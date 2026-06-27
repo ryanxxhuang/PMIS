@@ -1,0 +1,191 @@
+import { useState, useMemo } from 'react'
+import { useStore } from '../../store.jsx'
+import { Card, Stat, Badge, Button, Field, Empty } from '../../components/ui.jsx'
+import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
+
+const monthLabel = (str) => {
+  const d = new Date(str)
+  return isNaN(d) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+const TODAY = new Date() // 今天（部署後依使用者實際日期）
+
+export default function Progress() {
+  const { project, workItems: data, progressPlan, generateSchedule, updatePlannedPct, valuations,
+    isSupabaseConfigured, currentProject, workItemsSource } = useStore()
+  const [start, setStart] = useState(project.start_date)
+  const [end, setEnd] = useState(project.end_date)
+
+  const tree = useMemo(() => (data ? buildBillableTree(data.items) : { roots: [], childrenMap: new Map() }), [data])
+  const billableTotal = data?.meta.billable_total || 0
+
+  // 各估驗期 → 累計實際完成%（累計估驗金額 ÷ 發包工程費），對應到月份
+  const actualByMonth = useMemo(() => {
+    const map = new Map()
+    if (!data) return map
+    for (const v of valuations) {
+      const cum = totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, v.items))
+      const pct = billableTotal ? (cum / billableTotal) * 100 : 0
+      const lbl = monthLabel(v.valuation_date)
+      if (lbl) map.set(lbl, pct) // 同月以最後一期為準
+    }
+    return map
+  }, [data, valuations, tree, billableTotal])
+
+  if (!data) return <Empty>載入進度資料中…</Empty>
+
+  if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
+    return (
+      <Card title="進度管制">
+        <Empty>此專案的標單尚未匯入資料庫。請先到「標單工項」頁匯入標單，進度才能對齊金額權重。</Empty>
+      </Card>
+    )
+  }
+
+  if (!progressPlan) {
+    return (
+      <div className="space-y-5">
+        <Header billableTotal={billableTotal} project={project} />
+        <Card title="建立預定進度">
+          <p className="text-sm text-slate-500 mb-4">
+            標單只提供金額權重、沒有時間分布，需先設定預定進度（廠商施工預定進度表）。
+            系統會依開工/竣工切出月份，並產生一條標準 S 曲線當起點，之後可逐月微調。
+          </p>
+          <div className="flex items-end gap-3 flex-wrap">
+            <Field label="開工日"><input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm" /></Field>
+            <Field label="竣工日"><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm" /></Field>
+            <Button onClick={() => generateSchedule(start, end)}>產生預定 S 曲線</Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  const months = progressPlan.months
+  const N = months.length
+
+  // 實際資料點（對應到月份 index）
+  const actualPoints = months
+    .map((m, i) => ({ i, pct: actualByMonth.get(m.label) }))
+    .filter((p) => p.pct != null)
+  const actualNow = actualPoints.length ? actualPoints[actualPoints.length - 1].pct : 0
+
+  // 今天落在第幾個月（小數）+ 內插預定進度
+  const elapsed = (TODAY.getFullYear() - new Date(progressPlan.start).getFullYear()) * 12
+    + (TODAY.getMonth() - new Date(progressPlan.start).getMonth())
+    + (TODAY.getDate() - 1) / 30
+  const todayFrac = Math.max(0, Math.min(N - 1, elapsed))
+  const plannedNow = (() => {
+    if (elapsed <= 0) return 0
+    if (elapsed >= N - 1) return months[N - 1].plannedPct
+    const lo = Math.floor(todayFrac), hi = Math.ceil(todayFrac), f = todayFrac - lo
+    return months[lo].plannedPct + (months[hi].plannedPct - months[lo].plannedPct) * f
+  })()
+  const behind = plannedNow - actualNow
+  const statusBadge = behind > 5
+    ? <Badge color="red">落後 {behind.toFixed(1)}%</Badge>
+    : behind < -2
+      ? <Badge color="blue">超前 {(-behind).toFixed(1)}%</Badge>
+      : <Badge color="green">進度正常</Badge>
+
+  // ── S 曲線 SVG ──
+  const W = 760, H = 300, m = { l: 44, r: 20, t: 16, b: 30 }
+  const pw = W - m.l - m.r, ph = H - m.t - m.b
+  const x = (i) => m.l + (N > 1 ? (i / (N - 1)) : 0) * pw
+  const y = (p) => m.t + (1 - p / 100) * ph
+  const plannedPts = months.map((mm, i) => `${x(i).toFixed(1)},${y(mm.plannedPct).toFixed(1)}`).join(' ')
+  const actualPts = actualPoints.map((p) => `${x(p.i).toFixed(1)},${y(p.pct).toFixed(1)}`).join(' ')
+  const xLabelEvery = Math.ceil(N / 9)
+
+  return (
+    <div className="space-y-5">
+      <Header billableTotal={billableTotal} project={project} action={
+        <Button variant="secondary" onClick={() => generateSchedule(progressPlan.start, progressPlan.end)}>重產 S 曲線</Button>
+      } />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="依預定 S 曲線內插" color="text-slate-700" />
+        <Stat label="實際進度" value={`${actualNow.toFixed(1)}%`} sub="累計估驗 ÷ 發包工程費" color="text-[#c2410c]" />
+        <Stat label="進度差" value={`${behind >= 0 ? '−' : '+'}${Math.abs(behind).toFixed(1)}%`} sub={behind > 0 ? '落後' : '超前/持平'} color={behind > 5 ? 'text-rose-600' : 'text-emerald-600'} />
+        <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm flex flex-col">
+          <div className="text-xs text-slate-500 uppercase tracking-wide">進度狀態</div>
+          <div className="mt-2">{statusBadge}</div>
+          <div className="text-xs text-slate-400 mt-auto pt-2">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
+        </div>
+      </div>
+
+      <Card title="進度 S 曲線（預定 vs 實際）">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="進度 S 曲線">
+          {[0, 25, 50, 75, 100].map((p) => (
+            <g key={p}>
+              <line x1={m.l} y1={y(p)} x2={W - m.r} y2={y(p)} stroke="#e2e8f0" strokeWidth="1" />
+              <text x={m.l - 6} y={y(p) + 3} textAnchor="end" fontSize="10" fill="#94a3b8">{p}%</text>
+            </g>
+          ))}
+          {months.map((mm, i) => (i % xLabelEvery === 0 || i === N - 1) ? (
+            <text key={i} x={x(i)} y={H - m.b + 16} textAnchor="middle" fontSize="9" fill="#94a3b8">{mm.label.slice(2)}</text>
+          ) : null)}
+          {/* 今天垂直線 */}
+          <line x1={x(todayFrac)} y1={m.t} x2={x(todayFrac)} y2={H - m.b} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 3" />
+          <text x={x(todayFrac)} y={m.t - 4} textAnchor="middle" fontSize="9" fill="#64748b">今天</text>
+          {/* 預定 */}
+          <polyline points={plannedPts} fill="none" stroke="#94a3b8" strokeWidth="2" />
+          {/* 實際 */}
+          {actualPoints.length > 0 && <polyline points={actualPts} fill="none" stroke="#f26722" strokeWidth="2.5" />}
+          {actualPoints.map((p) => <circle key={p.i} cx={x(p.i)} cy={y(p.pct)} r="3.5" fill="#f26722" />)}
+        </svg>
+        <div className="flex items-center gap-5 text-xs text-slate-500 mt-2 pl-1">
+          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-slate-400" />預定進度</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-[#f26722]" />實際進度（估驗）</span>
+        </div>
+      </Card>
+
+      <Card title="逐月預定進度（可調整）">
+        <div className="overflow-x-auto -mx-5 -my-5">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-200">
+                <th className="text-left font-medium py-2 pl-3">月份</th>
+                <th className="text-right font-medium px-3">預定累計%</th>
+                <th className="text-right font-medium px-3 pr-4">實際累計%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {months.map((mm, i) => {
+                const act = actualByMonth.get(mm.label)
+                return (
+                  <tr key={mm.label} className="border-b border-slate-50 hover:bg-slate-50">
+                    <td className="py-1.5 pl-3 text-slate-700 tabular-nums">{mm.label}</td>
+                    <td className="text-right px-3">
+                      <input type="number" min="0" max="100" value={mm.plannedPct}
+                        onChange={(e) => { let n = parseFloat(e.target.value); if (isNaN(n)) n = 0; updatePlannedPct(i, Math.max(0, Math.min(100, n))) }}
+                        className="w-20 text-right border border-slate-300 rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[#f26722] focus:outline-none" />
+                    </td>
+                    <td className="text-right px-3 pr-4 tabular-nums">{act != null ? <span className="text-[#c2410c]">{act.toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <p className="text-xs text-slate-400">
+        實際進度即時取自「估驗計價」（累計估驗金額 ÷ 發包工程費），不需另外輸入；估驗一核定，這條線就動。
+        預定 S 曲線為標準 smoothstep 起點，請依實際施工預定進度表逐月微調。
+      </p>
+    </div>
+  )
+}
+
+function Header({ billableTotal, project, action }) {
+  const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
+  return (
+    <div className="flex items-end justify-between flex-wrap gap-3">
+      <div>
+        <h1 className="text-xl font-bold text-slate-800">進度管制 <span className="text-slate-400 font-normal text-base">S-Curve</span></h1>
+        <p className="text-sm text-slate-500 mt-1">{project.project_name}　·　發包工程費 {yi(billableTotal)}</p>
+      </div>
+      {action}
+    </div>
+  )
+}

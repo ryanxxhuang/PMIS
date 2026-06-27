@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f1f5f9;
+}

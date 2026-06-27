@@ -1,0 +1,278 @@
+// Demo 種子資料 — 對應 PRD section 21「混凝土澆置前自主檢查」情境
+
+export const project = {
+  project_id: 'P-2026-001',
+  project_name: 'A 區新建工程',
+  project_code: 'TPE-A-2026',
+  owner_name: '臺北市政府工務局',
+  contractor_name: '大華營造股份有限公司',
+  supervisor_name: '宏觀工程顧問有限公司',
+  location: '臺北市信義區 A 區基地',
+  start_date: '2026-01-15',
+  end_date: '2027-06-30',
+  status: '施工中',
+}
+
+export const users = [
+  { user_id: 'U1', name: '林志明', role: 'Contractor Field Engineer', company: '大華營造', label: '施工 / 現場工程師' },
+  { user_id: 'U2', name: '陳怡君', role: 'Contractor QC Engineer', company: '大華營造', label: '施工 / 品管工程師' },
+  { user_id: 'U3', name: '王建國', role: 'Supervisor Engineer', company: '宏觀顧問', label: '監造 / 監造工程師' },
+]
+
+export const workAreas = ['A 區 1F', 'A 區 2F', 'A 區地下室']
+export const workItems = ['混凝土工程', '鋼筋工程', '模板工程', '土方工程']
+
+// 預先準備好「AI 解析後」會產出的契約要求（demo 中按下解析才會載入）
+export const aiExtractedRequirements = [
+  {
+    requirement_id: 'R1',
+    title: '混凝土澆置前自主檢查',
+    requirement_type: 'Inspection',
+    work_item: '混凝土工程',
+    required_role: '施工廠商',
+    reviewer_role: '監造',
+    required_form: '混凝土澆置前自主檢查表',
+    required_photo: true,
+    frequency: '每次澆置前',
+    source_document: '工程契約_施工規範.pdf',
+    source_page: 'p.42',
+    source_section: '第 3 章 3.2.1 混凝土施工',
+    confidence_score: 0.94,
+    status: 'Review',
+  },
+  {
+    requirement_id: 'R2',
+    title: '施工日誌每日填寫',
+    requirement_type: 'Daily Log',
+    work_item: '全工項',
+    required_role: '施工廠商',
+    reviewer_role: '監造',
+    required_form: '施工日報',
+    required_photo: false,
+    frequency: '每日',
+    source_document: '工程契約_施工規範.pdf',
+    source_page: 'p.12',
+    source_section: '第 1 章 1.5 施工管理',
+    confidence_score: 0.98,
+    status: 'Review',
+  },
+  {
+    requirement_id: 'R3',
+    title: '鋼筋綁紮監造查驗',
+    requirement_type: 'Inspection',
+    work_item: '鋼筋工程',
+    required_role: '施工廠商',
+    reviewer_role: '監造',
+    required_form: '鋼筋查驗表',
+    required_photo: true,
+    frequency: '每樓層',
+    source_document: '工程契約_施工規範.pdf',
+    source_page: 'p.55',
+    source_section: '第 3 章 3.1.4 鋼筋工程',
+    confidence_score: 0.91,
+    status: 'Review',
+  },
+  {
+    requirement_id: 'R4',
+    title: '混凝土試體抗壓試驗報告',
+    requirement_type: 'Test Report',
+    work_item: '混凝土工程',
+    required_role: '施工廠商',
+    reviewer_role: '監造',
+    required_form: '試驗報告附件',
+    required_photo: false,
+    frequency: '每 100 m³',
+    source_document: '品質計畫書.pdf',
+    source_page: 'p.8',
+    source_section: '第 2 章 材料品質管理',
+    confidence_score: 0.88,
+    status: 'Review',
+  },
+]
+
+// AI 從「已核准契約要求」展開的檢驗停留點計畫（ITP / 查驗點計畫）
+// 這是 Requirement 與 自主檢查 / 監造查驗 之間原本缺的中間層：回答「這個工項何時必須通知監造」。
+// point_type：W 見證點（監造可到可不到）/ H 停留點（限制點，監造未到場不得續作）/ R 文件審查點
+export const aiGeneratedITP = [
+  {
+    itp_id: 'ITP-1', requirement_id: 'R1', work_item: '混凝土工程',
+    title: '混凝土澆置前自主檢查',
+    inspection_class: '第一級 · 施工自主檢查',
+    point_type: 'R',
+    required_role: '施工廠商', reviewer_role: '—',
+    form_name: '混凝土澆置前自主檢查表',
+    acceptance_criteria: '鋼筋保護層厚度符合設計、模板穩固、澆置面清潔、預埋件位置正確',
+    frequency: '每次澆置前',
+    source_document: '工程契約_施工規範.pdf', source_page: 'p.42', source_section: '第 3 章 3.2.1 混凝土施工',
+  },
+  {
+    itp_id: 'ITP-2', requirement_id: 'R1', work_item: '混凝土工程',
+    title: '混凝土澆置前監造查驗',
+    inspection_class: '第二級 · 監造查驗',
+    point_type: 'H',
+    required_role: '施工廠商（申請）', reviewer_role: '監造',
+    form_name: '監造查驗表',
+    acceptance_criteria: '監造現場查驗合格後始可澆置；監造未到場查驗不得續作',
+    frequency: '每次澆置前',
+    source_document: '工程契約_施工規範.pdf', source_page: 'p.42', source_section: '第 3 章 3.2.1 混凝土施工',
+  },
+  {
+    itp_id: 'ITP-3', requirement_id: 'R3', work_item: '鋼筋工程',
+    title: '鋼筋綁紮自主檢查',
+    inspection_class: '第一級 · 施工自主檢查',
+    point_type: 'R',
+    required_role: '施工廠商', reviewer_role: '—',
+    form_name: '鋼筋自主檢查表',
+    acceptance_criteria: '鋼筋規格、間距、保護層、續接位置符合設計圖說',
+    frequency: '每樓層',
+    source_document: '工程契約_施工規範.pdf', source_page: 'p.55', source_section: '第 3 章 3.1.4 鋼筋工程',
+  },
+  {
+    itp_id: 'ITP-4', requirement_id: 'R3', work_item: '鋼筋工程',
+    title: '鋼筋綁紮監造查驗',
+    inspection_class: '第二級 · 監造查驗',
+    point_type: 'H',
+    required_role: '施工廠商（申請）', reviewer_role: '監造',
+    form_name: '鋼筋查驗表',
+    acceptance_criteria: '監造查驗合格後始可封模、澆置混凝土',
+    frequency: '每樓層',
+    source_document: '工程契約_施工規範.pdf', source_page: 'p.55', source_section: '第 3 章 3.1.4 鋼筋工程',
+  },
+  {
+    itp_id: 'ITP-5', requirement_id: 'R4', work_item: '混凝土工程',
+    title: '混凝土試體取樣試驗',
+    inspection_class: '第二級 · 監造見證',
+    point_type: 'W',
+    required_role: '施工廠商（取樣）', reviewer_role: '監造（見證）',
+    form_name: '試驗報告附件',
+    acceptance_criteria: '抗壓強度 ≥ 設計強度 f′c；每 100m³ 取樣一組',
+    frequency: '每 100 m³',
+    source_document: '品質計畫書.pdf', source_page: 'p.8', source_section: '第 2 章 材料品質管理',
+  },
+]
+
+// 送審 Submittals（Procore 工作流：ball-in-court「球在誰手上」）
+// 一份已在審查中（球在監造，可立即操作），一份已走完完整往返（含審查歷程）
+export const seedSubmittals = [
+  {
+    submittal_id: 'SUB-001',
+    submittal_no: 'SUB-2026-001',
+    title: '預拌混凝土配比設計',
+    type: '配比設計',
+    work_item: '混凝土工程',
+    spec_section: '施工規範 3.2.1 混凝土施工',
+    linked_requirement_id: 'R1',
+    revision: 0,
+    submitted_by: '陳怡君',
+    submitted_at: '2026-06-15 10:20',
+    due_date: '2026-06-19',
+    reviewer: '宏觀工程顧問',
+    attachments: ['配比設計報告.pdf', '試拌紀錄.pdf'],
+    status: '審核中',
+    ball_in_court: '監造',
+    review_comments: [
+      { by: '陳怡君', role: '施工品管', at: '2026-06-15 10:20', decision: '提出送審', note: '檢附配比設計報告與試拌紀錄，請審查。' },
+    ],
+  },
+  {
+    submittal_id: 'SUB-002',
+    submittal_no: 'SUB-2026-002',
+    title: '鋼筋出廠證明與檢驗報告',
+    type: '出廠證明',
+    work_item: '鋼筋工程',
+    spec_section: '施工規範 3.1.4 鋼筋工程',
+    linked_requirement_id: 'R3',
+    revision: 2,
+    submitted_by: '陳怡君',
+    submitted_at: '2026-06-12 14:05',
+    due_date: '2026-06-16',
+    reviewer: '王建國',
+    attachments: ['SD420W_出廠證明.pdf', '拉力試驗報告_v2.pdf'],
+    status: '核准',
+    ball_in_court: '—',
+    review_comments: [
+      { by: '陳怡君', role: '施工品管', at: '2026-06-12 14:05', decision: '提出送審', note: '檢附第一批號出廠證明。' },
+      { by: '王建國', role: '監造', at: '2026-06-13 09:30', decision: '退回修正', note: '請補附第二批號拉力試驗報告。' },
+      { by: '陳怡君', role: '施工品管', at: '2026-06-14 16:40', decision: '重新送審', note: '已補附 v2 拉力試驗報告。' },
+      { by: '王建國', role: '監造', at: '2026-06-15 11:00', decision: '核准', note: '符合 CNS 560 規範，准予使用。' },
+    ],
+  },
+]
+
+export const submittalTypes = ['材料送審', '施工計畫', '配比設計', '樣品送審', '出廠證明', '試驗報告']
+
+// RFI 工程疑義 / 技術澄清（人對人正式往來；可標工期 / 費用影響 — 與 AI Spec Q&A 區分）
+// 一筆待回覆（球在監造，可立即操作）、一筆已結案（含完整問答）
+export const seedRFIs = [
+  {
+    rfi_id: 'RFI-001',
+    rfi_no: 'RFI-2026-001',
+    subject: 'B1 連續壁與筏基交界止水細部',
+    question: '設計圖 S-12 與 S-15 對 B1 連續壁頂與筏基交界的止水帶位置標示不一致，請釐清應採用何者施作。',
+    work_item: '混凝土工程',
+    linked_spec_section: '結構圖 S-12 / S-15',
+    asked_by: '林志明',
+    asked_at: '2026-06-16 09:10',
+    assigned_to: '宏觀工程顧問（監造）',
+    priority: '高',
+    cost_impact: true,
+    cost_note: '若採 S-15 需增設止水鋼板，估增加費用',
+    schedule_impact: true,
+    schedule_note: '影響 B1 澆置時程約 3 天',
+    due_date: '2026-06-19',
+    attachments: ['S-12_局部.pdf', 'S-15_局部.pdf'],
+    status: '待回覆',
+    ball_in_court: '監造',
+    answer: '',
+    answered_by: '',
+    answered_at: '',
+  },
+  {
+    rfi_id: 'RFI-002',
+    rfi_no: 'RFI-2026-002',
+    subject: '1F 柱主筋續接位置調整',
+    question: '1F 柱主筋續接位置是否可調整至樓板面上方 50cm，以配合施工架設置？',
+    work_item: '鋼筋工程',
+    linked_spec_section: '施工規範 3.1.4 鋼筋工程',
+    asked_by: '陳怡君',
+    asked_at: '2026-06-11 14:30',
+    assigned_to: '宏觀工程顧問（監造）',
+    priority: '中',
+    cost_impact: false,
+    cost_note: '',
+    schedule_impact: false,
+    schedule_note: '',
+    due_date: '2026-06-14',
+    attachments: [],
+    status: '已結案',
+    ball_in_court: '—',
+    answer: '同意調整至樓板面上方 50cm，惟同一斷面續接比例不得超過 50%，並須符合規範錯位要求。',
+    answered_by: '王建國',
+    answered_at: '2026-06-12 10:15',
+  },
+]
+
+export const rfiPriorities = ['高', '中', '低']
+
+// 對應 R1 核准後 AI 產生的自主檢查表欄位
+export const concreteInspectionForm = {
+  form_template_id: 'F1',
+  form_name: '混凝土澆置前自主檢查表',
+  form_type: 'Self-inspection',
+  work_item: '混凝土工程',
+  source_page: 'p.42',
+  version: 'v1',
+  fields: [
+    { key: 'auto_project', label: '專案名稱', type: 'auto', value: 'A 區新建工程' },
+    { key: 'auto_code', label: '工程編號', type: 'auto', value: 'TPE-A-2026' },
+    { key: 'auto_date', label: '日期', type: 'auto', value: '2026-06-17' },
+    { key: 'work_area', label: '工區', type: 'select', options: ['A 區 1F', 'A 區 2F', 'A 區地下室'], required: true },
+    { key: 'rebar_cover', label: '鋼筋保護層厚度檢查', type: 'passfail', required: true },
+    { key: 'formwork', label: '模板穩固度檢查', type: 'passfail', required: true },
+    { key: 'cleanliness', label: '澆置面清潔檢查', type: 'passfail', required: true },
+    { key: 'embedded', label: '預埋件位置檢查', type: 'passfail', required: true },
+    { key: 'photo', label: '現場照片', type: 'photo', required: true },
+    { key: 'remark', label: '備註', type: 'textarea', required: false },
+    { key: 'signature', label: '簽名', type: 'signature', required: true },
+  ],
+}
