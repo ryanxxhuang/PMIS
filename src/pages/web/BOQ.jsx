@@ -74,27 +74,27 @@ export default function BOQ() {
       const row = (
         <tr
           key={it.item_key}
-          className={`border-b border-slate-50 hover:bg-slate-50 ${
-            it.depth === 1 ? 'bg-slate-50/70 font-semibold' : ''
-          } ${!it.is_billable ? 'text-slate-400' : ''}`}
+          className={`border-b border-[var(--border-2)] hover:bg-[var(--surface-2)] ${
+            it.depth === 1 ? 'bg-[var(--surface-2)]/70 font-semibold' : ''
+          } ${!it.is_billable ? 'text-[var(--text-3)]' : ''}`}
         >
           <td className="py-1.5 pr-2" style={{ paddingLeft: 10 + level * 18 }}>
             {hasKids ? (
-              <button onClick={() => toggle(it.item_key)} className="mr-1 w-4 inline-block text-slate-400 hover:text-slate-700">
+              <button onClick={() => toggle(it.item_key)} className="mr-1 w-4 inline-block text-[var(--text-3)] hover:text-[var(--text)]">
                 {isOpen ? '▾' : '▸'}
               </button>
             ) : (
               <span className="mr-1 w-4 inline-block" />
             )}
-            <span className="text-slate-400 text-xs mr-2 tabular-nums">{it.item_no}</span>
-            <span className={it.depth <= 2 ? 'text-slate-800' : ''}>{it.description}</span>
+            <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{it.item_no}</span>
+            <span className={it.depth <= 2 ? 'text-[var(--text)]' : ''}>{it.description}</span>
             {it.is_price_adjustable && <span className="ml-2 text-[10px] text-violet-600 align-middle">物調</span>}
-            {it.item_kind === 'subtotal' && <span className="ml-2 text-[10px] text-slate-400 align-middle">合計</span>}
+            {it.item_kind === 'subtotal' && <span className="ml-2 text-[10px] text-[var(--text-3)] align-middle">合計</span>}
           </td>
-          <td className="text-right text-slate-400 text-xs px-2 whitespace-nowrap">{it.unit}</td>
-          <td className="text-right text-slate-600 px-2 tabular-nums whitespace-nowrap">{fmt(it.quantity)}</td>
-          <td className="text-right text-slate-500 px-2 tabular-nums whitespace-nowrap">{fmt(it.unit_price)}</td>
-          <td className="text-right text-slate-800 px-2 tabular-nums whitespace-nowrap">{fmt(it.amount)}</td>
+          <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{it.unit}</td>
+          <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{fmt(it.quantity)}</td>
+          <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{fmt(it.unit_price)}</td>
+          <td className="text-right text-[var(--text)] px-2 tabular-nums whitespace-nowrap">{fmt(it.amount)}</td>
         </tr>
       )
       if (hasKids && isOpen) return [row, ...renderRows(kids, level + 1)]
@@ -105,8 +105,8 @@ export default function BOQ() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">標單工項 <span className="text-slate-400 font-normal text-base">BOQ / WBS</span></h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-xl font-bold text-[var(--text)]">標單工項 <span className="text-[var(--text-3)] font-normal text-base">BOQ / WBS</span></h1>
+          <p className="text-sm text-[var(--text-2)] mt-1">
             {meta.project_name}　·　{meta.owner_name}　·　契約 {meta.contract_no}
           </p>
         </div>
@@ -132,13 +132,13 @@ export default function BOQ() {
               {importErr && <span className="text-sm text-rose-600">{importErr}</span>}
             </div>
           ) : (
-            <div className="flex items-center gap-3 flex-wrap bg-white rounded-lg border border-amber-200 px-3 py-2">
-              <div className="text-sm text-slate-700">
+            <div className="flex items-center gap-3 flex-wrap bg-[var(--surface)] rounded-lg border border-amber-200 px-3 py-2">
+              <div className="text-sm text-[var(--text)]">
                 解析成功：<b>{parsed.meta.project_name || '（未命名）'}</b>　·
-                {fmt(parsed.meta.item_count)} 項工項，發包工程費 <b className="text-[#c2410c]">{yi(parsed.meta.billable_total)}</b>
+                {fmt(parsed.meta.item_count)} 項工項，發包工程費 <b className="text-[var(--blue-text)]">{yi(parsed.meta.billable_total)}</b>
               </div>
               <Button onClick={() => runImport(parsed)} disabled={importing}>{importing ? '匯入中…' : `匯入 ${fmt(parsed.meta.item_count)} 工項`}</Button>
-              <button onClick={() => setParsed(null)} className="text-xs text-slate-400 hover:text-slate-600">取消</button>
+              <button onClick={() => setParsed(null)} className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)]">取消</button>
               {importErr && <span className="text-sm text-rose-600">{importErr}</span>}
             </div>
           )}
@@ -146,16 +146,16 @@ export default function BOQ() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat label="發包工程費" value={yi(meta.billable_total)} sub={`NT$ ${fmt(meta.billable_total)}`} color="text-[#c2410c]" />
+        <Stat label="發包工程費" value={yi(meta.billable_total)} sub={`NT$ ${fmt(meta.billable_total)}`} color="text-[var(--blue-text)]" />
         <Stat label="工項總數" value={fmt(meta.item_count)} sub="含分項與合計列" />
         <Stat label="末端計價工項" value={fmt(meta.leaf_count)} sub="估驗 / 數量管制單元" />
-        <Stat label="資料來源" value={workItemsSource === 'db' ? 'Supabase' : 'PCCES'} sub={workItemsSource === 'db' ? '已存入資料庫' : '範例（PCCES 匯入）'} color={workItemsSource === 'db' ? 'text-emerald-600' : 'text-slate-800'} />
+        <Stat label="資料來源" value={workItemsSource === 'db' ? 'Supabase' : 'PCCES'} sub={workItemsSource === 'db' ? '已存入資料庫' : '範例（PCCES 匯入）'} color={workItemsSource === 'db' ? 'text-emerald-600' : 'text-[var(--text)]'} />
       </div>
 
       <Card
         title="工項階層"
         action={
-          <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+          <label className="flex items-center gap-1.5 text-xs text-[var(--text-2)] cursor-pointer">
             <input type="checkbox" checked={onlyBillable} onChange={(e) => setOnlyBillable(e.target.checked)} />
             只看發包工程費
           </label>
@@ -164,7 +164,7 @@ export default function BOQ() {
         <div className="overflow-x-auto -mx-5 -my-5">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-200">
+              <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
                 <th className="text-left font-medium py-2 pl-3">項次 / 工項名稱</th>
                 <th className="text-right font-medium px-2">單位</th>
                 <th className="text-right font-medium px-2">數量</th>
@@ -177,7 +177,7 @@ export default function BOQ() {
         </div>
       </Card>
 
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-[var(--text-3)]">
         <Badge color="purple">物調</Badge> = 物價調整項（variablePrice）。發包工程費（壹、貳）為廠商估驗計價基礎；參、肆為非發包（間接成本 / 機關收入），灰色顯示。
       </p>
     </div>

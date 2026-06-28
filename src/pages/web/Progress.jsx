@@ -46,13 +46,13 @@ export default function Progress() {
       <div className="space-y-5">
         <Header billableTotal={billableTotal} project={project} />
         <Card title="建立預定進度">
-          <p className="text-sm text-slate-500 mb-4">
+          <p className="text-sm text-[var(--text-2)] mb-4">
             標單只提供金額權重、沒有時間分布，需先設定預定進度（廠商施工預定進度表）。
             系統會依開工/竣工切出月份，並產生一條標準 S 曲線當起點，之後可逐月微調。
           </p>
           <div className="flex items-end gap-3 flex-wrap">
-            <Field label="開工日"><input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm" /></Field>
-            <Field label="竣工日"><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm" /></Field>
+            <Field label="開工日"><input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
+            <Field label="竣工日"><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
             <Button onClick={() => generateSchedule(start, end)}>產生預定 S 曲線</Button>
           </div>
         </Card>
@@ -103,13 +103,13 @@ export default function Progress() {
       } />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="依預定 S 曲線內插" color="text-slate-700" />
-        <Stat label="實際進度" value={`${actualNow.toFixed(1)}%`} sub="累計估驗 ÷ 發包工程費" color="text-[#c2410c]" />
+        <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="依預定 S 曲線內插" color="text-[var(--text)]" />
+        <Stat label="實際進度" value={`${actualNow.toFixed(1)}%`} sub="累計估驗 ÷ 發包工程費" color="text-[var(--blue-text)]" />
         <Stat label="進度差" value={`${behind >= 0 ? '−' : '+'}${Math.abs(behind).toFixed(1)}%`} sub={behind > 0 ? '落後' : '超前/持平'} color={behind > 5 ? 'text-rose-600' : 'text-emerald-600'} />
-        <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm flex flex-col">
-          <div className="text-xs text-slate-500 uppercase tracking-wide">進度狀態</div>
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-4 shadow-sm flex flex-col">
+          <div className="text-xs text-[var(--text-2)] uppercase tracking-wide">進度狀態</div>
           <div className="mt-2">{statusBadge}</div>
-          <div className="text-xs text-slate-400 mt-auto pt-2">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
+          <div className="text-xs text-[var(--text-3)] mt-auto pt-2">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
         </div>
       </div>
 
@@ -130,12 +130,12 @@ export default function Progress() {
           {/* 預定 */}
           <polyline points={plannedPts} fill="none" stroke="#94a3b8" strokeWidth="2" />
           {/* 實際 */}
-          {actualPoints.length > 0 && <polyline points={actualPts} fill="none" stroke="#f26722" strokeWidth="2.5" />}
-          {actualPoints.map((p) => <circle key={p.i} cx={x(p.i)} cy={y(p.pct)} r="3.5" fill="#f26722" />)}
+          {actualPoints.length > 0 && <polyline points={actualPts} fill="none" stroke="#1a73e8" strokeWidth="2.5" />}
+          {actualPoints.map((p) => <circle key={p.i} cx={x(p.i)} cy={y(p.pct)} r="3.5" fill="#1a73e8" />)}
         </svg>
-        <div className="flex items-center gap-5 text-xs text-slate-500 mt-2 pl-1">
+        <div className="flex items-center gap-5 text-xs text-[var(--text-2)] mt-2 pl-1">
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-slate-400" />預定進度</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-[#f26722]" />實際進度（估驗）</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-[#1a73e8]" />實際進度（估驗）</span>
         </div>
       </Card>
 
@@ -143,7 +143,7 @@ export default function Progress() {
         <div className="overflow-x-auto -mx-5 -my-5">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-200">
+              <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
                 <th className="text-left font-medium py-2 pl-3">月份</th>
                 <th className="text-right font-medium px-3">預定累計%</th>
                 <th className="text-right font-medium px-3 pr-4">實際累計%</th>
@@ -153,14 +153,14 @@ export default function Progress() {
               {months.map((mm, i) => {
                 const act = actualByMonth.get(mm.label)
                 return (
-                  <tr key={mm.label} className="border-b border-slate-50 hover:bg-slate-50">
-                    <td className="py-1.5 pl-3 text-slate-700 tabular-nums">{mm.label}</td>
+                  <tr key={mm.label} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
+                    <td className="py-1.5 pl-3 text-[var(--text)] tabular-nums">{mm.label}</td>
                     <td className="text-right px-3">
                       <input type="number" min="0" max="100" value={mm.plannedPct}
                         onChange={(e) => { let n = parseFloat(e.target.value); if (isNaN(n)) n = 0; updatePlannedPct(i, Math.max(0, Math.min(100, n))) }}
-                        className="w-20 text-right border border-slate-300 rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[#f26722] focus:outline-none" />
+                        className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none" />
                     </td>
-                    <td className="text-right px-3 pr-4 tabular-nums">{act != null ? <span className="text-[#c2410c]">{act.toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>
+                    <td className="text-right px-3 pr-4 tabular-nums">{act != null ? <span className="text-[var(--blue-text)]">{act.toFixed(1)}%</span> : <span className="text-[var(--text-3)]">—</span>}</td>
                   </tr>
                 )
               })}
@@ -169,7 +169,7 @@ export default function Progress() {
         </div>
       </Card>
 
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-[var(--text-3)]">
         實際進度即時取自「估驗計價」（累計估驗金額 ÷ 發包工程費），不需另外輸入；估驗一核定，這條線就動。
         預定 S 曲線為標準 smoothstep 起點，請依實際施工預定進度表逐月微調。
       </p>
@@ -182,8 +182,8 @@ function Header({ billableTotal, project, action }) {
   return (
     <div className="flex items-end justify-between flex-wrap gap-3">
       <div>
-        <h1 className="text-xl font-bold text-slate-800">進度管制 <span className="text-slate-400 font-normal text-base">S-Curve</span></h1>
-        <p className="text-sm text-slate-500 mt-1">{project.project_name}　·　發包工程費 {yi(billableTotal)}</p>
+        <h1 className="text-xl font-bold text-[var(--text)]">進度管制 <span className="text-[var(--text-3)] font-normal text-base">S-Curve</span></h1>
+        <p className="text-sm text-[var(--text-2)] mt-1">{project.project_name}　·　發包工程費 {yi(billableTotal)}</p>
       </div>
       {action}
     </div>

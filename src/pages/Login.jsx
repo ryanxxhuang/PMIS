@@ -11,11 +11,11 @@ export default function Login() {
   useEffect(() => { if (currentUser) navigate('/dashboard') }, [currentUser, navigate])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1c2b39] to-[#0f1924] p-6">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-8">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-6">
+      <div className="bg-[var(--surface)] rounded-2xl g-elevation-2 w-full max-w-md p-8">
         <div className="text-center mb-6">
-          <div className="text-3xl font-bold tracking-tight text-slate-800">PMIS <span className="text-[#f26722]">AI</span></div>
-          <div className="text-slate-500 text-sm mt-1">AI 工程現場管理平台</div>
+          <div className="text-3xl font-medium tracking-tight text-[var(--text)]">PMIS <span className="text-[var(--blue)] font-bold">AI</span></div>
+          <div className="text-[var(--text-2)] text-sm mt-1">AI 工程現場管理平台</div>
         </div>
         {isSupabaseConfigured
           ? <AuthForm signIn={signIn} signUp={signUp} />
@@ -55,23 +55,23 @@ function AuthForm({ signIn, signUp }) {
     return (
       <div className="text-center space-y-3 py-2">
         <div className="text-4xl">📧</div>
-        <div className="font-semibold text-slate-800">驗證信已寄出</div>
-        <p className="text-sm text-slate-500">
+        <div className="font-semibold text-[var(--text)]">驗證信已寄出</div>
+        <p className="text-sm text-[var(--text-2)]">
           已寄到 <b>{form.email}</b>。請到信箱點擊連結完成驗證，<br />再回來登入。
         </p>
-        <button onClick={() => { setSent(false); setMode('signin') }} className="text-sm text-[#f26722] hover:underline">← 回登入</button>
+        <button onClick={() => { setSent(false); setMode('signin') }} className="text-sm text-[var(--blue)] hover:underline">← 回登入</button>
       </div>
     )
   }
 
-  const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-[#f26722] focus:outline-none'
+  const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none'
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      <div className="flex rounded-lg bg-slate-100 p-1 text-sm mb-1">
+      <div className="flex rounded-lg bg-[var(--surface-2)] p-1 text-sm mb-1">
         {[['signin', '登入'], ['signup', '註冊']].map(([m, label]) => (
           <button key={m} type="button" onClick={() => { setMode(m); setErr('') }}
-            className={`flex-1 py-1.5 rounded-md transition ${mode === m ? 'bg-white shadow-sm font-medium text-slate-800' : 'text-slate-500'}`}>
+            className={`flex-1 py-1.5 rounded-md transition ${mode === m ? 'bg-[var(--surface)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--text-2)]'}`}>
             {label}
           </button>
         ))}
@@ -98,10 +98,10 @@ function AuthForm({ signIn, signUp }) {
       {err && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{err}</div>}
 
       <button type="submit" disabled={loading}
-        className="w-full bg-[#f26722] text-white rounded-lg py-2.5 font-medium hover:bg-[#dd5c14] transition disabled:opacity-50">
+        className="w-full bg-[#1a73e8] text-white rounded-lg py-2.5 font-medium hover:bg-[#1765cc] transition disabled:opacity-50">
         {loading ? '處理中…' : mode === 'signin' ? '登入' : '建立帳號並登入'}
       </button>
-      <div className="text-center text-xs text-slate-400 pt-1">真實帳號 · 資料存於 Supabase（RLS 權限控管）</div>
+      <div className="text-center text-xs text-[var(--text-3)] pt-1">真實帳號 · 資料存於 Supabase（RLS 權限控管）</div>
     </form>
   )
 }
@@ -114,20 +114,20 @@ function RolePicker({ setCurrentUser, navigate }) {
   }
   return (
     <>
-      <div className="text-sm text-slate-600 mb-3 font-medium">選擇 demo 角色登入：</div>
+      <div className="text-sm text-[var(--text-2)] mb-3 font-medium">選擇 demo 角色登入：</div>
       <div className="space-y-2">
         {users.map((u) => (
           <button key={u.user_id} onClick={() => pick(u)}
-            className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-[#f26722] hover:bg-[#fdf0e9] transition text-left">
-            <div className="w-10 h-10 rounded-full bg-[#fdece3] text-[#c2410c] flex items-center justify-center font-bold">{u.name[0]}</div>
+            className="w-full flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] hover:border-[var(--blue)] hover:bg-[var(--blue-tint)] transition text-left">
+            <div className="w-10 h-10 rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] flex items-center justify-center font-bold">{u.name[0]}</div>
             <div>
-              <div className="font-medium text-slate-800">{u.name}</div>
-              <div className="text-xs text-slate-500">{u.label} · {u.company}</div>
+              <div className="font-medium text-[var(--text)]">{u.name}</div>
+              <div className="text-xs text-[var(--text-2)]">{u.label} · {u.company}</div>
             </div>
           </button>
         ))}
       </div>
-      <div className="text-center text-xs text-slate-400 mt-6">點任一角色即可進入 prototype</div>
+      <div className="text-center text-xs text-[var(--text-3)] mt-6">點任一角色即可進入 prototype</div>
     </>
   )
 }

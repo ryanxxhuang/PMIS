@@ -44,8 +44,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">{project.project_name}</h1>
-        <p className="text-slate-500 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-[var(--text)]">{project.project_name}</h1>
+        <p className="text-[var(--text-2)] text-sm mt-1">
           {project.project_code} · {project.owner_name} · 施工：{project.contractor_name || '—'} · 監造：{project.supervisor_name || '—'}
         </p>
       </div>
@@ -53,20 +53,20 @@ export default function Dashboard() {
       {!imported ? (
         <Card>
           <Empty>
-            此專案尚未匯入標單。請先到「<Link to="/boq" className="text-[#f26722]">標單工項</Link>」上傳 PCCES 預算書 XML，
+            此專案尚未匯入標單。請先到「<Link to="/boq" className="text-[var(--blue)]">標單工項</Link>」上傳 PCCES 預算書 XML，
             之後估驗、進度、施工日誌、品質查驗才會有資料。
           </Empty>
         </Card>
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Stat label="發包工程費" value={yi(billableTotal)} sub={`NT$ ${fmt(billableTotal)}`} color="text-[#c2410c]" />
+            <Stat label="發包工程費" value={yi(billableTotal)} sub={`NT$ ${fmt(billableTotal)}`} color="text-[var(--blue-text)]" />
             <Stat label="累計完成度" value={`${completion.toFixed(1)}%`} sub={`累計估驗 ${fmt(actualCum)}`} color="text-emerald-600" />
             <Stat label="進度狀態"
               value={behind == null ? '—' : behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '正常'}
               sub={plannedNow == null ? '尚未設定預定進度' : `預定 ${plannedNow.toFixed(1)}% / 實際 ${completion.toFixed(1)}%`}
-              color={behind != null && behind > 5 ? 'text-rose-600' : 'text-slate-800'} />
-            <Stat label="未結案缺失" value={openDefects.length} sub={pendingInsp.length ? `待查驗 ${pendingInsp.length}` : '無待查驗'} color={openDefects.length ? 'text-rose-600' : 'text-slate-800'} />
+              color={behind != null && behind > 5 ? 'text-rose-600' : 'text-[var(--text)]'} />
+            <Stat label="未結案缺失" value={openDefects.length} sub={pendingInsp.length ? `待查驗 ${pendingInsp.length}` : '無待查驗'} color={openDefects.length ? 'text-rose-600' : 'text-[var(--text)]'} />
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -77,12 +77,12 @@ export default function Dashboard() {
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
-            <Card title="未結案缺失" action={<Link to="/quality" className="text-xs text-[#f26722]">品質查驗 →</Link>}>
+            <Card title="未結案缺失" action={<Link to="/quality" className="text-xs text-[var(--blue)]">品質查驗 →</Link>}>
               {openDefects.length === 0 ? <Empty>無未結案缺失</Empty> : (
                 <div className="space-y-2">
                   {openDefects.slice(0, 6).map((d) => (
-                    <div key={d.id} className="flex items-center justify-between text-sm border-b border-slate-50 pb-2">
-                      <span className="text-slate-700 truncate">{d.title}</span>
+                    <div key={d.id} className="flex items-center justify-between text-sm border-b border-[var(--border-2)] pb-2">
+                      <span className="text-[var(--text)] truncate">{d.title}</span>
                       <div className="flex items-center gap-2 shrink-0">
                         {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>}
                         <Badge color={defColor[d.status] || 'slate'}>{d.status}</Badge>
@@ -93,13 +93,13 @@ export default function Dashboard() {
               )}
             </Card>
 
-            <Card title="最近施工日誌" action={<Link to="/site-log" className="text-xs text-[#f26722]">施工日誌 →</Link>}>
+            <Card title="最近施工日誌" action={<Link to="/site-log" className="text-xs text-[var(--blue)]">施工日誌 →</Link>}>
               {siteLogs.length === 0 ? <Empty>尚無施工日誌</Empty> : (
                 <div className="space-y-2">
                   {siteLogs.slice(0, 6).map((l) => (
-                    <div key={l.id} className="flex items-center justify-between text-sm border-b border-slate-50 pb-2">
-                      <span className="text-slate-700 tabular-nums">{l.log_date}</span>
-                      <span className="text-xs text-slate-400 truncate ml-3">{l.work_summary || `${Object.keys(l.items).length} 工項`}</span>
+                    <div key={l.id} className="flex items-center justify-between text-sm border-b border-[var(--border-2)] pb-2">
+                      <span className="text-[var(--text)] tabular-nums">{l.log_date}</span>
+                      <span className="text-xs text-[var(--text-3)] truncate ml-3">{l.work_summary || `${Object.keys(l.items).length} 工項`}</span>
                     </div>
                   ))}
                 </div>

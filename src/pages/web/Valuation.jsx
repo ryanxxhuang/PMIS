@@ -90,20 +90,20 @@ export default function Valuation() {
       ? (it.amount ? (cum / it.amount) * 100 : 0)
       : (it.quantity ? (cumQty / it.quantity) * 100 : 0)
     return (
-      <tr key={it.item_key} className={`border-b border-slate-50 hover:bg-slate-50 ${it.depth === 1 ? 'bg-slate-50/70 font-semibold' : ''}`}>
+      <tr key={it.item_key} className={`border-b border-[var(--border-2)] hover:bg-[var(--surface-2)] ${it.depth === 1 ? 'bg-[var(--surface-2)]/70 font-semibold' : ''}`}>
         <td className="py-1.5 pr-2" style={{ paddingLeft: 10 + level * 18 }}>
           {hasKids ? (
-            <button onClick={() => toggle(it.item_key)} className="mr-1 w-4 inline-block text-slate-400 hover:text-slate-700">{isOpen ? '▾' : '▸'}</button>
+            <button onClick={() => toggle(it.item_key)} className="mr-1 w-4 inline-block text-[var(--text-3)] hover:text-[var(--text)]">{isOpen ? '▾' : '▸'}</button>
           ) : <span className="mr-1 w-4 inline-block" />}
-          <span className="text-slate-400 text-xs mr-2 tabular-nums">{it.item_no}</span>
-          <span className={it.depth <= 2 ? 'text-slate-800' : ''}>{it.description}</span>
+          <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{it.item_no}</span>
+          <span className={it.depth <= 2 ? 'text-[var(--text)]' : ''}>{it.description}</span>
         </td>
-        <td className="text-right text-slate-400 text-xs px-2 whitespace-nowrap">{hasKids ? '' : it.unit}</td>
-        <td className="text-right text-slate-500 px-2 tabular-nums whitespace-nowrap">{hasKids ? '' : fmt(it.quantity)}</td>
-        <td className="text-right text-slate-500 px-2 tabular-nums whitespace-nowrap">{hasKids ? '' : fmt(it.unit_price)}</td>
+        <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{hasKids ? '' : it.unit}</td>
+        <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{hasKids ? '' : fmt(it.quantity)}</td>
+        <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{hasKids ? '' : fmt(it.unit_price)}</td>
         <td className="text-right px-2 whitespace-nowrap">
           {hasKids ? (
-            <span className="text-slate-400 tabular-nums">{pct.toFixed(1)}%</span>
+            <span className="text-[var(--text-3)] tabular-nums">{pct.toFixed(1)}%</span>
           ) : editable ? (
             <span className="inline-flex items-center gap-1 justify-end">
               <input
@@ -111,16 +111,16 @@ export default function Valuation() {
                 value={selected?.items?.[it.item_key] ?? ''}
                 onChange={(e) => onQty(it, e.target.value)}
                 placeholder="0"
-                className="w-20 text-right border border-slate-300 rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[#f26722] focus:outline-none"
+                className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none"
               />
-              <span className="text-[10px] text-slate-400 w-9 text-right tabular-nums">{pct.toFixed(0)}%</span>
+              <span className="text-[10px] text-[var(--text-3)] w-9 text-right tabular-nums">{pct.toFixed(0)}%</span>
             </span>
           ) : (
-            <span className="text-slate-600 tabular-nums">{fmt(cumQty)} <span className="text-[10px] text-slate-400">({pct.toFixed(0)}%)</span></span>
+            <span className="text-[var(--text-2)] tabular-nums">{fmt(cumQty)} <span className="text-[10px] text-[var(--text-3)]">({pct.toFixed(0)}%)</span></span>
           )}
         </td>
-        <td className="text-right text-slate-700 px-2 tabular-nums whitespace-nowrap">{fmt(cum)}</td>
-        <td className={`text-right px-2 pr-3 tabular-nums whitespace-nowrap ${per > 0 ? 'text-[#c2410c] font-medium' : 'text-slate-400'}`}>{fmt(per)}</td>
+        <td className="text-right text-[var(--text)] px-2 tabular-nums whitespace-nowrap">{fmt(cum)}</td>
+        <td className={`text-right px-2 pr-3 tabular-nums whitespace-nowrap ${per > 0 ? 'text-[var(--blue-text)] font-medium' : 'text-[var(--text-3)]'}`}>{fmt(per)}</td>
       </tr>
     )
   }
@@ -137,8 +137,8 @@ export default function Valuation() {
     <div className="space-y-5">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">估驗計價 <span className="text-slate-400 font-normal text-base">Valuation</span></h1>
-          <p className="text-sm text-slate-500 mt-1">{project.project_name}　·　發包工程費 {yi(billableTotal)}（保留款 {selected?.retention_pct ?? 5}%）</p>
+          <h1 className="text-xl font-bold text-[var(--text)]">估驗計價 <span className="text-[var(--text-3)] font-normal text-base">Valuation</span></h1>
+          <p className="text-sm text-[var(--text-2)] mt-1">{project.project_name}　·　發包工程費 {yi(billableTotal)}（保留款 {selected?.retention_pct ?? 5}%）</p>
         </div>
         <div className="flex items-center gap-2">
           {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}>🖨 列印估驗單</Button>}
@@ -162,7 +162,7 @@ export default function Valuation() {
                 key={v.id}
                 onClick={() => setSelectedId(v.id)}
                 className={`px-3 py-1.5 rounded-lg text-sm border transition ${
-                  v.id === selected?.id ? 'bg-[#fdf0e9] text-[#c2410c] border-[#f26722] font-medium' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  v.id === selected?.id ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] border-[var(--blue)] font-medium' : 'bg-[var(--surface)] text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface-2)]'
                 }`}
               >
                 第 {v.period_no} 期
@@ -173,10 +173,10 @@ export default function Valuation() {
 
           {/* 本期彙總 */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Stat label="本期估驗金額" value={fmt(periodAmt)} sub={`第 ${selected.period_no} 期`} color="text-[#c2410c]" />
+            <Stat label="本期估驗金額" value={fmt(periodAmt)} sub={`第 ${selected.period_no} 期`} color="text-[var(--blue-text)]" />
             <Stat label="累計估驗金額" value={fmt(totalCum)} sub={`占發包 ${completion.toFixed(1)}%`} />
             <Stat label="累計完成度" value={`${completion.toFixed(1)}%`} sub={`/ ${yi(billableTotal)}`} color="text-emerald-600" />
-            <Stat label="本期保留款" value={fmt(periodAmt * ret)} sub={`${selected.retention_pct}%`} color="text-slate-500" />
+            <Stat label="本期保留款" value={fmt(periodAmt * ret)} sub={`${selected.retention_pct}%`} color="text-[var(--text-2)]" />
             <Stat label="本期應付" value={fmt(periodAmt * (1 - ret))} sub="本期估驗 − 保留款" color="text-blue-600" />
           </div>
 
@@ -184,7 +184,7 @@ export default function Valuation() {
             title={`第 ${selected.period_no} 期 估驗明細`}
             action={
               <div className="flex items-center gap-2">
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項…" className="text-sm border border-slate-300 rounded-lg px-2.5 py-1 w-40 focus:border-[#f26722] focus:outline-none" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項…" className="text-sm border border-[var(--border)] rounded-lg px-2.5 py-1 w-40 focus:border-[var(--blue)] focus:outline-none" />
                 {selected.status === '草稿' && dbMode && siteLogs.length > 0 && (
                   <Button variant="secondary" onClick={async () => { setFilling(true); await fillValuationFromSiteLogs(selected.id); setFilling(false) }} disabled={filling}>
                     {filling ? '帶入中…' : '從施工日誌帶入'}
@@ -203,7 +203,7 @@ export default function Valuation() {
             <div className="overflow-x-auto -mx-5 -my-5">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-200">
+                  <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
                     <th className="text-left font-medium py-2 pl-3">項次 / 工項名稱</th>
                     <th className="text-right font-medium px-2 whitespace-nowrap">單位</th>
                     <th className="text-right font-medium px-2 whitespace-nowrap">契約數量</th>
@@ -218,7 +218,7 @@ export default function Valuation() {
             </div>
           </Card>
 
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-[var(--text-3)]">
             在末端工項填「累計完成數量」（夾在 0～契約數量），累計金額 = 契約金額 × 完成數量÷契約數量，右側顯示完成%。
             本期金額 = 本期累計 − 前期累計，父項金額自動加總。保留款依契約比例逐期扣留，竣工驗收後返還。
             完成數量之後可由施工日誌的當日數量自動回填。

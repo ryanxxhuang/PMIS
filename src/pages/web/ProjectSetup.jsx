@@ -22,7 +22,7 @@ export default function ProjectSetup() {
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
-  const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-[#f26722] focus:outline-none'
+  const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none'
 
   const submit = async (e) => {
     e.preventDefault()
@@ -37,8 +37,8 @@ export default function ProjectSetup() {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-slate-800">建立專案</h1>
-        <p className="text-sm text-slate-500 mt-1">先建立一個工程專案，之後就能匯入標單、做估驗與進度。已帶入本契約預設值，可修改。</p>
+        <h1 className="text-xl font-bold text-[var(--text)]">建立專案</h1>
+        <p className="text-sm text-[var(--text-2)] mt-1">先建立一個工程專案，之後就能匯入標單、做估驗與進度。已帶入本契約預設值，可修改。</p>
       </div>
       <Card>
         <form onSubmit={submit} className="space-y-4">

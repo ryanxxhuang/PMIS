@@ -26,32 +26,32 @@ function ProjectSwitcher() {
   if (!isSupabaseConfigured || !currentProject) {
     return (
       <div className="flex items-center gap-2 min-w-0">
-        <span className="text-white/40 text-xs shrink-0">專案</span>
-        <span className="font-medium truncate">{project.project_name}</span>
+        <span className="text-[var(--text-3)] text-xs shrink-0">專案</span>
+        <span className="font-medium truncate text-[var(--text)]">{project.project_name}</span>
       </div>
     )
   }
   return (
     <div className="relative min-w-0">
-      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 hover:bg-white/5 rounded px-2 py-1 -ml-2">
-        <span className="text-white/40 text-xs shrink-0">專案</span>
-        <span className="font-medium truncate max-w-[280px]">{currentProject.project_name}</span>
-        <span className="text-white/40 text-[10px]">▼</span>
+      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
+        <span className="text-[var(--text-3)] text-xs shrink-0">專案</span>
+        <span className="font-medium truncate max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
+        <span className="text-[var(--text-2)] text-[10px]">▼</span>
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 mt-1 w-72 bg-white text-slate-700 rounded-lg shadow-xl border border-slate-200 py-1 z-20">
+          <div className="absolute left-0 mt-1 w-72 bg-[var(--surface)] text-[var(--text)] rounded-lg shadow-xl border border-[var(--border)] py-1 z-20">
             {projects.map((p) => (
               <button key={p.project_id} onClick={() => { switchProject(p.project_id); setOpen(false) }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 ${p.project_id === currentProject.project_id ? 'bg-[#fdf0e9]' : ''}`}>
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.project_id === currentProject.project_id ? 'bg-[#f26722]' : 'bg-slate-200'}`} />
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--surface-2)] flex items-center gap-2 ${p.project_id === currentProject.project_id ? 'bg-[var(--blue-tint)]' : ''}`}>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.project_id === currentProject.project_id ? 'bg-[var(--blue)]' : 'bg-[var(--border)]'}`} />
                 <span className="truncate">{p.project_name}</span>
               </button>
             ))}
-            <div className="border-t border-slate-100 my-1" />
+            <div className="border-t border-[var(--border-2)] my-1" />
             <button onClick={() => { setOpen(false); navigate('/project/new') }}
-              className="w-full text-left px-3 py-2 text-sm text-[#c2410c] hover:bg-slate-50">＋ 新增專案</button>
+              className="w-full text-left px-3 py-2 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)]">＋ 新增專案</button>
             <button onClick={async () => {
               if (window.confirm(`確定刪除專案「${currentProject.project_name}」？\n此專案的標單、估驗、進度、施工日誌、查驗、缺失將一併永久刪除，無法復原。`)) {
                 setOpen(false); await deleteProject(currentProject.project_id)
@@ -67,20 +67,28 @@ function ProjectSwitcher() {
 function TopBar() {
   const { currentUser, logout } = useStore()
   const navigate = useNavigate()
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  const toggleTheme = () => {
+    const next = !dark
+    document.documentElement.classList.toggle('dark', next)
+    try { localStorage.setItem('pmis-theme', next ? 'dark' : 'light') } catch { /* noop */ }
+    setDark(next)
+  }
   return (
-    <header className="bg-[#1c2b39] text-white h-14 flex items-center justify-between px-5 shrink-0">
+    <header className="bg-[var(--surface)] border-b border-[var(--border)] h-16 flex items-center justify-between px-5 shrink-0 relative z-10">
       <div className="flex items-center gap-4 min-w-0">
-        <div className="font-bold text-lg tracking-tight shrink-0">PMIS <span className="text-[#f26722]">AI</span></div>
-        <div className="h-5 w-px bg-white/15 shrink-0" />
+        <div className="font-medium text-xl tracking-tight text-[var(--text-2)] shrink-0">PMIS <span className="text-[var(--blue)] font-bold">AI</span></div>
+        <div className="h-6 w-px bg-[var(--border)] shrink-0" />
         <ProjectSwitcher />
       </div>
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-4 shrink-0">
         <div className="text-right leading-tight hidden sm:block">
-          <div className="text-sm text-white/90">{currentUser?.name}</div>
-          <div className="text-[11px] text-white/45">{currentUser?.label}</div>
+          <div className="text-sm text-[var(--text)]">{currentUser?.name}</div>
+          <div className="text-[11px] text-[var(--text-2)]">{currentUser?.label}</div>
         </div>
-        <div className="w-8 h-8 rounded-full bg-[#f26722] flex items-center justify-center font-bold text-sm">{currentUser?.name?.[0]}</div>
-        <button onClick={async () => { await logout(); navigate('/login') }} className="text-xs text-white/50 hover:text-white">登出</button>
+        <button onClick={toggleTheme} aria-label="切換深色模式" title="切換深色模式" className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]">{dark ? '☀️' : '🌙'}</button>
+        <div className="w-9 h-9 rounded-full bg-[#1a73e8] flex items-center justify-center font-medium text-sm text-white">{currentUser?.name?.[0]}</div>
+        <button onClick={async () => { await logout(); navigate('/login') }} className="text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
       </div>
     </header>
   )
@@ -88,23 +96,23 @@ function TopBar() {
 
 export function WebLayout({ children }) {
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-[var(--bg)]">
       <TopBar />
       <div className="flex flex-1 min-h-0">
-        <aside className="w-60 bg-white border-r border-slate-200 flex flex-col shrink-0">
+        <aside className="w-64 bg-[var(--surface)] border-r border-[var(--border-2)] flex flex-col shrink-0">
           <nav className="flex-1 py-3 overflow-auto">
             {navGroups.map((g) => (
-              <div key={g.title} className="mb-1">
-                <div className="px-5 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{g.title}</div>
+              <div key={g.title} className="mb-2">
+                <div className="px-6 pt-3 pb-1.5 text-[11px] font-medium tracking-wide text-[var(--text-3)]">{g.title}</div>
                 {g.items.map((n) => (
                   <NavLink
                     key={n.to}
                     to={n.to}
                     className={({ isActive }) =>
-                      `flex items-center gap-2.5 pl-[17px] pr-4 py-2 text-sm border-l-[3px] transition ${
+                      `flex items-center gap-3 mx-3 my-0.5 px-4 py-2 rounded-full text-sm transition ${
                         isActive
-                          ? 'bg-[#fdf0e9] text-[#c2410c] font-medium border-[#f26722]'
-                          : 'text-slate-600 hover:bg-slate-50 border-transparent'
+                          ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
+                          : 'text-[var(--text)] hover:bg-[var(--surface-2)]'
                       }`
                     }
                   >

@@ -17,7 +17,7 @@ function Web({ children }) {
   const { currentUser, isSupabaseConfigured, currentProject, projectLoading } = useStore()
   if (!currentUser) return <Navigate to="/login" replace />
   if (isSupabaseConfigured && currentUser.real) {
-    if (projectLoading) return <WebLayout><div className="text-center text-slate-400 text-sm py-20">載入專案…</div></WebLayout>
+    if (projectLoading) return <WebLayout><div className="text-center text-[var(--text-3)] text-sm py-20">載入專案…</div></WebLayout>
     if (!currentProject) return <WebLayout><ProjectSetup /></WebLayout>
   }
   return <WebLayout>{children}</WebLayout>

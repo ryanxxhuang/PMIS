@@ -4,7 +4,7 @@ import { Card, Button, Field, Badge, Empty } from '../../components/ui.jsx'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
-const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-[#f26722] focus:outline-none'
+const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none'
 
 // 小工項挑選器（搜尋 → 選一個）
 function WorkItemPicker({ leaves, value, label, onPick }) {
@@ -12,9 +12,9 @@ function WorkItemPicker({ leaves, value, label, onPick }) {
   const results = q.trim() ? leaves.filter((it) => it.description.includes(q.trim()) || (it.item_no || '').includes(q.trim())).slice(0, 12) : []
   if (value) {
     return (
-      <div className="flex items-center gap-2 text-sm border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
+      <div className="flex items-center gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface-2)]">
         <span className="truncate flex-1">{label}</span>
-        <button onClick={() => onPick(null, '')} className="text-slate-400 hover:text-rose-500 text-xs">✕</button>
+        <button onClick={() => onPick(null, '')} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
       </div>
     )
   }
@@ -22,11 +22,11 @@ function WorkItemPicker({ leaves, value, label, onPick }) {
     <div className="relative">
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋並選擇工項（可不填）…" className={input} />
       {results.length > 0 && (
-        <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-auto">
+        <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto">
           {results.map((it) => (
             <button key={it.item_key} onClick={() => { onPick(it.item_key, `${it.item_no} ${it.description}`); setQ('') }}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 truncate">
-              <span className="text-slate-400 text-xs mr-2">{it.item_no}</span>{it.description}
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] truncate">
+              <span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}
             </button>
           ))}
         </div>
@@ -82,14 +82,14 @@ export default function Quality() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-bold text-slate-800">品質查驗 <span className="text-slate-400 font-normal text-base">三級品管</span></h1>
-        <p className="text-sm text-slate-500 mt-1">{project.project_name}　·　查驗申請 → 監造查驗 → 不合格開缺失 → 改善複查結案</p>
+        <h1 className="text-xl font-bold text-[var(--text)]">品質查驗 <span className="text-[var(--text-3)] font-normal text-base">三級品管</span></h1>
+        <p className="text-sm text-[var(--text-2)] mt-1">{project.project_name}　·　查驗申請 → 監造查驗 → 不合格開缺失 → 改善複查結案</p>
       </div>
 
       {/* 查驗 */}
       <Card title={`查驗（待查驗 ${openInsp}）`} action={<Button onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
         {inspForm && (
-          <div className="bg-slate-50 rounded-lg p-4 mb-4 space-y-3">
+          <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
             <WorkItemPicker leaves={leaves} value={inspForm.work_item_key} label={inspForm.work_item_label} onPick={(k, l) => setInspForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
             <div className="grid grid-cols-2 gap-3">
               <Field label="查驗項目"><input className={input} value={inspForm.title} onChange={(e) => setInspForm((f) => ({ ...f, title: e.target.value }))} placeholder="如 混凝土澆置前查驗" /></Field>
@@ -103,17 +103,17 @@ export default function Quality() {
         {inspections.length === 0 ? <Empty>尚無查驗紀錄</Empty> : (
           <div className="space-y-2">
             {inspections.map((i) => (
-              <div key={i.id} className="flex items-center justify-between gap-3 border-b border-slate-50 pb-2 text-sm">
+              <div key={i.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
                 <div className="min-w-0">
-                  <div className="text-slate-800">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge></div>
-                  <div className="text-xs text-slate-400 truncate">{i.work_item_no && `${i.work_item_no} `}{i.location} · {i.inspection_type} · {i.requested_date || ''}{i.result_note ? ` · ${i.result_note}` : ''}</div>
+                  <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge></div>
+                  <div className="text-xs text-[var(--text-3)] truncate">{i.work_item_no && `${i.work_item_no} `}{i.location} · {i.inspection_type} · {i.requested_date || ''}{i.result_note ? ` · ${i.result_note}` : ''}</div>
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
                   {i.status === '待查驗' && <>
                     <Button variant="success" onClick={() => onResult(i, true)} disabled={busy}>合格</Button>
                     <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
                   </>}
-                  <button onClick={() => { if (window.confirm('刪除此查驗紀錄？')) deleteInspection(i.id) }} className="text-slate-300 hover:text-rose-500">✕</button>
+                  <button onClick={() => { if (window.confirm('刪除此查驗紀錄？')) deleteInspection(i.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
                 </div>
               </div>
             ))}
@@ -124,7 +124,7 @@ export default function Quality() {
       {/* 缺失 */}
       <Card title={`缺失追蹤（未結案 ${openDef}）`} action={<Button onClick={() => setDefForm(defForm ? null : { title: '', description: '', severity: '一般', location: '', due_date: '', work_item_key: '', work_item_label: '' })}>{defForm ? '取消' : '＋ 開立缺失'}</Button>}>
         {defForm && (
-          <div className="bg-slate-50 rounded-lg p-4 mb-4 space-y-3">
+          <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
             <WorkItemPicker leaves={leaves} value={defForm.work_item_key} label={defForm.work_item_label} onPick={(k, l) => setDefForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
             <div className="grid grid-cols-2 gap-3">
               <Field label="缺失標題"><input className={input} value={defForm.title} onChange={(e) => setDefForm((f) => ({ ...f, title: e.target.value }))} placeholder="如 鋼筋保護層不足" /></Field>
@@ -139,17 +139,17 @@ export default function Quality() {
         {defects.length === 0 ? <Empty>尚無缺失</Empty> : (
           <div className="space-y-2">
             {defects.map((d) => (
-              <div key={d.id} className="flex items-center justify-between gap-3 border-b border-slate-50 pb-2 text-sm">
+              <div key={d.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
                 <div className="min-w-0">
-                  <div className="text-slate-800">{d.title} <Badge color={defColor[d.status] || 'slate'}>{d.status}</Badge> {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>}</div>
-                  <div className="text-xs text-slate-400 truncate">{d.work_item_no && `${d.work_item_no} `}{d.location}{d.due_date ? ` · 期限 ${d.due_date}` : ''}{d.improvement_note ? ` · 改善：${d.improvement_note}` : ''}</div>
+                  <div className="text-[var(--text)]">{d.title} <Badge color={defColor[d.status] || 'slate'}>{d.status}</Badge> {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>}</div>
+                  <div className="text-xs text-[var(--text-3)] truncate">{d.work_item_no && `${d.work_item_no} `}{d.location}{d.due_date ? ` · 期限 ${d.due_date}` : ''}{d.improvement_note ? ` · 改善：${d.improvement_note}` : ''}</div>
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
                   {d.status !== '已結案' && <>
                     {d.status === '待複查' && <Button variant="ghost" onClick={() => updateDefectStatus(d.id, '改善中')} disabled={busy}>退回</Button>}
                     <Button variant={d.status === '待複查' ? 'success' : 'secondary'} onClick={() => advanceDefect(d)} disabled={busy}>{nextLabel[d.status]}</Button>
                   </>}
-                  <button onClick={() => { if (window.confirm('刪除此缺失？')) deleteDefect(d.id) }} className="text-slate-300 hover:text-rose-500">✕</button>
+                  <button onClick={() => { if (window.confirm('刪除此缺失？')) deleteDefect(d.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
                 </div>
               </div>
             ))}
@@ -157,7 +157,7 @@ export default function Quality() {
         )}
       </Card>
 
-      <p className="text-xs text-slate-400">三級品管：廠商提查驗申請 → 監造現場查驗（合格/不合格）→ 不合格自動開缺失 → 廠商改善 → 監造複查結案。查驗/缺失可掛回標單工項。</p>
+      <p className="text-xs text-[var(--text-3)]">三級品管：廠商提查驗申請 → 監造現場查驗（合格/不合格）→ 不合格自動開缺失 → 廠商改善 → 監造複查結案。查驗/缺失可掛回標單工項。</p>
     </div>
   )
 }
