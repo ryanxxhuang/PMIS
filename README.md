@@ -1,59 +1,126 @@
-# PMIS AI — Prototype
+# PMIS — Construction Project Management Information System
 
-PRD.md 的點擊式 demo（假資料、無真實後端/AI）。聚焦 PRD section 21 的「混凝土澆置前自主檢查」完整情境。
+> A web PMIS for Taiwan public‑works **contractors**. It ingests the government **PCCES**
+> bill of quantities and turns it into a live backbone for **cost, schedule and quality** —
+> multi‑tenant, with every project's data isolated by Postgres Row Level Security.
 
-## 啟動
+**▶ Live demo: https://ryanxxhuang.github.io/PMIS/**
 
-```bash
-npm install
-npm run dev      # http://localhost:5173
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20RLS-3FCF8E?logo=supabase&logoColor=white)
+
+---
+
+## What it does
+
+Public construction in Taiwan runs on a standard procurement contract and a structured
+**PCCES eTender** budget — the 標單 (bill of quantities). PMIS treats that bill of quantities
+as the **spine**: import it once and estimating, scheduling and quality all hang off the same
+work‑item tree, so quantities never get re‑keyed and the numbers always reconcile.
+
+### Cost &amp; schedule
+- 📋 **Bill of quantities** — upload a PCCES budget XML; it is parsed **in the browser** into a
+  3,000+ row work‑item tree (項次 / 數量 / 單價 / 複價) and stored per project.
+- 📝 **Daily site logs** — record completed quantity per work item, per day.
+- 💰 **Progress valuations (估驗計價)** — quantity‑based monthly billing that **auto‑fills its
+  cumulative quantities from the daily logs**, then computes retention and net payable.
+- 📈 **S‑curve** — planned vs. actual progress (actual derived live from valuations) with a
+  behind‑schedule indicator.
+- 🖨 **Valuation certificate** — print / export a formal payment document as PDF.
+
+### Quality — three‑tier QC (三級品管)
+- 🔍 **Inspections → defects** — raise an inspection, record pass/fail; a failure **auto‑opens a
+  linked defect** that moves through 開立 → 改善中 → 待複查 → 已結案.
+
+### Multi‑tenant
+Sign up, create a project, and work in your own isolated workspace. Owners can switch between
+projects, add members, and delete projects. Row Level Security guarantees a user only ever sees
+rows for the projects they belong to.
+
+---
+
+## How it fits together
+
+```mermaid
+flowchart LR
+  XML["PCCES budget XML"] -->|browser parse| WI["work_items<br/>(BOQ spine)"]
+  WI --> LOG["daily logs"]
+  LOG -->|sum quantity| VAL["valuations"]
+  WI --> VAL
+  VAL --> CRV["S-curve"]
+  VAL --> PDF["valuation certificate"]
+  WI --> INS["inspections"]
+  INS -->|fail| DEF["defects"]
 ```
 
-> 註：此機器在外接磁碟上，npm 對 optional native 套件有 bug。若 build/dev 報 `Cannot find module '@rollup/...'` 或 `lightningcss`，執行：
-> `npm install --no-save @rollup/rollup-darwin-arm64 lightningcss-darwin-arm64 @tailwindcss/oxide-darwin-arm64`
+---
 
-## Demo 流程（依畫面最上方的 11 步進度條由左到右）
+## Tech stack
 
-1. 登入頁選任一角色 → 進入 Web 管理端
-2. **契約上傳** → 載入範例契約 → 啟動 AI 解析（非同步，約 2 秒）
-3. **AI 解析審核** → Approve「混凝土澆置前自主檢查」→ 建立表單
-4. **AI 表單產生器** → 看欄位與手機預覽 → 發布表單
-5. 左下「切換到手機端」→ **自主檢查** 填表（全合格 + 照片 + 簽名）→ 送出
-6. **查驗申請** → 送出（自動帶入自主檢查表與照片）
-7. **監造查驗** → 選「不合格」→ 送出 → 系統自動建立缺失
-8. 缺失自動帶到 **缺失改善**（施工端）→ 填說明 + 改善照片 → 送複查
-9. **監造查驗** → 複查合格結案
-10. 回 Web → **缺失追蹤** 看完整時間軸 / **報表中心** 一鍵產出報表 / **Audit Trail** 看事件紀錄
+| Layer | Choices |
+|---|---|
+| Frontend | React 18 · Vite 5 · React Router 6 (HashRouter) · Tailwind CSS 4 |
+| Backend | Supabase — Postgres, Auth (email/password), Row Level Security |
+| BOQ parsing | PCCES eTender XML via in‑browser `DOMParser` ([`src/lib/parsePcces.js`](src/lib/parsePcces.js)); a Python port lives in [`scripts/import_boq.py`](scripts/import_boq.py) |
+| Hosting | GitHub Pages (static SPA) |
 
-## 重點對應 PRD
+There is no server of our own: the SPA talks directly to Supabase with a *publishable* key, and
+security is the database's job (RLS).
 
-- **Contract First**：每個 AI 要求、表單、缺失都帶來源文件頁碼 / 章節
-- **Human-reviewed AI**：AI 解析需人工 Approve / Edit / Reject 才進正式流程
-- **Mobile First**：手機框、少打字、多選擇、合格/不合格、拍照、簽名
-- **One Record, Many Outputs**：一次填寫 → 日誌 / 查驗紀錄 / 缺失表 / 照片表
-- **Auditability**：所有送出動作記入 Audit Trail（使用者 / 角色 / 時間 / 裝置）
+---
 
-## 技術
+## Getting started
 
-React 18 + Vite + Tailwind v4 + React Router。狀態在 `src/store.jsx`，並以 **localStorage 持久化**
-（key：`siteflow-demo-v1`）— 整頁重新整理不會丟進度。要從頭走一次，用左下角「**重置 demo**」按鈕清空。
+```bash
+git clone https://github.com/ryanxxhuang/PMIS.git
+cd PMIS
+npm install
+cp .env.example .env        # fill in VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+npm run dev                 # http://localhost:5173
+```
 
-## 結構
+Backend (Supabase project + schema): see **[supabase/SETUP.md](supabase/SETUP.md)**.
+The full, idempotent database schema is one file: **[supabase/schema.sql](supabase/schema.sql)**.
+
+## Deploy
+
+GitHub Pages in one command (build + push to the `gh-pages` branch):
+
+```bash
+npm run deploy
+```
+
+The app uses `HashRouter` and relative asset paths, so it runs from any static host or
+sub‑path with no server‑side routing config.
+
+---
+
+## Project structure
 
 ```
 src/
-  store.jsx          全域狀態 + 所有 action + localStorage 持久化 + resetDemo
-  data/seed.js       種子資料（A 區新建工程、AI 解析結果、表單欄位）
-  components/         ui.jsx（共用元件）、Layout.jsx（Web 側欄 + 手機框 + 進度條 + 重置鈕）
-  pages/web/         Dashboard / ContractUpload / AIReview / FormBuilder / DailyLogs / Defects / Reports / Audit
-  pages/mobile/      Home / DailyLog / SelfInspection / InspectionRequest / SupervisorInspection / DefectResponse / PhotoUpload
+  lib/
+    supabase.js      Supabase client (guarded — falls back to a local prototype if unset)
+    parsePcces.js    PCCES budget XML → work-item tree
+    boqCalc.js       tree building + cumulative-amount maths (shared by valuation & progress)
+  pages/web/         Dashboard · BOQ · SiteLog · Valuation · ValuationPrint · Progress · Quality
+  store.jsx          application state + all Supabase reads/writes
+supabase/
+  schema.sql         complete database schema (idempotent)
+  SETUP.md           backend setup guide
+scripts/
+  import_boq.py      offline PCCES XML → JSON importer (used to seed the sample BOQ)
 ```
 
-## 模組進度
+## Security
 
-對應 [SCOPE.md](SCOPE.md) 的施工廠商 ↔ 監造分階段規畫：
+Every table has Row Level Security enabled, sharing one `is_project_member()` predicate.
+The publishable key is designed to be public — it is RLS, not the key, that protects data. The
+`service_role` / secret key is never shipped to the browser.
 
-- **Phase 0（已建）**：契約上傳 · AI 解析審核 · AI 表單產生器 · 自主檢查 · 查驗申請 · 監造查驗 · 缺失追蹤 · 照片 · 報表 · Audit
-- **Phase 1**：✅ **M1 施工日誌 / 監造日報**（手機填寫、自動帶入當日照片/查驗/缺失、AI 摘要、監造日報可引用施工廠商日誌）｜✅ **M2 檢驗停留點 ITP**（W/H/R 停留點，AI 從契約要求展開）
-- **Phase 2**：✅ **M3 送審 Submittals**（Procore ball-in-court：球在誰手上、審查往返、版次管理）｜✅ **M4 RFI 工程疑義**（ball-in-court、工期/費用影響旗標）｜⬜ M5 試驗管理
-- **Phase 3**：會議紀錄 · 分包商 · 進度 · 工安 …（詳見 SCOPE.md）
+---
+
+<sub>Sample data is the public PCCES budget for the 國際原住民族文化創意產業園區新建工程 tender
+(~NT$0.94B, 3,262 work items), used purely to demonstrate the BOQ pipeline.</sub>

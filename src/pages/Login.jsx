@@ -110,7 +110,7 @@ function AuthForm({ signIn, signUp }) {
 function RolePicker({ setCurrentUser, navigate }) {
   const pick = (u) => {
     setCurrentUser(u)
-    navigate(u.role.startsWith('Supervisor') ? '/m/supervisor-inspection' : '/dashboard')
+    navigate('/dashboard')
   }
   return (
     <>
