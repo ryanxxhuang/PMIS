@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Field, Empty } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
@@ -14,6 +14,8 @@ export default function Progress() {
     isSupabaseConfigured, currentProject, workItemsSource } = useStore()
   const [start, setStart] = useState(project.start_date)
   const [end, setEnd] = useState(project.end_date)
+  const [expanded, setExpanded] = useState(() => new Set()) // 展開的工項節點 key
+  const toggle = (key) => setExpanded((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n })
 
   const tree = useMemo(() => (data ? buildBillableTree(data.items) : { roots: [], childrenMap: new Map() }), [data])
   const billableTotal = data?.meta.billable_total || 0
@@ -30,6 +32,25 @@ export default function Progress() {
     }
     return map
   }, [data, valuations, tree, billableTotal])
+
+  // 各節點的發包總額(子項加總,末端=自身金額)— 用來算各工項完成%
+  const amountMap = useMemo(() => {
+    const map = new Map()
+    if (!data) return map
+    const calc = (node) => {
+      const kids = tree.childrenMap.get(node.item_key) || []
+      const v = kids.length ? kids.reduce((s, k) => s + calc(k), 0) : (node.amount || 0)
+      map.set(node.item_key, v); return v
+    }
+    tree.roots.forEach(calc); return map
+  }, [data, tree])
+
+  // 最新一期估驗 → 各節點累計完成金額(滾算到母項)
+  const latestCumMap = useMemo(() => {
+    if (!data || !valuations.length) return new Map()
+    const latest = valuations.reduce((a, b) => (b.period_no > a.period_no ? b : a))
+    return buildCumMap(tree.roots, tree.childrenMap, latest.items || {})
+  }, [data, valuations, tree])
 
   if (!data) return <Empty>載入進度資料中…</Empty>
 
@@ -87,6 +108,15 @@ export default function Progress() {
       ? <Badge color="blue">超前 {(-behind).toFixed(1)}%</Badge>
       : <Badge color="green">進度正常</Badge>
 
+  // 工項層級進度:各節點實際完成%(累計估驗金額 ÷ 該節點發包額)
+  const nodePct = (key) => { const amt = amountMap.get(key) || 0; return amt > 0 ? (latestCumMap.get(key) || 0) / amt * 100 : 0 }
+  const leafList = data.items.filter((it) => it.is_billable && !it.is_rollup && !(tree.childrenMap.get(it.item_key)?.length))
+  const laggards = leafList
+    .map((it) => { const pct = nodePct(it.item_key); const share = billableTotal ? (amountMap.get(it.item_key) || 0) / billableTotal * 100 : 0; return { it, pct, share, drag: share * Math.max(0, plannedNow - pct) / 100 } })
+    .filter((l) => l.drag > 0)
+    .sort((a, b) => b.drag - a.drag)
+    .slice(0, 8)
+
   // ── S 曲線 SVG ──
   const W = 760, H = 300, m = { l: 44, r: 20, t: 16, b: 30 }
   const pw = W - m.l - m.r, ph = H - m.t - m.b
@@ -139,6 +169,37 @@ export default function Progress() {
         </div>
       </Card>
 
+      <Card title="落後工項（最拖累整體進度）">
+        {laggards.length === 0 ? (
+          <Empty>目前沒有明顯落後的工項 — 各工項實際完成度都追上今日預定 {plannedNow.toFixed(0)}%。</Empty>
+        ) : (
+          <div className="overflow-x-auto"><div className="min-w-[480px] space-y-1.5">
+            {laggards.map(({ it, pct, share }) => (
+              <div key={it.item_key} className="flex items-center gap-2">
+                <span className="w-20 shrink-0 text-xs text-[var(--text-3)] tabular-nums truncate">{it.item_no}</span>
+                <span className="flex-1 text-sm truncate">{it.description}</span>
+                <span className="w-12 text-right text-xs text-[var(--text-3)] tabular-nums" title="占發包工程費權重">{share.toFixed(1)}%</span>
+                <div className="w-28 shrink-0 h-2 rounded-full overflow-hidden bg-[var(--surface-2)]"><div className="h-full bg-[var(--red-text)] rounded-full" style={{ width: `${Math.min(100, pct)}%` }} /></div>
+                <span className="w-10 text-right text-xs tabular-nums">{pct.toFixed(0)}%</span>
+              </div>
+            ))}
+          </div></div>
+        )}
+        <p className="text-xs text-[var(--text-3)] mt-3">落後 = 實際完成% 低於今日預定 {plannedNow.toFixed(0)}%;依「權重 × 落後幅度」排序,越上面對整體進度拖累越大。</p>
+      </Card>
+
+      <Card title="工項進度（可展開鑽取）">
+        <div className="overflow-x-auto"><div className="min-w-[520px]">
+          <div className="flex items-center gap-2 pb-1.5 border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-3)]">
+            <span className="w-4 shrink-0" /><span className="w-20 shrink-0">項次</span><span className="flex-1">工項</span>
+            <span className="w-12 text-right">權重</span><span className="w-28 text-center shrink-0">完成度</span><span className="w-10 text-right">%</span><span className="w-8 shrink-0" />
+          </div>
+          <ProgressTree nodes={tree.roots} depth={0} expanded={expanded} toggle={toggle}
+            childrenMap={tree.childrenMap} nodePct={nodePct} amountMap={amountMap} billableTotal={billableTotal} plannedNow={plannedNow} />
+        </div></div>
+        <p className="text-xs text-[var(--text-3)] mt-3">點「▸」展開到更細的工項;紅色長條=該工項落後今日預定。各層百分比為金額加權滾算。</p>
+      </Card>
+
       <Card title="逐月預定進度（可調整）">
         <div className="overflow-x-auto -mx-5 -my-5">
           <table className="w-full text-sm">
@@ -177,13 +238,48 @@ export default function Progress() {
   )
 }
 
+function ProgressTree({ nodes, depth, expanded, toggle, childrenMap, nodePct, amountMap, billableTotal, plannedNow }) {
+  return nodes.map((it) => {
+    const kids = childrenMap.get(it.item_key) || []
+    const pct = nodePct(it.item_key)
+    const share = billableTotal ? (amountMap.get(it.item_key) || 0) / billableTotal * 100 : 0
+    const behind = plannedNow - pct > 5
+    const open = expanded.has(it.item_key)
+    return (
+      <Fragment key={it.item_key}>
+        <div className="flex items-center gap-2 py-1.5 border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
+          <button onClick={() => kids.length && toggle(it.item_key)} style={{ marginLeft: `${depth * 14}px` }}
+            className={`w-4 shrink-0 text-[var(--text-3)] ${kids.length ? 'cursor-pointer hover:text-[var(--text)]' : 'cursor-default'}`}>
+            {kids.length ? (open ? '▾' : '▸') : '·'}
+          </button>
+          <span className="w-20 shrink-0 text-xs text-[var(--text-3)] tabular-nums truncate">{it.item_no}</span>
+          <span className="flex-1 text-sm truncate">{it.description}</span>
+          <span className="w-12 text-right text-xs text-[var(--text-3)] tabular-nums">{share.toFixed(1)}%</span>
+          <div className="w-28 shrink-0 h-2 rounded-full overflow-hidden bg-[var(--surface-2)]">
+            <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: behind ? 'var(--red-text)' : 'var(--blue)' }} />
+          </div>
+          <span className="w-10 text-right text-xs tabular-nums">{pct.toFixed(0)}%</span>
+          {behind
+            ? <span className="w-8 shrink-0 text-[10px] text-center px-1 py-0.5 rounded-full bg-[var(--red-tint)] text-[var(--red-text)]">落後</span>
+            : <span className="w-8 shrink-0" />}
+        </div>
+        {open && kids.length > 0 && (
+          <ProgressTree nodes={kids} depth={depth + 1} expanded={expanded} toggle={toggle}
+            childrenMap={childrenMap} nodePct={nodePct} amountMap={amountMap} billableTotal={billableTotal} plannedNow={plannedNow} />
+        )}
+      </Fragment>
+    )
+  })
+}
+
 function Header({ billableTotal, project, action }) {
   const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
   return (
     <div className="flex items-end justify-between flex-wrap gap-3">
-      <div>
+      <div className="min-w-0">
         <h1 className="text-xl font-bold text-[var(--text)]">進度管制 <span className="text-[var(--text-3)] font-normal text-base">S-Curve</span></h1>
-        <p className="text-sm text-[var(--text-2)] mt-1">{project.project_name}　·　發包工程費 {yi(billableTotal)}</p>
+        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
+        <p className="text-xs text-[var(--text-3)] mt-0.5">發包工程費 {yi(billableTotal)}</p>
       </div>
       {action}
     </div>

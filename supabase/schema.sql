@@ -183,6 +183,12 @@ create policy "valuation_items_members_all" on public.valuation_items for all to
   using (exists (select 1 from public.valuations v where v.id = valuation_id and public.is_project_member(v.project_id)))
   with check (exists (select 1 from public.valuations v where v.id = valuation_id and public.is_project_member(v.project_id)));
 
+-- 請款 / 收款追蹤(估驗核定後)
+alter table public.valuations
+  add column if not exists invoice_date date,    -- 請款日
+  add column if not exists paid_date    date,    -- 收款日
+  add column if not exists paid_amount  numeric; -- 實收金額
+
 -- ── Planned schedule (S-curve baseline) ─────────────────────────────────────
 create table if not exists public.schedule_periods (
   id           uuid primary key default gen_random_uuid(),
@@ -231,6 +237,48 @@ create policy "daily_log_items_members_all" on public.daily_log_items for all to
   using (exists (select 1 from public.daily_logs d where d.id = daily_log_id and public.is_project_member(d.project_id)))
   with check (exists (select 1 from public.daily_logs d where d.id = daily_log_id and public.is_project_member(d.project_id)));
 
+-- ── Photos (site-log evidence; quality photos reuse this table later) ────────
+-- Files live in the 'photos' Storage bucket; this row is the metadata + links.
+-- Client generates id + storage_path so the mobile app can save offline first
+-- and sync later. inspection_id / defect_id are added when quality ships.
+create table if not exists public.photos (
+  id           uuid primary key default gen_random_uuid(),
+  project_id   uuid not null references public.projects(id) on delete cascade,
+  daily_log_id uuid references public.daily_logs(id) on delete cascade,
+  work_item_id uuid references public.work_items(id) on delete set null,
+  storage_path text not null,                  -- object path inside the 'photos' bucket
+  caption      text,
+  taken_at     timestamptz,                    -- when it was shot on site (≠ uploaded)
+  gps_lat      numeric,
+  gps_lng      numeric,
+  ai_source    boolean not null default false, -- true if a field was filled via whiteboard OCR
+  uploaded_by  uuid references auth.users(id),
+  created_at   timestamptz not null default now()
+);
+create index if not exists photos_project_idx   on public.photos(project_id);
+create index if not exists photos_daily_log_idx on public.photos(daily_log_id);
+alter table public.photos enable row level security;
+drop policy if exists "photos_members_all" on public.photos;
+create policy "photos_members_all" on public.photos for all to authenticated
+  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+
+-- ── Storage bucket for photo files + object-level RLS ────────────────────────
+-- Object path convention: <project_id>/<daily_log_id>/<photo_id>.jpg — the first
+-- folder segment is the project_id, so we reuse is_project_member() to gate access.
+insert into storage.buckets (id, name, public)
+values ('photos', 'photos', false)
+on conflict (id) do nothing;
+
+drop policy if exists "photos_objects_select" on storage.objects;
+create policy "photos_objects_select" on storage.objects for select to authenticated
+  using (bucket_id = 'photos' and public.is_project_member(((storage.foldername(name))[1])::uuid));
+drop policy if exists "photos_objects_insert" on storage.objects;
+create policy "photos_objects_insert" on storage.objects for insert to authenticated
+  with check (bucket_id = 'photos' and public.is_project_member(((storage.foldername(name))[1])::uuid));
+drop policy if exists "photos_objects_delete" on storage.objects;
+create policy "photos_objects_delete" on storage.objects for delete to authenticated
+  using (bucket_id = 'photos' and public.is_project_member(((storage.foldername(name))[1])::uuid));
+
 -- ── Quality: inspections + defects (three-tier QC) ──────────────────────────
 create table if not exists public.inspections (
   id              uuid primary key default gen_random_uuid(),
@@ -272,6 +320,108 @@ create policy "inspections_members_all" on public.inspections for all to authent
   using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
 drop policy if exists "defects_members_all" on public.defects;
 create policy "defects_members_all" on public.defects for all to authenticated
+  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+
+-- ── Contract obligations (AI-extracted deadlines + penalties) ───────────────
+-- Each row is a time-based duty pulled from the contract. The deadline is stored
+-- as a RULE (trigger event + offset days), not an absolute date — the frontend
+-- resolves it against the project's anchor dates below, so one parse works for
+-- any schedule and recomputes if a date slips.
+alter table public.projects
+  add column if not exists award_date       date,   -- 決標日
+  add column if not exists notice_date       date,   -- 接獲開工通知日
+  add column if not exists commencement_date date;   -- 開工日
+
+create table if not exists public.contract_obligations (
+  id            uuid primary key default gen_random_uuid(),
+  project_id    uuid not null references public.projects(id) on delete cascade,
+  title         text not null,                 -- 應辦事項
+  category      text,                          -- 階段:開工前 | 施工中 | 完工 | 保固
+  trigger_event text,                          -- award | notice | commencement | completion | monthly | fixed | other
+  offset_days   int,                           -- 期限天數(相對觸發點)
+  offset_dir    text default 'after',          -- before | after
+  fixed_date    date,                          -- trigger_event='fixed' 時的絕對日期
+  recurring     text,                          -- null | monthly …(可重複義務)
+  recurring_day int,                           -- 每月幾號(recurring='monthly')
+  responsible   text,                          -- 廠商 | 監造 | 機關
+  penalty       text,                          -- 罰則描述(逾期/未提送的後果)
+  source_clause text,                          -- 出處條款,如 §12.4
+  source_page   text,                          -- 頁碼
+  status        text not null default '待辦',  -- 待辦 | 已提送 | 已完成 | 不適用(逾期由到期日推算)
+  note          text,
+  sort_order    int,
+  created_at    timestamptz not null default now()
+);
+create index if not exists contract_obligations_project_idx on public.contract_obligations(project_id);
+alter table public.contract_obligations enable row level security;
+drop policy if exists "contract_obligations_members_all" on public.contract_obligations;
+create policy "contract_obligations_members_all" on public.contract_obligations for all to authenticated
+  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+
+-- ── Cost management (budget vs actual, subcontracting, gross margin) ─────────
+-- A contractor's profit ledger. Revenue = the billable BOQ total (發包工程費);
+-- this table holds the COST side. Each row is a budgeted vs actual cost line,
+-- categorised; a 分包 (subcontract) is just a row with category='分包' + vendor.
+-- 毛利 = 合約收入 − Σ 成本; the page derives budget/actual margin from these rows.
+create table if not exists public.cost_items (
+  id            uuid primary key default gen_random_uuid(),
+  project_id    uuid not null references public.projects(id) on delete cascade,
+  category      text not null default '其他',   -- 材料 | 人工 | 機具 | 分包 | 管理費 | 其他
+  title         text not null,                  -- 成本項目 / 分包工程名稱
+  vendor        text,                           -- 供應商 / 分包商
+  budget_amount numeric default 0,              -- 預算成本(發包前估算)
+  actual_amount numeric default 0,              -- 實際成本(已發生 / 已付)
+  status        text not null default '進行中',  -- 進行中 | 已結算
+  note          text,
+  sort_order    int,
+  created_at    timestamptz not null default now()
+);
+create index if not exists cost_items_project_idx on public.cost_items(project_id);
+alter table public.cost_items enable row level security;
+drop policy if exists "cost_items_members_all" on public.cost_items;
+create policy "cost_items_members_all" on public.cost_items for all to authenticated
+  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+
+-- ── Per-item schedule (逐工項計畫起迄 → per-item 落後) ───────────────────────
+-- Kept in its own table (not columns on work_items) so re-importing the BOQ
+-- doesn't wipe the schedule. One row per scheduled work item.
+create table if not exists public.item_schedules (
+  id             uuid primary key default gen_random_uuid(),
+  project_id     uuid not null references public.projects(id) on delete cascade,
+  work_item_id   uuid not null references public.work_items(id) on delete cascade,
+  planned_start  date,
+  planned_finish date,
+  created_at     timestamptz not null default now(),
+  unique (work_item_id)
+);
+create index if not exists item_schedules_project_idx on public.item_schedules(project_id);
+alter table public.item_schedules enable row level security;
+drop policy if exists "item_schedules_members_all" on public.item_schedules;
+create policy "item_schedules_members_all" on public.item_schedules for all to authenticated
+  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+
+-- ── Safety (工安) — self-checks, deficiencies, training, hazard notices ──────
+-- One flexible table for the contractor's site-safety log (public-works required).
+-- record_type splits the four kinds; 缺失/自主檢查 carry a status flow + due date,
+-- 教育訓練/危害告知 are point-in-time records.
+create table if not exists public.safety_records (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid not null references public.projects(id) on delete cascade,
+  record_type text not null default '工安缺失',  -- 自主檢查 | 工安缺失 | 教育訓練 | 危害告知
+  title       text not null,
+  location    text,
+  record_date date,
+  severity    text default '一般',              -- 缺失用:輕微 | 一般 | 嚴重
+  status      text not null default '待改善',    -- 待改善 | 改善中 | 已完成
+  due_date    date,
+  note        text,
+  created_by  uuid references auth.users(id),
+  created_at  timestamptz not null default now()
+);
+create index if not exists safety_records_project_idx on public.safety_records(project_id);
+alter table public.safety_records enable row level security;
+drop policy if exists "safety_records_members_all" on public.safety_records;
+create policy "safety_records_members_all" on public.safety_records for all to authenticated
   using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
 
 -- ── RPCs (SECURITY DEFINER) ─────────────────────────────────────────────────

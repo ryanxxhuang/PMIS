@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty } from '../../components/ui.jsx'
+import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
@@ -83,7 +84,8 @@ export default function Quality() {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold text-[var(--text)]">品質查驗 <span className="text-[var(--text-3)] font-normal text-base">三級品管</span></h1>
-        <p className="text-sm text-[var(--text-2)] mt-1">{project.project_name}　·　查驗申請 → 監造查驗 → 不合格開缺失 → 改善複查結案</p>
+        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
+        <p className="text-xs text-[var(--text-3)] mt-0.5">查驗申請 → 監造查驗 → 不合格開缺失 → 改善複查結案</p>
       </div>
 
       {/* 查驗 */}
@@ -122,7 +124,14 @@ export default function Quality() {
       </Card>
 
       {/* 缺失 */}
-      <Card title={`缺失追蹤（未結案 ${openDef}）`} action={<Button onClick={() => setDefForm(defForm ? null : { title: '', description: '', severity: '一般', location: '', due_date: '', work_item_key: '', work_item_label: '' })}>{defForm ? '取消' : '＋ 開立缺失'}</Button>}>
+      <Card title={`缺失追蹤（未結案 ${openDef}）`} action={<div className="flex items-center gap-3">
+        {defects.length > 0 && <button onClick={() => exportCsv(`缺失清單_${stamp()}`, defects, [
+          { key: 'title', label: '缺失標題' }, { key: 'work_item_no', label: '工項' }, { key: 'location', label: '位置' },
+          { key: 'severity', label: '嚴重度' }, { key: 'status', label: '狀態' }, { key: 'due_date', label: '改善期限' },
+          { key: 'improvement_note', label: '改善說明' },
+        ])} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
+        <Button onClick={() => setDefForm(defForm ? null : { title: '', description: '', severity: '一般', location: '', due_date: '', work_item_key: '', work_item_label: '' })}>{defForm ? '取消' : '＋ 開立缺失'}</Button>
+      </div>}>
         {defForm && (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
             <WorkItemPicker leaves={leaves} value={defForm.work_item_key} label={defForm.work_item_label} onPick={(k, l) => setDefForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />

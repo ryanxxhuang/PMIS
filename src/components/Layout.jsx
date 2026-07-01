@@ -5,15 +5,21 @@ import { useStore } from '../store.jsx'
 const navGroups = [
   { title: '總覽', items: [
     { to: '/dashboard', icon: '📊', label: '專案 Dashboard' },
+    { to: '/alerts', icon: '🔔', label: '提醒中心' },
+    { to: '/contract', icon: '📅', label: '契約管制' },
   ] },
   { title: '成本與進度', items: [
     { to: '/boq', icon: '📋', label: '標單工項' },
     { to: '/site-log', icon: '📝', label: '施工日誌' },
     { to: '/valuation', icon: '💰', label: '估驗計價' },
+    { to: '/payments', icon: '🧾', label: '請款收款' },
+    { to: '/cost', icon: '🧮', label: '成本管理' },
     { to: '/progress', icon: '📈', label: '進度 S 曲線' },
+    { to: '/schedule', icon: '🗓️', label: '逐工項排程' },
   ] },
-  { title: '品質', items: [
+  { title: '品質與工安', items: [
     { to: '/quality', icon: '🔍', label: '品質查驗' },
+    { to: '/safety', icon: '🦺', label: '工安管理' },
   ] },
 ]
 
@@ -35,7 +41,7 @@ function ProjectSwitcher() {
     <div className="relative min-w-0">
       <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
         <span className="text-[var(--text-3)] text-xs shrink-0">專案</span>
-        <span className="font-medium truncate max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
+        <span className="font-medium truncate max-w-[42vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
         <span className="text-[var(--text-2)] text-[10px]">▼</span>
       </button>
       {open && (
@@ -64,7 +70,7 @@ function ProjectSwitcher() {
   )
 }
 
-function TopBar() {
+function TopBar({ onMenu }) {
   const { currentUser, logout } = useStore()
   const navigate = useNavigate()
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
@@ -75,13 +81,14 @@ function TopBar() {
     setDark(next)
   }
   return (
-    <header className="bg-[var(--surface)] border-b border-[var(--border)] h-16 flex items-center justify-between px-5 shrink-0 relative z-10">
-      <div className="flex items-center gap-4 min-w-0">
+    <header className="bg-[var(--surface)] border-b border-[var(--border)] h-16 flex items-center justify-between px-3 md:px-5 shrink-0 relative z-10">
+      <div className="flex items-center gap-2 md:gap-4 min-w-0">
+        <button onClick={onMenu} aria-label="選單" className="md:hidden w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-xl text-[var(--text-2)] hover:bg-[var(--surface-2)]">☰</button>
         <div className="font-medium text-xl tracking-tight text-[var(--text-2)] shrink-0">PMIS <span className="text-[var(--blue)] font-bold">AI</span></div>
-        <div className="h-6 w-px bg-[var(--border)] shrink-0" />
+        <div className="h-6 w-px bg-[var(--border)] shrink-0 hidden sm:block" />
         <ProjectSwitcher />
       </div>
-      <div className="flex items-center gap-4 shrink-0">
+      <div className="flex items-center gap-2 md:gap-4 shrink-0">
         <div className="text-right leading-tight hidden sm:block">
           <div className="text-sm text-[var(--text)]">{currentUser?.name}</div>
           <div className="text-[11px] text-[var(--text-2)]">{currentUser?.label}</div>
@@ -95,11 +102,19 @@ function TopBar() {
 }
 
 export function WebLayout({ children }) {
+  const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg)]">
-      <TopBar />
+      <TopBar onMenu={() => setMenuOpen(true)} />
       <div className="flex flex-1 min-h-0">
-        <aside className="w-64 bg-[var(--surface)] border-r border-[var(--border-2)] flex flex-col shrink-0">
+        {/* 手機:點背景關閉抽屜 */}
+        {menuOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMenuOpen(false)} />}
+        <aside
+          className={`w-64 bg-[var(--surface)] border-r border-[var(--border-2)] flex flex-col shrink-0
+            fixed top-16 bottom-0 left-0 z-40 transition-transform
+            md:static md:top-auto md:z-auto md:translate-x-0
+            ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        >
           <nav className="flex-1 py-3 overflow-auto">
             {navGroups.map((g) => (
               <div key={g.title} className="mb-2">
@@ -108,6 +123,7 @@ export function WebLayout({ children }) {
                   <NavLink
                     key={n.to}
                     to={n.to}
+                    onClick={() => setMenuOpen(false)}
                     className={({ isActive }) =>
                       `flex items-center gap-3 mx-3 my-0.5 px-4 py-2 rounded-full text-sm transition ${
                         isActive
@@ -124,7 +140,7 @@ export function WebLayout({ children }) {
             ))}
           </nav>
         </aside>
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
+        <main className="flex-1 p-4 md:p-6 overflow-auto min-w-0">{children}</main>
       </div>
     </div>
   )

@@ -5,6 +5,9 @@ dist
 .DS_Store
 .playwright-mcp
 
+# Supabase CLI local state (linked project ref 等本機狀態，勿入版控)
+supabase/.temp/
+
 # 發包圖說原始檔（657MB，勿入版控；標單已解析成 src/data/workItems.json）
 發包圖說20200715/
 *.output

@@ -136,9 +136,10 @@ export default function Valuation() {
   return (
     <div className="space-y-5">
       <div className="flex items-end justify-between flex-wrap gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-[var(--text)]">估驗計價 <span className="text-[var(--text-3)] font-normal text-base">Valuation</span></h1>
-          <p className="text-sm text-[var(--text-2)] mt-1">{project.project_name}　·　發包工程費 {yi(billableTotal)}（保留款 {selected?.retention_pct ?? 5}%）</p>
+          <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
+          <p className="text-xs text-[var(--text-3)] mt-0.5">發包工程費 {yi(billableTotal)}（保留款 {selected?.retention_pct ?? 5}%）</p>
         </div>
         <div className="flex items-center gap-2">
           {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}>🖨 列印估驗單</Button>}

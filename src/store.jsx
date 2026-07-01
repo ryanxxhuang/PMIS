@@ -1,13 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
-import {
-  project,
-  users,
-  aiExtractedRequirements,
-  aiGeneratedITP,
-  seedSubmittals,
-  seedRFIs,
-  concreteInspectionForm,
-} from './data/seed.js'
+import { project } from './data/seed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
 import { loadWorkItems } from './lib/boqCalc.js'
 
@@ -27,6 +19,7 @@ function normalizeProject(row) {
     owner_name: row.owner_name, contractor_name: row.contractor_name,
     supervisor_name: row.supervisor_name, location: row.location,
     start_date: row.start_date, end_date: row.end_date, status: row.status,
+    award_date: row.award_date, notice_date: row.notice_date, commencement_date: row.commencement_date,
   }
 }
 
@@ -88,6 +81,7 @@ async function loadValuationsFromDB(projectId, idToKey) {
   return vals.map((v) => ({
     id: v.id, period_no: v.period_no, valuation_date: v.valuation_date,
     retention_pct: Number(v.retention_pct), status: v.status, items: byVal.get(v.id) || {},
+    invoice_date: v.invoice_date, paid_date: v.paid_date, paid_amount: v.paid_amount == null ? null : Number(v.paid_amount),
   }))
 }
 
@@ -129,60 +123,103 @@ async function loadQualityFromDB(projectId, byId) {
   return { inspections: (insp || []).map(deco), defects: (defs || []).map(deco) }
 }
 
-const STORAGE_KEY = 'siteflow-demo-v1'
-function loadPersisted() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}
-  } catch {
-    return {}
-  }
+// 從 DB 載入契約義務清單
+async function loadObligationsFromDB(projectId) {
+  const { data } = await supabase.from('contract_obligations')
+    .select('*').eq('project_id', projectId).order('sort_order')
+  return data || []
 }
 
-// Demo 流程的 11 個步驟（對應 PRD section 21）
-export const DEMO_STEPS = [
-  '上傳契約',
-  'AI 解析契約要求',
-  '審核 AI 解析結果',
-  'AI 建立表單',
-  '施工廠商填自主檢查',
-  '提出查驗申請',
-  '監造現場查驗',
-  '查驗不合格 → 開立缺失',
-  '施工廠商改善',
-  '監造複查結案',
-  '產出報表',
-]
+// 從 DB 載入成本項目（預算 vs 實際、分包）
+async function loadCostItemsFromDB(projectId) {
+  const { data } = await supabase.from('cost_items')
+    .select('*').eq('project_id', projectId).order('sort_order').order('created_at')
+  return data || []
+}
+
+// 從 DB 載入工安紀錄（自主檢查 / 缺失 / 教育訓練 / 危害告知）
+async function loadSafetyFromDB(projectId) {
+  const { data } = await supabase.from('safety_records')
+    .select('*').eq('project_id', projectId).order('record_date', { ascending: false }).order('created_at', { ascending: false })
+  return data || []
+}
+
+// 從 DB 載入逐工項排程，回傳 { item_key: { planned_start, planned_finish } }
+async function loadItemSchedulesFromDB(projectId, idToKey) {
+  const { data } = await supabase.from('item_schedules').select('*').eq('project_id', projectId)
+  const map = {}
+  for (const r of data || []) {
+    const key = idToKey.get(r.work_item_id)
+    if (key) map[key] = { planned_start: r.planned_start, planned_finish: r.planned_finish }
+  }
+  return map
+}
+
+// 壓縮並轉 base64(去掉 data: 前綴)。長邊降到 1600px、JPEG 0.8 → 省 token、上傳更快。
+function imageToBase64(file, maxPx = 1600) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(img.src)
+      resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1])
+    }
+    img.onerror = reject
+    img.src = URL.createObjectURL(file)
+  })
+}
+
+// 讀檔轉 base64(去 data: 前綴),不壓縮 — 給掃描/圖片契約用(退回視覺)。
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result).split(',')[1])
+    r.onerror = reject
+    r.readAsDataURL(file)
+  })
+}
+
+// 瀏覽器端抽契約文字:Word(.docx)用 mammoth、數位 PDF 用 pdf.js。
+// 抽得到文字就送純文字給 AI(比用「看圖」準很多);抽不到(掃描/圖片)回空字串走視覺。
+// 套件動態載入,不進主 bundle。
+async function extractContractText(file) {
+  const name = (file.name || '').toLowerCase()
+  const type = file.type || ''
+  const buf = await file.arrayBuffer()
+  if (name.endsWith('.docx') || type.includes('officedocument.wordprocessing') || type.includes('msword')) {
+    const m = await import('mammoth/mammoth.browser')
+    const extract = m.extractRawText || m.default?.extractRawText
+    const { value } = await extract({ arrayBuffer: buf })
+    return value || ''
+  }
+  if (name.endsWith('.pdf') || type.includes('pdf')) {
+    const pdfjs = await import('pdfjs-dist')
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise
+    const parts = []
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const tc = await page.getTextContent()
+      parts.push(tc.items.map((it) => it.str).join(' '))
+    }
+    return parts.join('\n')
+  }
+  return ''
+}
 
 const now = () => new Date().toLocaleString('zh-TW', { hour12: false })
 
 export function StoreProvider({ children }) {
-  const persisted = loadPersisted()
-  const [currentUser, setCurrentUser] = useState(persisted.currentUser ?? null)
-  const [completedSteps, setCompletedSteps] = useState(persisted.completedSteps ?? []) // 已完成的 demo 步驟 index
-  const [documents, setDocuments] = useState(persisted.documents ?? [])
-  // idle | processing | done — 重整時若卡在 processing 則依是否已有解析結果回復
-  const [aiStatus, setAiStatus] = useState(
-    persisted.aiStatus === 'processing'
-      ? (persisted.requirements?.length ? 'done' : 'idle')
-      : (persisted.aiStatus ?? 'idle')
-  )
-  const [requirements, setRequirements] = useState(persisted.requirements ?? [])
-  const [itp, setItp] = useState(persisted.itp ?? [])
-  const [forms, setForms] = useState(persisted.forms ?? [])
-  const [selfInspection, setSelfInspection] = useState(persisted.selfInspection ?? null)
-  const [inspectionRequest, setInspectionRequest] = useState(persisted.inspectionRequest ?? null)
-  const [supervisorResult, setSupervisorResult] = useState(persisted.supervisorResult ?? null)
-  const [defect, setDefect] = useState(persisted.defect ?? null)
-  const [photos, setPhotos] = useState(persisted.photos ?? [])
-  const [reports, setReports] = useState(persisted.reports ?? [])
-  const [audit, setAudit] = useState(persisted.audit ?? [])
-  const [dailyLogs, setDailyLogs] = useState(persisted.dailyLogs ?? [])
-  const [submittals, setSubmittals] = useState(persisted.submittals ?? seedSubmittals)
-  const [rfis, setRfis] = useState(persisted.rfis ?? seedRFIs)
-  // 估驗計價：每期一個物件，items 為 { [work_item_key]: 累計完成% }
-  const [valuations, setValuations] = useState(persisted.valuations ?? [])
+  const [currentUser, setCurrentUser] = useState(null)
+  const [audit, setAudit] = useState([]) // 記憶體操作紀錄（log() 寫入，供日後審計）
+  // 估驗計價：每期一個物件，items 為 { [work_item_key]: 累計完成數量 }
+  const [valuations, setValuations] = useState([])
   // 預定進度 S 曲線：{ start, end, months: [{ label, plannedPct }] }
-  const [progressPlan, setProgressPlan] = useState(persisted.progressPlan ?? null)
+  const [progressPlan, setProgressPlan] = useState(null)
   // 真實後端：使用者的所有專案 + 目前選的那個 + 標單工項（DB 或範例 JSON）
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState(null)
@@ -198,6 +235,14 @@ export function StoreProvider({ children }) {
   // 品質：查驗 + 缺失（真 DB）
   const [inspections, setInspections] = useState([])
   const [defects, setDefects] = useState([])
+  // 契約義務清單（真 DB；AI 解析契約後填入）
+  const [obligations, setObligations] = useState([])
+  // 成本項目（真 DB；預算 vs 實際、分包）
+  const [costItems, setCostItems] = useState([])
+  // 工安紀錄（真 DB）
+  const [safetyRecords, setSafetyRecords] = useState([])
+  // 逐工項排程（真 DB；{ item_key: { planned_start, planned_finish } }）
+  const [itemSchedules, setItemSchedules] = useState({})
 
   const log = useCallback((action, record, extra = {}) => {
     setAudit((a) => [
@@ -212,10 +257,6 @@ export function StoreProvider({ children }) {
       },
       ...a,
     ])
-  }, [])
-
-  const completeStep = useCallback((idx) => {
-    setCompletedSteps((s) => (s.includes(idx) ? s : [...s, idx]))
   }, [])
 
   // ── 真實 Auth（Supabase）────────────────────────────────────────────
@@ -342,6 +383,18 @@ export function StoreProvider({ children }) {
       const qual = await loadQualityFromDB(currentProject.project_id, wiMaps.byId)
       if (!active) return
       setInspections(qual.inspections); setDefects(qual.defects)
+      const obs = await loadObligationsFromDB(currentProject.project_id)
+      if (!active) return
+      setObligations(obs)
+      const costs = await loadCostItemsFromDB(currentProject.project_id)
+      if (!active) return
+      setCostItems(costs)
+      const safety = await loadSafetyFromDB(currentProject.project_id)
+      if (!active) return
+      setSafetyRecords(safety)
+      const sched = await loadItemSchedulesFromDB(currentProject.project_id, wiMaps.idToKey)
+      if (!active) return
+      setItemSchedules(sched)
     })()
     return () => { active = false }
   }, [dbMode, currentProject, wiMaps])
@@ -391,306 +444,6 @@ export function StoreProvider({ children }) {
     log('匯入標單工項', `${rows.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
     return { error: null, count: rows.length }
   }, [currentProject, currentUser, log])
-
-  // 1. 上傳契約
-  const uploadContract = useCallback((docName, docType) => {
-    const doc = {
-      document_id: `D${Date.now()}`,
-      document_name: docName,
-      document_type: docType,
-      version: 'v1',
-      uploaded_by: '林志明',
-      uploaded_at: now(),
-      ai_processed: false,
-      status: '已上傳',
-    }
-    setDocuments((d) => [...d, doc])
-    log('文件上傳', docName, { user: '林志明', role: '施工廠商' })
-    completeStep(0)
-  }, [log, completeStep])
-
-  // 2. AI 解析（非同步）
-  const runAIExtraction = useCallback(() => {
-    setAiStatus('processing')
-    log('啟動 AI 解析', '工程契約文件', { user: '林志明', role: '施工廠商' })
-    setTimeout(() => {
-      setRequirements(aiExtractedRequirements.map((r) => ({ ...r })))
-      setAiStatus('done')
-      setDocuments((d) => d.map((doc) => ({ ...doc, ai_processed: true, status: 'AI 已解析' })))
-      log('AI 解析結果產生', `${aiExtractedRequirements.length} 項契約要求`, { user: 'AI', role: 'AI' })
-      completeStep(1)
-    }, 2200)
-  }, [log, completeStep])
-
-  // 3. 審核 AI 解析結果
-  const setRequirementStatus = useCallback((id, status) => {
-    setRequirements((rs) => rs.map((r) => (r.requirement_id === id ? { ...r, status } : r)))
-    const labelMap = { Approved: 'AI 解析結果核准', Rejected: 'AI 解析結果拒絕' }
-    log(labelMap[status] || '更新要求狀態', id, { user: '陳怡君', role: '施工品管' })
-    if (status === 'Approved') completeStep(2)
-  }, [log, completeStep])
-
-  // M2. AI 從已核准契約要求展開檢驗停留點計畫（ITP / 查驗點計畫）
-  const generateITP = useCallback(() => {
-    const approvedIds = requirements.filter((r) => r.status === 'Approved').map((r) => r.requirement_id)
-    const points = aiGeneratedITP
-      .filter((p) => approvedIds.includes(p.requirement_id))
-      .map((p) => ({ ...p, status: 'Planned' }))
-    setItp(points)
-    const holds = points.filter((p) => p.point_type === 'H').length
-    log('AI 產生檢驗停留點計畫', `${points.length} 個查驗點（含 ${holds} 個 H 停留點）`, { user: 'AI', role: 'AI' })
-    return points
-  }, [requirements, log])
-
-  // 4. AI 建立表單
-  const createFormFromRequirement = useCallback((requirement) => {
-    const form = { ...concreteInspectionForm, fromRequirement: requirement.requirement_id, status: '草稿' }
-    setForms((f) => (f.find((x) => x.form_template_id === form.form_template_id) ? f : [...f, form]))
-    log('表單建立', form.form_name, { user: 'AI', role: 'AI' })
-    completeStep(3)
-    return form
-  }, [log, completeStep])
-
-  const publishForm = useCallback((formId) => {
-    setForms((f) => f.map((x) => (x.form_template_id === formId ? { ...x, status: '已發布' } : x)))
-    log('表單發布', formId, { user: '陳怡君', role: '施工品管' })
-  }, [log])
-
-  // 5. 施工廠商填自主檢查
-  const submitSelfInspection = useCallback((data) => {
-    const submission = {
-      submission_id: 'S1',
-      form_name: '混凝土澆置前自主檢查表',
-      submitted_by: '陳怡君',
-      submitted_at: now(),
-      status: '已送出',
-      data,
-    }
-    setSelfInspection(submission)
-    if (data.photo) {
-      setPhotos((p) => [...p, { photo_id: 'PH1', caption: '混凝土澆置前現場', photo_type: '自主檢查', taken_by: '陳怡君', taken_at: now(), work_item: '混凝土工程' }])
-    }
-    log('表單送出', '混凝土澆置前自主檢查表', { user: '陳怡君', role: '施工品管', device: 'Mobile' })
-    completeStep(4)
-    return submission
-  }, [log, completeStep])
-
-  // 6. 提出查驗申請
-  const submitInspectionRequest = useCallback(() => {
-    const req = {
-      inspection_id: 'IR1',
-      title: '混凝土澆置前查驗',
-      work_item: '混凝土工程',
-      location: 'A 區 1F',
-      requested_time: '2026-06-18 09:00',
-      status: 'Submitted',
-      self_check: '混凝土澆置前自主檢查表',
-      requested_by: '陳怡君',
-      created_at: now(),
-    }
-    setInspectionRequest(req)
-    log('查驗申請送出', req.title, { user: '陳怡君', role: '施工品管', device: 'Mobile' })
-    completeStep(5)
-    return req
-  }, [log, completeStep])
-
-  // 7 & 8. 監造查驗（不合格 → 自動開立缺失）
-  const submitSupervisorInspection = useCallback((result) => {
-    setSupervisorResult(result)
-    setInspectionRequest((r) => (r ? { ...r, status: result.pass ? 'Approved' : 'Rejected' } : r))
-    log('查驗結果更新', `混凝土澆置前查驗 — ${result.pass ? '合格' : '不合格'}`, { user: '王建國', role: '監造', device: 'Mobile' })
-    completeStep(6)
-    if (!result.pass) {
-      const d = {
-        defect_id: 'DF1',
-        title: '鋼筋保護層不足',
-        defect_type: '品質缺失',
-        work_item: '混凝土工程',
-        location: 'A 區 1F',
-        description: '澆置前查驗發現底層鋼筋保護層不足 1.5cm，未達規範 4cm 要求。',
-        source_section: '施工規範 p.42 第 3 章 3.2.1',
-        created_by: '王建國',
-        created_at: now(),
-        assigned_to: '大華營造',
-        due_date: '2026-06-20',
-        status: 'Open',
-        defect_photos: ['缺失照片：保護層量測'],
-        improvement_note: '',
-        improvement_photos: [],
-      }
-      setDefect(d)
-      log('缺失建立', d.title, { user: '王建國', role: '監造', device: 'Mobile' })
-      completeStep(7)
-    }
-    return result
-  }, [log, completeStep])
-
-  // 9. 施工廠商改善
-  const submitDefectImprovement = useCallback((note) => {
-    setDefect((d) => (d ? { ...d, improvement_note: note, improvement_photos: ['改善照片：保護層墊塊已加設'], status: 'Submitted for Review' } : d))
-    setPhotos((p) => [...p, { photo_id: 'PH2', caption: '保護層墊塊已加設', photo_type: '改善完成', taken_by: '林志明', taken_at: now(), work_item: '混凝土工程' }])
-    log('缺失改善回覆', '鋼筋保護層不足', { user: '林志明', role: '施工現場', device: 'Mobile' })
-    completeStep(8)
-  }, [log, completeStep])
-
-  // 10. 監造複查結案
-  const closeDefect = useCallback((pass) => {
-    setDefect((d) => (d ? { ...d, status: pass ? 'Closed' : 'Rejected', closed_at: pass ? now() : undefined } : d))
-    log(pass ? '缺失結案' : '缺失退回改善', '鋼筋保護層不足', { user: '王建國', role: '監造', device: 'Mobile' })
-    if (pass) completeStep(9)
-  }, [log, completeStep])
-
-  // M1. 施工日誌 / 監造日報（One Record, Many Outputs：自動帶入當日照片 / 查驗 / 缺失）
-  const submitDailyLog = useCallback((logType, data) => {
-    const isSup = logType === 'supervisor'
-    const entry = {
-      daily_log_id: `DL${Date.now()}`,
-      log_type: logType,
-      log_date: data.log_date || '2026-06-17',
-      weather: data.weather || '晴',
-      work_areas: data.work_areas || [],
-      work_items: data.work_items || [],
-      manpower: data.manpower || [],
-      equipment: data.equipment || [],
-      materials: data.materials || [],
-      work_summary: data.work_summary || '',
-      today_inspections: data.today_inspections || [],
-      today_defects: data.today_defects || [],
-      today_photos: data.today_photos || [],
-      safety_notes: data.safety_notes || '',
-      tomorrow_plan: data.tomorrow_plan || '',
-      // 監造日報專屬
-      ref_contractor_log_id: data.ref_contractor_log_id,
-      sampling_notes: data.sampling_notes,
-      supervisor_opinion: data.supervisor_opinion,
-      status: '已送出',
-      submitted_by: data.submitted_by || (isSup ? '王建國' : '林志明'),
-      submitted_at: now(),
-      version: 'v1',
-    }
-    setDailyLogs((ls) => [entry, ...ls])
-    log(
-      isSup ? '監造日報送出' : '施工日誌送出',
-      `${entry.log_date} ${isSup ? '監造日報' : '施工日誌'}`,
-      { user: entry.submitted_by, role: isSup ? '監造' : '施工現場', device: 'Mobile' }
-    )
-    return entry
-  }, [log])
-
-  // M3. 送審 Submittals（Procore ball-in-court 工作流）
-  // 施工廠商提出送審 → 球在監造
-  const createSubmittal = useCallback((data) => {
-    const s = {
-      submittal_id: `SUB-${Date.now()}`,
-      submittal_no: `SUB-2026-${String(submittals.length + 1).padStart(3, '0')}`,
-      title: data.title,
-      type: data.type,
-      work_item: data.work_item,
-      spec_section: data.spec_section || '',
-      linked_requirement_id: data.linked_requirement_id,
-      revision: 0,
-      submitted_by: data.submitted_by || '陳怡君',
-      submitted_at: now(),
-      due_date: data.due_date || '',
-      reviewer: '宏觀工程顧問',
-      attachments: data.attachments || [],
-      status: '審核中',
-      ball_in_court: '監造',
-      review_comments: [
-        { by: data.submitted_by || '陳怡君', role: '施工品管', at: now(), decision: '提出送審', note: data.note || '' },
-      ],
-    }
-    setSubmittals((prev) => [s, ...prev])
-    log('送審提出', `${s.submittal_no} ${s.title}`, { user: s.submitted_by, role: '施工品管' })
-    return s
-  }, [submittals.length, log])
-
-  // 監造審查 → 核准 / 核准(具註記) / 退回修正(球回施工) / 駁回
-  const reviewSubmittal = useCallback((id, decision, note) => {
-    setSubmittals((prev) => prev.map((s) => (s.submittal_id === id ? {
-      ...s,
-      status: decision,
-      ball_in_court: decision === '退回修正' ? '施工廠商' : '—',
-      reviewer: '王建國',
-      review_comments: [...s.review_comments, { by: '王建國', role: '監造', at: now(), decision, note: note || '' }],
-    } : s)))
-    log(`送審審查 — ${decision}`, id, { user: '王建國', role: '監造' })
-  }, [log])
-
-  // 施工廠商依退回意見修正後重新送審 → 版次 +1、球回監造
-  const resubmitSubmittal = useCallback((id, note) => {
-    setSubmittals((prev) => prev.map((s) => (s.submittal_id === id ? {
-      ...s,
-      revision: s.revision + 1,
-      status: '審核中',
-      ball_in_court: '監造',
-      review_comments: [...s.review_comments, { by: '陳怡君', role: '施工品管', at: now(), decision: '重新送審', note: note || '' }],
-    } : s)))
-    log('送審重新送出', id, { user: '陳怡君', role: '施工品管' })
-  }, [log])
-
-  // M4. RFI 工程疑義（ball-in-court；可標工期 / 費用影響，與 AI Spec Q&A 區分）
-  // 施工提出疑義 → 球在監造
-  const createRFI = useCallback((data) => {
-    const r = {
-      rfi_id: `RFI-${Date.now()}`,
-      rfi_no: `RFI-2026-${String(rfis.length + 1).padStart(3, '0')}`,
-      subject: data.subject,
-      question: data.question,
-      work_item: data.work_item,
-      linked_spec_section: data.linked_spec_section || '',
-      asked_by: data.asked_by || '林志明',
-      asked_at: now(),
-      assigned_to: '宏觀工程顧問（監造）',
-      priority: data.priority || '中',
-      cost_impact: !!data.cost_impact,
-      cost_note: data.cost_note || '',
-      schedule_impact: !!data.schedule_impact,
-      schedule_note: data.schedule_note || '',
-      due_date: data.due_date || '',
-      attachments: data.attachments || [],
-      status: '待回覆',
-      ball_in_court: '監造',
-      answer: '',
-      answered_by: '',
-      answered_at: '',
-    }
-    setRfis((prev) => [r, ...prev])
-    log('RFI 提出', `${r.rfi_no} ${r.subject}`, { user: r.asked_by, role: '施工廠商' })
-    return r
-  }, [rfis.length, log])
-
-  // 監造回覆 → 球回施工（待確認結案）
-  const answerRFI = useCallback((id, answer) => {
-    setRfis((prev) => prev.map((r) => (r.rfi_id === id ? {
-      ...r, status: '已回覆', ball_in_court: '施工廠商',
-      answer, answered_by: '王建國', answered_at: now(),
-    } : r)))
-    log('RFI 回覆', id, { user: '王建國', role: '監造' })
-  }, [log])
-
-  // 施工確認回覆無誤 → 結案
-  const closeRFI = useCallback((id) => {
-    setRfis((prev) => prev.map((r) => (r.rfi_id === id ? { ...r, status: '已結案', ball_in_court: '—' } : r)))
-    log('RFI 結案', id, { user: '林志明', role: '施工廠商' })
-  }, [log])
-
-  // 11. 產出報表
-  const generateReports = useCallback(() => {
-    const types = ['施工日報', '監造查驗紀錄', '缺失改善追蹤表', '照片紀錄表']
-    const rs = types.map((t, i) => ({
-      report_id: `RPT${i + 1}`,
-      report_type: t,
-      date_range: '2026-06-17 ~ 2026-06-20',
-      generated_by: '系統',
-      generated_at: now(),
-      status: '已產出',
-    }))
-    setReports(rs)
-    log('報表產出', types.join('、'), { user: '系統', role: '系統' })
-    completeStep(10)
-    return rs
-  }, [log, completeStep])
 
   // P2. 估驗計價（掛在 work_items 標單脊椎上）
   // 新增一期：期數 +1，並把前一期的累計完成% 帶過來當起點（累計往前滾）
@@ -750,6 +503,14 @@ export function StoreProvider({ children }) {
     log('估驗狀態更新', status, { user: status === '已核定' ? '王建國' : '陳怡君', role: status === '已核定' ? '監造' : '施工品管' })
     if (dbMode) supabase.from('valuations').update({ status }).eq('id', periodId).then(() => {})
   }, [dbMode, log])
+
+  // 請款/收款:更新某期的請款日 / 收款日 / 實收金額
+  const updateValuationPayment = useCallback(async (id, patch) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    setValuations((vs) => vs.map((v) => (v.id === id ? { ...v, ...patch } : v)))
+    const { error } = await supabase.from('valuations').update(patch).eq('id', id)
+    return { error }
+  }, [dbMode])
 
   // P3. 預定進度 S 曲線。依開工/竣工切出月份桶，預設用 smoothstep 產生標準 S 曲線。
   const generateSchedule = useCallback((start, end) => {
@@ -831,6 +592,207 @@ export function StoreProvider({ children }) {
     log('估驗帶入施工日誌數量', `${rows.length} 工項`, { user: currentUser?.name || '系統', role: '施工品管' })
     return { error: null, count: rows.length }
   }, [dbMode, siteLogs, wiMaps, currentUser, log])
+
+  // P4b. 施工日誌照片：檔案進 Storage（photos bucket）、metadata 進 photos 表。
+  // 路徑慣例 <project_id>/<daily_log_id>/<photo_id>.<ext>（第一段=project_id，對應 Storage RLS）。
+  const listSitePhotos = useCallback(async (dailyLogId) => {
+    if (!dbMode || !dailyLogId) return []
+    const { data } = await supabase.from('photos')
+      .select('*').eq('daily_log_id', dailyLogId).order('created_at')
+    if (!data?.length) return []
+    // 私有 bucket → 批次產生簽名 URL 供 <img> 顯示
+    const { data: signed } = await supabase.storage.from('photos')
+      .createSignedUrls(data.map((p) => p.storage_path), 3600)
+    const urlByPath = new Map((signed || []).map((s) => [s.path, s.signedUrl]))
+    return data.map((p) => ({ ...p, url: urlByPath.get(p.storage_path) || null }))
+  }, [dbMode])
+
+  const uploadSitePhoto = useCallback(async (dailyLogId, file, meta = {}) => {
+    if (!dbMode || !dailyLogId) return { error: { message: '需先存檔日誌' } }
+    const pid = currentProject.project_id
+    const id = crypto.randomUUID()
+    const ext = (file.name?.split('.').pop() || file.type?.split('/')[1] || 'jpg').toLowerCase()
+    const path = `${pid}/${dailyLogId}/${id}.${ext}`
+    const { error: upErr } = await supabase.storage.from('photos')
+      .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false })
+    if (upErr) return { error: upErr }
+    const wi = meta.work_item_key ? wiMaps.byKey.get(meta.work_item_key) : null
+    const { error: insErr } = await supabase.from('photos').insert({
+      id, project_id: pid, daily_log_id: dailyLogId, work_item_id: wi?.id || null,
+      storage_path: path, caption: meta.caption || null,
+      taken_at: meta.taken_at || new Date().toISOString(), uploaded_by: currentUser?.user_id,
+    })
+    if (insErr) { await supabase.storage.from('photos').remove([path]); return { error: insErr } } // 回滾孤兒檔
+    log('施工日誌照片上傳', meta.caption || file.name || '照片', { user: currentUser?.name || '系統', role: '施工現場' })
+    return { error: null, id }
+  }, [dbMode, currentProject, currentUser, wiMaps, log])
+
+  const deleteSitePhoto = useCallback(async (photo) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    await supabase.storage.from('photos').remove([photo.storage_path])
+    await supabase.from('photos').delete().eq('id', photo.id)
+    return { error: null }
+  }, [dbMode])
+
+  // AI 讀白板:照片 → read-whiteboard Edge Function（Claude 視覺）→ 結構化日誌欄位。
+  // 金鑰在雲端函式,前端只送壓好的 base64;工項對應(item_key)由前端用標單模糊比對。
+  const readWhiteboard = useCallback(async (file) => {
+    if (!isSupabaseConfigured) return { error: { message: '需登入（Supabase 未設定）' } }
+    let image_base64
+    try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
+    const { data, error } = await supabase.functions.invoke('read-whiteboard', {
+      body: { image_base64, mime_type: 'image/jpeg' },
+    })
+    if (error) return { error }
+    if (data?.error) return { error: { message: data.error } }
+    return { error: null, result: data }
+  }, [])
+
+  // 契約義務:重載 / 設基準日 / 解析契約 / 改狀態 ──────────────────────────
+  const reloadObligations = useCallback(async () => {
+    if (!dbMode) return
+    setObligations(await loadObligationsFromDB(currentProject.project_id))
+  }, [dbMode, currentProject])
+
+  // 基準日(決標/接獲通知/開工)→ 寫回 projects 欄位 + 本地
+  const updateProjectAnchors = useCallback(async (patch) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    const pid = currentProject.project_id
+    setProjects((ps) => ps.map((p) => (p.project_id === pid ? { ...p, ...patch } : p)))
+    const { error } = await supabase.from('projects').update(patch).eq('id', pid)
+    return { error }
+  }, [dbMode, currentProject])
+
+  // 上傳契約 → parse-contract（OpenAI 解析）→ 取代本專案的義務清單
+  const parseContract = useCallback(async (file) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    let body
+    try {
+      const text = await extractContractText(file)
+      body = (text && text.trim().length > 200)
+        ? { text, filename: file.name }                                   // 數位 Word/PDF → 送純文字(準)
+        : { file_base64: await fileToBase64(file), mime_type: file.type, filename: file.name } // 掃描/圖片 → 視覺
+    } catch { return { error: { message: '讀取檔案失敗' } } }
+    const { data, error } = await supabase.functions.invoke('parse-contract', { body })
+    if (error) return { error }
+    if (data?.error) return { error: { message: data.error } }
+    const obs = data.obligations || []
+    const pid = currentProject.project_id
+    await supabase.from('contract_obligations').delete().eq('project_id', pid) // 重新解析=取代
+    if (obs.length) {
+      const rows = obs.map((o, i) => ({
+        project_id: pid, title: o.title, category: o.category || null,
+        trigger_event: o.trigger_event || null,
+        offset_days: Number.isFinite(o.offset_days) ? o.offset_days : null,
+        offset_dir: o.offset_dir || 'after', fixed_date: o.fixed_date || null,
+        recurring: o.recurring || null, recurring_day: o.recurring_day || null,
+        responsible: o.responsible || null, penalty: o.penalty || null,
+        source_clause: o.source_clause || null, source_page: o.source_page || null,
+        status: '待辦', sort_order: i,
+      }))
+      const { error: insErr } = await supabase.from('contract_obligations').insert(rows)
+      if (insErr) return { error: insErr }
+    }
+    await reloadObligations()
+    log('AI 解析契約義務', `${obs.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
+    return { error: null, count: obs.length }
+  }, [dbMode, currentProject, currentUser, reloadObligations, log])
+
+  const updateObligationStatus = useCallback(async (id, status) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    setObligations((os) => os.map((o) => (o.id === id ? { ...o, status } : o)))
+    await supabase.from('contract_obligations').update({ status }).eq('id', id)
+    return { error: null }
+  }, [dbMode])
+
+  // P3. 成本管理：新增 / 更新 / 刪除成本項目（預算 vs 實際、分包）
+  const createCostItem = useCallback(async (input) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    const row = {
+      project_id: currentProject.project_id,
+      category: input.category || '其他', title: input.title,
+      vendor: input.vendor || null,
+      budget_amount: Number(input.budget_amount) || 0,
+      actual_amount: Number(input.actual_amount) || 0,
+      status: input.status || '進行中', note: input.note || null,
+      sort_order: costItems.length,
+    }
+    const { data, error } = await supabase.from('cost_items').insert(row).select().single()
+    if (error) return { error }
+    setCostItems((cs) => [...cs, data])
+    log('新增成本項目', `${row.category}·${row.title}`, { user: currentUser?.name || '系統', role: '工程' })
+    return { error: null }
+  }, [dbMode, currentProject, costItems, currentUser, log])
+
+  const updateCostItem = useCallback(async (id, patch) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    setCostItems((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+    const { error } = await supabase.from('cost_items').update(patch).eq('id', id)
+    return { error }
+  }, [dbMode])
+
+  const deleteCostItem = useCallback(async (id) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    setCostItems((cs) => cs.filter((c) => c.id !== id))
+    await supabase.from('cost_items').delete().eq('id', id)
+    return { error: null }
+  }, [dbMode])
+
+  // P6. 工安：新增 / 更新 / 刪除工安紀錄
+  const createSafetyRecord = useCallback(async (input) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    const row = {
+      project_id: currentProject.project_id,
+      record_type: input.record_type || '工安缺失', title: input.title,
+      location: input.location || null, record_date: input.record_date || null,
+      severity: input.severity || '一般',
+      status: input.record_type === '教育訓練' || input.record_type === '危害告知' ? '已完成' : (input.status || '待改善'),
+      due_date: input.due_date || null, note: input.note || null,
+      created_by: currentUser?.user_id,
+    }
+    const { data, error } = await supabase.from('safety_records').insert(row).select().single()
+    if (error) return { error }
+    setSafetyRecords((rs) => [data, ...rs])
+    log('新增工安紀錄', `${row.record_type}·${row.title}`, { user: currentUser?.name || '系統', role: '工安' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, log])
+
+  const updateSafetyRecord = useCallback(async (id, patch) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    setSafetyRecords((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+    const { error } = await supabase.from('safety_records').update(patch).eq('id', id)
+    return { error }
+  }, [dbMode])
+
+  const deleteSafetyRecord = useCallback(async (id) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    setSafetyRecords((rs) => rs.filter((r) => r.id !== id))
+    await supabase.from('safety_records').delete().eq('id', id)
+    return { error: null }
+  }, [dbMode])
+
+  // P4. 逐工項排程：設定某工項的計畫起迄（upsert by work_item_id）
+  const setItemSchedule = useCallback(async (itemKey, patch) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    const wi = wiMaps.byKey.get(itemKey)
+    if (!wi?.id) return { error: { message: '找不到工項' } }
+    setItemSchedules((m) => ({ ...m, [itemKey]: { ...(m[itemKey] || {}), ...patch } }))
+    const cur = itemSchedules[itemKey] || {}
+    const { error } = await supabase.from('item_schedules').upsert({
+      project_id: currentProject.project_id, work_item_id: wi.id,
+      planned_start: patch.planned_start !== undefined ? (patch.planned_start || null) : (cur.planned_start || null),
+      planned_finish: patch.planned_finish !== undefined ? (patch.planned_finish || null) : (cur.planned_finish || null),
+    }, { onConflict: 'work_item_id' })
+    return { error }
+  }, [dbMode, currentProject, wiMaps, itemSchedules])
+
+  const removeItemSchedule = useCallback(async (itemKey) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    const wi = wiMaps.byKey.get(itemKey)
+    setItemSchedules((m) => { const n = { ...m }; delete n[itemKey]; return n })
+    if (wi?.id) await supabase.from('item_schedules').delete().eq('work_item_id', wi.id)
+    return { error: null }
+  }, [dbMode, wiMaps])
 
   // P5. 品質查驗 / 缺失（三級品管流）
   const reloadQuality = useCallback(async () => {
@@ -950,61 +912,23 @@ export function StoreProvider({ children }) {
     return { error: null }
   }, [currentProjectId])
 
-  // 每次狀態變動寫回 localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentUser, completedSteps, documents, aiStatus, requirements, itp, forms,
-        selfInspection, inspectionRequest, supervisorResult, defect, photos, reports, audit, dailyLogs, submittals, rfis, valuations, progressPlan,
-      }))
-    } catch { /* 忽略 quota / 隱私模式錯誤 */ }
-  }, [currentUser, completedSteps, documents, aiStatus, requirements, itp, forms,
-      selfInspection, inspectionRequest, supervisorResult, defect, photos, reports, audit, dailyLogs, submittals, rfis, valuations, progressPlan])
-
-  // 重置 demo：清空所有進度與儲存
-  const resetDemo = useCallback(() => {
-    try { localStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
-    setCurrentUser(null)
-    setCompletedSteps([])
-    setDocuments([])
-    setAiStatus('idle')
-    setRequirements([])
-    setItp([])
-    setForms([])
-    setSelfInspection(null)
-    setInspectionRequest(null)
-    setSupervisorResult(null)
-    setDefect(null)
-    setPhotos([])
-    setReports([])
-    setAudit([])
-    setDailyLogs([])
-    setSubmittals(seedSubmittals)
-    setRfis(seedRFIs)
-    setValuations([])
-    setProgressPlan(null)
-  }, [])
-
   const value = {
     // state
-    project: currentProject || project, users, currentUser, setCurrentUser,
+    project: currentProject || project, currentUser, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
     workItems, workItemsSource, importWorkItems, dbMode,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard,
+    obligations, parseContract, updateObligationStatus, updateProjectAnchors,
+    costItems, createCostItem, updateCostItem, deleteCostItem,
+    safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
+    itemSchedules, setItemSchedule, removeItemSchedule,
     inspections, defects, createInspection, recordInspectionResult, createDefect, updateDefectStatus,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
-    completedSteps,
-    documents, aiStatus, requirements, itp, forms,
-    selfInspection, inspectionRequest, supervisorResult, defect, photos, reports, audit, dailyLogs, submittals, rfis, valuations, progressPlan,
+    valuations, progressPlan,
     // actions
-    uploadContract, runAIExtraction, setRequirementStatus, generateITP,
-    createFormFromRequirement, publishForm,
-    submitSelfInspection, submitInspectionRequest, submitSupervisorInspection,
-    submitDefectImprovement, closeDefect, submitDailyLog,
-    createSubmittal, reviewSubmittal, resubmitSubmittal,
-    createRFI, answerRFI, closeRFI, generateReports, resetDemo,
-    createValuation, updateValuationItem, setValuationStatus,
+    createValuation, updateValuationItem, setValuationStatus, updateValuationPayment,
     generateSchedule, updatePlannedPct,
   }
 

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty } from '../../components/ui.jsx'
+import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const todayStr = () => {
@@ -8,8 +9,26 @@ const todayStr = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// 把 AI 讀到的工項文字模糊比對到標單末端工項（回 work item 或 null）。
+// 含子串 → 取長度比;否則用字元交集 ×0.6;門檻 0.5。使用者最後會確認,寧可漏配也不要錯配。
+function matchLeaf(text, leaves) {
+  const t = (text || '').replace(/\s/g, '')
+  if (!t) return null
+  let best = null, score = 0
+  for (const it of leaves) {
+    const d = (it.description || '').replace(/\s/g, '')
+    if (!d) continue
+    let s
+    if (d.includes(t) || t.includes(d)) s = Math.min(t.length, d.length) / Math.max(t.length, d.length)
+    else { const overlap = [...new Set(t)].filter((c) => d.includes(c)).length; s = (overlap / Math.max(t.length, d.length)) * 0.6 }
+    if (s > score) { score = s; best = it }
+  }
+  return score >= 0.5 ? best : null
+}
+
 export default function SiteLog() {
-  const { project, workItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource } = useStore()
+  const { project, workItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard } = useStore()
   const [date, setDate] = useState(todayStr())
   const [weather, setWeather] = useState('晴')
   const [summary, setSummary] = useState('')
@@ -17,6 +36,10 @@ export default function SiteLog() {
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
+  const [photos, setPhotos] = useState([])      // 本日日誌的現場照片（含簽名 URL）
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)   // AI 讀白板中
+  const [aiMsg, setAiMsg] = useState('')
 
   // 發包末端工項（可回報的單元）+ 查表
   const { leaves, byKey } = useMemo(() => {
@@ -38,6 +61,13 @@ export default function SiteLog() {
     if (lg) { setWeather(lg.weather || '晴'); setSummary(lg.work_summary || ''); setItems({ ...lg.items }) }
     else { setItems({}); setSummary('') }
   }, [date, siteLogs])
+
+  // 切換日期 → 載入該日已存日誌的現場照片（未存檔的日期沒有 daily_log_id，無照片）
+  useEffect(() => {
+    const lg = siteLogs.find((l) => l.log_date === date)
+    if (lg?.id) listSitePhotos(lg.id).then(setPhotos)
+    else setPhotos([])
+  }, [date, siteLogs, listSitePhotos])
 
   if (!workItems) return <Empty>載入中…</Empty>
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
@@ -62,13 +92,55 @@ export default function SiteLog() {
     setSavedMsg(error ? (error.message || '存檔失敗') : '已存檔 ✓')
   }
 
+  // 本日已存檔的日誌（有 id 才能掛照片）
+  const currentLog = siteLogs.find((l) => l.log_date === date)
+
+  const onAddPhotos = async (e) => {
+    const files = Array.from(e.target.files || [])
+    e.target.value = '' // 允許重新選同一檔
+    if (!currentLog?.id || !files.length) return
+    setPhotoBusy(true)
+    for (const f of files) {
+      const { error } = await uploadSitePhoto(currentLog.id, f, { caption: summary || null })
+      if (error) { setSavedMsg(error.message || '照片上傳失敗'); break }
+    }
+    setPhotos(await listSitePhotos(currentLog.id))
+    setPhotoBusy(false)
+  }
+
+  const onDeletePhoto = async (p) => {
+    await deleteSitePhoto(p)
+    if (currentLog?.id) setPhotos(await listSitePhotos(currentLog.id))
+  }
+
+  // 拍/選白板照片 → AI 辨識 → 自動填日期/天氣/摘要 + 把工項數量帶入（工項用模糊比對到標單）
+  const onWhiteboard = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    setAiBusy(true); setAiMsg('AI 辨識中…')
+    const { error, result } = await readWhiteboard(file)
+    setAiBusy(false)
+    if (error) { setAiMsg(`辨識失敗:${error.message || ''}`); return }
+    if (result.log_date && /^\d{4}-\d{2}-\d{2}$/.test(result.log_date)) setDate(result.log_date)
+    if (result.weather) setWeather(result.weather)
+    if (result.work_summary) setSummary((s) => s || result.work_summary)
+    const next = { ...items }; let matched = 0; const missed = []
+    for (const it of result.items || []) {
+      const wi = matchLeaf(it.description, leaves)
+      if (wi) { next[wi.item_key] = it.quantity || 0; matched++ } else if (it.description) missed.push(it.description)
+    }
+    setItems(next)
+    setAiMsg(`AI 帶入 ${matched} 項${missed.length ? `,未對應:${missed.join('、')}` : ''}。請確認數量後存檔。`)
+  }
+
   const reportedKeys = Object.keys(items)
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold text-[var(--text)]">施工日誌 <span className="text-[var(--text-3)] font-normal text-base">每日進度回報</span></h1>
-        <p className="text-sm text-[var(--text-2)] mt-1">{project.project_name}　·　填各工項當日完成數量，估驗可一鍵帶入累計</p>
+        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
+        <p className="text-xs text-[var(--text-3)] mt-0.5">填各工項當日完成數量，估驗可一鍵帶入累計</p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
@@ -77,7 +149,17 @@ export default function SiteLog() {
             <div className="flex items-end gap-3 flex-wrap mb-4">
               <Field label="日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
               <Field label="天氣"><input value={weather} onChange={(e) => setWeather(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
-              <Field label="工作摘要"><input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-64" /></Field>
+              <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field></div>
+            </div>
+
+            <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
+              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[#1a73e8] text-white hover:bg-[#1765cc] shadow-sm'}`}>
+                <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
+                📋 {aiBusy ? 'AI 辨識中…' : '拍白板自動填寫'}
+              </label>
+              <p className={`text-xs mt-2 ${aiMsg.startsWith('辨識失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>
+                {aiMsg || '在白板寫好工項與數量、跟現場一起拍，AI 自動帶入下面的工項與當日數量。'}
+              </p>
             </div>
 
             <div className="relative mb-3">
@@ -97,7 +179,8 @@ export default function SiteLog() {
             {reportedKeys.length === 0 ? (
               <Empty>尚未加入工項。用上面搜尋把今天有施作的工項加進來，填當日數量。</Empty>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[460px]">
                 <thead>
                   <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
                     <th className="text-left py-1.5">工項</th>
@@ -125,6 +208,7 @@ export default function SiteLog() {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
 
             <div className="flex items-center gap-3 mt-4">
@@ -132,9 +216,50 @@ export default function SiteLog() {
               {savedMsg && <span className={`text-sm ${savedMsg.includes('✓') ? 'text-emerald-600' : 'text-rose-600'}`}>{savedMsg}</span>}
             </div>
           </Card>
+
+          <Card title="現場照片" className="mt-5">
+            {!currentLog ? (
+              <Empty>先存檔本日日誌，才能附上現場照片。</Empty>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-3">
+                  <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] transition ${photoBusy ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
+                    <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy} onChange={onAddPhotos} className="hidden" />
+                    {photoBusy ? '上傳中…' : '＋ 加照片'}
+                  </label>
+                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張　·　手機可直接開相機拍</span>
+                </div>
+                {photos.length === 0 ? (
+                  <Empty>尚無照片。</Empty>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {photos.map((p) => (
+                      <div key={p.id} className="group relative aspect-square rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--surface-2)]">
+                        {p.url && <img src={p.url} alt={p.caption || '現場照片'} loading="lazy" className="w-full h-full object-cover" />}
+                        <button onClick={() => onDeletePhoto(p)} title="刪除照片"
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </Card>
         </div>
 
-        <Card title={`施工日誌（${siteLogs.length}）`}>
+        <Card title={`施工日誌（${siteLogs.length}）`} action={siteLogs.length > 0 && (
+          <button onClick={() => {
+            const flat = siteLogs.flatMap((l) => Object.entries(l.items).map(([key, qty]) => ({
+              log_date: l.log_date, weather: l.weather || '', work_summary: l.work_summary || '',
+              item_no: byKey.get(key)?.item_no || '', description: byKey.get(key)?.description || key,
+              unit: byKey.get(key)?.unit || '', qty,
+            })))
+            exportCsv(`施工日誌_${stamp()}`, flat, [
+              { key: 'log_date', label: '日期' }, { key: 'weather', label: '天氣' }, { key: 'work_summary', label: '工作摘要' },
+              { key: 'item_no', label: '項次' }, { key: 'description', label: '工項' }, { key: 'unit', label: '單位' }, { key: 'qty', label: '當日數量' },
+            ])
+          }} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>
+        )}>
           {siteLogs.length === 0 ? <Empty>尚無日誌</Empty> : (
             <div className="space-y-1.5">
               {siteLogs.map((l) => (

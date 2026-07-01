@@ -10,7 +10,13 @@ import SiteLog from './pages/web/SiteLog.jsx'
 import Valuation from './pages/web/Valuation.jsx'
 import ValuationPrint from './pages/web/ValuationPrint.jsx'
 import Progress from './pages/web/Progress.jsx'
+import Schedule from './pages/web/Schedule.jsx'
 import Quality from './pages/web/Quality.jsx'
+import Contract from './pages/web/Contract.jsx'
+import Safety from './pages/web/Safety.jsx'
+import Payments from './pages/web/Payments.jsx'
+import Cost from './pages/web/Cost.jsx'
+import Alerts from './pages/web/Alerts.jsx'
 
 // Gate every page behind auth; force project creation before the workspace loads.
 function Web({ children }) {
@@ -33,8 +39,14 @@ export default function App() {
       <Route path="/site-log" element={<Web><SiteLog /></Web>} />
       <Route path="/valuation" element={<Web><Valuation /></Web>} />
       <Route path="/valuation/print" element={<ValuationPrint />} />
+      <Route path="/payments" element={<Web><Payments /></Web>} />
+      <Route path="/cost" element={<Web><Cost /></Web>} />
       <Route path="/progress" element={<Web><Progress /></Web>} />
+      <Route path="/schedule" element={<Web><Schedule /></Web>} />
       <Route path="/quality" element={<Web><Quality /></Web>} />
+      <Route path="/safety" element={<Web><Safety /></Web>} />
+      <Route path="/contract" element={<Web><Contract /></Web>} />
+      <Route path="/alerts" element={<Web><Alerts /></Web>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )
