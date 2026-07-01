@@ -17,7 +17,7 @@ function deriveState(sch, pct) {
 }
 
 export default function Schedule() {
-  const { project, workItems, dbMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
+  const { project, workItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
   const [search, setSearch] = useState('')
 
   // 發包末端工項 + 查表
@@ -53,7 +53,7 @@ export default function Schedule() {
   const q = search.trim()
   const results = q ? leaves.filter((it) => !itemSchedules[it.item_key] && (it.description.includes(q) || (it.item_no || '').includes(q))).slice(0, 15) : []
 
-  if (!dbMode) {
+  if (!dbMode && !demoMode) {
     return <Card title="逐工項排程"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單。</Empty></Card>
   }
 

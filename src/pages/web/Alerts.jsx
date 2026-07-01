@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { Scale } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty } from '../../components/ui.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
@@ -63,7 +64,7 @@ export default function Alerts() {
     { key: 'todo', label: '待處理', color: 'blue' },
   ].map((g) => ({ ...g, items: alerts.filter((x) => x.level === g.key) }))
 
-  if (!isSupabaseConfigured || !currentProject) {
+  if (isSupabaseConfigured && !currentProject) {
     return <Card title="提醒中心"><Empty>請先登入並選擇專案。</Empty></Card>
   }
 
@@ -88,7 +89,7 @@ export default function Alerts() {
                 <div className="min-w-0 flex-1">
                   <div className="text-sm text-[var(--text)] truncate">{x.title}</div>
                   <div className="text-xs text-[var(--text-3)]">{x.meta}</div>
-                  {x.extra && <div className="text-xs text-[var(--amber-text)] truncate">⚖ {x.extra}</div>}
+                  {x.extra && <div className="text-xs text-[var(--amber-text)] truncate flex items-center gap-1"><Scale size={12} className="shrink-0" aria-hidden /> {x.extra}</div>}
                 </div>
                 <span className="text-[var(--text-3)] text-xs shrink-0 mt-0.5">→</span>
               </Link>

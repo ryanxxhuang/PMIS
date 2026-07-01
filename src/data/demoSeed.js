@@ -1,0 +1,175 @@
+// Demo storyline 產生器 — 只在「未設定 Supabase」時用。
+// 以範例標單（workItems.json）為脊椎，動態生出一個「開工第 6 個月、
+// 實際略落後預定」的完整專案：估驗 5 期、請款收款、施工日誌、查驗缺失、
+// 契約義務、成本、工安、變更設計、逐工項排程。
+// 所有日期相對「今天」計算 → demo 永遠是活的（有逾期、有即將到期、有進行中）。
+//
+// 對 B2B 銷售而言 demo 模式就是銷售簡報：每一頁都要看得到「用起來的樣子」。
+
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const daysFromNow = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d }
+const monthsFromNow = (n, day) => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + n, day) }
+
+// 與 store.generateSchedule 相同的 smoothstep S 形累計
+const smoothstep = (t) => t * t * (3 - 2 * t)
+
+export function buildDemoData(workItems, project) {
+  // ── 選出「有在施作」的工項：金額最大的末端工項，累計覆蓋 55% 發包額 ──
+  // （排除營業稅/利潤/管理費等「式」計價總項，避免進度畫面失真）
+  const leaves = workItems.items
+    .filter((it) => it.is_billable && it.is_leaf && !it.is_rollup && (it.amount || 0) > 0)
+    .filter((it) => !/營業稅|利潤|管理費|保險費/.test(it.description || ''))
+    .sort((a, b) => (b.amount || 0) - (a.amount || 0))
+  const billableTotal = workItems.meta.billable_total || 1
+  const active = []
+  let cover = 0
+  for (const it of leaves) {
+    active.push(it)
+    cover += it.amount || 0
+    if (cover >= billableTotal * 0.55) break
+  }
+
+  // ── 預定進度 S 曲線（開工月 → 竣工月）──
+  const start = new Date(project.start_date), end = new Date(project.end_date)
+  const buckets = []
+  let cur = new Date(start.getFullYear(), start.getMonth(), 1)
+  const last = new Date(end.getFullYear(), end.getMonth(), 1)
+  while (cur <= last) { buckets.push(new Date(cur)); cur.setMonth(cur.getMonth() + 1) }
+  const N = buckets.length || 1
+  const months = buckets.map((d, i) => ({
+    label: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+    plannedPct: +(smoothstep((i + 1) / N) * 100).toFixed(1),
+  }))
+  const progressPlan = { start: project.start_date, end: project.end_date, months }
+
+  // ── 估驗 5 期（開工次月起每月一期）：實際 ≈ 20%，落後預定 ~26% ──
+  // 落後 ~6% → Dashboard/S曲線亮「落後」警示（demo 要秀的就是異常管理）
+  const fractions = [0.07, 0.14, 0.22, 0.29, 0.36]
+  const round1 = (x) => Math.round(x * 10) / 10
+  const valuations = fractions.map((f, i) => {
+    const items = {}
+    for (const it of active) items[it.item_key] = round1((it.quantity || 0) * f)
+    const valDate = monthsFromNow(i - 4, 25) // 第5期=本月25（尚未到也無妨，狀態=審核中）
+    const dF = f - (i ? fractions[i - 1] : 0)
+    const periodAmt = Math.round(cover * dF)
+    const net = Math.round(periodAmt * 0.95) // 扣 5% 保留款
+    const v = {
+      id: `VAL-DEMO-${i + 1}`, period_no: i + 1,
+      valuation_date: iso(valDate), retention_pct: 5,
+      status: i < 4 ? '已核定' : '監造審核',
+      items,
+    }
+    // 請款收款：前 3 期已收款、第 4 期已請款未收（→ 提醒中心有「未收款」）
+    if (i < 3) {
+      v.invoice_date = iso(new Date(valDate.getFullYear(), valDate.getMonth() + 1, 5))
+      v.paid_date = iso(new Date(valDate.getFullYear(), valDate.getMonth() + 1, 28))
+      v.paid_amount = net
+    } else if (i === 3) {
+      v.invoice_date = iso(daysFromNow(-18))
+      v.paid_date = null
+      v.paid_amount = null
+    }
+    return v
+  })
+
+  // ── 施工日誌：近兩週 8 筆（跳過部分日期，看起來像真的）──
+  const weathers = ['晴', '晴', '多雲', '晴時多雲', '陰', '晴', '陰短暫雨', '晴']
+  const summaries = [
+    '3F 柱牆鋼筋綁紮、模板組立',
+    '3F 版牆混凝土澆置 420kgf/cm²',
+    '4F 放樣、柱筋續接器施工',
+    '4F 柱牆鋼筋綁紮',
+    '外牆窯燒磚打樣區施作、監造勘驗',
+    '4F 模板組立、施工架昇層',
+    '4F 版筋綁紮、水電配管配合',
+    '4F 版牆混凝土澆置、養護',
+  ]
+  const logDays = [-13, -12, -10, -9, -7, -5, -2, -1]
+  const siteLogs = logDays.map((off, i) => {
+    const items = {}
+    for (const it of active.slice(0, 3)) items[it.item_key] = round1((it.quantity || 0) * 0.004)
+    return {
+      id: `LOG-DEMO-${i + 1}`, log_date: iso(daysFromNow(off)),
+      weather: weathers[i], work_summary: summaries[i], status: '已送出', items,
+    }
+  }).reverse() // 新的在前，與 DB 排序一致
+
+  // ── 品質：查驗 5 筆（合格/不合格/待查驗）+ 缺失 3 筆 ──
+  const wi = (n) => active[n] || active[0]
+  const deco = (n) => ({ work_item_no: wi(n).item_no || '', work_item_desc: wi(n).description || '' })
+  const inspections = [
+    { id: 'INSP-DEMO-1', title: '3F 柱牆鋼筋查驗', location: '3F', inspection_type: '施工查驗', requested_date: iso(daysFromNow(-11)), status: '合格', result_note: '符合設計圖說', ...deco(0) },
+    { id: 'INSP-DEMO-2', title: '3F 混凝土澆置前查驗', location: '3F', inspection_type: '施工查驗', requested_date: iso(daysFromNow(-9)), status: '合格', result_note: null, ...deco(3) },
+    { id: 'INSP-DEMO-3', title: '外牆窯燒磚打樣查驗', location: '1F 打樣區', inspection_type: '材料查驗', requested_date: iso(daysFromNow(-6)), status: '不合格', result_note: '磚縫寬度不均，重新打樣', ...deco(1) },
+    { id: 'INSP-DEMO-4', title: '4F 柱牆鋼筋查驗', location: '4F', inspection_type: '施工查驗', requested_date: iso(daysFromNow(-1)), status: '待查驗', result_note: null, ...deco(0) },
+    { id: 'INSP-DEMO-5', title: '4F 模板查驗', location: '4F', inspection_type: '施工查驗', requested_date: iso(daysFromNow(0)), status: '待查驗', result_note: null, ...deco(3) },
+  ]
+  const defects = [
+    { id: 'DEF-DEMO-1', title: '查驗不合格：外牆窯燒磚打樣', description: '磚縫寬度不均，需重新打樣送審', severity: '一般', location: '1F 打樣區', due_date: iso(daysFromNow(4)), status: '改善中', improvement_note: '已重新調整工法，預計本週完成打樣', ...deco(1) },
+    { id: 'DEF-DEMO-2', title: '3F 西側牆面蜂窩', description: '澆置振動不確實造成蜂窩，需鑿除修補', severity: '嚴重', location: '3F 西側', due_date: iso(daysFromNow(-2)), status: '開立', improvement_note: null, ...deco(5) },
+    { id: 'DEF-DEMO-3', title: '2F 樓梯間模板拆除不完全', description: '殘留模板角材', severity: '一般', location: '2F 樓梯間', due_date: iso(daysFromNow(-10)), status: '已結案', improvement_note: '已清除完畢，監造複查通過', ...deco(3) },
+  ]
+
+  // ── 契約義務（典型公共工程時程義務 + 罰則）──
+  const obligations = [
+    { id: 'OB-1', title: '提送施工計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', sort_order: 0 },
+    { id: 'OB-2', title: '提送品質計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', sort_order: 1 },
+    { id: 'OB-3', title: '投保營造綜合保險', category: '開工前', trigger_event: 'commencement', offset_days: 0, offset_dir: 'after', responsible: '廠商', penalty: '未投保者機關得代辦並自價金扣抵', source_clause: '第 13 條', source_page: 'p.18', status: '已完成', sort_order: 2 },
+    { id: 'OB-4', title: '提送施工月報', category: '施工中', recurring: 'monthly', recurring_day: 5, responsible: '廠商', penalty: null, source_clause: '第 10 條', source_page: 'p.14', status: '待辦', sort_order: 3 },
+    { id: 'OB-5', title: '職業安全衛生教育訓練（每季）', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(12)), responsible: '廠商', penalty: null, source_clause: '第 14 條', source_page: 'p.20', status: '待辦', sort_order: 4 },
+    { id: 'OB-6', title: '第 5 期估驗計價送審', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(-3)), responsible: '廠商', penalty: null, source_clause: '第 5 條', source_page: 'p.8', status: '待辦', sort_order: 5 },
+    { id: 'OB-7', title: '中間查核點：地上結構體完成 50%', category: '施工中', trigger_event: 'commencement', offset_days: 270, offset_dir: 'after', responsible: '廠商', penalty: '逾查核點未達進度按日計罰 1‰', source_clause: '第 7 條', source_page: 'p.10', status: '待辦', sort_order: 6 },
+    { id: 'OB-8', title: '提送竣工圖說', category: '完工', trigger_event: 'completion', offset_days: 30, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 21 條', source_page: 'p.30', status: '待辦', sort_order: 7 },
+  ]
+
+  // ── 成本管理（預算 vs 實際；有超支也有節餘）──
+  const costItems = [
+    { id: 'COST-1', category: '分包', title: '鋼筋工程（連工帶料）', vendor: '正大鋼鐵行', budget_amount: 52000000, actual_amount: 24800000, status: '進行中', note: null, sort_order: 0 },
+    { id: 'COST-2', category: '分包', title: '模板工程', vendor: '協力模板工程行', budget_amount: 46000000, actual_amount: 21500000, status: '進行中', note: null, sort_order: 1 },
+    { id: 'COST-3', category: '材料', title: '預拌混凝土', vendor: '國產建材', budget_amount: 40000000, actual_amount: 19200000, status: '進行中', note: '單價調整後略高於預算', sort_order: 2 },
+    { id: 'COST-4', category: '分包', title: '外牆窯燒磚工程', vendor: '大誠土水', budget_amount: 45000000, actual_amount: 3800000, status: '進行中', note: '打樣中', sort_order: 3 },
+    { id: 'COST-5', category: '機具', title: '塔式起重機租賃', vendor: '宏昇機械', budget_amount: 8400000, actual_amount: 4200000, status: '進行中', note: null, sort_order: 4 },
+    { id: 'COST-6', category: '機具', title: '施工電梯租賃', vendor: '宏昇機械', budget_amount: 3600000, actual_amount: 1500000, status: '進行中', note: null, sort_order: 5 },
+    { id: 'COST-7', category: '人工', title: '工地管理人事費', vendor: null, budget_amount: 21600000, actual_amount: 6700000, status: '進行中', note: '6 名常駐', sort_order: 6 },
+    { id: 'COST-8', category: '其他', title: '臨時水電費', vendor: '台電/北水', budget_amount: 1800000, actual_amount: 940000, status: '進行中', note: null, sort_order: 7 },
+  ]
+
+  // ── 工安紀錄 ──
+  const safetyRecords = [
+    { id: 'SAF-1', record_type: '工安缺失', title: '4F 臨邊開口未設護欄', location: '4F 電梯井', record_date: iso(daysFromNow(-2)), severity: '嚴重', status: '待改善', due_date: iso(daysFromNow(1)), note: '已先行圍設警示帶' },
+    { id: 'SAF-2', record_type: '工安缺失', title: '施工架斜籬破損', location: '南側外牆', record_date: iso(daysFromNow(-6)), severity: '一般', status: '改善中', due_date: iso(daysFromNow(3)), note: null },
+    { id: 'SAF-3', record_type: '自主檢查', title: '施工架週檢', location: '全區', record_date: iso(daysFromNow(0)), severity: '一般', status: '已完成', due_date: null, note: '扣件抽驗合格' },
+    { id: 'SAF-4', record_type: '自主檢查', title: '塔吊月檢', location: '塔吊 T1', record_date: iso(daysFromNow(-15)), severity: '一般', status: '已完成', due_date: null, note: null },
+    { id: 'SAF-5', record_type: '教育訓練', title: '新進人員職安教育訓練', location: '工務所', record_date: iso(daysFromNow(-9)), severity: '一般', status: '已完成', due_date: null, note: '12 人參訓' },
+    { id: 'SAF-6', record_type: '危害告知', title: '混凝土澆置作業危害告知', location: '4F', record_date: iso(daysFromNow(-1)), severity: '一般', status: '已完成', due_date: null, note: null },
+  ]
+
+  // ── 變更設計（1 筆已核准、1 筆審核中）──
+  const changeOrders = [
+    {
+      id: 'CO-DEMO-1', co_no: 'CO-001', title: '地下室排水溝斷面變更', co_date: iso(daysFromNow(-75)), status: '核准', reason: '現地湧水量大於設計值，加大排水斷面', sort_order: 0,
+      items: [
+        { id: 'COI-1', item_no: '追加-1', description: '排水溝加大斷面（60→90cm）', unit: 'M', qty_delta: 180, unit_price: 4200, amount_delta: 756000, note: null },
+        { id: 'COI-2', item_no: '追加-2', description: '不鏽鋼格柵蓋板加寬', unit: 'M', qty_delta: 180, unit_price: 2800, amount_delta: 504000, note: null },
+      ],
+    },
+    {
+      id: 'CO-DEMO-2', co_no: 'CO-002', title: '1F 大廳地坪材質變更', co_date: iso(daysFromNow(-12)), status: '審核中', reason: '業主要求由拋光石英磚改為石材', sort_order: 1,
+      items: [
+        { id: 'COI-3', item_no: '追減-1', description: '拋光石英磚地坪（取消）', unit: 'M2', qty_delta: -420, unit_price: 2600, amount_delta: -1092000, note: null },
+        { id: 'COI-4', item_no: '追加-3', description: '花崗石地坪（新增）', unit: 'M2', qty_delta: 420, unit_price: 6800, amount_delta: 2856000, note: null },
+      ],
+    },
+  ]
+
+  // ── 逐工項排程：前 10 個活躍工項（已完/進行中/未開始 + 一筆逾期）──
+  const itemSchedules = {}
+  active.slice(0, 10).forEach((it, i) => {
+    // 錯開的區段：早的已完工、中間進行中、其一 planned_finish 已過 → 排程頁看得到「落後」
+    const s = daysFromNow(-150 + i * 18)
+    const f = daysFromNow(-150 + i * 18 + 80)
+    itemSchedules[it.item_key] = { planned_start: iso(s), planned_finish: iso(f) }
+  })
+
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules }
+}

@@ -5,45 +5,83 @@
   /* One harmonized family for both Chinese and Latin — avoids the mixed-metrics look */
   font-family: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Data-dense tool: digits align in every table without per-cell classes */
+  font-variant-numeric: tabular-nums;
 
-  /* Semantic tokens — light */
-  --bg: #f8f9fa;
+  /* ── Brand palette — steel blue (structure) + safety orange (signal) ──
+     Note: --blue* names kept for compatibility; values are brand steel blue, not Google blue. */
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-2: #f1f3f4;
-  --text: #202124;
-  --text-2: #5f6368;
-  --text-3: #80868b;
-  --border: #dadce0;
-  --border-2: #e8eaed;
-  --blue: #1a73e8;
-  --blue-text: #1967d2;
-  --blue-tint: #e8f0fe;
-  --slate-tint: #f1f3f4; --slate-text: #5f6368;
-  --green-tint: #e6f4ea; --green-text: #188038;
-  --amber-tint: #fef7e0; --amber-text: #b06000;
-  --red-tint: #fce8e6;   --red-text: #c5221f;
-  --purple-tint: #f3e8fd; --purple-text: #8430ce;
-  --elevation: 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+  --surface-2: #eef1f4;
+  --text: #1c2733;
+  --text-2: #51606e;
+  --text-3: #7b8794;
+  --border: #d5dce3;
+  --border-2: #e6eaef;
+
+  --blue: #1e5a85;          /* primary: steel blue */
+  --blue-text: #1b5480;
+  --blue-tint: #e5eef5;
+  --primary: #1e5a85;
+  --primary-hover: #17486b;
+
+  --accent: #e8630c;        /* safety orange — brand signal, use sparingly */
+  --accent-text: #c8540a;
+  --accent-tint: #fdeadd;
+
+  --slate-tint: #eef1f4; --slate-text: #51606e;
+  --green-tint: #e4f3ec; --green-text: #1a7f4e;
+  --amber-tint: #fdf3df; --amber-text: #a96a00;
+  --red-tint: #fbe9e7;   --red-text: #c73a34;
+  --purple-tint: #f1eafb; --purple-text: #7d47c4;
+
+  --success: #1a7f4e;   --success-hover: #156a41;
+  --danger: #c73a34;    --danger-hover: #b02f29;
+
+  /* Chart tokens — SVG charts must read these, never hardcode */
+  --chart-grid: #e6eaef;
+  --chart-axis-text: #7b8794;
+  --chart-muted-line: #9aa8b5;
+  --chart-today: #b8c4cf;
+
+  --elevation: 0 1px 2px 0 rgba(28,39,51,.10), 0 1px 3px 1px rgba(28,39,51,.06);
 }
 
 .dark {
-  /* Google dark palette */
-  --bg: #202124;
-  --surface: #2d2e30;
-  --surface-2: #3c4043;
-  --text: #e8eaed;
-  --text-2: #9aa0a6;
-  --text-3: #80868b;
-  --border: #3c4043;
-  --border-2: #303134;
-  --blue: #8ab4f8;
-  --blue-text: #8ab4f8;
-  --blue-tint: #283142;
-  --slate-tint: #3c4043; --slate-text: #9aa0a6;
-  --green-tint: #1f3a28; --green-text: #81c995;
-  --amber-tint: #3a3120; --amber-text: #fdd663;
-  --red-tint: #3c2523;   --red-text: #f28b82;
-  --purple-tint: #322a3f; --purple-text: #d7aefb;
+  /* Steel dark — cool neutrals, not Google grey */
+  --bg: #14181d;
+  --surface: #1c2229;
+  --surface-2: #2a323b;
+  --text: #e6ebf0;
+  --text-2: #9fabb8;
+  --text-3: #75818e;
+  --border: #313b46;
+  --border-2: #262e37;
+
+  --blue: #7fb3d8;
+  --blue-text: #8dbde0;
+  --blue-tint: #1f3346;
+  --primary: #2e6d9e;
+  --primary-hover: #3a7dae;
+
+  --accent: #f09150;
+  --accent-text: #f09150;
+  --accent-tint: #3a2a1e;
+
+  --slate-tint: #2a323b; --slate-text: #9fabb8;
+  --green-tint: #1e3a2c; --green-text: #7fcf9f;
+  --amber-tint: #3a3120; --amber-text: #f4c665;
+  --red-tint: #3d2725;   --red-text: #f2938c;
+  --purple-tint: #322a3f; --purple-text: #cbaef3;
+
+  --success: #2b8a5c;   --success-hover: #37996a;
+  --danger: #cf4b44;    --danger-hover: #db5a53;
+
+  --chart-grid: #2a323b;
+  --chart-axis-text: #75818e;
+  --chart-muted-line: #5c6b79;
+  --chart-today: #46525f;
+
   --elevation: 0 1px 2px 0 rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
 }
 

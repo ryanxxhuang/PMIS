@@ -13,7 +13,7 @@ const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const thisMonth = () => todayStr().slice(0, 7)
 
 export default function Safety() {
-  const { project, dbMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord } = useStore()
+  const { project, dbMode, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -41,7 +41,7 @@ export default function Safety() {
     if (!error) setForm(null)
   }
 
-  if (!dbMode) {
+  if (!dbMode && !demoMode) {
     return <Card title="工安管理"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單。</Empty></Card>
   }
 
@@ -63,7 +63,7 @@ export default function Safety() {
         <div className="flex flex-wrap gap-2">
           {TYPES.map((t) => (
             <button key={t} onClick={() => openForm(t)}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium border transition ${form?.record_type === t ? 'bg-[#1a73e8] text-white border-transparent' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+              className={`text-xs px-3 py-1.5 rounded-full font-medium border transition ${form?.record_type === t ? 'bg-[var(--primary)] text-white border-transparent' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
               ＋ {t}
             </button>
           ))}

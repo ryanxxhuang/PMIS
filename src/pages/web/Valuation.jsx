@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Printer, Trash2 } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Empty } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
@@ -142,7 +143,7 @@ export default function Valuation() {
           <p className="text-xs text-[var(--text-3)] mt-0.5">發包工程費 {yi(billableTotal)}（保留款 {selected?.retention_pct ?? 5}%）</p>
         </div>
         <div className="flex items-center gap-2">
-          {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}>🖨 列印估驗單</Button>}
+          {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}
           <Button onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>
         </div>
       </div>
@@ -196,7 +197,7 @@ export default function Valuation() {
                   <Button variant="ghost" onClick={() => setValuationStatus(selected.id, '草稿')}>退回</Button>
                   <Button variant="success" onClick={() => setValuationStatus(selected.id, '已核定')}>核定估驗</Button>
                 </>}
-                <Button variant="ghost" onClick={() => { if (window.confirm(`刪除第 ${selected.period_no} 期估驗？`)) { deleteValuation(selected.id); setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600">🗑</Button>
+                <Button variant="ghost" onClick={() => { if (window.confirm(`刪除第 ${selected.period_no} 期估驗？`)) { deleteValuation(selected.id); setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>
               </div>
             }
           >

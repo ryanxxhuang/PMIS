@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Printer } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, Button } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
@@ -12,7 +13,7 @@ const monthEnd = (m) => { const [y, mo] = m.split('-').map(Number); return new D
 const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 
 export default function MonthlyReport() {
-  const { project, workItems, dbMode, valuations, progressPlan, siteLogs,
+  const { project, workItems, dbMode, demoMode, valuations, progressPlan, siteLogs,
     inspections, defects, safetyRecords, changeOrders } = useStore()
   const [month, setMonth] = useState(thisMonthStr())
   const [review, setReview] = useState('')   // 工程檢討（列印用，不儲存）
@@ -57,7 +58,7 @@ export default function MonthlyReport() {
     }
   }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, tree, billable])
 
-  if (!dbMode) {
+  if (!dbMode && !demoMode) {
     return <Card title="施工月報"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單。</Empty></Card>
   }
 
@@ -77,7 +78,7 @@ export default function MonthlyReport() {
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
             className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
         </label>
-        <Button onClick={() => window.print()}>🖨 列印 / 存 PDF</Button>
+        <Button onClick={() => window.print()}><Printer size={15} aria-hidden />列印 / 存 PDF</Button>
       </div>
 
       {/* 月報本體（列印範圍）*/}

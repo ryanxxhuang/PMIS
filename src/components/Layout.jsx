@@ -1,27 +1,33 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
+import {
+  LayoutDashboard, Bell, CalendarClock, Newspaper,
+  ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
+  ShieldCheck, HardHat,
+  Menu, ChevronDown, Trash2, Moon, Sun, Plus,
+} from 'lucide-react'
 
 const navGroups = [
   { title: '總覽', items: [
-    { to: '/dashboard', icon: '📊', label: '專案 Dashboard' },
-    { to: '/alerts', icon: '🔔', label: '提醒中心' },
-    { to: '/contract', icon: '📅', label: '契約管制' },
-    { to: '/monthly-report', icon: '📰', label: '施工月報' },
+    { to: '/dashboard', icon: LayoutDashboard, label: '專案 Dashboard' },
+    { to: '/alerts', icon: Bell, label: '提醒中心' },
+    { to: '/contract', icon: CalendarClock, label: '契約管制' },
+    { to: '/monthly-report', icon: Newspaper, label: '施工月報' },
   ] },
   { title: '成本與進度', items: [
-    { to: '/boq', icon: '📋', label: '標單工項' },
-    { to: '/site-log', icon: '📝', label: '施工日誌' },
-    { to: '/valuation', icon: '💰', label: '估驗計價' },
-    { to: '/payments', icon: '🧾', label: '請款收款' },
-    { to: '/cost', icon: '🧮', label: '成本管理' },
-    { to: '/change-orders', icon: '🔧', label: '變更設計' },
-    { to: '/progress', icon: '📈', label: '進度 S 曲線' },
-    { to: '/schedule', icon: '🗓️', label: '逐工項排程' },
+    { to: '/boq', icon: ClipboardList, label: '標單工項' },
+    { to: '/site-log', icon: PencilLine, label: '施工日誌' },
+    { to: '/valuation', icon: Coins, label: '估驗計價' },
+    { to: '/payments', icon: Receipt, label: '請款收款' },
+    { to: '/cost', icon: Wallet, label: '成本管理' },
+    { to: '/change-orders', icon: Wrench, label: '變更設計' },
+    { to: '/progress', icon: TrendingUp, label: '進度 S 曲線' },
+    { to: '/schedule', icon: CalendarRange, label: '逐工項排程' },
   ] },
   { title: '品質與工安', items: [
-    { to: '/quality', icon: '🔍', label: '品質查驗' },
-    { to: '/safety', icon: '🦺', label: '工安管理' },
+    { to: '/quality', icon: ShieldCheck, label: '品質查驗' },
+    { to: '/safety', icon: HardHat, label: '工安管理' },
   ] },
 ]
 
@@ -44,7 +50,7 @@ function ProjectSwitcher() {
       <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
         <span className="text-[var(--text-3)] text-xs shrink-0">專案</span>
         <span className="font-medium truncate max-w-[42vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
-        <span className="text-[var(--text-2)] text-[10px]">▼</span>
+        <ChevronDown size={14} className="text-[var(--text-2)] shrink-0" aria-hidden />
       </button>
       {open && (
         <>
@@ -59,12 +65,12 @@ function ProjectSwitcher() {
             ))}
             <div className="border-t border-[var(--border-2)] my-1" />
             <button onClick={() => { setOpen(false); navigate('/project/new') }}
-              className="w-full text-left px-3 py-2 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)]">＋ 新增專案</button>
+              className="w-full text-left px-3 py-2 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><Plus size={14} aria-hidden /> 新增專案</button>
             <button onClick={async () => {
               if (window.confirm(`確定刪除專案「${currentProject.project_name}」？\n此專案的標單、估驗、進度、施工日誌、查驗、缺失將一併永久刪除，無法復原。`)) {
                 setOpen(false); await deleteProject(currentProject.project_id)
               }
-            }} className="w-full text-left px-3 py-2 text-sm text-rose-500 hover:bg-rose-50">🗑 刪除此專案</button>
+            }} className="w-full text-left px-3 py-2 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>
           </div>
         </>
       )}
@@ -85,8 +91,8 @@ function TopBar({ onMenu }) {
   return (
     <header className="bg-[var(--surface)] border-b border-[var(--border)] h-16 flex items-center justify-between px-3 md:px-5 shrink-0 relative z-10 print:hidden">
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
-        <button onClick={onMenu} aria-label="選單" className="md:hidden w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-xl text-[var(--text-2)] hover:bg-[var(--surface-2)]">☰</button>
-        <div className="font-medium text-xl tracking-tight text-[var(--text-2)] shrink-0">PMIS <span className="text-[var(--blue)] font-bold">AI</span></div>
+        <button onClick={onMenu} aria-label="選單" className="md:hidden w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><Menu size={20} aria-hidden /></button>
+        <div className="font-medium text-xl tracking-tight text-[var(--text)] shrink-0">PMIS <span className="text-[var(--accent-text)] font-bold">AI</span></div>
         <div className="h-6 w-px bg-[var(--border)] shrink-0 hidden sm:block" />
         <ProjectSwitcher />
       </div>
@@ -95,8 +101,8 @@ function TopBar({ onMenu }) {
           <div className="text-sm text-[var(--text)]">{currentUser?.name}</div>
           <div className="text-[11px] text-[var(--text-2)]">{currentUser?.label}</div>
         </div>
-        <button onClick={toggleTheme} aria-label="切換深色模式" title="切換深色模式" className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]">{dark ? '☀️' : '🌙'}</button>
-        <div className="w-9 h-9 rounded-full bg-[#1a73e8] flex items-center justify-center font-medium text-sm text-white">{currentUser?.name?.[0]}</div>
+        <button onClick={toggleTheme} aria-label="切換深色模式" title="切換深色模式" className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]">{dark ? <Sun size={18} aria-hidden /> : <Moon size={18} aria-hidden />}</button>
+        <div className="w-9 h-9 rounded-full bg-[var(--primary)] flex items-center justify-center font-medium text-sm text-white">{currentUser?.name?.[0]}</div>
         <button onClick={async () => { await logout(); navigate('/login') }} className="text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
       </div>
     </header>
@@ -121,23 +127,26 @@ export function WebLayout({ children }) {
             {navGroups.map((g) => (
               <div key={g.title} className="mb-2">
                 <div className="px-6 pt-3 pb-1.5 text-[11px] font-medium tracking-wide text-[var(--text-3)]">{g.title}</div>
-                {g.items.map((n) => (
-                  <NavLink
-                    key={n.to}
-                    to={n.to}
-                    onClick={() => setMenuOpen(false)}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 mx-3 my-0.5 px-4 py-2 rounded-full text-sm transition ${
-                        isActive
-                          ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
-                          : 'text-[var(--text)] hover:bg-[var(--surface-2)]'
-                      }`
-                    }
-                  >
-                    <span className="text-base">{n.icon}</span>
-                    {n.label}
-                  </NavLink>
-                ))}
+                {g.items.map((n) => {
+                  const Icon = n.icon
+                  return (
+                    <NavLink
+                      key={n.to}
+                      to={n.to}
+                      onClick={() => setMenuOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 mx-3 my-0.5 px-4 py-2 rounded-full text-sm transition ${
+                          isActive
+                            ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
+                            : 'text-[var(--text)] hover:bg-[var(--surface-2)]'
+                        }`
+                      }
+                    >
+                      <Icon size={17} strokeWidth={1.8} className="shrink-0 opacity-80" aria-hidden />
+                      {n.label}
+                    </NavLink>
+                  )
+                })}
               </div>
             ))}
           </nav>

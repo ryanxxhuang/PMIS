@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { MailCheck } from 'lucide-react'
 import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
 
@@ -14,7 +15,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-6">
       <div className="bg-[var(--surface)] rounded-2xl g-elevation-2 w-full max-w-md p-8">
         <div className="text-center mb-6">
-          <div className="text-3xl font-medium tracking-tight text-[var(--text)]">PMIS <span className="text-[var(--blue)] font-bold">AI</span></div>
+          <div className="text-3xl font-medium tracking-tight text-[var(--text)]">PMIS <span className="text-[var(--accent-text)] font-bold">AI</span></div>
           <div className="text-[var(--text-2)] text-sm mt-1">AI 工程現場管理平台</div>
         </div>
         {isSupabaseConfigured
@@ -54,7 +55,7 @@ function AuthForm({ signIn, signUp }) {
   if (sent) {
     return (
       <div className="text-center space-y-3 py-2">
-        <div className="text-4xl">📧</div>
+        <div className="flex justify-center"><MailCheck size={36} className="text-[var(--blue-text)]" aria-hidden /></div>
         <div className="font-semibold text-[var(--text)]">驗證信已寄出</div>
         <p className="text-sm text-[var(--text-2)]">
           已寄到 <b>{form.email}</b>。請到信箱點擊連結完成驗證，<br />再回來登入。
@@ -98,7 +99,7 @@ function AuthForm({ signIn, signUp }) {
       {err && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{err}</div>}
 
       <button type="submit" disabled={loading}
-        className="w-full bg-[#1a73e8] text-white rounded-lg py-2.5 font-medium hover:bg-[#1765cc] transition disabled:opacity-50">
+        className="w-full bg-[var(--primary)] text-white rounded-lg py-2.5 font-medium hover:bg-[var(--primary-hover)] transition disabled:opacity-50">
         {loading ? '處理中…' : mode === 'signin' ? '登入' : '建立帳號並登入'}
       </button>
       <div className="text-center text-xs text-[var(--text-3)] pt-1">真實帳號 · 資料存於 Supabase（RLS 權限控管）</div>

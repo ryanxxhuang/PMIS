@@ -12,8 +12,8 @@ const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
 
 export default function Dashboard() {
-  const { project, workItems, workItemsSource, valuations, progressPlan, inspections, defects, siteLogs } = useStore()
-  const imported = workItemsSource === 'db'
+  const { project, workItems, workItemsSource, demoMode, valuations, progressPlan, inspections, defects, siteLogs } = useStore()
+  const imported = workItemsSource === 'db' || demoMode
 
   const { roots, childrenMap } = useMemo(
     () => (workItems ? buildBillableTree(workItems.items) : { roots: [], childrenMap: new Map() }),

@@ -10,7 +10,7 @@ const STATUS_COLOR = { 提出: 'slate', 審核中: 'amber', 核准: 'green', 駁
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function ChangeOrders() {
-  const { project, workItems, dbMode, changeOrders,
+  const { project, workItems, dbMode, demoMode, changeOrders,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, updateChangeOrderItem, deleteChangeOrderItem } = useStore()
   const original = workItems?.meta.billable_total || 0
@@ -52,7 +52,7 @@ export default function ChangeOrders() {
     if (!error) setHead({ co_no: '', title: '', co_date: todayStr() })
   }
 
-  if (!dbMode) {
+  if (!dbMode && !demoMode) {
     return <Card title="變更設計"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單，才能對照原契約金額計算追加減。</Empty></Card>
   }
 

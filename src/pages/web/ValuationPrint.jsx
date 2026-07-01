@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
+import { Printer } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 
@@ -27,7 +28,7 @@ export default function ValuationPrint() {
   if (!workItems || !selected) {
     return (
       <div className="p-10 text-center text-slate-400">
-        無估驗資料。<button onClick={() => navigate('/valuation')} className="text-[#1a73e8] underline">返回估驗計價</button>
+        無估驗資料。<button onClick={() => navigate('/valuation')} className="text-[var(--blue-text)] underline">返回估驗計價</button>
       </div>
     )
   }
@@ -59,7 +60,7 @@ export default function ValuationPrint() {
       {/* 工具列（列印時隱藏）*/}
       <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
         <button onClick={() => navigate('/valuation')} className="text-sm text-slate-500 hover:text-slate-800">← 返回估驗計價</button>
-        <button onClick={() => window.print()} className="bg-[#1a73e8] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[#1765cc]">🖨 列印 / 另存 PDF</button>
+        <button onClick={() => window.print()} className="bg-[var(--primary)] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--primary-hover)] inline-flex items-center gap-1.5"><Printer size={15} aria-hidden />列印 / 另存 PDF</button>
       </div>
 
       {/* 文件本體 A4 */}

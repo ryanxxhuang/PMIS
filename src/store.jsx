@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { project } from './data/seed.js'
+import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
 import { loadWorkItems } from './lib/boqCalc.js'
 import { parseLocalDate } from './lib/dates.js'
@@ -380,6 +381,21 @@ export function StoreProvider({ children }) {
     return { byKey, idToKey, byId }
   }, [workItems])
   const dbMode = isSupabaseConfigured && !!currentProject && workItemsSource === 'db'
+  // demo 模式：未設 Supabase → 全站用 demoSeed storyline，寫入只進記憶體
+  const demoMode = !isSupabaseConfigured
+
+  // demo 模式：範例標單載入後，一次性預載完整示範資料（銷售展示 storyline）
+  const demoLoadedRef = useRef(false)
+  useEffect(() => {
+    if (!demoMode || demoLoadedRef.current) return
+    if (!workItems || workItemsSource !== 'sample' || !currentUser) return
+    demoLoadedRef.current = true
+    const d = buildDemoData(workItems, project)
+    setValuations(d.valuations); setProgressPlan(d.progressPlan); setSiteLogs(d.siteLogs)
+    setInspections(d.inspections); setDefects(d.defects); setObligations(d.obligations)
+    setCostItems(d.costItems); setSafetyRecords(d.safetyRecords); setChangeOrders(d.changeOrders)
+    setItemSchedules(d.itemSchedules)
+  }, [demoMode, workItems, workItemsSource, currentUser])
 
   // DB 模式：載入此專案的估驗與預定進度（取代 localStorage 的值）
   useEffect(() => {
@@ -522,10 +538,10 @@ export function StoreProvider({ children }) {
     if (dbMode) supabase.from('valuations').update({ status }).eq('id', periodId).then(() => {})
   }, [dbMode, log])
 
-  // 請款/收款:更新某期的請款日 / 收款日 / 實收金額
+  // 請款/收款:更新某期的請款日 / 收款日 / 實收金額（demo 模式只更新本機）
   const updateValuationPayment = useCallback(async (id, patch) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     setValuations((vs) => vs.map((v) => (v.id === id ? { ...v, ...patch } : v)))
+    if (!dbMode) return { error: null }
     const { error } = await supabase.from('valuations').update(patch).eq('id', id)
     return { error }
   }, [dbMode])
@@ -566,7 +582,14 @@ export function StoreProvider({ children }) {
 
   // P4. 施工日誌：存某日各工項當日完成數量（一天一筆，沿用 project_id+log_date 唯一）
   const saveSiteLog = useCallback(async ({ log_date, weather, work_summary, items }) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
+    if (!dbMode) {
+      // demo：本機 upsert（同日覆蓋），維持日期新→舊排序
+      setSiteLogs((ls) => [
+        { id: `LOG-${Date.now()}`, log_date, weather: weather || null, work_summary: work_summary || null, status: '已送出', items: items || {} },
+        ...ls.filter((l) => l.log_date !== log_date),
+      ].sort((a, b) => b.log_date.localeCompare(a.log_date)))
+      return { error: null }
+    }
     const { data: up, error: e1 } = await supabase.from('daily_logs').upsert(
       { project_id: currentProject.project_id, log_date, weather: weather || null, work_summary: work_summary || null, status: '已送出', created_by: currentUser?.user_id },
       { onConflict: 'project_id,log_date' },
@@ -588,7 +611,6 @@ export function StoreProvider({ children }) {
 
   // 把施工日誌各日數量加總，帶入某估驗期的「累計完成數量」（標 source=daily_log）
   const fillValuationFromSiteLogs = useCallback(async (periodId) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     const accum = {}
     for (const lg of siteLogs)
       for (const [key, q] of Object.entries(lg.items || {}))
@@ -598,6 +620,7 @@ export function StoreProvider({ children }) {
       if (wi?.quantity) accum[key] = Math.min(accum[key], wi.quantity)
     }
     setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, items: { ...v.items, ...accum } } : v)))
+    if (!dbMode) return { error: null, count: Object.keys(accum).length }
     const rows = Object.entries(accum).map(([key, qty]) => {
       const wi = wiMaps.byKey.get(key)
       if (!wi) return null
@@ -717,17 +740,14 @@ export function StoreProvider({ children }) {
   }, [dbMode, currentProject, currentUser, reloadObligations, log])
 
   const updateObligationStatus = useCallback(async (id, status) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     setObligations((os) => os.map((o) => (o.id === id ? { ...o, status } : o)))
-    await supabase.from('contract_obligations').update({ status }).eq('id', id)
+    if (dbMode) await supabase.from('contract_obligations').update({ status }).eq('id', id)
     return { error: null }
   }, [dbMode])
 
-  // P3. 成本管理：新增 / 更新 / 刪除成本項目（預算 vs 實際、分包）
+  // P3. 成本管理：新增 / 更新 / 刪除成本項目（預算 vs 實際、分包；demo 只進記憶體）
   const createCostItem = useCallback(async (input) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     const row = {
-      project_id: currentProject.project_id,
       category: input.category || '其他', title: input.title,
       vendor: input.vendor || null,
       budget_amount: Number(input.budget_amount) || 0,
@@ -735,7 +755,12 @@ export function StoreProvider({ children }) {
       status: input.status || '進行中', note: input.note || null,
       sort_order: costItems.length,
     }
-    const { data, error } = await supabase.from('cost_items').insert(row).select().single()
+    if (!dbMode) {
+      setCostItems((cs) => [...cs, { ...row, id: `COST-${Date.now()}` }])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('cost_items')
+      .insert({ ...row, project_id: currentProject.project_id }).select().single()
     if (error) return { error }
     setCostItems((cs) => [...cs, data])
     log('新增成本項目', `${row.category}·${row.title}`, { user: currentUser?.name || '系統', role: '工程' })
@@ -743,32 +768,33 @@ export function StoreProvider({ children }) {
   }, [dbMode, currentProject, costItems, currentUser, log])
 
   const updateCostItem = useCallback(async (id, patch) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     setCostItems((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+    if (!dbMode) return { error: null }
     const { error } = await supabase.from('cost_items').update(patch).eq('id', id)
     return { error }
   }, [dbMode])
 
   const deleteCostItem = useCallback(async (id) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     setCostItems((cs) => cs.filter((c) => c.id !== id))
-    await supabase.from('cost_items').delete().eq('id', id)
+    if (dbMode) await supabase.from('cost_items').delete().eq('id', id)
     return { error: null }
   }, [dbMode])
 
-  // P6. 工安：新增 / 更新 / 刪除工安紀錄
+  // P6. 工安：新增 / 更新 / 刪除工安紀錄（demo 只進記憶體）
   const createSafetyRecord = useCallback(async (input) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     const row = {
-      project_id: currentProject.project_id,
       record_type: input.record_type || '工安缺失', title: input.title,
       location: input.location || null, record_date: input.record_date || null,
       severity: input.severity || '一般',
       status: input.record_type === '教育訓練' || input.record_type === '危害告知' ? '已完成' : (input.status || '待改善'),
       due_date: input.due_date || null, note: input.note || null,
-      created_by: currentUser?.user_id,
     }
-    const { data, error } = await supabase.from('safety_records').insert(row).select().single()
+    if (!dbMode) {
+      setSafetyRecords((rs) => [{ ...row, id: `SAF-${Date.now()}` }, ...rs])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('safety_records')
+      .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setSafetyRecords((rs) => [data, ...rs])
     log('新增工安紀錄', `${row.record_type}·${row.title}`, { user: currentUser?.name || '系統', role: '工安' })
@@ -776,22 +802,24 @@ export function StoreProvider({ children }) {
   }, [dbMode, currentProject, currentUser, log])
 
   const updateSafetyRecord = useCallback(async (id, patch) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     setSafetyRecords((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+    if (!dbMode) return { error: null }
     const { error } = await supabase.from('safety_records').update(patch).eq('id', id)
     return { error }
   }, [dbMode])
 
   const deleteSafetyRecord = useCallback(async (id) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     setSafetyRecords((rs) => rs.filter((r) => r.id !== id))
-    await supabase.from('safety_records').delete().eq('id', id)
+    if (dbMode) await supabase.from('safety_records').delete().eq('id', id)
     return { error: null }
   }, [dbMode])
 
-  // P4. 逐工項排程：設定某工項的計畫起迄（upsert by work_item_id）
+  // P4. 逐工項排程：設定某工項的計畫起迄（upsert by work_item_id；demo 只進記憶體）
   const setItemSchedule = useCallback(async (itemKey, patch) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
+    if (!dbMode) {
+      setItemSchedules((m) => ({ ...m, [itemKey]: { ...(m[itemKey] || {}), ...patch } }))
+      return { error: null }
+    }
     const wi = wiMaps.byKey.get(itemKey)
     if (!wi?.id) return { error: { message: '找不到工項' } }
     setItemSchedules((m) => ({ ...m, [itemKey]: { ...(m[itemKey] || {}), ...patch } }))
@@ -805,24 +833,26 @@ export function StoreProvider({ children }) {
   }, [dbMode, currentProject, wiMaps, itemSchedules])
 
   const removeItemSchedule = useCallback(async (itemKey) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
-    const wi = wiMaps.byKey.get(itemKey)
     setItemSchedules((m) => { const n = { ...m }; delete n[itemKey]; return n })
+    if (!dbMode) return { error: null }
+    const wi = wiMaps.byKey.get(itemKey)
     if (wi?.id) await supabase.from('item_schedules').delete().eq('work_item_id', wi.id)
     return { error: null }
   }, [dbMode, wiMaps])
 
-  // 變更設計：表頭 CRUD ------------------------------------------------------
+  // 變更設計：表頭 CRUD（demo 只進記憶體）------------------------------------
   const createChangeOrder = useCallback(async (input) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     const row = {
-      project_id: currentProject.project_id,
       co_no: input.co_no || null, title: input.title,
       co_date: input.co_date || null, status: input.status || '提出',
       reason: input.reason || null, sort_order: changeOrders.length,
-      created_by: currentUser?.user_id,
     }
-    const { data, error } = await supabase.from('change_orders').insert(row).select().single()
+    if (!dbMode) {
+      setChangeOrders((cs) => [...cs, { ...row, id: `CO-${Date.now()}`, items: [] }])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('change_orders')
+      .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setChangeOrders((cs) => [...cs, { ...data, items: [] }])
     log('新增變更設計', `${row.co_no || ''} ${row.title}`, { user: currentUser?.name || '系統', role: '工程' })
@@ -830,42 +860,42 @@ export function StoreProvider({ children }) {
   }, [dbMode, currentProject, changeOrders, currentUser, log])
 
   const updateChangeOrder = useCallback(async (id, patch) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     setChangeOrders((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+    if (!dbMode) return { error: null }
     const { error } = await supabase.from('change_orders').update(patch).eq('id', id)
     return { error }
   }, [dbMode])
 
   const deleteChangeOrder = useCallback(async (id) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     setChangeOrders((cs) => cs.filter((c) => c.id !== id))
-    await supabase.from('change_orders').delete().eq('id', id) // 明細 cascade
+    if (dbMode) await supabase.from('change_orders').delete().eq('id', id) // 明細 cascade
     return { error: null }
   }, [dbMode])
 
   // 變更設計：追加減工項明細 CRUD --------------------------------------------
   const addChangeOrderItem = useCallback(async (coId, input) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
     const qty = Number(input.qty_delta) || 0
     const price = Number(input.unit_price) || 0
     const row = {
-      change_order_id: coId, project_id: currentProject.project_id,
-      work_item_id: wi?.id || null,
       item_no: input.item_no || wi?.item_no || null,
       description: input.description || wi?.description || '',
       unit: input.unit || wi?.unit || null,
       qty_delta: qty, unit_price: price, amount_delta: qty * price,
       note: input.note || null,
     }
-    const { data, error } = await supabase.from('change_order_items').insert(row).select().single()
+    if (!dbMode) {
+      setChangeOrders((cs) => cs.map((c) => (c.id === coId ? { ...c, items: [...c.items, { ...row, id: `COI-${Date.now()}` }] } : c)))
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('change_order_items')
+      .insert({ ...row, change_order_id: coId, project_id: currentProject.project_id, work_item_id: wi?.id || null }).select().single()
     if (error) return { error }
     setChangeOrders((cs) => cs.map((c) => (c.id === coId ? { ...c, items: [...c.items, data] } : c)))
     return { error: null }
   }, [dbMode, currentProject, wiMaps])
 
   const updateChangeOrderItem = useCallback(async (coId, id, patch) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     // qty_delta / unit_price 變動時同步重算 amount_delta
     const recompute = (it) => {
       const merged = { ...it, ...patch }
@@ -878,6 +908,7 @@ export function StoreProvider({ children }) {
     setChangeOrders((cs) => cs.map((c) => (c.id === coId
       ? { ...c, items: c.items.map((it) => (it.id === id ? (saved = recompute(it)) : it)) }
       : c)))
+    if (!dbMode) return { error: null }
     const dbPatch = { ...patch }
     if (saved && ('qty_delta' in patch || 'unit_price' in patch)) dbPatch.amount_delta = saved.amount_delta
     const { error } = await supabase.from('change_order_items').update(dbPatch).eq('id', id)
@@ -885,9 +916,8 @@ export function StoreProvider({ children }) {
   }, [dbMode])
 
   const deleteChangeOrderItem = useCallback(async (coId, id) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     setChangeOrders((cs) => cs.map((c) => (c.id === coId ? { ...c, items: c.items.filter((it) => it.id !== id) } : c)))
-    await supabase.from('change_order_items').delete().eq('id', id)
+    if (dbMode) await supabase.from('change_order_items').delete().eq('id', id)
     return { error: null }
   }, [dbMode])
 
@@ -898,8 +928,16 @@ export function StoreProvider({ children }) {
   }, [currentProject, wiMaps])
 
   const createInspection = useCallback(async (input) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
+    if (!dbMode) {
+      setInspections((is) => [{
+        id: `INSP-${Date.now()}`, title: input.title, location: input.location || null,
+        inspection_type: input.inspection_type || '施工查驗',
+        requested_date: input.requested_date || null, status: '待查驗', result_note: null,
+        work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
+      }, ...is])
+      return { error: null }
+    }
     const { error } = await supabase.from('inspections').insert({
       project_id: currentProject.project_id, work_item_id: wi?.id || null,
       title: input.title, location: input.location || null,
@@ -915,7 +953,17 @@ export function StoreProvider({ children }) {
 
   // 監造查驗：合格 / 不合格（不合格可一併開缺失）
   const recordInspectionResult = useCallback(async (insp, pass, note) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
+    if (!dbMode) {
+      setInspections((is) => is.map((i) => (i.id === insp.id ? { ...i, status: pass ? '合格' : '不合格', result_note: note || null } : i)))
+      if (!pass) {
+        setDefects((ds) => [{
+          id: `DEF-${Date.now()}`, title: `查驗不合格：${insp.title}`, description: note || null,
+          severity: '一般', location: insp.location || null, due_date: null, status: '開立', improvement_note: null,
+          work_item_no: insp.work_item_no || '', work_item_desc: insp.work_item_desc || '',
+        }, ...ds])
+      }
+      return { error: null }
+    }
     const { error } = await supabase.from('inspections').update({
       status: pass ? '合格' : '不合格', result_note: note || null,
       inspected_by: currentUser?.user_id, inspected_at: new Date().toISOString(),
@@ -934,8 +982,16 @@ export function StoreProvider({ children }) {
   }, [dbMode, currentProject, currentUser, reloadQuality, log])
 
   const createDefect = useCallback(async (input) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
+    if (!dbMode) {
+      setDefects((ds) => [{
+        id: `DEF-${Date.now()}`, title: input.title, description: input.description || null,
+        severity: input.severity || '一般', location: input.location || null,
+        due_date: input.due_date || null, status: '開立', improvement_note: null,
+        work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
+      }, ...ds])
+      return { error: null }
+    }
     const { error } = await supabase.from('defects').insert({
       project_id: currentProject.project_id, work_item_id: wi?.id || null,
       title: input.title, description: input.description || null,
@@ -950,10 +1006,13 @@ export function StoreProvider({ children }) {
 
   // 缺失狀態推進：開立 → 改善中 → 待複查 → 已結案
   const updateDefectStatus = useCallback(async (defectId, status, extra = {}) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
     const patch = { status }
     if (extra.improvement_note !== undefined) patch.improvement_note = extra.improvement_note
     if (status === '已結案') patch.closed_at = new Date().toISOString()
+    if (!dbMode) {
+      setDefects((ds) => ds.map((d) => (d.id === defectId ? { ...d, ...patch } : d)))
+      return { error: null }
+    }
     const { error } = await supabase.from('defects').update(patch).eq('id', defectId)
     if (error) return { error }
     await reloadQuality()
@@ -974,10 +1033,12 @@ export function StoreProvider({ children }) {
 
   const deleteInspection = useCallback(async (id) => {
     if (dbMode) { await supabase.from('inspections').delete().eq('id', id); await reloadQuality() }
+    else setInspections((is) => is.filter((i) => i.id !== id))
   }, [dbMode, reloadQuality])
 
   const deleteDefect = useCallback(async (id) => {
     if (dbMode) { await supabase.from('defects').delete().eq('id', id); await reloadQuality() }
+    else setDefects((ds) => ds.filter((d) => d.id !== id))
   }, [dbMode, reloadQuality])
 
   // 重新匯入標單：清空本專案 work_items 與相依資料（估驗/進度/日誌/查驗/缺失）
@@ -1014,7 +1075,7 @@ export function StoreProvider({ children }) {
     project: currentProject || project, currentUser, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
-    workItems, workItemsSource, importWorkItems, dbMode,
+    workItems, workItemsSource, importWorkItems, dbMode, demoMode,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard,
     obligations, parseContract, updateObligationStatus, updateProjectAnchors,

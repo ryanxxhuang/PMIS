@@ -149,25 +149,25 @@ export default function Progress() {
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="進度 S 曲線">
           {[0, 25, 50, 75, 100].map((p) => (
             <g key={p}>
-              <line x1={m.l} y1={y(p)} x2={W - m.r} y2={y(p)} stroke="#e2e8f0" strokeWidth="1" />
-              <text x={m.l - 6} y={y(p) + 3} textAnchor="end" fontSize="10" fill="#94a3b8">{p}%</text>
+              <line x1={m.l} y1={y(p)} x2={W - m.r} y2={y(p)} style={{ stroke: 'var(--chart-grid)' }} strokeWidth="1" />
+              <text x={m.l - 6} y={y(p) + 3} textAnchor="end" fontSize="10" style={{ fill: 'var(--chart-axis-text)' }}>{p}%</text>
             </g>
           ))}
           {months.map((mm, i) => (i % xLabelEvery === 0 || i === N - 1) ? (
-            <text key={i} x={x(i)} y={H - m.b + 16} textAnchor="middle" fontSize="9" fill="#94a3b8">{mm.label.slice(2)}</text>
+            <text key={i} x={x(i)} y={H - m.b + 16} textAnchor="middle" fontSize="9" style={{ fill: 'var(--chart-axis-text)' }}>{mm.label.slice(2)}</text>
           ) : null)}
           {/* 今天垂直線 */}
-          <line x1={x(todayFrac)} y1={m.t} x2={x(todayFrac)} y2={H - m.b} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 3" />
-          <text x={x(todayFrac)} y={m.t - 4} textAnchor="middle" fontSize="9" fill="#64748b">今天</text>
+          <line x1={x(todayFrac)} y1={m.t} x2={x(todayFrac)} y2={H - m.b} style={{ stroke: 'var(--chart-today)' }} strokeWidth="1" strokeDasharray="4 3" />
+          <text x={x(todayFrac)} y={m.t - 4} textAnchor="middle" fontSize="9" style={{ fill: 'var(--chart-axis-text)' }}>今天</text>
           {/* 預定 */}
-          <polyline points={plannedPts} fill="none" stroke="#94a3b8" strokeWidth="2" />
+          <polyline points={plannedPts} fill="none" style={{ stroke: 'var(--chart-muted-line)' }} strokeWidth="2" />
           {/* 實際 */}
-          {actualPoints.length > 0 && <polyline points={actualPts} fill="none" stroke="#1a73e8" strokeWidth="2.5" />}
-          {actualPoints.map((p) => <circle key={p.i} cx={x(p.i)} cy={y(p.pct)} r="3.5" fill="#1a73e8" />)}
+          {actualPoints.length > 0 && <polyline points={actualPts} fill="none" style={{ stroke: 'var(--blue)' }} strokeWidth="2.5" />}
+          {actualPoints.map((p) => <circle key={p.i} cx={x(p.i)} cy={y(p.pct)} r="3.5" style={{ fill: 'var(--blue)' }} />)}
         </svg>
         <div className="flex items-center gap-5 text-xs text-[var(--text-2)] mt-2 pl-1">
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-slate-400" />預定進度</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-[#1a73e8]" />實際進度（估驗）</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-[var(--chart-muted-line)]" />預定進度</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-[var(--blue)]" />實際進度（估驗）</span>
         </div>
       </Card>
 

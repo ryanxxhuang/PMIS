@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { Camera } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -153,9 +154,9 @@ export default function SiteLog() {
             </div>
 
             <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
-              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[#1a73e8] text-white hover:bg-[#1765cc] shadow-sm'}`}>
+              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
-                📋 {aiBusy ? 'AI 辨識中…' : '拍白板自動填寫'}
+                <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : '拍白板自動填寫'}
               </label>
               <p className={`text-xs mt-2 ${aiMsg.startsWith('辨識失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>
                 {aiMsg || '在白板寫好工項與數量、跟現場一起拍，AI 自動帶入下面的工項與當日數量。'}

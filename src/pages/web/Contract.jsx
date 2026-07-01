@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { Scale, FileText } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty } from '../../components/ui.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
@@ -74,7 +75,7 @@ export default function Contract() {
       .sort((x, y) => (x.due?.getTime() || Infinity) - (y.due?.getTime() || Infinity)),
   })).filter((g) => g.list.length), [items])
 
-  if (!isSupabaseConfigured || !currentProject) {
+  if (isSupabaseConfigured && !currentProject) {
     return <Card title="契約管制"><Empty>請先登入並建立/選擇專案,才能解析契約時程。</Empty></Card>
   }
 
@@ -100,7 +101,7 @@ export default function Contract() {
       </Card>
 
       <Card title="契約解析" action={
-        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${busy || !dbMode ? 'opacity-50' : 'cursor-pointer bg-[#1a73e8] text-white hover:bg-[#1765cc] shadow-sm'}`}>
+        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${busy || !dbMode ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
           <input type="file" accept="application/pdf,image/*" disabled={busy || !dbMode} onChange={onUpload} className="hidden" />
           {busy ? '解析中…' : '上傳契約解析'}
         </label>
@@ -142,10 +143,10 @@ export default function Contract() {
                     </div>
                   )}
                   {it.ob.penalty && (
-                    <div className="text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-2 py-1 mt-2 inline-block">⚖ {it.ob.penalty}</div>
+                    <div className="text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-2 py-1 mt-2 inline-flex items-center gap-1"><Scale size={12} aria-hidden /> {it.ob.penalty}</div>
                   )}
                   {(it.ob.source_clause || it.ob.source_page) && (
-                    <div className="text-[11px] text-[var(--text-3)] mt-2">📄 契約 {it.ob.source_clause} {it.ob.source_page}</div>
+                    <div className="text-[11px] text-[var(--text-3)] mt-2 flex items-center gap-1"><FileText size={11} aria-hidden /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>
                   )}
                 </div>
               </div>

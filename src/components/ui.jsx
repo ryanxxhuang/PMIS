@@ -1,4 +1,5 @@
-// Shared UI — Google Material styling (elevation surfaces, blue accent, tonal chips)
+// Shared UI — brand styling (elevation surfaces, steel-blue primary, tonal chips)
+import { FileText } from 'lucide-react'
 
 export function Card({ title, action, children, className = '' }) {
   return (
@@ -43,10 +44,10 @@ export function StatusBadge({ status }) {
 
 export function Button({ variant = 'primary', className = '', children, ...props }) {
   const styles = {
-    primary: 'bg-[#1a73e8] text-white hover:bg-[#1765cc] shadow-sm hover:shadow',
-    secondary: 'bg-[var(--surface)] text-[var(--blue)] border border-[var(--border)] hover:bg-[var(--bg)]',
-    success: 'bg-[#1e8e3e] text-white hover:bg-[#188038] shadow-sm hover:shadow',
-    danger: 'bg-[#d93025] text-white hover:bg-[#c5221f] shadow-sm hover:shadow',
+    primary: 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm hover:shadow',
+    secondary: 'bg-[var(--surface)] text-[var(--blue-text)] border border-[var(--border)] hover:bg-[var(--bg)]',
+    success: 'bg-[var(--success)] text-white hover:bg-[var(--success-hover)] shadow-sm hover:shadow',
+    danger: 'bg-[var(--danger)] text-white hover:bg-[var(--danger-hover)] shadow-sm hover:shadow',
     ghost: 'text-[var(--blue)] hover:bg-[var(--blue-tint)]',
   }
   return (
@@ -82,7 +83,7 @@ export function Field({ label, children, hint }) {
 export function SourceTag({ doc, page, section }) {
   return (
     <div className="text-xs text-[var(--text-2)] bg-[var(--bg)] border border-[var(--border-2)] rounded-lg px-2.5 py-1.5">
-      📄 <span className="font-medium text-[var(--text)]">{doc}</span> · {page}
+      <FileText size={12} className="inline -mt-0.5 mr-1 text-[var(--text-3)]" aria-hidden /><span className="font-medium text-[var(--text)]">{doc}</span> · {page}
       {section && <span className="block text-[var(--text-3)] mt-0.5">{section}</span>}
     </div>
   )

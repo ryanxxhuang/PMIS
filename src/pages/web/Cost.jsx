@@ -13,7 +13,7 @@ const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 const pct = (n) => (isFinite(n) ? n.toFixed(1) : '—')
 
 export default function Cost() {
-  const { project, workItems, dbMode, costItems, createCostItem, updateCostItem, deleteCostItem } = useStore()
+  const { project, workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem } = useStore()
   const revenue = workItems?.meta.billable_total || 0
 
   const [form, setForm] = useState({ category: '分包', title: '', vendor: '', budget_amount: '', actual_amount: '' })
@@ -46,7 +46,7 @@ export default function Cost() {
     if (!error) setForm({ category: form.category, title: '', vendor: '', budget_amount: '', actual_amount: '' })
   }
 
-  if (!dbMode) {
+  if (!dbMode && !demoMode) {
     return <Card title="成本管理"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單，才能對照合約收入計算毛利。</Empty></Card>
   }
 
