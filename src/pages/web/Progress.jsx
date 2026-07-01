@@ -2,10 +2,11 @@ import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Field, Empty } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
+import { parseLocalDate } from '../../lib/dates.js'
 
 const monthLabel = (str) => {
-  const d = new Date(str)
-  return isNaN(d) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const d = parseLocalDate(str)
+  return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : null
 }
 const TODAY = new Date() // 今天（部署後依使用者實際日期）
 
@@ -91,8 +92,9 @@ export default function Progress() {
   const actualNow = actualPoints.length ? actualPoints[actualPoints.length - 1].pct : 0
 
   // 今天落在第幾個月（小數）+ 內插預定進度
-  const elapsed = (TODAY.getFullYear() - new Date(progressPlan.start).getFullYear()) * 12
-    + (TODAY.getMonth() - new Date(progressPlan.start).getMonth())
+  const planStart = parseLocalDate(progressPlan.start)
+  const elapsed = (TODAY.getFullYear() - planStart.getFullYear()) * 12
+    + (TODAY.getMonth() - planStart.getMonth())
     + (TODAY.getDate() - 1) / 30
   const todayFrac = Math.max(0, Math.min(N - 1, elapsed))
   const plannedNow = (() => {

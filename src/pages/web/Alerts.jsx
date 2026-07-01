@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Empty } from '../../components/ui.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
+import { parseLocalDate } from '../../lib/dates.js'
 
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -31,7 +32,7 @@ export default function Alerts() {
     // 品質缺失:未結案
     for (const df of defects) {
       if (df.status === '已結案') continue
-      const due = df.due_date ? new Date(df.due_date) : null
+      const due = parseLocalDate(df.due_date)
       const d = due ? diffDays(due) : null
       if (d != null && d < 0) out.push({ level: 'overdue', tag: '缺失', title: df.title, meta: `改善逾期 ${-d} 天 · ${df.status}`, to: '/quality' })
       else if (d != null && d <= 7) out.push({ level: 'soon', tag: '缺失', title: df.title, meta: `${d} 天內應改善 · ${df.status}`, to: '/quality' })
@@ -41,7 +42,7 @@ export default function Alerts() {
     // 工安缺失:未完成
     for (const s of safetyRecords) {
       if (s.record_type !== '工安缺失' || s.status === '已完成') continue
-      const due = s.due_date ? new Date(s.due_date) : null
+      const due = parseLocalDate(s.due_date)
       const d = due ? diffDays(due) : null
       if (d != null && d < 0) out.push({ level: 'overdue', tag: '工安', title: s.title, meta: `改善逾期 ${-d} 天 · ${s.status}`, to: '/safety' })
       else if (d != null && d <= 7) out.push({ level: 'soon', tag: '工安', title: s.title, meta: `${d} 天內應改善 · ${s.status}`, to: '/safety' })

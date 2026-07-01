@@ -2,14 +2,14 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
+import { parseLocalDate } from '../../lib/dates.js'
 
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
-const parse = (s) => (s ? new Date(s + 'T00:00:00') : null)
 
 // 依計畫起迄 + 完成% 推導狀態
 function deriveState(sch, pct) {
   if (pct >= 99.99) return { key: 'done', label: '已完成', color: 'var(--green-text)' }
-  const t = today0(), end = parse(sch.planned_finish), start = parse(sch.planned_start)
+  const t = today0(), end = parseLocalDate(sch.planned_finish), start = parseLocalDate(sch.planned_start)
   if (end && t > end) return { key: 'late', label: '落後', color: 'var(--red-text)' }
   if (start && t >= start) return { key: 'doing', label: '進行中', color: 'var(--blue)' }
   if (start && t < start) return { key: 'pending', label: '未開始', color: 'var(--text-3)' }

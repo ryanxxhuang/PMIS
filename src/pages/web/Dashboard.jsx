@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Empty } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
+import { parseLocalDate } from '../../lib/dates.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
@@ -29,7 +30,7 @@ export default function Dashboard() {
   const plannedNow = useMemo(() => {
     if (!progressPlan) return null
     const months = progressPlan.months, N = months.length
-    const start = new Date(progressPlan.start)
+    const start = parseLocalDate(progressPlan.start)
     const elapsed = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
     if (elapsed <= 0) return 0
     if (elapsed >= N - 1) return months[N - 1].plannedPct

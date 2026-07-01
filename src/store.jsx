@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useMemo } 
 import { project } from './data/seed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
 import { loadWorkItems } from './lib/boqCalc.js'
+import { parseLocalDate } from './lib/dates.js'
 
 const StoreContext = createContext(null)
 
@@ -531,7 +532,7 @@ export function StoreProvider({ children }) {
 
   // P3. 預定進度 S 曲線。依開工/竣工切出月份桶，預設用 smoothstep 產生標準 S 曲線。
   const generateSchedule = useCallback((start, end) => {
-    const s = new Date(start), e = new Date(end)
+    const s = parseLocalDate(start), e = parseLocalDate(end)
     const buckets = []
     let cur = new Date(s.getFullYear(), s.getMonth(), 1)
     const last = new Date(e.getFullYear(), e.getMonth(), 1)

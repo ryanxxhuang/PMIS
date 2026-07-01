@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, Button } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
+import { parseLocalDate } from '../../lib/dates.js'
 
 const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const thisMonthStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
@@ -23,7 +24,7 @@ export default function MonthlyReport() {
 
   // 截至某 cutoff 日的累計估驗金額（取 valuation_date 在 cutoff（含）以前、期數最大的一期）
   const cumAt = (cutoff) => {
-    const eligible = valuations.filter((v) => !v.valuation_date || new Date(v.valuation_date) <= cutoff)
+    const eligible = valuations.filter((v) => !v.valuation_date || parseLocalDate(v.valuation_date) <= cutoff)
     if (!eligible.length) return 0
     const latest = eligible.reduce((a, b) => (b.period_no > a.period_no ? b : a))
     return totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, latest.items))

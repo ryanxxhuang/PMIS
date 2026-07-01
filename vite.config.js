@@ -10,4 +10,7 @@ export default defineConfig({
     // 避免編輯 .claude 設定或文件時觸發整頁 reload、清掉 demo 進行中的記憶體狀態
     watch: { ignored: ['**/.claude/**', '**/PRD.md'] },
   },
+  test: {
+    environment: 'node', // parsePcces 需要 DOM 的測試檔自帶 @vitest-environment jsdom
+  },
 })
