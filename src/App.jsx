@@ -18,6 +18,7 @@ import Payments from './pages/web/Payments.jsx'
 import Cost from './pages/web/Cost.jsx'
 import ChangeOrders from './pages/web/ChangeOrders.jsx'
 import Alerts from './pages/web/Alerts.jsx'
+import MonthlyReport from './pages/web/MonthlyReport.jsx'
 
 // Gate every page behind auth; force project creation before the workspace loads.
 function Web({ children }) {
@@ -49,6 +50,7 @@ export default function App() {
       <Route path="/safety" element={<Web><Safety /></Web>} />
       <Route path="/contract" element={<Web><Contract /></Web>} />
       <Route path="/alerts" element={<Web><Alerts /></Web>} />
+      <Route path="/monthly-report" element={<Web><MonthlyReport /></Web>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )

@@ -7,6 +7,7 @@ const navGroups = [
     { to: '/dashboard', icon: '📊', label: '專案 Dashboard' },
     { to: '/alerts', icon: '🔔', label: '提醒中心' },
     { to: '/contract', icon: '📅', label: '契約管制' },
+    { to: '/monthly-report', icon: '📰', label: '施工月報' },
   ] },
   { title: '成本與進度', items: [
     { to: '/boq', icon: '📋', label: '標單工項' },
@@ -82,7 +83,7 @@ function TopBar({ onMenu }) {
     setDark(next)
   }
   return (
-    <header className="bg-[var(--surface)] border-b border-[var(--border)] h-16 flex items-center justify-between px-3 md:px-5 shrink-0 relative z-10">
+    <header className="bg-[var(--surface)] border-b border-[var(--border)] h-16 flex items-center justify-between px-3 md:px-5 shrink-0 relative z-10 print:hidden">
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
         <button onClick={onMenu} aria-label="選單" className="md:hidden w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-xl text-[var(--text-2)] hover:bg-[var(--surface-2)]">☰</button>
         <div className="font-medium text-xl tracking-tight text-[var(--text-2)] shrink-0">PMIS <span className="text-[var(--blue)] font-bold">AI</span></div>
@@ -111,7 +112,7 @@ export function WebLayout({ children }) {
         {/* 手機:點背景關閉抽屜 */}
         {menuOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMenuOpen(false)} />}
         <aside
-          className={`w-64 bg-[var(--surface)] border-r border-[var(--border-2)] flex flex-col shrink-0
+          className={`w-64 bg-[var(--surface)] border-r border-[var(--border-2)] flex flex-col shrink-0 print:hidden
             fixed top-16 bottom-0 left-0 z-40 transition-transform
             md:static md:top-auto md:z-auto md:translate-x-0
             ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
