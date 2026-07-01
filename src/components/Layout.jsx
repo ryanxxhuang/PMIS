@@ -14,6 +14,7 @@ const navGroups = [
     { to: '/valuation', icon: '💰', label: '估驗計價' },
     { to: '/payments', icon: '🧾', label: '請款收款' },
     { to: '/cost', icon: '🧮', label: '成本管理' },
+    { to: '/change-orders', icon: '🔧', label: '變更設計' },
     { to: '/progress', icon: '📈', label: '進度 S 曲線' },
     { to: '/schedule', icon: '🗓️', label: '逐工項排程' },
   ] },

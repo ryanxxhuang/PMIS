@@ -382,6 +382,49 @@ drop policy if exists "cost_items_members_all" on public.cost_items;
 create policy "cost_items_members_all" on public.cost_items for all to authenticated
   using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
 
+-- ── Change orders (變更設計 / 追加減帳) ──────────────────────────────────────
+-- A formal contract amendment and its added/reduced work-item lines. Only 核准
+-- change orders count toward the revised contract sum. Line amounts are stored
+-- denormalised (item_no/desc/unit/qty_delta/unit_price/amount_delta) so a CO
+-- survives a BOQ re-import even though work_item_id is set null on delete.
+create table if not exists public.change_orders (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  co_no      text,                            -- 變更編號 (第1次變更…)
+  title      text not null,                   -- 事由 / 名稱
+  co_date    date,
+  status     text not null default '提出',    -- 提出 | 審核中 | 核准 | 駁回
+  reason     text,
+  sort_order int,
+  created_by uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.change_order_items (
+  id              uuid primary key default gen_random_uuid(),
+  change_order_id uuid not null references public.change_orders(id) on delete cascade,
+  project_id      uuid not null references public.projects(id) on delete cascade,
+  work_item_id    uuid references public.work_items(id) on delete set null, -- 連既有工項(選填)
+  item_no         text,
+  description     text not null,
+  unit            text,
+  qty_delta       numeric default 0,          -- 追加為正、減帳為負
+  unit_price      numeric default 0,
+  amount_delta    numeric default 0,          -- = qty_delta × unit_price
+  note            text,
+  sort_order      int,
+  created_at      timestamptz not null default now()
+);
+create index if not exists change_orders_project_idx on public.change_orders(project_id);
+create index if not exists change_order_items_co_idx on public.change_order_items(change_order_id);
+alter table public.change_orders      enable row level security;
+alter table public.change_order_items enable row level security;
+drop policy if exists "change_orders_members_all" on public.change_orders;
+create policy "change_orders_members_all" on public.change_orders for all to authenticated
+  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+drop policy if exists "change_order_items_members_all" on public.change_order_items;
+create policy "change_order_items_members_all" on public.change_order_items for all to authenticated
+  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+
 -- ── Per-item schedule (逐工項計畫起迄 → per-item 落後) ───────────────────────
 -- Kept in its own table (not columns on work_items) so re-importing the BOQ
 -- doesn't wipe the schedule. One row per scheduled work item.

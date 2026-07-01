@@ -137,6 +137,18 @@ async function loadCostItemsFromDB(projectId) {
   return data || []
 }
 
+// 從 DB 載入變更設計 + 追加減工項明細（明細 nest 在各變更下）
+async function loadChangeOrdersFromDB(projectId) {
+  const { data: cos } = await supabase.from('change_orders')
+    .select('*').eq('project_id', projectId).order('sort_order').order('created_at')
+  if (!cos?.length) return []
+  const { data: items } = await supabase.from('change_order_items')
+    .select('*').in('change_order_id', cos.map((c) => c.id)).order('sort_order').order('created_at')
+  const byCo = new Map(cos.map((c) => [c.id, []]))
+  for (const it of items || []) byCo.get(it.change_order_id)?.push(it)
+  return cos.map((c) => ({ ...c, items: byCo.get(c.id) || [] }))
+}
+
 // 從 DB 載入工安紀錄（自主檢查 / 缺失 / 教育訓練 / 危害告知）
 async function loadSafetyFromDB(projectId) {
   const { data } = await supabase.from('safety_records')
@@ -241,6 +253,8 @@ export function StoreProvider({ children }) {
   const [costItems, setCostItems] = useState([])
   // 工安紀錄（真 DB）
   const [safetyRecords, setSafetyRecords] = useState([])
+  // 變更設計 / 追加減帳（真 DB；每筆含 items 明細）
+  const [changeOrders, setChangeOrders] = useState([])
   // 逐工項排程（真 DB；{ item_key: { planned_start, planned_finish } }）
   const [itemSchedules, setItemSchedules] = useState({})
 
@@ -395,6 +409,9 @@ export function StoreProvider({ children }) {
       const sched = await loadItemSchedulesFromDB(currentProject.project_id, wiMaps.idToKey)
       if (!active) return
       setItemSchedules(sched)
+      const cos = await loadChangeOrdersFromDB(currentProject.project_id)
+      if (!active) return
+      setChangeOrders(cos)
     })()
     return () => { active = false }
   }, [dbMode, currentProject, wiMaps])
@@ -794,6 +811,85 @@ export function StoreProvider({ children }) {
     return { error: null }
   }, [dbMode, wiMaps])
 
+  // 變更設計：表頭 CRUD ------------------------------------------------------
+  const createChangeOrder = useCallback(async (input) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    const row = {
+      project_id: currentProject.project_id,
+      co_no: input.co_no || null, title: input.title,
+      co_date: input.co_date || null, status: input.status || '提出',
+      reason: input.reason || null, sort_order: changeOrders.length,
+      created_by: currentUser?.user_id,
+    }
+    const { data, error } = await supabase.from('change_orders').insert(row).select().single()
+    if (error) return { error }
+    setChangeOrders((cs) => [...cs, { ...data, items: [] }])
+    log('新增變更設計', `${row.co_no || ''} ${row.title}`, { user: currentUser?.name || '系統', role: '工程' })
+    return { error: null }
+  }, [dbMode, currentProject, changeOrders, currentUser, log])
+
+  const updateChangeOrder = useCallback(async (id, patch) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    setChangeOrders((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+    const { error } = await supabase.from('change_orders').update(patch).eq('id', id)
+    return { error }
+  }, [dbMode])
+
+  const deleteChangeOrder = useCallback(async (id) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    setChangeOrders((cs) => cs.filter((c) => c.id !== id))
+    await supabase.from('change_orders').delete().eq('id', id) // 明細 cascade
+    return { error: null }
+  }, [dbMode])
+
+  // 變更設計：追加減工項明細 CRUD --------------------------------------------
+  const addChangeOrderItem = useCallback(async (coId, input) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
+    const qty = Number(input.qty_delta) || 0
+    const price = Number(input.unit_price) || 0
+    const row = {
+      change_order_id: coId, project_id: currentProject.project_id,
+      work_item_id: wi?.id || null,
+      item_no: input.item_no || wi?.item_no || null,
+      description: input.description || wi?.description || '',
+      unit: input.unit || wi?.unit || null,
+      qty_delta: qty, unit_price: price, amount_delta: qty * price,
+      note: input.note || null,
+    }
+    const { data, error } = await supabase.from('change_order_items').insert(row).select().single()
+    if (error) return { error }
+    setChangeOrders((cs) => cs.map((c) => (c.id === coId ? { ...c, items: [...c.items, data] } : c)))
+    return { error: null }
+  }, [dbMode, currentProject, wiMaps])
+
+  const updateChangeOrderItem = useCallback(async (coId, id, patch) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    // qty_delta / unit_price 變動時同步重算 amount_delta
+    const recompute = (it) => {
+      const merged = { ...it, ...patch }
+      if ('qty_delta' in patch || 'unit_price' in patch) {
+        merged.amount_delta = (Number(merged.qty_delta) || 0) * (Number(merged.unit_price) || 0)
+      }
+      return merged
+    }
+    let saved = null
+    setChangeOrders((cs) => cs.map((c) => (c.id === coId
+      ? { ...c, items: c.items.map((it) => (it.id === id ? (saved = recompute(it)) : it)) }
+      : c)))
+    const dbPatch = { ...patch }
+    if (saved && ('qty_delta' in patch || 'unit_price' in patch)) dbPatch.amount_delta = saved.amount_delta
+    const { error } = await supabase.from('change_order_items').update(dbPatch).eq('id', id)
+    return { error }
+  }, [dbMode])
+
+  const deleteChangeOrderItem = useCallback(async (coId, id) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    setChangeOrders((cs) => cs.map((c) => (c.id === coId ? { ...c, items: c.items.filter((it) => it.id !== id) } : c)))
+    await supabase.from('change_order_items').delete().eq('id', id)
+    return { error: null }
+  }, [dbMode])
+
   // P5. 品質查驗 / 缺失（三級品管流）
   const reloadQuality = useCallback(async () => {
     const qual = await loadQualityFromDB(currentProject.project_id, wiMaps.byId)
@@ -924,6 +1020,8 @@ export function StoreProvider({ children }) {
     costItems, createCostItem, updateCostItem, deleteCostItem,
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
     itemSchedules, setItemSchedule, removeItemSchedule,
+    changeOrders, createChangeOrder, updateChangeOrder, deleteChangeOrder,
+    addChangeOrderItem, updateChangeOrderItem, deleteChangeOrderItem,
     inspections, defects, createInspection, recordInspectionResult, createDefect, updateDefectStatus,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,

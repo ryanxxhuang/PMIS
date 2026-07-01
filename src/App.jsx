@@ -16,6 +16,7 @@ import Contract from './pages/web/Contract.jsx'
 import Safety from './pages/web/Safety.jsx'
 import Payments from './pages/web/Payments.jsx'
 import Cost from './pages/web/Cost.jsx'
+import ChangeOrders from './pages/web/ChangeOrders.jsx'
 import Alerts from './pages/web/Alerts.jsx'
 
 // Gate every page behind auth; force project creation before the workspace loads.
@@ -41,6 +42,7 @@ export default function App() {
       <Route path="/valuation/print" element={<ValuationPrint />} />
       <Route path="/payments" element={<Web><Payments /></Web>} />
       <Route path="/cost" element={<Web><Cost /></Web>} />
+      <Route path="/change-orders" element={<Web><ChangeOrders /></Web>} />
       <Route path="/progress" element={<Web><Progress /></Web>} />
       <Route path="/schedule" element={<Web><Schedule /></Web>} />
       <Route path="/quality" element={<Web><Quality /></Web>} />
