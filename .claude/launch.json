@@ -14,6 +14,13 @@
       "runtimeArgs": ["VITE_SUPABASE_URL=", "npm", "run", "dev"],
       "port": 5199,
       "autoPort": true
+    },
+    {
+      "name": "pmis-site",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "python3 -m http.server ${PORT:-8788} -d /Volumes/GameSSD/Projects/pmis-site"],
+      "port": 8788,
+      "autoPort": true
     }
   ]
 }

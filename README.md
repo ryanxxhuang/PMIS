@@ -5,7 +5,7 @@
 > quality and safety** — with AI that reads site whiteboards and parses contract deadlines,
 > multi‑tenant, every project's data isolated by Postgres Row Level Security.
 
-**▶ Live demo: https://ryanxxhuang.github.io/PMIS/**
+**▶ App: https://ryanxxhuang.github.io/PMIS/ · Demo (no sign-up): https://ryanxxhuang.github.io/PMIS/demo/ · Site: https://ryanxxhuang.github.io/**
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
