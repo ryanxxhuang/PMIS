@@ -9,7 +9,7 @@
     "test": "vitest run",
     "preview": "vite preview",
     "build:demo": "env VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= vite build --outDir dist/demo",
-    "deploy": "vite build && npm run build:demo && gh-pages -d dist"
+    "deploy": "vite build && npm run build:demo && gh-pages -d dist --dotfiles"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
