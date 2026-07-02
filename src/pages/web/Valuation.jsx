@@ -4,6 +4,7 @@ import { Printer, Trash2 } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Empty } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
+import { applyApprovedChangeOrders, approvedNetAmount } from '../../lib/changeOrders.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
@@ -12,7 +13,8 @@ const statusColor = { 草稿: 'slate', 監造審核: 'amber', 已核定: 'green'
 
 export default function Valuation() {
   const { project, workItems: data, valuations, createValuation, updateValuationItem, setValuationStatus,
-    isSupabaseConfigured, currentProject, workItemsSource, siteLogs, fillValuationFromSiteLogs, dbMode, deleteValuation } = useStore()
+    isSupabaseConfigured, currentProject, workItemsSource, siteLogs, fillValuationFromSiteLogs, dbMode, deleteValuation,
+    changeOrders } = useStore()
   const [filling, setFilling] = useState(false)
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(() => new Set())
@@ -23,11 +25,17 @@ export default function Valuation() {
     if (data) setExpanded(new Set(data.items.filter((it) => it.depth === 1).map((it) => it.item_key)))
   }, [data])
 
-  // 只取「發包工程費、非合計列」建樹（合計列會重複母項金額）
-  const { childrenMap, roots, billableTotal } = useMemo(() => {
-    if (!data) return { childrenMap: new Map(), roots: [], billableTotal: 0 }
-    return { ...buildBillableTree(data.items), billableTotal: data.meta.billable_total }
-  }, [data])
+  // 只取「發包工程費、非合計列」建樹（合計列會重複母項金額）。
+  // 已核准的變更設計先套回工項（連結工項的明細調整數量/金額），分母用變更後契約金額。
+  const { childrenMap, roots, billableTotal, coNet } = useMemo(() => {
+    if (!data) return { childrenMap: new Map(), roots: [], billableTotal: 0, coNet: 0 }
+    const net = approvedNetAmount(changeOrders)
+    return {
+      ...buildBillableTree(applyApprovedChangeOrders(data.items, changeOrders)),
+      billableTotal: (data.meta.billable_total || 0) + net,
+      coNet: net,
+    }
+  }, [data, changeOrders])
 
   const selected = valuations.find((v) => v.id === selectedId) || valuations[valuations.length - 1]
   const prev = selected ? valuations.find((v) => v.period_no === selected.period_no - 1) : null
@@ -140,7 +148,12 @@ export default function Valuation() {
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-[var(--text)]">估驗計價 <span className="text-[var(--text-3)] font-normal text-base">Valuation</span></h1>
           <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-          <p className="text-xs text-[var(--text-3)] mt-0.5">發包工程費 {yi(billableTotal)}（保留款 {selected?.retention_pct ?? 5}%）</p>
+          <p className="text-xs text-[var(--text-3)] mt-0.5">
+            {coNet !== 0
+              ? `變更後契約金額 ${yi(billableTotal)}（原發包 ${yi(billableTotal - coNet)}，核准追加減 ${coNet > 0 ? '+' : ''}${fmt(coNet)}）`
+              : `發包工程費 ${yi(billableTotal)}`}
+            （保留款 {selected?.retention_pct ?? 5}%）
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}

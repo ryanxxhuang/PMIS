@@ -3,13 +3,14 @@ import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { Printer } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
+import { applyApprovedChangeOrders, approvedNetAmount } from '../../lib/changeOrders.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
 
 // 估驗計價單（可列印 / 另存 PDF）— 不套 WebLayout，整頁就是文件
 export default function ValuationPrint() {
-  const { project, workItems, valuations, currentUser } = useStore()
+  const { project, workItems, valuations, currentUser, changeOrders } = useStore()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
 
@@ -17,9 +18,14 @@ export default function ValuationPrint() {
   const selected = valuations.find((v) => v.id === periodId) || valuations[valuations.length - 1]
   const prev = selected ? valuations.find((v) => v.period_no === selected.period_no - 1) : null
 
+  // 已核准變更套回工項後建樹(與估驗頁同一套計算)
+  const adjItems = useMemo(
+    () => (workItems ? applyApprovedChangeOrders(workItems.items, changeOrders) : []),
+    [workItems, changeOrders],
+  )
   const { childrenMap, roots } = useMemo(
-    () => (workItems ? buildBillableTree(workItems.items) : { childrenMap: new Map(), roots: [] }),
-    [workItems],
+    () => (workItems ? buildBillableTree(adjItems) : { childrenMap: new Map(), roots: [] }),
+    [workItems, adjItems],
   )
   const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected?.items || {}), [roots, childrenMap, selected])
   const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev?.items || {}), [roots, childrenMap, prev])
@@ -33,8 +39,9 @@ export default function ValuationPrint() {
     )
   }
 
-  const billableTotal = workItems.meta.billable_total
-  const leaves = workItems.items
+  const coNet = approvedNetAmount(changeOrders)
+  const billableTotal = (workItems.meta.billable_total || 0) + coNet
+  const leaves = adjItems
     .filter((it) => it.is_billable && !it.is_rollup && !(childrenMap.get(it.item_key)?.length) && (cumThis.get(it.item_key) || 0) > 0)
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
 
@@ -76,7 +83,7 @@ export default function ValuationPrint() {
           <Info label="機　　關">{project.owner_name || '—'}</Info>
           <Info label="承包廠商">{project.contractor_name || '—'}</Info>
           <Info label="估驗日期">{selected.valuation_date}</Info>
-          <Info label="發包工程費">NT$ {fmt(billableTotal)}</Info>
+          <Info label={coNet !== 0 ? '變更後契約金額' : '發包工程費'}>NT$ {fmt(billableTotal)}{coNet !== 0 && <span className="text-slate-500 font-normal">（原發包 {fmt(billableTotal - coNet)}）</span>}</Info>
         </div>
 
         {/* 金額彙總 */}

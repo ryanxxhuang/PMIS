@@ -5,7 +5,15 @@
       "name": "pmis-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "pmis-demo",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["VITE_SUPABASE_URL=", "npm", "run", "dev"],
+      "port": 5199,
+      "autoPort": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Field, Empty } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
+import { applyApprovedChangeOrders, revisedContractTotal } from '../../lib/changeOrders.js'
 
 const monthLabel = (str) => {
   const d = parseLocalDate(str)
@@ -12,14 +13,16 @@ const TODAY = new Date() // 今天（部署後依使用者實際日期）
 
 export default function Progress() {
   const { project, workItems: data, progressPlan, generateSchedule, updatePlannedPct, valuations,
-    isSupabaseConfigured, currentProject, workItemsSource } = useStore()
+    isSupabaseConfigured, currentProject, workItemsSource, changeOrders } = useStore()
   const [start, setStart] = useState(project.start_date)
   const [end, setEnd] = useState(project.end_date)
   const [expanded, setExpanded] = useState(() => new Set()) // 展開的工項節點 key
   const toggle = (key) => setExpanded((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n })
 
-  const tree = useMemo(() => (data ? buildBillableTree(data.items) : { roots: [], childrenMap: new Map() }), [data])
-  const billableTotal = data?.meta.billable_total || 0
+  // 已核准變更套回工項後建樹;完成%分母 = 變更後契約金額
+  const adjItems = useMemo(() => (data ? applyApprovedChangeOrders(data.items, changeOrders) : []), [data, changeOrders])
+  const tree = useMemo(() => (data ? buildBillableTree(adjItems) : { roots: [], childrenMap: new Map() }), [data, adjItems])
+  const billableTotal = data ? revisedContractTotal(data.meta.billable_total, changeOrders) : 0
 
   // 各估驗期 → 累計實際完成%（累計估驗金額 ÷ 發包工程費），對應到月份
   const actualByMonth = useMemo(() => {
@@ -112,7 +115,7 @@ export default function Progress() {
 
   // 工項層級進度:各節點實際完成%(累計估驗金額 ÷ 該節點發包額)
   const nodePct = (key) => { const amt = amountMap.get(key) || 0; return amt > 0 ? (latestCumMap.get(key) || 0) / amt * 100 : 0 }
-  const leafList = data.items.filter((it) => it.is_billable && !it.is_rollup && !(tree.childrenMap.get(it.item_key)?.length))
+  const leafList = adjItems.filter((it) => it.is_billable && !it.is_rollup && !(tree.childrenMap.get(it.item_key)?.length))
   const laggards = leafList
     .map((it) => { const pct = nodePct(it.item_key); const share = billableTotal ? (amountMap.get(it.item_key) || 0) / billableTotal * 100 : 0; return { it, pct, share, drag: share * Math.max(0, plannedNow - pct) / 100 } })
     .filter((l) => l.drag > 0)

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, Button } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
+import { revisedContractTotal, approvedNetAmount } from '../../lib/changeOrders.js'
 
 const CATS = ['材料', '人工', '機具', '分包', '管理費', '其他']
 const CAT_COLOR = {
@@ -13,8 +14,10 @@ const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 const pct = (n) => (isFinite(n) ? n.toFixed(1) : '—')
 
 export default function Cost() {
-  const { project, workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem } = useStore()
-  const revenue = workItems?.meta.billable_total || 0
+  const { project, workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem, changeOrders } = useStore()
+  // 合約收入 = 變更後契約金額(原發包 + 已核准追加減)
+  const revenue = revisedContractTotal(workItems?.meta.billable_total || 0, changeOrders)
+  const coNet = approvedNetAmount(changeOrders)
 
   const [form, setForm] = useState({ category: '分包', title: '', vendor: '', budget_amount: '', actual_amount: '' })
   const [busy, setBusy] = useState(false)
@@ -59,7 +62,7 @@ export default function Cost() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Stat label="合約收入（發包工程費）" value={yi(revenue)} sub={`NT$ ${money(revenue)}`} color="text-[var(--blue-text)]" />
+        <Stat label={coNet !== 0 ? '合約收入（變更後契約金額）' : '合約收入（發包工程費）'} value={yi(revenue)} sub={coNet !== 0 ? `NT$ ${money(revenue)} · 含核准追加減 ${coNet > 0 ? '+' : ''}${money(coNet)}` : `NT$ ${money(revenue)}`} color="text-[var(--blue-text)]" />
         <Stat label="預估毛利（收入−預算成本）" value={`${pct(budgetRate)}%`} sub={`NT$ ${money(budgetMargin)}`} color={budgetMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
         <Stat label="實際毛利（收入−實際成本）" value={`${pct(actualRate)}%`} sub={`NT$ ${money(actualMargin)}`} color={actualMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
         <Stat label="預算成本合計" value={money(totals.budget)} sub="NT$" color="text-[var(--text)]" />

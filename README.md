@@ -28,7 +28,8 @@ reconcile.
   defects/inspections at a glance.
 - 🔔 **Alert center (提醒中心)** — one place that surfaces everything due or overdue: contract
   deadlines, defect remediation, unfinished safety issues, and 已核定‑未請款 / 已請款‑未收款
-  payments. Each row links to its source screen.
+  payments. Each row links to its source screen. A daily **email digest** (Edge Function +
+  pg_cron + Resend) mails members whenever anything is overdue or due within 7 days.
 - 📅 **Contract control (契約管制)** — **AI parses the uploaded contract** into every time‑based
   obligation (start‑work‑within‑X‑days, monthly reports, submittals…), each with its trigger,
   computed due date, penalty and source clause. Due dates recompute live from a few anchor dates.
@@ -222,7 +223,10 @@ cd PMIS
 npm install
 cp .env.example .env        # fill in VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 npm run dev                 # http://localhost:5173
+npm test                    # vitest — BOQ maths, contract deadlines, PCCES parser
 ```
+
+CI (GitHub Actions) runs `npm test` + `npm run build` on every push and PR to `main`.
 
 Backend (Supabase project + schema): see **[supabase/SETUP.md](supabase/SETUP.md)**.
 The full, idempotent database schema is one file: **[supabase/schema.sql](supabase/schema.sql)** —

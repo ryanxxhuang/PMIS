@@ -68,3 +68,31 @@ supabase functions deploy parse-contract
 ```
 
 (Word/Excel contracts: export to PDF first for v1.)
+
+## 6. Daily reminder emails (提醒推播)
+
+The `send-reminders` Edge Function ([`functions/send-reminders/index.ts`](./functions/send-reminders/index.ts))
+scans every project for **overdue / due-within-7-days** items (contract obligations, quality
+defects, safety deficiencies, unbilled/unpaid valuations — the same rules as the in-app alert
+center) and emails a digest to all project members via [Resend](https://resend.com).
+It only sends when something is overdue or due soon; plain "待處理" items don't trigger mail.
+
+```bash
+supabase secrets set RESEND_API_KEY=re_...       # resend.com → API Keys (free tier ok)
+supabase secrets set CRON_SECRET=$(openssl rand -hex 24)   # keep the value for cron.sql
+supabase secrets set REMINDER_FROM='PMIS 提醒 <alerts@yourdomain.com>'  # optional; needs a
+                                                  # verified domain on Resend. Default uses
+                                                  # onboarding@resend.dev (test only: it can
+                                                  # deliver ONLY to your own Resend account email)
+supabase functions deploy send-reminders --no-verify-jwt   # auth = x-cron-secret header instead
+```
+
+Schedule it daily at 08:00 Taipei with **pg_cron**: open [`cron.sql`](./cron.sql), replace
+`<PROJECT_REF>` and `<CRON_SECRET>`, run it in the SQL Editor.
+
+Test without sending anything (dry run — returns the digest as JSON):
+
+```bash
+curl -s -X POST "https://<ref>.supabase.co/functions/v1/send-reminders?dry=1" \
+  -H "x-cron-secret: <CRON_SECRET>"
+```
