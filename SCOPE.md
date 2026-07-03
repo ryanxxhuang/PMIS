@@ -15,10 +15,10 @@
 |---|---|
 | BOQ 脊椎 | PCCES XML 瀏覽器內解析 → 3,000+ 工項樹入庫(`/boq`) |
 | 成本進度 | 施工日誌+AI 白板辨識(`/site-log`)→ 估驗計價自動彙總(`/valuation`)→ 請款收款(`/payments`)→ S 曲線(`/progress`)/ 逐工項排程(`/schedule`)/ 成本毛利(`/cost`)/ 估驗計價單列印(`/valuation/print`) |
-| 變更 | 變更設計/追加減帳(`/change-orders`,含明細與變更後契約金額) |
+| 變更 | 變更設計/追加減帳(`/change-orders`,含明細與變更後契約金額);上傳變更後 PCCES XML 自動 diff 產生追加減明細(`src/lib/coDiff.js`,2026-07-03) |
 | 品質工安 | 三級品管、查驗不合格自動開缺失(`/quality`);工安四類紀錄(`/safety`) |
 | 契約 | AI 解析契約時程義務+罰則(`/contract`);提醒中心彙總逾期(`/alerts`) |
-| 報表 | 自動施工月報(`/monthly-report`);各清單 CSV 匯出(UTF-8 BOM) |
+| 報表 | 自動施工月報(`/monthly-report`,含本月完成工項數量表+施工紀要+AI 檢討/下月計畫草稿);各清單 CSV 匯出(UTF-8 BOM) |
 | 後端 | 單一份 idempotent schema、全表 RLS、2 個 SECURITY DEFINER RPC、2 個 Edge Functions(gpt-4o) |
 | 工程地基 | vitest 測試(boqCalc / contractDue / parsePcces / dates / changeOrders + Edge Function 共用邏輯,37 tests)+ GitHub Actions CI(test+build) |
 
@@ -33,10 +33,16 @@
    估驗/S 曲線/計價單/成本收入的分母改用變更後契約金額。已在 demo 模式驗證。
 2. **角色權限未落地** — schema 有 `org_type`/`role`,估驗有送審→監造審核流程,
    但 UI 未依角色限制動作;多人協作前必補。
-3. ~~**提醒是被動的**~~ — 已做(2026-07-01):`send-reminders` Edge Function 每日彙整
-   逾期/7 日內到期事項寄 email 給專案成員(Resend + pg_cron,見 supabase/SETUP.md §6);
-   **待部署**(deploy + secrets + cron.sql)。
-4. **月報/估驗缺公定格式輸出** — CSV 交不出去;月報需比照估驗計價單做 print/PDF。
+3. ~~**提醒是被動的**~~ — 已做(2026-07-01)、**已部署**(2026-07-02):函式 deploy、
+   CRON_SECRET、pg_cron 排程(每日台北 08:00)皆完成;**剩 RESEND_API_KEY 未設**
+   (未設前 cron 觸發但不寄信,安全 no-op)。
+4. **月報格式** — 查證後:工程會只有施工日誌/監造報表有全國公定格式,
+   **施工月報無單一國定格式**(各機關自訂)。已補齊通行月報結構(2026-07-02):
+   「本月完成主要工項數量」表(彙整自日誌)+「施工紀要」(施工天數/天氣)。
+   剩:拿到目標機關實際範本後對齊欄位。
+7. ⚠️ **Supabase 專案服務受限(exceed_egress_quota,2026-07-02 發現)** —
+   Edge Function 與後端 API 被擋,**正式站目前不可用**(demo 不受影響);
+   需升級方案/解除 spend cap 或等月額度重置。給真實廠商試用前必須解決。
 5. **store.jsx 單一 context(1,000+ 行)** — 任何寫入全 app rerender;每加模組都在惡化,
    中期需按領域拆分或 memo 重算。
 6. ~~**日期字串解析時區風險**~~ — 已修(2026-07-01,commit `4a1bea8`):共用
@@ -46,12 +52,23 @@
 
 ## 3. 短期路線(下一步,已定)
 
-1. ✅ **提醒推播** — 已做(2026-07-01):每日 email 彙整(僅在有逾期/即將到期時寄,
-   純待處理不打擾)。部署步驟見 supabase/SETUP.md §6。
-2. **月報/估驗公定格式輸出** — 對齊公共工程表格的 print/PDF。最直接省時、最好賣的 demo 點。
+1. ✅ **提醒推播** — 已做+已部署(2026-07-02);剩 RESEND_API_KEY(見缺口 #3)。
+2. ✅ **月報通行格式** — 已做(2026-07-02):工項數量表+施工紀要(見缺口 #4);
+   機關範本到手後再對齊。
 3. ✅ **變更設計下游連動**(缺口 #1)— 已做(2026-07-02),見上。
 
-做完 1–2 即可拿去給真實廠商試用,以回饋決定第 4 節方向。
+AI 自動化第一輪(2026-07-03,三項皆落地):
+- ✅ **變更 diff** — 變更設計頁上傳變更後 PCCES XML → `coDiff.js` 確定性比對
+  (item_key 優先、名稱+單位後備;單價變更拆「減原量@原價+加新量@新價」兩筆)→
+  預覽差異 → 一鍵套用明細。10 個 vitest、demo 端到端驗證(6.9MB XML 即時解析)。
+- ✅ **AI 月報草稿** — 月報「檢討/下月計畫」一鍵起草:demo 模式本地模板、
+  真專案走 `draft-monthly-review` Edge Function(已部署,gpt-4o,金鑰不進前端)。
+- ✅ **規範→自主檢查表實驗** — 見 `docs/實驗-規範轉自主檢查表-03310.md`:
+  從 03310 結構用混凝土章抽出 30+ 條量化檢查項(含標準/允許誤差/出處條文),
+  可行性確認;產品化 = parse-contract 模式 + 工程師審核 + 掛回工項樹(refItemCode 前綴)。
+
+下一步:解除 Supabase egress 限制(缺口 #7)+ 設 RESEND_API_KEY → 即可拿去給
+真實廠商試用,以回饋決定第 4 節方向。
 
 ---
 

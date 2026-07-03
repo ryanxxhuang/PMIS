@@ -689,6 +689,30 @@ export function StoreProvider({ children }) {
     return { error: null, result: data }
   }, [])
 
+  // AI 月報草稿:彙整數據 → draft-monthly-review Edge Function → 檢討/下月計畫。
+  // demo 模式在本地用數據套模板生成(銷售 demo 不依賴後端)。
+  const draftMonthlyReview = useCallback(async (payload) => {
+    if (demoMode) {
+      const s = payload.stats || {}
+      const behind = s.diff != null && s.diff < 0
+      const review =
+        `本月完成估驗金額 NT$ ${Math.round(s.thisMonthVal || 0).toLocaleString()}，累計實際進度 ${(s.actualPct || 0).toFixed(1)}%` +
+        (s.plannedPct != null ? `，較預定進度${behind ? '落後' : '超前'} ${Math.abs(s.diff).toFixed(1)}%。` : '。') +
+        `本月施工 ${s.workDays || 0} 天（雨天 ${s.rainDays || 0} 天），查驗 ${s.inspections || 0} 次` +
+        (s.failed ? `（不合格 ${s.failed} 件，均已開立缺失追蹤改善）` : '（均合格）') +
+        `。` + (behind ? '落後主因為雨天影響戶外作業，已調整人力於室內工項並研擬趕工計畫。' : '整體進度受控，持續依計畫推進。')
+      const next_plan =
+        `預定持續辦理${(s.logSummaries || []).slice(-1)[0] || '主體結構工程'}之後續作業，` +
+        `並依進度計畫安排後續工項進場；持續落實三級品管自主檢查與工安巡檢，如有變更設計核定將即時納入估驗。`
+      return { error: null, result: { review, next_plan } }
+    }
+    if (!isSupabaseConfigured) return { error: { message: '需登入（Supabase 未設定）' } }
+    const { data, error } = await supabase.functions.invoke('draft-monthly-review', { body: payload })
+    if (error) return { error }
+    if (data?.error) return { error: { message: data.error } }
+    return { error: null, result: data }
+  }, [demoMode])
+
   // 契約義務:重載 / 設基準日 / 解析契約 / 改狀態 ──────────────────────────
   const reloadObligations = useCallback(async () => {
     if (!dbMode) return
@@ -895,6 +919,36 @@ export function StoreProvider({ children }) {
     return { error: null }
   }, [dbMode, currentProject, wiMaps])
 
+  // 批次新增明細（變更預算書 diff 套用用）：demo 一次進記憶體、DB 單次 insert 多列
+  const addChangeOrderItems = useCallback(async (coId, inputs) => {
+    const rows = inputs.map((input) => {
+      const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
+      const qty = Number(input.qty_delta) || 0
+      const price = Number(input.unit_price) || 0
+      return {
+        item_no: input.item_no || wi?.item_no || null,
+        description: input.description || wi?.description || '',
+        unit: input.unit || wi?.unit || null,
+        qty_delta: qty, unit_price: price, amount_delta: qty * price,
+        note: input.note || null,
+        _work_item_id: wi?.id || null,
+      }
+    })
+    if (!dbMode) {
+      const stamp = Date.now()
+      const local = rows.map(({ _work_item_id, ...r }, i) => ({ ...r, id: `COI-${stamp}-${i}` }))
+      setChangeOrders((cs) => cs.map((c) => (c.id === coId ? { ...c, items: [...c.items, ...local] } : c)))
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('change_order_items')
+      .insert(rows.map(({ _work_item_id, ...r }) => ({
+        ...r, change_order_id: coId, project_id: currentProject.project_id, work_item_id: _work_item_id,
+      }))).select()
+    if (error) return { error }
+    setChangeOrders((cs) => cs.map((c) => (c.id === coId ? { ...c, items: [...c.items, ...data] } : c)))
+    return { error: null }
+  }, [dbMode, currentProject, wiMaps])
+
   const updateChangeOrderItem = useCallback(async (coId, id, patch) => {
     // qty_delta / unit_price 變動時同步重算 amount_delta
     const recompute = (it) => {
@@ -1077,13 +1131,13 @@ export function StoreProvider({ children }) {
     currentProject, projects, projectLoading, createProject, switchProject,
     workItems, workItemsSource, importWorkItems, dbMode, demoMode,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard,
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview,
     obligations, parseContract, updateObligationStatus, updateProjectAnchors,
     costItems, createCostItem, updateCostItem, deleteCostItem,
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
     itemSchedules, setItemSchedule, removeItemSchedule,
     changeOrders, createChangeOrder, updateChangeOrder, deleteChangeOrder,
-    addChangeOrderItem, updateChangeOrderItem, deleteChangeOrderItem,
+    addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
     inspections, defects, createInspection, recordInspectionResult, createDefect, updateDefectStatus,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,

@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react'
-import { Printer } from 'lucide-react'
+import { Printer, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, Button } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
 const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
+const qtyFmt = (n) => (n == null || isNaN(n) ? '—' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }))
 const thisMonthStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 const inMonth = (d, m) => (d || '').slice(0, 7) === m
 // 某月最後一天（用來算「截至月底」的累計）
@@ -14,10 +15,12 @@ const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = n
 
 export default function MonthlyReport() {
   const { project, workItems, dbMode, demoMode, valuations, progressPlan, siteLogs,
-    inspections, defects, safetyRecords, changeOrders } = useStore()
+    inspections, defects, safetyRecords, changeOrders, draftMonthlyReview } = useStore()
   const [month, setMonth] = useState(thisMonthStr())
   const [review, setReview] = useState('')   // 工程檢討（列印用，不儲存）
   const [nextPlan, setNextPlan] = useState('') // 下月工作計畫
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiErr, setAiErr] = useState('')
 
   const billable = workItems?.meta.billable_total || 0
 
@@ -42,6 +45,21 @@ export default function MonthlyReport() {
       plannedPct = (upto.length ? upto[upto.length - 1] : progressPlan.months[0]).plannedPct
     }
     const logs = siteLogs.filter((l) => inMonth(l.log_date, month)).sort((a, b) => a.log_date.localeCompare(b.log_date))
+    // 本月 / 截至月底累計完成數量（彙整自施工日誌明細）
+    const byKey = new Map((workItems?.items || []).map((it) => [it.item_key, it]))
+    const sumQty = (ls) => {
+      const m = new Map()
+      for (const l of ls) for (const [k, q] of Object.entries(l.items || {})) m.set(k, (m.get(k) || 0) + (Number(q) || 0))
+      return m
+    }
+    const qtyM = sumQty(logs)
+    const qtyCum = sumQty(siteLogs.filter((l) => l.log_date && parseLocalDate(l.log_date) <= mEnd))
+    const itemRows = [...qtyM.entries()].map(([k, q]) => {
+      const it = byKey.get(k) || {}
+      return { key: k, item_no: it.item_no || '', description: it.description || k, unit: it.unit || '',
+        contractQty: it.quantity || 0, qty: q, cum: qtyCum.get(k) || 0, value: (it.unit_price || 0) * q }
+    }).sort((a, b) => b.value - a.value)
+    const rainDays = logs.filter((l) => (l.weather || '').includes('雨')).length
     const inspM = inspections.filter((i) => inMonth(i.requested_date || i.created_at, month))
     const defOpened = defects.filter((d) => inMonth(d.created_at, month))
     const defClosed = defects.filter((d) => d.closed_at && inMonth(d.closed_at, month))
@@ -52,11 +70,11 @@ export default function MonthlyReport() {
       .reduce((s, c) => s + c.items.reduce((t, it) => t + (Number(it.amount_delta) || 0), 0), 0)
     return {
       cumThis, thisMonthVal: cumThis - cumPrev, actualPct, plannedPct,
-      logs, inspM, defOpened, defClosed, defOpen, safM, coM, approvedNet,
+      logs, itemRows, rainDays, inspM, defOpened, defClosed, defOpen, safM, coM, approvedNet,
       paidCum: valuations.reduce((s, v) => s + (v.paid_amount || 0), 0),
       invoicedCount: valuations.filter((v) => v.invoice_date).length,
     }
-  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, tree, billable])
+  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, tree, billable, workItems])
 
   if (!dbMode && !demoMode) {
     return <Card title="施工月報"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單。</Empty></Card>
@@ -124,8 +142,51 @@ export default function MonthlyReport() {
           </dl>
         </Section>
 
-        {/* 本月施工重點 */}
-        <Section title="四、本月施工重點">
+        {/* 本月完成工項數量（彙整自施工日誌明細）*/}
+        <Section title="四、本月完成主要工項數量">
+          {data.itemRows.length === 0 ? (
+            <p className="text-sm text-[var(--text-3)]">本月施工日誌無工項數量紀錄。</p>
+          ) : (
+            <>
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-y border-[var(--border)] text-xs text-[var(--text-2)]">
+                    <th className="text-left py-1.5 pr-2 font-medium whitespace-nowrap">項次</th>
+                    <th className="text-left py-1.5 pr-2 font-medium">工項名稱</th>
+                    <th className="text-center py-1.5 px-2 font-medium whitespace-nowrap">單位</th>
+                    <th className="text-right py-1.5 px-2 font-medium whitespace-nowrap">契約數量</th>
+                    <th className="text-right py-1.5 px-2 font-medium whitespace-nowrap">本月完成</th>
+                    <th className="text-right py-1.5 px-2 font-medium whitespace-nowrap">累計完成</th>
+                    <th className="text-right py-1.5 pl-2 font-medium whitespace-nowrap">累計完成率</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.itemRows.slice(0, 15).map((r) => (
+                    <tr key={r.key} className="border-b border-[var(--border)]">
+                      <td className="py-1.5 pr-2 text-[var(--text-3)] text-xs tabular-nums whitespace-nowrap">{r.item_no}</td>
+                      <td className="py-1.5 pr-2">{r.description}</td>
+                      <td className="py-1.5 px-2 text-center text-[var(--text-3)]">{r.unit}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums">{qtyFmt(r.contractQty)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums font-medium">{qtyFmt(r.qty)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums">{qtyFmt(r.cum)}</td>
+                      <td className="py-1.5 pl-2 text-right tabular-nums">{r.contractQty ? `${Math.min(100, (r.cum / r.contractQty) * 100).toFixed(1)}%` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {data.itemRows.length > 15 && (
+                <p className="text-xs text-[var(--text-3)] mt-2">依本月完成金額列前 15 項，其餘 {data.itemRows.length - 15} 項略（詳估驗計價明細）。</p>
+              )}
+            </>
+          )}
+        </Section>
+
+        {/* 施工紀要 */}
+        <Section title="五、本月施工紀要">
+          <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-sm mb-3">
+            <Info k="施工天數" v={`${data.logs.length} 天`} />
+            <Info k="雨天" v={`${data.rainDays} 天`} />
+          </dl>
           {data.logs.length === 0 ? (
             <p className="text-sm text-[var(--text-3)]">本月無施工日誌紀錄。</p>
           ) : (
@@ -139,7 +200,7 @@ export default function MonthlyReport() {
         </Section>
 
         {/* 品質 */}
-        <Section title="五、品質管理">
+        <Section title="六、品質管理">
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1.5 text-sm">
             <Info k="本月查驗次數" v={`${data.inspM.length} 次`} />
             <Info k="合格 / 不合格" v={`${cnt(data.inspM, (i) => i.status === '合格')} / ${cnt(data.inspM, (i) => i.status === '不合格')}`} />
@@ -149,7 +210,7 @@ export default function MonthlyReport() {
         </Section>
 
         {/* 工安 */}
-        <Section title="六、工安管理">
+        <Section title="七、工安管理">
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1.5 text-sm">
             <Info k="自主檢查" v={`${cnt(data.safM, (s) => s.record_type === '自主檢查')} 次`} />
             <Info k="工安缺失" v={`${cnt(data.safM, (s) => s.record_type === '工安缺失')} 件`} />
@@ -160,7 +221,7 @@ export default function MonthlyReport() {
 
         {/* 變更設計 */}
         {(data.coM.length > 0 || data.approvedNet !== 0) && (
-          <Section title="七、變更設計">
+          <Section title="八、變更設計">
             <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-sm">
               <Info k="本月新增變更" v={`${data.coM.length} 件`} />
               <Info k="累計核准淨增減" v={`NT$ ${money(data.approvedNet)}`} />
@@ -169,7 +230,32 @@ export default function MonthlyReport() {
         )}
 
         {/* 檢討與下月計畫（可填，列印用）*/}
-        <Section title="八、檢討與下月工作計畫">
+        <Section title="九、檢討與下月工作計畫">
+          <div className="print:hidden mb-2 flex items-center gap-2">
+            <button onClick={async () => {
+              setAiBusy(true); setAiErr('')
+              const { error, result } = await draftMonthlyReview({
+                month, project_name: project.project_name,
+                stats: {
+                  thisMonthVal: data.thisMonthVal, cumThis: data.cumThis,
+                  actualPct: data.actualPct, plannedPct: data.plannedPct, diff,
+                  workDays: data.logs.length, rainDays: data.rainDays,
+                  inspections: data.inspM.length, failed: cnt(data.inspM, (i) => i.status === '不合格'),
+                  defectsOpened: data.defOpened.length, defectsClosed: data.defClosed.length, defectsOpen: data.defOpen,
+                  changeOrders: data.coM.length, approvedNet: data.approvedNet,
+                  logSummaries: data.logs.filter((l) => l.work_summary).map((l) => l.work_summary).slice(-10),
+                },
+              })
+              setAiBusy(false)
+              if (error) setAiErr(error.message || 'AI 草稿失敗')
+              else { setReview(result.review || ''); setNextPlan(result.next_plan || '') }
+            }} disabled={aiBusy}
+              className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] transition ${aiBusy ? 'opacity-50' : 'hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
+              <Sparkles size={15} aria-hidden />{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
+            </button>
+            <span className="text-[11px] text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
+            {aiErr && <span className="text-xs text-rose-600">{aiErr}</span>}
+          </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <div className="text-sm font-medium mb-1">本月檢討</div>

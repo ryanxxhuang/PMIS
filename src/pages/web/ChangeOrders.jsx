@@ -1,7 +1,10 @@
 import { useState, useMemo } from 'react'
+import { FileUp } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, Button, Badge } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
+import { parsePccesXml } from '../../lib/parsePcces.js'
+import { diffBoq } from '../../lib/coDiff.js'
 
 const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
@@ -12,7 +15,7 @@ const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 export default function ChangeOrders() {
   const { project, workItems, dbMode, demoMode, changeOrders,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
-    addChangeOrderItem, updateChangeOrderItem, deleteChangeOrderItem } = useStore()
+    addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem } = useStore()
   const original = workItems?.meta.billable_total || 0
 
   const [head, setHead] = useState({ co_no: '', title: '', co_date: todayStr() })
@@ -116,10 +119,11 @@ export default function ChangeOrders() {
             <button onClick={exportAll} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ 匯出全部 CSV</button>
           </div>
           {changeOrders.map((co) => (
-            <ChangeOrderCard key={co.id} co={co} net={coNet(co)} leaves={leaves}
+            <ChangeOrderCard key={co.id} co={co} net={coNet(co)} leaves={leaves} allItems={workItems?.items || []}
               onStatus={(s) => updateChangeOrder(co.id, { status: s })}
               onDelete={() => { if (window.confirm(`刪除變更「${co.title}」及其明細?`)) deleteChangeOrder(co.id) }}
               onAddItem={(input) => addChangeOrderItem(co.id, input)}
+              onAddItems={(rows) => addChangeOrderItems(co.id, rows)}
               onUpdateItem={(id, patch) => updateChangeOrderItem(co.id, id, patch)}
               onDeleteItem={(id) => deleteChangeOrderItem(co.id, id)} />
           ))}
@@ -133,10 +137,35 @@ export default function ChangeOrders() {
   )
 }
 
-function ChangeOrderCard({ co, net, leaves, onStatus, onDelete, onAddItem, onUpdateItem, onDeleteItem }) {
+const KIND_COLOR = { 數量增減: 'blue', '單價變更-減': 'amber', '單價變更-加': 'amber', 新增項: 'green', 刪除項: 'red' }
+
+function ChangeOrderCard({ co, net, leaves, allItems, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem }) {
   const [draft, setDraft] = useState({ work_item_key: '', item_no: '', description: '', unit: '', qty_delta: '', unit_price: '', note: '' })
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
+  const [diff, setDiff] = useState(null) // { fileName, rows, summary }
+  const [diffErr, setDiffErr] = useState('')
+  const [applying, setApplying] = useState(false)
+
+  const onDiffFile = async (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    setDiffErr('')
+    try {
+      const parsed = parsePccesXml(await f.text())
+      setDiff({ fileName: f.name, ...diffBoq(allItems, parsed.items) })
+    } catch (err) {
+      setDiff(null)
+      setDiffErr(err.message || '解析失敗')
+    }
+  }
+  const applyDiff = async () => {
+    setApplying(true)
+    const { error } = await onAddItems(diff.rows)
+    setApplying(false)
+    if (!error) setDiff(null)
+  }
 
   const results = search.trim() ? leaves.filter((it) => it.description.includes(search.trim()) || (it.item_no || '').includes(search.trim())).slice(0, 10) : []
   const pick = (it) => {
@@ -203,6 +232,63 @@ function ChangeOrderCard({ co, net, leaves, onStatus, onDelete, onAddItem, onUpd
           </table>
         </div>
       )}
+
+      {/* 變更後預算書 diff → 自動產生明細 */}
+      <div className="mb-3">
+        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] transition ${applying ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
+          <FileUp size={15} aria-hidden />上傳變更後預算書 XML，自動產生明細
+          <input type="file" accept=".xml" className="hidden" onChange={onDiffFile} disabled={applying} />
+        </label>
+        {diffErr && <p className="text-xs text-rose-600 mt-1.5">{diffErr}</p>}
+        {diff && (
+          <div className="mt-2 border border-[var(--border)] rounded-lg p-3 bg-[var(--surface)]">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-2)]">
+              <span className="font-medium text-[var(--text)]">{diff.fileName}</span>
+              <span>數量增減 {diff.summary.changed} 項</span>
+              <span>單價變更 {diff.summary.priceChanged} 項</span>
+              <span>新增 {diff.summary.added} 項</span>
+              <span>刪除 {diff.summary.removed} 項</span>
+              <span className={`font-medium tabular-nums ${diff.summary.net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>淨額 {diff.summary.net >= 0 ? '+' : ''}{money(diff.summary.net)}</span>
+            </div>
+            {diff.rows.length === 0 ? (
+              <p className="text-sm text-[var(--text-3)] mt-2">與現行標單無差異。</p>
+            ) : (
+              <>
+                <div className="overflow-auto max-h-64 mt-2">
+                  <table className="w-full text-sm min-w-[620px]">
+                    <thead>
+                      <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
+                        <th className="text-left font-medium py-1">類型</th>
+                        <th className="text-left font-medium px-2">工項</th>
+                        <th className="text-right font-medium px-2">單位</th>
+                        <th className="text-right font-medium px-2">數量增減</th>
+                        <th className="text-right font-medium px-2">單價</th>
+                        <th className="text-right font-medium px-2">金額增減</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diff.rows.map((r, i) => (
+                        <tr key={i} className="border-b border-[var(--border-2)]">
+                          <td className="py-1"><Badge color={KIND_COLOR[r.kind] || 'slate'}>{r.kind}</Badge></td>
+                          <td className="px-2"><span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{r.item_no}</span>{r.description}</td>
+                          <td className="px-2 text-right text-[var(--text-3)] text-xs whitespace-nowrap">{r.unit}</td>
+                          <td className="px-2 text-right tabular-nums">{r.qty_delta}</td>
+                          <td className="px-2 text-right tabular-nums">{money(r.unit_price)}</td>
+                          <td className={`px-2 text-right tabular-nums font-medium ${r.amount_delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{r.amount_delta >= 0 ? '+' : ''}{money(r.amount_delta)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <Button onClick={applyDiff} disabled={applying}>{applying ? '套用中…' : `套用 ${diff.rows.length} 筆明細`}</Button>
+                  <button onClick={() => setDiff(null)} className="text-sm text-[var(--text-3)] hover:underline">取消</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* 新增明細 */}
       <div className="bg-[var(--surface-2)] rounded-lg p-3">
