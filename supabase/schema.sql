@@ -18,6 +18,14 @@ returns boolean language sql security definer stable set search_path = public as
   );
 $$;
 
+
+-- 目前使用者所屬專案(RLS 熱路徑:無參數+STABLE → planner 以 initplan 快取一次;
+-- SECURITY DEFINER → 不觸發 project_members 自身 policy,避免遞迴)
+create or replace function public.my_project_ids()
+returns setof uuid language sql security definer stable set search_path = public as $$
+  select project_id from public.project_members where user_id = auth.uid();
+$$;
+
 -- ── Profiles (extends auth.users) ───────────────────────────────────────────
 create table if not exists public.profiles (
   id         uuid primary key references auth.users(id) on delete cascade,
@@ -83,7 +91,7 @@ alter table public.project_members enable row level security;
 
 drop policy if exists "projects_select_members" on public.projects;
 create policy "projects_select_members" on public.projects
-  for select to authenticated using (public.is_project_member(id));
+  for select to authenticated using (id in (select public.my_project_ids()));
 drop policy if exists "projects_insert_self" on public.projects;
 create policy "projects_insert_self" on public.projects
   for insert to authenticated with check (auth.uid() = created_by);
@@ -142,7 +150,8 @@ create index if not exists work_items_parent_idx  on public.work_items(parent_id
 alter table public.work_items enable row level security;
 drop policy if exists "work_items_members_all" on public.work_items;
 create policy "work_items_members_all" on public.work_items for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 
 -- ── Valuations (progress billing) ───────────────────────────────────────────
 create table if not exists public.valuations (
@@ -177,11 +186,12 @@ alter table public.valuations      enable row level security;
 alter table public.valuation_items enable row level security;
 drop policy if exists "valuations_members_all" on public.valuations;
 create policy "valuations_members_all" on public.valuations for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 drop policy if exists "valuation_items_members_all" on public.valuation_items;
 create policy "valuation_items_members_all" on public.valuation_items for all to authenticated
-  using (exists (select 1 from public.valuations v where v.id = valuation_id and public.is_project_member(v.project_id)))
-  with check (exists (select 1 from public.valuations v where v.id = valuation_id and public.is_project_member(v.project_id)));
+  using (valuation_id in (select id from public.valuations))
+  with check (valuation_id in (select id from public.valuations));
 
 -- 請款 / 收款追蹤(估驗核定後)
 alter table public.valuations
@@ -203,7 +213,8 @@ create index if not exists schedule_periods_project_idx on public.schedule_perio
 alter table public.schedule_periods enable row level security;
 drop policy if exists "schedule_periods_members_all" on public.schedule_periods;
 create policy "schedule_periods_members_all" on public.schedule_periods for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 
 -- ── Daily site logs (feed valuations) ───────────────────────────────────────
 create table if not exists public.daily_logs (
@@ -239,11 +250,12 @@ alter table public.daily_logs      enable row level security;
 alter table public.daily_log_items enable row level security;
 drop policy if exists "daily_logs_members_all" on public.daily_logs;
 create policy "daily_logs_members_all" on public.daily_logs for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 drop policy if exists "daily_log_items_members_all" on public.daily_log_items;
 create policy "daily_log_items_members_all" on public.daily_log_items for all to authenticated
-  using (exists (select 1 from public.daily_logs d where d.id = daily_log_id and public.is_project_member(d.project_id)))
-  with check (exists (select 1 from public.daily_logs d where d.id = daily_log_id and public.is_project_member(d.project_id)));
+  using (daily_log_id in (select id from public.daily_logs))
+  with check (daily_log_id in (select id from public.daily_logs));
 
 -- ── Photos (site-log evidence; quality photos reuse this table later) ────────
 -- Files live in the 'photos' Storage bucket; this row is the metadata + links.
@@ -268,7 +280,8 @@ create index if not exists photos_daily_log_idx on public.photos(daily_log_id);
 alter table public.photos enable row level security;
 drop policy if exists "photos_members_all" on public.photos;
 create policy "photos_members_all" on public.photos for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 
 -- ── Storage bucket for photo files + object-level RLS ────────────────────────
 -- Object path convention: <project_id>/<daily_log_id>/<photo_id>.jpg — the first
@@ -325,10 +338,12 @@ alter table public.inspections enable row level security;
 alter table public.defects     enable row level security;
 drop policy if exists "inspections_members_all" on public.inspections;
 create policy "inspections_members_all" on public.inspections for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 drop policy if exists "defects_members_all" on public.defects;
 create policy "defects_members_all" on public.defects for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 
 -- ── Contract obligations (AI-extracted deadlines + penalties) ───────────────
 -- Each row is a time-based duty pulled from the contract. The deadline is stored
@@ -364,7 +379,8 @@ create index if not exists contract_obligations_project_idx on public.contract_o
 alter table public.contract_obligations enable row level security;
 drop policy if exists "contract_obligations_members_all" on public.contract_obligations;
 create policy "contract_obligations_members_all" on public.contract_obligations for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 
 -- ── Cost management (budget vs actual, subcontracting, gross margin) ─────────
 -- A contractor's profit ledger. Revenue = the billable BOQ total (發包工程費);
@@ -388,7 +404,8 @@ create index if not exists cost_items_project_idx on public.cost_items(project_i
 alter table public.cost_items enable row level security;
 drop policy if exists "cost_items_members_all" on public.cost_items;
 create policy "cost_items_members_all" on public.cost_items for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 
 -- ── Change orders (變更設計 / 追加減帳) ──────────────────────────────────────
 -- A formal contract amendment and its added/reduced work-item lines. Only 核准
@@ -428,10 +445,12 @@ alter table public.change_orders      enable row level security;
 alter table public.change_order_items enable row level security;
 drop policy if exists "change_orders_members_all" on public.change_orders;
 create policy "change_orders_members_all" on public.change_orders for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 drop policy if exists "change_order_items_members_all" on public.change_order_items;
 create policy "change_order_items_members_all" on public.change_order_items for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 
 -- ── Per-item schedule (逐工項計畫起迄 → per-item 落後) ───────────────────────
 -- Kept in its own table (not columns on work_items) so re-importing the BOQ
@@ -449,7 +468,8 @@ create index if not exists item_schedules_project_idx on public.item_schedules(p
 alter table public.item_schedules enable row level security;
 drop policy if exists "item_schedules_members_all" on public.item_schedules;
 create policy "item_schedules_members_all" on public.item_schedules for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 
 -- ── Safety (工安) — self-checks, deficiencies, training, hazard notices ──────
 -- One flexible table for the contractor's site-safety log (public-works required).
@@ -473,7 +493,8 @@ create index if not exists safety_records_project_idx on public.safety_records(p
 alter table public.safety_records enable row level security;
 drop policy if exists "safety_records_members_all" on public.safety_records;
 create policy "safety_records_members_all" on public.safety_records for all to authenticated
-  using (public.is_project_member(project_id)) with check (public.is_project_member(project_id));
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
 
 -- ── RPCs (SECURITY DEFINER) ─────────────────────────────────────────────────
 -- Create a project and add the caller as its admin member, atomically.
@@ -503,3 +524,12 @@ begin
   delete from public.projects where id = p_id;
 end; $$;
 grant execute on function public.delete_project(uuid) to authenticated;
+
+-- ── RLS 熱路徑與外鍵索引(缺這些會逐列全表掃描) ──────────────────────────────
+create index if not exists project_members_user_idx      on public.project_members(user_id);
+create index if not exists change_order_items_project_idx on public.change_order_items(project_id);
+create index if not exists change_order_items_wi_idx     on public.change_order_items(work_item_id);
+create index if not exists defects_inspection_idx        on public.defects(inspection_id);
+create index if not exists defects_wi_idx                on public.defects(work_item_id);
+create index if not exists inspections_wi_idx            on public.inspections(work_item_id);
+create index if not exists photos_wi_idx                 on public.photos(work_item_id);
