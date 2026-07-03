@@ -112,6 +112,8 @@ async function loadSiteLogsFromDB(projectId, idToKey) {
   }
   return logs.map((l) => ({
     id: l.id, log_date: l.log_date, weather: l.weather,
+    weather_am: l.weather_am, weather_pm: l.weather_pm,
+    labor: l.labor || [], equipment: l.equipment || [], materials: l.materials || [], extras: l.extras || {},
     work_summary: l.work_summary, status: l.status, items: byLog.get(l.id) || {},
   }))
 }
@@ -581,17 +583,24 @@ export function StoreProvider({ children }) {
   }, [dbMode, currentProject, progressPlan])
 
   // P4. 施工日誌：存某日各工項當日完成數量（一天一筆，沿用 project_id+log_date 唯一）
-  const saveSiteLog = useCallback(async ({ log_date, weather, work_summary, items }) => {
+  // 公定格式欄位:weather_am/pm、labor/equipment/materials(陣列)、extras(四~八節)
+  const saveSiteLog = useCallback(async ({ log_date, weather, weather_am, weather_pm, labor, equipment, materials, extras, work_summary, items }) => {
+    const official = {
+      weather_am: weather_am || null, weather_pm: weather_pm || null,
+      labor: labor?.length ? labor : null, equipment: equipment?.length ? equipment : null,
+      materials: materials?.length ? materials : null,
+      extras: extras && Object.keys(extras).length ? extras : null,
+    }
     if (!dbMode) {
       // demo：本機 upsert（同日覆蓋），維持日期新→舊排序
       setSiteLogs((ls) => [
-        { id: `LOG-${Date.now()}`, log_date, weather: weather || null, work_summary: work_summary || null, status: '已送出', items: items || {} },
+        { id: `LOG-${Date.now()}`, log_date, weather: weather || null, ...official, work_summary: work_summary || null, status: '已送出', items: items || {} },
         ...ls.filter((l) => l.log_date !== log_date),
       ].sort((a, b) => b.log_date.localeCompare(a.log_date)))
       return { error: null }
     }
     const { data: up, error: e1 } = await supabase.from('daily_logs').upsert(
-      { project_id: currentProject.project_id, log_date, weather: weather || null, work_summary: work_summary || null, status: '已送出', created_by: currentUser?.user_id },
+      { project_id: currentProject.project_id, log_date, weather: weather || null, ...official, work_summary: work_summary || null, status: '已送出', created_by: currentUser?.user_id },
       { onConflict: 'project_id,log_date' },
     ).select().single()
     if (e1) return { error: e1 }
@@ -682,6 +691,19 @@ export function StoreProvider({ children }) {
     let image_base64
     try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
     const { data, error } = await supabase.functions.invoke('read-whiteboard', {
+      body: { image_base64, mime_type: 'image/jpeg' },
+    })
+    if (error) return { error }
+    if (data?.error) return { error: { message: data.error } }
+    return { error: null, result: data }
+  }, [])
+
+  // AI 缺失描述:缺失照片 → describe-defect Edge Function → 缺失表單欄位。
+  const describeDefect = useCallback(async (file) => {
+    if (!isSupabaseConfigured) return { error: { message: '需登入（demo 模式不支援 AI 辨識）' } }
+    let image_base64
+    try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
+    const { data, error } = await supabase.functions.invoke('describe-defect', {
       body: { image_base64, mime_type: 'image/jpeg' },
     })
     if (error) return { error }
@@ -1131,7 +1153,7 @@ export function StoreProvider({ children }) {
     currentProject, projects, projectLoading, createProject, switchProject,
     workItems, workItemsSource, importWorkItems, dbMode, demoMode,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview,
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
     obligations, parseContract, updateObligationStatus, updateProjectAnchors,
     costItems, createCostItem, updateCostItem, deleteCostItem,
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,

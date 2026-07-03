@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Camera } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -38,10 +39,31 @@ function WorkItemPicker({ leaves, value, label, onPick }) {
 
 export default function Quality() {
   const { project, workItems, inspections, defects, createInspection, recordInspectionResult,
-    createDefect, updateDefectStatus, deleteInspection, deleteDefect, isSupabaseConfigured, currentProject, workItemsSource } = useStore()
+    createDefect, updateDefectStatus, deleteInspection, deleteDefect, describeDefect,
+    isSupabaseConfigured, currentProject, workItemsSource } = useStore()
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
   const [defForm, setDefForm] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiMsg, setAiMsg] = useState('')
+
+  // 拍缺失照片 → AI 描述 → 填表單
+  const onDefectPhoto = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    setAiBusy(true); setAiMsg('AI 辨識中…')
+    const { error, result } = await describeDefect(file)
+    setAiBusy(false)
+    if (error) { setAiMsg(`辨識失敗:${error.message || ''}`); return }
+    setDefForm((f) => ({
+      ...f,
+      title: result.title || f.title,
+      description: [result.description, result.suggestion && `建議:${result.suggestion}`].filter(Boolean).join(' '),
+      severity: result.severity || f.severity,
+      location: f.location || result.location || '',
+    }))
+    setAiMsg(result.title ? 'AI 已填入，請確認後開立。' : 'AI 未辨識出明顯缺失，請人工填寫。')
+  }
 
   const leaves = useMemo(() => {
     if (!workItems) return []
@@ -134,6 +156,13 @@ export default function Quality() {
       </div>}>
         {defForm && (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+                <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onDefectPhoto} className="hidden" />
+                <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : '拍缺失照片 AI 填表'}
+              </label>
+              <span className={`text-xs ${aiMsg.startsWith('辨識失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>{aiMsg || '拍缺失現場，AI 自動填標題/說明/嚴重度。'}</span>
+            </div>
             <WorkItemPicker leaves={leaves} value={defForm.work_item_key} label={defForm.work_item_label} onPick={(k, l) => setDefForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
             <div className="grid grid-cols-2 gap-3">
               <Field label="缺失標題"><input className={input} value={defForm.title} onChange={(e) => setDefForm((f) => ({ ...f, title: e.target.value }))} placeholder="如 鋼筋保護層不足" /></Field>

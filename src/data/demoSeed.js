@@ -85,12 +85,28 @@ export function buildDemoData(workItems, project) {
     '4F 版牆混凝土澆置、養護',
   ]
   const logDays = [-13, -12, -10, -9, -7, -5, -2, -1]
+  // 公定格式欄位(出工/機具/材料/四~八節)—— 澆置日(i=1,7)材料含混凝土
+  const pour = (i) => i === 1 || i === 7
   const siteLogs = logDays.map((off, i) => {
     const items = {}
     for (const it of active.slice(0, 3)) items[it.item_key] = round1((it.quantity || 0) * 0.004)
     return {
       id: `LOG-DEMO-${i + 1}`, log_date: iso(daysFromNow(off)),
-      weather: weathers[i], work_summary: summaries[i], status: '已送出', items,
+      weather: weathers[i], weather_am: weathers[i], weather_pm: i === 6 ? '短暫雨' : weathers[i],
+      labor: [
+        { type: '鋼筋工', count: 12 }, { type: '模板工', count: 10 },
+        ...(pour(i) ? [{ type: '混凝土工', count: 8 }] : []), { type: '雜工', count: 4 },
+      ],
+      equipment: [{ name: '塔式起重機', count: 1 }, ...(pour(i) ? [{ name: '混凝土泵浦車', count: 2 }, { name: '振動棒', count: 6 }] : [])],
+      materials: pour(i) ? [{ name: '預拌混凝土 420kgf/cm²', unit: 'M3', qty: 180 }, { name: '鋼筋 SD420W', unit: 'T', qty: 10 }] : [{ name: '鋼筋 SD420W', unit: 'T', qty: 10 }],
+      extras: {
+        technicians: pour(i) ? '混凝土工程技術士 2 名' : '',
+        edu: true, insured: '無新進勞工', ppe: true, safety_other: '',
+        sampling: pour(i) ? '混凝土圓柱試體 2 組(6 支)、坍度試驗 18±2.5cm' : '',
+        notice: i === 4 ? '通知帷幕牆廠商確認打樣區磚縫寬度' : '',
+        important: i === 4 ? '監造單位勘驗外牆打樣區' : '',
+      },
+      work_summary: summaries[i], status: '已送出', items,
     }
   }).reverse() // 新的在前，與 DB 排序一致
 

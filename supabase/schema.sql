@@ -217,6 +217,14 @@ create table if not exists public.daily_logs (
   created_at   timestamptz not null default now(),
   unique (project_id, log_date)
 );
+-- 公定格式(工程會「公共工程施工日誌」)欄位:天氣上下午、出工/機具/材料、四~八節
+alter table public.daily_logs
+  add column if not exists weather_am text,        -- 天氣(上午)
+  add column if not exists weather_pm text,        -- 天氣(下午)
+  add column if not exists labor      jsonb,       -- [{type,count}] 工別/出工人數
+  add column if not exists equipment  jsonb,       -- [{name,count}] 機具/數量
+  add column if not exists materials  jsonb,       -- [{name,unit,qty}] 材料使用
+  add column if not exists extras     jsonb;       -- {technicians,edu,insured,ppe,safety_other,sampling,notice,important}
 create table if not exists public.daily_log_items (
   id           uuid primary key default gen_random_uuid(),
   daily_log_id uuid not null references public.daily_logs(id) on delete cascade,

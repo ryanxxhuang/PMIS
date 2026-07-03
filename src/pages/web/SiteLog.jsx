@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Camera } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Camera, Printer, ChevronDown, ChevronRight } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -30,10 +31,18 @@ function matchLeaf(text, leaves) {
 export default function SiteLog() {
   const { project, workItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard } = useStore()
+  const navigate = useNavigate()
   const [date, setDate] = useState(todayStr())
-  const [weather, setWeather] = useState('晴')
+  const [weather, setWeather] = useState('晴')       // 上午天氣（相容舊欄位）
+  const [weatherPm, setWeatherPm] = useState('')     // 下午天氣
   const [summary, setSummary] = useState('')
   const [items, setItems] = useState({}) // item_key -> 當日數量
+  // 公定格式欄位（工程會公共工程施工日誌）
+  const [officialOpen, setOfficialOpen] = useState(false)
+  const [labor, setLabor] = useState([])         // [{type,count}]
+  const [equipment, setEquipment] = useState([]) // [{name,count}]
+  const [materials, setMaterials] = useState([]) // [{name,unit,qty}]
+  const [extras, setExtras] = useState({})       // 四~八節
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
@@ -59,8 +68,11 @@ export default function SiteLog() {
   // 切換日期 → 載入該日已存的日誌
   useEffect(() => {
     const lg = siteLogs.find((l) => l.log_date === date)
-    if (lg) { setWeather(lg.weather || '晴'); setSummary(lg.work_summary || ''); setItems({ ...lg.items }) }
-    else { setItems({}); setSummary('') }
+    if (lg) {
+      setWeather(lg.weather_am || lg.weather || '晴'); setWeatherPm(lg.weather_pm || '')
+      setSummary(lg.work_summary || ''); setItems({ ...lg.items })
+      setLabor(lg.labor || []); setEquipment(lg.equipment || []); setMaterials(lg.materials || []); setExtras(lg.extras || {})
+    } else { setItems({}); setSummary(''); setWeatherPm(''); setLabor([]); setEquipment([]); setMaterials([]); setExtras({}) }
   }, [date, siteLogs])
 
   // 切換日期 → 載入該日已存日誌的現場照片（未存檔的日期沒有 daily_log_id，無照片）
@@ -88,7 +100,10 @@ export default function SiteLog() {
 
   const onSave = async () => {
     setSaving(true); setSavedMsg('')
-    const { error } = await saveSiteLog({ log_date: date, weather, work_summary: summary, items })
+    const { error } = await saveSiteLog({
+      log_date: date, weather, weather_am: weather, weather_pm: weatherPm,
+      labor, equipment, materials, extras, work_summary: summary, items,
+    })
     setSaving(false)
     setSavedMsg(error ? (error.message || '存檔失敗') : '已存檔 ✓')
   }
@@ -149,7 +164,8 @@ export default function SiteLog() {
           <Card title="本日日誌">
             <div className="flex items-end gap-3 flex-wrap mb-4">
               <Field label="日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
-              <Field label="天氣"><input value={weather} onChange={(e) => setWeather(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
+              <Field label="天氣(上午)"><input value={weather} onChange={(e) => setWeather(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
+              <Field label="天氣(下午)"><input value={weatherPm} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
               <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field></div>
             </div>
 
@@ -212,8 +228,71 @@ export default function SiteLog() {
               </div>
             )}
 
+            {/* 公定格式欄位（工程會「公共工程施工日誌」二~八節）*/}
+            <div className="mt-4 border border-[var(--border)] rounded-lg">
+              <button onClick={() => setOfficialOpen((o) => !o)}
+                className="w-full flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--text-2)] hover:bg-[var(--surface-2)] rounded-lg">
+                {officialOpen ? <ChevronDown size={15} aria-hidden /> : <ChevronRight size={15} aria-hidden />}
+                公定格式欄位（出工人數・機具・材料・安衛…）
+                <span className="ml-auto text-[11px] text-[var(--text-3)] font-normal">
+                  {labor.length + equipment.length + materials.length > 0 ? `已填 ${labor.length + equipment.length + materials.length} 列` : '選填，列印公定格式日誌用'}
+                </span>
+              </button>
+              {officialOpen && (
+                <div className="px-3 pb-3 space-y-4">
+                  <RowsEditor title="出工人數（工別）" rows={labor} onChange={setLabor}
+                    fields={[{ key: 'type', ph: '工別（如 鋼筋工）', w: 'flex-1' }, { key: 'count', ph: '人數', w: 'w-20', num: true }]} />
+                  <RowsEditor title="機具使用" rows={equipment} onChange={setEquipment}
+                    fields={[{ key: 'name', ph: '機具名稱', w: 'flex-1' }, { key: 'count', ph: '數量', w: 'w-20', num: true }]} />
+                  <RowsEditor title="材料使用" rows={materials} onChange={setMaterials}
+                    fields={[{ key: 'name', ph: '材料名稱', w: 'flex-1' }, { key: 'unit', ph: '單位', w: 'w-16' }, { key: 'qty', ph: '本日數量', w: 'w-24', num: true }]} />
+                  <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                    <label className="block">
+                      <span className="block text-xs font-medium text-[var(--text-2)] mb-1">四、應置技術士（種類及人數，無則留空）</span>
+                      <input value={extras.technicians || ''} onChange={(e) => setExtras({ ...extras, technicians: e.target.value })}
+                        placeholder="如：混凝土工程技術士 2 名" className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                    </label>
+                    <div>
+                      <span className="block text-xs font-medium text-[var(--text-2)] mb-1">五、職業安全衛生</span>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm py-1">
+                        <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={!!extras.edu} onChange={(e) => setExtras({ ...extras, edu: e.target.checked })} />勤前教育（含危害告知）</label>
+                        <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={!!extras.ppe} onChange={(e) => setExtras({ ...extras, ppe: e.target.checked })} />檢查個人防護具</label>
+                        <label className="inline-flex items-center gap-1.5">新進勞工提報勞保
+                          <select value={extras.insured || '無新進勞工'} onChange={(e) => setExtras({ ...extras, insured: e.target.value })}
+                            className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs">
+                            {['有', '無', '無新進勞工'].map((s) => <option key={s}>{s}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                    <label className="block">
+                      <span className="block text-xs font-medium text-[var(--text-2)] mb-1">六、施工取樣試驗紀錄</span>
+                      <input value={extras.sampling || ''} onChange={(e) => setExtras({ ...extras, sampling: e.target.value })}
+                        placeholder="如：混凝土圓柱試體 2 組、坍度 18±2.5cm" className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                    </label>
+                    <label className="block">
+                      <span className="block text-xs font-medium text-[var(--text-2)] mb-1">七、通知協力廠商辦理事項</span>
+                      <input value={extras.notice || ''} onChange={(e) => setExtras({ ...extras, notice: e.target.value })}
+                        className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                    </label>
+                    <label className="block sm:col-span-2">
+                      <span className="block text-xs font-medium text-[var(--text-2)] mb-1">八、重要事項紀錄</span>
+                      <input value={extras.important || ''} onChange={(e) => setExtras({ ...extras, important: e.target.value })}
+                        className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center gap-3 mt-4">
               <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button>
+              {currentLog && (
+                <button onClick={() => navigate(`/site-log/print?d=${date}`)}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--surface-2)] text-[var(--blue)]">
+                  <Printer size={15} aria-hidden />列印公定格式日誌
+                </button>
+              )}
               {savedMsg && <span className={`text-sm ${savedMsg.includes('✓') ? 'text-emerald-600' : 'text-rose-600'}`}>{savedMsg}</span>}
             </div>
           </Card>
@@ -281,6 +360,34 @@ export default function SiteLog() {
       <p className="text-xs text-[var(--text-3)]">
         一天一筆（同日再存會覆蓋）。各日「當日完成數量」加總 = 估驗的「累計完成數量」——到估驗頁按「從施工日誌帶入」即可自動填入。
       </p>
+    </div>
+  )
+}
+
+// 小型列編輯器（出工/機具/材料共用）：fields = [{key, ph, w, num}]
+function RowsEditor({ title, rows, onChange, fields }) {
+  const set = (i, key, val) => onChange(rows.map((r, j) => (j === i ? { ...r, [key]: val } : r)))
+  const add = () => onChange([...rows, Object.fromEntries(fields.map((f) => [f.key, f.num ? '' : '']))])
+  const del = (i) => onChange(rows.filter((_, j) => j !== i))
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-xs font-medium text-[var(--text-2)]">{title}</span>
+        <button onClick={add} className="text-xs text-[var(--blue)] hover:underline">＋ 加一列</button>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--text-3)]">（未填）</p>
+      ) : rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-2 mb-1.5">
+          {fields.map((f) => (
+            <input key={f.key} value={r[f.key] ?? ''} placeholder={f.ph}
+              type={f.num ? 'number' : 'text'} min={f.num ? 0 : undefined} step={f.num ? 'any' : undefined}
+              onChange={(e) => set(i, f.key, f.num ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
+              className={`${f.w} border border-[var(--border)] rounded-lg px-2 py-1 text-sm ${f.num ? 'text-right tabular-nums' : ''}`} />
+          ))}
+          <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+        </div>
+      ))}
     </div>
   )
 }

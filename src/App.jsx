@@ -7,6 +7,7 @@ import ProjectSetup from './pages/web/ProjectSetup.jsx'
 import Dashboard from './pages/web/Dashboard.jsx'
 import BOQ from './pages/web/BOQ.jsx'
 import SiteLog from './pages/web/SiteLog.jsx'
+import SiteLogPrint from './pages/web/SiteLogPrint.jsx'
 import Valuation from './pages/web/Valuation.jsx'
 import ValuationPrint from './pages/web/ValuationPrint.jsx'
 import Progress from './pages/web/Progress.jsx'
@@ -39,6 +40,7 @@ export default function App() {
       <Route path="/project/new" element={<Web><ProjectSetup /></Web>} />
       <Route path="/boq" element={<Web><BOQ /></Web>} />
       <Route path="/site-log" element={<Web><SiteLog /></Web>} />
+      <Route path="/site-log/print" element={<SiteLogPrint />} />
       <Route path="/valuation" element={<Web><Valuation /></Web>} />
       <Route path="/valuation/print" element={<ValuationPrint />} />
       <Route path="/payments" element={<Web><Payments /></Web>} />

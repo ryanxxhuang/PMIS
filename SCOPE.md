@@ -14,9 +14,9 @@
 | 線 | 已完成 |
 |---|---|
 | BOQ 脊椎 | PCCES XML 瀏覽器內解析 → 3,000+ 工項樹入庫(`/boq`) |
-| 成本進度 | 施工日誌+AI 白板辨識(`/site-log`)→ 估驗計價自動彙總(`/valuation`)→ 請款收款(`/payments`)→ S 曲線(`/progress`)/ 逐工項排程(`/schedule`)/ 成本毛利(`/cost`)/ 估驗計價單列印(`/valuation/print`) |
+| 成本進度 | 施工日誌+AI 白板辨識(`/site-log`,含公定格式欄位:天氣上下午/出工/機具/材料/安衛,公定格式列印 `/site-log/print`)→ 估驗計價自動彙總(`/valuation`)→ 請款收款(`/payments`)→ S 曲線(`/progress`)/ 逐工項排程(`/schedule`)/ 成本毛利(`/cost`)/ 估驗計價單列印(`/valuation/print`) |
 | 變更 | 變更設計/追加減帳(`/change-orders`,含明細與變更後契約金額);上傳變更後 PCCES XML 自動 diff 產生追加減明細(`src/lib/coDiff.js`,2026-07-03) |
-| 品質工安 | 三級品管、查驗不合格自動開缺失(`/quality`);工安四類紀錄(`/safety`) |
+| 品質工安 | 三級品管、查驗不合格自動開缺失(`/quality`,含拍缺失照片 AI 填表 `describe-defect`);工安四類紀錄(`/safety`) |
 | 契約 | AI 解析契約時程義務+罰則(`/contract`);提醒中心彙總逾期(`/alerts`) |
 | 報表 | 自動施工月報(`/monthly-report`,含本月完成工項數量表+施工紀要+AI 檢討/下月計畫草稿);各清單 CSV 匯出(UTF-8 BOM) |
 | 後端 | 單一份 idempotent schema、全表 RLS、2 個 SECURITY DEFINER RPC、2 個 Edge Functions(gpt-4o) |
@@ -56,6 +56,14 @@
 2. ✅ **月報通行格式** — 已做(2026-07-02):工項數量表+施工紀要(見缺口 #4);
    機關範本到手後再對齊。
 3. ✅ **變更設計下游連動**(缺口 #1)— 已做(2026-07-02),見上。
+
+第二輪(2026-07-03,接續完成):
+- ✅ **施工日誌公定格式** — 依工程會 101.10.17 格式:daily_logs 加
+  weather_am/pm + labor/equipment/materials/extras(jsonb,已套用到線上 DB),
+  日誌頁公定格式欄位區塊(出工/機具/材料/技術士/安衛/取樣/通知/重要事項),
+  公定格式列印頁 `/site-log/print`(民國日期、開工後第 X 日曆天、累計自動彙計、簽章欄)。
+- ✅ **缺失照片 AI 填表** — `/quality` 開立缺失可拍照 → `describe-defect`
+  Edge Function(已部署)→ 自動填標題/說明/嚴重度/改善建議;demo 模式顯示友善提示。
 
 AI 自動化第一輪(2026-07-03,三項皆落地):
 - ✅ **變更 diff** — 變更設計頁上傳變更後 PCCES XML → `coDiff.js` 確定性比對
