@@ -39,6 +39,33 @@ async function fetchAllWorkItems(projectId) {
   return all
 }
 
+// work_items 本地快取（IndexedDB）—— egress 最大宗就是重抓整份標單（數 MB/次）。
+// 標單匯入後即不變，用「筆數比對」驗證快取有效（重匯/清除必然改變筆數）。
+function wiDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('pmis-cache', 1)
+    req.onupgradeneeded = () => req.result.createObjectStore('work_items')
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+async function wiCacheGet(projectId) {
+  try {
+    const db = await wiDB()
+    return await new Promise((resolve) => {
+      const req = db.transaction('work_items').objectStore('work_items').get(projectId)
+      req.onsuccess = () => resolve(req.result || null)
+      req.onerror = () => resolve(null)
+    })
+  } catch { return null }
+}
+async function wiCachePut(projectId, rows) {
+  try { const db = await wiDB(); db.transaction('work_items', 'readwrite').objectStore('work_items').put(rows, projectId) } catch { /* 快取失敗不影響功能 */ }
+}
+async function wiCacheDel(projectId) {
+  try { const db = await wiDB(); db.transaction('work_items', 'readwrite').objectStore('work_items').delete(projectId) } catch { /* noop */ }
+}
+
 // DB work_items 列 → 與 workItems.json 同形狀（parent_id→parent_key 還原、數值轉 Number）
 function dbToWorkItems(rows, project) {
   const idToKey = new Map(rows.map((r) => [r.id, r.item_key]))
@@ -282,8 +309,12 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     if (!isSupabaseConfigured) return
     let active = true
+    let lastUserId = null // 同一使用者的重複 auth 事件（TOKEN_REFRESHED、切回分頁）直接略過，
+                          // 否則 setCurrentUser(新物件) 會連鎖觸發專案+整份標單重新下載（egress 元凶）
     const loadProfile = async (session) => {
-      if (!session?.user) { if (active) setCurrentUser(null); return }
+      if (!session?.user) { lastUserId = null; if (active) setCurrentUser(null); return }
+      if (session.user.id === lastUserId) return
+      lastUserId = session.user.id
       const { data: profile } = await supabase
         .from('profiles').select('*').eq('id', session.user.id).single()
       if (!active) return
@@ -353,16 +384,26 @@ export function StoreProvider({ children }) {
     return () => { active = false }
   }, [currentUser])
 
-  // 載入標單工項：有真專案且 DB 有資料 → 讀 DB；否則 fallback 範例 JSON
+  // 載入標單工項：有真專案且 DB 有資料 → 讀 DB；否則 fallback 範例 JSON。
+  // 先打「筆數」head 查詢（幾乎零流量）驗證本地快取，命中就不重新下載整份標單；
+  // 依賴用 project_id（字串）而非物件參考，避免專案清單重載時無謂重抓。
   useEffect(() => {
     let active = true
     ;(async () => {
       setWorkItems(null)
       if (isSupabaseConfigured && currentProject) {
+        const pid = currentProject.project_id
         try {
-          const rows = await fetchAllWorkItems(currentProject.project_id)
-          if (!active) return
-          if (rows.length) { setWorkItems(dbToWorkItems(rows, currentProject)); setWorkItemsSource('db'); return }
+          const { count, error } = await supabase.from('work_items')
+            .select('id', { count: 'exact', head: true }).eq('project_id', pid)
+          if (error) throw error
+          if (count) {
+            const cached = await wiCacheGet(pid)
+            let rows = cached && cached.length === count ? cached : null
+            if (!rows) { rows = await fetchAllWorkItems(pid); wiCachePut(pid, rows) }
+            if (!active) return
+            setWorkItems(dbToWorkItems(rows, currentProject)); setWorkItemsSource('db'); return
+          }
         } catch { /* 落到範例 */ }
       }
       const json = await loadWorkItems()
@@ -371,7 +412,8 @@ export function StoreProvider({ children }) {
       setWorkItemsSource('sample')
     })()
     return () => { active = false }
-  }, [currentProject])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProject?.project_id])
 
   // 工項查表（item_key↔work_item uuid）+ 是否走真 DB（估驗/進度才寫回 DB）
   const wiMaps = useMemo(() => {
@@ -475,6 +517,7 @@ export function StoreProvider({ children }) {
       if (error) return { error }
     }
     const fresh = await fetchAllWorkItems(currentProject.project_id)
+    wiCachePut(currentProject.project_id, fresh)
     setWorkItems(dbToWorkItems(fresh, currentProject))
     setWorkItemsSource('db')
     log('匯入標單工項', `${rows.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
@@ -1124,6 +1167,7 @@ export function StoreProvider({ children }) {
     for (const t of ['defects', 'inspections', 'valuations', 'schedule_periods', 'daily_logs', 'work_items']) {
       await supabase.from(t).delete().eq('project_id', pid)
     }
+    wiCacheDel(pid)
     setValuations([]); setProgressPlan(null); setSiteLogs([]); setInspections([]); setDefects([])
     const json = await loadWorkItems()
     setWorkItems({ items: json.items, meta: json.meta }); setWorkItemsSource('sample')
@@ -1134,6 +1178,7 @@ export function StoreProvider({ children }) {
   const deleteProject = useCallback(async (id) => {
     const { error } = await supabase.rpc('delete_project', { p_id: id })
     if (error) return { error }
+    wiCacheDel(id)
     setProjects((prev) => {
       const next = prev.filter((p) => p.project_id !== id)
       if (currentProjectId === id) {
