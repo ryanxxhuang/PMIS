@@ -48,7 +48,7 @@ export default function SiteLog() {
   const [savedMsg, setSavedMsg] = useState('')
   const [photos, setPhotos] = useState([])      // 本日日誌的現場照片（含簽名 URL）
   const [photoBusy, setPhotoBusy] = useState(false)
-  const [aiBusy, setAiBusy] = useState(false)   // AI 讀白板中
+  const [aiBusy, setAiBusy] = useState(false)   // AI 現場辨識中
   const [aiMsg, setAiMsg] = useState('')
 
   // 發包末端工項（可回報的單元）+ 查表
@@ -129,7 +129,7 @@ export default function SiteLog() {
     if (currentLog?.id) setPhotos(await listSitePhotos(currentLog.id))
   }
 
-  // 拍/選白板照片 → AI 辨識 → 自動填日期/天氣/摘要 + 把工項數量帶入（工項用模糊比對到標單）
+  // AI 現場辨識:拍工程告示板/現場照片 → 自動填日期/天氣/摘要 + 把工項數量帶入（工項用模糊比對到標單）
   const onWhiteboard = async (e) => {
     const file = e.target.files?.[0]; e.target.value = ''
     if (!file) return
@@ -170,10 +170,10 @@ export default function SiteLog() {
             <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
               <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
-                <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : '拍白板自動填寫'}
+                <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : 'AI 拍照自動填寫'}
               </label>
               <p className={`text-xs mt-2 ${aiMsg.startsWith('辨識失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>
-                {aiMsg || '在白板寫好工項與數量、跟現場一起拍，AI 自動帶入下面的工項與當日數量。'}
+                {aiMsg || '拍下工程告示板或現場照片，AI 辨識後自動帶入日期、天氣與各工項當日數量。'}
               </p>
             </div>
 

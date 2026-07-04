@@ -2,7 +2,7 @@
 
 > A web PMIS for Taiwan public‑works **contractors**. It ingests the government **PCCES**
 > bill of quantities and turns it into a live backbone for **cost, cash‑flow, schedule,
-> quality and safety** — with AI that reads site whiteboards and parses contract deadlines,
+> quality and safety** — with AI that reads site-board photos and parses contract deadlines,
 > multi‑tenant, every project's data isolated by Postgres Row Level Security.
 
 **▶ App: https://ryanxxhuang.github.io/PMIS/ · Demo (no sign-up): https://ryanxxhuang.github.io/PMIS/demo/ · Site: https://ryanxxhuang.github.io/**
@@ -11,7 +11,7 @@
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20RLS%20%2B%20Edge-3FCF8E?logo=supabase&logoColor=white)
-![OpenAI](https://img.shields.io/badge/AI-GPT--4o%20vision-412991?logo=openai&logoColor=white)
+![Claude](https://img.shields.io/badge/AI-Claude%20Haiku%20%2B%20Sonnet-D97757?logo=anthropic&logoColor=white)
 
 ---
 
@@ -38,7 +38,7 @@ reconcile.
 - 📋 **Bill of quantities** — upload a PCCES budget XML; it is parsed **in the browser** into a
   3,000+ row work‑item tree (項次 / 數量 / 單價 / 複價) and stored per project.
 - 📝 **Daily site logs** — record completed quantity per work item, per day, with site photos.
-  📷 **Snap a whiteboard → AI fills the log**: the day's work items and quantities are read off
+  📷 **Snap the site board → AI fills the log**: the day's work items and quantities are read off
   the photo and matched back to the BOQ.
 - 💰 **Progress valuations (估驗計價)** — quantity‑based monthly billing that **auto‑fills its
   cumulative quantities from the daily logs**, then computes retention and net payable.
@@ -78,7 +78,7 @@ rows for the projects they belong to.
 | `/alerts` | **Alert center** | Aggregates 逾期 / 即將到期(7日) / 待處理 across contract obligations, defects, safety issues and payments. |
 | `/contract` | **Contract control** | Set anchor dates → upload contract → **AI extracts obligations + penalties**; phase‑grouped list with live due dates, countdowns and source clauses. |
 | `/boq` | **Bill of quantities** | Drag‑drop a PCCES XML → parsed in‑browser → imported into `work_items` in batches. Browse the 3,000‑row tree; re‑import resets the project. |
-| `/site-log` | **Daily site log** | One record per day; enter completed quantity per work item + photos. 📷 whiteboard‑OCR auto‑fill. Feeds valuations. |
+| `/site-log` | **Daily site log** | One record per day; enter completed quantity per work item + photos. 📷 site-photo AI auto‑fill. Feeds valuations. |
 | `/valuation` | **Progress valuation (估驗計價)** | Per‑period billing; "fill from site logs" sums daily quantities; auto‑computes cum %, amount, retention, net payable; status workflow 草稿→送審→監造審核→已核定→已請款. |
 | `/payments` | **Billing & receipts** | Per‑period 本期估驗 / 保留款 / 應領; invoice & payment dates + amount; cash‑flow totals. CSV export. |
 | `/cost` | **Cost & margin** | Budget vs. actual cost by category + subcontracts; live gross‑margin (budget & actual). CSV export. |
@@ -96,7 +96,7 @@ rows for the projects they belong to.
 flowchart LR
   XML["PCCES budget XML"] -->|browser parse| WI["work_items<br/>(BOQ spine)"]
   WI --> LOG["daily logs"]
-  WB["site whiteboard photo"] -->|AI vision| LOG
+  WB["site-board photo"] -->|AI vision| LOG
   LOG -->|sum quantity| VAL["valuations"]
   WI --> VAL
   VAL --> PAY["billing / receipts"]
@@ -121,7 +121,7 @@ flowchart LR
 PMIS is a **static React SPA** talking straight to **Supabase** over PostgREST/GoTrue with a
 *publishable* anon key. The database does the heavy lifting — auth, authorization (RLS),
 constraints, and the operations that need elevated rights (SECURITY DEFINER RPCs). The only
-custom server code is two **Edge Functions** that call an LLM for the AI features (they never
+custom server code is a handful of **Edge Functions** that call an LLM for the AI features (they never
 touch the DB; they take a file in and return structured JSON).
 
 ```mermaid
@@ -138,7 +138,7 @@ flowchart TB
     API --> RPC["RPCs (SECURITY DEFINER)<br/>create_project · delete_project"]
     RPC --> DB
     STG["Storage (photos bucket, RLS)"]
-    FN["Edge Functions (Deno)<br/>parse-contract · read-whiteboard"] -->|OpenAI gpt-4o| AI(("LLM"))
+    FN["Edge Functions (Deno)<br/>parse-contract · read-whiteboard"] -->|Claude API| AI(("LLM"))
   end
   S -->|"upload/signed URL"| STG
 ```
@@ -165,9 +165,10 @@ contract_qty)` and rolled up the tree ([`lib/boqCalc.js`](src/lib/boqCalc.js)) �
 amount×ratio (not unit‑price×qty) so a 100 %‑complete item bills exactly its contract amount with
 no rounding drift.
 
-**AI features.** Both are Supabase Edge Functions calling OpenAI `gpt-4o` with structured
+**AI features.** All are Supabase Edge Functions calling the Claude API (shared layer
+`functions/_shared/claude.ts`; Haiku for vision, Sonnet for long documents) with structured
 (json‑schema) output:
-- **read‑whiteboard** — a site whiteboard photo → `{ log_date, weather, work_summary, items[] }`;
+- **read‑whiteboard** — a site-board photo → `{ log_date, weather, work_summary, items[] }`;
   items are fuzzy‑matched back to BOQ leaves before filling the daily log.
 - **parse‑contract** — a contract (digital PDF/Word → text extracted in‑browser via `pdf.js` /
   `mammoth`; scanned/image → base64 vision) → a list of obligations matching `contract_obligations`.
@@ -205,7 +206,7 @@ Two `SECURITY DEFINER` RPCs cover operations RLS alone can't express atomically:
 |---|---|
 | Frontend | React 18 · Vite 5 · React Router 6 (HashRouter) · Tailwind CSS 4 |
 | Backend | Supabase — Postgres, Auth (email/password), Row Level Security, Storage, Edge Functions (Deno) |
-| AI | OpenAI `gpt-4o` (vision + structured output) via Edge Functions; in‑browser text extraction with `pdf.js` (`pdfjs-dist`) and `mammoth` |
+| AI | Claude API (Haiku 4.5 vision / Sonnet 5 long‑doc, forced tool‑use structured output) via Edge Functions; in‑browser text extraction with `pdf.js` (`pdfjs-dist`) and `mammoth` |
 | BOQ parsing | PCCES eTender XML via in‑browser `DOMParser` ([`src/lib/parsePcces.js`](src/lib/parsePcces.js)); a Python port lives in [`scripts/import_boq.py`](scripts/import_boq.py) |
 | Hosting | GitHub Pages (static SPA) |
 
@@ -232,7 +233,7 @@ Backend (Supabase project + schema): see **[supabase/SETUP.md](supabase/SETUP.md
 The full, idempotent database schema is one file: **[supabase/schema.sql](supabase/schema.sql)** —
 paste it into the SQL editor and run.
 
-**AI features** (optional) need the two Edge Functions deployed and an OpenAI key set:
+**AI features** (optional) need the Edge Functions deployed and an Anthropic key set:
 
 ```bash
 supabase functions deploy parse-contract
@@ -274,7 +275,7 @@ src/
   App.jsx            routes + auth/project gating
 supabase/
   schema.sql         complete database schema, RLS + RPCs (idempotent)
-  functions/         Edge Functions — parse-contract · read-whiteboard (OpenAI)
+  functions/         Edge Functions — parse-contract · read-whiteboard (Claude API)
   SETUP.md           backend setup guide
 scripts/
   import_boq.py      offline PCCES XML → JSON importer (used to seed the sample BOQ)

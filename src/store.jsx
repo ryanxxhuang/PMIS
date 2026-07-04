@@ -748,7 +748,7 @@ export function StoreProvider({ children }) {
     return { error: null }
   }, [dbMode])
 
-  // AI 讀白板:照片 → read-whiteboard Edge Function（Claude 視覺）→ 結構化日誌欄位。
+  // AI 現場辨識:工程告示板/現場照片 → read-whiteboard Edge Function（Claude 視覺）→ 結構化日誌欄位。
   // 金鑰在雲端函式,前端只送壓好的 base64;工項對應(item_key)由前端用標單模糊比對。
   const readWhiteboard = useCallback(async (file) => {
     if (!isSupabaseConfigured) return { error: { message: '需登入（Supabase 未設定）' } }
