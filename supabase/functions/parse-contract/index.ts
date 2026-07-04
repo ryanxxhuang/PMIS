@@ -1,27 +1,17 @@
 // Supabase Edge Function: parse-contract
 // ---------------------------------------------------------------------------
-// 收一份契約檔(PDF / 掃描 PDF / 圖片)→ OpenAI 通讀 → 回傳「時程義務清單」。
-// 對齊 contract_obligations 表的欄位。金鑰沿用同一把 OPENAI_API_KEY(雲端 secret)。
+// 收一份契約檔(PDF / 掃描 PDF / 圖片)→ Claude 通讀 → 回傳「時程義務清單」。
+// 對齊 contract_obligations 表的欄位。長文件抽取用 smart 模型(Sonnet)。
 //
 // 部署:supabase functions deploy parse-contract
-// 已設過 OPENAI_API_KEY 的話不必再設。
 //
 // 前端(store.jsx)會先抽出文字再呼叫:Word(.docx)、數位 PDF → 送純文字(準);
 // 掃描 PDF/圖片抽不到字 → 退回送 base64 由模型「看」。本函式兩種輸入都吃。
-// 模型:下面 MODEL 常數(需支援檔案/視覺輸入 + 結構化輸出)。
 
-const MODEL = 'gpt-4o'
+import { claudeJson, imageBlock, pdfBlock, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-// OpenAI strict 模式:每層 additionalProperties:false、每個欄位都要列進 required。
 const OBLIGATION = {
   type: 'object',
-  additionalProperties: false,
   properties: {
     title: { type: 'string', description: '應辦事項' },
     category: { type: 'string', description: '所屬階段:開工前 | 施工中 | 完工 | 保固' },
@@ -46,7 +36,6 @@ const OBLIGATION = {
 
 const SCHEMA = {
   type: 'object',
-  additionalProperties: false,
   properties: { obligations: { type: 'array', items: OBLIGATION } },
   required: ['obligations'],
 }
@@ -58,17 +47,11 @@ const PROMPT =
   '每一項請標出:應辦事項、所屬階段、觸發點(對應列舉值)、期限天數與在觸發點之前/之後、是否為每月等週期性、' +
   '負責方、逾期或未提送的罰則、以及出處條款與頁碼。只根據契約內容、不要臆測;找不到的欄位留空字串或 0。盡量找齊。'
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { ...cors, 'content-type': 'application/json' } })
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
     const { text, file_base64, mime_type, filename } = await req.json()
     if (!text && !file_base64) return json({ error: '缺少 text 或 file_base64' }, 400)
-    const apiKey = Deno.env.get('OPENAI_API_KEY')
-    if (!apiKey) return json({ error: '伺服器未設定 OPENAI_API_KEY' }, 500)
 
     // 優先用前端抽好的純文字(準);沒有才退回讓模型「看」PDF/圖片。
     let content
@@ -76,34 +59,18 @@ Deno.serve(async (req) => {
       content = [{ type: 'text', text: `${PROMPT}\n\n=== 契約全文 ===\n${text}` }]
     } else {
       const isPdf = (mime_type || '').includes('pdf') || (filename || '').toLowerCase().endsWith('.pdf')
-      const filePart = isPdf
-        ? { type: 'file', file: { filename: filename || 'contract.pdf', file_data: `data:application/pdf;base64,${file_base64}` } }
-        : { type: 'image_url', image_url: { url: `data:${mime_type || 'image/jpeg'};base64,${file_base64}` } }
-      content = [{ type: 'text', text: PROMPT }, filePart]
+      content = [
+        { type: 'text', text: PROMPT },
+        isPdf ? pdfBlock(file_base64) : imageBlock(file_base64, mime_type || 'image/jpeg'),
+      ]
     }
 
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 8192,
-        messages: [{ role: 'user', content }],
-        response_format: { type: 'json_schema', json_schema: { name: 'contract_obligations', strict: true, schema: SCHEMA } },
-      }),
+    const { data, error } = await claudeJson({
+      model: MODELS.smart, name: 'contract_obligations', schema: SCHEMA, maxTokens: 8192,
+      content,
     })
-
-    if (!resp.ok) {
-      const t = await resp.text()
-      return json({ error: `OpenAI ${resp.status}: ${t}` }, 502)
-    }
-    const data = await resp.json()
-    const msg = data.choices?.[0]?.message
-    if (msg?.refusal) return json({ error: `AI 婉拒此請求:${msg.refusal}` }, 502)
-    if (!msg?.content) return json({ error: 'AI 未回傳內容' }, 502)
-    let parsed: unknown
-    try { parsed = JSON.parse(msg.content) } catch { return json({ error: '回傳非 JSON', raw: msg.content }, 502) }
-    return json(parsed, 200)
+    if (error) return json({ error }, 502)
+    return json(data, 200)
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500)
   }

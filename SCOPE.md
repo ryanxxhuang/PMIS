@@ -44,9 +44,11 @@
    服務全恢復;臨時測試帳號實測 RLS 隔離/註冊觸發器/提醒信 dry-run 全通過;
    HIBP 外洩密碼保護已開(Pro 限定)、每日備份運作中。egress 根因(auth 連鎖重抓)
    前端已修+快取,不會重演。
-8. ⚠️ **OpenAI API 額度用完(insufficient_quota,2026-07-05 發現)** —
-   四個 AI 功能(白板辨識/契約解析/月報草稿/缺失照片)呼叫成功但被 OpenAI 429 擋;
-   需至 platform.openai.com 儲值,或改接 Claude API。
+8. ~~**OpenAI API 額度用完**~~ — 已解(2026-07-05):四個 AI 函式全數遷移到
+   **Claude API**(共用層 `functions/_shared/claude.ts`:強制 tool use=保證 JSON schema;
+   Haiku 4.5 做視覺/短文、Sonnet 5 做長文件抽取),已部署+逐一實測通過:
+   白板辨識(合成白板圖全欄位正確)、缺失照片(正確辨識非缺失照)、
+   月報草稿(數據 grounded)、契約解析(節錄 8 條義務全中,含罰則/條款/保固年→天換算)。
 5. **store.jsx 單一 context(1,000+ 行)** — 任何寫入全 app rerender;每加模組都在惡化,
    中期需按領域拆分或 memo 重算。
 6. ~~**日期字串解析時區風險**~~ — 已修(2026-07-01,commit `4a1bea8`):共用

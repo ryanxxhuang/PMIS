@@ -43,16 +43,18 @@ your deployed URL so the verification link points back.
 ## 5. Whiteboard OCR Edge Function (AI autofill)
 
 The `read-whiteboard` Edge Function ([`functions/read-whiteboard/index.ts`](./functions/read-whiteboard/index.ts))
-takes a site-board photo and returns structured daily-log fields via an OpenAI vision model
-(`gpt-4o`). The OpenAI API key lives **only** in the function's secrets — it never reaches the
-browser.
+takes a site-board photo and returns structured daily-log fields via Claude vision
+(shared provider layer in [`functions/_shared/claude.ts`](./functions/_shared/claude.ts):
+Haiku for vision/short drafts, Sonnet for long-document extraction; forced tool-use =
+guaranteed JSON schema). The Anthropic API key lives **only** in the function's secrets —
+it never reaches the browser.
 
 Requires the [Supabase CLI](https://supabase.com/docs/guides/cli) (`npm i -g supabase`), then:
 
 ```bash
 supabase login
 supabase link --project-ref <your-project-ref>   # ref is in your Project URL
-supabase secrets set OPENAI_API_KEY=sk-...        # your OpenAI key
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-... # console.anthropic.com → API Keys
 supabase functions deploy read-whiteboard
 ```
 
@@ -61,7 +63,7 @@ the user's JWT automatically via `supabase.functions.invoke('read-whiteboard', �
 
 The `parse-contract` function ([`functions/parse-contract/index.ts`](./functions/parse-contract/index.ts))
 reads an uploaded contract (PDF / scanned PDF / image) and returns the structured time-based
-obligation list for the **contract deadlines** page. It reuses the same `OPENAI_API_KEY` secret:
+obligation list for the **contract deadlines** page. It reuses the same `ANTHROPIC_API_KEY` secret:
 
 ```bash
 supabase functions deploy parse-contract
