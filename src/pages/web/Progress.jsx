@@ -1,6 +1,6 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Button, Field, Empty } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { applyApprovedChangeOrders, revisedContractTotal } from '../../lib/changeOrders.js'
@@ -206,7 +206,7 @@ export default function Progress() {
       </Card>
 
       <Card title="逐月預定進度（可調整）">
-        <div className="overflow-x-auto -mx-5 -my-5">
+        <div className="overflow-x-auto -mx-4 -my-4">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
@@ -282,9 +282,7 @@ function Header({ billableTotal, project, action }) {
   return (
     <div className="flex items-end justify-between flex-wrap gap-3">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-[var(--text)]">進度管制 <span className="text-[var(--text-3)] font-normal text-base">S-Curve</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">發包工程費 {yi(billableTotal)}</p>
+        <PageHeader title="進度管制" tagline="S-Curve" subtitle={`發包工程費 ${yi(billableTotal)}`} />
       </div>
       {action}
     </div>

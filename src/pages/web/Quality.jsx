@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Camera } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, Empty } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
@@ -105,9 +105,7 @@ export default function Quality() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-bold text-[var(--text)]">品質查驗 <span className="text-[var(--text-3)] font-normal text-base">三級品管</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">查驗申請 → 監造查驗 → 不合格開缺失 → 改善複查結案</p>
+        <PageHeader title="品質查驗" tagline="三級品管" subtitle="查驗申請 → 監造查驗 → 不合格開缺失 → 改善複查結案" />
       </div>
 
       {/* 查驗 */}

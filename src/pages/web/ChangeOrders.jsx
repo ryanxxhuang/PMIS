@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { FileUp } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button, Badge } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, Badge, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 import { diffBoq } from '../../lib/coDiff.js'
@@ -75,9 +75,7 @@ export default function ChangeOrders() {
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-[var(--text)]">變更設計 <span className="text-[var(--text-3)] font-normal text-base">追加減帳・契約金額調整</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">追加/減帳工項 → 僅「核准」的計入變更後契約金額</p>
+        <PageHeader title="變更設計" tagline="追加減帳・契約金額調整" subtitle="追加/減帳工項 → 僅「核准」的計入變更後契約金額" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

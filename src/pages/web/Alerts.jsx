@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Scale } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Empty } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader } from '../../components/ui.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
@@ -73,9 +73,7 @@ export default function Alerts() {
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-[var(--text)]">提醒中心 <span className="text-[var(--text-3)] font-normal text-base">該處理的都在這</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">彙整契約到期、缺失改善、請款收款的待辦與逾期</p>
+        <PageHeader title="提醒中心" tagline="該處理的都在這" subtitle="彙整契約到期、缺失改善、請款收款的待辦與逾期" />
       </div>
 
       {alerts.length === 0 ? (

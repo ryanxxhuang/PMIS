@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Scale, FileText } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Empty } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader } from '../../components/ui.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
@@ -82,9 +82,7 @@ export default function Contract() {
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-[var(--text)]">契約管制 <span className="text-[var(--text-3)] font-normal text-base">時程義務與罰則</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">設定基準日 → 上傳契約 AI 解析 → 各項到期日與罰則自動彙整</p>
+        <PageHeader title="契約管制" tagline="時程義務與罰則" subtitle="設定基準日 → 上傳契約 AI 解析 → 各項到期日與罰則自動彙整" />
       </div>
 
       <Card title="基準日">

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { revisedContractTotal, approvedNetAmount } from '../../lib/changeOrders.js'
 
@@ -56,9 +56,7 @@ export default function Cost() {
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-[var(--text)]">成本管理 <span className="text-[var(--text-3)] font-normal text-base">預算 vs 實際・毛利</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">合約收入（發包工程費）對照成本與分包，即時算出預估與實際毛利</p>
+        <PageHeader title="成本管理" tagline="預算 vs 實際・毛利" subtitle="合約收入（發包工程費）對照成本與分包，即時算出預估與實際毛利" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -72,7 +70,7 @@ export default function Cost() {
 
       {byCat.length > 0 && (
         <Card title="分類成本">
-          <div className="overflow-x-auto -mx-5 -my-5">
+          <div className="overflow-x-auto -mx-4 -my-4">
             <table className="w-full text-sm min-w-[520px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
@@ -141,7 +139,7 @@ export default function Cost() {
         {costItems.length === 0 ? (
           <Empty>尚無成本項目。把分包發包、材料、人工等成本登進來，這裡會即時對照合約收入算毛利。</Empty>
         ) : (
-          <div className="overflow-x-auto -mx-5 -my-5">
+          <div className="overflow-x-auto -mx-4 -my-4">
             <table className="w-full text-sm min-w-[760px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">

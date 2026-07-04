@@ -125,8 +125,11 @@ export function WebLayout({ children }) {
         >
           <nav className="flex-1 py-3 overflow-auto">
             {navGroups.map((g) => (
-              <div key={g.title} className="mb-2">
-                <div className="px-6 pt-3 pb-1.5 text-[11px] font-medium tracking-wide text-[var(--text-3)]">{g.title}</div>
+              <div key={g.title} className="mb-3">
+                <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
+                  <span className="text-[10px] font-medium tracking-[0.12em] text-[var(--text-3)] shrink-0">{g.title}</span>
+                  <span className="flex-1 border-t border-[var(--border-2)]" />
+                </div>
                 {g.items.map((n) => {
                   const Icon = n.icon
                   return (
@@ -135,14 +138,14 @@ export function WebLayout({ children }) {
                       to={n.to}
                       onClick={() => setMenuOpen(false)}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 mx-3 my-0.5 px-4 py-2 rounded-full text-sm transition ${
+                        `flex items-center gap-2.5 mr-3 my-0.5 pl-[13px] pr-3 py-[7px] rounded-r-md text-sm border-l-[3px] transition ${
                           isActive
-                            ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
-                            : 'text-[var(--text)] hover:bg-[var(--surface-2)]'
+                            ? 'border-[var(--blue)] bg-[var(--blue-tint)] text-[var(--blue-text)] font-semibold'
+                            : 'border-transparent text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
                         }`
                       }
                     >
-                      <Icon size={17} strokeWidth={1.8} className="shrink-0 opacity-80" aria-hidden />
+                      <Icon size={16} strokeWidth={1.8} className="shrink-0 opacity-75" aria-hidden />
                       {n.label}
                     </NavLink>
                   )

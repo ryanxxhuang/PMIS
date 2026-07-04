@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button, Badge } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, Badge, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
 const TYPES = ['自主檢查', '工安缺失', '教育訓練', '危害告知']
@@ -48,9 +48,7 @@ export default function Safety() {
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-[var(--text)]">工安管理 <span className="text-[var(--text-3)] font-normal text-base">自主檢查・缺失・教育訓練</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">記錄工地安全自主檢查、工安缺失改善、教育訓練與危害告知</p>
+        <PageHeader title="工安管理" tagline="自主檢查・缺失・教育訓練" subtitle="記錄工地安全自主檢查、工安缺失改善、教育訓練與危害告知" />
       </div>
 
       <div className="grid grid-cols-3 gap-4">

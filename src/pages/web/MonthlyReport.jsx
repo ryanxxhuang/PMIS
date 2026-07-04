@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Printer, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, Button } from '../../components/ui.jsx'
+import { Card, Empty, Button, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
@@ -86,17 +86,18 @@ export default function MonthlyReport() {
   return (
     <div className="space-y-5">
       {/* 工具列（列印時隱藏）*/}
-      <div className="flex flex-wrap items-end gap-3 print:hidden">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-bold text-[var(--text)]">施工月報 <span className="text-[var(--text-3)] font-normal text-base">自動彙編</span></h1>
-          <p className="text-xs text-[var(--text-3)] mt-0.5">選月份 → 自動彙整進度 / 估驗 / 品質 / 工安 / 變更 → 列印或存 PDF</p>
-        </div>
-        <label className="block">
-          <span className="block text-xs font-medium text-[var(--text-2)] mb-1">報告月份</span>
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
-            className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-        </label>
-        <Button onClick={() => window.print()}><Printer size={15} aria-hidden />列印 / 存 PDF</Button>
+      <div className="print:hidden">
+        <PageHeader title="施工月報" tagline="自動彙編" subtitle="選月份 → 自動彙整進度 / 估驗 / 品質 / 工安 / 變更 → 列印或存 PDF"
+          action={
+            <div className="flex items-end gap-3">
+              <label className="block">
+                <span className="block text-xs font-medium text-[var(--text-2)] mb-1">報告月份</span>
+                <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
+                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+              </label>
+              <Button onClick={() => window.print()}><Printer size={15} aria-hidden />列印 / 存 PDF</Button>
+            </div>
+          } />
       </div>
 
       {/* 月報本體（列印範圍）*/}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Empty, Button } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Empty, Button, PageHeader } from '../../components/ui.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 
 const fmt = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-US'))
@@ -103,19 +103,14 @@ export default function BOQ() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-[var(--text)]">標單工項 <span className="text-[var(--text-3)] font-normal text-base">BOQ / WBS</span></h1>
-          <p className="text-sm text-[var(--text-2)] mt-1">
-            {meta.project_name}　·　{meta.owner_name}　·　契約 {meta.contract_no}
-          </p>
-        </div>
-        {dbMode && workItemsSource === 'db' && (
+      <PageHeader title="標單工項" tagline="BOQ / WBS"
+        subtitle={`${meta.project_name}　·　${meta.owner_name}`}
+        meta={meta.contract_no ? [{ k: '契約編號', v: meta.contract_no }] : []}
+        action={dbMode && workItemsSource === 'db' && (
           <Button variant="ghost" onClick={async () => {
             if (window.confirm('重新匯入會清空此專案的標單工項，以及相依的估驗、進度、施工日誌、查驗、缺失。確定？')) await resetProjectBoq()
           }}>↻ 重新匯入標單</Button>
-        )}
-      </div>
+        )} />
 
       {canImport && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 space-y-2">
@@ -161,7 +156,7 @@ export default function BOQ() {
           </label>
         }
       >
-        <div className="overflow-x-auto -mx-5 -my-5">
+        <div className="overflow-x-auto -mx-4 -my-4">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">

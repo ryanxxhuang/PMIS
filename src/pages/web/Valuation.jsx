@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Printer, Trash2 } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Button, Empty } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Button, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { applyApprovedChangeOrders, approvedNetAmount } from '../../lib/changeOrders.js'
 
@@ -144,22 +144,16 @@ export default function Valuation() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between flex-wrap gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold text-[var(--text)]">估驗計價 <span className="text-[var(--text-3)] font-normal text-base">Valuation</span></h1>
-          <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-          <p className="text-xs text-[var(--text-3)] mt-0.5">
-            {coNet !== 0
-              ? `變更後契約金額 ${yi(billableTotal)}（原發包 ${yi(billableTotal - coNet)}，核准追加減 ${coNet > 0 ? '+' : ''}${fmt(coNet)}）`
-              : `發包工程費 ${yi(billableTotal)}`}
-            （保留款 {selected?.retention_pct ?? 5}%）
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}
-          <Button onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>
-        </div>
-      </div>
+      <PageHeader title="估驗計價" tagline="Valuation"
+        subtitle={`${coNet !== 0
+          ? `變更後契約金額 ${yi(billableTotal)}（原發包 ${yi(billableTotal - coNet)}，核准追加減 ${coNet > 0 ? '+' : ''}${fmt(coNet)}）`
+          : `發包工程費 ${yi(billableTotal)}`}（保留款 ${selected?.retention_pct ?? 5}%）`}
+        action={
+          <div className="flex items-center gap-2">
+            {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}
+            <Button onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>
+          </div>
+        } />
 
       {valuations.length === 0 ? (
         <Card>
@@ -215,7 +209,7 @@ export default function Valuation() {
             }
           >
             {!editable && <p className="text-xs text-amber-600 mb-2">本期狀態為「{selected.status}」，明細唯讀。</p>}
-            <div className="overflow-x-auto -mx-5 -my-5">
+            <div className="overflow-x-auto -mx-4 -my-4">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">

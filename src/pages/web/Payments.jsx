@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty } from '../../components/ui.jsx'
+import { Card, Stat, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
@@ -39,9 +39,7 @@ export default function Payments() {
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-[var(--text)]">請款收款 <span className="text-[var(--text-3)] font-normal text-base">現金流</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">每期估驗 → 本期應領、保留款、收款追蹤</p>
+        <PageHeader title="請款收款" tagline="現金流" subtitle="每期估驗 → 本期應領、保留款、收款追蹤" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -63,7 +61,7 @@ export default function Payments() {
         {rows.length === 0 ? (
           <Empty>尚無估驗期。請先到「估驗計價」建立估驗,這裡才會列出每期請款。</Empty>
         ) : (
-          <div className="overflow-x-auto -mx-5 -my-5">
+          <div className="overflow-x-auto -mx-4 -my-4">
             <table className="w-full text-sm min-w-[820px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">

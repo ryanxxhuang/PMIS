@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera, Printer, ChevronDown, ChevronRight } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Empty } from '../../components/ui.jsx'
+import { Card, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
@@ -154,9 +154,7 @@ export default function SiteLog() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-bold text-[var(--text)]">施工日誌 <span className="text-[var(--text-3)] font-normal text-base">每日進度回報</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">填各工項當日完成數量，估驗可一鍵帶入累計</p>
+        <PageHeader title="施工日誌" tagline="每日進度回報" subtitle="填各工項當日完成數量，估驗可一鍵帶入累計" />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">

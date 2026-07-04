@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty } from '../../components/ui.jsx'
+import { Card, Stat, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
@@ -60,9 +60,7 @@ export default function Schedule() {
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-[var(--text)]">逐工項排程 <span className="text-[var(--text-3)] font-normal text-base">每項計畫起迄・落後追蹤</span></h1>
-        <p className="text-sm font-medium text-[var(--text)] mt-1 truncate">{project.project_name}</p>
-        <p className="text-xs text-[var(--text-3)] mt-0.5">對關鍵工項設定計畫起迄，依最新估驗完成數量自動判斷落後</p>
+        <PageHeader title="逐工項排程" tagline="每項計畫起迄・落後追蹤" subtitle="對關鍵工項設定計畫起迄，依最新估驗完成數量自動判斷落後" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -102,7 +100,7 @@ export default function Schedule() {
         {rows.length === 0 ? (
           <Empty>尚未排程任何工項。用上方搜尋把關鍵工項加進來，設定計畫起迄。</Empty>
         ) : (
-          <div className="overflow-x-auto -mx-5 -my-5">
+          <div className="overflow-x-auto -mx-4 -my-4">
             <table className="w-full text-sm min-w-[720px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">

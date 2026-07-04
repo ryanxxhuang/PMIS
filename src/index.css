@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 :root {
   /* One harmonized family for both Chinese and Latin — avoids the mixed-metrics look */
@@ -8,16 +8,19 @@
   /* Data-dense tool: digits align in every table without per-cell classes */
   font-variant-numeric: tabular-nums;
 
+  /* 數據體:金額/數量/百分比/日期/代碼一律等寬,像圖面標註與儀表讀數 */
+  --font-data: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
   /* ── Brand palette — steel blue (structure) + safety orange (signal) ──
      Note: --blue* names kept for compatibility; values are brand steel blue, not Google blue. */
-  --bg: #f6f7f9;
+  --bg: #f1f3f6;
   --surface: #ffffff;
-  --surface-2: #eef1f4;
-  --text: #1c2733;
-  --text-2: #51606e;
-  --text-3: #7b8794;
-  --border: #d5dce3;
-  --border-2: #e6eaef;
+  --surface-2: #eceff3;
+  --text: #16202b;
+  --text-2: #4d5c6a;
+  --text-3: #78848f;
+  --border: #c9d2da;
+  --border-2: #e2e7ec;
 
   --blue: #1e5a85;          /* primary: steel blue */
   --blue-text: #1b5480;
@@ -93,5 +96,30 @@ input, select, textarea { color: var(--text); background-color: var(--surface); 
 input::placeholder, textarea::placeholder { color: var(--text-3); }
 select option { color: var(--text); background: var(--surface); }
 
-.g-elevation-1 { box-shadow: var(--elevation); }
-.g-elevation-2 { box-shadow: var(--elevation); }
+/* 圖紙分格:卡片以 1px 墨線描邊為主、陰影極輕(取代原本的浮影) */
+.g-elevation-1 { border: 1px solid var(--border-2); box-shadow: 0 1px 2px rgba(22,32,43,.04); }
+.g-elevation-2 { border: 1px solid var(--border-2); box-shadow: 0 2px 8px rgba(22,32,43,.08); }
+
+/* 全站數據體:既有 tabular-nums 直接升級為等寬儀表體(.num 為語意別名) */
+.tabular-nums, .num {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* 圖框 title block:頁首底部的「粗墨線 + 細線」雙軌,像圖紙角框 */
+.title-block {
+  border-bottom: 2px solid var(--text);
+  position: relative;
+  padding-bottom: 10px;
+}
+.title-block::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -5px;
+  border-bottom: 1px solid var(--border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
