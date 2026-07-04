@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react'
-import { Camera } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Camera, Printer, Zap } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
+import { judgeChecklist, judgeItem } from '../../lib/qc.js'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
@@ -40,6 +42,8 @@ function WorkItemPicker({ leaves, value, label, onPick }) {
 export default function Quality() {
   const { project, workItems, inspections, defects, createInspection, recordInspectionResult,
     createDefect, updateDefectStatus, deleteInspection, deleteDefect, describeDefect,
+    checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
+    testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     isSupabaseConfigured, currentProject, workItemsSource } = useStore()
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
   const [defForm, setDefForm] = useState(null)
@@ -193,7 +197,241 @@ export default function Quality() {
         )}
       </Card>
 
-      <p className="text-xs text-[var(--text-3)]">三級品管：廠商提查驗申請 → 監造現場查驗（合格/不合格）→ 不合格自動開缺失 → 廠商改善 → 監造複查結案。查驗/缺失可掛回標單工項。</p>
+      {/* 自主檢查表:量化標準 → 實測值 → 自動判定 */}
+      <ChecklistSection templates={checklistTemplates} records={checklistRecords}
+        onCreate={createChecklistRecord} onDelete={deleteChecklistRecord} />
+
+      {/* 取樣試驗:試體齡期追蹤 + fc′ 自動判定 */}
+      <SamplesSection samples={testSamples} onGenerate={generateSamplesFromLogs}
+        onCreate={createTestSamples} onUpdate={updateTestSample} onDelete={deleteTestSample} />
+
+      <p className="text-xs text-[var(--text-3)]">三級品管：廠商提查驗申請 → 監造現場查驗（合格/不合格）→ 不合格自動開缺失 → 廠商改善 → 監造複查結案。自主檢查依範本量化標準自動判定、試體依 fc′ 自動判定，不合格皆自動開缺失；試驗到期自動進提醒中心。</p>
     </div>
+  )
+}
+
+// 判定章:○ 合格 / ✕ 不合格 / — 未檢
+function PassMark({ pass }) {
+  if (pass === true) return <span className="text-[var(--green-text)] font-semibold">○</span>
+  if (pass === false) return <span className="text-[var(--red-text)] font-semibold">✕</span>
+  return <span className="text-[var(--text-3)]">—</span>
+}
+
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+
+// ── 自主檢查表:選範本 → 填實測值 → 依量化標準自動判定 → 不合格自動開缺失 ──
+function ChecklistSection({ templates, records, onCreate, onDelete }) {
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const [tplId, setTplId] = useState(templates[0]?.id)
+  const [date, setDate] = useState(todayIso())
+  const [location, setLocation] = useState('')
+  const [values, setValues] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const template = templates.find((t) => t.id === tplId) || templates[0]
+  const live = useMemo(() => (template ? judgeChecklist(template, values) : null), [template, values])
+
+  const setVal = (no, v) => setValues((p) => ({ ...p, [no]: v }))
+  const save = async () => {
+    setSaving(true); setMsg('')
+    const { error, overall } = await onCreate({ template, check_date: date, location, values })
+    setSaving(false)
+    if (error) { setMsg(error.message || '存檔失敗'); return }
+    setMsg(overall === '不合格' ? '已存檔：判定不合格，系統已自動開立缺失。' : `已存檔：判定${overall || '未完成'} ✓`)
+    setValues({}); setOpen(false)
+  }
+
+  let lastGroup = null
+  return (
+    <Card title={`自主檢查表（${records.length}）`} action={
+      <Button onClick={() => { setOpen((o) => !o); setMsg('') }}>{open ? '取消' : '＋ 新增檢查'}</Button>
+    }>
+      {msg && <p className={`text-sm mb-3 ${msg.includes('不合格') ? 'text-[var(--accent-text)]' : 'text-emerald-600'}`}>{msg}</p>}
+
+      {open && template && (
+        <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="檢查表範本">
+              <select value={tplId} onChange={(e) => { setTplId(e.target.value); setValues({}) }}
+                className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]">
+                {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+              </select>
+            </Field>
+            <Field label="檢查日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" /></Field>
+            <Field label="檢查位置"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="如 4F 版牆" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-36" /></Field>
+          </div>
+          <p className="text-[11px] text-[var(--text-3)]">依據：{template.source}。填實測值即時判定；未填的項目視為未檢，不列入判定。</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead>
+                <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
+                  <th className="text-left font-medium py-1.5 w-14">項次</th>
+                  <th className="text-left font-medium">檢查項目</th>
+                  <th className="text-left font-medium px-2">檢查標準</th>
+                  <th className="text-right font-medium px-2 w-36">實測值</th>
+                  <th className="text-center font-medium w-12">判定</th>
+                </tr>
+              </thead>
+              <tbody>
+                {template.items.map((it) => {
+                  const groupRow = it.group !== lastGroup
+                  lastGroup = it.group
+                  return [
+                    groupRow && (
+                      <tr key={`g-${it.group}`}><td colSpan={5} className="pt-2 pb-1 text-[11px] font-semibold tracking-[0.08em] text-[var(--text-3)]">{it.group}</td></tr>
+                    ),
+                    <tr key={it.no} className="border-b border-[var(--border-2)]">
+                      <td className="py-1.5 text-xs text-[var(--text-3)] tabular-nums">{it.no}</td>
+                      <td className="py-1.5 pr-2">{it.item}</td>
+                      <td className="py-1.5 px-2 text-xs text-[var(--text-2)]">{it.standard}</td>
+                      <td className="py-1.5 px-2 text-right">
+                        {it.kind === 'bool' ? (
+                          <input type="checkbox" checked={values[it.no] === true}
+                            onChange={(e) => setVal(it.no, e.target.checked)} />
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            <input type="number" step="any" value={values[it.no] ?? ''}
+                              onChange={(e) => setVal(it.no, e.target.value === '' ? '' : Number(e.target.value))}
+                              className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums bg-[var(--surface)]" />
+                            <span className="text-[10px] text-[var(--text-3)] w-10">{it.unit || ''}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-center"><PassMark pass={judgeItem(it, values[it.no])} /></td>
+                    </tr>,
+                  ]
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button onClick={save} disabled={saving}>{saving ? '存檔中…' : '存檔並判定'}</Button>
+            {live?.overall && (
+              <Badge color={live.overall === '合格' ? 'green' : 'red'}>目前判定：{live.overall}{live.failed.length ? `（${live.failed.length} 項不合格）` : ''}</Badge>
+            )}
+          </div>
+        </div>
+      )}
+
+      {records.length === 0 ? <Empty>尚無自主檢查紀錄。選範本填實測值，系統依量化標準自動判定。</Empty> : (
+        <div className="space-y-1.5">
+          {records.map((r) => {
+            const tpl = templates.find((t) => t.id === r.template_id)
+            return (
+              <div key={r.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-1.5 text-sm">
+                <div className="min-w-0">
+                  <span className="tabular-nums text-[var(--text-3)] text-xs mr-2">{r.check_date}</span>
+                  <span className="text-[var(--text)]">{tpl?.title || '（範本已刪除）'}</span>
+                  {r.location && <span className="text-xs text-[var(--text-3)] ml-2">{r.location}</span>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge color={r.overall === '合格' ? 'green' : r.overall === '不合格' ? 'red' : 'slate'}>{r.overall || '未判定'}</Badge>
+                  <button onClick={() => navigate(`/quality/checklist-print?id=${r.id}`)} title="列印自主檢查表"
+                    className="text-[var(--blue)] hover:underline text-xs inline-flex items-center gap-1"><Printer size={13} aria-hidden />列印</button>
+                  <button onClick={() => { if (window.confirm('刪除此檢查紀錄？')) onDelete(r.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ── 取樣試驗:澆置日誌 → 試體組 → 7/28 天齡期 → 抗壓值自動判定 ──
+function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete }) {
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [manual, setManual] = useState({ sampled_date: todayIso(), fc: 420, location: '' })
+  const [addOpen, setAddOpen] = useState(false)
+  const today = todayIso()
+
+  const gen = async () => {
+    setBusy(true); setMsg('')
+    const { error, count } = await onGenerate()
+    setBusy(false)
+    setMsg(error ? (error.message || '帶入失敗') : count ? `已由施工日誌帶入 ${count} 組取樣。` : '施工日誌沒有尚未建檔的澆置紀錄。')
+  }
+  const addManual = async () => {
+    if (!manual.sampled_date) return
+    setBusy(true)
+    await onCreate([manual])
+    setBusy(false); setAddOpen(false)
+  }
+  const dueCell = (due, filled) => {
+    if (!due) return null
+    const overdue = !filled && due < today
+    return <span className={`tabular-nums text-xs ${overdue ? 'text-[var(--accent-text)] font-semibold' : 'text-[var(--text-3)]'}`}>{due}{overdue ? ' 逾期' : ''}</span>
+  }
+
+  return (
+    <Card title={`取樣試驗（${samples.length}）`} action={
+      <div className="flex items-center gap-2">
+        <Button variant="secondary" onClick={gen} disabled={busy}><Zap size={14} aria-hidden />從施工日誌帶入</Button>
+        <Button onClick={() => setAddOpen((o) => !o)}>{addOpen ? '取消' : '＋ 手動新增'}</Button>
+      </div>
+    }>
+      {msg && <p className="text-sm mb-3 text-[var(--text-2)]">{msg}</p>}
+      {addOpen && (
+        <div className="bg-[var(--surface-2)] rounded-lg p-3 mb-4 flex flex-wrap items-end gap-3">
+          <Field label="取樣(澆置)日"><input type="date" value={manual.sampled_date} onChange={(e) => setManual({ ...manual, sampled_date: e.target.value })} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" /></Field>
+          <Field label="fc′ (kgf/cm²)"><input type="number" value={manual.fc} onChange={(e) => setManual({ ...manual, fc: Number(e.target.value) || null })} className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] text-right tabular-nums" /></Field>
+          <Field label="位置"><input value={manual.location} onChange={(e) => setManual({ ...manual, location: e.target.value })} className="w-36 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" /></Field>
+          <Button onClick={addManual} disabled={busy}>建立試體組</Button>
+        </div>
+      )}
+
+      {samples.length === 0 ? (
+        <Empty>尚無試體。按「從施工日誌帶入」，凡日誌材料含混凝土的澆置日會自動建檔並排 7 / 28 天試驗到期日。</Empty>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
+                <th className="text-left font-medium py-1.5">試體編號</th>
+                <th className="text-left font-medium px-2">取樣日</th>
+                <th className="text-right font-medium px-2">fc′</th>
+                <th className="text-right font-medium px-2">7天(參考)</th>
+                <th className="text-right font-medium px-2">28天各試體 kgf/cm²</th>
+                <th className="text-center font-medium px-2">判定</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {samples.map((s) => (
+                <tr key={s.id} className="border-b border-[var(--border-2)]">
+                  <td className="py-1.5 tabular-nums text-xs">{s.sample_no}<div className="text-[10px] text-[var(--text-3)]">{s.location}</div></td>
+                  <td className="px-2 tabular-nums text-xs text-[var(--text-2)]">{s.sampled_date}</td>
+                  <td className="px-2 text-right tabular-nums">{s.fc || '—'}</td>
+                  <td className="px-2 text-right">
+                    <input type="number" step="any" defaultValue={s.d7_value ?? ''} placeholder="值"
+                      onBlur={(e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n !== s.d7_value) onUpdate(s.id, { d7_value: n }) }}
+                      className="w-16 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                    <div>{dueCell(s.d7_due, s.d7_value != null)}</div>
+                  </td>
+                  <td className="px-2 text-right">
+                    <input defaultValue={(s.d28_values || []).join(', ')} placeholder="如 445, 432, 428"
+                      onBlur={(e) => {
+                        const arr = e.target.value.split(/[,、\s]+/).map(Number).filter((n) => !isNaN(n) && n > 0)
+                        if (JSON.stringify(arr) !== JSON.stringify(s.d28_values || [])) onUpdate(s.id, { d28_values: arr.length ? arr : null })
+                      }}
+                      className="w-36 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                    <div>{dueCell(s.d28_due, (s.d28_values || []).length > 0)}</div>
+                  </td>
+                  <td className="px-2 text-center">
+                    <Badge color={s.status === '合格' ? 'green' : s.status === '不合格' ? 'red' : 'slate'}>{s.status}</Badge>
+                  </td>
+                  <td className="text-right pl-2"><button onClick={() => { if (window.confirm(`刪除試體 ${s.sample_no}？`)) onDelete(s.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--text-3)] mt-2">28 天判定標準（03310）：任一試體 ≥ 0.85 fc′ 且平均 ≥ fc′；不合格自動開立缺失。到期未試驗會出現在提醒中心。</p>
+    </Card>
   )
 }

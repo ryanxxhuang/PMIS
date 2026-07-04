@@ -8,6 +8,7 @@ import Dashboard from './pages/web/Dashboard.jsx'
 import BOQ from './pages/web/BOQ.jsx'
 import SiteLog from './pages/web/SiteLog.jsx'
 import SiteLogPrint from './pages/web/SiteLogPrint.jsx'
+import ChecklistPrint from './pages/web/ChecklistPrint.jsx'
 import Valuation from './pages/web/Valuation.jsx'
 import ValuationPrint from './pages/web/ValuationPrint.jsx'
 import Progress from './pages/web/Progress.jsx'
@@ -49,6 +50,7 @@ export default function App() {
       <Route path="/progress" element={<Web><Progress /></Web>} />
       <Route path="/schedule" element={<Web><Schedule /></Web>} />
       <Route path="/quality" element={<Web><Quality /></Web>} />
+      <Route path="/quality/checklist-print" element={<ChecklistPrint />} />
       <Route path="/safety" element={<Web><Safety /></Web>} />
       <Route path="/contract" element={<Web><Contract /></Web>} />
       <Route path="/alerts" element={<Web><Alerts /></Web>} />

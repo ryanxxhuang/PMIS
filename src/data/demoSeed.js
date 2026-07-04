@@ -6,6 +6,8 @@
 //
 // 對 B2B 銷售而言 demo 模式就是銷售簡報：每一頁都要看得到「用起來的樣子」。
 
+import { TEMPLATE_03310 } from './checklist03310.js'
+
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const daysFromNow = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d }
 const monthsFromNow = (n, day) => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + n, day) }
@@ -187,5 +189,30 @@ export function buildDemoData(workItems, project) {
     itemSchedules[it.item_key] = { planned_start: iso(s), planned_finish: iso(f) }
   })
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules }
+  // ── 品管:自主檢查表(內建 03310 範本 + 一筆合格紀錄)+ 取樣試體 ──
+  // 試體 storyline:一組已合格(30 天前)、一組 7 天試驗逾期(9 天前,未填值)、
+  // 一組已填 7 天值待 28 天;最近一次澆置(-1)不建 → 留給「從施工日誌帶入」展示。
+  const checklistTemplates = [{ id: 'CLT-DEMO-1', ...TEMPLATE_03310 }]
+  const clValues = { B1: true, B2: true, B3: true, C1: 27, C2: 18.5, C3: 30, C4: 10, C5: 7500, D1: true }
+  const checklistRecords = [{
+    id: 'CLR-DEMO-1', template_id: 'CLT-DEMO-1', check_date: iso(daysFromNow(-12)),
+    location: '3F 版牆', note: null, overall: '合格',
+    results: Object.fromEntries(TEMPLATE_03310.items.map((it) => [it.no, { value: clValues[it.no] ?? null, pass: clValues[it.no] != null ? true : null }])),
+  }]
+  const mkSample = (off, extra) => {
+    const d = iso(daysFromNow(off))
+    return {
+      sample_no: `TS-${d.replaceAll('-', '')}`, test_item: '混凝土抗壓', fc: 420,
+      sampled_date: d, cylinders: 6,
+      d7_due: iso(daysFromNow(off + 7)), d28_due: iso(daysFromNow(off + 28)),
+      d7_value: null, d28_values: null, status: '待試驗', note: null, ...extra,
+    }
+  }
+  const testSamples = [
+    { id: 'TS-DEMO-1', ...mkSample(-30, { location: '2F 版牆', d7_value: 302, d28_values: [448, 431, 442], status: '合格' }) },
+    { id: 'TS-DEMO-2', ...mkSample(-12, { location: '3F 版牆', d7_value: 296 }) },   // 待 28 天
+    { id: 'TS-DEMO-3', ...mkSample(-9, { location: '3F 柱牆' }) },                    // 7 天試驗已逾期 → 提醒
+  ]
+
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples }
 }

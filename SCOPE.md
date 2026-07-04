@@ -16,7 +16,7 @@
 | BOQ 脊椎 | PCCES XML 瀏覽器內解析 → 3,000+ 工項樹入庫(`/boq`) |
 | 成本進度 | 施工日誌+AI 白板辨識(`/site-log`,含公定格式欄位:天氣上下午/出工/機具/材料/安衛,公定格式列印 `/site-log/print`)→ 估驗計價自動彙總(`/valuation`)→ 請款收款(`/payments`)→ S 曲線(`/progress`)/ 逐工項排程(`/schedule`)/ 成本毛利(`/cost`)/ 估驗計價單列印(`/valuation/print`) |
 | 變更 | 變更設計/追加減帳(`/change-orders`,含明細與變更後契約金額);上傳變更後 PCCES XML 自動 diff 產生追加減明細(`src/lib/coDiff.js`,2026-07-03) |
-| 品質工安 | 三級品管、查驗不合格自動開缺失(`/quality`,含拍缺失照片 AI 填表 `describe-defect`);工安四類紀錄(`/safety`) |
+| 品質工安 | 三級品管、查驗不合格自動開缺失(`/quality`,含拍缺失照片 AI 填表 `describe-defect`);**自主檢查表**(範本量化標準→實測值自動判定→不合格自動開缺失→公定式列印 `/quality/checklist-print`,內建 03310 範本,`src/lib/qc.js`);**取樣試驗**(澆置日誌自動帶入試體組→7/28 天齡期到期入提醒中心+email→28 天值依 fc′ 自動判定);工安四類紀錄(`/safety`) |
 | 契約 | AI 解析契約時程義務+罰則(`/contract`);提醒中心彙總逾期(`/alerts`) |
 | 報表 | 自動施工月報(`/monthly-report`,含本月完成工項數量表+施工紀要+AI 檢討/下月計畫草稿);各清單 CSV 匯出(UTF-8 BOM) |
 | 後端 | 單一份 idempotent schema、全表 RLS、2 個 SECURITY DEFINER RPC、2 個 Edge Functions(gpt-4o) |

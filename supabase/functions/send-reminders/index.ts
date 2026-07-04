@@ -28,8 +28,26 @@ function collectAlerts(
   todayUTC: number,
   anchors: Anchors,
   obligations: any[], defects: any[], safetyRecords: any[], valuations: any[],
+  testSamples: any[] = [],
 ): Alert[] {
   const out: Alert[] = []
+
+  // 取樣試驗:試體 7/28 天齡期到期未試驗(與 src/lib/qc.js sampleAlerts 同規則)
+  for (const s of testSamples) {
+    if (s.status === '合格' || s.status === '不合格') continue
+    const checks = [
+      { due: s.d7_due, filled: s.d7_value != null, label: '7天試驗' },
+      { due: s.d28_due, filled: Array.isArray(s.d28_values) && s.d28_values.length > 0, label: '28天抗壓試驗' },
+    ]
+    for (const c of checks) {
+      if (c.filled || !c.due) continue
+      const due = computeObligationDueUTC({ trigger_event: 'fixed', fixed_date: c.due }, anchors, todayUTC)
+      if (due == null) continue
+      const d = diffDays(due, todayUTC)
+      if (d < 0) out.push({ level: 'overdue', tag: '試驗', title: `${s.sample_no} ${s.test_item} ${c.label}`, meta: `逾期 ${-d} 天（到期 ${formatDate(due)}）` })
+      else if (d <= SOON_DAYS) out.push({ level: 'soon', tag: '試驗', title: `${s.sample_no} ${s.test_item} ${c.label}`, meta: `還有 ${d} 天（到期 ${formatDate(due)}）` })
+    }
+  }
 
   for (const ob of obligations) {
     if (ob.status === '已提送' || ob.status === '已完成' || ob.status === '不適用') continue
@@ -118,14 +136,15 @@ Deno.serve(async (req) => {
   const results: any[] = []
 
   for (const p of projects || []) {
-    const [obligations, defects, safety, valuations] = await Promise.all([
+    const [obligations, defects, safety, valuations, samples] = await Promise.all([
       supabase.from('contract_obligations').select('*').eq('project_id', p.id),
       supabase.from('defects').select('title, status, due_date').eq('project_id', p.id),
       supabase.from('safety_records').select('title, status, due_date, record_type').eq('project_id', p.id),
       supabase.from('valuations').select('period_no, status, invoice_date, paid_date').eq('project_id', p.id),
+      supabase.from('test_samples').select('sample_no, test_item, status, d7_due, d28_due, d7_value, d28_values').eq('project_id', p.id),
     ]).then((rs) => rs.map((r) => r.data || []))
 
-    const alerts = collectAlerts(todayUTC, p, obligations, defects, safety, valuations)
+    const alerts = collectAlerts(todayUTC, p, obligations, defects, safety, valuations, samples)
     const overdue = alerts.filter((a) => a.level === 'overdue').length
     const soon = alerts.filter((a) => a.level === 'soon').length
 

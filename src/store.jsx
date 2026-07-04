@@ -4,6 +4,8 @@ import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
 import { loadWorkItems } from './lib/boqCalc.js'
 import { parseLocalDate } from './lib/dates.js'
+import { judgeChecklist, judgeConcrete, sampleDues, pendingSamplesFromLogs } from './lib/qc.js'
+import { TEMPLATE_03310 } from './data/checklist03310.js'
 
 const StoreContext = createContext(null)
 
@@ -143,6 +145,17 @@ async function loadSiteLogsFromDB(projectId, idToKey) {
     labor: l.labor || [], equipment: l.equipment || [], materials: l.materials || [], extras: l.extras || {},
     work_summary: l.work_summary, status: l.status, items: byLog.get(l.id) || {},
   }))
+}
+
+// 從 DB 載入品管:檢查表範本/紀錄 + 取樣試體
+async function loadQcFromDB(projectId) {
+  const { data: tpls } = await supabase.from('checklist_templates')
+    .select('*').eq('project_id', projectId).order('created_at')
+  const { data: recs } = await supabase.from('checklist_records')
+    .select('*').eq('project_id', projectId).order('check_date', { ascending: false })
+  const { data: samples } = await supabase.from('test_samples')
+    .select('*').eq('project_id', projectId).order('sampled_date', { ascending: false })
+  return { templates: tpls || [], records: recs || [], samples: samples || [] }
 }
 
 // 從 DB 載入查驗 + 缺失，並把 work_item 資訊去正規化方便顯示
@@ -288,6 +301,10 @@ export function StoreProvider({ children }) {
   const [changeOrders, setChangeOrders] = useState([])
   // 逐工項排程（真 DB；{ item_key: { planned_start, planned_finish } }）
   const [itemSchedules, setItemSchedules] = useState({})
+  // 品管:自主檢查表範本/紀錄、取樣試驗試體
+  const [checklistTemplates, setChecklistTemplates] = useState([])
+  const [checklistRecords, setChecklistRecords] = useState([])
+  const [testSamples, setTestSamples] = useState([])
 
   const log = useCallback((action, record, extra = {}) => {
     setAudit((a) => [
@@ -438,6 +455,7 @@ export function StoreProvider({ children }) {
     setValuations(d.valuations); setProgressPlan(d.progressPlan); setSiteLogs(d.siteLogs)
     setInspections(d.inspections); setDefects(d.defects); setObligations(d.obligations)
     setCostItems(d.costItems); setSafetyRecords(d.safetyRecords); setChangeOrders(d.changeOrders)
+    setChecklistTemplates(d.checklistTemplates); setChecklistRecords(d.checklistRecords); setTestSamples(d.testSamples)
     setItemSchedules(d.itemSchedules)
   }, [demoMode, workItems, workItemsSource, currentUser])
 
@@ -473,6 +491,9 @@ export function StoreProvider({ children }) {
       const cos = await loadChangeOrdersFromDB(currentProject.project_id)
       if (!active) return
       setChangeOrders(cos)
+      const qc = await loadQcFromDB(currentProject.project_id)
+      if (!active) return
+      setChecklistTemplates(qc.templates); setChecklistRecords(qc.records); setTestSamples(qc.samples)
     })()
     return () => { active = false }
   }, [dbMode, currentProject, wiMaps])
@@ -1123,6 +1144,120 @@ export function StoreProvider({ children }) {
     return { error: null }
   }, [dbMode, currentProject, currentUser, wiMaps, reloadQuality, log])
 
+  // ── 品管自動化:自主檢查表(量化標準自動判定) + 取樣試驗(齡期追蹤) ─────────
+  // 可用範本 = 專案範本 ∪ 內建 03310(尚無同源範本時顯示;首次使用才落 DB)
+  const allChecklistTemplates = useMemo(() => {
+    if (checklistTemplates.some((t) => t.source === TEMPLATE_03310.source)) return checklistTemplates
+    return [{ id: TEMPLATE_03310.key, ...TEMPLATE_03310, builtin: true }, ...checklistTemplates]
+  }, [checklistTemplates])
+
+  const createChecklistRecord = useCallback(async ({ template, check_date, location, values, note }) => {
+    const { results, overall, failed } = judgeChecklist(template, values)
+    const openDefect = async () => {
+      if (overall !== '不合格') return
+      await createDefect({
+        title: `自主檢查不合格：${template.title}`,
+        description: `不合格項目：${failed.map((f) => `${f.no} ${f.item}（標準 ${f.standard}）`).join('、')}`,
+        severity: '一般', location,
+      })
+    }
+    if (!dbMode) {
+      setChecklistRecords((rs) => [{
+        id: `CLR-${Date.now()}`, template_id: template.id, check_date, location: location || null,
+        results, overall, note: note || null,
+      }, ...rs])
+      await openDefect()
+      return { error: null, overall }
+    }
+    let templateId = template.id
+    if (template.builtin) {
+      const { data: t, error: te } = await supabase.from('checklist_templates').insert({
+        project_id: currentProject.project_id, title: template.title, source: template.source,
+        items: template.items, created_by: currentUser?.user_id,
+      }).select().single()
+      if (te) return { error: te }
+      setChecklistTemplates((ts) => [...ts, t])
+      templateId = t.id
+    }
+    const { data: rec, error } = await supabase.from('checklist_records').insert({
+      project_id: currentProject.project_id, template_id: templateId, check_date,
+      location: location || null, results, overall, note: note || null, created_by: currentUser?.user_id,
+    }).select().single()
+    if (error) return { error }
+    setChecklistRecords((rs) => [rec, ...rs])
+    await openDefect()
+    log('自主檢查', `${template.title} ${check_date} → ${overall || '未判定'}`, { user: currentUser?.name, role: '施工品管' })
+    return { error: null, overall }
+  }, [dbMode, currentProject, currentUser, createDefect, log])
+
+  const deleteChecklistRecord = useCallback(async (id) => {
+    setChecklistRecords((rs) => rs.filter((r) => r.id !== id))
+    if (dbMode) await supabase.from('checklist_records').delete().eq('id', id)
+  }, [dbMode])
+
+  // 建立試體組(手動或由日誌帶入);自動算 7/28 天到期日
+  const createTestSamples = useCallback(async (rows) => {
+    const prepared = rows.map((r) => ({
+      sample_no: r.sample_no || `TS-${(r.sampled_date || '').replaceAll('-', '')}`,
+      test_item: r.test_item || '混凝土抗壓', fc: r.fc ?? null,
+      sampled_date: r.sampled_date, location: r.location || null, cylinders: r.cylinders ?? 6,
+      ...sampleDues(r.sampled_date), d7_value: null, d28_values: null, status: '待試驗', note: r.note || null,
+    }))
+    if (!dbMode) {
+      const stamp = Date.now()
+      setTestSamples((ss) => [...prepared.map((p, i) => ({ ...p, id: `TS-${stamp}-${i}` })), ...ss]
+        .sort((a, b) => b.sampled_date.localeCompare(a.sampled_date)))
+      return { error: null, count: prepared.length }
+    }
+    const { data, error } = await supabase.from('test_samples')
+      .insert(prepared.map((p) => ({ ...p, project_id: currentProject.project_id, created_by: currentUser?.user_id })))
+      .select()
+    if (error) return { error }
+    setTestSamples((ss) => [...data, ...ss].sort((a, b) => b.sampled_date.localeCompare(a.sampled_date)))
+    log('建立取樣試體', `${data.length} 組`, { user: currentUser?.name, role: '施工品管' })
+    return { error: null, count: data.length }
+  }, [dbMode, currentProject, currentUser, log])
+
+  // 掃施工日誌(材料含混凝土) → 補建缺漏的取樣組
+  const generateSamplesFromLogs = useCallback(async () => {
+    const pending = pendingSamplesFromLogs(siteLogs, testSamples)
+    if (!pending.length) return { error: null, count: 0 }
+    return createTestSamples(pending)
+  }, [siteLogs, testSamples, createTestSamples])
+
+  // 更新試體(填 7 天參考值 / 28 天各試體值);28 天值依 fc′ 自動判定,不合格自動開缺失
+  const updateTestSample = useCallback(async (id, patch) => {
+    let judged = null
+    setTestSamples((ss) => ss.map((s) => {
+      if (s.id !== id) return s
+      const merged = { ...s, ...patch }
+      if ('d28_values' in patch || 'fc' in patch) {
+        const r = judgeConcrete(merged.fc, merged.d28_values)
+        merged.status = r.status || '待試驗'
+        judged = { merged, r }
+      }
+      return merged
+    }))
+    if (judged?.r.status === '不合格') {
+      const { merged, r } = judged
+      await createDefect({
+        title: `試體抗壓不合格：${merged.sample_no}`,
+        description: `28天抗壓 平均 ${Math.round(r.avg)} / 最低 ${Math.round(r.min)} kgf/cm²，未達 fc′ ${merged.fc}（標準：任一 ≥0.85fc′ 且平均 ≥fc′）`,
+        severity: '嚴重', location: merged.location || '',
+      })
+    }
+    if (!dbMode) return { error: null }
+    const dbPatch = { ...patch }
+    if (judged) dbPatch.status = judged.merged.status
+    const { error } = await supabase.from('test_samples').update(dbPatch).eq('id', id)
+    return { error }
+  }, [dbMode, createDefect])
+
+  const deleteTestSample = useCallback(async (id) => {
+    setTestSamples((ss) => ss.filter((s) => s.id !== id))
+    if (dbMode) await supabase.from('test_samples').delete().eq('id', id)
+  }, [dbMode])
+
   // 缺失狀態推進：開立 → 改善中 → 待複查 → 已結案
   const updateDefectStatus = useCallback(async (defectId, status, extra = {}) => {
     const patch = { status }
@@ -1206,6 +1341,8 @@ export function StoreProvider({ children }) {
     changeOrders, createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
     inspections, defects, createInspection, recordInspectionResult, createDefect, updateDefectStatus,
+    checklistTemplates: allChecklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
+    testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,
     // actions

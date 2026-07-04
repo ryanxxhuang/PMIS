@@ -5,13 +5,14 @@ import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
 import { parseLocalDate } from '../../lib/dates.js'
+import { sampleAlerts } from '../../lib/qc.js'
 
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const diffDays = (d) => Math.round((d - today0()) / 86400000)
 
 export default function Alerts() {
-  const { project, obligations, defects, valuations, safetyRecords, currentProject, isSupabaseConfigured } = useStore()
+  const { project, obligations, defects, valuations, safetyRecords, testSamples, currentProject, isSupabaseConfigured } = useStore()
 
   const alerts = useMemo(() => {
     const a = {
@@ -50,13 +51,23 @@ export default function Alerts() {
       else out.push({ level: 'todo', tag: '工安', title: s.title, meta: `未改善 · ${s.status}`, to: '/safety' })
     }
 
+    // 取樣試驗:試體 7/28 天齡期到期未試驗
+    for (const t of sampleAlerts(testSamples, today0())) {
+      out.push({
+        level: t.level, tag: '試驗',
+        title: `${t.sample.sample_no} ${t.sample.test_item} ${t.label}`,
+        meta: t.days < 0 ? `逾期 ${-t.days} 天(到期 ${t.due})` : `還有 ${t.days} 天(到期 ${t.due})`,
+        to: '/quality',
+      })
+    }
+
     // 請款 / 收款
     for (const v of valuations) {
       if (v.status === '已核定' && !v.invoice_date) out.push({ level: 'todo', tag: '請款', title: `第 ${v.period_no} 期估驗待請款`, meta: '已核定,尚未請款', to: '/payments' })
       else if (v.invoice_date && !v.paid_date) out.push({ level: 'todo', tag: '收款', title: `第 ${v.period_no} 期待收款`, meta: `已於 ${v.invoice_date} 請款`, to: '/payments' })
     }
     return out
-  }, [obligations, defects, valuations, safetyRecords, currentProject])
+  }, [obligations, defects, valuations, safetyRecords, testSamples, currentProject])
 
   const groups = [
     { key: 'overdue', label: '已逾期', color: 'red' },
@@ -68,7 +79,7 @@ export default function Alerts() {
     return <Card title="提醒中心"><Empty>請先登入並選擇專案。</Empty></Card>
   }
 
-  const tagColor = (t) => ({ 契約: 'var(--purple-text)', 缺失: 'var(--red-text)', 工安: 'var(--amber-text)', 請款: 'var(--blue-text)', 收款: 'var(--green-text)' }[t] || 'var(--text-3)')
+  const tagColor = (t) => ({ 契約: 'var(--purple-text)', 缺失: 'var(--red-text)', 工安: 'var(--amber-text)', 試驗: 'var(--accent-text)', 請款: 'var(--blue-text)', 收款: 'var(--green-text)' }[t] || 'var(--text-3)')
 
   return (
     <div className="space-y-5">

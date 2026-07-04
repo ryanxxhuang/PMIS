@@ -496,6 +496,67 @@ create policy "safety_records_members_all" on public.safety_records for all to a
   using (project_id in (select public.my_project_ids()))
   with check (project_id in (select public.my_project_ids()));
 
+-- ── QC: 自主檢查表(範本+紀錄,實測值自動判定)與取樣試驗(試體齡期追蹤) ─────────
+create table if not exists public.checklist_templates (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid not null references public.projects(id) on delete cascade,
+  title       text not null,
+  source      text,                        -- 依據(規範章節)
+  items       jsonb not null default '[]', -- [{no,group,item,kind:'num'|'bool',min,max,unit,standard,source}]
+  created_by  uuid references auth.users(id),
+  created_at  timestamptz not null default now()
+);
+create table if not exists public.checklist_records (
+  id           uuid primary key default gen_random_uuid(),
+  project_id   uuid not null references public.projects(id) on delete cascade,
+  template_id  uuid references public.checklist_templates(id) on delete cascade,
+  check_date   date not null,
+  location     text,
+  work_item_id uuid references public.work_items(id) on delete set null,
+  results      jsonb not null default '{}', -- {no:{value,pass}}
+  overall      text,                        -- 合格|不合格(依量化標準自動判定)
+  note         text,
+  created_by   uuid references auth.users(id),
+  created_at   timestamptz not null default now()
+);
+create table if not exists public.test_samples (
+  id           uuid primary key default gen_random_uuid(),
+  project_id   uuid not null references public.projects(id) on delete cascade,
+  sample_no    text,
+  test_item    text not null default '混凝土抗壓',
+  fc           numeric,                     -- 設計強度 kgf/cm²
+  sampled_date date not null,               -- 取樣(澆置)日
+  location     text,
+  cylinders    int default 6,
+  d7_due       date, d28_due date,          -- 齡期到期日(取樣日 +7/+28)
+  d7_value     numeric,                     -- 7天參考值
+  d28_values   jsonb,                       -- [28天各試體值] → 依 fc′ 自動判定
+  status       text not null default '待試驗', -- 待試驗|合格|不合格
+  note         text,
+  created_by   uuid references auth.users(id),
+  created_at   timestamptz not null default now()
+);
+create index if not exists checklist_templates_project_idx on public.checklist_templates(project_id);
+create index if not exists checklist_records_project_idx   on public.checklist_records(project_id);
+create index if not exists checklist_records_template_idx  on public.checklist_records(template_id);
+create index if not exists checklist_records_wi_idx        on public.checklist_records(work_item_id);
+create index if not exists test_samples_project_idx        on public.test_samples(project_id);
+alter table public.checklist_templates enable row level security;
+alter table public.checklist_records   enable row level security;
+alter table public.test_samples        enable row level security;
+drop policy if exists "checklist_templates_members_all" on public.checklist_templates;
+create policy "checklist_templates_members_all" on public.checklist_templates for all to authenticated
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "checklist_records_members_all" on public.checklist_records;
+create policy "checklist_records_members_all" on public.checklist_records for all to authenticated
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "test_samples_members_all" on public.test_samples;
+create policy "test_samples_members_all" on public.test_samples for all to authenticated
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
+
 -- ── RPCs (SECURITY DEFINER) ─────────────────────────────────────────────────
 -- Create a project and add the caller as its admin member, atomically.
 create or replace function public.create_project(
