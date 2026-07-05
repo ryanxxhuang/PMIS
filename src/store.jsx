@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { project } from './data/seed.js'
+import { project, users } from './data/seed.js'
 import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
 import { loadWorkItems } from './lib/boqCalc.js'
@@ -306,6 +306,9 @@ export function StoreProvider({ children }) {
   const [checklistTemplates, setChecklistTemplates] = useState([])
   const [checklistRecords, setChecklistRecords] = useState([])
   const [testSamples, setTestSamples] = useState([])
+  // 監造協作:送審與工程疑義
+  const [submittals, setSubmittals] = useState([])
+  const [rfis, setRfis] = useState([])
 
   const log = useCallback((action, record, extra = {}) => {
     setAudit((a) => [
@@ -478,6 +481,7 @@ export function StoreProvider({ children }) {
     setInspections(d.inspections); setDefects(d.defects); setObligations(d.obligations)
     setCostItems(d.costItems); setSafetyRecords(d.safetyRecords); setChangeOrders(d.changeOrders)
     setChecklistTemplates(d.checklistTemplates); setChecklistRecords(d.checklistRecords); setTestSamples(d.testSamples)
+    setSubmittals(d.submittals); setRfis(d.rfis)
     setItemSchedules(d.itemSchedules)
   }, [demoMode, workItems, workItemsSource, currentUser])
 
@@ -516,6 +520,12 @@ export function StoreProvider({ children }) {
       const qc = await loadQcFromDB(currentProject.project_id)
       if (!active) return
       setChecklistTemplates(qc.templates); setChecklistRecords(qc.records); setTestSamples(qc.samples)
+      const [{ data: subs }, { data: rfiRows }] = await Promise.all([
+        supabase.from('submittals').select('*').eq('project_id', currentProject.project_id).order('created_at', { ascending: false }),
+        supabase.from('rfis').select('*').eq('project_id', currentProject.project_id).order('created_at', { ascending: false }),
+      ])
+      if (!active) return
+      setSubmittals(subs || []); setRfis(rfiRows || [])
     })()
     return () => { active = false }
   }, [dbMode, currentProject, wiMaps])
@@ -1280,6 +1290,123 @@ export function StoreProvider({ children }) {
     if (dbMode) await supabase.from('test_samples').delete().eq('id', id)
   }, [dbMode])
 
+  // ── 監造協作:送審(Submittal)/工程疑義(RFI)/成員管理 ─────────────────────
+  const createSubmittal = useCallback(async (input) => {
+    const row = {
+      submittal_no: input.submittal_no || `SUB-${String(submittals.length + 1).padStart(3, '0')}`,
+      title: input.title, category: input.category || '施工計畫',
+      revision: 0, status: '已提送',
+      submitted_date: input.submitted_date || null, due_date: input.due_date || null,
+      decided_date: null, review_note: null, attachment_note: input.attachment_note || null,
+    }
+    if (!dbMode) {
+      setSubmittals((ss) => [{ ...row, id: `SUB-${Date.now()}` }, ...ss])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('submittals')
+      .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
+    if (error) return { error }
+    setSubmittals((ss) => [data, ...ss])
+    log('提送送審', `${row.submittal_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, submittals, log])
+
+  // 監造審定:審核中|核准|核備|退回補正|駁回
+  const decideSubmittal = useCallback(async (id, status, review_note) => {
+    const patch = { status, review_note: review_note || null }
+    if (status !== '審核中') patch.decided_date = new Date().toISOString().slice(0, 10)
+    setSubmittals((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+    if (!dbMode) return { error: null }
+    const { error } = await supabase.from('submittals').update(patch).eq('id', id)
+    if (!error) log('送審審定', `${status}`, { user: currentUser?.name, role: '監造' })
+    return { error }
+  }, [dbMode, currentUser, log])
+
+  // 施工修正再送:退回補正 → 已提送(revision +1)
+  const resubmitSubmittal = useCallback(async (id) => {
+    let patch = null
+    setSubmittals((ss) => ss.map((s) => {
+      if (s.id !== id) return s
+      patch = { status: '已提送', revision: (s.revision || 0) + 1, decided_date: null,
+        submitted_date: new Date().toISOString().slice(0, 10) }
+      return { ...s, ...patch }
+    }))
+    if (!dbMode || !patch) return { error: null }
+    const { error } = await supabase.from('submittals').update(patch).eq('id', id)
+    return { error }
+  }, [dbMode])
+
+  const deleteSubmittal = useCallback(async (id) => {
+    setSubmittals((ss) => ss.filter((s) => s.id !== id))
+    if (dbMode) await supabase.from('submittals').delete().eq('id', id)
+  }, [dbMode])
+
+  const createRfi = useCallback(async (input) => {
+    const row = {
+      rfi_no: input.rfi_no || `RFI-${String(rfis.length + 1).padStart(3, '0')}`,
+      title: input.title, question: input.question || null,
+      answer: null, status: '待回覆',
+      asked_date: input.asked_date || new Date().toISOString().slice(0, 10),
+      due_date: input.due_date || null, answered_date: null,
+      cost_impact: !!input.cost_impact, schedule_impact: !!input.schedule_impact,
+    }
+    if (!dbMode) {
+      setRfis((rs) => [{ ...row, id: `RFI-${Date.now()}` }, ...rs])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('rfis')
+      .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
+    if (error) return { error }
+    setRfis((rs) => [data, ...rs])
+    log('提出工程疑義', `${row.rfi_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, rfis, log])
+
+  const answerRfi = useCallback(async (id, answer) => {
+    const patch = { answer, status: '已回覆', answered_date: new Date().toISOString().slice(0, 10) }
+    setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+    if (!dbMode) return { error: null }
+    const { error } = await supabase.from('rfis').update(patch).eq('id', id)
+    if (!error) log('回覆工程疑義', answer.slice(0, 30), { user: currentUser?.name, role: '監造' })
+    return { error }
+  }, [dbMode, currentUser, log])
+
+  const closeRfi = useCallback(async (id) => {
+    setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, status: '已結案' } : r)))
+    if (dbMode) await supabase.from('rfis').update({ status: '已結案' }).eq('id', id)
+  }, [dbMode])
+
+  const deleteRfi = useCallback(async (id) => {
+    setRfis((rs) => rs.filter((r) => r.id !== id))
+    if (dbMode) await supabase.from('rfis').delete().eq('id', id)
+  }, [dbMode])
+
+  // 成員管理(RPC:email 對照 auth.users 必須在伺服器端做)
+  const listMembers = useCallback(async () => {
+    if (!dbMode) {
+      return users.map((u) => ({ user_id: u.user_id, full_name: u.name, company: u.company, org_type: u.org_type, member_role: u.user_id === 'U1' ? 'admin' : 'member' }))
+    }
+    const { data } = await supabase.rpc('list_project_members', { p_project: currentProject.project_id })
+    return data || []
+  }, [dbMode, currentProject])
+
+  const addMemberByEmail = useCallback(async (email, role = 'member') => {
+    if (!dbMode) return { error: { message: 'demo 模式不支援邀請成員' } }
+    const { data, error } = await supabase.rpc('add_member_by_email', {
+      p_project: currentProject.project_id, p_email: email, p_role: role,
+    })
+    if (error) return { error }
+    if (data === 'not_found') return { error: { message: '找不到這個 email 的帳號，請對方先註冊。' } }
+    log('加入成員', email, { user: currentUser?.name, role: '專案' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, log])
+
+  const removeMember = useCallback(async (userId) => {
+    if (!dbMode) return { error: { message: 'demo 模式不支援移除成員' } }
+    const { error } = await supabase.rpc('remove_member', { p_project: currentProject.project_id, p_user: userId })
+    return { error }
+  }, [dbMode, currentProject])
+
   // 缺失狀態推進：開立 → 改善中 → 待複查 → 已結案
   const updateDefectStatus = useCallback(async (defectId, status, extra = {}) => {
     const patch = { status }
@@ -1365,6 +1492,9 @@ export function StoreProvider({ children }) {
     inspections, defects, createInspection, recordInspectionResult, createDefect, updateDefectStatus,
     checklistTemplates: allChecklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
+    submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal,
+    rfis, createRfi, answerRfi, closeRfi, deleteRfi,
+    listMembers, addMemberByEmail, removeMember,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,
     // actions

@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import {
   LayoutDashboard, Bell, CalendarClock, Newspaper,
   ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
-  ShieldCheck, HardHat,
+  ShieldCheck, HardHat, FileCheck2, MessageSquareWarning, Users,
   Menu, ChevronDown, Trash2, Moon, Sun, Plus,
 } from 'lucide-react'
 
@@ -28,6 +28,11 @@ const navGroups = [
   { title: '品質與工安', items: [
     { to: '/quality', icon: ShieldCheck, label: '品質查驗' },
     { to: '/safety', icon: HardHat, label: '工安管理' },
+  ] },
+  { title: '監造協作', items: [
+    { to: '/submittals', icon: FileCheck2, label: '送審文件' },
+    { to: '/rfi', icon: MessageSquareWarning, label: '工程疑義' },
+    { to: '/members', icon: Users, label: '專案成員' },
   ] },
 ]
 

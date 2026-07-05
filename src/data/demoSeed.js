@@ -214,5 +214,29 @@ export function buildDemoData(workItems, project) {
     { id: 'TS-DEMO-3', ...mkSample(-9, { location: '3F 柱牆' }) },                    // 7 天試驗已逾期 → 提醒
   ]
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples }
+  // ── 監造協作:送審(核准/待審/退回補正各一)+ 工程疑義(待回覆/已回覆) ──
+  const submittals = [
+    { id: 'SUB-DEMO-3', submittal_no: 'SUB-003', title: '外牆窯燒磚 材料送審(修正版)', category: '材料設備',
+      revision: 1, status: '已提送', submitted_date: iso(daysFromNow(-2)), due_date: iso(daysFromNow(5)),
+      decided_date: null, review_note: '第一次退回:未附出廠證明與試驗報告', attachment_note: '含出廠證明、CNS 試驗報告' },
+    { id: 'SUB-DEMO-2', submittal_no: 'SUB-002', title: '4F 以上結構體施工計畫', category: '施工計畫',
+      revision: 0, status: '審核中', submitted_date: iso(daysFromNow(-6)), due_date: iso(daysFromNow(1)),
+      decided_date: null, review_note: null, attachment_note: null },
+    { id: 'SUB-DEMO-1', submittal_no: 'SUB-001', title: '整體品質計畫', category: '品質計畫',
+      revision: 0, status: '核准', submitted_date: iso(daysFromNow(-140)), due_date: null,
+      decided_date: iso(daysFromNow(-130)), review_note: '同意備查,依核定版執行', attachment_note: null },
+  ]
+  const rfis = [
+    { id: 'RFI-DEMO-2', rfi_no: 'RFI-002', title: '3F 樑柱接頭鋼筋與機電套管衝突', status: '待回覆',
+      question: '3F G3 樑與 C5 柱接頭處,依機電圖 E-301 之預埋套管與主筋衝突,請釋疑是否可調整套管位置。',
+      answer: null, asked_date: iso(daysFromNow(-3)), due_date: iso(daysFromNow(4)),
+      answered_date: null, cost_impact: false, schedule_impact: true },
+    { id: 'RFI-DEMO-1', rfi_no: 'RFI-001', title: '外牆窯燒磚勾縫劑顏色', status: '已回覆',
+      question: '契約圖說未載明勾縫劑顏色,請確認採深灰或磚紅。',
+      answer: '依建築師 2026/06/20 回覆採深灰色(色號 G-25),請據以施作。',
+      asked_date: iso(daysFromNow(-15)), due_date: null, answered_date: iso(daysFromNow(-12)),
+      cost_impact: false, schedule_impact: false },
+  ]
+
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis }
 }

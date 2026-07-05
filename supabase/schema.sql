@@ -557,7 +557,99 @@ create policy "test_samples_members_all" on public.test_samples for all to authe
   using (project_id in (select public.my_project_ids()))
   with check (project_id in (select public.my_project_ids()));
 
+-- ── 監造協作:送審(Submittal)與工程疑義(RFI) ─────────────────────────────────
+create table if not exists public.submittals (
+  id             uuid primary key default gen_random_uuid(),
+  project_id     uuid not null references public.projects(id) on delete cascade,
+  submittal_no   text,
+  title          text not null,
+  category       text not null default '施工計畫',  -- 施工計畫|品質計畫|材料設備|樣品|配比|其他
+  revision       int not null default 0,           -- 修正次數(退回補正後再送 +1)
+  status         text not null default '已提送',    -- 已提送|審核中|核准|核備|退回補正|駁回
+  submitted_date date,
+  due_date       date,                              -- 監造應審回期限
+  decided_date   date,
+  review_note    text,                              -- 審查意見
+  attachment_note text,                             -- 附件說明/文件連結(v1 不做檔案上傳)
+  work_item_id   uuid references public.work_items(id) on delete set null,
+  created_by     uuid references auth.users(id),
+  created_at     timestamptz not null default now()
+);
+create table if not exists public.rfis (
+  id             uuid primary key default gen_random_uuid(),
+  project_id     uuid not null references public.projects(id) on delete cascade,
+  rfi_no         text,
+  title          text not null,
+  question       text,
+  answer         text,
+  status         text not null default '待回覆',    -- 待回覆|已回覆|已結案
+  asked_date     date,
+  due_date       date,
+  answered_date  date,
+  cost_impact    boolean not null default false,
+  schedule_impact boolean not null default false,
+  created_by     uuid references auth.users(id),
+  created_at     timestamptz not null default now()
+);
+create index if not exists submittals_project_idx on public.submittals(project_id);
+create index if not exists submittals_wi_idx      on public.submittals(work_item_id);
+create index if not exists rfis_project_idx       on public.rfis(project_id);
+alter table public.submittals enable row level security;
+alter table public.rfis       enable row level security;
+drop policy if exists "submittals_members_all" on public.submittals;
+create policy "submittals_members_all" on public.submittals for all to authenticated
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "rfis_members_all" on public.rfis;
+create policy "rfis_members_all" on public.rfis for all to authenticated
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
+
 -- ── RPCs (SECURITY DEFINER) ─────────────────────────────────────────────────
+-- 用 email 邀請成員加入專案(監造/機關/其他廠商帳號)。只有專案建立者可執行;
+-- email 對照 auth.users(前端讀不到別人的 email,必須走 SECURITY DEFINER)。
+create or replace function public.add_member_by_email(p_project uuid, p_email text, p_role text default 'member')
+returns text language plpgsql security definer set search_path = public as $$
+declare uid uuid;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not exists (select 1 from public.projects where id = p_project and created_by = auth.uid()) then
+    raise exception '只有專案建立者可以管理成員';
+  end if;
+  select id into uid from auth.users where lower(email) = lower(trim(p_email));
+  if uid is null then return 'not_found'; end if;
+  insert into public.project_members (project_id, user_id, role)
+  values (p_project, uid, p_role) on conflict do nothing;
+  return 'ok';
+end; $$;
+grant execute on function public.add_member_by_email(uuid, text, text) to authenticated;
+
+-- 專案成員清單(名字+組織)——一般成員也看得到團隊名單(僅此專案)。
+create or replace function public.list_project_members(p_project uuid)
+returns table (user_id uuid, full_name text, company text, org_type text, member_role text)
+language sql security definer stable set search_path = public as $$
+  select m.user_id, p.full_name, p.company, p.org_type, m.role
+  from public.project_members m
+  join public.profiles p on p.id = m.user_id
+  where m.project_id = p_project
+    and exists (select 1 from public.project_members me
+                where me.project_id = p_project and me.user_id = auth.uid())
+  order by m.created_at
+$$;
+grant execute on function public.list_project_members(uuid) to authenticated;
+
+-- 建立者移除成員(不能移除自己)
+create or replace function public.remove_member(p_project uuid, p_user uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.projects where id = p_project and created_by = auth.uid()) then
+    raise exception '只有專案建立者可以管理成員';
+  end if;
+  if p_user = auth.uid() then raise exception '不能移除自己'; end if;
+  delete from public.project_members where project_id = p_project and user_id = p_user;
+end; $$;
+grant execute on function public.remove_member(uuid, uuid) to authenticated;
+
 -- Create a project and add the caller as its admin member, atomically.
 create or replace function public.create_project(
   p_name text, p_code text default null, p_owner text default null,

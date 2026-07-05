@@ -7,6 +7,9 @@ import ProjectSetup from './pages/web/ProjectSetup.jsx'
 import Dashboard from './pages/web/Dashboard.jsx'
 import BOQ from './pages/web/BOQ.jsx'
 import SiteLog from './pages/web/SiteLog.jsx'
+import Submittals from './pages/web/Submittals.jsx'
+import RFI from './pages/web/RFI.jsx'
+import Members from './pages/web/Members.jsx'
 import SiteLogPrint from './pages/web/SiteLogPrint.jsx'
 import ChecklistPrint from './pages/web/ChecklistPrint.jsx'
 import Valuation from './pages/web/Valuation.jsx'
@@ -52,6 +55,9 @@ export default function App() {
       <Route path="/quality" element={<Web><Quality /></Web>} />
       <Route path="/quality/checklist-print" element={<ChecklistPrint />} />
       <Route path="/safety" element={<Web><Safety /></Web>} />
+      <Route path="/submittals" element={<Web><Submittals /></Web>} />
+      <Route path="/rfi" element={<Web><RFI /></Web>} />
+      <Route path="/members" element={<Web><Members /></Web>} />
       <Route path="/contract" element={<Web><Contract /></Web>} />
       <Route path="/alerts" element={<Web><Alerts /></Web>} />
       <Route path="/monthly-report" element={<Web><MonthlyReport /></Web>} />
