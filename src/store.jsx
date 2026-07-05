@@ -279,6 +279,7 @@ export function StoreProvider({ children }) {
   // 真實後端：使用者的所有專案 + 目前選的那個 + 標單工項（DB 或範例 JSON）
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState(null)
+  const [myMemberRoles, setMyMemberRoles] = useState({}) // { project_id: 'admin' | … }
   const [projectLoading, setProjectLoading] = useState(isSupabaseConfigured)
   const currentProject = useMemo(
     () => projects.find((p) => p.project_id === currentProjectId) || null,
@@ -384,16 +385,21 @@ export function StoreProvider({ children }) {
     try { localStorage.setItem('pmis-current-project', id) } catch { /* noop */ }
   }, [])
 
-  // 登入後載入此使用者的「所有」專案；選上次用的或第一個
+  // 登入後載入此使用者的「所有」專案；選上次用的或第一個。
+  // 同時取自己的成員角色(project_members.role)——admin(建立者)擁有完整權限。
   useEffect(() => {
     if (!isSupabaseConfigured) { setProjectLoading(false); return }
-    if (!currentUser?.real) { setProjects([]); setCurrentProjectId(null); setProjectLoading(false); return }
+    if (!currentUser?.real) { setProjects([]); setCurrentProjectId(null); setMyMemberRoles({}); setProjectLoading(false); return }
     let active = true
     setProjectLoading(true)
-    supabase.from('projects').select('*').order('created_at').then(({ data }) => {
+    Promise.all([
+      supabase.from('projects').select('*').order('created_at'),
+      supabase.from('project_members').select('project_id, role').eq('user_id', currentUser.user_id),
+    ]).then(([{ data }, { data: memberships }]) => {
       if (!active) return
       const list = (data || []).map(normalizeProject)
       setProjects(list)
+      setMyMemberRoles(Object.fromEntries((memberships || []).map((m) => [m.project_id, m.role])))
       const saved = (() => { try { return localStorage.getItem('pmis-current-project') } catch { return null } })()
       const pick = list.find((p) => p.project_id === saved) || list[0] || null
       setCurrentProjectId(pick?.project_id || null)
@@ -446,17 +452,20 @@ export function StoreProvider({ children }) {
   // demo 模式：未設 Supabase → 全站用 demoSeed storyline，寫入只進記憶體
   const demoMode = !isSupabaseConfigured
 
-  // 角色權限（UI 層 v1）：施工＝填報/提送，監造＝判定/核定/結案，機關＝唯讀。
-  // 核心規則：施工不能核准或結案自己的東西。org_type 缺省視為施工（單人試用不擋）。
+  // 角色權限（UI 層 v1）：施工＝填報/提送，監造＝判定/結案，機關＝唯讀。
+  // 核心規則：施工不能核准或結案自己的東西。
+  // 例外：專案 admin（建立者）擁有完整權限——單人/小團隊試用不會被自己的
+  // org_type 卡死；demo 模式刻意不套用 admin 例外，保留兩種角色的展示劇本。
   const can = useMemo(() => {
     const org = currentUser?.org_type || 'contractor'
+    const isAdmin = !demoMode && myMemberRoles[currentProjectId] === 'admin'
     return {
-      edit: org === 'contractor',     // 日誌/成本/請款/檢查表等日常填報
-      submit: org === 'contractor',   // 提送（估驗送監造審核、查驗申請）
-      approve: org === 'supervisor',  // 核定估驗、查驗判定、缺失複查結案、變更核准
-      readonly: org === 'owner',
+      edit: isAdmin || org === 'contractor',     // 日誌/成本/請款/檢查表等日常填報
+      submit: isAdmin || org === 'contractor',   // 提送（估驗送監造審核、查驗申請）
+      approve: isAdmin || org === 'supervisor',  // 核定估驗、查驗判定、缺失複查結案、變更核准
+      readonly: !isAdmin && org === 'owner',
     }
-  }, [currentUser])
+  }, [currentUser, demoMode, myMemberRoles, currentProjectId])
 
   // demo 模式：範例標單載入後，一次性預載完整示範資料（銷售展示 storyline）
   const demoLoadedRef = useRef(false)
