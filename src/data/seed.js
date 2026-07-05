@@ -30,7 +30,7 @@ export const project = {
 }
 
 export const users = [
-  { user_id: 'U1', name: '林志明', role: 'Contractor Field Engineer', company: '大華營造', label: '施工 / 現場工程師' },
-  { user_id: 'U2', name: '陳怡君', role: 'Contractor QC Engineer', company: '大華營造', label: '施工 / 品管工程師' },
-  { user_id: 'U3', name: '王建國', role: 'Supervisor Engineer', company: '宏觀顧問', label: '監造 / 監造工程師' },
+  { user_id: 'U1', name: '林志明', role: 'Contractor Field Engineer', company: '大華營造', label: '施工 / 現場工程師', org_type: 'contractor' },
+  { user_id: 'U2', name: '陳怡君', role: 'Contractor QC Engineer', company: '大華營造', label: '施工 / 品管工程師', org_type: 'contractor' },
+  { user_id: 'U3', name: '王建國', role: 'Supervisor Engineer', company: '宏觀顧問', label: '監造 / 監造工程師', org_type: 'supervisor' },
 ]

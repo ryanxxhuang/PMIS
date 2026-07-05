@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
+import { Download } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
@@ -13,8 +14,28 @@ const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
 
 export default function Dashboard() {
-  const { project, workItems, workItemsSource, demoMode, valuations, progressPlan, inspections, defects, siteLogs } = useStore()
+  const { project, workItems, workItemsSource, demoMode, valuations, progressPlan, inspections, defects, siteLogs,
+    obligations, costItems, safetyRecords, changeOrders, itemSchedules,
+    checklistTemplates, checklistRecords, testSamples } = useStore()
   const imported = workItemsSource === 'db' || demoMode
+
+  // 整案資料匯出:所有模組打包成一個 JSON 檔——資料是使用者的,隨時拿得走
+  const exportAll = () => {
+    const payload = {
+      exported_at: new Date().toISOString(),
+      project, work_items: workItems, valuations, progress_plan: progressPlan,
+      site_logs: siteLogs, inspections, defects, obligations,
+      cost_items: costItems, safety_records: safetyRecords, change_orders: changeOrders,
+      item_schedules: itemSchedules, checklist_templates: checklistTemplates,
+      checklist_records: checklistRecords, test_samples: testSamples,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `PMIS匯出_${project.project_name}_${todayISO}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
 
   const { roots, childrenMap } = useMemo(
     () => (workItems ? buildBillableTree(workItems.items) : { roots: [], childrenMap: new Map() }),
@@ -52,6 +73,12 @@ export default function Dashboard() {
           { k: '工程代碼', v: project.project_code || '—' },
           { k: '日期', v: todayISO },
         ]}
+        action={imported && (
+          <button onClick={exportAll} title="把本專案所有資料打包下載(JSON)"
+            className="inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1.5 border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] transition">
+            <Download size={13} aria-hidden />匯出整案資料
+          </button>
+        )}
       />
 
       {!imported ? (

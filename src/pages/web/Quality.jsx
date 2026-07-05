@@ -44,7 +44,7 @@ export default function Quality() {
     createDefect, updateDefectStatus, deleteInspection, deleteDefect, describeDefect,
     checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
-    isSupabaseConfigured, currentProject, workItemsSource } = useStore()
+    isSupabaseConfigured, currentProject, workItemsSource, can } = useStore()
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
   const [defForm, setDefForm] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -113,7 +113,7 @@ export default function Quality() {
       </div>
 
       {/* 查驗 */}
-      <Card title={`查驗（待查驗 ${openInsp}）`} action={<Button onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
+      <Card title={`查驗（待查驗 ${openInsp}）`} action={can.submit && <Button onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
         {inspForm && (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
             <WorkItemPicker leaves={leaves} value={inspForm.work_item_key} label={inspForm.work_item_label} onPick={(k, l) => setInspForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
@@ -135,11 +135,11 @@ export default function Quality() {
                   <div className="text-xs text-[var(--text-3)] truncate">{i.work_item_no && `${i.work_item_no} `}{i.location} · {i.inspection_type} · {i.requested_date || ''}{i.result_note ? ` · ${i.result_note}` : ''}</div>
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
-                  {i.status === '待查驗' && <>
+                  {i.status === '待查驗' && (can.approve ? <>
                     <Button variant="success" onClick={() => onResult(i, true)} disabled={busy}>合格</Button>
                     <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
-                  </>}
-                  <button onClick={() => { if (window.confirm('刪除此查驗紀錄？')) deleteInspection(i.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                  </> : <span className="text-xs text-[var(--text-3)]">待監造查驗</span>)}
+                  {can.edit && <button onClick={() => { if (window.confirm('刪除此查驗紀錄？')) deleteInspection(i.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
                 </div>
               </div>
             ))}
@@ -185,11 +185,16 @@ export default function Quality() {
                   <div className="text-xs text-[var(--text-3)] truncate">{d.work_item_no && `${d.work_item_no} `}{d.location}{d.due_date ? ` · 期限 ${d.due_date}` : ''}{d.improvement_note ? ` · 改善：${d.improvement_note}` : ''}</div>
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
-                  {d.status !== '已結案' && <>
-                    {d.status === '待複查' && <Button variant="ghost" onClick={() => updateDefectStatus(d.id, '改善中')} disabled={busy}>退回</Button>}
-                    <Button variant={d.status === '待複查' ? 'success' : 'secondary'} onClick={() => advanceDefect(d)} disabled={busy}>{nextLabel[d.status]}</Button>
-                  </>}
-                  <button onClick={() => { if (window.confirm('刪除此缺失？')) deleteDefect(d.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                  {d.status !== '已結案' && (
+                    // 改善鏈:施工做「開始改善/提送複查」;複查結案/退回只有監造能按
+                    d.status === '待複查' ? (can.approve ? <>
+                      <Button variant="ghost" onClick={() => updateDefectStatus(d.id, '改善中')} disabled={busy}>退回</Button>
+                      <Button variant="success" onClick={() => advanceDefect(d)} disabled={busy}>複查結案</Button>
+                    </> : <span className="text-xs text-[var(--text-3)]">待監造複查</span>)
+                    : (can.edit ? <Button variant="secondary" onClick={() => advanceDefect(d)} disabled={busy}>{nextLabel[d.status]}</Button>
+                      : <span className="text-xs text-[var(--text-3)]">待廠商改善</span>)
+                  )}
+                  {can.edit && <button onClick={() => { if (window.confirm('刪除此缺失？')) deleteDefect(d.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
                 </div>
               </div>
             ))}
@@ -198,11 +203,11 @@ export default function Quality() {
       </Card>
 
       {/* 自主檢查表:量化標準 → 實測值 → 自動判定 */}
-      <ChecklistSection templates={checklistTemplates} records={checklistRecords}
+      <ChecklistSection templates={checklistTemplates} records={checklistRecords} canEdit={can.edit}
         onCreate={createChecklistRecord} onDelete={deleteChecklistRecord} />
 
       {/* 取樣試驗:試體齡期追蹤 + fc′ 自動判定 */}
-      <SamplesSection samples={testSamples} onGenerate={generateSamplesFromLogs}
+      <SamplesSection samples={testSamples} onGenerate={generateSamplesFromLogs} canEdit={can.edit}
         onCreate={createTestSamples} onUpdate={updateTestSample} onDelete={deleteTestSample} />
 
       <p className="text-xs text-[var(--text-3)]">三級品管：廠商提查驗申請 → 監造現場查驗（合格/不合格）→ 不合格自動開缺失 → 廠商改善 → 監造複查結案。自主檢查依範本量化標準自動判定、試體依 fc′ 自動判定，不合格皆自動開缺失；試驗到期自動進提醒中心。</p>
@@ -220,7 +225,7 @@ function PassMark({ pass }) {
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 // ── 自主檢查表:選範本 → 填實測值 → 依量化標準自動判定 → 不合格自動開缺失 ──
-function ChecklistSection({ templates, records, onCreate, onDelete }) {
+function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [tplId, setTplId] = useState(templates[0]?.id)
@@ -246,7 +251,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete }) {
   let lastGroup = null
   return (
     <Card title={`自主檢查表（${records.length}）`} action={
-      <Button onClick={() => { setOpen((o) => !o); setMsg('') }}>{open ? '取消' : '＋ 新增檢查'}</Button>
+      canEdit && <Button onClick={() => { setOpen((o) => !o); setMsg('') }}>{open ? '取消' : '＋ 新增檢查'}</Button>
     }>
       {msg && <p className={`text-sm mb-3 ${msg.includes('不合格') ? 'text-[var(--accent-text)]' : 'text-emerald-600'}`}>{msg}</p>}
 
@@ -342,7 +347,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete }) {
 }
 
 // ── 取樣試驗:澆置日誌 → 試體組 → 7/28 天齡期 → 抗壓值自動判定 ──
-function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete }) {
+function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, canEdit }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [manual, setManual] = useState({ sampled_date: todayIso(), fc: 420, location: '' })
@@ -369,7 +374,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete }) {
 
   return (
     <Card title={`取樣試驗（${samples.length}）`} action={
-      <div className="flex items-center gap-2">
+      canEdit && <div className="flex items-center gap-2">
         <Button variant="secondary" onClick={gen} disabled={busy}><Zap size={14} aria-hidden />從施工日誌帶入</Button>
         <Button onClick={() => setAddOpen((o) => !o)}>{addOpen ? '取消' : '＋ 手動新增'}</Button>
       </div>

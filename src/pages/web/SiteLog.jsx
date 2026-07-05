@@ -30,7 +30,7 @@ function matchLeaf(text, leaves) {
 
 export default function SiteLog() {
   const { project, workItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard } = useStore()
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, can } = useStore()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayStr())
   const [weather, setWeather] = useState('晴')       // 上午天氣（相容舊欄位）
@@ -167,7 +167,7 @@ export default function SiteLog() {
               <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field></div>
             </div>
 
-            <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
+            {can.edit && <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
               <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
                 <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : 'AI 拍照自動填寫'}
@@ -175,7 +175,7 @@ export default function SiteLog() {
               <p className={`text-xs mt-2 ${aiMsg.startsWith('辨識失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>
                 {aiMsg || '拍下工程告示板或現場照片，AI 辨識後自動帶入日期、天氣與各工項當日數量。'}
               </p>
-            </div>
+            </div>}
 
             <div className="relative mb-3">
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項加入今日回報…" className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none" />
@@ -284,7 +284,7 @@ export default function SiteLog() {
             </div>
 
             <div className="flex items-center gap-3 mt-4">
-              <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button>
+              {can.edit ? <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button> : <span className="text-xs text-[var(--text-3)]">監造帳號唯讀，日誌由施工廠商填報。</span>}
               {currentLog && (
                 <button onClick={() => navigate(`/site-log/print?d=${date}`)}
                   className="inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--surface-2)] text-[var(--blue)]">

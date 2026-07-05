@@ -14,7 +14,7 @@ const statusColor = { 草稿: 'slate', 監造審核: 'amber', 已核定: 'green'
 export default function Valuation() {
   const { project, workItems: data, valuations, createValuation, updateValuationItem, setValuationStatus,
     isSupabaseConfigured, currentProject, workItemsSource, siteLogs, fillValuationFromSiteLogs, dbMode, deleteValuation,
-    changeOrders } = useStore()
+    changeOrders, can } = useStore()
   const [filling, setFilling] = useState(false)
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(() => new Set())
@@ -39,7 +39,7 @@ export default function Valuation() {
 
   const selected = valuations.find((v) => v.id === selectedId) || valuations[valuations.length - 1]
   const prev = selected ? valuations.find((v) => v.period_no === selected.period_no - 1) : null
-  const editable = selected?.status === '草稿'
+  const editable = selected?.status === '草稿' && can.edit
 
   const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected?.items || {}), [roots, childrenMap, selected?.items])
   const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev?.items || {}), [roots, childrenMap, prev?.items])
@@ -151,7 +151,7 @@ export default function Valuation() {
         action={
           <div className="flex items-center gap-2">
             {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}
-            <Button onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>
+            {can.edit && <Button onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>}
           </div>
         } />
 
@@ -194,17 +194,17 @@ export default function Valuation() {
             action={
               <div className="flex items-center gap-2">
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項…" className="text-sm border border-[var(--border)] rounded-lg px-2.5 py-1 w-40 focus:border-[var(--blue)] focus:outline-none" />
-                {selected.status === '草稿' && dbMode && siteLogs.length > 0 && (
+                {selected.status === '草稿' && can.edit && dbMode && siteLogs.length > 0 && (
                   <Button variant="secondary" onClick={async () => { setFilling(true); await fillValuationFromSiteLogs(selected.id); setFilling(false) }} disabled={filling}>
                     {filling ? '帶入中…' : '從施工日誌帶入'}
                   </Button>
                 )}
-                {selected.status === '草稿' && <Button variant="secondary" onClick={() => setValuationStatus(selected.id, '監造審核')}>送監造審核</Button>}
-                {selected.status === '監造審核' && <>
+                {selected.status === '草稿' && can.submit && <Button variant="secondary" onClick={() => setValuationStatus(selected.id, '監造審核')}>送監造審核</Button>}
+                {selected.status === '監造審核' && (can.approve ? <>
                   <Button variant="ghost" onClick={() => setValuationStatus(selected.id, '草稿')}>退回</Button>
                   <Button variant="success" onClick={() => setValuationStatus(selected.id, '已核定')}>核定估驗</Button>
-                </>}
-                <Button variant="ghost" onClick={() => { if (window.confirm(`刪除第 ${selected.period_no} 期估驗？`)) { deleteValuation(selected.id); setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>
+                </> : <Badge color="amber">待監造核定</Badge>)}
+                {can.edit && <Button variant="ghost" onClick={() => { if (window.confirm(`刪除第 ${selected.period_no} 期估驗？`)) { deleteValuation(selected.id); setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
               </div>
             }
           >

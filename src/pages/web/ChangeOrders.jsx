@@ -13,7 +13,7 @@ const STATUS_COLOR = { 提出: 'slate', 審核中: 'amber', 核准: 'green', 駁
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function ChangeOrders() {
-  const { project, workItems, dbMode, demoMode, changeOrders,
+  const { project, workItems, dbMode, demoMode, changeOrders, can,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem } = useStore()
   const original = workItems?.meta.billable_total || 0
@@ -88,7 +88,7 @@ export default function ChangeOrders() {
         <p className="text-xs text-[var(--text-3)] -mt-2">另有審核中/提出的變更淨額 <span className={totals.pendingNet >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{totals.pendingNet >= 0 ? '+' : ''}{money(totals.pendingNet)}</span>（尚未計入變更後契約金額）。</p>
       )}
 
-      <Card title="新增變更設計">
+      {can.edit && <Card title="新增變更設計">
         <form onSubmit={onCreate} className="flex flex-wrap items-end gap-3">
           <label className="block">
             <span className="block text-xs font-medium text-[var(--text-2)] mb-1">變更編號</span>
@@ -107,7 +107,7 @@ export default function ChangeOrders() {
           </label>
           <Button type="submit" disabled={busy || !head.title.trim()}>{busy ? '新增中…' : '＋ 新增'}</Button>
         </form>
-      </Card>
+      </Card>}
 
       {changeOrders.length === 0 ? (
         <Card title="變更清單"><Empty>尚無變更設計。新增一筆後，在其中加入追加/減帳工項。</Empty></Card>
@@ -118,6 +118,7 @@ export default function ChangeOrders() {
           </div>
           {changeOrders.map((co) => (
             <ChangeOrderCard key={co.id} co={co} net={coNet(co)} leaves={leaves} allItems={workItems?.items || []}
+              canApprove={can.approve} canEdit={can.edit}
               onStatus={(s) => updateChangeOrder(co.id, { status: s })}
               onDelete={() => { if (window.confirm(`刪除變更「${co.title}」及其明細?`)) deleteChangeOrder(co.id) }}
               onAddItem={(input) => addChangeOrderItem(co.id, input)}
@@ -137,7 +138,7 @@ export default function ChangeOrders() {
 
 const KIND_COLOR = { 數量增減: 'blue', '單價變更-減': 'amber', '單價變更-加': 'amber', 新增項: 'green', 刪除項: 'red' }
 
-function ChangeOrderCard({ co, net, leaves, allItems, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem }) {
+function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem }) {
   const [draft, setDraft] = useState({ work_item_key: '', item_no: '', description: '', unit: '', qty_delta: '', unit_price: '', note: '' })
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
@@ -182,11 +183,13 @@ function ChangeOrderCard({ co, net, leaves, allItems, onStatus, onDelete, onAddI
     <Card title={`${co.co_no ? co.co_no + '　' : ''}${co.title}`} action={
       <div className="flex items-center gap-2">
         <span className={`text-sm font-medium tabular-nums ${net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{net >= 0 ? '+' : ''}{money(net)}</span>
-        <select value={co.status} onChange={(e) => onStatus(e.target.value)}
-          className="text-xs border border-[var(--border)] rounded-lg px-2 py-1 bg-[var(--surface)]">
-          {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <button onClick={onDelete} className="text-[var(--text-3)] hover:text-rose-600 text-sm">✕</button>
+        {canApprove ? (
+          <select value={co.status} onChange={(e) => onStatus(e.target.value)}
+            className="text-xs border border-[var(--border)] rounded-lg px-2 py-1 bg-[var(--surface)]">
+            {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        ) : <Badge color={STATUS_COLOR[co.status] || 'slate'}>{co.status}</Badge>}
+        {canEdit && <button onClick={onDelete} className="text-[var(--text-3)] hover:text-rose-600 text-sm">✕</button>}
       </div>
     }>
       <div className="flex items-center gap-2 mb-3 text-xs text-[var(--text-3)]">

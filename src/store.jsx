@@ -373,6 +373,7 @@ export function StoreProvider({ children }) {
   // 登出：真實模式呼叫 Supabase signOut；prototype 模式只清 currentUser
   const logout = useCallback(async () => {
     if (isSupabaseConfigured) { try { await supabase.auth.signOut() } catch { /* noop */ } }
+    demoLoadedRef.current = false // demo:換角色重新登入時重種完整 storyline(登出會清部分資料)
     setCurrentUser(null)
     setProjects([]); setCurrentProjectId(null); setSiteLogs([]); setInspections([]); setDefects([])
   }, [])
@@ -444,6 +445,18 @@ export function StoreProvider({ children }) {
   const dbMode = isSupabaseConfigured && !!currentProject && workItemsSource === 'db'
   // demo 模式：未設 Supabase → 全站用 demoSeed storyline，寫入只進記憶體
   const demoMode = !isSupabaseConfigured
+
+  // 角色權限（UI 層 v1）：施工＝填報/提送，監造＝判定/核定/結案，機關＝唯讀。
+  // 核心規則：施工不能核准或結案自己的東西。org_type 缺省視為施工（單人試用不擋）。
+  const can = useMemo(() => {
+    const org = currentUser?.org_type || 'contractor'
+    return {
+      edit: org === 'contractor',     // 日誌/成本/請款/檢查表等日常填報
+      submit: org === 'contractor',   // 提送（估驗送監造審核、查驗申請）
+      approve: org === 'supervisor',  // 核定估驗、查驗判定、缺失複查結案、變更核准
+      readonly: org === 'owner',
+    }
+  }, [currentUser])
 
   // demo 模式：範例標單載入後，一次性預載完整示範資料（銷售展示 storyline）
   const demoLoadedRef = useRef(false)
@@ -1331,7 +1344,7 @@ export function StoreProvider({ children }) {
     project: currentProject || project, currentUser, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
-    workItems, workItemsSource, importWorkItems, dbMode, demoMode,
+    workItems, workItemsSource, importWorkItems, dbMode, demoMode, can,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
     obligations, parseContract, updateObligationStatus, updateProjectAnchors,
