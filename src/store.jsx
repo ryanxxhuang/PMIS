@@ -470,6 +470,24 @@ export function StoreProvider({ children }) {
     }
   }, [currentUser, demoMode, myMemberRoles, currentProjectId])
 
+  // 標註圖(圖面/照片 markup):demo 直接存 dataURL;真專案存 photos bucket
+  // (路徑首段=project_id,沿用既有 Storage RLS)。
+  const saveMarkup = useCallback(async (dataUrl, kind) => {
+    if (!dataUrl) return null
+    if (!dbMode) return dataUrl
+    const blob = await (await fetch(dataUrl)).blob()
+    const path = `${currentProject.project_id}/markups/${kind}-${crypto.randomUUID()}.jpg`
+    const { error } = await supabase.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' })
+    return error ? null : path
+  }, [dbMode, currentProject])
+
+  const resolveMarkup = useCallback(async (path) => {
+    if (!path || path.startsWith('data:')) return path
+    const { data } = await supabase.storage.from('photos').createSignedUrl(path, 3600)
+    return data?.signedUrl || null
+  }, [])
+
+
   // demo 模式：範例標單載入後，一次性預載完整示範資料（銷售展示 storyline）
   const demoLoadedRef = useRef(false)
   useEffect(() => {
@@ -1155,11 +1173,12 @@ export function StoreProvider({ children }) {
 
   const createDefect = useCallback(async (input) => {
     const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
+    const markup_path = await saveMarkup(input.markup_data, 'defect')
     if (!dbMode) {
       setDefects((ds) => [{
         id: `DEF-${Date.now()}`, title: input.title, description: input.description || null,
         severity: input.severity || '一般', location: input.location || null,
-        due_date: input.due_date || null, status: '開立', improvement_note: null,
+        due_date: input.due_date || null, status: '開立', improvement_note: null, markup_path,
         work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
       }, ...ds])
       return { error: null }
@@ -1168,13 +1187,13 @@ export function StoreProvider({ children }) {
       project_id: currentProject.project_id, work_item_id: wi?.id || null,
       title: input.title, description: input.description || null,
       severity: input.severity || '一般', location: input.location || null,
-      due_date: input.due_date || null, status: '開立', created_by: currentUser?.user_id,
+      due_date: input.due_date || null, status: '開立', created_by: currentUser?.user_id, markup_path,
     })
     if (error) return { error }
     await reloadQuality()
     log('開立缺失', input.title, { user: currentUser?.name, role: '監造' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, wiMaps, reloadQuality, log])
+  }, [dbMode, currentProject, currentUser, wiMaps, saveMarkup, reloadQuality, log])
 
   // ── 品管自動化:自主檢查表(量化標準自動判定) + 取樣試驗(齡期追蹤) ─────────
   // 可用範本 = 專案範本 ∪ 內建 03310(尚無同源範本時顯示;首次使用才落 DB)
@@ -1342,7 +1361,9 @@ export function StoreProvider({ children }) {
   }, [dbMode])
 
   const createRfi = useCallback(async (input) => {
+    const markup_path = await saveMarkup(input.markup_data, 'rfi')
     const row = {
+      markup_path,
       rfi_no: input.rfi_no || `RFI-${String(rfis.length + 1).padStart(3, '0')}`,
       title: input.title, question: input.question || null,
       answer: null, status: '待回覆',
@@ -1360,7 +1381,7 @@ export function StoreProvider({ children }) {
     setRfis((rs) => [data, ...rs])
     log('提出工程疑義', `${row.rfi_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, rfis, log])
+  }, [dbMode, currentProject, currentUser, rfis, saveMarkup, log])
 
   const answerRfi = useCallback(async (id, answer) => {
     const patch = { answer, status: '已回覆', answered_date: new Date().toISOString().slice(0, 10) }
@@ -1494,7 +1515,7 @@ export function StoreProvider({ children }) {
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal,
     rfis, createRfi, answerRfi, closeRfi, deleteRfi,
-    listMembers, addMemberByEmail, removeMember,
+    listMembers, addMemberByEmail, removeMember, resolveMarkup,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,
     // actions

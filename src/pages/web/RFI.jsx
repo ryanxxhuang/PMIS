@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../../store.jsx'
+import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
@@ -8,8 +9,9 @@ const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function RFI() {
-  const { project, rfis, createRfi, answerRfi, closeRfi, deleteRfi,
+  const { project, rfis, createRfi, answerRfi, closeRfi, deleteRfi, resolveMarkup,
     isSupabaseConfigured, currentProject, can } = useStore()
+  const [markupOpen, setMarkupOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -54,7 +56,13 @@ export default function RFI() {
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.schedule_impact} onChange={(e) => setForm({ ...form, schedule_impact: e.target.checked })} />涉及工期影響</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.cost_impact} onChange={(e) => setForm({ ...form, cost_impact: e.target.checked })} />涉及費用影響</label>
           </div>
-          <div className="mt-3"><Button onClick={submit} disabled={busy || !form.title}>{busy ? '提出中…' : '提出疑義'}</Button></div>
+          <div className="mt-3 flex items-center gap-3">
+            <Button onClick={submit} disabled={busy || !form.title}>{busy ? '提出中…' : '提出疑義'}</Button>
+            <Button variant="secondary" onClick={() => setMarkupOpen(true)}>🖍 圖面標註{form.markup_data ? '（已附）' : ''}</Button>
+            {form.markup_data && <MarkupThumb src={form.markup_data} />}
+          </div>
+          {markupOpen && <MarkupEditor title="把圖面有疑義的位置匡起來" initialImage={form.markup_data}
+            onSave={(d) => { setForm({ ...form, markup_data: d }); setMarkupOpen(false) }} onClose={() => setMarkupOpen(false)} />}
         </Card>
       )}
 
@@ -74,6 +82,7 @@ export default function RFI() {
                     <div className="text-xs text-[var(--text-3)] mt-0.5">提出 {r.asked_date || '—'}{r.due_date ? ` · 期限 ${r.due_date}` : ''}{r.answered_date ? ` · 回覆 ${r.answered_date}` : ''}</div>
                     {r.question && <div className="text-xs text-[var(--text-2)] mt-1">問：{r.question}</div>}
                     {r.answer && <div className="text-xs text-[var(--blue-text)] mt-1">答：{r.answer}</div>}
+                    {r.markup_path && <div className="mt-1.5"><MarkupThumb src={r.markup_path} resolve={resolveMarkup} /></div>}
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     {r.status === '待回覆' && (can.approve

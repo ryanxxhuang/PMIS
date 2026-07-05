@@ -328,6 +328,7 @@ create table if not exists public.defects (
   status           text not null default '開立',  -- 開立 | 改善中 | 待複查 | 已結案
   due_date         date,
   improvement_note text,
+  markup_path      text,
   created_by       uuid references auth.users(id),
   created_at       timestamptz not null default now(),
   closed_at        timestamptz
@@ -588,6 +589,7 @@ create table if not exists public.rfis (
   answered_date  date,
   cost_impact    boolean not null default false,
   schedule_impact boolean not null default false,
+  markup_path    text,                              -- 圖面標註(storage path;demo 為 dataURL)
   created_by     uuid references auth.users(id),
   created_at     timestamptz not null default now()
 );

@@ -5,6 +5,7 @@ import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { judgeChecklist, judgeItem } from '../../lib/qc.js'
+import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
@@ -44,7 +45,8 @@ export default function Quality() {
     createDefect, updateDefectStatus, deleteInspection, deleteDefect, describeDefect,
     checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
-    isSupabaseConfigured, currentProject, workItemsSource, can } = useStore()
+    isSupabaseConfigured, currentProject, workItemsSource, can, resolveMarkup } = useStore()
+  const [markupOpen, setMarkupOpen] = useState(false)
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
   const [defForm, setDefForm] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -173,7 +175,13 @@ export default function Quality() {
               <Field label="改善期限"><input type="date" className={input} value={defForm.due_date} onChange={(e) => setDefForm((f) => ({ ...f, due_date: e.target.value }))} /></Field>
             </div>
             <Field label="說明"><textarea className={input} rows={2} value={defForm.description} onChange={(e) => setDefForm((f) => ({ ...f, description: e.target.value }))} /></Field>
-            <Button onClick={submitDef} disabled={busy || !defForm.title}>開立缺失</Button>
+            <div className="flex items-center gap-3">
+              <Button onClick={submitDef} disabled={busy || !defForm.title}>開立缺失</Button>
+              <Button variant="secondary" onClick={() => setMarkupOpen(true)}>🖍 圖面/照片標註{defForm.markup_data ? '（已附）' : ''}</Button>
+              {defForm.markup_data && <MarkupThumb src={defForm.markup_data} />}
+            </div>
+            {markupOpen && <MarkupEditor title="把缺失位置匡起來" initialImage={defForm.markup_data}
+              onSave={(d) => { setDefForm((f) => ({ ...f, markup_data: d })); setMarkupOpen(false) }} onClose={() => setMarkupOpen(false)} />}
           </div>
         )}
         {defects.length === 0 ? <Empty>尚無缺失</Empty> : (
@@ -183,6 +191,7 @@ export default function Quality() {
                 <div className="min-w-0">
                   <div className="text-[var(--text)]">{d.title} <Badge color={defColor[d.status] || 'slate'}>{d.status}</Badge> {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>}</div>
                   <div className="text-xs text-[var(--text-3)] truncate">{d.work_item_no && `${d.work_item_no} `}{d.location}{d.due_date ? ` · 期限 ${d.due_date}` : ''}{d.improvement_note ? ` · 改善：${d.improvement_note}` : ''}</div>
+                  {d.markup_path && <div className="mt-1"><MarkupThumb src={d.markup_path} resolve={resolveMarkup} /></div>}
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
                   {d.status !== '已結案' && (
