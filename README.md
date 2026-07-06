@@ -33,40 +33,75 @@ reconcile.
 - 📅 **Contract control (契約管制)** — **AI parses the uploaded contract** into every time‑based
   obligation (start‑work‑within‑X‑days, monthly reports, submittals…), each with its trigger,
   computed due date, penalty and source clause. Due dates recompute live from a few anchor dates.
+- 📰 **Monthly report (施工月報)** — pick a month; it auto‑compiles progress, valuations,
+  a per‑work‑item completed‑quantity table, quality/safety/change‑order stats, and an
+  **AI‑drafted review + next‑month plan**. Print / save as PDF.
 
 ### 成本與進度 · Cost & schedule
 - 📋 **Bill of quantities** — upload a PCCES budget XML; it is parsed **in the browser** into a
-  3,000+ row work‑item tree (項次 / 數量 / 單價 / 複價) and stored per project.
-- 📝 **Daily site logs** — record completed quantity per work item, per day, with site photos.
-  📷 **Snap the site board → AI fills the log**: the day's work items and quantities are read off
-  the photo and matched back to the BOQ.
+  3,000+ row work‑item tree (項次 / 數量 / 單價 / 複價) and stored per project (IndexedDB cached).
+- 📝 **Daily site logs** — completed quantity per work item, per day, with site photos.
+  📷 **Snap the site board → AI fills the log** (date, weather, work items + quantities matched
+  back to the BOQ). Also captures the full **工程會 official daily‑log format** (labour, plant,
+  materials, safety, sampling) with a dedicated print page.
 - 💰 **Progress valuations (估驗計價)** — quantity‑based monthly billing that **auto‑fills its
-  cumulative quantities from the daily logs**, then computes retention and net payable.
+  cumulative quantities from the daily logs**, then computes retention and net payable; status
+  workflow 草稿 → 監造審核 → 已核定 gated by role.
 - 🧾 **Billing & receipts (請款收款)** — per‑period 本期估驗 / 保留款 / 應領, invoice & payment
   tracking (待請款 / 已請款 / 已收款) and a cash‑flow summary.
 - 🧮 **Cost & margin (成本管理)** — budget vs. actual cost by category (材料/人工/機具/分包/管理費),
   subcontracts as cost lines, and live **gross margin** = contract revenue − cost.
+- 🔧 **Change orders (變更設計)** — 追加/減帳 line items; only 核准 ones adjust the revised contract
+  amount (flowed into valuation / S‑curve / cost denominators). **Upload the revised PCCES XML →
+  it diffs against the current BOQ and drafts the add/deduct line items automatically.**
 - 📈 **S‑curve** — planned vs. actual progress (actual derived live from valuations) with a
   behind‑schedule indicator.
-- 🗓️ **Per‑item schedule (逐工項排程)** — set planned start/finish on key work items; status
-  (未開始 / 進行中 / 落後 / 已完成) is derived from today vs. plan and the latest valuation's
-  completed quantity.
+- 🗓️ **Per‑item schedule (逐工項排程)** — planned start/finish on key items; status
+  (未開始 / 進行中 / 落後 / 已完成) derived from today vs. plan and the latest valuation.
 - 🖨 **Valuation certificate** — print / export a formal payment document as PDF.
 
 ### 品質與工安 · Quality & safety
 - 🔍 **Quality — three‑tier QC (三級品管)** — raise an inspection, record pass/fail; a failure
-  **auto‑opens a linked defect** that moves 開立 → 改善中 → 待複查 → 已結案.
-- 🦺 **Safety (工安管理)** — self‑checks, safety deficiencies (with a remediation flow),
-  training and hazard‑notice records — public‑works required, exportable per type.
+  **auto‑opens a linked defect** that moves 開立 → 改善中 → 待複查 → 已結案. 📷 **snap a defect
+  photo → AI fills the defect form**.
+- ✅ **Self‑inspection checklists (自主檢查表)** — a template's quantified limits judge each entered
+  measurement live (○/✕); a failing sheet **auto‑opens a defect**; prints as an official checklist.
+- 🧪 **Specimen testing (取樣試驗)** — pulls concrete‑pour days from the daily logs, auto‑sets
+  7/28‑day test due dates (into the alert center + email), and **auto‑judges 28‑day compressive
+  strength** per 03310 (fail → auto defect).
+- 👁 **Observations (觀察事項)** — lightweight site notes (softer than a defect); resolve them or
+  **escalate to a formal defect** in one click.
+- 🦺 **Safety (工安管理)** — self‑checks, safety deficiencies (remediation flow), training and
+  hazard notices — public‑works required, exportable per type.
 
-Every list — cost, payments, defects, daily logs, safety, schedule — **exports to CSV**
-(UTF‑8 BOM, so Excel renders Chinese correctly). The whole UI is **mobile‑responsive** with a
-drawer nav for use on site.
+### 監造協作 · Supervisor collaboration
+- 📄 **Submittals (送審文件)** — contractor submits (施工計畫 / 品質計畫 / 材料 / 樣品); supervisor
+  受理 → 核准 / 核備 / 退回補正; contractor 修正再送 (revision +1). Ball‑in‑court workflow.
+- ❓ **RFIs (工程疑義)** — contractor raises, supervisor answers, contractor confirms close; flags
+  schedule / cost impact.
+- 🖍 **Drawing / photo markup** — box, arrow and text over a drawing screenshot, site photo, or
+  **PDF page**, attached to an RFI or defect so both sides see the same circled spot.
+- 🎯 **Ball‑in‑court** — every collaboration item shows whose turn it is (⏳ 待監造 / 待廠商, ✓ done);
+  the dashboard tallies 球在廠商 N / 球在監造 M across all of them.
+- 👥 **Project members (專案成員)** — invite supervisor / owner / partner accounts by email;
+  permissions follow each member's org type. **Role‑based UI**: contractor files & submits,
+  supervisor approves & closes, owner is read‑only (the project creator has full rights).
+
+Every list — cost, payments, defects, daily logs, safety, schedule, submittals, RFIs — **exports
+to CSV** (UTF‑8 BOM, so Excel renders Chinese correctly); the dashboard has a **whole‑project
+JSON export**. The whole UI is **mobile‑responsive** with a drawer nav for use on site.
+
+### AI features (Claude API)
+Four Supabase Edge Functions call the Claude API through a shared layer (`_shared/claude.ts`,
+forced tool‑use = schema‑guaranteed JSON; Haiku for vision/short text, Sonnet for long docs):
+**read‑whiteboard** (site‑board photo → daily‑log fields), **describe‑defect** (defect photo →
+defect form), **draft‑monthly‑review** (stats → 檢討/下月計畫), **parse‑contract** (contract →
+time‑based obligations). Keys live only in server secrets.
 
 ### Multi‑tenant
-Sign up, create a project, and work in your own isolated workspace. Owners can switch between
-projects, add members, and delete projects. Row Level Security guarantees a user only ever sees
-rows for the projects they belong to.
+Sign up, create a project, work in your own isolated workspace. Owners switch between projects,
+invite members, delete projects. Row Level Security guarantees a user only ever sees rows for the
+projects they belong to.
 
 ### Features by screen
 
@@ -84,9 +119,16 @@ rows for the projects they belong to.
 | `/cost` | **Cost & margin** | Budget vs. actual cost by category + subcontracts; live gross‑margin (budget & actual). CSV export. |
 | `/progress` | **S‑curve** | Planned baseline (smoothstep S‑curve over project months) vs. actual derived from valuations; flags behind‑schedule. |
 | `/schedule` | **Per‑item schedule** | Assign planned start/finish to key items; per‑item 未開始/進行中/落後/已完成 from plan + valuation. CSV export. |
-| `/quality` | **Quality (三級品管)** | Raise inspections, record pass/fail. A fail auto‑opens a linked defect (開立→改善中→待複查→已結案). CSV export. |
+| `/change-orders` | **Change orders (變更設計)** | 追加/減帳 items; 核准 ones adjust the revised contract amount. Upload revised PCCES XML → auto‑diff line items. |
+| `/monthly-report` | **Monthly report (施工月報)** | Pick a month → auto‑compiled report + AI‑drafted review/plan; print/PDF. |
+| `/quality` | **Quality (三級品管)** | Inspections, defects (auto‑opened on fail, AI photo fill), 自主檢查表 (auto‑judge), 取樣試驗 (fc′ auto‑judge), 觀察事項 (escalate to defect). |
 | `/safety` | **Safety (工安)** | Self‑checks, safety deficiencies (remediation flow), training & hazard notices. CSV per type. |
-| `/valuation/print` | **Valuation certificate** | Print/PDF a formal payment document (standalone route, no app chrome). |
+| `/submittals` | **Submittals (送審文件)** | Contractor submits, supervisor 核准/核備/退回補正, contractor 修正再送. Ball‑in‑court. |
+| `/rfi` | **RFIs (工程疑義)** | Contractor asks (with drawing markup), supervisor answers, contractor closes; schedule/cost impact flags. |
+| `/members` | **Project members (專案成員)** | Invite by email; role legend by org type; creator manages the roster. |
+| `/valuation/print` | **Valuation certificate** | Print/PDF a formal payment document (standalone route). |
+| `/site-log/print` | **Official daily log** | 工程會 公共工程施工日誌 format, print/PDF. |
+| `/quality/checklist-print` | **Self‑inspection sheet** | Official 自主檢查表 format with ○/✕ judgments, print/PDF. |
 
 ---
 
@@ -177,8 +219,8 @@ no rounding drift.
 
 ### Data model
 
-All domain tables are project‑scoped and cascade from `projects`. Every one has RLS enabled with
-the same `is_project_member(project_id)` predicate.
+All 24 domain tables are project‑scoped and cascade from `projects`. Every one has RLS enabled,
+gated by the caller's project membership (`my_project_ids()`).
 
 | Table | Role |
 |---|---|
@@ -186,17 +228,21 @@ the same `is_project_member(project_id)` predicate.
 | `projects` · `project_members` | A project and its membership; creator auto‑added as `admin`. Anchor dates (award/notice/commencement) live here. |
 | `work_items` | **The BOQ spine** — the PCCES work‑item tree (項次/數量/單價/複價, kind, leaf/rollup, billable, weight). |
 | `valuations` · `valuation_items` | Progress billing per period; items hold cumulative quantity + derived cum %/amount, tagged `source = manual \| daily_log`; invoice/payment fields for cash‑flow. |
-| `schedule_periods` | Planned‑progress baseline (monthly `planned_pct`) for the S‑curve. |
-| `item_schedules` | Per‑item planned start/finish (own table so re‑importing the BOQ doesn't wipe it). |
-| `daily_logs` · `daily_log_items` | One log per day; per‑item completed quantity that feeds valuations. |
-| `photos` | Site‑log photo metadata; files live in the `photos` Storage bucket (object‑level RLS by project). |
-| `inspections` · `defects` | Three‑tier QC; a failed inspection auto‑opens a linked defect. |
+| `schedule_periods` · `item_schedules` | S‑curve baseline (monthly `planned_pct`) and per‑item planned start/finish. |
+| `daily_logs` · `daily_log_items` | One log per day; per‑item completed quantity that feeds valuations, plus the official‑format fields (labour/plant/materials/safety as JSONB). |
+| `photos` | Site‑log photo + markup metadata; files live in the `photos` Storage bucket (object‑level RLS by project). |
+| `inspections` · `defects` | Three‑tier QC; a failed inspection auto‑opens a linked defect (`markup_path` for circled evidence). |
+| `checklist_templates` · `checklist_records` | Self‑inspection checklists (quantified limits) and judged submissions. |
+| `test_samples` | Concrete specimens — 7/28‑day due dates and fc′ auto‑judgment. |
+| `observations` | Lightweight site notes; can escalate into a defect. |
+| `change_orders` · `change_order_items` | 變更設計 追加/減帳; approved net flows into the revised contract amount. |
 | `contract_obligations` | AI‑extracted time‑based duties + penalties (deadline stored as a rule). |
-| `cost_items` | Cost ledger — budget vs. actual by category, subcontracts (vendor). |
-| `safety_records` | Safety log — self‑checks / deficiencies / training / hazard notices. |
+| `cost_items` · `safety_records` | Cost ledger (budget vs. actual, subcontracts) and the safety log. |
+| `submittals` · `rfis` | Supervisor collaboration — submittal review flow and RFIs (`markup_path`). |
 
-Two `SECURITY DEFINER` RPCs cover operations RLS alone can't express atomically:
-`create_project` (insert + add creator as member) and `delete_project` (member‑gated cascade).
+`SECURITY DEFINER` RPCs cover what RLS alone can't express: `create_project` /
+`delete_project`, and member management (`add_member_by_email`, `list_project_members`,
+`remove_member`) — email→user lookup and cross‑member reads need elevated rights.
 
 ---
 
