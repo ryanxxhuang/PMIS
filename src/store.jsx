@@ -360,14 +360,29 @@ export function StoreProvider({ children }) {
     return () => { active = false; sub.subscription.unsubscribe() }
   }, [])
 
+  // 若後台開著「Confirm email」,驗證信裡的連結預設會導向 Supabase Site URL——
+  // 若沒設好就會落在錯的地方。帶 emailRedirectTo 明確導回本 App(去掉 HashRouter 的
+  // #fragment,只留文件 URL,Supabase 會把 token 接在後面,supabase-js 自動解析)。
+  // 這組 URL 也必須加進後台 Auth → URL Configuration 的 Redirect URLs 白名單。
+  const authRedirectTo = () =>
+    (typeof window !== 'undefined' ? window.location.href.split('#')[0] : undefined)
+
   const signUp = useCallback(async ({ email, password, full_name, company, org_type, role }) => {
     const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { full_name, company, org_type, role } },
+      options: { data: { full_name, company, org_type, role }, emailRedirectTo: authRedirectTo() },
     })
     // Confirm email 開啟時：建立成功但不給 session（需先點信中連結）→ needsConfirmation
     const needsConfirmation = !error && !data?.session
     return { error, needsConfirmation }
+  }, [])
+
+  // 沒收到驗證信時重寄（Confirm email 開啟時才有意義）。
+  const resendSignup = useCallback(async (email) => {
+    const { error } = await supabase.auth.resend({
+      type: 'signup', email, options: { emailRedirectTo: authRedirectTo() },
+    })
+    return { error }
   }, [])
 
   const signIn = useCallback(async ({ email, password }) => {
@@ -1560,7 +1575,7 @@ export function StoreProvider({ children }) {
     submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
     rfis, createRfi, answerRfi, closeRfi, deleteRfi,
-    listMembers, addMemberByEmail, removeMember, resolveMarkup,
+    listMembers, addMemberByEmail, removeMember, resolveMarkup, resendSignup,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,
     // actions

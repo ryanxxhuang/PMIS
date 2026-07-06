@@ -5,7 +5,7 @@ import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
 
 export default function Login() {
-  const { isSupabaseConfigured, setCurrentUser, currentUser, signIn, signUp } = useStore()
+  const { isSupabaseConfigured, setCurrentUser, currentUser, signIn, signUp, resendSignup } = useStore()
   const navigate = useNavigate()
 
   // 已登入（含 Supabase session 還原）→ 直接進 Dashboard
@@ -19,7 +19,7 @@ export default function Login() {
           <div className="text-[var(--text-2)] text-sm mt-1">AI 工程現場管理平台</div>
         </div>
         {isSupabaseConfigured
-          ? <AuthForm signIn={signIn} signUp={signUp} />
+          ? <AuthForm signIn={signIn} signUp={signUp} resendSignup={resendSignup} />
           : <RolePicker setCurrentUser={setCurrentUser} navigate={navigate} />}
       </div>
     </div>
@@ -27,12 +27,13 @@ export default function Login() {
 }
 
 // ── 真實 Email 註冊 / 登入 ──────────────────────────────────────────
-function AuthForm({ signIn, signUp }) {
+function AuthForm({ signIn, signUp, resendSignup }) {
   const [mode, setMode] = useState('signin') // signin | signup
   const [form, setForm] = useState({ email: '', password: '', full_name: '', company: '', org_type: 'contractor', role: '' })
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false) // 註冊後等收驗證信
+  const [resendMsg, setResendMsg] = useState('')
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const submit = async (e) => {
@@ -52,6 +53,12 @@ function AuthForm({ signIn, signUp }) {
     }
   }
 
+  const onResend = async () => {
+    setResendMsg('寄送中…')
+    const { error } = await resendSignup(form.email)
+    setResendMsg(error ? (error.message || '重寄失敗，請稍後再試') : '已重寄，請查看信箱（含垃圾郵件匣）。')
+  }
+
   if (sent) {
     return (
       <div className="text-center space-y-3 py-2">
@@ -60,7 +67,13 @@ function AuthForm({ signIn, signUp }) {
         <p className="text-sm text-[var(--text-2)]">
           已寄到 <b>{form.email}</b>。請到信箱點擊連結完成驗證，<br />再回來登入。
         </p>
-        <button onClick={() => { setSent(false); setMode('signin') }} className="text-sm text-[var(--blue)] hover:underline">← 回登入</button>
+        <p className="text-xs text-[var(--text-3)]">沒收到？也看一下垃圾郵件匣。</p>
+        <div className="flex items-center justify-center gap-3 pt-1">
+          <button onClick={onResend} className="text-sm text-[var(--blue)] hover:underline">重寄驗證信</button>
+          <span className="text-[var(--border)]">·</span>
+          <button onClick={() => { setSent(false); setResendMsg(''); setMode('signin') }} className="text-sm text-[var(--blue)] hover:underline">← 回登入</button>
+        </div>
+        {resendMsg && <p className="text-xs text-[var(--text-2)]">{resendMsg}</p>}
       </div>
     )
   }

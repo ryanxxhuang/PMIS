@@ -98,3 +98,52 @@ Test without sending anything (dry run — returns the digest as JSON):
 curl -s -X POST "https://<ref>.supabase.co/functions/v1/send-reminders?dry=1" \
   -H "x-cron-secret: <CRON_SECRET>"
 ```
+
+## 7. 發廠商試用前 checklist（pilot pre-flight）
+
+送連結給第一家施工廠商試用前，跑過這張清單。**打勾的三項只有你能在 Supabase 後台 /
+DNS 設定，程式碼幫不了**——這裡列出確切位置。
+
+### 7.1　讓廠商能自己註冊登入（**必做**）
+
+註冊流程有兩種走法，pilot 建議選 A：
+
+- **A（建議，最省事）— 關掉信箱驗證，即時登入。**
+  *Authentication → Sign In / Providers → Email → 關閉 **Confirm email***。
+  廠商填完註冊表 → 立刻有 session 直接進 App，全程不碰 email。
+- **B — 保留信箱驗證（較安全，但要能寄信）。** Supabase 內建寄信有速率限制
+  （約每小時數封）且常進垃圾桶，正式用要接自訂 SMTP：
+  *Authentication → Emails → SMTP Settings*（可用 Resend / SendGrid）。
+  App 端已帶 `emailRedirectTo` 把驗證連結導回本站，登入頁的「驗證信已寄出」畫面也有
+  **重寄驗證信** 按鈕。
+
+不論 A / B，都要把 App 網址加進白名單，否則導回會被擋：
+*Authentication → URL Configuration* → **Site URL** 與 **Redirect URLs** 都填
+`https://ryanxxhuang.github.io/PMIS/`（本機測試再加 `http://localhost:5173/`）。
+
+### 7.2　提醒信要真的寄到廠商（可等，但要知道）
+
+預設寄件者 `onboarding@resend.dev` **只能寄到你自己 Resend 帳號的信箱**，寄給廠商不會到。
+要讓每日提醒真的進廠商信箱：Resend 後台驗證一個網域（規劃中的 `pmis.ai`）→ 設
+`supabase secrets set REMINDER_FROM='PMIS 提醒 <alerts@pmis.ai>'` → 重新 deploy。
+**pilot 可以先不做**：廠商是主動天天在用 App，提醒信是加分不是必要；等要廣發前再補。
+
+### 7.3　權限邊界的已知限制（**先別拉外部監造/機關進同一案**）
+
+目前角色權限是 **UI 層** 的（施工填報、監造審核、機關唯讀）；資料庫 RLS 是「同專案成員
+即可讀寫」，**沒有 per-action 的伺服器端強制**。具體風險：任何被加進專案的成員都能改別人
+的單、甚至呼叫 `delete_project` 刪掉整個案子（`schema.sql` 的 `delete_project` 只檢查是不是
+成員）。
+
+- ✅ **單一施工廠商自己試**（他就是建立者 admin，管自己的案）→ 安全，放心發。
+- ⚠️ **把不完全信任的監造 / 機關 / 別家廠商加進同一案** → 先別，等 RLS per-action
+  強制到位（SCOPE 缺口 #2）再開。
+
+### 7.4　發之前快速驗一次
+
+1. 開無痕視窗 → `https://ryanxxhuang.github.io/PMIS/` → 用一個測試 email 註冊（org 選施工廠商）
+   → 確認能進 Dashboard。
+2. 你的帳號在 **專案成員** 頁用該測試 email 加進一個案 → 換回測試帳號 → 確認看得到那個案、
+   且**看不到**別的案。
+3. `/boq` 上傳一份 PCCES XML → 工項樹進得來。
+4. `send-reminders?dry=1`（上面的 curl）→ 回傳 JSON 不報錯。
