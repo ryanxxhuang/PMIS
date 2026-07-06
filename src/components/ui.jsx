@@ -60,6 +60,13 @@ export function Badge({ color = 'slate', children }) {
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded-[3px] text-xs font-medium ${badgeColors[color]}`}>{children}</span>
 }
 
+// Ball-in-court 責任標籤:一致的「球在誰手上」視覺。ball = { who, label }
+const BALL_COLOR = { contractor: 'blue', supervisor: 'amber', design: 'purple', done: 'green' }
+export function BallChip({ ball }) {
+  if (!ball) return null
+  return <Badge color={BALL_COLOR[ball.who] || 'slate'}>{ball.who === 'done' ? '✓' : '⏳'} {ball.label}</Badge>
+}
+
 // Pick a chip color from a status string
 export function StatusBadge({ status }) {
   const map = {

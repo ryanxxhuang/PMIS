@@ -239,5 +239,13 @@ export function buildDemoData(workItems, project) {
       cost_impact: false, schedule_impact: false },
   ]
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis }
+  // ── 觀察事項(輕量提醒):一則待處理、一則已處理 ──
+  const observations = [
+    { id: 'OBS-DEMO-1', title: '4F 東側樓梯開口未設護欄', description: '現場巡查發現臨時開口缺防護，提醒盡速補設，避免升級為工安缺失。',
+      location: '4F 東側樓梯', assigned_to: 'contractor', status: '待處理', markup_path: null },
+    { id: 'OBS-DEMO-2', title: '鋼筋堆置未墊高', description: '料場鋼筋直接置於地面，提醒墊高避免銹蝕。',
+      location: '料場', assigned_to: 'contractor', status: '已處理', markup_path: null },
+  ]
+
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations }
 }

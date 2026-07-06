@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useStore } from '../../store.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
-import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
+import { rfiBall } from '../../lib/ballInCourt.js'
 
 const STATUS_COLOR = { 待回覆: 'amber', 已回覆: 'blue', 已結案: 'green' }
 const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none'
@@ -75,7 +76,7 @@ export default function RFI() {
                   <div className="min-w-0">
                     <div className="text-sm text-[var(--text)]">
                       <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{r.rfi_no}</span>{r.title}
-                      <Badge color={STATUS_COLOR[r.status] || 'slate'}>{r.status}</Badge>
+                      <BallChip ball={rfiBall(r)} />
                       {r.schedule_impact && <Badge color="amber">工期</Badge>}
                       {r.cost_impact && <Badge color="red">費用</Badge>}
                     </div>

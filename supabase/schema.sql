@@ -558,6 +558,27 @@ create policy "test_samples_members_all" on public.test_samples for all to authe
   using (project_id in (select public.my_project_ids()))
   with check (project_id in (select public.my_project_ids()));
 
+-- ── 觀察事項(Observation):比缺失輕的現場提醒,可升級成正式缺失 ─────────────
+create table if not exists public.observations (
+  id           uuid primary key default gen_random_uuid(),
+  project_id   uuid not null references public.projects(id) on delete cascade,
+  title        text not null,
+  description  text,
+  location     text,
+  assigned_to  text not null default 'contractor', -- 待哪方處理:contractor|supervisor
+  status       text not null default '待處理',       -- 待處理|已處理|轉缺失
+  markup_path  text,                                 -- 圖面/照片標註
+  work_item_id uuid references public.work_items(id) on delete set null,
+  created_by   uuid references auth.users(id),
+  created_at   timestamptz not null default now()
+);
+create index if not exists observations_project_idx on public.observations(project_id);
+alter table public.observations enable row level security;
+drop policy if exists "observations_members_all" on public.observations;
+create policy "observations_members_all" on public.observations for all to authenticated
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
+
 -- ── 監造協作:送審(Submittal)與工程疑義(RFI) ─────────────────────────────────
 create table if not exists public.submittals (
   id             uuid primary key default gen_random_uuid(),

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
+import { submittalBall } from '../../lib/ballInCourt.js'
 
 const CATEGORIES = ['施工計畫', '品質計畫', '材料設備', '樣品', '配比', '其他']
 const STATUS_COLOR = { 已提送: 'blue', 審核中: 'amber', 核准: 'green', 核備: 'green', 退回補正: 'red', 駁回: 'red' }
@@ -71,7 +72,7 @@ export default function Submittals() {
                     <div className="text-sm text-[var(--text)]">
                       <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{s.submittal_no}</span>{s.title}
                       {s.revision > 0 && <span className="text-[var(--text-3)] text-xs ml-1">Rev.{s.revision}</span>}
-                      <Badge color={STATUS_COLOR[s.status] || 'slate'}>{s.status}</Badge>
+                      <BallChip ball={submittalBall(s)} />
                     </div>
                     <div className="text-xs text-[var(--text-3)] mt-0.5">
                       {s.category} · 提送 {s.submitted_date || '—'}{s.due_date ? ` · 應審回 ${s.due_date}` : ''}{s.decided_date ? ` · 審定 ${s.decided_date}` : ''}

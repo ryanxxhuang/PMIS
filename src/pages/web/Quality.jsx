@@ -2,9 +2,10 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera, Printer, Zap } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { judgeChecklist, judgeItem } from '../../lib/qc.js'
+import { defectBall, inspectionBall, observationBall } from '../../lib/ballInCourt.js'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
@@ -45,6 +46,7 @@ export default function Quality() {
     createDefect, updateDefectStatus, deleteInspection, deleteDefect, describeDefect,
     checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
+    observations, createObservation, updateObservation, escalateObservation, deleteObservation,
     isSupabaseConfigured, currentProject, workItemsSource, can, resolveMarkup } = useStore()
   const [markupOpen, setMarkupOpen] = useState(false)
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
@@ -133,7 +135,7 @@ export default function Quality() {
             {inspections.map((i) => (
               <div key={i.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
                 <div className="min-w-0">
-                  <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge></div>
+                  <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge> <BallChip ball={inspectionBall(i)} /></div>
                   <div className="text-xs text-[var(--text-3)] truncate">{i.work_item_no && `${i.work_item_no} `}{i.location} · {i.inspection_type} · {i.requested_date || ''}{i.result_note ? ` · ${i.result_note}` : ''}</div>
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
@@ -189,7 +191,7 @@ export default function Quality() {
             {defects.map((d) => (
               <div key={d.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
                 <div className="min-w-0">
-                  <div className="text-[var(--text)]">{d.title} <Badge color={defColor[d.status] || 'slate'}>{d.status}</Badge> {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>}</div>
+                  <div className="text-[var(--text)]">{d.title} <BallChip ball={defectBall(d)} /> {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>}</div>
                   <div className="text-xs text-[var(--text-3)] truncate">{d.work_item_no && `${d.work_item_no} `}{d.location}{d.due_date ? ` · 期限 ${d.due_date}` : ''}{d.improvement_note ? ` · 改善：${d.improvement_note}` : ''}</div>
                   {d.markup_path && <div className="mt-1"><MarkupThumb src={d.markup_path} resolve={resolveMarkup} /></div>}
                 </div>
@@ -210,6 +212,11 @@ export default function Quality() {
           </div>
         )}
       </Card>
+
+      {/* 觀察事項:比缺失輕的現場提醒,可升級成正式缺失 */}
+      <ObservationsSection observations={observations} canWrite={can.edit || can.approve}
+        onCreate={createObservation} onUpdate={updateObservation} onEscalate={escalateObservation}
+        onDelete={deleteObservation} resolveMarkup={resolveMarkup} />
 
       {/* 自主檢查表:量化標準 → 實測值 → 自動判定 */}
       <ChecklistSection templates={checklistTemplates} records={checklistRecords} canEdit={can.edit}
@@ -446,6 +453,66 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
         </div>
       )}
       <p className="text-[11px] text-[var(--text-3)] mt-2">28 天判定標準（03310）：任一試體 ≥ 0.85 fc′ 且平均 ≥ fc′；不合格自動開立缺失。到期未試驗會出現在提醒中心。</p>
+    </Card>
+  )
+}
+
+// ── 觀察事項:輕量現場提醒（比缺失輕）→ 標記已處理 或 升級為缺失 ──
+const OBS_STATUS_COLOR = { 待處理: 'amber', 已處理: 'green', 轉缺失: 'slate' }
+function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEscalate, onDelete, resolveMarkup }) {
+  const [form, setForm] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [markupOpen, setMarkupOpen] = useState(false)
+
+  const submit = async () => {
+    setBusy(true); await onCreate(form); setBusy(false); setForm(null)
+  }
+  const open = observations.filter((o) => o.status === '待處理').length
+
+  return (
+    <Card title={`觀察事項（待處理 ${open}）`} action={
+      canWrite && <Button onClick={() => setForm(form ? null : { title: '', description: '', location: '', assigned_to: 'contractor' })}>{form ? '取消' : '＋ 新增觀察'}</Button>
+    }>
+      {form && (
+        <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
+          <div className="grid md:grid-cols-2 gap-3">
+            <Field label="觀察主旨"><input className={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如 4F 東側樓梯開口未設護欄" /></Field>
+            <Field label="位置"><input className={input} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="如 4F 東側" /></Field>
+          </div>
+          <Field label="說明"><textarea rows={2} className={input} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="現場觀察到、提醒改善的事項（尚未到開立缺失的程度）" /></Field>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button onClick={submit} disabled={busy || !form.title}>新增觀察</Button>
+            <Button variant="secondary" onClick={() => setMarkupOpen(true)}>🖍 圖面/照片標註{form.markup_data ? '（已附）' : ''}</Button>
+            {form.markup_data && <MarkupThumb src={form.markup_data} />}
+          </div>
+          {markupOpen && <MarkupEditor title="把觀察位置匡起來" initialImage={form.markup_data}
+            onSave={(d) => { setForm((f) => ({ ...f, markup_data: d })); setMarkupOpen(false) }} onClose={() => setMarkupOpen(false)} />}
+        </div>
+      )}
+
+      {observations.length === 0 ? <Empty>尚無觀察事項。現場看到「不對但還沒到缺失」的狀況先記為觀察，處理掉或必要時一鍵升級為缺失。</Empty> : (
+        <div className="space-y-2">
+          {observations.map((o) => (
+            <div key={o.id} className="flex items-start justify-between gap-3 border-b border-[var(--border-2)] pb-2">
+              <div className="min-w-0">
+                <div className="text-sm text-[var(--text)]">{o.title} <Badge color={OBS_STATUS_COLOR[o.status] || 'slate'}>{o.status}</Badge> <BallChip ball={observationBall(o)} /></div>
+                <div className="text-xs text-[var(--text-3)] truncate">{o.location}{o.description ? ` · ${o.description}` : ''}</div>
+                {o.markup_path && <div className="mt-1"><MarkupThumb src={o.markup_path} resolve={resolveMarkup} /></div>}
+              </div>
+              {canWrite && o.status !== '轉缺失' && (
+                <div className="flex items-center gap-2 shrink-0">
+                  {o.status === '待處理' && <>
+                    <Button variant="secondary" onClick={() => onUpdate(o.id, { status: '已處理' })}>標記已處理</Button>
+                    <Button variant="danger" onClick={() => { if (window.confirm('升級為正式缺失？將自動開立缺失單追蹤改善。')) onEscalate(o) }}>升級為缺失</Button>
+                  </>}
+                  <button onClick={() => { if (window.confirm('刪除此觀察？')) onDelete(o.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--text-3)] mt-2">觀察事項是比缺失輕的提醒（現場口頭提醒的數位化）：可標記已處理，或在必要時一鍵升級為正式缺失單（進入改善→複查→結案流程）。</p>
     </Card>
   )
 }

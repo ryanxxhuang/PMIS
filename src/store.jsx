@@ -309,6 +309,7 @@ export function StoreProvider({ children }) {
   // 監造協作:送審與工程疑義
   const [submittals, setSubmittals] = useState([])
   const [rfis, setRfis] = useState([])
+  const [observations, setObservations] = useState([]) // 觀察事項(輕量提醒)
 
   const log = useCallback((action, record, extra = {}) => {
     setAudit((a) => [
@@ -499,7 +500,7 @@ export function StoreProvider({ children }) {
     setInspections(d.inspections); setDefects(d.defects); setObligations(d.obligations)
     setCostItems(d.costItems); setSafetyRecords(d.safetyRecords); setChangeOrders(d.changeOrders)
     setChecklistTemplates(d.checklistTemplates); setChecklistRecords(d.checklistRecords); setTestSamples(d.testSamples)
-    setSubmittals(d.submittals); setRfis(d.rfis)
+    setSubmittals(d.submittals); setRfis(d.rfis); setObservations(d.observations)
     setItemSchedules(d.itemSchedules)
   }, [demoMode, workItems, workItemsSource, currentUser])
 
@@ -538,12 +539,13 @@ export function StoreProvider({ children }) {
       const qc = await loadQcFromDB(currentProject.project_id)
       if (!active) return
       setChecklistTemplates(qc.templates); setChecklistRecords(qc.records); setTestSamples(qc.samples)
-      const [{ data: subs }, { data: rfiRows }] = await Promise.all([
+      const [{ data: subs }, { data: rfiRows }, { data: obsRows }] = await Promise.all([
         supabase.from('submittals').select('*').eq('project_id', currentProject.project_id).order('created_at', { ascending: false }),
         supabase.from('rfis').select('*').eq('project_id', currentProject.project_id).order('created_at', { ascending: false }),
+        supabase.from('observations').select('*').eq('project_id', currentProject.project_id).order('created_at', { ascending: false }),
       ])
       if (!active) return
-      setSubmittals(subs || []); setRfis(rfiRows || [])
+      setSubmittals(subs || []); setRfis(rfiRows || []); setObservations(obsRows || [])
     })()
     return () => { active = false }
   }, [dbMode, currentProject, wiMaps])
@@ -1402,6 +1404,48 @@ export function StoreProvider({ children }) {
     if (dbMode) await supabase.from('rfis').delete().eq('id', id)
   }, [dbMode])
 
+  // ── 觀察事項:輕量提醒,可升級成正式缺失 ──────────────────────────────────
+  const createObservation = useCallback(async (input) => {
+    const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
+    const markup_path = await saveMarkup(input.markup_data, 'obs')
+    const row = {
+      title: input.title, description: input.description || null, location: input.location || null,
+      assigned_to: input.assigned_to || 'contractor', status: '待處理', markup_path,
+    }
+    if (!dbMode) {
+      setObservations((os) => [{ ...row, id: `OBS-${Date.now()}`, work_item_no: wi?.item_no || '' }, ...os])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('observations')
+      .insert({ ...row, project_id: currentProject.project_id, work_item_id: wi?.id || null, created_by: currentUser?.user_id })
+      .select().single()
+    if (error) return { error }
+    setObservations((os) => [data, ...os])
+    log('新增觀察事項', input.title, { user: currentUser?.name, role: '監造' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, wiMaps, saveMarkup, log])
+
+  const updateObservation = useCallback(async (id, patch) => {
+    setObservations((os) => os.map((o) => (o.id === id ? { ...o, ...patch } : o)))
+    if (dbMode) await supabase.from('observations').update(patch).eq('id', id)
+    return { error: null }
+  }, [dbMode])
+
+  // 升級為缺失:建立缺失(帶入標註)並把觀察標為「轉缺失」
+  const escalateObservation = useCallback(async (obs) => {
+    await createDefect({
+      title: obs.title, description: obs.description || null, location: obs.location || '',
+      severity: '一般', markup_data: obs.markup_path && obs.markup_path.startsWith('data:') ? obs.markup_path : undefined,
+    })
+    await updateObservation(obs.id, { status: '轉缺失' })
+    return { error: null }
+  }, [createDefect, updateObservation])
+
+  const deleteObservation = useCallback(async (id) => {
+    setObservations((os) => os.filter((o) => o.id !== id))
+    if (dbMode) await supabase.from('observations').delete().eq('id', id)
+  }, [dbMode])
+
   // 成員管理(RPC:email 對照 auth.users 必須在伺服器端做)
   const listMembers = useCallback(async () => {
     if (!dbMode) {
@@ -1514,6 +1558,7 @@ export function StoreProvider({ children }) {
     checklistTemplates: allChecklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal,
+    observations, createObservation, updateObservation, escalateObservation, deleteObservation,
     rfis, createRfi, answerRfi, closeRfi, deleteRfi,
     listMembers, addMemberByEmail, removeMember, resolveMarkup,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
