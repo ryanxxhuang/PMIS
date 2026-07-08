@@ -486,6 +486,7 @@ export function StoreProvider({ children }) {
       ratify: isAdmin || org === 'owner' || org === 'supervisor', // 契約級核定：變更設計核准/駁回（機關為主，監造得初審）
       oversee: org === 'owner',                   // 機關監督視角（首頁行動中心＝核定/撥款）
       readonly: !isAdmin && org === 'owner',
+      admin: isAdmin,                             // 專案建立者：看得到全部側欄工具（角色化導覽的例外）
     }
   }, [currentUser, demoMode, myMemberRoles, currentProjectId])
 

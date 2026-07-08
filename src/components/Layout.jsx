@@ -20,11 +20,11 @@ const navGroups = [
     { to: '/boq', icon: ClipboardList, label: '標單工項' },
     { to: '/site-log', icon: PencilLine, label: '施工日誌' },
     { to: '/valuation', icon: Coins, label: '估驗計價' },
-    { to: '/payments', icon: Receipt, label: '請款收款' },
-    { to: '/cost', icon: Wallet, label: '成本管理' },
+    { to: '/payments', icon: Receipt, label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
+    { to: '/cost', icon: Wallet, label: '成本管理', roles: ['contractor'] },               // 廠商毛利機密
     { to: '/change-orders', icon: Wrench, label: '變更設計' },
     { to: '/progress', icon: TrendingUp, label: '進度 S 曲線' },
-    { to: '/schedule', icon: CalendarRange, label: '逐工項排程' },
+    { to: '/schedule', icon: CalendarRange, label: '逐工項排程', roles: ['contractor'] },   // 廠商內部規劃
   ] },
   { title: '品質與工安', items: [
     { to: '/quality', icon: ShieldCheck, label: '品質查驗' },
@@ -117,6 +117,12 @@ function TopBar({ onMenu }) {
 
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { currentUser, can } = useStore()
+  // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——admin(專案建立者)看得到全部。
+  const org = currentUser?.org_type || 'contractor'
+  const visibleGroups = navGroups
+    .map((g) => ({ ...g, items: g.items.filter((n) => !n.roles || can?.admin || n.roles.includes(org)) }))
+    .filter((g) => g.items.length)
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg)]">
       <TopBar onMenu={() => setMenuOpen(true)} />
@@ -130,7 +136,7 @@ export function WebLayout({ children }) {
             ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
         >
           <nav className="flex-1 py-3 overflow-auto">
-            {navGroups.map((g) => (
+            {visibleGroups.map((g) => (
               <div key={g.title} className="mb-3">
                 <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
                   <span className="text-[10px] font-medium tracking-[0.12em] text-[var(--text-3)] shrink-0">{g.title}</span>

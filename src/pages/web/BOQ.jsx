@@ -127,7 +127,7 @@ export default function BOQ() {
               {importErr && <span className="text-sm text-rose-600">{importErr}</span>}
             </div>
           ) : (
-            <div className="flex items-center gap-3 flex-wrap bg-[var(--surface)] rounded-lg border border-amber-200 px-3 py-2">
+            <div className="flex items-center gap-3 flex-wrap bg-[var(--amber-tint)] rounded-lg border border-[var(--amber-text)]/25 px-3 py-2">
               <div className="text-sm text-[var(--text)]">
                 解析成功：<b>{parsed.meta.project_name || '（未命名）'}</b>　·
                 {fmt(parsed.meta.item_count)} 項工項，發包工程費 <b className="text-[var(--blue-text)]">{yi(parsed.meta.billable_total)}</b>

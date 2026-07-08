@@ -123,12 +123,19 @@ export default function Progress() {
     .slice(0, 8)
 
   // ── S 曲線 SVG ──
-  const W = 760, H = 300, m = { l: 44, r: 20, t: 16, b: 30 }
+  const W = 900, H = 300, m = { l: 46, r: 24, t: 26, b: 34 }
   const pw = W - m.l - m.r, ph = H - m.t - m.b
   const x = (i) => m.l + (N > 1 ? (i / (N - 1)) : 0) * pw
   const y = (p) => m.t + (1 - p / 100) * ph
+  const y0 = y(0)
   const plannedPts = months.map((mm, i) => `${x(i).toFixed(1)},${y(mm.plannedPct).toFixed(1)}`).join(' ')
   const actualPts = actualPoints.map((p) => `${x(p.i).toFixed(1)},${y(p.pct).toFixed(1)}`).join(' ')
+  // 曲線下方漸層填色的路徑（面積圖）——填滿空曠的繪圖區、更有質感
+  const plannedArea = `M ${x(0).toFixed(1)},${y0.toFixed(1)} ` + months.map((mm, i) => `L ${x(i).toFixed(1)},${y(mm.plannedPct).toFixed(1)}`).join(' ') + ` L ${x(N - 1).toFixed(1)},${y0.toFixed(1)} Z`
+  const actualArea = actualPoints.length
+    ? `M ${x(actualPoints[0].i).toFixed(1)},${y0.toFixed(1)} ` + actualPoints.map((p) => `L ${x(p.i).toFixed(1)},${y(p.pct).toFixed(1)}`).join(' ') + ` L ${x(actualPoints[actualPoints.length - 1].i).toFixed(1)},${y0.toFixed(1)} Z`
+    : ''
+  const lastAct = actualPoints[actualPoints.length - 1]
   const xLabelEvery = Math.ceil(N / 9)
 
   return (
@@ -140,37 +147,65 @@ export default function Progress() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="依預定 S 曲線內插" color="text-[var(--text)]" />
         <Stat label="實際進度" value={`${actualNow.toFixed(1)}%`} sub="累計估驗 ÷ 發包工程費" color="text-[var(--blue-text)]" />
-        <Stat label="進度差" value={`${behind >= 0 ? '−' : '+'}${Math.abs(behind).toFixed(1)}%`} sub={behind > 0 ? '落後' : '超前/持平'} color={behind > 5 ? 'text-rose-600' : 'text-emerald-600'} />
-        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-4 shadow-sm flex flex-col">
-          <div className="text-xs text-[var(--text-2)] uppercase tracking-wide">進度狀態</div>
-          <div className="mt-2">{statusBadge}</div>
-          <div className="text-xs text-[var(--text-3)] mt-auto pt-2">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
+        <Stat label="進度差" value={`${behind >= 0 ? '−' : '+'}${Math.abs(behind).toFixed(1)}%`} sub={behind > 0 ? '落後' : '超前/持平'} color={behind > 5 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />
+        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03)] px-4 py-3.5 flex flex-col">
+          <div className="text-[11px] text-[var(--text-3)] tracking-[0.04em]">進度狀態</div>
+          <div className="mt-1.5">{statusBadge}</div>
+          <div className="text-[11px] text-[var(--text-3)] mt-auto pt-2 num">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
         </div>
       </div>
 
       <Card title="進度 S 曲線（預定 vs 實際）">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="進度 S 曲線">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 440 }} preserveAspectRatio="xMidYMid meet" role="img" aria-label="進度 S 曲線：預定 vs 實際">
+          <defs>
+            <linearGradient id="planFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" style={{ stopColor: 'var(--chart-muted-line)', stopOpacity: 0.13 }} />
+              <stop offset="100%" style={{ stopColor: 'var(--chart-muted-line)', stopOpacity: 0 }} />
+            </linearGradient>
+            <linearGradient id="actFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" style={{ stopColor: 'var(--blue)', stopOpacity: 0.20 }} />
+              <stop offset="100%" style={{ stopColor: 'var(--blue)', stopOpacity: 0 }} />
+            </linearGradient>
+          </defs>
+          {/* 橫格線 + Y 軸 */}
           {[0, 25, 50, 75, 100].map((p) => (
             <g key={p}>
               <line x1={m.l} y1={y(p)} x2={W - m.r} y2={y(p)} style={{ stroke: 'var(--chart-grid)' }} strokeWidth="1" />
-              <text x={m.l - 6} y={y(p) + 3} textAnchor="end" fontSize="10" style={{ fill: 'var(--chart-axis-text)' }}>{p}%</text>
+              <text x={m.l - 8} y={y(p) + 3.5} textAnchor="end" fontSize="11" style={{ fill: 'var(--chart-axis-text)' }}>{p}%</text>
             </g>
           ))}
+          {/* X 軸月份 */}
           {months.map((mm, i) => (i % xLabelEvery === 0 || i === N - 1) ? (
-            <text key={i} x={x(i)} y={H - m.b + 16} textAnchor="middle" fontSize="9" style={{ fill: 'var(--chart-axis-text)' }}>{mm.label.slice(2)}</text>
+            <text key={i} x={x(i)} y={H - m.b + 18} textAnchor="middle" fontSize="10" style={{ fill: 'var(--chart-axis-text)' }}>{mm.label.slice(2)}</text>
           ) : null)}
-          {/* 今天垂直線 */}
-          <line x1={x(todayFrac)} y1={m.t} x2={x(todayFrac)} y2={H - m.b} style={{ stroke: 'var(--chart-today)' }} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={x(todayFrac)} y={m.t - 4} textAnchor="middle" fontSize="9" style={{ fill: 'var(--chart-axis-text)' }}>今天</text>
-          {/* 預定 */}
-          <polyline points={plannedPts} fill="none" style={{ stroke: 'var(--chart-muted-line)' }} strokeWidth="2" />
-          {/* 實際 */}
-          {actualPoints.length > 0 && <polyline points={actualPts} fill="none" style={{ stroke: 'var(--blue)' }} strokeWidth="2.5" />}
-          {actualPoints.map((p) => <circle key={p.i} cx={x(p.i)} cy={y(p.pct)} r="3.5" style={{ fill: 'var(--blue)' }} />)}
+          {/* 面積填色 */}
+          <path d={plannedArea} fill="url(#planFill)" />
+          {actualArea && <path d={actualArea} fill="url(#actFill)" />}
+          {/* 今天標記 */}
+          <line x1={x(todayFrac)} y1={m.t} x2={x(todayFrac)} y2={H - m.b} style={{ stroke: 'var(--chart-today)' }} strokeWidth="1.5" strokeDasharray="4 4" />
+          <g transform={`translate(${x(todayFrac).toFixed(1)}, ${(m.t - 5).toFixed(1)})`}>
+            <rect x="-17" y="-14" width="34" height="16" rx="4" style={{ fill: 'var(--chart-today)' }} />
+            <text x="0" y="-2" textAnchor="middle" fontSize="10" fontWeight="600" style={{ fill: 'var(--surface)' }}>今天</text>
+          </g>
+          {/* 預定線 */}
+          <polyline points={plannedPts} fill="none" style={{ stroke: 'var(--chart-muted-line)' }} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          {/* 實際線 */}
+          {actualPoints.length > 0 && <polyline points={actualPts} fill="none" style={{ stroke: 'var(--blue)' }} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+          {/* 中間資料點（低調） */}
+          {actualPoints.slice(0, -1).map((p) => <circle key={p.i} cx={x(p.i)} cy={y(p.pct)} r="2.8" style={{ fill: 'var(--blue)' }} />)}
+          {/* 預定「今日」值標 */}
+          <text x={x(todayFrac) - 8} y={y(plannedNow) - 6} textAnchor="end" fontSize="11" style={{ fill: 'var(--chart-axis-text)' }}>預定 {plannedNow.toFixed(1)}%</text>
+          {/* 實際最新點：強調 + 直接標值 */}
+          {lastAct && (
+            <g>
+              <circle cx={x(lastAct.i)} cy={y(lastAct.pct)} r="5" style={{ fill: 'var(--blue)', stroke: 'var(--surface)' }} strokeWidth="2.5" />
+              <text x={x(lastAct.i) + 10} y={y(lastAct.pct) + 4} fontSize="12.5" fontWeight="700" style={{ fill: 'var(--blue-text)' }}>{lastAct.pct.toFixed(1)}%</text>
+            </g>
+          )}
         </svg>
         <div className="flex items-center gap-5 text-xs text-[var(--text-2)] mt-2 pl-1">
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-[var(--chart-muted-line)]" />預定進度</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-[var(--blue)]" />實際進度（估驗）</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded-full bg-[var(--chart-muted-line)]" />預定進度</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded-full bg-[var(--blue)]" />實際進度（估驗）</span>
         </div>
       </Card>
 
