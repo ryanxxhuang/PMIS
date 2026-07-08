@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Printer, Trash2 } from 'lucide-react'
+import { Printer, Trash2, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
@@ -16,6 +16,7 @@ export default function Valuation() {
     isSupabaseConfigured, currentProject, workItemsSource, siteLogs, fillValuationFromSiteLogs, dbMode, deleteValuation,
     changeOrders, can } = useStore()
   const [filling, setFilling] = useState(false)
+  const [aiMsg, setAiMsg] = useState('')
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(() => new Set())
   const [selectedId, setSelectedId] = useState(null)
@@ -194,9 +195,9 @@ export default function Valuation() {
             action={
               <div className="flex items-center gap-2">
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項…" className="text-sm border border-[var(--border)] rounded-lg px-2.5 py-1 w-40 focus:border-[var(--blue)] focus:outline-none" />
-                {selected.status === '草稿' && can.edit && dbMode && siteLogs.length > 0 && (
-                  <Button variant="secondary" onClick={async () => { setFilling(true); await fillValuationFromSiteLogs(selected.id); setFilling(false) }} disabled={filling}>
-                    {filling ? '帶入中…' : '從施工日誌帶入'}
+                {selected.status === '草稿' && can.edit && siteLogs.length > 0 && (
+                  <Button onClick={async () => { setFilling(true); const { count } = await fillValuationFromSiteLogs(selected.id); setFilling(false); setAiMsg(count ? `AI 已依 ${siteLogs.length} 筆施工日誌草擬 ${count} 個工項的累計完成數量，請覆核後送審。` : 'AI 未在施工日誌找到可帶入的完成數量。') }} disabled={filling} title="掃描施工日誌，自動草擬本期各工項累計完成數量">
+                    <Sparkles size={14} aria-hidden />{filling ? 'AI 草擬中…' : 'AI 估驗草擬'}
                   </Button>
                 )}
                 {selected.status === '草稿' && can.submit && <Button variant="secondary" onClick={() => setValuationStatus(selected.id, '監造審核')}>送監造審核</Button>}
@@ -208,6 +209,12 @@ export default function Valuation() {
               </div>
             }
           >
+            {aiMsg && editable && (
+              <div className="mb-3 flex items-start gap-2 text-xs bg-[var(--blue-tint)] text-[var(--blue-text)] rounded-lg px-3 py-2">
+                <Sparkles size={14} className="shrink-0 mt-0.5" aria-hidden />
+                <span>{aiMsg}</span>
+              </div>
+            )}
             {!editable && <p className="text-xs text-amber-600 mb-2">本期狀態為「{selected.status}」，明細唯讀。</p>}
             <div className="overflow-x-auto -mx-4 -my-4">
               <table className="w-full text-sm">

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import {
-  LayoutDashboard, Bell, CalendarClock, Newspaper,
+  LayoutDashboard, Sparkles, Bell, CalendarClock, Newspaper,
   ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
   ShieldCheck, HardHat, FileCheck2, MessageSquareWarning, Users,
   Menu, ChevronDown, Trash2, Moon, Sun, Plus,
@@ -11,6 +11,7 @@ import {
 const navGroups = [
   { title: '總覽', items: [
     { to: '/dashboard', icon: LayoutDashboard, label: '專案 Dashboard' },
+    { to: '/assistant', icon: Sparkles, label: 'AI 助理' },
     { to: '/alerts', icon: Bell, label: '提醒中心' },
     { to: '/contract', icon: CalendarClock, label: '契約管制' },
     { to: '/monthly-report', icon: Newspaper, label: '施工月報' },

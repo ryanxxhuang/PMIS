@@ -758,9 +758,13 @@ export function StoreProvider({ children }) {
     for (const lg of siteLogs)
       for (const [key, q] of Object.entries(lg.items || {}))
         accum[key] = (accum[key] || 0) + (Number(q) || 0)
+    // 累計不倒退：本期草擬值不得低於前期已帶入的累計（該期建立時已滾入前期值），且不超過契約數量
+    const floor = valuations.find((v) => v.id === periodId)?.items || {}
     for (const key of Object.keys(accum)) {
       const wi = wiMaps.byKey.get(key)
-      if (wi?.quantity) accum[key] = Math.min(accum[key], wi.quantity)
+      let val = Math.max(accum[key], Number(floor[key]) || 0)
+      if (wi?.quantity) val = Math.min(val, wi.quantity)
+      accum[key] = val
     }
     setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, items: { ...v.items, ...accum } } : v)))
     if (!dbMode) return { error: null, count: Object.keys(accum).length }
@@ -775,7 +779,7 @@ export function StoreProvider({ children }) {
     if (rows.length) await supabase.from('valuation_items').upsert(rows, { onConflict: 'valuation_id,work_item_id' })
     log('估驗帶入施工日誌數量', `${rows.length} 工項`, { user: currentUser?.name || '系統', role: '施工品管' })
     return { error: null, count: rows.length }
-  }, [dbMode, siteLogs, wiMaps, currentUser, log])
+  }, [dbMode, siteLogs, valuations, wiMaps, currentUser, log])
 
   // P4b. 施工日誌照片：檔案進 Storage（photos bucket）、metadata 進 photos 表。
   // 路徑慣例 <project_id>/<daily_log_id>/<photo_id>.<ext>（第一段=project_id，對應 Storage RLS）。
