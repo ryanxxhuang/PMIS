@@ -151,7 +151,7 @@ export default function Valuation() {
         action={
           <div className="flex items-center gap-2">
             {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}
-            {can.edit && <Button onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>}
+            {can.edit && <Button variant="secondary" onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>}
           </div>
         } />
 
@@ -181,7 +181,7 @@ export default function Valuation() {
           </div>
 
           {/* 本期彙總 */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <Stat label="本期估驗金額" value={fmt(periodAmt)} sub={`第 ${selected.period_no} 期`} color="text-[var(--blue-text)]" />
             <Stat label="累計估驗金額" value={fmt(totalCum)} sub={`占發包 ${completion.toFixed(1)}%`} />
             <Stat label="累計完成度" value={`${completion.toFixed(1)}%`} sub={`/ ${yi(billableTotal)}`} color="text-emerald-600" />

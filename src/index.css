@@ -107,17 +107,18 @@ select option { color: var(--text); background: var(--surface); }
   letter-spacing: -0.01em;
 }
 
-/* 圖框 title block:頁首底部的「粗墨線 + 細線」雙軌,像圖紙角框 */
+/* 頁首底線:改為單一輕線 + 左側短色標(工程識別的收斂訊號,不再是粗墨線) */
 .title-block {
-  border-bottom: 2px solid var(--text);
+  border-bottom: 1px solid var(--border-2);
   position: relative;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
 }
 .title-block::after {
   content: '';
   position: absolute;
-  left: 0; right: 0; bottom: -5px;
-  border-bottom: 1px solid var(--border);
+  left: 0; bottom: -1px;
+  width: 40px;
+  border-bottom: 2px solid var(--blue);
 }
 
 @media (prefers-reduced-motion: reduce) {

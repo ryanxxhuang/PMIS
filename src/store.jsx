@@ -471,17 +471,20 @@ export function StoreProvider({ children }) {
   // demo 模式：未設 Supabase → 全站用 demoSeed storyline，寫入只進記憶體
   const demoMode = !isSupabaseConfigured
 
-  // 角色權限（UI 層 v1）：施工＝填報/提送，監造＝判定/結案，機關＝唯讀。
-  // 核心規則：施工不能核准或結案自己的東西。
+  // 角色權限（UI 層 v1，對應三級品管）：
+  //   施工＝填報/提送，監造＝查驗判定/審核，機關＝監督核定（變更設計核准、撥款）。
+  // 核心規則：施工不能核准或結案自己的東西；機關對日常填報唯讀，但保留契約級核定權。
   // 例外：專案 admin（建立者）擁有完整權限——單人/小團隊試用不會被自己的
-  // org_type 卡死；demo 模式刻意不套用 admin 例外，保留兩種角色的展示劇本。
+  // org_type 卡死；demo 模式刻意不套用 admin 例外，保留三種角色的展示劇本。
   const can = useMemo(() => {
     const org = currentUser?.org_type || 'contractor'
     const isAdmin = !demoMode && myMemberRoles[currentProjectId] === 'admin'
     return {
-      edit: isAdmin || org === 'contractor',     // 日誌/成本/請款/檢查表等日常填報
-      submit: isAdmin || org === 'contractor',   // 提送（估驗送監造審核、查驗申請）
-      approve: isAdmin || org === 'supervisor',  // 核定估驗、查驗判定、缺失複查結案、變更核准
+      edit: isAdmin || org === 'contractor',      // 日誌/成本/請款/檢查表等日常填報
+      submit: isAdmin || org === 'contractor',    // 提送（估驗送監造審核、查驗申請）
+      approve: isAdmin || org === 'supervisor',   // 監造：核定估驗、查驗判定、缺失複查結案、送審審定
+      ratify: isAdmin || org === 'owner' || org === 'supervisor', // 契約級核定：變更設計核准/駁回（機關為主，監造得初審）
+      oversee: org === 'owner',                   // 機關監督視角（首頁行動中心＝核定/撥款）
       readonly: !isAdmin && org === 'owner',
     }
   }, [currentUser, demoMode, myMemberRoles, currentProjectId])

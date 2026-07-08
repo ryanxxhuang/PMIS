@@ -6,7 +6,7 @@ import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { rfiBall } from '../../lib/ballInCourt.js'
 
 const STATUS_COLOR = { 待回覆: 'amber', 已回覆: 'blue', 已結案: 'green' }
-const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none'
+const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function RFI() {
@@ -43,7 +43,7 @@ export default function RFI() {
         action={
           <div className="flex items-center gap-2">
             {rfis.length > 0 && <button onClick={exportRows} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
-            {can.submit && <Button onClick={() => setForm(form ? null : { title: '', question: '', asked_date: todayIso(), due_date: '', cost_impact: false, schedule_impact: false })}>{form ? '取消' : '＋ 提出疑義'}</Button>}
+            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', question: '', asked_date: todayIso(), due_date: '', cost_impact: false, schedule_impact: false })}>{form ? '取消' : '＋ 提出疑義'}</Button>}
           </div>
         } />
 

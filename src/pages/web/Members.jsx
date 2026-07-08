@@ -4,7 +4,7 @@ import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
 const ORG_COLOR = { contractor: 'blue', supervisor: 'amber', owner: 'purple' }
-const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none'
+const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 
 export default function Members() {
   const { project, listMembers, addMemberByEmail, removeMember, currentUser,

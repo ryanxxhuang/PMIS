@@ -29,8 +29,11 @@ export const project = {
   commencement_date: iso(START),
 }
 
+// 三方角色 demo 帳號（對應三級品管：施工自主檢查 → 監造查驗 → 機關監督）。
+// 每個 org_type 至少一個帳號，登入後 store.can 依角色開放不同權限。
 export const users = [
   { user_id: 'U1', name: '林志明', role: 'Contractor Field Engineer', company: '大華營造', label: '施工 / 現場工程師', org_type: 'contractor' },
   { user_id: 'U2', name: '陳怡君', role: 'Contractor QC Engineer', company: '大華營造', label: '施工 / 品管工程師', org_type: 'contractor' },
   { user_id: 'U3', name: '王建國', role: 'Supervisor Engineer', company: '宏觀顧問', label: '監造 / 監造工程師', org_type: 'supervisor' },
+  { user_id: 'U4', name: '李淑芬', role: 'Owner Engineer', company: '臺北市政府工務局', label: '機關 / 承辦工程司', org_type: 'owner' },
 ]

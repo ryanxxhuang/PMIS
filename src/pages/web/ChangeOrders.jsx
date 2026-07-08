@@ -118,7 +118,7 @@ export default function ChangeOrders() {
           </div>
           {changeOrders.map((co) => (
             <ChangeOrderCard key={co.id} co={co} net={coNet(co)} leaves={leaves} allItems={workItems?.items || []}
-              canApprove={can.approve} canEdit={can.edit}
+              canApprove={can.ratify} canEdit={can.edit}
               onStatus={(s) => updateChangeOrder(co.id, { status: s })}
               onDelete={() => { if (window.confirm(`刪除變更「${co.title}」及其明細?`)) deleteChangeOrder(co.id) }}
               onAddItem={(input) => addChangeOrderItem(co.id, input)}

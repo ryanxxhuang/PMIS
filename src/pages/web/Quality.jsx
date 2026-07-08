@@ -5,12 +5,12 @@ import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { judgeChecklist, judgeItem } from '../../lib/qc.js'
-import { defectBall, inspectionBall, observationBall } from '../../lib/ballInCourt.js'
+import { defectBall } from '../../lib/ballInCourt.js'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
-const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none'
+const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 
 // 小工項挑選器（搜尋 → 選一個）
 function WorkItemPicker({ leaves, value, label, onPick }) {
@@ -117,7 +117,7 @@ export default function Quality() {
       </div>
 
       {/* 查驗 */}
-      <Card title={`查驗（待查驗 ${openInsp}）`} action={can.submit && <Button onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
+      <Card title={`查驗（待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
         {inspForm && (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
             <WorkItemPicker leaves={leaves} value={inspForm.work_item_key} label={inspForm.work_item_label} onPick={(k, l) => setInspForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
@@ -135,7 +135,7 @@ export default function Quality() {
             {inspections.map((i) => (
               <div key={i.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
                 <div className="min-w-0">
-                  <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge> <BallChip ball={inspectionBall(i)} /></div>
+                  <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge></div>
                   <div className="text-xs text-[var(--text-3)] truncate">{i.work_item_no && `${i.work_item_no} `}{i.location} · {i.inspection_type} · {i.requested_date || ''}{i.result_note ? ` · ${i.result_note}` : ''}</div>
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
@@ -158,7 +158,7 @@ export default function Quality() {
           { key: 'severity', label: '嚴重度' }, { key: 'status', label: '狀態' }, { key: 'due_date', label: '改善期限' },
           { key: 'improvement_note', label: '改善說明' },
         ])} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
-        <Button onClick={() => setDefForm(defForm ? null : { title: '', description: '', severity: '一般', location: '', due_date: '', work_item_key: '', work_item_label: '' })}>{defForm ? '取消' : '＋ 開立缺失'}</Button>
+        <Button variant="secondary" onClick={() => setDefForm(defForm ? null : { title: '', description: '', severity: '一般', location: '', due_date: '', work_item_key: '', work_item_label: '' })}>{defForm ? '取消' : '＋ 開立缺失'}</Button>
       </div>}>
         {defForm && (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
@@ -267,7 +267,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
   let lastGroup = null
   return (
     <Card title={`自主檢查表（${records.length}）`} action={
-      canEdit && <Button onClick={() => { setOpen((o) => !o); setMsg('') }}>{open ? '取消' : '＋ 新增檢查'}</Button>
+      canEdit && <Button variant="secondary" onClick={() => { setOpen((o) => !o); setMsg('') }}>{open ? '取消' : '＋ 新增檢查'}</Button>
     }>
       {msg && <p className={`text-sm mb-3 ${msg.includes('不合格') ? 'text-[var(--accent-text)]' : 'text-emerald-600'}`}>{msg}</p>}
 
@@ -392,7 +392,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
     <Card title={`取樣試驗（${samples.length}）`} action={
       canEdit && <div className="flex items-center gap-2">
         <Button variant="secondary" onClick={gen} disabled={busy}><Zap size={14} aria-hidden />從施工日誌帶入</Button>
-        <Button onClick={() => setAddOpen((o) => !o)}>{addOpen ? '取消' : '＋ 手動新增'}</Button>
+        <Button variant="secondary" onClick={() => setAddOpen((o) => !o)}>{addOpen ? '取消' : '＋ 手動新增'}</Button>
       </div>
     }>
       {msg && <p className="text-sm mb-3 text-[var(--text-2)]">{msg}</p>}
@@ -471,7 +471,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
 
   return (
     <Card title={`觀察事項（待處理 ${open}）`} action={
-      canWrite && <Button onClick={() => setForm(form ? null : { title: '', description: '', location: '', assigned_to: 'contractor' })}>{form ? '取消' : '＋ 新增觀察'}</Button>
+      canWrite && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', description: '', location: '', assigned_to: 'contractor' })}>{form ? '取消' : '＋ 新增觀察'}</Button>
     }>
       {form && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
@@ -495,7 +495,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
           {observations.map((o) => (
             <div key={o.id} className="flex items-start justify-between gap-3 border-b border-[var(--border-2)] pb-2">
               <div className="min-w-0">
-                <div className="text-sm text-[var(--text)]">{o.title} <Badge color={OBS_STATUS_COLOR[o.status] || 'slate'}>{o.status}</Badge> <BallChip ball={observationBall(o)} /></div>
+                <div className="text-sm text-[var(--text)]">{o.title} <Badge color={OBS_STATUS_COLOR[o.status] || 'slate'}>{o.status}</Badge></div>
                 <div className="text-xs text-[var(--text-3)] truncate">{o.location}{o.description ? ` · ${o.description}` : ''}</div>
                 {o.markup_path && <div className="mt-1"><MarkupThumb src={o.markup_path} resolve={resolveMarkup} /></div>}
               </div>
@@ -503,7 +503,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
                 <div className="flex items-center gap-2 shrink-0">
                   {o.status === '待處理' && <>
                     <Button variant="secondary" onClick={() => onUpdate(o.id, { status: '已處理' })}>標記已處理</Button>
-                    <Button variant="danger" onClick={() => { if (window.confirm('升級為正式缺失？將自動開立缺失單追蹤改善。')) onEscalate(o) }}>升級為缺失</Button>
+                    <Button variant="outline" onClick={() => { if (window.confirm('升級為正式缺失？將自動開立缺失單追蹤改善。')) onEscalate(o) }}>升級為缺失</Button>
                   </>}
                   <button onClick={() => { if (window.confirm('刪除此觀察？')) onDelete(o.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
                 </div>

@@ -1,16 +1,16 @@
 // Shared UI — brand styling (elevation surfaces, steel-blue primary, tonal chips)
 import { FileText } from 'lucide-react'
 
-export function Card({ title, action, children, className = '' }) {
+export function Card({ title, action, children, className = '', bodyClass = 'p-5' }) {
   return (
-    <div className={`bg-[var(--surface)] rounded-lg g-elevation-1 ${className}`}>
+    <div className={`bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03),0_1px_10px_-2px_rgba(22,32,43,.05)] ${className}`}>
       {title && (
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-2)]">
-          <h3 className="font-semibold text-[var(--text)] text-[13px] tracking-wide">{title}</h3>
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[var(--border-2)]">
+          <h3 className="font-semibold text-[var(--text)] text-sm tracking-tight">{title}</h3>
           {action}
         </div>
       )}
-      <div className="p-4">{children}</div>
+      <div className={bodyClass}>{children}</div>
     </div>
   )
 }
@@ -55,13 +55,13 @@ const badgeColors = {
   purple: 'bg-[var(--purple-tint)] text-[var(--purple-text)]',
 }
 
-// 章戳式標籤:方角小戳記,像文件上的核章,不用膠囊
-export function Badge({ color = 'slate', children }) {
-  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded-[3px] text-xs font-medium ${badgeColors[color]}`}>{children}</span>
+// Tonal chip — softened to a modern rounded tag (was hard 章戳 square)
+export function Badge({ color = 'slate', children, className = '' }) {
+  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${badgeColors[color]} ${className}`}>{children}</span>
 }
 
 // Ball-in-court 責任標籤:一致的「球在誰手上」視覺。ball = { who, label }
-const BALL_COLOR = { contractor: 'blue', supervisor: 'amber', design: 'purple', done: 'green' }
+const BALL_COLOR = { contractor: 'blue', supervisor: 'amber', owner: 'purple', design: 'slate', done: 'green' }
 export function BallChip({ ball }) {
   if (!ball) return null
   return <Badge color={BALL_COLOR[ball.who] || 'slate'}>{ball.who === 'done' ? '✓' : '⏳'} {ball.label}</Badge>
@@ -80,17 +80,32 @@ export function StatusBadge({ status }) {
   return <Badge color={map[status] || 'slate'}>{status}</Badge>
 }
 
-export function Button({ variant = 'primary', className = '', children, ...props }) {
-  const styles = {
-    primary: 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm hover:shadow',
-    secondary: 'bg-[var(--surface)] text-[var(--blue-text)] border border-[var(--border)] hover:bg-[var(--bg)]',
-    success: 'bg-[var(--success)] text-white hover:bg-[var(--success-hover)] shadow-sm hover:shadow',
-    danger: 'bg-[var(--danger)] text-white hover:bg-[var(--danger-hover)] shadow-sm hover:shadow',
-    ghost: 'text-[var(--blue)] hover:bg-[var(--blue-tint)]',
-  }
+// Button hierarchy (modern-SaaS): one filled primary per context; everything else quiet.
+//   primary  — the single main action (filled steel-blue)
+//   secondary— common action (soft tinted fill, no loud border)
+//   outline  — bordered, for neutral toolbar actions
+//   ghost    — text-only tertiary
+//   success  — confirm/approve (filled green)
+//   danger   — destructive, filled red (real deletes only; use size="sm" ghost ✕ for row deletes)
+const BTN_SIZES = {
+  sm: 'px-2.5 py-1 text-xs gap-1 rounded-md',
+  md: 'px-3.5 py-2 text-sm gap-1.5 rounded-lg',
+  lg: 'px-5 py-2.5 text-sm gap-2 rounded-lg',
+}
+const BTN_VARIANTS = {
+  primary: 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm',
+  secondary: 'bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border-2)]',
+  outline: 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]',
+  ghost: 'text-[var(--blue-text)] hover:bg-[var(--blue-tint)]',
+  success: 'bg-[var(--success)] text-white hover:bg-[var(--success-hover)] shadow-sm',
+  danger: 'bg-[var(--danger)] text-white hover:bg-[var(--danger-hover)] shadow-sm',
+}
+export function Button({ variant = 'primary', size = 'md', className = '', children, ...props }) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap shrink-0 transition disabled:opacity-40 disabled:cursor-not-allowed ${styles[variant]} ${className}`}
+      className={`inline-flex items-center justify-center font-medium whitespace-nowrap shrink-0 transition-colors
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue)]/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface)]
+        disabled:opacity-40 disabled:cursor-not-allowed ${BTN_SIZES[size] || BTN_SIZES.md} ${BTN_VARIANTS[variant] || BTN_VARIANTS.primary} ${className}`}
       {...props}
     >
       {children}
@@ -100,12 +115,25 @@ export function Button({ variant = 'primary', className = '', children, ...props
 
 export function Stat({ label, value, sub, color = 'text-[var(--text)]' }) {
   return (
-    <div className="bg-[var(--surface)] rounded-lg g-elevation-1 px-3.5 py-3">
-      <div className="text-[11px] text-[var(--text-3)] tracking-[0.06em]">{label}</div>
-      <div className={`text-xl font-semibold mt-0.5 tabular-nums ${color}`}>{value}</div>
-      {sub && <div className="text-[11px] text-[var(--text-3)] mt-0.5 tabular-nums truncate">{sub}</div>}
+    <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03)] px-4 py-3.5">
+      <div className="text-[11px] text-[var(--text-3)] tracking-[0.04em]">{label}</div>
+      <div className={`text-[22px] leading-tight font-semibold mt-1 tabular-nums ${color}`}>{value}</div>
+      {sub && <div className="text-[11px] text-[var(--text-3)] mt-1 tabular-nums truncate">{sub}</div>}
     </div>
   )
+}
+
+// Shared form controls (modern-SaaS: consistent height, soft border, focus ring).
+// Pages still writing inline input classes should migrate to these on rollout.
+const FIELD_BASE = 'w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:outline-none focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/20 disabled:opacity-50'
+export function Input({ className = '', ...props }) {
+  return <input className={`${FIELD_BASE} ${className}`} {...props} />
+}
+export function Textarea({ className = '', ...props }) {
+  return <textarea className={`${FIELD_BASE} resize-y ${className}`} {...props} />
+}
+export function Select({ className = '', children, ...props }) {
+  return <select className={`${FIELD_BASE} pr-8 ${className}`} {...props}>{children}</select>
 }
 
 export function Field({ label, children, hint }) {
