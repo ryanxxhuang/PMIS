@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import {
   LayoutDashboard, Sparkles, Bell, CalendarClock, Newspaper,
   ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
-  ShieldCheck, HardHat, FileCheck2, MessageSquareWarning, Users,
+  ShieldCheck, ShieldAlert, ClipboardCheck, HardHat, FileCheck2, MessageSquareWarning, Users,
   Menu, ChevronDown, Trash2, Moon, Sun, Plus,
 } from 'lucide-react'
 
@@ -15,6 +15,7 @@ const navGroups = [
     { to: '/alerts', icon: Bell, label: '提醒中心' },
     { to: '/contract', icon: CalendarClock, label: '契約管制' },
     { to: '/monthly-report', icon: Newspaper, label: '施工月報' },
+    { to: '/audit', icon: ShieldAlert, label: '風險稽核', roles: ['owner'] }, // 機關防弊
   ] },
   { title: '成本與進度', items: [
     { to: '/boq', icon: ClipboardList, label: '標單工項' },
@@ -33,6 +34,7 @@ const navGroups = [
   { title: '監造協作', items: [
     { to: '/submittals', icon: FileCheck2, label: '送審文件' },
     { to: '/rfi', icon: MessageSquareWarning, label: '工程疑義' },
+    { to: '/supervisor-report', icon: ClipboardCheck, label: '監造報表', roles: ['supervisor'] }, // AI 監造報表
     { to: '/members', icon: Users, label: '專案成員' },
   ] },
 ]
