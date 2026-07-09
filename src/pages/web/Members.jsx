@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
 const ORG_COLOR = { contractor: 'blue', supervisor: 'amber', owner: 'purple' }
@@ -34,7 +35,7 @@ export default function Members() {
     reload()
   }
   const onRemove = async (m) => {
-    if (!window.confirm(`將 ${m.full_name} 移出本專案？`)) return
+    if (!(await appConfirm({ title: `將 ${m.full_name} 移出本專案？`, danger: true, confirmLabel: '移出' }))) return
     await removeMember(m.user_id)
     reload()
   }

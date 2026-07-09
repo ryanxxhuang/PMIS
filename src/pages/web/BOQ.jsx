@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Empty, Button, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 
 const fmt = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-US'))
@@ -108,7 +109,7 @@ export default function BOQ() {
         meta={meta.contract_no ? [{ k: '契約編號', v: meta.contract_no }] : []}
         action={dbMode && workItemsSource === 'db' && (
           <Button variant="ghost" onClick={async () => {
-            if (window.confirm('重新匯入會清空此專案的標單工項，以及相依的估驗、進度、施工日誌、查驗、缺失。確定？')) await resetProjectBoq()
+            if (await appConfirm({ title: '重新匯入標單？', body: '會清空此專案的標單工項，以及相依的估驗、進度、施工日誌、查驗、缺失。', danger: true, confirmLabel: '清空重匯' })) await resetProjectBoq()
           }}>↻ 重新匯入標單</Button>
         )} />
 

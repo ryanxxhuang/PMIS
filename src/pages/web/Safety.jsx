@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, Button, Badge, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
 const TYPES = ['自主檢查', '工安缺失', '教育訓練', '危害告知']
@@ -147,7 +148,7 @@ export default function Safety() {
                       {NEXT_LABEL[r.status]}
                     </Button>
                   )}
-                  <button onClick={() => { if (window.confirm('刪除此工安紀錄？')) deleteSafetyRecord(r.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                  <button onClick={async () => { if (await appConfirm({ title: '刪除此工安紀錄？', danger: true, confirmLabel: '刪除' })) deleteSafetyRecord(r.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
                 </div>
               </div>
             ))}

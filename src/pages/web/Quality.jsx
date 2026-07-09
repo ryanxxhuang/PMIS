@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Camera, Printer, Zap } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { judgeChecklist, judgeItem } from '../../lib/qc.js'
 import { defectBall } from '../../lib/ballInCourt.js'
@@ -143,7 +144,7 @@ export default function Quality() {
                     <Button variant="success" onClick={() => onResult(i, true)} disabled={busy}>合格</Button>
                     <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
                   </> : <span className="text-xs text-[var(--text-3)]">待監造查驗</span>)}
-                  {can.edit && <button onClick={() => { if (window.confirm('刪除此查驗紀錄？')) deleteInspection(i.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
+                  {can.edit && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) deleteInspection(i.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
                 </div>
               </div>
             ))}
@@ -205,7 +206,7 @@ export default function Quality() {
                     : (can.edit ? <Button variant="secondary" onClick={() => advanceDefect(d)} disabled={busy}>{nextLabel[d.status]}</Button>
                       : <span className="text-xs text-[var(--text-3)]">待廠商改善</span>)
                   )}
-                  {can.edit && <button onClick={() => { if (window.confirm('刪除此缺失？')) deleteDefect(d.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
+                  {can.edit && <button onClick={async () => { if (await appConfirm({ title: '刪除此缺失？', danger: true, confirmLabel: '刪除' })) deleteDefect(d.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
                 </div>
               </div>
             ))}
@@ -351,7 +352,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
                   <Badge color={r.overall === '合格' ? 'green' : r.overall === '不合格' ? 'red' : 'slate'}>{r.overall || '未判定'}</Badge>
                   <button onClick={() => navigate(`/quality/checklist-print?id=${r.id}`)} title="列印自主檢查表"
                     className="text-[var(--blue)] hover:underline text-xs inline-flex items-center gap-1"><Printer size={13} aria-hidden />列印</button>
-                  <button onClick={() => { if (window.confirm('刪除此檢查紀錄？')) onDelete(r.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                  <button onClick={async () => { if (await appConfirm({ title: '刪除此檢查紀錄？', danger: true, confirmLabel: '刪除' })) onDelete(r.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
                 </div>
               </div>
             )
@@ -445,7 +446,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                   <td className="px-2 text-center">
                     <Badge color={s.status === '合格' ? 'green' : s.status === '不合格' ? 'red' : 'slate'}>{s.status}</Badge>
                   </td>
-                  <td className="text-right pl-2"><button onClick={() => { if (window.confirm(`刪除試體 ${s.sample_no}？`)) onDelete(s.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button></td>
+                  <td className="text-right pl-2"><button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) onDelete(s.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button></td>
                 </tr>
               ))}
             </tbody>
@@ -503,9 +504,9 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
                 <div className="flex items-center gap-2 shrink-0">
                   {o.status === '待處理' && <>
                     <Button variant="secondary" onClick={() => onUpdate(o.id, { status: '已處理' })}>標記已處理</Button>
-                    <Button variant="outline" onClick={() => { if (window.confirm('升級為正式缺失？將自動開立缺失單追蹤改善。')) onEscalate(o) }}>升級為缺失</Button>
+                    <Button variant="outline" onClick={async () => { if (await appConfirm({ title: '升級為正式缺失？', body: '將自動開立缺失單追蹤改善。', confirmLabel: '升級' })) onEscalate(o) }}>升級為缺失</Button>
                   </>}
-                  <button onClick={() => { if (window.confirm('刪除此觀察？')) onDelete(o.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
+                  <button onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) onDelete(o.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
                 </div>
               )}
             </div>

@@ -1,4 +1,5 @@
 // Shared UI — brand styling (elevation surfaces, steel-blue primary, tonal chips)
+import { forwardRef } from 'react'
 import { FileText } from 'lucide-react'
 
 export function Card({ title, action, children, className = '', bodyClass = 'p-5' }) {
@@ -100,9 +101,10 @@ const BTN_VARIANTS = {
   success: 'bg-[var(--success)] text-white hover:bg-[var(--success-hover)] shadow-sm',
   danger: 'bg-[var(--danger)] text-white hover:bg-[var(--danger-hover)] shadow-sm',
 }
-export function Button({ variant = 'primary', size = 'md', className = '', children, ...props }) {
+export const Button = forwardRef(function Button({ variant = 'primary', size = 'md', className = '', children, ...props }, ref) {
   return (
     <button
+      ref={ref}
       className={`inline-flex items-center justify-center font-medium whitespace-nowrap shrink-0 transition-colors
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue)]/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface)]
         disabled:opacity-40 disabled:cursor-not-allowed ${BTN_SIZES[size] || BTN_SIZES.md} ${BTN_VARIANTS[variant] || BTN_VARIANTS.primary} ${className}`}
@@ -111,14 +113,14 @@ export function Button({ variant = 'primary', size = 'md', className = '', child
       {children}
     </button>
   )
-}
+})
 
 export function Stat({ label, value, sub, color = 'text-[var(--text)]' }) {
   return (
     <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03)] px-4 py-3.5">
       <div className="text-[11px] text-[var(--text-3)] tracking-[0.04em]">{label}</div>
       <div className={`text-[22px] leading-tight font-semibold mt-1 tabular-nums ${color}`}>{value}</div>
-      {sub && <div className="text-[11px] text-[var(--text-3)] mt-1 tabular-nums truncate">{sub}</div>}
+      {sub && <div className="text-[11px] text-[var(--text-3)] mt-1 tabular-nums leading-snug">{sub}</div>}
     </div>
   )
 }

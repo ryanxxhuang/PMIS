@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../../store.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { rfiBall } from '../../lib/ballInCourt.js'
 
@@ -93,7 +94,7 @@ export default function RFI() {
                       can.submit ? <Button variant="success" onClick={() => closeRfi(r.id)}>確認結案</Button>
                         : can.approve ? <Button variant="secondary" onClick={() => onAnswer(r)}>補充回覆</Button> : null
                     )}
-                    {can.submit && <button onClick={() => { if (window.confirm('刪除此疑義？')) deleteRfi(r.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
+                    {can.submit && <button onClick={async () => { if (await appConfirm({ title: '刪除此疑義？', danger: true, confirmLabel: '刪除' })) deleteRfi(r.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
                   </div>
                 </div>
               </div>

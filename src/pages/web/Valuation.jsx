@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Printer, Trash2, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Empty, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { applyApprovedChangeOrders, approvedNetAmount } from '../../lib/changeOrders.js'
 
@@ -205,7 +206,7 @@ export default function Valuation() {
                   <Button variant="ghost" onClick={() => setValuationStatus(selected.id, '草稿')}>退回</Button>
                   <Button variant="success" onClick={() => setValuationStatus(selected.id, '已核定')}>核定估驗</Button>
                 </> : <Badge color="amber">待監造核定</Badge>)}
-                {can.edit && <Button variant="ghost" onClick={() => { if (window.confirm(`刪除第 ${selected.period_no} 期估驗？`)) { deleteValuation(selected.id); setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
+                {can.edit && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { deleteValuation(selected.id); setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
               </div>
             }
           >

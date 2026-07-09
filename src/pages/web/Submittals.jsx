@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { submittalBall } from '../../lib/ballInCourt.js'
 
@@ -94,7 +95,7 @@ export default function Submittals() {
                     {can.submit && s.status === '退回補正' && <Button variant="secondary" onClick={() => resubmitSubmittal(s.id)}>修正再送</Button>}
                     {can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
                     {!can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
-                    {can.submit && <button onClick={() => { if (window.confirm('刪除此送審？')) deleteSubmittal(s.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
+                    {can.submit && <button onClick={async () => { if (await appConfirm({ title: '刪除此送審？', danger: true, confirmLabel: '刪除' })) deleteSubmittal(s.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
                   </div>
                 </div>
               </div>

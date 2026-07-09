@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Camera, Printer, ChevronDown, ChevronRight } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
@@ -345,7 +346,7 @@ export default function SiteLog() {
                   <div className="flex justify-between items-center gap-2">
                     <button onClick={() => setDate(l.log_date)} className="font-medium text-[var(--text)] tabular-nums text-left flex-1 truncate">{l.log_date}</button>
                     <span className="text-xs text-[var(--text-3)]">{Object.keys(l.items).length} 工項</span>
-                    <button onClick={() => { if (window.confirm(`刪除 ${l.log_date} 的施工日誌？`)) deleteSiteLog(l.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                    <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) deleteSiteLog(l.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
                   </div>
                   {l.work_summary && <div className="text-xs text-[var(--text-2)] truncate mt-0.5">{l.work_summary}</div>}
                 </div>

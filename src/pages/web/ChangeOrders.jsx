@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { FileUp } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, Button, Badge, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 import { diffBoq } from '../../lib/coDiff.js'
@@ -120,7 +121,7 @@ export default function ChangeOrders() {
             <ChangeOrderCard key={co.id} co={co} net={coNet(co)} leaves={leaves} allItems={workItems?.items || []}
               canApprove={can.ratify} canEdit={can.edit}
               onStatus={(s) => updateChangeOrder(co.id, { status: s })}
-              onDelete={() => { if (window.confirm(`刪除變更「${co.title}」及其明細?`)) deleteChangeOrder(co.id) }}
+              onDelete={async () => { if (await appConfirm({ title: `刪除變更「${co.title}」？`, body: '其明細將一併刪除。', danger: true, confirmLabel: '刪除' })) deleteChangeOrder(co.id) }}
               onAddItem={(input) => addChangeOrderItem(co.id, input)}
               onAddItems={(rows) => addChangeOrderItems(co.id, rows)}
               onUpdateItem={(id, patch) => updateChangeOrderItem(co.id, id, patch)}

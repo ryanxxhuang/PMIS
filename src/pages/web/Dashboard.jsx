@@ -145,7 +145,8 @@ export default function Dashboard() {
           <RoleActionCenter org={myOrg} items={myItems} />
 
           {/* 次要計數:一排帶狀,圖示左、狀態右對齊,填滿寬度 */}
-          <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] grid grid-cols-2 md:grid-cols-4 divide-x divide-[var(--border-2)] max-md:[&>*:nth-child(n+3)]:border-t max-md:[&>*:nth-child(even)]:border-l max-md:[&>*]:border-[var(--border-2)] max-md:divide-x-0 overflow-hidden">
+          {/* 2 欄為主、夠寬(xl)才 4 欄——避免窄桌機時中文標籤被擠成直排 */}
+          <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] grid grid-cols-2 xl:grid-cols-4 xl:divide-x divide-[var(--border-2)] max-xl:[&>*:nth-child(n+3)]:border-t max-xl:[&>*:nth-child(even)]:border-l max-xl:[&>*]:border-[var(--border-2)] overflow-hidden">
             {[
               { label: '估驗期數', value: valuations.length, sub: latestVal ? `第 ${latestVal.period_no} 期` : '尚無', to: '/valuation', icon: Coins },
               { label: '施工日誌', value: siteLogs.length, sub: `${siteLogs.length} 筆`, to: '/site-log', icon: PencilLine },
@@ -157,7 +158,7 @@ export default function Dashboard() {
                 <Link key={s.label} to={s.to} className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition min-w-0">
                   <span className="w-9 h-9 rounded-lg grid place-items-center shrink-0 bg-[var(--surface-2)] text-[var(--text-2)]"><Icon size={17} aria-hidden /></span>
                   <span className="min-w-0 leading-tight">
-                    <span className="block text-[11px] text-[var(--text-3)] tracking-[0.04em]">{s.label}</span>
+                    <span className="block text-[11px] text-[var(--text-3)] tracking-[0.04em] whitespace-nowrap">{s.label}</span>
                     <span className="num text-xl font-semibold text-[var(--text)]">{s.value}</span>
                   </span>
                   <span className={`ml-auto text-[11px] num text-right shrink-0 ${s.warn ? 'text-[var(--accent-text)] font-medium' : 'text-[var(--text-3)]'}`}>{s.sub}</span>

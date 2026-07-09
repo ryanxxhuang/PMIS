@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
+import { appConfirm } from './confirm.jsx'
 import {
   LayoutDashboard, Sparkles, Bell, CalendarClock, Newspaper,
   ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
@@ -75,9 +76,14 @@ function ProjectSwitcher() {
             <button onClick={() => { setOpen(false); navigate('/project/new') }}
               className="w-full text-left px-3 py-2 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><Plus size={14} aria-hidden /> 新增專案</button>
             <button onClick={async () => {
-              if (window.confirm(`確定刪除專案「${currentProject.project_name}」？\n此專案的標單、估驗、進度、施工日誌、查驗、缺失將一併永久刪除，無法復原。`)) {
-                setOpen(false); await deleteProject(currentProject.project_id)
-              }
+              setOpen(false)
+              // 高危險:整案永久刪除 → 要求輸入專案名稱確認,防手滑
+              const ok = await appConfirm({
+                title: '永久刪除專案',
+                body: `「${currentProject.project_name}」的標單、估驗、進度、施工日誌、查驗、缺失將一併永久刪除，無法復原。`,
+                danger: true, confirmLabel: '永久刪除', requireText: currentProject.project_name,
+              })
+              if (ok) await deleteProject(currentProject.project_id)
             }} className="w-full text-left px-3 py-2 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>
           </div>
         </>

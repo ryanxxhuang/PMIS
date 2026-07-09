@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, Button, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { revisedContractTotal, approvedNetAmount } from '../../lib/changeOrders.js'
 
@@ -175,7 +176,7 @@ export default function Cost() {
                       </button>
                     </td>
                     <td className="px-2 pr-5 text-right">
-                      <button onClick={() => { if (window.confirm(`刪除「${c.title}」?`)) deleteCostItem(c.id) }}
+                      <button onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) deleteCostItem(c.id) }}
                         className="text-[var(--text-3)] hover:text-rose-600 text-sm">✕</button>
                     </td>
                   </tr>

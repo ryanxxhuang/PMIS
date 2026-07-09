@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { Scale, FileText } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
@@ -45,7 +46,7 @@ export default function Contract() {
   const onUpload = async (e) => {
     const file = e.target.files?.[0]; e.target.value = ''
     if (!file) return
-    if (obligations.length && !window.confirm('重新解析會「取代」目前的義務清單,確定?')) return
+    if (obligations.length && !(await appConfirm({ title: '重新解析契約？', body: '重新解析會「取代」目前的義務清單。', confirmLabel: '重新解析' }))) return
     setBusy(true); setMsg('AI 解析契約中…(大檔可能要數十秒)')
     const { error, count } = await parseContract(file)
     setBusy(false)

@@ -269,8 +269,25 @@ async function extractContractText(file) {
 
 const now = () => new Date().toLocaleString('zh-TW', { hour12: false })
 
+// demo 模式:記住上次選的角色,重整/簡報中 F5 不會被踢回登入頁
+const DEMO_USER_KEY = 'pmis-demo-user'
+function restoreDemoUser() {
+  if (isSupabaseConfigured) return null
+  try {
+    const id = localStorage.getItem(DEMO_USER_KEY)
+    return users.find((u) => u.user_id === id) || null
+  } catch { return null }
+}
+
 export function StoreProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null)
+  const [currentUser, setCurrentUserState] = useState(restoreDemoUser)
+  // demo 選角色時持久化;真實模式由 Supabase session 管,不動 localStorage
+  const setCurrentUser = useCallback((u) => {
+    if (!isSupabaseConfigured) {
+      try { u ? localStorage.setItem(DEMO_USER_KEY, u.user_id) : localStorage.removeItem(DEMO_USER_KEY) } catch { /* noop */ }
+    }
+    setCurrentUserState(u)
+  }, [])
   const [audit, setAudit] = useState([]) // 記憶體操作紀錄（log() 寫入，供日後審計）
   // 估驗計價：每期一個物件，items 為 { [work_item_key]: 累計完成數量 }
   const [valuations, setValuations] = useState([])

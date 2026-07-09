@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { WebLayout } from './components/Layout.jsx'
+import { ConfirmHost } from './components/confirm.jsx'
 
 import Login from './pages/Login.jsx'
 import ProjectSetup from './pages/web/ProjectSetup.jsx'
@@ -41,6 +42,8 @@ function Web({ children }) {
 
 export default function App() {
   return (
+    <>
+    <ConfirmHost />
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<Web><Dashboard /></Web>} />
@@ -69,5 +72,6 @@ export default function App() {
       <Route path="/monthly-report" element={<Web><MonthlyReport /></Web>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </>
   )
 }
