@@ -26,6 +26,43 @@ returns setof uuid language sql security definer stable set search_path = public
   select project_id from public.project_members where user_id = auth.uid();
 $$;
 
+-- ── 伺服器端 RBAC helpers ────────────────────────────────────────────────────
+-- 角色模型與前端 store 的 `can` 對齊:org_type 來自 profiles(公司身分,跨專案一致),
+-- admin=專案建立者或 member role='admin'(單人/自家團隊不被 org_type 卡死)。
+-- 規則:機關(owner)唯讀;核准動作(估驗核定/查驗判定/缺失結案/送審審定)由
+-- trigger 保護只有監造能做——RLS 管「誰能碰這列」,trigger 管「誰能做這種狀態轉移」。
+
+-- 目前使用者的組織別(無 profile 時視為 contractor,與前端預設一致)
+create or replace function public.my_org_type()
+returns text language sql security definer stable set search_path = public as $$
+  select coalesce((select org_type from public.profiles where id = auth.uid()), 'contractor');
+$$;
+
+-- 專案管理者:建立者,或 project_members.role='admin'
+create or replace function public.is_project_admin(p uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from public.project_members m
+    where m.project_id = p and m.user_id = auth.uid() and m.role = 'admin'
+  ) or exists (
+    select 1 from public.projects pr where pr.id = p and pr.created_by = auth.uid()
+  );
+$$;
+
+-- 日常填報資料的寫入權:專案成員且非機關(機關唯讀);admin 一律可
+create or replace function public.can_write(p uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select p in (select public.my_project_ids())
+     and (public.is_project_admin(p) or public.my_org_type() <> 'owner');
+$$;
+
+-- 廠商內部資料(成本/毛利=商業機密):只有廠商成員或 admin 可讀寫
+create or replace function public.can_access_contractor_private(p uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select p in (select public.my_project_ids())
+     and (public.is_project_admin(p) or public.my_org_type() = 'contractor');
+$$;
+
 -- ── Profiles (extends auth.users) ───────────────────────────────────────────
 create table if not exists public.profiles (
   id         uuid primary key references auth.users(id) on delete cascade,
@@ -149,9 +186,18 @@ create index if not exists work_items_project_idx on public.work_items(project_i
 create index if not exists work_items_parent_idx  on public.work_items(parent_id);
 alter table public.work_items enable row level security;
 drop policy if exists "work_items_members_all" on public.work_items;
-create policy "work_items_members_all" on public.work_items for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "work_items_select" on public.work_items;
+create policy "work_items_select" on public.work_items for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "work_items_insert" on public.work_items;
+create policy "work_items_insert" on public.work_items for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "work_items_update" on public.work_items;
+create policy "work_items_update" on public.work_items for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "work_items_delete" on public.work_items;
+create policy "work_items_delete" on public.work_items for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── Valuations (progress billing) ───────────────────────────────────────────
 create table if not exists public.valuations (
@@ -185,13 +231,29 @@ create index if not exists valuation_items_val_idx on public.valuation_items(val
 alter table public.valuations      enable row level security;
 alter table public.valuation_items enable row level security;
 drop policy if exists "valuations_members_all" on public.valuations;
-create policy "valuations_members_all" on public.valuations for all to authenticated
+drop policy if exists "valuations_select" on public.valuations;
+create policy "valuations_select" on public.valuations for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "valuations_insert" on public.valuations;
+create policy "valuations_insert" on public.valuations for insert to authenticated
+  with check (public.can_write(project_id));
+-- update 開放給所有成員(機關要登錄請款/撥款欄位);「誰能改哪些欄位/狀態」
+-- 由 valuations_guard trigger 強制(核定=監造、機關僅撥款欄)。
+drop policy if exists "valuations_update" on public.valuations;
+create policy "valuations_update" on public.valuations for update to authenticated
   using (project_id in (select public.my_project_ids()))
   with check (project_id in (select public.my_project_ids()));
+drop policy if exists "valuations_delete" on public.valuations;
+create policy "valuations_delete" on public.valuations for delete to authenticated
+  using (public.can_write(project_id));
 drop policy if exists "valuation_items_members_all" on public.valuation_items;
-create policy "valuation_items_members_all" on public.valuation_items for all to authenticated
-  using (valuation_id in (select id from public.valuations))
-  with check (valuation_id in (select id from public.valuations));
+drop policy if exists "valuation_items_select" on public.valuation_items;
+create policy "valuation_items_select" on public.valuation_items for select to authenticated
+  using (valuation_id in (select id from public.valuations));
+drop policy if exists "valuation_items_write" on public.valuation_items;
+create policy "valuation_items_write" on public.valuation_items for all to authenticated
+  using (valuation_id in (select id from public.valuations v where public.can_write(v.project_id)))
+  with check (valuation_id in (select id from public.valuations v where public.can_write(v.project_id)));
 
 -- 請款 / 收款追蹤(估驗核定後)
 alter table public.valuations
@@ -212,9 +274,18 @@ create table if not exists public.schedule_periods (
 create index if not exists schedule_periods_project_idx on public.schedule_periods(project_id);
 alter table public.schedule_periods enable row level security;
 drop policy if exists "schedule_periods_members_all" on public.schedule_periods;
-create policy "schedule_periods_members_all" on public.schedule_periods for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "schedule_periods_select" on public.schedule_periods;
+create policy "schedule_periods_select" on public.schedule_periods for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "schedule_periods_insert" on public.schedule_periods;
+create policy "schedule_periods_insert" on public.schedule_periods for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "schedule_periods_update" on public.schedule_periods;
+create policy "schedule_periods_update" on public.schedule_periods for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "schedule_periods_delete" on public.schedule_periods;
+create policy "schedule_periods_delete" on public.schedule_periods for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── Daily site logs (feed valuations) ───────────────────────────────────────
 create table if not exists public.daily_logs (
@@ -249,13 +320,26 @@ create index if not exists daily_log_items_log_idx on public.daily_log_items(dai
 alter table public.daily_logs      enable row level security;
 alter table public.daily_log_items enable row level security;
 drop policy if exists "daily_logs_members_all" on public.daily_logs;
-create policy "daily_logs_members_all" on public.daily_logs for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "daily_logs_select" on public.daily_logs;
+create policy "daily_logs_select" on public.daily_logs for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "daily_logs_insert" on public.daily_logs;
+create policy "daily_logs_insert" on public.daily_logs for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "daily_logs_update" on public.daily_logs;
+create policy "daily_logs_update" on public.daily_logs for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "daily_logs_delete" on public.daily_logs;
+create policy "daily_logs_delete" on public.daily_logs for delete to authenticated
+  using (public.can_write(project_id));
 drop policy if exists "daily_log_items_members_all" on public.daily_log_items;
-create policy "daily_log_items_members_all" on public.daily_log_items for all to authenticated
-  using (daily_log_id in (select id from public.daily_logs))
-  with check (daily_log_id in (select id from public.daily_logs));
+drop policy if exists "daily_log_items_select" on public.daily_log_items;
+create policy "daily_log_items_select" on public.daily_log_items for select to authenticated
+  using (daily_log_id in (select id from public.daily_logs));
+drop policy if exists "daily_log_items_write" on public.daily_log_items;
+create policy "daily_log_items_write" on public.daily_log_items for all to authenticated
+  using (daily_log_id in (select id from public.daily_logs d where public.can_write(d.project_id)))
+  with check (daily_log_id in (select id from public.daily_logs d where public.can_write(d.project_id)));
 
 -- ── Photos (site-log evidence; quality photos reuse this table later) ────────
 -- Files live in the 'photos' Storage bucket; this row is the metadata + links.
@@ -279,9 +363,18 @@ create index if not exists photos_project_idx   on public.photos(project_id);
 create index if not exists photos_daily_log_idx on public.photos(daily_log_id);
 alter table public.photos enable row level security;
 drop policy if exists "photos_members_all" on public.photos;
-create policy "photos_members_all" on public.photos for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "photos_select" on public.photos;
+create policy "photos_select" on public.photos for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "photos_insert" on public.photos;
+create policy "photos_insert" on public.photos for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "photos_update" on public.photos;
+create policy "photos_update" on public.photos for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "photos_delete" on public.photos;
+create policy "photos_delete" on public.photos for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── Storage bucket for photo files + object-level RLS ────────────────────────
 -- Object path convention: <project_id>/<daily_log_id>/<photo_id>.jpg — the first
@@ -295,10 +388,10 @@ create policy "photos_objects_select" on storage.objects for select to authentic
   using (bucket_id = 'photos' and public.is_project_member(((storage.foldername(name))[1])::uuid));
 drop policy if exists "photos_objects_insert" on storage.objects;
 create policy "photos_objects_insert" on storage.objects for insert to authenticated
-  with check (bucket_id = 'photos' and public.is_project_member(((storage.foldername(name))[1])::uuid));
+  with check (bucket_id = 'photos' and public.can_write(((storage.foldername(name))[1])::uuid));
 drop policy if exists "photos_objects_delete" on storage.objects;
 create policy "photos_objects_delete" on storage.objects for delete to authenticated
-  using (bucket_id = 'photos' and public.is_project_member(((storage.foldername(name))[1])::uuid));
+  using (bucket_id = 'photos' and public.can_write(((storage.foldername(name))[1])::uuid));
 
 -- ── Quality: inspections + defects (three-tier QC) ──────────────────────────
 create table if not exists public.inspections (
@@ -338,13 +431,31 @@ create index if not exists defects_project_idx on public.defects(project_id);
 alter table public.inspections enable row level security;
 alter table public.defects     enable row level security;
 drop policy if exists "inspections_members_all" on public.inspections;
-create policy "inspections_members_all" on public.inspections for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "inspections_select" on public.inspections;
+create policy "inspections_select" on public.inspections for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "inspections_insert" on public.inspections;
+create policy "inspections_insert" on public.inspections for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "inspections_update" on public.inspections;
+create policy "inspections_update" on public.inspections for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "inspections_delete" on public.inspections;
+create policy "inspections_delete" on public.inspections for delete to authenticated
+  using (public.can_write(project_id));
 drop policy if exists "defects_members_all" on public.defects;
-create policy "defects_members_all" on public.defects for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "defects_select" on public.defects;
+create policy "defects_select" on public.defects for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "defects_insert" on public.defects;
+create policy "defects_insert" on public.defects for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "defects_update" on public.defects;
+create policy "defects_update" on public.defects for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "defects_delete" on public.defects;
+create policy "defects_delete" on public.defects for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── Contract obligations (AI-extracted deadlines + penalties) ───────────────
 -- Each row is a time-based duty pulled from the contract. The deadline is stored
@@ -379,9 +490,18 @@ create table if not exists public.contract_obligations (
 create index if not exists contract_obligations_project_idx on public.contract_obligations(project_id);
 alter table public.contract_obligations enable row level security;
 drop policy if exists "contract_obligations_members_all" on public.contract_obligations;
-create policy "contract_obligations_members_all" on public.contract_obligations for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "contract_obligations_select" on public.contract_obligations;
+create policy "contract_obligations_select" on public.contract_obligations for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "contract_obligations_insert" on public.contract_obligations;
+create policy "contract_obligations_insert" on public.contract_obligations for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "contract_obligations_update" on public.contract_obligations;
+create policy "contract_obligations_update" on public.contract_obligations for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "contract_obligations_delete" on public.contract_obligations;
+create policy "contract_obligations_delete" on public.contract_obligations for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── Cost management (budget vs actual, subcontracting, gross margin) ─────────
 -- A contractor's profit ledger. Revenue = the billable BOQ total (發包工程費);
@@ -403,10 +523,12 @@ create table if not exists public.cost_items (
 );
 create index if not exists cost_items_project_idx on public.cost_items(project_id);
 alter table public.cost_items enable row level security;
+-- 成本/毛利=廠商商業機密:監造/機關連「讀」都不行(側欄本來就不給看,這裡是伺服器端落實)
 drop policy if exists "cost_items_members_all" on public.cost_items;
-create policy "cost_items_members_all" on public.cost_items for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "cost_items_contractor_only" on public.cost_items;
+create policy "cost_items_contractor_only" on public.cost_items for all to authenticated
+  using (public.can_access_contractor_private(project_id))
+  with check (public.can_access_contractor_private(project_id));
 
 -- ── Change orders (變更設計 / 追加減帳) ──────────────────────────────────────
 -- A formal contract amendment and its added/reduced work-item lines. Only 核准
@@ -445,13 +567,34 @@ create index if not exists change_order_items_co_idx on public.change_order_item
 alter table public.change_orders      enable row level security;
 alter table public.change_order_items enable row level security;
 drop policy if exists "change_orders_members_all" on public.change_orders;
-create policy "change_orders_members_all" on public.change_orders for all to authenticated
+drop policy if exists "change_orders_select" on public.change_orders;
+create policy "change_orders_select" on public.change_orders for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "change_orders_insert" on public.change_orders;
+create policy "change_orders_insert" on public.change_orders for insert to authenticated
+  with check (public.can_write(project_id));
+-- update 開放給所有成員(機關要做契約級核定:核准/駁回);欄位與狀態轉移
+-- 由 change_orders_guard trigger 強制(核准/駁回=監造/機關;機關僅能改狀態)。
+drop policy if exists "change_orders_update" on public.change_orders;
+create policy "change_orders_update" on public.change_orders for update to authenticated
   using (project_id in (select public.my_project_ids()))
   with check (project_id in (select public.my_project_ids()));
+drop policy if exists "change_orders_delete" on public.change_orders;
+create policy "change_orders_delete" on public.change_orders for delete to authenticated
+  using (public.can_write(project_id));
 drop policy if exists "change_order_items_members_all" on public.change_order_items;
-create policy "change_order_items_members_all" on public.change_order_items for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "change_order_items_select" on public.change_order_items;
+create policy "change_order_items_select" on public.change_order_items for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "change_order_items_insert" on public.change_order_items;
+create policy "change_order_items_insert" on public.change_order_items for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "change_order_items_update" on public.change_order_items;
+create policy "change_order_items_update" on public.change_order_items for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "change_order_items_delete" on public.change_order_items;
+create policy "change_order_items_delete" on public.change_order_items for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── Per-item schedule (逐工項計畫起迄 → per-item 落後) ───────────────────────
 -- Kept in its own table (not columns on work_items) so re-importing the BOQ
@@ -468,9 +611,18 @@ create table if not exists public.item_schedules (
 create index if not exists item_schedules_project_idx on public.item_schedules(project_id);
 alter table public.item_schedules enable row level security;
 drop policy if exists "item_schedules_members_all" on public.item_schedules;
-create policy "item_schedules_members_all" on public.item_schedules for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "item_schedules_select" on public.item_schedules;
+create policy "item_schedules_select" on public.item_schedules for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "item_schedules_insert" on public.item_schedules;
+create policy "item_schedules_insert" on public.item_schedules for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "item_schedules_update" on public.item_schedules;
+create policy "item_schedules_update" on public.item_schedules for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "item_schedules_delete" on public.item_schedules;
+create policy "item_schedules_delete" on public.item_schedules for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── Safety (工安) — self-checks, deficiencies, training, hazard notices ──────
 -- One flexible table for the contractor's site-safety log (public-works required).
@@ -493,9 +645,18 @@ create table if not exists public.safety_records (
 create index if not exists safety_records_project_idx on public.safety_records(project_id);
 alter table public.safety_records enable row level security;
 drop policy if exists "safety_records_members_all" on public.safety_records;
-create policy "safety_records_members_all" on public.safety_records for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "safety_records_select" on public.safety_records;
+create policy "safety_records_select" on public.safety_records for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "safety_records_insert" on public.safety_records;
+create policy "safety_records_insert" on public.safety_records for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "safety_records_update" on public.safety_records;
+create policy "safety_records_update" on public.safety_records for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "safety_records_delete" on public.safety_records;
+create policy "safety_records_delete" on public.safety_records for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── QC: 自主檢查表(範本+紀錄,實測值自動判定)與取樣試驗(試體齡期追蹤) ─────────
 create table if not exists public.checklist_templates (
@@ -546,17 +707,44 @@ alter table public.checklist_templates enable row level security;
 alter table public.checklist_records   enable row level security;
 alter table public.test_samples        enable row level security;
 drop policy if exists "checklist_templates_members_all" on public.checklist_templates;
-create policy "checklist_templates_members_all" on public.checklist_templates for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "checklist_templates_select" on public.checklist_templates;
+create policy "checklist_templates_select" on public.checklist_templates for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "checklist_templates_insert" on public.checklist_templates;
+create policy "checklist_templates_insert" on public.checklist_templates for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "checklist_templates_update" on public.checklist_templates;
+create policy "checklist_templates_update" on public.checklist_templates for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "checklist_templates_delete" on public.checklist_templates;
+create policy "checklist_templates_delete" on public.checklist_templates for delete to authenticated
+  using (public.can_write(project_id));
 drop policy if exists "checklist_records_members_all" on public.checklist_records;
-create policy "checklist_records_members_all" on public.checklist_records for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "checklist_records_select" on public.checklist_records;
+create policy "checklist_records_select" on public.checklist_records for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "checklist_records_insert" on public.checklist_records;
+create policy "checklist_records_insert" on public.checklist_records for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "checklist_records_update" on public.checklist_records;
+create policy "checklist_records_update" on public.checklist_records for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "checklist_records_delete" on public.checklist_records;
+create policy "checklist_records_delete" on public.checklist_records for delete to authenticated
+  using (public.can_write(project_id));
 drop policy if exists "test_samples_members_all" on public.test_samples;
-create policy "test_samples_members_all" on public.test_samples for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "test_samples_select" on public.test_samples;
+create policy "test_samples_select" on public.test_samples for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "test_samples_insert" on public.test_samples;
+create policy "test_samples_insert" on public.test_samples for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "test_samples_update" on public.test_samples;
+create policy "test_samples_update" on public.test_samples for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "test_samples_delete" on public.test_samples;
+create policy "test_samples_delete" on public.test_samples for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── 觀察事項(Observation):比缺失輕的現場提醒,可升級成正式缺失 ─────────────
 create table if not exists public.observations (
@@ -575,9 +763,18 @@ create table if not exists public.observations (
 create index if not exists observations_project_idx on public.observations(project_id);
 alter table public.observations enable row level security;
 drop policy if exists "observations_members_all" on public.observations;
-create policy "observations_members_all" on public.observations for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "observations_select" on public.observations;
+create policy "observations_select" on public.observations for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "observations_insert" on public.observations;
+create policy "observations_insert" on public.observations for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "observations_update" on public.observations;
+create policy "observations_update" on public.observations for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "observations_delete" on public.observations;
+create policy "observations_delete" on public.observations for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── 監造協作:送審(Submittal)與工程疑義(RFI) ─────────────────────────────────
 create table if not exists public.submittals (
@@ -620,13 +817,31 @@ create index if not exists rfis_project_idx       on public.rfis(project_id);
 alter table public.submittals enable row level security;
 alter table public.rfis       enable row level security;
 drop policy if exists "submittals_members_all" on public.submittals;
-create policy "submittals_members_all" on public.submittals for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "submittals_select" on public.submittals;
+create policy "submittals_select" on public.submittals for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "submittals_insert" on public.submittals;
+create policy "submittals_insert" on public.submittals for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "submittals_update" on public.submittals;
+create policy "submittals_update" on public.submittals for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "submittals_delete" on public.submittals;
+create policy "submittals_delete" on public.submittals for delete to authenticated
+  using (public.can_write(project_id));
 drop policy if exists "rfis_members_all" on public.rfis;
-create policy "rfis_members_all" on public.rfis for all to authenticated
-  using (project_id in (select public.my_project_ids()))
-  with check (project_id in (select public.my_project_ids()));
+drop policy if exists "rfis_select" on public.rfis;
+create policy "rfis_select" on public.rfis for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "rfis_insert" on public.rfis;
+create policy "rfis_insert" on public.rfis for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "rfis_update" on public.rfis;
+create policy "rfis_update" on public.rfis for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "rfis_delete" on public.rfis;
+create policy "rfis_delete" on public.rfis for delete to authenticated
+  using (public.can_write(project_id));
 
 -- ── RPCs (SECURITY DEFINER) ─────────────────────────────────────────────────
 -- 用 email 邀請成員加入專案(監造/機關/其他廠商帳號)。只有專案建立者可執行;
@@ -692,14 +907,201 @@ begin
 end; $$;
 grant execute on function public.create_project(text,text,text,text,text,text,date,date) to authenticated;
 
--- Delete a project (and everything it cascades to). Members only.
+-- Delete a project (and everything it cascades to). Admin/creator only —
+-- 受邀的監造/機關/他家廠商成員不可刪除整案。
 create or replace function public.delete_project(p_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
-  if not public.is_project_member(p_id) then raise exception 'not a project member'; end if;
+  if not public.is_project_admin(p_id) then raise exception '只有專案建立者/管理者可以刪除專案'; end if;
   delete from public.projects where id = p_id;
 end; $$;
 grant execute on function public.delete_project(uuid) to authenticated;
+
+-- ============================================================================
+-- ── 伺服器端 RBAC:狀態轉移 trigger 防護 ─────────────────────────────────────
+--  RLS 決定「誰能碰這列」,這裡決定「誰能做這種狀態轉移 / 改哪些欄位」。
+--  對應前端 can:approve(核定/判定/結案/審定)=監造、ratify(變更核准)=機關/監造、
+--  機關其餘唯讀。admin(建立者/管理者)一律放行;auth.uid() is null
+--  (service role、SQL Editor、遷移腳本)一律放行——只防登入使用者越權。
+-- ============================================================================
+
+-- 估驗:跨越「已核定」的狀態轉移=監造;機關只能碰請款/撥款三欄
+create or replace function public.valuations_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare org text;
+begin
+  if auth.uid() is null or public.is_project_admin(new.project_id) then return new; end if;
+  org := public.my_org_type();
+  if new.status is distinct from old.status
+     and (new.status = '已核定' or old.status = '已核定')
+     and org <> 'supervisor' then
+    raise exception '估驗核定/退回核定僅監造或專案管理者可執行';
+  end if;
+  if org = 'owner' and (
+       new.period_no      is distinct from old.period_no
+    or new.period_start   is distinct from old.period_start
+    or new.period_end     is distinct from old.period_end
+    or new.valuation_date is distinct from old.valuation_date
+    or new.retention_pct  is distinct from old.retention_pct
+    or new.status         is distinct from old.status
+    or new.note           is distinct from old.note
+  ) then
+    raise exception '機關僅可登錄請款/撥款欄位(invoice_date / paid_date / paid_amount)';
+  end if;
+  return new;
+end; $$;
+drop trigger if exists valuations_guard on public.valuations;
+create trigger valuations_guard before update on public.valuations
+  for each row execute function public.valuations_guard();
+
+-- 估驗明細:已核定的估驗凍結(監造/管理者才可再動——退回重審用)
+create or replace function public.valuation_items_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v record;
+begin
+  if auth.uid() is null then return coalesce(new, old); end if;
+  select project_id, status into v from public.valuations
+    where id = coalesce(new.valuation_id, old.valuation_id);
+  if v.status = '已核定'
+     and not public.is_project_admin(v.project_id)
+     and public.my_org_type() <> 'supervisor' then
+    raise exception '已核定估驗的明細不可再修改(需監造退回後重編)';
+  end if;
+  return coalesce(new, old);
+end; $$;
+drop trigger if exists valuation_items_guard on public.valuation_items;
+create trigger valuation_items_guard before insert or update or delete on public.valuation_items
+  for each row execute function public.valuation_items_guard();
+
+-- 查驗:合格/不合格判定(含撤銷判定)=監造
+create or replace function public.inspections_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or public.is_project_admin(new.project_id) then return new; end if;
+  if new.status is distinct from old.status
+     and (new.status in ('合格','不合格') or old.status in ('合格','不合格'))
+     and public.my_org_type() <> 'supervisor' then
+    raise exception '查驗判定(合格/不合格)僅監造或專案管理者可執行';
+  end if;
+  return new;
+end; $$;
+drop trigger if exists inspections_guard on public.inspections;
+create trigger inspections_guard before update on public.inspections
+  for each row execute function public.inspections_guard();
+
+-- 缺失:結案/撤銷結案=監造(施工只能改善、提送複查)
+create or replace function public.defects_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or public.is_project_admin(new.project_id) then return new; end if;
+  if new.status is distinct from old.status
+     and (new.status = '已結案' or old.status = '已結案')
+     and public.my_org_type() <> 'supervisor' then
+    raise exception '缺失結案僅監造或專案管理者可執行';
+  end if;
+  return new;
+end; $$;
+drop trigger if exists defects_guard on public.defects;
+create trigger defects_guard before update on public.defects
+  for each row execute function public.defects_guard();
+
+-- 送審:審定結果(核准/核備/退回補正/駁回)=監造
+create or replace function public.submittals_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or public.is_project_admin(new.project_id) then return new; end if;
+  if new.status is distinct from old.status
+     and (new.status in ('核准','核備','退回補正','駁回')
+       or old.status in ('核准','核備','退回補正','駁回'))
+     and public.my_org_type() <> 'supervisor' then
+    raise exception '送審審定僅監造或專案管理者可執行';
+  end if;
+  return new;
+end; $$;
+drop trigger if exists submittals_guard on public.submittals;
+create trigger submittals_guard before update on public.submittals
+  for each row execute function public.submittals_guard();
+
+-- RFI:正式回覆=監造(廠商提問、確認結案)
+create or replace function public.rfis_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare org text;
+begin
+  if auth.uid() is null or public.is_project_admin(new.project_id) then return new; end if;
+  org := public.my_org_type();
+  if (new.answer is distinct from old.answer
+      or (new.status is distinct from old.status and new.status = '已回覆'))
+     and org <> 'supervisor' then
+    raise exception '回覆工程疑義僅監造或專案管理者可執行';
+  end if;
+  return new;
+end; $$;
+drop trigger if exists rfis_guard on public.rfis;
+create trigger rfis_guard before update on public.rfis
+  for each row execute function public.rfis_guard();
+
+-- 變更設計:核准/駁回(含撤銷)=機關或監造(契約級核定);機關僅能改狀態欄
+create or replace function public.change_orders_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare org text;
+begin
+  if auth.uid() is null or public.is_project_admin(new.project_id) then return new; end if;
+  org := public.my_org_type();
+  if new.status is distinct from old.status
+     and (new.status in ('核准','駁回') or old.status in ('核准','駁回'))
+     and org not in ('supervisor','owner') then
+    raise exception '變更設計核准/駁回僅機關、監造或專案管理者可執行';
+  end if;
+  if org = 'owner' and (
+       new.co_no      is distinct from old.co_no
+    or new.title      is distinct from old.title
+    or new.co_date    is distinct from old.co_date
+    or new.reason     is distinct from old.reason
+    or new.sort_order is distinct from old.sort_order
+  ) then
+    raise exception '機關僅可核定變更設計狀態,不可修改內容';
+  end if;
+  return new;
+end; $$;
+drop trigger if exists change_orders_guard on public.change_orders;
+create trigger change_orders_guard before update on public.change_orders
+  for each row execute function public.change_orders_guard();
+
+-- 變更明細:已核准的變更凍結(管理者才可再動)
+create or replace function public.change_order_items_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare co record;
+begin
+  if auth.uid() is null then return coalesce(new, old); end if;
+  select project_id, status into co from public.change_orders
+    where id = coalesce(new.change_order_id, old.change_order_id);
+  if co.status = '核准' and not public.is_project_admin(co.project_id) then
+    raise exception '已核准變更設計的明細不可再修改';
+  end if;
+  return coalesce(new, old);
+end; $$;
+drop trigger if exists change_order_items_guard on public.change_order_items;
+create trigger change_order_items_guard before insert or update or delete on public.change_order_items
+  for each row execute function public.change_order_items_guard();
+
+-- 身分別(org_type)提權防護:加入「他人建立的專案」後不可自改 org_type
+-- (否則廠商成員可自改為監造,自己核定自己的估驗)。單人/自家專案可自由修正。
+create or replace function public.profiles_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return new; end if;
+  if new.org_type is distinct from old.org_type and exists (
+    select 1 from public.project_members m
+    join public.projects p on p.id = m.project_id
+    where m.user_id = old.id and p.created_by <> old.id
+  ) then
+    raise exception '已加入他人專案後不可變更身分別,請聯絡專案管理者';
+  end if;
+  return new;
+end; $$;
+drop trigger if exists profiles_guard on public.profiles;
+create trigger profiles_guard before update on public.profiles
+  for each row execute function public.profiles_guard();
 
 -- ── RLS 熱路徑與外鍵索引(缺這些會逐列全表掃描) ──────────────────────────────
 create index if not exists project_members_user_idx      on public.project_members(user_id);
