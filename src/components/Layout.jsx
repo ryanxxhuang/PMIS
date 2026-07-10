@@ -24,8 +24,8 @@ const navGroups = [
     { to: '/boq', icon: ClipboardList, label: '標單工項' },
     { to: '/site-log', icon: PencilLine, label: '施工日誌' },
     { to: '/valuation', icon: Coins, label: '估驗計價' },
-    { to: '/payments', icon: Receipt, label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
-    { to: '/cost', icon: Wallet, label: '成本管理', roles: ['contractor'] },               // 廠商毛利機密
+    { to: '/payments', icon: Receipt, label: '請款收款', roles: ['contractor', 'owner'], perm: 'updatePayment' }, // 監造不經手請款
+    { to: '/cost', icon: Wallet, label: '成本管理', roles: ['contractor'], perm: 'accessContractorPrivate' }, // 廠商毛利機密(contractor_pm)
     { to: '/change-orders', icon: Wrench, label: '變更設計' },
     { to: '/progress', icon: TrendingUp, label: '進度 S 曲線' },
     { to: '/schedule', icon: CalendarRange, label: '逐工項排程', roles: ['contractor'] },   // 廠商內部規劃
@@ -45,7 +45,7 @@ const navGroups = [
 
 // Top-bar project picker: switch / create / delete (real backend only).
 function ProjectSwitcher() {
-  const { project, projects, currentProject, switchProject, deleteProject, isSupabaseConfigured } = useStore()
+  const { project, projects, currentProject, switchProject, deleteProject, isSupabaseConfigured, can } = useStore()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
 
@@ -78,7 +78,7 @@ function ProjectSwitcher() {
             <div className="border-t border-[var(--border-2)] my-1" />
             <button onClick={() => { setOpen(false); navigate('/project/new') }}
               className="w-full text-left px-3 py-2 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><Plus size={14} aria-hidden /> 新增專案</button>
-            <button onClick={async () => {
+            {can.manageProjectIdentity && <button onClick={async () => {
               setOpen(false)
               // 高危險:整案永久刪除 → 要求輸入專案名稱確認,防手滑
               const ok = await appConfirm({
@@ -87,7 +87,7 @@ function ProjectSwitcher() {
                 danger: true, confirmLabel: '永久刪除', requireText: currentProject.project_name,
               })
               if (ok) await deleteProject(currentProject.project_id)
-            }} className="w-full text-left px-3 py-2 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>
+            }} className="w-full text-left px-3 py-2 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>}
           </div>
         </>
       )}
@@ -128,11 +128,17 @@ function TopBar({ onMenu }) {
 
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { currentUser, can } = useStore()
-  // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——admin(專案建立者)看得到全部。
-  const org = currentUser?.org_type || 'contractor'
+  const { partyOrgKey, can } = useStore()
+  // 角色化導覽(P0-03):依「這個專案」的 membership party 過濾工具——切換專案時
+  // 跟著變(A 案廠商/B 案監造看到不同側欄)。未解析身分只看共用工具。
+  // 技術管理員不再因 admin 看到全部(技術管理 ≠ 契約權限);perm 鍵對應 can 矩陣。
   const visibleGroups = navGroups
-    .map((g) => ({ ...g, items: g.items.filter((n) => !n.roles || can?.admin || n.roles.includes(org)) }))
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((n) =>
+        (!n.roles || (partyOrgKey && n.roles.includes(partyOrgKey)))
+        && (!n.perm || can?.[n.perm])),
+    }))
     .filter((g) => g.items.length)
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg)]">

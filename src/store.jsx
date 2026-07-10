@@ -20,6 +20,7 @@ import {
   loadQualityFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
   loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
 } from './store/db.js'
+import { derivePermissions, deriveDemoPermissions, navPartyKey } from './lib/projectPermissions.js'
 import { useAuthSlice } from './store/slices/auth.js'
 import { useProjectsSlice } from './store/slices/projects.js'
 import { useBillingSlice } from './store/slices/billing.js'
@@ -52,33 +53,34 @@ export function StoreProvider({ children }) {
   // ── 身分與專案(其他 slice 的共同上游)────────────────────────────────────
   const { currentUser, setCurrentUser, signUp, resendSignup, signIn, signOutBase } = useAuthSlice()
   const {
-    projects, currentProjectId, currentProject, myMemberRoles,
+    projects, currentProject,
     projectMembershipsByProject, currentProjectMembership, projectLoading,
     workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps, dbMode, demoMode,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
 
-  // 角色權限（UI 層 v1，對應三級品管）。P0-02 only exposes the new
-  // project-scoped identity; authorization remains legacy until P0-03.
-  //   施工＝填報/提送，監造＝查驗判定/審核，機關＝監督核定（變更設計核准、撥款）。
-  // 核心規則：施工不能核准或結案自己的東西；機關對日常填報唯讀，但保留契約級核定權。
-  // 例外：專案 admin（建立者）擁有完整權限——單人/小團隊試用不會被自己的
-  // org_type 卡死；demo 模式刻意不套用 admin 例外，保留三種角色的展示劇本。
-  // (伺服器端另有同規則的 RLS+trigger 強制,見 supabase/schema.sql RBAC 段)
-  const can = useMemo(() => {
-    const org = currentUser?.org_type || 'contractor'
-    const isAdmin = !demoMode && myMemberRoles[currentProjectId] === 'admin'
-    return {
-      edit: isAdmin || org === 'contractor',      // 日誌/成本/請款/檢查表等日常填報
-      submit: isAdmin || org === 'contractor',    // 提送（估驗送監造審核、查驗申請）
-      approve: isAdmin || org === 'supervisor',   // 監造：核定估驗、查驗判定、缺失複查結案、送審審定
-      ratify: isAdmin || org === 'owner' || org === 'supervisor', // 契約級核定：變更設計核准/駁回（機關為主，監造得初審）
-      oversee: org === 'owner',                   // 機關監督視角（首頁行動中心＝核定/撥款）
-      readonly: !isAdmin && org === 'owner',
-      admin: isAdmin,                             // 專案建立者：看得到全部側欄工具（角色化導覽的例外）
-    }
-  }, [currentUser, demoMode, myMemberRoles, currentProjectId])
+  // 角色權限(P0-03 cutover):真實模式由「這個專案」的 membership
+  // (party_type × project_role)推導,與伺服器端 permission functions 同矩陣;
+  // is_project_admin 只保留技術管理(manageProjectIdentity/admin),不再
+  // override 業務審核——技術管理 ≠ 契約權限。profiles.org_type 只剩 demo/
+  // 註冊提示用途。無 membership 或 party 停用 → fail closed(唯讀)。
+  // demo 模式沿用三個銷售劇本角色,映射為代表性專案身分走同一條推導。
+  // (伺服器端為最終仲裁:RLS + transition guards,見 supabase/schema.sql P0-03 段)
+  const can = useMemo(
+    () => (demoMode
+      ? deriveDemoPermissions(currentUser?.org_type || 'contractor')
+      : derivePermissions(currentProjectMembership)),
+    [demoMode, currentUser, currentProjectMembership],
+  )
+  // 這個專案我代表哪一方('contractor'|'supervisor'|'owner'|null):
+  // 供角色化導覽與 ball-in-court 視角使用;切換專案時跟著 membership 變。
+  const partyOrgKey = useMemo(
+    () => (demoMode
+      ? (currentUser?.org_type || 'contractor')
+      : navPartyKey(currentProjectMembership)),
+    [demoMode, currentUser, currentProjectMembership],
+  )
 
   // 標註圖(圖面/照片 markup):demo 直接存 dataURL;真專案存 photos bucket
   // (路徑首段=project_id,沿用既有 Storage RLS)。
@@ -239,7 +241,7 @@ export function StoreProvider({ children }) {
     project: currentProject || project, currentUser, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
-    projectMembershipsByProject, currentProjectMembership,
+    projectMembershipsByProject, currentProjectMembership, partyOrgKey,
     workItems, workItemsSource, importWorkItems, dbMode, demoMode, can,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,

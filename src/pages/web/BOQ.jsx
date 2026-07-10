@@ -9,7 +9,7 @@ const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 
 // 標單工項（BOQ）— 工項樹來自 store：有真專案讀 Supabase work_items，否則範例 JSON。
 export default function BOQ() {
-  const { workItems: data, workItemsSource, importWorkItems, isSupabaseConfigured, currentProject, resetProjectBoq, dbMode } = useStore()
+  const { workItems: data, workItemsSource, importWorkItems, isSupabaseConfigured, currentProject, resetProjectBoq, dbMode, can } = useStore()
   const [expanded, setExpanded] = useState(() => new Set())
   const [onlyBillable, setOnlyBillable] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -41,7 +41,7 @@ export default function BOQ() {
     if (error) setImportErr(error.message || '匯入失敗')
     else setParsed(null)
   }
-  const canImport = isSupabaseConfigured && currentProject && workItemsSource === 'sample'
+  const canImport = isSupabaseConfigured && currentProject && workItemsSource === 'sample' && can.manageBoq
 
   const childrenMap = useMemo(() => {
     const map = new Map()
@@ -107,7 +107,7 @@ export default function BOQ() {
       <PageHeader title="標單工項" tagline="BOQ / WBS"
         subtitle={`${meta.project_name}　·　${meta.owner_name}`}
         meta={meta.contract_no ? [{ k: '契約編號', v: meta.contract_no }] : []}
-        action={dbMode && workItemsSource === 'db' && (
+        action={dbMode && workItemsSource === 'db' && can.manageBoq && (
           <Button variant="ghost" onClick={async () => {
             if (await appConfirm({ title: '重新匯入標單？', body: '會清空此專案的標單工項，以及相依的估驗、進度、施工日誌、查驗、缺失。', danger: true, confirmLabel: '清空重匯' })) await resetProjectBoq()
           }}>↻ 重新匯入標單</Button>

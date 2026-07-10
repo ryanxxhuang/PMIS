@@ -8,7 +8,7 @@ const money = (n) => (n == null || isNaN(n) ? '—' : Math.round(n).toLocaleStri
 const payStatus = (v) => (v.paid_date ? '已收款' : v.invoice_date ? '已請款' : '待請款')
 
 export default function Payments() {
-  const { project, workItems: data, valuations, updateValuationPayment, isSupabaseConfigured, currentProject, workItemsSource } = useStore()
+  const { project, workItems: data, valuations, updateValuationPayment, isSupabaseConfigured, currentProject, workItemsSource, can } = useStore()
 
   const tree = useMemo(() => (data ? buildBillableTree(data.items) : { roots: [], childrenMap: new Map() }), [data])
 
@@ -80,6 +80,7 @@ export default function Payments() {
               <tbody>
                 {rows.map(({ v, cum, thisAmt, retention, net }) => {
                   const st = payStatus(v)
+                  const canUpdate = can.updatePayment && ['已核定', '已請款'].includes(v.status)
                   return (
                     <tr key={v.id} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
                       <td className="py-1.5 pl-4 tabular-nums">第 {v.period_no} 期</td>
@@ -89,15 +90,15 @@ export default function Payments() {
                       <td className="px-2 text-right tabular-nums text-[var(--text-2)]">{money(retention)}</td>
                       <td className="px-2 text-right tabular-nums font-medium">{money(net)}</td>
                       <td className="px-2">
-                        <input type="date" value={v.invoice_date || ''} onChange={(e) => updateValuationPayment(v.id, { invoice_date: e.target.value || null })}
+                        <input type="date" value={v.invoice_date || ''} disabled={!canUpdate} onChange={(e) => updateValuationPayment(v.id, { invoice_date: e.target.value || null })}
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
                       </td>
                       <td className="px-2">
-                        <input type="date" value={v.paid_date || ''} onChange={(e) => updateValuationPayment(v.id, { paid_date: e.target.value || null })}
+                        <input type="date" value={v.paid_date || ''} disabled={!canUpdate} onChange={(e) => updateValuationPayment(v.id, { paid_date: e.target.value || null })}
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
                       </td>
                       <td className="px-2 text-right">
-                        <input type="number" min="0" step="any" value={v.paid_amount ?? ''} placeholder={Math.round(net).toString()}
+                        <input type="number" min="0" step="any" value={v.paid_amount ?? ''} placeholder={Math.round(net).toString()} disabled={!canUpdate}
                           onChange={(e) => { const n = parseFloat(e.target.value); updateValuationPayment(v.id, { paid_amount: isNaN(n) ? null : n }) }}
                           className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
                       </td>

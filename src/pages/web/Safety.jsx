@@ -14,7 +14,7 @@ const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const thisMonth = () => todayStr().slice(0, 7)
 
 export default function Safety() {
-  const { project, dbMode, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord } = useStore()
+  const { project, dbMode, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord, can } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -58,7 +58,7 @@ export default function Safety() {
         <Stat label="教育訓練累計" value={counts.trainings} sub="場" color="text-[var(--green-text)]" />
       </div>
 
-      <Card title="新增工安紀錄" action={
+      {can.manageSafety && <Card title="新增工安紀錄" action={
         <div className="flex flex-wrap gap-2">
           {TYPES.map((t) => (
             <button key={t} onClick={() => openForm(t)}
@@ -118,7 +118,7 @@ export default function Safety() {
             </div>
           </div>
         )}
-      </Card>
+      </Card>}
 
       {groups.length === 0 ? (
         <Card title="工安紀錄"><Empty>尚無工安紀錄。用上方新增自主檢查、工安缺失、教育訓練或危害告知。</Empty></Card>
@@ -143,12 +143,12 @@ export default function Safety() {
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
-                  {NEEDS_FLOW(r.record_type) && r.status !== '已完成' && (
+                  {can.manageSafety && NEEDS_FLOW(r.record_type) && r.status !== '已完成' && (
                     <Button variant={r.status === '改善中' ? 'success' : 'secondary'} onClick={() => updateSafetyRecord(r.id, { status: NEXT[r.status] })} disabled={busy}>
                       {NEXT_LABEL[r.status]}
                     </Button>
                   )}
-                  <button onClick={async () => { if (await appConfirm({ title: '刪除此工安紀錄？', danger: true, confirmLabel: '刪除' })) deleteSafetyRecord(r.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                  {can.manageSafety && <button onClick={async () => { if (await appConfirm({ title: '刪除此工安紀錄？', danger: true, confirmLabel: '刪除' })) deleteSafetyRecord(r.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
                 </div>
               </div>
             ))}

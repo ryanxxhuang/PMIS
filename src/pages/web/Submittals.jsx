@@ -46,7 +46,7 @@ export default function Submittals() {
         action={
           <div className="flex items-center gap-2">
             {submittals.length > 0 && <button onClick={exportRows} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
-            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', category: '施工計畫', submitted_date: todayIso(), due_date: '', attachment_note: '' })}>{form ? '取消' : '＋ 提送送審'}</Button>}
+            {can.createSubmittal && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', category: '施工計畫', submitted_date: todayIso(), due_date: '', attachment_note: '' })}>{form ? '取消' : '＋ 提送送審'}</Button>}
           </div>
         } />
 
@@ -83,7 +83,7 @@ export default function Submittals() {
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     {/* 監造:審定動作 */}
-                    {can.approve && (s.status === '已提送' || s.status === '審核中') && (
+                    {can.reviewSubmittal && (s.status === '已提送' || s.status === '審核中') && (
                       <div className="flex flex-wrap gap-1.5 justify-end">
                         {s.status === '已提送' && <Button variant="secondary" onClick={() => onDecide(s, '審核中')}>受理審核</Button>}
                         <Button variant="success" onClick={() => onDecide(s, '核准')}>核准</Button>
@@ -92,10 +92,9 @@ export default function Submittals() {
                       </div>
                     )}
                     {/* 施工:退回補正後修正再送 */}
-                    {can.submit && s.status === '退回補正' && <Button variant="secondary" onClick={() => resubmitSubmittal(s.id)}>修正再送</Button>}
-                    {can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
-                    {!can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
-                    {can.submit && <button onClick={async () => { if (await appConfirm({ title: '刪除此送審？', danger: true, confirmLabel: '刪除' })) deleteSubmittal(s.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
+                    {can.createSubmittal && s.status === '退回補正' && <Button variant="secondary" onClick={() => resubmitSubmittal(s.id)}>修正再送</Button>}
+                    {!can.reviewSubmittal && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
+                    {can.createSubmittal && s.status === '已提送' && <button onClick={async () => { if (await appConfirm({ title: '刪除此送審？', danger: true, confirmLabel: '刪除' })) deleteSubmittal(s.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
                   </div>
                 </div>
               </div>

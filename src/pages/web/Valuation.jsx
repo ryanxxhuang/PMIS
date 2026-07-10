@@ -41,7 +41,7 @@ export default function Valuation() {
 
   const selected = valuations.find((v) => v.id === selectedId) || valuations[valuations.length - 1]
   const prev = selected ? valuations.find((v) => v.period_no === selected.period_no - 1) : null
-  const editable = selected?.status === '草稿' && can.edit
+  const editable = selected?.status === '草稿' && can.submitValuation
 
   const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected?.items || {}), [roots, childrenMap, selected?.items])
   const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev?.items || {}), [roots, childrenMap, prev?.items])
@@ -153,7 +153,7 @@ export default function Valuation() {
         action={
           <div className="flex items-center gap-2">
             {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}
-            {can.edit && <Button variant="secondary" onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>}
+            {can.submitValuation && <Button variant="secondary" onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>}
           </div>
         } />
 
@@ -196,17 +196,17 @@ export default function Valuation() {
             action={
               <div className="flex items-center gap-2">
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項…" className="text-sm border border-[var(--border)] rounded-lg px-2.5 py-1 w-40 focus:border-[var(--blue)] focus:outline-none" />
-                {selected.status === '草稿' && can.edit && siteLogs.length > 0 && (
+                {selected.status === '草稿' && can.submitValuation && siteLogs.length > 0 && (
                   <Button onClick={async () => { setFilling(true); const { count } = await fillValuationFromSiteLogs(selected.id); setFilling(false); setAiMsg(count ? `AI 已依 ${siteLogs.length} 筆施工日誌草擬 ${count} 個工項的累計完成數量，請覆核後送審。` : 'AI 未在施工日誌找到可帶入的完成數量。') }} disabled={filling} title="掃描施工日誌，自動草擬本期各工項累計完成數量">
                     <Sparkles size={14} aria-hidden />{filling ? 'AI 草擬中…' : 'AI 估驗草擬'}
                   </Button>
                 )}
-                {selected.status === '草稿' && can.submit && <Button variant="secondary" onClick={() => setValuationStatus(selected.id, '監造審核')}>送監造審核</Button>}
-                {selected.status === '監造審核' && (can.approve ? <>
+                {selected.status === '草稿' && can.submitValuation && <Button variant="secondary" onClick={() => setValuationStatus(selected.id, '監造審核')}>送監造審核</Button>}
+                {selected.status === '監造審核' && (can.reviewValuation ? <>
                   <Button variant="ghost" onClick={() => setValuationStatus(selected.id, '草稿')}>退回</Button>
                   <Button variant="success" onClick={() => setValuationStatus(selected.id, '已核定')}>核定估驗</Button>
                 </> : <Badge color="amber">待監造核定</Badge>)}
-                {can.edit && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { deleteValuation(selected.id); setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
+                {can.submitValuation && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { deleteValuation(selected.id); setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
               </div>
             }
           >

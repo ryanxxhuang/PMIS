@@ -45,7 +45,7 @@ export function useProjectsSlice({ currentUser, log }) {
       supabase.from('projects').select('*').order('created_at'),
       supabase.from('project_members').select('project_id, role').eq('user_id', currentUser.user_id),
       supabase.from('project_memberships')
-        .select('id, project_id, project_party_id, project_role, is_project_admin, project_parties(party_type, display_name)')
+        .select('id, project_id, project_party_id, project_role, is_project_admin, project_parties(party_type, display_name, is_active)')
         .eq('user_id', currentUser.user_id),
     ]).then(([{ data }, { data: legacyMemberships }, { data: projectMemberships }]) => {
       if (!active) return

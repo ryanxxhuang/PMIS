@@ -32,6 +32,7 @@ describe('project-scoped identity', () => {
       project_party_id: 'party-a',
       party_type: 'contractor',
       party_display_name: 'Builder A',
+      party_is_active: true,
       project_role: 'contractor_pm',
       is_project_admin: true,
     })

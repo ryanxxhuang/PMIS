@@ -25,7 +25,7 @@ function ruleText(ob) {
 const DOT = { done: 'var(--green-text)', overdue: 'var(--red-text)', soon: 'var(--amber-text)', scheduled: 'var(--blue)', nodate: 'var(--text-3)' }
 
 export default function Contract() {
-  const { project, isSupabaseConfigured, currentProject, dbMode, obligations, parseContract, updateObligationStatus, updateProjectAnchors } = useStore()
+  const { project, isSupabaseConfigured, currentProject, dbMode, obligations, parseContract, updateObligationStatus, updateProjectAnchors, can } = useStore()
   const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -92,6 +92,7 @@ export default function Contract() {
             <label key={k} className="block">
               <span className="block text-sm font-medium text-[var(--text)] mb-1">{label}</span>
               <input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
+                disabled={!can.manageProjectIdentity}
                 className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
             </label>
           ))}
@@ -100,8 +101,8 @@ export default function Contract() {
       </Card>
 
       <Card title="契約解析" action={
-        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${busy || !dbMode ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
-          <input type="file" accept="application/pdf,image/*" disabled={busy || !dbMode} onChange={onUpload} className="hidden" />
+        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${busy || !dbMode || !can.manageObligations ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+          <input type="file" accept="application/pdf,image/*" disabled={busy || !dbMode || !can.manageObligations} onChange={onUpload} className="hidden" />
           {busy ? '解析中…' : '上傳契約解析'}
         </label>
       }>
@@ -127,10 +128,10 @@ export default function Contract() {
                 <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
                   <div className="flex justify-between items-start gap-2">
                     <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
-                    <button onClick={() => updateObligationStatus(it.ob.id, it.done ? '待辦' : '已提送')}
+                    {can.manageObligations && <button onClick={() => updateObligationStatus(it.ob.id, it.done ? '待辦' : '已提送')}
                       className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
                       {it.done ? '已提送 ✓' : '標為已提送'}
-                    </button>
+                    </button>}
                   </div>
                   <div className="text-xs text-[var(--text-3)] mt-1">
                     {ruleText(it.ob)}{it.due ? `　·　到期 ${iso(it.due)}` : ''}

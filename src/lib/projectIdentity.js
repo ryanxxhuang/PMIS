@@ -33,6 +33,9 @@ export function normalizeProjectMembership(row) {
     project_party_id: row.project_party_id || null,
     party_type: row.party_type || party.party_type || null,
     party_display_name: row.party_display_name || party.display_name || null,
+    // P0-03: a deactivated party carries no contractual authority (fail
+    // closed); an absent flag (older payloads/demo) defaults to active.
+    party_is_active: (row.party_is_active ?? party.is_active) !== false,
     project_role: row.project_role || null,
     is_project_admin: row.is_project_admin === true,
   }

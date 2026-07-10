@@ -68,7 +68,7 @@ export default function ITP() {
       <Card
         title={`停留點清單（${inspectionPoints.length}）`}
         bodyClass={inspectionPoints.length ? 'p-0' : 'p-6'}
-        action={(can.approve || can.admin) && (
+        action={can.manageItp && (
           <Button variant="secondary" onClick={() => setForm(form ? null : { point_type: 'H', title: '', acceptance_criteria: '', frequency: '', source_clause: '', work_item_key: '', work_item_label: '' })}>
             {form ? '取消' : '＋ 建立停留點'}
           </Button>
@@ -121,7 +121,7 @@ export default function ITP() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge color={sm.color}><Icon size={12} aria-hidden /> {st.label}</Badge>
-                    {st.key === 'pending' && can.submit && p.point_type !== 'R' && (
+                    {st.key === 'pending' && can.submitInspection && p.point_type !== 'R' && (
                       <Button size="sm" variant={hot ? 'primary' : 'outline'} onClick={async () => { setBusy(true); await requestInspectionForPoint(p); setBusy(false) }} disabled={busy}>
                         申請查驗
                       </Button>
@@ -129,7 +129,7 @@ export default function ITP() {
                     {(st.key === 'requested' || st.key === 'failed') && (
                       <Link to="/quality" className="text-xs text-[var(--blue-text)] hover:underline">查驗紀錄 →</Link>
                     )}
-                    {(can.approve || can.admin) && (
+                    {can.manageItp && (
                       <button onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) deleteInspectionPoint(p.id) }}
                         className="text-[var(--text-3)] hover:text-rose-500">✕</button>
                     )}

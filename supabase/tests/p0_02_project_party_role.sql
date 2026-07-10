@@ -347,6 +347,14 @@ select is(
   1,
   'a requirement accepts a party from the same project'
 );
+-- P0-03: application users can no longer hard-delete project parties (they
+-- deactivate them instead). The ON DELETE SET NULL behavior below is now a
+-- service-role operation, so clear the authenticated identity first.
+do $setup$
+begin
+  perform set_config('request.jwt.claim.sub', '', true);
+end;
+$setup$;
 delete from public.project_parties
 where project_id = '10000000-0000-0000-0000-000000000002'
   and migration_key = 'legacy:supervisor';
