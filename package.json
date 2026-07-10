@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
+    "test:db": "supabase test db",
     "preview": "vite preview",
     "build:demo": "env VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= vite build --outDir dist/demo",
     "deploy": "vite build && npm run build:demo && gh-pages -d dist --dotfiles"
