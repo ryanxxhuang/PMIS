@@ -30,6 +30,7 @@ import SupervisorReport from './pages/web/SupervisorReport.jsx'
 import RiskAudit from './pages/web/RiskAudit.jsx'
 import Portfolio from './pages/web/Portfolio.jsx'
 import Acceptance from './pages/web/Acceptance.jsx'
+import ITP from './pages/web/ITP.jsx'
 
 // Gate every page behind auth; force project creation before the workspace loads.
 function Web({ children }) {
@@ -66,6 +67,7 @@ export default function App() {
       <Route path="/progress" element={<Web><Progress /></Web>} />
       <Route path="/schedule" element={<Web><Schedule /></Web>} />
       <Route path="/quality" element={<Web><Quality /></Web>} />
+      <Route path="/itp" element={<Web><ITP /></Web>} />
       <Route path="/quality/checklist-print" element={<ChecklistPrint />} />
       <Route path="/safety" element={<Web><Safety /></Web>} />
       <Route path="/submittals" element={<Web><Submittals /></Web>} />

@@ -186,6 +186,18 @@ export async function loadSafetyFromDB(projectId) {
   return data || []
 }
 
+// 從 DB 載入 ITP 檢驗停留點,去正規化工項資訊(顯示+日誌活動比對用)
+export async function loadItpFromDB(projectId, byId, idToKey) {
+  const { data } = await supabase.from('inspection_points')
+    .select('*').eq('project_id', projectId).order('sort_order').order('created_at')
+  return (data || []).map((r) => ({
+    ...r,
+    work_item_key: r.work_item_id ? (idToKey.get(r.work_item_id) || null) : null,
+    work_item_no: byId.get(r.work_item_id)?.item_no || '',
+    work_item_desc: byId.get(r.work_item_id)?.description || '',
+  }))
+}
+
 // 從 DB 載入驗收/結算事件(一階段一筆,依建立時間排序)
 export async function loadAcceptanceFromDB(projectId) {
   const { data } = await supabase.from('acceptance_events')

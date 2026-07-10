@@ -7,13 +7,14 @@ import { computeObligationDue } from '../../lib/contractDue.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { sampleAlerts } from '../../lib/qc.js'
 import { acceptanceAlerts } from '../../lib/acceptance.js'
+import { itpAlerts } from '../../lib/itp.js'
 
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const diffDays = (d) => Math.round((d - today0()) / 86400000)
 
 export default function Alerts() {
-  const { project, obligations, defects, valuations, safetyRecords, testSamples, acceptanceEvents, currentProject, isSupabaseConfigured } = useStore()
+  const { project, obligations, defects, valuations, safetyRecords, testSamples, acceptanceEvents, inspectionPoints, inspections, siteLogs, currentProject, isSupabaseConfigured } = useStore()
 
   const alerts = useMemo(() => {
     const a = {
@@ -72,8 +73,13 @@ export default function Alerts() {
     for (const acc of acceptanceAlerts(acceptanceEvents, today0())) {
       out.push({ level: acc.level, tag: '驗收', title: acc.title, meta: acc.meta, to: '/acceptance' })
     }
+
+    // ITP 停留點:施作中未叫驗的 H(不得續作)/W(應通知見證)
+    for (const a of itpAlerts(inspectionPoints, inspections, siteLogs)) {
+      out.push({ level: a.level, tag: '停留點', title: a.title, meta: a.meta, to: '/itp' })
+    }
     return out
-  }, [obligations, defects, valuations, safetyRecords, testSamples, acceptanceEvents, currentProject])
+  }, [obligations, defects, valuations, safetyRecords, testSamples, acceptanceEvents, inspectionPoints, inspections, siteLogs, currentProject])
 
   const groups = [
     { key: 'overdue', label: '已逾期', color: 'red' },
@@ -85,7 +91,7 @@ export default function Alerts() {
     return <Card title="提醒中心"><Empty>請先登入並選擇專案。</Empty></Card>
   }
 
-  const tagColor = (t) => ({ 契約: 'var(--purple-text)', 缺失: 'var(--red-text)', 工安: 'var(--amber-text)', 試驗: 'var(--accent-text)', 請款: 'var(--blue-text)', 收款: 'var(--green-text)', 驗收: 'var(--green-text)' }[t] || 'var(--text-3)')
+  const tagColor = (t) => ({ 契約: 'var(--purple-text)', 缺失: 'var(--red-text)', 工安: 'var(--amber-text)', 試驗: 'var(--accent-text)', 請款: 'var(--blue-text)', 收款: 'var(--green-text)', 驗收: 'var(--green-text)', 停留點: 'var(--red-text)' }[t] || 'var(--text-3)')
 
   return (
     <div className="space-y-5">

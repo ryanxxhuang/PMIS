@@ -18,7 +18,7 @@ import { loadWorkItems } from './lib/boqCalc.js'
 import {
   wiCacheDel, loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
-  loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB,
+  loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
 } from './store/db.js'
 import { useAuthSlice } from './store/slices/auth.js'
 import { useProjectsSlice } from './store/slices/projects.js'
@@ -110,6 +110,8 @@ export function StoreProvider({ children }) {
   } = useBillingSlice(ctx, siteLogs)
   const {
     inspections, setInspections, defects, setDefects,
+    inspectionPoints, setInspectionPoints,
+    createInspectionPoint, deleteInspectionPoint, requestInspectionForPoint,
     setChecklistTemplates, allChecklistTemplates,
     checklistRecords, setChecklistRecords, testSamples, setTestSamples,
     createInspection, recordInspectionResult, createDefect, updateDefectStatus,
@@ -149,6 +151,7 @@ export function StoreProvider({ children }) {
     setChecklistTemplates(d.checklistTemplates); setChecklistRecords(d.checklistRecords); setTestSamples(d.testSamples)
     setSubmittals(d.submittals); setRfis(d.rfis); setObservations(d.observations)
     setItemSchedules(d.itemSchedules); setAcceptanceEvents(d.acceptanceEvents || [])
+    setInspectionPoints(d.inspectionPoints || [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, workItems, workItemsSource, currentUser])
 
@@ -187,6 +190,9 @@ export function StoreProvider({ children }) {
       const acc = await loadAcceptanceFromDB(currentProject.project_id)
       if (!active) return
       setAcceptanceEvents(acc)
+      const itp = await loadItpFromDB(currentProject.project_id, wiMaps.byId, wiMaps.idToKey)
+      if (!active) return
+      setInspectionPoints(itp)
       const qc = await loadQcFromDB(currentProject.project_id)
       if (!active) return
       setChecklistTemplates(qc.templates); setChecklistRecords(qc.records); setTestSamples(qc.samples)
@@ -242,6 +248,7 @@ export function StoreProvider({ children }) {
     changeOrders, createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
     inspections, defects, createInspection, recordInspectionResult, createDefect, updateDefectStatus,
+    inspectionPoints, createInspectionPoint, deleteInspectionPoint, requestInspectionForPoint,
     checklistTemplates: allChecklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal,

@@ -13,6 +13,8 @@ export function useQualitySlice({ dbMode, currentProject, currentUser, wiMaps, l
   const [checklistTemplates, setChecklistTemplates] = useState([])
   const [checklistRecords, setChecklistRecords] = useState([])
   const [testSamples, setTestSamples] = useState([])
+  // ITP 檢驗停留點(W/H/R;狀態由連結查驗推導,見 lib/itp.js)
+  const [inspectionPoints, setInspectionPoints] = useState([])
 
   const reloadQuality = useCallback(async () => {
     const qual = await loadQualityFromDB(currentProject.project_id, wiMaps.byId)
@@ -237,8 +239,71 @@ export function useQualitySlice({ dbMode, currentProject, currentUser, wiMaps, l
     if (dbMode) await supabase.from('test_samples').delete().eq('id', id)
   }, [dbMode])
 
+  // ── ITP 停留點:建立/更新/刪除 + 從停留點一鍵申請查驗 ────────────────────
+  const createInspectionPoint = useCallback(async (input) => {
+    const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
+    const row = {
+      point_type: input.point_type || 'H', title: input.title,
+      acceptance_criteria: input.acceptance_criteria || null,
+      frequency: input.frequency || null, source_clause: input.source_clause || null,
+      sort_order: input.sort_order ?? null,
+    }
+    if (!dbMode) {
+      setInspectionPoints((ps) => [...ps, {
+        ...row, id: `ITP-${Date.now()}`, inspection_id: null,
+        work_item_key: wi?.item_key || null, work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
+      }])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('inspection_points')
+      .insert({ ...row, project_id: currentProject.project_id, work_item_id: wi?.id || null, created_by: currentUser?.user_id })
+      .select().single()
+    if (error) return { error }
+    setInspectionPoints((ps) => [...ps, {
+      ...data, work_item_key: wi?.item_key || null, work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
+    }])
+    log('建立停留點', `${row.point_type}·${row.title}`, { user: currentUser?.name, role: '監造' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, wiMaps, log])
+
+  const deleteInspectionPoint = useCallback(async (id) => {
+    setInspectionPoints((ps) => ps.filter((p) => p.id !== id))
+    if (dbMode) await supabase.from('inspection_points').delete().eq('id', id)
+  }, [dbMode])
+
+  // 從停留點發起查驗申請:建立查驗並回寫 inspection_id 連結(狀態自此由查驗推導)
+  const requestInspectionForPoint = useCallback(async (point) => {
+    const today = new Date().toISOString().slice(0, 10)
+    if (!dbMode) {
+      const inspId = `INSP-${Date.now()}`
+      setInspections((is) => [{
+        id: inspId, title: point.title, location: null,
+        inspection_type: '停留點查驗', requested_date: today, status: '待查驗', result_note: null,
+        work_item_no: point.work_item_no || '', work_item_desc: point.work_item_desc || '',
+      }, ...is])
+      setInspectionPoints((ps) => ps.map((p) => (p.id === point.id ? { ...p, inspection_id: inspId } : p)))
+      return { error: null }
+    }
+    const inspId = crypto.randomUUID()
+    const { error } = await supabase.from('inspections').insert({
+      id: inspId, project_id: currentProject.project_id,
+      work_item_id: point.work_item_id || null, title: point.title,
+      inspection_type: '停留點查驗', requested_date: today,
+      requested_by: currentUser?.user_id, status: '待查驗',
+    })
+    if (error) return { error }
+    const { error: e2 } = await supabase.from('inspection_points').update({ inspection_id: inspId }).eq('id', point.id)
+    if (e2) return { error: e2 }
+    setInspectionPoints((ps) => ps.map((p) => (p.id === point.id ? { ...p, inspection_id: inspId } : p)))
+    await reloadQuality()
+    log('停留點申請查驗', point.title, { user: currentUser?.name, role: '施工品管' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, reloadQuality, log])
+
   return {
     inspections, setInspections, defects, setDefects,
+    inspectionPoints, setInspectionPoints,
+    createInspectionPoint, deleteInspectionPoint, requestInspectionForPoint,
     checklistTemplates, setChecklistTemplates, allChecklistTemplates,
     checklistRecords, setChecklistRecords, testSamples, setTestSamples,
     reloadQuality, createInspection, recordInspectionResult, createDefect, updateDefectStatus,

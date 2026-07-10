@@ -247,6 +247,28 @@ export function buildDemoData(workItems, project) {
       location: '料場', assigned_to: 'contractor', status: '已處理', markup_path: null },
   ]
 
+  // ── ITP 檢驗停留點:H=停留(未查驗不得續作)/W=見證/R=文審 ──
+  // 故事線:一點已通過(連合格查驗)、一點已申請(連待查驗)、一 H 點施作中未叫驗(紅色警示)、
+  // 一 W 點施作中應通知見證、一 R 點文審待辦。
+  const itpKey = (n) => wi(n).item_key || null
+  const inspectionPoints = [
+    { id: 'ITP-DEMO-1', point_type: 'H', title: '柱牆鋼筋查驗（每層）',
+      acceptance_criteria: '鋼筋號數／間距／搭接長度符合設計圖說', frequency: '每層施作前',
+      source_clause: '品質計畫 §4.2', work_item_key: itpKey(0), ...deco(0), inspection_id: 'INSP-DEMO-4' },
+    { id: 'ITP-DEMO-2', point_type: 'H', title: '混凝土澆置前查驗（每次澆置）',
+      acceptance_criteria: '模板／鋼筋／預埋件檢查合格，坍度 15±2.5cm', frequency: '每次澆置前',
+      source_clause: '規範 03310', work_item_key: itpKey(3), ...deco(3), inspection_id: 'INSP-DEMO-2' },
+    { id: 'ITP-DEMO-3', point_type: 'H', title: '模板組立查驗（每層）',
+      acceptance_criteria: '支撐間距／垂直度／面板清潔符合施工計畫', frequency: '每層組立完成',
+      source_clause: '品質計畫 §4.3', work_item_key: itpKey(2), ...deco(2), inspection_id: null },
+    { id: 'ITP-DEMO-4', point_type: 'W', title: '防水層施作見證',
+      acceptance_criteria: '底漆均勻、膜厚≧2mm、搭接寬度≧10cm', frequency: '每區施作首日',
+      source_clause: '規範 07100', work_item_key: itpKey(1), ...deco(1), inspection_id: null },
+    { id: 'ITP-DEMO-5', point_type: 'R', title: '鋼筋出廠證明／無輻射證明文審',
+      acceptance_criteria: '每批附出廠證明、CNS 560 試驗報告', frequency: '每批進場前',
+      source_clause: '規範 03210', work_item_key: null, work_item_no: '', work_item_desc: '', inspection_id: null },
+  ]
+
   // ── 驗收/結算(示範:B 區道路改善工程的驗收時程,見 DEMO_PORTFOLIO) ──
   // 報竣 -28 天、竣工確認 -25 天 → 初驗法定期限 = 確認 +30 天 = 5 天後 → 提醒中心倒數
   const acceptanceEvents = [
@@ -254,7 +276,7 @@ export function buildDemoData(workItems, project) {
     { id: 'ACC-DEMO-2', stage_key: 'confirm', event_date: iso(daysFromNow(-25)), result: null, note: '會同監造、廠商核對竣工項目數量' },
   ]
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents }
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints }
 }
 
 // ── 跨案總覽的示範姊妹案(靜態摘要;A 區為主 storyline,由 store 即時計算) ──

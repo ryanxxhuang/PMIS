@@ -5,7 +5,7 @@ import { appConfirm } from './confirm.jsx'
 import {
   LayoutDashboard, LayoutGrid, Sparkles, Bell, CalendarClock, Newspaper, BadgeCheck,
   ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
-  ShieldCheck, ShieldAlert, ClipboardCheck, HardHat, FileCheck2, MessageSquareWarning, Users,
+  ShieldCheck, ShieldAlert, ClipboardCheck, HardHat, FileCheck2, MessageSquareWarning, Users, Flag,
   Menu, ChevronDown, Trash2, Moon, Sun, Plus,
 } from 'lucide-react'
 
@@ -32,6 +32,7 @@ const navGroups = [
   ] },
   { title: '品質與工安', items: [
     { to: '/quality', icon: ShieldCheck, label: '品質查驗' },
+    { to: '/itp', icon: Flag, label: '檢驗停留點' },
     { to: '/safety', icon: HardHat, label: '工安管理' },
   ] },
   { title: '監造協作', items: [

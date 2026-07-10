@@ -843,6 +843,40 @@ drop policy if exists "rfis_delete" on public.rfis;
 create policy "rfis_delete" on public.rfis for delete to authenticated
   using (public.can_write(project_id));
 
+-- ── ITP 檢驗停留點(監造協作的結構關鍵) ─────────────────────────────────────
+-- 回答「這個工項什麼時候必須通知監造」:W=見證點(通知監造到場見證)、
+-- H=停留點(監造未查驗不得續作)、R=文審點(文件審查)。
+-- 掛在工項上;申請查驗後以 inspection_id 連結,狀態由查驗結果推導(前端 lib/itp.js)。
+create table if not exists public.inspection_points (
+  id                  uuid primary key default gen_random_uuid(),
+  project_id          uuid not null references public.projects(id) on delete cascade,
+  work_item_id        uuid references public.work_items(id) on delete set null,
+  point_type          text not null default 'H' check (point_type in ('W','H','R')),
+  title               text not null,
+  acceptance_criteria text,   -- 允收標準(可由 AI 從規範抽,人工審核)
+  frequency           text,   -- 頻率(每層/每批/每次澆置前…)
+  source_clause       text,   -- 出處(品質計畫/規範章節)
+  inspection_id       uuid references public.inspections(id) on delete set null,
+  sort_order          int,
+  created_by          uuid references auth.users(id),
+  created_at          timestamptz not null default now()
+);
+create index if not exists inspection_points_project_idx on public.inspection_points(project_id);
+create index if not exists inspection_points_wi_idx      on public.inspection_points(work_item_id);
+alter table public.inspection_points enable row level security;
+drop policy if exists "inspection_points_select" on public.inspection_points;
+create policy "inspection_points_select" on public.inspection_points for select to authenticated
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists "inspection_points_insert" on public.inspection_points;
+create policy "inspection_points_insert" on public.inspection_points for insert to authenticated
+  with check (public.can_write(project_id));
+drop policy if exists "inspection_points_update" on public.inspection_points;
+create policy "inspection_points_update" on public.inspection_points for update to authenticated
+  using (public.can_write(project_id)) with check (public.can_write(project_id));
+drop policy if exists "inspection_points_delete" on public.inspection_points;
+create policy "inspection_points_delete" on public.inspection_points for delete to authenticated
+  using (public.can_write(project_id));
+
 -- ── 驗收/結算(機關主導):報竣→竣工確認→初驗→(改善→複驗)→正驗→結算證明→保固 ──
 -- 一階段一筆事件(後蓋前);法定期限(細則§92/93/94、採購法§73)由前端 lib 推算。
 -- 三方都要寫(廠商報竣、機關驗收、監造陪驗)→ 唯一「機關也可寫」的業務表。
