@@ -18,7 +18,7 @@ import { loadWorkItems } from './lib/boqCalc.js'
 import {
   wiCacheDel, loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
-  loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB,
+  loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB,
 } from './store/db.js'
 import { useAuthSlice } from './store/slices/auth.js'
 import { useProjectsSlice } from './store/slices/projects.js'
@@ -55,6 +55,7 @@ export function StoreProvider({ children }) {
     projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
     workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps, dbMode, demoMode,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
+    loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
 
   // 角色權限（UI 層 v1，對應三級品管）：
@@ -126,6 +127,7 @@ export function StoreProvider({ children }) {
   const {
     costItems, setCostItems, changeOrders, setChangeOrders,
     itemSchedules, setItemSchedules, obligations, setObligations,
+    acceptanceEvents, setAcceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent,
     createCostItem, updateCostItem, deleteCostItem,
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
@@ -146,7 +148,7 @@ export function StoreProvider({ children }) {
     setCostItems(d.costItems); setSafetyRecords(d.safetyRecords); setChangeOrders(d.changeOrders)
     setChecklistTemplates(d.checklistTemplates); setChecklistRecords(d.checklistRecords); setTestSamples(d.testSamples)
     setSubmittals(d.submittals); setRfis(d.rfis); setObservations(d.observations)
-    setItemSchedules(d.itemSchedules)
+    setItemSchedules(d.itemSchedules); setAcceptanceEvents(d.acceptanceEvents || [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, workItems, workItemsSource, currentUser])
 
@@ -182,6 +184,9 @@ export function StoreProvider({ children }) {
       const cos = await loadChangeOrdersFromDB(currentProject.project_id)
       if (!active) return
       setChangeOrders(cos)
+      const acc = await loadAcceptanceFromDB(currentProject.project_id)
+      if (!active) return
+      setAcceptanceEvents(acc)
       const qc = await loadQcFromDB(currentProject.project_id)
       if (!active) return
       setChecklistTemplates(qc.templates); setChecklistRecords(qc.records); setTestSamples(qc.samples)
@@ -230,6 +235,7 @@ export function StoreProvider({ children }) {
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
     obligations, parseContract, updateObligationStatus, updateProjectAnchors,
+    acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, createCostItem, updateCostItem, deleteCostItem,
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
     itemSchedules, setItemSchedule, removeItemSchedule,

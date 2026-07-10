@@ -186,6 +186,13 @@ export async function loadSafetyFromDB(projectId) {
   return data || []
 }
 
+// 從 DB 載入驗收/結算事件(一階段一筆,依建立時間排序)
+export async function loadAcceptanceFromDB(projectId) {
+  const { data } = await supabase.from('acceptance_events')
+    .select('*').eq('project_id', projectId).order('created_at')
+  return data || []
+}
+
 // 從 DB 載入逐工項排程，回傳 { item_key: { planned_start, planned_finish } }
 export async function loadItemSchedulesFromDB(projectId, idToKey) {
   const { data } = await supabase.from('item_schedules').select('*').eq('project_id', projectId)

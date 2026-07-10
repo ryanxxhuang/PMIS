@@ -843,7 +843,64 @@ drop policy if exists "rfis_delete" on public.rfis;
 create policy "rfis_delete" on public.rfis for delete to authenticated
   using (public.can_write(project_id));
 
+-- ── 驗收/結算(機關主導):報竣→竣工確認→初驗→(改善→複驗)→正驗→結算證明→保固 ──
+-- 一階段一筆事件(後蓋前);法定期限(細則§92/93/94、採購法§73)由前端 lib 推算。
+-- 三方都要寫(廠商報竣、機關驗收、監造陪驗)→ 唯一「機關也可寫」的業務表。
+create table if not exists public.acceptance_events (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  stage_key  text not null,   -- report|confirm|initial|fix|reinspect|final|certificate|warranty
+  event_date date,            -- 實際辦理日
+  result     text,            -- 初驗/複驗/正驗:合格|不合格
+  note       text,
+  created_by uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+create index if not exists acceptance_events_project_idx on public.acceptance_events(project_id);
+alter table public.acceptance_events enable row level security;
+drop policy if exists "acceptance_events_members_all" on public.acceptance_events;
+create policy "acceptance_events_members_all" on public.acceptance_events for all to authenticated
+  using (project_id in (select public.my_project_ids()))
+  with check (project_id in (select public.my_project_ids()));
+
 -- ── RPCs (SECURITY DEFINER) ─────────────────────────────────────────────────
+-- 跨案總覽:一次撈回目前使用者所有專案的彙總數字(逐案打查詢會拖垮 portfolio 頁)。
+-- SECURITY DEFINER + 明確以 my_project_ids() 過濾,不多給一列。
+create or replace function public.portfolio_summary()
+returns table (
+  project_id uuid,
+  billable_total numeric,      -- 發包工程費(可計價末端項加總)
+  latest_period int,           -- 最新估驗期
+  latest_status text,
+  latest_cum numeric,          -- 最新一期累計估驗金額
+  open_defects int,
+  pending_inspections int,
+  pending_change_orders int,   -- 提出/審核中
+  acceptance_events jsonb      -- 驗收事件(前端推算階段/期限)
+) language sql security definer stable set search_path = public as $$
+  select
+    p.id,
+    (select coalesce(sum(w.amount), 0) from public.work_items w
+      where w.project_id = p.id and w.is_billable and w.is_leaf and not w.is_rollup),
+    lv.period_no,
+    lv.status,
+    (select coalesce(sum(vi.amount_cum), 0) from public.valuation_items vi where vi.valuation_id = lv.id),
+    (select count(*)::int from public.defects d where d.project_id = p.id and d.status <> '已結案'),
+    (select count(*)::int from public.inspections i where i.project_id = p.id and i.status = '待查驗'),
+    (select count(*)::int from public.change_orders c where c.project_id = p.id and c.status in ('提出','審核中')),
+    (select coalesce(jsonb_agg(jsonb_build_object(
+        'stage_key', a.stage_key, 'event_date', a.event_date, 'result', a.result) order by a.created_at), '[]'::jsonb)
+      from public.acceptance_events a where a.project_id = p.id)
+  from public.projects p
+  left join lateral (
+    select v.id, v.period_no, v.status from public.valuations v
+    where v.project_id = p.id order by v.period_no desc limit 1
+  ) lv on true
+  where p.id in (select public.my_project_ids())
+  order by p.created_at
+$$;
+grant execute on function public.portfolio_summary() to authenticated;
+
 -- 用 email 邀請成員加入專案(監造/機關/其他廠商帳號)。只有專案建立者可執行;
 -- email 對照 auth.users(前端讀不到別人的 email,必須走 SECURITY DEFINER)。
 create or replace function public.add_member_by_email(p_project uuid, p_email text, p_role text default 'member')

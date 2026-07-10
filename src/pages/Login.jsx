@@ -8,8 +8,10 @@ export default function Login() {
   const { isSupabaseConfigured, setCurrentUser, currentUser, signIn, signUp, resendSignup } = useStore()
   const navigate = useNavigate()
 
-  // 已登入（含 Supabase session 還原）→ 直接進 Dashboard
-  useEffect(() => { if (currentUser) navigate('/dashboard') }, [currentUser, navigate])
+  // 已登入（含 Supabase session 還原）→ 進首頁。機關承辦管多案 → 預設落在跨案總覽。
+  useEffect(() => {
+    if (currentUser) navigate(currentUser.org_type === 'owner' ? '/portfolio' : '/dashboard')
+  }, [currentUser, navigate])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-6">
@@ -124,7 +126,7 @@ function AuthForm({ signIn, signUp, resendSignup }) {
 function RolePicker({ setCurrentUser, navigate }) {
   const pick = (u) => {
     setCurrentUser(u)
-    navigate('/dashboard')
+    navigate(u.org_type === 'owner' ? '/portfolio' : '/dashboard') // 機關落在跨案總覽
   }
   return (
     <>

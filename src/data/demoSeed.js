@@ -247,5 +247,32 @@ export function buildDemoData(workItems, project) {
       location: '料場', assigned_to: 'contractor', status: '已處理', markup_path: null },
   ]
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations }
+  // ── 驗收/結算(示範:B 區道路改善工程的驗收時程,見 DEMO_PORTFOLIO) ──
+  // 報竣 -28 天、竣工確認 -25 天 → 初驗法定期限 = 確認 +30 天 = 5 天後 → 提醒中心倒數
+  const acceptanceEvents = [
+    { id: 'ACC-DEMO-1', stage_key: 'report', event_date: iso(daysFromNow(-28)), result: null, note: '廠商於預定竣工日申報竣工' },
+    { id: 'ACC-DEMO-2', stage_key: 'confirm', event_date: iso(daysFromNow(-25)), result: null, note: '會同監造、廠商核對竣工項目數量' },
+  ]
+
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents }
 }
+
+// ── 跨案總覽的示範姊妹案(靜態摘要;A 區為主 storyline,由 store 即時計算) ──
+// 機關承辦同時管多案是常態:一案施工中(落後)、一案驗收倒數、一案保固中,
+// 三種狀態一頁看完就是跨案總覽的賣點。
+export const DEMO_PORTFOLIO = [
+  {
+    key: 'B', name: 'B 區道路改善工程', code: 'TPE-B-2025', status: '驗收中',
+    billable: 128500000, cum: 126950000, progressPct: 98.8, plannedPct: 100,
+    openDefects: 1, pendingInspections: 0, pendingCOs: 0,
+    acceptance: { label: '初驗（期限倒數 5 天）', done: 2, total: 6, overdue: false },
+    to: '/acceptance', // demo 的驗收頁就是 B 區 storyline
+  },
+  {
+    key: 'C', name: 'C 區公園景觀工程', code: 'TPE-C-2024', status: '保固中',
+    billable: 45200000, cum: 45200000, progressPct: 100, plannedPct: 100,
+    openDefects: 0, pendingInspections: 0, pendingCOs: 0,
+    acceptance: { label: '結案（保固中）', done: 6, total: 6, finished: true },
+    to: null,
+  },
+]

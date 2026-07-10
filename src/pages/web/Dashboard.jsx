@@ -15,7 +15,7 @@ const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結�
 export default function Dashboard() {
   const { project, currentUser, workItems, workItemsSource, demoMode, valuations, progressPlan, inspections, defects, siteLogs,
     obligations, costItems, safetyRecords, changeOrders, itemSchedules,
-    checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations } = useStore()
+    checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents } = useStore()
   const imported = workItemsSource === 'db' || demoMode
   const balls = tallyBalls({ rfis, submittals, valuations, defects, inspections, observations, changeOrders })
   const myOrg = currentUser?.org_type || 'contractor'
@@ -33,7 +33,7 @@ export default function Dashboard() {
       cost_items: costItems, safety_records: safetyRecords, change_orders: changeOrders,
       item_schedules: itemSchedules, checklist_templates: checklistTemplates,
       checklist_records: checklistRecords, test_samples: testSamples,
-      submittals, rfis, observations,
+      submittals, rfis, observations, acceptance_events: acceptanceEvents,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')

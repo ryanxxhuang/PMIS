@@ -165,6 +165,12 @@ export function useProjectsSlice({ currentUser, log }) {
     return { error: null }
   }, [currentProjectId])
 
+  // 跨案總覽:一支 RPC 撈回所有專案的彙總(金額/估驗/缺失/查驗/變更/驗收事件)
+  const loadPortfolio = useCallback(async () => {
+    const { data, error } = await supabase.rpc('portfolio_summary')
+    return { rows: data || [], error }
+  }, [])
+
   // 登出時的專案側清理(由 store.jsx 的 logout 呼叫)
   const clearOnLogout = useCallback(() => {
     setProjects([]); setCurrentProjectId(null)
@@ -174,5 +180,6 @@ export function useProjectsSlice({ currentUser, log }) {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
     workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps, dbMode, demoMode,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
+    loadPortfolio,
   }
 }
