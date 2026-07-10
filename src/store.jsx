@@ -125,7 +125,7 @@ export function StoreProvider({ children }) {
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
-    parseContract, updateObligationStatus,
+    parseContract, updateObligationStatus, ingestRequirementDocument,
   } = useLedgerSlice(ctx)
 
   // ── 跨領域效果 ───────────────────────────────────────────────────────────
@@ -233,6 +233,7 @@ export function StoreProvider({ children }) {
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
     obligations, parseContract, updateObligationStatus, updateProjectAnchors,
+    ingestRequirementDocument,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, createCostItem, updateCostItem, deleteCostItem,
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
