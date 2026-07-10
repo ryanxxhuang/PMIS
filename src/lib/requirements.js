@@ -13,9 +13,18 @@ export const REQUIREMENT_TYPES = Object.freeze([
 ])
 
 export const REQUIREMENT_MATCH_TYPES = Object.freeze(['ai', 'code', 'description', 'manual'])
+export const REQUIREMENT_STATUSES = Object.freeze([
+  'draft_ai',
+  'needs_review',
+  'approved',
+  'rejected',
+  'superseded',
+])
+export const REQUIREMENT_ORIGINS = Object.freeze(['ai', 'manual', 'migration'])
+export const REQUIREMENT_SOURCE_KINDS = Object.freeze(['document', 'legacy', 'manual'])
 
 export function isRequirementAuthoritative(requirement) {
-  return !requirement?.ai_generated || Boolean(requirement.reviewed_at)
+  return requirement?.status === 'approved'
 }
 
 export function deadlineRuleFromRequirement(requirement) {

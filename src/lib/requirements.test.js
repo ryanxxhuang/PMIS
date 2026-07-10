@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   REQUIREMENT_MATCH_TYPES,
+  REQUIREMENT_ORIGINS,
+  REQUIREMENT_SOURCE_KINDS,
+  REQUIREMENT_STATUSES,
   REQUIREMENT_TYPES,
   computeRequirementDue,
   deadlineRuleFromRequirement,
@@ -18,18 +21,31 @@ const anchors = {
 const ymd = (date) => date?.toISOString().slice(0, 10) || null
 
 describe('requirement domain', () => {
-  it('exposes the P0-01 requirement and match types', () => {
+  it('exposes the P0-01 domain constants', () => {
     expect(REQUIREMENT_TYPES).toEqual([
       'deadline', 'submittal', 'inspection', 'test', 'checklist',
       'evidence', 'photo', 'report', 'other',
     ])
     expect(REQUIREMENT_MATCH_TYPES).toEqual(['ai', 'code', 'description', 'manual'])
+    expect(REQUIREMENT_STATUSES).toEqual([
+      'draft_ai', 'needs_review', 'approved', 'rejected', 'superseded',
+    ])
+    expect(REQUIREMENT_ORIGINS).toEqual(['ai', 'manual', 'migration'])
+    expect(REQUIREMENT_SOURCE_KINDS).toEqual(['document', 'legacy', 'manual'])
   })
 
-  it('does not treat unreviewed AI output as authoritative', () => {
-    expect(isRequirementAuthoritative({ ai_generated: true, reviewed_at: null })).toBe(false)
-    expect(isRequirementAuthoritative({ ai_generated: true, reviewed_at: '2026-07-10T00:00:00Z' })).toBe(true)
-    expect(isRequirementAuthoritative({ ai_generated: false, reviewed_at: null })).toBe(true)
+  it('treats only approved requirements as authoritative', () => {
+    for (const status of REQUIREMENT_STATUSES) {
+      expect(isRequirementAuthoritative({ status })).toBe(status === 'approved')
+    }
+  })
+
+  it('does not derive authority from origin or review metadata', () => {
+    const reviewedAt = '2026-07-10T00:00:00Z'
+    expect(isRequirementAuthoritative({ origin: 'manual', status: 'needs_review' })).toBe(false)
+    expect(isRequirementAuthoritative({ origin: 'ai', status: 'rejected', reviewed_at: reviewedAt })).toBe(false)
+    expect(isRequirementAuthoritative({ origin: 'ai', status: 'superseded', reviewed_at: reviewedAt })).toBe(false)
+    expect(isRequirementAuthoritative({ origin: 'migration', status: 'approved' })).toBe(true)
   })
 
   it('preserves legacy relative-deadline behavior', () => {
