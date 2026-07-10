@@ -116,7 +116,7 @@ function ProjectCard({ c, onOpen }) {
   const clickable = c.isCurrent || c.projectId || c.to
   return (
     <button onClick={onOpen} disabled={!clickable}
-      className={`text-left bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03),0_1px_10px_-2px_rgba(22,32,43,.05)] p-5 transition ${clickable ? 'hover:border-[var(--blue)] hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
+      className={`text-left h-full flex flex-col bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03),0_1px_10px_-2px_rgba(22,32,43,.05)] p-5 transition ${clickable ? 'hover:border-[var(--blue)] hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-semibold text-[var(--text)] truncate flex items-center gap-2">
@@ -131,28 +131,29 @@ function ProjectCard({ c, onOpen }) {
         </div>
       </div>
 
-      {/* 進度條 + 金額 */}
+      {/* 進度:百分比一行 → 進度條 → 金額固定一行——每張卡同構,寬窄都不會亂跳行 */}
       <div className="mt-4">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[12px]">
-          <span className="num font-semibold text-[var(--text)] whitespace-nowrap">{c.progressPct.toFixed(1)}%
-            {behind != null && (
-              <span className={`ml-2 text-[11px] font-medium ${behind > 5 ? 'text-[var(--accent-text)]' : behind < -2 ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'}`}>
-                {behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '進度正常'}
-              </span>
-            )}
-          </span>
-          <span className="num text-[var(--text-3)] whitespace-nowrap ml-auto">NT$ {fmt(c.cum)} / {fmt(c.billable)}</span>
+        <div className="flex items-baseline gap-2">
+          <span className="num text-lg leading-none font-semibold text-[var(--text)]">{c.progressPct.toFixed(1)}%</span>
+          {behind != null && (
+            <span className={`text-[11px] font-medium whitespace-nowrap ${behind > 5 ? 'text-[var(--accent-text)]' : behind < -2 ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'}`}>
+              {behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '進度正常'}
+            </span>
+          )}
         </div>
-        <div className="relative h-2 rounded-full bg-[var(--surface-2)] mt-1.5 overflow-hidden">
+        <div className="relative h-2 rounded-full bg-[var(--surface-2)] mt-2 overflow-hidden">
           <div className="absolute inset-y-0 left-0 rounded-full bg-[var(--blue)]" style={{ width: `${Math.min(100, c.progressPct)}%` }} />
           {c.plannedPct != null && (
             <div className="absolute inset-y-0 w-[2px] bg-[var(--text-2)]" style={{ left: `${Math.min(100, c.plannedPct)}%` }} />
           )}
         </div>
+        <div className="num text-[11px] text-[var(--text-3)] mt-1.5 text-right whitespace-nowrap">
+          累計估驗 NT$ {fmt(c.cum)} ／ {fmt(c.billable)}
+        </div>
       </div>
 
-      {/* 待辦計數 */}
-      <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
+      {/* 待辦計數(mt-auto 把底部區塊釘齊卡底,三張卡對齊) */}
+      <div className="mt-auto pt-4 grid grid-cols-3 gap-2 text-[11px] w-full">
         {[
           { icon: AlertTriangle, label: '缺失', title: '未結案缺失', v: c.openDefects, warn: c.openDefects > 0 },
           { icon: ShieldCheck, label: '待查驗', title: '待監造查驗', v: c.pendingInspections, warn: c.pendingInspections > 0 },
@@ -169,14 +170,14 @@ function ProjectCard({ c, onOpen }) {
         })}
       </div>
 
-      {/* 驗收階段 chip */}
-      {c.acceptance && (
-        <div className="mt-3 flex items-center gap-2 text-[12px]">
-          <BadgeCheck size={14} className={c.acceptance.overdue ? 'text-[var(--red-text)]' : c.acceptance.finished ? 'text-[var(--green-text)]' : 'text-[var(--blue-text)]'} aria-hidden />
-          <span className="text-[var(--text-2)]">驗收：{c.acceptance.label}</span>
-          <span className="num text-[var(--text-3)] ml-auto">{c.acceptance.done}/{c.acceptance.total}</span>
-        </div>
-      )}
+      {/* 驗收階段:永遠顯示同一列(沒進驗收就淡色),三張卡底部才會整齊 */}
+      <div className="mt-3 flex items-center gap-2 text-[12px] w-full">
+        <BadgeCheck size={14} className={!c.acceptance ? 'text-[var(--text-3)] opacity-60' : c.acceptance.overdue ? 'text-[var(--red-text)]' : c.acceptance.finished ? 'text-[var(--green-text)]' : 'text-[var(--blue-text)]'} aria-hidden />
+        <span className={c.acceptance ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}>
+          驗收：{c.acceptance ? c.acceptance.label : '尚未進入驗收程序'}
+        </span>
+        {c.acceptance && <span className="num text-[var(--text-3)] ml-auto">{c.acceptance.done}/{c.acceptance.total}</span>}
+      </div>
     </button>
   )
 }
