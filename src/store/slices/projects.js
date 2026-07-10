@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 import { loadWorkItems } from '../../lib/boqCalc.js'
+import { indexProjectMemberships } from '../../lib/projectIdentity.js'
 import {
   normalizeProject, fetchAllWorkItems, wiCacheGet, wiCachePut, wiCacheDel, dbToWorkItems,
 } from '../db.js'
@@ -11,10 +12,15 @@ export function useProjectsSlice({ currentUser, log }) {
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState(null)
   const [myMemberRoles, setMyMemberRoles] = useState({}) // { project_id: 'admin' | … }
+  const [projectMembershipsByProject, setProjectMembershipsByProject] = useState({})
   const [projectLoading, setProjectLoading] = useState(isSupabaseConfigured)
   const currentProject = useMemo(
     () => projects.find((p) => p.project_id === currentProjectId) || null,
     [projects, currentProjectId],
+  )
+  const currentProjectMembership = useMemo(
+    () => projectMembershipsByProject[currentProjectId] || null,
+    [projectMembershipsByProject, currentProjectId],
   )
   const [workItems, setWorkItems] = useState(null)            // { items, meta }
   const [workItemsSource, setWorkItemsSource] = useState('sample') // 'db' | 'sample'
@@ -29,17 +35,24 @@ export function useProjectsSlice({ currentUser, log }) {
   // 同時取自己的成員角色(project_members.role)——admin(建立者)擁有完整權限。
   useEffect(() => {
     if (!isSupabaseConfigured) { setProjectLoading(false); return }
-    if (!currentUser?.real) { setProjects([]); setCurrentProjectId(null); setMyMemberRoles({}); setProjectLoading(false); return }
+    if (!currentUser?.real) {
+      setProjects([]); setCurrentProjectId(null); setMyMemberRoles({})
+      setProjectMembershipsByProject({}); setProjectLoading(false); return
+    }
     let active = true
     setProjectLoading(true)
     Promise.all([
       supabase.from('projects').select('*').order('created_at'),
       supabase.from('project_members').select('project_id, role').eq('user_id', currentUser.user_id),
-    ]).then(([{ data }, { data: memberships }]) => {
+      supabase.from('project_memberships')
+        .select('id, project_id, project_party_id, project_role, is_project_admin, project_parties(party_type, display_name)')
+        .eq('user_id', currentUser.user_id),
+    ]).then(([{ data }, { data: legacyMemberships }, { data: projectMemberships }]) => {
       if (!active) return
       const list = (data || []).map(normalizeProject)
       setProjects(list)
-      setMyMemberRoles(Object.fromEntries((memberships || []).map((m) => [m.project_id, m.role])))
+      setMyMemberRoles(Object.fromEntries((legacyMemberships || []).map((m) => [m.project_id, m.role])))
+      setProjectMembershipsByProject(indexProjectMemberships(projectMemberships || []))
       const saved = (() => { try { return localStorage.getItem('pmis-current-project') } catch { return null } })()
       const pick = list.find((p) => p.project_id === saved) || list[0] || null
       setCurrentProjectId(pick?.project_id || null)
@@ -173,11 +186,13 @@ export function useProjectsSlice({ currentUser, log }) {
 
   // 登出時的專案側清理(由 store.jsx 的 logout 呼叫)
   const clearOnLogout = useCallback(() => {
-    setProjects([]); setCurrentProjectId(null)
+    setProjects([]); setCurrentProjectId(null); setMyMemberRoles({})
+    setProjectMembershipsByProject({})
   }, [])
 
   return {
-    projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
+    projects, setProjects, currentProjectId, currentProject, myMemberRoles,
+    projectMembershipsByProject, currentProjectMembership, projectLoading,
     workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps, dbMode, demoMode,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,

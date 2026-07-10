@@ -52,13 +52,15 @@ export function StoreProvider({ children }) {
   // ── 身分與專案(其他 slice 的共同上游)────────────────────────────────────
   const { currentUser, setCurrentUser, signUp, resendSignup, signIn, signOutBase } = useAuthSlice()
   const {
-    projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
+    projects, currentProjectId, currentProject, myMemberRoles,
+    projectMembershipsByProject, currentProjectMembership, projectLoading,
     workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps, dbMode, demoMode,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
 
-  // 角色權限（UI 層 v1，對應三級品管）：
+  // 角色權限（UI 層 v1，對應三級品管）。P0-02 only exposes the new
+  // project-scoped identity; authorization remains legacy until P0-03.
   //   施工＝填報/提送，監造＝查驗判定/審核，機關＝監督核定（變更設計核准、撥款）。
   // 核心規則：施工不能核准或結案自己的東西；機關對日常填報唯讀，但保留契約級核定權。
   // 例外：專案 admin（建立者）擁有完整權限——單人/小團隊試用不會被自己的
@@ -237,6 +239,7 @@ export function StoreProvider({ children }) {
     project: currentProject || project, currentUser, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
+    projectMembershipsByProject, currentProjectMembership,
     workItems, workItemsSource, importWorkItems, dbMode, demoMode, can,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
