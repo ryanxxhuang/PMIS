@@ -10,7 +10,7 @@
 //   src/store/slices/collab.js   — 送審/RFI/觀察事項/成員
 //   src/store/slices/ledger.js   — 成本/變更設計/逐工項排程/契約義務
 // 跨領域的部分留在這裡:demo 種子、DB 整批載入、登出清理、重匯標單、角色權限 can。
-import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef } from 'react'
 import { project } from './data/seed.js'
 import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
@@ -31,24 +31,11 @@ import { useLedgerSlice } from './store/slices/ledger.js'
 
 const StoreContext = createContext(null)
 
-const now = () => new Date().toLocaleString('zh-TW', { hour12: false })
-
 export function StoreProvider({ children }) {
-  const [audit, setAudit] = useState([]) // 記憶體操作紀錄（log() 寫入，供日後審計）
-  const log = useCallback((action, record, extra = {}) => {
-    setAudit((a) => [
-      {
-        event_id: `E${a.length + 1}`,
-        user: extra.user || '系統',
-        role: extra.role || '-',
-        action,
-        related_record: record,
-        timestamp: now(),
-        device_type: extra.device || 'Web',
-      },
-      ...a,
-    ])
-  }, [])
+  // P0-05: legacy slice call sites still invoke log(), but the unused
+  // in-memory array is retired. Authoritative events are database-triggered;
+  // keeping this no-op avoids coupling unrelated slice cleanup to P0-05.
+  const log = useCallback(() => {}, [])
 
   // ── 身分與專案(其他 slice 的共同上游)────────────────────────────────────
   const { currentUser, setCurrentUser, signUp, resendSignup, signIn, signOutBase } = useAuthSlice()
