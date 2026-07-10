@@ -714,6 +714,29 @@ create unique index if not exists requirements_legacy_obligation_uidx
 create index if not exists requirements_authoritative_idx on public.requirements(project_id)
   where is_authoritative;
 
+-- Project-scoped roots cannot be reassigned. This keeps existing Requirement
+-- source/work-item bridges valid even when a user can write to both projects.
+create or replace function public.guard_project_identity()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if new.project_id is distinct from old.project_id then
+    raise exception 'project identity is immutable';
+  end if;
+  return new;
+end; $$;
+drop trigger if exists requirements_project_identity_guard on public.requirements;
+create trigger requirements_project_identity_guard
+  before update on public.requirements for each row
+  execute function public.guard_project_identity();
+drop trigger if exists documents_project_identity_guard on public.documents;
+create trigger documents_project_identity_guard
+  before update on public.documents for each row
+  execute function public.guard_project_identity();
+drop trigger if exists work_items_project_identity_guard on public.work_items;
+create trigger work_items_project_identity_guard
+  before update on public.work_items for each row
+  execute function public.guard_project_identity();
+
 create or replace function public.touch_requirement_updated_at()
 returns trigger language plpgsql set search_path = public as $$
 begin
@@ -873,6 +896,7 @@ alter table public.contract_obligations
 
 create or replace function public.upsert_contract_obligation_requirement()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare requirement_status text;
 begin
   new.requirement_id = new.id;
 
@@ -921,26 +945,40 @@ begin
     frequency_type = excluded.frequency_type,
     frequency_config = excluded.frequency_config,
     origin = 'migration',
-    legacy_contract_obligation_id = excluded.legacy_contract_obligation_id;
+    legacy_contract_obligation_id = excluded.legacy_contract_obligation_id
+  where requirements.status in ('draft_ai','needs_review');
 
-  if new.source_clause is not null or new.source_page is not null then
-    insert into public.requirement_sources (
-      id, requirement_id, source_kind, source_verified,
-      page_number, page_label, clause
-    ) values (
-      new.id,
-      new.id,
-      'legacy',
-      false,
-      nullif(substring(new.source_page from '([0-9]+)'), '')::int,
-      new.source_page,
-      new.source_clause
-    )
-    on conflict (id) do update set
-      requirement_id = excluded.requirement_id,
-      page_number = excluded.page_number,
-      page_label = excluded.page_label,
-      clause = excluded.clause;
+  select status into requirement_status
+  from public.requirements where id = new.id;
+
+  if requirement_status in ('draft_ai','needs_review') then
+    if new.source_clause is not null or new.source_page is not null then
+      insert into public.requirement_sources (
+        id, requirement_id, document_version_id, source_kind, source_verified,
+        page_number, page_label, clause
+      ) values (
+        new.id,
+        new.id,
+        null,
+        'legacy',
+        false,
+        nullif(substring(new.source_page from '([0-9]+)'), '')::int,
+        new.source_page,
+        new.source_clause
+      )
+      on conflict (id) do update set
+        requirement_id = excluded.requirement_id,
+        document_version_id = null,
+        source_kind = 'legacy',
+        source_verified = false,
+        page_number = excluded.page_number,
+        page_label = excluded.page_label,
+        clause = excluded.clause
+      where requirement_sources.source_kind = 'legacy';
+    else
+      delete from public.requirement_sources
+      where id = new.id and requirement_id = new.id and source_kind = 'legacy';
+    end if;
   end if;
 
   return new;

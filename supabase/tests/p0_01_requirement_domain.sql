@@ -1,6 +1,6 @@
 begin;
 
-select plan(35);
+select plan(44);
 
 select has_table('public', 'documents', 'documents table exists');
 select has_table('public', 'document_versions', 'document_versions table exists');
@@ -221,6 +221,39 @@ select throws_ok(
   'cross-project requirement/work-item links are rejected'
 );
 
+select throws_ok(
+  $$
+    update public.requirements
+    set project_id = '10000000-0000-0000-0000-000000000002'
+    where id = '30000000-0000-0000-0000-000000000001'
+  $$,
+  'P0001',
+  'project identity is immutable',
+  'a linked requirement cannot be reassigned to another project'
+);
+
+select throws_ok(
+  $$
+    update public.documents
+    set project_id = '10000000-0000-0000-0000-000000000002'
+    where id = '60000000-0000-0000-0000-000000000001'
+  $$,
+  'P0001',
+  'project identity is immutable',
+  'a cited document cannot be reassigned to another project'
+);
+
+select throws_ok(
+  $$
+    update public.work_items
+    set project_id = '10000000-0000-0000-0000-000000000002'
+    where id = '20000000-0000-0000-0000-000000000001'
+  $$,
+  'P0001',
+  'project identity is immutable',
+  'a linked work item cannot be reassigned to another project'
+);
+
 select is((select is_authoritative from public.requirements where id = '30000000-0000-0000-0000-000000000002'), false, 'draft_ai is not authoritative');
 select is((select is_authoritative from public.requirements where id = '30000000-0000-0000-0000-000000000001'), false, 'manual needs_review is not authoritative');
 select is((select is_authoritative from public.requirements where id = '30000000-0000-0000-0000-000000000003'), true, 'approved is authoritative');
@@ -270,6 +303,56 @@ select results_eq(
   'legacy source metadata remains explicitly unverified'
 );
 
+update public.contract_obligations
+set title = 'Updated draft quality plan', offset_days = 45,
+    source_clause = '2.3.4', source_page = 'p.50'
+where id = '90000000-0000-0000-0000-000000000001';
+
+select results_eq(
+  $$
+    select status, title, trigger_config ->> 'offset_days'
+    from public.requirements
+    where id = '90000000-0000-0000-0000-000000000001'
+  $$,
+  $$ values ('needs_review'::text, 'Updated draft quality plan'::text, '45'::text) $$,
+  'needs_review requirement content continues to synchronize from legacy'
+);
+
+select results_eq(
+  $$
+    select page_number, page_label, clause
+    from public.requirement_sources
+    where id = '90000000-0000-0000-0000-000000000001'
+  $$,
+  $$ values (50, 'p.50'::text, '2.3.4'::text) $$,
+  'needs_review legacy source metadata continues to synchronize'
+);
+
+update public.contract_obligations
+set source_clause = null, source_page = null
+where id = '90000000-0000-0000-0000-000000000001';
+
+select is(
+  (select count(*)::integer from public.requirement_sources
+    where id = '90000000-0000-0000-0000-000000000001'),
+  0,
+  'clearing mutable legacy citation metadata removes the stale source'
+);
+
+update public.contract_obligations
+set source_clause = '2.3.4', source_page = 'p.50'
+where id = '90000000-0000-0000-0000-000000000001';
+
+select results_eq(
+  $$
+    select source_kind, source_verified, page_number, clause
+    from public.requirement_sources
+    where id = '90000000-0000-0000-0000-000000000001'
+  $$,
+  $$ values ('legacy'::text, false, 50, '2.3.4'::text) $$,
+  'restoring mutable legacy citation metadata recreates one deterministic source'
+);
+
 update public.contract_obligations set status = '已提送'
 where id = '90000000-0000-0000-0000-000000000001';
 update public.contract_obligations set status = '待辦'
@@ -290,14 +373,27 @@ select is(
 
 update public.requirements set status = 'approved', reviewed_at = now()
 where id = '90000000-0000-0000-0000-000000000001';
-update public.contract_obligations set title = 'Updated operational title'
+update public.contract_obligations
+set title = 'Unapproved changed title', offset_days = 90,
+    source_clause = '9.9.9', source_page = 'p.99'
 where id = '90000000-0000-0000-0000-000000000001';
 
-select is(
-  (select status from public.requirements
-    where id = '90000000-0000-0000-0000-000000000001'),
-  'approved',
-  'legacy synchronization does not demote an approved requirement'
+select results_eq(
+  $$
+    select r.status, r.is_authoritative, r.title,
+           r.trigger_config ->> 'offset_days', s.page_number, s.clause
+    from public.requirements r
+    join public.requirement_sources s on s.requirement_id = r.id
+    where r.id = '90000000-0000-0000-0000-000000000001'
+      and s.id = '90000000-0000-0000-0000-000000000001'
+  $$,
+  $$
+    values (
+      'approved'::text, true, 'Updated draft quality plan'::text,
+      '45'::text, 50, '2.3.4'::text
+    )
+  $$,
+  'approved requirement content and citation survive unapproved legacy changes'
 );
 
 delete from public.contract_obligations
@@ -314,6 +410,62 @@ select is(
     where id = '90000000-0000-0000-0000-000000000001'),
   1,
   'surviving approved legacy requirements remain authoritative'
+);
+
+insert into public.contract_obligations (
+  id, project_id, title, trigger_event, offset_days, offset_dir,
+  source_clause, source_page, status
+) values (
+  '90000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000001',
+  'Rejected original', 'notice', 7, 'after', 'R.1', 'p.7', '待辦'
+);
+update public.requirements set status = 'rejected', reviewed_at = now()
+where id = '90000000-0000-0000-0000-000000000002';
+update public.contract_obligations
+set title = 'Rejected changed', offset_days = 8,
+    source_clause = 'R.2', source_page = 'p.8'
+where id = '90000000-0000-0000-0000-000000000002';
+
+select results_eq(
+  $$
+    select r.status, r.is_authoritative, r.title,
+           r.trigger_config ->> 'offset_days', s.page_number, s.clause
+    from public.requirements r
+    join public.requirement_sources s on s.requirement_id = r.id
+    where r.id = '90000000-0000-0000-0000-000000000002'
+      and s.id = '90000000-0000-0000-0000-000000000002'
+  $$,
+  $$ values ('rejected'::text, false, 'Rejected original'::text, '7'::text, 7, 'R.1'::text) $$,
+  'rejected requirement content and citation survive later legacy changes'
+);
+
+insert into public.contract_obligations (
+  id, project_id, title, trigger_event, offset_days, offset_dir,
+  source_clause, source_page, status
+) values (
+  '90000000-0000-0000-0000-000000000003',
+  '10000000-0000-0000-0000-000000000001',
+  'Superseded original', 'notice', 14, 'after', 'S.1', 'p.14', '待辦'
+);
+update public.requirements set status = 'superseded', reviewed_at = now()
+where id = '90000000-0000-0000-0000-000000000003';
+update public.contract_obligations
+set title = 'Superseded changed', offset_days = 15,
+    source_clause = 'S.2', source_page = 'p.15'
+where id = '90000000-0000-0000-0000-000000000003';
+
+select results_eq(
+  $$
+    select r.status, r.is_authoritative, r.title,
+           r.trigger_config ->> 'offset_days', s.page_number, s.clause
+    from public.requirements r
+    join public.requirement_sources s on s.requirement_id = r.id
+    where r.id = '90000000-0000-0000-0000-000000000003'
+      and s.id = '90000000-0000-0000-0000-000000000003'
+  $$,
+  $$ values ('superseded'::text, false, 'Superseded original'::text, '14'::text, 14, 'S.1'::text) $$,
+  'superseded requirement content and citation survive later legacy changes'
 );
 
 -- auth.uid() is non-null here, exercising the application-user guard.

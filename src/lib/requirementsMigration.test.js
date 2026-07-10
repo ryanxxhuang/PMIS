@@ -55,4 +55,20 @@ describe('P0-01 requirement migration contract', () => {
     expect(sql).toContain("status in ('draft_ai','needs_review')")
     expect(sql).not.toContain('reviewed_at is null')
   })
+
+  it('synchronizes only mutable legacy snapshots and removes stale sources', () => {
+    const sql = requirementBlock(migration)
+    expect(sql).toContain("where requirements.status in ('draft_ai','needs_review')")
+    expect(sql).toContain("if requirement_status in ('draft_ai','needs_review') then")
+    expect(sql).toContain("where requirement_sources.source_kind = 'legacy'")
+    expect(sql).toContain('delete from public.requirement_sources')
+  })
+
+  it('makes project identity immutable for linked project-scoped roots', () => {
+    const sql = requirementBlock(migration)
+    expect(sql).toContain("raise exception 'project identity is immutable'")
+    expect(sql).toContain('requirements_project_identity_guard')
+    expect(sql).toContain('documents_project_identity_guard')
+    expect(sql).toContain('work_items_project_identity_guard')
+  })
 })

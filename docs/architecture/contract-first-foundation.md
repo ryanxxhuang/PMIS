@@ -41,6 +41,9 @@ extract page text.
 - `requirement_sources` stores document, legacy, or manual citations.
 - `requirement_work_items` links a requirement to one or more PCCES BOQ items.
   A database trigger rejects cross-project links.
+- Project identity is immutable on `requirements`, `documents`, and
+  `work_items`, so a valid bridge cannot become cross-project through later
+  parent reassignment.
 - `responsible_project_party_id` is a nullable P0-02 placeholder. Until the
   project-party model exists, `responsible_party_type` is limited to `agency`,
   `supervisor`, `contractor`, or `other` and is not an authorization source.
@@ -93,9 +96,13 @@ legacy_contract_obligation_id = contract_obligations.id
 ```
 
 Operational status changes remain on `contract_obligations` and never promote
-or demote the Requirement lifecycle. Repeated synchronization upserts the same
-root and source. Parser replacement may remove draft/needs-review mirrors, but
-approved, rejected, and superseded lifecycle outcomes survive.
+or demote the Requirement lifecycle. While a Requirement is `draft_ai` or
+`needs_review`, repeated synchronization updates the same root/source and
+removes the deterministic legacy source when its page/clause metadata is
+cleared. Once the Requirement is approved, rejected, or superseded, its content
+and citation snapshot are frozen against later legacy changes. Parser
+replacement may remove draft/needs-review mirrors, but explicit lifecycle
+outcomes survive.
 
 ## 8. Source traceability semantics
 
