@@ -1,0 +1,179 @@
+// Collab slice:監造協作——送審(Submittal)、工程疑義(RFI)、觀察事項、專案成員管理。
+import { useState, useCallback } from 'react'
+import { users } from '../../data/seed.js'
+import { supabase } from '../../lib/supabase.js'
+
+export function useCollabSlice({ dbMode, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
+  // 監造協作:送審與工程疑義
+  const [submittals, setSubmittals] = useState([])
+  const [rfis, setRfis] = useState([])
+  const [observations, setObservations] = useState([]) // 觀察事項(輕量提醒)
+
+  const createSubmittal = useCallback(async (input) => {
+    const row = {
+      submittal_no: input.submittal_no || `SUB-${String(submittals.length + 1).padStart(3, '0')}`,
+      title: input.title, category: input.category || '施工計畫',
+      revision: 0, status: '已提送',
+      submitted_date: input.submitted_date || null, due_date: input.due_date || null,
+      decided_date: null, review_note: null, attachment_note: input.attachment_note || null,
+    }
+    if (!dbMode) {
+      setSubmittals((ss) => [{ ...row, id: `SUB-${Date.now()}` }, ...ss])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('submittals')
+      .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
+    if (error) return { error }
+    setSubmittals((ss) => [data, ...ss])
+    log('提送送審', `${row.submittal_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, submittals, log])
+
+  // 監造審定:審核中|核准|核備|退回補正|駁回
+  const decideSubmittal = useCallback(async (id, status, review_note) => {
+    const patch = { status, review_note: review_note || null }
+    if (status !== '審核中') patch.decided_date = new Date().toISOString().slice(0, 10)
+    setSubmittals((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+    if (!dbMode) return { error: null }
+    const { error } = await supabase.from('submittals').update(patch).eq('id', id)
+    if (!error) log('送審審定', `${status}`, { user: currentUser?.name, role: '監造' })
+    return { error }
+  }, [dbMode, currentUser, log])
+
+  // 施工修正再送:退回補正 → 已提送(revision +1)
+  const resubmitSubmittal = useCallback(async (id) => {
+    let patch = null
+    setSubmittals((ss) => ss.map((s) => {
+      if (s.id !== id) return s
+      patch = { status: '已提送', revision: (s.revision || 0) + 1, decided_date: null,
+        submitted_date: new Date().toISOString().slice(0, 10) }
+      return { ...s, ...patch }
+    }))
+    if (!dbMode || !patch) return { error: null }
+    const { error } = await supabase.from('submittals').update(patch).eq('id', id)
+    return { error }
+  }, [dbMode])
+
+  const deleteSubmittal = useCallback(async (id) => {
+    setSubmittals((ss) => ss.filter((s) => s.id !== id))
+    if (dbMode) await supabase.from('submittals').delete().eq('id', id)
+  }, [dbMode])
+
+  const createRfi = useCallback(async (input) => {
+    const markup_path = await saveMarkup(input.markup_data, 'rfi')
+    const row = {
+      markup_path,
+      rfi_no: input.rfi_no || `RFI-${String(rfis.length + 1).padStart(3, '0')}`,
+      title: input.title, question: input.question || null,
+      answer: null, status: '待回覆',
+      asked_date: input.asked_date || new Date().toISOString().slice(0, 10),
+      due_date: input.due_date || null, answered_date: null,
+      cost_impact: !!input.cost_impact, schedule_impact: !!input.schedule_impact,
+    }
+    if (!dbMode) {
+      setRfis((rs) => [{ ...row, id: `RFI-${Date.now()}` }, ...rs])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('rfis')
+      .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
+    if (error) return { error }
+    setRfis((rs) => [data, ...rs])
+    log('提出工程疑義', `${row.rfi_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, rfis, saveMarkup, log])
+
+  const answerRfi = useCallback(async (id, answer) => {
+    const patch = { answer, status: '已回覆', answered_date: new Date().toISOString().slice(0, 10) }
+    setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+    if (!dbMode) return { error: null }
+    const { error } = await supabase.from('rfis').update(patch).eq('id', id)
+    if (!error) log('回覆工程疑義', answer.slice(0, 30), { user: currentUser?.name, role: '監造' })
+    return { error }
+  }, [dbMode, currentUser, log])
+
+  const closeRfi = useCallback(async (id) => {
+    setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, status: '已結案' } : r)))
+    if (dbMode) await supabase.from('rfis').update({ status: '已結案' }).eq('id', id)
+  }, [dbMode])
+
+  const deleteRfi = useCallback(async (id) => {
+    setRfis((rs) => rs.filter((r) => r.id !== id))
+    if (dbMode) await supabase.from('rfis').delete().eq('id', id)
+  }, [dbMode])
+
+  // ── 觀察事項:輕量提醒,可升級成正式缺失 ──────────────────────────────────
+  const createObservation = useCallback(async (input) => {
+    const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
+    const markup_path = await saveMarkup(input.markup_data, 'obs')
+    const row = {
+      title: input.title, description: input.description || null, location: input.location || null,
+      assigned_to: input.assigned_to || 'contractor', status: '待處理', markup_path,
+    }
+    if (!dbMode) {
+      setObservations((os) => [{ ...row, id: `OBS-${Date.now()}`, work_item_no: wi?.item_no || '' }, ...os])
+      return { error: null }
+    }
+    const { data, error } = await supabase.from('observations')
+      .insert({ ...row, project_id: currentProject.project_id, work_item_id: wi?.id || null, created_by: currentUser?.user_id })
+      .select().single()
+    if (error) return { error }
+    setObservations((os) => [data, ...os])
+    log('新增觀察事項', input.title, { user: currentUser?.name, role: '監造' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, wiMaps, saveMarkup, log])
+
+  const updateObservation = useCallback(async (id, patch) => {
+    setObservations((os) => os.map((o) => (o.id === id ? { ...o, ...patch } : o)))
+    if (dbMode) await supabase.from('observations').update(patch).eq('id', id)
+    return { error: null }
+  }, [dbMode])
+
+  // 升級為缺失:建立缺失(帶入標註)並把觀察標為「轉缺失」
+  const escalateObservation = useCallback(async (obs) => {
+    await createDefect({
+      title: obs.title, description: obs.description || null, location: obs.location || '',
+      severity: '一般', markup_data: obs.markup_path && obs.markup_path.startsWith('data:') ? obs.markup_path : undefined,
+    })
+    await updateObservation(obs.id, { status: '轉缺失' })
+    return { error: null }
+  }, [createDefect, updateObservation])
+
+  const deleteObservation = useCallback(async (id) => {
+    setObservations((os) => os.filter((o) => o.id !== id))
+    if (dbMode) await supabase.from('observations').delete().eq('id', id)
+  }, [dbMode])
+
+  // 成員管理(RPC:email 對照 auth.users 必須在伺服器端做)
+  const listMembers = useCallback(async () => {
+    if (!dbMode) {
+      return users.map((u) => ({ user_id: u.user_id, full_name: u.name, company: u.company, org_type: u.org_type, member_role: u.user_id === 'U1' ? 'admin' : 'member' }))
+    }
+    const { data } = await supabase.rpc('list_project_members', { p_project: currentProject.project_id })
+    return data || []
+  }, [dbMode, currentProject])
+
+  const addMemberByEmail = useCallback(async (email, role = 'member') => {
+    if (!dbMode) return { error: { message: 'demo 模式不支援邀請成員' } }
+    const { data, error } = await supabase.rpc('add_member_by_email', {
+      p_project: currentProject.project_id, p_email: email, p_role: role,
+    })
+    if (error) return { error }
+    if (data === 'not_found') return { error: { message: '找不到這個 email 的帳號，請對方先註冊。' } }
+    log('加入成員', email, { user: currentUser?.name, role: '專案' })
+    return { error: null }
+  }, [dbMode, currentProject, currentUser, log])
+
+  const removeMember = useCallback(async (userId) => {
+    if (!dbMode) return { error: { message: 'demo 模式不支援移除成員' } }
+    const { error } = await supabase.rpc('remove_member', { p_project: currentProject.project_id, p_user: userId })
+    return { error }
+  }, [dbMode, currentProject])
+
+  return {
+    submittals, setSubmittals, rfis, setRfis, observations, setObservations,
+    createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal,
+    createRfi, answerRfi, closeRfi, deleteRfi,
+    createObservation, updateObservation, escalateObservation, deleteObservation,
+    listMembers, addMemberByEmail, removeMember,
+  }
+}
