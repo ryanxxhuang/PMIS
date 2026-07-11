@@ -22,7 +22,7 @@ import {
 } from '../../lib/documentClassifier.js'
 import {
   uploadFilesToPackage, summarizePackageProgress, packageStatusFromRuns,
-  formatElapsed, staleProcessingPatch, STAGE_LABELS, RUN_STATUS_LABELS,
+  formatElapsed, staleProcessingPatch, takeSelectedFiles, STAGE_LABELS, RUN_STATUS_LABELS,
 } from '../../lib/packageUpload.js'
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
@@ -392,7 +392,7 @@ export default function Contract() {
           <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${uploading || !canUploadDocs ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
             <input type="file" multiple accept={ACCEPT_ATTR}
               disabled={uploading || !canUploadDocs}
-              onChange={(e) => { const fs = e.target.files; e.target.value = ''; handleFiles(fs, selectedPackage) }}
+              onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)}
               className="hidden" />
             <UploadCloud size={15} aria-hidden /> {uploading ? '整理中…' : '上傳契約文件'}
           </label>

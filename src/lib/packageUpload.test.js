@@ -2,12 +2,25 @@ import { describe, expect, it } from 'vitest'
 import {
   UPLOAD_CONCURRENCY, formatElapsed, mapWithConcurrency,
   packageStatusFromRuns, staleProcessingPatch, storagePathFor, summarizePackageProgress,
+  takeSelectedFiles,
 } from './packageUpload.js'
 
 const run = (overrides) => ({
   status: 'processing', stage: 'received', parser_type: 'pdf',
   suggested_document_type: null, classification_status: null, metadata: {},
   started_at: '2026-07-11T00:00:00Z', ...overrides,
+})
+
+describe('takeSelectedFiles', () => {
+  it('snapshots a live FileList before clearing the input', () => {
+    const selected = [{ name: 'contract.pdf' }, { name: 'specification.docx' }]
+    const input = {
+      files: selected,
+      set value(_next) { this.files = [] },
+    }
+    expect(takeSelectedFiles(input)).toEqual(selected)
+    expect(input.files).toEqual([])
+  })
 })
 
 describe('summarizePackageProgress (real stage counts, no fake percentage)', () => {

@@ -23,6 +23,13 @@ export const PROCESSING_STALE_MS = 20 * 60 * 1000
 const PAGE_INSERT_BATCH = 200
 const FIRST_TEXT_SAMPLE_PAGES = 3
 
+// FileList is live: clearing the input before copying it empties the selection.
+export function takeSelectedFiles(input) {
+  const files = [...(input?.files || [])].filter(Boolean)
+  if (input) input.value = ''
+  return files
+}
+
 export const STAGE_ORDER = Object.freeze({
   received: 0, uploaded: 1, extracting_text: 2, classifying: 3,
   extracting_requirements: 4, completed: 5, failed: 5, unsupported: 5,
