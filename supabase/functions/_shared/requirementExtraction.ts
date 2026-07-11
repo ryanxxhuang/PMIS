@@ -9,7 +9,24 @@
 // * deterministic per-run suggestion IDs so retrying a persistence step inside
 //   the same run cannot insert duplicates.
 
-export const PROMPT_VERSION = 'extract-requirements/v1'
+export const PROMPT_VERSION = 'extract-requirements/v2'
+
+// P0-07.5: extraction focus routed by the classified document type. Unknown
+// types get no special focus (generic obligations prompt).
+export const EXTRACTION_FOCUS: Record<string, string> = {
+  contract:
+    '本文件為契約條款:優先找出期限與週期義務、應提送/申報的文件(含開工前計畫書)、' +
+    '通知與核准義務、各方責任分工、與罰則綁定的義務、應留存的佐證。',
+  specification:
+    '本文件為施工/技術規範:優先找出檢驗與試驗要求、允收/合格標準(含數值)、' +
+    '取樣與試驗頻率、應留存的品質佐證(試驗報告/檢驗紀錄)。',
+  quality_plan:
+    '本文件為品質計畫:優先找出檢驗停留點、自主檢查要求、應建立的品質紀錄、' +
+    '人員資格與訓練要求。',
+  itp:
+    '本文件為檢驗及測試計畫(ITP):優先找出檢驗停留點(見證點/停留點/文審點)、' +
+    '通知監造的時機、見證與停留程序、各點的允收標準。',
+}
 
 // Vocabulary mirrors the P0-01 requirement domain (src/lib/requirements.js and
 // the requirements table CHECK constraints) plus the legacy contract phase /

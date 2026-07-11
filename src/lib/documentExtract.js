@@ -14,6 +14,7 @@ import { normalizeSourceText } from '../../supabase/functions/_shared/sourceVeri
 
 export const PDF_EXTRACTION_METHOD = 'pdf_text'
 export const DOCX_EXTRACTION_METHOD = 'docx_text_unpaginated'
+export const TXT_EXTRACTION_METHOD = 'txt_text_unpaginated'
 // Below this normalized length a page has no verifiable content.
 export const MIN_PAGE_TEXT_LENGTH = 20
 // DOCX storage segment size (characters, before normalization).
@@ -76,6 +77,16 @@ export function buildDocxPageRecords(rawText, segmentLength = DOCX_SEGMENT_LENGT
   }))
 }
 
+// Plain text has no page boundaries either: deterministic UTF-8 decode into
+// unpaginated storage segments. Requirement sources keep page_number null.
+export function buildTxtPageRecords(rawText, segmentLength = DOCX_SEGMENT_LENGTH) {
+  return segmentUnpaginatedText(rawText, segmentLength).map((segment, i) => ({
+    page_number: i + 1, // storage index only - NOT a citable page (unpaginated)
+    extracted_text: segment,
+    extraction_method: TXT_EXTRACTION_METHOD,
+  }))
+}
+
 export function hasExtractableText(pages) {
   return (pages || []).some(
     (p) => normalizeSourceText(p.extracted_text).length >= MIN_PAGE_TEXT_LENGTH,
@@ -94,6 +105,10 @@ export async function extractDocumentPages(file) {
     const extract = m.extractRawText || m.default?.extractRawText
     const { value } = await extract({ arrayBuffer: buffer })
     return { pages: buildDocxPageRecords(value || ''), pagination: 'unpaginated', buffer }
+  }
+  if (name.endsWith('.txt') || type === 'text/plain') {
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buffer))
+    return { pages: buildTxtPageRecords(text), pagination: 'unpaginated', buffer }
   }
   if (name.endsWith('.pdf') || type.includes('pdf')) {
     const pdfjs = await import('pdfjs-dist')

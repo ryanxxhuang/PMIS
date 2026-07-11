@@ -19,8 +19,8 @@ import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
 import { normalizeSourceText, verifySuggestionSource } from '../_shared/sourceVerify.ts'
 import {
-  PROMPT_VERSION, REQUIREMENT_TYPES, RESPONSIBLE_PARTY_TYPES, LIFECYCLE_PHASES,
-  TRIGGER_TYPES, OFFSET_DIRS, FREQUENCY_TYPES,
+  PROMPT_VERSION, EXTRACTION_FOCUS, REQUIREMENT_TYPES, RESPONSIBLE_PARTY_TYPES,
+  LIFECYCLE_PHASES, TRIGGER_TYPES, OFFSET_DIRS, FREQUENCY_TYPES,
   buildWorkItemCatalog, mapWorkItemRefs, validateSuggestion, deterministicUuid,
 } from '../_shared/requirementExtraction.ts'
 
@@ -125,9 +125,11 @@ function buildPrompt(opts: {
   const pageRule = opts.paginated
     ? '每項的 source.page_number 必須是上方「=== 第 N 頁 ===」實際出現的 N,引註原文必須出現在該頁。'
     : '此文件沒有可靠頁碼:source.page_number 一律填 0,改以 section / clause 標明出處。'
+  const focus = EXTRACTION_FOCUS[opts.documentType]
   return (
     '以下是台灣公共工程專案文件的逐頁文字。\n' +
-    `文件名稱:${opts.title}\n文件類型:${opts.documentType}\n\n` +
+    `文件名稱:${opts.title}\n文件類型:${opts.documentType}\n` +
+    (focus ? `${focus}\n` : '') + '\n' +
     '任務:通讀全文,抽出「可執行的履約需求」——必須提送/申報、應辦檢驗/試驗、應通知/會同/見證、' +
     '停留點(未查驗不得續作)、應留存的紀錄/照片/報告、期限與週期義務、允收標準、取樣/試驗頻率等。\n' +
     '不要把以下內容當成需求:一般背景說明、純名詞定義、目錄項目、沒有具體義務的敘述性文字。\n' +

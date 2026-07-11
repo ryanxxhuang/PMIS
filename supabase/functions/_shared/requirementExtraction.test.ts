@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
+  EXTRACTION_FOCUS,
   buildWorkItemCatalog,
   deterministicUuid,
   mapWorkItemRefs,
   validateSuggestion,
 } from './requirementExtraction.ts'
+
+describe('document-type extraction focus', () => {
+  it('routes only the approved persistent document types to focused prompts', () => {
+    expect(EXTRACTION_FOCUS.contract).toContain('期限與週期義務')
+    expect(EXTRACTION_FOCUS.specification).toContain('取樣與試驗頻率')
+    expect(EXTRACTION_FOCUS.quality_plan).toContain('自主檢查要求')
+    expect(EXTRACTION_FOCUS.itp).toContain('檢驗停留點')
+    expect(EXTRACTION_FOCUS.other).toBeUndefined()
+  })
+})
 
 const validRaw = {
   title: '開工前提送施工計畫書',

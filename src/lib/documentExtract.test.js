@@ -3,8 +3,10 @@ import {
   DOCX_EXTRACTION_METHOD,
   MIN_PAGE_TEXT_LENGTH,
   PDF_EXTRACTION_METHOD,
+  TXT_EXTRACTION_METHOD,
   buildDocxPageRecords,
   buildPdfPageRecords,
+  buildTxtPageRecords,
   hasExtractableText,
   segmentUnpaginatedText,
 } from './documentExtract.js'
@@ -61,6 +63,14 @@ describe('segmentUnpaginatedText / buildDocxPageRecords', () => {
       page_number: 1,
       extracted_text: '第一段\n第二段',
       extraction_method: DOCX_EXTRACTION_METHOD,
+    }])
+  })
+
+  it('marks TXT records as unpaginated storage segments', () => {
+    expect(buildTxtPageRecords('契約文字第一段\n契約文字第二段')).toEqual([{
+      page_number: 1,
+      extracted_text: '契約文字第一段\n契約文字第二段',
+      extraction_method: TXT_EXTRACTION_METHOD,
     }])
   })
 

@@ -118,12 +118,29 @@ export function useProjectsSlice({ currentUser, log }) {
     })
     if (!error && data) {
       const np = normalizeProject(data)
+      // The project-creation trigger has already dual-written both membership
+      // models. Load that identity before selecting the project so Contract
+      // package permissions are correct immediately, without a page refresh.
+      const [{ data: scopedRows }, { data: legacyRows }] = await Promise.all([
+        supabase.from('project_memberships')
+          .select('id, project_id, project_party_id, project_role, is_project_admin, project_parties(party_type, display_name, is_active)')
+          .eq('project_id', np.project_id).eq('user_id', currentUser?.user_id).limit(1),
+        supabase.from('project_members').select('project_id, role')
+          .eq('project_id', np.project_id).eq('user_id', currentUser?.user_id).limit(1),
+      ])
       setProjects((prev) => [...prev, np])
+      if (scopedRows?.length) {
+        const indexed = indexProjectMemberships(scopedRows)
+        setProjectMembershipsByProject((prev) => ({ ...prev, ...indexed }))
+      }
+      if (legacyRows?.length) {
+        setMyMemberRoles((prev) => ({ ...prev, [np.project_id]: legacyRows[0].role }))
+      }
       setCurrentProjectId(np.project_id)
       try { localStorage.setItem('pmis-current-project', np.project_id) } catch { /* noop */ }
     }
     return { error }
-  }, [])
+  }, [currentUser])
 
   // 匯入標單工項到此專案的 work_items（client 端產 uuid 維持父子關係，分批寫入）。
   // parsed = 上傳 XML 解析結果 { items }；未帶則用內建範例（國際原住民標單）。
