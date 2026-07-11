@@ -32,6 +32,7 @@ import Activity from './pages/web/Activity.jsx'
 import Portfolio from './pages/web/Portfolio.jsx'
 import Acceptance from './pages/web/Acceptance.jsx'
 import ITP from './pages/web/ITP.jsx'
+import Requirements from './pages/web/Requirements.jsx'
 
 // Gate every page behind auth; force project creation before the workspace loads.
 function Web({ children }) {
@@ -76,6 +77,7 @@ export default function App() {
       <Route path="/rfi" element={<Web><RFI /></Web>} />
       <Route path="/members" element={<Web><Members /></Web>} />
       <Route path="/contract" element={<Web><Contract /></Web>} />
+      <Route path="/requirements" element={<Web><Requirements /></Web>} />
       <Route path="/alerts" element={<Web><Alerts /></Web>} />
       <Route path="/monthly-report" element={<Web><MonthlyReport /></Web>} />
       <Route path="*" element={<Navigate to="/login" replace />} />

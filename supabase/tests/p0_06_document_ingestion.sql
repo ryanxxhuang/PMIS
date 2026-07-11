@@ -263,20 +263,20 @@ $$, 'P0001', 'requirement and work item must belong to the same project',
 select public.pmis_p06_login('d6000000-0000-0000-0000-000000000001');
 set local role authenticated;
 select lives_ok($$
-  update public.requirements set status = 'approved', reviewed_at = now()
-  where id = 'd6700000-0000-0000-0000-000000000001'
+  select public.review_requirement(
+    'd6700000-0000-0000-0000-000000000001', 'approve')
 $$, 'reviewer approves a verified AI suggestion');
 select lives_ok($$
-  update public.requirements set status = 'rejected', reviewed_at = now()
-  where id = 'd6700000-0000-0000-0000-000000000002'
+  select public.review_requirement(
+    'd6700000-0000-0000-0000-000000000002', 'reject')
 $$, 'reviewer rejects an unverified AI suggestion');
 select lives_ok($$
-  update public.requirements set status = 'approved', reviewed_at = now()
-  where id = 'd6700000-0000-0000-0000-000000000003'
+  select public.review_requirement(
+    'd6700000-0000-0000-0000-000000000003', 'approve')
 $$, 'reviewer approves the suggestion that will be superseded');
 select lives_ok($$
-  update public.requirements set status = 'superseded'
-  where id = 'd6700000-0000-0000-0000-000000000003'
+  select public.review_requirement(
+    'd6700000-0000-0000-0000-000000000003', 'supersede')
 $$, 'reviewer supersedes an approved requirement');
 reset role;
 select public.pmis_p06_login(null);

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { Scale, FileText, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
@@ -147,7 +148,12 @@ export default function Contract() {
         {!dbMode && <p className="text-xs text-amber-600 mt-2">需真實專案(demo 模式不支援)。</p>}
         {dbMode && !can.manageDocuments && <p className="text-xs text-[var(--text-3)] mt-2">需文件管理權限(廠商專案經理/機關專案經理/監造主任/文件管理員)。</p>}
         <p className="text-xs text-[var(--text-3)] mt-2">支援數位 PDF 與 Word(.docx)。掃描檔暫不支援(無 OCR);Word 文件無可靠頁碼,引註以章節/條款標明。</p>
-        {ingestMsg && <p className={`text-xs mt-3 ${ingestMsg.startsWith('擷取失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>{ingestMsg}</p>}
+        {ingestMsg && (
+          <p className={`text-xs mt-3 ${ingestMsg.startsWith('擷取失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>
+            {ingestMsg}
+            {ingestMsg.startsWith('已產生') && <>　<Link to="/requirements" className="text-[var(--blue-text)] hover:underline">查看履約需求 →</Link></>}
+          </p>
+        )}
       </Card>
 
       {groups.length === 0 ? (

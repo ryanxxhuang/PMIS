@@ -524,8 +524,8 @@ select throws_ok($$
 $$, 'P0001', 'requirements cannot be created directly in a reviewed status',
   'reviewers must use the Requirement lifecycle instead of inserting authoritative truth');
 select lives_ok($$
-  update public.requirements set status = 'approved', reviewed_at = now()
-  where id = 'e0000000-0000-0000-0000-00000000e801'
+  select public.review_requirement(
+    'e0000000-0000-0000-0000-00000000e801', 'approve')
 $$, 'agency reviewer approves a requirement');
 reset role;
 select public.pmis_test_login(null);
@@ -559,8 +559,8 @@ reset role;
 select public.pmis_test_login('bbbbbbbb-0000-0000-0000-000000000005');
 set local role authenticated;
 select lives_ok($$
-  update public.requirements set status = 'superseded'
-  where id = 'e0000000-0000-0000-0000-00000000e801'
+  select public.review_requirement(
+    'e0000000-0000-0000-0000-00000000e801', 'supersede')
 $$, 'supervisor reviewer supersedes an approved requirement');
 select throws_ok($$
   update public.requirements set status = 'approved'

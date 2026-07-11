@@ -174,8 +174,8 @@ $$, $$ values ('contractor'::text, 'contractor_pm'::text, true) $$,
 select public.pmis_p05_login('c5000000-0000-0000-0000-000000000001');
 set local role authenticated;
 select lives_ok($$
-  update public.requirements set status = 'approved', reviewed_at = now()
-  where id = 'c5500000-0000-0000-0000-000000000001'
+  select public.review_requirement(
+    'c5500000-0000-0000-0000-000000000001', 'approve')
 $$, 'agency reviewer approves requirement');
 reset role;
 select public.pmis_p05_login('c5000000-0000-0000-0000-000000000003');
