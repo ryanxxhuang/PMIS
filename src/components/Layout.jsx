@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
+import { projectDeleteErrorMessage } from '../lib/projectMode.js'
 import {
   LayoutDashboard, LayoutGrid, Sparkles, Bell, CalendarClock, Newspaper, BadgeCheck,
   ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange, ScrollText,
@@ -50,6 +51,7 @@ function ProjectSwitcher() {
   const { project, projects, currentProject, switchProject, deleteProject, isSupabaseConfigured, can } = useStore()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   if (!isSupabaseConfigured || !currentProject) {
     return (
@@ -61,7 +63,7 @@ function ProjectSwitcher() {
   }
   return (
     <div className="relative min-w-0">
-      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
+      <button onClick={() => { setOpen((o) => !o); setDeleteError('') }} className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
         <span className="text-[var(--text-3)] text-xs shrink-0">專案</span>
         <span className="font-medium truncate max-w-[42vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
         <ChevronDown size={14} className="text-[var(--text-2)] shrink-0" aria-hidden />
@@ -78,6 +80,7 @@ function ProjectSwitcher() {
               </button>
             ))}
             <div className="border-t border-[var(--border-2)] my-1" />
+            {deleteError && <p role="alert" className="px-3 py-2 text-xs text-[var(--red-text)] bg-[var(--red-tint)]">專案刪除失敗：{deleteError}</p>}
             <button onClick={() => { setOpen(false); navigate('/project/new') }}
               className="w-full text-left px-3 py-2 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><Plus size={14} aria-hidden /> 新增專案</button>
             {can.manageProjectIdentity && <button onClick={async () => {
@@ -88,7 +91,10 @@ function ProjectSwitcher() {
                 body: `「${currentProject.project_name}」的標單、估驗、進度、施工日誌、查驗、缺失將一併永久刪除，無法復原。`,
                 danger: true, confirmLabel: '永久刪除', requireText: currentProject.project_name,
               })
-              if (ok) await deleteProject(currentProject.project_id)
+              if (ok) {
+                const { error } = await deleteProject(currentProject.project_id)
+                if (error) { setDeleteError(projectDeleteErrorMessage(error)); setOpen(true) }
+              }
             }} className="w-full text-left px-3 py-2 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>}
           </div>
         </>

@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase.js'
 import { loadObligationsFromDB, extractContractText, fileToBase64 } from '../db.js'
 import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/documentIngestion.js'
 
-export function useLedgerSlice({ dbMode, currentProject, currentUser, wiMaps, log }) {
+export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log }) {
   // 成本項目（真 DB；預算 vs 實際、分包）
   const [costItems, setCostItems] = useState([])
   // 變更設計 / 追加減帳（真 DB；每筆含 items 明細）
@@ -191,13 +191,13 @@ export function useLedgerSlice({ dbMode, currentProject, currentUser, wiMaps, lo
 
   // 契約義務:重載 / 解析契約 / 改狀態 ──────────────────────────
   const reloadObligations = useCallback(async () => {
-    if (!dbMode) return
+    if (!isPersistedProject) return
     setObligations(await loadObligationsFromDB(currentProject.project_id))
-  }, [dbMode, currentProject])
+  }, [isPersistedProject, currentProject])
 
   // 上傳契約 → parse-contract（AI 解析）→ 取代本專案的義務清單
   const parseContract = useCallback(async (file) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
+    if (!isPersistedProject) return { error: { message: '需真專案' } }
     let body
     try {
       const text = await extractContractText(file)
@@ -228,26 +228,26 @@ export function useLedgerSlice({ dbMode, currentProject, currentUser, wiMaps, lo
     await reloadObligations()
     log('AI 解析契約義務', `${obs.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
     return { error: null, count: obs.length }
-  }, [dbMode, currentProject, currentUser, reloadObligations, log])
+  }, [isPersistedProject, currentProject, currentUser, reloadObligations, log])
 
   // P0-06:上傳契約/規範 → 正式文件版本+逐頁保存 → extract-requirements
   // Edge Function 產生「AI 履約需求建議」(draft_ai / needs_review,待人工審查)。
   // 與上面的 parseContract(legacy 時程義務)平行存在,互不取代。
   const ingestRequirementDocument = useCallback(async (file, documentType = 'contract') => {
-    if (!dbMode) return { error: { message: '需真實專案(demo 模式不支援 AI 需求擷取)' } }
+    if (!isPersistedProject) return { error: { message: '需真實專案(demo 模式不支援 AI 需求擷取)' } }
     return runRequirementIngestion({
       projectId: currentProject.project_id,
       userId: currentUser?.user_id || null,
       file,
       documentType,
     })
-  }, [dbMode, currentProject, currentUser])
+  }, [isPersistedProject, currentProject, currentUser])
 
   const updateObligationStatus = useCallback(async (id, status) => {
     setObligations((os) => os.map((o) => (o.id === id ? { ...o, status } : o)))
-    if (dbMode) await supabase.from('contract_obligations').update({ status }).eq('id', id)
+    if (isPersistedProject) await supabase.from('contract_obligations').update({ status }).eq('id', id)
     return { error: null }
-  }, [dbMode])
+  }, [isPersistedProject])
 
   // 驗收:登錄/更新某階段(同階段一筆,重複登錄=修正)
   const recordAcceptanceEvent = useCallback(async (stage_key, { event_date, result, note }) => {

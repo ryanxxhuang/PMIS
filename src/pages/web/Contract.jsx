@@ -5,6 +5,7 @@ import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
+import { deriveContractControls } from '../../lib/projectMode.js'
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
 const TRIGGER_LABEL = {
@@ -26,12 +27,13 @@ function ruleText(ob) {
 const DOT = { done: 'var(--green-text)', overdue: 'var(--red-text)', soon: 'var(--amber-text)', scheduled: 'var(--blue)', nodate: 'var(--text-3)' }
 
 export default function Contract() {
-  const { project, isSupabaseConfigured, currentProject, dbMode, obligations, parseContract, updateObligationStatus, updateProjectAnchors, ingestRequirementDocument, can } = useStore()
+  const { project, isSupabaseConfigured, currentProject, isPersistedProject, obligations, parseContract, updateObligationStatus, updateProjectAnchors, ingestRequirementDocument, can } = useStore()
   const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [ingestBusy, setIngestBusy] = useState(false)
   const [ingestMsg, setIngestMsg] = useState('')
+  const { legacyParserEnabled, requirementIngestionEnabled } = deriveContractControls({ isPersistedProject, can })
 
   useEffect(() => {
     setAnchors({
@@ -120,12 +122,13 @@ export default function Contract() {
       </Card>
 
       <Card title="契約解析" action={
-        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${busy || !dbMode || !can.manageObligations ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
-          <input type="file" accept="application/pdf,image/*" disabled={busy || !dbMode || !can.manageObligations} onChange={onUpload} className="hidden" />
+        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${busy || !legacyParserEnabled ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+          <input type="file" accept="application/pdf,image/*" disabled={busy || !legacyParserEnabled} onChange={onUpload} className="hidden" />
           {busy ? '解析中…' : '上傳契約解析'}
         </label>
       }>
-        {!dbMode && <p className="text-xs text-amber-600 mb-2">此專案尚未匯入標單(非真實專案資料),解析功能需真實專案。</p>}
+        {!isPersistedProject && <p className="text-xs text-amber-600 mb-2">Demo 模式不支援契約解析，請登入並選擇真實專案。</p>}
+        {isPersistedProject && !can.manageObligations && <p className="text-xs text-[var(--text-3)] mb-2">目前身分沒有契約義務管理權限。</p>}
         <div className="flex flex-wrap gap-2">
           <Pill color="red" n={counts.overdue} label="已逾期" />
           <Pill color="amber" n={counts.soon} label="7 日內到期" />
@@ -136,8 +139,8 @@ export default function Contract() {
       </Card>
 
       <Card title="AI 履約需求擷取(建議草稿)" action={
-        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${ingestBusy || !dbMode || !can.manageDocuments ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
-          <input type="file" accept="application/pdf,.docx" disabled={ingestBusy || !dbMode || !can.manageDocuments} onChange={onIngest} className="hidden" />
+        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${ingestBusy || !requirementIngestionEnabled ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+          <input type="file" accept="application/pdf,.docx" disabled={ingestBusy || !requirementIngestionEnabled} onChange={onIngest} className="hidden" />
           <Sparkles size={14} aria-hidden /> {ingestBusy ? '擷取中…' : 'AI 解析履約需求'}
         </label>
       }>
@@ -145,8 +148,8 @@ export default function Contract() {
           上傳契約/規範 → 建立正式文件版本並逐頁保存 → AI 擷取「履約需求建議」並逐項驗證引註出處。
           產出僅為待審查草稿(不會自動生效、不影響上方時程義務清單);審查介面於後續版本提供。
         </p>
-        {!dbMode && <p className="text-xs text-amber-600 mt-2">需真實專案(demo 模式不支援)。</p>}
-        {dbMode && !can.manageDocuments && <p className="text-xs text-[var(--text-3)] mt-2">需文件管理權限(廠商專案經理/機關專案經理/監造主任/文件管理員)。</p>}
+        {!isPersistedProject && <p className="text-xs text-amber-600 mt-2">Demo 模式不支援，請登入並選擇真實專案。</p>}
+        {isPersistedProject && !can.manageDocuments && <p className="text-xs text-[var(--text-3)] mt-2">需文件管理權限(廠商專案經理/機關專案經理/監造主任/文件管理員)。</p>}
         <p className="text-xs text-[var(--text-3)] mt-2">支援數位 PDF 與 Word(.docx)。掃描檔暫不支援(無 OCR);Word 文件無可靠頁碼,引註以章節/條款標明。</p>
         {ingestMsg && (
           <p className={`text-xs mt-3 ${ingestMsg.startsWith('擷取失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>

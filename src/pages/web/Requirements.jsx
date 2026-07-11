@@ -23,7 +23,7 @@ const EDITABLE_STATUSES = ['draft_ai', 'needs_review']
 const fmtTime = (v) => (v ? new Date(v).toLocaleString('zh-TW', { hour12: false }) : '')
 
 export default function Requirements() {
-  const { currentProject, dbMode, can, workItems } = useStore()
+  const { currentProject, isPersistedProject, can, workItems } = useStore()
   const [rows, setRows] = useState([])
   const [runs, setRuns] = useState([])
   const [sourcesByReq, setSourcesByReq] = useState(new Map())
@@ -42,7 +42,7 @@ export default function Requirements() {
   const currentRunIds = useMemo(() => latestCompletedRunIds(runs), [runs])
 
   const reload = useCallback(async () => {
-    if (!dbMode || !pid) return
+    if (!isPersistedProject || !pid) return
     const [{ data: runRows }, { data: reqRows }] = await Promise.all([
       supabase.from('document_ingestion_runs')
         .select('id, document_version_id, status, started_at, completed_at, model_name, prompt_version')
@@ -73,12 +73,12 @@ export default function Requirements() {
     } else {
       setVersionsById(new Map())
     }
-  }, [dbMode, pid])
+  }, [isPersistedProject, pid])
 
   useEffect(() => { reload() }, [reload])
 
   const loadDetail = useCallback(async (requirementId) => {
-    if (!dbMode) return
+    if (!isPersistedProject) return
     const [{ data: linkRows }, { data: artifactRows }] = await Promise.all([
       supabase.from('requirement_work_items').select('*')
         .eq('requirement_id', requirementId).order('created_at'),
@@ -87,7 +87,7 @@ export default function Requirements() {
     ])
     setLinks(linkRows || [])
     setArtifactLinks(artifactRows || [])
-  }, [dbMode])
+  }, [isPersistedProject])
 
   const select = (id) => {
     setSelectedId(id); setEditing(null); setMsg(''); setManualItemNo('')
@@ -168,7 +168,7 @@ export default function Requirements() {
     setLinks((ls) => [...ls, data]); setManualItemNo(''); setMsg('')
   }
 
-  if (!dbMode) {
+  if (!isPersistedProject) {
     return (
       <div className="space-y-5">
         <PageHeader title="履約需求" tagline="AI 建議 → 人工審查" subtitle="AI 擷取的履約需求建議在此逐項審查;核定後才成為專案的契約性規則" />

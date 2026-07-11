@@ -42,7 +42,8 @@ export function StoreProvider({ children }) {
   const {
     projects, currentProject,
     projectMembershipsByProject, currentProjectMembership, projectLoading,
-    workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps, dbMode, demoMode,
+    workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps,
+    isPersistedProject, hasDbBoq, dbMode, demoMode,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
@@ -87,7 +88,7 @@ export function StoreProvider({ children }) {
   }, [])
 
   // ── 各領域 slice ─────────────────────────────────────────────────────────
-  const ctx = { dbMode, demoMode, currentProject, currentUser, wiMaps, log, saveMarkup }
+  const ctx = { dbMode, isPersistedProject, demoMode, currentProject, currentUser, wiMaps, log, saveMarkup }
   const {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto,
@@ -163,9 +164,6 @@ export function StoreProvider({ children }) {
       const qual = await loadQualityFromDB(currentProject.project_id, wiMaps.byId)
       if (!active) return
       setInspections(qual.inspections); setDefects(qual.defects)
-      const obs = await loadObligationsFromDB(currentProject.project_id)
-      if (!active) return
-      setObligations(obs)
       const costs = await loadCostItemsFromDB(currentProject.project_id)
       if (!active) return
       setCostItems(costs)
@@ -199,6 +197,16 @@ export function StoreProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbMode, currentProject, wiMaps])
 
+  // Contract-first: obligations belong to a persisted project, not to its BOQ.
+  useEffect(() => {
+    if (!isPersistedProject) return
+    let active = true
+    loadObligationsFromDB(currentProject.project_id).then((rows) => {
+      if (active) setObligations(rows)
+    })
+    return () => { active = false }
+  }, [isPersistedProject, currentProject, setObligations])
+
   // 登出：真實模式呼叫 Supabase signOut；prototype 模式只清 currentUser
   const logout = useCallback(async () => {
     demoLoadedRef.current = false // demo:換角色重新登入時重種完整 storyline(登出會清部分資料)
@@ -229,7 +237,8 @@ export function StoreProvider({ children }) {
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
     projectMembershipsByProject, currentProjectMembership, partyOrgKey,
-    workItems, workItemsSource, importWorkItems, dbMode, demoMode, can,
+    workItems, workItemsSource, importWorkItems,
+    isPersistedProject, hasDbBoq, dbMode, demoMode, can,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
     obligations, parseContract, updateObligationStatus, updateProjectAnchors,

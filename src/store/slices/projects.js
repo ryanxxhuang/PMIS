@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 import { loadWorkItems } from '../../lib/boqCalc.js'
 import { indexProjectMemberships } from '../../lib/projectIdentity.js'
+import { deriveProjectModes } from '../../lib/projectMode.js'
 import {
   normalizeProject, fetchAllWorkItems, wiCacheGet, wiCachePut, wiCacheDel, dbToWorkItems,
 } from '../db.js'
@@ -101,7 +102,10 @@ export function useProjectsSlice({ currentUser, log }) {
     }
     return { byKey, idToKey, byId }
   }, [workItems])
-  const dbMode = isSupabaseConfigured && !!currentProject && workItemsSource === 'db'
+  const { isPersistedProject, hasDbBoq } = deriveProjectModes({
+    isSupabaseConfigured, currentUser, currentProject, workItemsSource,
+  })
+  const dbMode = hasDbBoq
   // demo 模式：未設 Supabase → 全站用 demoSeed storyline，寫入只進記憶體
   const demoMode = !isSupabaseConfigured
 
@@ -154,12 +158,12 @@ export function useProjectsSlice({ currentUser, log }) {
 
   // 基準日(決標/接獲通知/開工)→ 寫回 projects 欄位 + 本地
   const updateProjectAnchors = useCallback(async (patch) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
+    if (!isPersistedProject) return { error: { message: '需真專案' } }
     const pid = currentProject.project_id
     setProjects((ps) => ps.map((p) => (p.project_id === pid ? { ...p, ...patch } : p)))
     const { error } = await supabase.from('projects').update(patch).eq('id', pid)
     return { error }
-  }, [dbMode, currentProject])
+  }, [isPersistedProject, currentProject])
 
   // 刪除專案（RPC，security definer 連同所有相依資料一併刪）
   const deleteProject = useCallback(async (id) => {
@@ -193,7 +197,8 @@ export function useProjectsSlice({ currentUser, log }) {
   return {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles,
     projectMembershipsByProject, currentProjectMembership, projectLoading,
-    workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps, dbMode, demoMode,
+    workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps,
+    isPersistedProject, hasDbBoq, dbMode, demoMode,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   }
