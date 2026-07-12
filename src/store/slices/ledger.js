@@ -257,9 +257,9 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
 
   const updateObligationStatus = useCallback(async (id, status) => {
     setObligations((os) => os.map((o) => (o.id === id ? { ...o, status } : o)))
-    if (dbMode) await supabase.from('contract_obligations').update({ status }).eq('id', id)
+    if (isPersistedProject) await supabase.from('contract_obligations').update({ status }).eq('id', id)
     return { error: null }
-  }, [dbMode])
+  }, [isPersistedProject])
 
   // 驗收:登錄/更新某階段(同階段一筆,重複登錄=修正)。
   // 用 isPersistedProject 而非 dbMode:驗收不依賴標單,沒 BOQ 的真專案也必須寫 DB

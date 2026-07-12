@@ -187,14 +187,15 @@ export function useProjectsSlice({ currentUser, log }) {
     return { error: null, count: rows.length }
   }, [currentProject, currentUser, log])
 
-  // 基準日(決標/接獲通知/開工)→ 寫回 projects 欄位 + 本地
+  // 基準日(決標/接獲通知/開工)→ 寫回 projects 欄位 + 本地。
+  // 契約時程/驗收領域不依賴標單 → isPersistedProject(匯標單前也要能設基準日)。
   const updateProjectAnchors = useCallback(async (patch) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
+    if (!isPersistedProject) return { error: { message: '需真專案' } }
     const pid = currentProject.project_id
     setProjects((ps) => ps.map((p) => (p.project_id === pid ? { ...p, ...patch } : p)))
     const { error } = await supabase.from('projects').update(patch).eq('id', pid)
     return { error }
-  }, [dbMode, currentProject])
+  }, [isPersistedProject, currentProject])
 
   // 正式模式:單向開啟(DB-first,成功才更新本地)——關閉建立者的跨角色簽核例外。
   // RLS 只允許建立者更新 projects:非建立者 update 靜默 0 列,以 data 長度判定。

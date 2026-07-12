@@ -1,10 +1,12 @@
 // Site slice:施工日誌(含公定格式欄位)、日誌照片、AI 辨識(告示板/缺失照/月報草稿)、工安紀錄。
+// 施工日誌掛在標單工項上(數量回報)→ dbMode;工安紀錄不依賴標單 → isPersistedProject,
+// 真專案匯標單前也要寫 DB(否則只進記憶體,重新整理就消失)。
 import { useState, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 import { loadSiteLogsFromDB, imageToBase64 } from '../db.js'
 import { mutationOutcome } from './billing.js'
 
-export function useSiteSlice({ dbMode, demoMode, currentProject, currentUser, wiMaps, log }) {
+export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, log }) {
   // 施工日誌（真 DB；每筆 items 為 { work_item_key: 當日完成數量 }）
   const [siteLogs, setSiteLogs] = useState([])
   // 工安紀錄（真 DB）
@@ -154,7 +156,7 @@ export function useSiteSlice({ dbMode, demoMode, currentProject, currentUser, wi
         ? '已完成' : (input.status || '待改善'),
       due_date: input.due_date || null, note: input.note || null,
     }
-    if (!dbMode) {
+    if (!isPersistedProject) {
       setSafetyRecords((rs) => [{ ...row, id: `SAF-${Date.now()}` }, ...rs])
       return { error: null }
     }
@@ -164,29 +166,29 @@ export function useSiteSlice({ dbMode, demoMode, currentProject, currentUser, wi
     setSafetyRecords((rs) => [data, ...rs])
     log('新增工安紀錄', `${row.record_type}·${row.title}`, { user: currentUser?.name || '系統', role: '工安' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, log])
+  }, [isPersistedProject, currentProject, currentUser, log])
 
   // 更新工安紀錄:DB 成功才更新 UI(guard 拒絕——他方紀錄/已完成未附原因——如實回報)
   const updateSafetyRecord = useCallback(async (id, patch) => {
-    if (dbMode) {
+    if (isPersistedProject) {
       const res = await supabase.from('safety_records').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '未寫入:可能無權限或紀錄已被移除')
       if (error) return { error }
     }
     setSafetyRecords((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
     return { error: null }
-  }, [dbMode])
+  }, [isPersistedProject])
 
   // 刪除工安紀錄:DB 刪成功才從 UI 移除(已完成紀錄由 guard 擋下,不可假消失)
   const deleteSafetyRecord = useCallback(async (id) => {
-    if (dbMode) {
+    if (isPersistedProject) {
       const res = await supabase.from('safety_records').delete().eq('id', id).select('id')
       const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或紀錄已被移除')
       if (error) return { error }
     }
     setSafetyRecords((rs) => rs.filter((r) => r.id !== id))
     return { error: null }
-  }, [dbMode])
+  }, [isPersistedProject])
 
   return {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,

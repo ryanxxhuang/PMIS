@@ -18,7 +18,7 @@ const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const thisMonth = () => todayStr().slice(0, 7)
 
 export default function Safety() {
-  const { project, dbMode, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord, currentUser, can } = useStore()
+  const { project, isPersistedProject, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord, currentUser, can } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('')
@@ -83,8 +83,9 @@ export default function Safety() {
     else setCorrecting(null)
   }
 
-  if (!dbMode && !demoMode) {
-    return <Card title="工安管理"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單。</Empty></Card>
+  // 工安不依賴標單:真專案選定即可用(寫入走 isPersistedProject),不必等標單匯入
+  if (!isPersistedProject && !demoMode) {
+    return <Card title="工安管理"><Empty>此功能需真實專案。請先建立或選擇專案。</Empty></Card>
   }
 
   return (

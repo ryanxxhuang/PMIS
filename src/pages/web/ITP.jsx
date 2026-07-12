@@ -22,6 +22,7 @@ export default function ITP() {
   const {
     workItems, inspections, siteLogs, inspectionPoints, can,
     createInspectionPoint, deleteInspectionPoint, requestInspectionForPoint,
+    isSupabaseConfigured, currentProject, workItemsSource,
   } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -35,6 +36,10 @@ export default function ITP() {
   }, [workItems])
 
   if (!workItems) return <Empty>載入中…</Empty>
+  // 停留點掛在標單工項上(slice 寫入走 dbMode):標單未匯入前擋牆,避免寫進記憶體假成功
+  if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
+    return <Card title="檢驗停留點"><Empty>此專案的標單尚未匯入資料庫。請先到「標單工項」匯入標單，停留點才能掛在工項上。</Empty></Card>
+  }
 
   const counts = { H: 0, W: 0, R: 0 }
   for (const p of inspectionPoints) counts[p.point_type] = (counts[p.point_type] || 0) + 1

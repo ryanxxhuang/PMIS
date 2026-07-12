@@ -1,10 +1,12 @@
 // Collab slice:監造協作——送審(Submittal)、工程疑義(RFI)、觀察事項、專案成員管理。
+// 送審/RFI/觀察不依賴標單工項 → 寫入分流用 isPersistedProject 而非 dbMode:
+// 否則真專案在匯入標單前的寫入只進記憶體,重新整理就消失(假成功)。
 import { useState, useCallback } from 'react'
 import { users } from '../../data/seed.js'
 import { supabase } from '../../lib/supabase.js'
 import { mutationOutcome } from './billing.js'
 
-export function useCollabSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
+export function useCollabSlice({ isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
   // 監造協作:送審與工程疑義
   const [submittals, setSubmittals] = useState([])
   const [rfis, setRfis] = useState([])
@@ -18,7 +20,7 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
       submitted_date: input.submitted_date || null, due_date: input.due_date || null,
       decided_date: null, review_note: null, attachment_note: input.attachment_note || null,
     }
-    if (!dbMode) {
+    if (!isPersistedProject) {
       setSubmittals((ss) => [{ ...row, id: `SUB-${Date.now()}` }, ...ss])
       return { error: null }
     }
@@ -28,13 +30,13 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
     setSubmittals((ss) => [data, ...ss])
     log('提送送審', `${row.submittal_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, submittals, log])
+  }, [isPersistedProject, currentProject, currentUser, submittals, log])
 
   // 監造審定:審核中|核准|核備|退回補正|駁回。DB 成功才更新 UI(失敗=UI 不變)。
   const decideSubmittal = useCallback(async (id, status, review_note) => {
     const patch = { status, review_note: review_note || null }
     if (status !== '審核中') patch.decided_date = new Date().toISOString().slice(0, 10)
-    if (dbMode) {
+    if (isPersistedProject) {
       const res = await supabase.from('submittals').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '審定未寫入:可能無權限或這筆送審已被移除')
       if (error) return { error }
@@ -42,7 +44,7 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
     }
     setSubmittals((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
     return { error: null }
-  }, [dbMode, currentUser, log])
+  }, [isPersistedProject, currentUser, log])
 
   // 施工修正再送:退回補正 → 已提送(revision +1)
   const resubmitSubmittal = useCallback(async (id) => {
@@ -53,15 +55,15 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
         submitted_date: new Date().toISOString().slice(0, 10) }
       return { ...s, ...patch }
     }))
-    if (!dbMode || !patch) return { error: null }
+    if (!isPersistedProject || !patch) return { error: null }
     const { error } = await supabase.from('submittals').update(patch).eq('id', id)
     return { error }
-  }, [dbMode])
+  }, [isPersistedProject])
 
   const deleteSubmittal = useCallback(async (id) => {
     setSubmittals((ss) => ss.filter((s) => s.id !== id))
-    if (dbMode) await supabase.from('submittals').delete().eq('id', id)
-  }, [dbMode])
+    if (isPersistedProject) await supabase.from('submittals').delete().eq('id', id)
+  }, [isPersistedProject])
 
   const createRfi = useCallback(async (input) => {
     const markup_path = await saveMarkup(input.markup_data, 'rfi')
@@ -74,7 +76,7 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
       due_date: input.due_date || null, answered_date: null,
       cost_impact: !!input.cost_impact, schedule_impact: !!input.schedule_impact,
     }
-    if (!dbMode) {
+    if (!isPersistedProject) {
       setRfis((rs) => [{ ...row, id: `RFI-${Date.now()}` }, ...rs])
       return { error: null }
     }
@@ -84,12 +86,12 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
     setRfis((rs) => [data, ...rs])
     log('提出工程疑義', `${row.rfi_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, rfis, saveMarkup, log])
+  }, [isPersistedProject, currentProject, currentUser, rfis, saveMarkup, log])
 
   // 回覆/結案:DB 成功才更新 UI(失敗=UI 不變)。
   const answerRfi = useCallback(async (id, answer) => {
     const patch = { answer, status: '已回覆', answered_date: new Date().toISOString().slice(0, 10) }
-    if (dbMode) {
+    if (isPersistedProject) {
       const res = await supabase.from('rfis').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '回覆未寫入:可能無權限或這筆疑義已被移除')
       if (error) return { error }
@@ -97,22 +99,22 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
     }
     setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
     return { error: null }
-  }, [dbMode, currentUser, log])
+  }, [isPersistedProject, currentUser, log])
 
   const closeRfi = useCallback(async (id) => {
-    if (dbMode) {
+    if (isPersistedProject) {
       const res = await supabase.from('rfis').update({ status: '已結案' }).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '結案未寫入:可能無權限或這筆疑義已被移除')
       if (error) return { error }
     }
     setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, status: '已結案' } : r)))
     return { error: null }
-  }, [dbMode])
+  }, [isPersistedProject])
 
   const deleteRfi = useCallback(async (id) => {
     setRfis((rs) => rs.filter((r) => r.id !== id))
-    if (dbMode) await supabase.from('rfis').delete().eq('id', id)
-  }, [dbMode])
+    if (isPersistedProject) await supabase.from('rfis').delete().eq('id', id)
+  }, [isPersistedProject])
 
   // ── 觀察事項:輕量提醒,可升級成正式缺失 ──────────────────────────────────
   const createObservation = useCallback(async (input) => {
@@ -122,7 +124,7 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
       title: input.title, description: input.description || null, location: input.location || null,
       assigned_to: input.assigned_to || 'contractor', status: '待處理', markup_path,
     }
-    if (!dbMode) {
+    if (!isPersistedProject) {
       setObservations((os) => [{ ...row, id: `OBS-${Date.now()}`, work_item_no: wi?.item_no || '' }, ...os])
       return { error: null }
     }
@@ -133,13 +135,13 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
     setObservations((os) => [data, ...os])
     log('新增觀察事項', input.title, { user: currentUser?.name, role: '監造' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, wiMaps, saveMarkup, log])
+  }, [isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup, log])
 
   const updateObservation = useCallback(async (id, patch) => {
     setObservations((os) => os.map((o) => (o.id === id ? { ...o, ...patch } : o)))
-    if (dbMode) await supabase.from('observations').update(patch).eq('id', id)
+    if (isPersistedProject) await supabase.from('observations').update(patch).eq('id', id)
     return { error: null }
-  }, [dbMode])
+  }, [isPersistedProject])
 
   // 升級為缺失:建立缺失(帶入標註)並把觀察標為「轉缺失」
   const escalateObservation = useCallback(async (obs) => {
@@ -153,8 +155,8 @@ export function useCollabSlice({ dbMode, isPersistedProject, currentProject, cur
 
   const deleteObservation = useCallback(async (id) => {
     setObservations((os) => os.filter((o) => o.id !== id))
-    if (dbMode) await supabase.from('observations').delete().eq('id', id)
-  }, [dbMode])
+    if (isPersistedProject) await supabase.from('observations').delete().eq('id', id)
+  }, [isPersistedProject])
 
   // 成員管理(RPC:email 對照 auth.users 必須在伺服器端做)。
   // 用 isPersistedProject 而非 dbMode:真專案「標單匯入前」也要能管成員/開正式模式,

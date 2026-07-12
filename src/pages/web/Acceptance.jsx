@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react'
 import { BadgeCheck, CalendarClock, CheckCircle2, Circle, AlertTriangle } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Badge, Button, Input, Select, PageHeader } from '../../components/ui.jsx'
+import { Card, Badge, Button, Input, Select, Empty, PageHeader } from '../../components/ui.jsx'
 import { deriveAcceptance, needsFixFlow, acceptanceAlerts } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 
@@ -19,7 +19,7 @@ const STAGE_ORGS = {
 }
 
 export default function Acceptance() {
-  const { acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, demoMode, project, currentUser, can } = useStore()
+  const { acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, demoMode, isPersistedProject, project, currentUser, can } = useStore()
   const [errMsg, setErrMsg] = useState('')
   const org = currentUser?.org_type || 'contractor'
   // 專案管理者=授權主驗(正式模式=關);demo 刻意不套 admin 例外,保留三方角色劇本
@@ -36,6 +36,11 @@ export default function Acceptance() {
 
   // demo 的驗收 storyline 屬於 B 區(見 DEMO_PORTFOLIO);真實專案顯示本案
   const displayName = demoMode ? DEMO_PORTFOLIO[0].name : project.project_name
+
+  // 真實模式但尚未選定專案:登錄只會進記憶體(假成功),擋下
+  if (!demoMode && !isPersistedProject) {
+    return <Card title="驗收結算"><Empty>此功能需真實專案。請先建立或選擇專案。</Empty></Card>
+  }
 
   return (
     <div className="space-y-5">

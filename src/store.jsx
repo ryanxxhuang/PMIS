@@ -67,15 +67,16 @@ export function StoreProvider({ children }) {
   }, [currentUser, demoMode, myMemberRoles, currentProjectId, currentProject])
 
   // 標註圖(圖面/照片 markup):demo 直接存 dataURL;真專案存 photos bucket
-  // (路徑首段=project_id,沿用既有 Storage RLS)。
+  // (路徑首段=project_id,沿用既有 Storage RLS)。Storage 不依賴標單 →
+  // isPersistedProject,匯標單前的 RFI/觀察標註才不會把整張 dataURL 塞進 DB 欄位。
   const saveMarkup = useCallback(async (dataUrl, kind) => {
     if (!dataUrl) return null
-    if (!dbMode) return dataUrl
+    if (!isPersistedProject) return dataUrl
     const blob = await (await fetch(dataUrl)).blob()
     const path = `${currentProject.project_id}/markups/${kind}-${crypto.randomUUID()}.jpg`
     const { error } = await supabase.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' })
     return error ? null : path
-  }, [dbMode, currentProject])
+  }, [isPersistedProject, currentProject])
 
   const resolveMarkup = useCallback(async (path) => {
     if (!path || path.startsWith('data:')) return path
@@ -143,7 +144,7 @@ export function StoreProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, workItems, workItemsSource, currentUser])
 
-  // DB 模式：載入此專案的全部領域資料（依序,避免同時打爆連線）
+  // DB 模式：載入掛在標單工項上的領域資料（依序,避免同時打爆連線）
   useEffect(() => {
     if (!dbMode) return
     let active = true
@@ -160,15 +161,9 @@ export function StoreProvider({ children }) {
       const qual = await loadQualityFromDB(currentProject.project_id, wiMaps.byId)
       if (!active) return
       setInspections(qual.inspections); setDefects(qual.defects)
-      const obs = await loadObligationsFromDB(currentProject.project_id)
-      if (!active) return
-      setObligations(obs)
       const costs = await loadCostItemsFromDB(currentProject.project_id)
       if (!active) return
       setCostItems(costs)
-      const safety = await loadSafetyFromDB(currentProject.project_id)
-      if (!active) return
-      setSafetyRecords(safety)
       const sched = await loadItemSchedulesFromDB(currentProject.project_id, wiMaps.idToKey)
       if (!active) return
       setItemSchedules(sched)
@@ -181,26 +176,35 @@ export function StoreProvider({ children }) {
       const qc = await loadQcFromDB(currentProject.project_id)
       if (!active) return
       setChecklistTemplates(qc.templates); setChecklistRecords(qc.records); setTestSamples(qc.samples)
-      const [{ data: subs }, { data: rfiRows }, { data: obsRows }] = await Promise.all([
-        supabase.from('submittals').select('*').eq('project_id', currentProject.project_id).order('created_at', { ascending: false }),
-        supabase.from('rfis').select('*').eq('project_id', currentProject.project_id).order('created_at', { ascending: false }),
-        supabase.from('observations').select('*').eq('project_id', currentProject.project_id).order('created_at', { ascending: false }),
-      ])
-      if (!active) return
-      setSubmittals(subs || []); setRfis(rfiRows || []); setObservations(obsRows || [])
     })()
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbMode, currentProject, wiMaps])
 
-  // 驗收事件不依賴標單:真專案選定即從 DB 載入(沒 BOQ 的專案也要能讀寫驗收時程,
-  // 否則登錄只進記憶體、重新整理就消失——假成功)。寫入端見 ledger slice 同名判斷。
+  // 不依賴標單的領域(驗收/契約義務/工安/送審/RFI/觀察):真專案選定即從 DB 載入,
+  // 不等標單匯入(沒 BOQ 的專案也要能讀寫,否則寫入只進記憶體、重新整理就消失——
+  // 假成功)。寫入端見各 slice 的 isPersistedProject 同名判斷。
   useEffect(() => {
     if (!isPersistedProject) return
+    const pid = currentProject.project_id
     let active = true
     ;(async () => {
-      const acc = await loadAcceptanceFromDB(currentProject.project_id)
-      if (active) setAcceptanceEvents(acc)
+      const acc = await loadAcceptanceFromDB(pid)
+      if (!active) return
+      setAcceptanceEvents(acc)
+      const obs = await loadObligationsFromDB(pid)
+      if (!active) return
+      setObligations(obs)
+      const safety = await loadSafetyFromDB(pid)
+      if (!active) return
+      setSafetyRecords(safety)
+      const [{ data: subs }, { data: rfiRows }, { data: obsRows }] = await Promise.all([
+        supabase.from('submittals').select('*').eq('project_id', pid).order('created_at', { ascending: false }),
+        supabase.from('rfis').select('*').eq('project_id', pid).order('created_at', { ascending: false }),
+        supabase.from('observations').select('*').eq('project_id', pid).order('created_at', { ascending: false }),
+      ])
+      if (!active) return
+      setSubmittals(subs || []); setRfis(rfiRows || []); setObservations(obsRows || [])
     })()
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
