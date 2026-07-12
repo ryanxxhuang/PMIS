@@ -1,5 +1,9 @@
 -- ============================================================================
---  PMIS — Supabase schema (single source of truth)
+--  PMIS — Supabase schema (FROZEN 2026-07-11 — 歷史參考,非真相來源)
+-- ----------------------------------------------------------------------------
+--  ⚠ 單一真相來源已改為 supabase/migrations/(baseline + 後續 migrations)。
+--  新的 schema 變更一律寫 migration,勿再改本檔;本檔內容=baseline+前兩支 RBAC。
+--  雙軌維護(schema.sql+migrations)是 2026-07-11 P0 事故的結構性成因之一。
 -- ----------------------------------------------------------------------------
 --  Idempotent: safe to run on a fresh project or to re-sync an existing one.
 --  Paste the whole file into Supabase Studio → SQL Editor → Run.
