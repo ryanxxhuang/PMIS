@@ -189,22 +189,15 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     return { error: null }
   }, [dbMode])
 
-  // 契約義務:重載 / 解析契約 / 改狀態 ──────────────────────────
+  // 契約義務:重載 / 解析契約 / 改狀態(契約領域不依賴標單 → isPersistedProject)──
   const reloadObligations = useCallback(async () => {
-    if (!dbMode) return
+    if (!isPersistedProject) return
     setObligations(await loadObligationsFromDB(currentProject.project_id))
-  }, [dbMode, currentProject])
+  }, [isPersistedProject, currentProject])
 
-  // 上傳契約 → parse-contract（AI 解析）→ 取代本專案的義務清單
-  const parseContract = useCallback(async (file) => {
-    if (!dbMode) return { error: { message: '需真專案' } }
-    let body
-    try {
-      const text = await extractContractText(file)
-      body = (text && text.trim().length > 200)
-        ? { text, filename: file.name }                                   // 數位 Word/PDF → 送純文字(準)
-        : { file_base64: await fileToBase64(file), mime_type: file.type, filename: file.name } // 掃描/圖片 → 視覺
-    } catch { return { error: { message: '讀取檔案失敗' } } }
+  // 共用解析核心:把契約內容(純文字或視覺)送 parse-contract → 取代義務清單
+  const parseContractBody = useCallback(async (body) => {
+    if (!isPersistedProject) return { error: { message: '需真專案' } }
     const { data, error } = await supabase.functions.invoke('parse-contract', { body })
     if (error) return { error }
     if (data?.error) return { error: { message: data.error } }
@@ -228,7 +221,26 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     await reloadObligations()
     log('AI 解析契約義務', `${obs.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
     return { error: null, count: obs.length }
-  }, [dbMode, currentProject, currentUser, reloadObligations, log])
+  }, [isPersistedProject, currentProject, currentUser, reloadObligations, log])
+
+  // P0-07.5:統一上傳流程已抽好逐頁文字 → 同一份契約直接重建義務,不需二次上傳
+  const parseContractFromText = useCallback(async (text) => {
+    if (!text || text.trim().length < 200) return { error: { message: '契約文字不足,無法解析義務時程' } }
+    return parseContractBody({ text })
+  }, [parseContractBody])
+
+  // 相容:單檔上傳路徑;瀏覽器抽文字,抽不到退回視覺
+  const parseContract = useCallback(async (file) => {
+    if (!isPersistedProject) return { error: { message: '需真專案' } }
+    let body
+    try {
+      const text = await extractContractText(file)
+      body = (text && text.trim().length > 200)
+        ? { text, filename: file.name }
+        : { file_base64: await fileToBase64(file), mime_type: file.type, filename: file.name }
+    } catch { return { error: { message: '讀取檔案失敗' } } }
+    return parseContractBody(body)
+  }, [isPersistedProject, parseContractBody])
 
   // P0-06:上傳契約/規範 → 正式文件版本+逐頁保存 → extract-requirements Edge Function
   // 產生「AI 履約需求建議」(draft_ai/needs_review,待人工審查)。與 parseContract(legacy
@@ -303,6 +315,6 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
-    reloadObligations, parseContract, updateObligationStatus, ingestRequirementDocument,
+    reloadObligations, parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument,
   }
 }

@@ -102,6 +102,19 @@ export function useProjectsSlice({ currentUser, log }) {
   // 重試標單載入（error 狀態的 UI 呼叫）
   const retryWorkItems = useCallback(() => setWiReloadKey((k) => k + 1), [])
 
+  // 本人在目前專案的 P0-02 membership(契約包上傳的 party 歸屬用;無則 null)
+  const [currentProjectMembership, setCurrentProjectMembership] = useState(null)
+  useEffect(() => {
+    const pid = currentProject?.project_id
+    if (!isSupabaseConfigured || !pid || !currentUser?.real) { setCurrentProjectMembership(null); return }
+    let active = true
+    supabase.from('project_memberships').select('*')
+      .eq('project_id', pid).eq('user_id', currentUser.user_id).maybeSingle()
+      .then(({ data }) => { if (active) setCurrentProjectMembership(data || null) })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProject?.project_id, currentUser?.user_id])
+
   // 工項查表（item_key↔work_item uuid）+ 是否走真 DB（估驗/進度才寫回 DB）
   const wiMaps = useMemo(() => {
     const byKey = new Map(), idToKey = new Map(), byId = new Map()
@@ -204,7 +217,7 @@ export function useProjectsSlice({ currentUser, log }) {
 
   return {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
-    workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject,
+    workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   }
