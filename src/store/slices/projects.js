@@ -112,6 +112,9 @@ export function useProjectsSlice({ currentUser, log }) {
     return { byKey, idToKey, byId }
   }, [workItems])
   const dbMode = isSupabaseConfigured && !!currentProject && workItemsSource === 'db'
+  // 真專案已選定(不要求已匯標單):不依賴 work_items 的領域(驗收/契約義務等)
+  // 用這個判斷寫 DB——否則沒標單的真專案會把資料寫進記憶體,重新整理就消失(假成功)。
+  const isPersistedProject = isSupabaseConfigured && !!currentProject
   // demo 模式：未設 Supabase → 全站用 demoSeed storyline，寫入只進記憶體
   const demoMode = !isSupabaseConfigured
 
@@ -201,7 +204,7 @@ export function useProjectsSlice({ currentUser, log }) {
 
   return {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
-    workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode,
+    workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   }

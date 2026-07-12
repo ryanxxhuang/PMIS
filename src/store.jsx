@@ -52,7 +52,7 @@ export function StoreProvider({ children }) {
   const { currentUser, setCurrentUser, signUp, resendSignup, signIn, signOutBase } = useAuthSlice()
   const {
     projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
-    workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode,
+    workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
@@ -95,7 +95,7 @@ export function StoreProvider({ children }) {
   }, [])
 
   // ── 各領域 slice ─────────────────────────────────────────────────────────
-  const ctx = { dbMode, demoMode, currentProject, currentUser, wiMaps, log, saveMarkup }
+  const ctx = { dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }
   const {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto,
@@ -186,9 +186,6 @@ export function StoreProvider({ children }) {
       const cos = await loadChangeOrdersFromDB(currentProject.project_id)
       if (!active) return
       setChangeOrders(cos)
-      const acc = await loadAcceptanceFromDB(currentProject.project_id)
-      if (!active) return
-      setAcceptanceEvents(acc)
       const itp = await loadItpFromDB(currentProject.project_id, wiMaps.byId, wiMaps.idToKey)
       if (!active) return
       setInspectionPoints(itp)
@@ -206,6 +203,19 @@ export function StoreProvider({ children }) {
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbMode, currentProject, wiMaps])
+
+  // 驗收事件不依賴標單:真專案選定即從 DB 載入(沒 BOQ 的專案也要能讀寫驗收時程,
+  // 否則登錄只進記憶體、重新整理就消失——假成功)。寫入端見 ledger slice 同名判斷。
+  useEffect(() => {
+    if (!isPersistedProject) return
+    let active = true
+    ;(async () => {
+      const acc = await loadAcceptanceFromDB(currentProject.project_id)
+      if (active) setAcceptanceEvents(acc)
+    })()
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPersistedProject, currentProject?.project_id])
 
   // 登出：真實模式呼叫 Supabase signOut；prototype 模式只清 currentUser
   const logout = useCallback(async () => {
@@ -235,7 +245,7 @@ export function StoreProvider({ children }) {
     project: currentProject || project, currentUser, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
-    workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, can,
+    workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, isPersistedProject, can,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
     obligations, parseContract, updateObligationStatus, updateProjectAnchors,

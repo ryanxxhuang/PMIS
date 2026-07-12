@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase.js'
 import { loadObligationsFromDB, extractContractText, fileToBase64 } from '../db.js'
 
-export function useLedgerSlice({ dbMode, currentProject, currentUser, wiMaps, log }) {
+export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log }) {
   // 成本項目（真 DB；預算 vs 實際、分包）
   const [costItems, setCostItems] = useState([])
   // 變更設計 / 追加減帳（真 DB；每筆含 items 明細）
@@ -235,11 +235,13 @@ export function useLedgerSlice({ dbMode, currentProject, currentUser, wiMaps, lo
     return { error: null }
   }, [dbMode])
 
-  // 驗收:登錄/更新某階段(同階段一筆,重複登錄=修正)
+  // 驗收:登錄/更新某階段(同階段一筆,重複登錄=修正)。
+  // 用 isPersistedProject 而非 dbMode:驗收不依賴標單,沒 BOQ 的真專案也必須寫 DB
+  // (否則假成功,重新整理就消失)。
   const recordAcceptanceEvent = useCallback(async (stage_key, { event_date, result, note }) => {
     const existing = acceptanceEvents.filter((e) => e.stage_key === stage_key).pop()
     const patch = { event_date: event_date || null, result: result || null, note: note || null }
-    if (!dbMode) {
+    if (!isPersistedProject) {
       if (existing) setAcceptanceEvents((es) => es.map((e) => (e.id === existing.id ? { ...e, ...patch } : e)))
       else setAcceptanceEvents((es) => [...es, { id: `ACC-${Date.now()}`, stage_key, ...patch }])
       return { error: null }
@@ -256,13 +258,13 @@ export function useLedgerSlice({ dbMode, currentProject, currentUser, wiMaps, lo
     setAcceptanceEvents((es) => [...es, data])
     log('驗收階段登錄', `${stage_key} ${event_date || ''}`, { user: currentUser?.name || '系統', role: '機關' })
     return { error: null }
-  }, [dbMode, acceptanceEvents, currentProject, currentUser, log])
+  }, [isPersistedProject, acceptanceEvents, currentProject, currentUser, log])
 
   // 驗收:撤銷某階段的登錄(登錯日期重來)。
   // DB 刪成功才從 UI 移除;guard 拒絕(他方事件/角色不符)或 RLS 靜默 0-row 都如實回報。
   const clearAcceptanceEvent = useCallback(async (stage_key) => {
     const targets = acceptanceEvents.filter((e) => e.stage_key === stage_key)
-    if (dbMode) {
+    if (isPersistedProject) {
       const deleted = []
       for (const t of targets) {
         const { data, error } = await supabase.from('acceptance_events')
@@ -277,7 +279,7 @@ export function useLedgerSlice({ dbMode, currentProject, currentUser, wiMaps, lo
     }
     setAcceptanceEvents((es) => es.filter((e) => e.stage_key !== stage_key))
     return { error: null }
-  }, [dbMode, acceptanceEvents])
+  }, [isPersistedProject, acceptanceEvents])
 
   return {
     costItems, setCostItems, changeOrders, setChangeOrders,
