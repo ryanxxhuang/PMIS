@@ -3,6 +3,7 @@
 // 回傳 { answer, sources:[{label,to}] } 或 null（不會答 → UI 導引）。
 import { computeObligationDue } from './contractDue.js'
 import { pendingSamplesFromLogs } from './qc.js'
+import { isRainyLog } from './weatherMetrics.js'
 
 const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 const has = (q, ...ks) => ks.some((k) => q.includes(k))
@@ -78,7 +79,7 @@ const INTENTS = [
   // 天氣 / 雨天
   (q, d) => has(q, '天氣', '雨天', '下雨', '氣候') ? (() => {
     const logs = d.siteLogs || []
-    const rain = logs.filter((l) => /雨/.test(`${l.weather || ''}${l.weather_am || ''}${l.weather_pm || ''}`))
+    const rain = logs.filter(isRainyLog) // 與兩份報表同源
     return { answer: `近期 ${logs.length} 筆施工日誌中有 ${rain.length} 天出現降雨${rain.length ? `（${rain.slice(0, 5).map((l) => l.log_date).join('、')}）` : ''}。雨天天數可作為工期展延佐證。`,
       sources: [{ label: '施工日誌', to: '/site-log' }] }
   })() : null,

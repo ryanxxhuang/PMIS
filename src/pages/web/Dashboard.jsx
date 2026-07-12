@@ -6,6 +6,8 @@ import { Card, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { tallyBalls, myOpenItems } from '../../lib/ballInCourt.js'
+import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
+import InsightsPanel from '../../components/InsightsPanel.jsx'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const TODAY = new Date()
@@ -69,6 +71,16 @@ export default function Dashboard() {
 
   const openDefects = defects.filter((d) => d.status !== '已結案')
   const pendingInsp = inspections.filter((i) => i.status === '待查驗')
+
+  // AI 主動觀察(§9-8:從 AI 助理搬來——Dashboard=待辦+風險,助理只留問答)
+  const anchors = {
+    award_date: project?.award_date, notice_date: project?.notice_date,
+    commencement_date: project?.commencement_date, end_date: project?.end_date,
+  }
+  const insights = useMemo(() => insightsForRole(buildInsights({
+    progress: { actualPct: completion, plannedPct: plannedNow }, siteLogs, defects, testSamples,
+    obligations, valuations, changeOrders, anchors,
+  }, TODAY), myOrg), [completion, plannedNow, siteLogs, defects, testSamples, obligations, valuations, changeOrders, myOrg]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-5">
@@ -147,6 +159,9 @@ export default function Dashboard() {
 
           {/* 行動中心:依登入角色，把「球在你手上」的協作項列成收件匣 */}
           <RoleActionCenter org={myOrg} items={myItems} />
+
+          {/* AI 主動觀察(只在這裡出現;AI 助理=問答、提醒中心=期限) */}
+          <InsightsPanel insights={insights} />
 
           {/* 次要計數:一排帶狀,圖示左、狀態右對齊,填滿寬度 */}
           {/* 2 欄為主、夠寬(xl)才 4 欄——避免窄桌機時中文標籤被擠成直排 */}

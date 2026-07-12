@@ -4,6 +4,8 @@ import { useStore } from '../../store.jsx'
 import { Card, Empty, Button, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
+import { rainDayCount } from '../../lib/weatherMetrics.js'
+import { validateDraft } from '../../lib/factsValidator.js'
 
 const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const qtyFmt = (n) => (n == null || isNaN(n) ? '—' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }))
@@ -59,7 +61,7 @@ export default function MonthlyReport() {
       return { key: k, item_no: it.item_no || '', description: it.description || k, unit: it.unit || '',
         contractQty: it.quantity || 0, qty: q, cum: qtyCum.get(k) || 0, value: (it.unit_price || 0) * q }
     }).sort((a, b) => b.value - a.value)
-    const rainDays = logs.filter((l) => (l.weather || '').includes('雨')).length
+    const rainDays = rainDayCount(logs) // 與監造報表/AI 助理同源(任一時段含雨=雨天)
     const inspM = inspections.filter((i) => inMonth(i.requested_date || i.created_at, month))
     const defOpened = defects.filter((d) => inMonth(d.created_at, month))
     const defClosed = defects.filter((d) => d.closed_at && inMonth(d.closed_at, month))
@@ -235,7 +237,8 @@ export default function MonthlyReport() {
           <div className="print:hidden mb-2 flex items-center gap-2">
             <button onClick={async () => {
               setAiBusy(true); setAiErr('')
-              const { error, result } = await draftMonthlyReview({
+              // facts=程式算好的數據;AI 只改寫、不算數(P1-1)
+              const payload = {
                 month, project_name: project.project_name,
                 stats: {
                   thisMonthVal: data.thisMonthVal, cumThis: data.cumThis,
@@ -246,10 +249,17 @@ export default function MonthlyReport() {
                   changeOrders: data.coM.length, approvedNet: data.approvedNet,
                   logSummaries: data.logs.filter((l) => l.work_summary).map((l) => l.work_summary).slice(-10),
                 },
-              })
+              }
+              const { error, result } = await draftMonthlyReview(payload)
               setAiBusy(false)
-              if (error) setAiErr(error.message || 'AI 草稿失敗')
-              else { setReview(result.review || ''); setNextPlan(result.next_plan || '') }
+              if (error) { setAiErr(error.message || 'AI 草稿失敗'); return }
+              // 確定性驗證:草稿中的數字必須全部出自 facts,否則整份擋下不帶入
+              const check = validateDraft(`${result.review || ''}\n${result.next_plan || ''}`, payload)
+              if (!check.ok) {
+                setAiErr(`AI 草稿含依據以外的數字（${check.violations.slice(0, 5).join('、')}），已擋下未帶入——請重試或手動撰寫。`)
+                return
+              }
+              setReview(result.review || ''); setNextPlan(result.next_plan || '')
             }} disabled={aiBusy}
               className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] transition ${aiBusy ? 'opacity-50' : 'hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
               <Sparkles size={15} aria-hidden />{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}

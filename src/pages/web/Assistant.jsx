@@ -1,24 +1,19 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Sparkles, Send, ShieldCheck, AlertTriangle, Clock, ArrowRight, Bot } from 'lucide-react'
+import { Send, ShieldCheck, ArrowRight, Bot } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader, Button } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
-import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
 import { answerQuestion, SUGGESTED_QUESTIONS } from '../../lib/assistantQA.js'
 import { myOpenItems } from '../../lib/ballInCourt.js'
 
 const TODAY = new Date()
-const SEV = {
-  risk: { color: 'var(--red-text)', bg: 'var(--red-tint)', icon: AlertTriangle, label: '需注意' },
-  watch: { color: 'var(--amber-text)', bg: 'var(--amber-tint)', icon: Clock, label: '留意' },
-  ok: { color: 'var(--green-text)', bg: 'var(--green-tint)', icon: ShieldCheck, label: '正常' },
-}
+// §9-8 去重:主動分析(insights)只在 Dashboard 出現,這裡專心做問答
 const ROLE_HELLO = {
-  contractor: '我幫你盯著進度、品管、契約到期和現金流，該補的、快逾期的先挑出來。',
-  supervisor: '我幫你盯著該查未查、待審與缺失複查，有異常先標給你看。',
-  owner: '我幫你盯著全案風險、變更與撥款，有異常樣態先提醒你。',
+  contractor: '問我本案的進度、估驗請款、缺失查驗、品管取樣和契約義務——答案附出處。',
+  supervisor: '問我本案的查驗、待審、缺失複查與進度——答案附出處。',
+  owner: '問我本案的風險、變更、撥款與進度——答案附出處。',
 }
 
 export default function Assistant() {
@@ -60,11 +55,6 @@ export default function Assistant() {
     [org, rfis, submittals, valuations, defects, inspections, observations, changeOrders],
   )
 
-  const insights = useMemo(() => insightsForRole(buildInsights({
-    progress: { actualPct, plannedPct: plannedNow }, siteLogs, defects, testSamples,
-    obligations, valuations, changeOrders, anchors,
-  }, TODAY), org), [actualPct, plannedNow, siteLogs, defects, testSamples, obligations, valuations, changeOrders, org]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const qaData = {
     project, progress: { actualPct, plannedPct: plannedNow },
     finance: { billableTotal, actualCum }, valuations, defects, inspections, siteLogs,
@@ -86,53 +76,16 @@ export default function Assistant() {
         subtitle={ROLE_HELLO[org] || ROLE_HELLO.contractor}
         meta={[{ k: '模式', v: '唯讀' }]} />
 
-      <div className="grid lg:grid-cols-[1.15fr_1fr] gap-5 items-start">
-        {/* 主動觀察 */}
-        <InsightsPanel insights={insights} />
-        {/* 問答 */}
+      <div className="max-w-3xl">
         <ChatPanel data={qaData} />
       </div>
 
       <p className="text-[11px] text-[var(--text-3)] flex items-center gap-1.5">
         <ShieldCheck size={13} aria-hidden />
-        AI 助理只讀本案資料、附上出處，<b className="text-[var(--text-2)] font-medium">不會替你送出或核定任何東西</b>——它幫你先看到、你來決定。
+        AI 助理只讀本案資料、附上出處，<b className="text-[var(--text-2)] font-medium">不會替你送出或核定任何東西</b>。
+        主動分析在 <Link to="/dashboard" className="text-[var(--blue-text)] hover:underline">專案 Dashboard</Link>、期限提醒在 <Link to="/alerts" className="text-[var(--blue-text)] hover:underline">提醒中心</Link>。
       </p>
     </div>
-  )
-}
-
-function InsightsPanel({ insights }) {
-  return (
-    <Card title={`AI 幫你看到的（${insights.length}）`} bodyClass={insights.length ? 'p-0' : 'p-6'}
-      action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><Sparkles size={12} aria-hidden />主動分析</span>}>
-      {insights.length === 0 ? (
-        <Empty>目前沒有偵測到需要注意的事——都在軌道上。</Empty>
-      ) : (
-        <ul className="divide-y divide-[var(--border-2)]">
-          {insights.map((it) => {
-            const s = SEV[it.sev] || SEV.watch
-            const Icon = s.icon
-            return (
-              <li key={it.id}>
-                <Link to={it.to} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition">
-                  <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: s.bg, color: s.color }}>
-                    <Icon size={16} aria-hidden />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-[var(--text)]">{it.title}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: s.bg, color: s.color }}>{it.tag}</span>
-                    </span>
-                    <span className="block text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">{it.detail}</span>
-                  </span>
-                  <ArrowRight size={15} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-1" aria-hidden />
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </Card>
   )
 }
 

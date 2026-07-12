@@ -47,6 +47,22 @@ export default function Valuation() {
   const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected?.items || {}), [roots, childrenMap, selected?.items])
   const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev?.items || {}), [roots, childrenMap, prev?.items])
 
+  // 搜尋攤平末端工項:結果設上限——真實 PCCES 標單有數千末端工項,
+  // 一次渲染整包搜尋結果會卡住頁面(P1-3);超過上限提示縮小關鍵字。
+  const SEARCH_LIMIT = 120
+  const { leaves, matchCount } = useMemo(() => {
+    const q = search.trim()
+    if (!q) return { leaves: [], matchCount: 0 }
+    const out = []; let count = 0
+    for (const list of childrenMap.values())
+      for (const it of list)
+        if (!(childrenMap.get(it.item_key)?.length) && (it.description.includes(q) || (it.item_no || '').includes(q))) {
+          count++
+          if (out.length < SEARCH_LIMIT) out.push(it)
+        }
+    return { leaves: out, matchCount: count }
+  }, [search, childrenMap])
+
   if (!data) return <Empty>載入估驗資料中…</Empty>
 
   // 真專案但標單尚未匯入 DB → 估驗無法綁工項，先請匯入
@@ -71,12 +87,16 @@ export default function Valuation() {
       return n
     })
 
-  // 輸入「累計完成數量」，夾在 0 ~ 契約數量;DB 失敗時 slice 會還原該格,這裡顯示原因
+  // 輸入「累計完成數量」，夾在 0 ~ 契約數量;DB 失敗時 slice 會還原該格,這裡顯示原因。
+  // onBlur 才寫入(P1-3):打字中不觸發 DB upsert 與全樹重算——大標單每鍵一次會卡死。
   const onQty = async (it, val) => {
+    const existing = selected?.items?.[it.item_key]
+    if (val === '' && existing == null) return          // 沒填過又留空:不寫 0 列
     let n = parseFloat(val)
     if (isNaN(n)) n = 0
     const maxQ = it.quantity || 0
     n = Math.max(0, maxQ > 0 ? Math.min(maxQ, n) : n)
+    if (existing != null && Number(existing) === n) return // 無變化不寫
     const { error } = await updateValuationItem(selected.id, it.item_key, n)
     if (error) setErrMsg(`數量未儲存（${it.item_no || it.item_key}）：${error.message}`)
   }
@@ -93,16 +113,6 @@ export default function Valuation() {
     setErrMsg('')
     const { error } = await setValuationStatus(selected.id, status)
     if (error) setErrMsg(`狀態更新失敗：${error.message}`)
-  }
-
-  // 搜尋時直接攤平顯示符合的末端工項；否則顯示階層樹
-  const leaves = []
-  if (search) {
-    const q = search.trim()
-    for (const list of childrenMap.values())
-      for (const it of list)
-        if (!(childrenMap.get(it.item_key)?.length) && (it.description.includes(q) || (it.item_no || '').includes(q)))
-          leaves.push(it)
   }
 
   const renderRow = (it, level) => {
@@ -135,8 +145,9 @@ export default function Valuation() {
             <span className="inline-flex items-center gap-1 justify-end">
               <input
                 type="number" min="0" max={it.quantity || undefined} step="any"
-                value={selected?.items?.[it.item_key] ?? ''}
-                onChange={(e) => onQty(it, e.target.value)}
+                key={`${selected.id}:${it.item_key}:${cumQty}`}
+                defaultValue={selected?.items?.[it.item_key] ?? ''}
+                onBlur={(e) => onQty(it, e.target.value)}
                 placeholder="0"
                 className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none"
               />
@@ -253,7 +264,14 @@ export default function Valuation() {
                     <th className="text-right font-medium px-2 pr-3 whitespace-nowrap">本期金額</th>
                   </tr>
                 </thead>
-                <tbody>{search ? leaves.map((it) => renderRow(it, 0)) : renderTree(roots)}</tbody>
+                <tbody>
+                  {search ? leaves.map((it) => renderRow(it, 0)) : renderTree(roots)}
+                  {search && matchCount > leaves.length && (
+                    <tr><td colSpan={7} className="py-2 px-3 text-xs text-[var(--text-3)]">
+                      符合 {matchCount} 筆,僅顯示前 {leaves.length} 筆——請輸入更精確的關鍵字或工項編號。
+                    </td></tr>
+                  )}
+                </tbody>
               </table>
             </div>
           </Card>

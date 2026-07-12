@@ -1,5 +1,7 @@
 // AI 監造報表草稿 — 全確定性（無需後端）。把某月的施工日誌、查驗、缺失、送審彙整成
 // 監造視角的報表，並生出一段「監造意見」草稿供監造覆核修改。唯讀：只產草稿，不送出。
+import { rainDayCount } from './weatherMetrics.js'
+
 const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 const ym = (s) => (s || '').slice(0, 7)
 
@@ -11,7 +13,7 @@ export function buildSupervisorReport(data = {}, monthLabel) {
   // 施工日誌（本月）
   const logs = siteLogs.filter((l) => inM(l.log_date)).sort((a, b) => a.log_date.localeCompare(b.log_date))
   const workDays = logs.length
-  const rainDays = logs.filter((l) => /雨/.test(`${l.weather || ''}${l.weather_am || ''}${l.weather_pm || ''}`)).length
+  const rainDays = rainDayCount(logs) // 與施工月報/AI 助理同源
   const summaries = logs.map((l) => ({ date: l.log_date, text: l.work_summary })).filter((x) => x.text)
 
   // 查驗辦理（本月申請或本月判定者）
