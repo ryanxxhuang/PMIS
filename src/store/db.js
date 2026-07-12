@@ -145,13 +145,25 @@ export async function loadQcFromDB(projectId) {
   return { templates: tpls || [], records: recs || [], samples: samples || [] }
 }
 
+// 從 DB 載入缺失(統一引擎:domain=quality|safety)。缺失不依賴標單,
+// 匯標單前 byId 可為空 Map(工項欄位留白)。
+export async function loadDefectsFromDB(projectId, byId = new Map()) {
+  const { data } = await supabase.from('defects')
+    .select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+  return (data || []).map((r) => ({
+    ...r,
+    work_item_no: byId.get(r.work_item_id)?.item_no || '',
+    work_item_desc: byId.get(r.work_item_id)?.description || '',
+  }))
+}
+
 // 從 DB 載入查驗 + 缺失，並把 work_item 資訊去正規化方便顯示
 export async function loadQualityFromDB(projectId, byId) {
   const wi = (id) => byId.get(id)
   const deco = (r) => ({ ...r, work_item_no: wi(r.work_item_id)?.item_no || '', work_item_desc: wi(r.work_item_id)?.description || '' })
   const { data: insp } = await supabase.from('inspections').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
-  const { data: defs } = await supabase.from('defects').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
-  return { inspections: (insp || []).map(deco), defects: (defs || []).map(deco) }
+  const defs = await loadDefectsFromDB(projectId, byId)
+  return { inspections: (insp || []).map(deco), defects: defs }
 }
 
 // 從 DB 載入契約義務清單

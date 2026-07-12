@@ -63,16 +63,20 @@ export default function MonthlyReport() {
     }).sort((a, b) => b.value - a.value)
     const rainDays = rainDayCount(logs) // 與監造報表/AI 助理同源(任一時段含雨=雨天)
     const inspM = inspections.filter((i) => inMonth(i.requested_date || i.created_at, month))
-    const defOpened = defects.filter((d) => inMonth(d.created_at, month))
-    const defClosed = defects.filter((d) => d.closed_at && inMonth(d.closed_at, month))
-    const defOpen = defects.filter((d) => d.status !== '已結案').length
+    // 品質段只算 domain=quality;工安缺失在「七、工安管理」段(safDefM),不重複計
+    const qDefects = defects.filter((d) => (d.domain || 'quality') === 'quality')
+    const defOpened = qDefects.filter((d) => inMonth(d.created_at, month))
+    const defClosed = qDefects.filter((d) => d.closed_at && inMonth(d.closed_at, month))
+    const defOpen = qDefects.filter((d) => d.status !== '已結案').length
     const safM = safetyRecords.filter((s) => inMonth(s.record_date, month))
+    // 工安缺失=統一缺失引擎(domain='safety'),以發現日(無則建立日)歸月
+    const safDefM = defects.filter((d) => d.domain === 'safety' && inMonth(d.record_date || d.created_at, month))
     const coM = changeOrders.filter((c) => inMonth(c.co_date, month))
     const approvedNet = changeOrders.filter((c) => c.status === '核准')
       .reduce((s, c) => s + c.items.reduce((t, it) => t + (Number(it.amount_delta) || 0), 0), 0)
     return {
       cumThis, thisMonthVal: cumThis - cumPrev, actualPct, plannedPct,
-      logs, itemRows, rainDays, inspM, defOpened, defClosed, defOpen, safM, coM, approvedNet,
+      logs, itemRows, rainDays, inspM, defOpened, defClosed, defOpen, safM, safDefM, coM, approvedNet,
       paidCum: valuations.reduce((s, v) => s + (v.paid_amount || 0), 0),
       invoicedCount: valuations.filter((v) => v.invoice_date).length,
     }
@@ -216,7 +220,7 @@ export default function MonthlyReport() {
         <Section title="七、工安管理">
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1.5 text-sm">
             <Info k="自主檢查" v={`${cnt(data.safM, (s) => s.record_type === '自主檢查')} 次`} />
-            <Info k="工安缺失" v={`${cnt(data.safM, (s) => s.record_type === '工安缺失')} 件`} />
+            <Info k="工安缺失" v={`${data.safDefM.length} 件`} />
             <Info k="教育訓練" v={`${cnt(data.safM, (s) => s.record_type === '教育訓練')} 場`} />
             <Info k="危害告知" v={`${cnt(data.safM, (s) => s.record_type === '危害告知')} 次`} />
           </dl>

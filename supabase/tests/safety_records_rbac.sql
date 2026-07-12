@@ -1,9 +1,11 @@
 -- safety_records 三方資料權責矩陣(pgTAP)。
 -- 執行方式:本地 supabase(colima)+psql,整份在交易內執行並 rollback。
--- 對應 migration 20260712000200_safety_records_rbac.sql / schema.sql「工安紀錄 RBAC」段。
+-- 對應 migration 20260712000200_safety_records_rbac.sql + 20260712001400(工安缺失除役):
+-- 工安缺失已併入統一缺失引擎(defects, domain='safety'),safety_records 僅存原始紀錄
+-- 六類(自主檢查/教育訓練/危害告知/監造觀察/監造查驗/監造複查),新增工安缺失一律拒絕。
 begin;
 
-select plan(33);
+select plan(34);
 
 -- ── 結構 ─────────────────────────────────────────────────────────────────────
 select has_table('public', 'safety_record_audits', 'audit 表存在');
@@ -56,7 +58,10 @@ select lives_ok($$ insert into public.safety_records (id, project_id, record_typ
           '自主檢查','用電設備自主檢查','待改善') $$, '廠商可建立自主檢查');
 select lives_ok($$ insert into public.safety_records (id, project_id, record_type, title, status)
   values ('31000000-0000-0000-0000-000000000002','21000000-0000-0000-0000-000000000001',
-          '工安缺失','施工架未掛安全網','待改善') $$, '廠商可建立工安缺失(改善紀錄)');
+          '自主檢查','施工架自主檢查','待改善') $$, '廠商可建立第二筆自主檢查(供刪除稽核測試)');
+select throws_ok($$ insert into public.safety_records (project_id, record_type, title)
+  values ('21000000-0000-0000-0000-000000000001','工安缺失','施工架未掛安全網') $$, 'P0001', null,
+  '工安缺失類型已除役:新增被拒並導向統一缺失引擎');
 select throws_ok($$ insert into public.safety_records (project_id, record_type, title)
   values ('21000000-0000-0000-0000-000000000001','監造觀察','越權觀察') $$, 'P0001', null,
   '廠商不可建立監造事件');

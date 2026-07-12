@@ -71,7 +71,7 @@ export function myOpenItems(org, data = {}) {
     push(b, '估驗', `第 ${v.period_no} 期估驗`, b.who === 'owner' ? '/payments' : '/valuation')
   })
   inspections.forEach((i) => push(inspectionBall(i), '查驗', i.title, '/quality'))
-  defects.forEach((d) => push(defectBall(d), '缺失', d.title, '/quality'))
+  defects.forEach((d) => push(defectBall(d), d.domain === 'safety' ? '工安缺失' : '缺失', d.title, d.domain === 'safety' ? '/safety' : '/quality'))
   observations.forEach((o) => push(observationBall(o), '觀察', o.title, '/quality'))
   changeOrders.forEach((c) => push(changeOrderBall(c), '變更', `${c.co_no ? c.co_no + ' ' : ''}${c.title || ''}`.trim(), '/change-orders'))
   return out

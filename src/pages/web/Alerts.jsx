@@ -14,7 +14,7 @@ const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0
 const diffDays = (d) => Math.round((d - today0()) / 86400000)
 
 export default function Alerts() {
-  const { project, obligations, defects, valuations, safetyRecords, testSamples, acceptanceEvents, inspectionPoints, inspections, siteLogs, currentProject, isSupabaseConfigured } = useStore()
+  const { project, obligations, defects, valuations, testSamples, acceptanceEvents, inspectionPoints, inspections, siteLogs, currentProject, isSupabaseConfigured } = useStore()
 
   const alerts = useMemo(() => {
     const a = {
@@ -33,24 +33,17 @@ export default function Alerts() {
       else if (d <= 7) out.push({ level: 'soon', tag: '契約', title: ob.title, meta: `還有 ${d} 天(到期 ${iso(due)})`, extra: ob.penalty, to: '/contract' })
     }
 
-    // 品質缺失:未結案
+    // 缺失(統一引擎):未結案,品質/工安以 domain 分流
     for (const df of defects) {
       if (df.status === '已結案') continue
+      const safety = df.domain === 'safety'
+      const tag = safety ? '工安' : '缺失'
+      const to = safety ? '/safety' : '/quality'
       const due = parseLocalDate(df.due_date)
       const d = due ? diffDays(due) : null
-      if (d != null && d < 0) out.push({ level: 'overdue', tag: '缺失', title: df.title, meta: `改善逾期 ${-d} 天 · ${df.status}`, to: '/quality' })
-      else if (d != null && d <= 7) out.push({ level: 'soon', tag: '缺失', title: df.title, meta: `${d} 天內應改善 · ${df.status}`, to: '/quality' })
-      else out.push({ level: 'todo', tag: '缺失', title: df.title, meta: `未結案 · ${df.status}`, to: '/quality' })
-    }
-
-    // 工安缺失:未完成
-    for (const s of safetyRecords) {
-      if (s.record_type !== '工安缺失' || s.status === '已完成') continue
-      const due = parseLocalDate(s.due_date)
-      const d = due ? diffDays(due) : null
-      if (d != null && d < 0) out.push({ level: 'overdue', tag: '工安', title: s.title, meta: `改善逾期 ${-d} 天 · ${s.status}`, to: '/safety' })
-      else if (d != null && d <= 7) out.push({ level: 'soon', tag: '工安', title: s.title, meta: `${d} 天內應改善 · ${s.status}`, to: '/safety' })
-      else out.push({ level: 'todo', tag: '工安', title: s.title, meta: `未改善 · ${s.status}`, to: '/safety' })
+      if (d != null && d < 0) out.push({ level: 'overdue', tag, title: df.title, meta: `改善逾期 ${-d} 天 · ${df.status}`, to })
+      else if (d != null && d <= 7) out.push({ level: 'soon', tag, title: df.title, meta: `${d} 天內應改善 · ${df.status}`, to })
+      else out.push({ level: 'todo', tag, title: df.title, meta: `未結案 · ${df.status}`, to })
     }
 
     // 取樣試驗:試體 7/28 天齡期到期未試驗
@@ -79,7 +72,7 @@ export default function Alerts() {
       out.push({ level: a.level, tag: '停留點', title: a.title, meta: a.meta, to: '/itp' })
     }
     return out
-  }, [obligations, defects, valuations, safetyRecords, testSamples, acceptanceEvents, inspectionPoints, inspections, siteLogs, currentProject])
+  }, [obligations, defects, valuations, testSamples, acceptanceEvents, inspectionPoints, inspections, siteLogs, currentProject])
 
   const groups = [
     { key: 'overdue', label: '已逾期', color: 'red' },

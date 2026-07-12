@@ -122,10 +122,14 @@ export function buildDemoData(workItems, project) {
     { id: 'INSP-DEMO-4', title: '4F 柱牆鋼筋查驗', location: '4F', inspection_type: '施工查驗', requested_date: iso(daysFromNow(-1)), status: '待查驗', result_note: null, ...deco(0) },
     { id: 'INSP-DEMO-5', title: '4F 模板查驗', location: '4F', inspection_type: '施工查驗', requested_date: iso(daysFromNow(0)), status: '待查驗', result_note: null, ...deco(3) },
   ]
+  // 統一缺失引擎:品質/工安同一狀態機(開立→改善中→待複查→已結案),以 domain 分類
   const defects = [
-    { id: 'DEF-DEMO-1', title: '查驗不合格：外牆窯燒磚打樣', description: '磚縫寬度不均，需重新打樣送審', severity: '一般', location: '1F 打樣區', due_date: iso(daysFromNow(4)), status: '改善中', improvement_note: '已重新調整工法，預計本週完成打樣', ...deco(1) },
-    { id: 'DEF-DEMO-2', title: '3F 西側牆面蜂窩', description: '澆置振動不確實造成蜂窩，需鑿除修補', severity: '嚴重', location: '3F 西側', due_date: iso(daysFromNow(-2)), status: '開立', improvement_note: null, ...deco(5) },
-    { id: 'DEF-DEMO-3', title: '2F 樓梯間模板拆除不完全', description: '殘留模板角材', severity: '一般', location: '2F 樓梯間', due_date: iso(daysFromNow(-10)), status: '已結案', improvement_note: '已清除完畢，監造複查通過', ...deco(3) },
+    { id: 'DEF-DEMO-1', domain: 'quality', title: '查驗不合格：外牆窯燒磚打樣', description: '磚縫寬度不均，需重新打樣送審', severity: '一般', location: '1F 打樣區', due_date: iso(daysFromNow(4)), status: '改善中', improvement_note: '已重新調整工法，預計本週完成打樣', ...deco(1) },
+    { id: 'DEF-DEMO-2', domain: 'quality', title: '3F 西側牆面蜂窩', description: '澆置振動不確實造成蜂窩，需鑿除修補', severity: '嚴重', location: '3F 西側', due_date: iso(daysFromNow(-2)), status: '開立', improvement_note: null, ...deco(5) },
+    { id: 'DEF-DEMO-3', domain: 'quality', title: '2F 樓梯間模板拆除不完全', description: '殘留模板角材', severity: '一般', location: '2F 樓梯間', due_date: iso(daysFromNow(-10)), status: '已結案', improvement_note: '已清除完畢，監造複查通過', ...deco(3) },
+    // 工安缺失(domain=safety):同一引擎,展示廠商改善鏈 + 監造複查結案
+    { id: 'DEF-DEMO-S1', domain: 'safety', title: '4F 臨邊開口未設護欄', description: '已先行圍設警示帶', severity: '嚴重', location: '4F 電梯井', record_date: iso(daysFromNow(-2)), due_date: iso(daysFromNow(1)), status: '開立', improvement_note: null, work_item_no: '', work_item_desc: '' },
+    { id: 'DEF-DEMO-S2', domain: 'safety', title: '施工架斜籬破損', description: null, severity: '一般', location: '南側外牆', record_date: iso(daysFromNow(-6)), due_date: iso(daysFromNow(3)), status: '改善中', improvement_note: null, work_item_no: '', work_item_desc: '' },
   ]
 
   // ── 契約義務（典型公共工程時程義務 + 罰則）──
@@ -152,16 +156,14 @@ export function buildDemoData(workItems, project) {
     { id: 'COST-8', category: '其他', title: '臨時水電費', vendor: '台電/北水', budget_amount: 1800000, actual_amount: 940000, status: '進行中', note: null, sort_order: 7 },
   ]
 
-  // ── 工安紀錄 ──
+  // ── 工安紀錄(原始紀錄六類;工安缺失已併入上方統一缺失引擎 DEF-DEMO-S1/S2) ──
   const safetyRecords = [
-    { id: 'SAF-1', record_type: '工安缺失', title: '4F 臨邊開口未設護欄', location: '4F 電梯井', record_date: iso(daysFromNow(-2)), severity: '嚴重', status: '待改善', due_date: iso(daysFromNow(1)), note: '已先行圍設警示帶' },
-    { id: 'SAF-2', record_type: '工安缺失', title: '施工架斜籬破損', location: '南側外牆', record_date: iso(daysFromNow(-6)), severity: '一般', status: '改善中', due_date: iso(daysFromNow(3)), note: null },
     { id: 'SAF-3', record_type: '自主檢查', title: '施工架週檢', location: '全區', record_date: iso(daysFromNow(0)), severity: '一般', status: '已完成', due_date: null, note: '扣件抽驗合格' },
     { id: 'SAF-4', record_type: '自主檢查', title: '塔吊月檢', location: '塔吊 T1', record_date: iso(daysFromNow(-15)), severity: '一般', status: '已完成', due_date: null, note: null },
     { id: 'SAF-5', record_type: '教育訓練', title: '新進人員職安教育訓練', location: '工務所', record_date: iso(daysFromNow(-9)), severity: '一般', status: '已完成', due_date: null, note: '12 人參訓' },
     { id: 'SAF-6', record_type: '危害告知', title: '混凝土澆置作業危害告知', location: '4F', record_date: iso(daysFromNow(-1)), severity: '一般', status: '已完成', due_date: null, note: null },
     // 監造三類(事件型,生即完成):展示三方權責——監造只能「新增」,不可改寫廠商紀錄
-    { id: 'SAF-7', record_type: '監造觀察', title: '3F 模板支撐間距不足,已口頭通知改善', location: '3F', record_date: iso(daysFromNow(-3)), severity: '一般', status: '已完成', due_date: null, note: '併入 SAF-1 缺失追蹤' },
+    { id: 'SAF-7', record_type: '監造觀察', title: '3F 模板支撐間距不足,已口頭通知改善', location: '3F', record_date: iso(daysFromNow(-3)), severity: '一般', status: '已完成', due_date: null, note: '併入工安缺失追蹤' },
     { id: 'SAF-8', record_type: '監造查驗', title: '施工架與安全網查驗', location: '南側外牆', record_date: iso(daysFromNow(-5)), severity: '一般', status: '已完成', due_date: null, note: '斜籬破損處待廠商改善後複查' },
     { id: 'SAF-9', record_type: '監造複查', title: '2F 臨邊護欄改善複查合格', location: '2F', record_date: iso(daysFromNow(-8)), severity: '一般', status: '已完成', due_date: null, note: null },
   ]

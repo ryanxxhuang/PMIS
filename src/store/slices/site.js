@@ -145,13 +145,15 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return { error: null, result: data }
   }, [demoMode])
 
-  // 工安：新增 / 更新 / 刪除工安紀錄（demo 只進記憶體）
+  // 工安：新增 / 更新 / 刪除工安紀錄（demo 只進記憶體）。
+  // 工安缺失已併入統一缺失引擎(defects, domain='safety',見 quality slice)——
+  // safety_records 僅存原始紀錄六類,伺服器 guard 會拒絕工安缺失類型。
   const createSafetyRecord = useCallback(async (input) => {
     const row = {
-      record_type: input.record_type || '工安缺失', title: input.title,
+      record_type: input.record_type || '自主檢查', title: input.title,
       location: input.location || null, record_date: input.record_date || null,
       severity: input.severity || '一般',
-      // 事件型紀錄(訓練/告知/監造三類)生即完成;自主檢查與缺失走改善流程
+      // 事件型紀錄(訓練/告知/監造三類)生即完成;自主檢查走改善流程
       status: ['教育訓練', '危害告知', '監造觀察', '監造查驗', '監造複查'].includes(input.record_type)
         ? '已完成' : (input.status || '待改善'),
       due_date: input.due_date || null, note: input.note || null,

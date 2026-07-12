@@ -43,6 +43,7 @@ vi.mock('../../lib/supabase.js', () => ({ supabase: h.client, isSupabaseConfigur
 import { useCollabSlice } from './collab.js'
 import { useSiteSlice } from './site.js'
 import { useLedgerSlice } from './ledger.js'
+import { useQualitySlice } from './quality.js'
 
 const wrote = (table, op) => h.calls.some((c) => c.table === table && c.op === op)
 
@@ -117,6 +118,21 @@ describe('標單匯入前的真專案:工安/契約義務寫入必須進 DB', ()
     const r = renderHook(() => useLedgerSlice(preBoqCtx))
     await act(async () => { await r.current.updateObligationStatus('ob-1', '已提送') })
     expect(wrote('contract_obligations', 'update')).toBe(true)
+  })
+
+  // 統一缺失引擎:工安缺失(domain=safety)在匯標單前就要能寫 DB
+  it('缺失 create/updateStatus/delete 都打 supabase(domain=safety)', async () => {
+    const r = renderHook(() => useQualitySlice(preBoqCtx, []))
+    await act(async () => {
+      expect((await r.current.createDefect({ title: '臨邊未設護欄', domain: 'safety' })).error).toBeNull()
+    })
+    await act(async () => { await r.current.updateDefectStatus('row-1', '改善中') })
+    await act(async () => { await r.current.deleteDefect('row-1') })
+    const ins = h.calls.find((c) => c.table === 'defects' && c.op === 'insert')
+    expect(ins.args[0].domain).toBe('safety')
+    expect(ins.args[0].work_item_id).toBeNull()
+    expect(wrote('defects', 'update')).toBe(true)
+    expect(wrote('defects', 'delete')).toBe(true)
   })
 })
 

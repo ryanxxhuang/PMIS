@@ -1,79 +1,25 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Printer, Zap } from 'lucide-react'
+import { Printer, Zap } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
-import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { judgeChecklist, judgeItem } from '../../lib/qc.js'
-import { defectBall } from '../../lib/ballInCourt.js'
+import DefectTracker, { WorkItemPicker } from '../../components/DefectTracker.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
-const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
 const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 
-// 小工項挑選器（搜尋 → 選一個）
-function WorkItemPicker({ leaves, value, label, onPick }) {
-  const [q, setQ] = useState('')
-  const results = q.trim() ? leaves.filter((it) => it.description.includes(q.trim()) || (it.item_no || '').includes(q.trim())).slice(0, 12) : []
-  if (value) {
-    return (
-      <div className="flex items-center gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface-2)]">
-        <span className="truncate flex-1">{label}</span>
-        <button onClick={() => onPick(null, '')} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
-      </div>
-    )
-  }
-  return (
-    <div className="relative">
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋並選擇工項（可不填）…" className={input} />
-      {results.length > 0 && (
-        <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto">
-          {results.map((it) => (
-            <button key={it.item_key} onClick={() => { onPick(it.item_key, `${it.item_no} ${it.description}`); setQ('') }}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] truncate">
-              <span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function Quality() {
-  const { project, workItems, inspections, defects, createInspection, recordInspectionResult,
-    createDefect, updateDefectStatus, deleteInspection, deleteDefect, describeDefect,
+  const { project, workItems, inspections, createInspection, recordInspectionResult, deleteInspection,
     checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
     isSupabaseConfigured, currentProject, workItemsSource, can, resolveMarkup } = useStore()
-  const [markupOpen, setMarkupOpen] = useState(false)
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
-  const [defForm, setDefForm] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [aiBusy, setAiBusy] = useState(false)
-  const [aiMsg, setAiMsg] = useState('')
-  const [errMsg, setErrMsg] = useState('') // 判定/缺失寫入失敗必須讓使用者看到(失敗=UI 不變)
-
-  // 拍缺失照片 → AI 描述 → 填表單
-  const onDefectPhoto = async (e) => {
-    const file = e.target.files?.[0]; e.target.value = ''
-    if (!file) return
-    setAiBusy(true); setAiMsg('AI 辨識中…')
-    const { error, result } = await describeDefect(file)
-    setAiBusy(false)
-    if (error) { setAiMsg(`辨識失敗:${error.message || ''}`); return }
-    setDefForm((f) => ({
-      ...f,
-      title: result.title || f.title,
-      description: [result.description, result.suggestion && `建議:${result.suggestion}`].filter(Boolean).join(' '),
-      severity: result.severity || f.severity,
-      location: f.location || result.location || '',
-    }))
-    setAiMsg(result.title ? 'AI 已填入，請確認後開立。' : 'AI 未辨識出明顯缺失，請人工填寫。')
-  }
+  const [errMsg, setErrMsg] = useState('') // 判定寫入失敗必須讓使用者看到(失敗=UI 不變)
 
   const leaves = useMemo(() => {
     if (!workItems) return []
@@ -90,9 +36,6 @@ export default function Quality() {
   const submitInsp = async () => {
     setBusy(true); await createInspection(inspForm); setBusy(false); setInspForm(null)
   }
-  const submitDef = async () => {
-    setBusy(true); await createDefect(defForm); setBusy(false); setDefForm(null)
-  }
   const onResult = async (insp, pass) => {
     let note = ''
     if (!pass) {
@@ -107,24 +50,7 @@ export default function Quality() {
     setBusy(false)
     if (error) setErrMsg(`查驗判定未寫入：${error.message}`)
   }
-  const advanceDefect = async (d) => {
-    let res
-    if (d.status === '開立') res = await updateDefectStatus(d.id, '改善中')
-    else if (d.status === '改善中') {
-      const note = await appPrompt({
-        title: `提送複查：${d.title}`, label: '改善說明（必填）',
-        defaultValue: d.improvement_note || '', required: true, confirmLabel: '提送複查',
-      })
-      if (note === null) return
-      res = await updateDefectStatus(d.id, '待複查', { improvement_note: note })
-    }
-    else if (d.status === '待複查') res = await updateDefectStatus(d.id, '已結案')
-    if (res?.error) setErrMsg(`缺失狀態未更新：${res.error.message}`)
-  }
-  const nextLabel = { 開立: '開始改善', 改善中: '提送複查', 待複查: '複查結案' }
-
   const openInsp = inspections.filter((i) => i.status === '待查驗').length
-  const openDef = defects.filter((d) => d.status !== '已結案').length
 
   return (
     <div className="space-y-5">
@@ -174,67 +100,8 @@ export default function Quality() {
         )}
       </Card>
 
-      {/* 缺失 */}
-      <Card title={`缺失追蹤（未結案 ${openDef}）`} action={<div className="flex items-center gap-3">
-        {defects.length > 0 && <button onClick={() => exportCsv(`缺失清單_${stamp()}`, defects, [
-          { key: 'title', label: '缺失標題' }, { key: 'work_item_no', label: '工項' }, { key: 'location', label: '位置' },
-          { key: 'severity', label: '嚴重度' }, { key: 'status', label: '狀態' }, { key: 'due_date', label: '改善期限' },
-          { key: 'improvement_note', label: '改善說明' },
-        ])} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
-        <Button variant="secondary" onClick={() => setDefForm(defForm ? null : { title: '', description: '', severity: '一般', location: '', due_date: '', work_item_key: '', work_item_label: '' })}>{defForm ? '取消' : '＋ 開立缺失'}</Button>
-      </div>}>
-        {defForm && (
-          <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
-                <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onDefectPhoto} className="hidden" />
-                <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : '拍缺失照片 AI 填表'}
-              </label>
-              <span className={`text-xs ${aiMsg.startsWith('辨識失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>{aiMsg || '拍缺失現場，AI 自動填標題/說明/嚴重度。'}</span>
-            </div>
-            <WorkItemPicker leaves={leaves} value={defForm.work_item_key} label={defForm.work_item_label} onPick={(k, l) => setDefForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="缺失標題"><input className={input} value={defForm.title} onChange={(e) => setDefForm((f) => ({ ...f, title: e.target.value }))} placeholder="如 鋼筋保護層不足" /></Field>
-              <Field label="位置"><input className={input} value={defForm.location} onChange={(e) => setDefForm((f) => ({ ...f, location: e.target.value }))} /></Field>
-              <Field label="嚴重度"><select className={input} value={defForm.severity} onChange={(e) => setDefForm((f) => ({ ...f, severity: e.target.value }))}><option>輕微</option><option>一般</option><option>嚴重</option></select></Field>
-              <Field label="改善期限"><input type="date" className={input} value={defForm.due_date} onChange={(e) => setDefForm((f) => ({ ...f, due_date: e.target.value }))} /></Field>
-            </div>
-            <Field label="說明"><textarea className={input} rows={2} value={defForm.description} onChange={(e) => setDefForm((f) => ({ ...f, description: e.target.value }))} /></Field>
-            <div className="flex items-center gap-3">
-              <Button onClick={submitDef} disabled={busy || !defForm.title}>開立缺失</Button>
-              <Button variant="secondary" onClick={() => setMarkupOpen(true)}>🖍 圖面/照片標註{defForm.markup_data ? '（已附）' : ''}</Button>
-              {defForm.markup_data && <MarkupThumb src={defForm.markup_data} />}
-            </div>
-            {markupOpen && <MarkupEditor title="把缺失位置匡起來" initialImage={defForm.markup_data}
-              onSave={(d) => { setDefForm((f) => ({ ...f, markup_data: d })); setMarkupOpen(false) }} onClose={() => setMarkupOpen(false)} />}
-          </div>
-        )}
-        {defects.length === 0 ? <Empty>尚無缺失</Empty> : (
-          <div className="space-y-2">
-            {defects.map((d) => (
-              <div key={d.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
-                <div className="min-w-0">
-                  <div className="text-[var(--text)]">{d.title} <BallChip ball={defectBall(d)} /> {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>}</div>
-                  <div className="text-xs text-[var(--text-3)] truncate">{d.work_item_no && `${d.work_item_no} `}{d.location}{d.due_date ? ` · 期限 ${d.due_date}` : ''}{d.improvement_note ? ` · 改善：${d.improvement_note}` : ''}</div>
-                  {d.markup_path && <div className="mt-1"><MarkupThumb src={d.markup_path} resolve={resolveMarkup} /></div>}
-                </div>
-                <div className="flex gap-2 shrink-0 items-center">
-                  {d.status !== '已結案' && (
-                    // 改善鏈:施工做「開始改善/提送複查」;複查結案/退回只有監造能按
-                    d.status === '待複查' ? (can.approve ? <>
-                      <Button variant="ghost" onClick={() => updateDefectStatus(d.id, '改善中')} disabled={busy}>退回</Button>
-                      <Button variant="success" onClick={() => advanceDefect(d)} disabled={busy}>複查結案</Button>
-                    </> : <span className="text-xs text-[var(--text-3)]">待監造複查</span>)
-                    : (can.edit ? <Button variant="secondary" onClick={() => advanceDefect(d)} disabled={busy}>{nextLabel[d.status]}</Button>
-                      : <span className="text-xs text-[var(--text-3)]">待廠商改善</span>)
-                  )}
-                  {can.edit && <button onClick={async () => { if (await appConfirm({ title: '刪除此缺失？', danger: true, confirmLabel: '刪除' })) deleteDefect(d.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+      {/* 缺失:統一缺失引擎(與工安缺失同狀態機),此處只列品質 domain */}
+      <DefectTracker domain="quality" leaves={leaves} />
 
       {/* 觀察事項:比缺失輕的現場提醒,可升級成正式缺失 */}
       <ObservationsSection observations={observations} canWrite={can.edit || can.approve}

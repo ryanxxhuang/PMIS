@@ -16,7 +16,7 @@ import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
 import {
   wiCacheDel, loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
-  loadQualityFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
+  loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
   loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
 } from './store/db.js'
 import { useAuthSlice } from './store/slices/auth.js'
@@ -181,7 +181,7 @@ export function StoreProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbMode, currentProject, wiMaps])
 
-  // 不依賴標單的領域(驗收/契約義務/工安/送審/RFI/觀察):真專案選定即從 DB 載入,
+  // 不依賴標單的領域(驗收/契約義務/工安/缺失/送審/RFI/觀察):真專案選定即從 DB 載入,
   // 不等標單匯入(沒 BOQ 的專案也要能讀寫,否則寫入只進記憶體、重新整理就消失——
   // 假成功)。寫入端見各 slice 的 isPersistedProject 同名判斷。
   useEffect(() => {
@@ -198,6 +198,12 @@ export function StoreProvider({ children }) {
       const safety = await loadSafetyFromDB(pid)
       if (!active) return
       setSafetyRecords(safety)
+      // 缺失(統一引擎)不依賴標單:匯標單前也要載(dbMode 載入會再帶工項資訊覆蓋)
+      if (!dbMode) {
+        const defs = await loadDefectsFromDB(pid)
+        if (!active) return
+        setDefects(defs)
+      }
       const [{ data: subs }, { data: rfiRows }, { data: obsRows }] = await Promise.all([
         supabase.from('submittals').select('*').eq('project_id', pid).order('created_at', { ascending: false }),
         supabase.from('rfis').select('*').eq('project_id', pid).order('created_at', { ascending: false }),
@@ -219,15 +225,18 @@ export function StoreProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signOutBase, clearOnLogout])
 
-  // 重新匯入標單：清空本專案 work_items 與相依資料（估驗/進度/日誌/查驗/缺失）
+  // 重新匯入標單：清空本專案 work_items 與相依資料（估驗/進度/日誌/查驗）。
+  // 缺失不清:統一引擎後缺失是履約證據(已結案 guard 也擋刪除)且不依賴標單,
+  // 只會因 work_items 刪除被解除工項連結(FK set null)。
   const resetProjectBoq = useCallback(async () => {
     if (!dbMode) return { error: { message: '需真專案' } }
     const pid = currentProject.project_id
-    for (const t of ['defects', 'inspections', 'valuations', 'schedule_periods', 'daily_logs', 'work_items']) {
+    for (const t of ['inspections', 'valuations', 'schedule_periods', 'daily_logs', 'work_items']) {
       await supabase.from(t).delete().eq('project_id', pid)
     }
     wiCacheDel(pid)
-    setValuations([]); setProgressPlan(null); setSiteLogs([]); setInspections([]); setDefects([])
+    setValuations([]); setProgressPlan(null); setSiteLogs([]); setInspections([])
+    setDefects(await loadDefectsFromDB(pid)) // 重載:工項連結已解除
     retryWorkItems() // 重跑載入 → 真專案 0 筆會進 'empty'（顯示匯入 onboarding），不載範例
     return { error: null }
     // eslint-disable-next-line react-hooks/exhaustive-deps

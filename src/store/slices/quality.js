@@ -1,11 +1,14 @@
 // Quality slice:三級品管——查驗/缺失、自主檢查表(量化標準自動判定)、取樣試驗(齡期追蹤)。
+// 缺失=統一缺失引擎(domain: quality|safety,QA §9-4):不依賴標單 → 走 isPersistedProject
+// (工安缺失在匯標單前也要進 DB,否則只進記憶體=假成功);查驗掛工項 → 維持 dbMode。
 import { useState, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase.js'
 import { judgeChecklist, judgeConcrete, sampleDues, pendingSamplesFromLogs } from '../../lib/qc.js'
 import { TEMPLATE_03310 } from '../../data/checklist03310.js'
-import { loadQualityFromDB } from '../db.js'
+import { loadQualityFromDB, loadDefectsFromDB } from '../db.js'
+import { mutationOutcome } from './billing.js'
 
-export function useQualitySlice({ dbMode, currentProject, currentUser, wiMaps, log, saveMarkup }, siteLogs) {
+export function useQualitySlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }, siteLogs) {
   // 品質：查驗 + 缺失（真 DB）
   const [inspections, setInspections] = useState([])
   const [defects, setDefects] = useState([])
@@ -19,6 +22,11 @@ export function useQualitySlice({ dbMode, currentProject, currentUser, wiMaps, l
   const reloadQuality = useCallback(async () => {
     const qual = await loadQualityFromDB(currentProject.project_id, wiMaps.byId)
     setInspections(qual.inspections); setDefects(qual.defects)
+  }, [currentProject, wiMaps])
+
+  // 缺失單獨重載(缺失不依賴標單;匯標單前 wiMaps 為空,工項欄位留白即可)
+  const reloadDefects = useCallback(async () => {
+    setDefects(await loadDefectsFromDB(currentProject.project_id, wiMaps.byId))
   }, [currentProject, wiMaps])
 
   const createInspection = useCallback(async (input) => {
@@ -75,55 +83,67 @@ export function useQualitySlice({ dbMode, currentProject, currentUser, wiMaps, l
     return { error: null }
   }, [dbMode, currentProject, currentUser, reloadQuality, log])
 
+  // 開立缺失(統一引擎):domain 分品質/工安;工安缺失可在匯標單前寫入(isPersistedProject)
   const createDefect = useCallback(async (input) => {
+    const domain = input.domain || 'quality'
     const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
     const markup_path = await saveMarkup(input.markup_data, 'defect')
-    if (!dbMode) {
+    if (!isPersistedProject) {
       setDefects((ds) => [{
-        id: `DEF-${Date.now()}`, title: input.title, description: input.description || null,
+        id: `DEF-${Date.now()}`, domain, title: input.title, description: input.description || null,
         severity: input.severity || '一般', location: input.location || null,
-        due_date: input.due_date || null, status: '開立', improvement_note: null, markup_path,
+        due_date: input.due_date || null, record_date: input.record_date || null,
+        status: '開立', improvement_note: null, markup_path,
         work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
       }, ...ds])
       return { error: null }
     }
     const { error } = await supabase.from('defects').insert({
       project_id: currentProject.project_id, work_item_id: wi?.id || null,
-      title: input.title, description: input.description || null,
+      domain, title: input.title, description: input.description || null,
       severity: input.severity || '一般', location: input.location || null,
-      due_date: input.due_date || null, status: '開立', created_by: currentUser?.user_id, markup_path,
+      due_date: input.due_date || null, record_date: input.record_date || null,
+      status: '開立', created_by: currentUser?.user_id, markup_path,
     })
     if (error) return { error }
-    await reloadQuality()
-    log('開立缺失', input.title, { user: currentUser?.name, role: '監造' })
+    await reloadDefects()
+    log('開立缺失', input.title, { user: currentUser?.name, role: domain === 'safety' ? '工安' : '監造' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, wiMaps, saveMarkup, reloadQuality, log])
+  }, [isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup, reloadDefects, log])
 
-  // 缺失狀態推進：開立 → 改善中 → 待複查 → 已結案
+  // 缺失狀態推進：開立 → 改善中 → 待複查 → 已結案;撤銷結案須附 correction_reason(留稽核)
   const updateDefectStatus = useCallback(async (defectId, status, extra = {}) => {
     const patch = { status }
     if (extra.improvement_note !== undefined) patch.improvement_note = extra.improvement_note
+    if (extra.correction_reason !== undefined) patch.correction_reason = extra.correction_reason
     if (status === '已結案') patch.closed_at = new Date().toISOString()
-    if (!dbMode) {
+    if (!isPersistedProject) {
       setDefects((ds) => ds.map((d) => (d.id === defectId ? { ...d, ...patch } : d)))
       return { error: null }
     }
-    const { error } = await supabase.from('defects').update(patch).eq('id', defectId)
+    const res = await supabase.from('defects').update(patch).eq('id', defectId).select('id')
+    const { error } = mutationOutcome(res, '未寫入:可能無權限或缺失已被移除')
     if (error) return { error }
-    await reloadQuality()
+    await reloadDefects()
     log('缺失更新', status, { user: currentUser?.name, role: '品管' })
     return { error: null }
-  }, [dbMode, currentUser, reloadQuality, log])
+  }, [isPersistedProject, currentUser, reloadDefects, log])
 
   const deleteInspection = useCallback(async (id) => {
     if (dbMode) { await supabase.from('inspections').delete().eq('id', id); await reloadQuality() }
     else setInspections((is) => is.filter((i) => i.id !== id))
   }, [dbMode, reloadQuality])
 
+  // 刪除缺失:DB 刪成功才從 UI 移除(已結案由 guard 擋下,不可假消失)
   const deleteDefect = useCallback(async (id) => {
-    if (dbMode) { await supabase.from('defects').delete().eq('id', id); await reloadQuality() }
-    else setDefects((ds) => ds.filter((d) => d.id !== id))
-  }, [dbMode, reloadQuality])
+    if (isPersistedProject) {
+      const res = await supabase.from('defects').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或缺失已被移除')
+      if (error) return { error }
+    }
+    setDefects((ds) => ds.filter((d) => d.id !== id))
+    return { error: null }
+  }, [isPersistedProject])
 
   // ── 品管自動化:自主檢查表(量化標準自動判定) + 取樣試驗(齡期追蹤) ─────────
   // 可用範本 = 專案範本 ∪ 內建 03310(尚無同源範本時顯示;首次使用才落 DB)

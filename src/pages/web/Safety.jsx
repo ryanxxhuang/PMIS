@@ -3,22 +3,24 @@ import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, Button, Badge, PageHeader } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
+import DefectTracker from '../../components/DefectTracker.jsx'
 
 // 伺服器 safety_records_guard 矩陣的鏡像(僅 UX;真正強制在 DB trigger,
-// 見 migration 20260712000200_safety_records_rbac.sql):廠商=前四類,監造=監造三類,機關唯讀。
-const CONTRACTOR_TYPES = ['自主檢查', '工安缺失', '教育訓練', '危害告知']
+// 見 migrations 20260712000200 + 20260712001400):廠商=三類原始紀錄,監造=監造三類,機關唯讀。
+// 工安缺失已併入統一缺失引擎(下方「工安缺失追蹤」卡,與品質缺失同狀態機)。
+const CONTRACTOR_TYPES = ['自主檢查', '教育訓練', '危害告知']
 const SUPERVISOR_TYPES = ['監造觀察', '監造查驗', '監造複查']
 const TYPES = [...CONTRACTOR_TYPES, ...SUPERVISOR_TYPES]
-const TYPE_COLOR = { 自主檢查: 'blue', 工安缺失: 'red', 教育訓練: 'green', 危害告知: 'amber', 監造觀察: 'slate', 監造查驗: 'purple', 監造複查: 'purple' }
+const TYPE_COLOR = { 自主檢查: 'blue', 教育訓練: 'green', 危害告知: 'amber', 監造觀察: 'slate', 監造查驗: 'purple', 監造複查: 'purple' }
 const STATUS_COLOR = { 待改善: 'red', 改善中: 'amber', 已完成: 'green' }
-const NEEDS_FLOW = (t) => t === '自主檢查' || t === '工安缺失'
+const NEEDS_FLOW = (t) => t === '自主檢查'
 const NEXT = { 待改善: '改善中', 改善中: '已完成' }
 const NEXT_LABEL = { 待改善: '開始改善', 改善中: '標為完成' }
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const thisMonth = () => todayStr().slice(0, 7)
 
 export default function Safety() {
-  const { project, isPersistedProject, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord, currentUser, can } = useStore()
+  const { project, isPersistedProject, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord, defects, currentUser, can } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('')
@@ -36,19 +38,19 @@ export default function Safety() {
       : org === 'contractor' ? !r.record_type.startsWith('監造') : false)
 
   const counts = useMemo(() => {
-    const openDef = safetyRecords.filter((r) => r.record_type === '工安缺失' && r.status !== '已完成').length
+    // 工安缺失=統一缺失引擎(defects, domain='safety'),未結案即未改善
+    const openDef = defects.filter((d) => (d.domain || 'quality') === 'safety' && d.status !== '已結案').length
     const checksThisMonth = safetyRecords.filter((r) => r.record_type === '自主檢查' && (r.record_date || '').startsWith(thisMonth())).length
     const trainings = safetyRecords.filter((r) => r.record_type === '教育訓練').length
     return { openDef, checksThisMonth, trainings }
-  }, [safetyRecords])
+  }, [safetyRecords, defects])
 
   const groups = useMemo(() => TYPES.map((t) => ({
     t, list: safetyRecords.filter((r) => r.record_type === t),
   })).filter((g) => g.list.length), [safetyRecords])
 
   const openForm = (type) => setForm({
-    record_type: type, title: '', location: '', record_date: todayStr(),
-    severity: '一般', due_date: '', note: '',
+    record_type: type, title: '', location: '', record_date: todayStr(), note: '',
   })
 
   const onSubmit = async () => {
@@ -91,7 +93,7 @@ export default function Safety() {
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <PageHeader title="工安管理" tagline="自主檢查・缺失・教育訓練" subtitle="記錄工地安全自主檢查、工安缺失改善、教育訓練與危害告知" />
+        <PageHeader title="工安管理" tagline="自主檢查・缺失・教育訓練" subtitle="工安缺失走統一缺失引擎;自主檢查、教育訓練與危害告知在此登錄" />
       </div>
 
       {errMsg && (
@@ -102,10 +104,13 @@ export default function Safety() {
       )}
 
       <div className="grid grid-cols-3 gap-4">
-        <Stat label="未改善工安缺失" value={counts.openDef} sub="件" color={counts.openDef > 0 ? 'text-rose-600' : 'text-emerald-600'} />
+        <Stat label="未結案工安缺失" value={counts.openDef} sub="件" color={counts.openDef > 0 ? 'text-rose-600' : 'text-emerald-600'} />
         <Stat label="本月自主檢查" value={counts.checksThisMonth} sub="次" color="text-[var(--blue-text)]" />
         <Stat label="教育訓練累計" value={counts.trainings} sub="場" color="text-[var(--green-text)]" />
       </div>
+
+      {/* 工安缺失:統一缺失引擎(與品質缺失同一狀態機/稽核),以 domain=safety 分類 */}
+      <DefectTracker domain="safety" />
 
       <Card title="新增工安紀錄" action={
         <div className="flex flex-wrap gap-2">
@@ -133,7 +138,7 @@ export default function Safety() {
               <label className="block">
                 <span className="block text-xs font-medium text-[var(--text-2)] mb-1">{form.record_type === '教育訓練' ? '課程 / 主題' : form.record_type === '危害告知' ? '危害項目' : '項目 / 標題'}</span>
                 <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder={form.record_type === '工安缺失' ? '如：施工架未掛安全網' : form.record_type === '自主檢查' ? '如：用電設備自主檢查' : ''}
+                  placeholder={form.record_type === '自主檢查' ? '如：用電設備自主檢查' : ''}
                   className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
               </label>
               <label className="block">
@@ -146,22 +151,6 @@ export default function Safety() {
                 <input type="date" value={form.record_date} onChange={(e) => setForm({ ...form, record_date: e.target.value })}
                   className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
               </label>
-              {form.record_type === '工安缺失' && (
-                <>
-                  <label className="block">
-                    <span className="block text-xs font-medium text-[var(--text-2)] mb-1">嚴重度</span>
-                    <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}
-                      className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]">
-                      <option>輕微</option><option>一般</option><option>嚴重</option>
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="block text-xs font-medium text-[var(--text-2)] mb-1">改善期限</span>
-                    <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })}
-                      className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-                  </label>
-                </>
-              )}
             </div>
             <label className="block">
               <span className="block text-xs font-medium text-[var(--text-2)] mb-1">備註 {form.record_type === '教育訓練' ? '（講師 / 參與人數）' : ''}</span>
@@ -177,7 +166,7 @@ export default function Safety() {
       </Card>
 
       {groups.length === 0 ? (
-        <Card title="工安紀錄"><Empty>尚無工安紀錄。用上方新增自主檢查、工安缺失、教育訓練或危害告知。</Empty></Card>
+        <Card title="工安紀錄"><Empty>尚無工安紀錄。用上方新增自主檢查、教育訓練或危害告知;工安缺失請用上方「工安缺失追蹤」開立。</Empty></Card>
       ) : groups.map((g) => (
         <Card key={g.t} title={`${g.t}（${g.list.length}）`} action={
           <button onClick={() => exportCsv(`工安_${g.t}_${stamp()}`, g.list, [
@@ -193,7 +182,6 @@ export default function Safety() {
                     <div className="text-[var(--text)]">
                       {r.title}
                       {NEEDS_FLOW(r.record_type) && <> <Badge color={STATUS_COLOR[r.status] || 'slate'}>{r.status}</Badge></>}
-                      {r.record_type === '工安缺失' && r.severity === '嚴重' && <> <Badge color="red">嚴重</Badge></>}
                       {r.correction_reason && <> <Badge color="amber">已更正</Badge></>}
                     </div>
                     <div className="text-xs text-[var(--text-3)] truncate">
@@ -246,7 +234,8 @@ export default function Safety() {
       ))}
 
       <p className="text-xs text-[var(--text-3)]">
-        公共工程必備：廠商的自主檢查、缺失改善、教育訓練與危害告知，加上監造的觀察/查驗/複查事件都集中在此，可逐類匯出 CSV 交件。
+        公共工程必備：工安缺失走與品質缺失相同的統一改善狀態機（開立→改善→複查→結案）；
+        廠商的自主檢查、教育訓練與危害告知，加上監造的觀察/查驗/複查事件都集中在此，可逐類匯出 CSV 交件。
         已完成紀錄不可刪除，更正會連同原因留存稽核。
       </p>
     </div>
