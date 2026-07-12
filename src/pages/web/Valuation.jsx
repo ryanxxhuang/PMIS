@@ -18,6 +18,7 @@ export default function Valuation() {
     changeOrders, can } = useStore()
   const [filling, setFilling] = useState(false)
   const [aiMsg, setAiMsg] = useState('')
+  const [errMsg, setErrMsg] = useState('') // DB 寫入失敗的訊息(不偽裝成功)
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(() => new Set())
   const [selectedId, setSelectedId] = useState(null)
@@ -70,13 +71,28 @@ export default function Valuation() {
       return n
     })
 
-  // 輸入「累計完成數量」，夾在 0 ~ 契約數量
-  const onQty = (it, val) => {
+  // 輸入「累計完成數量」，夾在 0 ~ 契約數量;DB 失敗時 slice 會還原該格,這裡顯示原因
+  const onQty = async (it, val) => {
     let n = parseFloat(val)
     if (isNaN(n)) n = 0
     const maxQ = it.quantity || 0
     n = Math.max(0, maxQ > 0 ? Math.min(maxQ, n) : n)
-    updateValuationItem(selected.id, it.item_key, n)
+    const { error } = await updateValuationItem(selected.id, it.item_key, n)
+    if (error) setErrMsg(`數量未儲存（${it.item_no || it.item_key}）：${error.message}`)
+  }
+
+  // 建立估驗期(新增一期/第 1 期共用):DB 成功才會拿到 v
+  const onCreate = async () => {
+    setErrMsg('')
+    const { v, error } = await createValuation()
+    if (error) setErrMsg(`建立估驗期失敗：${error.message}`)
+    else setSelectedId(v.id)
+  }
+
+  const onStatus = async (status) => {
+    setErrMsg('')
+    const { error } = await setValuationStatus(selected.id, status)
+    if (error) setErrMsg(`狀態更新失敗：${error.message}`)
   }
 
   // 搜尋時直接攤平顯示符合的末端工項；否則顯示階層樹
@@ -153,15 +169,22 @@ export default function Valuation() {
         action={
           <div className="flex items-center gap-2">
             {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}
-            {can.edit && <Button variant="secondary" onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>＋ 新增估驗期</Button>}
+            {can.edit && <Button variant="secondary" onClick={onCreate}>＋ 新增估驗期</Button>}
           </div>
         } />
+
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
 
       {valuations.length === 0 ? (
         <Card>
           <Empty>
             尚無估驗期。每月對已完成工項提報估驗，系統依標單單價自動計算本期/累計金額與保留款。
-            <div className="mt-4"><Button onClick={() => { const v = createValuation(); setSelectedId(v.id) }}>建立第 1 期估驗</Button></div>
+            {can.edit && <div className="mt-4"><Button onClick={onCreate}>建立第 1 期估驗</Button></div>}
           </Empty>
         </Card>
       ) : (
@@ -197,16 +220,16 @@ export default function Valuation() {
               <div className="flex items-center gap-2">
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項…" className="text-sm border border-[var(--border)] rounded-lg px-2.5 py-1 w-40 focus:border-[var(--blue)] focus:outline-none" />
                 {selected.status === '草稿' && can.edit && siteLogs.length > 0 && (
-                  <Button onClick={async () => { setFilling(true); const { count } = await fillValuationFromSiteLogs(selected.id); setFilling(false); setAiMsg(count ? `AI 已依 ${siteLogs.length} 筆施工日誌草擬 ${count} 個工項的累計完成數量，請覆核後送審。` : 'AI 未在施工日誌找到可帶入的完成數量。') }} disabled={filling} title="掃描施工日誌，自動草擬本期各工項累計完成數量">
+                  <Button onClick={async () => { setFilling(true); setErrMsg(''); const { count, error } = await fillValuationFromSiteLogs(selected.id); setFilling(false); if (error) { setErrMsg(`AI 草擬未寫入：${error.message}`); return } setAiMsg(count ? `AI 已依 ${siteLogs.length} 筆施工日誌草擬 ${count} 個工項的累計完成數量，請覆核後送審。` : 'AI 未在施工日誌找到可帶入的完成數量。') }} disabled={filling} title="掃描施工日誌，自動草擬本期各工項累計完成數量">
                     <Sparkles size={14} aria-hidden />{filling ? 'AI 草擬中…' : 'AI 估驗草擬'}
                   </Button>
                 )}
-                {selected.status === '草稿' && can.submit && <Button variant="secondary" onClick={() => setValuationStatus(selected.id, '監造審核')}>送監造審核</Button>}
+                {selected.status === '草稿' && can.submit && <Button variant="secondary" onClick={() => onStatus('監造審核')}>送監造審核</Button>}
                 {selected.status === '監造審核' && (can.approve ? <>
-                  <Button variant="ghost" onClick={() => setValuationStatus(selected.id, '草稿')}>退回</Button>
-                  <Button variant="success" onClick={() => setValuationStatus(selected.id, '已核定')}>核定估驗</Button>
+                  <Button variant="ghost" onClick={() => onStatus('草稿')}>退回</Button>
+                  <Button variant="success" onClick={() => onStatus('已核定')}>核定估驗</Button>
                 </> : <Badge color="amber">待監造核定</Badge>)}
-                {can.edit && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { deleteValuation(selected.id); setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
+                {can.edit && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
               </div>
             }
           >

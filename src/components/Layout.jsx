@@ -128,7 +128,7 @@ function TopBar({ onMenu }) {
 
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { currentUser, can } = useStore()
+  const { currentUser, can, workItemsSource, workItemsError, retryWorkItems } = useStore()
   // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——admin(專案建立者)看得到全部。
   const org = currentUser?.org_type || 'contractor'
   const visibleGroups = navGroups
@@ -177,7 +177,15 @@ export function WebLayout({ children }) {
             ))}
           </nav>
         </aside>
-        <main className="flex-1 p-4 md:p-6 overflow-auto min-w-0">{children}</main>
+        <main className="flex-1 p-4 md:p-6 overflow-auto min-w-0">
+          {workItemsSource === 'error' && (
+            <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700 print:hidden">
+              <span>標單工項讀取失敗：{workItemsError || '連線異常'}。各頁資料可能不完整。</span>
+              <button onClick={retryWorkItems} className="font-medium underline hover:text-rose-900">重試</button>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   )

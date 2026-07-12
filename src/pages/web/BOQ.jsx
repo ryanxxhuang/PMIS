@@ -9,7 +9,7 @@ const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 
 // 標單工項（BOQ）— 工項樹來自 store：有真專案讀 Supabase work_items，否則範例 JSON。
 export default function BOQ() {
-  const { workItems: data, workItemsSource, importWorkItems, isSupabaseConfigured, currentProject, resetProjectBoq, dbMode } = useStore()
+  const { workItems: data, workItemsSource, workItemsError, retryWorkItems, importWorkItems, isSupabaseConfigured, currentProject, resetProjectBoq, dbMode } = useStore()
   const [expanded, setExpanded] = useState(() => new Set())
   const [onlyBillable, setOnlyBillable] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -41,7 +41,8 @@ export default function BOQ() {
     if (error) setImportErr(error.message || '匯入失敗')
     else setParsed(null)
   }
-  const canImport = isSupabaseConfigured && currentProject && workItemsSource === 'sample'
+  // 真專案且標單為空（不再以範例冒充）→ 顯示匯入 onboarding
+  const canImport = isSupabaseConfigured && currentProject && workItemsSource === 'empty'
 
   const childrenMap = useMemo(() => {
     const map = new Map()
@@ -55,6 +56,18 @@ export default function BOQ() {
     return map
   }, [data])
 
+  if (workItemsSource === 'error') {
+    return (
+      <Card title="標單工項">
+        <Empty>
+          <div className="space-y-3">
+            <div>標單工項讀取失敗：{workItemsError || '請稍後再試'}</div>
+            <Button onClick={retryWorkItems}>重試</Button>
+          </div>
+        </Empty>
+      </Card>
+    )
+  }
   if (!data) return <Empty>載入標單工項中…</Empty>
 
   const { meta } = data
@@ -116,7 +129,7 @@ export default function BOQ() {
       {canImport && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 space-y-2">
           <div className="text-sm text-amber-800">
-            此專案<b>尚未匯入標單</b>，目前顯示的是範例。上傳本案的 PCCES 預算書 XML，系統會解析後寫進資料庫，估驗/進度就跟著真資料走。
+            此專案<b>尚未匯入標單</b>。上傳本案的 PCCES 預算書 XML，系統會解析後寫進資料庫，估驗/進度就跟著真資料走。
           </div>
           <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" onChange={onPickFile} className="hidden" />
           {!parsed ? (
@@ -145,7 +158,10 @@ export default function BOQ() {
         <Stat label="發包工程費" value={yi(meta.billable_total)} sub={`NT$ ${fmt(meta.billable_total)}`} color="text-[var(--blue-text)]" />
         <Stat label="工項總數" value={fmt(meta.item_count)} sub="含分項與合計列" />
         <Stat label="末端計價工項" value={fmt(meta.leaf_count)} sub="估驗 / 數量管制單元" />
-        <Stat label="資料來源" value={workItemsSource === 'db' ? 'Supabase' : 'PCCES'} sub={workItemsSource === 'db' ? '已存入資料庫' : '範例（PCCES 匯入）'} color={workItemsSource === 'db' ? 'text-emerald-600' : 'text-[var(--text)]'} />
+        <Stat label="資料來源"
+          value={workItemsSource === 'db' ? 'Supabase' : workItemsSource === 'empty' ? '尚未匯入' : 'PCCES'}
+          sub={workItemsSource === 'db' ? '已存入資料庫' : workItemsSource === 'empty' ? '請上傳標單 XML' : '範例（PCCES 匯入）'}
+          color={workItemsSource === 'db' ? 'text-emerald-600' : 'text-[var(--text)]'} />
       </div>
 
       <Card

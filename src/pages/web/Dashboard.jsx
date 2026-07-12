@@ -87,7 +87,11 @@ export default function Dashboard() {
         )}
       />
 
-      {!imported ? (
+      {workItemsSource === 'error' ? (
+        <Card>
+          <Empty>標單工項讀取失敗，資料暫時無法顯示。請用上方紅色橫幅的「重試」重新載入。</Empty>
+        </Card>
+      ) : !imported ? (
         <Card>
           <Empty>
             此專案尚未匯入標單。請先到「<Link to="/boq" className="text-[var(--blue)]">標單工項</Link>」上傳 PCCES 預算書 XML，

@@ -7,6 +7,23 @@ import {
   normalizeProject, fetchAllWorkItems, wiCacheGet, wiCachePut, wiCacheDel, dbToWorkItems,
 } from '../db.js'
 
+// 標單載入分流（純函式，deps 注入以便單元測試）：
+//   demo/無專案 → 範例；真專案 0 筆 → 'empty'；查詢失敗 → 'error'；有資料 → 'db'。
+// 真實專案「絕不」以範例資料充當標單——寧可誠實顯示空狀態或錯誤（含重試）。
+export async function resolveWorkItems({ configured, project, fetchCount, fetchDbItems, fetchSample }) {
+  if (configured && project) {
+    try {
+      const count = await fetchCount()
+      if (count > 0) return { workItems: await fetchDbItems(count), source: 'db', error: null }
+      return { workItems: dbToWorkItems([], project), source: 'empty', error: null }
+    } catch (e) {
+      return { workItems: null, source: 'error', error: e?.message || '標單工項讀取失敗' }
+    }
+  }
+  const json = await fetchSample()
+  return { workItems: { items: json.items, meta: json.meta }, source: 'sample', error: null }
+}
+
 export function useProjectsSlice({ currentUser, log }) {
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState(null)
@@ -17,7 +34,9 @@ export function useProjectsSlice({ currentUser, log }) {
     [projects, currentProjectId],
   )
   const [workItems, setWorkItems] = useState(null)            // { items, meta }
-  const [workItemsSource, setWorkItemsSource] = useState('sample') // 'db' | 'sample'
+  const [workItemsSource, setWorkItemsSource] = useState('sample') // 'db' | 'sample' | 'empty' | 'error'
+  const [workItemsError, setWorkItemsError] = useState(null)   // 'error' 時的訊息（顯示給使用者）
+  const [wiReloadKey, setWiReloadKey] = useState(0)            // retryWorkItems() 遞增觸發重載
 
   // 切換目前專案（記住選擇，重整後沿用）
   const switchProject = useCallback((id) => {
@@ -48,36 +67,40 @@ export function useProjectsSlice({ currentUser, log }) {
     return () => { active = false }
   }, [currentUser])
 
-  // 載入標單工項：有真專案且 DB 有資料 → 讀 DB；否則 fallback 範例 JSON。
+  // 載入標單工項：demo/無專案 → 範例 JSON；真專案 → 讀 DB。
   // 先打「筆數」head 查詢（幾乎零流量）驗證本地快取，命中就不重新下載整份標單；
   // 依賴用 project_id（字串）而非物件參考，避免專案清單重載時無謂重抓。
   useEffect(() => {
     let active = true
     ;(async () => {
-      setWorkItems(null)
-      if (isSupabaseConfigured && currentProject) {
-        const pid = currentProject.project_id
-        try {
+      setWorkItems(null); setWorkItemsError(null)
+      const pid = currentProject?.project_id
+      const res = await resolveWorkItems({
+        configured: isSupabaseConfigured,
+        project: currentProject,
+        fetchCount: async () => {
           const { count, error } = await supabase.from('work_items')
             .select('id', { count: 'exact', head: true }).eq('project_id', pid)
           if (error) throw error
-          if (count) {
-            const cached = await wiCacheGet(pid)
-            let rows = cached && cached.length === count ? cached : null
-            if (!rows) { rows = await fetchAllWorkItems(pid); wiCachePut(pid, rows) }
-            if (!active) return
-            setWorkItems(dbToWorkItems(rows, currentProject)); setWorkItemsSource('db'); return
-          }
-        } catch { /* 落到範例 */ }
-      }
-      const json = await loadWorkItems()
+          return count || 0
+        },
+        fetchDbItems: async (count) => {
+          const cached = await wiCacheGet(pid)
+          let rows = cached && cached.length === count ? cached : null
+          if (!rows) { rows = await fetchAllWorkItems(pid); wiCachePut(pid, rows) }
+          return dbToWorkItems(rows, currentProject)
+        },
+        fetchSample: loadWorkItems,
+      })
       if (!active) return
-      setWorkItems({ items: json.items, meta: json.meta })
-      setWorkItemsSource('sample')
+      setWorkItems(res.workItems); setWorkItemsSource(res.source); setWorkItemsError(res.error)
     })()
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProject?.project_id])
+  }, [currentProject?.project_id, wiReloadKey])
+
+  // 重試標單載入（error 狀態的 UI 呼叫）
+  const retryWorkItems = useCallback(() => setWiReloadKey((k) => k + 1), [])
 
   // 工項查表（item_key↔work_item uuid）+ 是否走真 DB（估驗/進度才寫回 DB）
   const wiMaps = useMemo(() => {
@@ -178,7 +201,7 @@ export function useProjectsSlice({ currentUser, log }) {
 
   return {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
-    workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps, dbMode, demoMode,
+    workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   }

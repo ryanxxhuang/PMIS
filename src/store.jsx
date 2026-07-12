@@ -14,7 +14,6 @@ import { createContext, useContext, useState, useCallback, useEffect, useMemo, u
 import { project } from './data/seed.js'
 import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
-import { loadWorkItems } from './lib/boqCalc.js'
 import {
   wiCacheDel, loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
@@ -53,7 +52,7 @@ export function StoreProvider({ children }) {
   const { currentUser, setCurrentUser, signUp, resendSignup, signIn, signOutBase } = useAuthSlice()
   const {
     projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
-    workItems, setWorkItems, workItemsSource, setWorkItemsSource, wiMaps, dbMode, demoMode,
+    workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
@@ -226,8 +225,7 @@ export function StoreProvider({ children }) {
     }
     wiCacheDel(pid)
     setValuations([]); setProgressPlan(null); setSiteLogs([]); setInspections([]); setDefects([])
-    const json = await loadWorkItems()
-    setWorkItems({ items: json.items, meta: json.meta }); setWorkItemsSource('sample')
+    retryWorkItems() // 重跑載入 → 真專案 0 筆會進 'empty'（顯示匯入 onboarding），不載範例
     return { error: null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbMode, currentProject])
@@ -237,7 +235,7 @@ export function StoreProvider({ children }) {
     project: currentProject || project, currentUser, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
-    workItems, workItemsSource, importWorkItems, dbMode, demoMode, can,
+    workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, can,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
     obligations, parseContract, updateObligationStatus, updateProjectAnchors,
