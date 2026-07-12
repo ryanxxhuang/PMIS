@@ -22,8 +22,8 @@ export default function Acceptance() {
   const { acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, demoMode, project, currentUser, can } = useStore()
   const [errMsg, setErrMsg] = useState('')
   const org = currentUser?.org_type || 'contractor'
-  // 專案管理者=授權主驗;demo 刻意不套 admin 例外,保留三方角色劇本
-  const canStage = (key) => (!demoMode && can.admin) || (STAGE_ORGS[key] || []).includes(org)
+  // 專案管理者=授權主驗(正式模式=關);demo 刻意不套 admin 例外,保留三方角色劇本
+  const canStage = (key) => (!demoMode && can.override) || (STAGE_ORGS[key] || []).includes(org)
 
   const stages = useMemo(() => deriveAcceptance(acceptanceEvents), [acceptanceEvents])
   const fixFlow = needsFixFlow(acceptanceEvents)

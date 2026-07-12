@@ -26,7 +26,7 @@ export default function Safety() {
   const [correcting, setCorrecting] = useState(null)
 
   const org = currentUser?.org_type || 'contractor'
-  const isAdmin = !demoMode && can.admin // demo 刻意不套 admin 例外,保留三方角色劇本
+  const isAdmin = !demoMode && can.override // demo 刻意不套 admin 例外,保留三方角色劇本;正式模式=關
   const creatableTypes = isAdmin ? TYPES
     : org === 'contractor' ? CONTRACTOR_TYPES
     : org === 'supervisor' ? SUPERVISOR_TYPES : []

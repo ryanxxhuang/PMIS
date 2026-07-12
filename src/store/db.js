@@ -11,6 +11,7 @@ export function normalizeProject(row) {
     supervisor_name: row.supervisor_name, location: row.location,
     start_date: row.start_date, end_date: row.end_date, status: row.status,
     award_date: row.award_date, notice_date: row.notice_date, commencement_date: row.commencement_date,
+    formal_mode: !!row.formal_mode,
   }
 }
 

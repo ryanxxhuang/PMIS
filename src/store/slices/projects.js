@@ -196,6 +196,19 @@ export function useProjectsSlice({ currentUser, log }) {
     return { error }
   }, [dbMode, currentProject])
 
+  // 正式模式:單向開啟(DB-first,成功才更新本地)——關閉建立者的跨角色簽核例外。
+  // RLS 只允許建立者更新 projects:非建立者 update 靜默 0 列,以 data 長度判定。
+  const enableFormalMode = useCallback(async () => {
+    if (!(isSupabaseConfigured && currentProject)) return { error: { message: '需真專案才能開啟正式模式' } }
+    const pid = currentProject.project_id
+    const { data, error } = await supabase.from('projects')
+      .update({ formal_mode: true }).eq('id', pid).select('id')
+    if (error) return { error }
+    if (!data?.length) return { error: { message: '未生效:僅專案建立者可開啟正式模式' } }
+    setProjects((ps) => ps.map((p) => (p.project_id === pid ? { ...p, formal_mode: true } : p)))
+    return { error: null }
+  }, [currentProject])
+
   // 刪除專案（RPC，security definer 連同所有相依資料一併刪）
   const deleteProject = useCallback(async (id) => {
     const { error } = await supabase.rpc('delete_project', { p_id: id })
@@ -227,7 +240,7 @@ export function useProjectsSlice({ currentUser, log }) {
   return {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
     workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership,
-    switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
+    switchProject, createProject, importWorkItems, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
     loadPortfolio,
   }
 }

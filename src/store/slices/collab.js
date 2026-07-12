@@ -4,7 +4,7 @@ import { users } from '../../data/seed.js'
 import { supabase } from '../../lib/supabase.js'
 import { mutationOutcome } from './billing.js'
 
-export function useCollabSlice({ dbMode, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
+export function useCollabSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
   // 監造協作:送審與工程疑義
   const [submittals, setSubmittals] = useState([])
   const [rfis, setRfis] = useState([])
@@ -156,17 +156,19 @@ export function useCollabSlice({ dbMode, currentProject, currentUser, wiMaps, lo
     if (dbMode) await supabase.from('observations').delete().eq('id', id)
   }, [dbMode])
 
-  // 成員管理(RPC:email 對照 auth.users 必須在伺服器端做)
+  // 成員管理(RPC:email 對照 auth.users 必須在伺服器端做)。
+  // 用 isPersistedProject 而非 dbMode:真專案「標單匯入前」也要能管成員/開正式模式,
+  // 否則會靜默回落 demo 名單(即 QA 報告「另一測試專案的錯誤名單」)。
   const listMembers = useCallback(async () => {
-    if (!dbMode) {
+    if (!isPersistedProject) {
       return users.map((u) => ({ user_id: u.user_id, full_name: u.name, company: u.company, org_type: u.org_type, member_role: u.user_id === 'U1' ? 'admin' : 'member' }))
     }
     const { data } = await supabase.rpc('list_project_members', { p_project: currentProject.project_id })
     return data || []
-  }, [dbMode, currentProject])
+  }, [isPersistedProject, currentProject])
 
   const addMemberByEmail = useCallback(async (email, role = 'member') => {
-    if (!dbMode) return { error: { message: 'demo 模式不支援邀請成員' } }
+    if (!isPersistedProject) return { error: { message: 'demo 模式不支援邀請成員' } }
     const { data, error } = await supabase.rpc('add_member_by_email', {
       p_project: currentProject.project_id, p_email: email, p_role: role,
     })
@@ -174,13 +176,13 @@ export function useCollabSlice({ dbMode, currentProject, currentUser, wiMaps, lo
     if (data === 'not_found') return { error: { message: '找不到這個 email 的帳號，請對方先註冊。' } }
     log('加入成員', email, { user: currentUser?.name, role: '專案' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, log])
+  }, [isPersistedProject, currentProject, currentUser, log])
 
   const removeMember = useCallback(async (userId) => {
-    if (!dbMode) return { error: { message: 'demo 模式不支援移除成員' } }
+    if (!isPersistedProject) return { error: { message: 'demo 模式不支援移除成員' } }
     const { error } = await supabase.rpc('remove_member', { p_project: currentProject.project_id, p_user: userId })
     return { error }
-  }, [dbMode, currentProject])
+  }, [isPersistedProject, currentProject])
 
   return {
     submittals, setSubmittals, rfis, setRfis, observations, setObservations,

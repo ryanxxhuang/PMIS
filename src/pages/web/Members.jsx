@@ -9,11 +9,12 @@ const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-
 
 export default function Members() {
   const { project, listMembers, addMemberByEmail, removeMember, currentUser,
-    isSupabaseConfigured, currentProject, demoMode } = useStore()
+    isSupabaseConfigured, currentProject, demoMode, enableFormalMode } = useStore()
   const [members, setMembers] = useState([])
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [formalMsg, setFormalMsg] = useState('')
 
   const reload = useCallback(async () => { setMembers(await listMembers()) }, [listMembers])
   useEffect(() => { reload() }, [reload])
@@ -39,6 +40,18 @@ export default function Members() {
     await removeMember(m.user_id)
     reload()
   }
+  const onEnableFormal = async () => {
+    const ok = await appConfirm({
+      title: '開啟正式模式？', danger: true, confirmLabel: '開啟（不可復原）',
+      body: '開啟後,估驗核定、查驗判定、送審審定、RFI 回覆、變更核准等簽核動作,必須由對應角色（監造/機關）的帳號執行;你將失去跨角色權限,僅保留成員與專案管理,且無法自行關閉。請先確認監造與機關成員都已加入專案。',
+      requireText: project.project_name,
+    })
+    if (!ok) return
+    setBusy(true); setFormalMsg('')
+    const { error } = await enableFormalMode()
+    setBusy(false)
+    setFormalMsg(error ? (error.message || '開啟失敗') : '正式模式已開啟。')
+  }
 
   return (
     <div className="space-y-5">
@@ -55,6 +68,32 @@ export default function Members() {
           </div>
           {msg && <p className={`text-sm mt-2 ${msg.includes('已加入') ? 'text-emerald-600' : 'text-rose-600'}`}>{msg}</p>}
           {demoMode && <p className="text-xs text-[var(--text-3)] mt-2">（demo 模式為展示用，實際邀請需登入真實專案。）</p>}
+        </Card>
+      )}
+
+      {!demoMode && isSupabaseConfigured && (
+        <Card title="正式模式">
+          {currentProject?.formal_mode ? (
+            <div className="flex items-start gap-2 text-sm">
+              <Badge color="green">已開啟</Badge>
+              <span className="text-[var(--text-2)]">簽核動作僅能由對應角色帳號執行;專案建立者僅保留成員與專案管理。</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-[var(--text-2)]">
+                目前為<b>試用模式</b>:專案建立者擁有跨角色完整權限,方便單人試用。正式履約前請開啟正式模式,開啟後:
+              </p>
+              <ul className="text-sm text-[var(--text-2)] list-disc pl-5 space-y-0.5">
+                <li>估驗核定、查驗判定、送審審定、RFI 回覆僅限監造帳號;變更設計核准僅限機關/監造。</li>
+                <li>專案建立者僅保留成員管理與專案設定,依自己的組織別行事。</li>
+                <li><b>開啟後不可自行關閉</b>(履約證據完整性)。</li>
+              </ul>
+              {isAdmin
+                ? <Button variant="danger" onClick={onEnableFormal} disabled={busy}>開啟正式模式</Button>
+                : <p className="text-xs text-[var(--text-3)]">僅專案建立者可開啟。</p>}
+            </div>
+          )}
+          {formalMsg && <p className={`text-sm mt-2 ${formalMsg.includes('已開啟') ? 'text-emerald-600' : 'text-rose-600'}`}>{formalMsg}</p>}
         </Card>
       )}
 
@@ -88,7 +127,7 @@ export default function Members() {
       <p className="text-xs text-[var(--text-3)]">
         權限依組織別：<b>施工廠商</b>填報 / 提送（日誌、估驗送審、查驗申請、送審、疑義提出）；
         <b>監造單位</b>審核 / 判定（核定估驗、查驗合格判定、缺失複查結案、送審核備、疑義回覆）；
-        <b>主辦機關</b>唯讀。專案建立者不受此限，擁有完整權限。
+        <b>主辦機關</b>唯讀。專案建立者於試用模式不受此限；開啟正式模式後回歸自己的組織別。
       </p>
     </div>
   )

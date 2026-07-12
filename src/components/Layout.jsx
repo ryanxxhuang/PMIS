@@ -140,10 +140,11 @@ function TopBar({ onMenu }) {
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { currentUser, can, workItemsSource, workItemsError, retryWorkItems } = useStore()
-  // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——admin(專案建立者)看得到全部。
+  // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——非正式模式的
+  // admin(專案建立者)看得到全部;正式模式後回歸自己的角色視角。
   const org = currentUser?.org_type || 'contractor'
   const visibleGroups = navGroups
-    .map((g) => ({ ...g, items: g.items.filter((n) => !n.roles || can?.admin || n.roles.includes(org)) }))
+    .map((g) => ({ ...g, items: g.items.filter((n) => !n.roles || can?.override || n.roles.includes(org)) }))
     .filter((g) => g.items.length)
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg)]">

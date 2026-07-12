@@ -39,29 +39,32 @@ export function StoreProvider({ children }) {
   const {
     projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
     workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership,
-    switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
+    switchProject, createProject, importWorkItems, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
     loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
 
   // 角色權限（UI 層 v1，對應三級品管）：
   //   施工＝填報/提送，監造＝查驗判定/審核，機關＝監督核定（變更設計核准、撥款）。
   // 核心規則：施工不能核准或結案自己的東西；機關對日常填報唯讀，但保留契約級核定權。
-  // 例外：專案 admin（建立者）擁有完整權限——單人/小團隊試用不會被自己的
-  // org_type 卡死；demo 模式刻意不套用 admin 例外，保留三種角色的展示劇本。
-  // (伺服器端另有同規則的 RLS+trigger 強制,見 supabase/schema.sql RBAC 段)
+  // 例外：專案 admin（建立者）的跨角色完整權限（override）——單人/小團隊試用
+  // 不會被自己的 org_type 卡死；「正式模式」開啟後 override 關閉,人人依 org 行事,
+  // admin 只保留專案管理（成員/設定/刪除）。demo 模式刻意不套用 admin 例外。
+  // (伺服器端同規則:admin_override()+guard trigger,見 migrations formal_mode 段)
   const can = useMemo(() => {
     const org = currentUser?.org_type || 'contractor'
     const isAdmin = !demoMode && myMemberRoles[currentProjectId] === 'admin'
+    const override = isAdmin && !currentProject?.formal_mode // 跨角色簽核例外,正式模式=關
     return {
-      edit: isAdmin || org === 'contractor',      // 日誌/成本/請款/檢查表等日常填報
-      submit: isAdmin || org === 'contractor',    // 提送（估驗送監造審核、查驗申請）
-      approve: isAdmin || org === 'supervisor',   // 監造：核定估驗、查驗判定、缺失複查結案、送審審定
-      ratify: isAdmin || org === 'owner' || org === 'supervisor', // 契約級核定：變更設計核准/駁回（機關為主，監造得初審）
-      oversee: org === 'owner',                   // 機關監督視角（首頁行動中心＝核定/撥款）
-      readonly: !isAdmin && org === 'owner',
-      admin: isAdmin,                             // 專案建立者：看得到全部側欄工具（角色化導覽的例外）
+      edit: override || org === 'contractor',      // 日誌/成本/請款/檢查表等日常填報
+      submit: override || org === 'contractor',    // 提送（估驗送監造審核、查驗申請）
+      approve: override || org === 'supervisor',   // 監造：核定估驗、查驗判定、缺失複查結案、送審審定
+      ratify: override || org === 'owner' || org === 'supervisor', // 契約級核定：變更設計核准/駁回（機關為主，監造得初審）
+      oversee: org === 'owner',                    // 機關監督視角（首頁行動中心＝核定/撥款）
+      readonly: !override && org === 'owner',
+      override,                                    // 看得到全部側欄工具/路由（角色化導覽的例外）
+      admin: isAdmin,                              // 專案管理：成員/設定/刪除（不受正式模式影響）
     }
-  }, [currentUser, demoMode, myMemberRoles, currentProjectId])
+  }, [currentUser, demoMode, myMemberRoles, currentProjectId, currentProject])
 
   // 標註圖(圖面/照片 markup):demo 直接存 dataURL;真專案存 photos bucket
   // (路徑首段=project_id,沿用既有 Storage RLS)。
@@ -234,7 +237,7 @@ export function StoreProvider({ children }) {
     workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, isPersistedProject, can,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
-    obligations, parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, currentProjectMembership, reloadMembership,
+    obligations, parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, createCostItem, updateCostItem, deleteCostItem,
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,

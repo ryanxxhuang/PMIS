@@ -44,7 +44,7 @@ function Web({ children }) {
     if (projectLoading) return <WebLayout><div className="text-center text-[var(--text-3)] text-sm py-20">載入專案…</div></WebLayout>
     if (!currentProject) return <WebLayout><ProjectSetup /></WebLayout>
   }
-  if (!routeAllowed(pathname, currentUser.org_type || 'contractor', can.admin)) {
+  if (!routeAllowed(pathname, currentUser.org_type || 'contractor', can.override)) {
     return (
       <WebLayout>
         <div className="text-center py-20 space-y-2">
