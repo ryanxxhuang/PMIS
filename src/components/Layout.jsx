@@ -45,6 +45,15 @@ const navGroups = [
   ] },
 ]
 
+// 路由守衛與側欄導覽共用同一份 roles 對照:導覽隱藏≠權限,直接輸入網址也要擋。
+// (資料本身另有 RLS 保護;這裡擋的是「不該給這個角色的工作畫面」。)
+export function routeAllowed(pathname, org, isAdmin) {
+  for (const g of navGroups) for (const n of g.items) {
+    if (n.to === pathname) return !n.roles || isAdmin || n.roles.includes(org)
+  }
+  return true // 不在導覽清單的路由(列印頁、建案頁…)不設角色限制
+}
+
 // Top-bar project picker: switch / create / delete (real backend only).
 function ProjectSwitcher() {
   const { project, projects, currentProject, switchProject, deleteProject, isSupabaseConfigured } = useStore()

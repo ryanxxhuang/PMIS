@@ -4,6 +4,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Square, MoveUpRight, Type, Undo2, X } from 'lucide-react'
 import { Button } from './ui.jsx'
+import { appPrompt } from './confirm.jsx'
 
 const STROKE = '#e8630c' // 安全橘:警示=品牌語意
 
@@ -60,11 +61,11 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
     }
   }, [dims])
 
-  const down = (e) => {
+  const down = async (e) => {
     if (!dims) return
     const p = toNatural(e)
     if (tool === 'text') {
-      const t = window.prompt('標註文字：')
+      const t = await appPrompt({ title: '標註文字', label: '文字內容（必填）', required: true, confirmLabel: '加入標註' })
       if (t?.trim()) setShapes((ss) => [...ss, { type: 'text', x1: p.x, y1: p.y, text: t.trim() }])
       return
     }

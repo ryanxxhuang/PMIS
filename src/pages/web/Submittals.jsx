@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
-import { appConfirm } from '../../components/confirm.jsx'
+import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { submittalBall } from '../../lib/ballInCourt.js'
 
@@ -15,6 +15,7 @@ export default function Submittals() {
     isSupabaseConfigured, currentProject, can } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [errMsg, setErrMsg] = useState('') // 審定寫入失敗必須讓使用者看到(失敗=UI 不變)
 
   if (isSupabaseConfigured && !currentProject) {
     return <Card title="送審文件"><Empty>請先登入並選擇專案。</Empty></Card>
@@ -24,11 +25,17 @@ export default function Submittals() {
     setBusy(true); await createSubmittal(form); setBusy(false); setForm(null)
   }
   const onDecide = async (s, status) => {
-    const note = (status === '退回補正' || status === '駁回')
-      ? window.prompt(`${status}原因 / 審查意見：`, s.review_note || '')
-      : window.prompt('審查意見（可留空）：', s.review_note || '') ?? ''
-    if (note === null && (status === '退回補正' || status === '駁回')) return
-    await decideSubmittal(s.id, status, note || s.review_note)
+    const required = status === '退回補正' || status === '駁回'
+    const note = await appPrompt({
+      title: `${status}：${s.submittal_no}`, body: s.title,
+      label: required ? `${status}原因 / 審查意見（必填）` : '審查意見（可留空）',
+      defaultValue: s.review_note || '', required, danger: required, confirmLabel: status,
+    })
+    if (note === null) return
+    setErrMsg(''); setBusy(true)
+    const { error } = await decideSubmittal(s.id, status, note || s.review_note)
+    setBusy(false)
+    if (error) setErrMsg(`${status}未寫入：${error.message}`)
   }
 
   const pending = submittals.filter((s) => s.status === '已提送' || s.status === '審核中').length
@@ -49,6 +56,13 @@ export default function Submittals() {
             {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', category: '施工計畫', submitted_date: todayIso(), due_date: '', attachment_note: '' })}>{form ? '取消' : '＋ 提送送審'}</Button>}
           </div>
         } />
+
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
 
       {form && (
         <Card>
@@ -85,10 +99,10 @@ export default function Submittals() {
                     {/* 監造:審定動作 */}
                     {can.approve && (s.status === '已提送' || s.status === '審核中') && (
                       <div className="flex flex-wrap gap-1.5 justify-end">
-                        {s.status === '已提送' && <Button variant="secondary" onClick={() => onDecide(s, '審核中')}>受理審核</Button>}
-                        <Button variant="success" onClick={() => onDecide(s, '核准')}>核准</Button>
-                        <Button variant="secondary" onClick={() => onDecide(s, '核備')}>核備</Button>
-                        <Button variant="danger" onClick={() => onDecide(s, '退回補正')}>退回補正</Button>
+                        {s.status === '已提送' && <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '審核中')}>受理審核</Button>}
+                        <Button variant="success" disabled={busy} onClick={() => onDecide(s, '核准')}>核准</Button>
+                        <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '核備')}>核備</Button>
+                        <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '退回補正')}>退回補正</Button>
                       </div>
                     )}
                     {/* 施工:退回補正後修正再送 */}

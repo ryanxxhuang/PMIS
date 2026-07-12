@@ -1,6 +1,6 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
-import { WebLayout } from './components/Layout.jsx'
+import { WebLayout, routeAllowed } from './components/Layout.jsx'
 import { ConfirmHost } from './components/confirm.jsx'
 
 import Login from './pages/Login.jsx'
@@ -35,12 +35,24 @@ import Acceptance from './pages/web/Acceptance.jsx'
 import ITP from './pages/web/ITP.jsx'
 
 // Gate every page behind auth; force project creation before the workspace loads.
+// 角色化路由守衛:與側欄同一份 roles 對照(routeAllowed)——導覽隱藏的頁,直接輸入網址也進不去。
 function Web({ children }) {
-  const { currentUser, isSupabaseConfigured, currentProject, projectLoading } = useStore()
+  const { currentUser, isSupabaseConfigured, currentProject, projectLoading, can } = useStore()
+  const { pathname } = useLocation()
   if (!currentUser) return <Navigate to="/login" replace />
   if (isSupabaseConfigured && currentUser.real) {
     if (projectLoading) return <WebLayout><div className="text-center text-[var(--text-3)] text-sm py-20">載入專案…</div></WebLayout>
     if (!currentProject) return <WebLayout><ProjectSetup /></WebLayout>
+  }
+  if (!routeAllowed(pathname, currentUser.org_type || 'contractor', can.admin)) {
+    return (
+      <WebLayout>
+        <div className="text-center py-20 space-y-2">
+          <div className="text-[var(--text)] font-medium">你的角色沒有此頁的存取權限</div>
+          <p className="text-sm text-[var(--text-3)]">這個工作畫面僅開放給特定角色（如廠商內部成本、監造報表）。</p>
+        </div>
+      </WebLayout>
+    )
   }
   return <WebLayout>{children}</WebLayout>
 }

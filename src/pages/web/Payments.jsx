@@ -93,6 +93,9 @@ export default function Payments() {
               </thead>
               <tbody>
                 {rows.map(({ v, cum, thisAmt, retention, net }) => {
+                  // 金流閘門:未核定的期別鎖定請款/收款(DB trigger 同規則強制)
+                  const approved = v.status === '已核定' || v.status === '已請款'
+                  const lockTip = approved ? undefined : '估驗尚未核定,不可登錄請款/收款'
                   const st = payStatus(v)
                   return (
                     <tr key={v.id} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
@@ -103,20 +106,28 @@ export default function Payments() {
                       <td className="px-2 text-right tabular-nums text-[var(--text-2)]">{money(retention)}</td>
                       <td className="px-2 text-right tabular-nums font-medium">{money(net)}</td>
                       <td className="px-2">
-                        <input type="date" value={v.invoice_date || ''} onChange={(e) => onPay(v.id, { invoice_date: e.target.value || null })}
-                          className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
+                        {/* onBlur 才寫入:避免打字打到一半就把半成品(或空值)存進 DB */}
+                        <input type="date" key={`inv-${v.id}-${v.invoice_date || ''}`} defaultValue={v.invoice_date || ''}
+                          disabled={!approved} title={lockTip}
+                          onBlur={(e) => { const d = e.target.value || null; if (d !== (v.invoice_date || null)) onPay(v.id, { invoice_date: d }) }}
+                          className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2">
-                        <input type="date" value={v.paid_date || ''} onChange={(e) => onPay(v.id, { paid_date: e.target.value || null })}
-                          className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
+                        <input type="date" key={`paid-${v.id}-${v.paid_date || ''}`} defaultValue={v.paid_date || ''}
+                          disabled={!approved} title={lockTip}
+                          onBlur={(e) => { const d = e.target.value || null; if (d !== (v.paid_date || null)) onPay(v.id, { paid_date: d }) }}
+                          className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 text-right">
-                        <input type="number" min="0" step="any" value={v.paid_amount ?? ''} placeholder={Math.round(net).toString()}
-                          onChange={(e) => { const n = parseFloat(e.target.value); onPay(v.id, { paid_amount: isNaN(n) ? null : n }) }}
-                          className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                        <input type="number" min="0" step="any" key={`amt-${v.id}-${v.paid_amount ?? ''}`} defaultValue={v.paid_amount ?? ''}
+                          placeholder={Math.round(net).toString()} disabled={!approved} title={lockTip}
+                          onBlur={(e) => { const n = parseFloat(e.target.value); const val = isNaN(n) ? null : n; if (val !== (v.paid_amount ?? null)) onPay(v.id, { paid_amount: val }) }}
+                          className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 pr-4">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${st === '已收款' ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : st === '已請款' ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'bg-[var(--slate-tint)] text-[var(--slate-text)]'}`}>{st}</span>
+                        {approved
+                          ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${st === '已收款' ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : st === '已請款' ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'bg-[var(--slate-tint)] text-[var(--slate-text)]'}`}>{st}</span>
+                          : <span className="text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[var(--amber-tint)] text-[var(--amber-text)]" title={lockTip}>{v.status}·未核定</span>}
                       </td>
                     </tr>
                   )
@@ -129,6 +140,7 @@ export default function Payments() {
 
       <p className="text-xs text-[var(--text-3)]">
         本期估驗 = 本期累計估驗 − 前期累計;本期應領 = 本期估驗 − 本期保留款(依該期保留款%)。填收款日與實收金額即追蹤現金流;保留款累計於完工後請領。
+        估驗須經監造核定後才能登錄請款/收款——未核定的期別欄位鎖定;已登錄金流的期別要退回核定,須先清空請款/收款欄位。
       </p>
     </div>
   )

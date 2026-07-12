@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react'
 import { users } from '../../data/seed.js'
 import { supabase } from '../../lib/supabase.js'
+import { mutationOutcome } from './billing.js'
 
 export function useCollabSlice({ dbMode, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
   // 監造協作:送審與工程疑義
@@ -29,15 +30,18 @@ export function useCollabSlice({ dbMode, currentProject, currentUser, wiMaps, lo
     return { error: null }
   }, [dbMode, currentProject, currentUser, submittals, log])
 
-  // 監造審定:審核中|核准|核備|退回補正|駁回
+  // 監造審定:審核中|核准|核備|退回補正|駁回。DB 成功才更新 UI(失敗=UI 不變)。
   const decideSubmittal = useCallback(async (id, status, review_note) => {
     const patch = { status, review_note: review_note || null }
     if (status !== '審核中') patch.decided_date = new Date().toISOString().slice(0, 10)
+    if (dbMode) {
+      const res = await supabase.from('submittals').update(patch).eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '審定未寫入:可能無權限或這筆送審已被移除')
+      if (error) return { error }
+      log('送審審定', `${status}`, { user: currentUser?.name, role: '監造' })
+    }
     setSubmittals((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
-    if (!dbMode) return { error: null }
-    const { error } = await supabase.from('submittals').update(patch).eq('id', id)
-    if (!error) log('送審審定', `${status}`, { user: currentUser?.name, role: '監造' })
-    return { error }
+    return { error: null }
   }, [dbMode, currentUser, log])
 
   // 施工修正再送:退回補正 → 已提送(revision +1)
@@ -82,18 +86,27 @@ export function useCollabSlice({ dbMode, currentProject, currentUser, wiMaps, lo
     return { error: null }
   }, [dbMode, currentProject, currentUser, rfis, saveMarkup, log])
 
+  // 回覆/結案:DB 成功才更新 UI(失敗=UI 不變)。
   const answerRfi = useCallback(async (id, answer) => {
     const patch = { answer, status: '已回覆', answered_date: new Date().toISOString().slice(0, 10) }
+    if (dbMode) {
+      const res = await supabase.from('rfis').update(patch).eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '回覆未寫入:可能無權限或這筆疑義已被移除')
+      if (error) return { error }
+      log('回覆工程疑義', answer.slice(0, 30), { user: currentUser?.name, role: '監造' })
+    }
     setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
-    if (!dbMode) return { error: null }
-    const { error } = await supabase.from('rfis').update(patch).eq('id', id)
-    if (!error) log('回覆工程疑義', answer.slice(0, 30), { user: currentUser?.name, role: '監造' })
-    return { error }
+    return { error: null }
   }, [dbMode, currentUser, log])
 
   const closeRfi = useCallback(async (id) => {
+    if (dbMode) {
+      const res = await supabase.from('rfis').update({ status: '已結案' }).eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '結案未寫入:可能無權限或這筆疑義已被移除')
+      if (error) return { error }
+    }
     setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, status: '已結案' } : r)))
-    if (dbMode) await supabase.from('rfis').update({ status: '已結案' }).eq('id', id)
+    return { error: null }
   }, [dbMode])
 
   const deleteRfi = useCallback(async (id) => {

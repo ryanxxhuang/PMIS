@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../../store.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
-import { appConfirm } from '../../components/confirm.jsx'
+import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { rfiBall } from '../../lib/ballInCourt.js'
 
@@ -16,6 +16,7 @@ export default function RFI() {
   const [markupOpen, setMarkupOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [errMsg, setErrMsg] = useState('') // 回覆/結案寫入失敗必須讓使用者看到(失敗=UI 不變)
 
   if (isSupabaseConfigured && !currentProject) {
     return <Card title="工程疑義"><Empty>請先登入並選擇專案。</Empty></Card>
@@ -25,9 +26,21 @@ export default function RFI() {
     setBusy(true); await createRfi(form); setBusy(false); setForm(null)
   }
   const onAnswer = async (r) => {
-    const ans = window.prompt('回覆內容：', r.answer || '')
-    if (ans === null || !ans.trim()) return
-    await answerRfi(r.id, ans.trim())
+    const ans = await appPrompt({
+      title: `回覆：${r.rfi_no}`, body: r.question || r.title,
+      label: '回覆內容（必填）', defaultValue: r.answer || '', required: true, confirmLabel: '送出回覆',
+    })
+    if (ans === null) return
+    setErrMsg(''); setBusy(true)
+    const { error } = await answerRfi(r.id, ans.trim())
+    setBusy(false)
+    if (error) setErrMsg(`回覆未寫入：${error.message}`)
+  }
+  const onClose = async (r) => {
+    setErrMsg(''); setBusy(true)
+    const { error } = await closeRfi(r.id)
+    setBusy(false)
+    if (error) setErrMsg(`結案未寫入：${error.message}`)
   }
 
   const open = rfis.filter((r) => r.status === '待回覆').length
@@ -47,6 +60,13 @@ export default function RFI() {
             {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', question: '', asked_date: todayIso(), due_date: '', cost_impact: false, schedule_impact: false })}>{form ? '取消' : '＋ 提出疑義'}</Button>}
           </div>
         } />
+
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
 
       {form && (
         <Card>
@@ -88,11 +108,11 @@ export default function RFI() {
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     {r.status === '待回覆' && (can.approve
-                      ? <Button variant="secondary" onClick={() => onAnswer(r)}>回覆</Button>
+                      ? <Button variant="secondary" disabled={busy} onClick={() => onAnswer(r)}>回覆</Button>
                       : <span className="text-[10px] text-[var(--text-3)]">待監造回覆</span>)}
                     {r.status === '已回覆' && (
-                      can.submit ? <Button variant="success" onClick={() => closeRfi(r.id)}>確認結案</Button>
-                        : can.approve ? <Button variant="secondary" onClick={() => onAnswer(r)}>補充回覆</Button> : null
+                      can.submit ? <Button variant="success" disabled={busy} onClick={() => onClose(r)}>確認結案</Button>
+                        : can.approve ? <Button variant="secondary" disabled={busy} onClick={() => onAnswer(r)}>補充回覆</Button> : null
                     )}
                     {can.submit && <button onClick={async () => { if (await appConfirm({ title: '刪除此疑義？', danger: true, confirmLabel: '刪除' })) deleteRfi(r.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
                   </div>

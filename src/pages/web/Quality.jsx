@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Camera, Printer, Zap } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
-import { appConfirm } from '../../components/confirm.jsx'
+import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { judgeChecklist, judgeItem } from '../../lib/qc.js'
 import { defectBall } from '../../lib/ballInCourt.js'
@@ -55,6 +55,7 @@ export default function Quality() {
   const [busy, setBusy] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
   const [aiMsg, setAiMsg] = useState('')
+  const [errMsg, setErrMsg] = useState('') // 判定/缺失寫入失敗必須讓使用者看到(失敗=UI 不變)
 
   // 拍缺失照片 → AI 描述 → 填表單
   const onDefectPhoto = async (e) => {
@@ -93,18 +94,32 @@ export default function Quality() {
     setBusy(true); await createDefect(defForm); setBusy(false); setDefForm(null)
   }
   const onResult = async (insp, pass) => {
-    const note = pass ? '' : (window.prompt('不合格原因 / 缺失說明：') ?? '')
-    if (!pass && note === null) return
-    setBusy(true); await recordInspectionResult(insp, pass, note); setBusy(false)
+    let note = ''
+    if (!pass) {
+      note = await appPrompt({
+        title: `判定不合格：${insp.title}`, label: '不合格原因 / 缺失說明（必填）',
+        required: true, danger: true, confirmLabel: '判定不合格並開立缺失',
+      })
+      if (note === null) return
+    }
+    setErrMsg(''); setBusy(true)
+    const { error } = await recordInspectionResult(insp, pass, note)
+    setBusy(false)
+    if (error) setErrMsg(`查驗判定未寫入：${error.message}`)
   }
   const advanceDefect = async (d) => {
-    if (d.status === '開立') return updateDefectStatus(d.id, '改善中')
-    if (d.status === '改善中') {
-      const note = window.prompt('改善說明：', d.improvement_note || '')
+    let res
+    if (d.status === '開立') res = await updateDefectStatus(d.id, '改善中')
+    else if (d.status === '改善中') {
+      const note = await appPrompt({
+        title: `提送複查：${d.title}`, label: '改善說明（必填）',
+        defaultValue: d.improvement_note || '', required: true, confirmLabel: '提送複查',
+      })
       if (note === null) return
-      return updateDefectStatus(d.id, '待複查', { improvement_note: note })
+      res = await updateDefectStatus(d.id, '待複查', { improvement_note: note })
     }
-    if (d.status === '待複查') return updateDefectStatus(d.id, '已結案')
+    else if (d.status === '待複查') res = await updateDefectStatus(d.id, '已結案')
+    if (res?.error) setErrMsg(`缺失狀態未更新：${res.error.message}`)
   }
   const nextLabel = { 開立: '開始改善', 改善中: '提送複查', 待複查: '複查結案' }
 
@@ -116,6 +131,13 @@ export default function Quality() {
       <div>
         <PageHeader title="品質查驗" tagline="三級品管" subtitle="查驗申請 → 監造查驗 → 不合格開缺失 → 改善複查結案" />
       </div>
+
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
 
       {/* 查驗 */}
       <Card title={`查驗（待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
