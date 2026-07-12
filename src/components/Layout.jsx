@@ -6,7 +6,7 @@ import {
   LayoutDashboard, LayoutGrid, Sparkles, Bell, CalendarClock, Newspaper, BadgeCheck,
   ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
   ShieldCheck, ShieldAlert, ClipboardCheck, HardHat, FileCheck2, MessageSquareWarning, Users, Flag,
-  Menu, ChevronDown, Trash2, Moon, Sun, Plus, History,
+  Menu, ChevronDown, Trash2, Moon, Sun, Plus, History, ScrollText,
 } from 'lucide-react'
 
 const navGroups = [
@@ -17,6 +17,7 @@ const navGroups = [
     { to: '/alerts', icon: Bell, label: '提醒中心' },
     { to: '/activity', icon: History, label: '活動紀錄' },
     { to: '/contract', icon: CalendarClock, label: '契約管制' },
+    { to: '/requirements', icon: ScrollText, label: '履約需求' },
     { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
     { to: '/monthly-report', icon: Newspaper, label: '施工月報' },
     { to: '/audit', icon: ShieldAlert, label: '風險稽核', roles: ['owner'] }, // 機關防弊

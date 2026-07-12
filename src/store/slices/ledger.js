@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase.js'
 import { loadObligationsFromDB, extractContractText, fileToBase64 } from '../db.js'
+import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/documentIngestion.js'
 
 export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log }) {
   // 成本項目（真 DB；預算 vs 實際、分包）
@@ -229,6 +230,19 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     return { error: null, count: obs.length }
   }, [dbMode, currentProject, currentUser, reloadObligations, log])
 
+  // P0-06:上傳契約/規範 → 正式文件版本+逐頁保存 → extract-requirements Edge Function
+  // 產生「AI 履約需求建議」(draft_ai/needs_review,待人工審查)。與 parseContract(legacy
+  // 時程義務)平行存在。契約文件不依賴標單 → 用 isPersistedProject 而非 dbMode。
+  const ingestRequirementDocument = useCallback(async (file, documentType = 'contract') => {
+    if (!isPersistedProject) return { error: { message: '需真實專案(demo 模式不支援 AI 需求擷取)' } }
+    return runRequirementIngestion({
+      projectId: currentProject.project_id,
+      userId: currentUser?.user_id || null,
+      file,
+      documentType,
+    })
+  }, [isPersistedProject, currentProject, currentUser])
+
   const updateObligationStatus = useCallback(async (id, status) => {
     setObligations((os) => os.map((o) => (o.id === id ? { ...o, status } : o)))
     if (dbMode) await supabase.from('contract_obligations').update({ status }).eq('id', id)
@@ -289,6 +303,6 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
-    reloadObligations, parseContract, updateObligationStatus,
+    reloadObligations, parseContract, updateObligationStatus, ingestRequirementDocument,
   }
 }

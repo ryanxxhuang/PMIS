@@ -3,7 +3,7 @@
 -- repeat the full P0-04 authorization matrix.
 begin;
 
-select plan(46);
+select plan(48);
 
 create or replace function public.pmis_p05_login(p_uid uuid)
 returns void language plpgsql as $$
@@ -185,11 +185,10 @@ $$, $$ values ('contractor'::text, 'contractor_pm'::text, true) $$,
 -- Requirement review and change-order governance.
 select public.pmis_p05_login('c5000000-0000-0000-0000-000000000001');
 set local role authenticated;
--- [批4後啟用] review_requirement RPC 屬 P0-07(requirement review boundary),批4恢復後解開:
--- select lives_ok($$
---   select public.review_requirement(
---     'c5500000-0000-0000-0000-000000000001', 'approve')
--- $$, 'agency reviewer approves requirement');
+select lives_ok($$
+  select public.review_requirement(
+    'c5500000-0000-0000-0000-000000000001', 'approve')
+$$, 'agency reviewer approves requirement');
 reset role;
 select public.pmis_p05_login('c5000000-0000-0000-0000-000000000003');
 set local role authenticated;
@@ -206,11 +205,10 @@ select lives_ok($$
 $$, 'agency ratifies change order');
 reset role;
 select public.pmis_p05_login(null);
--- [批4後啟用] 依賴上方 review_requirement 的核准事件:
--- select is((select entity_id from public.audit_events
---   where event_type = 'requirement.approved'),
---   'c5500000-0000-0000-0000-000000000001'::uuid,
---   'requirement approval references the authoritative Requirement');
+select is((select entity_id from public.audit_events
+  where event_type = 'requirement.approved'),
+  'c5500000-0000-0000-0000-000000000001'::uuid,
+  'requirement approval references the authoritative Requirement');
 select is((select count(*)::integer from public.audit_events
   where event_type = 'change_order.review_started'), 1,
   'review start creates one semantic change-order event');

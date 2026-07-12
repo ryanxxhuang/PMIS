@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Scale, FileText } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Scale, FileText, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -25,10 +26,12 @@ function ruleText(ob) {
 const DOT = { done: 'var(--green-text)', overdue: 'var(--red-text)', soon: 'var(--amber-text)', scheduled: 'var(--blue)', nodate: 'var(--text-3)' }
 
 export default function Contract() {
-  const { project, isSupabaseConfigured, currentProject, dbMode, obligations, parseContract, updateObligationStatus, updateProjectAnchors } = useStore()
+  const { project, isSupabaseConfigured, currentProject, dbMode, obligations, parseContract, updateObligationStatus, updateProjectAnchors, ingestRequirementDocument, can, isPersistedProject } = useStore()
   const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [ingestBusy, setIngestBusy] = useState(false)
+  const [ingestMsg, setIngestMsg] = useState('')
 
   useEffect(() => {
     setAnchors({
@@ -51,6 +54,22 @@ export default function Contract() {
     const { error, count } = await parseContract(file)
     setBusy(false)
     setMsg(error ? `解析失敗:${error.message || ''}` : `已解析並帶入 ${count} 項義務。`)
+  }
+
+  // P0-06:AI 履約需求擷取(可追溯 ingestion pipeline)。與上方 legacy 時程義務
+  // 解析平行存在;產物只是 draft/待審查建議,審查介面屬 P0-07。
+  const onIngest = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    setIngestBusy(true)
+    setIngestMsg('AI 擷取履約需求中…(建立文件版本、逐頁保存、引註驗證,大檔可能要數十秒)')
+    const { error, run } = await ingestRequirementDocument(file)
+    setIngestBusy(false)
+    if (error) { setIngestMsg(`擷取失敗:${error.message || ''}`); return }
+    setIngestMsg(
+      `已產生 ${run?.extracted_requirement_count ?? 0} 項 AI 履約需求建議`
+      + `(引註已驗證 ${run?.verified_source_count ?? 0} 項、待補審 ${run?.needs_review_count ?? 0} 項),待人工審查。`,
+    )
   }
 
   const items = useMemo(() => {
@@ -92,6 +111,7 @@ export default function Contract() {
             <label key={k} className="block">
               <span className="block text-sm font-medium text-[var(--text)] mb-1">{label}</span>
               <input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
+                disabled={!can.edit}
                 className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
             </label>
           ))}
@@ -100,8 +120,8 @@ export default function Contract() {
       </Card>
 
       <Card title="契約解析" action={
-        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${busy || !dbMode ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
-          <input type="file" accept="application/pdf,image/*" disabled={busy || !dbMode} onChange={onUpload} className="hidden" />
+        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${busy || !dbMode || !can.edit ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+          <input type="file" accept="application/pdf,image/*" disabled={busy || !dbMode || !can.edit} onChange={onUpload} className="hidden" />
           {busy ? '解析中…' : '上傳契約解析'}
         </label>
       }>
@@ -113,6 +133,27 @@ export default function Contract() {
         </div>
         {msg && <p className={`text-xs mt-3 ${msg.startsWith('解析失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>{msg}</p>}
         <p className="text-xs text-[var(--text-3)] mt-2">支援 PDF / 掃描 PDF / 圖片。Word、Excel 請先匯出成 PDF。重新解析會取代現有清單。</p>
+      </Card>
+
+      <Card title="AI 履約需求擷取(建議草稿)" action={
+        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${ingestBusy || !isPersistedProject || !can.edit ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+          <input type="file" accept="application/pdf,.docx" disabled={ingestBusy || !isPersistedProject || !can.edit} onChange={onIngest} className="hidden" />
+          <Sparkles size={14} aria-hidden /> {ingestBusy ? '擷取中…' : 'AI 解析履約需求'}
+        </label>
+      }>
+        <p className="text-xs text-[var(--text-2)]">
+          上傳契約/規範 → 建立正式文件版本並逐頁保存 → AI 擷取「履約需求建議」並逐項驗證引註出處。
+          產出僅為待審查草稿(不會自動生效、不影響上方時程義務清單);審查介面於後續版本提供。
+        </p>
+        {!isPersistedProject && <p className="text-xs text-amber-600 mt-2">需真實專案(demo 模式不支援)。</p>}
+        {isPersistedProject && !can.edit && <p className="text-xs text-[var(--text-3)] mt-2">需編輯權限(施工廠商或專案管理者)。</p>}
+        <p className="text-xs text-[var(--text-3)] mt-2">支援數位 PDF 與 Word(.docx)。掃描檔暫不支援(無 OCR);Word 文件無可靠頁碼,引註以章節/條款標明。</p>
+        {ingestMsg && (
+          <p className={`text-xs mt-3 ${ingestMsg.startsWith('擷取失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>
+            {ingestMsg}
+            {ingestMsg.startsWith('已產生') && <>　<Link to="/requirements" className="text-[var(--blue-text)] hover:underline">查看履約需求 →</Link></>}
+          </p>
+        )}
       </Card>
 
       {groups.length === 0 ? (
@@ -127,10 +168,10 @@ export default function Contract() {
                 <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
                   <div className="flex justify-between items-start gap-2">
                     <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
-                    <button onClick={() => updateObligationStatus(it.ob.id, it.done ? '待辦' : '已提送')}
+                    {can.edit && <button onClick={() => updateObligationStatus(it.ob.id, it.done ? '待辦' : '已提送')}
                       className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
                       {it.done ? '已提送 ✓' : '標為已提送'}
-                    </button>
+                    </button>}
                   </div>
                   <div className="text-xs text-[var(--text-3)] mt-1">
                     {ruleText(it.ob)}{it.due ? `　·　到期 ${iso(it.due)}` : ''}
