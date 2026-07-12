@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ShieldCheck, CheckCircle2, AlertTriangle, ShieldAlert, Sparkles } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, AlertTriangle, ShieldAlert, Sparkles, HelpCircle } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
@@ -11,6 +11,7 @@ const ST = {
   pass: { icon: CheckCircle2, c: 'var(--green-text)', bg: 'var(--green-tint)', label: '通過' },
   warn: { icon: AlertTriangle, c: 'var(--amber-text)', bg: 'var(--amber-tint)', label: '注意' },
   risk: { icon: ShieldAlert, c: 'var(--red-text)', bg: 'var(--red-tint)', label: '風險' },
+  na: { icon: HelpCircle, c: 'var(--slate-text)', bg: 'var(--slate-tint)', label: '未評估' }, // 資料不足,不算通過
 }
 
 export default function RiskAudit() {
@@ -81,7 +82,9 @@ export default function RiskAudit() {
           <div>
             <div className="text-[11px] tracking-[0.04em] text-[var(--text-3)]">稽核結果</div>
             <div className="text-lg font-semibold text-[var(--text)]">
-              {overall === 'pass' ? '本案未發現明顯異常' : overall === 'warn' ? `${summary.warn} 項需注意` : `${summary.risk} 項風險 · ${summary.warn} 項注意`}
+              {overall === 'pass'
+                ? (summary.na ? `未發現異常（${summary.na} 項資料不足未評估）` : '本案未發現明顯異常')
+                : overall === 'warn' ? `${summary.warn} 項需注意` : `${summary.risk} 項風險 · ${summary.warn} 項注意`}
             </div>
           </div>
         </div>
@@ -89,6 +92,7 @@ export default function RiskAudit() {
           <span className="flex items-center gap-1.5"><CheckCircle2 size={15} style={{ color: 'var(--green-text)' }} aria-hidden /><span className="num font-semibold">{summary.pass}</span> 通過</span>
           <span className="flex items-center gap-1.5"><AlertTriangle size={15} style={{ color: 'var(--amber-text)' }} aria-hidden /><span className="num font-semibold">{summary.warn}</span> 注意</span>
           <span className="flex items-center gap-1.5"><ShieldAlert size={15} style={{ color: 'var(--red-text)' }} aria-hidden /><span className="num font-semibold">{summary.risk}</span> 風險</span>
+          {summary.na > 0 && <span className="flex items-center gap-1.5"><HelpCircle size={15} style={{ color: 'var(--slate-text)' }} aria-hidden /><span className="num font-semibold">{summary.na}</span> 未評估</span>}
         </div>
       </div>
 

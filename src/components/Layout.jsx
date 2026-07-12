@@ -1,57 +1,32 @@
 import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
-import {
-  LayoutDashboard, LayoutGrid, Sparkles, Bell, CalendarClock, Newspaper, BadgeCheck,
-  ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
-  ShieldCheck, ShieldAlert, ClipboardCheck, HardHat, FileCheck2, MessageSquareWarning, Users, Flag,
-  Menu, ChevronDown, Trash2, Moon, Sun, Plus, History, ScrollText,
-} from 'lucide-react'
+import { visibleNavGroups, workbenchFor } from '../lib/navConfig.js'
+import { Menu, ChevronDown, Trash2, Moon, Sun, Plus } from 'lucide-react'
 
-const navGroups = [
-  { title: '總覽', items: [
-    { to: '/portfolio', icon: LayoutGrid, label: '跨案總覽' },
-    { to: '/dashboard', icon: LayoutDashboard, label: '專案 Dashboard' },
-    { to: '/assistant', icon: Sparkles, label: 'AI 助理' },
-    { to: '/alerts', icon: Bell, label: '提醒中心' },
-    { to: '/activity', icon: History, label: '活動紀錄' },
-    { to: '/contract', icon: CalendarClock, label: '專案文件' },
-    { to: '/requirements', icon: ScrollText, label: '履約需求' },
-    { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
-    { to: '/monthly-report', icon: Newspaper, label: '施工月報' },
-    { to: '/audit', icon: ShieldAlert, label: '風險稽核', roles: ['owner'] }, // 機關防弊
-  ] },
-  { title: '成本與進度', items: [
-    { to: '/boq', icon: ClipboardList, label: '標單工項' },
-    { to: '/site-log', icon: PencilLine, label: '施工日誌' },
-    { to: '/valuation', icon: Coins, label: '估驗計價' },
-    { to: '/payments', icon: Receipt, label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
-    { to: '/cost', icon: Wallet, label: '成本管理', roles: ['contractor'] },               // 廠商毛利機密
-    { to: '/change-orders', icon: Wrench, label: '變更設計' },
-    { to: '/progress', icon: TrendingUp, label: '進度 S 曲線' },
-    { to: '/schedule', icon: CalendarRange, label: '逐工項排程', roles: ['contractor'] },   // 廠商內部規劃
-  ] },
-  { title: '品質與工安', items: [
-    { to: '/quality', icon: ShieldCheck, label: '品質查驗' },
-    { to: '/itp', icon: Flag, label: '檢驗停留點' },
-    { to: '/safety', icon: HardHat, label: '工安管理' },
-  ] },
-  { title: '監造協作', items: [
-    { to: '/submittals', icon: FileCheck2, label: '送審文件' },
-    { to: '/rfi', icon: MessageSquareWarning, label: '工程疑義' },
-    { to: '/supervisor-report', icon: ClipboardCheck, label: '監造報表', roles: ['supervisor'] }, // AI 監造報表
-    { to: '/members', icon: Users, label: '專案成員' },
-  ] },
-]
-
-// 路由守衛與側欄導覽共用同一份 roles 對照:導覽隱藏≠權限,直接輸入網址也要擋。
-// (資料本身另有 RLS 保護;這裡擋的是「不該給這個角色的工作畫面」。)
-export function routeAllowed(pathname, org, isAdmin) {
-  for (const g of navGroups) for (const n of g.items) {
-    if (n.to === pathname) return !n.roles || isAdmin || n.roles.includes(org)
-  }
-  return true // 不在導覽清單的路由(列印頁、建案頁…)不設角色限制
+// 工作台分頁列(§9 瘦身):同一工作台的路由以分頁互切,分頁可見性與導覽/守衛同源。
+// 只有一個可見分頁時不渲染(例如監造的「估驗與金流」只剩估驗計價)。
+export function WorkbenchTabs() {
+  const { currentUser, can } = useStore()
+  const { pathname } = useLocation()
+  const wb = workbenchFor(pathname, currentUser?.org_type || 'contractor', can?.override)
+  if (!wb || wb.tabs.length < 2) return null
+  return (
+    <div className="flex items-center gap-1 border-b border-[var(--border-2)] mb-5 print:hidden" role="tablist" aria-label={wb.label}>
+      {wb.tabs.map((t) => (
+        <NavLink key={t.to} to={t.to}
+          className={({ isActive }) =>
+            `px-3 py-2 text-sm border-b-2 -mb-px transition-colors ${
+              isActive
+                ? 'border-[var(--blue)] text-[var(--blue-text)] font-semibold'
+                : 'border-transparent text-[var(--text-2)] hover:text-[var(--text)]'
+            }`}>
+          {t.label}
+        </NavLink>
+      ))}
+    </div>
+  )
 }
 
 // Top-bar project picker: switch / create / delete (real backend only).
@@ -140,12 +115,11 @@ function TopBar({ onMenu }) {
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { currentUser, can, workItemsSource, workItemsError, retryWorkItems } = useStore()
+  const { pathname } = useLocation()
   // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——非正式模式的
   // admin(專案建立者)看得到全部;正式模式後回歸自己的角色視角。
   const org = currentUser?.org_type || 'contractor'
-  const visibleGroups = navGroups
-    .map((g) => ({ ...g, items: g.items.filter((n) => !n.roles || can?.override || n.roles.includes(org)) }))
-    .filter((g) => g.items.length)
+  const visibleGroups = visibleNavGroups(org, can?.override)
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg)]">
       <TopBar onMenu={() => setMenuOpen(true)} />
@@ -167,6 +141,8 @@ export function WebLayout({ children }) {
                 </div>
                 {g.items.map((n) => {
                   const Icon = n.icon
+                  // 工作台入口:站在任一分頁上都算 active(NavLink 只認自己的 to)
+                  const wbActive = n.tabs?.some((t) => t.to === pathname)
                   return (
                     <NavLink
                       key={n.to}
@@ -174,7 +150,7 @@ export function WebLayout({ children }) {
                       onClick={() => setMenuOpen(false)}
                       className={({ isActive }) =>
                         `flex items-center gap-2.5 mr-3 my-0.5 pl-[13px] pr-3 py-[7px] rounded-r-md text-sm border-l-[3px] transition ${
-                          isActive
+                          (isActive || wbActive)
                             ? 'border-[var(--blue)] bg-[var(--blue-tint)] text-[var(--blue-text)] font-semibold'
                             : 'border-transparent text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
                         }`

@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
-import { WebLayout, routeAllowed } from './components/Layout.jsx'
+import { WebLayout, WorkbenchTabs } from './components/Layout.jsx'
+import { routeAllowed } from './lib/navConfig.js'
 import { ConfirmHost } from './components/confirm.jsx'
 
 import Login from './pages/Login.jsx'
@@ -54,7 +55,7 @@ function Web({ children }) {
       </WebLayout>
     )
   }
-  return <WebLayout>{children}</WebLayout>
+  return <WebLayout><WorkbenchTabs />{children}</WebLayout>
 }
 
 export default function App() {
