@@ -3,9 +3,8 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase.js'
 import { loadObligationsFromDB, extractContractText, fileToBase64 } from '../db.js'
-import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/documentIngestion.js'
 
-export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log }) {
+export function useLedgerSlice({ dbMode, currentProject, currentUser, wiMaps, log }) {
   // 成本項目（真 DB；預算 vs 實際、分包）
   const [costItems, setCostItems] = useState([])
   // 變更設計 / 追加減帳（真 DB；每筆含 items 明細）
@@ -191,14 +190,20 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
 
   // 契約義務:重載 / 解析契約 / 改狀態 ──────────────────────────
   const reloadObligations = useCallback(async () => {
-    if (!isPersistedProject) return
+    if (!dbMode) return
     setObligations(await loadObligationsFromDB(currentProject.project_id))
-  }, [isPersistedProject, currentProject])
+  }, [dbMode, currentProject])
 
-  // legacy 義務時程解析:共用「已抽好的純文字」路徑。P0-07.5 之後同一份契約
-  // 只上傳一次——套件上傳流程把契約類文件的儲存頁文字餵進來,不再要求二次上傳。
-  const parseContractBody = useCallback(async (body) => {
-    if (!isPersistedProject) return { error: { message: '需真專案' } }
+  // 上傳契約 → parse-contract（AI 解析）→ 取代本專案的義務清單
+  const parseContract = useCallback(async (file) => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    let body
+    try {
+      const text = await extractContractText(file)
+      body = (text && text.trim().length > 200)
+        ? { text, filename: file.name }                                   // 數位 Word/PDF → 送純文字(準)
+        : { file_base64: await fileToBase64(file), mime_type: file.type, filename: file.name } // 掃描/圖片 → 視覺
+    } catch { return { error: { message: '讀取檔案失敗' } } }
     const { data, error } = await supabase.functions.invoke('parse-contract', { body })
     if (error) return { error }
     if (data?.error) return { error: { message: data.error } }
@@ -222,45 +227,13 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     await reloadObligations()
     log('AI 解析契約義務', `${obs.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
     return { error: null, count: obs.length }
-  }, [isPersistedProject, currentProject, currentUser, reloadObligations, log])
-
-  // 由已儲存的契約文字重建義務時程(取代現有清單;不需重新上傳檔案)
-  const parseContractFromText = useCallback(async (text) => {
-    if (!text || text.trim().length < 200) return { error: { message: '契約文字不足,無法解析義務時程' } }
-    return parseContractBody({ text })
-  }, [parseContractBody])
-
-  // 相容:單檔上傳路徑(舊呼叫端);瀏覽器抽文字,抽不到退回視覺
-  const parseContract = useCallback(async (file) => {
-    if (!isPersistedProject) return { error: { message: '需真專案' } }
-    let body
-    try {
-      const text = await extractContractText(file)
-      body = (text && text.trim().length > 200)
-        ? { text, filename: file.name }
-        : { file_base64: await fileToBase64(file), mime_type: file.type, filename: file.name }
-    } catch { return { error: { message: '讀取檔案失敗' } } }
-    return parseContractBody(body)
-  }, [isPersistedProject, parseContractBody])
-
-  // P0-06:上傳契約/規範 → 正式文件版本+逐頁保存 → extract-requirements
-  // Edge Function 產生「AI 履約需求建議」(draft_ai / needs_review,待人工審查)。
-  // 與上面的 parseContract(legacy 時程義務)平行存在,互不取代。
-  const ingestRequirementDocument = useCallback(async (file, documentType = 'contract') => {
-    if (!isPersistedProject) return { error: { message: '需真實專案(demo 模式不支援 AI 需求擷取)' } }
-    return runRequirementIngestion({
-      projectId: currentProject.project_id,
-      userId: currentUser?.user_id || null,
-      file,
-      documentType,
-    })
-  }, [isPersistedProject, currentProject, currentUser])
+  }, [dbMode, currentProject, currentUser, reloadObligations, log])
 
   const updateObligationStatus = useCallback(async (id, status) => {
     setObligations((os) => os.map((o) => (o.id === id ? { ...o, status } : o)))
-    if (isPersistedProject) await supabase.from('contract_obligations').update({ status }).eq('id', id)
+    if (dbMode) await supabase.from('contract_obligations').update({ status }).eq('id', id)
     return { error: null }
-  }, [isPersistedProject])
+  }, [dbMode])
 
   // 驗收:登錄/更新某階段(同階段一筆,重複登錄=修正)
   const recordAcceptanceEvent = useCallback(async (stage_key, { event_date, result, note }) => {
@@ -301,7 +274,6 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
-    reloadObligations, parseContract, parseContractFromText, updateObligationStatus,
-    ingestRequirementDocument,
+    reloadObligations, parseContract, updateObligationStatus,
   }
 }

@@ -44,7 +44,7 @@ export default function RFI() {
         action={
           <div className="flex items-center gap-2">
             {rfis.length > 0 && <button onClick={exportRows} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
-            {can.createRfi && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', question: '', asked_date: todayIso(), due_date: '', cost_impact: false, schedule_impact: false })}>{form ? '取消' : '＋ 提出疑義'}</Button>}
+            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', question: '', asked_date: todayIso(), due_date: '', cost_impact: false, schedule_impact: false })}>{form ? '取消' : '＋ 提出疑義'}</Button>}
           </div>
         } />
 
@@ -87,14 +87,14 @@ export default function RFI() {
                     {r.markup_path && <div className="mt-1.5"><MarkupThumb src={r.markup_path} resolve={resolveMarkup} /></div>}
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    {r.status === '待回覆' && (can.answerRfi
+                    {r.status === '待回覆' && (can.approve
                       ? <Button variant="secondary" onClick={() => onAnswer(r)}>回覆</Button>
                       : <span className="text-[10px] text-[var(--text-3)]">待監造回覆</span>)}
                     {r.status === '已回覆' && (
-                      can.createRfi ? <Button variant="success" onClick={() => closeRfi(r.id)}>確認結案</Button>
-                        : can.answerRfi ? <Button variant="secondary" onClick={() => onAnswer(r)}>補充回覆</Button> : null
+                      can.submit ? <Button variant="success" onClick={() => closeRfi(r.id)}>確認結案</Button>
+                        : can.approve ? <Button variant="secondary" onClick={() => onAnswer(r)}>補充回覆</Button> : null
                     )}
-                    {can.createRfi && r.status === '待回覆' && <button onClick={async () => { if (await appConfirm({ title: '刪除此疑義？', danger: true, confirmLabel: '刪除' })) deleteRfi(r.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
+                    {can.submit && <button onClick={async () => { if (await appConfirm({ title: '刪除此疑義？', danger: true, confirmLabel: '刪除' })) deleteRfi(r.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
                   </div>
                 </div>
               </div>

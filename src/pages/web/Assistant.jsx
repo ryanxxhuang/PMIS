@@ -19,15 +19,13 @@ const ROLE_HELLO = {
   contractor: '我幫你盯著進度、品管、契約到期和現金流，該補的、快逾期的先挑出來。',
   supervisor: '我幫你盯著該查未查、待審與缺失複查，有異常先標給你看。',
   owner: '我幫你盯著全案風險、變更與撥款，有異常樣態先提醒你。',
-  viewer: '目前是唯讀專案視角；我會整理共用風險資訊，不會指派契約行動。',
 }
 
 export default function Assistant() {
   const store = useStore()
-  const { project, partyOrgKey, workItems, valuations, progressPlan, siteLogs, inspections, defects,
+  const { project, currentUser, workItems, valuations, progressPlan, siteLogs, inspections, defects,
     testSamples, obligations, changeOrders, submittals, rfis, observations, demoMode, workItemsSource, currentProject } = store
-  // P0-03:助理視角依「這個專案」我代表的一方(切換專案時跟著變);未解析→唯讀視角
-  const org = partyOrgKey || 'viewer'
+  const org = currentUser?.org_type || 'contractor'
   const imported = workItemsSource === 'db' || demoMode
 
   // 進度與財務（與 Dashboard 同源計算）
@@ -85,7 +83,7 @@ export default function Assistant() {
   return (
     <div className="space-y-5">
       <PageHeader title="AI 助理" tagline="Copilot"
-        subtitle={ROLE_HELLO[org] || ROLE_HELLO.viewer}
+        subtitle={ROLE_HELLO[org] || ROLE_HELLO.contractor}
         meta={[{ k: '模式', v: '唯讀' }]} />
 
       <div className="grid lg:grid-cols-[1.15fr_1fr] gap-5 items-start">

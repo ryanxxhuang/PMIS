@@ -5,13 +5,11 @@ import { appConfirm } from '../../components/confirm.jsx'
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
 const ORG_COLOR = { contractor: 'blue', supervisor: 'amber', owner: 'purple' }
-const PARTY_LABEL = { agency: '主辦機關', contractor: '施工廠商', supervisor: '監造單位', designer: '設計', consultant: '顧問', other: '待確認' }
-const PARTY_COLOR = { agency: 'purple', contractor: 'blue', supervisor: 'amber', designer: 'slate', consultant: 'slate', other: 'slate' }
 const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 
 export default function Members() {
   const { project, listMembers, addMemberByEmail, removeMember, currentUser,
-    isSupabaseConfigured, currentProject, demoMode, can } = useStore()
+    isSupabaseConfigured, currentProject, demoMode } = useStore()
   const [members, setMembers] = useState([])
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
@@ -24,8 +22,8 @@ export default function Members() {
     return <Card title="專案成員"><Empty>請先登入並選擇專案。</Empty></Card>
   }
 
-  // P0-03:技術管理來自 v2 membership,不再以 legacy creator/admin 推導。
-  const isAdmin = demoMode ? true : can.manageProjectIdentity
+  // 只有專案建立者(admin)可管理成員
+  const isAdmin = demoMode ? true : members.find((m) => m.user_id === currentUser?.user_id)?.member_role === 'admin'
 
   const onAdd = async () => {
     if (!email.trim()) return
@@ -44,13 +42,13 @@ export default function Members() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="專案成員" tagline="Team" subtitle="技術管理與契約角色分離；權限依本專案的參與方與角色套用"
+      <PageHeader title="專案成員" tagline="Team" subtitle="邀請監造 / 機關 / 協力廠商加入，依組織別自動套用權限"
         meta={[{ k: '成員數', v: String(members.length) }]} />
 
       {isAdmin && (
         <Card title="加入成員">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[220px]"><Field label="對方帳號 Email" hint="對方需先註冊；既有邀請流程會以 profile 作遷移提示，未能可靠對應時保持待確認／唯讀。">
+            <div className="flex-1 min-w-[220px]"><Field label="對方帳號 Email" hint="對方需先在本系統註冊；權限依其註冊時選的組織別（施工/監造/機關）自動套用。">
               <input className={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="supervisor@example.com" type="email" />
             </Field></div>
             <Button onClick={onAdd} disabled={busy || !email.trim()}>{busy ? '加入中…' : '＋ 加入專案'}</Button>
@@ -69,17 +67,14 @@ export default function Members() {
                   <div className="w-9 h-9 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-medium text-sm shrink-0">{m.full_name?.[0] || '?'}</div>
                   <div className="min-w-0">
                     <div className="text-sm text-[var(--text)] truncate">{m.full_name}
-                      {m.is_project_admin && <Badge color="green">技術管理員</Badge>}
+                      {m.member_role === 'admin' && <Badge color="green">建立者</Badge>}
                       {m.user_id === currentUser?.user_id && <span className="text-xs text-[var(--text-3)] ml-1">（你）</span>}
                     </div>
                     <div className="text-xs text-[var(--text-3)] truncate">{m.company || '—'}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Badge color={PARTY_COLOR[m.party_type] || ORG_COLOR[m.org_type] || 'slate'}>
-                    {PARTY_LABEL[m.party_type] || ORG_LABEL[m.org_type] || '待確認'}
-                  </Badge>
-                  {m.project_role && <span className="text-xs text-[var(--text-3)]">{m.project_role}</span>}
+                  <Badge color={ORG_COLOR[m.org_type] || 'slate'}>{ORG_LABEL[m.org_type] || m.org_type}</Badge>
                   {isAdmin && m.user_id !== currentUser?.user_id && (
                     <button onClick={() => onRemove(m)} className="text-[var(--text-3)] hover:text-rose-500 text-xs">移除</button>
                   )}
@@ -91,8 +86,9 @@ export default function Members() {
       </Card>
 
       <p className="text-xs text-[var(--text-3)]">
-        契約權限由 project party + project role 決定；技術管理員只能管理專案身分與設定，
-        不會因此取得估驗核定、查驗判定、變更核准或成本資料權限。
+        權限依組織別：<b>施工廠商</b>填報 / 提送（日誌、估驗送審、查驗申請、送審、疑義提出）；
+        <b>監造單位</b>審核 / 判定（核定估驗、查驗合格判定、缺失複查結案、送審核備、疑義回覆）；
+        <b>主辦機關</b>唯讀。專案建立者不受此限，擁有完整權限。
       </p>
     </div>
   )

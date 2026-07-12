@@ -28,11 +28,9 @@ import MonthlyReport from './pages/web/MonthlyReport.jsx'
 import Assistant from './pages/web/Assistant.jsx'
 import SupervisorReport from './pages/web/SupervisorReport.jsx'
 import RiskAudit from './pages/web/RiskAudit.jsx'
-import Activity from './pages/web/Activity.jsx'
 import Portfolio from './pages/web/Portfolio.jsx'
 import Acceptance from './pages/web/Acceptance.jsx'
 import ITP from './pages/web/ITP.jsx'
-import Requirements from './pages/web/Requirements.jsx'
 
 // Gate every page behind auth; force project creation before the workspace loads.
 function Web({ children }) {
@@ -55,7 +53,6 @@ export default function App() {
       <Route path="/assistant" element={<Web><Assistant /></Web>} />
       <Route path="/supervisor-report" element={<Web><SupervisorReport /></Web>} />
       <Route path="/audit" element={<Web><RiskAudit /></Web>} />
-      <Route path="/activity" element={<Web><Activity /></Web>} />
       <Route path="/portfolio" element={<Web><Portfolio /></Web>} />
       <Route path="/acceptance" element={<Web><Acceptance /></Web>} />
       <Route path="/project/new" element={<Web><ProjectSetup /></Web>} />
@@ -77,7 +74,6 @@ export default function App() {
       <Route path="/rfi" element={<Web><RFI /></Web>} />
       <Route path="/members" element={<Web><Members /></Web>} />
       <Route path="/contract" element={<Web><Contract /></Web>} />
-      <Route path="/requirements" element={<Web><Requirements /></Web>} />
       <Route path="/alerts" element={<Web><Alerts /></Web>} />
       <Route path="/monthly-report" element={<Web><MonthlyReport /></Web>} />
       <Route path="*" element={<Navigate to="/login" replace />} />

@@ -2,12 +2,11 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
-import { projectDeleteErrorMessage } from '../lib/projectMode.js'
 import {
   LayoutDashboard, LayoutGrid, Sparkles, Bell, CalendarClock, Newspaper, BadgeCheck,
-  ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange, ScrollText,
+  ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
   ShieldCheck, ShieldAlert, ClipboardCheck, HardHat, FileCheck2, MessageSquareWarning, Users, Flag,
-  Menu, ChevronDown, Trash2, Moon, Sun, Plus, History,
+  Menu, ChevronDown, Trash2, Moon, Sun, Plus,
 } from 'lucide-react'
 
 const navGroups = [
@@ -17,18 +16,16 @@ const navGroups = [
     { to: '/assistant', icon: Sparkles, label: 'AI 助理' },
     { to: '/alerts', icon: Bell, label: '提醒中心' },
     { to: '/contract', icon: CalendarClock, label: '契約管制' },
-    { to: '/requirements', icon: ScrollText, label: '履約需求' },
     { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
     { to: '/monthly-report', icon: Newspaper, label: '施工月報' },
     { to: '/audit', icon: ShieldAlert, label: '風險稽核', roles: ['owner'] }, // 機關防弊
-    { to: '/activity', icon: History, label: '專案活動紀錄' },
   ] },
   { title: '成本與進度', items: [
     { to: '/boq', icon: ClipboardList, label: '標單工項' },
     { to: '/site-log', icon: PencilLine, label: '施工日誌' },
     { to: '/valuation', icon: Coins, label: '估驗計價' },
-    { to: '/payments', icon: Receipt, label: '請款收款', roles: ['contractor', 'owner'], perm: 'updatePayment' }, // 監造不經手請款
-    { to: '/cost', icon: Wallet, label: '成本管理', roles: ['contractor'], perm: 'accessContractorPrivate' }, // 廠商毛利機密(contractor_pm)
+    { to: '/payments', icon: Receipt, label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
+    { to: '/cost', icon: Wallet, label: '成本管理', roles: ['contractor'] },               // 廠商毛利機密
     { to: '/change-orders', icon: Wrench, label: '變更設計' },
     { to: '/progress', icon: TrendingUp, label: '進度 S 曲線' },
     { to: '/schedule', icon: CalendarRange, label: '逐工項排程', roles: ['contractor'] },   // 廠商內部規劃
@@ -48,10 +45,9 @@ const navGroups = [
 
 // Top-bar project picker: switch / create / delete (real backend only).
 function ProjectSwitcher() {
-  const { project, projects, currentProject, switchProject, deleteProject, isSupabaseConfigured, can } = useStore()
+  const { project, projects, currentProject, switchProject, deleteProject, isSupabaseConfigured } = useStore()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [deleteError, setDeleteError] = useState('')
 
   if (!isSupabaseConfigured || !currentProject) {
     return (
@@ -63,7 +59,7 @@ function ProjectSwitcher() {
   }
   return (
     <div className="relative min-w-0">
-      <button onClick={() => { setOpen((o) => !o); setDeleteError('') }} className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
+      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
         <span className="text-[var(--text-3)] text-xs shrink-0">專案</span>
         <span className="font-medium truncate max-w-[42vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
         <ChevronDown size={14} className="text-[var(--text-2)] shrink-0" aria-hidden />
@@ -80,10 +76,9 @@ function ProjectSwitcher() {
               </button>
             ))}
             <div className="border-t border-[var(--border-2)] my-1" />
-            {deleteError && <p role="alert" className="px-3 py-2 text-xs text-[var(--red-text)] bg-[var(--red-tint)]">專案刪除失敗：{deleteError}</p>}
             <button onClick={() => { setOpen(false); navigate('/project/new') }}
               className="w-full text-left px-3 py-2 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><Plus size={14} aria-hidden /> 新增專案</button>
-            {can.manageProjectIdentity && <button onClick={async () => {
+            <button onClick={async () => {
               setOpen(false)
               // 高危險:整案永久刪除 → 要求輸入專案名稱確認,防手滑
               const ok = await appConfirm({
@@ -91,11 +86,8 @@ function ProjectSwitcher() {
                 body: `「${currentProject.project_name}」的標單、估驗、進度、施工日誌、查驗、缺失將一併永久刪除，無法復原。`,
                 danger: true, confirmLabel: '永久刪除', requireText: currentProject.project_name,
               })
-              if (ok) {
-                const { error } = await deleteProject(currentProject.project_id)
-                if (error) { setDeleteError(projectDeleteErrorMessage(error)); setOpen(true) }
-              }
-            }} className="w-full text-left px-3 py-2 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>}
+              if (ok) await deleteProject(currentProject.project_id)
+            }} className="w-full text-left px-3 py-2 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>
           </div>
         </>
       )}
@@ -136,17 +128,11 @@ function TopBar({ onMenu }) {
 
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { partyOrgKey, can } = useStore()
-  // 角色化導覽(P0-03):依「這個專案」的 membership party 過濾工具——切換專案時
-  // 跟著變(A 案廠商/B 案監造看到不同側欄)。未解析身分只看共用工具。
-  // 技術管理員不再因 admin 看到全部(技術管理 ≠ 契約權限);perm 鍵對應 can 矩陣。
+  const { currentUser, can } = useStore()
+  // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——admin(專案建立者)看得到全部。
+  const org = currentUser?.org_type || 'contractor'
   const visibleGroups = navGroups
-    .map((g) => ({
-      ...g,
-      items: g.items.filter((n) =>
-        (!n.roles || (partyOrgKey && n.roles.includes(partyOrgKey)))
-        && (!n.perm || can?.[n.perm])),
-    }))
+    .map((g) => ({ ...g, items: g.items.filter((n) => !n.roles || can?.admin || n.roles.includes(org)) }))
     .filter((g) => g.items.length)
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg)]">

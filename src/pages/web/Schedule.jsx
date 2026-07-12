@@ -17,7 +17,7 @@ function deriveState(sch, pct) {
 }
 
 export default function Schedule() {
-  const { project, workItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule, can } = useStore()
+  const { project, workItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
   const [search, setSearch] = useState('')
 
   // 發包末端工項 + 查表
@@ -70,7 +70,7 @@ export default function Schedule() {
         <Stat label="已完成" value={counts.done} sub="項" color="text-[var(--green-text)]" />
       </div>
 
-      {can.manageProgressPlan && <Card title="加入工項排程">
+      <Card title="加入工項排程">
         <div className="relative">
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項加入排程…"
             className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none" />
@@ -87,7 +87,7 @@ export default function Schedule() {
           )}
         </div>
         <p className="text-xs text-[var(--text-3)] mt-2">建議只排關鍵 / 大宗工項。狀態：今天超過「計畫迄」且未完成 → 落後。完成%取自最新一期估驗。</p>
-      </Card>}
+      </Card>
 
       <Card title={`排程清單（${rows.length}）`} action={rows.length > 0 && (
         <button onClick={() => exportCsv(`逐工項排程_${stamp()}`, rows, [
@@ -118,18 +118,16 @@ export default function Schedule() {
                     <td className="py-1.5 pl-5 min-w-[200px]"><span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{r.it.item_no}</span>{r.it.description || r.key}</td>
                     <td className="px-2">
                       <input type="date" value={r.sch.planned_start || ''} onChange={(e) => setItemSchedule(r.key, { planned_start: e.target.value || null })}
-                        disabled={!can.manageProgressPlan}
                         className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
                     </td>
                     <td className="px-2">
                       <input type="date" value={r.sch.planned_finish || ''} onChange={(e) => setItemSchedule(r.key, { planned_finish: e.target.value || null })}
-                        disabled={!can.manageProgressPlan}
                         className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
                     </td>
                     <td className="px-2 text-right tabular-nums">{r.pct.toFixed(1)}%</td>
                     <td className="px-2"><span className="text-xs font-medium" style={{ color: r.state.color }}>{r.state.label}</span></td>
                     <td className="px-2 pr-5 text-right">
-                      {can.manageProgressPlan && <button onClick={() => removeItemSchedule(r.key)} className="text-[var(--text-3)] hover:text-rose-600 text-sm">✕</button>}
+                      <button onClick={() => removeItemSchedule(r.key)} className="text-[var(--text-3)] hover:text-rose-600 text-sm">✕</button>
                     </td>
                   </tr>
                 ))}

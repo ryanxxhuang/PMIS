@@ -13,7 +13,7 @@ const TODAY = new Date() // 今天（部署後依使用者實際日期）
 
 export default function Progress() {
   const { project, workItems: data, progressPlan, generateSchedule, updatePlannedPct, valuations,
-    isSupabaseConfigured, currentProject, workItemsSource, changeOrders, can } = useStore()
+    isSupabaseConfigured, currentProject, workItemsSource, changeOrders } = useStore()
   const [start, setStart] = useState(project.start_date)
   const [end, setEnd] = useState(project.end_date)
   const [expanded, setExpanded] = useState(() => new Set()) // 展開的工項節點 key
@@ -71,7 +71,6 @@ export default function Progress() {
       <div className="space-y-5">
         <Header billableTotal={billableTotal} project={project} />
         <Card title="建立預定進度">
-          {!can.manageProgressPlan ? <Empty>尚未建立預定進度；僅授權的廠商施工角色可建立。</Empty> : <>
           <p className="text-sm text-[var(--text-2)] mb-4">
             標單只提供金額權重、沒有時間分布，需先設定預定進度（廠商施工預定進度表）。
             系統會依開工/竣工切出月份，並產生一條標準 S 曲線當起點，之後可逐月微調。
@@ -81,7 +80,6 @@ export default function Progress() {
             <Field label="竣工日"><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
             <Button onClick={() => generateSchedule(start, end)}>產生預定 S 曲線</Button>
           </div>
-          </>}
         </Card>
       </div>
     )
@@ -143,7 +141,7 @@ export default function Progress() {
   return (
     <div className="space-y-5">
       <Header billableTotal={billableTotal} project={project} action={
-        can.manageProgressPlan && <Button variant="secondary" onClick={() => generateSchedule(progressPlan.start, progressPlan.end)}>重產 S 曲線</Button>
+        <Button variant="secondary" onClick={() => generateSchedule(progressPlan.start, progressPlan.end)}>重產 S 曲線</Button>
       } />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -260,7 +258,6 @@ export default function Progress() {
                     <td className="py-1.5 pl-3 text-[var(--text)] tabular-nums">{mm.label}</td>
                     <td className="text-right px-3">
                       <input type="number" min="0" max="100" value={mm.plannedPct}
-                        disabled={!can.manageProgressPlan}
                         onChange={(e) => { let n = parseFloat(e.target.value); if (isNaN(n)) n = 0; updatePlannedPct(i, Math.max(0, Math.min(100, n))) }}
                         className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none" />
                     </td>

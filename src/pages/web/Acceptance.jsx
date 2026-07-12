@@ -11,7 +11,7 @@ import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 const RESULT_STAGES = new Set(['initial', 'reinspect', 'final']) // 這幾關要記合格/不合格
 
 export default function Acceptance() {
-  const { acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, demoMode, project, can } = useStore()
+  const { acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, demoMode, project } = useStore()
 
   const stages = useMemo(() => deriveAcceptance(acceptanceEvents), [acceptanceEvents])
   const fixFlow = needsFixFlow(acceptanceEvents)
@@ -61,7 +61,6 @@ export default function Acceptance() {
         <ol>
           {visible.map((s, i) => (
             <StageRow key={s.key} stage={s} last={i === visible.length - 1}
-              canEdit={!!can.recordAcceptance?.[s.key]}
               onSave={(patch) => recordAcceptanceEvent(s.key, patch)}
               onClear={() => clearAcceptanceEvent(s.key)} />
           ))}
@@ -77,7 +76,7 @@ export default function Acceptance() {
   )
 }
 
-function StageRow({ stage, last, canEdit, onSave, onClear }) {
+function StageRow({ stage, last, onSave, onClear }) {
   const [editing, setEditing] = useState(false)
   const [date, setDate] = useState(stage.event?.event_date || '')
   const [result, setResult] = useState(stage.event?.result || '')
@@ -124,9 +123,9 @@ function StageRow({ stage, last, canEdit, onSave, onClear }) {
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="num text-[var(--text)]">{stage.event.event_date}</span>
             {stage.event.note && <span className="text-[var(--text-2)] text-xs">{stage.event.note}</span>}
-            {canEdit && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline">修改</button>}
+            <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline">修改</button>
           </div>
-        ) : canEdit && (editing || stage.state === 'due' || (!done && stage.state === 'pending')) && (
+        ) : (editing || stage.state === 'due' || (!done && stage.state === 'pending')) && (
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <label className="block">
               <span className="block text-[11px] text-[var(--text-3)] mb-0.5">實際辦理日</span>

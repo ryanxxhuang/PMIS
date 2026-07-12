@@ -168,7 +168,7 @@ export default function SiteLog() {
               <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field></div>
             </div>
 
-            {can.editDailyLog && <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
+            {can.edit && <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
               <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
                 <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : 'AI 拍照自動填寫'}
@@ -285,7 +285,7 @@ export default function SiteLog() {
             </div>
 
             <div className="flex items-center gap-3 mt-4">
-              {can.editDailyLog ? <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button> : <span className="text-xs text-[var(--text-3)]">此帳號唯讀，日誌由施工廠商填報。</span>}
+              {can.edit ? <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button> : <span className="text-xs text-[var(--text-3)]">監造帳號唯讀，日誌由施工廠商填報。</span>}
               {currentLog && (
                 <button onClick={() => navigate(`/site-log/print?d=${date}`)}
                   className="inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--surface-2)] text-[var(--blue)]">

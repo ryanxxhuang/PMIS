@@ -118,7 +118,7 @@ export default function Quality() {
       </div>
 
       {/* 查驗 */}
-      <Card title={`查驗（待查驗 ${openInsp}）`} action={can.submitInspection && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
+      <Card title={`查驗（待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
         {inspForm && (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
             <WorkItemPicker leaves={leaves} value={inspForm.work_item_key} label={inspForm.work_item_label} onPick={(k, l) => setInspForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
@@ -140,11 +140,11 @@ export default function Quality() {
                   <div className="text-xs text-[var(--text-3)] truncate">{i.work_item_no && `${i.work_item_no} `}{i.location} · {i.inspection_type} · {i.requested_date || ''}{i.result_note ? ` · ${i.result_note}` : ''}</div>
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
-                  {i.status === '待查驗' && (can.decideInspection ? <>
+                  {i.status === '待查驗' && (can.approve ? <>
                     <Button variant="success" onClick={() => onResult(i, true)} disabled={busy}>合格</Button>
                     <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
                   </> : <span className="text-xs text-[var(--text-3)]">待監造查驗</span>)}
-                  {((i.status === '待查驗' && can.submitInspection) || can.decideInspection) && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) deleteInspection(i.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
+                  {can.edit && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) deleteInspection(i.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
                 </div>
               </div>
             ))}
@@ -159,7 +159,7 @@ export default function Quality() {
           { key: 'severity', label: '嚴重度' }, { key: 'status', label: '狀態' }, { key: 'due_date', label: '改善期限' },
           { key: 'improvement_note', label: '改善說明' },
         ])} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
-        {can.openDefect && <Button variant="secondary" onClick={() => setDefForm(defForm ? null : { title: '', description: '', severity: '一般', location: '', due_date: '', work_item_key: '', work_item_label: '' })}>{defForm ? '取消' : '＋ 開立缺失'}</Button>}
+        <Button variant="secondary" onClick={() => setDefForm(defForm ? null : { title: '', description: '', severity: '一般', location: '', due_date: '', work_item_key: '', work_item_label: '' })}>{defForm ? '取消' : '＋ 開立缺失'}</Button>
       </div>}>
         {defForm && (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
@@ -199,14 +199,14 @@ export default function Quality() {
                 <div className="flex gap-2 shrink-0 items-center">
                   {d.status !== '已結案' && (
                     // 改善鏈:施工做「開始改善/提送複查」;複查結案/退回只有監造能按
-                    d.status === '待複查' ? (can.closeDefect ? <>
+                    d.status === '待複查' ? (can.approve ? <>
                       <Button variant="ghost" onClick={() => updateDefectStatus(d.id, '改善中')} disabled={busy}>退回</Button>
                       <Button variant="success" onClick={() => advanceDefect(d)} disabled={busy}>複查結案</Button>
                     </> : <span className="text-xs text-[var(--text-3)]">待監造複查</span>)
-                    : (can.manageDefectRemediation ? <Button variant="secondary" onClick={() => advanceDefect(d)} disabled={busy}>{nextLabel[d.status]}</Button>
+                    : (can.edit ? <Button variant="secondary" onClick={() => advanceDefect(d)} disabled={busy}>{nextLabel[d.status]}</Button>
                       : <span className="text-xs text-[var(--text-3)]">待廠商改善</span>)
                   )}
-                  {can.closeDefect && <button onClick={async () => { if (await appConfirm({ title: '刪除此缺失？', danger: true, confirmLabel: '刪除' })) deleteDefect(d.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
+                  {can.edit && <button onClick={async () => { if (await appConfirm({ title: '刪除此缺失？', danger: true, confirmLabel: '刪除' })) deleteDefect(d.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
                 </div>
               </div>
             ))}
@@ -215,16 +215,16 @@ export default function Quality() {
       </Card>
 
       {/* 觀察事項:比缺失輕的現場提醒,可升級成正式缺失 */}
-      <ObservationsSection observations={observations} canWrite={can.manageObservations}
+      <ObservationsSection observations={observations} canWrite={can.edit || can.approve}
         onCreate={createObservation} onUpdate={updateObservation} onEscalate={escalateObservation}
         onDelete={deleteObservation} resolveMarkup={resolveMarkup} />
 
       {/* 自主檢查表:量化標準 → 實測值 → 自動判定 */}
-      <ChecklistSection templates={checklistTemplates} records={checklistRecords} canEdit={can.manageQualityExecution}
+      <ChecklistSection templates={checklistTemplates} records={checklistRecords} canEdit={can.edit}
         onCreate={createChecklistRecord} onDelete={deleteChecklistRecord} />
 
       {/* 取樣試驗:試體齡期追蹤 + fc′ 自動判定 */}
-      <SamplesSection samples={testSamples} onGenerate={generateSamplesFromLogs} canEdit={can.manageQualityExecution}
+      <SamplesSection samples={testSamples} onGenerate={generateSamplesFromLogs} canEdit={can.edit}
         onCreate={createTestSamples} onUpdate={updateTestSample} onDelete={deleteTestSample} />
 
       <p className="text-xs text-[var(--text-3)]">三級品管：廠商提查驗申請 → 監造現場查驗（合格/不合格）→ 不合格自動開缺失 → 廠商改善 → 監造複查結案。自主檢查依範本量化標準自動判定、試體依 fc′ 自動判定，不合格皆自動開缺失；試驗到期自動進提醒中心。</p>

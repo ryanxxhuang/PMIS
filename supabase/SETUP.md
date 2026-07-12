@@ -71,24 +71,6 @@ supabase functions deploy parse-contract
 
 (Word/Excel contracts: export to PDF first for v1.)
 
-The `extract-requirements` function ([`functions/extract-requirements/index.ts`](./functions/extract-requirements/index.ts))
-is the P0-06 traceable ingestion pipeline: it reads the stored `document_pages` of an
-immutable document version, extracts **Requirement suggestions** via Claude, verifies every
-citation deterministically against the stored page text, and persists
-`draft_ai` / `needs_review` requirements linked to a `document_ingestion_runs` row.
-It reuses the same `ANTHROPIC_API_KEY` secret:
-
-```bash
-supabase functions deploy extract-requirements
-```
-
-`verify_jwt` stays on (the default). The function additionally verifies the caller inside the
-handler: `auth.getUser()`, an RLS-scoped read of the requested document version (the project id
-is derived server-side, never trusted from the request body), and the
-`can_manage_documents(project)` permission RPC — only then does its service-role client write
-runs and suggestions. See
-[`docs/architecture/traceable-document-ingestion.md`](../docs/architecture/traceable-document-ingestion.md).
-
 ## 6. Daily reminder emails (提醒推播)
 
 The `send-reminders` Edge Function ([`functions/send-reminders/index.ts`](./functions/send-reminders/index.ts))

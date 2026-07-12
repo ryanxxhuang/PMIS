@@ -15,7 +15,7 @@ const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 const pct = (n) => (isFinite(n) ? n.toFixed(1) : '—')
 
 export default function Cost() {
-  const { project, workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem, changeOrders, can } = useStore()
+  const { project, workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem, changeOrders } = useStore()
   // 合約收入 = 變更後契約金額(原發包 + 已核准追加減)
   const revenue = revisedContractTotal(workItems?.meta.billable_total || 0, changeOrders)
   const coNet = approvedNetAmount(changeOrders)
@@ -52,9 +52,6 @@ export default function Cost() {
 
   if (!dbMode && !demoMode) {
     return <Card title="成本管理"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單，才能對照合約收入計算毛利。</Empty></Card>
-  }
-  if (!can.accessContractorPrivate) {
-    return <Card title="成本管理"><Empty>此專案身分沒有承攬廠商成本／毛利資料權限。</Empty></Card>
   }
 
   return (

@@ -13,13 +13,12 @@ const todayISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
 
 export default function Dashboard() {
-  const { project, partyOrgKey, workItems, workItemsSource, demoMode, valuations, progressPlan, inspections, defects, siteLogs,
+  const { project, currentUser, workItems, workItemsSource, demoMode, valuations, progressPlan, inspections, defects, siteLogs,
     obligations, costItems, safetyRecords, changeOrders, itemSchedules,
     checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents } = useStore()
   const imported = workItemsSource === 'db' || demoMode
   const balls = tallyBalls({ rfis, submittals, valuations, defects, inspections, observations, changeOrders })
-  // P0-03:首頁行動中心依「這個專案」我代表的一方;未解析→唯讀,不指派契約待辦
-  const myOrg = partyOrgKey || 'viewer'
+  const myOrg = currentUser?.org_type || 'contractor'
   const myItems = useMemo(
     () => myOpenItems(myOrg, { rfis, submittals, valuations, defects, inspections, observations, changeOrders }),
     [myOrg, rfis, submittals, valuations, defects, inspections, observations, changeOrders],
@@ -235,7 +234,6 @@ const ORG_ACTION = {
   contractor: { title: '待你送出／改善', empty: '目前沒有待你送出或改善的事項 — 都跟上了。' },
   supervisor: { title: '待你審核', empty: '目前沒有待你審核的事項 — 都跟上了。' },
   owner: { title: '待你核定／撥款', empty: '目前沒有待你核定或撥款的事項 — 都跟上了。' },
-  viewer: { title: '唯讀專案視角', empty: '身分尚未解析或目前為檢視者，沒有契約待辦。' },
 }
 // 每種協作項的圖示 + 色票(icon 方塊底色/字色)——收件匣一眼分辨類型
 const TAG_META = {
@@ -251,7 +249,7 @@ const TAG_META = {
 // 角色行動中心:把 myOpenItems 算出的「球在你手上」協作項列成收件匣。
 // 三種角色共用元件,只是標題/空狀態文案不同——每個人的首頁都直接看到「該我處理的」。
 function RoleActionCenter({ org, items }) {
-  const cfg = ORG_ACTION[org] || ORG_ACTION.viewer
+  const cfg = ORG_ACTION[org] || ORG_ACTION.contractor
   const shown = items.slice(0, 8)
   const countPill = (
     <span className={`num text-xs font-semibold px-2 py-0.5 rounded-full ${items.length ? 'bg-[var(--accent-tint)] text-[var(--accent-text)]' : 'bg-[var(--green-tint)] text-[var(--green-text)]'}`}>
