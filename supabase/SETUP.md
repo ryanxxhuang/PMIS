@@ -10,8 +10,17 @@ your users (Tokyo / Singapore for Taiwan).
 
 ## 2. Apply the schema
 
-**SQL Editor** → **New query** → paste all of [`schema.sql`](./schema.sql) → **Run**.
-It's idempotent, so you can re-run it any time to re-sync tables, policies, functions and RPCs.
+> ⚠ **2026-07 起單一真相來源是 [`migrations/`](./migrations)**;`schema.sql` 已凍結為
+> 歷史參考,不要再用它初始化或同步。
+
+```bash
+supabase link --project-ref <你的 project ref>
+supabase db push          # 依序套用 migrations/(baseline + 後續全部)
+```
+
+本地開發:`colima start && supabase start`(空庫會自動由 migrations 重建),
+pgTAP 測試見 [`tests/`](./tests)。Storage bucket(`photos`、`contract-documents`)
+與其物件 policies 都由 migration 建立,不需手動設定。
 
 This creates: `profiles`, `projects`, `project_members`, `work_items`, `valuations`,
 `valuation_items`, `schedule_periods`, `daily_logs`, `daily_log_items`, `photos`,

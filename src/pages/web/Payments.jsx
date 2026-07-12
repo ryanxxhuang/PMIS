@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
@@ -9,6 +9,13 @@ const payStatus = (v) => (v.paid_date ? '已收款' : v.invoice_date ? '已請�
 
 export default function Payments() {
   const { project, workItems: data, valuations, updateValuationPayment, isSupabaseConfigured, currentProject, workItemsSource } = useStore()
+  const [errMsg, setErrMsg] = useState('')
+  // 請款/收款欄位寫入失敗必須讓使用者看到(DB-first,失敗=UI 不變)
+  const onPay = async (id, patch) => {
+    setErrMsg('')
+    const { error } = await updateValuationPayment(id, patch)
+    if (error) setErrMsg(`未寫入：${error.message}`)
+  }
 
   const tree = useMemo(() => (data ? buildBillableTree(data.items) : { roots: [], childrenMap: new Map() }), [data])
 
@@ -41,6 +48,13 @@ export default function Payments() {
       <div className="min-w-0">
         <PageHeader title="請款收款" tagline="現金流" subtitle="每期估驗 → 本期應領、保留款、收款追蹤" />
       </div>
+
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="累計應領(扣保留款)" value={money(sum.net)} sub="NT$" color="text-[var(--text)]" />
@@ -89,16 +103,16 @@ export default function Payments() {
                       <td className="px-2 text-right tabular-nums text-[var(--text-2)]">{money(retention)}</td>
                       <td className="px-2 text-right tabular-nums font-medium">{money(net)}</td>
                       <td className="px-2">
-                        <input type="date" value={v.invoice_date || ''} onChange={(e) => updateValuationPayment(v.id, { invoice_date: e.target.value || null })}
+                        <input type="date" value={v.invoice_date || ''} onChange={(e) => onPay(v.id, { invoice_date: e.target.value || null })}
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
                       </td>
                       <td className="px-2">
-                        <input type="date" value={v.paid_date || ''} onChange={(e) => updateValuationPayment(v.id, { paid_date: e.target.value || null })}
+                        <input type="date" value={v.paid_date || ''} onChange={(e) => onPay(v.id, { paid_date: e.target.value || null })}
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
                       </td>
                       <td className="px-2 text-right">
                         <input type="number" min="0" step="any" value={v.paid_amount ?? ''} placeholder={Math.round(net).toString()}
-                          onChange={(e) => { const n = parseFloat(e.target.value); updateValuationPayment(v.id, { paid_amount: isNaN(n) ? null : n }) }}
+                          onChange={(e) => { const n = parseFloat(e.target.value); onPay(v.id, { paid_amount: isNaN(n) ? null : n }) }}
                           className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
                       </td>
                       <td className="px-2 pr-4">

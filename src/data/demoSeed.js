@@ -160,6 +160,10 @@ export function buildDemoData(workItems, project) {
     { id: 'SAF-4', record_type: '自主檢查', title: '塔吊月檢', location: '塔吊 T1', record_date: iso(daysFromNow(-15)), severity: '一般', status: '已完成', due_date: null, note: null },
     { id: 'SAF-5', record_type: '教育訓練', title: '新進人員職安教育訓練', location: '工務所', record_date: iso(daysFromNow(-9)), severity: '一般', status: '已完成', due_date: null, note: '12 人參訓' },
     { id: 'SAF-6', record_type: '危害告知', title: '混凝土澆置作業危害告知', location: '4F', record_date: iso(daysFromNow(-1)), severity: '一般', status: '已完成', due_date: null, note: null },
+    // 監造三類(事件型,生即完成):展示三方權責——監造只能「新增」,不可改寫廠商紀錄
+    { id: 'SAF-7', record_type: '監造觀察', title: '3F 模板支撐間距不足,已口頭通知改善', location: '3F', record_date: iso(daysFromNow(-3)), severity: '一般', status: '已完成', due_date: null, note: '併入 SAF-1 缺失追蹤' },
+    { id: 'SAF-8', record_type: '監造查驗', title: '施工架與安全網查驗', location: '南側外牆', record_date: iso(daysFromNow(-5)), severity: '一般', status: '已完成', due_date: null, note: '斜籬破損處待廠商改善後複查' },
+    { id: 'SAF-9', record_type: '監造複查', title: '2F 臨邊護欄改善複查合格', location: '2F', record_date: iso(daysFromNow(-8)), severity: '一般', status: '已完成', due_date: null, note: null },
   ]
 
   // ── 變更設計（1 筆已核准、1 筆審核中）──
