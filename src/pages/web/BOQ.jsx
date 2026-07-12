@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Empty, Button, PageHeader } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -129,12 +130,12 @@ export default function BOQ() {
       {canImport && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 space-y-2">
           <div className="text-sm text-amber-800">
-            此專案<b>尚未匯入標單</b>。上傳本案的 PCCES 預算書 XML，系統會解析後寫進資料庫，估驗/進度就跟著真資料走。
+            此專案<b>尚未匯入標單</b>。到「<Link to="/contract" className="font-medium underline">專案文件</Link>」把標單 XML 和契約等文件<b>一次上傳</b>,系統會自動匯入並整理。
           </div>
           <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" onChange={onPickFile} className="hidden" />
           {!parsed ? (
             <div className="flex items-center gap-3 flex-wrap">
-              <Button onClick={() => fileRef.current?.click()}>選擇標單 XML 檔</Button>
+              <Link to="/contract"><Button>前往專案文件上傳</Button></Link>
               <button onClick={() => runImport()} disabled={importing} className="text-xs text-amber-700 hover:text-amber-900 underline disabled:opacity-50">
                 {importing ? '匯入中…' : '沒有檔案？用範例標單試試'}
               </button>

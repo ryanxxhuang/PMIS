@@ -102,18 +102,27 @@ export function useProjectsSlice({ currentUser, log }) {
   // 重試標單載入（error 狀態的 UI 呼叫）
   const retryWorkItems = useCallback(() => setWiReloadKey((k) => k + 1), [])
 
-  // 本人在目前專案的 P0-02 membership(契約包上傳的 party 歸屬用;無則 null)
+  // 本人在目前專案的 P0-02 membership(契約包上傳的 party 歸屬用;無則 null)。
+  // 必須帶出 party_type(join parties),availablePackageOptions 靠它分流。
+  const [membershipReloadKey, setMembershipReloadKey] = useState(0)
+  const reloadMembership = useCallback(() => setMembershipReloadKey((k) => k + 1), [])
   const [currentProjectMembership, setCurrentProjectMembership] = useState(null)
   useEffect(() => {
     const pid = currentProject?.project_id
     if (!isSupabaseConfigured || !pid || !currentUser?.real) { setCurrentProjectMembership(null); return }
     let active = true
-    supabase.from('project_memberships').select('*')
+    supabase.from('project_memberships')
+      .select('*, project_parties(party_type, display_name)')
       .eq('project_id', pid).eq('user_id', currentUser.user_id).maybeSingle()
-      .then(({ data }) => { if (active) setCurrentProjectMembership(data || null) })
+      .then(({ data }) => {
+        if (!active) return
+        setCurrentProjectMembership(data
+          ? { ...data, party_type: data.project_parties?.party_type || null }
+          : null)
+      })
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProject?.project_id, currentUser?.user_id])
+  }, [currentProject?.project_id, currentUser?.user_id, membershipReloadKey])
 
   // 工項查表（item_key↔work_item uuid）+ 是否走真 DB（估驗/進度才寫回 DB）
   const wiMaps = useMemo(() => {
@@ -217,7 +226,7 @@ export function useProjectsSlice({ currentUser, log }) {
 
   return {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
-    workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership,
+    workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership,
     switchProject, createProject, importWorkItems, updateProjectAnchors, deleteProject, clearOnLogout,
     loadPortfolio,
   }

@@ -50,7 +50,7 @@ export default function Contract() {
     isSupabaseConfigured, currentProject, isPersistedProject,
     currentProjectMembership, currentUser,
     obligations, parseContractFromText, updateObligationStatus, updateProjectAnchors, can,
-    importWorkItems, workItemsSource,
+    importWorkItems, workItemsSource, reloadMembership,
   } = useStore()
   const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '' })
   const [parties, setParties] = useState([])
@@ -171,6 +171,22 @@ export default function Contract() {
       && p.counterparty_project_party_id === o.counterparty_project_party_id,
   ))
 
+  // 自動補齊專案身分:受邀成員/舊專案缺 parties 或 membership 時,開頁即修——
+  // 不再把使用者導去一個管不了這件事的頁面。冪等 RPC,失敗才顯示訊息。
+  const identityFixTried = useRef(false)
+  useEffect(() => {
+    if (!isPersistedProject || !pid || !canUploadDocs) return
+    if (packageOptions.length > 0 || identityFixTried.current) return
+    identityFixTried.current = true
+    ;(async () => {
+      const { error } = await supabase.rpc('ensure_project_identity', { p: pid })
+      if (error) { setMsg(`初始化專案身分失敗:${error.message}`); return }
+      reloadMembership()
+      await reloadPackages()
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPersistedProject, pid, canUploadDocs, packageOptions.length])
+
   const ensurePackage = useCallback(async (option) => {
     const existing = packages.find((p) => p.package_type === option.package_type
       && p.counterparty_project_party_id === option.counterparty_project_party_id)
@@ -208,7 +224,7 @@ export default function Contract() {
     let pkg = targetPackage
     try {
       if (!pkg) {
-        if (!packageOptions.length) { setMsg('此專案尚未設定契約相對人(施工廠商/監造單位),請先於專案成員維護。'); return }
+        if (!packageOptions.length) { setMsg('專案身分初始化中,請稍候幾秒再試一次。'); return }
         pkg = await ensurePackage(packageOptions[0])
       }
       setUploading(true); setMsg(''); setLegacyMsg('')
@@ -454,7 +470,7 @@ export default function Contract() {
             </div>
           )}
           {!isPersistedProject && <p className="text-xs text-amber-600 mt-2">Demo 模式不支援,請登入並選擇真實專案。</p>}
-          {isPersistedProject && !can.edit && <p className="text-xs text-[var(--text-3)] mt-2">需文件管理權限(廠商專案經理/機關專案經理/監造主任/文件管理員)。</p>}
+          {isPersistedProject && !can.edit && <p className="text-xs text-[var(--text-3)] mt-2">需編輯權限(施工廠商或專案管理者)。</p>}
         </div>
 
         {/* 真實階段進度(持久化;離開頁面不會遺失) */}

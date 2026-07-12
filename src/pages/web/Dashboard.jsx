@@ -94,7 +94,7 @@ export default function Dashboard() {
       ) : !imported ? (
         <Card>
           <Empty>
-            此專案尚未匯入標單。請先到「<Link to="/boq" className="text-[var(--blue)]">標單工項</Link>」上傳 PCCES 預算書 XML，
+            此專案尚未匯入標單。請到「<Link to="/contract" className="text-[var(--blue)]">專案文件</Link>」把標單 XML 與契約等文件一次上傳，
             之後估驗、進度、施工日誌、品質查驗才會有資料。
           </Empty>
         </Card>

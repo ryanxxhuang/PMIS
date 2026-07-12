@@ -16,7 +16,7 @@ const navGroups = [
     { to: '/assistant', icon: Sparkles, label: 'AI 助理' },
     { to: '/alerts', icon: Bell, label: '提醒中心' },
     { to: '/activity', icon: History, label: '活動紀錄' },
-    { to: '/contract', icon: CalendarClock, label: '契約管制' },
+    { to: '/contract', icon: CalendarClock, label: '專案文件' },
     { to: '/requirements', icon: ScrollText, label: '履約需求' },
     { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
     { to: '/monthly-report', icon: Newspaper, label: '施工月報' },

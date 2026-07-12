@@ -174,7 +174,7 @@ export default function Requirements() {
     return (
       <div className="space-y-5">
         <PageHeader title="履約需求" tagline="AI 建議 → 人工審查" subtitle="AI 擷取的履約需求建議在此逐項審查;核定後才成為專案的契約性規則" />
-        <Card title="履約需求審查"><Empty>需真實專案。於「契約管制」頁上傳文件執行 AI 履約需求擷取後,建議會出現在這裡待審查。</Empty></Card>
+        <Card title="履約需求審查"><Empty>需真實專案。於「專案文件」頁一次上傳專案文件後,建議會出現在這裡待審查。</Empty></Card>
       </div>
     )
   }
