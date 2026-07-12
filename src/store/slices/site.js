@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 import { loadSiteLogsFromDB, imageToBase64 } from '../db.js'
+import { mutationOutcome } from './billing.js'
 
 export function useSiteSlice({ dbMode, demoMode, currentProject, currentUser, wiMaps, log }) {
   // 施工日誌（真 DB；每筆 items 為 { work_item_key: 當日完成數量 }）
@@ -148,7 +149,9 @@ export function useSiteSlice({ dbMode, demoMode, currentProject, currentUser, wi
       record_type: input.record_type || '工安缺失', title: input.title,
       location: input.location || null, record_date: input.record_date || null,
       severity: input.severity || '一般',
-      status: input.record_type === '教育訓練' || input.record_type === '危害告知' ? '已完成' : (input.status || '待改善'),
+      // 事件型紀錄(訓練/告知/監造三類)生即完成;自主檢查與缺失走改善流程
+      status: ['教育訓練', '危害告知', '監造觀察', '監造查驗', '監造複查'].includes(input.record_type)
+        ? '已完成' : (input.status || '待改善'),
       due_date: input.due_date || null, note: input.note || null,
     }
     if (!dbMode) {
@@ -163,16 +166,25 @@ export function useSiteSlice({ dbMode, demoMode, currentProject, currentUser, wi
     return { error: null }
   }, [dbMode, currentProject, currentUser, log])
 
+  // 更新工安紀錄:DB 成功才更新 UI(guard 拒絕——他方紀錄/已完成未附原因——如實回報)
   const updateSafetyRecord = useCallback(async (id, patch) => {
+    if (dbMode) {
+      const res = await supabase.from('safety_records').update(patch).eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '未寫入:可能無權限或紀錄已被移除')
+      if (error) return { error }
+    }
     setSafetyRecords((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
-    if (!dbMode) return { error: null }
-    const { error } = await supabase.from('safety_records').update(patch).eq('id', id)
-    return { error }
+    return { error: null }
   }, [dbMode])
 
+  // 刪除工安紀錄:DB 刪成功才從 UI 移除(已完成紀錄由 guard 擋下,不可假消失)
   const deleteSafetyRecord = useCallback(async (id) => {
+    if (dbMode) {
+      const res = await supabase.from('safety_records').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或紀錄已被移除')
+      if (error) return { error }
+    }
     setSafetyRecords((rs) => rs.filter((r) => r.id !== id))
-    if (dbMode) await supabase.from('safety_records').delete().eq('id', id)
     return { error: null }
   }, [dbMode])
 
