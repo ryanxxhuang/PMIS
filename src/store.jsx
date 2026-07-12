@@ -29,24 +29,10 @@ import { useLedgerSlice } from './store/slices/ledger.js'
 
 const StoreContext = createContext(null)
 
-const now = () => new Date().toLocaleString('zh-TW', { hour12: false })
-
 export function StoreProvider({ children }) {
-  const [audit, setAudit] = useState([]) // 記憶體操作紀錄（log() 寫入，供日後審計）
-  const log = useCallback((action, record, extra = {}) => {
-    setAudit((a) => [
-      {
-        event_id: `E${a.length + 1}`,
-        user: extra.user || '系統',
-        role: extra.role || '-',
-        action,
-        related_record: record,
-        timestamp: now(),
-        device_type: extra.device || 'Web',
-      },
-      ...a,
-    ])
-  }, [])
+  // P0-05:記憶體假 audit 已除役——權威事件由 DB trigger 寫入 audit_events(不可竄改),
+  // /activity 頁讀取。slice 呼叫點保留 log() 形狀,維持最小侵入。
+  const log = useCallback(() => {}, [])
 
   // ── 身分與專案(其他 slice 的共同上游)────────────────────────────────────
   const { currentUser, setCurrentUser, signUp, resendSignup, signIn, signOutBase } = useAuthSlice()

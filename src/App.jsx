@@ -24,6 +24,7 @@ import Payments from './pages/web/Payments.jsx'
 import Cost from './pages/web/Cost.jsx'
 import ChangeOrders from './pages/web/ChangeOrders.jsx'
 import Alerts from './pages/web/Alerts.jsx'
+import Activity from './pages/web/Activity.jsx'
 import MonthlyReport from './pages/web/MonthlyReport.jsx'
 import Assistant from './pages/web/Assistant.jsx'
 import SupervisorReport from './pages/web/SupervisorReport.jsx'
@@ -75,6 +76,7 @@ export default function App() {
       <Route path="/members" element={<Web><Members /></Web>} />
       <Route path="/contract" element={<Web><Contract /></Web>} />
       <Route path="/alerts" element={<Web><Alerts /></Web>} />
+      <Route path="/activity" element={<Web><Activity /></Web>} />
       <Route path="/monthly-report" element={<Web><MonthlyReport /></Web>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

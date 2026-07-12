@@ -6,7 +6,7 @@ import {
   LayoutDashboard, LayoutGrid, Sparkles, Bell, CalendarClock, Newspaper, BadgeCheck,
   ClipboardList, PencilLine, Coins, Receipt, Wallet, Wrench, TrendingUp, CalendarRange,
   ShieldCheck, ShieldAlert, ClipboardCheck, HardHat, FileCheck2, MessageSquareWarning, Users, Flag,
-  Menu, ChevronDown, Trash2, Moon, Sun, Plus,
+  Menu, ChevronDown, Trash2, Moon, Sun, Plus, History,
 } from 'lucide-react'
 
 const navGroups = [
@@ -15,6 +15,7 @@ const navGroups = [
     { to: '/dashboard', icon: LayoutDashboard, label: '專案 Dashboard' },
     { to: '/assistant', icon: Sparkles, label: 'AI 助理' },
     { to: '/alerts', icon: Bell, label: '提醒中心' },
+    { to: '/activity', icon: History, label: '活動紀錄' },
     { to: '/contract', icon: CalendarClock, label: '契約管制' },
     { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
     { to: '/monthly-report', icon: Newspaper, label: '施工月報' },
