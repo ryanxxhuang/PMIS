@@ -10,8 +10,20 @@ import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 
 const RESULT_STAGES = new Set(['initial', 'reinspect', 'final']) // 這幾關要記合格/不合格
 
+// 伺服器 acceptance_events_guard 矩陣的鏡像(僅 UX;真正強制在 DB trigger,
+// 見 migration 20260712000100_acceptance_events_rbac.sql)
+const STAGE_ORGS = {
+  report: ['contractor'], confirm: ['supervisor', 'owner'], initial: ['owner'],
+  fix: ['contractor'], reinspect: ['supervisor', 'owner'], final: ['owner'],
+  certificate: ['owner'], warranty: ['owner'],
+}
+
 export default function Acceptance() {
-  const { acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, demoMode, project } = useStore()
+  const { acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, demoMode, project, currentUser, can } = useStore()
+  const [errMsg, setErrMsg] = useState('')
+  const org = currentUser?.org_type || 'contractor'
+  // 專案管理者=授權主驗;demo 刻意不套 admin 例外,保留三方角色劇本
+  const canStage = (key) => (!demoMode && can.admin) || (STAGE_ORGS[key] || []).includes(org)
 
   const stages = useMemo(() => deriveAcceptance(acceptanceEvents), [acceptanceEvents])
   const fixFlow = needsFixFlow(acceptanceEvents)
@@ -37,6 +49,13 @@ export default function Acceptance() {
         ]}
       />
 
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
+
       {demoMode && (
         <div className="text-xs rounded-lg border border-[var(--border-2)] bg-[var(--blue-tint)]/50 text-[var(--text-2)] px-3 py-2">
           示範資料：<b>{DEMO_PORTFOLIO[0].name}</b>（驗收中）。真實專案將顯示該案自己的驗收時程。
@@ -61,8 +80,19 @@ export default function Acceptance() {
         <ol>
           {visible.map((s, i) => (
             <StageRow key={s.key} stage={s} last={i === visible.length - 1}
-              onSave={(patch) => recordAcceptanceEvent(s.key, patch)}
-              onClear={() => clearAcceptanceEvent(s.key)} />
+              allowed={canStage(s.key)}
+              onSave={async (patch) => {
+                setErrMsg('')
+                const { error } = await recordAcceptanceEvent(s.key, patch)
+                if (error) setErrMsg(`「${s.label}」登錄失敗：${error.message}`)
+                return { error }
+              }}
+              onClear={async () => {
+                setErrMsg('')
+                const { error } = await clearAcceptanceEvent(s.key)
+                if (error) setErrMsg(`「${s.label}」撤銷失敗：${error.message}`)
+                return { error }
+              }} />
           ))}
         </ol>
       </Card>
@@ -76,7 +106,7 @@ export default function Acceptance() {
   )
 }
 
-function StageRow({ stage, last, onSave, onClear }) {
+function StageRow({ stage, last, allowed, onSave, onClear }) {
   const [editing, setEditing] = useState(false)
   const [date, setDate] = useState(stage.event?.event_date || '')
   const [result, setResult] = useState(stage.event?.result || '')
@@ -85,8 +115,8 @@ function StageRow({ stage, last, onSave, onClear }) {
 
   const save = async () => {
     if (!date) return
-    await onSave({ event_date: date, result: RESULT_STAGES.has(stage.key) ? (result || '合格') : null, note })
-    setEditing(false)
+    const res = await onSave({ event_date: date, result: RESULT_STAGES.has(stage.key) ? (result || '合格') : null, note })
+    if (!res?.error) setEditing(false) // 失敗保持編輯狀態,錯誤訊息顯示在頁面 banner
   }
 
   const dueBadge = !done && stage.due && (
@@ -123,8 +153,12 @@ function StageRow({ stage, last, onSave, onClear }) {
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="num text-[var(--text)]">{stage.event.event_date}</span>
             {stage.event.note && <span className="text-[var(--text-2)] text-xs">{stage.event.note}</span>}
-            <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline">修改</button>
+            {allowed && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline">修改</button>}
           </div>
+        ) : !allowed ? (
+          (stage.state === 'due' || stage.state === 'pending') && (
+            <div className="mt-1.5 text-[11px] text-[var(--text-3)]">由{stage.by === '—' ? '機關' : stage.by}登錄</div>
+          )
         ) : (editing || stage.state === 'due' || (!done && stage.state === 'pending')) && (
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <label className="block">
@@ -149,7 +183,7 @@ function StageRow({ stage, last, onSave, onClear }) {
             {editing && (
               <>
                 <Button size="sm" variant="outline" onClick={() => setEditing(false)}>取消</Button>
-                <Button size="sm" variant="ghost" className="!text-[var(--red-text)]" onClick={async () => { await onClear(); setEditing(false); setDate(''); setResult(''); setNote('') }}>撤銷此階段</Button>
+                <Button size="sm" variant="ghost" className="!text-[var(--red-text)]" onClick={async () => { const res = await onClear(); if (!res?.error) { setEditing(false); setDate(''); setResult(''); setNote('') } }}>撤銷此階段</Button>
               </>
             )}
           </div>

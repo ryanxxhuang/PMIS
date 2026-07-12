@@ -258,11 +258,24 @@ export function useLedgerSlice({ dbMode, currentProject, currentUser, wiMaps, lo
     return { error: null }
   }, [dbMode, acceptanceEvents, currentProject, currentUser, log])
 
-  // 驗收:撤銷某階段的登錄(登錯日期重來)
+  // 驗收:撤銷某階段的登錄(登錯日期重來)。
+  // DB 刪成功才從 UI 移除;guard 拒絕(他方事件/角色不符)或 RLS 靜默 0-row 都如實回報。
   const clearAcceptanceEvent = useCallback(async (stage_key) => {
     const targets = acceptanceEvents.filter((e) => e.stage_key === stage_key)
+    if (dbMode) {
+      const deleted = []
+      for (const t of targets) {
+        const { data, error } = await supabase.from('acceptance_events')
+          .delete().eq('id', t.id).select('id')
+        if (error || !data?.length) {
+          // 已刪成功的先反映到 UI,再回報失敗原因
+          if (deleted.length) setAcceptanceEvents((es) => es.filter((e) => !deleted.includes(e.id)))
+          return { error: error || { message: '撤銷被拒絕:可能無權限或非本方登錄' } }
+        }
+        deleted.push(t.id)
+      }
+    }
     setAcceptanceEvents((es) => es.filter((e) => e.stage_key !== stage_key))
-    if (dbMode) for (const t of targets) await supabase.from('acceptance_events').delete().eq('id', t.id)
     return { error: null }
   }, [dbMode, acceptanceEvents])
 
