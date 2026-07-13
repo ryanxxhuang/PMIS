@@ -189,12 +189,16 @@ export function useProjectsSlice({ currentUser, log }) {
 
   // 基準日(決標/接獲通知/開工)→ 寫回 projects 欄位 + 本地。
   // 契約時程/驗收領域不依賴標單 → isPersistedProject(匯標單前也要能設基準日)。
+  // DB-first + RLS 感知:RLS 只允許建立者更新 projects,非建立者 update 靜默 0 列(無 error)。
+  // 以 .select('id') 的回傳列數判定是否真生效,成功才更新本地——避免幽靈成功(座標/基準日看似存了、重整消失)。
   const updateProjectAnchors = useCallback(async (patch) => {
     if (!isPersistedProject) return { error: { message: '需真專案' } }
     const pid = currentProject.project_id
+    const { data, error } = await supabase.from('projects').update(patch).eq('id', pid).select('id')
+    if (error) return { error }
+    if (!data?.length) return { error: { message: '未生效:僅專案建立者可修改專案設定' } }
     setProjects((ps) => ps.map((p) => (p.project_id === pid ? { ...p, ...patch } : p)))
-    const { error } = await supabase.from('projects').update(patch).eq('id', pid)
-    return { error }
+    return { error: null }
   }, [isPersistedProject, currentProject])
 
   // 正式模式:單向開啟(DB-first,成功才更新本地)——關閉建立者的跨角色簽核例外。
