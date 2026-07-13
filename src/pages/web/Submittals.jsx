@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Upload, Paperclip, FileSearch } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
@@ -15,12 +15,15 @@ const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 
 export default function Submittals() {
   const { project, submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
-    isSupabaseConfigured, currentProject, can } = useStore()
+    uploadSubmittalFile, readSubmittalDoc, isSupabaseConfigured, currentProject, can } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 審定寫入失敗必須讓使用者看到(失敗=UI 不變)
   const [aiReview, setAiReview] = useState({}) // { [submittalId]: { result, opinion } } AI 審查助手結果
   const [reviewBusy, setReviewBusy] = useState(null) // 正在跑審查的 submittal id
+  const [aiRead, setAiRead] = useState({})     // { [submittalId]: result } AI 讀文件審查結果
+  const [readBusy, setReadBusy] = useState(null)
+  const [uploadBusy, setUploadBusy] = useState(null)
 
   if (isSupabaseConfigured && !currentProject) {
     return <Card title="送審文件"><Empty>請先登入並選擇專案。</Empty></Card>
@@ -31,8 +34,8 @@ export default function Submittals() {
   }
   const onDecide = async (s, status) => {
     const required = status === '退回補正' || status === '駁回'
-    // AI 審查助手已備妥意見 → 帶入為預設(監造仍可改);否則沿用原邏輯(退回/駁回不預填舊意見)
-    const aiOpinion = aiReview[s.id]?.opinion
+    // AI 審查助手/讀文件審查已備妥意見 → 帶入為預設(監造仍可改);否則沿用原邏輯(退回/駁回不預填舊意見)
+    const aiOpinion = aiReview[s.id]?.opinion || aiRead[s.id]?.summary_opinion
     const note = await appPrompt({
       title: `${status}：${s.submittal_no}`, body: s.title,
       label: required ? `${status}原因 / 審查意見（必填）` : '審查意見（可留空）',
@@ -43,7 +46,10 @@ export default function Submittals() {
     const { error } = await decideSubmittal(s.id, status, note || s.review_note)
     setBusy(false)
     if (error) setErrMsg(`${status}未寫入：${error.message}`)
-    else setAiReview((m) => { const n = { ...m }; delete n[s.id]; return n }) // 審定後收起助手面板
+    else { // 審定後收起助手面板
+      setAiReview((m) => { const n = { ...m }; delete n[s.id]; return n })
+      setAiRead((m) => { const n = { ...m }; delete n[s.id]; return n })
+    }
   }
 
   // AI 送審審查助手:產生審查要點清單 + 意見草稿 + 建議判定
@@ -55,6 +61,26 @@ export default function Submittals() {
     setAiReview((m) => ({ ...m, [s.id]: { result, opinion: result.opinion || '' } }))
   }
   const closeReview = (id) => setAiReview((m) => { const n = { ...m }; delete n[id]; return n })
+
+  // 廠商上傳送審主文件
+  const onUpload = async (s, e) => {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    setUploadBusy(s.id); setErrMsg('')
+    const { error } = await uploadSubmittalFile(s.id, file)
+    setUploadBusy(null)
+    if (error) setErrMsg(`文件上傳失敗：${error.message || ''}`)
+  }
+  // AI 讀文件審查:讀送審文件本體逐項比對契約需求
+  const onRead = async (s) => {
+    setReadBusy(s.id); setErrMsg('')
+    const { error, result } = await readSubmittalDoc(s)
+    setReadBusy(null)
+    if (error) { setErrMsg(`AI 讀文件審查失敗：${error.message || ''}`); return }
+    setAiRead((m) => ({ ...m, [s.id]: result }))
+  }
+  const closeRead = (id) => setAiRead((m) => { const n = { ...m }; delete n[id]; return n })
+
   // 修正再送:補正說明必填(P0-01 持久化 + P1-08 實質補正證據)
   const onResubmit = async (s) => {
     const note = await appPrompt({
@@ -124,6 +150,18 @@ export default function Submittals() {
                     </div>
                     {s.attachment_note && <div className="text-xs text-[var(--text-2)] mt-0.5">附件：{s.attachment_note}</div>}
                     {s.review_note && <div className="text-xs text-[var(--amber-text)] mt-0.5">審查意見：{s.review_note}</div>}
+                    {/* 送審主文件本體:廠商上傳,監造可 AI 審讀 */}
+                    <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                      {s.attachment_path
+                        ? <span className="text-xs inline-flex items-center gap-1 text-[var(--blue-text)]"><Paperclip size={12} aria-hidden />已附文件：{s.attachment_name || '文件'}</span>
+                        : <span className="text-[11px] text-[var(--text-3)]">尚未上傳文件本體</span>}
+                      {can.submit && (s.status === '已提送' || s.status === '審核中' || s.status === '退回補正') && (
+                        <label className={`text-xs inline-flex items-center gap-1 rounded px-2 py-0.5 border border-[var(--border)] ${uploadBusy === s.id ? 'opacity-50' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
+                          <input type="file" accept=".pdf,.doc,.docx,image/*" disabled={uploadBusy === s.id} onChange={(e) => onUpload(s, e)} className="hidden" />
+                          <Upload size={12} aria-hidden />{uploadBusy === s.id ? '上傳中…' : (s.attachment_path ? '更換文件' : '上傳文件')}
+                        </label>
+                      )}
+                    </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     {/* 監造:審定動作——先受理才可核准/核備(P1-08:不可跳過受理) */}
@@ -143,6 +181,12 @@ export default function Submittals() {
                     {can.approve && (s.status === '已提送' || s.status === '審核中') && !aiReview[s.id] && (
                       <Button variant="secondary" disabled={reviewBusy === s.id} onClick={() => onReview(s)}>
                         <Sparkles size={13} aria-hidden />{reviewBusy === s.id ? ' AI 審查中…' : ' AI 審查助手'}
+                      </Button>
+                    )}
+                    {/* 監造:AI 讀文件審查——讀送審文件本體逐項比對契約需求(需已上傳文件) */}
+                    {can.approve && s.attachment_path && (s.status === '已提送' || s.status === '審核中') && !aiRead[s.id] && (
+                      <Button variant="secondary" disabled={readBusy === s.id} onClick={() => onRead(s)}>
+                        <FileSearch size={13} aria-hidden />{readBusy === s.id ? ' AI 讀文件中…' : ' AI 讀文件審查'}
                       </Button>
                     )}
                     {/* 施工:退回補正後修正再送(補正說明必填=實質補正證據) */}
@@ -190,13 +234,46 @@ export default function Submittals() {
                     </div>
                   )
                 })()}
+                {aiRead[s.id] && (() => {
+                  const d = aiRead[s.id]
+                  const RS = { 符合: 'green', 部分符合: 'amber', 不符: 'red', 未涵蓋: 'slate', 需人工確認: 'blue' }
+                  return (
+                    <div className="mt-3 border-t border-[var(--border-2)] pt-3">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5 flex-wrap">
+                          <FileSearch size={14} className="text-[var(--blue)]" aria-hidden />AI 讀文件審查
+                          {d.suggested_decision && <Badge color={DECISION_COLOR[d.suggested_decision] || 'slate'}>建議：{d.suggested_decision}</Badge>}
+                          <span className="text-[10px] text-[var(--text-3)] font-normal">{d.mode === 'text' ? '已讀文件文字' : '視覺讀取'}</span>
+                        </div>
+                        <button onClick={() => closeRead(s.id)} className="text-xs text-[var(--text-3)] hover:text-rose-500 shrink-0">收起</button>
+                      </div>
+                      {d.doc_summary && <div className="text-xs text-[var(--text-2)] mb-2">文件摘要：{d.doc_summary}</div>}
+                      {d.caution && <div className="text-xs text-[var(--amber-text)] mb-2">⚠ {d.caution}</div>}
+                      <div className="text-xs font-medium text-[var(--text-2)] mb-1">逐項比對契約需求</div>
+                      <ul className="space-y-1 mb-3">
+                        {(d.findings || []).map((f, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm">
+                            <Badge color={RS[f.status] || 'slate'}>{f.status}</Badge>
+                            <span className="min-w-0"><span className="text-[var(--text)]">{f.requirement}</span>
+                              {f.note && <span className="text-[var(--text-3)] text-xs"> · {f.note}</span>}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查意見草稿（可修改，核准/核備/退回時自動帶入）</div>
+                      <textarea rows={3} value={d.summary_opinion || ''}
+                        onChange={(e) => setAiRead((m) => ({ ...m, [s.id]: { ...m[s.id], summary_opinion: e.target.value } }))}
+                        className={input} />
+                      <p className="text-[11px] text-[var(--text-3)] mt-1">AI 讀送審文件本體逐項比對契約需求；「需人工確認/未涵蓋」項仍須監造核對，最終判定由監造裁量。</p>
+                    </div>
+                  )
+                })()}
               </div>
             ))}
           </div>
         )}
       </Card>
 
-      <p className="text-xs text-[var(--text-3)]">送審採 ball-in-court：施工提送 → 監造受理審核 → 核准/核備/退回補正；退回補正後施工修正再送（版次 +1）。v1 文件本體另以公文或雲端連結提送，此處追蹤流程與審查意見。</p>
+      <p className="text-xs text-[var(--text-3)]">送審採 ball-in-court：施工提送 → 監造受理審核 → 核准/核備/退回補正；退回補正後施工修正再送（版次 +1）。廠商可上傳送審文件本體（PDF/圖），監造以「AI 讀文件審查」逐項比對契約需求並草擬意見。</p>
     </div>
   )
 }

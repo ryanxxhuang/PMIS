@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react'
 import { users } from '../../data/seed.js'
 import { supabase } from '../../lib/supabase.js'
 import { mutationOutcome } from './billing.js'
+import { fileToBase64, extractContractText } from '../db.js'
 
 // 各類送審的「通用審查要點」——demo 或尚未解析契約規範時的回退清單(標「通用」)。
 const SUBMITTAL_REVIEW_POINTS = {
@@ -132,6 +133,51 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     if (data?.error) return { error: { message: data.error } }
     return { error: null, result: data }
   }, [demoMode, isPersistedProject, currentProject, wiMaps])
+
+  // 送審主文件上傳:存 photos bucket(<pid>/submittals/<id>.<ext>,沿用其 project 資料夾 RLS)+ 寫 metadata。
+  const uploadSubmittalFile = useCallback(async (submittalId, file) => {
+    if (!isPersistedProject) return { error: { message: '需真專案才能上傳送審文件' } }
+    const pid = currentProject.project_id
+    const ext = (file.name?.split('.').pop() || 'bin').toLowerCase()
+    const path = `${pid}/submittals/${submittalId}.${ext}`
+    const { error: upErr } = await supabase.storage.from('photos').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: true })
+    if (upErr) return { error: upErr }
+    const patch = { attachment_path: path, attachment_name: file.name || `文件.${ext}`, attachment_mime: file.type || null }
+    const res = await supabase.from('submittals').update(patch).eq('id', submittalId).select('id')
+    const { error } = mutationOutcome(res, '文件已上傳但 metadata 未寫入:可能無權限')
+    if (error) { await supabase.storage.from('photos').remove([path]); return { error } }
+    setSubmittals((ss) => ss.map((s) => (s.id === submittalId ? { ...s, ...patch } : s)))
+    log('送審文件上傳', patch.attachment_name, { user: currentUser?.name, role: '施工' })
+    return { error: null }
+  }, [isPersistedProject, currentProject, currentUser, log])
+
+  // AI 審讀送審文件:下載附件 → 抽文字(數位 PDF/docx,比看圖準)或轉 base64(掃描/圖走視覺)
+  // → 交 read-submittal edge fn 逐項比對契約需求。反幻覺全在 edge fn(未涵蓋不臆測符合)。
+  const readSubmittalDoc = useCallback(async (submittal) => {
+    if (!isPersistedProject) return { error: { message: '需真專案' } }
+    if (!submittal.attachment_path) return { error: { message: '此送審尚未上傳文件' } }
+    const { data: blob, error: dlErr } = await supabase.storage.from('photos').download(submittal.attachment_path)
+    if (dlErr || !blob) return { error: dlErr || { message: '下載送審文件失敗' } }
+    const file = new File([blob], submittal.attachment_name || 'doc', { type: submittal.attachment_mime || blob.type })
+    let doc_text = ''
+    try { doc_text = await extractContractText(file) } catch { doc_text = '' }
+    const pid = currentProject.project_id
+    const { data: reqs } = await supabase.from('requirements')
+      .select('title,acceptance_criteria,evidence_requirement,status')
+      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(30)
+    const body = {
+      submittal: { title: submittal.title, category: submittal.category },
+      requirements: (reqs || []).map((r) => ({ title: r.title, acceptance_criteria: r.acceptance_criteria, evidence_requirement: r.evidence_requirement })),
+    }
+    if (doc_text && doc_text.trim().length > 40) body.doc_text = doc_text.slice(0, 24000)
+    else {
+      try { body.file_base64 = await fileToBase64(file) } catch { return { error: { message: '讀取文件失敗' } } }
+      body.mime_type = submittal.attachment_mime || 'application/pdf'
+    }
+    const { data, error } = await supabase.functions.invoke('read-submittal', { body })
+    if (error || data?.error) return { error: { message: error?.message || data?.error || 'AI 審讀暫時無法使用' } }
+    return { error: null, result: { ...data, mode: body.doc_text ? 'text' : 'vision' } }
+  }, [isPersistedProject, currentProject])
 
   // AI RFI 回覆草稿:依本專案契約履約需求 + 疑義內容草擬監造回覆 + 工期/費用影響研判。
   // demo/未設 → 通用草稿(涉設計判斷一律建議轉設計釋疑,不臆造);真專案撈 requirements 交 draft-rfi-reply。
@@ -286,7 +332,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
 
   return {
     submittals, setSubmittals, rfis, setRfis, observations, setObservations,
-    createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
+    createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal, uploadSubmittalFile, readSubmittalDoc,
     createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply,
     createObservation, updateObservation, escalateObservation, deleteObservation,
     listMembers, addMemberByEmail, removeMember,
