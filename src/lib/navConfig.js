@@ -4,7 +4,7 @@
 // Layout 的側欄、App 的路由守衛、WorkbenchTabs 分頁列都吃這一份——
 // 「導覽隱藏」與「權限」永遠一致。
 import {
-  LayoutDashboard, LayoutGrid, Sparkles, Bell, CalendarClock, Newspaper, BadgeCheck,
+  LayoutDashboard, LayoutGrid, Bell, CalendarClock, Newspaper, BadgeCheck,
   ClipboardList, PencilLine, Coins, Wallet, TrendingUp,
   ShieldCheck, HardHat, FileCheck2, Users, History,
 } from 'lucide-react'
@@ -13,7 +13,6 @@ export const navGroups = [
   { title: '總覽', items: [
     { to: '/portfolio', icon: LayoutGrid, label: '跨案總覽' },
     { to: '/dashboard', icon: LayoutDashboard, label: '專案 Dashboard' },
-    { to: '/assistant', icon: Sparkles, label: 'AI 助理' },
     { to: '/alerts', icon: Bell, label: '提醒中心' },
     { to: '/activity', icon: History, label: '活動紀錄' },
     { to: '/contract', icon: CalendarClock, label: '契約與文件', tabs: [

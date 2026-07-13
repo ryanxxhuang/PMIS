@@ -6,7 +6,9 @@ import { Send, ArrowRight, Bot } from 'lucide-react'
 import { Button } from './ui.jsx'
 import { answerQuestion, SUGGESTED_QUESTIONS } from '../lib/assistantQA.js'
 
-export default function CopilotChat({ data, facts, askAssistant, minH = 180, maxH = 360 }) {
+// fill=true:填滿父容器(浮動面板固定高,訊息區 flex-1 撐開、輸入貼底,消除下方留白)。
+// fill=false:頁面版,訊息區以 minH/maxH 內部捲動。
+export default function CopilotChat({ data, facts, askAssistant, minH = 180, maxH = 360, fill = false }) {
   const [msgs, setMsgs] = useState([])
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -34,8 +36,9 @@ export default function CopilotChat({ data, facts, askAssistant, minH = 180, max
   }
 
   return (
-    <div className="flex flex-col min-h-0">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ minHeight: minH, maxHeight: maxH }}>
+    <div className={`flex flex-col min-h-0 ${fill ? 'flex-1' : ''}`}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
+        style={fill ? undefined : { minHeight: minH, maxHeight: maxH }}>
         {msgs.length === 0 ? (
           <div className="text-sm text-[var(--text-3)] py-6 text-center">
             問問看本案的進度、估驗、缺失、契約……<br />答案都從本案資料來、附上出處連結。
