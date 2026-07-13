@@ -53,7 +53,9 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     return { error: null }
   }, [dbMode])
 
-  // 逐工項排程：設定某工項的計畫起迄（upsert by work_item_id；demo 只進記憶體）
+  // 逐工項排程：設定某工項的計畫起迄（upsert by work_item_id；demo 只進記憶體）。
+  // DB-first + 以 DB 現值合併(R3 P1-02:原本用閉包裡過期的本地值合併,連續填
+  // 起、迄兩欄會互相蓋成 null,畫面成功、F5 歸零)。
   const setItemSchedule = useCallback(async (itemKey, patch) => {
     if (!dbMode) {
       setItemSchedules((m) => ({ ...m, [itemKey]: { ...(m[itemKey] || {}), ...patch } }))
@@ -61,15 +63,21 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     }
     const wi = wiMaps.byKey.get(itemKey)
     if (!wi?.id) return { error: { message: '找不到工項' } }
-    setItemSchedules((m) => ({ ...m, [itemKey]: { ...(m[itemKey] || {}), ...patch } }))
-    const cur = itemSchedules[itemKey] || {}
-    const { error } = await supabase.from('item_schedules').upsert({
+    const { data: exist, error: readErr } = await supabase.from('item_schedules')
+      .select('planned_start, planned_finish').eq('work_item_id', wi.id).maybeSingle()
+    if (readErr) return { error: readErr }
+    const row = {
       project_id: currentProject.project_id, work_item_id: wi.id,
-      planned_start: patch.planned_start !== undefined ? (patch.planned_start || null) : (cur.planned_start || null),
-      planned_finish: patch.planned_finish !== undefined ? (patch.planned_finish || null) : (cur.planned_finish || null),
-    }, { onConflict: 'work_item_id' })
-    return { error }
-  }, [dbMode, currentProject, wiMaps, itemSchedules])
+      planned_start: patch.planned_start !== undefined ? (patch.planned_start || null) : (exist?.planned_start ?? null),
+      planned_finish: patch.planned_finish !== undefined ? (patch.planned_finish || null) : (exist?.planned_finish ?? null),
+    }
+    const res = await supabase.from('item_schedules')
+      .upsert(row, { onConflict: 'work_item_id' }).select('planned_start, planned_finish')
+    const { error } = mutationOutcome(res, '排程未寫入:可能無權限')
+    if (error) return { error }
+    setItemSchedules((m) => ({ ...m, [itemKey]: { ...(m[itemKey] || {}), planned_start: row.planned_start, planned_finish: row.planned_finish } }))
+    return { error: null }
+  }, [dbMode, currentProject, wiMaps])
 
   const removeItemSchedule = useCallback(async (itemKey) => {
     setItemSchedules((m) => { const n = { ...m }; delete n[itemKey]; return n })

@@ -26,6 +26,7 @@ export function buildSupervisorReport(data = {}, monthLabel) {
   const defOpen = defects.filter((d) => d.status !== '已結案')
   const defClosedM = defects.filter((d) => d.status === '已結案' && inM((d.closed_at || '').slice(0, 10)))
   const defOverdue = defOpen.filter((d) => d.due_date && d.due_date < new Date().toISOString().slice(0, 10))
+  const defNoDue = defOpen.filter((d) => !d.due_date)
 
   // 送審審核（本月審定者 + 現況待審）
   const subDecidedM = submittals.filter((s) => inM((s.decided_date || '').slice(0, 10)))
@@ -44,7 +45,12 @@ export function buildSupervisorReport(data = {}, monthLabel) {
       ? `本月辦理查驗 ${insp.length} 件（合格 ${inspPass} 件${inspFail ? `、不合格 ${inspFail} 件，均已開立缺失並追蹤改善` : '，均符合設計圖說與規範'}）。`
       : '本月無新辦理查驗。',
     defOpen.length
-      ? `目前未結案缺失 ${defOpen.length} 件${defOverdue.length ? `（其中 ${defOverdue.length} 件已逾改善期限，將發函督促限期改善）` : '，均在改善期限內追蹤'}${defClosedM.length ? `；本月複查結案 ${defClosedM.length} 件` : ''}。`
+      // 最小證據原則(R3 P1-06):未設期限的缺失不得宣稱「期限內」——那是錯誤安全感
+      ? `目前未結案缺失 ${defOpen.length} 件${defOverdue.length
+          ? `（其中 ${defOverdue.length} 件已逾改善期限，將發函督促限期改善）`
+          : defNoDue.length
+            ? `（其中 ${defNoDue.length} 件未設改善期限，請補訂期限後追蹤）`
+            : '，均在改善期限內追蹤'}${defClosedM.length ? `；本月複查結案 ${defClosedM.length} 件` : ''}。`
       : '目前無未結案缺失，品質督導情形良好。',
     subDecidedM.length || subPending.length
       ? `送審文件本月審定 ${subDecidedM.length} 件，尚有 ${subPending.length} 件審核中。`

@@ -330,9 +330,9 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
           <input value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="單位"
             className="w-16 border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm bg-[var(--surface)]" />
           <input type="number" step="any" value={draft.qty_delta} onChange={(e) => setDraft({ ...draft, qty_delta: e.target.value })} placeholder="數量±"
-            className="w-24 text-right border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm tabular-nums bg-[var(--surface)]" />
+            aria-label="新明細數量增減" className="w-24 text-right border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm tabular-nums bg-[var(--surface)]" />
           <input type="number" step="any" value={draft.unit_price} onChange={(e) => setDraft({ ...draft, unit_price: e.target.value })} placeholder="單價"
-            className="w-24 text-right border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm tabular-nums bg-[var(--surface)]" />
+            aria-label="新明細單價" className="w-24 text-right border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm tabular-nums bg-[var(--surface)]" />
           <Button onClick={submit} disabled={adding || !draft.description.trim()}>{adding ? '…' : '＋ 明細'}</Button>
         </div>
         <p className="text-[11px] text-[var(--text-3)] mt-1.5">追加填正數量、減帳填負數量。金額 = 數量 × 單價，自動計算。</p>

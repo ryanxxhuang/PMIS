@@ -40,7 +40,10 @@ export function deriveAcceptance(events = [], today = new Date()) {
 
   return ACCEPTANCE_STAGES.map((def) => {
     const event = byStage.get(def.key) || null
-    const fromEvent = def.dueFrom ? byStage.get(def.dueFrom) : null
+    let fromEvent = def.dueFrom ? byStage.get(def.dueFrom) : null
+    // 初驗不合格走「改善→複驗」時,正式驗收期限自「複驗日」重新起算
+    // (細則 §94 準用;R3 P1-03:原本固定錨在初驗日,複驗後期限沒有重算)
+    if (def.key === 'final' && byStage.get('reinspect')?.event_date) fromEvent = byStage.get('reinspect')
     const due = def.dueDays && fromEvent?.event_date ? addDays(fromEvent.event_date, def.dueDays) : null
     const daysLeft = !event && due ? dayDiff(due, today0) : null
     return {

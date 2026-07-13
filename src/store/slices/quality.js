@@ -131,9 +131,17 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     return { error: null }
   }, [isPersistedProject, currentUser, reloadDefects, log])
 
+  // DB 成功才移除(已判定查驗=品質證據,DB delete guard 會擋)
   const deleteInspection = useCallback(async (id) => {
-    if (dbMode) { await supabase.from('inspections').delete().eq('id', id); await reloadQuality() }
-    else setInspections((is) => is.filter((i) => i.id !== id))
+    if (dbMode) {
+      const res = await supabase.from('inspections').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:查驗已判定或無權限')
+      if (error) return { error }
+      await reloadQuality()
+      return { error: null }
+    }
+    setInspections((is) => is.filter((i) => i.id !== id))
+    return { error: null }
   }, [dbMode, reloadQuality])
 
   // 刪除缺失:DB 刪成功才從 UI 移除(已結案由 guard 擋下,不可假消失)
@@ -259,37 +267,49 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     return createTestSamples(pending)
   }, [siteLogs, testSamples, createTestSamples])
 
-  // 更新試體(填 7 天參考值 / 28 天各試體值);28 天值依 fc′ 自動判定,不合格自動開缺失
+  // 更新試體(填 7 天參考值 / 28 天各試體值)。
+  // 真專案:判定與自動開缺失已下沉 DB trigger(同一交易;R3 P0-02 前端三步非交易
+  // 會被 reload 蓋掉/半套落庫)——這裡只寫值,成功後 reload 取回導出的狀態與缺失。
+  // demo:維持本地 judgeConcrete + 本地開缺失。
   const updateTestSample = useCallback(async (id, patch) => {
-    let judged = null
-    setTestSamples((ss) => ss.map((s) => {
-      if (s.id !== id) return s
-      const merged = { ...s, ...patch }
-      if ('d28_values' in patch || 'fc' in patch) {
-        const r = judgeConcrete(merged.fc, merged.d28_values)
-        merged.status = r.status || '待試驗'
-        judged = { merged, r }
+    if (!dbMode) {
+      let judged = null
+      setTestSamples((ss) => ss.map((s) => {
+        if (s.id !== id) return s
+        const merged = { ...s, ...patch }
+        if ('d28_values' in patch || 'fc' in patch) {
+          const r = judgeConcrete(merged.fc, merged.d28_values)
+          merged.status = r.status || '待試驗'
+          judged = { merged, r }
+        }
+        return merged
+      }))
+      if (judged?.r.status === '不合格') {
+        const { merged, r } = judged
+        await createDefect({
+          title: `試體抗壓不合格：${merged.sample_no}`,
+          description: `28天抗壓 平均 ${Math.round(r.avg)} / 最低 ${Math.round(r.min)} kgf/cm²，未達 fc′ ${merged.fc}（標準：任一 ≥0.85fc′ 且平均 ≥fc′）`,
+          severity: '嚴重', location: merged.location || '',
+        })
       }
-      return merged
-    }))
-    if (judged?.r.status === '不合格') {
-      const { merged, r } = judged
-      await createDefect({
-        title: `試體抗壓不合格：${merged.sample_no}`,
-        description: `28天抗壓 平均 ${Math.round(r.avg)} / 最低 ${Math.round(r.min)} kgf/cm²，未達 fc′ ${merged.fc}（標準：任一 ≥0.85fc′ 且平均 ≥fc′）`,
-        severity: '嚴重', location: merged.location || '',
-      })
+      return { error: null }
     }
-    if (!dbMode) return { error: null }
-    const dbPatch = { ...patch }
-    if (judged) dbPatch.status = judged.merged.status
-    const { error } = await supabase.from('test_samples').update(dbPatch).eq('id', id)
-    return { error }
-  }, [dbMode, createDefect])
+    const res = await supabase.from('test_samples').update(patch).eq('id', id).select('id')
+    const { error } = mutationOutcome(res, '試驗值未寫入:可能無權限或試體已被移除')
+    if (error) return { error }
+    await reloadQuality() // 取回 trigger 推導的狀態 + 自動開立的缺失
+    return { error: null }
+  }, [dbMode, createDefect, reloadQuality])
 
+  // DB 成功才移除(已判定試體=品質證據,DB delete guard 會擋)
   const deleteTestSample = useCallback(async (id) => {
+    if (dbMode) {
+      const res = await supabase.from('test_samples').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:試體已判定或無權限')
+      if (error) return { error }
+    }
     setTestSamples((ss) => ss.filter((s) => s.id !== id))
-    if (dbMode) await supabase.from('test_samples').delete().eq('id', id)
+    return { error: null }
   }, [dbMode])
 
   // ── ITP 停留點:建立/更新/刪除 + 從停留點一鍵申請查驗 ────────────────────

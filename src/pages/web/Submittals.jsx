@@ -118,13 +118,23 @@ export default function Submittals() {
                           <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '核備')}>核備</Button>
                         </>}
                         <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '退回補正')}>退回補正</Button>
+                        {/* 駁回=終局(不可再送);DB 一直支援,UI 補齊入口(R3 P2-02) */}
+                        {s.status === '審核中' && <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '駁回')}>駁回</Button>}
                       </div>
                     )}
                     {/* 施工:退回補正後修正再送(補正說明必填=實質補正證據) */}
                     {can.submit && s.status === '退回補正' && <Button variant="secondary" disabled={busy} onClick={() => onResubmit(s)}>修正再送</Button>}
                     {can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
                     {!can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
-                    {can.submit && <button onClick={async () => { if (await appConfirm({ title: '刪除此送審？', danger: true, confirmLabel: '刪除' })) deleteSubmittal(s.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
+                    {/* 僅「已提送且未經審查」可刪(R3 P0-01:一經受理即為履約證據,DB 另有 guard) */}
+                    {can.submit && s.status === '已提送' && !(s.revision > 0) && (
+                      <button onClick={async () => {
+                        if (!(await appConfirm({ title: '刪除此送審？', danger: true, confirmLabel: '刪除' }))) return
+                        setErrMsg('')
+                        const { error } = await deleteSubmittal(s.id)
+                        if (error) setErrMsg(`刪除失敗：${error.message}`)
+                      }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>
+                    )}
                   </div>
                 </div>
               </div>

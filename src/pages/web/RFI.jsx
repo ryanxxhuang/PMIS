@@ -114,7 +114,15 @@ export default function RFI() {
                       can.submit ? <Button variant="success" disabled={busy} onClick={() => onClose(r)}>確認結案</Button>
                         : can.approve ? <Button variant="secondary" disabled={busy} onClick={() => onAnswer(r)}>補充回覆</Button> : null
                     )}
-                    {can.submit && <button onClick={async () => { if (await appConfirm({ title: '刪除此疑義？', danger: true, confirmLabel: '刪除' })) deleteRfi(r.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
+                    {/* 僅「待回覆」可刪(已回覆=履約證據,DB 另有 guard) */}
+                    {can.submit && r.status === '待回覆' && (
+                      <button onClick={async () => {
+                        if (!(await appConfirm({ title: '刪除此疑義？', danger: true, confirmLabel: '刪除' }))) return
+                        setErrMsg('')
+                        const { error } = await deleteRfi(r.id)
+                        if (error) setErrMsg(`刪除失敗：${error.message}`)
+                      }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>
+                    )}
                   </div>
                 </div>
               </div>

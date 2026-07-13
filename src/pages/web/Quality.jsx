@@ -92,7 +92,8 @@ export default function Quality() {
                     <Button variant="success" onClick={() => onResult(i, true)} disabled={busy}>合格</Button>
                     <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
                   </> : <span className="text-xs text-[var(--text-3)]">待監造查驗</span>)}
-                  {can.edit && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) deleteInspection(i.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>}
+                  {/* 已判定查驗=品質證據,不提供刪除(DB 另有 guard) */}
+                  {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspection(i.id); if (error) setErrMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-rose-500" aria-label={`刪除查驗 ${i.title}`}>✕</button>}
                 </div>
               </div>
             ))}
@@ -415,15 +416,20 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                   <td className="px-2 text-right tabular-nums">{s.fc || '—'}</td>
                   <td className="px-2 text-right">
                     <input type="number" step="any" defaultValue={s.d7_value ?? ''} placeholder="值"
-                      onBlur={(e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n !== s.d7_value) onUpdate(s.id, { d7_value: n }) }}
+                      aria-label={`${s.sample_no} 7天參考值`}
+                      onBlur={async (e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n !== s.d7_value) { const { error } = await onUpdate(s.id, { d7_value: n }); if (error) setMsg(`未寫入：${error.message}`) } }}
                       className="w-16 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
                     <div>{dueCell(s.d7_due, s.d7_value != null)}</div>
                   </td>
                   <td className="px-2 text-right">
                     <input defaultValue={(s.d28_values || []).join(', ')} placeholder="如 445, 432, 428"
-                      onBlur={(e) => {
+                      aria-label={`${s.sample_no} 28天各試體值`}
+                      onBlur={async (e) => {
                         const arr = e.target.value.split(/[,、\s]+/).map(Number).filter((n) => !isNaN(n) && n > 0)
-                        if (JSON.stringify(arr) !== JSON.stringify(s.d28_values || [])) onUpdate(s.id, { d28_values: arr.length ? arr : null })
+                        if (JSON.stringify(arr) !== JSON.stringify(s.d28_values || [])) {
+                          const { error } = await onUpdate(s.id, { d28_values: arr.length ? arr : null })
+                          if (error) setMsg(`試驗值未寫入：${error.message}`)
+                        }
                       }}
                       className="w-36 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
                     <div>{dueCell(s.d28_due, (s.d28_values || []).length > 0)}</div>
@@ -431,7 +437,10 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                   <td className="px-2 text-center">
                     <Badge color={s.status === '合格' ? 'green' : s.status === '不合格' ? 'red' : 'slate'}>{s.status}</Badge>
                   </td>
-                  <td className="text-right pl-2"><button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) onDelete(s.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button></td>
+                  {/* 已判定試體=品質證據,不提供刪除(DB 另有 guard) */}
+                  <td className="text-right pl-2">{s.status === '待試驗' && (
+                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-rose-500" aria-label={`刪除試體 ${s.sample_no}`}>✕</button>
+                  )}</td>
                 </tr>
               ))}
             </tbody>

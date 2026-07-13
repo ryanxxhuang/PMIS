@@ -98,7 +98,7 @@ export default function MonthlyReport() {
             <div className="flex items-end gap-3">
               <label className="block">
                 <span className="block text-xs font-medium text-[var(--text-2)] mb-1">報告月份</span>
-                <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
+                <input type="month" value={month} aria-label="月報月份" onChange={(e) => setMonth(e.target.value)}
                   className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
               </label>
               <Button onClick={() => window.print()}><Printer size={15} aria-hidden />列印 / 存 PDF</Button>

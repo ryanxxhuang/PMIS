@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, PageHeader } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 
-const money = (n) => (n == null || isNaN(n) ? '—' : Math.round(n).toLocaleString('en-US'))
+// Math.round(-0.4)=-0:正規化,避免顯示「-0」(R3 P2-01)
+const money = (n) => (n == null || isNaN(n) ? '—' : (Math.round(n) === 0 ? 0 : Math.round(n)).toLocaleString('en-US'))
 const payStatus = (v) => (v.paid_date ? '已收款' : v.invoice_date ? '已請款' : '待請款')
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function Payments() {
   const { project, workItems: data, valuations, updateValuationPayment, isSupabaseConfigured, currentProject, workItemsSource } = useStore()
@@ -108,26 +111,44 @@ export default function Payments() {
                       <td className="px-2">
                         {/* onBlur 才寫入:避免打字打到一半就把半成品(或空值)存進 DB */}
                         <input type="date" key={`inv-${v.id}-${v.invoice_date || ''}`} defaultValue={v.invoice_date || ''}
-                          disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期請款日`}
-                          onBlur={(e) => { const d = e.target.value || null; if (d !== (v.invoice_date || null)) onPay(v.id, { invoice_date: d }) }}
+                          disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期請款日`} max={todayIso()}
+                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.invoice_date || null)) return; if (d && d > todayIso()) { setErrMsg(`請款日不可晚於今日（輸入了 ${d}）`); return } onPay(v.id, { invoice_date: d }) }}
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2">
                         <input type="date" key={`paid-${v.id}-${v.paid_date || ''}`} defaultValue={v.paid_date || ''}
-                          disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期收款日`}
-                          onBlur={(e) => { const d = e.target.value || null; if (d !== (v.paid_date || null)) onPay(v.id, { paid_date: d }) }}
+                          disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期收款日`} max={todayIso()}
+                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.paid_date || null)) return; if (d && d > todayIso()) { setErrMsg(`收款日不可晚於今日（輸入了 ${d}）`); return } onPay(v.id, { paid_date: d }) }}
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 text-right">
                         <input type="number" min="0" step="any" key={`amt-${v.id}-${v.paid_amount ?? ''}`} defaultValue={v.paid_amount ?? ''}
                           placeholder={Math.round(net).toString()} disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期實收金額`}
-                          onBlur={(e) => { const n = parseFloat(e.target.value); const val = isNaN(n) ? null : n; if (val !== (v.paid_amount ?? null)) onPay(v.id, { paid_amount: val }) }}
+                          onBlur={async (e) => {
+                            const n = parseFloat(e.target.value); const val = isNaN(n) ? null : n
+                            if (val === (v.paid_amount ?? null)) return
+                            // 超過本期應領=可疑輸入,二次確認(R3 P1-04:曾接受 15 位數實收,未收款變巨額負值)
+                            if (val != null && val > Math.round(net) && !(await appConfirm({
+                              title: `實收 ${money(val)} 超過本期應領 ${money(net)}`,
+                              body: '確定登錄這個金額?(溢收/合併撥付請於備註說明)', danger: true, confirmLabel: '確認登錄',
+                            }))) return
+                            onPay(v.id, { paid_amount: val })
+                          }}
                           className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 pr-4">
-                        {approved
-                          ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${st === '已收款' ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : st === '已請款' ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'bg-[var(--slate-tint)] text-[var(--slate-text)]'}`}>{st}</span>
-                          : <span className="text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[var(--amber-tint)] text-[var(--amber-text)]" title={lockTip}>{v.status}·未核定</span>}
+                        <span className="inline-flex items-center gap-1.5">
+                          {approved
+                            ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${st === '已收款' ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : st === '已請款' ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'bg-[var(--slate-tint)] text-[var(--slate-text)]'}`}>{st}</span>
+                            : <span className="text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[var(--amber-tint)] text-[var(--amber-text)]" title={lockTip}>{v.status}·未核定</span>}
+                          {/* 一鍵清空三欄(單一寫入):退回核定前的正規動線(R3 P1-01) */}
+                          {approved && (v.invoice_date || v.paid_date || v.paid_amount != null) && (
+                            <button onClick={async () => {
+                              if (!(await appConfirm({ title: `清空第 ${v.period_no} 期請款/收款資料？`, body: '退回核定前需先清空金流欄位;清空後可重新登錄。', danger: true, confirmLabel: '清空' }))) return
+                              onPay(v.id, { invoice_date: null, paid_date: null, paid_amount: null })
+                            }} className="text-[11px] text-[var(--text-3)] hover:text-rose-500 underline whitespace-nowrap" aria-label={`清空第 ${v.period_no} 期金流`}>清空</button>
+                          )}
+                        </span>
                       </td>
                     </tr>
                   )

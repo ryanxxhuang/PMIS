@@ -69,9 +69,15 @@ export function useCollabSlice({ isPersistedProject, currentProject, currentUser
     return { error: null }
   }, [isPersistedProject, submittals, currentUser, log])
 
+  // DB 成功才移除(R3 P0-01:stale 分頁刪除已受理送審曾假成功;DB 另有 delete guard)
   const deleteSubmittal = useCallback(async (id) => {
+    if (isPersistedProject) {
+      const res = await supabase.from('submittals').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:送審已進入審查或無權限')
+      if (error) return { error }
+    }
     setSubmittals((ss) => ss.filter((s) => s.id !== id))
-    if (isPersistedProject) await supabase.from('submittals').delete().eq('id', id)
+    return { error: null }
   }, [isPersistedProject])
 
   const createRfi = useCallback(async (input) => {
@@ -120,9 +126,15 @@ export function useCollabSlice({ isPersistedProject, currentProject, currentUser
     return { error: null }
   }, [isPersistedProject])
 
+  // DB 成功才移除(已回覆的 RFI 是履約證據,DB delete guard 會擋)
   const deleteRfi = useCallback(async (id) => {
+    if (isPersistedProject) {
+      const res = await supabase.from('rfis').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:疑義已有回覆或無權限')
+      if (error) return { error }
+    }
     setRfis((rs) => rs.filter((r) => r.id !== id))
-    if (isPersistedProject) await supabase.from('rfis').delete().eq('id', id)
+    return { error: null }
   }, [isPersistedProject])
 
   // ── 觀察事項:輕量提醒,可升級成正式缺失 ──────────────────────────────────

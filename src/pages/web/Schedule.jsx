@@ -19,6 +19,12 @@ function deriveState(sch, pct) {
 export default function Schedule() {
   const { project, workItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
   const [search, setSearch] = useState('')
+  const [errMsg, setErrMsg] = useState('') // 排程寫入失敗必須讓使用者看到(失敗=UI 不變)
+  const onSet = async (key, patch) => {
+    setErrMsg('')
+    const { error } = await setItemSchedule(key, patch)
+    if (error) setErrMsg(`排程未寫入：${error.message}`)
+  }
 
   // 發包末端工項 + 查表
   const { leaves, byKey } = useMemo(() => {
@@ -63,6 +69,13 @@ export default function Schedule() {
         <PageHeader title="逐工項排程" tagline="每項計畫起迄・落後追蹤" subtitle="對關鍵工項設定計畫起迄，依最新估驗完成數量自動判斷落後" />
       </div>
 
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="已排程工項" value={counts.total} sub="項" color="text-[var(--text)]" />
         <Stat label="落後" value={counts.late} sub="項" color={counts.late > 0 ? 'text-rose-600' : 'text-emerald-600'} />
@@ -77,7 +90,7 @@ export default function Schedule() {
           {results.length > 0 && (
             <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-64 overflow-auto">
               {results.map((it) => (
-                <button key={it.item_key} onClick={() => { setItemSchedule(it.item_key, { planned_start: null, planned_finish: null }); setSearch('') }}
+                <button key={it.item_key} onClick={() => { onSet(it.item_key, { planned_start: null, planned_finish: null }); setSearch('') }}
                   className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] flex justify-between gap-2">
                   <span className="truncate"><span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}</span>
                   <span className="text-[var(--text-3)] text-xs shrink-0">{it.unit}</span>
@@ -117,11 +130,13 @@ export default function Schedule() {
                   <tr key={r.key} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
                     <td className="py-1.5 pl-5 min-w-[200px]"><span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{r.it.item_no}</span>{r.it.description || r.key}</td>
                     <td className="px-2">
-                      <input type="date" value={r.sch.planned_start || ''} onChange={(e) => setItemSchedule(r.key, { planned_start: e.target.value || null })}
+                      <input type="date" value={r.sch.planned_start || ''} onChange={(e) => onSet(r.key, { planned_start: e.target.value || null })}
+                        aria-label={`${r.it.description || r.key} 計畫開始日`}
                         className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
                     </td>
                     <td className="px-2">
-                      <input type="date" value={r.sch.planned_finish || ''} onChange={(e) => setItemSchedule(r.key, { planned_finish: e.target.value || null })}
+                      <input type="date" value={r.sch.planned_finish || ''} onChange={(e) => onSet(r.key, { planned_finish: e.target.value || null })}
+                        aria-label={`${r.it.description || r.key} 計畫完成日`}
                         className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
                     </td>
                     <td className="px-2 text-right tabular-nums">{r.pct.toFixed(1)}%</td>

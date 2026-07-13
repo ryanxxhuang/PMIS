@@ -40,6 +40,18 @@ describe('deriveAcceptance', () => {
     expect(final.daysLeft).toBe(9)
   })
 
+  it('R3 P1-03:初驗不合格→複驗後,正式驗收 20 日改自「複驗日」起算', () => {
+    const events = [
+      { stage_key: 'report', event_date: '2026-07-01' },
+      { stage_key: 'confirm', event_date: '2026-07-05' },
+      { stage_key: 'initial', event_date: '2026-07-20', result: '不合格' },
+      { stage_key: 'fix', event_date: '2026-07-22' },
+      { stage_key: 'reinspect', event_date: '2026-07-25', result: '合格' },
+    ]
+    const final = deriveAcceptance(events, T('2026-07-26')).find((s) => s.key === 'final')
+    expect(final.due).toBe('2026-08-14') // 複驗 7/25 + 20;不是初驗 7/20 + 20 = 8/09
+  })
+
   it('已完成的階段不再算 daysLeft', () => {
     const stages = deriveAcceptance([
       { stage_key: 'report', event_date: '2026-07-01' },
