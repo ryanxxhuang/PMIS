@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
@@ -11,12 +12,14 @@ const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function RFI() {
-  const { project, rfis, createRfi, answerRfi, closeRfi, deleteRfi, resolveMarkup,
+  const { project, rfis, createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply, resolveMarkup,
     isSupabaseConfigured, currentProject, can } = useStore()
   const [markupOpen, setMarkupOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 回覆/結案寫入失敗必須讓使用者看到(失敗=UI 不變)
+  const [aiDraft, setAiDraft] = useState({}) // { [rfiId]: result } AI 回覆草稿
+  const [draftBusy, setDraftBusy] = useState(null)
 
   if (isSupabaseConfigured && !currentProject) {
     return <Card title="工程疑義"><Empty>請先登入並選擇專案。</Empty></Card>
@@ -28,14 +31,26 @@ export default function RFI() {
   const onAnswer = async (r) => {
     const ans = await appPrompt({
       title: `回覆：${r.rfi_no}`, body: r.question || r.title,
-      label: '回覆內容（必填）', defaultValue: r.answer || '', required: true, confirmLabel: '送出回覆',
+      // AI 草稿已備妥 → 帶入為預設(監造仍可改)
+      label: '回覆內容（必填）', defaultValue: aiDraft[r.id]?.answer || r.answer || '', required: true, confirmLabel: '送出回覆',
     })
     if (ans === null) return
     setErrMsg(''); setBusy(true)
     const { error } = await answerRfi(r.id, ans.trim())
     setBusy(false)
     if (error) setErrMsg(`回覆未寫入：${error.message}`)
+    else setAiDraft((m) => { const n = { ...m }; delete n[r.id]; return n }) // 回覆後收起草稿
   }
+
+  // AI 回覆草稿:依契約規範/工項草擬監造回覆
+  const onDraft = async (r) => {
+    setDraftBusy(r.id); setErrMsg('')
+    const { error, result } = await draftRfiReply(r)
+    setDraftBusy(null)
+    if (error) { setErrMsg(`AI 回覆草稿失敗：${error.message || ''}`); return }
+    setAiDraft((m) => ({ ...m, [r.id]: result }))
+  }
+  const closeDraft = (id) => setAiDraft((m) => { const n = { ...m }; delete n[id]; return n })
   const onClose = async (r) => {
     setErrMsg(''); setBusy(true)
     const { error } = await closeRfi(r.id)
@@ -114,6 +129,12 @@ export default function RFI() {
                       can.submit ? <Button variant="success" disabled={busy} onClick={() => onClose(r)}>確認結案</Button>
                         : can.approve ? <Button variant="secondary" disabled={busy} onClick={() => onAnswer(r)}>補充回覆</Button> : null
                     )}
+                    {/* 監造:AI 回覆草稿——依契約規範草擬回覆,涉設計判斷會提示轉設計釋疑 */}
+                    {can.approve && (r.status === '待回覆' || r.status === '已回覆') && !aiDraft[r.id] && (
+                      <Button variant="secondary" disabled={draftBusy === r.id} onClick={() => onDraft(r)}>
+                        <Sparkles size={13} aria-hidden />{draftBusy === r.id ? ' AI 草擬中…' : ' AI 回覆草稿'}
+                      </Button>
+                    )}
                     {/* 僅「待回覆」可刪(已回覆=履約證據,DB 另有 guard) */}
                     {can.submit && r.status === '待回覆' && (
                       <button onClick={async () => {
@@ -125,6 +146,25 @@ export default function RFI() {
                     )}
                   </div>
                 </div>
+                {aiDraft[r.id] && (() => {
+                  const d = aiDraft[r.id]
+                  return (
+                    <div className="mt-3 border-t border-[var(--border-2)] pt-3">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5 flex-wrap">
+                          <Sparkles size={14} className="text-[var(--blue)]" aria-hidden />AI 回覆草稿
+                          {d.needs_designer && <Badge color="amber">建議轉設計釋疑</Badge>}
+                          {d.schedule_impact && <Badge color="amber">工期</Badge>}
+                          {d.cost_impact && <Badge color="red">費用</Badge>}
+                        </div>
+                        <button onClick={() => closeDraft(r.id)} className="text-xs text-[var(--text-3)] hover:text-rose-500 shrink-0">收起</button>
+                      </div>
+                      <p className="text-sm text-[var(--text-2)] leading-relaxed bg-[var(--blue)]/[0.04] border border-[var(--blue)]/20 rounded-lg px-3 py-2 whitespace-pre-line">{d.answer}</p>
+                      <div className="text-[11px] text-[var(--text-3)] mt-1">依據：{d.basis || '—'}{d.caution ? ` ｜ ${d.caution}` : ''}</div>
+                      <p className="text-[11px] text-[var(--text-3)] mt-1">按上方「{r.status === '待回覆' ? '回覆' : '補充回覆'}」會自動帶入此草稿供修改；回覆為正式契約文件，最終內容由監造裁量。</p>
+                    </div>
+                  )
+                })()}
               </div>
             ))}
           </div>

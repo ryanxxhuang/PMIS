@@ -133,6 +133,30 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     return { error: null, result: data }
   }, [demoMode, isPersistedProject, currentProject, wiMaps])
 
+  // AI RFI 回覆草稿:依本專案契約履約需求 + 疑義內容草擬監造回覆 + 工期/費用影響研判。
+  // demo/未設 → 通用草稿(涉設計判斷一律建議轉設計釋疑,不臆造);真專案撈 requirements 交 draft-rfi-reply。
+  const draftRfiReply = useCallback(async (rfi) => {
+    if (demoMode || !isPersistedProject) {
+      return { error: null, result: {
+        answer: `關於「${rfi.title}」,經審視契約圖說與施工規範,請依原設計圖說及規範辦理;如現場實際情形與圖說確有出入或涉及設計變更,建議檢附現場照片與圖說對照,轉請設計單位釋疑後辦理,不宜逕予認定。`,
+        basis: '通用', needs_designer: true,
+        cost_impact: !!rfi.cost_impact, schedule_impact: !!rfi.schedule_impact,
+        caution: '此為通用草稿;上傳並解析契約/規範後可比對本專案實際履約需求。',
+      } }
+    }
+    const pid = currentProject.project_id
+    const { data: reqs } = await supabase.from('requirements')
+      .select('title,acceptance_criteria,evidence_requirement,status')
+      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(25)
+    const payload = {
+      rfi: { title: rfi.title, question: rfi.question, cost_impact: rfi.cost_impact, schedule_impact: rfi.schedule_impact },
+      requirements: (reqs || []).map((r) => ({ title: r.title, acceptance_criteria: r.acceptance_criteria, evidence_requirement: r.evidence_requirement })),
+    }
+    const { data, error } = await supabase.functions.invoke('draft-rfi-reply', { body: payload })
+    if (error || data?.error) return { error: { message: error?.message || data?.error || 'AI 回覆草稿暫時無法使用' } }
+    return { error: null, result: data }
+  }, [demoMode, isPersistedProject, currentProject])
+
   const createRfi = useCallback(async (input) => {
     const markup_path = await saveMarkup(input.markup_data, 'rfi')
     const row = {
@@ -263,7 +287,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
   return {
     submittals, setSubmittals, rfis, setRfis, observations, setObservations,
     createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
-    createRfi, answerRfi, closeRfi, deleteRfi,
+    createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply,
     createObservation, updateObservation, escalateObservation, deleteObservation,
     listMembers, addMemberByEmail, removeMember,
   }

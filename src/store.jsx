@@ -111,7 +111,7 @@ export function StoreProvider({ children }) {
   const {
     submittals, setSubmittals, rfis, setRfis, observations, setObservations,
     createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
-    createRfi, answerRfi, closeRfi, deleteRfi,
+    createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply,
     createObservation, updateObservation, escalateObservation, deleteObservation,
     listMembers, addMemberByEmail, removeMember,
   } = useCollabSlice(ctx, createDefect)
@@ -263,7 +263,7 @@ export function StoreProvider({ children }) {
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
-    rfis, createRfi, answerRfi, closeRfi, deleteRfi,
+    rfis, createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply,
     listMembers, addMemberByEmail, removeMember, resolveMarkup, resendSignup,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,
