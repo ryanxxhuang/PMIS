@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
 import { visibleNavGroups, workbenchFor } from '../lib/navConfig.js'
+import CopilotFab from './CopilotFab.jsx'
 import { Menu, ChevronDown, Trash2, Moon, Sun, Plus } from 'lucide-react'
 
 // 工作台分頁列(§9 瘦身):同一工作台的路由以分頁互切,分頁可見性與導覽/守衛同源。
@@ -175,6 +176,7 @@ export function WebLayout({ children }) {
           {children}
         </main>
       </div>
+      <CopilotFab />
     </div>
   )
 }
