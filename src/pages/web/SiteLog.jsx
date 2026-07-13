@@ -1,14 +1,11 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Printer, ChevronDown, ChevronRight, CopyPlus, Plus } from 'lucide-react'
+import { Camera, Printer, ChevronDown, ChevronRight, CopyPlus, Plus, CloudSun } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { previousLog, copyableFromLog, frequentItems, addUniqueRow } from '../../lib/siteLogHelpers.js'
-
-// 天氣快選(點選免打字);仍可在輸入框自訂
-const WEATHER_PRESETS = ['晴', '晴時多雲', '多雲', '陰', '短暫雨', '陣雨', '雨', '雷陣雨']
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const todayStr = () => {
@@ -35,11 +32,15 @@ function matchLeaf(text, leaves) {
 
 export default function SiteLog() {
   const { project, workItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, can } = useStore()
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, fetchWeather, updateProjectAnchors, can } = useStore()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayStr())
   const [weather, setWeather] = useState('晴')       // 上午天氣（相容舊欄位）
   const [weatherPm, setWeatherPm] = useState('')     // 下午天氣
+  const [weatherBusy, setWeatherBusy] = useState(false)
+  const [coordOpen, setCoordOpen] = useState(false)
+  const [lat, setLat] = useState(currentProject?.latitude ?? '') // 工地座標(CWA 天氣)
+  const [lon, setLon] = useState(currentProject?.longitude ?? '')
   const [summary, setSummary] = useState('')
   const [items, setItems] = useState({}) // item_key -> 當日數量
   // 公定格式欄位（工程會公共工程施工日誌）
@@ -98,6 +99,35 @@ export default function SiteLog() {
     if (c.weather) setWeather(c.weather)
     setWeatherPm(c.weather_pm)
     setSavedMsg(`已帶入 ${c.from} 的班組/機具/材料,請調整今日差異後存檔`)
+  }
+
+  // 天氣:工地座標 → 中央氣象局自動帶入(座標存一次,之後每天一鍵)
+  const hasCoords = currentProject?.latitude != null && currentProject?.longitude != null
+  const pullWeather = async () => {
+    if (!hasCoords) { setCoordOpen(true); return }
+    setWeatherBusy(true); setSavedMsg('')
+    const r = await fetchWeather(currentProject.latitude, currentProject.longitude, date)
+    setWeatherBusy(false)
+    if (r?.error) { setSavedMsg(`天氣未帶入:${r.error}`); return }
+    if (r.am) setWeather(r.am)
+    if (r.pm) setWeatherPm(r.pm)
+    setSavedMsg(`天氣已帶入(資料來源:${r.source || '中央氣象局'}）`)
+  }
+  const saveCoords = async () => {
+    const la = parseFloat(lat), lo = parseFloat(lon)
+    if (isNaN(la) || isNaN(lo)) { setSavedMsg('請輸入有效的經緯度數字'); return }
+    setWeatherBusy(true)
+    const { error } = await updateProjectAnchors({ latitude: la, longitude: lo })
+    setWeatherBusy(false)
+    if (error) { setSavedMsg(`座標未儲存:${error.message}`); return }
+    setCoordOpen(false)
+    // 存好座標後直接撈一次天氣
+    setWeatherBusy(true); setSavedMsg('')
+    const r = await fetchWeather(la, lo, date)
+    setWeatherBusy(false)
+    if (r?.error) { setSavedMsg(`座標已存,但天氣未帶入:${r.error}`); return }
+    if (r.am) setWeather(r.am); if (r.pm) setWeatherPm(r.pm)
+    setSavedMsg(`工地座標已儲存;天氣已帶入(${r.source || '中央氣象局'}）`)
   }
 
   if (!workItems) return <Empty>載入中…</Empty>
@@ -183,6 +213,11 @@ export default function SiteLog() {
               <Field label="天氣(上午)"><input value={weather} onChange={(e) => setWeather(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
               <Field label="天氣(下午)"><input value={weatherPm} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
               <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field></div>
+              {can.edit && (
+                <Button variant="secondary" onClick={pullWeather} disabled={weatherBusy} title="依工地座標向中央氣象局帶入今日天氣">
+                  <CloudSun size={14} aria-hidden />{weatherBusy ? '帶入中…' : '帶入天氣'}
+                </Button>
+              )}
               {/* 零輸入:一鍵帶入前一筆日誌的班組/機具/材料(僅新日期、且有前一筆時) */}
               {can.edit && !dateHasLog && prevLog && (
                 <Button variant="secondary" onClick={copyYesterday} title={`帶入 ${prevLog.log_date} 的班組/機具/材料`}>
@@ -190,16 +225,20 @@ export default function SiteLog() {
                 </Button>
               )}
             </div>
-            {/* 天氣快選:點選免打字(仍可在上方輸入框自訂) */}
-            {can.edit && (
-              <div className="flex flex-wrap items-center gap-1.5 mb-4 text-[11px]">
-                <span className="text-[var(--text-3)]">快選天氣</span>
-                {WEATHER_PRESETS.map((w) => (
-                  <span key={w} className="inline-flex rounded-full border border-[var(--border)] overflow-hidden">
-                    <button onClick={() => setWeather(w)} className={`px-2 py-0.5 hover:bg-[var(--surface-2)] ${weather === w ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium' : 'text-[var(--text-2)]'}`} title="設為上午">{w}</button>
-                    <button onClick={() => setWeatherPm(w)} className={`px-1.5 py-0.5 border-l border-[var(--border)] hover:bg-[var(--surface-2)] ${weatherPm === w ? 'bg-[var(--amber-tint)] text-[var(--amber-text)] font-medium' : 'text-[var(--text-3)]'}`} title="設為下午">下</button>
-                  </span>
-                ))}
+            {/* 工地座標設定(首次帶天氣時出現;存一次之後每天一鍵帶入) */}
+            {can.edit && coordOpen && (
+              <div className="mb-4 p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex flex-wrap items-end gap-3">
+                <div className="text-xs text-[var(--text-2)] w-full">設定工地經緯度(存一次,之後每天一鍵帶入中央氣象局天氣)。可在 Google 地圖長按工地位置複製座標。</div>
+                <Field label="緯度 Latitude"><input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="24.9937" className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm tabular-nums" /></Field>
+                <Field label="經度 Longitude"><input value={lon} onChange={(e) => setLon(e.target.value)} placeholder="121.3009" className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm tabular-nums" /></Field>
+                <Button onClick={saveCoords} disabled={weatherBusy}>{weatherBusy ? '處理中…' : '儲存並帶入天氣'}</Button>
+                <button onClick={() => setCoordOpen(false)} className="text-sm text-[var(--text-3)] hover:underline">取消</button>
+              </div>
+            )}
+            {can.edit && hasCoords && !coordOpen && (
+              <div className="mb-4 -mt-1 text-[11px] text-[var(--text-3)]">
+                工地座標 {Number(currentProject.latitude).toFixed(4)}, {Number(currentProject.longitude).toFixed(4)}
+                <button onClick={() => { setLat(currentProject.latitude); setLon(currentProject.longitude); setCoordOpen(true) }} className="ml-2 text-[var(--blue-text)] hover:underline">修改</button>
               </div>
             )}
 

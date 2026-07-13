@@ -12,6 +12,7 @@ export function normalizeProject(row) {
     start_date: row.start_date, end_date: row.end_date, status: row.status,
     award_date: row.award_date, notice_date: row.notice_date, commencement_date: row.commencement_date,
     formal_mode: !!row.formal_mode,
+    latitude: row.latitude ?? null, longitude: row.longitude ?? null, // 工地座標(CWA 天氣用)
   }
 }
 

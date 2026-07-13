@@ -145,6 +145,14 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return { error: null, result: data }
   }, [demoMode])
 
+  // 工地座標 → 中央氣象局天氣(fetch-weather edge fn,授權碼在雲端 secret)。
+  const fetchWeather = useCallback(async (lat, lon, date) => {
+    if (!isSupabaseConfigured) return { error: '需登入(Supabase)才能連中央氣象局' }
+    const { data, error } = await supabase.functions.invoke('fetch-weather', { body: { lat, lon, date } })
+    if (error || data?.error) return { error: error?.message || data?.error || '天氣服務暫時無法使用' }
+    return data // { am, pm, township, source }
+  }, [])
+
   // 開放式 copilot 問答:送本案 facts 快照到 assistant-chat edge fn。
   // demo/未設 Supabase → 回 fallback,由 Assistant.jsx 改用確定性 answerQuestion。
   const askAssistant = useCallback(async (question, facts) => {
@@ -204,7 +212,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   return {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto,
-    readWhiteboard, describeDefect, draftMonthlyReview, askAssistant,
+    readWhiteboard, describeDefect, draftMonthlyReview, askAssistant, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   }
 }
