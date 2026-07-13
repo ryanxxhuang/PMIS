@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Printer, ChevronDown, ChevronRight, CopyPlus, Plus, CloudSun } from 'lucide-react'
+import { Camera, Printer, ChevronDown, ChevronRight, CopyPlus, Plus, CloudSun, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -32,7 +32,7 @@ function matchLeaf(text, leaves) {
 
 export default function SiteLog() {
   const { project, workItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, fetchWeather, updateProjectAnchors, can } = useStore()
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can } = useStore()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayStr())
   const [weather, setWeather] = useState('晴')       // 上午天氣（相容舊欄位）
@@ -56,6 +56,9 @@ export default function SiteLog() {
   const [photoBusy, setPhotoBusy] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)   // AI 現場辨識中
   const [aiMsg, setAiMsg] = useState('')
+  // AI 批次辨識照片:選檔後先進 staging 逐張判讀,使用者覆核可編說明/工項,再一鍵全上傳
+  const [staging, setStaging] = useState([])    // [{key,file,previewUrl,status,caption,category,work_item_key,work_item_label}]
+  const [batchBusy, setBatchBusy] = useState(false)
 
   // 發包末端工項（可回報的單元）+ 查表
   const { leaves, byKey } = useMemo(() => {
@@ -175,6 +178,59 @@ export default function SiteLog() {
   const onDeletePhoto = async (p) => {
     await deleteSitePhoto(p)
     if (currentLog?.id) setPhotos(await listSitePhotos(currentLog.id))
+  }
+
+  // AI 批次辨識:多檔 → 逐張 classify（併發 3）+ 模糊配工項 → 進 staging 覆核 → 一鍵全上傳。
+  // 覆核制:AI 猜的說明/工項先給人改再存,不直接落庫(寧可讓人確認也不錯配)。
+  const onBatchPhotos = async (e) => {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!currentLog?.id || !files.length) return
+    const stage = files.map((file) => ({
+      key: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file),
+      status: 'analyzing', caption: '', category: '', work_item_key: '', work_item_label: '', errMsg: '',
+    }))
+    setStaging(stage)
+    setBatchBusy(true)
+    let i = 0
+    const worker = async () => {
+      while (i < stage.length) {
+        const s = stage[i++]
+        const { error, result } = await classifySitePhoto(s.file)
+        const wi = !error && result?.work_item_hint ? matchLeaf(result.work_item_hint, leaves) : null
+        setStaging((prev) => prev.map((p) => p.key === s.key ? {
+          ...p, status: error ? 'error' : 'done',
+          caption: error ? '' : (result.caption || ''), category: error ? '' : (result.category || ''),
+          errMsg: error ? (error.message || '判讀失敗') : '',
+          work_item_key: wi?.item_key || '', work_item_label: wi ? `${wi.item_no} ${wi.description}` : '',
+        } : p))
+      }
+    }
+    await Promise.all([worker(), worker(), worker()])
+    setBatchBusy(false)
+  }
+
+  const patchStaging = (key, patch) => setStaging((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)))
+  const removeStaging = (key) => setStaging((prev) => {
+    const s = prev.find((p) => p.key === key); if (s) URL.revokeObjectURL(s.previewUrl)
+    return prev.filter((p) => p.key !== key)
+  })
+  const cancelBatch = () => { staging.forEach((s) => URL.revokeObjectURL(s.previewUrl)); setStaging([]) }
+
+  const confirmBatchUpload = async () => {
+    if (!currentLog?.id) return
+    setBatchBusy(true); setSavedMsg('')
+    let ok = 0, fail = 0
+    for (const s of staging) {
+      if (s.status === 'error') { fail++; continue }
+      const { error } = await uploadSitePhoto(currentLog.id, s.file, {
+        caption: s.caption || null, work_item_key: s.work_item_key || null,
+      })
+      if (error) { fail++ } else { ok++; URL.revokeObjectURL(s.previewUrl) }
+    }
+    setPhotos(await listSitePhotos(currentLog.id))
+    setStaging([]); setBatchBusy(false)
+    setSavedMsg(`已上傳 ${ok} 張照片${fail ? `,${fail} 張未成功` : ''}（AI 生說明，可再刪改）`)
   }
 
   // AI 現場辨識:拍工程告示板/現場照片 → 自動填日期/天氣/摘要 + 把工項數量帶入（工項用模糊比對到標單）
@@ -387,20 +443,83 @@ export default function SiteLog() {
               <Empty>先存檔本日日誌，才能附上現場照片。</Empty>
             ) : (
               <>
-                <div className="flex items-center gap-3 mb-3">
-                  <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] transition ${photoBusy ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
-                    <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy} onChange={onAddPhotos} className="hidden" />
-                    {photoBusy ? '上傳中…' : '＋ 加照片'}
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition shadow-sm ${(photoBusy || batchBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
+                    {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
+                    <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy} onChange={onBatchPhotos} className="hidden" />
+                    <Sparkles size={15} aria-hidden /> AI 批次辨識照片
                   </label>
-                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張　·　手機可直接開相機拍</span>
+                  <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] transition ${(photoBusy || batchBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
+                    <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy || batchBusy} onChange={onAddPhotos} className="hidden" />
+                    {photoBusy ? '上傳中…' : '＋ 直接加照片'}
+                  </label>
+                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張　·　批次辨識＝AI 自動生說明並配對工項</span>
                 </div>
+
+                {/* 批次辨識覆核區:AI 逐張判讀後,人可改說明/工項再一鍵全上傳 */}
+                {staging.length > 0 && (
+                  <div className="mb-4 border border-[var(--blue)]/30 bg-[var(--blue)]/[0.04] rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-[var(--blue)]" aria-hidden />
+                        AI 辨識覆核（{staging.filter((s) => s.status === 'done').length}/{staging.length}）
+                        {batchBusy && <span className="text-xs font-normal text-[var(--text-3)]">判讀中…</span>}
+                      </div>
+                      <button onClick={cancelBatch} disabled={batchBusy} className="text-xs text-[var(--text-3)] hover:text-rose-500">取消</button>
+                    </div>
+                    <div className="space-y-2 max-h-[28rem] overflow-auto">
+                      {staging.map((s) => (
+                        <div key={s.key} className="flex gap-3 items-start bg-[var(--surface)] border border-[var(--border)] rounded-lg p-2">
+                          <img src={s.previewUrl} alt="待上傳" className="w-16 h-16 rounded object-cover shrink-0 border border-[var(--border)]" />
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            {s.status === 'analyzing' ? (
+                              <div className="text-xs text-[var(--text-3)] py-3">AI 判讀中…</div>
+                            ) : s.status === 'error' ? (
+                              <div className="text-xs text-rose-600 py-1">辨識失敗：{s.errMsg}。仍可自行填說明後上傳。</div>
+                            ) : null}
+                            <input value={s.caption} disabled={s.status === 'analyzing'} placeholder="照片說明（AI 生成，可改）"
+                              onChange={(e) => patchStaging(s.key, { caption: e.target.value })}
+                              className="w-full border border-[var(--border)] rounded px-2 py-1 text-sm bg-[var(--surface)]" />
+                            <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                              {s.category && <span className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-2)]">{s.category}</span>}
+                              {s.work_item_label ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--blue)]/10 text-[var(--blue-text)] max-w-full">
+                                  <span className="truncate">工項：{s.work_item_label}</span>
+                                  <button onClick={() => patchStaging(s.key, { work_item_key: '', work_item_label: '' })} className="hover:text-rose-500 shrink-0" title="取消配對">✕</button>
+                                </span>
+                              ) : s.status === 'done' ? (
+                                <span className="text-[var(--text-3)]">未自動配對工項（可留白）</span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <button onClick={() => removeStaging(s.key)} disabled={batchBusy} title="移除此張"
+                            className="shrink-0 text-[var(--text-3)] hover:text-rose-500 text-sm leading-none">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                      <Button onClick={confirmBatchUpload} disabled={batchBusy || staging.every((s) => s.status !== 'done')}>
+                        {batchBusy ? '處理中…' : `全部上傳（${staging.filter((s) => s.status === 'done').length}）`}
+                      </Button>
+                      <Button variant="secondary" onClick={cancelBatch} disabled={batchBusy}>取消</Button>
+                    </div>
+                  </div>
+                )}
+
                 {photos.length === 0 ? (
-                  <Empty>尚無照片。</Empty>
+                  <Empty>尚無照片。用「AI 批次辨識照片」一次丟多張，AI 自動生說明並配工項。</Empty>
                 ) : (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {photos.map((p) => (
-                      <div key={p.id} className="group relative aspect-square rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--surface-2)]">
-                        {p.url && <img src={p.url} alt={p.caption || '現場照片'} loading="lazy" className="w-full h-full object-cover" />}
+                      <div key={p.id} className="group relative rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--surface-2)]">
+                        <div className="aspect-square">
+                          {p.url && <img src={p.url} alt={p.caption || '現場照片'} loading="lazy" className="w-full h-full object-cover" />}
+                        </div>
+                        {p.caption && (
+                          <div className="px-1.5 py-1 text-[11px] leading-tight text-[var(--text-2)] bg-[var(--surface)] border-t border-[var(--border-2)] truncate" title={p.caption}>
+                            {p.caption}
+                          </div>
+                        )}
                         <button onClick={() => onDeletePhoto(p)} title="刪除照片"
                           className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition">✕</button>
                       </div>

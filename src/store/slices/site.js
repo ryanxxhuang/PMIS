@@ -135,6 +135,20 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return { error: null, result: data }
   }, [])
 
+  // AI 施工照片分類:單張現場照 → classify-site-photo Edge Function → 照片簿說明/類別/工項關鍵詞。
+  // 「批次辨識」由前端對多檔各呼叫一次;工項對應由前端 matchLeaf 模糊比對標單。
+  const classifySitePhoto = useCallback(async (file) => {
+    if (!isSupabaseConfigured) return { error: { message: '需登入（demo 模式不支援 AI 辨識）' } }
+    let image_base64
+    try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
+    const { data, error } = await supabase.functions.invoke('classify-site-photo', {
+      body: { image_base64, mime_type: 'image/jpeg' },
+    })
+    if (error) return { error }
+    if (data?.error) return { error: { message: data.error } }
+    return { error: null, result: data }
+  }, [])
+
   // AI 月報草稿:彙整數據 → draft-monthly-review Edge Function → 檢討/下月計畫。
   // demo 模式在本地用數據套模板生成(銷售 demo 不依賴後端)。
   const draftMonthlyReview = useCallback(async (payload) => {
@@ -226,7 +240,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   return {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto,
-    readWhiteboard, describeDefect, analyzeSafetyPhoto, draftMonthlyReview, askAssistant, fetchWeather,
+    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, askAssistant, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   }
 }
