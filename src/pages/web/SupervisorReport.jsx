@@ -73,7 +73,7 @@ export default function SupervisorReport() {
         subtitle="自動彙整本月查驗、缺失、送審與進度 → 監造報表草稿，覆核後列印"
         action={
           <div className="flex items-center gap-2 print:hidden">
-            <input type="month" value={month} onChange={(e) => { setMonth(e.target.value); setOpinion(null) }}
+            <input type="month" value={month} aria-label="報表月份" onChange={(e) => { setMonth(e.target.value); setOpinion(null) }}
               className="bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--blue)]" />
             <Button onClick={() => window.print()}><Printer size={15} aria-hidden />列印 / 存 PDF</Button>
           </div>
