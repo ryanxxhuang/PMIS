@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase.js'
 import { Card, Empty, PageHeader, Badge, Button, Select } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
+import { estimatePenalty } from '../../lib/penaltyCalc.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 import {
   PACKAGE_TYPE_LABELS, PACKAGE_STATUS_LABELS, availablePackageOptions,
@@ -50,8 +51,9 @@ export default function Contract() {
     isSupabaseConfigured, currentProject, isPersistedProject,
     currentProjectMembership, currentUser,
     obligations, parseContractFromText, updateObligationStatus, updateProjectAnchors, can,
-    importWorkItems, workItemsSource, reloadMembership,
+    importWorkItems, workItemsSource, reloadMembership, workItems,
   } = useStore()
+  const contractTotal = workItems?.meta?.billable_total || 0 // 契約總價(發包工程費),逾期罰款試算基準
   const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '' })
   const [parties, setParties] = useState([])
   const [packages, setPackages] = useState([])
@@ -643,6 +645,18 @@ export default function Contract() {
                   {it.ob.penalty && (
                     <div className="text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-2 py-1 mt-2 inline-flex items-center gap-1"><Scale size={12} aria-hidden /> {it.ob.penalty}</div>
                   )}
+                  {/* 逾期罰款金額試算(確定性 regex 抽罰率;抽不出就不顯示——寧缺勿錯) */}
+                  {it.state === 'overdue' && it.ob.penalty && (() => {
+                    const est = estimatePenalty({ penaltyText: it.ob.penalty, overdueDays: -it.diff, contractTotal })
+                    return est ? (
+                      <div className="text-xs font-medium text-rose-700 bg-[var(--red-tint)] rounded-md px-2 py-1 mt-1.5 flex items-start gap-1.5">
+                        <Scale size={12} className="mt-0.5 shrink-0" aria-hidden />
+                        <span>預估逾期違約金約 NT$ {est.amount.toLocaleString('en-US')}{est.capped ? '(已達上限)' : ''}
+                          <span className="font-normal text-[var(--text-3)]"> · {est.basis} · 概算供參,實際依契約認定</span>
+                        </span>
+                      </div>
+                    ) : null
+                  })()}
                   {(it.ob.source_clause || it.ob.source_page) && (
                     <div className="text-[11px] text-[var(--text-3)] mt-2 flex items-center gap-1"><FileText size={11} aria-hidden /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>
                   )}
