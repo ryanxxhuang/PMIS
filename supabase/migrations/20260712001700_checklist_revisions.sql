@@ -10,7 +10,7 @@
 --   * 缺失關聯:defects.source_checklist_record_id 一律指向鏈根(root_id),
 --     部分唯一索引保證同一張檢查表(鏈)最多一筆未結案缺失——修訂後再判不合格
 --     不會重複開缺失;原缺失結案後再翻不合格才會開新缺失。
--- 可回退:supabase/rollbacks/20260712001600_checklist_revisions.down.sql
+-- 可回退:supabase/rollbacks/20260712001700_checklist_revisions.down.sql
 
 -- ── 1) checklist_records 版次欄位 ────────────────────────────────────────────
 alter table public.checklist_records

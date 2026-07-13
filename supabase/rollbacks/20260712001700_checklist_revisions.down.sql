@@ -1,4 +1,4 @@
--- 回退 20260712001600_checklist_revisions.sql:
+-- 回退 20260712001700_checklist_revisions.sql:
 -- 拆 guard 與索引、移除版次欄位與缺失來源關聯。
 -- 注意:回退會抹掉修訂鏈資訊(rev/supersedes/原因),僅在尚未產生修訂資料時使用。
 
