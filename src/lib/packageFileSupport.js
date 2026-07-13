@@ -6,6 +6,9 @@
 export const ACCEPTED_EXTENSIONS = Object.freeze([
   '.pdf', '.docx', '.doc', '.txt', '.csv', '.xlsx', '.xls',
   '.jpg', '.jpeg', '.png', '.tif', '.tiff',
+  // PCCES 標單 XML:統一窗口在進管線前就分流到 BOQ 匯入(Contract.jsx),
+  // 但原生檔案選擇器依 accept 過濾——沒列 .xml 使用者根本選不到(第二輪 P1-05)
+  '.xml',
 ])
 export const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.join(',')
 

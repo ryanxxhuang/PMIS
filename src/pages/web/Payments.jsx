@@ -108,19 +108,19 @@ export default function Payments() {
                       <td className="px-2">
                         {/* onBlur 才寫入:避免打字打到一半就把半成品(或空值)存進 DB */}
                         <input type="date" key={`inv-${v.id}-${v.invoice_date || ''}`} defaultValue={v.invoice_date || ''}
-                          disabled={!approved} title={lockTip}
+                          disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期請款日`}
                           onBlur={(e) => { const d = e.target.value || null; if (d !== (v.invoice_date || null)) onPay(v.id, { invoice_date: d }) }}
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2">
                         <input type="date" key={`paid-${v.id}-${v.paid_date || ''}`} defaultValue={v.paid_date || ''}
-                          disabled={!approved} title={lockTip}
+                          disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期收款日`}
                           onBlur={(e) => { const d = e.target.value || null; if (d !== (v.paid_date || null)) onPay(v.id, { paid_date: d }) }}
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 text-right">
                         <input type="number" min="0" step="any" key={`amt-${v.id}-${v.paid_amount ?? ''}`} defaultValue={v.paid_amount ?? ''}
-                          placeholder={Math.round(net).toString()} disabled={!approved} title={lockTip}
+                          placeholder={Math.round(net).toString()} disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期實收金額`}
                           onBlur={(e) => { const n = parseFloat(e.target.value); const val = isNaN(n) ? null : n; if (val !== (v.paid_amount ?? null)) onPay(v.id, { paid_amount: val }) }}
                           className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>

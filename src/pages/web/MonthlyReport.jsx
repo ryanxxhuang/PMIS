@@ -252,6 +252,13 @@ export default function MonthlyReport() {
                   defectsOpened: data.defOpened.length, defectsClosed: data.defClosed.length, defectsOpen: data.defOpen,
                   changeOrders: data.coM.length, approvedNet: data.approvedNet,
                   logSummaries: data.logs.filter((l) => l.work_summary).map((l) => l.work_summary).slice(-10),
+                  // 工項級數字(含頁面顯示的累計完成率)也是 facts——否則 AI 引用
+                  // 表格裡的 0.1% 會被 validator 誤殺(第二輪 P1-06)
+                  items: data.itemRows.slice(0, 15).map((r) => ({
+                    item_no: r.item_no, description: r.description, unit: r.unit,
+                    qty: r.qty, cum: r.cum, contractQty: r.contractQty, value: r.value,
+                    cumPct: r.contractQty ? +Math.min(100, (r.cum / r.contractQty) * 100).toFixed(1) : null,
+                  })),
                 },
               }
               const { error, result } = await draftMonthlyReview(payload)

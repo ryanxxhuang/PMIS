@@ -47,18 +47,27 @@ export function useCollabSlice({ isPersistedProject, currentProject, currentUser
   }, [isPersistedProject, currentUser, log])
 
   // 施工修正再送:退回補正 → 已提送(revision +1)
-  const resubmitSubmittal = useCallback(async (id) => {
-    let patch = null
-    setSubmittals((ss) => ss.map((s) => {
-      if (s.id !== id) return s
-      patch = { status: '已提送', revision: (s.revision || 0) + 1, decided_date: null,
-        submitted_date: new Date().toISOString().slice(0, 10) }
-      return { ...s, ...patch }
-    }))
-    if (!isPersistedProject || !patch) return { error: null }
-    const { error } = await supabase.from('submittals').update(patch).eq('id', id)
-    return { error }
-  }, [isPersistedProject])
+  // 修正再送:退回補正 → 已提送(版次+1)。DB 成功才更新 UI(P0-01:原本樂觀
+  // 更新不回滾,guard 拒絕時畫面假成功、監造看不到,流程死路)。
+  // 補正說明為必要證據,附記於附件說明(P1-08:一鍵再送缺實質補正紀錄)。
+  const resubmitSubmittal = useCallback(async (id, correctionNote) => {
+    const cur = submittals.find((s) => s.id === id)
+    if (!cur) return { error: { message: '找不到這筆送審' } }
+    const rev = (cur.revision || 0) + 1
+    const note = correctionNote?.trim()
+      ? `${cur.attachment_note ? `${cur.attachment_note}\n` : ''}補正(Rev.${rev}):${correctionNote.trim()}`
+      : cur.attachment_note
+    const patch = { status: '已提送', revision: rev, decided_date: null,
+      submitted_date: new Date().toISOString().slice(0, 10), attachment_note: note || null }
+    if (isPersistedProject) {
+      const res = await supabase.from('submittals').update(patch).eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '再送未寫入:可能無權限或這筆送審已被移除')
+      if (error) return { error }
+      log('送審修正再送', `${cur.submittal_no} Rev.${rev}`, { user: currentUser?.name, role: '施工' })
+    }
+    setSubmittals((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+    return { error: null }
+  }, [isPersistedProject, submittals, currentUser, log])
 
   const deleteSubmittal = useCallback(async (id) => {
     setSubmittals((ss) => ss.filter((s) => s.id !== id))

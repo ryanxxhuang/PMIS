@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Printer, Trash2, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Empty, PageHeader } from '../../components/ui.jsx'
-import { appConfirm } from '../../components/confirm.jsx'
+import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { applyApprovedChangeOrders, approvedNetAmount } from '../../lib/changeOrders.js'
 
@@ -113,6 +113,20 @@ export default function Valuation() {
     setErrMsg('')
     const { error } = await setValuationStatus(selected.id, status)
     if (error) setErrMsg(`狀態更新失敗：${error.message}`)
+  }
+  // 退回(監造審核→草稿)與退回核定(已核定→草稿):原因必填,記入本期備註(P1-01/02)。
+  // 已核定期若已登錄請款/收款,DB 會擋下並指引先清空——錯誤原樣顯示。
+  const onReject = async (label) => {
+    const reason = await appPrompt({
+      title: `${label}：第 ${selected.period_no} 期`, label: `${label}原因（必填，記入本期備註）`,
+      required: true, danger: true, confirmLabel: label,
+    })
+    if (reason === null) return
+    setErrMsg('')
+    const stamp = new Date().toISOString().slice(0, 10)
+    const note = `${selected.note ? `${selected.note}\n` : ''}${label}(${stamp})：${reason.trim()}`
+    const { error } = await setValuationStatus(selected.id, '草稿', { note })
+    if (error) setErrMsg(`${label}失敗：${error.message}`)
   }
 
   const renderRow = (it, level) => {
@@ -237,9 +251,11 @@ export default function Valuation() {
                 )}
                 {selected.status === '草稿' && can.submit && <Button variant="secondary" onClick={() => onStatus('監造審核')}>送監造審核</Button>}
                 {selected.status === '監造審核' && (can.approve ? <>
-                  <Button variant="ghost" onClick={() => onStatus('草稿')}>退回</Button>
+                  <Button variant="ghost" onClick={() => onReject('退回')}>退回</Button>
                   <Button variant="success" onClick={() => onStatus('已核定')}>核定估驗</Button>
                 </> : <Badge color="amber">待監造核定</Badge>)}
+                {selected.status === '已核定' && can.approve &&
+                  <Button variant="ghost" onClick={() => onReject('退回核定')}>退回核定</Button>}
                 {can.edit && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
               </div>
             }
@@ -251,6 +267,9 @@ export default function Valuation() {
               </div>
             )}
             {!editable && <p className="text-xs text-amber-600 mb-2">本期狀態為「{selected.status}」，明細唯讀。</p>}
+            {selected.note && (
+              <p className="text-xs text-[var(--amber-text)] mb-2 whitespace-pre-line">本期備註：{selected.note}</p>
+            )}
             <div className="overflow-x-auto -mx-4 -my-4">
               <table className="w-full text-sm">
                 <thead>

@@ -50,13 +50,18 @@ export default function Safety() {
   })).filter((g) => g.list.length), [safetyRecords])
 
   const openForm = (type) => setForm({
-    record_type: type, title: '', location: '', record_date: todayStr(), note: '',
+    record_type: type, title: '', location: '', record_date: todayStr(), note: '', result: '合格',
   })
 
   const onSubmit = async () => {
     if (!form.title.trim()) return
     setBusy(true); setErrMsg('')
-    const { error } = await createSafetyRecord(form)
+    // 自主檢查依「檢查結果」決定狀態:合格=已完成、不合格=待改善(P2-02:
+    // 原本一律待改善,把正常檢查自動當缺失,產生假待辦)
+    const payload = form.record_type === '自主檢查'
+      ? { ...form, status: form.result === '合格' ? '已完成' : '待改善' }
+      : form
+    const { error } = await createSafetyRecord(payload)
     setBusy(false)
     if (error) setErrMsg(`新增失敗：${error.message}`)
     else setForm(null)
@@ -151,6 +156,17 @@ export default function Safety() {
                 <input type="date" value={form.record_date} onChange={(e) => setForm({ ...form, record_date: e.target.value })}
                   className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
               </label>
+              {form.record_type === '自主檢查' && (
+                <label className="block">
+                  <span className="block text-xs font-medium text-[var(--text-2)] mb-1">檢查結果</span>
+                  {/* 正常檢查不是缺失:合格即完成,不合格才進改善流程(第二輪 P2-02) */}
+                  <select value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}
+                    className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]">
+                    <option value="合格">合格</option>
+                    <option value="不合格">不合格（進改善追蹤）</option>
+                  </select>
+                </label>
+              )}
             </div>
             <label className="block">
               <span className="block text-xs font-medium text-[var(--text-2)] mb-1">備註 {form.record_type === '教育訓練' ? '（講師 / 參與人數）' : ''}</span>

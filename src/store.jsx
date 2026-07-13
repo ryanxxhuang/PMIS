@@ -35,7 +35,7 @@ export function StoreProvider({ children }) {
   const log = useCallback(() => {}, [])
 
   // ── 身分與專案(其他 slice 的共同上游)────────────────────────────────────
-  const { currentUser, setCurrentUser, signUp, resendSignup, signIn, signOutBase } = useAuthSlice()
+  const { currentUser, authReady, setCurrentUser, signUp, resendSignup, signIn, signOutBase } = useAuthSlice()
   const {
     projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
     workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership,
@@ -244,7 +244,7 @@ export function StoreProvider({ children }) {
 
   const value = {
     // state
-    project: currentProject || project, currentUser, setCurrentUser,
+    project: currentProject || project, currentUser, authReady, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
     workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, isPersistedProject, can,

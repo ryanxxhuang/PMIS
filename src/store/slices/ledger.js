@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase.js'
 import { loadObligationsFromDB, extractContractText, fileToBase64 } from '../db.js'
 import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/documentIngestion.js'
+import { mutationOutcome } from './billing.js'
 
 export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log }) {
   // 成本項目（真 DB；預算 vs 實際、分包）
@@ -97,11 +98,15 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     return { error: null }
   }, [dbMode, currentProject, changeOrders, currentUser, log])
 
+  // 表頭/狀態:DB 成功才更新 UI(核准=契約級動作,不可假成功)
   const updateChangeOrder = useCallback(async (id, patch) => {
+    if (dbMode) {
+      const res = await supabase.from('change_orders').update(patch).eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '未寫入:可能無權限或這筆變更已被移除')
+      if (error) return { error }
+    }
     setChangeOrders((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
-    if (!dbMode) return { error: null }
-    const { error } = await supabase.from('change_orders').update(patch).eq('id', id)
-    return { error }
+    return { error: null }
   }, [dbMode])
 
   const deleteChangeOrder = useCallback(async (id) => {
@@ -163,29 +168,36 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     return { error: null }
   }, [dbMode, currentProject, wiMaps])
 
+  // 明細:DB 成功才更新 UI(第二輪 P0-02:樂觀更新被 guard 拒絕後不回滾,
+  // 畫面即時算出假的變更後契約金額,重整才復原)。
   const updateChangeOrderItem = useCallback(async (coId, id, patch) => {
+    const cur = changeOrders.find((c) => c.id === coId)?.items.find((it) => it.id === id)
+    if (!cur) return { error: { message: '找不到這筆明細' } }
     // qty_delta / unit_price 變動時同步重算 amount_delta
-    const recompute = (it) => {
-      const merged = { ...it, ...patch }
-      if ('qty_delta' in patch || 'unit_price' in patch) {
-        merged.amount_delta = (Number(merged.qty_delta) || 0) * (Number(merged.unit_price) || 0)
-      }
-      return merged
+    const merged = { ...cur, ...patch }
+    if ('qty_delta' in patch || 'unit_price' in patch) {
+      merged.amount_delta = (Number(merged.qty_delta) || 0) * (Number(merged.unit_price) || 0)
     }
-    let saved = null
+    if (dbMode) {
+      const dbPatch = { ...patch }
+      if ('qty_delta' in patch || 'unit_price' in patch) dbPatch.amount_delta = merged.amount_delta
+      const res = await supabase.from('change_order_items').update(dbPatch).eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '明細未寫入:已核准的變更不可修改,或無權限')
+      if (error) return { error }
+    }
     setChangeOrders((cs) => cs.map((c) => (c.id === coId
-      ? { ...c, items: c.items.map((it) => (it.id === id ? (saved = recompute(it)) : it)) }
+      ? { ...c, items: c.items.map((it) => (it.id === id ? merged : it)) }
       : c)))
-    if (!dbMode) return { error: null }
-    const dbPatch = { ...patch }
-    if (saved && ('qty_delta' in patch || 'unit_price' in patch)) dbPatch.amount_delta = saved.amount_delta
-    const { error } = await supabase.from('change_order_items').update(dbPatch).eq('id', id)
-    return { error }
-  }, [dbMode])
+    return { error: null }
+  }, [dbMode, changeOrders])
 
   const deleteChangeOrderItem = useCallback(async (coId, id) => {
+    if (dbMode) {
+      const res = await supabase.from('change_order_items').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '明細未刪除:已核准的變更不可修改,或無權限')
+      if (error) return { error }
+    }
     setChangeOrders((cs) => cs.map((c) => (c.id === coId ? { ...c, items: c.items.filter((it) => it.id !== id) } : c)))
-    if (dbMode) await supabase.from('change_order_items').delete().eq('id', id)
     return { error: null }
   }, [dbMode])
 

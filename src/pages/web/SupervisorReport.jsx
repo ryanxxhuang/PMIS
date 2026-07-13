@@ -100,7 +100,8 @@ export default function SupervisorReport() {
             <span>累計實際 <b className="num text-[var(--blue-text)]">{actualPct.toFixed(1)}%</b></span>
             {plannedNow != null && <span>累計預定 <b className="num">{plannedNow.toFixed(1)}%</b></span>}
             {behind != null && <Badge color={behind > 5 ? 'red' : behind < -2 ? 'blue' : 'green'}>{behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '進度正常'}</Badge>}
-            <span className="text-[var(--text-3)]">本月施工 {r.logs.workDays} 日{r.logs.rainDays ? `（雨天 ${r.logs.rainDays} 日）` : ''}</span>
+            {/* 雨天恆顯示(含 0):兩報表要能對值(P1-07) */}
+            <span className="text-[var(--text-3)]">本月施工 {r.logs.workDays} 日（雨天 {r.logs.rainDays} 日）</span>
           </div>
         </Section>
 

@@ -32,6 +32,12 @@ describe('validateDraft(AI 草稿數字必須出自 facts)', () => {
     const { ok } = validateDraft('本月澆置混凝土 10 M3,坍度 15cm 抽驗合格。', payload)
     expect(ok).toBe(true)
   })
+  it('P1-06 實案:工項級 facts(累計完成率 0.1%)→ 通過', () => {
+    const withItems = { ...payload, stats: { ...payload.stats,
+      items: [{ item_no: '壹.一.2.11', description: '結構用混凝土', qty: 2.5, cum: 2.5, contractQty: 3544, value: 7385, cumPct: 0.1 }] } }
+    const { ok } = validateDraft('主要工項結構用混凝土累計完成率 0.1%,本月完成 2.5 M3。', withItems)
+    expect(ok).toBe(true)
+  })
   it('月份年份(2026、7)屬 facts 字串 → 通過', () => {
     const { ok } = validateDraft('2026 年 7 月工進正常。', payload)
     expect(ok).toBe(true)

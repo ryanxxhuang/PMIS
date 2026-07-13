@@ -21,6 +21,7 @@ export default function ChangeOrders() {
 
   const [head, setHead] = useState({ co_no: '', title: '', co_date: todayStr() })
   const [busy, setBusy] = useState(false)
+  const [errMsg, setErrMsg] = useState('') // 明細/狀態寫入失敗必須讓使用者看到(失敗=UI 不變)
 
   // 發包末端工項（給明細連結既有工項用）
   const leaves = useMemo(() => {
@@ -89,6 +90,13 @@ export default function ChangeOrders() {
         <p className="text-xs text-[var(--text-3)] -mt-2">另有審核中/提出的變更淨額 <span className={totals.pendingNet >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{totals.pendingNet >= 0 ? '+' : ''}{money(totals.pendingNet)}</span>（尚未計入變更後契約金額）。</p>
       )}
 
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
+
       {can.edit && <Card title="新增變更設計">
         <form onSubmit={onCreate} className="flex flex-wrap items-end gap-3">
           <label className="block">
@@ -119,13 +127,15 @@ export default function ChangeOrders() {
           </div>
           {changeOrders.map((co) => (
             <ChangeOrderCard key={co.id} co={co} net={coNet(co)} leaves={leaves} allItems={workItems?.items || []}
-              canApprove={can.ratify} canEdit={can.edit}
-              onStatus={(s) => updateChangeOrder(co.id, { status: s })}
+              canApprove={can.ratify}
+              // 明細可編=廠商填報權 且 尚未核准(核准後 DB 凍結,UI 同步凍結——P0-02)
+              canEdit={can.edit} itemsEditable={can.edit && co.status !== '核准'}
+              onStatus={async (s) => { setErrMsg(''); const { error } = await updateChangeOrder(co.id, { status: s }); if (error) setErrMsg(`狀態未更新：${error.message}`) }}
               onDelete={async () => { if (await appConfirm({ title: `刪除變更「${co.title}」？`, body: '其明細將一併刪除。', danger: true, confirmLabel: '刪除' })) deleteChangeOrder(co.id) }}
               onAddItem={(input) => addChangeOrderItem(co.id, input)}
               onAddItems={(rows) => addChangeOrderItems(co.id, rows)}
-              onUpdateItem={(id, patch) => updateChangeOrderItem(co.id, id, patch)}
-              onDeleteItem={(id) => deleteChangeOrderItem(co.id, id)} />
+              onUpdateItem={async (id, patch) => { setErrMsg(''); const { error } = await updateChangeOrderItem(co.id, id, patch); if (error) setErrMsg(`明細未寫入：${error.message}`) }}
+              onDeleteItem={async (id) => { setErrMsg(''); const { error } = await deleteChangeOrderItem(co.id, id); if (error) setErrMsg(`明細未刪除：${error.message}`) }} />
           ))}
         </div>
       )}
@@ -139,7 +149,7 @@ export default function ChangeOrders() {
 
 const KIND_COLOR = { 數量增減: 'blue', '單價變更-減': 'amber', '單價變更-加': 'amber', 新增項: 'green', 刪除項: 'red' }
 
-function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem }) {
+function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, itemsEditable, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem }) {
   const [draft, setDraft] = useState({ work_item_key: '', item_no: '', description: '', unit: '', qty_delta: '', unit_price: '', note: '' })
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
@@ -212,22 +222,29 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, onSta
               </tr>
             </thead>
             <tbody>
+              {/* 已核准或無填報權=唯讀呈現(P0-02:先由狀態×角色決定唯讀,再渲染,不靠 API 事後擋) */}
               {co.items.map((it) => (
                 <tr key={it.id} className="border-b border-[var(--border-2)]">
                   <td className="py-1.5"><span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{it.item_no}</span>{it.description}</td>
                   <td className="px-2 text-right text-[var(--text-3)] text-xs whitespace-nowrap">{it.unit}</td>
-                  <td className="px-2 text-right">
-                    <input type="number" step="any" defaultValue={it.qty_delta ?? ''}
-                      onBlur={(e) => { const n = parseFloat(e.target.value); onUpdateItem(it.id, { qty_delta: isNaN(n) ? 0 : n }) }}
-                      className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                  <td className="px-2 text-right tabular-nums">
+                    {itemsEditable ? (
+                      <input type="number" step="any" defaultValue={it.qty_delta ?? ''} aria-label={`${it.description} 數量增減`}
+                        key={`q-${it.id}-${it.qty_delta ?? ''}`}
+                        onBlur={(e) => { const n = parseFloat(e.target.value); if ((isNaN(n) ? 0 : n) !== (Number(it.qty_delta) || 0)) onUpdateItem(it.id, { qty_delta: isNaN(n) ? 0 : n }) }}
+                        className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                    ) : <span>{it.qty_delta ?? 0}</span>}
                   </td>
-                  <td className="px-2 text-right">
-                    <input type="number" step="any" defaultValue={it.unit_price ?? ''}
-                      onBlur={(e) => { const n = parseFloat(e.target.value); onUpdateItem(it.id, { unit_price: isNaN(n) ? 0 : n }) }}
-                      className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                  <td className="px-2 text-right tabular-nums">
+                    {itemsEditable ? (
+                      <input type="number" step="any" defaultValue={it.unit_price ?? ''} aria-label={`${it.description} 單價`}
+                        key={`p-${it.id}-${it.unit_price ?? ''}`}
+                        onBlur={(e) => { const n = parseFloat(e.target.value); if ((isNaN(n) ? 0 : n) !== (Number(it.unit_price) || 0)) onUpdateItem(it.id, { unit_price: isNaN(n) ? 0 : n }) }}
+                        className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                    ) : <span>{money(it.unit_price)}</span>}
                   </td>
                   <td className={`px-2 text-right tabular-nums font-medium ${(Number(it.amount_delta) || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(Number(it.amount_delta) || 0) >= 0 ? '+' : ''}{money(it.amount_delta)}</td>
-                  <td className="text-right pl-2"><button onClick={() => onDeleteItem(it.id)} className="text-[var(--text-3)] hover:text-rose-600">✕</button></td>
+                  <td className="text-right pl-2">{itemsEditable && <button onClick={() => onDeleteItem(it.id)} aria-label={`刪除明細 ${it.description}`} className="text-[var(--text-3)] hover:text-rose-600">✕</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -235,8 +252,8 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, onSta
         </div>
       )}
 
-      {/* 變更後預算書 diff → 自動產生明細 */}
-      <div className="mb-3">
+      {/* 變更後預算書 diff → 自動產生明細(僅未核准且有填報權) */}
+      {itemsEditable && <div className="mb-3">
         <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] transition ${applying ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
           <FileUp size={15} aria-hidden />上傳變更後預算書 XML，自動產生明細
           <input type="file" accept=".xml" className="hidden" onChange={onDiffFile} disabled={applying} />
@@ -290,10 +307,10 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, onSta
             )}
           </div>
         )}
-      </div>
+      </div>}
 
-      {/* 新增明細 */}
-      <div className="bg-[var(--surface-2)] rounded-lg p-3">
+      {/* 新增明細(僅未核准且有填報權) */}
+      {itemsEditable && <div className="bg-[var(--surface-2)] rounded-lg p-3">
         <div className="relative mb-2">
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋既有工項連結（可留空直接新增全新項）…"
             className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" />
@@ -319,7 +336,10 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, onSta
           <Button onClick={submit} disabled={adding || !draft.description.trim()}>{adding ? '…' : '＋ 明細'}</Button>
         </div>
         <p className="text-[11px] text-[var(--text-3)] mt-1.5">追加填正數量、減帳填負數量。金額 = 數量 × 單價，自動計算。</p>
-      </div>
+      </div>}
+      {!itemsEditable && co.status === '核准' && (
+        <p className="text-[11px] text-[var(--text-3)]">此變更已核准，明細凍結；如需調整請由監造/機關撤銷核准後再修改。</p>
+      )}
     </Card>
   )
 }

@@ -22,6 +22,9 @@ function restoreDemoUser() {
 
 export function useAuthSlice() {
   const [currentUser, setCurrentUserState] = useState(restoreDemoUser)
+  // session 恢復完成前不可判定「未登入」——否則 F5 深連結會先被導去 /login,
+  // hash 路徑丟失,登入恢復後一律落在 Dashboard(第二輪 P1-04)。demo 模式同步恢復,直接 ready。
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
   // demo 選角色時持久化;真實模式由 Supabase session 管,不動 localStorage
   const setCurrentUser = useCallback((u) => {
     if (!isSupabaseConfigured) {
@@ -55,7 +58,10 @@ export function useAuthSlice() {
         real: true,
       })
     }
-    supabase.auth.getSession().then(({ data }) => loadProfile(data.session))
+    supabase.auth.getSession().then(async ({ data }) => {
+      await loadProfile(data.session)
+      if (active) setAuthReady(true)
+    })
     // 注意：不可在 onAuthStateChange callback 內直接 await Supabase 查詢，
     // 否則會與 auth lock 互鎖卡死所有後續查詢 → 用 setTimeout 推出 callback 再查。
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
@@ -100,5 +106,5 @@ export function useAuthSlice() {
     setCurrentUser(null)
   }, [setCurrentUser])
 
-  return { currentUser, setCurrentUser, signUp, resendSignup, signIn, signOutBase }
+  return { currentUser, authReady, setCurrentUser, signUp, resendSignup, signIn, signOutBase }
 }

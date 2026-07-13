@@ -31,7 +31,10 @@ export function changeOrderBall(co) {
 export function defectBall(d) {
   if (d.status === '已結案') return { who: 'done', label: '已結案' }
   if (d.status === '待複查') return { who: 'supervisor', label: '待監造複查' }
-  return { who: 'contractor', label: '待廠商改善' } // 開立 / 改善中
+  // 開立/改善中分開標示:按「開始改善」後仍顯示「待廠商改善」會讓
+  // 畫面標籤與實際狀態對不上(第二輪 P2-01)
+  if (d.status === '改善中') return { who: 'contractor', label: '廠商改善中' }
+  return { who: 'contractor', label: '待廠商改善' } // 開立
 }
 
 export function inspectionBall(i) {

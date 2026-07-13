@@ -34,7 +34,7 @@ export function buildSupervisorReport(data = {}, monthLabel) {
   // 監造意見草稿（依數據套語）
   const behind = progress && progress.plannedPct != null ? progress.plannedPct - progress.actualPct : null
   const opinion = [
-    `本月工地施工計 ${workDays} 日${rainDays ? `（含雨天 ${rainDays} 日）` : ''}，監造人員按日到場查核施工品質與安全衛生。`,
+    `本月工地施工計 ${workDays} 日（含雨天 ${rainDays} 日），監造人員按日到場查核施工品質與安全衛生。`,
     behind != null
       ? (behind > 5
         ? `累計實際進度 ${progress.actualPct.toFixed(1)}%，較預定 ${progress.plannedPct.toFixed(1)}% 落後 ${behind.toFixed(1)}%，已促請廠商檢討要徑工項並提報趕工計畫。`

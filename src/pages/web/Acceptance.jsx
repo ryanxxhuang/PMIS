@@ -86,6 +86,9 @@ export default function Acceptance() {
           {visible.map((s, i) => (
             <StageRow key={s.key} stage={s} last={i === visible.length - 1}
               allowed={canStage(s.key)}
+              // 順序 gate(P1-03):只開放「第一個未完成」階段登錄;
+              // 之後的階段只顯示預計期限,不可先填(正式驗收不得先於初驗)
+              sequentialOk={i === visible.findIndex((x) => x.state !== 'done')}
               onSave={async (patch) => {
                 setErrMsg('')
                 const { error } = await recordAcceptanceEvent(s.key, patch)
@@ -111,7 +114,7 @@ export default function Acceptance() {
   )
 }
 
-function StageRow({ stage, last, allowed, onSave, onClear }) {
+function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
   const [editing, setEditing] = useState(false)
   const [date, setDate] = useState(stage.event?.event_date || '')
   const [result, setResult] = useState(stage.event?.result || '')
@@ -164,16 +167,20 @@ function StageRow({ stage, last, allowed, onSave, onClear }) {
           (stage.state === 'due' || stage.state === 'pending') && (
             <div className="mt-1.5 text-[11px] text-[var(--text-3)]">由{stage.by === '—' ? '機關' : stage.by}登錄</div>
           )
-        ) : (editing || stage.state === 'due' || (!done && stage.state === 'pending')) && (
+        ) : !editing && !sequentialOk ? (
+          <div className="mt-1.5 text-[11px] text-[var(--text-3)]">
+            需先完成前一階段{stage.due ? `；預計期限 ${stage.due}` : ''}
+          </div>
+        ) : (
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <label className="block">
               <span className="block text-[11px] text-[var(--text-3)] mb-0.5">實際辦理日</span>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="!w-40 !py-1.5" />
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label={`${stage.label} 實際辦理日`} className="!w-40 !py-1.5" />
             </label>
             {RESULT_STAGES.has(stage.key) && (
               <label className="block">
                 <span className="block text-[11px] text-[var(--text-3)] mb-0.5">結果</span>
-                <Select value={result} onChange={(e) => setResult(e.target.value)} className="!w-28 !py-1.5">
+                <Select value={result} onChange={(e) => setResult(e.target.value)} aria-label={`${stage.label} 結果`} className="!w-28 !py-1.5">
                   <option value="">—</option>
                   <option value="合格">合格</option>
                   <option value="不合格">不合格</option>
@@ -182,7 +189,7 @@ function StageRow({ stage, last, allowed, onSave, onClear }) {
             )}
             <label className="block flex-1 min-w-[180px]">
               <span className="block text-[11px] text-[var(--text-3)] mb-0.5">備註</span>
-              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="會勘/驗收紀要…" className="!py-1.5" />
+              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="會勘/驗收紀要…" aria-label={`${stage.label} 備註`} className="!py-1.5" />
             </label>
             <Button size="sm" onClick={save} disabled={!date}>登錄</Button>
             {editing && (

@@ -95,15 +95,17 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
     return { error: null }
   }, [dbMode, wiMaps, valuations])
 
-  // 狀態轉移(送審/退回/核定):DB 成功才更新 UI。
+  // 狀態轉移(送審/退回/核定):DB 成功才更新 UI。extra 可帶附加欄位
+  // (退回原因寫入 note——退回不留原因會削弱審查證據,第二輪 P1-01)。
   // 「已核定」相關轉移由 DB 的 valuations_guard trigger 強制(僅監造/管理者),錯誤原样回傳。
-  const setValuationStatus = useCallback(async (periodId, status) => {
+  const setValuationStatus = useCallback(async (periodId, status, extra = {}) => {
+    const patch = { status, ...extra }
     if (dbMode) {
-      const res = await supabase.from('valuations').update({ status }).eq('id', periodId).select('id')
+      const res = await supabase.from('valuations').update(patch).eq('id', periodId).select('id')
       const { error } = mutationOutcome(res, '狀態未更新:可能無權限或這一期已被移除')
       if (error) return { error }
     }
-    setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, status } : v)))
+    setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, ...patch } : v)))
     log('估驗狀態更新', status, { user: status === '已核定' ? '王建國' : '陳怡君', role: status === '已核定' ? '監造' : '施工品管' })
     return { error: null }
   }, [dbMode, log])

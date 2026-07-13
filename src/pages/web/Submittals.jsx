@@ -29,13 +29,26 @@ export default function Submittals() {
     const note = await appPrompt({
       title: `${status}：${s.submittal_no}`, body: s.title,
       label: required ? `${status}原因 / 審查意見（必填）` : '審查意見（可留空）',
-      defaultValue: s.review_note || '', required, danger: required, confirmLabel: status,
+      // 退回/駁回不預填舊意見:必須寫「本次」的原因,不能沿用受理時的一般意見(P1-01)
+      defaultValue: required ? '' : (s.review_note || ''), required, danger: required, confirmLabel: status,
     })
     if (note === null) return
     setErrMsg(''); setBusy(true)
     const { error } = await decideSubmittal(s.id, status, note || s.review_note)
     setBusy(false)
     if (error) setErrMsg(`${status}未寫入：${error.message}`)
+  }
+  // 修正再送:補正說明必填(P0-01 持久化 + P1-08 實質補正證據)
+  const onResubmit = async (s) => {
+    const note = await appPrompt({
+      title: `修正再送：${s.submittal_no}`, body: s.review_note ? `退回原因：${s.review_note}` : s.title,
+      label: '補正說明（必填，將併入附件說明留存）', required: true, confirmLabel: `再送（Rev.${(s.revision || 0) + 1}）`,
+    })
+    if (note === null) return
+    setErrMsg(''); setBusy(true)
+    const { error } = await resubmitSubmittal(s.id, note)
+    setBusy(false)
+    if (error) setErrMsg(`再送未寫入：${error.message}`)
   }
 
   const pending = submittals.filter((s) => s.status === '已提送' || s.status === '審核中').length
@@ -96,17 +109,19 @@ export default function Submittals() {
                     {s.review_note && <div className="text-xs text-[var(--amber-text)] mt-0.5">審查意見：{s.review_note}</div>}
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    {/* 監造:審定動作 */}
+                    {/* 監造:審定動作——先受理才可核准/核備(P1-08:不可跳過受理) */}
                     {can.approve && (s.status === '已提送' || s.status === '審核中') && (
                       <div className="flex flex-wrap gap-1.5 justify-end">
                         {s.status === '已提送' && <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '審核中')}>受理審核</Button>}
-                        <Button variant="success" disabled={busy} onClick={() => onDecide(s, '核准')}>核准</Button>
-                        <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '核備')}>核備</Button>
+                        {s.status === '審核中' && <>
+                          <Button variant="success" disabled={busy} onClick={() => onDecide(s, '核准')}>核准</Button>
+                          <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '核備')}>核備</Button>
+                        </>}
                         <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '退回補正')}>退回補正</Button>
                       </div>
                     )}
-                    {/* 施工:退回補正後修正再送 */}
-                    {can.submit && s.status === '退回補正' && <Button variant="secondary" onClick={() => resubmitSubmittal(s.id)}>修正再送</Button>}
+                    {/* 施工:退回補正後修正再送(補正說明必填=實質補正證據) */}
+                    {can.submit && s.status === '退回補正' && <Button variant="secondary" disabled={busy} onClick={() => onResubmit(s)}>修正再送</Button>}
                     {can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
                     {!can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
                     {can.submit && <button onClick={async () => { if (await appConfirm({ title: '刪除此送審？', danger: true, confirmLabel: '刪除' })) deleteSubmittal(s.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>}
