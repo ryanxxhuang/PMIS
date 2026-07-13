@@ -256,7 +256,8 @@ export default function Valuation() {
                 </> : <Badge color="amber">待監造核定</Badge>)}
                 {selected.status === '已核定' && can.approve &&
                   <Button variant="ghost" onClick={() => onReject('退回核定')}>退回核定</Button>}
-                {can.edit && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
+                {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01) */}
+                {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
               </div>
             }
           >

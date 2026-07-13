@@ -130,6 +130,8 @@ export default function Schedule() {
                   <tr key={r.key} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
                     <td className="py-1.5 pl-5 min-w-[200px]"><span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{r.it.item_no}</span>{r.it.description || r.key}</td>
                     <td className="px-2">
+                      {/* 只送變動的單欄;合併(起+訖)由 setItemSchedule 以 ref 累積+debounce
+                          處理,同 tick 連發也會合併成單次正確寫入(R4 P1-01) */}
                       <input type="date" value={r.sch.planned_start || ''} onChange={(e) => onSet(r.key, { planned_start: e.target.value || null })}
                         aria-label={`${r.it.description || r.key} 計畫開始日`}
                         className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />

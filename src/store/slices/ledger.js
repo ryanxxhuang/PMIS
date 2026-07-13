@@ -1,6 +1,6 @@
 // Ledger slice:廠商帳務與契約——成本管理(預算vs實際/分包)、變更設計(表頭+追加減明細)、
 // 逐工項排程、契約義務(AI 解析)。
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase.js'
 import { loadObligationsFromDB, extractContractText, fileToBase64 } from '../db.js'
 import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/documentIngestion.js'
@@ -53,33 +53,38 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     return { error: null }
   }, [dbMode])
 
-  // 逐工項排程：設定某工項的計畫起迄（upsert by work_item_id；demo 只進記憶體）。
-  // DB-first + 以 DB 現值合併(R3 P1-02:原本用閉包裡過期的本地值合併,連續填
-  // 起、迄兩欄會互相蓋成 null,畫面成功、F5 歸零)。
-  const setItemSchedule = useCallback(async (itemKey, patch) => {
-    if (!dbMode) {
-      setItemSchedules((m) => ({ ...m, [itemKey]: { ...(m[itemKey] || {}), ...patch } }))
-      return { error: null }
-    }
+  // 逐工項排程:設定某工項的計畫起迄。
+  // R4 P1-01(前兩次都沒真正修好):起訖是兩個獨立 date input,同一 tick 連發時
+  // onChange 閉包都抓到同一次 render 的舊值 → 各送過期欄位、兩個 upsert 互相 race
+  // 蓋成 null。真解:ref 同步累積最新起訖(不靠 render 閉包、不靠 DB 讀),每工項
+  // debounce 合併成「單次」寫入完整整列——同 tick 連發也只落一次正確的 {起,訖}。
+  const schedRef = useRef({})        // { itemKey: { planned_start, planned_finish } } 永遠最新
+  const schedTimers = useRef({})     // 每工項的 debounce timer
+  const setItemSchedule = useCallback((itemKey, patch) => {
+    // 合併基底:schedRef 優先(含同 tick 前一次編輯),否則用載入的 itemSchedules
+    // (編輯既有排程時 ref 尚無此 key,不可讓另一欄被丟成 null)
+    const base = schedRef.current[itemKey] || itemSchedules[itemKey] || {}
+    const merged = { ...base, ...patch }
+    schedRef.current = { ...schedRef.current, [itemKey]: merged } // 同步更新,後續同 tick 呼叫看得到
+    setItemSchedules((m) => ({ ...m, [itemKey]: { ...(m[itemKey] || {}), ...merged } })) // 立即回饋 UI
+    if (!dbMode) return Promise.resolve({ error: null })
     const wi = wiMaps.byKey.get(itemKey)
-    if (!wi?.id) return { error: { message: '找不到工項' } }
-    const { data: exist, error: readErr } = await supabase.from('item_schedules')
-      .select('planned_start, planned_finish').eq('work_item_id', wi.id).maybeSingle()
-    if (readErr) return { error: readErr }
-    const row = {
-      project_id: currentProject.project_id, work_item_id: wi.id,
-      planned_start: patch.planned_start !== undefined ? (patch.planned_start || null) : (exist?.planned_start ?? null),
-      planned_finish: patch.planned_finish !== undefined ? (patch.planned_finish || null) : (exist?.planned_finish ?? null),
-    }
-    const res = await supabase.from('item_schedules')
-      .upsert(row, { onConflict: 'work_item_id' }).select('planned_start, planned_finish')
-    const { error } = mutationOutcome(res, '排程未寫入:可能無權限')
-    if (error) return { error }
-    setItemSchedules((m) => ({ ...m, [itemKey]: { ...(m[itemKey] || {}), planned_start: row.planned_start, planned_finish: row.planned_finish } }))
-    return { error: null }
-  }, [dbMode, currentProject, wiMaps])
+    if (!wi?.id) return Promise.resolve({ error: { message: '找不到工項' } })
+    return new Promise((resolve) => {
+      clearTimeout(schedTimers.current[itemKey])
+      schedTimers.current[itemKey] = setTimeout(async () => {
+        const cur = schedRef.current[itemKey] || {}
+        const row = { project_id: currentProject.project_id, work_item_id: wi.id,
+          planned_start: cur.planned_start || null, planned_finish: cur.planned_finish || null }
+        const res = await supabase.from('item_schedules').upsert(row, { onConflict: 'work_item_id' }).select('planned_start, planned_finish')
+        resolve(mutationOutcome(res, '排程未寫入:可能無權限'))
+      }, 350)
+    })
+  }, [dbMode, currentProject, wiMaps, itemSchedules])
 
   const removeItemSchedule = useCallback(async (itemKey) => {
+    clearTimeout(schedTimers.current[itemKey])
+    { const n = { ...schedRef.current }; delete n[itemKey]; schedRef.current = n } // 清 ref,重加不繼承舊值
     setItemSchedules((m) => { const n = { ...m }; delete n[itemKey]; return n })
     if (!dbMode) return { error: null }
     const wi = wiMaps.byKey.get(itemKey)

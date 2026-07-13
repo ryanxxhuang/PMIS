@@ -99,6 +99,9 @@ export default function Payments() {
                   // 金流閘門:未核定的期別鎖定請款/收款(DB trigger 同規則強制)
                   const approved = v.status === '已核定' || v.status === '已請款'
                   const lockTip = approved ? undefined : '估驗尚未核定,不可登錄請款/收款'
+                  // 流程順序(R4 P1-02,DB trigger 同規則):收款日需先有請款日、實收需先有收款日
+                  const canPaidDate = approved && !!v.invoice_date
+                  const canPaidAmount = approved && !!v.paid_date
                   const st = payStatus(v)
                   return (
                     <tr key={v.id} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
@@ -117,13 +120,15 @@ export default function Payments() {
                       </td>
                       <td className="px-2">
                         <input type="date" key={`paid-${v.id}-${v.paid_date || ''}`} defaultValue={v.paid_date || ''}
-                          disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期收款日`} max={todayIso()}
-                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.paid_date || null)) return; if (d && d > todayIso()) { setErrMsg(`收款日不可晚於今日（輸入了 ${d}）`); return } onPay(v.id, { paid_date: d }) }}
+                          disabled={!canPaidDate} title={approved ? (canPaidDate ? undefined : '請先填請款日') : lockTip}
+                          aria-label={`第 ${v.period_no} 期收款日`} max={todayIso()} min={v.invoice_date || undefined}
+                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.paid_date || null)) return; if (d && d > todayIso()) { setErrMsg(`收款日不可晚於今日（輸入了 ${d}）`); return } if (d && v.invoice_date && d < v.invoice_date) { setErrMsg(`收款日不可早於請款日 ${v.invoice_date}`); return } onPay(v.id, { paid_date: d }) }}
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 text-right">
                         <input type="number" min="0" step="any" key={`amt-${v.id}-${v.paid_amount ?? ''}`} defaultValue={v.paid_amount ?? ''}
-                          placeholder={Math.round(net).toString()} disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期實收金額`}
+                          placeholder={Math.round(net).toString()} disabled={!canPaidAmount}
+                          title={approved ? (canPaidAmount ? undefined : '請先填收款日') : lockTip} aria-label={`第 ${v.period_no} 期實收金額`}
                           onBlur={async (e) => {
                             const n = parseFloat(e.target.value); const val = isNaN(n) ? null : n
                             if (val === (v.paid_amount ?? null)) return

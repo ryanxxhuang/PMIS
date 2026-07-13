@@ -95,7 +95,8 @@ export default function ValuationPrint() {
           </div>
           <div>
             <Sum label="本期估驗金額" value={fmt(periodAmt)} strong />
-            <Sum label={`本期保留款（${retPct}%）`} value={`-${fmt(periodAmt * ret)}`} />
+            {/* 0 時不加負號前綴,避免印成「-0」(R4 P2-04) */}
+            <Sum label={`本期保留款（${retPct}%）`} value={Math.round(periodAmt * ret) ? `-${fmt(periodAmt * ret)}` : fmt(0)} />
             <Sum label="本期實領金額" value={fmt(periodAmt * (1 - ret))} strong />
           </div>
         </div>
