@@ -16,6 +16,7 @@ import SiteLogPrint from './pages/web/SiteLogPrint.jsx'
 import ChecklistPrint from './pages/web/ChecklistPrint.jsx'
 import Valuation from './pages/web/Valuation.jsx'
 import ValuationPrint from './pages/web/ValuationPrint.jsx'
+import ValuationPackage from './pages/web/ValuationPackage.jsx'
 import Progress from './pages/web/Progress.jsx'
 import Schedule from './pages/web/Schedule.jsx'
 import Quality from './pages/web/Quality.jsx'
@@ -78,6 +79,7 @@ export default function App() {
       <Route path="/site-log/print" element={<SiteLogPrint />} />
       <Route path="/valuation" element={<Web><Valuation /></Web>} />
       <Route path="/valuation/print" element={<ValuationPrint />} />
+      <Route path="/valuation/package" element={<ValuationPackage />} />
       <Route path="/payments" element={<Web><Payments /></Web>} />
       <Route path="/cost" element={<Web><Cost /></Web>} />
       <Route path="/change-orders" element={<Web><ChangeOrders /></Web>} />

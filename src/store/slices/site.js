@@ -94,6 +94,20 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return { error: null }
   }, [dbMode])
 
+  // 依工項撈全案照片(估驗佐證包用):給一組 work_item_key → 回該些工項的照片(含簽名 URL + 工項 key)。
+  // 吃 classify-site-photo 生成的 work_item_id 標籤:批次辨識配好工項的照片,估驗時自動歸位當佐證。
+  const listPhotosByWorkItems = useCallback(async (workItemKeys) => {
+    if (!dbMode || !currentProject) return []
+    const ids = [...new Set((workItemKeys || []).map((k) => wiMaps.byKey.get(k)?.id).filter(Boolean))]
+    if (!ids.length) return []
+    const { data } = await supabase.from('photos')
+      .select('*').eq('project_id', currentProject.project_id).in('work_item_id', ids).order('taken_at')
+    if (!data?.length) return []
+    const { data: signed } = await supabase.storage.from('photos').createSignedUrls(data.map((p) => p.storage_path), 3600)
+    const urlByPath = new Map((signed || []).map((s) => [s.path, s.signedUrl]))
+    return data.map((p) => ({ ...p, url: urlByPath.get(p.storage_path) || null, work_item_key: wiMaps.idToKey.get(p.work_item_id) || null }))
+  }, [dbMode, currentProject, wiMaps])
+
   // AI 現場辨識:工程告示板/現場照片 → read-whiteboard Edge Function（Claude 視覺）→ 結構化日誌欄位。
   // 金鑰在雲端函式,前端只送壓好的 base64;工項對應(item_key)由前端用標單模糊比對。
   const readWhiteboard = useCallback(async (file) => {
@@ -173,6 +187,27 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return { error: null, result: data }
   }, [demoMode])
 
+  // AI 本期估驗施工說明(估驗請款佐證包用):彙整本期工項/照片說明/日誌摘要 → 一段施工說明。
+  // demo 用資料套模板生成(不依賴後端);真專案走 draft-valuation-summary edge fn。
+  const draftValuationSummary = useCallback(async (payload) => {
+    if (demoMode) {
+      const its = payload.items || []
+      const top = its.slice(0, 4).map((i) => i.name).filter(Boolean)
+      const cap = (payload.photo_captions || []).slice(0, 3)
+      const summary =
+        `本期估驗金額 NT$ ${Math.round(payload.period_amount || 0).toLocaleString()}，累計完成 ${(payload.completion_pct || 0).toFixed(1)}%。` +
+        (top.length ? `本期主要施作:${top.join('、')}等 ${its.length} 項工項。` : '') +
+        (cap.length ? `現場佐證含${cap.join('、')}等紀錄。` : '') +
+        `各工項完成數量已依施工日誌逐日累計，並附現場照片佐證,檢附估驗計價單辦理本期估驗計價。`
+      return { error: null, result: { summary } }
+    }
+    if (!isSupabaseConfigured) return { error: { message: '需登入（Supabase 未設定）' } }
+    const { data, error } = await supabase.functions.invoke('draft-valuation-summary', { body: payload })
+    if (error) return { error }
+    if (data?.error) return { error: { message: data.error } }
+    return { error: null, result: data }
+  }, [demoMode])
+
   // 工地座標 → 中央氣象局天氣(fetch-weather edge fn,授權碼在雲端 secret)。
   const fetchWeather = useCallback(async (lat, lon, date) => {
     if (!isSupabaseConfigured) return { error: '需登入(Supabase)才能連中央氣象局' }
@@ -239,8 +274,8 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
 
   return {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
-    saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto,
-    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, askAssistant, fetchWeather,
+    saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, listPhotosByWorkItems,
+    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, askAssistant, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   }
 }

@@ -88,8 +88,8 @@ export function StoreProvider({ children }) {
   const ctx = { dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }
   const {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
-    saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto,
-    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, askAssistant, fetchWeather,
+    saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, listPhotosByWorkItems,
+    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, askAssistant, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   } = useSiteSlice(ctx)
   const {
@@ -249,7 +249,7 @@ export function StoreProvider({ children }) {
     currentProject, projects, projectLoading, createProject, switchProject,
     workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, isPersistedProject, can,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect, analyzeSafetyPhoto, classifySitePhoto, askAssistant, fetchWeather,
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, listPhotosByWorkItems, readWhiteboard, draftMonthlyReview, draftValuationSummary, describeDefect, analyzeSafetyPhoto, classifySitePhoto, askAssistant, fetchWeather,
     obligations, parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, createCostItem, updateCostItem, deleteCostItem,

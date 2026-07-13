@@ -194,6 +194,7 @@ export default function Valuation() {
         action={
           <div className="flex items-center gap-2">
             {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}
+            {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/package?p=${selected.id}`)} title="彙整本期估驗明細＋AI 施工說明＋佐證照片"><Sparkles size={15} aria-hidden />組請款佐證包</Button>}
             {can.edit && <Button variant="secondary" onClick={onCreate}>＋ 新增估驗期</Button>}
           </div>
         } />
