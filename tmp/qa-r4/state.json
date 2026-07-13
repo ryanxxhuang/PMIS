@@ -1,0 +1,30 @@
+{
+  "stamp": "20260713-0815-r4",
+  "emails": {
+    "A": "pmis.qa.a.20260713-0815-r4@example.com",
+    "B": "pmis.qa.b.20260713-0815-r4@example.com",
+    "C": "pmis.qa.c.20260713-0815-r4@example.com"
+  },
+  "password": "Pmis-QA4-20260713!",
+  "users": {
+    "A": "bfdcd193-b5c4-485d-8e89-399b37c99b9f",
+    "B": "1bdb120f-2c05-465e-a8a5-773b0dca53ba",
+    "C": "a43615ff-3e8e-4927-8503-1fa163f9a03a"
+  },
+  "alpha": {
+    "id": "cbfd9933-7717-48a6-ae3a-dee262c789e5",
+    "name": "PMIS-R4-甲-正式驗收-20260713-0815-r4"
+  },
+  "beta": {
+    "id": "07efe75a-7458-4b40-a735-020b87d057df",
+    "name": "PMIS-R4-乙-隔離對照-20260713-0815-r4",
+    "marker": "R4-BETA-SECRET-20260713-0815-r4"
+  },
+  "betaResources": {
+    "valuations": "c1c20f47-3090-4945-82fb-af933ddc1db7",
+    "defects": "6f1ed569-b65c-4d0a-a6cd-ac0b22943a27",
+    "cost_items": "4a820aad-cdc5-482e-a64d-8972b9fe5d52",
+    "submittals": "74e872ec-cc0d-43a0-9062-57ccfb733332",
+    "test_samples": "6d0e4340-d311-4b62-8b2d-9162c17791d2"
+  }
+}

@@ -1,0 +1,1668 @@
+PMIS AI — Contract-First Architecture Refactor
+P0 / P1 Product & Engineering Backlog
+
+0. Mission
+This repository already contains a broad Taiwan public-works PMIS covering PCCES BOQ, daily site logs,
+valuations, payments, cost, progress, quality, safety, ITP, submittals, RFIs, acceptance, portfolio
+management, and role-based workflows.
+
+
+Do not add more horizontal PMIS modules at this stage.
+
+
+The product north star is:
+
+
+       Upload the contract, specifications, quality plan, and required forms.
+       AI converts those documents into traceable execution requirements, and the system tells
+       each project participant what must be done, when, why, what evidence is required, and
+       which contractual source created the obligation.
+
+
+The current product is predominantly BOQ-first and module-first.
+
+
+The target architecture is Contract-First × Requirement-Driven, while retaining the existing PCCES BOQ
+as the financial/progress spine.
+
+
+The final product should have two connected structural spines:
+
+
+
+  FINANCIAL / PROGRESS SPINE
+
+
+  PCCES BOQ
+     ↓
+  Work Item
+     ↓
+  Daily Quantity
+     ↓
+  Valuation
+     ↓
+  Payment / Progress / Cost
+
+
+
+  EXECUTION / COMPLIANCE SPINE
+
+
+  Contract / Specification / Quality Plan
+     ↓
+  Requirement
+     ↓
+  Work Item / Project Phase / Event
+      ↓
+
+
+
+                                                   1
+  ITP / Checklist / Test / Submittal / Evidence
+     ↓
+  Execution Record
+     ↓
+  Inspection / Defect / Report / Audit
+
+
+These two spines must be linked through work_item_id and project workflow events where
+applicable.
+
+
+
+
+P0 — ARCHITECTURE AND PRODUCT
+FOUNDATION
+Do not begin P1 until all P0 acceptance criteria pass.
+
+
+
+
+P0-01 — Establish the Requirement Domain Model
+
+Problem
+
+The current contract_obligations table only represents time-based contractual obligations.
+
+
+The AI contract parser currently extracts deadlines, triggers, responsible parties, penalties, and source
+clauses.
+
+
+This is insufficient for the product vision.
+
+
+A contractual requirement may define:
+
+
+    • a deadline
+    • a submittal
+    • an inspection point
+    • a checklist
+    • a test
+    • an acceptance criterion
+    • an inspection frequency
+    • required evidence
+    • required photographs
+    • a reporting obligation
+
+These must share a common root domain entity.
+
+
+Implement
+
+Create a first-class requirements domain.
+
+
+Suggested schema:
+
+
+
+
+                                                         2
+  requirements
+  - id
+  - project_id
+  - title
+  - description
+  - requirement_type
+  - responsible_party_type
+  - lifecycle_phase
+  - trigger_type
+  - trigger_config jsonb
+  - frequency_type
+  - frequency_config jsonb
+  - acceptance_criteria
+  - evidence_requirement
+  - status
+  - confidence
+  - ai_generated
+  - reviewed_by
+  - reviewed_at
+  - created_at
+  - updated_at
+
+
+Initial requirement_type values:
+
+
+
+  deadline
+  submittal
+  inspection
+  test
+  checklist
+  evidence
+  photo
+  report
+  other
+
+
+Do not encode all domain logic into requirement_type .
+
+
+Use linked domain objects where specialized workflow is required.
+
+
+Create:
+
+
+
+  requirement_sources
+  - id
+  - requirement_id
+  - document_version_id
+  - page_number
+
+
+
+
+                                                  3
+  - section
+  - clause
+  - source_text
+  - source_start_offset nullable
+  - source_end_offset nullable
+
+
+Create:
+
+
+
+  requirement_work_items
+  - requirement_id
+  - work_item_id
+  - match_type
+  - confidence
+  - reviewed
+
+
+Possible match_type :
+
+
+
+  ai
+  code
+  description
+  manual
+
+
+
+Migration
+
+Existing contract_obligations data must not be silently destroyed.
+
+
+Provide an idempotent migration converting existing obligations into requirements with:
+
+
+
+  requirement_type = deadline
+
+
+Preserve current due-date behavior.
+
+
+Acceptance Criteria
+
+    1. Existing contract obligation screens continue to function.
+    2. Existing demo data remains usable.
+    3. Existing deadline calculations produce identical results.
+    4. A requirement can have multiple source references.
+    5. A requirement can link to multiple BOQ work items.
+    6. AI-generated requirements are not considered authoritative until reviewed.
+    7. Source text, document version, page, and clause are preserved.
+    8. Add automated migration/domain tests.
+
+
+
+
+                                                  4
+P0-02 — Build Project-Scoped Party and Role Architecture
+
+Problem
+
+profiles.org_type currently models:
+
+
+
+  contractor
+  supervisor
+  owner
+
+
+as a global user property.
+
+
+Real construction roles are project-scoped.
+
+
+A company or user may have different contractual roles on different projects.
+
+
+Implement
+
+Introduce:
+
+
+
+  organizations
+  - id
+  - name
+  - organization_type
+  - created_at
+
+
+Do not rely exclusively on organization_type for project authorization.
+
+
+Create:
+
+
+
+  project_parties
+  - id
+  - project_id
+  - organization_id
+  - party_type
+  - display_name
+  - created_at
+
+
+Initial party_type :
+
+
+
+  owner
+  contractor
+  supervisor
+  designer
+
+
+
+
+                                                    5
+  consultant
+  other
+
+
+Create or redesign memberships:
+
+
+
+  project_memberships
+  - id
+  - project_id
+  - user_id
+  - project_party_id
+  - project_role
+  - is_project_admin
+  - created_at
+
+
+Examples of project_role :
+
+
+
+  owner_pm
+  owner_engineer
+  contractor_pm
+  site_manager
+  quality_engineer
+  safety_engineer
+  supervisor_manager
+  supervisor_engineer
+  document_controller
+  viewer
+
+
+Do not build a full generic RBAC SaaS framework unless necessary.
+
+
+The immediate requirement is correct construction workflow authority.
+
+
+Migration
+
+Migrate existing projects and project_members .
+
+
+Use existing project:
+
+
+
+  owner_name
+  contractor_name
+  supervisor_name
+
+
+to seed project parties where possible.
+
+
+Use the user's existing profile org type only as a migration hint.
+
+
+
+
+                                                      6
+After migration, authorization must use project membership / project party.
+
+
+Acceptance Criteria
+
+    1. One user can be contractor on Project A and supervisor on Project B.
+    2. One organization can participate in multiple projects with different party roles.
+    3. Current demo roles still work.
+    4. No workflow authorization depends solely on profiles.org_type .
+    5. RLS tests cover at least three separate authenticated users representing contractor, supervisor,
+       and owner.
+
+
+
+
+P0-03 — Separate System Administration from Contractual
+Authority
+
+Problem
+
+The current project admin override allows an admin to obtain approval authority.
+
+
+Project administration and contractual approval authority are different concepts.
+
+
+A contractor project creator must never become authorized to:
+
+
+    • approve their own valuation
+    • judge their own inspection as passed
+    • close their own defect
+    • approve their own submittal
+
+simply because they created the project.
+
+
+Rule
+
+
+  TECHNICAL ADMINISTRATION
+  ≠
+  CONTRACTUAL AUTHORITY
+
+
+
+Implement
+
+is_project_admin may authorize:
+
+
+    • member management
+    • project settings
+    • integrations
+    • project deletion
+    • technical configuration
+
+It must not automatically authorize workflow transitions.
+
+
+Workflow authorization must derive from project party and project role.
+
+
+
+
+                                                    7
+Create explicit permission helper functions or equivalent server-side authorization functions.
+
+
+Examples:
+
+
+
+  can_submit_inspection()
+  can_decide_inspection()
+  can_submit_valuation()
+  can_approve_valuation()
+  can_close_defect()
+  can_review_submittal()
+  can_ratify_change_order()
+
+
+Do not use one generic can_write() helper for sensitive workflow authority.
+
+
+RLS protects row access.
+
+
+Database triggers or RPC boundaries protect workflow state transitions.
+
+
+Acceptance Criteria
+
+Test the following negative cases at DB level:
+
+
+
+  Contractor admin → cannot approve own valuation
+  Contractor admin → cannot pass own inspection
+  Contractor admin → cannot close own defect
+  Contractor admin → cannot approve own submittal
+
+
+  Owner admin → cannot perform supervisor inspection judgment
+
+
+  Supervisor → can decide inspection
+  Supervisor → can review submittal
+  Supervisor → can close defect
+
+
+  Authorized owner role → can perform defined owner approval action
+
+
+Frontend permission behavior must match server behavior.
+
+
+No frontend-only authorization.
+
+
+
+
+P0-04 — Implement Persistent Append-Only Audit Events
+
+Problem
+
+The current audit log exists only in React memory.
+
+
+This is not an engineering audit trail.
+
+
+
+
+                                                     8
+Implement
+
+Create:
+
+
+
+  audit_events
+  - id uuid
+  - project_id
+  - actor_user_id
+  - actor_project_party_id
+  - actor_project_role
+  - event_type
+  - entity_type
+  - entity_id
+  - action
+  - before_data jsonb
+  - after_data jsonb
+  - metadata jsonb
+  - correlation_id uuid
+  - occurred_at timestamptz
+
+
+The table must be append-only for application users.
+
+
+Authenticated application users:
+
+
+
+  SELECT: permitted project events
+  INSERT: only through controlled database mechanism where appropriate
+  UPDATE: never
+  DELETE: never
+
+
+Prefer database triggers for high-value workflow transitions.
+
+
+At minimum audit:
+
+
+
+  valuation status transitions
+  inspection status transitions
+  defect status transitions
+  submittal decisions
+  RFI answers / closure
+  change-order approvals
+  requirement approval / rejection
+  document version creation
+  project membership changes
+  acceptance stage changes
+
+
+Store before_data and after_data for sensitive workflow changes.
+
+
+
+
+                                                    9
+Do not expose secrets or unnecessary personal data.
+
+
+UI
+
+Add a basic project activity / audit view.
+
+
+Filters:
+
+
+
+  actor
+  event type
+  entity type
+  date range
+
+
+Entity records should be able to show their own event history.
+
+
+Acceptance Criteria
+
+     1. Browser refresh does not lose audit history.
+     2. Application users cannot update or delete audit events.
+     3. Contractor and supervisor workflow actions display correct actor identity and project role.
+     4. Audit remains correct if frontend code is bypassed and PostgREST is called directly.
+     5. Add DB authorization tests.
+
+
+
+
+P0-05 — Establish Document Control Primitives
+
+Problem
+
+Current submittals contain workflow state but do not maintain true document versions.
+
+
+A revision number without an immutable versioned file is insufficient.
+
+
+Implement
+
+Create:
+
+
+
+  documents
+  - id
+  - project_id
+  - document_number
+  - title
+  - document_type
+  - discipline
+  - current_version_id
+  - status
+  - created_at
+
+
+
+
+                                                    10
+Create:
+
+
+
+  document_versions
+  - id
+  - document_id
+  - version_label
+  - revision_number
+  - storage_path
+  - original_filename
+  - mime_type
+  - file_size
+  - checksum
+  - uploaded_by
+  - uploaded_at
+  - supersedes_version_id
+
+
+Once created, a document version's file identity must be immutable.
+
+
+A replacement file creates a new version.
+
+
+Create:
+
+
+
+  document_reviews
+  - id
+  - document_version_id
+  - review_cycle
+  - reviewer_user_id
+  - reviewer_party_id
+  - decision
+  - comment
+  - created_at
+
+
+Possible decisions:
+
+
+
+  approved
+  approved_as_noted
+  revise_and_resubmit
+  rejected
+  acknowledged
+
+
+
+Integration
+
+Refactor Submittals so a submittal references a document version.
+
+
+A resubmittal creates a new document version and review cycle.
+
+
+
+
+                                                  11
+Historical review cycles must remain accessible.
+
+
+Do not delete historical versions when a newer version is uploaded.
+
+
+Acceptance Criteria
+
+The product must answer:
+
+
+       Which exact file was submitted as Rev.2?
+
+
+       Who uploaded it?
+
+
+       What is its checksum?
+
+
+       Which file did the supervisor approve?
+
+
+       What comments were issued during that review cycle?
+
+
+       Was the file later superseded?
+
+
+All answers must be deterministically available from stored data.
+
+
+
+
+P0-06 — Replace Single-Pass Contract Parsing with a Traceable
+Ingestion Pipeline
+
+Problem
+
+The current contract parsing flow sends extracted document text to one AI call and receives a list of time
+obligations.
+
+
+The target system must ingest multiple large engineering documents while preserving source traceability.
+
+
+Required Documents
+
+Support:
+
+
+
+  contract
+  construction specification
+  quality plan
+  inspection / test plan
+  required form package
+  other project requirements
+
+
+
+Pipeline
+
+Implement the conceptual pipeline:
+
+
+
+
+                                                    12
+  Upload
+  ↓
+  Create Document + Document Version
+  ↓
+  Extract text by page
+  ↓
+  Normalize document structure
+  ↓
+  Split into traceable sections/chunks
+  ↓
+  AI requirement extraction
+  ↓
+  Normalize requirements
+  ↓
+  Deduplicate / merge candidate requirements
+  ↓
+  Suggest BOQ work-item links
+  ↓
+  Human review
+  ↓
+  Approve requirements
+  ↓
+  Generate downstream draft workflow objects
+
+
+
+Important
+
+Do not lose page mapping during PDF extraction.
+
+
+The current parts.join('\n') style extraction is insufficient for reliable source citations because
+page boundaries are not first-class data.
+
+
+Create a page-aware extracted representation.
+
+
+Example:
+
+
+
+  document_pages
+  - document_version_id
+  - page_number
+  - extracted_text
+  - extraction_method
+
+
+Optional future embeddings are acceptable, but vector search is not the P0 goal.
+
+
+AI Output
+
+AI results must contain:
+
+
+
+
+                                                   13
+  requirement
+  requirement_type
+  responsible party
+  trigger
+  frequency
+  acceptance criteria
+  evidence
+  source page
+  source clause
+  source quotation
+  confidence
+  candidate work-item references
+
+
+All AI output is a draft.
+
+
+Human Review Workflow
+
+Status:
+
+
+
+  draft_ai
+  approved
+  rejected
+  needs_review
+
+
+Provide bulk review UX.
+
+
+Reviewer can:
+
+
+
+  approve
+  edit then approve
+  reject
+  merge duplicates
+  change linked work items
+
+
+
+Acceptance Criteria
+
+     1. Multiple project documents can be uploaded.
+     2. Requirements remain linked to the exact source document version.
+     3. Requirements have page-level traceability.
+     4. Reprocessing one document does not delete requirements from unrelated documents.
+     5. AI output cannot silently replace approved human-reviewed requirements.
+     6. Duplicate suggestions can be identified and reviewed.
+     7. At least one integration test uses multiple documents.
+
+
+
+
+                                                14
+P0-07 — Make Contract-First the Product Onboarding Flow
+
+Current Problem
+
+Project creation currently sends the user directly to BOQ import.
+
+
+This communicates that the product is a traditional BOQ-first PMIS.
+
+
+New Project Flow
+
+Implement:
+
+
+
+  Create Project
+  ↓
+  Project Setup Wizard
+  ↓
+  1. Upload Project Documents
+  ↓
+  2. AI Analysis
+  ↓
+  3. Review Requirements
+  ↓
+  4. Import PCCES BOQ
+  ↓
+  5. Requirement ↔ Work Item Mapping
+  ↓
+  6. Project Ready
+
+
+Documents and BOQ should both be allowed to be skipped temporarily.
+
+
+Clearly communicate incomplete setup.
+
+
+Project Readiness
+
+Create readiness states such as:
+
+
+
+  documents_missing
+  requirements_processing
+  requirements_review_required
+  boq_missing
+  mapping_review_required
+  ready
+
+
+Do not hard-code this as a single database status if it is better derived.
+
+
+
+
+                                                      15
+IA
+
+The main project experience must answer:
+
+
+          What does this project require us to do?
+
+
+before:
+
+
+          Which PMIS module do you want to open?
+
+
+Do not delete the current modules.
+
+
+Change the hierarchy.
+
+
+Acceptance Criteria
+
+     1. A new real project is no longer automatically sent directly to /boq .
+     2. The setup flow visibly establishes the Contract-First product story.
+     3. Users can see AI analysis progress and review requirements.
+     4. The system explains why BOQ import matters separately from document analysis.
+     5. Existing projects receive a backward-compatible setup state.
+
+
+
+
+P0-08 — Refactor AI Assistant into LLM + Deterministic Project
+Tools
+
+Problem
+
+The current assistant uses deterministic keyword intent routing.
+
+
+The deterministic calculations are valuable.
+
+
+The keyword router is not an adequate general project assistant.
+
+
+Preserve
+
+Do not discard the existing business calculation logic.
+
+
+Refactor it into project tools.
+
+
+Suggested tools:
+
+
+
+  get_project_progress
+  get_progress_variance
+  get_open_defects
+  get_pending_inspections
+  get_itp_alerts
+  get_pending_tests
+
+
+
+
+                                                     16
+  get_contract_requirements
+  search_requirement_sources
+  get_pending_submittals
+  get_rfis
+  get_valuation_status
+  get_payment_status
+  get_change_orders
+  get_my_open_items
+  get_acceptance_status
+
+
+Each tool returns structured JSON.
+
+
+LLM Role
+
+The LLM:
+
+
+
+  understands the user question
+  chooses project tools
+  combines results
+  explains the answer
+  cites source records
+
+
+The deterministic layer:
+
+
+
+  calculates numbers
+  queries authoritative project data
+  applies domain rules
+
+
+
+Safety / Workflow Boundary
+
+The first assistant version remains read-only.
+
+
+The LLM may not:
+
+
+
+  approve
+  submit
+  close
+  delete
+  ratify
+  change contractual records
+
+
+Provide links to the relevant workflow screen.
+
+
+
+
+                                                 17
+Contract Q&A
+
+Questions such as:
+
+
+         鋼筋進場前要送哪些文件？
+
+
+must query approved requirements and requirement sources.
+
+
+Answers must reference source document / page / clause.
+
+
+Never invent missing requirements.
+
+
+Acceptance Criteria
+
+       1. Remove keyword intent routing as the primary assistant router.
+       2. Existing deterministic business calculations are preserved as tools.
+       3. The assistant answers cross-domain questions.
+       4. Requirement answers include project-source citations.
+       5. Unsupported questions explicitly state insufficient project information.
+       6. Assistant is read-only.
+       7. Add tool-level tests independently from LLM tests.
+
+
+
+
+P0-09 — Create a Requirement Review and Generation Boundary
+
+Product Rule
+
+AI does not directly create authoritative contractual workflow.
+
+
+Use:
+
+
+
+  AI suggestion
+  ↓
+  Human review
+  ↓
+  Approved requirement
+  ↓
+  Generate draft domain object
+  ↓
+  Authorized workflow execution
+
+
+
+Implement
+
+Create generation status / linkage sufficient to know:
+
+
+
+  Requirement R-123
+  ↓
+  generated
+
+
+
+                                                      18
+  ITP Point ITP-24
+
+
+  Requirement R-456
+  ↓
+  generated
+  Test Requirement TR-3
+
+
+Do not use fuzzy title matching as the permanent relational link.
+
+
+Suggested:
+
+
+
+  requirement_artifact_links
+  - requirement_id
+  - artifact_type
+  - artifact_id
+  - generation_type
+  - created_at
+
+
+
+Acceptance Criteria
+
+    1. AI cannot create an active H hold point without a review boundary.
+    2. Generated workflow entities trace back to requirements.
+    3. Requirements can show generated downstream artifacts.
+    4. Downstream artifacts can show source requirements.
+    5. Duplicate generation is prevented or explicitly handled.
+
+
+
+
+P0-10 — Build a Production Authorization Test Matrix
+Create automated authorization tests covering project parties, project roles, and workflow state
+transitions.
+
+
+At minimum test:
+
+
+
+  3 projects
+  3 organizations
+  4 users
+
+
+One user must have different roles on two different projects.
+
+
+Test direct DB/API actions rather than only React UI behavior.
+
+
+Create a documented permission matrix.
+
+
+Required domains:
+
+
+
+
+                                                    19
+  project settings
+  memberships
+  work items
+  daily logs
+  valuations
+  valuation approval
+  inspections
+  inspection decisions
+  defects
+  defect closure
+  ITP
+  submittals
+  submittal decisions
+  RFI answers
+  change-order approval
+  acceptance events
+  documents
+  document versions
+  requirements
+  requirement approval
+  audit events
+  contractor-private cost data
+
+
+
+Acceptance Criteria
+
+No P0 is complete while the permission matrix and automated negative authorization tests are missing.
+
+
+
+
+P1 — PRODUCT DIFFERENTIATION
+Begin only after P0 architecture is stable.
+
+
+
+
+P1-01 — AI Specification → ITP Generator
+From approved inspection requirements, generate suggested:
+
+
+
+  H hold points
+  W witness points
+  R review points
+
+
+Populate:
+
+
+
+
+                                                  20
+  title
+  work item
+  acceptance criteria
+  frequency
+  source requirement
+  source clause
+
+
+Supervisor reviews before activation.
+
+
+Primary demo:
+
+
+        AI found a concrete inspection requirement in Specification 03310 and suggests a W point
+        linked to the relevant PCCES concrete item.
+
+
+
+
+P1-02 — AI Requirement → Checklist Generator
+Generate structured checklist templates from approved requirements.
+
+
+Checklist items should contain:
+
+
+
+  item
+  measurement type
+  min
+  max
+  target
+  tolerance
+  unit
+  acceptance rule
+  source requirement
+  source clause
+
+
+Human review required.
+
+
+A failed quantitative check may continue using the existing automatic defect workflow.
+
+
+
+
+P1-03 — Generic Test Requirement Engine
+Replace concrete-only testing concepts with a generic test domain.
+
+
+Suggested:
+
+
+
+
+                                                   21
+  test_requirements
+  test_samples
+  test_results
+
+
+Examples:
+
+
+
+  concrete compressive strength
+  rebar tensile test
+  soil compaction
+  welding NDT
+  material testing
+
+
+A test requirement defines:
+
+
+
+  trigger
+  frequency
+  sample quantity
+  age / due rule
+  acceptance criteria
+  required report
+  source requirement
+
+
+
+
+P1-04 — Evidence and Photo Requirement Engine
+Create requirement-driven evidence obligations.
+
+
+Example:
+
+
+
+  Before concrete pour:
+  - reinforcement completion overview
+  - spacer / cover evidence
+  - embedded item evidence
+  - formwork condition
+
+
+The system should show:
+
+
+       4 required evidence items; 3 completed.
+
+
+Photo AI may suggest which evidence category a photo satisfies.
+
+
+AI suggestions require user confirmation.
+
+
+
+
+                                                  22
+P1-05 — Today / My Work Action Center
+This should become the primary field-user screen.
+
+
+Answer:
+
+
+        今天我要做什麼？
+
+
+Generate tasks from:
+
+
+
+  approved requirements
+  ITP state
+  active BOQ work items
+  daily log activity
+  pending inspections
+  test triggers
+  submittal deadlines
+  defect deadlines
+  contract deadlines
+  ball-in-court state
+
+
+Example:
+
+
+
+  TODAY
+
+
+  🔴 A區3F柱牆混凝土
+  H 點尚未申請查驗
+
+  🟠 混凝土 120m³
+  依 Requirement R-03310-024 建議建立取樣紀錄
+
+  🟡 SUB-018
+  明日到期
+
+  🔵 缺失 D-024
+  改善期限剩 2 日
+
+
+Every task must explain:
+
+
+
+  What
+  Why
+  Source
+  Required action
+
+
+
+
+                                                    23
+P1-06 — Work Item Requirement View
+A user selects a PCCES work item.
+
+
+Example:
+
+
+
+  預拌混凝土 3500 psi
+
+
+Display:
+
+
+
+  BEFORE WORK
+
+
+  ✓ Mix design approved
+  ✓ Material submittal approved
+  ○ Self-inspection required
+
+
+
+  DURING WORK
+
+
+  ! W witness point
+  ! Sampling requirement
+  ○ Four photo evidence requirements
+
+
+
+  AFTER WORK
+
+
+  ○ 7-day test
+  ○ 28-day test
+  ○ Complete daily log
+
+
+Every item shows a source requirement.
+
+
+This is a critical product differentiation screen.
+
+
+
+
+P1-07 — True Project RAG / Requirement Q&A
+After the structured Requirement Graph is operating correctly, add semantic retrieval over:
+
+
+
+  document pages
+  approved requirements
+  project records
+
+
+Structured requirements remain the preferred authoritative source for workflow questions.
+
+
+
+
+                                                     24
+Raw document RAG is used for:
+
+
+
+  explanation
+  cross-reference
+  unstructured contract questions
+  clause comparison
+
+
+Answers must separate:
+
+
+
+  Structured project requirement
+  Document text interpretation
+  Model inference
+
+
+Never present model inference as an approved contractual requirement.
+
+
+
+
+Implementation Order
+Execute in this exact order unless a blocking dependency is discovered:
+
+
+
+  P0-01 Requirement Domain
+  ↓
+  P0-02 Project Party / Role Model
+  ↓
+  P0-03 Contractual Authority
+  ↓
+  P0-10 Authorization Test Matrix
+  ↓
+  P0-04 Audit Events
+  ↓
+  P0-05 Document Control
+  ↓
+  P0-06 Document Ingestion Pipeline
+  ↓
+  P0-09 Review / Generation Boundary
+  ↓
+  P0-07 Contract-First Onboarding
+  ↓
+  P0-08 AI Assistant Tools
+
+
+  Then:
+
+
+  P1-01 ITP Generator
+  ↓
+  P1-02 Checklist Generator
+
+
+
+
+                                                   25
+  ↓
+  P1-03 Test Requirement Engine
+  ↓
+  P1-04 Evidence Requirements
+  ↓
+  P1-05 Today Action Center
+  ↓
+  P1-06 Work Item Requirement View
+  ↓
+  P1-07 Project RAG
+
+
+
+
+Engineering Constraints
+    1. Preserve the current PCCES BOQ pipeline.
+
+
+    2. Preserve current demo mode unless a deliberate migration is documented.
+
+
+    3. Keep Supabase RLS as a security boundary.
+
+
+    4. Sensitive workflow authority must also be protected server-side.
+
+
+    5. All schema changes must remain idempotent or use a clearly documented migration mechanism.
+
+
+    6. Do not replace deterministic business calculations with LLM-generated calculations.
+
+
+    7. AI output is a suggestion until human review when contractual authority is involved.
+
+
+    8. Preserve source traceability.
+
+
+    9. Do not silently delete approved human-reviewed requirements during AI reprocessing.
+
+
+   10. Add tests before declaring a P0 issue complete.
+
+
+   11. Do not perform a visual redesign unless the workflow requires UI changes.
+
+
+   12. Do not add unrelated PMIS modules.
+
+
+
+
+Required Working Method
+Before implementing:
+
+
+    1. Read PRD.md .
+    2. Read SCOPE.md .
+    3. Read README.md .
+
+
+
+
+                                                   26
+     4. Read supabase/schema.sql .
+     5. Inspect the store slices and all authorization helpers.
+     6. Inspect current contract parsing.
+     7. Inspect ITP, quality, submittal, and assistant workflows.
+
+Then produce:
+
+
+
+  A. Current architecture summary
+  B. Migration risk assessment
+  C. Proposed final data model
+  D. File-by-file implementation plan
+  E. Test plan
+
+
+Do not change code before completing that analysis.
+
+
+After analysis, implement P0-01 only.
+
+
+Do not attempt the entire backlog in one giant patch.
+
+
+After P0-01:
+
+
+
+  run tests
+  run build
+  review migration compatibility
+  summarize changed files
+  summarize schema decisions
+  list remaining risks
+
+
+Then stop.
+
+
+The objective is not maximum code volume.
+
+
+The objective is to establish the correct Contract-First domain foundation without destabilizing the
+working PMIS.
+
+
+
+
+                                                     27
+

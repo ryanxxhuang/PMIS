@@ -121,6 +121,20 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return { error: null, result: data }
   }, [])
 
+  // AI 工安判讀:工地照片 → analyze-safety-photo Edge Function(職安衛法規比對)→
+  // 危害類別/違反法規依據/嚴重度/改善建議,產出工安缺失草稿。差別於 describeDefect=比對職安衛法規。
+  const analyzeSafetyPhoto = useCallback(async (file) => {
+    if (!isSupabaseConfigured) return { error: { message: '需登入（demo 模式不支援 AI 判讀）' } }
+    let image_base64
+    try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
+    const { data, error } = await supabase.functions.invoke('analyze-safety-photo', {
+      body: { image_base64, mime_type: 'image/jpeg' },
+    })
+    if (error) return { error }
+    if (data?.error) return { error: { message: data.error } }
+    return { error: null, result: data }
+  }, [])
+
   // AI 月報草稿:彙整數據 → draft-monthly-review Edge Function → 檢討/下月計畫。
   // demo 模式在本地用數據套模板生成(銷售 demo 不依賴後端)。
   const draftMonthlyReview = useCallback(async (payload) => {
@@ -212,7 +226,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   return {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto,
-    readWhiteboard, describeDefect, draftMonthlyReview, askAssistant, fetchWeather,
+    readWhiteboard, describeDefect, analyzeSafetyPhoto, draftMonthlyReview, askAssistant, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   }
 }

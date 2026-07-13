@@ -45,7 +45,7 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
 const NEXT_LABEL = { 開立: '開始改善', 改善中: '提送複查', 待複查: '複查結案' }
 
 export default function DefectTracker({ domain = 'quality', leaves = [] }) {
-  const { defects, createDefect, updateDefectStatus, deleteDefect, describeDefect, resolveMarkup, can } = useStore()
+  const { defects, createDefect, updateDefectStatus, deleteDefect, describeDefect, analyzeSafetyPhoto, resolveMarkup, can } = useStore()
   const isSafety = domain === 'safety'
   const list = defects.filter((d) => (d.domain || 'quality') === domain)
   const openCount = list.filter((d) => d.status !== '已結案').length
@@ -63,14 +63,34 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
     work_item_key: '', work_item_label: '', ...(isSafety ? { record_date: todayIso() } : {}),
   })
 
-  // 拍缺失照片 → AI 描述 → 填表單(describe-defect 對品質/工安缺失皆適用)
+  // 拍缺失照片 → AI 填表。品質缺失=describe-defect(描述缺失);
+  // 工安缺失=analyze-safety-photo(職安衛法規判讀:危害類別+違反法規依據+建議)。
   const onPhoto = async (e) => {
     const file = e.target.files?.[0]; e.target.value = ''
     if (!file) return
-    setAiBusy(true); setAiMsg('AI 辨識中…')
-    const { error, result } = await describeDefect(file)
+    setAiBusy(true); setAiMsg(isSafety ? 'AI 判讀職安衛中…' : 'AI 辨識中…')
+    const { error, result } = await (isSafety ? analyzeSafetyPhoto(file) : describeDefect(file))
     setAiBusy(false)
-    if (error) { setAiMsg(`辨識失敗:${error.message || ''}`); return }
+    if (error) { setAiMsg(`${isSafety ? '判讀' : '辨識'}失敗:${error.message || ''}`); return }
+    if (isSafety) {
+      // 危害類別 + 現況 + 違反法規依據 + 改善建議,組成 grounded 的工安缺失說明
+      const desc = [
+        result.description,
+        result.violated_regulation && `依據:${result.violated_regulation}`,
+        result.suggestion && `建議:${result.suggestion}`,
+      ].filter(Boolean).join(' ')
+      setForm((f) => ({
+        ...f,
+        title: result.title || f.title,
+        description: desc || f.description,
+        severity: result.severity || f.severity,
+        location: f.location || result.location || '',
+      }))
+      setAiMsg(result.has_violation && result.title
+        ? `AI 判讀:【${result.hazard_type}】${result.violated_regulation || ''}｜已填入，請確認後開立(法條條號請現場核對)。`
+        : 'AI 未判讀出明顯職安衛危害;如仍要開立請人工填寫。')
+      return
+    }
     setForm((f) => ({
       ...f,
       title: result.title || f.title,
@@ -149,9 +169,9 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
           <div className="flex items-center gap-3 flex-wrap">
             <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
               <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onPhoto} className="hidden" />
-              <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : '拍缺失照片 AI 填表'}
+              <Camera size={15} aria-hidden /> {aiBusy ? (isSafety ? 'AI 判讀中…' : 'AI 辨識中…') : (isSafety ? '拍工安照片 AI 判讀' : '拍缺失照片 AI 填表')}
             </label>
-            <span className={`text-xs ${aiMsg.startsWith('辨識失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>{aiMsg || '拍缺失現場，AI 自動填標題/說明/嚴重度。'}</span>
+            <span className={`text-xs ${/失敗/.test(aiMsg) ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>{aiMsg || (isSafety ? '拍現場照片，AI 依職安衛法規判讀危害類別、違反依據並填表(條號請現場核對)。' : '拍缺失現場，AI 自動填標題/說明/嚴重度。')}</span>
           </div>
           {!isSafety && leaves.length > 0 && (
             <WorkItemPicker leaves={leaves} value={form.work_item_key} label={form.work_item_label}
