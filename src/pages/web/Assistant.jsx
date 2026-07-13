@@ -6,6 +6,7 @@ import { Card, Empty, PageHeader, Button } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { answerQuestion, SUGGESTED_QUESTIONS } from '../../lib/assistantQA.js'
+import { buildAssistantFacts } from '../../lib/assistantFacts.js'
 import { myOpenItems } from '../../lib/ballInCourt.js'
 
 const TODAY = new Date()
@@ -19,7 +20,8 @@ const ROLE_HELLO = {
 export default function Assistant() {
   const store = useStore()
   const { project, currentUser, workItems, valuations, progressPlan, siteLogs, inspections, defects,
-    testSamples, obligations, changeOrders, submittals, rfis, observations, demoMode, workItemsSource, currentProject } = store
+    testSamples, obligations, changeOrders, submittals, rfis, observations, safetyRecords, acceptanceEvents,
+    demoMode, workItemsSource, currentProject, askAssistant } = store
   const org = currentUser?.org_type || 'contractor'
   const imported = workItemsSource === 'db' || demoMode
 
@@ -60,6 +62,10 @@ export default function Assistant() {
     finance: { billableTotal, actualCum }, valuations, defects, inspections, siteLogs,
     obligations, changeOrders, testSamples, myItems, anchors,
   }
+  // copilot 送給 edge fn 的結構化事實快照(所有模組恆在;確定性回退用 qaData)
+  const facts = useMemo(() => buildAssistantFacts({
+    ...qaData, org, submittals, rfis, safetyRecords, acceptanceEvents,
+  }, TODAY), [qaData, org, submittals, rfis, safetyRecords, acceptanceEvents]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!imported) {
     return (
@@ -77,7 +83,7 @@ export default function Assistant() {
         meta={[{ k: '模式', v: '唯讀' }]} />
 
       <div className="max-w-3xl">
-        <ChatPanel data={qaData} />
+        <ChatPanel data={qaData} facts={facts} askAssistant={askAssistant} />
       </div>
 
       <p className="text-[11px] text-[var(--text-3)] flex items-center gap-1.5">
@@ -89,21 +95,32 @@ export default function Assistant() {
   )
 }
 
-function ChatPanel({ data }) {
+function ChatPanel({ data, facts, askAssistant }) {
   const [msgs, setMsgs] = useState([])
   const [q, setQ] = useState('')
+  const [busy, setBusy] = useState(false)
   const scrollRef = useRef(null)
-  useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs])
+  useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy])
 
-  const ask = (question) => {
-    const text = (question ?? q).trim()
-    if (!text) return
-    setQ('')
+  // 確定性回退(demo/未設 Supabase/AI 服務失敗):關鍵字比對答本案資料
+  const fallbackAnswer = (text) => {
     const r = answerQuestion(text, data)
-    const ai = r
-      ? { role: 'ai', text: r.answer, sources: r.sources || [] }
-      : { role: 'ai', text: '這個問題我還答不上來——我目前讀得懂本案的進度、估驗請款、缺失查驗、品管取樣和契約義務。換個說法，或點下面的建議問題試試。', sources: [] }
-    setMsgs((m) => [...m, { role: 'user', text }, ai])
+    return r
+      ? { role: 'ai', text: r.answer, sources: r.sources || [], mode: 'basic' }
+      : { role: 'ai', text: '這個問題我還答不上來——我目前讀得懂本案的進度、估驗請款、缺失查驗、品管取樣和契約義務。換個說法，或點下面的建議問題試試。', sources: [], mode: 'basic' }
+  }
+
+  const ask = async (question) => {
+    const text = (question ?? q).trim()
+    if (!text || busy) return
+    setQ(''); setMsgs((m) => [...m, { role: 'user', text }]); setBusy(true)
+    // AI 優先(edge fn Claude 開放式問答)→ 失敗/demo 回退確定性
+    const res = await askAssistant(text, facts)
+    let ai
+    if (res?.answer) ai = { role: 'ai', text: res.answer, sources: res.sources || [], mode: 'ai' }
+    else ai = fallbackAnswer(text) // res.fallback(demo) 或 res.error 都走這
+    setBusy(false)
+    setMsgs((m) => [...m, ai])
   }
 
   return (
@@ -116,7 +133,7 @@ function ChatPanel({ data }) {
           </div>
         ) : msgs.map((m, i) => (
           <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-            <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
+            <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-line ${
               m.role === 'user' ? 'bg-[var(--primary)] text-white rounded-br-sm' : 'bg-[var(--surface-2)] text-[var(--text)] rounded-bl-sm'}`}>
               {m.text}
               {m.sources?.length > 0 && (
@@ -131,21 +148,28 @@ function ChatPanel({ data }) {
             </div>
           </div>
         ))}
+        {busy && (
+          <div className="flex justify-start">
+            <div className="bg-[var(--surface-2)] text-[var(--text-3)] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm inline-flex items-center gap-1.5">
+              <Bot size={13} className="animate-pulse" aria-hidden />思考中…
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-[var(--border-2)] p-3 space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {SUGGESTED_QUESTIONS.map((s) => (
-            <button key={s} onClick={() => ask(s)}
-              className="text-[11px] px-2 py-1 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition">
+            <button key={s} onClick={() => ask(s)} disabled={busy}
+              className="text-[11px] px-2 py-1 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition disabled:opacity-40">
               {s}
             </button>
           ))}
         </div>
         <form onSubmit={(e) => { e.preventDefault(); ask() }} className="flex items-center gap-2">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="輸入問題…"
-            className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/20" />
-          <Button type="submit" size="sm" disabled={!q.trim()} aria-label="送出"><Send size={15} aria-hidden /></Button>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="輸入問題…" disabled={busy}
+            className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/20 disabled:opacity-60" />
+          <Button type="submit" size="sm" disabled={!q.trim() || busy} aria-label="送出"><Send size={15} aria-hidden /></Button>
         </form>
       </div>
     </Card>

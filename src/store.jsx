@@ -89,7 +89,7 @@ export function StoreProvider({ children }) {
   const {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto,
-    readWhiteboard, describeDefect, draftMonthlyReview,
+    readWhiteboard, describeDefect, draftMonthlyReview, askAssistant,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   } = useSiteSlice(ctx)
   const {
@@ -249,7 +249,7 @@ export function StoreProvider({ children }) {
     currentProject, projects, projectLoading, createProject, switchProject,
     workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, isPersistedProject, can,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect,
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, draftMonthlyReview, describeDefect, askAssistant,
     obligations, parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, createCostItem, updateCostItem, deleteCostItem,

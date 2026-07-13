@@ -145,6 +145,15 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return { error: null, result: data }
   }, [demoMode])
 
+  // 開放式 copilot 問答:送本案 facts 快照到 assistant-chat edge fn。
+  // demo/未設 Supabase → 回 fallback,由 Assistant.jsx 改用確定性 answerQuestion。
+  const askAssistant = useCallback(async (question, facts) => {
+    if (!isSupabaseConfigured) return { fallback: true }
+    const { data, error } = await supabase.functions.invoke('assistant-chat', { body: { question, facts } })
+    if (error || data?.error) return { error: error?.message || data?.error || 'AI 服務暫時無法使用' }
+    return { answer: data.answer, sources: data.sources || [] }
+  }, [])
+
   // 工安：新增 / 更新 / 刪除工安紀錄（demo 只進記憶體）。
   // 工安缺失已併入統一缺失引擎(defects, domain='safety',見 quality slice)——
   // safety_records 僅存原始紀錄六類,伺服器 guard 會拒絕工安缺失類型。
@@ -195,7 +204,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   return {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto,
-    readWhiteboard, describeDefect, draftMonthlyReview,
+    readWhiteboard, describeDefect, draftMonthlyReview, askAssistant,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   }
 }
