@@ -33,6 +33,20 @@ export function judgeChecklist(template, values) {
   return { results, overall: checked === 0 ? null : ok ? '合格' : '不合格', failed }
 }
 
+// 修訂差異:比對前後版 results({no:{value,pass}}),回傳值或判定有變的項目
+// (給修訂版次 UI 顯示「這次更正動了哪幾項」)
+export function diffChecklistResults(template, prevResults, nextResults) {
+  const out = []
+  for (const it of template?.items || []) {
+    const a = prevResults?.[it.no] || {}
+    const b = nextResults?.[it.no] || {}
+    const from = a.value ?? null, to = b.value ?? null
+    const passFrom = a.pass ?? null, passTo = b.pass ?? null
+    if (from !== to || passFrom !== passTo) out.push({ no: it.no, item: it.item, from, to, passFrom, passTo })
+  }
+  return out
+}
+
 // 混凝土 28 天抗壓判定(kgf/cm²):任一 ≥0.85fc′ 且平均 ≥fc′(03310 3.3.2(3)B)
 export function judgeConcrete(fc, values) {
   const vs = (values || []).map(Number).filter((n) => !isNaN(n) && n > 0)

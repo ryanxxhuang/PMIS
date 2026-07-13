@@ -7,6 +7,7 @@
 // 對 B2B 銷售而言 demo 模式就是銷售簡報：每一頁都要看得到「用起來的樣子」。
 
 import { TEMPLATE_03310 } from './checklist03310.js'
+import { judgeChecklist } from '../lib/qc.js'
 
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const daysFromNow = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d }
@@ -127,6 +128,8 @@ export function buildDemoData(workItems, project) {
     { id: 'DEF-DEMO-1', domain: 'quality', title: '查驗不合格：外牆窯燒磚打樣', description: '磚縫寬度不均，需重新打樣送審', severity: '一般', location: '1F 打樣區', due_date: iso(daysFromNow(4)), status: '改善中', improvement_note: '已重新調整工法，預計本週完成打樣', ...deco(1) },
     { id: 'DEF-DEMO-2', domain: 'quality', title: '3F 西側牆面蜂窩', description: '澆置振動不確實造成蜂窩，需鑿除修補', severity: '嚴重', location: '3F 西側', due_date: iso(daysFromNow(-2)), status: '開立', improvement_note: null, ...deco(5) },
     { id: 'DEF-DEMO-3', domain: 'quality', title: '2F 樓梯間模板拆除不完全', description: '殘留模板角材', severity: '一般', location: '2F 樓梯間', due_date: iso(daysFromNow(-10)), status: '已結案', improvement_note: '已清除完畢，監造複查通過', ...deco(3) },
+    // 自主檢查修訂版次連動:2F 版牆檢查表 Rev.1 更正後改判不合格自動開立(掛鏈根 CLR-DEMO-2)
+    { id: 'DEF-DEMO-CL1', domain: 'quality', title: '自主檢查不合格：場鑄結構用混凝土 自主檢查表', description: '不合格項目：C2 坍度（標準 18 ± 2.5 cm(依配比設計)）（Rev.1 更正後判定）', severity: '一般', location: '2F 版牆', due_date: iso(daysFromNow(2)), status: '改善中', improvement_note: '已通知預拌廠調整配比並重新取樣', source_checklist_record_id: 'CLR-DEMO-2', work_item_no: '', work_item_desc: '' },
     // 工安缺失(domain=safety):同一引擎,展示廠商改善鏈 + 監造複查結案
     { id: 'DEF-DEMO-S1', domain: 'safety', title: '4F 臨邊開口未設護欄', description: '已先行圍設警示帶', severity: '嚴重', location: '4F 電梯井', record_date: iso(daysFromNow(-2)), due_date: iso(daysFromNow(1)), status: '開立', improvement_note: null, work_item_no: '', work_item_desc: '' },
     { id: 'DEF-DEMO-S2', domain: 'safety', title: '施工架斜籬破損', description: null, severity: '一般', location: '南側外牆', record_date: iso(daysFromNow(-6)), due_date: iso(daysFromNow(3)), status: '改善中', improvement_note: null, work_item_no: '', work_item_desc: '' },
@@ -200,11 +203,20 @@ export function buildDemoData(workItems, project) {
   // 一組已填 7 天值待 28 天;最近一次澆置(-1)不建 → 留給「從施工日誌帶入」展示。
   const checklistTemplates = [{ id: 'CLT-DEMO-1', ...TEMPLATE_03310 }]
   const clValues = { B1: true, B2: true, B3: true, C1: 27, C2: 18.5, C3: 30, C4: 10, C5: 7500, D1: true }
-  const checklistRecords = [{
-    id: 'CLR-DEMO-1', template_id: 'CLT-DEMO-1', check_date: iso(daysFromNow(-12)),
-    location: '3F 版牆', note: null, overall: '合格',
-    results: Object.fromEntries(TEMPLATE_03310.items.map((it) => [it.no, { value: clValues[it.no] ?? null, pass: clValues[it.no] != null ? true : null }])),
-  }]
+  const mkCl = (vals) => { const { results, overall } = judgeChecklist(TEMPLATE_03310, vals); return { results, overall } }
+  // 修訂版次 storyline:2F 版牆那張 Rev.0 判合格 → 複核發現坍度登載錯誤 →
+  // Rev.1 更正為 30cm 改判不合格,自動開缺失(DEF-DEMO-CL1 掛鏈根 CLR-DEMO-2)
+  const checklistRecords = [
+    { id: 'CLR-DEMO-1', template_id: 'CLT-DEMO-1', check_date: iso(daysFromNow(-12)),
+      location: '3F 版牆', note: null, rev: 0, root_id: 'CLR-DEMO-1', supersedes_id: null,
+      revision_reason: null, ...mkCl(clValues) },
+    { id: 'CLR-DEMO-2R1', template_id: 'CLT-DEMO-1', check_date: iso(daysFromNow(-20)),
+      location: '2F 版牆', note: null, rev: 1, root_id: 'CLR-DEMO-2', supersedes_id: 'CLR-DEMO-2',
+      revision_reason: '複核取樣紀錄，坍度登載錯誤，更正為 30 cm', ...mkCl({ ...clValues, C2: 30 }) },
+    { id: 'CLR-DEMO-2', template_id: 'CLT-DEMO-1', check_date: iso(daysFromNow(-20)),
+      location: '2F 版牆', note: null, rev: 0, root_id: 'CLR-DEMO-2', supersedes_id: null,
+      revision_reason: null, ...mkCl(clValues) },
+  ]
   const mkSample = (off, extra) => {
     const d = iso(daysFromNow(off))
     return {

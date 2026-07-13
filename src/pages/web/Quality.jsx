@@ -4,7 +4,7 @@ import { Printer, Zap } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
-import { judgeChecklist, judgeItem } from '../../lib/qc.js'
+import { judgeChecklist, judgeItem, diffChecklistResults } from '../../lib/qc.js'
 import DefectTracker, { WorkItemPicker } from '../../components/DefectTracker.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 
@@ -130,48 +130,109 @@ function PassMark({ pass }) {
 
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
-// ── 自主檢查表:選範本 → 填實測值 → 依量化標準自動判定 → 不合格自動開缺失 ──
+// 修訂差異的值顯示:✓/✗(bool)、數值、—(未檢)
+const fmtVal = (v) => (v === true ? '✓' : v === false ? '✗' : v ?? '—')
+
+// ── 自主檢查表:選範本 → 填實測值 → 依量化標準自動判定 → 不合格自動開缺失。
+// 存檔後為證據不可就地修改:更正一律建立修訂版次 Rev.N(必附原因),重新判定
+// 並連動缺失(同鏈不重複開);僅未判定的紀錄可刪除。
 function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [revising, setRevising] = useState(null) // 修訂模式:被修訂的紀錄(現行版)
+  const [reason, setReason] = useState('')
   const [tplId, setTplId] = useState(templates[0]?.id)
   const [date, setDate] = useState(todayIso())
   const [location, setLocation] = useState('')
   const [values, setValues] = useState({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [historyOf, setHistoryOf] = useState(null) // 展開歷次版本的鏈根 id
 
-  const template = templates.find((t) => t.id === tplId) || templates[0]
+  const template = revising
+    ? templates.find((t) => t.id === revising.template_id)
+    : (templates.find((t) => t.id === tplId) || templates[0])
   const live = useMemo(() => (template ? judgeChecklist(template, values) : null), [template, values])
 
+  // 修訂鏈:依 root_id 分組,rev 最大者為現行版,其餘為歷次版本
+  const chains = useMemo(() => {
+    const byRoot = new Map()
+    for (const r of records) {
+      const root = r.root_id || r.id
+      if (!byRoot.has(root)) byRoot.set(root, [])
+      byRoot.get(root).push(r)
+    }
+    return [...byRoot.values()]
+      .map((revs) => {
+        revs.sort((a, b) => (b.rev || 0) - (a.rev || 0))
+        return { current: revs[0], history: revs.slice(1) }
+      })
+      .sort((a, b) => (b.current.check_date || '').localeCompare(a.current.check_date || ''))
+  }, [records])
+
   const setVal = (no, v) => setValues((p) => ({ ...p, [no]: v }))
+  const closeForm = () => { setOpen(false); setRevising(null); setValues({}); setReason('') }
+  const startRevise = (r) => {
+    setMsg(''); setRevising(r); setOpen(true); setReason('')
+    setDate(r.check_date || todayIso()); setLocation(r.location || '')
+    setValues(Object.fromEntries(
+      Object.entries(r.results || {}).filter(([, v]) => v?.value != null).map(([no, v]) => [no, v.value])))
+  }
   const save = async () => {
     setSaving(true); setMsg('')
-    const { error, overall } = await onCreate({ template, check_date: date, location, values })
+    const res = await onCreate({
+      template, check_date: date, location, values,
+      revises: revising || undefined, revision_reason: revising ? reason.trim() : undefined,
+    })
     setSaving(false)
-    if (error) { setMsg(error.message || '存檔失敗'); return }
-    setMsg(overall === '不合格' ? '已存檔：判定不合格，系統已自動開立缺失。' : `已存檔：判定${overall || '未完成'} ✓`)
-    setValues({}); setOpen(false)
+    if (res.error) { setMsg(res.error.message || '存檔失敗'); return }
+    const revTag = res.rev ? `Rev.${res.rev}：` : ''
+    if (res.defectAction === 'created') setMsg(`已存檔 ${revTag}判定不合格，系統已自動開立缺失。`)
+    else if (res.defectAction === 'linked') setMsg(`已存檔 ${revTag}判定不合格；此檢查表已有未結案缺失，未重複開立。`)
+    else if (res.defectError) setMsg(`已存檔 ${revTag}判定不合格，但缺失開立失敗：${res.defectError.message}`)
+    else if (res.overall === '合格' && res.openDefectRemains) setMsg(`已存檔 ${revTag}更正後判定合格。原自動開立的缺失仍在追蹤中，請至缺失區確認後續處理。`)
+    else setMsg(`已存檔 ${revTag}判定${res.overall || '未完成'} ✓`)
+    closeForm()
+  }
+  const del = async (r) => {
+    if (!(await appConfirm({ title: '刪除此檢查紀錄？', body: '僅未判定的紀錄可刪除；已判定的證據請以「修訂」更正。', danger: true, confirmLabel: '刪除' }))) return
+    const res = await onDelete(r.id)
+    if (res?.error) setMsg(res.error.message)
   }
 
   let lastGroup = null
   return (
-    <Card title={`自主檢查表（${records.length}）`} action={
-      canEdit && <Button variant="secondary" onClick={() => { setOpen((o) => !o); setMsg('') }}>{open ? '取消' : '＋ 新增檢查'}</Button>
+    <Card title={`自主檢查表（${chains.length}）`} action={
+      canEdit && <Button variant="secondary" onClick={() => { if (open) closeForm(); else setOpen(true); setMsg('') }}>{open ? '取消' : '＋ 新增檢查'}</Button>
     }>
-      {msg && <p className={`text-sm mb-3 ${msg.includes('不合格') ? 'text-[var(--accent-text)]' : 'text-emerald-600'}`}>{msg}</p>}
+      {msg && <p className={`text-sm mb-3 ${msg.includes('不合格') || msg.includes('拒絕') || msg.includes('不可') ? 'text-[var(--accent-text)]' : 'text-emerald-600'}`}>{msg}</p>}
 
       {open && template && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
+          {revising && (
+            <p className="text-sm font-medium text-[var(--text)]">
+              修訂 Rev.{(revising.rev || 0) + 1} — 原版{revising.rev ? ` Rev.${revising.rev}` : ''}（{revising.check_date} 判定{revising.overall || '未判定'}）不會被覆寫，將以新版次留存差異。
+            </p>
+          )}
           <div className="flex flex-wrap items-end gap-3">
             <Field label="檢查表範本">
-              <select value={tplId} onChange={(e) => { setTplId(e.target.value); setValues({}) }}
-                className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]">
-                {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-              </select>
+              {revising ? (
+                <span className="text-sm px-2.5 py-1.5 inline-block">{template.title}</span>
+              ) : (
+                <select value={tplId} onChange={(e) => { setTplId(e.target.value); setValues({}) }}
+                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]">
+                  {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </select>
+              )}
             </Field>
             <Field label="檢查日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" /></Field>
             <Field label="檢查位置"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="如 4F 版牆" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-36" /></Field>
+            {revising && (
+              <Field label="更正原因（必填）">
+                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="如 坍度登載錯誤，依取樣紀錄更正"
+                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-72" />
+              </Field>
+            )}
           </div>
           <p className="text-[11px] text-[var(--text-3)]">依據：{template.source}。填實測值即時判定；未填的項目視為未檢，不列入判定。</p>
           <div className="overflow-x-auto">
@@ -218,7 +279,8 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
             </table>
           </div>
           <div className="flex items-center gap-3">
-            <Button onClick={save} disabled={saving}>{saving ? '存檔中…' : '存檔並判定'}</Button>
+            <Button onClick={save} disabled={saving || (revising && !reason.trim())}>{saving ? '存檔中…' : revising ? `存檔為 Rev.${(revising.rev || 0) + 1} 並重新判定` : '存檔並判定'}</Button>
+            {revising && !reason.trim() && <span className="text-xs text-[var(--text-3)]">請先填寫更正原因</span>}
             {live?.overall && (
               <Badge color={live.overall === '合格' ? 'green' : 'red'}>目前判定：{live.overall}{live.failed.length ? `（${live.failed.length} 項不合格）` : ''}</Badge>
             )}
@@ -226,28 +288,62 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
         </div>
       )}
 
-      {records.length === 0 ? <Empty>尚無自主檢查紀錄。選範本填實測值，系統依量化標準自動判定。</Empty> : (
+      {chains.length === 0 ? <Empty>尚無自主檢查紀錄。選範本填實測值，系統依量化標準自動判定。</Empty> : (
         <div className="space-y-1.5">
-          {records.map((r) => {
+          {chains.map(({ current: r, history }) => {
             const tpl = templates.find((t) => t.id === r.template_id)
+            const rootId = r.root_id || r.id
+            const prev = history.find((h) => h.id === r.supersedes_id)
+            const diffs = (r.rev || 0) > 0 && tpl && prev ? diffChecklistResults(tpl, prev.results, r.results) : []
             return (
-              <div key={r.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-1.5 text-sm">
-                <div className="min-w-0">
-                  <span className="tabular-nums text-[var(--text-3)] text-xs mr-2">{r.check_date}</span>
-                  <span className="text-[var(--text)]">{tpl?.title || '（範本已刪除）'}</span>
-                  {r.location && <span className="text-xs text-[var(--text-3)] ml-2">{r.location}</span>}
+              <div key={rootId} className="border-b border-[var(--border-2)] pb-1.5">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <span className="tabular-nums text-[var(--text-3)] text-xs mr-2">{r.check_date}</span>
+                    <span className="text-[var(--text)]">{tpl?.title || '（範本已刪除）'}</span>
+                    {(r.rev || 0) > 0 && <Badge color="blue">Rev.{r.rev}</Badge>}
+                    {r.location && <span className="text-xs text-[var(--text-3)] ml-2">{r.location}</span>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge color={r.overall === '合格' ? 'green' : r.overall === '不合格' ? 'red' : 'slate'}>{r.overall || '未判定'}</Badge>
+                    <button onClick={() => navigate(`/quality/checklist-print?id=${r.id}`)} title="列印自主檢查表"
+                      className="text-[var(--blue)] hover:underline text-xs inline-flex items-center gap-1"><Printer size={13} aria-hidden />列印</button>
+                    {canEdit && tpl && (
+                      <button onClick={() => startRevise(r)} title="以修訂版次更正（不覆寫舊證據）"
+                        className="text-[var(--blue)] hover:underline text-xs">修訂</button>
+                    )}
+                    {history.length > 0 && (
+                      <button onClick={() => setHistoryOf(historyOf === rootId ? null : rootId)}
+                        className="text-[var(--text-3)] hover:underline text-xs">歷次 {history.length}</button>
+                    )}
+                    {canEdit && !r.overall && (
+                      <button onClick={() => del(r)} aria-label="刪除未判定的檢查紀錄" className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge color={r.overall === '合格' ? 'green' : r.overall === '不合格' ? 'red' : 'slate'}>{r.overall || '未判定'}</Badge>
-                  <button onClick={() => navigate(`/quality/checklist-print?id=${r.id}`)} title="列印自主檢查表"
-                    className="text-[var(--blue)] hover:underline text-xs inline-flex items-center gap-1"><Printer size={13} aria-hidden />列印</button>
-                  <button onClick={async () => { if (await appConfirm({ title: '刪除此檢查紀錄？', danger: true, confirmLabel: '刪除' })) onDelete(r.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
-                </div>
+                {(r.rev || 0) > 0 && r.revision_reason && (
+                  <div className="text-[11px] text-[var(--text-3)] mt-0.5">
+                    更正原因：{r.revision_reason}
+                    {diffs.length > 0 && <span className="ml-2">異動：{diffs.map((d) => `${d.no} ${fmtVal(d.from)}→${fmtVal(d.to)}`).join('、')}</span>}
+                  </div>
+                )}
+                {historyOf === rootId && history.map((h) => (
+                  <div key={h.id} className="flex items-center gap-2 text-xs text-[var(--text-3)] mt-1 pl-4">
+                    <span>Rev.{h.rev || 0}</span>
+                    <span className="tabular-nums">{h.check_date}</span>
+                    <Badge color="slate">{h.overall || '未判定'}</Badge>
+                    <span>已由新版取代</span>
+                    {(h.rev || 0) > 0 && h.revision_reason && <span className="truncate">（{h.revision_reason}）</span>}
+                    <button onClick={() => navigate(`/quality/checklist-print?id=${h.id}`)}
+                      className="text-[var(--blue)] hover:underline shrink-0">列印</button>
+                  </div>
+                ))}
               </div>
             )
           })}
         </div>
       )}
+      <p className="text-[11px] text-[var(--text-3)] mt-2">檢查表存檔後即為品質證據，不可就地修改：更正一律以「修訂」建立 Rev.N 留存差異與原因，並重新自動判定；改判不合格會自動開立缺失（同一張表已有未結案缺失時不重複開）。僅未判定的紀錄可刪除。</p>
     </Card>
   )
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { judgeItem, judgeChecklist, judgeConcrete, sampleDues, pendingSamplesFromLogs, sampleAlerts } from './qc.js'
+import { judgeItem, judgeChecklist, judgeConcrete, diffChecklistResults, sampleDues, pendingSamplesFromLogs, sampleAlerts } from './qc.js'
 
 const numItem = { no: 'C1', item: '澆置溫度', kind: 'num', min: 13, max: 32 }
 const minOnly = { no: 'C5', item: '振動頻率', kind: 'num', min: 7000 }
@@ -42,6 +42,23 @@ describe('judgeChecklist', () => {
   it('部分未檢不影響判定;全未檢 overall=null', () => {
     expect(judgeChecklist(tpl, { C1: 20 }).overall).toBe('合格')
     expect(judgeChecklist(tpl, {}).overall).toBe(null)
+  })
+})
+
+describe('diffChecklistResults(修訂版次差異)', () => {
+  const tpl = { items: [numItem, boolItem] }
+  it('值或判定有變的項目列入,未變不列', () => {
+    const prev = { C1: { value: 20, pass: true }, B1: { value: true, pass: true } }
+    const next = { C1: { value: 35, pass: false }, B1: { value: true, pass: true } }
+    const d = diffChecklistResults(tpl, prev, next)
+    expect(d).toHaveLength(1)
+    expect(d[0]).toMatchObject({ no: 'C1', from: 20, to: 35, passFrom: true, passTo: false })
+  })
+  it('未檢→已檢視為異動;完全相同回空陣列', () => {
+    const prev = { C1: { value: null, pass: null } }
+    const next = { C1: { value: 25, pass: true } }
+    expect(diffChecklistResults(tpl, prev, next).map((d) => d.no)).toEqual(['C1'])
+    expect(diffChecklistResults(tpl, next, next)).toEqual([])
   })
 })
 

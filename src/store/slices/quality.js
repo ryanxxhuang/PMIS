@@ -94,6 +94,7 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
         severity: input.severity || '一般', location: input.location || null,
         due_date: input.due_date || null, record_date: input.record_date || null,
         status: '開立', improvement_note: null, markup_path,
+        source_checklist_record_id: input.source_checklist_record_id || null,
         work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
       }, ...ds])
       return { error: null }
@@ -104,6 +105,7 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       severity: input.severity || '一般', location: input.location || null,
       due_date: input.due_date || null, record_date: input.record_date || null,
       status: '開立', created_by: currentUser?.user_id, markup_path,
+      source_checklist_record_id: input.source_checklist_record_id || null,
     })
     if (error) return { error }
     await reloadDefects()
@@ -152,23 +154,47 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     return [{ id: TEMPLATE_03310.key, ...TEMPLATE_03310, builtin: true }, ...checklistTemplates]
   }, [checklistTemplates])
 
-  const createChecklistRecord = useCallback(async ({ template, check_date, location, values, note }) => {
+  // 存檔自主檢查(P1-07 修訂版次):revises=被修訂的紀錄 → 新增 Rev.N(舊證據不覆寫,
+  // rev/root_id 由 DB guard 依鏈計算);缺失掛鏈根,同鏈最多一筆未結案缺失(不重複開)。
+  const createChecklistRecord = useCallback(async ({ template, check_date, location, values, note, revises, revision_reason }) => {
     const { results, overall, failed } = judgeChecklist(template, values)
-    const openDefect = async () => {
-      if (overall !== '不合格') return
-      await createDefect({
+    // 缺失連動:不合格 → 鏈上沒有未結案缺失才開新的;更正為合格 → 不動原缺失
+    // (結案是監造的權限),只回報仍在追蹤讓 UI 提示。
+    const syncDefect = async (rootId, rev) => {
+      let openDefect = null
+      if (dbMode) {
+        const { data } = await supabase.from('defects').select('id,status')
+          .eq('source_checklist_record_id', rootId).neq('status', '已結案').limit(1)
+        openDefect = data?.[0] || null
+      } else {
+        openDefect = defects.find((d) => d.source_checklist_record_id === rootId && d.status !== '已結案') || null
+      }
+      if (overall !== '不合格') return { defectAction: null, openDefectRemains: !!openDefect }
+      if (openDefect) return { defectAction: 'linked', openDefectRemains: true }
+      const { error } = await createDefect({
         title: `自主檢查不合格：${template.title}`,
-        description: `不合格項目：${failed.map((f) => `${f.no} ${f.item}（標準 ${f.standard}）`).join('、')}`,
+        description: `不合格項目：${failed.map((f) => `${f.no} ${f.item}（標準 ${f.standard}）`).join('、')}${rev > 0 ? `（Rev.${rev} 更正後判定）` : ''}`,
         severity: '一般', location,
+        // 檢查表在記憶體時(demo)缺失也在記憶體,本地 id 可直掛;真 DB 掛 uuid
+        source_checklist_record_id: rootId,
       })
+      // 並發下由唯一索引擋掉重複開立(23505)=已有原缺失,視為已關聯
+      if (error?.code === '23505') return { defectAction: 'linked', openDefectRemains: true }
+      if (error) return { defectAction: null, openDefectRemains: false, defectError: error }
+      return { defectAction: 'created', openDefectRemains: false }
     }
     if (!dbMode) {
+      const id = `CLR-${Date.now()}`
+      const rev = revises ? (revises.rev || 0) + 1 : 0
+      const rootId = revises ? (revises.root_id || revises.id) : id
       setChecklistRecords((rs) => [{
-        id: `CLR-${Date.now()}`, template_id: template.id, check_date, location: location || null,
+        id, template_id: template.id, check_date, location: location || null,
         results, overall, note: note || null,
+        rev, root_id: rootId, supersedes_id: revises?.id || null,
+        revision_reason: revises ? (revision_reason || null) : null,
       }, ...rs])
-      await openDefect()
-      return { error: null, overall }
+      const link = await syncDefect(rootId, rev)
+      return { error: null, overall, rev, ...link }
     }
     let templateId = template.id
     if (template.builtin) {
@@ -183,17 +209,24 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     const { data: rec, error } = await supabase.from('checklist_records').insert({
       project_id: currentProject.project_id, template_id: templateId, check_date,
       location: location || null, results, overall, note: note || null, created_by: currentUser?.user_id,
+      supersedes_id: revises?.id || null, revision_reason: revises ? revision_reason : null,
     }).select().single()
     if (error) return { error }
     setChecklistRecords((rs) => [rec, ...rs])
-    await openDefect()
-    log('自主檢查', `${template.title} ${check_date} → ${overall || '未判定'}`, { user: currentUser?.name, role: '施工品管' })
-    return { error: null, overall }
-  }, [dbMode, currentProject, currentUser, createDefect, log])
+    const link = await syncDefect(rec.root_id, rec.rev)
+    log('自主檢查', `${template.title} ${check_date}${rec.rev ? ` Rev.${rec.rev}` : ''} → ${overall || '未判定'}`, { user: currentUser?.name, role: '施工品管' })
+    return { error: null, overall, rev: rec.rev, ...link }
+  }, [dbMode, currentProject, currentUser, defects, createDefect, log])
 
+  // 刪除檢查紀錄:DB 先行(已判定/被修訂引用由 guard 擋下,不可假消失)
   const deleteChecklistRecord = useCallback(async (id) => {
+    if (dbMode) {
+      const res = await supabase.from('checklist_records').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或紀錄已被移除')
+      if (error) return { error }
+    }
     setChecklistRecords((rs) => rs.filter((r) => r.id !== id))
-    if (dbMode) await supabase.from('checklist_records').delete().eq('id', id)
+    return { error: null }
   }, [dbMode])
 
   // 建立試體組(手動或由日誌帶入);自動算 7/28 天到期日

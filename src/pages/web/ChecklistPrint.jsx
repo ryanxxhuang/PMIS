@@ -17,6 +17,8 @@ export default function ChecklistPrint() {
 
   const rec = checklistRecords.find((r) => r.id === sp.get('id')) || checklistRecords[0]
   const tpl = rec && checklistTemplates.find((t) => t.id === rec.template_id)
+  // 修訂版次:此版若已被更新版取代,列印時必須標示(舊證據可查考但不可誤用)
+  const supersededBy = rec && checklistRecords.find((r) => r.supersedes_id === rec.id)
 
   if (!currentUser) return <Navigate to="/login" replace />
   if (!rec || !tpl) {
@@ -42,7 +44,13 @@ export default function ChecklistPrint() {
 
       <div className="max-w-[210mm] mx-auto bg-white text-slate-900 shadow print:shadow-none p-[12mm] print:p-0">
         <h1 className="text-center text-lg font-bold tracking-widest">自 主 檢 查 表</h1>
-        <p className="text-center text-[12px] text-slate-500 mt-0.5 mb-2">（承攬廠商一級品管）</p>
+        <p className="text-center text-[12px] text-slate-500 mt-0.5 mb-2">（承攬廠商一級品管）{(rec.rev || 0) > 0 && <span className="ml-2 font-semibold text-slate-700">修訂版次 Rev.{rec.rev}</span>}</p>
+
+        {supersededBy && (
+          <div className="border border-red-400 text-red-700 text-[12px] font-semibold px-2 py-1 mb-2">
+            本表已由修訂版 Rev.{supersededBy.rev || '？'}（{roc(supersededBy.check_date)}）取代，僅供歷史查考。
+          </div>
+        )}
 
         <div className="border border-slate-400 text-[13px]">
           <div className="grid grid-cols-2">
@@ -54,6 +62,9 @@ export default function ChecklistPrint() {
             <div className="px-2 py-1 border-r border-slate-300"><span className="text-slate-500">檢查位置：</span>{rec.location || '—'}</div>
             <div className="px-2 py-1"><span className="text-slate-500">依據：</span>{tpl.source}</div>
           </div>
+          {(rec.rev || 0) > 0 && (
+            <div className="px-2 py-1 border-t border-slate-300"><span className="text-slate-500">更正原因（Rev.{rec.rev}）：</span>{rec.revision_reason || '—'}</div>
+          )}
         </div>
 
         <table className="w-full border-collapse mt-2">
