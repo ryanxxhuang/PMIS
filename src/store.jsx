@@ -110,7 +110,7 @@ export function StoreProvider({ children }) {
   } = useQualitySlice(ctx, siteLogs)
   const {
     submittals, setSubmittals, rfis, setRfis, observations, setObservations,
-    createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal,
+    createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
     createRfi, answerRfi, closeRfi, deleteRfi,
     createObservation, updateObservation, escalateObservation, deleteObservation,
     listMembers, addMemberByEmail, removeMember,
@@ -261,7 +261,7 @@ export function StoreProvider({ children }) {
     inspectionPoints, createInspectionPoint, deleteInspectionPoint, requestInspectionForPoint,
     checklistTemplates: allChecklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
-    submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal,
+    submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
     rfis, createRfi, answerRfi, closeRfi, deleteRfi,
     listMembers, addMemberByEmail, removeMember, resolveMarkup, resendSignup,

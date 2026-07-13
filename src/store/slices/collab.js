@@ -6,7 +6,26 @@ import { users } from '../../data/seed.js'
 import { supabase } from '../../lib/supabase.js'
 import { mutationOutcome } from './billing.js'
 
-export function useCollabSlice({ isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
+// 各類送審的「通用審查要點」——demo 或尚未解析契約規範時的回退清單(標「通用」)。
+const SUBMITTAL_REVIEW_POINTS = {
+  材料設備: ['出廠證明 / 品質保證書齊備', 'CNS 或契約指定規範之試驗報告', '型錄規格與契約規範相符', '樣品經核可(如契約要求)', '進場數量與需求/估驗相符'],
+  配比: ['配比設計經核可', '抗壓強度符合設計要求', '試拌 / 試驗報告檢附', '材料來源與送審一致'],
+  樣品: ['樣品規格與契約規範相符', '色澤 / 尺寸 / 材質符合', '經機關 / 監造確認並留樣'],
+  施工計畫: ['施工順序與工法合理可行', '職業安全衛生措施完備', '品管計畫與檢驗停留點明確', '機具與人力配置合理', '交通維持 / 環境保護措施'],
+  品質計畫: ['三級品管組織架構', '自主檢查表齊備', '檢驗停留點(H/W/R)設定', '不合格品處理程序'],
+  其他: ['文件完整性', '與契約規範相符', '權責簽章齊備'],
+}
+function demoSubmittalReview(submittal, workItem) {
+  const pts = SUBMITTAL_REVIEW_POINTS[submittal.category] || SUBMITTAL_REVIEW_POINTS['其他']
+  const checklist = pts.map((point) => ({ point, basis: '通用', status: '需監造核對文件' }))
+  const opinion = `本件「${submittal.title}」(${submittal.category})經初步審視，請依審查要點逐項核對文件本體`
+    + `${workItem?.desc ? `，並確認與工項「${workItem.desc}」之規範相符` : ''}。`
+    + `文件齊備且符合契約規範者建議核備；如有缺漏請敘明後退回補正。`
+  return { checklist, opinion, suggested_decision: '需補充後再核',
+    caution: '此為通用審查要點；上傳並解析契約/規範後可比對本專案實際履約需求。' }
+}
+
+export function useCollabSlice({ isPersistedProject, demoMode, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
   // 監造協作:送審與工程疑義
   const [submittals, setSubmittals] = useState([])
   const [rfis, setRfis] = useState([])
@@ -79,6 +98,40 @@ export function useCollabSlice({ isPersistedProject, currentProject, currentUser
     setSubmittals((ss) => ss.filter((s) => s.id !== id))
     return { error: null }
   }, [isPersistedProject])
+
+  // AI 送審審查助手:依本專案已解析履約需求 + 送審類別/工項 → 審查要點清單 + 意見草稿 + 建議判定。
+  // demo/無需求 → 確定性通用要點;真專案撈 requirements(有工項優先該工項連結)交 review-submittal edge fn。
+  const reviewSubmittal = useCallback(async (submittal) => {
+    const wi = submittal.work_item_id ? wiMaps.byId.get(submittal.work_item_id) : null
+    const workItem = (submittal.work_item_desc || wi)
+      ? { no: submittal.work_item_no || wi?.item_no || '', desc: submittal.work_item_desc || wi?.description || '', unit: wi?.unit || '' }
+      : null
+    if (demoMode || !isPersistedProject) return { error: null, result: demoSubmittalReview(submittal, workItem) }
+    const pid = currentProject.project_id
+    const { data: reqs } = await supabase.from('requirements')
+      .select('id,title,requirement_type,acceptance_criteria,evidence_requirement,status')
+      .eq('project_id', pid).in('status', ['approved', 'needs_review'])
+      .in('requirement_type', ['submittal', 'test', 'evidence', 'checklist', 'inspection', 'report', 'other']).limit(60)
+    let relevant = reqs || []
+    if (submittal.work_item_id && relevant.length) {
+      const { data: links } = await supabase.from('requirement_work_items').select('requirement_id').eq('work_item_id', submittal.work_item_id)
+      const linkedIds = new Set((links || []).map((l) => l.requirement_id))
+      const linked = relevant.filter((r) => linkedIds.has(r.id))
+      relevant = (linked.length ? [...linked, ...relevant.filter((r) => !linkedIds.has(r.id))] : relevant).slice(0, 25)
+    } else relevant = relevant.slice(0, 25)
+    const payload = {
+      submittal: { title: submittal.title, category: submittal.category, attachment_note: submittal.attachment_note, revision: submittal.revision },
+      work_item: workItem,
+      requirements: relevant.map((r) => ({
+        title: r.title, type: r.requirement_type, acceptance_criteria: r.acceptance_criteria,
+        evidence_requirement: r.evidence_requirement, authoritative: r.status === 'approved',
+      })),
+    }
+    const { data, error } = await supabase.functions.invoke('review-submittal', { body: payload })
+    if (error) return { error }
+    if (data?.error) return { error: { message: data.error } }
+    return { error: null, result: data }
+  }, [demoMode, isPersistedProject, currentProject, wiMaps])
 
   const createRfi = useCallback(async (input) => {
     const markup_path = await saveMarkup(input.markup_data, 'rfi')
@@ -209,7 +262,7 @@ export function useCollabSlice({ isPersistedProject, currentProject, currentUser
 
   return {
     submittals, setSubmittals, rfis, setRfis, observations, setObservations,
-    createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal,
+    createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
     createRfi, answerRfi, closeRfi, deleteRfi,
     createObservation, updateObservation, escalateObservation, deleteObservation,
     listMembers, addMemberByEmail, removeMember,
