@@ -1,10 +1,14 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Printer, ChevronDown, ChevronRight } from 'lucide-react'
+import { Camera, Printer, ChevronDown, ChevronRight, CopyPlus, Plus } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
+import { previousLog, copyableFromLog, frequentItems, addUniqueRow } from '../../lib/siteLogHelpers.js'
+
+// 天氣快選(點選免打字);仍可在輸入框自訂
+const WEATHER_PRESETS = ['晴', '晴時多雲', '多雲', '陰', '短暫雨', '陣雨', '雨', '雷陣雨']
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const todayStr = () => {
@@ -82,6 +86,19 @@ export default function SiteLog() {
     if (lg?.id) listSitePhotos(lg.id).then(setPhotos)
     else setPhotos([])
   }, [date, siteLogs, listSitePhotos])
+
+  // 零輸入:複製昨日 + 從歷史自學常用項目
+  const prevLog = useMemo(() => previousLog(siteLogs, date), [siteLogs, date])
+  const freq = useMemo(() => frequentItems(siteLogs), [siteLogs])
+  const dateHasLog = siteLogs.some((l) => l.log_date === date)
+  const copyYesterday = () => {
+    const c = copyableFromLog(prevLog)
+    if (!c) return
+    setLabor(c.labor); setEquipment(c.equipment); setMaterials(c.materials); setExtras(c.extras)
+    if (c.weather) setWeather(c.weather)
+    setWeatherPm(c.weather_pm)
+    setSavedMsg(`已帶入 ${c.from} 的班組/機具/材料,請調整今日差異後存檔`)
+  }
 
   if (!workItems) return <Empty>載入中…</Empty>
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
@@ -161,12 +178,30 @@ export default function SiteLog() {
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
           <Card title="本日日誌">
-            <div className="flex items-end gap-3 flex-wrap mb-4">
+            <div className="flex items-end gap-3 flex-wrap mb-2">
               <Field label="日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
               <Field label="天氣(上午)"><input value={weather} onChange={(e) => setWeather(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
               <Field label="天氣(下午)"><input value={weatherPm} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
               <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field></div>
+              {/* 零輸入:一鍵帶入前一筆日誌的班組/機具/材料(僅新日期、且有前一筆時) */}
+              {can.edit && !dateHasLog && prevLog && (
+                <Button variant="secondary" onClick={copyYesterday} title={`帶入 ${prevLog.log_date} 的班組/機具/材料`}>
+                  <CopyPlus size={14} aria-hidden />複製昨日
+                </Button>
+              )}
             </div>
+            {/* 天氣快選:點選免打字(仍可在上方輸入框自訂) */}
+            {can.edit && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-4 text-[11px]">
+                <span className="text-[var(--text-3)]">快選天氣</span>
+                {WEATHER_PRESETS.map((w) => (
+                  <span key={w} className="inline-flex rounded-full border border-[var(--border)] overflow-hidden">
+                    <button onClick={() => setWeather(w)} className={`px-2 py-0.5 hover:bg-[var(--surface-2)] ${weather === w ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium' : 'text-[var(--text-2)]'}`} title="設為上午">{w}</button>
+                    <button onClick={() => setWeatherPm(w)} className={`px-1.5 py-0.5 border-l border-[var(--border)] hover:bg-[var(--surface-2)] ${weatherPm === w ? 'bg-[var(--amber-tint)] text-[var(--amber-text)] font-medium' : 'text-[var(--text-3)]'}`} title="設為下午">下</button>
+                  </span>
+                ))}
+              </div>
+            )}
 
             {can.edit && <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
               <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
@@ -239,12 +274,24 @@ export default function SiteLog() {
               </button>
               {officialOpen && (
                 <div className="px-3 pb-3 space-y-4">
-                  <RowsEditor title="出工人數（工別）" rows={labor} onChange={setLabor}
-                    fields={[{ key: 'type', ph: '工別（如 鋼筋工）', w: 'flex-1' }, { key: 'count', ph: '人數', w: 'w-20', num: true }]} />
-                  <RowsEditor title="機具使用" rows={equipment} onChange={setEquipment}
-                    fields={[{ key: 'name', ph: '機具名稱', w: 'flex-1' }, { key: 'count', ph: '數量', w: 'w-20', num: true }]} />
-                  <RowsEditor title="材料使用" rows={materials} onChange={setMaterials}
-                    fields={[{ key: 'name', ph: '材料名稱', w: 'flex-1' }, { key: 'unit', ph: '單位', w: 'w-16' }, { key: 'qty', ph: '本日數量', w: 'w-24', num: true }]} />
+                  <div>
+                    <FreqChips items={freq.labor} label={(r) => r.type}
+                      onAdd={(r) => setLabor((rows) => addUniqueRow(rows, r, (x) => x.type))} />
+                    <RowsEditor title="出工人數（工別）" rows={labor} onChange={setLabor}
+                      fields={[{ key: 'type', ph: '工別（如 鋼筋工）', w: 'flex-1' }, { key: 'count', ph: '人數', w: 'w-20', num: true }]} />
+                  </div>
+                  <div>
+                    <FreqChips items={freq.equipment} label={(r) => r.name}
+                      onAdd={(r) => setEquipment((rows) => addUniqueRow(rows, r, (x) => x.name))} />
+                    <RowsEditor title="機具使用" rows={equipment} onChange={setEquipment}
+                      fields={[{ key: 'name', ph: '機具名稱', w: 'flex-1' }, { key: 'count', ph: '數量', w: 'w-20', num: true }]} />
+                  </div>
+                  <div>
+                    <FreqChips items={freq.materials} label={(r) => `${r.name}${r.unit ? `（${r.unit}）` : ''}`}
+                      onAdd={(r) => setMaterials((rows) => addUniqueRow(rows, r, (x) => x.name))} />
+                    <RowsEditor title="材料使用" rows={materials} onChange={setMaterials}
+                      fields={[{ key: 'name', ph: '材料名稱', w: 'flex-1' }, { key: 'unit', ph: '單位', w: 'w-16' }, { key: 'qty', ph: '本日數量', w: 'w-24', num: true }]} />
+                  </div>
                   <div className="grid sm:grid-cols-2 gap-3 text-sm">
                     <label className="block">
                       <span className="block text-xs font-medium text-[var(--text-2)] mb-1">四、應置技術士（種類及人數，無則留空）</span>
@@ -357,13 +404,29 @@ export default function SiteLog() {
       </div>
 
       <p className="text-xs text-[var(--text-3)]">
-        一天一筆（同日再存會覆蓋）。各日「當日完成數量」加總 = 估驗的「累計完成數量」——到估驗頁（草稿期）按「AI 估驗草擬」即可自動帶入。
+        一天一筆（同日再存會覆蓋）。零輸入:新日期可「複製昨日」帶入班組/機具/材料、天氣點選快填、常用項目一鍵加入（依你的歷史自動學）。各日「當日完成數量」加總 = 估驗的「累計完成數量」——到估驗頁（草稿期）按「AI 估驗草擬」即可自動帶入。
       </p>
     </div>
   )
 }
 
 // 小型列編輯器（出工/機具/材料共用）：fields = [{key, ph, w, num}]
+// 常用項目一鍵帶入(從歷史自學):點 chip 加入一列,已有同項則略過
+function FreqChips({ items, label, onAdd }) {
+  if (!items?.length) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1 mb-1.5">
+      <span className="text-[10px] text-[var(--text-3)]">常用</span>
+      {items.map((r, i) => (
+        <button key={i} onClick={() => onAdd(r)}
+          className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--blue-tint)] hover:text-[var(--blue-text)] hover:border-[var(--blue)] transition">
+          <Plus size={10} aria-hidden />{label(r)}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function RowsEditor({ title, rows, onChange, fields }) {
   const set = (i, key, val) => onChange(rows.map((r, j) => (j === i ? { ...r, [key]: val } : r)))
   const add = () => onChange([...rows, Object.fromEntries(fields.map((f) => [f.key, f.num ? '' : '']))])
