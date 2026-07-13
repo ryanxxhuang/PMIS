@@ -8,7 +8,7 @@
 
 import { cors, jsonResponse as json } from '../_shared/claude.ts'
 
-const DATASET = 'F-D0047-091' // 鄉鎮天氣預報-臺灣未來 2 天(逐 3 小時)
+const DATASET = 'F-D0047-089' // 鄉鎮天氣預報-臺灣未來 3 天(逐 3 小時,含天氣現象/3小時降雨機率)
 const R = Math.PI / 180
 const dist2 = (aLat: number, aLon: number, bLat: number, bLon: number) => {
   // 平面近似即可(找最近鄉鎮,不需精確大圓)
@@ -44,14 +44,15 @@ function wxText(t: Record<string, unknown>): string {
 }
 const startOf = (t: Record<string, unknown>) => String(t.StartTime ?? t.startTime ?? t.DataTime ?? t.dataTime ?? '')
 
-// 從時間序列挑「date 當天最接近 targetHour 時」的天氣
-function wxAt(times: Record<string, unknown>[], date: string, targetHour: number): string {
+// 從時間序列挑「date 當天、時段落在 [loHour,hiHour) 內、最接近 targetHour」的天氣。
+// 用窗口避免傍晚/夜間時段被誤當成上午(例如傍晚才填當天日誌時,上午時段已過→留空由人工填)。
+function wxAt(times: Record<string, unknown>[], date: string, loHour: number, hiHour: number, targetHour: number): string {
   let best = '', bestDiff = Infinity
   for (const t of times) {
     const st = startOf(t)
     if (!st.startsWith(date)) continue
     const hour = Number(st.slice(11, 13))
-    if (isNaN(hour)) continue
+    if (isNaN(hour) || hour < loHour || hour >= hiHour) continue
     const diff = Math.abs(hour - targetHour)
     if (diff < bestDiff) { bestDiff = diff; best = wxText(t) }
   }
@@ -87,9 +88,9 @@ Deno.serve(async (req) => {
     if (!near) return json({ error: '找不到最近鄉鎮(座標可能不在台灣範圍)' }, 422)
 
     const times = wxTimes(near)
-    const am = wxAt(times, day, 9)   // 上午 ≈ 09 時
-    const pm = wxAt(times, day, 15)  // 下午 ≈ 15 時
-    if (!am && !pm) return json({ error: `中央氣象局預報未涵蓋 ${day}(逐 3 小時僅約未來 2 天,過去日期請手動填寫)` }, 422)
+    const am = wxAt(times, day, 6, 12, 9)    // 上午:06–12 時,取最接近 09 時
+    const pm = wxAt(times, day, 12, 18, 15)  // 下午:12–18 時,取最接近 15 時
+    if (!am && !pm) return json({ error: `中央氣象局預報未涵蓋 ${day}(逐 3 小時僅約未來 3 天,過去日期請手動填寫)` }, 422)
 
     const township = locName(near)
     return json({ am, pm, township, source: `中央氣象局 ${township}` }, 200)
