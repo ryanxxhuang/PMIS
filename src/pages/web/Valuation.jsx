@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Printer, Trash2, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Button, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Button, Empty, PageHeader, PrerequisiteEmptyState } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { applyApprovedChangeOrders, approvedNetAmount } from '../../lib/changeOrders.js'
@@ -69,7 +69,11 @@ export default function Valuation() {
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return (
       <Card title="估驗計價">
-        <Empty>此專案的標單尚未匯入資料庫。請先到「標單工項」頁匯入標單，估驗才能掛在工項上。</Empty>
+        <PrerequisiteEmptyState
+          need="估驗計價依標單工項的契約數量/單價逐項計價,此專案的標單尚未匯入。"
+          unlocks="逐期估驗、請款收款、AI 估驗草擬、請款佐證包"
+          to={can.edit ? '/boq' : undefined} cta={can.edit ? '前往標單工項匯入' : undefined}
+          who={!can.edit ? '待施工廠商匯入標單並提報估驗後即可檢視。' : undefined} />
       </Card>
     )
   }

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera, Printer, ChevronDown, ChevronRight, CopyPlus, Plus, CloudSun, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { previousLog, copyableFromLog, frequentItems, addUniqueRow } from '../../lib/siteLogHelpers.js'
@@ -136,7 +136,15 @@ export default function SiteLog() {
 
   if (!workItems) return <Empty>載入中…</Empty>
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
-    return <Card title="施工日誌"><Empty>此專案的標單尚未匯入資料庫。請先到「標單工項」匯入標單，才能回報工項數量。</Empty></Card>
+    return (
+      <Card title="施工日誌">
+        <PrerequisiteEmptyState
+          need="施工日誌要掛在標單工項上回報當日完成數量,此專案的標單尚未匯入。"
+          unlocks="工項數量回報、現場照片、天氣帶入、估驗自動累計"
+          to={can.edit ? '/boq' : undefined} cta={can.edit ? '前往標單工項匯入' : undefined}
+          who={!can.edit ? '施工日誌由施工廠商填報;待廠商匯入標單並回報後即可檢視。' : undefined} />
+      </Card>
+    )
   }
 
   const q = search.trim()
@@ -266,9 +274,14 @@ export default function SiteLog() {
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
           <Card title="本日日誌">
+            {!can.edit && (
+              <div className="mb-3 text-xs text-[var(--text-2)] bg-[var(--surface-2)] rounded-lg px-3 py-2">
+                {can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為<b>唯讀</b>，可切換日期檢視歷史紀錄。
+              </div>
+            )}
             <div className="flex items-end gap-3 flex-wrap mb-2">
               <Field label="日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
-              <Field label="天氣(上午)"><input value={weather} onChange={(e) => setWeather(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
+              <Field label="天氣(上午)"><input value={weather} disabled={!can.edit} onChange={(e) => setWeather(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20 disabled:opacity-50 disabled:bg-[var(--surface-2)]" /></Field>
               <Field label="天氣(下午)"><input value={weatherPm} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
               <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field></div>
               {can.edit && (
@@ -429,7 +442,7 @@ export default function SiteLog() {
             </div>
 
             <div className="flex items-center gap-3 mt-4">
-              {can.edit ? <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button> : <span className="text-xs text-[var(--text-3)]">監造帳號唯讀，日誌由施工廠商填報。</span>}
+              {can.edit ? <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button> : <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>}
               {currentLog && (
                 <button onClick={() => navigate(`/site-log/print?d=${date}`)}
                   className="inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--surface-2)] text-[var(--blue)]">

@@ -1,5 +1,6 @@
 // Shared UI — brand styling (elevation surfaces, steel-blue primary, tonal chips)
 import { forwardRef } from 'react'
+import { Link } from 'react-router-dom'
 import { FileText } from 'lucide-react'
 
 export function Card({ title, action, children, className = '', bodyClass = 'p-5' }) {
@@ -159,4 +160,21 @@ export function SourceTag({ doc, page, section }) {
 
 export function Empty({ children }) {
   return <div className="text-center text-[var(--text-3)] text-sm py-10">{children}</div>
+}
+
+// 前置條件空狀態(P1-05):明確講「缺什麼、輪到誰、完成後解鎖什麼」+ 單一主 CTA。
+// 對無權限角色不給死按鈕,改顯示責任方(who)。to=CTA 連結;cta=按鈕文字;who=負責角色說明。
+export function PrerequisiteEmptyState({ title, need, unlocks, to, cta, who }) {
+  return (
+    <div className="text-center py-10 px-4">
+      {title && <div className="text-sm font-medium text-[var(--text)] mb-1">{title}</div>}
+      <div className="text-sm text-[var(--text-2)] max-w-md mx-auto">{need}</div>
+      {unlocks && <div className="text-xs text-[var(--text-3)] mt-1.5 max-w-md mx-auto">完成後即可使用：{unlocks}</div>}
+      <div className="mt-4">
+        {to && cta
+          ? <Link to={to}><Button>{cta}</Button></Link>
+          : who && <span className="text-xs text-[var(--text-3)]">{who}</span>}
+      </div>
+    </div>
+  )
 }

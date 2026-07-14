@@ -89,7 +89,10 @@ export function buildAssistantFacts(d = {}, today = new Date()) {
       待核定件: changeOrders.filter((c) => c.status === '提出' || c.status === '審核中').length },
     驗收: { has: acceptanceEvents.length > 0, 最新階段: lastAccept ? { 階段: lastAccept.stage_key, 日期: lastAccept.event_date, 結果: lastAccept.result || null } : null },
     契約義務: { has: obligations.length > 0, 總數: obligations.length, 逾期: overdueObl.length,
-      逾期清單: overdueObl.slice(0, 4).map((x) => ({ 事項: x.o.title, 到期: iso(x.due), 罰則: x.o.penalty || null })) },
+      逾期清單: overdueObl.slice(0, 4).map((x) => ({ 事項: x.o.title, 到期: iso(x.due), 罰則: x.o.penalty || null })),
+      // 全部義務(供 copilot 引用特定義務如月報/竣工文件期限,含契約出處條款/頁碼)
+      清單: obligations.slice(0, 30).map((o) => ({ 事項: o.title, 階段: o.category || null, 責任: o.responsible || null,
+        出處: o.source_clause || null, 頁: o.source_page || null, 罰則: o.penalty || null })) },
     待我處理: myItems.map((it) => ({ 類型: it.tag, 標題: it.title, 狀態: it.meta, 連結: it.to })),
     可引用路由: SOURCE_ROUTES,
   }

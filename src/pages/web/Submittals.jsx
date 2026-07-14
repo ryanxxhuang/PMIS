@@ -121,6 +121,13 @@ export default function Submittals() {
           <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
         </div>
       )}
+      {/* AI 長任務狀態(P1-10):讀文件需下載→抽字→比對,設時間預期避免以為卡住 */}
+      {(readBusy || reviewBusy) && (
+        <div className="flex items-center gap-2 text-sm bg-[var(--blue-tint)] text-[var(--blue-text)] rounded-lg px-3 py-2">
+          <Sparkles size={15} className="animate-pulse shrink-0" aria-hidden />
+          {readBusy ? 'AI 正在下載並讀取送審文件、逐項比對契約規範…較長文件約需 20–30 秒,可離開此頁稍後回來查看。' : 'AI 審查中…'}
+        </div>
+      )}
 
       {form && (
         <Card>

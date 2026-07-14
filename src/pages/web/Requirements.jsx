@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { ScrollText, CheckCircle2, XCircle, Ban, FileText, Link2, Pencil } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select, PrerequisiteEmptyState } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import {
   REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
@@ -27,6 +27,7 @@ export default function Requirements() {
   // 鏡像 DB 的 can_review_requirement(機關/監造;刻意無專案管理者例外——技術管理≠契約審核權)
   const canReview = ['owner', 'supervisor'].includes(currentUser?.org_type)
   const [rows, setRows] = useState([])
+  const [loaded, setLoaded] = useState(false)
   const [runs, setRuns] = useState([])
   const [sourcesByReq, setSourcesByReq] = useState(new Map())
   const [versionsById, setVersionsById] = useState(new Map())
@@ -75,6 +76,7 @@ export default function Requirements() {
     } else {
       setVersionsById(new Map())
     }
+    setLoaded(true)
   }, [isPersistedProject, pid])
 
   useEffect(() => { reload() }, [reload])
@@ -175,6 +177,21 @@ export default function Requirements() {
       <div className="space-y-5">
         <PageHeader title="履約需求" tagline="AI 建議 → 人工審查" subtitle="AI 擷取的履約需求建議在此逐項審查;核定後才成為專案的契約性規則" />
         <Card title="履約需求審查"><Empty>需真實專案。於「專案文件」頁一次上傳專案文件後,建議會出現在這裡待審查。</Empty></Card>
+      </div>
+    )
+  }
+
+  // 0 需求時只顯示上傳 CTA,不先堆一排 filter 與空審查區(P2-07)
+  if (loaded && !rows.length) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="履約需求" tagline="AI 建議 → 人工審查" subtitle="AI 擷取的履約需求建議在此逐項審查;核定後才成為專案的契約性規則" />
+        <Card title="履約需求審查">
+          <PrerequisiteEmptyState
+            need="尚未有已擷取的履約需求。到「專案文件」上傳契約/規範,系統會自動抽出履約需求供逐項審查。"
+            unlocks="需求審查核定、送審/RFI 的 AI 依規範比對、契約義務時程"
+            to="/contract" cta="前往上傳專案文件" />
+        </Card>
       </div>
     )
   }
