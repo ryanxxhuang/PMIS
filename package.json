@@ -12,6 +12,7 @@
     "deploy": "vite build && npm run build:demo && gh-pages -d dist --dotfiles"
   },
   "dependencies": {
+    "@sentry/react": "^10.65.0",
     "@supabase/supabase-js": "^2.108.2",
     "lucide-react": "^1.23.0",
     "mammoth": "^1.12.0",
