@@ -31,6 +31,11 @@ describe('parsePenaltyRate', () => {
     expect(r.perDayFixed).toBe(50000)
     expect(r.perDayFraction).toBeNull()
   })
+  it('固定額「N 元/日」(元在後、含千分位逗號)', () => {
+    expect(parsePenaltyRate('逾期新臺幣 10,000 元/日').perDayFixed).toBe(10000)
+    expect(parsePenaltyRate('每日 2,500 元').perDayFixed).toBe(2500)
+    expect(parsePenaltyRate('違約金 1 萬元/天').perDayFixed).toBe(10000)
+  })
   it('上限「N成」', () => {
     expect(parsePenaltyRate('千分之二，上限二成').capFraction).toBeCloseTo(0.2)
   })

@@ -6,6 +6,11 @@ import { Send, ArrowRight, Bot } from 'lucide-react'
 import { Button } from './ui.jsx'
 import { answerQuestion, SUGGESTED_QUESTIONS } from '../lib/assistantQA.js'
 
+// 保險:AI 偶爾仍輸出 Markdown,純文字面板會顯示 literal 星號/井號(P2-02)——顯示前清掉標記
+const stripMd = (s) => String(s || '')
+  .replace(/\*\*(.*?)\*\*/g, '$1').replace(/(^|\n)\s*#{1,6}\s+/g, '$1')
+  .replace(/(^|\n)\s*[-*]\s+/g, '$1').replace(/\*/g, '')
+
 // fill=true:填滿父容器(浮動面板固定高,訊息區 flex-1 撐開、輸入貼底,消除下方留白)。
 // fill=false:頁面版,訊息區以 minH/maxH 內部捲動。
 export default function CopilotChat({ data, facts, askAssistant, minH = 180, maxH = 360, fill = false }) {
@@ -47,7 +52,7 @@ export default function CopilotChat({ data, facts, askAssistant, minH = 180, max
           <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
             <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-line ${
               m.role === 'user' ? 'bg-[var(--primary)] text-white rounded-br-sm' : 'bg-[var(--surface-2)] text-[var(--text)] rounded-bl-sm'}`}>
-              {m.text}
+              {m.role === 'ai' ? stripMd(m.text) : m.text}
               {m.sources?.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {m.sources.map((s, j) => (

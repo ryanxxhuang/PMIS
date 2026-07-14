@@ -10,7 +10,7 @@ const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 
 // 標單工項（BOQ）— 工項樹來自 store：有真專案讀 Supabase work_items，否則範例 JSON。
 export default function BOQ() {
-  const { workItems: data, workItemsSource, workItemsError, retryWorkItems, importWorkItems, isSupabaseConfigured, currentProject, resetProjectBoq, dbMode } = useStore()
+  const { workItems: data, workItemsSource, workItemsError, retryWorkItems, importWorkItems, isSupabaseConfigured, currentProject, resetProjectBoq, dbMode, can } = useStore()
   const [expanded, setExpanded] = useState(() => new Set())
   const [onlyBillable, setOnlyBillable] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -121,7 +121,7 @@ export default function BOQ() {
       <PageHeader title="標單工項" tagline="BOQ / WBS"
         subtitle={`${meta.project_name}　·　${meta.owner_name}`}
         meta={meta.contract_no ? [{ k: '契約編號', v: meta.contract_no }] : []}
-        action={dbMode && workItemsSource === 'db' && (
+        action={dbMode && workItemsSource === 'db' && (can.edit || can.admin) && (
           <Button variant="ghost" onClick={async () => {
             if (await appConfirm({ title: '重新匯入標單？', body: '會清空此專案的標單工項，以及相依的估驗、進度、施工日誌、查驗、缺失。', danger: true, confirmLabel: '清空重匯' })) await resetProjectBoq()
           }}>↻ 重新匯入標單</Button>
@@ -136,9 +136,7 @@ export default function BOQ() {
           {!parsed ? (
             <div className="flex items-center gap-3 flex-wrap">
               <Link to="/contract"><Button>前往專案文件上傳</Button></Link>
-              <button onClick={() => runImport()} disabled={importing} className="text-xs text-amber-700 hover:text-amber-900 underline disabled:opacity-50">
-                {importing ? '匯入中…' : '沒有檔案？用範例標單試試'}
-              </button>
+              {/* 正式專案不提供「範例標單」:避免把示範用 3,262 工項灌進真實案(P1-11)。範例僅在 demo 站呈現。 */}
               {importErr && <span className="text-sm text-rose-600">{importErr}</span>}
             </div>
           ) : (

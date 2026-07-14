@@ -655,7 +655,11 @@ export default function Contract() {
                           <span className="font-normal text-[var(--text-3)]"> · {est.basis} · 概算供參,實際依契約認定</span>
                         </span>
                       </div>
-                    ) : null
+                    ) : (
+                      <div className="text-xs text-[var(--text-3)] bg-[var(--surface-2)] rounded-md px-2 py-1 mt-1.5 inline-flex items-center gap-1.5">
+                        <Scale size={12} className="shrink-0" aria-hidden />偵測到罰則,但金額格式需人工確認試算
+                      </div>
+                    )
                   })()}
                   {(it.ob.source_clause || it.ob.source_page) && (
                     <div className="text-[11px] text-[var(--text-3)] mt-2 flex items-center gap-1"><FileText size={11} aria-hidden /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>

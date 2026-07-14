@@ -3,22 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field } from '../../components/ui.jsx'
 
-// 預設帶入本契約資料（國際原住民文創園區），可改
+// 正式站一律留空,用 placeholder 當範例提示;不預填任何真實案值,避免使用者只改名就
+// 建出錯的契約/機關/廠商(P1-04)。施工廠商也不自動帶登入者公司。
 const DEFAULTS = {
-  project_name: '國際原住民族文化創意產業園區新建工程',
-  project_code: '20200710',
-  owner_name: '桃園市政府',
-  contractor_name: '',
-  supervisor_name: '',
-  location: '桃園市',
-  start_date: '2026-01-15',
-  end_date: '2027-06-30',
+  project_name: '', project_code: '', owner_name: '', contractor_name: '',
+  supervisor_name: '', location: '', start_date: '', end_date: '',
 }
 
 export default function ProjectSetup() {
-  const { createProject, currentUser } = useStore()
+  const { createProject } = useStore()
   const navigate = useNavigate()
-  const [form, setForm] = useState({ ...DEFAULTS, contractor_name: currentUser?.company || '' })
+  const [form, setForm] = useState({ ...DEFAULTS })
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -38,19 +33,19 @@ export default function ProjectSetup() {
     <div className="max-w-2xl mx-auto">
       <div className="mb-5">
         <h1 className="text-xl font-bold text-[var(--text)]">建立專案</h1>
-        <p className="text-sm text-[var(--text-2)] mt-1">先建立一個工程專案，之後就能匯入標單、做估驗與進度。已帶入本契約預設值，可修改。</p>
+        <p className="text-sm text-[var(--text-2)] mt-1">先建立一個工程專案，之後就能匯入標單、做估驗與進度。請填寫工程基本資料（僅工程名稱必填，其餘可稍後補）。</p>
       </div>
       <Card>
         <form onSubmit={submit} className="space-y-4">
-          <Field label="工程名稱"><input className={input} value={form.project_name} onChange={set('project_name')} required /></Field>
+          <Field label="工程名稱"><input className={input} value={form.project_name} onChange={set('project_name')} placeholder="如 ○○新建工程" required /></Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="契約編號"><input className={input} value={form.project_code} onChange={set('project_code')} /></Field>
-            <Field label="工程地點"><input className={input} value={form.location} onChange={set('location')} /></Field>
+            <Field label="契約編號"><input className={input} value={form.project_code} onChange={set('project_code')} placeholder="如 20250101" /></Field>
+            <Field label="工程地點"><input className={input} value={form.location} onChange={set('location')} placeholder="如 ○○市○○區" /></Field>
           </div>
           <div className="grid grid-cols-3 gap-4">
-            <Field label="機關（業主）"><input className={input} value={form.owner_name} onChange={set('owner_name')} /></Field>
-            <Field label="施工廠商"><input className={input} value={form.contractor_name} onChange={set('contractor_name')} /></Field>
-            <Field label="監造單位"><input className={input} value={form.supervisor_name} onChange={set('supervisor_name')} /></Field>
+            <Field label="機關（業主）"><input className={input} value={form.owner_name} onChange={set('owner_name')} placeholder="如 ○○市政府" /></Field>
+            <Field label="施工廠商"><input className={input} value={form.contractor_name} onChange={set('contractor_name')} placeholder="施作廠商名稱" /></Field>
+            <Field label="監造單位"><input className={input} value={form.supervisor_name} onChange={set('supervisor_name')} placeholder="監造單位名稱" /></Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Field label="開工日"><input type="date" className={input} value={form.start_date} onChange={set('start_date')} /></Field>

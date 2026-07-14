@@ -159,9 +159,10 @@ export default function ValuationPackage() {
           />
         </div>
 
-        {/* 本期估驗明細 */}
+        {/* 本期估驗明細(手機:表格自身橫捲,不讓整頁水平漂移——P1-08)*/}
         <div className="text-[11px] text-slate-500 mb-1">本期估驗明細（僅列本期有完成之工項）</div>
-        <table className="w-full border-collapse text-[12px] mb-6">
+        <div className="overflow-x-auto -mx-1 mb-6 print:overflow-visible print:mx-0">
+        <table className="w-full border-collapse text-[12px] min-w-[560px] print:min-w-0">
           <thead>
             <tr className="bg-slate-100">
               {['項次', '工項名稱', '單位', '本期完成數量', '單價', '本期金額', '佐證'].map((h) => (
@@ -193,6 +194,7 @@ export default function ValuationPackage() {
             </tr>
           </tbody>
         </table>
+        </div>
 
         {/* 佐證照片(按工項)*/}
         <div className="text-slate-600 font-medium mb-2 flex items-center gap-1.5">

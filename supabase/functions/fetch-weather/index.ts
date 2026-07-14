@@ -85,12 +85,12 @@ Deno.serve(async (req) => {
       const d = dist2(Number(lat), Number(lon), la, lo)
       if (d < nd) { nd = d; near = l }
     }
-    if (!near) return json({ error: '找不到最近鄉鎮(座標可能不在台灣範圍)' }, 422)
+    if (!near) return json({ error: '找不到最近鄉鎮(座標可能不在台灣範圍,請確認緯經度)' }, 200)
 
     const times = wxTimes(near)
     const am = wxAt(times, day, 6, 12, 9)    // 上午:06–12 時,取最接近 09 時
     const pm = wxAt(times, day, 12, 18, 15)  // 下午:12–18 時,取最接近 15 時
-    if (!am && !pm) return json({ error: `中央氣象局預報未涵蓋 ${day}(逐 3 小時僅約未來 3 天,過去日期請手動填寫)` }, 422)
+    if (!am && !pm) return json({ error: `中央氣象局預報未涵蓋 ${day}(逐 3 小時僅約未來 3 天,過去或太遠日期請手動填寫天氣)` }, 200)
 
     const township = locName(near)
     return json({ am, pm, township, source: `中央氣象局 ${township}` }, 200)

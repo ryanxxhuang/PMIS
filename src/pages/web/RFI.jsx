@@ -117,8 +117,8 @@ export default function RFI() {
                       {r.cost_impact && <Badge color="red">費用</Badge>}
                     </div>
                     <div className="text-xs text-[var(--text-3)] mt-0.5">提出 {r.asked_date || '—'}{r.due_date ? ` · 期限 ${r.due_date}` : ''}{r.answered_date ? ` · 回覆 ${r.answered_date}` : ''}</div>
-                    {r.question && <div className="text-xs text-[var(--text-2)] mt-1">問：{r.question}</div>}
-                    {r.answer && <div className="text-xs text-[var(--blue-text)] mt-1">答：{r.answer}</div>}
+                    {r.question && <div className="text-xs text-[var(--text-2)] mt-1 line-clamp-3 whitespace-pre-line" title={r.question}>問：{r.question}</div>}
+                    {r.answer && <div className="text-xs text-[var(--blue-text)] mt-1 line-clamp-3 whitespace-pre-line" title={r.answer}>答：{r.answer}</div>}
                     {r.markup_path && <div className="mt-1.5"><MarkupThumb src={r.markup_path} resolve={resolveMarkup} /></div>}
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">

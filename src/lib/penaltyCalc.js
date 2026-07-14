@@ -7,7 +7,7 @@ const ZH = { 零: 0, 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七
 export function zhNum(s) {
   if (s == null) return NaN
   s = String(s).trim()
-  if (/^\d+(\.\d+)?$/.test(s)) return Number(s)
+  if (/^[\d,]+(\.\d+)?$/.test(s)) return Number(s.replace(/,/g, '')) // 支援千分位逗號
   if (/^[零一二兩三四五六七八九十]+$/.test(s)) {
     if (s === '十') return 10
     if (s.length === 1) return ZH[s] ?? NaN
@@ -22,7 +22,7 @@ export function zhNum(s) {
   return NaN
 }
 
-const NUM = '([0-9]+(?:\\.[0-9]+)?|[零一二兩三四五六七八九十]+)'
+const NUM = '([0-9][0-9,]*(?:\\.[0-9]+)?|[零一二兩三四五六七八九十]+)'
 
 // 從罰則文字抽罰率 → { perDayFraction?, perDayFixed?, capFraction? };抽不出回 null。
 export function parsePenaltyRate(text) {
@@ -33,8 +33,10 @@ export function parsePenaltyRate(text) {
   else if ((m = t.match(new RegExp(NUM + '\\s*‰')))) perDayFraction = zhNum(m[1]) / 1000  // 每日 N‰(公共工程契約常見寫法)
   else if ((m = t.match(new RegExp('萬分之\\s*' + NUM)))) perDayFraction = zhNum(m[1]) / 10000
   else if ((m = t.match(new RegExp('百分之\\s*' + NUM + '[^,，。;；]{0,6}?(?:每|逐|/)?[日天]')))) perDayFraction = zhNum(m[1]) / 100
-  // 每日固定額:每日(新臺幣)? N (萬)? 元
+  // 每日固定額:①「每日(新臺幣)? N (萬)? 元」②「N (萬)? 元 /日|每日|/天」(元在後、含千分位)
   if (perDayFraction == null && (m = t.match(new RegExp('每[日天][^0-9零一二兩三四五六七八九十]{0,6}' + NUM + '\\s*(萬)?\\s*元')))) {
+    perDayFixed = zhNum(m[1]) * (m[2] ? 10000 : 1)
+  } else if (perDayFraction == null && (m = t.match(new RegExp(NUM + '\\s*(萬)?\\s*元\\s*(?:/|每)?\\s*[日天]')))) {
     perDayFixed = zhNum(m[1]) * (m[2] ? 10000 : 1)
   }
   // 上限:上限/最高/不得超過 …(百分之N | N% | N成)。「百分之二十」本身即為百分比,毋須 % 符號。
