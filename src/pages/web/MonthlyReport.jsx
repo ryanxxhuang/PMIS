@@ -238,6 +238,9 @@ export default function MonthlyReport() {
 
         {/* 檢討與下月計畫（可填，列印用）*/}
         <Section title="九、檢討與下月工作計畫">
+          <div className="print:hidden mb-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-flex items-center gap-1">
+            ⚠ 此兩欄為<b>列印前暫填</b>，離開或重整不會保存；請於列印/存 PDF 前填妥。
+          </div>
           <div className="print:hidden mb-2 flex items-center gap-2">
             <button onClick={async () => {
               setAiBusy(true); setAiErr('')

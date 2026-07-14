@@ -6,6 +6,7 @@ import { Card, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { previousLog, copyableFromLog, frequentItems, addUniqueRow } from '../../lib/siteLogHelpers.js'
+import { WorkItemPicker } from '../../components/DefectTracker.jsx'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const todayStr = () => {
@@ -223,7 +224,7 @@ export default function SiteLog() {
     setBatchBusy(true); setSavedMsg('')
     let ok = 0, fail = 0
     for (const s of staging) {
-      if (s.status === 'error') { fail++; continue }
+      if (s.status === 'analyzing') continue // 判讀中的略過;error 張仍可帶人工說明上傳(P1-02)
       const { error } = await uploadSitePhoto(currentLog.id, s.file, {
         caption: s.caption || null, work_item_key: s.work_item_key || null,
       })
@@ -481,18 +482,17 @@ export default function SiteLog() {
                             <input value={s.caption} disabled={s.status === 'analyzing'} placeholder="照片說明（AI 生成，可改）"
                               onChange={(e) => patchStaging(s.key, { caption: e.target.value })}
                               className="w-full border border-[var(--border)] rounded px-2 py-1 text-sm bg-[var(--surface)]" />
-                            <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                              {s.category && <span className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-2)]">{s.category}</span>}
-                              {s.notSite && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⚠ 疑似非工地照,請確認</span>}
-                              {s.work_item_label ? (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--blue)]/10 text-[var(--blue-text)] max-w-full">
-                                  <span className="truncate">工項：{s.work_item_label}</span>
-                                  <button onClick={() => patchStaging(s.key, { work_item_key: '', work_item_label: '' })} className="hover:text-rose-500 shrink-0" title="取消配對">✕</button>
-                                </span>
-                              ) : s.status === 'done' ? (
-                                <span className="text-[var(--text-3)]">未自動配對工項（可留白）</span>
-                              ) : null}
-                            </div>
+                            {s.status !== 'analyzing' && (
+                              <>
+                                <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                                  {s.category && <span className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-2)]">{s.category}</span>}
+                                  {s.notSite && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⚠ 疑似非工地照,請確認</span>}
+                                </div>
+                                {/* 可搜尋改選/清除工項(P1-02:不再只能取消配對)*/}
+                                <WorkItemPicker leaves={leaves} value={s.work_item_key} label={s.work_item_label || '（搜尋工項…）'}
+                                  onPick={(k, l) => patchStaging(s.key, { work_item_key: k || '', work_item_label: k ? l : '' })} />
+                              </>
+                            )}
                           </div>
                           <button onClick={() => removeStaging(s.key)} disabled={batchBusy} title="移除此張"
                             className="shrink-0 text-[var(--text-3)] hover:text-rose-500 text-sm leading-none">✕</button>
@@ -500,8 +500,8 @@ export default function SiteLog() {
                       ))}
                     </div>
                     <div className="flex items-center gap-2 mt-3">
-                      <Button onClick={confirmBatchUpload} disabled={batchBusy || staging.every((s) => s.status !== 'done')}>
-                        {batchBusy ? '處理中…' : `全部上傳（${staging.filter((s) => s.status === 'done').length}）`}
+                      <Button onClick={confirmBatchUpload} disabled={batchBusy || staging.every((s) => s.status === 'analyzing')}>
+                        {batchBusy ? '處理中…' : `全部上傳（${staging.filter((s) => s.status !== 'analyzing').length}）`}
                       </Button>
                       <Button variant="secondary" onClick={cancelBatch} disabled={batchBusy}>取消</Button>
                     </div>

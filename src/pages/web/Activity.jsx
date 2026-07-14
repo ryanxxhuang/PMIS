@@ -98,7 +98,7 @@ export default function Activity() {
           <div>
             <Input list="activity-actors" value={filters.actorUserId}
               onChange={(e) => setFilter('actorUserId', e.target.value)}
-              placeholder="執行者 UUID（或 system）" aria-label="執行者" />
+              placeholder="篩選執行者（點選下方清單）" aria-label="執行者" />
             <datalist id="activity-actors">
               <option value="system">系統</option>
               {actors.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
