@@ -40,7 +40,7 @@ const SCHEMA = {
     severity: { type: 'string', enum: ['輕微', '一般', '嚴重'], description: '嚴重度:可能致死/重傷(如高處墜落、感電、倒塌)判嚴重。' },
     location: { type: 'string', description: '照片可辨識的位置線索(樓層/構件/區域),看不出填空字串。' },
     violated_regulation: { type: 'string', description: '違反的職安衛法規「名稱+主題」,只可引用參考清單;不確定條號就不要寫條號,可寫「(依現場適用條文核對)」。無危害填空字串。' },
-    suggestion: { type: 'string', description: '具體改善建議,40 字內,對應該危害應採取的防護措施。' },
+    suggestion: { type: 'string', description: '改善建議,40 字內,**定性描述**應採取的防護措施(如「設置符合規定之護欄與安全網、人員佩戴安全帶」);不得寫出照片無法量測的具體尺寸/高度/距離數值,涉及規格請寫「依適用條文與現場量測辦理」。' },
   },
   required: ['has_violation', 'hazard_type', 'title', 'description', 'severity', 'location', 'violated_regulation', 'suggestion'],
 }
@@ -53,6 +53,8 @@ const PROMPT =
   '4) 嚴重度、位置線索、具體改善建議。\n' +
   '只根據照片「可見」的內容判讀,絕不臆測看不到的東西。法規依據只能引用下列參考清單中的法規名稱與主題,' +
   '**嚴禁自行編造法條條號**;若參考清單沒有明確條號,就只寫法規名稱與主題,並附「(依現場適用條文核對)」。' +
+  '**嚴禁輸出照片無法量測得知的具體數值**(護欄高度、安全距離、開口尺寸等一律不得給數字),改善建議只做定性描述,' +
+  '涉及規格一律寫「依適用條文與現場量測辦理」。你的角色是「提示疑似缺失、供現場人員核對」,不是給可照做的工程數值。' +
   '若照片看不出明顯危害,has_violation 回 false、hazard_type 回「無」、title 空字串,並在 description 說明照片看到的作業內容。\n\n' +
   SAFETY_REF
 

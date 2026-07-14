@@ -33,6 +33,13 @@ export function buildAssistantFacts(d = {}, today = new Date()) {
     請款日: v.invoice_date || null, 收款日: v.paid_date || null, 實收: v.paid_amount ?? null,
   }))
   const unpaid = valuations.filter((v) => v.status === '已核定' && v.invoice_date && !v.paid_date)
+  // 金流資料異常偵測(P0-09):有實收卻無收款日、實收為負、或未請款/未核定卻已有實收——
+  // copilot 遇此不得據以推論「正常」,須主動指出資料不一致。
+  const financeAnomalies = periods.filter((p) =>
+    (p.實收 != null && p.實收 > 0 && !p.收款日) ||
+    (p.實收 != null && p.實收 < 0) ||
+    (p.實收 != null && p.實收 > 0 && ['草稿', '監造審核', '待請款'].includes(p.狀態)),
+  ).map((p) => p.期)
 
   // 品質:查驗、缺失(統一引擎,分 domain)、試體
   const openDef = defects.filter((x) => x.status !== '已結案')
@@ -64,7 +71,8 @@ export function buildAssistantFacts(d = {}, today = new Date()) {
       預定百分比: r1(progress.plannedPct), 落後百分比: progress.plannedPct != null ? r1(progress.plannedPct - progress.actualPct) : null },
     金流: { has: valuations.length > 0, 發包工程費: finance.billableTotal ?? null,
       累計估驗: finance.actualCum != null ? Math.round(finance.actualCum) : null,
-      期數: valuations.length, 逐期: periods, 已請款未收款期: unpaid.map((v) => v.period_no) },
+      期數: valuations.length, 逐期: periods, 已請款未收款期: unpaid.map((v) => v.period_no),
+      資料異常期: financeAnomalies },
     品質: { has: inspections.length + defects.length + testSamples.length > 0,
       待查驗: inspections.filter((i) => i.status === '待查驗').length,
       未結缺失: qDef.length, 逾期缺失: overdueDef.length, 未設期限缺失: noDueDef.length,

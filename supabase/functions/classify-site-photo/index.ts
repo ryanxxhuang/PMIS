@@ -20,19 +20,21 @@ const SCHEMA = {
       enum: ['施工作業', '材料機具', '查驗會勘', '工地環境', '缺失異常', '其他'],
       description: '照片類別。施工作業=施作中;材料機具=料件進場/機具設備;查驗會勘=量測/會勘/驗收;工地環境=整地/圍籬/告示;缺失異常=可見缺失或安全異常。',
     },
-    work_item_hint: { type: 'string', description: '照片對應的工項關鍵詞(供比對標單),如「外牆磁磚」「鋼筋」「模板」「瀝青鋪面」;判斷不出填空字串。' },
-    visible_progress: { type: 'string', description: '照片可見的施作內容或數量線索,25 字內,如「約完成一面外牆」;看不出填空字串。' },
+    is_construction: { type: 'boolean', description: '照片是否為營建工地的施工/材料/機具/查驗現場。若為一般住宅室內、辦公室、風景、人像等非工地照片,回 false。' },
+    work_item_hint: { type: 'string', description: '照片對應的工項關鍵詞(供比對標單),如「外牆磁磚」「鋼筋」「模板」「瀝青鋪面」;判斷不出、或 is_construction=false 時一律填空字串,寧可不配也不要硬套。' },
+    visible_progress: { type: 'string', description: '照片「可見」的施作內容,25 字內;**只准描述看得到的物件與動作**,嚴禁使用「完成、已完成、測試中、就位、已驗收」等從照片無法判定的狀態詞;看不出填空字串。' },
   },
-  required: ['caption', 'category', 'work_item_hint', 'visible_progress'],
+  required: ['caption', 'category', 'is_construction', 'work_item_hint', 'visible_progress'],
 }
 
 const PROMPT =
-  '這是台灣公共工程的工地現場照片,要放進「施工照片簿」。請以工地管理角度判讀:\n' +
-  '1) 一句話的照片簿說明(工項/部位/施作內容);\n' +
-  '2) 照片類別;\n' +
-  '3) 最相關的工項關鍵詞(供對應標單,只給關鍵詞不要編標單項次);\n' +
-  '4) 可見的施作進度或數量線索。\n' +
-  '只根據照片「可見」內容判讀,不要臆測看不到的東西;無法判斷的欄位回空字串。'
+  '這是要放進「施工照片簿」的照片。請以工地管理角度判讀:\n' +
+  '1) 先判斷這是不是營建工地的施工/材料/機具/查驗現場(is_construction);若不是(如住宅室內、廚房、辦公室、風景),caption 據實描述、category 用「其他」、work_item_hint 與 visible_progress 一律空字串,不得硬套工項或說成本案施工。\n' +
+  '2) 一句話的照片簿說明(只描述可見內容);\n' +
+  '3) 照片類別;\n' +
+  '4) 最相關的工項關鍵詞(供對應標單,只給關鍵詞不編項次;判斷不出留空);\n' +
+  '5) 可見的施作內容(只描述看得到的,禁用「完成/測試中/就位/已驗收」等狀態詞)。\n' +
+  '只根據照片「可見」內容判讀,不要臆測看不到的東西;寧可留空也不要編。'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })

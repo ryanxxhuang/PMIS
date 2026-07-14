@@ -202,6 +202,7 @@ export default function SiteLog() {
           ...p, status: error ? 'error' : 'done',
           caption: error ? '' : (result.caption || ''), category: error ? '' : (result.category || ''),
           errMsg: error ? (error.message || '判讀失敗') : '',
+          notSite: !error && result?.is_construction === false, // AI 判為非工地照,提醒人工確認
           work_item_key: wi?.item_key || '', work_item_label: wi ? `${wi.item_no} ${wi.description}` : '',
         } : p))
       }
@@ -482,6 +483,7 @@ export default function SiteLog() {
                               className="w-full border border-[var(--border)] rounded px-2 py-1 text-sm bg-[var(--surface)]" />
                             <div className="flex items-center gap-1.5 flex-wrap text-xs">
                               {s.category && <span className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-2)]">{s.category}</span>}
+                              {s.notSite && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⚠ 疑似非工地照,請確認</span>}
                               {s.work_item_label ? (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--blue)]/10 text-[var(--blue-text)] max-w-full">
                                   <span className="truncate">工項：{s.work_item_label}</span>

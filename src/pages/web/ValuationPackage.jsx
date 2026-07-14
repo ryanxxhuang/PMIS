@@ -30,6 +30,9 @@ export default function ValuationPackage() {
   )
   const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected?.items || {}), [roots, childrenMap, selected])
   const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev?.items || {}), [roots, childrenMap, prev])
+  // buildCumMap 回的是「金額」;本期「數量」必須取估驗 items 的累計數量相減,不可拿金額當數量(P0-01)。
+  const periodQty = (key) => (Number(selected?.items?.[key]) || 0) - (Number(prev?.items?.[key]) || 0)
+  const periodAmtOf = (key) => (cumThis.get(key) || 0) - (cumPrev.get(key) || 0) // 本期金額 = buildCumMap 金額差
 
   // 本期有完成的末端工項(本期量 > 0)
   const leaves = useMemo(() => {
@@ -54,6 +57,10 @@ export default function ValuationPackage() {
   const [summary, setSummary] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [excluded, setExcluded] = useState(() => new Set()) // 使用者於列印前排除的誤配照片 id(P0-02 覆核 gate)
+  const incl = (list) => (list || []).filter((p) => !excluded.has(p.id))
+  const inclCount = Object.values(photosByItem).reduce((s, l) => s + incl(l).length, 0)
+  const toggleExclude = (id) => setExcluded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   const leafKeys = useMemo(() => leaves.map((l) => l.item_key).join(','), [leaves])
 
@@ -77,9 +84,10 @@ export default function ValuationPackage() {
       period_no: selected.period_no, period_amount: periodAmt, completion_pct: Number(completion.toFixed(1)),
       items: leaves.slice(0, 30).map((it) => ({
         name: it.description, unit: it.unit,
-        period_qty: (cumThis.get(it.item_key) || 0) - (cumPrev.get(it.item_key) || 0),
+        period_qty: periodQty(it.item_key),           // 數量(非金額)
+        period_amount: periodAmtOf(it.item_key),       // 金額另附,供 AI 引用不必自乘
       })),
-      photo_captions: Object.values(photosByItem).flat().map((p) => p.caption).filter(Boolean).slice(0, 12),
+      photo_captions: Object.values(photosByItem).flatMap((l) => incl(l)).map((p) => p.caption).filter(Boolean).slice(0, 12),
       log_summaries: siteLogs.map((l) => l.work_summary).filter(Boolean).slice(-12),
     }
     const { error, result } = await draftValuationSummary(payload)
@@ -163,16 +171,17 @@ export default function ValuationPackage() {
           </thead>
           <tbody>
             {leaves.map((it) => {
-              const per = (cumThis.get(it.item_key) || 0) - (cumPrev.get(it.item_key) || 0)
-              const n = photosByItem[it.item_key]?.length || 0
+              const qty = periodQty(it.item_key)          // 本期完成數量(原始數量差)
+              const amt = periodAmtOf(it.item_key)         // 本期金額(金額差,已 = 數量 × 單價,不可再乘)
+              const n = incl(photosByItem[it.item_key]).length
               return (
                 <tr key={it.item_key}>
                   <td className="border border-slate-200 px-1.5 py-1 text-slate-500 whitespace-nowrap">{it.item_no}</td>
                   <td className="border border-slate-200 px-1.5 py-1">{it.description}</td>
                   <td className="border border-slate-200 px-1.5 py-1 text-center text-slate-500 whitespace-nowrap">{it.unit}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmtQ(per)}</td>
+                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmtQ(qty)}</td>
                   <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(it.unit_price)}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(per * (it.unit_price || 0))}</td>
+                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(amt)}</td>
                   <td className="border border-slate-200 px-1.5 py-1 text-center text-slate-500 whitespace-nowrap">{n ? `${n} 張` : '—'}</td>
                 </tr>
               )
@@ -180,7 +189,7 @@ export default function ValuationPackage() {
             <tr className="bg-slate-50 font-semibold">
               <td className="border border-slate-300 px-1.5 py-1 text-right" colSpan={5}>本期估驗合計</td>
               <td className="border border-slate-300 px-1.5 py-1 text-right tabular-nums">{fmt(periodAmt)}</td>
-              <td className="border border-slate-300 px-1.5 py-1 text-center text-slate-500">{photoCount} 張</td>
+              <td className="border border-slate-300 px-1.5 py-1 text-center text-slate-500">{inclCount} 張</td>
             </tr>
           </tbody>
         </table>
@@ -189,23 +198,28 @@ export default function ValuationPackage() {
         <div className="text-slate-600 font-medium mb-2 flex items-center gap-1.5">
           <Images size={14} className="text-[var(--blue)] print:hidden" aria-hidden />現場佐證照片（按工項）
         </div>
+        <p className="text-[11px] text-slate-400 mb-2 print:hidden">照片由 AI 依工項自動歸位,可能誤配;<b className="text-slate-600">列印/送審前請逐張確認</b>,點 ✕ 可將誤配或非佐證照片排除本包。</p>
         {!loaded ? (
           <div className="text-slate-400 text-[12px] py-4">照片載入中…</div>
-        ) : photoCount === 0 ? (
+        ) : inclCount === 0 ? (
           <div className="text-slate-400 text-[12px] py-4 border border-dashed border-slate-200 rounded px-3 print:border-0">
-            本期工項尚無已配對的佐證照片。可到「施工日誌 → AI 批次辨識照片」上傳現場照，AI 會自動配到對應工項，估驗時即自動歸入本包。
+            {photoCount === 0
+              ? '本期工項尚無已配對的佐證照片。可到「施工日誌 → AI 批次辨識照片」上傳現場照,AI 會自動配到對應工項,估驗時即自動歸入本包。'
+              : '本期佐證照片已全部排除。'}
           </div>
         ) : (
           <div className="space-y-4">
-            {leaves.filter((it) => photosByItem[it.item_key]?.length).map((it) => (
+            {leaves.filter((it) => incl(photosByItem[it.item_key]).length).map((it) => (
               <div key={it.item_key} className="break-inside-avoid">
                 <div className="text-[12px] font-medium text-slate-700 mb-1">
                   <span className="text-slate-400 mr-1.5">{it.item_no}</span>{it.description}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {photosByItem[it.item_key].map((p) => (
-                    <figure key={p.id} className="border border-slate-200 rounded overflow-hidden break-inside-avoid">
+                  {incl(photosByItem[it.item_key]).map((p) => (
+                    <figure key={p.id} className="relative border border-slate-200 rounded overflow-hidden break-inside-avoid group">
                       {p.url && <img src={p.url} alt={p.caption || ''} className="w-full h-28 object-cover" />}
+                      <button onClick={() => toggleExclude(p.id)} title="排除此張(不列入本包)"
+                        className="print:hidden absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition">✕</button>
                       <figcaption className="text-[10px] text-slate-500 px-1.5 py-1 leading-tight">
                         {p.caption || '—'}{p.taken_at ? ` · ${String(p.taken_at).slice(0, 10)}` : ''}
                       </figcaption>

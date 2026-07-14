@@ -8,9 +8,11 @@ import { submittalBall } from '../../lib/ballInCourt.js'
 
 const CATEGORIES = ['施工計畫', '品質計畫', '材料設備', '樣品', '配比', '其他']
 const STATUS_COLOR = { 已提送: 'blue', 審核中: 'amber', 核准: 'green', 核備: 'green', 退回補正: 'red', 駁回: 'red' }
-const CHECK_COLOR = { 已於送審敘明: 'green', 需補件: 'amber', 需監造核對文件: 'slate' }
+const CHECK_COLOR = { 已於送審敘明: 'green', 需補件: 'amber', 需監造核對文件: 'slate', 不適用: 'slate' }
 const DECISION_COLOR = { 核准: 'green', 核備: 'green', 退回補正: 'red', 需補充後再核: 'amber' }
 const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
+// AI 偶爾把換行輸出成 literal「\n」;顯示前正規化成分隔號(P2-03)
+const fixNl = (s) => String(s || '').replace(/\\n|\n/g, '；').replace(/；+/g, '；').replace(/^；|；$/g, '')
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function Submittals() {
@@ -215,7 +217,7 @@ export default function Submittals() {
                         </div>
                         <button onClick={() => closeReview(s.id)} className="text-xs text-[var(--text-3)] hover:text-rose-500 shrink-0">收起</button>
                       </div>
-                      {r.caution && <div className="text-xs text-[var(--amber-text)] mb-2">⚠ {r.caution}</div>}
+                      {r.caution && <div className="text-xs text-[var(--amber-text)] mb-2">⚠ {fixNl(r.caution)}</div>}
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查要點</div>
                       <ul className="space-y-1 mb-3">
                         {(r.checklist || []).map((c, i) => (
@@ -236,7 +238,7 @@ export default function Submittals() {
                 })()}
                 {aiRead[s.id] && (() => {
                   const d = aiRead[s.id]
-                  const RS = { 符合: 'green', 部分符合: 'amber', 不符: 'red', 未涵蓋: 'slate', 需人工確認: 'blue' }
+                  const RS = { 符合: 'green', 部分符合: 'amber', 不符: 'red', 未涵蓋: 'slate', 需人工確認: 'blue', 不適用: 'slate' }
                   return (
                     <div className="mt-3 border-t border-[var(--border-2)] pt-3">
                       <div className="flex items-center justify-between gap-2 mb-2">
@@ -248,7 +250,7 @@ export default function Submittals() {
                         <button onClick={() => closeRead(s.id)} className="text-xs text-[var(--text-3)] hover:text-rose-500 shrink-0">收起</button>
                       </div>
                       {d.doc_summary && <div className="text-xs text-[var(--text-2)] mb-2">文件摘要：{d.doc_summary}</div>}
-                      {d.caution && <div className="text-xs text-[var(--amber-text)] mb-2">⚠ {d.caution}</div>}
+                      {d.caution && <div className="text-xs text-[var(--amber-text)] mb-2">⚠ {fixNl(d.caution)}</div>}
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">逐項比對契約需求</div>
                       <ul className="space-y-1 mb-3">
                         {(d.findings || []).map((f, i) => (
