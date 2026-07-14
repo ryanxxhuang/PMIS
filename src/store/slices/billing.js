@@ -113,6 +113,10 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
   // 請款/收款:更新某期的請款日 / 收款日 / 實收金額（demo 模式只更新本機）。
   // DB 成功才更新 UI,避免撥款欄位顯示假成功。
   const updateValuationPayment = useCallback(async (id, patch) => {
+    // 金流完整性(P1-07):實收不得為負(序列/核定規則由 DB payment_flow trigger 強制)
+    if (patch.paid_amount != null && Number(patch.paid_amount) < 0) {
+      return { error: { message: '實收金額不得為負' } }
+    }
     if (dbMode) {
       const res = await supabase.from('valuations').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '未寫入:可能無權限或這一期已被移除')

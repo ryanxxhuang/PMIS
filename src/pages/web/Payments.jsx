@@ -62,7 +62,9 @@ export default function Payments() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="累計應領(扣保留款)" value={money(sum.net)} sub="NT$" color="text-[var(--text)]" />
         <Stat label="累計已收" value={money(sum.received)} sub="NT$" color="text-[var(--blue-text)]" />
-        <Stat label="未收款" value={money(sum.unreceived)} sub="NT$" color={sum.unreceived > 0 ? 'text-amber-600' : 'text-emerald-600'} />
+        {/* 負未收=實收超過累計應領,屬資料異常而非正常 KPI(P1-07) */}
+        <Stat label="未收款" value={money(sum.unreceived)} sub={sum.unreceived < 0 ? '實收超過應領,請查核' : 'NT$'}
+          color={sum.unreceived < 0 ? 'text-rose-600' : sum.unreceived > 0 ? 'text-amber-600' : 'text-emerald-600'} />
         <Stat label="累計保留款(待退)" value={money(sum.retention)} sub="完工後請領" color="text-[var(--text)]" />
       </div>
 

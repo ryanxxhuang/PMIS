@@ -144,6 +144,20 @@ export function StoreProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, workItems, workItemsSource, currentUser])
 
+  // 切換到「不同專案」時立即清空所有 project-scoped state,避免新案資料載入前殘留前案資料(P0-07:
+  // 切案後 Portfolio／提醒中心仍短暫顯示前案缺失、付款,造成跨案誤操作風險)。demo 不切案故略過;
+  // 放在載入 effect 之前,確保清空先於非同步載入。
+  const prevProjectRef = useRef(null)
+  useEffect(() => {
+    if (!demoMode && prevProjectRef.current && prevProjectRef.current !== currentProjectId) {
+      setValuations([]); setProgressPlan(null); setSiteLogs([])
+      setInspections([]); setDefects([]); setCostItems([]); setItemSchedules({})
+      setChangeOrders([]); setInspectionPoints([]); setChecklistTemplates([]); setChecklistRecords([]); setTestSamples([])
+      setSafetyRecords([]); setObligations([]); setAcceptanceEvents([]); setSubmittals([]); setRfis([]); setObservations([])
+    }
+    prevProjectRef.current = currentProjectId
+  }, [currentProjectId, demoMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // DB 模式：載入掛在標單工項上的領域資料（依序,避免同時打爆連線）
   useEffect(() => {
     if (!dbMode) return
