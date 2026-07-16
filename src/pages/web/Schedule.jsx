@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Stat, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
@@ -69,12 +69,7 @@ export default function Schedule() {
         <PageHeader title="逐工項排程" tagline="每項計畫起迄・落後追蹤" subtitle="對關鍵工項設定計畫起迄，依最新估驗完成數量自動判斷落後" />
       </div>
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="已排程工項" value={counts.total} sub="項" color="text-[var(--text)]" />

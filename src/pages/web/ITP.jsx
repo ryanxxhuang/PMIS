@@ -6,7 +6,7 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Flag, AlertTriangle, CheckCircle2, Clock3, XCircle, Circle } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Badge, Button, Input, Select, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { POINT_TYPES, itpStatus, itpActivity, itpAlerts } from '../../lib/itp.js'
 
@@ -61,12 +61,7 @@ export default function ITP() {
         meta={[{ k: 'H 停留', v: counts.H }, { k: 'W 見證', v: counts.W }, { k: 'R 文審', v: counts.R }]}
       />
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       {alerts.length > 0 && (
         <Card bodyClass="p-0">

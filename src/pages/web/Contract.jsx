@@ -51,7 +51,7 @@ export default function Contract() {
     isSupabaseConfigured, currentProject, isPersistedProject,
     currentProjectMembership, currentUser,
     obligations, parseContractFromText, updateObligationStatus, updateProjectAnchors, can,
-    importWorkItems, workItemsSource, reloadMembership, workItems,
+    importWorkItems, workItemsSource, reloadMembership, workItems, submittals,
   } = useStore()
   const contractTotal = workItems?.meta?.billable_total || 0 // 契約總價(發包工程費),逾期罰款試算基準
   const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '' })
@@ -70,6 +70,9 @@ export default function Contract() {
   const [dragOver, setDragOver] = useState(false)
   const [, forceTick] = useState(0)
   const tickRef = useRef(null)
+  // W-01 佐證鏈:標為已提送時的送審佐證挑選(evidenceFor=義務 id;'' 表示不掛)
+  const [evidenceFor, setEvidenceFor] = useState(null)
+  const [evidencePick, setEvidencePick] = useState('')
 
   const pid = currentProject?.project_id
   const canUploadDocs = isPersistedProject && can.edit
@@ -636,11 +639,52 @@ export default function Contract() {
                 <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
                   <div className="flex justify-between items-start gap-2">
                     <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
-                    {can.edit && <button onClick={async () => { const { error } = await updateObligationStatus(it.ob.id, it.done ? '待辦' : '已提送'); if (error) setLegacyMsg(`義務狀態未寫入:${error.message}`) }}
+                    {can.edit && <button onClick={async () => {
+                      if (it.done) {
+                        // 退回待辦:一併解除佐證連結(W-01)
+                        const { error } = await updateObligationStatus(it.ob.id, '待辦', { evidence_submittal_id: null })
+                        if (error) setLegacyMsg(`義務狀態未寫入:${error.message}`)
+                      } else if (submittals.length) {
+                        // 有送審文件可掛 → 展開佐證挑選(不強制,可略過)
+                        setEvidenceFor(evidenceFor === it.ob.id ? null : it.ob.id); setEvidencePick('')
+                      } else {
+                        const { error } = await updateObligationStatus(it.ob.id, '已提送')
+                        if (error) setLegacyMsg(`義務狀態未寫入:${error.message}`)
+                      }
+                    }}
                       className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
                       {it.done ? '已提送 ✓' : '標為已提送'}
                     </button>}
                   </div>
+                  {/* W-01 佐證挑選:掛上對應的送審文件,義務完成不再只是空口 toggle */}
+                  {evidenceFor === it.ob.id && !it.done && (
+                    <div className="mt-2 p-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-[var(--text-2)] shrink-0">佐證送審文件</span>
+                      <Select value={evidencePick} onChange={(e) => setEvidencePick(e.target.value)} className="text-xs flex-1 min-w-[200px]">
+                        <option value="">（不掛佐證）</option>
+                        {submittals.map((s) => (
+                          <option key={s.id} value={s.id}>{s.submittal_no} {s.title}（{s.status}）</option>
+                        ))}
+                      </Select>
+                      <Button size="sm" onClick={async () => {
+                        const { error } = await updateObligationStatus(it.ob.id, '已提送',
+                          evidencePick ? { evidence_submittal_id: evidencePick } : {})
+                        if (error) { setLegacyMsg(`義務狀態未寫入:${error.message}`); return }
+                        setEvidenceFor(null)
+                      }}>{evidencePick ? '掛佐證並標為已提送' : '直接標為已提送'}</Button>
+                      <button onClick={() => setEvidenceFor(null)} className="text-xs text-[var(--text-3)] hover:underline">取消</button>
+                    </div>
+                  )}
+                  {/* 佐證連結:已掛送審文件的義務,稽核可一路點到原始送審紀錄 */}
+                  {it.ob.evidence_submittal_id && (() => {
+                    const ev = submittals.find((s) => s.id === it.ob.evidence_submittal_id)
+                    return (
+                      <Link to="/submittals" className="mt-1.5 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] hover:underline">
+                        <FileText size={11} aria-hidden />
+                        佐證:{ev ? `${ev.submittal_no} ${ev.title}（${ev.status}）` : '送審文件（已不存在或無權檢視）'}
+                      </Link>
+                    )
+                  })()}
                   <div className="text-xs text-[var(--text-3)] mt-1">
                     {ruleText(it.ob)}{it.due ? `　·　到期 ${iso(it.due)}` : ''}
                     {it.ob.responsible ? `　·　${it.ob.responsible}` : ''}

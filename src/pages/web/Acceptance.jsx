@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react'
 import { BadgeCheck, CalendarClock, CheckCircle2, Circle, AlertTriangle } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Badge, Button, Input, Select, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { deriveAcceptance, needsFixFlow, acceptanceAlerts } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 
@@ -54,12 +54,7 @@ export default function Acceptance() {
         ]}
       />
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       {demoMode && (
         <div className="text-xs rounded-lg border border-[var(--border-2)] bg-[var(--blue-tint)]/50 text-[var(--text-2)] px-3 py-2">

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Printer, Zap } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { judgeChecklist, judgeItem, diffChecklistResults } from '../../lib/qc.js'
 import DefectTracker, { WorkItemPicker } from '../../components/DefectTracker.jsx'
@@ -63,12 +63,7 @@ export default function Quality() {
         <PageHeader title="品質查驗" tagline="三級品管" subtitle="查驗申請 → 監造查驗 → 不合格開缺失 → 改善複查結案" />
       </div>
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       {/* 查驗 */}
       <Card title={`查驗（待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>

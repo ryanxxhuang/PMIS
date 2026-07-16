@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { FileUp } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button, Badge, PageHeader } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, Badge, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -90,12 +90,7 @@ export default function ChangeOrders() {
         <p className="text-xs text-[var(--text-3)] -mt-2">另有審核中/提出的變更淨額 <span className={totals.pendingNet >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{totals.pendingNet >= 0 ? '+' : ''}{money(totals.pendingNet)}</span>（尚未計入變更後契約金額）。</p>
       )}
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       {can.edit && <Card title="新增變更設計">
         <form onSubmit={onCreate} className="flex flex-wrap items-end gap-3">

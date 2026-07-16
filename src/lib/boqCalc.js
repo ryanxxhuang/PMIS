@@ -1,9 +1,22 @@
 // 標單金額計算共用工具（估驗 / 進度共用）
 
+// 欄式 → 列物件(P-05):範例標單存成 { meta, cols, rows }(key 只存一次,
+// 檔案 1.38MB→0.65MB);這裡還原成與原 workItems.json 完全相同的 { meta, items }。
+// 等價性由 workItemsCompact.test.js 逐項保證;重新產檔見 scripts/compact_workitems.py。
+export function rehydrateWorkItems(compact) {
+  const { meta, cols, rows } = compact
+  const items = rows.map((row) => {
+    const it = {}
+    for (let i = 0; i < cols.length; i++) it[cols[i]] = row[i]
+    return it
+  })
+  return { meta, items }
+}
+
 let _cache = null
 // 載入並快取 work_items（Vite 會 code-split 這份 JSON）
 export function loadWorkItems() {
-  if (!_cache) _cache = import('../data/workItems.json').then((m) => m.default)
+  if (!_cache) _cache = import('../data/workItems.compact.json').then((m) => rehydrateWorkItems(m.default))
   return _cache
 }
 

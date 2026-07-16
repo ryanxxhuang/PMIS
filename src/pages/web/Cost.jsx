@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button, PageHeader } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { revisedContractTotal, approvedNetAmount } from '../../lib/changeOrders.js'
@@ -72,12 +72,7 @@ export default function Cost() {
         <PageHeader title="成本管理" tagline="預算 vs 實際・毛利" subtitle="合約收入（發包工程費）對照成本與分包，即時算出預估與實際毛利" />
       </div>
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Stat label={coNet !== 0 ? '合約收入（變更後契約金額）' : '合約收入（發包工程費）'} value={yi(revenue)} sub={coNet !== 0 ? `NT$ ${money(revenue)} · 含核准追加減 ${coNet > 0 ? '+' : ''}${money(coNet)}` : `NT$ ${money(revenue)}`} color="text-[var(--blue-text)]" />

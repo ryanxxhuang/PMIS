@@ -32,7 +32,7 @@ function matchLeaf(text, leaves) {
 }
 
 export default function SiteLog() {
-  const { project, workItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
+  const { project, workItems, adjustedItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can } = useStore()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayStr())
@@ -61,19 +61,21 @@ export default function SiteLog() {
   const [staging, setStaging] = useState([])    // [{key,file,previewUrl,status,caption,category,work_item_key,work_item_label}]
   const [batchBusy, setBatchBusy] = useState(false)
 
-  // 發包末端工項（可回報的單元）+ 查表
+  // 發包末端工項（可回報的單元）+ 查表。
+  // 用「已核准變更套回後」的工項(B-02 小尾巴):否則核准追加數量後,
+  // 當日回報上限(setQty 夾在 0~契約數量)仍卡在舊契約數量。
   const { leaves, byKey } = useMemo(() => {
     if (!workItems) return { leaves: [], byKey: new Map() }
     const childMap = new Map()
-    for (const it of workItems.items) {
+    for (const it of adjustedItems) {
       const k = it.parent_key || '__root__'
       if (!childMap.has(k)) childMap.set(k, [])
       childMap.get(k).push(it)
     }
-    const m = new Map(workItems.items.map((it) => [it.item_key, it]))
-    const lv = workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
+    const m = new Map(adjustedItems.map((it) => [it.item_key, it]))
+    const lv = adjustedItems.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
     return { leaves: lv, byKey: m }
-  }, [workItems])
+  }, [workItems, adjustedItems])
 
   // 切換日期 → 載入該日已存的日誌
   useEffect(() => {

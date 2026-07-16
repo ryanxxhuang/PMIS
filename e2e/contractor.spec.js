@@ -23,6 +23,21 @@ test.describe('施工廠商', () => {
     await expect(page.getByText('AI 批次辨識照片', { exact: true })).toBeVisible()
   })
 
+  test('契約義務:標為已提送可掛送審佐證(W-01)', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/contract')
+    // demo 預掛佐證:品質計畫義務 → SUB-001(核准)
+    await expect(page.getByText(/佐證:SUB-001/)).toBeVisible()
+    // 對「提送施工月報」(待辦)掛 SUB-003 佐證並標為已提送
+    const card = page.getByText('提送施工月報')
+      .locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]')
+    await card.getByRole('button', { name: '標為已提送' }).click()
+    await card.getByRole('combobox').selectOption('SUB-DEMO-3')
+    await card.getByRole('button', { name: '掛佐證並標為已提送' }).click()
+    await expect(card.getByText(/佐證:SUB-003/)).toBeVisible()
+    await expect(card.getByRole('button', { name: '已提送 ✓' })).toBeVisible()
+  })
+
   test('估驗:新增估驗期 → 送監造審核', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/valuation')

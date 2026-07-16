@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Stat, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -54,12 +54,7 @@ export default function Payments() {
         <PageHeader title="請款收款" tagline="現金流" subtitle="每期估驗 → 本期應領、保留款、收款追蹤" />
       </div>
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="累計應領(扣保留款)" value={money(sum.net)} sub="NT$" color="text-[var(--text)]" />

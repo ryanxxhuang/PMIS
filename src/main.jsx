@@ -4,15 +4,14 @@ import { HashRouter } from 'react-router-dom'
 import App from './App.jsx'
 import { StoreProvider } from './store.jsx'
 import { initSentry, Sentry } from './lib/sentry.js'
+import { applyTheme, watchSystemTheme } from './lib/theme.js'
 import './index.css'
 
 initSentry() // 錯誤監控(只在正式站且有 DSN 時啟用)
 
-// Apply saved theme (or system preference) before first paint
-const savedTheme = localStorage.getItem('pmis-theme')
-if (savedTheme === 'dark' || (!savedTheme && window.matchMedia?.('(prefers-color-scheme: dark)').matches)) {
-  document.documentElement.classList.add('dark')
-}
+// 首繪前套用主題(U-07 三態:light/dark/system);system 模式跟隨 OS 即時切換
+applyTheme()
+watchSystemTheme()
 
 // 全站錯誤邊界:render 崩潰時不再是白畫面,顯示友善畫面 + 上報 Sentry(若已啟用)
 function CrashFallback() {

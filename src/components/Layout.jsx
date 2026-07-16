@@ -4,7 +4,8 @@ import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
 import { visibleNavGroups, workbenchFor } from '../lib/navConfig.js'
 import CopilotFab from './CopilotFab.jsx'
-import { Menu, ChevronDown, Trash2, Moon, Sun, Plus } from 'lucide-react'
+import { Menu, ChevronDown, Trash2, Moon, Sun, MonitorSmartphone, Plus } from 'lucide-react'
+import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 
 // 工作台分頁列(§9 瘦身):同一工作台的路由以分頁互切,分頁可見性與導覽/守衛同源。
 // 只有一個可見分頁時不渲染(例如監造的「估驗與金流」只剩估驗計價)。
@@ -83,16 +84,23 @@ function ProjectSwitcher() {
   )
 }
 
+// 主題三態循環(U-07):亮 → 暗 → 跟隨系統 → 亮
+const THEME_META = {
+  light: { icon: Sun, label: '亮色' },
+  dark: { icon: Moon, label: '深色' },
+  system: { icon: MonitorSmartphone, label: '跟隨系統' },
+}
+
 function TopBar({ onMenu }) {
   const { currentUser, logout } = useStore()
   const navigate = useNavigate()
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
-  const toggleTheme = () => {
-    const next = !dark
-    document.documentElement.classList.toggle('dark', next)
-    try { localStorage.setItem('pmis-theme', next ? 'dark' : 'light') } catch { /* noop */ }
-    setDark(next)
+  const [mode, setMode] = useState(getThemeMode)
+  const cycleTheme = () => {
+    const next = THEME_MODES[(THEME_MODES.indexOf(mode) + 1) % THEME_MODES.length]
+    setThemeMode(next)
+    setMode(next)
   }
+  const ThemeIcon = THEME_META[mode].icon
   return (
     <header className="bg-[var(--surface)] border-b border-[var(--border)] h-16 flex items-center justify-between px-3 md:px-5 shrink-0 relative z-10 print:hidden">
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
@@ -106,7 +114,7 @@ function TopBar({ onMenu }) {
           <div className="text-sm text-[var(--text)]">{currentUser?.name}</div>
           <div className="text-[11px] text-[var(--text-2)]">{currentUser?.label}</div>
         </div>
-        <button onClick={toggleTheme} aria-label="切換深色模式" title="切換深色模式" className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]">{dark ? <Sun size={18} aria-hidden /> : <Moon size={18} aria-hidden />}</button>
+        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><ThemeIcon size={18} aria-hidden /></button>
         <div className="w-9 h-9 rounded-full bg-[var(--primary)] flex items-center justify-center font-medium text-sm text-white">{currentUser?.name?.[0]}</div>
         <button onClick={async () => { await logout(); navigate('/login') }} className="text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
       </div>

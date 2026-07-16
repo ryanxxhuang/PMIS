@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Printer, Trash2, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Button, Empty, PageHeader, PrerequisiteEmptyState } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Button, Empty, PageHeader, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 
@@ -198,12 +198,7 @@ export default function Valuation() {
           </div>
         } />
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       {valuations.length === 0 ? (
         <Card>

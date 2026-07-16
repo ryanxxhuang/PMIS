@@ -162,6 +162,18 @@ export function Empty({ children }) {
   return <div className="text-center text-[var(--text-3)] text-sm py-10">{children}</div>
 }
 
+// 寫入/載入失敗的統一橫幅(U-03):所有頁面共用同一份樣式與關閉行為,
+// 不再各頁複製 div。msg 為空(null/'')時不渲染,呼叫端可無條件擺著。
+export function ErrorBanner({ msg, onClose, className = '' }) {
+  if (!msg) return null
+  return (
+    <div className={`flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 ${className}`}>
+      <span>{msg}</span>
+      {onClose && <button onClick={onClose} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>}
+    </div>
+  )
+}
+
 // 前置條件空狀態(P1-05):明確講「缺什麼、輪到誰、完成後解鎖什麼」+ 單一主 CTA。
 // 對無權限角色不給死按鈕,改顯示責任方(who)。to=CTA 連結;cta=按鈕文字;who=負責角色說明。
 export function PrerequisiteEmptyState({ title, need, unlocks, to, cta, who }) {

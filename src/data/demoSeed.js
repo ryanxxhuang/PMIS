@@ -138,7 +138,8 @@ export function buildDemoData(workItems, project) {
   // ── 契約義務（典型公共工程時程義務 + 罰則）──
   const obligations = [
     { id: 'OB-1', title: '提送施工計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', sort_order: 0 },
-    { id: 'OB-2', title: '提送品質計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', sort_order: 1 },
+    // W-01 佐證鏈 demo:品質計畫義務掛上核准的 SUB-001,展示「義務→送審」可勾稽
+    { id: 'OB-2', title: '提送品質計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', evidence_submittal_id: 'SUB-DEMO-1', sort_order: 1 },
     { id: 'OB-3', title: '投保營造綜合保險', category: '開工前', trigger_event: 'commencement', offset_days: 0, offset_dir: 'after', responsible: '廠商', penalty: '未投保者機關得代辦並自價金扣抵', source_clause: '第 13 條', source_page: 'p.18', status: '已完成', sort_order: 2 },
     { id: 'OB-4', title: '提送施工月報', category: '施工中', recurring: 'monthly', recurring_day: 5, responsible: '廠商', penalty: null, source_clause: '第 10 條', source_page: 'p.14', status: '待辦', sort_order: 3 },
     { id: 'OB-5', title: '職業安全衛生教育訓練（每季）', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(12)), responsible: '廠商', penalty: null, source_clause: '第 14 條', source_page: 'p.20', status: '待辦', sort_order: 4 },

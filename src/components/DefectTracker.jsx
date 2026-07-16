@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { Camera } from 'lucide-react'
 import { useStore } from '../store.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty } from './ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner } from './ui.jsx'
 import { appConfirm, appPrompt } from './confirm.jsx'
 import { exportCsv, stamp } from '../lib/exportCsv.js'
 import { defectBall } from '../lib/ballInCourt.js'
@@ -157,12 +157,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
         <Button variant="secondary" onClick={() => { setForm(form ? null : emptyForm()); setAiMsg('') }}>{form ? '取消' : '＋ 開立缺失'}</Button>
       )}
     </div>}>
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 mb-3">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} className="mb-3" />
 
       {form && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">

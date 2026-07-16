@@ -308,14 +308,16 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     })
   }, [isPersistedProject, currentProject, currentUser])
 
-  // DB 成功才更新 UI(B-07)
-  const updateObligationStatus = useCallback(async (id, status) => {
+  // DB 成功才更新 UI(B-07)。extra 可帶附加欄位:
+  // W-01 佐證鏈——標為已提送時掛 evidence_submittal_id(送審文件);退回待辦時清空。
+  const updateObligationStatus = useCallback(async (id, status, extra = {}) => {
+    const patch = { status, ...extra }
     if (isPersistedProject) {
-      const res = await supabase.from('contract_obligations').update({ status }).eq('id', id).select('id')
+      const res = await supabase.from('contract_obligations').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '未寫入:可能無權限或義務已被移除')
       if (error) return { error }
     }
-    setObligations((os) => os.map((o) => (o.id === id ? { ...o, status } : o)))
+    setObligations((os) => os.map((o) => (o.id === id ? { ...o, ...patch } : o)))
     return { error: null }
   }, [isPersistedProject])
 

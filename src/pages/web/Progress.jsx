@@ -1,6 +1,6 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
@@ -153,12 +153,7 @@ export default function Progress() {
         <Button variant="secondary" onClick={() => onGenerate(progressPlan.start, progressPlan.end)}>重產 S 曲線</Button>
       } />
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="依預定 S 曲線內插" color="text-[var(--text)]" />

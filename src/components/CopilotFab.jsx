@@ -2,7 +2,8 @@
 // 只在有資料的專案顯示(imported);列印頁隱藏;行動版為全寬 bottom sheet。
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Sparkles, X, Maximize2 } from 'lucide-react'
+import { X, Maximize2 } from 'lucide-react'
+import { useStore } from '../store.jsx'
 import { useAssistantData } from '../lib/assistantData.js'
 import CopilotChat from './CopilotChat.jsx'
 
@@ -19,8 +20,32 @@ function CopilotMark({ size = 24 }) {
   )
 }
 
+// 面板內容獨立成元件:useAssistantData 訂閱幾乎全部 store key、每次資料變動都重算
+// facts 快照——只有面板打開(掛載)時才付這個成本;收合時 FAB 僅訂閱 2 個 key。
+function CopilotPanel({ onClose }) {
+  const { data, facts, askAssistant } = useAssistantData()
+  return (
+    <div className="fixed z-[60] flex flex-col bg-[var(--surface)] border border-[var(--border)] shadow-2xl overflow-hidden
+      inset-x-2 bottom-2 top-16 rounded-2xl
+      sm:inset-x-auto sm:top-auto sm:right-6 sm:bottom-24 sm:w-[400px] sm:h-[560px] sm:max-h-[75vh]"
+      role="dialog" aria-modal="false" aria-label="AI 助理">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-2)] shrink-0">
+        <span className="w-7 h-7 rounded-lg grid place-items-center bg-[var(--blue-tint)] text-[var(--blue-text)] shrink-0"><CopilotMark size={16} /></span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-[var(--text)] leading-tight">AI 助理</div>
+          <div className="text-[10px] text-[var(--text-3)]">問本案的事 · 唯讀 · 附出處</div>
+        </div>
+        <Link to="/assistant" onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><Maximize2 size={15} aria-hidden /></Link>
+        <button onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><X size={17} aria-hidden /></button>
+      </div>
+      <CopilotChat data={data} facts={facts} askAssistant={askAssistant} fill />
+    </div>
+  )
+}
+
 export default function CopilotFab() {
-  const { data, facts, askAssistant, imported } = useAssistantData()
+  const { workItemsSource, demoMode } = useStore() // 只訂閱這 2 個 key(收合時)
+  const imported = workItemsSource === 'db' || demoMode
   const [open, setOpen] = useState(false)
 
   // Esc 關閉
@@ -35,24 +60,8 @@ export default function CopilotFab() {
 
   return (
     <div className="print:hidden">
-      {/* 展開面板 */}
-      {open && (
-        <div className="fixed z-[60] flex flex-col bg-[var(--surface)] border border-[var(--border)] shadow-2xl overflow-hidden
-          inset-x-2 bottom-2 top-16 rounded-2xl
-          sm:inset-x-auto sm:top-auto sm:right-6 sm:bottom-24 sm:w-[400px] sm:h-[560px] sm:max-h-[75vh]"
-          role="dialog" aria-modal="false" aria-label="AI 助理">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-2)] shrink-0">
-            <span className="w-7 h-7 rounded-lg grid place-items-center bg-[var(--blue-tint)] text-[var(--blue-text)] shrink-0"><CopilotMark size={16} /></span>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-[var(--text)] leading-tight">AI 助理</div>
-              <div className="text-[10px] text-[var(--text-3)]">問本案的事 · 唯讀 · 附出處</div>
-            </div>
-            <Link to="/assistant" onClick={() => setOpen(false)} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><Maximize2 size={15} aria-hidden /></Link>
-            <button onClick={() => setOpen(false)} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><X size={17} aria-hidden /></button>
-          </div>
-          <CopilotChat data={data} facts={facts} askAssistant={askAssistant} fill />
-        </div>
-      )}
+      {/* 展開面板(掛載時才計算 facts) */}
+      {open && <CopilotPanel onClose={() => setOpen(false)} />}
 
       {/* 浮動圓鈕:漸層 + 柔光環,更有質感 */}
       <button

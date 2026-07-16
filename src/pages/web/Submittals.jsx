@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Sparkles, Upload, Paperclip, FileSearch } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { submittalBall } from '../../lib/ballInCourt.js'
@@ -115,12 +115,7 @@ export default function Submittals() {
           </div>
         } />
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
       {/* AI 長任務狀態(P1-10):讀文件需下載→抽字→比對,設時間預期避免以為卡住 */}
       {(readBusy || reviewBusy) && (
         <div className="flex items-center gap-2 text-sm bg-[var(--blue-tint)] text-[var(--blue-text)] rounded-lg px-3 py-2">

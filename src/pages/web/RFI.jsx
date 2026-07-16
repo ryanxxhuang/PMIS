@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { rfiBall } from '../../lib/ballInCourt.js'
@@ -76,12 +76,7 @@ export default function RFI() {
           </div>
         } />
 
-      {errMsg && (
-        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
-          <span>{errMsg}</span>
-          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
-        </div>
-      )}
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       {form && (
         <Card>
