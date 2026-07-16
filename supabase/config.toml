@@ -160,7 +160,10 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# pmis-local dev server(密碼重設/驗證信 redirect 白名單;正式站對應後台 Auth → URL Configuration)。
+# 注意:app 送的 redirectTo 帶尾斜線(http://localhost:5197/),gotrue 比對是 exact/glob——
+# 無斜線的白名單會不匹配而回退 site_url。用 /** glob 最穩,正式站白名單同理。
+additional_redirect_urls = ["https://127.0.0.1:3000", "http://localhost:5197/**", "http://127.0.0.1:5197/**"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.

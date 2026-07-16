@@ -47,10 +47,12 @@ const PageLoading = () => (
 // Gate every page behind auth; force project creation before the workspace loads.
 // 角色化路由守衛:與側欄同一份 roles 對照(routeAllowed)——導覽隱藏的頁,直接輸入網址也進不去。
 function Web({ children }) {
-  const { currentUser, authReady, isSupabaseConfigured, currentProject, projectLoading, can } = useStore()
+  const { currentUser, authReady, isSupabaseConfigured, currentProject, projectLoading, can, passwordRecovery } = useStore()
   const { pathname } = useLocation()
   // session 恢復完成前先等,不可急著導 /login——否則深連結 F5 一律丟失落回 Dashboard(P1-04)
   if (!authReady) return <div className="min-h-screen grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
+  // 密碼重設連結回來:recovery session 已生效,但必須先設新密碼才能進工作區
+  if (passwordRecovery) return <Navigate to="/login" replace />
   if (!currentUser) return <Navigate to="/login" replace />
   if (isSupabaseConfigured && currentUser.real) {
     if (projectLoading) return <WebLayout><div className="text-center text-[var(--text-3)] text-sm py-20">載入專案…</div></WebLayout>

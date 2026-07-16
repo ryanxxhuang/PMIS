@@ -25,6 +25,9 @@ export function useAuthSlice() {
   // session 恢復完成前不可判定「未登入」——否則 F5 深連結會先被導去 /login,
   // hash 路徑丟失,登入恢復後一律落在 Dashboard(第二輪 P1-04)。demo 模式同步恢復,直接 ready。
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
+  // 密碼重設流程中:使用者點了重設信連結回來(PASSWORD_RECOVERY)。此時 session 已生效,
+  // 但必須先讓他設新密碼——App 守衛與 Login 依此旗標擋住一般導向、改顯示設定新密碼畫面。
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
   // demo 選角色時持久化;真實模式由 Supabase session 管,不動 localStorage
   const setCurrentUser = useCallback((u) => {
     if (!isSupabaseConfigured) {
@@ -67,7 +70,8 @@ export function useAuthSlice() {
       .finally(() => { if (active) setAuthReady(true) })
     // 注意：不可在 onAuthStateChange callback 內直接 await Supabase 查詢，
     // 否則會與 auth lock 互鎖卡死所有後續查詢 → 用 setTimeout 推出 callback 再查。
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true) // 重設信連結回來,先讓他設新密碼
       setTimeout(() => loadProfile(session), 0)
     })
     return () => { active = false; sub.subscription.unsubscribe() }
@@ -103,11 +107,28 @@ export function useAuthSlice() {
     return { error }
   }, [])
 
+  // 忘記密碼:寄重設連結(redirectTo 同註冊驗證信,需在後台 Redirect URLs 白名單)。
+  // 注意:為了不洩漏「哪些 email 已註冊」,Supabase 對不存在的帳號同樣回成功。
+  const requestPasswordReset = useCallback(async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: authRedirectTo() })
+    return { error }
+  }, [])
+
+  // 重設信連結回來後設定新密碼(recovery session 已生效)。成功即結束 recovery 流程。
+  const updatePassword = useCallback(async (password) => {
+    const { error } = await supabase.auth.updateUser({ password })
+    if (!error) setPasswordRecovery(false)
+    return { error }
+  }, [])
+
   // 登出的 auth 部分：真實模式呼叫 Supabase signOut；跨 slice 清理在 store.jsx
   const signOutBase = useCallback(async () => {
     if (isSupabaseConfigured) { try { await supabase.auth.signOut() } catch { /* noop */ } }
     setCurrentUser(null)
   }, [setCurrentUser])
 
-  return { currentUser, authReady, setCurrentUser, signUp, resendSignup, signIn, signOutBase }
+  return {
+    currentUser, authReady, setCurrentUser, signUp, resendSignup, signIn, signOutBase,
+    passwordRecovery, requestPasswordReset, updatePassword,
+  }
 }
