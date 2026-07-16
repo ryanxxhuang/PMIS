@@ -5,6 +5,10 @@ dist
 .DS_Store
 .playwright-mcp
 
+# Playwright E2E 產物
+test-results/
+playwright-report/
+
 # Supabase CLI local state (linked project ref 等本機狀態，勿入版控)
 supabase/.temp/
 

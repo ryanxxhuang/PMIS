@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "preview": "vite preview",
     "build:demo": "env VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= vite build --outDir dist/demo",
     "deploy": "vite build && npm run build:demo && gh-pages -d dist --dotfiles"
@@ -22,6 +24,7 @@
     "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.0.0",
     "@vitejs/plugin-react": "^4.3.1",
     "gh-pages": "^6.3.0",
