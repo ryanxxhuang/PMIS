@@ -10,7 +10,8 @@
 //   src/store/slices/collab.js   — 送審/RFI/觀察事項/成員
 //   src/store/slices/ledger.js   — 成本/變更設計/逐工項排程/契約義務
 // 跨領域的部分留在這裡:demo 種子、DB 整批載入、登出清理、重匯標單、角色權限 can。
-import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { createTrackedContext } from './store/tracked.jsx'
 import { project } from './data/seed.js'
 import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
@@ -28,7 +29,9 @@ import { useQualitySlice } from './store/slices/quality.js'
 import { useCollabSlice } from './store/slices/collab.js'
 import { useLedgerSlice } from './store/slices/ledger.js'
 
-const StoreContext = createContext(null)
+// Key 追蹤 context(P-01):useStore() 介面不變(照常解構),但每個元件只訂閱
+// 自己讀過的 key——估驗打字不再重渲染側欄/頂欄/浮動助理。核心在 store/tracked.jsx。
+const { Provider: TrackedProvider, useTracked } = createTrackedContext()
 
 export function StoreProvider({ children }) {
   // P0-05:記憶體假 audit 已除役——權威事件由 DB trigger 寫入 audit_events(不可竄改),
@@ -302,11 +305,9 @@ export function StoreProvider({ children }) {
     generateSchedule, updatePlannedPct,
   }
 
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+  return <TrackedProvider value={value}>{children}</TrackedProvider>
 }
 
 export function useStore() {
-  const ctx = useContext(StoreContext)
-  if (!ctx) throw new Error('useStore must be used within StoreProvider')
-  return ctx
+  return useTracked()
 }
