@@ -26,6 +26,7 @@ export default function ITP() {
   } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [errMsg, setErrMsg] = useState('') // 寫入失敗如實回報(B-07)
 
   const alerts = useMemo(() => itpAlerts(inspectionPoints, inspections, siteLogs), [inspectionPoints, inspections, siteLogs])
   const leaves = useMemo(() => {
@@ -45,7 +46,11 @@ export default function ITP() {
   for (const p of inspectionPoints) counts[p.point_type] = (counts[p.point_type] || 0) + 1
 
   const submit = async () => {
-    setBusy(true); await createInspectionPoint(form); setBusy(false); setForm(null)
+    setErrMsg(''); setBusy(true)
+    const { error } = await createInspectionPoint(form)
+    setBusy(false)
+    if (error) { setErrMsg(`停留點未建立:${error.message}`); return }
+    setForm(null)
   }
 
   return (
@@ -55,6 +60,13 @@ export default function ITP() {
         subtitle="H＝停留點（監造未查驗不得續作）、W＝見證點、R＝文審點。施作中未叫驗的 H 點會亮紅並進提醒中心。"
         meta={[{ k: 'H 停留', v: counts.H }, { k: 'W 見證', v: counts.W }, { k: 'R 文審', v: counts.R }]}
       />
+
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
 
       {alerts.length > 0 && (
         <Card bodyClass="p-0">
@@ -127,7 +139,7 @@ export default function ITP() {
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge color={sm.color}><Icon size={12} aria-hidden /> {st.label}</Badge>
                     {st.key === 'pending' && can.submit && p.point_type !== 'R' && (
-                      <Button size="sm" variant={hot ? 'primary' : 'outline'} onClick={async () => { setBusy(true); await requestInspectionForPoint(p); setBusy(false) }} disabled={busy}>
+                      <Button size="sm" variant={hot ? 'primary' : 'outline'} onClick={async () => { setErrMsg(''); setBusy(true); const { error } = await requestInspectionForPoint(p); setBusy(false); if (error) setErrMsg(`查驗申請未送出:${error.message}`) }} disabled={busy}>
                         申請查驗
                       </Button>
                     )}
@@ -135,7 +147,7 @@ export default function ITP() {
                       <Link to="/quality" className="text-xs text-[var(--blue-text)] hover:underline">查驗紀錄 →</Link>
                     )}
                     {can.approve && (
-                      <button onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) deleteInspectionPoint(p.id) }}
+                      <button onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspectionPoint(p.id); if (error) setErrMsg(`刪除失敗:${error.message}`) } }}
                         className="text-[var(--text-3)] hover:text-rose-500">✕</button>
                     )}
                   </div>

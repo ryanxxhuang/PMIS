@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
+import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { WebLayout, WorkbenchTabs } from './components/Layout.jsx'
 import { routeAllowed } from './lib/navConfig.js'
@@ -6,35 +7,42 @@ import { ConfirmHost } from './components/confirm.jsx'
 
 import Login from './pages/Login.jsx'
 import ProjectSetup from './pages/web/ProjectSetup.jsx'
-import Dashboard from './pages/web/Dashboard.jsx'
-import BOQ from './pages/web/BOQ.jsx'
-import SiteLog from './pages/web/SiteLog.jsx'
-import Submittals from './pages/web/Submittals.jsx'
-import RFI from './pages/web/RFI.jsx'
-import Members from './pages/web/Members.jsx'
-import SiteLogPrint from './pages/web/SiteLogPrint.jsx'
-import ChecklistPrint from './pages/web/ChecklistPrint.jsx'
-import Valuation from './pages/web/Valuation.jsx'
-import ValuationPrint from './pages/web/ValuationPrint.jsx'
-import ValuationPackage from './pages/web/ValuationPackage.jsx'
-import Progress from './pages/web/Progress.jsx'
-import Schedule from './pages/web/Schedule.jsx'
-import Quality from './pages/web/Quality.jsx'
-import Contract from './pages/web/Contract.jsx'
-import Safety from './pages/web/Safety.jsx'
-import Payments from './pages/web/Payments.jsx'
-import Cost from './pages/web/Cost.jsx'
-import ChangeOrders from './pages/web/ChangeOrders.jsx'
-import Alerts from './pages/web/Alerts.jsx'
-import Activity from './pages/web/Activity.jsx'
-import Requirements from './pages/web/Requirements.jsx'
-import MonthlyReport from './pages/web/MonthlyReport.jsx'
-import Assistant from './pages/web/Assistant.jsx'
-import SupervisorReport from './pages/web/SupervisorReport.jsx'
-import RiskAudit from './pages/web/RiskAudit.jsx'
-import Portfolio from './pages/web/Portfolio.jsx'
-import Acceptance from './pages/web/Acceptance.jsx'
-import ITP from './pages/web/ITP.jsx'
+
+// 頁面全部 lazy(P-02):原本 30 頁靜態 import 全進首屏 bundle(gzip 362KB),
+// 登入頁也要先吞完估驗樹/圖表/報表。按路由切塊後,首載只拿 Login+骨架。
+const Dashboard = lazy(() => import('./pages/web/Dashboard.jsx'))
+const BOQ = lazy(() => import('./pages/web/BOQ.jsx'))
+const SiteLog = lazy(() => import('./pages/web/SiteLog.jsx'))
+const Submittals = lazy(() => import('./pages/web/Submittals.jsx'))
+const RFI = lazy(() => import('./pages/web/RFI.jsx'))
+const Members = lazy(() => import('./pages/web/Members.jsx'))
+const SiteLogPrint = lazy(() => import('./pages/web/SiteLogPrint.jsx'))
+const ChecklistPrint = lazy(() => import('./pages/web/ChecklistPrint.jsx'))
+const Valuation = lazy(() => import('./pages/web/Valuation.jsx'))
+const ValuationPrint = lazy(() => import('./pages/web/ValuationPrint.jsx'))
+const ValuationPackage = lazy(() => import('./pages/web/ValuationPackage.jsx'))
+const Progress = lazy(() => import('./pages/web/Progress.jsx'))
+const Schedule = lazy(() => import('./pages/web/Schedule.jsx'))
+const Quality = lazy(() => import('./pages/web/Quality.jsx'))
+const Contract = lazy(() => import('./pages/web/Contract.jsx'))
+const Safety = lazy(() => import('./pages/web/Safety.jsx'))
+const Payments = lazy(() => import('./pages/web/Payments.jsx'))
+const Cost = lazy(() => import('./pages/web/Cost.jsx'))
+const ChangeOrders = lazy(() => import('./pages/web/ChangeOrders.jsx'))
+const Alerts = lazy(() => import('./pages/web/Alerts.jsx'))
+const Activity = lazy(() => import('./pages/web/Activity.jsx'))
+const Requirements = lazy(() => import('./pages/web/Requirements.jsx'))
+const MonthlyReport = lazy(() => import('./pages/web/MonthlyReport.jsx'))
+const Assistant = lazy(() => import('./pages/web/Assistant.jsx'))
+const SupervisorReport = lazy(() => import('./pages/web/SupervisorReport.jsx'))
+const RiskAudit = lazy(() => import('./pages/web/RiskAudit.jsx'))
+const Portfolio = lazy(() => import('./pages/web/Portfolio.jsx'))
+const Acceptance = lazy(() => import('./pages/web/Acceptance.jsx'))
+const ITP = lazy(() => import('./pages/web/ITP.jsx'))
+
+const PageLoading = () => (
+  <div className="min-h-[40vh] grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
+)
 
 // Gate every page behind auth; force project creation before the workspace loads.
 // 角色化路由守衛:與側欄同一份 roles 對照(routeAllowed)——導覽隱藏的頁,直接輸入網址也進不去。
@@ -58,14 +66,29 @@ function Web({ children }) {
       </WebLayout>
     )
   }
-  return <WebLayout><WorkbenchTabs />{children}</WebLayout>
+  return <WebLayout><WorkbenchTabs /><Suspense fallback={<PageLoading />}>{children}</Suspense></WebLayout>
+}
+
+// 找不到的路徑(U-02):原本靜默導回登入/首頁,使用者不知道自己打錯網址或收藏的連結已失效。
+function NotFound() {
+  const { pathname } = useLocation()
+  return (
+    <div className="text-center py-20 space-y-3">
+      <div className="text-4xl">🧭</div>
+      <div className="text-[var(--text)] font-medium">找不到這個頁面</div>
+      <p className="text-sm text-[var(--text-3)]">網址 <code className="px-1 rounded bg-[var(--surface-2)]">{pathname}</code> 不存在——可能打錯了,或這個連結已失效。</p>
+      <Link to="/dashboard" className="inline-block text-sm font-medium text-[var(--blue-text)] hover:underline">← 回到首頁</Link>
+    </div>
+  )
 }
 
 export default function App() {
   return (
     <>
     <ConfirmHost />
+    <Suspense fallback={<PageLoading />}>
     <Routes>
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<Web><Dashboard /></Web>} />
       <Route path="/assistant" element={<Web><Assistant /></Web>} />
@@ -97,8 +120,9 @@ export default function App() {
       <Route path="/activity" element={<Web><Activity /></Web>} />
       <Route path="/requirements" element={<Web><Requirements /></Web>} />
       <Route path="/monthly-report" element={<Web><MonthlyReport /></Web>} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Web><NotFound /></Web>} />
     </Routes>
+    </Suspense>
     </>
   )
 }

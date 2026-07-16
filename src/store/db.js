@@ -1,6 +1,9 @@
 // 資料存取層:DB 列 ↔ 前端形狀的轉換、各領域的載入函式、work_items 本地快取、
 // 檔案/圖片的 base64 與文字抽取。純函式(不含 React state),store 各 slice 共用。
 import { supabase } from '../lib/supabase.js'
+// pdf.js worker 自帶(B-12):?url 只打包資產網址,worker 檔進自家 dist——
+// 機關內網/防火牆擋 CDN 時,契約 PDF 抽字不再直接壞掉。
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 // DB projects 列 → 與 seed.project 同形狀（讓既有頁面不需改）
 export function normalizeProject(row) {
@@ -85,13 +88,22 @@ export function dbToWorkItems(rows, project) {
   }
 }
 
+// 查詢失敗一律往上拋(B-09):原本 `const { data } = await …` 靜默回空陣列,
+// 網路/RLS 失敗時使用者看到「尚無資料」而非「載入失敗」——以為缺失都結案了。
+// store.jsx 的載入 effect 統一 catch → 顯示重試 banner。
+async function must(query, label) {
+  const { data, error } = await query
+  if (error) throw new Error(`${label}讀取失敗:${error.message}`)
+  return data
+}
+
 // 從 DB 載入估驗（valuations + valuation_items），組回 { items: {item_key: 累計完成數量} } 形狀
 export async function loadValuationsFromDB(projectId, idToKey) {
-  const { data: vals } = await supabase.from('valuations')
-    .select('*').eq('project_id', projectId).order('period_no')
+  const vals = await must(supabase.from('valuations')
+    .select('*').eq('project_id', projectId).order('period_no'), '估驗')
   if (!vals?.length) return []
-  const { data: vItems } = await supabase.from('valuation_items')
-    .select('valuation_id, work_item_id, cum_qty').in('valuation_id', vals.map((v) => v.id))
+  const vItems = await must(supabase.from('valuation_items')
+    .select('valuation_id, work_item_id, cum_qty').in('valuation_id', vals.map((v) => v.id)), '估驗明細')
   const byVal = new Map(vals.map((v) => [v.id, {}]))
   for (const vi of vItems || []) {
     const key = idToKey.get(vi.work_item_id)
@@ -106,8 +118,8 @@ export async function loadValuationsFromDB(projectId, idToKey) {
 
 // 從 DB 載入預定進度（schedule_periods）→ progressPlan 形狀
 export async function loadScheduleFromDB(project) {
-  const { data } = await supabase.from('schedule_periods')
-    .select('*').eq('project_id', project.project_id).order('period_label')
+  const data = await must(supabase.from('schedule_periods')
+    .select('*').eq('project_id', project.project_id).order('period_label'), '預定進度')
   if (!data?.length) return null
   return {
     start: project.start_date, end: project.end_date,
@@ -117,11 +129,11 @@ export async function loadScheduleFromDB(project) {
 
 // 從 DB 載入施工日誌（daily_logs + daily_log_items），組回 { items: {item_key: 當日數量} }
 export async function loadSiteLogsFromDB(projectId, idToKey) {
-  const { data: logs } = await supabase.from('daily_logs')
-    .select('*').eq('project_id', projectId).order('log_date', { ascending: false })
+  const logs = await must(supabase.from('daily_logs')
+    .select('*').eq('project_id', projectId).order('log_date', { ascending: false }), '施工日誌')
   if (!logs?.length) return []
-  const { data: items } = await supabase.from('daily_log_items')
-    .select('daily_log_id, work_item_id, qty_today').in('daily_log_id', logs.map((l) => l.id))
+  const items = await must(supabase.from('daily_log_items')
+    .select('daily_log_id, work_item_id, qty_today').in('daily_log_id', logs.map((l) => l.id)), '日誌明細')
   const byLog = new Map(logs.map((l) => [l.id, {}]))
   for (const it of items || []) {
     const key = idToKey.get(it.work_item_id)
@@ -137,20 +149,20 @@ export async function loadSiteLogsFromDB(projectId, idToKey) {
 
 // 從 DB 載入品管:檢查表範本/紀錄 + 取樣試體
 export async function loadQcFromDB(projectId) {
-  const { data: tpls } = await supabase.from('checklist_templates')
-    .select('*').eq('project_id', projectId).order('created_at')
-  const { data: recs } = await supabase.from('checklist_records')
-    .select('*').eq('project_id', projectId).order('check_date', { ascending: false })
-  const { data: samples } = await supabase.from('test_samples')
-    .select('*').eq('project_id', projectId).order('sampled_date', { ascending: false })
+  const tpls = await must(supabase.from('checklist_templates')
+    .select('*').eq('project_id', projectId).order('created_at'), '檢查表範本')
+  const recs = await must(supabase.from('checklist_records')
+    .select('*').eq('project_id', projectId).order('check_date', { ascending: false }), '自主檢查紀錄')
+  const samples = await must(supabase.from('test_samples')
+    .select('*').eq('project_id', projectId).order('sampled_date', { ascending: false }), '取樣試體')
   return { templates: tpls || [], records: recs || [], samples: samples || [] }
 }
 
 // 從 DB 載入缺失(統一引擎:domain=quality|safety)。缺失不依賴標單,
 // 匯標單前 byId 可為空 Map(工項欄位留白)。
 export async function loadDefectsFromDB(projectId, byId = new Map()) {
-  const { data } = await supabase.from('defects')
-    .select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+  const data = await must(supabase.from('defects')
+    .select('*').eq('project_id', projectId).order('created_at', { ascending: false }), '缺失')
   return (data || []).map((r) => ({
     ...r,
     work_item_no: byId.get(r.work_item_id)?.item_no || '',
@@ -162,32 +174,32 @@ export async function loadDefectsFromDB(projectId, byId = new Map()) {
 export async function loadQualityFromDB(projectId, byId) {
   const wi = (id) => byId.get(id)
   const deco = (r) => ({ ...r, work_item_no: wi(r.work_item_id)?.item_no || '', work_item_desc: wi(r.work_item_id)?.description || '' })
-  const { data: insp } = await supabase.from('inspections').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+  const insp = await must(supabase.from('inspections').select('*').eq('project_id', projectId).order('created_at', { ascending: false }), '查驗')
   const defs = await loadDefectsFromDB(projectId, byId)
   return { inspections: (insp || []).map(deco), defects: defs }
 }
 
 // 從 DB 載入契約義務清單
 export async function loadObligationsFromDB(projectId) {
-  const { data } = await supabase.from('contract_obligations')
-    .select('*').eq('project_id', projectId).order('sort_order')
+  const data = await must(supabase.from('contract_obligations')
+    .select('*').eq('project_id', projectId).order('sort_order'), '契約義務')
   return data || []
 }
 
 // 從 DB 載入成本項目（預算 vs 實際、分包）
 export async function loadCostItemsFromDB(projectId) {
-  const { data } = await supabase.from('cost_items')
-    .select('*').eq('project_id', projectId).order('sort_order').order('created_at')
+  const data = await must(supabase.from('cost_items')
+    .select('*').eq('project_id', projectId).order('sort_order').order('created_at'), '成本項目')
   return data || []
 }
 
 // 從 DB 載入變更設計 + 追加減工項明細（明細 nest 在各變更下）
 export async function loadChangeOrdersFromDB(projectId) {
-  const { data: cos } = await supabase.from('change_orders')
-    .select('*').eq('project_id', projectId).order('sort_order').order('created_at')
+  const cos = await must(supabase.from('change_orders')
+    .select('*').eq('project_id', projectId).order('sort_order').order('created_at'), '變更設計')
   if (!cos?.length) return []
-  const { data: items } = await supabase.from('change_order_items')
-    .select('*').in('change_order_id', cos.map((c) => c.id)).order('sort_order').order('created_at')
+  const items = await must(supabase.from('change_order_items')
+    .select('*').in('change_order_id', cos.map((c) => c.id)).order('sort_order').order('created_at'), '變更明細')
   const byCo = new Map(cos.map((c) => [c.id, []]))
   for (const it of items || []) byCo.get(it.change_order_id)?.push(it)
   return cos.map((c) => ({ ...c, items: byCo.get(c.id) || [] }))
@@ -195,15 +207,15 @@ export async function loadChangeOrdersFromDB(projectId) {
 
 // 從 DB 載入工安紀錄（自主檢查 / 缺失 / 教育訓練 / 危害告知）
 export async function loadSafetyFromDB(projectId) {
-  const { data } = await supabase.from('safety_records')
-    .select('*').eq('project_id', projectId).order('record_date', { ascending: false }).order('created_at', { ascending: false })
+  const data = await must(supabase.from('safety_records')
+    .select('*').eq('project_id', projectId).order('record_date', { ascending: false }).order('created_at', { ascending: false }), '工安紀錄')
   return data || []
 }
 
 // 從 DB 載入 ITP 檢驗停留點,去正規化工項資訊(顯示+日誌活動比對用)
 export async function loadItpFromDB(projectId, byId, idToKey) {
-  const { data } = await supabase.from('inspection_points')
-    .select('*').eq('project_id', projectId).order('sort_order').order('created_at')
+  const data = await must(supabase.from('inspection_points')
+    .select('*').eq('project_id', projectId).order('sort_order').order('created_at'), '檢驗停留點')
   return (data || []).map((r) => ({
     ...r,
     work_item_key: r.work_item_id ? (idToKey.get(r.work_item_id) || null) : null,
@@ -214,14 +226,14 @@ export async function loadItpFromDB(projectId, byId, idToKey) {
 
 // 從 DB 載入驗收/結算事件(一階段一筆,依建立時間排序)
 export async function loadAcceptanceFromDB(projectId) {
-  const { data } = await supabase.from('acceptance_events')
-    .select('*').eq('project_id', projectId).order('created_at')
+  const data = await must(supabase.from('acceptance_events')
+    .select('*').eq('project_id', projectId).order('created_at'), '驗收事件')
   return data || []
 }
 
 // 從 DB 載入逐工項排程，回傳 { item_key: { planned_start, planned_finish } }
 export async function loadItemSchedulesFromDB(projectId, idToKey) {
-  const { data } = await supabase.from('item_schedules').select('*').eq('project_id', projectId)
+  const data = await must(supabase.from('item_schedules').select('*').eq('project_id', projectId), '逐工項排程')
   const map = {}
   for (const r of data || []) {
     const key = idToKey.get(r.work_item_id)
@@ -273,7 +285,7 @@ export async function extractContractText(file) {
   }
   if (name.endsWith('.pdf') || type.includes('pdf')) {
     const pdfjs = await import('pdfjs-dist')
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
     const pdf = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise
     const parts = []
     for (let i = 1; i <= pdf.numPages; i++) {

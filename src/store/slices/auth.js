@@ -58,10 +58,13 @@ export function useAuthSlice() {
         real: true,
       })
     }
-    supabase.auth.getSession().then(async ({ data }) => {
-      await loadProfile(data.session)
-      if (active) setAuthReady(true)
-    })
+    // getSession 失敗/卡住不可讓全站永久「載入中…」(B-13):
+    // 10 秒 timeout 或例外都視為未登入放行(落到 /login,可重試),不再無限轉圈。
+    const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: { session: null }, timedOut: true }), 10000))
+    Promise.race([supabase.auth.getSession(), timeout])
+      .then(async ({ data }) => { await loadProfile(data?.session || null) })
+      .catch(() => {})
+      .finally(() => { if (active) setAuthReady(true) })
     // 注意：不可在 onAuthStateChange callback 內直接 await Supabase 查詢，
     // 否則會與 auth lock 互鎖卡死所有後續查詢 → 用 setTimeout 推出 callback 再查。
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {

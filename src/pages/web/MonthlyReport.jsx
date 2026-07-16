@@ -17,16 +17,18 @@ const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = n
 
 export default function MonthlyReport() {
   const { project, workItems, dbMode, demoMode, valuations, progressPlan, siteLogs,
-    inspections, defects, safetyRecords, changeOrders, draftMonthlyReview } = useStore()
+    inspections, defects, safetyRecords, changeOrders, draftMonthlyReview,
+    adjustedItems, revisedTotal } = useStore()
   const [month, setMonth] = useState(thisMonthStr())
   const [review, setReview] = useState('')   // 工程檢討（列印用，不儲存）
   const [nextPlan, setNextPlan] = useState('') // 下月工作計畫
   const [aiBusy, setAiBusy] = useState(false)
   const [aiErr, setAiErr] = useState('')
 
-  const billable = workItems?.meta.billable_total || 0
+  // 財務單一真相層(B-02):月報金額/進度與估驗單同一套計算(含已核准變更)
+  const billable = workItems ? revisedTotal : 0
 
-  const tree = useMemo(() => (workItems ? buildBillableTree(workItems.items) : { roots: [], childrenMap: new Map() }), [workItems])
+  const tree = useMemo(() => (workItems ? buildBillableTree(adjustedItems) : { roots: [], childrenMap: new Map() }), [workItems, adjustedItems])
 
   // 截至某 cutoff 日的累計估驗金額（取 valuation_date 在 cutoff（含）以前、期數最大的一期）
   const cumAt = (cutoff) => {

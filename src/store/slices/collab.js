@@ -26,6 +26,15 @@ function demoSubmittalReview(submittal, workItem) {
     caution: '此為通用審查要點；上傳並解析契約/規範後可比對本專案實際履約需求。' }
 }
 
+// 下一個流水號:取既有編號的最大數字 +1(B-10:用 length+1 在刪除後會與現存編號相撞)
+function nextSerial(list, field, prefix) {
+  const max = list.reduce((m, x) => {
+    const n = parseInt(String(x[field] || '').replace(/\D+/g, ''), 10)
+    return Number.isFinite(n) ? Math.max(m, n) : m
+  }, 0)
+  return `${prefix}-${String(max + 1).padStart(3, '0')}`
+}
+
 export function useCollabSlice({ isPersistedProject, demoMode, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
   // 監造協作:送審與工程疑義
   const [submittals, setSubmittals] = useState([])
@@ -34,7 +43,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
 
   const createSubmittal = useCallback(async (input) => {
     const row = {
-      submittal_no: input.submittal_no || `SUB-${String(submittals.length + 1).padStart(3, '0')}`,
+      submittal_no: input.submittal_no || nextSerial(submittals, 'submittal_no', 'SUB'),
       title: input.title, category: input.category || '施工計畫',
       revision: 0, status: '已提送',
       submitted_date: input.submitted_date || null, due_date: input.due_date || null,
@@ -140,16 +149,19 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     const pid = currentProject.project_id
     const ext = (file.name?.split('.').pop() || 'bin').toLowerCase()
     const path = `${pid}/submittals/${submittalId}.${ext}`
+    const prevPath = submittals.find((s) => s.id === submittalId)?.attachment_path || null
     const { error: upErr } = await supabase.storage.from('photos').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: true })
     if (upErr) return { error: upErr }
     const patch = { attachment_path: path, attachment_name: file.name || `文件.${ext}`, attachment_mime: file.type || null }
     const res = await supabase.from('submittals').update(patch).eq('id', submittalId).select('id')
     const { error } = mutationOutcome(res, '文件已上傳但 metadata 未寫入:可能無權限')
     if (error) { await supabase.storage.from('photos').remove([path]); return { error } }
+    // 換副檔名重傳:清掉舊路徑,不留孤兒檔(B-15;失敗不影響本次上傳)
+    if (prevPath && prevPath !== path) await supabase.storage.from('photos').remove([prevPath]).catch(() => {})
     setSubmittals((ss) => ss.map((s) => (s.id === submittalId ? { ...s, ...patch } : s)))
     log('送審文件上傳', patch.attachment_name, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, log])
+  }, [isPersistedProject, currentProject, currentUser, submittals, log])
 
   // AI 審讀送審文件:下載附件 → 抽文字(數位 PDF/docx,比看圖準)或轉 base64(掃描/圖走視覺)
   // → 交 read-submittal edge fn 逐項比對契約需求。反幻覺全在 edge fn(未涵蓋不臆測符合)。
@@ -207,7 +219,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     const markup_path = await saveMarkup(input.markup_data, 'rfi')
     const row = {
       markup_path,
-      rfi_no: input.rfi_no || `RFI-${String(rfis.length + 1).padStart(3, '0')}`,
+      rfi_no: input.rfi_no || nextSerial(rfis, 'rfi_no', 'RFI'),
       title: input.title, question: input.question || null,
       answer: null, status: '待回覆',
       asked_date: input.asked_date || new Date().toISOString().slice(0, 10),
@@ -281,25 +293,37 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     return { error: null }
   }, [isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup, log])
 
+  // DB 成功才更新 UI(B-07:RLS 靜默 0 列時原本假成功,重整即還原)
   const updateObservation = useCallback(async (id, patch) => {
+    if (isPersistedProject) {
+      const res = await supabase.from('observations').update(patch).eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '未寫入:可能無權限或觀察事項已被移除')
+      if (error) return { error }
+    }
     setObservations((os) => os.map((o) => (o.id === id ? { ...o, ...patch } : o)))
-    if (isPersistedProject) await supabase.from('observations').update(patch).eq('id', id)
     return { error: null }
   }, [isPersistedProject])
 
-  // 升級為缺失:建立缺失(帶入標註)並把觀察標為「轉缺失」
+  // 升級為缺失:建立缺失(帶入標註)並把觀察標為「轉缺失」。
+  // 缺失建立失敗(RLS/guard)必須中止(B-06):否則觀察被關、缺失又不存在,事項就此消失。
   const escalateObservation = useCallback(async (obs) => {
-    await createDefect({
+    const { error } = await createDefect({
       title: obs.title, description: obs.description || null, location: obs.location || '',
       severity: '一般', markup_data: obs.markup_path && obs.markup_path.startsWith('data:') ? obs.markup_path : undefined,
     })
-    await updateObservation(obs.id, { status: '轉缺失' })
-    return { error: null }
+    if (error) return { error }
+    return updateObservation(obs.id, { status: '轉缺失' })
   }, [createDefect, updateObservation])
 
+  // DB 刪成功才從 UI 移除(B-07)
   const deleteObservation = useCallback(async (id) => {
+    if (isPersistedProject) {
+      const res = await supabase.from('observations').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或觀察事項已被移除')
+      if (error) return { error }
+    }
     setObservations((os) => os.filter((o) => o.id !== id))
-    if (isPersistedProject) await supabase.from('observations').delete().eq('id', id)
+    return { error: null }
   }, [isPersistedProject])
 
   // 成員管理(RPC:email 對照 auth.users 必須在伺服器端做)。

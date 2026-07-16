@@ -82,9 +82,16 @@ export default function Contract() {
     })
   }, [currentProject])
 
-  const setAnchor = (key, val) => {
-    setAnchors((a) => ({ ...a, [key]: val }))
-    updateProjectAnchors({ [key]: val || null })
+  // DB 成功才更新本地(B-04):非建立者被 RLS 靜默擋下時,原本 UI 直接顯示新日期,
+  // 整頁義務時程都建立在沒存進 DB 的基準日上,重整才還原。
+  const [anchorErr, setAnchorErr] = useState('')
+  const setAnchor = async (key, val) => {
+    setAnchorErr('')
+    if (isPersistedProject) {
+      const { error } = await updateProjectAnchors({ [key]: val || null })
+      if (error) { setAnchorErr(`基準日未儲存:${error.message}`); return }
+    }
+    setAnchors((a) => ({ ...a, [key]: val })) // demo:只進本地,供時間軸展示
   }
 
   // ── 契約包與處理狀態載入(持久化,重新整理不遺失)────────────────────────
@@ -393,6 +400,7 @@ export default function Contract() {
             </label>
           ))}
         </div>
+        {anchorErr && <p className="text-xs text-rose-600 mt-2">{anchorErr}</p>}
         <p className="text-xs text-[var(--text-3)] mt-3">義務時程的到期日、倒數、逾期都依這些基準日即時計算。</p>
       </Card>
 
@@ -628,7 +636,7 @@ export default function Contract() {
                 <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
                   <div className="flex justify-between items-start gap-2">
                     <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
-                    {can.edit && <button onClick={() => updateObligationStatus(it.ob.id, it.done ? '待辦' : '已提送')}
+                    {can.edit && <button onClick={async () => { const { error } = await updateObligationStatus(it.ob.id, it.done ? '待辦' : '已提送'); if (error) setLegacyMsg(`義務狀態未寫入:${error.message}`) }}
                       className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
                       {it.done ? '已提送 ✓' : '標為已提送'}
                     </button>}

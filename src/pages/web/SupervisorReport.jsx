@@ -6,8 +6,8 @@ import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCal
 import { parseLocalDate } from '../../lib/dates.js'
 import { buildSupervisorReport } from '../../lib/supervisorReport.js'
 
-const TODAY = new Date()
-const curMonth = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}`
+// 每次呼叫取「今天」(B-11):模組層常數會讓長開分頁凍結在開頁那天
+const curMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 
 function Section({ n, title, children }) {
   return (
@@ -24,16 +24,18 @@ const Kv = ({ k, v }) => (<div className="text-sm"><span className="text-[var(--
 
 export default function SupervisorReport() {
   const { project, workItems, valuations, progressPlan, siteLogs, inspections, defects, submittals,
-    demoMode, workItemsSource } = useStore()
+    demoMode, workItemsSource, adjustedItems, revisedTotal } = useStore()
   const [month, setMonth] = useState(curMonth)
   const [opinion, setOpinion] = useState(null) // null=用草稿；字串=已編輯
   const imported = workItemsSource === 'db' || demoMode
+  const TODAY = new Date()
 
+  // 財務單一真相層(B-02):監造報表進度與估驗/進度頁一致(含已核准變更)
   const { roots, childrenMap } = useMemo(
-    () => (workItems ? buildBillableTree(workItems.items) : { roots: [], childrenMap: new Map() }),
-    [workItems],
+    () => (workItems ? buildBillableTree(adjustedItems) : { roots: [], childrenMap: new Map() }),
+    [workItems, adjustedItems],
   )
-  const billableTotal = workItems?.meta.billable_total || 0
+  const billableTotal = workItems ? revisedTotal : 0
   const latestVal = valuations[valuations.length - 1]
   const actualPct = useMemo(() => {
     if (!latestVal || !billableTotal) return 0

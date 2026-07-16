@@ -45,8 +45,9 @@ function ProjectSwitcher() {
     )
   }
   return (
-    <div className="relative min-w-0">
-      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
+    <div className="relative min-w-0" onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}>
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu"
+        className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
         <span className="text-[var(--text-3)] text-xs shrink-0">專案</span>
         <span title={currentProject.project_name} className="font-medium truncate max-w-[42vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
         <ChevronDown size={14} className="text-[var(--text-2)] shrink-0" aria-hidden />
@@ -54,7 +55,7 @@ function ProjectSwitcher() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 mt-1 w-72 bg-[var(--surface)] text-[var(--text)] rounded-lg shadow-xl border border-[var(--border)] py-1 z-20">
+          <div role="menu" className="absolute left-0 mt-1 w-72 bg-[var(--surface)] text-[var(--text)] rounded-lg shadow-xl border border-[var(--border)] py-1 z-20">
             {projects.map((p) => (
               <button key={p.project_id} onClick={() => { switchProject(p.project_id); setOpen(false) }}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--surface-2)] flex items-center gap-2 ${p.project_id === currentProject.project_id ? 'bg-[var(--blue-tint)]' : ''}`}>
@@ -115,7 +116,7 @@ function TopBar({ onMenu }) {
 
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { currentUser, can, workItemsSource, workItemsError, retryWorkItems } = useStore()
+  const { currentUser, can, workItemsSource, workItemsError, retryWorkItems, domainLoadError, retryDomainLoad } = useStore()
   const { pathname } = useLocation()
   // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——非正式模式的
   // admin(專案建立者)看得到全部;正式模式後回歸自己的角色視角。
@@ -171,6 +172,13 @@ export function WebLayout({ children }) {
             <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700 print:hidden">
               <span>標單工項讀取失敗：{workItemsError || '連線異常'}。各頁資料可能不完整。</span>
               <button onClick={retryWorkItems} className="font-medium underline hover:text-rose-900">重試</button>
+            </div>
+          )}
+          {/* 領域資料載入失敗(B-09):不再靜默顯示「尚無資料」,如實回報並可重試 */}
+          {domainLoadError && (
+            <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700 print:hidden">
+              <span>{domainLoadError}。各頁資料可能不完整。</span>
+              <button onClick={retryDomainLoad} className="font-medium underline hover:text-rose-900">重試</button>
             </div>
           )}
           {children}

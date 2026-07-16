@@ -7,21 +7,21 @@ import { parseLocalDate } from './dates.js'
 import { buildAssistantFacts } from './assistantFacts.js'
 import { myOpenItems } from './ballInCourt.js'
 
-const TODAY = new Date()
-
 export function useAssistantData() {
+  const TODAY = new Date() // 每次 render 取(B-11):長開分頁的「今天」不可凍結在開頁那天
   const store = useStore()
   const { project, currentUser, workItems, valuations, progressPlan, siteLogs, inspections, defects,
     testSamples, obligations, changeOrders, submittals, rfis, observations, safetyRecords, acceptanceEvents,
-    demoMode, workItemsSource, askAssistant } = store
+    demoMode, workItemsSource, askAssistant, adjustedItems, revisedTotal } = store
   const org = currentUser?.org_type || 'contractor'
   const imported = workItemsSource === 'db' || demoMode
 
+  // 財務單一真相層(B-02):AI 快照引用的數字必須與畫面一致(含已核准變更)
   const { roots, childrenMap } = useMemo(
-    () => (workItems ? buildBillableTree(workItems.items) : { roots: [], childrenMap: new Map() }),
-    [workItems],
+    () => (workItems ? buildBillableTree(adjustedItems) : { roots: [], childrenMap: new Map() }),
+    [workItems, adjustedItems],
   )
-  const billableTotal = workItems?.meta.billable_total || 0
+  const billableTotal = workItems ? revisedTotal : 0
   const latestVal = valuations[valuations.length - 1]
   const actualCum = useMemo(
     () => (latestVal ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) : 0),

@@ -5,7 +5,6 @@ import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Empty, PageHeader, PrerequisiteEmptyState } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
-import { applyApprovedChangeOrders, approvedNetAmount } from '../../lib/changeOrders.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
@@ -15,7 +14,7 @@ const statusColor = { 草稿: 'slate', 監造審核: 'amber', 已核定: 'green'
 export default function Valuation() {
   const { project, workItems: data, valuations, createValuation, updateValuationItem, setValuationStatus,
     isSupabaseConfigured, currentProject, workItemsSource, siteLogs, fillValuationFromSiteLogs, dbMode, deleteValuation,
-    changeOrders, can } = useStore()
+    adjustedItems, coNet, revisedTotal, can } = useStore()
   const [filling, setFilling] = useState(false)
   const [aiMsg, setAiMsg] = useState('')
   const [errMsg, setErrMsg] = useState('') // DB 寫入失敗的訊息(不偽裝成功)
@@ -29,16 +28,12 @@ export default function Valuation() {
   }, [data])
 
   // 只取「發包工程費、非合計列」建樹（合計列會重複母項金額）。
-  // 已核准的變更設計先套回工項（連結工項的明細調整數量/金額），分母用變更後契約金額。
-  const { childrenMap, roots, billableTotal, coNet } = useMemo(() => {
-    if (!data) return { childrenMap: new Map(), roots: [], billableTotal: 0, coNet: 0 }
-    const net = approvedNetAmount(changeOrders)
-    return {
-      ...buildBillableTree(applyApprovedChangeOrders(data.items, changeOrders)),
-      billableTotal: (data.meta.billable_total || 0) + net,
-      coNet: net,
-    }
-  }, [data, changeOrders])
+  // 變更設計調整與變更後契約金額由 store 統一提供(財務單一真相層,B-02)。
+  const { childrenMap, roots } = useMemo(
+    () => (data ? buildBillableTree(adjustedItems) : { childrenMap: new Map(), roots: [] }),
+    [data, adjustedItems],
+  )
+  const billableTotal = revisedTotal
 
   const selected = valuations.find((v) => v.id === selectedId) || valuations[valuations.length - 1]
   const prev = selected ? valuations.find((v) => v.period_no === selected.period_no - 1) : null

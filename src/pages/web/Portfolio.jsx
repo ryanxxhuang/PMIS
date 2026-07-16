@@ -12,20 +12,22 @@ import { acceptanceStageSummary } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
-const TODAY = new Date()
 
 export default function Portfolio() {
   const {
     demoMode, isSupabaseConfigured, projects, currentProject, switchProject, loadPortfolio,
     project, workItems, valuations, progressPlan, defects, inspections, changeOrders, acceptanceEvents,
+    adjustedItems, revisedTotal,
   } = useStore()
   const navigate = useNavigate()
+  const TODAY = new Date() // 每次 render 取(B-11)
 
   // ── 本案(目前載入中的專案)即時計算——與 Dashboard 同一套數學 ──
   const current = useMemo(() => {
     if (!workItems) return null
-    const { roots, childrenMap } = buildBillableTree(workItems.items)
-    const billable = workItems.meta.billable_total || 0
+    // 財務單一真相層(B-02):與 Dashboard/估驗頁同一套計算(含已核准變更)
+    const { roots, childrenMap } = buildBillableTree(adjustedItems)
+    const billable = revisedTotal
     const latest = valuations[valuations.length - 1]
     const cum = latest ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latest.items)) : 0
     let planned = null
@@ -45,7 +47,7 @@ export default function Portfolio() {
       acceptance: acceptanceStageSummary(demoMode ? [] : acceptanceEvents), // demo 的驗收事件屬 B 區 storyline
       isCurrent: true,
     }
-  }, [workItems, valuations, progressPlan, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
+  }, [workItems, adjustedItems, revisedTotal, valuations, progressPlan, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
 
   // ── 其他專案:真實模式走 RPC;demo 用靜態示範案 ──
   const [others, setOthers] = useState(null)

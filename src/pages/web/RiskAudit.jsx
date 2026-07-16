@@ -7,7 +7,6 @@ import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCal
 import { auditProject } from '../../lib/riskAudit.js'
 import { buildIntegrityFindings } from '../../lib/integrityAudit.js'
 
-const TODAY = new Date()
 const ST = {
   pass: { icon: CheckCircle2, c: 'var(--green-text)', bg: 'var(--green-tint)', label: '通過' },
   warn: { icon: AlertTriangle, c: 'var(--amber-text)', bg: 'var(--amber-tint)', label: '注意' },
@@ -17,17 +16,20 @@ const ST = {
 
 export default function RiskAudit() {
   const { project, workItems, valuations, progressPlan, changeOrders, defects, obligations,
-    siteLogs, inspections, testSamples, auditSummary, demoMode, workItemsSource } = useStore()
+    siteLogs, inspections, testSamples, auditSummary, demoMode, workItemsSource,
+    adjustedItems, revisedTotal } = useStore()
   const imported = workItemsSource === 'db' || demoMode
   const navigate = useNavigate()
+  const TODAY = new Date() // 每次 render 取(B-11):長開分頁的「今天」不可凍結在開頁那天
   const [ai, setAi] = useState(null)       // { opinion, recommendations }
   const [aiBusy, setAiBusy] = useState(false)
 
+  // 財務單一真相層(B-02):稽核分母與估驗/進度頁一致(含已核准變更)
   const { roots, childrenMap } = useMemo(
-    () => (workItems ? buildBillableTree(workItems.items) : { roots: [], childrenMap: new Map() }),
-    [workItems],
+    () => (workItems ? buildBillableTree(adjustedItems) : { roots: [], childrenMap: new Map() }),
+    [workItems, adjustedItems],
   )
-  const billableTotal = workItems?.meta.billable_total || 0
+  const billableTotal = workItems ? revisedTotal : 0
 
   // 逐期「本期估驗」= 累計差
   const periodAmounts = useMemo(() => {

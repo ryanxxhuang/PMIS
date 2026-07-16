@@ -14,6 +14,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useMemo, u
 import { project } from './data/seed.js'
 import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
+import { applyApprovedChangeOrders, approvedNetAmount } from './lib/changeOrders.js'
 import {
   wiCacheDel, loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
@@ -126,6 +127,17 @@ export function StoreProvider({ children }) {
     parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument,
   } = useLedgerSlice(ctx)
 
+  // ── 財務單一真相層(B-02)──────────────────────────────────────────────────
+  // 「已核准變更設計套回工項」與「變更後契約金額」只在這裡算一次,所有金額/進度
+  // 頁面(估驗/請款/進度/首頁/月報/稽核/監造報表/AI 快照)一律吃這份——
+  // 之前各頁自算,有的套變更有的沒套,核准追加減後跨頁數字分裂。
+  const adjustedItems = useMemo(
+    () => (workItems ? applyApprovedChangeOrders(workItems.items, changeOrders) : []),
+    [workItems, changeOrders],
+  )
+  const coNet = useMemo(() => approvedNetAmount(changeOrders), [changeOrders])
+  const revisedTotal = (workItems?.meta?.billable_total || 0) + coNet
+
   // ── 跨領域效果 ───────────────────────────────────────────────────────────
   // demo 模式：範例標單載入後，一次性預載完整示範資料（銷售展示 storyline）
   const demoLoadedRef = useRef(false)
@@ -158,42 +170,45 @@ export function StoreProvider({ children }) {
     prevProjectRef.current = currentProjectId
   }, [currentProjectId, demoMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // DB 模式：載入掛在標單工項上的領域資料（依序,避免同時打爆連線）
+  // 領域資料載入失敗的統一回報(B-09):db.js 載入層失敗會 throw,這裡 catch 顯示
+  // 重試 banner(Layout)——不再靜默回空清單讓使用者誤以為「沒有資料」。
+  const [domainLoadError, setDomainLoadError] = useState(null)
+  const [domainReloadKey, setDomainReloadKey] = useState(0)
+  const retryDomainLoad = useCallback(() => setDomainReloadKey((k) => k + 1), [])
+
+  // DB 模式:載入掛在標單工項上的領域資料。並行載入(P-03):原本 10 個 loader 依序
+  // await(15+ 次序列往返,行動網路切案要 3-4 秒);supabase-js 走 HTTP/2 多工,一次發齊。
   useEffect(() => {
     if (!dbMode) return
     let active = true
+    setDomainLoadError(null)
     ;(async () => {
-      const vals = await loadValuationsFromDB(currentProject.project_id, wiMaps.idToKey)
-      if (!active) return
-      setValuations(vals)
-      const plan = await loadScheduleFromDB(currentProject)
-      if (!active) return
-      setProgressPlan(plan)
-      const logs = await loadSiteLogsFromDB(currentProject.project_id, wiMaps.idToKey)
-      if (!active) return
-      setSiteLogs(logs)
-      const qual = await loadQualityFromDB(currentProject.project_id, wiMaps.byId)
-      if (!active) return
-      setInspections(qual.inspections); setDefects(qual.defects)
-      const costs = await loadCostItemsFromDB(currentProject.project_id)
-      if (!active) return
-      setCostItems(costs)
-      const sched = await loadItemSchedulesFromDB(currentProject.project_id, wiMaps.idToKey)
-      if (!active) return
-      setItemSchedules(sched)
-      const cos = await loadChangeOrdersFromDB(currentProject.project_id)
-      if (!active) return
-      setChangeOrders(cos)
-      const itp = await loadItpFromDB(currentProject.project_id, wiMaps.byId, wiMaps.idToKey)
-      if (!active) return
-      setInspectionPoints(itp)
-      const qc = await loadQcFromDB(currentProject.project_id)
-      if (!active) return
-      setChecklistTemplates(qc.templates); setChecklistRecords(qc.records); setTestSamples(qc.samples)
+      try {
+        const pid = currentProject.project_id
+        const [vals, plan, logs, qual, costs, sched, cos, itp, qc] = await Promise.all([
+          loadValuationsFromDB(pid, wiMaps.idToKey),
+          loadScheduleFromDB(currentProject),
+          loadSiteLogsFromDB(pid, wiMaps.idToKey),
+          loadQualityFromDB(pid, wiMaps.byId),
+          loadCostItemsFromDB(pid),
+          loadItemSchedulesFromDB(pid, wiMaps.idToKey),
+          loadChangeOrdersFromDB(pid),
+          loadItpFromDB(pid, wiMaps.byId, wiMaps.idToKey),
+          loadQcFromDB(pid),
+        ])
+        if (!active) return
+        setValuations(vals); setProgressPlan(plan); setSiteLogs(logs)
+        setInspections(qual.inspections); setDefects(qual.defects)
+        setCostItems(costs); setItemSchedules(sched); setChangeOrders(cos)
+        setInspectionPoints(itp)
+        setChecklistTemplates(qc.templates); setChecklistRecords(qc.records); setTestSamples(qc.samples)
+      } catch (e) {
+        if (active) setDomainLoadError(e?.message || '專案資料載入失敗')
+      }
     })()
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbMode, currentProject, wiMaps])
+  }, [dbMode, currentProject, wiMaps, domainReloadKey])
 
   // 不依賴標單的領域(驗收/契約義務/工安/缺失/送審/RFI/觀察):真專案選定即從 DB 載入,
   // 不等標單匯入(沒 BOQ 的專案也要能讀寫,否則寫入只進記憶體、重新整理就消失——
@@ -203,32 +218,32 @@ export function StoreProvider({ children }) {
     const pid = currentProject.project_id
     let active = true
     ;(async () => {
-      const acc = await loadAcceptanceFromDB(pid)
-      if (!active) return
-      setAcceptanceEvents(acc)
-      const obs = await loadObligationsFromDB(pid)
-      if (!active) return
-      setObligations(obs)
-      const safety = await loadSafetyFromDB(pid)
-      if (!active) return
-      setSafetyRecords(safety)
-      // 缺失(統一引擎)不依賴標單:匯標單前也要載(dbMode 載入會再帶工項資訊覆蓋)
-      if (!dbMode) {
-        const defs = await loadDefectsFromDB(pid)
+      try {
+        const check = (label) => ({ data, error }) => {
+          if (error) throw new Error(`${label}讀取失敗:${error.message}`)
+          return data || []
+        }
+        // 並行載入(P-03);缺失(統一引擎)不依賴標單:匯標單前也要載(dbMode 載入會再帶工項資訊覆蓋)
+        const [acc, obs, safety, defs, subs, rfiRows, obsRows] = await Promise.all([
+          loadAcceptanceFromDB(pid),
+          loadObligationsFromDB(pid),
+          loadSafetyFromDB(pid),
+          dbMode ? null : loadDefectsFromDB(pid),
+          supabase.from('submittals').select('*').eq('project_id', pid).order('created_at', { ascending: false }).then(check('送審')),
+          supabase.from('rfis').select('*').eq('project_id', pid).order('created_at', { ascending: false }).then(check('工程疑義')),
+          supabase.from('observations').select('*').eq('project_id', pid).order('created_at', { ascending: false }).then(check('觀察事項')),
+        ])
         if (!active) return
-        setDefects(defs)
+        setAcceptanceEvents(acc); setObligations(obs); setSafetyRecords(safety)
+        if (defs) setDefects(defs)
+        setSubmittals(subs); setRfis(rfiRows); setObservations(obsRows)
+      } catch (e) {
+        if (active) setDomainLoadError(e?.message || '專案資料載入失敗')
       }
-      const [{ data: subs }, { data: rfiRows }, { data: obsRows }] = await Promise.all([
-        supabase.from('submittals').select('*').eq('project_id', pid).order('created_at', { ascending: false }),
-        supabase.from('rfis').select('*').eq('project_id', pid).order('created_at', { ascending: false }),
-        supabase.from('observations').select('*').eq('project_id', pid).order('created_at', { ascending: false }),
-      ])
-      if (!active) return
-      setSubmittals(subs || []); setRfis(rfiRows || []); setObservations(obsRows || [])
     })()
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPersistedProject, currentProject?.project_id])
+  }, [isPersistedProject, currentProject?.project_id, domainReloadKey])
 
   // 登出：真實模式呼叫 Supabase signOut；prototype 模式只清 currentUser
   const logout = useCallback(async () => {
@@ -250,7 +265,7 @@ export function StoreProvider({ children }) {
     }
     wiCacheDel(pid)
     setValuations([]); setProgressPlan(null); setSiteLogs([]); setInspections([])
-    setDefects(await loadDefectsFromDB(pid)) // 重載:工項連結已解除
+    try { setDefects(await loadDefectsFromDB(pid)) } catch { setDefects([]) } // 重載:工項連結已解除
     retryWorkItems() // 重跑載入 → 真專案 0 筆會進 'empty'（顯示匯入 onboarding），不載範例
     return { error: null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -262,6 +277,7 @@ export function StoreProvider({ children }) {
     isSupabaseConfigured, signUp, signIn, logout,
     currentProject, projects, projectLoading, createProject, switchProject,
     workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, isPersistedProject, can,
+    adjustedItems, coNet, revisedTotal, domainLoadError, retryDomainLoad,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, listPhotosByWorkItems, readWhiteboard, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, classifySitePhoto, askAssistant, fetchWeather,
     obligations, parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,

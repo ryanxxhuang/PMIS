@@ -160,7 +160,9 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
   }, [dbMode, siteLogs, valuations, wiMaps, currentUser, log])
 
   // 預定進度 S 曲線。依開工/竣工切出月份桶，預設用 smoothstep 產生標準 S 曲線。
-  const generateSchedule = useCallback((start, end) => {
+  // DB 寫入改為 upsert+await(B-08):原本 fire-and-forget 先刪後插,失敗時 UI 上
+  // S 曲線好好的、DB 是空的或半套——S 曲線是機關進度考核基準,不可假成功。
+  const generateSchedule = useCallback(async (start, end) => {
     const s = parseLocalDate(start), e = parseLocalDate(end)
     const buckets = []
     let cur = new Date(s.getFullYear(), s.getMonth(), 1)
@@ -173,24 +175,34 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
       plannedPct: +(smoothstep((i + 1) / N) * 100).toFixed(1),
     }))
     const plan = { start, end, months }
+    if (dbMode) {
+      const pid = currentProject.project_id
+      const rows = months.map((m) => ({ project_id: pid, period_label: m.label, planned_pct: m.plannedPct }))
+      // upsert 新月份成功後,才刪不在新區間內的舊月份(先插後刪,同 B-03 原則)
+      const { error: upErr } = await supabase.from('schedule_periods')
+        .upsert(rows, { onConflict: 'project_id,period_label' })
+      if (upErr) return { plan: null, error: upErr }
+      const { error: delErr } = await supabase.from('schedule_periods')
+        .delete().eq('project_id', pid).not('period_label', 'in', `(${months.map((m) => `"${m.label}"`).join(',')})`)
+      if (delErr) return { plan: null, error: delErr }
+    }
     setProgressPlan(plan)
     log('產生預定進度', `${start} ~ ${end}，共 ${N} 個月`, { user: '陳怡君', role: '施工品管' })
-    if (dbMode) (async () => {
-      await supabase.from('schedule_periods').delete().eq('project_id', currentProject.project_id)
-      const rows = months.map((m) => ({ project_id: currentProject.project_id, period_label: m.label, planned_pct: m.plannedPct }))
-      if (rows.length) await supabase.from('schedule_periods').insert(rows)
-    })()
-    return plan
+    return { plan, error: null }
   }, [dbMode, currentProject, log])
 
-  const updatePlannedPct = useCallback((i, pct) => {
-    setProgressPlan((p) => (p ? { ...p, months: p.months.map((m, idx) => (idx === i ? { ...m, plannedPct: pct } : m)) } : p))
-    if (dbMode && progressPlan?.months[i]) {
-      supabase.from('schedule_periods').upsert(
-        { project_id: currentProject.project_id, period_label: progressPlan.months[i].label, planned_pct: pct },
+  // DB 成功才更新 UI(B-08:原本 .then(()=>{}) 吞掉結果,靜默失敗)
+  const updatePlannedPct = useCallback(async (i, pct) => {
+    const month = progressPlan?.months[i]
+    if (dbMode && month) {
+      const { error } = await supabase.from('schedule_periods').upsert(
+        { project_id: currentProject.project_id, period_label: month.label, planned_pct: pct },
         { onConflict: 'project_id,period_label' },
-      ).then(() => {})
+      )
+      if (error) return { error }
     }
+    setProgressPlan((p) => (p ? { ...p, months: p.months.map((m, idx) => (idx === i ? { ...m, plannedPct: pct } : m)) } : p))
+    return { error: null }
   }, [dbMode, currentProject, progressPlan])
 
   // 刪除估驗期:DB 刪成功才從 UI 移除。已核定的期會被 valuation_items_guard

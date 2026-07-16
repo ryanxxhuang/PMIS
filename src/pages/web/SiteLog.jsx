@@ -185,7 +185,8 @@ export default function SiteLog() {
   }
 
   const onDeletePhoto = async (p) => {
-    await deleteSitePhoto(p)
+    const { error } = await deleteSitePhoto(p)
+    if (error) { setSavedMsg(`照片刪除失敗:${error.message}`); return }
     if (currentLog?.id) setPhotos(await listSitePhotos(currentLog.id))
   }
 
@@ -282,8 +283,8 @@ export default function SiteLog() {
             <div className="flex items-end gap-3 flex-wrap mb-2">
               <Field label="日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
               <Field label="天氣(上午)"><input value={weather} disabled={!can.edit} onChange={(e) => setWeather(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20 disabled:opacity-50 disabled:bg-[var(--surface-2)]" /></Field>
-              <Field label="天氣(下午)"><input value={weatherPm} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20" /></Field>
-              <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field></div>
+              <Field label="天氣(下午)"><input value={weatherPm} disabled={!can.edit} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20 disabled:opacity-50 disabled:bg-[var(--surface-2)]" /></Field>
+              <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} disabled={!can.edit} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm disabled:opacity-50 disabled:bg-[var(--surface-2)]" /></Field></div>
               {can.edit && (
                 <Button variant="secondary" onClick={pullWeather} disabled={weatherBusy} title="依工地座標向中央氣象局帶入今日天氣">
                   <CloudSun size={14} aria-hidden />{weatherBusy ? '帶入中…' : '帶入天氣'}
@@ -324,7 +325,7 @@ export default function SiteLog() {
             </div>}
 
             <div className="relative mb-3">
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項加入今日回報…" className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none" />
+              <input value={search} disabled={!can.edit} onChange={(e) => setSearch(e.target.value)} placeholder={can.edit ? '搜尋工項加入今日回報…' : '唯讀檢視'} className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
               {results.length > 0 && (
                 <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-64 overflow-auto">
                   {results.map((it) => (
@@ -360,10 +361,10 @@ export default function SiteLog() {
                         <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{it.unit}</td>
                         <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{fmt(it.quantity)}</td>
                         <td className="text-right px-2">
-                          <input type="number" min="0" step="any" value={items[key] ?? ''} onChange={(e) => setQty(key, e.target.value)}
-                            className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none" />
+                          <input type="number" min="0" step="any" value={items[key] ?? ''} disabled={!can.edit} onChange={(e) => setQty(key, e.target.value)}
+                            className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                         </td>
-                        <td className="text-right pl-2"><button onClick={() => removeItem(key)} className="text-[var(--text-3)] hover:text-rose-500">✕</button></td>
+                        <td className="text-right pl-2">{can.edit && <button onClick={() => removeItem(key)} className="text-[var(--text-3)] hover:text-rose-500" aria-label="移除此工項">✕</button>}</td>
                       </tr>
                     )
                   })}
@@ -385,36 +386,36 @@ export default function SiteLog() {
               {officialOpen && (
                 <div className="px-3 pb-3 space-y-4">
                   <div>
-                    <FreqChips items={freq.labor} label={(r) => r.type}
-                      onAdd={(r) => setLabor((rows) => addUniqueRow(rows, r, (x) => x.type))} />
-                    <RowsEditor title="出工人數（工別）" rows={labor} onChange={setLabor}
+                    {can.edit && <FreqChips items={freq.labor} label={(r) => r.type}
+                      onAdd={(r) => setLabor((rows) => addUniqueRow(rows, r, (x) => x.type))} />}
+                    <RowsEditor title="出工人數（工別）" rows={labor} onChange={setLabor} disabled={!can.edit}
                       fields={[{ key: 'type', ph: '工別（如 鋼筋工）', w: 'flex-1' }, { key: 'count', ph: '人數', w: 'w-20', num: true }]} />
                   </div>
                   <div>
-                    <FreqChips items={freq.equipment} label={(r) => r.name}
-                      onAdd={(r) => setEquipment((rows) => addUniqueRow(rows, r, (x) => x.name))} />
-                    <RowsEditor title="機具使用" rows={equipment} onChange={setEquipment}
+                    {can.edit && <FreqChips items={freq.equipment} label={(r) => r.name}
+                      onAdd={(r) => setEquipment((rows) => addUniqueRow(rows, r, (x) => x.name))} />}
+                    <RowsEditor title="機具使用" rows={equipment} onChange={setEquipment} disabled={!can.edit}
                       fields={[{ key: 'name', ph: '機具名稱', w: 'flex-1' }, { key: 'count', ph: '數量', w: 'w-20', num: true }]} />
                   </div>
                   <div>
-                    <FreqChips items={freq.materials} label={(r) => `${r.name}${r.unit ? `（${r.unit}）` : ''}`}
-                      onAdd={(r) => setMaterials((rows) => addUniqueRow(rows, r, (x) => x.name))} />
-                    <RowsEditor title="材料使用" rows={materials} onChange={setMaterials}
+                    {can.edit && <FreqChips items={freq.materials} label={(r) => `${r.name}${r.unit ? `（${r.unit}）` : ''}`}
+                      onAdd={(r) => setMaterials((rows) => addUniqueRow(rows, r, (x) => x.name))} />}
+                    <RowsEditor title="材料使用" rows={materials} onChange={setMaterials} disabled={!can.edit}
                       fields={[{ key: 'name', ph: '材料名稱', w: 'flex-1' }, { key: 'unit', ph: '單位', w: 'w-16' }, { key: 'qty', ph: '本日數量', w: 'w-24', num: true }]} />
                   </div>
                   <div className="grid sm:grid-cols-2 gap-3 text-sm">
                     <label className="block">
                       <span className="block text-xs font-medium text-[var(--text-2)] mb-1">四、應置技術士（種類及人數，無則留空）</span>
-                      <input value={extras.technicians || ''} onChange={(e) => setExtras({ ...extras, technicians: e.target.value })}
-                        placeholder="如：混凝土工程技術士 2 名" className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                      <input value={extras.technicians || ''} disabled={!can.edit} onChange={(e) => setExtras({ ...extras, technicians: e.target.value })}
+                        placeholder="如：混凝土工程技術士 2 名" className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                     </label>
                     <div>
                       <span className="block text-xs font-medium text-[var(--text-2)] mb-1">五、職業安全衛生</span>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm py-1">
-                        <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={!!extras.edu} onChange={(e) => setExtras({ ...extras, edu: e.target.checked })} />勤前教育（含危害告知）</label>
-                        <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={!!extras.ppe} onChange={(e) => setExtras({ ...extras, ppe: e.target.checked })} />檢查個人防護具</label>
+                        <label className="inline-flex items-center gap-1.5"><input type="checkbox" disabled={!can.edit} checked={!!extras.edu} onChange={(e) => setExtras({ ...extras, edu: e.target.checked })} />勤前教育（含危害告知）</label>
+                        <label className="inline-flex items-center gap-1.5"><input type="checkbox" disabled={!can.edit} checked={!!extras.ppe} onChange={(e) => setExtras({ ...extras, ppe: e.target.checked })} />檢查個人防護具</label>
                         <label className="inline-flex items-center gap-1.5">新進勞工提報勞保
-                          <select value={extras.insured || '無新進勞工'} onChange={(e) => setExtras({ ...extras, insured: e.target.value })}
+                          <select value={extras.insured || '無新進勞工'} disabled={!can.edit} onChange={(e) => setExtras({ ...extras, insured: e.target.value })}
                             className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs">
                             {['有', '無', '無新進勞工'].map((s) => <option key={s}>{s}</option>)}
                           </select>
@@ -423,18 +424,18 @@ export default function SiteLog() {
                     </div>
                     <label className="block">
                       <span className="block text-xs font-medium text-[var(--text-2)] mb-1">六、施工取樣試驗紀錄</span>
-                      <input value={extras.sampling || ''} onChange={(e) => setExtras({ ...extras, sampling: e.target.value })}
-                        placeholder="如：混凝土圓柱試體 2 組、坍度 18±2.5cm" className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                      <input value={extras.sampling || ''} disabled={!can.edit} onChange={(e) => setExtras({ ...extras, sampling: e.target.value })}
+                        placeholder="如：混凝土圓柱試體 2 組、坍度 18±2.5cm" className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                     </label>
                     <label className="block">
                       <span className="block text-xs font-medium text-[var(--text-2)] mb-1">七、通知協力廠商辦理事項</span>
-                      <input value={extras.notice || ''} onChange={(e) => setExtras({ ...extras, notice: e.target.value })}
-                        className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                      <input value={extras.notice || ''} disabled={!can.edit} onChange={(e) => setExtras({ ...extras, notice: e.target.value })}
+                        className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                     </label>
                     <label className="block sm:col-span-2">
                       <span className="block text-xs font-medium text-[var(--text-2)] mb-1">八、重要事項紀錄</span>
-                      <input value={extras.important || ''} onChange={(e) => setExtras({ ...extras, important: e.target.value })}
-                        className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                      <input value={extras.important || ''} disabled={!can.edit} onChange={(e) => setExtras({ ...extras, important: e.target.value })}
+                        className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                     </label>
                   </div>
                 </div>
@@ -459,16 +460,19 @@ export default function SiteLog() {
             ) : (
               <>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition shadow-sm ${(photoBusy || batchBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
-                    {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
-                    <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy} onChange={onBatchPhotos} className="hidden" />
-                    <Sparkles size={15} aria-hidden /> AI 批次辨識照片
-                  </label>
-                  <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] transition ${(photoBusy || batchBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
-                    <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy || batchBusy} onChange={onAddPhotos} className="hidden" />
-                    {photoBusy ? '上傳中…' : '＋ 直接加照片'}
-                  </label>
-                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張　·　批次辨識＝AI 自動生說明並配對工項</span>
+                  {/* 照片上傳=施工廠商的事:唯讀角色(監造/機關)不顯示死按鈕(U-01) */}
+                  {can.edit && <>
+                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition shadow-sm ${(photoBusy || batchBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
+                      {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
+                      <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy} onChange={onBatchPhotos} className="hidden" />
+                      <Sparkles size={15} aria-hidden /> AI 批次辨識照片
+                    </label>
+                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] transition ${(photoBusy || batchBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
+                      <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy || batchBusy} onChange={onAddPhotos} className="hidden" />
+                      {photoBusy ? '上傳中…' : '＋ 直接加照片'}
+                    </label>
+                  </>}
+                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? '　·　批次辨識＝AI 自動生說明並配對工項' : '（照片由施工廠商上傳）'}</span>
                 </div>
 
                 {/* 批次辨識覆核區:AI 逐張判讀後,人可改說明/工項再一鍵全上傳 */}
@@ -535,8 +539,8 @@ export default function SiteLog() {
                             {p.caption}
                           </div>
                         )}
-                        <button onClick={() => onDeletePhoto(p)} title="刪除照片"
-                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition">✕</button>
+                        {can.edit && <button onClick={() => onDeletePhoto(p)} title="刪除照片"
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition">✕</button>}
                       </div>
                     ))}
                   </div>
@@ -566,7 +570,7 @@ export default function SiteLog() {
                   <div className="flex justify-between items-center gap-2">
                     <button onClick={() => setDate(l.log_date)} className="font-medium text-[var(--text)] tabular-nums text-left flex-1 truncate">{l.log_date}</button>
                     <span className="text-xs text-[var(--text-3)]">{Object.keys(l.items).length} 工項</span>
-                    <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) deleteSiteLog(l.id) }} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                    {can.edit && <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(`日誌刪除失敗:${error.message}`) } }} className="text-[var(--text-3)] hover:text-rose-500" aria-label={`刪除 ${l.log_date} 日誌`}>✕</button>}
                   </div>
                   {l.work_summary && <div className="text-xs text-[var(--text-2)] truncate mt-0.5">{l.work_summary}</div>}
                 </div>
@@ -600,7 +604,7 @@ function FreqChips({ items, label, onAdd }) {
   )
 }
 
-function RowsEditor({ title, rows, onChange, fields }) {
+function RowsEditor({ title, rows, onChange, fields, disabled = false }) {
   const set = (i, key, val) => onChange(rows.map((r, j) => (j === i ? { ...r, [key]: val } : r)))
   const add = () => onChange([...rows, Object.fromEntries(fields.map((f) => [f.key, f.num ? '' : '']))])
   const del = (i) => onChange(rows.filter((_, j) => j !== i))
@@ -608,19 +612,19 @@ function RowsEditor({ title, rows, onChange, fields }) {
     <div>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-xs font-medium text-[var(--text-2)]">{title}</span>
-        <button onClick={add} className="text-xs text-[var(--blue)] hover:underline">＋ 加一列</button>
+        {!disabled && <button onClick={add} className="text-xs text-[var(--blue)] hover:underline">＋ 加一列</button>}
       </div>
       {rows.length === 0 ? (
         <p className="text-xs text-[var(--text-3)]">（未填）</p>
       ) : rows.map((r, i) => (
         <div key={i} className="flex items-center gap-2 mb-1.5">
           {fields.map((f) => (
-            <input key={f.key} value={r[f.key] ?? ''} placeholder={f.ph}
+            <input key={f.key} value={r[f.key] ?? ''} placeholder={f.ph} disabled={disabled}
               type={f.num ? 'number' : 'text'} min={f.num ? 0 : undefined} step={f.num ? 'any' : undefined}
               onChange={(e) => set(i, f.key, f.num ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
-              className={`${f.w} border border-[var(--border)] rounded-lg px-2 py-1 text-sm ${f.num ? 'text-right tabular-nums' : ''}`} />
+              className={`${f.w} border border-[var(--border)] rounded-lg px-2 py-1 text-sm ${f.num ? 'text-right tabular-nums' : ''} disabled:opacity-50 disabled:bg-[var(--surface-2)]`} />
           ))}
-          <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+          {!disabled && <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-rose-500" aria-label="刪除此列">✕</button>}
         </div>
       ))}
     </div>

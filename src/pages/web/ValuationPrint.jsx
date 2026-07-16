@@ -3,14 +3,13 @@ import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { Printer } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
-import { applyApprovedChangeOrders, approvedNetAmount } from '../../lib/changeOrders.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
 
 // 估驗計價單（可列印 / 另存 PDF）— 不套 WebLayout，整頁就是文件
 export default function ValuationPrint() {
-  const { project, workItems, valuations, currentUser, changeOrders } = useStore()
+  const { project, workItems, valuations, currentUser, adjustedItems: adjItems, coNet, revisedTotal } = useStore()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
 
@@ -18,11 +17,7 @@ export default function ValuationPrint() {
   const selected = valuations.find((v) => v.id === periodId) || valuations[valuations.length - 1]
   const prev = selected ? valuations.find((v) => v.period_no === selected.period_no - 1) : null
 
-  // 已核准變更套回工項後建樹(與估驗頁同一套計算)
-  const adjItems = useMemo(
-    () => (workItems ? applyApprovedChangeOrders(workItems.items, changeOrders) : []),
-    [workItems, changeOrders],
-  )
+  // 變更設計調整由 store 統一提供(財務單一真相層,B-02),與估驗頁同一份
   const { childrenMap, roots } = useMemo(
     () => (workItems ? buildBillableTree(adjItems) : { childrenMap: new Map(), roots: [] }),
     [workItems, adjItems],
@@ -39,8 +34,7 @@ export default function ValuationPrint() {
     )
   }
 
-  const coNet = approvedNetAmount(changeOrders)
-  const billableTotal = (workItems.meta.billable_total || 0) + coNet
+  const billableTotal = revisedTotal
   const leaves = adjItems
     .filter((it) => it.is_billable && !it.is_rollup && !(childrenMap.get(it.item_key)?.length) && (cumThis.get(it.item_key) || 0) > 0)
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))

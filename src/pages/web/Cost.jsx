@@ -22,6 +22,17 @@ export default function Cost() {
 
   const [form, setForm] = useState({ category: '分包', title: '', vendor: '', budget_amount: '', actual_amount: '' })
   const [busy, setBusy] = useState(false)
+  const [errMsg, setErrMsg] = useState('') // 寫入失敗如實回報(B-07)
+  const onUpdate = async (id, patch) => {
+    setErrMsg('')
+    const { error } = await updateCostItem(id, patch)
+    if (error) setErrMsg(`未寫入:${error.message}`)
+  }
+  const onDelete = async (id) => {
+    setErrMsg('')
+    const { error } = await deleteCostItem(id)
+    if (error) setErrMsg(`刪除失敗:${error.message}`)
+  }
 
   const totals = useMemo(() => {
     let budget = 0, actual = 0
@@ -44,10 +55,11 @@ export default function Cost() {
   const onAdd = async (e) => {
     e.preventDefault()
     if (!form.title.trim()) return
-    setBusy(true)
+    setErrMsg(''); setBusy(true)
     const { error } = await createCostItem(form)
     setBusy(false)
-    if (!error) setForm({ category: form.category, title: '', vendor: '', budget_amount: '', actual_amount: '' })
+    if (error) { setErrMsg(`新增失敗:${error.message}`); return }
+    setForm({ category: form.category, title: '', vendor: '', budget_amount: '', actual_amount: '' })
   }
 
   if (!dbMode && !demoMode) {
@@ -59,6 +71,13 @@ export default function Cost() {
       <div className="min-w-0">
         <PageHeader title="成本管理" tagline="預算 vs 實際・毛利" subtitle="合約收入（發包工程費）對照成本與分包，即時算出預估與實際毛利" />
       </div>
+
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Stat label={coNet !== 0 ? '合約收入（變更後契約金額）' : '合約收入（發包工程費）'} value={yi(revenue)} sub={coNet !== 0 ? `NT$ ${money(revenue)} · 含核准追加減 ${coNet > 0 ? '+' : ''}${money(coNet)}` : `NT$ ${money(revenue)}`} color="text-[var(--blue-text)]" />
@@ -161,22 +180,22 @@ export default function Cost() {
                     <td className="px-2 text-[var(--text-2)]">{c.vendor || '—'}</td>
                     <td className="px-2 text-right">
                       <input type="number" min="0" step="any" defaultValue={c.budget_amount ?? ''}
-                        onBlur={(e) => { const n = parseFloat(e.target.value); updateCostItem(c.id, { budget_amount: isNaN(n) ? 0 : n }) }}
+                        onBlur={(e) => { const n = parseFloat(e.target.value); onUpdate(c.id, { budget_amount: isNaN(n) ? 0 : n }) }}
                         className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
                     </td>
                     <td className="px-2 text-right">
                       <input type="number" min="0" step="any" defaultValue={c.actual_amount ?? ''}
-                        onBlur={(e) => { const n = parseFloat(e.target.value); updateCostItem(c.id, { actual_amount: isNaN(n) ? 0 : n }) }}
+                        onBlur={(e) => { const n = parseFloat(e.target.value); onUpdate(c.id, { actual_amount: isNaN(n) ? 0 : n }) }}
                         className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
                     </td>
                     <td className="px-2">
-                      <button onClick={() => updateCostItem(c.id, { status: c.status === '已結算' ? '進行中' : '已結算' })}
+                      <button onClick={() => onUpdate(c.id, { status: c.status === '已結算' ? '進行中' : '已結算' })}
                         className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${c.status === '已結算' ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'bg-[var(--slate-tint)] text-[var(--slate-text)]'}`}>
                         {c.status}
                       </button>
                     </td>
                     <td className="px-2 pr-5 text-right">
-                      <button onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) deleteCostItem(c.id) }}
+                      <button onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) onDelete(c.id) }}
                         className="text-[var(--text-3)] hover:text-rose-600 text-sm">✕</button>
                     </td>
                   </tr>

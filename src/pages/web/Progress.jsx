@@ -3,26 +3,34 @@ import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Field, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
-import { applyApprovedChangeOrders, revisedContractTotal } from '../../lib/changeOrders.js'
 
 const monthLabel = (str) => {
   const d = parseLocalDate(str)
   return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : null
 }
-const TODAY = new Date() // 今天（部署後依使用者實際日期）
-
 export default function Progress() {
+  const TODAY = new Date() // 每次 render 取(B-11):模組層常數會讓長開分頁的「今天」凍結在開頁那天
   const { project, workItems: data, progressPlan, generateSchedule, updatePlannedPct, valuations,
-    isSupabaseConfigured, currentProject, workItemsSource, changeOrders } = useStore()
+    isSupabaseConfigured, currentProject, workItemsSource,
+    adjustedItems: adjItems, revisedTotal } = useStore()
   const [start, setStart] = useState(project.start_date)
   const [end, setEnd] = useState(project.end_date)
   const [expanded, setExpanded] = useState(() => new Set()) // 展開的工項節點 key
+  const [errMsg, setErrMsg] = useState('') // 排程寫入失敗如實回報(B-08)
   const toggle = (key) => setExpanded((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n })
+  const onGenerate = async (s, e) => {
+    setErrMsg('')
+    const { error } = await generateSchedule(s, e)
+    if (error) setErrMsg(`預定進度未寫入:${error.message}`)
+  }
+  const onPlannedPct = async (i, pct) => {
+    const { error } = await updatePlannedPct(i, pct)
+    if (error) setErrMsg(`第 ${i + 1} 月預定% 未寫入:${error.message}`)
+  }
 
-  // 已核准變更套回工項後建樹;完成%分母 = 變更後契約金額
-  const adjItems = useMemo(() => (data ? applyApprovedChangeOrders(data.items, changeOrders) : []), [data, changeOrders])
+  // 變更設計調整/變更後契約金額由 store 統一提供(財務單一真相層,B-02)
   const tree = useMemo(() => (data ? buildBillableTree(adjItems) : { roots: [], childrenMap: new Map() }), [data, adjItems])
-  const billableTotal = data ? revisedContractTotal(data.meta.billable_total, changeOrders) : 0
+  const billableTotal = data ? revisedTotal : 0
 
   // 各估驗期 → 累計實際完成%（累計估驗金額 ÷ 發包工程費），對應到月份
   const actualByMonth = useMemo(() => {
@@ -78,7 +86,8 @@ export default function Progress() {
           <div className="flex items-end gap-3 flex-wrap">
             <Field label="開工日"><input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
             <Field label="竣工日"><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
-            <Button onClick={() => generateSchedule(start, end)}>產生預定 S 曲線</Button>
+            <Button onClick={() => onGenerate(start, end)}>產生預定 S 曲線</Button>
+            {errMsg && <span className="text-sm text-rose-600">{errMsg}</span>}
           </div>
         </Card>
       </div>
@@ -141,8 +150,15 @@ export default function Progress() {
   return (
     <div className="space-y-5">
       <Header billableTotal={billableTotal} project={project} action={
-        <Button variant="secondary" onClick={() => generateSchedule(progressPlan.start, progressPlan.end)}>重產 S 曲線</Button>
+        <Button variant="secondary" onClick={() => onGenerate(progressPlan.start, progressPlan.end)}>重產 S 曲線</Button>
       } />
+
+      {errMsg && (
+        <div className="flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2">
+          <span>{errMsg}</span>
+          <button onClick={() => setErrMsg('')} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="依預定 S 曲線內插" color="text-[var(--text)]" />
@@ -258,7 +274,7 @@ export default function Progress() {
                     <td className="py-1.5 pl-3 text-[var(--text)] tabular-nums">{mm.label}</td>
                     <td className="text-right px-3">
                       <input type="number" min="0" max="100" value={mm.plannedPct}
-                        onChange={(e) => { let n = parseFloat(e.target.value); if (isNaN(n)) n = 0; updatePlannedPct(i, Math.max(0, Math.min(100, n))) }}
+                        onChange={(e) => { let n = parseFloat(e.target.value); if (isNaN(n)) n = 0; onPlannedPct(i, Math.max(0, Math.min(100, n))) }}
                         className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none" />
                     </td>
                     <td className="text-right px-3 pr-4 tabular-nums">{act != null ? <span className="text-[var(--blue-text)]">{act.toFixed(1)}%</span> : <span className="text-[var(--text-3)]">—</span>}</td>

@@ -34,23 +34,52 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       { onConflict: 'project_id,log_date' },
     ).select().single()
     if (e1) return { error: e1 }
-    await supabase.from('daily_log_items').delete().eq('daily_log_id', up.id)
-    const rows = Object.entries(items || {}).map(([key, q]) => {
+    // 明細用 diff 寫入(B-05):原本「先全刪再插」,插入失敗時該日工項數量已被刪光。
+    // 現在逐列比對:只刪被移除的、更新有變的、插入新增的——任一步失敗,其餘資料仍在。
+    const { data: existing, error: eq } = await supabase.from('daily_log_items')
+      .select('id, work_item_id, qty_today').eq('daily_log_id', up.id)
+    if (eq) return { error: eq }
+    const byWi = new Map((existing || []).map((r) => [r.work_item_id, r]))
+    const nextRows = Object.entries(items || {}).map(([key, q]) => {
       const wi = wiMaps.byKey.get(key)
-      return (wi && q) ? { daily_log_id: up.id, work_item_id: wi.id, qty_today: q } : null
+      return (wi && q) ? { work_item_id: wi.id, qty_today: q } : null
     }).filter(Boolean)
-    if (rows.length) {
-      const { error: e2 } = await supabase.from('daily_log_items').insert(rows)
-      if (e2) return { error: e2 }
+    const nextIds = new Set(nextRows.map((r) => r.work_item_id))
+    const toDelete = (existing || []).filter((r) => !nextIds.has(r.work_item_id)).map((r) => r.id)
+    if (toDelete.length) {
+      const { error: ed } = await supabase.from('daily_log_items').delete().in('id', toDelete)
+      if (ed) return { error: ed }
     }
-    setSiteLogs(await loadSiteLogsFromDB(currentProject.project_id, wiMaps.idToKey))
+    for (const r of nextRows) {
+      const cur = byWi.get(r.work_item_id)
+      if (cur) {
+        if (Number(cur.qty_today) !== Number(r.qty_today)) {
+          const { error: eu } = await supabase.from('daily_log_items')
+            .update({ qty_today: r.qty_today }).eq('id', cur.id)
+          if (eu) return { error: eu }
+        }
+      } else {
+        const { error: ei } = await supabase.from('daily_log_items')
+          .insert({ daily_log_id: up.id, ...r })
+        if (ei) return { error: ei }
+      }
+    }
+    const rows = nextRows
+    // 寫入已成功;重載失敗不可偽裝成存檔失敗(B-09 載入層會 throw)
+    try { setSiteLogs(await loadSiteLogsFromDB(currentProject.project_id, wiMaps.idToKey)) } catch { /* 保留現況 */ }
     log('施工日誌送出', `${log_date}（${rows.length} 工項）`, { user: currentUser?.name || '系統', role: '施工現場' })
     return { error: null }
   }, [dbMode, currentProject, currentUser, wiMaps, log])
 
+  // DB 刪成功才從 UI 移除(B-07:RLS 拒絕時原本假消失,重整即復活)
   const deleteSiteLog = useCallback(async (logId) => {
-    if (dbMode) await supabase.from('daily_logs').delete().eq('id', logId)
+    if (dbMode) {
+      const res = await supabase.from('daily_logs').delete().eq('id', logId).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或日誌已被移除')
+      if (error) return { error }
+    }
     setSiteLogs((ls) => ls.filter((l) => l.id !== logId))
+    return { error: null }
   }, [dbMode])
 
   // 施工日誌照片：檔案進 Storage（photos bucket）、metadata 進 photos 表。
@@ -87,10 +116,14 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return { error: null, id }
   }, [dbMode, currentProject, currentUser, wiMaps, log])
 
+  // 先刪 DB 列(有 RLS/guard 把關,失敗如實回報),成功後再清 Storage 檔
+  // (Storage 清失敗=孤兒檔,遠比「檔沒了、列還在」安全)——B-07。
   const deleteSitePhoto = useCallback(async (photo) => {
     if (!dbMode) return { error: { message: '需真專案' } }
+    const res = await supabase.from('photos').delete().eq('id', photo.id).select('id')
+    const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或照片已被移除')
+    if (error) return { error }
     await supabase.storage.from('photos').remove([photo.storage_path])
-    await supabase.from('photos').delete().eq('id', photo.id)
     return { error: null }
   }, [dbMode])
 

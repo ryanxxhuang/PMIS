@@ -1,5 +1,6 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* 字型改由 index.html <link> 載入:@import 放在 tailwind 展開後會落在規則之後,
+   Lightning CSS 於 build 時整行丟棄 → 正式站字型靜默失效(dev 看得到、prod 沒有)。 */
 
 :root {
   /* One harmonized family for both Chinese and Latin — avoids the mixed-metrics look */

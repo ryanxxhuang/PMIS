@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { Printer, Sparkles, Images } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
-import { applyApprovedChangeOrders, approvedNetAmount } from '../../lib/changeOrders.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
@@ -11,7 +10,8 @@ const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-U
 // 估驗請款佐證包(可列印 / 另存 PDF)——本期估驗明細 + AI 本期施工說明 + 佐證照片(按工項)。
 // 佐證照片吃 classify-site-photo 配好的工項標籤,估驗時自動歸位;不套 WebLayout,整頁即文件。
 export default function ValuationPackage() {
-  const { project, workItems, valuations, currentUser, changeOrders, siteLogs,
+  const { project, workItems, valuations, currentUser, siteLogs,
+    adjustedItems: adjItems, revisedTotal,
     listPhotosByWorkItems, draftValuationSummary } = useStore()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
@@ -20,10 +20,7 @@ export default function ValuationPackage() {
   const selected = valuations.find((v) => v.id === periodId) || valuations[valuations.length - 1]
   const prev = selected ? valuations.find((v) => v.period_no === selected.period_no - 1) : null
 
-  const adjItems = useMemo(
-    () => (workItems ? applyApprovedChangeOrders(workItems.items, changeOrders) : []),
-    [workItems, changeOrders],
-  )
+  // 變更設計調整由 store 統一提供(財務單一真相層,B-02)
   const { childrenMap, roots } = useMemo(
     () => (workItems ? buildBillableTree(adjItems) : { childrenMap: new Map(), roots: [] }),
     [workItems, adjItems],
@@ -46,8 +43,7 @@ export default function ValuationPackage() {
   const totalCum = roots.reduce((s, r) => s + (cumThis.get(r.item_key) || 0), 0)
   const totalPrev = roots.reduce((s, r) => s + (cumPrev.get(r.item_key) || 0), 0)
   const periodAmt = totalCum - totalPrev
-  const coNet = approvedNetAmount(changeOrders)
-  const billableTotal = (workItems?.meta.billable_total || 0) + coNet
+  const billableTotal = revisedTotal
   const completion = billableTotal ? (totalCum / billableTotal) * 100 : 0
   const retPct = selected?.retention_pct ?? 5
 

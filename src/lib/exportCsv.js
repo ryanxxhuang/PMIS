@@ -3,7 +3,10 @@
 
 function cell(v) {
   if (v == null) return ''
-  const s = String(v)
+  let s = String(v)
+  // Formula injection 防護(B-14):自由文字若以 = + - @ 開頭,Excel 會當公式執行。
+  // 純數字(含負數/小數)不受影響;其餘加 ' 前綴中和(Excel 顯示原文)。
+  if (typeof v !== 'number' && /^[=+\-@]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = `'${s}`
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 

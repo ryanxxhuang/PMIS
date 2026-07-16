@@ -19,14 +19,18 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
   // ITP 檢驗停留點(W/H/R;狀態由連結查驗推導,見 lib/itp.js)
   const [inspectionPoints, setInspectionPoints] = useState([])
 
+  // 載入層失敗會 throw(B-09);這裡是「寫入成功後的重載」——重載失敗不可把
+  // 成功的寫入偽裝成錯誤,保留現況即可(下次進頁會重載補齊)。
   const reloadQuality = useCallback(async () => {
-    const qual = await loadQualityFromDB(currentProject.project_id, wiMaps.byId)
-    setInspections(qual.inspections); setDefects(qual.defects)
+    try {
+      const qual = await loadQualityFromDB(currentProject.project_id, wiMaps.byId)
+      setInspections(qual.inspections); setDefects(qual.defects)
+    } catch { /* 保留現況 */ }
   }, [currentProject, wiMaps])
 
   // 缺失單獨重載(缺失不依賴標單;匯標單前 wiMaps 為空,工項欄位留白即可)
   const reloadDefects = useCallback(async () => {
-    setDefects(await loadDefectsFromDB(currentProject.project_id, wiMaps.byId))
+    try { setDefects(await loadDefectsFromDB(currentProject.project_id, wiMaps.byId)) } catch { /* 保留現況 */ }
   }, [currentProject, wiMaps])
 
   const createInspection = useCallback(async (input) => {
@@ -339,9 +343,15 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     return { error: null }
   }, [dbMode, currentProject, currentUser, wiMaps, log])
 
+  // DB 刪成功才從 UI 移除(B-07:原本樂觀移除,RLS 拒絕時假消失)
   const deleteInspectionPoint = useCallback(async (id) => {
+    if (dbMode) {
+      const res = await supabase.from('inspection_points').delete().eq('id', id).select('id')
+      const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或停留點已被移除')
+      if (error) return { error }
+    }
     setInspectionPoints((ps) => ps.filter((p) => p.id !== id))
-    if (dbMode) await supabase.from('inspection_points').delete().eq('id', id)
+    return { error: null }
   }, [dbMode])
 
   // 從停留點發起查驗申請:建立查驗並回寫 inspection_id 連結(狀態自此由查驗推導)

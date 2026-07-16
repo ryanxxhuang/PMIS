@@ -10,16 +10,21 @@ import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
 import InsightsPanel from '../../components/InsightsPanel.jsx'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
-const TODAY = new Date()
-const todayISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}-${String(TODAY.getDate()).padStart(2, '0')}`
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
 
 export default function Dashboard() {
   const { project, currentUser, workItems, workItemsSource, demoMode, valuations, progressPlan, inspections, defects, siteLogs,
     obligations, costItems, safetyRecords, changeOrders, itemSchedules,
+    adjustedItems, revisedTotal,
     checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents } = useStore()
   const imported = workItemsSource === 'db' || demoMode
-  const balls = tallyBalls({ rfis, submittals, valuations, defects, inspections, observations, changeOrders })
+  // 「今天」每次 render 取:工地平板整週不關分頁,模組層常數會讓日期/逾期判斷停在開頁那天(B-11)
+  const TODAY = new Date()
+  const todayISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}-${String(TODAY.getDate()).padStart(2, '0')}`
+  const balls = useMemo(
+    () => tallyBalls({ rfis, submittals, valuations, defects, inspections, observations, changeOrders }),
+    [rfis, submittals, valuations, defects, inspections, observations, changeOrders],
+  )
   const myOrg = currentUser?.org_type || 'contractor'
   const myItems = useMemo(
     () => myOpenItems(myOrg, { rfis, submittals, valuations, defects, inspections, observations, changeOrders }),
@@ -45,11 +50,12 @@ export default function Dashboard() {
     URL.revokeObjectURL(a.href)
   }
 
+  // 財務單一真相層(B-02):完成率/金額一律以「已核准變更套回後」計算,與估驗/進度頁一致
   const { roots, childrenMap } = useMemo(
-    () => (workItems ? buildBillableTree(workItems.items) : { roots: [], childrenMap: new Map() }),
-    [workItems],
+    () => (workItems ? buildBillableTree(adjustedItems) : { roots: [], childrenMap: new Map() }),
+    [workItems, adjustedItems],
   )
-  const billableTotal = workItems?.meta.billable_total || 0
+  const billableTotal = workItems ? revisedTotal : 0
   const latestVal = valuations[valuations.length - 1]
   const actualCum = useMemo(
     () => (latestVal ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) : 0),
@@ -66,7 +72,8 @@ export default function Dashboard() {
     if (elapsed >= N - 1) return months[N - 1].plannedPct
     const lo = Math.floor(elapsed), f = elapsed - lo
     return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
-  }, [progressPlan])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progressPlan, todayISO])
   const behind = plannedNow != null ? plannedNow - completion : null
 
   const openDefects = defects.filter((d) => d.status !== '已結案')
@@ -80,7 +87,7 @@ export default function Dashboard() {
   const insights = useMemo(() => insightsForRole(buildInsights({
     progress: { actualPct: completion, plannedPct: plannedNow }, siteLogs, defects, testSamples,
     obligations, valuations, changeOrders, anchors,
-  }, TODAY), myOrg), [completion, plannedNow, siteLogs, defects, testSamples, obligations, valuations, changeOrders, myOrg]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, TODAY), myOrg), [completion, plannedNow, siteLogs, defects, testSamples, obligations, valuations, changeOrders, myOrg, todayISO]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-5">
@@ -285,7 +292,7 @@ function RoleActionCenter({ org, items }) {
             const m = TAG_META[x.tag] || { icon: Eye, c: 'var(--text-3)', bg: 'var(--surface-2)' }
             const Icon = m.icon
             return (
-              <li key={i}>
+              <li key={x.id || `${x.tag}|${x.title}|${i}`}>
                 <Link to={x.to} className="group flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition">
                   <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0" style={{ background: m.bg, color: m.c }}>
                     <Icon size={16} aria-hidden />

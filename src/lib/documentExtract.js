@@ -10,6 +10,8 @@
 //         never cite a page number.
 // Scanned PDF / images → text extraction yields (near-)empty pages; callers
 // must detect this via hasExtractableText() and fail honestly (no OCR in P0-06).
+// pdf.js worker 自帶(B-12):不依賴 CDN,機關內網也能抽字。
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { normalizeSourceText } from '../../supabase/functions/_shared/sourceVerify.ts'
 
 export const PDF_EXTRACTION_METHOD = 'pdf_text'
@@ -97,8 +99,7 @@ export async function extractDocumentPages(file) {
   }
   if (name.endsWith('.pdf') || type.includes('pdf')) {
     const pdfjs = await import('pdfjs-dist')
-    pdfjs.GlobalWorkerOptions.workerSrc =
-      `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
     const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise
     const rawPages = []
     for (let i = 1; i <= pdf.numPages; i++) {

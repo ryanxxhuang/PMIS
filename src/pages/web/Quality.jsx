@@ -33,8 +33,13 @@ export default function Quality() {
     return <Card title="品質查驗"><Empty>此專案的標單尚未匯入資料庫。請先到「標單工項」匯入標單。</Empty></Card>
   }
 
+  // 失敗要讓使用者看到、表單不關(B-07:原本吞掉 error,看起來像成功)
   const submitInsp = async () => {
-    setBusy(true); await createInspection(inspForm); setBusy(false); setInspForm(null)
+    setErrMsg(''); setBusy(true)
+    const { error } = await createInspection(inspForm)
+    setBusy(false)
+    if (error) { setErrMsg(`查驗申請未送出:${error.message}`); return }
+    setInspForm(null)
   }
   const onResult = async (insp, pass) => {
     let note = ''
@@ -457,11 +462,18 @@ const OBS_STATUS_COLOR = { 待處理: 'amber', 已處理: 'green', 轉缺失: 's
 function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEscalate, onDelete, resolveMarkup }) {
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
   const [markupOpen, setMarkupOpen] = useState(false)
 
-  const submit = async () => {
-    setBusy(true); await onCreate(form); setBusy(false); setForm(null)
+  // 寫入失敗如實回報(B-07):失敗時表單不關、清單不動
+  const run = async (label, fn) => {
+    setErr(''); setBusy(true)
+    const { error } = (await fn()) || {}
+    setBusy(false)
+    if (error) { setErr(`${label}失敗:${error.message}`); return false }
+    return true
   }
+  const submit = async () => { if (await run('新增觀察', () => onCreate(form))) setForm(null) }
   const open = observations.filter((o) => o.status === '待處理').length
 
   return (
@@ -485,6 +497,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
         </div>
       )}
 
+      {err && <p className="text-xs text-rose-600 mb-2">{err}</p>}
       {observations.length === 0 ? <Empty>尚無觀察事項。現場看到「不對但還沒到缺失」的狀況先記為觀察，處理掉或必要時一鍵升級為缺失。</Empty> : (
         <div className="space-y-2">
           {observations.map((o) => (
@@ -497,10 +510,10 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
               {canWrite && o.status !== '轉缺失' && (
                 <div className="flex items-center gap-2 shrink-0">
                   {o.status === '待處理' && <>
-                    <Button variant="secondary" onClick={() => onUpdate(o.id, { status: '已處理' })}>標記已處理</Button>
-                    <Button variant="outline" onClick={async () => { if (await appConfirm({ title: '升級為正式缺失？', body: '將自動開立缺失單追蹤改善。', confirmLabel: '升級' })) onEscalate(o) }}>升級為缺失</Button>
+                    <Button variant="secondary" disabled={busy} onClick={() => run('標記已處理', () => onUpdate(o.id, { status: '已處理' }))}>標記已處理</Button>
+                    <Button variant="outline" disabled={busy} onClick={async () => { if (await appConfirm({ title: '升級為正式缺失？', body: '將自動開立缺失單追蹤改善。', confirmLabel: '升級' })) run('升級為缺失', () => onEscalate(o)) }}>升級為缺失</Button>
                   </>}
-                  <button onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) onDelete(o.id) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
+                  <button disabled={busy} onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) run('刪除觀察', () => onDelete(o.id)) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
                 </div>
               )}
             </div>
