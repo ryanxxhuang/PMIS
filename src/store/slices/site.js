@@ -34,36 +34,23 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       { onConflict: 'project_id,log_date' },
     ).select().single()
     if (e1) return { error: e1 }
-    // 明細用 diff 寫入(B-05):原本「先全刪再插」,插入失敗時該日工項數量已被刪光。
-    // 現在逐列比對:只刪被移除的、更新有變的、插入新增的——任一步失敗,其餘資料仍在。
-    const { data: existing, error: eq } = await supabase.from('daily_log_items')
-      .select('id, work_item_id, qty_today').eq('daily_log_id', up.id)
-    if (eq) return { error: eq }
-    const byWi = new Map((existing || []).map((r) => [r.work_item_id, r]))
+    // 明細寫入(B-05 根治):daily_log_items 本就有 unique(daily_log_id, work_item_id)
+    // 約束(baseline 表定義),直接單批 upsert 撞約束合併(新增+更新一次落庫),
+    // 再清掉被移除的列。先寫後刪:刪除失敗只是殘留多餘列(下次存檔會再清),
+    // 不會像舊「先全刪再插」在中途失敗時把該日數量刪光。
     const nextRows = Object.entries(items || {}).map(([key, q]) => {
       const wi = wiMaps.byKey.get(key)
-      return (wi && q) ? { work_item_id: wi.id, qty_today: q } : null
+      return (wi && q) ? { daily_log_id: up.id, work_item_id: wi.id, qty_today: q } : null
     }).filter(Boolean)
-    const nextIds = new Set(nextRows.map((r) => r.work_item_id))
-    const toDelete = (existing || []).filter((r) => !nextIds.has(r.work_item_id)).map((r) => r.id)
-    if (toDelete.length) {
-      const { error: ed } = await supabase.from('daily_log_items').delete().in('id', toDelete)
-      if (ed) return { error: ed }
+    if (nextRows.length) {
+      const { error: e2 } = await supabase.from('daily_log_items')
+        .upsert(nextRows, { onConflict: 'daily_log_id,work_item_id' })
+      if (e2) return { error: e2 }
     }
-    for (const r of nextRows) {
-      const cur = byWi.get(r.work_item_id)
-      if (cur) {
-        if (Number(cur.qty_today) !== Number(r.qty_today)) {
-          const { error: eu } = await supabase.from('daily_log_items')
-            .update({ qty_today: r.qty_today }).eq('id', cur.id)
-          if (eu) return { error: eu }
-        }
-      } else {
-        const { error: ei } = await supabase.from('daily_log_items')
-          .insert({ daily_log_id: up.id, ...r })
-        if (ei) return { error: ei }
-      }
-    }
+    const keep = nextRows.map((r) => `"${r.work_item_id}"`).join(',')
+    const delQuery = supabase.from('daily_log_items').delete().eq('daily_log_id', up.id)
+    const { error: e3 } = await (nextRows.length ? delQuery.not('work_item_id', 'in', `(${keep})`) : delQuery)
+    if (e3) return { error: e3 }
     const rows = nextRows
     // 寫入已成功;重載失敗不可偽裝成存檔失敗(B-09 載入層會 throw)
     try { setSiteLogs(await loadSiteLogsFromDB(currentProject.project_id, wiMaps.idToKey)) } catch { /* 保留現況 */ }
