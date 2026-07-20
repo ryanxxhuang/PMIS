@@ -157,6 +157,8 @@ export default function MonthlyReport() {
             <p className="text-sm text-[var(--text-3)]">本月施工日誌無工項數量紀錄。</p>
           ) : (
             <>
+              {/* 窄螢幕表格自行橫捲,不撐破報告版面;列印時寬度足夠、不受影響 */}
+              <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-y border-[var(--border)] text-xs text-[var(--text-2)]">
@@ -183,6 +185,7 @@ export default function MonthlyReport() {
                   ))}
                 </tbody>
               </table>
+              </div>
               {data.itemRows.length > 15 && (
                 <p className="text-xs text-[var(--text-3)] mt-2">依本月完成金額列前 15 項，其餘 {data.itemRows.length - 15} 項略（詳估驗計價明細）。</p>
               )}
@@ -322,7 +325,7 @@ function Section({ title, children }) {
   )
 }
 function Info({ k, v }) {
-  return <div className="flex gap-2"><dt className="text-[var(--text-3)] shrink-0">{k}：</dt><dd className="font-medium">{v || '—'}</dd></div>
+  return <div className="flex flex-wrap gap-x-2"><dt className="text-[var(--text-3)]">{k}：</dt><dd className="font-medium min-w-0">{v || '—'}</dd></div>
 }
 function Metric({ label, value, color = '' }) {
   return (

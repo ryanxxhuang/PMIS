@@ -56,7 +56,7 @@ export default function Payments() {
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="累計應領(扣保留款)" value={money(sum.net)} sub="NT$" color="text-[var(--text)]" />
         <Stat label="累計已收" value={money(sum.received)} sub="NT$" color="text-[var(--blue-text)]" />
         {/* 負未收=實收超過累計應領,屬資料異常而非正常 KPI(P1-07) */}

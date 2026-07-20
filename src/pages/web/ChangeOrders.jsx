@@ -80,7 +80,7 @@ export default function ChangeOrders() {
         <PageHeader title="變更設計" tagline="追加減帳・契約金額調整" subtitle="追加/減帳工項 → 僅「核准」的計入變更後契約金額" />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="原契約金額" value={yi(original)} sub={`NT$ ${money(original)}`} color="text-[var(--text)]" />
         <Stat label="累計追加(核准)" value={money(totals.add)} sub="NT$" color="text-[var(--green-text)]" />
         <Stat label="累計減帳(核准)" value={money(Math.abs(totals.reduce))} sub="NT$" color="text-[var(--red-text)]" />

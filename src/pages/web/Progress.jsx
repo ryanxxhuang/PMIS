@@ -155,7 +155,7 @@ export default function Progress() {
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="依預定 S 曲線內插" color="text-[var(--text)]" />
         <Stat label="實際進度" value={`${actualNow.toFixed(1)}%`} sub="累計估驗 ÷ 發包工程費" color="text-[var(--blue-text)]" />
         <Stat label="進度差" value={`${behind >= 0 ? '−' : '+'}${Math.abs(behind).toFixed(1)}%`} sub={behind > 0 ? '落後' : '超前/持平'} color={behind > 5 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />

@@ -5,7 +5,7 @@ import { FileText } from 'lucide-react'
 
 export function Card({ title, action, children, className = '', bodyClass = 'p-5' }) {
   return (
-    <div className={`bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] ${className}`}>
+    <div className={`min-w-0 bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] ${className}`}>
       {title && (
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[var(--border-2)]">
           <h3 className="font-semibold text-[var(--text)] text-sm tracking-tight">{title}</h3>
@@ -29,7 +29,7 @@ export function PageHeader({ title, tagline, subtitle, meta = [], action }) {
           </h1>
           {subtitle && <p className="text-xs text-[var(--text-2)] mt-1 truncate">{subtitle}</p>}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
           {meta.length > 0 && (
             <dl className="hidden sm:flex items-stretch divide-x divide-[var(--border)] border border-[var(--border)] rounded">
               {meta.map((m) => (
@@ -120,7 +120,7 @@ export const Button = forwardRef(function Button({ variant = 'primary', size = '
 
 export function Stat({ label, value, sub, color = 'text-[var(--text)]' }) {
   return (
-    <div className="stat-card bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] px-4 py-3.5">
+    <div className="stat-card min-w-0 bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] px-4 py-3.5">
       <div className="text-[11px] text-[var(--text-3)] tracking-[0.06em]">{label}</div>
       <div className={`stat-value leading-tight font-semibold mt-1 tabular-nums tracking-[-0.01em] ${color}`}>{value}</div>
       {sub && <div className="text-[11px] text-[var(--text-3)] mt-1 tabular-nums leading-snug">{sub}</div>}

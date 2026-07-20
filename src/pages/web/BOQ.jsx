@@ -153,7 +153,7 @@ export default function BOQ() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="發包工程費" value={yi(meta.billable_total)} sub={`NT$ ${fmt(meta.billable_total)}`} color="text-[var(--blue-text)]" />
         <Stat label="工項總數" value={fmt(meta.item_count)} sub="含分項與合計列" />
         <Stat label="末端計價工項" value={fmt(meta.leaf_count)} sub="估驗 / 數量管制單元" />

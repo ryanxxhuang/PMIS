@@ -71,7 +71,7 @@ export default function Schedule() {
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="已排程工項" value={counts.total} sub="項" color="text-[var(--text)]" />
         <Stat label="落後" value={counts.late} sub="項" color={counts.late > 0 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />
         <Stat label="進行中" value={counts.doing} sub="項" color="text-[var(--blue-text)]" />

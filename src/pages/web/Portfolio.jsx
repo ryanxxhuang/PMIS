@@ -149,8 +149,8 @@ function ProjectCard({ c, onOpen }) {
             <div className="absolute inset-y-0 w-[2px] bg-[var(--text-2)]" style={{ left: `${Math.min(100, c.plannedPct)}%` }} />
           )}
         </div>
-        <div className="num text-[11px] text-[var(--text-3)] mt-1.5 text-right whitespace-nowrap">
-          累計估驗 NT$ {fmt(c.cum)} ／ {fmt(c.billable)}
+        <div className="num text-[11px] text-[var(--text-3)] mt-1.5 text-right">
+          <span className="whitespace-nowrap">累計估驗 NT$ {fmt(c.cum)}</span> ／ <span className="whitespace-nowrap">{fmt(c.billable)}</span>
         </div>
       </div>
 
@@ -165,7 +165,7 @@ function ProjectCard({ c, onOpen }) {
           return (
             <div key={s.label} title={s.title} className="flex items-center gap-1.5 rounded-lg bg-[var(--surface-2)]/60 px-2 py-1.5 min-w-0">
               <Icon size={13} className={`shrink-0 ${s.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-3)]'}`} aria-hidden />
-              <span className="text-[var(--text-3)] whitespace-nowrap">{s.label}</span>
+              <span className="text-[var(--text-3)] truncate">{s.label}</span>
               <span className={`num ml-auto font-semibold ${s.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-2)]'}`}>{s.v}</span>
             </div>
           )
