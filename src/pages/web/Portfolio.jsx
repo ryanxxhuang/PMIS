@@ -118,7 +118,7 @@ function ProjectCard({ c, onOpen }) {
   const clickable = c.isCurrent || c.projectId || c.to
   return (
     <button onClick={onOpen} disabled={!clickable}
-      className={`text-left h-full flex flex-col bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03),0_1px_10px_-2px_rgba(22,32,43,.05)] p-5 pressable ${clickable ? 'hover:border-[var(--blue)] hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
+      className={`text-left h-full flex flex-col bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-5 pressable ${clickable ? 'hover:border-[var(--blue)] hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-semibold text-[var(--text)] truncate flex items-center gap-2">

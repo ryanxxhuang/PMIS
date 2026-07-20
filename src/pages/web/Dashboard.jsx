@@ -120,7 +120,7 @@ export default function Dashboard() {
       ) : (
         <div className="space-y-6">
           {/* 進度主橫幅:整份 dashboard 唯一的大聲量——落後就亮橘色警示 */}
-          <section className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03),0_1px_10px_-2px_rgba(22,32,43,.05)] grid md:grid-cols-[1fr_auto] overflow-hidden">
+          <section className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] grid md:grid-cols-[1fr_auto] overflow-hidden">
             <div className="px-6 py-5 min-w-0">
               <div className="text-[11px] font-medium uppercase tracking-[0.09em] text-[var(--text-3)]">累計實際進度</div>
               <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 mt-1.5">
@@ -172,7 +172,7 @@ export default function Dashboard() {
 
           {/* 次要計數:一排帶狀,圖示左、狀態右對齊,填滿寬度 */}
           {/* 2 欄為主、夠寬(xl)才 4 欄——避免窄桌機時中文標籤被擠成直排 */}
-          <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] grid grid-cols-2 xl:grid-cols-4 xl:divide-x divide-[var(--border-2)] max-xl:[&>*:nth-child(n+3)]:border-t max-xl:[&>*:nth-child(even)]:border-l max-xl:[&>*]:border-[var(--border-2)] overflow-hidden">
+          <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] grid grid-cols-2 xl:grid-cols-4 xl:divide-x divide-[var(--border-2)] max-xl:[&>*:nth-child(n+3)]:border-t max-xl:[&>*:nth-child(even)]:border-l max-xl:[&>*]:border-[var(--border-2)] overflow-hidden">
             {[
               { label: '估驗期數', value: valuations.length, sub: latestVal ? `第 ${latestVal.period_no} 期` : '尚無', to: '/valuation', icon: Coins },
               { label: '施工日誌', value: siteLogs.length, sub: `${siteLogs.length} 筆`, to: '/site-log', icon: PencilLine },
@@ -195,7 +195,7 @@ export default function Dashboard() {
 
           {/* 球在誰手上:三方責任,三等分置中填滿整排 */}
           {(balls.contractor + balls.supervisor + balls.owner + balls.design > 0) && (
-            <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-5 px-5 py-3">
+            <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-5 px-5 py-3">
               <span className="text-[11px] tracking-[0.04em] text-[var(--text-3)] shrink-0">待處理協作項 · 球在誰手上</span>
               <div className="sm:flex-1 grid grid-cols-3 divide-x divide-[var(--border-2)]">
                 {[

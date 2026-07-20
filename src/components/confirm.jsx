@@ -63,8 +63,8 @@ export function ConfirmHost() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print:hidden" role="dialog" aria-modal="true" aria-label={title} onKeyDown={onKeyDown}>
-      <div className="absolute inset-0 bg-black/40 enter-fade" onClick={() => close(false)} />
-      <div className="relative bg-[var(--surface)] text-[var(--text)] rounded-xl border border-[var(--border)] shadow-2xl w-full max-w-sm p-5 enter-modal">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] enter-fade" onClick={() => close(false)} />
+      <div className="relative bg-[var(--surface)] text-[var(--text)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] w-full max-w-sm p-5 enter-modal">
         <div className="flex items-start gap-3">
           <span className={`w-9 h-9 rounded-full grid place-items-center shrink-0 ${danger ? 'bg-[var(--red-tint)] text-[var(--red-text)]' : 'bg-[var(--blue-tint)] text-[var(--blue-text)]'}`}>
             {danger ? <AlertTriangle size={18} aria-hidden /> : isPrompt ? <PencilLine size={18} aria-hidden /> : <HelpCircle size={18} aria-hidden />}

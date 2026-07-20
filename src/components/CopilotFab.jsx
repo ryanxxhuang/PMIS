@@ -25,7 +25,7 @@ function CopilotMark({ size = 24 }) {
 function CopilotPanel({ onClose }) {
   const { data, facts, askAssistant } = useAssistantData()
   return (
-    <div className="fixed z-[60] flex flex-col bg-[var(--surface)] border border-[var(--border)] shadow-2xl overflow-hidden
+    <div className="fixed z-[60] flex flex-col bg-[var(--surface)] border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] overflow-hidden
       inset-x-2 bottom-2 top-16 rounded-2xl enter-panel
       sm:inset-x-auto sm:top-auto sm:right-6 sm:bottom-24 sm:w-[400px] sm:h-[560px] sm:max-h-[75vh]"
       role="dialog" aria-modal="false" aria-label="AI 助理">

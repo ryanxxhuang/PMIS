@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
@@ -91,7 +91,7 @@ const THEME_META = {
   system: { icon: MonitorSmartphone, label: '跟隨系統' },
 }
 
-function TopBar({ onMenu }) {
+function TopBar({ onMenu, scrolled }) {
   const { currentUser, logout } = useStore()
   const navigate = useNavigate()
   const [mode, setMode] = useState(getThemeMode)
@@ -102,7 +102,7 @@ function TopBar({ onMenu }) {
   }
   const ThemeIcon = THEME_META[mode].icon
   return (
-    <header className="bg-[var(--surface)] border-b border-[var(--border)] h-16 flex items-center justify-between px-3 md:px-5 shrink-0 relative z-10 print:hidden">
+    <header data-scrolled={scrolled} className="chrome-glass chrome-edge fixed top-0 inset-x-0 z-40 h-16 flex items-center justify-between px-3 md:px-5 print:hidden">
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
         <button onClick={onMenu} aria-label="選單" className="md:hidden w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><Menu size={20} aria-hidden /></button>
         <div className="font-medium text-xl tracking-tight text-[var(--text)] shrink-0">PMIS <span className="text-[var(--accent-text)] font-bold">AI</span></div>
@@ -124,6 +124,14 @@ function TopBar({ onMenu }) {
 
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  // scroll edge:內容捲到 chrome 底下才浮出界線(置頂時頂欄與背景齊平)
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   const { currentUser, can, workItemsSource, workItemsError, retryWorkItems, domainLoadError, retryDomainLoad } = useStore()
   const { pathname } = useLocation()
   // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——非正式模式的
@@ -131,17 +139,16 @@ export function WebLayout({ children }) {
   const org = currentUser?.org_type || 'contractor'
   const visibleGroups = visibleNavGroups(org, can?.override)
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg)]">
-      <TopBar onMenu={() => setMenuOpen(true)} />
-      <div className="flex flex-1 min-h-0">
-        {/* 手機:點背景關閉抽屜 */}
-        {menuOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
-        <aside
-          className={`w-64 bg-[var(--surface)] border-r border-[var(--border-2)] flex flex-col shrink-0 print:hidden
-            fixed top-16 bottom-0 left-0 z-40 transition-transform duration-300 [transition-timing-function:var(--ease-drawer)]
-            md:static md:top-auto md:z-auto md:translate-x-0
-            ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
-        >
+    <div className="min-h-screen bg-[var(--bg)]">
+      <TopBar onMenu={() => setMenuOpen(true)} scrolled={scrolled} />
+      {/* 手機:點背景關閉抽屜(蓋過頂欄,抽屜再蓋過遮罩) */}
+      {menuOpen && <div className="fixed inset-0 z-50 bg-black/40 md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
+      <aside
+        className={`chrome-glass w-64 border-r border-[var(--border-card)] flex flex-col print:hidden
+          fixed top-16 bottom-0 left-0 z-[55] transition-transform duration-300 [transition-timing-function:var(--ease-drawer)]
+          md:translate-x-0
+          ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
           <nav className="flex-1 py-3 overflow-auto">
             {visibleGroups.map((g) => (
               <div key={g.title} className="mb-3">
@@ -174,8 +181,8 @@ export function WebLayout({ children }) {
               </div>
             ))}
           </nav>
-        </aside>
-        <main className="flex-1 p-4 md:p-6 overflow-auto min-w-0">
+      </aside>
+      <main className="md:ml-64 p-4 md:p-6 pt-20 md:pt-[88px] min-w-0 print:ml-0 print:pt-0">
           {workItemsSource === 'error' && (
             <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-[var(--red-text)]/25 bg-[var(--red-tint)] px-4 py-2.5 text-sm text-[var(--red-text)] print:hidden enter-row">
               <span>標單工項讀取失敗：{workItemsError || '連線異常'}。各頁資料可能不完整。</span>
@@ -189,9 +196,8 @@ export function WebLayout({ children }) {
               <button onClick={retryDomainLoad} className="font-medium underline opacity-90 hover:opacity-100">重試</button>
             </div>
           )}
-          {children}
-        </main>
-      </div>
+        {children}
+      </main>
       <CopilotFab />
     </div>
   )

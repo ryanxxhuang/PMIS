@@ -19,7 +19,7 @@ test.describe('機關', () => {
     await gotoHash(page, '/change-orders')
     // CO-002 卡片上的狀態下拉(機關 can.ratify)
     const co2Card = page.locator('h3', { hasText: 'CO-002' })
-      .locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]')
+      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
     await co2Card.locator('select').selectOption('核准')
     // 本頁彙總即時更新
     await expect(page.getByText(`NT$ ${REVISED_AFTER_CO2}`).first()).toBeVisible()

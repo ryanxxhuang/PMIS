@@ -50,6 +50,15 @@
 
   --elevation: 0 1px 2px 0 rgba(28,39,51,.10), 0 1px 3px 1px rgba(28,39,51,.06);
 
+  /* ── 材質系統(apple-design §12)──
+     chrome=鏡面浮層(頂欄/側欄);card=一般卡片(半透明疊層影,取代墨線硬描邊);
+     overlay=大面積浮面(對話框/面板),讀起來要「更厚」:更深的影。 */
+  --chrome-bg: rgba(255,255,255,.68);
+  --border-card: rgba(201,210,218,.55);
+  --shadow-card: 0 1px 2px rgba(22,32,43,.04), 0 8px 24px -12px rgba(22,32,43,.10);
+  --shadow-overlay: 0 24px 48px -12px rgba(22,32,43,.28);
+  --edge-shadow: 0 1px 0 var(--border-2), 0 8px 24px -16px rgba(22,32,43,.25);
+
   /* ── Motion system ──
      資料密集工程工具:動效只做「回饋」與「防突變」,快、脆、不表演。
      曲線用強化版 ease-out/in-out(內建 CSS easing 太弱),UI 一律 <300ms。 */
@@ -98,6 +107,12 @@
   --chart-today: #46525f;
 
   --elevation: 0 1px 2px 0 rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
+
+  --chrome-bg: rgba(28,34,41,.68);
+  --border-card: rgba(49,59,70,.6);
+  --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px -12px rgba(0,0,0,.35);
+  --shadow-overlay: 0 24px 48px -12px rgba(0,0,0,.6);
+  --edge-shadow: 0 1px 0 var(--border-2), 0 8px 24px -16px rgba(0,0,0,.55);
 }
 
 html, body, #root { height: 100%; margin: 0; }
@@ -108,9 +123,23 @@ input, select, textarea { color: var(--text); background-color: var(--surface); 
 input::placeholder, textarea::placeholder { color: var(--text-3); }
 select option { color: var(--text); background: var(--surface); }
 
-/* 圖紙分格:卡片以 1px 墨線描邊為主、陰影極輕(取代原本的浮影) */
-.g-elevation-1 { border: 1px solid var(--border-2); box-shadow: 0 1px 2px rgba(22,32,43,.04); }
-.g-elevation-2 { border: 1px solid var(--border-2); box-shadow: 0 2px 8px rgba(22,32,43,.08); }
+/* 材質層級:一般表面用半透明疊層影,大面積浮面(modal)更厚更深 */
+.g-elevation-1 { border: 1px solid var(--border-card); box-shadow: var(--shadow-card); }
+.g-elevation-2 { border: 1px solid var(--border-card); box-shadow: var(--shadow-overlay); }
+
+/* 鏡面 chrome(頂欄/側欄):毛玻璃浮層,內容從底下捲過;
+   使用者關閉透明度時退回實心(§14 prefers-reduced-transparency)。 */
+.chrome-glass {
+  background: var(--chrome-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .chrome-glass { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+/* scroll edge(§12):置頂時無界線;內容捲到 chrome 底下才浮出 hairline+柔影 */
+.chrome-edge { transition: box-shadow 200ms var(--ease-out); }
+.chrome-edge[data-scrolled="true"] { box-shadow: var(--edge-shadow); }
 
 /* 全站數據體:既有 tabular-nums 直接升級為等寬儀表體(.num 為語意別名) */
 .tabular-nums, .num {

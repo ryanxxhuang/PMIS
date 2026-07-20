@@ -5,7 +5,7 @@ import { FileText } from 'lucide-react'
 
 export function Card({ title, action, children, className = '', bodyClass = 'p-5' }) {
   return (
-    <div className={`bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03),0_1px_10px_-2px_rgba(22,32,43,.05)] ${className}`}>
+    <div className={`bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] ${className}`}>
       {title && (
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[var(--border-2)]">
           <h3 className="font-semibold text-[var(--text)] text-sm tracking-tight">{title}</h3>
@@ -23,7 +23,7 @@ export function PageHeader({ title, tagline, subtitle, meta = [], action }) {
     <div className="title-block">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-[var(--text)] tracking-tight leading-tight">
+          <h1 className="text-[26px] font-bold text-[var(--text)] tracking-[-0.02em] leading-tight">
             {title}
             {tagline && <span className="ml-2 text-sm font-normal text-[var(--text-3)]">{tagline}</span>}
           </h1>
@@ -94,13 +94,15 @@ const BTN_SIZES = {
   md: 'px-3.5 py-2 text-sm gap-1.5 rounded-lg',
   lg: 'px-5 py-2.5 text-sm gap-2 rounded-lg',
 }
+// 實心鈕頂緣一道極輕高光(材質受光感,§12 light catching)+ 半透明落影
+const FILLED_SHADOW = '[box-shadow:0_1px_2px_rgba(22,32,43,.18),inset_0_1px_0_rgba(255,255,255,.16)]'
 const BTN_VARIANTS = {
-  primary: 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm',
+  primary: `bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] ${FILLED_SHADOW}`,
   secondary: 'bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border-2)]',
   outline: 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]',
   ghost: 'text-[var(--blue-text)] hover:bg-[var(--blue-tint)]',
-  success: 'bg-[var(--success)] text-white hover:bg-[var(--success-hover)] shadow-sm',
-  danger: 'bg-[var(--danger)] text-white hover:bg-[var(--danger-hover)] shadow-sm',
+  success: `bg-[var(--success)] text-white hover:bg-[var(--success-hover)] ${FILLED_SHADOW}`,
+  danger: `bg-[var(--danger)] text-white hover:bg-[var(--danger-hover)] ${FILLED_SHADOW}`,
 }
 export const Button = forwardRef(function Button({ variant = 'primary', size = 'md', className = '', children, ...props }, ref) {
   return (
@@ -118,9 +120,9 @@ export const Button = forwardRef(function Button({ variant = 'primary', size = '
 
 export function Stat({ label, value, sub, color = 'text-[var(--text)]' }) {
   return (
-    <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03)] px-4 py-3.5">
-      <div className="text-[11px] text-[var(--text-3)] tracking-[0.04em]">{label}</div>
-      <div className={`text-[22px] leading-tight font-semibold mt-1 tabular-nums ${color}`}>{value}</div>
+    <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] px-4 py-3.5">
+      <div className="text-[11px] text-[var(--text-3)] tracking-[0.06em]">{label}</div>
+      <div className={`text-[26px] leading-tight font-semibold mt-1 tabular-nums tracking-[-0.01em] ${color}`}>{value}</div>
       {sub && <div className="text-[11px] text-[var(--text-3)] mt-1 tabular-nums leading-snug">{sub}</div>}
     </div>
   )

@@ -108,7 +108,7 @@ export default function RiskAudit() {
         subtitle="系統化檢核本案的估驗、變更、品質、契約與進度，標出值得複查的異常" />
 
       {/* 稽核結果總覽 */}
-      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03)] p-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-5 flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex items-center gap-3">
           <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0" style={{ background: O.bg, color: O.c }}><O.icon size={24} aria-hidden /></span>
           <div>

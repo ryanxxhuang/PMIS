@@ -81,7 +81,7 @@ export default function SupervisorReport() {
           </div>
         } />
 
-      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-2)] shadow-[0_1px_2px_rgba(22,32,43,.03),0_1px_10px_-2px_rgba(22,32,43,.05)] p-6 md:p-8 print:border-0 print:shadow-none print:p-0 space-y-6 text-[var(--text)]">
+      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-6 md:p-8 print:border-0 print:shadow-none print:p-0 space-y-6 text-[var(--text)]">
         <div className="text-center border-b border-[var(--border)] pb-4">
           <div className="text-lg font-bold">監造報表</div>
           <div className="text-sm text-[var(--text-2)] mt-0.5">{project.project_name}</div>
