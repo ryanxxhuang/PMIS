@@ -120,9 +120,9 @@ export const Button = forwardRef(function Button({ variant = 'primary', size = '
 
 export function Stat({ label, value, sub, color = 'text-[var(--text)]' }) {
   return (
-    <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] px-4 py-3.5">
+    <div className="stat-card bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] px-4 py-3.5">
       <div className="text-[11px] text-[var(--text-3)] tracking-[0.06em]">{label}</div>
-      <div className={`text-[26px] leading-tight font-semibold mt-1 tabular-nums tracking-[-0.01em] ${color}`}>{value}</div>
+      <div className={`stat-value leading-tight font-semibold mt-1 tabular-nums tracking-[-0.01em] ${color}`}>{value}</div>
       {sub && <div className="text-[11px] text-[var(--text-3)] mt-1 tabular-nums leading-snug">{sub}</div>}
     </div>
   )

@@ -200,6 +200,15 @@ select option { color: var(--text); background: var(--surface); }
   @starting-style { opacity: 0; transform: translateY(2px); }
 }
 
+/* Stat 數值自適應(container query):字級跟著「卡片」寬度縮放——
+   格線擠窄或視窗變小時數字自動降級,長金額永不破框。
+   不支援 cqw 的舊瀏覽器落回固定 22px(仍在安全範圍)。 */
+.stat-card { container-type: inline-size; }
+.stat-value {
+  font-size: 22px;
+  font-size: clamp(15px, 11cqw, 26px);
+}
+
 /* 主題切換平滑化:只在切換瞬間掛上,避免亮↔暗全畫面突跳。
    平時不掛,免得所有元素常駐 color transition 造成 hover 遲滯。 */
 html.theme-switching, html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
