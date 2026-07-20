@@ -128,15 +128,15 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
 
   const toolBtn = (t, Icon, label) => (
     <button onClick={() => setTool(t)} title={label}
-      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border transition ${
+      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border pressable ${
         tool === t ? 'border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--accent-text)]' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
       <Icon size={14} aria-hidden />{label}
     </button>
   )
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 print:hidden" onClick={onClose}>
-      <div className="bg-[var(--surface)] rounded-lg g-elevation-2 w-full max-w-4xl max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 print:hidden enter-fade" onClick={onClose}>
+      <div className="bg-[var(--surface)] rounded-lg g-elevation-2 w-full max-w-4xl max-h-[92vh] flex flex-col enter-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-2)]">
           <h3 className="font-semibold text-[13px] tracking-wide text-[var(--text)]">{title}</h3>
           <button onClick={onClose} aria-label="關閉" className="text-[var(--text-3)] hover:text-[var(--text)]"><X size={17} aria-hidden /></button>
@@ -151,7 +151,7 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
             {toolBtn('arrow', MoveUpRight, '箭頭')}
             {toolBtn('text', Type, '文字')}
             <button onClick={() => setShapes((ss) => ss.slice(0, -1))} disabled={!shapes.length} title="復原"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] disabled:opacity-40"><Undo2 size={14} aria-hidden />復原</button>
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable disabled:opacity-40"><Undo2 size={14} aria-hidden />復原</button>
             <span className="text-[11px] text-[var(--text-3)] ml-auto">在圖上拖曳畫{tool === 'rect' ? '框' : tool === 'arrow' ? '箭頭' : '（點一下輸入文字）'}</span>
           </>}
         </div>
@@ -195,8 +195,8 @@ export function MarkupThumb({ src, resolve, className = '' }) {
         {url ? <img src={url} alt="圖面標註" className="h-14 w-20 object-cover" /> : <span className="h-14 w-20 flex items-center justify-center text-[10px] text-[var(--text-3)]">載入中</span>}
       </button>
       {open && url && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6 print:hidden" onClick={() => setOpen(false)}>
-          <img src={url} alt="圖面標註" className="max-w-full max-h-full rounded shadow-2xl" />
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6 print:hidden enter-fade" onClick={() => setOpen(false)}>
+          <img src={url} alt="圖面標註" className="max-w-full max-h-full rounded shadow-2xl enter-modal" />
         </div>
       )}
     </>

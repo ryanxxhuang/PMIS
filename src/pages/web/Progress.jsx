@@ -87,7 +87,7 @@ export default function Progress() {
             <Field label="開工日"><input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
             <Field label="竣工日"><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
             <Button onClick={() => onGenerate(start, end)}>產生預定 S 曲線</Button>
-            {errMsg && <span className="text-sm text-rose-600">{errMsg}</span>}
+            {errMsg && <span className="text-sm text-[var(--red-text)]">{errMsg}</span>}
           </div>
         </Card>
       </div>

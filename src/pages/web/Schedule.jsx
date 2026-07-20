@@ -73,7 +73,7 @@ export default function Schedule() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="已排程工項" value={counts.total} sub="項" color="text-[var(--text)]" />
-        <Stat label="落後" value={counts.late} sub="項" color={counts.late > 0 ? 'text-rose-600' : 'text-emerald-600'} />
+        <Stat label="落後" value={counts.late} sub="項" color={counts.late > 0 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />
         <Stat label="進行中" value={counts.doing} sub="項" color="text-[var(--blue-text)]" />
         <Stat label="已完成" value={counts.done} sub="項" color="text-[var(--green-text)]" />
       </div>
@@ -83,7 +83,7 @@ export default function Schedule() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項加入排程…"
             className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none" />
           {results.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-64 overflow-auto">
+            <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-64 overflow-auto enter-menu">
               {results.map((it) => (
                 <button key={it.item_key} onClick={() => { onSet(it.item_key, { planned_start: null, planned_finish: null }); setSearch('') }}
                   className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] flex justify-between gap-2">
@@ -139,7 +139,7 @@ export default function Schedule() {
                     <td className="px-2 text-right tabular-nums">{r.pct.toFixed(1)}%</td>
                     <td className="px-2"><span className="text-xs font-medium" style={{ color: r.state.color }}>{r.state.label}</span></td>
                     <td className="px-2 pr-5 text-right">
-                      <button onClick={() => removeItemSchedule(r.key)} className="text-[var(--text-3)] hover:text-rose-600 text-sm">✕</button>
+                      <button onClick={() => removeItemSchedule(r.key)} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm">✕</button>
                     </td>
                   </tr>
                 ))}

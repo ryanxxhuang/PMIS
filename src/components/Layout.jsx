@@ -48,7 +48,7 @@ function ProjectSwitcher() {
   return (
     <div className="relative min-w-0" onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}>
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu"
-        className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2">
+        className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2 pressable">
         <span className="text-[var(--text-3)] text-xs shrink-0">專案</span>
         <span title={currentProject.project_name} className="font-medium truncate max-w-[42vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
         <ChevronDown size={14} className="text-[var(--text-2)] shrink-0" aria-hidden />
@@ -56,7 +56,7 @@ function ProjectSwitcher() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div role="menu" className="absolute left-0 mt-1 w-72 bg-[var(--surface)] text-[var(--text)] rounded-lg shadow-xl border border-[var(--border)] py-1 z-20">
+          <div role="menu" className="absolute left-0 mt-1 w-72 bg-[var(--surface)] text-[var(--text)] rounded-lg shadow-xl border border-[var(--border)] py-1 z-20 enter-menu origin-top-left">
             {projects.map((p) => (
               <button key={p.project_id} onClick={() => { switchProject(p.project_id); setOpen(false) }}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--surface-2)] flex items-center gap-2 ${p.project_id === currentProject.project_id ? 'bg-[var(--blue-tint)]' : ''}`}>
@@ -104,7 +104,7 @@ function TopBar({ onMenu }) {
   return (
     <header className="bg-[var(--surface)] border-b border-[var(--border)] h-16 flex items-center justify-between px-3 md:px-5 shrink-0 relative z-10 print:hidden">
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
-        <button onClick={onMenu} aria-label="選單" className="md:hidden w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><Menu size={20} aria-hidden /></button>
+        <button onClick={onMenu} aria-label="選單" className="md:hidden w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><Menu size={20} aria-hidden /></button>
         <div className="font-medium text-xl tracking-tight text-[var(--text)] shrink-0">PMIS <span className="text-[var(--accent-text)] font-bold">AI</span></div>
         <div className="h-6 w-px bg-[var(--border)] shrink-0 hidden sm:block" />
         <ProjectSwitcher />
@@ -114,7 +114,7 @@ function TopBar({ onMenu }) {
           <div className="text-sm text-[var(--text)]">{currentUser?.name}</div>
           <div className="text-[11px] text-[var(--text-2)]">{currentUser?.label}</div>
         </div>
-        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><ThemeIcon size={18} aria-hidden /></button>
+        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><ThemeIcon size={18} aria-hidden /></button>
         <div className="w-9 h-9 rounded-full bg-[var(--primary)] flex items-center justify-center font-medium text-sm text-white">{currentUser?.name?.[0]}</div>
         <button onClick={async () => { await logout(); navigate('/login') }} className="text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
       </div>
@@ -135,10 +135,10 @@ export function WebLayout({ children }) {
       <TopBar onMenu={() => setMenuOpen(true)} />
       <div className="flex flex-1 min-h-0">
         {/* 手機:點背景關閉抽屜 */}
-        {menuOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMenuOpen(false)} />}
+        {menuOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
         <aside
           className={`w-64 bg-[var(--surface)] border-r border-[var(--border-2)] flex flex-col shrink-0 print:hidden
-            fixed top-16 bottom-0 left-0 z-40 transition-transform
+            fixed top-16 bottom-0 left-0 z-40 transition-transform duration-300 [transition-timing-function:var(--ease-drawer)]
             md:static md:top-auto md:z-auto md:translate-x-0
             ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
         >
@@ -159,7 +159,7 @@ export function WebLayout({ children }) {
                       to={n.to}
                       onClick={() => setMenuOpen(false)}
                       className={({ isActive }) =>
-                        `flex items-center gap-2.5 mr-3 my-0.5 pl-[13px] pr-3 py-[7px] rounded-r-md text-sm border-l-[3px] transition ${
+                        `flex items-center gap-2.5 mr-3 my-0.5 pl-[13px] pr-3 py-[7px] rounded-r-md text-sm border-l-[3px] transition-colors ${
                           (isActive || wbActive)
                             ? 'border-[var(--blue)] bg-[var(--blue-tint)] text-[var(--blue-text)] font-semibold'
                             : 'border-transparent text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
@@ -177,16 +177,16 @@ export function WebLayout({ children }) {
         </aside>
         <main className="flex-1 p-4 md:p-6 overflow-auto min-w-0">
           {workItemsSource === 'error' && (
-            <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700 print:hidden">
+            <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-[var(--red-text)]/25 bg-[var(--red-tint)] px-4 py-2.5 text-sm text-[var(--red-text)] print:hidden enter-row">
               <span>標單工項讀取失敗：{workItemsError || '連線異常'}。各頁資料可能不完整。</span>
-              <button onClick={retryWorkItems} className="font-medium underline hover:text-rose-900">重試</button>
+              <button onClick={retryWorkItems} className="font-medium underline opacity-90 hover:opacity-100">重試</button>
             </div>
           )}
           {/* 領域資料載入失敗(B-09):不再靜默顯示「尚無資料」,如實回報並可重試 */}
           {domainLoadError && (
-            <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700 print:hidden">
+            <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-[var(--red-text)]/25 bg-[var(--red-tint)] px-4 py-2.5 text-sm text-[var(--red-text)] print:hidden enter-row">
               <span>{domainLoadError}。各頁資料可能不完整。</span>
-              <button onClick={retryDomainLoad} className="font-medium underline hover:text-rose-900">重試</button>
+              <button onClick={retryDomainLoad} className="font-medium underline opacity-90 hover:opacity-100">重試</button>
             </div>
           )}
           {children}

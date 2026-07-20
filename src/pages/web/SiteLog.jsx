@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Printer, ChevronDown, ChevronRight, CopyPlus, Plus, CloudSun, Sparkles } from 'lucide-react'
+import { Camera, Printer, ChevronRight, CopyPlus, Plus, CloudSun, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -317,11 +317,11 @@ export default function SiteLog() {
             )}
 
             {can.edit && <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
-              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
                 <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : 'AI 拍照自動填寫'}
               </label>
-              <p className={`text-xs mt-2 ${aiMsg.startsWith('辨識失敗') ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>
+              <p className={`text-xs mt-2 ${aiMsg.startsWith('辨識失敗') ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>
                 {aiMsg || '拍下工程告示板或現場照片，AI 辨識後自動帶入日期、天氣與各工項當日數量。'}
               </p>
             </div>}
@@ -329,7 +329,7 @@ export default function SiteLog() {
             <div className="relative mb-3">
               <input value={search} disabled={!can.edit} onChange={(e) => setSearch(e.target.value)} placeholder={can.edit ? '搜尋工項加入今日回報…' : '唯讀檢視'} className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
               {results.length > 0 && (
-                <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-64 overflow-auto">
+                <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-64 overflow-auto enter-menu">
                   {results.map((it) => (
                     <button key={it.item_key} onClick={() => addItem(it.item_key)} className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] flex justify-between gap-2">
                       <span className="truncate"><span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}</span>
@@ -366,7 +366,7 @@ export default function SiteLog() {
                           <input type="number" min="0" step="any" value={items[key] ?? ''} disabled={!can.edit} onChange={(e) => setQty(key, e.target.value)}
                             className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                         </td>
-                        <td className="text-right pl-2">{can.edit && <button onClick={() => removeItem(key)} className="text-[var(--text-3)] hover:text-rose-500" aria-label="移除此工項">✕</button>}</td>
+                        <td className="text-right pl-2">{can.edit && <button onClick={() => removeItem(key)} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="移除此工項">✕</button>}</td>
                       </tr>
                     )
                   })}
@@ -379,7 +379,7 @@ export default function SiteLog() {
             <div className="mt-4 border border-[var(--border)] rounded-lg">
               <button onClick={() => setOfficialOpen((o) => !o)}
                 className="w-full flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--text-2)] hover:bg-[var(--surface-2)] rounded-lg">
-                {officialOpen ? <ChevronDown size={15} aria-hidden /> : <ChevronRight size={15} aria-hidden />}
+                <ChevronRight size={15} aria-hidden className={`transition-transform duration-[var(--dur-fast)] ${officialOpen ? 'rotate-90' : ''}`} />
                 公定格式欄位（出工人數・機具・材料・安衛…）
                 <span className="ml-auto text-[11px] text-[var(--text-3)] font-normal">
                   {labor.length + equipment.length + materials.length > 0 ? `已填 ${labor.length + equipment.length + materials.length} 列` : '選填，列印公定格式日誌用'}
@@ -452,7 +452,7 @@ export default function SiteLog() {
                   <Printer size={15} aria-hidden />列印公定格式日誌
                 </button>
               )}
-              {savedMsg && <span className={`text-sm ${savedMsg.includes('✓') ? 'text-emerald-600' : 'text-rose-600'}`}>{savedMsg}</span>}
+              {savedMsg && <span className={`text-sm ${savedMsg.includes('✓') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{savedMsg}</span>}
             </div>
           </Card>
 
@@ -464,12 +464,12 @@ export default function SiteLog() {
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                   {/* 照片上傳=施工廠商的事:唯讀角色(監造/機關)不顯示死按鈕(U-01) */}
                   {can.edit && <>
-                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition shadow-sm ${(photoBusy || batchBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
+                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable shadow-sm ${(photoBusy || batchBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
                       {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
                       <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy} onChange={onBatchPhotos} className="hidden" />
                       <Sparkles size={15} aria-hidden /> AI 批次辨識照片
                     </label>
-                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] transition ${(photoBusy || batchBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
+                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] pressable ${(photoBusy || batchBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
                       <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy || batchBusy} onChange={onAddPhotos} className="hidden" />
                       {photoBusy ? '上傳中…' : '＋ 直接加照片'}
                     </label>
@@ -486,7 +486,7 @@ export default function SiteLog() {
                         AI 辨識覆核（{staging.filter((s) => s.status === 'done').length}/{staging.length}）
                         {batchBusy && <span className="text-xs font-normal text-[var(--text-3)]">判讀中…</span>}
                       </div>
-                      <button onClick={cancelBatch} disabled={batchBusy} className="text-xs text-[var(--text-3)] hover:text-rose-500">取消</button>
+                      <button onClick={cancelBatch} disabled={batchBusy} className="text-xs text-[var(--text-3)] hover:text-[var(--red-text)]">取消</button>
                     </div>
                     <div className="space-y-2 max-h-[28rem] overflow-auto">
                       {staging.map((s) => (
@@ -496,7 +496,7 @@ export default function SiteLog() {
                             {s.status === 'analyzing' ? (
                               <div className="text-xs text-[var(--text-3)] py-3">AI 判讀中…</div>
                             ) : s.status === 'error' ? (
-                              <div className="text-xs text-rose-600 py-1">辨識失敗：{s.errMsg}。仍可自行填說明後上傳。</div>
+                              <div className="text-xs text-[var(--red-text)] py-1">辨識失敗：{s.errMsg}。仍可自行填說明後上傳。</div>
                             ) : null}
                             <input value={s.caption} disabled={s.status === 'analyzing'} placeholder="照片說明（AI 生成，可改）"
                               onChange={(e) => patchStaging(s.key, { caption: e.target.value })}
@@ -505,7 +505,7 @@ export default function SiteLog() {
                               <>
                                 <div className="flex items-center gap-1.5 flex-wrap text-xs">
                                   {s.category && <span className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-2)]">{s.category}</span>}
-                                  {s.notSite && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⚠ 疑似非工地照,請確認</span>}
+                                  {s.notSite && <span className="px-1.5 py-0.5 rounded bg-[var(--amber-tint)] text-[var(--amber-text)] border border-[var(--amber-text)]/25">⚠ 疑似非工地照,請確認</span>}
                                 </div>
                                 {/* 可搜尋改選/清除工項(P1-02:不再只能取消配對)*/}
                                 <WorkItemPicker leaves={leaves} value={s.work_item_key} label={s.work_item_label || '（搜尋工項…）'}
@@ -514,7 +514,7 @@ export default function SiteLog() {
                             )}
                           </div>
                           <button onClick={() => removeStaging(s.key)} disabled={batchBusy} title="移除此張"
-                            className="shrink-0 text-[var(--text-3)] hover:text-rose-500 text-sm leading-none">✕</button>
+                            className="shrink-0 text-[var(--text-3)] hover:text-[var(--red-text)] text-sm leading-none">✕</button>
                         </div>
                       ))}
                     </div>
@@ -542,7 +542,7 @@ export default function SiteLog() {
                           </div>
                         )}
                         {can.edit && <button onClick={() => onDeletePhoto(p)} title="刪除照片"
-                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition">✕</button>}
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition-opacity">✕</button>}
                       </div>
                     ))}
                   </div>
@@ -568,11 +568,11 @@ export default function SiteLog() {
           {siteLogs.length === 0 ? <Empty>尚無日誌</Empty> : (
             <div className="space-y-1.5">
               {siteLogs.map((l) => (
-                <div key={l.id} className={`px-3 py-2 rounded-lg text-sm border transition ${l.log_date === date ? 'bg-[var(--blue-tint)] border-[var(--blue)]' : 'border-[var(--border)] hover:bg-[var(--surface-2)]'}`}>
+                <div key={l.id} className={`px-3 py-2 rounded-lg text-sm border transition-colors ${l.log_date === date ? 'bg-[var(--blue-tint)] border-[var(--blue)]' : 'border-[var(--border)] hover:bg-[var(--surface-2)]'}`}>
                   <div className="flex justify-between items-center gap-2">
                     <button onClick={() => setDate(l.log_date)} className="font-medium text-[var(--text)] tabular-nums text-left flex-1 truncate">{l.log_date}</button>
                     <span className="text-xs text-[var(--text-3)]">{Object.keys(l.items).length} 工項</span>
-                    {can.edit && <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(`日誌刪除失敗:${error.message}`) } }} className="text-[var(--text-3)] hover:text-rose-500" aria-label={`刪除 ${l.log_date} 日誌`}>✕</button>}
+                    {can.edit && <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(`日誌刪除失敗:${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label={`刪除 ${l.log_date} 日誌`}>✕</button>}
                   </div>
                   {l.work_summary && <div className="text-xs text-[var(--text-2)] truncate mt-0.5">{l.work_summary}</div>}
                 </div>
@@ -598,7 +598,7 @@ function FreqChips({ items, label, onAdd }) {
       <span className="text-[10px] text-[var(--text-3)]">常用</span>
       {items.map((r, i) => (
         <button key={i} onClick={() => onAdd(r)}
-          className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--blue-tint)] hover:text-[var(--blue-text)] hover:border-[var(--blue)] transition">
+          className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--blue-tint)] hover:text-[var(--blue-text)] hover:border-[var(--blue)] pressable">
           <Plus size={10} aria-hidden />{label(r)}
         </button>
       ))}
@@ -626,7 +626,7 @@ function RowsEditor({ title, rows, onChange, fields, disabled = false }) {
               onChange={(e) => set(i, f.key, f.num ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
               className={`${f.w} border border-[var(--border)] rounded-lg px-2 py-1 text-sm ${f.num ? 'text-right tabular-nums' : ''} disabled:opacity-50 disabled:bg-[var(--surface-2)]`} />
           ))}
-          {!disabled && <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-rose-500" aria-label="刪除此列">✕</button>}
+          {!disabled && <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除此列">✕</button>}
         </div>
       ))}
     </div>

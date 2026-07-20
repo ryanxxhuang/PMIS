@@ -106,7 +106,7 @@ export const Button = forwardRef(function Button({ variant = 'primary', size = '
   return (
     <button
       ref={ref}
-      className={`inline-flex items-center justify-center font-medium whitespace-nowrap shrink-0 transition-colors
+      className={`inline-flex items-center justify-center font-medium whitespace-nowrap shrink-0 pressable
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue)]/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface)]
         disabled:opacity-40 disabled:cursor-not-allowed ${BTN_SIZES[size] || BTN_SIZES.md} ${BTN_VARIANTS[variant] || BTN_VARIANTS.primary} ${className}`}
       {...props}
@@ -167,9 +167,9 @@ export function Empty({ children }) {
 export function ErrorBanner({ msg, onClose, className = '' }) {
   if (!msg) return null
   return (
-    <div className={`flex items-start justify-between gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-3 py-2 ${className}`}>
+    <div className={`flex items-start justify-between gap-2 text-sm bg-[var(--red-tint)] border border-[var(--red-text)]/25 text-[var(--red-text)] rounded-lg px-3 py-2 enter-row ${className}`}>
       <span>{msg}</span>
-      {onClose && <button onClick={onClose} className="shrink-0 text-rose-400 hover:text-rose-700" aria-label="關閉錯誤訊息">✕</button>}
+      {onClose && <button onClick={onClose} className="shrink-0 opacity-60 hover:opacity-100 transition-opacity" aria-label="關閉錯誤訊息">✕</button>}
     </div>
   )
 }

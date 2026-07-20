@@ -128,7 +128,7 @@ export default function BOQ() {
         )} />
 
       {canImport && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 space-y-2">
+        <div className="bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded-lg px-4 py-3 space-y-2">
           <div className="text-sm text-amber-800">
             此專案<b>尚未匯入標單</b>。到「<Link to="/contract" className="font-medium underline">專案文件</Link>」把標單 XML 和契約等文件<b>一次上傳</b>,系統會自動匯入並整理。
           </div>
@@ -137,7 +137,7 @@ export default function BOQ() {
             <div className="flex items-center gap-3 flex-wrap">
               <Link to="/contract"><Button>前往專案文件上傳</Button></Link>
               {/* 正式專案不提供「範例標單」:避免把示範用 3,262 工項灌進真實案(P1-11)。範例僅在 demo 站呈現。 */}
-              {importErr && <span className="text-sm text-rose-600">{importErr}</span>}
+              {importErr && <span className="text-sm text-[var(--red-text)]">{importErr}</span>}
             </div>
           ) : (
             <div className="flex items-center gap-3 flex-wrap bg-[var(--amber-tint)] rounded-lg border border-[var(--amber-text)]/25 px-3 py-2">
@@ -147,7 +147,7 @@ export default function BOQ() {
               </div>
               <Button onClick={() => runImport(parsed)} disabled={importing}>{importing ? '匯入中…' : `匯入 ${fmt(parsed.meta.item_count)} 工項`}</Button>
               <button onClick={() => setParsed(null)} className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)]">取消</button>
-              {importErr && <span className="text-sm text-rose-600">{importErr}</span>}
+              {importErr && <span className="text-sm text-[var(--red-text)]">{importErr}</span>}
             </div>
           )}
         </div>
@@ -160,7 +160,7 @@ export default function BOQ() {
         <Stat label="資料來源"
           value={workItemsSource === 'db' ? 'Supabase' : workItemsSource === 'empty' ? '尚未匯入' : 'PCCES'}
           sub={workItemsSource === 'db' ? '已存入資料庫' : workItemsSource === 'empty' ? '請上傳標單 XML' : '範例（PCCES 匯入）'}
-          color={workItemsSource === 'db' ? 'text-emerald-600' : 'text-[var(--text)]'} />
+          color={workItemsSource === 'db' ? 'text-[var(--green-text)]' : 'text-[var(--text)]'} />
       </div>
 
       <Card

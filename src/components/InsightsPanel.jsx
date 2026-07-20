@@ -23,7 +23,7 @@ export default function InsightsPanel({ insights }) {
             const Icon = s.icon
             return (
               <li key={it.id}>
-                <Link to={it.to} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition">
+                <Link to={it.to} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">
                   <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: s.bg, color: s.color }}>
                     <Icon size={16} aria-hidden />
                   </span>

@@ -143,7 +143,7 @@ export default function ITP() {
                     )}
                     {can.approve && (
                       <button onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspectionPoint(p.id); if (error) setErrMsg(`刪除失敗:${error.message}`) } }}
-                        className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                        className="text-[var(--text-3)] hover:text-[var(--red-text)]">✕</button>
                     )}
                   </div>
                 </li>
@@ -170,7 +170,7 @@ function PointItemPicker({ leaves, value, label, onPick }) {
     return (
       <div className="flex items-center gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface-2)]">
         <span className="truncate flex-1">{label}</span>
-        <button onClick={() => onPick(null, '')} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
+        <button onClick={() => onPick(null, '')} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
       </div>
     )
   }
@@ -178,7 +178,7 @@ function PointItemPicker({ leaves, value, label, onPick }) {
     <div className="relative">
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋並選擇工項（可不填）…" />
       {results.length > 0 && (
-        <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto">
+        <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto enter-menu">
           {results.map((it) => (
             <button key={it.item_key} onClick={() => { onPick(it.item_key, `${it.item_no} ${it.description}`); setQ('') }}
               className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] truncate">

@@ -136,7 +136,7 @@ export default function MonthlyReport() {
             <Metric label="累計實際進度" value={`${data.actualPct.toFixed(1)}%`} />
             <Metric label="超前 / 落後"
               value={diff == null ? '—' : `${diff >= 0 ? '超前 ' : '落後 '}${Math.abs(diff).toFixed(1)}%`}
-              color={diff == null ? '' : diff >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
+              color={diff == null ? '' : diff >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'} />
           </div>
           <p className="text-xs text-[var(--text-3)] mt-3">實際進度依累計估驗金額 ÷ 契約金額計算。</p>
         </Section>
@@ -240,7 +240,7 @@ export default function MonthlyReport() {
 
         {/* 檢討與下月計畫（可填，列印用）*/}
         <Section title="九、檢討與下月工作計畫">
-          <div className="print:hidden mb-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-flex items-center gap-1">
+          <div className="print:hidden mb-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded px-2 py-1 inline-flex items-center gap-1">
             ⚠ 此兩欄為<b>列印前暫填</b>，離開或重整不會保存；請於列印/存 PDF 前填妥。
           </div>
           <div className="print:hidden mb-2 flex items-center gap-2">
@@ -277,11 +277,11 @@ export default function MonthlyReport() {
               }
               setReview(result.review || ''); setNextPlan(result.next_plan || '')
             }} disabled={aiBusy}
-              className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] transition ${aiBusy ? 'opacity-50' : 'hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
+              className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] pressable ${aiBusy ? 'opacity-50' : 'hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
               <Sparkles size={15} aria-hidden />{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
             </button>
             <span className="text-[11px] text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
-            {aiErr && <span className="text-xs text-rose-600">{aiErr}</span>}
+            {aiErr && <span className="text-xs text-[var(--red-text)]">{aiErr}</span>}
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>

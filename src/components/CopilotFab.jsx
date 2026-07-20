@@ -26,7 +26,7 @@ function CopilotPanel({ onClose }) {
   const { data, facts, askAssistant } = useAssistantData()
   return (
     <div className="fixed z-[60] flex flex-col bg-[var(--surface)] border border-[var(--border)] shadow-2xl overflow-hidden
-      inset-x-2 bottom-2 top-16 rounded-2xl
+      inset-x-2 bottom-2 top-16 rounded-2xl enter-panel
       sm:inset-x-auto sm:top-auto sm:right-6 sm:bottom-24 sm:w-[400px] sm:h-[560px] sm:max-h-[75vh]"
       role="dialog" aria-modal="false" aria-label="AI 助理">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-2)] shrink-0">
@@ -67,7 +67,7 @@ export default function CopilotFab() {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? '收合 AI 助理' : '開啟 AI 助理'}
-        className={`fixed z-[60] bottom-6 right-6 w-14 h-14 rounded-full grid place-items-center shadow-lg ring-1 transition-transform hover:scale-105 active:scale-95
+        className={`fixed z-[60] bottom-6 right-6 w-14 h-14 rounded-full grid place-items-center shadow-lg ring-1 transition-transform duration-[var(--dur-press)] [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95
           ${open
             ? 'bg-[var(--surface-2)] text-[var(--text-2)] border border-[var(--border)] ring-transparent'
             : 'bg-gradient-to-br from-[var(--blue)] to-[var(--primary)] text-white ring-white/15 shadow-[var(--blue)]/30'}`}>

@@ -271,7 +271,7 @@ export default function Requirements() {
             )}
           </div>
         )}>
-          {msg && <p className="text-xs text-rose-600 mb-3">{msg}</p>}
+          {msg && <p className="text-xs text-[var(--red-text)] mb-3">{msg}</p>}
 
           {editing ? (
             <div className="space-y-2 mb-4">

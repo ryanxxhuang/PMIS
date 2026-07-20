@@ -104,7 +104,7 @@ export default function Safety() {
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       <div className="grid grid-cols-3 gap-4">
-        <Stat label="未結案工安缺失" value={counts.openDef} sub="件" color={counts.openDef > 0 ? 'text-rose-600' : 'text-emerald-600'} />
+        <Stat label="未結案工安缺失" value={counts.openDef} sub="件" color={counts.openDef > 0 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />
         <Stat label="本月自主檢查" value={counts.checksThisMonth} sub="次" color="text-[var(--blue-text)]" />
         <Stat label="教育訓練累計" value={counts.trainings} sub="場" color="text-[var(--green-text)]" />
       </div>
@@ -116,7 +116,7 @@ export default function Safety() {
         <div className="flex flex-wrap gap-2">
           {creatableTypes.map((t) => (
             <button key={t} onClick={() => openForm(t)}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium border transition ${form?.record_type === t ? 'bg-[var(--primary)] text-white border-transparent' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+              className={`text-xs px-3 py-1.5 rounded-full font-medium border pressable ${form?.record_type === t ? 'bg-[var(--primary)] text-white border-transparent' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
               ＋ {t}
             </button>
           ))}
@@ -210,7 +210,7 @@ export default function Safety() {
                         className="text-xs text-[var(--blue-text)] hover:underline">更正</button>
                     )}
                     {canTouch(r) && r.status !== '已完成' && (
-                      <button onClick={() => onDelete(r)} className="text-[var(--text-3)] hover:text-rose-500" aria-label="刪除紀錄">✕</button>
+                      <button onClick={() => onDelete(r)} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除紀錄">✕</button>
                     )}
                   </div>
                 </div>

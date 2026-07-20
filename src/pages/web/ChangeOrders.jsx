@@ -82,12 +82,12 @@ export default function ChangeOrders() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="原契約金額" value={yi(original)} sub={`NT$ ${money(original)}`} color="text-[var(--text)]" />
-        <Stat label="累計追加(核准)" value={money(totals.add)} sub="NT$" color="text-emerald-600" />
-        <Stat label="累計減帳(核准)" value={money(Math.abs(totals.reduce))} sub="NT$" color="text-rose-600" />
+        <Stat label="累計追加(核准)" value={money(totals.add)} sub="NT$" color="text-[var(--green-text)]" />
+        <Stat label="累計減帳(核准)" value={money(Math.abs(totals.reduce))} sub="NT$" color="text-[var(--red-text)]" />
         <Stat label="變更後契約金額" value={yi(revised)} sub={`${ratio >= 0 ? '+' : ''}${ratio.toFixed(1)}% · NT$ ${money(revised)}`} color="text-[var(--blue-text)]" />
       </div>
       {totals.pendingNet !== 0 && (
-        <p className="text-xs text-[var(--text-3)] -mt-2">另有審核中/提出的變更淨額 <span className={totals.pendingNet >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{totals.pendingNet >= 0 ? '+' : ''}{money(totals.pendingNet)}</span>（尚未計入變更後契約金額）。</p>
+        <p className="text-xs text-[var(--text-3)] -mt-2">另有審核中/提出的變更淨額 <span className={totals.pendingNet >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}>{totals.pendingNet >= 0 ? '+' : ''}{money(totals.pendingNet)}</span>（尚未計入變更後契約金額）。</p>
       )}
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
@@ -188,14 +188,14 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
   return (
     <Card title={`${co.co_no ? co.co_no + '　' : ''}${co.title}`} action={
       <div className="flex items-center gap-2">
-        <span className={`text-sm font-medium tabular-nums ${net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{net >= 0 ? '+' : ''}{money(net)}</span>
+        <span className={`text-sm font-medium tabular-nums ${net >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{net >= 0 ? '+' : ''}{money(net)}</span>
         {canApprove ? (
           <select value={co.status} onChange={(e) => onStatus(e.target.value)}
             className="text-xs border border-[var(--border)] rounded-lg px-2 py-1 bg-[var(--surface)]">
             {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         ) : <Badge color={STATUS_COLOR[co.status] || 'slate'}>{co.status}</Badge>}
-        {canEdit && <button onClick={onDelete} className="text-[var(--text-3)] hover:text-rose-600 text-sm">✕</button>}
+        {canEdit && <button onClick={onDelete} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm">✕</button>}
       </div>
     }>
       <div className="flex items-center gap-2 mb-3 text-xs text-[var(--text-3)]">
@@ -238,8 +238,8 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
                         className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
                     ) : <span>{money(it.unit_price)}</span>}
                   </td>
-                  <td className={`px-2 text-right tabular-nums font-medium ${(Number(it.amount_delta) || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(Number(it.amount_delta) || 0) >= 0 ? '+' : ''}{money(it.amount_delta)}</td>
-                  <td className="text-right pl-2">{itemsEditable && <button onClick={() => onDeleteItem(it.id)} aria-label={`刪除明細 ${it.description}`} className="text-[var(--text-3)] hover:text-rose-600">✕</button>}</td>
+                  <td className={`px-2 text-right tabular-nums font-medium ${(Number(it.amount_delta) || 0) >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{(Number(it.amount_delta) || 0) >= 0 ? '+' : ''}{money(it.amount_delta)}</td>
+                  <td className="text-right pl-2">{itemsEditable && <button onClick={() => onDeleteItem(it.id)} aria-label={`刪除明細 ${it.description}`} className="text-[var(--text-3)] hover:text-[var(--red-text)]">✕</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -249,11 +249,11 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
 
       {/* 變更後預算書 diff → 自動產生明細(僅未核准且有填報權) */}
       {itemsEditable && <div className="mb-3">
-        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] transition ${applying ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
+        <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] pressable ${applying ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
           <FileUp size={15} aria-hidden />上傳變更後預算書 XML，自動產生明細
           <input type="file" accept=".xml" className="hidden" onChange={onDiffFile} disabled={applying} />
         </label>
-        {diffErr && <p className="text-xs text-rose-600 mt-1.5">{diffErr}</p>}
+        {diffErr && <p className="text-xs text-[var(--red-text)] mt-1.5">{diffErr}</p>}
         {diff && (
           <div className="mt-2 border border-[var(--border)] rounded-lg p-3 bg-[var(--surface)]">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-2)]">
@@ -262,7 +262,7 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
               <span>單價變更 {diff.summary.priceChanged} 項</span>
               <span>新增 {diff.summary.added} 項</span>
               <span>刪除 {diff.summary.removed} 項</span>
-              <span className={`font-medium tabular-nums ${diff.summary.net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>淨額 {diff.summary.net >= 0 ? '+' : ''}{money(diff.summary.net)}</span>
+              <span className={`font-medium tabular-nums ${diff.summary.net >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>淨額 {diff.summary.net >= 0 ? '+' : ''}{money(diff.summary.net)}</span>
             </div>
             {diff.rows.length === 0 ? (
               <p className="text-sm text-[var(--text-3)] mt-2">與現行標單無差異。</p>
@@ -288,7 +288,7 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
                           <td className="px-2 text-right text-[var(--text-3)] text-xs whitespace-nowrap">{r.unit}</td>
                           <td className="px-2 text-right tabular-nums">{r.qty_delta}</td>
                           <td className="px-2 text-right tabular-nums">{money(r.unit_price)}</td>
-                          <td className={`px-2 text-right tabular-nums font-medium ${r.amount_delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{r.amount_delta >= 0 ? '+' : ''}{money(r.amount_delta)}</td>
+                          <td className={`px-2 text-right tabular-nums font-medium ${r.amount_delta >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{r.amount_delta >= 0 ? '+' : ''}{money(r.amount_delta)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -310,7 +310,7 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋既有工項連結（可留空直接新增全新項）…"
             className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" />
           {results.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto">
+            <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto enter-menu">
               {results.map((it) => (
                 <button key={it.item_key} onClick={() => pick(it)} className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] truncate">
                   <span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}

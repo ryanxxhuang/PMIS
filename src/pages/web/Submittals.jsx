@@ -204,7 +204,7 @@ export default function Submittals() {
                         setErrMsg('')
                         const { error } = await deleteSubmittal(s.id)
                         if (error) setErrMsg(`刪除失敗：${error.message}`)
-                      }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>
+                      }} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">刪除</button>
                     )}
                   </div>
                 </div>
@@ -217,7 +217,7 @@ export default function Submittals() {
                           <Sparkles size={14} className="text-[var(--blue)]" aria-hidden />AI 審查助手
                           {r.suggested_decision && <Badge color={DECISION_COLOR[r.suggested_decision] || 'slate'}>建議：{r.suggested_decision}</Badge>}
                         </div>
-                        <button onClick={() => closeReview(s.id)} className="text-xs text-[var(--text-3)] hover:text-rose-500 shrink-0">收起</button>
+                        <button onClick={() => closeReview(s.id)} className="text-xs text-[var(--text-3)] hover:text-[var(--red-text)] shrink-0">收起</button>
                       </div>
                       {r.caution && <div className="text-xs text-[var(--amber-text)] mb-2">⚠ {fixNl(r.caution)}</div>}
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查要點</div>
@@ -249,7 +249,7 @@ export default function Submittals() {
                           {d.suggested_decision && <Badge color={DECISION_COLOR[d.suggested_decision] || 'slate'}>建議：{d.suggested_decision}</Badge>}
                           <span className="text-[10px] text-[var(--text-3)] font-normal">{d.mode === 'text' ? '已讀文件文字' : '視覺讀取'}</span>
                         </div>
-                        <button onClick={() => closeRead(s.id)} className="text-xs text-[var(--text-3)] hover:text-rose-500 shrink-0">收起</button>
+                        <button onClick={() => closeRead(s.id)} className="text-xs text-[var(--text-3)] hover:text-[var(--red-text)] shrink-0">收起</button>
                       </div>
                       {d.doc_summary && <div className="text-xs text-[var(--text-2)] mb-2">文件摘要：{d.doc_summary}</div>}
                       {d.caution && <div className="text-xs text-[var(--amber-text)] mb-2">⚠ {fixNl(d.caution)}</div>}

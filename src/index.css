@@ -49,6 +49,17 @@
   --chart-today: #b8c4cf;
 
   --elevation: 0 1px 2px 0 rgba(28,39,51,.10), 0 1px 3px 1px rgba(28,39,51,.06);
+
+  /* ── Motion system ──
+     資料密集工程工具:動效只做「回饋」與「防突變」,快、脆、不表演。
+     曲線用強化版 ease-out/in-out(內建 CSS easing 太弱),UI 一律 <300ms。 */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);  /* iOS 抽屜曲線(進出對稱) */
+  --dur-press: 140ms;   /* 按壓回饋 */
+  --dur-fast: 160ms;    /* hover、小型浮層 */
+  --dur-menu: 180ms;    /* 下拉選單、popover */
+  --dur-modal: 220ms;   /* 對話框、側面板 */
 }
 
 .dark {
@@ -120,6 +131,51 @@ select option { color: var(--text); background: var(--surface); }
   left: 0; bottom: -1px;
   width: 40px;
   border-bottom: 2px solid var(--blue);
+}
+
+/* ── 互動回饋:按壓即時縮放(pointer-down 就回饋,不等 click)──
+   所有可按元素共用;disabled 不回饋。縮放輕(0.97),專業不花。
+   過渡表在此統一(transform+顏色),用了 .pressable 就別再掛 transition-colors,
+   兩者的 transition 宣告會互蓋。 */
+.pressable {
+  transition: transform var(--dur-press) var(--ease-out),
+    background-color var(--dur-fast) ease, color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+.pressable:active:not(:disabled) { transform: scale(0.97); }
+
+/* ── 進場過渡:掛載時從 @starting-style 過渡到常態(只動 transform/opacity)。
+   出場一律即時(高頻工具,關閉要快);不支援 @starting-style 的瀏覽器
+   直接顯示,無動畫、零破壞。方向遵守空間一致性:從觸發源長出來。 ── */
+.enter-fade {            /* 遮罩 scrim:純淡入 */
+  transition: opacity var(--dur-menu) var(--ease-out);
+  @starting-style { opacity: 0; }
+}
+.enter-menu {            /* 下拉/浮層:自觸發鈕向下長出 */
+  transform-origin: top;
+  transition: opacity var(--dur-menu) var(--ease-out), transform var(--dur-menu) var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+.enter-modal {           /* 對話框:置中,微縮放浮現(絕不從 scale(0) 出現) */
+  transform-origin: center;
+  transition: opacity var(--dur-modal) var(--ease-out), transform var(--dur-modal) var(--ease-out);
+  @starting-style { opacity: 0; transform: scale(0.96); }
+}
+.enter-panel {           /* 錨定面板(如右下 Copilot):從觸發鈕的角落長出 */
+  transform-origin: bottom right;
+  transition: opacity var(--dur-modal) var(--ease-out), transform var(--dur-modal) var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(8px) scale(0.97); }
+}
+.enter-row {             /* 清單新增列/橫幅:防「突然出現」的最小位移 */
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(2px); }
+}
+
+/* 主題切換平滑化:只在切換瞬間掛上,避免亮↔暗全畫面突跳。
+   平時不掛,免得所有元素常駐 color transition 造成 hover 遲滯。 */
+html.theme-switching, html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
+  transition: background-color 200ms var(--ease-in-out), color 200ms var(--ease-in-out),
+    border-color 200ms var(--ease-in-out), fill 200ms var(--ease-in-out), stroke 200ms var(--ease-in-out) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

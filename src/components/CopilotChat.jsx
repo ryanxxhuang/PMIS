@@ -49,7 +49,7 @@ export default function CopilotChat({ data, facts, askAssistant, minH = 180, max
             問問看本案的進度、估驗、缺失、契約……<br />答案都從本案資料來、附上出處連結。
           </div>
         ) : msgs.map((m, i) => (
-          <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+          <div key={i} className={`enter-row ${m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}`}>
             <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-line ${
               m.role === 'user' ? 'bg-[var(--primary)] text-white rounded-br-sm' : 'bg-[var(--surface-2)] text-[var(--text)] rounded-bl-sm'}`}>
               {m.role === 'ai' ? stripMd(m.text) : m.text}
@@ -66,7 +66,7 @@ export default function CopilotChat({ data, facts, askAssistant, minH = 180, max
           </div>
         ))}
         {busy && (
-          <div className="flex justify-start">
+          <div className="flex justify-start enter-row">
             <div className="bg-[var(--surface-2)] text-[var(--text-3)] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm inline-flex items-center gap-1.5">
               <Bot size={13} className="animate-pulse" aria-hidden />思考中…
             </div>
@@ -78,7 +78,7 @@ export default function CopilotChat({ data, facts, askAssistant, minH = 180, max
         <div className="flex flex-wrap gap-1.5">
           {SUGGESTED_QUESTIONS.map((s) => (
             <button key={s} onClick={() => ask(s)} disabled={busy}
-              className="text-[11px] px-2 py-1 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition disabled:opacity-40">
+              className="text-[11px] px-2 py-1 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] pressable disabled:opacity-40">
               {s}
             </button>
           ))}

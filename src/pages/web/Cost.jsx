@@ -76,11 +76,11 @@ export default function Cost() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Stat label={coNet !== 0 ? '合約收入（變更後契約金額）' : '合約收入（發包工程費）'} value={yi(revenue)} sub={coNet !== 0 ? `NT$ ${money(revenue)} · 含核准追加減 ${coNet > 0 ? '+' : ''}${money(coNet)}` : `NT$ ${money(revenue)}`} color="text-[var(--blue-text)]" />
-        <Stat label="預估毛利（收入−預算成本）" value={`${pct(budgetRate)}%`} sub={`NT$ ${money(budgetMargin)}`} color={budgetMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
-        <Stat label="實際毛利（收入−實際成本）" value={`${pct(actualRate)}%`} sub={`NT$ ${money(actualMargin)}`} color={actualMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
+        <Stat label="預估毛利（收入−預算成本）" value={`${pct(budgetRate)}%`} sub={`NT$ ${money(budgetMargin)}`} color={budgetMargin >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'} />
+        <Stat label="實際毛利（收入−實際成本）" value={`${pct(actualRate)}%`} sub={`NT$ ${money(actualMargin)}`} color={actualMargin >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'} />
         <Stat label="預算成本合計" value={money(totals.budget)} sub="NT$" color="text-[var(--text)]" />
         <Stat label="實際成本合計" value={money(totals.actual)} sub="NT$" color="text-[var(--text)]" />
-        <Stat label="成本超支 / 結餘" value={money(totals.budget - totals.actual)} sub={totals.actual > totals.budget ? '已超出預算' : '尚在預算內'} color={totals.actual > totals.budget ? 'text-rose-600' : 'text-[var(--text-2)]'} />
+        <Stat label="成本超支 / 結餘" value={money(totals.budget - totals.actual)} sub={totals.actual > totals.budget ? '已超出預算' : '尚在預算內'} color={totals.actual > totals.budget ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'} />
       </div>
 
       {byCat.length > 0 && (
@@ -103,7 +103,7 @@ export default function Cost() {
                     <td className="px-2 text-right tabular-nums text-[var(--text-3)]">{g.n}</td>
                     <td className="px-2 text-right tabular-nums">{money(g.budget)}</td>
                     <td className="px-2 text-right tabular-nums">{money(g.actual)}</td>
-                    <td className={`px-2 pr-5 text-right tabular-nums ${g.actual > g.budget ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>{money(g.budget - g.actual)}</td>
+                    <td className={`px-2 pr-5 text-right tabular-nums ${g.actual > g.budget ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>{money(g.budget - g.actual)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -191,7 +191,7 @@ export default function Cost() {
                     </td>
                     <td className="px-2 pr-5 text-right">
                       <button onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) onDelete(c.id) }}
-                        className="text-[var(--text-3)] hover:text-rose-600 text-sm">✕</button>
+                        className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm">✕</button>
                     </td>
                   </tr>
                 ))}

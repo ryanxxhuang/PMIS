@@ -217,7 +217,7 @@ export default function ValuationPackage() {
                     <figure key={p.id} className="relative border border-slate-200 rounded overflow-hidden break-inside-avoid group">
                       {p.url && <img src={p.url} alt={p.caption || ''} className="w-full h-28 object-cover" />}
                       <button onClick={() => toggleExclude(p.id)} title="排除此張(不列入本包)"
-                        className="print:hidden absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition">✕</button>
+                        className="print:hidden absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                       <figcaption className="text-[10px] text-slate-500 px-1.5 py-1 leading-tight">
                         {p.caption || '—'}{p.taken_at ? ` · ${String(p.taken_at).slice(0, 10)}` : ''}
                       </figcaption>

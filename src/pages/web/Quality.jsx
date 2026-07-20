@@ -93,7 +93,7 @@ export default function Quality() {
                     <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
                   </> : <span className="text-xs text-[var(--text-3)]">待監造查驗</span>)}
                   {/* 已判定查驗=品質證據,不提供刪除(DB 另有 guard) */}
-                  {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspection(i.id); if (error) setErrMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-rose-500" aria-label={`刪除查驗 ${i.title}`}>✕</button>}
+                  {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspection(i.id); if (error) setErrMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label={`刪除查驗 ${i.title}`}>✕</button>}
                 </div>
               </div>
             ))}
@@ -206,7 +206,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
     <Card title={`自主檢查表（${chains.length}）`} action={
       canEdit && <Button variant="secondary" onClick={() => { if (open) closeForm(); else setOpen(true); setMsg('') }}>{open ? '取消' : '＋ 新增檢查'}</Button>
     }>
-      {msg && <p className={`text-sm mb-3 ${msg.includes('不合格') || msg.includes('拒絕') || msg.includes('不可') ? 'text-[var(--accent-text)]' : 'text-emerald-600'}`}>{msg}</p>}
+      {msg && <p className={`text-sm mb-3 ${msg.includes('不合格') || msg.includes('拒絕') || msg.includes('不可') ? 'text-[var(--accent-text)]' : 'text-[var(--green-text)]'}`}>{msg}</p>}
 
       {open && template && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
@@ -318,7 +318,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
                         className="text-[var(--text-3)] hover:underline text-xs">歷次 {history.length}</button>
                     )}
                     {canEdit && !r.overall && (
-                      <button onClick={() => del(r)} aria-label="刪除未判定的檢查紀錄" className="text-[var(--text-3)] hover:text-rose-500">✕</button>
+                      <button onClick={() => del(r)} aria-label="刪除未判定的檢查紀錄" className="text-[var(--text-3)] hover:text-[var(--red-text)]">✕</button>
                     )}
                   </div>
                 </div>
@@ -439,7 +439,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                   </td>
                   {/* 已判定試體=品質證據,不提供刪除(DB 另有 guard) */}
                   <td className="text-right pl-2">{s.status === '待試驗' && (
-                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-rose-500" aria-label={`刪除試體 ${s.sample_no}`}>✕</button>
+                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label={`刪除試體 ${s.sample_no}`}>✕</button>
                   )}</td>
                 </tr>
               ))}
@@ -492,7 +492,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
         </div>
       )}
 
-      {err && <p className="text-xs text-rose-600 mb-2">{err}</p>}
+      {err && <p className="text-xs text-[var(--red-text)] mb-2">{err}</p>}
       {observations.length === 0 ? <Empty>尚無觀察事項。現場看到「不對但還沒到缺失」的狀況先記為觀察，處理掉或必要時一鍵升級為缺失。</Empty> : (
         <div className="space-y-2">
           {observations.map((o) => (
@@ -508,7 +508,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
                     <Button variant="secondary" disabled={busy} onClick={() => run('標記已處理', () => onUpdate(o.id, { status: '已處理' }))}>標記已處理</Button>
                     <Button variant="outline" disabled={busy} onClick={async () => { if (await appConfirm({ title: '升級為正式缺失？', body: '將自動開立缺失單追蹤改善。', confirmLabel: '升級' })) run('升級為缺失', () => onEscalate(o)) }}>升級為缺失</Button>
                   </>}
-                  <button disabled={busy} onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) run('刪除觀察', () => onDelete(o.id)) }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
+                  <button disabled={busy} onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) run('刪除觀察', () => onDelete(o.id)) }} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
                 </div>
               )}
             </div>

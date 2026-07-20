@@ -18,9 +18,16 @@ export function applyTheme(mode = getThemeMode()) {
   document.documentElement.classList.toggle('dark', dark)
 }
 
+// 亮↔暗是全畫面亮度跳變,切換瞬間掛上過渡 class 讓顏色滑過去;
+// 常駐會拖慢所有 hover,所以過渡結束即摘除。
+let switchTimer = null
 export function setThemeMode(mode) {
   try { localStorage.setItem(KEY, mode) } catch { /* noop */ }
+  const el = document.documentElement
+  el.classList.add('theme-switching')
   applyTheme(mode)
+  clearTimeout(switchTimer)
+  switchTimer = setTimeout(() => el.classList.remove('theme-switching'), 250)
 }
 
 // system 模式下,OS 亮暗切換即時反映(main.jsx 掛一次)

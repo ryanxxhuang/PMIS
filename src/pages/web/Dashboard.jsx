@@ -100,7 +100,7 @@ export default function Dashboard() {
         ]}
         action={imported && (
           <button onClick={exportAll} title="把本專案所有資料打包下載(JSON)"
-            className="inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1.5 border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] transition">
+            className="inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1.5 border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable">
             <Download size={13} aria-hidden />匯出整案資料
           </button>
         )}
@@ -181,7 +181,7 @@ export default function Dashboard() {
             ].map((s) => {
               const Icon = s.icon
               return (
-                <Link key={s.label} to={s.to} className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition min-w-0">
+                <Link key={s.label} to={s.to} className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors min-w-0">
                   <span className="w-9 h-9 rounded-lg grid place-items-center shrink-0 bg-[var(--surface-2)] text-[var(--text-2)]"><Icon size={17} aria-hidden /></span>
                   <span className="min-w-0 leading-tight">
                     <span className="block text-[11px] text-[var(--text-3)] tracking-[0.04em] whitespace-nowrap">{s.label}</span>
@@ -220,7 +220,7 @@ export default function Dashboard() {
                 <ul className="divide-y divide-[var(--border-2)]">
                   {openDefects.slice(0, 6).map((d) => (
                     <li key={d.id}>
-                      <Link to="/quality" className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-[var(--surface-2)] transition">
+                      <Link to="/quality" className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-[var(--surface-2)] transition-colors">
                         <span className="text-[var(--text)] truncate">{d.title}</span>
                         <div className="flex items-center gap-2 shrink-0">
                           {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>}
@@ -239,7 +239,7 @@ export default function Dashboard() {
                 <ul className="divide-y divide-[var(--border-2)]">
                   {siteLogs.slice(0, 6).map((l) => (
                     <li key={l.id}>
-                      <Link to="/site-log" className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-[var(--surface-2)] transition">
+                      <Link to="/site-log" className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-[var(--surface-2)] transition-colors">
                         <span className="num text-[var(--text-2)] shrink-0">{l.log_date}</span>
                         <span className="text-[var(--text)] truncate ml-3 flex-1 text-right">{l.work_summary || `${Object.keys(l.items).length} 工項`}</span>
                       </Link>
@@ -293,7 +293,7 @@ function RoleActionCenter({ org, items }) {
             const Icon = m.icon
             return (
               <li key={x.id || `${x.tag}|${x.title}|${i}`}>
-                <Link to={x.to} className="group flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition">
+                <Link to={x.to} className="group flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">
                   <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0" style={{ background: m.bg, color: m.c }}>
                     <Icon size={16} aria-hidden />
                   </span>

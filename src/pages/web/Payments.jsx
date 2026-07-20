@@ -61,7 +61,7 @@ export default function Payments() {
         <Stat label="累計已收" value={money(sum.received)} sub="NT$" color="text-[var(--blue-text)]" />
         {/* 負未收=實收超過累計應領,屬資料異常而非正常 KPI(P1-07) */}
         <Stat label="未收款" value={money(sum.unreceived)} sub={sum.unreceived < 0 ? '實收超過應領,請查核' : 'NT$'}
-          color={sum.unreceived < 0 ? 'text-rose-600' : sum.unreceived > 0 ? 'text-amber-600' : 'text-emerald-600'} />
+          color={sum.unreceived < 0 ? 'text-[var(--red-text)]' : sum.unreceived > 0 ? 'text-amber-600' : 'text-[var(--green-text)]'} />
         <Stat label="累計保留款(待退)" value={money(sum.retention)} sub="完工後請領" color="text-[var(--text)]" />
       </div>
 
@@ -150,7 +150,7 @@ export default function Payments() {
                             <button onClick={async () => {
                               if (!(await appConfirm({ title: `清空第 ${v.period_no} 期請款/收款資料？`, body: '退回核定前需先清空金流欄位;清空後可重新登錄。', danger: true, confirmLabel: '清空' }))) return
                               onPay(v.id, { invoice_date: null, paid_date: null, paid_amount: null })
-                            }} className="text-[11px] text-[var(--text-3)] hover:text-rose-500 underline whitespace-nowrap" aria-label={`清空第 ${v.period_no} 期金流`}>清空</button>
+                            }} className="text-[11px] text-[var(--text-3)] hover:text-[var(--red-text)] underline whitespace-nowrap" aria-label={`清空第 ${v.period_no} 期金流`}>清空</button>
                           )}
                         </span>
                       </td>

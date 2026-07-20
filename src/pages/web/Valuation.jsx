@@ -215,7 +215,7 @@ export default function Valuation() {
               <button
                 key={v.id}
                 onClick={() => setSelectedId(v.id)}
-                className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                className={`px-3 py-1.5 rounded-lg text-sm border pressable ${
                   v.id === selected?.id ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] border-[var(--blue)] font-medium' : 'bg-[var(--surface)] text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface-2)]'
                 }`}
               >
@@ -229,7 +229,7 @@ export default function Valuation() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <Stat label="本期估驗金額" value={fmt(periodAmt)} sub={`第 ${selected.period_no} 期`} color="text-[var(--blue-text)]" />
             <Stat label="累計估驗金額" value={fmt(totalCum)} sub={`占發包 ${completion.toFixed(1)}%`} />
-            <Stat label="累計完成度" value={`${completion.toFixed(1)}%`} sub={`/ ${yi(billableTotal)}`} color="text-emerald-600" />
+            <Stat label="累計完成度" value={`${completion.toFixed(1)}%`} sub={`/ ${yi(billableTotal)}`} color="text-[var(--green-text)]" />
             <Stat label="本期保留款" value={fmt(periodAmt * ret)} sub={`${selected.retention_pct}%`} color="text-[var(--text-2)]" />
             <Stat label="本期應付" value={fmt(periodAmt * (1 - ret))} sub="本期估驗 − 保留款" color="text-blue-600" />
           </div>
@@ -252,7 +252,7 @@ export default function Valuation() {
                 {selected.status === '已核定' && can.approve &&
                   <Button variant="ghost" onClick={() => onReject('退回核定')}>退回核定</Button>}
                 {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01) */}
-                {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-rose-400 hover:text-rose-600" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
+                {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-[var(--red-text)] hover:text-[var(--red-text)]" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
               </div>
             }
           >

@@ -21,7 +21,7 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
     return (
       <div className="flex items-center gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface-2)]">
         <span className="truncate flex-1">{label}</span>
-        <button onClick={() => onPick(null, '')} className="text-[var(--text-3)] hover:text-rose-500 text-xs">✕</button>
+        <button onClick={() => onPick(null, '')} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
       </div>
     )
   }
@@ -29,7 +29,7 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
     <div className="relative">
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋並選擇工項（可不填）…" className={input} />
       {results.length > 0 && (
-        <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto">
+        <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto enter-menu">
           {results.map((it) => (
             <button key={it.item_key} onClick={() => { onPick(it.item_key, `${it.item_no} ${it.description}`); setQ('') }}
               className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] truncate">
@@ -162,11 +162,11 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
       {form && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 transition ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+            <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
               <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onPhoto} className="hidden" />
               <Camera size={15} aria-hidden /> {aiBusy ? (isSafety ? 'AI 判讀中…' : 'AI 辨識中…') : (isSafety ? '拍工安照片 AI 判讀' : '拍缺失照片 AI 填表')}
             </label>
-            <span className={`text-xs ${/失敗/.test(aiMsg) ? 'text-rose-600' : 'text-[var(--text-2)]'}`}>{aiMsg || (isSafety ? '拍現場照片，AI 依職安衛法規判讀危害類別、違反依據並填表(條號請現場核對)。' : '拍缺失現場，AI 自動填標題/說明/嚴重度。')}</span>
+            <span className={`text-xs ${/失敗/.test(aiMsg) ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>{aiMsg || (isSafety ? '拍現場照片，AI 依職安衛法規判讀危害類別、違反依據並填表(條號請現場核對)。' : '拍缺失現場，AI 自動填標題/說明/嚴重度。')}</span>
           </div>
           {!isSafety && leaves.length > 0 && (
             <WorkItemPicker leaves={leaves} value={form.work_item_key} label={form.work_item_label}
@@ -214,7 +214,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
                   can.approve && <button onClick={() => reopen(d)} className="text-xs text-[var(--blue-text)] hover:underline">撤銷結案</button>
                 )}
                 {can.edit && d.status !== '已結案' && (
-                  <button onClick={() => remove(d)} className="text-[var(--text-3)] hover:text-rose-500" aria-label="刪除缺失">✕</button>
+                  <button onClick={() => remove(d)} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除缺失">✕</button>
                 )}
               </div>
             </div>

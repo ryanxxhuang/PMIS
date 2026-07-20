@@ -66,7 +66,7 @@ export default function Members() {
             </Field></div>
             <Button onClick={onAdd} disabled={busy || !email.trim()}>{busy ? '加入中…' : '＋ 加入專案'}</Button>
           </div>
-          {msg && <p className={`text-sm mt-2 ${msg.includes('已加入') ? 'text-emerald-600' : 'text-rose-600'}`}>{msg}</p>}
+          {msg && <p className={`text-sm mt-2 ${msg.includes('已加入') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{msg}</p>}
           {demoMode && <p className="text-xs text-[var(--text-3)] mt-2">（demo 模式為展示用，實際邀請需登入真實專案。）</p>}
         </Card>
       )}
@@ -93,7 +93,7 @@ export default function Members() {
                 : <p className="text-xs text-[var(--text-3)]">僅專案建立者可開啟。</p>}
             </div>
           )}
-          {formalMsg && <p className={`text-sm mt-2 ${formalMsg.includes('已開啟') ? 'text-emerald-600' : 'text-rose-600'}`}>{formalMsg}</p>}
+          {formalMsg && <p className={`text-sm mt-2 ${formalMsg.includes('已開啟') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{formalMsg}</p>}
         </Card>
       )}
 
@@ -115,7 +115,7 @@ export default function Members() {
                 <div className="flex items-center gap-2 shrink-0">
                   <Badge color={ORG_COLOR[m.org_type] || 'slate'}>{ORG_LABEL[m.org_type] || m.org_type}</Badge>
                   {isAdmin && m.user_id !== currentUser?.user_id && (
-                    <button onClick={() => onRemove(m)} className="text-[var(--text-3)] hover:text-rose-500 text-xs">移除</button>
+                    <button onClick={() => onRemove(m)} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">移除</button>
                   )}
                 </div>
               </div>

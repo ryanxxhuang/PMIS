@@ -137,7 +137,7 @@ export default function RFI() {
                         setErrMsg('')
                         const { error } = await deleteRfi(r.id)
                         if (error) setErrMsg(`刪除失敗：${error.message}`)
-                      }} className="text-[var(--text-3)] hover:text-rose-500 text-xs">刪除</button>
+                      }} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">刪除</button>
                     )}
                   </div>
                 </div>
@@ -152,7 +152,7 @@ export default function RFI() {
                           {d.schedule_impact && <Badge color="amber">工期</Badge>}
                           {d.cost_impact && <Badge color="red">費用</Badge>}
                         </div>
-                        <button onClick={() => closeDraft(r.id)} className="text-xs text-[var(--text-3)] hover:text-rose-500 shrink-0">收起</button>
+                        <button onClick={() => closeDraft(r.id)} className="text-xs text-[var(--text-3)] hover:text-[var(--red-text)] shrink-0">收起</button>
                       </div>
                       <p className="text-sm text-[var(--text-2)] leading-relaxed bg-[var(--blue)]/[0.04] border border-[var(--blue)]/20 rounded-lg px-3 py-2 whitespace-pre-line">{d.answer}</p>
                       <div className="text-[11px] text-[var(--text-3)] mt-1">依據：{d.basis || '—'}{d.caution ? ` ｜ ${d.caution}` : ''}</div>

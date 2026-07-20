@@ -5,7 +5,7 @@
 // 由「同一批已儲存的契約文字」重建,不再要求第二次上傳。
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Scale, FileText, UploadCloud, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
+import { Scale, FileText, UploadCloud, ChevronRight, RefreshCw } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { Card, Empty, PageHeader, Badge, Button, Select } from '../../components/ui.jsx'
@@ -403,7 +403,7 @@ export default function Contract() {
             </label>
           ))}
         </div>
-        {anchorErr && <p className="text-xs text-rose-600 mt-2">{anchorErr}</p>}
+        {anchorErr && <p className="text-xs text-[var(--red-text)] mt-2">{anchorErr}</p>}
         <p className="text-xs text-[var(--text-3)] mt-3">義務時程的到期日、倒數、逾期都依這些基準日即時計算。</p>
       </Card>
 
@@ -433,7 +433,7 @@ export default function Contract() {
               ))}
             </Select>
           )}
-          <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 transition ${uploading || !canUploadDocs ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+          <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${uploading || !canUploadDocs ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
             <input type="file" multiple accept={ACCEPT_ATTR}
               disabled={uploading || !canUploadDocs}
               onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)}
@@ -450,7 +450,7 @@ export default function Contract() {
               const active = p.id === selectedPackageId
               return (
                 <button key={p.id} onClick={() => setSelectedPackageId(p.id)}
-                  className={`text-left border rounded-xl px-3 py-2 min-w-[160px] transition ${active ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border)] hover:bg-[var(--surface-2)]'}`}>
+                  className={`text-left border rounded-xl px-3 py-2 min-w-[160px] pressable ${active ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border)] hover:bg-[var(--surface-2)]'}`}>
                   <div className="text-sm font-medium text-[var(--text)]">{name.title}</div>
                   {name.subtitle && <div className="text-xs text-[var(--text-3)]">{name.subtitle}</div>}
                   <div className="text-xs text-[var(--text-3)] mt-0.5">{PACKAGE_STATUS_LABELS[p.status] || p.status}</div>
@@ -465,7 +465,7 @@ export default function Contract() {
           onDragOver={(e) => { e.preventDefault(); if (canUploadDocs) setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => { e.preventDefault(); setDragOver(false); if (canUploadDocs) handleFiles(e.dataTransfer?.files, selectedPackage) }}
-          className={`border-2 border-dashed rounded-xl px-4 py-4 transition ${dragOver ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border)]'}`}
+          className={`border-2 border-dashed rounded-xl px-4 py-4 transition-colors ${dragOver ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border)]'}`}
         >
           {progress.total === 0 ? (
             <p className="text-sm text-[var(--text-2)]">
@@ -504,7 +504,7 @@ export default function Contract() {
             <p className="text-xs text-[var(--text-3)] mt-2">你可以離開此頁,處理結果會保留。</p>
           </div>
         )}
-        {msg && <p className="text-xs text-rose-600 mt-3">{msg}</p>}
+        {msg && <p className="text-xs text-[var(--red-text)] mt-3">{msg}</p>}
         {legacyMsg && <p className="text-xs text-[var(--text-2)] mt-2">{legacyMsg}</p>}
         {boqMsg && <p className="text-xs text-[var(--text-2)] mt-2">{boqMsg}</p>}
         {!uploading && (runs.length > 0 || obligations.length > 0) && (
@@ -595,7 +595,7 @@ export default function Contract() {
         {runs.length > 0 && (
           <div className="mt-3">
             <button onClick={() => setShowTech((s) => !s)} className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] inline-flex items-center gap-1">
-              {showTech ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />} 技術資訊
+              <ChevronRight size={12} aria-hidden className={`transition-transform duration-[var(--dur-fast)] ${showTech ? 'rotate-90' : ''}`} /> 技術資訊
             </button>
             {showTech && (
               <div className="mt-2 text-[11px] text-[var(--text-3)] space-y-0.5">
@@ -690,7 +690,7 @@ export default function Contract() {
                     {it.ob.responsible ? `　·　${it.ob.responsible}` : ''}
                   </div>
                   {!it.done && it.due && (
-                    <div className={`text-xs font-medium mt-0.5 ${it.state === 'overdue' ? 'text-rose-600' : it.state === 'soon' ? 'text-amber-600' : 'text-[var(--text-2)]'}`}>
+                    <div className={`text-xs font-medium mt-0.5 ${it.state === 'overdue' ? 'text-[var(--red-text)]' : it.state === 'soon' ? 'text-amber-600' : 'text-[var(--text-2)]'}`}>
                       {it.state === 'overdue' ? `已逾期 ${-it.diff} 天` : `還有 ${it.diff} 天`}
                     </div>
                   )}
@@ -701,7 +701,7 @@ export default function Contract() {
                   {it.state === 'overdue' && it.ob.penalty && (() => {
                     const est = estimatePenalty({ penaltyText: it.ob.penalty, overdueDays: -it.diff, contractTotal })
                     return est ? (
-                      <div className="text-xs font-medium text-rose-700 bg-[var(--red-tint)] rounded-md px-2 py-1 mt-1.5 flex items-start gap-1.5">
+                      <div className="text-xs font-medium text-[var(--red-text)] bg-[var(--red-tint)] rounded-md px-2 py-1 mt-1.5 flex items-start gap-1.5">
                         <Scale size={12} className="mt-0.5 shrink-0" aria-hidden />
                         <span>預估逾期違約金約 NT$ {est.amount.toLocaleString('en-US')}{est.capped ? '(已達上限)' : ''}
                           <span className="font-normal text-[var(--text-3)]"> · {est.basis} · 概算供參,實際依契約認定</span>

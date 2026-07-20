@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
+import { ErrorBanner } from '../components/ui.jsx'
 
 export default function Login() {
   const { isSupabaseConfigured, setCurrentUser, currentUser, signIn, signUp, resendSignup,
@@ -57,9 +58,9 @@ function ResetPasswordForm({ updatePassword }) {
       <p className="text-xs text-[var(--text-2)]">你剛透過重設連結回來,請設定新密碼後繼續。</p>
       <input className={input} type="password" placeholder="新密碼（至少 6 碼）" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={6} autoFocus />
       <input className={input} type="password" placeholder="再輸入一次新密碼" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={6} />
-      {err && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{err}</div>}
+      <ErrorBanner msg={err} />
       <button type="submit" disabled={busy}
-        className="w-full bg-[var(--primary)] text-white rounded-lg py-2.5 font-medium hover:bg-[var(--primary-hover)] transition disabled:opacity-50">
+        className="w-full bg-[var(--primary)] text-white rounded-lg py-2.5 font-medium hover:bg-[var(--primary-hover)] pressable disabled:opacity-50">
         {busy ? '更新中…' : '設定新密碼並登入'}
       </button>
     </form>
@@ -146,7 +147,7 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
       <div className="flex rounded-lg bg-[var(--surface-2)] p-1 text-sm mb-1">
         {[['signin', '登入'], ['signup', '註冊']].map(([m, label]) => (
           <button key={m} type="button" onClick={() => { setMode(m); setErr('') }}
-            className={`flex-1 py-1.5 rounded-md transition ${mode === m ? 'bg-[var(--surface)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--text-2)]'}`}>
+            className={`flex-1 py-1.5 rounded-md pressable ${mode === m ? 'bg-[var(--surface)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--text-2)]'}`}>
             {label}
           </button>
         ))}
@@ -175,10 +176,10 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
         <input className={input} type="password" placeholder="密碼（至少 6 碼）" value={form.password} onChange={set('password')} required minLength={6} />
       )}
 
-      {err && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{err}</div>}
+      <ErrorBanner msg={err} />
 
       <button type="submit" disabled={loading}
-        className="w-full bg-[var(--primary)] text-white rounded-lg py-2.5 font-medium hover:bg-[var(--primary-hover)] transition disabled:opacity-50">
+        className="w-full bg-[var(--primary)] text-white rounded-lg py-2.5 font-medium hover:bg-[var(--primary-hover)] pressable disabled:opacity-50">
         {loading ? '處理中…' : mode === 'signin' ? '登入' : mode === 'signup' ? '建立帳號並登入' : '寄送重設連結'}
       </button>
       <div className="text-center pt-0.5">
@@ -210,7 +211,7 @@ function RolePicker({ setCurrentUser, navigate }) {
       <div className="space-y-2">
         {users.map((u) => (
           <button key={u.user_id} onClick={() => pick(u)}
-            className="w-full flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] hover:border-[var(--blue)] hover:bg-[var(--blue-tint)] transition text-left">
+            className="w-full flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] hover:border-[var(--blue)] hover:bg-[var(--blue-tint)] pressable text-left">
             <div className="w-10 h-10 rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] flex items-center justify-center font-bold">{u.name[0]}</div>
             <div>
               <div className="font-medium text-[var(--text)]">{u.name}</div>

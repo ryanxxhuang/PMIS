@@ -98,7 +98,7 @@ export default function Alerts() {
         <Card key={g.key} title={`${g.label}（${g.items.length}）`}>
           <div className="space-y-1.5">
             {g.items.map((x, i) => (
-              <Link key={`${x.tag}|${x.title}|${x.meta}|${i}`} to={x.to} className="flex items-start gap-3 px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-2)] transition">
+              <Link key={`${x.tag}|${x.title}|${x.meta}|${i}`} to={x.to} className="flex items-start gap-3 px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
                 <span className="text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0 mt-0.5" style={{ color: tagColor(x.tag), background: 'var(--surface-2)' }}>{x.tag}</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm text-[var(--text)] truncate">{x.title}</div>
