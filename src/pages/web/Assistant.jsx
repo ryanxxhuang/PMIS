@@ -33,7 +33,7 @@ export default function Assistant() {
       <div className="max-w-3xl">
         <Card title="問我專案的事" bodyClass="p-0"
           action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><Bot size={12} aria-hidden />附出處</span>}>
-          <CopilotChat data={data} facts={facts} askAssistant={askAssistant} />
+          <CopilotChat data={data} onAsk={(t) => askAssistant(t, facts)} />
         </Card>
       </div>
 

@@ -44,6 +44,7 @@ import { useCollabSlice } from './collab.js'
 import { useSiteSlice } from './site.js'
 import { useLedgerSlice } from './ledger.js'
 import { useQualitySlice } from './quality.js'
+import { useAgentSlice } from './agent.js'
 
 const wrote = (table, op) => h.calls.some((c) => c.table === table && c.op === op)
 
@@ -133,6 +134,36 @@ describe('標單匯入前的真專案:工安/契約義務寫入必須進 DB', ()
     expect(ins.args[0].work_item_id).toBeNull()
     expect(wrote('defects', 'update')).toBe(true)
     expect(wrote('defects', 'delete')).toBe(true)
+  })
+})
+
+describe('agent slice:demo 只進記憶體、真專案走 RPC/edge fn', () => {
+  it('demo:runAgent 回 fallback、resolveAgentAction 只改記憶體,完全不打網路', async () => {
+    const r = renderHook(() => useAgentSlice(demoCtx))
+    await act(async () => {
+      r.current.setAgentActions([{ id: 'AGA-1', status: 'pending', summary: 'demo 草稿' }])
+    })
+    await act(async () => { expect((await r.current.runAgent('今天進度如何?')).fallback).toBe(true) })
+    await act(async () => { expect((await r.current.resolveAgentAction('AGA-1', 'accepted')).error).toBeNull() })
+    expect(r.current.agentActions[0].status).toBe('accepted')
+    expect(r.current.agentActions[0].resolved_at).toBeTruthy()
+    expect(h.calls).toEqual([]) // demo 紅線:不碰 supabase(含載入 effect)
+  })
+
+  it('真專案:載入打 agent_actions、resolveAgentAction 走 resolve_agent_action RPC', async () => {
+    const r = renderHook(() => useAgentSlice(preBoqCtx))
+    await act(async () => {}) // 讓載入 effect 的 async 完成
+    expect(wrote('agent_actions', 'select')).toBe(true)
+    await act(async () => { expect((await r.current.resolveAgentAction('row-1', 'rejected')).error).toBeNull() })
+    expect(h.calls.some((c) => c.table === 'rpc:resolve_agent_action')).toBe(true)
+  })
+
+  it('批2 紅線:resolveAgentAction 不接受 accepted/rejected 以外的狀態(edited 留給批3)', async () => {
+    const r = renderHook(() => useAgentSlice(demoCtx))
+    await act(async () => {
+      expect((await r.current.resolveAgentAction('AGA-1', 'edited')).error).toBe('不支援的處理狀態')
+    })
+    expect(h.calls).toEqual([])
   })
 })
 

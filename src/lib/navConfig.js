@@ -6,11 +6,12 @@
 import {
   LayoutDashboard, LayoutGrid, Bell, CalendarClock, Newspaper, BadgeCheck,
   ClipboardList, PencilLine, Coins, Wallet, TrendingUp,
-  ShieldCheck, HardHat, FileCheck2, Users, History,
+  ShieldCheck, HardHat, FileCheck2, Users, History, Bot,
 } from 'lucide-react'
 
 export const navGroups = [
   { title: '總覽', items: [
+    { to: '/agent', icon: Bot, label: 'AI Agent' },
     { to: '/portfolio', icon: LayoutGrid, label: '跨案總覽' },
     { to: '/dashboard', icon: LayoutDashboard, label: '專案 Dashboard' },
     { to: '/alerts', icon: Bell, label: '提醒中心' },

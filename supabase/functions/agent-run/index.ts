@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     }
 
     // -- history 淨化:只收純文字、最多 20 則、每則 ≤ 4000 字元 ------------------
-    const history = Array.isArray(body?.history)
+    let history = Array.isArray(body?.history)
       ? (body.history as unknown[])
           .filter(
             (m): m is { role: 'user' | 'assistant'; content: string } =>
@@ -95,6 +95,13 @@ Deno.serve(async (req) => {
           .slice(-20)
           .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
       : undefined
+    // history 來自前端(不可信)。Anthropic Messages API 要求 messages 第一則必須
+    // 是 user role——若淨化後(截斷/過濾可能移掉開頭的 user 訊息)以 assistant
+    // 開頭,整個請求會 400。丟棄開頭連續的 assistant 訊息,確保非空 history
+    // 一律以 user 開頭。
+    while (history && history.length > 0 && history[0].role === 'assistant') {
+      history = history.slice(1)
+    }
 
     const result = await claudeAgent({
       system: personaSystem(role),

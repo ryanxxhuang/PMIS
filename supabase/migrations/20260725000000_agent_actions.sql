@@ -5,7 +5,11 @@
 -- (仍走既有 RLS + guard trigger,本檔不碰)。這張表因此是系統管理表,不是業務表。
 --
 -- 存取模型(照 audit_events / document_ingestion_runs 的 append-only 慣例):
---   * SELECT:專案成員(RLS:my_project_ids())。
+--   * SELECT:草稿本人(actor_user = auth.uid())——草稿是尚未送出的私人工作
+--     狀態,同案他人不可見(要給別人看的東西走送審/查驗等正式流程)。這與
+--     resolve_agent_action() 的本人限定一致:看得到的必定能處理,不會出現
+--     「看得到卻無權處理」的死路。policy 同時保留 my_project_ids() 條件作
+--     縱深防禦:即使 actor_user 被誤植也不會跨案外洩。
 --   * INSERT:只有 service role(agent-run edge function 落草稿);
 --     authenticated 無任何表級寫入權限。
 --   * 狀態轉移:只走 resolve_agent_action() RPC(security definer)——
@@ -36,7 +40,7 @@ create index if not exists agent_actions_actor_idx   on public.agent_actions(act
 alter table public.agent_actions enable row level security;
 drop policy if exists "agent_actions_select" on public.agent_actions;
 create policy "agent_actions_select" on public.agent_actions for select to authenticated
-  using (project_id in (select public.my_project_ids()));
+  using (actor_user = auth.uid() and project_id in (select public.my_project_ids()));
 
 -- 刻意不建 INSERT / UPDATE / DELETE policy,並收回表級寫入權限。
 -- 必須自己 revoke 的原因:20260712001200_authenticated_baseline_grants.sql 除了

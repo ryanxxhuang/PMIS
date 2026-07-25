@@ -1,11 +1,12 @@
 -- agent_actions pgTAP 套件:AI 草稿收件匣(批 1 agent runtime)。
--- 涵蓋:結構與 check 約束、表級權限(authenticated 只可讀不可寫)、RLS 專案隔離、
+-- 涵蓋:結構與 check 約束、表級權限(authenticated 只可讀不可寫)、
+-- RLS 隔離(草稿僅本人可見:同案他人與跨案皆不可見)、
 -- resolve_agent_action 狀態機(本人限定/終態不可逆/非法值擋下)、審計留痕。
 -- 執行:本地 supabase(colima)+容器內 psql,整份交易內執行並 rollback。
 -- 對應 migration 20260725000000_agent_actions.sql。
 begin;
 
-select plan(30);
+select plan(31);
 
 -- login helper(同 p0_05 慣例:兩種 claim 寫法都設,涵蓋不同 auth.uid() 實作)
 create or replace function pg_temp.become(u uuid) returns void language plpgsql as $$
@@ -94,16 +95,28 @@ alter table public.audit_events disable trigger audit_events_immutable;
 delete from public.audit_events;
 alter table public.audit_events enable trigger audit_events_immutable;
 
--- ── RLS 專案隔離 + 直接寫入不可行(以 A 案成員身分) ────────────────────────
+-- ── RLS 隔離(草稿僅本人可見)+ 直接寫入不可行 ─────────────────────────────
 select pg_temp.become('aa100000-0000-0000-0000-000000000001');
 set local role authenticated;
 
 select is((select count(*)::integer from public.agent_actions
   where project_id = 'aa200000-0000-0000-0000-00000000000a'), 3,
-  'A 案成員看得到 A 案的 AI 草稿');
+  '本人看得到自己在 A 案的 AI 草稿');
 select is((select count(*)::integer from public.agent_actions
   where project_id = 'aa200000-0000-0000-0000-00000000000b'), 0,
   'A 案成員看不到 B 案的 AI 草稿');
+
+-- 新語意:草稿是尚未送出的私人工作狀態——同專案的另一個成員也看不到
+-- (與 resolve_agent_action 的本人限定一致,不會出現「看得到卻無權處理」)
+reset role;
+select pg_temp.become('aa100000-0000-0000-0000-000000000002');
+set local role authenticated;
+select is((select count(*)::integer from public.agent_actions
+  where project_id = 'aa200000-0000-0000-0000-00000000000a'), 0,
+  '同案他人看不到別人的 AI 草稿');
+reset role;
+select pg_temp.become('aa100000-0000-0000-0000-000000000001');
+set local role authenticated;
 
 select throws_ok($$
   insert into public.agent_actions (project_id, actor_user, agent_role, kind, summary)

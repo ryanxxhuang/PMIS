@@ -34,6 +34,7 @@ const Activity = lazy(() => import('./pages/web/Activity.jsx'))
 const Requirements = lazy(() => import('./pages/web/Requirements.jsx'))
 const MonthlyReport = lazy(() => import('./pages/web/MonthlyReport.jsx'))
 const Assistant = lazy(() => import('./pages/web/Assistant.jsx'))
+const AgentConsole = lazy(() => import('./pages/web/Agent.jsx'))
 const SupervisorReport = lazy(() => import('./pages/web/SupervisorReport.jsx'))
 const RiskAudit = lazy(() => import('./pages/web/RiskAudit.jsx'))
 const Portfolio = lazy(() => import('./pages/web/Portfolio.jsx'))
@@ -94,6 +95,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<Web><Dashboard /></Web>} />
       <Route path="/assistant" element={<Web><Assistant /></Web>} />
+      <Route path="/agent" element={<Web><AgentConsole /></Web>} />
       <Route path="/supervisor-report" element={<Web><SupervisorReport /></Web>} />
       <Route path="/audit" element={<Web><RiskAudit /></Web>} />
       <Route path="/portfolio" element={<Web><Portfolio /></Web>} />

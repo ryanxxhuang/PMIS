@@ -11,9 +11,26 @@ const stripMd = (s) => String(s || '')
   .replace(/\*\*(.*?)\*\*/g, '$1').replace(/(^|\n)\s*#{1,6}\s+/g, '$1')
   .replace(/(^|\n)\s*[-*]\s+/g, '$1').replace(/\*/g, '')
 
+// agent 查詢工具 → 使用者看得懂的模組名(steps 的「查了:…」小字用;與後端
+// agentTools.ts 的七支唯讀工具一一對應,未知工具名原樣顯示)
+const TOOL_LABEL = {
+  search_boq: '標單工項',
+  list_daily_logs: '施工日誌',
+  get_valuation: '估驗計價',
+  get_requirements: '履約需求',
+  list_my_open_items: '待辦事項',
+  find_evidence: '佐證勾稽',
+  get_record: '單筆明細',
+}
+// 只列成功的查詢(ok:false 表示工具失敗,不該讓使用者以為有查到),並去重
+const stepLabels = (steps) =>
+  [...new Set((steps || []).filter((s) => s.ok !== false).map((s) => TOOL_LABEL[s.tool] || s.tool))]
+
 // fill=true:填滿父容器(浮動面板固定高,訊息區 flex-1 撐開、輸入貼底,消除下方留白)。
 // fill=false:頁面版,訊息區以 minH/maxH 內部捲動。
-export default function CopilotChat({ data, facts, askAssistant, minH = 180, maxH = 360, fill = false }) {
+// onAsk:統一的問答函式 (text) => Promise<{ answer, sources?, steps? } | { fallback: true } | { error }>
+// ——呼叫端自己決定接 assistant-chat 或 agent-run;fallback / error 都走確定性回退(data)。
+export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill = false }) {
   const [msgs, setMsgs] = useState([])
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -32,9 +49,9 @@ export default function CopilotChat({ data, facts, askAssistant, minH = 180, max
     const text = (question ?? q).trim()
     if (!text || busy) return
     setQ(''); setMsgs((m) => [...m, { role: 'user', text }]); setBusy(true)
-    const res = await askAssistant(text, facts) // AI 優先
+    const res = await onAsk(text) // AI 優先
     let ai
-    if (res?.answer) ai = { role: 'ai', text: res.answer, sources: res.sources || [], mode: 'ai' }
+    if (res?.answer) ai = { role: 'ai', text: res.answer, sources: res.sources || [], steps: stepLabels(res.steps), mode: 'ai' }
     else ai = fallbackAnswer(text) // res.fallback(demo) 或 res.error 都走這
     setBusy(false)
     setMsgs((m) => [...m, ai])
@@ -50,17 +67,23 @@ export default function CopilotChat({ data, facts, askAssistant, minH = 180, max
           </div>
         ) : msgs.map((m, i) => (
           <div key={i} className={`enter-row ${m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}`}>
-            <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-line ${
-              m.role === 'user' ? 'bg-[var(--primary)] text-white rounded-br-sm' : 'bg-[var(--surface-2)] text-[var(--text)] rounded-bl-sm'}`}>
-              {m.role === 'ai' ? stripMd(m.text) : m.text}
-              {m.sources?.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {m.sources.map((s, j) => (
-                    <Link key={j} to={s.to} className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--border-2)] text-[var(--blue-text)] hover:bg-[var(--blue-tint)] inline-flex items-center gap-0.5">
-                      {s.label} <ArrowRight size={10} aria-hidden />
-                    </Link>
-                  ))}
-                </div>
+            <div className="max-w-[85%] min-w-0">
+              <div className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-line ${
+                m.role === 'user' ? 'bg-[var(--primary)] text-white rounded-br-sm' : 'bg-[var(--surface-2)] text-[var(--text)] rounded-bl-sm'}`}>
+                {m.role === 'ai' ? stripMd(m.text) : m.text}
+                {m.sources?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {m.sources.map((s, j) => (
+                      <Link key={j} to={s.to} className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--border-2)] text-[var(--blue-text)] hover:bg-[var(--blue-tint)] inline-flex items-center gap-0.5">
+                        {s.label} <ArrowRight size={10} aria-hidden />
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* agent 真的去查過哪些模組——透明化查詢路徑,建立「答案有憑有據」的信任 */}
+              {m.steps?.length > 0 && (
+                <div className="text-[10px] text-[var(--text-3)] mt-1 px-1">查了:{m.steps.join('、')}</div>
               )}
             </div>
           </div>

@@ -9,6 +9,7 @@
 //   src/store/slices/quality.js  — 查驗/缺失/自主檢查表/取樣試驗
 //   src/store/slices/collab.js   — 送審/RFI/觀察事項/成員
 //   src/store/slices/ledger.js   — 成本/變更設計/逐工項排程/契約義務
+//   src/store/slices/agent.js    — AI agent 對話與草稿收件匣
 // 跨領域的部分留在這裡:demo 種子、DB 整批載入、登出清理、重匯標單、角色權限 can。
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { createTrackedContext } from './store/tracked.jsx'
@@ -28,6 +29,7 @@ import { useSiteSlice } from './store/slices/site.js'
 import { useQualitySlice } from './store/slices/quality.js'
 import { useCollabSlice } from './store/slices/collab.js'
 import { useLedgerSlice } from './store/slices/ledger.js'
+import { useAgentSlice } from './store/slices/agent.js'
 
 // Key 追蹤 context(P-01):useStore() 介面不變(照常解構),但每個元件只訂閱
 // 自己讀過的 key——估驗打字不再重渲染側欄/頂欄/浮動助理。核心在 store/tracked.jsx。
@@ -132,6 +134,9 @@ export function StoreProvider({ children }) {
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
     parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument,
   } = useLedgerSlice(ctx)
+  const {
+    agentActions, agentActionsLoading, runAgent, resolveAgentAction, reloadAgentActions, setAgentActions,
+  } = useAgentSlice(ctx)
 
   // ── 財務單一真相層(B-02)──────────────────────────────────────────────────
   // 「已核准變更設計套回工項」與「變更後契約金額」只在這裡算一次,所有金額/進度
@@ -158,7 +163,7 @@ export function StoreProvider({ children }) {
     setChecklistTemplates(d.checklistTemplates); setChecklistRecords(d.checklistRecords); setTestSamples(d.testSamples)
     setSubmittals(d.submittals); setRfis(d.rfis); setObservations(d.observations)
     setItemSchedules(d.itemSchedules); setAcceptanceEvents(d.acceptanceEvents || [])
-    setInspectionPoints(d.inspectionPoints || [])
+    setInspectionPoints(d.inspectionPoints || []); setAgentActions(d.agentActions || [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, workItems, workItemsSource, currentUser])
 
@@ -301,6 +306,7 @@ export function StoreProvider({ children }) {
     submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal, uploadSubmittalFile, readSubmittalDoc,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
     rfis, createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply,
+    agentActions, agentActionsLoading, runAgent, resolveAgentAction, reloadAgentActions,
     listMembers, addMemberByEmail, removeMember, resolveMarkup, resendSignup,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,

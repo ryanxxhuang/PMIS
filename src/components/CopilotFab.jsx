@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { X, Maximize2 } from 'lucide-react'
 import { useStore } from '../store.jsx'
 import { useAssistantData } from '../lib/assistantData.js'
+import { displayAgentRole, AGENT_LABEL } from '../lib/agentRole.js'
 import CopilotChat from './CopilotChat.jsx'
 
 // 自訂 AI 標記:對話泡泡 + 靈感火花(比通用 Sparkles 更有識別度、更「設計感」)。
@@ -23,22 +24,35 @@ function CopilotMark({ size = 24 }) {
 // 面板內容獨立成元件:useAssistantData 訂閱幾乎全部 store key、每次資料變動都重算
 // facts 快照——只有面板打開(掛載)時才付這個成本;收合時 FAB 僅訂閱 2 個 key。
 function CopilotPanel({ onClose }) {
-  const { data, facts, askAssistant } = useAssistantData()
+  const { data, facts, org } = useAssistantData()
+  const { runAgent, currentProjectMembership, demoMode, currentUser } = useStore()
+  // 角色只用於顯示(紅線:權限一律以伺服器為準);agent-run 回傳的 role 覆蓋前端推算
+  const [serverRole, setServerRole] = useState(null)
+  const role = serverRole || displayAgentRole({ demoMode, currentUser, projectRole: currentProjectMembership?.project_role, orgType: org })
+  const label = AGENT_LABEL[role] || AGENT_LABEL.field
+
+  // 浮動面板不帶 history,保持輕量;fallback / error 由 CopilotChat 的確定性回退接手
+  const onAsk = async (text) => {
+    const res = await runAgent(text, { facts })
+    if (res?.role && res.role !== role) setServerRole(res.role)
+    return res?.text ? { answer: res.text, sources: res.sources || [], steps: res.steps } : res
+  }
+
   return (
     <div className="fixed z-[60] flex flex-col bg-[var(--surface)] border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] overflow-hidden
       inset-x-2 bottom-2 top-16 rounded-2xl enter-panel
       sm:inset-x-auto sm:top-auto sm:right-6 sm:bottom-24 sm:w-[400px] sm:h-[560px] sm:max-h-[75vh]"
-      role="dialog" aria-modal="false" aria-label="AI 助理">
+      role="dialog" aria-modal="false" aria-label={label.name}>
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-2)] shrink-0">
         <span className="w-7 h-7 rounded-lg grid place-items-center bg-[var(--blue-tint)] text-[var(--blue-text)] shrink-0"><CopilotMark size={16} /></span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-[var(--text)] leading-tight">AI 助理</div>
-          <div className="text-[10px] text-[var(--text-3)]">問本案的事 · 唯讀 · 附出處</div>
+          <div className="text-sm font-semibold text-[var(--text)] leading-tight">{label.name}</div>
+          <div className="text-[10px] text-[var(--text-3)]">查得到本案資料 · 只擬草稿不替你決定</div>
         </div>
-        <Link to="/assistant" onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><Maximize2 size={15} aria-hidden /></Link>
+        <Link to="/agent" onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><Maximize2 size={15} aria-hidden /></Link>
         <button onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><X size={17} aria-hidden /></button>
       </div>
-      <CopilotChat data={data} facts={facts} askAssistant={askAssistant} fill />
+      <CopilotChat data={data} onAsk={onAsk} fill />
     </div>
   )
 }

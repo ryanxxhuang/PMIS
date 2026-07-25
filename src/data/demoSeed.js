@@ -295,7 +295,38 @@ export function buildDemoData(workItems, project) {
     { id: 'ACC-DEMO-2', stage_key: 'confirm', event_date: iso(daysFromNow(-25)), result: null, note: '會同監造、廠商核對竣工項目數量' },
   ]
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints }
+  // ── AI 草稿收件匣(批2 /agent):四個角色的 agent 各一筆 pending 草稿 ──
+  // 真實模式要等批3「現場 agent」上線才會產草稿;demo 先把「AI 擬好、人決定」
+  // 的產品承諾演出來。日期相對今天 → 收件匣永遠像剛擬好的。
+  const agaAt = (h) => new Date(Date.now() - h * 3600e3).toISOString()
+  const agentActions = [
+    { id: 'AGA-DEMO-1', project_id: project.project_id, actor_user: null,
+      agent_role: 'field', kind: 'draft_daily_log', target_table: 'daily_logs', target_id: null,
+      summary: `已依 18 張現場照片擬好 ${iso(daysFromNow(-1))} 施工日誌草稿(3 個工項、含天氣與出工)`,
+      rationale: '依照片拍攝時間與位置分組,對照進行中工項與前一日出工人數推估',
+      evidence: { 來源: ['現場照片 18 張', `前日日誌 ${iso(daysFromNow(-2))}`, '進行中工項 3 項'] },
+      status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(2) },
+    { id: 'AGA-DEMO-2', project_id: project.project_id, actor_user: null,
+      agent_role: 'qc', kind: 'draft_inspection', target_table: 'test_samples', target_id: null,
+      summary: '7 天齡期試體 2 組今日到期,已擬好取樣試驗紀錄草稿',
+      rationale: '依取樣日期回推齡期,兩組試體的 7 天試驗到期日為今日',
+      evidence: { 來源: ['試體台帳(取樣日回推齡期)', '混凝土抗壓 fc=420'] },
+      status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(5) },
+    { id: 'AGA-DEMO-3', project_id: project.project_id, actor_user: null,
+      agent_role: 'supervisor', kind: 'draft_submittal_review', target_table: 'submittals', target_id: null,
+      summary: '送審 SUB-003 已逐項比對契約需求,擬好審查意見(2 項需補件)',
+      rationale: '依材料設備類審查要點逐項核對附件說明,出廠證明與 CNS 試驗報告需補正本',
+      evidence: { 來源: ['SUB-003 外牆窯燒磚材料送審', '材料設備類審查要點 5 項'] },
+      status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(20) },
+    { id: 'AGA-DEMO-4', project_id: project.project_id, actor_user: null,
+      agent_role: 'owner', kind: 'audit_note', target_table: 'valuations', target_id: null,
+      summary: '第 3 期估驗報量與施工日誌加總差 15 m³,建議複查',
+      rationale: '以文件勾稽鏈逐工項比對估驗明細與日誌數量加總,混凝土項差異超出容差',
+      evidence: { 來源: ['第 3 期估驗明細', '施工日誌數量加總'] },
+      status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(26) },
+  ]
+
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions }
 }
 
 // ── 跨案總覽的示範姊妹案(靜態摘要;A 區為主 storyline,由 store 即時計算) ──
