@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest'
 // 純函式不打網路;mock 掉 supabase 讓本檔在 node 環境零依賴載入
 vi.mock('../../lib/supabase.js', () => ({ supabase: null, isSupabaseConfigured: false }))
 
-import { draftPayloadToSiteLog, draftNeedsInputCount, applyDraftQuantities } from './agent.js'
+import { draftPayloadToSiteLog, draftNeedsInputCount, applyDraftQuantities, draftPayloadToChecklist, checklistDraftCounts } from './agent.js'
 
 // 後端 draft_daily_log 產出的 payload(規格 A1 第 7 點形狀,items 鍵為 work_item uuid)
 const payload = {
@@ -104,5 +104,55 @@ describe('applyDraftQuantities(收件匣卡片填的數量 → 合併回草稿 p
   it('quantities 未帶(undefined)→ 原 payload 原樣回傳,維持既有行為', () => {
     expect(applyDraftQuantities(payload, undefined)).toBe(payload)
     expect(applyDraftQuantities(null, undefined)).toBeNull()
+  })
+})
+
+// ── 批4:查驗草稿 payload → createChecklistRecord 入參 ─────────────────────
+// 實測值紅線:num 項後端一律 value:null(AI 不准猜),轉換後不得進 values——
+// judgeChecklist 對未檢項回 null 不列入判定,「還沒量」不是「量了合格」。
+const templates = [
+  { id: 'CLT-1', title: '混凝土自主檢查表', items: [
+    { no: 'B1', item: '已通知監造', kind: 'bool' },
+    { no: 'C2', item: '坍度', kind: 'num', min: 15.5, max: 20.5 },
+  ] },
+]
+const clPayload = {
+  template_id: 'CLT-1', template_title: '混凝土自主檢查表',
+  check_date: '2026-07-25', location: '3F 版牆',
+  results: {
+    B1: { value: true, ai_suggested: true },       // 照片可判讀的 bool → AI 建議值
+    C2: { value: null, needs_input: true },        // 實測值:AI 不准猜,留白待人填
+  },
+}
+
+describe('draftPayloadToChecklist(查驗草稿 → createChecklistRecord 形狀)', () => {
+  it('以 template_id 查回完整 template,values 只收已有值的項', () => {
+    const out = draftPayloadToChecklist(clPayload, templates)
+    expect(out.template).toBe(templates[0])
+    expect(out.check_date).toBe('2026-07-25')
+    expect(out.location).toBe('3F 版牆')
+    expect(out.values).toEqual({ B1: true }) // C2 是 null(待人填)→ 不進 values
+  })
+  it('value:null / 空字串不進 values(未檢不是合格);false 是有效的 bool 值要進', () => {
+    const out = draftPayloadToChecklist({ ...clPayload, results: {
+      B1: { value: false, ai_suggested: true }, C2: { value: '', needs_input: true },
+    } }, templates)
+    expect(out.values).toEqual({ B1: false })
+  })
+  it('template_id 查不到時退回 title 相符;兩者皆無 → null(誠實錯誤,不拿錯範本硬存)', () => {
+    const byTitle = draftPayloadToChecklist({ ...clPayload, template_id: 'gone' }, templates)
+    expect(byTitle?.template).toBe(templates[0])
+    expect(draftPayloadToChecklist({ template_id: 'gone', template_title: '也沒有' }, templates)).toBeNull()
+    expect(draftPayloadToChecklist(clPayload, [])).toBeNull()
+  })
+})
+
+describe('checklistDraftCounts(收件匣卡片統計)', () => {
+  it('needsInput=待人填項數、aiSuggested=AI 建議且有值的項數', () => {
+    expect(checklistDraftCounts(clPayload)).toEqual({ needsInput: 1, aiSuggested: 1 })
+  })
+  it('空/缺 payload 回零,不炸', () => {
+    expect(checklistDraftCounts(null)).toEqual({ needsInput: 0, aiSuggested: 0 })
+    expect(checklistDraftCounts({})).toEqual({ needsInput: 0, aiSuggested: 0 })
   })
 })

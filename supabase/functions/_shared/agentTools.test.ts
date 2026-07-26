@@ -1,28 +1,39 @@
-// 驗證批3 agentTools:角色工具分發的順序穩定性(prompt cache 前綴)與
-// buildDailyLogDraft 的「數量誠實原則」——數量永遠留空標 needs_input,
-// 昨日數量只進 rationale 供參考,絕不預填。
+// 驗證批3/批4 agentTools:角色工具分發的順序穩定性(prompt cache 前綴)、
+// buildDailyLogDraft 的「數量誠實原則」(數量永遠留空標 needs_input,昨日數量
+// 只進 rationale 供參考,絕不預填),以及批4 buildInspectionDraft 的
+// 「實測值不讓 AI 讀」紅線(num 項不存在任何賦值路徑)。
 import { describe, it, expect } from 'vitest'
-import { QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL, toolsForRole, buildDailyLogDraft, makeToolExec } from './agentTools.ts'
-import type { DailyLogDraftInput } from './agentTools.ts'
+import {
+  QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL, DRAFT_INSPECTION_TOOL, RAISE_TO_TOOL, RUN_INTEGRITY_AUDIT_TOOL,
+  toolsForRole, buildDailyLogDraft, buildInspectionDraft, pickChecklistTemplate, makeToolExec,
+} from './agentTools.ts'
+import type { DailyLogDraftInput, InspectionDraftInput } from './agentTools.ts'
 
-describe('toolsForRole(批3 角色分發)', () => {
+describe('toolsForRole(批4 角色分發:查詢在前、角色草稿工具居中、raise_to 殿後)', () => {
   const queryNames = QUERY_TOOLS.map((t) => t.name)
 
-  it('field = 查詢七支在前 + draft_daily_log 殿後(順序固定,快取前綴穩定)', () => {
-    const names = toolsForRole('field').map((t) => t.name)
-    expect(names).toEqual([...queryNames, 'draft_daily_log'])
-    expect(names[names.length - 1]).toBe(DRAFT_DAILY_LOG_TOOL.name)
+  it('field = 查詢七支 + draft_daily_log + raise_to', () => {
+    expect(toolsForRole('field').map((t) => t.name)).toEqual([...queryNames, 'draft_daily_log', 'raise_to'])
+    expect(toolsForRole('field').at(-1)).toBe(RAISE_TO_TOOL)
   })
 
-  it('qc / supervisor / owner 只有查詢七支(草稿工具是批4)', () => {
-    for (const role of ['qc', 'supervisor', 'owner'] as const) {
-      expect(toolsForRole(role).map((t) => t.name)).toEqual(queryNames)
+  it('qc = 查詢七支 + draft_inspection + raise_to', () => {
+    expect(toolsForRole('qc').map((t) => t.name)).toEqual([...queryNames, 'draft_inspection', 'raise_to'])
+    expect(toolsForRole('qc').at(-2)).toBe(DRAFT_INSPECTION_TOOL)
+  })
+
+  it('supervisor / owner = 查詢七支 + run_integrity_audit + raise_to(同一份勾稽)', () => {
+    for (const role of ['supervisor', 'owner'] as const) {
+      expect(toolsForRole(role).map((t) => t.name)).toEqual([...queryNames, 'run_integrity_audit', 'raise_to'])
+      expect(toolsForRole(role).at(-2)).toBe(RUN_INTEGRITY_AUDIT_TOOL)
     }
   })
 
-  it('多次呼叫回傳同一參考順序(不重排、不重建亂序)', () => {
-    expect(toolsForRole('field').map((t) => t.name)).toEqual(toolsForRole('field').map((t) => t.name))
-    expect(toolsForRole('qc')).toBe(QUERY_TOOLS)
+  it('每個角色多次呼叫回傳同一參考(模組層常數,不重建 → 快取前綴逐位元組穩定)', () => {
+    for (const role of ['field', 'qc', 'supervisor', 'owner'] as const) {
+      expect(toolsForRole(role)).toBe(toolsForRole(role))
+    }
+    expect(toolsForRole('field')[0]).toBe(QUERY_TOOLS[0])
   })
 })
 
@@ -132,5 +143,171 @@ describe('makeToolExec 的 draft_daily_log 防護', () => {
     const exec = makeToolExec({} as never, '00000000-0000-0000-0000-000000000000', {} as never, 'user-1')
     expect(((await exec('draft_daily_log', { log_date: '2026/07/25' })) as { error?: string }).error).toContain('YYYY-MM-DD')
     expect(((await exec('draft_daily_log', { log_date: '2026-13-40' })) as { error?: string }).error).toContain('有效日期')
+  })
+})
+
+// ── 批4:buildInspectionDraft ——「實測值不讓 AI 讀」紅線 ─────────────────────
+const inspInput = (over: Partial<InspectionDraftInput> = {}): InspectionDraftInput => ({
+  template: {
+    id: 'tpl-1',
+    title: '場鑄結構用混凝土 自主檢查表',
+    source: '03310',
+    items: [
+      { no: 'B1', group: '澆置前', item: '澆置前已通知監造單位', kind: 'bool', standard: '≥24 小時前通知' },
+      { no: 'C2', group: '澆置中', item: '坍度', kind: 'num', min: 15.5, max: 20.5, unit: 'cm', standard: '18 ± 2.5 cm' },
+      { no: 'D1', group: '取樣養護', item: '抗壓試體已取樣', kind: 'bool', standard: '每組 6 個' },
+      { no: 'D3', group: '取樣養護', item: '防天候保護天數', kind: 'num', min: 7, unit: '天', standard: '≥7 天' },
+    ],
+  },
+  templateReason: '本案僅有這一張範本',
+  checkDate: '2026-07-25',
+  workItem: { id: 'wi-1', item_no: '壹.一.6', description: '場鑄結構混凝土' },
+  locationHint: '3F 柱牆澆置',
+  photoIds: ['p1', 'p2'],
+  boolSuggestions: null,
+  ...over,
+})
+
+// 新形狀:每筆建議 = { value, basis } —— 沒有記錄依據的推論,事後和猜測分不出來
+const sug = (value: boolean, basis = '照片說明提到已依標準辦理') => ({ value, basis })
+
+describe('buildInspectionDraft 實測值紅線(num 項不存在任何賦值路徑)', () => {
+  it('num 項一律 value:null + needs_input —— 即使同時給了 bool 建議', () => {
+    const out = buildInspectionDraft(inspInput({ boolSuggestions: { B1: sug(true) } }))
+    if ('error' in out) throw new Error(out.error)
+    const results = out.payload.results as Record<string, { value: unknown; needs_input?: boolean }>
+    for (const no of ['C2', 'D3']) {
+      expect(results[no].value).toBeNull()
+      expect(results[no].needs_input).toBe(true)
+    }
+  })
+
+  it('bool_suggestions 指到 num 項 → 直接回 error(不是默默忽略)', () => {
+    const out = buildInspectionDraft(inspInput({ boolSuggestions: { C2: sug(true) } }))
+    expect('error' in out && out.error).toContain('數值實測項')
+  })
+
+  it('未知項次 / 非布林 value / 非物件 → 各自回明確錯誤讓模型修正', () => {
+    expect((buildInspectionDraft(inspInput({ boolSuggestions: { Z9: sug(true) } })) as { error: string }).error).toContain('未知項次')
+    expect((buildInspectionDraft(inspInput({ boolSuggestions: { B1: { value: '有', basis: '照片說明提到已通知' } } })) as { error: string }).error).toContain('true/false')
+    expect((buildInspectionDraft(inspInput({ boolSuggestions: { B1: '有' } })) as { error: string }).error).toContain('物件')
+    expect((buildInspectionDraft(inspInput({ boolSuggestions: [true] })) as { error: string }).error).toContain('物件')
+  })
+
+  it('缺 basis 的建議被拒 —— bool 建議必須附依據', () => {
+    const out = buildInspectionDraft(inspInput({ boolSuggestions: { B1: { value: true } } }))
+    expect('error' in out && out.error).toContain('必須附依據')
+  })
+
+  it('basis 太短(去空白後 < 4 字)被拒', () => {
+    const out = buildInspectionDraft(inspInput({ boolSuggestions: { B1: { value: true, basis: ' 有 ' } } }))
+    expect('error' in out && out.error).toContain('必須附依據')
+  })
+
+  it('bool 建議逐項標 ai_suggested:true + ai_basis;false 也如實輸出(不因 falsy 被吞)', () => {
+    const out = buildInspectionDraft(inspInput({
+      boolSuggestions: {
+        B1: sug(true, '對話中他親口說昨天已通知監造'),
+        D1: sug(false, '照片說明載明試體尚未取樣'),
+      },
+    }))
+    if ('error' in out) throw new Error(out.error)
+    const results = out.payload.results as Record<string, { value: unknown; ai_suggested?: boolean; ai_basis?: string; needs_input?: boolean }>
+    expect(results.B1).toMatchObject({ value: true, ai_suggested: true, ai_basis: '對話中他親口說昨天已通知監造' })
+    expect(results.D1).toMatchObject({ value: false, ai_suggested: true, ai_basis: '照片說明載明試體尚未取樣' })
+    expect(results.B1.needs_input).toBeUndefined()
+  })
+
+  it('沒給建議的 bool 項不硬猜 —— 留空標 needs_input', () => {
+    const out = buildInspectionDraft(inspInput())
+    if ('error' in out) throw new Error(out.error)
+    const results = out.payload.results as Record<string, { value: unknown; needs_input?: boolean; ai_suggested?: boolean }>
+    expect(results.B1).toMatchObject({ value: null, needs_input: true })
+    expect(results.D1.ai_suggested).toBeUndefined()
+  })
+
+  it('不呼叫 judgeChecklist:overall 留 null,results 不含任何 pass 判定', () => {
+    const out = buildInspectionDraft(inspInput({ boolSuggestions: { B1: sug(true) } }))
+    if ('error' in out) throw new Error(out.error)
+    expect(out.payload.overall).toBeNull()
+    expect(JSON.stringify(out.payload.results)).not.toContain('"pass"')
+  })
+
+  it('payload 對齊前端接受路徑:template_id 必要、results 以項次 no 為鍵、帶 check_date/location', () => {
+    const out = buildInspectionDraft(inspInput())
+    if ('error' in out) throw new Error(out.error)
+    expect(out.payload.template_id).toBe('tpl-1')
+    expect(out.payload.check_date).toBe('2026-07-25')
+    expect(out.payload.location).toBe('3F 柱牆澆置')
+    expect(Object.keys(out.payload.results as object).sort()).toEqual(['B1', 'C2', 'D1', 'D3'])
+    expect(out.payload.photo_ids).toEqual(['p1', 'p2'])
+  })
+
+  it('summary 誠實標示待填實測項數;rationale 明說不猜實測值、判定由系統', () => {
+    const out = buildInspectionDraft(inspInput({ boolSuggestions: { B1: sug(true) } }))
+    if ('error' in out) throw new Error(out.error)
+    expect(out.summary).toBe('已擬好「場鑄結構用混凝土 自主檢查表」自主檢查表草稿(7/25,實測值 2 項待你填)')
+    expect(out.rationale).toContain('系統與 AI 都不猜實測值')
+    expect(out.rationale).toContain('AI 不參與判定')
+    expect(out.rationale).toContain('1 項為 AI 依當日照片與對話線索的建議')
+    expect(out.numPending).toBe(2)
+    expect(out.boolSuggested).toBe(1)
+  })
+})
+
+describe('pickChecklistTemplate(確定性關鍵字相符,非 AI)', () => {
+  const templates = [
+    { id: 't1', title: '鋼筋組立 自主檢查表' },
+    { id: 't2', title: '場鑄結構用混凝土 自主檢查表' },
+  ]
+
+  it('僅一張範本時直接用', () => {
+    const out = pickChecklistTemplate([templates[0]], null)
+    expect(out?.template.id).toBe('t1')
+    expect(out?.reason).toContain('僅有這一張')
+  })
+
+  it('依工項描述雙字組挑最相符的一張,理由可供收件人質疑', () => {
+    const out = pickChecklistTemplate(templates, '場鑄結構混凝土(3000psi)')
+    expect(out?.template.id).toBe('t2')
+    expect(out?.reason).toContain('相符度挑選')
+  })
+
+  it('多張範本但無工項描述、或全部 0 分 → 回 null(誠實請使用者指定,不亂挑)', () => {
+    expect(pickChecklistTemplate(templates, null)).toBeNull()
+    expect(pickChecklistTemplate(templates, '交通維持設施')).toBeNull()
+  })
+})
+
+// ── 批4:draft_inspection / raise_to 的 makeToolExec 防護 ───────────────────
+describe('makeToolExec 的 draft_inspection / raise_to 防護', () => {
+  const pid = '00000000-0000-0000-0000-000000000000'
+
+  it('draft_inspection:未傳 service 時誠實回「伺服器未設定」,不碰資料庫', async () => {
+    const exec = makeToolExec({} as never, pid)
+    expect(((await exec('draft_inspection', {})) as { error?: string }).error).toBe('伺服器未設定,暫時無法建立草稿')
+  })
+
+  it('draft_inspection:check_date / UUID 不合法時回錯誤讓模型修正', async () => {
+    const exec = makeToolExec({} as never, pid, {} as never, 'user-1', 'qc')
+    expect(((await exec('draft_inspection', { check_date: '2026-13-40' })) as { error?: string }).error).toContain('有效日期')
+    expect(((await exec('draft_inspection', { work_item_id: 'abc' })) as { error?: string }).error).toContain('UUID')
+    expect(((await exec('draft_inspection', { template_id: 'abc' })) as { error?: string }).error).toContain('UUID')
+  })
+
+  it('raise_to:to_role / subject / target 成對性逐項驗證', async () => {
+    const exec = makeToolExec({} as never, pid, {} as never, 'user-1', 'qc')
+    expect(((await exec('raise_to', { to_role: 'boss', subject: 'x' })) as { error?: string }).error).toContain('to_role')
+    expect(((await exec('raise_to', { to_role: 'supervisor', subject: '  ' })) as { error?: string }).error).toContain('subject')
+    expect(((await exec('raise_to', { to_role: 'supervisor', subject: '請複查', target_table: 'defects' })) as { error?: string }).error)
+      .toContain('成對')
+    expect(((await exec('raise_to', { to_role: 'supervisor', subject: '請複查', target_table: 'projects', target_id: pid })) as { error?: string }).error)
+      .toContain('白名單')
+  })
+
+  it('raise_to:未傳 service/role 時誠實回「伺服器未設定」,不碰資料庫', async () => {
+    const exec = makeToolExec({} as never, pid)
+    expect(((await exec('raise_to', { to_role: 'supervisor', subject: '缺失改善完成,請複查' })) as { error?: string }).error)
+      .toBe('伺服器未設定,暫時無法建立草稿')
   })
 })

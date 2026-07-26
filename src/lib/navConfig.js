@@ -3,9 +3,11 @@
 // roles 缺省=全角色可見;can.override(非正式模式的專案管理者)一律放行。
 // Layout 的側欄、App 的路由守衛、WorkbenchTabs 分頁列都吃這一份——
 // 「導覽隱藏」與「權限」永遠一致。
+// hidden: true=不渲染在側欄/分頁列,但仍參與 routeAllowed 的角色判斷——
+// 批 3/批 4 的收斂是「不顯示」,不是「不設限」;刪掉定義會讓 roles 一起消失(權限靜默鬆綁)。
 import {
   LayoutDashboard, LayoutGrid, Bell, CalendarClock, Newspaper, BadgeCheck,
-  ClipboardList, Coins, Wallet, TrendingUp,
+  ClipboardList, Coins, Wallet, TrendingUp, PencilLine,
   ShieldCheck, HardHat, FileCheck2, Users, History, Bot,
 } from 'lucide-react'
 
@@ -16,10 +18,14 @@ export const navGroups = [
     { to: '/dashboard', icon: LayoutDashboard, label: '專案 Dashboard' },
     { to: '/alerts', icon: Bell, label: '提醒中心' },
     { to: '/activity', icon: History, label: '活動紀錄' },
+    // 「風險稽核」(/audit)已自分頁隱藏(批4 產品原則:agent 能做的就把手動入口藏起來)——
+    // 機關/監造 agent 的 run_integrity_audit 在對話裡就能跑出同一份確定性發現,
+    // 還會寫成稽核提示草稿進 /agent 收件匣。路由保留(App.jsx 不動),機關深連結照常;
+    // hidden=不顯示但不解除限制:roles 必須留著,否則刪掉定義=任何角色都能深連結進防弊稽核。
     { to: '/contract', icon: CalendarClock, label: '契約與文件', tabs: [
       { to: '/contract', label: '專案文件' },
       { to: '/requirements', label: '履約需求' },
-      { to: '/audit', label: '風險稽核', roles: ['owner'] },     // 機關防弊
+      { to: '/audit', label: '風險稽核', roles: ['owner'], hidden: true }, // 機關防弊
     ] },
     { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
     { to: '/monthly-report', icon: Newspaper, label: '報表中心', tabs: [
@@ -29,9 +35,11 @@ export const navGroups = [
   ] },
   { title: '成本與進度', items: [
     { to: '/boq', icon: ClipboardList, label: '標單工項' },
-    // 「施工日誌」已自側欄移除(批3 產品原則:agent 能做的就把手動入口藏起來)——
+    // 「施工日誌」已自側欄隱藏(批3 產品原則:agent 能做的就把手動入口藏起來)——
     // 日常路徑是照片上傳→現場 agent 擬草稿→/agent 收件匣接受。路由保留(App.jsx 不動),
     // 深連結/提醒中心導向照常,/agent 收件匣底部留次要手動入口以防沒拍照的日子卡死。
+    // hidden=不顯示;本頁本來就不限角色,留定義是為了讓機制一致(隱藏≠移除)。
+    { to: '/site-log', icon: PencilLine, label: '施工日誌', hidden: true },
     { to: '/valuation', icon: Coins, label: '估驗與金流', tabs: [
       { to: '/valuation', label: '估驗計價' },
       { to: '/payments', label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
@@ -61,7 +69,8 @@ export const navGroups = [
 
 const tabAllowed = (n, org, override) => !n.roles || override || n.roles.includes(org)
 
-// 路由守衛:導覽/分頁未列的路由(列印頁、建案頁…)不設角色限制
+// 路由守衛:導覽/分頁未列的路由(列印頁、建案頁…)不設角色限制;
+// hidden 項照樣被找到、照樣套 roles——要限角色的路由必須列在定義裡(頂多 hidden),不能刪。
 export function routeAllowed(pathname, org, override) {
   for (const g of navGroups) for (const item of g.items) {
     for (const n of (item.tabs || [item])) {
@@ -71,25 +80,33 @@ export function routeAllowed(pathname, org, override) {
   return true
 }
 
-// 此路由所屬工作台(供分頁列渲染);單頁路由回 null
+// 此路由所屬工作台(供分頁列渲染);單頁路由回 null。
+// hidden 分頁不出現在分頁列;深連結進 hidden 分頁(如 /audit)視為單頁、不掛工作台。
 export function workbenchFor(pathname, org, override) {
   for (const g of navGroups) for (const item of g.items) {
-    if (item.tabs?.some((t) => t.to === pathname)) {
-      return { label: item.label, tabs: item.tabs.filter((t) => tabAllowed(t, org, override)) }
+    const hit = item.tabs?.find((t) => t.to === pathname)
+    if (hit) {
+      if (hit.hidden) return null
+      return {
+        label: item.label,
+        tabs: item.tabs.filter((t) => !t.hidden && tabAllowed(t, org, override)),
+      }
     }
   }
   return null
 }
 
-// 側欄可見項:工作台入口=第一個可見分頁;整組分頁都不可見則隱藏入口
+// 側欄可見項:工作台入口=第一個可見分頁;整組分頁都不可見則隱藏入口。
+// hidden 項一律不渲染(權限判斷仍在 routeAllowed 生效)。
 export function visibleNavGroups(org, override) {
   return navGroups
     .map((g) => ({
       ...g,
       items: g.items
         .map((item) => {
+          if (item.hidden) return null
           if (!item.tabs) return tabAllowed(item, org, override) ? item : null
-          const tabs = item.tabs.filter((t) => tabAllowed(t, org, override))
+          const tabs = item.tabs.filter((t) => !t.hidden && tabAllowed(t, org, override))
           return tabs.length ? { ...item, to: tabs[0].to, tabs } : null
         })
         .filter(Boolean),

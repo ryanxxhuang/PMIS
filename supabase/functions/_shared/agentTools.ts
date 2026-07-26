@@ -1,9 +1,11 @@
-// Agent 工具層(批1 唯讀查詢七支;批3 加入第八支 draft_daily_log)。
+// Agent 工具層(批1 唯讀查詢七支;批3 draft_daily_log;批4 run_integrity_audit
+// + draft_inspection + raise_to)。
 // ---------------------------------------------------------------------------
-// 七支查詢工具全部只讀不寫;draft_daily_log 是第一支「會寫東西」的工具,但它
-// 只寫 agent_actions(AI 草稿收件匣,系統管理表)—— 絕不寫 daily_logs 等任何
-// 業務資料表。真正的日誌寫入發生在使用者於收件匣按「接受」之後,由前端走既有
-// saveSiteLog 完成,既有 RLS / guard trigger 全部照常生效。
+// 七支查詢工具全部只讀不寫;草稿類工具(draft_daily_log / draft_inspection /
+// raise_to / run_integrity_audit 落稿)只寫 agent_actions(AI 草稿收件匣,系統
+// 管理表)—— 絕不寫 daily_logs 等任何業務資料表。真正的業務寫入發生在使用者於
+// 收件匣按「接受」之後,由前端走既有 store action 完成,既有 RLS / guard
+// trigger 全部照常生效。
 // 權限模型:所有業務查詢都走「呼叫者 JWT 建的 userClient」→ 自動套 RLS;
 // 但每個查詢仍逐一 .eq('project_id', …) 綁定本案 —— 縱深防禦,不單靠 RLS。
 // service role client 只用於寫 agent_actions(該表 authenticated 無寫入權),
@@ -19,8 +21,11 @@
 
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { ToolDef, ToolExec } from './agent.ts'
+import { AGENT_ROLES } from './agentPersona.ts'
 import type { AgentRole } from './agentPersona.ts'
 import { computeObligationDueUTC, diffDays, formatDate, parseDateUTC, taipeiTodayUTC } from './contractDue.ts'
+import { buildIntegrityFindings } from './integrityAudit.ts'
+import type { IntegrityLeaf, PourDate, TestSample } from './integrityAudit.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -192,13 +197,113 @@ export const DRAFT_DAILY_LOG_TOOL: ToolDef = {
   },
 }
 
-// 角色分發:field 多拿 draft_daily_log;qc/supervisor/owner 的草稿工具是批4。
-// ⚠️ 順序固定:查詢七支在前、draft 在後 —— 同一角色的 tools 前綴必須逐位元組
-// 穩定,prompt cache 才會命中(不同角色本來就是不同前綴,各自穩定即可)。
-const FIELD_TOOLS: ToolDef[] = [...QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL]
+// ── 批4(任務A):run_integrity_audit(供 supervisor 與 owner —— 監造要對量、
+// 機關要防弊,同一份發現)。findings 由確定性引擎 buildIntegrityFindings 產出,
+// 本工具不得過濾、重排或改寫 detail 文字 —— AI 只能引用,不參與判定。
+// 角色分發(toolsForRole)由批4任務B統一處理,此處只匯出工具定義與執行分支。
+export const RUN_INTEGRITY_AUDIT_TOOL: ToolDef = {
+  name: 'run_integrity_audit',
+  description:
+    '跨文件對帳:逐工項比對估驗、施工日誌、查驗、試體,找出對不起來的地方' +
+    '(估驗超前日誌、估驗無日誌佐證、未查驗即計價、澆置無試體…)。' +
+    '要回答「這期估驗報量對得起來嗎」「有沒有超計」「有什麼該複查的」時呼叫我。' +
+    '回傳的發現全部是程式精確比對出來的,你只能引用,不可自行增刪或改數字。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      create_draft: { type: 'boolean', description: '(選填)true = 另外把發現寫成一筆稽核草稿放進草稿收件匣' },
+    },
+    required: [],
+  },
+}
+
+// ── 批4(任務B):draft_inspection(只給 qc) ────────────────────────────────
+// 本批最重要的判斷:查驗實測值不讓 AI 讀。照片能證明「有做」,不能證明「做了多
+// 少」;實測值(kind:'num')驅動 judgeChecklist 的合格/不合格判定,是有法律效力
+// 的品質紀錄 —— AI 讀錯一個數字就是一張假的「合格」檢查表。因此 num 項一律留空
+// 標 needs_input,本檔不存在任何對 num 項賦值的路徑;bool 項(有/無、已設置)
+// 才允許模型經 bool_suggestions 給建議,且每項標 ai_suggested 由人逐項確認。
+// 收緊(批4 尾):模型在 agent-run 裡沒有視覺輸入,bool 建議的依據頂多是一段
+// caption 文字 —— 沒有記錄依據的推論,事後和猜測分不出來。因此每筆建議強制附
+// basis(憑什麼這樣建議),缺依據直接拒絕,payload 逐項存 ai_basis 供前端展示。
+export const DRAFT_INSPECTION_TOOL: ToolDef = {
+  name: 'draft_inspection',
+  description:
+    '當使用者說要做/擬自主檢查表或查驗紀錄時呼叫。會依當日照片與工項挑出合適的' +
+    '檢查表範本,把日期、部位、工項與照片帶好,產生草稿進收件匣。' +
+    '數值類實測項一律留空由使用者填,判定由系統依量化標準自動跑——你不可以猜任何實測值。' +
+    '勾選類項目(有/無、已設置/未設置)只有在照片說明或使用者親口說過的內容能直接支持時,' +
+    '才可經 bool_suggestions 給建議值並附上依據(會逐項標示為 AI 建議);沒把握就省略該項。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      work_item_id: { type: 'string', description: '(選填)對應工項 UUID,可先用 search_boq 查' },
+      check_date: { type: 'string', description: '(選填)檢查日期 YYYY-MM-DD,省略=今天(台北時間)' },
+      template_id: { type: 'string', description: '(選填)檢查表範本 UUID;省略時依工項與範本標題挑最相符的一張' },
+      bool_suggestions: {
+        type: 'object',
+        description:
+          '(選填)勾選類項目的建議值。鍵=檢查項次編號(如 B1);值={ value: true/false, basis: 依據 }。' +
+          'basis 必填:寫出你依據什麼這樣建議(例如「照片說明提到已架設臨邊護欄」' +
+          '或「7/24 查驗紀錄載明模板已組立完成」)。' +
+          '你沒有看到照片本身,只能依工具回傳的文字內容推論——推論不出來就省略該項,不要猜。' +
+          '僅接受 kind 為 bool 的項目;數值實測項給了會直接被拒絕。',
+        additionalProperties: {
+          type: 'object',
+          properties: { value: { type: 'boolean' }, basis: { type: 'string' } },
+          required: ['value', 'basis'],
+        },
+      },
+    },
+    required: [],
+  },
+}
+
+// ── 批4(任務B):raise_to(全角色) ─────────────────────────────────────────
+// 唯一「寫給別人」的工具:agent_actions 落在對方名下(actor_user = 對方)。
+// 該表 SELECT policy 是「本人」→ 呼叫者自己看不到這筆 —— 這是正確設計(草稿
+// 是提給對方的私人待辦),工具回傳必須把這件事講清楚,免得 agent 叫使用者去
+// 自己的收件匣找。
+export const RAISE_TO_TOOL: ToolDef = {
+  name: 'raise_to',
+  description:
+    '把一件事交給另一個角色處理,並附上你擬好的說明。' +
+    '用在你判斷這件事的球應該在別人手上時(例如廠商的缺失改善完成、要請監造複查)。' +
+    '這只是產生一則交接草稿給對方確認,你沒有替任何人做決定;' +
+    '送出後只會出現在對方的草稿收件匣,使用者自己的收件匣不會顯示這筆。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      to_role: {
+        type: 'string',
+        enum: ['field', 'qc', 'supervisor', 'owner'],
+        description: '交接對象角色:field=現場、qc=品管、supervisor=監造、owner=機關',
+      },
+      subject: { type: 'string', description: '一句話說明要對方處理什麼' },
+      note: { type: 'string', description: '(選填)補充說明' },
+      target_table: { type: 'string', description: '(選填)關聯單據的資料表名(白名單,須與 target_id 成對)' },
+      target_id: { type: 'string', description: '(選填)關聯單據 UUID(須與 target_table 成對)' },
+    },
+    required: ['to_role', 'subject'],
+  },
+}
+
+// 角色分發(批4 任務B 統一收斂):查詢七支在前、角色專屬草稿工具居中、raise_to
+// 殿後 —— 順序固定。⚠️ 每個角色的陣列都是模組層常數(只建一次):同一角色的
+// tools 前綴必須逐位元組穩定,prompt cache 才會命中(不同角色本來就是不同前綴,
+// 各自穩定即可)。
+const FIELD_TOOLS: ToolDef[] = [...QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL, RAISE_TO_TOOL]
+const QC_TOOLS: ToolDef[] = [...QUERY_TOOLS, DRAFT_INSPECTION_TOOL, RAISE_TO_TOOL]
+const SUPERVISOR_TOOLS: ToolDef[] = [...QUERY_TOOLS, RUN_INTEGRITY_AUDIT_TOOL, RAISE_TO_TOOL]
+const OWNER_TOOLS: ToolDef[] = [...QUERY_TOOLS, RUN_INTEGRITY_AUDIT_TOOL, RAISE_TO_TOOL]
 
 export function toolsForRole(role: AgentRole): ToolDef[] {
-  return role === 'field' ? FIELD_TOOLS : QUERY_TOOLS
+  switch (role) {
+    case 'field': return FIELD_TOOLS
+    case 'qc': return QC_TOOLS
+    case 'supervisor': return SUPERVISOR_TOOLS
+    default: return OWNER_TOOLS
+  }
 }
 
 // ── 各工具實作 ───────────────────────────────────────────────────────────────
@@ -752,14 +857,643 @@ async function draftDailyLog(
   }
 }
 
+// ── 批4(任務A):run_integrity_audit 執行 ───────────────────────────────────
+// 用 userClient(RLS + .eq(project_id) 縱深防禦)查齊 buildIntegrityFindings 的
+// 六個輸入,「組法與 src/pages/web/RiskAudit.jsx 完全一致」(兩邊如改要同步):
+//   * leaves:is_billable 且非 rollup 且無可計價子項的工項(parent_id→item_key
+//     還原 parent_key,同 db.js dbToWorkItems;RiskAudit 的 childrenMap 亦只收
+//     billable 非 rollup 項,已核准變更只改 quantity/amount 不改樹形)。
+//   * loggedQty:全部施工日誌明細逐工項累加當日數量(item_key 為鍵;
+//     同 loadSiteLogsFromDB 只收 item_key 與 qty_today 皆非 null 的列)。
+//   * billedQty:「最新一期」估驗的各工項累計數量(cum_qty,item_key 為鍵)。
+//   * inspStatusByItem:查驗依 created_at 新→舊,取每工項最近一次的狀態。
+//   * pourDates:混凝土工項(description 含「混凝土」的 leaf)當日數量 >0 的
+//     日誌日期,依日期新→舊(同前端 siteLogs 的迭代順序)。
+//   * testSamples:全部試體(sampled_date 新→舊,同 loadQcFromDB)。
+// PostgREST 單次回應上限 1000 列(config max_rows),勾稽要全量 → 大表分頁抓齊
+// (同 db.js fetchAllWorkItems 的做法;附穩定排序鍵避免跨頁重複/漏列)。
+
+type PageResult<T> = { data: T[] | null; error: { message: string } | null }
+
+async function fetchAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<PageResult<T>>,
+): Promise<{ rows: T[]; error?: string }> {
+  const all: T[] = []
+  const size = 1000
+  for (let from = 0; ; from += size) {
+    const { data, error } = await page(from, from + size - 1)
+    if (error) return { rows: all, error: error.message }
+    const batch = data ?? []
+    all.push(...batch)
+    if (batch.length < size) break
+  }
+  return { rows: all }
+}
+
+async function runIntegrityAudit(
+  db: SupabaseClient,
+  projectId: string,
+  service: SupabaseClient | null,
+  userId: string | undefined,
+  role: AgentRole | null,
+  input: Record<string, unknown>,
+) {
+  if (input.create_draft !== undefined && typeof input.create_draft !== 'boolean') {
+    return { error: 'create_draft 必須是布林值' }
+  }
+
+  // 1) 標單全量(分頁)→ leaves
+  type WiRow = {
+    id: string; item_key: string | null; parent_id: string | null
+    item_no: string | null; description: string | null; unit: string | null
+    quantity: number | null; is_billable: boolean | null; is_rollup: boolean | null
+  }
+  const wi = await fetchAllRows<WiRow>((f, t) =>
+    db.from('work_items')
+      .select('id, item_key, parent_id, item_no, description, unit, quantity, is_billable, is_rollup')
+      .eq('project_id', projectId)
+      .order('sort_order')
+      .range(f, t))
+  if (wi.error) return { error: wi.error }
+  if (!wi.rows.length) return { note: '本案尚未匯入標單工項,無法進行勾稽。請先到「標單工項」匯入。' }
+
+  const idToKey = new Map<string, string | null>(wi.rows.map((r) => [r.id, r.item_key]))
+  const billables = wi.rows.filter((r) => r.is_billable && !r.is_rollup)
+  // 「有可計價子項」= 某 billable 非 rollup 項的 parent_key 等於自己的 item_key
+  const parentKeys = new Set<string>()
+  for (const r of billables) {
+    if (!r.parent_id) continue
+    const pk = idToKey.get(r.parent_id)
+    if (pk != null) parentKeys.add(pk)
+  }
+  const leaves: IntegrityLeaf[] = billables
+    .filter((r) => !(r.item_key != null && parentKeys.has(r.item_key)))
+    .map((r) => ({
+      item_key: r.item_key, item_no: r.item_no, description: r.description,
+      unit: r.unit, quantity: r.quantity == null ? null : Number(r.quantity),
+    }))
+
+  // 2) 施工日誌 + 明細(分頁)→ loggedQty、pourDates
+  const logs = await fetchAllRows<{ id: string; log_date: string | null }>((f, t) =>
+    db.from('daily_logs')
+      .select('id, log_date')
+      .eq('project_id', projectId)
+      .order('log_date', { ascending: false })
+      .range(f, t))
+  if (logs.error) return { error: logs.error }
+  const logItems = await fetchAllRows<{ daily_log_id: string; work_item_id: string; qty_today: number | null }>((f, t) =>
+    db.from('daily_log_items')
+      .select('daily_log_id, work_item_id, qty_today, daily_logs!inner(project_id)')
+      .eq('daily_logs.project_id', projectId) // 明細表無 project_id → inner join 綁定本案(縱深防禦)
+      .order('daily_log_id')
+      .order('work_item_id')
+      .range(f, t))
+  if (logItems.error) return { error: logItems.error }
+
+  const loggedQty = new Map<string, number>()
+  const itemsByLog = new Map<string, { key: string; qty: number }[]>()
+  for (const it of logItems.rows) {
+    const key = idToKey.get(it.work_item_id)
+    if (key == null || it.qty_today == null) continue // 同 loadSiteLogsFromDB 的過濾
+    const q = Number(it.qty_today) || 0
+    loggedQty.set(key, (loggedQty.get(key) || 0) + q)
+    const arr = itemsByLog.get(it.daily_log_id) ?? []
+    arr.push({ key, qty: q })
+    itemsByLog.set(it.daily_log_id, arr)
+  }
+
+  // 3) 最新一期估驗 → billedQty
+  const { data: latestVal, error: valErr } = await db.from('valuations')
+    .select('id, period_no')
+    .eq('project_id', projectId)
+    .order('period_no', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (valErr) return { error: valErr.message }
+  const billedQty = new Map<string, number>()
+  if (latestVal) {
+    const vItems = await fetchAllRows<{ work_item_id: string; cum_qty: number | null }>((f, t) =>
+      db.from('valuation_items')
+        .select('work_item_id, cum_qty, valuations!inner(project_id)')
+        .eq('valuation_id', latestVal.id)
+        .eq('valuations.project_id', projectId) // 明細表無 project_id → inner join 綁定本案
+        .order('work_item_id')
+        .range(f, t))
+    if (vItems.error) return { error: vItems.error }
+    for (const v of vItems.rows) {
+      const key = idToKey.get(v.work_item_id)
+      if (key == null || v.cum_qty == null) continue // 同 loadValuationsFromDB 的過濾
+      billedQty.set(key, Number(v.cum_qty) || 0)
+    }
+  }
+
+  // 4) 查驗:created_at 新→舊,每工項取最近一次狀態
+  const insp = await fetchAllRows<{ id: string; work_item_id: string | null; status: string }>((f, t) =>
+    db.from('inspections')
+      .select('id, work_item_id, status, created_at')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(f, t))
+  if (insp.error) return { error: insp.error }
+  const inspStatusByItem = new Map<string, string>()
+  for (const ins of insp.rows) {
+    const key = ins.work_item_id ? idToKey.get(ins.work_item_id) : null
+    if (key && !inspStatusByItem.has(key)) inspStatusByItem.set(key, ins.status)
+  }
+
+  // 5) 混凝土澆置日:description 含「混凝土」的 leaf 當日數量 >0 的日誌日期(新→舊)
+  const concreteKeys = new Set(leaves.filter((it) => (it.description || '').includes('混凝土')).map((it) => it.item_key))
+  const pourSet = new Set<string>()
+  for (const lg of logs.rows) {
+    if (!lg.log_date) continue
+    if ((itemsByLog.get(lg.id) ?? []).some((e) => concreteKeys.has(e.key) && e.qty > 0)) pourSet.add(lg.log_date)
+  }
+  const pourDates: PourDate[] = [...pourSet].map((date) => ({ date }))
+
+  // 6) 試體全量(sampled_date 新→舊)
+  const samples = await fetchAllRows<TestSample & { id: string }>((f, t) =>
+    db.from('test_samples')
+      .select('id, sampled_date, status, sample_no')
+      .eq('project_id', projectId)
+      .order('sampled_date', { ascending: false })
+      .order('id')
+      .range(f, t))
+  if (samples.error) return { error: samples.error }
+
+  // ── 確定性引擎跑勾稽;findings 原樣回傳 —— 不過濾、不重排、不改寫 ──────────
+  const { findings, summary } = buildIntegrityFindings({
+    leaves, loggedQty, billedQty, inspStatusByItem, pourDates, testSamples: samples.rows,
+  })
+
+  if (!findings.length) {
+    return {
+      ok: true, findings: [], summary,
+      note: '本案目前各工項的估驗、日誌、查驗、試體對得起來,沒有發現異常。',
+    }
+  }
+
+  // create_draft === true → 另寫一筆 audit_note 草稿進收件匣(service role 只做這件事)
+  let draftInfo: Record<string, unknown> = {}
+  if (input.create_draft === true) {
+    if (!service || !userId || !role) return { error: '伺服器未設定,暫時無法建立草稿' }
+    const { data: action, error: insErr } = await service
+      .from('agent_actions')
+      .insert({
+        project_id: projectId,
+        actor_user: userId,
+        agent_role: role, // 呼叫者角色:supervisor(監造對量)/ owner(機關防弊)拿同一份發現
+        kind: 'audit_note',
+        target_table: 'valuations',
+        summary: `勾稽發現 ${findings.length} 項(risk ${summary.risk} 項)`,
+        rationale: findings.map((f) => f.title).join('\n'),
+        evidence: { findings },
+      })
+      .select('id')
+      .single()
+    if (insErr) return { error: insErr.message }
+    draftInfo = {
+      agent_action_id: action.id,
+      draft_note: '稽核發現已寫成草稿放進使用者的草稿收件匣,由使用者本人決定如何處理。',
+    }
+  }
+
+  return { ok: true, findings, summary, ...draftInfo }
+}
+
+// ── 批4(任務B):draft_inspection 實作 ──────────────────────────────────────
+
+// checklist_templates.items 的實際形狀(baseline migration):
+// [{no,group,item,kind:'num'|'bool',min,max,unit,standard,source}]
+export type ChecklistTemplateItem = {
+  no: string
+  group?: string | null
+  item: string
+  kind: 'num' | 'bool'
+  min?: number | null
+  max?: number | null
+  unit?: string | null
+  standard?: string | null
+  source?: string | null
+}
+
+// 範本挑選(確定性關鍵字相符,非 AI):以工項描述的相鄰雙字組對範本標題計分,
+// 取最高分;同分取排序較前者(呼叫端已依 created_at 升冪,平手決策確定性)。
+// 僅一張範本時直接用;沒有描述或全部 0 分 → 回 null(誠實請使用者指定,不亂挑)。
+export function pickChecklistTemplate<T extends { title: string }>(
+  templates: T[],
+  workItemDesc: string | null | undefined,
+): { template: T; reason: string } | null {
+  if (!templates.length) return null
+  if (templates.length === 1) return { template: templates[0], reason: '本案僅有這一張範本' }
+  const desc = (workItemDesc || '').replace(/\s+/g, '')
+  if (!desc) return null
+  const grams = new Set<string>()
+  const chars = [...desc]
+  if (chars.length === 1) grams.add(desc)
+  for (let i = 0; i + 1 < chars.length; i++) grams.add(chars[i] + chars[i + 1])
+  let best: T | null = null
+  let bestScore = 0
+  for (const t of templates) {
+    let score = 0
+    for (const g of grams) if (t.title.includes(g)) score += 1
+    if (score > bestScore) { best = t; bestScore = score }
+  }
+  if (!best) return null
+  return { template: best, reason: `依工項「${workItemDesc}」與範本標題的相符度挑選,若不對請指定範本` }
+}
+
+export type InspectionDraftInput = {
+  template: { id: string; title: string; source?: string | null; items: ChecklistTemplateItem[] }
+  templateReason: string // 挑中這張範本的依據(原樣寫進 rationale,讓收件的人能質疑)
+  checkDate: string
+  workItem?: { id: string; item_no?: string | null; description?: string | null } | null
+  locationHint?: string | null // 當日該工項照片的 caption 線索;取不到就 null
+  photoIds?: string[]
+  boolSuggestions?: unknown // 模型對 bool 項的建議(嚴格驗證,見下)
+}
+
+// 實測值的紅線(本批最重要的判斷,絕不可放寬):
+//   * kind:'num' → 一律 { value: null, needs_input: true },由人親自量測填寫。
+//     本函式(與整個檔案)不存在任何對 num 項賦值的路徑 —— boolSuggestions 指到
+//     num 項直接回 error(不是默默忽略,讓模型知道這條路不通)。
+//   * kind:'bool' → 模型有把握才經 boolSuggestions 給建議,每項必須附 basis(依據);
+//     模型在這條流程沒有視覺輸入,依據只能來自工具回傳的文字 —— 沒依據的建議
+//     直接拒絕,不是默默收下。每項標 ai_suggested: true + ai_basis(前端據以顯示
+//     「AI 建議」與依據小字,不得自動送出);false 也如實輸出(勾「無」同樣是
+//     判定輸入,不可因 falsy 被吞);沒給的一律留空標 needs_input。
+//   * 不呼叫 judgeChecklist:值沒填完,判定沒有意義 —— overall 留 null,由使用者
+//     填完實測值後走前端既有 createChecklistRecord(內部 judgeChecklist)自動判定。
+// payload 形狀對齊前端收件匣的接受路徑(results 以項次 no 為鍵、template_id 必要、
+// value 為 null 的項不會進存檔 values —— 未檢 ≠ 合格)。
+export function buildInspectionDraft(input: InspectionDraftInput):
+  | { payload: Record<string, unknown>; summary: string; rationale: string; numPending: number; boolSuggested: number }
+  | { error: string } {
+  const { template, templateReason, checkDate, workItem, locationHint, boolSuggestions } = input
+  const items = template.items || []
+  if (!items.length) return { error: `範本「${template.title}」沒有任何檢查項目,無法擬稿` }
+
+  // bool_suggestions 嚴格驗證:只接受「存在且 kind 為 bool」的項次,且每筆
+  // 必須是 { value: boolean, basis: string } —— 缺依據的建議一律拒絕
+  const suggestions = new Map<string, { value: boolean; basis: string }>()
+  if (boolSuggestions !== undefined && boolSuggestions !== null) {
+    if (typeof boolSuggestions !== 'object' || Array.isArray(boolSuggestions)) {
+      return { error: 'bool_suggestions 必須是物件(鍵=項次編號、值={ value: true/false, basis: 依據 })' }
+    }
+    const byNo = new Map(items.map((it) => [it.no, it]))
+    for (const [no, raw] of Object.entries(boolSuggestions as Record<string, unknown>)) {
+      const it = byNo.get(no)
+      if (!it) return { error: `bool_suggestions 含未知項次「${no}」,請對照範本項次` }
+      if (it.kind !== 'bool') {
+        return { error: `項次「${no}」是數值實測項,不接受任何建議值 —— 實測值一律由使用者親自量測填寫` }
+      }
+      if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+        return { error: `項次「${no}」的建議必須是 { value: true/false, basis: 依據 } 物件` }
+      }
+      const { value, basis } = raw as { value?: unknown; basis?: unknown }
+      if (typeof value !== 'boolean') return { error: `項次「${no}」的建議值 value 必須是 true/false` }
+      if (typeof basis !== 'string' || basis.trim().length < 4) {
+        return {
+          error:
+            `項次「${no}」缺少有效依據 —— bool 建議必須附依據(basis),` +
+            '寫出你依據工具回傳的哪段內容(照片說明、查驗紀錄等)這樣建議;推論不出來就省略該項',
+        }
+      }
+      suggestions.set(no, { value, basis: basis.trim() })
+    }
+  }
+
+  // results 以項次 no 為鍵;value/needs_input/ai_suggested 是前端契約,
+  // kind/group/item/unit/standard 是收件匣卡片的展示欄位(轉存檔時只取 value)。
+  const results: Record<string, unknown> = {}
+  let numPending = 0
+  let boolSuggested = 0
+  let boolPending = 0
+  for (const it of items) {
+    const base = { kind: it.kind, group: it.group ?? null, item: it.item, unit: it.unit ?? null, standard: it.standard ?? null }
+    if (it.kind === 'bool' && suggestions.has(it.no)) {
+      const s = suggestions.get(it.no)!
+      // ai_basis:這筆建議憑什麼 —— 沒有記錄依據的推論,事後和猜測分不出來
+      results[it.no] = { ...base, value: s.value, ai_suggested: true, ai_basis: s.basis }
+      boolSuggested += 1
+    } else {
+      // num 項只會走到這個分支 —— value 永遠 null,檔案內沒有其他賦值路徑
+      results[it.no] = { ...base, value: null, needs_input: true }
+      if (it.kind === 'bool') boolPending += 1
+      else numPending += 1
+    }
+  }
+
+  const payload = {
+    template_id: template.id, // 前端接受時據以查回完整 template,再走 createChecklistRecord
+    template_title: template.title,
+    template_source: template.source ?? null,
+    check_date: checkDate,
+    location: locationHint || null,
+    // 注意:前端 createChecklistRecord 目前不寫 work_item_id(checklist_records
+    // 有此欄但存檔入參沒有)—— 這裡仍帶上供收件匣展示與日後補齊。
+    work_item_id: workItem?.id ?? null,
+    work_item_no: workItem?.item_no ?? null,
+    work_item_desc: workItem?.description ?? null,
+    results,
+    overall: null, // 不判定:值沒填完判定沒有意義;填完後由系統依量化標準自動判定
+    note: null,
+    photo_ids: input.photoIds ?? [],
+    field_sources: {
+      template: templateReason,
+      location: locationHint ? 'photo_caption' : null,
+      num_values: 'needs_input', // 實測值沒有來源 —— 一律由人填
+      bool_values: boolSuggested ? 'ai_suggested_partial' : 'needs_input',
+    },
+  }
+
+  const [, m, d] = checkDate.split('-')
+  const summary =
+    `已擬好「${template.title}」自主檢查表草稿` +
+    `(${Number(m)}/${Number(d)},實測值 ${numPending} 項待你填)`
+
+  // rationale:逐欄位交代依據 —— 讓收件的人知道哪些可信、哪些必須自己填
+  const rationaleParts = [
+    `範本:${templateReason}。`,
+    `實測值(數值項 ${numPending} 項):一律留空待你親自量測填寫 —— 系統與 AI 都不猜實測值;` +
+      '你填完後由系統依量化標準自動判定合格與否,AI 不參與判定。',
+    boolSuggested
+      ? `勾選項:${boolSuggested} 項為 AI 依當日照片與對話線索的建議(已逐項標示「AI 建議」),送出前請逐項確認` +
+        (boolPending ? `;另 ${boolPending} 項留空待你勾選。` : '。')
+      : boolPending
+        ? `勾選項:${boolPending} 項全部留空待你勾選,AI 未給任何建議。`
+        : '',
+    locationHint ? `部位:取自當日照片說明「${locationHint}」,請確認是否正確。` : '部位:未能從當日照片取得線索,留空待填。',
+    workItem ? `工項:${[workItem.item_no, workItem.description].filter(Boolean).join(' ')}。` : '',
+  ].filter(Boolean)
+
+  return { payload, summary, rationale: rationaleParts.join('\n'), numPending, boolSuggested }
+}
+
+// draft_inspection 執行:查詢一律走 userClient(RLS);service 只用來寫 agent_actions。
+async function draftInspection(
+  db: SupabaseClient,
+  projectId: string,
+  service: SupabaseClient | null,
+  userId: string | undefined,
+  input: Record<string, unknown>,
+) {
+  // check_date 驗證:格式 + 回轉一致(同 draft_daily_log)
+  let checkDate: string
+  if (input.check_date !== undefined) {
+    if (!isDate(input.check_date)) return { error: 'check_date 必須是 YYYY-MM-DD' }
+    const ms = parseDateUTC(input.check_date)
+    if (ms == null || formatDate(ms) !== input.check_date) return { error: 'check_date 不是有效日期' }
+    checkDate = input.check_date
+  } else {
+    checkDate = formatDate(taipeiTodayUTC())
+  }
+  if (input.work_item_id !== undefined && !isUuid(input.work_item_id)) return { error: 'work_item_id 必須是 UUID' }
+  if (input.template_id !== undefined && !isUuid(input.template_id)) return { error: 'template_id 必須是 UUID' }
+  if (!service || !userId) return { error: '伺服器未設定,暫時無法建立草稿' }
+
+  // 本案範本(created_at 升冪 → 挑選與平手決策確定性)
+  type TemplateRow = { id: string; title: string; source: string | null; items: unknown }
+  const { data: tplData, error: tErr } = await db
+    .from('checklist_templates')
+    .select('id, title, source, items')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true })
+  if (tErr) return { error: tErr.message }
+  const templates = (tplData ?? []) as TemplateRow[]
+  if (!templates.length) {
+    // 誠實回報,不是失敗 —— agent 要能把這句話轉述給使用者
+    return { note: '本案尚未建立自主檢查表範本,請先到品質管理建立範本。' }
+  }
+
+  // 工項(選填;RLS + .eq(project_id) 縱深防禦)
+  let workItem: { id: string; item_no: string | null; description: string | null } | null = null
+  if (input.work_item_id) {
+    const { data: wi, error: wiErr } = await db
+      .from('work_items')
+      .select('id, item_no, description')
+      .eq('project_id', projectId)
+      .eq('id', input.work_item_id)
+      .maybeSingle()
+    if (wiErr) return { error: wiErr.message }
+    if (!wi) return { error: '找不到此工項(或不屬於本案),可先用 search_boq 查正確的 work_item_id' }
+    workItem = wi
+  }
+
+  // 挑範本:指定就用;否則確定性關鍵字相符;挑不出來就誠實列清單請指定
+  let template: TemplateRow
+  let templateReason: string
+  if (input.template_id) {
+    const found = templates.find((t) => t.id === input.template_id)
+    if (!found) return { error: '找不到此檢查表範本(或不屬於本案)' }
+    template = found
+    templateReason = '你指定的範本'
+  } else {
+    const picked = pickChecklistTemplate(templates, workItem?.description ?? null)
+    if (!picked) {
+      return {
+        note: '無法判斷該用哪張檢查表範本,請指定 template_id 後重試。',
+        templates: templates.map((t) => ({ id: t.id, title: t.title })),
+      }
+    }
+    template = picked.template
+    templateReason = picked.reason
+  }
+
+  // 當日該工項照片(台北時區界):location 線索(caption)+ 掛照片。
+  // 沒指定工項就不撈 —— 不把不相干的照片掛上檢查表。
+  let locationHint: string | null = null
+  let photoIds: string[] = []
+  if (workItem) {
+    const { data: photos, error: phErr } = await db
+      .from('photos')
+      .select('id, caption, taken_at')
+      .eq('project_id', projectId)
+      .eq('work_item_id', workItem.id)
+      .gte('taken_at', `${checkDate}T00:00:00+08:00`)
+      .lte('taken_at', `${checkDate}T23:59:59+08:00`)
+      .order('taken_at', { ascending: true })
+    if (phErr) return { error: phErr.message }
+    photoIds = (photos ?? []).map((p) => p.id)
+    const cap = (photos ?? []).map((p) => (p.caption || '').trim()).find((c) => c)
+    if (cap) locationHint = cap.slice(0, 50)
+  }
+
+  const built = buildInspectionDraft({
+    template: {
+      id: template.id,
+      title: template.title,
+      source: template.source,
+      items: (Array.isArray(template.items) ? template.items : []) as ChecklistTemplateItem[],
+    },
+    templateReason,
+    checkDate,
+    workItem,
+    locationHint,
+    photoIds,
+    boolSuggestions: input.bool_suggestions,
+  })
+  if ('error' in built) return { error: built.error }
+
+  // 唯一的寫入:agent_actions(service role)。絕不寫 checklist_records ——
+  // 真正的檢查表由使用者在收件匣接受後、前端走 createChecklistRecord 建立。
+  const { data: action, error: insErr } = await service
+    .from('agent_actions')
+    .insert({
+      project_id: projectId,
+      actor_user: userId,
+      agent_role: 'qc', // draft_inspection 只分發給 qc 角色
+      kind: 'draft_inspection',
+      target_table: 'checklist_records',
+      summary: built.summary,
+      rationale: built.rationale,
+      evidence: { payload: built.payload },
+    })
+    .select('id')
+    .single()
+  if (insErr) return { error: insErr.message }
+
+  // 回給模型的是「草稿已放入收件匣」的事實 —— 讓它據實轉述,不可宣稱檢查表已建立
+  return {
+    ok: true,
+    agent_action_id: action.id,
+    template_title: template.title,
+    check_date: checkDate,
+    待填實測項: built.numPending,
+    AI建議勾選項: built.boolSuggested,
+    照片數: photoIds.length,
+    ...(templateReason !== '你指定的範本' ? { 範本挑選依據: `${templateReason}(不對可改指定 template_id 重擬)` } : {}),
+    note:
+      '草稿已放進使用者的草稿收件匣;檢查表尚未建立,數值實測項須由使用者親自量測填寫,' +
+      '合格判定由系統於填畢後自動執行 —— 不可宣稱檢查表已建立、已合格或已判定。',
+  }
+}
+
+// ── 批4(任務B):raise_to 實作 ──────────────────────────────────────────────
+
+const ROLE_LABEL: Record<AgentRole, string> = { field: '現場', qc: '品管', supervisor: '監造', owner: '機關' }
+
+// project_memberships.project_role(P0-02 check constraint 全值域)→ agent 角色。
+// 與 agent-run/index.ts 的 ROLE_BY_PROJECT_ROLE 互為反向,改動要兩邊同步;
+// document_controller / viewer 不對應任何 agent 角色,不是任何交接對象。
+// 陣列順序 = 同角色多人時的收件優先序(執行層先於主管層:交接多為執行層事務)。
+const PROJECT_ROLES_BY_AGENT_ROLE: Record<AgentRole, string[]> = {
+  field: ['site_manager', 'contractor_pm', 'safety_engineer'],
+  qc: ['quality_engineer'],
+  supervisor: ['supervisor_engineer', 'supervisor_manager'],
+  owner: ['agency_engineer', 'agency_pm'],
+}
+
+// raise_to 可關聯的單據表白名單:get_record 白名單 + 品管兩張(檢查表/試體)
+const HANDOFF_TABLES = new Set([...Object.keys(RECORD_SELECTS), 'checklist_records', 'test_samples'])
+
+async function raiseTo(
+  db: SupabaseClient,
+  projectId: string,
+  service: SupabaseClient | null,
+  userId: string | undefined,
+  callerRole: AgentRole | null,
+  input: Record<string, unknown>,
+) {
+  const toRole = input.to_role
+  if (typeof toRole !== 'string' || !(AGENT_ROLES as readonly string[]).includes(toRole)) {
+    return { error: `to_role 必須是 ${AGENT_ROLES.join('/')} 之一` }
+  }
+  const subject = input.subject
+  if (typeof subject !== 'string' || !subject.trim()) return { error: 'subject 必須是非空字串' }
+  if (subject.length > 200) return { error: 'subject 請在 200 字內,細節放 note' }
+  const note = input.note
+  if (note !== undefined && (typeof note !== 'string' || note.length > 2000)) {
+    return { error: 'note 必須是 2000 字內的字串' }
+  }
+  const targetTable = input.target_table
+  const targetId = input.target_id
+  if ((targetTable === undefined) !== (targetId === undefined)) {
+    return { error: 'target_table 與 target_id 必須成對提供' }
+  }
+  if (targetTable !== undefined) {
+    if (typeof targetTable !== 'string' || !HANDOFF_TABLES.has(targetTable)) {
+      return { error: `target_table 必須是白名單之一:${[...HANDOFF_TABLES].join('、')}` }
+    }
+    if (!isUuid(targetId)) return { error: 'target_id 必須是 UUID' }
+  }
+  if (!service || !userId || !callerRole) return { error: '伺服器未設定,暫時無法建立草稿' }
+
+  const to = toRole as AgentRole
+  const label = ROLE_LABEL[to]
+
+  // 找對方:本案 project_memberships 中職務映射到 to_role 的成員
+  // (RLS:同案成員可讀本案 memberships;.eq(project_id) 縱深防禦)。
+  const wanted = PROJECT_ROLES_BY_AGENT_ROLE[to]
+  const { data: members, error: mErr } = await db
+    .from('project_memberships')
+    .select('user_id, project_role, created_at')
+    .eq('project_id', projectId)
+    .in('project_role', wanted)
+  if (mErr) return { error: mErr.message }
+  const recipient = [...(members ?? [])].sort((a, b) => {
+    const d = wanted.indexOf(a.project_role) - wanted.indexOf(b.project_role)
+    return d !== 0 ? d : String(a.created_at).localeCompare(String(b.created_at))
+  })[0]
+  if (!recipient) {
+    // 誠實錯誤:成員可能存在但未設定專案內職務(只有組織別)—— 一樣無法確定交接對象
+    return { error: `本案沒有指派「${label}」角色的成員,無法交接。請先在專案成員設定該職務。` }
+  }
+  if (recipient.user_id === userId) {
+    return { error: `查到的「${label}」成員就是使用者本人,不需要交接 —— 請直接處理,或改交給其他角色` }
+  }
+
+  // 姓名(profiles 對 authenticated 可讀):交接語句與回覆訊息用
+  const { data: profs } = await db.from('profiles').select('id, full_name').in('id', [userId, recipient.user_id])
+  const nameOf = (id: string) => (profs ?? []).find((p) => p.id === id)?.full_name || null
+  const callerName = nameOf(userId) || '同案成員'
+  const recipientName = nameOf(recipient.user_id) || `${label}成員`
+
+  const noteText = typeof note === 'string' && note.trim() ? note.trim() : null
+  const rationale = [noteText, `由 ${callerName}(${ROLE_LABEL[callerRole]})的 agent 轉來`]
+    .filter(Boolean)
+    .join('\n')
+
+  // 唯一的寫入:agent_actions,落在「對方」名下(actor_user = 對方)。
+  // 該表 SELECT policy 是本人 → 對方看得到、呼叫者看不到 —— 正確設計,見工具定義註解。
+  const { data: action, error: insErr } = await service
+    .from('agent_actions')
+    .insert({
+      project_id: projectId,
+      actor_user: recipient.user_id,
+      agent_role: to,
+      kind: 'handoff',
+      target_table: targetTable ?? null,
+      target_id: targetId ?? null,
+      summary: subject.trim(),
+      rationale,
+      evidence: { from_user: userId, from_role: callerRole, to_role: to, note: noteText },
+    })
+    .select('id')
+    .single()
+  if (insErr) return { error: insErr.message }
+
+  return {
+    ok: true,
+    agent_action_id: action.id,
+    交接對象: `${recipientName}(${label})`,
+    note:
+      `交接草稿已送出給 ${recipientName}(${label}),會出現在「對方」的草稿收件匣,由對方本人決定是否接手。` +
+      '這筆不會出現在使用者自己的收件匣 —— 請據實告訴使用者「已送給對方」,不要叫使用者去自己的收件匣找它。',
+  }
+}
+
 // ── 分派器 ───────────────────────────────────────────────────────────────────
-// service / userId 只有 draft_daily_log 用得到:service 是 service role client,
+// service / userId 只有草稿工具用得到:service 是 service role client,
 // 僅用於寫 agent_actions —— 絕不可傳給任何查詢工具(查詢一律走 RLS 的 userClient)。
+// role = 呼叫端(agent-run)由伺服器決定的角色,run_integrity_audit 落草稿時
+// 以此填 agent_role —— 不信任模型輸入。
 export function makeToolExec(
   supabase: SupabaseClient,
   projectId: string,
   service?: SupabaseClient | null,
   userId?: string,
+  role?: AgentRole | null,
 ): ToolExec {
   return async (name, input) => {
     switch (name) {
@@ -771,6 +1505,9 @@ export function makeToolExec(
       case 'find_evidence': return await findEvidence(supabase, projectId, input)
       case 'get_record': return await getRecord(supabase, projectId, input)
       case 'draft_daily_log': return await draftDailyLog(supabase, projectId, service ?? null, userId, input)
+      case 'draft_inspection': return await draftInspection(supabase, projectId, service ?? null, userId, input)
+      case 'raise_to': return await raiseTo(supabase, projectId, service ?? null, userId, role ?? null, input)
+      case 'run_integrity_audit': return await runIntegrityAudit(supabase, projectId, service ?? null, userId, role ?? null, input)
       default: return { error: `未知的工具:${name}` }
     }
   }

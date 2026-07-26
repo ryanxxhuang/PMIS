@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
     const result = await claudeAgent({
       system: personaSystem(role),
       tools: toolsForRole(role),
-      exec: makeToolExec(userClient, projectId, serviceClient, user.id),
+      exec: makeToolExec(userClient, projectId, serviceClient, user.id, role),
       userMessage: message,
       facts: body?.facts,
       history,

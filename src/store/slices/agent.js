@@ -47,6 +47,33 @@ export function draftNeedsInputCount(payload) {
     .filter((v) => v?.needs_input && (v?.qty_today == null || v.qty_today === '')).length
 }
 
+// 查驗草稿 payload → createChecklistRecord 入參的形狀轉換(批4,純函式)。
+// payload.results 形如 { [項次no]: { value, needs_input?, ai_suggested? } }(後端 draft_inspection 產);
+// createChecklistRecord 要的是「完整 template 物件 + values({no: value})」,判定它自己跑
+// judgeChecklist(確定性)——所以這裡要用 template_id 從既有範本清單查回整個 template。
+// 實測值紅線:num 項後端一律 value:null(AI 不准猜),value 為 null 的項不進 values,
+// judgeChecklist 對未檢項回 pass:null 不列入判定,語意正確。
+// 範本查不到(已被刪除)回 null,由呼叫端給誠實錯誤——絕不能拿錯的範本硬存。
+export function draftPayloadToChecklist(payload, templates) {
+  const tpl = (templates || []).find((t) => t.id === payload?.template_id)
+    || (payload?.template_title ? (templates || []).find((t) => t.title === payload.template_title) : null)
+  if (!tpl) return null
+  const values = {}
+  for (const [no, v] of Object.entries(payload?.results || {})) {
+    if (v && v.value != null && v.value !== '') values[no] = v.value
+  }
+  return { template: tpl, check_date: payload.check_date, location: payload.location || null, values, note: payload.note || null }
+}
+
+// 查驗草稿統計(收件匣卡片顯示):實測值等待人填的項數 / AI 建議勾選的項數
+export function checklistDraftCounts(payload) {
+  const rs = Object.values(payload?.results || {})
+  return {
+    needsInput: rs.filter((v) => v?.needs_input && (v?.value == null || v.value === '')).length,
+    aiSuggested: rs.filter((v) => v?.ai_suggested && v?.value != null).length,
+  }
+}
+
 // 把收件匣卡片上人填的數量合併回草稿 payload(純函式,回傳全新物件)。
 // quantities 形如 { [work_item_id]: '12.5' },值來自 <input> 一律可能是字串;
 // 只有解析後 > 0 的才視為「已填」(0/空字串/非數字都維持原樣=未填,對齊
@@ -62,7 +89,7 @@ export function applyDraftQuantities(payload, quantities) {
   return { ...payload, items }
 }
 
-export function useAgentSlice({ demoMode, isPersistedProject, currentProject, currentUser, wiMaps }, { saveSiteLog } = {}) {
+export function useAgentSlice({ demoMode, isPersistedProject, currentProject, currentUser, wiMaps }, { saveSiteLog, createChecklistRecord, allChecklistTemplates } = {}) {
   // AI 草稿收件匣(pending 由 UI 篩;保留近 50 筆含已處理,之後可做歷史)
   const [agentActions, setAgentActions] = useState([])
   const [agentActionsLoading, setAgentActionsLoading] = useState(false)
@@ -133,9 +160,26 @@ export function useAgentSlice({ demoMode, isPersistedProject, currentProject, cu
   // 草稿數量一律 needs_input(見 draftPayloadToSiteLog 註解),沒有這個入口的話
   // 接受後的日誌會一個工項都沒有,agent 從照片認出工項的價值就蒸發了。
   const acceptDraft = useCallback(async (action, quantities) => {
-    // 非日誌草稿:維持批 2 行為(只改狀態);沒帶 payload 的舊草稿/demo 種子亦同——
-    // 不能因為草稿缺料就讓收件匣卡死,至少要能把它處理掉。
     const payload = action?.evidence?.payload
+    // 查驗草稿(批4):先真的建立自主檢查表紀錄、才標 accepted(順序紅線同日誌)。
+    // 與日誌不同,checklist insert 不是冪等 upsert——反向失敗(紀錄已建立、草稿標記失敗)
+    // 時草稿留在收件匣,重按接受會多建一筆 Rev.0 紀錄;無資料遺失、可於品質管理刪除,
+    // 仍優於顛倒順序的「草稿消失、紀錄沒建立」。
+    // 判定不在這裡跑:createChecklistRecord 內部走 judgeChecklist(確定性),
+    // AI 建議的 bool 已由使用者按「接受」背書,num 實測值未填=未檢不列入判定。
+    if (action?.kind === 'draft_inspection' && payload?.template_id) {
+      if (typeof createChecklistRecord !== 'function') return { error: '自主檢查表寫入尚未就緒,請稍後再試' }
+      const input = draftPayloadToChecklist(payload, allChecklistTemplates)
+      if (!input) return { error: '找不到草稿對應的檢查表範本(可能已被刪除),請拒絕此草稿後至品質管理手動建立' }
+      const res = await createChecklistRecord(input)
+      if (res?.error) return { error: res.error?.message || res.error } // 紀錄沒建立 → 草稿維持 pending
+      const r2 = await resolveAgentAction(action.id, 'accepted')
+      if (r2?.error) return r2
+      return { error: null, applied: 'checklist' }
+    }
+    // audit_note / handoff(批4):接受=「知道了/收下」,不產生任何業務資料,只標 accepted。
+    // 其他非日誌 kind、沒帶 payload 的舊草稿/demo 種子亦同(批 2 行為)——
+    // 不能因為草稿缺料就讓收件匣卡死,至少要能把它處理掉。
     if (action?.kind !== 'draft_daily_log' || !payload?.log_date) {
       return resolveAgentAction(action?.id, 'accepted')
     }
@@ -146,7 +190,7 @@ export function useAgentSlice({ demoMode, isPersistedProject, currentProject, cu
     const res = await resolveAgentAction(action.id, 'accepted')
     if (res?.error) return res // 日誌已建立、只是草稿標記失敗;重按接受為冪等 upsert,無害
     return { error: null, applied: 'daily_log' }
-  }, [resolveAgentAction, saveSiteLog, wiMaps])
+  }, [resolveAgentAction, saveSiteLog, wiMaps, createChecklistRecord, allChecklistTemplates])
 
   return { agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions, setAgentActions }
 }

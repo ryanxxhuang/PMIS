@@ -15,9 +15,18 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
     expect(routeAllowed('/cost', 'supervisor', false)).toBe(false)
     expect(routeAllowed('/cost', 'contractor', false)).toBe(true)
   })
-  it('風險稽核(工作台分頁):僅機關', () => {
+  it('風險稽核:導覽隱藏(hidden)但角色限制仍在——僅機關可深連結', () => {
+    // 批4 只是「不顯示」手動入口,不是解除機關防弊稽核的角色限制;
+    // 這組斷言釘住 hidden 機制:刪導覽項=靜默鬆綁,絕不允許重演。
     expect(routeAllowed('/audit', 'contractor', false)).toBe(false)
+    expect(routeAllowed('/audit', 'supervisor', false)).toBe(false)
     expect(routeAllowed('/audit', 'owner', false)).toBe(true)
+    expect(routeAllowed('/audit', 'contractor', true)).toBe(true) // override 一律放行
+  })
+  it('施工日誌:hidden 但本來就不限角色,深連結各角色照常', () => {
+    for (const org of ['contractor', 'supervisor', 'owner']) {
+      expect(routeAllowed('/site-log', org, false)).toBe(true)
+    }
   })
   it('監造報表:僅監造;逐工項排程:僅施工', () => {
     expect(routeAllowed('/supervisor-report', 'owner', false)).toBe(false)
@@ -39,11 +48,14 @@ describe('workbenchFor(分頁列)', () => {
     expect(workbenchFor('/valuation', 'supervisor', false).tabs.map((t) => t.label))
       .toEqual(['估驗計價'])
   })
-  it('契約與文件:風險稽核分頁僅機關可見', () => {
+  it('契約與文件:風險稽核分頁 hidden,各角色分頁列皆只剩專案文件/履約需求', () => {
     expect(workbenchFor('/contract', 'owner', false).tabs.map((t) => t.label))
-      .toEqual(['專案文件', '履約需求', '風險稽核'])
+      .toEqual(['專案文件', '履約需求'])
+    expect(workbenchFor('/contract', 'owner', false).tabs.map((t) => t.label))
+      .not.toContain('風險稽核')
     expect(workbenchFor('/contract', 'contractor', false).tabs.map((t) => t.label))
       .toEqual(['專案文件', '履約需求'])
+    expect(workbenchFor('/audit', 'owner', false)).toBeNull() // 深連結進 hidden 分頁=單頁,不掛分頁列
   })
   it('單頁路由無工作台', () => {
     expect(workbenchFor('/site-log', 'contractor', false)).toBeNull()
@@ -59,17 +71,17 @@ describe('visibleNavGroups(側欄)', () => {
     expect(items.find((i) => i.label === '報表中心').tabs.map((t) => t.label))
       .toContain('監造報表')
   })
-  it('機關:報表中心只剩施工月報,契約與文件含風險稽核', () => {
+  it('機關:報表中心只剩施工月報,契約與文件不再有風險稽核分頁', () => {
     const items = flatNav(visibleNavGroups('owner', false))
     expect(items.find((i) => i.label === '報表中心').tabs.map((t) => t.label))
       .toEqual(['施工月報'])
     expect(items.find((i) => i.label === '契約與文件').tabs.map((t) => t.label))
-      .toContain('風險稽核')
+      .not.toContain('風險稽核')
   })
   it('override(試用模式管理者)看得到全部入口', () => {
     const items = flatNav(visibleNavGroups('contractor', true))
     expect(items.find((i) => i.label === '成本管理')).toBeDefined()
-    expect(items.find((i) => i.label === '契約與文件').tabs).toHaveLength(3)
+    expect(items.find((i) => i.label === '契約與文件').tabs).toHaveLength(2) // 風險稽核已收斂,override 也不例外
   })
   it('施工日誌:側欄已收斂(改由 agent 草稿產生),但路由與深連結仍保留', () => {
     for (const org of ['contractor', 'supervisor', 'owner']) {

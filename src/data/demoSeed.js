@@ -295,8 +295,9 @@ export function buildDemoData(workItems, project) {
     { id: 'ACC-DEMO-2', stage_key: 'confirm', event_date: iso(daysFromNow(-25)), result: null, note: '會同監造、廠商核對竣工項目數量' },
   ]
 
-  // ── AI 草稿收件匣(批2 /agent):四個角色的 agent 各一筆 pending 草稿 ──
-  // 真實模式要等批3「現場 agent」上線才會產草稿;demo 先把「AI 擬好、人決定」
+  // ── AI 草稿收件匣(批2 /agent):四種角色 agent 的 pending 草稿(批4 起五筆,
+  // 涵蓋日誌/查驗/審查/稽核/交接五種 kind)──
+  // 真實模式由各角色 agent 的草稿工具產生;demo 先把「AI 擬好、人決定」
   // 的產品承諾演出來。日期相對今天 → 收件匣永遠像剛擬好的。
   const agaAt = (h) => new Date(Date.now() - h * 3600e3).toISOString()
 
@@ -328,6 +329,44 @@ export function buildDemoData(workItems, project) {
     photo_ids: Array.from({ length: 18 }, (_, i) => `PHO-DEMO-${i + 1}`),
   }
 
+  // 查驗草稿的完整 payload(批4):形狀對齊後端 draft_inspection 的產出,接受會走
+  // createChecklistRecord 進記憶體(判定由 judgeChecklist 確定性跑)。
+  // 實測值紅線:kind:'num' 一律 { value:null, needs_input:true } 由人填(AI 不准猜數值);
+  // kind:'bool' 照片可合理判讀的給建議值並標 ai_suggested(UI 顯示「AI 建議」),
+  // 且每筆帶 ai_basis(憑什麼這樣建議)——後端 draft_inspection 強制附依據,demo 同形;
+  // B1(是否已於 24 小時前通知監造)照片看不出來——沒把握就不猜,一樣留白。
+  const inspDraftBasis = {
+    B2: '澆置前照片說明載明模板內已清理無積水、預埋管件已綁紮固定',
+    B3: '照片說明提到施工縫面已打毛清潔並灑水潤濕',
+    D1: '照片說明含試體取樣紀錄,載明已取樣 2 組共 12 個',
+  }
+  const inspDraftResults = {}
+  for (const it of TEMPLATE_03310.items) {
+    inspDraftResults[it.no] = (it.kind === 'bool' && it.no !== 'B1')
+      ? { value: true, ai_suggested: true, ai_basis: inspDraftBasis[it.no] }
+      : { value: null, needs_input: true }
+  }
+  const inspDraftNeeds = Object.values(inspDraftResults).filter((v) => v.needs_input).length
+  const inspDraftPayload = {
+    template_id: 'CLT-DEMO-1', template_title: TEMPLATE_03310.title,
+    check_date: iso(daysFromNow(0)), location: '3F 版牆', work_item_id: null,
+    results: inspDraftResults, note: null,
+  }
+
+  // 稽核提示的發現清單(批4):形狀對齊 lib/integrityAudit.js buildIntegrityFindings 的
+  // findings(status/category/route/title/detail)——真實模式由 run_integrity_audit
+  // 用同一個確定性引擎產出,demo 用同形狀靜態資料把卡片演出來。
+  const auditFindings = [
+    { status: 'risk', category: '估驗勾稽', route: '/valuation',
+      title: '估驗超前施工日誌:1 項工項',
+      detail: '下列工項累計估驗量高於施工日誌累計完成量逾 5%,可能超計,建議查核完成佐證後再計價:'
+        + '結構體混凝土(估驗 385 > 日誌 370)。' },
+    { status: 'warn', category: '該查未查', route: '/quality',
+      title: '接近完成未申請查驗:2 項工項',
+      detail: '下列工項累計完成已達 8 成以上,但尚無任何查驗申請紀錄,建議監造要求申請查驗:'
+        + '外牆防水層、屋頂隔熱層。' },
+  ]
+
   const agentActions = [
     { id: 'AGA-DEMO-1', project_id: project.project_id, actor_user: null,
       agent_role: 'field', kind: 'draft_daily_log', target_table: 'daily_logs', target_id: null,
@@ -339,10 +378,12 @@ export function buildDemoData(workItems, project) {
       evidence: { 來源: ['現場照片 18 張', `前日日誌 ${iso(daysFromNow(-1))}`, '進行中工項 3 項'], payload: draftPayload },
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(2) },
     { id: 'AGA-DEMO-2', project_id: project.project_id, actor_user: null,
-      agent_role: 'qc', kind: 'draft_inspection', target_table: 'test_samples', target_id: null,
-      summary: '7 天齡期試體 2 組今日到期,已擬好取樣試驗紀錄草稿',
-      rationale: '依取樣日期回推齡期,兩組試體的 7 天試驗到期日為今日',
-      evidence: { 來源: ['試體台帳(取樣日回推齡期)', '混凝土抗壓 fc=420'] },
+      agent_role: 'qc', kind: 'draft_inspection', target_table: 'checklist_records', target_id: null,
+      summary: `已依今日澆置照片擬好「${TEMPLATE_03310.title}」草稿(${inspDraftNeeds} 項待你填)`,
+      rationale: '範本:依今日照片對應的混凝土澆置作業,挑出 03310 自主檢查表範本。\n'
+        + '目視項:照片可判讀的勾選項先給建議值並標「AI 建議」、逐項附依據,由你確認;是否已通知監造照片看不出來,留白不猜。\n'
+        + '實測值:坍度、溫度等數值一律留空由你親自填——AI 不猜實測值,合格判定由系統依量化標準自動跑。',
+      evidence: { 來源: ['今日澆置照片 6 張', '檢查表範本 03310'], payload: inspDraftPayload },
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(5) },
     { id: 'AGA-DEMO-3', project_id: project.project_id, actor_user: null,
       agent_role: 'supervisor', kind: 'draft_submittal_review', target_table: 'submittals', target_id: null,
@@ -352,10 +393,17 @@ export function buildDemoData(workItems, project) {
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(20) },
     { id: 'AGA-DEMO-4', project_id: project.project_id, actor_user: null,
       agent_role: 'owner', kind: 'audit_note', target_table: 'valuations', target_id: null,
-      summary: '第 3 期估驗報量與施工日誌加總差 15 m³,建議複查',
-      rationale: '以文件勾稽鏈逐工項比對估驗明細與日誌數量加總,混凝土項差異超出容差',
-      evidence: { 來源: ['第 3 期估驗明細', '施工日誌數量加總'] },
+      summary: '勾稽發現 2 項(risk 1 項):估驗報量與施工日誌差 15 m³,建議複查',
+      rationale: '以文件勾稽鏈逐工項確定性比對估驗、日誌、查驗、試體,發現由程式精確比對得出,AI 不增刪不改數字',
+      evidence: { 來源: ['第 3 期估驗明細', '施工日誌數量加總', '查驗紀錄'], findings: auditFindings },
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(26) },
+    // 批4 raise_to:另一角色的 agent 轉來的交接事項——接受=收下球,不產生業務資料
+    { id: 'AGA-DEMO-5', project_id: project.project_id, actor_user: null,
+      agent_role: 'supervisor', kind: 'handoff', target_table: 'defects', target_id: null,
+      summary: '缺失「3F 柱鋼筋保護層不足」廠商回報已改善完成,請安排複查',
+      rationale: '廠商已上傳改善後照片並填寫改善說明,球應轉到監造複查。由 王品管(施工品管)的 agent 轉來。',
+      evidence: { 來源: ['缺失改善紀錄', '改善後照片 3 張'] },
+      status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(8) },
   ]
 
   return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions }

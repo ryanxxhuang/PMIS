@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, Bot, ChevronDown, ChevronRight } from 'lucide-react'
 import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input } from '../../components/ui.jsx'
 import { useStore } from '../../store.jsx'
-import { applyDraftQuantities, draftNeedsInputCount } from '../../store/slices/agent.js'
+import { applyDraftQuantities, draftNeedsInputCount, checklistDraftCounts } from '../../store/slices/agent.js'
 import { useAssistantData } from '../../lib/assistantData.js'
 import { displayAgentRole, AGENT_LABEL } from '../../lib/agentRole.js'
 import CopilotChat from '../../components/CopilotChat.jsx'
@@ -18,13 +18,17 @@ const KIND_LABEL = {
   draft_inspection: '查驗草稿',
   draft_submittal_review: '審查意見',
   audit_note: '稽核提示',
+  handoff: '交接事項',
 }
 const KIND_COLOR = {
   draft_daily_log: 'blue',
   draft_inspection: 'green',
   draft_submittal_review: 'amber',
   audit_note: 'purple',
+  handoff: 'red', // 球轉到你手上,視覺上要跳出來
 }
+// 稽核發現的狀態標籤(對齊 buildIntegrityFindings 的 status)
+const FINDING_BADGE = { risk: { color: 'red', label: '風險' }, warn: { color: 'amber', label: '提醒' } }
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
 
@@ -67,11 +71,14 @@ const mmdd = (d) => {
 }
 
 function DraftInboxCard() {
-  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft } = useStore()
+  // checklistTemplates:store 對外名(store.jsx 把 allChecklistTemplates 以此名輸出),
+  // 已含內建 03310 範本——查驗草稿卡片用它把項次 no 對回項目文字
+  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft, checklistTemplates } = useStore()
   const [resolvingId, setResolvingId] = useState(null)
   const [errMsg, setErrMsg] = useState(null)
-  const [doneMsg, setDoneMsg] = useState(null) // 接受日誌草稿成功後的提示(帶去填數量連結)
+  const [doneMsg, setDoneMsg] = useState(null) // 接受成功後的提示 { text, to, cta }(帶去補填/查看連結)
   const [openRationale, setOpenRationale] = useState(null) // 展開理由的那一筆 id
+  const [openFindings, setOpenFindings] = useState(null) // 展開稽核發現清單的那一筆 id
   // 日誌草稿卡片上人填的工項數量:{ [action.id]: { [work_item_id]: 輸入字串 } }。
   // 數量誠實原則下草稿的 qty_today 一律 null,不在這裡填的話,接受後的日誌
   // 會一個工項都沒有——所以數量輸入直接放在卡片裡(不開新頁、不開 modal)。
@@ -89,7 +96,13 @@ function DraftInboxCard() {
     else if (res?.applied === 'daily_log') {
       // 成功提示要看「合併人填數量後」還缺不缺:全填了就只導去查看,還有缺才提示去補
       const merged = applyDraftQuantities(a.evidence?.payload, qtyDraft[a.id])
-      setDoneMsg({ text: `已建立 ${mmdd(merged?.log_date)} 施工日誌`, needsQty: draftNeedsInputCount(merged) > 0 })
+      setDoneMsg({
+        text: `已建立 ${mmdd(merged?.log_date)} 施工日誌`, to: '/site-log',
+        cta: draftNeedsInputCount(merged) > 0 ? '去填數量' : '查看日誌',
+      })
+    } else if (res?.applied === 'checklist') {
+      // 查驗草稿的實測值一律留白(AI 不猜數值),接受後人必須進品質管理補填
+      setDoneMsg({ text: '已建立自主檢查表(實測值待填)', to: '/quality', cta: '去填實測值' })
     }
     setResolvingId(null)
   }
@@ -101,8 +114,8 @@ function DraftInboxCard() {
       {doneMsg && (
         <div className="mb-3 flex items-center justify-between gap-2 text-xs rounded-lg px-2.5 py-2 bg-[var(--green-tint)] text-[var(--green-text)] enter-row">
           <span>{doneMsg.text}</span>
-          <Link to="/site-log" className="shrink-0 inline-flex items-center gap-0.5 font-medium hover:underline">
-            {doneMsg.needsQty ? '去填數量' : '查看日誌'} <ArrowRight size={11} aria-hidden />
+          <Link to={doneMsg.to} className="shrink-0 inline-flex items-center gap-0.5 font-medium hover:underline">
+            {doneMsg.cta} <ArrowRight size={11} aria-hidden />
           </Link>
         </div>
       )}
@@ -128,6 +141,21 @@ function DraftInboxCard() {
             // 未填=輸入(或草稿預填值)解析後不 > 0;未填的接受時直接略過,不擋接受
             const unfilled = draftItems
               .filter(([wiId, v]) => !(Number(qtys[wiId] ?? v?.qty_today) > 0)).length
+            // 稽核提示:確定性引擎產出的發現清單(evidence.findings),展開可看 title+detail;
+            // 「知道了」只標 accepted,不產生任何業務資料(發現本身就是交付物)
+            const findings = a.kind === 'audit_note' ? (a.evidence?.findings || []) : []
+            const findingsOpened = openFindings === a.id
+            // 查驗草稿:顯示範本標題與待填項數;bool 的 AI 建議值必須標「AI 建議」——
+            // 使用者要一眼看得出哪些是 AI 從照片猜的,按「接受」才算人背書
+            const clPayload = a.kind === 'draft_inspection' ? a.evidence?.payload : null
+            const clTpl = clPayload
+              ? ((checklistTemplates || []).find((t) => t.id === clPayload.template_id)
+                || (checklistTemplates || []).find((t) => t.title === clPayload.template_title))
+              : null
+            const clCounts = clPayload ? checklistDraftCounts(clPayload) : null
+            const clItemByNo = new Map((clTpl?.items || []).map((it) => [it.no, it]))
+            const clSuggested = clPayload
+              ? Object.entries(clPayload.results || {}).filter(([, v]) => v?.ai_suggested && v?.value != null) : []
             return (
               <div key={a.id} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
                 <div className="flex items-start gap-2">
@@ -152,6 +180,59 @@ function DraftInboxCard() {
                     ))}
                   </div>
                 )}
+                {clPayload && (
+                  <div className="rounded-lg border border-[var(--border-2)] divide-y divide-[var(--border-2)]">
+                    <div className="px-2.5 py-1.5 text-xs text-[var(--text-2)]">
+                      <span className="font-medium text-[var(--text)]">{clTpl?.title || clPayload.template_title || '檢查表範本'}</span>
+                      <span className="text-[var(--text-3)] ml-1.5">{[clPayload.check_date, clPayload.location].filter(Boolean).join('・')}</span>
+                    </div>
+                    {clSuggested.map(([no, v]) => (
+                      <div key={no} className="px-2.5 py-1.5 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate">
+                            <span className="text-[var(--text-3)] mr-1">{no}</span>
+                            {clItemByNo.get(no)?.item || ''}
+                          </div>
+                          <span className={`shrink-0 text-xs ${v.value === false ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>
+                            {v.value === true ? '✓ 符合' : v.value === false ? '✗ 不符' : String(v.value)}
+                          </span>
+                          <Badge color="purple" className="shrink-0 !text-[10px] !px-1.5">AI 建議</Badge>
+                        </div>
+                        {/* 依據:AI 憑什麼這樣勾 —— 沒有依據的建議後端已拒收,這裡把依據攤在人眼前 */}
+                        {v.ai_basis && (
+                          <div className="text-[11px] text-[var(--text-3)] leading-snug">依據:{v.ai_basis}</div>
+                        )}
+                      </div>
+                    ))}
+                    {clCounts?.needsInput > 0 && (
+                      <div className="px-2.5 py-1.5 text-[11px] text-[var(--text-3)]">
+                        {clCounts.needsInput} 項實測值待你填——AI 不猜數值,接受後到品質管理補填,判定由系統依量化標準自動跑
+                      </div>
+                    )}
+                  </div>
+                )}
+                {findings.length > 0 && (
+                  <button onClick={() => setOpenFindings(findingsOpened ? null : a.id)}
+                    className="inline-flex items-center gap-0.5 text-[11px] text-[var(--text-3)] hover:text-[var(--text-2)]">
+                    {findingsOpened ? <ChevronDown size={11} aria-hidden /> : <ChevronRight size={11} aria-hidden />}
+                    勾稽發現 {findings.length} 項
+                  </button>
+                )}
+                {findingsOpened && findings.length > 0 && (
+                  <div className="rounded-lg border border-[var(--border-2)] divide-y divide-[var(--border-2)] enter-row">
+                    {findings.map((f, i) => (
+                      <div key={i} className="px-2.5 py-2 space-y-1">
+                        <div className="flex items-start gap-2">
+                          <Badge color={FINDING_BADGE[f.status]?.color || 'slate'} className="shrink-0 mt-0.5 !text-[10px] !px-1.5">
+                            {FINDING_BADGE[f.status]?.label || f.status}
+                          </Badge>
+                          <div className="min-w-0 flex-1 text-xs text-[var(--text)] leading-snug">{f.title}</div>
+                        </div>
+                        {f.detail && <div className="text-[11px] text-[var(--text-2)] leading-relaxed">{f.detail}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {a.rationale && (
                   <button onClick={() => setOpenRationale(opened ? null : a.id)}
                     className="inline-flex items-center gap-0.5 text-[11px] text-[var(--text-3)] hover:text-[var(--text-2)]">
@@ -164,7 +245,9 @@ function DraftInboxCard() {
                 )}
                 <div className="flex items-center gap-2 pt-0.5 flex-wrap">
                   <Button size="sm" disabled={busy} onClick={() => resolve(a, 'accepted')}>
-                    {draftItems.length > 0 ? '接受並建立日誌' : '接受'}
+                    {a.kind === 'audit_note' ? '知道了'
+                      : draftItems.length > 0 ? '接受並建立日誌'
+                        : clPayload ? '接受並建立檢查表' : '接受'}
                   </Button>
                   <Button size="sm" variant="outline" disabled={busy} onClick={() => resolve(a, 'rejected')}>拒絕</Button>
                   {/* 不擋接受:有些日子確實沒有可計量的工項,只誠實提醒略過的後果 */}
