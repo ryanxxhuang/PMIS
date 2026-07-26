@@ -19,18 +19,48 @@ export function normalizeProject(row) {
   }
 }
 
-// 抓某專案全部 work_items（PostgREST 單次上限，需分頁）
-export async function fetchAllWorkItems(projectId) {
-  const all = []; const size = 1000; let from = 0
-  for (;;) {
-    const { data, error } = await supabase.from('work_items').select('*')
-      .eq('project_id', projectId).order('sort_order').range(from, from + size - 1)
-    if (error) throw error
-    all.push(...data)
-    if (data.length < size) break
-    from += size
+// 查詢失敗一律往上拋(B-09):原本 `const { data } = await …` 靜默回空陣列,
+// 網路/RLS 失敗時使用者看到「尚無資料」而非「載入失敗」——以為缺失都結案了。
+// store.jsx 的載入 effect 統一 catch → 顯示重試 banner。
+async function must(query, label) {
+  const { data, error } = await query
+  if (error) throw new Error(`${label}讀取失敗:${error.message}`)
+  return data
+}
+
+// PostgREST 單次回傳有上限(預設 max_rows=1000),超過就「靜默截斷」——不報錯、
+// 沒有任何提示。大案(3,000+ 工項、日誌明細逐日累積)會出現估驗累計少算、
+// S 曲線失真、勾稽漏抓,而畫面看起來完全正常。所有列表載入一律逐頁抓到抓不滿一頁為止。
+const PAGE_SIZE = 1000
+// .in() 的父層 id 清單是進 URL query string 的,一次塞上千個 uuid 會超過長度上限;分批送。
+const IN_CHUNK = 100
+
+// build(from, to) 每次都要回傳「新的」query builder——supabase 的 builder 是一次性 thenable,
+// 不能重複 await。排序一律帶 id 收尾:沒有唯一的排序鍵時 range 分頁可能重複或漏列。
+async function pageAll(build, label) {
+  const all = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const data = await must(build(from, from + PAGE_SIZE - 1), label)
+    all.push(...(data || []))
+    if (!data || data.length < PAGE_SIZE) break
   }
   return all
+}
+
+// 子表依父層 id 載入:id 清單分批進 .in(),每批再各自逐頁。
+async function pageAllIn(ids, build, label) {
+  const all = []
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK)
+    all.push(...await pageAll((from, to) => build(chunk, from, to), label))
+  }
+  return all
+}
+
+// 抓某專案全部 work_items（PostgREST 單次上限，需分頁）
+export async function fetchAllWorkItems(projectId) {
+  return pageAll((from, to) => supabase.from('work_items').select('*')
+    .eq('project_id', projectId).order('sort_order').order('id').range(from, to), '標單工項')
 }
 
 // work_items 本地快取（IndexedDB）—— egress 最大宗就是重抓整份標單（數 MB/次）。
@@ -88,22 +118,13 @@ export function dbToWorkItems(rows, project) {
   }
 }
 
-// 查詢失敗一律往上拋(B-09):原本 `const { data } = await …` 靜默回空陣列,
-// 網路/RLS 失敗時使用者看到「尚無資料」而非「載入失敗」——以為缺失都結案了。
-// store.jsx 的載入 effect 統一 catch → 顯示重試 banner。
-async function must(query, label) {
-  const { data, error } = await query
-  if (error) throw new Error(`${label}讀取失敗:${error.message}`)
-  return data
-}
-
 // 從 DB 載入估驗（valuations + valuation_items），組回 { items: {item_key: 累計完成數量} } 形狀
 export async function loadValuationsFromDB(projectId, idToKey) {
-  const vals = await must(supabase.from('valuations')
-    .select('*').eq('project_id', projectId).order('period_no'), '估驗')
+  const vals = await pageAll((from, to) => supabase.from('valuations')
+    .select('*').eq('project_id', projectId).order('period_no').order('id').range(from, to), '估驗')
   if (!vals?.length) return []
-  const vItems = await must(supabase.from('valuation_items')
-    .select('valuation_id, work_item_id, cum_qty').in('valuation_id', vals.map((v) => v.id)), '估驗明細')
+  const vItems = await pageAllIn(vals.map((v) => v.id), (chunk, from, to) => supabase.from('valuation_items')
+    .select('valuation_id, work_item_id, cum_qty').in('valuation_id', chunk).order('id').range(from, to), '估驗明細')
   const byVal = new Map(vals.map((v) => [v.id, {}]))
   for (const vi of vItems || []) {
     const key = idToKey.get(vi.work_item_id)
@@ -118,8 +139,8 @@ export async function loadValuationsFromDB(projectId, idToKey) {
 
 // 從 DB 載入預定進度（schedule_periods）→ progressPlan 形狀
 export async function loadScheduleFromDB(project) {
-  const data = await must(supabase.from('schedule_periods')
-    .select('*').eq('project_id', project.project_id).order('period_label'), '預定進度')
+  const data = await pageAll((from, to) => supabase.from('schedule_periods')
+    .select('*').eq('project_id', project.project_id).order('period_label').order('id').range(from, to), '預定進度')
   if (!data?.length) return null
   return {
     start: project.start_date, end: project.end_date,
@@ -129,11 +150,11 @@ export async function loadScheduleFromDB(project) {
 
 // 從 DB 載入施工日誌（daily_logs + daily_log_items），組回 { items: {item_key: 當日數量} }
 export async function loadSiteLogsFromDB(projectId, idToKey) {
-  const logs = await must(supabase.from('daily_logs')
-    .select('*').eq('project_id', projectId).order('log_date', { ascending: false }), '施工日誌')
+  const logs = await pageAll((from, to) => supabase.from('daily_logs')
+    .select('*').eq('project_id', projectId).order('log_date', { ascending: false }).order('id').range(from, to), '施工日誌')
   if (!logs?.length) return []
-  const items = await must(supabase.from('daily_log_items')
-    .select('daily_log_id, work_item_id, qty_today').in('daily_log_id', logs.map((l) => l.id)), '日誌明細')
+  const items = await pageAllIn(logs.map((l) => l.id), (chunk, from, to) => supabase.from('daily_log_items')
+    .select('daily_log_id, work_item_id, qty_today').in('daily_log_id', chunk).order('id').range(from, to), '日誌明細')
   const byLog = new Map(logs.map((l) => [l.id, {}]))
   for (const it of items || []) {
     const key = idToKey.get(it.work_item_id)
@@ -149,20 +170,20 @@ export async function loadSiteLogsFromDB(projectId, idToKey) {
 
 // 從 DB 載入品管:檢查表範本/紀錄 + 取樣試體
 export async function loadQcFromDB(projectId) {
-  const tpls = await must(supabase.from('checklist_templates')
-    .select('*').eq('project_id', projectId).order('created_at'), '檢查表範本')
-  const recs = await must(supabase.from('checklist_records')
-    .select('*').eq('project_id', projectId).order('check_date', { ascending: false }), '自主檢查紀錄')
-  const samples = await must(supabase.from('test_samples')
-    .select('*').eq('project_id', projectId).order('sampled_date', { ascending: false }), '取樣試體')
+  const tpls = await pageAll((from, to) => supabase.from('checklist_templates')
+    .select('*').eq('project_id', projectId).order('created_at').order('id').range(from, to), '檢查表範本')
+  const recs = await pageAll((from, to) => supabase.from('checklist_records')
+    .select('*').eq('project_id', projectId).order('check_date', { ascending: false }).order('id').range(from, to), '自主檢查紀錄')
+  const samples = await pageAll((from, to) => supabase.from('test_samples')
+    .select('*').eq('project_id', projectId).order('sampled_date', { ascending: false }).order('id').range(from, to), '取樣試體')
   return { templates: tpls || [], records: recs || [], samples: samples || [] }
 }
 
 // 從 DB 載入缺失(統一引擎:domain=quality|safety)。缺失不依賴標單,
 // 匯標單前 byId 可為空 Map(工項欄位留白)。
 export async function loadDefectsFromDB(projectId, byId = new Map()) {
-  const data = await must(supabase.from('defects')
-    .select('*').eq('project_id', projectId).order('created_at', { ascending: false }), '缺失')
+  const data = await pageAll((from, to) => supabase.from('defects')
+    .select('*').eq('project_id', projectId).order('created_at', { ascending: false }).order('id').range(from, to), '缺失')
   return (data || []).map((r) => ({
     ...r,
     work_item_no: byId.get(r.work_item_id)?.item_no || '',
@@ -174,32 +195,33 @@ export async function loadDefectsFromDB(projectId, byId = new Map()) {
 export async function loadQualityFromDB(projectId, byId) {
   const wi = (id) => byId.get(id)
   const deco = (r) => ({ ...r, work_item_no: wi(r.work_item_id)?.item_no || '', work_item_desc: wi(r.work_item_id)?.description || '' })
-  const insp = await must(supabase.from('inspections').select('*').eq('project_id', projectId).order('created_at', { ascending: false }), '查驗')
+  const insp = await pageAll((from, to) => supabase.from('inspections').select('*')
+    .eq('project_id', projectId).order('created_at', { ascending: false }).order('id').range(from, to), '查驗')
   const defs = await loadDefectsFromDB(projectId, byId)
   return { inspections: (insp || []).map(deco), defects: defs }
 }
 
 // 從 DB 載入契約義務清單
 export async function loadObligationsFromDB(projectId) {
-  const data = await must(supabase.from('contract_obligations')
-    .select('*').eq('project_id', projectId).order('sort_order'), '契約義務')
+  const data = await pageAll((from, to) => supabase.from('contract_obligations')
+    .select('*').eq('project_id', projectId).order('sort_order').order('id').range(from, to), '契約義務')
   return data || []
 }
 
 // 從 DB 載入成本項目（預算 vs 實際、分包）
 export async function loadCostItemsFromDB(projectId) {
-  const data = await must(supabase.from('cost_items')
-    .select('*').eq('project_id', projectId).order('sort_order').order('created_at'), '成本項目')
+  const data = await pageAll((from, to) => supabase.from('cost_items')
+    .select('*').eq('project_id', projectId).order('sort_order').order('created_at').order('id').range(from, to), '成本項目')
   return data || []
 }
 
 // 從 DB 載入變更設計 + 追加減工項明細（明細 nest 在各變更下）
 export async function loadChangeOrdersFromDB(projectId) {
-  const cos = await must(supabase.from('change_orders')
-    .select('*').eq('project_id', projectId).order('sort_order').order('created_at'), '變更設計')
+  const cos = await pageAll((from, to) => supabase.from('change_orders')
+    .select('*').eq('project_id', projectId).order('sort_order').order('created_at').order('id').range(from, to), '變更設計')
   if (!cos?.length) return []
-  const items = await must(supabase.from('change_order_items')
-    .select('*').in('change_order_id', cos.map((c) => c.id)).order('sort_order').order('created_at'), '變更明細')
+  const items = await pageAllIn(cos.map((c) => c.id), (chunk, from, to) => supabase.from('change_order_items')
+    .select('*').in('change_order_id', chunk).order('sort_order').order('created_at').order('id').range(from, to), '變更明細')
   const byCo = new Map(cos.map((c) => [c.id, []]))
   for (const it of items || []) byCo.get(it.change_order_id)?.push(it)
   return cos.map((c) => ({ ...c, items: byCo.get(c.id) || [] }))
@@ -207,15 +229,15 @@ export async function loadChangeOrdersFromDB(projectId) {
 
 // 從 DB 載入工安紀錄（自主檢查 / 缺失 / 教育訓練 / 危害告知）
 export async function loadSafetyFromDB(projectId) {
-  const data = await must(supabase.from('safety_records')
-    .select('*').eq('project_id', projectId).order('record_date', { ascending: false }).order('created_at', { ascending: false }), '工安紀錄')
+  const data = await pageAll((from, to) => supabase.from('safety_records').select('*').eq('project_id', projectId)
+    .order('record_date', { ascending: false }).order('created_at', { ascending: false }).order('id').range(from, to), '工安紀錄')
   return data || []
 }
 
 // 從 DB 載入 ITP 檢驗停留點,去正規化工項資訊(顯示+日誌活動比對用)
 export async function loadItpFromDB(projectId, byId, idToKey) {
-  const data = await must(supabase.from('inspection_points')
-    .select('*').eq('project_id', projectId).order('sort_order').order('created_at'), '檢驗停留點')
+  const data = await pageAll((from, to) => supabase.from('inspection_points')
+    .select('*').eq('project_id', projectId).order('sort_order').order('created_at').order('id').range(from, to), '檢驗停留點')
   return (data || []).map((r) => ({
     ...r,
     work_item_key: r.work_item_id ? (idToKey.get(r.work_item_id) || null) : null,
@@ -226,14 +248,15 @@ export async function loadItpFromDB(projectId, byId, idToKey) {
 
 // 從 DB 載入驗收/結算事件(一階段一筆,依建立時間排序)
 export async function loadAcceptanceFromDB(projectId) {
-  const data = await must(supabase.from('acceptance_events')
-    .select('*').eq('project_id', projectId).order('created_at'), '驗收事件')
+  const data = await pageAll((from, to) => supabase.from('acceptance_events')
+    .select('*').eq('project_id', projectId).order('created_at').order('id').range(from, to), '驗收事件')
   return data || []
 }
 
 // 從 DB 載入逐工項排程，回傳 { item_key: { planned_start, planned_finish } }
 export async function loadItemSchedulesFromDB(projectId, idToKey) {
-  const data = await must(supabase.from('item_schedules').select('*').eq('project_id', projectId), '逐工項排程')
+  const data = await pageAll((from, to) => supabase.from('item_schedules').select('*')
+    .eq('project_id', projectId).order('id').range(from, to), '逐工項排程')
   const map = {}
   for (const r of data || []) {
     const key = idToKey.get(r.work_item_id)
