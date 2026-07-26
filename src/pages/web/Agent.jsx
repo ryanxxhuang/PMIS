@@ -30,6 +30,11 @@ const KIND_COLOR = {
 // 稽核發現的狀態標籤(對齊 buildIntegrityFindings 的 status)
 const FINDING_BADGE = { risk: { color: 'red', label: '風險' }, warn: { color: 'amber', label: '提醒' } }
 
+// 審查意見草稿:要點狀態與建議判定的 Badge 顏色(對齊後端 draft_submittal_review 的字彙;
+// 未知值退 slate 不擋新字彙)。建議判定只是建議——文字一律帶「建議:」前綴,不可像已審定
+const REVIEW_STATUS_COLOR = { 已於送審敘明: 'green', 需補件: 'amber', 需監造核對文件: 'blue', 不適用: 'slate' }
+const REVIEW_DECISION_COLOR = { 核准: 'green', 核備: 'green', 退回補正: 'red', 需補充後再核: 'amber' }
+
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
 
 // 今日待我處理:最多亮 8 筆,其餘導去提醒中心——這裡是行動入口不是完整清單
@@ -103,6 +108,9 @@ function DraftInboxCard() {
     } else if (res?.applied === 'checklist') {
       // 查驗草稿的實測值一律留白(AI 不猜數值),接受後人必須進品質管理補填
       setDoneMsg({ text: '已建立自主檢查表(實測值待填)', to: '/quality', cta: '去填實測值' })
+    } else if (res?.applied === 'submittal_review') {
+      // 採用只存意見+推進到審核中,審定(核准/退回)必須由監造本人到送審頁做
+      setDoneMsg({ text: '已存下審查意見,送審推進到「審核中」——審定請到送審頁自行操作', to: '/submittals', cta: '去審定' })
     }
     setResolvingId(null)
   }
@@ -156,6 +164,9 @@ function DraftInboxCard() {
             const clItemByNo = new Map((clTpl?.items || []).map((it) => [it.no, it]))
             const clSuggested = clPayload
               ? Object.entries(clPayload.results || {}).filter(([, v]) => v?.ai_suggested && v?.value != null) : []
+            // 審查意見草稿(批6):要點清單+意見草稿+「建議」判定。採用只存意見並推進到
+            // 審核中(見 acceptDraft 審定紅線),核准/退回一律由監造本人在送審頁操作
+            const subPayload = a.kind === 'draft_submittal_review' ? a.evidence?.payload : null
             return (
               <div key={a.id} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
                 <div className="flex items-start gap-2">
@@ -211,6 +222,42 @@ function DraftInboxCard() {
                     )}
                   </div>
                 )}
+                {subPayload && (
+                  <div className="rounded-lg border border-[var(--border-2)] divide-y divide-[var(--border-2)]">
+                    <div className="flex items-center gap-2 px-2.5 py-1.5">
+                      <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate">
+                        {subPayload.submittal_no && <span className="text-[var(--text-3)] mr-1">{subPayload.submittal_no}</span>}
+                        <span className="font-medium text-[var(--text)]">{subPayload.submittal_title || ''}</span>
+                      </div>
+                      {/* 「建議:」前綴不可省——這只是 AI 的建議,不是審定結果 */}
+                      {subPayload.suggested_decision && (
+                        <Badge color={REVIEW_DECISION_COLOR[subPayload.suggested_decision] || 'slate'} className="shrink-0">
+                          建議:{subPayload.suggested_decision}
+                        </Badge>
+                      )}
+                    </div>
+                    {(subPayload.checklist || []).map((c, i) => (
+                      <div key={i} className="px-2.5 py-1.5 space-y-0.5">
+                        <div className="flex items-start gap-2">
+                          <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] leading-snug">{c.point}</div>
+                          <Badge color={REVIEW_STATUS_COLOR[c.status] || 'slate'} className="shrink-0 !text-[10px] !px-1.5">{c.status}</Badge>
+                        </div>
+                        {c.basis && <div className="text-[11px] text-[var(--text-3)] leading-snug">依據:{c.basis}</div>}
+                      </div>
+                    ))}
+                    {subPayload.opinion && (
+                      <div className="px-2.5 py-1.5">
+                        <div className="text-[11px] text-[var(--text-3)] mb-0.5">審查意見草稿</div>
+                        <div className="text-xs text-[var(--text)] leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
+                          {subPayload.opinion}
+                        </div>
+                      </div>
+                    )}
+                    {subPayload.caution && (
+                      <div className="px-2.5 py-1.5 text-[11px] font-medium text-[var(--amber-text)] leading-snug">⚠ {subPayload.caution}</div>
+                    )}
+                  </div>
+                )}
                 {findings.length > 0 && (
                   <button onClick={() => setOpenFindings(findingsOpened ? null : a.id)}
                     className="inline-flex items-center gap-0.5 text-[11px] text-[var(--text-3)] hover:text-[var(--text-2)]">
@@ -247,12 +294,17 @@ function DraftInboxCard() {
                   <Button size="sm" disabled={busy} onClick={() => resolve(a, 'accepted')}>
                     {a.kind === 'audit_note' ? '知道了'
                       : draftItems.length > 0 ? '接受並建立日誌'
-                        : clPayload ? '接受並建立檢查表' : '接受'}
+                        : clPayload ? '接受並建立檢查表'
+                          : subPayload ? '採用意見' : '接受'}
                   </Button>
                   <Button size="sm" variant="outline" disabled={busy} onClick={() => resolve(a, 'rejected')}>拒絕</Button>
                   {/* 不擋接受:有些日子確實沒有可計量的工項,只誠實提醒略過的後果 */}
                   {unfilled > 0 && (
                     <span className="text-[11px] text-[var(--text-3)]">未填數量的工項不會寫入日誌</span>
+                  )}
+                  {/* 審定紅線的使用者話術:採用≠審定,決定權在人 */}
+                  {subPayload && (
+                    <span className="text-[11px] text-[var(--text-3)]">採用只會存下意見草稿,核准/退回仍需你在送審頁面自行審定</span>
                   )}
                 </div>
               </div>

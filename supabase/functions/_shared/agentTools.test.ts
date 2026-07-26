@@ -4,7 +4,7 @@
 // 「實測值不讓 AI 讀」紅線(num 項不存在任何賦值路徑)。
 import { describe, it, expect } from 'vitest'
 import {
-  QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL, DRAFT_INSPECTION_TOOL, RAISE_TO_TOOL, RUN_INTEGRITY_AUDIT_TOOL,
+  QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL, DRAFT_INSPECTION_TOOL, DRAFT_SUBMITTAL_REVIEW_TOOL, RAISE_TO_TOOL, RUN_INTEGRITY_AUDIT_TOOL,
   toolsForRole, buildDailyLogDraft, buildInspectionDraft, pickChecklistTemplate, makeToolExec,
 } from './agentTools.ts'
 import type { DailyLogDraftInput, InspectionDraftInput } from './agentTools.ts'
@@ -22,10 +22,22 @@ describe('toolsForRole(批4 角色分發:查詢在前、角色草稿工具居中
     expect(toolsForRole('qc').at(-2)).toBe(DRAFT_INSPECTION_TOOL)
   })
 
-  it('supervisor / owner = 查詢七支 + run_integrity_audit + raise_to(同一份勾稽)', () => {
-    for (const role of ['supervisor', 'owner'] as const) {
-      expect(toolsForRole(role).map((t) => t.name)).toEqual([...queryNames, 'run_integrity_audit', 'raise_to'])
-      expect(toolsForRole(role).at(-2)).toBe(RUN_INTEGRITY_AUDIT_TOOL)
+  it('supervisor = 查詢七支 + run_integrity_audit + draft_submittal_review + raise_to', () => {
+    expect(toolsForRole('supervisor').map((t) => t.name))
+      .toEqual([...queryNames, 'run_integrity_audit', 'draft_submittal_review', 'raise_to'])
+    expect(toolsForRole('supervisor').at(-2)).toBe(DRAFT_SUBMITTAL_REVIEW_TOOL)
+    expect(toolsForRole('supervisor').at(-1)).toBe(RAISE_TO_TOOL)
+  })
+
+  it('owner = 查詢七支 + run_integrity_audit + raise_to(送審審查是監造的法定職掌,不給機關)', () => {
+    expect(toolsForRole('owner').map((t) => t.name)).toEqual([...queryNames, 'run_integrity_audit', 'raise_to'])
+    expect(toolsForRole('owner').at(-2)).toBe(RUN_INTEGRITY_AUDIT_TOOL)
+    expect(toolsForRole('owner').map((t) => t.name)).not.toContain('draft_submittal_review')
+  })
+
+  it('field / qc 沒有 draft_submittal_review(只給 supervisor)', () => {
+    for (const role of ['field', 'qc'] as const) {
+      expect(toolsForRole(role).map((t) => t.name)).not.toContain('draft_submittal_review')
     }
   })
 
@@ -309,5 +321,27 @@ describe('makeToolExec 的 draft_inspection / raise_to 防護', () => {
     const exec = makeToolExec({} as never, pid)
     expect(((await exec('raise_to', { to_role: 'supervisor', subject: '缺失改善完成,請複查' })) as { error?: string }).error)
       .toBe('伺服器未設定,暫時無法建立草稿')
+  })
+})
+
+// ── draft_submittal_review 的 makeToolExec 防護 ─────────────────────────────
+describe('makeToolExec 的 draft_submittal_review 防護', () => {
+  const pid = '00000000-0000-0000-0000-000000000000'
+
+  it('未傳 service 時誠實回「伺服器未設定」,不碰資料庫', async () => {
+    const exec = makeToolExec({} as never, pid)
+    expect(((await exec('draft_submittal_review', {})) as { error?: string }).error)
+      .toBe('伺服器未設定,暫時無法建立草稿')
+  })
+
+  it('submittal_id 不是 UUID 時回錯誤讓模型自行修正(先於一切查詢)', async () => {
+    const exec = makeToolExec({} as never, pid, {} as never, 'user-1', 'supervisor')
+    expect(((await exec('draft_submittal_review', { submittal_id: 'SUB-001' })) as { error?: string }).error)
+      .toContain('UUID')
+  })
+
+  it('工具定義的描述明講「不能替監造做審定」(反幻覺紅線寫進 description)', () => {
+    expect(DRAFT_SUBMITTAL_REVIEW_TOOL.description).toContain('不能替監造做審定')
+    expect(DRAFT_SUBMITTAL_REVIEW_TOOL.description).toContain('法定裁量')
   })
 })

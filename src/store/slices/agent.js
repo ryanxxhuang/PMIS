@@ -94,7 +94,7 @@ export function applyDraftQuantities(payload, quantities) {
   return { ...payload, items }
 }
 
-export function useAgentSlice({ demoMode, isPersistedProject, currentProject, currentUser, wiMaps }, { saveSiteLog, createChecklistRecord, allChecklistTemplates } = {}) {
+export function useAgentSlice({ demoMode, isPersistedProject, currentProject, currentUser, wiMaps }, { saveSiteLog, createChecklistRecord, allChecklistTemplates, decideSubmittal } = {}) {
   // AI 草稿收件匣(pending 由 UI 篩;保留近 50 筆含已處理,之後可做歷史)
   const [agentActions, setAgentActions] = useState([])
   const [agentActionsLoading, setAgentActionsLoading] = useState(false)
@@ -182,6 +182,20 @@ export function useAgentSlice({ demoMode, isPersistedProject, currentProject, cu
       if (r2?.error) return r2
       return { error: null, applied: 'checklist' }
     }
+    // 審查意見草稿(批6):採用=把 AI 擬的意見存進 review_note、把件推進到「審核中」。
+    // ⚠️ 審定紅線:decideSubmittal 的狀態一律傳 '審核中'——傳其他值會寫 decided_date
+    // 形同替監造審定(見 collab.js decideSubmittal:status !== '審核中' 才寫 decided_date)。
+    // AI 只擬意見,核准/核備/退回補正必須由監造本人在 /submittals 操作。
+    // 順序紅線同上:先 decideSubmittal 成功、才標 accepted;反向失敗(意見已存、
+    // 草稿標記失敗)時重按採用只是對同一件重寫相同 review_note(冪等),無害。
+    if (action?.kind === 'draft_submittal_review' && payload?.submittal_id) {
+      if (typeof decideSubmittal !== 'function') return { error: '送審審查寫入尚未就緒,請稍後再試' }
+      const res = await decideSubmittal(payload.submittal_id, '審核中', payload.opinion || null)
+      if (res?.error) return { error: res.error?.message || res.error } // 意見沒存入 → 草稿維持 pending
+      const r2 = await resolveAgentAction(action.id, 'accepted')
+      if (r2?.error) return r2
+      return { error: null, applied: 'submittal_review' }
+    }
     // audit_note / handoff(批4):接受=「知道了/收下」,不產生任何業務資料,只標 accepted。
     // 其他非日誌 kind、沒帶 payload 的舊草稿/demo 種子亦同(批 2 行為)——
     // 不能因為草稿缺料就讓收件匣卡死,至少要能把它處理掉。
@@ -195,7 +209,7 @@ export function useAgentSlice({ demoMode, isPersistedProject, currentProject, cu
     const res = await resolveAgentAction(action.id, 'accepted')
     if (res?.error) return res // 日誌已建立、只是草稿標記失敗;重按接受為冪等 upsert,無害
     return { error: null, applied: 'daily_log' }
-  }, [resolveAgentAction, saveSiteLog, wiMaps, createChecklistRecord, allChecklistTemplates])
+  }, [resolveAgentAction, saveSiteLog, wiMaps, createChecklistRecord, allChecklistTemplates, decideSubmittal])
 
   return { agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions, setAgentActions }
 }

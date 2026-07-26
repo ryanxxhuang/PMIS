@@ -390,11 +390,36 @@ export function buildDemoData(workItems, project) {
         + '實測值:坍度、溫度等數值一律留空由你親自填——AI 不猜實測值,合格判定由系統依量化標準自動跑。',
       evidence: { 來源: ['今日澆置照片 6 張', '檢查表範本 03310'], payload: inspDraftPayload },
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(5) },
+    // 審查意見草稿(批6):payload 形狀對齊後端 draft_submittal_review 工具的產出
+    // (submittal_id/no/title + checklist[{point,basis,status}] + opinion + suggested_decision + caution)。
+    // submittal_id 指向上方 demo 送審 SUB-DEMO-3(SUB-003,已提送中的修正版)——
+    // 「採用意見」只會把意見存進 review_note 並推進到「審核中」,審定仍由監造本人做。
     { id: 'AGA-DEMO-3', project_id: project.project_id, actor_user: null,
-      agent_role: 'supervisor', kind: 'draft_submittal_review', target_table: 'submittals', target_id: null,
+      agent_role: 'supervisor', kind: 'draft_submittal_review', target_table: 'submittals', target_id: 'SUB-DEMO-3',
       summary: '送審 SUB-003 已逐項比對契約需求,擬好審查意見(2 項需補件)',
       rationale: '依材料設備類審查要點逐項核對附件說明,出廠證明與 CNS 試驗報告需補正本',
-      evidence: { 來源: ['SUB-003 外牆窯燒磚材料送審', '材料設備類審查要點 5 項'] },
+      evidence: {
+        來源: ['SUB-003 外牆窯燒磚材料送審', '材料設備類審查要點 5 項'],
+        payload: {
+          submittal_id: 'SUB-DEMO-3', submittal_no: 'SUB-003', submittal_title: '外牆窯燒磚 材料送審(修正版)',
+          checklist: [
+            { point: '出廠證明 / 品質保證書齊備', basis: '契約施工規範第 04210 章:磚材進場應檢附出廠證明正本', status: '需補件' },
+            { point: 'CNS 或契約指定規範之試驗報告', basis: '規範第 04210 章:應檢附 CNS 抗壓強度及吸水率試驗報告(六個月內)', status: '需補件' },
+            { point: '型錄規格與契約規範相符', basis: '附件型錄載明尺寸 230×110×60mm、吸水率 ≤10%,與規範相符', status: '已於送審敘明' },
+            { point: '樣品經核可(如契約要求)', basis: '規範要求送樣留存,附件說明未載明留樣紀錄,請核對現場樣品', status: '需監造核對文件' },
+            { point: '第一次退回事項已補正', basis: 'Rev.1 附件說明已載明補附出廠證明與 CNS 試驗報告', status: '需監造核對文件' },
+            { point: '進場數量與需求/估驗相符', basis: '本件為材料規格送審,不涉進場數量核對', status: '不適用' },
+          ],
+          opinion: '本件「外牆窯燒磚 材料送審」(Rev.1)經逐項核對審查要點:\n'
+            + '一、出廠證明僅為影本且未加蓋廠商大小章,請補正本。\n'
+            + '二、CNS 試驗報告出具日期逾六個月,不符規範第 04210 章時效規定,請重新送驗後補附。\n'
+            + '三、型錄規格(尺寸、吸水率)核與契約規範相符,尚無不符。\n'
+            + '四、樣品留樣紀錄未見於附件,請於補正時一併檢附,俾憑核對。\n'
+            + '綜上,本件尚有 2 項文件未齊備,建議退回補正,俟補件齊全後再行審查。',
+          suggested_decision: '退回補正',
+          caution: 'AI 依契約需求與附件說明擬具,未實際檢視文件正本;請核對送審文件本體後再行審定。',
+        },
+      },
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(20) },
     { id: 'AGA-DEMO-4', project_id: project.project_id, actor_user: null,
       agent_role: 'owner', kind: 'audit_note', target_table: 'valuations', target_id: null,
