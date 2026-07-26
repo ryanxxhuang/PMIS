@@ -1,8 +1,9 @@
 import { useMemo, useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
-import { Printer, Sparkles, Images } from 'lucide-react'
+import { Printer, Sparkles, Images, FileText } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
+import { collectEvidence } from '../../lib/evidence.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
@@ -59,6 +60,35 @@ export default function ValuationPackage() {
   const toggleExclude = (id) => setExcluded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   const leafKeys = useMemo(() => leaves.map((l) => l.item_key).join(','), [leaves])
+
+  // 附件:施工日誌——本期估驗工項的貢獻日誌(佐證推導層 collectEvidence 確定性 join,
+  // 不存關聯表;日誌改了附件自動跟著對)。列可查證的清單,不逐份印公定格式。
+  const [attachLogs, setAttachLogs] = useState(true) // 列印前開關,預設夾附
+  const LOG_CAP = 60
+  const logAttachment = useMemo(() => {
+    if (!leaves.length || !siteLogs?.length) return { rows: [], total: 0 }
+    const logByDate = new Map(siteLogs.map((l) => [l.log_date, l]))
+    const byDate = new Map() // log_date → 該日貢獻的本期工項與數量
+    for (const it of leaves) {
+      const { logs } = collectEvidence(it.item_key, { siteLogs, workItem: it })
+      for (const l of logs) {
+        if (!byDate.has(l.log_date)) byDate.set(l.log_date, [])
+        byDate.get(l.log_date).push({ item_no: it.item_no, description: it.description, unit: it.unit, qty: l.qty })
+      }
+    }
+    const rows = [...byDate.entries()]
+      .sort((a, b) => (b[0] || '').localeCompare(a[0] || '')) // 日期新→舊
+      .map(([date, items]) => {
+        const src = logByDate.get(date)
+        return {
+          date,
+          weather: [src?.weather_am, src?.weather_pm].filter(Boolean).join(' / ') || src?.weather || '—',
+          summary: src?.work_summary || '',
+          items,
+        }
+      })
+    return { rows: rows.slice(0, LOG_CAP), total: rows.length }
+  }, [leaves, siteLogs])
 
   useEffect(() => {
     let alive = true
@@ -238,6 +268,54 @@ export default function ValuationPackage() {
             </div>
           ))}
         </div>
+        {/* 附件:施工日誌(旗艦承諾:紙本輸出自動夾附平時的施工日誌)*/}
+        <label className="print:hidden flex items-center gap-2 mt-8 text-[12px] text-slate-500 select-none cursor-pointer">
+          <input type="checkbox" checked={attachLogs} onChange={(e) => setAttachLogs(e.target.checked)} />
+          夾附施工日誌（列印時自動附上本期估驗工項的貢獻日誌清單）
+        </label>
+        {attachLogs && (logAttachment.rows.length === 0 ? (
+          <div className="print:hidden text-[11px] text-slate-400 mt-1">本期估驗工項尚無對應的施工日誌，列印時不會產生附件。</div>
+        ) : (
+          <div className="mt-4 print:break-before-page">
+            <div className="text-slate-600 font-medium mb-1 flex items-center gap-1.5">
+              <FileText size={14} className="text-[var(--blue)] print:hidden" aria-hidden />附件：施工日誌
+            </div>
+            <div className="text-[11px] text-slate-500 mb-1">
+              本期估驗工項之貢獻施工日誌（由日誌數量自動勾稽，
+              {logAttachment.total > LOG_CAP ? `共 ${logAttachment.total} 筆，列出最近 ${LOG_CAP} 筆` : `共 ${logAttachment.total} 筆`}
+              ；完整日誌以「施工日誌」頁列印版為準）
+            </div>
+            <div className="overflow-x-auto -mx-1 print:overflow-visible print:mx-0">
+            <table className="w-full border-collapse text-[11px] min-w-[560px] print:min-w-0">
+              <thead>
+                <tr className="bg-slate-100">
+                  {['日期', '天氣', '本期相關工項與當日數量', '工作摘要'].map((h) => (
+                    <th key={h} className="border border-slate-300 px-1.5 py-1 font-medium text-slate-600 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {logAttachment.rows.map((r) => (
+                  <tr key={r.date} className="break-inside-avoid align-top">
+                    <td className="border border-slate-200 px-1.5 py-1 tabular-nums whitespace-nowrap text-slate-600">{r.date}</td>
+                    <td className="border border-slate-200 px-1.5 py-1 whitespace-nowrap text-slate-500">{r.weather}</td>
+                    <td className="border border-slate-200 px-1.5 py-1">
+                      {r.items.map((it) => (
+                        <div key={it.item_no} className="leading-snug">
+                          <span className="text-slate-400 mr-1">{it.item_no}</span>{it.description}
+                          <span className="tabular-nums text-slate-600 ml-1">{fmtQ(it.qty)} {it.unit}</span>
+                        </div>
+                      ))}
+                    </td>
+                    <td className="border border-slate-200 px-1.5 py-1 text-slate-600">{r.summary || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </div>
+        ))}
+
         <div className="text-[10px] text-slate-400 mt-3 print:hidden">
           保留款 {retPct}%。本包為佐證彙整，正式估驗金額以「估驗計價單」為準。
         </div>

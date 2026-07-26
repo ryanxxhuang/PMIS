@@ -168,8 +168,16 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
 
   // 存檔自主檢查(P1-07 修訂版次):revises=被修訂的紀錄 → 新增 Rev.N(舊證據不覆寫,
   // rev/root_id 由 DB guard 依鏈計算);缺失掛鏈根,同鏈最多一筆未結案缺失(不重複開)。
-  const createChecklistRecord = useCallback(async ({ template, check_date, location, values, note, revises, revision_reason }) => {
+  const createChecklistRecord = useCallback(async ({ template, check_date, location, values, note, revises, revision_reason, work_item_id, work_item_key }) => {
     const { results, overall, failed } = judgeChecklist(template, values)
+    // 佐證鏈(批5)補工項關聯:UI 傳 work_item_key(同 createInspection 慣例,由 wiMaps 換 uuid)、
+    // agent 草稿直接帶 work_item_id(uuid)。修訂版次未指定時沿用被修訂紀錄的關聯(證據鏈不斷)。
+    // 只加欄位——判定/缺失連動邏輯不動。
+    const wiFromKey = work_item_key ? wiMaps.byKey.get(work_item_key) : null
+    const wiId = work_item_id ?? wiFromKey?.id ?? (revises ? revises.work_item_id : null) ?? null
+    // demo 的工項無 uuid:記憶體紀錄另存 work_item_key,佐證推導與畫面顯示都靠它
+    const wiKey = wiFromKey?.item_key ?? (work_item_id ? wiMaps.idToKey.get(work_item_id) : null)
+      ?? (revises ? revises.work_item_key : null) ?? null
     // 缺失連動:不合格 → 鏈上沒有未結案缺失才開新的;更正為合格 → 不動原缺失
     // (結案是監造的權限),只回報仍在追蹤讓 UI 提示。
     const syncDefect = async (rootId, rev) => {
@@ -202,6 +210,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       setChecklistRecords((rs) => [{
         id, template_id: template.id, check_date, location: location || null,
         results, overall, note: note || null,
+        // demo 慣例(同 lib/evidence.js):無 uuid 時 work_item_id 直接放 item_key,佐證推導才對得上
+        work_item_id: wiId ?? wiKey ?? null, work_item_key: wiKey,
         rev, root_id: rootId, supersedes_id: revises?.id || null,
         revision_reason: revises ? (revision_reason || null) : null,
       }, ...rs])
@@ -221,6 +231,7 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     const { data: rec, error } = await supabase.from('checklist_records').insert({
       project_id: currentProject.project_id, template_id: templateId, check_date,
       location: location || null, results, overall, note: note || null, created_by: currentUser?.user_id,
+      work_item_id: wiId,
       supersedes_id: revises?.id || null, revision_reason: revises ? revision_reason : null,
     }).select().single()
     if (error) return { error }
@@ -228,7 +239,7 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     const link = await syncDefect(rec.root_id, rec.rev)
     log('自主檢查', `${template.title} ${check_date}${rec.rev ? ` Rev.${rec.rev}` : ''} → ${overall || '未判定'}`, { user: currentUser?.name, role: '施工品管' })
     return { error: null, overall, rev: rec.rev, ...link }
-  }, [dbMode, currentProject, currentUser, defects, createDefect, log])
+  }, [dbMode, currentProject, currentUser, wiMaps, defects, createDefect, log])
 
   // 刪除檢查紀錄:DB 先行(已判定/被修訂引用由 guard 擋下,不可假消失)
   const deleteChecklistRecord = useCallback(async (id) => {

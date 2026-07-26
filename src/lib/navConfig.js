@@ -1,68 +1,68 @@
 // 導覽/工作台/路由權限的單一真相來源(QA 報告 §9 系統瘦身:相關工具整併成
-// 工作台分頁,導覽從 22 項收斂;路由全部保留,深連結與提醒中心導向不變)。
+// 工作台分頁,導覽從 22 項收斂;批 6 再收斂到 9 個可見項;路由全部保留,
+// 深連結與提醒中心導向不變)。
 // roles 缺省=全角色可見;can.override(非正式模式的專案管理者)一律放行。
 // Layout 的側欄、App 的路由守衛、WorkbenchTabs 分頁列都吃這一份——
 // 「導覽隱藏」與「權限」永遠一致。
 // hidden: true=不渲染在側欄/分頁列,但仍參與 routeAllowed 的角色判斷——
 // 批 3/批 4 的收斂是「不顯示」,不是「不設限」;刪掉定義會讓 roles 一起消失(權限靜默鬆綁)。
 import {
-  LayoutDashboard, LayoutGrid, Bell, CalendarClock, Newspaper, BadgeCheck,
-  ClipboardList, Coins, Wallet, TrendingUp, PencilLine,
-  ShieldCheck, HardHat, FileCheck2, Users, History, Bot,
+  LayoutDashboard, LayoutGrid, Bell, CalendarClock, BadgeCheck,
+  ClipboardList, Coins, PencilLine,
+  ShieldCheck, Users, Bot,
 } from 'lucide-react'
 
 export const navGroups = [
   { title: '總覽', items: [
     { to: '/agent', icon: Bot, label: 'AI Agent' },
     { to: '/portfolio', icon: LayoutGrid, label: '跨案總覽' },
-    { to: '/dashboard', icon: LayoutDashboard, label: '專案 Dashboard' },
-    { to: '/alerts', icon: Bell, label: '提醒中心' },
-    { to: '/activity', icon: History, label: '活動紀錄' },
-    // 「風險稽核」(/audit)已自分頁隱藏(批4 產品原則:agent 能做的就把手動入口藏起來)——
-    // 機關/監造 agent 的 run_integrity_audit 在對話裡就能跑出同一份確定性發現,
-    // 還會寫成稽核提示草稿進 /agent 收件匣。路由保留(App.jsx 不動),機關深連結照常;
-    // hidden=不顯示但不解除限制:roles 必須留著,否則刪掉定義=任何角色都能深連結進防弊稽核。
-    { to: '/contract', icon: CalendarClock, label: '契約與文件', tabs: [
-      { to: '/contract', label: '專案文件' },
-      { to: '/requirements', label: '履約需求' },
-      { to: '/audit', label: '風險稽核', roles: ['owner'], hidden: true }, // 機關防弊
-    ] },
-    { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
-    { to: '/monthly-report', icon: Newspaper, label: '報表中心', tabs: [
+    { to: '/dashboard', icon: LayoutDashboard, label: '專案儀表', tabs: [
+      { to: '/dashboard', label: '專案 Dashboard' },
+      { to: '/activity', label: '活動紀錄' },
       { to: '/monthly-report', label: '施工月報' },
       { to: '/supervisor-report', label: '監造報表', roles: ['supervisor'] },
     ] },
+    // 「提醒中心」已自側欄隱藏(批6 產品原則:agent 能做的就把手動入口藏起來)——
+    // agent 主控台的「今日待我處理」吃同一份 ball-in-court 資料;每日提醒信仍深連結到本頁。
+    // 路由保留(App.jsx 不動);本頁不限角色,留定義是讓機制一致(隱藏≠移除)。
+    { to: '/alerts', icon: Bell, label: '提醒中心', hidden: true },
   ] },
   { title: '成本與進度', items: [
     { to: '/boq', icon: ClipboardList, label: '標單工項' },
+    { to: '/valuation', icon: Coins, label: '估驗與金流', tabs: [
+      { to: '/valuation', label: '估驗計價' },
+      { to: '/payments', label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
+      { to: '/cost', label: '成本管理', roles: ['contractor'] },              // 廠商毛利機密
+      { to: '/progress', label: '進度 S 曲線' },
+      { to: '/schedule', label: '逐工項排程', roles: ['contractor'] },        // 廠商內部規劃
+    ] },
     // 「施工日誌」已自側欄隱藏(批3 產品原則:agent 能做的就把手動入口藏起來)——
     // 日常路徑是照片上傳→現場 agent 擬草稿→/agent 收件匣接受。路由保留(App.jsx 不動),
     // 深連結/提醒中心導向照常,/agent 收件匣底部留次要手動入口以防沒拍照的日子卡死。
     // hidden=不顯示;本頁本來就不限角色,留定義是為了讓機制一致(隱藏≠移除)。
     { to: '/site-log', icon: PencilLine, label: '施工日誌', hidden: true },
-    { to: '/valuation', icon: Coins, label: '估驗與金流', tabs: [
-      { to: '/valuation', label: '估驗計價' },
-      { to: '/payments', label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
-    ] },
-    { to: '/cost', icon: Wallet, label: '成本管理', roles: ['contractor'] },  // 廠商毛利機密
-    { to: '/progress', icon: TrendingUp, label: '進度管制', tabs: [
-      { to: '/progress', label: '進度 S 曲線' },
-      { to: '/schedule', label: '逐工項排程', roles: ['contractor'] },        // 廠商內部規劃
-    ] },
   ] },
   { title: '品質與工安', items: [
-    { to: '/quality', icon: ShieldCheck, label: '品質管理', tabs: [
+    { to: '/quality', icon: ShieldCheck, label: '品質與工安', tabs: [
       { to: '/quality', label: '品質查驗' },
       { to: '/itp', label: '檢驗停留點' },
+      { to: '/safety', label: '工安管理' },
     ] },
-    { to: '/safety', icon: HardHat, label: '工安管理' },
   ] },
-  { title: '協作', items: [
-    { to: '/submittals', icon: FileCheck2, label: '技術協作', tabs: [
+  { title: '契約與協作', items: [
+    // 「風險稽核」(/audit)已自分頁隱藏(批4 產品原則:agent 能做的就把手動入口藏起來)——
+    // 機關/監造 agent 的 run_integrity_audit 在對話裡就能跑出同一份確定性發現,
+    // 還會寫成稽核提示草稿進 /agent 收件匣。路由保留(App.jsx 不動),機關深連結照常;
+    // hidden=不顯示但不解除限制:roles 必須留著,否則刪掉定義=任何角色都能深連結進防弊稽核。
+    { to: '/contract', icon: CalendarClock, label: '契約與協作', tabs: [
+      { to: '/contract', label: '專案文件' },
+      { to: '/requirements', label: '履約需求' },
       { to: '/submittals', label: '送審文件' },
       { to: '/rfi', label: '工程疑義' },
       { to: '/change-orders', label: '變更設計' },
+      { to: '/audit', label: '風險稽核', roles: ['owner'], hidden: true }, // 機關防弊
     ] },
+    { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
     { to: '/members', icon: Users, label: '專案成員' },
   ] },
 ]

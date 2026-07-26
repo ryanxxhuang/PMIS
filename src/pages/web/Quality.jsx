@@ -110,7 +110,7 @@ export default function Quality() {
         onDelete={deleteObservation} resolveMarkup={resolveMarkup} />
 
       {/* 自主檢查表:量化標準 → 實測值 → 自動判定 */}
-      <ChecklistSection templates={checklistTemplates} records={checklistRecords} canEdit={can.edit}
+      <ChecklistSection templates={checklistTemplates} records={checklistRecords} canEdit={can.edit} leaves={leaves}
         onCreate={createChecklistRecord} onDelete={deleteChecklistRecord} />
 
       {/* 取樣試驗:試體齡期追蹤 + fc′ 自動判定 */}
@@ -137,7 +137,7 @@ const fmtVal = (v) => (v === true ? '✓' : v === false ? '✗' : v ?? '—')
 // ── 自主檢查表:選範本 → 填實測值 → 依量化標準自動判定 → 不合格自動開缺失。
 // 存檔後為證據不可就地修改:更正一律建立修訂版次 Rev.N(必附原因),重新判定
 // 並連動缺失(同鏈不重複開);僅未判定的紀錄可刪除。
-function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
+function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, leaves = [] }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [revising, setRevising] = useState(null) // 修訂模式:被修訂的紀錄(現行版)
@@ -145,10 +145,20 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
   const [tplId, setTplId] = useState(templates[0]?.id)
   const [date, setDate] = useState(todayIso())
   const [location, setLocation] = useState('')
+  const [wiKey, setWiKey] = useState('') // 對應工項(選填,佐證鏈:估驗佐證欄靠它對回檢查表)
+  const [wiLabel, setWiLabel] = useState('')
   const [values, setValues] = useState({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [historyOf, setHistoryOf] = useState(null) // 展開歷次版本的鏈根 id
+
+  // 紀錄 → 末端工項:demo 存 work_item_key、真 DB 存 work_item_id(uuid),一張表查兩種鍵
+  const leafByRef = useMemo(() => {
+    const m = new Map()
+    for (const l of leaves) { m.set(l.item_key, l); if (l.id) m.set(l.id, l) }
+    return m
+  }, [leaves])
+  const wiOf = (r) => leafByRef.get(r.work_item_key) || leafByRef.get(r.work_item_id)
 
   const template = revising
     ? templates.find((t) => t.id === revising.template_id)
@@ -172,10 +182,12 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
   }, [records])
 
   const setVal = (no, v) => setValues((p) => ({ ...p, [no]: v }))
-  const closeForm = () => { setOpen(false); setRevising(null); setValues({}); setReason('') }
+  const closeForm = () => { setOpen(false); setRevising(null); setValues({}); setReason(''); setWiKey(''); setWiLabel('') }
   const startRevise = (r) => {
     setMsg(''); setRevising(r); setOpen(true); setReason('')
     setDate(r.check_date || todayIso()); setLocation(r.location || '')
+    const wi = wiOf(r) // 修訂帶入原紀錄的工項關聯,可改可清
+    setWiKey(wi?.item_key || ''); setWiLabel(wi ? `${wi.item_no} ${wi.description}` : '')
     setValues(Object.fromEntries(
       Object.entries(r.results || {}).filter(([, v]) => v?.value != null).map(([no, v]) => [no, v.value])))
   }
@@ -183,6 +195,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
     setSaving(true); setMsg('')
     const res = await onCreate({
       template, check_date: date, location, values,
+      work_item_key: wiKey || undefined,
       revises: revising || undefined, revision_reason: revising ? reason.trim() : undefined,
     })
     setSaving(false)
@@ -228,6 +241,10 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
             </Field>
             <Field label="檢查日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" /></Field>
             <Field label="檢查位置"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="如 4F 版牆" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-36" /></Field>
+            <div className="w-72"><Field label="對應工項（選填）">
+              <WorkItemPicker leaves={leaves} value={wiKey} label={wiLabel}
+                onPick={(k, l) => { setWiKey(k || ''); setWiLabel(l) }} />
+            </Field></div>
             {revising && (
               <Field label="更正原因（必填）">
                 <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="如 坍度登載錯誤，依取樣紀錄更正"
@@ -304,6 +321,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit }) {
                     <span className="text-[var(--text)]">{tpl?.title || '（範本已刪除）'}</span>
                     {(r.rev || 0) > 0 && <Badge color="blue">Rev.{r.rev}</Badge>}
                     {r.location && <span className="text-xs text-[var(--text-3)] ml-2">{r.location}</span>}
+                    {wiOf(r) && <span className="text-xs text-[var(--text-3)] ml-2" title={wiOf(r).description}>工項 {wiOf(r).item_no}</span>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge color={r.overall === '合格' ? 'green' : r.overall === '不合格' ? 'red' : 'slate'}>{r.overall || '未判定'}</Badge>

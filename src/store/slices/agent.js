@@ -62,7 +62,12 @@ export function draftPayloadToChecklist(payload, templates) {
   for (const [no, v] of Object.entries(payload?.results || {})) {
     if (v && v.value != null && v.value !== '') values[no] = v.value
   }
-  return { template: tpl, check_date: payload.check_date, location: payload.location || null, values, note: payload.note || null }
+  return {
+    template: tpl, check_date: payload.check_date, location: payload.location || null, values, note: payload.note || null,
+    // 批4 payload 已帶 work_item_id(uuid),當時存檔路徑不收所以丟掉;
+    // 批5 createChecklistRecord 已補此入參 → 一併傳下去,佐證鏈才接得起來。
+    work_item_id: payload.work_item_id || null,
+  }
 }
 
 // 查驗草稿統計(收件匣卡片顯示):實測值等待人填的項數 / AI 建議勾選的項數

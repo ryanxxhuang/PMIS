@@ -15,11 +15,13 @@ export function WorkbenchTabs() {
   const wb = workbenchFor(pathname, currentUser?.org_type || 'contractor', can?.override)
   if (!wb || wb.tabs.length < 2) return null
   return (
-    <div className="flex items-center gap-1 border-b border-[var(--border-2)] mb-5 print:hidden" role="tablist" aria-label={wb.label}>
+    // overflow-x-auto:批6 收斂後單一工作台最多 5 個可見分頁,窄視窗改為橫向捲動,
+    // 不讓分頁標籤換行擠壓(全站數字破框掃蕩的同一原則:寧可捲、不可破)。
+    <div className="flex items-center gap-1 border-b border-[var(--border-2)] mb-5 overflow-x-auto print:hidden" role="tablist" aria-label={wb.label}>
       {wb.tabs.map((t) => (
         <NavLink key={t.to} to={t.to}
           className={({ isActive }) =>
-            `px-3 py-2 text-sm border-b-2 -mb-px transition-colors ${
+            `px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap shrink-0 transition-colors ${
               isActive
                 ? 'border-[var(--blue)] text-[var(--blue-text)] font-semibold'
                 : 'border-transparent text-[var(--text-2)] hover:text-[var(--text)]'

@@ -4,9 +4,35 @@
 //
 // join key = item_key(估驗/日誌皆以此為鍵);查驗以 work_item_id→item_key 對應;
 // 試體無工項欄位,以「取樣日(=澆置日)」與施工日誌的混凝土澆置日對帳。
+//
+// 2026-07-26 收斂:混凝土工項的判定從「description 含『混凝土』」改為 isConcretePourItem()
+// (含『混凝土』且不含模板/打鑿等排除詞)。此前「場鑄結構混凝土用模板」等非澆置工項會被
+// 當成澆置工項,只做模板的日子被算進澆置日,產生假的「澆置無試體」發現——這是刻意修正,
+// 部分既有發現會因此消失,不是回歸。
 
 const fmtQ = (n) => (n == null || isNaN(n) ? '0' : Number(n).toLocaleString('en-US'))
-const OVER_TOL = 1.05 // 估驗超過日誌 5% 以上才算超計(容忍量測/進位誤差)
+
+// 是否為混凝土澆置工項(試體/澆置日的對應依據)。
+// 「含混凝土」太寬:場鑄結構「混凝土」用模板、混凝土「打鑿」等都會誤中,
+// 模板不會有試體、只做模板的日子也不是澆置日——誤判會產生假的「澆置無試體」
+// 稽核發現,對機關端的公信力傷害大於漏抓。
+// 排除詞依據(src/data/workItems.json 實際出現的品項 + 常見非澆置作業):
+// - 模板:場鑄結構混凝土用模板(普通/清水/金屬浪板底模)、混凝土模板及附屬品支撐施工架
+// - 打鑿/鑽孔/切割/拆除/表面處理/養護:混凝土的後續處理作業,非澆置
+//   (資料中有「混凝土表面處理,地坪整體粉光處理」;「混凝土模板…組立及拆除」)
+// - 預鑄:外牆預鑄清水混凝土造形(窗花)——廠製構件現場安裝,無現場澆置
+// - 附屬品:混凝土附屬品,保麗龍——材料,非澆置
+// - 地磚:透水性混凝土地磚——預製品鋪設,無取樣試體
+// - 圍籬:施工圍籬…(含地坪混凝土鋪設)——假設工程使用費,附帶鋪設非結構澆置
+// 兩邊同步:supabase/functions/_shared/integrityAudit.ts 有逐行等價的移植版。
+const CONCRETE_EXCLUDES = ['模板', '打鑿', '鑽孔', '切割', '拆除', '表面處理', '養護', '預鑄', '附屬品', '地磚', '圍籬']
+export function isConcretePourItem(description) {
+  const d = description || ''
+  return d.includes('混凝土') && !CONCRETE_EXCLUDES.some((w) => d.includes(w))
+}
+// 估驗超過日誌 5% 以上才算超計(容忍量測/進位誤差)。
+// export:估驗頁佐證欄的差異警示(lib/evidence.js)共用同一容忍值,兩邊判定不可分裂。
+export const OVER_TOL = 1.05
 
 const nameOf = (it) => `${it.item_no || ''} ${it.description || ''}`.trim()
 const few = (arr, f, n = 3) => arr.slice(0, n).map(f).join('、') + (arr.length > n ? ` 等 ${arr.length} 項` : '')

@@ -1,7 +1,8 @@
 // 專案職務(P0-02 project_memberships.project_role)→ 專屬 agent 角色。
-// 後端 agent-run(supabase/functions/agent-run/index.ts)有同一份映射且以後端為準:
-// 前端這份只用於「顯示」(標題/稱謂),任何權限判斷都不得依賴它;agent-run 回傳的
-// role 若與前端算的不同,以回傳值為準。
+// 後端共用版在 supabase/functions/_shared/agentRole.ts(agent-run 與 send-reminders
+// 每日早報共用)且以後端為準:前端這份只用於「顯示」(標題/稱謂),任何權限判斷
+// 都不得依賴它;agent-run 回傳的 role 若與前端算的不同,以回傳值為準。
+// ⚠ 兩份映射(本檔 / _shared/agentRole.ts)值域與 fallback 必須同步修改。
 export const AGENT_ROLES = ['field', 'qc', 'supervisor', 'owner']
 
 // qc 只會來自明確設定的品管職務,不會從組織別推出來(與後端 ROLE_BY_PROJECT_ROLE 一致)

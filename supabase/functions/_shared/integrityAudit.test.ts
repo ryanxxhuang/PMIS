@@ -3,8 +3,8 @@
 // 兩邊漂移的唯一保險;任何一邊改判斷邏輯,這裡會先紅。
 import { describe, it, expect } from 'vitest'
 // @ts-expect-error 前端 JS 模組無型別宣告 —— 對照測試刻意直接吃前端原檔
-import { buildIntegrityFindings as buildWeb } from '../../../src/lib/integrityAudit.js'
-import { buildIntegrityFindings as buildSrv } from './integrityAudit.ts'
+import { buildIntegrityFindings as buildWeb, isConcretePourItem as isPourWeb } from '../../../src/lib/integrityAudit.js'
+import { buildIntegrityFindings as buildSrv, isConcretePourItem as isPourSrv } from './integrityAudit.ts'
 
 const leaves = [
   { item_key: 'A', item_no: '01', description: '基礎混凝土', unit: 'm3', quantity: 100 },
@@ -144,6 +144,48 @@ describe('integrityAudit 伺服器移植 — 與前端同判斷(同一組案例)
       '混凝土澆置未見取樣試體', '混凝土試體強度不合格', '接近完成未申請查驗',
     ])
     for (const f of findings) expect(['/valuation', '/quality']).toContain(f.route)
+  })
+
+  it('檢查4 只做模板的日子不是澆置日:模板工項不得產生「澆置無試體」', () => {
+    // 呼叫端(RiskAudit.jsx / agentTools.ts)以 isConcretePourItem 決定哪些日誌日期算澆置日;
+    // 這裡以同一組工項+日誌重演兩邊的組法,斷言分類與最終發現皆一致。
+    const items = [
+      { item_key: 'F', description: '場鑄結構混凝土用模板，普通模板，(建築，建築物)' },
+      { item_key: 'P', description: '結構用混凝土，280kgf/cm2' },
+    ]
+    // 兩邊的判定函式對每個工項同判
+    for (const it of items) expect(isPourSrv(it.description)).toBe(isPourWeb(it.description))
+    expect(isPourSrv(items[0].description)).toBe(false) // 模板 ≠ 澆置
+    expect(isPourSrv(items[1].description)).toBe(true)
+
+    // 7/01 只做模板、7/02 真澆置且有試體 → 不得有任何「澆置無試體」發現
+    const logs = [
+      { date: '2026-07-01', qty: new Map([['F', 120]]) },
+      { date: '2026-07-02', qty: new Map([['P', 85]]) },
+    ]
+    const mkPourDates = (isPour: (d: string | null | undefined) => boolean) => {
+      const keys = new Set(items.filter((it) => isPour(it.description)).map((it) => it.item_key))
+      return logs.filter((l) => [...l.qty].some(([k, q]) => keys.has(k) && q > 0)).map((l) => ({ date: l.date }))
+    }
+    expect(mkPourDates(isPourSrv)).toEqual(mkPourDates(isPourWeb))
+    expect(mkPourDates(isPourSrv)).toEqual([{ date: '2026-07-02' }]) // 只做模板的 7/01 不入列
+    const { findings } = both({
+      leaves: items.map((it, i) => ({ ...it, item_no: `0${i + 1}`, unit: i ? 'm3' : 'm2', quantity: 500 })),
+      pourDates: mkPourDates(isPourSrv),
+      testSamples: [{ sampled_date: '2026-07-02', status: '合格', sample_no: 'S1' }],
+    })
+    expect(byTitle('混凝土澆置未見取樣試體', findings)).toBeFalsy()
+  })
+
+  it('isConcretePourItem 兩邊同判:排除詞逐一對照', () => {
+    const cases = [
+      '結構用混凝土，420kgf/cm2', '結構用混凝土，預拌，140kgf/cm2，含澆置，筏基回填',
+      '場鑄結構混凝土用模板，清水模板，(建築，建築物)', '混凝土打鑿', '混凝土鑽孔', '混凝土切割',
+      '混凝土構造物拆除', '混凝土表面處理，地坪整體粉光處理', '混凝土養護',
+      '外牆預鑄清水混凝土造形(窗花)', '混凝土附屬品，保麗龍', '透水性混凝土地磚', '施工圍籬，(含地坪混凝土鋪設)',
+      '鋼筋 SD420W', '', null, undefined,
+    ]
+    for (const c of cases) expect(isPourSrv(c as string)).toBe(isPourWeb(c))
   })
 
   it('空輸入 / 無參數不崩,兩邊同回空', () => {

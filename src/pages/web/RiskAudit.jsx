@@ -5,7 +5,7 @@ import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader, Button } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { auditProject } from '../../lib/riskAudit.js'
-import { buildIntegrityFindings } from '../../lib/integrityAudit.js'
+import { buildIntegrityFindings, isConcretePourItem } from '../../lib/integrityAudit.js'
 
 const ST = {
   pass: { icon: CheckCircle2, c: 'var(--green-text)', bg: 'var(--green-tint)', label: '通過' },
@@ -75,7 +75,7 @@ export default function RiskAudit() {
     const billedQty = new Map(Object.entries(latest?.items || {}).map(([k, v]) => [k, Number(v) || 0]))
     const inspStatusByItem = new Map() // inspections 已依 created_at desc → 第一個=最近
     for (const ins of inspections) { const key = idToKey.get(ins.work_item_id); if (key && !inspStatusByItem.has(key)) inspStatusByItem.set(key, ins.status) }
-    const concreteKeys = new Set(leaves.filter((it) => (it.description || '').includes('混凝土')).map((it) => it.item_key))
+    const concreteKeys = new Set(leaves.filter((it) => isConcretePourItem(it.description)).map((it) => it.item_key))
     const pourSet = new Set()
     for (const lg of siteLogs) if (lg.log_date && Object.entries(lg.items || {}).some(([k, q]) => concreteKeys.has(k) && (Number(q) || 0) > 0)) pourSet.add(lg.log_date)
     return buildIntegrityFindings({ leaves, loggedQty, billedQty, inspStatusByItem, pourDates: [...pourSet].map((date) => ({ date })), testSamples })

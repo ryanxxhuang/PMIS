@@ -8,6 +8,7 @@
 
 import { TEMPLATE_03310 } from './checklist03310.js'
 import { judgeChecklist } from '../lib/qc.js'
+import { isConcretePourItem } from '../lib/integrityAudit.js'
 
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const daysFromNow = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d }
@@ -90,9 +91,13 @@ export function buildDemoData(workItems, project) {
   const logDays = [-13, -12, -10, -9, -7, -5, -2, -1]
   // 公定格式欄位(出工/機具/材料/四~八節)—— 澆置日(i=1,7)材料含混凝土
   const pour = (i) => i === 1 || i === 7
+  // 澆置日的日誌工項要含真正的澆置工項(isConcretePourItem 判定,如結構用混凝土 420)——
+  // 佐證欄的試體與稽核的澆置日都以此對應;模板等含「混凝土」字樣的工項不算澆置。
+  const pourItem = active.find((it) => isConcretePourItem(it.description))
   const siteLogs = logDays.map((off, i) => {
     const items = {}
     for (const it of active.slice(0, 3)) items[it.item_key] = round1((it.quantity || 0) * 0.004)
+    if (pour(i) && pourItem) items[pourItem.item_key] = round1((pourItem.quantity || 0) * 0.004)
     return {
       id: `LOG-DEMO-${i + 1}`, log_date: iso(daysFromNow(off)),
       weather: weathers[i], weather_am: weathers[i], weather_pm: i === 6 ? '短暫雨' : weathers[i],

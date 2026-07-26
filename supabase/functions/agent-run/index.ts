@@ -15,23 +15,13 @@ import { claudeAgent } from '../_shared/agent.ts'
 import { personaSystem } from '../_shared/agentPersona.ts'
 import type { AgentRole } from '../_shared/agentPersona.ts'
 import { makeToolExec, toolsForRole } from '../_shared/agentTools.ts'
+// 專案角色 → agent persona 的映射抽在 _shared/agentRole.ts(send-reminders 共用;
+// 前端 src/lib/agentRole.js 另有顯示用副本,三處值域必須同步)。
+// (規格原訂讀 project_members.job_role;該欄位不存在 —— 專案內職務的實際來源是
+//  P0-02 的 project_memberships.project_role,映射依其 check constraint 全值域。)
+import { ROLE_BY_PROJECT_ROLE, agentRoleOf } from '../_shared/agentRole.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-// 專案角色 → agent persona。qc 只會來自明確設定的品管職務,不會從組織別推出來。
-// (規格原訂讀 project_members.job_role;該欄位不存在 —— 專案內職務的實際來源是
-//  P0-02 的 project_memberships.project_role,以下依其 check constraint 全值域映射。)
-const ROLE_BY_PROJECT_ROLE: Record<string, AgentRole> = {
-  quality_engineer: 'qc',
-  contractor_pm: 'field',
-  site_manager: 'field',
-  safety_engineer: 'field',
-  supervisor_manager: 'supervisor',
-  supervisor_engineer: 'supervisor',
-  agency_pm: 'owner',
-  agency_engineer: 'owner',
-  // document_controller / viewer 不對應特定 persona → 落到組織別 fallback
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -88,7 +78,7 @@ Deno.serve(async (req) => {
     if (!role) {
       // 專案內未設職務 → 以組織別映射(contractor→field;qc 只能來自明確職務設定)
       const { data: orgType } = await userClient.rpc('my_org_type')
-      role = orgType === 'supervisor' ? 'supervisor' : orgType === 'owner' ? 'owner' : 'field'
+      role = agentRoleOf(null, typeof orgType === 'string' ? orgType : null)
     }
 
     // -- history 淨化:只收純文字、最多 20 則、每則 ≤ 4000 字元 ------------------

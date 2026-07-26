@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Printer, Trash2, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, Empty, PageHeader, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
+import { collectEvidence, OVER_TOL } from '../../lib/evidence.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
@@ -14,12 +15,14 @@ const statusColor = { 草稿: 'slate', 監造審核: 'amber', 已核定: 'green'
 export default function Valuation() {
   const { project, workItems: data, valuations, createValuation, updateValuationItem, setValuationStatus,
     isSupabaseConfigured, currentProject, workItemsSource, siteLogs, fillValuationFromSiteLogs, dbMode, deleteValuation,
+    inspections, checklistRecords, checklistTemplates, testSamples,
     adjustedItems, coNet, revisedTotal, can } = useStore()
   const [filling, setFilling] = useState(false)
   const [aiMsg, setAiMsg] = useState('')
   const [errMsg, setErrMsg] = useState('') // DB 寫入失敗的訊息(不偽裝成功)
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(() => new Set())
+  const [evOpen, setEvOpen] = useState(() => new Set()) // 佐證欄展開的工項
   const [selectedId, setSelectedId] = useState(null)
   const [search, setSearch] = useState('')
 
@@ -58,6 +61,22 @@ export default function Valuation() {
     return { leaves: out, matchCount: count }
   }, [search, childrenMap])
 
+  // 佐證推導(批5):純計算但末端工項可能上千——不預先算全部,只對「實際渲染到畫面
+  // 的列」惰性計算並快取;資料變動時 useMemo 重建快取。推導規則在 lib/evidence.js。
+  const getEvidence = useMemo(() => {
+    // 檢查表紀錄只有 template_id,顯示用標題由範本去正規化補上
+    const tmap = new Map((checklistTemplates || []).map((t) => [t.id, t.title]))
+    const records = (checklistRecords || []).map((r) => ({ ...r, title: tmap.get(r.template_id) || r.title || '自主檢查表' }))
+    const idToKey = new Map((data?.items || []).filter((it) => it.id).map((it) => [it.id, it.item_key]))
+    const deps = { siteLogs, inspections, checklistRecords: records, testSamples, wiMaps: { idToKey } }
+    const cache = new Map()
+    return (it) => {
+      let ev = cache.get(it.item_key)
+      if (!ev) { ev = collectEvidence(it.item_key, { ...deps, workItem: it }); cache.set(it.item_key, ev) }
+      return ev
+    }
+  }, [data, siteLogs, inspections, checklistRecords, checklistTemplates, testSamples])
+
   if (!data) return <Empty>載入估驗資料中…</Empty>
 
   // 真專案但標單尚未匯入 DB → 估驗無法綁工項，先請匯入
@@ -81,6 +100,13 @@ export default function Valuation() {
 
   const toggle = (key) =>
     setExpanded((p) => {
+      const n = new Set(p)
+      n.has(key) ? n.delete(key) : n.add(key)
+      return n
+    })
+
+  const toggleEv = (key) =>
+    setEvOpen((p) => {
       const n = new Set(p)
       n.has(key) ? n.delete(key) : n.add(key)
       return n
@@ -128,6 +154,102 @@ export default function Valuation() {
     if (error) setErrMsg(`${label}失敗：${error.message}`)
   }
 
+  // 佐證欄摘要:0 的類別不顯示;全 0 顯示灰字「無」
+  const evSummary = (c) => {
+    const parts = []
+    if (c.logs) parts.push(`${c.logs} 日誌`)
+    if (c.inspections) parts.push(`${c.inspections} 查驗`)
+    if (c.checklists) parts.push(`${c.checklists} 檢查表`)
+    if (c.samples) parts.push(`${c.samples} 試體`)
+    return parts.join(' · ')
+  }
+  const evStatusCls = (s) => (s === '合格' ? 'text-[var(--green-text)]' : s === '不合格' ? 'text-[var(--red-text)]' : 'text-[var(--text-3)]')
+  const EV_LOG_LIMIT = 30
+
+  // 佐證展開細節:沿用樹狀列展開的語彙(該列下方插一列),不開 modal
+  const renderEvidenceRow = (it, ev, level) => (
+    <tr key={`${it.item_key}::ev`} className="border-b border-[var(--border-2)] bg-[var(--surface-2)]/60">
+      <td colSpan={8} className="py-2.5 pr-3" style={{ paddingLeft: 10 + level * 18 + 20 }}>
+        <div className="space-y-2 text-xs">
+          {ev.logs.length > 0 && (
+            <div>
+              <div className="font-medium text-[var(--text-2)] mb-0.5">
+                施工日誌 <span className="text-[var(--text-3)] font-normal">{ev.logs.length} 筆</span>
+                <Link to="/site-log" className="ml-2 text-[var(--blue-text)] hover:underline font-normal">前往日誌 →</Link>
+              </div>
+              <ul className="space-y-0.5">
+                {ev.logs.slice(0, EV_LOG_LIMIT).map((l) => (
+                  <li key={l.log_date} className="text-[var(--text-3)]">
+                    <span className="tabular-nums text-[var(--text-2)]">{l.log_date}</span>
+                    <span className="mx-1.5 tabular-nums">{l.qty.toLocaleString('en-US')} {it.unit}</span>
+                    {l.note && <span className="text-[var(--text-3)]">— {l.note}</span>}
+                  </li>
+                ))}
+                {ev.logs.length > EV_LOG_LIMIT && (
+                  <li className="text-[var(--text-3)]">共 {ev.logs.length} 筆,僅列最近 {EV_LOG_LIMIT} 筆</li>
+                )}
+              </ul>
+            </div>
+          )}
+          {ev.inspections.length > 0 && (
+            <div>
+              <div className="font-medium text-[var(--text-2)] mb-0.5">
+                查驗 <span className="text-[var(--text-3)] font-normal">{ev.inspections.length} 筆</span>
+                <Link to="/quality" className="ml-2 text-[var(--blue-text)] hover:underline font-normal">前往品質查驗 →</Link>
+              </div>
+              <ul className="space-y-0.5">
+                {ev.inspections.map((i) => (
+                  <li key={i.id} className="text-[var(--text-3)]">
+                    {i.title}
+                    <span className={`ml-1.5 ${evStatusCls(i.status)}`}>{i.status}</span>
+                    {i.inspected_at && <span className="ml-1.5 tabular-nums">{String(i.inspected_at).slice(0, 10)}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {ev.checklists.length > 0 && (
+            <div>
+              <div className="font-medium text-[var(--text-2)] mb-0.5">
+                自主檢查表 <span className="text-[var(--text-3)] font-normal">{ev.checklists.length} 筆</span>
+                <Link to="/quality" className="ml-2 text-[var(--blue-text)] hover:underline font-normal">前往自主檢查 →</Link>
+              </div>
+              <ul className="space-y-0.5">
+                {ev.checklists.map((r) => (
+                  <li key={r.id} className="text-[var(--text-3)]">
+                    {r.title}
+                    <span className="ml-1.5 tabular-nums">{r.check_date}</span>
+                    <span className={`ml-1.5 ${evStatusCls(r.overall)}`}>{r.overall || '未判定'}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {ev.samples.length > 0 && (
+            <div>
+              <div className="font-medium text-[var(--text-2)] mb-0.5">
+                取樣試體 <span className="text-[var(--text-3)] font-normal">{ev.samples.length} 組(以澆置日對應)</span>
+                <Link to="/quality" className="ml-2 text-[var(--blue-text)] hover:underline font-normal">前往取樣試驗 →</Link>
+              </div>
+              <ul className="space-y-0.5">
+                {ev.samples.map((s) => (
+                  <li key={s.id} className="text-[var(--text-3)]">
+                    <span className="text-[var(--text-2)]">{s.sample_no}</span>
+                    <span className="ml-1.5 tabular-nums">取樣 {s.sampled_date}</span>
+                    <span className={`ml-1.5 ${evStatusCls(s.status)}`}>{s.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {ev.counts.logs + ev.counts.inspections + ev.counts.checklists + ev.counts.samples === 0 && (
+            <div className="text-[var(--text-3)]">此工項尚無任何現場紀錄佐證(施工日誌/查驗/檢查表/試體均查無對應)。</div>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
+
   const renderRow = (it, level) => {
     const kids = childrenMap.get(it.item_key) || []
     const hasKids = kids.length > 0
@@ -135,11 +257,16 @@ export default function Valuation() {
     const cum = cumThis.get(it.item_key) || 0
     const per = cum - (cumPrev.get(it.item_key) || 0)
     const cumQty = selected?.items?.[it.item_key] ?? 0
+    // 佐證只對渲染到的葉項計算(getEvidence 內部有快取)
+    const ev = hasKids ? null : getEvidence(it)
+    // 差異警示:估驗累計 > 日誌累計 ×1.05(與稽核頁 OVER_TOL 同一容忍值)——
+    // 把送審後才會被勾稽出的「超前計價」提前呈現在填報當下
+    const overBilled = ev && Number(cumQty) > 0 && Number(cumQty) > ev.loggedTotal * OVER_TOL
     // 完成百分比：父項用金額比、葉項用數量比
     const pct = hasKids
       ? (it.amount ? (cum / it.amount) * 100 : 0)
       : (it.quantity ? (cumQty / it.quantity) * 100 : 0)
-    return (
+    const row = (
       <tr key={it.item_key} className={`border-b border-[var(--border-2)] hover:bg-[var(--surface-2)] ${it.depth === 1 ? 'bg-[var(--surface-2)]/70 font-semibold' : ''}`}>
         <td className="py-1.5 pr-2" style={{ paddingLeft: 10 + level * 18 }}>
           {hasKids ? (
@@ -171,9 +298,33 @@ export default function Valuation() {
           )}
         </td>
         <td className="text-right text-[var(--text)] px-2 tabular-nums whitespace-nowrap">{fmt(cum)}</td>
-        <td className={`text-right px-2 pr-3 tabular-nums whitespace-nowrap ${per > 0 ? 'text-[var(--blue-text)] font-medium' : 'text-[var(--text-3)]'}`}>{fmt(per)}</td>
+        <td className={`text-right px-2 tabular-nums whitespace-nowrap ${per > 0 ? 'text-[var(--blue-text)] font-medium' : 'text-[var(--text-3)]'}`}>{fmt(per)}</td>
+        <td className="text-left px-2 pr-3 whitespace-nowrap text-xs">
+          {!hasKids && ev && (
+            <span className="inline-flex items-center gap-1.5">
+              {ev.counts.logs + ev.counts.inspections + ev.counts.checklists + ev.counts.samples === 0 ? (
+                <span className="text-[var(--text-3)]">無</span>
+              ) : (
+                <button
+                  onClick={() => toggleEv(it.item_key)}
+                  title="展開佐證細節(日誌/查驗/檢查表/試體)"
+                  className="text-[var(--blue-text)] hover:underline"
+                >
+                  {evOpen.has(it.item_key) ? '▾ ' : '▸ '}{evSummary(ev.counts)}
+                </button>
+              )}
+              {overBilled && (
+                <span className="text-[10px] text-[var(--amber-text)]" title="累計估驗數量高於施工日誌累計完成量逾 5%,可能超計,建議查核佐證後再計價">
+                  估驗 {fmt(cumQty)} &gt; 日誌 {fmt(ev.loggedTotal)}
+                </span>
+              )}
+            </span>
+          )}
+        </td>
       </tr>
     )
+    if (!hasKids && evOpen.has(it.item_key)) return [row, renderEvidenceRow(it, ev, level)]
+    return row
   }
 
   const renderTree = (items, level = 0) =>
@@ -276,13 +427,14 @@ export default function Valuation() {
                     <th className="text-right font-medium px-2 whitespace-nowrap">單價</th>
                     <th className="text-right font-medium px-2 whitespace-nowrap">累計完成數量</th>
                     <th className="text-right font-medium px-2 whitespace-nowrap">累計金額</th>
-                    <th className="text-right font-medium px-2 pr-3 whitespace-nowrap">本期金額</th>
+                    <th className="text-right font-medium px-2 whitespace-nowrap">本期金額</th>
+                    <th className="text-left font-medium px-2 pr-3 whitespace-nowrap">佐證</th>
                   </tr>
                 </thead>
                 <tbody>
                   {search ? leaves.map((it) => renderRow(it, 0)) : renderTree(roots)}
                   {search && matchCount > leaves.length && (
-                    <tr><td colSpan={7} className="py-2 px-3 text-xs text-[var(--text-3)]">
+                    <tr><td colSpan={8} className="py-2 px-3 text-xs text-[var(--text-3)]">
                       符合 {matchCount} 筆,僅顯示前 {leaves.length} 筆——請輸入更精確的關鍵字或工項編號。
                     </td></tr>
                   )}
@@ -295,6 +447,7 @@ export default function Valuation() {
             在末端工項填「累計完成數量」（夾在 0～契約數量），累計金額 = 契約金額 × 完成數量÷契約數量，右側顯示完成%。
             本期金額 = 本期累計 − 前期累計，父項金額自動加總。保留款依契約比例逐期扣留，竣工驗收後返還。
             完成數量之後可由施工日誌的當日數量自動回填。
+            「佐證」欄自動彙整該工項對應的施工日誌/查驗/自主檢查/試體紀錄；估驗累計高於日誌累計逾 5% 會就地提示，讓超計在送審前就被發現。
           </p>
         </>
       )}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildIntegrityFindings } from './integrityAudit.js'
+import { buildIntegrityFindings, isConcretePourItem } from './integrityAudit.js'
 
 const leaves = [
   { item_key: 'A', item_no: '01', description: '基礎混凝土', unit: 'm3', quantity: 100 },
@@ -82,5 +82,33 @@ describe('buildIntegrityFindings', () => {
   it('空輸入不崩', () => {
     expect(buildIntegrityFindings().findings).toEqual([])
     expect(buildIntegrityFindings({}).summary.risk).toBe(0)
+  })
+})
+
+describe('isConcretePourItem — 混凝土澆置工項判定', () => {
+  it('正例:真正的澆置工項', () => {
+    expect(isConcretePourItem('場鑄結構用混凝土，280kgf/cm2')).toBe(true)
+    expect(isConcretePourItem('結構用混凝土，預拌，140kgf/cm2，含澆置，筏基回填')).toBe(true)
+    expect(isConcretePourItem('水泥混凝土構造物，有鋼筋，設備基座')).toBe(true)
+  })
+
+  it('反例:含「混凝土」字樣但非澆置的工項', () => {
+    expect(isConcretePourItem('場鑄結構混凝土用模板，普通模板，(建築，建築物)')).toBe(false)
+    expect(isConcretePourItem('混凝土打鑿')).toBe(false)
+    expect(isConcretePourItem('混凝土鑽孔')).toBe(false)
+    expect(isConcretePourItem('混凝土切割')).toBe(false)
+    expect(isConcretePourItem('混凝土構造物拆除')).toBe(false)
+    expect(isConcretePourItem('混凝土表面處理，地坪整體粉光處理')).toBe(false)
+    expect(isConcretePourItem('混凝土養護')).toBe(false)
+    expect(isConcretePourItem('外牆預鑄清水混凝土造形(窗花)')).toBe(false)
+    expect(isConcretePourItem('混凝土附屬品，保麗龍')).toBe(false)
+    expect(isConcretePourItem('透水性混凝土地磚，長方形，30*60cm，厚6cm')).toBe(false)
+  })
+
+  it('不含「混凝土」或空值 → false', () => {
+    expect(isConcretePourItem('鋼筋 SD420W')).toBe(false)
+    expect(isConcretePourItem('')).toBe(false)
+    expect(isConcretePourItem(null)).toBe(false)
+    expect(isConcretePourItem(undefined)).toBe(false)
   })
 })

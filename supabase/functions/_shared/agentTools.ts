@@ -23,8 +23,10 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { ToolDef, ToolExec } from './agent.ts'
 import { AGENT_ROLES } from './agentPersona.ts'
 import type { AgentRole } from './agentPersona.ts'
+import type { BallSide } from './agentRole.ts'
+export type { BallSide }
 import { computeObligationDueUTC, diffDays, formatDate, parseDateUTC, taipeiTodayUTC } from './contractDue.ts'
-import { buildIntegrityFindings } from './integrityAudit.ts'
+import { buildIntegrityFindings, isConcretePourItem } from './integrityAudit.ts'
 import type { IntegrityLeaf, PourDate, TestSample } from './integrityAudit.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -439,20 +441,37 @@ async function getRequirements(db: SupabaseClient, projectId: string, input: Rec
   return { contract_obligations: obligationRows, approved_requirements: reqRows }
 }
 
-async function listMyOpenItems(db: SupabaseClient, projectId: string, _input: Record<string, unknown>) {
-  // 「我方」= 呼叫者的組織別(伺服器端 RPC,不信任 client 傳值)
-  const { data: orgType } = await db.rpc('my_org_type')
-  const side: 'contractor' | 'supervisor' | 'owner' =
-    orgType === 'supervisor' ? 'supervisor' : orgType === 'owner' ? 'owner' : 'contractor'
-  const today = taipeiTodayUTC()
+// ── 球在誰手上:本案全陣營未結項彙整 ──────────────────────────────────────────
+// list_my_open_items(RLS userClient)與 send-reminders 每日早報(service role)
+// 共用同一份收集邏輯 —— 這是「球在誰手上」判斷的伺服器端唯一實作,別再抄一份。
+// 每個查詢都逐一 .eq('project_id') 綁定本案:userClient 下是縱深防禦,
+// service role 下(無 RLS)則是唯一的跨案隔離保證,絕不可拿掉。
+export interface OpenBallItem {
+  side: BallSide
+  kind: string
+  id: string
+  title: string
+  status: string
+  meta: string
+  due_date: string | null
+  overdue_days?: number
+}
 
-  type Item = { kind: string; id: string; title: string; status: string; meta: string; due_date: string | null; overdue_days?: number }
-  const items: Item[] = []
+// opts.obligationSoonDays:契約義務除「已逾期」外,額外納入 N 天內到期者
+// (list_my_open_items 維持原行為只收逾期 → 預設 0;早報要列「7 日內到期」→ 7)。
+export async function collectOpenBallItems(
+  db: SupabaseClient,
+  projectId: string,
+  today: number,
+  opts: { obligationSoonDays?: number } = {},
+): Promise<{ items: OpenBallItem[] } | { error: string }> {
+  const soonDays = opts.obligationSoonDays ?? 0
+  const items: OpenBallItem[] = []
   const push = (ball: Ball, kind: string, id: string, title: string, status: string, dueDate: string | null) => {
-    if (ball.who !== side) return
+    if (ball.who === 'done') return
     const dueMs = parseDateUTC(dueDate)
     const overdue = dueMs != null && dueMs < today ? diffDays(today, dueMs) : undefined
-    items.push({ kind, id, title: title || '(未命名)', status, meta: ball.label, due_date: dueDate, ...(overdue ? { overdue_days: overdue } : {}) })
+    items.push({ side: ball.who, kind, id, title: title || '(未命名)', status, meta: ball.label, due_date: dueDate, ...(overdue ? { overdue_days: overdue } : {}) })
   }
 
   const [defects, submittals, rfis, valuations, proj, obligations] = await Promise.all([
@@ -478,26 +497,30 @@ async function listMyOpenItems(db: SupabaseClient, projectId: string, _input: Re
   for (const v of valuations.data ?? []) {
     push(valuationBall(v), '估驗', v.id, `第 ${v.period_no} 期估驗`, v.status, null)
   }
-  // 逾期契約義務:到期日由 contractDue 依基準日確定性推算(不是 AI 算);
+  // 契約義務:到期日由 contractDue 依基準日確定性推算(不是 AI 算);
   // responsible 未填的義務預設歸廠商(與資料慣例一致)。
-  const sideLabel = side === 'contractor' ? '廠商' : side === 'supervisor' ? '監造' : '機關'
+  const SIDE_BY_RESP: Record<string, BallSide> = { 廠商: 'contractor', 監造: 'supervisor', 機關: 'owner' }
   for (const ob of obligations.data ?? []) {
-    const resp = ob.responsible || '廠商'
-    if (resp !== sideLabel) continue
+    const side = SIDE_BY_RESP[ob.responsible || '廠商'] ?? 'contractor'
     const due = proj?.data ? computeObligationDueUTC(ob, proj.data, today) : null
-    if (due == null || due >= today) continue
+    if (due == null) continue
+    const overdue = due < today
+    if (!overdue && (soonDays <= 0 || diffDays(due, today) > soonDays)) continue
     items.push({
+      side,
       kind: '契約義務',
       id: ob.id,
       title: ob.title,
       status: '待辦',
-      meta: `已逾期${ob.source_clause ? '(依 ' + ob.source_clause + ')' : ''}`,
+      meta: overdue
+        ? `已逾期${ob.source_clause ? '(依 ' + ob.source_clause + ')' : ''}`
+        : `待辦${ob.source_clause ? '(依 ' + ob.source_clause + ')' : ''}`,
       due_date: formatDate(due),
-      overdue_days: diffDays(today, due),
+      ...(overdue ? { overdue_days: diffDays(today, due) } : {}),
     })
   }
 
-  // 到期日近的排前面;沒有到期日的排最後
+  // 到期日近的排前面;沒有到期日的排最後(stable sort → 同日維持插入順序)
   items.sort((a, b) => {
     const am = parseDateUTC(a.due_date)
     const bm = parseDateUTC(b.due_date)
@@ -506,6 +529,22 @@ async function listMyOpenItems(db: SupabaseClient, projectId: string, _input: Re
     if (bm == null) return -1
     return am - bm
   })
+  return { items }
+}
+
+async function listMyOpenItems(db: SupabaseClient, projectId: string, _input: Record<string, unknown>) {
+  // 「我方」= 呼叫者的組織別(伺服器端 RPC,不信任 client 傳值)
+  const { data: orgType } = await db.rpc('my_org_type')
+  const side: BallSide =
+    orgType === 'supervisor' ? 'supervisor' : orgType === 'owner' ? 'owner' : 'contractor'
+  const today = taipeiTodayUTC()
+  const sideLabel = side === 'contractor' ? '廠商' : side === 'supervisor' ? '監造' : '機關'
+
+  const collected = await collectOpenBallItems(db, projectId, today)
+  if ('error' in collected) return { error: collected.error }
+  const items = collected.items
+    .filter((i) => i.side === side)
+    .map(({ side: _side, ...rest }) => rest) // 工具輸出維持原形(不含 side 欄)
   if (!items.length) return { note: '目前沒有球在我方的待辦', side: sideLabel }
   return { side: sideLabel, items: items.slice(0, 30) }
 }
@@ -867,7 +906,7 @@ async function draftDailyLog(
 //     同 loadSiteLogsFromDB 只收 item_key 與 qty_today 皆非 null 的列)。
 //   * billedQty:「最新一期」估驗的各工項累計數量(cum_qty,item_key 為鍵)。
 //   * inspStatusByItem:查驗依 created_at 新→舊,取每工項最近一次的狀態。
-//   * pourDates:混凝土工項(description 含「混凝土」的 leaf)當日數量 >0 的
+//   * pourDates:混凝土澆置工項(isConcretePourItem 判定的 leaf)當日數量 >0 的
 //     日誌日期,依日期新→舊(同前端 siteLogs 的迭代順序)。
 //   * testSamples:全部試體(sampled_date 新→舊,同 loadQcFromDB)。
 // PostgREST 單次回應上限 1000 列(config max_rows),勾稽要全量 → 大表分頁抓齊
@@ -1002,8 +1041,8 @@ async function runIntegrityAudit(
     if (key && !inspStatusByItem.has(key)) inspStatusByItem.set(key, ins.status)
   }
 
-  // 5) 混凝土澆置日:description 含「混凝土」的 leaf 當日數量 >0 的日誌日期(新→舊)
-  const concreteKeys = new Set(leaves.filter((it) => (it.description || '').includes('混凝土')).map((it) => it.item_key))
+  // 5) 混凝土澆置日:混凝土澆置工項(isConcretePourItem)當日數量 >0 的日誌日期(新→舊)
+  const concreteKeys = new Set(leaves.filter((it) => isConcretePourItem(it.description)).map((it) => it.item_key))
   const pourSet = new Set<string>()
   for (const lg of logs.rows) {
     if (!lg.log_date) continue
