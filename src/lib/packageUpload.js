@@ -14,6 +14,7 @@
 // Retries are idempotent: same content -> same checksum -> same version ->
 // same processing-run row (unique on document_version_id).
 import { supabase } from './supabase.js'
+import { pageAllSafe } from './pagedQuery.js'
 import { extractDocumentPages, hasExtractableText } from './documentExtract.js'
 import { fileKind, analysisSupport, storedLimitationLabel } from './packageFileSupport.js'
 import { classifyDocument, shouldExtractRequirements } from './documentClassifier.js'
@@ -427,11 +428,12 @@ export async function uploadFilesToPackage({
       && run.classification_status === 'auto_accepted'
       && packageRow.package_type === 'construction') {
       try {
-        const { data: pageRows } = await supabase
+        // 契約全文可達上千頁,不分頁只會拿到前 1,000 頁
+        const { data: pageRows } = await pageAllSafe((from, to) => supabase
           .from('document_pages')
           .select('extracted_text')
           .eq('document_version_id', run.document_version_id)
-          .order('page_number')
+          .order('page_number').order('id').range(from, to))
         if (pageRows?.length) {
           contractTexts.push(pageRows.map((p) => p.extracted_text).join('\n'))
         }

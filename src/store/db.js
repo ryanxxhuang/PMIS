@@ -1,6 +1,8 @@
 // 資料存取層:DB 列 ↔ 前端形狀的轉換、各領域的載入函式、work_items 本地快取、
 // 檔案/圖片的 base64 與文字抽取。純函式(不含 React state),store 各 slice 共用。
 import { supabase } from '../lib/supabase.js'
+// 所有列表載入一律走分頁,避免 PostgREST max_rows 靜默截斷(見 pagedQuery.js 開頭)
+import { pageAll, pageAllIn } from '../lib/pagedQuery.js'
 // pdf.js worker 自帶(B-12):?url 只打包資產網址,worker 檔進自家 dist——
 // 機關內網/防火牆擋 CDN 時,契約 PDF 抽字不再直接壞掉。
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -17,44 +19,6 @@ export function normalizeProject(row) {
     formal_mode: !!row.formal_mode,
     latitude: row.latitude ?? null, longitude: row.longitude ?? null, // 工地座標(CWA 天氣用)
   }
-}
-
-// 查詢失敗一律往上拋(B-09):原本 `const { data } = await …` 靜默回空陣列,
-// 網路/RLS 失敗時使用者看到「尚無資料」而非「載入失敗」——以為缺失都結案了。
-// store.jsx 的載入 effect 統一 catch → 顯示重試 banner。
-async function must(query, label) {
-  const { data, error } = await query
-  if (error) throw new Error(`${label}讀取失敗:${error.message}`)
-  return data
-}
-
-// PostgREST 單次回傳有上限(預設 max_rows=1000),超過就「靜默截斷」——不報錯、
-// 沒有任何提示。大案(3,000+ 工項、日誌明細逐日累積)會出現估驗累計少算、
-// S 曲線失真、勾稽漏抓,而畫面看起來完全正常。所有列表載入一律逐頁抓到抓不滿一頁為止。
-const PAGE_SIZE = 1000
-// .in() 的父層 id 清單是進 URL query string 的,一次塞上千個 uuid 會超過長度上限;分批送。
-const IN_CHUNK = 100
-
-// build(from, to) 每次都要回傳「新的」query builder——supabase 的 builder 是一次性 thenable,
-// 不能重複 await。排序一律帶 id 收尾:沒有唯一的排序鍵時 range 分頁可能重複或漏列。
-async function pageAll(build, label) {
-  const all = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const data = await must(build(from, from + PAGE_SIZE - 1), label)
-    all.push(...(data || []))
-    if (!data || data.length < PAGE_SIZE) break
-  }
-  return all
-}
-
-// 子表依父層 id 載入:id 清單分批進 .in(),每批再各自逐頁。
-async function pageAllIn(ids, build, label) {
-  const all = []
-  for (let i = 0; i < ids.length; i += IN_CHUNK) {
-    const chunk = ids.slice(i, i + IN_CHUNK)
-    all.push(...await pageAll((from, to) => build(chunk, from, to), label))
-  }
-  return all
 }
 
 // 抓某專案全部 work_items（PostgREST 單次上限，需分頁）
@@ -244,6 +208,23 @@ export async function loadItpFromDB(projectId, byId, idToKey) {
     work_item_no: byId.get(r.work_item_id)?.item_no || '',
     work_item_desc: byId.get(r.work_item_id)?.description || '',
   }))
+}
+
+// 從 DB 載入協作三表(送審 / 工程疑義 / 觀察事項)。原本散在 store.jsx 內嵌查詢且未分頁,
+// 收回來跟其他領域一致,才吃得到分頁與統一的錯誤標籤。
+export async function loadSubmittalsFromDB(projectId) {
+  return pageAll((from, to) => supabase.from('submittals')
+    .select('*').eq('project_id', projectId).order('created_at', { ascending: false }).order('id').range(from, to), '送審')
+}
+
+export async function loadRfisFromDB(projectId) {
+  return pageAll((from, to) => supabase.from('rfis')
+    .select('*').eq('project_id', projectId).order('created_at', { ascending: false }).order('id').range(from, to), '工程疑義')
+}
+
+export async function loadObservationsFromDB(projectId) {
+  return pageAll((from, to) => supabase.from('observations')
+    .select('*').eq('project_id', projectId).order('created_at', { ascending: false }).order('id').range(from, to), '觀察事項')
 }
 
 // 從 DB 載入驗收/結算事件(一階段一筆,依建立時間排序)

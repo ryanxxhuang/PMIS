@@ -21,6 +21,7 @@ import {
   wiCacheDel, loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
   loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
+  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB,
 } from './store/db.js'
 import { useAuthSlice } from './store/slices/auth.js'
 import { useProjectsSlice } from './store/slices/projects.js'
@@ -230,19 +231,15 @@ export function StoreProvider({ children }) {
     let active = true
     ;(async () => {
       try {
-        const check = (label) => ({ data, error }) => {
-          if (error) throw new Error(`${label}讀取失敗:${error.message}`)
-          return data || []
-        }
         // 並行載入(P-03);缺失(統一引擎)不依賴標單:匯標單前也要載(dbMode 載入會再帶工項資訊覆蓋)
         const [acc, obs, safety, defs, subs, rfiRows, obsRows] = await Promise.all([
           loadAcceptanceFromDB(pid),
           loadObligationsFromDB(pid),
           loadSafetyFromDB(pid),
           dbMode ? null : loadDefectsFromDB(pid),
-          supabase.from('submittals').select('*').eq('project_id', pid).order('created_at', { ascending: false }).then(check('送審')),
-          supabase.from('rfis').select('*').eq('project_id', pid).order('created_at', { ascending: false }).then(check('工程疑義')),
-          supabase.from('observations').select('*').eq('project_id', pid).order('created_at', { ascending: false }).then(check('觀察事項')),
+          loadSubmittalsFromDB(pid),
+          loadRfisFromDB(pid),
+          loadObservationsFromDB(pid),
         ])
         if (!active) return
         setAcceptanceEvents(acc); setObligations(obs); setSafetyRecords(safety)

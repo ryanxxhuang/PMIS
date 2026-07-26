@@ -4,6 +4,7 @@
 import { useState, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 import { loadSiteLogsFromDB, imageToBase64 } from '../db.js'
+import { pageAllInSafe, chunked } from '../../lib/pagedQuery.js'
 import { mutationOutcome } from './billing.js'
 
 export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, log }) {
@@ -120,11 +121,17 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     if (!dbMode || !currentProject) return []
     const ids = [...new Set((workItemKeys || []).map((k) => wiMaps.byKey.get(k)?.id).filter(Boolean))]
     if (!ids.length) return []
-    const { data } = await supabase.from('photos')
-      .select('*').eq('project_id', currentProject.project_id).in('work_item_id', ids).order('taken_at')
+    // 一期估驗可涵蓋數百個工項、上千張照片:工項 id 要分批進 .in(),結果要分頁
+    const { data } = await pageAllInSafe(ids, (chunk, from, to) => supabase.from('photos')
+      .select('*').eq('project_id', currentProject.project_id).in('work_item_id', chunk)
+      .order('taken_at').order('id').range(from, to))
     if (!data?.length) return []
-    const { data: signed } = await supabase.storage.from('photos').createSignedUrls(data.map((p) => p.storage_path), 3600)
-    const urlByPath = new Map((signed || []).map((s) => [s.path, s.signedUrl]))
+    // 簽名 URL 也有批次上限,照片分頁後跟著分批簽
+    const urlByPath = new Map()
+    for (const batch of chunked(data.map((p) => p.storage_path))) {
+      const { data: signed } = await supabase.storage.from('photos').createSignedUrls(batch, 3600)
+      for (const s of signed || []) urlByPath.set(s.path, s.signedUrl)
+    }
     return data.map((p) => ({ ...p, url: urlByPath.get(p.storage_path) || null, work_item_key: wiMaps.idToKey.get(p.work_item_id) || null }))
   }, [dbMode, currentProject, wiMaps])
 
