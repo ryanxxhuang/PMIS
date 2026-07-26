@@ -85,6 +85,16 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
               {m.steps?.length > 0 && (
                 <div className="text-[10px] text-[var(--text-3)] mt-1 px-1">查了:{m.steps.join('、')}</div>
               )}
+              {/* 確定性回退要看得出來(實際踩過:demo 站拿到回退答案卻以為是 agent 在回)——
+                  只有 mode:'basic'(demo/未設 Supabase/AI 失敗)才顯示,agent 正常回答不顯示 */}
+              {m.mode === 'basic' && (
+                <div className="text-[10px] text-[var(--text-3)] mt-1 px-1">
+                  <span title="未連上 AI agent,這是依本案資料的關鍵字快答"
+                    className="inline-block px-1.5 py-0.5 rounded-full border border-[var(--border-2)] bg-[var(--surface-2)]">
+                    離線快答
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         ))}

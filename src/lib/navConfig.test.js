@@ -71,6 +71,13 @@ describe('visibleNavGroups(側欄)', () => {
     expect(items.find((i) => i.label === '成本管理')).toBeDefined()
     expect(items.find((i) => i.label === '契約與文件').tabs).toHaveLength(3)
   })
+  it('施工日誌:側欄已收斂(改由 agent 草稿產生),但路由與深連結仍保留', () => {
+    for (const org of ['contractor', 'supervisor', 'owner']) {
+      expect(flatNav(visibleNavGroups(org, false)).find((i) => i.label === '施工日誌')).toBeUndefined()
+      expect(routeAllowed('/site-log', org, false)).toBe(true) // 未列導覽=不設限,手動入口/深連結照常
+    }
+    expect(flatNav(visibleNavGroups('contractor', true)).find((i) => i.label === '施工日誌')).toBeUndefined()
+  })
   it('每個工作台入口都指向自己的第一個可見分頁', () => {
     for (const org of ['contractor', 'supervisor', 'owner']) {
       for (const item of flatNav(visibleNavGroups(org, false))) {

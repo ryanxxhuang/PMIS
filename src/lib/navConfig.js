@@ -5,7 +5,7 @@
 // 「導覽隱藏」與「權限」永遠一致。
 import {
   LayoutDashboard, LayoutGrid, Bell, CalendarClock, Newspaper, BadgeCheck,
-  ClipboardList, PencilLine, Coins, Wallet, TrendingUp,
+  ClipboardList, Coins, Wallet, TrendingUp,
   ShieldCheck, HardHat, FileCheck2, Users, History, Bot,
 } from 'lucide-react'
 
@@ -29,7 +29,9 @@ export const navGroups = [
   ] },
   { title: '成本與進度', items: [
     { to: '/boq', icon: ClipboardList, label: '標單工項' },
-    { to: '/site-log', icon: PencilLine, label: '施工日誌' },
+    // 「施工日誌」已自側欄移除(批3 產品原則:agent 能做的就把手動入口藏起來)——
+    // 日常路徑是照片上傳→現場 agent 擬草稿→/agent 收件匣接受。路由保留(App.jsx 不動),
+    // 深連結/提醒中心導向照常,/agent 收件匣底部留次要手動入口以防沒拍照的日子卡死。
     { to: '/valuation', icon: Coins, label: '估驗與金流', tabs: [
       { to: '/valuation', label: '估驗計價' },
       { to: '/payments', label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款

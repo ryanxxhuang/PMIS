@@ -299,12 +299,44 @@ export function buildDemoData(workItems, project) {
   // 真實模式要等批3「現場 agent」上線才會產草稿;demo 先把「AI 擬好、人決定」
   // 的產品承諾演出來。日期相對今天 → 收件匣永遠像剛擬好的。
   const agaAt = (h) => new Date(Date.now() - h * 3600e3).toISOString()
+
+  // 日誌草稿的完整 payload(批3):形狀對齊後端 buildDailyLogDraft 的產出,讓 demo 的
+  // 旗艦流程「照片→草稿→收件匣填數量→接受→日誌」真的演得出來(接受會走 saveSiteLog 進記憶體)。
+  // 草稿日期用「今天」:demo 日誌只到昨天,接受後在 /site-log 置頂新增一筆,不覆蓋既有故事線。
+  // 工項取 active 前 3 項(與近兩週日誌的工項一致);demo 工項沒有 uuid,items 鍵直接用
+  // item_key,靠 draftPayloadToSiteLog 的 item_key 備援對回 saveSiteLog。
+  // 數量誠實原則:qty_today 一律 null + needs_input(照片證明有做,不證明做多少)。
+  const draftLogDate = iso(daysFromNow(0))
+  const ylog = siteLogs.find((l) => l.log_date === iso(daysFromNow(-1))) // 出工/機具/材料的複製來源
+  const draftPhotoCounts = [8, 6, 4] // 三工項的照片張數,加總=summary 的 18 張
+  const draftWis = active.slice(0, 3)
+  const draftItems = {}
+  for (const it of draftWis) {
+    draftItems[it.item_key] = {
+      item_key: it.item_key, item_no: it.item_no || null, description: it.description,
+      unit: it.unit || null, qty_today: null, needs_input: true, source: null,
+    }
+  }
+  const draftPayload = {
+    log_date: draftLogDate,
+    weather_am: '晴', weather_pm: '午後短暫陣雨',
+    labor: ylog?.labor || [], equipment: ylog?.equipment || [], materials: ylog?.materials || [],
+    work_summary: `依現場照片,本日施作:${draftWis.map((it, i) =>
+      `${[it.item_no, it.description].filter(Boolean).join(' ')}(照片 ${draftPhotoCounts[i]} 張)`).join('、')}。各工項數量待現場確認後填寫。`,
+    items: draftItems,
+    field_sources: { items: 'photos', quantities: 'needs_input', weather: 'cwa', labor: 'yesterday', equipment: 'yesterday', materials: 'yesterday' },
+    photo_ids: Array.from({ length: 18 }, (_, i) => `PHO-DEMO-${i + 1}`),
+  }
+
   const agentActions = [
     { id: 'AGA-DEMO-1', project_id: project.project_id, actor_user: null,
       agent_role: 'field', kind: 'draft_daily_log', target_table: 'daily_logs', target_id: null,
-      summary: `已依 18 張現場照片擬好 ${iso(daysFromNow(-1))} 施工日誌草稿(3 個工項、含天氣與出工)`,
-      rationale: '依照片拍攝時間與位置分組,對照進行中工項與前一日出工人數推估',
-      evidence: { 來源: ['現場照片 18 張', `前日日誌 ${iso(daysFromNow(-2))}`, '進行中工項 3 項'] },
+      summary: `已依 18 張現場照片擬好 ${draftLogDate} 施工日誌草稿(3 個工項,數量待你填)`,
+      rationale: '工項清單:依當日已配對工項的現場照片自動帶出(確定性比對,非 AI 判讀)。\n'
+        + '數量:一律留空待你親自填寫——照片能證明有施作,不能證明做了多少,系統不猜數量。\n'
+        + `出工/機具/材料:複製自昨日(${iso(daysFromNow(-1))})日誌,請核對後調整。\n`
+        + '天氣:依工地座標向中央氣象局預報自動帶入。',
+      evidence: { 來源: ['現場照片 18 張', `前日日誌 ${iso(daysFromNow(-1))}`, '進行中工項 3 項'], payload: draftPayload },
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(2) },
     { id: 'AGA-DEMO-2', project_id: project.project_id, actor_user: null,
       agent_role: 'qc', kind: 'draft_inspection', target_table: 'test_samples', target_id: null,

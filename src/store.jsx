@@ -135,8 +135,8 @@ export function StoreProvider({ children }) {
     parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument,
   } = useLedgerSlice(ctx)
   const {
-    agentActions, agentActionsLoading, runAgent, resolveAgentAction, reloadAgentActions, setAgentActions,
-  } = useAgentSlice(ctx)
+    agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions, setAgentActions,
+  } = useAgentSlice(ctx, { saveSiteLog }) // 接受日誌草稿時走既有 saveSiteLog(RLS/guard 照常生效)
 
   // ── 財務單一真相層(B-02)──────────────────────────────────────────────────
   // 「已核准變更設計套回工項」與「變更後契約金額」只在這裡算一次,所有金額/進度
@@ -306,7 +306,7 @@ export function StoreProvider({ children }) {
     submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal, uploadSubmittalFile, readSubmittalDoc,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
     rfis, createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply,
-    agentActions, agentActionsLoading, runAgent, resolveAgentAction, reloadAgentActions,
+    agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions,
     listMembers, addMemberByEmail, removeMember, resolveMarkup, resendSignup,
     deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,

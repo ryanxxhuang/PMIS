@@ -1,7 +1,8 @@
 // Supabase Edge Function: agent-run
 // ---------------------------------------------------------------------------
-// 多輪 agent(批1):收本案事實快照 + 使用者訊息,讓 Claude 以「唯讀查詢工具」
-// 自行調閱本案資料後回答。只讀不寫 —— 批1 沒有任何寫入業務資料的工具。
+// 多輪 agent(批1 查詢;批3 加 field 角色的 draft_daily_log):收本案事實快照 +
+// 使用者訊息,讓 Claude 自行調閱本案資料後回答。查詢工具只讀不寫;
+// draft_daily_log 只寫 agent_actions 草稿收件匣 —— 不寫任何業務資料表。
 // 權限:verify_jwt 預設開啟;函式內再以呼叫者 JWT 建 userClient(getUser +
 // RLS 讀 projects 證明成員資格),所有工具查詢都走這個 client → 自動套 RLS。
 // 角色由伺服器決定(project_memberships / my_org_type),不信任 client 傳值。
@@ -38,6 +39,13 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
     if (!supabaseUrl || !anonKey) return json({ error: '伺服器未設定 Supabase 環境變數' }, 500)
+    // service role:只給 draft_daily_log 寫 agent_actions 用(該表 authenticated 無
+    // 寫入權)。缺 SUPABASE_SERVICE_ROLE_KEY 不整支失敗 —— 查詢工具照常可用,
+    // 只有 draft_daily_log 會回「伺服器未設定,暫時無法建立草稿」。
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const serviceClient = serviceKey
+      ? createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+      : null
 
     const body = await req.json().catch(() => null)
     const projectId = body?.project_id
@@ -106,7 +114,7 @@ Deno.serve(async (req) => {
     const result = await claudeAgent({
       system: personaSystem(role),
       tools: toolsForRole(role),
-      exec: makeToolExec(userClient, projectId),
+      exec: makeToolExec(userClient, projectId, serviceClient, user.id),
       userMessage: message,
       facts: body?.facts,
       history,
