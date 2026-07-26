@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { ScrollText, CheckCircle2, XCircle, Ban, FileText, Link2, Pencil } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
+import { pageAllInSafe } from '../../lib/pagedQuery.js'
 import { Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select, PrerequisiteEmptyState } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import {
@@ -56,8 +57,10 @@ export default function Requirements() {
     setRuns(runRows || [])
     setRows(reqRows || [])
     const ids = (reqRows || []).map((r) => r.id)
+    // 一則需求可有多筆出處:300 則需求的出處合計會破單次上限,要分批 + 分頁
     const { data: sourceRows } = ids.length
-      ? await supabase.from('requirement_sources').select('*').in('requirement_id', ids)
+      ? await pageAllInSafe(ids, (chunk, from, to) => supabase.from('requirement_sources')
+        .select('*').in('requirement_id', chunk).order('id').range(from, to))
       : { data: [] }
     const byReq = new Map()
     for (const s of sourceRows || []) {
@@ -70,8 +73,8 @@ export default function Requirements() {
       ...(runRows || []).map((r) => r.document_version_id),
     ].filter(Boolean))]
     if (versionIds.length) {
-      const { data: versions } = await supabase.from('document_versions')
-        .select('id, version_label, documents(title, document_type)').in('id', versionIds)
+      const { data: versions } = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_versions')
+        .select('id, version_label, documents(title, document_type)').in('id', chunk).order('id').range(from, to))
       setVersionsById(new Map((versions || []).map((v) => [v.id, v])))
     } else {
       setVersionsById(new Map())

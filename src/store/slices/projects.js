@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 import { loadWorkItems } from '../../lib/boqCalc.js'
+import { pageAllSafe } from '../../lib/pagedQuery.js'
 import {
   normalizeProject, fetchAllWorkItems, wiCacheGet, wiCachePut, wiCacheDel, dbToWorkItems,
 } from '../db.js'
@@ -52,8 +53,12 @@ export function useProjectsSlice({ currentUser, log }) {
     let active = true
     setProjectLoading(true)
     Promise.all([
-      supabase.from('projects').select('*').order('created_at'),
-      supabase.from('project_members').select('project_id, role').eq('user_id', currentUser.user_id),
+      pageAllSafe((from, to) => supabase.from('projects')
+        .select('*').order('created_at').order('id').range(from, to)),
+      // project_members 沒有 id 欄(PK 是 project_id+user_id);已鎖定 user_id,
+      // 用 project_id 排序即為唯一鍵,分頁不會重複或漏列
+      pageAllSafe((from, to) => supabase.from('project_members')
+        .select('project_id, role').eq('user_id', currentUser.user_id).order('project_id').range(from, to)),
     ]).then(([{ data }, { data: memberships }]) => {
       if (!active) return
       const list = (data || []).map(normalizeProject)

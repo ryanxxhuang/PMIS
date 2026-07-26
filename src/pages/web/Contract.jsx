@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 import { Scale, FileText, UploadCloud, ChevronRight, RefreshCw } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
+import { pageAllInSafe } from '../../lib/pagedQuery.js'
 import { Card, Empty, PageHeader, Badge, Button, Select } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
@@ -335,9 +336,10 @@ export default function Contract() {
     const versionIds = [...versionsById.values()]
       .filter((v) => contractDocIds.includes(v.document_id)).map((v) => v.id)
     if (!versionIds.length) { setLegacyMsg('本契約包尚無「契約」類文件,無法產生義務時程。'); return }
-    const { data: pageRows } = await supabase.from('document_pages')
+    // 契約全文可達上千頁:不分頁就只讀到前 1,000 頁,義務時程會憑半份契約產生
+    const { data: pageRows } = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_pages')
       .select('document_version_id, page_number, extracted_text')
-      .in('document_version_id', versionIds).order('page_number')
+      .in('document_version_id', chunk).order('page_number').order('id').range(from, to))
     const text = (pageRows || []).map((p) => p.extracted_text).join('\n').slice(0, LEGACY_TEXT_BUDGET)
     const { error, count } = await parseContractFromText(text)
     setLegacyMsg(error ? `義務時程解析失敗:${error.message || ''}` : `已重新產生 ${count} 項義務時程。`)
