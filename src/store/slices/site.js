@@ -137,17 +137,18 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
 
   // AI 現場辨識:工程告示板/現場照片 → read-whiteboard Edge Function（Claude 視覺）→ 結構化日誌欄位。
   // 金鑰在雲端函式,前端只送壓好的 base64;工項對應(item_key)由前端用標單模糊比對。
+  // 批 B:body 一律帶 project_id——伺服器閘門(openAiGate)驗成員資格與功能開關。
   const readWhiteboard = useCallback(async (file) => {
     if (!isSupabaseConfigured) return { error: { message: '需登入（Supabase 未設定）' } }
     let image_base64
     try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
     const { data, error } = await supabase.functions.invoke('read-whiteboard', {
-      body: { image_base64, mime_type: 'image/jpeg' },
+      body: { image_base64, mime_type: 'image/jpeg', project_id: currentProject?.project_id },
     })
     if (error) return { error }
     if (data?.error) return { error: { message: data.error } }
     return { error: null, result: data }
-  }, [])
+  }, [currentProject])
 
   // AI 缺失描述:缺失照片 → describe-defect Edge Function → 缺失表單欄位。
   const describeDefect = useCallback(async (file) => {
@@ -155,12 +156,12 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     let image_base64
     try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
     const { data, error } = await supabase.functions.invoke('describe-defect', {
-      body: { image_base64, mime_type: 'image/jpeg' },
+      body: { image_base64, mime_type: 'image/jpeg', project_id: currentProject?.project_id },
     })
     if (error) return { error }
     if (data?.error) return { error: { message: data.error } }
     return { error: null, result: data }
-  }, [])
+  }, [currentProject])
 
   // AI 工安判讀:工地照片 → analyze-safety-photo Edge Function(職安衛法規比對)→
   // 危害類別/違反法規依據/嚴重度/改善建議,產出工安缺失草稿。差別於 describeDefect=比對職安衛法規。
@@ -169,12 +170,12 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     let image_base64
     try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
     const { data, error } = await supabase.functions.invoke('analyze-safety-photo', {
-      body: { image_base64, mime_type: 'image/jpeg' },
+      body: { image_base64, mime_type: 'image/jpeg', project_id: currentProject?.project_id },
     })
     if (error) return { error }
     if (data?.error) return { error: { message: data.error } }
     return { error: null, result: data }
-  }, [])
+  }, [currentProject])
 
   // AI 施工照片分類:單張現場照 → classify-site-photo Edge Function → 照片簿說明/類別/工項關鍵詞。
   // 「批次辨識」由前端對多檔各呼叫一次;工項對應由前端 matchLeaf 模糊比對標單。
@@ -183,12 +184,12 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     let image_base64
     try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
     const { data, error } = await supabase.functions.invoke('classify-site-photo', {
-      body: { image_base64, mime_type: 'image/jpeg' },
+      body: { image_base64, mime_type: 'image/jpeg', project_id: currentProject?.project_id },
     })
     if (error) return { error }
     if (data?.error) return { error: { message: data.error } }
     return { error: null, result: data }
-  }, [])
+  }, [currentProject])
 
   // AI 月報草稿:彙整數據 → draft-monthly-review Edge Function → 檢討/下月計畫。
   // demo 模式在本地用數據套模板生成(銷售 demo 不依賴後端)。
@@ -208,11 +209,13 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       return { error: null, result: { review, next_plan } }
     }
     if (!isSupabaseConfigured) return { error: { message: '需登入（Supabase 未設定）' } }
-    const { data, error } = await supabase.functions.invoke('draft-monthly-review', { body: payload })
+    const { data, error } = await supabase.functions.invoke('draft-monthly-review', {
+      body: { ...payload, project_id: currentProject?.project_id },
+    })
     if (error) return { error }
     if (data?.error) return { error: { message: data.error } }
     return { error: null, result: data }
-  }, [demoMode])
+  }, [demoMode, currentProject])
 
   // AI 本期估驗施工說明(估驗請款佐證包用):彙整本期工項/照片說明/日誌摘要 → 一段施工說明。
   // demo 用資料套模板生成(不依賴後端);真專案走 draft-valuation-summary edge fn。
@@ -229,11 +232,13 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       return { error: null, result: { summary } }
     }
     if (!isSupabaseConfigured) return { error: { message: '需登入（Supabase 未設定）' } }
-    const { data, error } = await supabase.functions.invoke('draft-valuation-summary', { body: payload })
+    const { data, error } = await supabase.functions.invoke('draft-valuation-summary', {
+      body: { ...payload, project_id: currentProject?.project_id },
+    })
     if (error) return { error }
     if (data?.error) return { error: { message: data.error } }
     return { error: null, result: data }
-  }, [demoMode])
+  }, [demoMode, currentProject])
 
   // AI 稽核摘要:文件勾稽鏈的「確定性發現」(integrityAudit.js)→ 機關稽核意見+建議事項。
   // demo/未設 → 由發現套模板生成(判定全在確定性引擎,AI 只寫文字,不臆造)。
@@ -248,27 +253,33 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       const recommendations = findings.slice(0, 6).map((f) => `就「${f.title.split('：')[0].split(':')[0]}」，請查核相關佐證並依契約與三級品管程序處置。`)
       return { error: null, result: { opinion, recommendations } }
     }
-    const { data, error } = await supabase.functions.invoke('audit-summary', { body: payload })
+    const { data, error } = await supabase.functions.invoke('audit-summary', {
+      body: { ...payload, project_id: currentProject?.project_id },
+    })
     if (error || data?.error) return { error: { message: error?.message || data?.error || 'AI 稽核摘要暫時無法使用' } }
     return { error: null, result: data }
-  }, [demoMode])
+  }, [demoMode, currentProject])
 
   // 工地座標 → 中央氣象局天氣(fetch-weather edge fn,授權碼在雲端 secret)。
   const fetchWeather = useCallback(async (lat, lon, date) => {
     if (!isSupabaseConfigured) return { error: '需登入(Supabase)才能連中央氣象局' }
-    const { data, error } = await supabase.functions.invoke('fetch-weather', { body: { lat, lon, date } })
+    const { data, error } = await supabase.functions.invoke('fetch-weather', {
+      body: { lat, lon, date, project_id: currentProject?.project_id },
+    })
     if (error || data?.error) return { error: error?.message || data?.error || '天氣服務暫時無法使用' }
     return data // { am, pm, township, source }
-  }, [])
+  }, [currentProject])
 
   // 開放式 copilot 問答:送本案 facts 快照到 assistant-chat edge fn。
   // demo/未設 Supabase → 回 fallback,由 Assistant.jsx 改用確定性 answerQuestion。
   const askAssistant = useCallback(async (question, facts) => {
     if (!isSupabaseConfigured) return { fallback: true }
-    const { data, error } = await supabase.functions.invoke('assistant-chat', { body: { question, facts } })
+    const { data, error } = await supabase.functions.invoke('assistant-chat', {
+      body: { question, facts, project_id: currentProject?.project_id },
+    })
     if (error || data?.error) return { error: error?.message || data?.error || 'AI 服務暫時無法使用' }
     return { answer: data.answer, sources: data.sources || [] }
-  }, [])
+  }, [currentProject])
 
   // 工安：新增 / 更新 / 刪除工安紀錄（demo 只進記憶體）。
   // 工安缺失已併入統一缺失引擎(defects, domain='safety',見 quality slice)——

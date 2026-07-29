@@ -58,7 +58,7 @@ function CopilotPanel({ onClose }) {
 }
 
 export default function CopilotFab() {
-  const { workItemsSource, demoMode } = useStore() // 只訂閱這 2 個 key(收合時)
+  const { workItemsSource, demoMode, aiEnabled } = useStore() // 收合時只訂閱這幾個 key
   const imported = workItemsSource === 'db' || demoMode
   const [open, setOpen] = useState(false)
 
@@ -71,6 +71,9 @@ export default function CopilotFab() {
   }, [open])
 
   if (!imported) return null // 尚無專案資料時不顯示(與 /assistant 頁的空狀態一致)
+  // 批 B UX:agent 對話功能關閉時整顆 FAB 藏起來(面板走 agent-run),
+  // 說明入口在 /agent 頁;真正的閘門在伺服器端 openAiGate
+  if (!aiEnabled('agent.run')) return null
 
   return (
     <div className="print:hidden">

@@ -6,10 +6,13 @@
 // 「導覽隱藏」與「權限」永遠一致。
 // hidden: true=不渲染在側欄/分頁列,但仍參與 routeAllowed 的角色判斷——
 // 批 3/批 4 的收斂是「不顯示」,不是「不設限」;刪掉定義會讓 roles 一起消失(權限靜默鬆綁)。
+// platformAdminOnly: true=僅平台管理員(產品營運者)可見/可進——這是「平台」維度,
+// 與 roles(專案角色 org_type)互相獨立:can.override(專案管理者)也翻不過它。
+// 前端隱藏只是 UX;真正的把關在資料庫(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)。
 import {
   LayoutDashboard, LayoutGrid, Bell, CalendarClock, BadgeCheck,
   ClipboardList, Coins, PencilLine,
-  ShieldCheck, Users, Bot,
+  ShieldCheck, Users, Bot, ShieldAlert,
 } from 'lucide-react'
 
 export const navGroups = [
@@ -65,16 +68,26 @@ export const navGroups = [
     { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
     { to: '/members', icon: Users, label: '專案成員' },
   ] },
+  { title: '平台', items: [
+    // 平台管理後台(批 C):AI 用量/成本儀表、功能開關、專案方案。僅平台管理員
+    // (profiles.is_platform_admin)可見;一般使用者連群組標題都不渲染。
+    { to: '/admin', icon: ShieldAlert, label: '平台管理', platformAdminOnly: true },
+  ] },
 ]
 
-const tabAllowed = (n, org, override) => !n.roles || override || n.roles.includes(org)
+// platformAdminOnly 是獨立維度:專案角色/override 一律翻不過(平台後台不是專案工具)
+const tabAllowed = (n, org, override, platformAdmin) => {
+  if (n.platformAdminOnly) return !!platformAdmin
+  return !n.roles || override || n.roles.includes(org)
+}
 
 // 路由守衛:導覽/分頁未列的路由(列印頁、建案頁…)不設角色限制;
 // hidden 項照樣被找到、照樣套 roles——要限角色的路由必須列在定義裡(頂多 hidden),不能刪。
-export function routeAllowed(pathname, org, override) {
+// platformAdmin 缺省 false:未傳入(舊呼叫點)時平台後台一律擋。
+export function routeAllowed(pathname, org, override, platformAdmin = false) {
   for (const g of navGroups) for (const item of g.items) {
     for (const n of (item.tabs || [item])) {
-      if (n.to === pathname) return tabAllowed(n, org, override)
+      if (n.to === pathname) return tabAllowed(n, org, override, platformAdmin)
     }
   }
   return true
@@ -82,14 +95,14 @@ export function routeAllowed(pathname, org, override) {
 
 // 此路由所屬工作台(供分頁列渲染);單頁路由回 null。
 // hidden 分頁不出現在分頁列;深連結進 hidden 分頁(如 /audit)視為單頁、不掛工作台。
-export function workbenchFor(pathname, org, override) {
+export function workbenchFor(pathname, org, override, platformAdmin = false) {
   for (const g of navGroups) for (const item of g.items) {
     const hit = item.tabs?.find((t) => t.to === pathname)
     if (hit) {
       if (hit.hidden) return null
       return {
         label: item.label,
-        tabs: item.tabs.filter((t) => !t.hidden && tabAllowed(t, org, override)),
+        tabs: item.tabs.filter((t) => !t.hidden && tabAllowed(t, org, override, platformAdmin)),
       }
     }
   }
@@ -98,15 +111,15 @@ export function workbenchFor(pathname, org, override) {
 
 // 側欄可見項:工作台入口=第一個可見分頁;整組分頁都不可見則隱藏入口。
 // hidden 項一律不渲染(權限判斷仍在 routeAllowed 生效)。
-export function visibleNavGroups(org, override) {
+export function visibleNavGroups(org, override, platformAdmin = false) {
   return navGroups
     .map((g) => ({
       ...g,
       items: g.items
         .map((item) => {
           if (item.hidden) return null
-          if (!item.tabs) return tabAllowed(item, org, override) ? item : null
-          const tabs = item.tabs.filter((t) => !t.hidden && tabAllowed(t, org, override))
+          if (!item.tabs) return tabAllowed(item, org, override, platformAdmin) ? item : null
+          const tabs = item.tabs.filter((t) => !t.hidden && tabAllowed(t, org, override, platformAdmin))
           return tabs.length ? { ...item, to: tabs[0].to, tabs } : null
         })
         .filter(Boolean),

@@ -33,7 +33,7 @@ function matchLeaf(text, leaves) {
 
 export default function SiteLog() {
   const { project, workItems, adjustedItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can } = useStore()
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can, aiEnabled } = useStore()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayStr())
   const [weather, setWeather] = useState('晴')       // 上午天氣（相容舊欄位）
@@ -316,7 +316,8 @@ export default function SiteLog() {
               </div>
             )}
 
-            {can.edit && <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
+            {/* 批 B UX:告示板辨識功能關閉時整塊藏起來(真正的閘門在伺服器端) */}
+            {can.edit && aiEnabled('sitelog.whiteboard') && <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
               <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
                 <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : 'AI 拍照自動填寫'}
@@ -325,6 +326,9 @@ export default function SiteLog() {
                 {aiMsg || '拍下工程告示板或現場照片，AI 辨識後自動帶入日期、天氣與各工項當日數量。'}
               </p>
             </div>}
+            {can.edit && !aiEnabled('sitelog.whiteboard') && (
+              <p className="mb-3 text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（工程告示板辨識），請直接於下方手動填寫。</p>
+            )}
 
             <div className="relative mb-3">
               <input value={search} disabled={!can.edit} onChange={(e) => setSearch(e.target.value)} placeholder={can.edit ? '搜尋工項加入今日回報…' : '唯讀檢視'} className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
@@ -464,17 +468,20 @@ export default function SiteLog() {
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                   {/* 照片上傳=施工廠商的事:唯讀角色(監造/機關)不顯示死按鈕(U-01) */}
                   {can.edit && <>
-                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable shadow-sm ${(photoBusy || batchBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
-                      {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
-                      <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy} onChange={onBatchPhotos} className="hidden" />
-                      <Sparkles size={15} aria-hidden /> AI 批次辨識照片
-                    </label>
+                    {/* 批 B UX:照片分類功能關閉時藏 AI 批次入口,保留「直接加照片」 */}
+                    {aiEnabled('photo.classify') && (
+                      <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable shadow-sm ${(photoBusy || batchBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
+                        {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
+                        <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy} onChange={onBatchPhotos} className="hidden" />
+                        <Sparkles size={15} aria-hidden /> AI 批次辨識照片
+                      </label>
+                    )}
                     <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] pressable ${(photoBusy || batchBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
                       <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy || batchBusy} onChange={onAddPhotos} className="hidden" />
                       {photoBusy ? '上傳中…' : '＋ 直接加照片'}
                     </label>
                   </>}
-                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? '　·　批次辨識＝AI 自動生說明並配對工項' : '（照片由施工廠商上傳）'}</span>
+                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? (aiEnabled('photo.classify') ? '　·　批次辨識＝AI 自動生說明並配對工項' : '　·　AI 批次辨識未啟用') : '（照片由施工廠商上傳）'}</span>
                 </div>
 
                 {/* 批次辨識覆核區:AI 逐張判讀後,人可改說明/工項再一鍵全上傳 */}

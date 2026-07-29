@@ -17,7 +17,7 @@ const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = n
 
 export default function MonthlyReport() {
   const { project, workItems, dbMode, demoMode, valuations, progressPlan, siteLogs,
-    inspections, defects, safetyRecords, changeOrders, draftMonthlyReview,
+    inspections, defects, safetyRecords, changeOrders, draftMonthlyReview, aiEnabled,
     adjustedItems, revisedTotal } = useStore()
   const [month, setMonth] = useState(thisMonthStr())
   const [review, setReview] = useState('')   // 工程檢討（列印用，不儲存）
@@ -246,7 +246,11 @@ export default function MonthlyReport() {
           <div className="print:hidden mb-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded px-2 py-1 inline-flex items-center gap-1">
             ⚠ 此兩欄為<b>列印前暫填</b>，離開或重整不會保存；請於列印/存 PDF 前填妥。
           </div>
-          <div className="print:hidden mb-2 flex items-center gap-2">
+          {/* 批 B UX:月報草稿功能關閉時藏 AI 按鈕(demo 一律開;真正的閘門在伺服器端) */}
+          {!aiEnabled('report.monthly') && (
+            <div className="print:hidden mb-2 text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（施工月報草稿），請人工填寫。</div>
+          )}
+          {aiEnabled('report.monthly') && <div className="print:hidden mb-2 flex items-center gap-2">
             <button onClick={async () => {
               setAiBusy(true); setAiErr('')
               // facts=程式算好的數據;AI 只改寫、不算數(P1-1)
@@ -285,7 +289,7 @@ export default function MonthlyReport() {
             </button>
             <span className="text-[11px] text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
             {aiErr && <span className="text-xs text-[var(--red-text)]">{aiErr}</span>}
-          </div>
+          </div>}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <div className="text-sm font-medium mb-1">本月檢討</div>

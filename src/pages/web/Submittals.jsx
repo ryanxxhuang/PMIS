@@ -17,7 +17,7 @@ const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 
 export default function Submittals() {
   const { project, submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
-    uploadSubmittalFile, readSubmittalDoc, isSupabaseConfigured, currentProject, can } = useStore()
+    uploadSubmittalFile, readSubmittalDoc, isSupabaseConfigured, currentProject, can, aiEnabled } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 審定寫入失敗必須讓使用者看到(失敗=UI 不變)
@@ -181,17 +181,21 @@ export default function Submittals() {
                         {s.status === '審核中' && <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '駁回')}>駁回</Button>}
                       </div>
                     )}
-                    {/* 監造:AI 審查助手——依契約規範/工項產生審查要點+意見草稿 */}
-                    {can.approve && (s.status === '已提送' || s.status === '審核中') && !aiReview[s.id] && (
+                    {/* 監造:AI 審查助手——依契約規範/工項產生審查要點+意見草稿。
+                        批 B UX:功能關閉時藏按鈕(真正的閘門在伺服器端) */}
+                    {can.approve && aiEnabled('submittal.review') && (s.status === '已提送' || s.status === '審核中') && !aiReview[s.id] && (
                       <Button variant="secondary" disabled={reviewBusy === s.id} onClick={() => onReview(s)}>
                         <Sparkles size={13} aria-hidden />{reviewBusy === s.id ? ' AI 審查中…' : ' AI 審查助手'}
                       </Button>
                     )}
                     {/* 監造:AI 讀文件審查——讀送審文件本體逐項比對契約需求(需已上傳文件) */}
-                    {can.approve && s.attachment_path && (s.status === '已提送' || s.status === '審核中') && !aiRead[s.id] && (
+                    {can.approve && aiEnabled('submittal.read') && s.attachment_path && (s.status === '已提送' || s.status === '審核中') && !aiRead[s.id] && (
                       <Button variant="secondary" disabled={readBusy === s.id} onClick={() => onRead(s)}>
                         <FileSearch size={13} aria-hidden />{readBusy === s.id ? ' AI 讀文件中…' : ' AI 讀文件審查'}
                       </Button>
+                    )}
+                    {can.approve && !aiEnabled('submittal.review') && !aiEnabled('submittal.read') && (s.status === '已提送' || s.status === '審核中') && (
+                      <span className="text-[10px] text-[var(--text-3)]">AI 審查功能未啟用</span>
                     )}
                     {/* 施工:退回補正後修正再送(補正說明必填=實質補正證據) */}
                     {can.submit && s.status === '退回補正' && <Button variant="secondary" disabled={busy} onClick={() => onResubmit(s)}>修正再送</Button>}

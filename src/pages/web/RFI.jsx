@@ -13,7 +13,7 @@ const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 
 export default function RFI() {
   const { project, rfis, createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply, resolveMarkup,
-    isSupabaseConfigured, currentProject, can } = useStore()
+    isSupabaseConfigured, currentProject, can, aiEnabled } = useStore()
   const [markupOpen, setMarkupOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -124,11 +124,15 @@ export default function RFI() {
                       can.submit ? <Button variant="success" disabled={busy} onClick={() => onClose(r)}>確認結案</Button>
                         : can.approve ? <Button variant="secondary" disabled={busy} onClick={() => onAnswer(r)}>補充回覆</Button> : null
                     )}
-                    {/* 監造:AI 回覆草稿——依契約規範草擬回覆,涉設計判斷會提示轉設計釋疑 */}
-                    {can.approve && (r.status === '待回覆' || r.status === '已回覆') && !aiDraft[r.id] && (
+                    {/* 監造:AI 回覆草稿——依契約規範草擬回覆,涉設計判斷會提示轉設計釋疑。
+                        批 B UX:功能關閉時藏按鈕、留簡短說明(真正的閘門在伺服器端) */}
+                    {can.approve && aiEnabled('rfi.draft_reply') && (r.status === '待回覆' || r.status === '已回覆') && !aiDraft[r.id] && (
                       <Button variant="secondary" disabled={draftBusy === r.id} onClick={() => onDraft(r)}>
                         <Sparkles size={13} aria-hidden />{draftBusy === r.id ? ' AI 草擬中…' : ' AI 回覆草稿'}
                       </Button>
+                    )}
+                    {can.approve && !aiEnabled('rfi.draft_reply') && (r.status === '待回覆' || r.status === '已回覆') && (
+                      <span className="text-[10px] text-[var(--text-3)]">AI 回覆草稿未啟用</span>
                     )}
                     {/* 僅「待回覆」可刪(已回覆=履約證據,DB 另有 guard) */}
                     {can.submit && r.status === '待回覆' && (

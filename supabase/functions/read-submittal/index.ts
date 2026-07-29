@@ -12,6 +12,7 @@
 // 部署(colima 下必須 --use-api):supabase functions deploy read-submittal --use-api
 
 import { claudeJson, imageBlock, pdfBlock, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -46,8 +47,11 @@ const SYS =
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
+  const p = await req.json().catch(() => null) || {}
+  const gate = await openAiGate(req, { feature: 'submittal.read', projectId: p?.project_id })
+  if (!gate.ok) return gate.response
   try {
-    const p = await req.json()
     const reqs = (p.requirements || []).slice(0, 20)
     const reqText = reqs.length
       ? reqs.map((r: Record<string, unknown>, i: number) =>
@@ -65,12 +69,17 @@ Deno.serve(async (req) => {
       return json({ error: '缺少送審文件內容(doc_text 或 file_base64)' }, 400)
     }
 
-    const { data, error } = await claudeJson({
+    const { data, error, usage, model } = await claudeJson({
       model: MODELS.smart, name: 'submittal_read', schema: SCHEMA, maxTokens: 2400, system: SYS, content,
     })
-    if (error) return json({ error }, 502)
+    if (error) {
+      await closeAiGate(gate, { feature: 'submittal.read', model, usage, status: 'error', errorCode: 'claude_error' })
+      return json({ error }, 502)
+    }
+    await closeAiGate(gate, { feature: 'submittal.read', model, usage, status: 'ok' })
     return json(data, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'submittal.read', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

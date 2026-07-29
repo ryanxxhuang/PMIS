@@ -13,7 +13,7 @@ const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-U
 export default function ValuationPackage() {
   const { project, workItems, valuations, currentUser, siteLogs,
     adjustedItems: adjItems, revisedTotal,
-    listPhotosByWorkItems, draftValuationSummary } = useStore()
+    listPhotosByWorkItems, draftValuationSummary, aiEnabled } = useStore()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
 
@@ -121,9 +121,10 @@ export default function ValuationPackage() {
     if (!error && result?.summary) setSummary(result.summary)
   }
 
-  // 佐證照片載入後自動產生一次 AI 說明(尚未產生時)
+  // 佐證照片載入後自動產生一次 AI 說明(尚未產生時)。
+  // 批 B UX:功能關閉時不自動產生(避免載入頁面就吃 403),說明欄保留人工填寫。
   useEffect(() => {
-    if (loaded && selected && !summary && !aiBusy) genSummary()
+    if (loaded && selected && !summary && !aiBusy && aiEnabled('valuation.summary')) genSummary()
   }, [loaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!currentUser) return <Navigate to="/login" replace />
@@ -145,10 +146,15 @@ export default function ValuationPackage() {
       <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between z-10">
         <button onClick={() => navigate('/valuation')} className="text-sm text-slate-500 hover:text-slate-800">← 返回估驗計價</button>
         <div className="flex items-center gap-2">
-          <button onClick={genSummary} disabled={aiBusy}
-            className="text-sm text-[var(--blue-text)] border border-[var(--border)] rounded-lg px-3 py-2 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50">
-            <Sparkles size={15} aria-hidden />{aiBusy ? 'AI 產生中…' : '重新產生施工說明'}
-          </button>
+          {/* 批 B UX:估驗施工說明草稿功能關閉時藏按鈕、留簡短說明(說明欄仍可人工填) */}
+          {aiEnabled('valuation.summary') ? (
+            <button onClick={genSummary} disabled={aiBusy}
+              className="text-sm text-[var(--blue-text)] border border-[var(--border)] rounded-lg px-3 py-2 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50">
+              <Sparkles size={15} aria-hidden />{aiBusy ? 'AI 產生中…' : '重新產生施工說明'}
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-400">AI 施工說明未啟用，請直接編輯下方說明欄</span>
+          )}
           <button onClick={() => window.print()} className="bg-[var(--primary)] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--primary-hover)] inline-flex items-center gap-1.5">
             <Printer size={15} aria-hidden />列印 / 另存 PDF
           </button>

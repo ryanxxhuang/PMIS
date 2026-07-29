@@ -40,6 +40,7 @@ const RiskAudit = lazy(() => import('./pages/web/RiskAudit.jsx'))
 const Portfolio = lazy(() => import('./pages/web/Portfolio.jsx'))
 const Acceptance = lazy(() => import('./pages/web/Acceptance.jsx'))
 const ITP = lazy(() => import('./pages/web/ITP.jsx'))
+const Admin = lazy(() => import('./pages/web/Admin.jsx'))
 
 const PageLoading = () => (
   <div className="min-h-[40vh] grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
@@ -48,18 +49,25 @@ const PageLoading = () => (
 // Gate every page behind auth; force project creation before the workspace loads.
 // 角色化路由守衛:與側欄同一份 roles 對照(routeAllowed)——導覽隱藏的頁,直接輸入網址也進不去。
 function Web({ children }) {
-  const { currentUser, authReady, isSupabaseConfigured, currentProject, projectLoading, can, passwordRecovery } = useStore()
+  const { currentUser, authReady, isSupabaseConfigured, currentProject, projectLoading, can, passwordRecovery, isPlatformAdmin, platformAdminChecked } = useStore()
   const { pathname } = useLocation()
   // session 恢復完成前先等,不可急著導 /login——否則深連結 F5 一律丟失落回 Dashboard(P1-04)
   if (!authReady) return <div className="min-h-screen grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
   // 密碼重設連結回來:recovery session 已生效,但必須先設新密碼才能進工作區
   if (passwordRecovery) return <Navigate to="/login" replace />
   if (!currentUser) return <Navigate to="/login" replace />
-  if (isSupabaseConfigured && currentUser.real) {
+  // 平台後台不掛任何專案脈絡:沒有專案的平台帳號也要進得去(不被 ProjectSetup 卡住)
+  if (isSupabaseConfigured && currentUser.real && pathname !== '/admin') {
     if (projectLoading) return <WebLayout><div className="text-center text-[var(--text-3)] text-sm py-20">載入專案…</div></WebLayout>
     if (!currentProject) return <WebLayout><ProjectSetup /></WebLayout>
   }
-  if (!routeAllowed(pathname, currentUser.org_type || 'contractor', can.override)) {
+  // /admin:isPlatformAdmin 由 RPC 非同步判定,判定完成前先顯示載入——避免真正的
+  // 平台管理員先閃過「無權限」畫面。前端守衛只是 UX;真正的把關在資料庫
+  // (每支 admin RPC 第一行檢查 is_platform_admin() 並 raise,繞過前端也拿不到資料)。
+  if (pathname === '/admin' && !platformAdminChecked) {
+    return <div className="min-h-screen grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
+  }
+  if (!routeAllowed(pathname, currentUser.org_type || 'contractor', can.override, isPlatformAdmin)) {
     return (
       <WebLayout>
         <div className="text-center py-20 space-y-2">
@@ -124,6 +132,7 @@ export default function App() {
       <Route path="/activity" element={<Web><Activity /></Web>} />
       <Route path="/requirements" element={<Web><Requirements /></Web>} />
       <Route path="/monthly-report" element={<Web><MonthlyReport /></Web>} />
+      <Route path="/admin" element={<Web><Admin /></Web>} />
       <Route path="*" element={<Web><NotFound /></Web>} />
     </Routes>
     </Suspense>

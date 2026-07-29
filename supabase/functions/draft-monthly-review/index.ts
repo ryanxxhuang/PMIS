@@ -6,6 +6,7 @@
 // 部署:supabase functions deploy draft-monthly-review
 
 import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -18,8 +19,12 @@ const SCHEMA = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
+  const body = await req.json().catch(() => null)
+  const gate = await openAiGate(req, { feature: 'report.monthly', projectId: body?.project_id })
+  if (!gate.ok) return gate.response
   try {
-    const { month, project_name, stats } = await req.json()
+    const { month, project_name, stats } = body || {}
     if (!stats) return json({ error: '缺少 stats' }, 400)
 
     const prompt =
@@ -34,13 +39,18 @@ Deno.serve(async (req) => {
       '下月計畫依本月施工項目合理延伸,用「預定持續辦理…」等保守措辭。' +
       '各 150 字內,不用條列符號,直接寫成短段落,使用繁體中文。'
 
-    const { data, error } = await claudeJson({
+    const { data, error, usage, model } = await claudeJson({
       model: MODELS.fast, name: 'monthly_review', schema: SCHEMA, maxTokens: 1024,
       content: prompt,
     })
-    if (error) return json({ error }, 502)
+    if (error) {
+      await closeAiGate(gate, { feature: 'report.monthly', model, usage, status: 'error', errorCode: 'claude_error' })
+      return json({ error }, 502)
+    }
+    await closeAiGate(gate, { feature: 'report.monthly', model, usage, status: 'ok' })
     return json(data, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'report.monthly', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

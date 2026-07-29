@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ShieldCheck, Bot } from 'lucide-react'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
+import { useStore } from '../../store.jsx'
 import { useAssistantData } from '../../lib/assistantData.js'
 import CopilotChat from '../../components/CopilotChat.jsx'
 
@@ -14,6 +15,8 @@ const ROLE_HELLO = {
 
 export default function Assistant() {
   const { data, facts, askAssistant, imported, org } = useAssistantData()
+  const { aiEnabled } = useStore()
+  const chatOn = aiEnabled('assistant.chat') // 批 B UX:功能關閉時藏問答入口(真正的閘門在伺服器端)
 
   if (!imported) {
     return (
@@ -33,7 +36,9 @@ export default function Assistant() {
       <div className="max-w-3xl">
         <Card title="問我專案的事" bodyClass="p-0"
           action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><Bot size={12} aria-hidden />附出處</span>}>
-          <CopilotChat data={data} onAsk={(t) => askAssistant(t, facts)} />
+          {chatOn
+            ? <CopilotChat data={data} onAsk={(t) => askAssistant(t, facts)} />
+            : <div className="p-4"><Empty>此 AI 功能未啟用（AI 問答助理）。如需開通請聯絡系統管理者。</Empty></div>}
         </Card>
       </div>
 

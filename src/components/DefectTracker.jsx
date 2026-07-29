@@ -45,8 +45,10 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
 const NEXT_LABEL = { 開立: '開始改善', 改善中: '提送複查', 待複查: '複查結案' }
 
 export default function DefectTracker({ domain = 'quality', leaves = [] }) {
-  const { defects, createDefect, updateDefectStatus, deleteDefect, describeDefect, analyzeSafetyPhoto, resolveMarkup, can } = useStore()
+  const { defects, createDefect, updateDefectStatus, deleteDefect, describeDefect, analyzeSafetyPhoto, resolveMarkup, can, aiEnabled } = useStore()
   const isSafety = domain === 'safety'
+  // 批 B UX:對應 AI 功能(工安=safety.photo、品質=defect.describe)關閉時藏拍照入口
+  const aiPhotoOn = aiEnabled(isSafety ? 'safety.photo' : 'defect.describe')
   const list = defects.filter((d) => (d.domain || 'quality') === domain)
   const openCount = list.filter((d) => d.status !== '已結案').length
   const title = isSafety ? '工安缺失追蹤' : '缺失追蹤'
@@ -161,13 +163,17 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
 
       {form && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
-              <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onPhoto} className="hidden" />
-              <Camera size={15} aria-hidden /> {aiBusy ? (isSafety ? 'AI 判讀中…' : 'AI 辨識中…') : (isSafety ? '拍工安照片 AI 判讀' : '拍缺失照片 AI 填表')}
-            </label>
-            <span className={`text-xs ${/失敗/.test(aiMsg) ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>{aiMsg || (isSafety ? '拍現場照片，AI 依職安衛法規判讀危害類別、違反依據並填表(條號請現場核對)。' : '拍缺失現場，AI 自動填標題/說明/嚴重度。')}</span>
-          </div>
+          {aiPhotoOn ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+                <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onPhoto} className="hidden" />
+                <Camera size={15} aria-hidden /> {aiBusy ? (isSafety ? 'AI 判讀中…' : 'AI 辨識中…') : (isSafety ? '拍工安照片 AI 判讀' : '拍缺失照片 AI 填表')}
+              </label>
+              <span className={`text-xs ${/失敗/.test(aiMsg) ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>{aiMsg || (isSafety ? '拍現場照片，AI 依職安衛法規判讀危害類別、違反依據並填表(條號請現場核對)。' : '拍缺失現場，AI 自動填標題/說明/嚴重度。')}</span>
+            </div>
+          ) : (
+            <p className="text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（{isSafety ? '工安照片判讀' : '缺失照片描述'}），請人工填寫下方欄位。</p>
+          )}
           {!isSafety && leaves.length > 0 && (
             <WorkItemPicker leaves={leaves} value={form.work_item_key} label={form.work_item_label}
               onPick={(k, l) => setForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />

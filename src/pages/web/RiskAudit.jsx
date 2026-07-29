@@ -17,7 +17,7 @@ const ST = {
 export default function RiskAudit() {
   const { project, workItems, valuations, progressPlan, changeOrders, defects, obligations,
     siteLogs, inspections, testSamples, auditSummary, demoMode, workItemsSource,
-    adjustedItems, revisedTotal } = useStore()
+    adjustedItems, revisedTotal, aiEnabled } = useStore()
   const imported = workItemsSource === 'db' || demoMode
   const navigate = useNavigate()
   const TODAY = new Date() // 每次 render 取(B-11):長開分頁的「今天」不可凍結在開頁那天
@@ -178,13 +178,18 @@ export default function RiskAudit() {
         )}
       </Card>
 
-      {/* AI 稽核意見:只根據上方確定性發現撰寫 */}
+      {/* AI 稽核意見:只根據上方確定性發現撰寫。
+          批 B UX:功能關閉時藏產生按鈕、留簡短說明(確定性勾稽發現不受影響) */}
       <Card title="AI 稽核意見" action={
-        <Button variant="secondary" onClick={genAudit} disabled={aiBusy}>
-          <Sparkles size={14} aria-hidden />{aiBusy ? '產生中…' : ai ? '重新產生' : '產生稽核意見'}
-        </Button>
+        aiEnabled('audit.summary') && (
+          <Button variant="secondary" onClick={genAudit} disabled={aiBusy}>
+            <Sparkles size={14} aria-hidden />{aiBusy ? '產生中…' : ai ? '重新產生' : '產生稽核意見'}
+          </Button>
+        )
       }>
-        {!ai ? (
+        {!aiEnabled('audit.summary') ? (
+          <p className="text-xs text-[var(--text-3)]">此 AI 功能未啟用（機關稽核意見草稿）；上方確定性勾稽發現不受影響,仍可據以人工撰寫稽核意見。</p>
+        ) : !ai ? (
           <p className="text-xs text-[var(--text-3)]">依上方勾稽發現一鍵生成可交件的稽核意見摘要與建議事項；AI 只根據系統確定性發現撰寫，不臆造未列出的問題。</p>
         ) : (
           <div className="space-y-3">

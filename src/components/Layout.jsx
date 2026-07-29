@@ -134,12 +134,13 @@ export function WebLayout({ children }) {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
-  const { currentUser, can, workItemsSource, workItemsError, retryWorkItems, domainLoadError, retryDomainLoad } = useStore()
+  const { currentUser, can, workItemsSource, workItemsError, retryWorkItems, domainLoadError, retryDomainLoad, isPlatformAdmin } = useStore()
   const { pathname } = useLocation()
   // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——非正式模式的
   // admin(專案建立者)看得到全部;正式模式後回歸自己的角色視角。
+  // isPlatformAdmin 是獨立的「平台」維度(僅控制 /admin 入口可見;真正把關在 DB 的 admin RPC)。
   const org = currentUser?.org_type || 'contractor'
-  const visibleGroups = visibleNavGroups(org, can?.override)
+  const visibleGroups = visibleNavGroups(org, can?.override, isPlatformAdmin)
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       <TopBar onMenu={() => setMenuOpen(true)} scrolled={scrolled} />

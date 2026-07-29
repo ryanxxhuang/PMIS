@@ -9,6 +9,7 @@
 // 部署(colima 下必須 --use-api):supabase functions deploy draft-rfi-reply --use-api
 
 import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -25,8 +26,11 @@ const SCHEMA = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
+  const p = await req.json().catch(() => null) || {}
+  const gate = await openAiGate(req, { feature: 'rfi.draft_reply', projectId: p?.project_id })
+  if (!gate.ok) return gate.response
   try {
-    const p = await req.json()
     const rfi = p.rfi || {}
     const reqs = (p.requirements || []).slice(0, 20)
     const reqText = reqs.length
@@ -40,12 +44,17 @@ Deno.serve(async (req) => {
       '這是正式契約文件,務必嚴謹:只依提供的契約需求作答,不得臆造規範數值、尺寸或條號。' +
       '若疑義涉及設計圖說判斷、規範認定而提供資料不足,needs_designer 設為 true,並在回覆中明確載明「本案涉及設計判斷,建議轉請設計單位/建築師釋疑後辦理,不宜逕予認定」。' +
       '一併研判是否涉及工期或費用影響。回覆為草稿,供監造修改後正式發出,語氣正式、精簡。'
-    const { data, error } = await claudeJson({
+    const { data, error, usage, model } = await claudeJson({
       model: MODELS.fast, name: 'rfi_reply', schema: SCHEMA, maxTokens: 700, system, content: facts,
     })
-    if (error) return json({ error }, 502)
+    if (error) {
+      await closeAiGate(gate, { feature: 'rfi.draft_reply', model, usage, status: 'error', errorCode: 'claude_error' })
+      return json({ error }, 502)
+    }
+    await closeAiGate(gate, { feature: 'rfi.draft_reply', model, usage, status: 'ok' })
     return json(data, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'rfi.draft_reply', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 import { loadWorkItems } from '../../lib/boqCalc.js'
+import { PLAN_RANK } from '../../lib/aiFeatures.js'
 import { pageAllSafe } from '../../lib/pagedQuery.js'
 import {
   normalizeProject, fetchAllWorkItems, wiCacheGet, wiCachePut, wiCacheDel, dbToWorkItems,
@@ -129,6 +130,46 @@ export function useProjectsSlice({ currentUser, log }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject?.project_id, currentUser?.user_id, membershipReloadKey])
 
+  // ── AI 功能開關(批 B,純 UX 層)────────────────────────────────────────────
+  // 載入平台級 ai_features(key/enabled/min_plan)與本專案 project_ai_overrides,
+  // 配合 currentProject.ai_plan 在前端算出 aiEnabled(featureKey),把已停用功能的
+  // 入口藏起來——避免使用者按下去才吃 403。
+  // ⚠ 這只是 UX,不是權限:真正的閘門在伺服器端(edge function 的 openAiGate 問
+  // ai_feature_allowed);前端載入失敗/尚未載入一律「樂觀顯示」,由伺服器最終把關。
+  const [aiFeatureRows, setAiFeatureRows] = useState(null) // null=未載入(樂觀顯示)
+  const [aiOverrides, setAiOverrides] = useState({})       // { feature_key: enabled }
+  useEffect(() => {
+    const pid = currentProject?.project_id
+    if (!isSupabaseConfigured || !pid || !currentUser?.real) {
+      setAiFeatureRows(null); setAiOverrides({}); return
+    }
+    let active = true
+    Promise.all([
+      supabase.from('ai_features').select('key, enabled, min_plan'),
+      supabase.from('project_ai_overrides').select('feature_key, enabled').eq('project_id', pid),
+    ]).then(([f, o]) => {
+      if (!active) return
+      // 查詢失敗維持 null(樂觀顯示);表尚未 migrate 的環境也不會弄壞任何入口
+      setAiFeatureRows(f.error ? null : (f.data || []))
+      setAiOverrides(o.error ? {} : Object.fromEntries((o.data || []).map((r) => [r.feature_key, r.enabled])))
+    })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProject?.project_id, currentUser?.real])
+
+  // 與 DB 版 ai_feature_allowed 同三段邏輯:平台總開關 → 專案覆寫 → 方案門檻。
+  // demo 模式 / 未設 Supabase 一律 true(demo 是銷售簡報,不能被開關弄壞)。
+  const aiEnabled = useCallback((featureKey) => {
+    if (!isSupabaseConfigured) return true // demo:全開
+    if (!aiFeatureRows || !aiFeatureRows.length) return true // 未載入/載入失敗:樂觀顯示,伺服器仍會擋
+    const row = aiFeatureRows.find((f) => f.key === featureKey)
+    if (!row) return false // DB 已移除該功能 → 伺服器必擋,入口一併藏(對齊 fail-closed)
+    if (!row.enabled) return false // 平台 kill switch,覆寫翻不過
+    if (featureKey in aiOverrides) return aiOverrides[featureKey]
+    const plan = currentProject?.ai_plan || 'standard'
+    return (PLAN_RANK[plan] ?? 1) >= (PLAN_RANK[row.min_plan] ?? 0)
+  }, [aiFeatureRows, aiOverrides, currentProject?.ai_plan]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // 工項查表（item_key↔work_item uuid）+ 是否走真 DB（估驗/進度才寫回 DB）
   const wiMaps = useMemo(() => {
     const byKey = new Map(), idToKey = new Map(), byId = new Map()
@@ -249,7 +290,7 @@ export function useProjectsSlice({ currentUser, log }) {
 
   return {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
-    workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership,
+    workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership, aiEnabled,
     switchProject, createProject, importWorkItems, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
     loadPortfolio,
   }

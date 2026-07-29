@@ -7,6 +7,7 @@
 // 回 { am, pm, township, source } 或 { error }。防禦式解析 CWA 新舊欄位大小寫。
 
 import { cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const DATASET = 'F-D0047-089' // 鄉鎮天氣預報-臺灣未來 3 天(逐 3 小時,含天氣現象/3小時降雨機率)
 const R = Math.PI / 180
@@ -61,21 +62,35 @@ function wxAt(times: Record<string, unknown>[], date: string, loHour: number, hi
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:isLlm=false 也照樣過閘門、照樣記用量(token/cost 為 0、model null)——
+  // weather.fetch 是可獨立開關、需計次的模組(見 aiFeatures.ts 的 isLlm 語意)
+  const body = await req.json().catch(() => null)
+  const gate = await openAiGate(req, { feature: 'weather.fetch', projectId: body?.project_id })
+  if (!gate.ok) return gate.response
   try {
     const key = Deno.env.get('CWA_API_KEY')
     if (!key) return json({ error: '伺服器未設定 CWA_API_KEY(中央氣象局授權碼)' }, 500)
-    const { lat, lon, date } = await req.json()
+    const { lat, lon, date } = body || {}
     if (lat == null || lon == null) return json({ error: '缺少工地座標' }, 400)
     const day = (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) ? date : new Date().toISOString().slice(0, 10)
 
     const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/${DATASET}?Authorization=${encodeURIComponent(key)}`
     const resp = await fetch(url)
-    if (!resp.ok) return json({ error: `中央氣象局 ${resp.status}` }, 502)
-    const body = await resp.json()
-    if (body?.success === 'false' || body?.success === false) return json({ error: '中央氣象局:授權碼無效或查詢失敗' }, 502)
+    if (!resp.ok) {
+      await closeAiGate(gate, { feature: 'weather.fetch', status: 'error', errorCode: 'cwa_error' })
+      return json({ error: `中央氣象局 ${resp.status}` }, 502)
+    }
+    const cwa = await resp.json()
+    if (cwa?.success === 'false' || cwa?.success === false) {
+      await closeAiGate(gate, { feature: 'weather.fetch', status: 'error', errorCode: 'cwa_error' })
+      return json({ error: '中央氣象局:授權碼無效或查詢失敗' }, 502)
+    }
 
-    const locations = pickLocations(body.records || {})
-    if (!locations.length) return json({ error: '中央氣象局回應無鄉鎮資料(格式可能已變更)' }, 502)
+    const locations = pickLocations(cwa.records || {})
+    if (!locations.length) {
+      await closeAiGate(gate, { feature: 'weather.fetch', status: 'error', errorCode: 'cwa_error' })
+      return json({ error: '中央氣象局回應無鄉鎮資料(格式可能已變更)' }, 502)
+    }
 
     // 找最近鄉鎮
     let near: Record<string, unknown> | null = null, nd = Infinity
@@ -85,16 +100,25 @@ Deno.serve(async (req) => {
       const d = dist2(Number(lat), Number(lon), la, lo)
       if (d < nd) { nd = d; near = l }
     }
-    if (!near) return json({ error: '找不到最近鄉鎮(座標可能不在台灣範圍,請確認緯經度)' }, 200)
+    // 以下三個 200 出口(含「查無資料」的業務結果)都算服務正常運作 → 記 ok(token 0)
+    if (!near) {
+      await closeAiGate(gate, { feature: 'weather.fetch', status: 'ok' })
+      return json({ error: '找不到最近鄉鎮(座標可能不在台灣範圍,請確認緯經度)' }, 200)
+    }
 
     const times = wxTimes(near)
     const am = wxAt(times, day, 6, 12, 9)    // 上午:06–12 時,取最接近 09 時
     const pm = wxAt(times, day, 12, 18, 15)  // 下午:12–18 時,取最接近 15 時
-    if (!am && !pm) return json({ error: `中央氣象局預報未涵蓋 ${day}(逐 3 小時僅約未來 3 天,過去或太遠日期請手動填寫天氣)` }, 200)
+    if (!am && !pm) {
+      await closeAiGate(gate, { feature: 'weather.fetch', status: 'ok' })
+      return json({ error: `中央氣象局預報未涵蓋 ${day}(逐 3 小時僅約未來 3 天,過去或太遠日期請手動填寫天氣)` }, 200)
+    }
 
     const township = locName(near)
+    await closeAiGate(gate, { feature: 'weather.fetch', status: 'ok' })
     return json({ am, pm, township, source: `中央氣象局 ${township}` }, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'weather.fetch', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

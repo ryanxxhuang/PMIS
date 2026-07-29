@@ -17,6 +17,7 @@
 
 import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 import { normalizeSourceText, verifySuggestionSource } from '../_shared/sourceVerify.ts'
 import {
   PROMPT_VERSION, REQUIREMENT_TYPES, RESPONSIBLE_PARTY_TYPES, LIFECYCLE_PHASES,
@@ -166,23 +167,21 @@ Deno.serve(async (req) => {
     return json({ error: '伺服器未設定 Supabase 環境變數' }, 500)
   }
 
+  // 批 B 閘門:身分/成員資格/功能開關統一走 openAiGate(body.project_id 前端必帶;
+  // 權威 project 仍由 DB 從文件版本解出,下方 cross-check 保證兩者一致——
+  // 閘門判定不會套錯專案)。gate.userClient 沿用為本函式的 RLS-scoped client。
+  const body = await req.json().catch(() => null)
+  const gate = await openAiGate(req, { feature: 'requirements.extract', projectId: body?.project_id })
+  if (!gate.ok) return gate.response
+  const userClient = gate.userClient
+
   let service: SupabaseClient | null = null
   let runId: string | null = null
   try {
-    const body = await req.json().catch(() => null)
     const documentVersionId = body?.document_version_id
     if (typeof documentVersionId !== 'string' || !UUID_RE.test(documentVersionId)) {
       return json({ error: '缺少有效的 document_version_id' }, 400)
     }
-
-    // -- Caller authentication + authorization --------------------------------
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: req.headers.get('Authorization') || '' } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
-    const { data: userData } = await userClient.auth.getUser()
-    const user = userData?.user
-    if (!user) return json({ error: '未登入' }, 401)
 
     // RLS-scoped read proves the caller can see this version and pins the
     // project server-side; project_id from the body is only cross-checked.
@@ -229,7 +228,7 @@ Deno.serve(async (req) => {
         model_provider: 'anthropic',
         model_name: MODELS.smart,
         prompt_version: PROMPT_VERSION,
-        started_by: user.id,
+        started_by: gate.userId,
         input_page_count: pageRows.length,
       })
       .select('id')
@@ -279,11 +278,12 @@ Deno.serve(async (req) => {
       documentText,
       catalogLines,
     })
-    const { data: aiData, error: aiError } = await claudeJson({
+    const { data: aiData, error: aiError, usage: aiUsage, model: aiModel } = await claudeJson({
       model: MODELS.smart, name: 'requirement_suggestions', schema: SCHEMA,
       maxTokens: 16384, content: prompt,
     })
     if (aiError) {
+      await closeAiGate(gate, { feature: 'requirements.extract', model: aiModel, usage: aiUsage, status: 'error', errorCode: 'claude_error' })
       await failRun(service, runId, aiError, {
         pagination: paginated ? 'paginated' : 'unpaginated',
         empty_page_numbers: emptyPageNumbers,
@@ -291,6 +291,9 @@ Deno.serve(async (req) => {
       })
       return json({ error: aiError, run_id: runId, status: 'failed' }, 502)
     }
+    // AI 呼叫成功即記用量(token 已花掉);之後的落庫失敗不影響這筆記帳,
+    // 也不在外層 catch 再記(避免同一次呼叫重複計數)
+    await closeAiGate(gate, { feature: 'requirements.extract', model: aiModel, usage: aiUsage, status: 'ok' })
 
     // -- Deterministic validation + source verification ------------------------
     const rawItems = Array.isArray((aiData as Record<string, unknown>)?.requirements)

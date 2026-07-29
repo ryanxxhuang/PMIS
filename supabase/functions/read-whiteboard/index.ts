@@ -7,6 +7,7 @@
 // verify_jwt 預設開啟 → 只有登入使用者(前端帶 JWT)才能呼叫,擋匿名濫用金鑰。
 
 import { claudeJson, imageBlock, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -41,16 +42,25 @@ const PROMPT =
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
+  const body = await req.json().catch(() => null)
+  const gate = await openAiGate(req, { feature: 'sitelog.whiteboard', projectId: body?.project_id })
+  if (!gate.ok) return gate.response
   try {
-    const { image_base64, mime_type } = await req.json()
+    const { image_base64, mime_type } = body || {}
     if (!image_base64) return json({ error: '缺少 image_base64' }, 400)
-    const { data, error } = await claudeJson({
+    const { data, error, usage, model } = await claudeJson({
       model: MODELS.fast, name: 'site_log', schema: SCHEMA, maxTokens: 1024,
       content: [{ type: 'text', text: PROMPT }, imageBlock(image_base64, mime_type || 'image/jpeg')],
     })
-    if (error) return json({ error }, 502)
+    if (error) {
+      await closeAiGate(gate, { feature: 'sitelog.whiteboard', model, usage, status: 'error', errorCode: 'claude_error' })
+      return json({ error }, 502)
+    }
+    await closeAiGate(gate, { feature: 'sitelog.whiteboard', model, usage, status: 'ok' })
     return json(data, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'sitelog.whiteboard', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

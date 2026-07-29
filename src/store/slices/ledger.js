@@ -241,7 +241,10 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
   // 已完成的義務狀態依 title 對映帶到新清單,重解析不歸零人工進度。
   const parseContractBody = useCallback(async (body) => {
     if (!isPersistedProject) return { error: { message: '需真專案' } }
-    const { data, error } = await supabase.functions.invoke('parse-contract', { body })
+    // 批 B:body 一律帶 project_id——伺服器閘門(openAiGate)驗成員資格與功能開關
+    const { data, error } = await supabase.functions.invoke('parse-contract', {
+      body: { ...body, project_id: currentProject.project_id },
+    })
     if (error) return { error }
     if (data?.error) return { error: { message: data.error } }
     const obs = data.obligations || []

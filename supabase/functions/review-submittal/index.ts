@@ -10,6 +10,7 @@
 // 部署(colima 下必須 --use-api):supabase functions deploy review-submittal --use-api
 
 import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -36,8 +37,11 @@ const SCHEMA = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
+  const p = await req.json().catch(() => null) || {}
+  const gate = await openAiGate(req, { feature: 'submittal.review', projectId: p?.project_id })
+  if (!gate.ok) return gate.response
   try {
-    const p = await req.json()
     const sub = p.submittal || {}
     const wi = p.work_item
     const reqs = (p.requirements || []).slice(0, 25)
@@ -59,13 +63,18 @@ Deno.serve(async (req) => {
       '例:一份「施工計畫」不應被要求載明逾期罰款、每月月報期限、竣工文件期限——這些與施工計畫無關的需求一律標「不適用」,' +
       '且**「不適用」與「通用」項目都不得影響你的建議判定**(不得因施工計畫沒寫罰則就建議退回補正)。只有本類別應涵蓋卻缺漏/不符者才影響判定。' +
       '注意:本系統只追蹤送審流程、未附文件本體,凡涉及文件實質內容(圖說尺寸、計算書、試驗數值等)一律標「需監造核對文件」,不得臆斷已符合。語氣正式、精簡、務實。'
-    const { data, error } = await claudeJson({
+    const { data, error, usage, model } = await claudeJson({
       model: MODELS.fast, name: 'submittal_review', schema: SCHEMA, maxTokens: 1200,
       system, content: facts,
     })
-    if (error) return json({ error }, 502)
+    if (error) {
+      await closeAiGate(gate, { feature: 'submittal.review', model, usage, status: 'error', errorCode: 'claude_error' })
+      return json({ error }, 502)
+    }
+    await closeAiGate(gate, { feature: 'submittal.review', model, usage, status: 'ok' })
     return json(data, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'submittal.review', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

@@ -31,6 +31,7 @@ import { useQualitySlice } from './store/slices/quality.js'
 import { useCollabSlice } from './store/slices/collab.js'
 import { useLedgerSlice } from './store/slices/ledger.js'
 import { useAgentSlice } from './store/slices/agent.js'
+import { useAdminSlice } from './store/slices/admin.js'
 
 // Key 追蹤 context(P-01):useStore() 介面不變(照常解構),但每個元件只訂閱
 // 自己讀過的 key——估驗打字不再重渲染側欄/頂欄/浮動助理。核心在 store/tracked.jsx。
@@ -48,7 +49,7 @@ export function StoreProvider({ children }) {
   } = useAuthSlice()
   const {
     projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
-    workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership,
+    workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership, aiEnabled,
     switchProject, createProject, importWorkItems, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
     loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
@@ -138,6 +139,9 @@ export function StoreProvider({ children }) {
   const {
     agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions, setAgentActions,
   } = useAgentSlice(ctx, { saveSiteLog, createChecklistRecord, allChecklistTemplates, decideSubmittal }) // 接受日誌/查驗/審查意見草稿時走既有 saveSiteLog / createChecklistRecord / decideSubmittal(RLS/guard/確定性判定照常生效;審查意見一律只推進到「審核中」)
+  // 平台管理後台(批 C):isPlatformAdmin 只影響 /admin 的導覽與路由(UX)——
+  // 真正的權限把關在 DB(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)
+  const adminSlice = useAdminSlice({ currentUser })
 
   // ── 財務單一真相層(B-02)──────────────────────────────────────────────────
   // 「已核准變更設計套回工項」與「變更後契約金額」只在這裡算一次,所有金額/進度
@@ -286,6 +290,8 @@ export function StoreProvider({ children }) {
     passwordRecovery, requestPasswordReset, updatePassword,
     currentProject, projects, projectLoading, createProject, switchProject,
     workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, isPersistedProject, can,
+    // AI 功能開關(批 B,UX 層——真正的閘門在伺服器端 openAiGate):關閉的功能把入口藏起來
+    aiEnabled,
     adjustedItems, coNet, revisedTotal, domainLoadError, retryDomainLoad,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, listPhotosByWorkItems, readWhiteboard, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, classifySitePhoto, askAssistant, fetchWeather,
@@ -310,6 +316,7 @@ export function StoreProvider({ children }) {
     // actions
     createValuation, updateValuationItem, setValuationStatus, updateValuationPayment,
     generateSchedule, updatePlannedPct,
+    ...adminSlice, // 平台管理後台(isPlatformAdmin/platformAdminChecked + admin 載入/動作)
   }
 
   return <TrackedProvider value={value}>{children}</TrackedProvider>

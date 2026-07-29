@@ -130,6 +130,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       relevant = (linked.length ? [...linked, ...relevant.filter((r) => !linkedIds.has(r.id))] : relevant).slice(0, 25)
     } else relevant = relevant.slice(0, 25)
     const payload = {
+      project_id: pid, // 批 B:伺服器閘門(openAiGate)驗成員資格與功能開關
       submittal: { title: submittal.title, category: submittal.category, attachment_note: submittal.attachment_note, revision: submittal.revision },
       work_item: workItem,
       requirements: relevant.map((r) => ({
@@ -178,6 +179,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       .select('title,acceptance_criteria,evidence_requirement,status')
       .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(30)
     const body = {
+      project_id: pid, // 批 B:伺服器閘門(openAiGate)驗成員資格與功能開關
       submittal: { title: submittal.title, category: submittal.category },
       requirements: (reqs || []).map((r) => ({ title: r.title, acceptance_criteria: r.acceptance_criteria, evidence_requirement: r.evidence_requirement })),
     }
@@ -207,6 +209,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       .select('title,acceptance_criteria,evidence_requirement,status')
       .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(25)
     const payload = {
+      project_id: pid, // 批 B:伺服器閘門(openAiGate)驗成員資格與功能開關
       rfi: { title: rfi.title, question: rfi.question, cost_impact: rfi.cost_impact, schedule_impact: rfi.schedule_impact },
       requirements: (reqs || []).map((r) => ({ title: r.title, acceptance_criteria: r.acceptance_criteria, evidence_requirement: r.evidence_requirement })),
     }

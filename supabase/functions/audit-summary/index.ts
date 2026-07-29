@@ -8,6 +8,7 @@
 // 部署(colima 下必須 --use-api):supabase functions deploy audit-summary --use-api
 
 import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -23,10 +24,15 @@ const SCHEMA = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
+  const p = await req.json().catch(() => null) || {}
+  const gate = await openAiGate(req, { feature: 'audit.summary', projectId: p?.project_id })
+  if (!gate.ok) return gate.response
   try {
-    const p = await req.json()
     const findings = (p.findings || []).slice(0, 20)
     if (!findings.length) {
+      // 無發現走確定性罐頭回覆、不打 LLM——仍記一筆 ok(token 0)計次
+      await closeAiGate(gate, { feature: 'audit.summary', status: 'ok' })
       return json({ opinion: '本案經文件勾稽鏈自動比對(估驗、施工日誌、查驗、試體),未發現明顯對不起來之處,證據鏈大致完整。仍請依契約與相關法令續行常態監督。', recommendations: [] }, 200)
     }
     const list = findings.map((f: Record<string, unknown>, i: number) =>
@@ -39,12 +45,17 @@ Deno.serve(async (req) => {
       '嚴禁出現「剔除、補強、打除、停工、罰款、扣款、解約、驗收不合格」等處置字眼(那是結構技師、監造與機關依法定程序的權責)。' +
       '例:試體 7 天未達標,只能建議「確認齡期、設計強度、28 天試驗結果與監造紀錄」,不得建議剔除或補強。' +
       '務必敘明本結果為「值得複查的異常提示,非違規認定」,實際處置應依契約與相關法令查證。'
-    const { data, error } = await claudeJson({
+    const { data, error, usage, model } = await claudeJson({
       model: MODELS.fast, name: 'audit_summary', schema: SCHEMA, maxTokens: 900, system, content: facts,
     })
-    if (error) return json({ error }, 502)
+    if (error) {
+      await closeAiGate(gate, { feature: 'audit.summary', model, usage, status: 'error', errorCode: 'claude_error' })
+      return json({ error }, 502)
+    }
+    await closeAiGate(gate, { feature: 'audit.summary', model, usage, status: 'ok' })
     return json(data, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'audit.summary', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

@@ -8,6 +8,7 @@
 // 部署(colima 下必須 --use-api):supabase functions deploy assistant-chat --use-api
 
 import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -44,17 +45,25 @@ const SYSTEM =
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
+  const body = await req.json().catch(() => null)
+  const gate = await openAiGate(req, { feature: 'assistant.chat', projectId: body?.project_id })
+  if (!gate.ok) return gate.response
   try {
-    const { question, facts } = await req.json()
+    const { question, facts } = body || {}
     if (!question || !facts) return json({ error: '缺少 question 或 facts' }, 400)
 
-    const { data, error } = await claudeJson({
+    const { data, error, usage, model } = await claudeJson({
       model: MODELS.fast, name: 'project_answer', schema: SCHEMA, maxTokens: 1500, system: SYSTEM,
       content:
         `本案事實快照(唯一資料來源):\n${JSON.stringify(facts)}\n\n` +
         `使用者問題:${question}\n\n只根據上面快照回答,附出處。`,
     })
-    if (error) return json({ error }, 502)
+    if (error) {
+      await closeAiGate(gate, { feature: 'assistant.chat', model, usage, status: 'error', errorCode: 'claude_error' })
+      return json({ error }, 502)
+    }
+    await closeAiGate(gate, { feature: 'assistant.chat', model, usage, status: 'ok' })
 
     // 出處路由白名單防呆:過濾掉不在快照可引用路由內的 route(避免 AI 生假連結)
     const allow = new Set(Object.values(facts.可引用路由 || {}))
@@ -65,6 +74,7 @@ Deno.serve(async (req) => {
       : []
     return json({ answer: (data as { answer: string }).answer, sources }, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'assistant.chat', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

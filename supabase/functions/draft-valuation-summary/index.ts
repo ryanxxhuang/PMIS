@@ -7,6 +7,7 @@
 // 部署(colima 下必須 --use-api):supabase functions deploy draft-valuation-summary --use-api
 
 import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -18,8 +19,11 @@ const SCHEMA = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
+  const p = await req.json().catch(() => null) || {}
+  const gate = await openAiGate(req, { feature: 'valuation.summary', projectId: p?.project_id })
+  if (!gate.ok) return gate.response
   try {
-    const p = await req.json()
     const items = (p.items || []).slice(0, 30)
       .map((i: Record<string, unknown>) => `${i.name}${i.period_qty ? `(本期 ${i.period_qty} ${i.unit || ''})` : ''}`).join('、')
     const caps = (p.photo_captions || []).slice(0, 12).join('、')
@@ -33,13 +37,18 @@ Deno.serve(async (req) => {
     const system =
       '你是台灣公共工程承包商的工地主任,要為「本期估驗計價」撰寫本期施工說明,交監造與機關審核。' +
       '只根據提供的事實撰寫,不得誇大或臆造未提供的數字/工項;語氣為正式、精簡的公共工程用語;120–160 字,單一段落。'
-    const { data, error } = await claudeJson({
+    const { data, error, usage, model } = await claudeJson({
       model: MODELS.fast, name: 'valuation_summary', schema: SCHEMA, maxTokens: 512,
       system, content: facts,
     })
-    if (error) return json({ error }, 502)
+    if (error) {
+      await closeAiGate(gate, { feature: 'valuation.summary', model, usage, status: 'error', errorCode: 'claude_error' })
+      return json({ error }, 502)
+    }
+    await closeAiGate(gate, { feature: 'valuation.summary', model, usage, status: 'ok' })
     return json(data, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'valuation.summary', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

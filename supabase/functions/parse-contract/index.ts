@@ -9,6 +9,7 @@
 // 掃描 PDF/圖片抽不到字 → 退回送 base64 由模型「看」。本函式兩種輸入都吃。
 
 import { claudeJson, imageBlock, pdfBlock, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 
 const OBLIGATION = {
   type: 'object',
@@ -49,8 +50,12 @@ const PROMPT =
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
+  const body = await req.json().catch(() => null)
+  const gate = await openAiGate(req, { feature: 'contract.parse', projectId: body?.project_id })
+  if (!gate.ok) return gate.response
   try {
-    const { text, file_base64, mime_type, filename } = await req.json()
+    const { text, file_base64, mime_type, filename } = body || {}
     if (!text && !file_base64) return json({ error: '缺少 text 或 file_base64' }, 400)
 
     // 優先用前端抽好的純文字(準);沒有才退回讓模型「看」PDF/圖片。
@@ -65,13 +70,18 @@ Deno.serve(async (req) => {
       ]
     }
 
-    const { data, error } = await claudeJson({
+    const { data, error, usage, model } = await claudeJson({
       model: MODELS.smart, name: 'contract_obligations', schema: SCHEMA, maxTokens: 8192,
       content,
     })
-    if (error) return json({ error }, 502)
+    if (error) {
+      await closeAiGate(gate, { feature: 'contract.parse', model, usage, status: 'error', errorCode: 'claude_error' })
+      return json({ error }, 502)
+    }
+    await closeAiGate(gate, { feature: 'contract.parse', model, usage, status: 'ok' })
     return json(data, 200)
   } catch (e) {
+    await closeAiGate(gate, { feature: 'contract.parse', status: 'error', errorCode: 'exception' })
     return json({ error: String((e as Error)?.message || e) }, 500)
   }
 })

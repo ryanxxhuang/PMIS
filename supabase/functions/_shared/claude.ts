@@ -13,6 +13,16 @@ export const MODELS = {
 
 type ContentBlock = Record<string, unknown>
 
+// Anthropic 回應的 usage 形狀(批 B 計量用;欄位可能缺)
+export type ClaudeUsage = {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
+}
+
+// 回傳除 { data, error } 外亦帶 usage / model(批 B 計量用,純加法——
+// 既有呼叫端只解構 { data, error } 完全不受影響)
 export async function claudeJson(opts: {
   model: string
   content: ContentBlock[] | string
@@ -20,7 +30,7 @@ export async function claudeJson(opts: {
   name: string           // 工具名(描述輸出用途)
   maxTokens?: number
   system?: string
-}): Promise<{ data?: unknown; error?: string }> {
+}): Promise<{ data?: unknown; error?: string; usage?: ClaudeUsage; model?: string }> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
   if (!apiKey) return { error: '伺服器未設定 ANTHROPIC_API_KEY' }
 
@@ -40,11 +50,14 @@ export async function claudeJson(opts: {
       messages: [{ role: 'user', content: opts.content }],
     }),
   })
-  if (!resp.ok) return { error: `Claude ${resp.status}: ${await resp.text()}` }
+  if (!resp.ok) return { error: `Claude ${resp.status}: ${await resp.text()}`, model: opts.model }
   const data = await resp.json()
+  // usage / model 原樣帶回(token 已燒掉,連「未回結構化內容」的失敗也要能記帳)
+  const usage = data.usage as ClaudeUsage | undefined
+  const model = typeof data.model === 'string' ? data.model : opts.model
   const tu = (data.content || []).find((b: { type: string }) => b.type === 'tool_use')
-  if (!tu?.input) return { error: 'AI 未回傳結構化內容' }
-  return { data: tu.input }
+  if (!tu?.input) return { error: 'AI 未回傳結構化內容', usage, model }
+  return { data: tu.input, usage, model }
 }
 
 export const imageBlock = (base64: string, mediaType = 'image/jpeg') =>

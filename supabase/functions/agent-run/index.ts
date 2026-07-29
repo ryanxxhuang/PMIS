@@ -10,8 +10,12 @@
 // 部署:supabase functions deploy agent-run --use-api(colima 下必須 --use-api)
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { cors, jsonResponse as json } from '../_shared/claude.ts'
+import { cors, jsonResponse as json, MODELS } from '../_shared/claude.ts'
 import { claudeAgent } from '../_shared/agent.ts'
+// 批 B:功能閘門檢查沿用本函式既有的 userClient/serviceClient(不重跑 openAiGate
+// 的身分/成員流程),記帳走同一支低階 recordAiUsage(紅線:記帳失敗絕不影響回應)
+import { recordAiUsage } from '../_shared/aiGate.ts'
+import { featureByKey } from '../_shared/aiFeatures.ts'
 import { personaSystem } from '../_shared/agentPersona.ts'
 import type { AgentRole } from '../_shared/agentPersona.ts'
 import { makeToolExec, toolsForRole } from '../_shared/agentTools.ts'
@@ -25,6 +29,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  const startedAt = Date.now() // 批 B:用量事件的 duration 起點
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
@@ -64,6 +69,22 @@ Deno.serve(async (req) => {
       .maybeSingle()
     if (projectError) return json({ error: projectError.message }, 500)
     if (!project) return json({ error: '找不到專案或無權限' }, 404)
+
+    // -- 批 B:AI 功能閘門(計量/商業閘門,非安全邊界——資料安全靠 RLS)---------
+    // RPC 查詢失敗 → 保守放行並 log:讓計量層故障導致 agent 全倒是不合理的爆炸半徑;
+    // 正常回 false(平台關閉/方案不足)→ 記 blocked 並擋下。
+    const { data: allowed, error: allowError } = await userClient
+      .rpc('ai_feature_allowed', { p_project: projectId, p_feature: 'agent.run' })
+    if (allowError) {
+      console.error('ai_feature_allowed 查詢失敗(agent.run,保守放行):', allowError.message)
+    } else if (allowed === false) {
+      await recordAiUsage(serviceClient, {
+        feature: 'agent.run', projectId, userId: user.id, actor: 'user',
+        durationMs: Date.now() - startedAt, status: 'blocked', errorCode: 'feature_disabled',
+      })
+      const label = featureByKey['agent.run']?.label || 'agent.run'
+      return json({ error: `此 AI 功能未啟用(${label}),請聯絡系統管理者`, code: 'feature_disabled' }, 403)
+    }
 
     // -- 角色由伺服器決定 ------------------------------------------------------
     const { data: membership } = await userClient
@@ -108,6 +129,16 @@ Deno.serve(async (req) => {
       userMessage: message,
       facts: body?.facts,
       history,
+    })
+
+    // 批 B:記用量(claudeAgent 已彙總多輪 usage;model 即其預設的 MODELS.agent)。
+    // recordAiUsage 內部吞掉一切錯誤——記帳失敗絕不能讓 agent 回應失敗。
+    await recordAiUsage(serviceClient, {
+      feature: 'agent.run', projectId, userId: user.id, actor: 'user',
+      model: MODELS.agent, usage: result.usage,
+      durationMs: Date.now() - startedAt,
+      status: result.error ? 'error' : 'ok',
+      errorCode: result.error ? 'claude_error' : null,
     })
 
     // steps 只回摘要(tool/ok/ms),工具輸出不回前端 —— 前端只該看到最終回答

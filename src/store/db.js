@@ -18,6 +18,7 @@ export function normalizeProject(row) {
     award_date: row.award_date, notice_date: row.notice_date, commencement_date: row.commencement_date,
     formal_mode: !!row.formal_mode,
     latitude: row.latitude ?? null, longitude: row.longitude ?? null, // 工地座標(CWA 天氣用)
+    ai_plan: row.ai_plan || 'standard', // AI 方案(批 B:前端 aiEnabled 據此隱藏入口)
   }
 }
 

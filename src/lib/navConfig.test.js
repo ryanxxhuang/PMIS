@@ -154,6 +154,52 @@ describe('visibleNavGroups(側欄)', () => {
   })
 })
 
+describe('平台管理(/admin):platformAdminOnly 是獨立於專案角色的維度', () => {
+  it('非平台管理員:任何專案角色都進不去,override 也翻不過', () => {
+    for (const org of ORGS) {
+      expect(routeAllowed('/admin', org, false)).toBe(false)
+      expect(routeAllowed('/admin', org, false, false)).toBe(false)
+    }
+    // can.override 是「專案管理者」的跨角色例外,不是平台權限——絕不放行 /admin
+    expect(routeAllowed('/admin', 'contractor', true)).toBe(false)
+    expect(routeAllowed('/admin', 'owner', true, false)).toBe(false)
+  })
+  it('平台管理員:任何專案角色都進得去(平台維度與 org_type 無關)', () => {
+    for (const org of ORGS) {
+      expect(routeAllowed('/admin', org, false, true)).toBe(true)
+    }
+  })
+  it('側欄:非平台管理員完全看不到(連「平台」群組都不渲染),仍是 9 項', () => {
+    for (const org of ORGS) {
+      const groups = visibleNavGroups(org, false)
+      expect(groups.find((g) => g.title === '平台')).toBeUndefined()
+      expect(flatNav(groups)).toHaveLength(9)
+    }
+    expect(flatNav(visibleNavGroups('contractor', true)).find((i) => i.to === '/admin')).toBeUndefined()
+  })
+  it('側欄:平台管理員多出「平台管理」一項(9+1)', () => {
+    const groups = visibleNavGroups('owner', false, true)
+    const platform = groups.find((g) => g.title === '平台')
+    expect(platform.items.map((i) => i.label)).toEqual(['平台管理'])
+    expect(flatNav(groups)).toHaveLength(10)
+  })
+  it('/admin 是單頁,不掛工作台分頁列', () => {
+    expect(workbenchFor('/admin', 'owner', false, true)).toBeNull()
+  })
+  it('platformAdminOnly 路由清單釘死:只有 /admin,且不得帶 roles(兩維度不可混用)', () => {
+    const flagged = []
+    for (const g of navGroups) for (const item of g.items) {
+      for (const n of (item.tabs || [item])) {
+        if (n.platformAdminOnly) {
+          flagged.push(n.to)
+          expect(n.roles).toBeUndefined()
+        }
+      }
+    }
+    expect(flagged).toEqual(['/admin'])
+  })
+})
+
 describe('roles 定義釘死(批6 搬移不得鬆綁)', () => {
   // 直接對 navGroups 定義做結構斷言:哪些路由帶 roles、帶哪些 roles,一字不差。
   it('帶 roles 的路由清單與內容完全不變', () => {
