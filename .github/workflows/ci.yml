@@ -14,7 +14,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # 單一真相:讀 .nvmrc,本機 `nvm use` 與 CI 一定拿到同一個 major。
+          # 硬下限(>=22.13.0)另外釘在 package.json engines。
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm test
