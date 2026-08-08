@@ -5,13 +5,17 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Square, MoveUpRight, Type, Undo2, X } from 'lucide-react'
 import { Button } from './ui.jsx'
 import { appPrompt } from './confirm.jsx'
+// pdf.js worker 自帶,與 documentExtract.js 同一個決定(B-12):
+// 原本這裡是 jsdelivr CDN,機關內網連不出去就標註不了圖面;而且 worker 是會執行的
+// 程式碼,從第三方 CDN 拉本來就不該是預設。bundled worker 版本必然與主程式一致。
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 const STROKE = '#e8630c' // 安全橘:警示=品牌語意
 
 async function fileToImageDataUrl(file) {
   if (file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf')) {
     const pdfjs = await import('pdfjs-dist')
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
     const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
     const page = await pdf.getPage(1)
     const vp = page.getViewport({ scale: 2 })
