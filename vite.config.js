@@ -7,6 +7,10 @@ export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],
   server: {
+    // 只綁 localhost,不對區域網路公開。dev server 的路徑類漏洞(如 GHSA-fx2h-pf6j-xcff
+    // 的 server.fs.deny 繞過)只有在 server 聽得到外部連線時才有人打得到 —— 明寫比靠預設值安全。
+    // 真要讓手機連本機測,才臨時下 `npm run dev -- --host`。
+    host: 'localhost',
     // 尊重外部指定的 PORT(preview/CI 自動配 port),沒有就用 Vite 預設 5173
     port: Number(process.env.PORT) || undefined,
     // 避免編輯 .claude 設定或文件時觸發整頁 reload、清掉 demo 進行中的記憶體狀態
