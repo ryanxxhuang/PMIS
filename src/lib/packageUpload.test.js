@@ -86,11 +86,17 @@ describe('elapsed time and storage paths', () => {
     expect(formatElapsed(3_599_000)).toBe('59:59')
   })
 
-  it('builds the package-scoped private storage path with the original filename', () => {
+  it('storage key 一律退化成 ASCII(Supabase 只收 S3 安全字元,中文檔名會 Invalid key)', () => {
+    // dry-run 2026-08-12 的真實案例:整串中文+全形括號,原樣進 key 直接被拒
+    expect(storagePathFor({
+      projectId: 'p1', packageId: 'pkg1', documentId: 'd1', versionId: 'v1',
+      filename: '02-工務局工程採購契約(稿)-1090720.pdf',
+    })).toBe('projects/p1/contract-packages/pkg1/d1/v1/02-_-1090720.pdf')
+    // 全中文檔名 → 退到 file+副檔名(顯示名存 original_filename,不靠 key)
     expect(storagePathFor({
       projectId: 'p1', packageId: 'pkg1', documentId: 'd1', versionId: 'v1',
       filename: '工程採購契約.pdf',
-    })).toBe('projects/p1/contract-packages/pkg1/d1/v1/工程採購契約.pdf')
+    })).toBe('projects/p1/contract-packages/pkg1/d1/v1/file.pdf')
     // path separators in filenames cannot escape the package folder
     expect(storagePathFor({
       projectId: 'p1', packageId: 'pkg1', documentId: 'd1', versionId: 'v1',

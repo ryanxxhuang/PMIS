@@ -133,8 +133,18 @@ export async function mapWithConcurrency(items, limit, fn) {
 }
 
 export function storagePathFor({ projectId, packageId, documentId, versionId, filename }) {
-  const safe = (filename || 'file').replace(/[/\\]/g, '_')
-  return `projects/${projectId}/contract-packages/${packageId}/${documentId}/${versionId}/${safe}`
+  // Supabase Storage 的物件 key 只收 S3 安全字元(ASCII)——中文或全形符號會讓整個
+  // 上傳被拒(Invalid key)。dry-run 第一份真實契約「02-工務局工程採購契約(稿)-1090720.pdf」
+  // 就炸在這裡:政府文件檔名幾乎都是中文,key 必須退化成 ASCII。
+  // 顯示用的原始檔名存於 document_versions.original_filename,不受影響;
+  // 唯一性由路徑中的 documentId/versionId 保證,檔名只是給人在 bucket 裡辨識的尾巴。
+  const raw = filename || 'file'
+  const ext = (raw.match(/\.[A-Za-z0-9]{1,10}$/) || [''])[0]
+  const base = raw.slice(0, raw.length - ext.length)
+    .replace(/[^A-Za-z0-9._-]/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^_+|_+$/g, '') || 'file'
+  return `projects/${projectId}/contract-packages/${packageId}/${documentId}/${versionId}/${base}${ext}`
 }
 
 async function sha256Hex(buffer) {
