@@ -60,8 +60,8 @@ function ResetPasswordForm({ updatePassword }) {
     <form onSubmit={submit} className="space-y-3">
       <div className="text-sm font-medium text-[var(--text)]">設定新密碼</div>
       <p className="text-xs text-[var(--text-2)]">你剛透過重設連結回來,請設定新密碼後繼續。</p>
-      <input className={input} type="password" placeholder="新密碼（至少 6 碼）" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={6} autoFocus />
-      <input className={input} type="password" placeholder="再輸入一次新密碼" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={6} />
+      <input className={input} type="password" placeholder="新密碼（至少 8 碼，含大小寫英文與數字）" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} autoFocus />
+      <input className={input} type="password" placeholder="再輸入一次新密碼" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={8} />
       <ErrorBanner msg={err} />
       <button type="submit" disabled={busy}
         className="w-full bg-[var(--primary)] text-white rounded-lg py-2.5 font-medium hover:bg-[var(--primary-hover)] pressable disabled:opacity-50">
@@ -177,7 +177,7 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
       )}
       <input className={input} type="email" placeholder="Email" value={form.email} onChange={set('email')} required />
       {mode !== 'forgot' && (
-        <input className={input} type="password" placeholder="密碼（至少 6 碼）" value={form.password} onChange={set('password')} required minLength={6} />
+        <input className={input} type="password" placeholder="密碼（至少 8 碼，含大小寫英文與數字）" value={form.password} onChange={set('password')} required minLength={8} />
       )}
 
       <ErrorBanner msg={err} />
