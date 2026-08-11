@@ -1,0 +1,10 @@
+# 為什麼要有這個檔:不放的話 /robots.txt 會由 Cloudflare 邊緣自行產生回應,
+# 那個回應不經過 Worker,因此 _headers 的安全標頭套不上去
+# (2026-08-11 弱點掃描就各報了一個 X-Content-Type-Options 與 HSTS 缺漏)。
+# 自己放一份,改由 Worker 提供,標頭就會一併帶上。
+
+User-agent: *
+Allow: /
+
+# demo 站是銷售簡報用的假資料,不要被搜尋引擎索引
+Disallow: /demo/
