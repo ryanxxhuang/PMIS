@@ -1,0 +1,51 @@
+# Cloudflare Pages 回應標頭。
+#
+# 為什麼會有這個檔:2026-08-11 弱點掃描(OWASP ZAP)報的 13 類警告裡有 7 類同一根因——
+# GitHub Pages 不支援自訂 HTTP 回應標頭,所以 CSP/X-Frame-Options 這些在舊主機上根本設不了。
+# 搬到 Cloudflare Pages 後一次補齊。
+#
+# ⚠️ 法規定位要講清楚(跟機關解釋時用):附表十「系統與通訊保護」構面在**普通級與中級都是
+# 「無要求」**,所以安全標頭**不是條文要求**,是「測試階段應執行弱點掃描」掃出來的結果要求的。
+# 這個區別寫在 docs/資安/弱點掃描-2026-08-11/掃描結果與處置對照.md。
+
+/*
+  # --- 掃描直接點名的四項 ---
+  # 點擊劫持:本服務沒有任何被嵌入的正當情境,直接 DENY
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  # 只開實際用得到的能力:施工日誌與缺失照片有 capture="environment"(手機直接拍),故 camera 要留
+  Permissions-Policy: camera=(self), geolocation=(), microphone=(), payment=(), usb=(), interest-cohort=()
+
+  # --- HSTS ---
+  # 舊站在 *.github.io 是靠瀏覽器 preload 清單強制 HTTPS,換自有網域後要自己扛。
+  # preload 指示要等網域穩定跑一陣子、確認全站 HTTPS 無誤後再送出 preload 申請。
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+  # --- CSP ---
+  # script-src 維持嚴格 'self':全站 JS 皆自載,無任何第三方 CDN(所以 SRI 那項掃描警告也不適用)。
+  # style-src 需要 'unsafe-inline':React 的 style={{...}} 會產生行內樣式屬性。
+  # fonts.googleapis.com / fonts.gstatic.com:index.html 直接載 Noto Sans TC 與 IBM Plex Mono
+  #   (字型必須寫在 index.html,index.css 的 @import 會被 Lightning CSS 在 build 時丟棄)。
+  # connect-src:Supabase(REST/Storage/Auth)+ Sentry 錯誤回報。前端不直接呼叫 Claude API,
+  #   所有 LLM 呼叫都走 edge function,故不需開放 Anthropic 網域。
+  # worker-src blob::pdfjs-dist 解析 PDF 時會用 worker。
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io; worker-src 'self' blob:; upgrade-insecure-requests
+
+  # --- 跨來源隔離 ---
+  # 只設 COOP,刻意不設 COEP(require-corp)。COEP 會擋掉未帶 CORP 標頭的跨來源資源(Google Fonts),
+  # 而它真正的用途是解鎖 SharedArrayBuffer——本服務用不到。ZAP 會報這項,已在處置對照表敘明不適用。
+  Cross-Origin-Opener-Policy: same-origin
+
+# 內容雜湊過的資產可以永久快取
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 入口頁不可快取,否則改版後使用者會拿到舊的 index 指向已不存在的 assets
+/index.html
+  Cache-Control: no-cache
+
+# 漏洞回報聯絡資訊(RFC 9116)。純文字,且要能被機器抓取
+/.well-known/security.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=86400
