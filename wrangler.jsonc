@@ -1,0 +1,20 @@
+// Cloudflare Workers 靜態資產部署設定。
+//
+// 為什麼是 Workers 而不是傳統 Pages:2026-08 Cloudflare 已把 Pages 併進 Workers,
+// 新版後台的「Import a repository」走的是 Workers builds 流程(deploy command = wrangler deploy)。
+// Workers 的 static assets 同樣支援 _headers 與 _redirects,所以搬家的目的(補安全標頭)成立。
+//
+// 搬家原因見 docs/資安/弱點掃描-2026-08-11/掃描結果與處置對照.md:
+// 掃出的 13 類警告有 7 類根因是 GitHub Pages 不支援自訂 HTTP 回應標頭。
+{
+  "name": "pmis",
+  "compatibility_date": "2026-08-11",
+  "assets": {
+    // vite build 的產出。public/ 底下的 _headers、_redirects、.well-known/
+    // 會被 vite 原樣複製進 dist/,由 Cloudflare 讀取。
+    "directory": "./dist/",
+    // 前端是 SPA(HashRouter,但 /demo 子站與未來改 BrowserRouter 都需要這個):
+    // 找不到實體檔案時回 index.html 且狀態碼 200,而不是 404。
+    "not_found_handling": "single-page-application"
+  }
+}
