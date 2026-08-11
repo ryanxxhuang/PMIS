@@ -4,6 +4,7 @@ import { MailCheck } from 'lucide-react'
 import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
 import { ErrorBanner } from '../components/ui.jsx'
+import { friendlyError } from '../lib/errorMessage.js'
 
 export default function Login() {
   const { isSupabaseConfigured, setCurrentUser, currentUser, signIn, signUp, resendSignup,
@@ -52,7 +53,7 @@ function ResetPasswordForm({ updatePassword }) {
     setBusy(true)
     const { error } = await updatePassword(pw)
     setBusy(false)
-    if (error) setErr(error.message || '密碼更新失敗,請重試(重設連結可能已過期,可重寄一封)')
+    if (error) setErr(friendlyError(error, '密碼更新失敗，請重試（重設連結可能已過期，可重寄一封）'))
     // 成功:passwordRecovery 清除 → Login 的導向 effect 自動帶進工作區
   }
 
@@ -88,17 +89,17 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
     if (mode === 'forgot') {
       const { error } = await requestPasswordReset(form.email)
       setLoading(false)
-      if (error) setErr(error.message || '寄送失敗,請稍後再試')
+      if (error) setErr(friendlyError(error, '寄送失敗，請稍後再試'))
       else setResetSent(true)
     } else if (mode === 'signin') {
       const { error } = await signIn({ email: form.email, password: form.password })
       setLoading(false)
-      if (error) setErr(error.message || '登入失敗，請確認帳密')
+      if (error) setErr(friendlyError(error, '登入失敗，請確認帳密'))
       // 成功後由 store 的 auth listener 設定 currentUser → Login useEffect 自動導向
     } else {
       const { error, needsConfirmation } = await signUp(form)
       setLoading(false)
-      if (error) setErr(error.message || '註冊失敗，請再試一次')
+      if (error) setErr(friendlyError(error, '註冊失敗，請再試一次'))
       else if (needsConfirmation) setSent(true)
       // 若未開驗證信（needsConfirmation=false）→ 直接登入並自動導向
     }
@@ -122,7 +123,7 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
   const onResend = async () => {
     setResendMsg('寄送中…')
     const { error } = await resendSignup(form.email)
-    setResendMsg(error ? (error.message || '重寄失敗，請稍後再試') : '已重寄，請查看信箱（含垃圾郵件匣）。')
+    setResendMsg(error ? friendlyError(error, '重寄失敗，請稍後再試') : '已重寄，請查看信箱（含垃圾郵件匣）。')
   }
 
   if (sent) {
