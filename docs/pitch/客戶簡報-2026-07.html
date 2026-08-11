@@ -1,0 +1,633 @@
+<!--
+  客戶 pitch 簡報（機關版，可抽頁給監造／廠商用）。
+  這份檔案是 Artifact 片段：沒有 <!doctype>／<html>／<head>／<body>，發佈時由平台包起來。
+  要改的地方集中在三處：
+    1) --brand-name / --brand-latin 附近的封面文字
+    2) .price 區塊的數字（現在錨在小額採購 15 萬上限內）
+    3) 每頁 <footer class="tb"> 的章節名（title block）
+  簡報操作：← → / 空白鍵翻頁；瀏覽器列印可直接輸出橫式 PDF。
+-->
+<title>工程 Agent — 客戶簡報</title>
+
+<style>
+  /* ── tokens：直接沿用產品 UI 的鋼青藍＋安全橘，讓簡報和實機同一個世界 ── */
+  :root {
+    --ink: #16202b;
+    --ink-2: #4d5c6a;
+    --ink-3: #78848f;
+    --paper: #f1f3f6;
+    --card: #ffffff;
+    --card-2: #eceff3;
+    --rule: #c9d2da;
+    --rule-2: #e2e7ec;
+    --steel: #1e5a85;
+    --steel-text: #1b5480;
+    --steel-tint: #e5eef5;
+    --safety: #e8630c;
+    --safety-text: #c8540a;
+    --safety-tint: #fdeadd;
+    --good: #1a7f4e;
+    --bad: #c73a34;
+
+    --font-display: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+    --font-body: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --pad: clamp(28px, 4.2vw, 76px);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e6ebf0; --ink-2: #9fabb8; --ink-3: #75818e;
+      --paper: #14181d; --card: #1c2229; --card-2: #2a323b;
+      --rule: #313b46; --rule-2: #262e37;
+      --steel: #5b9dc9; --steel-text: #7fb6da; --steel-tint: #1a2b38;
+      --safety: #f5873c; --safety-text: #f5873c; --safety-tint: #3a2113;
+      --good: #4cb98a; --bad: #e0736c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e6ebf0; --ink-2: #9fabb8; --ink-3: #75818e;
+    --paper: #14181d; --card: #1c2229; --card-2: #2a323b;
+    --rule: #313b46; --rule-2: #262e37;
+    --steel: #5b9dc9; --steel-text: #7fb6da; --steel-tint: #1a2b38;
+    --safety: #f5873c; --safety-text: #f5873c; --safety-tint: #3a2113;
+    --good: #4cb98a; --bad: #e0736c;
+  }
+  :root[data-theme="light"] {
+    --ink: #16202b; --ink-2: #4d5c6a; --ink-3: #78848f;
+    --paper: #f1f3f6; --card: #ffffff; --card-2: #eceff3;
+    --rule: #c9d2da; --rule-2: #e2e7ec;
+    --steel: #1e5a85; --steel-text: #1b5480; --steel-tint: #e5eef5;
+    --safety: #e8630c; --safety-text: #c8540a; --safety-tint: #fdeadd;
+    --good: #1a7f4e; --bad: #c73a34;
+  }
+
+  .deck {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: clamp(15px, 1.05vw, 19px);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    scroll-snap-type: y mandatory;
+    overflow-y: auto;
+    max-height: 100vh;
+  }
+  .deck * { box-sizing: border-box; }
+
+  /* ── 每頁一張 16:9 圖框，底部是工程圖說的標題欄 ── */
+  .slide {
+    scroll-snap-align: start;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100vh;
+    padding: var(--pad) var(--pad) calc(var(--pad) + 34px);
+    border-bottom: 1px solid var(--rule-2);
+  }
+  .slide > .body { width: 100%; max-width: 1120px; margin: 0 auto; }
+
+  .tb {
+    position: absolute;
+    left: var(--pad); right: var(--pad); bottom: calc(var(--pad) * 0.55);
+    display: flex; align-items: baseline; gap: 14px;
+    padding-top: 9px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--font-mono);
+    font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .tb .sec { color: var(--ink-2); }
+  .tb .no { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+  /* ── 排版尺度 ── */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11.5px; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--safety-text);
+    margin: 0 0 18px;
+  }
+  .eyebrow.q { color: var(--steel-text); }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 800; font-size: clamp(40px, 5.6vw, 84px);
+    line-height: 1.06; letter-spacing: -.02em;
+    text-wrap: balance; margin: 0;
+  }
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 750; font-size: clamp(27px, 3.1vw, 46px);
+    line-height: 1.18; letter-spacing: -.015em;
+    text-wrap: balance; margin: 0 0 .55em;
+  }
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 700; font-size: clamp(17px, 1.35vw, 21px);
+    line-height: 1.35; letter-spacing: -.005em; margin: 0 0 .35em;
+  }
+  .lede { font-size: clamp(17px, 1.5vw, 24px); color: var(--ink-2); max-width: 40em; margin: 0; }
+  .fine { font-size: 13.5px; color: var(--ink-3); }
+  p { margin: 0 0 .8em; max-width: 42em; }
+  p:last-child { margin-bottom: 0; }
+  strong { font-weight: 700; color: var(--ink); }
+  em.hl { font-style: normal; color: var(--safety-text); font-weight: 700; }
+
+  .cols { display: grid; gap: clamp(20px, 2.4vw, 44px); }
+  .cols.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cols.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cols.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cols.split { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); align-items: start; }
+  @media (max-width: 860px) {
+    .cols.c2, .cols.c3, .cols.c4, .cols.split { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--rule-2);
+    border-radius: 3px;
+    padding: clamp(16px, 1.5vw, 24px);
+  }
+  .card.tint { background: var(--steel-tint); border-color: transparent; }
+  .card.warn { background: var(--safety-tint); border-color: transparent; }
+
+  /* 逐條列：靠 gap 排版，不用 margin 疊 */
+  .stack { display: flex; flex-direction: column; gap: clamp(12px, 1.2vw, 20px); }
+  ul.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55em; }
+  ul.plain > li { position: relative; padding-left: 1.15em; }
+  ul.plain > li::before {
+    content: ""; position: absolute; left: 0; top: .72em;
+    width: .45em; height: 1px; background: var(--rule);
+  }
+  ul.plain.tick > li::before {
+    content: "✓"; width: auto; height: auto; background: none;
+    top: 0; color: var(--good); font-size: .9em; font-weight: 700;
+  }
+  ul.plain.cross > li::before {
+    content: "✕"; width: auto; height: auto; background: none;
+    top: 0; color: var(--bad); font-size: .9em; font-weight: 700;
+  }
+
+  /* 紅線：真的畫成三條橘線 */
+  .redline { display: flex; gap: 16px; align-items: flex-start; padding: 2px 0; }
+  .redline > .bar { flex: 0 0 3px; align-self: stretch; min-height: 3.2em; background: var(--safety); border-radius: 2px; }
+  .redline > .txt { min-width: 0; }
+  .redline .n {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .16em;
+    color: var(--safety-text); display: block; margin-bottom: 3px;
+  }
+
+  /* 佐證鏈：節點＋連接細線 */
+  .chain { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+  .chain .node {
+    flex: 1 1 0; min-width: 108px;
+    background: var(--card); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 13px 12px; text-align: center;
+  }
+  .chain .node .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; color: var(--ink-3); display: block; }
+  .chain .node .v { font-weight: 700; font-size: clamp(14px, 1.1vw, 17px); }
+  .chain .link { flex: 0 0 26px; align-self: center; height: 1px; background: var(--steel); position: relative; }
+  .chain .link::after {
+    content: ""; position: absolute; right: 0; top: -3px;
+    border-left: 5px solid var(--steel); border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
+  }
+  @media (max-width: 860px) { .chain .link { display: none; } .chain { gap: 8px; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: clamp(13px, .96vw, 16px); }
+  .scroller { overflow-x: auto; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+  thead th {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3); border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+  tbody th { font-weight: 700; white-space: nowrap; color: var(--ink); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat .fig {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(30px, 3.4vw, 52px); line-height: 1;
+    letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+  }
+  .stat .cap { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+
+  .price { display: grid; gap: 14px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media (max-width: 860px) { .price { grid-template-columns: minmax(0, 1fr); } }
+  .price .tier { background: var(--card); border: 1px solid var(--rule-2); border-radius: 3px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .price .tier.pick { border-color: var(--safety); box-shadow: inset 0 0 0 1px var(--safety); }
+  .price .amt { font-family: var(--font-display); font-weight: 800; font-size: clamp(22px, 2vw, 30px); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .price .per { font-size: 12.5px; color: var(--ink-3); }
+
+  .kbd {
+    position: fixed; right: 14px; bottom: 14px; z-index: 20;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em;
+    color: var(--ink-3); background: var(--card); border: 1px solid var(--rule-2);
+    border-radius: 3px; padding: 5px 9px;
+  }
+
+  :where(a, button, .slide):focus-visible { outline: 2px solid var(--safety); outline-offset: 3px; }
+
+  @media print {
+    .kbd { display: none; }
+    .deck { max-height: none; overflow: visible; background: #fff; color: #16202b; }
+    .slide { min-height: 0; height: 18.2cm; page-break-after: always; border: 0; }
+  }
+  @page { size: A4 landscape; margin: 8mm; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="deck" id="deck">
+
+  <!-- 1 封面 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">公共工程專案管理 · AI AGENT 平台</p>
+      <h1>每一個承辦人，<br>配一個懂他業務的 Agent。</h1>
+      <p class="lede">系統讀你的契約、標單和規範，把該做的事做成草稿。<br>
+        你只做一件事：<em class="hl">核</em>。</p>
+      <p class="fine">工程 Agent　|　2026 年 7 月　|　試辦提案</p>
+    </div>
+    <footer class="tb"><span class="sec">封面</span><span class="no">01 / 16</span></footer>
+  </section>
+
+  <!-- 2 現況 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow q">現況</p>
+      <h2>資料不是沒有，是散在四個地方。</h2>
+      <div class="cols c4">
+        <div class="card"><h3>施工日誌</h3><p class="fine">廠商每月印一疊 PDF 送來</p></div>
+        <div class="card"><h3>估驗計價</h3><p class="fine">Excel，每期一個檔</p></div>
+        <div class="card"><h3>查驗紀錄</h3><p class="fine">紙本，放監造那邊</p></div>
+        <div class="card"><h3>工地照片</h3><p class="fine">LINE 群組，翻不到</p></div>
+      </div>
+      <p>四份文件本來就應該互相對得上。<strong>但沒有人有時間逐工項去對。</strong></p>
+    </div>
+    <footer class="tb"><span class="sec">問題</span><span class="no">02 / 16</span></footer>
+  </section>
+
+  <!-- 3 代價 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow q">代價</p>
+      <h2>所以三件事永遠在燒承辦人的時間。</h2>
+      <div class="cols c3">
+        <div class="card"><h3>估驗核定</h3><p class="fine">廠商報這期做了多少，要人工翻日誌回頭對數量。對不完，就只能相信。</p></div>
+        <div class="card"><h3>稽核與審計</h3><p class="fine">被問「這期估驗的依據在哪」，得從四個地方重新湊一份出來。</p></div>
+        <div class="card"><h3>法定期限</h3><p class="fine">送審、月報、竣工文件、逾期罰款——沒有人在幫你算日子。</p></div>
+      </div>
+      <div class="card warn"><p><strong>這三件事共同的形狀是：資料都在，但沒有被串起來。</strong></p></div>
+    </div>
+    <footer class="tb"><span class="sec">問題</span><span class="no">03 / 16</span></footer>
+  </section>
+
+  <!-- 4 解法一句話 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">解法</p>
+      <h2>不是再多一個要填的系統。<br>是四個會替你做事的 Agent。</h2>
+      <div class="cols split">
+        <div class="stack">
+          <p>傳統專案管理系統是<strong>資料庫</strong>：要有人先輸入，它才有價值。所以最後大家還是用 Excel。</p>
+          <p>這套是<strong>Agent</strong>：它讀你已經有的文件——契約、標單、規範、日誌、照片——然後產出草稿。<em class="hl">少輸入，多產出。</em></p>
+        </div>
+        <div class="card tint stack">
+          <div class="stat"><span class="fig">4</span><span class="cap">角色，各一個 Agent</span></div>
+          <p class="fine">現場（廠商）／品管／監造／機關。<br>加一個角色＝加一份人格設定與工具白名單，不是重寫一套系統。</p>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">解法</span><span class="no">04 / 16</span></footer>
+  </section>
+
+  <!-- 5 四個角色 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">解法</p>
+      <h2>Agent 做草稿，人做決定。</h2>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>角色</th><th>Agent 幫他做</th><th>他自己做（Agent 沒有這個工具）</th></tr></thead>
+          <tbody>
+            <tr><th>現場<br><span class="fine">廠商</span></th>
+              <td>日誌零輸入（複製昨日、常用班組機具自學、座標帶入當日天氣）；工地照片批次辨識，逐張產說明並配到工項；估驗數量從日誌累計帶出</td>
+              <td>確認、送出</td></tr>
+            <tr><th>品管</th>
+              <td>自主檢查表依契約規範生成；缺失照片產描述草稿；混凝土試體齡期到期提醒</td>
+              <td>判定合格與否</td></tr>
+            <tr><th>監造</th>
+              <td>送審文件逐項比對契約規範，出審查要點與意見草稿；RFI 回覆草稿；施工月報草稿</td>
+              <td>審定、核備</td></tr>
+            <tr><th>機關</th>
+              <td>佐證鏈逐工項對帳；稽核意見草稿；法定期限倒數與逾期違約金試算；跨案總覽</td>
+              <td>核定、驗收、結案</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">解法</span><span class="no">05 / 16</span></footer>
+  </section>
+
+  <!-- 6 佐證鏈 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">核心差異</p>
+      <h2>佐證鏈：逐工項把四份文件對起來。</h2>
+      <div class="chain">
+        <div class="node"><span class="k">CLAIM</span><span class="v">估驗數量</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">LOG</span><span class="v">日誌累計</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">INSPECT</span><span class="v">查驗紀錄</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">TEST</span><span class="v">試體強度</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">PHOTO</span><span class="v">現場照片</span></div>
+      </div>
+      <div class="cols c2">
+        <div class="stack">
+          <h3>六項對帳，全部是程式算的</h3>
+          <ul class="plain">
+            <li>本期估驗量超過日誌累計量</li>
+            <li>混凝土澆置日沒有對應試體</li>
+            <li>估驗的工項沒有查驗紀錄</li>
+            <li>品質缺失未結案就進入計價</li>
+            <li>照片沒有對應到任何工項</li>
+            <li>變更設計未核准就計價</li>
+          </ul>
+        </div>
+        <div class="card warn stack">
+          <h3>判定確定性，AI 只寫文字</h3>
+          <p class="fine">哪裡對不上，是資料庫算出來的，數字永遠可回溯。<br><br>
+            AI 的工作只有一件：把對不上的地方寫成一段人看得懂的稽核意見草稿——而且只建議<strong>查證</strong>，不寫剔除、補強、停工、罰款。</p>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">核心差異</span><span class="no">06 / 16</span></footer>
+  </section>
+
+  <!-- 7 三條紅線 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">信任設計</p>
+      <h2>三條紅線，寫在架構裡，不是寫在簡報上。</h2>
+      <div class="stack">
+        <div class="redline"><div class="bar"></div><div class="txt">
+          <span class="n">紅線 01</span>
+          <h3>AI 只產生草稿</h3>
+          <p class="fine">核定、判定、結案、驗收、凍結——Agent 的工具箱裡<strong>根本沒有這些工具</strong>。這是工具白名單保證的，不是靠提示詞叮嚀它。狀態轉移一律走資料庫層規則加上人簽核。</p>
+        </div></div>
+        <div class="redline"><div class="bar"></div><div class="txt">
+          <span class="n">紅線 02</span>
+          <h3>數字永遠由確定性引擎算</h3>
+          <p class="fine">金額、數量、期限、罰款由程式計算後回傳給 AI 複述。<strong>AI 不准自己乘除，也不准自己編法規條號</strong>——引用不到來源時，它必須寫「依適用條文與現場量測辦理」。</p>
+        </div></div>
+        <div class="redline"><div class="bar"></div><div class="txt">
+          <span class="n">紅線 03</span>
+          <h3>每個 Agent 動作都留痕</h3>
+          <p class="fine">角色、動作種類、目標、理由、引用佐證、人的覆核結果，逐筆入庫可匯出。稽核問「這個數字誰算的」，答案永遠是：程式，而且有紀錄。</p>
+        </div></div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">信任設計</span><span class="no">07 / 16</span></footer>
+  </section>
+
+  <!-- 8 對照 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow q">定位</p>
+      <h2>跟你看過的系統差在哪。</h2>
+      <div class="cols c2">
+        <div class="card stack">
+          <h3>傳統工程管理系統</h3>
+          <ul class="plain cross">
+            <li>價值＝有人願意輸入</li>
+            <li>表單欄位寫死，每個機關都要客製</li>
+            <li>權限是前端把按鈕藏起來</li>
+            <li>報表要人組，佐證要人湊</li>
+            <li>導入半年，上線後回去用 Excel</li>
+          </ul>
+        </div>
+        <div class="card tint stack">
+          <h3>工程 Agent</h3>
+          <ul class="plain tick">
+            <li>價值＝上傳既有文件就開始產出</li>
+            <li>表單欄位從你上傳的契約解析出來</li>
+            <li>權限在資料庫層，前端只是體驗</li>
+            <li>佐證鏈自動對帳，意見產草稿</li>
+            <li>四週跑完一個完整估驗週期</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">定位</span><span class="no">08 / 16</span></footer>
+  </section>
+
+  <!-- 9 demo -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">DEMO 動線</p>
+      <h2>十五分鐘，走完一個估驗週期。</h2>
+      <div class="cols c4">
+        <div class="card stack"><span class="cap fine">步驟一</span><h3>上傳</h3><p class="fine">契約 PDF 與 PCCES 標單 XML。系統抽出履約需求、義務時程與罰則，標單展成工項樹。</p></div>
+        <div class="card stack"><span class="cap fine">步驟二</span><h3>現場</h3><p class="fine">手機填一天日誌：複製昨日、帶入天氣、拍五張照片批次辨識並配工項。</p></div>
+        <div class="card stack"><span class="cap fine">步驟三</span><h3>估驗</h3><p class="fine">本期數量從日誌帶出，金額由引擎算。一鍵組請款佐證包：明細＋施工說明＋照片按工項排。</p></div>
+        <div class="card stack"><span class="cap fine">步驟四</span><h3>機關</h3><p class="fine">佐證鏈六項對帳，抓出對不上的工項，產出稽核意見草稿。你核。</p></div>
+      </div>
+      <p class="fine">全程可現場操作，不放錄影。</p>
+    </div>
+    <footer class="tb"><span class="sec">DEMO</span><span class="no">09 / 16</span></footer>
+  </section>
+
+  <!-- 10 工程完成度 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow q">工程狀態</p>
+      <h2>不是原型，是可以放真案的系統。</h2>
+      <div class="cols c4">
+        <div class="stat"><span class="fig">32</span><span class="cap">功能頁面</span></div>
+        <div class="stat"><span class="fig">17</span><span class="cap">AI 功能模組</span></div>
+        <div class="stat"><span class="fig">493</span><span class="cap">計算引擎單元測試</span></div>
+        <div class="stat"><span class="fig">400+</span><span class="cap">資料庫權限測試</span></div>
+      </div>
+      <div class="cols c2">
+        <div class="card stack">
+          <h3>權限不在前端</h3>
+          <p class="fine">誰能看、誰能寫、誰能改狀態，全部在資料庫層以資料列權限與狀態轉移規則實作，逐角色逐表自動化實測。前端把按鈕藏起來不算安全。</p>
+        </div>
+        <div class="card stack">
+          <h3>每個 AI 功能可獨立開關</h3>
+          <p class="fine">十七個 AI 模組逐一可關，關閉時系統照樣完整運作（只是少了草稿）。用量逐次計數，機關看得到自己花了多少。</p>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">工程狀態</span><span class="no">10 / 16</span></footer>
+  </section>
+
+  <!-- 11 資安 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow q">資安與資料落地</p>
+      <h2>資料放哪裡，由機關決定。</h2>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>方案</th><th>資料庫位置</th><th>適用時機</th></tr></thead>
+          <tbody>
+            <tr><th>試辦</th><td>新加坡（AWS ap-southeast-1）</td><td>小額採購試辦期，資料為測試性質</td></tr>
+            <tr><th>境內託管</th><td>台北（AWS ap-east-2）或彰化（Google Cloud asia-east1）</td><td>機關要求資料留存境內時，成本併入服務費</td></tr>
+            <tr><th>機關地端</th><td>機關自有機房</td><td>資訊安全責任等級較高、需完全自主控管</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="plain">
+        <li>全程不使用中國廠牌之資通訊產品與雲端服務</li>
+        <li>資料可完整匯出（含 Agent 動作紀錄），不綁架機關資料</li>
+        <li>存取紀錄與 Agent 動作紀錄可供內部控制與稽核調閱</li>
+      </ul>
+    </div>
+    <footer class="tb"><span class="sec">資安</span><span class="no">11 / 16</span></footer>
+  </section>
+
+  <!-- 12 採購路徑 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">採購路徑</p>
+      <h2>先用一個案子驗證，再談規模。</h2>
+      <div class="cols c3">
+        <div class="card stack"><h3>15 萬以下</h3><p class="fine">小額採購，得逕洽廠商辦理。<strong>建議從這裡開始</strong>：一個案、一個試辦，四週看結果。</p></div>
+        <div class="card stack"><h3>15 萬 – 150 萬</h3><p class="fine">未達公告金額，公開取得三家以上書面報價。試辦有結果後擴大到多案。</p></div>
+        <div class="card stack"><h3>150 萬以上</h3><p class="fine">達公告金額，依法公開招標。此時已有前期成效可寫入需求規格。</p></div>
+      </div>
+      <div class="card warn"><p class="fine"><strong>我們不建議、也不配合為了規避公開招標而分批辦理。</strong>試辦的範圍就是真的只有一個案子；需求擴大時，走上一級的程序。</p></div>
+    </div>
+    <footer class="tb"><span class="sec">採購</span><span class="no">12 / 16</span></footer>
+  </section>
+
+  <!-- 13 方案 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">方案</p>
+      <h2>方案與價格。</h2>
+      <div class="price">
+        <div class="tier"><h3>試辦</h3><span class="amt">NT$0</span><span class="per">單案 · 三個月</span>
+          <p class="fine">現場端全功能、AI 影像辨識與日誌零輸入。用來確認團隊願不願意用。</p></div>
+        <div class="tier"><h3>標準</h3><span class="amt">NT$60,000</span><span class="per">單案 · 每年</span>
+          <p class="fine">加上估驗計價、契約義務期限、月報與估驗說明草稿。</p></div>
+        <div class="tier pick"><h3>專業</h3><span class="amt">NT$120,000</span><span class="per">單案 · 每年</span>
+          <p class="fine">加上監造送審審查、RFI 回覆草稿、<strong>佐證鏈勾稽與稽核意見</strong>。機關要的是這一層。</p></div>
+        <div class="tier"><h3>機關授權</h3><span class="amt">NT$148,000</span><span class="per">多案 · 每年</span>
+          <p class="fine">五案以內、跨案總覽與法定期限彙總。<strong>落在小額採購範圍內。</strong></p></div>
+      </div>
+      <p class="fine">境內託管、地端部署與資料轉移另計。教育與研究機構首年另有折扣。</p>
+    </div>
+    <footer class="tb"><span class="sec">方案</span><span class="no">13 / 16</span></footer>
+  </section>
+
+  <!-- 14 導入時程 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">導入</p>
+      <h2>四週。每週結束你都看得到東西。</h2>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>週次</th><th>做什麼</th><th>週末你會看到</th></tr></thead>
+          <tbody>
+            <tr><th>第一週</th><td>建案、匯入契約與 PCCES 標單、建帳號與三方角色</td><td>完整工項樹與契約義務時程表</td></tr>
+            <tr><th>第二週</th><td>現場端上線：施工日誌、照片辨識、自主檢查</td><td>當天填、當天看得到的日誌與照片簿</td></tr>
+            <tr><th>第三週</th><td>估驗計價、請款佐證包、送審與 RFI</td><td>一份可直接送出的估驗請款佐證包</td></tr>
+            <tr><th>第四週</th><td>機關端：佐證鏈勾稽、稽核意見、跨案總覽</td><td>一份稽核勾稽報告，指出真實不一致</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="fine">貴機關需要投入的：一位承辦人、一個進行中的案子、廠商與監造各一位願意試的人。</p>
+    </div>
+    <footer class="tb"><span class="sec">導入</span><span class="no">14 / 16</span></footer>
+  </section>
+
+  <!-- 15 界線 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">界線</p>
+      <h2>我們不做什麼。</h2>
+      <div class="cols c2">
+        <div class="card stack">
+          <h3>技術上做不到（刻意的）</h3>
+          <ul class="plain cross">
+            <li>替機關核定估驗、驗收或結算</li>
+            <li>替監造審定送審文件或判定查驗</li>
+            <li>自行變更任何單據的狀態</li>
+            <li>產生法規條號或引用不存在的條文</li>
+          </ul>
+        </div>
+        <div class="card stack">
+          <h3>商業上不碰</h3>
+          <ul class="plain cross">
+            <li>不取代監造，也不介入監造與廠商的權責</li>
+            <li>不涉入招標、決標與底價作業</li>
+            <li>不以機關資料訓練模型</li>
+            <li>不承接會讓我們同時服務對立雙方的角色</li>
+          </ul>
+        </div>
+      </div>
+      <p>能力邊界是產品規格的一部分。<strong>不能替你決定，正是它能被放進審計流程的原因。</strong></p>
+    </div>
+    <footer class="tb"><span class="sec">界線</span><span class="no">15 / 16</span></footer>
+  </section>
+
+  <!-- 16 下一步 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">下一步</p>
+      <h1>給我一個案子。<br>四週後你自己判斷。</h1>
+      <div class="cols split">
+        <div class="stack">
+          <p class="lede">試辦不收費，範圍是一個進行中的工程案。<br>
+            四週後如果承辦人不想繼續用，我們把資料匯出給你，就結束。</p>
+        </div>
+        <div class="card tint stack">
+          <h3>需要貴機關給的</h3>
+          <ul class="plain">
+            <li>一位承辦人，每週約一小時</li>
+            <li>一個進行中的案子（契約＋標單）</li>
+            <li>廠商與監造各一位聯絡人</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">結尾</span><span class="no">16 / 16</span></footer>
+  </section>
+
+</div>
+
+<div class="kbd" aria-hidden="true">← → 翻頁</div>
+
+<script>
+  (function () {
+    var deck = document.getElementById('deck');
+    if (!deck) return;
+    var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+
+    function current() {
+      var top = deck.scrollTop, best = 0, bestDist = Infinity;
+      slides.forEach(function (s, i) {
+        var d = Math.abs(s.offsetTop - top);
+        if (d < bestDist) { bestDist = d; best = i; }
+      });
+      return best;
+    }
+    function go(delta) {
+      var next = Math.min(slides.length - 1, Math.max(0, current() + delta));
+      slides[next].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); go(1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+      else if (e.key === 'Home') { e.preventDefault(); slides[0].scrollIntoView({ behavior: 'smooth' }); }
+      else if (e.key === 'End') { e.preventDefault(); slides[slides.length - 1].scrollIntoView({ behavior: 'smooth' }); }
+    });
+  })();
+</script>
