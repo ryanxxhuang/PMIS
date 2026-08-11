@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
@@ -28,6 +28,10 @@ export default function Login() {
           : isSupabaseConfigured
             ? <AuthForm signIn={signIn} signUp={signUp} resendSignup={resendSignup} requestPasswordReset={requestPasswordReset} />
             : <RolePicker setCurrentUser={setCurrentUser} navigate={navigate} />}
+        {/* 漏洞回報頁要有公開入口才算「公開」;登入頁是唯一不需登入就會到的畫面。 */}
+        <div className="mt-6 border-t border-[var(--border)] pt-4 text-center">
+          <Link to="/security" className="text-xs text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">資安漏洞回報</Link>
+        </div>
       </div>
     </div>
   )
