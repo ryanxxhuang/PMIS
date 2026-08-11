@@ -132,6 +132,13 @@ export async function mapWithConcurrency(items, limit, fn) {
   return results
 }
 
+// storage key 是否為 Supabase 接受的合法路徑(ASCII 安全字元)。
+// 用途:「相同 checksum 重用既有 version」時,若那筆 version 是修復前寫入的
+// 中文壞路徑(上傳從未成功),不能重用——否則會一直撞同一筆壞紀錄,修復永遠輪不到執行。
+export function isValidStorageKey(path) {
+  return typeof path === 'string' && path.length > 0 && /^[A-Za-z0-9._\-/]+$/.test(path)
+}
+
 export function storagePathFor({ projectId, packageId, documentId, versionId, filename }) {
   // Supabase Storage 的物件 key 只收 S3 安全字元(ASCII)——中文或全形符號會讓整個
   // 上傳被拒(Invalid key)。dry-run 第一份真實契約「02-工務局工程採購契約(稿)-1090720.pdf」
@@ -247,7 +254,9 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
     .eq('document_id', documentId)
     .order('uploaded_at', { ascending: false })
   if (versionsError) throw new Error(versionsError.message)
-  const reused = versions?.find((v) => v.checksum === checksum) || null
+  // 只重用「storage key 合法」的 version:壞路徑的那筆代表原始檔從未成功上傳,
+  // 重用它等於永遠卡死在同一筆失敗紀錄(dry-run 2026-08-12 實際發生)。
+  const reused = versions?.find((v) => v.checksum === checksum && isValidStorageKey(v.storage_path)) || null
   let versionId = reused?.id || null
   let storagePath = reused?.storage_path || null
   let newVersion = false

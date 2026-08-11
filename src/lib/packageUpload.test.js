@@ -4,7 +4,7 @@ vi.mock('./supabase.js', () => ({ supabase: null, isSupabaseConfigured: false })
 import { describe, expect, it } from 'vitest'
 import {
   UPLOAD_CONCURRENCY, formatElapsed, mapWithConcurrency,
-  packageStatusFromRuns, staleProcessingPatch, storagePathFor, summarizePackageProgress,
+  isValidStorageKey, packageStatusFromRuns, staleProcessingPatch, storagePathFor, summarizePackageProgress,
   takeSelectedFiles,
 } from './packageUpload.js'
 
@@ -84,6 +84,14 @@ describe('elapsed time and storage paths', () => {
     expect(formatElapsed(102_000)).toBe('01:42')
     expect(formatElapsed(0)).toBe('00:00')
     expect(formatElapsed(3_599_000)).toBe('59:59')
+  })
+
+  it('修復前寫入的中文壞路徑不得被 checksum 重用邏輯採用', () => {
+    // 這筆是 2026-08-12 dry-run 真實卡死的紀錄形狀:version 已入庫但 storage 上傳從未成功
+    expect(isValidStorageKey('projects/p1/contract-packages/pkg/d/v/02-工務局工程採購契約(稿)-1090720.pdf')).toBe(false)
+    expect(isValidStorageKey('projects/p1/contract-packages/pkg/d/v/02-_-1090720.pdf')).toBe(true)
+    expect(isValidStorageKey('')).toBe(false)
+    expect(isValidStorageKey(null)).toBe(false)
   })
 
   it('storage key 一律退化成 ASCII(Supabase 只收 S3 安全字元,中文檔名會 Invalid key)', () => {
