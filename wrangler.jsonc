@@ -13,8 +13,13 @@
     // vite build 的產出。public/ 底下的 _headers、_redirects、.well-known/
     // 會被 vite 原樣複製進 dist/,由 Cloudflare 讀取。
     "directory": "./dist/",
-    // 前端是 SPA(HashRouter,但 /demo 子站與未來改 BrowserRouter 都需要這個):
-    // 找不到實體檔案時回 index.html 且狀態碼 200,而不是 404。
+    // 前端是 SPA:找不到實體檔案時回 index.html 且狀態碼 200,而不是 404。
+    //
+    // ⚠️ 這個設定取代了原本的 public/_redirects(`/* /index.html 200`),該檔已刪除。
+    // Workers 靜態資產會自動去掉網址中的 `/index` 與 `.html`,所以那條規則會變成
+    // /index.html → / → 又符合 /* → 無限迴圈,Cloudflare 會直接拒絕部署
+    // (error 100324: Infinite loop detected in this rule)。
+    // GitHub Pages 本來就忽略 _redirects,刪掉不影響舊站。
     "not_found_handling": "single-page-application"
   }
 }
