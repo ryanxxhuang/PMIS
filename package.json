@@ -11,7 +11,7 @@
     "test:e2e:ui": "playwright test --ui",
     "preview": "vite preview",
     "build:demo": "env VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= vite build --outDir dist/demo",
-    "deploy": "vite build && npm run build:demo && gh-pages -d dist --dotfiles"
+    "deploy": "echo \"⚠️ 已改用 Cloudflare Workers 自動部署:push 到 main 即部署(見 wrangler.jsonc)。舊的 gh-pages 流程已停用,勿再執行。\" && exit 1"
   },
   "engines": {
     "node": ">=22.13.0"

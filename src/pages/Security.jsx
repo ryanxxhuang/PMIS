@@ -11,8 +11,9 @@ import { ShieldCheck, Mail, Clock, Ban, Scale, ListChecks } from 'lucide-react'
 //   ② 有真實可收信的窗口
 //   ③ 寫出「應變流程」而不只是一個信箱(機制 ≠ 聯絡方式)
 //
-// 網域下來後要改的只有兩處:下面的 CONTACT,以及 public/.well-known/security.txt。
-const CONTACT = import.meta.env.VITE_SECURITY_CONTACT || 'ryanxhuang1212@gmail.com'
+// 2026-08-11 網域上線:改用網域信箱(Cloudflare Email Routing 轉寄至負責人信箱)。
+// 若要換信箱,同時要改 public/.well-known/security.txt。
+const CONTACT = import.meta.env.VITE_SECURITY_CONTACT || 'security@gov-agent.ai'
 const UPDATED = '2026-08-11'
 
 function Section({ icon: Icon, title, children }) {

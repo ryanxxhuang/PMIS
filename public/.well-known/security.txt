@@ -1,9 +1,11 @@
 # RFC 9116 漏洞回報聯絡資訊
-# 對應的人類可讀版本在 /#/security(前端走 HashRouter)
-# 網域確定後:①把下列 mailto 換成 security@<網域> ②Canonical 補上正式網址
-#           ③GitHub Pages 專案站會把本檔放在 /PMIS/.well-known/,
-#             需自有網域指向根路徑才符合 RFC 的 /.well-known/security.txt 位置
+# 人類可讀版本:https://gov-agent.ai/#/security
+#
+# 信箱走 Cloudflare Email Routing 轉寄,DNS 已設 MX/SPF/DKIM(2026-08-11 生效)。
+# Expires 到期前要更新本檔,否則依 RFC 9116 視為失效。
 
-Contact: mailto:ryanxhuang1212@gmail.com
+Contact: mailto:security@gov-agent.ai
 Expires: 2027-08-11T00:00:00.000Z
 Preferred-Languages: zh-Hant, en
+Canonical: https://gov-agent.ai/.well-known/security.txt
+Policy: https://gov-agent.ai/#/security
