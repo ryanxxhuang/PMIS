@@ -43,14 +43,15 @@ function SetupChecklist({ imported }) {
   }, [pid, imported, listMembers]) // 標單匯入後重推導(文件/建議數會變)
 
   const missingOrgs = ['contractor', 'supervisor', 'owner'].filter((o) => !snap?.orgs.has(o))
+  // 順序=D-007 文件優先:建案落地就是專案文件頁,第一步自然是上傳;成員可並行後補
   const steps = [
-    {
-      to: '/members', label: '確認三方成員', done: snap ? missingOrgs.length === 0 : false,
-      detail: snap ? (missingOrgs.length ? `尚缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}` : '廠商、監造、機關都已加入') : '載入中…',
-    },
     {
       to: '/contract', label: '上傳專案文件(含標單 XML)', done: !!snap && snap.docs > 0 && imported,
       detail: snap ? `文件 ${snap.docs} 件・標單${imported ? '已匯入' : '未匯入'}` : '載入中…',
+    },
+    {
+      to: '/members', label: '確認三方成員', done: snap ? missingOrgs.length === 0 : false,
+      detail: snap ? (missingOrgs.length ? `尚缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}` : '廠商、監造、機關都已加入') : '載入中…',
     },
     {
       to: '/requirements', label: '檢查 AI 履約要求建議', done: !!snap && snap.reqPending === 0 && snap.reqApproved > 0,
