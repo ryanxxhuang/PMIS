@@ -10,13 +10,21 @@ const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-
 export default function Members() {
   const { project, listMembers, addMemberByEmail, removeMember, currentUser,
     isSupabaseConfigured, currentProject, demoMode, enableFormalMode } = useStore()
-  const [members, setMembers] = useState([])
+  // 三態分離(W4-1/P1-05):members=null 載入中、loadError 載入失敗(可重試)、
+  // []=真的沒成員——三者不可再共用同一個空陣列。
+  const [members, setMembers] = useState(null)
+  const [loadError, setLoadError] = useState(null)
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [formalMsg, setFormalMsg] = useState('')
 
-  const reload = useCallback(async () => { setMembers(await listMembers()) }, [listMembers])
+  const reload = useCallback(async () => {
+    setMembers(null); setLoadError(null)
+    const { rows, error } = await listMembers()
+    if (error) setLoadError(error)
+    else setMembers(rows)
+  }, [listMembers])
   useEffect(() => { reload() }, [reload])
 
   if (isSupabaseConfigured && !currentProject) {
@@ -24,7 +32,7 @@ export default function Members() {
   }
 
   // 只有專案建立者(admin)可管理成員
-  const isAdmin = demoMode ? true : members.find((m) => m.user_id === currentUser?.user_id)?.member_role === 'admin'
+  const isAdmin = demoMode ? true : (members || []).find((m) => m.user_id === currentUser?.user_id)?.member_role === 'admin'
 
   const onAdd = async () => {
     if (!email.trim()) return
@@ -56,7 +64,7 @@ export default function Members() {
   return (
     <div className="space-y-5">
       <PageHeader title="專案成員" tagline="Team" subtitle="邀請監造 / 機關 / 協力廠商加入，依組織別自動套用權限"
-        meta={[{ k: '成員數', v: String(members.length) }]} />
+        meta={[{ k: '成員數', v: members ? String(members.length) : '—' }]} />
 
       {isAdmin && (
         <Card title="加入成員">
@@ -98,7 +106,15 @@ export default function Members() {
       )}
 
       <Card title="成員名單">
-        {members.length === 0 ? <Empty>載入中…</Empty> : (
+        {loadError ? (
+          <Empty>
+            <div className="space-y-3">
+              <div>成員載入失敗:{loadError}</div>
+              <Button onClick={reload}>重試</Button>
+            </div>
+          </Empty>
+        ) : members === null ? <Empty>載入中…</Empty>
+          : members.length === 0 ? <Empty>此專案尚無成員。</Empty> : (
           <div className="space-y-2">
             {members.map((m) => (
               <div key={m.user_id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2">

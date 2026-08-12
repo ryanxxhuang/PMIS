@@ -332,12 +332,15 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
   // 成員管理(RPC:email 對照 auth.users 必須在伺服器端做)。
   // 用 isPersistedProject 而非 dbMode:真專案「標單匯入前」也要能管成員/開正式模式,
   // 否則會靜默回落 demo 名單(即 QA 報告「另一測試專案的錯誤名單」)。
+  // 回傳 { rows, error }(W4-1/P1-05):RPC 失敗必須讓 UI 分得出「載入失敗」與
+  // 「真的沒成員」——舊版吞錯回空陣列,成員頁會永遠顯示「載入中…」。
   const listMembers = useCallback(async () => {
     if (!isPersistedProject) {
-      return users.map((u) => ({ user_id: u.user_id, full_name: u.name, company: u.company, org_type: u.org_type, member_role: u.user_id === 'U1' ? 'admin' : 'member' }))
+      return { rows: users.map((u) => ({ user_id: u.user_id, full_name: u.name, company: u.company, org_type: u.org_type, member_role: u.user_id === 'U1' ? 'admin' : 'member' })), error: null }
     }
-    const { data } = await supabase.rpc('list_project_members', { p_project: currentProject.project_id })
-    return data || []
+    const { data, error } = await supabase.rpc('list_project_members', { p_project: currentProject.project_id })
+    if (error) return { rows: [], error: error.message || '成員載入失敗' }
+    return { rows: data || [], error: null }
   }, [isPersistedProject, currentProject])
 
   const addMemberByEmail = useCallback(async (email, role = 'member') => {
