@@ -60,6 +60,11 @@ export default function SiteLog() {
   // AI 批次辨識照片:選檔後先進 staging 逐張判讀,使用者覆核可編說明/工項,再一鍵全上傳
   const [staging, setStaging] = useState([])    // [{key,file,previewUrl,status,caption,category,work_item_key,work_item_label}]
   const [batchBusy, setBatchBusy] = useState(false)
+  // P0 #11「辨識已上傳照片」的執行狀態。⚠️ 必須在 139 行「載入中」早退之前宣告,
+  // 否則首次 render(workItems 未載入)與後續 render 的 hook 數不一致,React 會整頁炸掉
+  // (2026-08-12 已炸過一次:插在中段 → 頁面發生錯誤)。
+  const [existingBusy, setExistingBusy] = useState(false)
+  const [existingMsg, setExistingMsg] = useState('')
 
   // 發包末端工項（可回報的單元）+ 查表。
   // 用「已核准變更套回後」的工項(B-02 小尾巴):否則核准追加數量後,
@@ -228,8 +233,7 @@ export default function SiteLog() {
   // AI 辨識「已上傳」的照片(P0 #11):使用者的直覺是先上傳、再按 AI 辨識——
   // 原本批次辨識只吃「新選檔」,對既有照片無能為力,按了等於沒反應。
   // 這裡把缺說明的既有照片抓下來(簽名 URL → blob)逐張判讀,回寫說明與工項。
-  const [existingBusy, setExistingBusy] = useState(false)
-  const [existingMsg, setExistingMsg] = useState('')
+  // (existingBusy/existingMsg 的 useState 在頂部——139 行的載入早退之前,rules of hooks)
   const photosNeedingAI = photos.filter((p) => !p.caption && p.url)
   const onClassifyExisting = async () => {
     if (!photosNeedingAI.length || existingBusy) return
