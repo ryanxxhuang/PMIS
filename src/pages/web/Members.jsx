@@ -15,6 +15,7 @@ export default function Members() {
   const [members, setMembers] = useState(null)
   const [loadError, setLoadError] = useState(null)
   const [email, setEmail] = useState('')
+  const [inviteOrg, setInviteOrg] = useState('') // W4-3:邀請方必須宣告要邀哪一方
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [formalMsg, setFormalMsg] = useState('')
@@ -35,12 +36,12 @@ export default function Members() {
   const isAdmin = demoMode ? true : (members || []).find((m) => m.user_id === currentUser?.user_id)?.member_role === 'admin'
 
   const onAdd = async () => {
-    if (!email.trim()) return
+    if (!email.trim() || !inviteOrg) return
     setBusy(true); setMsg('')
-    const { error } = await addMemberByEmail(email.trim())
+    const { error } = await addMemberByEmail(email.trim(), 'member', inviteOrg)
     setBusy(false)
     if (error) { setMsg(error.message || '加入失敗'); return }
-    setEmail(''); setMsg('已加入。')
+    setEmail(''); setMsg(`已加入(${ORG_LABEL[inviteOrg]})。`)
     reload()
   }
   const onRemove = async (m) => {
@@ -68,11 +69,20 @@ export default function Members() {
 
       {isAdmin && (
         <Card title="加入成員">
+          {/* W4-3(D-009):邀請方宣告受邀方身分,伺服器與對方註冊身分比對,不符即擋 */}
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[220px]"><Field label="對方帳號 Email" hint="對方需先在本系統註冊；權限依其註冊時選的組織別（施工/監造/機關）自動套用。">
+            <div className="flex-1 min-w-[220px]"><Field label="對方帳號 Email" hint="對方需先在本系統註冊；與你指定的身分不符時會被擋下,不會誤入專案。">
               <input className={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="supervisor@example.com" type="email" />
             </Field></div>
-            <Button onClick={onAdd} disabled={busy || !email.trim()}>{busy ? '加入中…' : '＋ 加入專案'}</Button>
+            <div className="min-w-[140px]"><Field label="受邀方身分">
+              <select className={input} value={inviteOrg} onChange={(e) => setInviteOrg(e.target.value)}>
+                <option value="">請選擇…</option>
+                <option value="contractor">施工廠商</option>
+                <option value="supervisor">監造單位</option>
+                <option value="owner">主辦機關</option>
+              </select>
+            </Field></div>
+            <Button onClick={onAdd} disabled={busy || !email.trim() || !inviteOrg}>{busy ? '加入中…' : '＋ 加入專案'}</Button>
           </div>
           {msg && <p className={`text-sm mt-2 ${msg.includes('已加入') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{msg}</p>}
           {demoMode && <p className="text-xs text-[var(--text-3)] mt-2">（demo 模式為展示用，實際邀請需登入真實專案。）</p>}

@@ -343,10 +343,12 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     return { rows: data || [], error: null }
   }, [isPersistedProject, currentProject])
 
-  const addMemberByEmail = useCallback(async (email, role = 'member') => {
+  // expectedOrg(W4-3/D-009):邀請方宣告要邀的是哪一方(contractor/supervisor/owner),
+  // 伺服器比對被邀帳號的註冊身分,不符即拒絕——錯配無法靜默入案。
+  const addMemberByEmail = useCallback(async (email, role = 'member', expectedOrg = null) => {
     if (!isPersistedProject) return { error: { message: 'demo 模式不支援邀請成員' } }
     const { data, error } = await supabase.rpc('add_member_by_email', {
-      p_project: currentProject.project_id, p_email: email, p_role: role,
+      p_project: currentProject.project_id, p_email: email, p_role: role, p_expected_org: expectedOrg,
     })
     if (error) return { error }
     if (data === 'not_found') return { error: { message: '找不到這個 email 的帳號，請對方先註冊。' } }
