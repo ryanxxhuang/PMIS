@@ -63,7 +63,7 @@ export default function Cost() {
   }
 
   if (!dbMode && !demoMode) {
-    return <Card title="成本管理"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單，才能對照合約收入計算毛利。</Empty></Card>
+    return <Card title="成本管理"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML，才能對照合約收入計算毛利。</Empty></Card>
   }
 
   return (

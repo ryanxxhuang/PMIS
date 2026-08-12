@@ -348,19 +348,19 @@ export default function Agent() {
     return res // { fallback }(demo)或 { error }→ CopilotChat 確定性回退接手
   }
 
-  if (!imported) {
-    return (
-      <div className="space-y-5">
-        <PageHeader title={label.name} tagline="AI Agent" subtitle={label.desc} />
-        <Card><Empty>此專案尚未匯入標單，agent 還沒有資料可查。請先到「標單工項」匯入 PCCES 預算書。</Empty></Card>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-5">
       <PageHeader title={label.name} tagline="AI Agent" subtitle={label.desc}
         meta={[{ k: '目前身分', v: ORG_LABEL[org] || ORG_LABEL.contractor }]} />
+
+      {/* W2-3(D-007):未匯標單不再整頁擋住——文件/成員/期限問題不依賴 BOQ,
+          只有工項類(估驗/進度/數量)要先匯入;指引與全站一致(專案文件一次上傳)。 */}
+      {!imported && (
+        <div className="bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded-lg px-4 py-3 text-sm text-amber-800">
+          此專案尚未匯入標單:文件、成員與期限問題可以直接問;估驗、進度、工項數量類問題要先到「
+          <Link to="/contract" className="font-medium underline">專案文件</Link>」上傳標單 XML 才有資料。
+        </div>
+      )}
 
       {/* 行動版順序:待我處理 → 草稿收件匣 → 對話(先讓人看到要做什麼);
           桌機:對話為主排左、兩張側卡排右 */}

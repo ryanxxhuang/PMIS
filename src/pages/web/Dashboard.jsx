@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
-import { useMemo } from 'react'
-import { Download, ChevronRight, Coins, FileCheck2, MessageSquareWarning, ShieldCheck, AlertTriangle, Eye, Wrench, PencilLine } from 'lucide-react'
+import { useMemo, useState, useEffect } from 'react'
+import { Download, ChevronRight, Coins, FileCheck2, MessageSquareWarning, ShieldCheck, AlertTriangle, Eye, Wrench, PencilLine, CheckCircle2, Circle } from 'lucide-react'
 import { useStore } from '../../store.jsx'
+import { supabase } from '../../lib/supabase.js'
 import { Card, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
@@ -12,8 +13,79 @@ import InsightsPanel from '../../components/InsightsPanel.jsx'
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const defColor = { 開立: 'red', 改善中: 'amber', 待複查: 'blue', 已結案: 'green' }
 
+// 初始化四步清單(W2-2,D-007 文件優先):真專案在正式模式開啟前顯示。
+// 狀態全部由既有資料推導(成員 org 覆蓋/文件數/workItemsSource/requirement 狀態),
+// 不建 onboarding 資料表、不做逐步精靈;每步直達既有工作頁。
+const ORG_LABEL = { contractor: '廠商', supervisor: '監造', owner: '機關' }
+function SetupChecklist({ imported }) {
+  const { listMembers, currentProject } = useStore()
+  const [snap, setSnap] = useState(null)
+  const pid = currentProject?.project_id
+  useEffect(() => {
+    if (!pid) return
+    let active = true
+    ;(async () => {
+      const [members, docsRes, pendRes, apprRes] = await Promise.all([
+        listMembers().catch(() => []),
+        supabase.from('documents').select('id', { count: 'exact', head: true }).eq('project_id', pid),
+        supabase.from('requirements').select('id', { count: 'exact', head: true }).eq('project_id', pid).in('status', ['draft_ai', 'needs_review']),
+        supabase.from('requirements').select('id', { count: 'exact', head: true }).eq('project_id', pid).eq('status', 'approved'),
+      ])
+      if (!active) return
+      setSnap({
+        orgs: new Set((members || []).map((m) => m.org_type).filter(Boolean)),
+        docs: docsRes?.count || 0,
+        reqPending: pendRes?.count || 0,
+        reqApproved: apprRes?.count || 0,
+      })
+    })()
+    return () => { active = false }
+  }, [pid, imported, listMembers]) // 標單匯入後重推導(文件/建議數會變)
+
+  const missingOrgs = ['contractor', 'supervisor', 'owner'].filter((o) => !snap?.orgs.has(o))
+  // 順序=D-007 文件優先:建案落地就是專案文件頁,第一步自然是上傳;成員可並行後補
+  const steps = [
+    {
+      to: '/contract', label: '上傳專案文件(含標單 XML)', done: !!snap && snap.docs > 0 && imported,
+      detail: snap ? `文件 ${snap.docs} 件・標單${imported ? '已匯入' : '未匯入'}` : '載入中…',
+    },
+    {
+      to: '/members', label: '確認三方成員', done: snap ? missingOrgs.length === 0 : false,
+      detail: snap ? (missingOrgs.length ? `尚缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}` : '廠商、監造、機關都已加入') : '載入中…',
+    },
+    {
+      to: '/requirements', label: '檢查 AI 履約要求建議', done: !!snap && snap.reqPending === 0 && snap.reqApproved > 0,
+      detail: snap ? `待審 ${snap.reqPending} 件・已核定 ${snap.reqApproved} 件` : '載入中…',
+    },
+    {
+      to: '/members', label: '開啟正式模式', done: false, // 開啟後整張清單就不再顯示
+      detail: '三方到齊後,由專案建立者在「專案成員」頁開啟',
+    },
+  ]
+  return (
+    <Card title="專案初始化" action={<span className="text-xs text-[var(--text-3)]">完成後開啟正式模式,進入日常履約</span>}>
+      <ol className="divide-y divide-[var(--border-2)]">
+        {steps.map((s, i) => (
+          <li key={i}>
+            <Link to={s.to} className="flex items-center gap-3 py-2.5 group">
+              {s.done
+                ? <CheckCircle2 size={18} className="text-[var(--green-text)] shrink-0" aria-hidden />
+                : <Circle size={18} className="text-[var(--text-3)] shrink-0" aria-hidden />}
+              <div className="min-w-0 flex-1">
+                <div className={`text-sm ${s.done ? 'text-[var(--text-3)] line-through' : 'text-[var(--text)] font-medium'}`}>{i + 1}. {s.label}</div>
+                <div className="text-xs text-[var(--text-3)] mt-0.5">{s.detail}</div>
+              </div>
+              <ChevronRight size={15} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0" aria-hidden />
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </Card>
+  )
+}
+
 export default function Dashboard() {
-  const { project, currentUser, workItems, workItemsSource, demoMode, valuations, progressPlan, inspections, defects, siteLogs,
+  const { project, currentUser, workItems, workItemsSource, demoMode, isPersistedProject, valuations, progressPlan, inspections, defects, siteLogs,
     obligations, costItems, safetyRecords, changeOrders, itemSchedules,
     adjustedItems, revisedTotal,
     checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents } = useStore()
@@ -111,14 +183,18 @@ export default function Dashboard() {
           <Empty>標單工項讀取失敗，資料暫時無法顯示。請用上方紅色橫幅的「重試」重新載入。</Empty>
         </Card>
       ) : !imported ? (
-        <Card>
-          <Empty>
-            此專案尚未匯入標單。請到「<Link to="/contract" className="text-[var(--blue)]">專案文件</Link>」把標單 XML 與契約等文件一次上傳，
-            之後估驗、進度、施工日誌、品質查驗才會有資料。
-          </Empty>
-        </Card>
+        // 未匯標單:初始化清單就是指引(第 2 步=到專案文件一次上傳,與全站說法一致)
+        isPersistedProject ? <SetupChecklist imported={false} /> : (
+          <Card>
+            <Empty>
+              此專案尚未匯入標單。請到「<Link to="/contract" className="text-[var(--blue)]">專案文件</Link>」把標單 XML 與契約等文件一次上傳，
+              之後估驗、進度、施工日誌、品質查驗才會有資料。
+            </Empty>
+          </Card>
+        )
       ) : (
         <div className="space-y-6">
+          {isPersistedProject && !project.formal_mode && <SetupChecklist imported />}
           {/* 進度主橫幅:整份 dashboard 唯一的大聲量——落後就亮橘色警示 */}
           <section className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] grid md:grid-cols-[1fr_auto] overflow-hidden">
             <div className="px-6 py-5 min-w-0">

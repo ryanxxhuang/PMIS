@@ -30,7 +30,7 @@ export default function Quality() {
 
   if (!workItems) return <Empty>載入中…</Empty>
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
-    return <Card title="品質查驗"><Empty>此專案的標單尚未匯入資料庫。請先到「標單工項」匯入標單。</Empty></Card>
+    return <Card title="品質查驗"><Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
   }
 
   // 失敗要讓使用者看到、表單不關(B-07:原本吞掉 error,看起來像成功)

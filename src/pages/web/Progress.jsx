@@ -69,7 +69,7 @@ export default function Progress() {
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return (
       <Card title="進度管制">
-        <Empty>此專案的標單尚未匯入資料庫。請先到「標單工項」頁匯入標單，進度才能對齊金額權重。</Empty>
+        <Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML，進度才能對齊金額權重。</Empty>
       </Card>
     )
   }

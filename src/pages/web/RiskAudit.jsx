@@ -92,7 +92,7 @@ export default function RiskAudit() {
     return (
       <div className="space-y-5">
         <PageHeader title="風險稽核" tagline="AI 防弊" subtitle="系統化檢核估驗、變更、品質、契約與進度的異常樣態" />
-        <Card><Empty>此專案尚未匯入標單，無法稽核。請先到「標單工項」匯入。</Empty></Card>
+        <Card><Empty>此專案尚未匯入標單，無法稽核。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
       </div>
     )
   }
