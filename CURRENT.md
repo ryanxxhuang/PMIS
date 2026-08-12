@@ -103,7 +103,7 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 57 個 Vitest 測試檔，共 523 個測試；12 個 Playwright Demo 三角色 E2E；1 個手動真 Supabase 冒煙；23 組 pgTAP SQL 測試。
+- 57 個 Vitest 測試檔，共 523 個測試；12 個 Playwright Demo 三角色 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試。
 
 最近一次全套驗證（W5 PR #6，2026-08-12）：523 個單元測試、12 個 E2E、23 檔共 723 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W5 已合併至 `main` 並部署；2026-08-13 正式資料庫已套用至 `20260812000600`，第二次 dry-run 顯示無待套 migration、遠端 DB lint 零錯誤。`agent-run` v9 與 `send-reminders` v10 已重部署且為 ACTIVE，未帶 JWT／cron secret 的安全冒煙均回 401。main CI 與 Cloudflare Workers build 均成功，正式站首頁及 `/requirements` 深層路由回應 HTTP 200。
 
@@ -121,7 +121,7 @@ W5-3 已把雙成員模型的防誤用規則固定：[`docs/architecture/three-p
 
 W5-4 只修正一條可重現的 Demo／DB 漂移：同一組 28 天試體判定不合格時，正式 DB 會在同一交易建立並以 `test_sample_id` 去重缺失，但 Demo 曾因 React state updater 時序漏開缺失，重試時又可能重複開。現在 Demo 以 `deriveTestSampleUpdate` 同步推導判定，並以 `shouldCreateTestSampleDefect` 保持一組試體一筆缺失；其他尚未發生漂移的雙引擎規則沒有重構。
 
-W6-1 已建立獨立的真後端 Playwright project：`npm run test:e2e:real` 只讀取環境變數或未追蹤的 `.env.e2e.real`，不進預設 CI，且會拒絕正式 Supabase URL。2026-08-13 已用完整 migrations 的一次性本機 Supabase staging 驗證登入、F5 session 還原與登出 1/1 通過；臨時帳號測後刪除。原本 12 條 Demo E2E、523 個 Vitest 與正式 build 亦全綠。
+W6 已完成：`npm run test:e2e:real`（環境變數注入、拒絕正式 Supabase、不進預設 CI）對一次性本機 staging 跑 5 條——auth 冒煙、鏈 1 初始化（含邀請錯配拒絕與正式模式）、鏈 2 估驗三方簽核與請款收款、鏈 3 文件上傳→Requirement 核定→D-012 義務物化、鏈 4 匯入/重設 rollback（含 UI 錯誤橫幅與「日誌不半刪」）。fixture 全走產品窄門 RPC，清理含 Storage 物件，跑後殘留 0；細節見 `docs/REAL_BACKEND_E2E.md`。
 
 ### 6.1 前端資料存取規則
 
