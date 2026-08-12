@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest'
 // 純函式不打網路;mock 掉 supabase 讓本檔在 node 環境零依賴載入
 vi.mock('../../lib/supabase.js', () => ({ supabase: null, isSupabaseConfigured: false }))
 
-import { draftPayloadToSiteLog, draftNeedsInputCount, applyDraftQuantities, draftPayloadToChecklist, checklistDraftCounts } from './agent.js'
+import { draftPayloadToSiteLog, draftNeedsInputCount, applyDraftQuantities, draftPayloadToChecklist, checklistDraftCounts, extractInvokeError } from './agent.js'
 
 // 後端 draft_daily_log 產出的 payload(規格 A1 第 7 點形狀,items 鍵為 work_item uuid)
 const payload = {
@@ -154,5 +154,36 @@ describe('checklistDraftCounts(收件匣卡片統計)', () => {
   it('空/缺 payload 回零,不炸', () => {
     expect(checklistDraftCounts(null)).toEqual({ needsInput: 0, aiSuggested: 0 })
     expect(checklistDraftCounts({})).toEqual({ needsInput: 0, aiSuggested: 0 })
+  })
+})
+
+// PR #4 review:functions.invoke 對非 2xx 只給通用訊息,伺服器的 403/503 中文
+// 錯誤在 error.context body——extractInvokeError 要把它撈出來給 UI 如實顯示。
+describe('extractInvokeError(非 2xx 錯誤訊息萃取)', () => {
+  it('FunctionsHttpError:從 error.context 的 JSON body 取伺服器中文訊息', async () => {
+    const error = { message: 'Edge Function returned a non-2xx status code',
+      context: { json: async () => ({ error: '此 AI 功能未啟用(AI Agent 主控台),請聯絡系統管理者', code: 'feature_disabled' }) } }
+    expect(await extractInvokeError(error, null)).toBe('此 AI 功能未啟用(AI Agent 主控台),請聯絡系統管理者')
+  })
+
+  it('503 閘門 fail-closed 的 body 同樣萃取', async () => {
+    const error = { message: 'non-2xx',
+      context: { json: async () => ({ error: 'AI 功能開關暫時無法確認(AI Agent 主控台),為安全起見先暫停服務,請稍後再試', code: 'gate_unavailable' }) } }
+    expect(await extractInvokeError(error, null)).toContain('暫停服務')
+  })
+
+  it('body 不是 JSON(json() 拋錯)→ 退回 error.message', async () => {
+    const error = { message: '網路中斷', context: { json: async () => { throw new Error('not json') } } }
+    expect(await extractInvokeError(error, null)).toBe('網路中斷')
+  })
+
+  it('無 context(FunctionsFetchError)→ error.message;連 message 都沒有 → 通用訊息', async () => {
+    expect(await extractInvokeError({ message: 'fetch failed' }, null)).toBe('fetch failed')
+    expect(await extractInvokeError({}, null)).toBe('AI agent 暫時無法使用')
+  })
+
+  it('2xx 但 body 帶 error 欄位 → 用 data.error;都沒有 → 通用訊息', async () => {
+    expect(await extractInvokeError(null, { error: 'claude 逾時' })).toBe('claude 逾時')
+    expect(await extractInvokeError(null, null)).toBe('AI agent 暫時無法使用')
   })
 })
