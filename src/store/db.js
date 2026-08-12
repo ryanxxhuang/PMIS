@@ -169,7 +169,8 @@ export async function loadQualityFromDB(projectId, byId) {
 // 從 DB 載入契約義務清單
 export async function loadObligationsFromDB(projectId) {
   const data = await pageAll((from, to) => supabase.from('contract_obligations')
-    .select('*').eq('project_id', projectId).order('sort_order').order('id').range(from, to), '契約義務')
+    .select('*').eq('project_id', projectId).neq('status', '不適用')
+    .order('sort_order').order('id').range(from, to), '契約義務')
   return data || []
 }
 

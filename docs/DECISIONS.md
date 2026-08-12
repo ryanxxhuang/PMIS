@@ -75,4 +75,4 @@
 
 - **狀態**：ACCEPTED（2026-08-12）
 - **決策**：`requirements` 是唯一契約要求權威；只有經人工核定且 `requirement_type = 'deadline'` 的 Requirement，才能單向產生／更新 `contract_obligations` 相容 runtime。obligation 的執行狀態與佐證不反向改寫 Requirement。
-- **結果**：W5-2 已在本機完成並通過驗證：新文件只跑 `extract-requirements` 一次，舊 `parse-contract` Edge Function 檔案保留但沒有前端呼叫者；受控核准會冪等產生 deadline obligation，並保留既有 `status`、`evidence_submittal_id`、`penalty` 與歷史連結。尚未 commit、開 PR 或部署。
+- **結果**：W5-2 已在 PR #6 完成並通過驗證：新文件只跑 `extract-requirements` 一次，舊 `parse-contract` Edge Function 檔案保留但沒有前端呼叫者；受控核准會冪等產生 deadline obligation，並保留既有 `status`、`evidence_submittal_id`、`penalty` 與歷史連結。已核准期限被人工取代時，只有仍待辦的相容提醒會改為「不適用」並退出現行清單，資料列、佐證與歷史不刪除。尚未合併或部署。

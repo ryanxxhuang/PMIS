@@ -189,6 +189,12 @@ begin
 
   if p_decision = 'approve' and req.requirement_type = 'deadline' then
     perform public.materialize_deadline_obligation(req.id);
+  elsif p_decision = 'supersede' and req.requirement_type = 'deadline' then
+    -- Keep the compatibility row and its evidence/history, but retire an open
+    -- reminder when its sole contractual source is no longer authoritative.
+    update public.contract_obligations
+    set status = '不適用'
+    where requirement_id = req.id and status = '待辦';
   end if;
 
   perform set_config('pmis.requirement_review', '', true);

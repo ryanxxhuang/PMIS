@@ -21,10 +21,10 @@
 - [x] W2 單一初始化流程 — PR #3，已部署
 - [x] W3 單一 Agent 體驗 — PR #4，已部署（migration `20260812000300`＋16 支 Edge Functions）
 - [x] W4 成員與正式模式 — PR #5，已部署（migration `20260812000400`）
-- [ ] W5 一次一項架構債（本機收尾核對完成，待 commit／PR／部署）
+- [ ] W5 一次一項架構債（PR #6 待合併／部署）
 - [ ] W6 最小真案驗收
 
-**目前續接點：提交 W5。** W5-2～W5-4 的本機實作與統一收尾核對已完成；正式庫匿名 preflight、Vitest、build、E2E、全套 pgTAP、資料庫 lint 與 W5-2 rollback 演練均已通過。依 `DEVELOPMENT.md`，下一步須由使用者明確授權後才 commit／PR／部署；此前不要重做 W5 或開始 W6。
+**目前續接點：核 PR #6。** W5-2～W5-4 已提交；正式庫匿名 preflight、Vitest、build、E2E、全套 pgTAP、資料庫 lint、W5-2 rollback 演練與 supersede 回歸均已通過。未經使用者明確授權不得合併、部署或開始 W6。
 
 ---
 
@@ -91,24 +91,24 @@
   範圍：盤點 `contract_obligations` ↔ `requirements`：正式庫數量、同步殘料、程式雙寫點清單 → 產出一頁決策文件（單向 vs 解耦的代價比較）交使用者定案。
   不做：不改任何程式與資料。
   驗收：使用者能憑 [`W5-1-Requirement-Obligation-決策書.md`](W5-1-Requirement-Obligation-決策書.md) 直接選邊。
-- [ ] **W5-2 C-001 單向 Requirement → obligation（D-012；本機完成，待 commit／PR／部署）**
+- [ ] **W5-2 C-001 單向 Requirement → obligation（D-012；PR #6 待合併／部署）**
   範圍：變更前先以正式庫唯讀 `count(*)` 精確分類 W5-1 的約 48 筆差額並把匿名統計附在 PR；移除 obligation → Requirement 的同步／刪除 trigger；將 approved deadline Requirement → obligation 的冪等轉換放進受控審查交易；停止 `Contract` 前端所有 `parse-contract` 呼叫，保留 Edge Function 檔案作相容／rollback。既有 obligation 原列沿用，不重建。
   欄位：Requirement 管契約內容與期限規則；obligation 只保留提醒 runtime。轉換可更新標題、階段、責任方與期限規則，但不得覆寫既有 `status`、`evidence_submittal_id`、`penalty` 或歷史連結。
   不做：不刪表、不批次刪歷史資料、不自動核定 AI 建議、不處理非 deadline 產物、不順手做 W5-3／W5-4。
   驗收：同一文件只觸發一次 Requirement 抽取；待審／駁回 Requirement 不產生 obligation；核定 deadline 恰好產生一筆，重試不重複；既有 65 筆 obligation 的執行狀態與佐證不變；Vitest、build、相關 E2E 與 pgTAP 全綠，附 migration rollback。
-  本機證據（2026-08-12）：正式庫唯讀精確基線為 65 obligations／113 requirements／48 筆未連 obligation；48 筆全為未核定建議，orphan legacy = 0、approved deadline 缺 obligation = 0。519 Vitest、12 E2E、23 檔 715 pgTAP、build 及 rollback 重升演練全綠。未部署正式 migration。
-- [ ] **W5-3 C-002 成員模型命名防誤用（本機完成，待 commit／PR／部署）**
+  本機證據（2026-08-12）：正式庫唯讀精確基線為 65 obligations／113 requirements／48 筆未連 obligation；48 筆全為未核定建議，orphan legacy = 0、approved deadline 缺 obligation = 0。519 Vitest、12 E2E、23 檔 715 pgTAP、build 及 rollback 重升演練全綠。PR 審查另補上 supersede 回歸：已取代的 deadline 只將仍待辦的 obligation 標成「不適用」，保留原列、佐證與歷史，並退出前端及 Agent 現行清單。未部署正式 migration。
+- [ ] **W5-3 C-002 成員模型命名防誤用（PR #6 待合併／部署）**
   範圍：補 helper 註解與開發規則（`project_members`=授權、`project_memberships`=身分快照），高風險呼叫點加註。
   不做：不改名、不刪相容表、不動 RLS。
   驗收：兩套模型的用途在程式內有單一說明點可查。
   本機證據（2026-08-12）：唯一規則固定在 `architecture/three-party-role-model.md`；comment-only migration `20260812000600` 標註兩張表與 11 個 helper，高風險 Store／契約文件／提醒呼叫點已加註。519 Vitest、12 E2E、23 檔 720 pgTAP、build 與 DB lint 全綠；未改 RLS，未部署正式 migration。
-- [ ] **W5-4 C-003 已漂移規則抽純函式（本機完成，待 commit／PR／部署）**
+- [ ] **W5-4 C-003 已漂移規則抽純函式（PR #6 待合併／部署）**
   範圍：只處理「已經發生 demo／DB 行為不一致」的規則，抽共用純函式＋測試釘住。
   不做：不全面重構雙引擎。
   驗收：列出處理了哪幾條規則，各附一個回歸測試。
   本機證據（2026-08-12）：盤點後只處理一條可重現漂移——試體不合格時 Demo 曾因 React updater 時序漏開缺失，重試又未依 `test_sample_id` 去重；正式 DB trigger 會同交易建立且冪等。已抽 `deriveTestSampleUpdate`／`shouldCreateTestSampleDefect`，並各有純函式測試及一條整合回歸。522 Vitest、12 E2E、23 檔 720 pgTAP、build 與 DB lint 全綠；未新增 migration，其他潛在同步點未重構。
 
-W5 統一收尾核對（2026-08-12）：W5-1 決策與正式庫匿名基線、W5-2 單向 migration／rollback／pgTAP、W5-3 comment-only migration、W5-4 純函式與回歸測試均逐項符合上述範圍；沒有新增架構或擴大重構。工作樹尚未 commit、開 PR 或部署。
+W5 統一收尾核對（2026-08-12）：W5-1 決策與正式庫匿名基線、W5-2 單向 migration／rollback／pgTAP、W5-3 comment-only migration、W5-4 純函式與回歸測試均逐項符合上述範圍；PR 審查發現並補上 supersede 不得殘留待辦提醒的回歸，沒有新增架構或擴大重構。最新全套結果為 523 Vitest、12 E2E、23 檔 723 pgTAP、build 與 DB lint 全綠；已提交至 PR #6，尚未合併或部署。
 
 ## W6｜最小真案驗收（不以 demo 通過代替真後端）
 

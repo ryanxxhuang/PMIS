@@ -82,7 +82,7 @@ contract_packages
           → requirement_artifact_links
 ```
 
-只有 `status = 'approved'` 的 Requirement 才是權威要求。W5-2 已在本機工作樹反轉相容方向：人工核准的 deadline Requirement 會在同一審查交易中冪等建立／更新一筆 `contract_obligations` 提醒 runtime；obligation 只保留狀態、佐證、罰則與歷史，不反向改寫契約內容。正式站在 migration `20260812000500` 部署前仍是舊方向。
+只有 `status = 'approved'` 的 Requirement 才是權威要求。W5-2 已在 PR #6 反轉相容方向：人工核准的 deadline Requirement 會在同一審查交易中冪等建立／更新一筆 `contract_obligations` 提醒 runtime；obligation 只保留狀態、佐證、罰則與歷史，不反向改寫契約內容。已核准期限被人工取代時，只把仍在待辦的相容提醒標成「不適用」並退出現行清單，原列與佐證／歷史仍保留。正式站在 migration `20260812000500` 部署前仍是舊方向。
 
 ## 5. AI 的不可跨越邊界
 
@@ -103,9 +103,9 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 57 個 Vitest 測試檔，共 522 個測試；12 個 Playwright 三角色 E2E；23 組 pgTAP SQL 測試。
+- 57 個 Vitest 測試檔，共 523 個測試；12 個 Playwright 三角色 E2E；23 組 pgTAP SQL 測試。
 
-最近一次全套驗證（W5-2～W5-4 本機實作，2026-08-12）：522 個單元測試、12 個 E2E、23 檔共 720 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W4 已合併至 `main` 並部署；W5-2～W5-4 尚未 commit、開 PR 或部署，正式資料庫仍同步至 `20260812000400`。
+最近一次全套驗證（W5 PR #6，2026-08-12）：523 個單元測試、12 個 E2E、23 檔共 723 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W4 已合併至 `main` 並部署；W5-2～W5-4 已提交至 PR #6，尚未合併或部署，正式資料庫仍同步至 `20260812000400`。
 
 標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 

@@ -2,7 +2,7 @@
 -- only an approved deadline becomes one compatibility obligation runtime row.
 begin;
 
-select plan(20);
+select plan(23);
 
 create or replace function public.pmis_w52_login(p_uid uuid)
 returns void language plpgsql as $$
@@ -162,6 +162,34 @@ select results_eq(
   ) $$,
   'retry refreshes contractual fields and preserves runtime status, evidence, penalty, and note'
 );
+
+update public.contract_obligations set status = '待辦'
+where requirement_id = '52300000-0000-0000-0000-000000000003';
+select public.pmis_w52_login('52000000-0000-0000-0000-000000000001');
+set local role authenticated;
+select lives_ok($$
+  select public.review_requirement('52300000-0000-0000-0000-000000000003', 'supersede')
+$$, 'superseding an approved deadline retires its open reminder runtime');
+reset role;
+select public.pmis_w52_login(null);
+
+select results_eq(
+  $$
+    select r.status, o.status, o.evidence_submittal_id::text, o.penalty, o.note
+    from public.requirements r
+    join public.contract_obligations o on o.requirement_id = r.id
+    where r.id = '52300000-0000-0000-0000-000000000003'
+  $$,
+  $$ values (
+    'superseded'::text, '不適用'::text,
+    '52200000-0000-0000-0000-000000000001'::text,
+    '逾期每日千分之一'::text, '現場執行備註'::text
+  ) $$,
+  'supersede marks only the runtime state not applicable and preserves evidence/history'
+);
+select is((select count(*)::integer from public.contract_obligations
+  where requirement_id = '52300000-0000-0000-0000-000000000003'), 1,
+  'supersede preserves the compatibility row for audit history');
 
 select * from finish();
 rollback;

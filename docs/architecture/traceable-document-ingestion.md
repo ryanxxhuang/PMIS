@@ -226,6 +226,13 @@ title, phase, responsibility, and deadline rule while preserving status,
 evidence, penalty, note, identity, and history. Pending, rejected, and
 non-deadline Requirements create no obligation.
 
+If a human later supersedes an approved deadline, the same review transaction
+marks only a still-pending compatibility obligation as `不適用`. The row,
+evidence, penalty, note, identity, and audit history remain in the database,
+while current frontend and Agent readers exclude it so obsolete reminders do
+not remain operational. Already-submitted or otherwise progressed runtime is
+left untouched as history.
+
 The Contract frontend no longer invokes `parse-contract` or rereads stored
 contract text for a second AI pass. The Edge Function directory and feature
 registration remain for compatibility, historical usage accounting, and the
