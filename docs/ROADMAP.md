@@ -47,7 +47,7 @@
 
 ## W3｜單一 Agent 體驗（D-008）
 
-- [ ] **W3-1 /assistant 能力盤點＋導向**
+- [x] **W3-1 /assistant 能力盤點＋導向**
   範圍：逐工具比對 `/assistant`（`assistant.chat`）與 `/agent`（`agent.run`）能力；確認無獨有能力後，`/assistant` 路由 302 到 `/agent`（保留路由不刪）。有獨有能力則先停下來回報使用者。
   不做：不刪 `assistant` edge function、不動 DB。
   驗收：直接輸入 `/assistant` 網址會到 `/agent`；能力比對結論寫在 PR。
@@ -120,3 +120,4 @@
 - `(project_id, item_key)` 部分唯一索引（待正式資料盤點）
 - pgTAP 進 CI（P2-08）
 - 已核定估驗／檢查紀錄擋重設的 UX 磨光（guard 訊息措辭）
+- agent-run 回答補出處連結（sources）——/assistant 唯一獨有的輸出格式，導向後暫以 steps 摘要代替

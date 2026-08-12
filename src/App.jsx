@@ -33,7 +33,7 @@ const Alerts = lazy(() => import('./pages/web/Alerts.jsx'))
 const Activity = lazy(() => import('./pages/web/Activity.jsx'))
 const Requirements = lazy(() => import('./pages/web/Requirements.jsx'))
 const MonthlyReport = lazy(() => import('./pages/web/MonthlyReport.jsx'))
-const Assistant = lazy(() => import('./pages/web/Assistant.jsx'))
+// /assistant 已導向 /agent(D-008/W3-1):頁面檔與 edge fn 留待 W3-3 退場
 const AgentConsole = lazy(() => import('./pages/web/Agent.jsx'))
 const SupervisorReport = lazy(() => import('./pages/web/SupervisorReport.jsx'))
 const RiskAudit = lazy(() => import('./pages/web/RiskAudit.jsx'))
@@ -105,7 +105,10 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/security" element={<Security />} />
       <Route path="/dashboard" element={<Web><Dashboard /></Web>} />
-      <Route path="/assistant" element={<Web><Assistant /></Web>} />
+      {/* D-008(W3-1):/agent 是唯一完整 AI 入口。能力比對:assistant.chat 無獨有
+          能力(僅「回答附出處連結」的輸出格式差異;/agent 以 steps 摘要代替)。
+          路由保留導向,深連結/書籤不會 404。 */}
+      <Route path="/assistant" element={<Navigate to="/agent" replace />} />
       <Route path="/agent" element={<Web><AgentConsole /></Web>} />
       <Route path="/supervisor-report" element={<Web><SupervisorReport /></Web>} />
       <Route path="/audit" element={<Web><RiskAudit /></Web>} />
