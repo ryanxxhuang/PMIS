@@ -15,14 +15,14 @@ import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 const SCHEMA = {
   type: 'object',
   properties: {
-    caption: { type: 'string', description: '施工照片簿說明,20 字內,如「三樓外牆磁磚黏貼」「基礎底版鋼筋綁紮」。只描述照片可見內容。' },
+    caption: { type: 'string', description: '施工照片簿說明,40 字內。若照片中有查驗黑板/告示板/白板,**必須把板上可辨識的關鍵數據抄進來**(如鋼筋號數 #4(D13)、間距 15×15cm、搭接長度 ≥27cm、樓層/位置);沒有板子才用一句話描述可見內容,如「三樓外牆磁磚黏貼」。' },
     category: {
       type: 'string',
       enum: ['施工作業', '材料機具', '查驗會勘', '工地環境', '缺失異常', '其他'],
       description: '照片類別。施工作業=施作中;材料機具=料件進場/機具設備;查驗會勘=量測/會勘/驗收;工地環境=整地/圍籬/告示;缺失異常=可見缺失或安全異常。',
     },
     is_construction: { type: 'boolean', description: '照片是否為營建工地的施工/材料/機具/查驗現場。若為一般住宅室內、辦公室、風景、人像等非工地照片,回 false。' },
-    work_item_hint: { type: 'string', description: '照片對應的工項關鍵詞(供比對標單),如「外牆磁磚」「鋼筋」「模板」「瀝青鋪面」;判斷不出、或 is_construction=false 時一律填空字串,寧可不配也不要硬套。' },
+    work_item_hint: { type: 'string', description: '照片對應的工項關鍵詞(供比對標單),用標單常見的完整工項詞彙,如「鋼筋加工及組立」「模板組立」「混凝土澆置」「外牆磁磚」「瀝青混凝土鋪面」;避免只給單一名詞(如只寫「鋼筋」);**必須是被施作的對象(材料/構件),不得是活動類型**——「查驗」「會勘」「量測」「巡檢」不是工項,查驗照片的 hint 要寫被查驗的東西(如鋼筋);判斷不出、或 is_construction=false 時一律填空字串,寧可不配也不要硬套。' },
     visible_progress: { type: 'string', description: '照片「可見」的施作內容,25 字內;**只准描述看得到的物件與動作**,嚴禁使用「完成、已完成、測試中、就位、已驗收」等從照片無法判定的狀態詞;看不出填空字串。' },
   },
   required: ['caption', 'category', 'is_construction', 'work_item_hint', 'visible_progress'],
@@ -31,7 +31,7 @@ const SCHEMA = {
 const PROMPT =
   '這是要放進「施工照片簿」的照片。請以工地管理角度判讀:\n' +
   '1) 先判斷這是不是營建工地的施工/材料/機具/查驗現場(is_construction);若不是(如住宅室內、廚房、辦公室、風景),caption 據實描述、category 用「其他」、work_item_hint 與 visible_progress 一律空字串,不得硬套工項或說成本案施工。\n' +
-  '2) 一句話的照片簿說明(只描述可見內容);\n' +
+  '2) 照片簿說明:照片中若有查驗黑板/告示板,把板上讀得到的關鍵數據抄進說明(鋼筋號數、間距、搭接長度、樓層位置等,讀不清楚的字不要猜);沒有板子就一句話描述可見內容;\n' +
   '3) 照片類別;\n' +
   '4) 最相關的工項關鍵詞(供對應標單,只給關鍵詞不編項次;判斷不出留空);\n' +
   '5) 可見的施作內容(只描述看得到的,禁用「完成/測試中/就位/已驗收」等狀態詞)。\n' +

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera, Printer, ChevronRight, CopyPlus, Plus, CloudSun, Sparkles } from 'lucide-react'
+import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -16,21 +17,6 @@ const todayStr = () => {
 
 // 把 AI 讀到的工項文字模糊比對到標單末端工項（回 work item 或 null）。
 // 含子串 → 取長度比;否則用字元交集 ×0.6;門檻 0.5。使用者最後會確認,寧可漏配也不要錯配。
-function matchLeaf(text, leaves) {
-  const t = (text || '').replace(/\s/g, '')
-  if (!t) return null
-  let best = null, score = 0
-  for (const it of leaves) {
-    const d = (it.description || '').replace(/\s/g, '')
-    if (!d) continue
-    let s
-    if (d.includes(t) || t.includes(d)) s = Math.min(t.length, d.length) / Math.max(t.length, d.length)
-    else { const overlap = [...new Set(t)].filter((c) => d.includes(c)).length; s = (overlap / Math.max(t.length, d.length)) * 0.6 }
-    if (s > score) { score = s; best = it }
-  }
-  return score >= 0.5 ? best : null
-}
-
 export default function SiteLog() {
   const { project, workItems, adjustedItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can, aiEnabled } = useStore()
@@ -238,7 +224,7 @@ export default function SiteLog() {
   const onClassifyExisting = async () => {
     if (!photosNeedingAI.length || existingBusy) return
     setExistingBusy(true); setExistingMsg('')
-    let ok = 0, fail = 0, i = 0
+    let ok = 0, fail = 0, matched = 0, i = 0
     let firstErr = '' // 全失敗時要能說出「為什麼」——這次事故就是 catch 吞掉錯誤查了三層
     const list = photosNeedingAI
     const worker = async () => {
@@ -254,14 +240,16 @@ export default function SiteLog() {
             caption: result?.is_construction === false ? '（AI 判讀:疑似非工地照片,請人工確認）' : (result?.caption || ''),
             work_item_key: wi?.item_key,
           })
-          if (upErr) { fail++; firstErr = firstErr || (upErr.message || '寫回失敗') } else ok++
+          if (upErr) { fail++; firstErr = firstErr || (upErr.message || '寫回失敗') } else { ok++; if (wi) matched++ }
         } catch (e) { fail++; firstErr = firstErr || (e?.message || '處理失敗') }
         setExistingMsg(`辨識中… ${ok + fail}/${list.length}`)
       }
     }
     await Promise.all([worker(), worker(), worker()])
     if (currentLog?.id) setPhotos(await listSitePhotos(currentLog.id))
-    setExistingMsg(fail ? `完成:${ok} 張已生成說明,${fail} 張失敗${firstErr ? `(${firstErr})` : ''},可重按重試` : `完成:${ok} 張已生成說明並配對工項`)
+    setExistingMsg(fail
+      ? `完成:${ok} 張已生成說明,${fail} 張失敗${firstErr ? `(${firstErr})` : ''},可重按重試`
+      : `完成:${ok} 張已生成說明,${matched} 張配對到工項${matched < ok ? '(其餘辨識不出對應工項,可自行歸類)' : ''}`)
     setExistingBusy(false)
   }
 
