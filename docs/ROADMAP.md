@@ -19,7 +19,7 @@
 - [x] W0 可追蹤基準
 - [x] W1 標單資料安全 — PR #2（未部署：migration 與前端需同批上線）
 - [x] W2 單一初始化流程 — PR #3(stacked on #2),含本機 Supabase 瀏覽器實測
-- [ ] W3 單一 Agent 體驗
+- [x] W3 單一 Agent 體驗 — 四格完成,PR 編號待補
 - [ ] W4 成員與正式模式
 - [ ] W5 一次一項架構債
 - [ ] W6 最小真案驗收
@@ -59,7 +59,7 @@
   範圍：前端不再呼叫 `assistant.chat`；`ai_features` 標記停用（不刪列、不刪 edge function 檔案）；用量歷史保留。
   不做：不刪任何 DB 資料與歷史。
   驗收：全站僅剩 `agent.run` 一個對話功能開關；`/admin` 用量頁仍能看歷史。
-- [ ] **W3-4 AI 閘門 fail-closed（D-010、P1-07）**
+- [x] **W3-4 AI 閘門 fail-closed（D-010、P1-07）**
   範圍：`_shared/aiGate.ts` 查詢失敗改為拒絕（fail-closed）＋清楚錯誤訊息；用量寫入失敗不擋回應但記 log 告警（既有 log 管道即可）。
   不做：不做補記後台、不改方案模型。
   驗收：模擬 `ai_feature_allowed` 查詢失敗 → 功能拒絕服務；恢復後正常。附對應測試。

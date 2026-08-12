@@ -89,7 +89,7 @@ contract_packages
 1. AI 只能查詢、彙整與產生草稿，不能核定、判定、結案、驗收或凍結。
 2. 數字由確定性引擎計算，AI 只能引用工具回傳值。
 3. Agent 草稿與動作寫入 `agent_actions`，必須由人接受或拒絕。
-4. 每個 AI 功能都要經伺服器端功能閘門，並記錄 `ai_usage_events`。
+4. 每個 AI 功能都要經伺服器端功能閘門，並記錄 `ai_usage_events`；閘門查詢失敗時 fail-closed（D-010），用量記帳失敗則絕不影響回應。
 5. 正式狀態轉移由 RLS、資料庫 Guard Trigger 與人的操作共同保護。
 
 ## 6. 目前技術現況
@@ -103,9 +103,9 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 33 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 54 個 Vitest 測試檔，共 499 個測試；12 個 Playwright 三角色 E2E；21 組 pgTAP SQL 測試。
+- 55 個 Vitest 測試檔，共 506 個測試；12 個 Playwright 三角色 E2E；21 組 pgTAP SQL 測試。
 
-已於 W1（標單資料安全，2026-08-12）確認：499 個單元測試通過、12 個 E2E 通過、正式建置成功；全套 pgTAP 於本機 `db reset` 後重跑，21 檔共 684 項全數通過。
+最近一次全套驗證（W3 收包，2026-08-12）：506 個單元測試通過、12 個 E2E 通過、正式建置成功；全套 pgTAP 於本機 `db reset` 後重跑，21 檔共 684 項全數通過。
 
 標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 

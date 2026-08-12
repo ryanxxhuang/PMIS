@@ -8,14 +8,15 @@
 // 1. 記帳失敗永遠不能讓 AI 功能失敗——record_ai_usage 只 grant service_role,
 //    缺 SUPABASE_SERVICE_ROLE_KEY 或 RPC 出錯時一律 console.error 後靜默略過,
 //    使用者的 AI 回應照常送出。用量事件是營運資料,掉一筆可惜、擋掉使用者不可原諒。
-// 2. 閘門判斷(ai_feature_allowed RPC)出錯時「保守放行」並 log——這是計量/商業
-//    閘門,不是安全邊界(真正的資料安全邊界是 RLS,在 userClient 的每個查詢上);
-//    讓計量層的故障導致全站 AI 停擺是不合理的爆炸半徑。注意:RPC「正常回 false」
-//    仍確實擋下(那是平台/方案的明確決定),放行只針對「查詢本身失敗」。
+// 2. 閘門判斷(ai_feature_allowed RPC)出錯時 fail-closed 擋下並 log(W3-4/D-010,
+//    使用者定案,推翻早期的「保守放行」):kill switch 與方案限制在 DB 故障時仍必須
+//    有效,寧可 AI 暫停,不可失控放行。判定邏輯集中在 gatePolicy.gateVerdict,
+//    「正常回 false」(403 明確關閉)與「查詢失敗」(503 稍後再試)分開回報。
 
 import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { jsonResponse as json } from './claude.ts'
 import { featureByKey } from './aiFeatures.ts'
+import { gateVerdict } from './gatePolicy.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -127,22 +128,21 @@ export async function openAiGate(req: Request, opts: {
     if (!project) return { ok: false, response: json({ error: '找不到專案或無權限' }, 404) }
   }
 
-  // 功能開關:ai_feature_allowed 是 security definer,userClient 呼叫即可
+  // 功能開關:ai_feature_allowed 是 security definer,userClient 呼叫即可。
+  // 查詢失敗=fail-closed(檔頭紅線 2/D-010);判定集中在 gateVerdict。
   const { data: allowed, error: allowError } = await userClient
     .rpc('ai_feature_allowed', { p_project: projectId, p_feature: opts.feature })
   if (allowError) {
-    // 保守放行(理由見檔頭紅線 2):計量閘門故障不該讓 AI 功能全倒
-    console.error(`ai_feature_allowed 查詢失敗(${opts.feature},保守放行):`, allowError.message)
-  } else if (allowed === false) {
-    const label = featureByKey[opts.feature]?.label || opts.feature
+    console.error(`ai_feature_allowed 查詢失敗(${opts.feature},fail-closed 擋下):`, allowError.message)
+  }
+  const label = featureByKey[opts.feature]?.label || opts.feature
+  const verdict = gateVerdict(label, allowed as boolean | null, !!allowError)
+  if (!verdict.allow) {
     await recordAiUsage(serviceClient, {
       feature: opts.feature, projectId, userId: user.id, actor: 'user',
-      durationMs: Date.now() - startedAt, status: 'blocked', errorCode: 'feature_disabled',
+      durationMs: Date.now() - startedAt, status: 'blocked', errorCode: verdict.code,
     })
-    return {
-      ok: false,
-      response: json({ error: `此 AI 功能未啟用(${label}),請聯絡系統管理者`, code: 'feature_disabled' }, 403),
-    }
+    return { ok: false, response: json({ error: verdict.message, code: verdict.code }, verdict.status) }
   }
 
   return { ok: true, userClient, serviceClient, userId: user.id, projectId, startedAt }
