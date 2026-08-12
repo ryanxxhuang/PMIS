@@ -63,7 +63,7 @@ export default function Members() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="專案成員" tagline="Team" subtitle="邀請監造 / 機關 / 協力廠商加入，依組織別自動套用權限"
+      <PageHeader title="專案成員" tagline="Team" subtitle="邀請監造 / 機關 / 協力廠商加入本專案"
         meta={[{ k: '成員數', v: members ? String(members.length) : '—' }]} />
 
       {isAdmin && (
@@ -140,10 +140,13 @@ export default function Members() {
         )}
       </Card>
 
+      {/* W4-2/P1-06:文案以 can(store.jsx)與 RLS/guard(migrations)實際行為為準——
+          機關不是唯讀:變更核准/駁回、估驗請款與撥款登錄、驗收各階段、風險稽核都是機關的簽核權。 */}
       <p className="text-xs text-[var(--text-3)]">
-        權限依組織別：<b>施工廠商</b>填報 / 提送（日誌、估驗送審、查驗申請、送審、疑義提出）；
-        <b>監造單位</b>審核 / 判定（核定估驗、查驗合格判定、缺失複查結案、送審核備、疑義回覆）；
-        <b>主辦機關</b>唯讀。專案建立者於試用模式不受此限；開啟正式模式後回歸自己的組織別。
+        權限依組織別：<b>施工廠商</b>填報／提送（日誌、估驗提送、查驗申請、送審、疑義提出）；
+        <b>監造單位</b>審核／判定（估驗核定、查驗判定、缺失複查結案、送審審定、疑義回覆、變更初審）；
+        <b>主辦機關</b>契約級簽核（變更設計核准／駁回、估驗請款與撥款登錄、驗收各階段、風險稽核），對日常填報唯讀。
+        專案建立者於試用模式有跨角色權限；開啟正式模式後回歸自己的組織別。
       </p>
     </div>
   )
