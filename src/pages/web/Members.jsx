@@ -35,6 +35,11 @@ export default function Members() {
   // 只有專案建立者(admin)可管理成員
   const isAdmin = demoMode ? true : (members || []).find((m) => m.user_id === currentUser?.user_id)?.member_role === 'admin'
 
+  // W4-4:三方到齊檢查——null=名單未載入(載入中/失敗),無法確認;[]=到齊
+  const missingOrgs = members
+    ? ['contractor', 'supervisor', 'owner'].filter((o) => !members.some((m) => m.org_type === o))
+    : null
+
   const onAdd = async () => {
     if (!email.trim() || !inviteOrg) return
     setBusy(true); setMsg('')
@@ -50,9 +55,16 @@ export default function Members() {
     reload()
   }
   const onEnableFormal = async () => {
+    // W4-4:確認畫面如實列出三方到齊狀態——不齊也可開(到齊與否是專案自己的決定),
+    // 但缺哪方、後果是什麼要先講清楚;requireText 即二次確認。
+    const readiness = missingOrgs === null
+      ? '⚠ 目前無法確認三方成員是否到齊(名單載入中或載入失敗),建議先回成員名單確認。'
+      : missingOrgs.length
+        ? `⚠ 三方尚未到齊,目前缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}。開啟後,缺席角色負責的簽核(核定/判定/核准)將無人可執行,直到該身分的成員加入。`
+        : '三方成員已到齊(施工廠商、監造單位、主辦機關)。'
     const ok = await appConfirm({
       title: '開啟正式模式？', danger: true, confirmLabel: '開啟（不可復原）',
-      body: '開啟後,估驗核定、查驗判定、送審審定、RFI 回覆、變更核准等簽核動作,必須由對應角色（監造/機關）的帳號執行;你將失去跨角色權限,僅保留成員與專案管理,且無法自行關閉。請先確認監造與機關成員都已加入專案。',
+      body: `${readiness}\n\n開啟後,估驗核定、查驗判定、送審審定、RFI 回覆、變更核准等簽核動作,必須由對應角色（監造/機關）的帳號執行;你將失去跨角色權限,僅保留成員與專案管理,且無法自行關閉。`,
       requireText: project.project_name,
     })
     if (!ok) return
@@ -106,6 +118,12 @@ export default function Members() {
                 <li>專案建立者僅保留成員管理與專案設定,依自己的組織別行事。</li>
                 <li><b>開啟後不可自行關閉</b>(履約證據完整性)。</li>
               </ul>
+              {/* W4-4:開啟前先看得到三方到齊狀態(對話框內會再確認一次) */}
+              {missingOrgs !== null && (
+                missingOrgs.length
+                  ? <p className="text-sm text-[var(--amber-text)]">三方到齊檢查:尚缺 {missingOrgs.map((o) => ORG_LABEL[o]).join('、')}。</p>
+                  : <p className="text-sm text-[var(--green-text)]">三方到齊檢查:施工廠商、監造單位、主辦機關都已加入。</p>
+              )}
               {isAdmin
                 ? <Button variant="danger" onClick={onEnableFormal} disabled={busy}>開啟正式模式</Button>
                 : <p className="text-xs text-[var(--text-3)]">僅專案建立者可開啟。</p>}
