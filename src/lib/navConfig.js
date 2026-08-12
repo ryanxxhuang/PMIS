@@ -39,11 +39,13 @@ export const navGroups = [
       { to: '/progress', label: '進度 S 曲線' },
       { to: '/schedule', label: '逐工項排程', roles: ['contractor'] },        // 廠商內部規劃
     ] },
-    // 「施工日誌」已自側欄隱藏(批3 產品原則:agent 能做的就把手動入口藏起來)——
-    // 日常路徑是照片上傳→現場 agent 擬草稿→/agent 收件匣接受。路由保留(App.jsx 不動),
-    // 深連結/提醒中心導向照常,/agent 收件匣底部留次要手動入口以防沒拍照的日子卡死。
-    // hidden=不顯示;本頁本來就不限角色,留定義是為了讓機制一致(隱藏≠移除)。
-    { to: '/site-log', icon: PencilLine, label: '施工日誌', hidden: true },
+    // 「施工日誌」曾自側欄隱藏(批3 原則:agent 能做的就把手動入口藏起來),
+    // **2026-08-12 dry-run 改回顯示**:實測連產品擁有者自己都找不到入口
+    // (原話「各個功能模塊放的地方很亂,很沒有邏輯」),現場工程師更不可能。
+    // 教訓:「agent 能做」不等於「入口可以消失」——藏入口的前提是 agent 那條路
+    // 本身高度可發現,而 /agent 收件匣底部的次要入口顯然不夠。
+    // 收斂原則不變,但要等導覽 IA 重新檢視後,連同 agent 路徑一起設計(dry-run 問題 #10)。
+    { to: '/site-log', icon: PencilLine, label: '施工日誌' },
   ] },
   { title: '品質與工安', items: [
     { to: '/quality', icon: ShieldCheck, label: '品質與工安', tabs: [

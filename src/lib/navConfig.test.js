@@ -102,11 +102,11 @@ describe('workbenchFor(分頁列)', () => {
 })
 
 describe('visibleNavGroups(側欄)', () => {
-  it('批6 收斂:三角色側欄都是 9 個可見項', () => {
+  it('三角色側欄都是 10 個可見項(批6 收斂為 9;2026-08-12 施工日誌改回顯示 → 10)', () => {
     for (const org of ORGS) {
-      expect(flatNav(visibleNavGroups(org, false))).toHaveLength(9)
+      expect(flatNav(visibleNavGroups(org, false))).toHaveLength(10)
     }
-    expect(flatNav(visibleNavGroups('contractor', true))).toHaveLength(9) // override 也不多
+    expect(flatNav(visibleNavGroups('contractor', true))).toHaveLength(10) // override 也不多
   })
   it('監造:估驗與金流無成本管理/逐工項排程分頁,入口指向估驗計價', () => {
     const items = flatNav(visibleNavGroups('supervisor', false))
@@ -131,12 +131,14 @@ describe('visibleNavGroups(側欄)', () => {
     expect(items.find((i) => i.label === '估驗與金流').tabs).toHaveLength(5)
     expect(items.find((i) => i.label === '契約與協作').tabs).toHaveLength(5) // 風險稽核已收斂,override 也不例外
   })
-  it('施工日誌:側欄已收斂(改由 agent 草稿產生),但路由與深連結仍保留', () => {
+  // 2026-08-12 dry-run 反轉:曾因「agent 能做就藏入口」收斂,實測連產品擁有者都找不到
+  // (問題 #10)。現場工程師每天要填的東西必須在側欄看得到——這條測試就是不讓它再被藏回去。
+  it('施工日誌:側欄必須看得到(三角色皆是),不得再收斂', () => {
     for (const org of ORGS) {
-      expect(flatNav(visibleNavGroups(org, false)).find((i) => i.label === '施工日誌')).toBeUndefined()
-      expect(routeAllowed('/site-log', org, false)).toBe(true) // 手動入口/深連結照常
+      expect(flatNav(visibleNavGroups(org, false)).find((i) => i.label === '施工日誌')).toBeDefined()
+      expect(routeAllowed('/site-log', org, false)).toBe(true)
     }
-    expect(flatNav(visibleNavGroups('contractor', true)).find((i) => i.label === '施工日誌')).toBeUndefined()
+    expect(flatNav(visibleNavGroups('contractor', true)).find((i) => i.label === '施工日誌')).toBeDefined()
   })
   it('提醒中心:批6 側欄收斂(agent 主控台同源資料),路由與深連結仍保留', () => {
     for (const org of ORGS) {
@@ -169,19 +171,19 @@ describe('平台管理(/admin):platformAdminOnly 是獨立於專案角色的維�
       expect(routeAllowed('/admin', org, false, true)).toBe(true)
     }
   })
-  it('側欄:非平台管理員完全看不到(連「平台」群組都不渲染),仍是 9 項', () => {
+  it('側欄:非平台管理員完全看不到(連「平台」群組都不渲染),仍是 10 項', () => {
     for (const org of ORGS) {
       const groups = visibleNavGroups(org, false)
       expect(groups.find((g) => g.title === '平台')).toBeUndefined()
-      expect(flatNav(groups)).toHaveLength(9)
+      expect(flatNav(groups)).toHaveLength(10)
     }
     expect(flatNav(visibleNavGroups('contractor', true)).find((i) => i.to === '/admin')).toBeUndefined()
   })
-  it('側欄:平台管理員多出「平台管理」一項(9+1)', () => {
+  it('側欄:平台管理員多出「平台管理」一項(10+1)', () => {
     const groups = visibleNavGroups('owner', false, true)
     const platform = groups.find((g) => g.title === '平台')
     expect(platform.items.map((i) => i.label)).toEqual(['平台管理'])
-    expect(flatNav(groups)).toHaveLength(10)
+    expect(flatNav(groups)).toHaveLength(11)
   })
   it('/admin 是單頁,不掛工作台分頁列', () => {
     expect(workbenchFor('/admin', 'owner', false, true)).toBeNull()
@@ -217,13 +219,13 @@ describe('roles 定義釘死(批6 搬移不得鬆綁)', () => {
       '/audit': ['owner'],
     })
   })
-  it('hidden 路由清單:/alerts、/site-log、/audit,且定義仍在(隱藏≠移除)', () => {
+  it('hidden 路由清單:/alerts、/audit(site-log 於 2026-08-12 改回顯示),且定義仍在(隱藏≠移除)', () => {
     const hidden = []
     for (const g of navGroups) for (const item of g.items) {
       for (const n of (item.tabs || [item])) {
         if (n.hidden) hidden.push(n.to)
       }
     }
-    expect(hidden.sort()).toEqual(['/alerts', '/audit', '/site-log'])
+    expect(hidden.sort()).toEqual(['/alerts', '/audit'])
   })
 })
