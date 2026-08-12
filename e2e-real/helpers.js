@@ -39,10 +39,16 @@ const BUCKET_PREFIX = {
 }
 const BUCKETS = Object.keys(BUCKET_PREFIX)
 async function listAllObjectPaths(storage, bucket, prefix) {
-  const { data, error } = await storage.from(bucket).list(prefix, { limit: 100 })
-  if (error || !data?.length) return []
+  const entries = []
+  const limit = 100
+  for (let offset = 0;; offset += limit) {
+    const { data, error } = await storage.from(bucket).list(prefix, { limit, offset })
+    if (error) throw new Error(`列出 storage 失敗(${bucket}/${prefix}):${error.message}`)
+    entries.push(...(data || []))
+    if (!data || data.length < limit) break
+  }
   const paths = []
-  for (const entry of data) {
+  for (const entry of entries) {
     const full = `${prefix}/${entry.name}`
     if (entry.id === null) paths.push(...await listAllObjectPaths(storage, bucket, full)) // 資料夾 → 遞迴
     else paths.push(full)
@@ -66,9 +72,12 @@ export async function deleteOwnedProjects(email) {
   const anon = createClient(url, process.env.E2E_REAL_SUPABASE_ANON_KEY?.trim(), {
     auth: { persistSession: false, autoRefreshToken: false },
   })
-  const { error: signInError } = await anon.auth.signInWithPassword({ email, password: PW })
+  const { data: signIn, error: signInError } = await anon.auth.signInWithPassword({ email, password: PW })
   if (signInError) throw new Error(`清理登入失敗(${email}):${signInError.message}`)
-  const { data: projects, error: listError } = await anon.from('projects').select('id')
+  if (!signIn.user?.id) throw new Error(`清理登入失敗(${email}):找不到使用者 ID`)
+  const { data: projects, error: listError } = await anon.from('projects')
+    .select('id')
+    .eq('created_by', signIn.user.id)
   if (listError) throw new Error(`清理列專案失敗(${email}):${listError.message}`)
   for (const p of projects || []) {
     await removeProjectStorage(p.id) // 先清 bucket 物件(DB cascade 不會清)

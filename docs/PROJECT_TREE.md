@@ -281,7 +281,12 @@ e2e/
 └── helpers.js               共用登入與專案 fixture
 
 e2e-real/
-└── auth-smoke.spec.js       真登入、session 還原與登出
+├── auth-smoke.spec.js          真登入、session 還原與登出
+├── chain1-onboarding.spec.js  註冊、建案、三方邀請與正式模式
+├── chain2-valuation.spec.js   估驗三方簽核與請款收款
+├── chain3-requirements.spec.js 文件、Requirement 審查與義務物化
+├── chain4-boq-rollback.spec.js 標單匯入／重設 rollback
+└── helpers.js                 隔離帳號、專案與 Storage 清理
 
 public/
 ├── _headers                 Cloudflare 安全標頭與 CSP

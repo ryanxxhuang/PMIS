@@ -121,7 +121,9 @@ W5-3 已把雙成員模型的防誤用規則固定：[`docs/architecture/three-p
 
 W5-4 只修正一條可重現的 Demo／DB 漂移：同一組 28 天試體判定不合格時，正式 DB 會在同一交易建立並以 `test_sample_id` 去重缺失，但 Demo 曾因 React state updater 時序漏開缺失，重試時又可能重複開。現在 Demo 以 `deriveTestSampleUpdate` 同步推導判定，並以 `shouldCreateTestSampleDefect` 保持一組試體一筆缺失；其他尚未發生漂移的雙引擎規則沒有重構。
 
-W6 已完成：`npm run test:e2e:real`（環境變數注入、拒絕正式 Supabase、不進預設 CI）對一次性本機 staging 跑 5 條——auth 冒煙、鏈 1 初始化（含邀請錯配拒絕與正式模式）、鏈 2 估驗三方簽核與請款收款、鏈 3 文件上傳→Requirement 核定→D-012 義務物化、鏈 4 匯入/重設 rollback（含 UI 錯誤橫幅與「日誌不半刪」）。fixture 全走產品窄門 RPC，清理含 Storage 物件，跑後殘留 0；細節見 `docs/REAL_BACKEND_E2E.md`。
+W6 目前 5 條本機真後端測試全綠：`npm run test:e2e:real`（環境變數注入、拒絕正式 Supabase、不進預設 CI）對一次性本機 staging 跑 auth 冒煙、鏈 1 初始化（含邀請錯配拒絕與正式模式）、鏈 2 估驗三方簽核與請款收款、鏈 3 文件上傳＋綁定真文件版本的人工待審 Requirement→核定→D-012 義務物化、鏈 4 匯入/重設 rollback（含 UI 錯誤橫幅與「日誌不半刪」）。fixture 走產品窄門 RPC，清理含 Storage 物件，跑後殘留 0。
+
+但 W6 尚未完整收官：鏈 3 因本機沒有 Edge runtime／Anthropic key，以人工 fixture 代替 live AI 輸出，沒有驗證 `extract-requirements` 成功寫入 ingestion run、AI-origin Requirement 與 citation。依原評估報告的真實 Edge 完成條件，這項仍待一次性 staging 驗證；細節見 `docs/REAL_BACKEND_E2E.md`。
 
 ### 6.1 前端資料存取規則
 

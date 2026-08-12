@@ -21,6 +21,7 @@
 ```text
 E2E_REAL_SUPABASE_URL=
 E2E_REAL_SUPABASE_ANON_KEY=
+E2E_REAL_SERVICE_ROLE_KEY=
 E2E_REAL_EMAIL=
 E2E_REAL_PASSWORD=
 ```
@@ -33,17 +34,23 @@ E2E_REAL_PASSWORD=
 npm run test:e2e:real
 ```
 
-W6-1 冒煙只做登入、session 重整還原與登出，不建立業務資料。W6-2 起的鏈測試會建立臨時帳號與專案,由各 spec 的 afterAll 自動清理(見下)。鏈測試需要額外的 `E2E_REAL_SERVICE_ROLE_KEY`(建立/刪除 fixture 帳號用;只填 staging 的 key)。通過後刪除測試帳號；若使用臨時雲端專案，整個專案刪除，不保留常駐 staging。
+W6-1 冒煙只做登入、session 重整還原與登出，不建立業務資料。W6-2 起的鏈測試會建立臨時帳號與專案,由各 spec 的 afterAll 自動清理(見下)。`E2E_REAL_SERVICE_ROLE_KEY` 只用來建立/刪除 staging fixture 帳號。通過後刪除測試帳號；若使用臨時雲端專案，整個專案刪除，不保留常駐 staging。
 
 若缺少環境變數、URL 無效或誤指向正式 Supabase，指令會在啟動瀏覽器前直接失敗。
 
 ## 清理原則(W6-2 起)
 
-- 業務資料一律走產品窄門清理:以建立者帳號呼叫 `delete_project` RPC(cascade 清全案),不用 service role 直刪資料表——**新版 CLI 的本機 stack 對 `service_role` 沒有資料表 GRANT**(secure-by-default),直刪會 `permission denied`;hosted 專案雖有 grant,仍以真路徑為準。
+- 業務資料一律走產品窄門清理:只列出 `created_by` 等於測試建立者的專案，再由建立者帳號呼叫 `delete_project` RPC(cascade 清全案)；不能刪除該帳號僅受邀加入的專案。不用 service role 直刪資料表——**新版 CLI 的本機 stack 對 `service_role` 沒有資料表 GRANT**(secure-by-default),直刪會 `permission denied`;hosted 專案雖有 grant,仍以真路徑為準。
 - 帳號用 admin API 刪(先刪其專案,`projects.created_by` FK 會擋 `deleteUser`)。
 - 清理失敗一律 throw:staging 殘留必須大聲失敗,不能靜默留資料。
 - fixture email 一律帶時間戳唯一化,重跑不互撞。
-- **Storage 物件不隨 DB cascade 刪除**:刪專案前先用 storage API(service key)清該案物件——`contract-documents` 在 `projects/<id>/` 之下、`photos` 直接以 `<id>/` 開頭(helpers 的 `removeProjectStorage`)。
+- **Storage 物件不隨 DB cascade 刪除**:刪專案前先用 storage API(service key)分頁列完並清除該案物件——`contract-documents` 在 `projects/<id>/` 之下、`photos` 直接以 `<id>/` 開頭(helpers 的 `removeProjectStorage`)；列舉或刪除失敗都直接讓測試失敗。
+
+## W6-4 的驗證邊界
+
+本機 staging 沒有啟動 Edge runtime，也沒有注入 Anthropic API key。因此 `chain3-requirements.spec.js` 驗證的是真實 Storage／documents／document_versions、綁定該文件版本的待審 Requirement、三方 RLS、人工核定與 D-012 obligation 物化；待審列以人工 fixture 代替 live AI 輸出。
+
+這條測試**不是** `extract-requirements` 的 live AI／Edge 成功路徑，不能拿來宣稱外部模型串接已通過。若要符合原評估報告「真實 Storage 與 Edge」的完整完成條件，仍須在帶 Edge runtime 與 Anthropic key 的一次性 staging 另跑成功路徑，測後刪除環境與資料。
 
 ## W6-1 基線
 

@@ -4,8 +4,9 @@
 // 審查人)→ 核定當下單向物化 contract_obligations → /contract 義務時程出現。
 // 廠商端負向斷言:非審查角色(contractor)看不到核定鈕(鏡像 can_review_requirement,
 // 刻意無專案管理者例外)。
-// 註:AI 建議(extract-requirements edge fn)本機 staging 無 edge runtime,
-// 此鏈以人工建立待審 Requirement 代替 AI 建議;AI 端已由功能閘門與 demo 覆蓋。
+// 註:AI 建議(extract-requirements edge fn)本機 staging 無 edge runtime/API key。
+// 此鏈在真文件版本建立後,以帶 document source 的人工待審 Requirement 代替 AI 輸出;
+// 不把這條測試誤稱為 live AI/Edge 成功路徑。
 import { test, expect } from '@playwright/test'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
@@ -16,7 +17,7 @@ const PROJECT_NAME = `鏈3文件工程-${Date.now().toString(36)}`
 const REQ_TITLE = `開工後提送品質計畫-${Date.now().toString(36)}`
 const conEmail = uniqueEmail('w6c3-con')
 const supEmail = uniqueEmail('w6c3-sup')
-let conId, supId
+let conId, supId, projectId
 
 test.beforeAll(async () => {
   conId = await createConfirmedUser(conEmail, 'contractor', '鏈三廠商')
@@ -27,20 +28,11 @@ test.beforeAll(async () => {
     p_supervisor: '監造', p_location: null, p_start: null, p_end: null,
   })
   if (createError) throw new Error(`建案失敗:${createError.message}`)
+  projectId = project.id
   const { error: invErr } = await c.rpc('add_member_by_email', {
     p_project: project.id, p_email: supEmail, p_role: 'member', p_expected_org: 'supervisor',
   })
   if (invErr) throw new Error(`邀請失敗:${invErr.message}`)
-  // 待審 deadline Requirement(成員 RLS 的 insert 真路徑;origin=manual 代替 AI 建議)
-  const { error: reqErr } = await c.from('requirements').insert({
-    project_id: project.id, title: REQ_TITLE,
-    description: '依契約規定於固定期限前提送品質計畫送審。',
-    requirement_type: 'deadline', responsible_party_type: 'contractor',
-    lifecycle_phase: '開工前', trigger_type: 'fixed',
-    trigger_config: { fixed_date: '2026-09-30' },
-    status: 'needs_review', origin: 'manual',
-  })
-  if (reqErr) throw new Error(`建立待審 Requirement 失敗:${reqErr.message}`)
   await c.auth.signOut()
 })
 
@@ -60,6 +52,36 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→義務時程出�
     buffer: Buffer.from('本契約甲方為機關、乙方為廠商。乙方應於開工後提送品質計畫送審。', 'utf-8'),
   })
   await expect(page.getByText('契約書.txt').first()).toBeVisible({ timeout: 15_000 })
+
+  // 本機沒有 live AI/Edge,但替代 fixture 必須在真上傳之後建立,並引用剛產生的
+  // document_version；不能用一筆與文件無關的 Requirement 偽裝整條鏈已串起來。
+  const c = await signInClient(conEmail)
+  let documentId = null
+  await expect.poll(async () => {
+    const { data } = await c.from('documents').select('id')
+      .eq('project_id', projectId).eq('title', '契約書.txt').maybeSingle()
+    documentId = data?.id || null
+    return documentId
+  }).not.toBeNull()
+  const { data: version, error: versionErr } = await c.from('document_versions')
+    .select('id').eq('document_id', documentId).single()
+  if (versionErr) throw new Error(`找不到上傳文件版本:${versionErr.message}`)
+  const { data: requirement, error: reqErr } = await c.from('requirements').insert({
+    project_id: projectId, title: REQ_TITLE,
+    description: '依契約規定於固定期限前提送品質計畫送審。',
+    requirement_type: 'deadline', responsible_party_type: 'contractor',
+    lifecycle_phase: '開工前', trigger_type: 'fixed',
+    trigger_config: { fixed_date: '2026-09-30' },
+    status: 'needs_review', origin: 'manual',
+  }).select('id').single()
+  if (reqErr) throw new Error(`建立待審 Requirement 失敗:${reqErr.message}`)
+  const { error: sourceErr } = await c.from('requirement_sources').insert({
+    requirement_id: requirement.id, document_version_id: version.id,
+    source_kind: 'document', source_verified: false,
+    source_text: '乙方應於開工後提送品質計畫送審。',
+  })
+  if (sourceErr) throw new Error(`建立 Requirement 文件來源失敗:${sourceErr.message}`)
+  await c.auth.signOut()
 
   // ── 廠商在 /requirements 看得到待審,但沒有核定鈕(非審查角色)──────────────
   await gotoHash(page, '/requirements')
