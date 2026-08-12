@@ -10,6 +10,7 @@
 - **W5-1 已完成**：唯讀盤點與 A／B 代價見 `docs/W5-1-Requirement-Obligation-決策書.md`。
 - 使用者已選 A（D-012）：`requirements` 是唯一權威，approved deadline Requirement 單向產生 obligation；obligation 執行狀態不反向改寫 Requirement。
 - **W5-2～W5-4 已由 PR #6 部署，不要重做**：Requirement 單向 migration／rollback、legacy caller 退場、成員模型防誤用，以及試體缺失 Demo／DB 漂移修正均已完成；PR 審查補上 supersede 不得殘留待辦提醒的回歸，保留資料與歷史但從現行前端／Agent 清單排除。最新基線為 523 Vitest、12 E2E、723 pgTAP；正式資料庫已到 `20260812000600`，引用共用工具的 `agent-run` v9／`send-reminders` v10 也已部署。下一工作包是 W6，開始前仍要依 `docs/ROADMAP.md` 的單格範圍執行。
+- **W6-1 真後端 E2E 基建已在本機完成**：獨立 `playwright.real.config.js`／`e2e-real/`、staging-only 防呆、環境變數注入與登入／session／登出冒煙均已驗證；不進預設 CI，臨時帳號已清除。尚未 commit、PR 或部署；未經使用者下一步指示不要開始 W6-2。
 - 正式庫 preflight：65 obligations／113 requirements／48 筆差額；差額全是未核定建議，orphan legacy = 0、approved deadline 缺 obligation = 0。
 - 每次續接仍以 `docs/ROADMAP.md` 第一個未勾項目為準；工作包分支從最新 `main` 建立，不沿用已合併的 W1～W5 分支。
 

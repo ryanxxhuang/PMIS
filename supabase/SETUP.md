@@ -25,6 +25,9 @@ supabase db push          # 依序套用 migrations/(baseline + 後續全部)
 pgTAP 測試見 [`tests/`](./tests)。Storage bucket(`photos`、`contract-documents`)
 與其物件 policies 都由 migration 建立,不需手動設定。
 
+手動真後端 Playwright 測試的 staging、環境變數與清理方式見
+[`../docs/REAL_BACKEND_E2E.md`](../docs/REAL_BACKEND_E2E.md)；它不進預設 CI，也禁止連正式 Supabase。
+
 The full migration chain currently creates 50 tables across project identity, BOQ and finance,
 documents and Requirements, quality and safety, collaboration, acceptance, audit, Agent drafts,
 and AI operations. Do not maintain a duplicate table list here; inspect the migrations or

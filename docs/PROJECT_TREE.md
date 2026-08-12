@@ -19,14 +19,17 @@ PMIS/
 ├── package-lock.json         鎖定依賴版本
 ├── index.html                Vite HTML 入口
 ├── vite.config.js            Vite／React／Tailwind 設定
-├── playwright.config.js      E2E 設定
+├── playwright.config.js      Demo E2E 設定
+├── playwright.real.config.js 真 Supabase 手動 E2E 設定
 ├── wrangler.jsonc            Cloudflare Workers 部署設定
 ├── .env.example              可提交的環境變數範例
+├── .env.e2e.real.example     真後端 E2E 環境變數範例
 ├── .nvmrc                    Node 版本
 ├── .github/workflows/ci.yml  CI：測試與建置
 ├── src/                      React 前端與確定性領域邏輯
 ├── supabase/                 DB migrations、Edge Functions、pgTAP
 ├── e2e/                      Playwright 三方流程
+├── e2e-real/                 Playwright 真 Supabase 冒煙（不進 CI）
 ├── public/                   靜態檔、安全標頭與 security.txt
 ├── docs/                     現行文件、決策、證據與對外資料
 └── scripts/                  一次性 BOQ 資料整理工具
@@ -276,6 +279,9 @@ e2e/
 ├── supervisor.spec.js       監造流程
 ├── owner.spec.js            機關流程
 └── helpers.js               共用登入與專案 fixture
+
+e2e-real/
+└── auth-smoke.spec.js       真登入、session 還原與登出
 
 public/
 ├── _headers                 Cloudflare 安全標頭與 CSP

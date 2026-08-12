@@ -24,7 +24,7 @@
 - [x] W5 一次一項架構債 — PR #6，已部署（migrations `20260812000500`、`20260812000600`）
 - [ ] W6 最小真案驗收
 
-**目前續接點：W6-1 真後端 E2E 基建。** W5 已由 PR #6 合併並部署；正式庫 migration history 已到 `20260812000600`，`agent-run` v9／`send-reminders` v10 已更新，第二次 dry-run 無待套項目，遠端 DB lint、Edge Functions 安全冒煙、main CI、Cloudflare Workers build 與正式站 HTTP 冒煙均通過。W6 尚未開始。
+**目前續接點：W6-2 鏈 1。** W6-1 已在本機完成，尚未 commit／PR：真後端 project 與 Demo E2E 完全隔離，staging secrets 由環境注入並拒絕正式 Supabase；一次性本機 Supabase staging 冒煙已通過且測試帳號已清理。未經使用者下一步指示不要開始 W6-2。
 
 ---
 
@@ -112,10 +112,11 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 
 ## W6｜最小真案驗收（不以 demo 通過代替真後端）
 
-- [ ] **W6-1 真後端 E2E 基建**
+- [x] **W6-1 真後端 E2E 基建（本機完成，待 W6 工作包統一 PR）**
   範圍：Playwright 第二個 project（真 Supabase staging；帳號／秘密由環境變數注入），本機手動跑，不進預設 CI。
   不做：不改既有 demo E2E、不建雲端常駐 staging（臨時開→測完刪，見成本紀律）。
   驗收：`npm run test:e2e:real` 能對真後端跑一條冒煙。
+  本機證據（2026-08-13）：隔離的 `real-supabase` project 以環境變數啟動，登入／F5 session 還原／登出 1/1 通過；缺 secrets 與正式 Supabase URL 均在瀏覽器啟動前被拒絕。臨時帳號清理後殘留 0；原 12 Demo E2E、523 Vitest 與 build 全綠，CI 未加入真後端測試。
 - [ ] **W6-2 鏈 1：註冊→登入→建案→邀請→正式模式**
 - [ ] **W6-3 鏈 2：廠商提送→監造審核→機關核准／付款**
 - [ ] **W6-4 鏈 3：文件上傳→Requirement 建議→人工核定**
