@@ -51,7 +51,7 @@
   範圍：逐工具比對 `/assistant`（`assistant.chat`）與 `/agent`（`agent.run`）能力；確認無獨有能力後，`/assistant` 路由 302 到 `/agent`（保留路由不刪）。有獨有能力則先停下來回報使用者。
   不做：不刪 `assistant` edge function、不動 DB。
   驗收：直接輸入 `/assistant` 網址會到 `/agent`；能力比對結論寫在 PR。
-- [ ] **W3-2 浮動 Copilot 收斂為薄入口**
+- [x] **W3-2 浮動 Copilot 收斂為薄入口**
   範圍：浮動按鈕改為開啟同一 Agent（同 session 或明示「新對話」，擇一實作並寫進 PR）；移除「已匯 BOQ 才出現」的限制（對齊 W2-3）。
   不做：不做跨裝置對話歷史、不加聊天資料庫。
   驗收：浮動入口與 `/agent` 行為一致；使用者能分辨這是同一個 Agent。

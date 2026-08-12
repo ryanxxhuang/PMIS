@@ -1,5 +1,7 @@
 // 右下角浮動 AI copilot——全站任何頁面伸手可及,點開懸浮對話面板。
-// 只在有資料的專案顯示(imported);列印頁隱藏;行動版為全寬 bottom sheet。
+// W3-2(D-008)薄入口定位:與 /agent 是同一個 Agent(同 runtime/persona/工具),
+// 面板每次打開都是新對話(不帶 history,長對話請開完整頁);真專案不需先匯標單
+// (對齊 W2-3——文件/成員/期限問題不依賴 BOQ)。列印頁隱藏;行動版為全寬 bottom sheet。
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { X, Maximize2 } from 'lucide-react'
@@ -46,8 +48,8 @@ function CopilotPanel({ onClose }) {
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-2)] shrink-0">
         <span className="w-7 h-7 rounded-lg grid place-items-center bg-[var(--blue-tint)] text-[var(--blue-text)] shrink-0"><CopilotMark size={16} /></span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-[var(--text)] leading-tight">{label.name}</div>
-          <div className="text-[10px] text-[var(--text-3)]">查得到本案資料 · 只擬草稿不替你決定</div>
+          <div className="text-sm font-semibold text-[var(--text)] leading-tight">{label.name} <span className="font-normal text-[10px] text-[var(--text-3)]">新對話</span></div>
+          <div className="text-[10px] text-[var(--text-3)]">與主控台同一個 Agent · 長對話請開<Link to="/agent" onClick={onClose} className="text-[var(--blue-text)] hover:underline">完整頁</Link></div>
         </div>
         <Link to="/agent" onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><Maximize2 size={15} aria-hidden /></Link>
         <button onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><X size={17} aria-hidden /></button>
@@ -58,8 +60,9 @@ function CopilotPanel({ onClose }) {
 }
 
 export default function CopilotFab() {
-  const { workItemsSource, demoMode, aiEnabled } = useStore() // 收合時只訂閱這幾個 key
-  const imported = workItemsSource === 'db' || demoMode
+  const { isPersistedProject, demoMode, aiEnabled } = useStore() // 收合時只訂閱這幾個 key
+  // W2-3/W3-2:真專案選定即可用,不再要求先匯標單(工項類問題 agent 會自行說明)
+  const available = isPersistedProject || demoMode
   const [open, setOpen] = useState(false)
 
   // Esc 關閉
@@ -70,7 +73,7 @@ export default function CopilotFab() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  if (!imported) return null // 尚無專案資料時不顯示(與 /assistant 頁的空狀態一致)
+  if (!available) return null // 尚未選定專案(或未設 Supabase 又非 demo)時不顯示
   // 批 B UX:agent 對話功能關閉時整顆 FAB 藏起來(面板走 agent-run),
   // 說明入口在 /agent 頁;真正的閘門在伺服器端 openAiGate
   if (!aiEnabled('agent.run')) return null
