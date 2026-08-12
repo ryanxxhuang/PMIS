@@ -235,6 +235,8 @@
     font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em;
     padding: 2px 7px; border-radius: 2px; line-height: 1.5;
   }
+  /* .stack 是 flex column,預設 stretch 會把籤拉成整條;要它貼齊文字寬 */
+  .stack > .chip { align-self: flex-start; }
   .chip.ok  { background: var(--good-tint); color: var(--good); }
   .chip.no  { background: var(--bad-tint);  color: var(--bad); }
   .chip.na  { background: var(--card-2);    color: var(--ink-3); }
@@ -251,6 +253,15 @@
 
   .legend { display: flex; flex-wrap: wrap; gap: 16px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; color: var(--ink-3); }
   .legend b { color: var(--ink-2); }
+
+  /* 內容特別滿的頁（11 列回覆表、九宮格功能面）：整頁縮一階，
+     否則列印成 A4 橫式時最後一列會壓到標題欄。 */
+  .slide.packed h2 { font-size: clamp(23px, 2.4vw, 35px); margin-bottom: .35em; }
+  .slide.packed .stack { gap: clamp(9px, .85vw, 14px); }
+  .slide.packed th, .slide.packed td { padding: 6.5px 10px; }
+  .slide.packed table { font-size: clamp(12px, .86vw, 14.5px); }
+  .slide.packed .card { padding: clamp(11px, 1.05vw, 16px); }
+  .slide.packed .cols { gap: clamp(12px, 1.5vw, 26px); }
 
   .kbd {
     position: fixed; right: 14px; bottom: 14px; z-index: 20;
@@ -338,7 +349,7 @@
   </section>
 
   <!-- 04 功能全覽 -->
-  <section class="slide">
+  <section class="slide packed">
     <div class="body stack">
       <p class="eyebrow">第一幕 · 功能全覽</p>
       <h2>九個功能面，一條資料脊椎串起來。</h2>
@@ -562,7 +573,7 @@
   </section>
 
   <!-- 10 逐項回覆表 -->
-  <section class="slide">
+  <section class="slide packed">
     <div class="body stack">
       <p class="eyebrow">第二幕 · 逐項回覆</p>
       <h2>SaaS 套裝型・普級全部 11 列，逐列已備妥。</h2>
@@ -632,7 +643,7 @@
   </section>
 
   <!-- 12 常見三問 -->
-  <section class="slide">
+  <section class="slide packed">
     <div class="body stack">
       <p class="eyebrow">第二幕 · 常被問到的三題</p>
       <h2>ISO 是「或」，第三方檢測有門檻。</h2>
@@ -781,7 +792,7 @@
   </section>
 
   <!-- 17 簽稿骨架 -->
-  <section class="slide">
+  <section class="slide packed">
     <div class="body stack">
       <p class="eyebrow">第三幕 · 簽稿骨架</p>
       <h2>七段說明，每一段都有對應的法源。</h2>
