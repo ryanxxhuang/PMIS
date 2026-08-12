@@ -15,11 +15,11 @@ node build.js raw.pptx && python3 fix_ea.py raw.pptx ../組長簡報-產品資�
 
 （`~/.npmrc` 全域寫死 `os=linux`，mac 本機不加 `--os=darwin --cpu=arm64` 會裝壞。）
 
-## 三支腳本各自在做什麼
+## 四支腳本各自在做什麼
 
 | 檔 | 為什麼需要它 |
 |---|---|
-| `build.js` | 版面與內容。23 頁＝20 內容頁 ＋ 3 頁幕別分隔。用 pptxgenjs |
+| `build.js` | 版面與內容。25 頁＝22 內容頁 ＋ 3 頁幕別分隔（壹／貳／參）。用 pptxgenjs |
 | `fix_ea.py` | **不能省**。pptxgenjs 只寫 `<a:latin>`，PowerPoint 碰到中文會改查佈景主題的 `minorFont/ea`，那格是空的 → Windows 上會落到新細明體。這支逐一補 `<a:ea>`／`<a:cs>` 為微軟正黑體。佈景主題檔要跳過（`majorFont` 的 schema 是 latin→ea→cs→font\*，再插一組會違反 XSD） |
 | `pick.py` | 抽出單一頁做成單頁 pptx。QuickLook 只畫第一頁,靠這支才能逐頁目視檢查（`python3 pick.py D.pptx p20.pptx 20` 再 `qlmanage -t`）。⚠️ QuickLook 的 Office 轉譯器**不吃儲存格上下內距**,表格會畫得比真實 PowerPoint 矮——看到表格下方留白過多不用急著改,以 `check_fit.py` 的估算為準 |
 | `check_fit.py` | 本機沒有 LibreOffice，沒辦法逐頁算圖檢查。改用確定性檢查：形狀有沒有出血／壓到頁尾，以及**表格會被 PowerPoint 撐到多高、會不會撞到下面手擺的文字**（pptxgenjs 寫進 XML 的列高只是估值，實際會更高——這是最容易出事的地方） |
