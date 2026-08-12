@@ -44,8 +44,11 @@ for n in slides:
         boxes.append((x, y, cx, cy))
         if x < -PAD or y < -PAD or x + cx > SLIDE_W + PAD or y + cy > SLIDE_H + PAD:
             problems.append(f"P{num:02d} 形狀超出版面: x={x:.2f} y={y:.2f} w={cx:.2f} h={cy:.2f}")
-        # 頁尾那兩個文字框自己就在 6.94,略過
-        if y + cy > FOOTER_Y + PAD and y < FOOTER_Y:
+        # 滿版底色帶(從頂端拉到底)是背景,頁尾文字疊在它上面,不算壓到
+        full_bleed = y <= 0.02 and cy >= SLIDE_H - 0.02
+        boxes.pop() if full_bleed else None
+        # 頁尾那兩個文字框自己就在 6.92,略過
+        if not full_bleed and y + cy > FOOTER_Y + PAD and y < FOOTER_Y:
             problems.append(f"P{num:02d} 形狀壓到頁尾: 下緣 {y + cy:.2f}\" > {FOOTER_Y}\"")
 
     # ── 2) 表格實際高度 ────────────────────────────────────────────────
