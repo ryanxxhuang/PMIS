@@ -408,25 +408,24 @@ select is((select count(*)::integer from public.audit_events
     and entity_id = 'e7700000-0000-0000-0000-000000000001'), 1,
   'the review action still flows through the P0-05 lifecycle audit trigger');
 
--- ── Legacy contract_obligations synchronization keeps working ────────────────
+-- ── D-012 closes the legacy obligation authoring direction ──────────────────
 select public.pmis_p07_login('e7000000-0000-0000-0000-000000000002');
 set local role authenticated;
-select lives_ok($$
+select throws_ok($$
   insert into public.contract_obligations
     (id, project_id, title, trigger_event, offset_days, offset_dir)
   values ('e7a00000-0000-0000-0000-000000000001',
           'e7100000-0000-0000-0000-00000000000a', '開工後15日提送品質計畫',
           'commencement', 15, 'after')
-$$, 'contractor still creates legacy deadline obligations');
-select lives_ok($$
-  update public.contract_obligations set status = '已提送'
-  where id = 'e7a00000-0000-0000-0000-000000000001'
-$$, 'legacy obligation status updates keep flowing through the sync trigger');
+$$, '42501', null, 'contractor cannot author compatibility obligations directly');
 reset role;
 select public.pmis_p07_login(null);
-select is((select status from public.requirements
-  where id = 'e7a00000-0000-0000-0000-000000000001'), 'needs_review',
-  'legacy sync still creates the unreviewed requirement mirror');
+select is((select count(*)::integer from public.requirements
+  where id = 'e7a00000-0000-0000-0000-000000000001'), 0,
+  'blocked obligation insert creates no Requirement mirror');
+select is(has_column_privilege('authenticated', 'public.contract_obligations',
+  'status', 'UPDATE'), true,
+  'contractors retain the narrow obligation status operation');
 
 select * from finish();
 rollback;

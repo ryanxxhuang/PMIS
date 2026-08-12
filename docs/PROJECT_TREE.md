@@ -112,7 +112,7 @@ lib/
 │   ├── requirements.js       Requirement 共用規則
 │   └── requirementReview.js  審查清單呈現規則
 ├── 品質、安全與佐證
-│   ├── qc.js                 檢查表與試驗確定性判定
+│   ├── qc.js                 檢查表、試體判定與 Demo 缺失冪等純函式
 │   ├── itp.js                ITP 規則
 │   ├── evidence.js           佐證鏈
 │   ├── photoMatch.js         照片對應
@@ -203,10 +203,10 @@ store/
 supabase/
 ├── SETUP.md                 本機與後端設定 runbook
 ├── config.toml              Supabase local／function 設定
-├── migrations/              31 個依序套用的資料庫變更；唯一 schema 真相
+├── migrations/              36 個依序套用的資料庫變更；唯一 schema 真相
 ├── functions/               16 個 Edge Functions + `_shared`
-├── tests/                   20 組 pgTAP 權限與狀態流程測試
-├── rollbacks/               僅兩個明確支援的 down script
+├── tests/                   23 組 pgTAP 權限與狀態流程測試
+├── rollbacks/               3 個明確支援的 down script
 ├── cron.sql                 排程參考
 └── schema.sql               凍結歷史參考，不再初始化 DB
 ```
@@ -225,6 +225,11 @@ supabase/
 202607280000-002 平台管理、AI 計量、org_type 防提權
 202608110001-002 稽核 IP、刪案紀錄
 20260812000100  三方 Agent 角色收斂
+20260812000200  W1 標單重設／匯入單一交易
+20260812000300  W3 AI 閘門 fail-closed
+20260812000400  W4 邀請三方身分確認
+20260812000500  W5-2 Requirement → obligation 單向相容（待部署）
+20260812000600  W5-3 雙成員模型 schema 註解（待部署）
 ```
 
 規則：只能新增 migration；不能修改已套用檔案。權限與狀態變更同步更新 `supabase/tests/`。
@@ -237,7 +242,7 @@ functions/
 ├── assistant-chat/               助理問答
 ├── audit-summary/                AI 稽核摘要
 ├── extract-requirements/         可追溯 Requirement 擷取
-├── parse-contract/               舊期限義務解析
+├── parse-contract/               舊期限解析；檔案保留供相容／rollback，前端無 caller
 ├── read-submittal/               送審文件讀取
 ├── review-submittal/             送審 AI 審查草稿
 ├── draft-rfi-reply/              RFI 回覆草稿

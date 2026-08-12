@@ -8,8 +8,8 @@
 
 | # | 判定 | demo/前端引擎 | 伺服器權威 | 同步保證 |
 |---|------|--------------|-----------|---------|
-| 1 | 自主檢查表量化判定 | `src/lib/qc.js` `judgeChecklist` | `checklist_records` trigger(`20260712001700_checklist_revisions.sql`) | 無自動保證,**人工同步** |
-| 2 | 試體 28 天抗壓判定+自動開缺失 | `src/lib/qc.js` `judgeConcrete` + `quality.js` demo 分支 | `test_samples` trigger(`20260712001400_unified_defect_engine.sql`) | 無自動保證,**人工同步** |
+| 1 | 自主檢查表量化判定 | Demo 與真實前端都呼叫 `src/lib/qc.js` `judgeChecklist` | DB 保存前端送入的 `results/overall`；`checklist_records_guard` 只保護修訂鏈，不重算判定 | ✅ 前端共用同一純函式；伺服器沒有第二份判定實作 |
+| 2 | 試體 28 天抗壓判定+自動開缺失 | `src/lib/qc.js` `deriveTestSampleUpdate`／`shouldCreateTestSampleDefect` + `quality.js` demo 分支 | `judge_test_sample`／`test_sample_defect` trigger(`20260712001600_evidence_guards.sql`) | W5-4 已用 Vitest＋整合回歸釘住「同步判定、保存 `test_sample_id`、不重複開」；0.85fc′／平均門檻仍人工同步 |
 | 3 | 檢查表修訂鏈 rev/root_id | `quality.js createChecklistRecord` demo 分支本地計算 | DB guard 依鏈計算(前端真專案不算,寫入後 reload 取回) | 無自動保證,**人工同步** |
 | 4 | 契約義務到期日計算 | `src/lib/contractDue.js` | `supabase/functions/_shared/contractDue.ts`(send-reminders 用) | ✅ `contractDue.test.ts` 與前端**同一組測試案例**對齊 |
 | 5 | 提醒中心彙整規則 | `src/pages/web/Alerts.jsx` | `send-reminders` 的 `collectAlerts`(伺服器版) | 無自動保證,**人工同步**(兩處都有互相指涉的註解) |
@@ -26,6 +26,12 @@
   (qc.test.js 等)→ demo 站人工過一次該情境。
 - 第 4 項(contractDue)的「共用測試案例」模式是理想型:改動另外幾對時,
   優先考慮把案例抽成兩邊共用的 fixture。
+
+## W5-4 已處理的實際漂移
+
+只修正一條已能重現的差異：正式 DB 在試體 28 天值寫入時同步判定，且同一 `test_sample_id` 最多建立一筆缺失；Demo 原本把判定結果暫存在 React state updater 內再立刻讀取，可能漏開缺失，後續重試又沒有試體連結可去重。現在判定改由同步純函式回傳，Demo 缺失保存 `test_sample_id` 並以純函式原子去重。
+
+其餘清單項目目前沒有已重現漂移，因此 W5-4 不重構。未來只有在測試或真案驗收證明兩側結果不同時，才針對該條補純函式或共用案例。
 
 ## 相關設計決策:切案清空與載入的 effect 順序(W-03)
 

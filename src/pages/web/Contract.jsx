@@ -1,17 +1,14 @@
 // P0-07.5 契約管制:一個「契約文件包」主流程取代舊的兩個上傳卡。
 // 使用者只做一件事:選契約包 → 一次丟進整包文件 → 系統自動整理、分類、
 // 找出履約要求。進度來自持久化的 document_processing_runs——離開頁面或重新
-// 整理都不會遺失。義務時程(legacy contract_obligations)仍在下方運作,
-// 由「同一批已儲存的契約文字」重建,不再要求第二次上傳。
+// 整理都不會遺失。核准的 deadline Requirement 由資料庫單向建立下方義務時程。
 // 契約包、文件與處理進度只供本頁使用，保留有界的頁面查詢，不塞進全域 Store。
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Scale, FileText, UploadCloud, ChevronRight, RefreshCw } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { pageAllInSafe } from '../../lib/pagedQuery.js'
 import { Card, Empty, PageHeader, Badge, Button, Select } from '../../components/ui.jsx'
-import { appConfirm } from '../../components/confirm.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
 import { estimatePenalty } from '../../lib/penaltyCalc.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -46,13 +43,11 @@ function ruleText(ob) {
 }
 
 const DOT = { done: 'var(--green-text)', overdue: 'var(--red-text)', soon: 'var(--amber-text)', scheduled: 'var(--blue)', nodate: 'var(--text-3)' }
-const LEGACY_TEXT_BUDGET = 150_000
-
 export default function Contract() {
   const {
     isSupabaseConfigured, currentProject, isPersistedProject,
     currentProjectMembership, currentUser,
-    obligations, parseContractFromText, updateObligationStatus, updateProjectAnchors, can,
+    obligations, updateObligationStatus, updateProjectAnchors, can,
     importWorkItems, workItemsSource, reloadMembership, workItems, submittals,
   } = useStore()
   const contractTotal = workItems?.meta?.billable_total || 0 // 契約總價(發包工程費),逾期罰款試算基準
@@ -67,7 +62,7 @@ export default function Contract() {
   const [uploading, setUploading] = useState(false)
   const [boqMsg, setBoqMsg] = useState('')
   const [msg, setMsg] = useState('')
-  const [legacyMsg, setLegacyMsg] = useState('')
+  const [obligationMsg, setObligationMsg] = useState('')
   const [showTech, setShowTech] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [, forceTick] = useState(0)
@@ -172,6 +167,7 @@ export default function Contract() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs, progress.active, Date.now()])
 
+  // 身分快照只選「我代表哪個契約方」；能否上傳仍由 project_members/profile 產生的 can.edit 決定。
   const packageOptions = useMemo(
     () => availablePackageOptions({ membership: currentProjectMembership, parties }),
     [currentProjectMembership, parties],
@@ -219,7 +215,7 @@ export default function Contract() {
     return data
   }, [packages, parties, pid, currentUser])
 
-  // ── 一個主要上傳流程:多檔 → 自動整理 → 履約要求 → 義務時程 ─────────────
+  // ── 一個主要上傳流程:多檔 → 自動整理 → 履約要求 ───────────────────────
   const handleFiles = useCallback(async (fileList, targetPackage) => {
     let files = [...(fileList || [])].filter(Boolean)
     if (!files.length || !canUploadDocs) return
@@ -245,28 +241,16 @@ export default function Contract() {
         if (!packageOptions.length) { setMsg('專案身分初始化中,請稍候幾秒再試一次。'); return }
         pkg = await ensurePackage(packageOptions[0])
       }
-      setUploading(true); setMsg(''); setLegacyMsg('')
+      setUploading(true); setMsg('')
       setSelectedPackageId(pkg.id)
       await supabase.from('contract_packages').update({ status: 'processing' }).eq('id', pkg.id)
       const onRun = (run) => setRuns((rs) => {
         const i = rs.findIndex((r) => r.document_version_id === run.document_version_id)
         return i >= 0 ? rs.map((r, j) => (j === i ? run : r)) : [...rs, run]
       })
-      const { runs: batchRuns, failures, contractTexts } = await uploadFilesToPackage({
+      const { runs: batchRuns, failures } = await uploadFilesToPackage({
         files, packageRow: pkg, projectId: pid, userId: currentUser?.user_id || null, onRun,
       })
-      // 義務時程(legacy):同一批契約文字直接重建,不需第二次上傳。
-      if (pkg.package_type === 'construction' && can.edit && contractTexts.length) {
-        if (!obligations.length) {
-          const { error, count } = await parseContractFromText(
-            contractTexts.join('\n\n').slice(0, LEGACY_TEXT_BUDGET))
-          setLegacyMsg(error
-            ? `義務時程解析未完成:${error.message || ''}`
-            : `已同步產生 ${count} 項義務時程(見下方)。`)
-        } else {
-          setLegacyMsg('義務時程已存在,未自動覆蓋;可在下方「義務時程」以最新契約文件重新產生。')
-        }
-      }
       const { data: freshRuns } = await supabase.from('document_processing_runs')
         .select('*').eq('contract_package_id', pkg.id).order('started_at')
       const nextStatus = packageStatusFromRuns(freshRuns || batchRuns)
@@ -279,8 +263,8 @@ export default function Contract() {
     } finally {
       setUploading(false)
     }
-  }, [canUploadDocs, packageOptions, ensurePackage, pid, currentUser, can.edit,
-    obligations.length, parseContractFromText, reloadRuns, importWorkItems, workItemsSource])
+  }, [canUploadDocs, packageOptions, ensurePackage, pid, currentUser,
+    reloadRuns, importWorkItems, workItemsSource])
 
   // 待確認文件:修正分類 → 視需要重新路由 AI 分析
   const confirmClassification = useCallback(async (run, newType) => {
@@ -328,29 +312,7 @@ export default function Contract() {
     await reloadRuns(run.contract_package_id)
   }, [versionsById, pid, reloadRuns])
 
-  // ── 義務時程(legacy runtime,原樣保留)────────────────────────────────
-  const regenerateDeadlines = useCallback(async () => {
-    if (!selectedPackage || selectedPackage.package_type !== 'construction') return
-    if (obligations.length && !(await appConfirm({
-      title: '重新產生義務時程?', body: '將以本契約包中「契約」類文件的已儲存文字重新解析,並取代目前清單。',
-      confirmLabel: '重新產生',
-    }))) return
-    setLegacyMsg('正在由已儲存的契約文字重新產生義務時程…')
-    const contractDocIds = [...docsById.values()]
-      .filter((d) => d.document_type === 'contract').map((d) => d.id)
-    const versionIds = [...versionsById.values()]
-      .filter((v) => contractDocIds.includes(v.document_id)).map((v) => v.id)
-    if (!versionIds.length) { setLegacyMsg('本契約包尚無「契約」類文件,無法產生義務時程。'); return }
-    // 契約全文可達上千頁:不分頁就只讀到前 1,000 頁,義務時程會憑半份契約產生
-    const { data: pageRows } = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_pages')
-      .select('document_version_id, page_number, extracted_text')
-      .in('document_version_id', chunk).order('page_number').order('id').range(from, to))
-    const text = (pageRows || []).map((p) => p.extracted_text).join('\n').slice(0, LEGACY_TEXT_BUDGET)
-    const { error, count } = await parseContractFromText(text)
-    setLegacyMsg(error ? `義務時程解析失敗:${error.message || ''}` : `已重新產生 ${count} 項義務時程。`)
-  }, [selectedPackage, obligations.length, docsById, versionsById, parseContractFromText])
-
-  // ── 義務時程顯示(原樣)────────────────────────────────────────────────
+  // ── 義務時程顯示(approved deadline 的相容 runtime)────────────────────
   const items = useMemo(() => {
     const a = { ...anchors, end_date: currentProject?.end_date }
     return obligations.map((ob) => {
@@ -396,7 +358,7 @@ export default function Contract() {
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔、抽出時程義務與履約需求,然後告訴你什麼時間該做什麼" />
+        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並抽出履約需求;人工核准的期限會進入義務時程" />
       </div>
 
       <Card title="基準日">
@@ -512,7 +474,6 @@ export default function Contract() {
           </div>
         )}
         {msg && <p className="text-xs text-[var(--red-text)] mt-3">{msg}</p>}
-        {legacyMsg && <p className="text-xs text-[var(--text-2)] mt-2">{legacyMsg}</p>}
         {boqMsg && <p className="text-xs text-[var(--text-2)] mt-2">{boqMsg}</p>}
         {!uploading && (runs.length > 0 || obligations.length > 0) && (
           <div className="mt-4 rounded-lg border border-[var(--border-2)] bg-[var(--blue-tint)]/40 px-4 py-3">
@@ -620,20 +581,17 @@ export default function Contract() {
         )}
       </Card>
 
-      {/* ── 義務時程(legacy 相容 runtime)──────────────────────────────── */}
-      <Card title="義務時程" action={
-        can.edit && selectedPackage?.package_type === 'construction' && (
-          <Button variant="outline" size="sm" onClick={regenerateDeadlines}>以契約文件重新產生</Button>
-        )
-      }>
+      {/* ── 義務時程(approved deadline 相容 runtime)────────────────────── */}
+      <Card title="義務時程">
         <div className="flex flex-wrap gap-2">
           <Pill color="red" n={counts.overdue} label="已逾期" />
           <Pill color="amber" n={counts.soon} label="7 日內到期" />
           <Pill color="green" n={counts.done} label="已完成" />
         </div>
         {groups.length === 0 && (
-          <p className="text-xs text-[var(--text-3)] mt-3">尚無資料。上傳契約文件後,系統會自動由契約類文件產生時程義務與罰則清單。</p>
+          <p className="text-xs text-[var(--text-3)] mt-3">尚無已核准的期限要求。上傳契約文件並前往「履約需求審查」；期限核准後會自動出現在這裡。</p>
         )}
+        {obligationMsg && <p className="text-xs text-[var(--red-text)] mt-2">{obligationMsg}</p>}
       </Card>
 
       {groups.map((g) => (
@@ -650,13 +608,13 @@ export default function Contract() {
                       if (it.done) {
                         // 退回待辦:一併解除佐證連結(W-01)
                         const { error } = await updateObligationStatus(it.ob.id, '待辦', { evidence_submittal_id: null })
-                        if (error) setLegacyMsg(`義務狀態未寫入:${error.message}`)
+                        if (error) setObligationMsg(`義務狀態未寫入:${error.message}`)
                       } else if (submittals.length) {
                         // 有送審文件可掛 → 展開佐證挑選(不強制,可略過)
                         setEvidenceFor(evidenceFor === it.ob.id ? null : it.ob.id); setEvidencePick('')
                       } else {
                         const { error } = await updateObligationStatus(it.ob.id, '已提送')
-                        if (error) setLegacyMsg(`義務狀態未寫入:${error.message}`)
+                        if (error) setObligationMsg(`義務狀態未寫入:${error.message}`)
                       }
                     }}
                       className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
@@ -676,7 +634,7 @@ export default function Contract() {
                       <Button size="sm" onClick={async () => {
                         const { error } = await updateObligationStatus(it.ob.id, '已提送',
                           evidencePick ? { evidence_submittal_id: evidencePick } : {})
-                        if (error) { setLegacyMsg(`義務狀態未寫入:${error.message}`); return }
+                        if (error) { setObligationMsg(`義務狀態未寫入:${error.message}`); return }
                         setEvidenceFor(null)
                       }}>{evidencePick ? '掛佐證並標為已提送' : '直接標為已提送'}</Button>
                       <button onClick={() => setEvidenceFor(null)} className="text-xs text-[var(--text-3)] hover:underline">取消</button>

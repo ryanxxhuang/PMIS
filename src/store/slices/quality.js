@@ -3,7 +3,7 @@
 // (工安缺失在匯標單前也要進 DB,否則只進記憶體=假成功);查驗掛工項 → 維持 dbMode。
 import { useState, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase.js'
-import { judgeChecklist, judgeConcrete, sampleDues, pendingSamplesFromLogs } from '../../lib/qc.js'
+import { judgeChecklist, deriveTestSampleUpdate, shouldCreateTestSampleDefect, sampleDues, pendingSamplesFromLogs } from '../../lib/qc.js'
 import { TEMPLATE_03310 } from '../../data/checklist03310.js'
 import { loadQualityFromDB, loadDefectsFromDB } from '../db.js'
 import { mutationOutcome } from './billing.js'
@@ -93,14 +93,18 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
     const markup_path = await saveMarkup(input.markup_data, 'defect')
     if (!isPersistedProject) {
-      setDefects((ds) => [{
-        id: `DEF-${Date.now()}`, domain, title: input.title, description: input.description || null,
-        severity: input.severity || '一般', location: input.location || null,
-        due_date: input.due_date || null, record_date: input.record_date || null,
-        status: '開立', improvement_note: null, markup_path,
-        source_checklist_record_id: input.source_checklist_record_id || null,
-        work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
-      }, ...ds])
+      setDefects((ds) => {
+        if (input.test_sample_id && !shouldCreateTestSampleDefect(ds, input.test_sample_id)) return ds
+        return [{
+          id: `DEF-${Date.now()}`, domain, title: input.title, description: input.description || null,
+          severity: input.severity || '一般', location: input.location || null,
+          due_date: input.due_date || null, record_date: input.record_date || null,
+          status: '開立', improvement_note: null, markup_path,
+          source_checklist_record_id: input.source_checklist_record_id || null,
+          test_sample_id: input.test_sample_id || null,
+          work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
+        }, ...ds]
+      })
       return { error: null }
     }
     const { error } = await supabase.from('defects').insert({
@@ -110,6 +114,7 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       due_date: input.due_date || null, record_date: input.record_date || null,
       status: '開立', created_by: currentUser?.user_id, markup_path,
       source_checklist_record_id: input.source_checklist_record_id || null,
+      test_sample_id: input.test_sample_id || null,
     })
     if (error) return { error }
     await reloadDefects()
@@ -288,23 +293,15 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
   // demo:維持本地 judgeConcrete + 本地開缺失。
   const updateTestSample = useCallback(async (id, patch) => {
     if (!dbMode) {
-      let judged = null
-      setTestSamples((ss) => ss.map((s) => {
-        if (s.id !== id) return s
-        const merged = { ...s, ...patch }
-        if ('d28_values' in patch || 'fc' in patch) {
-          const r = judgeConcrete(merged.fc, merged.d28_values)
-          merged.status = r.status || '待試驗'
-          judged = { merged, r }
-        }
-        return merged
-      }))
-      if (judged?.r.status === '不合格') {
-        const { merged, r } = judged
+      const current = testSamples.find((s) => s.id === id)
+      if (!current) return { error: null }
+      const { sample: merged, judgement } = deriveTestSampleUpdate(current, patch)
+      setTestSamples((ss) => ss.map((s) => (s.id === id ? merged : s)))
+      if (judgement?.status === '不合格') {
         await createDefect({
           title: `試體抗壓不合格：${merged.sample_no}`,
-          description: `28天抗壓 平均 ${Math.round(r.avg)} / 最低 ${Math.round(r.min)} kgf/cm²，未達 fc′ ${merged.fc}（標準：任一 ≥0.85fc′ 且平均 ≥fc′）`,
-          severity: '嚴重', location: merged.location || '',
+          description: `28天抗壓 平均 ${Math.round(judgement.avg)} / 最低 ${Math.round(judgement.min)} kgf/cm²，未達 fc′ ${merged.fc}（標準：任一 ≥0.85fc′ 且平均 ≥fc′）`,
+          severity: '嚴重', location: merged.location || '', test_sample_id: merged.id,
         })
       }
       return { error: null }
@@ -314,7 +311,7 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     if (error) return { error }
     await reloadQuality() // 取回 trigger 推導的狀態 + 自動開立的缺失
     return { error: null }
-  }, [dbMode, createDefect, reloadQuality])
+  }, [dbMode, testSamples, createDefect, reloadQuality])
 
   // DB 成功才移除(已判定試體=品質證據,DB delete guard 會擋)
   const deleteTestSample = useCallback(async (id) => {

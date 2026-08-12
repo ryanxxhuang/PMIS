@@ -14,7 +14,6 @@
 // Retries are idempotent: same content -> same checksum -> same version ->
 // same processing-run row (unique on document_version_id).
 import { supabase } from './supabase.js'
-import { pageAllSafe } from './pagedQuery.js'
 import { extractDocumentPages, hasExtractableText } from './documentExtract.js'
 import { fileKind, analysisSupport, storedLimitationLabel } from './packageFileSupport.js'
 import { classifyDocument, shouldExtractRequirements } from './documentClassifier.js'
@@ -434,33 +433,15 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
   })
 }
 
-// Whole-package upload. Returns per-file results plus the extracted text of
-// trusted contract-type files so the caller can feed the LEGACY deadline
-// parser once per batch (no second upload of the same files).
+// Whole-package upload. Requirement extraction is the only contractual AI
+// pipeline; approved deadlines are materialized by the database review action.
 export async function uploadFilesToPackage({
   files, packageRow, projectId, userId, onRun,
 }) {
-  const contractTexts = []
   const results = await mapWithConcurrency([...files], UPLOAD_CONCURRENCY, async (file) => {
-    const run = await processPackageFile({ file, packageRow, projectId, userId, onRun })
-    if (run?.suggested_document_type === 'contract'
-      && run.classification_status === 'auto_accepted'
-      && packageRow.package_type === 'construction') {
-      try {
-        // 契約全文可達上千頁,不分頁只會拿到前 1,000 頁
-        const { data: pageRows } = await pageAllSafe((from, to) => supabase
-          .from('document_pages')
-          .select('extracted_text')
-          .eq('document_version_id', run.document_version_id)
-          .order('page_number').order('id').range(from, to))
-        if (pageRows?.length) {
-          contractTexts.push(pageRows.map((p) => p.extracted_text).join('\n'))
-        }
-      } catch { /* legacy deadline text is best-effort */ }
-    }
-    return run
+    return processPackageFile({ file, packageRow, projectId, userId, onRun })
   })
   const runs = results.filter((r) => r.ok).map((r) => r.value)
   const failures = results.filter((r) => !r.ok).map((r) => r.error?.message || String(r.error))
-  return { runs, failures, contractTexts }
+  return { runs, failures }
 }

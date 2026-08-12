@@ -82,7 +82,7 @@ contract_packages
           → requirement_artifact_links
 ```
 
-只有 `status = 'approved'` 的 Requirement 才是權威要求。`contract_obligations` 是目前提醒與期限流程仍在使用的相容層，現行 migration 會把它同步成待審 Requirement；這是既有行為，不代表已核定。
+只有 `status = 'approved'` 的 Requirement 才是權威要求。W5-2 已在本機工作樹反轉相容方向：人工核准的 deadline Requirement 會在同一審查交易中冪等建立／更新一筆 `contract_obligations` 提醒 runtime；obligation 只保留狀態、佐證、罰則與歷史，不反向改寫契約內容。正式站在 migration `20260812000500` 部署前仍是舊方向。
 
 ## 5. AI 的不可跨越邊界
 
@@ -99,17 +99,27 @@ contract_packages
 - React 18、Vite 6、Tailwind CSS 4 的靜態 SPA。
 - Supabase Postgres、Auth、RLS、Storage 與 Deno Edge Functions。
 - Cloudflare Workers 靜態資產部署，正式站為 <https://gov-agent.ai>。
-- 36 條 React 路由、34 個頁面檔、9 個 Store slices。
+- 36 條 React 路由、33 個頁面檔、9 個 Store slices。
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
-- 34 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 55 個 Vitest 測試檔，共 506 個測試；12 個 Playwright 三角色 E2E；22 組 pgTAP SQL 測試。
+- 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
+- 57 個 Vitest 測試檔，共 522 個測試；12 個 Playwright 三角色 E2E；23 組 pgTAP SQL 測試。
 
-最近一次全套驗證（W3 收包，2026-08-12）：506 個單元測試通過、12 個 E2E 通過、正式建置成功；全套 pgTAP 於本機 `db reset` 後重跑，21 檔共 684 項全數通過。
+最近一次全套驗證（W5-2～W5-4 本機實作，2026-08-12）：522 個單元測試、12 個 E2E、23 檔共 720 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W4 已合併至 `main` 並部署；W5-2～W5-4 尚未 commit、開 PR 或部署，正式資料庫仍同步至 `20260812000400`。
 
 標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 
 初始化自 W2 起只有一條路（D-007）：建案 → 專案文件一次上傳 → 三方成員 → 正式模式。Dashboard 對未開正式模式的真專案顯示四步初始化清單（狀態由既有資料推導）；`/agent` 不再因未匯標單整頁封鎖，僅提示工項類問題需先匯入；所有「無標單」空狀態統一指向專案文件。
+
+AI 入口自 W3 起收斂為單一 Agent（D-008、D-010）：`/assistant` 導向 `/agent`，浮動 Copilot 是同一 Agent 的明示新對話入口；前端不再呼叫 `assistant.chat`，但功能列、Edge Function 與歷史用量保留。所有 AI 功能閘門查詢失敗時 fail-closed；403／503 錯誤會在 UI 如實顯示並可重試，不會偽裝成離線快答。
+
+成員與正式模式自 W4 起採三方確認流程（D-009）：成員頁明確區分載入中、空名單、載入失敗與正常名單；邀請方必須指定廠商／監造／機關，伺服器會與受邀帳號的註冊身分比對，錯配即拒絕。開啟正式模式前會列出缺少哪一方並要求二次確認；三方未到齊仍可由專案建立者決定是否開啟。
+
+W5-2 的正式庫變更前唯讀基線：65 筆 obligation、113 筆 Requirement，差額 48 筆全是未核定建議（24 筆 `draft_ai/ai`、23 筆 `needs_review/ai`、1 筆 `needs_review/manual`）；0 筆 orphan legacy，0 筆已核准 deadline 缺 obligation。65 筆 obligation 全為待辦、0 筆有佐證、21 筆有罰則，且 65 筆都有唯一 Requirement 連結。盤點只讀匿名數量，未匯出業務內容。
+
+W5-3 已在本機把雙成員模型的防誤用規則固定：[`docs/architecture/three-party-role-model.md`](docs/architecture/three-party-role-model.md#成員模型的唯一判斷規則) 是唯一說明點；migration `20260812000600` 只替兩張表與 helper 加 schema comment，關鍵前端／提醒呼叫點也有短註解。沒有改名、刪表或變更 RLS；正式站要等 migration 部署後才有資料庫 metadata。
+
+W5-4 只修正一條可重現的 Demo／DB 漂移：同一組 28 天試體判定不合格時，正式 DB 會在同一交易建立並以 `test_sample_id` 去重缺失，但 Demo 曾因 React state updater 時序漏開缺失，重試時又可能重複開。現在 Demo 以 `deriveTestSampleUpdate` 同步推導判定，並以 `shouldCreateTestSampleDefect` 保持一組試體一筆缺失；其他尚未發生漂移的雙引擎規則沒有重構。
 
 ### 6.1 前端資料存取規則
 
@@ -122,9 +132,9 @@ contract_packages
 
 以下是現況，不應在沒有測試保護下直接刪除：
 
-1. **雙成員資料仍待命名收斂**：責任已定案——`project_members` 管專案存取／admin，`project_memberships` 管文件與契約方身分；但舊欄位名稱與相容 RPC 仍容易讓人誤用。
-2. **雙引擎同步**：Demo／前端確定性判定與伺服器 Trigger／Edge 規則有多組人工同步點。
-3. **舊相容層**：`contract_obligations` 與 `requirements` 目前仍有同步關係；要不要解耦尚未定案，不得只改其中一邊。
+1. **雙成員資料仍保留相近名稱**：W5-3 已用單一架構規則、schema comment 與高風險呼叫點註解降低誤用；為維持相容，未改表名、刪相容 helper 或動 RLS。
+2. **雙引擎同步**：W5-4 已修正試體不合格缺失的漏開／重複開漂移；其餘 Demo／前端與伺服器 Trigger／Edge 規則仍有人工同步點，詳見 `docs/architecture/dual-engine-sync.md`。
+3. **期限相容層仍存在**：W5-2 已把方向收斂為 approved deadline Requirement → obligation，但時間軸、提醒與部分 Agent 查詢仍讀 `contract_obligations`；它是有 rollback 的 runtime 相容層，不是第二份契約權威。正式站在 `20260812000500` 部署前仍跑舊 trigger。
 
 ## 8. 文件權威順序
 

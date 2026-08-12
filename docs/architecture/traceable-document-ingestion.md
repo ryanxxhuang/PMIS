@@ -68,10 +68,10 @@ the existing `pdfjs-dist` dependency:
 ```
 
 pdf.js end-of-line markers are preserved as line breaks; only whitespace runs
-are tidied, so section/clause numbering survives. Pages are stored
-individually in `document_pages` — never concatenated first. The legacy flat
-`extractContractText()` in `store/db.js` remains only for the `parse-contract`
-deadline flow and is not a P0-06 traceability source.
+are tidied, so section/clause numbering survives. Pages are stored individually
+in `document_pages` — never concatenated first. W5-2 removed the Contract
+frontend's flat `parse-contract` deadline flow; contractual ingestion now uses
+this page-aware Requirement pipeline only.
 
 ## 4. DOCX limitation (unpaginated)
 
@@ -209,19 +209,28 @@ AI can never mark a link reviewed.
   by construction (no destructive step exists), and DB guards independently
   prevent deleting or mutating reviewed snapshots.
 
-## 12. Legacy `contract_obligations` compatibility
+## 12. W5-2 `contract_obligations` compatibility
+
+This section describes the repository implementation. Production remains on
+the former trigger direction until migration `20260812000500` is deployed.
 
 ```
-contract_obligations = legacy Contract page / deadline runtime
-requirements         = Contract-First shared Requirement foundation
+requirements         = sole contractual source of truth
+contract_obligations = approved-deadline reminder/runtime compatibility
 ```
 
-`parse-contract`, the Contract page deadline list, due-date calculation,
-acceptance, alerts, reminders, and demo mode are untouched. The two pipelines
-run side by side; P0-06 does not make `contract_obligations` authoritative
-over reviewed Requirements (the P0-01 sync trigger still only touches
-draft/needs_review mirrors). The long-term direction is Requirements, but the
-Contract-First onboarding/UI cutover belongs to a later decision.
+Migration `20260812000500` removes the obligation → Requirement sync/delete
+triggers. A controlled human approval of a deadline Requirement calls one
+internal idempotent adapter in the same transaction. It updates the runtime
+title, phase, responsibility, and deadline rule while preserving status,
+evidence, penalty, note, identity, and history. Pending, rejected, and
+non-deadline Requirements create no obligation.
+
+The Contract frontend no longer invokes `parse-contract` or rereads stored
+contract text for a second AI pass. The Edge Function directory and feature
+registration remain for compatibility, historical usage accounting, and the
+documented rollback. The deadline list, due-date calculation, alerts,
+reminders, and demo data continue to consume the compatibility runtime.
 
 ## 13. Edge Function authentication
 

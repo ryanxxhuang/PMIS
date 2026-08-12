@@ -34,7 +34,10 @@ const h = vi.hoisted(() => {
       from: (table) => { calls.push({ table, op: 'from' }); return builder(table) },
       rpc: (fn, args) => { calls.push({ table: `rpc:${fn}`, op: 'rpc', args }); return Promise.resolve({ data: [], error: null }) },
       storage: { from: (bucket) => builder(`storage:${bucket}`) },
-      functions: { invoke: () => Promise.resolve({ data: null, error: null }) },
+      functions: { invoke: (fn, args) => {
+        calls.push({ table: `function:${fn}`, op: 'invoke', args })
+        return Promise.resolve({ data: null, error: null })
+      } },
     },
   }
 })
@@ -117,8 +120,13 @@ describe('標單匯入前的真專案:工安/契約義務寫入必須進 DB', ()
 
   it('契約義務改狀態打 supabase', async () => {
     const r = renderHook(() => useLedgerSlice(preBoqCtx))
+    expect(r.current.parseContract).toBeUndefined()
+    expect(r.current.parseContractFromText).toBeUndefined()
+    await act(async () => { await r.current.reloadObligations() })
     await act(async () => { await r.current.updateObligationStatus('ob-1', '已提送') })
+    expect(wrote('contract_obligations', 'select')).toBe(true)
     expect(wrote('contract_obligations', 'update')).toBe(true)
+    expect(h.calls.some((c) => c.table === 'function:parse-contract')).toBe(false)
   })
 
   // 統一缺失引擎:工安缺失(domain=safety)在匯標單前就要能寫 DB
@@ -180,5 +188,20 @@ describe('demo 模式(未設 Supabase):只進記憶體,不打 DB', () => {
     expect(collab.current.rfis).toHaveLength(1)
     expect(collab.current.observations).toHaveLength(1)
     expect(site.current.safetyRecords).toHaveLength(1)
+  })
+
+  it('同一組試體反覆判定不合格仍只有一筆有 test_sample_id 的缺失', async () => {
+    const quality = renderHook(() => useQualitySlice(demoCtx, []))
+    act(() => quality.current.setTestSamples([{
+      id: 'TS-DEMO-1', sample_no: 'TS-1', fc: 280, d28_values: null,
+      status: '待試驗', location: 'A 區',
+    }]))
+
+    await act(async () => { await quality.current.updateTestSample('TS-DEMO-1', { d28_values: [200, 200, 200] }) })
+    await act(async () => { await quality.current.updateTestSample('TS-DEMO-1', { d28_values: [210, 205, 200] }) })
+
+    expect(quality.current.defects).toHaveLength(1)
+    expect(quality.current.defects[0].test_sample_id).toBe('TS-DEMO-1')
+    expect(h.calls).toEqual([])
   })
 })

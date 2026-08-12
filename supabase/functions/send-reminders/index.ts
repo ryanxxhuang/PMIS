@@ -99,7 +99,8 @@ Deno.serve(async (req) => {
       .eq('project_id', p.id)
     const allItems: OpenBallItem[] = [...collected.items, ...testSampleItems(samples || [], todayUTC)]
 
-    // ── 2) 成員與三方角色：project_members 管專案存取，profiles.org_type 管角色 ─
+    // ── 2) AUTHORIZATION：project_members 管存取，profiles.org_type 管角色；
+    // project_memberships/project_role 是身分快照，不得用來分流提醒 ─────────
     const { data: legacyMembers } = await supabase
       .from('project_members').select('user_id').eq('project_id', p.id)
     const memberIds = (legacyMembers || []).map((m) => m.user_id)

@@ -1,7 +1,7 @@
 // P0-06 page-aware document extraction (browser side).
-// Unlike the legacy flat extractContractText() in store/db.js (kept for the
-// parse-contract deadline flow), this layer preserves page boundaries so every
-// stored page in document_pages can later ground an AI citation.
+// This layer preserves page boundaries so every stored page in document_pages
+// can later ground an AI citation. The flat extractor in store/db.js remains
+// for unrelated document readers, not for contractual Requirement ingestion.
 //
 // PDF   → one record per rendered page, extraction_method 'pdf_text'.
 // DOCX  → Mammoth raw text has NO reliable page boundaries. The text is split

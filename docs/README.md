@@ -24,7 +24,7 @@
 | 5 | [`architecture/README.md`](architecture/README.md) | 架構文件狀態與閱讀入口 |
 | 6 | [`PROJECT_TREE.md`](PROJECT_TREE.md) | 詳細目錄、模組責任與修改入口 |
 
-目前產品整理評估見 [`產品全案評估報告-2026-08-12.md`](產品全案評估報告-2026-08-12.md)。狀態為 `EVALUATION`，供使用者逐批核准；其中建議不得直接視為實作授權。
+目前產品整理評估見 [`產品全案評估報告-2026-08-12.md`](產品全案評估報告-2026-08-12.md)。狀態為 `EVALUATION`，供使用者逐批核准；其中建議不得直接視為實作授權。Requirement／obligation 的決策與正式庫匿名基線見 [`W5-1-Requirement-Obligation-決策書.md`](W5-1-Requirement-Obligation-決策書.md)；W5-2～W5-4 本機實作與正式部署狀態以 `CURRENT.md` 為準。
 
 長期方向見 [`北極星-政府機關-Agent-平台.md`](北極星-政府機關-Agent-平台.md)。專案入口、啟動與驗證指令見 [`../README.md`](../README.md)。AI 工具的 repo 指令見 [`../AGENTS.md`](../AGENTS.md)；[`../CLAUDE.md`](../CLAUDE.md) 是相同原則的 Claude 相容入口。
 
@@ -32,7 +32,7 @@
 
 架構文件的逐份狀態集中在 [`architecture/README.md`](architecture/README.md)。目前主要文件：
 
-- [`architecture/three-party-role-model.md`](architecture/three-party-role-model.md)：廠商／監造／機關三方角色。
+- [`architecture/three-party-role-model.md`](architecture/three-party-role-model.md)：廠商／監造／機關三方角色，以及雙成員模型的唯一判斷規則。
 - [`architecture/contract-first-foundation.md`](architecture/contract-first-foundation.md)：工程財務與文件履約兩條資料脊椎。
 - [`architecture/traceable-document-ingestion.md`](architecture/traceable-document-ingestion.md)：文件版本、分頁、AI 擷取與來源。
 - [`architecture/requirement-review-boundary.md`](architecture/requirement-review-boundary.md)：Requirement 人工審查與產物連結。

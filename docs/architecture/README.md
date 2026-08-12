@@ -8,7 +8,7 @@
 
 | 文件 | 狀態 | 責任 |
 |---|---|---|
-| [`three-party-role-model.md`](three-party-role-model.md) | `ACCEPTED` | 廠商／監造／機關三方授權與 Agent 身分 |
+| [`three-party-role-model.md`](three-party-role-model.md) | `ACCEPTED` | 廠商／監造／機關三方授權、Agent 身分與雙成員模型的唯一規則 |
 | [`contract-first-foundation.md`](contract-first-foundation.md) | `CURRENT` | 文件、Requirement 與 BOQ 兩條資料脊椎 |
 | [`traceable-document-ingestion.md`](traceable-document-ingestion.md) | `CURRENT` | 文件攝取、版本、分頁與 AI 擷取 |
 | [`requirement-review-boundary.md`](requirement-review-boundary.md) | `CURRENT` | Requirement 審查、來源凍結與履約產物連結 |
