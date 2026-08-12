@@ -3,6 +3,7 @@
 // 找出履約要求。進度來自持久化的 document_processing_runs——離開頁面或重新
 // 整理都不會遺失。義務時程(legacy contract_obligations)仍在下方運作,
 // 由「同一批已儲存的契約文字」重建,不再要求第二次上傳。
+// 契約包、文件與處理進度只供本頁使用，保留有界的頁面查詢，不塞進全域 Store。
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Scale, FileText, UploadCloud, ChevronRight, RefreshCw } from 'lucide-react'

@@ -1,5 +1,7 @@
 # Persistent Audit Events (P0-05)
 
+> 狀態：**CURRENT** ｜ 對應已實作 migration 與 `/activity` 行為。
+
 ## Purpose and product boundary
 
 `audit_events` is the persistent evidence history for high-value project

@@ -1,5 +1,7 @@
 # P0-07 — Requirement Review and Artifact Link Boundary
 
+> 狀態：**CURRENT** ｜ 描述已實作的 Requirement 人工審查安全邊界。
+
 ## 1. Human review boundary
 
 P0-06 produces traceable AI Requirement suggestions (`draft_ai` /

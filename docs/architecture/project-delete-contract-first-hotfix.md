@@ -1,5 +1,7 @@
 # Project deletion and contract-first mode boundary
 
+> 狀態：**CURRENT NOTE** ｜ 記錄目前仍有效的窄邊界，不是一般功能規格。
+
 This hotfix separates two concepts that must not confer authority on each
 other:
 

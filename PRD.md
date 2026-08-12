@@ -1,11 +1,14 @@
-# Product Requirement Document — PMIS AI
+# Product Requirement Document — PMIS AI（早期原型歷史文件）
 
-> **⚠️ 文件狀態(2026-07-01)**:本 PRD 是早期 prototype 階段寫下的**長期產品願景**
-> (GC↔監造協作、Contract-First × AI)。實作後路線已轉向「**施工廠商優先**」——
-> 現行產品是成本/進度/品質/工安一體的廠商套件(含估驗計價、請款收款、變更設計等
-> 本文件標示「先不採用」的模組)。**目前實際狀態與路線圖以 [SCOPE.md](SCOPE.md) 為準**,
-> 功能與架構見 [README.md](README.md)。本文件中的監造協作規劃(ITP/送審/RFI/權限矩陣)
-> 對應 SCOPE.md 的「方向 A」,尚未實作。
+> **文件狀態：HISTORICAL。** 本 PRD 是早期 PMIS AI prototype 的產品構想，保留
+> GC↔監造、Contract-First、Procore 參考模型與當時的頁面規劃。文內「已實作／未實作」、
+> MVP 範圍、角色與頁面狀態均已和現行系統分歧，不應用來開發或驗收目前產品。
+>
+> 目前產品與系統真相見 [CURRENT.md](CURRENT.md)；GovAgent 最終方向見
+> [GovAgent 北極星](docs/北極星-政府機關-Agent-平台.md)；文件分類見
+> [docs/README.md](docs/README.md)。
+>
+> 以下為原始 PRD 內容，僅供追溯早期產品思考。
 
 ## 1. Product Name
 
