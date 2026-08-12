@@ -202,36 +202,47 @@ export function useProjectsSlice({ currentUser, log }) {
     return { error }
   }, [])
 
-  // 匯入標單工項到此專案的 work_items（client 端產 uuid 維持父子關係，分批寫入）。
+  // 匯入標單工項到此專案的 work_items——單一 RPC 交易,全成或全敗(P0-02)。
+  // id 與父子關係由伺服器建立(import_work_items 依 parent_key 回填 parent_id);
+  // 失敗時 DB 與前端狀態都維持原狀,重試不會撞到半份殘留資料。
   // parsed = 上傳 XML 解析結果 { items }；未帶則用內建範例（國際原住民標單）。
   const importWorkItems = useCallback(async (parsed) => {
     if (!currentProject) return { error: { message: '尚無專案' } }
     const data = parsed || await loadWorkItems()
-    const idMap = new Map()
-    for (const it of data.items) idMap.set(it.item_key, crypto.randomUUID())
-    const rows = data.items.map((it) => ({
-      id: idMap.get(it.item_key), project_id: currentProject.project_id,
-      parent_id: it.parent_key ? idMap.get(it.parent_key) : null,
-      item_key: it.item_key, item_no: it.item_no, ref_item_code: it.ref_item_code,
+    const items = data.items.map((it) => ({
+      item_key: it.item_key, parent_key: it.parent_key || null,
+      item_no: it.item_no, ref_item_code: it.ref_item_code,
       item_kind: it.item_kind, description: it.description, unit: it.unit,
       quantity: it.quantity, unit_price: it.unit_price, amount: it.amount,
       section: it.section, depth: it.depth, sort_order: it.sort_order,
       is_leaf: it.is_leaf, is_rollup: it.is_rollup,
       is_price_adjustable: it.is_price_adjustable, is_billable: it.is_billable,
       weight: it.weight, remark: it.remark,
-    })).sort((a, b) => a.sort_order - b.sort_order) // 父先於子，避免 FK 違反
-    const size = 500
-    for (let i = 0; i < rows.length; i += size) {
-      const { error } = await supabase.from('work_items').insert(rows.slice(i, i + size))
-      if (error) return { error }
-    }
+    }))
+    const { data: count, error } = await supabase.rpc('import_work_items', {
+      p_project_id: currentProject.project_id, p_items: items,
+    })
+    if (error) return { error }
     const fresh = await fetchAllWorkItems(currentProject.project_id)
     wiCachePut(currentProject.project_id, fresh)
     setWorkItems(dbToWorkItems(fresh, currentProject))
     setWorkItemsSource('db')
-    log('匯入標單工項', `${rows.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
-    return { error: null, count: rows.length }
+    log('匯入標單工項', `${count ?? items.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
+    return { error: null, count: count ?? items.length }
   }, [currentProject, currentUser, log])
+
+  // 清空標單與相依資料(估驗/進度/日誌/查驗)——單一 RPC 交易,全成或全敗(P0-01)。
+  // 失敗(被證據 guard 擋下)時不清快取、不觸發重載:DB 已 rollback,前端不能假裝成功。
+  // 跨 slice 的畫面狀態清理(估驗/日誌/查驗/缺失)由組合根 store.jsx 在成功後接手。
+  const resetProjectBoqDb = useCallback(async () => {
+    if (!dbMode) return { error: { message: '需真專案' } }
+    const pid = currentProject.project_id
+    const { error } = await supabase.rpc('reset_project_boq', { p_project_id: pid })
+    if (error) return { error }
+    wiCacheDel(pid)
+    retryWorkItems() // 重跑載入 → 真專案 0 筆會進 'empty'(顯示匯入 onboarding),不載範例
+    return { error: null }
+  }, [dbMode, currentProject, retryWorkItems])
 
   // 基準日(決標/接獲通知/開工)→ 寫回 projects 欄位 + 本地。
   // 契約時程/驗收領域不依賴標單 → isPersistedProject(匯標單前也要能設基準日)。
@@ -291,7 +302,7 @@ export function useProjectsSlice({ currentUser, log }) {
   return {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
     workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership, aiEnabled,
-    switchProject, createProject, importWorkItems, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
+    switchProject, createProject, importWorkItems, resetProjectBoqDb, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
     loadPortfolio,
   }
 }

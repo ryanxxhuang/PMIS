@@ -226,11 +226,15 @@ export default function Contract() {
     // 統一窗口:PCCES 標單 XML 直接路由到 BOQ 匯入,其餘進契約包管線
     const xmls = files.filter((f) => /\.xml$/i.test(f.name))
     files = files.filter((f) => !/\.xml$/i.test(f.name))
+    // 同批多個 XML:第一份成功後,迴圈內的 workItemsSource 是過期閉包值,
+    // 用本地旗標擋後續檔案——否則第二份會撞伺服器「已有標單」錯誤,蓋掉成功訊息
+    let boqImported = workItemsSource === 'db'
     for (const xf of xmls) {
       try {
-        if (workItemsSource === 'db') { setBoqMsg('標單已匯入過,略過 XML(如需重匯請至「標單工項」頁清空重匯)。'); continue }
+        if (boqImported) { setBoqMsg((prev) => `${prev ? prev + ' ' : ''}標單已匯入過,略過「${xf.name}」(如需重匯請至「標單工項」頁清空重匯)。`); continue }
         const parsed = parsePccesXml(await xf.text())
         const { error, count } = await importWorkItems(parsed)
+        if (!error) boqImported = true
         setBoqMsg(error ? `標單匯入失敗:${error.message}` : `標單已匯入 ${count} 項工項(見「標單工項」頁)。`)
       } catch (e) { setBoqMsg(`標單 XML 解析失敗:${e.message || ''}`) }
     }

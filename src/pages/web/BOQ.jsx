@@ -15,6 +15,7 @@ export default function BOQ() {
   const [onlyBillable, setOnlyBillable] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importErr, setImportErr] = useState('')
+  const [resetErr, setResetErr] = useState('')   // 清空重匯被證據 guard 擋下時顯示原因
   const [parsed, setParsed] = useState(null)   // 上傳 XML 解析結果 { meta, items }
   const fileRef = useRef(null)
 
@@ -123,9 +124,18 @@ export default function BOQ() {
         meta={meta.contract_no ? [{ k: '契約編號', v: meta.contract_no }] : []}
         action={dbMode && workItemsSource === 'db' && (can.edit || can.admin) && (
           <Button variant="ghost" onClick={async () => {
-            if (await appConfirm({ title: '重新匯入標單？', body: '會清空此專案的標單工項，以及相依的估驗、進度、施工日誌、查驗、缺失。', danger: true, confirmLabel: '清空重匯' })) await resetProjectBoq()
+            if (await appConfirm({ title: '重新匯入標單？', body: '會清空此專案的標單工項，以及相依的估驗、進度、施工日誌、查驗、缺失。', danger: true, confirmLabel: '清空重匯' })) {
+              const { error } = await resetProjectBoq()
+              setResetErr(error ? (error.message || '清空失敗,資料未變動') : '')
+            }
           }}>↻ 重新匯入標單</Button>
         )} />
+
+      {resetErr && (
+        <div className="bg-[var(--red-tint,transparent)] text-sm text-[var(--red-text)] rounded-lg border border-[var(--red-text)]/25 px-4 py-3">
+          清空未執行,所有資料維持原狀：{resetErr}
+        </div>
+      )}
 
       {canImport && (
         <div className="bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded-lg px-4 py-3 space-y-2">
