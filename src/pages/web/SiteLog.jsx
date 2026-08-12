@@ -239,6 +239,7 @@ export default function SiteLog() {
     if (!photosNeedingAI.length || existingBusy) return
     setExistingBusy(true); setExistingMsg('')
     let ok = 0, fail = 0, i = 0
+    let firstErr = '' // 全失敗時要能說出「為什麼」——這次事故就是 catch 吞掉錯誤查了三層
     const list = photosNeedingAI
     const worker = async () => {
       while (i < list.length) {
@@ -247,20 +248,20 @@ export default function SiteLog() {
           const blob = await (await fetch(ph.url)).blob()
           const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' })
           const { error, result } = await classifySitePhoto(file)
-          if (error) { fail++; continue }
+          if (error) { fail++; firstErr = firstErr || (error.message || 'AI 判讀失敗'); continue }
           const wi = result?.work_item_hint ? matchLeaf(result.work_item_hint, leaves) : null
           const { error: upErr } = await updateSitePhotoMeta(ph.id, {
             caption: result?.is_construction === false ? '（AI 判讀:疑似非工地照片,請人工確認）' : (result?.caption || ''),
             work_item_key: wi?.item_key,
           })
-          if (upErr) fail++; else ok++
-        } catch { fail++ }
+          if (upErr) { fail++; firstErr = firstErr || (upErr.message || '寫回失敗') } else ok++
+        } catch (e) { fail++; firstErr = firstErr || (e?.message || '處理失敗') }
         setExistingMsg(`辨識中… ${ok + fail}/${list.length}`)
       }
     }
     await Promise.all([worker(), worker(), worker()])
     if (currentLog?.id) setPhotos(await listSitePhotos(currentLog.id))
-    setExistingMsg(fail ? `完成:${ok} 張已生成說明,${fail} 張失敗(可重按重試失敗的)` : `完成:${ok} 張已生成說明並配對工項`)
+    setExistingMsg(fail ? `完成:${ok} 張已生成說明,${fail} 張失敗${firstErr ? `(${firstErr})` : ''},可重按重試` : `完成:${ok} 張已生成說明並配對工項`)
     setExistingBusy(false)
   }
 
