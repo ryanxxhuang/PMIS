@@ -102,10 +102,12 @@ contract_packages
 - 36 條 React 路由、34 個頁面檔、9 個 Store slices。
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions。
-- 31 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 53 個 Vitest 測試檔，共 494 個測試；12 個 Playwright 三角色 E2E；20 組 pgTAP SQL 測試。
+- 32 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
+- 54 個 Vitest 測試檔，共 499 個測試；12 個 Playwright 三角色 E2E；21 組 pgTAP SQL 測試。
 
-已於本次盤點確認：494 個單元測試通過、12 個 E2E 通過、正式建置成功；角色收斂相關的 `agent_actions` pgTAP 32 項通過，其餘 pgTAP 套件本次未重跑。
+已於 W1（標單資料安全，2026-08-12）確認：499 個單元測試通過、12 個 E2E 通過、正式建置成功；全套 pgTAP 於本機 `db reset` 後重跑，21 檔共 684 項全數通過。
+
+標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 
 ### 6.1 前端資料存取規則
 
