@@ -24,7 +24,7 @@
 - [x] W5 一次一項架構債 — PR #6，已部署（migrations `20260812000500`、`20260812000600`）
 - [ ] W6 最小真案驗收
 
-**目前續接點：W6-2 鏈 1。** W6-1 已在本機完成，尚未 commit／PR：真後端 project 與 Demo E2E 完全隔離，staging secrets 由環境注入並拒絕正式 Supabase；一次性本機 Supabase staging 冒煙已通過且測試帳號已清理。未經使用者下一步指示不要開始 W6-2。
+**目前續接點：W6-3 鏈 2（廠商提送→監造審核→機關核准／付款）。** W6-1/W6-2 已完成並 commit 於 `codex/w6-1-real-e2e`;鏈測試的清理原則見 `docs/REAL_BACKEND_E2E.md`。
 
 ---
 
@@ -117,7 +117,8 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   不做：不改既有 demo E2E、不建雲端常駐 staging（臨時開→測完刪，見成本紀律）。
   驗收：`npm run test:e2e:real` 能對真後端跑一條冒煙。
   本機證據（2026-08-13）：隔離的 `real-supabase` project 以環境變數啟動，登入／F5 session 還原／登出 1/1 通過；缺 secrets 與正式 Supabase URL 均在瀏覽器啟動前被拒絕。臨時帳號清理後殘留 0；原 12 Demo E2E、523 Vitest 與 build 全綠，CI 未加入真後端測試。
-- [ ] **W6-2 鏈 1：註冊→登入→建案→邀請→正式模式**
+- [x] **W6-2 鏈 1：註冊→登入→建案→邀請→正式模式**
+  本機證據（2026-08-13）：`e2e-real/chain1-onboarding.spec.js` 對一次性本機 staging 通過——註冊落地建案頁、建案導向專案文件（D-007）、邀請錯配被擋＋訊息完整（D-009）、三方到齊轉綠（W4-4）、requireText 開啟正式模式、被邀監造登入可見專案（RLS）；afterAll 走 delete_project RPC＋admin API 清理，殘留 0。
 - [ ] **W6-3 鏈 2：廠商提送→監造審核→機關核准／付款**
 - [ ] **W6-4 鏈 3：文件上傳→Requirement 建議→人工核定**
 - [ ] **W6-5 鏈 4：標單匯入失敗／重設失敗 rollback（真後端重演 W1 pgTAP 情境）**

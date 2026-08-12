@@ -1,0 +1,81 @@
+// W6 真後端 E2E 共用工具:用 service role 建立/清理臨時帳號與其專案。
+// 只在隔離 staging 執行(config 已擋正式 Supabase);測後一律清乾淨,不留常駐資料。
+import { createClient } from '@supabase/supabase-js'
+
+const url = process.env.E2E_REAL_SUPABASE_URL?.trim().replace(/\/$/, '')
+const serviceKey = process.env.E2E_REAL_SERVICE_ROLE_KEY?.trim()
+
+// service role 只在測試機用來建 fixture 帳號與清理——缺就讓需要它的 spec 明確失敗
+export function admin() {
+  if (!serviceKey) throw new Error('W6 真後端 E2E 需要 E2E_REAL_SERVICE_ROLE_KEY(建立/清理臨時帳號)')
+  return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+}
+
+const PW = 'W6real123' // 符合登入規則:至少 8 碼、含大小寫與數字
+export const password = PW
+
+// 每次跑用唯一 email,避免殘留帳號造成重複(email 是 auth.users 唯一鍵)
+export function uniqueEmail(prefix) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}@e2e.test`
+}
+
+// 直接建好一個 email 已確認的帳號(admin API);org_type 走 handle_new_user
+// 從 user_metadata 建 profiles——供「被邀請方」等不需走註冊 UI 的 fixture。
+export async function createConfirmedUser(email, orgType, fullName = '測試帳號') {
+  const { data, error } = await admin().auth.admin.createUser({
+    email, password: PW, email_confirm: true,
+    user_metadata: { full_name: fullName, org_type: orgType },
+  })
+  if (error) throw new Error(`建立 fixture 帳號失敗(${email}):${error.message}`)
+  return data.user.id
+}
+
+// 清理專案:以「建立者本人」登入走產品的 delete_project RPC(真路徑,cascade
+// 清全部業務資料)。不用 service role 直刪資料表——新版 CLI 的本機 stack 對
+// service_role 沒有資料表 GRANT(secure-by-default),直刪會 permission denied。
+export async function deleteOwnedProjects(email) {
+  const anon = createClient(url, process.env.E2E_REAL_SUPABASE_ANON_KEY?.trim(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { error: signInError } = await anon.auth.signInWithPassword({ email, password: PW })
+  if (signInError) throw new Error(`清理登入失敗(${email}):${signInError.message}`)
+  const { data: projects, error: listError } = await anon.from('projects').select('id')
+  if (listError) throw new Error(`清理列專案失敗(${email}):${listError.message}`)
+  for (const p of projects || []) {
+    const { error } = await anon.rpc('delete_project', { p_id: p.id })
+    if (error) throw new Error(`清理刪專案失敗(${p.id}):${error.message}`)
+  }
+  await anon.auth.signOut()
+}
+
+// 清理帳號(admin API)。錯誤不吞:staging 殘留必須大聲失敗,不能靜默留資料。
+// 呼叫前先確保其建立的專案已刪(projects.created_by FK 會擋 deleteUser)。
+export async function cleanupUser(userId) {
+  if (!userId) return
+  const { error } = await admin().auth.admin.deleteUser(userId)
+  if (error) throw new Error(`清理帳號失敗(${userId}):${error.message || JSON.stringify(error)}`)
+}
+
+// email → user id(admin listUsers;staging 帳號數量小,單頁即可)
+export async function findUserIdByEmail(email) {
+  const { data, error } = await admin().auth.admin.listUsers({ page: 1, perPage: 200 })
+  if (error) throw new Error(`listUsers 失敗:${error.message}`)
+  return data?.users?.find((u) => u.email === email)?.id || null
+}
+
+// hash router 導頁
+export async function gotoHash(page, hash) {
+  await page.goto(`/#${hash}`)
+}
+
+// 走註冊 UI 建立並登入一個新帳號,回傳其 email(建立者一律走真流程,不抄捷徑)
+export async function registerViaUI(page, { email, orgType, name = '建立者', company = '測試單位' }) {
+  await gotoHash(page, '/login')
+  await page.getByRole('button', { name: '註冊', exact: true }).click()
+  await page.getByPlaceholder('姓名').fill(name)
+  await page.getByPlaceholder('公司 / 單位').fill(company)
+  await page.locator('select').first().selectOption(orgType)
+  await page.getByPlaceholder('Email').fill(email)
+  await page.getByPlaceholder('密碼（至少 8 碼，含大小寫英文與數字）').fill(PW)
+  await page.getByRole('button', { name: '建立帳號並登入' }).click()
+}
