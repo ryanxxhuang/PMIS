@@ -1,0 +1,931 @@
+<!--
+  組長簡報（2026-08-12，中央大學總務處營繕組）。
+  這份和 `客戶簡報-2026-07.html` 的差別：那份是賣產品，這份是**幫組長把簽辦跑起來**。
+  三幕：① 產品有哪些功能 ② 資安逐項怎麼過 ③ 簽辦要引哪些規範、附哪幾份文件。
+
+  設計沿用同一套 token（鋼青藍＋安全橘＋工程圖說標題欄），讓兩份簡報是同一個世界。
+  Artifact 片段：沒有 <!doctype>／<html>／<head>／<body>，發佈時由平台包起來。
+  操作：← → / 空白鍵翻頁；瀏覽器列印可直接輸出 A4 橫式 PDF。
+
+  ⚠️ 兩處講話紅線（改文案時不要破壞）：
+   1) 標的名稱一律「雲端訂閱服務（SaaS）」——一旦出現「開發／客製／建置」，
+      一覽表歸類會掉到「應用軟體或系統開發服務」，普級要求暴增到 15 萬做不完。
+   2) 不寫死價格與時程（行號尚未核准，開不出估價單）。
+-->
+<title>工程 Agent — 產品、資安與簽辦（組長版）</title>
+
+<style>
+  /* ── tokens：沿用產品 UI 的鋼青藍＋安全橘 ── */
+  :root {
+    --ink: #16202b;
+    --ink-2: #4d5c6a;
+    --ink-3: #78848f;
+    --paper: #f1f3f6;
+    --card: #ffffff;
+    --card-2: #eceff3;
+    --rule: #c9d2da;
+    --rule-2: #e2e7ec;
+    --steel: #1e5a85;
+    --steel-text: #1b5480;
+    --steel-tint: #e5eef5;
+    --safety: #e8630c;
+    --safety-text: #c8540a;
+    --safety-tint: #fdeadd;
+    --good: #1a7f4e;
+    --good-tint: #e2f2ea;
+    --bad: #c73a34;
+    --bad-tint: #fbe8e7;
+
+    --font-display: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+    --font-body: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --pad: clamp(28px, 4.2vw, 76px);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e6ebf0; --ink-2: #9fabb8; --ink-3: #75818e;
+      --paper: #14181d; --card: #1c2229; --card-2: #2a323b;
+      --rule: #313b46; --rule-2: #262e37;
+      --steel: #5b9dc9; --steel-text: #7fb6da; --steel-tint: #1a2b38;
+      --safety: #f5873c; --safety-text: #f5873c; --safety-tint: #3a2113;
+      --good: #4cb98a; --good-tint: #16332a;
+      --bad: #e0736c; --bad-tint: #38201f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e6ebf0; --ink-2: #9fabb8; --ink-3: #75818e;
+    --paper: #14181d; --card: #1c2229; --card-2: #2a323b;
+    --rule: #313b46; --rule-2: #262e37;
+    --steel: #5b9dc9; --steel-text: #7fb6da; --steel-tint: #1a2b38;
+    --safety: #f5873c; --safety-text: #f5873c; --safety-tint: #3a2113;
+    --good: #4cb98a; --good-tint: #16332a;
+    --bad: #e0736c; --bad-tint: #38201f;
+  }
+  :root[data-theme="light"] {
+    --ink: #16202b; --ink-2: #4d5c6a; --ink-3: #78848f;
+    --paper: #f1f3f6; --card: #ffffff; --card-2: #eceff3;
+    --rule: #c9d2da; --rule-2: #e2e7ec;
+    --steel: #1e5a85; --steel-text: #1b5480; --steel-tint: #e5eef5;
+    --safety: #e8630c; --safety-text: #c8540a; --safety-tint: #fdeadd;
+    --good: #1a7f4e; --good-tint: #e2f2ea;
+    --bad: #c73a34; --bad-tint: #fbe8e7;
+  }
+
+  .deck {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: clamp(15px, 1.05vw, 19px);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    scroll-snap-type: y mandatory;
+    overflow-y: auto;
+    max-height: 100vh;
+  }
+  .deck * { box-sizing: border-box; }
+
+  /* ── 每頁一張 16:9 圖框，底部是工程圖說的標題欄 ── */
+  .slide {
+    scroll-snap-align: start;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100vh;
+    padding: var(--pad) var(--pad) calc(var(--pad) + 34px);
+    border-bottom: 1px solid var(--rule-2);
+  }
+  .slide > .body { width: 100%; max-width: 1180px; margin: 0 auto; }
+
+  .tb {
+    position: absolute;
+    left: var(--pad); right: var(--pad); bottom: calc(var(--pad) * 0.55);
+    display: flex; align-items: baseline; gap: 14px;
+    padding-top: 9px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--font-mono);
+    font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .tb .sec { color: var(--ink-2); }
+  .tb .no { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+  /* ── 排版尺度 ── */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11.5px; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--safety-text);
+    margin: 0 0 18px;
+  }
+  .eyebrow.q { color: var(--steel-text); }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 800; font-size: clamp(38px, 5.2vw, 78px);
+    line-height: 1.07; letter-spacing: -.02em;
+    text-wrap: balance; margin: 0;
+  }
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 750; font-size: clamp(26px, 2.9vw, 43px);
+    line-height: 1.18; letter-spacing: -.015em;
+    text-wrap: balance; margin: 0 0 .5em;
+  }
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 700; font-size: clamp(16.5px, 1.3vw, 20px);
+    line-height: 1.35; letter-spacing: -.005em; margin: 0 0 .3em;
+  }
+  .lede { font-size: clamp(17px, 1.5vw, 24px); color: var(--ink-2); max-width: 40em; margin: 0; }
+  .fine { font-size: 13.5px; color: var(--ink-3); line-height: 1.55; }
+  p { margin: 0 0 .8em; max-width: 44em; }
+  p:last-child { margin-bottom: 0; }
+  strong { font-weight: 700; color: var(--ink); }
+  em.hl { font-style: normal; color: var(--safety-text); font-weight: 700; }
+  em.st { font-style: normal; color: var(--steel-text); font-weight: 700; }
+
+  .cols { display: grid; gap: clamp(16px, 2vw, 38px); }
+  .cols.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cols.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cols.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cols.split { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); align-items: start; }
+  @media (max-width: 900px) {
+    .cols.c2, .cols.c3, .cols.c4, .cols.split { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--rule-2);
+    border-radius: 3px;
+    padding: clamp(14px, 1.4vw, 22px);
+  }
+  .card.tint { background: var(--steel-tint); border-color: transparent; }
+  .card.warn { background: var(--safety-tint); border-color: transparent; }
+  .card.ok   { background: var(--good-tint); border-color: transparent; }
+
+  .stack { display: flex; flex-direction: column; gap: clamp(11px, 1.1vw, 19px); }
+  .stack.tight { gap: clamp(8px, .7vw, 12px); }
+
+  ul.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5em; }
+  ul.plain > li { position: relative; padding-left: 1.15em; }
+  ul.plain > li::before {
+    content: ""; position: absolute; left: 0; top: .72em;
+    width: .45em; height: 1px; background: var(--rule);
+  }
+  ul.plain.tick > li::before {
+    content: "✓"; width: auto; height: auto; background: none;
+    top: 0; color: var(--good); font-size: .9em; font-weight: 700;
+  }
+  ul.plain.cross > li::before {
+    content: "✕"; width: auto; height: auto; background: none;
+    top: 0; color: var(--bad); font-size: .9em; font-weight: 700;
+  }
+
+  /* 紅線：三條橘線 */
+  .redline { display: flex; gap: 15px; align-items: flex-start; padding: 1px 0; }
+  .redline > .bar { flex: 0 0 3px; align-self: stretch; min-height: 2.8em; background: var(--safety); border-radius: 2px; }
+  .redline > .txt { min-width: 0; }
+  .redline .n {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .16em;
+    color: var(--safety-text); display: block; margin-bottom: 2px;
+  }
+
+  /* 佐證鏈 / 會辦動線共用的節點串 */
+  .chain { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+  .chain .node {
+    flex: 1 1 0; min-width: 104px;
+    background: var(--card); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 12px 11px; text-align: center;
+  }
+  .chain .node.hot { border-color: var(--safety); box-shadow: inset 0 0 0 1px var(--safety); }
+  .chain .node .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; color: var(--ink-3); display: block; }
+  .chain .node .v { font-weight: 700; font-size: clamp(13.5px, 1.05vw, 16.5px); }
+  .chain .link { flex: 0 0 24px; align-self: center; height: 1px; background: var(--steel); position: relative; }
+  .chain .link::after {
+    content: ""; position: absolute; right: 0; top: -3px;
+    border-left: 5px solid var(--steel); border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
+  }
+  @media (max-width: 900px) { .chain .link { display: none; } .chain { gap: 8px; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: clamp(12.5px, .92vw, 15.5px); }
+  .scroller { overflow-x: auto; }
+  th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+  thead th {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3); border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+  tbody th { font-weight: 700; color: var(--ink); }
+  tbody th.no-wrap { white-space: nowrap; }
+  td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: center; }
+  td.lvl { font-family: var(--font-mono); text-align: center; font-size: 15px; white-space: nowrap; }
+
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat .fig {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(28px, 3.2vw, 50px); line-height: 1;
+    letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+  }
+  .stat .cap { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+
+  /* 狀態籤：已備齊／待補／不適用 */
+  .chip {
+    display: inline-block; white-space: nowrap;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em;
+    padding: 2px 7px; border-radius: 2px; line-height: 1.5;
+  }
+  .chip.ok  { background: var(--good-tint); color: var(--good); }
+  .chip.no  { background: var(--bad-tint);  color: var(--bad); }
+  .chip.na  { background: var(--card-2);    color: var(--ink-3); }
+  .chip.wip { background: var(--safety-tint); color: var(--safety-text); }
+
+  /* 法源引註：等寬、細框，看起來就像公文裡的引註 */
+  .cite {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.6;
+    color: var(--ink-2); background: var(--card);
+    border-left: 2px solid var(--steel); border-radius: 0 3px 3px 0;
+    padding: 9px 13px;
+  }
+  .cite b { color: var(--ink); font-weight: 700; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; color: var(--ink-3); }
+  .legend b { color: var(--ink-2); }
+
+  .kbd {
+    position: fixed; right: 14px; bottom: 14px; z-index: 20;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em;
+    color: var(--ink-3); background: var(--card); border: 1px solid var(--rule-2);
+    border-radius: 3px; padding: 5px 9px;
+  }
+
+  :where(a, button, .slide):focus-visible { outline: 2px solid var(--safety); outline-offset: 3px; }
+
+  @media print {
+    .kbd { display: none; }
+    .deck { max-height: none; overflow: visible; background: #fff; color: #16202b; }
+    .slide { min-height: 0; height: 18.2cm; page-break-after: always; border: 0; }
+  }
+  @page { size: A4 landscape; margin: 8mm; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="deck" id="deck">
+
+  <!-- 01 封面 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">公共工程專案管理 · 雲端訂閱服務（SaaS）</p>
+      <h1>每一個承辦人，<br>配一個懂他業務的 Agent。</h1>
+      <p class="lede">這份簡報講三件事：<em class="st">系統有哪些功能</em>、<em class="st">資安怎麼過</em>、<em class="st">簽辦要引哪些規範</em>。</p>
+      <div class="cite">
+        <b>gov-agent.ai</b>　·　2026 年 8 月 12 日　·　中央大學總務處營繕組
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">封面</span><span class="no">01 / 20</span></footer>
+  </section>
+
+  <!-- 02 三幕導覽 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow q">本簡報架構</p>
+      <h2>把三個問題一次講完。</h2>
+      <div class="cols c3">
+        <div class="card stack tight">
+          <span class="chip na">第一幕 · P03–P08</span>
+          <h3>系統有哪些功能</h3>
+          <p class="fine">九個功能面、十六個可獨立開關的 AI 模組、四個角色各一個 Agent。重點在「少輸入、多產出」。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip wip">第二幕 · P09–P15</span>
+          <h3>資安怎麼過</h3>
+          <p class="fine">工程會一覽表歸類、普級 11 項逐項回覆、境外資料、弱點掃描、日誌、AI 的信任設計。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">第三幕 · P16–P20</span>
+          <h3>簽辦要引哪些規範</h3>
+          <p class="fine">採購方式法源、簽稿七段骨架、七份附件與現況、會辦動線與時程。</p>
+        </div>
+      </div>
+      <div class="card tint">
+        <p class="fine"><strong>先說結論：資安不是這個案子的風險，歸類才是。</strong>同一套系統歸到不同的表，
+          普級要求差好幾倍——所以第二幕的第一頁在講歸類，不是在講技術。</p>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">導覽</span><span class="no">02 / 20</span></footer>
+  </section>
+
+  <!-- 03 現況 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow q">第一幕 · 現況</p>
+      <h2>資料不是沒有，是散在四個地方。</h2>
+      <div class="cols c4">
+        <div class="card"><h3>施工日誌</h3><p class="fine">廠商每月印一疊 PDF 送來</p></div>
+        <div class="card"><h3>估驗計價</h3><p class="fine">Excel，每期一個檔</p></div>
+        <div class="card"><h3>查驗紀錄</h3><p class="fine">紙本，放監造那邊</p></div>
+        <div class="card"><h3>工地照片</h3><p class="fine">LINE 群組，翻不到</p></div>
+      </div>
+      <div class="cols c3">
+        <div class="card stack tight"><h3>估驗核定</h3><p class="fine">廠商報這期做了多少，要人工翻日誌回頭對數量。對不完，就只能相信。</p></div>
+        <div class="card stack tight"><h3>稽核與審計</h3><p class="fine">被問「這期估驗的依據在哪」，得從四個地方重新湊一份出來。</p></div>
+        <div class="card stack tight"><h3>法定期限</h3><p class="fine">送審、月報、竣工文件、逾期違約金——沒有人在幫你算日子。</p></div>
+      </div>
+      <div class="card warn"><p><strong>四份文件本來就應該互相對得上，但沒有人有時間逐工項去對。</strong></p></div>
+    </div>
+    <footer class="tb"><span class="sec">第一幕 · 產品</span><span class="no">03 / 20</span></footer>
+  </section>
+
+  <!-- 04 功能全覽 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第一幕 · 功能全覽</p>
+      <h2>九個功能面，一條資料脊椎串起來。</h2>
+      <div class="cols c3">
+        <div class="card stack tight">
+          <span class="chip na">總覽</span>
+          <h3>AI Agent 主控台</h3>
+          <p class="fine">依角色的今日待辦、草稿收件匣、對話式查詢。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">總覽</span>
+          <h3>跨案總覽</h3>
+          <p class="fine">機關端多案進度、金流與逾期一頁看完。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">總覽</span>
+          <h3>專案儀表</h3>
+          <p class="fine">Dashboard、活動紀錄、施工月報、監造報表。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">成本與進度</span>
+          <h3>標單工項</h3>
+          <p class="fine">PCCES 預算書匯入展成工項樹，全案數字的來源。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">成本與進度</span>
+          <h3>估驗與金流</h3>
+          <p class="fine">估驗計價、請款收款、成本管理、進度 S 曲線、逐工項排程。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">成本與進度</span>
+          <h3>施工日誌</h3>
+          <p class="fine">現場當天填，數量直接累計到估驗。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">品質與工安</span>
+          <h3>品質與工安</h3>
+          <p class="fine">品質查驗、檢驗停留點（ITP）、工安管理與缺失追蹤。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">契約與協作</span>
+          <h3>契約與協作</h3>
+          <p class="fine">專案文件、履約需求、送審文件、工程疑義（RFI）、變更設計、風險稽核。</p>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">契約與協作</span>
+          <h3>驗收結算與成員</h3>
+          <p class="fine">法定期限倒數、驗收流程、專案成員與權限。</p>
+        </div>
+      </div>
+      <p class="fine">資料脊椎：<em class="st">標單工項 → 施工日誌數量 → 估驗計價 → 請款</em>，全線以同一個工項識別碼串接，所以才對得起來。</p>
+    </div>
+    <footer class="tb"><span class="sec">第一幕 · 產品</span><span class="no">04 / 20</span></footer>
+  </section>
+
+  <!-- 05 四個角色 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第一幕 · 角色</p>
+      <h2>Agent 做草稿，人做決定。</h2>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>角色</th><th>Agent 幫他做</th><th>他自己做（Agent 沒有這個工具）</th></tr></thead>
+          <tbody>
+            <tr><th class="no-wrap">現場<br><span class="fine">廠商</span></th>
+              <td>日誌零輸入（複製昨日、常用班組機具自學、依座標帶入當日天氣）；工地照片批次辨識，逐張產說明並配到工項；估驗數量從日誌累計帶出</td>
+              <td>確認、送出</td></tr>
+            <tr><th class="no-wrap">品管</th>
+              <td>自主檢查表依契約規範生成；缺失照片產描述草稿；混凝土試體齡期到期提醒</td>
+              <td>判定合格與否</td></tr>
+            <tr><th class="no-wrap">監造</th>
+              <td>送審文件逐項比對契約規範，出審查要點與意見草稿；RFI 回覆草稿；施工月報草稿</td>
+              <td>審定、核備</td></tr>
+            <tr><th class="no-wrap">機關</th>
+              <td>佐證鏈逐工項對帳；稽核意見草稿；法定期限倒數與逾期違約金試算；跨案總覽</td>
+              <td>核定、驗收、結案</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="fine">加一個角色＝加一份人格設定與工具白名單，不是另外做一套系統。</p>
+    </div>
+    <footer class="tb"><span class="sec">第一幕 · 產品</span><span class="no">05 / 20</span></footer>
+  </section>
+
+  <!-- 06 佐證鏈 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第一幕 · 機關最有感的一頁</p>
+      <h2>佐證鏈：逐工項把四份文件對起來。</h2>
+      <div class="chain">
+        <div class="node"><span class="k">CLAIM</span><span class="v">估驗數量</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">LOG</span><span class="v">日誌累計</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">INSPECT</span><span class="v">查驗紀錄</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">TEST</span><span class="v">試體強度</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">PHOTO</span><span class="v">現場照片</span></div>
+      </div>
+      <div class="cols c2">
+        <div class="stack tight">
+          <h3>六項對帳，全部是程式算的</h3>
+          <ul class="plain">
+            <li>本期估驗量超過日誌累計量</li>
+            <li>混凝土澆置日沒有對應試體</li>
+            <li>估驗的工項沒有查驗紀錄</li>
+            <li>品質缺失未結案就進入計價</li>
+            <li>照片沒有對應到任何工項</li>
+            <li>變更設計未核准就計價</li>
+          </ul>
+        </div>
+        <div class="card warn stack tight">
+          <h3>判定確定性，AI 只寫文字</h3>
+          <p class="fine">哪裡對不上，是資料庫算出來的，數字永遠可回溯。</p>
+          <p class="fine">AI 的工作只有一件：把對不上的地方寫成一段人看得懂的稽核意見草稿——而且只建議<strong>查證</strong>，不寫剔除、補強、停工、罰款。</p>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">第一幕 · 產品</span><span class="no">06 / 20</span></footer>
+  </section>
+
+  <!-- 07 AI 模組清單 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第一幕 · AI 模組</p>
+      <h2>十六個 AI 模組，每一個都可以單獨關掉。</h2>
+      <div class="cols c4">
+        <div class="card stack tight">
+          <span class="chip na">對話</span>
+          <ul class="plain"><li>AI Agent 主控台</li><li>AI 問答助理</li></ul>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">讀文件</span>
+          <ul class="plain"><li>契約解析（時程／罰則）</li><li>規範需求抽取</li><li>送審文件讀取</li></ul>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">產草稿</span>
+          <ul class="plain"><li>監造送審審查意見</li><li>RFI 回覆草稿</li><li>機關稽核意見草稿</li><li>施工月報草稿</li><li>估驗施工說明草稿</li></ul>
+        </div>
+        <div class="card stack tight">
+          <span class="chip na">看照片 · 介接</span>
+          <ul class="plain"><li>工程告示板辨識</li><li>缺失照片描述</li><li>施工照片分類</li><li>工安照片判讀</li><li>天氣帶入（中央氣象署）</li><li>每日 agent 早報</li></ul>
+        </div>
+      </div>
+      <div class="cols c2">
+        <div class="card ok stack tight">
+          <h3>關掉之後，系統照常運作</h3>
+          <p class="fine">關閉只是少了草稿，估驗、日誌、查驗、驗收全部照走。
+            <strong>若貴校不接受把資料送到境外的模型，十六個模組可以整組關掉。</strong></p>
+        </div>
+        <div class="card stack tight">
+          <h3>每一次呼叫都計量</h3>
+          <p class="fine">功能、使用者、專案、耗用量與成本逐次入庫，機關看得到自己用了多少、花了多少——這也是後續編列預算的依據。</p>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">第一幕 · 產品</span><span class="no">07 / 20</span></footer>
+  </section>
+
+  <!-- 08 工程狀態 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第一幕 · 工程狀態</p>
+      <h2>不是原型，是可以放真案的系統。</h2>
+      <div class="cols c4">
+        <div class="stat"><span class="fig">36</span><span class="cap">功能頁面</span></div>
+        <div class="stat"><span class="fig">16</span><span class="cap">AI 模組</span></div>
+        <div class="stat"><span class="fig">503</span><span class="cap">計算引擎單元測試</span></div>
+        <div class="stat"><span class="fig">20</span><span class="cap">套資料庫權限測試</span></div>
+      </div>
+      <div class="cols c2">
+        <div class="card stack tight">
+          <h3>權限不在前端</h3>
+          <p class="fine">誰能看、誰能寫、誰能改狀態，全部在資料庫層以資料列權限（RLS）與狀態轉移規則實作，逐角色逐表自動化實測（20 套、六百餘項）。
+            <strong>把前端按鈕藏起來不算安全</strong>——這也是工程會一覽表「帳號控管措施」那一列的實質內容。</p>
+        </div>
+        <div class="card stack tight">
+          <h3>數字由確定性引擎算</h3>
+          <p class="fine">金額、數量、期限、逾期違約金由程式計算，503 項單元測試釘住。AI 只能複述引擎回傳的數字，
+            <strong>不准自己乘除</strong>。</p>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">第一幕 · 產品</span><span class="no">08 / 20</span></footer>
+  </section>
+
+  <!-- 09 資安：歸類 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第二幕 · 資安</p>
+      <h2>第一件事是歸類，不是技術。</h2>
+      <div class="cite">
+        依據：<b>行政院公共工程委員會 112 年 9 月 25 日工程企字第 1120022701 號函</b>檢送之
+        「各類資訊(服務)採購之共通性資通安全基本要求參考一覽表」（普級部分自 113 年 3 月 1 日施行）
+      </div>
+      <p>一覽表共 <strong>9 張表</strong>，依「資料或系統類型」分。<em class="hl">同一套系統歸到不同的表，普級要求差好幾倍。</em>
+        本案應歸<strong>「雲端微服務（SaaS）套裝型」</strong>——這一格由使用單位主動敘明，不要等別人猜。</p>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>類型</th><th>普級新增的硬要求</th><th>本案</th></tr></thead>
+          <tbody>
+            <tr><th class="no-wrap">雲端微服務（SaaS）<br>套裝型</th>
+              <td>帳號控管、資料傳輸屬「◎ 個案評估」；全表共 11 列</td>
+              <td><span class="chip ok">本案適用</span></td></tr>
+            <tr><th class="no-wrap">SaaS 辦公室<br>生產力工具</th>
+              <td>多因子認證 ●、帳號控管 ●、資料傳輸 ●、資料分類與標籤 ●、釣魚郵件過濾 ●</td>
+              <td><span class="chip na">排除</span> <span class="fine">不提供郵件、行事曆、雲端硬碟、即時通訊</span></td></tr>
+            <tr><th class="no-wrap">雲端平台<br>（PaaS／IaaS）</th>
+              <td>平台層控制措施</td>
+              <td><span class="chip na">排除</span> <span class="fine">機關不取得平台資源，僅使用應用服務</span></td></tr>
+            <tr><th class="no-wrap">應用軟體或<br>系統開發服務</th>
+              <td>附表十全構面 ●、上線前主機弱點掃描 ●、網站弱點掃描 ●、資安維運服務 ●、機關人員教育訓練 ●、SBOM ◎</td>
+              <td><span class="chip no">須排除</span> <span class="fine">機關不委託開發、不取得原始碼、不驗收程式，僅按期訂閱既有服務</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="fine"><strong>所以文件用語很重要</strong>：標的名稱一律寫「雲端訂閱服務」，全案不出現「開發」「客製」「建置」。</p>
+    </div>
+    <footer class="tb"><span class="sec">第二幕 · 資安</span><span class="no">09 / 20</span></footer>
+  </section>
+
+  <!-- 10 逐項回覆表 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第二幕 · 逐項回覆</p>
+      <h2>SaaS 套裝型・普級全部 11 列，逐列已備妥。</h2>
+      <div class="legend">
+        <span><b>●</b> 建議辦理</span><span><b>◎</b> 經機關評估個案有必要時</span><span><b>－</b> 不適用</span>
+        <span>（圖示定義出自一覽表說明欄）</span>
+      </div>
+      <div class="scroller">
+        <table>
+          <thead><tr><th class="num">#</th><th>項目</th><th class="num">普級</th><th>我方回覆與佐證</th><th>狀態</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><th>完善資通安全管理措施<span class="fine"> 或 ISO 27001</span></th><td class="lvl">●</td><td>走前者：資通系統防護基準普通級符合性對照表</td><td><span class="chip ok">已備齊</span></td></tr>
+            <tr><td class="num">2</td><th>隱私資訊管理標準（ISO 27701）</th><td class="lvl">◎</td><td>個資極少（姓名／職稱／公務聯絡方式／帳號），以個資委外附約替代</td><td><span class="chip na">可談</span></td></tr>
+            <tr><td class="num">3</td><th>非大陸地區廠商、非第三地區含陸資</th><td class="lvl">●</td><td>非陸資廠商聲明書</td><td><span class="chip wip">待具結</span></td></tr>
+            <tr><td class="num">4</td><th>帳號控管措施</th><td class="lvl">◎</td><td>伺服器端 RBAC ＋ 資料列權限逐表隔離</td><td><span class="chip ok">已具備</span></td></tr>
+            <tr><td class="num">5</td><th>資料傳輸措施</th><td class="lvl">◎</td><td>TLS 1.2 以上，附實測</td><td><span class="chip ok">已具備</span></td></tr>
+            <tr><td class="num">6</td><th>事件日誌（含 IP 位址）保存<span class="fine">，建議至少六個月</span></th><td class="lvl">●</td><td>帳號權限變更、登入、時間、IP、資料存取皆入庫且不可竄改；書面留存政策可直接當附件</td><td><span class="chip ok">已備齊</span></td></tr>
+            <tr><td class="num">7</td><th>供應商安全 ＋ 產品安全（各擇一）</th><td class="lvl">●</td><td>供應商：公開漏洞回報機制（<code>/security</code> ＋ security.txt）；產品：弱點掃描報告 <strong>High 0</strong></td><td><span class="chip ok">已備齊</span></td></tr>
+            <tr><td class="num">8</td><th>廠商通過 CMMC</th><td class="lvl">－</td><td>普級不適用</td><td><span class="chip na">不適用</span></td></tr>
+            <tr><td class="num">9</td><th>未經機關審查同意，不得移至本國以外地區</th><td class="lvl">●</td><td>主動送資料落地說明書，<strong>請機關審查同意</strong>（見下頁）</td><td><span class="chip wip">請機關核</span></td></tr>
+            <tr><td class="num">10</td><th>存取、備份、備援不得位於大陸地區（含港澳）</th><td class="lvl">●</td><td>完全不涉，寫入聲明書</td><td><span class="chip ok">乾淨</span></td></tr>
+            <tr><td class="num">11</td><th>虛擬主機映像檔安全</th><td class="lvl">◎</td><td>本服務為 SaaS，不提供虛擬主機予機關</td><td><span class="chip na">不適用</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">第二幕 · 資安</span><span class="no">10 / 20</span></footer>
+  </section>
+
+  <!-- 11 境外資料 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第二幕 · 最關鍵的一題</p>
+      <h2>境外不是禁止，是「經機關審查同意」。</h2>
+      <p>一覽表資料安全欄兩條的措辭刻意寫得不一樣——<em class="hl">這個對比是整件事的關鍵。</em></p>
+      <div class="cols c2">
+        <div class="card tint stack tight">
+          <span class="chip na">境外</span>
+          <p><strong>「未經機關審查同意</strong>，不得將雲端資訊系統或儲存資料移至本國以外地區」</p>
+          <p class="fine">→ 經審查同意就可以。要做的不是搬回校內，是<strong>備齊材料請機關審查</strong>。</p>
+        </div>
+        <div class="card warn stack tight">
+          <span class="chip na">大陸地區</span>
+          <p>存取、備份及備援之實體所在地<strong>「不得」</strong>位於大陸地區（含港澳），且不得跨該等境內傳輸</p>
+          <p class="fine">→ 絕對禁止、無例外。<strong>本服務完全不涉。</strong></p>
+        </div>
+      </div>
+      <div class="cols split">
+        <div class="card stack tight">
+          <h3>本案的事實</h3>
+          <ul class="plain tick">
+            <li>資料庫位於<strong>日本</strong>；日本有完整個資保護法制（APPI），並為歐盟認定適足性之國家</li>
+            <li>不涉大陸地區（含港澳），第二條完全乾淨</li>
+            <li>AI 模組可整組關閉，關閉後不對外送任何內容</li>
+            <li>傳輸 TLS 1.2 以上、靜態加密；資料可完整匯出，不綁架機關資料</li>
+          </ul>
+        </div>
+        <div class="card tint stack tight">
+          <h3>可參照的校內先例</h3>
+          <p class="fine">貴校自 112 年 12 月 1 日起全校實施 <strong>Office 365 A3</strong>（電子計算機中心公告），
+            教職員信箱、行事曆與雲端硬碟均位於境外雲端。</p>
+          <p class="fine">想請教貴校當時<strong>審查同意的作業方式</strong>，我方比照相同規格備妥文件即可。</p>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">第二幕 · 資安</span><span class="no">11 / 20</span></footer>
+  </section>
+
+  <!-- 12 常見三問 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第二幕 · 常被問到的三題</p>
+      <h2>ISO 是「或」，第三方檢測有門檻。</h2>
+      <div class="stack">
+        <div class="card stack tight">
+          <h3>沒有 ISO 27001 可以嗎？</h3>
+          <p class="fine">一覽表原文：「須具備完善資通安全管理措施<strong>或</strong>通過 CNS 27001 或 ISO 27001 等標準、其他具有同等或以上效果之系統或標準」。
+            <strong>關鍵是「或」。</strong>本案走前者，提供逐項的符合性對照表為佐證。</p>
+        </div>
+        <div class="card stack tight">
+          <h3>要不要第三方安全性檢測？</h3>
+          <p class="fine">一覽表說明欄：屬機關<strong>核心資通系統</strong>，或<strong>委託金額達新臺幣一千萬元以上</strong>者，機關應自行或另行委託第三方檢測。
+            本案兩者皆不是，<strong>不適用</strong>；改以我方提供的弱點掃描報告佐證。</p>
+        </div>
+        <div class="card stack tight">
+          <h3>萬一有一項真的做不到？</h3>
+          <p class="fine">一覽表「供應商及產品安全要求」欄原文開頭即載明：「…提出佐證資料，<strong>若無符合條件者提請機關資安長確認風險</strong>」。
+            制度設計的出口是風險確認，不是廢標。<span class="fine">（本案不需要走這條——11 列都有回覆。）</span></p>
+        </div>
+      </div>
+      <div class="card tint">
+        <p class="fine">另一個結構性事實：函文說明一寫明「由機關<strong>視個案特性</strong>將所列資安事項納入契約辦理」，
+          且圖示 <b>●＝建議辦理</b>。這是<strong>參考</strong>一覽表，機關本就有裁量空間挑合理的子集。</p>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">第二幕 · 資安</span><span class="no">12 / 20</span></footer>
+  </section>
+
+  <!-- 13 已完成的技術佐證 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第二幕 · 已完成的技術佐證</p>
+      <h2>能拿出報告的，都已經跑完了。</h2>
+      <div class="cols c3">
+        <div class="card ok stack tight">
+          <div class="stat"><span class="fig">0</span><span class="cap">高風險弱點</span></div>
+          <h3>弱點掃描報告</h3>
+          <p class="fine">OWASP ZAP baseline ＋ AJAX spider，受測標的為正式站。<strong>High 0</strong>、通過檢測項 60、
+            警告 7 類（均為刻意設計、誤報或資訊性提示，逐項有處置說明）。</p>
+          <p class="fine">另附<strong>修補歷程</strong>：首次掃描警告 13 類，移轉主機並統一設定安全標頭後複測，7 類根因相同者全部消失（13→7、通過 54→60）——這正好是附表十要求的「漏洞修復應測試有效性」佐證。</p>
+        </div>
+        <div class="card ok stack tight">
+          <div class="stat"><span class="fig">6</span><span class="cap">個月日誌留存</span></div>
+          <h3>事件日誌</h3>
+          <p class="fine">一覽表明文列舉的六類全數入庫：帳號與權限變更、登入名稱、時間、<strong>IP 位址</strong>、資料存取、重要安全性事件。</p>
+          <p class="fine">IP 由伺服器端解析（前端不得傳入）；紀錄只增不改；<strong>無任何自動清除機制</strong>；專案刪除亦留痕。書面留存政策可直接當簽的附件。</p>
+        </div>
+        <div class="card ok stack tight">
+          <div class="stat"><span class="fig">2</span><span class="cap">個公開回報入口</span></div>
+          <h3>漏洞回報應變機制</h3>
+          <p class="fine">公開頁面（不需登入）＋ 依 RFC 9116 的 <code>/.well-known/security.txt</code>，
+            並載明內部應變流程六步與聯絡信箱。</p>
+          <p class="fine">這一項滿足一覽表「供應商安全」的條件之一，<strong>不需要第三方檢測團隊</strong>。</p>
+        </div>
+      </div>
+      <p class="fine">一句話版本：<strong>普級 11 項要求、High 0、日誌六個月</strong>——記住這三個數字就夠了。</p>
+    </div>
+    <footer class="tb"><span class="sec">第二幕 · 資安</span><span class="no">13 / 20</span></footer>
+  </section>
+
+  <!-- 14 AI 信任設計 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第二幕 · AI 會不會亂做決定</p>
+      <h2>三條紅線，寫在架構裡，不是寫在簡報上。</h2>
+      <div class="stack">
+        <div class="redline"><div class="bar"></div><div class="txt">
+          <span class="n">紅線 01</span>
+          <h3>AI 只產生草稿</h3>
+          <p class="fine">核定、判定、結案、驗收、凍結——Agent 的工具箱裡<strong>根本沒有這些工具</strong>。這是工具白名單保證的，不是靠提示詞叮嚀它。狀態轉移一律走資料庫層規則加上人簽核。</p>
+        </div></div>
+        <div class="redline"><div class="bar"></div><div class="txt">
+          <span class="n">紅線 02</span>
+          <h3>數字永遠由確定性引擎算</h3>
+          <p class="fine">金額、數量、期限、違約金由程式計算後回傳給 AI 複述。<strong>AI 不准自己乘除，也不准自己編法規條號</strong>——引用不到來源時，它必須寫「依適用條文與現場量測辦理」。</p>
+        </div></div>
+        <div class="redline"><div class="bar"></div><div class="txt">
+          <span class="n">紅線 03</span>
+          <h3>每個 Agent 動作都留痕</h3>
+          <p class="fine">角色、動作種類、目標、理由、引用佐證、人的覆核結果，逐筆入庫可匯出。稽核問「這個數字誰算的」，答案永遠是：程式，而且有紀錄。</p>
+        </div></div>
+      </div>
+      <div class="card warn">
+        <p class="fine"><strong>加上第四條：每個 AI 功能都是可獨立開關的模組（見 P07）。</strong>
+          十六個模組逐一可關，關閉時系統照常運作。機關不必在「要 AI」和「不要 AI」之間二選一。</p>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">第二幕 · 資安</span><span class="no">14 / 20</span></footer>
+  </section>
+
+  <!-- 15 個資 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第二幕 · 個資委外</p>
+      <h2>個資這層是契約題，不是技術題。</h2>
+      <div class="cite">
+        <b>個人資料保護法施行細則第 8 條</b>：公務機關委託他人蒐集、處理或利用個人資料者，
+        應對受託者為適當之監督，並明確約定監督事項及方式。
+      </div>
+      <div class="cols split">
+        <div class="stack tight">
+          <p>本服務涉及的個資範圍很窄：<strong>姓名、職稱、單位、公務聯絡方式、系統帳號</strong>——
+            不涉特種個資、不涉學籍或健康資料，也不以機關資料訓練模型。</p>
+          <p class="fine">貴校的個資制度建在<strong>教育部「教育體系資通安全暨個人資料管理規範」</strong>上，
+            委外附約通常照該規範 <strong>B.12.1.2 的八要項</strong>撰寫，境外傳輸則對應 <strong>B.11.1.1 的五條</strong>。
+            <strong>我方直接照那些條目先寫好附約草案，法制單位不必起草。</strong></p>
+        </div>
+        <div class="card tint stack tight">
+          <h3>附約會寫進去的事</h3>
+          <ul class="plain">
+            <li>蒐集處理利用之範圍、類別、目的與期間</li>
+            <li>保密義務與事故責任</li>
+            <li><strong>機關保有稽核權</strong>（含實地稽核）</li>
+            <li>再委外（分包）之限制</li>
+            <li>資安事故之通知義務與時限</li>
+            <li>契約終止時<strong>資料返還、刪除與銷毀切結</strong></li>
+          </ul>
+        </div>
+      </div>
+      <p class="fine">補充：個資法第 21 條（國際傳輸限制）規範對象為<strong>非公務機關</strong>；國立中央大學屬公務機關，
+        故境外傳輸並無法定禁令，而是回到前頁的「機關審查同意」與本頁的契約約定。</p>
+    </div>
+    <footer class="tb"><span class="sec">第二幕 · 資安</span><span class="no">15 / 20</span></footer>
+  </section>
+
+  <!-- 16 採購方式法源 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第三幕 · 簽辦</p>
+      <h2>採購方式：小額採購逕洽，法源三條。</h2>
+      <div class="stack tight">
+        <div class="cite"><b>政府採購法第 3 條</b>　公立學校辦理採購，依本法之規定。</div>
+        <div class="cite"><b>工程會 111 年 12 月 23 日工程企字第 1110100798 號令</b>　自 112 年 1 月 1 日起，
+          公告金額為新臺幣 150 萬元；<b>中央機關小額採購金額為新臺幣 15 萬元以下</b>。</div>
+        <div class="cite"><b>中央機關未達公告金額採購招標辦法第 5 條</b>　公告金額十分之一以下採購之招標，
+          <b>得不經公告程序，逕洽廠商採購，免提供報價或企劃書</b>。</div>
+      </div>
+      <div class="cols c3">
+        <div class="card ok stack tight"><h3>本案規劃</h3><p class="fine">總價壓在 <strong>15 萬元以下</strong>，以單一在建工程案為試辦標的，走小額採購逕洽。正式估價單另送。</p></div>
+        <div class="card stack tight"><h3>不需要做的事</h3><p class="fine">未逾 15 萬，<strong>無採購法第 49 條</strong>公開取得三家書面報價之適用；經確認貴校對 15 萬以下亦<strong>無加嚴規定</strong>。</p></div>
+        <div class="card stack tight"><h3>財產登記</h3><p class="fine">純訂閱服務，機關<strong>未取得軟硬體所有權，不涉財產登記</strong>——簽裡直接寫明可省一段流程。</p></div>
+      </div>
+      <div class="card warn"><p class="fine"><strong>我們不建議、也不配合為了規避公開招標而分批辦理。</strong>試辦範圍就是一個案子；需求擴大時，走上一級的程序。</p></div>
+    </div>
+    <footer class="tb"><span class="sec">第三幕 · 簽辦</span><span class="no">16 / 20</span></footer>
+  </section>
+
+  <!-- 17 簽稿骨架 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第三幕 · 簽稿骨架</p>
+      <h2>七段說明，每一段都有對應的法源。</h2>
+      <div class="scroller">
+        <table>
+          <thead><tr><th class="num">段</th><th>寫什麼</th><th>法源／依據</th></tr></thead>
+          <tbody>
+            <tr><td class="num">一</td><th>需求緣由</th><td>現行以紙本與 Excel 彙整進度、估驗、日誌與查驗紀錄，人工重複登打、佐證散落；以某工程為試辦標的，載明服務期間</td></tr>
+            <tr><td class="num">二</td><th>採購方式之依據</th><td>採購法 §3 ／ 工程會 111 年令（15 萬）／ 未達公告金額招標辦法 §5 逕洽 ／ 敘明無 §49 適用</td></tr>
+            <tr><td class="num">三</td><th>資安要求之依據及辦理情形</th><td>工程會 112/9/25 工程企字第 1120022701 號函；<strong>敘明歸屬「SaaS 套裝型」及排除理由</strong>；系統防護需求等級評估為<strong>普級</strong>，請計網中心卓核；廠商逐項回覆詳附件二</td></tr>
+            <tr><td class="num">四</td><th>境外資料之審查同意</th><td>一覽表資料安全欄；資料庫位於日本（非大陸地區），廠商提出落地說明（附件四），<strong>請計網中心審查，經同意後於契約載明</strong></td></tr>
+            <tr><td class="num">五</td><th>個人資料委外</th><td>個資法施行細則 §8；契約附個資委外處理附約（附件五）</td></tr>
+            <tr><td class="num">六</td><th>資安經費</th><td>「資訊服務採購作業指引」一、(一)2 要求估算並單獨計列；本案為標準訂閱服務，資安措施已內含於訂閱費用無法拆分，<strong>敘明原因</strong></td></tr>
+            <tr><td class="num">七</td><th>履約與驗收</th><td>由本組指定人員驗收，以服務可用性及約定功能項目為驗收標準；不涉財產登記</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="fine"><strong>擬辦</strong>：一、同意依上開方式辦理小額採購並簽訂服務契約。二、<strong>會辦電子計算機中心</strong>（第三、四點）。三、會辦個資業務單位／法制（第五點）。四、奉核後續辦請購。</p>
+      <p class="fine">以上為<strong>廠商整理的參考骨架與法源清單</strong>，實際簽稿文字仍由貴組承辦人依校內格式撰擬。</p>
+    </div>
+    <footer class="tb"><span class="sec">第三幕 · 簽辦</span><span class="no">17 / 20</span></footer>
+  </section>
+
+  <!-- 18 附件 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第三幕 · 附件</p>
+      <h2>七份附件，六份在我這邊。</h2>
+      <div class="scroller">
+        <table>
+          <thead><tr><th class="num">附件</th><th>文件</th><th>用途</th><th>狀態</th></tr></thead>
+          <tbody>
+            <tr><td class="num">一</td><th>廠商估價單</th><td>金額與服務期間</td><td><span class="chip wip">商業登記核准後即送</span></td></tr>
+            <tr><td class="num">二</td><th>資安要求逐項回覆表</th><td>SaaS 套裝型・普級 11 列（本簡報 P10）</td><td><span class="chip ok">已定稿</span></td></tr>
+            <tr><td class="num">三</td><th>非陸資廠商聲明書</th><td>對應第 3、10 列</td><td><span class="chip wip">具結中</span></td></tr>
+            <tr><td class="num">四</td><th>資料落地與境外傳輸說明書</th><td>供計網中心審查同意（第 9 列）</td><td><span class="chip ok">材料齊備</span></td></tr>
+            <tr><td class="num">五</td><th>個人資料委外處理附約（草案）</th><td>個資法施行細則 §8</td><td><span class="chip ok">草案可提供</span></td></tr>
+            <tr><td class="num">六</td><th>服務條款與隱私權政策</th><td>含個資申訴窗口</td><td><span class="chip wip">整理中</span></td></tr>
+            <tr><td class="num">七</td><th>資通系統防護基準普通級符合性對照表</th><td>對應第 1 列（走「完善資通安全管理措施」）</td><td><span class="chip ok">已完成</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card warn">
+        <p class="fine"><strong>唯一會卡住整案的是附件一。</strong>本公司商業登記正在辦理中，核准後統一編號、
+          商業登記證明與估價單會一併送達。其餘六份不受影響，可先行提供貴組與計網中心預覽。</p>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">第三幕 · 簽辦</span><span class="no">18 / 20</span></footer>
+  </section>
+
+  <!-- 19 會辦動線 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">第三幕 · 動線</p>
+      <h2>資訊類採購會會辦計網中心，所以文件要一次到位。</h2>
+      <div class="chain">
+        <div class="node"><span class="k">使用單位</span><span class="v">營繕組擬簽</span></div>
+        <div class="link"></div>
+        <div class="node hot"><span class="k">會辦 · 資安</span><span class="v">電子計算機中心</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">會辦 · 個資</span><span class="v">個資／法制單位</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">核定</span><span class="v">權責長官</span></div>
+        <div class="link"></div>
+        <div class="node"><span class="k">續辦</span><span class="v">請購 · 簽約</span></div>
+      </div>
+      <div class="cols c2">
+        <div class="card warn stack tight">
+          <h3>關鍵推論</h3>
+          <p class="fine">會辦是必然，所以<strong>簽送出去的那一刻，資安文件就必須完整</strong>——不能先簽再補，一退件就是一輪時間。</p>
+          <p class="fine">附件二、三、四、七要一次到位，讓會辦是「<strong>核對</strong>」而不是「索資」。</p>
+        </div>
+        <div class="card tint stack tight">
+          <h3>想請組長幫的一件事</h3>
+          <p class="fine">與其等會辦時計網中心來要資料，<strong>想在正式送簽前先與他們對一次要求</strong>。
+            若他們有自己的委外資安檢核表，我照他們的表逐欄對映，不另編一份。</p>
+          <p class="fine">方便請組長幫忙引薦窗口嗎？</p>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">第三幕 · 簽辦</span><span class="no">19 / 20</span></footer>
+  </section>
+
+  <!-- 20 下一步 -->
+  <section class="slide">
+    <div class="body stack">
+      <p class="eyebrow">下一步</p>
+      <h1>給我一個案子。<br>四週後您自己判斷。</h1>
+      <div class="cols split">
+        <div class="stack">
+          <p class="lede">試辦範圍就是一個進行中的工程案。<br>
+            四週後如果承辦人不想繼續用，我們把資料完整匯出給貴組，就結束。</p>
+          <div class="card stack tight">
+            <h3>貴組需要投入的</h3>
+            <ul class="plain">
+              <li>一位承辦人，每週約一小時</li>
+              <li>一個進行中的案子（契約＋標單）</li>
+              <li>廠商與監造各一位聯絡人</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card tint stack tight">
+          <h3>今天想請教的四件事</h3>
+          <ul class="plain">
+            <li><strong>經費來源</strong>是校務基金、計畫項下，還是單位自籌？</li>
+            <li>需不需要壓在<strong>本年度 12/31 前驗收結案</strong>？</li>
+            <li>這個金額的<strong>核定層級</strong>到哪一級？</li>
+            <li>能否幫我<strong>引薦計網中心</strong>，送簽前先對一次資安要求？</li>
+          </ul>
+          <p class="fine">最後一題最重要——它決定這個簽會不會被退件。</p>
+        </div>
+      </div>
+    </div>
+    <footer class="tb"><span class="sec">結尾</span><span class="no">20 / 20</span></footer>
+  </section>
+
+</div>
+
+<div class="kbd" aria-hidden="true">← → 翻頁</div>
+
+<script>
+  (function () {
+    var deck = document.getElementById('deck');
+    if (!deck) return;
+    var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+
+    function current() {
+      var top = deck.scrollTop, best = 0, bestDist = Infinity;
+      slides.forEach(function (s, i) {
+        var d = Math.abs(s.offsetTop - top);
+        if (d < bestDist) { bestDist = d; best = i; }
+      });
+      return best;
+    }
+    function go(delta) {
+      var next = Math.min(slides.length - 1, Math.max(0, current() + delta));
+      slides[next].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); go(1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+      else if (e.key === 'Home') { e.preventDefault(); slides[0].scrollIntoView({ behavior: 'smooth' }); }
+      else if (e.key === 'End') { e.preventDefault(); slides[slides.length - 1].scrollIntoView({ behavior: 'smooth' }); }
+    });
+  })();
+</script>
