@@ -85,7 +85,7 @@ export default function MonthlyReport() {
   }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, tree, billable, workItems])
 
   if (!dbMode && !demoMode) {
-    return <Card title="施工月報"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單。</Empty></Card>
+    return <Card title="施工月報"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
   }
 
   const cnt = (arr, pred) => arr.filter(pred).length

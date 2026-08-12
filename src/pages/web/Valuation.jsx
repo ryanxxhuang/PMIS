@@ -86,7 +86,7 @@ export default function Valuation() {
         <PrerequisiteEmptyState
           need="估驗計價依標單工項的契約數量/單價逐項計價,此專案的標單尚未匯入。"
           unlocks="逐期估驗、請款收款、AI 估驗草擬、請款佐證包"
-          to={can.edit ? '/boq' : undefined} cta={can.edit ? '前往標單工項匯入' : undefined}
+          to={can.edit ? '/contract' : undefined} cta={can.edit ? '前往專案文件上傳標單' : undefined}
           who={!can.edit ? '待施工廠商匯入標單並提報估驗後即可檢視。' : undefined} />
       </Card>
     )

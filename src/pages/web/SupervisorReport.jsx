@@ -61,7 +61,7 @@ export default function SupervisorReport() {
     return (
       <div className="space-y-5">
         <PageHeader title="監造報表" tagline="AI 草擬" subtitle="自動彙整本月查驗、缺失、送審與進度，產出監造報表草稿" />
-        <Card><Empty>此專案尚未匯入標單，無法彙整監造報表。請先到「標單工項」匯入。</Empty></Card>
+        <Card><Empty>此專案尚未匯入標單，無法彙整監造報表。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
       </div>
     )
   }

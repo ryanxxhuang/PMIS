@@ -25,15 +25,15 @@ export default function ProjectSetup() {
     const { error } = await createProject(form)
     setLoading(false)
     if (error) { setErr(error.message || '建立失敗，請再試一次'); return }
-    // 成功 → 切到新專案並前往標單頁（引導匯入該案標單）
-    navigate('/boq')
+    // 成功 → 前往專案文件(D-007 文件優先:標單/契約/規範一次上傳,初始化只有這一條路)
+    navigate('/contract')
   }
 
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-5">
         <h1 className="text-xl font-bold text-[var(--text)]">建立專案</h1>
-        <p className="text-sm text-[var(--text-2)] mt-1">先建立一個工程專案，之後就能匯入標單、做估驗與進度。請填寫工程基本資料（僅工程名稱必填，其餘可稍後補）。</p>
+        <p className="text-sm text-[var(--text-2)] mt-1">先建立一個工程專案，接著到「專案文件」把標單、契約等文件一次上傳。請填寫工程基本資料（僅工程名稱必填，其餘可稍後補）。</p>
       </div>
       <Card>
         <form onSubmit={submit} className="space-y-4">

@@ -58,7 +58,7 @@ export default function ChangeOrders() {
   }
 
   if (!dbMode && !demoMode) {
-    return <Card title="變更設計"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單，才能對照原契約金額計算追加減。</Empty></Card>
+    return <Card title="變更設計"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML，才能對照原契約金額計算追加減。</Empty></Card>
   }
 
   const exportAll = () => {

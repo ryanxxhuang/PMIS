@@ -109,6 +109,8 @@ contract_packages
 
 標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 
+初始化自 W2 起只有一條路（D-007）：建案 → 專案文件一次上傳 → 三方成員 → 正式模式。Dashboard 對未開正式模式的真專案顯示四步初始化清單（狀態由既有資料推導）；`/agent` 不再因未匯標單整頁封鎖，僅提示工項類問題需先匯入；所有「無標單」空狀態統一指向專案文件。
+
 ### 6.1 前端資料存取規則
 
 - 跨頁共享、需要同步更新的資料放 Store。

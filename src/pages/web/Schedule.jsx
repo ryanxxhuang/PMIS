@@ -60,7 +60,7 @@ export default function Schedule() {
   const results = q ? leaves.filter((it) => !itemSchedules[it.item_key] && (it.description.includes(q) || (it.item_no || '').includes(q))).slice(0, 15) : []
 
   if (!dbMode && !demoMode) {
-    return <Card title="逐工項排程"><Empty>此功能需真實專案（已匯入標單）。請先建立專案並匯入標單。</Empty></Card>
+    return <Card title="逐工項排程"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
   }
 
   return (

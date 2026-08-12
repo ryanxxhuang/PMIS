@@ -136,7 +136,7 @@ export default function SiteLog() {
         <PrerequisiteEmptyState
           need="施工日誌要掛在標單工項上回報當日完成數量,此專案的標單尚未匯入。"
           unlocks="工項數量回報、現場照片、天氣帶入、估驗自動累計"
-          to={can.edit ? '/boq' : undefined} cta={can.edit ? '前往標單工項匯入' : undefined}
+          to={can.edit ? '/contract' : undefined} cta={can.edit ? '前往專案文件上傳標單' : undefined}
           who={!can.edit ? '施工日誌由施工廠商填報;待廠商匯入標單並回報後即可檢視。' : undefined} />
       </Card>
     )

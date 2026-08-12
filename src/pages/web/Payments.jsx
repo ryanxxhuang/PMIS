@@ -45,7 +45,7 @@ export default function Payments() {
 
   if (!data) return <Empty>載入請款資料中…</Empty>
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
-    return <Card title="請款收款"><Empty>此專案的標單尚未匯入資料庫,且需有估驗資料才能彙整請款。</Empty></Card>
+    return <Card title="請款收款"><Empty>此專案的標單尚未匯入資料庫,且需有估驗資料才能彙整請款。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
   }
 
   return (
