@@ -106,6 +106,19 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
 
   // 先刪 DB 列(有 RLS/guard 把關,失敗如實回報),成功後再清 Storage 檔
   // (Storage 清失敗=孤兒檔,遠比「檔沒了、列還在」安全)——B-07。
+  // AI 辨識「已上傳」照片後回寫說明/工項(P0 #11:批次辨識原本只吃新選檔,
+  // 使用者先上傳再按 AI 什麼都不會發生)。ai_source 標記讓佐證鏈知道說明是 AI 生的。
+  const updateSitePhotoMeta = useCallback(async (photoId, { caption, work_item_key }) => {
+    if (!dbMode) return { error: { message: 'demo 模式不支援' } }
+    const wi = work_item_key ? wiMaps.byKey.get(work_item_key) : null
+    const patch = { ai_source: true }
+    if (caption !== undefined) patch.caption = caption || null
+    if (work_item_key !== undefined) patch.work_item_id = wi?.id || null
+    const res = await supabase.from('photos').update(patch).eq('id', photoId).select('id')
+    const { error } = mutationOutcome(res, '照片更新被拒:可能無權限')
+    return { error }
+  }, [dbMode, wiMaps])
+
   const deleteSitePhoto = useCallback(async (photo) => {
     if (!dbMode) return { error: { message: '需真專案' } }
     const res = await supabase.from('photos').delete().eq('id', photo.id).select('id')
@@ -330,7 +343,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
 
   return {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
-    saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, listPhotosByWorkItems,
+    saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
     readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, auditSummary, askAssistant, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   }

@@ -33,7 +33,7 @@ function matchLeaf(text, leaves) {
 
 export default function SiteLog() {
   const { project, workItems, adjustedItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can, aiEnabled } = useStore()
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can, aiEnabled } = useStore()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayStr())
   const [weather, setWeather] = useState('晴')       // 上午天氣（相容舊欄位）
@@ -176,7 +176,8 @@ export default function SiteLog() {
   const onAddPhotos = async (e) => {
     const files = Array.from(e.target.files || [])
     e.target.value = '' // 允許重新選同一檔
-    if (!currentLog?.id || !files.length) return
+    if (!files.length) return // 使用者取消選檔:不是錯誤
+    if (!currentLog?.id) { setSavedMsg('請先存檔本日日誌,才能上傳照片'); return } // P0 #11:靜默失敗變可見
     setPhotoBusy(true)
     for (const f of files) {
       const { error } = await uploadSitePhoto(currentLog.id, f, { caption: summary || null })
@@ -197,7 +198,8 @@ export default function SiteLog() {
   const onBatchPhotos = async (e) => {
     const files = Array.from(e.target.files || [])
     e.target.value = ''
-    if (!currentLog?.id || !files.length) return
+    if (!files.length) return // 取消選檔
+    if (!currentLog?.id) { setSavedMsg('請先存檔本日日誌,才能使用 AI 辨識'); return }
     const stage = files.map((file) => ({
       key: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file),
       status: 'analyzing', caption: '', category: '', work_item_key: '', work_item_label: '', errMsg: '',
@@ -221,6 +223,41 @@ export default function SiteLog() {
     }
     await Promise.all([worker(), worker(), worker()])
     setBatchBusy(false)
+  }
+
+  // AI 辨識「已上傳」的照片(P0 #11):使用者的直覺是先上傳、再按 AI 辨識——
+  // 原本批次辨識只吃「新選檔」,對既有照片無能為力,按了等於沒反應。
+  // 這裡把缺說明的既有照片抓下來(簽名 URL → blob)逐張判讀,回寫說明與工項。
+  const [existingBusy, setExistingBusy] = useState(false)
+  const [existingMsg, setExistingMsg] = useState('')
+  const photosNeedingAI = photos.filter((p) => !p.caption && p.url)
+  const onClassifyExisting = async () => {
+    if (!photosNeedingAI.length || existingBusy) return
+    setExistingBusy(true); setExistingMsg('')
+    let ok = 0, fail = 0, i = 0
+    const list = photosNeedingAI
+    const worker = async () => {
+      while (i < list.length) {
+        const ph = list[i++]
+        try {
+          const blob = await (await fetch(ph.url)).blob()
+          const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' })
+          const { error, result } = await classifySitePhoto(file)
+          if (error) { fail++; continue }
+          const wi = result?.work_item_hint ? matchLeaf(result.work_item_hint, leaves) : null
+          const { error: upErr } = await updateSitePhotoMeta(ph.id, {
+            caption: result?.is_construction === false ? '（AI 判讀:疑似非工地照片,請人工確認）' : (result?.caption || ''),
+            work_item_key: wi?.item_key,
+          })
+          if (upErr) fail++; else ok++
+        } catch { fail++ }
+        setExistingMsg(`辨識中… ${ok + fail}/${list.length}`)
+      }
+    }
+    await Promise.all([worker(), worker(), worker()])
+    if (currentLog?.id) setPhotos(await listSitePhotos(currentLog.id))
+    setExistingMsg(fail ? `完成:${ok} 張已生成說明,${fail} 張失敗(可重按重試失敗的)` : `完成:${ok} 張已生成說明並配對工項`)
+    setExistingBusy(false)
   }
 
   const patchStaging = (key, patch) => setStaging((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)))
@@ -470,18 +507,25 @@ export default function SiteLog() {
                   {can.edit && <>
                     {/* 批 B UX:照片分類功能關閉時藏 AI 批次入口,保留「直接加照片」 */}
                     {aiEnabled('photo.classify') && (
-                      <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable shadow-sm ${(photoBusy || batchBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
+                      <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable shadow-sm ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
                         {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
-                        <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy} onChange={onBatchPhotos} className="hidden" />
-                        <Sparkles size={15} aria-hidden /> AI 批次辨識照片
+                        <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy || existingBusy} onChange={onBatchPhotos} className="hidden" />
+                        <Sparkles size={15} aria-hidden /> 選照片 AI 辨識後上傳
                       </label>
                     )}
-                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] pressable ${(photoBusy || batchBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
-                      <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy || batchBusy} onChange={onAddPhotos} className="hidden" />
-                      {photoBusy ? '上傳中…' : '＋ 直接加照片'}
+                    {/* P0 #11:已上傳但沒說明的照片,一鍵補 AI 說明+配工項——使用者的直覺是「先上傳,再辨識」 */}
+                    {aiEnabled('photo.classify') && photosNeedingAI.length > 0 && (
+                      <Button variant="secondary" onClick={onClassifyExisting} disabled={photoBusy || batchBusy || existingBusy}>
+                        <Sparkles size={14} aria-hidden />{existingBusy ? '辨識中…' : `AI 辨識已上傳的 ${photosNeedingAI.length} 張`}
+                      </Button>
+                    )}
+                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] pressable ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
+                      <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy || batchBusy || existingBusy} onChange={onAddPhotos} className="hidden" />
+                      {photoBusy ? '上傳中…' : '＋ 上傳照片(不辨識)'}
                     </label>
                   </>}
-                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? (aiEnabled('photo.classify') ? '　·　批次辨識＝AI 自動生說明並配對工項' : '　·　AI 批次辨識未啟用') : '（照片由施工廠商上傳）'}</span>
+                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? (aiEnabled('photo.classify') ? '　·　AI 辨識＝自動生說明並配對工項' : '　·　AI 批次辨識未啟用') : '（照片由施工廠商上傳）'}</span>
+                  {existingMsg && <span className={`text-xs font-medium ${existingMsg.includes('失敗') ? 'text-[var(--red-text)]' : 'text-[var(--green-text,#15803d)]'}`}>{existingMsg}</span>}
                 </div>
 
                 {/* 批次辨識覆核區:AI 逐張判讀後,人可改說明/工項再一鍵全上傳 */}
