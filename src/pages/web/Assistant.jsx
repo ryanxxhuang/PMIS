@@ -22,7 +22,7 @@ export default function Assistant() {
     return (
       <div className="space-y-5">
         <PageHeader title="AI 助理" tagline="Copilot" subtitle="先幫你看到該注意的，也能隨時問專案問題" />
-        <Card><Empty>此專案尚未匯入標單，AI 助理還沒有資料可分析。請先到「標單工項」匯入 PCCES 預算書。</Empty></Card>
+        <Card><Empty>此專案尚未匯入標單，AI 助理還沒有資料可分析。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
       </div>
     )
   }

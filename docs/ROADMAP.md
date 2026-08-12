@@ -33,7 +33,7 @@
   不做：不動建案表單欄位、不動 Contract 頁上傳邏輯。
   驗收：新專案建案後落在專案文件頁；全站對「尚未匯標單」的指引只有一種說法。
 - [x] **W2-2 初始化四步清單**
-  範圍：Dashboard（真專案）顯示固定四步 checklist：三方成員 → 上傳文件（含 PCCES）→ 檢查 AI 建議 → 開啟正式模式；每步狀態由既有資料推導（成員數／文件數／workItemsSource／formal_mode），各步連到既有頁面。
+  範圍：Dashboard（真專案）顯示固定四步 checklist：上傳文件（含 PCCES）→ 三方成員 → 檢查 AI 建議 → 開啟正式模式（文件優先，與建案落地頁一致；PR #3 review 修正順序）；每步狀態由既有資料推導（成員數／文件數／workItemsSource／formal_mode），各步連到既有頁面。
   不做：不建 onboarding framework、不加新表、不做逐步精靈。
   驗收：四步各自的完成／未完成狀態正確；點擊直達對應頁。
 - [x] **W2-3 解除 Agent 的 BOQ 全頁阻擋（P1-02）**
