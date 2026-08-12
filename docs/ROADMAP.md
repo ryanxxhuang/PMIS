@@ -19,7 +19,7 @@
 - [x] W0 可追蹤基準
 - [x] W1 標單資料安全 — PR #2（未部署：migration 與前端需同批上線）
 - [x] W2 單一初始化流程 — PR #3(stacked on #2),含本機 Supabase 瀏覽器實測
-- [x] W3 單一 Agent 體驗 — 四格完成,PR 編號待補
+- [x] W3 單一 Agent 體驗 — PR #4(stacked on #3)
 - [ ] W4 成員與正式模式
 - [ ] W5 一次一項架構債
 - [ ] W6 最小真案驗收
