@@ -102,8 +102,8 @@ contract_packages
 - 36 條 React 路由、34 個頁面檔、9 個 Store slices。
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
-- 33 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 55 個 Vitest 測試檔，共 506 個測試；12 個 Playwright 三角色 E2E；21 組 pgTAP SQL 測試。
+- 34 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
+- 55 個 Vitest 測試檔，共 506 個測試；12 個 Playwright 三角色 E2E；22 組 pgTAP SQL 測試。
 
 最近一次全套驗證（W3 收包，2026-08-12）：506 個單元測試通過、12 個 E2E 通過、正式建置成功；全套 pgTAP 於本機 `db reset` 後重跑，21 檔共 684 項全數通過。
 

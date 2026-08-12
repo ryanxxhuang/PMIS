@@ -10,13 +10,22 @@ const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-
 export default function Members() {
   const { project, listMembers, addMemberByEmail, removeMember, currentUser,
     isSupabaseConfigured, currentProject, demoMode, enableFormalMode } = useStore()
-  const [members, setMembers] = useState([])
+  // 三態分離(W4-1/P1-05):members=null 載入中、loadError 載入失敗(可重試)、
+  // []=真的沒成員——三者不可再共用同一個空陣列。
+  const [members, setMembers] = useState(null)
+  const [loadError, setLoadError] = useState(null)
   const [email, setEmail] = useState('')
+  const [inviteOrg, setInviteOrg] = useState('') // W4-3:邀請方必須宣告要邀哪一方
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [formalMsg, setFormalMsg] = useState('')
 
-  const reload = useCallback(async () => { setMembers(await listMembers()) }, [listMembers])
+  const reload = useCallback(async () => {
+    setMembers(null); setLoadError(null)
+    const { rows, error } = await listMembers()
+    if (error) setLoadError(error)
+    else setMembers(rows)
+  }, [listMembers])
   useEffect(() => { reload() }, [reload])
 
   if (isSupabaseConfigured && !currentProject) {
@@ -24,15 +33,20 @@ export default function Members() {
   }
 
   // 只有專案建立者(admin)可管理成員
-  const isAdmin = demoMode ? true : members.find((m) => m.user_id === currentUser?.user_id)?.member_role === 'admin'
+  const isAdmin = demoMode ? true : (members || []).find((m) => m.user_id === currentUser?.user_id)?.member_role === 'admin'
+
+  // W4-4:三方到齊檢查——null=名單未載入(載入中/失敗),無法確認;[]=到齊
+  const missingOrgs = members
+    ? ['contractor', 'supervisor', 'owner'].filter((o) => !members.some((m) => m.org_type === o))
+    : null
 
   const onAdd = async () => {
-    if (!email.trim()) return
+    if (!email.trim() || !inviteOrg) return
     setBusy(true); setMsg('')
-    const { error } = await addMemberByEmail(email.trim())
+    const { error } = await addMemberByEmail(email.trim(), 'member', inviteOrg)
     setBusy(false)
     if (error) { setMsg(error.message || '加入失敗'); return }
-    setEmail(''); setMsg('已加入。')
+    setEmail(''); setMsg(`已加入(${ORG_LABEL[inviteOrg]})。`)
     reload()
   }
   const onRemove = async (m) => {
@@ -41,9 +55,16 @@ export default function Members() {
     reload()
   }
   const onEnableFormal = async () => {
+    // W4-4:確認畫面如實列出三方到齊狀態——不齊也可開(到齊與否是專案自己的決定),
+    // 但缺哪方、後果是什麼要先講清楚;requireText 即二次確認。
+    const readiness = missingOrgs === null
+      ? '⚠ 目前無法確認三方成員是否到齊(名單載入中或載入失敗),建議先回成員名單確認。'
+      : missingOrgs.length
+        ? `⚠ 三方尚未到齊,目前缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}。開啟後,缺席角色負責的簽核(核定/判定/核准)將無人可執行,直到該身分的成員加入。`
+        : '三方成員已到齊(施工廠商、監造單位、主辦機關)。'
     const ok = await appConfirm({
       title: '開啟正式模式？', danger: true, confirmLabel: '開啟（不可復原）',
-      body: '開啟後,估驗核定、查驗判定、送審審定、RFI 回覆、變更核准等簽核動作,必須由對應角色（監造/機關）的帳號執行;你將失去跨角色權限,僅保留成員與專案管理,且無法自行關閉。請先確認監造與機關成員都已加入專案。',
+      body: `${readiness}\n\n開啟後,估驗核定、查驗判定、送審審定、RFI 回覆、變更核准等簽核動作,必須由對應角色（監造/機關）的帳號執行;你將失去跨角色權限,僅保留成員與專案管理,且無法自行關閉。`,
       requireText: project.project_name,
     })
     if (!ok) return
@@ -55,16 +76,25 @@ export default function Members() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="專案成員" tagline="Team" subtitle="邀請監造 / 機關 / 協力廠商加入，依組織別自動套用權限"
-        meta={[{ k: '成員數', v: String(members.length) }]} />
+      <PageHeader title="專案成員" tagline="Team" subtitle="邀請監造 / 機關 / 協力廠商加入本專案"
+        meta={[{ k: '成員數', v: members ? String(members.length) : '—' }]} />
 
       {isAdmin && (
         <Card title="加入成員">
+          {/* W4-3(D-009):邀請方宣告受邀方身分,伺服器與對方註冊身分比對,不符即擋 */}
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[220px]"><Field label="對方帳號 Email" hint="對方需先在本系統註冊；權限依其註冊時選的組織別（施工/監造/機關）自動套用。">
+            <div className="flex-1 min-w-[220px]"><Field label="對方帳號 Email" hint="對方需先在本系統註冊；與你指定的身分不符時會被擋下,不會誤入專案。">
               <input className={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="supervisor@example.com" type="email" />
             </Field></div>
-            <Button onClick={onAdd} disabled={busy || !email.trim()}>{busy ? '加入中…' : '＋ 加入專案'}</Button>
+            <div className="min-w-[140px]"><Field label="受邀方身分">
+              <select className={input} value={inviteOrg} onChange={(e) => setInviteOrg(e.target.value)}>
+                <option value="">請選擇…</option>
+                <option value="contractor">施工廠商</option>
+                <option value="supervisor">監造單位</option>
+                <option value="owner">主辦機關</option>
+              </select>
+            </Field></div>
+            <Button onClick={onAdd} disabled={busy || !email.trim() || !inviteOrg}>{busy ? '加入中…' : '＋ 加入專案'}</Button>
           </div>
           {msg && <p className={`text-sm mt-2 ${msg.includes('已加入') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{msg}</p>}
           {demoMode && <p className="text-xs text-[var(--text-3)] mt-2">（demo 模式為展示用，實際邀請需登入真實專案。）</p>}
@@ -88,6 +118,12 @@ export default function Members() {
                 <li>專案建立者僅保留成員管理與專案設定,依自己的組織別行事。</li>
                 <li><b>開啟後不可自行關閉</b>(履約證據完整性)。</li>
               </ul>
+              {/* W4-4:開啟前先看得到三方到齊狀態(對話框內會再確認一次) */}
+              {missingOrgs !== null && (
+                missingOrgs.length
+                  ? <p className="text-sm text-[var(--amber-text)]">三方到齊檢查:尚缺 {missingOrgs.map((o) => ORG_LABEL[o]).join('、')}。</p>
+                  : <p className="text-sm text-[var(--green-text)]">三方到齊檢查:施工廠商、監造單位、主辦機關都已加入。</p>
+              )}
               {isAdmin
                 ? <Button variant="danger" onClick={onEnableFormal} disabled={busy}>開啟正式模式</Button>
                 : <p className="text-xs text-[var(--text-3)]">僅專案建立者可開啟。</p>}
@@ -98,7 +134,15 @@ export default function Members() {
       )}
 
       <Card title="成員名單">
-        {members.length === 0 ? <Empty>載入中…</Empty> : (
+        {loadError ? (
+          <Empty>
+            <div className="space-y-3">
+              <div>成員載入失敗:{loadError}</div>
+              <Button onClick={reload}>重試</Button>
+            </div>
+          </Empty>
+        ) : members === null ? <Empty>載入中…</Empty>
+          : members.length === 0 ? <Empty>此專案尚無成員。</Empty> : (
           <div className="space-y-2">
             {members.map((m) => (
               <div key={m.user_id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2">
@@ -124,10 +168,13 @@ export default function Members() {
         )}
       </Card>
 
+      {/* W4-2/P1-06:文案以 can(store.jsx)與 RLS/guard(migrations)實際行為為準——
+          機關不是唯讀:變更核准/駁回、估驗請款與撥款登錄、驗收各階段、風險稽核都是機關的簽核權。 */}
       <p className="text-xs text-[var(--text-3)]">
-        權限依組織別：<b>施工廠商</b>填報 / 提送（日誌、估驗送審、查驗申請、送審、疑義提出）；
-        <b>監造單位</b>審核 / 判定（核定估驗、查驗合格判定、缺失複查結案、送審核備、疑義回覆）；
-        <b>主辦機關</b>唯讀。專案建立者於試用模式不受此限；開啟正式模式後回歸自己的組織別。
+        權限依組織別：<b>施工廠商</b>填報／提送（日誌、估驗提送、查驗申請、送審、疑義提出）；
+        <b>監造單位</b>審核／判定（估驗核定、查驗判定、缺失複查結案、送審審定、疑義回覆、變更初審）；
+        <b>主辦機關</b>契約級簽核（變更設計核准／駁回、估驗請款與撥款登錄、驗收各階段、風險稽核），對日常填報唯讀。
+        專案建立者於試用模式有跨角色權限；開啟正式模式後回歸自己的組織別。
       </p>
     </div>
   )

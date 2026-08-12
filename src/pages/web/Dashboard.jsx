@@ -26,14 +26,15 @@ function SetupChecklist({ imported }) {
     let active = true
     ;(async () => {
       const [members, docsRes, pendRes, apprRes] = await Promise.all([
-        listMembers().catch(() => []),
+        listMembers().catch(() => ({ rows: [], error: '成員載入失敗' })),
         supabase.from('documents').select('id', { count: 'exact', head: true }).eq('project_id', pid),
         supabase.from('requirements').select('id', { count: 'exact', head: true }).eq('project_id', pid).in('status', ['draft_ai', 'needs_review']),
         supabase.from('requirements').select('id', { count: 'exact', head: true }).eq('project_id', pid).eq('status', 'approved'),
       ])
       if (!active) return
       setSnap({
-        orgs: new Set((members || []).map((m) => m.org_type).filter(Boolean)),
+        orgs: new Set((members?.rows || []).map((m) => m.org_type).filter(Boolean)),
+        membersError: members?.error || null, // W4-1:載入失敗要說失敗,不能假裝「尚缺三方」
         docs: docsRes?.count || 0,
         reqPending: pendRes?.count || 0,
         reqApproved: apprRes?.count || 0,
@@ -50,8 +51,10 @@ function SetupChecklist({ imported }) {
       detail: snap ? `文件 ${snap.docs} 件・標單${imported ? '已匯入' : '未匯入'}` : '載入中…',
     },
     {
-      to: '/members', label: '確認三方成員', done: snap ? missingOrgs.length === 0 : false,
-      detail: snap ? (missingOrgs.length ? `尚缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}` : '廠商、監造、機關都已加入') : '載入中…',
+      to: '/members', label: '確認三方成員', done: snap ? !snap.membersError && missingOrgs.length === 0 : false,
+      detail: !snap ? '載入中…'
+        : snap.membersError ? `${snap.membersError},到成員頁重試`
+          : missingOrgs.length ? `尚缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}` : '廠商、監造、機關都已加入',
     },
     {
       to: '/requirements', label: '檢查 AI 履約要求建議', done: !!snap && snap.reqPending === 0 && snap.reqApproved > 0,
