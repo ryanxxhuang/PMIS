@@ -43,6 +43,7 @@ W6-1 冒煙只做登入、session 重整還原與登出，不建立業務資料�
 - 帳號用 admin API 刪(先刪其專案,`projects.created_by` FK 會擋 `deleteUser`)。
 - 清理失敗一律 throw:staging 殘留必須大聲失敗,不能靜默留資料。
 - fixture email 一律帶時間戳唯一化,重跑不互撞。
+- **Storage 物件不隨 DB cascade 刪除**:刪專案前先用 storage API(service key)清該案物件——`contract-documents` 在 `projects/<id>/` 之下、`photos` 直接以 `<id>/` 開頭(helpers 的 `removeProjectStorage`)。
 
 ## W6-1 基線
 

@@ -24,7 +24,7 @@
 - [x] W5 一次一項架構債 — PR #6，已部署（migrations `20260812000500`、`20260812000600`）
 - [ ] W6 最小真案驗收
 
-**目前續接點：W6-4 鏈 3（文件上傳→Requirement 建議→人工核定）。** W6-1~W6-3 已完成並 commit 於 `codex/w6-1-real-e2e`。
+**目前續接點：W6-5 鏈 4（標單匯入失敗／重設失敗 rollback）。** W6-1~W6-4 已完成並 commit 於 `codex/w6-1-real-e2e`。
 
 ---
 
@@ -121,7 +121,8 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   本機證據（2026-08-13）：`e2e-real/chain1-onboarding.spec.js` 對一次性本機 staging 通過——註冊落地建案頁、建案導向專案文件（D-007）、邀請錯配被擋＋訊息完整（D-009）、三方到齊轉綠（W4-4）、requireText 開啟正式模式、被邀監造登入可見專案（RLS）；afterAll 走 delete_project RPC＋admin API 清理，殘留 0。
 - [x] **W6-3 鏈 2：廠商提送→監造審核→機關核准／付款**
   本機證據（2026-08-13）：`e2e-real/chain2-valuation.spec.js` 正式模式下通過——廠商建期送審（無核定鈕）、監造核定、機關登錄請款/收款（待請款→已請款→已收款）；fixture 全走產品 RPC，afterAll 清理殘留 0。
-- [ ] **W6-4 鏈 3：文件上傳→Requirement 建議→人工核定**
+- [x] **W6-4 鏈 3：文件上傳→Requirement 建議→人工核定**
+  本機證據（2026-08-13）：`e2e-real/chain3-requirements.spec.js` 通過——上傳契約 txt（Storage＋documents）、廠商看得到待審但無核定鈕（鏡像 can_review_requirement）、監造核定（review_requirement RPC）、D-012 單向物化後義務時程出現同標題與固定到期日。AI 建議以人工待審列代替（本機無 edge runtime）。清理含 Storage 物件，殘留 0。
 - [ ] **W6-5 鏈 4：標單匯入失敗／重設失敗 rollback（真後端重演 W1 pgTAP 情境）**
   （W6-2～W6-5 驗收：各鏈在真後端綠；失敗畫面有明確錯誤）
 

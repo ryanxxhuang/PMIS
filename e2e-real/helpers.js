@@ -30,6 +30,35 @@ export async function createConfirmedUser(email, orgType, fullName = '測試帳�
   return data.user.id
 }
 
+// Storage 物件不隨 DB cascade 刪除——刪專案前先清該案在兩個 bucket 的物件。
+// 走 storage API+service key(storage-api 的合法管理路徑,無資料表 GRANT 問題)。
+// 路徑慣例不同:contract-documents 在 projects/<id>/ 之下,photos 直接以 <id>/ 開頭。
+const BUCKET_PREFIX = {
+  'contract-documents': (projectId) => `projects/${projectId}`,
+  photos: (projectId) => projectId,
+}
+const BUCKETS = Object.keys(BUCKET_PREFIX)
+async function listAllObjectPaths(storage, bucket, prefix) {
+  const { data, error } = await storage.from(bucket).list(prefix, { limit: 100 })
+  if (error || !data?.length) return []
+  const paths = []
+  for (const entry of data) {
+    const full = `${prefix}/${entry.name}`
+    if (entry.id === null) paths.push(...await listAllObjectPaths(storage, bucket, full)) // 資料夾 → 遞迴
+    else paths.push(full)
+  }
+  return paths
+}
+export async function removeProjectStorage(projectId) {
+  const storage = admin().storage
+  for (const bucket of BUCKETS) {
+    const paths = await listAllObjectPaths(storage, bucket, BUCKET_PREFIX[bucket](projectId))
+    if (!paths.length) continue
+    const { error } = await storage.from(bucket).remove(paths)
+    if (error) throw new Error(`清理 storage 失敗(${bucket}):${error.message}`)
+  }
+}
+
 // 清理專案:以「建立者本人」登入走產品的 delete_project RPC(真路徑,cascade
 // 清全部業務資料)。不用 service role 直刪資料表——新版 CLI 的本機 stack 對
 // service_role 沒有資料表 GRANT(secure-by-default),直刪會 permission denied。
@@ -42,6 +71,7 @@ export async function deleteOwnedProjects(email) {
   const { data: projects, error: listError } = await anon.from('projects').select('id')
   if (listError) throw new Error(`清理列專案失敗(${email}):${listError.message}`)
   for (const p of projects || []) {
+    await removeProjectStorage(p.id) // 先清 bucket 物件(DB cascade 不會清)
     const { error } = await anon.rpc('delete_project', { p_id: p.id })
     if (error) throw new Error(`清理刪專案失敗(${p.id}):${error.message}`)
   }
