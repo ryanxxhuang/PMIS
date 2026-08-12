@@ -1,5 +1,7 @@
 # Contract-First Foundation
 
+> 狀態：**CURRENT** ｜ 描述目前已實作的 P0-01 基礎與相容行為。
+
 This document describes the implemented P0-01 persistence foundation. It does
 not describe future workflow as if it already exists.
 

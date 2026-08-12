@@ -3,10 +3,10 @@
 -- RLS 隔離(草稿僅本人可見:同案他人與跨案皆不可見)、
 -- resolve_agent_action 狀態機(本人限定/終態不可逆/非法值擋下)、審計留痕。
 -- 執行:本地 supabase(colima)+容器內 psql,整份交易內執行並 rollback。
--- 對應 migration 20260725000000_agent_actions.sql。
+-- 對應 migrations 20260725000000_agent_actions.sql、20260812000100_three_party_agent_roles.sql。
 begin;
 
-select plan(31);
+select plan(32);
 
 -- login helper(同 p0_05 慣例:兩種 claim 寫法都設,涵蓋不同 auth.uid() 實作)
 create or replace function pg_temp.become(u uuid) returns void language plpgsql as $$
@@ -77,6 +77,11 @@ insert into public.agent_actions (id, project_id, actor_user, agent_role, kind, 
    'aa100000-0000-0000-0000-000000000001', 'qc', 'draft_inspection', '查驗申請草稿'),
   ('aa400000-0000-0000-0000-00000000000b', 'aa200000-0000-0000-0000-00000000000b',
    'aa100000-0000-0000-0000-000000000003', 'supervisor', 'answer', 'B 案問答草稿');
+
+select results_eq($$
+  select distinct agent_role from public.agent_actions order by agent_role
+$$, $$ values ('contractor'::text), ('supervisor'::text) $$,
+  '舊版 field/qc 寫入自動正規化為 contractor，資料只保留三方角色');
 
 -- check 約束有效(FK 皆已就緒,非法值必須被 check 擋下)
 select throws_ok($$

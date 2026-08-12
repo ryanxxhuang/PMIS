@@ -168,7 +168,7 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
               <option value="supervisor">監造</option>
               <option value="owner">機關</option>
             </select>
-            <input className={input} placeholder="職稱（如 品管工程師）" value={form.role} onChange={set('role')} />
+            <input className={input} title="職稱只供顯示，不影響系統權限" placeholder="職稱（選填，不影響權限）" value={form.role} onChange={set('role')} />
           </div>
         </>
       )}

@@ -1,5 +1,7 @@
 # Cloudflare 搬家逐步設定指南
 
+> **文件狀態：HISTORICAL RUNBOOK。** 記錄 2026-08-11 搬遷過程；目前部署入口以根目錄 `README.md` 與 `wrangler.jsonc` 為準。
+
 **建立日期**：2026-08-11
 **目的**：把正式站從 `ryanxxhuang.github.io/PMIS` 搬到 `gov-agent.ai`，並讓 `public/_headers` 的安全標頭生效。
 

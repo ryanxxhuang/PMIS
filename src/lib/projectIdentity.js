@@ -20,6 +20,9 @@ export const PROJECT_ROLES = Object.freeze([
   'viewer',
 ])
 
+// PROJECT_ROLES 是既有文件／契約身分的描述性欄位，不是業務權限或 Agent
+// 身分來源。授權只看 contractor / supervisor / owner 三方 org_type。
+
 export function normalizeProjectMembership(row) {
   if (!row?.project_id) return null
   const partyRelation = Array.isArray(row.project_parties)

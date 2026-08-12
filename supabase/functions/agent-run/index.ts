@@ -1,11 +1,12 @@
 // Supabase Edge Function: agent-run
 // ---------------------------------------------------------------------------
-// 多輪 agent(批1 查詢;批3 加 field 角色的 draft_daily_log):收本案事實快照 +
+// 多輪三方 agent：收本案事實快照 +
 // 使用者訊息,讓 Claude 自行調閱本案資料後回答。查詢工具只讀不寫;
 // draft_daily_log 只寫 agent_actions 草稿收件匣 —— 不寫任何業務資料表。
 // 權限:verify_jwt 預設開啟;函式內再以呼叫者 JWT 建 userClient(getUser +
 // RLS 讀 projects 證明成員資格),所有工具查詢都走這個 client → 自動套 RLS。
-// 角色由伺服器決定(project_memberships / my_org_type),不信任 client 傳值。
+// 角色由伺服器依三方 org_type 決定,不信任 client 傳值。現場／品管只是
+// 廠商內部分工,不讀 project_memberships.project_role。
 //
 // 部署:supabase functions deploy agent-run --use-api(colima 下必須 --use-api)
 
@@ -19,11 +20,7 @@ import { featureByKey } from '../_shared/aiFeatures.ts'
 import { personaSystem } from '../_shared/agentPersona.ts'
 import type { AgentRole } from '../_shared/agentPersona.ts'
 import { makeToolExec, toolsForRole } from '../_shared/agentTools.ts'
-// 專案角色 → agent persona 的映射抽在 _shared/agentRole.ts(send-reminders 共用;
-// 前端 src/lib/agentRole.js 另有顯示用副本,三處值域必須同步)。
-// (規格原訂讀 project_members.job_role;該欄位不存在 —— 專案內職務的實際來源是
-//  P0-02 的 project_memberships.project_role,映射依其 check constraint 全值域。)
-import { ROLE_BY_PROJECT_ROLE, agentRoleOf } from '../_shared/agentRole.ts'
+import { agentRoleOf } from '../_shared/agentRole.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -87,20 +84,8 @@ Deno.serve(async (req) => {
     }
 
     // -- 角色由伺服器決定 ------------------------------------------------------
-    const { data: membership } = await userClient
-      .from('project_memberships')
-      .select('project_role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .maybeSingle()
-    let role: AgentRole | null = membership?.project_role
-      ? ROLE_BY_PROJECT_ROLE[membership.project_role as string] ?? null
-      : null
-    if (!role) {
-      // 專案內未設職務 → 以組織別映射(contractor→field;qc 只能來自明確職務設定)
-      const { data: orgType } = await userClient.rpc('my_org_type')
-      role = agentRoleOf(null, typeof orgType === 'string' ? orgType : null)
-    }
+    const { data: orgType } = await userClient.rpc('my_org_type')
+    const role: AgentRole = agentRoleOf(typeof orgType === 'string' ? orgType : null)
 
     // -- history 淨化:只收純文字、最多 20 則、每則 ≤ 4000 字元 ------------------
     let history = Array.isArray(body?.history)

@@ -1,7 +1,10 @@
 # Backend setup (Supabase)
 
+> **文件狀態：ACTIVE RUNBOOK。** 指令與本 repo migration 鏈同步；正式環境操作仍需明確授權。
+
 The app talks to a Supabase project (Postgres + Auth) over the public **publishable** key.
-All access control is enforced by Row Level Security — see [`schema.sql`](./schema.sql).
+Access control is enforced by Row Level Security, RPCs and guard triggers. The database source of
+truth is [`migrations/`](./migrations); [`schema.sql`](./schema.sql) is frozen historical reference.
 
 ## 1. Create the project
 
@@ -22,10 +25,10 @@ supabase db push          # 依序套用 migrations/(baseline + 後續全部)
 pgTAP 測試見 [`tests/`](./tests)。Storage bucket(`photos`、`contract-documents`)
 與其物件 policies 都由 migration 建立,不需手動設定。
 
-This creates: `profiles`, `projects`, `project_members`, `work_items`, `valuations`,
-`valuation_items`, `schedule_periods`, `daily_logs`, `daily_log_items`, `photos`,
-`contract_obligations`, `inspections`, `defects` — all with RLS — plus the
-`create_project` / `delete_project` RPCs.
+The full migration chain currently creates 50 tables across project identity, BOQ and finance,
+documents and Requirements, quality and safety, collaboration, acceptance, audit, Agent drafts,
+and AI operations. Do not maintain a duplicate table list here; inspect the migrations or
+[`../CURRENT.md`](../CURRENT.md) for the current domain map.
 
 It also creates the private **`photos`** Storage bucket and its object-level RLS policies (a
 member of a project can read/write only files under that project's folder). Photo files are
@@ -49,14 +52,17 @@ Email + password is enabled by default. For local development it's convenient to
 production deployment, turn it **on** and set *Authentication → URL Configuration → Site URL* to
 your deployed URL so the verification link points back.
 
-## 5. Whiteboard OCR Edge Function (AI autofill)
+## 5. Edge Functions and server secrets
 
-The `read-whiteboard` Edge Function ([`functions/read-whiteboard/index.ts`](./functions/read-whiteboard/index.ts))
-takes a site-board photo and returns structured daily-log fields via Claude vision
-(shared provider layer in [`functions/_shared/claude.ts`](./functions/_shared/claude.ts):
-Haiku for vision/short drafts, Sonnet for long-document extraction; forced tool-use =
-guaranteed JSON schema). The Anthropic API key lives **only** in the function's secrets —
-it never reaches the browser.
+There are currently 16 Edge Functions. Their feature metadata is mirrored in
+[`../src/lib/aiFeatures.js`](../src/lib/aiFeatures.js) and
+[`functions/_shared/aiFeatures.ts`](./functions/_shared/aiFeatures.ts); runtime availability is
+decided by the database `ai_features` table through the server-side AI gate.
+
+Claude-backed functions share [`functions/_shared/claude.ts`](./functions/_shared/claude.ts):
+Haiku handles vision and short drafts, Sonnet handles long-document extraction and Agent runs,
+and Opus handles high-judgment review scenarios. Forced tool use provides structured output.
+The Anthropic key lives only in server secrets and never reaches the browser.
 
 Requires the [Supabase CLI](https://supabase.com/docs/guides/cli) (`npm i -g supabase`), then:
 
@@ -64,21 +70,12 @@ Requires the [Supabase CLI](https://supabase.com/docs/guides/cli) (`npm i -g sup
 supabase login
 supabase link --project-ref <your-project-ref>   # ref is in your Project URL
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-... # console.anthropic.com → API Keys
-supabase functions deploy read-whiteboard
+supabase secrets set CWA_API_KEY=...              # 中央氣象署，fetch-weather 使用
+supabase functions deploy <function-name> --use-api
 ```
 
-`verify_jwt` stays on (the default), so only signed-in users can invoke it — the frontend attaches
-the user's JWT automatically via `supabase.functions.invoke('read-whiteboard', …)`.
-
-The `parse-contract` function ([`functions/parse-contract/index.ts`](./functions/parse-contract/index.ts))
-reads an uploaded contract (PDF / scanned PDF / image) and returns the structured time-based
-obligation list for the **contract deadlines** page. It reuses the same `ANTHROPIC_API_KEY` secret:
-
-```bash
-supabase functions deploy parse-contract
-```
-
-(Word/Excel contracts: export to PDF first for v1.)
+Functions called by users keep JWT verification enabled. `send-reminders` is the deliberate
+exception: it is invoked by cron and authenticates with `x-cron-secret`.
 
 ## 6. Daily reminder emails (提醒推播)
 
@@ -91,11 +88,11 @@ It only sends when something is overdue or due soon; plain "待處理" items don
 ```bash
 supabase secrets set RESEND_API_KEY=re_...       # resend.com → API Keys (free tier ok)
 supabase secrets set CRON_SECRET=$(openssl rand -hex 24)   # keep the value for cron.sql
-supabase secrets set REMINDER_FROM='PMIS 提醒 <alerts@yourdomain.com>'  # optional; needs a
+supabase secrets set REMINDER_FROM='GovAgent 提醒 <alerts@gov-agent.ai>'  # requires a
                                                   # verified domain on Resend. Default uses
                                                   # onboarding@resend.dev (test only: it can
                                                   # deliver ONLY to your own Resend account email)
-supabase functions deploy send-reminders --no-verify-jwt   # auth = x-cron-secret header instead
+supabase functions deploy send-reminders --no-verify-jwt --use-api  # auth = x-cron-secret header instead
 ```
 
 Schedule it daily at 08:00 Taipei with **pg_cron**: open [`cron.sql`](./cron.sql), replace
@@ -108,10 +105,10 @@ curl -s -X POST "https://<ref>.supabase.co/functions/v1/send-reminders?dry=1" \
   -H "x-cron-secret: <CRON_SECRET>"
 ```
 
-## 7. 發廠商試用前 checklist（pilot pre-flight）
+## 7. 正式環境 pre-flight
 
-送連結給第一家施工廠商試用前，跑過這張清單。**打勾的三項只有你能在 Supabase 後台 /
-DNS 設定，程式碼幫不了**——這裡列出確切位置。
+送正式站給外部使用者前，跑過這張清單。Supabase Auth、SMTP、Resend 與 DNS 都是外部
+設定，不能只靠 repository 內的程式碼驗證。
 
 ### 7.1　讓廠商能自己註冊登入（**必做**）
 
@@ -127,19 +124,19 @@ DNS 設定，程式碼幫不了**——這裡列出確切位置。
   **重寄驗證信** 按鈕。
 
 不論 A / B，都要把 App 網址加進白名單，否則導回會被擋：
-*Authentication → URL Configuration* → **Site URL** 與 **Redirect URLs** 都填
-`https://ryanxxhuang.github.io/PMIS/`（本機測試再加 `http://localhost:5173/`）。
+*Authentication → URL Configuration* → **Site URL** 填 `https://gov-agent.ai`，
+**Redirect URLs** 加入 `https://gov-agent.ai/**`（本機測試另加 `http://localhost:5173/**`）。
 
 ### 7.2　提醒信要真的寄到廠商（可等，但要知道）
 
 預設寄件者 `onboarding@resend.dev` **只能寄到你自己 Resend 帳號的信箱**，寄給廠商不會到。
-要讓每日提醒真的進廠商信箱：Resend 後台驗證一個網域（規劃中的 `pmis.ai`）→ 設
-`supabase secrets set REMINDER_FROM='PMIS 提醒 <alerts@pmis.ai>'` → 重新 deploy。
-**pilot 可以先不做**：廠商是主動天天在用 App，提醒信是加分不是必要；等要廣發前再補。
+要讓每日提醒真的寄到外部信箱：先在 Resend 驗證 `gov-agent.ai` 的寄件網域，再設定
+`REMINDER_FROM` 並重新部署 `send-reminders`。未驗證前只能用 Resend 測試寄件者寄到帳號本人。
 
-### 7.3　伺服器端 RBAC（2026-07-09 已上線，可以拉三方進同一案了）
+### 7.3　伺服器端 RBAC
 
-角色權限已從 UI 層下沉到資料庫層，重跑 `schema.sql` 即套用（已套用到線上）：
+角色權限已從 UI 層下沉到資料庫層。新環境必須用 `supabase db push` 依序套用完整
+`migrations/`，不可重跑已凍結的 `schema.sql`：
 
 - **RLS 層**：機關(owner)對日常填報唯讀（寫入被 `can_write()` 擋）；
   成本管理 `cost_items` 連「讀」都限廠商成員/admin（毛利機密）；
@@ -147,14 +144,14 @@ DNS 設定，程式碼幫不了**——這裡列出確切位置。
 - **Trigger 層**（狀態轉移防護）：估驗核定、查驗判定、缺失結案、送審審定＝監造限定；
   變更設計核准/駁回＝機關/監造；機關在估驗只能寫請款/撥款三欄；
   **已核定估驗與已核准變更的明細凍結**；加入他人專案後不可自改 org_type（防提權）。
-- admin（建立者/管理者）一律放行——單人試用不受任何限制；
+- 非正式模式下，專案 admin 可以跨角色操作，方便單人試用；開啟 `formal_mode` 後會關閉跨角色 override，admin 只保留成員、設定、刪案等專案管理權限；
   service role / SQL Editor（`auth.uid()` 為 null）不受 trigger 限制。
 
 已在線上 DB 以 18 項權限矩陣測試驗證（模擬三方角色 JWT，測完 rollback）。
 
 ### 7.4　發之前快速驗一次
 
-1. 開無痕視窗 → `https://ryanxxhuang.github.io/PMIS/` → 用一個測試 email 註冊（org 選施工廠商）
+1. 開無痕視窗 → `https://gov-agent.ai` → 用一個測試 email 註冊（org 選施工廠商）
    → 確認能進 Dashboard。
 2. 你的帳號在 **專案成員** 頁用該測試 email 加進一個案 → 換回測試帳號 → 確認看得到那個案、
    且**看不到**別的案。

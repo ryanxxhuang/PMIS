@@ -1,3 +1,5 @@
+// 稽核事件只供本頁篩選與分頁，不進全域 Store。查詢保持 project-scoped，
+// 若未來第二個頁面需要同一份事件清單，再抽共用函式。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { History, RefreshCw } from 'lucide-react'
 import { useStore } from '../../store.jsx'

@@ -1,5 +1,7 @@
 # P0-06 — Traceable AI Document Ingestion
 
+> 狀態：**CURRENT** ｜ 描述已實作的文件攝取、來源定位與 AI 建議流程。
+
 ## 1. Purpose
 
 Before P0-06, the only AI document flow was `parse-contract`: a flat-text
@@ -219,7 +221,7 @@ acceptance, alerts, reminders, and demo mode are untouched. The two pipelines
 run side by side; P0-06 does not make `contract_obligations` authoritative
 over reviewed Requirements (the P0-01 sync trigger still only touches
 draft/needs_review mirrors). The long-term direction is Requirements, but the
-Contract-First onboarding/UI cutover belongs to P0-09.
+Contract-First onboarding/UI cutover belongs to a later decision.
 
 ## 13. Edge Function authentication
 

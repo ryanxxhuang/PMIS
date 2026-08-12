@@ -182,7 +182,7 @@ export const QUERY_TOOLS: ToolDef[] = [
   },
 ]
 
-// ── 批3:draft_daily_log(第八支;只給 field 角色) ──────────────────────────
+// ── 批3:draft_daily_log（廠商 Agent）────────────────────────────────────
 // 唯一「會寫」的工具,但只寫 agent_actions 草稿收件匣 —— 不寫任何業務資料表。
 export const DRAFT_DAILY_LOG_TOOL: ToolDef = {
   name: 'draft_daily_log',
@@ -219,7 +219,7 @@ export const RUN_INTEGRITY_AUDIT_TOOL: ToolDef = {
   },
 }
 
-// ── 批4(任務B):draft_inspection(只給 qc) ────────────────────────────────
+// ── 批4(任務B):draft_inspection（廠商 Agent）────────────────────────────
 // 本批最重要的判斷:查驗實測值不讓 AI 讀。照片能證明「有做」,不能證明「做了多
 // 少」;實測值(kind:'num')驅動 judgeChecklist 的合格/不合格判定,是有法律效力
 // 的品質紀錄 —— AI 讀錯一個數字就是一張假的「合格」檢查表。因此 num 項一律留空
@@ -304,8 +304,8 @@ export const RAISE_TO_TOOL: ToolDef = {
     properties: {
       to_role: {
         type: 'string',
-        enum: ['field', 'qc', 'supervisor', 'owner'],
-        description: '交接對象角色:field=現場、qc=品管、supervisor=監造、owner=機關',
+        enum: ['contractor', 'supervisor', 'owner'],
+        description: '交接對象角色:contractor=廠商、supervisor=監造、owner=機關',
       },
       subject: { type: 'string', description: '一句話說明要對方處理什麼' },
       note: { type: 'string', description: '(選填)補充說明' },
@@ -320,15 +320,13 @@ export const RAISE_TO_TOOL: ToolDef = {
 // 殿後 —— 順序固定。⚠️ 每個角色的陣列都是模組層常數(只建一次):同一角色的
 // tools 前綴必須逐位元組穩定,prompt cache 才會命中(不同角色本來就是不同前綴,
 // 各自穩定即可)。
-const FIELD_TOOLS: ToolDef[] = [...QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL, RAISE_TO_TOOL]
-const QC_TOOLS: ToolDef[] = [...QUERY_TOOLS, DRAFT_INSPECTION_TOOL, RAISE_TO_TOOL]
+const CONTRACTOR_TOOLS: ToolDef[] = [...QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL, DRAFT_INSPECTION_TOOL, RAISE_TO_TOOL]
 const SUPERVISOR_TOOLS: ToolDef[] = [...QUERY_TOOLS, RUN_INTEGRITY_AUDIT_TOOL, DRAFT_SUBMITTAL_REVIEW_TOOL, RAISE_TO_TOOL]
 const OWNER_TOOLS: ToolDef[] = [...QUERY_TOOLS, RUN_INTEGRITY_AUDIT_TOOL, RAISE_TO_TOOL]
 
 export function toolsForRole(role: AgentRole): ToolDef[] {
   switch (role) {
-    case 'field': return FIELD_TOOLS
-    case 'qc': return QC_TOOLS
+    case 'contractor': return CONTRACTOR_TOOLS
     case 'supervisor': return SUPERVISOR_TOOLS
     default: return OWNER_TOOLS
   }
@@ -899,7 +897,7 @@ async function draftDailyLog(
     .insert({
       project_id: projectId,
       actor_user: userId,
-      agent_role: 'field',
+      agent_role: 'contractor',
       kind: 'draft_daily_log',
       target_table: 'daily_logs',
       summary,
@@ -1407,7 +1405,7 @@ async function draftInspection(
     .insert({
       project_id: projectId,
       actor_user: userId,
-      agent_role: 'qc', // draft_inspection 只分發給 qc 角色
+      agent_role: 'contractor',
       kind: 'draft_inspection',
       target_table: 'checklist_records',
       summary: built.summary,
@@ -1628,18 +1626,7 @@ async function draftSubmittalReview(
 
 // ── 批4(任務B):raise_to 實作 ──────────────────────────────────────────────
 
-const ROLE_LABEL: Record<AgentRole, string> = { field: '現場', qc: '品管', supervisor: '監造', owner: '機關' }
-
-// project_memberships.project_role(P0-02 check constraint 全值域)→ agent 角色。
-// 與 agent-run/index.ts 的 ROLE_BY_PROJECT_ROLE 互為反向,改動要兩邊同步;
-// document_controller / viewer 不對應任何 agent 角色,不是任何交接對象。
-// 陣列順序 = 同角色多人時的收件優先序(執行層先於主管層:交接多為執行層事務)。
-const PROJECT_ROLES_BY_AGENT_ROLE: Record<AgentRole, string[]> = {
-  field: ['site_manager', 'contractor_pm', 'safety_engineer'],
-  qc: ['quality_engineer'],
-  supervisor: ['supervisor_engineer', 'supervisor_manager'],
-  owner: ['agency_engineer', 'agency_pm'],
-}
+const ROLE_LABEL: Record<AgentRole, string> = { contractor: '廠商', supervisor: '監造', owner: '機關' }
 
 // raise_to 可關聯的單據表白名單:get_record 白名單 + 品管兩張(檢查表/試體)
 const HANDOFF_TABLES = new Set([...Object.keys(RECORD_SELECTS), 'checklist_records', 'test_samples'])
@@ -1679,32 +1666,18 @@ async function raiseTo(
   const to = toRole as AgentRole
   const label = ROLE_LABEL[to]
 
-  // 找對方:本案 project_memberships 中職務映射到 to_role 的成員
-  // (RLS:同案成員可讀本案 memberships;.eq(project_id) 縱深防禦)。
-  const wanted = PROJECT_ROLES_BY_AGENT_ROLE[to]
+  // 找對方：list_project_members 已依本案成員資格限縮，org_type 是唯一三方角色
+  // 來源；project_role／職稱不參與交接分流。同方多人時依 RPC 的加入順序取第一位。
   const { data: members, error: mErr } = await db
-    .from('project_memberships')
-    .select('user_id, project_role, created_at')
-    .eq('project_id', projectId)
-    .in('project_role', wanted)
+    .rpc('list_project_members', { p_project: projectId })
   if (mErr) return { error: mErr.message }
-  const recipient = [...(members ?? [])].sort((a, b) => {
-    const d = wanted.indexOf(a.project_role) - wanted.indexOf(b.project_role)
-    return d !== 0 ? d : String(a.created_at).localeCompare(String(b.created_at))
-  })[0]
+  const recipient = (members ?? []).find((m) => m.org_type === to && m.user_id !== userId)
   if (!recipient) {
-    // 誠實錯誤:成員可能存在但未設定專案內職務(只有組織別)—— 一樣無法確定交接對象
-    return { error: `本案沒有指派「${label}」角色的成員,無法交接。請先在專案成員設定該職務。` }
-  }
-  if (recipient.user_id === userId) {
-    return { error: `查到的「${label}」成員就是使用者本人,不需要交接 —— 請直接處理,或改交給其他角色` }
+    return { error: `本案沒有其他「${label}」成員,無法交接。請先將對方加入專案。` }
   }
 
-  // 姓名(profiles 對 authenticated 可讀):交接語句與回覆訊息用
-  const { data: profs } = await db.from('profiles').select('id, full_name').in('id', [userId, recipient.user_id])
-  const nameOf = (id: string) => (profs ?? []).find((p) => p.id === id)?.full_name || null
-  const callerName = nameOf(userId) || '同案成員'
-  const recipientName = nameOf(recipient.user_id) || `${label}成員`
+  const callerName = (members ?? []).find((m) => m.user_id === userId)?.full_name || '同案成員'
+  const recipientName = recipient.full_name || `${label}成員`
 
   const noteText = typeof note === 'string' && note.trim() ? note.trim() : null
   const rationale = [noteText, `由 ${callerName}(${ROLE_LABEL[callerRole]})的 agent 轉來`]

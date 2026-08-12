@@ -1,5 +1,7 @@
 # Project Party and Role Model
 
+> **文件狀態：HISTORICAL FOUNDATION。** 這份文件保留 P0-02 建模背景；目前授權與 Agent 角色以 [`three-party-role-model.md`](three-party-role-model.md) 為準。`project_role` 現在只作相容／描述用途，不是權限來源。
+
 ## 1. Why profiles are not project identity
 
 `profiles.org_type` is a user-level attribute. It can describe a default or

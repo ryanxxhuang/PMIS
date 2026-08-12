@@ -18,7 +18,7 @@ import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
 import { applyApprovedChangeOrders, approvedNetAmount } from './lib/changeOrders.js'
 import {
-  wiCacheDel, loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
+  loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
   loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
   loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB,
@@ -50,7 +50,7 @@ export function StoreProvider({ children }) {
   const {
     projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
     workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership, aiEnabled,
-    switchProject, createProject, importWorkItems, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
+    switchProject, createProject, importWorkItems, resetProjectBoqDb, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
     loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
 
@@ -269,19 +269,17 @@ export function StoreProvider({ children }) {
   // 重新匯入標單：清空本專案 work_items 與相依資料（估驗/進度/日誌/查驗）。
   // 缺失不清:統一引擎後缺失是履約證據(已結案 guard 也擋刪除)且不依賴標單,
   // 只會因 work_items 刪除被解除工項連結(FK set null)。
+  // 單一 RPC 交易(P0-01):任何證據 guard 擋下就整包 rollback,
+  // 失敗時不清快取、不動前端狀態——不再有「日誌刪光、標單還在、畫面說成功」。
+  // RPC 呼叫與快取/重載(含失敗注入測試)在 projects slice;這裡只做成功後的跨 slice 畫面清理。
   const resetProjectBoq = useCallback(async () => {
-    if (!dbMode) return { error: { message: '需真專案' } }
-    const pid = currentProject.project_id
-    for (const t of ['inspections', 'valuations', 'schedule_periods', 'daily_logs', 'work_items']) {
-      await supabase.from(t).delete().eq('project_id', pid)
-    }
-    wiCacheDel(pid)
+    const { error } = await resetProjectBoqDb()
+    if (error) return { error }
     setValuations([]); setProgressPlan(null); setSiteLogs([]); setInspections([])
-    try { setDefects(await loadDefectsFromDB(pid)) } catch { setDefects([]) } // 重載:工項連結已解除
-    retryWorkItems() // 重跑載入 → 真專案 0 筆會進 'empty'（顯示匯入 onboarding），不載範例
+    try { setDefects(await loadDefectsFromDB(currentProject.project_id)) } catch { setDefects([]) } // 重載:工項連結已解除
     return { error: null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbMode, currentProject])
+  }, [resetProjectBoqDb, currentProject])
 
   const value = {
     // state

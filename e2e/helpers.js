@@ -3,7 +3,7 @@
 import { expect } from '@playwright/test'
 
 export const ROLES = {
-  contractor: '陳怡君', // 施工 / 品管工程師(can.edit/submit)
+  contractor: '陳怡君', // 施工廠商(can.edit/submit，現場／品管工作皆可處理)
   supervisor: '王建國', // 監造(can.approve)
   owner: '李淑芬',      // 機關(can.ratify/oversee;登入落在 /portfolio)
 }

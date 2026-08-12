@@ -1,340 +1,194 @@
-# PMIS — Construction Project Management Information System
+# GovAgent／PMIS
 
-> A web PMIS for Taiwan public‑works **contractors**. It ingests the government **PCCES**
-> bill of quantities and turns it into a live backbone for **cost, cash‑flow, schedule,
-> quality and safety** — with AI that reads site-board photos and parses contract deadlines,
-> multi‑tenant, every project's data isolated by Postgres Row Level Security.
+> **GovAgent** 是最終產品：讓政府機關每位承辦人都有一個懂業務、法規與文書格式的 AI Agent。
+> **PMIS** 是目前第一個垂直領域——公共工程專案管理——的專案名稱與程式庫名稱。
 
-**▶ App: https://ryanxxhuang.github.io/PMIS/ · Demo (no sign-up): https://ryanxxhuang.github.io/PMIS/demo/ · Site: https://ryanxxhuang.github.io/**
+- 正式站：<https://gov-agent.ai>
+- 目前系統真相：[CURRENT.md](CURRENT.md)
+- 開發基準：[DEVELOPMENT.md](DEVELOPMENT.md)
+- 已定案決策：[docs/DECISIONS.md](docs/DECISIONS.md)
+- 文件索引：[docs/README.md](docs/README.md)
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20RLS%20%2B%20Edge-3FCF8E?logo=supabase&logoColor=white)
-![Claude](https://img.shields.io/badge/AI-Claude%20Haiku%20%2B%20Sonnet-D97757?logo=anthropic&logoColor=white)
+![Claude](https://img.shields.io/badge/AI-Claude-D97757?logo=anthropic&logoColor=white)
 
----
+## 現階段產品
 
-## What it does
+PMIS 讓公共工程的施工廠商、監造單位與主辦機關在同一專案協作：
 
-Public construction in Taiwan runs on a standard procurement contract and a structured
-**PCCES eTender** budget — the 標單 (bill of quantities). PMIS treats that bill of quantities
-as the **spine**: import it once and estimating, cash‑flow, scheduling, quality and cost all
-hang off the same work‑item tree, so quantities never get re‑keyed and the numbers always
-reconcile.
+- PCCES 標單、施工日誌、估驗計價、請款收款、成本、S 曲線與逐工項排程。
+- 品質查驗、ITP、自主檢查、取樣試驗、缺失與工安管理。
+- 契約文件、履約需求、送審、RFI、變更設計、驗收結算與稽核留痕。
+- 廠商、監造、機關三種 Agent；廠商 Agent 同時支援現場與品管工作，AI 只查詢、彙整與產生草稿。
+- 多租戶 Supabase 後端；RLS、狀態 Guard Trigger 與 Audit Trigger 是安全邊界。
+- AI 功能開關、方案、用量與成本管理。
 
-### 總覽 · Overview
-- 📊 **Dashboard** — contract value, billed‑to‑date, completion %, schedule status, open
-  defects/inspections at a glance.
-- 🔔 **Alert center (提醒中心)** — one place that surfaces everything due or overdue: contract
-  deadlines, defect remediation, unfinished safety issues, and 已核定‑未請款 / 已請款‑未收款
-  payments. Each row links to its source screen. A daily **email digest** (Edge Function +
-  pg_cron + Resend) mails members whenever anything is overdue or due within 7 days.
-- 📅 **Contract control (契約管制)** — **AI parses the uploaded contract** into every time‑based
-  obligation (start‑work‑within‑X‑days, monthly reports, submittals…), each with its trigger,
-  computed due date, penalty and source clause. Due dates recompute live from a few anchor dates.
-- 📰 **Monthly report (施工月報)** — pick a month; it auto‑compiles progress, valuations,
-  a per‑work‑item completed‑quantity table, quality/safety/change‑order stats, and an
-  **AI‑drafted review + next‑month plan**. Print / save as PDF.
+平台目前只做公共工程，不為尚未開始的其他政府業務預先建立抽象框架。
 
-### 成本與進度 · Cost & schedule
-- 📋 **Bill of quantities** — upload a PCCES budget XML; it is parsed **in the browser** into a
-  3,000+ row work‑item tree (項次 / 數量 / 單價 / 複價) and stored per project (IndexedDB cached).
-- 📝 **Daily site logs** — completed quantity per work item, per day, with site photos.
-  📷 **Snap the site board → AI fills the log** (date, weather, work items + quantities matched
-  back to the BOQ). Also captures the full **工程會 official daily‑log format** (labour, plant,
-  materials, safety, sampling) with a dedicated print page.
-- 💰 **Progress valuations (估驗計價)** — quantity‑based monthly billing that **auto‑fills its
-  cumulative quantities from the daily logs**, then computes retention and net payable; status
-  workflow 草稿 → 監造審核 → 已核定 gated by role.
-- 🧾 **Billing & receipts (請款收款)** — per‑period 本期估驗 / 保留款 / 應領, invoice & payment
-  tracking (待請款 / 已請款 / 已收款) and a cash‑flow summary.
-- 🧮 **Cost & margin (成本管理)** — budget vs. actual cost by category (材料/人工/機具/分包/管理費),
-  subcontracts as cost lines, and live **gross margin** = contract revenue − cost.
-- 🔧 **Change orders (變更設計)** — 追加/減帳 line items; only 核准 ones adjust the revised contract
-  amount (flowed into valuation / S‑curve / cost denominators). **Upload the revised PCCES XML →
-  it diffs against the current BOQ and drafts the add/deduct line items automatically.**
-- 📈 **S‑curve** — planned vs. actual progress (actual derived live from valuations) with a
-  behind‑schedule indicator.
-- 🗓️ **Per‑item schedule (逐工項排程)** — planned start/finish on key items; status
-  (未開始 / 進行中 / 落後 / 已完成) derived from today vs. plan and the latest valuation.
-- 🖨 **Valuation certificate** — print / export a formal payment document as PDF.
+## 核心資料模型
 
-### 品質與工安 · Quality & safety
-- 🔍 **Quality — three‑tier QC (三級品管)** — raise an inspection, record pass/fail; a failure
-  **auto‑opens a linked defect** that moves 開立 → 改善中 → 待複查 → 已結案. 📷 **snap a defect
-  photo → AI fills the defect form**.
-- ✅ **Self‑inspection checklists (自主檢查表)** — a template's quantified limits judge each entered
-  measurement live (○/✕); a failing sheet **auto‑opens a defect**; prints as an official checklist.
-- 🧪 **Specimen testing (取樣試驗)** — pulls concrete‑pour days from the daily logs, auto‑sets
-  7/28‑day test due dates (into the alert center + email), and **auto‑judges 28‑day compressive
-  strength** per 03310 (fail → auto defect).
-- 👁 **Observations (觀察事項)** — lightweight site notes (softer than a defect); resolve them or
-  **escalate to a formal defect** in one click.
-- 🦺 **Safety (工安管理)** — self‑checks, safety deficiencies (remediation flow), training and
-  hazard notices — public‑works required, exportable per type.
-
-### 監造協作 · Supervisor collaboration
-- 📄 **Submittals (送審文件)** — contractor submits (施工計畫 / 品質計畫 / 材料 / 樣品); supervisor
-  受理 → 核准 / 核備 / 退回補正; contractor 修正再送 (revision +1). Ball‑in‑court workflow.
-- ❓ **RFIs (工程疑義)** — contractor raises, supervisor answers, contractor confirms close; flags
-  schedule / cost impact.
-- 🖍 **Drawing / photo markup** — box, arrow and text over a drawing screenshot, site photo, or
-  **PDF page**, attached to an RFI or defect so both sides see the same circled spot.
-- 🎯 **Ball‑in‑court** — every collaboration item shows whose turn it is (⏳ 待監造 / 待廠商, ✓ done);
-  the dashboard tallies 球在廠商 N / 球在監造 M across all of them.
-- 👥 **Project members (專案成員)** — invite supervisor / owner / partner accounts by email;
-  permissions follow each member's org type. **Role‑based UI**: contractor files & submits,
-  supervisor approves & closes, owner is read‑only (the project creator has full rights).
-
-Every list — cost, payments, defects, daily logs, safety, schedule, submittals, RFIs — **exports
-to CSV** (UTF‑8 BOM, so Excel renders Chinese correctly); the dashboard has a **whole‑project
-JSON export**. The whole UI is **mobile‑responsive** with a drawer nav for use on site.
-
-### AI features (Claude API)
-Four Supabase Edge Functions call the Claude API through a shared layer (`_shared/claude.ts`,
-forced tool‑use = schema‑guaranteed JSON; Haiku for vision/short text, Sonnet for long docs):
-**read‑whiteboard** (site‑board photo → daily‑log fields), **describe‑defect** (defect photo →
-defect form), **draft‑monthly‑review** (stats → 檢討/下月計畫), **parse‑contract** (contract →
-time‑based obligations). Keys live only in server secrets.
-
-### Multi‑tenant
-Sign up, create a project, work in your own isolated workspace. Owners switch between projects,
-invite members, delete projects. Row Level Security guarantees a user only ever sees rows for the
-projects they belong to.
-
-### Features by screen
-
-| Route | Screen | What you do there |
-|---|---|---|
-| `/login` | **Login / Sign‑up** | Email + password auth. Sign‑up captures `org_type` (施工廠商 / 監造 / 機關) and role. |
-| `/project/new` | **Project setup** | Create a project (owner / contractor / supervisor / dates). First‑run gate: the workspace won't open until a project exists. |
-| `/dashboard` | **Dashboard** | Contract value, item counts, billed‑to‑date and schedule status at a glance. |
-| `/alerts` | **Alert center** | Aggregates 逾期 / 即將到期(7日) / 待處理 across contract obligations, defects, safety issues and payments. |
-| `/contract` | **Contract control** | Set anchor dates → upload contract → **AI extracts obligations + penalties**; phase‑grouped list with live due dates, countdowns and source clauses. |
-| `/boq` | **Bill of quantities** | Drag‑drop a PCCES XML → parsed in‑browser → imported into `work_items` in batches. Browse the 3,000‑row tree; re‑import resets the project. |
-| `/site-log` | **Daily site log** | One record per day; enter completed quantity per work item + photos. 📷 site-photo AI auto‑fill. Feeds valuations. |
-| `/valuation` | **Progress valuation (估驗計價)** | Per‑period billing; "fill from site logs" sums daily quantities; auto‑computes cum %, amount, retention, net payable; status workflow 草稿→送審→監造審核→已核定→已請款. |
-| `/payments` | **Billing & receipts** | Per‑period 本期估驗 / 保留款 / 應領; invoice & payment dates + amount; cash‑flow totals. CSV export. |
-| `/cost` | **Cost & margin** | Budget vs. actual cost by category + subcontracts; live gross‑margin (budget & actual). CSV export. |
-| `/progress` | **S‑curve** | Planned baseline (smoothstep S‑curve over project months) vs. actual derived from valuations; flags behind‑schedule. |
-| `/schedule` | **Per‑item schedule** | Assign planned start/finish to key items; per‑item 未開始/進行中/落後/已完成 from plan + valuation. CSV export. |
-| `/change-orders` | **Change orders (變更設計)** | 追加/減帳 items; 核准 ones adjust the revised contract amount. Upload revised PCCES XML → auto‑diff line items. |
-| `/monthly-report` | **Monthly report (施工月報)** | Pick a month → auto‑compiled report + AI‑drafted review/plan; print/PDF. |
-| `/quality` | **Quality (三級品管)** | Inspections, defects (auto‑opened on fail, AI photo fill), 自主檢查表 (auto‑judge), 取樣試驗 (fc′ auto‑judge), 觀察事項 (escalate to defect). |
-| `/safety` | **Safety (工安)** | Self‑checks, safety deficiencies (remediation flow), training & hazard notices. CSV per type. |
-| `/submittals` | **Submittals (送審文件)** | Contractor submits, supervisor 核准/核備/退回補正, contractor 修正再送. Ball‑in‑court. |
-| `/rfi` | **RFIs (工程疑義)** | Contractor asks (with drawing markup), supervisor answers, contractor closes; schedule/cost impact flags. |
-| `/members` | **Project members (專案成員)** | Invite by email; role legend by org type; creator manages the roster. |
-| `/valuation/print` | **Valuation certificate** | Print/PDF a formal payment document (standalone route). |
-| `/site-log/print` | **Official daily log** | 工程會 公共工程施工日誌 format, print/PDF. |
-| `/quality/checklist-print` | **Self‑inspection sheet** | Official 自主檢查表 format with ○/✕ judgments, print/PDF. |
-
----
-
-## How it fits together
+系統有兩條互相連接的脊椎。
 
 ```mermaid
 flowchart LR
-  XML["PCCES budget XML"] -->|browser parse| WI["work_items<br/>(BOQ spine)"]
-  WI --> LOG["daily logs"]
-  WB["site-board photo"] -->|AI vision| LOG
-  LOG -->|sum quantity| VAL["valuations"]
-  WI --> VAL
-  VAL --> PAY["billing / receipts"]
-  VAL --> CRV["S-curve"]
-  VAL --> SCH["per-item schedule"]
-  VAL --> PDF["valuation certificate"]
-  WI --> COST["cost / margin"]
-  WI --> INS["inspections"]
-  INS -->|fail| DEF["defects"]
-  WI --> SAF["safety"]
-  DOC["contract document"] -->|AI parse| OBL["contract obligations"]
-  OBL --> ALERT["alert center"]
-  DEF --> ALERT
-  SAF --> ALERT
-  PAY --> ALERT
+  XML["PCCES XML"] --> WI["work_items"]
+  WI --> LOG["daily_logs"]
+  LOG --> VAL["valuations"]
+  VAL --> PAY["請款、收款與進度"]
+  WI --> QC["品質、工安與佐證"]
+
+  PKG["contract_packages"] --> DOC["documents / versions / pages"]
+  DOC --> REQ["requirements / sources"]
+  REQ --> WI
+  REQ --> ART["履約產物連結"]
 ```
 
----
+- 工程數量與財務資料以 `work_item_id` 串接。
+- 文件解析結果只有經人審查、成為 `approved` Requirement 後才具權威性。
+- 金額、期限與合格判定由確定性程式或資料庫 Trigger 執行，不交給 AI 自行計算。
 
-## System architecture
+完整現況與已知架構債見 [CURRENT.md](CURRENT.md)。
 
-PMIS is a **static React SPA** talking straight to **Supabase** over PostgREST/GoTrue with a
-*publishable* anon key. The database does the heavy lifting — auth, authorization (RLS),
-constraints, and the operations that need elevated rights (SECURITY DEFINER RPCs). The only
-custom server code is a handful of **Edge Functions** that call an LLM for the AI features (they never
-touch the DB; they take a file in and return structured JSON).
+## 系統架構
 
 ```mermaid
 flowchart TB
-  subgraph Browser["Browser — React 18 SPA (static, GitHub Pages)"]
-    P["pages/web/*"] --> S["store.jsx<br/>(single context: all reads/writes)"]
-    S --> L["lib/parsePcces · boqCalc · contractDue · exportCsv"]
-  end
-  S -->|"supabase-js (anon key)"| API
-  S -->|"invoke"| FN
-  subgraph Supabase
-    API["PostgREST + GoTrue"] --> RLS["Row Level Security<br/>is_project_member()"]
-    RLS --> DB[("Postgres")]
-    API --> RPC["RPCs (SECURITY DEFINER)<br/>create_project · delete_project"]
-    RPC --> DB
-    STG["Storage (photos bucket, RLS)"]
-    FN["Edge Functions (Deno)<br/>parse-contract · read-whiteboard"] -->|Claude API| AI(("LLM"))
-  end
-  S -->|"upload/signed URL"| STG
+  Browser["React SPA"] --> Routes["App routes + role guard"]
+  Routes --> Pages["pages / components"]
+  Pages --> Store["tracked Store + domain slices"]
+  Pages -. "頁面專屬資料" .-> API["Supabase API"]
+  Store --> Lib["共用查詢 + 確定性 engines"]
+  Store --> API
+  Store --> Edge["Supabase Edge Functions"]
+  Edge --> Gate["AI gate + usage metering"]
+  Edge --> Agent["Agent runtime + role tool whitelist"]
+  Edge --> Claude["Claude API"]
+  API --> DB[("Postgres + RLS + RPC + Triggers")]
 ```
 
-**One store, two modes.** [`src/store.jsx`](src/store.jsx) is the single source of truth — it
-owns React state *and* every Supabase call. A `dbMode` flag (`isSupabaseConfigured && a real
-project is selected && its BOQ lives in the DB`) decides where data comes from:
+資料存取只遵守三條規則：
 
-- **DB mode** — work items, valuations, schedule, site logs, quality, cost, safety, contract
-  obligations and per‑item schedules all load from / persist to Postgres, scoped to the project.
-- **Sample fallback** — if Supabase env vars are unset, or a project has no imported BOQ yet, the
-  app degrades to the bundled sample BOQ so the demo always runs. The UI shape is identical.
+1. 多頁共用、需要同步更新的專案資料放進 [src/store.jsx](src/store.jsx) 與 [src/store/slices](src/store/slices)。
+2. 只屬於單一頁面的有界資料，由頁面直接查 Supabase；目前只有 `Contract`、`Requirements`、`Activity` 三頁。
+3. 相同查詢真的出現兩次以上，才抽到 `src/lib` 或 `src/store/db.js`；不為形式統一新增 repository 層。
 
-**Request lifecycle.** Sign in → load this user's projects → pick the last‑used (or first) →
-load its `work_items` (paged 1,000 rows at a time past the PostgREST cap) → derive lookup maps
-(`item_key ↔ uuid`) → load valuations / schedule / site logs / quality / cost / safety / contract
-obligations / item schedules for that project.
+## 角色與 AI 邊界
 
-**The BOQ spine.** Import maps each parsed item to a client‑generated UUID so parent/child links
-survive the round‑trip (`parent_key → parent_id`), then inserts in `sort_order` so parents land
-before children (FK‑safe). Everything downstream references `work_item_id`, so quantities are
-never re‑keyed. Cumulative valuation amounts are computed as `contract_amount × (done_qty /
-contract_qty)` and rolled up the tree ([`lib/boqCalc.js`](src/lib/boqCalc.js)) — using
-amount×ratio (not unit‑price×qty) so a 100 %‑complete item bills exactly its contract amount with
-no rounding drift.
+| Agent | 使用者 | 主要工具 |
+|---|---|---|
+| 廠商 Agent | 廠商指派的專案人員 | 日誌、工項、照片、檢查表、試體、缺失與送審佐證 |
+| 監造 Agent | 監造工程師 | 查驗、送審審查、估驗勾稽 |
+| 機關 Agent | 主辦機關承辦人 | 契約期限、付款、驗收、跨文件稽核 |
 
-**AI features.** All are Supabase Edge Functions calling the Claude API (shared layer
-`functions/_shared/claude.ts`; Haiku for vision, Sonnet for long documents) with structured
-(json‑schema) output:
-- **read‑whiteboard** — a site-board photo → `{ log_date, weather, work_summary, items[] }`;
-  items are fuzzy‑matched back to BOQ leaves before filling the daily log.
-- **parse‑contract** — a contract (digital PDF/Word → text extracted in‑browser via `pdf.js` /
-  `mammoth`; scanned/image → base64 vision) → a list of obligations matching `contract_obligations`.
-  Deadlines are stored as **rules** (trigger event + offset days), so one parse re‑resolves against
-  the project's anchor dates and recomputes if a date slips.
+現場、品管與工安是廠商內部分工，不是權限角色。所有廠商成員可處理廠商範圍內的工作，由公司自行指派實際承辦人。
 
-### Data model
+所有 Agent 都遵守：
 
-All 24 domain tables are project‑scoped and cascade from `projects`. Every one has RLS enabled,
-gated by the caller's project membership (`my_project_ids()`).
+1. 只依本案資料與工具回傳內容回答。
+2. 不自行計算數字或捏造契約、法規條號。
+3. 只產生草稿與建議，不核定、判定、結案或驗收。
+4. 草稿寫入 `agent_actions`，由人接受或拒絕。
 
-| Table | Role |
+目前 16 個 AI／整合功能的註冊表位於：
+
+- [src/lib/aiFeatures.js](src/lib/aiFeatures.js)：前端顯示鏡像。
+- [supabase/functions/_shared/aiFeatures.ts](supabase/functions/_shared/aiFeatures.ts)：Edge Functions 鏡像。
+- DB `ai_features`：執行期權威來源。
+
+## 技術棧
+
+| 層 | 技術 |
 |---|---|
-| `profiles` | Extends `auth.users`; auto‑created on sign‑up via trigger (`org_type`, company, role). |
-| `projects` · `project_members` | A project and its membership; creator auto‑added as `admin`. Anchor dates (award/notice/commencement) live here. |
-| `work_items` | **The BOQ spine** — the PCCES work‑item tree (項次/數量/單價/複價, kind, leaf/rollup, billable, weight). |
-| `valuations` · `valuation_items` | Progress billing per period; items hold cumulative quantity + derived cum %/amount, tagged `source = manual \| daily_log`; invoice/payment fields for cash‑flow. |
-| `schedule_periods` · `item_schedules` | S‑curve baseline (monthly `planned_pct`) and per‑item planned start/finish. |
-| `daily_logs` · `daily_log_items` | One log per day; per‑item completed quantity that feeds valuations, plus the official‑format fields (labour/plant/materials/safety as JSONB). |
-| `photos` | Site‑log photo + markup metadata; files live in the `photos` Storage bucket (object‑level RLS by project). |
-| `inspections` · `defects` | Three‑tier QC; a failed inspection auto‑opens a linked defect (`markup_path` for circled evidence). |
-| `checklist_templates` · `checklist_records` | Self‑inspection checklists (quantified limits) and judged submissions. |
-| `test_samples` | Concrete specimens — 7/28‑day due dates and fc′ auto‑judgment. |
-| `observations` | Lightweight site notes; can escalate into a defect. |
-| `change_orders` · `change_order_items` | 變更設計 追加/減帳; approved net flows into the revised contract amount. |
-| `contract_obligations` | AI‑extracted time‑based duties + penalties (deadline stored as a rule). |
-| `cost_items` · `safety_records` | Cost ledger (budget vs. actual, subcontracts) and the safety log. |
-| `submittals` · `rfis` | Supervisor collaboration — submittal review flow and RFIs (`markup_path`). |
+| 前端 | React 18、Vite 6、React Router、Tailwind CSS 4 |
+| 後端 | Supabase Postgres、Auth、RLS、Storage、RPC、Deno Edge Functions |
+| AI | Claude Haiku／Sonnet／Opus，伺服器端功能閘門與用量計量 |
+| 文件解析 | PDF.js、Mammoth、PCCES XML DOMParser |
+| 測試 | Vitest、Playwright、pgTAP |
+| 部署 | Cloudflare Workers 靜態資產、GitHub Actions CI |
+| 監控／整合 | Sentry、中央氣象署 API、Resend Email |
 
-`SECURITY DEFINER` RPCs cover what RLS alone can't express: `create_project` /
-`delete_project`, and member management (`add_member_by_email`, `list_project_members`,
-`remove_member`) — email→user lookup and cross‑member reads need elevated rights.
+## 本機開發
 
----
-
-## Tech stack
-
-| Layer | Choices |
-|---|---|
-| Frontend | React 18 · Vite 5 · React Router 6 (HashRouter) · Tailwind CSS 4 |
-| Backend | Supabase — Postgres, Auth (email/password), Row Level Security, Storage, Edge Functions (Deno) |
-| AI | Claude API (Haiku 4.5 vision / Sonnet 5 long‑doc, forced tool‑use structured output) via Edge Functions; in‑browser text extraction with `pdf.js` (`pdfjs-dist`) and `mammoth` |
-| BOQ parsing | PCCES eTender XML via in‑browser `DOMParser` ([`src/lib/parsePcces.js`](src/lib/parsePcces.js)); a Python port lives in [`scripts/import_boq.py`](scripts/import_boq.py) |
-| Hosting | GitHub Pages (static SPA) |
-
-The SPA ships only a *publishable* key; security is the database's job (RLS). The
-`service_role` / secret key and the `OPENAI_API_KEY` live only as server‑side secrets (Edge
-Functions), never in the browser.
-
----
-
-## Getting started
+需求：Node.js 22.13.0 以上。
 
 ```bash
 git clone https://github.com/ryanxxhuang/PMIS.git
 cd PMIS
 npm install
-cp .env.example .env        # fill in VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
-npm run dev                 # http://localhost:5173
-npm test                    # vitest — BOQ maths, contract deadlines, PCCES parser
+cp .env.example .env
+npm run dev
 ```
 
-CI (GitHub Actions) runs `npm test` + `npm run build` on every push and PR to `main`.
+`.env` 至少需要：
 
-Backend (Supabase project + schema): see **[supabase/SETUP.md](supabase/SETUP.md)**.
-The full, idempotent database schema is one file: **[supabase/schema.sql](supabase/schema.sql)** —
-paste it into the SQL editor and run.
+```text
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<publishable-key>
+```
 
-**AI features** (optional) need the Edge Functions deployed and an Anthropic key set:
+未設定 Supabase 時，前端會進入內建 Demo 模式。
+
+## 驗證
 
 ```bash
-supabase functions deploy parse-contract
-supabase functions deploy read-whiteboard
-supabase secrets set OPENAI_API_KEY=sk-...
+npm test
+npm run test:e2e
+npm run build
 ```
 
-## Deploy
+資料庫的 RLS、RPC 與狀態轉移測試在 [supabase/tests](supabase/tests)。
 
-GitHub Pages in one command (build + push to the `gh-pages` branch):
+2026-08-12 基線：494 個 Vitest 測試與 12 個 Playwright E2E 通過，正式建置成功。
 
-```bash
-npm run deploy
-```
+## Supabase 與部署
 
-The app uses `HashRouter` and relative asset paths, so it runs from any static host or
-sub‑path with no server‑side routing config.
+- 後端設定：[supabase/SETUP.md](supabase/SETUP.md)
+- 資料庫唯一真相：[supabase/migrations](supabase/migrations)
+- `supabase/schema.sql`：凍結的歷史參考，不用來初始化或同步資料庫。
+- Cloudflare 設定：[wrangler.jsonc](wrangler.jsonc)
+- 正式站搬遷紀錄：[docs/Cloudflare搬家-逐步設定指南.md](docs/Cloudflare搬家-逐步設定指南.md)
 
----
+推送到 `main` 後，由 Cloudflare Workers 的 repository build 流程部署。`npm run deploy` 是已停用的舊流程，會主動失敗。
 
-## Project structure
+## 專案結構
 
-```
+```text
 src/
-  lib/
-    supabase.js      Supabase client (guarded — falls back to a sample mode if unset)
-    parsePcces.js    PCCES budget XML → work-item tree (browser DOMParser)
-    boqCalc.js       tree building + cumulative-amount maths (shared by valuation/progress/cost)
-    contractDue.js   resolve an obligation's due date from trigger + rule + anchor dates
-    exportCsv.js     table → CSV download (UTF-8 BOM for Excel CJK)
-  pages/
-    Login.jsx        auth (sign-in / sign-up)
-    web/             ProjectSetup · Dashboard · Alerts · Contract · BOQ · SiteLog ·
-                     Valuation · ValuationPrint · Payments · Cost · Progress ·
-                     Schedule · Quality · Safety
-  components/        Layout.jsx (app shell + responsive nav) · ui.jsx (shared primitives)
-  data/              workItems.json (sample BOQ) · seed.js (small no-Supabase fallback)
-  store.jsx          single context: all React state + every Supabase read/write
-  App.jsx            routes + auth/project gating
+├── App.jsx                 路由與身分／角色守衛
+├── components/             共用 UI、Layout、Copilot、缺失與標註元件
+├── data/                   Demo 與內建工程資料
+├── lib/                    確定性引擎、文件、需求、稽核與支援函式
+├── pages/                  34 個頁面檔
+├── store.jsx               Store 組合根與跨領域派生資料
+└── store/slices/           9 個狀態／資料操作 slices
+
 supabase/
-  schema.sql         complete database schema, RLS + RPCs (idempotent)
-  functions/         Edge Functions — parse-contract · read-whiteboard (Claude API)
-  SETUP.md           backend setup guide
-scripts/
-  import_boq.py      offline PCCES XML → JSON importer (used to seed the sample BOQ)
+├── functions/              16 個 Edge Functions 與共用 Agent／AI 層
+├── migrations/             Schema、RLS、RPC、Trigger 的唯一真相
+├── tests/                  pgTAP 安全與狀態流程測試
+├── rollbacks/              少數明確支援的回復腳本
+└── SETUP.md                後端設定
+
+docs/
+├── README.md               文件索引與狀態
+├── DECISIONS.md            已定案決策
+├── ROADMAP.md              待確認的整理順序
+├── architecture/           已實作架構決策
+├── 資安/                   資安政策、符合性與弱掃證據
+├── 採購/                   採購與簽辦資料
+└── pitch/                  對外簡報與產生工具
 ```
 
-## Security
+## 文件閱讀順序
 
-Every table has Row Level Security enabled, sharing one `is_project_member()` predicate; the
-`photos` Storage bucket is gated the same way at the object level. The publishable key is
-designed to be public — it is RLS, not the key, that protects data. Secret keys
-(`service_role`, `OPENAI_API_KEY`) live only in Edge Function secrets, never in the browser.
+1. [DEVELOPMENT.md](DEVELOPMENT.md)：文件先行、簡單化原則與完成定義。
+2. [CURRENT.md](CURRENT.md)：目前產品、系統現況與已知架構債。
+3. [docs/DECISIONS.md](docs/DECISIONS.md)：已定案且不得自行推翻的決策。
+4. [docs/ROADMAP.md](docs/ROADMAP.md)：候選改動；未核准前不得實作。
+5. [docs/README.md](docs/README.md)：其餘文件的用途與時效。
+6. [docs/PROJECT_TREE.md](docs/PROJECT_TREE.md)：完整專案樹與各目錄責任。
 
----
-
-<sub>Sample data is the public PCCES budget for the 國際原住民族文化創意產業園區新建工程 tender
-(~NT$0.94B, 3,262 work items), used purely to demonstrate the BOQ pipeline.</sub>
+`SCOPE.md`、`PRD.md` 與日期式報告均為歷史快照；除非要追溯決策，不用它們判斷目前功能。

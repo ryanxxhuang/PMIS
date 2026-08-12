@@ -326,13 +326,13 @@ function DraftInboxCard() {
 
 export default function Agent() {
   const { data, facts, imported, org } = useAssistantData()
-  const { runAgent, currentProjectMembership, demoMode, currentUser, aiEnabled } = useStore()
+  const { runAgent, aiEnabled } = useStore()
   const agentOn = aiEnabled('agent.run') // 批 B UX:功能關閉時藏對話入口(真正的閘門在伺服器端)
 
   // 角色只用於顯示(紅線:權限一律以伺服器為準);agent-run 回傳的 role 覆蓋前端推算
   const [serverRole, setServerRole] = useState(null)
-  const role = serverRole || displayAgentRole({ demoMode, currentUser, projectRole: currentProjectMembership?.project_role, orgType: org })
-  const label = AGENT_LABEL[role] || AGENT_LABEL.field
+  const role = serverRole || displayAgentRole({ orgType: org })
+  const label = AGENT_LABEL[role] || AGENT_LABEL.contractor
 
   // 對話 history 由 onAsk 這層自行累積(CopilotChat 的訊息串是它的內部 state):
   // 前端先收斂到最近 10 則、每則 2000 字元省 token(後端另有 20 則/4000 上限)
