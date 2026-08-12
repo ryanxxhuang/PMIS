@@ -16,6 +16,7 @@ import { normalizeSourceText } from '../../supabase/functions/_shared/sourceVeri
 
 export const PDF_EXTRACTION_METHOD = 'pdf_text'
 export const DOCX_EXTRACTION_METHOD = 'docx_text_unpaginated'
+export const TXT_EXTRACTION_METHOD = 'txt_text_unpaginated'
 // Below this normalized length a page has no verifiable content.
 export const MIN_PAGE_TEXT_LENGTH = 20
 // DOCX storage segment size (characters, before normalization).
@@ -78,6 +79,14 @@ export function buildDocxPageRecords(rawText, segmentLength = DOCX_SEGMENT_LENGT
   }))
 }
 
+export function buildTxtPageRecords(rawText, segmentLength = DOCX_SEGMENT_LENGTH) {
+  return segmentUnpaginatedText(rawText, segmentLength).map((segment, i) => ({
+    page_number: i + 1,
+    extracted_text: segment,
+    extraction_method: TXT_EXTRACTION_METHOD,
+  }))
+}
+
 export function hasExtractableText(pages) {
   return (pages || []).some(
     (p) => normalizeSourceText(p.extracted_text).length >= MIN_PAGE_TEXT_LENGTH,
@@ -90,6 +99,10 @@ export async function extractDocumentPages(file) {
   const name = (file.name || '').toLowerCase()
   const type = file.type || ''
   const buffer = await file.arrayBuffer()
+  if (name.endsWith('.txt') || type === 'text/plain') {
+    const text = new TextDecoder('utf-8').decode(buffer)
+    return { pages: buildTxtPageRecords(text), pagination: 'unpaginated', buffer }
+  }
   if (name.endsWith('.docx') || type.includes('officedocument.wordprocessing')
     || type.includes('msword')) {
     const m = await import('mammoth/mammoth.browser')
@@ -109,5 +122,5 @@ export async function extractDocumentPages(file) {
     }
     return { pages: buildPdfPageRecords(rawPages), pagination: 'paginated', buffer }
   }
-  throw new Error('僅支援 PDF 或 Word(.docx)文件')
+  throw new Error('僅支援 PDF、Word(.docx)或純文字(.txt)文件')
 }

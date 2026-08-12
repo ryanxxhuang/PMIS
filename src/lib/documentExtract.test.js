@@ -3,8 +3,10 @@ import {
   DOCX_EXTRACTION_METHOD,
   MIN_PAGE_TEXT_LENGTH,
   PDF_EXTRACTION_METHOD,
+  TXT_EXTRACTION_METHOD,
   buildDocxPageRecords,
   buildPdfPageRecords,
+  buildTxtPageRecords,
   hasExtractableText,
   segmentUnpaginatedText,
 } from './documentExtract.js'
@@ -67,6 +69,16 @@ describe('segmentUnpaginatedText / buildDocxPageRecords', () => {
   it('returns no records for empty text', () => {
     expect(buildDocxPageRecords('')).toEqual([])
     expect(buildDocxPageRecords('   \n  ')).toEqual([])
+  })
+})
+
+describe('buildTxtPageRecords', () => {
+  it('stores UTF-8 text as unpaginated segments for Requirement ingestion', () => {
+    expect(buildTxtPageRecords('第十條\n乙方應於期限前提送品質計畫')).toEqual([{
+      page_number: 1,
+      extracted_text: '第十條\n乙方應於期限前提送品質計畫',
+      extraction_method: TXT_EXTRACTION_METHOD,
+    }])
   })
 })
 
