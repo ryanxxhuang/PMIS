@@ -23,6 +23,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 // 批 B:reminder.daily 逐專案過 ai_feature_allowed;用量走低階 recordAiUsage
 // (本函式無使用者 JWT、以 service role 掃全部專案,不適用 openAiGate)
 import { recordAiUsage } from '../_shared/aiGate.ts'
+import { gateVerdict } from '../_shared/gatePolicy.ts'
 import { taipeiTodayUTC, formatDate } from '../_shared/contractDue.ts'
 import { agentRoleOf, AGENT_NAME } from '../_shared/agentRole.ts'
 import type { AgentRole } from '../_shared/agentPersona.ts'
@@ -61,21 +62,26 @@ Deno.serve(async (req) => {
 
   for (const p of projects || []) {
     // ── 0) 批 B:reminder.daily 功能閘門(逐專案)──────────────────────────────
-    // RPC 查詢失敗 → 保守放行並 log(這是計量/商業閘門,不是安全邊界);
-    // 回 false → 跳過本專案不寄信,記一筆 blocked(actor=system、user null)。
+    // 查詢失敗 fail-closed 跳過本專案(W3-4/D-010,判定同 gateVerdict);
+    // 回 false → 跳過不寄信。兩者都記 blocked(actor=system、user null);
     // dry=1 模式一律不記帳,避免測試污染用量資料。
     const { data: allowed, error: allowError } = await supabase
       .rpc('ai_feature_allowed', { p_project: p.id, p_feature: 'reminder.daily' })
     if (allowError) {
-      console.error(`ai_feature_allowed 查詢失敗(reminder.daily,專案 ${p.id},保守放行):`, allowError.message)
-    } else if (allowed === false) {
+      console.error(`ai_feature_allowed 查詢失敗(reminder.daily,專案 ${p.id},fail-closed 跳過):`, allowError.message)
+    }
+    const verdict = gateVerdict('reminder.daily', allowed as boolean | null, !!allowError)
+    if (!verdict.allow) {
       if (!dry) {
         await recordAiUsage(supabase, {
           feature: 'reminder.daily', projectId: p.id, userId: null, actor: 'system',
-          status: 'blocked', errorCode: 'feature_disabled',
+          status: 'blocked', errorCode: verdict.code,
         })
       }
-      results.push({ project: p.name, skipped: 'reminder.daily 未啟用' })
+      results.push({
+        project: p.name,
+        skipped: verdict.code === 'gate_unavailable' ? 'reminder.daily 開關暫時無法確認(fail-closed 跳過)' : 'reminder.daily 未啟用',
+      })
       continue
     }
 

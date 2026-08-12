@@ -19,7 +19,7 @@
 - [x] W0 可追蹤基準
 - [x] W1 標單資料安全 — PR #2（未部署：migration 與前端需同批上線）
 - [x] W2 單一初始化流程 — PR #3(stacked on #2),含本機 Supabase 瀏覽器實測
-- [ ] W3 單一 Agent 體驗
+- [x] W3 單一 Agent 體驗 — PR #4(stacked on #3)
 - [ ] W4 成員與正式模式
 - [ ] W5 一次一項架構債
 - [ ] W6 最小真案驗收
@@ -47,19 +47,19 @@
 
 ## W3｜單一 Agent 體驗（D-008）
 
-- [ ] **W3-1 /assistant 能力盤點＋導向**
+- [x] **W3-1 /assistant 能力盤點＋導向**
   範圍：逐工具比對 `/assistant`（`assistant.chat`）與 `/agent`（`agent.run`）能力；確認無獨有能力後，`/assistant` 路由 302 到 `/agent`（保留路由不刪）。有獨有能力則先停下來回報使用者。
   不做：不刪 `assistant` edge function、不動 DB。
   驗收：直接輸入 `/assistant` 網址會到 `/agent`；能力比對結論寫在 PR。
-- [ ] **W3-2 浮動 Copilot 收斂為薄入口**
+- [x] **W3-2 浮動 Copilot 收斂為薄入口**
   範圍：浮動按鈕改為開啟同一 Agent（同 session 或明示「新對話」，擇一實作並寫進 PR）；移除「已匯 BOQ 才出現」的限制（對齊 W2-3）。
   不做：不做跨裝置對話歷史、不加聊天資料庫。
   驗收：浮動入口與 `/agent` 行為一致；使用者能分辨這是同一個 Agent。
-- [ ] **W3-3 assistant.chat 功能退場**
+- [x] **W3-3 assistant.chat 功能退場**
   範圍：前端不再呼叫 `assistant.chat`；`ai_features` 標記停用（不刪列、不刪 edge function 檔案）；用量歷史保留。
   不做：不刪任何 DB 資料與歷史。
   驗收：全站僅剩 `agent.run` 一個對話功能開關；`/admin` 用量頁仍能看歷史。
-- [ ] **W3-4 AI 閘門 fail-closed（D-010、P1-07）**
+- [x] **W3-4 AI 閘門 fail-closed（D-010、P1-07）**
   範圍：`_shared/aiGate.ts` 查詢失敗改為拒絕（fail-closed）＋清楚錯誤訊息；用量寫入失敗不擋回應但記 log 告警（既有 log 管道即可）。
   不做：不做補記後台、不改方案模型。
   驗收：模擬 `ai_feature_allowed` 查詢失敗 → 功能拒絕服務；恢復後正常。附對應測試。
@@ -120,3 +120,4 @@
 - `(project_id, item_key)` 部分唯一索引（待正式資料盤點）
 - pgTAP 進 CI（P2-08）
 - 已核定估驗／檢查紀錄擋重設的 UX 磨光（guard 訊息措辭）
+- agent-run 回答補出處連結（sources）——/assistant 唯一獨有的輸出格式，導向後暫以 steps 摘要代替

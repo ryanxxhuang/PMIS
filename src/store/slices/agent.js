@@ -9,6 +9,20 @@
 import { useState, useCallback, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 
+// functions.invoke 對非 2xx 只回通用訊息(FunctionsHttpError),伺服器的中文錯誤
+// (403 功能停用/503 閘門 fail-closed)在 error.context(Response)body 裡——
+// 撈出來,「清楚錯誤訊息」才到得了使用者眼前(PR #4 review;純函式,有測試)。
+export async function extractInvokeError(error, data, fallbackMsg = 'AI agent 暫時無法使用') {
+  if (error) {
+    try {
+      const body = await error.context?.json?.()
+      if (body?.error) return String(body.error)
+    } catch { /* body 不是 JSON 或已被消費 → 退回通用訊息 */ }
+    return error.message || fallbackMsg
+  }
+  return data?.error ? String(data.error) : fallbackMsg
+}
+
 // 日誌草稿 payload → saveSiteLog 入參的形狀轉換(純函式,agent.test.js 有測)。
 // payload.items 形如 { [work_item_id(uuid)]: { qty_today, needs_input, source } }(後端 draft_daily_log 產),
 // saveSiteLog 的 items 則是 { [item_key]: 數量 } ——它內部用 wiMaps.byKey 以 item_key 查回 uuid
@@ -127,14 +141,14 @@ export function useAgentSlice({ demoMode, isPersistedProject, currentProject, cu
   }, [demoMode, isPersistedProject, currentProject?.project_id, currentUser?.user_id, reloadKey])
 
   // 對話:送本案 facts 快照 + 對話 history 給 agent-run,agent 自行呼叫唯讀工具再回答。
-  // demo/未設 Supabase → fallback(UI 走確定性回退,同 askAssistant 既有模式)。
+  // demo/未設 Supabase → fallback(UI 走確定性回退)。
   // 回傳的 role 由伺服器決定;前端算的角色只用於顯示,以回傳值為準。
   const runAgent = useCallback(async (message, { facts, history } = {}) => {
     if (demoMode || !isSupabaseConfigured || !isPersistedProject) return { fallback: true }
     const { data, error } = await supabase.functions.invoke('agent-run', {
       body: { project_id: currentProject.project_id, message, facts, history },
     })
-    if (error || !data || data.error) return { error: error?.message || data?.error || 'AI agent 暫時無法使用' }
+    if (error || !data || data.error) return { error: await extractInvokeError(error, data) }
     return { text: data.text, role: data.role, steps: data.steps || [], usage: data.usage, stop_reason: data.stop_reason }
   }, [demoMode, isPersistedProject, currentProject])
 

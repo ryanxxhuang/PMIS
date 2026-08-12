@@ -283,16 +283,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return data // { am, pm, township, source }
   }, [currentProject])
 
-  // 開放式 copilot 問答:送本案 facts 快照到 assistant-chat edge fn。
-  // demo/未設 Supabase → 回 fallback,由 Assistant.jsx 改用確定性 answerQuestion。
-  const askAssistant = useCallback(async (question, facts) => {
-    if (!isSupabaseConfigured) return { fallback: true }
-    const { data, error } = await supabase.functions.invoke('assistant-chat', {
-      body: { question, facts, project_id: currentProject?.project_id },
-    })
-    if (error || data?.error) return { error: error?.message || data?.error || 'AI 服務暫時無法使用' }
-    return { answer: data.answer, sources: data.sources || [] }
-  }, [currentProject])
+  // (W3-3)askAssistant/assistant-chat 已退場:對話一律走 agent slice 的 runAgent(agent.run)
 
   // 工安：新增 / 更新 / 刪除工安紀錄（demo 只進記憶體）。
   // 工安缺失已併入統一缺失引擎(defects, domain='safety',見 quality slice)——
@@ -344,7 +335,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   return {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
-    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, auditSummary, askAssistant, fetchWeather,
+    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   }
 }

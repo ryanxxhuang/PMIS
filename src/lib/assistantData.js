@@ -12,7 +12,7 @@ export function useAssistantData() {
   const store = useStore()
   const { project, currentUser, workItems, valuations, progressPlan, siteLogs, inspections, defects,
     testSamples, obligations, changeOrders, submittals, rfis, observations, safetyRecords, acceptanceEvents,
-    demoMode, workItemsSource, askAssistant, adjustedItems, revisedTotal } = store
+    demoMode, workItemsSource, adjustedItems, revisedTotal } = store
   const org = currentUser?.org_type || 'contractor'
   const imported = workItemsSource === 'db' || demoMode
 
@@ -57,5 +57,5 @@ export function useAssistantData() {
     ...data, org, submittals, rfis, safetyRecords, acceptanceEvents,
   }, TODAY), [data, org, submittals, rfis, safetyRecords, acceptanceEvents]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { data, facts, askAssistant, imported, org }
+  return { data, facts, imported, org }
 }

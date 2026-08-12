@@ -17,6 +17,7 @@ import { claudeAgent } from '../_shared/agent.ts'
 // 的身分/成員流程),記帳走同一支低階 recordAiUsage(紅線:記帳失敗絕不影響回應)
 import { recordAiUsage } from '../_shared/aiGate.ts'
 import { featureByKey } from '../_shared/aiFeatures.ts'
+import { gateVerdict } from '../_shared/gatePolicy.ts'
 import { personaSystem } from '../_shared/agentPersona.ts'
 import type { AgentRole } from '../_shared/agentPersona.ts'
 import { makeToolExec, toolsForRole } from '../_shared/agentTools.ts'
@@ -67,20 +68,22 @@ Deno.serve(async (req) => {
     if (projectError) return json({ error: projectError.message }, 500)
     if (!project) return json({ error: '找不到專案或無權限' }, 404)
 
-    // -- 批 B:AI 功能閘門(計量/商業閘門,非安全邊界——資料安全靠 RLS)---------
-    // RPC 查詢失敗 → 保守放行並 log:讓計量層故障導致 agent 全倒是不合理的爆炸半徑;
-    // 正常回 false(平台關閉/方案不足)→ 記 blocked 並擋下。
+    // -- 批 B:AI 功能閘門——查詢失敗 fail-closed(W3-4/D-010,判定同 aiGate)------
+    // kill switch 與方案限制在 DB 故障時仍必須有效;正常回 false(平台關閉/方案
+    // 不足)回 403,查詢失敗回 503,兩者都記 blocked 用量。
     const { data: allowed, error: allowError } = await userClient
       .rpc('ai_feature_allowed', { p_project: projectId, p_feature: 'agent.run' })
     if (allowError) {
-      console.error('ai_feature_allowed 查詢失敗(agent.run,保守放行):', allowError.message)
-    } else if (allowed === false) {
+      console.error('ai_feature_allowed 查詢失敗(agent.run,fail-closed 擋下):', allowError.message)
+    }
+    const label = featureByKey['agent.run']?.label || 'agent.run'
+    const verdict = gateVerdict(label, allowed as boolean | null, !!allowError)
+    if (!verdict.allow) {
       await recordAiUsage(serviceClient, {
         feature: 'agent.run', projectId, userId: user.id, actor: 'user',
-        durationMs: Date.now() - startedAt, status: 'blocked', errorCode: 'feature_disabled',
+        durationMs: Date.now() - startedAt, status: 'blocked', errorCode: verdict.code,
       })
-      const label = featureByKey['agent.run']?.label || 'agent.run'
-      return json({ error: `此 AI 功能未啟用(${label}),請聯絡系統管理者`, code: 'feature_disabled' }, 403)
+      return json({ error: verdict.message, code: verdict.code }, verdict.status)
     }
 
     // -- 角色由伺服器決定 ------------------------------------------------------

@@ -26,10 +26,21 @@ const TOOL_LABEL = {
 const stepLabels = (steps) =>
   [...new Set((steps || []).filter((s) => s.ok !== false).map((s) => TOOL_LABEL[s.tool] || s.tool))]
 
+// 回覆分流(PR #4 review 釘住的 fail-closed 前端半邊):
+//   answer → AI 回答;error → 如實顯示錯誤(絕不偽裝成離線快答——否則伺服器端
+//   的 403 功能停用/503 閘門故障會被前端靜默吃掉,fail-closed 形同失效);
+//   其餘(fallback:demo/未設 Supabase)→ 確定性離線快答。
+// res.error 相容字串(runAgent)與 { message }(其他 slice)兩種形狀。
+export function replyMessage(res, deterministic) {
+  if (res?.answer) return { role: 'ai', text: res.answer, sources: res.sources || [], steps: stepLabels(res.steps), mode: 'ai' }
+  if (res?.error) return { role: 'ai', text: String(res.error.message || res.error), sources: [], mode: 'error' }
+  return deterministic()
+}
+
 // fill=true:填滿父容器(浮動面板固定高,訊息區 flex-1 撐開、輸入貼底,消除下方留白)。
 // fill=false:頁面版,訊息區以 minH/maxH 內部捲動。
 // onAsk:統一的問答函式 (text) => Promise<{ answer, sources?, steps? } | { fallback: true } | { error }>
-// ——呼叫端自己決定接 assistant-chat 或 agent-run;fallback / error 都走確定性回退(data)。
+// ——呼叫端自己決定接 agent-run 與否;分流規則見 replyMessage。
 export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill = false }) {
   const [msgs, setMsgs] = useState([])
   const [q, setQ] = useState('')
@@ -50,9 +61,8 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
     if (!text || busy) return
     setQ(''); setMsgs((m) => [...m, { role: 'user', text }]); setBusy(true)
     const res = await onAsk(text) // AI 優先
-    let ai
-    if (res?.answer) ai = { role: 'ai', text: res.answer, sources: res.sources || [], steps: stepLabels(res.steps), mode: 'ai' }
-    else ai = fallbackAnswer(text) // res.fallback(demo) 或 res.error 都走這
+    const ai = replyMessage(res, () => fallbackAnswer(text))
+    if (ai.mode === 'error') ai.retry = text // 錯誤訊息旁給「重試」重問同一句
     setBusy(false)
     setMsgs((m) => [...m, ai])
   }
@@ -69,7 +79,9 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
           <div key={i} className={`enter-row ${m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}`}>
             <div className="max-w-[85%] min-w-0">
               <div className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-line ${
-                m.role === 'user' ? 'bg-[var(--primary)] text-white rounded-br-sm' : 'bg-[var(--surface-2)] text-[var(--text)] rounded-bl-sm'}`}>
+                m.role === 'user' ? 'bg-[var(--primary)] text-white rounded-br-sm'
+                  : m.mode === 'error' ? 'bg-[var(--red-tint,transparent)] border border-[var(--red-text)]/25 text-[var(--red-text)] rounded-bl-sm'
+                    : 'bg-[var(--surface-2)] text-[var(--text)] rounded-bl-sm'}`}>
                 {m.role === 'ai' ? stripMd(m.text) : m.text}
                 {m.sources?.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
@@ -93,6 +105,15 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
                     className="inline-block px-1.5 py-0.5 rounded-full border border-[var(--border-2)] bg-[var(--surface-2)]">
                     離線快答
                   </span>
+                </div>
+              )}
+              {/* fail-closed 的錯誤如實顯示後,給重試(閘門恢復後重問同一句即可) */}
+              {m.mode === 'error' && (
+                <div className="mt-1 px-1">
+                  <button onClick={() => ask(m.retry)} disabled={busy}
+                    className="text-[11px] text-[var(--blue-text)] hover:underline pressable disabled:opacity-40">
+                    重試
+                  </button>
                 </div>
               )}
             </div>
