@@ -39,7 +39,7 @@ test.describe('監造', () => {
     await expect(page.getByPlaceholder('唯讀檢視')).toBeDisabled()
     await expect(page.getByPlaceholder('今日施工概況')).toBeDisabled()
     await expect(page.getByRole('button', { name: '存檔', exact: true })).toHaveCount(0)
-    await expect(page.getByText('AI 批次辨識照片', { exact: true })).toHaveCount(0) // U-01:不給死按鈕
+    await expect(page.getByText('選照片 AI 辨識後上傳', { exact: true })).toHaveCount(0) // U-01:不給死按鈕(P0 #11 改名後同步)
   })
 
   test('路由守衛:監造進不了請款收款', async ({ page }) => {

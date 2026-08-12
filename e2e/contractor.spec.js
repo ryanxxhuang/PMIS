@@ -20,7 +20,7 @@ test.describe('施工廠商', () => {
     await expect(page.getByText('已存檔 ✓')).toBeVisible()
     // 跨元件同步:列印鈕出現、照片區解鎖(P-01 tracked store 的回歸點)
     await expect(page.getByRole('button', { name: /列印公定格式日誌/ })).toBeVisible()
-    await expect(page.getByText('AI 批次辨識照片', { exact: true })).toBeVisible()
+    await expect(page.getByText('選照片 AI 辨識後上傳', { exact: true })).toBeVisible() // P0 #11 改名:區分「選檔辨識」與「辨識已上傳」兩條路
   })
 
   test('契約義務:標為已提送可掛送審佐證(W-01)', async ({ page }) => {
