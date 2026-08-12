@@ -1,0 +1,63 @@
+name: pgTAP
+
+# 資料庫護欄(P2-08):RLS/RPC/Guard Trigger 是安全邊界,全套 pgTAP 必須在
+# 資料庫相關變更的 PR 上自動執行——不能只靠本機記得跑。
+# 只在動到 migrations/tests/config 時觸發,不拖慢一般前端 PR。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/pgtap.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/pgtap.yml'
+
+jobs:
+  pgtap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # 與本機跑法同一套(docs/REAL_BACKEND_E2E.md 的 staging 章節、記憶中的
+      # colima 最小服務組):起本機 stack → db reset 套全部 migrations →
+      # 容器內 psql 逐檔執行。排除的服務 pgTAP 用不到;未知服務名 CLI 只警告。
+      - name: 啟動本機 Supabase(最小服務組)
+        run: supabase start -x analytics,vector,edge-runtime,imgproxy,inbucket,realtime,storage,studio
+      - name: 從零套用全部 migrations
+        run: supabase db reset
+      - name: 執行全套 pgTAP
+        run: |
+          docker exec supabase_db_PMIS psql -U postgres -d postgres \
+            -c "create extension if not exists pgtap with schema public;"
+          total_ok=0; failed=0
+          for f in supabase/tests/*.sql; do
+            # ON_ERROR_STOP:檔案中途的 SQL 錯誤立即讓 psql 以非零退出——
+            # 不能讓「前半已印出 ok、後半整段爛掉」的檔案溜成綠燈。
+            out=$( (echo "set search_path = extensions, public;"; cat "$f") \
+              | docker exec -i supabase_db_PMIS psql -U postgres -d postgres \
+                  -v ON_ERROR_STOP=1 -q -t -A -f - 2>&1 ); rc=$?
+            ok=$(printf '%s\n' "$out" | grep -c "^ok " || true)
+            notok=$(printf '%s\n' "$out" | grep -c "^not ok" || true)
+            planmiss=$(printf '%s\n' "$out" | grep -c "Looks like you planned" || true)
+            total_ok=$((total_ok + ok))
+            # 四種都算失敗:not ok、psql 非零退出(SQL 錯誤)、plan 數不符、整檔跑不出 ok
+            if [ "$notok" != "0" ] || [ "$rc" != "0" ] || [ "$planmiss" != "0" ] || [ "$ok" = "0" ]; then
+              echo "::error file=$f::pgTAP 失敗(ok=$ok, not_ok=$notok, psql_rc=$rc, plan_mismatch=$planmiss)"
+              printf '%s\n' "$out" | grep -E "not ok|# |ERROR|FATAL" | head -40
+              failed=1
+            else
+              echo "$(basename "$f"): $ok ok"
+            fi
+          done
+          echo "=== pgTAP TOTAL ok=$total_ok ==="
+          exit $failed

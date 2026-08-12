@@ -24,3 +24,4 @@ mobile-home.png
 self-inspection.png
 發包圖說*.zip
 .wrangler/
+.env.e2e.real
