@@ -24,7 +24,7 @@
 - [x] W5 一次一項架構債 — PR #6，已部署（migrations `20260812000500`、`20260812000600`）
 - [ ] W6 最小真案驗收
 
-**目前續接點：W6-1 真後端 E2E 基建。** W5 已由 PR #6 合併並部署；正式庫 migration history 已到 `20260812000600`，第二次 dry-run 無待套項目，遠端 DB lint、main CI、Cloudflare Workers build 與正式站 HTTP 冒煙均通過。W6 尚未開始。
+**目前續接點：W6-1 真後端 E2E 基建。** W5 已由 PR #6 合併並部署；正式庫 migration history 已到 `20260812000600`，`agent-run` v9／`send-reminders` v10 已更新，第二次 dry-run 無待套項目，遠端 DB lint、Edge Functions 安全冒煙、main CI、Cloudflare Workers build 與正式站 HTTP 冒煙均通過。W6 尚未開始。
 
 ---
 
@@ -108,7 +108,7 @@
   驗收：列出處理了哪幾條規則，各附一個回歸測試。
   本機證據（2026-08-12）：盤點後只處理一條可重現漂移——試體不合格時 Demo 曾因 React updater 時序漏開缺失，重試又未依 `test_sample_id` 去重；正式 DB trigger 會同交易建立且冪等。已抽 `deriveTestSampleUpdate`／`shouldCreateTestSampleDefect`，並各有純函式測試及一條整合回歸。522 Vitest、12 E2E、23 檔 720 pgTAP、build 與 DB lint 全綠；未新增 migration，其他潛在同步點未重構。
 
-W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單向 migration／rollback／pgTAP、W5-3 comment-only migration、W5-4 純函式與回歸測試均逐項符合上述範圍；PR 審查發現並補上 supersede 不得殘留待辦提醒的回歸，沒有新增架構或擴大重構。最新全套結果為 523 Vitest、12 E2E、23 檔 723 pgTAP、build 與 DB lint 全綠；PR #6、正式 migrations、main CI 與 Cloudflare Workers 均已部署驗證。
+W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單向 migration／rollback／pgTAP、W5-3 comment-only migration、W5-4 純函式與回歸測試均逐項符合上述範圍；PR 審查發現並補上 supersede 不得殘留待辦提醒的回歸，沒有新增架構或擴大重構。最新全套結果為 523 Vitest、12 E2E、23 檔 723 pgTAP、build 與 DB lint 全綠；PR #6、正式 migrations、`agent-run`／`send-reminders`、main CI 與 Cloudflare Workers 均已部署驗證。
 
 ## W6｜最小真案驗收（不以 demo 通過代替真後端）
 

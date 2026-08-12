@@ -105,7 +105,7 @@ contract_packages
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
 - 57 個 Vitest 測試檔，共 523 個測試；12 個 Playwright 三角色 E2E；23 組 pgTAP SQL 測試。
 
-最近一次全套驗證（W5 PR #6，2026-08-12）：523 個單元測試、12 個 E2E、23 檔共 723 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W5 已合併至 `main` 並部署；2026-08-13 正式資料庫已套用至 `20260812000600`，第二次 dry-run 顯示無待套 migration、遠端 DB lint 零錯誤。main CI 與 Cloudflare Workers build 均成功，正式站首頁及 `/requirements` 深層路由回應 HTTP 200。
+最近一次全套驗證（W5 PR #6，2026-08-12）：523 個單元測試、12 個 E2E、23 檔共 723 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W5 已合併至 `main` 並部署；2026-08-13 正式資料庫已套用至 `20260812000600`，第二次 dry-run 顯示無待套 migration、遠端 DB lint 零錯誤。`agent-run` v9 與 `send-reminders` v10 已重部署且為 ACTIVE，未帶 JWT／cron secret 的安全冒煙均回 401。main CI 與 Cloudflare Workers build 均成功，正式站首頁及 `/requirements` 深層路由回應 HTTP 200。
 
 標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 
