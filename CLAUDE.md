@@ -4,14 +4,14 @@
 
 ---
 
-## 0. 目前續接點（2026-08-12）
+## 0. 目前續接點（2026-08-13）
 
-- W0～W4 已合併至 `main` 並部署；不要重做文件基準、標單原子化、初始化流程、單一 Agent 或成員／正式模式。
+- W0～W5 已合併至 `main` 並部署；不要重做文件基準、標單原子化、初始化流程、單一 Agent、成員／正式模式或 W5 架構債。
 - **W5-1 已完成**：唯讀盤點與 A／B 代價見 `docs/W5-1-Requirement-Obligation-決策書.md`。
 - 使用者已選 A（D-012）：`requirements` 是唯一權威，approved deadline Requirement 單向產生 obligation；obligation 執行狀態不反向改寫 Requirement。
-- **W5-2～W5-4 已提交至 PR #6，不要重做**：Requirement 單向 migration／rollback、legacy caller 退場、成員模型防誤用，以及試體缺失 Demo／DB 漂移修正均已完成；PR 審查補上 supersede 不得殘留待辦提醒的回歸，保留資料與歷史但從現行前端／Agent 清單排除。最新基線為 523 Vitest、12 E2E、723 pgTAP；尚未合併或部署。下一動作是核 PR，未經使用者明確授權不得合併、部署或開始 W6。
+- **W5-2～W5-4 已由 PR #6 部署，不要重做**：Requirement 單向 migration／rollback、legacy caller 退場、成員模型防誤用，以及試體缺失 Demo／DB 漂移修正均已完成；PR 審查補上 supersede 不得殘留待辦提醒的回歸，保留資料與歷史但從現行前端／Agent 清單排除。最新基線為 523 Vitest、12 E2E、723 pgTAP；正式資料庫已到 `20260812000600`。下一工作包是 W6，開始前仍要依 `docs/ROADMAP.md` 的單格範圍執行。
 - 正式庫 preflight：65 obligations／113 requirements／48 筆差額；差額全是未核定建議，orphan legacy = 0、approved deadline 缺 obligation = 0。
-- 每次續接仍以 `docs/ROADMAP.md` 第一個未勾項目為準；工作包分支從最新 `main` 建立，不沿用已合併的 W1～W4 分支。
+- 每次續接仍以 `docs/ROADMAP.md` 第一個未勾項目為準；工作包分支從最新 `main` 建立，不沿用已合併的 W1～W5 分支。
 
 ---
 

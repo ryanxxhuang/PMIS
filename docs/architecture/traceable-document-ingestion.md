@@ -211,8 +211,8 @@ AI can never mark a link reviewed.
 
 ## 12. W5-2 `contract_obligations` compatibility
 
-This section describes the repository implementation. Production remains on
-the former trigger direction until migration `20260812000500` is deployed.
+This section describes the repository and production implementation. Migration
+`20260812000500` was deployed on 2026-08-13.
 
 ```
 requirements         = sole contractual source of truth

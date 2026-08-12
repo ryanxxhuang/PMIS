@@ -10,7 +10,7 @@ W5-1 盤點時不是單純有兩張表，而是**建築契約包在 obligation �
 
 **已定案選 A：只保留一次 Requirement 抽取；人工核定的 deadline Requirement 再單向產生／更新 obligation。** 這符合現行「只有 approved Requirement 才是契約權威」的規則，也能真正移除重複 AI 成本與隱性雙寫。
 
-本文件完成方向定案；W5-2 已於同日完成本機實作與驗證，尚未 commit、開 PR 或部署。範圍與收包狀態以 `docs/ROADMAP.md` 為準。
+本文件完成方向定案；W5-2 已由 PR #6 實作，並於 2026-08-13 隨 migration `20260812000500` 部署。範圍與收包狀態以 `docs/ROADMAP.md` 為準。
 
 ## 正式庫快照
 
@@ -74,7 +74,7 @@ W5-1 因此判定兩邊都不能直接刪：
 | 長期成本 | 低：一份契約事實、一次 AI 抽取 | 高：雙 parser、雙審查語意、差異需長期人工解釋 |
 | 主要風險 | 轉換時必須保住 obligation 的 `status`／佐證 | 產品的「亂」會從隱性同步變成顯性不一致 |
 
-## W5-2 的硬邊界（A，已由本機實作遵守）
+## W5-2 的硬邊界（A，已由正式部署遵守）
 
 W5-2 先以正式庫唯讀 `count(*)` 精確分類差額，再停止新文件的 legacy 二次解析，將「核定 deadline」接到 obligation 相容 runtime；既有 `status`、佐證與歷史 Requirement 不刪。
 

@@ -1,7 +1,7 @@
 # GovAgent／PMIS — 目前系統真相
 
 > 狀態：**CURRENT（現況權威文件）**
-> 最後核對：2026-08-12
+> 最後核對：2026-08-13
 > 用途：回答「產品現在是什麼、已經做到哪裡、哪份文件說了算」。
 
 ## 1. 一句話定義
@@ -82,7 +82,7 @@ contract_packages
           → requirement_artifact_links
 ```
 
-只有 `status = 'approved'` 的 Requirement 才是權威要求。W5-2 已在 PR #6 反轉相容方向：人工核准的 deadline Requirement 會在同一審查交易中冪等建立／更新一筆 `contract_obligations` 提醒 runtime；obligation 只保留狀態、佐證、罰則與歷史，不反向改寫契約內容。已核准期限被人工取代時，只把仍在待辦的相容提醒標成「不適用」並退出現行清單，原列與佐證／歷史仍保留。正式站在 migration `20260812000500` 部署前仍是舊方向。
+只有 `status = 'approved'` 的 Requirement 才是權威要求。W5-2 已由 PR #6 部署：人工核准的 deadline Requirement 會在同一審查交易中冪等建立／更新一筆 `contract_obligations` 提醒 runtime；obligation 只保留狀態、佐證、罰則與歷史，不反向改寫契約內容。已核准期限被人工取代時，只把仍在待辦的相容提醒標成「不適用」並退出現行清單，原列與佐證／歷史仍保留。
 
 ## 5. AI 的不可跨越邊界
 
@@ -105,7 +105,7 @@ contract_packages
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
 - 57 個 Vitest 測試檔，共 523 個測試；12 個 Playwright 三角色 E2E；23 組 pgTAP SQL 測試。
 
-最近一次全套驗證（W5 PR #6，2026-08-12）：523 個單元測試、12 個 E2E、23 檔共 723 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W4 已合併至 `main` 並部署；W5-2～W5-4 已提交至 PR #6，尚未合併或部署，正式資料庫仍同步至 `20260812000400`。
+最近一次全套驗證（W5 PR #6，2026-08-12）：523 個單元測試、12 個 E2E、23 檔共 723 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W5 已合併至 `main` 並部署；2026-08-13 正式資料庫已套用至 `20260812000600`，第二次 dry-run 顯示無待套 migration、遠端 DB lint 零錯誤。main CI 與 Cloudflare Workers build 均成功，正式站首頁及 `/requirements` 深層路由回應 HTTP 200。
 
 標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 
@@ -117,7 +117,7 @@ AI 入口自 W3 起收斂為單一 Agent（D-008、D-010）：`/assistant` 導�
 
 W5-2 的正式庫變更前唯讀基線：65 筆 obligation、113 筆 Requirement，差額 48 筆全是未核定建議（24 筆 `draft_ai/ai`、23 筆 `needs_review/ai`、1 筆 `needs_review/manual`）；0 筆 orphan legacy，0 筆已核准 deadline 缺 obligation。65 筆 obligation 全為待辦、0 筆有佐證、21 筆有罰則，且 65 筆都有唯一 Requirement 連結。盤點只讀匿名數量，未匯出業務內容。
 
-W5-3 已在本機把雙成員模型的防誤用規則固定：[`docs/architecture/three-party-role-model.md`](docs/architecture/three-party-role-model.md#成員模型的唯一判斷規則) 是唯一說明點；migration `20260812000600` 只替兩張表與 helper 加 schema comment，關鍵前端／提醒呼叫點也有短註解。沒有改名、刪表或變更 RLS；正式站要等 migration 部署後才有資料庫 metadata。
+W5-3 已把雙成員模型的防誤用規則固定：[`docs/architecture/three-party-role-model.md`](docs/architecture/three-party-role-model.md#成員模型的唯一判斷規則) 是唯一說明點；已部署的 migration `20260812000600` 只替兩張表與 helper 加 schema comment，關鍵前端／提醒呼叫點也有短註解。沒有改名、刪表或變更 RLS。
 
 W5-4 只修正一條可重現的 Demo／DB 漂移：同一組 28 天試體判定不合格時，正式 DB 會在同一交易建立並以 `test_sample_id` 去重缺失，但 Demo 曾因 React state updater 時序漏開缺失，重試時又可能重複開。現在 Demo 以 `deriveTestSampleUpdate` 同步推導判定，並以 `shouldCreateTestSampleDefect` 保持一組試體一筆缺失；其他尚未發生漂移的雙引擎規則沒有重構。
 
@@ -134,7 +134,7 @@ W5-4 只修正一條可重現的 Demo／DB 漂移：同一組 28 天試體判定
 
 1. **雙成員資料仍保留相近名稱**：W5-3 已用單一架構規則、schema comment 與高風險呼叫點註解降低誤用；為維持相容，未改表名、刪相容 helper 或動 RLS。
 2. **雙引擎同步**：W5-4 已修正試體不合格缺失的漏開／重複開漂移；其餘 Demo／前端與伺服器 Trigger／Edge 規則仍有人工同步點，詳見 `docs/architecture/dual-engine-sync.md`。
-3. **期限相容層仍存在**：W5-2 已把方向收斂為 approved deadline Requirement → obligation，但時間軸、提醒與部分 Agent 查詢仍讀 `contract_obligations`；它是有 rollback 的 runtime 相容層，不是第二份契約權威。正式站在 `20260812000500` 部署前仍跑舊 trigger。
+3. **期限相容層仍存在**：W5-2 已把方向收斂為 approved deadline Requirement → obligation，但時間軸、提醒與部分 Agent 查詢仍讀 `contract_obligations`；它是有 rollback 的 runtime 相容層，不是第二份契約權威。正式站已套用 `20260812000500`，舊的 obligation → Requirement triggers 已退役。
 
 ## 8. 文件權威順序
 
