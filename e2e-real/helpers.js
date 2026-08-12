@@ -68,6 +68,32 @@ export async function gotoHash(page, hash) {
   await page.goto(`/#${hash}`)
 }
 
+// 以某帳號簽入的 anon client(走 RLS 的真使用者身分)——fixture 佈置用產品窄門
+// (create_project/import_work_items/add_member_by_email 等 RPC),不繞過權限。
+export async function signInClient(email) {
+  const anon = createClient(url, process.env.E2E_REAL_SUPABASE_ANON_KEY?.trim(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { error } = await anon.auth.signInWithPassword({ email, password: PW })
+  if (error) throw new Error(`fixture 登入失敗(${email}):${error.message}`)
+  return anon
+}
+
+// UI 登入(既有帳號)
+export async function loginReal(page, email) {
+  await gotoHash(page, '/login')
+  await page.getByPlaceholder('Email').fill(email)
+  await page.getByPlaceholder('密碼（至少 8 碼，含大小寫英文與數字）').fill(PW)
+  await page.locator('button[type="submit"]').click()
+  await page.getByRole('button', { name: '登出', exact: true }).waitFor()
+}
+
+// UI 登出(回登入頁)
+export async function logoutReal(page) {
+  await page.getByRole('button', { name: '登出', exact: true }).click()
+  await page.locator('button[type="submit"]').waitFor()
+}
+
 // 走註冊 UI 建立並登入一個新帳號,回傳其 email(建立者一律走真流程,不抄捷徑)
 export async function registerViaUI(page, { email, orgType, name = '建立者', company = '測試單位' }) {
   await gotoHash(page, '/login')
