@@ -55,8 +55,8 @@ export default function SiteLog() {
   // 發包末端工項（可回報的單元）+ 查表。
   // 用「已核准變更套回後」的工項(B-02 小尾巴):否則核准追加數量後,
   // 當日回報上限(setQty 夾在 0~契約數量)仍卡在舊契約數量。
-  const { leaves, byKey } = useMemo(() => {
-    if (!workItems) return { leaves: [], byKey: new Map() }
+  const { leaves, byKey, byId } = useMemo(() => {
+    if (!workItems) return { leaves: [], byKey: new Map(), byId: new Map() }
     const childMap = new Map()
     for (const it of adjustedItems) {
       const k = it.parent_key || '__root__'
@@ -65,7 +65,9 @@ export default function SiteLog() {
     }
     const m = new Map(adjustedItems.map((it) => [it.item_key, it]))
     const lv = adjustedItems.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
-    return { leaves: lv, byKey: m }
+    // byId:照片卡顯示「配到哪個工項」用(photos.work_item_id → 工項)
+    const idMap = new Map(adjustedItems.filter((it) => it.id).map((it) => [it.id, it]))
+    return { leaves: lv, byKey: m, byId: idMap }
   }, [workItems, adjustedItems])
 
   // 切換日期 → 載入該日已存的日誌
@@ -220,7 +222,8 @@ export default function SiteLog() {
   // 原本批次辨識只吃「新選檔」,對既有照片無能為力,按了等於沒反應。
   // 這裡把缺說明的既有照片抓下來(簽名 URL → blob)逐張判讀,回寫說明與工項。
   // (existingBusy/existingMsg 的 useState 在頂部——139 行的載入早退之前,rules of hooks)
-  const photosNeedingAI = photos.filter((p) => !p.caption && p.url)
+  // 缺說明「或」缺工項都可重跑(配對失敗後要能重試,不必刪照片重傳);非工地照重跑成本極低且是使用者主動觸發
+  const photosNeedingAI = photos.filter((p) => (!p.caption || !p.work_item_id) && p.url)
   const onClassifyExisting = async () => {
     if (!photosNeedingAI.length || existingBusy) return
     setExistingBusy(true); setExistingMsg('')
@@ -509,7 +512,7 @@ export default function SiteLog() {
                     {/* P0 #11:已上傳但沒說明的照片,一鍵補 AI 說明+配工項——使用者的直覺是「先上傳,再辨識」 */}
                     {aiEnabled('photo.classify') && photosNeedingAI.length > 0 && (
                       <Button variant="secondary" onClick={onClassifyExisting} disabled={photoBusy || batchBusy || existingBusy}>
-                        <Sparkles size={14} aria-hidden />{existingBusy ? '辨識中…' : `AI 辨識已上傳的 ${photosNeedingAI.length} 張`}
+                        <Sparkles size={14} aria-hidden />{existingBusy ? '辨識中…' : `AI 補辨識/配對 ${photosNeedingAI.length} 張`}
                       </Button>
                     )}
                     <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] pressable ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
@@ -580,9 +583,15 @@ export default function SiteLog() {
                         <div className="aspect-square">
                           {p.url && <img src={p.url} alt={p.caption || '現場照片'} loading="lazy" className="w-full h-full object-cover" />}
                         </div>
-                        {p.caption && (
-                          <div className="px-1.5 py-1 text-[11px] leading-tight text-[var(--text-2)] bg-[var(--surface)] border-t border-[var(--border-2)] truncate" title={p.caption}>
-                            {p.caption}
+                        {(p.caption || p.work_item_id) && (
+                          <div className="px-1.5 py-1 bg-[var(--surface)] border-t border-[var(--border-2)]">
+                            {p.caption && <div className="text-[11px] leading-tight text-[var(--text-2)] truncate" title={p.caption}>{p.caption}</div>}
+                            {/* 賣點的可見性:配到的工項一定要看得到,否則配對成功=白做(dry-run #17 教訓) */}
+                            {p.work_item_id && byId.get(p.work_item_id) && (
+                              <div className="text-[10px] leading-tight text-[var(--blue-text)] truncate" title={`${byId.get(p.work_item_id).item_no} ${byId.get(p.work_item_id).description}`}>
+                                ⛓ {byId.get(p.work_item_id).item_no} {byId.get(p.work_item_id).description}
+                              </div>
+                            )}
                           </div>
                         )}
                         {can.edit && <button onClick={() => onDeletePhoto(p)} title="刪除照片"
