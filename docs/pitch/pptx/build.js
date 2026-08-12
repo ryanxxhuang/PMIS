@@ -1,5 +1,10 @@
 // 組長簡報 PowerPoint 產生器（v2，2026-08-12 會後改版）
 // ---------------------------------------------------------------------------
+// v3（2026-08-12 會後）最重要的一件事：**這份是會後寄給組長自己看的文件，不是簡報稿。**
+//   組長當時沒看到這份，而且他「還在想要怎麼合作」——所以任何「已確定／今天請您決定」
+//   的寫法都是錯位的。第參幕整段從「請您決定的清單」改成「供參的行政整理」，
+//   並新增 P19 合作方式四個層級（前兩格零採購），結尾只留一個零承諾的 ask。
+//
 // v2 相對 v1 的四個實質改動（都是使用者當面指定的，改文案時不要改回去）：
 //   1) 全案不用黑。場景頁改成深鋼青藍 #154C74，內文最深的墨色也改成藍灰 #1D2B39。
 //   2) 採購方式已經確定是小額採購逕洽，不再花一整頁分析採購法 → 壓成「已確定的事」一列。
@@ -250,11 +255,11 @@ function stat(s, x, y, w, fig, cap, color = C.ink) {
      { text: '。' }],
     { x: bx, y: 4.5, w: W - bx - 0.8, h: 0.72, margin: 0, valign: 'top', fontFace: F, fontSize: 16, color: C.fieldInk2, lineSpacing: 24 },
   )
-  s.addText('2026 年 8 月 12 日　·　中央大學總務處營繕組', {
+  s.addText('接續 8 月 12 日談話的書面整理　·　中央大學總務處營繕組', {
     x: bx, y: 5.5, w: W - bx - 0.8, h: 0.3, margin: 0, valign: 'middle',
     fontFace: F, fontSize: 12, bold: true, charSpacing: 0.8, color: C.fieldInk2,
   })
-  s.addNotes('開場：今天講功能、資安、簽辦。最後一頁只剩兩件事要請組長決定——驗收時點，以及引薦計網中心。')
+  s.addNotes('這是寄給組長自己看的文件,不是簡報稿。語氣一律供參,不催決定。')
 }
 
 // 02 導覽
@@ -265,13 +270,13 @@ function stat(s, x, y, w, fig, cap, color = C.ink) {
   const acts = [
     ['壹 · P04–P09', '系統有哪些功能', '九個功能面、十六個可獨立開關的 AI 模組、四個角色各一個 Agent。重點在「少輸入、多產出」。', 'act'],
     ['貳 · P11–P17', '資安怎麼過', '工程會一覽表歸類、普級 11 項逐項回覆、境外資料、弱點掃描、日誌、AI 的信任設計。', 'wip'],
-    ['參 · P19–P25', '簽辦怎麼走', '已確定的事、履約期間與驗收時點、服務承諾、簽稿骨架、七份附件、會辦動線。', 'act'],
+    ['參 · P19–P25', '行政面怎麼走', '合作可以從很小開始、行政面我先查過的事、屆時的驗收方式、會寫進契約的服務承諾、文件現況。', 'act'],
   ]
   acts.forEach((a, i) => cardText(s, M + i * (cw + 0.42), y + 0.1, cw, 2.55, a[1], a[2], { chip: [a[0], a[3]], titleSize: 17 }))
   card(s, M, y + 3.0, CW, 1.05, { fill: C.steelTint, flat: true })
   s.addText(
-    [{ text: '先說結論：資安不是這個案子的風險，歸類才是。', options: { bold: true, color: C.ink } },
-     { text: '　同一套系統歸到不同的表，普級要求差好幾倍——所以第貳部分的第一頁在講歸類，不是在講技術。', options: { color: C.ink2 } }],
+    [{ text: '這份是接續 8 月 12 日談話的書面整理，供組長參考。', options: { bold: true, color: C.ink } },
+     { text: '　第參部分是行政面的整理，不是要請組長現在決定什麼；有哪一頁與貴校實務不符，請直接指正。', options: { color: C.ink2 } }],
     { x: M + 0.3, y: y + 3.0, w: CW - 0.6, h: 1.05, margin: 0, valign: 'middle', fontFace: F, fontSize: 13, lineSpacing: 19 },
   )
 }
@@ -621,71 +626,100 @@ divider('貳 · 資安', '貳', '資安怎麼過。',
   })
 }
 
-// ═══ 參 · 簽辦 ═════════════════════════════════════════════════════════════
-divider('參 · 簽辦', '參', '簽辦怎麼走。',
-  '採購方式已經確定，核定層級也確定。\n只剩驗收時點要請組長定。',
-  ['本案已經確定的四件事', '履約期間與驗收時點（要決定）', '寫進契約的服務承諾', '簽稿七段骨架', '七份附件與現況', '會辦動線'],
-  '這一段才是今天的目的。')
+// ═══ 參 · 行政與合作 ═══════════════════════════════════════════════════════
+// ⚠️ v3 語氣：組長「還在想要怎麼合作」，所以這一段一律是**供參的整理**，
+//    不是請他決定的清單。任何「已確定／請您選」的寫法都不要放回來。
+divider('參 · 行政', '參', '真的要合作的話，行政面怎麼走。',
+  '這一段是供參的整理，不是要請組長現在決定。\n重點只有一個：這一格不會卡。',
+  ['合作可以從很小開始', '行政面我先查過的事', '屆時的驗收方式', '若合作，會寫進契約的承諾', '簽長什麼樣子', '文件現況'],
+  '這一段不要用催的口氣講。')
 
-// 19 已確定 / 待決定
+// 19 合作方式的四個層級（回應「他還在想要怎麼合作」）
 {
-  const s = slide('參 · 簽辦')
-  const y = head(s, '本案定位', '該確定的都確定了，只剩一件事要定。')
-  const cw = (CW - 0.3 * 3) / 4
-  ;[['採購方式', '小額採購逕洽', '15 萬元以下，得不經公告程序逕洽廠商，免提供報價或企劃書。無須三家比價。'],
-    ['核定層級', '組長核定', '屬小額採購，本組權責即可核定，不必往上跑層級。'],
-    ['財產登記', '不涉財產登記', '純訂閱服務，機關未取得軟硬體所有權，省一段流程。'],
-    ['校內規定', '無加嚴規定', '已確認貴校對 15 萬以下無額外加嚴要求。']]
-    .forEach((a, i) => cardText(s, M + i * (cw + 0.3), y, cw, 1.75, a[1], a[2],
-      { chip: [a[0], 'ok'], titleSize: 15, bodySize: 10.5 }))
-
-  card(s, M, y + 2.1, CW, 1.9, { fill: C.safetyTint, flat: true })
-  s.addText('剩下的兩件事', {
-    x: M + 0.34, y: y + 2.28, w: CW - 0.68, h: 0.32, margin: 0, valign: 'middle',
-    fontFace: F, fontSize: 16, bold: true, color: C.ink,
+  const s = slide('參 · 行政')
+  const y = head(s, '合作方式', '合作可以從很小開始。')
+  s.addText('由淺到深四個層級，不必一次跳到最後一格。前兩格完全不涉採購，也不需要任何行政程序。', {
+    x: M, y, w: CW, h: 0.32, margin: 0, valign: 'middle', fontFace: F, fontSize: 12.5, color: C.ink2,
   })
-  const hw = (CW - 0.68 - 0.4) / 2
-  ;[['一', '履約期間與驗收時點', '簽一定要寫到「什麼時候驗收」。下一頁提三個方案，今天就可以定。'],
-    ['二', '會辦計網中心', '資訊類採購必會辦。文件我已備齊，希望送簽前先與他們對過一次。']]
-    .forEach((a, i) => {
-      const x = M + 0.34 + i * (hw + 0.4)
-      s.addText(a[0], { x, y: y + 2.74, w: 0.3, h: 0.3, margin: 0, valign: 'middle', fontFace: F, fontSize: 14, bold: true, color: C.safety })
-      s.addText(a[1], { x: x + 0.34, y: y + 2.74, w: hw - 0.34, h: 0.3, margin: 0, valign: 'middle', fontFace: F, fontSize: 14, bold: true, color: C.ink })
-      s.addText(a[2], { x: x + 0.34, y: y + 3.1, w: hw - 0.34, h: 0.6, margin: 0, valign: 'top', fontFace: F, fontSize: 11.5, color: C.ink2, lineSpacing: 16.5 })
-    })
+  table(s, M, y + 0.46, CW, [
+    [th('層級'), th('做什麼'), th('貴組要投入'), th('涉不涉採購')],
+    [tdb('一　先看'), td('我開一個示範專案帳號，組長與承辦人自己點，想看哪裡點哪裡'), td('約半小時'), tds('不涉', 'ok')],
+    [tdb('二　用貴組真的文件跑一次'), td('給我一份不含個資的契約與標單，我建好之後讓貴組看實際長什麼樣'), td('交一次檔'), tds('不涉', 'ok')],
+    [tdb('三　單一功能先用'), td('挑最痛的一塊先上（例如施工日誌＋照片辨識，或估驗佐證包）'), td('一位承辦人'), td('免費期間不涉')],
+    [tdb('四　單案訂閱'), td('一個在建案的完整流程，一年期'), td('承辦人＋廠商監造聯絡人'), td('小額採購')],
+  ], [2.6, 5.4, 2.0, 2.093], { size: 11, pad: 14 })
+  card(s, M, y + 3.5, CW, 1.05, { fill: C.steelTint, flat: true })
+  s.addText(
+    [{ text: '我的建議是先做到第二格。', options: { bold: true, color: C.ink } },
+     { text: '　它零採購、零風險，而且組長會直接看到系統吃了貴組真實的契約與標單之後長什麼樣子，'
+        + '再決定要不要往下走。這一步我這邊不收費，也不需要貴組跑任何程序。', options: { color: C.ink2 } }],
+    { x: M + 0.3, y: y + 3.5, w: CW - 0.6, h: 1.05, margin: 0, valign: 'middle', fontFace: F, fontSize: 12.5, lineSpacing: 19 },
+  )
+  s.addNotes('這是這份文件的核心一頁。他還在想怎麼合作，給他一個零成本的第一步。')
 }
 
-// 20 履約期間與驗收時點（新增）
+// 20 行政面先查過的事 ＋ 會辦動線
 {
-  const s = slide('參 · 簽辦')
-  const y = head(s, '要決定的第一件事', '簽要簽到什麼時候驗收。')
-  cite(s, M, y, CW, 0.78, '政府採購法施行細則',
+  const s = slide('參 · 行政')
+  const y = head(s, '行政面', '若走到第四格，這些我先查過了。', { small: true })
+  s.addText('以下是我方查證與理解，供組長參考；如與貴校實務有出入，請直接指正，我照貴組的做法調整。', {
+    x: M, y: y - 0.04, w: CW, h: 0.3, margin: 0, valign: 'middle', fontFace: F, fontSize: 11.5, color: C.ink3,
+  })
+  const cw = (CW - 0.3 * 3) / 4
+  ;[['採購方式', '小額採購逕洽', '15 萬元以下，得不經公告程序逕洽廠商，免提供報價或企劃書，亦無須三家比價。'],
+    ['核定層級', '應在組長權責內', '屬小額採購，理解上本組即可核定；實際權責仍以貴校分層負責明細表為準。'],
+    ['財產登記', '應不涉財產登記', '純訂閱服務，機關未取得軟硬體所有權。'],
+    ['校內規定', '未見加嚴規定', '查詢所得貴校對 15 萬以下無額外加嚴要求；若有內規請組長告知。']]
+    .forEach((a, i) => cardText(s, M + i * (cw + 0.3), y + 0.36, cw, 1.72, a[1], a[2],
+      { chip: [a[0], 'act'], titleSize: 14.5, bodySize: 10.5, compact: true }))
+
+  s.addText('會辦動線', {
+    x: M, y: y + 2.3, w: CW, h: 0.3, margin: 0, valign: 'middle',
+    fontFace: F, fontSize: 14.5, bold: true, color: C.ink,
+  })
+  chain(s, y + 2.66, [
+    ['使用單位', '營繕組擬簽'], ['會辦 · 資安', '電子計算機中心'], ['會辦 · 個資', '個資／法制單位'],
+    ['核定', '依校內權責'], ['續辦', '請購 · 簽約'],
+  ], 1)
+  card(s, M, y + 3.76, CW, 0.85, { fill: C.safetyTint, flat: true })
+  s.addText(
+    [{ text: '資訊類採購會會辦計網中心，所以簽送出去的那一刻資安文件就要完整——', options: { color: C.ink2 } },
+     { text: '不能先簽再補，一退件就是一輪時間。', options: { bold: true, color: C.ink } },
+     { text: '這也是為什麼我把第貳部分的文件先備齊。', options: { color: C.ink2 } }],
+    { x: M + 0.3, y: y + 3.76, w: CW - 0.6, h: 0.85, margin: 0, valign: 'middle', fontFace: F, fontSize: 12, lineSpacing: 18 },
+  )
+}
+
+// 21 驗收方式（供參，不催決定）
+{
+  const s = slide('參 · 行政')
+  const y = head(s, '屆時的行政細節', '如果走到採購，驗收怎麼訂。')
+  s.addText('這頁不是現在要決定的事，是先讓組長知道這一格不會卡。三種方式我方都接受。', {
+    x: M, y, w: CW, h: 0.3, margin: 0, valign: 'middle', fontFace: F, fontSize: 12.5, color: C.ink2,
+  })
+  cite(s, M, y + 0.42, CW, 0.78, '政府採購法施行細則',
     '§90-1　勞務驗收，得以書面或召開審查會方式辦理；其書面驗收文件或審查會紀錄，得視為驗收紀錄。　　'
     + '§94　無初驗程序者，除契約另有規定外，機關應於接獲廠商通知備驗或可得驗收之程序完成後三十日內辦理驗收。')
-  s.addText('本案是勞務採購，所以可以書面驗收、不必到場查驗、不辦資產點交。要在簽裡寫死的只有一件事：什麼事件觸發驗收。', {
-    x: M, y: y + 0.94, w: CW, h: 0.32, margin: 0, valign: 'middle', fontFace: F, fontSize: 12.5, color: C.ink2,
-  })
-  table(s, M, y + 1.4, CW, [
-    [th('方案'), th('驗收時點'), th('付款'), th('對貴組'), th('')],
-    [tdb('甲　期滿驗收'), td('服務期間屆滿後書面驗收'), td('期滿一次付清'), td('最保守，但整個服務期間沒有檢核點，出問題只能到期末處理'), tds('可接受', 'na')],
-    [tdb('乙　開通驗收'), td('服務開通、貴組確認約定功能可用後三十日內書面驗收'), td('驗收合格後一次付款'), td('一次驗收一次核銷，作業最省；履約保障改由服務承諾條款負責（下頁）'), tds('建議', 'ok')],
-    [tdb('丙　分期驗收'), td('開通驗收 ＋ 期滿結案驗收'), td('分二期'), td('多一個檢核點，但要跑兩次驗收與兩次核銷'), tds('也可以', 'na')],
+  table(s, M, y + 1.42, CW, [
+    [th('方式'), th('驗收時點'), th('付款'), th('對貴組'), th('')],
+    [tdb('甲　期滿驗收'), td('服務期間屆滿後書面驗收'), td('期滿一次付清'), td('最保守，但整個服務期間沒有檢核點'), tds('可以', 'na')],
+    [tdb('乙　開通驗收'), td('服務開通、貴組確認約定功能可用後三十日內書面驗收'), td('驗收合格後一次付款'), td('一次驗收一次核銷，作業最省'), tds('實務常見', 'act')],
+    [tdb('丙　分期驗收'), td('開通驗收 ＋ 期滿結案驗收'), td('分二期'), td('多一個檢核點，但要跑兩次驗收與核銷'), tds('可以', 'na')],
   ], [1.5, 3.1, 1.5, 4.393, 1.0], { size: 10.5, pad: 12 })
-  card(s, M, y + 3.88, CW, 1.0, { fill: C.steelTint, flat: true })
+  card(s, M, y + 4.02, CW, 0.86, { fill: C.steelTint, flat: true })
   s.addText(
-    [{ text: '建議方案乙，理由：', options: { bold: true, color: C.ink } },
-     { text: '訂閱服務的價值是在期間內持續提供，把驗收拖到期末並不會讓貴組多一分保障；真正的保障是寫進契約的服務承諾。'
-        + '若貴組偏好保守，我方完全接受方案丙，服務內容不變。', options: { color: C.ink2 } }],
-    { x: M + 0.3, y: y + 3.88, w: CW - 0.6, h: 1.0, margin: 0, valign: 'middle', fontFace: F, fontSize: 12.5, lineSpacing: 19 },
+    [{ text: '訂閱服務實務上多採乙（開通驗收），因為服務的價值在期間內持續提供，把驗收拖到期末並不會多一分保障；'
+        + '真正的保障是下一頁那六項寫進契約的承諾。', options: { color: C.ink2 } },
+     { text: '但要用哪一種，等貴組決定合作方式之後再談就好。', options: { bold: true, color: C.ink } }],
+    { x: M + 0.3, y: y + 4.02, w: CW - 0.6, h: 0.86, margin: 0, valign: 'middle', fontFace: F, fontSize: 12, lineSpacing: 18 },
   )
-  s.addNotes('這頁請組長當場選。若他猶豫，建議乙；若他要保守，丙也完全接受——不要爭。履約期間建議一年，自服務開通日起算。')
 }
 
-// 21 服務承諾（新增，取代舊版「不想用就結束」的試辦話術）
+// 22 服務承諾（直接回應「這家公司會不會做一做就不見了」）
 {
-  const s = slide('參 · 簽辦')
-  const y = head(s, '要決定的第一件事之二', '這不是試用，是有驗收標準的履約。')
-  s.addText('政府採購沒有「不想用就退掉」這種事。以下六項擬全部寫進服務契約，成為可被檢核的義務。', {
+  const s = slide('參 · 行政')
+  const y = head(s, '服務承諾', '若真的合作，這六項會寫進契約。')
+  s.addText('對一家新公司，最合理的疑慮是「會不會做一做就不見了」。所以以下六項不是口頭保證，是擬全部寫進服務契約、可被檢核的義務。', {
     x: M, y, w: CW, h: 0.32, margin: 0, valign: 'middle', fontFace: F, fontSize: 12.5, color: C.ink2,
   })
   const cw = (CW - 0.3 * 2) / 3
@@ -695,7 +729,7 @@ divider('參 · 簽辦', '參', '簽辦怎麼走。',
     ['資料可攜', '貴組隨時可自行完整匯出（含工項、估驗、日誌、佐證與 agent 動作紀錄），格式為通用試算表。'],
     ['期滿或終止', '完整交付資料後依約刪除，並出具資料刪除與銷毀切結書。不以任何形式扣留機關資料。'],
     ['資料不作訓練', '不以貴校資料訓練或改良模型。AI 模組可整組關閉，關閉後不對外送出任何內容。'],
-    ['每月服務報告', '每月提供用量、事件與已處理問題之書面報告，可直接作為履約管理與驗收之佐證。']]
+    ['每月服務報告', '每月提供用量、事件與已處理問題之書面報告，可直接作為履約管理之佐證。']]
     .forEach((a, i) => cardText(s, M + (i % 3) * (cw + 0.3), y + 0.44 + Math.floor(i / 3) * (ch + 0.18), cw, ch, a[0], a[1],
       { titleSize: 14.5, bodySize: 11 }))
   card(s, M, y + 3.6, CW, 0.92, { fill: C.goodTint, flat: true })
@@ -705,97 +739,80 @@ divider('參 · 簽辦', '參', '簽辦怎麼走。',
         + '這不是等簽約後才要開始做的東西——是已經在跑的東西。', options: { color: C.ink2 } }],
     { x: M + 0.3, y: y + 3.6, w: CW - 0.6, h: 0.92, margin: 0, valign: 'middle', fontFace: F, fontSize: 12.5, lineSpacing: 19 },
   )
-  s.addNotes('可用率 99% 與四小時回應是會被寫進契約的義務——講之前先確認自己做得到。')
+  s.addNotes('可用率 99% 與四小時回應是會被寫進契約的義務——確認自己做得到再送出這份文件。')
 }
 
-// 22 簽稿骨架
+// 23 簽稿骨架（幫承辦人省時間，不是催簽）
 {
-  const s = slide('參 · 簽辦')
-  const y = head(s, '簽稿骨架', '七段說明，每一段都有對應的依據。', { small: true })
-  table(s, M, y + 0.18, CW, [
+  const s = slide('參 · 行政')
+  const y = head(s, '供參', '真的要簽的時候，簽大概長這樣。', { small: true })
+  s.addText('放這頁的目的是幫承辦人省起草時間，不是催組長簽。文字仍由貴組依校內格式撰擬。', {
+    x: M, y: y - 0.04, w: CW, h: 0.3, margin: 0, valign: 'middle', fontFace: F, fontSize: 11.5, color: C.ink3,
+  })
+  table(s, M, y + 0.34, CW, [
     [th('段'), th('寫什麼'), th('依據／要點')],
-    [td('一', { align: 'center', bold: true, color: C.steelText }), tdb('需求緣由'), td('現行以紙本與 Excel 彙整進度、估驗、日誌與查驗紀錄，人工重複登打、佐證散落；以某工程為試辦標的，載明服務期間')],
+    [td('一', { align: 'center', bold: true, color: C.steelText }), tdb('需求緣由'), td('現行以紙本與 Excel 彙整進度、估驗、日誌與查驗紀錄，人工重複登打、佐證散落；以某工程為標的，載明服務期間')],
     [td('二', { align: 'center', bold: true, color: C.steelText }), tdb('採購方式'), td('小額採購逕洽（15 萬元以下，得不經公告程序，免提供報價或企劃書）；敘明無須三家比價')],
     [td('三', { align: 'center', bold: true, color: C.steelText }), tdb('資安要求之依據及辦理情形'), td('工程會 112/9/25 工程企字第 1120022701 號函；敘明歸屬「SaaS 套裝型」及排除理由；系統防護需求等級評估為普級，請計網中心卓核；廠商逐項回覆詳附件二')],
     [td('四', { align: 'center', bold: true, color: C.steelText }), tdb('境外資料之審查同意'), td('一覽表資料安全欄；資料庫位於日本（非大陸地區），廠商提出落地說明（附件四），請計網中心審查，經同意後於契約載明')],
     [td('五', { align: 'center', bold: true, color: C.steelText }), tdb('個人資料委外'), td('個資法施行細則 §8；契約附個資委外處理附約（附件五）')],
     [td('六', { align: 'center', bold: true, color: C.steelText }), tdb('資安經費'), td('「資訊服務採購作業指引」要求估算並單獨計列；本案為標準訂閱服務，資安措施已內含於訂閱費用無法拆分，敘明原因')],
-    [td('七', { align: 'center', bold: true, color: C.steelText }), tdb('履約期間與驗收'), td('服務期間；驗收時點依前頁方案擇一並寫明；勞務採購採書面驗收；服務承諾條款納入契約；不涉財產登記', { color: C.safetyText })],
+    [td('七', { align: 'center', bold: true, color: C.steelText }), tdb('履約期間與驗收'), td('服務期間；驗收方式依前頁擇一載明；勞務採購採書面驗收；服務承諾條款納入契約；不涉財產登記')],
   ], [0.55, 2.7, 8.843], { size: 10.5, pad: 9 })
   s.addText(
-    [{ text: '擬辦：', options: { bold: true, color: C.ink } },
-     { text: '一、同意依上開方式辦理小額採購並簽訂服務契約。二、', options: { color: C.ink2 } },
+    [{ text: '擬辦大意：', options: { bold: true, color: C.ink } },
+     { text: '同意辦理小額採購並簽訂服務契約；', options: { color: C.ink2 } },
      { text: '會辦電子計算機中心', options: { bold: true, color: C.safetyText } },
-     { text: '（第三、四點）。三、會辦個資業務單位／法制（第五點）。四、奉核後續辦請購。', options: { color: C.ink2 } }],
-    { x: M, y: 5.86, w: CW, h: 0.34, margin: 0, valign: 'middle', fontFace: F, fontSize: 11.5 },
+     { text: '（第三、四點）與個資業務單位／法制（第五點）；奉核後續辦請購。', options: { color: C.ink2 } }],
+    { x: M, y: 6.02, w: CW, h: 0.34, margin: 0, valign: 'middle', fontFace: F, fontSize: 11.5 },
   )
-  s.addText('以上為廠商整理的參考骨架，實際簽稿文字仍由貴組承辦人依校內格式撰擬。', {
-    x: M, y: 6.26, w: CW, h: 0.3, margin: 0, valign: 'middle', fontFace: F, fontSize: 10.5, color: C.ink3,
-  })
 }
 
-// 23 附件
+// 24 文件現況
 {
-  const s = slide('參 · 簽辦')
-  const y = head(s, '附件', '七份附件，六份在我這邊。')
+  const s = slide('參 · 行政')
+  const y = head(s, '文件現況', '七份附件，六份已經備妥。')
   table(s, M, y + 0.18, CW, [
     [th('附件'), th('文件'), th('用途'), th('狀態')],
-    [td('一', { align: 'center', bold: true, color: C.steelText }), tdb('廠商估價單'), td('金額與服務期間'), tds('商業登記核准後即送', 'wip')],
-    [td('二', { align: 'center', bold: true, color: C.steelText }), tdb('資安要求逐項回覆表'), td('SaaS 套裝型・普級 11 列（本簡報 P12）'), tds('已定稿', 'ok')],
+    [td('一', { align: 'center', bold: true, color: C.steelText }), tdb('廠商估價單'), td('金額與服務期間'), tds('商業登記核准後即可出具', 'wip')],
+    [td('二', { align: 'center', bold: true, color: C.steelText }), tdb('資安要求逐項回覆表'), td('SaaS 套裝型・普級 11 列（本文件 P12）'), tds('已定稿', 'ok')],
     [td('三', { align: 'center', bold: true, color: C.steelText }), tdb('非陸資廠商聲明書'), td('對應第 3、10 列'), tds('具結中', 'wip')],
-    [td('四', { align: 'center', bold: true, color: C.steelText }), tdb('資料落地與境外傳輸說明書'), td('供計網中心審查同意（第 9 列）'), tds('材料齊備', 'ok')],
+    [td('四', { align: 'center', bold: true, color: C.steelText }), tdb('資料落地與境外傳輸說明書'), td('供計網中心審查（第 9 列）'), tds('材料齊備', 'ok')],
     [td('五', { align: 'center', bold: true, color: C.steelText }), tdb('個人資料委外處理附約（草案）'), td('個資法施行細則 §8'), tds('草案可提供', 'ok')],
     [td('六', { align: 'center', bold: true, color: C.steelText }), tdb('服務條款與隱私權政策'), td('含個資申訴窗口'), tds('整理中', 'wip')],
     [td('七', { align: 'center', bold: true, color: C.steelText }), tdb('資通系統防護基準普通級符合性對照表'), td('對應第 1 列（走「完善資通安全管理措施」）'), tds('已完成', 'ok')],
   ], [0.7, 4.0, 5.15, 2.243], { size: 11, pad: 8 })
-  card(s, M, y + 4.05, CW, 0.9, { fill: C.safetyTint, flat: true })
+  card(s, M, y + 4.05, CW, 0.9, { fill: C.steelTint, flat: true })
   s.addText(
-    [{ text: '唯一會影響時程的是附件一。', options: { bold: true, color: C.ink } },
-     { text: '　本公司商業登記正在辦理中，核准後統一編號、商業登記證明與估價單會一併送達。其餘六份不受影響，可先行提供貴組與計網中心預覽。', options: { color: C.ink2 } }],
+    [{ text: '不論最後怎麼合作，這六份文件都可以先給貴組與計網中心看。', options: { bold: true, color: C.ink } },
+     { text: '　估價單要等商業登記核准（辦理中）才開得出來，但那是最後一步，不影響前面任何討論。', options: { color: C.ink2 } }],
     { x: M + 0.3, y: y + 4.05, w: CW - 0.6, h: 0.9, margin: 0, valign: 'middle', fontFace: F, fontSize: 12, lineSpacing: 18 },
   )
 }
 
-// 24 會辦動線
-{
-  const s = slide('參 · 簽辦')
-  const y = head(s, '動線', '核定在組長，真正的關卡在計網中心。', { small: true })
-  const after = chain(s, y + 0.24, [
-    ['使用單位', '營繕組擬簽'], ['會辦 · 資安', '電子計算機中心'], ['會辦 · 個資', '個資／法制單位'],
-    ['核定', '組長'], ['續辦', '請購 · 簽約'],
-  ], 1)
-  const cw = (CW - 0.42) / 2
-  cardText(s, M, after + 0.52, cw, 2.2, '關鍵推論',
-    '會辦是必然，所以簽送出去的那一刻，資安文件就必須完整——不能先簽再補，一退件就是一輪時間。\n\n附件二、三、四、七要一次到位，讓會辦是「核對」而不是「索資」。',
-    { fill: C.safetyTint, flat: true, titleSize: 15, bodySize: 12 })
-  cardText(s, M + cw + 0.42, after + 0.52, cw, 2.2, '想請組長幫的一件事',
-    '與其等會辦時計網中心來要資料，想在正式送簽前先與他們對一次要求。若他們有自己的委外資安檢核表，我照他們的表逐欄對映，不另編一份。\n\n方便請組長幫忙引薦窗口嗎？',
-    { fill: C.steelTint, flat: true, titleSize: 15, bodySize: 12 })
-  s.addNotes('講完直接問引薦。這是今天最重要的一個 ask。')
-}
-
-// 25 結尾
+// 25 結尾（不催決定）
 {
   const s = slide('結尾', { field: true })
   s.addText('下一步', {
     x: M, y: 0.85, w: CW, h: 0.3, margin: 0, valign: 'middle',
     fontFace: F, fontSize: 11, bold: true, charSpacing: 2.6, color: C.safety,
   })
-  s.addText('挑一個在建案，\n把它從頭跑到底。', {
+  s.addText('不用現在決定\n要怎麼合作。', {
     x: M, y: 1.32, w: CW * 0.52, h: 1.7, margin: 0, valign: 'top',
     fontFace: F, fontSize: 37, bold: true, color: C.fieldInk, lineSpacing: 48,
   })
-  s.addText('本案不是試用，是有驗收標準、有服務承諾的履約。契約載明的每一項，我都做得到才寫上去。', {
-    x: M, y: 3.25, w: CW * 0.5, h: 0.9, margin: 0, valign: 'top',
+  s.addText('這份文件是接續上次談話的書面整理，把系統做到哪、資安過不過得了、行政面怎麼走，一次寫清楚，方便組長自己看。', {
+    x: M, y: 3.25, w: CW * 0.5, h: 0.95, margin: 0, valign: 'top',
     fontFace: F, fontSize: 14, color: C.fieldInk2, lineSpacing: 22,
   })
-  s.addText('貴組需要投入的', {
-    x: M, y: 4.3, w: CW * 0.5, h: 0.3, margin: 0, valign: 'middle',
+  s.addText('若有哪一頁與貴校實務不符，請直接指正，我照著改。', {
+    x: M, y: 4.35, w: CW * 0.5, h: 0.34, margin: 0, valign: 'middle',
     fontFace: F, fontSize: 13, bold: true, color: C.fieldInk,
   })
-  bullets(s, M, 4.68, CW * 0.48, [
-    '一位承辦人，每週約一小時', '一個進行中的案子（契約＋標單）', '廠商與監造各一位聯絡人',
-  ], 'dash', 12.5, C.fieldInk2)
+  s.addText('聯絡：security@gov-agent.ai　·　gov-agent.ai', {
+    x: M, y: 4.9, w: CW * 0.5, h: 0.3, margin: 0, valign: 'middle',
+    fontFace: F, fontSize: 12, color: C.fieldInk2,
+  })
 
   const bx = M + CW * 0.56
   const bw = CW * 0.44
@@ -803,20 +820,27 @@ divider('參 · 簽辦', '參', '簽辦怎麼走。',
     x: bx, y: 1.32, w: bw, h: 4.0, rectRadius: 0.04,
     fill: { color: C.fieldDeep }, line: { color: '2A6997', width: 1 },
   })
-  s.addText('今天想請組長決定的三件事', {
+  s.addText('若方便，只想請組長幫一件事', {
     x: bx + 0.34, y: 1.62, w: bw - 0.68, h: 0.34, margin: 0, valign: 'middle',
     fontFace: F, fontSize: 16, bold: true, color: C.fieldInk,
   })
-  ;[['驗收時點', '要用甲、乙、丙哪一個方案？（建議乙：開通驗收）'],
-    ['引薦計網中心', '送簽前先對一次資安要求，把退件風險降到最低。'],
-    ['試辦標的', '哪一個在建工程案適合？契約與標單能否先給我。']]
-    .forEach((a, i) => {
-      const yy = 2.24 + i * 0.92
-      s.addText(String(i + 1), { x: bx + 0.34, y: yy, w: 0.3, h: 0.3, margin: 0, valign: 'middle', fontFace: F, fontSize: 13, bold: true, color: C.safety })
-      s.addText(a[0], { x: bx + 0.7, y: yy, w: bw - 1.04, h: 0.3, margin: 0, valign: 'middle', fontFace: F, fontSize: 14, bold: true, color: 'FFFFFF' })
-      s.addText(a[1], { x: bx + 0.7, y: yy + 0.32, w: bw - 1.04, h: 0.5, margin: 0, valign: 'top', fontFace: F, fontSize: 11.5, color: C.fieldInk2, lineSpacing: 16 })
-    })
-  s.addNotes('第 2 題價值最高——他會直接告訴你這個簽會卡在哪一關。')
+  s.addText('引薦計網中心的窗口。', {
+    x: bx + 0.34, y: 2.06, w: bw - 0.68, h: 0.36, margin: 0, valign: 'middle',
+    fontFace: F, fontSize: 19, bold: true, color: C.safety,
+  })
+  s.addText('不論最後用哪一種合作方式，資安這一關遲早要過。提前對過一次，之後不論走到哪一步都會順很多——而且這一步不需要貴組做任何決定。', {
+    x: bx + 0.34, y: 2.52, w: bw - 0.68, h: 1.0, margin: 0, valign: 'top',
+    fontFace: F, fontSize: 12, color: C.fieldInk2, lineSpacing: 17,
+  })
+  s.addText('其他兩件，不急：', {
+    x: bx + 0.34, y: 3.66, w: bw - 0.68, h: 0.3, margin: 0, valign: 'middle',
+    fontFace: F, fontSize: 12.5, bold: true, color: C.fieldInk,
+  })
+  bullets(s, bx + 0.34, 4.02, bw - 0.68, [
+    '合作想從哪一格開始（P19）',
+    '若想看真實文件跑一次，需要一份契約與標單',
+  ], 'dash', 11.5, C.fieldInk2)
+  s.addNotes('這頁只留一個 ask，而且是零承諾的那一個。不要催他決定合作方式。')
 }
 
 const OUT = process.argv[2] || 'deck.pptx'
