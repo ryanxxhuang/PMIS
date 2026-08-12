@@ -1,8 +1,8 @@
 // Ledger slice:廠商帳務與契約——成本管理(預算vs實際/分包)、變更設計(表頭+追加減明細)、
-// 逐工項排程、契約義務(AI 解析)。
+// 逐工項排程、核准期限的義務 runtime。
 import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase.js'
-import { loadObligationsFromDB, extractContractText, fileToBase64 } from '../db.js'
+import { loadObligationsFromDB } from '../db.js'
 import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/documentIngestion.js'
 import { mutationOutcome } from './billing.js'
 
@@ -13,7 +13,7 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
   const [changeOrders, setChangeOrders] = useState([])
   // 逐工項排程（真 DB；{ item_key: { planned_start, planned_finish } }）
   const [itemSchedules, setItemSchedules] = useState({})
-  // 契約義務清單（真 DB；AI 解析契約後填入）
+  // 契約義務清單（真 DB；核准 deadline Requirement 後由 DB 建立）
   const [obligations, setObligations] = useState([])
   // 驗收/結算事件（真 DB；一階段一筆,法定期限由 lib/acceptance.js 推算）
   const [acceptanceEvents, setAcceptanceEvents] = useState([])
@@ -227,80 +227,16 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     return { error: null }
   }, [dbMode])
 
-  // 契約義務:重載 / 解析契約 / 改狀態(契約領域不依賴標單 → isPersistedProject)──
+  // 契約義務:重載 / 改狀態(契約領域不依賴標單 → isPersistedProject)──────────
   const reloadObligations = useCallback(async () => {
     if (!isPersistedProject) return
     // 寫入後重載:失敗保留現況,不把成功的解析偽裝成錯誤(B-09 載入層會 throw)
     try { setObligations(await loadObligationsFromDB(currentProject.project_id)) } catch { /* 保留現況 */ }
   }, [isPersistedProject, currentProject])
 
-  // 共用解析核心:把契約內容(純文字或視覺)送 parse-contract → 取代義務清單。
-  // 順序=先插新、成功才刪舊(B-03):原本先刪全部再插,AI 失敗/insert 失敗時舊清單已毀損,
-  // AI 回 0 筆也會把清單清空。現在:AI 失敗或回 0 筆 → 保留原清單如實回報;
-  // 新批次落庫後才刪舊列(刪舊失敗=殘留重複列,可再重跑,遠比資料消失安全)。
-  // 已完成的義務狀態依 title 對映帶到新清單,重解析不歸零人工進度。
-  const parseContractBody = useCallback(async (body) => {
-    if (!isPersistedProject) return { error: { message: '需真專案' } }
-    // 批 B:body 一律帶 project_id——伺服器閘門(openAiGate)驗成員資格與功能開關
-    const { data, error } = await supabase.functions.invoke('parse-contract', {
-      body: { ...body, project_id: currentProject.project_id },
-    })
-    if (error) return { error }
-    if (data?.error) return { error: { message: data.error } }
-    const obs = data.obligations || []
-    if (!obs.length) return { error: { message: 'AI 未從文件中解析出任何義務,原清單保留未動' } }
-    const pid = currentProject.project_id
-    const { data: oldRows } = await supabase.from('contract_obligations')
-      .select('id, title, status').eq('project_id', pid)
-    const doneTitles = new Set((oldRows || [])
-      .filter((o) => o.status === '已提送' || o.status === '已完成').map((o) => o.title))
-    const rows = obs.map((o, i) => ({
-      project_id: pid, title: o.title, category: o.category || null,
-      trigger_event: o.trigger_event || null,
-      offset_days: Number.isFinite(o.offset_days) ? o.offset_days : null,
-      offset_dir: o.offset_dir || 'after', fixed_date: o.fixed_date || null,
-      recurring: o.recurring || null, recurring_day: o.recurring_day || null,
-      responsible: o.responsible || null, penalty: o.penalty || null,
-      source_clause: o.source_clause || null, source_page: o.source_page || null,
-      status: doneTitles.has(o.title) ? '已提送' : '待辦', sort_order: i,
-    }))
-    const { error: insErr } = await supabase.from('contract_obligations').insert(rows)
-    if (insErr) return { error: insErr }
-    if (oldRows?.length) {
-      const { error: delErr } = await supabase.from('contract_obligations')
-        .delete().in('id', oldRows.map((o) => o.id))
-      if (delErr) {
-        await reloadObligations()
-        return { error: { message: `新清單已建立,但清除舊清單失敗(${delErr.message});請重新產生一次` } }
-      }
-    }
-    await reloadObligations()
-    log('AI 解析契約義務', `${obs.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
-    return { error: null, count: obs.length }
-  }, [isPersistedProject, currentProject, currentUser, reloadObligations, log])
-
-  // P0-07.5:統一上傳流程已抽好逐頁文字 → 同一份契約直接重建義務,不需二次上傳
-  const parseContractFromText = useCallback(async (text) => {
-    if (!text || text.trim().length < 200) return { error: { message: '契約文字不足,無法解析義務時程' } }
-    return parseContractBody({ text })
-  }, [parseContractBody])
-
-  // 相容:單檔上傳路徑;瀏覽器抽文字,抽不到退回視覺
-  const parseContract = useCallback(async (file) => {
-    if (!isPersistedProject) return { error: { message: '需真專案' } }
-    let body
-    try {
-      const text = await extractContractText(file)
-      body = (text && text.trim().length > 200)
-        ? { text, filename: file.name }
-        : { file_base64: await fileToBase64(file), mime_type: file.type, filename: file.name }
-    } catch { return { error: { message: '讀取檔案失敗' } } }
-    return parseContractBody(body)
-  }, [isPersistedProject, parseContractBody])
-
   // P0-06:上傳契約/規範 → 正式文件版本+逐頁保存 → extract-requirements Edge Function
-  // 產生「AI 履約需求建議」(draft_ai/needs_review,待人工審查)。與 parseContract(legacy
-  // 時程義務)平行存在。契約文件不依賴標單 → 用 isPersistedProject 而非 dbMode。
+  // 產生「AI 履約需求建議」(draft_ai/needs_review,待人工審查)。核准的 deadline
+  // 由 DB 審查交易建立義務 runtime。契約文件不依賴標單 → 用 isPersistedProject。
   const ingestRequirementDocument = useCallback(async (file, documentType = 'contract') => {
     if (!isPersistedProject) return { error: { message: '需真實專案(demo 模式不支援 AI 需求擷取)' } }
     return runRequirementIngestion({
@@ -378,6 +314,6 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
-    reloadObligations, parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument,
+    reloadObligations, updateObligationStatus, ingestRequirementDocument,
   }
 }

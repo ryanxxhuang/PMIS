@@ -141,7 +141,7 @@ npm run build
 
 資料庫的 RLS、RPC 與狀態轉移測試在 [supabase/tests](supabase/tests)。
 
-2026-08-12 基線：494 個 Vitest 測試與 12 個 Playwright E2E 通過，正式建置成功。
+2026-08-12 W5 PR #6 本機基線：57 個 Vitest 測試檔共 523 項、12 個 Playwright E2E、23 組 pgTAP 共 723 項全數通過，正式建置與資料庫 lint 成功。W5-2～W5-4 尚未合併或部署。
 
 ## Supabase 與部署
 
@@ -161,7 +161,7 @@ src/
 ├── components/             共用 UI、Layout、Copilot、缺失與標註元件
 ├── data/                   Demo 與內建工程資料
 ├── lib/                    確定性引擎、文件、需求、稽核與支援函式
-├── pages/                  34 個頁面檔
+├── pages/                  33 個頁面檔
 ├── store.jsx               Store 組合根與跨領域派生資料
 └── store/slices/           9 個狀態／資料操作 slices
 

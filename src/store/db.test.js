@@ -151,6 +151,16 @@ describe('db.js 分頁載入:超過 PostgREST 單次上限時要全部取回', (
     expect(sched.months).toHaveLength(1020)
   })
 
+  it('已廢止期限的不適用 obligation 保留在 DB，但不再進入現行提醒資料', async () => {
+    pg.setTable('contract_obligations', [
+      ...rows('active-ob', 2, (i) => ({ status: '待辦', sort_order: i })),
+      ...rows('retired-ob', 1, () => ({ status: '不適用', sort_order: 2 })),
+    ])
+    const got = await loadObligationsFromDB(PID)
+    expect(got).toHaveLength(2)
+    expect(got.every((o) => o.status !== '不適用')).toBe(true)
+  })
+
   it('只回本專案的列(分頁不會把別案的資料一起撈進來)', async () => {
     pg.setTable('defects', [
       ...rows('def', 1200, () => ({ created_at: '2026-01-01' })),

@@ -1,6 +1,6 @@
 begin;
 
-select plan(38);
+select plan(43);
 
 select has_table('public', 'organizations', 'organizations table exists');
 select has_table('public', 'project_parties', 'project_parties table exists');
@@ -8,6 +8,29 @@ select has_table('public', 'project_memberships', 'project_memberships table exi
 select has_column(
   'public', 'requirements', 'responsible_project_party_id',
   'requirements can point to a responsible project party'
+);
+
+-- W5-3: schema metadata keeps the two similarly named member models distinct.
+select ok(
+  obj_description('public.project_members'::regclass) like 'AUTHORIZATION:%',
+  'project_members is labelled as the authorization model'
+);
+select ok(
+  obj_description('public.project_memberships'::regclass) like 'IDENTITY SNAPSHOT:%',
+  'project_memberships is labelled as the identity snapshot model'
+);
+select ok(
+  obj_description('public.can_write(uuid)'::regprocedure) like 'AUTHORIZATION:%',
+  'business write helper is labelled as authorization'
+);
+select ok(
+  obj_description('public.my_project_membership(uuid)'::regprocedure) like 'IDENTITY SNAPSHOT:%',
+  'party membership helper is labelled as identity snapshot'
+);
+select ok(
+  obj_description('public.my_project_ids_v2()'::regprocedure)
+    like 'IDENTITY SNAPSHOT:%not business authorization%',
+  'v2 compatibility helper warns against business authorization use'
 );
 
 -- Fixed users and projects make legacy conversion assertions deterministic.

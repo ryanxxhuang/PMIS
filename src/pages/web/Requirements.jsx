@@ -24,7 +24,7 @@ const EDITABLE_STATUSES = ['draft_ai', 'needs_review']
 const fmtTime = (v) => (v ? new Date(v).toLocaleString('zh-TW', { hour12: false }) : '')
 
 export default function Requirements() {
-  const { currentProject, isPersistedProject, currentUser, workItems } = useStore()
+  const { currentProject, isPersistedProject, currentUser, workItems, reloadObligations } = useStore()
   // 鏡像 DB 的 can_review_requirement(機關/監造;刻意無專案管理者例外——技術管理≠契約審核權)
   const canReview = ['owner', 'supervisor'].includes(currentUser?.org_type)
   const [rows, setRows] = useState([])
@@ -131,6 +131,7 @@ export default function Requirements() {
     setBusy('')
     if (error) { setMsg(`審查失敗:${error.message || ''}`); return }
     setRows((rs) => rs.map((r) => (r.id === data.id ? data : r)))
+    if (decision === 'approve' && data.requirement_type === 'deadline') await reloadObligations()
     setMsg('')
   }
 

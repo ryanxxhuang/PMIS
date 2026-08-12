@@ -431,6 +431,7 @@ async function getRequirements(db: SupabaseClient, projectId: string, input: Rec
     .from('contract_obligations')
     .select('id, title, category, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, responsible, penalty, source_clause, source_page, status, note')
     .eq('project_id', projectId)
+    .neq('status', '不適用')
     .order('sort_order', { ascending: true })
     .limit(limit)
   if (pat) obQ = obQ.or(`title.ilike.${pat},penalty.ilike.${pat},note.ilike.${pat}`)

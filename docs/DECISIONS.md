@@ -51,22 +51,28 @@
 
 - **狀態**：ACCEPTED（2026-08-12）
 - **決策**：`/agent` 是唯一完整 AI 產品；浮動按鈕只做同一 Agent 的薄快速入口；`/assistant` 確認無獨有能力後導向 `/agent`。
-- **結果**：不再擴充 `/assistant`；一個 Agent runtime、一套功能開關與計量。
+- **結果**：W3 已完成；`/assistant` 導向 `/agent`，浮動入口明示為同一 Agent 的新對話，前端不再呼叫 `assistant.chat`。舊功能列、Edge Function 與用量歷史保留，但功能開關已停用。
 
 ## D-009｜正式專案角色以邀請方確認為準
 
 - **狀態**：ACCEPTED（2026-08-12）
 - **決策**：公開註冊自選的 org_type 不作為正式專案身分信任依據；正式身分由邀請方／專案管理者在邀請時確認。
-- **結果**：未完成確認機制前不擴充成員功能；不建立新角色或組織樹。
+- **結果**：W4 已完成；邀請方必須指定三方身分，伺服器與受邀帳號的 `profiles.org_type` 比對，錯配即拒絕。未建立新角色或組織樹。W5-3 再把 `project_members`＝授權、`project_memberships`＝身分快照固定為唯一開發規則與 schema metadata；本機完成，尚未部署。
 
 ## D-010｜AI 功能開關故障策略是 fail-closed
 
 - **狀態**：ACCEPTED（2026-08-12）
 - **決策**：`ai_feature_allowed` 查詢失敗時拒絕服務（fail-closed），不得保守放行。
-- **結果**：kill switch 在 DB 故障時仍有效；用量記錄失敗可不阻擋回應，但必須有告警與可補記機制。
+- **結果**：W3 已完成；kill switch 在 DB 故障時仍有效，前端會顯示清楚錯誤與重試。用量記錄失敗不阻擋 AI 回應，但會寫既有 log 告警；補記後台不在目前範圍。
 
 ## D-011｜Requirement／obligation 先盤點再定向
 
 - **狀態**：ACCEPTED（2026-08-12）
 - **決策**：先完成正式資料盤點（雙寫點、同步殘料、數量），再由使用者在「單向產生」與「完全解耦」之間定案。
-- **結果**：盤點前不改 trigger、不刪表、不清資料；對應 C-001。
+- **結果**：W5-1 已完成唯讀盤點，見 [`W5-1-Requirement-Obligation-決策書.md`](W5-1-Requirement-Obligation-決策書.md)；使用者已於 D-012 選擇 A。
+
+## D-012｜Requirement 單向產生 obligation
+
+- **狀態**：ACCEPTED（2026-08-12）
+- **決策**：`requirements` 是唯一契約要求權威；只有經人工核定且 `requirement_type = 'deadline'` 的 Requirement，才能單向產生／更新 `contract_obligations` 相容 runtime。obligation 的執行狀態與佐證不反向改寫 Requirement。
+- **結果**：W5-2 已在 PR #6 完成並通過驗證：新文件只跑 `extract-requirements` 一次，舊 `parse-contract` Edge Function 檔案保留但沒有前端呼叫者；受控核准會冪等產生 deadline obligation，並保留既有 `status`、`evidence_submittal_id`、`penalty` 與歷史連結。已核准期限被人工取代時，只有仍待辦的相容提醒會改為「不適用」並退出現行清單，資料列、佐證與歷史不刪除。尚未合併或部署。

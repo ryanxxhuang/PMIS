@@ -266,206 +266,91 @@ select is((select count(*)::integer from public.authoritative_requirements where
 select is((select count(*)::integer from public.authoritative_requirements where id = '30000000-0000-0000-0000-000000000004'), 0, 'rejected is excluded from authoritative_requirements');
 select is((select count(*)::integer from public.authoritative_requirements where id = '30000000-0000-0000-0000-000000000005'), 0, 'superseded is excluded from authoritative_requirements');
 
-insert into public.contract_obligations (
-  id, project_id, title, category, trigger_event, offset_days, offset_dir,
-  responsible, source_clause, source_page, status
+
+-- D-012: Requirement owns contractual content. Only an approved deadline is
+-- adapted into the obligation runtime, and repeated materialization preserves
+-- the runtime fields that users operate.
+select has_function('public', 'materialize_deadline_obligation', array['uuid'],
+  'approved deadline materialization boundary exists');
+select is((select count(*)::integer from pg_trigger
+  where tgrelid = 'public.contract_obligations'::regclass
+    and tgname = 'contract_obligations_sync_requirement' and not tgisinternal), 0,
+  'obligation-to-Requirement synchronization trigger is retired');
+select is((select count(*)::integer from pg_trigger
+  where tgrelid = 'public.contract_obligations'::regclass
+    and tgname = 'contract_obligations_delete_requirement' and not tgisinternal), 0,
+  'obligation deletion no longer mutates Requirement');
+select is(has_table_privilege('authenticated', 'public.contract_obligations', 'INSERT'), false,
+  'browser users cannot author compatibility obligations directly');
+select is(has_table_privilege('authenticated', 'public.contract_obligations', 'DELETE'), false,
+  'browser users cannot delete compatibility obligations directly');
+select is(has_column_privilege('authenticated', 'public.contract_obligations', 'status', 'UPDATE'), true,
+  'browser users may operate obligation status');
+select is(has_column_privilege('authenticated', 'public.contract_obligations', 'evidence_submittal_id', 'UPDATE'), true,
+  'browser users may attach obligation evidence');
+
+insert into public.requirements (
+  id, project_id, title, description, requirement_type,
+  responsible_party_type, lifecycle_phase, trigger_type, trigger_config,
+  frequency_type, frequency_config, status, origin
 ) values (
   '90000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
-  'Submit quality plan', '開工前', 'commencement', 30, 'after',
-  '廠商', '1.2.3', 'p.42', '待辦'
+  'Submit quality plan', '契約說明', 'deadline',
+  'contractor', '開工前', 'commencement',
+  '{"offset_days":30,"offset_dir":"after"}',
+  null, '{}', 'needs_review', 'manual'
 );
 
-select results_eq(
-  $$
-    select status, origin, legacy_contract_obligation_id::text,
-           responsible_party_type, trigger_config ->> 'offset_days'
-    from public.requirements
-    where id = '90000000-0000-0000-0000-000000000001'
-  $$,
-  $$
-    values (
-      'needs_review'::text, 'migration'::text,
-      '90000000-0000-0000-0000-000000000001'::text,
-      'contractor'::text, '30'::text
-    )
-  $$,
-  'legacy obligations migrate with explicit provenance and no authority'
-);
-
-select results_eq(
-  $$
-    select source_kind, source_verified, document_version_id, page_number, clause
-    from public.requirement_sources
-    where id = '90000000-0000-0000-0000-000000000001'
-  $$,
-  $$ values ('legacy'::text, false, null::uuid, 42, '1.2.3'::text) $$,
-  'legacy source metadata remains explicitly unverified'
-);
-
-update public.contract_obligations
-set title = 'Updated draft quality plan', offset_days = 45,
-    source_clause = '2.3.4', source_page = 'p.50'
-where id = '90000000-0000-0000-0000-000000000001';
-
-select results_eq(
-  $$
-    select status, title, trigger_config ->> 'offset_days'
-    from public.requirements
-    where id = '90000000-0000-0000-0000-000000000001'
-  $$,
-  $$ values ('needs_review'::text, 'Updated draft quality plan'::text, '45'::text) $$,
-  'needs_review requirement content continues to synchronize from legacy'
-);
-
-select results_eq(
-  $$
-    select page_number, page_label, clause
-    from public.requirement_sources
-    where id = '90000000-0000-0000-0000-000000000001'
-  $$,
-  $$ values (50, 'p.50'::text, '2.3.4'::text) $$,
-  'needs_review legacy source metadata continues to synchronize'
-);
-
-update public.contract_obligations
-set source_clause = null, source_page = null
-where id = '90000000-0000-0000-0000-000000000001';
-
-select is(
-  (select count(*)::integer from public.requirement_sources
-    where id = '90000000-0000-0000-0000-000000000001'),
-  0,
-  'clearing mutable legacy citation metadata removes the stale source'
-);
-
-update public.contract_obligations
-set source_clause = '2.3.4', source_page = 'p.50'
-where id = '90000000-0000-0000-0000-000000000001';
-
-select results_eq(
-  $$
-    select source_kind, source_verified, page_number, clause
-    from public.requirement_sources
-    where id = '90000000-0000-0000-0000-000000000001'
-  $$,
-  $$ values ('legacy'::text, false, 50, '2.3.4'::text) $$,
-  'restoring mutable legacy citation metadata recreates one deterministic source'
-);
-
-update public.contract_obligations set status = '已提送'
-where id = '90000000-0000-0000-0000-000000000001';
-update public.contract_obligations set status = '待辦'
-where id = '90000000-0000-0000-0000-000000000001';
-
-select is(
-  (select count(*)::integer from public.requirements
-    where legacy_contract_obligation_id = '90000000-0000-0000-0000-000000000001'),
-  1,
-  'legacy migration does not duplicate requirement roots'
-);
-select is(
-  (select count(*)::integer from public.requirement_sources
-    where id = '90000000-0000-0000-0000-000000000001'),
-  1,
-  'legacy source synchronization is idempotent'
-);
+select is(public.materialize_deadline_obligation(
+  '90000000-0000-0000-0000-000000000001'), null::uuid,
+  'unapproved deadline does not create an obligation');
+select is((select count(*)::integer from public.contract_obligations
+  where requirement_id = '90000000-0000-0000-0000-000000000001'), 0,
+  'unapproved deadline leaves no compatibility row');
 
 update public.requirements set status = 'approved', reviewed_at = now()
 where id = '90000000-0000-0000-0000-000000000001';
+select lives_ok($$
+  select public.materialize_deadline_obligation('90000000-0000-0000-0000-000000000001')
+$$, 'approved deadline materializes successfully');
+select results_eq(
+  $$
+    select title, category, trigger_event, offset_days, offset_dir,
+           responsible, status, requirement_id::text
+    from public.contract_obligations
+    where requirement_id = '90000000-0000-0000-0000-000000000001'
+  $$,
+  $$ values (
+    'Submit quality plan'::text, '開工前'::text, 'commencement'::text,
+    30, 'after'::text, '廠商'::text, '待辦'::text,
+    '90000000-0000-0000-0000-000000000001'::text
+  ) $$,
+  'approved Requirement content maps to one obligation runtime row'
+);
+
 update public.contract_obligations
-set title = 'Unapproved changed title', offset_days = 90,
-    source_clause = '9.9.9', source_page = 'p.99'
+set status = '已完成', penalty = '每日千分之一', note = '現場備註'
+where requirement_id = '90000000-0000-0000-0000-000000000001';
+update public.requirements
+set title = 'Updated quality plan', trigger_config = '{"offset_days":45,"offset_dir":"before"}'
 where id = '90000000-0000-0000-0000-000000000001';
-
+select is(public.materialize_deadline_obligation(
+  '90000000-0000-0000-0000-000000000001'),
+  '90000000-0000-0000-0000-000000000001'::uuid,
+  'materialization retry returns the existing obligation identity');
 select results_eq(
   $$
-    select r.status, r.is_authoritative, r.title,
-           r.trigger_config ->> 'offset_days', s.page_number, s.clause
-    from public.requirements r
-    join public.requirement_sources s on s.requirement_id = r.id
-    where r.id = '90000000-0000-0000-0000-000000000001'
-      and s.id = '90000000-0000-0000-0000-000000000001'
+    select count(*)::integer, min(title), min(offset_days), min(offset_dir),
+           min(status), min(penalty), min(note)
+    from public.contract_obligations
+    where requirement_id = '90000000-0000-0000-0000-000000000001'
   $$,
-  $$
-    values (
-      'approved'::text, true, 'Updated draft quality plan'::text,
-      '45'::text, 50, '2.3.4'::text
-    )
-  $$,
-  'approved requirement content and citation survive unapproved legacy changes'
-);
-
-delete from public.contract_obligations
-where id = '90000000-0000-0000-0000-000000000001';
-
-select is(
-  (select count(*)::integer from public.requirements
-    where id = '90000000-0000-0000-0000-000000000001'),
-  1,
-  'approved requirements survive legacy replacement'
-);
-select is(
-  (select count(*)::integer from public.authoritative_requirements
-    where id = '90000000-0000-0000-0000-000000000001'),
-  1,
-  'surviving approved legacy requirements remain authoritative'
-);
-
-insert into public.contract_obligations (
-  id, project_id, title, trigger_event, offset_days, offset_dir,
-  source_clause, source_page, status
-) values (
-  '90000000-0000-0000-0000-000000000002',
-  '10000000-0000-0000-0000-000000000001',
-  'Rejected original', 'notice', 7, 'after', 'R.1', 'p.7', '待辦'
-);
-update public.requirements set status = 'rejected', reviewed_at = now()
-where id = '90000000-0000-0000-0000-000000000002';
-update public.contract_obligations
-set title = 'Rejected changed', offset_days = 8,
-    source_clause = 'R.2', source_page = 'p.8'
-where id = '90000000-0000-0000-0000-000000000002';
-
-select results_eq(
-  $$
-    select r.status, r.is_authoritative, r.title,
-           r.trigger_config ->> 'offset_days', s.page_number, s.clause
-    from public.requirements r
-    join public.requirement_sources s on s.requirement_id = r.id
-    where r.id = '90000000-0000-0000-0000-000000000002'
-      and s.id = '90000000-0000-0000-0000-000000000002'
-  $$,
-  $$ values ('rejected'::text, false, 'Rejected original'::text, '7'::text, 7, 'R.1'::text) $$,
-  'rejected requirement content and citation survive later legacy changes'
-);
-
-insert into public.contract_obligations (
-  id, project_id, title, trigger_event, offset_days, offset_dir,
-  source_clause, source_page, status
-) values (
-  '90000000-0000-0000-0000-000000000003',
-  '10000000-0000-0000-0000-000000000001',
-  'Superseded original', 'notice', 14, 'after', 'S.1', 'p.14', '待辦'
-);
-update public.requirements set status = 'superseded', reviewed_at = now()
-where id = '90000000-0000-0000-0000-000000000003';
-update public.contract_obligations
-set title = 'Superseded changed', offset_days = 15,
-    source_clause = 'S.2', source_page = 'p.15'
-where id = '90000000-0000-0000-0000-000000000003';
-
-select results_eq(
-  $$
-    select r.status, r.is_authoritative, r.title,
-           r.trigger_config ->> 'offset_days', s.page_number, s.clause
-    from public.requirements r
-    join public.requirement_sources s on s.requirement_id = r.id
-    where r.id = '90000000-0000-0000-0000-000000000003'
-      and s.id = '90000000-0000-0000-0000-000000000003'
-  $$,
-  $$ values ('superseded'::text, false, 'Superseded original'::text, '14'::text, 14, 'S.1'::text) $$,
-  'superseded requirement content and citation survive later legacy changes'
+  $$ values (
+    1, 'Updated quality plan'::text, 45, 'before'::text,
+    '已完成'::text, '每日千分之一'::text, '現場備註'::text
+  ) $$,
+  'retry updates contractual fields once and preserves runtime state'
 );
 
 -- auth.uid() is non-null here, exercising the application-user guard.

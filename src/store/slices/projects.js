@@ -29,6 +29,7 @@ export async function resolveWorkItems({ configured, project, fetchCount, fetchD
 export function useProjectsSlice({ currentUser, log }) {
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState(null)
+  // AUTHORIZATION：來自 project_members，供專案存取/admin 與 Store can 使用。
   const [myMemberRoles, setMyMemberRoles] = useState({}) // { project_id: 'admin' | … }
   const [projectLoading, setProjectLoading] = useState(isSupabaseConfigured)
   const currentProject = useMemo(
@@ -108,8 +109,8 @@ export function useProjectsSlice({ currentUser, log }) {
   // 重試標單載入（error 狀態的 UI 呼叫）
   const retryWorkItems = useCallback(() => setWiReloadKey((k) => k + 1), [])
 
-  // 本人在目前專案的 P0-02 membership(契約包上傳的 party 歸屬用;無則 null)。
-  // 必須帶出 party_type(join parties),availablePackageOptions 靠它分流。
+  // IDENTITY SNAPSHOT ONLY：本人在本案代表的契約方，只供文件歸屬/相對方判斷；
+  // 不得拿來決定 can、RLS、Agent 或提醒。party_type(join parties)供契約包分流。
   const [membershipReloadKey, setMembershipReloadKey] = useState(0)
   const reloadMembership = useCallback(() => setMembershipReloadKey((k) => k + 1), [])
   const [currentProjectMembership, setCurrentProjectMembership] = useState(null)

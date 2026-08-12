@@ -46,6 +46,7 @@
 - 金額、期限與合格判定必須由確定性程式或資料庫規則計算。
 - RLS、RPC、Guard Trigger 與 migration 是安全邊界；前端隱藏按鈕不是權限控制。
 - 只有 `approved` Requirement 是權威契約要求。
+- 成員模型以 [`docs/architecture/three-party-role-model.md`](docs/architecture/three-party-role-model.md#成員模型的唯一判斷規則) 為唯一規則：`project_members` 管授權，`project_memberships` 管身分快照；不得從 `project_role` 或 party 類型推導業務權限。
 
 ## 5. 資料與 migration
 

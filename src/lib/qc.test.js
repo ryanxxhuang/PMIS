@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { judgeItem, judgeChecklist, judgeConcrete, diffChecklistResults, sampleDues, pendingSamplesFromLogs, sampleAlerts } from './qc.js'
+import { judgeItem, judgeChecklist, judgeConcrete, deriveTestSampleUpdate, shouldCreateTestSampleDefect, diffChecklistResults, sampleDues, pendingSamplesFromLogs, sampleAlerts } from './qc.js'
 
 const numItem = { no: 'C1', item: '澆置溫度', kind: 'num', min: 13, max: 32 }
 const minOnly = { no: 'C5', item: '振動頻率', kind: 'num', min: 7000 }
@@ -75,6 +75,31 @@ describe('judgeConcrete(03310:任一 ≥0.85fc′ 且平均 ≥fc′)', () => {
   it('無值/無 fc → null', () => {
     expect(judgeConcrete(420, []).status).toBe(null)
     expect(judgeConcrete(null, [400]).status).toBe(null)
+  })
+})
+
+describe('shouldCreateTestSampleDefect(DB trigger 的試體缺失冪等規則)', () => {
+  it('首次不合格可開立；同試體已有缺失（即使已結案）也不重複開', () => {
+    expect(shouldCreateTestSampleDefect([], 'TS-1')).toBe(true)
+    expect(shouldCreateTestSampleDefect([
+      { id: 'DEF-1', test_sample_id: 'TS-1', status: '已結案' },
+    ], 'TS-1')).toBe(false)
+    expect(shouldCreateTestSampleDefect([], null)).toBe(false)
+  })
+})
+
+describe('deriveTestSampleUpdate(DB trigger 的同步判定規則)', () => {
+  it('合併 28 天值後同步回傳不合格判定，非判定欄位更新不重算', () => {
+    const failed = deriveTestSampleUpdate(
+      { id: 'TS-1', fc: 280, d28_values: null, status: '待試驗' },
+      { d28_values: [200, 200, 200] },
+    )
+    expect(failed.sample.status).toBe('不合格')
+    expect(failed.judgement).toMatchObject({ status: '不合格', avg: 200, min: 200 })
+
+    const noteOnly = deriveTestSampleUpdate(failed.sample, { note: '複核' })
+    expect(noteOnly.sample.status).toBe('不合格')
+    expect(noteOnly.judgement).toBeNull()
   })
 })
 

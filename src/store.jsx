@@ -54,6 +54,8 @@ export function StoreProvider({ children }) {
     loadPortfolio,
   } = useProjectsSlice({ currentUser, log })
 
+  // AUTHORIZATION：UI 權限只讀 project_members 的 admin 旗標 + profiles.org_type；
+  // currentProjectMembership 是契約方身分快照，絕不能餵給 can。
   // 角色權限（UI 層 v1，對應三級品管）：
   //   施工＝填報/提送，監造＝查驗判定/審核，機關＝監督核定（變更設計核准、撥款）。
   // 核心規則：施工不能核准或結案自己的東西；機關對日常填報唯讀，但保留契約級核定權。
@@ -134,7 +136,7 @@ export function StoreProvider({ children }) {
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
-    parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument,
+    reloadObligations, updateObligationStatus, ingestRequirementDocument,
   } = useLedgerSlice(ctx)
   const {
     agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions, setAgentActions,
@@ -293,7 +295,7 @@ export function StoreProvider({ children }) {
     adjustedItems, coNet, revisedTotal, domainLoadError, retryDomainLoad,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, readWhiteboard, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, classifySitePhoto, fetchWeather,
-    obligations, parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
+    obligations, reloadObligations, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, createCostItem, updateCostItem, deleteCostItem,
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,

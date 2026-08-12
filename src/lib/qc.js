@@ -56,6 +56,21 @@ export function judgeConcrete(fc, values) {
   return { status: min >= 0.85 * fc && avg >= fc ? '合格' : '不合格', avg, min }
 }
 
+// 試體輸入更新的同步推導。不能把 judgement 暫存在 React state updater 內再立刻讀，
+// 因為 updater 可能延後執行，demo 會漏開正式 DB trigger 一定會開的缺失。
+export function deriveTestSampleUpdate(sample, patch) {
+  const merged = { ...sample, ...patch }
+  if (!('d28_values' in patch) && !('fc' in patch)) return { sample: merged, judgement: null }
+  const judgement = judgeConcrete(merged.fc, merged.d28_values)
+  return { sample: { ...merged, status: judgement.status || '待試驗' }, judgement }
+}
+
+// 同一組不合格試體只開一筆缺失。正式 DB 由 defects.test_sample_id 防重複；
+// demo 用此純函式套同一規則，且已結案的原缺失也算已有追蹤紀錄。
+export function shouldCreateTestSampleDefect(defects, testSampleId) {
+  return !!testSampleId && !(defects || []).some((d) => d.test_sample_id === testSampleId)
+}
+
 const addDays = (iso, days) => {
   const d = parseLocalDate(iso)
   d.setDate(d.getDate() + days)

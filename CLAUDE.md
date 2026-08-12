@@ -4,6 +4,17 @@
 
 ---
 
+## 0. 目前續接點（2026-08-12）
+
+- W0～W4 已合併至 `main` 並部署；不要重做文件基準、標單原子化、初始化流程、單一 Agent 或成員／正式模式。
+- **W5-1 已完成**：唯讀盤點與 A／B 代價見 `docs/W5-1-Requirement-Obligation-決策書.md`。
+- 使用者已選 A（D-012）：`requirements` 是唯一權威，approved deadline Requirement 單向產生 obligation；obligation 執行狀態不反向改寫 Requirement。
+- **W5-2～W5-4 已提交至 PR #6，不要重做**：Requirement 單向 migration／rollback、legacy caller 退場、成員模型防誤用，以及試體缺失 Demo／DB 漂移修正均已完成；PR 審查補上 supersede 不得殘留待辦提醒的回歸，保留資料與歷史但從現行前端／Agent 清單排除。最新基線為 523 Vitest、12 E2E、723 pgTAP；尚未合併或部署。下一動作是核 PR，未經使用者明確授權不得合併、部署或開始 W6。
+- 正式庫 preflight：65 obligations／113 requirements／48 筆差額；差額全是未核定建議，orphan legacy = 0、approved deadline 缺 obligation = 0。
+- 每次續接仍以 `docs/ROADMAP.md` 第一個未勾項目為準；工作包分支從最新 `main` 建立，不沿用已合併的 W1～W4 分支。
+
+---
+
 ## 1. 北極星（所有開發以此為核心）
 
 > **終極目標：政府機關的每一個承辦人，都配一個懂他業務的 AI Agent。**
@@ -62,6 +73,7 @@
 - **Stack**：React 18 + Vite + Tailwind 4 ／ Supabase（Postgres + RLS + Edge Functions on Deno）
 - **資料脊椎**：PCCES 標單 → `work_items` 樹；日誌數量 → 估驗 → 請款，全線靠 `work_item_id` 串
 - **權限**：伺服器端 RBAC（RLS ＋ 狀態轉移 trigger），前端 `can` 只是 UX，不是安全邊界
+- **成員模型**：`project_members`＝授權；`project_memberships`＝契約方身分快照。唯一規則見 `docs/architecture/three-party-role-model.md`
 - **導覽單一真相**：`src/lib/navConfig.js`（側欄／路由守衛／分頁列共用；`hidden: true` ≠ 移除權限）
 - **Store**：`src/store.jsx` 組合根 ＋ `src/store/slices/*`
 - **資料存取**：跨頁共享資料才進 Store；單頁專屬資料可直接查 Supabase；同一查詢重複兩次以上才抽共用層
