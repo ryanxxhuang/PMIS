@@ -1,7 +1,7 @@
 // 驗證「你的 agent 早報」(send-reminders)確定性內容組裝:
 //   * collectOpenBallItems(agentTools):全陣營收集 + obligationSoonDays 行為
-//   * testSampleItems:試體齡期 → 品管早報項
-//   * itemsForRecipient:陣營過濾 + 同陣營偏好路由(試驗→qc、工安→field)與回落
+//   * testSampleItems:試體齡期 → 廠商早報項
+//   * itemsForRecipient:只依廠商／監造／機關三方陣營過濾
 //   * splitBrief / shouldSendBrief:「沒有屬於這個角色的事就不寄」
 //   * renderBriefEmail / briefSubject:角色化信件(確定性,無 LLM)
 import { describe, it, expect } from 'vitest'
@@ -89,7 +89,7 @@ describe('collectOpenBallItems(與 list_my_open_items 同一份實作)', () => {
   })
 })
 
-describe('testSampleItems(試體齡期 → 品管早報項)', () => {
+describe('testSampleItems(試體齡期 → 廠商早報項)', () => {
   it('未試驗且齡期已到/將到 → 廠商陣營「試驗」項;已填/已判定/太遠的不收', () => {
     const items = testSampleItems([
       { id: 't1', sample_no: 'C-01', test_item: '混凝土抗壓', status: '待試驗', d7_due: '2026-07-20', d7_value: null, d28_due: '2026-08-10', d28_values: [] },
@@ -106,7 +106,7 @@ describe('testSampleItems(試體齡期 → 品管早報項)', () => {
   })
 })
 
-describe('itemsForRecipient(陣營 + 偏好路由)', () => {
+describe('itemsForRecipient（三方陣營）', () => {
   const items = [
     item({ id: 'a', kind: '試驗' }),
     item({ id: 'b', kind: '工安缺失' }),
@@ -116,17 +116,11 @@ describe('itemsForRecipient(陣營 + 偏好路由)', () => {
   const ids = (xs: OpenBallItem[]) => xs.map((i) => i.id)
 
   it('只拿自己陣營的球', () => {
-    expect(ids(itemsForRecipient(items, 'supervisor', new Set(['field', 'supervisor'])))).toEqual(['d'])
-    expect(ids(itemsForRecipient(items, 'owner', new Set(['owner'])))).toEqual([])
+    expect(ids(itemsForRecipient(items, 'supervisor'))).toEqual(['d'])
+    expect(ids(itemsForRecipient(items, 'owner'))).toEqual([])
   })
-  it('同陣營偏好路由:試驗歸品管、工安歸現場,一般缺失兩者都收', () => {
-    const present = new Set(['field', 'qc'] as const)
-    expect(ids(itemsForRecipient(items, 'field', present))).toEqual(['b', 'c'])
-    expect(ids(itemsForRecipient(items, 'qc', present))).toEqual(['a', 'c'])
-  })
-  it('偏好角色不在專案裡 → 回落給同陣營成員(提醒不能沒人收到)', () => {
-    const onlyField = new Set(['field'] as const)
-    expect(ids(itemsForRecipient(items, 'field', onlyField))).toEqual(['a', 'b', 'c'])
+  it('廠商成員收到所有廠商事項，不再依現場／品管分流', () => {
+    expect(ids(itemsForRecipient(items, 'contractor'))).toEqual(['a', 'b', 'c'])
   })
 })
 
@@ -157,13 +151,13 @@ describe('renderBriefEmail / briefSubject(角色化、確定性)', () => {
     item({ id: 'soon', title: 'SUB-001 鋼筋施工計畫', kind: '送審', due_date: '2026-07-28', meta: '待監造審定' }),
   ], TODAY)
   const html = renderBriefEmail({
-    role: 'qc', projectName: 'A 區新建工程', todayUTC: TODAY,
+    role: 'contractor', projectName: 'A 區新建工程', todayUTC: TODAY,
     sections, pendingDrafts: 2, agentUrl: 'https://x.test/#/agent',
   })
 
   it('開頭一句:{角色} Agent · {專案名} · {日期}', () => {
     expect(briefDateLabel(TODAY)).toBe('7/26')
-    expect(html).toContain('品管 Agent · A 區新建工程 · 7/26')
+    expect(html).toContain('廠商 Agent · A 區新建工程 · 7/26')
   })
   it('第一段球在你手上(逾期紅字)、第二段 7 日內到期', () => {
     expect(html).toContain('今天球在你手上')
@@ -177,14 +171,14 @@ describe('renderBriefEmail / briefSubject(角色化、確定性)', () => {
     expect(html).toContain('打開你的 Agent')
     expect(html).toContain('https://x.test/#/agent')
     const noDrafts = renderBriefEmail({
-      role: 'qc', projectName: 'A', todayUTC: TODAY, sections, pendingDrafts: 0, agentUrl: 'https://x.test/#/agent',
+      role: 'contractor', projectName: 'A', todayUTC: TODAY, sections, pendingDrafts: 0, agentUrl: 'https://x.test/#/agent',
     })
     expect(noDrafts).not.toContain('待覆核')
   })
   it('標題含角色與兩段件數;HTML 內容有跳脫', () => {
-    expect(briefSubject('qc', 'A 區新建工程', sections)).toBe('【PMIS】品管 Agent · A 區新建工程:逾期 1 件、7 日內到期 1 件')
+    expect(briefSubject('contractor', 'A 區新建工程', sections)).toBe('【PMIS】廠商 Agent · A 區新建工程:逾期 1 件、7 日內到期 1 件')
     const dirty = renderBriefEmail({
-      role: 'field', projectName: '<script>alert(1)</script>', todayUTC: TODAY,
+      role: 'contractor', projectName: '<script>alert(1)</script>', todayUTC: TODAY,
       sections, pendingDrafts: 0, agentUrl: 'https://x.test/#/agent',
     })
     expect(dirty).not.toContain('<script>')

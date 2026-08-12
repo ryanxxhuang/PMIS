@@ -374,7 +374,7 @@ export function buildDemoData(workItems, project) {
 
   const agentActions = [
     { id: 'AGA-DEMO-1', project_id: project.project_id, actor_user: null,
-      agent_role: 'field', kind: 'draft_daily_log', target_table: 'daily_logs', target_id: null,
+      agent_role: 'contractor', kind: 'draft_daily_log', target_table: 'daily_logs', target_id: null,
       summary: `已依 18 張現場照片擬好 ${draftLogDate} 施工日誌草稿(3 個工項,數量待你填)`,
       rationale: '工項清單:依當日已配對工項的現場照片自動帶出(確定性比對,非 AI 判讀)。\n'
         + '數量:一律留空待你親自填寫——照片能證明有施作,不能證明做了多少,系統不猜數量。\n'
@@ -383,7 +383,7 @@ export function buildDemoData(workItems, project) {
       evidence: { 來源: ['現場照片 18 張', `前日日誌 ${iso(daysFromNow(-1))}`, '進行中工項 3 項'], payload: draftPayload },
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(2) },
     { id: 'AGA-DEMO-2', project_id: project.project_id, actor_user: null,
-      agent_role: 'qc', kind: 'draft_inspection', target_table: 'checklist_records', target_id: null,
+      agent_role: 'contractor', kind: 'draft_inspection', target_table: 'checklist_records', target_id: null,
       summary: `已依今日澆置照片擬好「${TEMPLATE_03310.title}」草稿(${inspDraftNeeds} 項待你填)`,
       rationale: '範本:依今日照片對應的混凝土澆置作業,挑出 03310 自主檢查表範本。\n'
         + '目視項:照片可判讀的勾選項先給建議值並標「AI 建議」、逐項附依據,由你確認;是否已通知監造照片看不出來,留白不猜。\n'

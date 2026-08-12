@@ -12,14 +12,12 @@ import type { DailyLogDraftInput, InspectionDraftInput } from './agentTools.ts'
 describe('toolsForRole(批4 角色分發:查詢在前、角色草稿工具居中、raise_to 殿後)', () => {
   const queryNames = QUERY_TOOLS.map((t) => t.name)
 
-  it('field = 查詢七支 + draft_daily_log + raise_to', () => {
-    expect(toolsForRole('field').map((t) => t.name)).toEqual([...queryNames, 'draft_daily_log', 'raise_to'])
-    expect(toolsForRole('field').at(-1)).toBe(RAISE_TO_TOOL)
-  })
-
-  it('qc = 查詢七支 + draft_inspection + raise_to', () => {
-    expect(toolsForRole('qc').map((t) => t.name)).toEqual([...queryNames, 'draft_inspection', 'raise_to'])
-    expect(toolsForRole('qc').at(-2)).toBe(DRAFT_INSPECTION_TOOL)
+  it('contractor = 查詢七支 + 日誌草稿 + 自主檢查草稿 + raise_to', () => {
+    expect(toolsForRole('contractor').map((t) => t.name))
+      .toEqual([...queryNames, 'draft_daily_log', 'draft_inspection', 'raise_to'])
+    expect(toolsForRole('contractor').at(-3)).toBe(DRAFT_DAILY_LOG_TOOL)
+    expect(toolsForRole('contractor').at(-2)).toBe(DRAFT_INSPECTION_TOOL)
+    expect(toolsForRole('contractor').at(-1)).toBe(RAISE_TO_TOOL)
   })
 
   it('supervisor = 查詢七支 + run_integrity_audit + draft_submittal_review + raise_to', () => {
@@ -35,17 +33,15 @@ describe('toolsForRole(批4 角色分發:查詢在前、角色草稿工具居中
     expect(toolsForRole('owner').map((t) => t.name)).not.toContain('draft_submittal_review')
   })
 
-  it('field / qc 沒有 draft_submittal_review(只給 supervisor)', () => {
-    for (const role of ['field', 'qc'] as const) {
-      expect(toolsForRole(role).map((t) => t.name)).not.toContain('draft_submittal_review')
-    }
+  it('contractor 沒有 draft_submittal_review（只給 supervisor）', () => {
+    expect(toolsForRole('contractor').map((t) => t.name)).not.toContain('draft_submittal_review')
   })
 
   it('每個角色多次呼叫回傳同一參考(模組層常數,不重建 → 快取前綴逐位元組穩定)', () => {
-    for (const role of ['field', 'qc', 'supervisor', 'owner'] as const) {
+    for (const role of ['contractor', 'supervisor', 'owner'] as const) {
       expect(toolsForRole(role)).toBe(toolsForRole(role))
     }
-    expect(toolsForRole('field')[0]).toBe(QUERY_TOOLS[0])
+    expect(toolsForRole('contractor')[0]).toBe(QUERY_TOOLS[0])
   })
 })
 
@@ -301,14 +297,14 @@ describe('makeToolExec 的 draft_inspection / raise_to 防護', () => {
   })
 
   it('draft_inspection:check_date / UUID 不合法時回錯誤讓模型修正', async () => {
-    const exec = makeToolExec({} as never, pid, {} as never, 'user-1', 'qc')
+    const exec = makeToolExec({} as never, pid, {} as never, 'user-1', 'contractor')
     expect(((await exec('draft_inspection', { check_date: '2026-13-40' })) as { error?: string }).error).toContain('有效日期')
     expect(((await exec('draft_inspection', { work_item_id: 'abc' })) as { error?: string }).error).toContain('UUID')
     expect(((await exec('draft_inspection', { template_id: 'abc' })) as { error?: string }).error).toContain('UUID')
   })
 
   it('raise_to:to_role / subject / target 成對性逐項驗證', async () => {
-    const exec = makeToolExec({} as never, pid, {} as never, 'user-1', 'qc')
+    const exec = makeToolExec({} as never, pid, {} as never, 'user-1', 'contractor')
     expect(((await exec('raise_to', { to_role: 'boss', subject: 'x' })) as { error?: string }).error).toContain('to_role')
     expect(((await exec('raise_to', { to_role: 'supervisor', subject: '  ' })) as { error?: string }).error).toContain('subject')
     expect(((await exec('raise_to', { to_role: 'supervisor', subject: '請複查', target_table: 'defects' })) as { error?: string }).error)
@@ -321,6 +317,33 @@ describe('makeToolExec 的 draft_inspection / raise_to 防護', () => {
     const exec = makeToolExec({} as never, pid)
     expect(((await exec('raise_to', { to_role: 'supervisor', subject: '缺失改善完成,請複查' })) as { error?: string }).error)
       .toBe('伺服器未設定,暫時無法建立草稿')
+  })
+
+  it('raise_to:只依三方 org_type 找收件人，不讀 project_role', async () => {
+    let inserted: Record<string, unknown> | null = null
+    const db = {
+      rpc: async () => ({
+        data: [
+          { user_id: 'user-1', full_name: '廠商甲', org_type: 'contractor', project_role: 'quality_engineer' },
+          { user_id: 'user-2', full_name: '監造乙', org_type: 'supervisor', project_role: 'viewer' },
+        ],
+        error: null,
+      }),
+    }
+    const service = {
+      from: () => ({
+        insert: (row: Record<string, unknown>) => {
+          inserted = row
+          return { select: () => ({ single: async () => ({ data: { id: 'action-1' }, error: null }) }) }
+        },
+      }),
+    }
+    const exec = makeToolExec(db as never, pid, service as never, 'user-1', 'contractor')
+    const out = await exec('raise_to', { to_role: 'supervisor', subject: '缺失改善完成，請複查' }) as Record<string, unknown>
+
+    expect(out.ok).toBe(true)
+    expect(out.交接對象).toBe('監造乙(監造)')
+    expect(inserted).toMatchObject({ actor_user: 'user-2', agent_role: 'supervisor' })
   })
 })
 

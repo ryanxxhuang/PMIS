@@ -25,11 +25,11 @@ function CopilotMark({ size = 24 }) {
 // facts 快照——只有面板打開(掛載)時才付這個成本;收合時 FAB 僅訂閱 2 個 key。
 function CopilotPanel({ onClose }) {
   const { data, facts, org } = useAssistantData()
-  const { runAgent, currentProjectMembership, demoMode, currentUser } = useStore()
+  const { runAgent } = useStore()
   // 角色只用於顯示(紅線:權限一律以伺服器為準);agent-run 回傳的 role 覆蓋前端推算
   const [serverRole, setServerRole] = useState(null)
-  const role = serverRole || displayAgentRole({ demoMode, currentUser, projectRole: currentProjectMembership?.project_role, orgType: org })
-  const label = AGENT_LABEL[role] || AGENT_LABEL.field
+  const role = serverRole || displayAgentRole({ orgType: org })
+  const label = AGENT_LABEL[role] || AGENT_LABEL.contractor
 
   // 浮動面板不帶 history,保持輕量;fallback / error 由 CopilotChat 的確定性回退接手
   const onAsk = async (text) => {

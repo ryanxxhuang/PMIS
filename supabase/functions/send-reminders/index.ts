@@ -1,11 +1,10 @@
 // Supabase Edge Function: send-reminders —「你的 agent 早報」
 // ---------------------------------------------------------------------------
-// 每日角色化早報:掃全部專案,對每位成員依其 agent 角色(現場/品管/監造/機關)
+// 每日角色化早報:掃全部專案,對每位成員依其三方角色(廠商/監造/機關)
 // 產生「今天球在你手上」的個人化信件 —— 不再是全員同一份流水清單。
-//   * 角色判定與 agent-run 同一份映射(_shared/agentRole.ts):
-//     project_memberships.project_role 優先,對不到用 profiles.org_type fallback。
+//   * 角色判定與 agent-run 同一份映射(_shared/agentRole.ts):只看三方 org_type。
 //   * 「球在誰手上」與 agent 工具 list_my_open_items 同一份實作
-//     (_shared/agentTools.ts collectOpenBallItems),外加試體齡期(品管)。
+//     (_shared/agentTools.ts collectOpenBallItems),外加試體齡期(廠商事項)。
 //   * 沒有屬於這個角色的事(逾期或 7 日內到期)就不寄信給他。
 //   * 內容一律確定性產生,絕不呼叫 LLM(成本不合理、寄錯無法收回)。
 //
@@ -86,7 +85,7 @@ Deno.serve(async (req) => {
       results.push({ project: p.name, error: collected.error })
       continue
     }
-    // 試體齡期(7/28 天)→ 廠商陣營、品管優先(工安缺失已併入 defects 引擎
+    // 試體齡期(7/28 天)→ 廠商陣營(工安缺失已併入 defects 引擎
     // domain='safety',collectOpenBallItems 會帶出來;舊版另查 safety_records
     // 的路徑在統一缺失引擎後已是死碼,不再保留)
     const { data: samples } = await supabase.from('test_samples')
@@ -94,17 +93,12 @@ Deno.serve(async (req) => {
       .eq('project_id', p.id)
     const allItems: OpenBallItem[] = [...collected.items, ...testSampleItems(samples || [], todayUTC)]
 
-    // ── 2) 成員與角色:memberships(明確職務)∪ legacy project_members ────────
-    const [{ data: memberships }, { data: legacyMembers }] = await Promise.all([
-      supabase.from('project_memberships').select('user_id, project_role').eq('project_id', p.id),
-      supabase.from('project_members').select('user_id').eq('project_id', p.id),
-    ])
-    const roleByUser = new Map<string, string | null>() // user_id → project_role|null
-    for (const m of legacyMembers || []) roleByUser.set(m.user_id, null)
-    for (const m of memberships || []) roleByUser.set(m.user_id, m.project_role)
+    // ── 2) 成員與三方角色：project_members 管專案存取，profiles.org_type 管角色 ─
+    const { data: legacyMembers } = await supabase
+      .from('project_members').select('user_id').eq('project_id', p.id)
+    const memberIds = (legacyMembers || []).map((m) => m.user_id)
 
-    // org_type fallback(profiles)只查快取沒有的
-    const missing = [...roleByUser.keys()].filter((id) => !orgTypeCache.has(id))
+    const missing = memberIds.filter((id) => !orgTypeCache.has(id))
     if (missing.length) {
       const { data: profs } = await supabase.from('profiles').select('id, org_type').in('id', missing)
       for (const pr of profs || []) orgTypeCache.set(pr.id, pr.org_type || null)
@@ -112,10 +106,9 @@ Deno.serve(async (req) => {
     }
 
     const agentRoleByUser = new Map<string, AgentRole>()
-    for (const [uid, projectRole] of roleByUser) {
-      agentRoleByUser.set(uid, agentRoleOf(projectRole, orgTypeCache.get(uid)))
+    for (const uid of memberIds) {
+      agentRoleByUser.set(uid, agentRoleOf(orgTypeCache.get(uid)))
     }
-    const rolesPresent = new Set(agentRoleByUser.values())
 
     // ── 3) AI 草稿收件匣:本案各成員 pending 筆數(一次查完) ──────────────────
     const { data: drafts } = await supabase.from('agent_actions')
@@ -127,7 +120,7 @@ Deno.serve(async (req) => {
     const recipients: unknown[] = []
     let sent = 0
     for (const [uid, role] of agentRoleByUser) {
-      const mine = itemsForRecipient(allItems, role, rolesPresent)
+      const mine = itemsForRecipient(allItems, role)
       const sections = splitBrief(mine, todayUTC)
       const pendingDrafts = draftCount.get(uid) || 0
       const shouldSend = shouldSendBrief(sections)

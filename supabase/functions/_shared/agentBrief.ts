@@ -16,7 +16,7 @@ import { diffDays, formatDate, parseDateUTC } from './contractDue.ts'
 export const SOON_DAYS = 7
 
 // ── 試體齡期 → 早報項目(與 src/lib/qc.js sampleAlerts 同規則;確定性) ──────
-// 試體試驗是廠商品管的責任 → side 一律 contractor,kind '試驗'(品管優先路由)。
+// 試體試驗是廠商責任 → side 一律 contractor、kind 為「試驗」。
 export interface TestSampleRow {
   id?: string
   sample_no?: string | null
@@ -57,28 +57,12 @@ export function testSampleItems(samples: TestSampleRow[], todayUTC: number): Ope
   return out
 }
 
-// ── 收件者過濾:球在我陣營 + 同陣營內的偏好路由 ─────────────────────────────
-// field / qc 同屬廠商陣營;為了讓信「跟我有關」,特定類別優先路由給對的角色:
-//   試驗(試體齡期)→ 品管;工安缺失 → 現場。
-// 但偏好角色在本專案「沒有任何成員」時,回落給同陣營全部成員 —— 寧可現場工程師
-// 多收到一則試體提醒,也不能讓提醒沒人收到。
-const PREFERRED_ROLE_BY_KIND: Record<string, AgentRole> = {
-  試驗: 'qc',
-  工安缺失: 'field',
-}
-
-export function itemsForRecipient(
-  items: OpenBallItem[],
-  role: AgentRole,
-  rolesPresent: ReadonlySet<AgentRole>,
-): OpenBallItem[] {
+// ── 收件者過濾：只依廠商／監造／機關三方陣營 ─────────────────────────────
+// 廠商內部的現場、品管分工不是系統角色；所有廠商成員都能看到廠商事項，
+// 由公司自行決定實際承辦人。
+export function itemsForRecipient(items: OpenBallItem[], role: AgentRole): OpenBallItem[] {
   const side = SIDE_BY_AGENT_ROLE[role]
-  return items.filter((it) => {
-    if (it.side !== side) return false
-    const pref = PREFERRED_ROLE_BY_KIND[it.kind]
-    if (pref && pref !== role && rolesPresent.has(pref)) return false
-    return true
-  })
+  return items.filter((it) => it.side === side)
 }
 
 // ── 分段:今天球在你手上(逾期+無期限未結)/ 7 日內到期 ─────────────────────
