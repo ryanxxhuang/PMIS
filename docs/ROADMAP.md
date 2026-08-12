@@ -55,7 +55,7 @@
   範圍：浮動按鈕改為開啟同一 Agent（同 session 或明示「新對話」，擇一實作並寫進 PR）；移除「已匯 BOQ 才出現」的限制（對齊 W2-3）。
   不做：不做跨裝置對話歷史、不加聊天資料庫。
   驗收：浮動入口與 `/agent` 行為一致；使用者能分辨這是同一個 Agent。
-- [ ] **W3-3 assistant.chat 功能退場**
+- [x] **W3-3 assistant.chat 功能退場**
   範圍：前端不再呼叫 `assistant.chat`；`ai_features` 標記停用（不刪列、不刪 edge function 檔案）；用量歷史保留。
   不做：不刪任何 DB 資料與歷史。
   驗收：全站僅剩 `agent.run` 一個對話功能開關；`/admin` 用量頁仍能看歷史。

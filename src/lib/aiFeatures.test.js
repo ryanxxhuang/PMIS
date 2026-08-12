@@ -63,8 +63,8 @@ describe('aiFeatures 前後端註冊表同步', () => {
       .toEqual(['weather.fetch', 'reminder.daily'])
   })
 
-  it('所有功能 defaultEnabled = true(平台級開關的 seed 預設)', () => {
-    for (const f of AI_FEATURES) expect(f.defaultEnabled).toBe(true)
+  it('defaultEnabled:僅退場的 assistant.chat 為 false,其餘為 true(W3-3/D-008)', () => {
+    for (const f of AI_FEATURES) expect(f.defaultEnabled, f.key).toBe(f.key !== 'assistant.chat')
   })
 
   it('每個 edgeFunction 目錄確實存在於 supabase/functions/', () => {

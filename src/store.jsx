@@ -100,7 +100,7 @@ export function StoreProvider({ children }) {
   const {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
-    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, auditSummary, askAssistant, fetchWeather,
+    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   } = useSiteSlice(ctx)
   const {
@@ -292,7 +292,7 @@ export function StoreProvider({ children }) {
     aiEnabled,
     adjustedItems, coNet, revisedTotal, domainLoadError, retryDomainLoad,
     siteLogs, saveSiteLog, fillValuationFromSiteLogs,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, readWhiteboard, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, classifySitePhoto, askAssistant, fetchWeather,
+    listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, readWhiteboard, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, classifySitePhoto, fetchWeather,
     obligations, parseContract, parseContractFromText, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, createCostItem, updateCostItem, deleteCostItem,
