@@ -1,7 +1,7 @@
 # GovAgent／PMIS — 目前系統真相
 
 > 狀態：**CURRENT（現況權威文件）**
-> 最後核對：2026-08-13
+> 最後核對：2026-08-14
 > 用途：回答「產品現在是什麼、已經做到哪裡、哪份文件說了算」。
 
 ## 1. 一句話定義
@@ -94,7 +94,7 @@ contract_packages
 
 ## 6. 目前技術現況
 
-截至 2026-08-13 的盤點：
+截至 2026-08-14 的盤點：
 
 - React 18、Vite 6、Tailwind CSS 4 的靜態 SPA。
 - Supabase Postgres、Auth、RLS、Storage 與 Deno Edge Functions。
@@ -103,7 +103,7 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 58 個 Vitest 測試檔，共 563 個測試；19 個 Playwright Demo 三角色／路由 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
+- 60 個 Vitest 測試檔，共 583 個測試；19 個 Playwright Demo 三角色／路由 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
 
 最近一次全套驗證（W7 PR #9，2026-08-13）：530 個單元測試、14 個 Demo E2E、5 個真 Supabase E2E 與 production build 全數通過。PR #8 已讓 23 檔 pgTAP 自動進 CI；其 main run 與一般 CI 均成功。W0～W5、W6 PR #7、pgTAP CI PR #8 與 W7 PR #9 已合併部署；PR #9 的 main CI 與 Cloudflare Workers build 成功，正式站首頁、`/requirements`、`/security` 與 `/site-log/print` 均回 HTTP 200。正式資料庫維持 `20260812000600`，W7 沒有資料庫變更。
 
@@ -134,6 +134,10 @@ W8-2 由 PR #12 交付：今日待辦的聚合收斂為單一純函式 [`src/lib
 W8-2 的三條硬規則寫在函式與測試裡：AI 草稿與未核定 Requirement 不是 `buildTodayTasks` 的輸入，結構上進不了待辦；契約義務只接受 `廠商／監造／機關` 三個精確 `responsible` 值，且只有廠商責任者列為待辦（`/contract` 的完成鈕吃 `can.edit`，監造／機關按不到，不製造做不到的假待辦）；「今天已完成」只採可靠操作時間戳 `defects.closed_at` 與 `inspections.inspected_at`（依 `Asia/Taipei` 判日），可回填的業務日期與沒有完成時間欄位的估驗核定／變更核准一律不列。驗收階段的角色白名單移到 [`src/lib/acceptance.js`](src/lib/acceptance.js) 的 `ACCEPTANCE_STAGE_ORGS`，驗收頁與待辦聚合共用。
 
 W8-2 未動路由數、頁面權限、RLS、資料庫與 Edge Function。同批修正三個既有缺陷：估驗「待廠商請款」導向改為 `/payments`（請款日欄位在該頁）、`recordInspectionResult` 的 demo 分支補寫 `inspected_at`（原本只有 DB 分支寫，造成雙引擎漂移）、`computeObligationDue` 新增可注入的 `today`（每月重複義務不再讀系統時鐘）；期限判斷一律先正規化為台北日曆日午夜，避免傍晚開頁時第 8 天被誤列進「7 日內」。本機基線為 563 Vitest、19 Demo E2E 與 production build 全綠。初始化第 3 步語意與契約重點改版仍屬 W8-3，不得寫成已完成。
+
+W8-3A 已在本地分支完成實作與複審，尚未提交 PR 或部署：未開正式模式的真專案仍保留一張四步初始化卡片；每步顯示責任方、完成狀態與單一目的地，卡片另顯示完成數與唯一下一步。第 3 步只以本案是否存在 `status = 'completed'` 的 `document_ingestion_runs` 判定 AI 是否整理完成，不再讀 Requirement 待審／核定數；即使仍有 106 筆待審或擷取結果為 0 筆也算完成。完成但 0 筆時 `/requirements` 會顯示「沒有找到建議」的有效空結果，不會把使用者導回重新上傳；人工核定只決定內容是否成為契約規則，不是開啟正式模式的門檻。第 4 步維持可由專案建立者直接前往 `/members` 開啟，前三步或三方未齊只提供提醒，不會鎖住按鈕。
+
+W8-3A 本機驗證（2026-08-14）：60 個 Vitest 檔、583 個測試與 19 個 Demo E2E 全綠，production build 成功，`git diff --check` clean；沒有變更路由、角色、RLS、資料庫、migration、Edge Function 或 Store slice。因 Demo 不渲染真專案初始化卡片，該卡片本身的桌面／375px 目視仍待 PR 預覽或真專案登入環境補驗；在此之前 `docs/ROADMAP.md` 不把 W8-3A 勾成已完成。
 
 ### 6.1 前端資料存取規則
 

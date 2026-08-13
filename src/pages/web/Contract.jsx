@@ -482,7 +482,10 @@ export default function Contract() {
               {obligations.length > 0 && (
                 <li>📅 {obligations.length} 項時程義務已列在下方時間軸——到期會自動出現在<Link to="/alerts" className="text-[var(--blue-text)] hover:underline">提醒中心</Link>。</li>
               )}
-              <li>🔍 AI 擷取的履約需求要人工確認才生效 → <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">前往履約需求審查</Link>(機關/監造辦理)。</li>
+              {/* W8-3A(D-014):人工核定只針對「要成為契約規則」的內容,不是初始化門檻。
+                  ⚠️ 這一行在整理尚未跑完時也會顯示,所以措辭必須中性——不得斷言「AI 已整理完成」
+                  (是否完成的唯一判定在 document_ingestion_runs,見 Requirements 的 requirementsIntro)。 */}
+              <li>🔍 AI 整理完成後,只有要成為契約規則的內容才需人工核定 → <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">前往履約需求審查</Link>(機關/監造辦理);未核定不影響開啟正式模式。</li>
               {workItemsSource === 'db'
                 ? <li>📋 標單已就緒 → <Link to="/boq" className="text-[var(--blue-text)] hover:underline">標單工項</Link>;估驗、進度、日誌都掛在它上面。</li>
                 : <li>📋 還沒看到標單:把 PCCES 預算書 XML 也丟進上面同一個框即可自動匯入。</li>}

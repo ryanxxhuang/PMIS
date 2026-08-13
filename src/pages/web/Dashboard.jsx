@@ -12,10 +12,59 @@ import InsightsPanel from '../../components/InsightsPanel.jsx'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 
-// 初始化四步清單(W2-2,D-007 文件優先):真專案在正式模式開啟前顯示。
-// 狀態全部由既有資料推導(成員 org 覆蓋/文件數/workItemsSource/requirement 狀態),
-// 不建 onboarding 資料表、不做逐步精靈;每步直達既有工作頁。
+// 初始化四步清單(W2-2 建立、W8-3A 依 D-014 修訂):真專案在正式模式開啟前顯示。
+// 狀態全部由既有資料推導,不建 onboarding 資料表、不做逐步精靈;每步直達既有工作頁。
+//
+// W8-3A 的兩個關鍵修正:
+//   ① 第 3 步只問「AI 整理完了沒」——`document_ingestion_runs` 有沒有一筆 completed。
+//      不再讀 Requirement 的待審／核定數:那 106 筆是 AI 的產出,不是人要清空的初始化
+//      門檻,更不該擋住開啟正式模式(D-014)。擷取結果 0 筆也算整理完成,那代表
+//      「AI 讀完了但沒找到建議」,不是失敗。
+//   ② 第 4 步永遠不因前三步或三方未到齊而卡住;原本「三方到齊後才能開啟」的文案
+//      與 W4-4 已定案行為不符(不齊也可開,只是要二次確認)。
 const ORG_LABEL = { contractor: '廠商', supervisor: '監造', owner: '機關' }
+// 查詢失敗要說失敗,不能靜默當成 0 筆 —— 那會把「查不到」演成「還沒開始」,
+// 使用者會去重做一次已經做完的事。
+const LOAD_FAIL = '狀態載入失敗，前往專案文件查看'
+
+// 由既有資料推導四步(純函式,便於釘住完成條件)。snap = null 代表仍在載入。
+// 每步固定有:責任方、完成與否、唯一目的地;不提供逐筆打勾、略過或批次核定。
+export function buildSetupSteps(snap, { imported } = {}) {
+  const missingOrgs = ['contractor', 'supervisor', 'owner'].filter((o) => !snap?.orgs?.has(o))
+  const ingestionDone = !!snap && !snap.ingestionError && snap.ingestionCompleted > 0
+  return [
+    {
+      to: '/contract', label: '上傳專案文件與標單', owner: '施工廠商／專案建立者',
+      done: !!snap && !snap.docsError && snap.docs > 0 && !!imported,
+      detail: !snap ? '載入中…'
+        : snap.docsError ? LOAD_FAIL
+          : `文件 ${snap.docs} 件・標單${imported ? '已匯入' : '未匯入'}`,
+    },
+    {
+      to: '/members', label: '確認三方成員', owner: '專案建立者',
+      done: !!snap && !snap.membersError && missingOrgs.length === 0,
+      detail: !snap ? '載入中…'
+        : snap.membersError ? `${snap.membersError},到成員頁重試`
+          : missingOrgs.length ? `尚缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}` : '廠商、監造、機關都已加入',
+    },
+    {
+      // 完成後才導去看結果;沒整理完就回專案文件看處理狀態或重試(那裡才有上傳與重跑)
+      to: ingestionDone ? '/requirements' : '/contract',
+      label: 'AI 整理契約重點', owner: '系統自動', done: ingestionDone,
+      detail: !snap ? '載入中…'
+        : snap.ingestionError ? LOAD_FAIL
+          : ingestionDone
+            ? 'AI 已完成整理；只有要成為契約規則的內容才需人工核定，不影響開啟正式模式'
+            : '尚未有完成的整理；到專案文件查看處理狀態或重試',
+    },
+    {
+      to: '/members', label: '開啟正式模式', owner: '專案建立者',
+      done: false, // 開啟後整張清單就不再顯示,所以在清單存在期間固定未完成
+      detail: '由專案建立者在「專案成員」頁開啟；前面步驟未完成或三方未到齊也可以開啟，系統會再次確認',
+    },
+  ]
+}
+
 function SetupChecklist({ imported }) {
   const { listMembers, currentProject } = useStore()
   const [snap, setSnap] = useState(null)
@@ -24,60 +73,53 @@ function SetupChecklist({ imported }) {
     if (!pid) return
     let active = true
     ;(async () => {
-      const [members, docsRes, pendRes, apprRes] = await Promise.all([
+      const [members, docsRes, ingRes] = await Promise.all([
         listMembers().catch(() => ({ rows: [], error: '成員載入失敗' })),
         supabase.from('documents').select('id', { count: 'exact', head: true }).eq('project_id', pid),
-        supabase.from('requirements').select('id', { count: 'exact', head: true }).eq('project_id', pid).in('status', ['draft_ai', 'needs_review']),
-        supabase.from('requirements').select('id', { count: 'exact', head: true }).eq('project_id', pid).eq('status', 'approved'),
+        // 第 3 步的唯一依據:本案有沒有跑完過一次履約要求擷取
+        supabase.from('document_ingestion_runs').select('id', { count: 'exact', head: true })
+          .eq('project_id', pid).eq('status', 'completed'),
       ])
       if (!active) return
       setSnap({
         orgs: new Set((members?.rows || []).map((m) => m.org_type).filter(Boolean)),
         membersError: members?.error || null, // W4-1:載入失敗要說失敗,不能假裝「尚缺三方」
         docs: docsRes?.count || 0,
-        reqPending: pendRes?.count || 0,
-        reqApproved: apprRes?.count || 0,
+        docsError: docsRes?.error || null,
+        ingestionCompleted: ingRes?.count || 0,
+        ingestionError: ingRes?.error || null,
       })
     })()
     return () => { active = false }
-  }, [pid, imported, listMembers]) // 標單匯入後重推導(文件/建議數會變)
+  }, [pid, imported, listMembers]) // 標單匯入後重推導(文件數會變)
 
-  const missingOrgs = ['contractor', 'supervisor', 'owner'].filter((o) => !snap?.orgs.has(o))
-  // 順序=D-007 文件優先:建案落地就是專案文件頁,第一步自然是上傳;成員可並行後補
-  const steps = [
-    {
-      to: '/contract', label: '上傳專案文件(含標單 XML)', done: !!snap && snap.docs > 0 && imported,
-      detail: snap ? `文件 ${snap.docs} 件・標單${imported ? '已匯入' : '未匯入'}` : '載入中…',
-    },
-    {
-      to: '/members', label: '確認三方成員', done: snap ? !snap.membersError && missingOrgs.length === 0 : false,
-      detail: !snap ? '載入中…'
-        : snap.membersError ? `${snap.membersError},到成員頁重試`
-          : missingOrgs.length ? `尚缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}` : '廠商、監造、機關都已加入',
-    },
-    {
-      to: '/requirements', label: '檢查 AI 履約要求建議', done: !!snap && snap.reqPending === 0 && snap.reqApproved > 0,
-      detail: snap ? `待審 ${snap.reqPending} 件・已核定 ${snap.reqApproved} 件` : '載入中…',
-    },
-    {
-      to: '/members', label: '開啟正式模式', done: false, // 開啟後整張清單就不再顯示
-      detail: '三方到齊後,由專案建立者在「專案成員」頁開啟',
-    },
-  ]
+  const steps = buildSetupSteps(snap, { imported })
+  const doneCount = steps.filter((s) => s.done).length
+  // 下一步 = 前 3 步第一個未完成;前三步都完成就指向第 4 步(開啟正式模式)
+  const next = steps.slice(0, 3).find((s) => !s.done) || steps[3]
+
   return (
-    <Card title="專案初始化" action={<span className="text-xs text-[var(--text-3)]">完成後開啟正式模式,進入日常履約</span>}>
+    <Card title="專案初始化" action={<span className="num text-xs text-[var(--text-3)]">已完成 {doneCount}/4</span>}>
+      <Link to={next.to}
+        className="flex items-center gap-2 rounded-lg bg-[var(--blue-tint)] text-[var(--blue-text)] px-3 py-2 mb-3 text-sm font-medium hover:brightness-95 transition-[filter]">
+        <span className="min-w-0 flex-1">下一步：{next.label}</span>
+        <ChevronRight size={15} className="shrink-0" aria-hidden />
+      </Link>
       <ol className="divide-y divide-[var(--border-2)]">
         {steps.map((s, i) => (
           <li key={i}>
-            <Link to={s.to} className="flex items-center gap-3 py-2.5 group">
+            <Link to={s.to} className="flex items-start gap-3 py-2.5 group">
               {s.done
-                ? <CheckCircle2 size={18} className="text-[var(--green-text)] shrink-0" aria-hidden />
-                : <Circle size={18} className="text-[var(--text-3)] shrink-0" aria-hidden />}
+                ? <CheckCircle2 size={18} className="text-[var(--green-text)] shrink-0 mt-0.5" aria-hidden />
+                : <Circle size={18} className="text-[var(--text-3)] shrink-0 mt-0.5" aria-hidden />}
               <div className="min-w-0 flex-1">
-                <div className={`text-sm ${s.done ? 'text-[var(--text-3)] line-through' : 'text-[var(--text)] font-medium'}`}>{i + 1}. {s.label}</div>
-                <div className="text-xs text-[var(--text-3)] mt-0.5">{s.detail}</div>
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className={`text-sm ${s.done ? 'text-[var(--text-3)] line-through' : 'text-[var(--text)] font-medium'}`}>{i + 1}. {s.label}</span>
+                  <span className="text-[11px] text-[var(--text-3)]">{s.owner}</span>
+                </div>
+                <div className="text-xs text-[var(--text-3)] mt-0.5 leading-snug">{s.detail}</div>
               </div>
-              <ChevronRight size={15} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0" aria-hidden />
+              <ChevronRight size={15} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-0.5" aria-hidden />
             </Link>
           </li>
         ))}

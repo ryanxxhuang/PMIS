@@ -1,7 +1,7 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8 計畫已核准；W8-1 PR #11、W8-2 PR #12；下一包 W8-3）**
-> 最後更新：2026-08-13
+> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8 計畫已核准；W8-1 PR #11、W8-2 PR #12；W8-3A 本機實作與複審完成，待 PR 預覽目視）**
+> 最後更新：2026-08-14
 > 依《產品全案評估報告 2026-08-12》與 W8-0 第二版（相關決策已定案為 D-007～D-015）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
 
@@ -27,7 +27,8 @@
 - [x] W8-0 UI/UX 全產品重新評估與整體改善計畫（第二版）— 36 路由盤點＋三角色桌面／手機直接走查＋使用者回饋校準完成，沒有產品實作
 - [x] W8-1 全站框架、品牌與導覽 — PR #11
 - [x] W8-2 今日待辦與 Agent 分工 — PR #12（563 Vitest／19 Demo E2E／build 全綠）
-- [ ] W8-3 初始化與契約重點 — `ACCEPTED`，下一個工作包
+- [ ] W8-3A 初始化設定精靈 — 本機實作與複審完成（583 Vitest／19 Demo E2E／build 全綠），待 PR 預覽的真專案桌面／375px 目視後勾選
+- [ ] W8-3B 契約重點與具體後續動作 — `ACCEPTED`，W8-3A 後執行
 - [ ] W8-4 三角色核心業務頁 — `ACCEPTED`，須依 A／B／C 子包執行
 - [ ] W8-5 手機、無障礙與真實使用者驗收 — `ACCEPTED`，最後收尾
 
@@ -158,6 +159,44 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   範圍：W8-2A 先盤點（[`W8-2A-今日待辦與-Agent-資料來源盤點-2026-08-13.md`](W8-2A-今日待辦與-Agent-資料來源盤點-2026-08-13.md)），W8-2B 依該文件 §5～§7 實作 B1～B7：新增單一聚合 `src/lib/todayTasks.js`；`Alerts.jsx` 內嵌的第二套規則搬進去並補球權；補上契約義務、試體齡期、驗收法定期限與 ITP 停留點；Dashboard 改三段（每段 5 筆、溢位連 `/alerts`）；Agent 移除重複待辦只留無件數連結；修正估驗待請款導向與 demo 的 `inspected_at`。
   不做：不新增 task 表或 workflow engine、不改三角色、不動 RLS／migration／Edge Function、不改 `Contract` 的義務操作、不動初始化四步清單與 `/requirements`（W8-3）。
   驗收證據（2026-08-13，本機）：563 Vitest、19 Demo E2E、production build 全綠；`todayTasks.test.js` 釘住三分類與球權、互斥性、到期排序、責任白名單、AI 產物不得成為待辦、「今天已完成」只吃可靠時間戳、以及兩個日期邊界回歸（台北日曆日門檻、每月義務不讀系統時鐘）；三角色 demo 目視與 375px 無水平溢位。前後端待辦集合差異登記於 [`architecture/dual-engine-sync.md`](architecture/dual-engine-sync.md)，不在本包對齊。
+
+- [ ] **W8-3A 保留並改善初始化設定精靈（D-014）**
+  問題：四步方向正確，但第 3 步目前以「待審清零且至少核定一筆」判定完成，會把大量 AI 建議誤包裝成人工初始化門檻；第 4 步文案又錯稱三方到齊後才能開啟，與 W4 已定案行為不一致。
+  目標：保留 Dashboard 原有四步清單，讓使用者一眼看懂誰負責、系統何時算完成、現在唯一建議的下一步，以及哪些事項只是建議準備而非阻擋正式模式。
+  不做：不新增 onboarding／wizard framework、路由、資料表、migration、Edge Function、角色或 Store slice；不改正式模式的 DB/RLS/單向語意；不在本包重做 `/requirements` 清單、批次核定或契約重點資訊架構（屬 W8-3B）。
+  影響：只允許最小修改 `Dashboard.jsx` 的 `SetupChecklist`，以及 `Contract.jsx`、`Requirements.jsx`、`Members.jsx` 與相關測試中的必要銜接文案；沒有明確需要時不新增共用模組。
+  驗收：第 3 步不再讀 Requirement 待審／核定數決定完成；AI 整理完成但仍有 106 筆待審時仍顯示完成；四步各有責任方與唯一目的地；前面步驟未完成仍可由建立者開啟正式模式；桌面與 375px 無水平溢位且沒有第二套初始化狀態。
+
+  **四步唯一判定（不得自行改寫）**
+
+  | 步驟 | 責任 | 完成條件（只用既有資料） | 唯一目的地 |
+  |---|---|---|---|
+  | 1. 上傳專案文件與標單 | 施工廠商／專案建立者 | `documents` 至少 1 件，且 `workItemsSource === 'db'` | `/contract` |
+  | 2. 確認三方成員 | 專案建立者 | `project_members` 的 `org_type` 同時涵蓋 `contractor`、`supervisor`、`owner` | `/members` |
+  | 3. AI 整理契約重點 | 系統自動 | `document_ingestion_runs` 至少 1 筆 `status = 'completed'`；即使擷取結果為 0 筆或仍有任意數量待審 Requirement，也算整理完成 | 未完成到 `/contract`；完成後查看結果到 `/requirements` |
+  | 4. 開啟正式模式 | 專案建立者 | 清單顯示期間固定未完成；`formal_mode = true` 後整張清單依既有行為消失 | `/members` |
+
+  **UI 與錯誤規則**
+
+  1. 保留一張卡片與四列清單，不新增獨立精靈頁；卡片顯示「已完成 N/4」與一個醒目的「下一步：…」入口，取前 3 步第一個未完成項，前三步皆完成時指向第 4 步。
+  2. 每列顯示責任方、完成／未完成狀態與一個目的地；不得出現逐筆打勾、略過、批次核定或「清空待審」操作。
+  3. 第 3 步只查 completed ingestion run。文件或 ingestion 查詢失敗要如實顯示「狀態載入失敗，前往專案文件查看」，不得當成 0 筆；沒有 completed run 時一律回 `/contract` 查看處理或重試。
+  4. 第 3 步完成文案必須明講「AI 已完成整理；只有要成為契約規則的內容才需人工核定，不影響開啟正式模式」，不得再顯示待審數量製造清空壓力。
+  5. 第 4 步永不因第 1～3 步或三方未到齊而 disabled；`Members.jsx` 保留既有缺方警告與二次確認，只補「初始化是準備指引，不要求清空 AI 建議」的說明。
+  6. `Contract.jsx`／`Requirements.jsx` 只補同一語意的短說明，不改列表、篩選、核定 RPC、權限或資料查詢；完整契約重點改版留給 W8-3B。
+
+  **最低測試**
+
+  1. completed ingestion run + 106 筆待審 + 0 筆核定，步驟 3 仍完成。
+  2. 沒有 completed run，即使已有 approved Requirement，步驟 3 仍未完成並導向 `/contract`。
+  3. completed run 擷取 0 筆 Requirement，步驟 3 仍完成；這代表 AI 已整理但沒有找到建議，不是假失敗。
+  4. ingestion 查詢失敗不偽裝成「尚未開始」；正式模式入口不被前三步鎖住。
+  5. 維持完整 Vitest、Demo E2E、production build；本包不動 DB／Edge，因此不新增 pgTAP／真後端 E2E。
+
+  **本機驗證（2026-08-14，待 PR）**：四步判定、責任方、單一下一步、查詢失敗與正式模式不鎖定均已由 13 個 `Dashboard.setupChecklist` 測試固定；另以 7 個 `Requirements.intro` 測試固定 completed run + 0 筆的有效空結果，以及「沒有 completed run 不得宣稱 AI 已完成」。完整結果為 60 個 Vitest 檔、583 個測試與 19 個 Demo E2E 全綠，production build 成功，`git diff --check` clean；沒有變更 DB／Edge／路由／角色／Store。Demo 不會渲染真專案初始化卡片，因此該卡片的桌面與 375px 目視留待 PR 預覽或真專案登入環境補驗，完成前本格維持未勾選。
+
+- [ ] **W8-3B 契約重點與具體後續動作**
+  範圍維持 W8-0 已核准內容：`/requirements` 的一般體驗改為契約重點與具體後續動作，原始擷取結果保留作追溯；待 W8-3A 合併後另做資料盤點與實作規格，不得混入本包。
 
 ---
 

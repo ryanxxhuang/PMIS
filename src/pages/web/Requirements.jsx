@@ -17,6 +17,37 @@ import {
 } from '../../lib/requirementReview.js'
 
 const LIST_LIMIT = 300
+
+// W8-3A(D-014):「AI 整理完了沒」在全站只有一個判定依據——本案有沒有跑完過一次
+// 履約要求擷取(`document_ingestion_runs.status = 'completed'`)。首頁初始化清單第 3 步
+// 用它,這一頁也必須用它,否則會出現「首頁說整理完成 → 點進來卻叫你重新上傳」的死路。
+// ⚠️ 有 Requirement 不等於 AI 跑完過(可能是人工建立或舊 run),絕不可反推成「整理完成」。
+export function requirementsIntro(runs = [], rowCount = 0) {
+  const ingestionDone = (runs || []).some((r) => r?.status === 'completed')
+  if (rowCount > 0) {
+    return {
+      ingestionDone,
+      mode: 'list',
+      // 沒有 completed run 時只講審查規則,不宣稱 AI 整理完成
+      note: ingestionDone
+        ? 'AI 已完成整理，專案初始化的「AI 整理契約重點」即為完成；下方只有要成為契約規則的內容才需人工核定，未核定不影響開啟正式模式。'
+        : '下方只有要成為契約規則的內容才需人工核定，未核定不影響開啟正式模式。',
+      emptyText: null,
+    }
+  }
+  // 整理完成但 0 筆:這是有效結果(AI 讀完了沒找到),不是失敗,也沒有事情要做——
+  // 不能再給「前往上傳」的 CTA 把人送回原點。
+  if (ingestionDone) {
+    return {
+      ingestionDone, mode: 'done-empty', note: null,
+      emptyText: 'AI 已完成整理，本次沒有找到契約重點建議，不需處理，也不影響開啟正式模式。',
+    }
+  }
+  return {
+    ingestionDone, mode: 'not-started', note: null,
+    emptyText: '尚未有完成的 AI 整理。到「專案文件」上傳契約/規範,或查看目前的處理狀態。',
+  }
+}
 const STATUS_BADGE = {
   draft_ai: 'blue', needs_review: 'amber', approved: 'green', rejected: 'red', superseded: 'slate',
 }
@@ -44,6 +75,8 @@ export default function Requirements() {
   const pid = currentProject?.project_id
   const runsById = useMemo(() => new Map(runs.map((r) => [r.id, r])), [runs])
   const currentRunIds = useMemo(() => latestCompletedRunIds(runs), [runs])
+  // 空狀態與頁首說明的唯一判定(見 requirementsIntro):必須在早退之前算,才不會違反 hooks 順序
+  const intro = useMemo(() => requirementsIntro(runs, rows.length), [runs, rows.length])
 
   const reload = useCallback(async () => {
     if (!isPersistedProject || !pid) return
@@ -185,16 +218,21 @@ export default function Requirements() {
     )
   }
 
-  // 0 需求時只顯示上傳 CTA,不先堆一排 filter 與空審查區(P2-07)
+  // 0 需求時不先堆一排 filter 與空審查區(P2-07)。W8-3A:分「AI 還沒跑完」與
+  // 「跑完但沒找到」兩種——後者不是缺前置條件,給上傳 CTA 只會把人繞回原點。
   if (loaded && !rows.length) {
     return (
       <div className="space-y-5">
         <PageHeader title="履約需求" tagline="AI 建議 → 人工審查" subtitle="AI 擷取的履約需求建議在此逐項審查;核定後才成為專案的契約性規則" />
         <Card title="履約需求審查">
-          <PrerequisiteEmptyState
-            need="尚未有已擷取的履約需求。到「專案文件」上傳契約/規範,系統會自動抽出履約需求供逐項審查。"
-            unlocks="需求審查核定、送審/RFI 的 AI 依規範比對、契約義務時程"
-            to="/contract" cta="前往上傳專案文件" />
+          {intro.mode === 'done-empty'
+            ? <Empty>{intro.emptyText}</Empty>
+            : (
+              <PrerequisiteEmptyState
+                need={intro.emptyText}
+                unlocks="需求審查核定、送審/RFI 的 AI 依規範比對、契約義務時程"
+                to="/contract" cta="前往專案文件" />
+            )}
         </Card>
       </div>
     )
@@ -203,6 +241,10 @@ export default function Requirements() {
   return (
     <div className="space-y-5">
       <PageHeader title="履約需求" tagline="AI 建議 → 人工審查" subtitle="逐項檢視需求內容、出處引註與工項對應;核定後才成為專案的契約性規則" />
+
+      {/* W8-3A(D-014):與首頁初始化清單第 3 步同一語意——AI 整理完成即算完成,
+          這裡的待審數量不是初始化門檻,不必為了開啟正式模式把它清空。 */}
+      <p className="text-xs text-[var(--text-3)]">{intro.note}</p>
 
       <Card title="待審查清單" bodyClass="p-0" action={
         <div className="flex flex-wrap gap-2 items-center text-xs">
