@@ -77,22 +77,43 @@ export const navGroups = [
   ] },
 ]
 
+// 不出現在導覽的路由也必須明確登記。access 只描述路由表面；
+// authenticated 路由一律由 App 的共同 Web guard 驗證登入與專案狀態。
+// print 只代表不套 WebLayout，不代表公開。
+const nonNavRouteRules = {
+  '/': { access: 'redirect' },
+  '/login': { access: 'public' },
+  '/security': { access: 'public' },
+  '/assistant': { access: 'redirect' },
+  '/project/new': { access: 'authenticated' },
+  '/site-log/print': { access: 'authenticated', surface: 'print' },
+  '/valuation/print': { access: 'authenticated', surface: 'print' },
+  '/valuation/package': { access: 'authenticated', surface: 'print' },
+  '/quality/checklist-print': { access: 'authenticated', surface: 'print' },
+  '*': { access: 'authenticated', surface: 'not-found' },
+}
+
+const navRouteRules = Object.fromEntries(
+  navGroups.flatMap((group) => group.items.flatMap((item) => item.tabs || [item]))
+    .map((route) => [route.to, { ...route, access: 'authenticated' }]),
+)
+
+// 所有前端路由的權限登記表。新增 App 路由卻忘記登記時，routeAllowed 會 fail-closed。
+export const routeRegistry = Object.freeze({ ...navRouteRules, ...nonNavRouteRules })
+
 // platformAdminOnly 是獨立維度:專案角色/override 一律翻不過(平台後台不是專案工具)
 const tabAllowed = (n, org, override, platformAdmin) => {
   if (n.platformAdminOnly) return !!platformAdmin
   return !n.roles || override || n.roles.includes(org)
 }
 
-// 路由守衛:導覽/分頁未列的路由(列印頁、建案頁…)不設角色限制;
-// hidden 項照樣被找到、照樣套 roles——要限角色的路由必須列在定義裡(頂多 hidden),不能刪。
+// 路由守衛:未登記路由一律拒絕；hidden 項照樣套用 roles。
 // platformAdmin 缺省 false:未傳入(舊呼叫點)時平台後台一律擋。
 export function routeAllowed(pathname, org, override, platformAdmin = false) {
-  for (const g of navGroups) for (const item of g.items) {
-    for (const n of (item.tabs || [item])) {
-      if (n.to === pathname) return tabAllowed(n, org, override, platformAdmin)
-    }
-  }
-  return true
+  const route = routeRegistry[pathname]
+  if (!route) return false
+  if (route.access === 'public' || route.access === 'redirect') return true
+  return tabAllowed(route, org, override, platformAdmin)
 }
 
 // 此路由所屬工作台(供分頁列渲染);單頁路由回 null。

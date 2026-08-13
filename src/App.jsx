@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { WebLayout, WorkbenchTabs } from './components/Layout.jsx'
-import { routeAllowed } from './lib/navConfig.js'
+import { routeAllowed, routeRegistry } from './lib/navConfig.js'
 import { ConfirmHost } from './components/confirm.jsx'
 
 import Login from './pages/Login.jsx'
@@ -50,7 +50,7 @@ const PageLoading = () => (
 
 // Gate every page behind auth; force project creation before the workspace loads.
 // 角色化路由守衛:與側欄同一份 roles 對照(routeAllowed)——導覽隱藏的頁,直接輸入網址也進不去。
-function Web({ children }) {
+function Web({ children, bare = false, registryPath }) {
   const { currentUser, authReady, isSupabaseConfigured, currentProject, projectLoading, can, passwordRecovery, isPlatformAdmin, platformAdminChecked } = useStore()
   const { pathname } = useLocation()
   // session 恢復完成前先等,不可急著導 /login——否則深連結 F5 一律丟失落回 Dashboard(P1-04)
@@ -69,7 +69,7 @@ function Web({ children }) {
   if (pathname === '/admin' && !platformAdminChecked) {
     return <div className="min-h-screen grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
   }
-  if (!routeAllowed(pathname, currentUser.org_type || 'contractor', can.override, isPlatformAdmin)) {
+  if (!routeAllowed(registryPath || pathname, currentUser.org_type || 'contractor', can.override, isPlatformAdmin)) {
     return (
       <WebLayout>
         <div className="text-center py-20 space-y-2">
@@ -79,6 +79,7 @@ function Web({ children }) {
       </WebLayout>
     )
   }
+  if (bare) return <Suspense fallback={<PageLoading />}>{children}</Suspense>
   return <WebLayout><WorkbenchTabs /><Suspense fallback={<PageLoading />}>{children}</Suspense></WebLayout>
 }
 
@@ -95,51 +96,65 @@ function NotFound() {
   )
 }
 
+const appRoutes = [
+  { path: '/', element: <Navigate to="/dashboard" replace /> },
+  { path: '/login', element: <Login /> },
+  { path: '/security', element: <Security /> },
+  { path: '/dashboard', element: <Dashboard /> },
+  // D-008(W3-1):/agent 是唯一完整 AI 入口；/assistant 只保留相容導向。
+  { path: '/assistant', element: <Navigate to="/agent" replace /> },
+  { path: '/agent', element: <AgentConsole /> },
+  { path: '/supervisor-report', element: <SupervisorReport /> },
+  { path: '/audit', element: <RiskAudit /> },
+  { path: '/portfolio', element: <Portfolio /> },
+  { path: '/acceptance', element: <Acceptance /> },
+  { path: '/project/new', element: <ProjectSetup /> },
+  { path: '/boq', element: <BOQ /> },
+  { path: '/site-log', element: <SiteLog /> },
+  { path: '/site-log/print', element: <SiteLogPrint /> },
+  { path: '/valuation', element: <Valuation /> },
+  { path: '/valuation/print', element: <ValuationPrint /> },
+  { path: '/valuation/package', element: <ValuationPackage /> },
+  { path: '/payments', element: <Payments /> },
+  { path: '/cost', element: <Cost /> },
+  { path: '/change-orders', element: <ChangeOrders /> },
+  { path: '/progress', element: <Progress /> },
+  { path: '/schedule', element: <Schedule /> },
+  { path: '/quality', element: <Quality /> },
+  { path: '/itp', element: <ITP /> },
+  { path: '/quality/checklist-print', element: <ChecklistPrint /> },
+  { path: '/safety', element: <Safety /> },
+  { path: '/submittals', element: <Submittals /> },
+  { path: '/rfi', element: <RFI /> },
+  { path: '/members', element: <Members /> },
+  { path: '/contract', element: <Contract /> },
+  { path: '/alerts', element: <Alerts /> },
+  { path: '/activity', element: <Activity /> },
+  { path: '/requirements', element: <Requirements /> },
+  { path: '/monthly-report', element: <MonthlyReport /> },
+  { path: '/admin', element: <Admin /> },
+  { path: '*', element: <NotFound /> },
+]
+
+for (const { path } of appRoutes) {
+  if (!routeRegistry[path]) throw new Error(`前端路由尚未登記：${path}`)
+}
+
+function guardedElement({ path, element }) {
+  const rule = routeRegistry[path]
+  if (rule.access === 'public' || rule.access === 'redirect') return element
+  return <Web bare={rule.surface === 'print'} registryPath={path}>{element}</Web>
+}
+
 export default function App() {
   return (
     <>
     <ConfirmHost />
     <Suspense fallback={<PageLoading />}>
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/security" element={<Security />} />
-      <Route path="/dashboard" element={<Web><Dashboard /></Web>} />
-      {/* D-008(W3-1):/agent 是唯一完整 AI 入口。能力比對:assistant.chat 無獨有
-          能力(僅「回答附出處連結」的輸出格式差異;/agent 以 steps 摘要代替)。
-          路由保留導向,深連結/書籤不會 404。 */}
-      <Route path="/assistant" element={<Navigate to="/agent" replace />} />
-      <Route path="/agent" element={<Web><AgentConsole /></Web>} />
-      <Route path="/supervisor-report" element={<Web><SupervisorReport /></Web>} />
-      <Route path="/audit" element={<Web><RiskAudit /></Web>} />
-      <Route path="/portfolio" element={<Web><Portfolio /></Web>} />
-      <Route path="/acceptance" element={<Web><Acceptance /></Web>} />
-      <Route path="/project/new" element={<Web><ProjectSetup /></Web>} />
-      <Route path="/boq" element={<Web><BOQ /></Web>} />
-      <Route path="/site-log" element={<Web><SiteLog /></Web>} />
-      <Route path="/site-log/print" element={<SiteLogPrint />} />
-      <Route path="/valuation" element={<Web><Valuation /></Web>} />
-      <Route path="/valuation/print" element={<ValuationPrint />} />
-      <Route path="/valuation/package" element={<ValuationPackage />} />
-      <Route path="/payments" element={<Web><Payments /></Web>} />
-      <Route path="/cost" element={<Web><Cost /></Web>} />
-      <Route path="/change-orders" element={<Web><ChangeOrders /></Web>} />
-      <Route path="/progress" element={<Web><Progress /></Web>} />
-      <Route path="/schedule" element={<Web><Schedule /></Web>} />
-      <Route path="/quality" element={<Web><Quality /></Web>} />
-      <Route path="/itp" element={<Web><ITP /></Web>} />
-      <Route path="/quality/checklist-print" element={<ChecklistPrint />} />
-      <Route path="/safety" element={<Web><Safety /></Web>} />
-      <Route path="/submittals" element={<Web><Submittals /></Web>} />
-      <Route path="/rfi" element={<Web><RFI /></Web>} />
-      <Route path="/members" element={<Web><Members /></Web>} />
-      <Route path="/contract" element={<Web><Contract /></Web>} />
-      <Route path="/alerts" element={<Web><Alerts /></Web>} />
-      <Route path="/activity" element={<Web><Activity /></Web>} />
-      <Route path="/requirements" element={<Web><Requirements /></Web>} />
-      <Route path="/monthly-report" element={<Web><MonthlyReport /></Web>} />
-      <Route path="/admin" element={<Web><Admin /></Web>} />
-      <Route path="*" element={<Web><NotFound /></Web>} />
+      {appRoutes.map((route) => (
+        <Route key={route.path} path={route.path} element={guardedElement(route)} />
+      ))}
     </Routes>
     </Suspense>
     </>

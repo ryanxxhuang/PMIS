@@ -26,6 +26,7 @@ PMIS/
 ├── .env.e2e.real.example     真後端 E2E 環境變數範例
 ├── .nvmrc                    Node 版本
 ├── .github/workflows/ci.yml  CI：測試與建置
+├── .github/workflows/pgtap.yml CI：資料庫 pgTAP
 ├── src/                      React 前端與確定性領域邏輯
 ├── supabase/                 DB migrations、Edge Functions、pgTAP
 ├── e2e/                      Playwright 三方流程
@@ -42,7 +43,7 @@ PMIS/
 ```text
 src/
 ├── main.jsx                  React 掛載點
-├── App.jsx                   路由、登入與角色守衛
+├── App.jsx                   頁面對應與共同登入／角色守衛
 ├── index.css                 全域樣式與設計 token
 ├── store.jsx                 Store 組合根、共用狀態與派生資料
 ├── components/               跨頁 UI 與互動元件
@@ -87,7 +88,7 @@ lib/
 ├── 身分與導覽
 │   ├── agentRole.js          三方 Agent 角色正規化
 │   ├── projectIdentity.js    專案／成員身分解析
-│   └── navConfig.js          導覽與路由角色限制單一來源
+│   └── navConfig.js          routeRegistry、導覽與路由角色限制單一來源
 ├── AI 與助理
 │   ├── aiFeatures.js         前端 AI 功能註冊鏡像
 │   ├── aiInsights.js         洞察組裝
@@ -278,6 +279,7 @@ e2e/
 ├── contractor.spec.js       廠商流程
 ├── supervisor.spec.js       監造流程
 ├── owner.spec.js            機關流程
+├── routes.spec.js           公開頁、列印深連結與共同守衛
 └── helpers.js               共用登入與專案 fixture
 
 e2e-real/
@@ -314,7 +316,7 @@ docs/
 
 | 要改的事情 | 第一個入口 | 通常還要檢查 |
 |---|---|---|
-| 路由或誰看得到頁面 | `src/App.jsx`、`src/lib/navConfig.js` | `src/lib/navConfig.test.js` |
+| 路由或誰看得到頁面 | `src/lib/navConfig.js` 的 `routeRegistry`、`src/App.jsx` | `src/lib/navConfig.test.js`、`e2e/routes.spec.js` |
 | 三方角色或 Agent 工具 | `src/lib/agentRole.js`、`functions/_shared/agentRole.ts` | `agentTools.ts`、migration、三處測試 |
 | 跨頁共享資料 | `src/store.jsx`、對應 slice、`store/db.js` | 頁面讀取與 persisted write tests |
 | 單頁專屬清單 | 該 `pages/web/*.jsx` | 查詢是否有上限、RLS 是否允許 |

@@ -149,7 +149,7 @@ npm run test:e2e:real
 
 資料庫的 RLS、RPC 與狀態轉移測試在 [supabase/tests](supabase/tests)。
 
-2026-08-12 W5 PR #6 基線：57 個 Vitest 測試檔共 523 項、12 個 Playwright E2E、23 組 pgTAP 共 723 項全數通過，正式建置與資料庫 lint 成功。PR #6、migrations `20260812000500`／`20260812000600`，以及受共用程式影響的 `agent-run`／`send-reminders` 已於 2026-08-13 部署。
+2026-08-13 W7 本機基線：57 個 Vitest 測試檔共 530 項、14 個 Demo Playwright E2E、5 個真 Supabase E2E 與 production build 全數通過。23 組 pgTAP 已由 PR #8 納入獨立 CI，main run 成功。W6 PR #7 與 PR #8 已合併部署；`extract-requirements` live AI 成功路徑仍需帶 Anthropic key 的一次性 staging 驗證，不能以人工 fixture 代替。
 
 ## Supabase 與部署
 
@@ -165,7 +165,7 @@ npm run test:e2e:real
 
 ```text
 src/
-├── App.jsx                 路由與身分／角色守衛
+├── App.jsx                 頁面對應與共用路由守衛
 ├── components/             共用 UI、Layout、Copilot、缺失與標註元件
 ├── data/                   Demo 與內建工程資料
 ├── lib/                    確定性引擎、文件、需求、稽核與支援函式
