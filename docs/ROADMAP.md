@@ -1,6 +1,6 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8 計畫已核准；W8-1 PR #11、W8-2 PR #12；W8-3A 本機實作與複審完成，待 PR 預覽目視）**
+> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8 計畫已核准；W8-1 PR #11、W8-2 PR #12、W8-3A PR #13）**
 > 最後更新：2026-08-14
 > 依《產品全案評估報告 2026-08-12》與 W8-0 第二版（相關決策已定案為 D-007～D-015）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
@@ -27,7 +27,7 @@
 - [x] W8-0 UI/UX 全產品重新評估與整體改善計畫（第二版）— 36 路由盤點＋三角色桌面／手機直接走查＋使用者回饋校準完成，沒有產品實作
 - [x] W8-1 全站框架、品牌與導覽 — PR #11
 - [x] W8-2 今日待辦與 Agent 分工 — PR #12（563 Vitest／19 Demo E2E／build 全綠）
-- [ ] W8-3A 初始化設定精靈 — 本機實作與複審完成（583 Vitest／19 Demo E2E／build 全綠），待 PR 預覽的真專案桌面／375px 目視後勾選
+- [x] W8-3A 初始化設定精靈 — PR #13（583 Vitest／19 Demo E2E／build 全綠；真實 staging 專案桌面／375px 目視通過）
 - [ ] W8-3B 契約重點與具體後續動作 — `ACCEPTED`，W8-3A 後執行
 - [ ] W8-4 三角色核心業務頁 — `ACCEPTED`，須依 A／B／C 子包執行
 - [ ] W8-5 手機、無障礙與真實使用者驗收 — `ACCEPTED`，最後收尾
@@ -160,7 +160,7 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   不做：不新增 task 表或 workflow engine、不改三角色、不動 RLS／migration／Edge Function、不改 `Contract` 的義務操作、不動初始化四步清單與 `/requirements`（W8-3）。
   驗收證據（2026-08-13，本機）：563 Vitest、19 Demo E2E、production build 全綠；`todayTasks.test.js` 釘住三分類與球權、互斥性、到期排序、責任白名單、AI 產物不得成為待辦、「今天已完成」只吃可靠時間戳、以及兩個日期邊界回歸（台北日曆日門檻、每月義務不讀系統時鐘）；三角色 demo 目視與 375px 無水平溢位。前後端待辦集合差異登記於 [`architecture/dual-engine-sync.md`](architecture/dual-engine-sync.md)，不在本包對齊。
 
-- [ ] **W8-3A 保留並改善初始化設定精靈（D-014）**
+- [x] **W8-3A 保留並改善初始化設定精靈（D-014，PR #13）**
   問題：四步方向正確，但第 3 步目前以「待審清零且至少核定一筆」判定完成，會把大量 AI 建議誤包裝成人工初始化門檻；第 4 步文案又錯稱三方到齊後才能開啟，與 W4 已定案行為不一致。
   目標：保留 Dashboard 原有四步清單，讓使用者一眼看懂誰負責、系統何時算完成、現在唯一建議的下一步，以及哪些事項只是建議準備而非阻擋正式模式。
   不做：不新增 onboarding／wizard framework、路由、資料表、migration、Edge Function、角色或 Store slice；不改正式模式的 DB/RLS/單向語意；不在本包重做 `/requirements` 清單、批次核定或契約重點資訊架構（屬 W8-3B）。
@@ -193,7 +193,7 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   4. ingestion 查詢失敗不偽裝成「尚未開始」；正式模式入口不被前三步鎖住。
   5. 維持完整 Vitest、Demo E2E、production build；本包不動 DB／Edge，因此不新增 pgTAP／真後端 E2E。
 
-  **本機驗證（2026-08-14，待 PR）**：四步判定、責任方、單一下一步、查詢失敗與正式模式不鎖定均已由 13 個 `Dashboard.setupChecklist` 測試固定；另以 7 個 `Requirements.intro` 測試固定 completed run + 0 筆的有效空結果，以及「沒有 completed run 不得宣稱 AI 已完成」。完整結果為 60 個 Vitest 檔、583 個測試與 19 個 Demo E2E 全綠，production build 成功，`git diff --check` clean；沒有變更 DB／Edge／路由／角色／Store。Demo 不會渲染真專案初始化卡片，因此該卡片的桌面與 375px 目視留待 PR 預覽或真專案登入環境補驗，完成前本格維持未勾選。
+  **驗證（2026-08-14，PR #13）**：四步判定、責任方、單一下一步、查詢失敗與正式模式不鎖定均已由 13 個 `Dashboard.setupChecklist` 測試固定；另以 7 個 `Requirements.intro` 測試固定 completed run + 0 筆的有效空結果，以及「沒有 completed run 不得宣稱 AI 已完成」。完整結果為 60 個 Vitest 檔、583 個測試與 19 個 Demo E2E 全綠，production build 成功，`git diff --check` clean；沒有變更 DB／Edge／路由／角色／Store。另以既有 staging 測試帳號建立未開正式模式的真實專案，完成 Dashboard 初始化卡片桌面與 375px 目視，以及 `/contract`、`/requirements`、`/members` 三個銜接頁的 375px 無水平溢位驗收；臨時專案已刪除。
 
 - [ ] **W8-3B 契約重點與具體後續動作**
   範圍維持 W8-0 已核准內容：`/requirements` 的一般體驗改為契約重點與具體後續動作，原始擷取結果保留作追溯；待 W8-3A 合併後另做資料盤點與實作規格，不得混入本包。
