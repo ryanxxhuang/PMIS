@@ -167,7 +167,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={project.project_name}
+        title="今日待辦"
+        tagline={project.project_name}
         subtitle={`${project.owner_name} · 施工：${project.contractor_name || '—'} · 監造：${project.supervisor_name || '—'}`}
         meta={[
           { k: '工程代碼', v: project.project_code || '—' },

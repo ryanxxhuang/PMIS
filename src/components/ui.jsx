@@ -21,15 +21,15 @@ export function Card({ title, action, children, className = '', bodyClass = 'p-5
 export function PageHeader({ title, tagline, subtitle, meta = [], action }) {
   return (
     <div className="title-block">
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-        <div className="min-w-0">
-          <h1 className="text-[26px] font-bold text-[var(--text)] tracking-[-0.02em] leading-tight">
-            {title}
-            {tagline && <span className="ml-2 text-sm font-normal text-[var(--text-3)]">{tagline}</span>}
-          </h1>
-          {subtitle && <p className="text-xs text-[var(--text-2)] mt-1 truncate">{subtitle}</p>}
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0 max-w-4xl">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <h1 className="text-2xl sm:text-[26px] font-bold text-[var(--text)] tracking-[-0.02em] leading-tight">{title}</h1>
+            {tagline && <span className="text-sm font-normal text-[var(--text-3)]">{tagline}</span>}
+          </div>
+          {subtitle && <p className="text-sm leading-relaxed text-[var(--text-2)] mt-1.5">{subtitle}</p>}
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex w-full sm:w-auto flex-wrap items-center gap-2 sm:gap-3 min-w-0">
           {meta.length > 0 && (
             <dl className="hidden sm:flex items-stretch divide-x divide-[var(--border)] border border-[var(--border)] rounded">
               {meta.map((m) => (
@@ -40,7 +40,7 @@ export function PageHeader({ title, tagline, subtitle, meta = [], action }) {
               ))}
             </dl>
           )}
-          {action}
+          {action && <div className="w-full sm:w-auto">{action}</div>}
         </div>
       </div>
     </div>

@@ -11,7 +11,7 @@
 目前只做第一個垂直領域：**公共工程專案管理**。因此：
 
 - **GovAgent**：長期產品與平台名稱。
-- **PMIS**：目前公共工程垂直領域的專案名稱、程式庫名稱與既有介面名稱。
+- **PMIS**：目前公共工程垂直領域的 repo／工程專案代稱；介面主品牌已在 W8-1 統一為 `GovAgent｜公共工程`。
 - **`gov-agent.ai`**：目前正式站網域。
 
 在公共工程階段驗證完成前，不因長期願景而提早開發戶政、社福等其他領域，也不為假想需求建立外掛系統或 DSL。
@@ -103,7 +103,7 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 57 個 Vitest 測試檔，共 530 個測試；14 個 Playwright Demo 三角色／路由 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
+- 57 個 Vitest 測試檔，共 531 個測試；16 個 Playwright Demo 三角色／路由 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
 
 最近一次全套驗證（W7 PR #9，2026-08-13）：530 個單元測試、14 個 Demo E2E、5 個真 Supabase E2E 與 production build 全數通過。PR #8 已讓 23 檔 pgTAP 自動進 CI；其 main run 與一般 CI 均成功。W0～W5、W6 PR #7、pgTAP CI PR #8 與 W7 PR #9 已合併部署；PR #9 的 main CI 與 Cloudflare Workers build 成功，正式站首頁、`/requirements`、`/security` 與 `/site-log/print` 均回 HTTP 200。正式資料庫維持 `20260812000600`，W7 沒有資料庫變更。
 
@@ -126,6 +126,8 @@ W6 PR #7 已合併並部署，5 條本機真後端測試於 2026-08-13 重跑全
 但 W6 尚未完整收官：鏈 3 目前仍以人工 fixture 代替 live AI 輸出，沒有驗證 `extract-requirements` 成功寫入 ingestion run、AI-origin Requirement 與 citation。2026-08-13 手動重驗已能由未追蹤環境檔注入金鑰，但 Supabase CLI 2.113.0 的本機 Edge main worker 在模型呼叫前即發生 entrypoint boot error；待 CLI 修復或一次性 hosted staging 再完成，不代表產品或金鑰驗證失敗。細節見 `docs/REAL_BACKEND_E2E.md`。
 
 W7 已由 PR #9 部署並依 D-013 收口前端路由：`src/lib/navConfig.js` 的 `routeRegistry` 明確登記全部 36 條 App 路由，未登記業務路由 fail-closed；登入、公開、重新導向、列印與 404 各自標註。`src/App.jsx` 由這份路由表統一決定共同守衛與版面，四條列印路由現在也會先驗證登入與專案狀態，但仍保留無工作台外框的列印版面。既有三方頁面權限、導覽、RLS 與資料庫均未改動。
+
+W8-1 已完成並提交 PR、尚未合併或部署：主品牌統一為 `GovAgent｜公共工程`；側欄固定為今日待辦、現場與品質、審查與協作、進度與金流、文件與結案、專案六個工作面；`問 GovAgent` 是頁首全域入口；手機工作面使用目前頁面選單；機關仍落在跨案總覽。36 條路由與原角色限制不變，531 Vitest、16 Demo E2E、production build 與桌面／375px 瀏覽器目視均通過。今日待辦聚合、Agent 去重、初始化與契約重點仍屬後續 W8-2／W8-3，不得寫成已完成。
 
 ### 6.1 前端資料存取規則
 

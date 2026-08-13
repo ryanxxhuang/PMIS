@@ -34,6 +34,10 @@ export default function Security() {
       <main className="mx-auto w-full max-w-3xl space-y-10">
 
         <header className="space-y-3">
+          <Link to="/login" className="inline-flex items-baseline gap-2" aria-label="GovAgent 公共工程登入頁">
+            <span className="text-xl font-bold tracking-tight text-[var(--text)]">Gov<span className="text-[var(--accent-text)]">Agent</span></span>
+            <span className="text-xs text-[var(--text-3)]">公共工程</span>
+          </Link>
           <div className="flex items-center gap-2 text-sm text-[var(--text-3)]">
             <ShieldCheck size={16} aria-hidden="true" />
             資通安全

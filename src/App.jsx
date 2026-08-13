@@ -86,18 +86,28 @@ function Web({ children, bare = false, registryPath }) {
 // 找不到的路徑(U-02):原本靜默導回登入/首頁,使用者不知道自己打錯網址或收藏的連結已失效。
 function NotFound() {
   const { pathname } = useLocation()
+  const { currentUser } = useStore()
+  const home = currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'
+  const homeLabel = currentUser?.org_type === 'owner' ? '回到跨案總覽' : '回到今日待辦'
   return (
     <div className="text-center py-20 space-y-3">
       <div className="text-4xl">🧭</div>
       <div className="text-[var(--text)] font-medium">找不到這個頁面</div>
       <p className="text-sm text-[var(--text-3)]">網址 <code className="px-1 rounded bg-[var(--surface-2)]">{pathname}</code> 不存在——可能打錯了,或這個連結已失效。</p>
-      <Link to="/dashboard" className="inline-block text-sm font-medium text-[var(--blue-text)] hover:underline">← 回到首頁</Link>
+      <Link to={home} className="inline-block text-sm font-medium text-[var(--blue-text)] hover:underline">← {homeLabel}</Link>
     </div>
   )
 }
 
+function HomeRedirect() {
+  const { currentUser, authReady } = useStore()
+  if (!authReady) return <div className="min-h-screen grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
+  if (!currentUser) return <Navigate to="/login" replace />
+  return <Navigate to={currentUser.org_type === 'owner' ? '/portfolio' : '/dashboard'} replace />
+}
+
 const appRoutes = [
-  { path: '/', element: <Navigate to="/dashboard" replace /> },
+  { path: '/', element: <HomeRedirect /> },
   { path: '/login', element: <Login /> },
   { path: '/security', element: <Security /> },
   { path: '/dashboard', element: <Dashboard /> },

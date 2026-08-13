@@ -25,7 +25,7 @@
 | 6 | [`PROJECT_TREE.md`](PROJECT_TREE.md) | 詳細目錄、模組責任與修改入口 |
 | 7 | [`REAL_BACKEND_E2E.md`](REAL_BACKEND_E2E.md) | 手動真 Supabase staging 測試與清理 |
 
-目前產品整理評估見 [`產品全案評估報告-2026-08-12.md`](產品全案評估報告-2026-08-12.md)。狀態為 `EVALUATION`，供使用者逐批核准；其中建議不得直接視為實作授權。Requirement／obligation 的決策與正式庫匿名基線見 [`W5-1-Requirement-Obligation-決策書.md`](W5-1-Requirement-Obligation-決策書.md)；W5-2～W5-4、W6 與 W7 現況以 `CURRENT.md` 為準。
+目前產品整理評估見 [`產品全案評估報告-2026-08-12.md`](產品全案評估報告-2026-08-12.md)；全產品 UI/UX 第二版重新評估、36 路由處置與已核准 W8 分階段計畫見 [`W8-0-UIUX-全產品評估與改版藍圖-2026-08-13.md`](W8-0-UIUX-全產品評估與改版藍圖-2026-08-13.md)。W8-1 已完成並提交 PR、尚未合併／部署；後續工作以 `ROADMAP.md` 的第一個未完成 W8 工作包為準。Requirement／obligation 的決策與正式庫匿名基線見 [`W5-1-Requirement-Obligation-決策書.md`](W5-1-Requirement-Obligation-決策書.md)；已實作現況以 `CURRENT.md` 為準。
 
 長期方向見 [`北極星-政府機關-Agent-平台.md`](北極星-政府機關-Agent-平台.md)。專案入口、啟動與驗證指令見 [`../README.md`](../README.md)。AI 工具的 repo 指令見 [`../AGENTS.md`](../AGENTS.md)；[`../CLAUDE.md`](../CLAUDE.md) 是相同原則的 Claude 相容入口。
 
