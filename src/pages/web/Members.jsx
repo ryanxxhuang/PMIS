@@ -124,6 +124,11 @@ export default function Members() {
                   ? <p className="text-sm text-[var(--amber-text)]">三方到齊檢查:尚缺 {missingOrgs.map((o) => ORG_LABEL[o]).join('、')}。</p>
                   : <p className="text-sm text-[var(--green-text)]">三方到齊檢查:施工廠商、監造單位、主辦機關都已加入。</p>
               )}
+              {/* W8-3A(D-014):首頁初始化清單是準備指引,不是開啟正式模式的前置條件。
+                  這裡照舊只做三方到齊提醒＋二次確認,不因清單未完成而 disabled。 */}
+              <p className="text-xs text-[var(--text-3)]">
+                首頁的專案初始化清單是準備指引:不要求清空 AI 整理出的建議,也不會擋住這裡開啟正式模式。
+              </p>
               {isAdmin
                 ? <Button variant="danger" onClick={onEnableFormal} disabled={busy}>開啟正式模式</Button>
                 : <p className="text-xs text-[var(--text-3)]">僅專案建立者可開啟。</p>}
