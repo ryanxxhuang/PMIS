@@ -103,7 +103,7 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 57 個 Vitest 測試檔，共 523 個測試；12 個 Playwright Demo 三角色 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試。
+- 57 個 Vitest 測試檔，共 523 個測試；12 個 Playwright Demo 三角色 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
 
 最近一次全套驗證（W5 PR #6，2026-08-12）：523 個單元測試、12 個 E2E、23 檔共 723 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W5 已合併至 `main` 並部署；2026-08-13 正式資料庫已套用至 `20260812000600`，第二次 dry-run 顯示無待套 migration、遠端 DB lint 零錯誤。`agent-run` v9 與 `send-reminders` v10 已重部署且為 ACTIVE，未帶 JWT／cron secret 的安全冒煙均回 401。main CI 與 Cloudflare Workers build 均成功，正式站首頁及 `/requirements` 深層路由回應 HTTP 200。
 
