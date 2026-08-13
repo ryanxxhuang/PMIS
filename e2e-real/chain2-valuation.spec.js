@@ -7,7 +7,7 @@
 import { test, expect } from '@playwright/test'
 import {
   password, uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
-  signInClient, loginReal, logoutReal, gotoHash,
+  signInClient, loginReal, logoutReal, gotoHash, runCleanup,
 } from './helpers.js'
 
 const PROJECT_NAME = `鏈2估驗工程-${Date.now().toString(36)}`
@@ -47,10 +47,12 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
-  await deleteOwnedProjects(conEmail)
-  await cleanupUser(conId)
-  await cleanupUser(supId)
-  await cleanupUser(ownId)
+  await runCleanup(
+    () => deleteOwnedProjects(conEmail),
+    () => cleanupUser(conId),
+    () => cleanupUser(supId),
+    () => cleanupUser(ownId),
+  )
 })
 
 test('鏈 2:廠商建期送審 → 監造核定 → 機關請款/收款登錄', async ({ page }) => {

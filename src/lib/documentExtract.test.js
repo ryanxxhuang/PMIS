@@ -7,6 +7,7 @@ import {
   buildDocxPageRecords,
   buildPdfPageRecords,
   buildTxtPageRecords,
+  extractDocumentPages,
   hasExtractableText,
   segmentUnpaginatedText,
 } from './documentExtract.js'
@@ -98,5 +99,39 @@ describe('hasExtractableText', () => {
       { page_number: 1, extracted_text: '', extraction_method: PDF_EXTRACTION_METHOD },
       { page_number: 2, extracted_text: text, extraction_method: PDF_EXTRACTION_METHOD },
     ])).toBe(true)
+  })
+})
+
+// PR #7 審查修正:非 UTF-8 txt 必須誠實失敗,不能亂碼入庫(Big5)或讓 run 卡死(UTF-16 NUL)
+describe('extractDocumentPages(.txt 編碼誠實)', () => {
+  const txtFile = (bytes, name = '契約條款.txt') => ({
+    name, type: 'text/plain',
+    arrayBuffer: async () => Uint8Array.from(bytes).buffer,
+  })
+  const utf8 = (s) => [...new TextEncoder().encode(s)]
+
+  it('UTF-8 正常抽取,開頭 BOM 被去除', async () => {
+    const { pages, pagination } = await extractDocumentPages(
+      txtFile([0xef, 0xbb, 0xbf, ...utf8('第十條 乙方應於期限前提送品質計畫送審。')]))
+    expect(pagination).toBe('unpaginated')
+    expect(pages[0].extracted_text.startsWith('第十條')).toBe(true)
+    expect(pages[0].extraction_method).toBe(TXT_EXTRACTION_METHOD)
+  })
+
+  it('Big5 位元組(對 UTF-8 非法)→ 拒收,不得變亂碼入庫', async () => {
+    // 「契約」的 Big5 編碼:A5 D1 AC F9——皆為非法 UTF-8 序列
+    await expect(extractDocumentPages(txtFile([0xa5, 0xd1, 0xac, 0xf9, 0x0a, ...utf8('clause text here')])))
+      .rejects.toThrow(/無法以 UTF-8 讀取/)
+  })
+
+  it('UTF-16LE(帶 BOM)→ 拒收', async () => {
+    // BOM FF FE 對 UTF-8 非法 → fatal 解碼丟例外
+    await expect(extractDocumentPages(txtFile([0xff, 0xfe, 0x43, 0x00, 0x6f, 0x00])))
+      .rejects.toThrow(/無法以 UTF-8 讀取/)
+  })
+
+  it('無 BOM 但含 NUL(UTF-16 無 BOM 的特徵)→ 拒收,擋 Postgres \\u0000 卡死', async () => {
+    await expect(extractDocumentPages(txtFile([0x43, 0x00, 0x6f, 0x00, 0x6e, 0x00])))
+      .rejects.toThrow(/NUL 字元/)
   })
 })

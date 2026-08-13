@@ -100,8 +100,21 @@ export async function extractDocumentPages(file) {
   const type = file.type || ''
   const buffer = await file.arrayBuffer()
   if (name.endsWith('.txt') || type === 'text/plain') {
-    const text = new TextDecoder('utf-8').decode(buffer)
-    return { pages: buildTxtPageRecords(text), pagination: 'unpaginated', buffer }
+    // 編碼誠實(PR #7 審查):台灣公務環境仍常見 Big5/UTF-16 的舊 txt——
+    // 非 UTF-8 一律走「未能抽取」誠實失敗路徑,不能讓亂碼靜默入庫再拿去餵 AI。
+    // fatal 擋 Big5 與帶 BOM 的 UTF-16;NUL 檢查補殺無 BOM 的 UTF-16
+    // (NUL 是合法 UTF-8 碼位,fatal 擋不到,而 Postgres text 欄拒收 NUL(\u0000),
+    // 會讓 processing run 卡死在「處理中」)。開頭的 UTF-8 BOM 則無害,去掉即可。
+    let text
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+    } catch {
+      throw new Error('無法以 UTF-8 讀取這個純文字檔(可能是 Big5/UTF-16 等編碼):請以 UTF-8 另存新檔後重新上傳')
+    }
+    if (text.includes('\u0000')) {
+      throw new Error('無法以 UTF-8 讀取這個純文字檔(內含 NUL 字元,可能是 UTF-16 編碼):請以 UTF-8 另存新檔後重新上傳')
+    }
+    return { pages: buildTxtPageRecords(text.replace(/^\uFEFF/, '')), pagination: 'unpaginated', buffer }
   }
   if (name.endsWith('.docx') || type.includes('officedocument.wordprocessing')
     || type.includes('msword')) {

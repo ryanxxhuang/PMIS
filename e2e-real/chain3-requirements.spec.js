@@ -10,7 +10,7 @@
 import { test, expect } from '@playwright/test'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
-  signInClient, loginReal, logoutReal, gotoHash,
+  signInClient, loginReal, logoutReal, gotoHash, runCleanup,
 } from './helpers.js'
 
 const PROJECT_NAME = `鏈3文件工程-${Date.now().toString(36)}`
@@ -42,9 +42,11 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
-  await deleteOwnedProjects(conEmail)
-  await cleanupUser(conId)
-  await cleanupUser(supId)
+  await runCleanup(
+    () => deleteOwnedProjects(conEmail),
+    () => cleanupUser(conId),
+    () => cleanupUser(supId),
+  )
 })
 
 test('鏈 3:上傳文件→待審 Requirement→監造核定→義務時程出現', async ({ page }) => {

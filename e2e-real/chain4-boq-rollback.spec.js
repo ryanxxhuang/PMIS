@@ -8,7 +8,7 @@
 import { test, expect } from '@playwright/test'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
-  signInClient, loginReal, gotoHash,
+  signInClient, loginReal, gotoHash, runCleanup,
 } from './helpers.js'
 
 const PROJECT_NAME = `鏈4回滾工程-${Date.now().toString(36)}`
@@ -39,8 +39,10 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
-  await deleteOwnedProjects(conEmail)
-  await cleanupUser(conId)
+  await runCleanup(
+    () => deleteOwnedProjects(conEmail),
+    () => cleanupUser(conId),
+  )
 })
 
 test('鏈 4:匯入全敗如未匯→重試成功→重設被 guard 擋(UI 顯錯不半刪)→排除後成功', async ({ page }) => {

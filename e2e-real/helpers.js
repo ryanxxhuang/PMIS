@@ -102,6 +102,17 @@ export async function findUserIdByEmail(email) {
   return data?.users?.find((u) => u.email === email)?.id || null
 }
 
+// afterAll 清理鏈(PR #7 審查):逐步執行、收集錯誤最後一起 throw——
+// 不能讓「專案清理失敗」跳過其後的帳號清理,否則失敗的跑次會留下
+// 已確認+固定密碼的殘留帳號,違反「殘留 0」承諾。
+export async function runCleanup(...steps) {
+  const errors = []
+  for (const step of steps) {
+    try { await step() } catch (e) { errors.push(e) }
+  }
+  if (errors.length) throw new Error(`清理未完全:${errors.map((e) => e?.message || e).join(' | ')}`)
+}
+
 // hash router 導頁
 export async function gotoHash(page, hash) {
   await page.goto(`/#${hash}`)

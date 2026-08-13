@@ -4,7 +4,7 @@
 //   → 三方到齊檢查(W4-4) → requireText 二次確認開啟正式模式 → 被邀方登入看得到專案。
 // 帳號全部本次產生(唯一 email),測後 afterAll 以 service role 連專案一併清除。
 import { test, expect } from '@playwright/test'
-import { password, uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, findUserIdByEmail, registerViaUI, gotoHash } from './helpers.js'
+import { password, uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, findUserIdByEmail, registerViaUI, gotoHash, runCleanup } from './helpers.js'
 
 const PROJECT_NAME = `鏈1驗收工程-${Date.now().toString(36)}`
 const creatorEmail = uniqueEmail('w6c1-adm')
@@ -19,13 +19,14 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
-  // 先以建立者身分走 delete_project RPC 清專案(cascade 清全部業務資料),
-  // 再刪三個帳號。清理失敗會 throw——staging 殘留必須大聲,不能靜默留資料。
-  await deleteOwnedProjects(creatorEmail)
-  creatorId = creatorId || await findUserIdByEmail(creatorEmail)
-  await cleanupUser(creatorId)
-  await cleanupUser(supId)
-  await cleanupUser(ownId)
+  // runCleanup:各步錯誤收集最後一起 throw——建立者若在註冊前就失敗,
+  // 專案清理會失敗,但不得因此跳過 sup/own 兩個 beforeAll 帳號的清理。
+  await runCleanup(
+    () => deleteOwnedProjects(creatorEmail),
+    async () => { creatorId = creatorId || await findUserIdByEmail(creatorEmail); await cleanupUser(creatorId) },
+    () => cleanupUser(supId),
+    () => cleanupUser(ownId),
+  )
 })
 
 test('鏈 1:註冊→建案→邀請(含錯配拒絕)→三方到齊→正式模式→被邀方可見', async ({ page }) => {
