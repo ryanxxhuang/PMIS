@@ -1,6 +1,6 @@
-// 導覽/工作台/路由權限的單一真相來源(QA 報告 §9 系統瘦身:相關工具整併成
-// 工作台分頁,導覽從 22 項收斂;批 6 再收斂到 9 個可見項;路由全部保留,
-// 深連結與提醒中心導向不變)。
+// 導覽/工作台/路由權限的單一真相來源。W8-1 將業務入口收斂為六個工作面，
+// 路由全部保留，深連結與既有角色限制不變；GovAgent 是頁首的全域入口，
+// 不與六個工作面混成第七個模組。
 // roles 缺省=全角色可見;can.override(非正式模式的專案管理者)一律放行。
 // Layout 的側欄、App 的路由守衛、WorkbenchTabs 分頁列都吃這一份——
 // 「導覽隱藏」與「權限」永遠一致。
@@ -10,65 +10,46 @@
 // 與 roles(專案角色 org_type)互相獨立:can.override(專案管理者)也翻不過它。
 // 前端隱藏只是 UX;真正的把關在資料庫(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)。
 import {
-  LayoutDashboard, LayoutGrid, Bell, CalendarClock, BadgeCheck,
-  ClipboardList, Coins, PencilLine,
-  ShieldCheck, Users, Bot, ShieldAlert,
+  LayoutDashboard, LayoutGrid, CalendarClock,
+  Coins, PencilLine,
+  ShieldCheck, ShieldAlert,
 } from 'lucide-react'
 
 export const navGroups = [
-  { title: '總覽', items: [
-    { to: '/agent', icon: Bot, label: 'AI Agent' },
-    { to: '/portfolio', icon: LayoutGrid, label: '跨案總覽' },
-    { to: '/dashboard', icon: LayoutDashboard, label: '專案儀表', tabs: [
-      { to: '/dashboard', label: '專案 Dashboard' },
-      { to: '/activity', label: '活動紀錄' },
-      { to: '/monthly-report', label: '施工月報' },
-      { to: '/supervisor-report', label: '監造報表', roles: ['supervisor'] },
+  { title: '工作面', items: [
+    { to: '/dashboard', icon: LayoutDashboard, label: '今日待辦' },
+    { to: '/site-log', icon: ShieldCheck, label: '現場與品質', tabs: [
+      { to: '/site-log', label: '施工日誌' },
+      { to: '/quality', label: '品質查驗' },
+      { to: '/itp', label: '檢驗停留點' },
+      { to: '/safety', label: '工安管理' },
     ] },
-    // 「提醒中心」已自側欄隱藏(批6 產品原則:agent 能做的就把手動入口藏起來)——
-    // agent 主控台的「今日待我處理」吃同一份 ball-in-court 資料;每日提醒信仍深連結到本頁。
-    // 路由保留(App.jsx 不動);本頁不限角色,留定義是讓機制一致(隱藏≠移除)。
-    { to: '/alerts', icon: Bell, label: '提醒中心', hidden: true },
-  ] },
-  { title: '成本與進度', items: [
-    { to: '/boq', icon: ClipboardList, label: '標單工項' },
-    { to: '/valuation', icon: Coins, label: '估驗與金流', tabs: [
+    { to: '/requirements', icon: PencilLine, label: '審查與協作', tabs: [
+      { to: '/requirements', label: '履約需求' },
+      { to: '/submittals', label: '送審文件' },
+      { to: '/rfi', label: '工程疑義' },
+      { to: '/change-orders', label: '變更設計' },
+    ] },
+    { to: '/boq', icon: Coins, label: '進度與金流', tabs: [
+      { to: '/boq', label: '標單工項' },
       { to: '/valuation', label: '估驗計價' },
       { to: '/payments', label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
       { to: '/cost', label: '成本管理', roles: ['contractor'] },              // 廠商毛利機密
       { to: '/progress', label: '進度 S 曲線' },
       { to: '/schedule', label: '逐工項排程', roles: ['contractor'] },        // 廠商內部規劃
     ] },
-    // 「施工日誌」曾自側欄隱藏(批3 原則:agent 能做的就把手動入口藏起來),
-    // **2026-08-12 dry-run 改回顯示**:實測連產品擁有者自己都找不到入口
-    // (原話「各個功能模塊放的地方很亂,很沒有邏輯」),現場工程師更不可能。
-    // 教訓:「agent 能做」不等於「入口可以消失」——藏入口的前提是 agent 那條路
-    // 本身高度可發現,而 /agent 收件匣底部的次要入口顯然不夠。
-    // 收斂原則不變,但要等導覽 IA 重新檢視後,連同 agent 路徑一起設計(dry-run 問題 #10)。
-    { to: '/site-log', icon: PencilLine, label: '施工日誌' },
-  ] },
-  { title: '品質與工安', items: [
-    { to: '/quality', icon: ShieldCheck, label: '品質與工安', tabs: [
-      { to: '/quality', label: '品質查驗' },
-      { to: '/itp', label: '檢驗停留點' },
-      { to: '/safety', label: '工安管理' },
-    ] },
-  ] },
-  { title: '契約與協作', items: [
-    // 「風險稽核」(/audit)已自分頁隱藏(批4 產品原則:agent 能做的就把手動入口藏起來)——
-    // 機關/監造 agent 的 run_integrity_audit 在對話裡就能跑出同一份確定性發現,
-    // 還會寫成稽核提示草稿進 /agent 收件匣。路由保留(App.jsx 不動),機關深連結照常;
-    // hidden=不顯示但不解除限制:roles 必須留著,否則刪掉定義=任何角色都能深連結進防弊稽核。
-    { to: '/contract', icon: CalendarClock, label: '契約與協作', tabs: [
+    { to: '/contract', icon: CalendarClock, label: '文件與結案', tabs: [
       { to: '/contract', label: '專案文件' },
-      { to: '/requirements', label: '履約需求' },
-      { to: '/submittals', label: '送審文件' },
-      { to: '/rfi', label: '工程疑義' },
-      { to: '/change-orders', label: '變更設計' },
+      { to: '/monthly-report', label: '施工月報' },
+      { to: '/supervisor-report', label: '監造報表', roles: ['supervisor'] },
+      { to: '/acceptance', label: '驗收結算' },
+    ] },
+    { to: '/portfolio', icon: LayoutGrid, label: '專案', tabs: [
+      { to: '/portfolio', label: '跨案總覽' },
+      { to: '/activity', label: '活動紀錄' },
+      { to: '/members', label: '三方成員' },
       { to: '/audit', label: '風險稽核', roles: ['owner'], hidden: true }, // 機關防弊
     ] },
-    { to: '/acceptance', icon: BadgeCheck, label: '驗收結算' },
-    { to: '/members', icon: Users, label: '專案成員' },
   ] },
   { title: '平台', items: [
     // 平台管理後台(批 C):AI 用量/成本儀表、功能開關、專案方案。僅平台管理員
@@ -85,6 +66,9 @@ const nonNavRouteRules = {
   '/login': { access: 'public' },
   '/security': { access: 'public' },
   '/assistant': { access: 'redirect' },
+  '/agent': { access: 'authenticated' },
+  // 提醒信仍可深連結；入口已由「今日待辦」承接。
+  '/alerts': { access: 'authenticated' },
   '/project/new': { access: 'authenticated' },
   '/site-log/print': { access: 'authenticated', surface: 'print' },
   '/valuation/print': { access: 'authenticated', surface: 'print' },

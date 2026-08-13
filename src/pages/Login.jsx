@@ -18,11 +18,11 @@ export default function Login() {
   }, [currentUser, passwordRecovery, navigate])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-6">
-      <div className="bg-[var(--surface)] rounded-2xl g-elevation-2 w-full max-w-md p-8">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-4 sm:p-6">
+      <div className="bg-[var(--surface)] rounded-2xl g-elevation-2 w-full max-w-md p-6 sm:p-8">
         <div className="text-center mb-6">
-          <div className="text-3xl font-medium tracking-tight text-[var(--text)]">PMIS <span className="text-[var(--accent-text)] font-bold">AI</span></div>
-          <div className="text-[var(--text-2)] text-sm mt-1">AI 工程現場管理平台</div>
+          <div className="text-3xl font-bold tracking-tight text-[var(--text)]">Gov<span className="text-[var(--accent-text)]">Agent</span></div>
+          <div className="text-[var(--text-2)] text-sm mt-1">公共工程專案管理</div>
         </div>
         {passwordRecovery
           ? <ResetPasswordForm updatePassword={updatePassword} />
@@ -162,7 +162,7 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
         <>
           <input className={input} placeholder="姓名" value={form.full_name} onChange={set('full_name')} required />
           <input className={input} placeholder="公司 / 單位" value={form.company} onChange={set('company')} />
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <select className={input} value={form.org_type} onChange={set('org_type')}>
               <option value="contractor">施工廠商</option>
               <option value="supervisor">監造</option>
@@ -199,7 +199,7 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
           </button>
         )}
       </div>
-      <div className="text-center text-xs text-[var(--text-3)] pt-1">真實帳號 · 資料存於 Supabase（RLS 權限控管）</div>
+      <div className="text-center text-xs text-[var(--text-3)] pt-1">帳號與專案資料依角色權限保護</div>
     </form>
   )
 }

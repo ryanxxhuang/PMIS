@@ -10,8 +10,11 @@ const REVISED_AFTER_CO2 = '724,388,067'
 test.describe('機關', () => {
   test('登入落在跨案總覽', async ({ page }) => {
     await loginAs(page, 'owner')
-    await expect(page.getByText('跨案總覽').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: '跨案總覽' })).toBeVisible()
     await expect(page.getByText('待你核定／撥款')).toHaveCount(0) // portfolio 無行動中心(在 dashboard)
+    // 已登入後重新開根路徑仍依角色落地，不被舊的固定 /dashboard 導向帶走。
+    await page.goto('/')
+    await expect(page).toHaveURL(/#\/portfolio/)
   })
 
   test('核准變更設計 → 變更後契約金額跨頁一致(B-02)', async ({ page }) => {
@@ -40,7 +43,7 @@ test.describe('機關', () => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/no-such-page')
     await expect(page.getByText('找不到這個頁面')).toBeVisible()
-    await page.getByRole('link', { name: /回到首頁/ }).click()
-    await expect(page).toHaveURL(/#\/dashboard/)
+    await page.getByRole('link', { name: /回到跨案總覽/ }).click()
+    await expect(page).toHaveURL(/#\/portfolio/)
   })
 })
