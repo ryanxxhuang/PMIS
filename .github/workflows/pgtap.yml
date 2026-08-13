@@ -43,9 +43,13 @@ jobs:
           for f in supabase/tests/*.sql; do
             # ON_ERROR_STOP:檔案中途的 SQL 錯誤立即讓 psql 以非零退出——
             # 不能讓「前半已印出 ok、後半整段爛掉」的檔案溜成綠燈。
-            out=$( (echo "set search_path = extensions, public;"; cat "$f") \
+            # 賦值寫在 if 條件裡是刻意的:Actions 預設 shell 是 `bash -e`,
+            # 而 `out=$(失敗指令)` 會直接觸發 errexit 中止整個 step——那樣雖然
+            # 仍是紅燈,卻在印出 ::error 與剩下的檔案之前就死了(等於看不到哪裡壞)。
+            # if 條件內的指令豁免 errexit,rc 才拿得到、迴圈才跑得完。
+            if out=$( (echo "set search_path = extensions, public;"; cat "$f") \
               | docker exec -i supabase_db_PMIS psql -U postgres -d postgres \
-                  -v ON_ERROR_STOP=1 -q -t -A -f - 2>&1 ); rc=$?
+                  -v ON_ERROR_STOP=1 -q -t -A -f - 2>&1 ); then rc=0; else rc=$?; fi
             ok=$(printf '%s\n' "$out" | grep -c "^ok " || true)
             notok=$(printf '%s\n' "$out" | grep -c "^not ok" || true)
             planmiss=$(printf '%s\n' "$out" | grep -c "Looks like you planned" || true)
