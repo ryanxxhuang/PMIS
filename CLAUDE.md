@@ -11,7 +11,7 @@
 - 使用者已選 A（D-012）：`requirements` 是唯一權威，approved deadline Requirement 單向產生 obligation；obligation 執行狀態不反向改寫 Requirement。
 - **W5-2～W5-4 已由 PR #6 部署，不要重做**：Requirement 單向 migration／rollback、legacy caller 退場、成員模型防誤用，以及試體缺失 Demo／DB 漂移修正均已完成；PR 審查補上 supersede 不得殘留待辦提醒的回歸，保留資料與歷史但從現行前端／Agent 清單排除。正式資料庫已到 `20260812000600`，引用共用工具的 `agent-run` v9／`send-reminders` v10 也已部署。
 - **W6-1～W6-5 已由 PR #7 合併部署**：獨立 `playwright.real.config.js`／`e2e-real/`、staging-only 防呆、環境變數注入、登入與四條鏈於 2026-08-13 重跑 5/5 通過，fixture 與 Storage 殘留 0。W6-4 的人工待審 fixture 會綁定真上傳文件版本，但 Supabase CLI 2.113.0 的本機 Edge main worker 目前在模型呼叫前即發生 entrypoint boot error，**不包含 `extract-requirements` live AI 成功路徑**；不要在同一版本反覆重試，也不得把 5/5 說成外部模型串接已驗證。細節見 `docs/REAL_BACKEND_E2E.md`。
-- **W7 路由治理已本機完成（D-013）**：36 條 App 路由全部進 `routeRegistry`，未登記路由預設拒絕；公開頁、重新導向、列印與 404 明確標記，四條列印路由改走共同登入／專案守衛。基線為 530 Vitest、14 Demo E2E、5 真 Supabase E2E 與 production build 全綠；W7 不動 DB。
+- **W7 路由治理已由 PR #9 合併部署（D-013）**：36 條 App 路由全部進 `routeRegistry`，未登記路由預設拒絕；公開頁、重新導向、列印與 404 明確標記，四條列印路由改走共同登入／專案守衛。基線為 530 Vitest、14 Demo E2E、5 真 Supabase E2E 與 production build 全綠；main CI、Cloudflare build 與正式站四條 HTTP 冒煙成功，W7 不動 DB。
 - 正式庫 preflight：65 obligations／113 requirements／48 筆差額；差額全是未核定建議，orphan legacy = 0、approved deadline 缺 obligation = 0。
 - 每次續接仍以 `docs/ROADMAP.md` 的未排入清單與使用者新核准範圍為準；新工作包從最新 `main` 建立，不沿用已合併分支。
 
