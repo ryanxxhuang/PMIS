@@ -10,9 +10,14 @@ test.describe('施工廠商', () => {
     for (const section of ['現在輪到我', '等待對方', '今天已完成']) {
       await expect(page.getByRole('heading', { name: section })).toBeVisible()
     }
-    // 期限型待辦已進首頁:OB-6 契約義務 fixed_date = 今天 -3 天(demoSeed)
-    await expect(page.getByText('第 5 期估驗計價送審')).toBeVisible()
-    await expect(page.getByText(/逾期 3 天/)).toBeVisible()
+    // 期限型待辦已進首頁:OB-6 契約義務(demoSeed 的 fixed_date 相對今天往前推)。
+    // 逾期天數一定要綁在這一筆上斷言:demo 有多筆待辦會落在同一個到期日,
+    // 全頁 getByText(/逾期 N 天/) 會同時命中別筆而觸發 strict mode violation。
+    // 天數本身不寫死——demoSeed 以機器本地時鐘產日期,todayTasks 以台北日曆日判斷,
+    // UTC 機器跑在台北的隔天時會多算一天(UTC 4 天 / Taipei 3 天),寫死就會隨時區紅。
+    const overdueObligation = page.getByRole('link').filter({ hasText: '第 5 期估驗計價送審' })
+    await expect(overdueObligation).toHaveCount(1) // 標題必須唯一命中,否則就是又出現重複入口
+    await expect(overdueObligation).toContainText(/逾期 \d+ 天（到期 \d{4}-\d{2}-\d{2}）/)
     // 等待對方只列直接相關的對手項:SUB-003 球在監造
     await expect(page.getByText(/SUB-003/)).toBeVisible()
   })
