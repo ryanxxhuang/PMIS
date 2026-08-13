@@ -19,14 +19,17 @@ PMIS/
 ├── package-lock.json         鎖定依賴版本
 ├── index.html                Vite HTML 入口
 ├── vite.config.js            Vite／React／Tailwind 設定
-├── playwright.config.js      E2E 設定
+├── playwright.config.js      Demo E2E 設定
+├── playwright.real.config.js 真 Supabase 手動 E2E 設定
 ├── wrangler.jsonc            Cloudflare Workers 部署設定
 ├── .env.example              可提交的環境變數範例
+├── .env.e2e.real.example     真後端 E2E 環境變數範例
 ├── .nvmrc                    Node 版本
 ├── .github/workflows/ci.yml  CI：測試與建置
 ├── src/                      React 前端與確定性領域邏輯
 ├── supabase/                 DB migrations、Edge Functions、pgTAP
 ├── e2e/                      Playwright 三方流程
+├── e2e-real/                 Playwright 真 Supabase 冒煙（不進 CI）
 ├── public/                   靜態檔、安全標頭與 security.txt
 ├── docs/                     現行文件、決策、證據與對外資料
 └── scripts/                  一次性 BOQ 資料整理工具
@@ -276,6 +279,14 @@ e2e/
 ├── supervisor.spec.js       監造流程
 ├── owner.spec.js            機關流程
 └── helpers.js               共用登入與專案 fixture
+
+e2e-real/
+├── auth-smoke.spec.js          真登入、session 還原與登出
+├── chain1-onboarding.spec.js  註冊、建案、三方邀請與正式模式
+├── chain2-valuation.spec.js   估驗三方簽核與請款收款
+├── chain3-requirements.spec.js 文件、Requirement 審查與義務物化
+├── chain4-boq-rollback.spec.js 標單匯入／重設 rollback
+└── helpers.js                 隔離帳號、專案與 Storage 清理
 
 public/
 ├── _headers                 Cloudflare 安全標頭與 CSP

@@ -2,6 +2,7 @@ node_modules
 dist
 .env
 .env.local
+.env.e2e.real
 .DS_Store
 .playwright-mcp
 
@@ -24,4 +25,3 @@ mobile-home.png
 self-inspection.png
 發包圖說*.zip
 .wrangler/
-.env.e2e.real

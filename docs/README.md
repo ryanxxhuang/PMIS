@@ -1,7 +1,7 @@
 # GovAgent／PMIS 文件索引
 
 > 狀態：**ACTIVE**
-> 最後盤點：2026-08-12
+> 最後盤點：2026-08-13
 > 用途：說明每份文件的責任、時效與能不能作為開發依據。
 
 ## 文件狀態
@@ -23,6 +23,7 @@
 | 4 | [`ROADMAP.md`](ROADMAP.md) | 候選改動；未核准前不得實作 |
 | 5 | [`architecture/README.md`](architecture/README.md) | 架構文件狀態與閱讀入口 |
 | 6 | [`PROJECT_TREE.md`](PROJECT_TREE.md) | 詳細目錄、模組責任與修改入口 |
+| 7 | [`REAL_BACKEND_E2E.md`](REAL_BACKEND_E2E.md) | 手動真 Supabase staging 測試與清理 |
 
 目前產品整理評估見 [`產品全案評估報告-2026-08-12.md`](產品全案評估報告-2026-08-12.md)。狀態為 `EVALUATION`，供使用者逐批核准；其中建議不得直接視為實作授權。Requirement／obligation 的決策與正式庫匿名基線見 [`W5-1-Requirement-Obligation-決策書.md`](W5-1-Requirement-Obligation-決策書.md)；W5-2～W5-4 已部署現況以 `CURRENT.md` 為準。
 

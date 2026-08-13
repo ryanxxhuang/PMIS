@@ -94,7 +94,7 @@ contract_packages
 
 ## 6. 目前技術現況
 
-截至 2026-08-12 的盤點：
+截至 2026-08-13 的盤點：
 
 - React 18、Vite 6、Tailwind CSS 4 的靜態 SPA。
 - Supabase Postgres、Auth、RLS、Storage 與 Deno Edge Functions。
@@ -103,7 +103,7 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 57 個 Vitest 測試檔，共 523 個測試；12 個 Playwright 三角色 E2E；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
+- 57 個 Vitest 測試檔，共 523 個測試；12 個 Playwright Demo 三角色 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
 
 最近一次全套驗證（W5 PR #6，2026-08-12）：523 個單元測試、12 個 E2E、23 檔共 723 項 pgTAP 全數通過，正式建置與資料庫 lint 成功；從零重建會依序套用 W5-2 與 W5-3 migration，W5-4 沒有資料庫變更。W0～W5 已合併至 `main` 並部署；2026-08-13 正式資料庫已套用至 `20260812000600`，第二次 dry-run 顯示無待套 migration、遠端 DB lint 零錯誤。`agent-run` v9 與 `send-reminders` v10 已重部署且為 ACTIVE，未帶 JWT／cron secret 的安全冒煙均回 401。main CI 與 Cloudflare Workers build 均成功，正式站首頁及 `/requirements` 深層路由回應 HTTP 200。
 
@@ -120,6 +120,10 @@ W5-2 的正式庫變更前唯讀基線：65 筆 obligation、113 筆 Requirement
 W5-3 已把雙成員模型的防誤用規則固定：[`docs/architecture/three-party-role-model.md`](docs/architecture/three-party-role-model.md#成員模型的唯一判斷規則) 是唯一說明點；已部署的 migration `20260812000600` 只替兩張表與 helper 加 schema comment，關鍵前端／提醒呼叫點也有短註解。沒有改名、刪表或變更 RLS。
 
 W5-4 只修正一條可重現的 Demo／DB 漂移：同一組 28 天試體判定不合格時，正式 DB 會在同一交易建立並以 `test_sample_id` 去重缺失，但 Demo 曾因 React state updater 時序漏開缺失，重試時又可能重複開。現在 Demo 以 `deriveTestSampleUpdate` 同步推導判定，並以 `shouldCreateTestSampleDefect` 保持一組試體一筆缺失；其他尚未發生漂移的雙引擎規則沒有重構。
+
+W6 目前 5 條本機真後端測試全綠：`npm run test:e2e:real`（環境變數注入、拒絕正式 Supabase、不進預設 CI）對一次性本機 staging 跑 auth 冒煙、鏈 1 初始化（含邀請錯配拒絕與正式模式）、鏈 2 估驗三方簽核與請款收款、鏈 3 文件上傳＋綁定真文件版本的人工待審 Requirement→核定→D-012 義務物化、鏈 4 匯入/重設 rollback（含 UI 錯誤橫幅與「日誌不半刪」）。fixture 走產品窄門 RPC，清理含 Storage 物件，跑後殘留 0。
+
+但 W6 尚未完整收官：鏈 3 因本機沒有 Edge runtime／Anthropic key，以人工 fixture 代替 live AI 輸出，沒有驗證 `extract-requirements` 成功寫入 ingestion run、AI-origin Requirement 與 citation。依原評估報告的真實 Edge 完成條件，這項仍待一次性 staging 驗證；細節見 `docs/REAL_BACKEND_E2E.md`。
 
 ### 6.1 前端資料存取規則
 
