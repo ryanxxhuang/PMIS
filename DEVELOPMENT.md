@@ -1,7 +1,7 @@
 # GovAgent／PMIS 開發基準
 
 > 狀態：**ACTIVE**
-> 最後更新：2026-08-12
+> 最後更新：2026-08-13
 > 用途：後續任何人或 AI 開發前都必須遵守的最小規則。
 
 ## 1. 開發前先讀什麼
@@ -45,6 +45,7 @@
 - AI 只能查詢、彙整與產生草稿；核定、判定、結案與驗收必須由人完成。
 - 金額、期限與合格判定必須由確定性程式或資料庫規則計算。
 - RLS、RPC、Guard Trigger 與 migration 是安全邊界；前端隱藏按鈕不是權限控制。
+- 所有前端路由都必須登記在 `src/lib/navConfig.js` 的 `routeRegistry`；未登記預設拒絕，公開與列印路由必須明確標註。
 - 只有 `approved` Requirement 是權威契約要求。
 - 成員模型以 [`docs/architecture/three-party-role-model.md`](docs/architecture/three-party-role-model.md#成員模型的唯一判斷規則) 為唯一規則：`project_members` 管授權，`project_memberships` 管身分快照；不得從 `project_role` 或 party 類型推導業務權限。
 

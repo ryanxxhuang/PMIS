@@ -76,3 +76,9 @@
 - **狀態**：ACCEPTED（2026-08-12）
 - **決策**：`requirements` 是唯一契約要求權威；只有經人工核定且 `requirement_type = 'deadline'` 的 Requirement，才能單向產生／更新 `contract_obligations` 相容 runtime。obligation 的執行狀態與佐證不反向改寫 Requirement。
 - **結果**：W5-2 已由 PR #6 與 migration `20260812000500` 部署：新文件只跑 `extract-requirements` 一次，舊 `parse-contract` Edge Function 檔案保留但沒有前端呼叫者；受控核准會冪等產生 deadline obligation，並保留既有 `status`、`evidence_submittal_id`、`penalty` 與歷史連結。已核准期限被人工取代時，只有仍待辦的相容提醒會改為「不適用」並退出現行清單，資料列、佐證與歷史不刪除。
+
+## D-013｜前端路由預設拒絕
+
+- **狀態**：ACCEPTED（2026-08-13）
+- **決策**：每條前端路由都必須登記在單一路由表；未登記的業務路由預設拒絕。公開頁、重新導向、列印頁與 404 必須明確標註，列印頁仍須通過共同登入與專案守衛。
+- **結果**：W7 只收口前端路由治理，不改三方角色、既有頁面權限、RLS、導覽資訊架構或資料庫。

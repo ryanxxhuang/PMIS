@@ -6,11 +6,12 @@
 
 ## 0. 目前續接點（2026-08-13）
 
-- W0～W5 已合併至 `main` 並部署；W6 工作包在 PR #7。不要重做文件基準、標單原子化、初始化流程、單一 Agent、成員／正式模式或 W5 架構債。
+- W0～W5 已合併至 `main` 並部署；W6 PR #7 與 pgTAP CI PR #8 已合併並部署。不要重做文件基準、標單原子化、初始化流程、單一 Agent、成員／正式模式、W5 架構債或 W6 真後端基建。
 - **W5-1 已完成**：唯讀盤點與 A／B 代價見 `docs/W5-1-Requirement-Obligation-決策書.md`。
 - 使用者已選 A（D-012）：`requirements` 是唯一權威，approved deadline Requirement 單向產生 obligation；obligation 執行狀態不反向改寫 Requirement。
-- **W5-2～W5-4 已由 PR #6 部署，不要重做**：Requirement 單向 migration／rollback、legacy caller 退場、成員模型防誤用，以及試體缺失 Demo／DB 漂移修正均已完成；PR 審查補上 supersede 不得殘留待辦提醒的回歸，保留資料與歷史但從現行前端／Agent 清單排除。最新基線為 523 Vitest、12 E2E、723 pgTAP；正式資料庫已到 `20260812000600`，引用共用工具的 `agent-run` v9／`send-reminders` v10 也已部署。下一工作包是 W6，開始前仍要依 `docs/ROADMAP.md` 的單格範圍執行。
-- **W6-1～W6-5 已在 PR #7 完成真後端測試基建與四條業務鏈**：獨立 `playwright.real.config.js`／`e2e-real/`、staging-only 防呆、環境變數注入、登入與四條鏈均已在一次性本機 Supabase 通過，fixture 與 Storage 殘留 0。W6-4 的人工待審 fixture 會綁定真上傳文件版本，但本機沒有 Edge runtime／Anthropic key，**不包含 `extract-requirements` live AI 成功路徑**；不得把 5/5 說成外部模型串接已驗證。細節見 `docs/REAL_BACKEND_E2E.md`。
+- **W5-2～W5-4 已由 PR #6 部署，不要重做**：Requirement 單向 migration／rollback、legacy caller 退場、成員模型防誤用，以及試體缺失 Demo／DB 漂移修正均已完成；PR 審查補上 supersede 不得殘留待辦提醒的回歸，保留資料與歷史但從現行前端／Agent 清單排除。正式資料庫已到 `20260812000600`，引用共用工具的 `agent-run` v9／`send-reminders` v10 也已部署。
+- **W6-1～W6-5 已由 PR #7 合併部署**：獨立 `playwright.real.config.js`／`e2e-real/`、staging-only 防呆、環境變數注入、登入與四條鏈於 2026-08-13 重跑 5/5 通過，fixture 與 Storage 殘留 0。W6-4 的人工待審 fixture 會綁定真上傳文件版本，但 Supabase CLI 2.113.0 的本機 Edge main worker 目前在模型呼叫前即發生 entrypoint boot error，**不包含 `extract-requirements` live AI 成功路徑**；不要在同一版本反覆重試，也不得把 5/5 說成外部模型串接已驗證。細節見 `docs/REAL_BACKEND_E2E.md`。
+- **W7 路由治理已本機完成（D-013）**：36 條 App 路由全部進 `routeRegistry`，未登記路由預設拒絕；公開頁、重新導向、列印與 404 明確標記，四條列印路由改走共同登入／專案守衛。基線為 530 Vitest、14 Demo E2E、5 真 Supabase E2E 與 production build 全綠；W7 不動 DB。
 - 正式庫 preflight：65 obligations／113 requirements／48 筆差額；差額全是未核定建議，orphan legacy = 0、approved deadline 缺 obligation = 0。
 - 每次續接仍以 `docs/ROADMAP.md` 的未排入清單與使用者新核准範圍為準；新工作包從最新 `main` 建立，不沿用已合併分支。
 
@@ -75,7 +76,7 @@
 - **資料脊椎**：PCCES 標單 → `work_items` 樹；日誌數量 → 估驗 → 請款，全線靠 `work_item_id` 串
 - **權限**：伺服器端 RBAC（RLS ＋ 狀態轉移 trigger），前端 `can` 只是 UX，不是安全邊界
 - **成員模型**：`project_members`＝授權；`project_memberships`＝契約方身分快照。唯一規則見 `docs/architecture/three-party-role-model.md`
-- **導覽單一真相**：`src/lib/navConfig.js`（側欄／路由守衛／分頁列共用；`hidden: true` ≠ 移除權限）
+- **路由與導覽單一真相**：`src/lib/navConfig.js` 的 `routeRegistry`／`navGroups`（未登記路由 fail-closed；公開與列印路由必須明確標記；`hidden: true` ≠ 移除權限）
 - **Store**：`src/store.jsx` 組合根 ＋ `src/store/slices/*`
 - **資料存取**：跨頁共享資料才進 Store；單頁專屬資料可直接查 Supabase；同一查詢重複兩次以上才抽共用層
 
@@ -91,6 +92,10 @@ npm run build
 
 ```bash
 npm run test:e2e
+```
+
+```bash
+npm run test:e2e:real
 ```
 
 ### 環境地雷

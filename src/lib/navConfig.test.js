@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { navGroups, routeAllowed, workbenchFor, visibleNavGroups } from './navConfig.js'
+import { navGroups, routeAllowed, routeRegistry, workbenchFor, visibleNavGroups } from './navConfig.js'
 
 const flatNav = (groups) => groups.flatMap((g) => g.items)
 const ORGS = ['contractor', 'supervisor', 'owner']
@@ -47,9 +47,26 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
     expect(routeAllowed('/schedule', 'owner', false)).toBe(false)
     expect(routeAllowed('/schedule', 'owner', true)).toBe(true)
   })
-  it('未列於導覽的路由(列印/建案)不設限', () => {
-    expect(routeAllowed('/site-log/print', 'owner', false)).toBe(true)
+  it('非導覽路由必須明確登記，列印與建案維持全角色可用', () => {
+    for (const path of ['/site-log/print', '/valuation/print', '/valuation/package', '/quality/checklist-print']) {
+      expect(routeRegistry[path]).toMatchObject({ access: 'authenticated', surface: 'print' })
+      for (const org of ORGS) expect(routeAllowed(path, org, false)).toBe(true)
+    }
+    expect(routeRegistry['/project/new']).toEqual({ access: 'authenticated' })
     expect(routeAllowed('/project/new', 'supervisor', false)).toBe(true)
+  })
+  it('未登記業務路由預設拒絕，override 與平台管理員也不得繞過', () => {
+    for (const org of ORGS) {
+      expect(routeAllowed('/forgot-to-register', org, false)).toBe(false)
+      expect(routeAllowed('/forgot-to-register', org, true, true)).toBe(false)
+    }
+  })
+  it('公開、重新導向與 404 路由都有明確類型', () => {
+    expect(routeRegistry['/login']).toEqual({ access: 'public' })
+    expect(routeRegistry['/security']).toEqual({ access: 'public' })
+    expect(routeRegistry['/']).toEqual({ access: 'redirect' })
+    expect(routeRegistry['/assistant']).toEqual({ access: 'redirect' })
+    expect(routeRegistry['*']).toEqual({ access: 'authenticated', surface: 'not-found' })
   })
   it('批6 搬進分頁的無 roles 路由:各角色仍全放行', () => {
     for (const to of ['/activity', '/monthly-report', '/progress', '/safety', '/itp', '/submittals', '/rfi', '/change-orders']) {

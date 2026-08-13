@@ -1,8 +1,8 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W5 已完成並部署；W6 PR #7 審查中）**
+> 狀態：**ACTIVE（W0–W5 已完成並部署；W6 PR #7 與 pgTAP CI PR #8 已合併；W7 本機完成）**
 > 最後更新：2026-08-13
-> 依《產品全案評估報告 2026-08-12》§9 工作包與 §10 決策（已定案為 D-007～D-011）。
+> 依《產品全案評估報告 2026-08-12》§9 工作包與 §10 決策（相關決策已定案為 D-007～D-013）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
 
 ## 續接規則（給任何新 session／新 AI，防止 token 用盡後重來）
@@ -22,9 +22,10 @@
 - [x] W3 單一 Agent 體驗 — PR #4，已部署（migration `20260812000300`＋16 支 Edge Functions）
 - [x] W4 成員與正式模式 — PR #5，已部署（migration `20260812000400`）
 - [x] W5 一次一項架構債 — PR #6，已部署（migrations `20260812000500`、`20260812000600`）
-- [ ] W6 最小真案驗收 — PR #7（尚缺 live Edge 成功路徑）
+- [ ] W6 最小真案驗收 — PR #7 已合併並部署（尚缺 live Edge 成功路徑）
+- [x] W7 路由治理 — 本機完成，待本工作包 PR
 
-W6 的 5 條本機真後端測試均綠，但 W6-4 以綁定真文件版本的人工待審 fixture 代替 live AI 輸出；依原評估報告「真實 RLS、RPC、Storage 與 Edge」完成條件，補完一次性 staging 的 `extract-requirements` 成功路徑後才能收官。
+W6 的 5 條本機真後端測試於 2026-08-13 重跑均綠，PR #7 已合併、main CI 與 Cloudflare 部署成功；但 W6-4 以綁定真文件版本的人工待審 fixture 代替 live AI 輸出。`ANTHROPIC_API_KEY` 已可由未追蹤環境檔注入，但 Supabase CLI 2.113.0 的本機 Edge main worker 目前在模型呼叫前即發生 entrypoint boot error；待 CLI 修復或一次性 hosted staging 後才能完整收官，不阻擋 W7。
 
 ---
 
@@ -123,16 +124,25 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   本機證據（2026-08-13）：`e2e-real/chain2-valuation.spec.js` 正式模式下通過——廠商建期送審（無核定鈕）、監造核定、機關登錄請款/收款（待請款→已請款→已收款）；fixture 全走產品 RPC，afterAll 清理殘留 0。
 - [ ] **W6-4 鏈 3：文件上傳→Requirement 建議→人工核定**
   已通過部分（2026-08-13）：`e2e-real/chain3-requirements.spec.js` 上傳契約 txt（Storage＋documents＋document_versions），並在真文件版本建立後插入帶 document source 的人工待審 Requirement；廠商看得到但無核定鈕，監造經 `review_requirement` 核定後，D-012 義務物化出現同標題與固定到期日。清理含 Storage 物件，殘留 0。
-  尚缺：本機沒有 Edge runtime／Anthropic key，尚未驗證 `extract-requirements` live AI 成功產生 `document_ingestion_runs`、AI-origin Requirement 與 citation；這是原完成條件的 Edge 部分，不能以人工 fixture 代替。
+  尚缺：Supabase CLI 2.113.0 的本機 Edge main worker 目前在模型呼叫前即發生 entrypoint boot error，尚未驗證 `extract-requirements` live AI 成功產生 `document_ingestion_runs`、AI-origin Requirement 與 citation；待 CLI 修復或一次性 hosted staging 再驗，不能以人工 fixture 代替。
 - [x] **W6-5 鏈 4：標單匯入失敗／重設失敗 rollback（真後端重演 W1 pgTAP 情境）**
   本機證據（2026-08-13）：`e2e-real/chain4-boq-rollback.spec.js` 通過——缺父項匯入整包拒收（全敗如未匯）、重試成功、重複匯入被擋；品質檢查紀錄連工項時 UI 清空重匯被 guard 擋下並顯示「清空未執行，所有資料維持原狀」紅色橫幅，標單與日誌原封不動（舊版災難點：日誌被靜默刪光）；移除品質證據後重試清空成功、回到 onboarding。
   （W6-2、W6-3、W6-5 已達成；W6-4 的 RLS／Storage／審查／物化已綠，live Edge 成功路徑待補。）
 
 ---
 
+## W7｜路由治理（D-013、P1-08）
+
+- [x] **W7-1 單一路由表與預設拒絕**
+  範圍：`src/lib/navConfig.js` 建立涵蓋 36 條 App 路由的 `routeRegistry`；導覽內路由沿用既有角色規則，登入、公開頁、重新導向、建案、列印與 404 明確登記；App 由路由表統一決定是否套共同守衛。
+  不做：不改三方角色、既有頁面權限、導覽 IA、RLS、資料庫或頁面 UI。
+  驗收證據（2026-08-13）：未登記路由對三角色、override 與平台管理員皆拒絕；四條列印路由明確標為 authenticated print 並通過共同登入／專案守衛；公開漏洞頁仍可匿名讀。530 Vitest、14 Demo E2E、5 真 Supabase E2E 與 production build 全綠。
+
+---
+
 ## 未排入（已知、刻意不順手做；要做需回報告或另立決策）
 
-- P1-08 路由治理（route registry 預設拒絕）
+- ~~P1-08 路由治理（route registry 預設拒絕）~~ — W7 完成，見 D-013
 - P1-09 以外的 P2 全部（品牌統一、載入效能、列印、OCR 支援矩陣…見報告 §6.3）
 - `(project_id, item_key)` 部分唯一索引（待正式資料盤點：`select project_id, item_key, count(*) from work_items where item_key is not null group by 1,2 having count(*) > 1;` 回空＝可加索引）
 - ~~pgTAP 進 CI（P2-08）~~ — 2026-08-13 完成：`.github/workflows/pgtap.yml`，動到 `supabase/migrations|tests|config` 的 push/PR 觸發，全套失敗偵測含 not-ok／SQL 中斷／plan 數不符／整檔壞掉

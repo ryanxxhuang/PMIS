@@ -48,16 +48,16 @@ W6-1 冒煙只做登入、session 重整還原與登出，不建立業務資料�
 
 ## W6-4 的驗證邊界
 
-本機 staging 沒有啟動 Edge runtime，也沒有注入 Anthropic API key。因此 `chain3-requirements.spec.js` 驗證的是真實 Storage／documents／document_versions、綁定該文件版本的待審 Requirement、三方 RLS、人工核定與 D-012 obligation 物化；待審列以人工 fixture 代替 live AI 輸出。
+目前工作區沒有注入 Anthropic API key，因此一般 `npm run test:e2e:real` 不啟動 live Edge 模式。`chain3-requirements.spec.js` 驗證的是真實 Storage／documents／document_versions、綁定該文件版本的待審 Requirement、三方 RLS、人工核定與 D-012 obligation 物化；待審列以人工 fixture 代替 live AI 輸出。
 
 這條測試**不是** `extract-requirements` 的 live AI／Edge 成功路徑，不能拿來宣稱外部模型串接已通過。若要符合原評估報告「真實 Storage 與 Edge」的完整完成條件，仍須在帶 Edge runtime 與 Anthropic key 的一次性 staging 另跑成功路徑，測後刪除環境與資料。
 
 ### Live Edge 驗收
 
-把 `ANTHROPIC_API_KEY` 放進未追蹤的 `.env.e2e.real` 後，先在一個 terminal 啟動本機函式：
+把 `ANTHROPIC_API_KEY` 放進未追蹤的 `.env.e2e.real`。本機 CLI／runtime 能正常啟動時，先在一個 terminal 啟動函式：
 
 ```bash
-npx supabase functions serve extract-requirements --env-file .env.e2e.real
+supabase functions serve --env-file .env.e2e.real
 ```
 
 再於另一個 terminal 執行：
@@ -68,6 +68,8 @@ npm run test:e2e:real -- e2e-real/chain3-requirements.spec.js
 
 只要環境內存在 `ANTHROPIC_API_KEY`，chain 3 就不會建立人工替代資料，而會要求同一文件版本的 `document_ingestion_runs.status = completed`、`origin = 'ai'` 的固定期限 Requirement，以及指回該文件版本的 citation；Edge 未啟動、模型失敗或沒有抽出契約明載期限都會讓測試失敗。成功後仍由 `afterAll` 清除專案、帳號與 Storage。
 
+2026-08-13 已確認目前 macOS arm64 的 Supabase CLI 2.113.0 在本機與 `/tmp` 副本都於 main worker boot 階段回報 `failed to determine entrypoint`；錯誤發生在模型呼叫前，不代表金鑰或 `extract-requirements` 產品路徑失敗。不要反覆重試。待 CLI／Edge Runtime 相容問題修復後再跑上述指令，或改用一次性 hosted staging；在此之前維持 live Edge 待驗，不影響其他 W6 測試與 W7。
+
 ## W6-1 基線
 
-2026-08-13 已以完整 migrations 重建的本機 Supabase 作一次性 staging：登入、F5 session 還原、登出 1/1 通過，臨時帳號清理後殘留 0。既有 12 條 Demo E2E、523 個 Vitest 與 production build 亦全數通過。
+2026-08-13 已以完整 migrations 重建的本機 Supabase 作一次性 staging；W7 收尾時重跑 auth 冒煙與四條業務鏈共 5/5 通過，臨時帳號、專案與 Storage 清理後殘留 0。同次 14 條 Demo E2E、530 個 Vitest 與 production build 亦全數通過。live Edge 因上述 CLI／runtime boot error 尚未宣稱完成。
