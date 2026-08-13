@@ -105,7 +105,7 @@ contract_packages
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
 - 57 個 Vitest 測試檔，共 530 個測試；14 個 Playwright Demo 三角色／路由 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
 
-最近一次全套驗證（W7 本機，2026-08-13）：530 個單元測試、14 個 Demo E2E、5 個真 Supabase E2E 與 production build 全數通過。PR #8 已讓 23 檔 pgTAP 自動進 CI；其 main run 與一般 CI 均成功。W0～W5 已部署，W6 PR #7 與 pgTAP CI PR #8 已合併至 `main`，兩者的 Cloudflare Workers build 均成功；正式站首頁及 `/requirements` 深層路由回應 HTTP 200。正式資料庫維持 `20260812000600`，W7 沒有資料庫變更。
+最近一次全套驗證（W7 PR #9，2026-08-13）：530 個單元測試、14 個 Demo E2E、5 個真 Supabase E2E 與 production build 全數通過。PR #8 已讓 23 檔 pgTAP 自動進 CI；其 main run 與一般 CI 均成功。W0～W5、W6 PR #7、pgTAP CI PR #8 與 W7 PR #9 已合併部署；PR #9 的 main CI 與 Cloudflare Workers build 成功，正式站首頁、`/requirements`、`/security` 與 `/site-log/print` 均回 HTTP 200。正式資料庫維持 `20260812000600`，W7 沒有資料庫變更。
 
 標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 
@@ -125,7 +125,7 @@ W6 PR #7 已合併並部署，5 條本機真後端測試於 2026-08-13 重跑全
 
 但 W6 尚未完整收官：鏈 3 目前仍以人工 fixture 代替 live AI 輸出，沒有驗證 `extract-requirements` 成功寫入 ingestion run、AI-origin Requirement 與 citation。2026-08-13 手動重驗已能由未追蹤環境檔注入金鑰，但 Supabase CLI 2.113.0 的本機 Edge main worker 在模型呼叫前即發生 entrypoint boot error；待 CLI 修復或一次性 hosted staging 再完成，不代表產品或金鑰驗證失敗。細節見 `docs/REAL_BACKEND_E2E.md`。
 
-W7 已依 D-013 收口前端路由：`src/lib/navConfig.js` 的 `routeRegistry` 明確登記全部 36 條 App 路由，未登記業務路由 fail-closed；登入、公開、重新導向、列印與 404 各自標註。`src/App.jsx` 由這份路由表統一決定共同守衛與版面，四條列印路由現在也會先驗證登入與專案狀態，但仍保留無工作台外框的列印版面。既有三方頁面權限、導覽、RLS 與資料庫均未改動。
+W7 已由 PR #9 部署並依 D-013 收口前端路由：`src/lib/navConfig.js` 的 `routeRegistry` 明確登記全部 36 條 App 路由，未登記業務路由 fail-closed；登入、公開、重新導向、列印與 404 各自標註。`src/App.jsx` 由這份路由表統一決定共同守衛與版面，四條列印路由現在也會先驗證登入與專案狀態，但仍保留無工作台外框的列印版面。既有三方頁面權限、導覽、RLS 與資料庫均未改動。
 
 ### 6.1 前端資料存取規則
 

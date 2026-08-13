@@ -1,6 +1,6 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W5 已完成並部署；W6 PR #7 與 pgTAP CI PR #8 已合併；W7 本機完成）**
+> 狀態：**ACTIVE（W0–W5 已完成並部署；W6 PR #7 與 pgTAP CI PR #8 已合併；W7 PR #9 已部署）**
 > 最後更新：2026-08-13
 > 依《產品全案評估報告 2026-08-12》§9 工作包與 §10 決策（相關決策已定案為 D-007～D-013）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
@@ -23,7 +23,7 @@
 - [x] W4 成員與正式模式 — PR #5，已部署（migration `20260812000400`）
 - [x] W5 一次一項架構債 — PR #6，已部署（migrations `20260812000500`、`20260812000600`）
 - [ ] W6 最小真案驗收 — PR #7 已合併並部署（尚缺 live Edge 成功路徑）
-- [x] W7 路由治理 — 本機完成，待本工作包 PR
+- [x] W7 路由治理 — PR #9，已部署
 
 W6 的 5 條本機真後端測試於 2026-08-13 重跑均綠，PR #7 已合併、main CI 與 Cloudflare 部署成功；但 W6-4 以綁定真文件版本的人工待審 fixture 代替 live AI 輸出。`ANTHROPIC_API_KEY` 已可由未追蹤環境檔注入，但 Supabase CLI 2.113.0 的本機 Edge main worker 目前在模型呼叫前即發生 entrypoint boot error；待 CLI 修復或一次性 hosted staging 後才能完整收官，不阻擋 W7。
 
@@ -136,7 +136,7 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 - [x] **W7-1 單一路由表與預設拒絕**
   範圍：`src/lib/navConfig.js` 建立涵蓋 36 條 App 路由的 `routeRegistry`；導覽內路由沿用既有角色規則，登入、公開頁、重新導向、建案、列印與 404 明確登記；App 由路由表統一決定是否套共同守衛。
   不做：不改三方角色、既有頁面權限、導覽 IA、RLS、資料庫或頁面 UI。
-  驗收證據（2026-08-13）：未登記路由對三角色、override 與平台管理員皆拒絕；四條列印路由明確標為 authenticated print 並通過共同登入／專案守衛；公開漏洞頁仍可匿名讀。530 Vitest、14 Demo E2E、5 真 Supabase E2E 與 production build 全綠。
+  驗收證據（2026-08-13）：未登記路由對三角色、override 與平台管理員皆拒絕；四條列印路由明確標為 authenticated print 並通過共同登入／專案守衛；公開漏洞頁仍可匿名讀。530 Vitest、14 Demo E2E、5 真 Supabase E2E 與 production build 全綠。PR #9 已合併，main CI 與 Cloudflare Workers build 成功，正式站首頁、業務、公開與列印深連結均回 HTTP 200。
 
 ---
 
