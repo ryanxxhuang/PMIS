@@ -3,11 +3,38 @@ import { test, expect } from '@playwright/test'
 import { loginAs, gotoHash } from './helpers.js'
 
 test.describe('施工廠商', () => {
-  test('Dashboard:進度橫幅與行動中心', async ({ page }) => {
+  test('今日待辦:進度摘要與三段待辦(現在輪到我/等待對方/今天已完成)', async ({ page }) => {
     await loginAs(page, 'contractor')
     await expect(page.getByText('累計實際進度')).toBeVisible()
     await expect(page.getByText('發包工程費')).toBeVisible()
-    await expect(page.getByText('待你送出／改善')).toBeVisible() // 角色化行動中心(施工視角)
+    for (const section of ['現在輪到我', '等待對方', '今天已完成']) {
+      await expect(page.getByRole('heading', { name: section })).toBeVisible()
+    }
+    // 期限型待辦已進首頁:OB-6 契約義務 fixed_date = 今天 -3 天(demoSeed)
+    await expect(page.getByText('第 5 期估驗計價送審')).toBeVisible()
+    await expect(page.getByText(/逾期 3 天/)).toBeVisible()
+    // 等待對方只列直接相關的對手項:SUB-003 球在監造
+    await expect(page.getByText(/SUB-003/)).toBeVisible()
+  })
+
+  test('Agent 不再重複待辦清單,只留前往今日待辦的入口', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/agent')
+    await expect(page.getByRole('heading', { name: 'AI 草稿收件匣' })).toBeVisible()
+    await expect(page.getByText('今日待我處理')).toHaveCount(0)
+    const toTasks = page.getByRole('link', { name: /前往今日待辦/ })
+    await expect(toTasks).toBeVisible()
+    await toTasks.click()
+    await expect(page.getByRole('heading', { name: '今日待辦' })).toBeVisible()
+  })
+
+  test('提醒中心與今日待辦同一份來源,溢位看得到完整清單', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/alerts')
+    await expect(page.getByRole('heading', { name: /現在輪到我/ })).toBeVisible()
+    await expect(page.getByText('第 5 期估驗計價送審')).toBeVisible()
+    // 首頁被 5 筆上限截掉的期限型待辦,在這裡看得到
+    await expect(page.getByText(/停留點|7天試驗|28天抗壓試驗/).first()).toBeVisible()
   })
 
   test('施工日誌:複製昨日 → 存檔 → 列印鈕/照片區解鎖', async ({ page }) => {

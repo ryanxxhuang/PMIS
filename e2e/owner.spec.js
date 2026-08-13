@@ -11,7 +11,7 @@ test.describe('機關', () => {
   test('登入落在跨案總覽', async ({ page }) => {
     await loginAs(page, 'owner')
     await expect(page.getByRole('heading', { name: '跨案總覽' })).toBeVisible()
-    await expect(page.getByText('待你核定／撥款')).toHaveCount(0) // portfolio 無行動中心(在 dashboard)
+    await expect(page.getByText('現在輪到我')).toHaveCount(0) // portfolio 無待辦段(在今日待辦)
     // 已登入後重新開根路徑仍依角色落地，不被舊的固定 /dashboard 導向帶走。
     await page.goto('/')
     await expect(page).toHaveURL(/#\/portfolio/)
@@ -31,6 +31,22 @@ test.describe('機關', () => {
     await expect(page.getByText(/變更後契約金額 7\.24 億/)).toBeVisible()
     await gotoHash(page, '/dashboard')
     await expect(page.getByText(`NT$ ${REVISED_AFTER_CO2}`)).toBeVisible()
+  })
+
+  test('今日待辦:機關拿得到驗收法定期限,拿不到廠商責任的事', async ({ page }) => {
+    await loginAs(page, 'owner')
+    await gotoHash(page, '/dashboard')
+    // demoSeed:報竣 -28、竣工確認 -25 → 初驗法定 30 日內,期限將至
+    const mine = page.getByRole('heading', { name: '現在輪到我' })
+      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    await expect(mine.getByText('初驗期限將至')).toBeVisible()
+    // 廠商責任的契約義務不得變成機關做不到的假待辦(AI 觀察那一行仍可提醒,但不是待辦)
+    await expect(mine.getByText('第 5 期估驗計價送審')).toHaveCount(0)
+    await expect(page.getByText('第 5 期估驗計價送審')).toHaveCount(1)
+    // 提醒中心仍可深連結(W7 路由治理不回退),且吃同一份聚合
+    await gotoHash(page, '/alerts')
+    await expect(page.getByRole('heading', { name: '提醒中心' })).toBeVisible()
+    await expect(page.getByText('初驗期限將至')).toBeVisible()
   })
 
   test('路由守衛:機關進不了廠商成本頁', async ({ page }) => {

@@ -5,18 +5,14 @@ import { useState, useMemo } from 'react'
 import { BadgeCheck, CalendarClock, CheckCircle2, Circle, AlertTriangle } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
-import { deriveAcceptance, needsFixFlow, acceptanceAlerts } from '../../lib/acceptance.js'
+import { deriveAcceptance, needsFixFlow, acceptanceAlerts, ACCEPTANCE_STAGE_ORGS } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 
 const RESULT_STAGES = new Set(['initial', 'reinspect', 'final']) // 這幾關要記合格/不合格
 
-// 伺服器 acceptance_events_guard 矩陣的鏡像(僅 UX;真正強制在 DB trigger,
-// 見 migration 20260712000100_acceptance_events_rbac.sql)
-const STAGE_ORGS = {
-  report: ['contractor'], confirm: ['supervisor', 'owner'], initial: ['owner'],
-  fix: ['contractor'], reinspect: ['supervisor', 'owner'], final: ['owner'],
-  certificate: ['owner'], warranty: ['owner'],
-}
+// 階段角色白名單已移到 acceptance.js(僅 UX;真正強制在 DB trigger,
+// 見 migration 20260712000100_acceptance_events_rbac.sql)——今日待辦聚合要用同一份。
+const STAGE_ORGS = ACCEPTANCE_STAGE_ORGS
 
 export default function Acceptance() {
   const { acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, demoMode, isPersistedProject, project, currentUser, can } = useStore()

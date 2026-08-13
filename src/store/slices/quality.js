@@ -60,7 +60,11 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
   // 監造查驗：合格 / 不合格（不合格可一併開缺失）
   const recordInspectionResult = useCallback(async (insp, pass, note) => {
     if (!dbMode) {
-      setInspections((is) => is.map((i) => (i.id === insp.id ? { ...i, status: pass ? '合格' : '不合格', result_note: note || null } : i)))
+      // inspected_at 與 DB 分支寫同一個欄位:今日待辦的「今天已完成」只認可靠時間戳,
+      // demo 少寫這一欄就會出現「真後端看得到、demo 永遠空白」的雙引擎漂移(C-003 同型)
+      setInspections((is) => is.map((i) => (i.id === insp.id
+        ? { ...i, status: pass ? '合格' : '不合格', result_note: note || null, inspected_at: new Date().toISOString() }
+        : i)))
       if (!pass) {
         setDefects((ds) => [{
           id: `DEF-${Date.now()}`, title: `查驗不合格：${insp.title}`, description: note || null,

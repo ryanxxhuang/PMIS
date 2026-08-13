@@ -30,6 +30,12 @@ test.describe('監造', () => {
     await confirmBtn.click()
     // 查驗變不合格 + 缺失清單多一筆連動缺失
     await expect(page.getByText('查驗不合格：4F 柱牆鋼筋查驗')).toBeVisible()
+    // 剛判定的查驗當天就進「今天已完成」(demo 與真後端同樣寫 inspected_at)
+    await gotoHash(page, '/dashboard')
+    const done = page.getByRole('heading', { name: '今天已完成' })
+      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    await expect(done.getByText('4F 柱牆鋼筋查驗')).toBeVisible()
+    await expect(done.getByText('監造判定不合格')).toBeVisible()
   })
 
   test('施工日誌對監造唯讀:欄位鎖定、無存檔/上傳鈕', async ({ page }) => {

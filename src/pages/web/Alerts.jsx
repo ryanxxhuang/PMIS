@@ -1,116 +1,91 @@
+// 提醒中心:今日待辦的完整清單(首頁每段只亮 5 筆,溢位往這裡)。
+// W8-2B 起與 Dashboard 吃同一支 buildTodayTasks —— 這頁以前自己內嵌一套
+// 契約/試體/驗收/停留點/請款規則且完全不看球權,結果三方看到同一份、
+// 也和首頁對不起來(W8-2A §2.5 的 C)。現在只剩「怎麼分組顯示」是本頁的事。
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Scale } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
-import { computeObligationDue } from '../../lib/contractDue.js'
-import { parseLocalDate } from '../../lib/dates.js'
-import { sampleAlerts } from '../../lib/qc.js'
-import { acceptanceAlerts } from '../../lib/acceptance.js'
-import { itpAlerts } from '../../lib/itp.js'
+import { buildTodayTasks } from '../../lib/todayTasks.js'
 
-const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
-const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const diffDays = (d) => Math.round((d - today0()) / 86400000)
+const TAG_COLOR = {
+  契約: 'var(--purple-text)', 缺失: 'var(--red-text)', 工安缺失: 'var(--amber-text)',
+  試驗: 'var(--accent-text)', 驗收: 'var(--green-text)', 停留點: 'var(--red-text)',
+  估驗: 'var(--blue-text)', 送審: 'var(--blue-text)', 疑義: 'var(--purple-text)',
+  查驗: 'var(--amber-text)', 觀察: 'var(--slate-text)', 變更: 'var(--green-text)',
+}
+
+function TaskList({ items }) {
+  return (
+    <div className="space-y-1.5">
+      {items.map((x) => (
+        <Link key={x.key} to={x.to}
+          className="flex items-start gap-3 px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
+          <span className="text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0 mt-0.5"
+            style={{ color: TAG_COLOR[x.tag] || 'var(--text-3)', background: 'var(--surface-2)' }}>{x.tag}</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm text-[var(--text)]">{x.title}</div>
+            <div className={`text-xs leading-snug ${x.overdueDays ? 'text-[var(--red-text)] font-medium' : 'text-[var(--text-3)]'}`}>{x.meta}</div>
+          </div>
+          <span className="text-[var(--text-3)] text-xs shrink-0 mt-0.5">→</span>
+        </Link>
+      ))}
+    </div>
+  )
+}
 
 export default function Alerts() {
-  const { project, obligations, defects, valuations, testSamples, acceptanceEvents, inspectionPoints, inspections, siteLogs, currentProject, isSupabaseConfigured } = useStore()
+  const {
+    project, currentUser, currentProject, isSupabaseConfigured,
+    obligations, defects, valuations, testSamples, acceptanceEvents, inspectionPoints,
+    inspections, siteLogs, submittals, rfis, observations, changeOrders,
+  } = useStore()
+  const org = currentUser?.org_type || 'contractor'
 
-  const alerts = useMemo(() => {
-    const a = {
-      award_date: currentProject?.award_date, notice_date: currentProject?.notice_date,
-      commencement_date: currentProject?.commencement_date, end_date: currentProject?.end_date,
-    }
-    const out = []
-
-    // 契約義務:未完成且有到期日
-    for (const ob of obligations) {
-      if (ob.status === '已提送' || ob.status === '已完成') continue
-      const due = computeObligationDue(ob, a)
-      if (!due) continue
-      const d = diffDays(due)
-      if (d < 0) out.push({ level: 'overdue', tag: '契約', title: ob.title, meta: `逾期 ${-d} 天(到期 ${iso(due)})`, extra: ob.penalty, to: '/contract' })
-      else if (d <= 7) out.push({ level: 'soon', tag: '契約', title: ob.title, meta: `還有 ${d} 天(到期 ${iso(due)})`, extra: ob.penalty, to: '/contract' })
-    }
-
-    // 缺失(統一引擎):未結案,品質/工安以 domain 分流
-    for (const df of defects) {
-      if (df.status === '已結案') continue
-      const safety = df.domain === 'safety'
-      const tag = safety ? '工安' : '缺失'
-      const to = safety ? '/safety' : '/quality'
-      const due = parseLocalDate(df.due_date)
-      const d = due ? diffDays(due) : null
-      if (d != null && d < 0) out.push({ level: 'overdue', tag, title: df.title, meta: `改善逾期 ${-d} 天 · ${df.status}`, to })
-      else if (d != null && d <= 7) out.push({ level: 'soon', tag, title: df.title, meta: `${d} 天內應改善 · ${df.status}`, to })
-      else out.push({ level: 'todo', tag, title: df.title, meta: `未結案 · ${df.status}`, to })
-    }
-
-    // 取樣試驗:試體 7/28 天齡期到期未試驗
-    for (const t of sampleAlerts(testSamples, today0())) {
-      out.push({
-        level: t.level, tag: '試驗',
-        title: `${t.sample.sample_no} ${t.sample.test_item} ${t.label}`,
-        meta: t.days < 0 ? `逾期 ${-t.days} 天(到期 ${t.due})` : `還有 ${t.days} 天(到期 ${t.due})`,
-        to: '/quality',
-      })
-    }
-
-    // 請款 / 收款
-    for (const v of valuations) {
-      if (v.status === '已核定' && !v.invoice_date) out.push({ level: 'todo', tag: '請款', title: `第 ${v.period_no} 期估驗待請款`, meta: '已核定,尚未請款', to: '/payments' })
-      else if (v.invoice_date && !v.paid_date) out.push({ level: 'todo', tag: '收款', title: `第 ${v.period_no} 期待收款`, meta: `已於 ${v.invoice_date} 請款`, to: '/payments' })
-    }
-
-    // 驗收:法定期限(細則 §92/93/94、採購法 §73)倒數與逾期
-    for (const acc of acceptanceAlerts(acceptanceEvents, today0())) {
-      out.push({ level: acc.level, tag: '驗收', title: acc.title, meta: acc.meta, to: '/acceptance' })
-    }
-
-    // ITP 停留點:施作中未叫驗的 H(不得續作)/W(應通知見證)
-    for (const a of itpAlerts(inspectionPoints, inspections, siteLogs)) {
-      out.push({ level: a.level, tag: '停留點', title: a.title, meta: a.meta, to: '/itp' })
-    }
-    return out
-  }, [obligations, defects, valuations, testSamples, acceptanceEvents, inspectionPoints, inspections, siteLogs, currentProject])
-
-  const groups = [
-    { key: 'overdue', label: '已逾期', color: 'red' },
-    { key: 'soon', label: '即將到期(7 日內)', color: 'amber' },
-    { key: 'todo', label: '待處理', color: 'blue' },
-  ].map((g) => ({ ...g, items: alerts.filter((x) => x.level === g.key) }))
+  const tasks = useMemo(() => buildTodayTasks({
+    org, today: new Date(),
+    anchors: {
+      award_date: project?.award_date, notice_date: project?.notice_date,
+      commencement_date: project?.commencement_date, end_date: project?.end_date,
+    },
+    rfis, submittals, valuations, defects, inspections, observations, changeOrders,
+    obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs,
+  }), [org, project, rfis, submittals, valuations, defects, inspections, observations, changeOrders,
+    obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs])
 
   if (isSupabaseConfigured && !currentProject) {
     return <Card title="提醒中心"><Empty>請先登入並選擇專案。</Empty></Card>
   }
 
-  const tagColor = (t) => ({ 契約: 'var(--purple-text)', 缺失: 'var(--red-text)', 工安: 'var(--amber-text)', 試驗: 'var(--accent-text)', 請款: 'var(--blue-text)', 收款: 'var(--green-text)', 驗收: 'var(--green-text)', 停留點: 'var(--red-text)' }[t] || 'var(--text-3)')
+  const empty = tasks.mine.length === 0 && tasks.waiting.length === 0
 
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <PageHeader title="提醒中心" tagline="該處理的都在這" subtitle="彙整契約到期、缺失改善、請款收款的待辦與逾期" />
+        <PageHeader title="提醒中心" tagline="今日待辦的完整清單"
+          subtitle="與首頁「今日待辦」同一份來源:先看輪到你的，再看在等誰。" />
       </div>
 
-      {alerts.length === 0 ? (
+      {empty ? (
         <Card title="提醒"><Empty>目前沒有逾期或待處理事項 — 都跟上了。</Empty></Card>
-      ) : groups.filter((g) => g.items.length).map((g) => (
-        <Card key={g.key} title={`${g.label}（${g.items.length}）`}>
-          <div className="space-y-1.5">
-            {g.items.map((x, i) => (
-              <Link key={`${x.tag}|${x.title}|${x.meta}|${i}`} to={x.to} className="flex items-start gap-3 px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                <span className="text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0 mt-0.5" style={{ color: tagColor(x.tag), background: 'var(--surface-2)' }}>{x.tag}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm text-[var(--text)] truncate">{x.title}</div>
-                  <div className="text-xs text-[var(--text-3)]">{x.meta}</div>
-                  {x.extra && <div className="text-xs text-[var(--amber-text)] truncate flex items-center gap-1"><Scale size={12} className="shrink-0" aria-hidden /> {x.extra}</div>}
-                </div>
-                <span className="text-[var(--text-3)] text-xs shrink-0 mt-0.5">→</span>
-              </Link>
-            ))}
-          </div>
-        </Card>
-      ))}
+      ) : (
+        <>
+          {tasks.mine.length > 0 && (
+            <Card title={`現在輪到我（${tasks.mine.length}）`}><TaskList items={tasks.mine} /></Card>
+          )}
+          {tasks.waiting.length > 0 && (
+            <Card title={`等待對方（${tasks.waiting.length}）`}><TaskList items={tasks.waiting} /></Card>
+          )}
+        </>
+      )}
+
+      {/* 契約義務的完成鈕在專案文件頁且只有廠商可按,所以監造／機關責任的義務
+          不會出現在上面兩段——不做誠實說明的話,那些期限會像憑空消失。 */}
+      <p className="text-xs text-[var(--text-3)]">
+        契約應辦事項的完整時程與責任方在「
+        <Link to="/contract" className="text-[var(--blue-text)] hover:underline">專案文件</Link>
+        」；這裡只列你這方現在做得到的事。
+      </p>
     </div>
   )
 }

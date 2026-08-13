@@ -103,7 +103,7 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 57 個 Vitest 測試檔，共 531 個測試；16 個 Playwright Demo 三角色／路由 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
+- 58 個 Vitest 測試檔，共 563 個測試；19 個 Playwright Demo 三角色／路由 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
 
 最近一次全套驗證（W7 PR #9，2026-08-13）：530 個單元測試、14 個 Demo E2E、5 個真 Supabase E2E 與 production build 全數通過。PR #8 已讓 23 檔 pgTAP 自動進 CI；其 main run 與一般 CI 均成功。W0～W5、W6 PR #7、pgTAP CI PR #8 與 W7 PR #9 已合併部署；PR #9 的 main CI 與 Cloudflare Workers build 成功，正式站首頁、`/requirements`、`/security` 與 `/site-log/print` 均回 HTTP 200。正式資料庫維持 `20260812000600`，W7 沒有資料庫變更。
 
@@ -127,7 +127,13 @@ W6 PR #7 已合併並部署，5 條本機真後端測試於 2026-08-13 重跑全
 
 W7 已由 PR #9 部署並依 D-013 收口前端路由：`src/lib/navConfig.js` 的 `routeRegistry` 明確登記全部 36 條 App 路由，未登記業務路由 fail-closed；登入、公開、重新導向、列印與 404 各自標註。`src/App.jsx` 由這份路由表統一決定共同守衛與版面，四條列印路由現在也會先驗證登入與專案狀態，但仍保留無工作台外框的列印版面。既有三方頁面權限、導覽、RLS 與資料庫均未改動。
 
-W8-1 由 PR #11 完成：主品牌統一為 `GovAgent｜公共工程`；側欄固定為今日待辦、現場與品質、審查與協作、進度與金流、文件與結案、專案六個工作面；`問 GovAgent` 是頁首全域入口；手機工作面使用目前頁面選單；機關仍落在跨案總覽。36 條路由與原角色限制不變，531 Vitest、16 Demo E2E、production build 與桌面／375px 瀏覽器目視均通過。今日待辦聚合、Agent 去重、初始化與契約重點仍屬後續 W8-2／W8-3，不得寫成已完成。
+W8-1 由 PR #11 完成：主品牌統一為 `GovAgent｜公共工程`；側欄固定為今日待辦、現場與品質、審查與協作、進度與金流、文件與結案、專案六個工作面；`問 GovAgent` 是頁首全域入口；手機工作面使用目前頁面選單；機關仍落在跨案總覽。36 條路由與原角色限制不變。
+
+W8-2 由 PR #12 交付：今日待辦的聚合收斂為單一純函式 [`src/lib/todayTasks.js`](src/lib/todayTasks.js)，`/dashboard` 與 `/alerts` 吃同一份，`/agent` 不再重複待辦清單（只留無件數的「前往今日待辦」連結）。`/dashboard` 改為「現在輪到我／等待對方／今天已完成」三段，每段最多 5 筆、溢位連 `/alerts`；統計帶、球權統計與未結案缺失卡移除，AI 主動觀察降為一行風險摘要。待辦一律由既有業務狀態推導：協作項沿用 `ballInCourt.js`（新增共用的 `collaborationItems()`），期限型沿用 `contractDue`／`qc`／`acceptance`／`itp` 既有引擎，`Alerts.jsx` 內嵌的第二套規則已刪除。
+
+W8-2 的三條硬規則寫在函式與測試裡：AI 草稿與未核定 Requirement 不是 `buildTodayTasks` 的輸入，結構上進不了待辦；契約義務只接受 `廠商／監造／機關` 三個精確 `responsible` 值，且只有廠商責任者列為待辦（`/contract` 的完成鈕吃 `can.edit`，監造／機關按不到，不製造做不到的假待辦）；「今天已完成」只採可靠操作時間戳 `defects.closed_at` 與 `inspections.inspected_at`（依 `Asia/Taipei` 判日），可回填的業務日期與沒有完成時間欄位的估驗核定／變更核准一律不列。驗收階段的角色白名單移到 [`src/lib/acceptance.js`](src/lib/acceptance.js) 的 `ACCEPTANCE_STAGE_ORGS`，驗收頁與待辦聚合共用。
+
+W8-2 未動路由數、頁面權限、RLS、資料庫與 Edge Function。同批修正三個既有缺陷：估驗「待廠商請款」導向改為 `/payments`（請款日欄位在該頁）、`recordInspectionResult` 的 demo 分支補寫 `inspected_at`（原本只有 DB 分支寫，造成雙引擎漂移）、`computeObligationDue` 新增可注入的 `today`（每月重複義務不再讀系統時鐘）；期限判斷一律先正規化為台北日曆日午夜，避免傍晚開頁時第 8 天被誤列進「7 日內」。本機基線為 563 Vitest、19 Demo E2E 與 production build 全綠。初始化第 3 步語意與契約重點改版仍屬 W8-3，不得寫成已完成。
 
 ### 6.1 前端資料存取規則
 
@@ -158,6 +164,7 @@ W8-1 由 PR #11 完成：主品牌統一為 `GovAgent｜公共工程`；側欄�
 | AI 協作入口 | `AGENTS.md`；細節仍以 `DEVELOPMENT.md` 為準 |
 | 前端頁面與元件對應 | `src/App.jsx` |
 | 路由登記、導覽、分頁與前端角色限制 | `src/lib/navConfig.js` 的 `routeRegistry`／`navGroups` |
+| 今日待辦的三段聚合、球權與完成條件 | `src/lib/todayTasks.js`（Dashboard 與 `/alerts` 共用；協作項球權仍在 `src/lib/ballInCourt.js`） |
 | 資料庫 Schema、RLS、RPC、Trigger | `supabase/migrations/` |
 | AI 功能註冊 | DB `ai_features`；程式鏡像為 `src/lib/aiFeatures.js` 與 `supabase/functions/_shared/aiFeatures.ts` |
 | 測試與建置基線 | 實際執行 `npm test`、`npm run test:e2e`、`npm run build` 與 `supabase/tests/` |
