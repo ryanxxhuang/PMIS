@@ -1,6 +1,6 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8 計畫已核准；W8-1 PR #11 完成；W8-2 本機完成待 PR；下一包 W8-3）**
+> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8 計畫已核准；W8-1 PR #11、W8-2 PR #12；下一包 W8-3）**
 > 最後更新：2026-08-13
 > 依《產品全案評估報告 2026-08-12》與 W8-0 第二版（相關決策已定案為 D-007～D-015）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
@@ -26,7 +26,7 @@
 - [x] W7 路由治理 — PR #9，已部署
 - [x] W8-0 UI/UX 全產品重新評估與整體改善計畫（第二版）— 36 路由盤點＋三角色桌面／手機直接走查＋使用者回饋校準完成，沒有產品實作
 - [x] W8-1 全站框架、品牌與導覽 — PR #11
-- [x] W8-2 今日待辦與 Agent 分工 — 本機完成（563 Vitest／19 Demo E2E／build 全綠），待複審後 commit／PR
+- [x] W8-2 今日待辦與 Agent 分工 — PR #12（563 Vitest／19 Demo E2E／build 全綠）
 - [ ] W8-3 初始化與契約重點 — `ACCEPTED`，下一個工作包
 - [ ] W8-4 三角色核心業務頁 — `ACCEPTED`，須依 A／B／C 子包執行
 - [ ] W8-5 手機、無障礙與真實使用者驗收 — `ACCEPTED`，最後收尾
@@ -154,7 +154,7 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   範圍：主品牌改為 `GovAgent｜公共工程`；側欄收斂為六個工作面；`問 GovAgent` 移至全域頁首；Dashboard 顯示名稱改為「今日待辦」；機關根路徑與 404 返回跨案總覽，其他角色返回今日待辦；手機抽屜有明確關閉鈕，工作面內頁改用目前頁面選單；共用 PageHeader 不再截斷說明。
   不做：未改業務資料、路由數、頁面權限、RLS、資料庫、今日待辦聚合、Agent 內容、初始化完成條件或 Requirement 流程。
   驗收證據（2026-08-13）：531 Vitest、16 Demo E2E 與 production build 全綠；三角色導覽仍只有六個業務工作面，36 條路由與原角色限制完整；Codex 瀏覽器目視桌面 Dashboard、機關 Portfolio、375px Dashboard／抽屜／品質頁，皆無文件級水平溢位。
-- [x] **W8-2 今日待辦與 Agent 分工**（本機完成、測試全綠，待 Codex 複審後 commit／開 PR）
+- [x] **W8-2 今日待辦與 Agent 分工（PR #12）**
   範圍：W8-2A 先盤點（[`W8-2A-今日待辦與-Agent-資料來源盤點-2026-08-13.md`](W8-2A-今日待辦與-Agent-資料來源盤點-2026-08-13.md)），W8-2B 依該文件 §5～§7 實作 B1～B7：新增單一聚合 `src/lib/todayTasks.js`；`Alerts.jsx` 內嵌的第二套規則搬進去並補球權；補上契約義務、試體齡期、驗收法定期限與 ITP 停留點；Dashboard 改三段（每段 5 筆、溢位連 `/alerts`）；Agent 移除重複待辦只留無件數連結；修正估驗待請款導向與 demo 的 `inspected_at`。
   不做：不新增 task 表或 workflow engine、不改三角色、不動 RLS／migration／Edge Function、不改 `Contract` 的義務操作、不動初始化四步清單與 `/requirements`（W8-3）。
   驗收證據（2026-08-13，本機）：563 Vitest、19 Demo E2E、production build 全綠；`todayTasks.test.js` 釘住三分類與球權、互斥性、到期排序、責任白名單、AI 產物不得成為待辦、「今天已完成」只吃可靠時間戳、以及兩個日期邊界回歸（台北日曆日門檻、每月義務不讀系統時鐘）；三角色 demo 目視與 375px 無水平溢位。前後端待辦集合差異登記於 [`architecture/dual-engine-sync.md`](architecture/dual-engine-sync.md)，不在本包對齊。
