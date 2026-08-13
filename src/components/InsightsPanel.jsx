@@ -1,46 +1,31 @@
-// AI 主動觀察面板(§9-8 去重:同一份 insights 只在 Dashboard 出現——
-// Dashboard=待辦+風險、AI 助理=問答、提醒中心=期限,三頁各司其職)。
+// AI 主動觀察摘要(W8-2B):降為今日待辦下方的一行風險摘要。
+// 這裡的東西不是待辦——沒有球權、沒有完成條件、也沒有唯一目的地,
+// 而且多數在語意上重複真待辦(缺失逾期/契約到期/待撥款/待核定變更/試體逾期)。
+// 佔一整張卡會讓人以為要逐項處理,所以只留一行,細節走各自的目的頁。
 import { Link } from 'react-router-dom'
-import { Sparkles, ShieldCheck, AlertTriangle, Clock, ArrowRight } from 'lucide-react'
-import { Card, Empty } from './ui.jsx'
+import { Sparkles } from 'lucide-react'
 
-const SEV = {
-  risk: { color: 'var(--red-text)', bg: 'var(--red-tint)', icon: AlertTriangle, label: '需注意' },
-  watch: { color: 'var(--amber-text)', bg: 'var(--amber-tint)', icon: Clock, label: '留意' },
-  ok: { color: 'var(--green-text)', bg: 'var(--green-tint)', icon: ShieldCheck, label: '正常' },
-}
+const SEV_DOT = { risk: 'var(--red-text)', watch: 'var(--amber-text)', ok: 'var(--green-text)' }
+const SHOWN = 3
 
 export default function InsightsPanel({ insights }) {
+  if (!insights?.length) return null // 沒有風險就不要多一行空話
+  const shown = insights.slice(0, SHOWN)
   return (
-    <Card title={`AI 幫你看到的（${insights.length}）`} bodyClass={insights.length ? 'p-0' : 'p-6'}
-      action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><Sparkles size={12} aria-hidden />主動分析</span>}>
-      {insights.length === 0 ? (
-        <Empty>目前沒有偵測到需要注意的事——都在軌道上。</Empty>
-      ) : (
-        <ul className="divide-y divide-[var(--border-2)]">
-          {insights.map((it) => {
-            const s = SEV[it.sev] || SEV.watch
-            const Icon = s.icon
-            return (
-              <li key={it.id}>
-                <Link to={it.to} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">
-                  <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: s.bg, color: s.color }}>
-                    <Icon size={16} aria-hidden />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-[var(--text)]">{it.title}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: s.bg, color: s.color }}>{it.tag}</span>
-                    </span>
-                    <span className="block text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">{it.detail}</span>
-                  </span>
-                  <ArrowRight size={15} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-1" aria-hidden />
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+    <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-card)] px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-3)] shrink-0">
+        <Sparkles size={12} aria-hidden />AI 幫你看到的 {insights.length} 件
+      </span>
+      {shown.map((it) => (
+        <Link key={it.id} to={it.to} title={it.detail}
+          className="inline-flex items-center gap-1.5 text-xs text-[var(--text-2)] hover:text-[var(--blue-text)] hover:underline">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SEV_DOT[it.sev] || SEV_DOT.watch }} aria-hidden />
+          {it.title}
+        </Link>
+      ))}
+      {insights.length > SHOWN && (
+        <span className="text-[11px] text-[var(--text-3)]">＋{insights.length - SHOWN} 項</span>
       )}
-    </Card>
+    </div>
   )
 }

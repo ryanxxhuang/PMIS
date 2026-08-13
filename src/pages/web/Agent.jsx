@@ -1,7 +1,8 @@
-// /agent — 專屬 agent 主控台(批2):使用者不再需要知道「該去哪一頁做事」,
-// 描述目的,由角色化 agent 去查、去擬。三塊:對話(主角,接 agent-run 多輪查詢)、
-// 今日待我處理(ball-in-court 球在我方)、AI 草稿收件匣(agent_actions pending,
-// 人接受/拒絕——AI 只擬草稿,決定權永遠在人)。
+// /agent — 專屬 agent 主控台:使用者不再需要知道「該去哪一頁做事」,
+// 描述目的,由角色化 agent 去查、去擬。兩塊:對話(主角,接 agent-run 多輪查詢)、
+// AI 草稿收件匣(agent_actions pending,人接受/拒絕——AI 只擬草稿,決定權永遠在人)。
+// W8-2B:待辦清單已整個交還「今日待辦」頁。這裡只留一個沒有件數的連結——
+// 顯示件數就得再載一份聚合,兩頁的數字遲早對不起來(W8-2A §2.1、§5)。
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Bot, ChevronDown, ChevronRight } from 'lucide-react'
@@ -37,35 +38,18 @@ const REVIEW_DECISION_COLOR = { 核准: 'green', 核備: 'green', 退回補正: 
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
 
-// 今日待我處理:最多亮 8 筆,其餘導去提醒中心——這裡是行動入口不是完整清單
-const MY_ITEMS_CAP = 8
-
-function MyItemsCard({ myItems }) {
+// 待辦的唯一入口是「今日待辦」頁。這裡刻意不顯示件數:件數要正確就得在
+// 這頁再算一次同樣的聚合,一旦兩份實作分岔,使用者會看到兩個不同的數字。
+function TodayTasksLink() {
   return (
-    <Card title="今日待我處理"
-      action={myItems.length > 0 && <span className="text-[11px] text-[var(--text-3)] tabular-nums">{myItems.length} 件</span>}>
-      {myItems.length === 0 ? (
-        <Empty>目前沒有球在你手上的事項。</Empty>
-      ) : (
-        <div className="divide-y divide-[var(--border-2)]">
-          {myItems.slice(0, MY_ITEMS_CAP).map((it, i) => (
-            <Link key={i} to={it.to} className="flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0 group">
-              <Badge className="shrink-0 mt-0.5">{it.tag}</Badge>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm text-[var(--text)] truncate group-hover:text-[var(--blue-text)]">{it.title}</div>
-                <div className="text-[11px] text-[var(--text-3)]">{it.meta}</div>
-              </div>
-              <ArrowRight size={13} className="shrink-0 mt-1 text-[var(--text-3)] opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden />
-            </Link>
-          ))}
-          {myItems.length > MY_ITEMS_CAP && (
-            <Link to="/alerts" className="block pt-2.5 text-xs text-[var(--blue-text)] hover:underline">
-              還有 {myItems.length - MY_ITEMS_CAP} 件,到提醒中心看全部
-            </Link>
-          )}
-        </div>
-      )}
-    </Card>
+    <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] px-4 py-3 flex items-center gap-3">
+      <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] leading-snug">
+        輪到你處理的事項都在「今日待辦」。
+      </div>
+      <Link to="/dashboard" className="shrink-0 inline-flex items-center gap-0.5 text-xs font-medium text-[var(--blue-text)] hover:underline">
+        前往今日待辦 <ArrowRight size={12} aria-hidden />
+      </Link>
+    </div>
   )
 }
 
@@ -362,17 +346,16 @@ export default function Agent() {
         </div>
       )}
 
-      {/* 行動版順序:待我處理 → 草稿收件匣 → 對話(先讓人看到要做什麼);
-          桌機:對話為主排左、兩張側卡排右 */}
+      {/* 桌機:對話為主排左、草稿收件匣排右 */}
       <div className="grid gap-5 lg:grid-cols-[1fr_380px] items-start">
         <Card title="跟你的 agent 說" bodyClass="p-0" className="order-2 lg:order-1"
           action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><Bot size={12} aria-hidden />會自己查本案資料</span>}>
           {agentOn
             ? <CopilotChat data={data} onAsk={onAsk} minH={360} maxH={560} />
-            : <div className="p-4"><Empty>此 AI 功能未啟用（AI Agent 主控台）。待我處理與草稿收件匣仍可使用；如需開通請聯絡系統管理者。</Empty></div>}
+            : <div className="p-4"><Empty>此 AI 功能未啟用（AI Agent 主控台）。今日待辦與草稿收件匣仍可使用；如需開通請聯絡系統管理者。</Empty></div>}
         </Card>
         <div className="space-y-5 order-1 lg:order-2 min-w-0">
-          <MyItemsCard myItems={data.myItems || []} />
+          <TodayTasksLink />
           <DraftInboxCard />
         </div>
       </div>
