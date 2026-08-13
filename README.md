@@ -139,6 +139,14 @@ npm run test:e2e
 npm run build
 ```
 
+真 Supabase staging 冒煙只在本機手動執行，不進預設 CI：
+
+```bash
+npm run test:e2e:real
+```
+
+環境與清理方式見 [真後端 E2E 操作指南](docs/REAL_BACKEND_E2E.md)。
+
 資料庫的 RLS、RPC 與狀態轉移測試在 [supabase/tests](supabase/tests)。
 
 2026-08-12 W5 PR #6 基線：57 個 Vitest 測試檔共 523 項、12 個 Playwright E2E、23 組 pgTAP 共 723 項全數通過，正式建置與資料庫 lint 成功。PR #6、migrations `20260812000500`／`20260812000600`，以及受共用程式影響的 `agent-run`／`send-reminders` 已於 2026-08-13 部署。

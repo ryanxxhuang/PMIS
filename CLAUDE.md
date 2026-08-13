@@ -6,12 +6,13 @@
 
 ## 0. 目前續接點（2026-08-13）
 
-- W0～W5 已合併至 `main` 並部署；不要重做文件基準、標單原子化、初始化流程、單一 Agent、成員／正式模式或 W5 架構債。
+- W0～W5 已合併至 `main` 並部署；W6 工作包在 PR #7。不要重做文件基準、標單原子化、初始化流程、單一 Agent、成員／正式模式或 W5 架構債。
 - **W5-1 已完成**：唯讀盤點與 A／B 代價見 `docs/W5-1-Requirement-Obligation-決策書.md`。
 - 使用者已選 A（D-012）：`requirements` 是唯一權威，approved deadline Requirement 單向產生 obligation；obligation 執行狀態不反向改寫 Requirement。
 - **W5-2～W5-4 已由 PR #6 部署，不要重做**：Requirement 單向 migration／rollback、legacy caller 退場、成員模型防誤用，以及試體缺失 Demo／DB 漂移修正均已完成；PR 審查補上 supersede 不得殘留待辦提醒的回歸，保留資料與歷史但從現行前端／Agent 清單排除。最新基線為 523 Vitest、12 E2E、723 pgTAP；正式資料庫已到 `20260812000600`，引用共用工具的 `agent-run` v9／`send-reminders` v10 也已部署。下一工作包是 W6，開始前仍要依 `docs/ROADMAP.md` 的單格範圍執行。
+- **W6-1～W6-5 已在 PR #7 完成真後端測試基建與四條業務鏈**：獨立 `playwright.real.config.js`／`e2e-real/`、staging-only 防呆、環境變數注入、登入與四條鏈均已在一次性本機 Supabase 通過，fixture 與 Storage 殘留 0。W6-4 的人工待審 fixture 會綁定真上傳文件版本，但本機沒有 Edge runtime／Anthropic key，**不包含 `extract-requirements` live AI 成功路徑**；不得把 5/5 說成外部模型串接已驗證。細節見 `docs/REAL_BACKEND_E2E.md`。
 - 正式庫 preflight：65 obligations／113 requirements／48 筆差額；差額全是未核定建議，orphan legacy = 0、approved deadline 缺 obligation = 0。
-- 每次續接仍以 `docs/ROADMAP.md` 第一個未勾項目為準；工作包分支從最新 `main` 建立，不沿用已合併的 W1～W5 分支。
+- 每次續接仍以 `docs/ROADMAP.md` 的未排入清單與使用者新核准範圍為準；新工作包從最新 `main` 建立，不沿用已合併分支。
 
 ---
 

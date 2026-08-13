@@ -18,6 +18,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node', // parsePcces 需要 DOM 的測試檔自帶 @vitest-environment jsdom
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.claude/**', '**/e2e/**'], // .claude 下有背景任務的 worktree;e2e 歸 Playwright 跑
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.claude/**', '**/e2e/**', '**/e2e-real/**'], // .claude 下有背景任務的 worktree;兩套 e2e 各由 Playwright 跑
   },
 })

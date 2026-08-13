@@ -1,6 +1,6 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W5 已完成並部署；W6 已獲准依序執行）**
+> 狀態：**ACTIVE（W0–W5 已完成並部署；W6 PR #7 審查中）**
 > 最後更新：2026-08-13
 > 依《產品全案評估報告 2026-08-12》§9 工作包與 §10 決策（已定案為 D-007～D-011）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
@@ -22,9 +22,9 @@
 - [x] W3 單一 Agent 體驗 — PR #4，已部署（migration `20260812000300`＋16 支 Edge Functions）
 - [x] W4 成員與正式模式 — PR #5，已部署（migration `20260812000400`）
 - [x] W5 一次一項架構債 — PR #6，已部署（migrations `20260812000500`、`20260812000600`）
-- [ ] W6 最小真案驗收
+- [ ] W6 最小真案驗收 — PR #7（尚缺 live Edge 成功路徑）
 
-**目前續接點：W6-1 真後端 E2E 基建。** W5 已由 PR #6 合併並部署；正式庫 migration history 已到 `20260812000600`，`agent-run` v9／`send-reminders` v10 已更新，第二次 dry-run 無待套項目，遠端 DB lint、Edge Functions 安全冒煙、main CI、Cloudflare Workers build 與正式站 HTTP 冒煙均通過。W6 尚未開始。
+W6 的 5 條本機真後端測試均綠，但 W6-4 以綁定真文件版本的人工待審 fixture 代替 live AI 輸出；依原評估報告「真實 RLS、RPC、Storage 與 Edge」完成條件，補完一次性 staging 的 `extract-requirements` 成功路徑後才能收官。
 
 ---
 
@@ -112,15 +112,21 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 
 ## W6｜最小真案驗收（不以 demo 通過代替真後端）
 
-- [ ] **W6-1 真後端 E2E 基建**
+- [x] **W6-1 真後端 E2E 基建（本機完成，待 W6 工作包統一 PR）**
   範圍：Playwright 第二個 project（真 Supabase staging；帳號／秘密由環境變數注入），本機手動跑，不進預設 CI。
   不做：不改既有 demo E2E、不建雲端常駐 staging（臨時開→測完刪，見成本紀律）。
   驗收：`npm run test:e2e:real` 能對真後端跑一條冒煙。
-- [ ] **W6-2 鏈 1：註冊→登入→建案→邀請→正式模式**
-- [ ] **W6-3 鏈 2：廠商提送→監造審核→機關核准／付款**
+  本機證據（2026-08-13）：隔離的 `real-supabase` project 以環境變數啟動，登入／F5 session 還原／登出 1/1 通過；缺 secrets 與正式 Supabase URL 均在瀏覽器啟動前被拒絕。臨時帳號清理後殘留 0；原 12 Demo E2E、523 Vitest 與 build 全綠，CI 未加入真後端測試。
+- [x] **W6-2 鏈 1：註冊→登入→建案→邀請→正式模式**
+  本機證據（2026-08-13）：`e2e-real/chain1-onboarding.spec.js` 對一次性本機 staging 通過——註冊落地建案頁、建案導向專案文件（D-007）、邀請錯配被擋＋訊息完整（D-009）、三方到齊轉綠（W4-4）、requireText 開啟正式模式、被邀監造登入可見專案（RLS）；afterAll 走 delete_project RPC＋admin API 清理，殘留 0。
+- [x] **W6-3 鏈 2：廠商提送→監造審核→機關核准／付款**
+  本機證據（2026-08-13）：`e2e-real/chain2-valuation.spec.js` 正式模式下通過——廠商建期送審（無核定鈕）、監造核定、機關登錄請款/收款（待請款→已請款→已收款）；fixture 全走產品 RPC，afterAll 清理殘留 0。
 - [ ] **W6-4 鏈 3：文件上傳→Requirement 建議→人工核定**
-- [ ] **W6-5 鏈 4：標單匯入失敗／重設失敗 rollback（真後端重演 W1 pgTAP 情境）**
-  （W6-2～W6-5 驗收：各鏈在真後端綠；失敗畫面有明確錯誤）
+  已通過部分（2026-08-13）：`e2e-real/chain3-requirements.spec.js` 上傳契約 txt（Storage＋documents＋document_versions），並在真文件版本建立後插入帶 document source 的人工待審 Requirement；廠商看得到但無核定鈕，監造經 `review_requirement` 核定後，D-012 義務物化出現同標題與固定到期日。清理含 Storage 物件，殘留 0。
+  尚缺：本機沒有 Edge runtime／Anthropic key，尚未驗證 `extract-requirements` live AI 成功產生 `document_ingestion_runs`、AI-origin Requirement 與 citation；這是原完成條件的 Edge 部分，不能以人工 fixture 代替。
+- [x] **W6-5 鏈 4：標單匯入失敗／重設失敗 rollback（真後端重演 W1 pgTAP 情境）**
+  本機證據（2026-08-13）：`e2e-real/chain4-boq-rollback.spec.js` 通過——缺父項匯入整包拒收（全敗如未匯）、重試成功、重複匯入被擋；品質檢查紀錄連工項時 UI 清空重匯被 guard 擋下並顯示「清空未執行，所有資料維持原狀」紅色橫幅，標單與日誌原封不動（舊版災難點：日誌被靜默刪光）；移除品質證據後重試清空成功、回到 onboarding。
+  （W6-2、W6-3、W6-5 已達成；W6-4 的 RLS／Storage／審查／物化已綠，live Edge 成功路徑待補。）
 
 ---
 
