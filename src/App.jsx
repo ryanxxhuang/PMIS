@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom'
 import { useStore } from './store.jsx'
-import { WebLayout, WorkbenchTabs } from './components/Layout.jsx'
+import { WebLayout } from './components/Layout.jsx'
 import { routeAllowed, routeRegistry } from './lib/navConfig.js'
 import { ConfirmHost } from './components/confirm.jsx'
 
@@ -80,7 +80,7 @@ function Web({ children, bare = false, registryPath }) {
     )
   }
   if (bare) return <Suspense fallback={<PageLoading />}>{children}</Suspense>
-  return <WebLayout><WorkbenchTabs /><Suspense fallback={<PageLoading />}>{children}</Suspense></WebLayout>
+  return <WebLayout><Suspense fallback={<PageLoading />}>{children}</Suspense></WebLayout>
 }
 
 // 找不到的路徑(U-02):原本靜默導回登入/首頁,使用者不知道自己打錯網址或收藏的連結已失效。

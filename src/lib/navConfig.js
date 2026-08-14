@@ -2,7 +2,7 @@
 // 路由全部保留，深連結與既有角色限制不變；GovAgent 是頁首的全域入口，
 // 不與六個工作面混成第七個模組。
 // roles 缺省=全角色可見;can.override(非正式模式的專案管理者)一律放行。
-// Layout 的側欄、App 的路由守衛、WorkbenchTabs 分頁列都吃這一份——
+// Layout 的階層側欄與 App 的路由守衛都吃這一份——
 // 「導覽隱藏」與「權限」永遠一致。
 // hidden: true=不渲染在側欄/分頁列,但仍參與 routeAllowed 的角色判斷——
 // 批 3/批 4 的收斂是「不顯示」,不是「不設限」;刪掉定義會讓 roles 一起消失(權限靜默鬆綁)。
@@ -98,22 +98,6 @@ export function routeAllowed(pathname, org, override, platformAdmin = false) {
   if (!route) return false
   if (route.access === 'public' || route.access === 'redirect') return true
   return tabAllowed(route, org, override, platformAdmin)
-}
-
-// 此路由所屬工作台(供分頁列渲染);單頁路由回 null。
-// hidden 分頁不出現在分頁列;深連結進 hidden 分頁(如 /audit)視為單頁、不掛工作台。
-export function workbenchFor(pathname, org, override, platformAdmin = false) {
-  for (const g of navGroups) for (const item of g.items) {
-    const hit = item.tabs?.find((t) => t.to === pathname)
-    if (hit) {
-      if (hit.hidden) return null
-      return {
-        label: item.label,
-        tabs: item.tabs.filter((t) => !t.hidden && tabAllowed(t, org, override, platformAdmin)),
-      }
-    }
-  }
-  return null
 }
 
 // 側欄可見項:工作台入口=第一個可見分頁;整組分頁都不可見則隱藏入口。

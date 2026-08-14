@@ -149,7 +149,7 @@ export default function Admin() {
         subtitle="全站 AI 用量與成本、功能開關、專案方案。權限由資料庫端 RPC 逐一把關;此頁僅平台管理員可見。"
       />
 
-      {/* 分頁列(樣式同 WorkbenchTabs;此頁自成一個工作台) */}
+      {/* 平台管理的頁內功能分區，不是側欄路由子頁。 */}
       <div className="flex items-center gap-1 border-b border-[var(--border-2)] overflow-x-auto" role="tablist" aria-label="平台管理">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
