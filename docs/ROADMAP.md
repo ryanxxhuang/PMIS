@@ -1,7 +1,7 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8-1 PR #11、W8-2 PR #12、W8-3A PR #13、W8-1R PR #14）**
-> 最後更新：2026-08-14
+> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8-1 PR #11、W8-2 PR #12、W8-3A PR #13、W8-1R PR #14、W8-3B PR #15）**
+> 最後更新：2026-08-15
 > 依《產品全案評估報告 2026-08-12》與已核准的 W8-0 第三版（方向已定案為 D-007～D-015）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
 
@@ -29,7 +29,7 @@
 - [x] W8-1R 常駐階層側欄修正 — PR #14，已部署
 - [x] W8-2 今日待辦與 Agent 分工 — PR #12（563 Vitest／19 Demo E2E／build 全綠）
 - [x] W8-3A 初始化設定精靈 — PR #13（583 Vitest／19 Demo E2E／build 全綠；真實 staging 專案桌面／375px 目視通過）
-- [ ] W8-3B 契約重點與具體後續動作 — `IN_REVIEW`，核心與自動驗證已完成，待真案目視
+- [x] W8-3B 契約重點與具體後續動作 — PR #15，已部署（587 Vitest／19 Demo E2E／build 全綠；真案三角色目視待補）
 - [ ] W8-4 三角色核心業務頁 — `ACCEPTED`，須依 A／B／C 子包執行
 - [ ] W8-5 手機、無障礙、視覺一致性與真實使用者驗收 — `ACCEPTED`，最後收尾
 
@@ -203,10 +203,10 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 
   **驗證（2026-08-14，PR #13）**：四步判定、責任方、單一下一步、查詢失敗與正式模式不鎖定均已由 13 個 `Dashboard.setupChecklist` 測試固定；另以 7 個 `Requirements.intro` 測試固定 completed run + 0 筆的有效空結果，以及「沒有 completed run 不得宣稱 AI 已完成」。完整結果為 60 個 Vitest 檔、583 個測試與 19 個 Demo E2E 全綠，production build 成功，`git diff --check` clean；沒有變更 DB／Edge／路由／角色／Store。另以既有 staging 測試帳號建立未開正式模式的真實專案，完成 Dashboard 初始化卡片桌面與 375px 目視，以及 `/contract`、`/requirements`、`/members` 三個銜接頁的 375px 無水平溢位驗收；臨時專案已刪除。
 
-- [ ] **W8-3B 契約重點與具體後續動作**
+- [x] **W8-3B 契約重點與具體後續動作（PR #15，已部署）**
   範圍與實作契約見 [`W8-3B-契約重點與後續動作規格-2026-08-14.md`](W8-3B-契約重點與後續動作規格-2026-08-14.md)。`/requirements` 預設只呈現已生效重點與最多 6 筆值得留意的整理結果；原始列、完整引註、歷史 run 與原審查動作保留在可收合追溯區。只有規則可追蹤的 deadline 顯示真實「核定並加入期限追蹤」捷徑，仍走 `review_requirement` 與 D-012；其他類型不假裝已有工作流建立器。
 
-  **進度（2026-08-14，尚未合併／部署）**：已以最新 `main` 完成核心複核與乾淨整理；60 個 Vitest 檔／587 個測試、19 個 Demo E2E、production build 與 `git diff --check` 全綠。Opus 元件級量測確認 0 水平溢位與動作條件正確，但不是真案登入驗收，並發現手機動作鈕 24px、Select 38px 及廠商查看動作不明顯。後續交由 Fable 5 只修規格 §11 的 F1～F4，Codex 只審查 PR；因此仍為 `IN_REVIEW`。
+  **交付（2026-08-15，PR #15 已合併部署）**：F1～F4 依規格 §11 完成——375px 動作鈕與六個追溯篩選補 44px 觸控高度（`max-sm:min-h-11`，桌面不變、不動共用 `ui.jsx`）、廠商唯一「查看」動作補中性邊框、無核定權提示改淡底提示列；Codex 的追溯收合清除歷史詳情修正保留。587 Vitest、19 Demo E2E、build 與 `git diff --check` 全綠；main CI 與 Cloudflare Workers build 成功，正式站四條冒煙 200，且已確認部署 CSS 含 44px utility、Requirements chunk 含期限捷徑。**真案三角色桌面／375px 實機目視仍未執行**（無可用帳號，AI 不得代登入），列為 W8-5 前的待補驗收。
 
 ---
 

@@ -1,7 +1,7 @@
 # GovAgent／PMIS — 目前系統真相
 
 > 狀態：**CURRENT（現況權威文件）**
-> 最後核對：2026-08-14
+> 最後核對：2026-08-15
 > 用途：回答「產品現在是什麼、已經做到哪裡、哪份文件說了算」。
 
 ## 1. 一句話定義
@@ -141,7 +141,7 @@ W8-3A 驗證（2026-08-14）：60 個 Vitest 檔、583 個測試與 19 個 Demo 
 
 W8-1R 驗證（2026-08-14）：60 個 Vitest 檔、576 個測試與 19 個 Demo E2E 全綠，production build 成功，`git diff --check` clean。測試數由 main 的 583 降為 576，是因移除 7 個只驗證已刪除 `workbenchFor()`／`WorkbenchTabs` 的過時測試；桌面側欄展開／收合／偏好保留、工作面子頁預設收合且目前工作面也可再次收合，以及 375px 同源抽屜均由 `e2e/routes.spec.js` 驗證。PR #14 的 main CI 與 Cloudflare Workers build 成功，正式站 bundle 已確認包含 `pmis-sidebar-collapsed` 與側欄展開／收合程式碼。
 
-W8-3B 候選實作（尚未合併／部署）已依核准規格完成核心複核：`/requirements` 一般畫面改為「已生效的契約重點」、最多 6 筆「值得留意的整理結果」與可收合完整追溯；舊 run 的 approved 在 300 筆有界查詢內仍保留，舊 run 未核定 AI 建議只在追溯區顯示。預設去重只合併呈現內容完全相同的列，不改 DB；只有可追蹤 deadline 能透過原 `review_requirement` 捷徑核定並由 D-012 物化 obligation，其他類型不假裝建立尚不存在的工作流。收合追溯時會同時關閉歷史詳情，避免 rejected／superseded 列殘留在一般畫面。目前 587 Vitest、19 Demo E2E、production build 與 `git diff --check` 全綠。Opus 元件級量測確認動作條件正確且 375px 無水平溢位，但它不是真案登入驗收；手機動作鈕與 Select 未達 44px，廠商唯一查看動作也不夠明顯。已定案由 Fable 5 只處理規格 §11 的 F1～F4，Codex 改為只審查 PR；未完成修正與真案操作前，不得寫成已交付。
+W8-3B 由 PR #15 交付並部署：`/requirements` 一般畫面改為「已生效的契約重點」、最多 6 筆「值得留意的整理結果」與可收合完整追溯；舊 run 的 approved 在 300 筆有界查詢內仍保留，舊 run 未核定 AI 建議只在追溯區顯示。預設去重只合併呈現內容完全相同的列，不改 DB；只有可追蹤 deadline 能透過原 `review_requirement` 捷徑「核定並加入期限追蹤」並由 D-012 物化 obligation，其他類型不假裝建立尚不存在的工作流。收合追溯時同時關閉歷史詳情，rejected／superseded 不殘留在一般畫面。側欄分頁標籤同步改為「契約重點」。手機磨光依規格 §11 完成：375px 動作鈕與六個追溯篩選至少 44px（`max-sm:min-h-11`，桌面與共用 `ui.jsx` 不動）、廠商唯一查看動作補中性邊框、無核定權提示改淡底提示列。587 Vitest、19 Demo E2E、production build 全綠；main CI 與 Cloudflare Workers build 成功，正式站冒煙 200。**真案三角色桌面／375px 實機目視尚未執行**（無可用帳號），不得寫成已完成，列為 W8-5 前待補。
 
 ### 6.1 前端資料存取規則
 
