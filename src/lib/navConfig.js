@@ -25,7 +25,7 @@ export const navGroups = [
       { to: '/safety', label: '工安管理' },
     ] },
     { to: '/requirements', icon: PencilLine, label: '審查與協作', tabs: [
-      { to: '/requirements', label: '履約需求' },
+      { to: '/requirements', label: '契約重點' },
       { to: '/submittals', label: '送審文件' },
       { to: '/rfi', label: '工程疑義' },
       { to: '/change-orders', label: '變更設計' },

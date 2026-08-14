@@ -77,18 +77,35 @@ run.
 
 ## 6. Requirement review UI
 
-New dedicated page `/requirements` (nav 履約需求), separate from the legacy
-deadline list; the Contract-page ingestion card links to it (查看履約需求)
-after a successful extraction. The page uses bounded, focused Supabase queries
-(runs ≤ 100, requirements ≤ 300, sources for the listed rows only; detail
-links load per selection) — nothing enters the global store. Filters: scope
-(current / all history), status, requirement type, responsible party,
-source-verification state, ingestion run. Default queue = manual/migration
-Requirements plus AI suggestions from the **latest completed** run per
-document version; failed/processing/pending run suggestions never appear by
-default but stay inspectable through the explicit run filter (nothing is
-deleted). Ordering is deterministic: `needs_review` → `draft_ai` → reviewed
-states, oldest first, id as tiebreak (`src/lib/requirementReview.js`).
+Dedicated page `/requirements` (nav 契約重點), separate from the legacy deadline
+list; the Contract-page ingestion card links to it after a successful
+extraction. The page uses bounded, focused Supabase queries (runs ≤ 100,
+requirements ≤ 300, sources for the listed rows only; detail links load per
+selection) — nothing enters the global store. A required query failure produces
+an explicit retry state and is never presented as an empty contract.
+
+W8-3B changes the default presentation, not the review boundary:
+
+* **已生效的契約重點** includes every approved Requirement in the
+  bounded Requirement query,
+  including an approved AI row from an older run. Reprocessing cannot make an
+  authoritative contract fact disappear from the default view.
+* **值得留意的整理結果** shows at most six unreviewed rows.
+  Manual/migration rows remain eligible; AI rows must belong to the latest
+  completed run per document version. Failed/processing/pending and stale-run
+  suggestions stay out of the summary.
+* Summary deduplication is display-only and exact across type, responsible
+  party, phase, content, timing/frequency rule, acceptance criteria and
+  evidence. There is no fuzzy or semantic merge and no database row changes.
+* The complete filters, all lifecycle states, historical runs and original
+  review list remain under the explicit **查看全部擷取結果** disclosure.
+  This is labelled as traceability data, not a queue that users must clear.
+
+The trace view keeps the six filters: scope (current / all history), status,
+requirement type, responsible party, source-verification state and ingestion
+run. Its current scope and deterministic review ordering remain unchanged:
+`needs_review` → `draft_ai` → reviewed states, oldest first, id as tiebreak
+(`src/lib/requirementReview.js`).
 
 Review controls (核定 / 駁回 / 廢止取代) render only for
 `can.reviewRequirement`, call the RPC, and update state exclusively from the
@@ -96,6 +113,15 @@ server response — no optimistic approval. Reviewers may also correct
 suggestion content (title, description, type, responsibility, phase,
 acceptance criteria, evidence) while the row is `draft_ai`/`needs_review`;
 the DB confines such edits to unreviewed rows.
+
+The only summary shortcut that claims to create an operational follow-up is
+**核定並加入期限追蹤**. It appears only to a reviewer for an
+unreviewed `deadline` with a deterministic trackable rule and, for AI rows, a
+verified source. It still calls `review_requirement`; D-012 materializes the
+obligation in the same server transaction, and the UI reloads obligations only
+after the server returns. Other requirement types can be inspected and may be
+approved as contract rules in detail, but the UI does not claim to create a
+submittal, inspection, test, checklist or evidence workflow.
 
 ## 7. Source presentation
 
