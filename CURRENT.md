@@ -127,7 +127,7 @@ W6 PR #7 已合併並部署，5 條本機真後端測試於 2026-08-13 重跑全
 
 W7 已由 PR #9 部署並依 D-013 收口前端路由：`src/lib/navConfig.js` 的 `routeRegistry` 明確登記全部 36 條 App 路由，未登記業務路由 fail-closed；登入、公開、重新導向、列印與 404 各自標註。`src/App.jsx` 由這份路由表統一決定共同守衛與版面，四條列印路由現在也會先驗證登入與專案狀態，但仍保留無工作台外框的列印版面。既有三方頁面權限、導覽、RLS 與資料庫均未改動。
 
-W8-1 由 PR #11 完成：主品牌統一為 `GovAgent｜公共工程`；側欄固定為今日待辦、現場與品質、審查與協作、進度與金流、文件與結案、專案六個工作面；`問 GovAgent` 是頁首全域入口；機關仍落在跨案總覽。36 條路由與原角色限制不變。2026-08-14 使用者核准 W8-0 第三版後，W8-1R 已提交至 PR #14 等待審查：桌面側欄預設常駐展開、可收合成圖示列並記住同一瀏覽器偏好；工作面的子頁選單預設收合，包含目前所在工作面也可自由展開與再次收合；手機抽屜使用同一階層；內容區原 `WorkbenchTabs` 與手機子頁下拉已移除。側欄視覺採 Codex 式安靜層級：工作面用圖示與較強文字，子頁縮排；目前頁與 hover 使用完整中性圓角底，不再使用藍色左線與子頁分隔線。`navConfig.js` 仍是導覽與路由守衛的單一真相來源，36 條路由、角色限制、RLS、資料庫與業務頁均未改。此項尚未部署。
+W8-1 由 PR #11 完成：主品牌統一為 `GovAgent｜公共工程`；側欄固定為今日待辦、現場與品質、審查與協作、進度與金流、文件與結案、專案六個工作面；`問 GovAgent` 是頁首全域入口；機關仍落在跨案總覽。36 條路由與原角色限制不變。2026-08-14 使用者核准 W8-0 第三版後，W8-1R 由 PR #14 完成並部署：桌面側欄預設常駐展開、可收合成圖示列並記住同一瀏覽器偏好；工作面的子頁選單預設收合，包含目前所在工作面也可自由展開與再次收合；手機抽屜使用同一階層；內容區原 `WorkbenchTabs` 與手機子頁下拉已移除。側欄視覺採 Codex 式安靜層級：工作面用圖示與較強文字，子頁縮排；目前頁與 hover 使用完整中性圓角底，不再使用藍色左線與子頁分隔線。`navConfig.js` 仍是導覽與路由守衛的單一真相來源，36 條路由、角色限制、RLS、資料庫與業務頁均未改。
 
 W8-2 由 PR #12 交付：今日待辦的聚合收斂為單一純函式 [`src/lib/todayTasks.js`](src/lib/todayTasks.js)，`/dashboard` 與 `/alerts` 吃同一份，`/agent` 不再重複待辦清單（只留無件數的「前往今日待辦」連結）。`/dashboard` 改為「現在輪到我／等待對方／今天已完成」三段，每段最多 5 筆、溢位連 `/alerts`；統計帶、球權統計與未結案缺失卡移除，AI 主動觀察降為一行風險摘要。待辦一律由既有業務狀態推導：協作項沿用 `ballInCourt.js`（新增共用的 `collaborationItems()`），期限型沿用 `contractDue`／`qc`／`acceptance`／`itp` 既有引擎，`Alerts.jsx` 內嵌的第二套規則已刪除。
 
@@ -139,7 +139,7 @@ W8-3A 由 PR #13 交付：未開正式模式的真專案仍保留一張四步初
 
 W8-3A 驗證（2026-08-14）：60 個 Vitest 檔、583 個測試與 19 個 Demo E2E 全綠，production build 與 PR CI 成功，`git diff --check` clean；沒有變更路由、角色、RLS、資料庫、migration、Edge Function 或 Store slice。另以既有 staging 測試帳號建立未開正式模式的真實專案，完成 Dashboard 初始化卡片桌面與 375px 目視，以及 `/contract`、`/requirements`、`/members` 三個銜接頁的 375px 無水平溢位驗收；臨時專案已刪除。
 
-W8-1R 驗證（2026-08-14）：60 個 Vitest 檔、576 個測試與 19 個 Demo E2E 全綠，production build 成功，`git diff --check` clean。測試數由 main 的 583 降為 576，是因移除 7 個只驗證已刪除 `workbenchFor()`／`WorkbenchTabs` 的過時測試；桌面側欄展開／收合／偏好保留、工作面子頁預設收合且目前工作面也可再次收合，以及 375px 同源抽屜均由 `e2e/routes.spec.js` 驗證。
+W8-1R 驗證（2026-08-14）：60 個 Vitest 檔、576 個測試與 19 個 Demo E2E 全綠，production build 成功，`git diff --check` clean。測試數由 main 的 583 降為 576，是因移除 7 個只驗證已刪除 `workbenchFor()`／`WorkbenchTabs` 的過時測試；桌面側欄展開／收合／偏好保留、工作面子頁預設收合且目前工作面也可再次收合，以及 375px 同源抽屜均由 `e2e/routes.spec.js` 驗證。PR #14 的 main CI 與 Cloudflare Workers build 成功，正式站 bundle 已確認包含 `pmis-sidebar-collapsed` 與側欄展開／收合程式碼。
 
 ### 6.1 前端資料存取規則
 
