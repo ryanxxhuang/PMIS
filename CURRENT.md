@@ -103,7 +103,7 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 60 個 Vitest 測試檔，共 583 個測試；19 個 Playwright Demo 三角色／路由 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
+- 60 個 Vitest 測試檔，共 576 個測試；19 個 Playwright Demo 三角色／路由 E2E；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
 
 最近一次全套驗證（W7 PR #9，2026-08-13）：530 個單元測試、14 個 Demo E2E、5 個真 Supabase E2E 與 production build 全數通過。PR #8 已讓 23 檔 pgTAP 自動進 CI；其 main run 與一般 CI 均成功。W0～W5、W6 PR #7、pgTAP CI PR #8 與 W7 PR #9 已合併部署；PR #9 的 main CI 與 Cloudflare Workers build 成功，正式站首頁、`/requirements`、`/security` 與 `/site-log/print` 均回 HTTP 200。正式資料庫維持 `20260812000600`，W7 沒有資料庫變更。
 
@@ -127,7 +127,7 @@ W6 PR #7 已合併並部署，5 條本機真後端測試於 2026-08-13 重跑全
 
 W7 已由 PR #9 部署並依 D-013 收口前端路由：`src/lib/navConfig.js` 的 `routeRegistry` 明確登記全部 36 條 App 路由，未登記業務路由 fail-closed；登入、公開、重新導向、列印與 404 各自標註。`src/App.jsx` 由這份路由表統一決定共同守衛與版面，四條列印路由現在也會先驗證登入與專案狀態，但仍保留無工作台外框的列印版面。既有三方頁面權限、導覽、RLS 與資料庫均未改動。
 
-W8-1 由 PR #11 完成：主品牌統一為 `GovAgent｜公共工程`；側欄固定為今日待辦、現場與品質、審查與協作、進度與金流、文件與結案、專案六個工作面；`問 GovAgent` 是頁首全域入口；手機工作面使用目前頁面選單；機關仍落在跨案總覽。36 條路由與原角色限制不變。
+W8-1 由 PR #11 完成：主品牌統一為 `GovAgent｜公共工程`；側欄固定為今日待辦、現場與品質、審查與協作、進度與金流、文件與結案、專案六個工作面；`問 GovAgent` 是頁首全域入口；機關仍落在跨案總覽。36 條路由與原角色限制不變。2026-08-14 使用者核准 W8-0 第三版後，W8-1R 已提交至 PR #14 等待審查：桌面側欄預設常駐展開、可收合成圖示列並記住同一瀏覽器偏好；工作面的子頁選單預設收合，包含目前所在工作面也可自由展開與再次收合；手機抽屜使用同一階層；內容區原 `WorkbenchTabs` 與手機子頁下拉已移除。側欄視覺採 Codex 式安靜層級：工作面用圖示與較強文字，子頁縮排；目前頁與 hover 使用完整中性圓角底，不再使用藍色左線與子頁分隔線。`navConfig.js` 仍是導覽與路由守衛的單一真相來源，36 條路由、角色限制、RLS、資料庫與業務頁均未改。此項尚未部署。
 
 W8-2 由 PR #12 交付：今日待辦的聚合收斂為單一純函式 [`src/lib/todayTasks.js`](src/lib/todayTasks.js)，`/dashboard` 與 `/alerts` 吃同一份，`/agent` 不再重複待辦清單（只留無件數的「前往今日待辦」連結）。`/dashboard` 改為「現在輪到我／等待對方／今天已完成」三段，每段最多 5 筆、溢位連 `/alerts`；統計帶、球權統計與未結案缺失卡移除，AI 主動觀察降為一行風險摘要。待辦一律由既有業務狀態推導：協作項沿用 `ballInCourt.js`（新增共用的 `collaborationItems()`），期限型沿用 `contractDue`／`qc`／`acceptance`／`itp` 既有引擎，`Alerts.jsx` 內嵌的第二套規則已刪除。
 
@@ -138,6 +138,8 @@ W8-2 未動路由數、頁面權限、RLS、資料庫與 Edge Function。同批�
 W8-3A 由 PR #13 交付：未開正式模式的真專案仍保留一張四步初始化卡片；每步顯示責任方、完成狀態與單一目的地，卡片另顯示完成數與唯一下一步。第 3 步只以本案是否存在 `status = 'completed'` 的 `document_ingestion_runs` 判定 AI 是否整理完成，不再讀 Requirement 待審／核定數；即使仍有 106 筆待審或擷取結果為 0 筆也算完成。完成但 0 筆時 `/requirements` 會顯示「沒有找到建議」的有效空結果，不會把使用者導回重新上傳；人工核定只決定內容是否成為契約規則，不是開啟正式模式的門檻。第 4 步維持可由專案建立者直接前往 `/members` 開啟，前三步或三方未齊只提供提醒，不會鎖住按鈕。
 
 W8-3A 驗證（2026-08-14）：60 個 Vitest 檔、583 個測試與 19 個 Demo E2E 全綠，production build 與 PR CI 成功，`git diff --check` clean；沒有變更路由、角色、RLS、資料庫、migration、Edge Function 或 Store slice。另以既有 staging 測試帳號建立未開正式模式的真實專案，完成 Dashboard 初始化卡片桌面與 375px 目視，以及 `/contract`、`/requirements`、`/members` 三個銜接頁的 375px 無水平溢位驗收；臨時專案已刪除。
+
+W8-1R 驗證（2026-08-14）：60 個 Vitest 檔、576 個測試與 19 個 Demo E2E 全綠，production build 成功，`git diff --check` clean。測試數由 main 的 583 降為 576，是因移除 7 個只驗證已刪除 `workbenchFor()`／`WorkbenchTabs` 的過時測試；桌面側欄展開／收合／偏好保留、工作面子頁預設收合且目前工作面也可再次收合，以及 375px 同源抽屜均由 `e2e/routes.spec.js` 驗證。
 
 ### 6.1 前端資料存取規則
 

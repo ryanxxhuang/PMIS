@@ -2,47 +2,15 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
-import { visibleNavGroups, workbenchFor } from '../lib/navConfig.js'
+import { visibleNavGroups } from '../lib/navConfig.js'
 import CopilotFab from './CopilotFab.jsx'
-import { Menu, ChevronDown, Trash2, Moon, Sun, MonitorSmartphone, Plus, Bot, X } from 'lucide-react'
+import { Menu, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Trash2, Moon, Sun, MonitorSmartphone, Plus, Bot, X } from 'lucide-react'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 
-// 工作台分頁列(§9 瘦身):同一工作台的路由以分頁互切,分頁可見性與導覽/守衛同源。
-// 只有一個可見分頁時不渲染(例如監造的「估驗與金流」只剩估驗計價)。
-export function WorkbenchTabs() {
-  const { currentUser, can } = useStore()
-  const { pathname } = useLocation()
-  const navigate = useNavigate()
-  const wb = workbenchFor(pathname, currentUser?.org_type || 'contractor', can?.override)
-  if (!wb || wb.tabs.length < 2) return null
-  return (
-    <div className="mb-5 print:hidden">
-      <label className="sm:hidden block">
-        <span className="mb-1.5 block text-xs font-medium text-[var(--text-2)]">{wb.label}</span>
-        <select
-          aria-label={`${wb.label}目前頁面`}
-          value={pathname}
-          onChange={(e) => navigate(e.target.value)}
-          className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--text)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20"
-        >
-          {wb.tabs.map((t) => <option key={t.to} value={t.to}>{t.label}</option>)}
-        </select>
-      </label>
-      <div className="hidden sm:flex items-center gap-1 border-b border-[var(--border-2)] overflow-x-auto" role="tablist" aria-label={wb.label}>
-        {wb.tabs.map((t) => (
-          <NavLink key={t.to} to={t.to}
-            className={({ isActive }) =>
-              `px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap shrink-0 transition-colors ${
-                isActive
-                  ? 'border-[var(--blue)] text-[var(--blue-text)] font-semibold'
-                  : 'border-transparent text-[var(--text-2)] hover:text-[var(--text)]'
-              }`}>
-            {t.label}
-          </NavLink>
-        ))}
-      </div>
-    </div>
-  )
+const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
+
+const initialSidebarCollapsed = () => {
+  try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1' } catch { return false }
 }
 
 // Top-bar project picker: switch / create / delete (real backend only).
@@ -146,6 +114,9 @@ function TopBar({ onMenu, scrolled }) {
 
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
+  // 工作面預設收合；展開狀態只保留在本次瀏覽，不製造另一份持久導覽設定。
+  const [expandedWorkbenches, setExpandedWorkbenches] = useState(() => new Set())
   // scroll edge:內容捲到 chrome 底下才浮出界線(置頂時頂欄與背景齊平)
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
@@ -161,14 +132,28 @@ export function WebLayout({ children }) {
   // isPlatformAdmin 是獨立的「平台」維度(僅控制 /admin 入口可見;真正把關在 DB 的 admin RPC)。
   const org = currentUser?.org_type || 'contractor'
   const visibleGroups = visibleNavGroups(org, can?.override, isPlatformAdmin)
+  const setDesktopCollapsed = () => {
+    setSidebarCollapsed((value) => {
+      const next = !value
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0') } catch { /* noop */ }
+      return next
+    })
+  }
+  const toggleWorkbench = (to) => {
+    setExpandedWorkbenches((current) => {
+      const next = new Set(current)
+      next.has(to) ? next.delete(to) : next.add(to)
+      return next
+    })
+  }
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       <TopBar onMenu={() => setMenuOpen(true)} scrolled={scrolled} />
       {/* 手機:點背景關閉抽屜(蓋過頂欄,抽屜再蓋過遮罩) */}
       {menuOpen && <div className="fixed inset-0 z-50 bg-black/40 md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
       <aside
-        className={`chrome-glass w-64 border-r border-[var(--border-card)] flex flex-col print:hidden
-          fixed top-16 bottom-0 left-0 z-[55] transition-transform duration-300 [transition-timing-function:var(--ease-drawer)]
+        className={`chrome-glass w-72 ${sidebarCollapsed ? 'md:w-16' : 'md:w-64'} border-r border-[var(--border-card)] flex flex-col print:hidden
+          fixed top-16 bottom-0 left-0 z-[55] transition-[width,transform] duration-300 [transition-timing-function:var(--ease-drawer)]
           md:translate-x-0
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
@@ -176,40 +161,74 @@ export function WebLayout({ children }) {
             <span className="text-sm font-semibold text-[var(--text)]">功能選單</span>
             <button onClick={() => setMenuOpen(false)} aria-label="關閉選單" className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><X size={19} aria-hidden /></button>
           </div>
-          <nav aria-label="主要功能" className="flex-1 py-3 overflow-auto">
+          <div className={`hidden md:flex h-12 shrink-0 items-center ${sidebarCollapsed ? 'justify-center' : 'justify-end px-3'}`}>
+            <button onClick={setDesktopCollapsed}
+              aria-label={sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'}
+              title={sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] pressable">
+              {sidebarCollapsed ? <PanelLeftOpen size={18} aria-hidden /> : <PanelLeftClose size={18} aria-hidden />}
+            </button>
+          </div>
+          <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
             {visibleGroups.map((g) => (
-              <div key={g.title} className="mb-3">
-                <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
-                  <span className="text-[10px] font-medium tracking-[0.12em] text-[var(--text-3)] shrink-0">{g.title}</span>
-                  <span className="flex-1 border-t border-[var(--border-2)]" />
+              <div key={g.title} className="mb-2">
+                <div className={`px-4 pt-4 pb-1.5 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
+                  <span className="text-xs font-medium text-[var(--text-3)]">{g.title}</span>
                 </div>
                 {g.items.map((n) => {
                   const Icon = n.icon
-                  // 工作台入口:站在任一分頁上都算 active(NavLink 只認自己的 to)
+                  // 工作面與角色子頁都來自 navConfig，不在 Layout 重寫清單。
                   const wbActive = n.tabs?.some((t) => t.to === pathname)
+                  const itemActive = pathname === n.to || wbActive
+                  const expanded = expandedWorkbenches.has(n.to)
                   return (
-                    <NavLink
-                      key={n.to}
-                      to={n.to}
-                      onClick={() => setMenuOpen(false)}
-                      className={({ isActive }) =>
-                        `flex items-center gap-2.5 mr-3 my-0.5 pl-[13px] pr-3 py-[7px] rounded-r-md text-sm border-l-[3px] transition-colors ${
-                          (isActive || wbActive)
-                            ? 'border-[var(--blue)] bg-[var(--blue-tint)] text-[var(--blue-text)] font-semibold'
-                            : 'border-transparent text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
-                        }`
-                      }
-                    >
-                      <Icon size={16} strokeWidth={1.8} className="shrink-0 opacity-75" aria-hidden />
-                      {n.label}
-                    </NavLink>
+                    <div key={n.to}>
+                      <div className={`mx-2 my-0.5 rounded-xl transition-colors flex items-center ${
+                        itemActive && (!n.tabs || !expanded)
+                          ? 'bg-[var(--surface-2)] text-[var(--text)] font-semibold'
+                          : itemActive
+                            ? 'text-[var(--text)] font-semibold'
+                            : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
+                      } ${sidebarCollapsed ? `md:justify-center ${itemActive ? 'md:bg-[var(--surface-2)] md:text-[var(--text)]' : ''}` : ''}`}>
+                        <NavLink to={n.to} onClick={() => setMenuOpen(false)} title={sidebarCollapsed ? n.label : undefined}
+                          aria-label={sidebarCollapsed ? n.label : undefined}
+                          className={() => `min-w-0 min-h-11 flex-1 flex items-center gap-2.5 px-3 text-sm ${
+                            sidebarCollapsed ? 'md:flex-none md:w-12 md:justify-center md:px-0' : ''
+                          }`}>
+                          <Icon size={17} strokeWidth={1.8} className="shrink-0 opacity-75" aria-hidden />
+                          <span className={sidebarCollapsed ? 'md:hidden' : ''}>{n.label}</span>
+                        </NavLink>
+                        {n.tabs && (
+                          <button type="button" onClick={() => toggleWorkbench(n.to)}
+                            aria-expanded={expanded} aria-controls={`nav-children-${n.to.slice(1)}`}
+                            aria-label={`${expanded ? '收合' : '展開'}${n.label}子頁`}
+                            className={`w-9 h-9 mr-1 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:bg-black/5 hover:text-[var(--text)] ${sidebarCollapsed ? 'md:hidden' : ''}`}>
+                            {expanded ? <ChevronDown size={15} aria-hidden /> : <ChevronRight size={15} aria-hidden />}
+                          </button>
+                        )}
+                      </div>
+                      {n.tabs && expanded && (
+                        <div id={`nav-children-${n.to.slice(1)}`} className={`pb-1 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
+                          {n.tabs.map((tab) => (
+                            <NavLink key={tab.to} to={tab.to} onClick={() => setMenuOpen(false)}
+                              className={({ isActive }) => `min-h-10 mx-2 pl-10 pr-3 rounded-xl flex items-center text-sm transition-colors ${
+                                isActive
+                                  ? 'bg-[var(--surface-2)] text-[var(--text)] font-medium'
+                                  : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
+                              }`}>
+                              {tab.label}
+                            </NavLink>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
               </div>
             ))}
           </nav>
       </aside>
-      <main className="md:ml-64 p-4 md:p-6 pt-20 md:pt-[88px] min-w-0 print:ml-0 print:pt-0">
+      <main className={`${sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'} transition-[margin] duration-300 p-4 md:p-6 pt-20 md:pt-[88px] min-w-0 print:ml-0 print:pt-0`}>
           {workItemsSource === 'error' && (
             <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-[var(--red-text)]/25 bg-[var(--red-tint)] px-4 py-2.5 text-sm text-[var(--red-text)] print:hidden enter-row">
               <span>標單工項讀取失敗：{workItemsError || '連線異常'}。各頁資料可能不完整。</span>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { navGroups, routeAllowed, routeRegistry, workbenchFor, visibleNavGroups } from './navConfig.js'
+import { navGroups, routeAllowed, routeRegistry, visibleNavGroups } from './navConfig.js'
 
 const flatNav = (groups) => groups.flatMap((g) => g.items)
 const ORGS = ['contractor', 'supervisor', 'owner']
@@ -72,51 +72,6 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
     for (const to of ['/activity', '/monthly-report', '/progress', '/safety', '/itp', '/submittals', '/rfi', '/change-orders']) {
       for (const org of ORGS) expect(routeAllowed(to, org, false)).toBe(true)
     }
-  })
-})
-
-describe('workbenchFor(分頁列)', () => {
-  it('進度與金流:施工六個分頁、監造不見請款/成本/排程、機關不見成本/排程', () => {
-    expect(workbenchFor('/valuation', 'contractor', false).tabs.map((t) => t.label))
-      .toEqual(['標單工項', '估驗計價', '請款收款', '成本管理', '進度 S 曲線', '逐工項排程'])
-    expect(workbenchFor('/payments', 'contractor', false).label).toBe('進度與金流')
-    expect(workbenchFor('/valuation', 'supervisor', false).tabs.map((t) => t.label))
-      .toEqual(['標單工項', '估驗計價', '進度 S 曲線'])
-    expect(workbenchFor('/valuation', 'owner', false).tabs.map((t) => t.label))
-      .toEqual(['標單工項', '估驗計價', '請款收款', '進度 S 曲線'])
-  })
-  it('現場與品質:四個分頁全角色一致', () => {
-    for (const org of ORGS) {
-      expect(workbenchFor('/site-log', org, false).tabs.map((t) => t.label))
-        .toEqual(['施工日誌', '品質查驗', '檢驗停留點', '工安管理'])
-    }
-    expect(workbenchFor('/safety', 'contractor', false).label).toBe('現場與品質')
-  })
-  it('審查與協作:四個分頁全角色一致', () => {
-    for (const org of ORGS) {
-      expect(workbenchFor('/requirements', org, false).tabs.map((t) => t.label))
-        .toEqual(['履約需求', '送審文件', '工程疑義', '變更設計'])
-    }
-  })
-  it('文件與結案:監造可見監造報表,廠商與機關不可見', () => {
-    expect(workbenchFor('/contract', 'supervisor', false).tabs.map((t) => t.label))
-      .toEqual(['專案文件', '施工月報', '監造報表', '驗收結算'])
-    expect(workbenchFor('/contract', 'contractor', false).tabs.map((t) => t.label))
-      .toEqual(['專案文件', '施工月報', '驗收結算'])
-    expect(workbenchFor('/contract', 'owner', false).tabs.map((t) => t.label))
-      .toEqual(['專案文件', '施工月報', '驗收結算'])
-  })
-  it('專案:風險稽核 hidden,其餘三頁全角色一致', () => {
-    for (const org of ORGS) {
-      expect(workbenchFor('/portfolio', org, false).tabs.map((t) => t.label))
-        .toEqual(['跨案總覽', '活動紀錄', '三方成員'])
-    }
-    expect(workbenchFor('/audit', 'owner', false)).toBeNull()
-  })
-  it('單頁路由無工作台', () => {
-    expect(workbenchFor('/dashboard', 'contractor', false)).toBeNull()
-    expect(workbenchFor('/agent', 'contractor', false)).toBeNull()
-    expect(workbenchFor('/alerts', 'owner', false)).toBeNull()
   })
 })
 
@@ -201,9 +156,6 @@ describe('平台管理(/admin):platformAdminOnly 是獨立於專案角色的維�
     const platform = groups.find((g) => g.title === '平台')
     expect(platform.items.map((i) => i.label)).toEqual(['平台管理'])
     expect(flatNav(groups)).toHaveLength(7)
-  })
-  it('/admin 是單頁,不掛工作台分頁列', () => {
-    expect(workbenchFor('/admin', 'owner', false, true)).toBeNull()
   })
   it('platformAdminOnly 路由清單釘死:只有 /admin,且不得帶 roles(兩維度不可混用)', () => {
     const flagged = []
