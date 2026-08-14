@@ -485,7 +485,7 @@ export default function Contract() {
               {/* W8-3A(D-014):人工核定只針對「要成為契約規則」的內容,不是初始化門檻。
                   ⚠️ 這一行在整理尚未跑完時也會顯示,所以措辭必須中性——不得斷言「AI 已整理完成」
                   (是否完成的唯一判定在 document_ingestion_runs,見 Requirements 的 requirementsIntro)。 */}
-              <li>🔍 AI 整理完成後,只有要成為契約規則的內容才需人工核定 → <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">前往履約需求審查</Link>(機關/監造辦理);未核定不影響開啟正式模式。</li>
+              <li>🔍 AI 整理完成後,只有要成為契約規則的內容才需人工核定 → <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">前往契約重點</Link>(機關/監造辦理);未核定不影響開啟正式模式。</li>
               {workItemsSource === 'db'
                 ? <li>📋 標單已就緒 → <Link to="/boq" className="text-[var(--blue-text)] hover:underline">標單工項</Link>;估驗、進度、日誌都掛在它上面。</li>
                 : <li>📋 還沒看到標單:把 PCCES 預算書 XML 也丟進上面同一個框即可自動匯入。</li>}
@@ -497,7 +497,7 @@ export default function Contract() {
         {aiCount != null && aiCount > 0 && (
           <p className="text-sm text-[var(--text)] mt-4">
             AI 從本契約找到 <span className="font-semibold">{aiCount}</span> 項履約要求建議。
-            <Link to="/requirements" className="text-[var(--blue-text)] hover:underline ml-1">前往審查 →</Link>
+            <Link to="/requirements" className="text-[var(--blue-text)] hover:underline ml-1">查看整理結果 →</Link>
           </p>
         )}
 
@@ -592,7 +592,7 @@ export default function Contract() {
           <Pill color="green" n={counts.done} label="已完成" />
         </div>
         {groups.length === 0 && (
-          <p className="text-xs text-[var(--text-3)] mt-3">尚無已核准的期限要求。上傳契約文件並前往「履約需求審查」；期限核准後會自動出現在這裡。</p>
+          <p className="text-xs text-[var(--text-3)] mt-3">尚無已核准的期限要求。上傳契約文件並前往「契約重點」；期限核准後會自動出現在這裡。</p>
         )}
         {obligationMsg && <p className="text-xs text-[var(--red-text)] mt-2">{obligationMsg}</p>}
       </Card>

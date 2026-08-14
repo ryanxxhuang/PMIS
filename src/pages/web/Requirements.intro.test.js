@@ -2,7 +2,9 @@
 // 重新上傳文件——0 筆結果被當成「還沒開始」,使用者被繞回原點。
 // 這支測試釘住:整理完成與否只看 completed ingestion run,兩種 0 筆狀態必須分開。
 import { describe, it, expect } from 'vitest'
-import { requirementsIntro } from './Requirements.jsx'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { HighlightRows, requirementsIntro } from './Requirements.jsx'
 
 const completed = [{ id: 'R1', status: 'completed' }]
 const inFlight = [{ id: 'R1', status: 'processing' }, { id: 'R2', status: 'failed' }]
@@ -67,5 +69,37 @@ describe('判定依據與 Dashboard 第 3 步一致', () => {
   it('runs 未載入(undefined/null)不當成完成', () => {
     expect(requirementsIntro(undefined, 0).ingestionDone).toBe(false)
     expect(requirementsIntro(null, 0).mode).toBe('not-started')
+  })
+})
+
+describe('W8-3B 契約重點動作', () => {
+  const deadline = {
+    id: 'D1', status: 'needs_review', requirement_type: 'deadline', origin: 'ai',
+    title: '開工後 14 日內提送計畫', responsible_party_type: 'contractor',
+    trigger_type: 'commencement', trigger_config: { offset_days: 14, offset_dir: 'after' },
+  }
+  const renderRows = (requirement, canReview) => renderToStaticMarkup(
+    createElement(HighlightRows, {
+      groups: [{ key: requirement.id, requirement, requirements: [requirement] }],
+      kind: 'suggestion', canReview,
+      verificationByReq: new Map([[requirement.id, 'verified']]),
+      onSelect: () => {}, onQuickApprove: () => {},
+    }),
+  )
+
+  it('廠商只能查看，不會出現契約核定捷徑', () => {
+    const html = renderRows(deadline, false)
+    expect(html).toContain('契約核定由監造／機關辦理')
+    expect(html).not.toContain('核定並加入期限追蹤')
+  })
+
+  it('已核對且規則完整的期限，只對契約審查者顯示真實捷徑', () => {
+    expect(renderRows(deadline, true)).toContain('核定並加入期限追蹤')
+  })
+
+  it('送審類只能查看內容，不假裝已能建立流程', () => {
+    const html = renderRows({ ...deadline, id: 'S1', requirement_type: 'submittal', title: '施工計畫送審' }, true)
+    expect(html).toContain('查看內容與來源')
+    expect(html).not.toMatch(/建立.*送審|核定並加入/)
   })
 })

@@ -3,17 +3,19 @@
 // 生命週期決定一律走 review_requirement RPC(伺服器蓋審查人/時間戳),
 // 前端絕不樂觀顯示核定結果。工作流 artifact 只列出既有連結(P0-07 不產生)。
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { ScrollText, CheckCircle2, XCircle, Ban, FileText, Link2, Pencil } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { CheckCircle2, XCircle, Ban, FileText, Link2, Pencil, ArrowRight, RefreshCw, Info } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { pageAllInSafe } from '../../lib/pagedQuery.js'
-import { Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select, PrerequisiteEmptyState } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import {
   REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
   WORK_ITEM_LINK_STATE_LABELS, ARTIFACT_TYPE_LABELS, GENERATION_TYPE_LABELS,
   latestCompletedRunIds, inDefaultReviewScope, sortForReviewQueue, filterRequirements,
   sourceVerificationSummary, sourcePageLabel, sourceVerificationLabel, formatRequirementRule,
+  HIGHLIGHT_LIMIT, buildRequirementHighlights, canQuickApproveDeadline,
 } from '../../lib/requirementReview.js'
 
 const LIST_LIMIT = 300
@@ -54,12 +56,79 @@ const STATUS_BADGE = {
 const EDITABLE_STATUSES = ['draft_ai', 'needs_review']
 const fmtTime = (v) => (v ? new Date(v).toLocaleString('zh-TW', { hour12: false }) : '')
 
+export function HighlightRows({ groups, kind, canReview, verificationByReq, onSelect, onQuickApprove }) {
+  if (!groups.length) {
+    return <Empty>{kind === 'approved' ? '尚無已生效的契約重點。' : '目前沒有需要特別留意的未核定內容。'}</Empty>
+  }
+  return (
+    <div className="divide-y divide-[var(--border)]">
+      {groups.map((group) => {
+        const r = group.requirement
+        const verification = verificationByReq.get(r.id) || 'none'
+        const quickApprove = kind === 'suggestion'
+          && canQuickApproveDeadline(r, verification, canReview)
+        return (
+          <div key={group.key} className="px-4 sm:px-5 py-3.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge color={kind === 'approved' ? 'green' : 'amber'}>
+                {kind === 'approved' ? '已生效' : '整理結果'}
+              </Badge>
+              <span className="text-xs text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[r.requirement_type] || r.requirement_type}</span>
+              {r.responsible_party_type && <span className="text-xs text-[var(--text-3)]">責任：{RESPONSIBLE_LABELS[r.responsible_party_type]}</span>}
+              {verification === 'verified' && <span className="text-xs text-[var(--green-text)]">來源已核對</span>}
+              {verification === 'unverified' && <span className="text-xs text-[var(--amber-text)]">來源待核對</span>}
+              {group.requirements.length > 1 && <span className="text-xs text-[var(--text-3)]">同內容 {group.requirements.length} 筆擷取</span>}
+            </div>
+            <div className="mt-1.5 text-sm font-semibold text-[var(--text)]">{r.title}</div>
+            {r.description && <p className="mt-1 text-sm leading-relaxed text-[var(--text-2)] line-clamp-2">{r.description}</p>}
+            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-3)]">
+              {r.lifecycle_phase && <span>階段：{r.lifecycle_phase}</span>}
+              {formatRequirementRule(r) && <span>時點：{formatRequirementRule(r)}</span>}
+              {r.evidence_requirement && <span>應留存佐證：{r.evidence_requirement}</span>}
+            </div>
+            {/* 手機直排全寬、桌機並排;桌機再加 flex-wrap,窄視窗時按鈕換行而不是擠出卡片。
+                F1:手機動作鈕補 44px 觸控高度(max-sm:min-h-11),桌機維持 sm 尺寸——
+                只在本頁就地補,不動共用 Button(全站控件統一留 W8-5)。 */}
+            <div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+              {kind === 'approved' && r.requirement_type === 'deadline' && (
+                <Link to="/contract" className="w-full sm:w-auto">
+                  <Button size="sm" variant="secondary" className="w-full sm:w-auto max-sm:min-h-11">前往期限追蹤 <ArrowRight size={12} aria-hidden /></Button>
+                </Link>
+              )}
+              {/* F3:廠商在這裡只有這一個動作,ghost 樣式在手機上全寬置中會被讀成一行說明文字;
+                  補中性邊框讓它像可按的東西,桌機恢復安靜 ghost(實心主動作每組仍只有一個)。 */}
+              <Button size="sm" variant="ghost"
+                className="w-full sm:w-auto max-sm:min-h-11 max-sm:border max-sm:border-[var(--border)]"
+                onClick={() => onSelect(group)}>
+                {kind === 'suggestion' && r.requirement_type === 'deadline' && canReview && !quickApprove
+                  ? '查看並確認期限' : '查看內容與來源'}
+              </Button>
+              {quickApprove && (
+                <Button size="sm" variant="success" className="w-full sm:w-auto max-sm:min-h-11" onClick={() => onQuickApprove(group)}>
+                  <CheckCircle2 size={13} aria-hidden /> 核定並加入期限追蹤
+                </Button>
+              )}
+              {/* F4:無核定權的提示要與按鈕有視覺區隔——淡底短提示列,不是內文也不是死按鈕 */}
+              {kind === 'suggestion' && !canReview && (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-xs text-[var(--text-3)] leading-snug w-full sm:w-auto sm:self-center">
+                  <Info size={12} className="shrink-0" aria-hidden />契約核定由監造／機關辦理
+                </span>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function Requirements() {
   const { currentProject, isPersistedProject, currentUser, workItems, reloadObligations } = useStore()
   // 鏡像 DB 的 can_review_requirement(機關/監造;刻意無專案管理者例外——技術管理≠契約審核權)
   const canReview = ['owner', 'supervisor'].includes(currentUser?.org_type)
   const [rows, setRows] = useState([])
   const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [runs, setRuns] = useState([])
   const [sourcesByReq, setSourcesByReq] = useState(new Map())
   const [versionsById, setVersionsById] = useState(new Map())
@@ -71,6 +140,7 @@ export default function Requirements() {
   const [msg, setMsg] = useState('')
   const [editing, setEditing] = useState(null)    // draft copy while editing content
   const [manualItemNo, setManualItemNo] = useState('')
+  const [showTrace, setShowTrace] = useState(false)
 
   const pid = currentProject?.project_id
   const runsById = useMemo(() => new Map(runs.map((r) => [r.id, r])), [runs])
@@ -80,39 +150,53 @@ export default function Requirements() {
 
   const reload = useCallback(async () => {
     if (!isPersistedProject || !pid) return
-    const [{ data: runRows }, { data: reqRows }] = await Promise.all([
-      supabase.from('document_ingestion_runs')
-        .select('id, document_version_id, status, started_at, completed_at, model_name, prompt_version')
-        .eq('project_id', pid).order('started_at', { ascending: false }).limit(100),
-      supabase.from('requirements').select('*')
-        .eq('project_id', pid).order('created_at', { ascending: false }).limit(LIST_LIMIT),
-    ])
-    setRuns(runRows || [])
-    setRows(reqRows || [])
-    const ids = (reqRows || []).map((r) => r.id)
-    // 一則需求可有多筆出處:300 則需求的出處合計會破單次上限,要分批 + 分頁
-    const { data: sourceRows } = ids.length
-      ? await pageAllInSafe(ids, (chunk, from, to) => supabase.from('requirement_sources')
-        .select('*').in('requirement_id', chunk).order('id').range(from, to))
-      : { data: [] }
-    const byReq = new Map()
-    for (const s of sourceRows || []) {
-      if (!byReq.has(s.requirement_id)) byReq.set(s.requirement_id, [])
-      byReq.get(s.requirement_id).push(s)
+    setLoaded(false)
+    setLoadError('')
+    try {
+      const [runResult, requirementResult] = await Promise.all([
+        supabase.from('document_ingestion_runs')
+          .select('id, document_version_id, status, started_at, completed_at, model_name, prompt_version')
+          .eq('project_id', pid).order('started_at', { ascending: false }).limit(100),
+        supabase.from('requirements').select('*')
+          .eq('project_id', pid).order('created_at', { ascending: false }).limit(LIST_LIMIT),
+      ])
+      if (runResult.error) throw runResult.error
+      if (requirementResult.error) throw requirementResult.error
+      const runRows = runResult.data || []
+      const reqRows = requirementResult.data || []
+      const ids = reqRows.map((r) => r.id)
+      // 一則需求可有多筆出處:300 則需求的出處合計會破單次上限,要分批 + 分頁
+      const sourceResult = ids.length
+        ? await pageAllInSafe(ids, (chunk, from, to) => supabase.from('requirement_sources')
+          .select('*').in('requirement_id', chunk).order('id').range(from, to))
+        : { data: [], error: null }
+      if (sourceResult.error) throw sourceResult.error
+      const sourceRows = sourceResult.data || []
+      const byReq = new Map()
+      for (const s of sourceRows) {
+        if (!byReq.has(s.requirement_id)) byReq.set(s.requirement_id, [])
+        byReq.get(s.requirement_id).push(s)
+      }
+      const versionIds = [...new Set([
+        ...sourceRows.map((s) => s.document_version_id),
+        ...runRows.map((r) => r.document_version_id),
+      ].filter(Boolean))]
+      let versions = []
+      if (versionIds.length) {
+        const versionResult = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_versions')
+          .select('id, version_label, documents(title, document_type)').in('id', chunk).order('id').range(from, to))
+        if (versionResult.error) throw versionResult.error
+        versions = versionResult.data || []
+      }
+      setRuns(runRows)
+      setRows(reqRows)
+      setSourcesByReq(byReq)
+      setVersionsById(new Map(versions.map((v) => [v.id, v])))
+    } catch (error) {
+      setLoadError(`契約重點載入失敗：${error?.message || '請稍後再試'}`)
+    } finally {
+      setLoaded(true)
     }
-    setSourcesByReq(byReq)
-    const versionIds = [...new Set([
-      ...(sourceRows || []).map((s) => s.document_version_id),
-      ...(runRows || []).map((r) => r.document_version_id),
-    ].filter(Boolean))]
-    if (versionIds.length) {
-      const { data: versions } = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_versions')
-        .select('id, version_label, documents(title, document_type)').in('id', chunk).order('id').range(from, to))
-      setVersionsById(new Map((versions || []).map((v) => [v.id, v])))
-    } else {
-      setVersionsById(new Map())
-    }
-    setLoaded(true)
   }, [isPersistedProject, pid])
 
   useEffect(() => { reload() }, [reload])
@@ -147,7 +231,22 @@ export default function Requirements() {
     return sortForReviewQueue(list)
   }, [rows, filters, currentRunIds, verificationByReq])
 
+  const highlights = useMemo(
+    () => buildRequirementHighlights(rows, currentRunIds, verificationByReq),
+    [rows, currentRunIds, verificationByReq],
+  )
+  const shownApproved = highlights.approved.slice(0, HIGHLIGHT_LIMIT)
+
   const selected = rows.find((r) => r.id === selectedId) || null
+  const selectedHighlight = useMemo(() => (
+    [...highlights.approved, ...highlights.suggestions]
+      .find((group) => group.requirement.id === selectedId) || null
+  ), [highlights, selectedId])
+  const selectedSources = useMemo(() => {
+    if (!selected) return []
+    const selectedRows = selectedHighlight?.requirements || [selected]
+    return selectedRows.flatMap((r) => sourcesByReq.get(r.id) || [])
+  }, [selected, selectedHighlight, sourcesByReq])
   const wiById = useMemo(() => {
     const map = new Map()
     for (const it of workItems?.items || []) if (it.id) map.set(it.id, it)
@@ -155,17 +254,45 @@ export default function Requirements() {
   }, [workItems])
 
   // 生命週期決定:唯一路徑是 review_requirement RPC;成功後以伺服器回傳列刷新。
-  const review = async (decision, confirmText) => {
-    if (!(await appConfirm({ title: confirmText, body: '此為契約層級決定,將由伺服器記錄審查人與時間。', confirmLabel: confirmText }))) return
+  const review = async (decision, confirmText, requirementId = selectedId, body = '此為契約層級決定,將由伺服器記錄審查人與時間。') => {
+    if (!(await appConfirm({ title: confirmText, body, confirmLabel: confirmText }))) return
     setBusy(decision)
     const { data, error } = await supabase.rpc('review_requirement', {
-      p_requirement_id: selectedId, p_decision: decision,
+      p_requirement_id: requirementId, p_decision: decision,
     })
     setBusy('')
     if (error) { setMsg(`審查失敗:${error.message || ''}`); return }
     setRows((rs) => rs.map((r) => (r.id === data.id ? data : r)))
     if (decision === 'approve' && data.requirement_type === 'deadline') await reloadObligations()
     setMsg('')
+  }
+
+  const selectHighlight = (group) => select(group.requirement.id)
+  const quickApproveDeadline = (group) => {
+    const requirementId = group.requirement.id
+    select(requirementId)
+    return review(
+      'approve',
+      '核定並加入期限追蹤',
+      requirementId,
+      '這會把本項核定為契約規則，並在同一筆伺服器交易中加入期限追蹤。',
+    )
+  }
+  const openApprovedTrace = () => {
+    setFilters({ scope: 'all', status: 'approved' })
+    setShowTrace(true)
+  }
+  const toggleTrace = () => {
+    if (showTrace) {
+      // 追溯區可選到 rejected／superseded／舊 run；收合時必須連詳情一起關閉，
+      // 否則歷史審查資料會殘留在一般契約重點畫面，破壞 W8-3B 的分層。
+      setSelectedId(null)
+      setEditing(null)
+      setLinks([])
+      setArtifactLinks([])
+      setMsg('')
+    }
+    setShowTrace((open) => !open)
   }
 
   const saveEdit = async () => {
@@ -212,8 +339,27 @@ export default function Requirements() {
   if (!isPersistedProject) {
     return (
       <div className="space-y-5">
-        <PageHeader title="履約需求" tagline="AI 建議 → 人工審查" subtitle="AI 擷取的履約需求建議在此逐項審查;核定後才成為專案的契約性規則" />
-        <Card title="履約需求審查"><Empty>需真實專案。於「專案文件」頁一次上傳專案文件後,建議會出現在這裡待審查。</Empty></Card>
+        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+        <Card title="契約重點"><Empty>需真實專案。於「專案文件」上傳契約或規範後，AI 整理結果會顯示在這裡。</Empty></Card>
+      </div>
+    )
+  }
+
+  if (!loaded) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+        <Card><Empty>正在載入契約重點…</Empty></Card>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+        <ErrorBanner msg={loadError} />
+        <Button className="w-full sm:w-auto" onClick={reload}><RefreshCw size={14} aria-hidden /> 重新載入</Button>
       </div>
     )
   }
@@ -223,8 +369,8 @@ export default function Requirements() {
   if (loaded && !rows.length) {
     return (
       <div className="space-y-5">
-        <PageHeader title="履約需求" tagline="AI 建議 → 人工審查" subtitle="AI 擷取的履約需求建議在此逐項審查;核定後才成為專案的契約性規則" />
-        <Card title="履約需求審查">
+        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+        <Card title="契約重點">
           {intro.mode === 'done-empty'
             ? <Empty>{intro.emptyText}</Empty>
             : (
@@ -240,76 +386,101 @@ export default function Requirements() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="履約需求" tagline="AI 建議 → 人工審查" subtitle="逐項檢視需求內容、出處引註與工項對應;核定後才成為專案的契約性規則" />
+      <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
 
       {/* W8-3A(D-014):與首頁初始化清單第 3 步同一語意——AI 整理完成即算完成,
           這裡的待審數量不是初始化門檻,不必為了開啟正式模式把它清空。 */}
       <p className="text-xs text-[var(--text-3)]">{intro.note}</p>
 
-      <Card title="待審查清單" bodyClass="p-0" action={
-        <div className="flex flex-wrap gap-2 items-center text-xs">
-          <Select value={filters.scope} onChange={(e) => setFilters((f) => ({ ...f, scope: e.target.value, ingestion_run_id: '' }))} className="text-xs">
-            <option value="current">目前範圍(最新成功擷取+人工)</option>
-            <option value="all">全部(含歷史 run)</option>
-          </Select>
-          <Select value={filters.status || ''} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="text-xs">
-            <option value="">全部狀態</option>
-            {Object.entries(REQUIREMENT_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </Select>
-          <Select value={filters.requirement_type || ''} onChange={(e) => setFilters((f) => ({ ...f, requirement_type: e.target.value }))} className="text-xs">
-            <option value="">全部類型</option>
-            {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </Select>
-          <Select value={filters.responsible_party_type || ''} onChange={(e) => setFilters((f) => ({ ...f, responsible_party_type: e.target.value }))} className="text-xs">
-            <option value="">全部負責方</option>
-            {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </Select>
-          <Select value={filters.verification || ''} onChange={(e) => setFilters((f) => ({ ...f, verification: e.target.value }))} className="text-xs">
-            <option value="">引註不限</option>
-            <option value="verified">來源已核對</option>
-            <option value="unverified">來源待人工確認</option>
-            <option value="none">無引註</option>
-          </Select>
-          <Select value={filters.ingestion_run_id || ''} onChange={(e) => setFilters((f) => ({ ...f, ingestion_run_id: e.target.value, ...(e.target.value ? { scope: 'all' } : {}) }))} className="text-xs">
-            <option value="">全部擷取 run</option>
-            {runs.map((r) => (
-              <option key={r.id} value={r.id}>
-                {fmtTime(r.started_at)}·{versionsById.get(r.document_version_id)?.documents?.title || '文件'}·{r.status}
-              </option>
-            ))}
-          </Select>
+      <Card title="已生效的契約重點" bodyClass="p-0" action={highlights.approved.length > HIGHLIGHT_LIMIT && (
+        <Button variant="ghost" size="sm" onClick={openApprovedTrace}>查看全部已生效內容</Button>
+      )}>
+        <HighlightRows groups={shownApproved} kind="approved" canReview={canReview}
+          verificationByReq={verificationByReq} onSelect={selectHighlight} onQuickApprove={quickApproveDeadline} />
+      </Card>
+
+      <Card title="值得留意的整理結果" bodyClass="p-0">
+        <HighlightRows groups={highlights.suggestions.slice(0, HIGHLIGHT_LIMIT)} kind="suggestion"
+          canReview={canReview} verificationByReq={verificationByReq}
+          onSelect={selectHighlight} onQuickApprove={quickApproveDeadline} />
+        <div className="border-t border-[var(--border)] px-4 sm:px-5 py-3 text-xs text-[var(--text-3)]">
+          其餘擷取結果已保留在追溯區，不必逐筆清空。
         </div>
-      }>
-        {visible.length === 0 ? (
-          <div className="p-5"><Empty>目前範圍內沒有履約需求。於「契約管制」頁執行 AI 履約需求擷取,或調整上方篩選。</Empty></div>
-        ) : (
-          <div className="divide-y divide-[var(--border)] max-h-[420px] overflow-y-auto">
-            {visible.map((r) => (
-              <button key={r.id} onClick={() => select(r.id)}
-                className={`w-full text-left px-4 py-2.5 hover:bg-[var(--surface-2)] ${r.id === selectedId ? 'bg-[var(--surface-2)]' : ''}`}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge color={STATUS_BADGE[r.status] || 'slate'}>{REQUIREMENT_STATUS_LABELS[r.status] || r.status}</Badge>
-                  <span className="text-xs text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[r.requirement_type] || r.requirement_type}</span>
-                  {r.responsible_party_type && <span className="text-xs text-[var(--text-3)]">{RESPONSIBLE_LABELS[r.responsible_party_type]}</span>}
-                  <span className="text-xs text-[var(--text-3)]">{ORIGIN_LABELS[r.origin] || r.origin}</span>
-                  {verificationByReq.get(r.id) === 'verified' && <span className="text-xs text-[var(--green-text)]">來源已核對</span>}
-                  {verificationByReq.get(r.id) === 'unverified' && <span className="text-xs text-[var(--amber-text)]">來源待人工確認</span>}
-                </div>
-                <div className="text-sm font-medium text-[var(--text)] mt-0.5 truncate">{r.title}</div>
-              </button>
-            ))}
+      </Card>
+
+      <Card title="查看全部擷取結果" bodyClass="p-0" action={(
+        <Button variant="ghost" size="sm" onClick={toggleTrace}>
+          {showTrace ? '收合追溯資料' : '展開追溯資料'}
+        </Button>
+      )}>
+        {!showTrace ? (
+          <p className="px-4 sm:px-5 py-4 text-sm text-[var(--text-2)]">這裡保留原始 AI 擷取、歷史 run 與專業審查資料，不是必須清空的待辦清單。</p>
+        ) : (<>
+          {/* F2:六個篩選在手機補 44px 觸控高度(max-sm:min-h-11);共用 Select 基底不動,全站統一留 W8-5 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-4 border-b border-[var(--border)] bg-[var(--surface-2)]">
+            <Select value={filters.scope} onChange={(e) => setFilters((f) => ({ ...f, scope: e.target.value, ingestion_run_id: '' }))} className="text-xs max-sm:min-h-11">
+              <option value="current">目前範圍（最新成功擷取＋人工）</option>
+              <option value="all">全部（含歷史 run）</option>
+            </Select>
+            <Select value={filters.status || ''} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="text-xs max-sm:min-h-11">
+              <option value="">全部狀態</option>
+              {Object.entries(REQUIREMENT_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </Select>
+            <Select value={filters.requirement_type || ''} onChange={(e) => setFilters((f) => ({ ...f, requirement_type: e.target.value }))} className="text-xs max-sm:min-h-11">
+              <option value="">全部類型</option>
+              {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </Select>
+            <Select value={filters.responsible_party_type || ''} onChange={(e) => setFilters((f) => ({ ...f, responsible_party_type: e.target.value }))} className="text-xs max-sm:min-h-11">
+              <option value="">全部負責方</option>
+              {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </Select>
+            <Select value={filters.verification || ''} onChange={(e) => setFilters((f) => ({ ...f, verification: e.target.value }))} className="text-xs max-sm:min-h-11">
+              <option value="">引註不限</option>
+              <option value="verified">來源已核對</option>
+              <option value="unverified">來源待核對</option>
+              <option value="none">無引註</option>
+            </Select>
+            <Select value={filters.ingestion_run_id || ''} onChange={(e) => setFilters((f) => ({ ...f, ingestion_run_id: e.target.value, ...(e.target.value ? { scope: 'all' } : {}) }))} className="text-xs max-sm:min-h-11">
+              <option value="">全部擷取 run</option>
+              {runs.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {fmtTime(r.started_at)}·{versionsById.get(r.document_version_id)?.documents?.title || '文件'}·{r.status}
+                </option>
+              ))}
+            </Select>
           </div>
-        )}
+          {visible.length === 0 ? (
+            <div className="p-5"><Empty>目前篩選範圍內沒有擷取結果。</Empty></div>
+          ) : (
+            <div className="divide-y divide-[var(--border)] max-h-[420px] overflow-y-auto">
+              {visible.map((r) => (
+                <button key={r.id} onClick={() => select(r.id)}
+                  className={`w-full text-left px-4 py-2.5 hover:bg-[var(--surface-2)] ${r.id === selectedId ? 'bg-[var(--surface-2)]' : ''}`}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge color={STATUS_BADGE[r.status] || 'slate'}>{REQUIREMENT_STATUS_LABELS[r.status] || r.status}</Badge>
+                    <span className="text-xs text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[r.requirement_type] || r.requirement_type}</span>
+                    {r.responsible_party_type && <span className="text-xs text-[var(--text-3)]">{RESPONSIBLE_LABELS[r.responsible_party_type]}</span>}
+                    <span className="text-xs text-[var(--text-3)]">{ORIGIN_LABELS[r.origin] || r.origin}</span>
+                    {verificationByReq.get(r.id) === 'verified' && <span className="text-xs text-[var(--green-text)]">來源已核對</span>}
+                    {verificationByReq.get(r.id) === 'unverified' && <span className="text-xs text-[var(--amber-text)]">來源待核對</span>}
+                  </div>
+                  {/* 追溯清單靠標題辨識是哪一條,375px 用 truncate 會把整句切掉;改成最多兩行 */}
+                  <div className="text-sm font-medium text-[var(--text)] mt-0.5 line-clamp-2">{r.title}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>)}
       </Card>
 
       {selected && (
-        <Card title="需求審查" action={canReview && (
-          <div className="flex gap-2">
+        <Card title="契約內容與來源" action={canReview && (
+          <div className="flex flex-wrap justify-start sm:justify-end gap-2">
             {EDITABLE_STATUSES.includes(selected.status) && !editing && (
               <Button variant="ghost" size="sm" onClick={() => setEditing({ ...selected })}><Pencil size={14} aria-hidden /> 修正內容</Button>
             )}
             {EDITABLE_STATUSES.includes(selected.status) && (<>
-              <Button variant="success" size="sm" disabled={!!busy} onClick={() => review('approve', '核定')}><CheckCircle2 size={14} aria-hidden /> 核定</Button>
+              <Button variant="success" size="sm" disabled={!!busy} onClick={() => review('approve', '核定為契約規則')}><CheckCircle2 size={14} aria-hidden /> 核定為契約規則</Button>
               <Button variant="danger" size="sm" disabled={!!busy} onClick={() => review('reject', '駁回')}><XCircle size={14} aria-hidden /> 駁回</Button>
             </>)}
             {selected.status === 'approved' && (
@@ -331,7 +502,7 @@ export default function Requirements() {
                   <option value="">負責方未定</option>
                   {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </Select>
-                <Input value={editing.lifecycle_phase || ''} onChange={(e) => setEditing((d) => ({ ...d, lifecycle_phase: e.target.value }))} placeholder="階段(開工前/施工中/完工/保固)" className="w-56" />
+                <Input value={editing.lifecycle_phase || ''} onChange={(e) => setEditing((d) => ({ ...d, lifecycle_phase: e.target.value }))} placeholder="階段(開工前/施工中/完工/保固)" className="w-full sm:w-56 min-w-0" />
               </div>
               <Input value={editing.acceptance_criteria || ''} onChange={(e) => setEditing((d) => ({ ...d, acceptance_criteria: e.target.value }))} placeholder="允收標準" />
               <Input value={editing.evidence_requirement || ''} onChange={(e) => setEditing((d) => ({ ...d, evidence_requirement: e.target.value }))} placeholder="應留存佐證" />
@@ -351,7 +522,6 @@ export default function Requirements() {
                 {formatRequirementRule(selected) && <span>時點:{formatRequirementRule(selected)}</span>}
                 {selected.acceptance_criteria && <span>允收:{selected.acceptance_criteria}</span>}
                 {selected.evidence_requirement && <span>佐證:{selected.evidence_requirement}</span>}
-                {selected.confidence != null && <span>AI 信心:{Math.round(selected.confidence * 100)}%</span>}
                 <span>來源:{ORIGIN_LABELS[selected.origin] || selected.origin}</span>
               </div>
               {selected.reviewed_at && (
@@ -375,9 +545,9 @@ export default function Requirements() {
 
           <div className="mb-4">
             <div className="text-sm font-medium text-[var(--text)] mb-1.5 flex items-center gap-1"><FileText size={14} aria-hidden /> 出處引註</div>
-            {(sourcesByReq.get(selected.id) || []).length === 0 ? (
+            {selectedSources.length === 0 ? (
               <p className="text-xs text-[var(--text-3)]">無引註。</p>
-            ) : (sourcesByReq.get(selected.id) || []).map((s) => {
+            ) : selectedSources.map((s) => {
               const version = s.document_version_id ? versionsById.get(s.document_version_id) : null
               return (
                 <div key={s.id} className={`border rounded-lg px-3 py-2 mb-2 text-xs ${s.source_verified ? 'border-[var(--green-text)]/40 bg-[var(--green-tint)]' : 'border-[var(--amber-text)]/40 bg-[var(--amber-tint)]'}`}>
@@ -400,9 +570,9 @@ export default function Requirements() {
             {links.map((l) => {
               const item = wiById.get(l.work_item_id)
               return (
-                <div key={l.work_item_id} className="flex items-center gap-2 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1.5">
-                  <span className="font-medium text-[var(--text)]">{item?.item_no || '—'}</span>
-                  <span className="flex-1 truncate text-[var(--text-2)]">{item?.description || l.work_item_id}</span>
+                <div key={l.work_item_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1.5">
+                  <span className="font-medium text-[var(--text)] shrink-0">{item?.item_no || '—'}</span>
+                  <span className="flex-1 min-w-[8rem] truncate text-[var(--text-2)]">{item?.description || l.work_item_id}</span>
                   {l.confidence != null && <span className="text-[var(--text-3)]">AI {Math.round(l.confidence * 100)}%</span>}
                   <Badge color={l.review_status === 'approved' ? 'green' : l.review_status === 'rejected' ? 'red' : 'blue'}>
                     {WORK_ITEM_LINK_STATE_LABELS[l.review_status] || l.review_status}
@@ -415,9 +585,10 @@ export default function Requirements() {
               )
             })}
             {canReview && (
-              <div className="flex gap-2 mt-2">
-                <Input value={manualItemNo} onChange={(e) => setManualItemNo(e.target.value)} placeholder="輸入工項編號(如 壹.一.6.3.28)手動連結" className="w-72 text-xs" />
-                <Button variant="ghost" size="sm" disabled={!manualItemNo.trim()} onClick={addManualLink}>新增連結</Button>
+              // 手機直排讓輸入與新增按鈕保有可讀寬度與觸控目標,桌機才並排
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                <Input value={manualItemNo} onChange={(e) => setManualItemNo(e.target.value)} placeholder="輸入工項編號(如 壹.一.6.3.28)手動連結" className="w-full sm:w-72 min-w-0 text-xs" />
+                <Button variant="ghost" size="sm" className="w-full sm:w-auto" disabled={!manualItemNo.trim()} onClick={addManualLink}>新增連結</Button>
               </div>
             )}
           </div>
@@ -425,24 +596,21 @@ export default function Requirements() {
           <div>
             <div className="text-sm font-medium text-[var(--text)] mb-1.5 flex items-center gap-1"><Link2 size={14} aria-hidden /> 已連結流程項目</div>
             {selected.status !== 'approved' && artifactLinks.length === 0 ? (
-              <p className="text-xs text-[var(--text-3)]">需求核定後,才能建立對應的流程項目連結(檢驗停留點/檢查表/送審等)。</p>
+              <p className="text-xs text-[var(--text-3)]">未核定內容不會建立或連結任何活躍流程。</p>
             ) : artifactLinks.length === 0 ? (
-              <p className="text-xs text-[var(--text-3)]">尚未建立流程項目。</p>
+              <p className="text-xs text-[var(--text-3)]">尚未連結流程項目；本頁不會自動建立送審、查驗或試驗流程。</p>
             ) : artifactLinks.map((l) => (
-              <div key={l.id} className="flex items-center gap-2 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1.5">
+              <div key={l.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1.5">
                 <Badge color="slate">{ARTIFACT_TYPE_LABELS[l.artifact_type] || l.artifact_type}</Badge>
-                <span className="flex-1 truncate text-[var(--text-3)]">{l.artifact_id}</span>
-                <span className="text-[var(--text-3)]">{GENERATION_TYPE_LABELS[l.generation_type] || l.generation_type}</span>
-                <span className="text-[var(--text-3)]">{fmtTime(l.created_at)}</span>
+                <span className="flex-1 min-w-[8rem] truncate text-[var(--text-3)]">{l.artifact_id}</span>
+                <span className="text-[var(--text-3)] shrink-0">{GENERATION_TYPE_LABELS[l.generation_type] || l.generation_type}</span>
+                <span className="text-[var(--text-3)] shrink-0">{fmtTime(l.created_at)}</span>
               </div>
             ))}
           </div>
         </Card>
       )}
 
-      {!selected && (
-        <Card title="需求審查"><Empty><span className="inline-flex items-center gap-1"><ScrollText size={14} aria-hidden /> 從上方清單選擇一項履約需求開始審查。</span></Empty></Card>
-      )}
     </div>
   )
 }

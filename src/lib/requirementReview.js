@@ -39,6 +39,8 @@ export const GENERATION_TYPE_LABELS = Object.freeze({
   manual: '人工', ai_draft: 'AI 草稿', migration: '轉入',
 })
 
+export const HIGHLIGHT_LIMIT = 6
+
 // The current review scope for AI suggestions: the latest COMPLETED run per
 // document version. Failed / processing / pending runs never define scope,
 // and older completed runs stay inspectable through the explicit run filter.
@@ -134,4 +136,107 @@ export function formatRequirementRule(requirement) {
     return `${base}${config.offset_dir === 'before' ? '前' : '後'} ${config.offset_days} 日內`
   }
   return base
+}
+
+const HIGHLIGHT_TYPE_ORDER = Object.freeze({
+  deadline: 0, submittal: 1, inspection: 2, test: 2, checklist: 3,
+  evidence: 4, photo: 4, report: 4, other: 5,
+})
+const VERIFICATION_ORDER = Object.freeze({ verified: 0, unverified: 1, none: 2 })
+
+const normalizedText = (value) => String(value ?? '').trim().replace(/\s+/g, ' ')
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value ?? null)
+}
+
+// W8-3B 只合併完全相同的呈現內容。這是 UI 去重 key，不更改 DB 列，
+// 也不做模糊／語意合併，避免把不同契約條款誤當成同一件事。
+export function requirementHighlightKey(requirement) {
+  const r = requirement || {}
+  return [
+    r.requirement_type, r.responsible_party_type, r.lifecycle_phase,
+    r.title, r.description, r.trigger_type, stableJson(r.trigger_config),
+    r.frequency_type, stableJson(r.frequency_config),
+    r.acceptance_criteria, r.evidence_requirement,
+  ].map(normalizedText).join('\u001f')
+}
+
+function compareHighlightRows(a, b, verificationByRequirement) {
+  const typeOrder = (HIGHLIGHT_TYPE_ORDER[a.requirement_type] ?? 9)
+    - (HIGHLIGHT_TYPE_ORDER[b.requirement_type] ?? 9)
+  if (typeOrder !== 0) return typeOrder
+  const verificationOrder = (VERIFICATION_ORDER[verificationByRequirement.get(a.id) || 'none'] ?? 9)
+    - (VERIFICATION_ORDER[verificationByRequirement.get(b.id) || 'none'] ?? 9)
+  if (verificationOrder !== 0) return verificationOrder
+  const createdA = Number.isNaN(new Date(a.created_at).getTime()) ? 0 : new Date(a.created_at).getTime()
+  const createdB = Number.isNaN(new Date(b.created_at).getTime()) ? 0 : new Date(b.created_at).getTime()
+  if (createdA !== createdB) return createdA - createdB
+  return String(a.id).localeCompare(String(b.id))
+}
+
+function groupHighlights(rows, verificationByRequirement) {
+  const grouped = new Map()
+  for (const requirement of rows || []) {
+    const key = requirementHighlightKey(requirement)
+    if (!grouped.has(key)) grouped.set(key, [])
+    grouped.get(key).push(requirement)
+  }
+  return [...grouped.entries()].map(([key, requirements]) => {
+    const sorted = [...requirements].sort((a, b) => compareHighlightRows(a, b, verificationByRequirement))
+    return { key, requirement: sorted[0], requirements: sorted }
+  }).sort((a, b) => compareHighlightRows(a.requirement, b.requirement, verificationByRequirement))
+}
+
+// 已核定契約事實不受最新 run 限制；未核定 AI 則只取每個文件版本的
+// 最新成功 run。rejected/superseded 只存在追溯清單，不進一般契約重點。
+export function buildRequirementHighlights(
+  requirements,
+  currentRunIds,
+  verificationByRequirement = new Map(),
+) {
+  const approved = groupHighlights(
+    (requirements || []).filter((r) => r.status === 'approved'),
+    verificationByRequirement,
+  )
+  const approvedKeys = new Set(approved.map((group) => group.key))
+  const suggestions = groupHighlights(
+    (requirements || []).filter((r) => (
+      ['draft_ai', 'needs_review'].includes(r.status)
+      && inDefaultReviewScope(r, currentRunIds)
+      && !approvedKeys.has(requirementHighlightKey(r))
+    )),
+    verificationByRequirement,
+  )
+  return { approved, suggestions }
+}
+
+function hasTrackableDeadlineRule(requirement) {
+  if (requirement?.requirement_type !== 'deadline') return false
+  if (requirement.frequency_type === 'monthly') {
+    const day = Number(requirement.frequency_config?.day)
+    return Number.isInteger(day) && day >= 1 && day <= 31
+  }
+  if (requirement.trigger_type === 'fixed') {
+    const date = requirement.trigger_config?.fixed_date
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return false
+    const [year, month, day] = date.split('-').map(Number)
+    const parsed = new Date(year, month - 1, day)
+    return parsed.getFullYear() === year
+      && parsed.getMonth() === month - 1
+      && parsed.getDate() === day
+  }
+  return ['award', 'notice', 'commencement', 'completion'].includes(requirement.trigger_type)
+}
+
+// 這個捷徑會真正建立 deadline obligation：只有契約審查角色、可追蹤規則，
+// 且 AI 來源已由系統核對時才可出現。人工／轉入列不要求 AI citation。
+export function canQuickApproveDeadline(requirement, verification, canReview) {
+  if (!canReview || !['draft_ai', 'needs_review'].includes(requirement?.status)) return false
+  if (!hasTrackableDeadlineRule(requirement)) return false
+  return requirement.origin !== 'ai' || verification === 'verified'
 }
