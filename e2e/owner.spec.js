@@ -12,6 +12,8 @@ test.describe('機關', () => {
     await loginAs(page, 'owner')
     await expect(page.getByRole('heading', { name: '跨案總覽' })).toBeVisible()
     await expect(page.getByText('現在輪到我')).toHaveCount(0) // portfolio 無待辦段(在今日待辦)
+    // 落地第一眼要看到跨案例外數字帶(W8-4C C3),不是只有卡片牆
+    await expect(page.getByText(/未結缺失/).first()).toBeVisible()
     // 已登入後重新開根路徑仍依角色落地，不被舊的固定 /dashboard 導向帶走。
     await page.goto('/')
     await expect(page).toHaveURL(/#\/portfolio/)
@@ -20,6 +22,8 @@ test.describe('機關', () => {
   test('核准變更設計 → 變更後契約金額跨頁一致(B-02)', async ({ page }) => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/change-orders')
+    // 待核定的變更排在最前面,機關進來第一眼就是要核的東西(W8-4C C1)
+    await expect(page.getByRole('heading', { name: /待核定/ })).toBeVisible()
     // CO-002 卡片上的狀態下拉(機關 can.ratify)
     const co2Card = page.locator('h3', { hasText: 'CO-002' })
       .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')

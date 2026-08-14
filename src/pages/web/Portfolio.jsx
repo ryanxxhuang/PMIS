@@ -13,6 +13,23 @@ import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 
+// 跨案例外彙總:機關承辦進來第一眼要看的是「哪裡出事」,不是逐卡自己加總。
+// 純函式抽出來是為了能單測——卡片形狀有三種來源(本案即時計算/demo 靜態/RPC),
+// 欄位可能缺,少一張卡就會讓整條摘要帶算錯,所以一律當可選欄位處理。
+export function portfolioExceptions(cards = []) {
+  const list = (cards || []).filter(Boolean)
+  const sum = (pick) => list.reduce((acc, c) => acc + (Number(pick(c)) || 0), 0)
+  return {
+    projects: list.length,
+    openDefects: sum((c) => c.openDefects),
+    pendingInspections: sum((c) => c.pendingInspections),
+    pendingCOs: sum((c) => c.pendingCOs),
+    // 沒進驗收程序的案子 acceptance 是 null;已結案(finished)不算「驗收中」
+    acceptanceActive: list.filter((c) => c.acceptance && !c.acceptance.finished).length,
+    acceptanceOverdue: list.filter((c) => c.acceptance?.overdue).length,
+  }
+}
+
 export default function Portfolio() {
   const {
     demoMode, isSupabaseConfigured, projects, currentProject, switchProject, loadPortfolio,
@@ -95,6 +112,7 @@ export default function Portfolio() {
         title="跨案總覽" tagline="Portfolio"
         subtitle="手上所有專案的進度、待辦與驗收階段,一頁比較;點卡片切換到該案。"
       />
+      {cards.length > 0 && <ExceptionBand ex={portfolioExceptions(cards)} />}
       {cards.length === 0 ? (
         <Card><Empty>尚無專案。</Empty></Card>
       ) : (
@@ -107,6 +125,35 @@ export default function Portfolio() {
           B 區 / C 區為示範資料——真實帳號會列出你被加入的所有專案(彙總數字由伺服器一次計算)。
         </p>
       )}
+    </div>
+  )
+}
+
+// 安靜的數字帶(刻意不做成 Card):它是卡片 grid 的索引,不該和專案卡搶視覺層級。
+// 值為 0 的項不渲染——0 是好消息,列出來只會稀釋真正要看的那幾個數字。
+function ExceptionBand({ ex }) {
+  const items = [
+    { key: 'defects', icon: AlertTriangle, text: `未結缺失 ${ex.openDefects}`, v: ex.openDefects, warn: true },
+    { key: 'insp', icon: ShieldCheck, text: `待查驗 ${ex.pendingInspections}`, v: ex.pendingInspections, warn: true },
+    { key: 'co', icon: Wrench, text: `待核定變更 ${ex.pendingCOs}`, v: ex.pendingCOs, warn: true },
+    { key: 'acc', icon: BadgeCheck, text: `驗收中 ${ex.acceptanceActive} 案`, v: ex.acceptanceActive },
+    { key: 'accOver', icon: BadgeCheck, text: `驗收逾期 ${ex.acceptanceOverdue} 案`, v: ex.acceptanceOverdue, red: true },
+  ].filter((i) => i.v > 0)
+
+  return (
+    <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-[var(--text-2)]">
+      <span className="num text-[var(--text-3)]">{ex.projects} 案</span>
+      {items.length === 0 ? (
+        <span className="text-[var(--text-3)]">各案均無未結例外</span>
+      ) : items.map((i) => {
+        const Icon = i.icon
+        return (
+          <span key={i.key} className={`flex items-center gap-1.5 ${i.red ? 'text-[var(--red-text)] font-medium' : ''}`}>
+            <Icon size={14} className={i.red ? 'text-[var(--red-text)]' : i.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-3)]'} aria-hidden />
+            {i.text}
+          </span>
+        )
+      })}
     </div>
   )
 }
