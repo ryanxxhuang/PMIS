@@ -4,22 +4,77 @@ import { Printer, Zap } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
-import { judgeChecklist, judgeItem, diffChecklistResults } from '../../lib/qc.js'
+import { judgeChecklist, judgeItem, diffChecklistResults, sampleAlerts } from '../../lib/qc.js'
+import { collaborationItems } from '../../lib/ballInCourt.js'
 import DefectTracker, { WorkItemPicker } from '../../components/DefectTracker.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
 const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 
+// ── W8-4A 工作佇列「現在要處理」────────────────────────────────────────
+// 佇列超過上限只顯示前幾筆＋「還有 N 項」:佇列是入口不是清單,完整內容在各分段。
+export const QUALITY_QUEUE_LIMIT = 6
+
+// 到期句沿用 W8-2 今日待辦的詞彙(todayTasks.js dueText):同一種期限,全站說同一句話
+const dueText = (days, due) => (days < 0
+  ? `逾期 ${-days} 天（到期 ${due}）`
+  : days === 0 ? `今天到期（${due}）` : `還有 ${days} 天（到期 ${due}）`)
+
+// collaborationItems 的 tag → 本頁分段。走白名單:未列的 tag(估驗/送審/工安缺失…)
+// 一律不進佇列——本頁只管品質 domain,佇列點了卻在下方找不到的項目不准出現。
+const QUEUE_SEGMENT_OF = { 查驗: '查驗', 缺失: '缺失', 觀察: '觀察' }
+
+// 工作佇列純函式:只組合既有引擎(collaborationItems + sampleAlerts),不自創狀態規則。
+// 結構上只收 { inspections, defects, observations, testSamples } 四種輸入——
+// AI 草稿(agent_actions)與未核定 Requirement 根本進不來,是紅線 1 的結構保證,
+// 不是靠呼叫端自律。today 由呼叫端注入(頁面 render 時的當天),純函式不讀時鐘,
+// 測試才能用固定日期斷言逾期天數。
+export function buildQualityQueue(org, data = {}, today) {
+  const { inspections = [], observations = [], testSamples = [] } = data
+  // 工安缺失屬 /safety;本頁 DefectTracker 只列 quality domain,佇列必須同一份範圍
+  const defects = (data.defects || []).filter((d) => d.domain !== 'safety')
+  const out = []
+  collaborationItems({ defects, inspections, observations }).forEach((it, i) => {
+    if (it.who !== org) return
+    const segment = QUEUE_SEGMENT_OF[it.tag]
+    if (!segment) return
+    out.push({ key: `${it.tag}:${it.id ?? `${it.title}#${i}`}`, tag: it.tag, title: it.title, meta: it.meta, segment })
+  })
+  // 試驗到期只給廠商:填試驗值的欄位在試驗分段吃 can.edit(=廠商),
+  // 塞給監造/機關只會是點了做不到的假待辦
+  if (org === 'contractor') {
+    for (const a of sampleAlerts(testSamples, today)) {
+      out.push({
+        key: `試驗:${a.sample.id ?? a.sample.sample_no}:${a.label}`,
+        tag: '試驗',
+        title: `${a.sample.sample_no || ''} ${a.sample.test_item || ''} ${a.label}`.trim(),
+        meta: dueText(a.days, a.due),
+        segment: '試驗',
+      })
+    }
+  }
+  return out
+}
+
+const QUEUE_TAG_COLOR = { 查驗: 'amber', 缺失: 'red', 觀察: 'slate', 試驗: 'blue' }
+const SEGMENTS = ['查驗', '缺失', '觀察', '檢查表', '試驗']
+
 export default function Quality() {
   const { project, workItems, inspections, createInspection, recordInspectionResult, deleteInspection,
     checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
+    defects, currentUser,
     isSupabaseConfigured, currentProject, workItemsSource, can, resolveMarkup } = useStore()
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 判定寫入失敗必須讓使用者看到(失敗=UI 不變)
+  // 預設分段固定「查驗」:三角色一致,監造判定動線不必先切段
+  const [segment, setSegment] = useState('查驗')
+  // 判定成功的原地回饋(沿用各區塊 savedMsg 模式,不進全域狀態):
+  // 判不合格開的缺失在「缺失」分段,不給入口使用者會以為判定沒發生
+  const [resultMsg, setResultMsg] = useState(null) // null | { pass: boolean }
 
   const leaves = useMemo(() => {
     if (!workItems) return []
@@ -53,20 +108,77 @@ export default function Quality() {
     setErrMsg(''); setBusy(true)
     const { error } = await recordInspectionResult(insp, pass, note)
     setBusy(false)
-    if (error) setErrMsg(`查驗判定未寫入：${error.message}`)
+    if (error) { setErrMsg(`查驗判定未寫入：${error.message}`); return }
+    setResultMsg({ pass })
   }
   const openInsp = inspections.filter((i) => i.status === '待查驗').length
+
+  // 「今天」每次 render 取(B-11:工地平板整週不關分頁,模組層常數會停在開頁那天)。
+  // 傳日曆日字串給期限引擎:含時間的「現在」會把 8 個日曆日壓成 7(W8-2 踩過的坑)。
+  const today = todayIso()
+  const myOrg = currentUser?.org_type || 'contractor'
+  const queue = buildQualityQueue(myOrg, { inspections, defects, observations, testSamples }, today)
+  // 分段計數:各分段「還有幾件事沒完」,與區塊內既有的計數口徑一致
+  const openDefects = defects.filter((d) => (d.domain || 'quality') === 'quality' && d.status !== '已結案').length
+  const openObs = observations.filter((o) => o.status === '待處理').length
+  const segCount = { 查驗: openInsp, 缺失: openDefects, 觀察: openObs, 檢查表: null, 試驗: sampleAlerts(testSamples, today).length }
 
   return (
     <div className="space-y-5">
       <div>
-        <PageHeader title="品質查驗" tagline="三級品管" subtitle="查驗申請 → 監造查驗 → 不合格開缺失 → 改善複查結案" />
+        <PageHeader title="品質查驗" tagline="三級品管" subtitle="查驗、缺失、觀察、檢查表與試驗——先看「現在要處理」，再進分段完成" />
       </div>
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
+      {/* 工作佇列:輪到登入角色處理的品質事項,點一筆切到對應分段(不捲頁) */}
+      <Card title="現在要處理">
+        {queue.length === 0 ? <Empty>目前沒有輪到你處理的品質事項</Empty> : (
+          <div className="space-y-1">
+            {queue.slice(0, QUALITY_QUEUE_LIMIT).map((q) => (
+              <button key={q.key} onClick={() => setSegment(q.segment)}
+                className="w-full flex items-center gap-3 text-left text-sm rounded-lg px-2 py-1.5 hover:bg-[var(--surface-2)] pressable">
+                <Badge color={QUEUE_TAG_COLOR[q.tag] || 'slate'}>{q.tag}</Badge>
+                <span className="min-w-0 flex-1 truncate text-[var(--text)]">{q.title}</span>
+                <span className="text-xs text-[var(--text-3)] shrink-0">{q.meta}</span>
+              </button>
+            ))}
+            {queue.length > QUALITY_QUEUE_LIMIT && (
+              <p className="text-xs text-[var(--text-3)] px-2 pt-1">還有 {queue.length - QUALITY_QUEUE_LIMIT} 項</p>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* 分段控制:等寬五段(375px 不橫捲)。非當前分段不渲染(unmount)——
+          已知取捨:切段會失去該段未送出的表單 state;各段表單皆短,重填成本低,
+          換來的是頁面不再五卡直落、每段各自可專心操作 */}
+      <div role="group" aria-label="品質分段"
+        className="grid grid-cols-5 gap-1 bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-1">
+        {SEGMENTS.map((s) => (
+          <button key={s} onClick={() => setSegment(s)} aria-pressed={segment === s}
+            className={`min-h-11 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-1 pressable transition-colors ${
+              segment === s ? 'bg-[var(--primary)] text-white [box-shadow:0_1px_2px_rgba(22,32,43,.18)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+            {s}
+            {segCount[s] > 0 && (
+              <span className={`min-w-4 px-1 rounded-full text-[10px] font-semibold tabular-nums ${
+                segment === s ? 'bg-white/25' : 'bg-[var(--surface-2)] text-[var(--text-2)]'}`}>{segCount[s]}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {/* 查驗 */}
+      {segment === '查驗' && (
       <Card title={`查驗（待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
+        {resultMsg && (
+          <div className="flex items-center gap-3 flex-wrap rounded-lg bg-[var(--green-tint)] text-[var(--green-text)] text-sm px-3 py-2 mb-3">
+            <span>{resultMsg.pass ? '已判定合格' : '已判定不合格並開立缺失'}</span>
+            {!resultMsg.pass && (
+              <button onClick={() => setSegment('缺失')} className="font-medium underline hover:opacity-80">查看缺失</button>
+            )}
+          </div>
+        )}
         {inspForm && (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
             <WorkItemPicker leaves={leaves} value={inspForm.work_item_key} label={inspForm.work_item_label} onPick={(k, l) => setInspForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
@@ -100,23 +212,31 @@ export default function Quality() {
           </div>
         )}
       </Card>
+      )}
 
       {/* 缺失:統一缺失引擎(與工安缺失同狀態機),此處只列品質 domain */}
-      <DefectTracker domain="quality" leaves={leaves} />
+      {segment === '缺失' && <DefectTracker domain="quality" leaves={leaves} />}
 
       {/* 觀察事項:比缺失輕的現場提醒,可升級成正式缺失 */}
+      {segment === '觀察' && (
       <ObservationsSection observations={observations} canWrite={can.edit || can.approve}
         onCreate={createObservation} onUpdate={updateObservation} onEscalate={escalateObservation}
         onDelete={deleteObservation} resolveMarkup={resolveMarkup} />
+      )}
 
       {/* 自主檢查表:量化標準 → 實測值 → 自動判定 */}
+      {segment === '檢查表' && (
       <ChecklistSection templates={checklistTemplates} records={checklistRecords} canEdit={can.edit} leaves={leaves}
         onCreate={createChecklistRecord} onDelete={deleteChecklistRecord} />
+      )}
 
       {/* 取樣試驗:試體齡期追蹤 + fc′ 自動判定 */}
+      {segment === '試驗' && (
       <SamplesSection samples={testSamples} onGenerate={generateSamplesFromLogs} canEdit={can.edit}
         onCreate={createTestSamples} onUpdate={updateTestSample} onDelete={deleteTestSample} />
+      )}
 
+      {/* 三級品管說明:所有分段共用,固定頁尾 */}
       <p className="text-xs text-[var(--text-3)]">三級品管：廠商提查驗申請 → 監造現場查驗（合格/不合格）→ 不合格自動開缺失 → 廠商改善 → 監造複查結案。自主檢查依範本量化標準自動判定、試體依 fc′ 自動判定，不合格皆自動開缺失；試驗到期自動進提醒中心。</p>
     </div>
   )

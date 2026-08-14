@@ -55,6 +55,27 @@ test.describe('施工廠商', () => {
     await expect(page.getByText('選照片 AI 辨識後上傳', { exact: true })).toBeVisible() // P0 #11 改名:區分「選檔辨識」與「辨識已上傳」兩條路
   })
 
+  test('品質:缺失改善鏈——切到缺失分段 → 開始改善 → 提送複查(W8-4A)', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/quality')
+    // 預設分段是查驗;由分段控制切到「缺失」操作 demo 種子(佇列點擊走同一條路)
+    await page.getByRole('group', { name: '品質分段' }).getByRole('button', { name: /缺失/ }).click()
+    // 鎖定「3F 西側牆面蜂窩」(開立)那一列:佇列項是 button 不含 justify-between div,
+    // 此 xpath 只會命中 DefectTracker 的缺失列
+    const row = page.getByText('3F 西側牆面蜂窩')
+      .locator('xpath=ancestor::div[contains(@class,"justify-between")][1]')
+    await row.getByRole('button', { name: '開始改善' }).click()
+    await expect(row.getByText('廠商改善中')).toBeVisible()
+    // 提送複查走 appPrompt:改善說明必填
+    await row.getByRole('button', { name: '提送複查' }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText(/提送複查：/)).toBeVisible()
+    await dialog.locator('textarea').fill('已鑿除蜂窩並以無收縮水泥砂漿修補完成')
+    await dialog.getByRole('button', { name: '提送複查' }).click()
+    // 待複查=球轉監造(BallChip 與狀態列都寫「待監造複查」)
+    await expect(row.getByText('待監造複查').first()).toBeVisible()
+  })
+
   test('契約義務:標為已提送可掛送審佐證(W-01)', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/contract')

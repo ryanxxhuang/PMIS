@@ -28,6 +28,10 @@ test.describe('監造', () => {
     await expect(confirmBtn).toBeDisabled()
     await dialog.locator('textarea').fill('主筋間距超出容許值,需拆除重綁')
     await confirmBtn.click()
+    // W8-4A:判定成功後查驗分段原地留結果列(可發現性)——連動缺失開在「缺失」分段,
+    // 由「查看缺失」入口切段,才看得到那筆缺失
+    await expect(page.getByText('已判定不合格並開立缺失')).toBeVisible()
+    await page.getByRole('button', { name: '查看缺失' }).click()
     // 查驗變不合格 + 缺失清單多一筆連動缺失
     await expect(page.getByText('查驗不合格：4F 柱牆鋼筋查驗')).toBeVisible()
     // 剛判定的查驗當天就進「今天已完成」(demo 與真後端同樣寫 inspected_at)
