@@ -1,6 +1,6 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8-1 PR #11、W8-2 PR #12、W8-3A PR #13、W8-1R PR #14、W8-3B PR #15）**
+> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8-1 PR #11、W8-2 PR #12、W8-3A PR #13、W8-1R PR #14、W8-3B PR #15、W8-4A PR #16、W8-4C PR #17；進行中 W8-4B）**
 > 最後更新：2026-08-15
 > 依《產品全案評估報告 2026-08-12》與已核准的 W8-0 第三版（方向已定案為 D-007～D-015）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
@@ -30,7 +30,7 @@
 - [x] W8-2 今日待辦與 Agent 分工 — PR #12（563 Vitest／19 Demo E2E／build 全綠）
 - [x] W8-3A 初始化設定精靈 — PR #13（583 Vitest／19 Demo E2E／build 全綠；真實 staging 專案桌面／375px 目視通過）
 - [x] W8-3B 契約重點與具體後續動作 — PR #15，已部署（587 Vitest／19 Demo E2E／build 全綠；真案三角色目視待補）
-- [ ] W8-4 三角色核心業務頁 — `ACCEPTED`，須依 A／B／C 子包執行
+- [ ] W8-4 三角色核心業務頁 — A（PR #16）／C（PR #17）已部署；B（監造）進行中
 - [ ] W8-5 手機、無障礙、視覺一致性與真實使用者驗收 — `ACCEPTED`，最後收尾
 
 D-014 已依核准報告修訂：保留四步專案初始化設定精靈，第 3 步採「AI 整理完成」，不要求清空全部待審。全產品方向見 D-015。
@@ -209,6 +209,20 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   **交付（2026-08-15，PR #15 已合併部署）**：F1～F4 依規格 §11 完成——375px 動作鈕與六個追溯篩選補 44px 觸控高度（`max-sm:min-h-11`，桌面不變、不動共用 `ui.jsx`）、廠商唯一「查看」動作補中性邊框、無核定權提示改淡底提示列；Codex 的追溯收合清除歷史詳情修正保留。587 Vitest、19 Demo E2E、build 與 `git diff --check` 全綠；main CI 與 Cloudflare Workers build 成功，正式站四條冒煙 200，且已確認部署 CSS 含 44px utility、Requirements chunk 含期限捷徑。**真案三角色桌面／375px 實機目視仍未執行**（無可用帳號，AI 不得代登入），列為 W8-5 前的待補驗收。
 
 ---
+
+### W8-4｜三角色核心業務頁（A／C 已交付）
+
+- [x] **W8-4A 廠商核心頁（PR #16，已部署）**
+  範圍：/quality 重大重整——「現在要處理」工作佇列（`buildQualityQueue` 純函式，只組合既有 `collaborationItems`＋`sampleAlerts`，AI 產物結構上進不了佇列）＋查驗/缺失/觀察/檢查表/試驗五段分段控制（預設查驗、44px、非當前分段 unmount）＋判不合格原地回饋與「查看缺失」切段；/site-log 手機存檔列 `max-sm` sticky 貼底（只在 `can.edit`，唯讀分支零改動留給 W8-4B）。
+  不做：未改 store slice、lib 引擎、寫入參數、權限條件、RLS、路由、角色。
+  驗收證據（2026-08-15）：595 Vitest（+8）、20 Demo E2E（+廠商缺失改善鏈）、build 全綠；對抗式紅線審查 PASS；375px /quality、/site-log 無溢位；PR CI 與合併後 main CI／Cloudflare build 成功。
+- [x] **W8-4C 機關核心頁（PR #17，已部署）**
+  範圍：/portfolio 例外數字帶（`portfolioExceptions` 純函式，0 不渲染）；/payments 手機唯讀期別時間線（桌面表格 `max-sm:hidden`，措辭避開 待請款/已請款/已收款 子字串以保真後端 e2e strict mode）；/change-orders 分「待核定／已核定／已結」兩群、已定案明細收 `<details>`、核定 select 位置不變。
+  不做：未改金額計算來源（adjustedItems/B-02）、日期 gate、非受控輸入、寫入參數。
+  驗收證據（2026-08-15）：592 Vitest（+5）、19 Demo E2E（含 B-02 回歸）、build 全綠；紅線審查 PASS；三頁 375px 無溢位；PR CI 與合併後 main CI／Cloudflare build 成功。
+- [ ] **W8-4B 監造核心頁**（進行中）
+  範圍：/valuation 先狀態・責任方・差異・可做動作再明細；/submittals 依球權分組；監造日誌摘要式唯讀檢視（不以大量 disabled 欄位假裝可編）。查驗與缺失複查已由 W8-4A 分段涵蓋。
+  邊界：不可破壞 `e2e-real/chain2-valuation.spec.js` 既有 locator（該檔不可改，改了要真後端重跑才能驗）。
 
 ## 未排入（已知、刻意不順手做；要做需回報告或另立決策）
 
