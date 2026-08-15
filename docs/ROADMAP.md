@@ -1,6 +1,6 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8-1 PR #11、W8-2 PR #12、W8-3A PR #13、W8-1R PR #14、W8-3B PR #15、W8-4A PR #16、W8-4C PR #17；進行中 W8-4B）**
+> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8-1 PR #11、W8-2 PR #12、W8-3A PR #13、W8-1R PR #14、W8-3B PR #15、W8-4A PR #16、W8-4B PR #18、W8-4C PR #17；下一包 W8-5）**
 > 最後更新：2026-08-15
 > 依《產品全案評估報告 2026-08-12》與已核准的 W8-0 第三版（方向已定案為 D-007～D-015）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
@@ -220,9 +220,9 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   範圍：/portfolio 例外數字帶（`portfolioExceptions` 純函式，0 不渲染）；/payments 手機唯讀期別時間線（桌面表格 `max-sm:hidden`，措辭避開 待請款/已請款/已收款 子字串以保真後端 e2e strict mode）；/change-orders 分「待核定／已核定／已結」兩群、已定案明細收 `<details>`、核定 select 位置不變。
   不做：未改金額計算來源（adjustedItems/B-02）、日期 gate、非受控輸入、寫入參數。
   驗收證據（2026-08-15）：592 Vitest（+5）、19 Demo E2E（含 B-02 回歸）、build 全綠；紅線審查 PASS；三頁 375px 無溢位；PR CI 與合併後 main CI／Cloudflare build 成功。
-- [ ] **W8-4B 監造核心頁**（進行中）
-  範圍：/valuation 先狀態・責任方・差異・可做動作再明細；/submittals 依球權分組；監造日誌摘要式唯讀檢視（不以大量 disabled 欄位假裝可編）。查驗與缺失複查已由 W8-4A 分段涵蓋。
-  邊界：不可破壞 `e2e-real/chain2-valuation.spec.js` 既有 locator（該檔不可改，改了要真後端重跑才能驗）。
+- [x] **W8-4B 監造核心頁（PR #18，已部署）**
+  範圍：/valuation 在 Stat 與明細之間插入本期決策列（狀態 Badge＋BallChip 責任方＋`summarizeValuationDiff` 差異彙總「超計 N 項／無佐證 M 項」可點展開；既有送審／核定／退回／刪除按鈕整段搬移非複製）；監造／機關日誌改摘要式唯讀（純文字天氣／摘要／工項、公定格式只列有資料的節，假可編欄位歸零；`can.edit` 視角 DOM 零改動）；/submittals 依 `submittalBall` 分「待我處理／等待對方／已完成」三群。
+  驗收證據（2026-08-15）：607 Vitest（+12 `Valuation.diff.test.js` 等）、22 Demo E2E（+2 送審分群；監造唯讀測試改寫）、build 全綠；`e2e-real/` 四檔零改動（chain2 按鈕名嚴格單一命中逐項核對）；對抗式紅線審查 PASS；合併後 main CI、Cloudflare build 與正式站冒煙成功。查驗與缺失複查已由 W8-4A 分段涵蓋。
 
 ## 未排入（已知、刻意不順手做；要做需回報告或另立決策）
 

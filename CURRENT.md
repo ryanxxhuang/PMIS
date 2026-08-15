@@ -143,7 +143,7 @@ W8-1R 驗證（2026-08-14）：60 個 Vitest 檔、576 個測試與 19 個 Demo 
 
 W8-3B 由 PR #15 交付並部署：`/requirements` 一般畫面改為「已生效的契約重點」、最多 6 筆「值得留意的整理結果」與可收合完整追溯；舊 run 的 approved 在 300 筆有界查詢內仍保留，舊 run 未核定 AI 建議只在追溯區顯示。預設去重只合併呈現內容完全相同的列，不改 DB；只有可追蹤 deadline 能透過原 `review_requirement` 捷徑「核定並加入期限追蹤」並由 D-012 物化 obligation，其他類型不假裝建立尚不存在的工作流。收合追溯時同時關閉歷史詳情，rejected／superseded 不殘留在一般畫面。側欄分頁標籤同步改為「契約重點」。手機磨光依規格 §11 完成：375px 動作鈕與六個追溯篩選至少 44px（`max-sm:min-h-11`，桌面與共用 `ui.jsx` 不動）、廠商唯一查看動作補中性邊框、無核定權提示改淡底提示列。587 Vitest、19 Demo E2E、production build 全綠；main CI 與 Cloudflare Workers build 成功，正式站冒煙 200。**真案三角色桌面／375px 實機目視尚未執行**（無可用帳號），不得寫成已完成，列為 W8-5 前待補。
 
-W8-4A 由 PR #16、W8-4C 由 PR #17 交付並部署（W8-4B 監造進行中）：/quality 首屏改「現在要處理」工作佇列＋五段分段控制，佇列只來自既有球權與試體齡期引擎，判不合格後原地回饋並可一鍵切到缺失分段；/site-log 手機存檔列貼底（唯讀分支未動）。/portfolio 新增跨案例外數字帶；/payments 手機改唯讀期別時間線（桌面表格與登錄欄位不變）；/change-orders 待核定群排前、已定案明細收合。兩包均未改 store 寫入、金額／期限確定性計算、權限條件、RLS 與路由；基線 595（A）／592（C）Vitest、20／19 Demo E2E、build 全綠，合併後 main CI、Cloudflare build 與正式站冒煙均成功。
+W8-4A 由 PR #16、W8-4B 由 PR #18、W8-4C 由 PR #17 交付並部署：/quality 首屏改「現在要處理」工作佇列＋五段分段控制，佇列只來自既有球權與試體齡期引擎，判不合格後原地回饋並可一鍵切到缺失分段；/site-log 手機存檔列貼底（唯讀分支未動）。/portfolio 新增跨案例外數字帶；/payments 手機改唯讀期別時間線（桌面表格與登錄欄位不變）；/change-orders 待核定群排前、已定案明細收合。W8-4B 補上監造視角：/valuation 首屏決策列（狀態＋BallChip 責任方＋「超計 N 項／無佐證 M 項」確定性差異彙總，動作按鈕整段搬移非複製、`e2e-real` 四檔零改動）；監造／機關日誌改摘要式唯讀檢視（假可編欄位歸零，廠商視角 DOM 零改動）；/submittals 依 `submittalBall` 分「待我處理／等待對方／已完成」。三包均未改 store 寫入、金額／期限確定性計算、權限條件、RLS 與路由；最新基線 607 Vitest、22 Demo E2E、build 全綠，各包合併後 main CI、Cloudflare build 與正式站冒煙均成功。
 
 ### 6.1 前端資料存取規則
 
