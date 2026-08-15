@@ -54,21 +54,34 @@ W6-1 冒煙只做登入、session 重整還原與登出，不建立業務資料�
 
 ### Live Edge 驗收
 
-把 `ANTHROPIC_API_KEY` 放進未追蹤的 `.env.e2e.real`。本機 CLI／runtime 能正常啟動時，先在一個 terminal 啟動函式：
+前置（2026-08-15 起，皆已查明並固定）：
+
+1. **colima 必須掛載 repo 所在磁碟**。repo 在外接 SSD（`/Volumes/GameSSD`）而 colima 預設只掛 `$HOME`——edge-runtime 容器 bind-mount 到的 functions 目錄在 VM 裡是空的，main worker 因此回報 `failed to determine entrypoint`。2026-08-13 記載的「CLI 2.113.0 boot error」是誤診：同版 CLI 在正確掛載下可正常服務 16 支函式（2026-08-15 實測，edge-runtime 1.74.3）。設定方式：
+
+   ```bash
+   colima stop && colima start --mount "$HOME:w" --mount "/Volumes/GameSSD:w"
+   ```
+
+2. **本機 service_role 表級權限由 `supabase/seed.sql` 對齊 hosted 平台預設**。hosted 的 service_role 對 public schema 有完整權限；新版 CLI 本機 stack secure-by-default 什麼都沒給，函式的 service client（與其觸發的 trigger）會 permission denied。seed 只在 `supabase start`／`db reset` 執行，不進正式部署。已在跑的 stack 可直接補：
+
+   ```bash
+   docker exec -i supabase_db_PMIS psql -U postgres < supabase/seed.sql
+   ```
+
+3. 把有效的 `ANTHROPIC_API_KEY` 放進未追蹤的 `.env.e2e.real`（`.env.e2e.real.example` 有註解行）。
+
+4. chain 3 在 live 模式會自動處理 `requirements.extract` 的 `min_plan='pro'` 門檻：以 `platform_admin_bootstrap` 名單 email 在拋棄式 staging 建立平台管理員帳號並呼叫 `admin_set_project_plan`——全程走產品窄門；正式庫上該 email 已註冊、建帳號會大聲失敗，本身就是「別對正式庫跑」的第二道閘。
+
+執行：一個 terminal 啟動函式，另一個跑單條：
 
 ```bash
 supabase functions serve --env-file .env.e2e.real
-```
-
-再於另一個 terminal 執行：
-
-```bash
 npm run test:e2e:real -- e2e-real/chain3-requirements.spec.js
 ```
 
-只要環境內存在 `ANTHROPIC_API_KEY`，chain 3 就不會建立人工替代資料，而會要求同一文件版本的 `document_ingestion_runs.status = completed`、`origin = 'ai'` 的固定期限 Requirement，以及指回該文件版本的 citation；Edge 未啟動、模型失敗或沒有抽出契約明載期限都會讓測試失敗。成功後仍由 `afterAll` 清除專案、帳號與 Storage。
+只要環境內存在 `ANTHROPIC_API_KEY`，chain 3 就不會建立人工替代資料，而會要求同一文件版本的 `document_ingestion_runs.status = completed`、`origin = 'ai'` 的固定期限 Requirement，以及指回該文件版本的 citation（以 `sourceVerify` 同義的正規化比對，防捏造也不製造假紅燈）；Edge 未啟動、模型失敗或沒有抽出契約明載期限都會讓測試失敗。失敗時錯誤訊息會附上伺服器端 `ingestion_runs.error_message`。成功後仍由 `afterAll` 清除專案、帳號與 Storage。
 
-2026-08-13 已確認目前 macOS arm64 的 Supabase CLI 2.113.0 在本機與 `/tmp` 副本都於 main worker boot 階段回報 `failed to determine entrypoint`；錯誤發生在模型呼叫前，不代表金鑰或 `extract-requirements` 產品路徑失敗。不要反覆重試。待 CLI／Edge Runtime 相容問題修復後再跑上述指令，或改用一次性 hosted staging；在此之前維持 live Edge 待驗，不影響其他 W6 測試與 W7。
+**目前狀態（2026-08-15）**：上述 1、2、4 全部落地後，live 管線已通到最後一哩——函式建立 ingestion run、請求真實抵達 Anthropic API，回應為 `401 API key is invalid`（金鑰已失效／被輪替，格式無誤）。整條串接（閘門→RLS 讀取→run 建立→模型呼叫）已驗證可運作；**只差換一把有效金鑰重跑單條 chain 3**，在那之前 live Edge 仍維持待驗，不得宣稱外部模型串接已通過。
 
 ## W6-1 基線
 

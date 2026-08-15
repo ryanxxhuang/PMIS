@@ -134,7 +134,7 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   本機證據（2026-08-13）：`e2e-real/chain2-valuation.spec.js` 正式模式下通過——廠商建期送審（無核定鈕）、監造核定、機關登錄請款/收款（待請款→已請款→已收款）；fixture 全走產品 RPC，afterAll 清理殘留 0。
 - [ ] **W6-4 鏈 3：文件上傳→Requirement 建議→人工核定**
   已通過部分（2026-08-13）：`e2e-real/chain3-requirements.spec.js` 上傳契約 txt（Storage＋documents＋document_versions），並在真文件版本建立後插入帶 document source 的人工待審 Requirement；廠商看得到但無核定鈕，監造經 `review_requirement` 核定後，D-012 義務物化出現同標題與固定到期日。清理含 Storage 物件，殘留 0。
-  尚缺：Supabase CLI 2.113.0 的本機 Edge main worker 目前在模型呼叫前即發生 entrypoint boot error，尚未驗證 `extract-requirements` live AI 成功產生 `document_ingestion_runs`、AI-origin Requirement 與 citation；待 CLI 修復或一次性 hosted staging 再驗，不能以人工 fixture 代替。
+  尚缺（2026-08-15 更新）：原「CLI boot error」已查明為誤診——真因是 colima 未掛載 repo 所在外接 SSD，掛載修正後原版 CLI 即可服務全部函式；另修正三個會擋在模型前的問題（本機 service_role 無表級權限→`supabase/seed.sql` 對齊 hosted 預設、chain3 未過 `min_plan='pro'` 閘門→bootstrap 平台管理員升級方案、W8 改版造成的 chain3/auth-smoke locator 漂移）。deterministic 5/5 重跑全綠；live 管線已實測通到 Anthropic API（回 401 金鑰失效）。**只差有效 `ANTHROPIC_API_KEY` 重跑單條 chain 3**（見 `docs/REAL_BACKEND_E2E.md` Live Edge 驗收）。
 - [x] **W6-5 鏈 4：標單匯入失敗／重設失敗 rollback（真後端重演 W1 pgTAP 情境）**
   本機證據（2026-08-13）：`e2e-real/chain4-boq-rollback.spec.js` 通過——缺父項匯入整包拒收（全敗如未匯）、重試成功、重複匯入被擋；品質檢查紀錄連工項時 UI 清空重匯被 guard 擋下並顯示「清空未執行，所有資料維持原狀」紅色橫幅，標單與日誌原封不動（舊版災難點：日誌被靜默刪光）；移除品質證據後重試清空成功、回到 onboarding。
   （W6-2、W6-3、W6-5 已達成；W6-4 的 RLS／Storage／審查／物化已綠，live Edge 成功路徑待補。）
