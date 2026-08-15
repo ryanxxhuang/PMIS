@@ -153,14 +153,22 @@ export function WebLayout({ children }) {
   }, [menuOpen])
   // 抽屜焦點管理:開啟移到關閉鈕、關閉還給漢堡鈕。prevMenuOpen 擋初載誤搶焦點
   // （桌機 menuOpen 恆為 false,不會進到還原分支）。
-  // 開啟聚焦要推遲一個 frame:visibility 在 transition 清單裡,effect 執行當下
-  // (transition progress=0)computed 還是 hidden,visibility:hidden 的元素不可聚焦,
-  // 同步 focus() 會靜默失敗;等瀏覽器跑過第一個 tick(visible)再聚焦。
+  // 開啟聚焦不能同步做也不能只推遲一個 frame:visibility 在 transition 清單裡,
+  // transition progress=0 時 computed 仍是 hidden,hidden 元素不可聚焦、focus()
+  // 靜默失敗;progress 何時 >0 又依環境 frame 節奏而定(CI 慢機第二個 rAF 仍打不到)。
+  // 改成有界重試:每 25ms 試一次直到焦點真的落上,500ms 內必然涵蓋 transition 起跑。
   useEffect(() => {
     if (menuOpen) {
-      const raf = requestAnimationFrame(() => requestAnimationFrame(() => drawerCloseRef.current?.focus()))
       prevMenuOpen.current = true
-      return () => cancelAnimationFrame(raf)
+      let tries = 0
+      let timer = null
+      const attempt = () => {
+        const el = drawerCloseRef.current
+        if (el) { el.focus(); if (document.activeElement === el) return }
+        if (++tries < 20) timer = setTimeout(attempt, 25)
+      }
+      attempt()
+      return () => clearTimeout(timer)
     }
     if (prevMenuOpen.current) menuBtnRef.current?.focus()
     prevMenuOpen.current = false
