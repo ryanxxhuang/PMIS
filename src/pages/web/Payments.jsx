@@ -8,6 +8,8 @@ import { exportCsv, stamp } from '../../lib/exportCsv.js'
 // Math.round(-0.4)=-0:正規化,避免顯示「-0」(R3 P2-01)
 const money = (n) => (n == null || isNaN(n) ? '—' : (Math.round(n) === 0 ? 0 : Math.round(n)).toLocaleString('en-US'))
 const payStatus = (v) => (v.paid_date ? '已收款' : v.invoice_date ? '已請款' : '待請款')
+// 手機時間線只留月日:窄螢幕一行要塞下期別、金額與狀態,完整日期在桌面表格
+const shortDate = (iso) => (iso ? `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}` : '')
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function Payments() {
@@ -77,7 +79,8 @@ export default function Payments() {
         {rows.length === 0 ? (
           <Empty>尚無估驗期。請先到「估驗計價」建立估驗,這裡才會列出每期請款。</Empty>
         ) : (
-          <div className="overflow-x-auto -mx-4 -my-4">
+          <>
+          <div className="overflow-x-auto -mx-4 -my-4 max-sm:hidden">
             <table className="w-full text-sm min-w-[820px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
@@ -160,6 +163,40 @@ export default function Payments() {
               </tbody>
             </table>
           </div>
+
+          {/* 手機:唯讀期別時間線。桌面表格 min-w 820px 在手機只能橫向捲,實際讀不了;
+              金流登錄仍只留在桌面(W8-0 §7),所以這裡刻意不放任何輸入或寫入路徑。 */}
+          <div className="sm:hidden -mx-4 -my-4">
+            <ul className="divide-y divide-[var(--border-2)]">
+              {rows.map(({ v, net }) => {
+                // 與表格同一條核定閘門:未核定期別在桌面是鎖定欄位,在手機只說明狀態
+                const approved = v.status === '已核定' || v.status === '已請款'
+                // 實收超過本期應領=資料異常(非正常 KPI),與 Stat「未收款」轉紅同一條判斷
+                const over = (v.paid_amount || 0) > Math.round(net)
+                return (
+                  <li key={v.id} className="px-4 py-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-sm font-medium">第 {v.period_no} 期</span>
+                      <span className="text-sm font-medium tabular-nums">NT$ {money(net)}</span>
+                    </div>
+                    <p className={`mt-0.5 text-xs ${over ? 'text-[var(--red-text)]' : 'text-[var(--text-3)]'}`}>
+                      {!approved
+                        ? `狀態：${v.status}（未核定）`
+                        : v.paid_date
+                          ? `收款完成（${shortDate(v.paid_date)}${v.paid_amount != null ? `，實收 NT$ ${money(v.paid_amount)}` : ''}）${over ? '，超過本期應領,請查核' : ''}`
+                          : v.invoice_date
+                            ? `請款中（${shortDate(v.invoice_date)} 請款,等待撥款）`
+                            : '尚未請款'}
+                    </p>
+                  </li>
+                )
+              })}
+            </ul>
+            <div className="px-4 py-3 border-t border-[var(--border-2)] text-xs text-[var(--text-3)]">
+              完整登錄請款日、收款日與實收金額，請使用桌面版。
+            </div>
+          </div>
+          </>
         )}
       </Card>
 
