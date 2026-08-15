@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test'
 
 test('真實 Supabase 帳號可登入、重整還原 session、再登出', async ({ page }) => {
   await page.goto('/#/login')
-  await expect(page.getByText('真實帳號 · 資料存於 Supabase（RLS 權限控管）')).toBeVisible()
+  // W8-1 登入頁改版移除 Supabase 術語;真實模式的識別改為此白話說明
+  await expect(page.getByText('帳號與專案資料依角色權限保護')).toBeVisible()
 
   await page.getByPlaceholder('Email').fill(process.env.E2E_REAL_EMAIL)
   await page.getByPlaceholder('密碼（至少 8 碼，含大小寫英文與數字）').fill(process.env.E2E_REAL_PASSWORD)
