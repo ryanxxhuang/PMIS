@@ -481,7 +481,11 @@ export default function SiteLog() {
               )}
             </div>
 
-            <div className="flex items-center gap-3 mt-4">
+            {/* W8-0 §7:手機存檔列貼底固定——公定格式欄位展開後表單很長,捲到底才找得到存檔鈕
+                是現場回報的痛點;-mx-5 抵掉 Card 內距讓底條滿版,pr-16 避開右下浮動 Copilot FAB(bottom-6 right-6)。
+                只在 can.edit 時加 sticky:唯讀視角沒有存檔鈕,DOM 行為維持原樣(W8-4B 範圍,本包不碰)。
+                pl-5/pr-16 拆開寫而不用 px-5,是避免 padding-inline 與 padding-right 的 cascade 順序不確定 */}
+            <div className={`flex items-center gap-3 mt-4${can.edit ? ' max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:bg-[var(--surface)] max-sm:border-t max-sm:border-[var(--border-2)] max-sm:-mx-5 max-sm:pl-5 max-sm:pr-16 max-sm:py-2.5 sm:static sm:border-0' : ''}`}>
               {can.edit ? <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button> : <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>}
               {currentLog && (
                 <button onClick={() => navigate(`/site-log/print?d=${date}`)}
