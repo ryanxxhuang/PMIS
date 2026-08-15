@@ -43,6 +43,9 @@ function ruleText(ob) {
 }
 
 const DOT = { done: 'var(--green-text)', overdue: 'var(--red-text)', soon: 'var(--amber-text)', scheduled: 'var(--blue)', nodate: 'var(--text-3)' }
+// W8-5:狀態不得只靠顏色。色點本身給等價文字(hover 看 title、報讀器讀 aria-label),
+// 色盲與螢幕報讀使用者才拿得到「已逾期/7 日內」這種行動依據。
+const DOT_LABEL = { done: '已完成', overdue: '已逾期', soon: '7 日內到期', scheduled: '排程中', nodate: '無期限' }
 export default function Contract() {
   const {
     isSupabaseConfigured, currentProject, isPersistedProject,
@@ -368,7 +371,7 @@ export default function Contract() {
               <span className="block text-sm font-medium text-[var(--text)] mb-1">{label}</span>
               <input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
                 disabled={!can.edit}
-                className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-sm:min-h-11" />
             </label>
           ))}
         </div>
@@ -451,7 +454,8 @@ export default function Contract() {
               {progress.failed > 0 && <span className="text-[var(--red-text)]">{progress.failed} 失敗</span>}
             </div>
           )}
-          {!isPersistedProject && <p className="text-xs text-amber-600 mt-2">Demo 模式不支援,請登入並選擇真實專案。</p>}
+          {/* 警語一律吃 --amber-text token:硬編碼 text-amber-600 在深色模式不會跟著切換 */}
+          {!isPersistedProject && <p className="text-xs text-[var(--amber-text)] mt-2">Demo 模式不支援,請登入並選擇真實專案。</p>}
           {isPersistedProject && !can.edit && <p className="text-xs text-[var(--text-3)] mt-2">需編輯權限(施工廠商或專案管理者)。</p>}
         </div>
 
@@ -507,8 +511,10 @@ export default function Contract() {
             <div className="text-sm font-medium text-[var(--amber-text)] mb-1.5">待確認文件({needsReviewRows.length})</div>
             {needsReviewRows.map(({ run, doc }) => (
               <div key={run.id} className="flex items-center gap-2 text-xs border border-[var(--amber-text)]/40 bg-[var(--amber-tint)] rounded-lg px-3 py-1.5 mb-1.5">
-                <span className="flex-1 truncate text-[var(--text)]">{doc?.title || '文件'}</span>
-                <span className="text-[var(--text-3)]">AI 建議:{DOCUMENT_TYPE_LABELS[run.suggested_document_type] || '無法判斷'}</span>
+                {/* 文件標題是人據以選分類的依據,被截斷時至少要能 hover 看全名 */}
+                <span className="flex-1 truncate text-[var(--text)]" title={doc?.title || '文件'}>{doc?.title || '文件'}</span>
+                {/* amber-tint 底上的 text-3 只有 3.4:1,次要文字改 text-2(≈6.6:1) */}
+                <span className="text-[var(--text-2)]">AI 建議:{DOCUMENT_TYPE_LABELS[run.suggested_document_type] || '無法判斷'}</span>
                 {can.edit && (
                   <div className="flex items-center gap-1.5">
                     <Select defaultValue={run.suggested_document_type || 'other'} className="text-xs w-40"
@@ -518,7 +524,7 @@ export default function Contract() {
                       ))}
                     </Select>
                     <button onClick={() => confirmClassification(run, run.suggested_document_type || 'other')}
-                      className="text-[var(--blue-text)] hover:underline whitespace-nowrap">確認此分類</button>
+                      className="text-[var(--blue-text)] hover:underline whitespace-nowrap inline-flex items-center max-sm:min-h-11 px-1">確認此分類</button>
                   </div>
                 )}
               </div>
@@ -538,19 +544,22 @@ export default function Contract() {
                   return (
                     <div key={run.id} className="flex items-center gap-2 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1">
                       <FileText size={12} className="text-[var(--text-3)] shrink-0" aria-hidden />
-                      <span className="flex-1 truncate text-[var(--text)]">{doc?.title || '文件'}</span>
+                      <span className="flex-1 truncate text-[var(--text)]" title={doc?.title || '文件'}>{doc?.title || '文件'}</span>
                       {version?.version_label && <span className="text-[var(--text-3)]">{version.version_label}</span>}
                       <Badge color={run.status === 'completed' ? 'green' : run.status === 'failed' ? 'red' : run.status === 'unsupported' ? 'slate' : run.status === 'partial' ? 'amber' : 'blue'}>
                         {run.status === 'processing' ? STAGE_LABELS[run.stage] || run.stage : RUN_STATUS_LABELS[run.status] || run.status}
                       </Badge>
                       {analyzed && <span className="text-[var(--green-text)]">{run.metadata?.requirement_extraction_message || '已分析'}</span>}
-                      {run.status === 'unsupported' && <span className="text-[var(--text-3)]">{run.metadata?.limitation || '尚未支援內容分析'}</span>}
+                      {run.status === 'unsupported' && <span className="text-[var(--text-2)]">{run.metadata?.limitation || '尚未支援內容分析'}</span>}
+                      {/* 解析失敗原因是「要不要重試」的唯一依據,220px 一定切掉:
+                          改兩行 line-clamp 併 title(同 RFI.jsx 的既有寫法),不再硬截斷 */}
                       {(run.status === 'partial' || run.status === 'failed') && run.error_message && (
-                        <span className="text-[var(--amber-text)] truncate max-w-[220px]">{run.error_message}</span>
+                        <span className="text-[var(--amber-text)] line-clamp-2 whitespace-pre-line max-w-[220px]"
+                          title={run.error_message}>{run.error_message}</span>
                       )}
                       {can.edit && run.metadata?.requirement_extraction === 'failed' && (
                         <button onClick={() => confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')}
-                          className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">
+                          className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-sm:min-h-11 px-1">
                           <RefreshCw size={11} aria-hidden /> 重試分析
                         </button>
                       )}
@@ -565,7 +574,8 @@ export default function Contract() {
         {/* 技術資訊(內部詞彙只放這裡) */}
         {runs.length > 0 && (
           <div className="mt-3">
-            <button onClick={() => setShowTech((s) => !s)} className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] inline-flex items-center gap-1">
+            <button onClick={() => setShowTech((s) => !s)} aria-expanded={showTech}
+              className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] inline-flex items-center gap-1 max-sm:min-h-11 px-1">
               <ChevronRight size={12} aria-hidden className={`transition-transform duration-[var(--dur-fast)] ${showTech ? 'rotate-90' : ''}`} /> 技術資訊
             </button>
             {showTech && (
@@ -603,7 +613,8 @@ export default function Contract() {
           <div className="space-y-2">
             {g.list.map((it) => (
               <div key={it.ob.id} className="flex gap-3">
-                <span className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0" style={{ background: DOT[it.state] }} />
+                <span className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0" style={{ background: DOT[it.state] }}
+                  role="img" title={DOT_LABEL[it.state]} aria-label={DOT_LABEL[it.state]} />
                 <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
                   <div className="flex justify-between items-start gap-2">
                     <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
@@ -620,7 +631,7 @@ export default function Contract() {
                         if (error) setObligationMsg(`義務狀態未寫入:${error.message}`)
                       }
                     }}
-                      className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 inline-flex items-center max-sm:min-h-11 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
                       {it.done ? '已提送 ✓' : '標為已提送'}
                     </button>}
                   </div>
@@ -640,7 +651,7 @@ export default function Contract() {
                         if (error) { setObligationMsg(`義務狀態未寫入:${error.message}`); return }
                         setEvidenceFor(null)
                       }}>{evidencePick ? '掛佐證並標為已提送' : '直接標為已提送'}</Button>
-                      <button onClick={() => setEvidenceFor(null)} className="text-xs text-[var(--text-3)] hover:underline">取消</button>
+                      <button onClick={() => setEvidenceFor(null)} className="text-xs text-[var(--text-3)] hover:underline inline-flex items-center max-sm:min-h-11 px-1">取消</button>
                     </div>
                   )}
                   {/* 佐證連結:已掛送審文件的義務,稽核可一路點到原始送審紀錄 */}
@@ -658,7 +669,7 @@ export default function Contract() {
                     {it.ob.responsible ? `　·　${it.ob.responsible}` : ''}
                   </div>
                   {!it.done && it.due && (
-                    <div className={`text-xs font-medium mt-0.5 ${it.state === 'overdue' ? 'text-[var(--red-text)]' : it.state === 'soon' ? 'text-amber-600' : 'text-[var(--text-2)]'}`}>
+                    <div className={`text-xs font-medium mt-0.5 ${it.state === 'overdue' ? 'text-[var(--red-text)]' : it.state === 'soon' ? 'text-[var(--amber-text)]' : 'text-[var(--text-2)]'}`}>
                       {it.state === 'overdue' ? `已逾期 ${-it.diff} 天` : `還有 ${it.diff} 天`}
                     </div>
                   )}

@@ -127,19 +127,21 @@ export default function Schedule() {
                     <td className="px-2">
                       {/* 只送變動的單欄;合併(起+訖)由 setItemSchedule 以 ref 累積+debounce
                           處理,同 tick 連發也會合併成單次正確寫入(R4 P1-01) */}
+                      {/* W8-5:表格內輸入只提到 ~38px(max-sm:py-2),不加 min-h——加了整張表列高會翻倍 */}
                       <input type="date" value={r.sch.planned_start || ''} onChange={(e) => onSet(r.key, { planned_start: e.target.value || null })}
                         aria-label={`${r.it.description || r.key} 計畫開始日`}
-                        className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
+                        className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs max-sm:py-2" />
                     </td>
                     <td className="px-2">
                       <input type="date" value={r.sch.planned_finish || ''} onChange={(e) => onSet(r.key, { planned_finish: e.target.value || null })}
                         aria-label={`${r.it.description || r.key} 計畫完成日`}
-                        className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs" />
+                        className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs max-sm:py-2" />
                     </td>
                     <td className="px-2 text-right tabular-nums">{r.pct.toFixed(1)}%</td>
                     <td className="px-2"><span className="text-xs font-medium" style={{ color: r.state.color }}>{r.state.label}</span></td>
                     <td className="px-2 pr-5 text-right">
-                      <button onClick={() => removeItemSchedule(r.key)} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm">✕</button>
+                      <button onClick={() => removeItemSchedule(r.key)} aria-label={`移除 ${r.it.item_no || r.key} 的排程`}
+                        className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm p-2 -m-2">✕</button>
                     </td>
                   </tr>
                 ))}

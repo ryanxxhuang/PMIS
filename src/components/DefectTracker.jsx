@@ -10,7 +10,9 @@ import { exportCsv, stamp } from '../lib/exportCsv.js'
 import { defectBall } from '../lib/ballInCourt.js'
 import MarkupEditor, { MarkupThumb } from './MarkupEditor.jsx'
 
-const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
+// 這份字串是 ui.jsx FIELD_BASE 的頁內複本(歷史包袱),所以 W8-5 的手機 44px
+// 最小高度必須在這裡同步補一次,否則同頁共用元件與原生控件會高度不一致
+const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm max-sm:min-h-11 transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 // 小工項挑選器（搜尋 → 選一個;品質缺失/查驗共用）
@@ -21,7 +23,8 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
     return (
       <div className="flex items-center gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface-2)]">
         <span className="truncate flex-1">{label}</span>
-        <button onClick={() => onPick(null, '')} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
+        {/* ✕ 本身沒有可及名稱;p-2 -m-2 只擴命中區、視覺與列高不變 */}
+        <button onClick={() => onPick(null, '')} aria-label="清除已選工項" className="p-2 -m-2 text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
       </div>
     )
   }
@@ -32,7 +35,7 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
         <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto enter-menu">
           {results.map((it) => (
             <button key={it.item_key} onClick={() => { onPick(it.item_key, `${it.item_no} ${it.description}`); setQ('') }}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] truncate">
+              className="w-full text-left px-3 py-1.5 text-sm max-sm:min-h-11 hover:bg-[var(--surface-2)] truncate">
               <span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}
             </button>
           ))}
@@ -198,12 +201,16 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
 
       {list.length === 0 ? <Empty>尚無{isSafety ? '工安' : ''}缺失</Empty> : (
         <div className="space-y-2">
-          {list.map((d) => (
+          {list.map((d) => {
+            // 期限與改善說明排在字串後段,375px 一定被 truncate 切掉,而缺失沒有詳情頁可下鑽,
+            // 所以同一串文字要同時掛 title,滑鼠/報讀器至少拿得到全文
+            const meta = [isSafety ? d.record_date : d.work_item_no, d.location, d.due_date ? `期限 ${d.due_date}` : '', d.improvement_note ? `改善：${d.improvement_note}` : ''].filter(Boolean).join(' · ')
+            return (
             <div key={d.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
               <div className="min-w-0">
                 <div className="text-[var(--text)]">{d.title} <BallChip ball={defectBall(d)} /> {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>} {d.correction_reason && <Badge color="amber">已更正</Badge>}</div>
-                <div className="text-xs text-[var(--text-3)] truncate">
-                  {[isSafety ? d.record_date : d.work_item_no, d.location, d.due_date ? `期限 ${d.due_date}` : '', d.improvement_note ? `改善：${d.improvement_note}` : ''].filter(Boolean).join(' · ')}
+                <div className="text-xs text-[var(--text-3)] truncate" title={meta}>
+                  {meta}
                 </div>
                 {d.markup_path && <div className="mt-1"><MarkupThumb src={d.markup_path} resolve={resolveMarkup} /></div>}
               </div>
@@ -217,14 +224,15 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
                   : (can.edit ? <Button variant="secondary" onClick={() => advance(d)} disabled={busy}>{NEXT_LABEL[d.status]}</Button>
                     : <span className="text-xs text-[var(--text-3)]">待廠商改善</span>)
                 ) : (
-                  can.approve && <button onClick={() => reopen(d)} className="text-xs text-[var(--blue-text)] hover:underline">撤銷結案</button>
+                  can.approve && <button onClick={() => reopen(d)} className="inline-flex items-center max-sm:min-h-11 px-1 text-xs text-[var(--blue-text)] hover:underline">撤銷結案</button>
                 )}
                 {can.edit && d.status !== '已結案' && (
-                  <button onClick={() => remove(d)} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除缺失">✕</button>
+                  <button onClick={() => remove(d)} className="p-2 -m-2 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除缺失">✕</button>
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
       <p className="text-[11px] text-[var(--text-3)] mt-2">

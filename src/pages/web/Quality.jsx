@@ -136,8 +136,10 @@ export default function Quality() {
         {queue.length === 0 ? <Empty>目前沒有輪到你處理的品質事項</Empty> : (
           <div className="space-y-1">
             {queue.slice(0, QUALITY_QUEUE_LIMIT).map((q) => (
+              // 整列可點的鈕,手機補到 44px 不會破版(class 刻意仍不含 justify-between:
+              // contractor/supervisor spec 用 justify-between 祖先鎖缺失/查驗列)
               <button key={q.key} onClick={() => setSegment(q.segment)}
-                className="w-full flex items-center gap-3 text-left text-sm rounded-lg px-2 py-1.5 hover:bg-[var(--surface-2)] pressable">
+                className="w-full flex items-center gap-3 text-left text-sm rounded-lg px-2 py-1.5 max-sm:min-h-11 hover:bg-[var(--surface-2)] pressable">
                 <Badge color={QUEUE_TAG_COLOR[q.tag] || 'slate'}>{q.tag}</Badge>
                 <span className="min-w-0 flex-1 truncate text-[var(--text)]">{q.title}</span>
                 <span className="text-xs text-[var(--text-3)] shrink-0">{q.meta}</span>
@@ -197,7 +199,9 @@ export default function Quality() {
               <div key={i.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
                 <div className="min-w-0">
                   <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge></div>
-                  <div className="text-xs text-[var(--text-3)] truncate">{i.work_item_no && `${i.work_item_no} `}{i.location} · {i.inspection_type} · {i.requested_date || ''}{i.result_note ? ` · ${i.result_note}` : ''}</div>
+                  {/* result_note(不合格原因)排在字串最後最先被切,而這一列沒有詳情頁可下鑽 → 補 title */}
+                <div className="text-xs text-[var(--text-3)] truncate"
+                  title={[i.work_item_no, i.location, i.inspection_type, i.requested_date, i.result_note].filter(Boolean).join(' · ')}>{i.work_item_no && `${i.work_item_no} `}{i.location} · {i.inspection_type} · {i.requested_date || ''}{i.result_note ? ` · ${i.result_note}` : ''}</div>
                 </div>
                 <div className="flex gap-2 shrink-0 items-center">
                   {i.status === '待查驗' && (can.approve ? <>
@@ -205,7 +209,7 @@ export default function Quality() {
                     <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
                   </> : <span className="text-xs text-[var(--text-3)]">待監造查驗</span>)}
                   {/* 已判定查驗=品質證據,不提供刪除(DB 另有 guard) */}
-                  {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspection(i.id); if (error) setErrMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label={`刪除查驗 ${i.title}`}>✕</button>}
+                  {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspection(i.id); if (error) setErrMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除查驗 ${i.title}`}>✕</button>}
                 </div>
               </div>
             ))}
@@ -353,14 +357,15 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
               {revising ? (
                 <span className="text-sm px-2.5 py-1.5 inline-block">{template.title}</span>
               ) : (
+                // 表單區(非表格)加高安全:原生 select 在手機尤其需要 44px
                 <select value={tplId} onChange={(e) => { setTplId(e.target.value); setValues({}) }}
-                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]">
+                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-sm:min-h-11">
                   {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
                 </select>
               )}
             </Field>
-            <Field label="檢查日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" /></Field>
-            <Field label="檢查位置"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="如 4F 版牆" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-36" /></Field>
+            <Field label="檢查日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-sm:min-h-11" /></Field>
+            <Field label="檢查位置"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="如 4F 版牆" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-36 max-sm:min-h-11" /></Field>
             <div className="w-72"><Field label="對應工項（選填）">
               <WorkItemPicker leaves={leaves} value={wiKey} label={wiLabel}
                 onPick={(k, l) => { setWiKey(k || ''); setWiLabel(l) }} />
@@ -368,7 +373,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
             {revising && (
               <Field label="更正原因（必填）">
                 <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="如 坍度登載錯誤，依取樣紀錄更正"
-                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-72" />
+                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-72 max-sm:min-h-11" />
               </Field>
             )}
           </div>
@@ -398,13 +403,15 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                       <td className="py-1.5 px-2 text-xs text-[var(--text-2)]">{it.standard}</td>
                       <td className="py-1.5 px-2 text-right">
                         {it.kind === 'bool' ? (
-                          <input type="checkbox" checked={values[it.no] === true}
+                          // 20px:原生 checkbox 預設 13px,和同列 text-sm 一樣高所以不撐列
+                          <input type="checkbox" className="w-5 h-5" checked={values[it.no] === true}
                             onChange={(e) => setVal(it.no, e.target.checked)} />
                         ) : (
                           <span className="inline-flex items-center gap-1">
-                            <input type="number" step="any" value={values[it.no] ?? ''}
+                            {/* 表格內輸入只提到 ~38px(max-sm:py-2),不加 min-h——加了整張檢查表列高會翻倍 */}
+                            <input type="number" step="any" inputMode="decimal" value={values[it.no] ?? ''}
                               onChange={(e) => setVal(it.no, e.target.value === '' ? '' : Number(e.target.value))}
-                              className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums bg-[var(--surface)]" />
+                              className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums bg-[var(--surface)] max-sm:py-2" />
                             <span className="text-[10px] text-[var(--text-3)] w-10">{it.unit || ''}</span>
                           </span>
                         )}
@@ -456,7 +463,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                         className="text-[var(--text-3)] hover:underline text-xs">歷次 {history.length}</button>
                     )}
                     {canEdit && !r.overall && (
-                      <button onClick={() => del(r)} aria-label="刪除未判定的檢查紀錄" className="text-[var(--text-3)] hover:text-[var(--red-text)]">✕</button>
+                      <button onClick={() => del(r)} aria-label="刪除未判定的檢查紀錄" className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2">✕</button>
                     )}
                   </div>
                 </div>
@@ -472,7 +479,8 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                     <span className="tabular-nums">{h.check_date}</span>
                     <Badge color="slate">{h.overall || '未判定'}</Badge>
                     <span>已由新版取代</span>
-                    {(h.rev || 0) > 0 && h.revision_reason && <span className="truncate">（{h.revision_reason}）</span>}
+                    {/* 更正原因是稽核性說明,這一列沒有下鑽入口 → 至少要能 hover 看全文 */}
+                    {(h.rev || 0) > 0 && h.revision_reason && <span className="truncate" title={h.revision_reason}>（{h.revision_reason}）</span>}
                     <button onClick={() => navigate(`/quality/checklist-print?id=${h.id}`)}
                       className="text-[var(--blue)] hover:underline shrink-0">列印</button>
                   </div>
@@ -523,9 +531,9 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
       {msg && <p className="text-sm mb-3 text-[var(--text-2)]">{msg}</p>}
       {addOpen && (
         <div className="bg-[var(--surface-2)] rounded-lg p-3 mb-4 flex flex-wrap items-end gap-3">
-          <Field label="取樣(澆置)日"><input type="date" value={manual.sampled_date} onChange={(e) => setManual({ ...manual, sampled_date: e.target.value })} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" /></Field>
-          <Field label="fc′ (kgf/cm²)"><input type="number" value={manual.fc} onChange={(e) => setManual({ ...manual, fc: Number(e.target.value) || null })} className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] text-right tabular-nums" /></Field>
-          <Field label="位置"><input value={manual.location} onChange={(e) => setManual({ ...manual, location: e.target.value })} className="w-36 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]" /></Field>
+          <Field label="取樣(澆置)日"><input type="date" value={manual.sampled_date} onChange={(e) => setManual({ ...manual, sampled_date: e.target.value })} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-sm:min-h-11" /></Field>
+          <Field label="fc′ (kgf/cm²)"><input type="number" inputMode="decimal" value={manual.fc} onChange={(e) => setManual({ ...manual, fc: Number(e.target.value) || null })} className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] text-right tabular-nums max-sm:min-h-11" /></Field>
+          <Field label="位置"><input value={manual.location} onChange={(e) => setManual({ ...manual, location: e.target.value })} className="w-36 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-sm:min-h-11" /></Field>
           <Button onClick={addManual} disabled={busy}>建立試體組</Button>
         </div>
       )}
@@ -553,10 +561,11 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                   <td className="px-2 tabular-nums text-xs text-[var(--text-2)]">{s.sampled_date}</td>
                   <td className="px-2 text-right tabular-nums">{s.fc || '—'}</td>
                   <td className="px-2 text-right">
-                    <input type="number" step="any" defaultValue={s.d7_value ?? ''} placeholder="值"
+                    {/* 表格內輸入:只加 max-sm:py-2(~38px),不加 min-h 以免試體表列高翻倍 */}
+                    <input type="number" step="any" inputMode="decimal" defaultValue={s.d7_value ?? ''} placeholder="值"
                       aria-label={`${s.sample_no} 7天參考值`}
                       onBlur={async (e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n !== s.d7_value) { const { error } = await onUpdate(s.id, { d7_value: n }); if (error) setMsg(`未寫入：${error.message}`) } }}
-                      className="w-16 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                      className="w-16 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums max-sm:py-2" />
                     <div>{dueCell(s.d7_due, s.d7_value != null)}</div>
                   </td>
                   <td className="px-2 text-right">
@@ -569,7 +578,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                           if (error) setMsg(`試驗值未寫入：${error.message}`)
                         }
                       }}
-                      className="w-36 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                      className="w-36 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums max-sm:py-2" />
                     <div>{dueCell(s.d28_due, (s.d28_values || []).length > 0)}</div>
                   </td>
                   <td className="px-2 text-center">
@@ -577,7 +586,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                   </td>
                   {/* 已判定試體=品質證據,不提供刪除(DB 另有 guard) */}
                   <td className="text-right pl-2">{s.status === '待試驗' && (
-                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label={`刪除試體 ${s.sample_no}`}>✕</button>
+                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除試體 ${s.sample_no}`}>✕</button>
                   )}</td>
                 </tr>
               ))}
@@ -637,7 +646,8 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
             <div key={o.id} className="flex items-start justify-between gap-3 border-b border-[var(--border-2)] pb-2">
               <div className="min-w-0">
                 <div className="text-sm text-[var(--text)]">{o.title} <Badge color={OBS_STATUS_COLOR[o.status] || 'slate'}>{o.status}</Badge></div>
-                <div className="text-xs text-[var(--text-3)] truncate">{o.location}{o.description ? ` · ${o.description}` : ''}</div>
+                {/* description 是這筆觀察唯一的內容說明,無詳情頁 → 補 title 才看得到全文 */}
+                <div className="text-xs text-[var(--text-3)] truncate" title={[o.location, o.description].filter(Boolean).join(' · ')}>{o.location}{o.description ? ` · ${o.description}` : ''}</div>
                 {o.markup_path && <div className="mt-1"><MarkupThumb src={o.markup_path} resolve={resolveMarkup} /></div>}
               </div>
               {canWrite && o.status !== '轉缺失' && (
@@ -646,7 +656,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
                     <Button variant="secondary" disabled={busy} onClick={() => run('標記已處理', () => onUpdate(o.id, { status: '已處理' }))}>標記已處理</Button>
                     <Button variant="outline" disabled={busy} onClick={async () => { if (await appConfirm({ title: '升級為正式缺失？', body: '將自動開立缺失單追蹤改善。', confirmLabel: '升級' })) run('升級為缺失', () => onEscalate(o)) }}>升級為缺失</Button>
                   </>}
-                  <button disabled={busy} onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) run('刪除觀察', () => onDelete(o.id)) }} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
+                  <button disabled={busy} onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) run('刪除觀察', () => onDelete(o.id)) }} aria-label={`刪除觀察 ${o.title}`} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs p-2 -m-2">✕</button>
                 </div>
               )}
             </div>

@@ -299,10 +299,16 @@ function ProgressTree({ nodes, depth, expanded, toggle, childrenMap, nodePct, am
     return (
       <Fragment key={it.item_key}>
         <div className="flex items-center gap-2 py-1.5 border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
-          <button onClick={() => kids.length && toggle(it.item_key)} style={{ marginLeft: `${depth * 14}px` }}
-            className={`w-4 shrink-0 text-[var(--text-3)] ${kids.length ? 'cursor-pointer hover:text-[var(--text)]' : 'cursor-default'}`}>
-            {kids.length ? (open ? '▾' : '▸') : '·'}
-          </button>
+          {/* 沒有子項時原本仍渲染一顆點不動的 button,對鍵盤是空殼 tab stop;改成純裝飾 span */}
+          {kids.length ? (
+            <button onClick={() => toggle(it.item_key)} style={{ marginLeft: `${depth * 14}px` }}
+              aria-expanded={open} aria-label={`${open ? '收合' : '展開'} ${it.item_no}`}
+              className="w-4 shrink-0 text-[var(--text-3)] cursor-pointer hover:text-[var(--text)]">
+              {open ? '▾' : '▸'}
+            </button>
+          ) : (
+            <span style={{ marginLeft: `${depth * 14}px` }} className="w-4 shrink-0 text-[var(--text-3)]" aria-hidden>·</span>
+          )}
           <span className="w-20 shrink-0 text-xs text-[var(--text-3)] tabular-nums truncate">{it.item_no}</span>
           <span className="flex-1 text-sm truncate">{it.description}</span>
           <span className="w-12 text-right text-xs text-[var(--text-3)] tabular-nums">{share.toFixed(1)}%</span>

@@ -44,7 +44,8 @@ function ResetPasswordForm({ updatePassword }) {
   const [pw2, setPw2] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none'
+  // 對齊 FIELD_BASE(W8-5):移除 outline 就要補 ring 當焦點指示;min-h-11=手機 44px 觸控目標
+  const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm min-h-11 focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 
   const submit = async (e) => {
     e.preventDefault()
@@ -145,14 +146,15 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
     )
   }
 
-  const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none'
+  // 對齊 FIELD_BASE(W8-5):移除 outline 就要補 ring 當焦點指示;min-h-11=手機 44px 觸控目標
+  const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm min-h-11 focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 
   return (
     <form onSubmit={submit} className="space-y-3">
       <div className="flex rounded-lg bg-[var(--surface-2)] p-1 text-sm mb-1">
         {[['signin', '登入'], ['signup', '註冊']].map(([m, label]) => (
           <button key={m} type="button" onClick={() => { setMode(m); setErr('') }}
-            className={`flex-1 py-1.5 rounded-md pressable ${mode === m ? 'bg-[var(--surface)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--text-2)]'}`}>
+            className={`flex-1 py-1.5 min-h-11 rounded-md pressable ${mode === m ? 'bg-[var(--surface)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--text-2)]'}`}>
             {label}
           </button>
         ))}
@@ -189,12 +191,12 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
       </button>
       <div className="text-center pt-0.5">
         {mode === 'signin' && (
-          <button type="button" onClick={() => { setMode('forgot'); setErr('') }} className="text-xs text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">
+          <button type="button" onClick={() => { setMode('forgot'); setErr('') }} className="inline-flex items-center min-h-11 px-2 text-xs text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">
             忘記密碼？
           </button>
         )}
         {mode === 'forgot' && (
-          <button type="button" onClick={() => { setMode('signin'); setErr('') }} className="text-xs text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">
+          <button type="button" onClick={() => { setMode('signin'); setErr('') }} className="inline-flex items-center min-h-11 px-2 text-xs text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">
             ← 回登入
           </button>
         )}

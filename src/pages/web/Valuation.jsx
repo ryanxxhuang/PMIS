@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Printer, Trash2, Sparkles } from 'lucide-react'
+import { Printer, Trash2, Sparkles, AlertTriangle } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, BallChip, Empty, PageHeader, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
@@ -303,7 +303,9 @@ export default function Valuation() {
       <tr key={it.item_key} className={`border-b border-[var(--border-2)] hover:bg-[var(--surface-2)] ${it.depth === 1 ? 'bg-[var(--surface-2)]/70 font-semibold' : ''}`}>
         <td className="py-1.5 pr-2" style={{ paddingLeft: 10 + level * 18 }}>
           {hasKids ? (
-            <button onClick={() => toggle(it.item_key)} className="mr-1 w-4 inline-block text-[var(--text-3)] hover:text-[var(--text)]">{isOpen ? '▾' : '▸'}</button>
+            // ▾/▸ 對報讀器沒有任何意義,展開狀態也讀不到,補名稱與 aria-expanded
+            <button onClick={() => toggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
+              className="mr-1 w-4 inline-block text-[var(--text-3)] hover:text-[var(--text)]">{isOpen ? '▾' : '▸'}</button>
           ) : <span className="mr-1 w-4 inline-block" />}
           <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{it.item_no}</span>
           <span className={it.depth <= 2 ? 'text-[var(--text)]' : ''}>{it.description}</span>
@@ -340,6 +342,7 @@ export default function Valuation() {
               ) : (
                 <button
                   onClick={() => toggleEv(it.item_key)}
+                  aria-expanded={evOpen.has(it.item_key)}
                   title="展開佐證細節(日誌/查驗/檢查表/試體)"
                   className="text-[var(--blue-text)] hover:underline"
                 >
@@ -347,8 +350,10 @@ export default function Valuation() {
                 </button>
               )}
               {overBilled && (
-                <span className="text-[10px] text-[var(--amber-text)]" title="累計估驗數量高於施工日誌累計完成量逾 5%,可能超計,建議查核佐證後再計價">
-                  估驗 {fmt(cumQty)} &gt; 日誌 {fmt(ev.loggedTotal)}
+                // 警示原本只有琥珀色+title,手機沒有 hover 就完全讀不到語意;
+                // 補圖示與「疑超計」字樣,顏色只是輔助(W8-0 §8-6)
+                <span className="inline-flex items-center gap-0.5 text-[11px] text-[var(--amber-text)]" title="累計估驗數量高於施工日誌累計完成量逾 5%,可能超計,建議查核佐證後再計價">
+                  <AlertTriangle size={11} aria-hidden />疑超計 估驗 {fmt(cumQty)} &gt; 日誌 {fmt(ev.loggedTotal)}
                 </span>
               )}
             </span>

@@ -143,6 +143,7 @@ export default function ITP() {
                     )}
                     {can.approve && (
                       <button onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspectionPoint(p.id); if (error) setErrMsg(`刪除失敗:${error.message}`) } }}
+                        aria-label={`刪除停留點 ${p.title}`}
                         className="text-[var(--text-3)] hover:text-[var(--red-text)]">✕</button>
                     )}
                   </div>
@@ -170,7 +171,7 @@ function PointItemPicker({ leaves, value, label, onPick }) {
     return (
       <div className="flex items-center gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface-2)]">
         <span className="truncate flex-1">{label}</span>
-        <button onClick={() => onPick(null, '')} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
+        <button onClick={() => onPick(null, '')} aria-label="清除已選工項" className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
       </div>
     )
   }

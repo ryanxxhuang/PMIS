@@ -63,7 +63,7 @@ export default function Payments() {
         <Stat label="累計已收" value={money(sum.received)} sub="NT$" color="text-[var(--blue-text)]" />
         {/* 負未收=實收超過累計應領,屬資料異常而非正常 KPI(P1-07) */}
         <Stat label="未收款" value={money(sum.unreceived)} sub={sum.unreceived < 0 ? '實收超過應領,請查核' : 'NT$'}
-          color={sum.unreceived < 0 ? 'text-[var(--red-text)]' : sum.unreceived > 0 ? 'text-amber-600' : 'text-[var(--green-text)]'} />
+          color={sum.unreceived < 0 ? 'text-[var(--red-text)]' : sum.unreceived > 0 ? 'text-[var(--amber-text)]' : 'text-[var(--green-text)]'} />
         <Stat label="累計保留款(待退)" value={money(sum.retention)} sub="完工後請領" color="text-[var(--text)]" />
       </div>
 
@@ -128,7 +128,8 @@ export default function Payments() {
                           className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 text-right">
-                        <input type="number" min="0" step="any" key={`amt-${v.id}-${v.paid_amount ?? ''}`} defaultValue={v.paid_amount ?? ''}
+                        {/* 平板(≥640px)也會用觸控填這欄:inputMode 讓數字鍵盤直接出來 */}
+                        <input type="number" min="0" step="any" inputMode="decimal" key={`amt-${v.id}-${v.paid_amount ?? ''}`} defaultValue={v.paid_amount ?? ''}
                           placeholder={Math.round(net).toString()} disabled={!canPaidAmount}
                           title={approved ? (canPaidAmount ? undefined : '請先填收款日') : lockTip} aria-label={`第 ${v.period_no} 期實收金額`}
                           onBlur={async (e) => {

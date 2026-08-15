@@ -34,7 +34,8 @@ export function PageHeader({ title, tagline, subtitle, meta = [], action }) {
             <dl className="hidden sm:flex items-stretch divide-x divide-[var(--border)] border border-[var(--border)] rounded">
               {meta.map((m) => (
                 <div key={m.k} className="px-2.5 py-1 leading-tight">
-                  <dt className="text-[9px] tracking-[0.1em] text-[var(--text-3)]">{m.k}</dt>
+                  {/* 10px+text-2:9px 加寬字距在 1x 螢幕幾乎不可讀,對比也不足(W8-5) */}
+                  <dt className="text-[10px] tracking-[0.1em] text-[var(--text-2)]">{m.k}</dt>
                   <dd className="text-[11px] num text-[var(--text)]">{m.v}</dd>
                 </div>
               ))}
@@ -89,10 +90,12 @@ export function StatusBadge({ status }) {
 //   ghost    — text-only tertiary
 //   success  — confirm/approve (filled green)
 //   danger   — destructive, filled red (real deletes only; use size="sm" ghost ✕ for row deletes)
+// max-sm:min-h-11:手機主要操作至少 44px(W8-5)。只補最小高度不動 padding,
+// 桌機密度不變;inline-flex 已置中,加高不影響文字對齊。
 const BTN_SIZES = {
-  sm: 'px-2.5 py-1 text-xs gap-1 rounded-md',
-  md: 'px-3.5 py-2 text-sm gap-1.5 rounded-lg',
-  lg: 'px-5 py-2.5 text-sm gap-2 rounded-lg',
+  sm: 'px-2.5 py-1 text-xs gap-1 rounded-md max-sm:min-h-11',
+  md: 'px-3.5 py-2 text-sm gap-1.5 rounded-lg max-sm:min-h-11',
+  lg: 'px-5 py-2.5 text-sm gap-2 rounded-lg max-sm:min-h-11',
 }
 // 實心鈕頂緣一道極輕高光(材質受光感,§12 light catching)+ 半透明落影
 const FILLED_SHADOW = '[box-shadow:0_1px_2px_rgba(22,32,43,.18),inset_0_1px_0_rgba(255,255,255,.16)]'
@@ -104,12 +107,14 @@ const BTN_VARIANTS = {
   success: `bg-[var(--success)] text-white hover:bg-[var(--success-hover)] ${FILLED_SHADOW}`,
   danger: `bg-[var(--danger)] text-white hover:bg-[var(--danger-hover)] ${FILLED_SHADOW}`,
 }
+// 焦點樣式用 outline 而非 ring(W8-5):ring-offset 寫死底色會在非 --surface 背景上
+// 露出白色缺口,ring(box-shadow)又會被 overflow-hidden 父層裁切;outline 不佔版面流、不被裁切。
 export const Button = forwardRef(function Button({ variant = 'primary', size = 'md', className = '', children, ...props }, ref) {
   return (
     <button
       ref={ref}
       className={`inline-flex items-center justify-center font-medium whitespace-nowrap shrink-0 pressable
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue)]/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface)]
+        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)]
         disabled:opacity-40 disabled:cursor-not-allowed ${BTN_SIZES[size] || BTN_SIZES.md} ${BTN_VARIANTS[variant] || BTN_VARIANTS.primary} ${className}`}
       {...props}
     >
@@ -130,7 +135,8 @@ export function Stat({ label, value, sub, color = 'text-[var(--text)]' }) {
 
 // Shared form controls (modern-SaaS: consistent height, soft border, focus ring).
 // Pages still writing inline input classes should migrate to these on rollout.
-const FIELD_BASE = 'w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:outline-none focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/20 disabled:opacity-50'
+// max-sm:min-h-11:手機表單控件補到 44px(W8-5);Textarea 本來就更高,min-h 不會縮小它
+const FIELD_BASE = 'w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:outline-none focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/20 disabled:opacity-50 max-sm:min-h-11'
 export function Input({ className = '', ...props }) {
   return <input className={`${FIELD_BASE} ${className}`} {...props} />
 }
@@ -171,7 +177,8 @@ export function ErrorBanner({ msg, onClose, className = '' }) {
   return (
     <div className={`flex items-start justify-between gap-2 text-sm bg-[var(--red-tint)] border border-[var(--red-text)]/25 text-[var(--red-text)] rounded-lg px-3 py-2 enter-row ${className}`}>
       <span>{msg}</span>
-      {onClose && <button onClick={onClose} className="shrink-0 opacity-60 hover:opacity-100 transition-opacity" aria-label="關閉錯誤訊息">✕</button>}
+      {/* p-2 -m-1:擴大 ✕ 命中區,負 margin 吸收 padding、橫幅高度不變(W8-5) */}
+      {onClose && <button onClick={onClose} className="shrink-0 p-2 -m-1 opacity-60 hover:opacity-100 transition-opacity" aria-label="關閉錯誤訊息">✕</button>}
     </div>
   )
 }
@@ -185,8 +192,10 @@ export function PrerequisiteEmptyState({ title, need, unlocks, to, cta, who }) {
       <div className="text-sm text-[var(--text-2)] max-w-md mx-auto">{need}</div>
       {unlocks && <div className="text-xs text-[var(--text-3)] mt-1.5 max-w-md mx-auto">完成後即可使用：{unlocks}</div>}
       <div className="mt-4">
+        {/* Link 包 Button 是巢狀互動元素:內層退出 tab 序避免 Tab 停兩次,
+            Link 給 inline-flex+圓角讓全域 focus outline 落在正確形狀上(W8-5 最小修法,不改 Button API) */}
         {to && cta
-          ? <Link to={to}><Button>{cta}</Button></Link>
+          ? <Link to={to} className="inline-flex rounded-lg"><Button tabIndex={-1}>{cta}</Button></Link>
           : who && <span className="text-xs text-[var(--text-3)]">{who}</span>}
       </div>
     </div>
