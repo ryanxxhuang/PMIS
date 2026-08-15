@@ -42,14 +42,22 @@ test.describe('監造', () => {
     await expect(done.getByText('監造判定不合格')).toBeVisible()
   })
 
-  test('施工日誌對監造唯讀:欄位鎖定、無存檔/上傳鈕', async ({ page }) => {
+  test('施工日誌對監造唯讀:摘要式檢視、無假可編欄位', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/site-log')
     await expect(page.getByText(/此頁為唯讀/).first()).toBeVisible()
-    await expect(page.getByPlaceholder('唯讀檢視')).toBeDisabled()
-    await expect(page.getByPlaceholder('今日施工概況')).toBeDisabled()
+    // W8-4B:唯讀=摘要式,頁上唯一的 input 是切歷史用的日期——不再有 disabled 欄位假裝可編
+    await expect(page.locator('input:not([type="date"])')).toHaveCount(0)
     await expect(page.getByRole('button', { name: '存檔', exact: true })).toHaveCount(0)
     await expect(page.getByText('選照片 AI 辨識後上傳', { exact: true })).toHaveCount(0) // U-01:不給死按鈕(P0 #11 改名後同步)
+    // 切到 demo 種子最近一筆日誌(右欄清單第一筆=昨天),摘要直接顯示該日內容
+    const list = page.getByRole('heading', { name: /施工日誌（/ }).locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    await list.getByRole('button', { name: /^\d{4}-\d{2}-\d{2}$/ }).first().click()
+    const card = page.getByRole('heading', { name: '本日日誌' }).locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    await expect(card.getByText('4F 版牆混凝土澆置、養護')).toBeVisible() // demoSeed 最近一筆(-1 天)的工作摘要
+    await expect(page.getByRole('button', { name: '列印公定格式日誌' })).toBeVisible()
+    // 有日誌的日期一樣是純文字摘要,不會長出可編欄位
+    await expect(page.locator('input:not([type="date"])')).toHaveCount(0)
   })
 
   test('路由守衛:監造進不了請款收款', async ({ page }) => {

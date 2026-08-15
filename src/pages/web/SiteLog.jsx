@@ -301,6 +301,27 @@ export default function SiteLog() {
 
   const reportedKeys = Object.keys(items)
 
+  // W8-4B B1 唯讀摘要:公定格式各節壓成「有資料才顯示」的 [節名, 內容] 行。
+  // 不用 useMemo:每節列數只有個位數,重算成本遠低於多養一個 hook(hooks 順序紅線)。
+  const roOfficial = []
+  if (!can.edit && currentLog) {
+    const push = (label, text) => { if (text) roOfficial.push([label, text]) }
+    push('出工人數', (currentLog.labor || []).filter((r) => r.type).map((r) => `${r.type}×${r.count ?? '—'}`).join('、'))
+    push('機具使用', (currentLog.equipment || []).filter((r) => r.name).map((r) => `${r.name}×${r.count ?? '—'}`).join('、'))
+    push('材料使用', (currentLog.materials || []).filter((r) => r.name).map((r) => `${r.name}×${r.qty ?? '—'}${r.unit ? ` ${r.unit}` : ''}`).join('、'))
+    const ex = currentLog.extras || {}
+    push('四、應置技術士', ex.technicians)
+    // 五、安衛:勾選/選單壓成一句;insured 預設「無新進勞工」不算有值(否則每天都多一行雜訊)
+    push('五、職業安全衛生', [
+      ex.edu && '勤前教育（含危害告知）',
+      ex.ppe && '檢查個人防護具',
+      ex.insured && ex.insured !== '無新進勞工' && `新進勞工提報勞保:${ex.insured}`,
+    ].filter(Boolean).join('、'))
+    push('六、施工取樣試驗紀錄', ex.sampling)
+    push('七、通知協力廠商辦理事項', ex.notice)
+    push('八、重要事項紀錄', ex.important)
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -310,11 +331,87 @@ export default function SiteLog() {
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
           <Card title="本日日誌">
-            {!can.edit && (
+            {/* W8-0 §6.2:唯讀(監造/機關)=摘要式檢視,不再用整排 disabled input 假裝可編——
+                disabled 欄位會誤導成「暫時鎖住的表單」,唯讀角色要的只是「看」。
+                分支只做在 render 層、不拆元件:所有 hook 無條件照跑,可編/唯讀 hook 數才會一致
+                (2026-08-12 hooks 順序事故的同型地雷);state 對唯讀多算是可接受的浪費。 */}
+            {!can.edit ? (<>
               <div className="mb-3 text-xs text-[var(--text-2)] bg-[var(--surface-2)] rounded-lg px-3 py-2">
                 {can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為<b>唯讀</b>，可切換日期檢視歷史紀錄。
               </div>
-            )}
+              {/* 日期本來就對唯讀開放(切歷史用),是唯讀頁上唯一的 input */}
+              <div className="mb-3">
+                <Field label="日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
+              </div>
+              {!currentLog ? (
+                <Empty>此日期尚無日誌。施工日誌由施工廠商填報。</Empty>
+              ) : (
+                <div className="space-y-4">
+                  {/* 天氣與摘要:純文字,空值顯示 —／（未填）而不是空輸入框 */}
+                  <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+                    <div><div className="text-xs text-[var(--text-3)] mb-0.5">天氣(上午)</div><div>{currentLog.weather_am || currentLog.weather || '—'}</div></div>
+                    <div><div className="text-xs text-[var(--text-3)] mb-0.5">天氣(下午)</div><div>{currentLog.weather_pm || '—'}</div></div>
+                    <div className="min-w-0 flex-1 basis-full sm:basis-auto"><div className="text-xs text-[var(--text-3)] mb-0.5">工作摘要</div><div>{currentLog.work_summary || '（未填）'}</div></div>
+                  </div>
+                  {/* 工項回報:表頭同可編視角,數字改純文字。當日數量不走 fmt(會四捨五入),
+                      日誌常見 0.x 之類的小數,照原值顯示才對得上列印與估驗累計 */}
+                  {Object.keys(currentLog.items || {}).length === 0 ? (
+                    <Empty>本日未回報工項數量。</Empty>
+                  ) : (
+                    <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[460px]">
+                      <thead>
+                        <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
+                          <th className="text-left py-1.5">工項</th>
+                          <th className="text-right px-2 whitespace-nowrap">單位</th>
+                          <th className="text-right px-2 whitespace-nowrap">契約數量</th>
+                          <th className="text-right px-2 whitespace-nowrap">當日完成數量</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(currentLog.items || {}).map(([key, qty]) => {
+                          const it = byKey.get(key) || {}
+                          return (
+                            <tr key={key} className="border-b border-[var(--border-2)]">
+                              <td className="py-1.5"><span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{it.item_no}</span>{it.description || key}</td>
+                              <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{it.unit}</td>
+                              <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{fmt(it.quantity)}</td>
+                              <td className="text-right px-2 tabular-nums whitespace-nowrap">{qty}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                    </div>
+                  )}
+                  {/* 公定格式:只列有資料的節;全部沒填收成一行,唯讀不需要一排空欄位 */}
+                  <div>
+                    <div className="text-xs font-medium text-[var(--text-2)] mb-1">公定格式欄位（出工人數・機具・材料・安衛…）</div>
+                    {roOfficial.length === 0 ? (
+                      <p className="text-xs text-[var(--text-3)]">本日未填公定格式欄位</p>
+                    ) : (
+                      <dl className="text-sm space-y-1">
+                        {roOfficial.map(([label, text]) => (
+                          <div key={label} className="flex gap-3">
+                            <dt className="w-32 shrink-0 text-xs text-[var(--text-3)] pt-0.5">{label}</dt>
+                            <dd className="min-w-0 flex-1">{text}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* 列印公定格式:對唯讀角色保留(監造/機關本來就要調閱正式格式) */}
+              {currentLog && (
+                <div className="mt-4">
+                  <button onClick={() => navigate(`/site-log/print?d=${date}`)}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--surface-2)] text-[var(--blue)]">
+                    <Printer size={15} aria-hidden />列印公定格式日誌
+                  </button>
+                </div>
+              )}
+            </>) : (<>
             <div className="flex items-end gap-3 flex-wrap mb-2">
               <Field label="日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
               <Field label="天氣(上午)"><input value={weather} disabled={!can.edit} onChange={(e) => setWeather(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm w-20 disabled:opacity-50 disabled:bg-[var(--surface-2)]" /></Field>
@@ -483,7 +580,7 @@ export default function SiteLog() {
 
             {/* W8-0 §7:手機存檔列貼底固定——公定格式欄位展開後表單很長,捲到底才找得到存檔鈕
                 是現場回報的痛點;-mx-5 抵掉 Card 內距讓底條滿版,pr-16 避開右下浮動 Copilot FAB(bottom-6 right-6)。
-                只在 can.edit 時加 sticky:唯讀視角沒有存檔鈕,DOM 行為維持原樣(W8-4B 範圍,本包不碰)。
+                這一列只有可編視角會渲染(唯讀已在上方走摘要分支),can.edit 條件保留是讓 DOM 與歷史版本逐字一致。
                 pl-5/pr-16 拆開寫而不用 px-5,是避免 padding-inline 與 padding-right 的 cascade 順序不確定 */}
             <div className={`flex items-center gap-3 mt-4${can.edit ? ' max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:bg-[var(--surface)] max-sm:border-t max-sm:border-[var(--border-2)] max-sm:-mx-5 max-sm:pl-5 max-sm:pr-16 max-sm:py-2.5 sm:static sm:border-0' : ''}`}>
               {can.edit ? <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button> : <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>}
@@ -495,11 +592,13 @@ export default function SiteLog() {
               )}
               {savedMsg && <span className={`text-sm ${savedMsg.includes('✓') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{savedMsg}</span>}
             </div>
+            </>)}
           </Card>
 
           <Card title="現場照片" className="mt-5">
             {!currentLog ? (
-              <Empty>先存檔本日日誌，才能附上現場照片。</Empty>
+              // 唯讀角色不能存檔:提示改成「等廠商」而不是叫監造/機關去存檔(W8-4B 修唯讀誤導文案)
+              <Empty>{can.edit ? '先存檔本日日誌，才能附上現場照片。' : '該日日誌建立後，廠商上傳的現場照片會顯示在這裡。'}</Empty>
             ) : (
               <>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -579,7 +678,8 @@ export default function SiteLog() {
                 )}
 
                 {photos.length === 0 ? (
-                  <Empty>尚無照片。用「AI 批次辨識照片」一次丟多張，AI 自動生說明並配工項。</Empty>
+                  // 唯讀角色沒有上傳入口:不指路「AI 批次辨識」這種按不到的操作
+                  <Empty>{can.edit ? '尚無照片。用「AI 批次辨識照片」一次丟多張，AI 自動生說明並配工項。' : '該日尚無現場照片。'}</Empty>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {photos.map((p) => (
@@ -639,9 +739,12 @@ export default function SiteLog() {
         </Card>
       </div>
 
-      <p className="text-xs text-[var(--text-3)]">
-        一天一筆（同日再存會覆蓋）。零輸入:新日期可「複製昨日」帶入班組/機具/材料、天氣點選快填、常用項目一鍵加入（依你的歷史自動學）。各日「當日完成數量」加總 = 估驗的「累計完成數量」——到估驗頁（草稿期）按「AI 估驗草擬」即可自動帶入。
-      </p>
+      {/* 廠商操作說明:唯讀角色沒有存檔/複製昨日/快填這些入口,整段只對可編視角渲染 */}
+      {can.edit && (
+        <p className="text-xs text-[var(--text-3)]">
+          一天一筆（同日再存會覆蓋）。零輸入:新日期可「複製昨日」帶入班組/機具/材料、天氣點選快填、常用項目一鍵加入（依你的歷史自動學）。各日「當日完成數量」加總 = 估驗的「累計完成數量」——到估驗頁（草稿期）按「AI 估驗草擬」即可自動帶入。
+        </p>
+      )}
     </div>
   )
 }
