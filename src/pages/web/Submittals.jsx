@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Sparkles, Upload, Paperclip, FileSearch } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
@@ -17,7 +17,7 @@ const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 
 export default function Submittals() {
   const { project, submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
-    uploadSubmittalFile, readSubmittalDoc, isSupabaseConfigured, currentProject, can, aiEnabled } = useStore()
+    uploadSubmittalFile, readSubmittalDoc, isSupabaseConfigured, currentProject, currentUser, can, aiEnabled } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 審定寫入失敗必須讓使用者看到(失敗=UI 不變)
@@ -26,6 +26,24 @@ export default function Submittals() {
   const [aiRead, setAiRead] = useState({})     // { [submittalId]: result } AI 讀文件審查結果
   const [readBusy, setReadBusy] = useState(null)
   const [uploadBusy, setUploadBusy] = useState(null)
+
+  // 依球權分群:打開這頁第一眼要看到「哪幾件在等我」,而不是待審與已結混排。
+  // 球權一律取自 submittalBall(全平台同一份責任語言),這裡不自己判狀態;
+  // myOrg 只影響分群顯示,能不能按審定仍由 can.* 決定。
+  // hooks 必須排在下方早退之前,順序不可變。
+  const groups = useMemo(() => {
+    const myOrg = currentUser?.org_type || 'contractor'
+    const mine = [], waiting = [], done = []
+    for (const s of submittals || []) {
+      const who = submittalBall(s).who
+      ;(who === 'done' ? done : who === myOrg ? mine : waiting).push(s)
+    }
+    return [
+      { key: 'mine', label: '待我處理', list: mine },
+      { key: 'waiting', label: '等待對方', list: waiting },
+      { key: 'done', label: '已完成', list: done },
+    ]
+  }, [submittals, currentUser])
 
   if (isSupabaseConfigured && !currentProject) {
     return <Card title="送審文件"><Empty>請先登入並選擇專案。</Empty></Card>
@@ -139,8 +157,12 @@ export default function Submittals() {
 
       <Card title={`送審清單（待審 ${pending}）`}>
         {submittals.length === 0 ? <Empty>尚無送審文件。施工廠商提送計畫/材料，監造審核核備。</Empty> : (
-          <div className="space-y-2">
-            {submittals.map((s) => (
+          <div className="space-y-4">
+            {groups.map((g) => g.list.length === 0 ? null : (
+            // 群標題只是安靜的分隔線索,不做成 Card——多一層框會讓清單看起來更重(比照變更清單)
+            <div key={g.key} className="space-y-2">
+              <h2 className="text-sm font-medium text-[var(--text-2)]">{g.label}（{g.list.length}）</h2>
+            {g.list.map((s) => (
               <div key={s.id} className="border border-[var(--border-2)] rounded-lg p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -199,8 +221,8 @@ export default function Submittals() {
                     )}
                     {/* 施工:退回補正後修正再送(補正說明必填=實質補正證據) */}
                     {can.submit && s.status === '退回補正' && <Button variant="secondary" disabled={busy} onClick={() => onResubmit(s)}>修正再送</Button>}
-                    {can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
-                    {!can.approve && (s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
+                    {/* 待審提示與角色無關(原本拆成 can.approve/!can.approve 兩條分支渲染同一段字,行為等價) */}
+                    {(s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
                     {/* 僅「已提送且未經審查」可刪(R3 P0-01:一經受理即為履約證據,DB 另有 guard) */}
                     {can.submit && s.status === '已提送' && !(s.revision > 0) && (
                       <button onClick={async () => {
@@ -276,6 +298,8 @@ export default function Submittals() {
                   )
                 })()}
               </div>
+            ))}
+            </div>
             ))}
           </div>
         )}

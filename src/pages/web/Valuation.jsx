@@ -2,15 +2,36 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Printer, Trash2, Sparkles } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Button, Empty, PageHeader, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Button, BallChip, Empty, PageHeader, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { collectEvidence, OVER_TOL } from '../../lib/evidence.js'
+import { valuationBall } from '../../lib/ballInCourt.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 
 const statusColor = { 草稿: 'slate', 監造審核: 'amber', 已核定: 'green' }
+
+// 決策列差異彙總(W8-4B B2):純計數,不動任何金額——金額仍由 boqCalc 確定性引擎算。
+// 超計與明細列的 overBilled 是同一條式子(OVER_TOL 同源),兩處判定不可分裂;
+// 只計 cum>0 的項——沒計價的工項本來就不存在「超計/無佐證」問題,也省掉整樹掃描。
+// 回傳 keys 讓決策列能把該些列的佐證欄一鍵展開(沿用 evOpen,不另做篩選機制)。
+export function summarizeValuationDiff(leaves, cumMap, evidenceOf) {
+  const overKeys = []
+  const noEvidenceKeys = []
+  for (const it of leaves || []) {
+    const cum = Number(cumMap?.[it.item_key] ?? 0)
+    if (!(cum > 0)) continue
+    const ev = evidenceOf(it)
+    const evCount = ev.counts.logs + ev.counts.inspections + ev.counts.checklists + ev.counts.samples
+    if (evCount === 0) noEvidenceKeys.push(it.item_key)
+    // 注意:無任何日誌(loggedTotal=0)而有計價者也算超計——與明細列警示一致,
+    // 這正是送審前最該被看到的一種差異
+    if (cum > ev.loggedTotal * OVER_TOL) overKeys.push(it.item_key)
+  }
+  return { over: overKeys.length, noEvidence: noEvidenceKeys.length, overKeys, noEvidenceKeys }
+}
 
 export default function Valuation() {
   const { project, workItems: data, valuations, createValuation, updateValuationItem, setValuationStatus,
@@ -76,6 +97,18 @@ export default function Valuation() {
       return ev
     }
   }, [data, siteLogs, inspections, checklistRecords, checklistTemplates, testSamples])
+
+  // 決策列差異彙總:從 selected.items 的 key 出發(只有被填過的工項才在裡面),
+  // 不掃整棵樹——真實 PCCES 標單有數千葉項,決策列不該多付整樹成本。
+  const keyToItem = useMemo(() => new Map((data?.items || []).map((it) => [it.item_key, it])), [data])
+  const diffSummary = useMemo(() => {
+    const items = selected?.items || {}
+    // 防呆:只留樹上真正的葉項(母項/不在計價樹上的 key 不應被計數)
+    const billedLeaves = Object.keys(items)
+      .map((k) => keyToItem.get(k))
+      .filter((it) => it && !(childrenMap.get(it.item_key)?.length))
+    return summarizeValuationDiff(billedLeaves, items, getEvidence)
+  }, [selected?.items, keyToItem, childrenMap, getEvidence])
 
   if (!data) return <Empty>載入估驗資料中…</Empty>
 
@@ -385,6 +418,51 @@ export default function Valuation() {
             <Stat label="本期應付" value={fmt(periodAmt * (1 - ret))} sub="本期估驗 − 保留款" color="text-blue-600" />
           </div>
 
+          {/* 本期決策列(W8-4B B2):先給「這期在誰手上、與日誌差在哪、我能按什麼」,
+              再往下讀明細(W8-0 §7)。動作鈕從明細卡右上「搬」到這裡——絕非複製,
+              e2e-real 對「核定估驗」等按鈕名是嚴格單一命中,全頁只准一顆。 */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-[var(--border-2)] bg-[var(--surface-2)]/60 px-4 py-2.5 max-sm:flex-col max-sm:items-stretch">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-[var(--text)]">第 {selected.period_no} 期</span>
+              <Badge color={statusColor[selected.status] || 'slate'}>{selected.status}</Badge>
+              {/* BallChip 在「監造審核」的標籤與右側既有「待監造核定」Badge 同字,而
+                  e2e-real 對該字是嚴格單一命中——非核定者視角只保留 Badge 那一處,
+                  其餘狀態(含核定者視角)由 BallChip 標示責任方 */}
+              {!(selected.status === '監造審核' && !can.approve) && <BallChip ball={valuationBall(selected)} />}
+            </div>
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              {diffSummary.over === 0 && diffSummary.noEvidence === 0 ? (
+                <span className="text-[var(--green-text)]">與日誌相符</span>
+              ) : (
+                <>
+                  {diffSummary.over > 0 && (
+                    <button
+                      onClick={() => setEvOpen((p) => new Set([...p, ...diffSummary.overKeys]))}
+                      title="展開超計工項的佐證欄(估驗累計高於日誌累計逾 5%),逐項查核後再核定"
+                      className="text-[var(--amber-text)] hover:underline"
+                    >
+                      超計 {diffSummary.over} 項
+                    </button>
+                  )}
+                  {diffSummary.noEvidence > 0 && (
+                    <span className="text-[var(--text-3)]" title="有計價但查無任何日誌/查驗/檢查表/試體對應">無佐證 {diffSummary.noEvidence} 項</span>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 sm:ml-auto max-sm:flex-col max-sm:items-stretch">
+              {selected.status === '草稿' && can.submit && <Button variant="secondary" className="max-sm:w-full max-sm:min-h-11" onClick={() => onStatus('監造審核')}>送監造審核</Button>}
+              {selected.status === '監造審核' && (can.approve ? <>
+                <Button variant="ghost" className="max-sm:w-full max-sm:min-h-11" onClick={() => onReject('退回')}>退回</Button>
+                <Button variant="success" className="max-sm:w-full max-sm:min-h-11" onClick={() => onStatus('已核定')}>核定估驗</Button>
+              </> : <Badge color="amber">待監造核定</Badge>)}
+              {selected.status === '已核定' && can.approve &&
+                <Button variant="ghost" className="max-sm:w-full max-sm:min-h-11" onClick={() => onReject('退回核定')}>退回核定</Button>}
+              {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01) */}
+              {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-[var(--red-text)] hover:text-[var(--red-text)] max-sm:w-full max-sm:min-h-11" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
+            </div>
+          </div>
+
           <Card
             title={`第 ${selected.period_no} 期 估驗明細`}
             action={
@@ -395,15 +473,6 @@ export default function Valuation() {
                     <Sparkles size={14} aria-hidden />{filling ? 'AI 草擬中…' : 'AI 估驗草擬'}
                   </Button>
                 )}
-                {selected.status === '草稿' && can.submit && <Button variant="secondary" onClick={() => onStatus('監造審核')}>送監造審核</Button>}
-                {selected.status === '監造審核' && (can.approve ? <>
-                  <Button variant="ghost" onClick={() => onReject('退回')}>退回</Button>
-                  <Button variant="success" onClick={() => onStatus('已核定')}>核定估驗</Button>
-                </> : <Badge color="amber">待監造核定</Badge>)}
-                {selected.status === '已核定' && can.approve &&
-                  <Button variant="ghost" onClick={() => onReject('退回核定')}>退回核定</Button>}
-                {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01) */}
-                {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-[var(--red-text)] hover:text-[var(--red-text)]" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
               </div>
             }
           >
