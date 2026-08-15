@@ -103,7 +103,7 @@ contract_packages
 - 50 張 migration 建立的資料表、1 個權威 Requirement View。
 - 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
 - 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 63 個 Vitest 測試檔，共 607 個測試；30 個 Playwright Demo 三角色／路由／無障礙 E2E（含 `e2e/a11y.spec.js` 的三角色 375px 全路由無溢位掃描與鍵盤合約）；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
+- 63 個 Vitest 測試檔，共 607 個測試；30 個 Playwright Demo 三角色／路由／無障礙 E2E（含 `e2e/a11y.spec.js` 的三角色 375px 全路由無溢位掃描與鍵盤合約）；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）（chain3 含 live AI 成功路徑，2026-08-15 驗證）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
 
 最近一次全套驗證（W7 PR #9，2026-08-13）：530 個單元測試、14 個 Demo E2E、5 個真 Supabase E2E 與 production build 全數通過。PR #8 已讓 23 檔 pgTAP 自動進 CI；其 main run 與一般 CI 均成功。W0～W5、W6 PR #7、pgTAP CI PR #8 與 W7 PR #9 已合併部署；PR #9 的 main CI 與 Cloudflare Workers build 成功，正式站首頁、`/requirements`、`/security` 與 `/site-log/print` 均回 HTTP 200。正式資料庫維持 `20260812000600`，W7 沒有資料庫變更。
 
@@ -123,7 +123,7 @@ W5-4 只修正一條可重現的 Demo／DB 漂移：同一組 28 天試體判定
 
 W6 PR #7 已合併並部署，5 條本機真後端測試於 2026-08-13 重跑全綠：`npm run test:e2e:real`（環境變數注入、拒絕正式 Supabase、不進預設 CI）對一次性本機 staging 跑 auth 冒煙、鏈 1 初始化（含邀請錯配拒絕與正式模式）、鏈 2 估驗三方簽核與請款收款、鏈 3 文件上傳＋綁定真文件版本的人工待審 Requirement→核定→D-012 義務物化、鏈 4 匯入/重設 rollback（含 UI 錯誤橫幅與「日誌不半刪」）。fixture 走產品窄門 RPC，清理含 Storage 物件，跑後殘留 0。
 
-但 W6 尚未完整收官：鏈 3 目前仍以人工 fixture 代替 live AI 輸出，沒有驗證 `extract-requirements` 成功寫入 ingestion run、AI-origin Requirement 與 citation。2026-08-13 手動重驗已能由未追蹤環境檔注入金鑰，但 Supabase CLI 2.113.0 的本機 Edge main worker 在模型呼叫前即發生 entrypoint boot error；待 CLI 修復或一次性 hosted staging 再完成，不代表產品或金鑰驗證失敗。細節見 `docs/REAL_BACKEND_E2E.md`。
+W6-4 已於 2026-08-15 收官：先前的「CLI boot error」查明為誤診，真因是 colima 未掛載 repo 所在的外接 SSD（連同本機 service_role 權限、pro 方案閘門與 W8 UI 漂移一併修復，已由 PR #20 合併）。同日本機一次性 staging 上全套 5/5 通過且鏈 3 為 live 模式——`extract-requirements` 真呼叫 Anthropic API、`document_ingestion_runs` completed、AI-origin 固定期限 Requirement 與經正規化比對的契約原文 citation，監造核定後 D-012 義務物化；`ai_usage_events` 留有 `requirements.extract`、token 非 0、`status='ok'` 的記帳列。細節見 `docs/REAL_BACKEND_E2E.md`。
 
 W7 已由 PR #9 部署並依 D-013 收口前端路由：`src/lib/navConfig.js` 的 `routeRegistry` 明確登記全部 36 條 App 路由，未登記業務路由 fail-closed；登入、公開、重新導向、列印與 404 各自標註。`src/App.jsx` 由這份路由表統一決定共同守衛與版面，四條列印路由現在也會先驗證登入與專案狀態，但仍保留無工作台外框的列印版面。既有三方頁面權限、導覽、RLS 與資料庫均未改動。
 

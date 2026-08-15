@@ -1,6 +1,6 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（W0–W7 已完成既定範圍；W8-1 PR #11、W8-2 PR #12、W8-3A PR #13、W8-1R PR #14、W8-3B PR #15、W8-4A PR #16、W8-4B PR #18、W8-4C PR #17；下一包 W8-5）**
+> 狀態：**ACTIVE（W0–W8 全數完成；W8-1 PR #11、W8-2 PR #12、W8-3A PR #13、W8-1R PR #14、W8-3B PR #15、W8-4A PR #16、W8-4B PR #18、W8-4C PR #17、W8-5 PR #19、W6-4 收官 PR #20；已核准清單全數交付）**
 > 最後更新：2026-08-15
 > 依《產品全案評估報告 2026-08-12》與已核准的 W8-0 第三版（方向已定案為 D-007～D-015）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
@@ -22,7 +22,7 @@
 - [x] W3 單一 Agent 體驗 — PR #4，已部署（migration `20260812000300`＋16 支 Edge Functions）
 - [x] W4 成員與正式模式 — PR #5，已部署（migration `20260812000400`）
 - [x] W5 一次一項架構債 — PR #6，已部署（migrations `20260812000500`、`20260812000600`）
-- [ ] W6 最小真案驗收 — PR #7 已合併並部署（尚缺 live Edge 成功路徑）
+- [x] W6 最小真案驗收 — PR #7 已合併並部署；live Edge 成功路徑已於 2026-08-15 由 PR #20 環境修復後驗證通過
 - [x] W7 路由治理 — PR #9，已部署
 - [x] W8-0 UI/UX 全產品重新評估與整體改善計畫（第三版）— 使用者已核准
 - [x] W8-1 全站框架、品牌與導覽 — PR #11
@@ -35,7 +35,7 @@
 
 D-014 已依核准報告修訂：保留四步專案初始化設定精靈，第 3 步採「AI 整理完成」，不要求清空全部待審。全產品方向見 D-015。
 
-W6 的 5 條本機真後端測試於 2026-08-13 重跑均綠，PR #7 已合併、main CI 與 Cloudflare 部署成功；但 W6-4 以綁定真文件版本的人工待審 fixture 代替 live AI 輸出。`ANTHROPIC_API_KEY` 已可由未追蹤環境檔注入，但 Supabase CLI 2.113.0 的本機 Edge main worker 目前在模型呼叫前即發生 entrypoint boot error；待 CLI 修復或一次性 hosted staging 後才能完整收官，不阻擋 W7。
+W6 的 5 條本機真後端測試於 2026-08-13 重跑均綠，PR #7 已合併、main CI 與 Cloudflare 部署成功；W6-4 的 live Edge 成功路徑則於 2026-08-15 由 PR #20 的環境修復後補齊：同一次性 staging 上 5/5 全綠且 chain 3 為 live 模式（真呼叫 Anthropic API、`ai_usage_events` 有記帳列），W6 至此完整收官。細節見 `docs/REAL_BACKEND_E2E.md`。
 
 ---
 
@@ -132,12 +132,13 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   本機證據（2026-08-13）：`e2e-real/chain1-onboarding.spec.js` 對一次性本機 staging 通過——註冊落地建案頁、建案導向專案文件（D-007）、邀請錯配被擋＋訊息完整（D-009）、三方到齊轉綠（W4-4）、requireText 開啟正式模式、被邀監造登入可見專案（RLS）；afterAll 走 delete_project RPC＋admin API 清理，殘留 0。
 - [x] **W6-3 鏈 2：廠商提送→監造審核→機關核准／付款**
   本機證據（2026-08-13）：`e2e-real/chain2-valuation.spec.js` 正式模式下通過——廠商建期送審（無核定鈕）、監造核定、機關登錄請款/收款（待請款→已請款→已收款）；fixture 全走產品 RPC，afterAll 清理殘留 0。
-- [ ] **W6-4 鏈 3：文件上傳→Requirement 建議→人工核定**
+- [x] **W6-4 鏈 3：文件上傳→Requirement 建議→人工核定**
   已通過部分（2026-08-13）：`e2e-real/chain3-requirements.spec.js` 上傳契約 txt（Storage＋documents＋document_versions），並在真文件版本建立後插入帶 document source 的人工待審 Requirement；廠商看得到但無核定鈕，監造經 `review_requirement` 核定後，D-012 義務物化出現同標題與固定到期日。清理含 Storage 物件，殘留 0。
-  尚缺（2026-08-15 更新）：原「CLI boot error」已查明為誤診——真因是 colima 未掛載 repo 所在外接 SSD，掛載修正後原版 CLI 即可服務全部函式；另修正三個會擋在模型前的問題（本機 service_role 無表級權限→`supabase/seed.sql` 對齊 hosted 預設、chain3 未過 `min_plan='pro'` 閘門→bootstrap 平台管理員升級方案、W8 改版造成的 chain3/auth-smoke locator 漂移）。deterministic 5/5 重跑全綠；live 管線已實測通到 Anthropic API（回 401 金鑰失效）。**只差有效 `ANTHROPIC_API_KEY` 重跑單條 chain 3**（見 `docs/REAL_BACKEND_E2E.md` Live Edge 驗收）。
+  已完成（2026-08-15，環境修復由 PR #20 合併）：原「CLI boot error」已查明為誤診——真因是 colima 未掛載 repo 所在外接 SSD，掛載修正後原版 CLI 即可服務全部函式；另修正三個會擋在模型前的問題（本機 service_role 無表級權限→`supabase/seed.sql` 對齊 hosted 預設、chain3 未過 `min_plan='pro'` 閘門→bootstrap 平台管理員升級方案、W8 改版造成的 chain3/auth-smoke locator 漂移）。
+  live 驗收證據：同日本機一次性 staging 上真後端 E2E 全套 5/5 通過**且 chain 3 為 live 模式**——上傳契約 txt → `extract-requirements` 真呼叫 Anthropic API → `document_ingestion_runs` completed → AI-origin deadline Requirement（trigger fixed、fixed_date 2026-10-31）→ citation 以 `sourceVerify` 同義正規化驗證為契約原文 → 廠商無核定鈕 → 監造以「核定並加入期限追蹤」（`review_requirement` RPC）核定 → D-012 物化 obligation 於 `/contract` 顯示同標題與 2026-10-31。硬證據為 `ai_usage_events` 內 `feature_key='requirements.extract'`、`model='claude-sonnet-5'`、input/output token 非 0（如 2382/575）、`cost_usd` 有值、`status='ok'` 的記帳列。模型行為記錄：帶期限的「品質計畫送審」條款被模型歸類為 submittal（合理分類），因此 live 斷言錨定在無歧義的純期限條款（工程期限 2026-10-31）。staging 殘留 0（僅冒煙帳號）。細節見 `docs/REAL_BACKEND_E2E.md` Live Edge 驗收。
 - [x] **W6-5 鏈 4：標單匯入失敗／重設失敗 rollback（真後端重演 W1 pgTAP 情境）**
   本機證據（2026-08-13）：`e2e-real/chain4-boq-rollback.spec.js` 通過——缺父項匯入整包拒收（全敗如未匯）、重試成功、重複匯入被擋；品質檢查紀錄連工項時 UI 清空重匯被 guard 擋下並顯示「清空未執行，所有資料維持原狀」紅色橫幅，標單與日誌原封不動（舊版災難點：日誌被靜默刪光）；移除品質證據後重試清空成功、回到 onboarding。
-  （W6-2、W6-3、W6-5 已達成；W6-4 的 RLS／Storage／審查／物化已綠，live Edge 成功路徑待補。）
+  （W6-2、W6-3、W6-5 已達成；W6-4 的 RLS／Storage／審查／物化與 live Edge 成功路徑均已於 2026-08-15 驗證通過。）
 
 ---
 

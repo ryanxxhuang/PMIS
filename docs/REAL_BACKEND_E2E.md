@@ -48,9 +48,9 @@ W6-1 冒煙只做登入、session 重整還原與登出，不建立業務資料�
 
 ## W6-4 的驗證邊界
 
-目前工作區沒有注入 Anthropic API key，因此一般 `npm run test:e2e:real` 不啟動 live Edge 模式。`chain3-requirements.spec.js` 驗證的是真實 Storage／documents／document_versions、綁定該文件版本的待審 Requirement、三方 RLS、人工核定與 D-012 obligation 物化；待審列以人工 fixture 代替 live AI 輸出。
+`chain3-requirements.spec.js` 有兩種模式。環境沒有 Anthropic API key 時走 deterministic 模式：驗證真實 Storage／documents／document_versions、綁定該文件版本的待審 Requirement、三方 RLS、人工核定與 D-012 obligation 物化，待審列以人工 fixture 代替 live AI 輸出——這個模式**不是** `extract-requirements` 的 live AI／Edge 成功路徑，單跑它不能宣稱外部模型串接已通過。
 
-這條測試**不是** `extract-requirements` 的 live AI／Edge 成功路徑，不能拿來宣稱外部模型串接已通過。若要符合原評估報告「真實 Storage 與 Edge」的完整完成條件，仍須在帶 Edge runtime 與 Anthropic key 的一次性 staging 另跑成功路徑，測後刪除環境與資料。
+環境有金鑰且 Edge 已啟動時走 live 模式，才符合原評估報告「真實 Storage 與 Edge」的完整完成條件。live 模式已於 2026-08-15 在一次性 staging 驗證通過（見下）。
 
 ### Live Edge 驗收
 
@@ -81,8 +81,14 @@ npm run test:e2e:real -- e2e-real/chain3-requirements.spec.js
 
 只要環境內存在 `ANTHROPIC_API_KEY`，chain 3 就不會建立人工替代資料，而會要求同一文件版本的 `document_ingestion_runs.status = completed`、`origin = 'ai'` 的固定期限 Requirement，以及指回該文件版本的 citation（以 `sourceVerify` 同義的正規化比對，防捏造也不製造假紅燈）；Edge 未啟動、模型失敗或沒有抽出契約明載期限都會讓測試失敗。失敗時錯誤訊息會附上伺服器端 `ingestion_runs.error_message`。成功後仍由 `afterAll` 清除專案、帳號與 Storage。
 
-**目前狀態（2026-08-15）**：上述 1、2、4 全部落地後，live 管線已通到最後一哩——函式建立 ingestion run、請求真實抵達 Anthropic API，回應為 `401 API key is invalid`（金鑰已失效／被輪替，格式無誤）。整條串接（閘門→RLS 讀取→run 建立→模型呼叫）已驗證可運作；**只差換一把有效金鑰重跑單條 chain 3**，在那之前 live Edge 仍維持待驗，不得宣稱外部模型串接已通過。
+**目前狀態（2026-08-15）：live 驗收已通過。** 上述前置全部落地並換上有效金鑰後，本機一次性 staging 上真後端 E2E 全套 5/5 通過，且 chain 3 為 live 模式：上傳契約 txt → `extract-requirements` 真呼叫 Anthropic API → `document_ingestion_runs` completed → AI-origin deadline Requirement（trigger fixed、fixed_date 2026-10-31）→ citation 以 `sourceVerify` 同義正規化驗證為契約原文 → 廠商無核定鈕 → 監造以「核定並加入期限追蹤」（`review_requirement` RPC）核定 → D-012 物化 obligation 於 `/contract` 顯示同標題與 2026-10-31。
+
+硬證據：`ai_usage_events` 有 `feature_key='requirements.extract'`、`model='claude-sonnet-5'`、input/output token 非 0（如 2382/575）、`cost_usd` 有值、`status='ok'` 的記帳列。
+
+模型行為記錄：帶期限的「品質計畫送審」條款被模型歸類為 submittal（合理分類），因此 live 斷言錨定在無歧義的純期限條款（工程期限 2026-10-31）。staging 殘留 0（僅冒煙帳號）。上述環境修復已由 PR #20 合併。
 
 ## W6-1 基線
 
-2026-08-13 已以完整 migrations 重建的本機 Supabase 作一次性 staging；W7 收尾時重跑 auth 冒煙與四條業務鏈共 5/5 通過，臨時帳號、專案與 Storage 清理後殘留 0。同次 14 條 Demo E2E、530 個 Vitest 與 production build 亦全數通過。live Edge 因上述 CLI／runtime boot error 尚未宣稱完成。
+2026-08-13 已以完整 migrations 重建的本機 Supabase 作一次性 staging；W7 收尾時重跑 auth 冒煙與四條業務鏈共 5/5 通過，臨時帳號、專案與 Storage 清理後殘留 0。同次 14 條 Demo E2E、530 個 Vitest 與 production build 亦全數通過。
+
+2026-08-15 於本機一次性 staging 再跑一次全套：auth 冒煙與四條業務鏈 5/5 通過，且 chain 3 為 live 模式（真呼叫 Anthropic API，見上）；殘留 0（僅冒煙帳號）。
