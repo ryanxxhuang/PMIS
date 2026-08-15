@@ -193,7 +193,9 @@ function ProjectCard({ c, onOpen }) {
         <div className="relative h-2 rounded-full bg-[var(--surface-2)] mt-2 overflow-hidden">
           <div className="absolute inset-y-0 left-0 rounded-full bg-[var(--blue)]" style={{ width: `${Math.min(100, c.progressPct)}%` }} />
           {c.plannedPct != null && (
-            <div className="absolute inset-y-0 w-[2px] bg-[var(--text-2)]" style={{ left: `${Math.min(100, c.plannedPct)}%` }} />
+            /* 標記線只有顏色與位置,沒有文字說明;比照 Dashboard 同一標記補 title/aria-label */
+            <div className="absolute inset-y-0 w-[2px] bg-[var(--text-2)]" style={{ left: `${Math.min(100, c.plannedPct)}%` }}
+              role="img" title={`今日預定 ${c.plannedPct.toFixed(1)}%`} aria-label={`今日預定 ${c.plannedPct.toFixed(1)}%`} />
           )}
         </div>
         <div className="num text-[11px] text-[var(--text-3)] mt-1.5 text-right">

@@ -161,15 +161,17 @@ function DraftInboxCard() {
                   <div className="rounded-lg border border-[var(--border-2)] divide-y divide-[var(--border-2)]">
                     {draftItems.map(([wiId, v]) => (
                       <div key={wiId} className="flex items-center gap-2 px-2.5 py-1.5">
-                        <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate">
+                        {/* 工項描述是人核准 AI 草稿前唯一的判斷依據(紅線 4),被截斷就補 title 看全文 */}
+                        <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate" title={`${v?.item_no || ''} ${v?.description || wiId}`.trim()}>
                           {v?.item_no && <span className="text-[var(--text-3)] mr-1">{v.item_no}</span>}
                           {v?.description || wiId}
                         </div>
+                        {/* !py-1 是刻意壓縮的清單密度;手機只放寬到 !py-2(~38px),不套 min-h-11 以免整份待審清單變兩倍長 */}
                         <Input type="number" min="0" step="any" inputMode="decimal" placeholder="數量"
                           aria-label={`${v?.description || wiId} 本日數量`}
                           value={qtys[wiId] ?? v?.qty_today ?? ''}
                           onChange={(e) => setQty(a.id, wiId, e.target.value)}
-                          className="!w-24 shrink-0 !py-1 text-right tabular-nums" />
+                          className="!w-24 shrink-0 !py-1 max-sm:!py-2 max-sm:!min-h-0 text-right tabular-nums" />
                         <span className="w-8 shrink-0 text-[11px] text-[var(--text-3)]">{v?.unit || ''}</span>
                       </div>
                     ))}
@@ -184,7 +186,7 @@ function DraftInboxCard() {
                     {clSuggested.map(([no, v]) => (
                       <div key={no} className="px-2.5 py-1.5 space-y-0.5">
                         <div className="flex items-center gap-2">
-                          <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate">
+                          <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate" title={`${no} ${clItemByNo.get(no)?.item || ''}`.trim()}>
                             <span className="text-[var(--text-3)] mr-1">{no}</span>
                             {clItemByNo.get(no)?.item || ''}
                           </div>
@@ -209,7 +211,7 @@ function DraftInboxCard() {
                 {subPayload && (
                   <div className="rounded-lg border border-[var(--border-2)] divide-y divide-[var(--border-2)]">
                     <div className="flex items-center gap-2 px-2.5 py-1.5">
-                      <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate">
+                      <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate" title={`${subPayload.submittal_no || ''} ${subPayload.submittal_title || ''}`.trim()}>
                         {subPayload.submittal_no && <span className="text-[var(--text-3)] mr-1">{subPayload.submittal_no}</span>}
                         <span className="font-medium text-[var(--text)]">{subPayload.submittal_title || ''}</span>
                       </div>
@@ -244,7 +246,7 @@ function DraftInboxCard() {
                 )}
                 {findings.length > 0 && (
                   <button onClick={() => setOpenFindings(findingsOpened ? null : a.id)}
-                    className="inline-flex items-center gap-0.5 text-[11px] text-[var(--text-3)] hover:text-[var(--text-2)]">
+                    className="inline-flex items-center gap-0.5 text-[11px] max-sm:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
                     {findingsOpened ? <ChevronDown size={11} aria-hidden /> : <ChevronRight size={11} aria-hidden />}
                     勾稽發現 {findings.length} 項
                   </button>
@@ -266,7 +268,7 @@ function DraftInboxCard() {
                 )}
                 {a.rationale && (
                   <button onClick={() => setOpenRationale(opened ? null : a.id)}
-                    className="inline-flex items-center gap-0.5 text-[11px] text-[var(--text-3)] hover:text-[var(--text-2)]">
+                    className="inline-flex items-center gap-0.5 text-[11px] max-sm:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
                     {opened ? <ChevronDown size={11} aria-hidden /> : <ChevronRight size={11} aria-hidden />}
                     為什麼這樣擬
                   </button>

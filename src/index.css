@@ -19,7 +19,7 @@
   --surface-2: #eceff3;
   --text: #16202b;
   --text-2: #4d5c6a;
-  --text-3: #78848f;
+  --text-3: #636f7b;   /* W8-5 對比修正:原 #78848f 對 --surface 只有 3.8:1;此值對 --surface 5.1:1、對 --bg 4.6:1(AA) */
   --border: #c9d2da;
   --border-2: #e2e7ec;
 
@@ -78,7 +78,7 @@
   --surface-2: #2a323b;
   --text: #e6ebf0;
   --text-2: #9fabb8;
-  --text-3: #75818e;
+  --text-3: #8b97a4;   /* W8-5 對比修正:原 #75818e 對 --surface 只有 4.0:1,調亮到 ≥4.5:1(AA) */
   --border: #313b46;
   --border-2: #262e37;
 
@@ -122,6 +122,19 @@ body { background: var(--bg); color: var(--text); }
 input, select, textarea { color: var(--text); background-color: var(--surface); }
 input::placeholder, textarea::placeholder { color: var(--text-3); }
 select option { color: var(--text); background: var(--surface); }
+
+/* 全域鍵盤焦點 fallback(W8-5):全站大量原生 button/連結沒寫任何 focus 樣式,
+   UA 預設外框在 hover 底色與深色模式下辨識度低。
+   必須包在 @layer base——Tailwind 4 把 utilities 放進 cascade layer,
+   本檔其餘 unlayered 規則優先於任何 layer,裸寫會反過來壓掉元件端的
+   focus-visible:* utilities 造成兩種焦點樣式疊加;:where() 讓特異性歸零,
+   元件要覆寫時不必打架。用 outline 不佔版面流、也不被 overflow 裁切。 */
+@layer base {
+  :where(a, button, [role="button"], summary, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+}
 
 /* 材質層級:一般表面用半透明疊層影,大面積浮面(modal)更厚更深 */
 .g-elevation-1 { border: 1px solid var(--border-card); box-shadow: var(--shadow-card); }

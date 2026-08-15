@@ -191,6 +191,7 @@ export default function Cost() {
                     </td>
                     <td className="px-2 pr-5 text-right">
                       <button onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) onDelete(c.id) }}
+                        aria-label={`刪除 ${c.title}`}
                         className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm">✕</button>
                     </td>
                   </tr>

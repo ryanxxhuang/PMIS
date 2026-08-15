@@ -6,6 +6,9 @@ import { Link } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 
 const SEV_DOT = { risk: 'var(--red-text)', watch: 'var(--amber-text)', ok: 'var(--green-text)' }
+// 嚴重度不能只靠顏色(W8-0 §8-6):色盲與報讀器都拿不到紅/琥珀/綠的差別,
+// 所以同一顆點要帶等價的文字名稱
+const SEV_LABEL = { risk: '需注意', watch: '留意', ok: '正常' }
 const SHOWN = 3
 
 export default function InsightsPanel({ insights }) {
@@ -19,7 +22,8 @@ export default function InsightsPanel({ insights }) {
       {shown.map((it) => (
         <Link key={it.id} to={it.to} title={it.detail}
           className="inline-flex items-center gap-1.5 text-xs text-[var(--text-2)] hover:text-[var(--blue-text)] hover:underline">
-          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SEV_DOT[it.sev] || SEV_DOT.watch }} aria-hidden />
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SEV_DOT[it.sev] || SEV_DOT.watch }}
+            role="img" aria-label={SEV_LABEL[it.sev] || SEV_LABEL.watch} />
           {it.title}
         </Link>
       ))}

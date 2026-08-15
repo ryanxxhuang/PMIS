@@ -195,7 +195,8 @@ export function MarkupThumb({ src, resolve, className = '' }) {
   if (!src) return null
   return (
     <>
-      <button onClick={() => setOpen(true)} title="檢視圖面標註" className={`block border border-[var(--border)] rounded overflow-hidden hover:opacity-80 ${className}`}>
+      {/* 名稱不能靠內層內容:載入中分支只有「載入中」三字,按鈕名稱會跟著跑掉 */}
+      <button onClick={() => setOpen(true)} aria-label="檢視圖面標註" title="檢視圖面標註" className={`block border border-[var(--border)] rounded overflow-hidden hover:opacity-80 ${className}`}>
         {url ? <img src={url} alt="圖面標註" className="h-14 w-20 object-cover" /> : <span className="h-14 w-20 flex items-center justify-center text-[10px] text-[var(--text-3)]">載入中</span>}
       </button>
       {open && url && (

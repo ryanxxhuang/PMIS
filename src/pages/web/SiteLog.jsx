@@ -497,10 +497,12 @@ export default function SiteLog() {
                         <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{it.unit}</td>
                         <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{fmt(it.quantity)}</td>
                         <td className="text-right px-2">
-                          <input type="number" min="0" step="any" value={items[key] ?? ''} disabled={!can.edit} onChange={(e) => setQty(key, e.target.value)}
-                            className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
+                          {/* W8-5:表格內輸入只提到 ~38px(max-sm:py-2),不加 min-h——加了整張表列高會翻倍 */}
+                          <input type="number" min="0" step="any" inputMode="decimal" value={items[key] ?? ''} disabled={!can.edit} onChange={(e) => setQty(key, e.target.value)}
+                            className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums max-sm:py-2 focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                         </td>
-                        <td className="text-right pl-2">{can.edit && <button onClick={() => removeItem(key)} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="移除此工項">✕</button>}</td>
+                        {/* p-2 -m-2:命中區擴大但視覺與列高不變 */}
+                        <td className="text-right pl-2">{can.edit && <button onClick={() => removeItem(key)} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label="移除此工項">✕</button>}</td>
                       </tr>
                     )
                   })}
@@ -547,12 +549,13 @@ export default function SiteLog() {
                     </label>
                     <div>
                       <span className="block text-xs font-medium text-[var(--text-2)] mb-1">五、職業安全衛生</span>
+                      {/* 原生 checkbox 預設約 13px,是全站最小的互動元素;w-5 h-5 提到 20px 且不動文字基線 */}
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm py-1">
-                        <label className="inline-flex items-center gap-1.5"><input type="checkbox" disabled={!can.edit} checked={!!extras.edu} onChange={(e) => setExtras({ ...extras, edu: e.target.checked })} />勤前教育（含危害告知）</label>
-                        <label className="inline-flex items-center gap-1.5"><input type="checkbox" disabled={!can.edit} checked={!!extras.ppe} onChange={(e) => setExtras({ ...extras, ppe: e.target.checked })} />檢查個人防護具</label>
+                        <label className="inline-flex items-center gap-1.5 max-sm:min-h-11"><input type="checkbox" className="w-5 h-5" disabled={!can.edit} checked={!!extras.edu} onChange={(e) => setExtras({ ...extras, edu: e.target.checked })} />勤前教育（含危害告知）</label>
+                        <label className="inline-flex items-center gap-1.5 max-sm:min-h-11"><input type="checkbox" className="w-5 h-5" disabled={!can.edit} checked={!!extras.ppe} onChange={(e) => setExtras({ ...extras, ppe: e.target.checked })} />檢查個人防護具</label>
                         <label className="inline-flex items-center gap-1.5">新進勞工提報勞保
                           <select value={extras.insured || '無新進勞工'} disabled={!can.edit} onChange={(e) => setExtras({ ...extras, insured: e.target.value })}
-                            className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs">
+                            className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs max-sm:min-h-11">
                             {['有', '無', '無新進勞工'].map((s) => <option key={s}>{s}</option>)}
                           </select>
                         </label>
@@ -641,7 +644,8 @@ export default function SiteLog() {
                     <div className="space-y-2 max-h-[28rem] overflow-auto">
                       {staging.map((s) => (
                         <div key={s.key} className="flex gap-3 items-start bg-[var(--surface)] border border-[var(--border)] rounded-lg p-2">
-                          <img src={s.previewUrl} alt="待上傳" className="w-16 h-16 rounded object-cover shrink-0 border border-[var(--border)]" />
+                          {/* alt 帶檔名:多張待上傳時報讀器才分得出是哪一張 */}
+                          <img src={s.previewUrl} alt={`待上傳照片 ${s.file?.name || ''}`} className="w-16 h-16 rounded object-cover shrink-0 border border-[var(--border)]" />
                           <div className="min-w-0 flex-1 space-y-1.5">
                             {s.status === 'analyzing' ? (
                               <div className="text-xs text-[var(--text-3)] py-3">AI 判讀中…</div>
@@ -663,8 +667,8 @@ export default function SiteLog() {
                               </>
                             )}
                           </div>
-                          <button onClick={() => removeStaging(s.key)} disabled={batchBusy} title="移除此張"
-                            className="shrink-0 text-[var(--text-3)] hover:text-[var(--red-text)] text-sm leading-none">✕</button>
+                          <button onClick={() => removeStaging(s.key)} disabled={batchBusy} title="移除此張" aria-label="移除此張待上傳照片"
+                            className="shrink-0 text-[var(--text-3)] hover:text-[var(--red-text)] text-sm leading-none p-2 -m-2">✕</button>
                         </div>
                       ))}
                     </div>
@@ -682,10 +686,11 @@ export default function SiteLog() {
                   <Empty>{can.edit ? '尚無照片。用「AI 批次辨識照片」一次丟多張，AI 自動生說明並配工項。' : '該日尚無現場照片。'}</Empty>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {photos.map((p) => (
+                    {photos.map((p, i) => (
                       <div key={p.id} className="group relative rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--surface-2)]">
                         <div className="aspect-square">
-                          {p.url && <img src={p.url} alt={p.caption || '現場照片'} loading="lazy" className="w-full h-full object-cover" />}
+                          {/* 無說明時用序號當 fallback:同一天多張照片,固定字串會讓報讀器全部同名 */}
+                          {p.url && <img src={p.url} alt={p.caption || `現場照片 ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />}
                         </div>
                         {(p.caption || p.work_item_id) && (
                           <div className="px-1.5 py-1 bg-[var(--surface)] border-t border-[var(--border-2)]">
@@ -698,8 +703,10 @@ export default function SiteLog() {
                             )}
                           </div>
                         )}
-                        {can.edit && <button onClick={() => onDeletePhoto(p)} title="刪除照片"
-                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 group-hover:opacity-100 transition-opacity">✕</button>}
+                        {/* 手機沒有 hover:opacity-0 等於這顆鈕在手機根本看不見也按不到,所以 max-sm 直接常駐並放大到 36px
+                            (縮圖只有半個 grid 欄寬,44px 會蓋掉照片主體,列為 W8-5 已知例外);鍵盤 focus 也要現形 */}
+                        {can.edit && <button onClick={() => onDeletePhoto(p)} title="刪除照片" aria-label={`刪除照片 ${p.caption || `現場照片 ${i + 1}`}`}
+                          className="absolute top-1 right-1 w-6 h-6 max-sm:w-9 max-sm:h-9 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 max-sm:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">✕</button>}
                       </div>
                     ))}
                   </div>
@@ -729,7 +736,7 @@ export default function SiteLog() {
                   <div className="flex justify-between items-center gap-2">
                     <button onClick={() => setDate(l.log_date)} className="font-medium text-[var(--text)] tabular-nums text-left flex-1 truncate">{l.log_date}</button>
                     <span className="text-xs text-[var(--text-3)]">{Object.keys(l.items).length} 工項</span>
-                    {can.edit && <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(`日誌刪除失敗:${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label={`刪除 ${l.log_date} 日誌`}>✕</button>}
+                    {can.edit && <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(`日誌刪除失敗:${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除 ${l.log_date} 日誌`}>✕</button>}
                   </div>
                   {l.work_summary && <div className="text-xs text-[var(--text-2)] truncate mt-0.5">{l.work_summary}</div>}
                 </div>
@@ -756,9 +763,10 @@ function FreqChips({ items, label, onAdd }) {
   return (
     <div className="flex flex-wrap items-center gap-1 mb-1.5">
       <span className="text-[10px] text-[var(--text-3)]">常用</span>
+      {/* chips 一排多顆密集排列,手機最容易點錯:min-h-11 + 較寬 padding(flex-wrap 容器,只會變高不會破版) */}
       {items.map((r, i) => (
         <button key={i} onClick={() => onAdd(r)}
-          className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--blue-tint)] hover:text-[var(--blue-text)] hover:border-[var(--blue)] pressable">
+          className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 max-sm:min-h-11 max-sm:px-3 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--blue-tint)] hover:text-[var(--blue-text)] hover:border-[var(--blue)] pressable">
           <Plus size={10} aria-hidden />{label(r)}
         </button>
       ))}
@@ -774,19 +782,21 @@ function RowsEditor({ title, rows, onChange, fields, disabled = false }) {
     <div>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-xs font-medium text-[var(--text-2)]">{title}</span>
-        {!disabled && <button onClick={add} className="text-xs text-[var(--blue)] hover:underline">＋ 加一列</button>}
+        {!disabled && <button onClick={add} className="inline-flex items-center max-sm:min-h-11 px-1 text-xs text-[var(--blue)] hover:underline">＋ 加一列</button>}
       </div>
       {rows.length === 0 ? (
         <p className="text-xs text-[var(--text-3)]">（未填）</p>
       ) : rows.map((r, i) => (
         <div key={i} className="flex items-center gap-2 mb-1.5">
           {fields.map((f) => (
+            // 這是 flex 列不是 table:加 min-h 只讓每列長高,不會像表格那樣整張翻倍
             <input key={f.key} value={r[f.key] ?? ''} placeholder={f.ph} disabled={disabled}
               type={f.num ? 'number' : 'text'} min={f.num ? 0 : undefined} step={f.num ? 'any' : undefined}
+              inputMode={f.num ? 'decimal' : undefined}
               onChange={(e) => set(i, f.key, f.num ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
-              className={`${f.w} border border-[var(--border)] rounded-lg px-2 py-1 text-sm ${f.num ? 'text-right tabular-nums' : ''} disabled:opacity-50 disabled:bg-[var(--surface-2)]`} />
+              className={`${f.w} border border-[var(--border)] rounded-lg px-2 py-1 text-sm max-sm:min-h-11 ${f.num ? 'text-right tabular-nums' : ''} disabled:opacity-50 disabled:bg-[var(--surface-2)]`} />
           ))}
-          {!disabled && <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除此列">✕</button>}
+          {!disabled && <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label="刪除此列">✕</button>}
         </div>
       ))}
     </div>

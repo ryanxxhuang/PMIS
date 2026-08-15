@@ -96,7 +96,9 @@ export default function BOQ() {
         >
           <td className="py-1.5 pr-2" style={{ paddingLeft: 10 + level * 18 }}>
             {hasKids ? (
-              <button onClick={() => toggle(it.item_key)} className="mr-1 w-4 inline-block text-[var(--text-3)] hover:text-[var(--text)]">
+              // ▾/▸ 無可及名稱且展開狀態讀不到,補 aria-expanded 與名稱
+              <button onClick={() => toggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
+                className="mr-1 w-4 inline-block text-[var(--text-3)] hover:text-[var(--text)]">
                 {isOpen ? '▾' : '▸'}
               </button>
             ) : (

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { FileUp } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button, Badge, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, Badge, PageHeader, ErrorBanner, Select } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -104,22 +104,23 @@ export default function ChangeOrders() {
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
+      {/* W8-5:表單區非表格,手機補到 44px 觸控目標不會壓縮任何列高 */}
       {can.edit && <Card title="新增變更設計">
         <form onSubmit={onCreate} className="flex flex-wrap items-end gap-3">
           <label className="block">
             <span className="block text-xs font-medium text-[var(--text-2)] mb-1">變更編號</span>
             <input value={head.co_no} onChange={(e) => setHead({ ...head, co_no: e.target.value })} placeholder="第1次變更"
-              className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+              className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-sm:min-h-11" />
           </label>
           <label className="block flex-1 min-w-[180px]">
             <span className="block text-xs font-medium text-[var(--text-2)] mb-1">事由 / 名稱</span>
             <input value={head.title} onChange={(e) => setHead({ ...head, title: e.target.value })} placeholder="如：因現場地質變更增設擋土措施"
-              className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+              className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-sm:min-h-11" />
           </label>
           <label className="block">
             <span className="block text-xs font-medium text-[var(--text-2)] mb-1">日期</span>
             <input type="date" value={head.co_date} onChange={(e) => setHead({ ...head, co_date: e.target.value })}
-              className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+              className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-sm:min-h-11" />
           </label>
           <Button type="submit" disabled={busy || !head.title.trim()}>{busy ? '新增中…' : '＋ 新增'}</Button>
         </form>
@@ -225,22 +226,23 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
             <td className="px-2 text-right text-[var(--text-3)] text-xs whitespace-nowrap">{it.unit}</td>
             <td className="px-2 text-right tabular-nums">
               {itemsEditable ? (
-                <input type="number" step="any" defaultValue={it.qty_delta ?? ''} aria-label={`${it.description} 數量增減`}
+                <input type="number" step="any" inputMode="decimal" defaultValue={it.qty_delta ?? ''} aria-label={`${it.description} 數量增減`}
                   key={`q-${it.id}-${it.qty_delta ?? ''}`}
                   onBlur={(e) => { const n = parseFloat(e.target.value); if ((isNaN(n) ? 0 : n) !== (Number(it.qty_delta) || 0)) onUpdateItem(it.id, { qty_delta: isNaN(n) ? 0 : n }) }}
-                  className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                  className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums max-sm:py-2" />
               ) : <span>{it.qty_delta ?? 0}</span>}
             </td>
             <td className="px-2 text-right tabular-nums">
               {itemsEditable ? (
-                <input type="number" step="any" defaultValue={it.unit_price ?? ''} aria-label={`${it.description} 單價`}
+                <input type="number" step="any" inputMode="decimal" defaultValue={it.unit_price ?? ''} aria-label={`${it.description} 單價`}
                   key={`p-${it.id}-${it.unit_price ?? ''}`}
                   onBlur={(e) => { const n = parseFloat(e.target.value); if ((isNaN(n) ? 0 : n) !== (Number(it.unit_price) || 0)) onUpdateItem(it.id, { unit_price: isNaN(n) ? 0 : n }) }}
-                  className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                  className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums max-sm:py-2" />
               ) : <span>{money(it.unit_price)}</span>}
             </td>
             <td className={`px-2 text-right tabular-nums font-medium ${(Number(it.amount_delta) || 0) >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{(Number(it.amount_delta) || 0) >= 0 ? '+' : ''}{money(it.amount_delta)}</td>
-            <td className="text-right pl-2">{itemsEditable && <button onClick={() => onDeleteItem(it.id)} aria-label={`刪除明細 ${it.description}`} className="text-[var(--text-3)] hover:text-[var(--red-text)]">✕</button>}</td>
+            {/* p-2 -m-2:命中區擴到約 32px 但視覺與列高完全不變(表格內拉到 44px 會讓每列翻倍) */}
+            <td className="text-right pl-2">{itemsEditable && <button onClick={() => onDeleteItem(it.id)} aria-label={`刪除明細 ${it.description}`} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2">✕</button>}</td>
           </tr>
         ))}
       </tbody>
@@ -251,13 +253,14 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
     <Card title={`${co.co_no ? co.co_no + '　' : ''}${co.title}`} action={
       <div className="flex items-center gap-2">
         <span className={`text-sm font-medium tabular-nums ${net >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{net >= 0 ? '+' : ''}{money(net)}</span>
+        {/* 共用 Select(仍是原生 <select>)才吃得到手機 44px 基底;卡頭空間有限所以 !w-auto */}
         {canApprove ? (
-          <select value={co.status} onChange={(e) => onStatus(e.target.value)}
-            className="text-xs border border-[var(--border)] rounded-lg px-2 py-1 bg-[var(--surface)]">
+          <Select value={co.status} onChange={(e) => onStatus(e.target.value)}
+            aria-label={`${co.co_no || co.title} 狀態`} className="!w-auto !py-1.5 text-xs">
             {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          </Select>
         ) : <Badge color={STATUS_COLOR[co.status] || 'slate'}>{co.status}</Badge>}
-        {canEdit && <button onClick={onDelete} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm">✕</button>}
+        {canEdit && <button onClick={onDelete} aria-label={`刪除變更單 ${co.title || co.co_no}`} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm p-2 -m-2">✕</button>}
       </div>
     }>
       <div className="flex items-center gap-2 mb-3 text-xs text-[var(--text-3)]">

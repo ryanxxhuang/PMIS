@@ -35,9 +35,13 @@ export function ConfirmHost() {
   const [req, setReq] = useState(null)
   const [text, setText] = useState('')
   const confirmBtn = useRef(null)
+  const dialogRef = useRef(null)
+  // 開啟前的焦點元素:關閉時還原,鍵盤使用者才不會被丟回文件開頭
+  const lastFocused = useRef(null)
 
   useEffect(() => {
-    hostSetter = setReq
+    // 在 setReq 前記焦點:等 effect 再記就已經被 textarea/Input 的 autoFocus 搶走
+    hostSetter = (r) => { lastFocused.current = document.activeElement; setReq(r) }
     return () => { hostSetter = null }
   }, [])
   useEffect(() => {
@@ -45,16 +49,50 @@ export function ConfirmHost() {
     // 無輸入欄時聚焦確認鈕 → Enter 直接確認、Tab 可到取消
     if (req && !req.requireText && !req.prompt) confirmBtn.current?.focus()
   }, [req])
+  // Esc 與 Tab 掛 window 層:對話框根 div 不可聚焦,使用者一點到標題文字焦點就落到
+  // body,綁在 div 的 onKeyDown 收不到 → Esc 死路。Tab 在此做最小 focus trap
+  // （首尾循環）,擋住焦點跑進 aria-modal 蓋住的背景頁面。
+  useEffect(() => {
+    if (!req) return
+    const cancel = () => {
+      setReq(null)
+      req.resolve(req.prompt ? null : false)
+      const el = lastFocused.current
+      if (el?.isConnected) el.focus()
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); cancel(); return }
+      if (e.key !== 'Tab') return
+      // 取消鈕永遠存在,nodes 不會是空的;確認鈕 disabled 時自然被排除在循環外
+      const nodes = dialogRef.current?.querySelectorAll(
+        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])')
+      if (!nodes || nodes.length === 0) return
+      const first = nodes[0]
+      const last = nodes[nodes.length - 1]
+      const active = document.activeElement
+      if (!dialogRef.current.contains(active)) { e.preventDefault(); first.focus(); return }
+      if (e.shiftKey && active === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [req])
 
   if (!req) return null
   const { title, body, confirmLabel = '確定', cancelLabel = '取消', danger = false, requireText,
     prompt: isPrompt, label, placeholder, required } = req
   const ready = isPrompt ? (!required || text.trim() !== '') : (!requireText || text === requireText)
   // confirm 模式 resolve boolean;prompt 模式 resolve 字串（確認）或 null（取消）
-  const close = (ok) => { setReq(null); req.resolve(isPrompt ? (ok ? text : null) : ok) }
+  const close = (ok) => {
+    setReq(null)
+    req.resolve(isPrompt ? (ok ? text : null) : ok)
+    const el = lastFocused.current
+    // 觸發元素可能已隨選單/列表卸載(isConnected=false),硬 focus 是 no-op,直接略過
+    if (el?.isConnected) el.focus()
+  }
 
   const onKeyDown = (e) => {
-    if (e.key === 'Escape') close(false)
+    // Escape 已改由 window 層處理(見上),這裡只留 Enter 確認
     if (e.key !== 'Enter' || !ready) return
     // prompt 的多行輸入欄:Enter 換行,Ctrl/Cmd+Enter 確認
     if (isPrompt && !(e.metaKey || e.ctrlKey)) return
@@ -63,8 +101,8 @@ export function ConfirmHost() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print:hidden" role="dialog" aria-modal="true" aria-label={title} onKeyDown={onKeyDown}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] enter-fade" onClick={() => close(false)} />
-      <div className="relative bg-[var(--surface)] text-[var(--text)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] w-full max-w-sm p-5 enter-modal">
+      <div aria-hidden="true" className="absolute inset-0 bg-black/40 backdrop-blur-[2px] enter-fade" onClick={() => close(false)} />
+      <div ref={dialogRef} className="relative bg-[var(--surface)] text-[var(--text)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] w-full max-w-sm p-5 enter-modal">
         <div className="flex items-start gap-3">
           <span className={`w-9 h-9 rounded-full grid place-items-center shrink-0 ${danger ? 'bg-[var(--red-tint)] text-[var(--red-text)]' : 'bg-[var(--blue-tint)] text-[var(--blue-text)]'}`}>
             {danger ? <AlertTriangle size={18} aria-hidden /> : isPrompt ? <PencilLine size={18} aria-hidden /> : <HelpCircle size={18} aria-hidden />}

@@ -413,12 +413,15 @@ function ByUserTab({ rows, loading }) {
 }
 
 // ── 小元件:開關(toggle)────────────────────────────────────────────────────
+// 焦點改 outline 方案與 ui.jsx Button 一致(W8-5):ring 直接畫在實心 pill 上
+// checked 時幾乎看不出來,outline+offset 讓焦點環離開填色邊。
+// 維持 <button role="switch">,不得換成 input[type=checkbox](監造唯讀 e2e 斷言依賴)。
 function Toggle({ checked, disabled, onChange, label }) {
   return (
     <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled}
       onClick={onChange}
       className={`relative shrink-0 w-9 h-5 rounded-full transition-colors disabled:opacity-40 disabled:cursor-wait
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue)]/40
+        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)]
         ${checked ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`}>
       <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : ''}`} />
     </button>
@@ -624,9 +627,11 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
                                     <span className="text-sm text-[var(--text)] truncate flex-1">{f.label}</span>
                                     {!f.enabled && <Badge color="red">平台已停用</Badge>}
                                     <Badge color={PLAN_COLOR[f.min_plan]}>{PLAN_LABEL[f.min_plan]}+</Badge>
+                                    {/* max-sm:!min-h-0:退掉 FIELD_BASE 的手機 44px——專案×功能矩陣是刻意壓縮的
+                                        密集格,拉高會撐爆表格(W8-0 不重寫表格的已知例外;平台後台手機使用頻率低) */}
                                     <Select value={state} disabled={busyFeature === f.key}
                                       onChange={(e) => changeOverride(p.project_id, f, e.target.value)}
-                                      className={`!w-auto !py-1 text-xs ${state !== 'follow' ? 'font-medium' : ''}`}
+                                      className={`!w-auto !py-1 text-xs max-sm:!min-h-0 ${state !== 'follow' ? 'font-medium' : ''}`}
                                       aria-label={`${p.name} 的 ${f.label} 覆寫`}>
                                       <option value="follow">跟隨方案</option>
                                       <option value="on">強制開啟</option>

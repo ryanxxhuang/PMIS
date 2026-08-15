@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
 import { visibleNavGroups } from '../lib/navConfig.js'
 import CopilotFab from './CopilotFab.jsx'
-import { Menu, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Trash2, Moon, Sun, MonitorSmartphone, Plus, Bot, X } from 'lucide-react'
+import { Menu, Check, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Trash2, Moon, Sun, MonitorSmartphone, Plus, Bot, X } from 'lucide-react'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
@@ -18,19 +18,37 @@ function ProjectSwitcher() {
   const { project, projects, currentProject, switchProject, deleteProject, isSupabaseConfigured } = useStore()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const triggerRef = useRef(null)
+  const firstItemRef = useRef(null)
+  const prevOpen = useRef(false)
+  // Esc 掛 window 層:原本綁在包裹 div 的 onKeyDown,焦點一離開該子樹（點了遮罩外
+  // 或被移走）Esc 就失效,變成只能滑鼠關閉。開啟時才掛、關閉即拆,不常駐監聽。
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+  // 鍵盤焦點:開啟移入第一個選單項（role=menu 慣例）、關閉還給觸發鈕,
+  // 避免焦點落回 body 讓鍵盤使用者迷路。prevOpen 擋掉初掛載時的誤搶焦點。
+  useEffect(() => {
+    if (open) firstItemRef.current?.focus()
+    else if (prevOpen.current) triggerRef.current?.focus()
+    prevOpen.current = open
+  }, [open])
 
   if (!isSupabaseConfigured || !currentProject) {
     return (
       <div className="flex items-center gap-2 min-w-0">
         <span className="hidden lg:inline text-[var(--text-3)] text-xs shrink-0">專案</span>
-        <span className="font-medium truncate max-w-[24vw] sm:max-w-[36vw] md:max-w-[280px] text-[var(--text)]">{project.project_name}</span>
+        <span title={project.project_name} className="font-medium truncate max-w-[24vw] sm:max-w-[36vw] md:max-w-[280px] text-[var(--text)]">{project.project_name}</span>
       </div>
     )
   }
   return (
-    <div className="relative min-w-0" onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}>
-      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu"
-        className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2 pressable">
+    <div className="relative min-w-0">
+      <button ref={triggerRef} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu"
+        className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2 max-sm:min-h-11 pressable">
         <span className="hidden lg:inline text-[var(--text-3)] text-xs shrink-0">專案</span>
         <span title={currentProject.project_name} className="font-medium truncate max-w-[24vw] sm:max-w-[36vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
         <ChevronDown size={14} className="text-[var(--text-2)] shrink-0" aria-hidden />
@@ -39,16 +57,23 @@ function ProjectSwitcher() {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div role="menu" className="absolute left-0 mt-1 w-72 bg-[var(--surface)] text-[var(--text)] rounded-lg shadow-xl border border-[var(--border)] py-1 z-20 enter-menu origin-top-left">
-            {projects.map((p) => (
-              <button key={p.project_id} onClick={() => { switchProject(p.project_id); setOpen(false) }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--surface-2)] flex items-center gap-2 ${p.project_id === currentProject.project_id ? 'bg-[var(--blue-tint)]' : ''}`}>
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.project_id === currentProject.project_id ? 'bg-[var(--blue)]' : 'bg-[var(--border)]'}`} />
-                <span className="truncate">{p.project_name}</span>
-              </button>
-            ))}
+            {projects.map((p, i) => {
+              const isCurrent = p.project_id === currentProject.project_id
+              return (
+                // aria-current＋Check:目前專案不能只靠底色/色點表達（色弱與報讀器都讀不到）
+                <button key={p.project_id} ref={i === 0 ? firstItemRef : undefined}
+                  onClick={() => { switchProject(p.project_id); setOpen(false) }}
+                  aria-current={isCurrent ? 'true' : undefined}
+                  className={`w-full text-left px-3 py-2 min-h-11 text-sm hover:bg-[var(--surface-2)] flex items-center gap-2 ${isCurrent ? 'bg-[var(--blue-tint)]' : ''}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isCurrent ? 'bg-[var(--blue)]' : 'bg-[var(--border)]'}`} />
+                  <span className="truncate">{p.project_name}</span>
+                  {isCurrent && <Check size={14} className="ml-auto shrink-0 text-[var(--blue-text)]" aria-hidden />}
+                </button>
+              )
+            })}
             <div className="border-t border-[var(--border-2)] my-1" />
             <button onClick={() => { setOpen(false); navigate('/project/new') }}
-              className="w-full text-left px-3 py-2 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><Plus size={14} aria-hidden /> 新增專案</button>
+              className="w-full text-left px-3 py-2 min-h-11 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><Plus size={14} aria-hidden /> 新增專案</button>
             <button onClick={async () => {
               setOpen(false)
               // 高危險:整案永久刪除 → 要求輸入專案名稱確認,防手滑
@@ -58,7 +83,7 @@ function ProjectSwitcher() {
                 danger: true, confirmLabel: '永久刪除', requireText: currentProject.project_name,
               })
               if (ok) await deleteProject(currentProject.project_id)
-            }} className="w-full text-left px-3 py-2 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>
+            }} className="w-full text-left px-3 py-2 min-h-11 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>
           </div>
         </>
       )}
@@ -73,7 +98,7 @@ const THEME_META = {
   system: { icon: MonitorSmartphone, label: '跟隨系統' },
 }
 
-function TopBar({ onMenu, scrolled }) {
+function TopBar({ onMenu, scrolled, menuBtnRef }) {
   const { currentUser, logout } = useStore()
   const navigate = useNavigate()
   const [mode, setMode] = useState(getThemeMode)
@@ -86,7 +111,8 @@ function TopBar({ onMenu, scrolled }) {
   return (
     <header data-scrolled={scrolled} className="chrome-glass chrome-edge fixed top-0 inset-x-0 z-40 h-16 flex items-center justify-between px-3 md:px-5 print:hidden">
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
-        <button onClick={onMenu} aria-label="選單" className="md:hidden w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><Menu size={20} aria-hidden /></button>
+        {/* 44px 觸控目標:漢堡鈕只在手機出現,直接升到 w-11;ref 供抽屜關閉時焦點還原 */}
+        <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><Menu size={20} aria-hidden /></button>
         <NavLink to={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} aria-label="GovAgent 公共工程首頁" className="flex items-baseline gap-2 shrink-0">
           <span className="font-bold text-lg tracking-tight text-[var(--text)]">Gov<span className="text-[var(--accent-text)]">Agent</span></span>
           <span className="hidden xl:inline text-[11px] text-[var(--text-3)]">公共工程</span>
@@ -104,9 +130,10 @@ function TopBar({ onMenu, scrolled }) {
           <div className="text-sm text-[var(--text)]">{currentUser?.name}</div>
           <div className="text-[11px] text-[var(--text-2)]">{currentUser?.label}</div>
         </div>
-        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><ThemeIcon size={18} aria-hidden /></button>
+        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-9 h-9 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><ThemeIcon size={18} aria-hidden /></button>
         <div className="hidden sm:flex w-9 h-9 rounded-full bg-[var(--primary)] items-center justify-center font-medium text-sm text-white">{currentUser?.name?.[0]}</div>
-        <button onClick={async () => { await logout(); navigate('/login') }} className="text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
+        {/* 44px 觸控目標:純文字鈕撐高、負 margin 吸收 padding,視覺間距不變 */}
+        <button onClick={async () => { await logout(); navigate('/login') }} className="inline-flex items-center h-11 px-2 -mx-2 text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
       </div>
     </header>
   )
@@ -114,6 +141,30 @@ function TopBar({ onMenu, scrolled }) {
 
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuBtnRef = useRef(null)
+  const drawerCloseRef = useRef(null)
+  const prevMenuOpen = useRef(false)
+  // 手機抽屜 Esc 關閉:掛 window 層（同 CopilotFab 寫法）,開著才監聽
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [menuOpen])
+  // 抽屜焦點管理:開啟移到關閉鈕、關閉還給漢堡鈕。prevMenuOpen 擋初載誤搶焦點
+  // （桌機 menuOpen 恆為 false,不會進到還原分支）。
+  // 開啟聚焦要推遲一個 frame:visibility 在 transition 清單裡,effect 執行當下
+  // (transition progress=0)computed 還是 hidden,visibility:hidden 的元素不可聚焦,
+  // 同步 focus() 會靜默失敗;等瀏覽器跑過第一個 tick(visible)再聚焦。
+  useEffect(() => {
+    if (menuOpen) {
+      const raf = requestAnimationFrame(() => requestAnimationFrame(() => drawerCloseRef.current?.focus()))
+      prevMenuOpen.current = true
+      return () => cancelAnimationFrame(raf)
+    }
+    if (prevMenuOpen.current) menuBtnRef.current?.focus()
+    prevMenuOpen.current = false
+  }, [menuOpen])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
   // 工作面預設收合；展開狀態只保留在本次瀏覽，不製造另一份持久導覽設定。
   const [expandedWorkbenches, setExpandedWorkbenches] = useState(() => new Set())
@@ -148,18 +199,21 @@ export function WebLayout({ children }) {
   }
   return (
     <div className="min-h-screen bg-[var(--bg)]">
-      <TopBar onMenu={() => setMenuOpen(true)} scrolled={scrolled} />
-      {/* 手機:點背景關閉抽屜(蓋過頂欄,抽屜再蓋過遮罩) */}
-      {menuOpen && <div className="fixed inset-0 z-50 bg-black/40 md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
+      <TopBar onMenu={() => setMenuOpen(true)} scrolled={scrolled} menuBtnRef={menuBtnRef} />
+      {/* 手機:點背景關閉抽屜(蓋過頂欄,抽屜再蓋過遮罩);純滑鼠 scrim,對報讀器隱藏 */}
+      {menuOpen && <div aria-hidden="true" className="fixed inset-0 z-50 bg-black/40 md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
+      {/* 關閉時 max-md:invisible:visibility hidden = 不可聚焦＋離開 a11y 樹,擋掉
+          「Tab 進看不見的抽屜」;visibility 進 transition 清單讓滑出動畫跑完才隱藏
+          （hidden→visible 則是動畫起點就顯示,開啟不閃爍）。桌機 md 斷點不受影響。 */}
       <aside
         className={`chrome-glass w-72 ${sidebarCollapsed ? 'md:w-16' : 'md:w-64'} border-r border-[var(--border-card)] flex flex-col print:hidden
-          fixed top-16 bottom-0 left-0 z-[55] transition-[width,transform] duration-300 [transition-timing-function:var(--ease-drawer)]
+          fixed top-16 bottom-0 left-0 z-[55] transition-[width,transform,visibility] duration-300 [transition-timing-function:var(--ease-drawer)]
           md:translate-x-0
-          ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+          ${menuOpen ? 'translate-x-0' : '-translate-x-full max-md:invisible'}`}
       >
           <div className="md:hidden flex items-center justify-between border-b border-[var(--border-2)] px-4 py-3">
             <span className="text-sm font-semibold text-[var(--text)]">功能選單</span>
-            <button onClick={() => setMenuOpen(false)} aria-label="關閉選單" className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><X size={19} aria-hidden /></button>
+            <button ref={drawerCloseRef} onClick={() => setMenuOpen(false)} aria-label="關閉選單" className="w-11 h-11 -my-1 -mr-1 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><X size={19} aria-hidden /></button>
           </div>
           <div className={`hidden md:flex h-12 shrink-0 items-center ${sidebarCollapsed ? 'justify-center' : 'justify-end px-3'}`}>
             <button onClick={setDesktopCollapsed}
@@ -192,7 +246,7 @@ export function WebLayout({ children }) {
                       } ${sidebarCollapsed ? `md:justify-center ${itemActive ? 'md:bg-[var(--surface-2)] md:text-[var(--text)]' : ''}` : ''}`}>
                         <NavLink to={n.to} onClick={() => setMenuOpen(false)} title={sidebarCollapsed ? n.label : undefined}
                           aria-label={sidebarCollapsed ? n.label : undefined}
-                          className={() => `min-w-0 min-h-11 flex-1 flex items-center gap-2.5 px-3 text-sm ${
+                          className={() => `min-w-0 min-h-11 flex-1 flex items-center gap-2.5 px-3 text-sm rounded-xl ${
                             sidebarCollapsed ? 'md:flex-none md:w-12 md:justify-center md:px-0' : ''
                           }`}>
                           <Icon size={17} strokeWidth={1.8} className="shrink-0 opacity-75" aria-hidden />
@@ -202,7 +256,7 @@ export function WebLayout({ children }) {
                           <button type="button" onClick={() => toggleWorkbench(n.to)}
                             aria-expanded={expanded} aria-controls={`nav-children-${n.to.slice(1)}`}
                             aria-label={`${expanded ? '收合' : '展開'}${n.label}子頁`}
-                            className={`w-9 h-9 mr-1 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:bg-black/5 hover:text-[var(--text)] ${sidebarCollapsed ? 'md:hidden' : ''}`}>
+                            className={`w-11 h-11 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:bg-black/5 hover:text-[var(--text)] ${sidebarCollapsed ? 'md:hidden' : ''}`}>
                             {expanded ? <ChevronDown size={15} aria-hidden /> : <ChevronRight size={15} aria-hidden />}
                           </button>
                         )}
@@ -211,7 +265,7 @@ export function WebLayout({ children }) {
                         <div id={`nav-children-${n.to.slice(1)}`} className={`pb-1 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
                           {n.tabs.map((tab) => (
                             <NavLink key={tab.to} to={tab.to} onClick={() => setMenuOpen(false)}
-                              className={({ isActive }) => `min-h-10 mx-2 pl-10 pr-3 rounded-xl flex items-center text-sm transition-colors ${
+                              className={({ isActive }) => `min-h-11 mx-2 pl-10 pr-3 rounded-xl flex items-center text-sm transition-colors ${
                                 isActive
                                   ? 'bg-[var(--surface-2)] text-[var(--text)] font-medium'
                                   : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'

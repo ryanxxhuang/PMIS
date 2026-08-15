@@ -146,13 +146,16 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
           {stage.event?.result && <Badge color={stage.event.result === '合格' ? 'green' : 'red'}>{stage.event.result}</Badge>}
           {dueBadge}
         </div>
-        <div className="text-[11px] text-[var(--text-3)] mt-0.5">{stage.basis}</div>
+        {/* 法定期限依據不是裝飾性後設資料——是使用者判斷「這關為什麼有期限」的唯一說明,
+            11px + text-3(3.8:1) 讀不了,升到 12px/text-2(≈7.3:1);其餘 11px 標註維持原樣 */}
+        <div className="text-xs text-[var(--text-2)] mt-0.5">{stage.basis}</div>
 
         {done && !editing ? (
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="num text-[var(--text)]">{stage.event.event_date}</span>
             {stage.event.note && <span className="text-[var(--text-2)] text-xs">{stage.event.note}</span>}
-            {allowed && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline">修改</button>}
+            {/* 「修改」是進入該階段編輯的唯一入口,原本只有 16px 命中區 */}
+            {allowed && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-sm:min-h-11 px-1">修改</button>}
           </div>
         ) : !allowed ? (
           (stage.state === 'due' || stage.state === 'pending') && (
@@ -165,12 +168,13 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
         ) : (
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <label className="block">
-              <span className="block text-[11px] text-[var(--text-3)] mb-0.5">實際辦理日</span>
+              {/* 欄位 label 是輸入依據,不是後設資料:12px + text-2 */}
+              <span className="block text-xs text-[var(--text-2)] mb-0.5">實際辦理日</span>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label={`${stage.label} 實際辦理日`} className="!w-40 !py-1.5" />
             </label>
             {RESULT_STAGES.has(stage.key) && (
               <label className="block">
-                <span className="block text-[11px] text-[var(--text-3)] mb-0.5">結果</span>
+                <span className="block text-xs text-[var(--text-2)] mb-0.5">結果</span>
                 <Select value={result} onChange={(e) => setResult(e.target.value)} aria-label={`${stage.label} 結果`} className="!w-28 !py-1.5">
                   <option value="">—</option>
                   <option value="合格">合格</option>
@@ -179,7 +183,7 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
               </label>
             )}
             <label className="block flex-1 min-w-[180px]">
-              <span className="block text-[11px] text-[var(--text-3)] mb-0.5">備註</span>
+              <span className="block text-xs text-[var(--text-2)] mb-0.5">備註</span>
               <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="會勘/驗收紀要…" aria-label={`${stage.label} 備註`} className="!py-1.5" />
             </label>
             <Button size="sm" onClick={save} disabled={!date}>登錄</Button>
