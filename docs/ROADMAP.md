@@ -31,7 +31,7 @@
 - [x] W8-3A 初始化設定精靈 — PR #13（583 Vitest／19 Demo E2E／build 全綠；真實 staging 專案桌面／375px 目視通過）
 - [x] W8-3B 契約重點與具體後續動作 — PR #15，已部署（587 Vitest／19 Demo E2E／build 全綠；真案三角色目視待補）
 - [ ] W8-4 三角色核心業務頁 — A（PR #16）／C（PR #17）已部署；B（監造）進行中
-- [ ] W8-5 手機、無障礙、視覺一致性與真實使用者驗收 — `ACCEPTED`，最後收尾
+- [x] W8-5 手機、無障礙、視覺一致性與真實使用者驗收 — PR #19，已部署（真人驗收清單為 DRAFT 待執行）
 
 D-014 已依核准報告修訂：保留四步專案初始化設定精靈，第 3 步採「AI 整理完成」，不要求清空全部待審。全產品方向見 D-015。
 
@@ -223,6 +223,11 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 - [x] **W8-4B 監造核心頁（PR #18，已部署）**
   範圍：/valuation 在 Stat 與明細之間插入本期決策列（狀態 Badge＋BallChip 責任方＋`summarizeValuationDiff` 差異彙總「超計 N 項／無佐證 M 項」可點展開；既有送審／核定／退回／刪除按鈕整段搬移非複製）；監造／機關日誌改摘要式唯讀（純文字天氣／摘要／工項、公定格式只列有資料的節，假可編欄位歸零；`can.edit` 視角 DOM 零改動）；/submittals 依 `submittalBall` 分「待我處理／等待對方／已完成」三群。
   驗收證據（2026-08-15）：607 Vitest（+12 `Valuation.diff.test.js` 等）、22 Demo E2E（+2 送審分群；監造唯讀測試改寫）、build 全綠；`e2e-real/` 四檔零改動（chain2 按鈕名嚴格單一命中逐項核對）；對抗式紅線審查 PASS；合併後 main CI、Cloudflare build 與正式站冒煙成功。查驗與缺失複查已由 W8-4A 分段涵蓋。
+
+- [x] **W8-5 手機、無障礙與真實使用者驗收（PR #19，已部署）**
+  範圍：共用元件一點式觸控目標（`BTN_SIZES`／`FIELD_BASE` 加 `max-sm:min-h-11`，桌機不變）；`@layer base` 全域 `:focus-visible` outline 與 Button 焦點改 outline 方案；三個鍵盤陷阱修復（手機抽屜關閉時 `max-md:invisible`＋Esc＋焦點進出、appConfirm/appPrompt window 層 Esc＋focus trap＋焦點還原、ProjectSwitcher 同款）；icon-only 鈕 aria-label／照片 alt／`aria-expanded`／狀態色點補文字語意；`--text-3` 亮 `#636f7b`／深 `#8b97a4` 過 AA；重要說明 truncate 改 line-clamp＋title；修手機照片刪除鈕 `opacity-0` hover-only 永不可點的 bug。表格內行內輸入依 W8-0「不重寫表格」明文例外只提到 38px（`max-sm:py-2`）＋`inputMode`。
+  驗收證據（2026-08-15）：607 Vitest（63 檔）、30 Demo E2E（22 基線＋8 條新 `e2e/a11y.spec.js`：三角色 375px 全路由無溢位掃描、44px 抽查、抽屜／對話框 Esc 鍵盤合約）、build 全綠；e2e 凍結契約逐項核對；合併後 main CI、Cloudflare build 成功，正式站冒煙 200 且部署 CSS 實測含 `:focus-visible` 規則與新 token。抽屜開啟聚焦曾因 `visibility` transition 在 CI 慢機 frame 節奏下不可聚焦而紅，改有界重試（25ms×20）後綠。
+  尚未完成：`docs/W8-5-三角色真實使用者驗收清單-2026-08-15.md` 為 DRAFT——「三角色測試者能理解下一步且完成任務」必須由真人依清單執行後回填，AI 不得代測；W8-3B 遺留的真案三角色實機目視同樣待真人執行。
 
 ## 未排入（已知、刻意不順手做；要做需回報告或另立決策）
 
