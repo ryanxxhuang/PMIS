@@ -16,8 +16,13 @@ import {
 const PROJECT_NAME = `鏈3文件工程-${Date.now().toString(36)}`
 const REQ_TITLE = `開工後提送品質計畫-${Date.now().toString(36)}`
 const LIVE_EDGE = Boolean(process.env.ANTHROPIC_API_KEY?.trim())
+// 兩條條款各有用途:第三條是無歧義的「純期限」(live 斷言錨點——完工是期限不是送審,
+// 抽取器只可能給 deadline);第十條是「帶期限的送審義務」,抽取器合理地會歸類為
+// submittal(2026-08-15 實測如此),所以不對它做型別斷言,只靠它讓文件更像真契約。
+const DEADLINE_DATE = '2026-10-31'
 const CONTRACT_TEXT = [
   '本契約甲方為機關、乙方為廠商。',
+  '第三條 工程期限：乙方應於2026年10月31日前完成全部工程。',
   '第十條 品質計畫提送：乙方應於2026年9月30日前提送品質計畫送審，並取得監造單位核可後始得施工。',
 ].join('\n')
 // 與 _shared/sourceVerify.ts normalizeSourceText 同義的測試側鏡像(NFKC+去零寬+去空白):
@@ -156,8 +161,21 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→義務時程出�
     const requirement = (suggestions || []).find((row) =>
       row.requirement_type === 'deadline'
       && row.trigger_type === 'fixed'
-      && row.trigger_config?.fixed_date === '2026-09-30')
-    if (!requirement) throw new Error('live AI 沒有產生契約明載的 2026-09-30 固定期限 Requirement')
+      && row.trigger_config?.fixed_date === DEADLINE_DATE)
+    if (!requirement) {
+      // 模型輸出非決定性:失敗時把實際產出與 run metadata(模型回了幾筆、
+      // 幾筆被確定性驗證拒絕、拒絕原因)攤開,才能分辨是「抽取品質問題」
+      // 還是「斷言過嚴」——不看內容就重試只會白燒 token
+      const dump = (suggestions || []).map((r) =>
+        `[${r.requirement_type}/${r.trigger_type || 'no-trigger'}] ${r.title} ${JSON.stringify(r.trigger_config || {})}`).join('；')
+      const { data: runRow } = await c.from('document_ingestion_runs')
+        .select('extracted_requirement_count,metadata').eq('id', run.id).maybeSingle()
+      throw new Error(
+        `live AI 沒有產生契約明載的 ${DEADLINE_DATE} 固定期限 Requirement。`
+        + `落庫 ${suggestions?.length || 0} 筆:${dump || '(空)'};`
+        + `run metadata=${JSON.stringify(runRow?.metadata || {})}`,
+      )
+    }
     expect(['draft_ai', 'needs_review']).toContain(requirement.status)
 
     const { data: source, error: sourceErr } = await c.from('requirement_sources')
@@ -180,14 +198,14 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→義務時程出�
       description: '依契約規定於固定期限前提送品質計畫送審。',
       requirement_type: 'deadline', responsible_party_type: 'contractor',
       lifecycle_phase: '開工前', trigger_type: 'fixed',
-      trigger_config: { fixed_date: '2026-09-30' },
+      trigger_config: { fixed_date: DEADLINE_DATE },
       status: 'needs_review', origin: 'manual',
     }).select('id').single()
     if (reqErr) throw new Error(`建立待審 Requirement 失敗:${reqErr.message}`)
     const { error: sourceErr } = await c.from('requirement_sources').insert({
       requirement_id: requirement.id, document_version_id: version.id,
       source_kind: 'document', source_verified: false,
-      source_text: '乙方應於2026年9月30日前提送品質計畫送審',
+      source_text: '乙方應於2026年10月31日前完成全部工程',
     })
     if (sourceErr) throw new Error(`建立 Requirement 文件來源失敗:${sourceErr.message}`)
   }
@@ -215,5 +233,5 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→義務時程出�
   // ── 義務時程出現同標題(D-012 相容 runtime),狀態待辦、到期日=固定日 ───────
   await gotoHash(page, '/contract')
   await expect(page.getByText(requirementTitle).first()).toBeVisible()
-  await expect(page.getByText('2026-09-30').first()).toBeVisible()
+  await expect(page.getByText(DEADLINE_DATE).first()).toBeVisible()
 })
