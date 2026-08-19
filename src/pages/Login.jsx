@@ -21,7 +21,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-4 sm:p-6">
       <div className="bg-[var(--surface)] rounded-2xl g-elevation-2 w-full max-w-md p-6 sm:p-8">
         <div className="text-center mb-6">
-          <div className="text-3xl font-bold tracking-tight text-[var(--text)]">Gov<span className="text-[var(--accent-text)]">Agent</span></div>
+          <div className="text-3xl font-bold tracking-tight text-[var(--text)]">PM<span className="text-[var(--accent-text)]">IS</span></div>
           <div className="text-[var(--text-2)] text-sm mt-1">公共工程專案管理</div>
         </div>
         {passwordRecovery

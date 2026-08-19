@@ -113,18 +113,18 @@ function TopBar({ onMenu, scrolled, menuBtnRef }) {
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
         {/* 44px 觸控目標:漢堡鈕只在手機出現,直接升到 w-11;ref 供抽屜關閉時焦點還原 */}
         <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><Menu size={20} aria-hidden /></button>
-        <NavLink to={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} aria-label="GovAgent 公共工程首頁" className="flex items-baseline gap-2 shrink-0">
-          <span className="font-bold text-lg tracking-tight text-[var(--text)]">Gov<span className="text-[var(--accent-text)]">Agent</span></span>
+        <NavLink to={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} aria-label="PMIS 公共工程首頁" className="flex items-baseline gap-2 shrink-0">
+          <span className="font-bold text-lg tracking-tight text-[var(--text)]">PM<span className="text-[var(--accent-text)]">IS</span></span>
           <span className="hidden xl:inline text-[11px] text-[var(--text-3)]">公共工程</span>
         </NavLink>
         <div className="h-6 w-px bg-[var(--border)] shrink-0 hidden sm:block" />
         <ProjectSwitcher />
       </div>
       <div className="flex items-center gap-1 sm:gap-2 md:gap-3 shrink-0">
-        <NavLink to="/agent" aria-label="問 GovAgent" title="問 GovAgent"
+        <NavLink to="/agent" aria-label="問 PMIS" title="問 PMIS"
           className={({ isActive }) => `h-9 inline-flex items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'}`}>
           <Bot size={17} aria-hidden />
-          <span className="hidden lg:inline">問 GovAgent</span>
+          <span className="hidden lg:inline">問 PMIS</span>
         </NavLink>
         <div className="text-right leading-tight hidden sm:block">
           <div className="text-sm text-[var(--text)]">{currentUser?.name}</div>
