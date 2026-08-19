@@ -92,7 +92,8 @@ export default function SupervisorReport() {
           <div className="grid sm:grid-cols-2 gap-x-8 gap-y-1">
             <Kv k="機關" v={project.owner_name} />
             <Kv k="承包廠商" v={project.contractor_name} />
-            <Kv k="開工日" v={project.start_date || '—'} />
+            {/* 同月報:實際開工日在 commencement_date,建案表單的 start_date 只是預定值 */}
+            <Kv k="開工日" v={project.commencement_date || (project.start_date ? `${project.start_date}（預計）` : '—')} />
             <Kv k="預定竣工" v={project.end_date || '—'} />
           </div>
         </Section>

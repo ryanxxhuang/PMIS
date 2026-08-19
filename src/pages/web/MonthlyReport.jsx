@@ -122,7 +122,9 @@ export default function MonthlyReport() {
             <Info k="機關" v={project.owner_name} />
             <Info k="承包廠商" v={project.contractor_name} />
             <Info k="監造單位" v={project.supervisor_name} />
-            <Info k="開工日" v={project.start_date} />
+            {/* 開工日以基準日(commencement_date,實際開工)為準;沒登錄才回退建案時填的
+                預定值並標明——月報是對外文件,不能把預定日期當成已開工的事實 */}
+            <Info k="開工日" v={project.commencement_date || (project.start_date ? `${project.start_date}（預計）` : '')} />
             <Info k="竣工日" v={project.end_date} />
             <Info k="原契約金額" v={`NT$ ${money(billable)}`} />
             {data.approvedNet !== 0 && <Info k="變更後契約金額" v={`NT$ ${money(billable + data.approvedNet)}`} />}

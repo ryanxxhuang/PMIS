@@ -169,6 +169,11 @@ export default function ValuationPackage() {
         <div className="text-center mb-5">
           <h1 className="text-xl font-bold tracking-wide">估 驗 請 款 佐 證 包</h1>
           <div className="text-slate-500 mt-1">第 {selected.period_no} 期</div>
+          {/* 本文件的定性必須跟著紙本走:原本這句藏在頁尾 11px 且 print:hidden,
+              列印出去就完全不見,機關很可能拿佐證包當計價依據。提到頁首常駐、列印同印。 */}
+          <div className="mt-2 inline-block text-[12px] text-amber-700 border border-amber-300 rounded px-3 py-1.5">
+            本包為佐證彙整，正式估驗金額以「估驗計價單」為準。
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-x-8 gap-y-1 mb-5 border-y border-slate-300 py-3">
@@ -222,6 +227,15 @@ export default function ValuationPackage() {
                 </tr>
               )
             })}
+            {/* 本期沒有新增完成量時,原本 tbody 只剩一列合計 0,看起來像「資料掉了」。
+                明講是「本期無新增」而非無資料,並指向累計數字該去哪裡看(C-11)。 */}
+            {leaves.length === 0 && (
+              <tr>
+                <td className="border border-slate-200 px-1.5 py-3 text-center text-slate-600" colSpan={7}>
+                  第 {selected.period_no} 期尚無本期新增完成數量；累計完成請見估驗計價單。
+                </td>
+              </tr>
+            )}
             <tr className="bg-slate-50 font-semibold">
               <td className="border border-slate-300 px-1.5 py-1 text-right" colSpan={5}>本期估驗合計</td>
               <td className="border border-slate-300 px-1.5 py-1 text-right tabular-nums">{fmt(periodAmt)}</td>
@@ -333,8 +347,9 @@ export default function ValuationPackage() {
           </div>
         ))}
 
+        {/* 釐清句已提到頁首常駐,這裡只留保留款比例 */}
         <div className="text-[11px] text-slate-500 mt-3 print:hidden">
-          保留款 {retPct}%。本包為佐證彙整，正式估驗金額以「估驗計價單」為準。
+          保留款 {retPct}%。
         </div>
       </div>
     </div>

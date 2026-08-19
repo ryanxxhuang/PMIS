@@ -71,7 +71,8 @@ export function StoreProvider({ children }) {
       edit: override || org === 'contractor',      // 日誌/成本/請款/檢查表等日常填報
       submit: override || org === 'contractor',    // 提送（估驗送監造審核、查驗申請）
       approve: override || org === 'supervisor',   // 監造：核定估驗、查驗判定、缺失複查結案、送審審定
-      ratify: override || org === 'owner' || org === 'supervisor', // 契約級核定：變更設計核准/駁回（機關為主，監造得初審）
+      ratify: override || org === 'owner',         // 契約級核定：變更設計核准/駁回/撤銷（機關專屬，D-016）
+      review: override || org === 'supervisor',    // 變更設計受理審查/退回（監造；核准前必經審核中）
       oversee: org === 'owner',                    // 機關監督視角（首頁行動中心＝核定/撥款）
       readonly: !override && org === 'owner',
       override,                                    // 看得到全部側欄工具/路由（角色化導覽的例外）

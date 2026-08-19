@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Printer, Trash2, Sparkles, AlertTriangle } from 'lucide-react'
+import { Printer, Trash2, Sparkles, AlertTriangle, Calculator } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, BallChip, Empty, PageHeader, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
@@ -39,7 +39,7 @@ export default function Valuation() {
     inspections, checklistRecords, checklistTemplates, testSamples,
     adjustedItems, coNet, revisedTotal, can } = useStore()
   const [filling, setFilling] = useState(false)
-  const [aiMsg, setAiMsg] = useState('')
+  const [fillMsg, setFillMsg] = useState('') // 日誌帶入的結果訊息(確定性加總,非 AI 草稿)
   const [errMsg, setErrMsg] = useState('') // DB 寫入失敗的訊息(不偽裝成功)
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(() => new Set())
@@ -118,7 +118,7 @@ export default function Valuation() {
       <Card title="估驗計價">
         <PrerequisiteEmptyState
           need="估驗計價依標單工項的契約數量/單價逐項計價,此專案的標單尚未匯入。"
-          unlocks="逐期估驗、請款收款、AI 估驗草擬、請款佐證包"
+          unlocks="逐期估驗、請款收款、日誌累計帶入、請款佐證包"
           to={can.edit ? '/contract' : undefined} cta={can.edit ? '前往專案文件上傳標單' : undefined}
           who={!can.edit ? '待施工廠商匯入標單並提報估驗後即可檢視。' : undefined} />
       </Card>
@@ -380,9 +380,21 @@ export default function Valuation() {
           ? `變更後契約金額 ${yi(billableTotal)}（原發包 ${yi(billableTotal - coNet)}，核准追加減 ${coNet > 0 ? '+' : ''}${fmt(coNet)}）`
           : `發包工程費 ${yi(billableTotal)}`}（保留款 ${selected?.retention_pct ?? 5}%）`}
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>}
-            {selected && <Button variant="secondary" onClick={() => navigate(`/valuation/package?p=${selected.id}`)} title="彙整本期估驗明細＋AI 施工說明＋佐證照片"><Sparkles size={15} aria-hidden />組請款佐證包</Button>}
+          // 兩份輸出常被搞混(C-11):差異原本只寫在 title tooltip,手機根本讀不到。
+          // 副文字常駐,講清楚哪一份是計價依據、哪一份只是佐證彙整。
+          <div className="flex flex-wrap items-start gap-2">
+            {selected && (
+              <div className="flex flex-col gap-0.5 max-w-[10rem]">
+                <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>
+                <span className="text-[11px] text-[var(--text-3)] leading-tight">正式計價金額文件</span>
+              </div>
+            )}
+            {selected && (
+              <div className="flex flex-col gap-0.5 max-w-[10rem]">
+                <Button variant="secondary" onClick={() => navigate(`/valuation/package?p=${selected.id}`)} title="彙整本期估驗明細＋AI 施工說明＋佐證照片"><Sparkles size={15} aria-hidden />組請款佐證包</Button>
+                <span className="text-[11px] text-[var(--text-3)] leading-tight">佐證彙整，非正式計價單</span>
+              </div>
+            )}
             {can.edit && <Button variant="secondary" onClick={onCreate}>＋ 新增估驗期</Button>}
           </div>
         } />
@@ -473,18 +485,21 @@ export default function Valuation() {
             action={
               <div className="flex items-center gap-2">
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項…" className="text-sm border border-[var(--border)] rounded-lg px-2.5 py-1 w-40 focus:border-[var(--blue)] focus:outline-none" />
+                {/* 這顆是確定性引擎(fillValuationFromSiteLogs 逐日加總,無任何模型呼叫),
+                    原本卻掛「AI 估驗草擬」的名字與 Sparkles——既違反「數字由確定性引擎算」
+                    的對外敘事,也讓使用者以為不開 AI 就填不了數量(C-9)。 */}
                 {selected.status === '草稿' && can.edit && siteLogs.length > 0 && (
-                  <Button onClick={async () => { setFilling(true); setErrMsg(''); const { count, error } = await fillValuationFromSiteLogs(selected.id); setFilling(false); if (error) { setErrMsg(`AI 草擬未寫入：${error.message}`); return } setAiMsg(count ? `AI 已依 ${siteLogs.length} 筆施工日誌草擬 ${count} 個工項的累計完成數量，請覆核後送審。` : 'AI 未在施工日誌找到可帶入的完成數量。') }} disabled={filling} title="掃描施工日誌，自動草擬本期各工項累計完成數量">
-                    <Sparkles size={14} aria-hidden />{filling ? 'AI 草擬中…' : 'AI 估驗草擬'}
+                  <Button onClick={async () => { setFilling(true); setErrMsg(''); const { count, error } = await fillValuationFromSiteLogs(selected.id); setFilling(false); if (error) { setErrMsg(`帶入未寫入：${error.message}`); return } setFillMsg(count ? `已依 ${siteLogs.length} 筆施工日誌帶入 ${count} 個工項累計，請覆核後送審。` : '施工日誌中查無可帶入的完成數量。') }} disabled={filling} title="依施工日誌逐日完成數量加總，帶入本期各工項累計完成數量（確定性計算，不經 AI）">
+                    <Calculator size={14} aria-hidden />{filling ? '帶入中…' : '帶入日誌累計'}
                   </Button>
                 )}
               </div>
             }
           >
-            {aiMsg && editable && (
+            {fillMsg && editable && (
               <div className="mb-3 flex items-start gap-2 text-xs bg-[var(--blue-tint)] text-[var(--blue-text)] rounded-lg px-3 py-2">
-                <Sparkles size={14} className="shrink-0 mt-0.5" aria-hidden />
-                <span>{aiMsg}</span>
+                <Calculator size={14} className="shrink-0 mt-0.5" aria-hidden />
+                <span>{fillMsg}</span>
               </div>
             )}
             {!editable && <p className="text-xs text-amber-600 mb-2">本期狀態為「{selected.status}」，明細唯讀。</p>}
@@ -520,7 +535,7 @@ export default function Valuation() {
           <p className="text-xs text-[var(--text-3)]">
             在末端工項填「累計完成數量」（夾在 0～契約數量），累計金額 = 契約金額 × 完成數量÷契約數量，右側顯示完成%。
             本期金額 = 本期累計 − 前期累計，父項金額自動加總。保留款依契約比例逐期扣留，竣工驗收後返還。
-            完成數量之後可由施工日誌的當日數量自動回填。
+            完成數量可按「帶入日誌累計」由施工日誌的當日數量逐日加總自動帶入（確定性計算，非 AI 推估），帶入後仍須逐項覆核再送審。
             「佐證」欄自動彙整該工項對應的施工日誌/查驗/自主檢查/試體紀錄；估驗累計高於日誌累計逾 5% 會就地提示，讓超計在送審前就被發現。
           </p>
         </>

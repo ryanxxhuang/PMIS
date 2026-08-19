@@ -23,9 +23,11 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       extras: extras && Object.keys(extras).length ? extras : null,
     }
     if (!dbMode) {
-      // demo：本機 upsert（同日覆蓋），維持日期新→舊排序
+      // demo：本機 upsert（同日覆蓋），維持日期新→舊排序。
+      // 數量空值/0 的列不落庫——與 dbMode 同口徑(C-4「複製昨日」只種工項列骨架,不產生假數量)
+      const kept = Object.fromEntries(Object.entries(items || {}).filter(([, q]) => q))
       setSiteLogs((ls) => [
-        { id: `LOG-${Date.now()}`, log_date, weather: weather || null, ...official, work_summary: work_summary || null, status: '已送出', items: items || {} },
+        { id: `LOG-${Date.now()}`, log_date, weather: weather || null, ...official, work_summary: work_summary || null, status: '已送出', items: kept },
         ...ls.filter((l) => l.log_date !== log_date),
       ].sort((a, b) => b.log_date.localeCompare(a.log_date)))
       return { error: null }
@@ -53,10 +55,13 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     const { error: e3 } = await (nextRows.length ? delQuery.not('work_item_id', 'in', `(${keep})`) : delQuery)
     if (e3) return { error: e3 }
     const rows = nextRows
-    // 寫入已成功;重載失敗不可偽裝成存檔失敗(B-09 載入層會 throw)
-    try { setSiteLogs(await loadSiteLogsFromDB(currentProject.project_id, wiMaps.idToKey)) } catch { /* 保留現況 */ }
+    // 寫入已成功;重載失敗不可偽裝成存檔失敗(B-09 載入層會 throw),但也不能靜默吞掉——
+    // ISSUE-6b:UI 顯示「已存檔 ✓」但 siteLogs 沒這筆,切日期即空白。保留現況、回 warning 讓 UI 提示。
+    let warning = null
+    try { setSiteLogs(await loadSiteLogsFromDB(currentProject.project_id, wiMaps.idToKey)) }
+    catch { warning = '已存檔,但畫面同步失敗,請重新整理後再確認' }
     log('施工日誌送出', `${log_date}（${rows.length} 工項）`, { user: currentUser?.name || '系統', role: '施工現場' })
-    return { error: null }
+    return { error: null, warning }
   }, [dbMode, currentProject, currentUser, wiMaps, log])
 
   // DB 刪成功才從 UI 移除(B-07:RLS 拒絕時原本假消失,重整即復活)

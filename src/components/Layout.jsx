@@ -213,9 +213,12 @@ export function WebLayout({ children }) {
       {/* 關閉時 max-md:invisible:visibility hidden = 不可聚焦＋離開 a11y 樹,擋掉
           「Tab 進看不見的抽屜」;visibility 進 transition 清單讓滑出動畫跑完才隱藏
           （hidden→visible 則是動畫起點就顯示,開啟不閃爍）。桌機 md 斷點不受影響。 */}
+      {/* 分層:手機抽屜要蓋過 z-50 遮罩故 z-[55];桌機側欄必須退到頂欄(z-40)之下,
+          否則頂欄 chrome-glass 的 backdrop-filter 自成 stacking context,專案下拉
+          整包被壓在側欄底下——誤點下拉選項會直接觸發側欄導覽而換頁(ISSUE-9)。 */}
       <aside
         className={`chrome-glass w-72 ${sidebarCollapsed ? 'md:w-16' : 'md:w-64'} border-r border-[var(--border-card)] flex flex-col print:hidden
-          fixed top-16 bottom-0 left-0 z-[55] transition-[width,transform,visibility] duration-300 [transition-timing-function:var(--ease-drawer)]
+          fixed top-16 bottom-0 left-0 z-[55] md:z-30 transition-[width,transform,visibility] duration-300 [transition-timing-function:var(--ease-drawer)]
           md:translate-x-0
           ${menuOpen ? 'translate-x-0' : '-translate-x-full max-md:invisible'}`}
       >

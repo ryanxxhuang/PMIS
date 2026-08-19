@@ -54,7 +54,9 @@ export default function Contract() {
     importWorkItems, workItemsSource, reloadMembership, workItems, submittals,
   } = useStore()
   const contractTotal = workItems?.meta?.billable_total || 0 // 契約總價(發包工程費),逾期罰款試算基準
-  const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '' })
+  // end_date 也是基準日之一(completion 觸發的義務用它算到期);它在建案表單填一次之後
+  // 原本沒有任何 UI 能修改,留白就永遠是 nodate,所以一併納入這張卡(W8-6 ISSUE-1)。
+  const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '', end_date: '' })
   const [parties, setParties] = useState([])
   const [packages, setPackages] = useState([])
   const [selectedPackageId, setSelectedPackageId] = useState(null)
@@ -63,7 +65,10 @@ export default function Contract() {
   const [versionsById, setVersionsById] = useState(new Map())
   const [aiCount, setAiCount] = useState(null)    // AI 履約要求建議數(本契約包)
   const [uploading, setUploading] = useState(false)
-  const [boqMsg, setBoqMsg] = useState('')
+  // 標單 XML 走的是另一條路(不建 processing run),自己記忙碌旗標與結果語氣:
+  // 成功/略過/失敗原本同一種灰字,失敗會被當成沒事(W8-6 ISSUE-2)。
+  const [boqBusy, setBoqBusy] = useState(false)
+  const [boqMsg, setBoqMsg] = useState(null)   // { tone: 'ok' | 'skip' | 'error', text }
   const [msg, setMsg] = useState('')
   const [obligationMsg, setObligationMsg] = useState('')
   const [showTech, setShowTech] = useState(false)
@@ -82,6 +87,7 @@ export default function Contract() {
       award_date: currentProject?.award_date || '',
       notice_date: currentProject?.notice_date || '',
       commencement_date: currentProject?.commencement_date || '',
+      end_date: currentProject?.end_date || '',
     })
   }, [currentProject])
 
@@ -222,20 +228,29 @@ export default function Contract() {
   const handleFiles = useCallback(async (fileList, targetPackage) => {
     let files = [...(fileList || [])].filter(Boolean)
     if (!files.length || !canUploadDocs) return
+    setBoqMsg(null)   // 上一批的結果不得跨批殘留(否則這次只丟 PDF 也會看到上次的標單訊息)
     // 統一窗口:PCCES 標單 XML 直接路由到 BOQ 匯入,其餘進契約包管線
     const xmls = files.filter((f) => /\.xml$/i.test(f.name))
     files = files.filter((f) => !/\.xml$/i.test(f.name))
     // 同批多個 XML:第一份成功後,迴圈內的 workItemsSource 是過期閉包值,
     // 用本地旗標擋後續檔案——否則第二份會撞伺服器「已有標單」錯誤,蓋掉成功訊息
     let boqImported = workItemsSource === 'db'
-    for (const xf of xmls) {
+    if (xmls.length) {
+      setBoqBusy(true)
       try {
-        if (boqImported) { setBoqMsg((prev) => `${prev ? prev + ' ' : ''}標單已匯入過,略過「${xf.name}」(如需重匯請至「標單工項」頁清空重匯)。`); continue }
-        const parsed = parsePccesXml(await xf.text())
-        const { error, count } = await importWorkItems(parsed)
-        if (!error) boqImported = true
-        setBoqMsg(error ? `標單匯入失敗:${error.message}` : `標單已匯入 ${count} 項工項(見「標單工項」頁)。`)
-      } catch (e) { setBoqMsg(`標單 XML 解析失敗:${e.message || ''}`) }
+        for (const xf of xmls) {
+          try {
+            // 略過訊息接在既有訊息後面,語氣沿用前一則:第一份成功、其餘略過時整體仍是成功
+            if (boqImported) { setBoqMsg((prev) => ({ tone: prev?.tone || 'skip', text: `${prev?.text ? prev.text + ' ' : ''}標單已匯入過,略過「${xf.name}」(如需重匯請至「標單工項」頁清空重匯)。` })); continue }
+            const parsed = parsePccesXml(await xf.text())
+            const { error, count } = await importWorkItems(parsed)
+            if (!error) boqImported = true
+            setBoqMsg(error
+              ? { tone: 'error', text: `標單匯入失敗:${error.message}` }
+              : { tone: 'ok', text: `標單已匯入 ${count} 項工項。` })
+          } catch (e) { setBoqMsg({ tone: 'error', text: `標單 XML 解析失敗:${e.message || ''}` }) }
+        }
+      } finally { setBoqBusy(false) }
     }
     if (!files.length) return
     let pkg = targetPackage
@@ -317,16 +332,17 @@ export default function Contract() {
 
   // ── 義務時程顯示(approved deadline 的相容 runtime)────────────────────
   const items = useMemo(() => {
-    const a = { ...anchors, end_date: currentProject?.end_date }
+    // end_date 已在 anchors 內(卡片可編輯),不再另外從 currentProject 取——否則剛改完的
+    // 竣工日要等專案清單重載才會反映到時程上
     return obligations.map((ob) => {
-      const due = computeObligationDue(ob, a)
+      const due = computeObligationDue(ob, anchors)
       const done = ob.status === '已提送' || ob.status === '已完成'
       let diff = null, state = 'nodate'
       if (done) state = 'done'
       else if (due) { diff = Math.round((due - today0()) / 86400000); state = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'scheduled' }
       return { ob, due, diff, done, state }
     })
-  }, [obligations, anchors, currentProject])
+  }, [obligations, anchors])
   const counts = useMemo(() => {
     let overdue = 0, soon = 0, done = 0
     for (const it of items) { if (it.state === 'overdue') overdue++; else if (it.state === 'soon') soon++; if (it.done) done++ }
@@ -366,7 +382,13 @@ export default function Contract() {
 
       <Card title="基準日">
         <div className="flex flex-wrap gap-4">
-          {[['award_date', '決標日'], ['notice_date', '接獲開工通知日'], ['commencement_date', '開工日']].map(([k, label]) => (
+          {[
+            ['award_date', '決標日'],
+            ['notice_date', '接獲開工通知日'],
+            ['commencement_date', '開工日'],
+            // 建案表單的「預計竣工日」寫的就是這一欄;完工類義務算不出到期日多半是它留白
+            ['end_date', '竣工日(完工義務基準)'],
+          ].map(([k, label]) => (
             <label key={k} className="block">
               <span className="block text-sm font-medium text-[var(--text)] mb-1">{label}</span>
               <input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
@@ -376,7 +398,7 @@ export default function Contract() {
           ))}
         </div>
         {anchorErr && <p className="text-xs text-[var(--red-text)] mt-2">{anchorErr}</p>}
-        <p className="text-xs text-[var(--text-3)] mt-3">義務時程的到期日、倒數、逾期都依這些基準日即時計算。</p>
+        <p className="text-xs text-[var(--text-3)] mt-3">義務時程的到期日、倒數、逾期都依這些基準日即時計算。「開工日」請填實際開工日;建立專案時填的是預計值,在這裡更新才會影響義務時程。</p>
       </Card>
 
       {/* ── 契約文件包:唯一的主要上傳流程 ──────────────────────────────── */}
@@ -405,12 +427,12 @@ export default function Contract() {
               ))}
             </Select>
           )}
-          <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${uploading || !canUploadDocs ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+          <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${uploading || boqBusy || !canUploadDocs ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
             <input type="file" multiple accept={ACCEPT_ATTR}
-              disabled={uploading || !canUploadDocs}
+              disabled={uploading || boqBusy || !canUploadDocs}
               onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)}
               className="hidden" />
-            <UploadCloud size={15} aria-hidden /> {uploading ? '整理中…' : '上傳契約文件'}
+            <UploadCloud size={15} aria-hidden /> {boqBusy ? '解析標單中…' : uploading ? '整理中…' : '上傳契約文件'}
           </label>
         </div>
       }>
@@ -460,7 +482,7 @@ export default function Contract() {
         </div>
 
         {/* 真實階段進度(持久化;離開頁面不會遺失) */}
-        {(progress.active > 0 || uploading) && (
+        {(progress.active > 0 || uploading || boqBusy) && (
           <div className="mt-4 bg-[var(--surface-2)] rounded-xl px-4 py-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="font-medium text-[var(--text)]">
@@ -469,17 +491,31 @@ export default function Contract() {
               {elapsed && <span className="text-xs text-[var(--text-3)]">已進行 {elapsed}</span>}
             </div>
             <ul className="mt-2 space-y-1 text-xs text-[var(--text-2)]">
-              <li>{progress.uploaded >= progress.total ? '✓' : '●'} 已上傳 {progress.uploaded} / {progress.total}</li>
-              <li>{progress.textExtracted >= progress.total - progress.unsupported ? '✓' : '●'} 已完成文字讀取 {progress.textExtracted} / {progress.total - progress.unsupported}</li>
-              <li>{progress.classified >= progress.total ? '✓' : '●'} 已辨識文件類型 {progress.classified} / {progress.total}</li>
-              <li>{progress.active === 0 ? '✓' : '●'} 已分析履約要求 {progress.requirementsAnalyzed}</li>
+              {/* 只丟標單 XML 時完全沒有 processing run,計數列會是 0/0——那條路徑只報自己的進度 */}
+              {boqBusy && <li>● 正在解析標單 XML…</li>}
+              {progress.total > 0 && (
+                <>
+                  <li>{progress.uploaded >= progress.total ? '✓' : '●'} 已上傳 {progress.uploaded} / {progress.total}</li>
+                  <li>{progress.textExtracted >= progress.total - progress.unsupported ? '✓' : '●'} 已完成文字讀取 {progress.textExtracted} / {progress.total - progress.unsupported}</li>
+                  <li>{progress.classified >= progress.total ? '✓' : '●'} 已辨識文件類型 {progress.classified} / {progress.total}</li>
+                  <li>{progress.active === 0 ? '✓' : '●'} 已分析履約要求 {progress.requirementsAnalyzed}</li>
+                </>
+              )}
             </ul>
-            <p className="text-xs text-[var(--text-3)] mt-2">你可以離開此頁,處理結果會保留。</p>
+            {/* 「可離開」只對持久化的 processing run 成立;標單匯入是本頁直接呼叫 RPC,離開會中斷 */}
+            {progress.total > 0 && <p className="text-xs text-[var(--text-3)] mt-2">你可以離開此頁,處理結果會保留。</p>}
           </div>
         )}
         {msg && <p className="text-xs text-[var(--red-text)] mt-3">{msg}</p>}
-        {boqMsg && <p className="text-xs text-[var(--text-2)] mt-2">{boqMsg}</p>}
-        {!uploading && (runs.length > 0 || obligations.length > 0) && (
+        {/* 成功/略過/失敗要一眼分得出來:失敗用紅字,成功綠字並直接給下一步入口 */}
+        {boqMsg && (
+          <p className={`text-xs mt-2 ${boqMsg.tone === 'ok' ? 'text-[var(--green-text)]' : boqMsg.tone === 'error' ? 'text-[var(--red-text)]' : 'text-[var(--text-3)]'}`}>
+            {boqMsg.text}
+            {boqMsg.tone === 'ok' && <Link to="/boq" className="text-[var(--blue-text)] hover:underline ml-1">前往標單工項 →</Link>}
+          </p>
+        )}
+        {/* workItemsSource:只匯了標單的新專案(runs=0、obligations=0)本來看不到後續指引 */}
+        {!uploading && !boqBusy && (runs.length > 0 || obligations.length > 0 || workItemsSource === 'db') && (
           <div className="mt-4 rounded-lg border border-[var(--border-2)] bg-[var(--blue-tint)]/40 px-4 py-3">
             <div className="text-xs font-semibold text-[var(--text)] mb-1.5">接下來該做什麼</div>
             <ul className="text-xs text-[var(--text-2)] space-y-1">

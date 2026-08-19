@@ -8,8 +8,10 @@ export function previousLog(siteLogs = [], date) {
     .sort((a, b) => b.log_date.localeCompare(a.log_date))[0] || null
 }
 
-// 複製昨日:只帶「每天重複」的欄位(人力/機具/材料/技術士安衛等 extras + 天氣),
-// 不帶當日工作摘要與各工項數量(那是每天真正要填的差異)。
+// 複製昨日:帶「每天重複」的欄位(人力/機具/材料/技術士安衛等 extras + 天氣),
+// 不帶當日工作摘要與各工項「數量」(那是每天真正要填的差異)。
+// C-4:工項改帶「列骨架」——key 保留、數量留空,施作中的工項列表每天大多重複,
+// 全不帶會讓使用者覺得「完全沒帶入」;數量空值在存檔時本就被丟棄,不會產生假數量。
 export function copyableFromLog(lg) {
   if (!lg) return null
   return {
@@ -17,6 +19,7 @@ export function copyableFromLog(lg) {
     equipment: (lg.equipment || []).map((r) => ({ ...r })),
     materials: (lg.materials || []).map((r) => ({ ...r })),
     extras: { ...(lg.extras || {}) },
+    items: Object.fromEntries(Object.keys(lg.items || {}).map((k) => [k, ''])),
     weather: lg.weather_am || lg.weather || '',
     weather_pm: lg.weather_pm || '',
     from: lg.log_date,

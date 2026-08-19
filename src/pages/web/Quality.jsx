@@ -60,6 +60,10 @@ export function buildQualityQueue(org, data = {}, today) {
 const QUEUE_TAG_COLOR = { 查驗: 'amber', 缺失: 'red', 觀察: 'slate', 試驗: 'blue' }
 const SEGMENTS = ['查驗', '缺失', '觀察', '檢查表', '試驗']
 
+// 查驗清單的狀態篩選(S-4):判定後的紀錄本來就留在清單裡,但純時間序要回答
+// 「擋土牆到底合格了沒」只能逐列掃。'全部' 是唯一非狀態值,其餘直接對 inspections.status。
+const INSP_FILTERS = ['全部', '待查驗', '合格', '不合格']
+
 export default function Quality() {
   const { project, workItems, inspections, createInspection, recordInspectionResult, deleteInspection,
     checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
@@ -75,6 +79,8 @@ export default function Quality() {
   // 判定成功的原地回饋(沿用各區塊 savedMsg 模式,不進全域狀態):
   // 判不合格開的缺失在「缺失」分段,不給入口使用者會以為判定沒發生
   const [resultMsg, setResultMsg] = useState(null) // null | { pass: boolean }
+  // 查驗清單的狀態篩選(S-4 查驗履歷):預設「全部」,不改變既有清單的預設內容
+  const [inspFilter, setInspFilter] = useState('全部')
 
   const leaves = useMemo(() => {
     if (!workItems) return []
@@ -90,6 +96,11 @@ export default function Quality() {
 
   // 失敗要讓使用者看到、表單不關(B-07:原本吞掉 error,看起來像成功)
   const submitInsp = async () => {
+    // 申請查驗日是三級品管的起算點(監造多久沒來查、逾期與否都靠它),
+    // 沒有它的查驗單事後補不回來 → 送出前擋住,不只是把鈕變灰
+    if (!inspForm.title || !inspForm.requested_date) {
+      setErrMsg('查驗申請未送出:查驗項目與申請查驗日必填。'); return
+    }
     setErrMsg(''); setBusy(true)
     const { error } = await createInspection(inspForm)
     setBusy(false)
@@ -111,7 +122,13 @@ export default function Quality() {
     if (error) { setErrMsg(`查驗判定未寫入：${error.message}`); return }
     setResultMsg({ pass })
   }
-  const openInsp = inspections.filter((i) => i.status === '待查驗').length
+  // 逐狀態計數一次算完:卡片標題、篩選 chips 與分段徽章共用同一份口徑,
+  // 免得「待查驗 N」在三處各自 filter 一遍還可能漂移
+  const inspCount = { 全部: inspections.length, 待查驗: 0, 合格: 0, 不合格: 0 }
+  // hasOwn 而非 in:狀態值來自 DB,不該讓 'constructor' 這種原型鍵意外命中計數器
+  for (const i of inspections) if (Object.hasOwn(inspCount, i.status)) inspCount[i.status] += 1
+  const openInsp = inspCount['待查驗']
+  const shownInsp = inspFilter === '全部' ? inspections : inspections.filter((i) => i.status === inspFilter)
 
   // 「今天」每次 render 取(B-11:工地平板整週不關分頁,模組層常數會停在開頁那天)。
   // 傳日曆日字串給期限引擎:含時間的「現在」會把 8 個日曆日壓成 7(W8-2 踩過的坑)。
@@ -170,9 +187,9 @@ export default function Quality() {
         ))}
       </div>
 
-      {/* 查驗 */}
+      {/* 查驗:標題同時給「全部」與「待查驗」——這張卡不只是待辦盒,也是本案的查驗履歷 */}
       {segment === '查驗' && (
-      <Card title={`查驗（待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: '', work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
+      <Card title={`查驗（全部 ${inspCount['全部']}・待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: todayIso(), work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
         {resultMsg && (
           <div className="flex items-center gap-3 flex-wrap rounded-lg bg-[var(--green-tint)] text-[var(--green-text)] text-sm px-3 py-2 mb-3">
             <span>{resultMsg.pass ? '已判定合格' : '已判定不合格並開立缺失'}</span>
@@ -188,14 +205,36 @@ export default function Quality() {
               <Field label="查驗項目"><input className={input} value={inspForm.title} onChange={(e) => setInspForm((f) => ({ ...f, title: e.target.value }))} placeholder="如 混凝土澆置前查驗" /></Field>
               <Field label="位置"><input className={input} value={inspForm.location} onChange={(e) => setInspForm((f) => ({ ...f, location: e.target.value }))} placeholder="如 A 區 1F" /></Field>
               <Field label="類型"><select className={input} value={inspForm.inspection_type} onChange={(e) => setInspForm((f) => ({ ...f, inspection_type: e.target.value }))}><option>施工查驗</option><option>材料查驗</option><option>隱蔽查驗</option></select></Field>
-              <Field label="申請查驗日"><input type="date" className={input} value={inspForm.requested_date} onChange={(e) => setInspForm((f) => ({ ...f, requested_date: e.target.value }))} /></Field>
+              {/* 預設今天:全站慣例是「事件已發生的記錄日預設今天」(檢查表/取樣皆同),
+                  申請查驗這件事就是按下去的當天發生,空白只會讓現場忘了填 */}
+              <Field label="申請查驗日（必填）"><input type="date" className={input} value={inspForm.requested_date} onChange={(e) => setInspForm((f) => ({ ...f, requested_date: e.target.value }))} /></Field>
             </div>
-            <Button onClick={submitInsp} disabled={busy || !inspForm.title}>送出查驗申請</Button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button onClick={submitInsp} disabled={busy || !inspForm.title || !inspForm.requested_date}>送出查驗申請</Button>
+              {!inspForm.requested_date && <span className="text-xs text-[var(--text-3)]">請先填寫申請查驗日</span>}
+            </div>
           </div>
         )}
-        {inspections.length === 0 ? <Empty>尚無查驗紀錄</Empty> : (
+        {/* 狀態篩選:判定後的紀錄一直都留在這張清單,但純時間序回答不了
+            「擋土牆合格了沒」。flex-wrap 是 375px 的保命符,四個 chip 一行放不下要能換行 */}
+        {inspections.length > 0 && (
+          <div role="group" aria-label="查驗狀態篩選" className="flex flex-wrap gap-1.5 mb-3">
+            {INSP_FILTERS.map((f) => (
+              <button key={f} onClick={() => setInspFilter(f)} aria-pressed={inspFilter === f}
+                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium max-sm:min-h-11 pressable transition-colors ${
+                  inspFilter === f
+                    ? 'border-[var(--primary)] bg-[var(--primary)] text-white'
+                    : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+                {f}<span className="tabular-nums opacity-80">{inspCount[f]}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {inspections.length === 0 ? <Empty>尚無查驗紀錄</Empty> : shownInsp.length === 0 ? (
+          <Empty>沒有「{inspFilter}」的查驗紀錄</Empty>
+        ) : (
           <div className="space-y-2">
-            {inspections.map((i) => (
+            {shownInsp.map((i) => (
               <div key={i.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
                 <div className="min-w-0">
                   <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge></div>

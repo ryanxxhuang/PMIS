@@ -83,7 +83,7 @@ export default function Members() {
         <Card title="加入成員">
           {/* W4-3(D-009):邀請方宣告受邀方身分,伺服器與對方註冊身分比對,不符即擋 */}
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[220px]"><Field label="對方帳號 Email" hint="對方需先在本系統註冊；與你指定的身分不符時會被擋下,不會誤入專案。">
+            <div className="flex-1 min-w-[220px]"><Field label="對方帳號 Email">
               <input className={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="supervisor@example.com" type="email" />
             </Field></div>
             <div className="min-w-[140px]"><Field label="受邀方身分">
@@ -94,8 +94,13 @@ export default function Members() {
                 <option value="owner">主辦機關</option>
               </select>
             </Field></div>
-            <Button onClick={onAdd} disabled={busy || !email.trim() || !inviteOrg}>{busy ? '加入中…' : '＋ 加入專案'}</Button>
+            {/* min-h 補到與 input/select 同高(py-2+text-sm+1px 框 = 38px):Button 沒有框,
+                差那 2px 會讓整列的底線看起來歪掉。手機的 max-sm:min-h-11 仍然勝出(在 media query 內) */}
+            <Button onClick={onAdd} disabled={busy || !email.trim() || !inviteOrg} className="min-h-[38px]">{busy ? '加入中…' : '＋ 加入專案'}</Button>
           </div>
+          {/* hint 拉出來自成一行:掛在 Email 欄的 Field 裡會把該欄整個頂高,
+              另兩欄沒有 hint,items-end 下三者中線就錯開(W8-6 ISSUE-3) */}
+          <p className="text-xs text-[var(--text-3)] mt-2">對方需先在本系統註冊；與你指定的身分不符時會被擋下,不會誤入專案。</p>
           {msg && <p className={`text-sm mt-2 ${msg.includes('已加入') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{msg}</p>}
           {demoMode && <p className="text-xs text-[var(--text-3)] mt-2">（demo 模式為展示用，實際邀請需登入真實專案。）</p>}
         </Card>

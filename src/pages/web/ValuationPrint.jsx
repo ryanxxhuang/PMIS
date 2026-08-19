@@ -26,9 +26,12 @@ export default function ValuationPrint() {
   const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev?.items || {}), [roots, childrenMap, prev])
 
   if (!currentUser) return <Navigate to="/login" replace />
-  if (!workItems || !selected) {
+  // 標單尚未載入(workItems 為 null)≠ 這期沒有估驗資料:兩者混成同一畫面時,
+  // 深連結進來的載入瞬間會直接告訴使用者「無估驗資料」,誤導成資料不存在(C-11)
+  if (!workItems) return <div className="p-10 text-center text-slate-600">載入中…</div>
+  if (!selected) {
     return (
-      <div className="p-10 text-center text-slate-400">
+      <div className="p-10 text-center text-slate-600">
         無估驗資料。<button onClick={() => navigate('/valuation')} className="text-[var(--blue-text)] underline">返回估驗計價</button>
       </div>
     )

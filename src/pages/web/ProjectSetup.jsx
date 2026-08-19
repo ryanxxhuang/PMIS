@@ -37,7 +37,9 @@ export default function ProjectSetup() {
       </div>
       <Card>
         <form onSubmit={submit} className="space-y-4">
-          <Field label="工程名稱"><input className={input} value={form.project_name} onChange={set('project_name')} placeholder="如 ○○新建工程" required /></Field>
+          {/* 必填說明只寫在導言會被跳過(導言是一段長句):表單頂端再標一次,與欄位上的紅＊對應 */}
+          <p className="text-xs text-[var(--text-3)]"><span className="text-[var(--red-text)]">＊</span> 為必填</p>
+          <Field label="工程名稱" required><input className={input} value={form.project_name} onChange={set('project_name')} placeholder="如 ○○新建工程" required /></Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="契約編號"><input className={input} value={form.project_code} onChange={set('project_code')} placeholder="如 20250101" /></Field>
             <Field label="工程地點"><input className={input} value={form.location} onChange={set('location')} placeholder="如 ○○市○○區" /></Field>
@@ -47,9 +49,12 @@ export default function ProjectSetup() {
             <Field label="施工廠商"><input className={input} value={form.contractor_name} onChange={set('contractor_name')} placeholder="施作廠商名稱" /></Field>
             <Field label="監造單位"><input className={input} value={form.supervisor_name} onChange={set('supervisor_name')} placeholder="監造單位名稱" /></Field>
           </div>
+          {/* 這兩欄寫的是 projects.start_date/end_date(契約預定值),不是期限引擎的開工基準
+              ——引擎讀的是另一欄 commencement_date,由「專案文件→基準日」登錄。同標籤兩欄位
+              會讓使用者以為在這裡填了開工日,義務時程就會開始倒數,所以標題明寫「預計」。 */}
           <div className="grid grid-cols-2 gap-4">
-            <Field label="開工日"><input type="date" className={input} value={form.start_date} onChange={set('start_date')} /></Field>
-            <Field label="竣工日"><input type="date" className={input} value={form.end_date} onChange={set('end_date')} /></Field>
+            <Field label="預計開工日" hint="實際開工日於接獲開工通知後,到「專案文件→基準日」登錄。"><input type="date" className={input} value={form.start_date} onChange={set('start_date')} /></Field>
+            <Field label="預計竣工日" hint="完工類義務以此為到期基準;可日後在「專案文件→基準日」修改。"><input type="date" className={input} value={form.end_date} onChange={set('end_date')} /></Field>
           </div>
           <ErrorBanner msg={err} />
           <Button type="submit" disabled={loading}>{loading ? '建立中…' : '建立專案'}</Button>
