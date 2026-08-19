@@ -58,3 +58,15 @@ export function collectEvidence(itemKey, {
     counts: { logs: logs.length, inspections: insp.length, checklists: checklists.length, samples: samples.length },
   }
 }
+
+// 佐證照片的說明行:機關看紙本佐證時第一個問的是「這張拍在哪」,
+// 所以 classify-site-photo 抄下來的施作區域(photos.location,如「A區1F」)要走在說明前面——
+// 同一工項不同樓層/區域的照片,光看 caption 分不出來(W8-5 ISSUE-4)。
+// 辨識不到就是 null(該欄寧缺勿錯),舊照片沒有這欄自然退回只顯示 caption,行為完全不變。
+// 回空字串代表兩者皆無,由呼叫端決定要顯示什麼佔位符。
+export function photoEvidenceLine(photo) {
+  const loc = (photo?.location || '').trim()
+  const caption = (photo?.caption || '').trim()
+  if (loc && caption) return `${loc}・${caption}`
+  return loc || caption || ''
+}

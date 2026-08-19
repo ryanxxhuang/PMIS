@@ -71,6 +71,7 @@ export default function Quality() {
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
     defects, currentUser,
     isSupabaseConfigured, currentProject, workItemsSource, can, resolveMarkup } = useStore()
+  const navigate = useNavigate() // 查驗列的「附自主檢查表」chip 導向既有列印檢視
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 判定寫入失敗必須讓使用者看到(失敗=UI 不變)
@@ -88,6 +89,28 @@ export default function Quality() {
     for (const it of workItems.items) { const k = it.parent_key || '__root__'; if (!childMap.has(k)) childMap.set(k, []); childMap.get(k).push(it) }
     return workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
   }, [workItems])
+
+  // 檢附自主檢查表(S-2)候選:已判定(合格/不合格皆可)的「現行版」檢查紀錄。
+  // 工項對應沿用 ChecklistSection 的雙鍵慣例(demo 存 work_item_key、真 DB 存 uuid);
+  // 未掛工項的檢查表不排除——掛工項本來就是選填,嚴格同鍵會把多數表藏光,
+  // 明確掛了「別的」工項才確定不相干。歷次版本不列:被修訂的舊證據不該再被檢附。
+  const attachableChecklists = useMemo(() => {
+    const leafByRef = new Map()
+    for (const l of leaves) { leafByRef.set(l.item_key, l); if (l.id) leafByRef.set(l.id, l) }
+    const currentByRoot = new Map()
+    for (const r of checklistRecords) {
+      const root = r.root_id || r.id
+      if ((currentByRoot.get(root)?.rev || 0) <= (r.rev || 0)) currentByRoot.set(root, r)
+    }
+    const formKey = inspForm?.work_item_key || null
+    return [...currentByRoot.values()]
+      .filter((r) => r.overall)
+      .filter((r) => {
+        const key = (leafByRef.get(r.work_item_key) || leafByRef.get(r.work_item_id))?.item_key || null
+        return key == null || key === formKey
+      })
+      .sort((a, b) => (b.check_date || '').localeCompare(a.check_date || ''))
+  }, [checklistRecords, leaves, inspForm?.work_item_key])
 
   if (!workItems) return <Empty>載入中…</Empty>
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
@@ -107,6 +130,19 @@ export default function Quality() {
     if (error) { setErrMsg(`查驗申請未送出:${error.message}`); return }
     setInspForm(null)
   }
+  // 三級品管一級交二級的正流程:自主檢查合格 → 提查驗申請並檢附該紀錄。
+  // 只預填表單(工項/項目/位置/檢附/申請日),送出仍由人按——與檢附 select 的
+  // 候選規則一致(現行版+已判定),所以預填的 id 一定會出現在下拉裡。
+  const requestInspectionFromChecklist = (r, tplTitle, wi) => {
+    setSegment('查驗')
+    setInspForm({
+      title: tplTitle || '', location: r.location || '',
+      inspection_type: '施工查驗', requested_date: todayIso(),
+      work_item_key: wi?.item_key || '', work_item_label: wi ? `${wi.item_no} ${wi.description}` : '',
+      checklist_record_id: r.id,
+    })
+  }
+
   const onResult = async (insp, pass) => {
     let note = ''
     if (!pass) {
@@ -189,7 +225,7 @@ export default function Quality() {
 
       {/* 查驗:標題同時給「全部」與「待查驗」——這張卡不只是待辦盒,也是本案的查驗履歷 */}
       {segment === '查驗' && (
-      <Card title={`查驗（全部 ${inspCount['全部']}・待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: todayIso(), work_item_key: '', work_item_label: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
+      <Card title={`查驗（全部 ${inspCount['全部']}・待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: todayIso(), work_item_key: '', work_item_label: '', checklist_record_id: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
         {resultMsg && (
           <div className="flex items-center gap-3 flex-wrap rounded-lg bg-[var(--green-tint)] text-[var(--green-text)] text-sm px-3 py-2 mb-3">
             <span>{resultMsg.pass ? '已判定合格' : '已判定不合格並開立缺失'}</span>
@@ -200,7 +236,8 @@ export default function Quality() {
         )}
         {inspForm && (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
-            <WorkItemPicker leaves={leaves} value={inspForm.work_item_key} label={inspForm.work_item_label} onPick={(k, l) => setInspForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
+            {/* 換工項連同清掉已選檢附:候選是「同工項」口徑,留著舊選擇會掛到不相干的表 */}
+            <WorkItemPicker leaves={leaves} value={inspForm.work_item_key} label={inspForm.work_item_label} onPick={(k, l) => setInspForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l, checklist_record_id: '' }))} />
             <div className="grid grid-cols-2 gap-3">
               <Field label="查驗項目"><input className={input} value={inspForm.title} onChange={(e) => setInspForm((f) => ({ ...f, title: e.target.value }))} placeholder="如 混凝土澆置前查驗" /></Field>
               <Field label="位置"><input className={input} value={inspForm.location} onChange={(e) => setInspForm((f) => ({ ...f, location: e.target.value }))} placeholder="如 A 區 1F" /></Field>
@@ -208,6 +245,24 @@ export default function Quality() {
               {/* 預設今天:全站慣例是「事件已發生的記錄日預設今天」(檢查表/取樣皆同),
                   申請查驗這件事就是按下去的當天發生,空白只會讓現場忘了填 */}
               <Field label="申請查驗日（必填）"><input type="date" className={input} value={inspForm.requested_date} onChange={(e) => setInspForm((f) => ({ ...f, requested_date: e.target.value }))} /></Field>
+              {/* 檢附自主檢查表(S-2):正式查驗單本來就要附第一級自主檢查證據——
+                  選填不擋送出,但監造一眼看得出第一級做了沒。只列已判定的現行版,
+                  「僅限已判定」是 UI 收斂(DB 只驗 FK 存在)。 */}
+              <Field label="檢附自主檢查表（選填）">
+                <select className={input} value={inspForm.checklist_record_id || ''}
+                  onChange={(e) => setInspForm((f) => ({ ...f, checklist_record_id: e.target.value }))}>
+                  {attachableChecklists.length === 0 ? (
+                    <option value="" disabled>此工項尚無已判定的自主檢查紀錄</option>
+                  ) : (<>
+                    <option value="">不檢附</option>
+                    {attachableChecklists.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.check_date} {checklistTemplates.find((t) => t.id === r.template_id)?.title || '自主檢查表'}{r.rev ? ` Rev.${r.rev}` : ''}{r.location ? `（${r.location}）` : ''} — {r.overall}
+                      </option>
+                    ))}
+                  </>)}
+                </select>
+              </Field>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <Button onClick={submitInsp} disabled={busy || !inspForm.title || !inspForm.requested_date}>送出查驗申請</Button>
@@ -237,7 +292,15 @@ export default function Quality() {
             {shownInsp.map((i) => (
               <div key={i.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
                 <div className="min-w-0">
-                  <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge></div>
+                  <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge>
+                    {/* 附自主檢查表 chip:點開既有列印檢視(成本最低的下鑽——檢查紀錄
+                        本來就以列印頁為完整檢視,查驗列不再自建展開) */}
+                    {i.checklist_record_id && (
+                      <button onClick={() => navigate(`/quality/checklist-print?id=${i.checklist_record_id}`)}
+                        title="檢視檢附的自主檢查表"
+                        className="ml-1.5 inline-flex items-center rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--blue)] hover:bg-[var(--surface-2)] pressable align-middle">附自主檢查表</button>
+                    )}
+                  </div>
                   {/* result_note(不合格原因)排在字串最後最先被切,而這一列沒有詳情頁可下鑽 → 補 title */}
                 <div className="text-xs text-[var(--text-3)] truncate"
                   title={[i.work_item_no, i.location, i.inspection_type, i.requested_date, i.result_note].filter(Boolean).join(' · ')}>{i.work_item_no && `${i.work_item_no} `}{i.location} · {i.inspection_type} · {i.requested_date || ''}{i.result_note ? ` · ${i.result_note}` : ''}</div>
@@ -270,7 +333,8 @@ export default function Quality() {
       {/* 自主檢查表:量化標準 → 實測值 → 自動判定 */}
       {segment === '檢查表' && (
       <ChecklistSection templates={checklistTemplates} records={checklistRecords} canEdit={can.edit} leaves={leaves}
-        onCreate={createChecklistRecord} onDelete={deleteChecklistRecord} />
+        onCreate={createChecklistRecord} onDelete={deleteChecklistRecord}
+        inspections={inspections} onRequestInspection={can.submit ? requestInspectionFromChecklist : null} />
       )}
 
       {/* 取樣試驗:試體齡期追蹤 + fc′ 自動判定 */}
@@ -300,7 +364,7 @@ const fmtVal = (v) => (v === true ? '✓' : v === false ? '✗' : v ?? '—')
 // ── 自主檢查表:選範本 → 填實測值 → 依量化標準自動判定 → 不合格自動開缺失。
 // 存檔後為證據不可就地修改:更正一律建立修訂版次 Rev.N(必附原因),重新判定
 // 並連動缺失(同鏈不重複開);僅未判定的紀錄可刪除。
-function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, leaves = [] }) {
+function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, leaves = [], inspections = [], onRequestInspection = null }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [revising, setRevising] = useState(null) // 修訂模式:被修訂的紀錄(現行版)
@@ -343,6 +407,16 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
       })
       .sort((a, b) => (b.current.check_date || '').localeCompare(a.current.check_date || ''))
   }, [records])
+
+  // 反向標記:這條修訂鏈的任一版被哪張查驗檢附(查驗刻意留在舊版=證據不可變,
+  // 所以要整鏈查,不能只看現行版 id)。有檢附就不再給「提出查驗申請」,避免重複送。
+  const attachedInspByRecordId = useMemo(() => {
+    const m = new Map()
+    for (const i of inspections) if (i.checklist_record_id) m.set(i.checklist_record_id, i)
+    return m
+  }, [inspections])
+  const attachedInspOfChain = (current, history) =>
+    [current, ...history].map((rev) => attachedInspByRecordId.get(rev.id)).find(Boolean) || null
 
   const setVal = (no, v) => setValues((p) => ({ ...p, [no]: v }))
   const closeForm = () => { setOpen(false); setRevising(null); setValues({}); setReason(''); setWiKey(''); setWiLabel('') }
@@ -479,6 +553,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
             const rootId = r.root_id || r.id
             const prev = history.find((h) => h.id === r.supersedes_id)
             const diffs = (r.rev || 0) > 0 && tpl && prev ? diffChecklistResults(tpl, prev.results, r.results) : []
+            const attachedInsp = attachedInspOfChain(r, history)
             return (
               <div key={rootId} className="border-b border-[var(--border-2)] pb-1.5">
                 <div className="flex items-center justify-between gap-3 text-sm">
@@ -491,6 +566,15 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge color={r.overall === '合格' ? 'green' : r.overall === '不合格' ? 'red' : 'slate'}>{r.overall || '未判定'}</Badge>
+                    {attachedInsp && (
+                      <span className="text-xs text-[var(--text-3)]" title={`已檢附於查驗:${attachedInsp.title}`}>已附查驗</span>
+                    )}
+                    {/* 一級交二級:自檢合格才有資格提查驗;已檢附過就不再給(避免重複送) */}
+                    {onRequestInspection && r.overall === '合格' && !attachedInsp && (
+                      <button onClick={() => onRequestInspection(r, tpl?.title || '', wiOf(r))}
+                        title="以此檢查紀錄為附件,預填查驗申請(送出前可改)"
+                        className="text-[var(--blue)] hover:underline text-xs whitespace-nowrap">提出查驗申請</button>
+                    )}
                     <button onClick={() => navigate(`/quality/checklist-print?id=${r.id}`)} title="列印自主檢查表"
                       className="text-[var(--blue)] hover:underline text-xs inline-flex items-center gap-1"><Printer size={13} aria-hidden />列印</button>
                     {canEdit && tpl && (

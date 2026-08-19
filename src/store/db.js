@@ -157,6 +157,7 @@ export async function loadDefectsFromDB(projectId, byId = new Map()) {
 }
 
 // 從 DB 載入查驗 + 缺失，並把 work_item 資訊去正規化方便顯示
+// (查驗的 checklist_record_id〔S-2 檢附自主檢查表〕走 select('*'),不需點名)
 export async function loadQualityFromDB(projectId, byId) {
   const wi = (id) => byId.get(id)
   const deco = (r) => ({ ...r, work_item_no: wi(r.work_item_id)?.item_no || '', work_item_desc: wi(r.work_item_id)?.description || '' })

@@ -8,6 +8,7 @@ import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { previousLog, copyableFromLog, frequentItems, addUniqueRow } from '../../lib/siteLogHelpers.js'
+import { mergeDraftItems, draftSummaryFromCaptions } from '../../lib/photoLogDraft.js' // 照片先行:辨識結果 → 日誌表單草稿(純函式)
 import { WorkItemPicker } from '../../components/DefectTracker.jsx'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
@@ -19,7 +20,7 @@ const todayStr = () => {
 // 把 AI 讀到的工項文字模糊比對到標單末端工項（回 work item 或 null）。
 // 含子串 → 取長度比;否則用字元交集 ×0.6;門檻 0.5。使用者最後會確認,寧可漏配也不要錯配。
 export default function SiteLog() {
-  const { project, workItems, adjustedItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource,
+  const { project, workItems, adjustedItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource, dbMode,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can, aiEnabled } = useStore()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayStr())
@@ -228,10 +229,11 @@ export default function SiteLog() {
     const files = Array.from(e.target.files || [])
     e.target.value = ''
     if (!files.length) return // 取消選檔
-    if (!currentLog?.id) { setSavedMsg('請先存檔本日日誌,才能使用 AI 辨識'); return }
+    // 照片先行(W8-7 C-6):該日還沒存檔也不擋——選檔即開始辨識,
+    // 「全部上傳」按下去時才自動建立草稿日誌(見 confirmBatchUpload)
     const stage = files.map((file) => ({
       key: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file),
-      status: 'analyzing', caption: '', category: '', work_item_key: '', work_item_label: '', errMsg: '',
+      status: 'analyzing', caption: '', category: '', work_item_key: '', work_item_label: '', errMsg: '', location: '',
     }))
     setStaging(stage)
     setBatchBusy(true)
@@ -244,6 +246,8 @@ export default function SiteLog() {
         setStaging((prev) => prev.map((p) => p.key === s.key ? {
           ...p, status: error ? 'error' : 'done',
           caption: error ? '' : (result.caption || ''), category: error ? '' : (result.category || ''),
+          // 施作區域(白板抄錄):舊版 edge fn 沒這欄=undefined,一律視同 null → 空字串(向後相容)
+          location: error ? '' : (result.location || ''),
           errMsg: error ? (error.message || '判讀失敗') : '',
           notSite: !error && result?.is_construction === false, // AI 判為非工地照,提醒人工確認
           work_item_key: wi?.item_key || '', work_item_label: wi ? `${wi.item_no} ${wi.description}` : '',
@@ -300,20 +304,52 @@ export default function SiteLog() {
   const cancelBatch = () => { staging.forEach((s) => URL.revokeObjectURL(s.previewUrl)); setStaging([]) }
 
   const confirmBatchUpload = async () => {
-    if (!currentLog?.id) return
     setBatchBusy(true); setSavedMsg('')
+    // 照片先行(W8-7):該日尚無日誌 → 先用既有 upsert(onConflict project_id,log_date)
+    // 自動建「空白草稿日誌」再掛照片。人按「全部上傳」=人觸發(紅線:AI 不自己寫 DB);
+    // 只建骨架(工項/摘要皆空),表單上未存檔的內容不在這裡落庫,日誌本體仍由人按「存檔」寫入。
+    // 建檔引發的 siteLogs 重載吃 W8-6 dirty 防護:dirty 時載入 effect 不重設表單;
+    // 乾淨表單被同步成空白日誌內容也無損(本來就是空的),下面的草稿回填走 wrapper setter 會標 dirty。
+    let logId = currentLog?.id
+    if (!logId && !dbMode) {
+      // demo 雙引擎同步:demo 的照片本來就不落庫(uploadSitePhoto 逐張回錯),
+      // 先建了空白日誌只會在 demo 劇本裡多一筆假日誌——直接講明,不留半套殘骸
+      setBatchBusy(false); setSavedMsg('demo 模式不支援照片上傳(需真專案),辨識覆核流程請在真專案體驗'); return
+    }
+    if (!logId) {
+      const { error: cErr, id } = await saveSiteLog({
+        log_date: date, weather, weather_am: weather, weather_pm: weatherPm,
+        labor: [], equipment: [], materials: [], extras: {}, work_summary: '', items: {},
+      })
+      if (cErr || !id) { setBatchBusy(false); setSavedMsg(cErr?.message || '自動建立本日日誌失敗,請先手動存檔再上傳'); return }
+      logId = id
+    }
     let ok = 0, fail = 0
+    const uploaded = [] // 只有上傳成功的張才回填草稿:日誌草稿要跟照片佐證對得上
     for (const s of staging) {
       if (s.status === 'analyzing') continue // 判讀中的略過;error 張仍可帶人工說明上傳(P1-02)
-      const { error } = await uploadSitePhoto(currentLog.id, s.file, {
-        caption: s.caption || null, work_item_key: s.work_item_key || null,
+      const { error } = await uploadSitePhoto(logId, s.file, {
+        caption: s.caption || null, work_item_key: s.work_item_key || null, location: s.location || null,
       })
-      if (error) { fail++ } else { ok++; URL.revokeObjectURL(s.previewUrl) }
+      if (error) { fail++ } else { ok++; uploaded.push(s); URL.revokeObjectURL(s.previewUrl) }
     }
-    setPhotos(await listSitePhotos(currentLog.id))
+    // 辨識結果回填表單(AI 只產草稿):配到工項→僅加列、數量留空由人填,不覆蓋既有列;
+    // caption 彙整→摘要草稿(僅摘要為空時,前綴「AI 草稿:」)。只動表單 state,落庫仍由人按「存檔」。
+    // functional update 對「最新」表單合併——上面自動建檔的重載可能已重跑載入 effect;
+    // closure 版 mergeDraftItems 只為算 N(訊息用),merge 具冪等性,兩者不會分歧出錯列。
+    const { added } = mergeDraftItems(items, uploaded)
+    if (added) setItems((p) => mergeDraftItems(p, uploaded).items)
+    const draftSummary = draftSummaryFromCaptions(summary, uploaded)
+    if (draftSummary) setSummary((s) => ((s || '').trim() ? s : draftSummary))
+    setPhotos(await listSitePhotos(logId))
     setStaging([]); setBatchBusy(false)
     // 全數成功=成功綠;有失敗才走錯誤紅(原本一律紅,成功也像出事)
-    setSavedMsg(`已上傳 ${ok} 張照片${fail ? `,${fail} 張未成功` : ''}（AI 生說明，可再刪改）`, fail ? 'error' : 'success')
+    const draftParts = [added ? `${added} 個工項` : '', draftSummary ? '摘要草稿' : ''].filter(Boolean)
+    setSavedMsg(
+      `已上傳 ${ok} 張照片${fail ? `,${fail} 張未成功` : ''}` +
+      (draftParts.length ? `;AI 帶入 ${draftParts.join('與')},請覆核數量後存檔` : '（AI 生說明，可再刪改）'),
+      fail ? 'error' : 'success',
+    )
   }
 
   // AI 現場辨識:拍工程告示板/現場照片 → 自動填日期/天氣/摘要 + 把工項數量帶入（工項用模糊比對到標單）
@@ -657,9 +693,13 @@ export default function SiteLog() {
           </Card>
 
           <Card title="現場照片" className="mt-5">
-            {!currentLog ? (
-              // 唯讀角色不能存檔:提示改成「等廠商」而不是叫監造/機關去存檔(W8-4B 修唯讀誤導文案)
-              <Empty>{can.edit ? '先存檔本日日誌，才能附上現場照片。' : '該日日誌建立後，廠商上傳的現場照片會顯示在這裡。'}</Empty>
+            {/* 照片先行(W8-7 C-6):可編角色不再被「先存檔」擋住——沒日誌也直接給批次辨識入口,
+                「全部上傳」時自動建草稿日誌。唯讀角色維持等待文案(W8-4B,也不得長出 input——唯讀 e2e 契約);
+                AI 辨識未啟用時沒有「辨識→確認」那步可觸發自動建檔,維持先存檔的原提示 */}
+            {!currentLog && !can.edit ? (
+              <Empty>該日日誌建立後，廠商上傳的現場照片會顯示在這裡。</Empty>
+            ) : !currentLog && !aiEnabled('photo.classify') ? (
+              <Empty>先存檔本日日誌，才能附上現場照片。</Empty>
             ) : (
               <>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -679,12 +719,20 @@ export default function SiteLog() {
                         <Sparkles size={14} aria-hidden />{existingBusy ? '辨識中…' : `AI 補辨識/配對 ${photosNeedingAI.length} 張`}
                       </Button>
                     )}
-                    <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] pressable ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
-                      <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy || batchBusy || existingBusy} onChange={onAddPhotos} className="hidden" />
-                      {photoBusy ? '上傳中…' : '＋ 上傳照片(不辨識)'}
-                    </label>
+                    {/* 「不辨識」=選檔即上傳、沒有確認步驟——不替使用者自動建檔,仍要先存檔才出現 */}
+                    {currentLog && (
+                      <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 border border-[var(--border)] pressable ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--text-2)]'}`}>
+                        <input type="file" accept="image/*" capture="environment" multiple disabled={photoBusy || batchBusy || existingBusy} onChange={onAddPhotos} className="hidden" />
+                        {photoBusy ? '上傳中…' : '＋ 上傳照片(不辨識)'}
+                      </label>
+                    )}
                   </>}
-                  <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? (aiEnabled('photo.classify') ? '　·　AI 辨識＝自動生說明並配對工項' : '　·　AI 批次辨識未啟用') : '（照片由施工廠商上傳）'}</span>
+                  {!currentLog ? (
+                    // 照片先行的引導:講清楚「確認上傳」會自動建檔+回填表單,人只要覆核數量再存檔
+                    <span className="text-xs text-[var(--text-3)]">本日尚未存檔日誌:選照片辨識後按「全部上傳」,會自動建立草稿日誌,並把配到的工項與摘要草稿帶進表單</span>
+                  ) : (
+                    <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? (aiEnabled('photo.classify') ? '　·　AI 辨識＝自動生說明並配對工項' : '　·　AI 批次辨識未啟用') : '（照片由施工廠商上傳）'}</span>
+                  )}
                   {existingMsg && <span className={`text-xs font-medium ${existingMsg.includes('失敗') ? 'text-[var(--red-text)]' : 'text-[var(--green-text,#15803d)]'}`}>{existingMsg}</span>}
                 </div>
 
@@ -717,6 +765,15 @@ export default function SiteLog() {
                               <>
                                 <div className="flex items-center gap-1.5 flex-wrap text-xs">
                                   {s.category && <span className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-2)]">{s.category}</span>}
+                                  {/* 施作區域=AI 自白板照抄的草稿:只給「清除」不給改寫——照抄原則,
+                                      人工要寫別的區域應該改在說明欄,不冒充板上文字 */}
+                                  {s.location && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--blue-tint)] text-[var(--blue-text)]">
+                                      📍 {s.location}
+                                      <button onClick={() => patchStaging(s.key, { location: '' })} title="清除施作區域"
+                                        aria-label={`清除施作區域 ${s.location}`} className="leading-none hover:text-[var(--red-text)]">✕</button>
+                                    </span>
+                                  )}
                                   {s.notSite && <span className="px-1.5 py-0.5 rounded bg-[var(--amber-tint)] text-[var(--amber-text)] border border-[var(--amber-text)]/25">⚠ 疑似非工地照,請確認</span>}
                                 </div>
                                 {/* 可搜尋改選/清除工項(P1-02:不再只能取消配對)*/}
@@ -750,9 +807,11 @@ export default function SiteLog() {
                           {/* 無說明時用序號當 fallback:同一天多張照片,固定字串會讓報讀器全部同名 */}
                           {p.url && <img src={p.url} alt={p.caption || `現場照片 ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />}
                         </div>
-                        {(p.caption || p.work_item_id) && (
+                        {(p.caption || p.work_item_id || p.location) && (
                           <div className="px-1.5 py-1 bg-[var(--surface)] border-t border-[var(--border-2)]">
                             {p.caption && <div className="text-[11px] leading-tight text-[var(--text-2)] truncate" title={p.caption}>{p.caption}</div>}
+                            {/* 施作區域(W8-7):同工項不同區域靠這行分辨;舊照片無 location(null)不渲染,顯示不受影響 */}
+                            {p.location && <div className="text-[10px] leading-tight text-[var(--text-3)] truncate" title={`施作區域 ${p.location}`}>📍 {p.location}</div>}
                             {/* 賣點的可見性:配到的工項一定要看得到,否則配對成功=白做(dry-run #17 教訓) */}
                             {p.work_item_id && byId.get(p.work_item_id) && (
                               <div className="text-[10px] leading-tight text-[var(--blue-text)] truncate" title={`${byId.get(p.work_item_id).item_no} ${byId.get(p.work_item_id).description}`}>
