@@ -40,7 +40,7 @@ test.describe('路由治理', () => {
     await expect(nav.getByRole('link', { name: '品質查驗', exact: true })).toBeVisible()
     await nav.getByRole('button', { name: '收合現場與品質子頁' }).click()
     await expect(nav.getByRole('link', { name: '品質查驗', exact: true })).toBeHidden()
-    await expect(page.getByRole('link', { name: '問 GovAgent' })).toBeVisible()
+    await expect(page.getByRole('link', { name: '問 PMIS' })).toBeVisible()
 
     await page.getByRole('button', { name: '收合側邊欄' }).click()
     await expect(page.getByRole('button', { name: '展開側邊欄' })).toBeVisible()
