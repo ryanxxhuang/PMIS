@@ -55,6 +55,11 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
   const list = defects.filter((d) => (d.domain || 'quality') === domain)
   const openCount = list.filter((d) => d.status !== '已結案').length
   const title = isSafety ? '工安缺失追蹤' : '缺失追蹤'
+  // 領域規則(C-8):品質缺失的正途是監造判查驗／自主檢查／試體不合格時「自動」開立,
+  // 廠商自行開一張品質缺失不是三級品管裡存在的動作,入口留著只會讓廠商以為要自己開。
+  // 工安缺失相反:廠商工安人員本就自行開立並追蹤改善,維持 can.edit||can.approve。
+  // 只收前端入口——自動開立仍以廠商身分 insert,不動 RLS 也不動任何自動路徑。
+  const canOpenManually = isSafety ? (can.edit || can.approve) : can.approve
 
   const [form, setForm] = useState(null)
   const [markupOpen, setMarkupOpen] = useState(false)
@@ -158,13 +163,15 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
     <Card title={`${title}（未結案 ${openCount}）`} action={<div className="flex items-center gap-3">
       {list.length > 0 && <button onClick={() => exportCsv(`${isSafety ? '工安缺失' : '缺失'}清單_${stamp()}`, list, csvCols)}
         className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
-      {(can.edit || can.approve) && (
+      {canOpenManually && (
         <Button variant="secondary" onClick={() => { setForm(form ? null : emptyForm()); setAiMsg('') }}>{form ? '取消' : '＋ 開立缺失'}</Button>
       )}
     </div>}>
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} className="mb-3" />
 
-      {form && (
+      {/* 表單一併吃 canOpenManually:權限變動(切正式模式/換角色)時殘留的展開表單
+          不可以還留在畫面上——藏鈕不藏表單等於沒藏 */}
+      {canOpenManually && form && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
           {aiPhotoOn ? (
             <div className="flex items-center gap-3 flex-wrap">
@@ -238,7 +245,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
       <p className="text-[11px] text-[var(--text-3)] mt-2">
         {isSafety
           ? '工安缺失與品質缺失共用同一套改善狀態機：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'
-          : '缺失改善鏈：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'}
+          : '品質缺失由監造判查驗不合格、或自主檢查表／試體判定不合格時自動開立，廠商不自行開立。缺失改善鏈：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'}
       </p>
     </Card>
   )

@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera, Printer, ChevronRight, CopyPlus, Plus, CloudSun, Sparkles } from 'lucide-react'
 import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState } from '../../components/ui.jsx'
+import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { previousLog, copyableFromLog, frequentItems, addUniqueRow } from '../../lib/siteLogHelpers.js'
@@ -22,23 +23,41 @@ export default function SiteLog() {
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can, aiEnabled } = useStore()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayStr())
-  const [weather, setWeather] = useState('晴')       // 上午天氣（相容舊欄位）
-  const [weatherPm, setWeatherPm] = useState('')     // 下午天氣
+  const [weather, setWeatherRaw] = useState('晴')       // 上午天氣（相容舊欄位）
+  const [weatherPm, setWeatherPmRaw] = useState('')     // 下午天氣
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [coordOpen, setCoordOpen] = useState(false)
   const [lat, setLat] = useState(currentProject?.latitude ?? '') // 工地座標(CWA 天氣)
   const [lon, setLon] = useState(currentProject?.longitude ?? '')
-  const [summary, setSummary] = useState('')
-  const [items, setItems] = useState({}) // item_key -> 當日數量
-  // 公定格式欄位（工程會公共工程施工日誌）
-  const [officialOpen, setOfficialOpen] = useState(false)
-  const [labor, setLabor] = useState([])         // [{type,count}]
-  const [equipment, setEquipment] = useState([]) // [{name,count}]
-  const [materials, setMaterials] = useState([]) // [{name,unit,qty}]
-  const [extras, setExtras] = useState({})       // 四~八節
+  const [summary, setSummaryRaw] = useState('')
+  const [items, setItemsRaw] = useState({}) // item_key -> 當日數量
+  // 公定格式欄位（工程會公共工程施工日誌）——法定欄位,預設展開不降級(ISSUE-5a)
+  const [officialOpen, setOfficialOpen] = useState(true)
+  const [labor, setLaborRaw] = useState([])         // [{type,count}]
+  const [equipment, setEquipmentRaw] = useState([]) // [{name,count}]
+  const [materials, setMaterialsRaw] = useState([]) // [{name,unit,qty}]
+  const [extras, setExtrasRaw] = useState({})       // 四~八節
+  // ISSUE-6a dirty 防護:表單有未存檔編輯時,載入 effect 不得用 store 覆寫表單。
+  // 編輯一律走下面的 wrapper setter 標記 dirty;raw setter 只給載入 effect 用(載入不是編輯)。
+  // 「帶入天氣/AI 帶入/複製昨日」也算編輯——6a 的資料遺失正是帶入天氣後
+  // saveCoords→setProjects→siteLogs 選取器換 identity→載入 effect 重跑,把剛帶入的內容洗掉。
+  const [dirty, setDirty] = useState(false)
+  const setWeather = (v) => { setDirty(true); setWeatherRaw(v) }
+  const setWeatherPm = (v) => { setDirty(true); setWeatherPmRaw(v) }
+  const setSummary = (v) => { setDirty(true); setSummaryRaw(v) }
+  const setItems = (v) => { setDirty(true); setItemsRaw(v) }
+  const setLabor = (v) => { setDirty(true); setLaborRaw(v) }
+  const setEquipment = (v) => { setDirty(true); setEquipmentRaw(v) }
+  const setMaterials = (v) => { setDirty(true); setMaterialsRaw(v) }
+  const setExtras = (v) => { setDirty(true); setExtrasRaw(v) }
+  // S-8 唯讀紙本化:監造/機關預設看公定格式紙本,摘要保留為切換
+  const [roSummary, setRoSummary] = useState(false)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
-  const [savedMsg, setSavedMsg] = useState('')
+  // ISSUE-6b 訊息分 tone:info(帶入/提示)/success(含 ✓)/error。
+  // 原本只有「含 ✓ 綠、其餘紅」,「已帶入…」「天氣未帶入…」這類資訊全被渲染成紅色錯誤。
+  const [savedMsg, setSavedMsgRaw] = useState(null) // { text, tone } | null
+  const setSavedMsg = (text, tone = 'error') => setSavedMsgRaw(text ? { text, tone } : null)
   const [photos, setPhotos] = useState([])      // 本日日誌的現場照片（含簽名 URL）
   const [photoBusy, setPhotoBusy] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)   // AI 現場辨識中
@@ -70,15 +89,23 @@ export default function SiteLog() {
     return { leaves: lv, byKey: m, byId: idMap }
   }, [workItems, adjustedItems])
 
-  // 切換日期 → 載入該日已存的日誌
+  // 載入該日已存的日誌(ISSUE-6a P0):
+  // - 日期變更 → 一律整包載入(切日期=使用者要看別天,並重置 dirty);
+  // - 同日期下 siteLogs 換 identity(存檔後重載、或其他 slice 寫入讓選取器重算)→
+  //   只在 !dirty 時同步,dirty 時絕不清空使用者未存檔的輸入。
+  const prevDateRef = useRef(date)
   useEffect(() => {
+    const dateChanged = prevDateRef.current !== date
+    prevDateRef.current = date
+    if (!dateChanged && dirty) return // 有未存檔編輯:不覆寫
     const lg = siteLogs.find((l) => l.log_date === date)
     if (lg) {
-      setWeather(lg.weather_am || lg.weather || '晴'); setWeatherPm(lg.weather_pm || '')
-      setSummary(lg.work_summary || ''); setItems({ ...lg.items })
-      setLabor(lg.labor || []); setEquipment(lg.equipment || []); setMaterials(lg.materials || []); setExtras(lg.extras || {})
-    } else { setItems({}); setSummary(''); setWeatherPm(''); setLabor([]); setEquipment([]); setMaterials([]); setExtras({}) }
-  }, [date, siteLogs])
+      setWeatherRaw(lg.weather_am || lg.weather || '晴'); setWeatherPmRaw(lg.weather_pm || '')
+      setSummaryRaw(lg.work_summary || ''); setItemsRaw({ ...lg.items })
+      setLaborRaw(lg.labor || []); setEquipmentRaw(lg.equipment || []); setMaterialsRaw(lg.materials || []); setExtrasRaw(lg.extras || {})
+    } else { setItemsRaw({}); setSummaryRaw(''); setWeatherPmRaw(''); setLaborRaw([]); setEquipmentRaw([]); setMaterialsRaw([]); setExtrasRaw({}) }
+    if (dateChanged) setDirty(false) // 新日期從乾淨狀態開始
+  }, [date, siteLogs, dirty])
 
   // 切換日期 → 載入該日已存日誌的現場照片（未存檔的日期沒有 daily_log_id，無照片）
   useEffect(() => {
@@ -95,9 +122,13 @@ export default function SiteLog() {
     const c = copyableFromLog(prevLog)
     if (!c) return
     setLabor(c.labor); setEquipment(c.equipment); setMaterials(c.materials); setExtras(c.extras)
+    // C-4:種出昨日工項的「列骨架」(數量留空,已手動加入的列不覆蓋)並展開公定格式區——
+    // 原本帶入的內容全落在收合區,使用者看起來「完全沒帶入」
+    setItems((p) => ({ ...c.items, ...p }))
+    setOfficialOpen(true)
     if (c.weather) setWeather(c.weather)
     setWeatherPm(c.weather_pm)
-    setSavedMsg(`已帶入 ${c.from} 的班組/機具/材料,請調整今日差異後存檔`)
+    setSavedMsg(`已帶入 ${c.from} 的班組/機具/材料與工項列表,數量請填今日實際值後存檔`, 'info')
   }
 
   // 天氣:工地座標 → 中央氣象局自動帶入(座標存一次,之後每天一鍵)
@@ -107,10 +138,10 @@ export default function SiteLog() {
     setWeatherBusy(true); setSavedMsg('')
     const r = await fetchWeather(currentProject.latitude, currentProject.longitude, date)
     setWeatherBusy(false)
-    if (r?.error) { setSavedMsg(`天氣未帶入:${r.error}`); return }
+    if (r?.error) { setSavedMsg(`天氣未帶入:${r.error}`, 'info'); return } // 帶不到≠系統錯誤,不渲染成紅字
     if (r.am) setWeather(r.am)
     if (r.pm) setWeatherPm(r.pm)
-    setSavedMsg(`天氣已帶入(資料來源:${r.source || '中央氣象局'}）`)
+    setSavedMsg(`天氣已帶入(資料來源:${r.source || '中央氣象局'}）`, 'info')
   }
   const saveCoords = async () => {
     const la = parseFloat(lat), lo = parseFloat(lon)
@@ -124,9 +155,9 @@ export default function SiteLog() {
     setWeatherBusy(true); setSavedMsg('')
     const r = await fetchWeather(la, lo, date)
     setWeatherBusy(false)
-    if (r?.error) { setSavedMsg(`座標已存,但天氣未帶入:${r.error}`); return }
+    if (r?.error) { setSavedMsg(`座標已存,但天氣未帶入:${r.error}`, 'info'); return }
     if (r.am) setWeather(r.am); if (r.pm) setWeatherPm(r.pm)
-    setSavedMsg(`工地座標已儲存;天氣已帶入(${r.source || '中央氣象局'}）`)
+    setSavedMsg(`工地座標已儲存;天氣已帶入(${r.source || '中央氣象局'}）`, 'info')
   }
 
   if (!workItems) return <Empty>載入中…</Empty>
@@ -155,12 +186,17 @@ export default function SiteLog() {
 
   const onSave = async () => {
     setSaving(true); setSavedMsg('')
-    const { error } = await saveSiteLog({
+    const { error, warning } = await saveSiteLog({
       log_date: date, weather, weather_am: weather, weather_pm: weatherPm,
       labor, equipment, materials, extras, work_summary: summary, items,
     })
     setSaving(false)
-    setSavedMsg(error ? (error.message || '存檔失敗') : '已存檔 ✓')
+    if (error) { setSavedMsg(error.message || '存檔失敗'); return }
+    // 已存檔但重載失敗(ISSUE-6b):保留 dirty——store 還沒有這筆,清了 dirty
+    // 會讓載入 effect 在下次 siteLogs 變動時把表單洗回「無日誌」空白
+    if (warning) { setSavedMsg(warning); return }
+    setDirty(false) // 存檔成功=表單與 store 一致,載入 effect 可安全同步
+    setSavedMsg('已存檔 ✓', 'success')
   }
 
   // 本日已存檔的日誌（有 id 才能掛照片）
@@ -276,7 +312,8 @@ export default function SiteLog() {
     }
     setPhotos(await listSitePhotos(currentLog.id))
     setStaging([]); setBatchBusy(false)
-    setSavedMsg(`已上傳 ${ok} 張照片${fail ? `,${fail} 張未成功` : ''}（AI 生說明，可再刪改）`)
+    // 全數成功=成功綠;有失敗才走錯誤紅(原本一律紅,成功也像出事)
+    setSavedMsg(`已上傳 ${ok} 張照片${fail ? `,${fail} 張未成功` : ''}（AI 生說明，可再刪改）`, fail ? 'error' : 'success')
   }
 
   // AI 現場辨識:拍工程告示板/現場照片 → 自動填日期/天氣/摘要 + 把工項數量帶入（工項用模糊比對到標單）
@@ -331,8 +368,9 @@ export default function SiteLog() {
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
           <Card title="本日日誌">
-            {/* W8-0 §6.2:唯讀(監造/機關)=摘要式檢視,不再用整排 disabled input 假裝可編——
+            {/* W8-0 §6.2 + S-8:唯讀(監造/機關)不用整排 disabled input 假裝可編——
                 disabled 欄位會誤導成「暫時鎖住的表單」,唯讀角色要的只是「看」。
+                預設看公定格式紙本(SiteLogOfficialSheet,與列印同版面),可切換摘要檢視。
                 分支只做在 render 層、不拆元件:所有 hook 無條件照跑,可編/唯讀 hook 數才會一致
                 (2026-08-12 hooks 順序事故的同型地雷);state 對唯讀多算是可接受的浪費。 */}
             {!can.edit ? (<>
@@ -340,11 +378,25 @@ export default function SiteLog() {
                 {can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為<b>唯讀</b>，可切換日期檢視歷史紀錄。
               </div>
               {/* 日期本來就對唯讀開放(切歷史用),是唯讀頁上唯一的 input */}
-              <div className="mb-3">
+              <div className="mb-3 flex items-end gap-3 flex-wrap">
                 <Field label="日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
+                {/* S-8:預設紙本(公定格式)、可切回摘要——鈕上寫「切過去會看到的那個檢視」 */}
+                {currentLog && (
+                  <button onClick={() => setRoSummary((v) => !v)}
+                    className="text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--surface-2)] text-[var(--text-2)]">
+                    {roSummary ? '公定格式檢視' : '摘要檢視'}
+                  </button>
+                )}
               </div>
               {!currentLog ? (
                 <Empty>此日期尚無日誌。施工日誌由施工廠商填報。</Empty>
+              ) : !roSummary ? (
+                // S-8 紙本化:監造/機關調閱的本來就是公定格式正式版面,預設直接內嵌 A4 文件本體。
+                // sheet 為純顯示無 input(唯讀頁 e2e 契約);紙本表格在手機縮不進 375px,
+                // 用 overflow-x-auto+min-w 讓紙本自己橫向捲,頁面不溢位(a11y 全路由無溢位掃描)。
+                <div className="overflow-x-auto">
+                  <SiteLogOfficialSheet project={project} log={currentLog} siteLogs={siteLogs} itemList={adjustedItems} className="min-w-[640px]" />
+                </div>
               ) : (
                 <div className="space-y-4">
                   {/* 天氣與摘要:純文字,空值顯示 —／（未填）而不是空輸入框 */}
@@ -421,6 +473,10 @@ export default function SiteLog() {
                 <Button variant="secondary" onClick={pullWeather} disabled={weatherBusy} title="依工地座標向中央氣象局帶入今日天氣">
                   <CloudSun size={14} aria-hidden />{weatherBusy ? '帶入中…' : '帶入天氣'}
                 </Button>
+              )}
+              {/* CWA 預報資料集只涵蓋未來約 3 天,過去日期打 API 必然帶不到——先講明,不讓使用者按了才看到失敗 */}
+              {can.edit && date < todayStr() && (
+                <span className="text-[11px] text-[var(--text-3)] pb-2">僅支援近 3 天預報,過去日期請手動填寫</span>
               )}
               {/* 零輸入:一鍵帶入前一筆日誌的班組/機具/材料(僅新日期、且有前一筆時) */}
               {can.edit && !dateHasLog && prevLog && (
@@ -518,7 +574,8 @@ export default function SiteLog() {
                 <ChevronRight size={15} aria-hidden className={`transition-transform duration-[var(--dur-fast)] ${officialOpen ? 'rotate-90' : ''}`} />
                 公定格式欄位（出工人數・機具・材料・安衛…）
                 <span className="ml-auto text-[11px] text-[var(--text-3)] font-normal">
-                  {labor.length + equipment.length + materials.length > 0 ? `已填 ${labor.length + equipment.length + materials.length} 列` : '選填，列印公定格式日誌用'}
+                  {/* ISSUE-5a:這是工程會公定格式的法定欄位,副標不用「選填」降級,改中性說明 */}
+                  {labor.length + equipment.length + materials.length > 0 ? `已填 ${labor.length + equipment.length + materials.length} 列` : '公定格式日誌欄位，列印時輸出'}
                 </span>
               </button>
               {officialOpen && (
@@ -593,7 +650,8 @@ export default function SiteLog() {
                   <Printer size={15} aria-hidden />列印公定格式日誌
                 </button>
               )}
-              {savedMsg && <span className={`text-sm ${savedMsg.includes('✓') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{savedMsg}</span>}
+              {/* ISSUE-6b tone:success 綠(「已存檔 ✓」e2e 凍結字串)/info 藍(帶入類資訊)/error 紅 */}
+              {savedMsg && <span className={`text-sm ${savedMsg.tone === 'success' ? 'text-[var(--green-text)]' : savedMsg.tone === 'info' ? 'text-[var(--blue-text)]' : 'text-[var(--red-text)]'}`}>{savedMsg.text}</span>}
             </div>
             </>)}
           </Card>
@@ -749,7 +807,7 @@ export default function SiteLog() {
       {/* 廠商操作說明:唯讀角色沒有存檔/複製昨日/快填這些入口,整段只對可編視角渲染 */}
       {can.edit && (
         <p className="text-xs text-[var(--text-3)]">
-          一天一筆（同日再存會覆蓋）。零輸入:新日期可「複製昨日」帶入班組/機具/材料、天氣點選快填、常用項目一鍵加入（依你的歷史自動學）。各日「當日完成數量」加總 = 估驗的「累計完成數量」——到估驗頁（草稿期）按「AI 估驗草擬」即可自動帶入。
+          一天一筆（同日再存會覆蓋）。零輸入:新日期可「複製昨日」帶入班組/機具/材料、天氣點選快填、常用項目一鍵加入（依你的歷史自動學）。各日「當日完成數量」加總 = 估驗的「累計完成數量」——到估驗頁（草稿期）按「帶入日誌累計」即可自動帶入。
         </p>
       )}
     </div>

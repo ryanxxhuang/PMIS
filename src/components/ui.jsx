@@ -147,10 +147,14 @@ export function Select({ className = '', children, ...props }) {
   return <select className={`${FIELD_BASE} pr-8 ${className}`} {...props}>{children}</select>
 }
 
-export function Field({ label, children, hint }) {
+// required 只影響視覺標示:必填語意仍由控件自身的原生 required 提供,所以紅＊
+// 掛 aria-hidden——否則報讀器會把「必填」唸兩次。預設 false,既有呼叫端輸出不變。
+export function Field({ label, children, hint, required = false }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-[var(--text)] mb-1">{label}</span>
+      <span className="block text-sm font-medium text-[var(--text)] mb-1">
+        {label}{required && <span className="text-[var(--red-text)] ml-0.5" aria-hidden>＊</span>}
+      </span>
       {children}
       {hint && <span className="block text-xs text-[var(--text-3)] mt-1">{hint}</span>}
     </label>

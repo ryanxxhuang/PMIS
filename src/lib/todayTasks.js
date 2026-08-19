@@ -186,6 +186,30 @@ export function buildTodayTasks(input = {}) {
     }
   }
 
+  // ── ⑥ 今日施工日誌未填(僅廠商)──────────────────────────────────────
+  // W8-2A §5-4 原本排除這條(無工地日曆,單看「今天沒日誌」會誤報);
+  // 2026-08-19 真人驗收翻案:使用者開口第一句就是「今天的施工日誌我還沒填」,
+  // 空狀態卻說「都跟上了」。改為只在「施工已開始的證據」存在時提醒,兩者擇一:
+  //   a. 開工錨點涵蓋今天(commencement_date ≤ 今天 ≤ end_date;end 缺值=未設限);
+  //   b. 本案已有至少一筆日誌(填過日誌=工地在運作)。
+  // 兩者皆無(全新專案)不推,維持原本不誤報的底線;停工日仍可能誤報,
+  // 但那需要工地日曆與停工登錄,不在本包(見 W8-2A §5-4 的 2026-08-19 補記)。
+  if (org === 'contractor') {
+    // log_date 是人填的業務日期字串('YYYY-MM-DD'),直接按字面比對台北日曆日,
+    // 不過 Date 轉換——轉換反而會把純日期字串攪進時區問題。
+    const hasTodayLog = siteLogs.some((l) => String(l?.log_date || '').slice(0, 10) === todayIso)
+    const sinceStart = daysBetween(anchors.commencement_date, todayIso) // 負=已開工
+    const untilEnd = daysBetween(anchors.end_date, todayIso)            // null=未設限
+    const inWindow = sinceStart != null && sinceStart <= 0 && (untilEnd == null || untilEnd >= 0)
+    if (!hasTodayLog && (inWindow || siteLogs.length > 0)) {
+      mine.push(task({
+        // 日誌沒有法定到期日,不掛 due 假造期限;無 due 者排在期限型待辦之後
+        key: `日誌:${todayIso}`, tag: '日誌', title: '今天的施工日誌尚未填寫',
+        ball: 'contractor', to: '/site-log', meta: `今天（${todayIso}）還沒有日誌紀錄`,
+      }))
+    }
+  }
+
   return {
     mine: mine.sort(byDue),
     waiting: waiting.sort(byDue),

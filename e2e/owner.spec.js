@@ -24,10 +24,11 @@ test.describe('機關', () => {
     await gotoHash(page, '/change-orders')
     // 待核定的變更排在最前面,機關進來第一眼就是要核的東西(W8-4C C1)
     await expect(page.getByRole('heading', { name: /待核定/ })).toBeVisible()
-    // CO-002 卡片上的狀態下拉(機關 can.ratify)
+    // CO-002 卡片上的「核准」動作鈕(機關 can.ratify;D-016 取代四值下拉,
+    // 監造只剩受理審查/退回,核准/駁回=機關專屬)
     const co2Card = page.locator('h3', { hasText: 'CO-002' })
       .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
-    await co2Card.locator('select').selectOption('核准')
+    await co2Card.getByRole('button', { name: '核准', exact: true }).click()
     // 本頁彙總即時更新
     await expect(page.getByText(`NT$ ${REVISED_AFTER_CO2}`).first()).toBeVisible()
     // 跨頁一致:估驗頁分母、Dashboard 發包工程費都是同一個數字

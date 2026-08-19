@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMemo, useState, useEffect } from 'react'
-import { Download, ChevronRight, Coins, FileCheck2, MessageSquareWarning, ShieldCheck, AlertTriangle, Eye, Wrench, CheckCircle2, Circle, Scale, FlaskConical, BadgeCheck, Octagon } from 'lucide-react'
+import { Download, ChevronRight, Coins, FileCheck2, MessageSquareWarning, ShieldCheck, AlertTriangle, Eye, Wrench, CheckCircle2, Circle, Scale, FlaskConical, BadgeCheck, Octagon, NotebookPen } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
@@ -278,8 +278,12 @@ export default function Dashboard() {
 
           {/* 三段今日待辦。狀態全部由既有業務流程更新——在目的頁做完事就自動退出,
               不需要回這裡打勾;這裡也永遠不會出現 AI 自己產生的工作。 */}
+          {/* 真人驗收(2026-08-19):什麼都還沒上傳的專案也說「都跟上了」會誤導。
+              store 沒有文件清單、不為此加查詢,退而求其次用「義務為空」當代理條件:
+              義務由契約解析而來,義務空=多半連契約都還沒整理,補一句指路即可 */}
           <TaskSection title="現在輪到我" items={tasks.mine} seeAll
-            empty="目前沒有輪到你處理的事項 — 都跟上了。" />
+            empty="目前沒有輪到你處理的事項 — 都跟上了。"
+            hint={obligations.length === 0 ? '上傳契約後，AI 會整理期限並在此提醒。' : null} />
           <TaskSection title="等待對方" items={tasks.waiting} seeAll
             empty="目前沒有在等其他單位的事項。" />
           <TaskSection title="今天已完成" items={tasks.doneToday} done
@@ -325,12 +329,13 @@ const TAG_META = {
   試驗: { icon: FlaskConical, c: 'var(--accent-text)', bg: 'var(--accent-tint)' },
   驗收: { icon: BadgeCheck, c: 'var(--green-text)', bg: 'var(--green-tint)' },
   停留點: { icon: Octagon, c: 'var(--red-text)', bg: 'var(--red-tint)' },
+  日誌: { icon: NotebookPen, c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
 }
 
 // 首頁每段最多 5 筆;完整清單在提醒中心,首頁不再無限長。
 const SECTION_CAP = 5
 
-function TaskSection({ title, items, empty, seeAll = false, done = false }) {
+function TaskSection({ title, items, empty, hint = null, seeAll = false, done = false }) {
   const shown = items.slice(0, SECTION_CAP)
   const countPill = (
     <span className={`num text-xs font-semibold px-2 py-0.5 rounded-full ${
@@ -340,7 +345,13 @@ function TaskSection({ title, items, empty, seeAll = false, done = false }) {
   )
   return (
     <Card title={title} action={countPill} bodyClass={items.length ? 'p-0' : 'p-6'}>
-      {items.length === 0 ? <Empty>{empty}</Empty> : (
+      {items.length === 0 ? (
+        <Empty>
+          {empty}
+          {/* 次要說明:只在呼叫端判斷「空得可疑」時出現(如義務為空=契約可能還沒上傳) */}
+          {hint && <div className="mt-1 text-xs text-[var(--text-3)]">{hint}</div>}
+        </Empty>
+      ) : (
         <ul className="divide-y divide-[var(--border-2)]">
           {shown.map((x) => {
             const m = TAG_META[x.tag] || { icon: Eye, c: 'var(--text-3)', bg: 'var(--surface-2)' }

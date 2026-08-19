@@ -19,13 +19,16 @@ describe('previousLog', () => {
 })
 
 describe('copyableFromLog', () => {
-  it('只帶重複欄位(人力/機具/材料/extras/天氣),不帶摘要與工項數量', () => {
+  it('帶重複欄位(人力/機具/材料/extras/天氣),不帶摘要', () => {
     const c = copyableFromLog(logs[0])
     expect(c.labor).toEqual([{ type: '鋼筋工', count: 8 }])
     expect(c.weather).toBe('晴'); expect(c.weather_pm).toBe('陣雨')
     expect(c.from).toBe('2026-07-10')
     expect(c).not.toHaveProperty('work_summary')
-    expect(c).not.toHaveProperty('items')
+  })
+  it('工項帶列骨架:key 保留、數量留空(C-4);無 items 時給空物件', () => {
+    expect(copyableFromLog(logs[0]).items).toEqual({ a: '' }) // 昨日 a:5 → 數量不複製
+    expect(copyableFromLog(logs[1]).items).toEqual({})
   })
   it('deep copy:改複製結果不動原日誌', () => {
     const c = copyableFromLog(logs[0]); c.labor[0].count = 99

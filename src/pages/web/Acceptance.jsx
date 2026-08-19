@@ -58,8 +58,10 @@ export default function Acceptance() {
         </div>
       )}
 
+      {/* 這張卡沒有標題時只是一串紅字,讀者無從知道它「憑什麼」提醒——
+          補上標題,把採購法期限的來源講明,才是機關承辦會信的提醒 */}
       {alerts.length > 0 && (
-        <Card bodyClass="p-0">
+        <Card title="法定期限提醒" bodyClass="p-0">
           <ul className="divide-y divide-[var(--border-2)]">
             {alerts.map((a) => (
               <li key={a.stage} className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
@@ -118,8 +120,18 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
     if (!res?.error) setEditing(false) // 失敗保持編輯狀態,錯誤訊息顯示在頁面 banner
   }
 
+  // 期限三級(O-8):逾期紅、7 日內琥珀、其餘灰。門檻與提醒中心的 acceptanceAlerts
+  // 同為 7 日——同一件事在時間軸與提醒卡不可以有兩套「快到期」定義。
+  // 級距只是呈現,天數與逾期判定仍由 acceptance.js 確定性算出。
+  const soon = !done && !stage.overdue && stage.daysLeft != null && stage.daysLeft <= 7
   const dueBadge = !done && stage.due && (
-    <span className={`inline-flex items-center gap-1 text-[11px] num ${stage.overdue ? 'text-[var(--red-text)] font-semibold' : 'text-[var(--text-3)]'}`}>
+    <span className={`inline-flex items-center gap-1 num ${
+      stage.overdue
+        ? 'text-xs font-semibold text-[var(--red-text)]'
+        : soon
+          ? 'text-xs font-medium text-[var(--amber-text)]'
+          : 'text-[11px] text-[var(--text-3)]'
+    }`}>
       <CalendarClock size={12} aria-hidden />
       期限 {stage.due}{stage.daysLeft != null && (stage.overdue ? `（逾期 ${-stage.daysLeft} 天）` : `（還有 ${stage.daysLeft} 天）`)}
     </span>

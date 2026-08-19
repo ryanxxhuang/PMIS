@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { FileUp } from 'lucide-react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button, Badge, PageHeader, ErrorBanner, Select } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, Badge, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -9,7 +9,6 @@ import { diffBoq } from '../../lib/coDiff.js'
 
 const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
-const STATUS = ['提出', '審核中', '核准', '駁回']
 const STATUS_COLOR = { 提出: 'slate', 審核中: 'amber', 核准: 'green', 駁回: 'red' }
 const isPending = (status) => status === '提出' || status === '審核中'
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -23,6 +22,7 @@ export default function ChangeOrders() {
   const [head, setHead] = useState({ co_no: '', title: '', co_date: todayStr() })
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 明細/狀態寫入失敗必須讓使用者看到(失敗=UI 不變)
+  const [submitted, setSubmitted] = useState(false) // 廠商送出後就地回饋(O-4:提出≠已受理,球在監造)
 
   // 發包末端工項（給明細連結既有工項用）
   const leaves = useMemo(() => {
@@ -66,7 +66,7 @@ export default function ChangeOrders() {
     setBusy(true)
     const { error } = await createChangeOrder(head)
     setBusy(false)
-    if (!error) setHead({ co_no: '', title: '', co_date: todayStr() })
+    if (!error) { setHead({ co_no: '', title: '', co_date: todayStr() }); setSubmitted(true) }
   }
 
   if (!dbMode && !demoMode) {
@@ -124,6 +124,8 @@ export default function ChangeOrders() {
           </label>
           <Button type="submit" disabled={busy || !head.title.trim()}>{busy ? '新增中…' : '＋ 新增'}</Button>
         </form>
+        {/* role="status":送出成功用 live region 就地告知,不打斷鍵盤動線(W8-5 a11y) */}
+        {submitted && <p role="status" className="text-xs text-[var(--green-text)] mt-2">已送出申請，待監造受理審查。</p>}
       </Card>}
 
       {changeOrders.length === 0 ? (
@@ -139,7 +141,8 @@ export default function ChangeOrders() {
               <h2 className="text-sm font-medium text-[var(--text-2)]">{g.label}（{g.list.length}）</h2>
               {g.list.map((co) => (
                 <ChangeOrderCard key={co.id} co={co} net={coNet(co)} leaves={leaves} allItems={workItems?.items || []}
-                  canApprove={can.ratify}
+                  // D-016 三段流程:監造受理審查/退回(can.review),機關核准/駁回(can.ratify)
+                  canReview={can.review} canRatify={can.ratify}
                   // 明細可編=廠商填報權 且 尚未核准(核准後 DB 凍結,UI 同步凍結——P0-02)
                   canEdit={can.edit} itemsEditable={can.edit && co.status !== '核准'}
                   onStatus={async (s) => { setErrMsg(''); const { error } = await updateChangeOrder(co.id, { status: s }); if (error) setErrMsg(`狀態未更新：${error.message}`) }}
@@ -163,7 +166,7 @@ export default function ChangeOrders() {
 
 const KIND_COLOR = { 數量增減: 'blue', '單價變更-減': 'amber', '單價變更-加': 'amber', 新增項: 'green', 刪除項: 'red' }
 
-function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, itemsEditable, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem }) {
+function ChangeOrderCard({ co, net, leaves, allItems, canReview, canRatify, canEdit, itemsEditable, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem }) {
   const [draft, setDraft] = useState({ work_item_key: '', item_no: '', description: '', unit: '', qty_delta: '', unit_price: '', note: '' })
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
@@ -253,13 +256,18 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
     <Card title={`${co.co_no ? co.co_no + '　' : ''}${co.title}`} action={
       <div className="flex items-center gap-2">
         <span className={`text-sm font-medium tabular-nums ${net >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{net >= 0 ? '+' : ''}{money(net)}</span>
-        {/* 共用 Select(仍是原生 <select>)才吃得到手機 44px 基底;卡頭空間有限所以 !w-auto */}
-        {canApprove ? (
-          <Select value={co.status} onChange={(e) => onStatus(e.target.value)}
-            aria-label={`${co.co_no || co.title} 狀態`} className="!w-auto !py-1.5 text-xs">
-            {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
-          </Select>
-        ) : <Badge color={STATUS_COLOR[co.status] || 'slate'}>{co.status}</Badge>}
+        {/* D-016 三段流程動作鈕取代四值下拉:能按什麼=角色×狀態,順序(提出→審核中→
+            核准/駁回)由 DB guard 強制,這裡只渲染當下合法的動作——監造看不到核准鈕 */}
+        {co.status === '提出' && canReview && (
+          <Button size="sm" variant="outline" onClick={() => onStatus('審核中')}>受理審查</Button>
+        )}
+        {co.status === '審核中' && canReview && (
+          <Button size="sm" variant="outline" onClick={() => onStatus('提出')}>退回</Button>
+        )}
+        {co.status === '審核中' && canRatify && (<>
+          <Button size="sm" onClick={() => onStatus('核准')}>核准</Button>
+          <Button size="sm" variant="danger" onClick={() => onStatus('駁回')}>駁回</Button>
+        </>)}
         {canEdit && <button onClick={onDelete} aria-label={`刪除變更單 ${co.title || co.co_no}`} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm p-2 -m-2">✕</button>}
       </div>
     }>
@@ -363,7 +371,7 @@ function ChangeOrderCard({ co, net, leaves, allItems, canApprove, canEdit, items
         <p className="text-[11px] text-[var(--text-3)] mt-1.5">追加填正數量、減帳填負數量。金額 = 數量 × 單價，自動計算。</p>
       </div>}
       {!itemsEditable && co.status === '核准' && (
-        <p className="text-[11px] text-[var(--text-3)]">此變更已核准，明細凍結；如需調整請由監造/機關撤銷核准後再修改。</p>
+        <p className="text-[11px] text-[var(--text-3)]">此變更已核准，明細凍結；如需調整請由機關撤銷核准後再修改（D-016：撤銷為機關專屬）。</p>
       )}
     </Card>
   )

@@ -131,7 +131,8 @@ describe('契約義務:精確責任白名單 + 目的頁真的能完成', () => 
       ob({ id: 'OB-3', title: '還很久', fixed_date: '2026-09-30', responsible: '廠商' }),
       ob({ id: 'OB-4', title: '沒有到期日', responsible: '廠商', trigger_event: 'other' }),
     ]
-    expect(build({ org: 'contractor', obligations: later, anchors }).mine).toEqual([])
+    // 只斷言契約段:anchors 的開工錨點涵蓋今天,第⑥類會另推一筆「日誌未填」(那是它的正確行為)
+    expect(build({ org: 'contractor', obligations: later, anchors }).mine.filter((t) => t.tag === '契約')).toEqual([])
   })
 })
 
@@ -219,6 +220,53 @@ describe('期限型待辦:試體、驗收、停留點', () => {
       const { waiting } = build({ org, ...shared })
       expect(waiting.some((t) => ['契約', '試驗', '驗收', '停留點'].includes(t.tag))).toBe(false)
     }
+  })
+})
+
+// 2026-08-19 真人驗收翻案(W8-2A §5-4 補記):使用者第一句就是「今天的施工日誌
+// 我還沒填」,空狀態卻說「都跟上了」。第⑥類只在「施工已開始的證據」存在時才推
+// (開工錨點涵蓋今天,或已有任一筆日誌),全新專案不推——釘住的是誤報防護本身。
+describe('今日施工日誌未填(第⑥類,僅廠商)', () => {
+  const anchors = { commencement_date: '2026-03-01', end_date: '2027-02-28' }
+  const yesterdayLog = [{ id: 'L1', log_date: '2026-08-12', items: {} }]
+  const todayLog = [{ id: 'L2', log_date: TODAY_ISO, items: {} }]
+
+  it('開工錨點涵蓋今天且今天沒日誌 → 推一筆導向 /site-log,且不掛假造的到期日', () => {
+    const t = build({ org: 'contractor', anchors }).mine.find((x) => x.tag === '日誌')
+    expect(t).toBeTruthy()
+    expect(t.title).toBe('今天的施工日誌尚未填寫')
+    expect(t.to).toBe('/site-log')
+    expect(t.ball).toBe('contractor')
+    expect(t.due).toBeNull() // 日誌沒有法定期限,不假造 due
+  })
+  it('今天已有日誌 → 不出現', () => {
+    expect(build({ org: 'contractor', anchors, siteLogs: todayLog }).mine.some((t) => t.tag === '日誌')).toBe(false)
+  })
+  it('非廠商 → 不出現(日誌是廠商在 /site-log 才做得到的事)', () => {
+    for (const org of ['supervisor', 'owner']) {
+      expect(build({ org, anchors, siteLogs: yesterdayLog }).mine.some((t) => t.tag === '日誌')).toBe(false)
+    }
+  })
+  it('全新專案(無開工錨點、無任何日誌) → 不出現,不對還沒開工的案子誤報', () => {
+    expect(build({ org: 'contractor' }).mine.some((t) => t.tag === '日誌')).toBe(false)
+  })
+  it('無錨點但已有昨日日誌(施工已開始的證據) → 出現', () => {
+    expect(build({ org: 'contractor', siteLogs: yesterdayLog }).mine.some((t) => t.tag === '日誌')).toBe(true)
+  })
+  it('尚未開工(commencement 在未來)且無日誌 → 不出現;end_date 缺值視為未設限', () => {
+    expect(build({ org: 'contractor', anchors: { commencement_date: '2026-09-01' } }).mine.some((t) => t.tag === '日誌')).toBe(false)
+    expect(build({ org: 'contractor', anchors: { commencement_date: '2026-03-01' } }).mine.some((t) => t.tag === '日誌')).toBe(true)
+  })
+  it('已過竣工日(end_date 在昨天)且無日誌 → 錨點視窗不成立,不出現', () => {
+    const ended = { commencement_date: '2025-01-01', end_date: '2026-08-12' }
+    expect(build({ org: 'contractor', anchors: ended }).mine.some((t) => t.tag === '日誌')).toBe(false)
+  })
+  it('沒有到期日 → 排在期限型待辦之後(沿用無 due 殿後規則)', () => {
+    const { mine } = build({
+      org: 'contractor', anchors,
+      defects: [{ id: 'D1', title: '模板殘料', status: '開立', due_date: '2026-08-20' }],
+    })
+    expect(mine.map((t) => t.tag)).toEqual(['缺失', '日誌'])
   })
 })
 
