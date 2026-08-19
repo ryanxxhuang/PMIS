@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { collectEvidence, OVER_TOL } from './evidence.js'
+import { collectEvidence, photoEvidenceLine, OVER_TOL } from './evidence.js'
 
 // 測試素材:A=混凝土工項、B=鋼筋工項(非混凝土)
 const workItemA = { id: 'uuid-A', item_key: 'A', item_no: '01', description: '結構體混凝土 420kgf/cm²', unit: 'm3', quantity: 1000 }
@@ -100,5 +100,26 @@ describe('collectEvidence', () => {
 
   it('OVER_TOL 與稽核共用同一容忍值', () => {
     expect(OVER_TOL).toBe(1.05)
+  })
+})
+
+describe('photoEvidenceLine', () => {
+  it('有施作區域時前綴帶出(區域・說明)', () => {
+    expect(photoEvidenceLine({ location: 'A區1F', caption: '柱牆混凝土澆置' })).toBe('A區1F・柱牆混凝土澆置')
+  })
+
+  it('舊照片無 location(null/未帶欄位)只顯示說明,行為不變', () => {
+    expect(photoEvidenceLine({ location: null, caption: '柱牆混凝土澆置' })).toBe('柱牆混凝土澆置')
+    expect(photoEvidenceLine({ caption: '柱牆混凝土澆置' })).toBe('柱牆混凝土澆置')
+  })
+
+  it('只有 location(AI 讀到板子但沒生說明)仍要看得到區域', () => {
+    expect(photoEvidenceLine({ location: 'B棟3F 柱牆', caption: null })).toBe('B棟3F 柱牆')
+  })
+
+  it('兩者皆無回空字串,佔位符交給呼叫端', () => {
+    expect(photoEvidenceLine({})).toBe('')
+    expect(photoEvidenceLine(null)).toBe('')
+    expect(photoEvidenceLine({ location: '  ', caption: '  ' })).toBe('') // 空白字串不算辨識到
   })
 })

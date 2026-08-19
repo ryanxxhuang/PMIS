@@ -26,11 +26,14 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       // demo：本機 upsert（同日覆蓋），維持日期新→舊排序。
       // 數量空值/0 的列不落庫——與 dbMode 同口徑(C-4「複製昨日」只種工項列骨架,不產生假數量)
       const kept = Object.fromEntries(Object.entries(items || {}).filter(([, q]) => q))
+      // 回傳 id 給「照片先行」(W8-7):自動建檔後要立刻掛照片,呼叫端等不到 state 重載。
+      // demo 每次存檔本來就換新 id(同日整列覆蓋),照片也不落庫,id 不需跨存檔穩定。
+      const demoId = `LOG-${Date.now()}`
       setSiteLogs((ls) => [
-        { id: `LOG-${Date.now()}`, log_date, weather: weather || null, ...official, work_summary: work_summary || null, status: '已送出', items: kept },
+        { id: demoId, log_date, weather: weather || null, ...official, work_summary: work_summary || null, status: '已送出', items: kept },
         ...ls.filter((l) => l.log_date !== log_date),
       ].sort((a, b) => b.log_date.localeCompare(a.log_date)))
-      return { error: null }
+      return { error: null, id: demoId }
     }
     const { data: up, error: e1 } = await supabase.from('daily_logs').upsert(
       { project_id: currentProject.project_id, log_date, weather: weather || null, ...official, work_summary: work_summary || null, status: '已送出', created_by: currentUser?.user_id },
@@ -61,7 +64,8 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     try { setSiteLogs(await loadSiteLogsFromDB(currentProject.project_id, wiMaps.idToKey)) }
     catch { warning = '已存檔,但畫面同步失敗,請重新整理後再確認' }
     log('施工日誌送出', `${log_date}（${rows.length} 工項）`, { user: currentUser?.name || '系統', role: '施工現場' })
-    return { error: null, warning }
+    // id 給「照片先行」自動建檔後立刻掛照片用(setSiteLogs 是非同步 state,呼叫端拿不到)
+    return { error: null, warning, id: up.id }
   }, [dbMode, currentProject, currentUser, wiMaps, log])
 
   // DB 刪成功才從 UI 移除(B-07:RLS 拒絕時原本假消失,重整即復活)
@@ -90,7 +94,10 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   }, [dbMode])
 
   const uploadSitePhoto = useCallback(async (dailyLogId, file, meta = {}) => {
-    if (!dbMode || !dailyLogId) return { error: { message: '需先存檔日誌' } }
+    // demo 與「缺 id」分開講:照片先行(W8-7)會自動建檔,demo 下失敗的原因是模式不落庫,
+    // 舊訊息「需先存檔日誌」會誤導使用者以為又要先存檔
+    if (!dbMode) return { error: { message: 'demo 模式不支援照片上傳(需真專案)' } }
+    if (!dailyLogId) return { error: { message: '需先存檔日誌' } }
     const pid = currentProject.project_id
     const id = crypto.randomUUID()
     const ext = (file.name?.split('.').pop() || file.type?.split('/')[1] || 'jpg').toLowerCase()
@@ -102,6 +109,8 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     const { error: insErr } = await supabase.from('photos').insert({
       id, project_id: pid, daily_log_id: dailyLogId, work_item_id: wi?.id || null,
       storage_path: path, caption: meta.caption || null,
+      // 施作區域(W8-7):AI 自查驗黑板/白板抄錄、人已在覆核區確認或清除;辨識不到=null
+      location: meta.location || null,
       taken_at: meta.taken_at || new Date().toISOString(), uploaded_by: currentUser?.user_id,
     })
     if (insErr) { await supabase.storage.from('photos').remove([path]); return { error: insErr } } // 回滾孤兒檔

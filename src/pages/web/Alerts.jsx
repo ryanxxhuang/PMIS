@@ -8,11 +8,15 @@ import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildTodayTasks } from '../../lib/todayTasks.js'
 
+// tag 配色對齊首頁 Dashboard 的 TAG_META:同一筆待辦在兩頁應該是同一個顏色語意。
+// 這裡漏鍵不會壞掉、只會靜默退成灰字(看起來像「未分類」),所以 buildTodayTasks
+// 新增 tag 時兩邊都要補——W8-6 的「日誌」就是只補了首頁。
 const TAG_COLOR = {
   契約: 'var(--purple-text)', 缺失: 'var(--red-text)', 工安缺失: 'var(--amber-text)',
   試驗: 'var(--accent-text)', 驗收: 'var(--green-text)', 停留點: 'var(--red-text)',
   估驗: 'var(--blue-text)', 送審: 'var(--blue-text)', 疑義: 'var(--purple-text)',
   查驗: 'var(--amber-text)', 觀察: 'var(--slate-text)', 變更: 'var(--green-text)',
+  日誌: 'var(--blue-text)',
 }
 
 function TaskList({ items }) {

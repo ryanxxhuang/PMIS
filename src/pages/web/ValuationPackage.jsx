@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { Printer, Sparkles, Images, FileText } from 'lucide-react'
 import { useStore } from '../../store.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
-import { collectEvidence } from '../../lib/evidence.js'
+import { collectEvidence, photoEvidenceLine } from '../../lib/evidence.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
@@ -268,21 +268,27 @@ export default function ValuationPackage() {
                   <span className="text-slate-500 mr-1.5">{it.item_no}</span>{it.description}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {incl(photosByItem[it.item_key]).map((p) => (
-                    <figure key={p.id} className="relative border border-slate-200 rounded overflow-hidden break-inside-avoid group">
-                      {/* 佐證照片本身就是送審內容,無 caption 時仍要說得出「這是哪個工項的照片」 */}
-                      {p.url && <img src={p.url} alt={p.caption || `${it.item_no} ${it.description} 佐證照片`} className="w-full h-28 object-cover" />}
-                      {/* 手機沒有 hover:原本 opacity-0 讓這顆鈕在手機上看不見也點不到,
-                          但上方文案正教使用者「點 ✕ 可排除」。手機常駐顯示並放大到 36px
-                          (縮圖僅 h-28,44px 會蓋掉照片主體,列為已知例外);鍵盤 focus 亦顯形 */}
-                      <button onClick={() => toggleExclude(p.id)} title="排除此張(不列入本包)"
-                        aria-label={`排除照片 ${p.caption || it.item_no} 不列入本包`}
-                        className="print:hidden absolute top-1 right-1 w-6 h-6 max-sm:w-9 max-sm:h-9 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 max-sm:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">✕</button>
-                      <figcaption className="text-[10px] text-slate-500 px-1.5 py-1 leading-tight">
-                        {p.caption || '—'}{p.taken_at ? ` · ${String(p.taken_at).slice(0, 10)}` : ''}
-                      </figcaption>
-                    </figure>
-                  ))}
+                  {incl(photosByItem[it.item_key]).map((p) => {
+                    // 施作區域(AI 從查驗黑板抄下的 photos.location)併進說明行:同一工項不同
+                    // 樓層/區域的照片,光看說明分不出來,機關逐張核對時會卡在這裡。
+                    // 舊照片沒有這欄(null)就退回只顯示說明,呈現完全不變。
+                    const line = photoEvidenceLine(p)
+                    return (
+                      <figure key={p.id} className="relative border border-slate-200 rounded overflow-hidden break-inside-avoid group">
+                        {/* 佐證照片本身就是送審內容,無 caption 時仍要說得出「這是哪個工項的照片」 */}
+                        {p.url && <img src={p.url} alt={line || `${it.item_no} ${it.description} 佐證照片`} className="w-full h-28 object-cover" />}
+                        {/* 手機沒有 hover:原本 opacity-0 讓這顆鈕在手機上看不見也點不到,
+                            但上方文案正教使用者「點 ✕ 可排除」。手機常駐顯示並放大到 36px
+                            (縮圖僅 h-28,44px 會蓋掉照片主體,列為已知例外);鍵盤 focus 亦顯形 */}
+                        <button onClick={() => toggleExclude(p.id)} title="排除此張(不列入本包)"
+                          aria-label={`排除照片 ${line || it.item_no} 不列入本包`}
+                          className="print:hidden absolute top-1 right-1 w-6 h-6 max-sm:w-9 max-sm:h-9 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 max-sm:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">✕</button>
+                        <figcaption className="text-[10px] text-slate-500 px-1.5 py-1 leading-tight">
+                          {line || '—'}{p.taken_at ? ` · ${String(p.taken_at).slice(0, 10)}` : ''}
+                        </figcaption>
+                      </figure>
+                    )
+                  })}
                 </div>
               </div>
             ))}

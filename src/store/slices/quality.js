@@ -40,6 +40,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
         id: `INSP-${Date.now()}`, title: input.title, location: input.location || null,
         inspection_type: input.inspection_type || '施工查驗',
         requested_date: input.requested_date || null, status: '待查驗', result_note: null,
+        // 檢附自主檢查表(S-2):單向引用第一級證據,demo 與真 DB 同欄名才不會雙引擎漂移
+        checklist_record_id: input.checklist_record_id || null,
         work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
       }, ...is])
       return { error: null }
@@ -49,6 +51,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       title: input.title, location: input.location || null,
       inspection_type: input.inspection_type || '施工查驗',
       requested_date: input.requested_date || null,
+      // 檢附自主檢查表(S-2):只在申請時掛上,查驗結果不回寫檢查紀錄(單向)
+      checklist_record_id: input.checklist_record_id || null,
       requested_by: currentUser?.user_id, status: '待查驗',
     })
     if (error) return { error }
