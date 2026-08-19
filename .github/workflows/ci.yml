@@ -22,8 +22,25 @@ jobs:
       - run: npm test
       - run: npm run build
       # E2E 護欄:三角色簽核鏈(Playwright,demo 模式跑 demoSeed,不碰 Supabase、無 secret)
-      - name: 安裝 Playwright Chromium
+      # 瀏覽器快取:Playwright CDN 偶發劣化會讓下載卡死撞 timeout(2026-08-19 main
+      # 連三次紅燈,程式無誤)。以實際安裝的 Playwright 版號當 key——升版自動換 key
+      # 重抓,同版直接還原 ~/.cache/ms-playwright,不再每次 run 都碰 CDN。
+      - name: 讀取 Playwright 版號
+        id: playwright-version
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: 快取 Playwright 瀏覽器
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      - name: 安裝 Playwright Chromium(cache miss 才下載)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+      # cache hit 仍要補 OS 套件——快取只涵蓋瀏覽器本體,apt 依賴不在 runner 映像保證內
+      - name: 安裝 Chromium 系統依賴(cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       - name: E2E(三角色簽核鏈)
         run: npx playwright test
       - name: 失敗時上傳 E2E 報告
