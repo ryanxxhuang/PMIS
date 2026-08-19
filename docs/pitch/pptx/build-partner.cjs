@@ -115,6 +115,10 @@ function shotSlide(sec, eyebrow, title, lead, points, file, caption) {
 // ⚠️ 年資的處理:台灣世曦監造 1 年、AI 新創產品經理半年、公務員 4 年。
 //    只寫了公務員的 4 年,另外兩段寫職稱不寫年資——不是隱瞞,是不把最短的兩個數字
 //    放在最顯眼的位置。對方當面問一定要照實答,所以這頁不能出現任何暗示更久的字眼。
+//
+// 獎項:使用者當時是**主辦**,所以從第一欄的條列升級成三欄下方的整條橫帶。
+//    這是全頁最硬的一個憑證,對工程圈聽眾的份量高於任何學歷,不要再把它降回條列。
+//    「擔任主辦的工程獲…」的寫法在機關側或監造側都成立,不必依附某一欄。
 // ═══════════════════════════════════════════════════════════════════════════
 {
   const s = slide('關於我')
@@ -123,7 +127,7 @@ function shotSlide(sec, eyebrow, title, lead, points, file, caption) {
   const cols = [
     ['監造這一側', '台灣世曦工程顧問｜監造', [
       '查驗、送審、估驗覆核都自己做過',
-      '經手工程獲公共工程金質獎、金品獎',
+      '監造報表與缺失追蹤的工時，我自己耗過',
       '土木本科出身，看得懂圖也看得懂標單',
     ], C.safetyText, C.safetyTint],
     ['機關這一側', '公務機關｜4 年', [
@@ -139,7 +143,7 @@ function shotSlide(sec, eyebrow, title, lead, points, file, caption) {
   ]
   cols.forEach(([tag, role, items, col, tint], i) => {
     const x = M + i * (cw + gap)
-    card(s, x, y, cw, 2.3)
+    card(s, x, y, cw, 2.2)
     s.addText(tag, {
       x: x + 0.24, y: y + 0.2, w: cw - 0.48, h: 0.3, margin: 0, align: 'center', valign: 'middle',
       shape: pres.ShapeType.roundRect, rectRadius: 0.03,
@@ -153,12 +157,26 @@ function shotSlide(sec, eyebrow, title, lead, points, file, caption) {
     bullets(s, x + 0.24, y + 1.06, cw - 0.48, items, 'dash', 11)
   })
 
-  cardText(s, M, y + 2.54, CW, 1.45,
+  // 獎項橫帶:整頁唯一用安全橘實色的元素,視線一定先落在這裡
+  s.addShape(pres.ShapeType.roundRect, {
+    x: M, y: y + 2.36, w: CW, h: 0.62, rectRadius: 0.035,
+    fill: { color: C.safetyTint }, line: { color: C.safety, width: 1 },
+  })
+  s.addText('工程榮譽', {
+    x: M + 0.3, y: y + 2.36, w: 1.3, h: 0.62, margin: 0, valign: 'middle',
+    fontFace: F, fontSize: 10, bold: true, charSpacing: 1.8, color: C.safetyText,
+  })
+  s.addText('擔任主辦的工程，獲公共工程金質獎、金品獎', {
+    x: M + 1.7, y: y + 2.36, w: CW - 2.0, h: 0.62, margin: 0, valign: 'middle',
+    fontFace: F, fontSize: 17, bold: true, color: C.ink,
+  })
+
+  cardText(s, M, y + 3.16, CW, 1.28,
     '所以「這個痛點是不是真的」，我不用回去問人。',
     '監造的查驗與送審、機關的簽辦與驗收、系統的資料模型與 AI 邊界——這三件事平常分屬三種人，很少落在同一個人身上。這套系統之所以敢把 AI 鎖在草稿這一側、把判定與簽名留給人，正是因為我知道簽下去的人要承擔什麼。',
     { titleSize: 17, bodySize: 12.5 })
 
-  cite(s, M, y + 4.12, CW, 0.6, '學歷',
+  cite(s, M, y + 4.56, CW, 0.5, '學歷',
     '中央大學土木工程學士　·　交通大學土木工程碩士　·　Georgia Tech 資訊工程碩士（MSCS）　·　UCLA 企業管理碩士（MBA）')
 }
 
