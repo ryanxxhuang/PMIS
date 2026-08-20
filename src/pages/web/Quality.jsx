@@ -192,7 +192,7 @@ export default function Quality() {
               // 整列可點的鈕,手機補到 44px 不會破版(class 刻意仍不含 justify-between:
               // contractor/supervisor spec 用 justify-between 祖先鎖缺失/查驗列)
               <button key={q.key} onClick={() => setSegment(q.segment)}
-                className="w-full flex items-center gap-3 text-left text-sm rounded-lg px-2 py-1.5 max-sm:min-h-11 hover:bg-[var(--surface-2)] pressable">
+                className="w-full flex items-center gap-3 text-left text-sm rounded-lg px-2 py-1.5 max-md:min-h-11 hover:bg-[var(--surface-2)] pressable">
                 <Badge color={QUEUE_TAG_COLOR[q.tag] || 'slate'}>{q.tag}</Badge>
                 <span className="min-w-0 flex-1 truncate text-[var(--text)]">{q.title}</span>
                 <span className="text-xs text-[var(--text-3)] shrink-0">{q.meta}</span>
@@ -278,7 +278,7 @@ export default function Quality() {
           <div role="group" aria-label="查驗狀態篩選" className="flex flex-wrap gap-1.5 mb-3">
             {INSP_FILTERS.map((f) => (
               <button key={f} onClick={() => setInspFilter(f)} aria-pressed={inspFilter === f}
-                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium max-sm:min-h-11 pressable transition-colors ${
+                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium max-md:min-h-11 pressable transition-colors ${
                   inspFilter === f
                     ? 'border-[var(--blue)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
                     : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
@@ -474,13 +474,13 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
               ) : (
                 // 表單區(非表格)加高安全:原生 select 在手機尤其需要 44px
                 <select value={tplId} onChange={(e) => { setTplId(e.target.value); setValues({}) }}
-                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-sm:min-h-11">
+                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-md:min-h-11">
                   {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
                 </select>
               )}
             </Field>
-            <Field label="檢查日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-sm:min-h-11" /></Field>
-            <Field label="檢查位置"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="如 4F 版牆" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-36 max-sm:min-h-11" /></Field>
+            <Field label="檢查日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-md:min-h-11" /></Field>
+            <Field label="檢查位置"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="如 4F 版牆" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-36 max-md:min-h-11" /></Field>
             <div className="w-72"><Field label="對應工項（選填）">
               <WorkItemPicker leaves={leaves} value={wiKey} label={wiLabel}
                 onPick={(k, l) => { setWiKey(k || ''); setWiLabel(l) }} />
@@ -488,7 +488,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
             {revising && (
               <Field label="更正原因（必填）">
                 <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="如 坍度登載錯誤，依取樣紀錄更正"
-                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-72 max-sm:min-h-11" />
+                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-72 max-md:min-h-11" />
               </Field>
             )}
           </div>
@@ -656,9 +656,9 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
       {msg && <p className="text-sm mb-3 text-[var(--text-2)]">{msg}</p>}
       {addOpen && (
         <div className="bg-[var(--surface-2)] rounded-lg p-3 mb-4 flex flex-wrap items-end gap-3">
-          <Field label="取樣(澆置)日"><input type="date" value={manual.sampled_date} onChange={(e) => setManual({ ...manual, sampled_date: e.target.value })} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-sm:min-h-11" /></Field>
-          <Field label="fc′ (kgf/cm²)"><input type="number" inputMode="decimal" value={manual.fc} onChange={(e) => setManual({ ...manual, fc: Number(e.target.value) || null })} className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] text-right tabular-nums max-sm:min-h-11" /></Field>
-          <Field label="位置"><input value={manual.location} onChange={(e) => setManual({ ...manual, location: e.target.value })} className="w-36 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-sm:min-h-11" /></Field>
+          <Field label="取樣(澆置)日"><input type="date" value={manual.sampled_date} onChange={(e) => setManual({ ...manual, sampled_date: e.target.value })} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-md:min-h-11" /></Field>
+          <Field label="fc′ (kgf/cm²)"><input type="number" inputMode="decimal" value={manual.fc} onChange={(e) => setManual({ ...manual, fc: Number(e.target.value) || null })} className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] text-right tabular-nums max-md:min-h-11" /></Field>
+          <Field label="位置"><input value={manual.location} onChange={(e) => setManual({ ...manual, location: e.target.value })} className="w-36 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-md:min-h-11" /></Field>
           <Button onClick={addManual} disabled={busy}>建立試體組</Button>
         </div>
       )}

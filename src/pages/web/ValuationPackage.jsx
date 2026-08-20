@@ -10,7 +10,7 @@ const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-U
 
 // 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
 // 顏色釘死亮色、不吃主題 token(理由見 SiteLogPrint.jsx):工具列跟紙不跟主題。
-const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-sm:min-h-11'
+const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-md:min-h-11'
 const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[#0b57d0] text-white hover:bg-[#0842a0]`
 const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white text-[#0b57d0] border border-[#dadce0] hover:bg-[#e8f0fe]`
 
@@ -140,7 +140,7 @@ export default function ValuationPackage() {
   if (!workItems || !selected) {
     return (
       <div className="p-10 text-center text-slate-600">
-        無估驗資料。<button onClick={() => navigate('/valuation')} className="text-[var(--blue-text)] underline inline-flex items-center max-sm:min-h-11 px-1">返回估驗計價</button>
+        無估驗資料。<button onClick={() => navigate('/valuation')} className="text-[var(--blue-text)] underline inline-flex items-center max-md:min-h-11 px-1">返回估驗計價</button>
       </div>
     )
   }
@@ -313,7 +313,7 @@ export default function ValuationPackage() {
           ))}
         </div>
         {/* 附件:施工日誌(旗艦承諾:紙本輸出自動夾附平時的施工日誌)*/}
-        <label className="print:hidden flex items-center gap-2 mt-8 text-[12px] text-slate-600 select-none cursor-pointer max-sm:min-h-11">
+        <label className="print:hidden flex items-center gap-2 mt-8 text-[12px] text-slate-600 select-none cursor-pointer max-md:min-h-11">
           {/* 原生 checkbox 預設約 13px,是全頁最小的觸控目標 */}
           <input type="checkbox" className="w-5 h-5" checked={attachLogs} onChange={(e) => setAttachLogs(e.target.checked)} />
           夾附施工日誌（列印時自動附上本期估驗工項的貢獻日誌清單）

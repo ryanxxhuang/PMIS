@@ -166,7 +166,7 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
             <span className="num text-[13px] text-[var(--text)]">{stage.event.event_date}</span>
             {stage.event.note && <span className="text-[var(--text-2)] text-xs">{stage.event.note}</span>}
             {/* 「修改」是進入該階段編輯的唯一入口,原本只有 16px 命中區 */}
-            {allowed && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-sm:min-h-11 px-1">修改</button>}
+            {allowed && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11 px-1">修改</button>}
           </div>
         ) : !allowed ? (
           (stage.state === 'due' || stage.state === 'pending') && (

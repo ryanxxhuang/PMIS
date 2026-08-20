@@ -42,7 +42,7 @@ function ProjectSwitcher() {
   }, [open])
 
   // Workspace 專案 chip:folder_open + 專案名 + 下拉箭頭(demo/單專案時純顯示)
-  const chipClass = 'flex items-center gap-1.5 min-w-0 h-10 max-sm:min-h-11 rounded-full bg-[var(--surface-2)] pl-3 pr-2'
+  const chipClass = 'flex items-center gap-1.5 min-w-0 h-10 max-md:min-h-11 rounded-full bg-[var(--surface-2)] pl-3 pr-2'
   if (!isSupabaseConfigured || !currentProject) {
     return (
       <div className={chipClass}>
@@ -184,9 +184,9 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
       </div>
       <GlobalSearch />
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-auto">
-        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-10 h-10 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name={THEME_META[mode].icon} size={20} /></button>
+        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-10 h-10 max-md:w-11 max-md:h-11 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name={THEME_META[mode].icon} size={20} /></button>
         <NavLink to="/alerts" aria-label="提醒中心" title="提醒中心"
-          className={({ isActive }) => `relative w-10 h-10 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center pressable ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+          className={({ isActive }) => `relative w-10 h-10 max-md:w-11 max-md:h-11 rounded-full flex items-center justify-center pressable ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
           <MSym name="notifications" size={20} />
           {/* 紅點只在真的有「輪到我」時亮(靜態紅點=說謊);aria-hidden,
               count 語意由側欄 badge 與今日待辦頁承擔 */}

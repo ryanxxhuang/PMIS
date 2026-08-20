@@ -87,24 +87,24 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
               {r.evidence_requirement && <span>應留存佐證：{r.evidence_requirement}</span>}
             </div>
             {/* 手機直排全寬、桌機並排;桌機再加 flex-wrap,窄視窗時按鈕換行而不是擠出卡片。
-                F1:手機動作鈕補 44px 觸控高度(max-sm:min-h-11),桌機維持 sm 尺寸——
+                F1:手機動作鈕補 44px 觸控高度(max-md:min-h-11),桌機維持 sm 尺寸——
                 只在本頁就地補,不動共用 Button(全站控件統一留 W8-5)。 */}
             <div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
               {kind === 'approved' && r.requirement_type === 'deadline' && (
                 <Link to="/contract" className="w-full sm:w-auto">
-                  <Button size="sm" variant="secondary" className="w-full sm:w-auto max-sm:min-h-11">前往期限追蹤 <MSym name="arrow_forward" size={12} /></Button>
+                  <Button size="sm" variant="secondary" className="w-full sm:w-auto max-md:min-h-11">前往期限追蹤 <MSym name="arrow_forward" size={12} /></Button>
                 </Link>
               )}
               {/* F3:廠商在這裡只有這一個動作,ghost 樣式在手機上全寬置中會被讀成一行說明文字;
                   補中性邊框讓它像可按的東西,桌機恢復安靜 ghost(實心主動作每組仍只有一個)。 */}
               <Button size="sm" variant="ghost"
-                className="w-full sm:w-auto max-sm:min-h-11 max-sm:border max-sm:border-[var(--border)]"
+                className="w-full sm:w-auto max-md:min-h-11 max-sm:border max-sm:border-[var(--border)]"
                 onClick={() => onSelect(group)}>
                 {kind === 'suggestion' && r.requirement_type === 'deadline' && canReview && !quickApprove
                   ? '查看並確認期限' : '查看內容與來源'}
               </Button>
               {quickApprove && (
-                <Button size="sm" variant="success" className="w-full sm:w-auto max-sm:min-h-11" onClick={() => onQuickApprove(group)}>
+                <Button size="sm" variant="success" className="w-full sm:w-auto max-md:min-h-11" onClick={() => onQuickApprove(group)}>
                   <MSym name="check_circle" size={13} /> 核定並加入期限追蹤
                 </Button>
               )}
@@ -416,31 +416,31 @@ export default function Requirements() {
         {!showTrace ? (
           <p className="px-4 sm:px-5 py-4 text-sm text-[var(--text-2)]">這裡保留原始 AI 擷取、歷史 run 與專業審查資料，不是必須清空的待辦清單。</p>
         ) : (<>
-          {/* F2:六個篩選在手機補 44px 觸控高度(max-sm:min-h-11);共用 Select 基底不動,全站統一留 W8-5 */}
+          {/* F2:六個篩選在手機補 44px 觸控高度(max-md:min-h-11);共用 Select 基底不動,全站統一留 W8-5 */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-4 border-b border-[var(--border)] bg-[var(--surface-2)]">
-            <Select value={filters.scope} onChange={(e) => setFilters((f) => ({ ...f, scope: e.target.value, ingestion_run_id: '' }))} className="text-xs max-sm:min-h-11">
+            <Select value={filters.scope} onChange={(e) => setFilters((f) => ({ ...f, scope: e.target.value, ingestion_run_id: '' }))} className="text-xs max-md:min-h-11">
               <option value="current">目前範圍（最新成功擷取＋人工）</option>
               <option value="all">全部（含歷史 run）</option>
             </Select>
-            <Select value={filters.status || ''} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="text-xs max-sm:min-h-11">
+            <Select value={filters.status || ''} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="text-xs max-md:min-h-11">
               <option value="">全部狀態</option>
               {Object.entries(REQUIREMENT_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
-            <Select value={filters.requirement_type || ''} onChange={(e) => setFilters((f) => ({ ...f, requirement_type: e.target.value }))} className="text-xs max-sm:min-h-11">
+            <Select value={filters.requirement_type || ''} onChange={(e) => setFilters((f) => ({ ...f, requirement_type: e.target.value }))} className="text-xs max-md:min-h-11">
               <option value="">全部類型</option>
               {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
-            <Select value={filters.responsible_party_type || ''} onChange={(e) => setFilters((f) => ({ ...f, responsible_party_type: e.target.value }))} className="text-xs max-sm:min-h-11">
+            <Select value={filters.responsible_party_type || ''} onChange={(e) => setFilters((f) => ({ ...f, responsible_party_type: e.target.value }))} className="text-xs max-md:min-h-11">
               <option value="">全部負責方</option>
               {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
-            <Select value={filters.verification || ''} onChange={(e) => setFilters((f) => ({ ...f, verification: e.target.value }))} className="text-xs max-sm:min-h-11">
+            <Select value={filters.verification || ''} onChange={(e) => setFilters((f) => ({ ...f, verification: e.target.value }))} className="text-xs max-md:min-h-11">
               <option value="">引註不限</option>
               <option value="verified">來源已核對</option>
               <option value="unverified">來源待核對</option>
               <option value="none">無引註</option>
             </Select>
-            <Select value={filters.ingestion_run_id || ''} onChange={(e) => setFilters((f) => ({ ...f, ingestion_run_id: e.target.value, ...(e.target.value ? { scope: 'all' } : {}) }))} className="text-xs max-sm:min-h-11">
+            <Select value={filters.ingestion_run_id || ''} onChange={(e) => setFilters((f) => ({ ...f, ingestion_run_id: e.target.value, ...(e.target.value ? { scope: 'all' } : {}) }))} className="text-xs max-md:min-h-11">
               <option value="">全部擷取 run</option>
               {runs.map((r) => (
                 <option key={r.id} value={r.id}>

@@ -2,8 +2,9 @@
 //
 // 為什麼要 subset:@material-symbols/font-400 整包 ~480KB(3,800 枚字形),
 // 全站實際只用 ~90 枚;工地弱網首載會先空白、再噴 ligature 英文字。
-// Google Fonts css2 API 的 icon_names 參數可回傳只含指定字符的可變字型
-// (保留 FILL 0..1 軸,選取態填滿靠它),約 30–60KB。
+// Google Fonts css2 API 的 icon_names 參數可回傳只含指定字符的字型;
+// 四條可變軸裡只保留 FILL 0..1(選取態填滿靠它),其餘 pin 成定值再 instance,
+// 檔案可以再省 ~85%(103KB → ~15KB)。
 //
 // 用法(開發期,需網路;產物 commit 進 repo,執行期不外連):
 //   node scripts/build-icon-font.mjs
@@ -31,9 +32,16 @@ const included = candidates.filter((n) => official.has(n))
 const ignored = candidates.filter((n) => !official.has(n))
 if (!included.length) throw new Error('抽不到任何圖示名,extraction 規則壞了?')
 
-// icon_names 必須字母序,否則 css2 回 400
+// icon_names 必須字母序,否則 css2 回 400。
+// 軸的取捨(值域改了要同步看 src/components/icons.jsx 與下面的 @font-face):
+//   FILL 0..1  保留可變——MSym 用 font-variation-settings 切選取態填滿
+//   wght 400   全站凍結(CSS font-weight: normal,沒有任何地方調 wght)
+//   GRAD 0     從未使用,pin 在預設值
+//   opsz 20    全站 icon 尺寸 10..40px、九成四 ≤20px;瀏覽器 optical sizing
+//              會 clamp 到軸下限 20,pin 20 對絕大多數圖示是零外觀變化
+//              (少數 22..40px 的圖示筆畫會比 optical sizing 略粗一點點)
 const cssUrl = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined'
-  + ':opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200'
+  + ':opsz,wght,FILL,GRAD@20,400,0..1,0'
   + `&icon_names=${included.join(',')}&display=block`
 const css = await (await fetch(cssUrl, { headers: { 'User-Agent': UA } })).text()
 const woffUrl = css.match(/src: url\((https:[^)]+)\) format\('woff2'\)/)?.[1]
@@ -49,7 +57,7 @@ writeFileSync(join(outDir, 'material-symbols.css'), `/* 由 scripts/build-icon-f
 @font-face {
   font-family: "Material Symbols Outlined";
   font-style: normal;
-  font-weight: 100 700;
+  font-weight: 400;
   font-display: block;
   src: url("./material-symbols-pmis.woff2") format("woff2");
 }

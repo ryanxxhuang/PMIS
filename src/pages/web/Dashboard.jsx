@@ -364,7 +364,7 @@ function AgentDoneCard() {
             待覆核 <span className="num text-[var(--blue-text)] font-semibold">{pendingCount}</span> 件
           </span>
           {/* 手機觸控 ≥44px:連結自己撐高,不靠父層 padding */}
-          <Link to="/agent" className="max-sm:min-h-11 inline-flex items-center shrink-0 text-xs font-medium text-[var(--blue-text)] hover:underline">
+          <Link to="/agent" className="max-md:min-h-11 inline-flex items-center shrink-0 text-xs font-medium text-[var(--blue-text)] hover:underline">
             到收件匣覆核 →
           </Link>
         </div>

@@ -173,7 +173,7 @@ export default function Admin() {
           <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
             {PRESETS.map((p) => (
               <button key={p.id} onClick={() => setPreset(p.id)}
-                className={`h-8 max-sm:min-h-11 px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors ${
+                className={`h-8 max-md:min-h-11 px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors ${
                   preset === p.id
                     ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
                     : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'

@@ -110,17 +110,17 @@ export default function ChangeOrders() {
           <label className="block">
             <span className="block text-xs font-medium text-[var(--text-2)] mb-1">變更編號</span>
             <input value={head.co_no} onChange={(e) => setHead({ ...head, co_no: e.target.value })} placeholder="第1次變更"
-              className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-sm:min-h-11" />
+              className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-md:min-h-11" />
           </label>
           <label className="block flex-1 min-w-[180px]">
             <span className="block text-xs font-medium text-[var(--text-2)] mb-1">事由 / 名稱</span>
             <input value={head.title} onChange={(e) => setHead({ ...head, title: e.target.value })} placeholder="如：因現場地質變更增設擋土措施"
-              className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-sm:min-h-11" />
+              className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-md:min-h-11" />
           </label>
           <label className="block">
             <span className="block text-xs font-medium text-[var(--text-2)] mb-1">日期</span>
             <input type="date" value={head.co_date} onChange={(e) => setHead({ ...head, co_date: e.target.value })}
-              className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-sm:min-h-11" />
+              className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-md:min-h-11" />
           </label>
           <Button type="submit" disabled={busy || !head.title.trim()}>{busy ? '新增中…' : '＋ 新增'}</Button>
         </form>

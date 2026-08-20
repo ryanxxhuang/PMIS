@@ -95,7 +95,7 @@ export default function Members() {
               </select>
             </Field></div>
             {/* min-h 補到與 input/select 同高(py-2+text-sm+1px 框 = 38px):Button 沒有框,
-                差那 2px 會讓整列的底線看起來歪掉。手機的 max-sm:min-h-11 仍然勝出(在 media query 內) */}
+                差那 2px 會讓整列的底線看起來歪掉。手機的 max-md:min-h-11 仍然勝出(在 media query 內) */}
             <Button onClick={onAdd} disabled={busy || !email.trim() || !inviteOrg} className="min-h-[38px]">{busy ? '加入中…' : '＋ 加入專案'}</Button>
           </div>
           {/* hint 拉出來自成一行:掛在 Email 欄的 Field 裡會把該欄整個頂高,
