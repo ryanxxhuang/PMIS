@@ -157,7 +157,7 @@ export default function Members() {
             {members.map((m) => (
               <div key={m.user_id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-medium text-sm shrink-0">{m.full_name?.[0] || '?'}</div>
+                  <div className="w-9 h-9 rounded-full bg-[var(--primary)] text-[var(--primary-fg)] flex items-center justify-center font-medium text-sm shrink-0">{m.full_name?.[0] || '?'}</div>
                   <div className="min-w-0">
                     <div className="text-sm text-[var(--text)] truncate">{m.full_name}
                       {m.member_role === 'admin' && <Badge color="green">建立者</Badge>}

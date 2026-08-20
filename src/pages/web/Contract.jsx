@@ -427,7 +427,7 @@ export default function Contract() {
               ))}
             </Select>
           )}
-          <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${uploading || boqBusy || !canUploadDocs ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+          <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${uploading || boqBusy || !canUploadDocs ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] shadow-sm'}`}>
             <input type="file" multiple accept={ACCEPT_ATTR}
               disabled={uploading || boqBusy || !canUploadDocs}
               onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)}

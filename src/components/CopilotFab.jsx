@@ -90,7 +90,7 @@ export default function CopilotFab() {
         className={`fixed z-[60] bottom-6 max-md:bottom-[92px] right-6 w-14 h-14 rounded-full grid place-items-center shadow-lg ring-1 transition-transform duration-[var(--dur-press)] [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95
           ${open
             ? 'bg-[var(--surface-2)] text-[var(--text-2)] border border-[var(--border)] ring-transparent'
-            : 'bg-gradient-to-br from-[var(--blue)] to-[var(--primary)] text-white ring-white/15 shadow-[var(--blue)]/30'}`}>
+            : 'bg-gradient-to-br from-[var(--blue)] to-[var(--primary)] text-[var(--primary-fg)] ring-white/15 shadow-[var(--blue)]/30'}`}>
         {open ? <MSym name="close" size={22} /> : <CopilotMark size={26} />}
       </button>
     </div>

@@ -718,7 +718,7 @@ export default function SiteLog() {
                   {can.edit && <>
                     {/* 批 B UX:照片分類功能關閉時藏 AI 批次入口,保留「直接加照片」 */}
                     {aiEnabled('photo.classify') && (
-                      <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable shadow-sm ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
+                      <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable shadow-sm ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40 bg-[var(--primary)] text-[var(--primary-fg)]' : 'cursor-pointer bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]'}`}>
                         {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
                         <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy || existingBusy} onChange={onBatchPhotos} className="hidden" />
                         <MSym name="auto_awesome" size={15} /> 選照片 AI 辨識後上傳
