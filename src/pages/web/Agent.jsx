@@ -234,7 +234,7 @@ function DraftInboxCard() {
                 )}
                 {findings.length > 0 && (
                   <button onClick={() => setOpenFindings(findingsOpened ? null : a.id)}
-                    className="inline-flex items-center gap-0.5 text-[11px] max-sm:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
+                    className="inline-flex items-center gap-0.5 text-[11px] max-md:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
                     {findingsOpened ? <MSym name="expand_more" size={11} /> : <MSym name="chevron_right" size={11} />}
                     勾稽發現 {findings.length} 項
                   </button>
@@ -256,7 +256,7 @@ function DraftInboxCard() {
                 )}
                 {a.rationale && (
                   <button onClick={() => setOpenRationale(opened ? null : a.id)}
-                    className="inline-flex items-center gap-0.5 text-[11px] max-sm:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
+                    className="inline-flex items-center gap-0.5 text-[11px] max-md:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
                     {opened ? <MSym name="expand_more" size={11} /> : <MSym name="chevron_right" size={11} />}
                     為什麼這樣擬
                   </button>

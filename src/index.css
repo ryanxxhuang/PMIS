@@ -31,7 +31,10 @@
   --surface-2: #f1f3f4;     /* chip 底/hover */
   --text: #202124;
   --text-2: #5f6368;
-  --text-3: #70757a;        /* 弱字(meta/註記):原型的 #80868b 對白卡只有 3.7:1——W8-5 已把 text-3 修到 AA 過一次,不重蹈;#70757a 是 Google 舊次要灰,對 --surface 4.6:1 */
+  --text-3: #6a6e73;        /* 弱字(meta/註記)。校準要對「三個底色」都過 AA,只驗白卡會漏:
+                               對 --surface #ffffff 5.13、--bg #f8fafd 4.91、--surface-2 #f1f3f4 4.61。
+                               W9 初版的 #70757a 只驗了白卡(4.65),對 --bg 只有 4.45——而 PageHeader 的
+                               tagline 正是直接坐在 --bg 上,等於全站頁首副標低於 AA。 */
   --border: #dadce0;        /* divider(卡內分隔) */
   --border-2: #e8eaed;      /* 更弱分隔 */
 
@@ -101,6 +104,12 @@
   --dur-fast: 160ms;    /* hover、小型浮層 */
   --dur-menu: 180ms;    /* 下拉選單、popover */
   --dur-modal: 220ms;   /* 對話框、側面板 */
+
+  /* 手機底部導覽的實際佔位高度(含 iOS home indicator 安全區)。
+     BottomNav 是 fixed + z-40,任何「貼底」的頁面元素都必須讓開這個高度,
+     否則會被它蓋住而且點不到——W9 上線時 /site-log 的手機存檔列就是這樣壞的。
+     66px = BottomNav.jsx 的 pt-2 + 圖示列 30px + gap + 標籤 + pb-3,改那支要同步改這裡。 */
+  --bottom-nav-h: calc(66px + env(safe-area-inset-bottom));
 }
 
 .dark {
@@ -131,9 +140,13 @@
   --red-tint: #3d2724;   --red-text: #f28b82;
   --purple-tint: #33283f; --purple-text: #d0bcff;
 
-  /* 實心鈕深色仍配白字,用 M3 dark error/green 提亮版保住對比 */
-  --success: #2b8a5c;   --success-hover: #37996a;
-  --danger: #dc362e;    --danger-hover: #e46962;
+  /* 實心鈕深色仍配白字。這四個值是「白字對底色」實算過的,改動前務必重算:
+     success 5.32 / success-hover 4.69 / danger 4.56 / danger-hover 5.84,全部 >= AA 4.5。
+     ⚠️ --danger 刻意不再調深:它同時被 confirm.jsx 與 InsightsPanel.jsx 當圖示色用,
+     #dc362e 對 --surface 是 3.15(過 1.4.11 的 3:1 圖形門檻),再深就破。
+     --success/--success-hover/--danger-hover 各自只有 ui.jsx 的實心鈕一個消費者,可自由調深。 */
+  --success: #1e7a4d;   --success-hover: #1f8452;
+  --danger: #dc362e;    --danger-hover: #c02a22;
 
   --ai: #a8c7fa;
   --ai-tint: #0d2f5f;

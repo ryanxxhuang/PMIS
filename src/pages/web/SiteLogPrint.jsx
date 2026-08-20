@@ -7,7 +7,7 @@ import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 // 所以 Button 的 Workspace 樣式在此就地複寫一份,四支列印頁維持同一組 class。
 // 主次兩鈕的顏色一律釘死亮色、不吃 --primary/--text-* 主題 token:紙面永遠是白紙,
 // 工具列跟紙不跟主題;吃 token 會讓深色模式的工具列與它下方的白色文件互相打架。
-const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-sm:min-h-11'
+const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-md:min-h-11'
 const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[#0b57d0] text-white hover:bg-[#0842a0]`
 const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white text-[#0b57d0] border border-[#dadce0] hover:bg-[#e8f0fe]`
 

@@ -655,11 +655,11 @@ export default function SiteLog() {
                       <span className="block text-xs font-medium text-[var(--text-2)] mb-1">五、職業安全衛生</span>
                       {/* 原生 checkbox 預設約 13px,是全站最小的互動元素;w-5 h-5 提到 20px 且不動文字基線 */}
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm py-1">
-                        <label className="inline-flex items-center gap-1.5 max-sm:min-h-11"><input type="checkbox" className="w-5 h-5" disabled={!can.edit} checked={!!extras.edu} onChange={(e) => setExtras({ ...extras, edu: e.target.checked })} />勤前教育（含危害告知）</label>
-                        <label className="inline-flex items-center gap-1.5 max-sm:min-h-11"><input type="checkbox" className="w-5 h-5" disabled={!can.edit} checked={!!extras.ppe} onChange={(e) => setExtras({ ...extras, ppe: e.target.checked })} />檢查個人防護具</label>
+                        <label className="inline-flex items-center gap-1.5 max-md:min-h-11"><input type="checkbox" className="w-5 h-5" disabled={!can.edit} checked={!!extras.edu} onChange={(e) => setExtras({ ...extras, edu: e.target.checked })} />勤前教育（含危害告知）</label>
+                        <label className="inline-flex items-center gap-1.5 max-md:min-h-11"><input type="checkbox" className="w-5 h-5" disabled={!can.edit} checked={!!extras.ppe} onChange={(e) => setExtras({ ...extras, ppe: e.target.checked })} />檢查個人防護具</label>
                         <label className="inline-flex items-center gap-1.5">新進勞工提報勞保
                           <select value={extras.insured || '無新進勞工'} disabled={!can.edit} onChange={(e) => setExtras({ ...extras, insured: e.target.value })}
-                            className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs max-sm:min-h-11">
+                            className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs max-md:min-h-11">
                             {['有', '無', '無新進勞工'].map((s) => <option key={s}>{s}</option>)}
                           </select>
                         </label>
@@ -686,10 +686,16 @@ export default function SiteLog() {
             </div>
 
             {/* W8-0 §7:手機存檔列貼底固定——公定格式欄位展開後表單很長,捲到底才找得到存檔鈕
-                是現場回報的痛點;-mx-5 抵掉 Card 內距讓底條滿版,pr-16 避開右下浮動 Copilot FAB(bottom-6 right-6)。
+                是現場回報的痛點;-mx-5 抵掉 Card 內距讓底條滿版。
                 這一列只有可編視角會渲染(唯讀已在上方走摘要分支),can.edit 條件保留是讓 DOM 與歷史版本逐字一致。
-                pl-5/pr-16 拆開寫而不用 px-5,是避免 padding-inline 與 padding-right 的 cascade 順序不確定 */}
-            <div className={`flex items-center gap-3 mt-4${can.edit ? ' max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:bg-[var(--surface)] max-sm:border-t max-sm:border-[var(--border-2)] max-sm:-mx-5 max-sm:pl-5 max-sm:pr-16 max-sm:py-2.5 sm:static sm:border-0' : ''}`}>
+                pl-5/pr-20 拆開寫而不用 px-5,是避免 padding-inline 與 padding-right 的 cascade 順序不確定。
+
+                ⚠️ bottom 必須是 --bottom-nav-h 不能是 0:W9 的 BottomNav 是 fixed bottom-0 z-40,
+                而這一列是 sticky z-10——貼到 0 會被整個蓋住,存檔鈕在手機上完全點不到(實測命中的是
+                BottomNav 的 span)。斷點也必須是 max-md 與 BottomNav 的 md:hidden 對齊,不能用 max-sm。
+                pr-20(80px)是讓開右下 Copilot FAB:FAB 在手機是 bottom-[92px] right-6 w-14,
+                往上挪之後兩者垂直重疊,右側要留滿 24+56=80px 才不會壓到。 */}
+            <div className={`flex items-center gap-3 mt-4${can.edit ? ' max-md:sticky max-md:bottom-[var(--bottom-nav-h)] max-md:z-10 max-md:bg-[var(--surface)] max-md:border-t max-md:border-[var(--border-2)] max-md:-mx-5 max-md:pl-5 max-md:pr-20 max-md:py-2.5 md:static md:border-0' : ''}`}>
               {can.edit ? <Button onClick={onSave} disabled={saving}>{saving ? '存檔中…' : '存檔'}</Button> : <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>}
               {currentLog && (
                 <button onClick={() => navigate(`/site-log/print?d=${date}`)}
@@ -895,7 +901,7 @@ function FreqChips({ items, label, onAdd }) {
       {/* chips 一排多顆密集排列,手機最容易點錯:min-h-11 + 較寬 padding(flex-wrap 容器,只會變高不會破版) */}
       {items.map((r, i) => (
         <button key={i} onClick={() => onAdd(r)}
-          className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 max-sm:min-h-11 max-sm:px-3 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--blue-tint)] hover:text-[var(--blue-text)] hover:border-[var(--blue)] pressable">
+          className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 max-md:min-h-11 max-sm:px-3 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--blue-tint)] hover:text-[var(--blue-text)] hover:border-[var(--blue)] pressable">
           <MSym name="add" size={10} />{label(r)}
         </button>
       ))}
@@ -911,7 +917,7 @@ function RowsEditor({ title, rows, onChange, fields, disabled = false }) {
     <div>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-xs font-medium text-[var(--text-2)]">{title}</span>
-        {!disabled && <button onClick={add} className="inline-flex items-center max-sm:min-h-11 px-1 text-xs text-[var(--blue)] hover:underline">＋ 加一列</button>}
+        {!disabled && <button onClick={add} className="inline-flex items-center max-md:min-h-11 px-1 text-xs text-[var(--blue)] hover:underline">＋ 加一列</button>}
       </div>
       {rows.length === 0 ? (
         <p className="text-xs text-[var(--text-3)]">（未填）</p>
@@ -923,7 +929,7 @@ function RowsEditor({ title, rows, onChange, fields, disabled = false }) {
               type={f.num ? 'number' : 'text'} min={f.num ? 0 : undefined} step={f.num ? 'any' : undefined}
               inputMode={f.num ? 'decimal' : undefined}
               onChange={(e) => set(i, f.key, f.num ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
-              className={`${f.w} border border-[var(--border)] rounded-lg px-2 py-1 text-sm max-sm:min-h-11 ${f.num ? 'text-right tabular-nums' : ''} disabled:opacity-50 disabled:bg-[var(--surface-2)]`} />
+              className={`${f.w} border border-[var(--border)] rounded-lg px-2 py-1 text-sm max-md:min-h-11 ${f.num ? 'text-right tabular-nums' : ''} disabled:opacity-50 disabled:bg-[var(--surface-2)]`} />
           ))}
           {!disabled && <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label="刪除此列">✕</button>}
         </div>

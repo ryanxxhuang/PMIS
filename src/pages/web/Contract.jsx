@@ -415,7 +415,7 @@ export default function Contract() {
               <span className="block text-sm font-medium text-[var(--text)] mb-1">{label}</span>
               <input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
                 disabled={!can.edit}
-                className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-sm:min-h-11" />
+                className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-md:min-h-11" />
             </label>
           ))}
         </div>
@@ -582,7 +582,7 @@ export default function Contract() {
                       ))}
                     </Select>
                     <button onClick={() => confirmClassification(run, run.suggested_document_type || 'other')}
-                      className="text-[var(--blue-text)] hover:underline whitespace-nowrap inline-flex items-center max-sm:min-h-11 px-1">確認此分類</button>
+                      className="text-[var(--blue-text)] hover:underline whitespace-nowrap inline-flex items-center max-md:min-h-11 px-1">確認此分類</button>
                   </div>
                 )}
               </div>
@@ -640,7 +640,7 @@ export default function Contract() {
                             )}
                             {can.edit && run.metadata?.requirement_extraction === 'failed' && (
                               <button onClick={() => confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')}
-                                className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-sm:min-h-11 px-1">
+                                className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1">
                                 <MSym name="refresh" size={11} /> 重試分析
                               </button>
                             )}
@@ -664,7 +664,7 @@ export default function Contract() {
         {runs.length > 0 && (
           <div className="mt-3">
             <button onClick={() => setShowTech((s) => !s)} aria-expanded={showTech}
-              className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] inline-flex items-center gap-1 max-sm:min-h-11 px-1">
+              className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] inline-flex items-center gap-1 max-md:min-h-11 px-1">
               <MSym name="chevron_right" size={12} className={`transition-transform duration-[var(--dur-fast)] ${showTech ? 'rotate-90' : ''}`} /> 技術資訊
             </button>
             {showTech && (
@@ -722,7 +722,7 @@ export default function Contract() {
                         if (error) setObligationMsg(`義務狀態未寫入:${error.message}`)
                       }
                     }}
-                      className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 inline-flex items-center max-sm:min-h-11 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 inline-flex items-center max-md:min-h-11 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
                       {it.done ? '已提送 ✓' : '標為已提送'}
                     </button>}
                   </div>
@@ -742,7 +742,7 @@ export default function Contract() {
                         if (error) { setObligationMsg(`義務狀態未寫入:${error.message}`); return }
                         setEvidenceFor(null)
                       }}>{evidencePick ? '掛佐證並標為已提送' : '直接標為已提送'}</Button>
-                      <button onClick={() => setEvidenceFor(null)} className="text-xs text-[var(--text-3)] hover:underline inline-flex items-center max-sm:min-h-11 px-1">取消</button>
+                      <button onClick={() => setEvidenceFor(null)} className="text-xs text-[var(--text-3)] hover:underline inline-flex items-center max-md:min-h-11 px-1">取消</button>
                     </div>
                   )}
                   {/* 佐證連結:已掛送審文件的義務,稽核可一路點到原始送審紀錄 */}

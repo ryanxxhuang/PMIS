@@ -482,15 +482,15 @@ export default function Valuation() {
               )}
             </div>
             <div className="flex items-center gap-2 sm:ml-auto max-sm:flex-col max-sm:items-stretch">
-              {selected.status === '草稿' && can.submit && <Button variant="secondary" className="max-sm:w-full max-sm:min-h-11" onClick={() => onStatus('監造審核')}>送監造審核</Button>}
+              {selected.status === '草稿' && can.submit && <Button variant="secondary" className="max-sm:w-full max-md:min-h-11" onClick={() => onStatus('監造審核')}>送監造審核</Button>}
               {selected.status === '監造審核' && (can.approve ? <>
-                <Button variant="ghost" className="max-sm:w-full max-sm:min-h-11" onClick={() => onReject('退回')}>退回</Button>
-                <Button variant="success" className="max-sm:w-full max-sm:min-h-11" onClick={() => onStatus('已核定')}>核定估驗</Button>
+                <Button variant="ghost" className="max-sm:w-full max-md:min-h-11" onClick={() => onReject('退回')}>退回</Button>
+                <Button variant="success" className="max-sm:w-full max-md:min-h-11" onClick={() => onStatus('已核定')}>核定估驗</Button>
               </> : <Badge color="amber">待監造核定</Badge>)}
               {selected.status === '已核定' && can.approve &&
-                <Button variant="ghost" className="max-sm:w-full max-sm:min-h-11" onClick={() => onReject('退回核定')}>退回核定</Button>}
+                <Button variant="ghost" className="max-sm:w-full max-md:min-h-11" onClick={() => onReject('退回核定')}>退回核定</Button>}
               {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01) */}
-              {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-[var(--red-text)] hover:text-[var(--red-text)] max-sm:w-full max-sm:min-h-11" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
+              {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-[var(--red-text)] hover:text-[var(--red-text)] max-sm:w-full max-md:min-h-11" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
             </div>
           </div>
 

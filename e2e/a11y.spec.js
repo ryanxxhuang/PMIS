@@ -1,10 +1,13 @@
 // W8-5 a11y／手機護欄:375px 全路由無溢位掃描、44px 觸控目標抽查、鍵盤 Esc 動線。
-// 這份是「改完之後應成立」的合約——共用元件的 max-sm:min-h-11(F1)、抽屜/對話框的
+// 這份是「改完之後應成立」的合約——共用元件的 max-md:min-h-11(F1)、抽屜/對話框的
 // Esc 與焦點管理(F2)落地後必須全綠;它不重複既有 spec 的業務斷言,只守版面與鍵盤。
 import { test, expect } from '@playwright/test'
 import { loginAs, gotoHash } from './helpers.js'
 
 const MOBILE = { width: 375, height: 812 }
+// 640-767 的縫:BottomNav 是 md:hidden(<768)所以這裡已是手機版面,
+// 但觸控目標若寫成 max-sm(<640)就會塌回桌機尺寸。744 是 iPad mini 直式寬度。
+const TABLET_GAP = { width: 744, height: 1024 }
 
 // 路由 → 該頁 PageHeader 的 h1 標題。掃描時等「該路由自己的 h1」出現才量寬度——
 // 路由是 lazy chunk,只等 main 非空會量到上一頁殘影,等到專屬 h1 才保證新頁已掛載。
@@ -92,7 +95,7 @@ test.describe('375px 全路由無溢位', () => {
 
 test.describe('44px 觸控目標抽查(375px)', () => {
   // 抽查三個代表面:共用 Button(存檔)、手工 min-h-11(品質分段)、清單列主觸控目標。
-  // 不逐顆掃全站——共用元件的高度由 F1 的 max-sm:min-h-11 一次保證,這裡只釘代表點防回退。
+  // 不逐顆掃全站——共用元件的高度由 F1 的 max-md:min-h-11 一次保證,這裡只釘代表點防回退。
   test('施工日誌存檔鈕高度 ≥ 44px', async ({ page }) => {
     await page.setViewportSize(MOBILE)
     await loginAs(page, 'contractor')
@@ -126,6 +129,50 @@ test.describe('44px 觸控目標抽查(375px)', () => {
     const box = await task.boundingBox()
     expect(box?.height, `今日待辦列高度 ${box?.height}px 未達 44px`).toBeGreaterThanOrEqual(44)
   })
+
+  // 744px(iPad mini 直式)落在 640-767 這一段:BottomNav 已出現=手機版面,
+  // 觸控目標若還綁 max-sm 就會塌成 32-36px。W9 上線時正是這個狀態。
+  test('744px(手機版面下緣)觸控目標不得塌回桌機尺寸', async ({ page }) => {
+    await page.setViewportSize(TABLET_GAP)
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/site-log')
+    await expect(page.getByRole('navigation', { name: '快速導覽' })).toBeVisible()
+    const save = page.getByRole('button', { name: '存檔', exact: true })
+    const box = await save.boundingBox()
+    expect(box?.height, `744px 下存檔鈕只有 ${box?.height}px——觸控目標斷點沒跟上手機版面斷點`).toBeGreaterThanOrEqual(44)
+  })
+})
+
+test.describe('貼底元素不得被 BottomNav 蓋住', () => {
+  // W9 迴歸:BottomNav(fixed bottom-0 z-40)整個蓋住施工日誌的 sticky 存檔列(z-10),
+  // 廠商在工地填完整份日誌後按不到存檔。這條守的是「貼底元素必須讓開 --bottom-nav-h」。
+  for (const vp of [MOBILE, TABLET_GAP]) {
+    test(`${vp.width}px 施工日誌存檔鈕未被底部導覽遮蔽`, async ({ page }) => {
+      await page.setViewportSize(vp)
+      await loginAs(page, 'contractor')
+      await gotoHash(page, '/site-log')
+
+      const save = page.getByRole('button', { name: '存檔', exact: true })
+      await expect(save).toBeVisible()
+      await save.scrollIntoViewIfNeeded()
+      const nav = page.getByRole('navigation', { name: '快速導覽' })
+      await expect(nav).toBeVisible()
+
+      const s = await save.boundingBox()
+      const n = await nav.boundingBox()
+      expect(s && n).toBeTruthy()
+      // 幾何:存檔鈕底緣必須在 BottomNav 頂緣之上
+      expect(s.y + s.height,
+        `存檔鈕底緣 ${s.y + s.height} 越過底部導覽頂緣 ${n.y},會被蓋住`).toBeLessThanOrEqual(n.y)
+
+      // 命中測試:存檔鈕中心點實際收得到點擊(而不是 BottomNav 收走)
+      const hit = await page.evaluate(([x, y]) => {
+        const el = document.elementFromPoint(x, y)
+        return el ? el.closest('button')?.textContent?.trim() ?? el.tagName : null
+      }, [s.x + s.width / 2, s.y + s.height / 2])
+      expect(hit, '存檔鈕中心點被其他元素攔截').toContain('存檔')
+    })
+  }
 })
 
 test.describe('鍵盤可達性', () => {

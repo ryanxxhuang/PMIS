@@ -34,7 +34,7 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
         <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto enter-menu">
           {results.map((it) => (
             <button key={it.item_key} onClick={() => { onPick(it.item_key, `${it.item_no} ${it.description}`); setQ('') }}
-              className="w-full text-left px-3 py-1.5 text-sm max-sm:min-h-11 hover:bg-[var(--surface-2)] truncate">
+              className="w-full text-left px-3 py-1.5 text-sm max-md:min-h-11 hover:bg-[var(--surface-2)] truncate">
               <span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}
             </button>
           ))}
@@ -230,7 +230,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
                   : (can.edit ? <Button variant="secondary" onClick={() => advance(d)} disabled={busy}>{NEXT_LABEL[d.status]}</Button>
                     : <span className="text-xs text-[var(--text-3)]">待廠商改善</span>)
                 ) : (
-                  can.approve && <button onClick={() => reopen(d)} className="inline-flex items-center max-sm:min-h-11 px-1 text-xs text-[var(--blue-text)] hover:underline">撤銷結案</button>
+                  can.approve && <button onClick={() => reopen(d)} className="inline-flex items-center max-md:min-h-11 px-1 text-xs text-[var(--blue-text)] hover:underline">撤銷結案</button>
                 )}
                 {can.edit && d.status !== '已結案' && (
                   <button onClick={() => remove(d)} className="p-2 -m-2 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除缺失">✕</button>

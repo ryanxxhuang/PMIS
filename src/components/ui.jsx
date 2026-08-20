@@ -106,11 +106,13 @@ export function StatusBadge({ status }) {
 //   success  — confirm/approve(filled green)
 //   danger   — destructive, filled red(real deletes only)
 // busy=true:送出中——disabled+progress_activity 旋轉(README 狀態規格)。
-// max-sm:min-h-11:手機主要操作至少 44px(W8-5),a11y spec 有 boundingBox 斷言。
+// max-md:min-h-11:手機主要操作至少 44px(W8-5)。斷點必須跟「手機層」一致——
+// BottomNav 是 md:hidden(<768),所以觸控目標也走 max-md;W9 初版寫成 max-sm(<640)
+// 會讓 640-767(iPad mini 直式 744px)拿到手機版面卻是桌機尺寸的觸控目標。
 const BTN_SIZES = {
-  sm: 'h-8 px-3 text-xs gap-1 rounded-full max-sm:min-h-11',
-  md: 'h-9 px-4 text-sm gap-1.5 rounded-full max-sm:min-h-11',
-  lg: 'h-10 px-5 text-sm gap-2 rounded-full max-sm:min-h-11',
+  sm: 'h-8 px-3 text-xs gap-1 rounded-full max-md:min-h-11',
+  md: 'h-9 px-4 text-sm gap-1.5 rounded-full max-md:min-h-11',
+  lg: 'h-10 px-5 text-sm gap-2 rounded-full max-md:min-h-11',
 }
 const BTN_VARIANTS = {
   primary: 'bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]',
@@ -157,8 +159,8 @@ export function Stat({ label, value, sub, color = 'text-[var(--text)]' }) {
 
 // Shared form controls(8px 圓角、focus 轉主色)。頁面不要再自寫 input class 字串——
 // 歷史複本已收斂到這裡(DefectTracker/ProjectSetup/Login 曾各抄一份)。
-// max-sm:min-h-11:手機表單控件補到 44px(W8-5);Textarea 本來就更高,min-h 不會縮小它
-export const FIELD_BASE = 'w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:outline-none focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/20 disabled:opacity-50 max-sm:min-h-11'
+// max-md:min-h-11:手機表單控件補到 44px(W8-5);Textarea 本來就更高,min-h 不會縮小它
+export const FIELD_BASE = 'w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:outline-none focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/20 disabled:opacity-50 max-md:min-h-11'
 export function Input({ className = '', ...props }) {
   return <input className={`${FIELD_BASE} ${className}`} {...props} />
 }
@@ -259,7 +261,7 @@ export function SortableTh({ label, field, sort, onSort, numeric = false, align 
     <th className={className}
       aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
       <button type="button" onClick={() => onSort(field, numeric)}
-        className={`w-full max-sm:min-h-11 inline-flex items-center gap-0.5 ${align === 'right' ? 'justify-end' : ''} ${active ? 'text-[var(--blue-text)]' : 'hover:text-[var(--text)]'}`}>
+        className={`w-full max-md:min-h-11 inline-flex items-center gap-0.5 ${align === 'right' ? 'justify-end' : ''} ${active ? 'text-[var(--blue-text)]' : 'hover:text-[var(--text)]'}`}>
         {label}
         {active && <MSym name={sort.dir === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={16} />}
       </button>
@@ -274,7 +276,7 @@ export function SortableTh({ label, field, sort, onSort, numeric = false, align 
 export function FilterChip({ label, icon = 'filter_list', active = false, onToggle }) {
   return (
     <button type="button" aria-pressed={active} onClick={onToggle}
-      className={`h-8 max-sm:min-h-11 shrink-0 inline-flex items-center gap-1.5 px-3.5 rounded-lg text-[13px] font-medium whitespace-nowrap pressable ${active
+      className={`h-8 max-md:min-h-11 shrink-0 inline-flex items-center gap-1.5 px-3.5 rounded-lg text-[13px] font-medium whitespace-nowrap pressable ${active
         ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
         : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'}`}>
       {!active && <MSym name={icon} size={16} />}
@@ -293,14 +295,14 @@ export function TablePager({ page, pageSize, total, onPage, onPageSize, sizes = 
   const end = Math.min(total, (page + 1) * pageSize)
   const canPrev = !disabled && page > 0
   const canNext = !disabled && end < total
-  const arrow = (ok) => `w-8 h-8 max-sm:min-h-11 max-sm:min-w-11 grid place-items-center rounded-full ${ok ? 'text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable' : 'text-[var(--border)]'}`
+  const arrow = (ok) => `w-8 h-8 max-md:min-h-11 max-md:min-w-11 grid place-items-center rounded-full ${ok ? 'text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable' : 'text-[var(--border)]'}`
   return (
     <div className={`flex flex-wrap items-center justify-end gap-x-3 gap-y-1 px-4 py-1.5 border-t border-[var(--border-2)] text-[13px] text-[var(--text-2)] ${className}`}>
       <label className="flex items-center gap-1.5">
         每頁列數
         <select value={pageSize} disabled={disabled} aria-label="每頁列數"
           onChange={(e) => onPageSize(Number(e.target.value))}
-          className="num bg-transparent border border-[var(--border)] rounded-md px-1 py-0.5 max-sm:min-h-11 text-[13px] text-[var(--text)] disabled:opacity-50">
+          className="num bg-transparent border border-[var(--border)] rounded-md px-1 py-0.5 max-md:min-h-11 text-[13px] text-[var(--text)] disabled:opacity-50">
           {sizes.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </label>
