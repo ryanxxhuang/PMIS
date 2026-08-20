@@ -1,12 +1,14 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMemo, useState, useEffect } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Badge, Card, Empty, PageHeader, Stat } from '../../components/ui.jsx'
+import { Badge, Button, Card, Empty, PageHeader, Stat } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
-import { buildTodayTasks } from '../../lib/todayTasks.js'
+import { taipeiISODate } from '../../lib/todayTasks.js'
+import { useTodayTasks } from '../../lib/useTodayTasks.js'
+import { KIND_LABEL } from '../../lib/agentRole.js'
 import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
 import InsightsPanel from '../../components/InsightsPanel.jsx'
 import { appSnackbar } from '../../components/snackbar.jsx'
@@ -132,8 +134,9 @@ function SetupChecklist({ imported }) {
 export default function Dashboard() {
   const { project, currentUser, workItems, workItemsSource, demoMode, isPersistedProject, valuations, progressPlan, inspections, defects, siteLogs,
     obligations, costItems, safetyRecords, changeOrders, itemSchedules,
-    adjustedItems, revisedTotal, inspectionPoints,
+    adjustedItems, revisedTotal, aiEnabled,
     checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents } = useStore()
+  const navigate = useNavigate()
   const imported = workItemsSource === 'db' || demoMode
   // 「今天」每次 render 取:工地平板整週不關分頁,模組層常數會讓日期/逾期判斷停在開頁那天(B-11)
   const TODAY = new Date()
@@ -143,14 +146,10 @@ export default function Dashboard() {
     award_date: project?.award_date, notice_date: project?.notice_date,
     commencement_date: project?.commencement_date, end_date: project?.end_date,
   }
-  // 今日待辦的唯一來源(W8-2B):協作項＋期限型全部在 todayTasks 聚合,
-  // 提醒中心吃的是同一支函式——首頁與提醒中心不會再說出兩種待辦。
-  const tasks = useMemo(() => buildTodayTasks({
-    org: myOrg, today: TODAY, anchors,
-    rfis, submittals, valuations, defects, inspections, observations, changeOrders,
-    obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs,
-  }), [myOrg, todayISO, project, rfis, submittals, valuations, defects, inspections, observations, changeOrders,
-    obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs]) // eslint-disable-line react-hooks/exhaustive-deps
+  // 今日待辦的唯一來源(W8-2B):協作項＋期限型全部在 todayTasks 聚合。
+  // 改吃 useTodayTasks 這支「唯一」hook(側欄 badge 與提醒中心同源)——
+  // 首頁再自己組一次 buildTodayTasks,件數遲早跟側欄分岔。
+  const tasks = useTodayTasks()
 
   // 整案資料匯出:所有模組打包成一個 JSON 檔——資料是使用者的,隨時拿得走
   const exportAll = () => {
@@ -290,6 +289,9 @@ export default function Dashboard() {
               {/* AI 主動觀察:風險警示卡,不是待辦(AI 不得替人產生人工工作) */}
               <InsightsPanel insights={insights} />
 
+              {/* AI 今日已代辦(README dash 右下):agent 今天替你做掉了什麼 */}
+              <AgentDoneCard />
+
               {/* 次要:最近紀錄。已完成的日誌不是待辦,也不併進「今天已完成」
                   (log_date 是人可回填的業務日期,不等於今天完成了什麼) */}
               <Card title="最近施工日誌" bodyClass={siteLogs.length ? 'p-0' : 'p-6'}
@@ -311,7 +313,63 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* 手機 CTA(README 手機今日待辦):滑到最底不知道下一步該做什麼時,一句話問 agent。
+          與 App bar 全域搜尋走同一條代問機制(router state 帶 q,Agent 頁消費即清),
+          也吃同一個 aiEnabled 閘門——功能關閉就整顆不渲染,不擺一顆按了會失望的鈕。
+          在內容流最底而非 fixed:不與 bottom nav / FAB 疊,也不遮住任何待辦列。 */}
+      {aiEnabled('agent.run') && (
+        <Button size="lg" className="w-full md:hidden"
+          onClick={() => navigate('/agent', { state: { q: '今天最該處理什麼？' } })}>
+          <MSym name="smart_toy" size={18} />問 PMIS：今天最該處理什麼？
+        </Button>
+      )}
     </div>
+  )
+}
+
+// AI 今日已代辦(README dash 右下):agent 今天替這個帳號完成了哪些草稿、
+// 還有幾件等覆核。純顯示統計——紅線:不產生任何待辦、不提供接受/核定動作,
+// 覆核一律回 /agent 收件匣逐筆處理(決定權永遠在人)。
+// agentActions 由 store 的 agent slice 在真專案選定時就載入(demo 走種子),
+// 不是 /agent 頁才觸發——這裡直接讀,不另發請求。
+// 「今日」用台北日曆日(taipeiISODate):resolved_at 存 UTC,台灣早上接受的草稿
+// 用 UTC 判斷會整天不出現——與 todayTasks「今天已完成」同一套規則(W8-2A §3.3)。
+function AgentDoneCard() {
+  const { agentActions } = useStore()
+  const todayIso = taipeiISODate(new Date())
+  const acceptedToday = (agentActions || []).filter((a) => a.status === 'accepted' && taipeiISODate(a.resolved_at) === todayIso)
+  const pendingCount = (agentActions || []).filter((a) => a.status === 'pending').length
+  // 兩個數字都是 0 → 整卡不渲染:誠實原則,沒代辦就不擺空卡自我宣傳
+  if (acceptedToday.length === 0 && pendingCount === 0) return null
+  // 依 kind 分組成「種類 × N 件」;未知 kind 原樣顯示(對齊收件匣,不擋新種類)
+  const byKind = [...acceptedToday.reduce((m, a) => m.set(a.kind, (m.get(a.kind) || 0) + 1), new Map())]
+  return (
+    <Card title="AI 今日已代辦" bodyClass="p-4">
+      {byKind.length > 0 && (
+        <ul className="space-y-1.5">
+          {byKind.map(([kind, n]) => (
+            <li key={kind} className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-[var(--text-2)]">{KIND_LABEL[kind] || kind}</span>
+              <span className="shrink-0 text-[var(--text-3)] text-xs">
+                × <span className="num text-[var(--blue-text)] font-semibold text-sm">{n}</span> 件
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {pendingCount > 0 && (
+        <div className={`flex items-center justify-between gap-3 text-sm ${byKind.length ? 'mt-2.5 pt-2.5 border-t border-[var(--border-2)]' : ''}`}>
+          <span className="text-[var(--text-2)]">
+            待覆核 <span className="num text-[var(--blue-text)] font-semibold">{pendingCount}</span> 件
+          </span>
+          {/* 手機觸控 ≥44px:連結自己撐高,不靠父層 padding */}
+          <Link to="/agent" className="max-sm:min-h-11 inline-flex items-center shrink-0 text-xs font-medium text-[var(--blue-text)] hover:underline">
+            到收件匣覆核 →
+          </Link>
+        </div>
+      )}
+    </Card>
   )
 }
 

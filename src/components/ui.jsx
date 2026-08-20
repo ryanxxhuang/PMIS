@@ -246,6 +246,77 @@ export function ErrorBanner({ msg, onClose, onRetry, className = '' }) {
   )
 }
 
+// ── 表格互動三件組(README「表格:排序、篩選、分頁」)──────────────────────
+// 排序/分頁的資料端在 src/lib/useTable.js(client-side 表用);伺服器分頁的表
+// 只共用 TablePager 皮。樹狀表(BOQ/Valuation)刻意不套,理由見 useTable.js。
+
+// 排序表頭:th 內是 button(整格可點),點擊循環 asc/desc;active 欄文字轉
+// accent 並附 16px 箭頭,th 帶 aria-sort 供報讀器。字級/內距/對齊由呼叫端
+// className 決定(Admin 沿用自己的 TH/THR 常數)——這裡只負責互動與 active 視覺。
+export function SortableTh({ label, field, sort, onSort, numeric = false, align = 'left', className = '' }) {
+  const active = sort?.field === field
+  return (
+    <th className={className}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+      <button type="button" onClick={() => onSort(field, numeric)}
+        className={`w-full max-sm:min-h-11 inline-flex items-center gap-0.5 ${align === 'right' ? 'justify-end' : ''} ${active ? 'text-[var(--blue-text)]' : 'hover:text-[var(--text)]'}`}>
+        {label}
+        {active && <MSym name={sort.dir === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={16} />}
+      </button>
+    </th>
+  )
+}
+
+// 篩選 chip:未套用=白底+前置圖示(filter_list/calendar_month);已套用=淺藍底
+// 深藍字+尾端 close。class 字面值與 PageTabs 的 CHIP_BASE/CHIP_ON/CHIP_OFF 對齊
+// ——刻意複製而非 import:不想再加深 ui↔PageTabs 的耦合,改 chips 皮時兩處一起動。
+// 同一顆 button 負責套用與移除(aria-pressed 供報讀器分辨),close 只是視覺提示。
+export function FilterChip({ label, icon = 'filter_list', active = false, onToggle }) {
+  return (
+    <button type="button" aria-pressed={active} onClick={onToggle}
+      className={`h-8 max-sm:min-h-11 shrink-0 inline-flex items-center gap-1.5 px-3.5 rounded-lg text-[13px] font-medium whitespace-nowrap pressable ${active
+        ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
+        : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'}`}>
+      {!active && <MSym name={icon} size={16} />}
+      {label}
+      {active && <MSym name="close" size={16} />}
+    </button>
+  )
+}
+
+// 卡底分頁列:「每頁列數 25 ▾ · 1–25 / 106 · ‹ ›」,靠右、數字 tabular。
+// 不可用的箭頭降 --border 且 disabled(規格);頁碼 0-based,對外顯示才 +1。
+// select 用裸樣式而非 FIELD_BASE——這裡要的是行內小控件,不是全寬表單欄位。
+// disabled=true 供伺服器分頁的表在載入中整組鎖住(client-side 表用不到)。
+export function TablePager({ page, pageSize, total, onPage, onPageSize, sizes = [10, 25, 50], disabled = false, className = '' }) {
+  const start = total === 0 ? 0 : page * pageSize + 1
+  const end = Math.min(total, (page + 1) * pageSize)
+  const canPrev = !disabled && page > 0
+  const canNext = !disabled && end < total
+  const arrow = (ok) => `w-8 h-8 max-sm:min-h-11 max-sm:min-w-11 grid place-items-center rounded-full ${ok ? 'text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable' : 'text-[var(--border)]'}`
+  return (
+    <div className={`flex flex-wrap items-center justify-end gap-x-3 gap-y-1 px-4 py-1.5 border-t border-[var(--border-2)] text-[13px] text-[var(--text-2)] ${className}`}>
+      <label className="flex items-center gap-1.5">
+        每頁列數
+        <select value={pageSize} disabled={disabled} aria-label="每頁列數"
+          onChange={(e) => onPageSize(Number(e.target.value))}
+          className="num bg-transparent border border-[var(--border)] rounded-md px-1 py-0.5 max-sm:min-h-11 text-[13px] text-[var(--text)] disabled:opacity-50">
+          {sizes.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </label>
+      <span className="num">{start}–{end} / {total}</span>
+      <div className="flex items-center">
+        <button type="button" onClick={() => onPage(page - 1)} disabled={!canPrev} aria-label="上一頁" className={arrow(canPrev)}>
+          <MSym name="chevron_left" size={20} />
+        </button>
+        <button type="button" onClick={() => onPage(page + 1)} disabled={!canNext} aria-label="下一頁" className={arrow(canNext)}>
+          <MSym name="chevron_right" size={20} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // 前置條件空狀態(P1-05):明確講「缺什麼、輪到誰、完成後解鎖什麼」+ 單一主 CTA。
 // 對無權限角色不給死按鈕,改顯示責任方(who)。to=CTA 連結;cta=按鈕文字;who=負責角色說明。
 export function PrerequisiteEmptyState({ title, need, unlocks, to, cta, who }) {

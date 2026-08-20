@@ -573,7 +573,11 @@ export default function Requirements() {
                 <div key={l.work_item_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1.5">
                   <span className="font-medium text-[var(--text)] shrink-0">{item?.item_no || '—'}</span>
                   <span className="flex-1 min-w-[8rem] truncate text-[var(--text-2)]">{item?.description || l.work_item_id}</span>
-                  {l.confidence != null && <span className="text-[var(--text-3)]">AI {Math.round(l.confidence * 100)}%</span>}
+                  {/* 信賴度上色(handoff 門檻 ≥0.89 ok／≤0.72 warn):覆核的人要能一眼挑出「AI 沒把握、非人工判斷不可」的配對,
+                      中間帶維持弱色不搶眼。數字照舊,顏色只是加速掃描,不取代旁邊的核可/駁回決定。 */}
+                  {l.confidence != null && (
+                    <span className={l.confidence >= 0.89 ? 'text-[var(--green-text)]' : l.confidence <= 0.72 ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}>AI {Math.round(l.confidence * 100)}%</span>
+                  )}
                   <Badge color={l.review_status === 'approved' ? 'green' : l.review_status === 'rejected' ? 'red' : 'blue'}>
                     {WORK_ITEM_LINK_STATE_LABELS[l.review_status] || l.review_status}
                   </Badge>

@@ -10,24 +10,9 @@ import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input, Surface } f
 import { useStore } from '../../store.jsx'
 import { applyDraftQuantities, draftNeedsInputCount, checklistDraftCounts } from '../../store/slices/agent.js'
 import { useAssistantData } from '../../lib/assistantData.js'
-import { displayAgentRole, AGENT_LABEL } from '../../lib/agentRole.js'
+// KIND_LABEL/KIND_COLOR 移到 agentRole.js:Dashboard 的「AI 今日已代辦」卡共用同一份標籤
+import { displayAgentRole, AGENT_LABEL, KIND_LABEL, KIND_COLOR } from '../../lib/agentRole.js'
 import CopilotChat from '../../components/CopilotChat.jsx'
-
-// agent_actions.kind → 使用者看得懂的草稿種類(未知 kind 原樣顯示,不擋新種類)
-const KIND_LABEL = {
-  draft_daily_log: '日誌草稿',
-  draft_inspection: '查驗草稿',
-  draft_submittal_review: '審查意見',
-  audit_note: '稽核提示',
-  handoff: '交接事項',
-}
-const KIND_COLOR = {
-  draft_daily_log: 'blue',
-  draft_inspection: 'green',
-  draft_submittal_review: 'amber',
-  audit_note: 'purple',
-  handoff: 'red', // 球轉到你手上,視覺上要跳出來
-}
 // 稽核發現的狀態標籤(對齊 buildIntegrityFindings 的 status)
 const FINDING_BADGE = { risk: { color: 'red', label: '風險' }, warn: { color: 'amber', label: '提醒' } }
 

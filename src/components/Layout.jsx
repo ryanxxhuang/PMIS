@@ -8,6 +8,7 @@ import BottomNav, { NAV_SHORT } from './BottomNav.jsx'
 import { MSym } from './icons.jsx'
 import { ErrorBanner } from './ui.jsx'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
+import { useTodayTasks, mineCountForNavItem } from '../lib/useTodayTasks.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
 
@@ -132,17 +133,22 @@ function GlobalSearch() {
   if (!aiEnabled('agent.run')) return <div className="flex-1 hidden md:block" />
   return (
     <div className="relative flex-1 max-w-[560px] min-w-0 hidden md:block">
+      {/* ≥1280 全寬藥丸;768–1279 收成圖示鈕(README 平板規格),兩者共用同一浮層 */}
       <button ref={btnRef} onClick={() => setOpen(true)} aria-label="搜尋(問 PMIS 代查)" title="搜尋(問 PMIS 代查)"
-        className="w-full h-11 rounded-full bg-[var(--g-search)] hover:bg-[var(--g-search-h)] flex items-center gap-2.5 px-4 pressable">
+        className="w-full h-11 rounded-full bg-[var(--g-search)] hover:bg-[var(--g-search-h)] hidden xl:flex items-center gap-2.5 px-4 pressable">
         <MSym name="search" size={20} className="text-[var(--text-2)]" />
         <span className="flex-1 text-left text-sm text-[var(--text-2)] truncate">搜尋工項、送審、缺失、契約條文……</span>
         <MSym name="tune" size={20} className="text-[var(--text-2)]" />
+      </button>
+      <button onClick={() => setOpen(true)} aria-label="搜尋(問 PMIS 代查)" title="搜尋(問 PMIS 代查)"
+        className="hidden md:flex xl:hidden w-11 h-11 ml-auto rounded-full items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable">
+        <MSym name="search" size={22} />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <form onSubmit={submit}
-            className="absolute inset-x-0 top-0 z-20 h-11 rounded-full bg-[var(--surface)] [box-shadow:var(--shadow-md)] flex items-center gap-2.5 px-4 enter-menu">
+            className="absolute top-0 right-0 w-[min(560px,72vw)] xl:w-auto xl:inset-x-0 z-20 h-11 rounded-full bg-[var(--surface)] [box-shadow:var(--shadow-md)] flex items-center gap-2.5 px-4 enter-menu">
             <MSym name="search" size={20} className="text-[var(--text-2)]" />
             <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
               placeholder="問 PMIS:輸入問題,Enter 代查本案資料…"
@@ -154,7 +160,7 @@ function GlobalSearch() {
   )
 }
 
-function TopBar({ onMenu, scrolled, menuBtnRef }) {
+function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
   const { currentUser, logout } = useStore()
   const navigate = useNavigate()
   const [mode, setMode] = useState(getThemeMode)
@@ -180,8 +186,11 @@ function TopBar({ onMenu, scrolled, menuBtnRef }) {
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-auto">
         <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-10 h-10 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name={THEME_META[mode].icon} size={20} /></button>
         <NavLink to="/alerts" aria-label="提醒中心" title="提醒中心"
-          className={({ isActive }) => `w-10 h-10 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center pressable ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+          className={({ isActive }) => `relative w-10 h-10 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center pressable ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
           <MSym name="notifications" size={20} />
+          {/* 紅點只在真的有「輪到我」時亮(靜態紅點=說謊);aria-hidden,
+              count 語意由側欄 badge 與今日待辦頁承擔 */}
+          {dueCount > 0 && <span aria-hidden className="absolute top-2 right-2.5 w-[7px] h-[7px] rounded-full bg-[var(--danger)] border-[1.5px] border-[var(--surface)]" />}
         </NavLink>
         {/* 帳戶區(兩行):登入者本人,沒有角色切換——身分在註冊時決定 */}
         <div className="hidden sm:flex items-center gap-2 pl-1.5 pr-2 py-1 ml-0.5 rounded-full">
@@ -255,6 +264,9 @@ export function WebLayout({ children }) {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
   const { currentUser, can, workItemsSource, workItemsError, retryWorkItems, domainLoadError, retryDomainLoad, isPlatformAdmin, project, demoMode } = useStore()
+  // 件數單一真相:與今日待辦頁同一支聚合(useTodayTasks),側欄 badge/通知紅點
+  // 不另算一份——兩套實作的數字遲早對不上(W8-2A §2.1)
+  const { mine: dueMine } = useTodayTasks()
   const { pathname } = useLocation()
   // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——非正式模式的
   // admin(專案建立者)看得到全部;正式模式後回歸自己的角色視角。
@@ -277,7 +289,7 @@ export function WebLayout({ children }) {
   }
   return (
     <div className="min-h-screen bg-[var(--bg)]">
-      <TopBar onMenu={() => setMenuOpen(true)} scrolled={scrolled} menuBtnRef={menuBtnRef} />
+      <TopBar onMenu={() => setMenuOpen(true)} scrolled={scrolled} menuBtnRef={menuBtnRef} dueCount={dueMine.length} />
       {/* 手機:點背景關閉抽屜(蓋過頂欄,抽屜再蓋過遮罩);純滑鼠 scrim,對報讀器隱藏 */}
       {menuOpen && <div aria-hidden="true" className="fixed inset-0 z-50 bg-black/40 md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
       {/* 關閉時 max-md:invisible:visibility hidden = 不可聚焦＋離開 a11y 樹,擋掉
@@ -323,6 +335,7 @@ export function WebLayout({ children }) {
                 </div>
                 {g.items.map((n) => {
                   // 工作面與角色子頁都來自 navConfig，不在 Layout 重寫清單。
+                  const mineCount = mineCountForNavItem(dueMine, n)
                   const wbActive = n.tabs?.some((t) => t.to === pathname)
                   const itemActive = pathname === n.to || wbActive
                   const expanded = expandedWorkbenches.has(n.to)
@@ -343,12 +356,21 @@ export function WebLayout({ children }) {
                             collapsed ? 'md:flex-none md:w-16 md:flex-col md:gap-1 md:justify-center md:px-0 md:py-1 md:rounded-2xl' : ''
                           }`}>
                           {/* rail(collapsed):56×32 藥丸圖示+10.5px 短標直排(README 平板規格) */}
-                          <span className={`flex items-center justify-center ${collapsed ? `md:w-14 md:h-8 md:rounded-full ${itemActive ? 'md:bg-[var(--blue-tint)]' : ''}` : ''}`}>
+                          <span className={`relative flex items-center justify-center ${collapsed ? `md:w-14 md:h-8 md:rounded-full ${itemActive ? 'md:bg-[var(--blue-tint)]' : ''}` : ''}`}>
                             <MSym name={n.icon} size={20} fill={itemActive} className={itemActive ? 'text-[var(--blue-text)]' : 'opacity-80'} />
+                            {/* rail 的未處理數:藥丸右上紅色小數字 */}
+                            {collapsed && mineCount > 0 && (
+                              <span aria-hidden className="hidden md:block absolute -top-1 right-0.5 text-[10px] leading-none font-medium num text-[var(--red-text)]">{mineCount}</span>
+                            )}
                           </span>
                           {/* 手機抽屜永遠全名(collapsed 只影響 md+ 的 rail);rail 用短標 */}
                           <span className={collapsed ? 'md:hidden' : ''}>{n.label}</span>
                           {collapsed && <span className="hidden md:block text-[10.5px] leading-none font-medium">{NAV_SHORT[n.label] || n.label}</span>}
+                          {/* 展開態:右側未處理件數(README 導覽規格)。aria-hidden——
+                              e2e 用 exact accessible name 抓連結,數字不得混進名字 */}
+                          {mineCount > 0 && (
+                            <span aria-hidden className={`ml-auto text-xs font-medium num ${itemActive ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} ${collapsed ? 'md:hidden' : ''}`}>{mineCount}</span>
+                          )}
                         </NavLink>
                         {n.tabs && (
                           <button type="button" onClick={() => toggleWorkbench(n.to)}
