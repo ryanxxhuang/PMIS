@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Badge, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Badge, Empty, PageHeader, Surface } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { acceptanceStageSummary } from '../../lib/acceptance.js'
@@ -162,9 +162,10 @@ const STATUS_COLOR = { 施工中: 'blue', 驗收中: 'amber', 保固中: 'green'
 function ProjectCard({ c, onOpen }) {
   const behind = c.plannedPct != null ? c.plannedPct - c.progressPct : null
   const clickable = c.isCurrent || c.projectId || c.to
+  // 卡殼吃共用 Surface(白卡/圓角/框線/陰影一份定義),這裡只留「可點卡片」自己的互動樣式
   return (
-    <button onClick={onOpen} disabled={!clickable}
-      className={`text-left h-full flex flex-col bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-5 pressable ${clickable ? 'hover:border-[var(--blue)] hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
+    <Surface as="button" onClick={onOpen} disabled={!clickable}
+      className={`text-left h-full flex flex-col p-5 pressable ${clickable ? 'hover:border-[var(--blue)] hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-semibold text-[var(--text)] truncate flex items-center gap-2">
@@ -183,8 +184,10 @@ function ProjectCard({ c, onOpen }) {
       <div className="mt-4">
         <div className="flex items-baseline gap-2">
           <span className="num text-lg leading-none font-semibold text-[var(--text)]">{c.progressPct.toFixed(1)}%</span>
+          {/* 實際 vs 計畫吃五語意色票:落後=red(與進度管制頁同一個 5% 門檻)、超前/正常=green;
+              不再用只有這裡看得到的 accent 橘——跨頁看同一件事,顏色要是同一個意思 */}
           {behind != null && (
-            <span className={`text-[11px] font-medium whitespace-nowrap ${behind > 5 ? 'text-[var(--accent-text)]' : behind < -2 ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'}`}>
+            <span className={`text-[11px] font-medium whitespace-nowrap ${behind > 5 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'}`}>
               {behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '進度正常'}
             </span>
           )}
@@ -227,6 +230,6 @@ function ProjectCard({ c, onOpen }) {
         </span>
         {c.acceptance && <span className="num text-[var(--text-3)] ml-auto">{c.acceptance.done}/{c.acceptance.total}</span>}
       </div>
-    </button>
+    </Surface>
   )
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, PageHeader, Button } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Button, Surface } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { auditProject } from '../../lib/riskAudit.js'
 import { buildIntegrityFindings, isConcretePourItem } from '../../lib/integrityAudit.js'
@@ -108,7 +108,7 @@ export default function RiskAudit() {
         subtitle="系統化檢核本案的估驗、變更、品質、契約與進度，標出值得複查的異常" />
 
       {/* 稽核結果總覽 */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+      <Surface className="p-5 flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex items-center gap-3">
           <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0" style={{ background: O.bg, color: O.c }}><MSym name={O.icon} size={24} /></span>
           <div>
@@ -126,7 +126,7 @@ export default function RiskAudit() {
           <span className="flex items-center gap-1.5"><MSym name="gpp_maybe" size={15} style={{ color: 'var(--red-text)' }} /><span className="num font-semibold">{totRisk}</span> 風險</span>
           {summary.na > 0 && <span className="flex items-center gap-1.5"><MSym name="help" size={15} style={{ color: 'var(--slate-text)' }} /><span className="num font-semibold">{summary.na}</span> 未評估</span>}
         </div>
-      </div>
+      </Surface>
 
       {/* 檢核明細 */}
       <Card title="稽核檢核表" bodyClass="p-0"

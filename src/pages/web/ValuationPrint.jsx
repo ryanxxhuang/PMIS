@@ -7,6 +7,12 @@ import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
 
+// 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
+// 次要鈕留在 slate 色階:紙面永遠是亮色,套 --text-* 在深色模式會變淺字壓白底。
+const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-sm:min-h-11'
+const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]`
+const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white border border-slate-300 text-slate-700 hover:bg-slate-50`
+
 // 估驗計價單（可列印 / 另存 PDF）— 不套 WebLayout，整頁就是文件
 export default function ValuationPrint() {
   const { project, workItems, valuations, currentUser, adjustedItems: adjItems, coNet, revisedTotal } = useStore()
@@ -62,9 +68,9 @@ export default function ValuationPrint() {
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
       {/* 工具列（列印時隱藏）*/}
-      <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
-        <button onClick={() => navigate('/valuation')} className="text-sm text-slate-500 hover:text-slate-800">← 返回估驗計價</button>
-        <button onClick={() => window.print()} className="bg-[var(--primary)] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--primary-hover)] inline-flex items-center gap-1.5"><MSym name="print" size={15} />列印 / 另存 PDF</button>
+      <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-2">
+        <button onClick={() => navigate('/valuation')} className={TOOLBAR_SECONDARY}>← 返回估驗計價</button>
+        <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}><MSym name="print" size={15} />列印 / 另存 PDF</button>
       </div>
 
       {/* 文件本體 A4 */}

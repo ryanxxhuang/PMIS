@@ -430,8 +430,13 @@ export default function SiteLog() {
                 // S-8 紙本化:監造/機關調閱的本來就是公定格式正式版面,預設直接內嵌 A4 文件本體。
                 // sheet 為純顯示無 input(唯讀頁 e2e 契約);紙本表格在手機縮不進 375px,
                 // 用 overflow-x-auto+min-w 讓紙本自己橫向捲,頁面不溢位(a11y 全路由無溢位掃描)。
-                <div className="overflow-x-auto">
-                  <SiteLogOfficialSheet project={project} log={currentLog} siteLogs={siteLogs} itemList={adjustedItems} className="min-w-[640px]" />
+                // 紙本內部的 slate-* 硬編是刻意(與列印輸出同版面,不跟主題變色):
+                // 外層固定 bg-white 當「紙」,深色模式下白紙壓深底才有邊界可讀,並以小字講明白底是公定格式
+                <div>
+                  <div className="overflow-x-auto rounded-xl border border-[var(--border-card)] bg-white p-3">
+                    <SiteLogOfficialSheet project={project} log={currentLog} siteLogs={siteLogs} itemList={adjustedItems} className="min-w-[640px]" />
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-[var(--text-3)]">公定格式(固定白底)</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -539,8 +544,14 @@ export default function SiteLog() {
             )}
 
             {/* 批 B UX:告示板辨識功能關閉時整塊藏起來(真正的閘門在伺服器端) */}
-            {can.edit && aiEnabled('sitelog.whiteboard') && <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
-              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+            {/* AI 卡樣式(handoff:AI 草稿提示卡):ai-tint 底+12px 圓角+auto_awesome 標籤列,
+                全站 AI 功能長同一張臉,一眼分得出「這塊是 AI 草稿入口」而非一般表單 */}
+            {can.edit && aiEnabled('sitelog.whiteboard') && <div className="mb-3 p-3 rounded-2xl bg-[var(--ai-tint)]">
+              <div className="flex items-center gap-1 mb-2">
+                <MSym name="auto_awesome" size={14} className="text-[var(--ai)]" />
+                <span className="text-[11px] font-medium text-[var(--ai-text)]">AI 草稿</span>
+              </div>
+              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] shadow-sm'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
                 <MSym name="photo_camera" size={15} /> {aiBusy ? 'AI 辨識中…' : 'AI 拍照自動填寫'}
               </label>
@@ -803,7 +814,8 @@ export default function SiteLog() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {photos.map((p, i) => (
                       <div key={p.id} className="group relative rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--surface-2)]">
-                        <div className="aspect-square">
+                        {/* 4:3 而非正方形(handoff 規格):相機原生比例,方形裁切會砍掉告示板兩側的字 */}
+                        <div className="aspect-[4/3]">
                           {/* 無說明時用序號當 fallback:同一天多張照片,固定字串會讓報讀器全部同名 */}
                           {p.url && <img src={p.url} alt={p.caption || `現場照片 ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />}
                         </div>

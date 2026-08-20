@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Surface, Button, Field, Badge, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { judgeChecklist, judgeItem, diffChecklistResults, sampleAlerts } from '../../lib/qc.js'
 import { collaborationItems } from '../../lib/ballInCourt.js'
@@ -207,21 +207,22 @@ export default function Quality() {
 
       {/* 分段控制:等寬五段(375px 不橫捲)。非當前分段不渲染(unmount)——
           已知取捨:切段會失去該段未送出的表單 state;各段表單皆短,重填成本低,
-          換來的是頁面不再五卡直落、每段各自可專心操作 */}
-      <div role="group" aria-label="品質分段"
-        className="grid grid-cols-5 gap-1 bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-1">
+          換來的是頁面不再五卡直落、每段各自可專心操作。
+          卡殼改吃 Surface(白卡單一真相);選取態文字走 --primary-fg,深色模式
+          primary 是淺藍底深字,寫死 text-white 會炸對比(token 層已註明) */}
+      <Surface role="group" aria-label="品質分段" className="grid grid-cols-5 gap-1 p-1">
         {SEGMENTS.map((s) => (
           <button key={s} onClick={() => setSegment(s)} aria-pressed={segment === s}
             className={`min-h-11 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-1 pressable transition-colors ${
-              segment === s ? 'bg-[var(--primary)] text-white [box-shadow:0_1px_2px_rgba(22,32,43,.18)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+              segment === s ? 'bg-[var(--primary)] text-[var(--primary-fg)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
             {s}
             {segCount[s] > 0 && (
               <span className={`min-w-4 px-1 rounded-full text-[10px] font-semibold tabular-nums ${
-                segment === s ? 'bg-white/25' : 'bg-[var(--surface-2)] text-[var(--text-2)]'}`}>{segCount[s]}</span>
+                segment === s ? 'bg-[var(--primary-fg)]/20' : 'bg-[var(--surface-2)] text-[var(--text-2)]'}`}>{segCount[s]}</span>
             )}
           </button>
         ))}
-      </div>
+      </Surface>
 
       {/* 查驗:標題同時給「全部」與「待查驗」——這張卡不只是待辦盒,也是本案的查驗履歷 */}
       {segment === '查驗' && (
@@ -271,15 +272,16 @@ export default function Quality() {
           </div>
         )}
         {/* 狀態篩選:判定後的紀錄一直都留在這張清單,但純時間序回答不了
-            「擋土牆合格了沒」。flex-wrap 是 375px 的保命符,四個 chip 一行放不下要能換行 */}
+            「擋土牆合格了沒」。flex-wrap 是 375px 的保命符,四個 chip 一行放不下要能換行。
+            Workspace chip 皮(handoff:已套用篩選=accent chip):選取淺藍底深藍字,未選白底細框 */}
         {inspections.length > 0 && (
           <div role="group" aria-label="查驗狀態篩選" className="flex flex-wrap gap-1.5 mb-3">
             {INSP_FILTERS.map((f) => (
               <button key={f} onClick={() => setInspFilter(f)} aria-pressed={inspFilter === f}
                 className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium max-sm:min-h-11 pressable transition-colors ${
                   inspFilter === f
-                    ? 'border-[var(--primary)] bg-[var(--primary)] text-white'
-                    : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+                    ? 'border-[var(--blue)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
                 {f}<span className="tabular-nums opacity-80">{inspCount[f]}</span>
               </button>
             ))}

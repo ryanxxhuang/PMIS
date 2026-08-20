@@ -139,19 +139,16 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
 
   return (
     <li className={`flex gap-3 px-5 py-4 ${!last ? 'border-b border-[var(--border-2)]' : ''}`}>
-      {/* 時間軸節點 */}
-      <div className="flex flex-col items-center pt-0.5">
-        {done
-          ? <MSym name="check_circle" size={20} className="text-[var(--green-text)] shrink-0" />
-          : stage.overdue
-            ? <MSym name="warning" size={20} className="text-[var(--red-text)] shrink-0" />
-            : <MSym name="radio_button_unchecked" size={20} className={stage.state === 'due' ? 'text-[var(--blue)]' : 'text-[var(--border)]'} />}
-        {!last && <span className="flex-1 w-px bg-[var(--border-2)] mt-1.5" />}
-      </div>
+      {/* 時間軸節點:7px 方點(刻意不加圓角)——同頁的圓形圖示與藥丸都是「可操作」的
+          語彙,時序節點做成方點才不會被當成按鈕。已完成填滿主色、未辦只留邊框。
+          aria-hidden:狀態不得只靠顏色(W8-5),完成與否由日期、期限與結果色票的
+          文字承擔,方點只是視覺節奏,不重複播報。 */}
+      <span aria-hidden className={`w-[7px] h-[7px] mt-[7px] shrink-0 border border-[var(--blue)] ${done ? 'bg-[var(--blue)]' : 'bg-transparent'}`} />
 
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className={`text-sm font-semibold ${done ? 'text-[var(--text)]' : stage.state === 'due' ? 'text-[var(--text)]' : 'text-[var(--text-3)]'}`}>
+          {/* Workspace 不用粗體撐層級:標題一律 500,強弱交給顏色(已完成/進行中為主文字色) */}
+          <span className={`text-sm font-medium ${done ? 'text-[var(--text)]' : stage.state === 'due' ? 'text-[var(--text)]' : 'text-[var(--text-3)]'}`}>
             {stage.label}
           </span>
           <span className="text-[11px] text-[var(--text-3)]">主辦：{stage.by}</span>
@@ -163,8 +160,10 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
         <div className="text-xs text-[var(--text-2)] mt-0.5">{stage.basis}</div>
 
         {done && !editing ? (
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <span className="num text-[var(--text)]">{stage.event.event_date}</span>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            {/* 方點欄不再有 20px 圖示撐高後,14px 的日期會壓過同列的階段標題;
+                降到 13px 讓「階段→依據→日期」三行由大到小收斂成一列時序 */}
+            <span className="num text-[13px] text-[var(--text)]">{stage.event.event_date}</span>
             {stage.event.note && <span className="text-[var(--text-2)] text-xs">{stage.event.note}</span>}
             {/* 「修改」是進入該階段編輯的唯一入口,原本只有 16px 命中區 */}
             {allowed && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-sm:min-h-11 px-1">修改</button>}

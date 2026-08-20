@@ -3,7 +3,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Card, Empty, PageHeader } from '../../components/ui.jsx'
+import { Badge, Card, Empty, PageHeader, Stat } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { buildTodayTasks } from '../../lib/todayTasks.js'
@@ -183,6 +183,11 @@ export default function Dashboard() {
   )
   const completion = billableTotal ? (actualCum / billableTotal) * 100 : 0
 
+  // 剩餘工期:契約迄日(end_date)減今天。end_date 是當地午夜(parseLocalDate),
+  // 除以整天後無條件進位,今天下午看「明天到期」仍算 1 天;無迄日不硬掰數字。
+  const endDate = anchors.end_date ? parseLocalDate(anchors.end_date) : null
+  const remainDays = endDate ? Math.ceil((endDate - TODAY) / 86400000) : null
+
   const plannedNow = useMemo(() => {
     if (!progressPlan) return null
     const months = progressPlan.months, N = months.length
@@ -238,77 +243,69 @@ export default function Dashboard() {
         <div className="space-y-5">
           {isPersistedProject && !project.formal_mode && <SetupChecklist imported />}
 
-          {/* 進度摘要:待辦是主角,進度縮成一條狀態帶(落後仍亮橘色) */}
-          <section className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] px-5 py-3.5 flex flex-wrap items-center gap-x-6 gap-y-3">
-            <div className="min-w-0">
-              <div className="text-[10px] font-medium uppercase tracking-[0.09em] text-[var(--text-3)]">累計實際進度</div>
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-0.5">
-                <span className="num text-[26px] leading-none font-semibold text-[var(--text)]">
-                  {completion.toFixed(1)}<span className="text-base text-[var(--text-3)] ml-0.5">%</span>
+          {/* 指標卡列(對齊原型 dash):原「進度摘要一條帶」收斂成四張 Stat。
+              落後/超前門檻與文案照舊,只是從色帶搬進「累計實際進度」卡的小字;
+              落後改吃 amber 語意色票(不再借品牌 accent 當警示色) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Stat label="累計實際進度" value={`${completion.toFixed(1)}%`}
+              sub={plannedNow != null ? (
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  <span className="num">目標 {plannedNow.toFixed(1)}%</span>
+                  {behind != null && (
+                    <Badge color={behind > 5 ? 'amber' : behind < -2 ? 'green' : 'slate'}>
+                      {behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '進度正常'}
+                    </Badge>
+                  )}
                 </span>
-                {plannedNow != null && <span className="text-xs text-[var(--text-2)] num">目標 {plannedNow.toFixed(1)}%</span>}
-                {behind != null && (
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold num ${
-                    behind > 5 ? 'bg-[var(--accent-tint)] text-[var(--accent-text)]'
-                    : behind < -2 ? 'bg-[var(--green-tint)] text-[var(--green-text)]'
-                    : 'bg-[var(--slate-tint)] text-[var(--slate-text)]'
-                  }`}>
-                    {behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '進度正常'}
-                  </span>
-                )}
-              </div>
-              <div className="relative h-1.5 w-full min-w-[180px] rounded-full bg-[var(--surface-2)] mt-2.5 overflow-visible">
-                <div className="absolute inset-y-0 left-0 rounded-full bg-[var(--blue)]" style={{ width: `${Math.min(100, completion)}%` }} />
-                {plannedNow != null && (
-                  <div className="absolute -top-1 -bottom-1 w-[2px] rounded bg-[var(--text-2)]" style={{ left: `${Math.min(100, plannedNow)}%` }} title={`今日預定 ${plannedNow.toFixed(1)}%`} />
-                )}
-              </div>
+              ) : null} />
+            <Stat label="發包工程費" value={`NT$ ${fmt(billableTotal)}`} color="text-[var(--blue-text)]" />
+            <Stat label="累計估驗" value={`NT$ ${fmt(actualCum)}`} />
+            <Stat label="剩餘工期" value={remainDays == null ? '—' : `${fmt(remainDays)} 天`}
+              sub={anchors.end_date ? `迄 ${anchors.end_date}` : null}
+              color={remainDays != null && remainDays < 0 ? 'text-[var(--red-text)]' : 'text-[var(--text)]'} />
+          </div>
+
+          {/* 主體兩欄(原型 1.35fr/1fr):左=三段待辦,右=風險警示+最近日誌;
+              手機維持單欄堆疊(grid 單欄的 gap 與原本 space-y-5 一致) */}
+          <div className="grid gap-5 lg:grid-cols-[1.35fr_1fr] lg:items-start">
+            <div className="min-w-0 space-y-5">
+              {/* 三段今日待辦。狀態全部由既有業務流程更新——在目的頁做完事就自動退出,
+                  不需要回這裡打勾;這裡也永遠不會出現 AI 自己產生的工作。 */}
+              {/* 真人驗收(2026-08-19):什麼都還沒上傳的專案也說「都跟上了」會誤導。
+                  store 沒有文件清單、不為此加查詢,退而求其次用「義務為空」當代理條件:
+                  義務由契約解析而來,義務空=多半連契約都還沒整理,補一句指路即可 */}
+              <TaskSection title="現在輪到我" items={tasks.mine} seeAll
+                empty="目前沒有輪到你處理的事項 — 都跟上了。"
+                hint={obligations.length === 0 ? '上傳契約後，AI 會整理期限並在此提醒。' : null} />
+              <TaskSection title="等待對方" items={tasks.waiting} seeAll
+                empty="目前沒有在等其他單位的事項。" />
+              <TaskSection title="今天已完成" items={tasks.doneToday} done
+                empty="今天還沒有你這方完成的紀錄。" />
             </div>
-            <div className="flex gap-6 sm:ml-auto">
-              <div>
-                <div className="text-[10px] font-medium tracking-[0.06em] text-[var(--text-3)] uppercase">發包工程費</div>
-                <div className="num text-[15px] font-semibold text-[var(--blue-text)] mt-0.5">NT$ {fmt(billableTotal)}</div>
-              </div>
-              <div>
-                <div className="text-[10px] font-medium tracking-[0.06em] text-[var(--text-3)] uppercase">累計估驗</div>
-                <div className="num text-[15px] font-semibold text-[var(--text)] mt-0.5">NT$ {fmt(actualCum)}</div>
-              </div>
+
+            <div className="min-w-0 space-y-5">
+              {/* AI 主動觀察:風險警示卡,不是待辦(AI 不得替人產生人工工作) */}
+              <InsightsPanel insights={insights} />
+
+              {/* 次要:最近紀錄。已完成的日誌不是待辦,也不併進「今天已完成」
+                  (log_date 是人可回填的業務日期,不等於今天完成了什麼) */}
+              <Card title="最近施工日誌" bodyClass={siteLogs.length ? 'p-0' : 'p-6'}
+                action={<Link to="/site-log" className="text-xs font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">施工日誌 <MSym name="chevron_right" size={13} /></Link>}>
+                {siteLogs.length === 0 ? <Empty>尚無施工日誌</Empty> : (
+                  <ul className="divide-y divide-[var(--border-2)]">
+                    {siteLogs.slice(0, 6).map((l) => (
+                      <li key={l.id}>
+                        <Link to="/site-log" className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-[var(--surface-2)] transition-colors">
+                          <span className="num text-[var(--text-2)] shrink-0">{l.log_date}</span>
+                          <span className="text-[var(--text)] truncate ml-3 flex-1 text-right">{l.work_summary || `${Object.keys(l.items).length} 工項`}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
             </div>
-          </section>
-
-          {/* 三段今日待辦。狀態全部由既有業務流程更新——在目的頁做完事就自動退出,
-              不需要回這裡打勾;這裡也永遠不會出現 AI 自己產生的工作。 */}
-          {/* 真人驗收(2026-08-19):什麼都還沒上傳的專案也說「都跟上了」會誤導。
-              store 沒有文件清單、不為此加查詢,退而求其次用「義務為空」當代理條件:
-              義務由契約解析而來,義務空=多半連契約都還沒整理,補一句指路即可 */}
-          <TaskSection title="現在輪到我" items={tasks.mine} seeAll
-            empty="目前沒有輪到你處理的事項 — 都跟上了。"
-            hint={obligations.length === 0 ? '上傳契約後，AI 會整理期限並在此提醒。' : null} />
-          <TaskSection title="等待對方" items={tasks.waiting} seeAll
-            empty="目前沒有在等其他單位的事項。" />
-          <TaskSection title="今天已完成" items={tasks.doneToday} done
-            empty="今天還沒有你這方完成的紀錄。" />
-
-          {/* AI 主動觀察:一行摘要,不是待辦(AI 不得替人產生人工工作) */}
-          <InsightsPanel insights={insights} />
-
-          {/* 次要:最近紀錄。已完成的日誌不是待辦,也不併進「今天已完成」
-              (log_date 是人可回填的業務日期,不等於今天完成了什麼) */}
-          <Card title="最近施工日誌" bodyClass={siteLogs.length ? 'p-0' : 'p-6'}
-            action={<Link to="/site-log" className="text-xs font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">施工日誌 <MSym name="chevron_right" size={13} /></Link>}>
-            {siteLogs.length === 0 ? <Empty>尚無施工日誌</Empty> : (
-              <ul className="divide-y divide-[var(--border-2)]">
-                {siteLogs.slice(0, 6).map((l) => (
-                  <li key={l.id}>
-                    <Link to="/site-log" className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-[var(--surface-2)] transition-colors">
-                      <span className="num text-[var(--text-2)] shrink-0">{l.log_date}</span>
-                      <span className="text-[var(--text)] truncate ml-3 flex-1 text-right">{l.work_summary || `${Object.keys(l.items).length} 工項`}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          </div>
         </div>
       )}
     </div>
@@ -334,6 +331,22 @@ const TAG_META = {
 
 // 首頁每段最多 5 筆;完整清單在提醒中心,首頁不再無限長。
 const SECTION_CAP = 5
+
+// 逾期列的期限改紅色 Badge:dueText 的句型固定(todayTasks.js),把「逾期 N 天（到期 date）」
+// 原地換成色票、前後文字一字不動——e2e 以這段完整字串斷言逾期,不能增刪字或換順序。
+// 句型比對不到(理論上不會)就整句退回原本紅字,寧可不美也不丟資訊。
+const OVERDUE_RE = /逾期 \d+ 天（到期 \d{4}-\d{2}-\d{2}）/
+function TaskMeta({ meta, overdue }) {
+  const m = overdue ? String(meta || '').match(OVERDUE_RE) : null
+  if (!m) return <span className={overdue ? 'text-[var(--red-text)] font-medium' : ''}>{meta}</span>
+  return (
+    <>
+      {meta.slice(0, m.index)}
+      <Badge color="red" className="align-middle">{m[0]}</Badge>
+      {meta.slice(m.index + m[0].length)}
+    </>
+  )
+}
 
 function TaskSection({ title, items, empty, hint = null, seeAll = false, done = false }) {
   const shown = items.slice(0, SECTION_CAP)
@@ -364,7 +377,7 @@ function TaskSection({ title, items, empty, hint = null, seeAll = false, done = 
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm text-[var(--text)]">{x.title}</span>
                     <span className="block text-[11px] text-[var(--text-3)] leading-snug">
-                      <span className={x.overdueDays ? 'text-[var(--red-text)] font-medium' : ''}>{x.meta}</span>
+                      <TaskMeta meta={x.meta} overdue={!!x.overdueDays} />
                     </span>
                   </span>
                   <MSym name="chevron_right" size={16} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-1" />

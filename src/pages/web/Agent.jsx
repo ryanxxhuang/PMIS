@@ -6,7 +6,7 @@
 import { useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
-import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input } from '../../components/ui.jsx'
+import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input, Surface } from '../../components/ui.jsx'
 import { useStore } from '../../store.jsx'
 import { applyDraftQuantities, draftNeedsInputCount, checklistDraftCounts } from '../../store/slices/agent.js'
 import { useAssistantData } from '../../lib/assistantData.js'
@@ -41,15 +41,18 @@ const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owne
 // 待辦的唯一入口是「今日待辦」頁。這裡刻意不顯示件數:件數要正確就得在
 // 這頁再算一次同樣的聚合,一旦兩份實作分岔,使用者會看到兩個不同的數字。
 function TodayTasksLink() {
+  // 卡殼吃共用 Surface;整張卡就是入口(手機上不必瞄準右邊那行小字)。
+  // 內層文字因此不再自己包一層 <Link>——連結套連結在 DOM 與輔助技術上都不成立。
   return (
-    <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] px-4 py-3 flex items-center gap-3">
+    <Surface as={Link} to="/dashboard"
+      className="group px-4 py-3 min-h-11 flex items-center gap-3 hover:border-[var(--blue)]">
       <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] leading-snug">
         輪到你處理的事項都在「今日待辦」。
       </div>
-      <Link to="/dashboard" className="shrink-0 inline-flex items-center gap-0.5 text-xs font-medium text-[var(--blue-text)] hover:underline">
+      <span className="shrink-0 inline-flex items-center gap-0.5 text-xs font-medium text-[var(--blue-text)] group-hover:underline">
         前往今日待辦 <MSym name="arrow_forward" size={12} />
-      </Link>
-    </div>
+      </span>
+    </Surface>
   )
 }
 

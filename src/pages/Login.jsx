@@ -3,13 +3,31 @@ import { useNavigate, Link } from 'react-router-dom'
 import { MSym } from '../components/icons.jsx'
 import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
-import { ErrorBanner } from '../components/ui.jsx'
+import { ErrorBanner, FIELD_BASE, Button } from '../components/ui.jsx'
 import { friendlyError } from '../lib/errorMessage.js'
+
+// ── Workspace 登入卡(design_handoff README §Screens 8)──────────────────────
+// 左欄 h1 要隨表單模式換字(登入/建立帳戶),但模式原本是 AuthForm 內部 state——
+// 所以把 mode 提升到本層傳下去;只搬 state 位置,登入/註冊流程與 store 呼叫不動。
+const MODE_HEAD = {
+  signin: { h1: '登入', desc: '使用你的 PMIS.ai 帳戶進入工程專案工作區' },
+  signup: { h1: '建立帳戶', desc: '註冊時選定角色,權限與可見範圍隨角色自動配置' },
+  forgot: { h1: '重設密碼', desc: '我們會寄一封重設連結到你註冊的信箱' },
+}
+
+// 信任說明(README:三條綠色資安說明):文案務實不誇大——對應傳輸加密、
+// 三方 RLS 隔離、agent_actions/稽核留痕這三件產品真的有做的事。
+const TRUST_POINTS = [
+  ['shield', '傳輸全程加密'],
+  ['location_on', '廠商/監造/機關三方權限隔離'],
+  ['history', '操作留痕可稽核'],
+]
 
 export default function Login() {
   const { isSupabaseConfigured, setCurrentUser, currentUser, signIn, signUp, resendSignup,
     passwordRecovery, requestPasswordReset, updatePassword } = useStore()
   const navigate = useNavigate()
+  const [mode, setMode] = useState('signin') // signin | signup | forgot
 
   // 已登入（含 Supabase session 還原）→ 進首頁。機關承辦管多案 → 預設落在跨案總覽。
   // 密碼重設流程中例外:recovery session 已生效,但要先設好新密碼才放行。
@@ -17,65 +35,81 @@ export default function Login() {
     if (currentUser && !passwordRecovery) navigate(currentUser.org_type === 'owner' ? '/portfolio' : '/dashboard')
   }, [currentUser, passwordRecovery, navigate])
 
+  const head = passwordRecovery
+    ? { h1: '設定新密碼', desc: '你剛透過重設連結回來,請設定新密碼後繼續。' }
+    : isSupabaseConfigured
+      ? MODE_HEAD[mode]
+      : { h1: '登入', desc: '示範環境:選擇角色即可進入 prototype' }
+  const base = import.meta.env.BASE_URL
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-4 sm:p-6">
-      <div className="bg-[var(--surface)] rounded-2xl g-elevation-2 w-full max-w-md p-6 sm:p-8">
-        <div className="text-center mb-6">
-          <div className="text-3xl font-bold tracking-tight text-[var(--text)]">PM<span className="text-[var(--accent-text)]">IS</span></div>
-          <div className="text-[var(--text-2)] text-sm mt-1">公共工程專案管理</div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg)] p-4 sm:p-6">
+      {/* 登入卡是全站唯一 28px 圓角的卡(README),刻意不吃 Surface——
+          Surface 的 rounded-2xl 與 rounded-[28px] 同權重會打架 */}
+      <div className="w-full max-w-[920px] bg-[var(--surface)] rounded-[28px] border border-[var(--border-card)] [box-shadow:var(--shadow-card)] grid lg:grid-cols-2">
+        {/* 左欄:品牌+標題+信任說明(lg 兩欄、手機直排) */}
+        <div className="p-6 sm:p-10 lg:pr-6 flex flex-col">
+          <div className="flex items-center gap-1.5">
+            <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-7 h-7 dark:hidden" />
+            <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-7 h-7 hidden dark:block" />
+            <span className="text-xl font-medium tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue)]">.ai</span></span>
+          </div>
+          <h1 className="text-[32px] leading-10 font-normal text-[var(--text)] mt-6">{head.h1}</h1>
+          <p className="text-sm text-[var(--text-2)] mt-2">{head.desc}</p>
+          <ul className="mt-8 lg:mt-auto lg:pt-8 space-y-2.5 text-[13px] text-[var(--text-2)]">
+            {TRUST_POINTS.map(([icon, text]) => (
+              <li key={icon} className="flex items-center gap-2">
+                <MSym name={icon} size={16} className="text-[var(--green-text)]" />
+                {text}
+              </li>
+            ))}
+          </ul>
         </div>
-        {passwordRecovery
-          ? <ResetPasswordForm updatePassword={updatePassword} />
-          : isSupabaseConfigured
-            ? <AuthForm signIn={signIn} signUp={signUp} resendSignup={resendSignup} requestPasswordReset={requestPasswordReset} />
-            : <RolePicker setCurrentUser={setCurrentUser} navigate={navigate} />}
-        {/* 漏洞回報頁要有公開入口才算「公開」;登入頁是唯一不需登入就會到的畫面。 */}
-        <div className="mt-6 border-t border-[var(--border)] pt-4 text-center">
-          <Link to="/security" className="text-xs text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">資安漏洞回報</Link>
+        {/* 右欄:表單 */}
+        <div className="p-6 sm:p-10 lg:pl-6 flex flex-col justify-center">
+          {passwordRecovery
+            ? <ResetPasswordForm updatePassword={updatePassword} />
+            : isSupabaseConfigured
+              ? <AuthForm mode={mode} setMode={setMode} signIn={signIn} signUp={signUp} resendSignup={resendSignup} requestPasswordReset={requestPasswordReset} />
+              : <RolePicker setCurrentUser={setCurrentUser} navigate={navigate} />}
         </div>
+      </div>
+      {/* 卡外底部列(README):左語言、右連結。只放真有目的地的連結——
+          目前僅 /security;漏洞回報頁要有公開入口才算「公開」,文案沿用 */}
+      <div className="w-full max-w-[920px] flex items-center justify-between flex-wrap gap-x-4 px-4 sm:px-6 mt-2 text-xs text-[var(--text-3)]">
+        <span className="inline-flex items-center min-h-11">繁體中文（台灣）</span>
+        <Link to="/security" className="inline-flex items-center min-h-11 px-2 hover:text-[var(--blue-text)] hover:underline">資安漏洞回報</Link>
       </div>
     </div>
   )
 }
 
-// ── 設定新密碼(點重設信連結回來,recovery session 已生效)─────────────────
-function ResetPasswordForm({ updatePassword }) {
-  const [pw, setPw] = useState('')
-  const [pw2, setPw2] = useState('')
-  const [err, setErr] = useState('')
-  const [busy, setBusy] = useState(false)
-  // 對齊 FIELD_BASE(W8-5):移除 outline 就要補 ring 當焦點指示;min-h-11=手機 44px 觸控目標
-  const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm min-h-11 focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
-
-  const submit = async (e) => {
-    e.preventDefault()
-    setErr('')
-    if (pw !== pw2) { setErr('兩次輸入的密碼不一致'); return }
-    setBusy(true)
-    const { error } = await updatePassword(pw)
-    setBusy(false)
-    if (error) setErr(friendlyError(error, '密碼更新失敗，請重試（重設連結可能已過期，可重寄一封）'))
-    // 成功:passwordRecovery 清除 → Login 的導向 effect 自動帶進工作區
-  }
-
+// ── 浮動標籤輸入框(README §8:52px 高、label 騎在上緣邊框)────────────────────
+// placeholder「屬性」是 e2e-real getByPlaceholder 的填表合約,必須原字保留;
+// 視覺說明改由浮動 label 承擔,placeholder 用 text-transparent 隱藏——
+// FIELD_BASE 內建 placeholder 顏色同權重,靠尾碼 ! 確保蓋過。
+function FloatField({ label, className = '', ...props }) {
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <div className="text-sm font-medium text-[var(--text)]">設定新密碼</div>
-      <p className="text-xs text-[var(--text-2)]">你剛透過重設連結回來,請設定新密碼後繼續。</p>
-      <input className={input} type="password" placeholder="新密碼（至少 8 碼，含大小寫英文與數字）" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} autoFocus />
-      <input className={input} type="password" placeholder="再輸入一次新密碼" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={8} />
-      <ErrorBanner msg={err} />
-      <button type="submit" disabled={busy}
-        className="w-full bg-[var(--primary)] text-white rounded-lg py-2.5 font-medium hover:bg-[var(--primary-hover)] pressable disabled:opacity-50">
-        {busy ? '更新中…' : '設定新密碼並登入'}
-      </button>
-    </form>
+    <label className="relative block">
+      <input className={`${FIELD_BASE} peer h-[52px] placeholder:text-transparent! ${className}`} {...props} />
+      {/* -top-2(-8px)+surface 底=蓋住邊框;focus 時與邊框一起轉主色(peer) */}
+      <span className="absolute -top-2 left-2.5 px-1 rounded bg-[var(--surface)] text-[11.5px] leading-4 text-[var(--text-2)] pointer-events-none transition-colors peer-focus:text-[var(--blue)]">
+        {label}
+      </span>
+    </label>
   )
 }
 
+// ── 註冊角色卡(README「第三版修訂·註冊時就選角色」)───────────────────────────
+// 每張說明「做什麼」與「看不到什麼」——權限邊界在選角色當下就講清楚。
+const ORG_CARDS = [
+  { value: 'contractor', icon: 'engineering', title: '施工廠商', does: '填日誌、送審、提估驗請款', boundary: '可見成本與內部排程' },
+  { value: 'supervisor', icon: 'fact_check', title: '監造單位', does: '審查與查驗、開缺失、出報表', boundary: '不經手請款與廠商成本' },
+  { value: 'owner', icon: 'account_balance', title: '機關業主', does: '核定與付款、跨案總覽', boundary: '不可見廠商毛利' },
+]
+
 // ── 真實 Email 註冊 / 登入 ──────────────────────────────────────────
-function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
-  const [mode, setMode] = useState('signin') // signin | signup | forgot
+function AuthForm({ mode, setMode, signIn, signUp, resendSignup, requestPasswordReset }) {
   const [form, setForm] = useState({ email: '', password: '', full_name: '', company: '', org_type: 'contractor', role: '' })
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
@@ -110,13 +144,17 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
   if (resetSent) {
     return (
       <div className="text-center space-y-3 py-2">
-        <div className="flex justify-center"><MSym name="mark_email_read" size={36} className="text-[var(--blue-text)]" /></div>
-        <div className="font-semibold text-[var(--text)]">重設連結已寄出</div>
+        <div className="flex justify-center">
+          <span className="w-14 h-14 rounded-full bg-[var(--blue-tint)] flex items-center justify-center">
+            <MSym name="mark_email_read" size={28} className="text-[var(--blue-text)]" />
+          </span>
+        </div>
+        <div className="font-medium text-[var(--text)]">重設連結已寄出</div>
         <p className="text-sm text-[var(--text-2)]">
           若 <b>{form.email}</b> 是已註冊的帳號，重設密碼連結已寄達。<br />請點信中連結回來設定新密碼。
         </p>
         <p className="text-xs text-[var(--text-3)]">沒收到？也看一下垃圾郵件匣。</p>
-        <button onClick={() => { setResetSent(false); setMode('signin'); setErr('') }} className="text-sm text-[var(--blue)] hover:underline">← 回登入</button>
+        <button onClick={() => { setResetSent(false); setMode('signin'); setErr('') }} className="inline-flex items-center min-h-11 px-2 text-sm text-[var(--blue)] hover:underline pressable">← 回登入</button>
       </div>
     )
   }
@@ -130,31 +168,34 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
   if (sent) {
     return (
       <div className="text-center space-y-3 py-2">
-        <div className="flex justify-center"><MSym name="mark_email_read" size={36} className="text-[var(--blue-text)]" /></div>
-        <div className="font-semibold text-[var(--text)]">驗證信已寄出</div>
+        {/* 註冊選角色是步驟 1,收驗證信是步驟 2——讓等待有進度感 */}
+        <div className="inline-flex items-center rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] text-[11px] font-medium px-2.5 py-1">步驟 2/2·驗證信箱</div>
+        <div className="flex justify-center">
+          <span className="w-14 h-14 rounded-full bg-[var(--blue-tint)] flex items-center justify-center">
+            <MSym name="mark_email_read" size={28} className="text-[var(--blue-text)]" />
+          </span>
+        </div>
+        <div className="font-medium text-[var(--text)]">驗證信已寄出</div>
         <p className="text-sm text-[var(--text-2)]">
           已寄到 <b>{form.email}</b>。請到信箱點擊連結完成驗證，<br />再回來登入。
         </p>
         <p className="text-xs text-[var(--text-3)]">沒收到？也看一下垃圾郵件匣。</p>
         <div className="flex items-center justify-center gap-3 pt-1">
-          <button onClick={onResend} className="text-sm text-[var(--blue)] hover:underline">重寄驗證信</button>
+          <button onClick={onResend} className="inline-flex items-center min-h-11 px-2 text-sm text-[var(--blue)] hover:underline pressable">重寄驗證信</button>
           <span className="text-[var(--border)]">·</span>
-          <button onClick={() => { setSent(false); setResendMsg(''); setMode('signin') }} className="text-sm text-[var(--blue)] hover:underline">← 回登入</button>
+          <button onClick={() => { setSent(false); setResendMsg(''); setMode('signin') }} className="inline-flex items-center min-h-11 px-2 text-sm text-[var(--blue)] hover:underline pressable">← 回登入</button>
         </div>
         {resendMsg && <p className="text-xs text-[var(--text-2)]">{resendMsg}</p>}
       </div>
     )
   }
 
-  // 對齊 FIELD_BASE(W8-5):移除 outline 就要補 ring 當焦點指示;min-h-11=手機 44px 觸控目標
-  const input = 'w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm min-h-11 focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
-
   return (
     <form onSubmit={submit} className="space-y-3">
-      <div className="flex rounded-lg bg-[var(--surface-2)] p-1 text-sm mb-1">
+      <div className="flex rounded-full bg-[var(--surface-2)] p-1 text-sm mb-1">
         {[['signin', '登入'], ['signup', '註冊']].map(([m, label]) => (
           <button key={m} type="button" onClick={() => { setMode(m); setErr('') }}
-            className={`flex-1 py-1.5 min-h-11 rounded-md pressable ${mode === m ? 'bg-[var(--surface)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--text-2)]'}`}>
+            className={`flex-1 py-1.5 min-h-11 rounded-full pressable ${mode === m ? 'bg-[var(--surface)] shadow-sm font-medium text-[var(--blue-text)]' : 'text-[var(--text-2)]'}`}>
             {label}
           </button>
         ))}
@@ -162,33 +203,59 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
 
       {mode === 'signup' && (
         <>
-          <input className={input} placeholder="姓名" value={form.full_name} onChange={set('full_name')} required />
-          <input className={input} placeholder="公司 / 單位" value={form.company} onChange={set('company')} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <select className={input} value={form.org_type} onChange={set('org_type')}>
+          <FloatField label="姓名" placeholder="姓名" value={form.full_name} onChange={set('full_name')} required />
+          <FloatField label="公司 / 單位" placeholder="公司 / 單位" value={form.company} onChange={set('company')} />
+          <div className="relative">
+            {/* e2e-real 合約:registerViaUI 用 page.locator('select').first().selectOption(orgType)
+                選角色,所以角色卡之外保留一顆原生 select 與 form.org_type 雙向同步。
+                Playwright 的 actionable 檢查不接受 display:none → 用 1×1px 透明;
+                鍵盤與報讀器改走下方角色卡 → tabIndex=-1 + aria-hidden。 */}
+            <select value={form.org_type} onChange={set('org_type')} tabIndex={-1} aria-hidden="true"
+              className="absolute top-0 left-0 w-px h-px opacity-0">
               <option value="contractor">施工廠商</option>
               <option value="supervisor">監造</option>
               <option value="owner">機關</option>
             </select>
-            <input className={input} title="職稱只供顯示，不影響系統權限" placeholder="職稱（選填，不影響權限）" value={form.role} onChange={set('role')} />
+            <div className="grid sm:grid-cols-3 gap-3">
+              {ORG_CARDS.map((c) => {
+                const selected = form.org_type === c.value
+                return (
+                  // 選取態用 inset shadow 畫 2px 框而非加粗 border——border 換粗細會位移
+                  <button key={c.value} type="button" aria-pressed={selected}
+                    onClick={() => setForm((f) => ({ ...f, org_type: c.value }))}
+                    className={`relative rounded-xl border border-[var(--border-card)] p-3 pr-7 text-left min-h-11 pressable transition-colors
+                      ${selected ? 'bg-[var(--blue-tint)] shadow-[inset_0_0_0_2px_var(--blue)]' : 'hover:bg-[var(--surface-2)]'}`}>
+                    {selected && <MSym name="check_circle" fill size={18} className="absolute top-2 right-2 text-[var(--blue)]" />}
+                    <MSym name={c.icon} size={24} fill={selected} className={selected ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} />
+                    <div className="text-sm font-medium text-[var(--text)] mt-1.5">{c.title}</div>
+                    <div className="text-[11px] text-[var(--text-2)] mt-0.5 leading-snug">{c.does}</div>
+                    <div className="text-[11px] text-[var(--text-3)] mt-0.5 leading-snug">{c.boundary}</div>
+                  </button>
+                )
+              })}
+            </div>
           </div>
+          <FloatField label="職稱（選填，不影響權限）" title="職稱只供顯示，不影響系統權限" placeholder="職稱（選填，不影響權限）" value={form.role} onChange={set('role')} />
         </>
       )}
 
       {mode === 'forgot' && (
         <p className="text-xs text-[var(--text-2)]">輸入註冊時的 Email，我們會寄一封「重設密碼」連結給你。</p>
       )}
-      <input className={input} type="email" placeholder="Email" value={form.email} onChange={set('email')} required />
+      <FloatField label="Email" type="email" placeholder="Email" value={form.email} onChange={set('email')} required />
       {mode !== 'forgot' && (
-        <input className={input} type="password" placeholder="密碼（至少 8 碼，含大小寫英文與數字）" value={form.password} onChange={set('password')} required minLength={8} />
+        <>
+          <FloatField label="密碼" type="password" placeholder="密碼（至少 8 碼，含大小寫英文與數字）" value={form.password} onChange={set('password')} required minLength={8} />
+          {/* placeholder 已隱藏,密碼規則改在註冊時用 hint 講(登入不需要) */}
+          {mode === 'signup' && <p className="text-[11px] text-[var(--text-3)] -mt-1.5 pl-2.5">至少 8 碼，含大小寫英文與數字</p>}
+        </>
       )}
 
       <ErrorBanner msg={err} />
 
-      <button type="submit" disabled={loading}
-        className="w-full bg-[var(--primary)] text-white rounded-lg py-2.5 font-medium hover:bg-[var(--primary-hover)] pressable disabled:opacity-50">
+      <Button type="submit" size="lg" busy={loading} className="w-full">
         {loading ? '處理中…' : mode === 'signin' ? '登入' : mode === 'signup' ? '建立帳號並登入' : '寄送重設連結'}
-      </button>
+      </Button>
       <div className="text-center pt-0.5">
         {mode === 'signin' && (
           <button type="button" onClick={() => { setMode('forgot'); setErr('') }} className="inline-flex items-center min-h-11 px-2 text-xs text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">
@@ -206,6 +273,38 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
   )
 }
 
+// ── 設定新密碼(點重設信連結回來,recovery session 已生效)─────────────────
+// 標題與說明已上移到左欄 h1/desc,表單只留欄位本身。
+function ResetPasswordForm({ updatePassword }) {
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setErr('')
+    if (pw !== pw2) { setErr('兩次輸入的密碼不一致'); return }
+    setBusy(true)
+    const { error } = await updatePassword(pw)
+    setBusy(false)
+    if (error) setErr(friendlyError(error, '密碼更新失敗，請重試（重設連結可能已過期，可重寄一封）'))
+    // 成功:passwordRecovery 清除 → Login 的導向 effect 自動帶進工作區
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <FloatField label="新密碼" type="password" placeholder="新密碼（至少 8 碼，含大小寫英文與數字）" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} autoFocus />
+      <p className="text-[11px] text-[var(--text-3)] -mt-1.5 pl-2.5">至少 8 碼，含大小寫英文與數字</p>
+      <FloatField label="再輸入一次新密碼" type="password" placeholder="再輸入一次新密碼" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={8} />
+      <ErrorBanner msg={err} />
+      <Button type="submit" size="lg" busy={busy} className="w-full">
+        {busy ? '更新中…' : '設定新密碼並登入'}
+      </Button>
+    </form>
+  )
+}
+
 // ── Prototype 假登入（未設定 Supabase 時的 fallback）───────────────────
 function RolePicker({ setCurrentUser, navigate }) {
   const pick = (u) => {
@@ -218,11 +317,11 @@ function RolePicker({ setCurrentUser, navigate }) {
       <div className="space-y-2">
         {users.map((u) => (
           <button key={u.user_id} onClick={() => pick(u)}
-            className="w-full flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] hover:border-[var(--blue)] hover:bg-[var(--blue-tint)] pressable text-left">
-            <div className="w-10 h-10 rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] flex items-center justify-center font-bold">{u.name[0]}</div>
-            <div>
+            className="w-full flex items-center gap-3 p-3 rounded-xl border border-[var(--border-card)] bg-[var(--surface)] hover:bg-[var(--surface-2)] pressable text-left min-h-11">
+            <div className="w-10 h-10 rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] flex items-center justify-center font-bold shrink-0">{u.name[0]}</div>
+            <div className="min-w-0">
               <div className="font-medium text-[var(--text)]">{u.name}</div>
-              <div className="text-xs text-[var(--text-2)]">{u.label} · {u.company}</div>
+              <div className="text-xs text-[var(--text-2)] truncate">{u.label} · {u.company}</div>
             </div>
           </button>
         ))}

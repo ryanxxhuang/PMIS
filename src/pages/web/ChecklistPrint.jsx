@@ -9,6 +9,12 @@ const roc = (iso) => {
   return `${y - 1911} 年 ${m} 月 ${d} 日`
 }
 
+// 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
+// 次要鈕留在 slate 色階:紙面永遠是亮色,套 --text-* 在深色模式會變淺字壓白底。
+const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-sm:min-h-11'
+const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]`
+const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white border border-slate-300 text-slate-700 hover:bg-slate-50`
+
 // 自主檢查表(可列印/存 PDF)— 對齊公共工程自主檢查表通行格式
 export default function ChecklistPrint() {
   const { project, checklistTemplates, checklistRecords, currentUser } = useStore()
@@ -35,9 +41,9 @@ export default function ChecklistPrint() {
   let lastGroup = null
   return (
     <div className="min-h-screen bg-slate-200 print:bg-white py-6 print:py-0">
-      <div className="max-w-[210mm] mx-auto mb-3 flex justify-between print:hidden px-1">
-        <button onClick={() => navigate('/quality')} className="text-sm text-slate-600 hover:underline">← 返回品質查驗</button>
-        <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 text-sm font-medium bg-[var(--primary)] text-white rounded-lg px-4 py-1.5">
+      <div className="max-w-[210mm] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden px-1">
+        <button onClick={() => navigate('/quality')} className={TOOLBAR_SECONDARY}>← 返回品質查驗</button>
+        <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}>
           <MSym name="print" size={15} />列印 / 存 PDF
         </button>
       </div>

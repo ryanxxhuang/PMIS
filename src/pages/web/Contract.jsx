@@ -632,10 +632,12 @@ export default function Contract() {
 
       {/* ── 義務時程(approved deadline 相容 runtime)────────────────────── */}
       <Card title="義務時程">
+        {/* 逾期/將到期/已完成三個計數走共用 Badge:五語意色票全站同一份定義,
+            本頁不再自帶一套藥丸樣式(顏色與其他頁的紅/琥珀/綠會對不起來) */}
         <div className="flex flex-wrap gap-2">
-          <Pill color="red" n={counts.overdue} label="已逾期" />
-          <Pill color="amber" n={counts.soon} label="7 日內到期" />
-          <Pill color="green" n={counts.done} label="已完成" />
+          <Badge color="red">已逾期 {counts.overdue} 項</Badge>
+          <Badge color="amber">7 日內到期 {counts.soon} 項</Badge>
+          <Badge color="green">已完成 {counts.done} 項</Badge>
         </div>
         {groups.length === 0 && (
           <p className="text-xs text-[var(--text-3)] mt-3">尚無已核准的期限要求。上傳契約文件並前往「契約重點」；期限核准後會自動出現在這裡。</p>
@@ -739,9 +741,4 @@ export default function Contract() {
       ))}
     </div>
   )
-}
-
-function Pill({ color, n, label }) {
-  const c = { red: 'bg-[var(--red-tint)] text-[var(--red-text)]', amber: 'bg-[var(--amber-tint)] text-[var(--amber-text)]', green: 'bg-[var(--green-tint)] text-[var(--green-text)]' }[color]
-  return <span className={`text-xs px-3 py-1 rounded-full font-medium ${c}`}>{label} {n} 項</span>
 }

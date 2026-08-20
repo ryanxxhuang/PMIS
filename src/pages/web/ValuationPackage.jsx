@@ -8,6 +8,12 @@ import { collectEvidence, photoEvidenceLine } from '../../lib/evidence.js'
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
 
+// 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
+// 次要鈕留在 slate 色階,理由同下方元件註解——紙面固定亮色,不吃主題 token。
+const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-sm:min-h-11'
+const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]`
+const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white border border-slate-300 text-slate-700 hover:bg-slate-50`
+
 // 估驗請款佐證包(可列印 / 另存 PDF)——本期估驗明細 + AI 本期施工說明 + 佐證照片(按工項)。
 // 佐證照片吃 classify-site-photo 配好的工項標籤,估驗時自動歸位;不套 WebLayout,整頁即文件。
 // 配色刻意不吃主題 token(與 SiteLogPrint 同):整份是固定白紙,套 --text-*／--amber-text
@@ -146,19 +152,21 @@ export default function ValuationPackage() {
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
       {/* 工具列(列印時隱藏)*/}
-      <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between z-10">
-        <button onClick={() => navigate('/valuation')} className="text-sm text-slate-600 hover:text-slate-900 inline-flex items-center max-sm:min-h-11 px-1">← 返回估驗計價</button>
-        <div className="flex items-center gap-2">
-          {/* 批 B UX:估驗施工說明草稿功能關閉時藏按鈕、留簡短說明(說明欄仍可人工填) */}
+      <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-2 z-10">
+        <button onClick={() => navigate('/valuation')} className={TOOLBAR_SECONDARY}>← 返回估驗計價</button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 批 B UX:估驗施工說明草稿功能關閉時藏按鈕、留簡短說明(說明欄仍可人工填)。
+              AI 鈕沿用次要藥丸,只把字換成藍色標示這是 AI 動作;同樣走固定色階而非
+              --blue-text——深色模式下 token 會變成淺字壓白底。 */}
           {aiEnabled('valuation.summary') ? (
             <button onClick={genSummary} disabled={aiBusy}
-              className="text-sm text-[var(--blue-text)] border border-[var(--border)] rounded-lg px-3 py-2 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50 max-sm:min-h-11">
+              className={`${TOOLBAR_BTN} bg-white border border-slate-300 text-blue-700 hover:bg-slate-50 disabled:opacity-50`}>
               <MSym name="auto_awesome" size={15} />{aiBusy ? 'AI 產生中…' : '重新產生施工說明'}
             </button>
           ) : (
             <span className="text-xs text-slate-600">AI 施工說明未啟用，請直接編輯下方說明欄</span>
           )}
-          <button onClick={() => window.print()} className="bg-[var(--primary)] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--primary-hover)] inline-flex items-center gap-1.5 max-sm:min-h-11">
+          <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}>
             <MSym name="print" size={15} />列印 / 另存 PDF
           </button>
         </div>

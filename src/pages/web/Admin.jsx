@@ -49,10 +49,12 @@ const PRESETS = [
   { id: 'custom', label: '自訂' },
 ]
 
-const TH = 'text-left font-medium py-2 px-3 whitespace-nowrap'
-const THR = 'text-right font-medium py-2 px-3 whitespace-nowrap'
-const TD = 'py-2 px-3'
-const TDR = 'py-2 px-3 text-right num whitespace-nowrap'
+// 表頭 11px/500/text-2、內文 13px:對齊 Workspace 表格慣例(README 字級表)。
+// 色寫在 th 自身而非 thead tr——同一列的其他 class 是既有結構,只做字級/色微調。
+const TH = 'text-left font-medium text-[11px] text-[var(--text-2)] py-2 px-3 whitespace-nowrap'
+const THR = 'text-right font-medium text-[11px] text-[var(--text-2)] py-2 px-3 whitespace-nowrap'
+const TD = 'py-2 px-3 text-[13px]'
+const TDR = 'py-2 px-3 text-[13px] text-right num whitespace-nowrap'
 const EMPTY_MSG = '這段期間還沒有 AI 使用紀錄。'
 
 export default function Admin() {
@@ -149,14 +151,16 @@ export default function Admin() {
         subtitle="全站 AI 用量與成本、功能開關、專案方案。權限由資料庫端 RPC 逐一把關;此頁僅平台管理員可見。"
       />
 
-      {/* 平台管理的頁內功能分區，不是側欄路由子頁。 */}
-      <div className="flex items-center gap-1 border-b border-[var(--border-2)] overflow-x-auto" role="tablist" aria-label="平台管理">
+      {/* 平台管理的頁內功能分區，不是側欄路由子頁。
+          視覺與工作面 chips(PageTabs)刻意同一套,但這裡是真的 tab(不換路由),
+          所以 role=tablist/aria-selected 的機制不動,只換皮。 */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5" role="tablist" aria-label="平台管理">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-            className={`px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap shrink-0 transition-colors ${
+            className={`h-8 max-sm:min-h-11 shrink-0 inline-flex items-center px-3.5 rounded-lg text-[13px] font-medium whitespace-nowrap pressable ${
               tab === t.id
-                ? 'border-[var(--blue)] text-[var(--blue-text)] font-semibold'
-                : 'border-transparent text-[var(--text-2)] hover:text-[var(--text)]'
+                ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
+                : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
             }`}>
             {t.label}
           </button>
@@ -166,13 +170,15 @@ export default function Admin() {
       {/* 期間選擇:用量分頁共用;開關/方案分頁與期間無關,不顯示避免誤導 */}
       {usageTab && (
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-[var(--border)] overflow-hidden">
+          {/* M3 分段按鈕:選取態沿用 chips 的淺藍底深藍字,與上方分頁同一組色,
+              使用者一眼看得出「這兩排都是切換、不是動作」。 */}
+          <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
             {PRESETS.map((p) => (
               <button key={p.id} onClick={() => setPreset(p.id)}
-                className={`px-3 py-1.5 text-sm transition-colors ${
+                className={`h-8 max-sm:min-h-11 px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors ${
                   preset === p.id
-                    ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-semibold'
-                    : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'
+                    ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
+                    : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
                 }`}>
                 {p.label}
               </button>
@@ -420,10 +426,11 @@ function Toggle({ checked, disabled, onChange, label }) {
   return (
     <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled}
       onClick={onChange}
-      className={`relative shrink-0 w-9 h-5 rounded-full transition-colors disabled:opacity-40 disabled:cursor-wait
+      className={`relative shrink-0 w-10 h-[22px] rounded-full transition-colors disabled:opacity-40 disabled:cursor-wait
         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)]
         ${checked ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`}>
-      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : ''}`} />
+      {/* M3 尺寸:軌 40×22、滑點 18 且上下左右各留 2 → 開啟位移 40−2−18−2 = 18px */}
+      <span className={`absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-[18px]' : ''}`} />
     </button>
   )
 }
