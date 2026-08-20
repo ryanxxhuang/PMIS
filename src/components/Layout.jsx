@@ -37,21 +37,23 @@ function ProjectSwitcher() {
     prevOpen.current = open
   }, [open])
 
+  // Workspace 專案 chip:folder_open + 專案名 + 下拉箭頭(demo/單專案時純顯示)
+  const chipClass = 'flex items-center gap-1.5 min-w-0 h-10 max-sm:min-h-11 rounded-full bg-[var(--surface-2)] pl-3 pr-2'
   if (!isSupabaseConfigured || !currentProject) {
     return (
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="hidden lg:inline text-[var(--text-3)] text-xs shrink-0">專案</span>
-        <span title={project.project_name} className="font-medium truncate max-w-[24vw] sm:max-w-[36vw] md:max-w-[280px] text-[var(--text)]">{project.project_name}</span>
+      <div className={chipClass}>
+        <MSym name="folder_open" size={18} className="text-[var(--text-2)]" />
+        <span title={project.project_name} className="text-sm truncate max-w-[24vw] sm:max-w-[36vw] md:max-w-[280px] text-[var(--text)]">{project.project_name}</span>
       </div>
     )
   }
   return (
     <div className="relative min-w-0">
       <button ref={triggerRef} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu"
-        className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2 max-sm:min-h-11 pressable">
-        <span className="hidden lg:inline text-[var(--text-3)] text-xs shrink-0">專案</span>
-        <span title={currentProject.project_name} className="font-medium truncate max-w-[24vw] sm:max-w-[36vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
-        <MSym name="expand_more" size={16} className="text-[var(--text-2)]" />
+        className={`${chipClass} hover:bg-[var(--border-2)] pressable`}>
+        <MSym name="folder_open" size={18} className="text-[var(--text-2)]" />
+        <span title={currentProject.project_name} className="text-sm truncate max-w-[24vw] sm:max-w-[36vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
+        <MSym name="arrow_drop_down" size={20} className="text-[var(--text-2)]" />
       </button>
       {open && (
         <>
@@ -98,6 +100,53 @@ const THEME_META = {
   system: { icon: 'brightness_auto', label: '跟隨系統' },
 }
 
+// 全域搜尋:Gmail 式藥丸「鈕」,點開才出現真 input(浮層)。
+// 刻意不做常駐 input——監造唯讀頁有「全頁 input 計數=0」的 e2e 合約,
+// TopBar 也是頁面的一部分;送出即導 /agent 代問(問 PMIS 是全域問答入口,不另建搜尋資料流)。
+function GlobalSearch() {
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const inputRef = useRef(null)
+  const btnRef = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); btnRef.current?.focus() } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+  useEffect(() => { if (open) inputRef.current?.focus() }, [open])
+  const submit = (e) => {
+    e.preventDefault()
+    const text = q.trim()
+    if (!text) return
+    setOpen(false); setQ('')
+    navigate('/agent', { state: { q: text } })
+  }
+  return (
+    <div className="relative flex-1 max-w-[560px] min-w-0 hidden md:block">
+      <button ref={btnRef} onClick={() => setOpen(true)} aria-label="搜尋(問 PMIS 代查)" title="搜尋(問 PMIS 代查)"
+        className="w-full h-11 rounded-full bg-[var(--g-search)] hover:bg-[var(--g-search-h)] flex items-center gap-2.5 px-4 pressable">
+        <MSym name="search" size={20} className="text-[var(--text-2)]" />
+        <span className="flex-1 text-left text-sm text-[var(--text-2)] truncate">搜尋工項、送審、缺失、契約條文……</span>
+        <MSym name="tune" size={20} className="text-[var(--text-2)]" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <form onSubmit={submit}
+            className="absolute inset-x-0 top-0 z-20 h-11 rounded-full bg-[var(--surface)] [box-shadow:var(--shadow-md)] flex items-center gap-2.5 px-4 enter-menu">
+            <MSym name="search" size={20} className="text-[var(--text-2)]" />
+            <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
+              placeholder="問 PMIS:輸入問題,Enter 代查本案資料…"
+              className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-[var(--text)] placeholder:text-[var(--text-3)]" />
+          </form>
+        </>
+      )}
+    </div>
+  )
+}
+
 function TopBar({ onMenu, scrolled, menuBtnRef }) {
   const { currentUser, logout } = useStore()
   const navigate = useNavigate()
@@ -107,32 +156,36 @@ function TopBar({ onMenu, scrolled, menuBtnRef }) {
     setThemeMode(next)
     setMode(next)
   }
+  const base = import.meta.env.BASE_URL
   return (
-    <header data-scrolled={scrolled} className="chrome-glass chrome-edge fixed top-0 inset-x-0 z-40 h-16 flex items-center justify-between px-3 md:px-5 print:hidden">
-      <div className="flex items-center gap-2 md:gap-4 min-w-0">
+    <header data-scrolled={scrolled} className="chrome-glass chrome-edge fixed top-0 inset-x-0 z-40 h-16 flex items-center gap-3 md:gap-5 px-3 md:px-4 print:hidden">
+      <div className="flex items-center gap-2 md:gap-3 min-w-0 shrink-0">
         {/* 44px 觸控目標:漢堡鈕只在手機出現,直接升到 w-11;ref 供抽屜關閉時焦點還原 */}
         <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name="menu" size={22} /></button>
-        <NavLink to={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} aria-label="PMIS 公共工程首頁" className="flex items-baseline gap-2 shrink-0">
-          <span className="font-bold text-lg tracking-tight text-[var(--text)]">PM<span className="text-[var(--accent-text)]">IS</span></span>
-          <span className="hidden xl:inline text-[11px] text-[var(--text-3)]">公共工程</span>
+        <NavLink to={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} aria-label="PMIS 公共工程首頁" className="flex items-center gap-1.5 shrink-0">
+          <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-6 h-6 dark:hidden" />
+          <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-6 h-6 hidden dark:block" />
+          <span className="text-xl font-medium tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue)]">.ai</span></span>
         </NavLink>
-        <div className="h-6 w-px bg-[var(--border)] shrink-0 hidden sm:block" />
         <ProjectSwitcher />
       </div>
-      <div className="flex items-center gap-1 sm:gap-2 md:gap-3 shrink-0">
-        <NavLink to="/agent" aria-label="問 PMIS" title="問 PMIS"
-          className={({ isActive }) => `h-9 inline-flex items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'}`}>
-          <MSym name="auto_awesome" size={18} />
-          <span className="hidden lg:inline">問 PMIS</span>
+      <GlobalSearch />
+      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-auto">
+        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-10 h-10 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name={THEME_META[mode].icon} size={20} /></button>
+        <NavLink to="/alerts" aria-label="提醒中心" title="提醒中心"
+          className={({ isActive }) => `w-10 h-10 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center pressable ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+          <MSym name="notifications" size={20} />
         </NavLink>
-        <div className="text-right leading-tight hidden sm:block">
-          <div className="text-sm text-[var(--text)]">{currentUser?.name}</div>
-          <div className="text-[11px] text-[var(--text-2)]">{currentUser?.label}</div>
+        {/* 帳戶區(兩行):登入者本人,沒有角色切換——身分在註冊時決定 */}
+        <div className="hidden sm:flex items-center gap-2 pl-1.5 pr-2 py-1 ml-0.5 rounded-full">
+          <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center font-medium text-[13px] text-[var(--primary-fg)]">{currentUser?.name?.[0]}</div>
+          <div className="leading-tight text-left hidden lg:block">
+            <div className="text-[12.5px] font-medium text-[var(--text)] whitespace-nowrap">{currentUser?.name}</div>
+            <div className="text-[11px] text-[var(--text-2)] whitespace-nowrap">{currentUser?.label}</div>
+          </div>
         </div>
-        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-9 h-9 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name={THEME_META[mode].icon} size={20} /></button>
-        <div className="hidden sm:flex w-9 h-9 rounded-full bg-[var(--primary)] items-center justify-center font-medium text-sm text-white">{currentUser?.name?.[0]}</div>
         {/* 44px 觸控目標:純文字鈕撐高、負 margin 吸收 padding,視覺間距不變 */}
-        <button onClick={async () => { await logout(); navigate('/login') }} className="inline-flex items-center h-11 px-2 -mx-2 text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
+        <button onClick={async () => { await logout(); navigate('/login') }} className="inline-flex items-center h-11 px-2 text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
       </div>
     </header>
   )
@@ -183,7 +236,7 @@ export function WebLayout({ children }) {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
-  const { currentUser, can, workItemsSource, workItemsError, retryWorkItems, domainLoadError, retryDomainLoad, isPlatformAdmin } = useStore()
+  const { currentUser, can, workItemsSource, workItemsError, retryWorkItems, domainLoadError, retryDomainLoad, isPlatformAdmin, project, demoMode } = useStore()
   const { pathname } = useLocation()
   // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——非正式模式的
   // admin(專案建立者)看得到全部;正式模式後回歸自己的角色視角。
@@ -229,15 +282,26 @@ export function WebLayout({ children }) {
             <button onClick={setDesktopCollapsed}
               aria-label={sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'}
               title={sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'}
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] pressable">
+              className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] pressable">
               <MSym name={sidebarCollapsed ? "left_panel_open" : "left_panel_close"} size={20} />
             </button>
           </div>
+          {/* 問 PMIS:佔 Gemini 在 Workspace 的位置(白底浮起鈕);自 TopBar 移入。
+              aria-label 恆掛,收合成純圖示時 accessible name 不變。 */}
+          <NavLink to="/agent" onClick={() => setMenuOpen(false)} aria-label="問 PMIS" title="問 PMIS"
+            className={({ isActive }) => `mx-3 mt-2 md:mt-0 mb-3 h-11 rounded-[22px] flex items-center gap-2.5 px-4 text-sm font-medium shrink-0 pressable
+              ${sidebarCollapsed ? 'md:mx-2 md:px-0 md:justify-center' : ''}
+              ${isActive
+                ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
+                : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border-card)] [box-shadow:var(--shadow-sm)] hover:[box-shadow:var(--shadow-md)]'}`}>
+            <MSym name="auto_awesome" size={20} className="text-[var(--ai)]" />
+            <span className={sidebarCollapsed ? 'md:hidden' : ''}>問 PMIS</span>
+          </NavLink>
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
             {visibleGroups.map((g) => (
               <div key={g.title} className="mb-2">
-                <div className={`px-4 pt-4 pb-1.5 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
-                  <span className="text-xs font-medium text-[var(--text-3)]">{g.title}</span>
+                <div className={`px-4 pt-3 pb-1.5 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
+                  <span className="text-[11px] font-medium text-[var(--text-2)]">{g.title}</span>
                 </div>
                 {g.items.map((n) => {
                   // 工作面與角色子頁都來自 navConfig，不在 Layout 重寫清單。
@@ -246,26 +310,28 @@ export function WebLayout({ children }) {
                   const expanded = expandedWorkbenches.has(n.to)
                   return (
                     <div key={n.to}>
-                      <div className={`mx-2 my-0.5 rounded-xl transition-colors flex items-center ${
+                      {/* Workspace 藥丸:貼齊左緣、右側全圓(0 100px 100px 0);
+                          選取=淺藍底深藍字+FILL 1 圖示。收合時縮成置中圓形。 */}
+                      <div className={`mr-4 my-0.5 rounded-r-full transition-colors flex items-center ${
                         itemActive && (!n.tabs || !expanded)
-                          ? 'bg-[var(--surface-2)] text-[var(--text)] font-semibold'
+                          ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
                           : itemActive
-                            ? 'text-[var(--text)] font-semibold'
+                            ? 'text-[var(--text)] font-medium'
                             : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
-                      } ${sidebarCollapsed ? `md:justify-center ${itemActive ? 'md:bg-[var(--surface-2)] md:text-[var(--text)]' : ''}` : ''}`}>
+                      } ${sidebarCollapsed ? `md:mx-2 md:rounded-full md:justify-center ${itemActive ? 'md:bg-[var(--blue-tint)] md:text-[var(--blue-text)]' : ''}` : ''}`}>
                         <NavLink to={n.to} onClick={() => setMenuOpen(false)} title={sidebarCollapsed ? n.label : undefined}
                           aria-label={sidebarCollapsed ? n.label : undefined}
-                          className={() => `min-w-0 min-h-11 flex-1 flex items-center gap-2.5 px-3 text-sm rounded-xl ${
-                            sidebarCollapsed ? 'md:flex-none md:w-12 md:justify-center md:px-0' : ''
+                          className={() => `min-w-0 min-h-11 flex-1 flex items-center gap-3.5 pl-4 pr-3 text-sm rounded-r-full ${
+                            sidebarCollapsed ? 'md:flex-none md:w-12 md:justify-center md:px-0 md:rounded-full' : ''
                           }`}>
-                          <MSym name={n.icon} size={20} fill={itemActive} className="opacity-80" />
+                          <MSym name={n.icon} size={20} fill={itemActive} className={itemActive ? '' : 'opacity-80'} />
                           <span className={sidebarCollapsed ? 'md:hidden' : ''}>{n.label}</span>
                         </NavLink>
                         {n.tabs && (
                           <button type="button" onClick={() => toggleWorkbench(n.to)}
                             aria-expanded={expanded} aria-controls={`nav-children-${n.to.slice(1)}`}
                             aria-label={`${expanded ? '收合' : '展開'}${n.label}子頁`}
-                            className={`w-11 h-11 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:bg-black/5 hover:text-[var(--text)] ${sidebarCollapsed ? 'md:hidden' : ''}`}>
+                            className={`w-11 h-11 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-black/5 hover:text-[var(--text)] ${sidebarCollapsed ? 'md:hidden' : ''}`}>
                             <MSym name={expanded ? "expand_more" : "chevron_right"} size={18} />
                           </button>
                         )}
@@ -274,9 +340,9 @@ export function WebLayout({ children }) {
                         <div id={`nav-children-${n.to.slice(1)}`} className={`pb-1 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
                           {n.tabs.map((tab) => (
                             <NavLink key={tab.to} to={tab.to} onClick={() => setMenuOpen(false)}
-                              className={({ isActive }) => `min-h-11 mx-2 pl-10 pr-3 rounded-xl flex items-center text-sm transition-colors ${
+                              className={({ isActive }) => `min-h-11 mr-4 pl-[54px] pr-3 rounded-r-full flex items-center text-sm transition-colors ${
                                 isActive
-                                  ? 'bg-[var(--surface-2)] text-[var(--text)] font-medium'
+                                  ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
                                   : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
                               }`}>
                               {tab.label}
@@ -290,6 +356,13 @@ export function WebLayout({ children }) {
               </div>
             ))}
           </nav>
+          {/* 底部模式列:正式模式=稽核中(綠);未開正式=準備模式;demo=示範模式 */}
+          <div className={`shrink-0 px-4 py-3 flex items-center gap-2 text-xs text-[var(--text-2)] ${sidebarCollapsed ? 'md:justify-center md:px-0' : ''}`}>
+            <MSym name="verified_user" size={16} className={project?.formal_mode ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'} />
+            <span className={sidebarCollapsed ? 'md:hidden' : ''}>
+              {demoMode ? '示範模式' : project?.formal_mode ? '正式模式 · 稽核中' : '準備模式'}
+            </span>
+          </div>
       </aside>
       <main className={`${sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'} transition-[margin] duration-300 p-4 md:p-6 pt-20 md:pt-[88px] min-w-0 print:ml-0 print:pt-0`}>
           {workItemsSource === 'error' && (

@@ -9,6 +9,10 @@
   --radius-2xl: 12px;
 }
 
+/* dark: 變體綁 .dark class(theme.js 三態都經由它),不是 prefers-color-scheme——
+   否則手動選亮色時 dark: utilities 仍跟著 OS 走,兩套判定打架。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   /* One harmonized family for both Chinese and Latin — avoids the mixed-metrics look.
      "Google Sans Text" 只在使用者本機有裝時吃到(非公開授權不 self-host);

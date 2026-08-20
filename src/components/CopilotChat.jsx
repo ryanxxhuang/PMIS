@@ -41,12 +41,19 @@ export function replyMessage(res, deterministic) {
 // fill=false:頁面版,訊息區以 minH/maxH 內部捲動。
 // onAsk:統一的問答函式 (text) => Promise<{ answer, sources?, steps? } | { fallback: true } | { error }>
 // ——呼叫端自己決定接 agent-run 與否;分流規則見 replyMessage。
-export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill = false }) {
+// initialQuestion:App bar 全域搜尋送出後導來 /agent 時帶的問句,掛載即代問一次
+// (router state 傳遞,不新增 store 資料流)。ref 擋 StrictMode 的 double-effect 重問。
+export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill = false, initialQuestion = null }) {
   const [msgs, setMsgs] = useState([])
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const scrollRef = useRef(null)
   useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy])
+  const askedInitial = useRef(false)
+  useEffect(() => {
+    if (initialQuestion && !askedInitial.current) { askedInitial.current = true; ask(initialQuestion) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuestion])
 
   // 確定性回退(demo/未設 Supabase/AI 服務失敗):關鍵字比對答本案資料
   const fallbackAnswer = (text) => {
@@ -79,7 +86,7 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
           <div key={i} className={`enter-row ${m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}`}>
             <div className="max-w-[85%] min-w-0">
               <div className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-line ${
-                m.role === 'user' ? 'bg-[var(--primary)] text-white rounded-br-sm'
+                m.role === 'user' ? 'bg-[var(--primary)] text-[var(--primary-fg)] rounded-br-sm'
                   : m.mode === 'error' ? 'bg-[var(--red-tint,transparent)] border border-[var(--red-text)]/25 text-[var(--red-text)] rounded-bl-sm'
                     : 'bg-[var(--surface-2)] text-[var(--text)] rounded-bl-sm'}`}>
                 {m.role === 'ai' ? stripMd(m.text) : m.text}

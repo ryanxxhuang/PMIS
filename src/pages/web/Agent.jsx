@@ -4,7 +4,7 @@
 // W8-2B:待辦清單已整個交還「今日待辦」頁。這裡只留一個沒有件數的連結——
 // 顯示件數就得再載一份聚合,兩頁的數字遲早對不起來(W8-2A §2.1、§5)。
 import { useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input } from '../../components/ui.jsx'
 import { useStore } from '../../store.jsx'
@@ -314,6 +314,8 @@ export default function Agent() {
   const { data, facts, imported, org } = useAssistantData()
   const { runAgent, aiEnabled } = useStore()
   const agentOn = aiEnabled('agent.run') // 批 B UX:功能關閉時藏對話入口(真正的閘門在伺服器端)
+  // App bar 全域搜尋送出後帶問句導來(router state,重整即消失,不會重複代問)
+  const initialQuestion = useLocation().state?.q || null
 
   // 角色只用於顯示(紅線:權限一律以伺服器為準);agent-run 回傳的 role 覆蓋前端推算
   const [serverRole, setServerRole] = useState(null)
@@ -353,7 +355,7 @@ export default function Agent() {
         <Card title="跟你的 agent 說" bodyClass="p-0" className="order-2 lg:order-1"
           action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="smart_toy" size={12} />會自己查本案資料</span>}>
           {agentOn
-            ? <CopilotChat data={data} onAsk={onAsk} minH={360} maxH={560} />
+            ? <CopilotChat data={data} onAsk={onAsk} minH={360} maxH={560} initialQuestion={initialQuestion} />
             : <div className="p-4"><Empty>此 AI 功能未啟用（AI Agent 主控台）。今日待辦與草稿收件匣仍可使用；如需開通請聯絡系統管理者。</Empty></div>}
         </Card>
         <div className="space-y-5 order-1 lg:order-2 min-w-0">
