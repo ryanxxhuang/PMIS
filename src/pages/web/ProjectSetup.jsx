@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Button, Field, ErrorBanner, FIELD_BASE } from '../../components/ui.jsx'
 
 // 正式站一律留空,用 placeholder 當範例提示;不預填任何真實案值,避免使用者只改名就
 // 建出錯的契約/機關/廠商(P1-04)。施工廠商也不自動帶登入者公司。
@@ -17,7 +17,7 @@ export default function ProjectSetup() {
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
-  const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
+  const input = FIELD_BASE // 收斂:不再抄 ui.jsx 的 class 字串
 
   const submit = async (e) => {
     e.preventDefault()

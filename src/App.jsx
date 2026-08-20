@@ -4,6 +4,7 @@ import { useStore } from './store.jsx'
 import { WebLayout } from './components/Layout.jsx'
 import { routeAllowed, routeRegistry } from './lib/navConfig.js'
 import { ConfirmHost } from './components/confirm.jsx'
+import { SnackbarHost } from './components/snackbar.jsx'
 
 import Login from './pages/Login.jsx'
 import ProjectSetup from './pages/web/ProjectSetup.jsx'
@@ -160,6 +161,7 @@ export default function App() {
   return (
     <>
     <ConfirmHost />
+    <SnackbarHost />
     <Suspense fallback={<PageLoading />}>
     <Routes>
       {appRoutes.map((route) => (
