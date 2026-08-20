@@ -246,7 +246,7 @@ export default function Dashboard() {
           {/* 指標卡列(對齊原型 dash):原「進度摘要一條帶」收斂成四張 Stat。
               落後/超前門檻與文案照舊,只是從色帶搬進「累計實際進度」卡的小字;
               落後改吃 amber 語意色票(不再借品牌 accent 當警示色) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             <Stat label="累計實際進度" value={`${completion.toFixed(1)}%`}
               sub={plannedNow != null ? (
                 <span className="inline-flex flex-wrap items-center gap-1.5">

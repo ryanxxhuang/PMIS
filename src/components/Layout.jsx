@@ -4,11 +4,15 @@ import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
 import { visibleNavGroups } from '../lib/navConfig.js'
 import CopilotFab from './CopilotFab.jsx'
+import BottomNav from './BottomNav.jsx'
 import { MSym } from './icons.jsx'
 import { ErrorBanner } from './ui.jsx'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
+
+// rail 短標籤(顯示層;navConfig 是路由/權限單一真相,不放表現欄位)
+const RAIL_SHORT = { 今日待辦: '待辦', 現場與品質: '現場', 審查與協作: '審查', 進度與金流: '金流', 文件與結案: '文件', 專案: '專案', 平台管理: '平台' }
 
 const initialSidebarCollapsed = () => {
   try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1' } catch { return false }
@@ -227,6 +231,17 @@ export function WebLayout({ children }) {
     prevMenuOpen.current = false
   }, [menuOpen])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
+  // 平板(768–1279)一律 icon rail:collapsed 是「衍生值」不回寫 localStorage,
+  // 平板逛一圈不會污染桌機(≥1280)的收合偏好;Playwright 預設 1280×720 落在記憶分支。
+  const [isTablet, setIsTablet] = useState(() => window.matchMedia?.('(min-width: 768px) and (max-width: 1279.98px)').matches ?? false)
+  useEffect(() => {
+    const mq = window.matchMedia?.('(min-width: 768px) and (max-width: 1279.98px)')
+    if (!mq) return
+    const onChange = () => setIsTablet(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  const collapsed = isTablet || sidebarCollapsed
   // 工作面預設收合；展開狀態只保留在本次瀏覽，不製造另一份持久導覽設定。
   const [expandedWorkbenches, setExpandedWorkbenches] = useState(() => new Set())
   // scroll edge:內容捲到 chrome 底下才浮出界線(置頂時頂欄與背景齊平)
@@ -270,7 +285,7 @@ export function WebLayout({ children }) {
           否則頂欄 chrome-glass 的 backdrop-filter 自成 stacking context,專案下拉
           整包被壓在側欄底下——誤點下拉選項會直接觸發側欄導覽而換頁(ISSUE-9)。 */}
       <aside
-        className={`chrome-glass w-72 ${sidebarCollapsed ? 'md:w-16' : 'md:w-64'} border-r border-[var(--border-card)] flex flex-col print:hidden
+        className={`chrome-glass w-72 ${collapsed ? 'md:w-20' : 'md:w-64'} border-r border-[var(--border-card)] flex flex-col print:hidden
           fixed top-16 bottom-0 left-0 z-[55] md:z-30 transition-[width,transform,visibility] duration-300 [transition-timing-function:var(--ease-drawer)]
           md:translate-x-0
           ${menuOpen ? 'translate-x-0' : '-translate-x-full max-md:invisible'}`}
@@ -279,7 +294,7 @@ export function WebLayout({ children }) {
             <span className="text-sm font-semibold text-[var(--text)]">功能選單</span>
             <button ref={drawerCloseRef} onClick={() => setMenuOpen(false)} aria-label="關閉選單" className="w-11 h-11 -my-1 -mr-1 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><MSym name="close" size={20} /></button>
           </div>
-          <div className={`hidden md:flex h-12 shrink-0 items-center ${sidebarCollapsed ? 'justify-center' : 'justify-end px-3'}`}>
+          <div className={`hidden xl:flex h-12 shrink-0 items-center ${collapsed ? 'justify-center' : 'justify-end px-3'}`}>
             <button onClick={setDesktopCollapsed}
               aria-label={sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'}
               title={sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'}
@@ -291,17 +306,17 @@ export function WebLayout({ children }) {
               aria-label 恆掛,收合成純圖示時 accessible name 不變。 */}
           <NavLink to="/agent" onClick={() => setMenuOpen(false)} aria-label="問 PMIS" title="問 PMIS"
             className={({ isActive }) => `mx-3 mt-2 md:mt-0 mb-3 h-11 rounded-[22px] flex items-center gap-2.5 px-4 text-sm font-medium shrink-0 pressable
-              ${sidebarCollapsed ? 'md:mx-2 md:px-0 md:justify-center' : ''}
+              ${collapsed ? 'md:mx-auto md:w-14 md:px-0 md:justify-center md:mt-3' : ''}
               ${isActive
                 ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
                 : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border-card)] [box-shadow:var(--shadow-sm)] hover:[box-shadow:var(--shadow-md)]'}`}>
             <MSym name="auto_awesome" size={20} className="text-[var(--ai)]" />
-            <span className={sidebarCollapsed ? 'md:hidden' : ''}>問 PMIS</span>
+            <span className={collapsed ? 'md:hidden' : ''}>問 PMIS</span>
           </NavLink>
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
             {visibleGroups.map((g) => (
               <div key={g.title} className="mb-2">
-                <div className={`px-4 pt-3 pb-1.5 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
+                <div className={`px-4 pt-3 pb-1.5 ${collapsed ? 'md:hidden' : ''}`}>
                   <span className="text-[11px] font-medium text-[var(--text-2)]">{g.title}</span>
                 </div>
                 {g.items.map((n) => {
@@ -319,26 +334,31 @@ export function WebLayout({ children }) {
                           : itemActive
                             ? 'text-[var(--text)] font-medium'
                             : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
-                      } ${sidebarCollapsed ? `md:mx-2 md:rounded-full md:justify-center ${itemActive ? 'md:bg-[var(--blue-tint)] md:text-[var(--blue-text)]' : ''}` : ''}`}>
-                        <NavLink to={n.to} onClick={() => setMenuOpen(false)} title={sidebarCollapsed ? n.label : undefined}
-                          aria-label={sidebarCollapsed ? n.label : undefined}
+                      } ${collapsed ? 'md:mx-0 md:mr-0 md:my-1 md:rounded-none md:bg-transparent md:justify-center' : ''}`}>
+                        <NavLink to={n.to} onClick={() => setMenuOpen(false)} title={collapsed ? n.label : undefined}
+                          aria-label={collapsed ? n.label : undefined}
                           className={() => `min-w-0 min-h-11 flex-1 flex items-center gap-3.5 pl-4 pr-3 text-sm rounded-r-full ${
-                            sidebarCollapsed ? 'md:flex-none md:w-12 md:justify-center md:px-0 md:rounded-full' : ''
+                            collapsed ? 'md:flex-none md:w-16 md:flex-col md:gap-1 md:justify-center md:px-0 md:py-1 md:rounded-2xl' : ''
                           }`}>
-                          <MSym name={n.icon} size={20} fill={itemActive} className={itemActive ? '' : 'opacity-80'} />
-                          <span className={sidebarCollapsed ? 'md:hidden' : ''}>{n.label}</span>
+                          {/* rail(collapsed):56×32 藥丸圖示+10.5px 短標直排(README 平板規格) */}
+                          <span className={`flex items-center justify-center ${collapsed ? `md:w-14 md:h-8 md:rounded-full ${itemActive ? 'md:bg-[var(--blue-tint)]' : ''}` : ''}`}>
+                            <MSym name={n.icon} size={20} fill={itemActive} className={itemActive ? 'text-[var(--blue-text)]' : 'opacity-80'} />
+                          </span>
+                          {/* 手機抽屜永遠全名(collapsed 只影響 md+ 的 rail);rail 用短標 */}
+                          <span className={collapsed ? 'md:hidden' : ''}>{n.label}</span>
+                          {collapsed && <span className="hidden md:block text-[10.5px] leading-none font-medium">{RAIL_SHORT[n.label] || n.label}</span>}
                         </NavLink>
                         {n.tabs && (
                           <button type="button" onClick={() => toggleWorkbench(n.to)}
                             aria-expanded={expanded} aria-controls={`nav-children-${n.to.slice(1)}`}
                             aria-label={`${expanded ? '收合' : '展開'}${n.label}子頁`}
-                            className={`w-11 h-11 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-black/5 hover:text-[var(--text)] ${sidebarCollapsed ? 'md:hidden' : ''}`}>
+                            className={`w-11 h-11 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-black/5 hover:text-[var(--text)] ${collapsed ? 'md:hidden' : ''}`}>
                             <MSym name={expanded ? "expand_more" : "chevron_right"} size={18} />
                           </button>
                         )}
                       </div>
                       {n.tabs && expanded && (
-                        <div id={`nav-children-${n.to.slice(1)}`} className={`pb-1 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
+                        <div id={`nav-children-${n.to.slice(1)}`} className={`pb-1 ${collapsed ? 'md:hidden' : ''}`}>
                           {n.tabs.map((tab) => (
                             <NavLink key={tab.to} to={tab.to} onClick={() => setMenuOpen(false)}
                               className={({ isActive }) => `min-h-11 mr-4 pl-[54px] pr-3 rounded-r-full flex items-center text-sm transition-colors ${
@@ -358,14 +378,14 @@ export function WebLayout({ children }) {
             ))}
           </nav>
           {/* 底部模式列:正式模式=稽核中(綠);未開正式=準備模式;demo=示範模式 */}
-          <div className={`shrink-0 px-4 py-3 flex items-center gap-2 text-xs text-[var(--text-2)] ${sidebarCollapsed ? 'md:justify-center md:px-0' : ''}`}>
+          <div className={`shrink-0 px-4 py-3 flex items-center gap-2 text-xs text-[var(--text-2)] ${collapsed ? 'md:justify-center md:px-0' : ''}`}>
             <MSym name="verified_user" size={16} className={project?.formal_mode ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'} />
-            <span className={sidebarCollapsed ? 'md:hidden' : ''}>
+            <span className={collapsed ? 'md:hidden' : ''}>
               {demoMode ? '示範模式' : project?.formal_mode ? '正式模式 · 稽核中' : '準備模式'}
             </span>
           </div>
       </aside>
-      <main className={`${sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'} transition-[margin] duration-300 p-4 md:p-6 pt-20 md:pt-[88px] min-w-0 print:ml-0 print:pt-0`}>
+      <main className={`${collapsed ? 'md:ml-20' : 'md:ml-64'} transition-[margin] duration-300 p-4 md:p-6 pt-20 md:pt-[88px] max-md:pb-24 min-w-0 print:ml-0 print:pt-0`}>
           {workItemsSource === 'error' && (
             <ErrorBanner className="mb-4 print:hidden" onRetry={retryWorkItems}
               msg={`標單工項讀取失敗：${workItemsError || '連線異常'}。各頁資料可能不完整。`} />
@@ -377,6 +397,7 @@ export function WebLayout({ children }) {
           )}
         {children}
       </main>
+      <BottomNav items={visibleGroups.flatMap((g) => g.items)} />
       <CopilotFab />
     </div>
   )
