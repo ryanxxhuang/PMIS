@@ -87,7 +87,6 @@ data/
 lib/
 ├── 身分與導覽
 │   ├── agentRole.js          三方 Agent 角色正規化
-│   ├── projectIdentity.js    專案／成員身分解析
 │   └── navConfig.js          routeRegistry、導覽與路由角色限制單一來源
 ├── AI 與助理
 │   ├── aiFeatures.js         前端 AI 功能註冊鏡像
@@ -96,7 +95,6 @@ lib/
 │   ├── assistantFacts.js     可引用事實
 │   ├── assistantQA.js        問答組裝
 │   ├── factsValidator.js     事實驗證
-│   └── requirementInbox.js   Requirement 草稿收件匣
 ├── 工程數量、金額與進度
 │   ├── parsePcces.js         PCCES XML 解析
 │   ├── boqCalc.js            標單／估驗計算
