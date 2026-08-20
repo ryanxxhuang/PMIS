@@ -45,8 +45,23 @@ const Admin = lazy(() => import('./pages/web/Admin.jsx'))
 // 漏洞回報頁刻意不掛 <Web>:機關要能不登入就讀到,否則「公開回報機制」不成立。
 const Security = lazy(() => import('./pages/Security.jsx'))
 
+// 路由 chunk 載入:骨架卡(列高與載入後接近,避免跳動);文字留給報讀器
 const PageLoading = () => (
-  <div className="min-h-[40vh] grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
+  <div className="space-y-5" aria-busy="true">
+    <div className="pt-1">
+      <div className="skeleton h-6 w-40 mb-2" />
+      <div className="skeleton h-3.5 w-72" />
+    </div>
+    <div className="min-w-0 bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-5">
+      <div className="skeleton h-3.5 w-1/2 mb-4" />
+      <div className="space-y-3">
+        <div className="flex items-center gap-3"><div className="skeleton w-5 h-5 rounded-full shrink-0" /><div className="flex-1"><div className="skeleton h-3 mb-1.5 w-[78%]" /><div className="skeleton h-2.5 w-[44%]" /></div></div>
+        <div className="flex items-center gap-3"><div className="skeleton w-5 h-5 rounded-full shrink-0" /><div className="flex-1"><div className="skeleton h-3 mb-1.5 w-[64%]" /><div className="skeleton h-2.5 w-[52%]" /></div></div>
+        <div className="flex items-center gap-3"><div className="skeleton w-5 h-5 rounded-full shrink-0" /><div className="flex-1"><div className="skeleton h-3 mb-1.5 w-[86%]" /><div className="skeleton h-2.5 w-[38%]" /></div></div>
+      </div>
+    </div>
+    <span className="sr-only">載入中…</span>
+  </div>
 )
 
 // Gate every page behind auth; force project creation before the workspace loads.

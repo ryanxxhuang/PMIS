@@ -6,7 +6,7 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { POINT_TYPES, itpStatus, itpActivity, itpAlerts } from '../../lib/itp.js'
 
@@ -36,7 +36,7 @@ export default function ITP() {
     return workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
   }, [workItems])
 
-  if (!workItems) return <Empty>載入中…</Empty>
+  if (!workItems) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
   // 停留點掛在標單工項上(slice 寫入走 dbMode):標單未匯入前擋牆,避免寫進記憶體假成功
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return <Card title="檢驗停留點"><Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML，停留點才能掛在工項上。</Empty></Card>

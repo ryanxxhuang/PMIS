@@ -176,7 +176,7 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
         </div>
         <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-[var(--border-2)]">
           <button onClick={onClose} className="text-sm text-[var(--text-3)] hover:underline">取消</button>
-          <Button onClick={save} disabled={!img || busy}>{busy ? '處理中…' : `儲存標註（${shapes.length} 個記號）`}</Button>
+          <Button onClick={save} disabled={!img} busy={busy}>{busy ? '處理中…' : `儲存標註（${shapes.length} 個記號）`}</Button>
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState } from '../../components/ui.jsx'
+import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState, SkeletonList } from '../../components/ui.jsx'
 import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -161,7 +161,7 @@ export default function SiteLog() {
     setSavedMsg(`工地座標已儲存;天氣已帶入(${r.source || '中央氣象局'}）`, 'info')
   }
 
-  if (!workItems) return <Empty>載入中…</Empty>
+  if (!workItems) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return (
       <Card title="施工日誌">
@@ -532,7 +532,7 @@ export default function SiteLog() {
                 <div className="text-xs text-[var(--text-2)] w-full">設定工地經緯度(存一次,之後每天一鍵帶入中央氣象局天氣)。可在 Google 地圖長按工地位置複製座標。</div>
                 <Field label="緯度 Latitude"><input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="24.9937" className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm tabular-nums" /></Field>
                 <Field label="經度 Longitude"><input value={lon} onChange={(e) => setLon(e.target.value)} placeholder="121.3009" className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm tabular-nums" /></Field>
-                <Button onClick={saveCoords} disabled={weatherBusy}>{weatherBusy ? '處理中…' : '儲存並帶入天氣'}</Button>
+                <Button onClick={saveCoords} busy={weatherBusy}>{weatherBusy ? '處理中…' : '儲存並帶入天氣'}</Button>
                 <button onClick={() => setCoordOpen(false)} className="text-sm text-[var(--text-3)] hover:underline">取消</button>
               </div>
             )}

@@ -5,6 +5,7 @@ import { appConfirm } from './confirm.jsx'
 import { visibleNavGroups } from '../lib/navConfig.js'
 import CopilotFab from './CopilotFab.jsx'
 import { MSym } from './icons.jsx'
+import { ErrorBanner } from './ui.jsx'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
@@ -58,7 +59,7 @@ function ProjectSwitcher() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div role="menu" className="absolute left-0 mt-1 w-72 bg-[var(--surface)] text-[var(--text)] rounded-lg shadow-xl border border-[var(--border)] py-1 z-20 enter-menu origin-top-left">
+          <div role="menu" className="absolute left-0 mt-1 w-72 bg-[var(--surface)] text-[var(--text)] rounded-lg [box-shadow:var(--shadow-md)] border border-[var(--border-2)] py-2 z-20 enter-menu origin-top-left">
             {projects.map((p, i) => {
               const isCurrent = p.project_id === currentProject.project_id
               return (
@@ -366,17 +367,13 @@ export function WebLayout({ children }) {
       </aside>
       <main className={`${sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'} transition-[margin] duration-300 p-4 md:p-6 pt-20 md:pt-[88px] min-w-0 print:ml-0 print:pt-0`}>
           {workItemsSource === 'error' && (
-            <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-[var(--red-text)]/25 bg-[var(--red-tint)] px-4 py-2.5 text-sm text-[var(--red-text)] print:hidden enter-row">
-              <span>標單工項讀取失敗：{workItemsError || '連線異常'}。各頁資料可能不完整。</span>
-              <button onClick={retryWorkItems} className="font-medium underline opacity-90 hover:opacity-100">重試</button>
-            </div>
+            <ErrorBanner className="mb-4 print:hidden" onRetry={retryWorkItems}
+              msg={`標單工項讀取失敗：${workItemsError || '連線異常'}。各頁資料可能不完整。`} />
           )}
           {/* 領域資料載入失敗(B-09):不再靜默顯示「尚無資料」,如實回報並可重試 */}
           {domainLoadError && (
-            <div className="mb-4 flex items-center gap-3 flex-wrap rounded-lg border border-[var(--red-text)]/25 bg-[var(--red-tint)] px-4 py-2.5 text-sm text-[var(--red-text)] print:hidden enter-row">
-              <span>{domainLoadError}。各頁資料可能不完整。</span>
-              <button onClick={retryDomainLoad} className="font-medium underline opacity-90 hover:opacity-100">重試</button>
-            </div>
+            <ErrorBanner className="mb-4 print:hidden" onRetry={retryDomainLoad}
+              msg={`${domainLoadError}。各頁資料可能不完整。`} />
           )}
         {children}
       </main>

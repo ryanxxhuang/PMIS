@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Surface, Button, Field, Badge, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Surface, Button, Field, Badge, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { judgeChecklist, judgeItem, diffChecklistResults, sampleAlerts } from '../../lib/qc.js'
 import { collaborationItems } from '../../lib/ballInCourt.js'
@@ -112,7 +112,7 @@ export default function Quality() {
       .sort((a, b) => (b.check_date || '').localeCompare(a.check_date || ''))
   }, [checklistRecords, leaves, inspForm?.work_item_key])
 
-  if (!workItems) return <Empty>載入中…</Empty>
+  if (!workItems) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return <Card title="品質查驗"><Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
   }
