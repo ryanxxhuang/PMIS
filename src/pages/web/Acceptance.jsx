@@ -2,7 +2,7 @@
 // 法定期限(採購法細則 §92/93/94、採購法 §73)自前一階段實際日自動起算,逾期紅字+進提醒中心。
 // 機關主導、廠商報竣、監造陪驗——三方都能登錄(伺服器 RLS 同步放行本表)。
 import { useState, useMemo } from 'react'
-import { BadgeCheck, CalendarClock, CheckCircle2, Circle, AlertTriangle } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { deriveAcceptance, needsFixFlow, acceptanceAlerts, ACCEPTANCE_STAGE_ORGS } from '../../lib/acceptance.js'
@@ -65,7 +65,7 @@ export default function Acceptance() {
           <ul className="divide-y divide-[var(--border-2)]">
             {alerts.map((a) => (
               <li key={a.stage} className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
-                <AlertTriangle size={15} className={a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--amber-text)]'} aria-hidden />
+                <MSym name="warning" size={15} className={a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--amber-text)]'} />
                 <span className={`font-medium ${a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--text)]'}`}>{a.title}</span>
                 <span className="text-[var(--text-3)] text-xs">{a.meta}</span>
               </li>
@@ -132,26 +132,23 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
           ? 'text-xs font-medium text-[var(--amber-text)]'
           : 'text-[11px] text-[var(--text-3)]'
     }`}>
-      <CalendarClock size={12} aria-hidden />
+      <MSym name="event" size={12} />
       期限 {stage.due}{stage.daysLeft != null && (stage.overdue ? `（逾期 ${-stage.daysLeft} 天）` : `（還有 ${stage.daysLeft} 天）`)}
     </span>
   )
 
   return (
     <li className={`flex gap-3 px-5 py-4 ${!last ? 'border-b border-[var(--border-2)]' : ''}`}>
-      {/* 時間軸節點 */}
-      <div className="flex flex-col items-center pt-0.5">
-        {done
-          ? <CheckCircle2 size={20} className="text-[var(--green-text)] shrink-0" aria-hidden />
-          : stage.overdue
-            ? <AlertTriangle size={20} className="text-[var(--red-text)] shrink-0" aria-hidden />
-            : <Circle size={20} className={stage.state === 'due' ? 'text-[var(--blue)]' : 'text-[var(--border)]'} aria-hidden />}
-        {!last && <span className="flex-1 w-px bg-[var(--border-2)] mt-1.5" />}
-      </div>
+      {/* 時間軸節點:7px 方點(刻意不加圓角)——同頁的圓形圖示與藥丸都是「可操作」的
+          語彙,時序節點做成方點才不會被當成按鈕。已完成填滿主色、未辦只留邊框。
+          aria-hidden:狀態不得只靠顏色(W8-5),完成與否由日期、期限與結果色票的
+          文字承擔,方點只是視覺節奏,不重複播報。 */}
+      <span aria-hidden className={`w-[7px] h-[7px] mt-[7px] shrink-0 border border-[var(--blue)] ${done ? 'bg-[var(--blue)]' : 'bg-transparent'}`} />
 
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className={`text-sm font-semibold ${done ? 'text-[var(--text)]' : stage.state === 'due' ? 'text-[var(--text)]' : 'text-[var(--text-3)]'}`}>
+          {/* Workspace 不用粗體撐層級:標題一律 500,強弱交給顏色(已完成/進行中為主文字色) */}
+          <span className={`text-sm font-medium ${done ? 'text-[var(--text)]' : stage.state === 'due' ? 'text-[var(--text)]' : 'text-[var(--text-3)]'}`}>
             {stage.label}
           </span>
           <span className="text-[11px] text-[var(--text-3)]">主辦：{stage.by}</span>
@@ -163,8 +160,10 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
         <div className="text-xs text-[var(--text-2)] mt-0.5">{stage.basis}</div>
 
         {done && !editing ? (
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <span className="num text-[var(--text)]">{stage.event.event_date}</span>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            {/* 方點欄不再有 20px 圖示撐高後,14px 的日期會壓過同列的階段標題;
+                降到 13px 讓「階段→依據→日期」三行由大到小收斂成一列時序 */}
+            <span className="num text-[13px] text-[var(--text)]">{stage.event.event_date}</span>
             {stage.event.note && <span className="text-[var(--text-2)] text-xs">{stage.event.note}</span>}
             {/* 「修改」是進入該階段編輯的唯一入口,原本只有 16px 命中區 */}
             {allowed && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-sm:min-h-11 px-1">修改</button>}
@@ -208,7 +207,7 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
           </div>
         )}
       </div>
-      {done && <BadgeCheck size={16} className="text-[var(--green-text)] shrink-0 mt-1 hidden sm:block" aria-hidden />}
+      {done && <MSym name="verified" size={16} className="text-[var(--green-text)] shrink-0 mt-1 hidden sm:block" />}
     </li>
   )
 }

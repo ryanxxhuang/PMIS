@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Empty, Button, PageHeader } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Empty, Button, PageHeader, SkeletonList } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 
@@ -70,7 +71,8 @@ export default function BOQ() {
       </Card>
     )
   }
-  if (!data) return <Empty>載入標單工項中…</Empty>
+  // 載入中用骨架屏:Empty 自帶 inbox 圖示,擺在載入分支等於先跟使用者說「沒資料」
+  if (!data) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入標單工項中…" /></Card>
 
   const { meta } = data
   const roots = (childrenMap.get('__root__') || []).filter((it) => !onlyBillable || it.is_billable)
@@ -91,23 +93,29 @@ export default function BOQ() {
         <tr
           key={it.item_key}
           className={`border-b border-[var(--border-2)] hover:bg-[var(--surface-2)] ${
-            it.depth === 1 ? 'bg-[var(--surface-2)]/70 font-semibold' : ''
+            hasKids ? 'bg-[var(--bg)] font-medium' : ''
           } ${!it.is_billable ? 'text-[var(--text-3)]' : ''}`}
         >
-          <td className="py-1.5 pr-2" style={{ paddingLeft: 10 + level * 18 }}>
-            {hasKids ? (
-              // ▾/▸ 無可及名稱且展開狀態讀不到,補 aria-expanded 與名稱
-              <button onClick={() => toggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
-                className="mr-1 w-4 inline-block text-[var(--text-3)] hover:text-[var(--text)]">
-                {isOpen ? '▾' : '▸'}
-              </button>
-            ) : (
-              <span className="mr-1 w-4 inline-block" />
-            )}
-            <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{it.item_no}</span>
-            <span className={it.depth <= 2 ? 'text-[var(--text)]' : ''}>{it.description}</span>
-            {it.is_price_adjustable && <span className="ml-2 text-[10px] text-violet-600 align-middle">物調</span>}
-            {it.item_kind === 'subtotal' && <span className="ml-2 text-[10px] text-[var(--text-3)] align-middle">合計</span>}
+          {/* table-fixed 下改用「固定寬佔位 span」縮排:padding 縮排會吃掉欄寬,
+              深層工項一縮排整欄就被推歪;佔位法讓縮排永不推移其他欄位 */}
+          <td className="py-1.5 pl-3 pr-2">
+            <span className="flex items-center gap-1 min-w-0">
+              <span style={{ width: level * 18 }} className="shrink-0" aria-hidden="true" />
+              {hasKids ? (
+                // 圖示 aria-hidden,可及名稱與展開狀態仍由 aria-label/aria-expanded 承擔
+                <button onClick={() => toggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
+                  className="w-4 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)]">
+                  <MSym name={isOpen ? 'expand_more' : 'chevron_right'} size={16} />
+                </button>
+              ) : (
+                <span className="w-4 shrink-0 inline-block" />
+              )}
+              <span className="text-[var(--text-3)] text-xs tabular-nums shrink-0">{it.item_no}</span>
+              {/* 長工項名 ellipsis 截斷不換行(列高一致),完整名稱靠 title 提示 */}
+              <span className={`truncate ${it.depth <= 2 ? 'text-[var(--text)]' : ''}`} title={it.description}>{it.description}</span>
+              {it.is_price_adjustable && <span className="shrink-0 text-[10px] text-[var(--purple-text)]">物調</span>}
+              {it.item_kind === 'subtotal' && <span className="shrink-0 text-[10px] text-[var(--text-3)]">合計</span>}
+            </span>
           </td>
           <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{it.unit}</td>
           <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{fmt(it.quantity)}</td>
@@ -141,7 +149,7 @@ export default function BOQ() {
 
       {canImport && (
         <div className="bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded-lg px-4 py-3 space-y-2">
-          <div className="text-sm text-amber-800">
+          <div className="text-sm text-[var(--amber-text)]">
             此專案<b>尚未匯入標單</b>。到「<Link to="/contract" className="font-medium underline">專案文件</Link>」把標單 XML 和契約等文件<b>一次上傳</b>,系統會自動匯入並整理。
           </div>
           <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" onChange={onPickFile} className="hidden" />
@@ -185,7 +193,16 @@ export default function BOQ() {
         }
       >
         <div className="overflow-x-auto -mx-4 -my-4">
-          <table className="w-full text-sm">
+          {/* table-fixed + colgroup:欄寬固定,縮排/長名稱不再逐列推擠;
+              min-w 保住名稱欄可讀寬度,窄螢幕交給外層 overflow-x-auto 捲動 */}
+          <table className="w-full min-w-[640px] table-fixed text-sm">
+            <colgroup>
+              <col />{/* 項次 / 工項名稱:吃剩餘寬度 */}
+              <col style={{ width: 64 }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 104 }} />
+              <col style={{ width: 118 }} />
+            </colgroup>
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
                 <th className="text-left font-medium py-2 pl-3">項次 / 工項名稱</th>
@@ -196,6 +213,17 @@ export default function BOQ() {
               </tr>
             </thead>
             <tbody>{renderRows(roots)}</tbody>
+            <tfoot>
+              {/* 合計取 meta.billable_total(發包工程費,匯入時已算好)——表格含參、肆非發包列,
+                  逐列加總會與發包口徑混淆,所以標明口徑、不在前端重算 */}
+              <tr className="bg-[var(--surface-2)] font-medium border-t border-[var(--border)]">
+                <td className="py-2 pl-3 pr-2">合計（發包工程費）</td>
+                <td />
+                <td />
+                <td />
+                <td className="text-right px-2 tabular-nums whitespace-nowrap">{fmt(meta.billable_total)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </Card>

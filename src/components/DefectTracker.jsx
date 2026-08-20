@@ -2,17 +2,16 @@
 // 開立 → 改善中 → 待複查 → 已結案。改善鏈=廠商;複查結案/退回/撤銷結案=監造
 // (伺服器 defects_guard 強制,前端 can 只是 UX)。已結案僅能附原因撤銷,不可刪除。
 import { useState } from 'react'
-import { Camera } from 'lucide-react'
+import { MSym } from './icons.jsx'
 import { useStore } from '../store.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner } from './ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner, FIELD_BASE, buttonClass } from './ui.jsx'
 import { appConfirm, appPrompt } from './confirm.jsx'
 import { exportCsv, stamp } from '../lib/exportCsv.js'
 import { defectBall } from '../lib/ballInCourt.js'
 import MarkupEditor, { MarkupThumb } from './MarkupEditor.jsx'
 
-// 這份字串是 ui.jsx FIELD_BASE 的頁內複本(歷史包袱),所以 W8-5 的手機 44px
-// 最小高度必須在這裡同步補一次,否則同頁共用元件與原生控件會高度不一致
-const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm max-sm:min-h-11 transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
+// 歷史上這裡抄過一份 FIELD_BASE;改版時收斂回 ui.jsx 正本,樣式永遠同步
+const input = FIELD_BASE
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 // 小工項挑選器（搜尋 → 選一個;品質缺失/查驗共用）
@@ -175,9 +174,9 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
           {aiPhotoOn ? (
             <div className="flex items-center gap-3 flex-wrap">
-              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+              <label className={`${buttonClass('primary', 'sm')} ${aiBusy ? 'opacity-50' : 'cursor-pointer'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onPhoto} className="hidden" />
-                <Camera size={15} aria-hidden /> {aiBusy ? (isSafety ? 'AI 判讀中…' : 'AI 辨識中…') : (isSafety ? '拍工安照片 AI 判讀' : '拍缺失照片 AI 填表')}
+                <MSym name="photo_camera" size={15} /> {aiBusy ? (isSafety ? 'AI 判讀中…' : 'AI 辨識中…') : (isSafety ? '拍工安照片 AI 判讀' : '拍缺失照片 AI 填表')}
               </label>
               <span className={`text-xs ${/失敗/.test(aiMsg) ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>{aiMsg || (isSafety ? '拍現場照片，AI 依職安衛法規判讀危害類別、違反依據並填表(條號請現場核對)。' : '拍缺失現場，AI 自動填標題/說明/嚴重度。')}</span>
             </div>

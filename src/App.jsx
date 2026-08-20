@@ -4,6 +4,8 @@ import { useStore } from './store.jsx'
 import { WebLayout } from './components/Layout.jsx'
 import { routeAllowed, routeRegistry } from './lib/navConfig.js'
 import { ConfirmHost } from './components/confirm.jsx'
+import { Surface, Skeleton, SkeletonList } from './components/ui.jsx'
+import { SnackbarHost } from './components/snackbar.jsx'
 
 import Login from './pages/Login.jsx'
 import ProjectSetup from './pages/web/ProjectSetup.jsx'
@@ -44,8 +46,16 @@ const Admin = lazy(() => import('./pages/web/Admin.jsx'))
 // 漏洞回報頁刻意不掛 <Web>:機關要能不登入就讀到,否則「公開回報機制」不成立。
 const Security = lazy(() => import('./pages/Security.jsx'))
 
+// 路由 chunk 載入:骨架卡吃共用 Surface/SkeletonList——卡殼規格再調時
+// 載入畫面跟著走,不會「載入完成變一個樣」;載入語意由 SkeletonList 的 sr-only 承擔
 const PageLoading = () => (
-  <div className="min-h-[40vh] grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
+  <div className="space-y-5" aria-busy="true">
+    <div className="pt-1">
+      <Skeleton className="h-6 w-40 mb-2" />
+      <Skeleton className="h-3.5 w-72" />
+    </div>
+    <Surface className="p-5"><SkeletonList rows={3} /></Surface>
+  </div>
 )
 
 // Gate every page behind auth; force project creation before the workspace loads.
@@ -160,6 +170,7 @@ export default function App() {
   return (
     <>
     <ConfirmHost />
+    <SnackbarHost />
     <Suspense fallback={<PageLoading />}>
     <Routes>
       {appRoutes.map((route) => (

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ShieldCheck, Mail, Clock, Ban, Scale, ListChecks } from 'lucide-react'
+import { MSym } from '../components/icons.jsx'
 
 // 公開漏洞回報頁(不需登入)。
 //
@@ -16,11 +16,11 @@ import { ShieldCheck, Mail, Clock, Ban, Scale, ListChecks } from 'lucide-react'
 const CONTACT = import.meta.env.VITE_SECURITY_CONTACT || 'security@gov-agent.ai'
 const UPDATED = '2026-08-11'
 
-function Section({ icon: Icon, title, children }) {
+function Section({ icon, title, children }) {
   return (
     <section className="space-y-3">
       <h2 className="flex items-center gap-2 text-base font-medium text-[var(--text)]">
-        <Icon size={18} className="text-[var(--blue-text)]" aria-hidden="true" />
+        <MSym name={icon} size={18} className="text-[var(--blue-text)]" />
         {title}
       </h2>
       <div className="space-y-2 text-sm leading-relaxed text-[var(--text-2)]">{children}</div>
@@ -29,17 +29,21 @@ function Section({ icon: Icon, title, children }) {
 }
 
 export default function Security() {
+  const base = import.meta.env.BASE_URL
   return (
     <div className="min-h-screen bg-[var(--bg)] px-6 py-12">
       <main className="mx-auto w-full max-w-3xl space-y-10">
 
         <header className="space-y-3">
-          <Link to="/login" className="inline-flex items-baseline gap-2" aria-label="PMIS 公共工程登入頁">
-            <span className="text-xl font-bold tracking-tight text-[var(--text)]">PM<span className="text-[var(--accent-text)]">IS</span></span>
-            <span className="text-xs text-[var(--text-3)]">公共工程</span>
+          {/* 字標與 Layout／Login 同一組 lockup:--accent 已改義為 warn(棕),
+              公開頁若還沿用舊字標,機關第一眼看到的品牌就跟站內對不起來 */}
+          <Link to="/login" className="inline-flex items-center gap-1.5" aria-label="PMIS 公共工程登入頁">
+            <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-6 h-6 dark:hidden" />
+            <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-6 h-6 hidden dark:block" />
+            <span className="text-xl font-medium tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue)]">.ai</span></span>
           </Link>
           <div className="flex items-center gap-2 text-sm text-[var(--text-3)]">
-            <ShieldCheck size={16} aria-hidden="true" />
+            <MSym name="verified_user" size={16} />
             資通安全
           </div>
           <h1 className="text-2xl font-medium tracking-tight text-[var(--text)]">漏洞回報與應變機制</h1>
@@ -51,7 +55,7 @@ export default function Security() {
           </p>
         </header>
 
-        <Section icon={Mail} title="回報管道">
+        <Section icon="mail" title="回報管道">
           <p>
             請將問題寄至{' '}
             <a href={`mailto:${CONTACT}?subject=${encodeURIComponent('[資安通報] ')}`}
@@ -70,7 +74,7 @@ export default function Security() {
           </p>
         </Section>
 
-        <Section icon={Clock} title="我們的回應時限">
+        <Section icon="schedule" title="我們的回應時限">
           <ul className="list-disc space-y-1 pl-5">
             <li><strong className="text-[var(--text)]">3 個工作日內</strong>確認收到你的回報。</li>
             <li><strong className="text-[var(--text)]">10 個工作日內</strong>完成初步評估，告知你我們的分級與預計處理方式。</li>
@@ -80,7 +84,7 @@ export default function Security() {
           </ul>
         </Section>
 
-        <Section icon={ListChecks} title="內部應變流程">
+        <Section icon="checklist" title="內部應變流程">
           <p>收到回報後，我們依下列流程處理——這是機制，不只是一個信箱：</p>
           <ol className="list-decimal space-y-1 pl-5">
             <li><strong className="text-[var(--text)]">受理與登錄</strong>：建立案號，記錄回報時間、來源與內容。</li>
@@ -96,7 +100,7 @@ export default function Security() {
           </p>
         </Section>
 
-        <Section icon={Ban} title="測試範圍與請你避免的行為">
+        <Section icon="block" title="測試範圍與請你避免的行為">
           <p><strong className="text-[var(--text)]">屬於範圍：</strong>本服務的網站、API 與後端服務。</p>
           <p>
             <strong className="text-[var(--text)]">不屬於範圍：</strong>我們所使用第三方服務本身的漏洞
@@ -111,7 +115,7 @@ export default function Security() {
           </ul>
         </Section>
 
-        <Section icon={Scale} title="安全港聲明">
+        <Section icon="balance" title="安全港聲明">
           <p>
             若你遵循本頁原則進行研究、並在第一時間通知我們、且未擴大存取或利用所發現的問題，
             我們<strong className="text-[var(--text)]">不會對你採取法律行動</strong>，

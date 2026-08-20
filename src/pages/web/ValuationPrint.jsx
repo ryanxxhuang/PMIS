@@ -1,11 +1,17 @@
 import { useMemo } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
-import { Printer } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
+
+// 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
+// 顏色釘死亮色、不吃主題 token(理由見 SiteLogPrint.jsx):工具列跟紙不跟主題。
+const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-sm:min-h-11'
+const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[#0b57d0] text-white hover:bg-[#0842a0]`
+const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white text-[#0b57d0] border border-[#dadce0] hover:bg-[#e8f0fe]`
 
 // 估驗計價單（可列印 / 另存 PDF）— 不套 WebLayout，整頁就是文件
 export default function ValuationPrint() {
@@ -62,9 +68,9 @@ export default function ValuationPrint() {
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
       {/* 工具列（列印時隱藏）*/}
-      <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
-        <button onClick={() => navigate('/valuation')} className="text-sm text-slate-500 hover:text-slate-800">← 返回估驗計價</button>
-        <button onClick={() => window.print()} className="bg-[var(--primary)] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--primary-hover)] inline-flex items-center gap-1.5"><Printer size={15} aria-hidden />列印 / 另存 PDF</button>
+      <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-2">
+        <button onClick={() => navigate('/valuation')} className={TOOLBAR_SECONDARY}>← 返回估驗計價</button>
+        <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}><MSym name="print" size={15} />列印 / 另存 PDF</button>
       </div>
 
       {/* 文件本體 A4 */}

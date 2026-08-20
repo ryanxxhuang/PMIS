@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShieldCheck, CheckCircle2, AlertTriangle, ShieldAlert, Sparkles, HelpCircle, GitCompareArrows } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, PageHeader, Button } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Button, Surface } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { auditProject } from '../../lib/riskAudit.js'
 import { buildIntegrityFindings, isConcretePourItem } from '../../lib/integrityAudit.js'
 
 const ST = {
-  pass: { icon: CheckCircle2, c: 'var(--green-text)', bg: 'var(--green-tint)', label: '通過' },
-  warn: { icon: AlertTriangle, c: 'var(--amber-text)', bg: 'var(--amber-tint)', label: '注意' },
-  risk: { icon: ShieldAlert, c: 'var(--red-text)', bg: 'var(--red-tint)', label: '風險' },
-  na: { icon: HelpCircle, c: 'var(--slate-text)', bg: 'var(--slate-tint)', label: '未評估' }, // 資料不足,不算通過
+  pass: { icon: 'check_circle', c: 'var(--green-text)', bg: 'var(--green-tint)', label: '通過' },
+  warn: { icon: 'warning', c: 'var(--amber-text)', bg: 'var(--amber-tint)', label: '注意' },
+  risk: { icon: 'gpp_maybe', c: 'var(--red-text)', bg: 'var(--red-tint)', label: '風險' },
+  na: { icon: 'help', c: 'var(--slate-text)', bg: 'var(--slate-tint)', label: '未評估' }, // 資料不足,不算通過
 }
 
 export default function RiskAudit() {
@@ -108,9 +108,9 @@ export default function RiskAudit() {
         subtitle="系統化檢核本案的估驗、變更、品質、契約與進度，標出值得複查的異常" />
 
       {/* 稽核結果總覽 */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+      <Surface className="p-5 flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex items-center gap-3">
-          <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0" style={{ background: O.bg, color: O.c }}><O.icon size={24} aria-hidden /></span>
+          <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0" style={{ background: O.bg, color: O.c }}><MSym name={O.icon} size={24} /></span>
           <div>
             <div className="text-[11px] tracking-[0.04em] text-[var(--text-3)]">稽核結果</div>
             <div className="text-lg font-semibold text-[var(--text)]">
@@ -121,22 +121,22 @@ export default function RiskAudit() {
           </div>
         </div>
         <div className="flex items-center gap-4 ml-auto text-sm">
-          <span className="flex items-center gap-1.5"><CheckCircle2 size={15} style={{ color: 'var(--green-text)' }} aria-hidden /><span className="num font-semibold">{summary.pass}</span> 通過</span>
-          <span className="flex items-center gap-1.5"><AlertTriangle size={15} style={{ color: 'var(--amber-text)' }} aria-hidden /><span className="num font-semibold">{totWarn}</span> 注意</span>
-          <span className="flex items-center gap-1.5"><ShieldAlert size={15} style={{ color: 'var(--red-text)' }} aria-hidden /><span className="num font-semibold">{totRisk}</span> 風險</span>
-          {summary.na > 0 && <span className="flex items-center gap-1.5"><HelpCircle size={15} style={{ color: 'var(--slate-text)' }} aria-hidden /><span className="num font-semibold">{summary.na}</span> 未評估</span>}
+          <span className="flex items-center gap-1.5"><MSym name="check_circle" size={15} style={{ color: 'var(--green-text)' }} /><span className="num font-semibold">{summary.pass}</span> 通過</span>
+          <span className="flex items-center gap-1.5"><MSym name="warning" size={15} style={{ color: 'var(--amber-text)' }} /><span className="num font-semibold">{totWarn}</span> 注意</span>
+          <span className="flex items-center gap-1.5"><MSym name="gpp_maybe" size={15} style={{ color: 'var(--red-text)' }} /><span className="num font-semibold">{totRisk}</span> 風險</span>
+          {summary.na > 0 && <span className="flex items-center gap-1.5"><MSym name="help" size={15} style={{ color: 'var(--slate-text)' }} /><span className="num font-semibold">{summary.na}</span> 未評估</span>}
         </div>
-      </div>
+      </Surface>
 
       {/* 檢核明細 */}
       <Card title="稽核檢核表" bodyClass="p-0"
-        action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><Sparkles size={12} aria-hidden />自動檢核</span>}>
+        action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="auto_awesome" size={12} />自動檢核</span>}>
         <ul className="divide-y divide-[var(--border-2)]">
           {checks.map((c, i) => {
             const s = ST[c.status]
             return (
               <li key={i} className="flex items-start gap-3 px-5 py-3.5">
-                <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: s.bg, color: s.c }}><s.icon size={17} aria-hidden /></span>
+                <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: s.bg, color: s.c }}><MSym name={s.icon} size={17} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-[var(--text)]">{c.title}</span>
@@ -152,7 +152,7 @@ export default function RiskAudit() {
 
       {/* 文件勾稽鏈:逐工項跨文件對帳(全確定性) */}
       <Card title="文件勾稽鏈" bodyClass="p-0"
-        action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><GitCompareArrows size={12} aria-hidden />估驗 ↔ 日誌 ↔ 查驗 ↔ 試體 對帳</span>}>
+        action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="compare_arrows" size={12} />估驗 ↔ 日誌 ↔ 查驗 ↔ 試體 對帳</span>}>
         {integrity.findings.length === 0 ? (
           <div className="px-5 py-6"><Empty>估驗、施工日誌、查驗與試體之間未發現對不起來之處（已勾稽 {integrity.summary.checked || 0} 項計價工項）。</Empty></div>
         ) : (
@@ -161,7 +161,7 @@ export default function RiskAudit() {
               const s = ST[c.status]
               return (
                 <li key={i} className="flex items-start gap-3 px-5 py-3.5">
-                  <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: s.bg, color: s.c }}><s.icon size={17} aria-hidden /></span>
+                  <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: s.bg, color: s.c }}><MSym name={s.icon} size={17} /></span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-[var(--text)]">{c.title}</span>
@@ -183,7 +183,7 @@ export default function RiskAudit() {
       <Card title="AI 稽核意見" action={
         aiEnabled('audit.summary') && (
           <Button variant="secondary" onClick={genAudit} disabled={aiBusy}>
-            <Sparkles size={14} aria-hidden />{aiBusy ? '產生中…' : ai ? '重新產生' : '產生稽核意見'}
+            <MSym name="auto_awesome" size={14} />{aiBusy ? '產生中…' : ai ? '重新產生' : '產生稽核意見'}
           </Button>
         )
       }>
@@ -207,7 +207,7 @@ export default function RiskAudit() {
       </Card>
 
       <p className="text-[11px] text-[var(--text-3)] leading-relaxed">
-        <ShieldCheck size={13} className="inline align-text-bottom mr-1" aria-hidden />
+        <MSym name="verified_user" size={13} className="inline align-text-bottom mr-1" />
         稽核結果為<b className="text-[var(--text-2)] font-medium">「值得複查的異常提示」，非違規認定</b>；供機關監督參考，實際處置請依契約與相關法令。多案時可於 <Link to="/dashboard" className="text-[var(--blue-text)] hover:underline">總覽</Link> 比較各案風險。
       </p>
     </div>

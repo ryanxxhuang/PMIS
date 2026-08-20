@@ -2,7 +2,7 @@
 // 上傳圖面(圖片或 PDF 第一頁)→ 畫框/箭頭/文字(安全橘)→ 輸出合成 JPEG dataURL。
 // 座標一律存原圖像素座標(依顯示縮放換算),合成時不失真。
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Square, MoveUpRight, Type, Undo2, X } from 'lucide-react'
+import { MSym } from './icons.jsx'
 import { Button } from './ui.jsx'
 import { appPrompt } from './confirm.jsx'
 // pdf.js worker 自帶,與 documentExtract.js 同一個決定(B-12):
@@ -10,7 +10,7 @@ import { appPrompt } from './confirm.jsx'
 // 程式碼,從第三方 CDN 拉本來就不該是預設。bundled worker 版本必然與主程式一致。
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-const STROKE = '#e8630c' // 安全橘:警示=品牌語意
+const STROKE = '#e8630c' // 安全橘:警示=品牌語意。工地標註慣例色,與 UI 品牌改版無關;歷史照片一致性
 
 async function fileToImageDataUrl(file) {
   if (file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf')) {
@@ -130,11 +130,11 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
     onSave(c.toDataURL('image/jpeg', 0.85))
   }
 
-  const toolBtn = (t, Icon, label) => (
+  const toolBtn = (t, icon, label) => (
     <button onClick={() => setTool(t)} title={label}
       className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border pressable ${
         tool === t ? 'border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--accent-text)]' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
-      <Icon size={14} aria-hidden />{label}
+      <MSym name={icon} size={14} />{label}
     </button>
   )
 
@@ -143,7 +143,7 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
       <div className="bg-[var(--surface)] rounded-lg g-elevation-2 w-full max-w-4xl max-h-[92vh] flex flex-col enter-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-2)]">
           <h3 className="font-semibold text-[13px] tracking-wide text-[var(--text)]">{title}</h3>
-          <button onClick={onClose} aria-label="關閉" className="text-[var(--text-3)] hover:text-[var(--text)]"><X size={17} aria-hidden /></button>
+          <button onClick={onClose} aria-label="關閉" className="text-[var(--text-3)] hover:text-[var(--text)]"><MSym name="close" size={17} /></button>
         </div>
         <div className="px-4 py-2.5 flex flex-wrap items-center gap-2 border-b border-[var(--border-2)]">
           <label className="inline-flex items-center text-xs font-medium rounded-md px-2.5 py-1.5 border border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]">
@@ -151,11 +151,11 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
             {img ? '換一張圖' : '選擇圖面 / 照片（含 PDF）'}
           </label>
           {img && <>
-            {toolBtn('rect', Square, '方框')}
-            {toolBtn('arrow', MoveUpRight, '箭頭')}
-            {toolBtn('text', Type, '文字')}
+            {toolBtn('rect', 'crop_square', '方框')}
+            {toolBtn('arrow', 'arrow_outward', '箭頭')}
+            {toolBtn('text', 'title', '文字')}
             <button onClick={() => setShapes((ss) => ss.slice(0, -1))} disabled={!shapes.length} title="復原"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable disabled:opacity-40"><Undo2 size={14} aria-hidden />復原</button>
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable disabled:opacity-40"><MSym name="undo" size={14} />復原</button>
             <span className="text-[11px] text-[var(--text-3)] ml-auto">在圖上拖曳畫{tool === 'rect' ? '框' : tool === 'arrow' ? '箭頭' : '（點一下輸入文字）'}</span>
           </>}
         </div>
@@ -176,7 +176,7 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
         </div>
         <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-[var(--border-2)]">
           <button onClick={onClose} className="text-sm text-[var(--text-3)] hover:underline">取消</button>
-          <Button onClick={save} disabled={!img || busy}>{busy ? '處理中…' : `儲存標註（${shapes.length} 個記號）`}</Button>
+          <Button onClick={save} disabled={!img} busy={busy}>{busy ? '處理中…' : `儲存標註（${shapes.length} 個記號）`}</Button>
         </div>
       </div>
     </div>

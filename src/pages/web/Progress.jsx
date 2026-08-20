@@ -1,6 +1,6 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surface } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
@@ -159,11 +159,12 @@ export default function Progress() {
         <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="依預定 S 曲線內插" color="text-[var(--text)]" />
         <Stat label="實際進度" value={`${actualNow.toFixed(1)}%`} sub="累計估驗 ÷ 發包工程費" color="text-[var(--blue-text)]" />
         <Stat label="進度差" value={`${behind >= 0 ? '−' : '+'}${Math.abs(behind).toFixed(1)}%`} sub={behind > 0 ? '落後' : '超前/持平'} color={behind > 5 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] px-4 py-3.5 flex flex-col">
+        {/* 第四格不是 Stat(值是 Badge 不是數字),卡殼改吃共用 Surface 才不會和左邊三格走鐘 */}
+        <Surface className="px-4 py-3.5 flex flex-col">
           <div className="text-[11px] text-[var(--text-3)] tracking-[0.04em]">進度狀態</div>
           <div className="mt-1.5">{statusBadge}</div>
           <div className="text-[11px] text-[var(--text-3)] mt-auto pt-2 num">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
-        </div>
+        </Surface>
       </div>
 
       <Card title="進度 S 曲線（預定 vs 實際）">

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Printer, Trash2, Sparkles, AlertTriangle, Calculator } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, BallChip, Empty, PageHeader, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
@@ -202,8 +202,11 @@ export default function Valuation() {
   // 佐證展開細節:沿用樹狀列展開的語彙(該列下方插一列),不開 modal
   const renderEvidenceRow = (it, ev, level) => (
     <tr key={`${it.item_key}::ev`} className="border-b border-[var(--border-2)] bg-[var(--surface-2)]/60">
-      <td colSpan={8} className="py-2.5 pr-3" style={{ paddingLeft: 10 + level * 18 + 20 }}>
-        <div className="space-y-2 text-xs">
+      {/* 縮排同明細列改佔位 span(+20 對齊展開鈕後的文字起點),colSpan 結構不動 */}
+      <td colSpan={8} className="py-2.5 pl-3 pr-3">
+        <div className="flex">
+          <span style={{ width: level * 18 + 20 }} className="shrink-0" aria-hidden="true" />
+          <div className="space-y-2 text-xs min-w-0">
           {ev.logs.length > 0 && (
             <div>
               <div className="font-medium text-[var(--text-2)] mb-0.5">
@@ -278,6 +281,7 @@ export default function Valuation() {
           {ev.counts.logs + ev.counts.inspections + ev.counts.checklists + ev.counts.samples === 0 && (
             <div className="text-[var(--text-3)]">此工項尚無任何現場紀錄佐證(施工日誌/查驗/檢查表/試體均查無對應)。</div>
           )}
+          </div>
         </div>
       </td>
     </tr>
@@ -300,15 +304,23 @@ export default function Valuation() {
       ? (it.amount ? (cum / it.amount) * 100 : 0)
       : (it.quantity ? (cumQty / it.quantity) * 100 : 0)
     const row = (
-      <tr key={it.item_key} className={`border-b border-[var(--border-2)] hover:bg-[var(--surface-2)] ${it.depth === 1 ? 'bg-[var(--surface-2)]/70 font-semibold' : ''}`}>
-        <td className="py-1.5 pr-2" style={{ paddingLeft: 10 + level * 18 }}>
-          {hasKids ? (
-            // ▾/▸ 對報讀器沒有任何意義,展開狀態也讀不到,補名稱與 aria-expanded
-            <button onClick={() => toggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
-              className="mr-1 w-4 inline-block text-[var(--text-3)] hover:text-[var(--text)]">{isOpen ? '▾' : '▸'}</button>
-          ) : <span className="mr-1 w-4 inline-block" />}
-          <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{it.item_no}</span>
-          <span className={it.depth <= 2 ? 'text-[var(--text)]' : ''}>{it.description}</span>
+      <tr key={it.item_key} className={`border-b border-[var(--border-2)] hover:bg-[var(--surface-2)] ${hasKids ? 'bg-[var(--bg)] font-medium' : ''}`}>
+        {/* table-fixed 下改用「固定寬佔位 span」縮排:padding 縮排會吃掉欄寬,
+            深層工項一縮排整欄就被推歪;佔位法讓縮排永不推移其他欄位 */}
+        <td className="py-1.5 pl-3 pr-2">
+          <span className="flex items-center gap-1 min-w-0">
+            <span style={{ width: level * 18 }} className="shrink-0" aria-hidden="true" />
+            {hasKids ? (
+              // 圖示 aria-hidden,可及名稱與展開狀態仍由 aria-label/aria-expanded 承擔
+              <button onClick={() => toggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
+                className="w-4 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)]">
+                <MSym name={isOpen ? 'expand_more' : 'chevron_right'} size={16} />
+              </button>
+            ) : <span className="w-4 shrink-0 inline-block" />}
+            <span className="text-[var(--text-3)] text-xs tabular-nums shrink-0">{it.item_no}</span>
+            {/* 長工項名 ellipsis 截斷不換行(列高一致),完整名稱靠 title 提示 */}
+            <span className={`truncate ${it.depth <= 2 ? 'text-[var(--text)]' : ''}`} title={it.description}>{it.description}</span>
+          </span>
         </td>
         <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{hasKids ? '' : it.unit}</td>
         <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{hasKids ? '' : fmt(it.quantity)}</td>
@@ -334,9 +346,11 @@ export default function Valuation() {
         </td>
         <td className="text-right text-[var(--text)] px-2 tabular-nums whitespace-nowrap">{fmt(cum)}</td>
         <td className={`text-right px-2 tabular-nums whitespace-nowrap ${per > 0 ? 'text-[var(--blue-text)] font-medium' : 'text-[var(--text-3)]'}`}>{fmt(per)}</td>
-        <td className="text-left px-2 pr-3 whitespace-nowrap text-xs">
+        {/* 佐證欄非數字欄:固定欄寬(colgroup 200px)下拿掉 nowrap 讓摘要與警示可換行,
+            否則「疑超計」長字串會溢出儲存格蓋到相鄰欄 */}
+        <td className="text-left px-2 pr-3 text-xs">
           {!hasKids && ev && (
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex flex-wrap items-center gap-1.5">
               {ev.counts.logs + ev.counts.inspections + ev.counts.checklists + ev.counts.samples === 0 ? (
                 <span className="text-[var(--text-3)]">無</span>
               ) : (
@@ -344,16 +358,16 @@ export default function Valuation() {
                   onClick={() => toggleEv(it.item_key)}
                   aria-expanded={evOpen.has(it.item_key)}
                   title="展開佐證細節(日誌/查驗/檢查表/試體)"
-                  className="text-[var(--blue-text)] hover:underline"
+                  className="inline-flex items-center gap-0.5 text-[var(--blue-text)] hover:underline"
                 >
-                  {evOpen.has(it.item_key) ? '▾ ' : '▸ '}{evSummary(ev.counts)}
+                  <MSym name={evOpen.has(it.item_key) ? 'expand_more' : 'chevron_right'} size={14} />{evSummary(ev.counts)}
                 </button>
               )}
               {overBilled && (
                 // 警示原本只有琥珀色+title,手機沒有 hover 就完全讀不到語意;
                 // 補圖示與「疑超計」字樣,顏色只是輔助(W8-0 §8-6)
                 <span className="inline-flex items-center gap-0.5 text-[11px] text-[var(--amber-text)]" title="累計估驗數量高於施工日誌累計完成量逾 5%,可能超計,建議查核佐證後再計價">
-                  <AlertTriangle size={11} aria-hidden />疑超計 估驗 {fmt(cumQty)} &gt; 日誌 {fmt(ev.loggedTotal)}
+                  <MSym name="warning" size={11} />疑超計 估驗 {fmt(cumQty)} &gt; 日誌 {fmt(ev.loggedTotal)}
                 </span>
               )}
             </span>
@@ -385,13 +399,13 @@ export default function Valuation() {
           <div className="flex flex-wrap items-start gap-2">
             {selected && (
               <div className="flex flex-col gap-0.5 max-w-[10rem]">
-                <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>
+                <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><MSym name="print" size={15} />列印估驗單</Button>
                 <span className="text-[11px] text-[var(--text-3)] leading-tight">正式計價金額文件</span>
               </div>
             )}
             {selected && (
               <div className="flex flex-col gap-0.5 max-w-[10rem]">
-                <Button variant="secondary" onClick={() => navigate(`/valuation/package?p=${selected.id}`)} title="彙整本期估驗明細＋AI 施工說明＋佐證照片"><Sparkles size={15} aria-hidden />組請款佐證包</Button>
+                <Button variant="secondary" onClick={() => navigate(`/valuation/package?p=${selected.id}`)} title="彙整本期估驗明細＋AI 施工說明＋佐證照片"><MSym name="auto_awesome" size={15} />組請款佐證包</Button>
                 <span className="text-[11px] text-[var(--text-3)] leading-tight">佐證彙整，非正式計價單</span>
               </div>
             )}
@@ -432,7 +446,7 @@ export default function Valuation() {
             <Stat label="累計估驗金額" value={fmt(totalCum)} sub={`占發包 ${completion.toFixed(1)}%`} />
             <Stat label="累計完成度" value={`${completion.toFixed(1)}%`} sub={`/ ${yi(billableTotal)}`} color="text-[var(--green-text)]" />
             <Stat label="本期保留款" value={fmt(periodAmt * ret)} sub={`${selected.retention_pct}%`} color="text-[var(--text-2)]" />
-            <Stat label="本期應付" value={fmt(periodAmt * (1 - ret))} sub="本期估驗 − 保留款" color="text-blue-600" />
+            <Stat label="本期應付" value={fmt(periodAmt * (1 - ret))} sub="本期估驗 − 保留款" color="text-[var(--blue-text)]" />
           </div>
 
           {/* 本期決策列(W8-4B B2):先給「這期在誰手上、與日誌差在哪、我能按什麼」,
@@ -476,7 +490,7 @@ export default function Valuation() {
               {selected.status === '已核定' && can.approve &&
                 <Button variant="ghost" className="max-sm:w-full max-sm:min-h-11" onClick={() => onReject('退回核定')}>退回核定</Button>}
               {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01) */}
-              {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-[var(--red-text)] hover:text-[var(--red-text)] max-sm:w-full max-sm:min-h-11" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
+              {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-[var(--red-text)] hover:text-[var(--red-text)] max-sm:w-full max-sm:min-h-11" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
             </div>
           </div>
 
@@ -490,7 +504,7 @@ export default function Valuation() {
                     的對外敘事,也讓使用者以為不開 AI 就填不了數量(C-9)。 */}
                 {selected.status === '草稿' && can.edit && siteLogs.length > 0 && (
                   <Button onClick={async () => { setFilling(true); setErrMsg(''); const { count, error } = await fillValuationFromSiteLogs(selected.id); setFilling(false); if (error) { setErrMsg(`帶入未寫入：${error.message}`); return } setFillMsg(count ? `已依 ${siteLogs.length} 筆施工日誌帶入 ${count} 個工項累計，請覆核後送審。` : '施工日誌中查無可帶入的完成數量。') }} disabled={filling} title="依施工日誌逐日完成數量加總，帶入本期各工項累計完成數量（確定性計算，不經 AI）">
-                    <Calculator size={14} aria-hidden />{filling ? '帶入中…' : '帶入日誌累計'}
+                    <MSym name="calculate" size={14} />{filling ? '帶入中…' : '帶入日誌累計'}
                   </Button>
                 )}
               </div>
@@ -498,16 +512,28 @@ export default function Valuation() {
           >
             {fillMsg && editable && (
               <div className="mb-3 flex items-start gap-2 text-xs bg-[var(--blue-tint)] text-[var(--blue-text)] rounded-lg px-3 py-2">
-                <Calculator size={14} className="shrink-0 mt-0.5" aria-hidden />
+                <MSym name="calculate" size={14} className="shrink-0 mt-0.5" />
                 <span>{fillMsg}</span>
               </div>
             )}
-            {!editable && <p className="text-xs text-amber-600 mb-2">本期狀態為「{selected.status}」，明細唯讀。</p>}
+            {!editable && <p className="text-xs text-[var(--amber-text)] mb-2">本期狀態為「{selected.status}」，明細唯讀。</p>}
             {selected.note && (
               <p className="text-xs text-[var(--amber-text)] mb-2 whitespace-pre-line">本期備註：{selected.note}</p>
             )}
             <div className="overflow-x-auto -mx-4 -my-4">
-              <table className="w-full text-sm">
+              {/* table-fixed + colgroup:欄寬固定,縮排/長名稱不再逐列推擠;
+                  min-w 保住名稱欄可讀寬度,窄螢幕交給外層 overflow-x-auto 捲動 */}
+              <table className="w-full min-w-[1040px] table-fixed text-sm">
+                <colgroup>
+                  <col />{/* 項次 / 工項名稱:吃剩餘寬度 */}
+                  <col style={{ width: 64 }} />
+                  <col style={{ width: 104 }} />
+                  <col style={{ width: 96 }} />
+                  <col style={{ width: 140 }} />{/* 累計完成數量:草稿期含輸入框+完成%,窄於 140 會擠爆 */}
+                  <col style={{ width: 118 }} />
+                  <col style={{ width: 118 }} />
+                  <col style={{ width: 200 }} />{/* 佐證:摘要文字欄,配可換行 */}
+                </colgroup>
                 <thead>
                   <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
                     <th className="text-left font-medium py-2 pl-3">項次 / 工項名稱</th>
@@ -528,6 +554,20 @@ export default function Valuation() {
                     </td></tr>
                   )}
                 </tbody>
+                <tfoot>
+                  {/* 合計沿用既有確定性彙總(totalCum/periodAmt 由 boqCalc 樹加總而來),不另行重算;
+                      搜尋模式只過濾顯示列,合計仍是全期口徑 */}
+                  <tr className="bg-[var(--surface-2)] font-medium border-t border-[var(--border)]">
+                    <td className="py-2 pl-3 pr-2">合計</td>
+                    <td />
+                    <td />
+                    <td />
+                    <td />
+                    <td className="text-right px-2 tabular-nums whitespace-nowrap">{fmt(totalCum)}</td>
+                    <td className="text-right px-2 tabular-nums whitespace-nowrap">{fmt(periodAmt)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </Card>

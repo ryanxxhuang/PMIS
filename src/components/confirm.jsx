@@ -12,7 +12,7 @@
 //
 // <ConfirmHost /> 掛在 App 頂層一次；appConfirm / appPrompt 透過模組層 setter 連到 host。
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, HelpCircle, PencilLine } from 'lucide-react'
+import { MSym } from './icons.jsx'
 import { Button, Input } from './ui.jsx'
 
 let hostSetter = null
@@ -102,13 +102,13 @@ export function ConfirmHost() {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print:hidden" role="dialog" aria-modal="true" aria-label={title} onKeyDown={onKeyDown}>
       <div aria-hidden="true" className="absolute inset-0 bg-black/40 backdrop-blur-[2px] enter-fade" onClick={() => close(false)} />
-      <div ref={dialogRef} className="relative bg-[var(--surface)] text-[var(--text)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] w-full max-w-sm p-5 enter-modal">
+      {/* Workspace 對話框:28px 圓角、24px 內距、標題 19px/400 配 24px 圖示(README) */}
+      <div ref={dialogRef} className="relative bg-[var(--surface)] text-[var(--text)] rounded-[28px] border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] w-full max-w-sm p-6 enter-modal">
         <div className="flex items-start gap-3">
-          <span className={`w-9 h-9 rounded-full grid place-items-center shrink-0 ${danger ? 'bg-[var(--red-tint)] text-[var(--red-text)]' : 'bg-[var(--blue-tint)] text-[var(--blue-text)]'}`}>
-            {danger ? <AlertTriangle size={18} aria-hidden /> : isPrompt ? <PencilLine size={18} aria-hidden /> : <HelpCircle size={18} aria-hidden />}
-          </span>
+          <MSym name={danger ? 'delete_forever' : isPrompt ? 'edit' : 'help'} size={24}
+            className={`mt-0.5 ${danger ? 'text-[var(--danger)]' : 'text-[var(--blue-text)]'}`} />
           <div className="min-w-0 flex-1">
-            <div className="font-semibold text-[15px] leading-snug">{title}</div>
+            <div className="text-[19px] font-normal leading-snug">{title}</div>
             {body && <p className="text-sm text-[var(--text-2)] mt-1.5 whitespace-pre-line leading-relaxed">{body}</p>}
             {isPrompt && (
               <div className="mt-3">
@@ -129,8 +129,8 @@ export function ConfirmHost() {
             )}
           </div>
         </div>
-        <div className="flex justify-end gap-2 mt-5">
-          <Button variant="outline" onClick={() => close(false)}>{cancelLabel}</Button>
+        <div className="flex justify-end gap-2 mt-6">
+          <Button variant="ghost" onClick={() => close(false)}>{cancelLabel}</Button>
           <Button ref={confirmBtn} variant={danger ? 'danger' : 'primary'} disabled={!ready} onClick={() => close(true)}>{confirmLabel}</Button>
         </div>
       </div>

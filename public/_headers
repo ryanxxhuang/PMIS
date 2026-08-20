@@ -25,16 +25,16 @@
   # --- CSP ---
   # script-src 維持嚴格 'self':全站 JS 皆自載,無任何第三方 CDN(所以 SRI 那項掃描警告也不適用)。
   # style-src 需要 'unsafe-inline':React 的 style={{...}} 會產生行內樣式屬性。
-  # fonts.googleapis.com / fonts.gstatic.com:index.html 直接載 Noto Sans TC 與 IBM Plex Mono
-  #   (字型必須寫在 index.html,index.css 的 @import 會被 Lightning CSS 在 build 時丟棄)。
+  # 字型已全面 self-host(@fontsource-variable/noto-sans-tc + @material-symbols/font-400 打包進
+  #   /assets/),font-src 不再開放任何外部主機;data: 留給 pdfjs 內嵌標準字型。
   # connect-src:Supabase(REST/Storage/Auth)+ Sentry 錯誤回報。前端不直接呼叫 Claude API,
   #   所有 LLM 呼叫都走 edge function,故不需開放 Anthropic 網域。
   # worker-src blob::pdfjs-dist 解析 PDF 時會用 worker。
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io; worker-src 'self' blob:; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io; worker-src 'self' blob:; upgrade-insecure-requests
 
   # --- 跨來源隔離 ---
-  # 只設 COOP,刻意不設 COEP(require-corp)。COEP 會擋掉未帶 CORP 標頭的跨來源資源(Google Fonts),
-  # 而它真正的用途是解鎖 SharedArrayBuffer——本服務用不到。ZAP 會報這項,已在處置對照表敘明不適用。
+  # 只設 COOP,刻意不設 COEP(require-corp)。COEP 真正的用途是解鎖 SharedArrayBuffer——
+  # 本服務用不到(字型已 self-host,已無跨來源資源疑慮)。ZAP 會報這項,已在處置對照表敘明不適用。
   Cross-Origin-Opener-Policy: same-origin
 
 # 內容雜湊過的資產可以永久快取

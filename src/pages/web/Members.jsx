@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, Empty, PageHeader, SkeletonList } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
@@ -143,7 +143,7 @@ export default function Members() {
         </Card>
       )}
 
-      <Card title="成員名單">
+      <Card title="成員名單" aria-busy={members === null ? 'true' : undefined}>
         {loadError ? (
           <Empty>
             <div className="space-y-3">
@@ -151,13 +151,13 @@ export default function Members() {
               <Button onClick={reload}>重試</Button>
             </div>
           </Empty>
-        ) : members === null ? <Empty>載入中…</Empty>
+        ) : members === null ? <SkeletonList rows={3} />
           : members.length === 0 ? <Empty>此專案尚無成員。</Empty> : (
           <div className="space-y-2">
             {members.map((m) => (
               <div key={m.user_id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-medium text-sm shrink-0">{m.full_name?.[0] || '?'}</div>
+                  <div className="w-9 h-9 rounded-full bg-[var(--primary)] text-[var(--primary-fg)] flex items-center justify-center font-medium text-sm shrink-0">{m.full_name?.[0] || '?'}</div>
                   <div className="min-w-0">
                     <div className="text-sm text-[var(--text)] truncate">{m.full_name}
                       {m.member_role === 'admin' && <Badge color="green">建立者</Badge>}

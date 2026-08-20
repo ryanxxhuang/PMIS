@@ -116,7 +116,7 @@ export default function Safety() {
         <div className="flex flex-wrap gap-2">
           {creatableTypes.map((t) => (
             <button key={t} onClick={() => openForm(t)}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium border pressable ${form?.record_type === t ? 'bg-[var(--primary)] text-white border-transparent' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+              className={`text-xs px-3 py-1.5 rounded-full font-medium border pressable ${form?.record_type === t ? 'bg-[var(--primary)] text-[var(--primary-fg)] border-transparent' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
               ＋ {t}
             </button>
           ))}

@@ -1,5 +1,5 @@
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
-import { Printer } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 
 // 民國年月日
@@ -8,6 +8,12 @@ const roc = (iso) => {
   const [y, m, d] = iso.split('-').map(Number)
   return `${y - 1911} 年 ${m} 月 ${d} 日`
 }
+
+// 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
+// 顏色釘死亮色、不吃主題 token(理由見 SiteLogPrint.jsx):工具列跟紙不跟主題。
+const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-sm:min-h-11'
+const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[#0b57d0] text-white hover:bg-[#0842a0]`
+const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white text-[#0b57d0] border border-[#dadce0] hover:bg-[#e8f0fe]`
 
 // 自主檢查表(可列印/存 PDF)— 對齊公共工程自主檢查表通行格式
 export default function ChecklistPrint() {
@@ -35,10 +41,10 @@ export default function ChecklistPrint() {
   let lastGroup = null
   return (
     <div className="min-h-screen bg-slate-200 print:bg-white py-6 print:py-0">
-      <div className="max-w-[210mm] mx-auto mb-3 flex justify-between print:hidden px-1">
-        <button onClick={() => navigate('/quality')} className="text-sm text-slate-600 hover:underline">← 返回品質查驗</button>
-        <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 text-sm font-medium bg-[var(--primary)] text-white rounded-lg px-4 py-1.5">
-          <Printer size={15} aria-hidden />列印 / 存 PDF
+      <div className="max-w-[210mm] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden px-1">
+        <button onClick={() => navigate('/quality')} className={TOOLBAR_SECONDARY}>← 返回品質查驗</button>
+        <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}>
+          <MSym name="print" size={15} />列印 / 存 PDF
         </button>
       </div>
 

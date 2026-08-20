@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/classical-c3a7ec3f-48c4-4361-bfe0-ea5ce74fdad9/styles.css">
+<script src="_ds/classical-c3a7ec3f-48c4-4361-bfe0-ea5ce74fdad9/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Text:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-bg:#ffffff; --color-surface:#f8f9fa; --color-text:#202124;
+    --color-accent:#0b57d0; --color-accent-2:#146c2e; --color-divider:#dadce0;
+    --ai:var(--color-accent); --ai-text:var(--color-accent-800); --ai-tint:var(--color-accent-100); --ai-line:transparent;
+    --color-neutral-100:#f8f9fa; --color-neutral-200:#f1f3f4; --color-neutral-300:#e8eaed;
+    --color-neutral-400:#dadce0; --color-neutral-500:#bdc1c6; --color-neutral-600:#80868b;
+    --color-neutral-700:#5f6368; --color-neutral-800:#3c4043; --color-neutral-900:#202124;
+    --color-accent-100:#ecf3fe; --color-accent-200:#d3e3fd; --color-accent-300:#a8c7fa;
+    --color-accent-400:#7cacf8; --color-accent-500:#1b6ef3; --color-accent-600:#0b57d0;
+    --color-accent-700:#0842a0; --color-accent-800:#062e6f; --color-accent-900:#041e49;
+    --c-danger:#b3261e; --c-danger-text:#8c1d18; --c-danger-tint:#fceeec;
+    --c-warn:#a05a00; --c-warn-text:#8a4b00; --c-warn-tint:#fef7e0;
+    --c-ok:#146c2e; --c-ok-text:#0f5223; --c-ok-tint:#e6f4ea;
+    --font-heading:"Google Sans Text","Noto Sans TC",system-ui,sans-serif;
+    --font-body:"Google Sans Text","Noto Sans TC",system-ui,sans-serif;
+    --font-display:"Google Sans Display","Google Sans","Google Sans Text","Noto Sans TC",system-ui,sans-serif;
+    --g-card:#ffffff; --g-line:#e3e6ea; --g-ground:#f8fafd; --g-chip:#f1f3f4;
+    --g-search:#ecf3fe; --g-search-h:#dfeafd; --g-bezel:#202124;
+    --font-heading-weight:500;
+    --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+    --shadow-sm:0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.08);
+    --shadow-md:0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.1);
+    --shadow-lg:0 2px 6px rgba(60,64,67,.3), 0 8px 24px 6px rgba(60,64,67,.12);
+  }
+  body { margin:0; background:var(--color-neutral-200); font-family:var(--font-body); font-size:13px; -webkit-font-smoothing:antialiased; }
+  h1,h2,h3,h4,h5,h6 { font-family:var(--font-heading); letter-spacing:0; }
+  h1, h2 { font-family:var(--font-display); }
+  .disp { font-family:var(--font-display); }
+  a { color:var(--color-accent); text-decoration:none; }
+  a:hover { color:var(--color-accent-700); text-decoration:underline; }
+  .num { font-variant-numeric:tabular-nums; font-feature-settings:"tnum"; }
+  .plate { filter:none; border:1px solid var(--color-divider); outline:0; border-radius:8px; overflow:hidden; }
+  .btn { font-family:var(--font-body); font-weight:500; border-radius:100px; letter-spacing:.01em; }
+  .btn-primary { background:var(--color-accent); color:#fff; border-color:transparent; }
+  .btn-primary:hover { background:#0842a0; color:#fff; }
+  .btn-primary:active { background:#062e6f; }
+  .btn-secondary { background:var(--g-card); color:var(--color-accent); border-color:var(--color-divider); }
+  .btn-secondary:hover { background:var(--color-accent-100); }
+  .btn-ghost { color:var(--color-accent); }
+  .btn-ghost:hover { background:var(--color-accent-100); }
+  .table th { font-family:var(--font-body); font-weight:500; color:var(--color-neutral-700); letter-spacing:.02em; }
+  .input { font-family:var(--font-body); border-radius:8px; }
+  ::selection { background:var(--color-accent-200); }
+  :focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; }
+  .msy { font-family:"Material Symbols Outlined"; font-weight:400; font-style:normal; line-height:1;
+    letter-spacing:normal; text-transform:none; display:inline-block; white-space:nowrap; direction:ltr;
+    font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; -webkit-font-feature-settings:'liga'; }
+  .msy-f { font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24; }
+  .table td, .table th { border-color:var(--g-line); }
+  .table tbody tr:hover { background:var(--g-ground); }
+  .input { border:1px solid var(--color-divider); background:var(--g-card); color:var(--color-text); }
+  .input:focus { border-color:var(--color-accent); }
+  .g-dark {
+    --color-bg:#202124; --color-surface:#292a2d; --color-text:#e8eaed;
+    --color-accent:#a8c7fa; --color-divider:#3c4043;
+    --ai:var(--color-accent); --ai-text:var(--color-accent-800); --ai-tint:var(--color-accent-100); --ai-line:transparent;
+    --color-neutral-100:#292a2d; --color-neutral-200:#35363a; --color-neutral-300:#3c4043;
+    --color-neutral-400:#5f6368; --color-neutral-500:#80868b; --color-neutral-600:#9aa0a6;
+    --color-neutral-700:#bdc1c6; --color-neutral-800:#dadce0; --color-neutral-900:#e8eaed;
+    --color-accent-100:#0d2f5f; --color-accent-200:#123f7d; --color-accent-300:#1f52a0;
+    --color-accent-400:#a8c7fa; --color-accent-500:#a8c7fa; --color-accent-600:#c2d9fd;
+    --color-accent-700:#c2d9fd; --color-accent-800:#d3e3fd; --color-accent-900:#ecf3fe;
+    --c-danger:#f2b8b5; --c-danger-text:#f2b8b5; --c-danger-tint:#3d2724; --c-warn:#fdd663; --c-warn-text:#fdd663; --c-warn-tint:#3a3020;
+    --c-ok:#81c995; --c-ok-text:#81c995; --c-ok-tint:#1f2d24;
+    --g-card:#292a2d; --g-line:#3c4043; --g-ground:#202124; --g-chip:#35363a;
+    --g-search:#303134; --g-search-h:#3c4043; --g-bezel:#000;
+    background:#202124; color:#e8eaed;
+  }
+  .g-dark .btn-primary { background:var(--color-accent); color:#062e6f; }
+  .g-dark .btn-primary:hover { background:#c2d9fd; color:#062e6f; }
+  .g-dark .btn-secondary { background:transparent; color:var(--color-accent); border-color:#5f6368; }
+  .g-dark .btn-secondary:hover { background:#0d2f5f; }
+  @keyframes g-shimmer { 0% { opacity:.45 } 50% { opacity:1 } 100% { opacity:.45 } }
+  @keyframes g-spin { to { transform:rotate(360deg) } }
+  .sk { background:var(--color-neutral-300); border-radius:4px; animation:g-shimmer 1.4s ease-in-out infinite; }
+  .spin { animation:g-spin .9s linear infinite; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+</helmet>
+
+<div class="{{ themeClass }}" style="min-height:100vh;background:var(--color-neutral-200);padding:0;display:flex;flex-direction:column;align-items:flex-start;overflow-x:auto">
+
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ false }}">
+<div style="width:1440px;margin-inline:auto;min-height:900px;background:var(--g-ground);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0">
+  <div style="width:920px;background:var(--g-card);border:1px solid var(--g-line);border-radius:28px;box-shadow:var(--shadow-sm);display:grid;grid-template-columns:1fr 1fr">
+    <div style="padding:48px 44px 44px 48px;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px">
+        <svg width="28" height="28" viewBox="0 0 48 48" style="flex:none" aria-hidden="true"><path d="M24 12.4 L34.4 30.4 L13.6 30.4 Z" fill="none" stroke="#dadce0" stroke-width="3.4" stroke-linejoin="round"></path><circle cx="24" cy="12.4" r="5.6" fill="var(--color-accent)"></circle><circle cx="34.4" cy="30.4" r="5.6" fill="#ea4335"></circle><circle cx="13.6" cy="30.4" r="5.6" fill="#fbbc04"></circle></svg>
+        <span style="font-family:var(--font-heading);font-size:20px;font-weight:500">PMIS<span style="color:var(--color-accent)">.ai</span></span>
+      </div>
+      <h1 style="font-size:32px;font-weight:400;margin:0 0 10px;letter-spacing:-.01em">登入</h1>
+      <p style="margin:0;font-size:14px;color:var(--color-neutral-800);line-height:1.6">使用機關公務信箱或專案邀請信箱，繼續前往 PMIS.ai</p>
+      <div style="margin-top:auto;padding-top:40px;display:flex;flex-direction:column;gap:10px;font-size:12px;color:var(--color-neutral-700)">
+        <div style="display:flex;align-items:center;gap:8px"><span class="msy" style="font-size:16px;color:var(--c-ok)">shield</span>資通系統防護基準 · 普通級</div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="msy" style="font-size:16px;color:var(--c-ok)">location_on</span>個資境內存放，未境外傳輸</div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="msy" style="font-size:16px;color:var(--c-ok)">history</span>登入與操作留存稽核軌跡 6 個月</div>
+      </div>
+    </div>
+    <div style="padding:48px 48px 44px 44px;display:flex;flex-direction:column;gap:18px">
+      <label style="display:block;position:relative">
+        <input class="input" value="chen.ywen@tycg.gov.tw" style="width:100%;box-sizing:border-box;height:52px;padding:0 16px;font-size:15px;border-radius:8px;border-color:var(--color-accent)">
+        <span style="position:absolute;top:-8px;left:10px;padding:0 6px;background:var(--g-card);font-size:11.5px;color:var(--color-accent)">電子信箱 · Email</span>
+      </label>
+      <label style="display:block;position:relative">
+        <input class="input" type="password" value="............" style="width:100%;box-sizing:border-box;height:52px;padding:0 16px;font-size:15px;border-radius:8px">
+        <span style="position:absolute;top:-8px;left:10px;padding:0 6px;background:var(--g-card);font-size:11.5px;color:var(--color-neutral-700)">密碼 · Password</span>
+      </label>
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--color-neutral-700)">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" checked>保持登入 30 天</label>
+        <a href="#">忘記密碼？</a>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px">
+        <button onClick="{{ goSignup }}" style="background:none;border:0;padding:0;cursor:pointer;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--color-accent)">建立帳戶</button>
+        <button class="btn btn-primary" onClick="{{ signIn }}" style="height:40px;padding:0 26px;font-size:14px">下一步</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;color:var(--color-neutral-600);font-size:12px;margin:2px 0"><span style="flex:1;height:1px;background:var(--color-divider)"></span>或<span style="flex:1;height:1px;background:var(--color-divider)"></span></div>
+      <button class="btn btn-secondary btn-block" onClick="{{ signIn }}" style="height:44px;gap:10px;font-size:14px"><span class="msy" style="font-size:20px">badge</span>以機關單一簽入（GSN SSO）登入</button>
+    </div>
+  </div>
+  <div style="width:920px;display:flex;justify-content:space-between;padding:18px 6px 0;font-size:12px;color:var(--color-neutral-700)">
+    <span>繁體中文 · Traditional Chinese</span>
+    <span style="display:flex;gap:20px"><a href="#">說明</a><a href="#">隱私權</a><a href="#">條款</a></span>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+<div style="width:1440px;margin-inline:auto;padding:48px 0 64px;display:flex;gap:56px;justify-content:center;background:var(--color-neutral-200)">
+  <div>
+    <div style="font-size:11px;letter-spacing:0;color:var(--color-accent-700);margin-bottom:12px;text-align:center">現場 · Site</div>
+    <div style="width:390px;height:800px;background:var(--color-bg);border:10px solid var(--g-bezel);border-radius:40px;overflow:hidden;box-shadow:var(--shadow-lg);display:flex;flex-direction:column">
+      <div style="padding:10px 18px 0;display:flex;justify-content:space-between;font-size:11px;color:var(--color-neutral-700)" class="num"><span>9:41</span><span>桃園 · 陰 28°C</span></div>
+      <div style="padding:14px 18px 12px;border-bottom:1px solid var(--color-divider)">
+        <div style="font-size:11px;letter-spacing:0;color:var(--color-accent-700)">施工日誌 · 8 月 20 日（三）</div>
+        <h2 style="font-size:21px;font-weight:500;margin:6px 0 0;letter-spacing:-.01em">今日現場</h2>
+      </div>
+      <div style="padding:14px 18px;border-bottom:1px solid var(--color-divider);background:var(--color-accent-100)">
+        <div style="font-size:11.5px;letter-spacing:0;color:var(--color-accent-700);margin-bottom:6px">AI 已擬好草稿</div>
+        <div style="font-size:12.5px;line-height:1.75">依昨日進度與 6 張現場照片，草擬人力 32 人、機具 5 部、施作項目 3 項。請確認後送出。</div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;min-height:44px">檢視草稿</button><button class="btn btn-secondary" style="min-height:44px">自行填寫</button></div>
+      </div>
+      <div style="padding:14px 18px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;letter-spacing:0;color:var(--color-neutral-700)"><span>照片 6 張 · AI 已標記 1 張異常</span><a href="#">全部</a></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <img class="plate" src="assets/photos/qc-board-2.jpg" alt="查驗告示牌" style="aspect-ratio:1;object-fit:cover;width:100%">
+          <img class="plate" src="assets/photos/qc-caliper-1.jpg" alt="線徑量測" style="aspect-ratio:1;object-fit:cover;width:100%">
+          <img class="plate" src="assets/photos/qc-caliper-2.jpg" alt="搭接量測" style="aspect-ratio:1;object-fit:cover;width:100%">
+        </div>
+        <div style="background:var(--c-warn-tint);border:1px solid transparent;border-radius:12px;padding:10px 12px">
+          <div style="font-size:11.5px;color:var(--c-warn-text)">照片 #3 · 搭接長度不足</div>
+          <div style="font-size:12.5px;line-height:1.7;margin-top:4px">量測 11 cm，規範要求 ≥ 27 cm。建議開立缺失並要求補搭接後複驗。</div>
+          <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;min-height:44px">開立觀察單</button><button class="btn btn-ghost" style="min-height:44px">忽略</button></div>
+        </div>
+        <div style="height:1px;background:var(--color-divider)"></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px"><span>人力</span><span class="num">32 人</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px"><span>機具</span><span class="num">5 部</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px"><span>施作項目</span><span class="num">3 項</span></div>
+        </div>
+      </div>
+      <div style="margin-top:auto;background:var(--g-ground);padding:8px 8px 16px;display:grid;grid-template-columns:repeat(4,1fr)">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="width:56px;height:30px;border-radius:15px;background:var(--color-accent-100);display:flex;align-items:center;justify-content:center"><span class="msy msy-f" style="font-size:20px;color:var(--color-accent-800)">engineering</span></span><span style="font-size:11px;font-weight:500;color:var(--color-accent-800)">現場</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="height:30px;display:flex;align-items:center"><span class="msy" style="font-size:20px;color:var(--color-neutral-700)">checklist</span></span><span style="font-size:11px;color:var(--color-neutral-700)">待辦</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="height:30px;display:flex;align-items:center"><span class="msy" style="font-size:20px;color:var(--color-neutral-700)">fact_check</span></span><span style="font-size:11px;color:var(--color-neutral-700)">查驗</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="height:30px;display:flex;align-items:center"><span class="msy" style="font-size:20px;color:var(--ai)">auto_awesome</span></span><span style="font-size:11px;color:var(--color-neutral-700)">問 PMIS</span></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div style="font-size:11px;letter-spacing:0;color:var(--color-accent-700);margin-bottom:12px;text-align:center">待辦 · Today</div>
+    <div style="width:390px;height:800px;background:var(--color-bg);border:10px solid var(--g-bezel);border-radius:36px;overflow:hidden;box-shadow:var(--shadow-lg);display:flex;flex-direction:column">
+      <div style="padding:10px 18px 0;display:flex;justify-content:space-between;font-size:11px;color:var(--color-neutral-700)" class="num"><span>9:41</span><span>4 件待辦</span></div>
+      <div style="padding:14px 18px 12px;border-bottom:1px solid var(--color-divider)">
+        <div style="font-size:11px;letter-spacing:0;color:var(--color-accent-700)">桃園市立圖書館新建工程</div>
+        <h2 style="font-size:21px;font-weight:500;margin:6px 0 0;letter-spacing:-.01em">今日待辦</h2>
+      </div>
+      <div style="flex:1;overflow:hidden">
+        <sc-for list="{{ mobileTasks }}" as="t" hint-placeholder-count="4">
+          <div style="padding:14px 18px;border-bottom:1px solid var(--color-divider);display:flex;gap:12px;align-items:flex-start">
+            <span style="width:7px;height:7px;margin-top:6px;flex:none;border:1px solid var(--color-accent-600);background:{{ t.dot }}"></span>
+            <div style="min-width:0">
+              <div style="display:flex;gap:8px;align-items:baseline"><span style="font-size:10px;letter-spacing:.1em;color:var(--color-accent-700)">{{ t.due }}</span><span style="font-size:10px;color:var(--color-neutral-600)">{{ t.code }}</span></div>
+              <div style="font-size:13.5px;line-height:1.6;margin-top:3px">{{ t.title }}</div>
+              <div style="font-size:11.5px;color:var(--color-neutral-700);margin-top:2px">{{ t.note }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border-top:1px solid var(--color-divider);padding:12px 18px 18px">
+        <button class="btn btn-primary btn-block" style="min-height:46px">問 PMIS：今天最該處理什麼？</button>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSignup }}" hint-placeholder-val="{{ false }}">
+<div style="width:1440px;margin-inline:auto;min-height:900px;background:var(--g-ground);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 0">
+  <div style="width:960px;background:var(--g-card);border:1px solid var(--g-line);border-radius:28px;box-shadow:var(--shadow-sm);padding:44px 48px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px">
+      <svg width="26" height="26" viewBox="0 0 48 48" style="flex:none" aria-hidden="true"><path d="M24 12.4 L34.4 30.4 L13.6 30.4 Z" fill="none" stroke="#dadce0" stroke-width="3.6" stroke-linejoin="round"></path><circle cx="24" cy="12.4" r="5.8" fill="var(--color-accent)"></circle><circle cx="34.4" cy="30.4" r="5.8" fill="#ea4335"></circle><circle cx="13.6" cy="30.4" r="5.8" fill="#fbbc04"></circle></svg>
+      <span style="font-family:var(--font-heading);font-size:19px;font-weight:500">PMIS<span style="color:var(--color-accent)">.ai</span></span>
+      <span style="margin-left:auto;font-size:12px;color:var(--color-neutral-700)">步驟 1 / 2 · 選擇身分</span>
+    </div>
+    <h1 style="font-size:30px;font-weight:400;margin:0 0 8px;letter-spacing:-.01em">建立帳戶</h1>
+    <p style="margin:0 0 22px;font-size:14px;color:var(--color-neutral-800);line-height:1.6">你在專案裡是哪一方？身分決定你看得到什麼、能簽什麼，之後只有專案建立者能調整。</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      <sc-for list="{{ signupRoles }}" as="r" hint-placeholder-count="3">
+        <button onClick="{{ r.pick }}" style="text-align:left;background:{{ r.bg }};border:{{ r.border }};border-radius:12px;padding:18px 18px 16px;cursor:pointer;font-family:var(--font-body);color:var(--color-text);display:flex;flex-direction:column;gap:8px;position:relative" style-hover="background:var(--color-neutral-100)">
+          <span class="msy {{ r.fill }}" style="font-size:26px;color:{{ r.iconColor }}">{{ r.icon }}</span>
+          <span style="font-size:16px;font-weight:500">{{ r.label }}</span>
+          <span style="font-size:12px;line-height:1.7;color:var(--color-neutral-700)">{{ r.desc }}</span>
+          <span style="font-size:11.5px;line-height:1.7;color:var(--color-neutral-700)">{{ r.scope }}</span>
+          <span class="msy" style="position:absolute;top:14px;right:14px;font-size:20px;color:var(--color-accent);display:{{ r.check }}">check_circle</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px">
+      <label style="display:block;position:relative">
+        <input class="input" value="陳雅雯" style="width:100%;box-sizing:border-box;height:52px;padding:0 16px;font-size:15px;border-radius:8px">
+        <span style="position:absolute;top:-8px;left:10px;padding:0 6px;background:var(--g-card);font-size:11.5px;color:var(--color-neutral-700)">姓名</span>
+      </label>
+      <label style="display:block;position:relative">
+        <input class="input" value="{{ signupOrgValue }}" style="width:100%;box-sizing:border-box;height:52px;padding:0 16px;font-size:15px;border-radius:8px">
+        <span style="position:absolute;top:-8px;left:10px;padding:0 6px;background:var(--g-card);font-size:11.5px;color:var(--color-neutral-700)">{{ signupOrgLabel }}</span>
+      </label>
+      <label style="display:block;position:relative">
+        <input class="input" value="chen.ywen@tycg.gov.tw" style="width:100%;box-sizing:border-box;height:52px;padding:0 16px;font-size:15px;border-radius:8px">
+        <span style="position:absolute;top:-8px;left:10px;padding:0 6px;background:var(--g-card);font-size:11.5px;color:var(--color-neutral-700)">公務／公司信箱</span>
+      </label>
+      <label style="display:block;position:relative">
+        <input class="input" value="TY-2026-LIB-001" style="width:100%;box-sizing:border-box;height:52px;padding:0 16px;font-size:15px;border-radius:8px">
+        <span style="position:absolute;top:-8px;left:10px;padding:0 6px;background:var(--g-card);font-size:11.5px;color:var(--color-neutral-700)">專案邀請碼（選填）</span>
+      </label>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:18px;padding:12px 14px;background:var(--color-accent-100);border-radius:8px">
+      <span class="msy" style="font-size:20px;color:var(--color-accent-800)">info</span>
+      <span style="font-size:12.5px;line-height:1.7;color:var(--color-accent-900)">{{ signupHint }}</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:22px">
+      <button onClick="{{ goLogin }}" style="background:none;border:0;padding:0;cursor:pointer;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--color-accent)">已有帳戶？登入</button>
+      <button class="btn btn-primary" onClick="{{ signIn }}" style="height:40px;padding:0 26px;font-size:14px">下一步：驗證信箱</button>
+    </div>
+  </div>
+  <div style="width:960px;display:flex;justify-content:space-between;padding:18px 6px 0;font-size:12px;color:var(--color-neutral-700)">
+    <span>繁體中文 · Traditional Chinese</span>
+    <span style="display:flex;gap:20px"><a href="#">說明</a><a href="#">隱私權</a><a href="#">條款</a></span>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isTablet }}" hint-placeholder-val="{{ false }}">
+<div style="width:1440px;margin-inline:auto;padding:40px 0 56px;display:flex;flex-direction:column;align-items:center;gap:14px">
+  <div style="font-size:11.5px;color:var(--color-neutral-700)">平板 1024 × 768 · 導覽收合成 icon rail（768–1279px 斷點）</div>
+  <div style="width:1024px;height:768px;background:var(--g-ground);border:10px solid var(--g-bezel);border-radius:24px;overflow:hidden;box-shadow:var(--shadow-lg);display:grid;grid-template-columns:80px 1fr">
+    <div style="background:var(--g-card);display:flex;flex-direction:column;align-items:center;padding:8px 0 12px;gap:4px">
+      <button style="width:48px;height:48px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">menu</span></button>
+      <button style="width:56px;height:44px;margin-bottom:6px;border:1px solid var(--ai-line);border-radius:22px;background:var(--ai-tint);cursor:pointer;display:flex;align-items:center;justify-content:center"><span class="msy" style="font-size:20px;color:var(--ai)">auto_awesome</span></button>
+      <sc-for list="{{ railNav }}" as="n" hint-placeholder-count="6">
+        <button onClick="{{ n.go }}" title="{{ n.zh }}" style="width:64px;border:0;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;font-family:var(--font-body)">
+          <span style="width:56px;height:32px;border-radius:16px;background:{{ n.bg }};display:flex;align-items:center;justify-content:center;position:relative"><span class="msy {{ n.fill }}" style="font-size:20px;color:{{ n.fg }}">{{ n.icon }}</span><span class="num" style="position:absolute;top:-2px;right:6px;font-size:10px;color:var(--c-danger)">{{ n.badge }}</span></span>
+          <span style="font-size:10.5px;color:{{ n.fg }};white-space:nowrap">{{ n.short }}</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;min-width:0">
+      <div style="height:60px;background:var(--g-card);display:flex;align-items:center;gap:10px;padding:0 14px">
+        <div style="display:flex;align-items:center;gap:6px;height:40px;padding:0 6px 0 12px;border-radius:20px;background:var(--g-chip)"><span class="msy" style="font-size:18px;color:var(--color-neutral-700)">folder_open</span><span style="font-size:13.5px;white-space:nowrap">桃園市立圖書館新建工程</span><span class="msy" style="font-size:20px;color:var(--color-neutral-700)">arrow_drop_down</span></div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:2px">
+          <button style="width:40px;height:40px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">search</span></button>
+          <button style="width:40px;height:40px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center;position:relative" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">notifications</span><span style="position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:50%;background:var(--c-danger);border:1.5px solid var(--g-card)"></span></button>
+          <div style="width:32px;height:32px;margin-left:6px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;background:var(--color-accent);color:#fff">{{ avatar }}</div>
+        </div>
+      </div>
+      <div style="padding:14px 18px 0">
+        <h1 style="font-size:22px;font-weight:400;margin:0">{{ pageTitle }}</h1>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.go }}" style="background:{{ t.bg }};border:1px solid {{ t.border }};border-radius:8px;height:30px;padding:0 12px;cursor:pointer;font-family:var(--font-body);font-size:12.5px;font-weight:500;color:{{ t.color }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:14px;min-width:0">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+          <sc-for list="{{ tabletFigures }}" as="f" hint-placeholder-count="2">
+            <div style="padding:14px 16px;background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="font-size:11px;color:var(--color-neutral-600)">{{ f.label }}</div>
+              <div class="num disp" style="font-size:26px;margin-top:4px">{{ f.value }}</div>
+              <div style="font-size:11px;color:var(--color-neutral-700)">{{ f.note }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;overflow:hidden">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--color-divider);font-size:14px;font-weight:500">今日待辦</div>
+          <sc-for list="{{ tabletTasks }}" as="t" hint-placeholder-count="3">
+            <div style="padding:11px 16px;border-bottom:1px solid var(--color-divider);display:grid;grid-template-columns:76px 1fr auto;gap:12px;align-items:start">
+              <span class="num" style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;background:{{ t.dueChip.bg }};color:{{ t.dueChip.fg }};font-size:10.5px;font-weight:500;white-space:nowrap">{{ t.dueChip.label }}</span>
+              <div><div style="font-size:13px;line-height:1.5">{{ t.title }}</div><div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">{{ t.note }}</div></div>
+              <span class="num" style="font-size:11px;color:var(--color-neutral-600)">{{ t.code }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}">
+<div style="width:1440px;margin-inline:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px 4px 12px">
+  <span style="font-size:11.5px;color:var(--color-neutral-700);margin-right:4px">原型檢視（不屬於產品介面）· 登入者身分於註冊時決定</span>
+  <sc-for list="{{ roles }}" as="r" hint-placeholder-count="3">
+    <button onClick="{{ r.go }}" style="display:flex;align-items:center;gap:6px;font-family:var(--font-body);font-size:12.5px;font-weight:500;height:28px;padding:0 12px 0 {{ r.padLeft }};border:1px solid {{ r.border }};background:{{ r.bg }};color:{{ r.color }};border-radius:8px;cursor:pointer" style-hover="background:var(--color-neutral-200)">
+      <span class="msy" style="font-size:16px;display:{{ r.checkDisplay }}">check</span>以{{ r.label }}身分檢視
+    </button>
+  </sc-for>
+  <button onClick="{{ togglePlatformAdmin }}" title="平台維度，與專案角色無關：三個角色都看不到平台管理" style="display:flex;align-items:center;gap:6px;font-family:var(--font-body);font-size:12.5px;font-weight:500;height:28px;padding:0 12px 0 {{ adminChip.padLeft }};border:1px solid {{ adminChip.border }};background:{{ adminChip.bg }};color:{{ adminChip.color }};border-radius:8px;cursor:pointer" style-hover="background:var(--color-neutral-200)">
+    <span class="msy" style="font-size:16px;display:{{ adminChip.check }}">check</span>我是平台營運者
+  </button>
+</div>
+<div style="width:1440px;margin-inline:auto;min-height:900px;background:var(--g-card);box-shadow:var(--shadow-md);display:grid;grid-template-columns:256px 1fr">
+
+  <aside style="background:var(--g-card);display:flex;flex-direction:column;padding:8px 8px 12px">
+    <div style="height:56px;display:flex;align-items:center;gap:6px;padding:0 4px 0 8px">
+      <button style="width:40px;height:40px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center;flex:none" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">menu</span></button>
+      <svg width="24" height="24" viewBox="0 0 48 48" style="flex:none" aria-hidden="true"><path d="M24 12.4 L34.4 30.4 L13.6 30.4 Z" fill="none" stroke="#dadce0" stroke-width="3.6" stroke-linejoin="round"></path><circle cx="24" cy="12.4" r="5.8" fill="var(--color-accent)"></circle><circle cx="34.4" cy="30.4" r="5.8" fill="#ea4335"></circle><circle cx="13.6" cy="30.4" r="5.8" fill="#fbbc04"></circle></svg>
+      <span style="font-family:var(--font-heading);font-size:20px;font-weight:500;letter-spacing:-.01em;color:var(--color-neutral-800);margin-left:2px">PMIS</span>
+      <span style="font-family:var(--font-heading);font-size:20px;font-weight:500;color:var(--color-accent)">.ai</span>
+    </div>
+    <button onClick="{{ goAgent }}" style="margin:6px 4px 14px;height:44px;border:1px solid var(--ai-line);border-radius:22px;background:var(--ai-tint);cursor:pointer;display:flex;align-items:center;gap:10px;padding:0 18px 0 14px;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--ai-text)" style-hover="box-shadow:var(--shadow-sm)">
+      <span class="msy" style="font-size:20px;color:var(--ai)">auto_awesome</span>問 PMIS
+    </button>
+    <div style="font-size:11px;font-weight:500;color:var(--color-neutral-700);padding:0 16px 6px">工作面</div>
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+      <button onClick="{{ n.go }}" style="width:100%;text-align:left;background:{{ n.bg }};border:0;border-radius:0 100px 100px 0;padding:0 16px 0 14px;height:40px;cursor:pointer;font-family:var(--font-body);color:{{ n.fg }};display:flex;align-items:center;gap:14px;font-size:14px;font-weight:{{ n.weight }}" style-hover="background:var(--color-neutral-200)">
+        <span class="msy {{ n.fill }}" style="font-size:20px">{{ n.icon }}</span>
+        <span style="white-space:nowrap">{{ n.zh }}</span>
+        <span class="num" style="margin-left:auto;font-size:12px;font-weight:500;color:{{ n.badgeColor }}">{{ n.badge }}</span>
+      </button>
+    </sc-for>
+    <div style="height:1px;background:var(--color-divider);margin:12px 8px"></div>
+    <sc-for list="{{ platformNav }}" as="n" hint-placeholder-count="1">
+      <button onClick="{{ n.go }}" style="width:100%;text-align:left;background:{{ n.bg }};border:0;border-radius:0 100px 100px 0;padding:0 16px 0 14px;height:40px;cursor:pointer;font-family:var(--font-body);color:{{ n.fg }};display:flex;align-items:center;gap:14px;font-size:14px" style-hover="background:var(--color-neutral-200)">
+        <span class="msy" style="font-size:20px">admin_panel_settings</span>{{ n.zh }}
+      </button>
+    </sc-for>
+    <div style="margin-top:auto;display:flex;align-items:center;gap:8px;padding:10px 16px 0;font-size:12px;color:var(--color-neutral-700)">
+      <span class="msy" style="font-size:16px;color:var(--c-ok)">verified_user</span>正式模式 · 稽核中
+    </div>
+  </aside>
+
+  <main style="display:flex;flex-direction:column;min-width:0;background:var(--g-ground)">
+    <header style="height:64px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px 0 4px;background:var(--g-card)">
+      <div style="display:flex;align-items:center;gap:6px;height:44px;padding:0 6px 0 14px;border-radius:22px;background:var(--g-chip);cursor:pointer;min-width:0" style-hover="background:var(--color-neutral-300)">
+        <span class="msy" style="font-size:18px;color:var(--color-neutral-700)">folder_open</span>
+        <span style="font-size:14px;white-space:nowrap;padding:0 2px">桃園市立圖書館新建工程</span>
+        <span class="msy" style="font-size:20px;color:var(--color-neutral-700)">arrow_drop_down</span>
+      </div>
+      <div style="flex:1;max-width:560px;display:flex;align-items:center;gap:10px;height:44px;padding:0 16px;border-radius:22px;background:var(--g-search)" style-hover="background:var(--g-search-h)">
+        <span class="msy" style="font-size:20px;color:var(--color-neutral-700)">search</span>
+        <input placeholder="搜尋工項、送審、缺失、契約條文……" style="flex:1;border:0;background:none;outline:none;font-family:var(--font-body);font-size:14px;color:var(--color-text)">
+        <span class="msy" style="font-size:20px;color:var(--color-neutral-700)">tune</span>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:2px">
+        <button onClick="{{ goStates }}" title="元件與狀態" style="width:40px;height:40px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">widgets</span></button>
+        <button onClick="{{ goTablet }}" title="平板版" style="width:40px;height:40px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">tablet_mac</span></button>
+        <button onClick="{{ toggleDark }}" title="深色模式" style="width:40px;height:40px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">{{ themeIcon }}</span></button>
+        <button onClick="{{ goMobile }}" title="手機版" style="width:40px;height:40px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">smartphone</span></button>
+        <button title="通知" style="width:40px;height:40px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center;position:relative" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">notifications</span><span style="position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:50%;background:var(--c-danger);border:1.5px solid #fff"></span></button>
+        <button onClick="{{ goLogin }}" title="說明" style="width:40px;height:40px;border:0;border-radius:50%;background:none;cursor:pointer;color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:22px">help</span></button>
+        <div style="display:flex;align-items:center;gap:10px;margin-left:8px;padding:4px 10px 4px 4px;border-radius:20px;cursor:pointer" style-hover="background:var(--color-neutral-200)">
+          <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;background:var(--color-accent);color:#fff;flex:none">{{ avatar }}</div>
+          <div style="display:flex;flex-direction:column;line-height:1.25">
+            <span style="font-size:12.5px;font-weight:500;white-space:nowrap">{{ userName }}</span>
+            <span style="font-size:11px;color:var(--color-neutral-700);white-space:nowrap">{{ userOrg }}</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div style="padding:18px 24px 0;background:var(--g-ground)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px">
+        <div>
+          <h1 style="font-size:24px;font-weight:400;margin:0;letter-spacing:-.005em;color:var(--color-neutral-900)">{{ pageTitle }}</h1>
+          <p style="margin:6px 0 0;font-size:13px;color:var(--color-neutral-700);max-width:660px;line-height:1.6">{{ pageLede }}</p>
+        </div>
+        <div style="display:flex;gap:8px;flex:none">
+          <sc-for list="{{ pageActions }}" as="a" hint-placeholder-count="2">
+            <button class="{{ a.cls }}" style="font-size:13px;height:36px">{{ a.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <sc-if value="{{ hasTabs }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.go }}" style="background:{{ t.bg }};border:1px solid {{ t.border }};border-radius:8px;height:32px;padding:0 14px;cursor:pointer;font-family:var(--font-body);font-size:13px;font-weight:500;color:{{ t.color }}" style-hover="background:var(--color-neutral-200)">{{ t.label }}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="padding:20px 24px 40px;flex:1;min-width:0;background:var(--g-ground)">
+
+      <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+          <sc-for list="{{ figures }}" as="f" hint-placeholder-count="4">
+            <div style="padding:16px 18px;background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="font-size:11px;letter-spacing:0;color:var(--color-neutral-600)">{{ f.label }}</div>
+              <div class="num" style="font-family:var(--font-display);font-size:30px;font-weight:400;margin-top:6px;letter-spacing:-.01em">{{ f.value }}</div>
+              <div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">{{ f.note }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:24px">
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+            <div style="padding:13px 18px;border-bottom:1px solid var(--color-divider);display:flex;align-items:baseline;justify-content:space-between">
+              <h3 style="margin:0;font-size:15px;font-weight:500">今日待辦</h3>
+              <span style="font-size:11px;letter-spacing:0;color:var(--color-neutral-600)">Ball in court · {{ roleLabel }}</span>
+            </div>
+            <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="5">
+              <div style="padding:13px 18px;border-bottom:1px solid var(--color-divider);display:grid;grid-template-columns:84px 1fr auto;gap:14px;align-items:start">
+                <span class="num" style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:{{ t.dueChip.bg }};color:{{ t.dueChip.fg }};font-size:11px;font-weight:500;white-space:nowrap">{{ t.dueChip.label }}</span>
+                <div style="min-width:0">
+                  <div style="font-size:13.5px;line-height:1.55">{{ t.title }}</div>
+                  <div style="font-size:11.5px;color:var(--color-neutral-700);margin-top:3px;line-height:1.6">{{ t.note }}</div>
+                </div>
+                <span class="num" style="font-size:10.5px;color:var(--color-neutral-600)">{{ t.code }}</span>
+              </div>
+            </sc-for>
+            <div style="padding:11px 18px"><a href="#">看全部 {{ taskCount }} 件待辦 →</a></div>
+          </section>
+
+          <div style="display:flex;flex-direction:column;gap:24px">
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider);display:flex;align-items:center;justify-content:space-between">
+                <h3 style="margin:0;font-size:15px;font-weight:500;display:flex;align-items:center;gap:8px"><span class="msy" style="font-size:20px;color:var(--c-danger)">warning</span>風險警示</h3>
+                <span style="font-size:11px;color:var(--color-neutral-700)">AI · 每日 06:00</span>
+              </div>
+              <sc-for list="{{ alerts }}" as="a" hint-placeholder-count="3">
+                <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)">
+                  <div style="display:flex;gap:8px;align-items:center"><span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:{{ a.levelChip.bg }};color:{{ a.levelChip.fg }};font-size:11px;font-weight:500;white-space:nowrap">{{ a.levelChip.label }}</span><span style="font-size:11.5px;color:var(--color-neutral-600)">{{ a.tag }}</span></div>
+                  <div style="font-size:13px;line-height:1.6;margin-top:4px">{{ a.title }}</div>
+                  <div style="font-size:11.5px;color:var(--color-neutral-700);margin-top:4px;line-height:1.65">依據：{{ a.source }}</div>
+                  <div style="display:flex;gap:8px;margin-top:9px"><button class="btn btn-primary" style="font-size:12px;padding:4px 10px">{{ a.action }}</button><button class="btn btn-ghost" style="font-size:12px;padding:4px 8px">來源</button></div>
+                </div>
+              </sc-for>
+            </section>
+
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)">
+                <h3 style="margin:0;font-size:15px;font-weight:500;display:flex;align-items:center;gap:8px"><span class="msy" style="font-size:20px;color:var(--ai)">auto_awesome</span>AI 今日已代辦</h3>
+              </div>
+              <sc-for list="{{ automation }}" as="a" hint-placeholder-count="4">
+                <div style="padding:10px 16px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;gap:12px;align-items:baseline">
+                  <span style="font-size:12.5px">{{ a.what }}</span>
+                  <span class="num" style="font-size:12.5px;color:var(--ai-text);font-weight:500;flex:none">{{ a.n }}</span>
+                </div>
+              </sc-for>
+              <div style="padding:11px 16px;font-size:11px;color:var(--color-neutral-700);line-height:1.7">每一項都可展開比對來源段落；核定前不寫入契約規則。</div>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSite }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:1fr 340px;gap:24px">
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <div style="background:var(--ai-tint);border:1px solid var(--ai-line);border-radius:12px;padding:14px 18px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:11px;display:flex;align-items:center;gap:6px;color:var(--ai-text)"><span class="msy" style="font-size:16px;color:var(--ai)">auto_awesome</span>AI 草稿 · 待確認</span><span class="num" style="font-size:11px;color:var(--color-neutral-700)">產生於 08:12</span></div>
+              <p style="margin:8px 0 0;font-size:13px;line-height:1.75">依昨日日誌、今日 6 張現場照片與氣象署觀測資料，草擬本日人力、機具與施作項目。監造尚未簽認。</p>
+              <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary" style="font-size:12.5px">採用草稿並送簽</button><button class="btn btn-secondary" style="font-size:12.5px">逐欄檢視差異</button></div>
+            </div>
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 18px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;align-items:baseline">
+                <h3 style="margin:0;font-size:15px;font-weight:500">施工日誌 · 8 月 20 日（三）</h3>
+                <span class="num" style="font-size:11px;color:var(--color-neutral-700)">陰・28°C・降雨 0 mm・可施工</span>
+              </div>
+              <table class="table" style="width:100%;font-size:12.5px">
+                <thead><tr><th style="text-align:left">施作項目</th><th style="text-align:left">位置</th><th style="text-align:right">人力</th><th style="text-align:right">機具</th><th style="text-align:left">查驗</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ siteRows }}" as="r" hint-placeholder-count="4">
+                    <tr><td>{{ r.item }}</td><td>{{ r.loc }}</td><td class="num" style="text-align:right">{{ r.men }}</td><td class="num" style="text-align:right">{{ r.eq }}</td><td>{{ r.qc }}</td></tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </section>
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:14px 18px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px"><h3 style="margin:0;font-size:15px;font-weight:500">現場照片</h3><span style="font-size:11px;color:var(--color-neutral-700)">6 張 · AI 已標記 2 張異常 · 自動比對工項</span></div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+                <figure><img class="plate" src="assets/photos/qc-board-1.jpg" alt="鋼線網查驗告示牌" style="aspect-ratio:4/3;object-fit:cover;width:100%"><figcaption>查驗告示牌 BAU-36 · 已對應 03-210</figcaption></figure>
+                <figure><img class="plate" src="assets/photos/qc-caliper-1.jpg" alt="鋼線網線徑量測" style="aspect-ratio:4/3;object-fit:cover;width:100%"><figcaption>線徑量測 · 卡尺 11 mm</figcaption></figure>
+                <figure><img class="plate" src="assets/photos/qc-caliper-2.jpg" alt="搭接長度量測" style="aspect-ratio:4/3;object-fit:cover;width:100%"><figcaption style="color:var(--c-warn-text)">搭接 11 cm · 低於規範 27 cm</figcaption></figure>
+                <figure><img class="plate" src="assets/photos/qc-board-3.jpg" alt="查驗現場全景" style="aspect-ratio:4/3;object-fit:cover;width:100%"><figcaption>頂版鋼線網全景 · 4-4-25M</figcaption></figure>
+              </div>
+            </section>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)"><h3 style="margin:0;font-size:14.5px;font-weight:500">缺失追蹤</h3></div>
+              <sc-for list="{{ defects }}" as="d" hint-placeholder-count="3">
+                <div style="padding:11px 16px;border-bottom:1px solid var(--color-divider)">
+                  <div style="display:flex;justify-content:space-between"><span class="num" style="font-size:10.5px;color:var(--color-neutral-600)">{{ d.code }}</span><span style="font-size:10.5px;color:{{ d.color }}">{{ d.state }}</span></div>
+                  <div style="font-size:12.5px;line-height:1.6;margin-top:3px">{{ d.title }}</div>
+                  <div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">{{ d.who }}</div>
+                </div>
+              </sc-for>
+            </section>
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)"><h3 style="margin:0;font-size:14.5px;font-weight:500">檢驗停留點</h3></div>
+              <sc-for list="{{ itp }}" as="i" hint-placeholder-count="3">
+                <div style="padding:11px 16px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+                  <div><div style="font-size:12.5px">{{ i.title }}</div><div class="num" style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">{{ i.when }}</div></div>
+                  <span style="font-size:10.5px;color:{{ i.color }};flex:none">{{ i.state }}</span>
+                </div>
+              </sc-for>
+              <div style="padding:11px 16px"><button class="btn btn-primary btn-block" style="font-size:12.5px">申請查驗</button></div>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isReq }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:1fr 330px;gap:24px">
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+            <div style="padding:13px 18px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;align-items:baseline">
+              <h3 style="margin:0;font-size:15px;font-weight:500">契約重點 · AI 擷取待核定</h3>
+              <span class="num" style="font-size:11px;color:var(--color-neutral-700)">共 106 條 · 待核定 12 · 已核定 88 · 退回 6</span>
+            </div>
+            <table class="table" style="width:100%;font-size:12.5px">
+              <thead><tr><th style="text-align:left">條號</th><th style="text-align:left">履約要求</th><th style="text-align:left">責任方</th><th style="text-align:left">期限</th><th style="text-align:right">信賴度</th><th></th></tr></thead>
+              <tbody>
+                <sc-for list="{{ obligations }}" as="o" hint-placeholder-count="6">
+                  <tr>
+                    <td class="num" style="white-space:nowrap">{{ o.clause }}</td>
+                    <td><div style="line-height:1.6">{{ o.text }}</div><div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">來源：{{ o.src }}</div></td>
+                    <td style="white-space:nowrap">{{ o.party }}</td>
+                    <td class="num" style="white-space:nowrap">{{ o.due }}</td>
+                    <td class="num" style="text-align:right;color:{{ o.confColor }}">{{ o.conf }}</td>
+                    <td style="white-space:nowrap"><button class="btn btn-primary" style="font-size:11.5px;padding:3px 9px">核定</button> <button class="btn btn-ghost" style="font-size:11.5px;padding:3px 7px">退回</button></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <div style="padding:12px 18px;font-size:11.5px;color:var(--color-neutral-700);line-height:1.75">核定後即成為契約規則，會自動長出期限型待辦、綁定送審與查驗項目；退回僅記錄不刪除，稽核軌跡保留原始擷取內容。</div>
+          </section>
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0;font-size:14.5px;font-weight:500">送審文件</h3><span class="num" style="font-size:11px;color:var(--color-neutral-700)">待審 5</span></div>
+              <sc-for list="{{ submittals }}" as="s" hint-placeholder-count="4">
+                <div style="padding:11px 16px;border-bottom:1px solid var(--color-divider)">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="num" style="font-size:11px;color:var(--color-neutral-600)">{{ s.code }}</span><span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:{{ s.tag.bg }};color:{{ s.tag.fg }};font-size:11px;font-weight:500;white-space:nowrap">{{ s.tag.label }}</span></div>
+                  <div style="font-size:12.5px;margin-top:3px;line-height:1.6">{{ s.title }}</div>
+                  <div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">{{ s.note }}</div>
+                </div>
+              </sc-for>
+            </section>
+            <section style="background:var(--ai-tint);border:1px solid var(--ai-line);border-radius:12px;padding:13px 16px">
+              <div style="font-size:11px;display:flex;align-items:center;gap:6px;color:var(--ai-text)"><span class="msy" style="font-size:16px;color:var(--ai)">auto_awesome</span>AI 審查助理</div>
+              <p style="margin:8px 0 0;font-size:12.5px;line-height:1.75">SUB-032 混凝土配比與契約第 03310 節第 2.4 款不符：規範要求 28 天抗壓 350 kgf/cm²，送審書載明 280。</p>
+              <div style="display:flex;gap:8px;margin-top:11px"><button class="btn btn-primary" style="font-size:12px">生成退回意見</button><button class="btn btn-ghost" style="font-size:12px">看條文</button></div>
+            </section>
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)"><h3 style="margin:0;font-size:14.5px;font-weight:500">工程疑義 · RFI</h3></div>
+              <div style="padding:11px 16px;border-bottom:1px solid var(--color-divider);font-size:12.5px;line-height:1.6">RFI-014 地下室止水帶規格與圖說不符<div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">待機關回覆 · 剩 1 日</div></div>
+              <div style="padding:11px 16px;font-size:12.5px;line-height:1.6">RFI-013 消防管線與結構樑衝突<div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">已回覆 · 衍生變更設計 CO-003</div></div>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isMoney }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+          <sc-for list="{{ moneyFigures }}" as="f" hint-placeholder-count="4">
+            <div style="padding:15px 18px;background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="font-size:11px;letter-spacing:0;color:var(--color-neutral-600)">{{ f.label }}</div>
+              <div class="num" style="font-family:var(--font-display);font-size:27px;margin-top:5px">{{ f.value }}</div>
+              <div style="font-size:11px;color:var(--color-neutral-700)">{{ f.note }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 360px;gap:24px">
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+            <div style="padding:13px 18px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;align-items:baseline">
+              <h3 style="margin:0;font-size:15px;font-weight:500">第 7 期估驗計價 · 工項明細</h3>
+              <span class="num" style="font-size:11px;color:var(--color-neutral-700)">量測期間 8/01 – 8/20 · 監造抽驗 12 項</span>
+            </div>
+            <table class="table" style="width:100%;font-size:12.5px;table-layout:fixed">
+              <colgroup><col style="width:88px"><col><col style="width:104px"><col style="width:88px"><col style="width:78px"><col style="width:118px"></colgroup>
+              <thead><tr>
+                <th style="text-align:left">項次</th>
+                <th style="text-align:left">工項</th>
+                <th style="text-align:right">契約數量</th>
+                <th style="text-align:right">本期</th>
+                <th style="text-align:right">累計 %</th>
+                <th style="text-align:right">本期金額</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ boqRows }}" as="b" hint-placeholder-count="7">
+                  <tr style="background:{{ b.rowBg }}">
+                    <td class="num" style="vertical-align:top;white-space:nowrap">{{ b.no }}</td>
+                    <td style="vertical-align:top"><span style="display:flex;gap:8px"><span style="width:{{ b.indent }};flex:none"></span><span style="min-width:0;font-weight:{{ b.weight }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.name }}</span></span></td>
+                    <td class="num" style="text-align:right;vertical-align:top;white-space:nowrap">{{ b.qty }}</td>
+                    <td class="num" style="text-align:right;vertical-align:top;white-space:nowrap">{{ b.now }}</td>
+                    <td class="num" style="text-align:right;vertical-align:top;white-space:nowrap">{{ b.cum }}</td>
+                    <td class="num" style="text-align:right;vertical-align:top;white-space:nowrap">{{ b.amt }}</td>
+                  </tr>
+                </sc-for>
+                <tr style="background:var(--color-neutral-200)">
+                  <td class="num" style="font-weight:500">合計</td>
+                  <td style="font-weight:500">第 7 期估驗金額（未稅）</td>
+                  <td></td><td></td>
+                  <td class="num" style="text-align:right;font-weight:500">42.7%</td>
+                  <td class="num" style="text-align:right;font-weight:500">32,180,000</td>
+                </tr>
+              </tbody>
+            </table>
+            <div style="padding:12px 18px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11.5px;color:var(--color-neutral-700)">AI 已比對上期數量與現場查驗紀錄，2 項數量差異已標記。</span>
+              <div style="display:flex;gap:8px"><button class="btn btn-secondary" style="font-size:12.5px">匯出計價封面</button><button class="btn btn-primary" style="font-size:12.5px">送監造審核</button></div>
+            </div>
+          </section>
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:14px 16px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><h3 style="margin:0;font-size:14.5px;font-weight:500">進度 S 曲線</h3><span style="font-size:10.5px;color:var(--color-accent-700)">落後 4.2%</span></div>
+              <svg viewBox="0 0 320 170" style="width:100%;height:auto">
+                <g stroke="var(--color-divider)" stroke-width="1">
+                  <line x1="34" y1="140" x2="310" y2="140"></line><line x1="34" y1="10" x2="34" y2="140"></line>
+                  <line x1="34" y1="105" x2="310" y2="105"></line><line x1="34" y1="70" x2="310" y2="70"></line><line x1="34" y1="35" x2="310" y2="35"></line>
+                </g>
+                <path d="M34 138 C 90 132, 120 108, 152 84 S 220 34, 310 16" fill="none" stroke="var(--color-neutral-600)" stroke-width="1.5" stroke-dasharray="4 3"></path>
+                <path d="M34 138 C 88 134, 118 116, 148 96 S 190 66, 214 58" fill="none" stroke="var(--color-accent)" stroke-width="2"></path>
+                <circle cx="214" cy="58" r="3" fill="var(--color-accent)"></circle>
+                <text x="30" y="14" text-anchor="end" font-size="8" fill="var(--color-neutral-600)">100%</text>
+                <text x="30" y="143" text-anchor="end" font-size="8" fill="var(--color-neutral-600)">0</text>
+                <text x="222" y="55" font-size="8" fill="var(--color-accent-700)">實際 58.3%</text>
+                <text x="250" y="26" font-size="8" fill="var(--color-neutral-600)">計畫 62.5%</text>
+              </svg>
+            </section>
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)"><h3 style="margin:0;font-size:14.5px;font-weight:500">請款與保留款</h3></div>
+              <sc-for list="{{ payRows }}" as="p" hint-placeholder-count="4">
+                <div style="padding:10px 16px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+                  <div><div style="font-size:12.5px">{{ p.label }}</div><div style="font-size:11px;color:var(--color-neutral-700)">{{ p.note }}</div></div>
+                  <span class="num" style="font-size:12.5px;flex:none">{{ p.amt }}</span>
+                </div>
+              </sc-for>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDocs }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:1fr 340px;gap:24px">
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+            <div style="padding:13px 18px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;align-items:baseline">
+              <h3 style="margin:0;font-size:15px;font-weight:500">專案文件</h3>
+              <span class="num" style="font-size:11px;color:var(--color-neutral-700)">42 件 · 3.8 GB · 全數留存於境內</span>
+            </div>
+            <table class="table" style="width:100%;font-size:12.5px">
+              <thead><tr><th style="text-align:left">文件</th><th style="text-align:left">分類</th><th style="text-align:left">版本</th><th style="text-align:left">AI 處理</th><th style="text-align:right">上傳</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ docRows }}" as="d" hint-placeholder-count="6">
+                  <tr>
+                    <td><div>{{ d.name }}</div><div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">{{ d.by }}</div></td>
+                    <td>{{ d.kind }}</td>
+                    <td class="num">{{ d.ver }}</td>
+                    <td><span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:{{ d.tag.bg }};color:{{ d.tag.fg }};font-size:11px;font-weight:500;white-space:nowrap">{{ d.tag.label }}</span></td>
+                    <td class="num" style="text-align:right;white-space:nowrap">{{ d.at }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <div style="padding:12px 18px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11.5px;color:var(--color-neutral-700)">上傳後自動分類、抽取履約要求與標單，並記錄擷取來源頁碼。</span>
+              <button class="btn btn-primary" style="font-size:12.5px">上傳文件</button>
+            </div>
+          </section>
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)"><h3 style="margin:0;font-size:14.5px;font-weight:500">驗收結算</h3></div>
+              <sc-for list="{{ acceptance }}" as="a" hint-placeholder-count="5">
+                <div style="padding:11px 16px;border-bottom:1px solid var(--color-divider);display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:baseline">
+                  <span style="width:7px;height:7px;border:1px solid var(--color-accent-600);background:{{ a.dot }}"></span>
+                  <div><div style="font-size:12.5px">{{ a.step }}</div><div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">{{ a.who }}</div></div>
+                  <span class="num" style="font-size:11px;color:var(--color-neutral-700)">{{ a.when }}</span>
+                </div>
+              </sc-for>
+            </section>
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:14px 16px">
+              <h3 style="margin:0 0 8px;font-size:14.5px;font-weight:500">施工月報 · 8 月</h3>
+              <p style="margin:0;font-size:12.5px;line-height:1.75;color:var(--color-neutral-800)">AI 已彙整本月日誌 20 篇、查驗 34 件、缺失 9 件與計價 1 期，草擬月報 14 頁。監造尚未簽章。</p>
+              <div style="display:flex;gap:8px;margin-top:11px"><button class="btn btn-primary" style="font-size:12px">檢視草稿</button><button class="btn btn-secondary" style="font-size:12px">匯出 PDF</button></div>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPortfolio }}" hint-placeholder-val="{{ false }}">
+        <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;margin-bottom:24px">
+          <table class="table" style="width:100%;font-size:12.5px">
+            <thead><tr><th style="text-align:left">專案</th><th style="text-align:left">承攬廠商</th><th style="text-align:right">契約金額</th><th style="text-align:right">計畫</th><th style="text-align:right">實際</th><th style="text-align:right">已計價</th><th style="text-align:left">風險</th></tr></thead>
+            <tbody>
+              <sc-for list="{{ portfolio }}" as="p" hint-placeholder-count="6">
+                <tr>
+                  <td><div>{{ p.name }}</div><div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">{{ p.stage }}</div></td>
+                  <td>{{ p.vendor }}</td>
+                  <td class="num" style="text-align:right">{{ p.amount }}</td>
+                  <td class="num" style="text-align:right;color:var(--color-neutral-700)">{{ p.plan }}</td>
+                  <td class="num" style="text-align:right;color:{{ p.actualColor }}">{{ p.actual }}</td>
+                  <td class="num" style="text-align:right">{{ p.paid }}</td>
+                  <td><span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:{{ p.tag.bg }};color:{{ p.tag.fg }};font-size:11px;font-weight:500;white-space:nowrap">{{ p.tag.label }}</span></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </section>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <section style="background:var(--color-accent-100);border:1px solid transparent;border-radius:12px">
+            <div style="padding:13px 16px;border-bottom:1px solid var(--color-accent-300)"><h3 style="margin:0;font-size:14.5px;font-weight:500;color:var(--color-accent-800)">跨案例外事項</h3></div>
+            <sc-for list="{{ exceptions }}" as="e" hint-placeholder-count="4">
+              <div style="padding:11px 16px;border-bottom:1px solid var(--color-divider)">
+                <div style="font-size:12.5px;line-height:1.6">{{ e.title }}</div>
+                <div style="font-size:11px;color:var(--color-neutral-700);margin-top:3px">{{ e.detail }}</div>
+              </div>
+            </sc-for>
+          </section>
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+            <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)"><h3 style="margin:0;font-size:14.5px;font-weight:500">活動紀錄 · 稽核軌跡</h3></div>
+            <sc-for list="{{ activity }}" as="a" hint-placeholder-count="6">
+              <div style="padding:9px 16px;border-bottom:1px solid var(--color-divider);display:flex;gap:12px;align-items:baseline">
+                <span class="num" style="font-size:10.5px;color:var(--color-neutral-600);flex:none">{{ a.at }}</span>
+                <span style="font-size:12.5px;line-height:1.55">{{ a.what }}</span>
+              </div>
+            </sc-for>
+          </section>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isAgent }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:24px">
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;display:flex;flex-direction:column;min-height:560px">
+            <div style="padding:13px 18px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;align-items:baseline">
+              <h3 style="margin:0;font-size:15px;font-weight:500">問 PMIS</h3>
+              <span style="font-size:10.5px;color:var(--color-neutral-600)">僅回答本案資料 · 每句附來源</span>
+            </div>
+            <div style="padding:18px;display:flex;flex-direction:column;gap:18px;flex:1">
+              <div style="align-self:flex-end;max-width:70%;background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.7;background:var(--color-neutral-100)">第 7 期估驗可以送嗎？有什麼會被退？</div>
+              <div style="max-width:86%">
+                <div style="font-size:11px;display:flex;align-items:center;gap:6px;color:var(--ai-text);margin-bottom:8px"><span class="msy" style="font-size:16px;color:var(--ai)">auto_awesome</span>PMIS.ai</div>
+                <div style="font-size:13.5px;line-height:1.9">可以送，但有兩處會被退回，建議先補齊：</div>
+                <ol style="font-size:13px;line-height:1.9;padding-left:20px;margin:8px 0 0">
+                  <li>項次 03-210 鋼筋加工組立本期 128 t，缺 8 月 12 日進場批次的出廠證明。<a href="#">契約 03210 節 2.3 款</a></li>
+                  <li>項次 08-410 外牆帷幕本期數量較現場查驗紀錄多 42 m²。<a href="#">查驗紀錄 QC-0221</a></li>
+                </ol>
+                <div style="font-size:13px;line-height:1.9;margin-top:10px">另提醒：保留款累計 NT$12,480,000，第 5 期應退部分逾期 11 日未辦。</div>
+                <div style="border-top:1px solid var(--color-divider);margin-top:14px;padding-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="btn btn-primary" style="font-size:12.5px">建立補件通知</button>
+                  <button class="btn btn-secondary" style="font-size:12.5px">修正 08-410 數量</button>
+                  <button class="btn btn-ghost" style="font-size:12.5px">加入今日待辦</button>
+                </div>
+              </div>
+              <div style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:11px 14px;background:var(--color-neutral-100)">
+                <div style="font-size:11px;color:var(--ai-text);margin-bottom:7px">取用資料 · Tool trace</div>
+                <div class="num" style="font-size:11.5px;line-height:1.9;color:var(--color-neutral-800)">標單工項（1,842 筆）→ 估驗計價 第 7 期 → 品質查驗紀錄 34 件 → 契約重點 106 條 → 請款收款 6 期</div>
+              </div>
+            </div>
+            <div style="border-top:1px solid var(--color-divider);padding:12px 18px;display:flex;gap:10px;align-items:center">
+              <input class="input" placeholder="問任何與本案有關的事……" style="flex:1">
+              <button class="btn btn-primary" style="font-size:13px">送出</button>
+            </div>
+          </section>
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)"><h3 style="margin:0;font-size:14.5px;font-weight:500">常問</h3></div>
+              <sc-for list="{{ prompts }}" as="p" hint-placeholder-count="5">
+                <button style="width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--color-divider);padding:11px 16px;font-family:inherit;font-size:12.5px;line-height:1.6;cursor:pointer;color:var(--color-text)" style-hover="background:var(--color-neutral-100)">{{ p }}</button>
+              </sc-for>
+            </section>
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:14px 16px">
+              <h3 style="margin:0 0 8px;font-size:14.5px;font-weight:500">代理權限</h3>
+              <p style="margin:0 0 10px;font-size:12px;line-height:1.75;color:var(--color-neutral-800)">Agent 可讀本案全部模組，寫入一律先產生草稿並留下操作者。</p>
+              <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+                <label style="display:flex;justify-content:space-between;align-items:center">擬草稿（日誌、月報、退回意見）<input type="checkbox" checked></label>
+                <label style="display:flex;justify-content:space-between;align-items:center">建立待辦與通知<input type="checkbox" checked></label>
+                <label style="display:flex;justify-content:space-between;align-items:center">直接核定契約重點<input type="checkbox"></label>
+              </div>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+          <sc-for list="{{ adminFigures }}" as="f" hint-placeholder-count="4">
+            <div style="padding:15px 18px;background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="font-size:11px;letter-spacing:0;color:var(--color-neutral-600)">{{ f.label }}</div>
+              <div class="num" style="font-family:var(--font-display);font-size:27px;margin-top:5px">{{ f.value }}</div>
+              <div style="font-size:11px;color:var(--color-neutral-700)">{{ f.note }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 340px;gap:24px">
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+            <div style="padding:13px 18px;border-bottom:1px solid var(--color-divider)"><h3 style="margin:0;font-size:15px;font-weight:500">專案方案與 AI 用量</h3></div>
+            <table class="table" style="width:100%;font-size:12.5px">
+              <thead><tr><th style="text-align:left">專案</th><th style="text-align:left">方案</th><th style="text-align:right">本月呼叫</th><th style="text-align:right">Token</th><th style="text-align:right">成本</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ adminRows }}" as="a" hint-placeholder-count="5">
+                  <tr><td>{{ a.name }}</td><td>{{ a.plan }}</td><td class="num" style="text-align:right">{{ a.calls }}</td><td class="num" style="text-align:right">{{ a.tokens }}</td><td class="num" style="text-align:right">{{ a.cost }}</td></tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </section>
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+              <div style="padding:13px 16px;border-bottom:1px solid var(--color-divider)"><h3 style="margin:0;font-size:14.5px;font-weight:500">功能開關</h3></div>
+              <sc-for list="{{ flags }}" as="f" hint-placeholder-count="5">
+                <div style="padding:10px 16px;border-bottom:1px solid var(--color-divider);display:flex;justify-content:space-between;gap:10px;align-items:center">
+                  <div><div style="font-size:12.5px">{{ f.name }}</div><div style="font-size:11px;color:var(--color-neutral-700);margin-top:2px">{{ f.scope }}</div></div>
+                  <span style="flex:none"><span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:{{ f.tag.bg }};color:{{ f.tag.fg }};font-size:11px;font-weight:500;white-space:nowrap">{{ f.tag.label }}</span></span>
+                </div>
+              </sc-for>
+            </section>
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:14px 16px">
+              <h3 style="margin:0 0 8px;font-size:14.5px;font-weight:500">資安與留存</h3>
+              <div style="display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--color-neutral-800);line-height:1.7">
+                <div style="display:flex;justify-content:space-between"><span>稽核日誌保存</span><span class="num">6 個月</span></div>
+                <div style="display:flex;justify-content:space-between"><span>弱點掃描</span><span class="num">2026-08-11 · 0 高危</span></div>
+                <div style="display:flex;justify-content:space-between"><span>個資境外傳輸</span><span>停用</span></div>
+                <div style="display:flex;justify-content:space-between"><span>防護基準</span><span>普通級 · 符合</span></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isStates }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:20px">
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:16px 18px">
+            <div style="font-size:11.5px;color:var(--color-neutral-700);margin-bottom:12px">載入中 · Skeleton</div>
+            <div class="sk" style="height:14px;width:52%;margin-bottom:14px"></div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;gap:12px;align-items:center"><div class="sk" style="width:20px;height:20px;border-radius:50%"></div><div style="flex:1"><div class="sk" style="height:11px;width:78%;margin-bottom:6px"></div><div class="sk" style="height:9px;width:44%"></div></div></div>
+              <div style="display:flex;gap:12px;align-items:center"><div class="sk" style="width:20px;height:20px;border-radius:50%"></div><div style="flex:1"><div class="sk" style="height:11px;width:64%;margin-bottom:6px"></div><div class="sk" style="height:9px;width:52%"></div></div></div>
+              <div style="display:flex;gap:12px;align-items:center"><div class="sk" style="width:20px;height:20px;border-radius:50%"></div><div style="flex:1"><div class="sk" style="height:11px;width:86%;margin-bottom:6px"></div><div class="sk" style="height:9px;width:38%"></div></div></div>
+            </div>
+            <div style="font-size:11.5px;color:var(--color-neutral-700);margin-top:14px;line-height:1.7">骨架維持真實列高與欄位位置，載入完成不位移。動畫 1.4s ease-in-out 透明度 .45→1。</div>
+          </section>
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column">
+            <div style="font-size:11.5px;color:var(--color-neutral-700);margin-bottom:12px">空狀態 · Empty</div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px 0">
+              <span class="msy" style="font-size:40px;color:var(--color-neutral-500)">inbox</span>
+              <div style="font-size:14px;font-weight:500;margin-top:10px">本期還沒有待審文件</div>
+              <div style="font-size:12px;color:var(--color-neutral-700);margin-top:6px;line-height:1.7;max-width:240px">廠商送審後會出現在這裡，並自動帶入契約審查期限。</div>
+              <button class="btn btn-secondary" style="margin-top:14px;font-size:13px;height:36px">通知廠商送審</button>
+            </div>
+          </section>
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column">
+            <div style="font-size:11.5px;color:var(--color-neutral-700);margin-bottom:12px">錯誤 · Error</div>
+            <div style="background:var(--c-danger-tint);border-radius:8px;padding:12px 14px;display:flex;gap:10px">
+              <span class="msy" style="font-size:20px;color:var(--c-danger);flex:none">error</span>
+              <div>
+                <div style="font-size:13px;font-weight:500">狀態載入失敗</div>
+                <div style="font-size:12px;line-height:1.7;margin-top:4px;color:var(--color-neutral-800)">查不到資料不等於沒有資料。請重試，或前往專案文件查看處理狀態。</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary" style="font-size:13px;height:36px">重試</button><button class="btn btn-secondary" style="font-size:13px;height:36px">前往專案文件</button></div>
+            <div style="margin-top:auto;padding-top:14px;display:flex;gap:8px;align-items:center">
+              <button class="btn btn-primary" disabled style="font-size:13px;height:36px;gap:8px"><span class="msy spin" style="font-size:18px">progress_activity</span>送出中…</button>
+              <button class="btn btn-secondary" disabled style="font-size:13px;height:36px">停用狀態</button>
+            </div>
+          </section>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:16px 18px">
+            <div style="font-size:11.5px;color:var(--color-neutral-700);margin-bottom:12px">對話框 · Dialog（危險動作）</div>
+            <div style="background:var(--color-neutral-300);border-radius:12px;padding:26px;display:flex;justify-content:center">
+              <div style="width:100%;max-width:380px;background:var(--g-card);border-radius:28px;box-shadow:var(--shadow-lg);padding:24px">
+                <div style="display:flex;gap:12px;align-items:flex-start">
+                  <span class="msy" style="font-size:24px;color:var(--c-danger)">delete_forever</span>
+                  <h3 style="margin:0;font-size:19px;font-weight:400">永久刪除專案</h3>
+                </div>
+                <p style="margin:12px 0 0;font-size:13px;line-height:1.75;color:var(--color-neutral-800)">「桃園市立圖書館新建工程」的標單、估驗、進度、施工日誌、查驗、缺失將一併永久刪除，無法復原。</p>
+                <div style="margin-top:14px;position:relative">
+                  <input class="input" placeholder="輸入專案名稱以確認" style="width:100%;box-sizing:border-box;height:48px;padding:0 14px;font-size:14px;border-radius:8px">
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+                  <button class="btn btn-ghost" style="font-size:14px;height:40px">取消</button>
+                  <button class="btn" style="font-size:14px;height:40px;background:var(--c-danger);color:#fff;border-color:transparent">永久刪除</button>
+                </div>
+              </div>
+            </div>
+          </section>
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:16px 18px">
+              <div style="font-size:11.5px;color:var(--color-neutral-700);margin-bottom:12px">Snackbar（含復原）</div>
+              <div style="background:#3c4043;color:#e8eaed;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:16px;box-shadow:var(--shadow-md)">
+                <span style="font-size:13px;flex:1">已核定 8 條契約重點</span>
+                <span style="font-size:13px;font-weight:500;color:#8ab4f8;cursor:pointer">復原</span>
+                <span class="msy" style="font-size:18px;color:#9aa0a6;cursor:pointer">close</span>
+              </div>
+              <div style="font-size:11.5px;color:var(--color-neutral-700);margin-top:10px;line-height:1.7">左下角出現，4 秒後自動消失；含破壞性動作時提供「復原」並延長至 8 秒。</div>
+            </section>
+            <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px;padding:16px 18px">
+              <div style="font-size:11.5px;color:var(--color-neutral-700);margin-bottom:12px">選單 · Menu（專案切換）</div>
+              <div style="width:288px;background:var(--g-card);border-radius:8px;box-shadow:var(--shadow-md);padding:8px 0">
+                <div style="height:40px;display:flex;align-items:center;gap:12px;padding:0 14px;background:var(--color-accent-100)"><span class="msy" style="font-size:18px;color:var(--color-accent-800)">check</span><span style="font-size:14px;color:var(--color-accent-800)">桃園市立圖書館新建工程</span></div>
+                <div style="height:40px;display:flex;align-items:center;gap:12px;padding:0 14px" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:18px;color:transparent">check</span><span style="font-size:14px">中壢運動公園改善工程</span></div>
+                <div style="height:40px;display:flex;align-items:center;gap:12px;padding:0 14px" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:18px;color:transparent">check</span><span style="font-size:14px">大溪河濱道路拓寬工程</span></div>
+                <div style="height:1px;background:var(--color-divider);margin:8px 0"></div>
+                <div style="height:40px;display:flex;align-items:center;gap:12px;padding:0 14px;color:var(--color-accent)" style-hover="background:var(--color-neutral-200)"><span class="msy" style="font-size:18px">add</span><span style="font-size:14px">新增專案</span></div>
+                <div style="height:40px;display:flex;align-items:center;gap:12px;padding:0 14px;color:var(--c-danger)" style-hover="background:var(--c-danger-tint)"><span class="msy" style="font-size:18px">delete</span><span style="font-size:14px">刪除此專案</span></div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <section style="background:var(--g-card);border:1px solid var(--g-line);border-radius:12px">
+          <div style="padding:13px 18px;border-bottom:1px solid var(--color-divider);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:15px;font-weight:500;margin-right:8px">表格：排序、篩選、分頁</h3>
+            <button style="height:32px;padding:0 10px 0 14px;border-radius:8px;border:1px solid transparent;background:var(--color-accent-100);color:var(--color-accent-800);font-family:var(--font-body);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px">待核定 12<span class="msy" style="font-size:16px">close</span></button>
+            <button style="height:32px;padding:0 14px;border-radius:8px;border:1px solid var(--color-divider);background:var(--g-card);color:var(--color-neutral-800);font-family:var(--font-body);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px"><span class="msy" style="font-size:16px">filter_list</span>責任方</button>
+            <button style="height:32px;padding:0 14px;border-radius:8px;border:1px solid var(--color-divider);background:var(--g-card);color:var(--color-neutral-800);font-family:var(--font-body);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px"><span class="msy" style="font-size:16px">calendar_month</span>期限</button>
+          </div>
+          <table class="table" style="width:100%;font-size:12.5px">
+            <thead><tr>
+              <th style="text-align:left">條號</th>
+              <th style="text-align:left">履約要求</th>
+              <th style="text-align:left">責任方</th>
+              <th style="text-align:right"><span style="display:inline-flex;align-items:center;gap:4px;color:var(--color-accent)">信賴度<span class="msy" style="font-size:16px">arrow_upward</span></span></th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="num">第 18 條</td><td>逾期違約金按契約總價千分之一計算</td><td>廠商</td><td class="num" style="text-align:right;color:var(--c-warn-text)">0.72</td></tr>
+              <tr><td class="num">附件三 4.2</td><td>每日回報工地安全衛生自主檢查表</td><td>廠商</td><td class="num" style="text-align:right;color:var(--c-warn-text)">0.68</td></tr>
+              <tr><td class="num">第 9 條 2 款</td><td>每月 5 日前提送上月施工月報一式三份</td><td>廠商</td><td class="num" style="text-align:right;color:var(--c-ok)">0.89</td></tr>
+            </tbody>
+          </table>
+          <div style="padding:10px 18px;display:flex;align-items:center;justify-content:flex-end;gap:20px;font-size:12.5px;color:var(--color-neutral-700)">
+            <span>每頁列數 25 ▾</span>
+            <span class="num">1–25 / 106</span>
+            <span style="display:flex;gap:4px">
+              <span class="msy" style="font-size:20px;color:var(--color-neutral-500)">chevron_left</span>
+              <span class="msy" style="font-size:20px;cursor:pointer">chevron_right</span>
+            </span>
+          </div>
+        </section>
+      </sc-if>
+
+    </div>
+  </main>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960}}">
+const ACC = 'var(--c-danger)', MUT = 'var(--color-neutral-700)', OK = 'var(--c-ok)';
+
+// 狀態一律用「色票 + 文字」表達：紅=需立刻處理、黃=待確認/接近期限、綠=正常、藍=進行中、灰=已結束
+const TONE = {
+  danger: { bg: 'var(--c-danger-tint)', fg: 'var(--c-danger-text)' },
+  warn: { bg: 'var(--c-warn-tint)', fg: 'var(--c-warn-text)' },
+  ok: { bg: 'var(--c-ok-tint)', fg: 'var(--c-ok-text)' },
+  info: { bg: 'var(--color-accent-100)', fg: 'var(--color-accent-800)' },
+  mute: { bg: 'var(--color-neutral-200)', fg: 'var(--color-neutral-700)' },
+};
+const chip = (tone, label) => ({ label, bg: TONE[tone].bg, fg: TONE[tone].fg });
+
+const NAV = [
+  { key: 'dash', zh: '今日待辦', en: 'Today', route: 'dash', icon: 'checklist', badge: '5' },
+  { key: 'site', zh: '現場與品質', en: 'Site & Quality', route: 'site', icon: 'engineering', badge: '3' },
+  { key: 'req', zh: '審查與協作', en: 'Review', route: 'req', icon: 'rate_review', badge: '12' },
+  { key: 'money', zh: '進度與金流', en: 'Payment', route: 'money', icon: 'payments', badge: '' },
+  { key: 'docs', zh: '文件與結案', en: 'Documents', route: 'docs', icon: 'folder', badge: '' },
+  { key: 'portfolio', zh: '專案', en: 'Portfolio', route: 'portfolio', icon: 'grid_view', badge: '' },
+];
+
+const TABS = {
+  site: ['施工日誌 Site log', '品質查驗 Quality', '檢驗停留點 ITP', '工安管理 Safety'],
+  req: ['契約重點 Obligations', '送審文件 Submittals', '工程疑義 RFI', '變更設計 Change orders'],
+  money: ['標單工項 BOQ', '估驗計價 Valuation', '請款收款 Payments', '進度 S 曲線 S-curve'],
+  docs: ['專案文件 Documents', '施工月報 Monthly', '監造報表 Supervision', '驗收結算 Acceptance'],
+  portfolio: ['跨案總覽 Overview', '活動紀錄 Activity', '三方成員 Members'],
+};
+
+const HEAD = {
+  dash: ['今日待辦 · Today', '今日待辦', '契約期限、協作球權與 AI 風險警示，收斂成一份可以照著做完的清單。'],
+  site: ['現場與品質 · Site & Quality', '施工日誌', '一次填寫，日誌、查驗、缺失與工安同步留痕；照片自動對應工項。'],
+  req: ['審查與協作 · Review', '契約重點', 'AI 自契約與規範擷取履約要求，人工核定後才成為契約規則。'],
+  money: ['進度與金流 · Progress & Payment', '估驗計價', '標單、查驗紀錄與計價同源；每期差異都能追到工項與現場。'],
+  docs: ['文件與結案 · Documents', '專案文件', '從投標文件到驗收結算，同一條版本鏈，附 AI 擷取來源頁碼。'],
+  portfolio: ['跨案總覽 · Portfolio', '在辦工程', '機關視角的全部在辦工程：進度、金流與需要盯的例外事項。'],
+  agent: ['AI 代理 · Ask PMIS', '問 PMIS', '以本案資料回答，每一句都附來源；建議的動作可以直接執行成草稿。'],
+  states: ['元件與狀態 · States', '元件與狀態', '載入、空、錯誤、送出中，以及 Dialog、Snackbar、選單、表格排序篩選分頁的規範。這頁只給實作者看，不是產品畫面。'],
+  admin: ['平台管理 · Platform', 'AI 用量與功能開關', '平台營運者專用：模型用量與成本、功能開關、專案方案與資安留存。'],
+};
+
+const ACTIONS = {
+  dash: [['btn btn-secondary', '匯出整案資料'], ['btn btn-primary', '問 PMIS']],
+  site: [['btn btn-secondary', '列印官方格式'], ['btn btn-primary', '新增日誌']],
+  req: [['btn btn-secondary', '匯出對照表'], ['btn btn-primary', '重跑 AI 擷取']],
+  money: [['btn btn-secondary', '匯入標單'], ['btn btn-primary', '建立第 8 期']],
+  docs: [['btn btn-secondary', '版本比對'], ['btn btn-primary', '上傳文件']],
+  portfolio: [['btn btn-secondary', '匯出季報'], ['btn btn-primary', '新增專案']],
+  agent: [['btn btn-secondary', '對話紀錄']],
+  admin: [['btn btn-secondary', '匯出用量 CSV']],
+};
+
+const TASKS = {
+  contractor: [
+    { due: '逾期 2 日', title: '第 7 期估驗待補件：8/12 進場鋼筋出廠證明', note: '監造 大方工程顧問 · 陳志明 退回', code: 'VAL-07', urgent: true },
+    { due: '今日', title: '施工日誌 8/20 尚未送簽（AI 草稿已備）', note: '契約規定次日 12:00 前完成', code: 'LOG-0820', urgent: true },
+    { due: '今日', title: 'RFI-014 地下室止水帶規格，等待機關回覆', note: '逾期將影響 B1 防水工序 3 日', code: 'RFI-014' },
+    { due: '2 日內', title: 'SUB-032 混凝土配比送審（AI 已標記不符規範）', note: '契約 03310 節 2.4 款：28 天 350 kgf/cm²', code: 'SUB-032' },
+    { due: '本週', title: '缺失 DEF-041 6F 樓板保護層不足，複驗申請', note: '監造指定 8/23 前完成改善', code: 'DEF-041' },
+  ],
+  supervisor: [
+    { due: '逾期 1 日', title: '查驗申請 QC-0231 6F 樓板配筋，尚未排定', note: '廠商 宏昇營造 8/19 提出', code: 'QC-0231', urgent: true },
+    { due: '今日', title: '第 7 期估驗計價審核（AI 已標記 2 項數量差異）', note: '08-410 外牆帷幕多 42 m²', code: 'VAL-07', urgent: true },
+    { due: '今日', title: '施工日誌 8/19 待簽認', note: '含 2 張 AI 標記異常照片', code: 'LOG-0819' },
+    { due: '3 日內', title: '8 月監造報表（AI 草稿 14 頁已備）', note: '需附本月查驗 34 件、缺失 9 件彙整', code: 'SUP-08' },
+    { due: '本週', title: 'DEF-039 外牆磁磚空鼓複驗', note: '廠商回報已改善', code: 'DEF-039' },
+  ],
+  owner: [
+    { due: '逾期 11 日', title: '第 5 期保留款應退部分尚未辦理', note: '契約第 5 條：驗收合格後 30 日內', code: 'PAY-05', urgent: true },
+    { due: '今日', title: '變更設計 CO-003 消防管線改道，待核定', note: '增加 NT$1,842,000 · 佔契約 0.38%', code: 'CO-003', urgent: true },
+    { due: '2 日內', title: 'RFI-014 地下室止水帶規格，待回覆廠商', note: '逾期將構成工期展延事由', code: 'RFI-014' },
+    { due: '本週', title: '第 6 期請款 NT$38,420,000 待付款', note: '監造已審核 · 主計待核', code: 'PAY-06' },
+    { due: '本月', title: '風險稽核：1 案計價曲線異常，待查', note: '中壢運動公園改善工程', code: 'AUD-02' },
+  ],
+};
+
+const ALERTS = {
+  contractor: [
+    { level: '高', tone: 'danger', tag: '品質', title: '鋼線網搭接長度 11 cm 低於規範 27 cm', source: '查驗照片 8/04 · BAU-36 頂版', action: '開立自主檢查' },
+    { level: '中', tone: 'warn', tag: '進度', title: '關鍵路徑「外牆帷幕吊裝」落後 4.2%，估計影響完工 9 日', source: '逐工項排程 · 本週實際產出', action: '調整排程' },
+    { level: '低', tone: 'ok', tag: '金流', title: '第 7 期估驗補件後預估 8/26 入帳，現金流無缺口', source: '請款收款 · 第 6–7 期', action: '看金流' },
+  ],
+  supervisor: [
+    { level: '高', tone: 'danger', tag: '品質', title: '鋼線網搭接不足，尚未收到廠商處理計畫', source: '查驗紀錄 QC-0231 · 契約 03310 節 3.2 款', action: '要求提報' },
+    { level: '中', tone: 'warn', tag: '文件', title: '3 份送審文件接近契約審查期限，逾期責任將移轉', source: '契約重點第 12 條 · 送審 14 日', action: '排定審查' },
+    { level: '低', tone: 'ok', tag: '工安', title: '本週工安觀察 0 件未結，自主檢查表齊備', source: '工安管理 · 8/14–8/20', action: '看紀錄' },
+  ],
+  owner: [
+    { level: '高', tone: 'danger', tag: '契約', title: '保留款退還逾期 11 日，屬機關應辦事項', source: '契約第 5 條 · 第 5 期驗收紀錄', action: '交辦主計' },
+    { level: '中', tone: 'warn', tag: '變更', title: 'CO-003 若逾 8/25 未核定，將產生停工待料', source: 'RFI-013 · 消防管線衝突', action: '排入簽辦' },
+    { level: '低', tone: 'ok', tag: '進度', title: '全機關 6 案中 4 案進度正常，僅本案落後逾 3%', source: '跨案總覽 · 8 月', action: '看跨案' },
+  ],
+};
+
+const FIGURES = {
+  contractor: [
+    { label: '實際進度', value: '58.3%', note: '計畫 62.5% · 落後 4.2%' },
+    { label: '契約金額', value: '4.86 億', note: '含變更 +1,842,000' },
+    { label: '已計價', value: '42.7%', note: '累計 NT$207,650,000' },
+    { label: '剩餘工期', value: '218 天', note: '完工 2027-03-25' },
+  ],
+  supervisor: [
+    { label: '實際進度', value: '58.3%', note: '計畫 62.5% · 落後 4.2%' },
+    { label: '待審件數', value: '9', note: '送審 5 · 查驗 3 · 計價 1' },
+    { label: '未結缺失', value: '9', note: '逾期未改善 2' },
+    { label: '本月查驗', value: '34', note: '合格 31 · 不合格 3' },
+  ],
+  owner: [
+    { label: '實際進度', value: '58.3%', note: '計畫 62.5% · 落後 4.2%' },
+    { label: '已付款', value: '38.9%', note: 'NT$189,230,000' },
+    { label: '保留款', value: '1,248 萬', note: '逾期未退 1 期' },
+    { label: '待簽辦', value: '3', note: '變更 1 · 請款 1 · 稽核 1' },
+  ],
+};
+
+const AUTOMATION = [
+  { what: '擷取契約履約要求', n: '106 條' },
+  { what: '比對送審文件與規範', n: '3 份' },
+  { what: '草擬施工日誌', n: '1 份' },
+  { what: '標記異常現場照片', n: '2 張' },
+  { what: '核對估驗數量與查驗紀錄', n: '1,842 筆' },
+];
+
+class Component extends DCLogic {
+  state = { route: 'dash', role: 'contractor', tab: 0, dark: false, platformAdmin: false, signupRole: 'owner' };
+
+  go = (route) => () => this.setState({ route, tab: 0 });
+  setRole = (role) => () => this.setState({ role });
+  toggleDark = () => this.setState((s) => ({ dark: !s.dark }));
+  togglePlatformAdmin = () => this.setState((s) => ({
+    platformAdmin: !s.platformAdmin,
+    route: s.platformAdmin && s.route === 'admin' ? 'dash' : s.route,
+  }));
+
+  renderVals() {
+    const { route, role, tab } = this.state;
+    const appRoutes = ['dash', 'site', 'req', 'money', 'docs', 'portfolio', 'agent', 'admin', 'states'];
+    const head = HEAD[route] || HEAD.dash;
+    const tabs = TABS[route] || [];
+    const roleLabel = { contractor: '廠商', supervisor: '監造', owner: '機關' }[role];
+
+    const nav = NAV.map((n) => {
+      const on = route === n.route;
+      return {
+        zh: n.zh, en: n.en, icon: n.icon, badge: n.badge, go: this.go(n.route),
+        bg: on ? 'var(--color-accent-100)' : 'transparent',
+        fg: on ? 'var(--color-accent-800)' : 'var(--color-neutral-800)',
+        weight: on ? '500' : '400',
+        fill: on ? 'msy-f' : '',
+        badgeColor: on ? 'var(--color-accent-800)' : 'var(--color-neutral-700)',
+      };
+    });
+
+    return {
+      themeClass: this.state.dark ? 'g-dark' : '',
+      themeIcon: this.state.dark ? 'light_mode' : 'dark_mode',
+      toggleDark: this.toggleDark,
+      togglePlatformAdmin: this.togglePlatformAdmin,
+      adminChip: this.state.platformAdmin
+        ? { bg: 'var(--color-accent-100)', border: 'transparent', color: 'var(--color-accent-800)', check: 'block', padLeft: '10px' }
+        : { bg: 'var(--g-card)', border: 'var(--color-divider)', color: 'var(--color-neutral-800)', check: 'none', padLeft: '14px' },
+      isLogin: route === 'login',
+      isMobile: route === 'mobile',
+      isApp: appRoutes.includes(route),
+      isDash: route === 'dash', isSite: route === 'site', isReq: route === 'req',
+      isMoney: route === 'money', isDocs: route === 'docs', isPortfolio: route === 'portfolio',
+      isAgent: route === 'agent', isAdmin: route === 'admin',
+      nav,
+      platformNav: this.state.platformAdmin ? [{
+        zh: '平台管理', en: 'Admin', go: this.go('admin'),
+        bg: route === 'admin' ? 'var(--color-accent-100)' : 'transparent',
+        fg: route === 'admin' ? 'var(--color-accent-800)' : 'var(--color-neutral-800)',
+      }] : [],
+      roles: [['contractor', '廠商'], ['supervisor', '監造'], ['owner', '機關']].map(([k, label]) => ({
+        label, go: this.setRole(k),
+        border: role === k ? 'transparent' : 'var(--color-divider)',
+        bg: role === k ? 'var(--color-accent-100)' : 'var(--g-card)',
+        color: role === k ? 'var(--color-accent-800)' : 'var(--color-neutral-800)',
+        padLeft: role === k ? '10px' : '14px',
+        checkDisplay: role === k ? 'block' : 'none',
+      })),
+      avatar: { contractor: '王', supervisor: '陳', owner: '林' }[role],
+      userName: { contractor: '王承翰', supervisor: '陳志明', owner: '林淑芬' }[role],
+      userOrg: {
+        contractor: '宏昇營造 · 廠商',
+        supervisor: '大方工程顧問 · 監造',
+        owner: '桃園市工務局 · 機關',
+      }[role],
+      goAgent: this.go('agent'), goLogin: this.go('login'), goMobile: this.go('mobile'),
+      goTablet: this.go('tablet'), goStates: this.go('states'), signIn: this.go('dash'),
+      isTablet: route === 'tablet', isStates: route === 'states', isSignup: route === 'signup',
+      goSignup: this.go('signup'),
+      signupRoles: [
+        { key: 'contractor', label: '施工廠商', icon: 'engineering', desc: '填日誌、申請查驗、送審文件、提估驗計價與請款。', scope: '可見成本與內部排程' },
+        { key: 'supervisor', label: '監造單位', icon: 'fact_check', desc: '審查送審與計價、排定查驗、開立缺失、出監造報表。', scope: '不經手請款與廠商成本' },
+        { key: 'owner', label: '機關／業主', icon: 'account_balance', desc: '核定變更、付款與保留款、看跨案總覽與風險稽核。', scope: '不可見廠商毛利' },
+      ].map((r) => {
+        const on = this.state.signupRole === r.key;
+        return {
+          ...r,
+          pick: () => this.setState({ signupRole: r.key }),
+          bg: on ? 'var(--color-accent-100)' : 'var(--g-card)',
+          border: on ? '2px solid var(--color-accent)' : '1px solid var(--color-divider)',
+          iconColor: on ? 'var(--color-accent-800)' : 'var(--color-neutral-700)',
+          fill: on ? 'msy-f' : '',
+          check: on ? 'block' : 'none',
+        };
+      }),
+      signupOrgLabel: { contractor: '營造公司名稱', supervisor: '工程顧問公司名稱', owner: '機關名稱' }[this.state.signupRole],
+      signupOrgValue: { contractor: '宏昇營造股份有限公司', supervisor: '大方工程顧問股份有限公司', owner: '桃園市政府工務局' }[this.state.signupRole],
+      signupHint: {
+        contractor: '廠商帳戶需由專案建立者或機關以邀請碼加入專案；未受邀前只能看到示範案。',
+        supervisor: '監造帳戶會自動取得審查與簽認權限，但不經手請款與廠商成本資料。',
+        owner: '機關帳戶可建立專案並開啟正式模式；平台管理後台不屬於專案角色，僅平台營運者可見。',
+      }[this.state.signupRole],
+      railNav: NAV.map((n, i) => {
+        const on = i === 0;
+        return {
+          zh: n.zh, short: ['待辦', '現場', '審查', '金流', '文件', '專案'][i], icon: n.icon, badge: n.badge,
+          go: this.go(n.route),
+          bg: on ? 'var(--color-accent-100)' : 'transparent',
+          fg: on ? 'var(--color-accent-800)' : 'var(--color-neutral-700)',
+          fill: on ? 'msy-f' : '',
+        };
+      }),
+      tabletFigures: FIGURES[role].slice(0, 2),
+      tabletTasks: TASKS[role].slice(0, 3).map((t) => ({
+        ...t,
+        dueChip: chip(t.due.startsWith('逾期') ? 'danger' : t.due === '今日' ? 'warn' : 'mute', t.due),
+      })),
+      pageKicker: head[0], pageTitle: head[1], pageLede: head[2],
+      pageActions: (ACTIONS[route] || []).map(([cls, label]) => ({ cls, label })),
+      hasTabs: tabs.length > 0,
+      tabs: tabs.map((label, i) => ({
+        label: label.split(' ')[0], go: () => this.setState({ tab: i }),
+        bg: i === tab ? 'var(--color-accent-100)' : 'var(--g-card)',
+        border: i === tab ? 'transparent' : 'var(--color-divider)',
+        color: i === tab ? 'var(--color-accent-800)' : 'var(--color-neutral-800)',
+      })),
+      roleLabel,
+      figures: FIGURES[role],
+      tasks: TASKS[role].map((t) => ({
+        ...t,
+        dueChip: chip(t.due.startsWith('逾期') ? 'danger' : t.due === '今日' ? 'warn' : 'mute', t.due),
+      })),
+      taskCount: role === 'owner' ? 11 : role === 'supervisor' ? 14 : 12,
+      alerts: ALERTS[role].map((a) => ({ ...a, levelChip: chip(a.tone, '風險 ' + a.level) })),
+      automation: AUTOMATION,
+      mobileTasks: TASKS.contractor.slice(0, 4).map((t) => ({
+        ...t,
+        dot: t.due.startsWith('逾期') ? 'var(--c-danger)' : t.due === '今日' ? 'var(--c-warn)' : 'transparent',
+      })),
+      siteRows: [
+        { item: '03-210 鋼線網組立（BAU-36）', loc: '頂版 4-4-25M', men: '12', eq: '1', qc: '已申請 QC-0231' },
+        { item: '03-310 混凝土澆置', loc: '5F 梯間', men: '8', eq: '2', qc: '合格 8/19' },
+        { item: '08-410 金屬帷幕吊裝', loc: '東立面 3–5F', men: '9', eq: '2', qc: '待查驗' },
+        { item: '02-220 假設工程維護', loc: '全區', men: '3', eq: '0', qc: '—' },
+      ],
+      defects: [
+        { code: 'DEF-041', tag: chip('danger', '逾期 1 日'), title: '頂版鋼線網搭接長度不足', who: '廠商改善中 · 限 8/23' },
+        { code: 'DEF-039', tag: chip('info', '待複驗'), title: '東立面磁磚空鼓 3 處', who: '已回報改善完成' },
+        { code: 'DEF-036', tag: chip('mute', '已結案'), title: 'B1 泵浦坑積水', who: '監造 8/14 複驗合格' },
+      ],
+      itp: [
+        { title: '頂版鋼線網查驗', when: '8/21 09:00 · 監造到場', tag: chip('ok', '已排定') },
+        { title: '5F 混凝土強度試體', when: '28 天 · 9/16 開封', tag: chip('info', '追蹤中') },
+        { title: '外牆帷幕水密試驗', when: '待廠商提出', tag: chip('warn', '未申請') },
+      ],
+      obligations: [
+        { clause: '第 5 條 1 款', text: '每期估驗計價應於監造審核後 15 日內完成付款', party: '機關', due: '事件觸發', conf: '0.96', confColor: OK, src: '契約書 p.7' },
+        { clause: '03310 節 2.4', text: '結構混凝土 28 天抗壓強度不得低於 350 kgf/cm²', party: '廠商', due: '持續', conf: '0.94', confColor: OK, src: '施工規範 p.112' },
+        { clause: '第 12 條 3 款', text: '送審文件監造應於 14 日內完成審查，逾期視同同意', party: '監造', due: '事件觸發', conf: '0.91', confColor: OK, src: '契約書 p.14' },
+        { clause: '第 9 條 2 款', text: '每月 5 日前提送上月施工月報一式三份', party: '廠商', due: '每月 5 日', conf: '0.89', confColor: OK, src: '契約書 p.11' },
+        { clause: '第 18 條', text: '逾期違約金按契約總價千分之一計算，上限百分之二十', party: '廠商', due: '事件觸發', conf: '0.72', confColor: 'var(--c-warn-text)', src: '契約書 p.21' },
+        { clause: '附件三 4.2', text: '施工期間應每日回報工地安全衛生自主檢查表', party: '廠商', due: '每日', conf: '0.68', confColor: 'var(--c-warn-text)', src: '投標須知 p.5' },
+      ],
+      submittals: [
+        { code: 'SUB-032', tag: chip('danger', '不符規範'), title: '結構混凝土配比設計書', note: 'AI 比對：抗壓強度低於契約要求' },
+        { code: 'SUB-031', tag: chip('info', '審查中 · 剩 4 日'), title: '金屬帷幕材料樣品與檢驗報告', note: '監造 大方工程顧問' },
+        { code: 'SUB-029', tag: chip('warn', '逾期 3 日'), title: '消防管線施工圖說（修訂三版）', note: '逾期視同同意 · 契約第 12 條' },
+        { code: 'SUB-027', tag: chip('ok', '已核可'), title: '鋼筋出廠證明與檢驗報告', note: '8/09 核可' },
+      ],
+      moneyFigures: [
+        { label: '本期估驗金額', value: '32,180,000', note: '第 7 期 · 8/01–8/20' },
+        { label: '累計計價', value: '42.7%', note: 'NT$207,650,000' },
+        { label: '保留款', value: '12,480,000', note: '契約 5% · 逾期未退 1 期' },
+        { label: '待付款', value: '38,420,000', note: '第 6 期 · 主計待核' },
+      ],
+      boqRows: [
+        { no: '03', name: '混凝土工程', qty: '—', now: '—', cum: '61.2%', amt: '18,420,000', indent: '0px', weight: '500', rowBg: 'var(--color-neutral-100)' },
+        { no: '03-210', name: '鋼筋加工組立（SD420W）', qty: '4,280 t', now: '128 t', cum: '64.8%', amt: '9,216,000', indent: '18px', weight: '400', rowBg: 'transparent' },
+        { no: '03-310', name: '結構混凝土 350 kgf/cm²', qty: '12,600 m³', now: '410 m³', cum: '58.1%', amt: '9,204,000', indent: '18px', weight: '400', rowBg: 'transparent' },
+        { no: '08', name: '門窗與帷幕工程', qty: '—', now: '—', cum: '31.4%', amt: '11,760,000', indent: '0px', weight: '500', rowBg: 'var(--color-neutral-100)' },
+        { no: '08-410', name: '金屬帷幕牆（含玻璃）', qty: '8,240 m²', now: '392 m²', cum: '33.8%', amt: '11,760,000', indent: '18px', weight: '400', rowBg: 'transparent' },
+        { no: '15', name: '機電與消防工程', qty: '—', now: '—', cum: '22.6%', amt: '2,000,000', indent: '0px', weight: '500', rowBg: 'var(--color-neutral-100)' },
+        { no: '15-120', name: '消防管線與設備（含變更）', qty: '1 式', now: '0.12 式', cum: '22.6%', amt: '2,000,000', indent: '18px', weight: '400', rowBg: 'transparent' },
+      ],
+      payRows: [
+        { label: '第 6 期請款', note: '監造已審核 · 主計待核', amt: '38,420,000' },
+        { label: '第 5 期保留款應退', note: '逾期 11 日 · 契約第 5 條', amt: '2,140,000' },
+        { label: '累計已付款', note: '截至 8/20', amt: '189,230,000' },
+        { label: '變更設計增額', note: 'CO-001、CO-002 已核定', amt: '3,684,000' },
+      ],
+      docRows: [
+        { name: '工程契約書（含附件一至五）', by: '機關 桃園市工務局 上傳', kind: '契約', ver: 'v1', tag: chip('ok', '已擷取 106 條'), at: '2025-03-18' },
+        { name: '施工規範（第 02–16 分項）', by: '機關上傳', kind: '規範', ver: 'v2', tag: chip('ok', '已擷取 · 頁碼對照'), at: '2025-03-18' },
+        { name: '詳細價目表（PCCES 匯出）', by: '廠商 宏昇營造 上傳', kind: '標單', ver: 'v3', tag: chip('ok', '已匯入 1,842 筆'), at: '2025-04-02' },
+        { name: '變更設計 CO-003 圖說與說明書', by: '監造上傳', kind: '變更', ver: 'v1', tag: chip('info', '處理中 · 3/8 頁'), at: '2026-08-18' },
+        { name: '8 月現場照片彙整（412 張）', by: '廠商上傳', kind: '照片', ver: '—', tag: chip('warn', '1 張異常待處理'), at: '2026-08-20' },
+        { name: '第 7 期估驗計價封面與明細', by: '系統產生', kind: '計價', ver: 'v1', tag: chip('mute', '無需處理'), at: '2026-08-20' },
+      ],
+      acceptance: [
+        { step: '分項查驗完成（結構體）', who: '監造 · 大方工程顧問', when: '2026-06-30', dot: 'var(--color-accent)' },
+        { step: '竣工報告提送', who: '廠商 · 預計 2027-03', when: '未辦', dot: 'transparent' },
+        { step: '初驗', who: '機關 · 竣工後 30 日內', when: '未辦', dot: 'transparent' },
+        { step: '驗收', who: '機關 · 初驗合格後 20 日內', when: '未辦', dot: 'transparent' },
+        { step: '結算與保留款退還', who: '機關 主計', when: '未辦', dot: 'transparent' },
+      ],
+      portfolio: [
+        { name: '桃園市立圖書館新建工程', stage: '施工中 · 第 7 期估驗', vendor: '宏昇營造', amount: '486,300,000', plan: '62.5%', actual: '58.3%', actualColor: 'var(--c-danger-text)', paid: '38.9%', tag: chip('danger', '進度落後 · 保留款逾期') },
+        { name: '中壢運動公園改善工程', stage: '施工中 · 第 12 期估驗', vendor: '長泰工程', amount: '212,400,000', plan: '81.0%', actual: '80.4%', actualColor: 'var(--c-warn-text)', paid: '74.2%', tag: chip('warn', '計價曲線異常') },
+        { name: '大溪河濱道路拓寬工程', stage: '施工中', vendor: '合陽營造', amount: '148,900,000', plan: '44.2%', actual: '46.8%', actualColor: 'var(--c-ok-text)', paid: '41.0%', tag: chip('ok', '正常') },
+        { name: '龜山區公有市場整建', stage: '驗收中', vendor: '宏昇營造', amount: '96,200,000', plan: '100%', actual: '100%', actualColor: 'var(--c-ok-text)', paid: '92.5%', tag: chip('warn', '初驗缺失 4 件未結') },
+        { name: '八德污水管線第三標', stage: '施工中', vendor: '德翔工程', amount: '324,700,000', plan: '28.4%', actual: '28.0%', actualColor: 'var(--c-ok-text)', paid: '24.6%', tag: chip('ok', '正常') },
+        { name: '平鎮國小校舍耐震補強', stage: '已完工結算', vendor: '合陽營造', amount: '58,400,000', plan: '100%', actual: '100%', actualColor: MUT, paid: '100%', tag: chip('mute', '已結案') },
+      ],
+      exceptions: [
+        { title: '保留款退還逾期 · 2 案', detail: '圖書館第 5 期逾 11 日、市場整建第 9 期逾 4 日' },
+        { title: '進度落後逾 3% · 1 案', detail: '圖書館新建工程 落後 4.2%，關鍵路徑外牆帷幕' },
+        { title: '計價曲線異常 · 1 案', detail: '中壢運動公園連續 3 期計價成長高於實際進度' },
+        { title: '初驗缺失未結 · 4 件', detail: '龜山市場整建，逾 30 日未複驗' },
+      ],
+      activity: [
+        { at: '08-20 09:42', what: '宏昇營造 王承翰 送出 第 7 期估驗計價' },
+        { at: '08-20 08:12', what: 'AI 代理 產生 施工日誌草稿 8/20（來源：照片 6 張）' },
+        { at: '08-19 17:05', what: '大方工程顧問 陳志明 退回 SUB-032（不符 03310 節）' },
+        { at: '08-19 14:20', what: '桃園市工務局 林淑芬 核定 契約重點 8 條' },
+        { at: '08-18 16:33', what: 'AI 代理 標記 現場照片 2 張異常（工安）' },
+        { at: '08-18 11:07', what: '大方工程顧問 陳志明 簽認 施工日誌 8/17' },
+      ],
+      prompts: [
+        '這個月落後的原因是什麼？拿現場資料回答我',
+        '契約裡機關有哪些逾期未辦的事？',
+        '第 7 期估驗跟第 6 期比，哪些工項變動最大？',
+        '把本月缺失與工安觀察整理成監造報表',
+        'CO-003 若核定，對完工日期與金額的影響？',
+      ],
+      adminFigures: [
+        { label: '在辦專案', value: '18', note: '機關 6 · 顧問 7 · 廠商 5' },
+        { label: '本月 AI 呼叫', value: '42,180', note: '較上月 +18.4%' },
+        { label: '本月成本', value: 'US$1,284', note: '每案平均 US$71' },
+        { label: '文件擷取', value: '1,204 頁', note: '成功率 98.2%' },
+      ],
+      adminRows: [
+        { name: '桃園市立圖書館新建工程', plan: '正式 · 專業版', calls: '9,842', tokens: '48.2 M', cost: 'US$312' },
+        { name: '中壢運動公園改善工程', plan: '正式 · 專業版', calls: '6,120', tokens: '29.4 M', cost: 'US$188' },
+        { name: '大溪河濱道路拓寬工程', plan: '正式 · 標準版', calls: '4,208', tokens: '18.1 M', cost: 'US$121' },
+        { name: '八德污水管線第三標', plan: '正式 · 標準版', calls: '3,914', tokens: '16.8 M', cost: 'US$112' },
+        { name: '示範案（教學用）', plan: '非正式模式', calls: '1,102', tokens: '4.2 M', cost: 'US$28' },
+      ],
+      flags: [
+        { name: '照片工安偵測', scope: '全平台', tag: chip('ok', '啟用') },
+        { name: '契約重點自動核定', scope: '僅示範案', tag: chip('warn', '限定啟用') },
+        { name: '月報自動草擬', scope: '顧問公司方案', tag: chip('ok', '啟用') },
+        { name: '跨案風險稽核', scope: '機關方案', tag: chip('ok', '啟用') },
+        { name: '境外模型供應商', scope: '—', tag: chip('mute', '停用') },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

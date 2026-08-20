@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Printer, Sparkles } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, Button, PageHeader } from '../../components/ui.jsx'
+import { Card, Empty, Button, PageHeader, Surface } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { rainDayCount } from '../../lib/weatherMetrics.js'
@@ -103,13 +103,14 @@ export default function MonthlyReport() {
                 <input type="month" value={month} aria-label="月報月份" onChange={(e) => setMonth(e.target.value)}
                   className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
               </label>
-              <Button onClick={() => window.print()}><Printer size={15} aria-hidden />列印 / 存 PDF</Button>
+              <Button onClick={() => window.print()}><MSym name="print" size={15} />列印 / 存 PDF</Button>
             </div>
           } />
       </div>
 
-      {/* 月報本體（列印範圍）*/}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-6 md:p-8 print:border-0 print:shadow-none print:p-0 space-y-6 text-[var(--text)]">
+      {/* 月報本體（列印範圍）——卡殼吃共用 Surface,白底/圓角/卡框/陰影跟著 token 走;
+          print: 三件(去邊框、去陰影、去內距)是列印版面的合約,原樣保留 */}
+      <Surface className="p-6 md:p-8 print:border-0 print:shadow-none print:p-0 space-y-6 text-[var(--text)]">
         <div className="text-center border-b border-[var(--border)] pb-4">
           <h2 className="text-lg font-bold">施工進度月報</h2>
           <p className="text-sm mt-1">{project.project_name}</p>
@@ -287,7 +288,7 @@ export default function MonthlyReport() {
               setReview(result.review || ''); setNextPlan(result.next_plan || '')
             }} disabled={aiBusy}
               className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] pressable ${aiBusy ? 'opacity-50' : 'hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
-              <Sparkles size={15} aria-hidden />{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
+              <MSym name="auto_awesome" size={15} />{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
             </button>
             <span className="text-[11px] text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
             {aiErr && <span className="text-xs text-[var(--red-text)]">{aiErr}</span>}
@@ -313,7 +314,7 @@ export default function MonthlyReport() {
             <div key={r}><div className="border-t border-[var(--text-3)] pt-1.5 mt-10">{r}</div></div>
           ))}
         </div>
-      </div>
+      </Surface>
 
       <p className="text-xs text-[var(--text-3)] print:hidden">
         本月報自動彙整自進度、估驗、施工日誌、品質查驗、工安與變更設計。檢討/下月計畫可臨時填寫後列印（不會儲存）。列印時側欄與工具列自動隱藏。

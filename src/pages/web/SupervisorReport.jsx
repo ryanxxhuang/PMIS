@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Printer, Sparkles } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, PageHeader, Button, Badge } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Button, Badge, Surface } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { buildSupervisorReport } from '../../lib/supervisorReport.js'
@@ -9,13 +9,12 @@ import { buildSupervisorReport } from '../../lib/supervisorReport.js'
 // 每次呼叫取「今天」(B-11):模組層常數會讓長開分頁凍結在開頁那天
 const curMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 
+// 章節標題=Workspace 卡頭風(15px/500)。拿掉藍色短標:章節本來就靠「一、二、三」
+// 編號分節,再加一條主色裝飾條會讓每一節都像重點,反而讀不出輕重。
 function Section({ n, title, children }) {
   return (
     <div>
-      <div className="flex items-center gap-2 mb-2">
-        <span className="w-1 h-4 rounded-full bg-[var(--blue)]" />
-        <h3 className="text-sm font-semibold text-[var(--text)]">{n}、{title}</h3>
-      </div>
+      <h3 className="text-[15px] font-medium text-[var(--text)] mb-2">{n}、{title}</h3>
       <div className="pl-3">{children}</div>
     </div>
   )
@@ -77,11 +76,13 @@ export default function SupervisorReport() {
           <div className="flex items-center gap-2 print:hidden">
             <input type="month" value={month} aria-label="報表月份" onChange={(e) => { setMonth(e.target.value); setOpinion(null) }}
               className="bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--blue)]" />
-            <Button onClick={() => window.print()}><Printer size={15} aria-hidden />列印 / 存 PDF</Button>
+            <Button onClick={() => window.print()}><MSym name="print" size={15} />列印 / 存 PDF</Button>
           </div>
         } />
 
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)] p-6 md:p-8 print:border-0 print:shadow-none print:p-0 space-y-6 text-[var(--text)]">
+      {/* 報表本體(列印範圍)——與施工月報同一組卡殼,改吃共用 Surface;
+          print: 三件是列印版面的合約,原樣保留 */}
+      <Surface className="p-6 md:p-8 print:border-0 print:shadow-none print:p-0 space-y-6 text-[var(--text)]">
         <div className="text-center border-b border-[var(--border)] pb-4">
           <div className="text-lg font-bold">監造報表</div>
           <div className="text-sm text-[var(--text-2)] mt-0.5">{project.project_name}</div>
@@ -142,7 +143,7 @@ export default function SupervisorReport() {
           <textarea value={opinionText} onChange={(e) => setOpinion(e.target.value)} rows={5}
             className="w-full text-sm leading-relaxed bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:border-[var(--blue)] print:border-0 print:px-0 resize-y" />
           <div className="text-[11px] text-[var(--text-3)] mt-1 print:hidden flex items-center gap-1">
-            <Sparkles size={12} aria-hidden />AI 依本月數據草擬，請監造覆核修改後再列印用印。
+            <MSym name="auto_awesome" size={12} />AI 依本月數據草擬，請監造覆核修改後再列印用印。
           </div>
         </Section>
 
@@ -151,7 +152,7 @@ export default function SupervisorReport() {
             <div key={role}><div className="border-t border-[var(--text-3)] pt-1 mt-8">{role}</div></div>
           ))}
         </div>
-      </div>
+      </Surface>
     </div>
   )
 }
