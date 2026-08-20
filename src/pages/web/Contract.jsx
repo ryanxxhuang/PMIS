@@ -8,7 +8,8 @@ import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Card, Empty, PageHeader, Badge, Button, Select, buttonClass } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Badge, Button, Select, buttonClass, FilterChip, SortableTh, TablePager } from '../../components/ui.jsx'
+import { useTableSort, usePagination } from '../../lib/useTable.js'
 import { computeObligationDue } from '../../lib/contractDue.js'
 import { estimatePenalty } from '../../lib/penaltyCalc.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -46,6 +47,12 @@ const DOT = { done: 'var(--green-text)', overdue: 'var(--red-text)', soon: 'var(
 // W8-5:狀態不得只靠顏色。色點本身給等價文字(hover 看 title、報讀器讀 aria-label),
 // 色盲與螢幕報讀使用者才拿得到「已逾期/7 日內」這種行動依據。
 const DOT_LABEL = { done: '已完成', overdue: '已逾期', soon: '7 日內到期', scheduled: '排程中', nodate: '無期限' }
+// 文件清單表格欄樣式:字級/內距對齊 Admin 的 TH/TD 常數(11px/500 表頭、13px 內文,
+// README 字級表)。兩頁沒有共用常數的必要,先各自字面;同步點是 README。
+const DOC_TH = 'text-left font-medium text-[11px] text-[var(--text-2)] py-2 px-3 whitespace-nowrap'
+// text-left/text-right 同屬性,不可用附加 class 蓋——誰生效取決於產出 CSS 順序
+const DOC_THR = 'text-right font-medium text-[11px] text-[var(--text-2)] py-2 px-3 whitespace-nowrap'
+const DOC_TD = 'py-2 px-3 text-[13px] align-top'
 export default function Contract() {
   const {
     isSupabaseConfigured, currentProject, isPersistedProject,
@@ -360,15 +367,30 @@ export default function Contract() {
     return { run, version, doc }
   }), [runs, versionsById, docsById])
   const needsReviewRows = fileRows.filter((r) => r.run.classification_status === 'needs_review')
-  const groupedFiles = useMemo(() => {
-    const byGroup = new Map(PRESENTATION_GROUPS.map((g) => [g, []]))
-    for (const row of fileRows) {
-      const type = row.doc?.document_type || row.run.suggested_document_type || 'other'
-      const group = presentationGroup(type, row.run.metadata?.classification_reason)
-      byGroup.get(group)?.push(row)
-    }
-    return [...byGroup.entries()].filter(([, list]) => list.length)
-  }, [fileRows])
+  // 文件清單表格化(README「表格:排序、篩選、分頁」):分類維度沿用既有的
+  // presentationGroup(它把 itp 併進品質類、認得「價格與標單」的 reason 細分),
+  // 不另發明一套 enum。title/uploaded 攤平成欄位供 useTableSort 直接比較。
+  const docTableRows = useMemo(() => fileRows.map(({ run, doc, version }) => ({
+    run,
+    doc,
+    version,
+    title: doc?.title || '文件',
+    group: presentationGroup(doc?.document_type || run.suggested_document_type || 'other',
+      run.metadata?.classification_reason),
+    uploaded: run.started_at || '',
+  })), [fileRows])
+  // chips 只列資料裡實際出現的分類(distinct),順序沿 PRESENTATION_GROUPS 固定
+  const docGroups = useMemo(
+    () => PRESENTATION_GROUPS.filter((g) => docTableRows.some((r) => r.group === g)),
+    [docTableRows],
+  )
+  const [docGroupFilter, setDocGroupFilter] = useState(null) // null=全部(單選篩選)
+  const filteredDocRows = useMemo(
+    () => (docGroupFilter ? docTableRows.filter((r) => r.group === docGroupFilter) : docTableRows),
+    [docTableRows, docGroupFilter],
+  )
+  const { sort: docSort, toggleSort: toggleDocSort, sorted: sortedDocRows } = useTableSort(filteredDocRows)
+  const { pageRows: docPageRows, pager: docPager } = usePagination(sortedDocRows)
 
   if (isSupabaseConfigured && !currentProject) {
     return <Card title="契約管制"><Empty>請先登入並建立/選擇專案,才能整理契約文件。</Empty></Card>
@@ -569,41 +591,72 @@ export default function Contract() {
           </div>
         )}
 
-        {/* 文件分類清單 */}
-        {groupedFiles.length > 0 && (
+        {/* 文件清單表格(README /contract 文件表格):分類 chips 篩選+文件名/上傳日
+            排序+分頁。只表格化「清單呈現」——上傳流程、待確認文件與義務時程都不在
+            此改動範圍(chain3 e2e 依賴義務時程與上傳表單原樣)。 */}
+        {docTableRows.length > 0 && (
           <div className="mt-4">
-            {groupedFiles.map(([group, list]) => (
-              <div key={group} className="mb-3">
-                <div className="text-sm font-medium text-[var(--text-2)] mb-1">{group}({list.length})</div>
-                {list.map(({ run, doc, version }) => {
-                  const analyzed = run.metadata?.requirement_extraction === 'completed'
-                  return (
-                    <div key={run.id} className="flex items-center gap-2 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1">
-                      <MSym name="description" size={12} className="text-[var(--text-3)] shrink-0" />
-                      <span className="flex-1 truncate text-[var(--text)]" title={doc?.title || '文件'}>{doc?.title || '文件'}</span>
-                      {version?.version_label && <span className="text-[var(--text-3)]">{version.version_label}</span>}
-                      <Badge color={run.status === 'completed' ? 'green' : run.status === 'failed' ? 'red' : run.status === 'unsupported' ? 'slate' : run.status === 'partial' ? 'amber' : 'blue'}>
-                        {run.status === 'processing' ? STAGE_LABELS[run.stage] || run.stage : RUN_STATUS_LABELS[run.status] || run.status}
-                      </Badge>
-                      {analyzed && <span className="text-[var(--green-text)]">{run.metadata?.requirement_extraction_message || '已分析'}</span>}
-                      {run.status === 'unsupported' && <span className="text-[var(--text-2)]">{run.metadata?.limitation || '尚未支援內容分析'}</span>}
-                      {/* 解析失敗原因是「要不要重試」的唯一依據,220px 一定切掉:
-                          改兩行 line-clamp 併 title(同 RFI.jsx 的既有寫法),不再硬截斷 */}
-                      {(run.status === 'partial' || run.status === 'failed') && run.error_message && (
-                        <span className="text-[var(--amber-text)] line-clamp-2 whitespace-pre-line max-w-[220px]"
-                          title={run.error_message}>{run.error_message}</span>
-                      )}
-                      {can.edit && run.metadata?.requirement_extraction === 'failed' && (
-                        <button onClick={() => confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')}
-                          className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-sm:min-h-11 px-1">
-                          <MSym name="refresh" size={11} /> 重試分析
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
+            <div className="flex flex-wrap gap-2 mb-2.5">
+              {docGroups.map((g) => (
+                <FilterChip key={g} label={g} active={docGroupFilter === g}
+                  onToggle={() => setDocGroupFilter((cur) => (cur === g ? null : g))} />
+              ))}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    <SortableTh className={DOC_TH} label="文件" field="title" sort={docSort} onSort={toggleDocSort} />
+                    <th className={DOC_TH}>分類</th>
+                    <th className={DOC_TH}>狀態</th>
+                    <SortableTh className={DOC_THR} align="right" label="上傳日" field="uploaded" sort={docSort} onSort={toggleDocSort} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {docPageRows.map(({ run, doc, version, title, group, uploaded }) => {
+                    const analyzed = run.metadata?.requirement_extraction === 'completed'
+                    return (
+                      <tr key={run.id} className="border-b border-[var(--border-2)] last:border-0">
+                        <td className={`${DOC_TD} max-w-[280px]`}>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <MSym name="description" size={12} className="text-[var(--text-3)] shrink-0" />
+                            <span className="truncate text-[var(--text)]" title={title}>{title}</span>
+                            {version?.version_label && <span className="text-[var(--text-3)] shrink-0">{version.version_label}</span>}
+                          </div>
+                        </td>
+                        <td className={`${DOC_TD} whitespace-nowrap text-[var(--text-2)]`}>{group}</td>
+                        <td className={DOC_TD}>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                            <Badge color={run.status === 'completed' ? 'green' : run.status === 'failed' ? 'red' : run.status === 'unsupported' ? 'slate' : run.status === 'partial' ? 'amber' : 'blue'}>
+                              {run.status === 'processing' ? STAGE_LABELS[run.stage] || run.stage : RUN_STATUS_LABELS[run.status] || run.status}
+                            </Badge>
+                            {analyzed && <span className="text-[var(--green-text)]">{run.metadata?.requirement_extraction_message || '已分析'}</span>}
+                            {run.status === 'unsupported' && <span className="text-[var(--text-2)]">{run.metadata?.limitation || '尚未支援內容分析'}</span>}
+                            {/* 解析失敗原因是「要不要重試」的唯一依據,220px 一定切掉:
+                                改兩行 line-clamp 併 title(同 RFI.jsx 的既有寫法),不再硬截斷 */}
+                            {(run.status === 'partial' || run.status === 'failed') && run.error_message && (
+                              <span className="text-[var(--amber-text)] line-clamp-2 whitespace-pre-line max-w-[220px]"
+                                title={run.error_message}>{run.error_message}</span>
+                            )}
+                            {can.edit && run.metadata?.requirement_extraction === 'failed' && (
+                              <button onClick={() => confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')}
+                                className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-sm:min-h-11 px-1">
+                                <MSym name="refresh" size={11} /> 重試分析
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className={`${DOC_TD} text-right num whitespace-nowrap text-[var(--text-2)]`}>
+                          {uploaded ? String(uploaded).slice(0, 10) : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {/* 卡身已有 p-5,水平內距歸零讓分頁列貼齊表格左右緣 */}
+            <TablePager {...docPager} className="!px-0" />
           </div>
         )}
 

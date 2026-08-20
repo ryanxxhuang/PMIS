@@ -4,13 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Badge, Button, Card, Empty, Input, PageHeader, Select, SkeletonList } from '../../components/ui.jsx'
+import { Badge, Button, Card, Empty, Input, PageHeader, Select, SkeletonList, TablePager } from '../../components/ui.jsx'
 import {
   AUDIT_ENTITY_LABELS, AUDIT_EVENT_LABELS, auditActorDisplay, auditEntityLabel,
   auditEventLabel, auditEventSubject, normalizeAuditFilters,
 } from '../../lib/auditEvents.js'
 
-const PAGE_SIZE = 50
 const EMPTY_FILTERS = { actorUserId: '', eventType: '', entityType: '', dateFrom: '', dateTo: '' }
 
 function formatTime(value) {
@@ -23,6 +22,8 @@ export default function Activity() {
   const [events, setEvents] = useState([])
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [page, setPage] = useState(0)
+  // 原固定 PAGE_SIZE=50 改為可選(TablePager);預設維持 50,既有使用行為不變
+  const [pageSize, setPageSize] = useState(50)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -44,11 +45,11 @@ export default function Activity() {
     if (f.entityType) query = query.eq('entity_type', f.entityType)
     if (f.dateFrom) query = query.gte('occurred_at', f.dateFrom)
     if (f.dateToExclusive) query = query.lt('occurred_at', f.dateToExclusive)
-    const from = page * PAGE_SIZE
+    const from = page * pageSize
     const { data, count, error: queryError } = await query
       .order('occurred_at', { ascending: false })
       .order('id', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1)
+      .range(from, from + pageSize - 1)
     if (requestId !== requestRef.current) return
     if (queryError) {
       setError(queryError.message || '活動紀錄載入失敗')
@@ -59,7 +60,7 @@ export default function Activity() {
       setTotal(count || 0)
     }
     setLoading(false)
-  }, [currentProject, isPersistedProject, filters, page])
+  }, [currentProject, isPersistedProject, filters, page, pageSize])
 
   useEffect(() => { loadEvents() }, [loadEvents])
   useEffect(() => { setPage(0) }, [currentProject?.project_id])
@@ -145,15 +146,13 @@ export default function Activity() {
             ))}
           </ul>
         )}
+        {/* 伺服器分頁(range 查詢):只共用 TablePager 皮,頁碼/總數仍由本頁 state 驅動。
+            載入中整組鎖住,對應原本兩顆按鈕的 loading disabled 行為 */}
+        <TablePager page={page} pageSize={pageSize} total={total} disabled={loading}
+          onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(0) }} />
       </Card>
 
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-[var(--text-3)]">每頁最多 {PAGE_SIZE} 筆，依發生時間由新到舊。</span>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0 || loading}>上一頁</Button>
-          <Button variant="outline" onClick={() => setPage((p) => p + 1)} disabled={(page + 1) * PAGE_SIZE >= total || loading}>下一頁</Button>
-        </div>
-      </div>
+      <p className="text-xs text-[var(--text-3)]">依發生時間由新到舊。</p>
     </div>
   )
 }

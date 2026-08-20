@@ -7,7 +7,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, PageHeader, Badge, Select, Input, Stat, Empty, ErrorBanner } from '../../components/ui.jsx'
+import { Card, PageHeader, Badge, Select, Input, Stat, Empty, ErrorBanner, SortableTh, TablePager } from '../../components/ui.jsx'
+import { useTableSort, usePagination } from '../../lib/useTable.js'
 import {
   TWD_PER_USD, toTwd, presetRange, customRange, pctOfTotal, overrideToRpcValue, overrideFromDb,
 } from '../../store/slices/admin.js'
@@ -283,6 +284,10 @@ function DailyBars({ rows, getV, fmt, color }) {
 
 // ── 分頁二:依功能 ───────────────────────────────────────────────────────────
 function ByFeatureTab({ rows, loading }) {
+  // 排序/分頁都是 client-side:admin RPC 一次回整段期間的彙總列,資料已在記憶體。
+  // 佔總成本刻意用「全部列」算,不受排序與換頁影響——那是期間佔比,不是當頁佔比。
+  const { sort, toggleSort, sorted } = useTableSort(rows)
+  const { pageRows, pager } = usePagination(sorted)
   const totalCost = rows.reduce((s, r) => s + (Number(r.cost_usd) || 0), 0)
   if (!rows.length) return <Card><Empty>{loading ? '載入中…' : EMPTY_MSG}</Empty></Card>
   return (
@@ -293,19 +298,19 @@ function ByFeatureTab({ rows, loading }) {
             <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
               <th className={TH}>功能</th>
               <th className={TH}>分類</th>
-              <th className={THR}>呼叫</th>
+              <SortableTh className={THR} align="right" numeric label="呼叫" field="calls" sort={sort} onSort={toggleSort} />
               <th className={THR}>失敗</th>
               <th className={THR}>被擋下</th>
-              <th className={THR}>輸入</th>
-              <th className={THR}>輸出</th>
-              <th className={THR}>快取讀</th>
-              <th className={THR}>快取寫</th>
-              <th className={THR}>成本</th>
+              <SortableTh className={THR} align="right" numeric label="輸入" field="input_tokens" sort={sort} onSort={toggleSort} />
+              <SortableTh className={THR} align="right" numeric label="輸出" field="output_tokens" sort={sort} onSort={toggleSort} />
+              <SortableTh className={THR} align="right" numeric label="快取讀" field="cache_read_tokens" sort={sort} onSort={toggleSort} />
+              <SortableTh className={THR} align="right" numeric label="快取寫" field="cache_write_tokens" sort={sort} onSort={toggleSort} />
+              <SortableTh className={THR} align="right" numeric label="成本" field="cost_usd" sort={sort} onSort={toggleSort} />
               <th className={`${TH} min-w-[140px]`}>佔總成本</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {pageRows.map((r) => {
               const cat = featureByKey[r.feature_key]?.category
               const pct = pctOfTotal(r.cost_usd, totalCost)
               return (
@@ -337,12 +342,15 @@ function ByFeatureTab({ rows, loading }) {
           </tbody>
         </table>
       </div>
+      <TablePager {...pager} />
     </Card>
   )
 }
 
 // ── 分頁三:依專案 ───────────────────────────────────────────────────────────
 function ByProjectTab({ rows, loading }) {
+  const { sort, toggleSort, sorted } = useTableSort(rows)
+  const { pageRows, pager } = usePagination(sorted)
   if (!rows.length) return <Card><Empty>{loading ? '載入中…' : EMPTY_MSG}</Empty></Card>
   return (
     <Card bodyClass="p-0">
@@ -352,14 +360,14 @@ function ByProjectTab({ rows, loading }) {
             <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
               <th className={TH}>專案</th>
               <th className={TH}>AI 方案</th>
-              <th className={THR}>呼叫</th>
-              <th className={THR}>成本</th>
-              <th className={THR}>輸入 token</th>
-              <th className={THR}>輸出 token</th>
+              <SortableTh className={THR} align="right" numeric label="呼叫" field="calls" sort={sort} onSort={toggleSort} />
+              <SortableTh className={THR} align="right" numeric label="成本" field="cost_usd" sort={sort} onSort={toggleSort} />
+              <SortableTh className={THR} align="right" numeric label="輸入 token" field="input_tokens" sort={sort} onSort={toggleSort} />
+              <SortableTh className={THR} align="right" numeric label="輸出 token" field="output_tokens" sort={sort} onSort={toggleSort} />
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {pageRows.map((r) => (
               <tr key={r.project_id || 'none'} className="border-b border-[var(--border-2)] last:border-0">
                 <td className={`${TD} font-medium text-[var(--text)]`}>
                   {r.project_name || <span className="text-[var(--text-3)] font-normal">(無專案脈絡或已刪除)</span>}
@@ -376,12 +384,15 @@ function ByProjectTab({ rows, loading }) {
           </tbody>
         </table>
       </div>
+      <TablePager {...pager} />
     </Card>
   )
 }
 
 // ── 分頁四:依使用者 ─────────────────────────────────────────────────────────
 function ByUserTab({ rows, loading }) {
+  const { sort, toggleSort, sorted } = useTableSort(rows)
+  const { pageRows, pager } = usePagination(sorted)
   if (!rows.length) return <Card><Empty>{loading ? '載入中…' : EMPTY_MSG}</Empty></Card>
   return (
     <Card bodyClass="p-0">
@@ -392,12 +403,12 @@ function ByUserTab({ rows, loading }) {
               <th className={TH}>使用者</th>
               <th className={TH}>公司</th>
               <th className={TH}>身分</th>
-              <th className={THR}>呼叫</th>
-              <th className={THR}>成本</th>
+              <SortableTh className={THR} align="right" numeric label="呼叫" field="calls" sort={sort} onSort={toggleSort} />
+              <SortableTh className={THR} align="right" numeric label="成本" field="cost_usd" sort={sort} onSort={toggleSort} />
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {pageRows.map((r) => (
               <tr key={r.user_id || 'none'} className="border-b border-[var(--border-2)] last:border-0">
                 <td className={`${TD} font-medium text-[var(--text)]`}>
                   {r.full_name || <span className="text-[var(--text-3)] font-normal">(帳號已刪除)</span>}
@@ -411,6 +422,7 @@ function ByUserTab({ rows, loading }) {
           </tbody>
         </table>
       </div>
+      <TablePager {...pager} />
     </Card>
   )
 }
