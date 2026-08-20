@@ -9,10 +9,10 @@ const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('e
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
 
 // 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
-// 次要鈕留在 slate 色階,理由同下方元件註解——紙面固定亮色,不吃主題 token。
+// 顏色釘死亮色、不吃主題 token(理由見 SiteLogPrint.jsx):工具列跟紙不跟主題。
 const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-sm:min-h-11'
-const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]`
-const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white border border-slate-300 text-slate-700 hover:bg-slate-50`
+const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[#0b57d0] text-white hover:bg-[#0842a0]`
+const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white text-[#0b57d0] border border-[#dadce0] hover:bg-[#e8f0fe]`
 
 // 估驗請款佐證包(可列印 / 另存 PDF)——本期估驗明細 + AI 本期施工說明 + 佐證照片(按工項)。
 // 佐證照片吃 classify-site-photo 配好的工項標籤,估驗時自動歸位;不套 WebLayout,整頁即文件。
@@ -160,7 +160,7 @@ export default function ValuationPackage() {
               --blue-text——深色模式下 token 會變成淺字壓白底。 */}
           {aiEnabled('valuation.summary') ? (
             <button onClick={genSummary} disabled={aiBusy}
-              className={`${TOOLBAR_BTN} bg-white border border-slate-300 text-blue-700 hover:bg-slate-50 disabled:opacity-50`}>
+              className={`${TOOLBAR_SECONDARY} disabled:opacity-50`}>
               <MSym name="auto_awesome" size={15} />{aiBusy ? 'AI 產生中…' : '重新產生施工說明'}
             </button>
           ) : (

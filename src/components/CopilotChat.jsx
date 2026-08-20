@@ -41,17 +41,20 @@ export function replyMessage(res, deterministic) {
 // fill=false:頁面版,訊息區以 minH/maxH 內部捲動。
 // onAsk:統一的問答函式 (text) => Promise<{ answer, sources?, steps? } | { fallback: true } | { error }>
 // ——呼叫端自己決定接 agent-run 與否;分流規則見 replyMessage。
-// initialQuestion:App bar 全域搜尋送出後導來 /agent 時帶的問句,掛載即代問一次
-// (router state 傳遞,不新增 store 資料流)。ref 擋 StrictMode 的 double-effect 重問。
+// initialQuestion:App bar 全域搜尋帶來的代問請求 { q, key }——key 是 history entry key,
+// 同頁第二次搜尋 key 會變、代問會再觸發;askedKey ref 擋 StrictMode double-effect 與同 key 重放。
 export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill = false, initialQuestion = null }) {
   const [msgs, setMsgs] = useState([])
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const scrollRef = useRef(null)
   useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy])
-  const askedInitial = useRef(false)
+  const askedKey = useRef(null)
   useEffect(() => {
-    if (initialQuestion && !askedInitial.current) { askedInitial.current = true; ask(initialQuestion) }
+    if (initialQuestion?.q && askedKey.current !== initialQuestion.key) {
+      askedKey.current = initialQuestion.key
+      ask(initialQuestion.q)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuestion])
 

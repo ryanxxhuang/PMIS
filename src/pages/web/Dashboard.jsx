@@ -9,6 +9,7 @@ import { parseLocalDate } from '../../lib/dates.js'
 import { buildTodayTasks } from '../../lib/todayTasks.js'
 import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
 import InsightsPanel from '../../components/InsightsPanel.jsx'
+import { appSnackbar } from '../../components/snackbar.jsx'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 
@@ -168,6 +169,8 @@ export default function Dashboard() {
     a.download = `PMIS匯出_${project.project_name}_${todayISO}.json`
     a.click()
     URL.revokeObjectURL(a.href)
+    // 瀏覽器下載沒有可見回饋:不吭一聲會讓人以為按鈕壞了,連按好幾次
+    appSnackbar('已匯出整案資料（JSON）')
   }
 
   // 財務單一真相層(B-02):完成率/金額一律以「已核准變更套回後」計算,與估驗/進度頁一致

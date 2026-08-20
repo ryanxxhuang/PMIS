@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Stat, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -51,7 +51,8 @@ export default function Payments() {
   // 未核定期數提示只在有草稿/監造審核期時出現,避免正常情況多一行雜訊
   const draftNote = sum.draftCount > 0 ? `另有未核定 ${sum.draftCount} 期未計入` : null
 
-  if (!data) return <Empty>載入請款資料中…</Empty>
+  // 載入中用骨架屏:Empty 自帶 inbox 圖示,擺在載入分支等於先跟使用者說「沒資料」
+  if (!data) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入請款資料中…" /></Card>
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return <Card title="請款收款"><Empty>此專案的標單尚未匯入資料庫,且需有估驗資料才能彙整請款。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
   }

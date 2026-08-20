@@ -1,6 +1,7 @@
 @import "tailwindcss";
-/* 字型改由 main.jsx 以 JS import 載入(@fontsource-variable/noto-sans-tc、@material-symbols/font-400):
-   本檔的 @import 放在 tailwind 展開後會落在規則之後,Lightning CSS 於 build 時整行丟棄
+/* 字型改由 main.jsx 以 JS import 載入(@fontsource-variable/noto-sans-tc、
+   src/assets/material-symbols.css 的 subset 圖示字型):本檔的 @import 放在
+   tailwind 展開後會落在規則之後,Lightning CSS 於 build 時整行丟棄
    → 正式站字型靜默失效(dev 看得到、prod 沒有)。JS import 完全繞開這個坑。 */
 
 /* 卡片圓角規格是 12px,但 e2e 有 5 處 xpath 綁死 rounded-2xl 的 class 名——
@@ -30,7 +31,7 @@
   --surface-2: #f1f3f4;     /* chip 底/hover */
   --text: #202124;
   --text-2: #5f6368;
-  --text-3: #80868b;        /* 弱字:僅限 meta/註記小字,正文次要一律用 --text-2 */
+  --text-3: #70757a;        /* 弱字(meta/註記):原型的 #80868b 對白卡只有 3.7:1——W8-5 已把 text-3 修到 AA 過一次,不重蹈;#70757a 是 Google 舊次要灰,對 --surface 4.6:1 */
   --border: #dadce0;        /* divider(卡內分隔) */
   --border-2: #e8eaed;      /* 更弱分隔 */
 
@@ -76,13 +77,11 @@
 
   /* Chart tokens — SVG charts must read these, never hardcode */
   --chart-grid: #e8eaed;
-  --chart-axis-text: #80868b;
+  --chart-axis-text: #70757a;
   --chart-muted-line: #80868b;
   --chart-today: #bdc1c6;
 
-  /* Google 三層陰影:sm=卡片/浮起鈕、md=選單/懸浮、lg=對話框 */
-  --elevation: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.08);
-  --shadow-sm: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.08);
+  /* Google 三層陰影:card=卡片/浮起鈕、md=選單/懸浮、overlay=對話框 */
   --shadow-md: 0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.1);
   --shadow-card: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.08);
   --shadow-overlay: 0 2px 6px rgba(60,64,67,.3), 0 8px 24px 6px rgba(60,64,67,.12);
@@ -150,8 +149,6 @@
   --chart-muted-line: #80868b;
   --chart-today: #5f6368;
 
-  --elevation: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
   --shadow-md: 0 1px 3px rgba(0,0,0,.35), 0 4px 8px 3px rgba(0,0,0,.25);
   --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
   --shadow-overlay: 0 2px 6px rgba(0,0,0,.4), 0 8px 24px 6px rgba(0,0,0,.4);
@@ -182,8 +179,7 @@ select option { color: var(--text); background: var(--surface); }
   }
 }
 
-/* 材質層級:sm=一般表面、overlay=大面積浮面(modal) */
-.g-elevation-1 { border: 1px solid var(--border-card); box-shadow: var(--shadow-card); }
+/* 大面積浮面(modal/燈箱)加框加深影;MarkupEditor 燈箱在用 */
 .g-elevation-2 { border: 1px solid var(--border-card); box-shadow: var(--shadow-overlay); }
 
 /* chrome(頂欄/側欄):Google 風實心白,無邊線靠 --bg 灰底分層。

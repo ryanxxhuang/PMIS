@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { MSym } from './icons.jsx'
 import { useStore } from '../store.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner, FIELD_BASE } from './ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner, FIELD_BASE, buttonClass } from './ui.jsx'
 import { appConfirm, appPrompt } from './confirm.jsx'
 import { exportCsv, stamp } from '../lib/exportCsv.js'
 import { defectBall } from '../lib/ballInCourt.js'
@@ -174,7 +174,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
           {aiPhotoOn ? (
             <div className="flex items-center gap-3 flex-wrap">
-              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+              <label className={`${buttonClass('primary', 'sm')} ${aiBusy ? 'opacity-50' : 'cursor-pointer'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onPhoto} className="hidden" />
                 <MSym name="photo_camera" size={15} /> {aiBusy ? (isSafety ? 'AI 判讀中…' : 'AI 辨識中…') : (isSafety ? '拍工安照片 AI 判讀' : '拍缺失照片 AI 填表')}
               </label>

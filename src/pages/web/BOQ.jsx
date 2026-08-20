@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Empty, Button, PageHeader } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Empty, Button, PageHeader, SkeletonList } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 
@@ -71,7 +71,8 @@ export default function BOQ() {
       </Card>
     )
   }
-  if (!data) return <Empty>載入標單工項中…</Empty>
+  // 載入中用骨架屏:Empty 自帶 inbox 圖示,擺在載入分支等於先跟使用者說「沒資料」
+  if (!data) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入標單工項中…" /></Card>
 
   const { meta } = data
   const roots = (childrenMap.get('__root__') || []).filter((it) => !onlyBillable || it.is_billable)

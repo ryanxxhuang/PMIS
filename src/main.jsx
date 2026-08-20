@@ -7,9 +7,11 @@ import { initSentry, Sentry } from './lib/sentry.js'
 import { applyTheme, watchSystemTheme } from './lib/theme.js'
 // 字型走 JS import self-host(機關禁外連 CDN):index.css 的 @import 會被
 // Lightning CSS 在 build 時丟棄,JS import 完全繞開。順序須在 index.css 之前,
-// 讓 .material-symbols-outlined 的元件層規則可覆寫套件預設。
+// 讓 .material-symbols-outlined 的元件層規則可覆寫預設。
+// 圖示字型是 subset(~100KB,整包 480KB 弱網首載會噴英文字):
+// 新增圖示要跑 node scripts/build-icon-font.mjs,守門測試 iconFont.test.js 會提醒。
 import '@fontsource-variable/noto-sans-tc'
-import '@material-symbols/font-400/outlined.css'
+import './assets/material-symbols.css'
 import './index.css'
 
 initSentry() // 錯誤監控(只在正式站且有 DSN 時啟用)
@@ -18,7 +20,9 @@ initSentry() // 錯誤監控(只在正式站且有 DSN 時啟用)
 applyTheme()
 watchSystemTheme()
 
-// 全站錯誤邊界:render 崩潰時不再是白畫面,顯示友善畫面 + 上報 Sentry(若已啟用)
+// 全站錯誤邊界:render 崩潰時不再是白畫面,顯示友善畫面 + 上報 Sentry(若已啟用)。
+// 樣式刻意寫死 hex 而不吃 token:崩潰畫面不假設 app CSS/主題已正常載入,
+// 品牌換色時要記得手動同步(Google 藍 #0b57d0/次要字 #5f6368)。
 function CrashFallback() {
   return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '2rem', textAlign: 'center', fontFamily: 'system-ui, sans-serif' }}>

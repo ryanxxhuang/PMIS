@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Card, Empty, PageHeader, Badge, Button, Select } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Badge, Button, Select, buttonClass } from '../../components/ui.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
 import { estimatePenalty } from '../../lib/penaltyCalc.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -427,7 +427,7 @@ export default function Contract() {
               ))}
             </Select>
           )}
-          <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${uploading || boqBusy || !canUploadDocs ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+          <label className={`${buttonClass('primary', 'md')} ${uploading || boqBusy || !canUploadDocs ? 'opacity-50' : 'cursor-pointer'}`}>
             <input type="file" multiple accept={ACCEPT_ATTR}
               disabled={uploading || boqBusy || !canUploadDocs}
               onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)}

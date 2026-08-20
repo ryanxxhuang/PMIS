@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, Empty, PageHeader } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, Empty, PageHeader, SkeletonList } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
@@ -143,7 +143,7 @@ export default function Members() {
         </Card>
       )}
 
-      <Card title="成員名單">
+      <Card title="成員名單" aria-busy={members === null ? 'true' : undefined}>
         {loadError ? (
           <Empty>
             <div className="space-y-3">
@@ -151,7 +151,7 @@ export default function Members() {
               <Button onClick={reload}>重試</Button>
             </div>
           </Empty>
-        ) : members === null ? <Empty>載入中…</Empty>
+        ) : members === null ? <SkeletonList rows={3} />
           : members.length === 0 ? <Empty>此專案尚無成員。</Empty> : (
           <div className="space-y-2">
             {members.map((m) => (

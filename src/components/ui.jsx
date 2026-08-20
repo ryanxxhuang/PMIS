@@ -14,9 +14,10 @@ export function Surface({ as: Tag = 'div', className = '', children, ...props })
   return <Tag className={`${SURFACE} ${className}`} {...props}>{children}</Tag>
 }
 
-export function Card({ title, action, children, className = '', bodyClass = 'p-5' }) {
+export function Card({ title, action, children, className = '', bodyClass = 'p-5', ...rest }) {
+  // ...rest 直通根節點:呼叫端的 aria-busy/data-* 才不會被靜默丟棄
   return (
-    <div className={`${SURFACE} ${className}`}>
+    <div className={`${SURFACE} ${className}`} {...rest}>
       {title && (
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[var(--border-2)]">
           <h3 className="font-medium text-[var(--text)] text-[15px]">{title}</h3>
@@ -119,6 +120,13 @@ const BTN_VARIANTS = {
   success: 'bg-[var(--success)] text-white hover:bg-[var(--success-hover)]',
   danger: 'bg-[var(--danger)] text-white hover:bg-[var(--danger-hover)]',
 }
+// 不能用 <button> 的呼叫端(label 檔案上傳鈕、<a>)用這支拿同一套皮,
+// 別再手抄 bg-[var(--primary)] 殼——散裝複本正是深色對比漏修的來源
+export const buttonClass = (variant = 'primary', size = 'md') =>
+  `inline-flex items-center justify-center font-medium whitespace-nowrap shrink-0 pressable
+    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]
+    ${BTN_SIZES[size] || BTN_SIZES.md} ${BTN_VARIANTS[variant] || BTN_VARIANTS.primary}`
+
 // 焦點樣式用 outline 而非 ring(W8-5):ring-offset 寫死底色會在非 --surface 背景上
 // 露出白色缺口,ring(box-shadow)又會被 overflow-hidden 父層裁切;outline 不佔版面流、不被裁切。
 export const Button = forwardRef(function Button({ variant = 'primary', size = 'md', busy = false, disabled, className = '', children, ...props }, ref) {
@@ -202,10 +210,13 @@ export function Skeleton({ className = '', style }) {
   return <div aria-hidden className={`skeleton ${className}`} style={style} />
 }
 // 清單場景的現成組合:圓點+兩條線 × rows(對應原型 states 頁的骨架樣板)
-export function SkeletonList({ rows = 3 }) {
+export function SkeletonList({ rows = 3, label = '載入中…' }) {
   const widths = [['78%', '44%'], ['64%', '52%'], ['86%', '38%']]
+  // 外層不能 aria-hidden——那會讓報讀器把載入中頁面讀成「什麼都沒有」;
+  // 視覺列自身 hidden(Skeleton 內建),語意由 sr-only 文字承擔
   return (
-    <div aria-hidden className="space-y-3 py-1">
+    <div className="space-y-3 py-1">
+      <span className="sr-only" role="status">{label}</span>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="flex items-center gap-3">
           <Skeleton className="w-5 h-5 !rounded-full shrink-0" />

@@ -12,6 +12,7 @@ import {
   TWD_PER_USD, toTwd, presetRange, customRange, pctOfTotal, overrideToRpcValue, overrideFromDb,
 } from '../../store/slices/admin.js'
 import { featureByKey } from '../../lib/aiFeatures.js'
+import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 
 // ── 顯示用對照(與 aiFeatures.js 的 category 值域一致)──────────────────────
 const CATEGORY_LABEL = {
@@ -157,11 +158,7 @@ export default function Admin() {
       <div className="flex items-center gap-2 overflow-x-auto pb-0.5" role="tablist" aria-label="平台管理">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-            className={`h-8 max-sm:min-h-11 shrink-0 inline-flex items-center px-3.5 rounded-lg text-[13px] font-medium whitespace-nowrap pressable ${
-              tab === t.id
-                ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
-                : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
-            }`}>
+            className={`${CHIP_BASE} ${tab === t.id ? CHIP_ON : CHIP_OFF}`}>
             {t.label}
           </button>
         ))}

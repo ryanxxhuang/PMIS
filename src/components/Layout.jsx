@@ -4,15 +4,13 @@ import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
 import { visibleNavGroups } from '../lib/navConfig.js'
 import CopilotFab from './CopilotFab.jsx'
-import BottomNav from './BottomNav.jsx'
+import BottomNav, { NAV_SHORT } from './BottomNav.jsx'
 import { MSym } from './icons.jsx'
 import { ErrorBanner } from './ui.jsx'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
 
-// rail 短標籤(顯示層;navConfig 是路由/權限單一真相,不放表現欄位)
-const RAIL_SHORT = { 今日待辦: '待辦', 現場與品質: '現場', 審查與協作: '審查', 進度與金流: '金流', 文件與結案: '文件', 專案: '專案', 平台管理: '平台' }
 
 const initialSidebarCollapsed = () => {
   try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1' } catch { return false }
@@ -110,6 +108,7 @@ const THEME_META = {
 // TopBar 也是頁面的一部分;送出即導 /agent 代問(問 PMIS 是全域問答入口,不另建搜尋資料流)。
 function GlobalSearch() {
   const navigate = useNavigate()
+  const { aiEnabled } = useStore()
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const inputRef = useRef(null)
@@ -128,6 +127,9 @@ function GlobalSearch() {
     setOpen(false); setQ('')
     navigate('/agent', { state: { q: text } })
   }
+  // agent.run 關閉的專案:搜尋送出會落到 /agent 的「未啟用」空頁、問題被吞——
+  // 功能關閉時整顆入口不渲染(與批 B「功能關閉時藏對話入口」同一條 UX 規則)
+  if (!aiEnabled('agent.run')) return <div className="flex-1 hidden md:block" />
   return (
     <div className="relative flex-1 max-w-[560px] min-w-0 hidden md:block">
       <button ref={btnRef} onClick={() => setOpen(true)} aria-label="搜尋(問 PMIS 代查)" title="搜尋(問 PMIS 代查)"
@@ -184,7 +186,7 @@ function TopBar({ onMenu, scrolled, menuBtnRef }) {
         {/* 帳戶區(兩行):登入者本人,沒有角色切換——身分在註冊時決定 */}
         <div className="hidden sm:flex items-center gap-2 pl-1.5 pr-2 py-1 ml-0.5 rounded-full">
           <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center font-medium text-[13px] text-[var(--primary-fg)]">{currentUser?.name?.[0]}</div>
-          <div className="leading-tight text-left hidden lg:block">
+          <div className="leading-tight text-left hidden sm:block">
             <div className="text-[12.5px] font-medium text-[var(--text)] whitespace-nowrap">{currentUser?.name}</div>
             <div className="text-[11px] text-[var(--text-2)] whitespace-nowrap">{currentUser?.label}</div>
           </div>
@@ -281,9 +283,9 @@ export function WebLayout({ children }) {
       {/* 關閉時 max-md:invisible:visibility hidden = 不可聚焦＋離開 a11y 樹,擋掉
           「Tab 進看不見的抽屜」;visibility 進 transition 清單讓滑出動畫跑完才隱藏
           （hidden→visible 則是動畫起點就顯示,開啟不閃爍）。桌機 md 斷點不受影響。 */}
-      {/* 分層:手機抽屜要蓋過 z-50 遮罩故 z-[55];桌機側欄必須退到頂欄(z-40)之下,
-          否則頂欄 chrome-glass 的 backdrop-filter 自成 stacking context,專案下拉
-          整包被壓在側欄底下——誤點下拉選項會直接觸發側欄導覽而換頁(ISSUE-9)。 */}
+      {/* 分層:手機抽屜要蓋過 z-50 遮罩故 z-[55];桌機側欄必須退到頂欄(z-40)之下——
+          專案下拉/搜尋浮層錨定在頂欄,側欄若壓過頂欄,下拉會被蓋住、誤點直接觸發
+          側欄導覽而換頁(ISSUE-9)。chrome 已改實心(毛玻璃退場),但層級關係不變。 */}
       <aside
         className={`chrome-glass w-72 ${collapsed ? 'md:w-20' : 'md:w-64'} border-r border-[var(--border-card)] flex flex-col print:hidden
           fixed top-16 bottom-0 left-0 z-[55] md:z-30 transition-[width,transform,visibility] duration-300 [transition-timing-function:var(--ease-drawer)]
@@ -309,7 +311,7 @@ export function WebLayout({ children }) {
               ${collapsed ? 'md:mx-auto md:w-14 md:px-0 md:justify-center md:mt-3' : ''}
               ${isActive
                 ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
-                : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border-card)] [box-shadow:var(--shadow-sm)] hover:[box-shadow:var(--shadow-md)]'}`}>
+                : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border-card)] [box-shadow:var(--shadow-card)] hover:[box-shadow:var(--shadow-md)]'}`}>
             <MSym name="auto_awesome" size={20} className="text-[var(--ai)]" />
             <span className={collapsed ? 'md:hidden' : ''}>問 PMIS</span>
           </NavLink>
@@ -346,7 +348,7 @@ export function WebLayout({ children }) {
                           </span>
                           {/* 手機抽屜永遠全名(collapsed 只影響 md+ 的 rail);rail 用短標 */}
                           <span className={collapsed ? 'md:hidden' : ''}>{n.label}</span>
-                          {collapsed && <span className="hidden md:block text-[10.5px] leading-none font-medium">{RAIL_SHORT[n.label] || n.label}</span>}
+                          {collapsed && <span className="hidden md:block text-[10.5px] leading-none font-medium">{NAV_SHORT[n.label] || n.label}</span>}
                         </NavLink>
                         {n.tabs && (
                           <button type="button" onClick={() => toggleWorkbench(n.to)}
@@ -397,7 +399,7 @@ export function WebLayout({ children }) {
           )}
         {children}
       </main>
-      <BottomNav items={visibleGroups.flatMap((g) => g.items)} />
+      <BottomNav items={visibleGroups.flatMap((g) => g.items)} homeTo={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} />
       <CopilotFab />
     </div>
   )

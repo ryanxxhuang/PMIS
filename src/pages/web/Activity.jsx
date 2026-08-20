@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Badge, Button, Card, Empty, Input, PageHeader, Select } from '../../components/ui.jsx'
+import { Badge, Button, Card, Empty, Input, PageHeader, Select, SkeletonList } from '../../components/ui.jsx'
 import {
   AUDIT_ENTITY_LABELS, AUDIT_EVENT_LABELS, auditActorDisplay, auditEntityLabel,
   auditEventLabel, auditEventSubject, normalizeAuditFilters,
@@ -119,8 +119,9 @@ export default function Activity() {
         </div>
       </Card>
 
-      <Card title={`活動紀錄（第 ${page + 1} 頁）`} bodyClass="p-0">
-        {loading ? <Empty>載入中…</Empty> : error ? <Empty>{error}</Empty> : events.length === 0 ? (
+      <Card title={`活動紀錄（第 ${page + 1} 頁）`} bodyClass="p-0" aria-busy={loading ? 'true' : undefined}>
+        {/* 卡片本體是 p-0(清單自帶 px-4),骨架屏得自己補回同一組內距 */}
+        {loading ? <div className="px-4 py-3.5"><SkeletonList rows={3} /></div> : error ? <Empty>{error}</Empty> : events.length === 0 ? (
           <Empty>目前沒有符合條件的活動紀錄。</Empty>
         ) : (
           <ul className="divide-y divide-[var(--border-2)]">

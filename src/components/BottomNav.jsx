@@ -7,12 +7,17 @@
 import { Link, useLocation } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 
-// 短標籤只是顯示層,不進 navConfig(那是路由/權限的單一真相,不放表現欄位)
-const SHORT = { 今日待辦: '待辦', 現場與品質: '現場', 審查與協作: '審查', 進度與金流: '金流', 文件與結案: '文件', 專案: '專案', 平台管理: '平台' }
+// 短標籤只是顯示層,不進 navConfig(那是路由/權限的單一真相,不放表現欄位)。
+// export 給 Layout 的 rail 共用——同一份 map,跨斷點標籤不分家。
+export const NAV_SHORT = { 今日待辦: '待辦', 現場與品質: '現場', 審查與協作: '審查', 進度與金流: '金流', 文件與結案: '文件', 專案: '專案', 平台管理: '平台' }
 
-export default function BottomNav({ items }) {
+// homeTo:該角色的主頁(機關=/portfolio)。主頁工作面排最前——slice(0,4) 是
+// 角色盲的,不排序的話 owner 的跨案總覽會被切掉,主畫面反而不在 bottom nav。
+export default function BottomNav({ items, homeTo = '/dashboard' }) {
   const { pathname } = useLocation()
-  const shown = items.slice(0, 4)
+  const homeIdx = items.findIndex((n) => n.to === homeTo || n.tabs?.some((t) => t.to === homeTo))
+  const ordered = homeIdx > 0 ? [items[homeIdx], ...items.slice(0, homeIdx), ...items.slice(homeIdx + 1)] : items
+  const shown = ordered.slice(0, 4)
   if (!shown.length) return null
   return (
     <nav aria-label="快速導覽"
@@ -27,7 +32,7 @@ export default function BottomNav({ items }) {
             <span className={`w-14 h-[30px] rounded-full flex items-center justify-center ${active ? 'bg-[var(--blue-tint)]' : ''}`}>
               <MSym name={n.icon} size={20} fill={active} className={active ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} />
             </span>
-            <span className={`text-[11px] font-medium leading-none ${active ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'}`}>{SHORT[n.label] || n.label}</span>
+            <span className={`text-[11px] font-medium leading-none ${active ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'}`}>{NAV_SHORT[n.label] || n.label}</span>
           </Link>
         )
       })}

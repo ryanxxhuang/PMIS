@@ -3,8 +3,8 @@
 // AI 草稿收件匣(agent_actions pending,人接受/拒絕——AI 只擬草稿,決定權永遠在人)。
 // W8-2B:待辦清單已整個交還「今日待辦」頁。這裡只留一個沒有件數的連結——
 // 顯示件數就得再載一份聚合,兩頁的數字遲早對不起來(W8-2A §2.1、§5)。
-import { useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input, Surface } from '../../components/ui.jsx'
 import { useStore } from '../../store.jsx'
@@ -317,8 +317,19 @@ export default function Agent() {
   const { data, facts, imported, org } = useAssistantData()
   const { runAgent, aiEnabled } = useStore()
   const agentOn = aiEnabled('agent.run') // 批 B UX:功能關閉時藏對話入口(真正的閘門在伺服器端)
-  // App bar 全域搜尋送出後帶問句導來(router state,重整即消失,不會重複代問)
-  const initialQuestion = useLocation().state?.q || null
+  // App bar 全域搜尋的代問請求:router state 存在 history entry 裡,
+  // 「不會跨重整存活」是錯誤直覺——F5/上一頁都會還原 state 而重複代問(重複扣 AI 費用)。
+  // 所以消費即清:收到 q 先存本地 state(帶 history key,同頁二次搜尋 key 會變),
+  // 再 replace 掉 history state;之後的重整/往返都拿不到 q。
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [initialQuestion, setInitialQuestion] = useState(null)
+  useEffect(() => {
+    const q = location.state?.q
+    if (!q) return
+    setInitialQuestion({ q, key: location.key })
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location, navigate])
 
   // 角色只用於顯示(紅線:權限一律以伺服器為準);agent-run 回傳的 role 覆蓋前端推算
   const [serverRole, setServerRole] = useState(null)

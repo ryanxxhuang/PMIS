@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState, SkeletonList } from '../../components/ui.jsx'
+import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState, SkeletonList, buttonClass } from '../../components/ui.jsx'
 import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -551,7 +551,7 @@ export default function SiteLog() {
                 <MSym name="auto_awesome" size={14} className="text-[var(--ai)]" />
                 <span className="text-[11px] font-medium text-[var(--ai-text)]">AI 草稿</span>
               </div>
-              <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] shadow-sm'}`}>
+              <label className={`${buttonClass('primary', 'md')} ${aiBusy ? 'opacity-50' : 'cursor-pointer'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
                 <MSym name="photo_camera" size={15} /> {aiBusy ? 'AI 辨識中…' : 'AI 拍照自動填寫'}
               </label>
@@ -718,7 +718,7 @@ export default function SiteLog() {
                   {can.edit && <>
                     {/* 批 B UX:照片分類功能關閉時藏 AI 批次入口,保留「直接加照片」 */}
                     {aiEnabled('photo.classify') && (
-                      <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable shadow-sm ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40 bg-[var(--primary)] text-[var(--primary-fg)]' : 'cursor-pointer bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]'}`}>
+                      <label className={`${buttonClass('primary', 'md')} ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40' : 'cursor-pointer'}`}>
                         {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
                         <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy || existingBusy} onChange={onBatchPhotos} className="hidden" />
                         <MSym name="auto_awesome" size={15} /> 選照片 AI 辨識後上傳

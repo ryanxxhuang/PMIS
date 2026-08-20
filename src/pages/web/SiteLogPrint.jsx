@@ -5,10 +5,11 @@ import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 
 // 工具列藥丸鈕:列印頁刻意不 import ui.jsx(整頁即文件、不吃工作台元件),
 // 所以 Button 的 Workspace 樣式在此就地複寫一份,四支列印頁維持同一組 class。
-// 次要鈕留在 slate 色階:紙面永遠是亮色,套 --text-* 在深色模式會變淺字壓白底。
+// 主次兩鈕的顏色一律釘死亮色、不吃 --primary/--text-* 主題 token:紙面永遠是白紙,
+// 工具列跟紙不跟主題;吃 token 會讓深色模式的工具列與它下方的白色文件互相打架。
 const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-sm:min-h-11'
-const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]`
-const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white border border-slate-300 text-slate-700 hover:bg-slate-50`
+const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[#0b57d0] text-white hover:bg-[#0842a0]`
+const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white text-[#0b57d0] border border-[#dadce0] hover:bg-[#e8f0fe]`
 
 // 公共工程施工日誌（工程會 101.10.17 修正公定格式）— 不套 WebLayout，整頁即文件。
 // A4 文件本體抽至 SiteLogOfficialSheet（S-8）供唯讀檢視共用;這裡只留工具列與守衛,
