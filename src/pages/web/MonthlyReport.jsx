@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Printer, Sparkles } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, Button, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
@@ -103,7 +103,7 @@ export default function MonthlyReport() {
                 <input type="month" value={month} aria-label="月報月份" onChange={(e) => setMonth(e.target.value)}
                   className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
               </label>
-              <Button onClick={() => window.print()}><Printer size={15} aria-hidden />列印 / 存 PDF</Button>
+              <Button onClick={() => window.print()}><MSym name="print" size={15} />列印 / 存 PDF</Button>
             </div>
           } />
       </div>
@@ -287,7 +287,7 @@ export default function MonthlyReport() {
               setReview(result.review || ''); setNextPlan(result.next_plan || '')
             }} disabled={aiBusy}
               className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] pressable ${aiBusy ? 'opacity-50' : 'hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
-              <Sparkles size={15} aria-hidden />{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
+              <MSym name="auto_awesome" size={15} />{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
             </button>
             <span className="text-[11px] text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
             {aiErr && <span className="text-xs text-[var(--red-text)]">{aiErr}</span>}

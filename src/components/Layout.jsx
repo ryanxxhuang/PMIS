@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
 import { visibleNavGroups } from '../lib/navConfig.js'
 import CopilotFab from './CopilotFab.jsx'
-import { Menu, Check, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Trash2, Moon, Sun, MonitorSmartphone, Plus, Bot, X } from 'lucide-react'
+import { MSym } from './icons.jsx'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
@@ -51,7 +51,7 @@ function ProjectSwitcher() {
         className="flex items-center gap-2 min-w-0 hover:bg-[var(--surface-2)] rounded-lg px-2 py-1.5 -ml-2 max-sm:min-h-11 pressable">
         <span className="hidden lg:inline text-[var(--text-3)] text-xs shrink-0">專案</span>
         <span title={currentProject.project_name} className="font-medium truncate max-w-[24vw] sm:max-w-[36vw] md:max-w-[280px] text-[var(--text)]">{currentProject.project_name}</span>
-        <ChevronDown size={14} className="text-[var(--text-2)] shrink-0" aria-hidden />
+        <MSym name="expand_more" size={16} className="text-[var(--text-2)]" />
       </button>
       {open && (
         <>
@@ -67,13 +67,13 @@ function ProjectSwitcher() {
                   className={`w-full text-left px-3 py-2 min-h-11 text-sm hover:bg-[var(--surface-2)] flex items-center gap-2 ${isCurrent ? 'bg-[var(--blue-tint)]' : ''}`}>
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isCurrent ? 'bg-[var(--blue)]' : 'bg-[var(--border)]'}`} />
                   <span className="truncate">{p.project_name}</span>
-                  {isCurrent && <Check size={14} className="ml-auto shrink-0 text-[var(--blue-text)]" aria-hidden />}
+                  {isCurrent && <MSym name="check" size={16} className="ml-auto text-[var(--blue-text)]" />}
                 </button>
               )
             })}
             <div className="border-t border-[var(--border-2)] my-1" />
             <button onClick={() => { setOpen(false); navigate('/project/new') }}
-              className="w-full text-left px-3 py-2 min-h-11 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><Plus size={14} aria-hidden /> 新增專案</button>
+              className="w-full text-left px-3 py-2 min-h-11 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><MSym name="add" size={16} /> 新增專案</button>
             <button onClick={async () => {
               setOpen(false)
               // 高危險:整案永久刪除 → 要求輸入專案名稱確認,防手滑
@@ -83,7 +83,7 @@ function ProjectSwitcher() {
                 danger: true, confirmLabel: '永久刪除', requireText: currentProject.project_name,
               })
               if (ok) await deleteProject(currentProject.project_id)
-            }} className="w-full text-left px-3 py-2 min-h-11 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><Trash2 size={14} aria-hidden /> 刪除此專案</button>
+            }} className="w-full text-left px-3 py-2 min-h-11 text-sm text-[var(--red-text)] hover:bg-[var(--red-tint)] flex items-center gap-1.5"><MSym name="delete" size={16} /> 刪除此專案</button>
           </div>
         </>
       )}
@@ -93,9 +93,9 @@ function ProjectSwitcher() {
 
 // 主題三態循環(U-07):亮 → 暗 → 跟隨系統 → 亮
 const THEME_META = {
-  light: { icon: Sun, label: '亮色' },
-  dark: { icon: Moon, label: '深色' },
-  system: { icon: MonitorSmartphone, label: '跟隨系統' },
+  light: { icon: 'light_mode', label: '亮色' },
+  dark: { icon: 'dark_mode', label: '深色' },
+  system: { icon: 'brightness_auto', label: '跟隨系統' },
 }
 
 function TopBar({ onMenu, scrolled, menuBtnRef }) {
@@ -107,12 +107,11 @@ function TopBar({ onMenu, scrolled, menuBtnRef }) {
     setThemeMode(next)
     setMode(next)
   }
-  const ThemeIcon = THEME_META[mode].icon
   return (
     <header data-scrolled={scrolled} className="chrome-glass chrome-edge fixed top-0 inset-x-0 z-40 h-16 flex items-center justify-between px-3 md:px-5 print:hidden">
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
         {/* 44px 觸控目標:漢堡鈕只在手機出現,直接升到 w-11;ref 供抽屜關閉時焦點還原 */}
-        <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><Menu size={20} aria-hidden /></button>
+        <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name="menu" size={22} /></button>
         <NavLink to={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} aria-label="PMIS 公共工程首頁" className="flex items-baseline gap-2 shrink-0">
           <span className="font-bold text-lg tracking-tight text-[var(--text)]">PM<span className="text-[var(--accent-text)]">IS</span></span>
           <span className="hidden xl:inline text-[11px] text-[var(--text-3)]">公共工程</span>
@@ -123,14 +122,14 @@ function TopBar({ onMenu, scrolled, menuBtnRef }) {
       <div className="flex items-center gap-1 sm:gap-2 md:gap-3 shrink-0">
         <NavLink to="/agent" aria-label="問 PMIS" title="問 PMIS"
           className={({ isActive }) => `h-9 inline-flex items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'}`}>
-          <Bot size={17} aria-hidden />
+          <MSym name="auto_awesome" size={18} />
           <span className="hidden lg:inline">問 PMIS</span>
         </NavLink>
         <div className="text-right leading-tight hidden sm:block">
           <div className="text-sm text-[var(--text)]">{currentUser?.name}</div>
           <div className="text-[11px] text-[var(--text-2)]">{currentUser?.label}</div>
         </div>
-        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-9 h-9 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><ThemeIcon size={18} aria-hidden /></button>
+        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-9 h-9 max-sm:w-11 max-sm:h-11 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name={THEME_META[mode].icon} size={20} /></button>
         <div className="hidden sm:flex w-9 h-9 rounded-full bg-[var(--primary)] items-center justify-center font-medium text-sm text-white">{currentUser?.name?.[0]}</div>
         {/* 44px 觸控目標:純文字鈕撐高、負 margin 吸收 padding,視覺間距不變 */}
         <button onClick={async () => { await logout(); navigate('/login') }} className="inline-flex items-center h-11 px-2 -mx-2 text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
@@ -224,14 +223,14 @@ export function WebLayout({ children }) {
       >
           <div className="md:hidden flex items-center justify-between border-b border-[var(--border-2)] px-4 py-3">
             <span className="text-sm font-semibold text-[var(--text)]">功能選單</span>
-            <button ref={drawerCloseRef} onClick={() => setMenuOpen(false)} aria-label="關閉選單" className="w-11 h-11 -my-1 -mr-1 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><X size={19} aria-hidden /></button>
+            <button ref={drawerCloseRef} onClick={() => setMenuOpen(false)} aria-label="關閉選單" className="w-11 h-11 -my-1 -mr-1 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)]"><MSym name="close" size={20} /></button>
           </div>
           <div className={`hidden md:flex h-12 shrink-0 items-center ${sidebarCollapsed ? 'justify-center' : 'justify-end px-3'}`}>
             <button onClick={setDesktopCollapsed}
               aria-label={sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'}
               title={sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'}
               className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] pressable">
-              {sidebarCollapsed ? <PanelLeftOpen size={18} aria-hidden /> : <PanelLeftClose size={18} aria-hidden />}
+              <MSym name={sidebarCollapsed ? "left_panel_open" : "left_panel_close"} size={20} />
             </button>
           </div>
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
@@ -241,7 +240,6 @@ export function WebLayout({ children }) {
                   <span className="text-xs font-medium text-[var(--text-3)]">{g.title}</span>
                 </div>
                 {g.items.map((n) => {
-                  const Icon = n.icon
                   // 工作面與角色子頁都來自 navConfig，不在 Layout 重寫清單。
                   const wbActive = n.tabs?.some((t) => t.to === pathname)
                   const itemActive = pathname === n.to || wbActive
@@ -260,7 +258,7 @@ export function WebLayout({ children }) {
                           className={() => `min-w-0 min-h-11 flex-1 flex items-center gap-2.5 px-3 text-sm rounded-xl ${
                             sidebarCollapsed ? 'md:flex-none md:w-12 md:justify-center md:px-0' : ''
                           }`}>
-                          <Icon size={17} strokeWidth={1.8} className="shrink-0 opacity-75" aria-hidden />
+                          <MSym name={n.icon} size={20} fill={itemActive} className="opacity-80" />
                           <span className={sidebarCollapsed ? 'md:hidden' : ''}>{n.label}</span>
                         </NavLink>
                         {n.tabs && (
@@ -268,7 +266,7 @@ export function WebLayout({ children }) {
                             aria-expanded={expanded} aria-controls={`nav-children-${n.to.slice(1)}`}
                             aria-label={`${expanded ? '收合' : '展開'}${n.label}子頁`}
                             className={`w-11 h-11 rounded-lg flex items-center justify-center text-[var(--text-3)] hover:bg-black/5 hover:text-[var(--text)] ${sidebarCollapsed ? 'md:hidden' : ''}`}>
-                            {expanded ? <ChevronDown size={15} aria-hidden /> : <ChevronRight size={15} aria-hidden />}
+                            <MSym name={expanded ? "expand_more" : "chevron_right"} size={18} />
                           </button>
                         )}
                       </div>

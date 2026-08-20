@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
@@ -128,7 +128,7 @@ export default function RFI() {
                         批 B UX:功能關閉時藏按鈕、留簡短說明(真正的閘門在伺服器端) */}
                     {can.approve && aiEnabled('rfi.draft_reply') && (r.status === '待回覆' || r.status === '已回覆') && !aiDraft[r.id] && (
                       <Button variant="secondary" disabled={draftBusy === r.id} onClick={() => onDraft(r)}>
-                        <Sparkles size={13} aria-hidden />{draftBusy === r.id ? ' AI 草擬中…' : ' AI 回覆草稿'}
+                        <MSym name="auto_awesome" size={13} />{draftBusy === r.id ? ' AI 草擬中…' : ' AI 回覆草稿'}
                       </Button>
                     )}
                     {can.approve && !aiEnabled('rfi.draft_reply') && (r.status === '待回覆' || r.status === '已回覆') && (
@@ -151,7 +151,7 @@ export default function RFI() {
                     <div className="mt-3 border-t border-[var(--border-2)] pt-3">
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5 flex-wrap">
-                          <Sparkles size={14} className="text-[var(--blue)]" aria-hidden />AI 回覆草稿
+                          <MSym name="auto_awesome" size={14} className="text-[var(--blue)]" />AI 回覆草稿
                           {d.needs_designer && <Badge color="amber">建議轉設計釋疑</Badge>}
                           {d.schedule_impact && <Badge color="amber">工期</Badge>}
                           {d.cost_impact && <Badge color="red">費用</Badge>}

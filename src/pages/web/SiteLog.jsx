@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Printer, ChevronRight, CopyPlus, Plus, CloudSun, Sparkles } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState } from '../../components/ui.jsx'
@@ -495,7 +495,7 @@ export default function SiteLog() {
                 <div className="mt-4">
                   <button onClick={() => navigate(`/site-log/print?d=${date}`)}
                     className="inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--surface-2)] text-[var(--blue)]">
-                    <Printer size={15} aria-hidden />列印公定格式日誌
+                    <MSym name="print" size={15} />列印公定格式日誌
                   </button>
                 </div>
               )}
@@ -507,7 +507,7 @@ export default function SiteLog() {
               <div className="w-full sm:w-auto"><Field label="工作摘要"><input value={summary} disabled={!can.edit} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="w-full sm:w-64 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm disabled:opacity-50 disabled:bg-[var(--surface-2)]" /></Field></div>
               {can.edit && (
                 <Button variant="secondary" onClick={pullWeather} disabled={weatherBusy} title="依工地座標向中央氣象局帶入今日天氣">
-                  <CloudSun size={14} aria-hidden />{weatherBusy ? '帶入中…' : '帶入天氣'}
+                  <MSym name="partly_cloudy_day" size={14} />{weatherBusy ? '帶入中…' : '帶入天氣'}
                 </Button>
               )}
               {/* CWA 預報資料集只涵蓋未來約 3 天,過去日期打 API 必然帶不到——先講明,不讓使用者按了才看到失敗 */}
@@ -517,7 +517,7 @@ export default function SiteLog() {
               {/* 零輸入:一鍵帶入前一筆日誌的班組/機具/材料(僅新日期、且有前一筆時) */}
               {can.edit && !dateHasLog && prevLog && (
                 <Button variant="secondary" onClick={copyYesterday} title={`帶入 ${prevLog.log_date} 的班組/機具/材料`}>
-                  <CopyPlus size={14} aria-hidden />複製昨日
+                  <MSym name="library_add" size={14} />複製昨日
                 </Button>
               )}
             </div>
@@ -542,7 +542,7 @@ export default function SiteLog() {
             {can.edit && aiEnabled('sitelog.whiteboard') && <div className="mb-3 p-3 rounded-lg bg-[var(--blue-tint)] border border-[var(--blue)]/30">
               <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable ${aiBusy ? 'opacity-50' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
-                <Camera size={15} aria-hidden /> {aiBusy ? 'AI 辨識中…' : 'AI 拍照自動填寫'}
+                <MSym name="photo_camera" size={15} /> {aiBusy ? 'AI 辨識中…' : 'AI 拍照自動填寫'}
               </label>
               <p className={`text-xs mt-2 ${aiMsg.startsWith('辨識失敗') ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>
                 {aiMsg || '拍下工程告示板或現場照片，AI 辨識後自動帶入日期、天氣與各工項當日數量。'}
@@ -607,7 +607,7 @@ export default function SiteLog() {
             <div className="mt-4 border border-[var(--border)] rounded-lg">
               <button onClick={() => setOfficialOpen((o) => !o)}
                 className="w-full flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--text-2)] hover:bg-[var(--surface-2)] rounded-lg">
-                <ChevronRight size={15} aria-hidden className={`transition-transform duration-[var(--dur-fast)] ${officialOpen ? 'rotate-90' : ''}`} />
+                <MSym name="chevron_right" size={15} className={`transition-transform duration-[var(--dur-fast)] ${officialOpen ? 'rotate-90' : ''}`} />
                 公定格式欄位（出工人數・機具・材料・安衛…）
                 <span className="ml-auto text-[11px] text-[var(--text-3)] font-normal">
                   {/* ISSUE-5a:這是工程會公定格式的法定欄位,副標不用「選填」降級,改中性說明 */}
@@ -683,7 +683,7 @@ export default function SiteLog() {
               {currentLog && (
                 <button onClick={() => navigate(`/site-log/print?d=${date}`)}
                   className="inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--surface-2)] text-[var(--blue)]">
-                  <Printer size={15} aria-hidden />列印公定格式日誌
+                  <MSym name="print" size={15} />列印公定格式日誌
                 </button>
               )}
               {/* ISSUE-6b tone:success 綠(「已存檔 ✓」e2e 凍結字串)/info 藍(帶入類資訊)/error 紅 */}
@@ -710,13 +710,13 @@ export default function SiteLog() {
                       <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 pressable shadow-sm ${(photoBusy || batchBusy || existingBusy) ? 'opacity-40 bg-[var(--primary)] text-white' : 'cursor-pointer bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'}`}>
                         {/* 批次=從相簿多選(不加 capture,否則手機會強開相機只能拍一張) */}
                         <input type="file" accept="image/*" multiple disabled={photoBusy || batchBusy || existingBusy} onChange={onBatchPhotos} className="hidden" />
-                        <Sparkles size={15} aria-hidden /> 選照片 AI 辨識後上傳
+                        <MSym name="auto_awesome" size={15} /> 選照片 AI 辨識後上傳
                       </label>
                     )}
                     {/* P0 #11:已上傳但沒說明的照片,一鍵補 AI 說明+配工項——使用者的直覺是「先上傳,再辨識」 */}
                     {aiEnabled('photo.classify') && photosNeedingAI.length > 0 && (
                       <Button variant="secondary" onClick={onClassifyExisting} disabled={photoBusy || batchBusy || existingBusy}>
-                        <Sparkles size={14} aria-hidden />{existingBusy ? '辨識中…' : `AI 補辨識/配對 ${photosNeedingAI.length} 張`}
+                        <MSym name="auto_awesome" size={14} />{existingBusy ? '辨識中…' : `AI 補辨識/配對 ${photosNeedingAI.length} 張`}
                       </Button>
                     )}
                     {/* 「不辨識」=選檔即上傳、沒有確認步驟——不替使用者自動建檔,仍要先存檔才出現 */}
@@ -733,7 +733,7 @@ export default function SiteLog() {
                   ) : (
                     <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? (aiEnabled('photo.classify') ? '　·　AI 辨識＝自動生說明並配對工項' : '　·　AI 批次辨識未啟用') : '（照片由施工廠商上傳）'}</span>
                   )}
-                  {existingMsg && <span className={`text-xs font-medium ${existingMsg.includes('失敗') ? 'text-[var(--red-text)]' : 'text-[var(--green-text,#15803d)]'}`}>{existingMsg}</span>}
+                  {existingMsg && <span className={`text-xs font-medium ${existingMsg.includes('失敗') ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'}`}>{existingMsg}</span>}
                 </div>
 
                 {/* 批次辨識覆核區:AI 逐張判讀後,人可改說明/工項再一鍵全上傳 */}
@@ -741,7 +741,7 @@ export default function SiteLog() {
                   <div className="mb-4 border border-[var(--blue)]/30 bg-[var(--blue)]/[0.04] rounded-xl p-3">
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5">
-                        <Sparkles size={14} className="text-[var(--blue)]" aria-hidden />
+                        <MSym name="auto_awesome" size={14} className="text-[var(--blue)]" />
                         AI 辨識覆核（{staging.filter((s) => s.status === 'done').length}/{staging.length}）
                         {batchBusy && <span className="text-xs font-normal text-[var(--text-3)]">判讀中…</span>}
                       </div>
@@ -884,7 +884,7 @@ function FreqChips({ items, label, onAdd }) {
       {items.map((r, i) => (
         <button key={i} onClick={() => onAdd(r)}
           className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 max-sm:min-h-11 max-sm:px-3 rounded-full border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--blue-tint)] hover:text-[var(--blue-text)] hover:border-[var(--blue)] pressable">
-          <Plus size={10} aria-hidden />{label(r)}
+          <MSym name="add" size={10} />{label(r)}
         </button>
       ))}
     </div>

@@ -5,7 +5,7 @@
 // 顯示件數就得再載一份聚合,兩頁的數字遲早對不起來(W8-2A §2.1、§5)。
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Bot, ChevronDown, ChevronRight } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input } from '../../components/ui.jsx'
 import { useStore } from '../../store.jsx'
 import { applyDraftQuantities, draftNeedsInputCount, checklistDraftCounts } from '../../store/slices/agent.js'
@@ -47,7 +47,7 @@ function TodayTasksLink() {
         輪到你處理的事項都在「今日待辦」。
       </div>
       <Link to="/dashboard" className="shrink-0 inline-flex items-center gap-0.5 text-xs font-medium text-[var(--blue-text)] hover:underline">
-        前往今日待辦 <ArrowRight size={12} aria-hidden />
+        前往今日待辦 <MSym name="arrow_forward" size={12} />
       </Link>
     </div>
   )
@@ -107,7 +107,7 @@ function DraftInboxCard() {
         <div className="mb-3 flex items-center justify-between gap-2 text-xs rounded-lg px-2.5 py-2 bg-[var(--green-tint)] text-[var(--green-text)] enter-row">
           <span>{doneMsg.text}</span>
           <Link to={doneMsg.to} className="shrink-0 inline-flex items-center gap-0.5 font-medium hover:underline">
-            {doneMsg.cta} <ArrowRight size={11} aria-hidden />
+            {doneMsg.cta} <MSym name="arrow_forward" size={11} />
           </Link>
         </div>
       )}
@@ -247,7 +247,7 @@ function DraftInboxCard() {
                 {findings.length > 0 && (
                   <button onClick={() => setOpenFindings(findingsOpened ? null : a.id)}
                     className="inline-flex items-center gap-0.5 text-[11px] max-sm:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
-                    {findingsOpened ? <ChevronDown size={11} aria-hidden /> : <ChevronRight size={11} aria-hidden />}
+                    {findingsOpened ? <MSym name="expand_more" size={11} /> : <MSym name="chevron_right" size={11} />}
                     勾稽發現 {findings.length} 項
                   </button>
                 )}
@@ -269,7 +269,7 @@ function DraftInboxCard() {
                 {a.rationale && (
                   <button onClick={() => setOpenRationale(opened ? null : a.id)}
                     className="inline-flex items-center gap-0.5 text-[11px] max-sm:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
-                    {opened ? <ChevronDown size={11} aria-hidden /> : <ChevronRight size={11} aria-hidden />}
+                    {opened ? <MSym name="expand_more" size={11} /> : <MSym name="chevron_right" size={11} />}
                     為什麼這樣擬
                   </button>
                 )}
@@ -303,7 +303,7 @@ function DraftInboxCard() {
           使用者卡死,所以留這個次要手動入口(路由本身保留)。 */}
       <div className="mt-3 pt-3 border-t border-[var(--border-2)] text-right">
         <Link to="/site-log" className="inline-flex items-center gap-0.5 text-[11px] text-[var(--text-3)] hover:text-[var(--blue-text)]">
-          手動寫施工日誌 <ArrowRight size={11} aria-hidden />
+          手動寫施工日誌 <MSym name="arrow_forward" size={11} />
         </Link>
       </div>
     </Card>
@@ -342,7 +342,7 @@ export default function Agent() {
       {/* W2-3(D-007):未匯標單不再整頁擋住——文件/成員/期限問題不依賴 BOQ,
           只有工項類(估驗/進度/數量)要先匯入;指引與全站一致(專案文件一次上傳)。 */}
       {!imported && (
-        <div className="bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded-lg px-4 py-3 text-sm text-amber-800">
+        <div className="bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded-lg px-4 py-3 text-sm text-[var(--amber-text)]">
           此專案尚未匯入標單:文件、成員與期限問題可以直接問;估驗、進度、工項數量類問題要先到「
           <Link to="/contract" className="font-medium underline">專案文件</Link>」上傳標單 XML 才有資料。
         </div>
@@ -351,7 +351,7 @@ export default function Agent() {
       {/* 桌機:對話為主排左、草稿收件匣排右 */}
       <div className="grid gap-5 lg:grid-cols-[1fr_380px] items-start">
         <Card title="跟你的 agent 說" bodyClass="p-0" className="order-2 lg:order-1"
-          action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><Bot size={12} aria-hidden />會自己查本案資料</span>}>
+          action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="smart_toy" size={12} />會自己查本案資料</span>}>
           {agentOn
             ? <CopilotChat data={data} onAsk={onAsk} minH={360} maxH={560} />
             : <div className="p-4"><Empty>此 AI 功能未啟用（AI Agent 主控台）。今日待辦與草稿收件匣仍可使用；如需開通請聯絡系統管理者。</Empty></div>}

@@ -4,7 +4,7 @@
 // 前端絕不樂觀顯示核定結果。工作流 artifact 只列出既有連結(P0-07 不產生)。
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, XCircle, Ban, FileText, Link2, Pencil, ArrowRight, RefreshCw, Info } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { pageAllInSafe } from '../../lib/pagedQuery.js'
@@ -92,7 +92,7 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
             <div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
               {kind === 'approved' && r.requirement_type === 'deadline' && (
                 <Link to="/contract" className="w-full sm:w-auto">
-                  <Button size="sm" variant="secondary" className="w-full sm:w-auto max-sm:min-h-11">前往期限追蹤 <ArrowRight size={12} aria-hidden /></Button>
+                  <Button size="sm" variant="secondary" className="w-full sm:w-auto max-sm:min-h-11">前往期限追蹤 <MSym name="arrow_forward" size={12} /></Button>
                 </Link>
               )}
               {/* F3:廠商在這裡只有這一個動作,ghost 樣式在手機上全寬置中會被讀成一行說明文字;
@@ -105,13 +105,13 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
               </Button>
               {quickApprove && (
                 <Button size="sm" variant="success" className="w-full sm:w-auto max-sm:min-h-11" onClick={() => onQuickApprove(group)}>
-                  <CheckCircle2 size={13} aria-hidden /> 核定並加入期限追蹤
+                  <MSym name="check_circle" size={13} /> 核定並加入期限追蹤
                 </Button>
               )}
               {/* F4:無核定權的提示要與按鈕有視覺區隔——淡底短提示列,不是內文也不是死按鈕 */}
               {kind === 'suggestion' && !canReview && (
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-xs text-[var(--text-3)] leading-snug w-full sm:w-auto sm:self-center">
-                  <Info size={12} className="shrink-0" aria-hidden />契約核定由監造／機關辦理
+                  <MSym name="info" size={12} className="shrink-0" />契約核定由監造／機關辦理
                 </span>
               )}
             </div>
@@ -359,7 +359,7 @@ export default function Requirements() {
       <div className="space-y-5">
         <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
         <ErrorBanner msg={loadError} />
-        <Button className="w-full sm:w-auto" onClick={reload}><RefreshCw size={14} aria-hidden /> 重新載入</Button>
+        <Button className="w-full sm:w-auto" onClick={reload}><MSym name="refresh" size={14} /> 重新載入</Button>
       </div>
     )
   }
@@ -477,14 +477,14 @@ export default function Requirements() {
         <Card title="契約內容與來源" action={canReview && (
           <div className="flex flex-wrap justify-start sm:justify-end gap-2">
             {EDITABLE_STATUSES.includes(selected.status) && !editing && (
-              <Button variant="ghost" size="sm" onClick={() => setEditing({ ...selected })}><Pencil size={14} aria-hidden /> 修正內容</Button>
+              <Button variant="ghost" size="sm" onClick={() => setEditing({ ...selected })}><MSym name="edit" size={14} /> 修正內容</Button>
             )}
             {EDITABLE_STATUSES.includes(selected.status) && (<>
-              <Button variant="success" size="sm" disabled={!!busy} onClick={() => review('approve', '核定為契約規則')}><CheckCircle2 size={14} aria-hidden /> 核定為契約規則</Button>
-              <Button variant="danger" size="sm" disabled={!!busy} onClick={() => review('reject', '駁回')}><XCircle size={14} aria-hidden /> 駁回</Button>
+              <Button variant="success" size="sm" disabled={!!busy} onClick={() => review('approve', '核定為契約規則')}><MSym name="check_circle" size={14} /> 核定為契約規則</Button>
+              <Button variant="danger" size="sm" disabled={!!busy} onClick={() => review('reject', '駁回')}><MSym name="cancel" size={14} /> 駁回</Button>
             </>)}
             {selected.status === 'approved' && (
-              <Button variant="ghost" size="sm" disabled={!!busy} onClick={() => review('supersede', '廢止取代')}><Ban size={14} aria-hidden /> 廢止取代</Button>
+              <Button variant="ghost" size="sm" disabled={!!busy} onClick={() => review('supersede', '廢止取代')}><MSym name="block" size={14} /> 廢止取代</Button>
             )}
           </div>
         )}>
@@ -544,7 +544,7 @@ export default function Requirements() {
           })()}
 
           <div className="mb-4">
-            <div className="text-sm font-medium text-[var(--text)] mb-1.5 flex items-center gap-1"><FileText size={14} aria-hidden /> 出處引註</div>
+            <div className="text-sm font-medium text-[var(--text)] mb-1.5 flex items-center gap-1"><MSym name="description" size={14} /> 出處引註</div>
             {selectedSources.length === 0 ? (
               <p className="text-xs text-[var(--text-3)]">無引註。</p>
             ) : selectedSources.map((s) => {
@@ -594,7 +594,7 @@ export default function Requirements() {
           </div>
 
           <div>
-            <div className="text-sm font-medium text-[var(--text)] mb-1.5 flex items-center gap-1"><Link2 size={14} aria-hidden /> 已連結流程項目</div>
+            <div className="text-sm font-medium text-[var(--text)] mb-1.5 flex items-center gap-1"><MSym name="link" size={14} /> 已連結流程項目</div>
             {selected.status !== 'approved' && artifactLinks.length === 0 ? (
               <p className="text-xs text-[var(--text-3)]">未核定內容不會建立或連結任何活躍流程。</p>
             ) : artifactLinks.length === 0 ? (

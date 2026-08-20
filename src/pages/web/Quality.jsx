@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Printer, Zap } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
@@ -576,7 +576,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                         className="text-[var(--blue)] hover:underline text-xs whitespace-nowrap">提出查驗申請</button>
                     )}
                     <button onClick={() => navigate(`/quality/checklist-print?id=${r.id}`)} title="列印自主檢查表"
-                      className="text-[var(--blue)] hover:underline text-xs inline-flex items-center gap-1"><Printer size={13} aria-hidden />列印</button>
+                      className="text-[var(--blue)] hover:underline text-xs inline-flex items-center gap-1"><MSym name="print" size={13} />列印</button>
                     {canEdit && tpl && (
                       <button onClick={() => startRevise(r)} title="以修訂版次更正（不覆寫舊證據）"
                         className="text-[var(--blue)] hover:underline text-xs">修訂</button>
@@ -647,7 +647,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
   return (
     <Card title={`取樣試驗（${samples.length}）`} action={
       canEdit && <div className="flex items-center gap-2">
-        <Button variant="secondary" onClick={gen} disabled={busy}><Zap size={14} aria-hidden />從施工日誌帶入</Button>
+        <Button variant="secondary" onClick={gen} disabled={busy}><MSym name="bolt" size={14} />從施工日誌帶入</Button>
         <Button variant="secondary" onClick={() => setAddOpen((o) => !o)}>{addOpen ? '取消' : '＋ 手動新增'}</Button>
       </div>
     }>

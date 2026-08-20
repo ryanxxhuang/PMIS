@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { MailCheck } from 'lucide-react'
+import { MSym } from '../components/icons.jsx'
 import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
 import { ErrorBanner } from '../components/ui.jsx'
@@ -110,7 +110,7 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
   if (resetSent) {
     return (
       <div className="text-center space-y-3 py-2">
-        <div className="flex justify-center"><MailCheck size={36} className="text-[var(--blue-text)]" aria-hidden /></div>
+        <div className="flex justify-center"><MSym name="mark_email_read" size={36} className="text-[var(--blue-text)]" /></div>
         <div className="font-semibold text-[var(--text)]">重設連結已寄出</div>
         <p className="text-sm text-[var(--text-2)]">
           若 <b>{form.email}</b> 是已註冊的帳號，重設密碼連結已寄達。<br />請點信中連結回來設定新密碼。
@@ -130,7 +130,7 @@ function AuthForm({ signIn, signUp, resendSignup, requestPasswordReset }) {
   if (sent) {
     return (
       <div className="text-center space-y-3 py-2">
-        <div className="flex justify-center"><MailCheck size={36} className="text-[var(--blue-text)]" aria-hidden /></div>
+        <div className="flex justify-center"><MSym name="mark_email_read" size={36} className="text-[var(--blue-text)]" /></div>
         <div className="font-semibold text-[var(--text)]">驗證信已寄出</div>
         <p className="text-sm text-[var(--text-2)]">
           已寄到 <b>{form.email}</b>。請到信箱點擊連結完成驗證，<br />再回來登入。

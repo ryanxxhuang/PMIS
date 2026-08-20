@@ -12,7 +12,7 @@
 //
 // <ConfirmHost /> 掛在 App 頂層一次；appConfirm / appPrompt 透過模組層 setter 連到 host。
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, HelpCircle, PencilLine } from 'lucide-react'
+import { MSym } from './icons.jsx'
 import { Button, Input } from './ui.jsx'
 
 let hostSetter = null
@@ -105,7 +105,7 @@ export function ConfirmHost() {
       <div ref={dialogRef} className="relative bg-[var(--surface)] text-[var(--text)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] w-full max-w-sm p-5 enter-modal">
         <div className="flex items-start gap-3">
           <span className={`w-9 h-9 rounded-full grid place-items-center shrink-0 ${danger ? 'bg-[var(--red-tint)] text-[var(--red-text)]' : 'bg-[var(--blue-tint)] text-[var(--blue-text)]'}`}>
-            {danger ? <AlertTriangle size={18} aria-hidden /> : isPrompt ? <PencilLine size={18} aria-hidden /> : <HelpCircle size={18} aria-hidden />}
+            {danger ? <MSym name="warning" size={18} /> : isPrompt ? <MSym name="edit" size={18} /> : <MSym name="help" size={18} />}
           </span>
           <div className="min-w-0 flex-1">
             <div className="font-semibold text-[15px] leading-snug">{title}</div>

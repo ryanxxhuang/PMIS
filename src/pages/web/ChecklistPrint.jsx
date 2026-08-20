@@ -1,5 +1,5 @@
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
-import { Printer } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 
 // 民國年月日
@@ -38,7 +38,7 @@ export default function ChecklistPrint() {
       <div className="max-w-[210mm] mx-auto mb-3 flex justify-between print:hidden px-1">
         <button onClick={() => navigate('/quality')} className="text-sm text-slate-600 hover:underline">← 返回品質查驗</button>
         <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 text-sm font-medium bg-[var(--primary)] text-white rounded-lg px-4 py-1.5">
-          <Printer size={15} aria-hidden />列印 / 存 PDF
+          <MSym name="print" size={15} />列印 / 存 PDF
         </button>
       </div>
 

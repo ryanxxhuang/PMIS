@@ -9,10 +9,8 @@
     <meta property="og:description" content="標單估驗、施工日誌、三級品管、契約義務追蹤,AI 少輸入多產出。" />
     <meta property="og:type" content="website" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <!-- 字型必須在這裡載:index.css 的 @import 會被 build(Lightning CSS)丟棄 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
+    <!-- 字型 self-host(機關禁外連 CDN):main.jsx 以 JS import 載入
+         @fontsource-variable/noto-sans-tc 與 @material-symbols/font-400,零外連。 -->
   </head>
   <body>
     <div id="root"></div>

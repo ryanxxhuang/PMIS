@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Printer, Trash2, Sparkles, AlertTriangle, Calculator } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, BallChip, Empty, PageHeader, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
@@ -353,7 +353,7 @@ export default function Valuation() {
                 // 警示原本只有琥珀色+title,手機沒有 hover 就完全讀不到語意;
                 // 補圖示與「疑超計」字樣,顏色只是輔助(W8-0 §8-6)
                 <span className="inline-flex items-center gap-0.5 text-[11px] text-[var(--amber-text)]" title="累計估驗數量高於施工日誌累計完成量逾 5%,可能超計,建議查核佐證後再計價">
-                  <AlertTriangle size={11} aria-hidden />疑超計 估驗 {fmt(cumQty)} &gt; 日誌 {fmt(ev.loggedTotal)}
+                  <MSym name="warning" size={11} />疑超計 估驗 {fmt(cumQty)} &gt; 日誌 {fmt(ev.loggedTotal)}
                 </span>
               )}
             </span>
@@ -385,13 +385,13 @@ export default function Valuation() {
           <div className="flex flex-wrap items-start gap-2">
             {selected && (
               <div className="flex flex-col gap-0.5 max-w-[10rem]">
-                <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><Printer size={15} aria-hidden />列印估驗單</Button>
+                <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><MSym name="print" size={15} />列印估驗單</Button>
                 <span className="text-[11px] text-[var(--text-3)] leading-tight">正式計價金額文件</span>
               </div>
             )}
             {selected && (
               <div className="flex flex-col gap-0.5 max-w-[10rem]">
-                <Button variant="secondary" onClick={() => navigate(`/valuation/package?p=${selected.id}`)} title="彙整本期估驗明細＋AI 施工說明＋佐證照片"><Sparkles size={15} aria-hidden />組請款佐證包</Button>
+                <Button variant="secondary" onClick={() => navigate(`/valuation/package?p=${selected.id}`)} title="彙整本期估驗明細＋AI 施工說明＋佐證照片"><MSym name="auto_awesome" size={15} />組請款佐證包</Button>
                 <span className="text-[11px] text-[var(--text-3)] leading-tight">佐證彙整，非正式計價單</span>
               </div>
             )}
@@ -432,7 +432,7 @@ export default function Valuation() {
             <Stat label="累計估驗金額" value={fmt(totalCum)} sub={`占發包 ${completion.toFixed(1)}%`} />
             <Stat label="累計完成度" value={`${completion.toFixed(1)}%`} sub={`/ ${yi(billableTotal)}`} color="text-[var(--green-text)]" />
             <Stat label="本期保留款" value={fmt(periodAmt * ret)} sub={`${selected.retention_pct}%`} color="text-[var(--text-2)]" />
-            <Stat label="本期應付" value={fmt(periodAmt * (1 - ret))} sub="本期估驗 − 保留款" color="text-blue-600" />
+            <Stat label="本期應付" value={fmt(periodAmt * (1 - ret))} sub="本期估驗 − 保留款" color="text-[var(--blue-text)]" />
           </div>
 
           {/* 本期決策列(W8-4B B2):先給「這期在誰手上、與日誌差在哪、我能按什麼」,
@@ -476,7 +476,7 @@ export default function Valuation() {
               {selected.status === '已核定' && can.approve &&
                 <Button variant="ghost" className="max-sm:w-full max-sm:min-h-11" onClick={() => onReject('退回核定')}>退回核定</Button>}
               {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01) */}
-              {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-[var(--red-text)] hover:text-[var(--red-text)] max-sm:w-full max-sm:min-h-11" aria-label="刪除估驗期"><Trash2 size={15} aria-hidden /></Button>}
+              {can.edit && selected.status === '草稿' && <Button variant="ghost" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="text-[var(--red-text)] hover:text-[var(--red-text)] max-sm:w-full max-sm:min-h-11" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
             </div>
           </div>
 
@@ -490,7 +490,7 @@ export default function Valuation() {
                     的對外敘事,也讓使用者以為不開 AI 就填不了數量(C-9)。 */}
                 {selected.status === '草稿' && can.edit && siteLogs.length > 0 && (
                   <Button onClick={async () => { setFilling(true); setErrMsg(''); const { count, error } = await fillValuationFromSiteLogs(selected.id); setFilling(false); if (error) { setErrMsg(`帶入未寫入：${error.message}`); return } setFillMsg(count ? `已依 ${siteLogs.length} 筆施工日誌帶入 ${count} 個工項累計，請覆核後送審。` : '施工日誌中查無可帶入的完成數量。') }} disabled={filling} title="依施工日誌逐日完成數量加總，帶入本期各工項累計完成數量（確定性計算，不經 AI）">
-                    <Calculator size={14} aria-hidden />{filling ? '帶入中…' : '帶入日誌累計'}
+                    <MSym name="calculate" size={14} />{filling ? '帶入中…' : '帶入日誌累計'}
                   </Button>
                 )}
               </div>
@@ -498,11 +498,11 @@ export default function Valuation() {
           >
             {fillMsg && editable && (
               <div className="mb-3 flex items-start gap-2 text-xs bg-[var(--blue-tint)] text-[var(--blue-text)] rounded-lg px-3 py-2">
-                <Calculator size={14} className="shrink-0 mt-0.5" aria-hidden />
+                <MSym name="calculate" size={14} className="shrink-0 mt-0.5" />
                 <span>{fillMsg}</span>
               </div>
             )}
-            {!editable && <p className="text-xs text-amber-600 mb-2">本期狀態為「{selected.status}」，明細唯讀。</p>}
+            {!editable && <p className="text-xs text-[var(--amber-text)] mb-2">本期狀態為「{selected.status}」，明細唯讀。</p>}
             {selected.note && (
               <p className="text-xs text-[var(--amber-text)] mb-2 whitespace-pre-line">本期備註：{selected.note}</p>
             )}

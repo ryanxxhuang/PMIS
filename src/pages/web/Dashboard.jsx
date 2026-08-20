@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMemo, useState, useEffect } from 'react'
-import { Download, ChevronRight, Coins, FileCheck2, MessageSquareWarning, ShieldCheck, AlertTriangle, Eye, Wrench, CheckCircle2, Circle, Scale, FlaskConical, BadgeCheck, Octagon, NotebookPen } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { Card, Empty, PageHeader } from '../../components/ui.jsx'
@@ -103,15 +103,15 @@ function SetupChecklist({ imported }) {
       <Link to={next.to}
         className="flex items-center gap-2 rounded-lg bg-[var(--blue-tint)] text-[var(--blue-text)] px-3 py-2 mb-3 text-sm font-medium hover:brightness-95 transition-[filter]">
         <span className="min-w-0 flex-1">下一步：{next.label}</span>
-        <ChevronRight size={15} className="shrink-0" aria-hidden />
+        <MSym name="chevron_right" size={15} className="shrink-0" />
       </Link>
       <ol className="divide-y divide-[var(--border-2)]">
         {steps.map((s, i) => (
           <li key={i}>
             <Link to={s.to} className="flex items-start gap-3 py-2.5 group">
               {s.done
-                ? <CheckCircle2 size={18} className="text-[var(--green-text)] shrink-0 mt-0.5" aria-hidden />
-                : <Circle size={18} className="text-[var(--text-3)] shrink-0 mt-0.5" aria-hidden />}
+                ? <MSym name="check_circle" size={18} className="text-[var(--green-text)] shrink-0 mt-0.5" />
+                : <MSym name="radio_button_unchecked" size={18} className="text-[var(--text-3)] shrink-0 mt-0.5" />}
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
                   <span className={`text-sm ${s.done ? 'text-[var(--text-3)] line-through' : 'text-[var(--text)] font-medium'}`}>{i + 1}. {s.label}</span>
@@ -119,7 +119,7 @@ function SetupChecklist({ imported }) {
                 </div>
                 <div className="text-xs text-[var(--text-3)] mt-0.5 leading-snug">{s.detail}</div>
               </div>
-              <ChevronRight size={15} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-0.5" aria-hidden />
+              <MSym name="chevron_right" size={15} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-0.5" />
             </Link>
           </li>
         ))}
@@ -215,7 +215,7 @@ export default function Dashboard() {
         action={imported && (
           <button onClick={exportAll} title="把本專案所有資料打包下載(JSON)"
             className="inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1.5 border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable">
-            <Download size={13} aria-hidden />匯出整案資料
+            <MSym name="download" size={13} />匯出整案資料
           </button>
         )}
       />
@@ -295,7 +295,7 @@ export default function Dashboard() {
           {/* 次要:最近紀錄。已完成的日誌不是待辦,也不併進「今天已完成」
               (log_date 是人可回填的業務日期,不等於今天完成了什麼) */}
           <Card title="最近施工日誌" bodyClass={siteLogs.length ? 'p-0' : 'p-6'}
-            action={<Link to="/site-log" className="text-xs font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">施工日誌 <ChevronRight size={13} aria-hidden /></Link>}>
+            action={<Link to="/site-log" className="text-xs font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">施工日誌 <MSym name="chevron_right" size={13} /></Link>}>
             {siteLogs.length === 0 ? <Empty>尚無施工日誌</Empty> : (
               <ul className="divide-y divide-[var(--border-2)]">
                 {siteLogs.slice(0, 6).map((l) => (
@@ -317,19 +317,19 @@ export default function Dashboard() {
 
 // 每種待辦的圖示 + 色票(icon 方塊底色/字色)——一眼分辨類型
 const TAG_META = {
-  估驗: { icon: Coins, c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
-  送審: { icon: FileCheck2, c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
-  疑義: { icon: MessageSquareWarning, c: 'var(--purple-text)', bg: 'var(--purple-tint)' },
-  查驗: { icon: ShieldCheck, c: 'var(--amber-text)', bg: 'var(--amber-tint)' },
-  缺失: { icon: AlertTriangle, c: 'var(--red-text)', bg: 'var(--red-tint)' },
-  工安缺失: { icon: AlertTriangle, c: 'var(--red-text)', bg: 'var(--red-tint)' },
-  觀察: { icon: Eye, c: 'var(--slate-text)', bg: 'var(--slate-tint)' },
-  變更: { icon: Wrench, c: 'var(--green-text)', bg: 'var(--green-tint)' },
-  契約: { icon: Scale, c: 'var(--purple-text)', bg: 'var(--purple-tint)' },
-  試驗: { icon: FlaskConical, c: 'var(--accent-text)', bg: 'var(--accent-tint)' },
-  驗收: { icon: BadgeCheck, c: 'var(--green-text)', bg: 'var(--green-tint)' },
-  停留點: { icon: Octagon, c: 'var(--red-text)', bg: 'var(--red-tint)' },
-  日誌: { icon: NotebookPen, c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
+  估驗: { icon: 'payments', c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
+  送審: { icon: 'task', c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
+  疑義: { icon: 'feedback', c: 'var(--purple-text)', bg: 'var(--purple-tint)' },
+  查驗: { icon: 'verified_user', c: 'var(--amber-text)', bg: 'var(--amber-tint)' },
+  缺失: { icon: 'warning', c: 'var(--red-text)', bg: 'var(--red-tint)' },
+  工安缺失: { icon: 'warning', c: 'var(--red-text)', bg: 'var(--red-tint)' },
+  觀察: { icon: 'visibility', c: 'var(--slate-text)', bg: 'var(--slate-tint)' },
+  變更: { icon: 'build', c: 'var(--green-text)', bg: 'var(--green-tint)' },
+  契約: { icon: 'balance', c: 'var(--purple-text)', bg: 'var(--purple-tint)' },
+  試驗: { icon: 'science', c: 'var(--accent-text)', bg: 'var(--accent-tint)' },
+  驗收: { icon: 'verified', c: 'var(--green-text)', bg: 'var(--green-tint)' },
+  停留點: { icon: 'report', c: 'var(--red-text)', bg: 'var(--red-tint)' },
+  日誌: { icon: 'edit_note', c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
 }
 
 // 首頁每段最多 5 筆;完整清單在提醒中心,首頁不再無限長。
@@ -354,13 +354,12 @@ function TaskSection({ title, items, empty, hint = null, seeAll = false, done = 
       ) : (
         <ul className="divide-y divide-[var(--border-2)]">
           {shown.map((x) => {
-            const m = TAG_META[x.tag] || { icon: Eye, c: 'var(--text-3)', bg: 'var(--surface-2)' }
-            const Icon = m.icon
+            const m = TAG_META[x.tag] || { icon: 'visibility', c: 'var(--text-3)', bg: 'var(--surface-2)' }
             return (
               <li key={x.key}>
                 <Link to={x.to} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">
                   <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0" style={{ background: m.bg, color: m.c }}>
-                    <Icon size={16} aria-hidden />
+                    <MSym name={m.icon} size={16} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm text-[var(--text)]">{x.title}</span>
@@ -368,7 +367,7 @@ function TaskSection({ title, items, empty, hint = null, seeAll = false, done = 
                       <span className={x.overdueDays ? 'text-[var(--red-text)] font-medium' : ''}>{x.meta}</span>
                     </span>
                   </span>
-                  <ChevronRight size={16} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-1" aria-hidden />
+                  <MSym name="chevron_right" size={16} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-1" />
                 </Link>
               </li>
             )
@@ -377,7 +376,7 @@ function TaskSection({ title, items, empty, hint = null, seeAll = false, done = 
           {items.length > shown.length && seeAll && (
             <li className="px-4 py-2.5">
               <Link to="/alerts" className="text-xs font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">
-                看全部 {items.length} 件 <ChevronRight size={13} aria-hidden />
+                看全部 {items.length} 件 <MSym name="chevron_right" size={13} />
               </Link>
             </li>
           )}

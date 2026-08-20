@@ -2,7 +2,7 @@
 // 頁的 Card 或右下角浮動面板)自己套 chrome。AI 優先 → demo/失敗回退確定性問答。
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Send, ArrowRight, Bot } from 'lucide-react'
+import { MSym } from './icons.jsx'
 import { Button } from './ui.jsx'
 import { answerQuestion, SUGGESTED_QUESTIONS } from '../lib/assistantQA.js'
 
@@ -87,7 +87,7 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {m.sources.map((s, j) => (
                       <Link key={j} to={s.to} className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--border-2)] text-[var(--blue-text)] hover:bg-[var(--blue-tint)] inline-flex items-center gap-0.5">
-                        {s.label} <ArrowRight size={10} aria-hidden />
+                        {s.label} <MSym name="arrow_forward" size={10} />
                       </Link>
                     ))}
                   </div>
@@ -122,7 +122,7 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
         {busy && (
           <div className="flex justify-start enter-row">
             <div className="bg-[var(--surface-2)] text-[var(--text-3)] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm inline-flex items-center gap-1.5">
-              <Bot size={13} className="animate-pulse" aria-hidden />思考中…
+              <MSym name="smart_toy" size={13} className="animate-pulse" />思考中…
             </div>
           </div>
         )}
@@ -140,7 +140,7 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
         <form onSubmit={(e) => { e.preventDefault(); ask() }} className="flex items-center gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="輸入問題…" disabled={busy}
             className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/20 disabled:opacity-60" />
-          <Button type="submit" size="sm" disabled={!q.trim() || busy} aria-label="送出"><Send size={15} aria-hidden /></Button>
+          <Button type="submit" size="sm" disabled={!q.trim() || busy} aria-label="送出"><MSym name="send" size={15} /></Button>
         </form>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { FileUp } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, Button, Badge, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -288,7 +288,7 @@ function ChangeOrderCard({ co, net, leaves, allItems, canReview, canRatify, canE
       {/* 變更後預算書 diff → 自動產生明細(僅未核准且有填報權) */}
       {itemsEditable && <div className="mb-3">
         <label className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] pressable ${applying ? 'opacity-40' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
-          <FileUp size={15} aria-hidden />上傳變更後預算書 XML，自動產生明細
+          <MSym name="upload_file" size={15} />上傳變更後預算書 XML，自動產生明細
           <input type="file" accept=".xml" className="hidden" onChange={onDiffFile} disabled={applying} />
         </label>
         {diffErr && <p className="text-xs text-[var(--red-text)] mt-1.5">{diffErr}</p>}

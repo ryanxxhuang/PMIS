@@ -2,7 +2,7 @@
 // 法定期限(採購法細則 §92/93/94、採購法 §73)自前一階段實際日自動起算,逾期紅字+進提醒中心。
 // 機關主導、廠商報竣、監造陪驗——三方都能登錄(伺服器 RLS 同步放行本表)。
 import { useState, useMemo } from 'react'
-import { BadgeCheck, CalendarClock, CheckCircle2, Circle, AlertTriangle } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { deriveAcceptance, needsFixFlow, acceptanceAlerts, ACCEPTANCE_STAGE_ORGS } from '../../lib/acceptance.js'
@@ -65,7 +65,7 @@ export default function Acceptance() {
           <ul className="divide-y divide-[var(--border-2)]">
             {alerts.map((a) => (
               <li key={a.stage} className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
-                <AlertTriangle size={15} className={a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--amber-text)]'} aria-hidden />
+                <MSym name="warning" size={15} className={a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--amber-text)]'} />
                 <span className={`font-medium ${a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--text)]'}`}>{a.title}</span>
                 <span className="text-[var(--text-3)] text-xs">{a.meta}</span>
               </li>
@@ -132,7 +132,7 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
           ? 'text-xs font-medium text-[var(--amber-text)]'
           : 'text-[11px] text-[var(--text-3)]'
     }`}>
-      <CalendarClock size={12} aria-hidden />
+      <MSym name="event" size={12} />
       期限 {stage.due}{stage.daysLeft != null && (stage.overdue ? `（逾期 ${-stage.daysLeft} 天）` : `（還有 ${stage.daysLeft} 天）`)}
     </span>
   )
@@ -142,10 +142,10 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
       {/* 時間軸節點 */}
       <div className="flex flex-col items-center pt-0.5">
         {done
-          ? <CheckCircle2 size={20} className="text-[var(--green-text)] shrink-0" aria-hidden />
+          ? <MSym name="check_circle" size={20} className="text-[var(--green-text)] shrink-0" />
           : stage.overdue
-            ? <AlertTriangle size={20} className="text-[var(--red-text)] shrink-0" aria-hidden />
-            : <Circle size={20} className={stage.state === 'due' ? 'text-[var(--blue)]' : 'text-[var(--border)]'} aria-hidden />}
+            ? <MSym name="warning" size={20} className="text-[var(--red-text)] shrink-0" />
+            : <MSym name="radio_button_unchecked" size={20} className={stage.state === 'due' ? 'text-[var(--blue)]' : 'text-[var(--border)]'} />}
         {!last && <span className="flex-1 w-px bg-[var(--border-2)] mt-1.5" />}
       </div>
 
@@ -208,7 +208,7 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
           </div>
         )}
       </div>
-      {done && <BadgeCheck size={16} className="text-[var(--green-text)] shrink-0 mt-1 hidden sm:block" aria-hidden />}
+      {done && <MSym name="verified" size={16} className="text-[var(--green-text)] shrink-0 mt-1 hidden sm:block" />}
     </li>
   )
 }

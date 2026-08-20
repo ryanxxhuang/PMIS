@@ -4,7 +4,7 @@
 // 「施作中卻未叫驗」的 H 點紅色警示並進提醒中心——這就是停留點的存在理由。
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Flag, AlertTriangle, CheckCircle2, Clock3, XCircle, Circle } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -12,10 +12,10 @@ import { POINT_TYPES, itpStatus, itpActivity, itpAlerts } from '../../lib/itp.js
 
 const TYPE_BADGE = { H: 'red', W: 'blue', R: 'slate' }
 const STATUS_META = {
-  pending: { color: 'slate', icon: Circle },
-  requested: { color: 'blue', icon: Clock3 },
-  passed: { color: 'green', icon: CheckCircle2 },
-  failed: { color: 'red', icon: XCircle },
+  pending: { color: 'slate', icon: 'radio_button_unchecked' },
+  requested: { color: 'blue', icon: 'schedule' },
+  passed: { color: 'green', icon: 'check_circle' },
+  failed: { color: 'red', icon: 'cancel' },
 }
 
 export default function ITP() {
@@ -68,7 +68,7 @@ export default function ITP() {
           <ul className="divide-y divide-[var(--border-2)]">
             {alerts.map((a) => (
               <li key={a.point.id} className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
-                <AlertTriangle size={15} className={a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--amber-text)]'} aria-hidden />
+                <MSym name="warning" size={15} className={a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--amber-text)]'} />
                 <span className={`font-medium ${a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--text)]'}`}>{a.title}</span>
                 <span className="text-[var(--text-3)] text-xs">{a.meta}</span>
               </li>
@@ -114,7 +114,6 @@ export default function ITP() {
               const st = itpStatus(p, inspections)
               const active = itpActivity(p, siteLogs)
               const sm = STATUS_META[st.key]
-              const Icon = sm.icon
               const hot = st.key === 'pending' && active && p.point_type === 'H'
               return (
                 <li key={p.id} className={`px-4 py-3 flex flex-wrap items-start gap-x-3 gap-y-1.5 ${hot ? 'bg-[var(--red-tint)]/40' : ''}`}>
@@ -132,7 +131,7 @@ export default function ITP() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Badge color={sm.color}><Icon size={12} aria-hidden /> {st.label}</Badge>
+                    <Badge color={sm.color}><MSym name={sm.icon} size={12} /> {st.label}</Badge>
                     {st.key === 'pending' && can.submit && p.point_type !== 'R' && (
                       <Button size="sm" variant={hot ? 'primary' : 'outline'} onClick={async () => { setErrMsg(''); setBusy(true); const { error } = await requestInspectionForPoint(p); setBusy(false); if (error) setErrMsg(`查驗申請未送出:${error.message}`) }} disabled={busy}>
                         申請查驗
@@ -155,7 +154,7 @@ export default function ITP() {
       </Card>
 
       <p className="text-xs text-[var(--text-3)] leading-relaxed">
-        <Flag size={12} className="inline -mt-0.5 mr-1" aria-hidden />
+        <MSym name="flag" size={12} className="inline -mt-0.5 mr-1" />
         停留點來源通常是「品質計畫」的檢驗停留點清單與施工規範的檢驗規定；
         之後可用 AI 從上傳的規範自動抽出建議停留點（同契約解析模式），由監造審核後生效。
       </p>

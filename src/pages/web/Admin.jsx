@@ -5,7 +5,7 @@
 // 資料全部來自批 A 的 migrations(20260728000000/20260728000100);本頁不新增資料層。
 // 圖表為純 CSS 長條(專案無圖表套件,也不引入)。
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { ShieldAlert, ChevronDown, ChevronRight, Info } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, PageHeader, Badge, Select, Input, Stat, Empty, ErrorBanner } from '../../components/ui.jsx'
 import {
@@ -133,7 +133,7 @@ export default function Admin() {
   if (!isPlatformAdmin) {
     return (
       <div className="text-center py-20 space-y-2">
-        <ShieldAlert size={28} className="mx-auto text-[var(--text-3)]" aria-hidden />
+        <MSym name="gpp_maybe" size={28} className="mx-auto text-[var(--text-3)]" />
         <div className="text-[var(--text)] font-medium">需要平台管理員權限</div>
         <p className="text-sm text-[var(--text-3)]">此後台僅開放產品營運者;所有資料存取由伺服器端逐一驗證。</p>
       </div>
@@ -468,7 +468,7 @@ function FeaturesTab({ features, setFeatures, loading, reload, setFeatureEnabled
   return (
     <div className="space-y-5">
       <div className="flex items-start gap-2.5 text-sm bg-[var(--blue-tint)] text-[var(--blue-text)] rounded-lg px-3.5 py-2.5">
-        <Info size={16} className="shrink-0 mt-0.5" aria-hidden />
+        <MSym name="info" size={16} className="shrink-0 mt-0.5" />
         <span>關閉後,該功能在伺服器端就會被擋下（不是只把按鈕藏起來）;已在進行中的請求不受影響。專案級覆寫翻不過這裡的平台總開關。</span>
       </div>
       <ErrorBanner msg={actionError} onClose={() => setActionError(null)} />
@@ -589,7 +589,7 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
                       <td className={`${TD} font-medium text-[var(--text)]`}>
                         <button onClick={() => toggleExpand(p)} className="flex items-center gap-1.5 text-left hover:text-[var(--blue-text)]"
                           aria-expanded={expanded}>
-                          {expanded ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                          {expanded ? <MSym name="expand_more" size={14} /> : <MSym name="chevron_right" size={14} />}
                           {p.name}
                         </button>
                       </td>

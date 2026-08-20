@@ -1,7 +1,7 @@
 // Shared UI — brand styling (elevation surfaces, steel-blue primary, tonal chips)
 import { forwardRef } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText } from 'lucide-react'
+import { MSym } from './icons.jsx'
 
 export function Card({ title, action, children, className = '', bodyClass = 'p-5' }) {
   return (
@@ -164,7 +164,7 @@ export function Field({ label, children, hint, required = false }) {
 export function SourceTag({ doc, page, section }) {
   return (
     <div className="text-xs text-[var(--text-2)] bg-[var(--bg)] border border-[var(--border-2)] rounded-lg px-2.5 py-1.5">
-      <FileText size={12} className="inline -mt-0.5 mr-1 text-[var(--text-3)]" aria-hidden /><span className="font-medium text-[var(--text)]">{doc}</span> · {page}
+      <MSym name="description" size={12} className="inline -mt-0.5 mr-1 text-[var(--text-3)]" /><span className="font-medium text-[var(--text)]">{doc}</span> · {page}
       {section && <span className="block text-[var(--text-3)] mt-0.5">{section}</span>}
     </div>
   )

@@ -5,7 +5,7 @@
 // 契約包、文件與處理進度只供本頁使用，保留有界的頁面查詢，不塞進全域 Store。
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Scale, FileText, UploadCloud, ChevronRight, RefreshCw } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { Card, Empty, PageHeader, Badge, Button, Select } from '../../components/ui.jsx'
@@ -432,7 +432,7 @@ export default function Contract() {
               disabled={uploading || boqBusy || !canUploadDocs}
               onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)}
               className="hidden" />
-            <UploadCloud size={15} aria-hidden /> {boqBusy ? '解析標單中…' : uploading ? '整理中…' : '上傳契約文件'}
+            <MSym name="cloud_upload" size={15} /> {boqBusy ? '解析標單中…' : uploading ? '整理中…' : '上傳契約文件'}
           </label>
         </div>
       }>
@@ -579,7 +579,7 @@ export default function Contract() {
                   const analyzed = run.metadata?.requirement_extraction === 'completed'
                   return (
                     <div key={run.id} className="flex items-center gap-2 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1">
-                      <FileText size={12} className="text-[var(--text-3)] shrink-0" aria-hidden />
+                      <MSym name="description" size={12} className="text-[var(--text-3)] shrink-0" />
                       <span className="flex-1 truncate text-[var(--text)]" title={doc?.title || '文件'}>{doc?.title || '文件'}</span>
                       {version?.version_label && <span className="text-[var(--text-3)]">{version.version_label}</span>}
                       <Badge color={run.status === 'completed' ? 'green' : run.status === 'failed' ? 'red' : run.status === 'unsupported' ? 'slate' : run.status === 'partial' ? 'amber' : 'blue'}>
@@ -596,7 +596,7 @@ export default function Contract() {
                       {can.edit && run.metadata?.requirement_extraction === 'failed' && (
                         <button onClick={() => confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')}
                           className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-sm:min-h-11 px-1">
-                          <RefreshCw size={11} aria-hidden /> 重試分析
+                          <MSym name="refresh" size={11} /> 重試分析
                         </button>
                       )}
                     </div>
@@ -612,7 +612,7 @@ export default function Contract() {
           <div className="mt-3">
             <button onClick={() => setShowTech((s) => !s)} aria-expanded={showTech}
               className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] inline-flex items-center gap-1 max-sm:min-h-11 px-1">
-              <ChevronRight size={12} aria-hidden className={`transition-transform duration-[var(--dur-fast)] ${showTech ? 'rotate-90' : ''}`} /> 技術資訊
+              <MSym name="chevron_right" size={12} className={`transition-transform duration-[var(--dur-fast)] ${showTech ? 'rotate-90' : ''}`} /> 技術資訊
             </button>
             {showTech && (
               <div className="mt-2 text-[11px] text-[var(--text-3)] space-y-0.5">
@@ -695,7 +695,7 @@ export default function Contract() {
                     const ev = submittals.find((s) => s.id === it.ob.evidence_submittal_id)
                     return (
                       <Link to="/submittals" className="mt-1.5 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] hover:underline">
-                        <FileText size={11} aria-hidden />
+                        <MSym name="description" size={11} />
                         佐證:{ev ? `${ev.submittal_no} ${ev.title}（${ev.status}）` : '送審文件（已不存在或無權檢視）'}
                       </Link>
                     )
@@ -710,26 +710,26 @@ export default function Contract() {
                     </div>
                   )}
                   {it.ob.penalty && (
-                    <div className="text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-2 py-1 mt-2 inline-flex items-center gap-1"><Scale size={12} aria-hidden /> {it.ob.penalty}</div>
+                    <div className="text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-2 py-1 mt-2 inline-flex items-center gap-1"><MSym name="balance" size={12} /> {it.ob.penalty}</div>
                   )}
                   {/* 逾期罰款金額試算(確定性 regex 抽罰率;抽不出就不顯示——寧缺勿錯) */}
                   {it.state === 'overdue' && it.ob.penalty && (() => {
                     const est = estimatePenalty({ penaltyText: it.ob.penalty, overdueDays: -it.diff, contractTotal })
                     return est ? (
                       <div className="text-xs font-medium text-[var(--red-text)] bg-[var(--red-tint)] rounded-md px-2 py-1 mt-1.5 flex items-start gap-1.5">
-                        <Scale size={12} className="mt-0.5 shrink-0" aria-hidden />
+                        <MSym name="balance" size={12} className="mt-0.5 shrink-0" />
                         <span>預估逾期違約金約 NT$ {est.amount.toLocaleString('en-US')}{est.capped ? '(已達上限)' : ''}
                           <span className="font-normal text-[var(--text-3)]"> · {est.basis} · 概算供參,實際依契約認定</span>
                         </span>
                       </div>
                     ) : (
                       <div className="text-xs text-[var(--text-3)] bg-[var(--surface-2)] rounded-md px-2 py-1 mt-1.5 inline-flex items-center gap-1.5">
-                        <Scale size={12} className="shrink-0" aria-hidden />偵測到罰則,但金額格式需人工確認試算
+                        <MSym name="balance" size={12} className="shrink-0" />偵測到罰則,但金額格式需人工確認試算
                       </div>
                     )
                   })()}
                   {(it.ob.source_clause || it.ob.source_page) && (
-                    <div className="text-[11px] text-[var(--text-3)] mt-2 flex items-center gap-1"><FileText size={11} aria-hidden /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>
+                    <div className="text-[11px] text-[var(--text-3)] mt-2 flex items-center gap-1"><MSym name="description" size={11} /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>
                   )}
                 </div>
               </div>

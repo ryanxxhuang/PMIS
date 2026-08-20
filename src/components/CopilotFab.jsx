@@ -4,7 +4,7 @@
 // (對齊 W2-3——文件/成員/期限問題不依賴 BOQ)。列印頁隱藏;行動版為全寬 bottom sheet。
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { X, Maximize2 } from 'lucide-react'
+import { MSym } from './icons.jsx'
 import { useStore } from '../store.jsx'
 import { useAssistantData } from '../lib/assistantData.js'
 import { displayAgentRole, AGENT_LABEL } from '../lib/agentRole.js'
@@ -51,8 +51,8 @@ function CopilotPanel({ onClose }) {
           <div className="text-sm font-semibold text-[var(--text)] leading-tight">{label.name} <span className="font-normal text-[10px] text-[var(--text-3)]">新對話</span></div>
           <div className="text-[10px] text-[var(--text-3)]">與主控台同一個 Agent · 長對話請開<Link to="/agent" onClick={onClose} className="text-[var(--blue-text)] hover:underline">完整頁</Link></div>
         </div>
-        <Link to="/agent" onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><Maximize2 size={15} aria-hidden /></Link>
-        <button onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><X size={17} aria-hidden /></button>
+        <Link to="/agent" onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><MSym name="open_in_full" size={15} /></Link>
+        <button onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><MSym name="close" size={17} /></button>
       </div>
       <CopilotChat data={data} onAsk={onAsk} fill />
     </div>
@@ -91,7 +91,7 @@ export default function CopilotFab() {
           ${open
             ? 'bg-[var(--surface-2)] text-[var(--text-2)] border border-[var(--border)] ring-transparent'
             : 'bg-gradient-to-br from-[var(--blue)] to-[var(--primary)] text-white ring-white/15 shadow-[var(--blue)]/30'}`}>
-        {open ? <X size={22} aria-hidden /> : <CopilotMark size={26} />}
+        {open ? <MSym name="close" size={22} /> : <CopilotMark size={26} />}
       </button>
     </div>
   )

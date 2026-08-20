@@ -3,7 +3,7 @@
 // 而且多數在語意上重複真待辦(缺失逾期/契約到期/待撥款/待核定變更/試體逾期)。
 // 佔一整張卡會讓人以為要逐項處理,所以只留一行,細節走各自的目的頁。
 import { Link } from 'react-router-dom'
-import { Sparkles } from 'lucide-react'
+import { MSym } from './icons.jsx'
 
 const SEV_DOT = { risk: 'var(--red-text)', watch: 'var(--amber-text)', ok: 'var(--green-text)' }
 // 嚴重度不能只靠顏色(W8-0 §8-6):色盲與報讀器都拿不到紅/琥珀/綠的差別,
@@ -17,7 +17,7 @@ export default function InsightsPanel({ insights }) {
   return (
     <div className="bg-[var(--surface)] rounded-xl border border-[var(--border-card)] px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
       <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-3)] shrink-0">
-        <Sparkles size={12} aria-hidden />AI 幫你看到的 {insights.length} 件
+        <MSym name="auto_awesome" size={12} />AI 幫你看到的 {insights.length} 件
       </span>
       {shown.map((it) => (
         <Link key={it.id} to={it.to} title={it.detail}

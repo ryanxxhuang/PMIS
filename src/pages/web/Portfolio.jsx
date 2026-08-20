@@ -3,7 +3,7 @@
 // demo 模式 = 本案(A 區)即時計算 + 兩個靜態示範姊妹案(驗收倒數/保固中)。
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, ShieldCheck, Wrench, ChevronRight, BadgeCheck } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
@@ -133,11 +133,11 @@ export default function Portfolio() {
 // 值為 0 的項不渲染——0 是好消息,列出來只會稀釋真正要看的那幾個數字。
 function ExceptionBand({ ex }) {
   const items = [
-    { key: 'defects', icon: AlertTriangle, text: `未結缺失 ${ex.openDefects}`, v: ex.openDefects, warn: true },
-    { key: 'insp', icon: ShieldCheck, text: `待查驗 ${ex.pendingInspections}`, v: ex.pendingInspections, warn: true },
-    { key: 'co', icon: Wrench, text: `待核定變更 ${ex.pendingCOs}`, v: ex.pendingCOs, warn: true },
-    { key: 'acc', icon: BadgeCheck, text: `驗收中 ${ex.acceptanceActive} 案`, v: ex.acceptanceActive },
-    { key: 'accOver', icon: BadgeCheck, text: `驗收逾期 ${ex.acceptanceOverdue} 案`, v: ex.acceptanceOverdue, red: true },
+    { key: 'defects', icon: 'warning', text: `未結缺失 ${ex.openDefects}`, v: ex.openDefects, warn: true },
+    { key: 'insp', icon: 'verified_user', text: `待查驗 ${ex.pendingInspections}`, v: ex.pendingInspections, warn: true },
+    { key: 'co', icon: 'build', text: `待核定變更 ${ex.pendingCOs}`, v: ex.pendingCOs, warn: true },
+    { key: 'acc', icon: 'verified', text: `驗收中 ${ex.acceptanceActive} 案`, v: ex.acceptanceActive },
+    { key: 'accOver', icon: 'verified', text: `驗收逾期 ${ex.acceptanceOverdue} 案`, v: ex.acceptanceOverdue, red: true },
   ].filter((i) => i.v > 0)
 
   return (
@@ -146,10 +146,9 @@ function ExceptionBand({ ex }) {
       {items.length === 0 ? (
         <span className="text-[var(--text-3)]">各案均無未結例外</span>
       ) : items.map((i) => {
-        const Icon = i.icon
         return (
           <span key={i.key} className={`flex items-center gap-1.5 ${i.red ? 'text-[var(--red-text)] font-medium' : ''}`}>
-            <Icon size={14} className={i.red ? 'text-[var(--red-text)]' : i.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-3)]'} aria-hidden />
+            <MSym name={i.icon} size={14} className={i.red ? 'text-[var(--red-text)]' : i.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-3)]'} />
             {i.text}
           </span>
         )
@@ -176,7 +175,7 @@ function ProjectCard({ c, onOpen }) {
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Badge color={STATUS_COLOR[c.status] || 'slate'}>{c.status}</Badge>
-          {clickable && <ChevronRight size={15} className="text-[var(--text-3)]" aria-hidden />}
+          {clickable && <MSym name="chevron_right" size={15} className="text-[var(--text-3)]" />}
         </div>
       </div>
 
@@ -206,14 +205,13 @@ function ProjectCard({ c, onOpen }) {
       {/* 待辦計數(mt-auto 把底部區塊釘齊卡底,三張卡對齊) */}
       <div className="mt-auto pt-4 grid grid-cols-3 gap-2 text-[11px] w-full">
         {[
-          { icon: AlertTriangle, label: '缺失', title: '未結案缺失', v: c.openDefects, warn: c.openDefects > 0 },
-          { icon: ShieldCheck, label: '待查驗', title: '待監造查驗', v: c.pendingInspections, warn: c.pendingInspections > 0 },
-          { icon: Wrench, label: '變更', title: '變更設計待核定', v: c.pendingCOs, warn: c.pendingCOs > 0 },
+          { icon: 'warning', label: '缺失', title: '未結案缺失', v: c.openDefects, warn: c.openDefects > 0 },
+          { icon: 'verified_user', label: '待查驗', title: '待監造查驗', v: c.pendingInspections, warn: c.pendingInspections > 0 },
+          { icon: 'build', label: '變更', title: '變更設計待核定', v: c.pendingCOs, warn: c.pendingCOs > 0 },
         ].map((s) => {
-          const Icon = s.icon
           return (
             <div key={s.label} title={s.title} className="flex items-center gap-1.5 rounded-lg bg-[var(--surface-2)]/60 px-2 py-1.5 min-w-0">
-              <Icon size={13} className={`shrink-0 ${s.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-3)]'}`} aria-hidden />
+              <MSym name={s.icon} size={13} className={`shrink-0 ${s.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-3)]'}`} />
               <span className="text-[var(--text-3)] truncate">{s.label}</span>
               <span className={`num ml-auto font-semibold ${s.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-2)]'}`}>{s.v}</span>
             </div>
@@ -223,7 +221,7 @@ function ProjectCard({ c, onOpen }) {
 
       {/* 驗收階段:永遠顯示同一列(沒進驗收就淡色),三張卡底部才會整齊 */}
       <div className="mt-3 flex items-center gap-2 text-[12px] w-full">
-        <BadgeCheck size={14} className={!c.acceptance ? 'text-[var(--text-3)] opacity-60' : c.acceptance.overdue ? 'text-[var(--red-text)]' : c.acceptance.finished ? 'text-[var(--green-text)]' : 'text-[var(--blue-text)]'} aria-hidden />
+        <MSym name="verified" size={14} className={!c.acceptance ? 'text-[var(--text-3)] opacity-60' : c.acceptance.overdue ? 'text-[var(--red-text)]' : c.acceptance.finished ? 'text-[var(--green-text)]' : 'text-[var(--blue-text)]'} />
         <span className={c.acceptance ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}>
           驗收：{c.acceptance ? c.acceptance.label : '尚未進入驗收程序'}
         </span>

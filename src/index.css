@@ -1,63 +1,92 @@
 @import "tailwindcss";
-/* 字型改由 index.html <link> 載入:@import 放在 tailwind 展開後會落在規則之後,
-   Lightning CSS 於 build 時整行丟棄 → 正式站字型靜默失效(dev 看得到、prod 沒有)。 */
+/* 字型改由 main.jsx 以 JS import 載入(@fontsource-variable/noto-sans-tc、@material-symbols/font-400):
+   本檔的 @import 放在 tailwind 展開後會落在規則之後,Lightning CSS 於 build 時整行丟棄
+   → 正式站字型靜默失效(dev 看得到、prod 沒有)。JS import 完全繞開這個坑。 */
+
+/* 卡片圓角規格是 12px,但 e2e 有 5 處 xpath 綁死 rounded-2xl 的 class 名——
+   在 theme 層把 2xl 的「值」改成 12px:class 名不動、視覺照規格。 */
+@theme {
+  --radius-2xl: 12px;
+}
 
 :root {
-  /* One harmonized family for both Chinese and Latin — avoids the mixed-metrics look */
-  font-family: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  /* One harmonized family for both Chinese and Latin — avoids the mixed-metrics look.
+     "Google Sans Text" 只在使用者本機有裝時吃到(非公開授權不 self-host);
+     fontsource 宣告的 family 名是 "Noto Sans TC Variable",不是 "Noto Sans TC"——
+     漏了 Variable 後綴會靜默退回系統字。 */
+  font-family: "Google Sans Text", "Noto Sans TC Variable", "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
   -webkit-font-smoothing: antialiased;
   /* Data-dense tool: digits align in every table without per-cell classes */
   font-variant-numeric: tabular-nums;
 
-  /* 數據體:金額/數量/百分比/日期/代碼一律等寬,像圖面標註與儀表讀數 */
-  --font-data: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* ── Google Workspace palette(design_handoff README 定案值)──
+     變數名沿用舊 token 讓全站 var() 引用自動跟上;--blue* 即 Material 3 藍。 */
+  --bg: #f8fafd;            /* 內容底(g-ground) */
+  --surface: #ffffff;       /* 卡面(g-card) */
+  --surface-2: #f1f3f4;     /* chip 底/hover */
+  --text: #202124;
+  --text-2: #5f6368;
+  --text-3: #80868b;        /* 弱字:僅限 meta/註記小字,正文次要一律用 --text-2 */
+  --border: #dadce0;        /* divider(卡內分隔) */
+  --border-2: #e8eaed;      /* 更弱分隔 */
 
-  /* ── Brand palette — steel blue (structure) + safety orange (signal) ──
-     Note: --blue* names kept for compatibility; values are brand steel blue, not Google blue. */
-  --bg: #f1f3f6;
-  --surface: #ffffff;
-  --surface-2: #eceff3;
-  --text: #16202b;
-  --text-2: #4d5c6a;
-  --text-3: #636f7b;   /* W8-5 對比修正:原 #78848f 對 --surface 只有 3.8:1;此值對 --surface 5.1:1、對 --bg 4.6:1(AA) */
-  --border: #c9d2da;
-  --border-2: #e2e7ec;
+  --blue: #0b57d0;          /* primary: Material 3 blue,小字對比 5.3:1 */
+  --blue-text: #174ea6;     /* info 色票字 */
+  --blue-tint: #e8f0fe;     /* info 色票底/導覽選取態 */
+  --primary: #0b57d0;
+  --primary-hover: #0842a0;
+  --primary-fg: #ffffff;    /* 深色模式 primary 鈕是淺藍底深字,寫死 text-white 會炸對比 */
 
-  --blue: #1e5a85;          /* primary: steel blue */
-  --blue-text: #1b5480;
-  --blue-tint: #e5eef5;
-  --primary: #1e5a85;
-  --primary-hover: #17486b;
+  /* --accent 原是安全橘「注意」訊號:對映到 warn 家族保留語意(落後/試驗/待處理數),
+     不對映到藍——藍在新系統是 primary/info,「注意」變藍會誤導。 */
+  --accent: #a05a00;
+  --accent-text: #8a4b00;
+  --accent-tint: #fef7e0;
 
-  --accent: #e8630c;        /* safety orange — brand signal, use sparingly */
-  --accent-text: #c8540a;
-  --accent-tint: #fdeadd;
+  /* 五語意狀態色票(README 第三版):red=danger、amber=warn、green=ok、blue=info、slate=mute */
+  --slate-tint: #f1f3f4; --slate-text: #5f6368;
+  --green-tint: #e6f4ea; --green-text: #137333;
+  --amber-tint: #fef7e0; --amber-text: #b06000;
+  --red-tint: #fce8e6;   --red-text: #a50e0e;
+  --purple-tint: #f3e8fd; --purple-text: #681da8;
 
-  --slate-tint: #eef1f4; --slate-text: #51606e;
-  --green-tint: #e4f3ec; --green-text: #1a7f4e;
-  --amber-tint: #fdf3df; --amber-text: #a96a00;
-  --red-tint: #fbe9e7;   --red-text: #c73a34;
-  --purple-tint: #f1eafb; --purple-text: #7d47c4;
+  --success: #146c2e;   --success-hover: #0f5223;
+  --danger: #b3261e;    --danger-hover: #8c1d18;
 
-  --success: #1a7f4e;   --success-hover: #156a41;
-  --danger: #c73a34;    --danger-hover: #b02f29;
+  /* AI 面板(問 PMIS/AI 草稿卡):accent-100 淺藍底+accent-800 深字 */
+  --ai: #0b57d0;
+  --ai-tint: #ecf3fe;
+  --ai-text: #062e6f;
+
+  /* App bar 搜尋框 */
+  --g-search: #ecf3fe;
+  --g-search-h: #dfeafd;
+
+  /* Snackbar(M2 深灰底,亮暗同值) */
+  --snackbar-bg: #3c4043;
+  --snackbar-text: #e8eaed;
+  --snackbar-action: #8ab4f8;
+
+  /* 鍵盤焦點(README:亮 #1a73e8/暗 #8ab4f8,不與 --blue 綁死) */
+  --focus: #1a73e8;
 
   /* Chart tokens — SVG charts must read these, never hardcode */
-  --chart-grid: #e6eaef;
-  --chart-axis-text: #7b8794;
-  --chart-muted-line: #9aa8b5;
-  --chart-today: #b8c4cf;
+  --chart-grid: #e8eaed;
+  --chart-axis-text: #80868b;
+  --chart-muted-line: #80868b;
+  --chart-today: #bdc1c6;
 
-  --elevation: 0 1px 2px 0 rgba(28,39,51,.10), 0 1px 3px 1px rgba(28,39,51,.06);
+  /* Google 三層陰影:sm=卡片/浮起鈕、md=選單/懸浮、lg=對話框 */
+  --elevation: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.08);
+  --shadow-sm: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.08);
+  --shadow-md: 0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.1);
+  --shadow-card: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.08);
+  --shadow-overlay: 0 2px 6px rgba(60,64,67,.3), 0 8px 24px 6px rgba(60,64,67,.12);
 
-  /* ── 材質系統(apple-design §12)──
-     chrome=鏡面浮層(頂欄/側欄);card=一般卡片(半透明疊層影,取代墨線硬描邊);
-     overlay=大面積浮面(對話框/面板),讀起來要「更厚」:更深的影。 */
-  --chrome-bg: rgba(255,255,255,.68);
-  --border-card: rgba(201,210,218,.55);
-  --shadow-card: 0 1px 2px rgba(22,32,43,.04), 0 8px 24px -12px rgba(22,32,43,.10);
-  --shadow-overlay: 0 24px 48px -12px rgba(22,32,43,.28);
-  --edge-shadow: 0 1px 0 var(--border-2), 0 8px 24px -16px rgba(22,32,43,.25);
+  /* chrome(頂欄/側欄):Google 風是實心白,不再毛玻璃 */
+  --chrome-bg: #ffffff;
+  --border-card: #e3e6ea;   /* 卡框(g-line)——與 --border(divider)是兩個值,不可合併 */
+  --edge-shadow: 0 1px 0 var(--border-2), 0 8px 24px -16px rgba(60,64,67,.25);
 
   /* ── Motion system ──
      資料密集工程工具:動效只做「回饋」與「防突變」,快、脆、不表演。
@@ -72,46 +101,59 @@
 }
 
 .dark {
-  /* Steel dark — cool neutrals, not Google grey */
-  --bg: #14181d;
-  --surface: #1c2229;
-  --surface-2: #2a323b;
-  --text: #e6ebf0;
-  --text-2: #9fabb8;
-  --text-3: #8b97a4;   /* W8-5 對比修正:原 #75818e 對 --surface 只有 4.0:1,調亮到 ≥4.5:1(AA) */
-  --border: #313b46;
-  --border-2: #262e37;
+  /* Material 3 dark(原型 .g-dark 定案值) */
+  --bg: #202124;
+  --surface: #292a2d;
+  --surface-2: #35363a;
+  --text: #e8eaed;
+  --text-2: #bdc1c6;
+  --text-3: #9aa0a6;
+  --border: #3c4043;
+  --border-2: #35363a;
 
-  --blue: #7fb3d8;
-  --blue-text: #8dbde0;
-  --blue-tint: #1f3346;
-  --primary: #2e6d9e;
-  --primary-hover: #3a7dae;
+  --blue: #a8c7fa;
+  --blue-text: #d2e3fc;
+  --blue-tint: #0d2f5f;
+  --primary: #a8c7fa;
+  --primary-hover: #c2d9fd;
+  --primary-fg: #062e6f;
 
-  --accent: #f09150;
-  --accent-text: #f09150;
-  --accent-tint: #3a2a1e;
+  --accent: #fdd663;
+  --accent-text: #fdd663;
+  --accent-tint: #3a3020;
 
-  --slate-tint: #2a323b; --slate-text: #9fabb8;
-  --green-tint: #1e3a2c; --green-text: #7fcf9f;
-  --amber-tint: #3a3120; --amber-text: #f4c665;
-  --red-tint: #3d2725;   --red-text: #f2938c;
-  --purple-tint: #322a3f; --purple-text: #cbaef3;
+  --slate-tint: #35363a; --slate-text: #bdc1c6;
+  --green-tint: #1f2d24; --green-text: #81c995;
+  --amber-tint: #3a3020; --amber-text: #fdd663;
+  --red-tint: #3d2724;   --red-text: #f28b82;
+  --purple-tint: #33283f; --purple-text: #d0bcff;
 
+  /* 實心鈕深色仍配白字,用 M3 dark error/green 提亮版保住對比 */
   --success: #2b8a5c;   --success-hover: #37996a;
-  --danger: #cf4b44;    --danger-hover: #db5a53;
+  --danger: #dc362e;    --danger-hover: #e46962;
 
-  --chart-grid: #2a323b;
-  --chart-axis-text: #75818e;
-  --chart-muted-line: #5c6b79;
-  --chart-today: #46525f;
+  --ai: #a8c7fa;
+  --ai-tint: #0d2f5f;
+  --ai-text: #d2e3fc;
 
-  --elevation: 0 1px 2px 0 rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
+  --g-search: #303134;
+  --g-search-h: #3c4043;
 
-  --chrome-bg: rgba(28,34,41,.68);
-  --border-card: rgba(49,59,70,.6);
-  --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px -12px rgba(0,0,0,.35);
-  --shadow-overlay: 0 24px 48px -12px rgba(0,0,0,.6);
+  --focus: #8ab4f8;
+
+  --chart-grid: #35363a;
+  --chart-axis-text: #9aa0a6;
+  --chart-muted-line: #80868b;
+  --chart-today: #5f6368;
+
+  --elevation: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
+  --shadow-md: 0 1px 3px rgba(0,0,0,.35), 0 4px 8px 3px rgba(0,0,0,.25);
+  --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
+  --shadow-overlay: 0 2px 6px rgba(0,0,0,.4), 0 8px 24px 6px rgba(0,0,0,.4);
+
+  --chrome-bg: #292a2d;
+  --border-card: #3c4043;
   --edge-shadow: 0 1px 0 var(--border-2), 0 8px 24px -16px rgba(0,0,0,.55);
 }
 
@@ -131,49 +173,46 @@ select option { color: var(--text); background: var(--surface); }
    元件要覆寫時不必打架。用 outline 不佔版面流、也不被 overflow 裁切。 */
 @layer base {
   :where(a, button, [role="button"], summary, select, [tabindex]):focus-visible {
-    outline: 2px solid var(--blue);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
 }
 
-/* 材質層級:一般表面用半透明疊層影,大面積浮面(modal)更厚更深 */
+/* 材質層級:sm=一般表面、overlay=大面積浮面(modal) */
 .g-elevation-1 { border: 1px solid var(--border-card); box-shadow: var(--shadow-card); }
 .g-elevation-2 { border: 1px solid var(--border-card); box-shadow: var(--shadow-overlay); }
 
-/* 鏡面 chrome(頂欄/側欄):毛玻璃浮層,內容從底下捲過;
-   使用者關閉透明度時退回實心(§14 prefers-reduced-transparency)。 */
-.chrome-glass {
-  background: var(--chrome-bg);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-}
-@media (prefers-reduced-transparency: reduce) {
-  .chrome-glass { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
-}
+/* chrome(頂欄/側欄):Google 風實心白,無邊線靠 --bg 灰底分層。
+   class 名保留(Layout 掛著),毛玻璃退場。 */
+.chrome-glass { background: var(--chrome-bg); }
 /* scroll edge(§12):置頂時無界線;內容捲到 chrome 底下才浮出 hairline+柔影 */
 .chrome-edge { transition: box-shadow 200ms var(--ease-out); }
 .chrome-edge[data-scrolled="true"] { box-shadow: var(--edge-shadow); }
 
-/* 全站數據體:既有 tabular-nums 直接升級為等寬儀表體(.num 為語意別名) */
+/* 全站數據體:Google 規格數字不用等寬字體,tabular-nums 就能對齊(.num 為語意別名) */
 .tabular-nums, .num {
-  font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  font-feature-settings: "tnum";
 }
 
-/* 頁首底線:改為單一輕線 + 左側短色標(工程識別的收斂訊號,不再是粗墨線) */
-.title-block {
-  border-bottom: 1px solid var(--border-2);
-  position: relative;
-  padding-bottom: 12px;
+/* 頁首:標題 24px/400,無底線裝飾(Google 頁首靠留白分層) */
+.title-block { padding-bottom: 4px; }
+
+/* Material Symbols:選取態用 FILL 1(可變軸),尺寸由元件 inline fontSize 控制。
+   字符走 ::before + attr(),ligature 名不進 textContent(見 icons.jsx 的說明)。 */
+.material-symbols-outlined { user-select: none; }
+.material-symbols-outlined[data-i]::before { content: attr(data-i); }
+
+/* 骨架屏:列高與欄位位置必須等於載入後,避免位移 */
+@keyframes g-shimmer { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+.skeleton {
+  background: var(--border-2);
+  border-radius: 4px;
+  animation: g-shimmer 1.4s ease-in-out infinite;
 }
-.title-block::after {
-  content: '';
-  position: absolute;
-  left: 0; bottom: -1px;
-  width: 40px;
-  border-bottom: 2px solid var(--blue);
-}
+/* 送出中:progress_activity 圖示旋轉 */
+@keyframes g-spin { to { transform: rotate(360deg); } }
+.msym-spin { animation: g-spin .9s linear infinite; }
 
 /* ── 互動回饋:按壓即時縮放(pointer-down 就回饋,不等 click)──
    所有可按元素共用;disabled 不回饋。縮放輕(0.97),專業不花。
@@ -219,7 +258,7 @@ select option { color: var(--text); background: var(--surface); }
 .stat-card { container-type: inline-size; }
 .stat-value {
   font-size: 22px;
-  font-size: clamp(15px, 11cqw, 26px);
+  font-size: clamp(15px, 11cqw, 27px);
 }
 
 /* 主題切換平滑化:只在切換瞬間掛上,避免亮↔暗全畫面突跳。

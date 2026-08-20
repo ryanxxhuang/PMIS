@@ -9,28 +9,24 @@
 // platformAdminOnly: true=僅平台管理員(產品營運者)可見/可進——這是「平台」維度,
 // 與 roles(專案角色 org_type)互相獨立:can.override(專案管理者)也翻不過它。
 // 前端隱藏只是 UX;真正的把關在資料庫(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)。
-import {
-  LayoutDashboard, LayoutGrid, CalendarClock,
-  Coins, PencilLine,
-  ShieldCheck, ShieldAlert,
-} from 'lucide-react'
-
+// icon 是 Material Symbols 的 ligature 名(字串),由 Layout 的 <MSym> 渲染——
+// 七枚對應 handoff README 的指定,不做 lucide 字面對譯。
 export const navGroups = [
   { title: '工作面', items: [
-    { to: '/dashboard', icon: LayoutDashboard, label: '今日待辦' },
-    { to: '/site-log', icon: ShieldCheck, label: '現場與品質', tabs: [
+    { to: '/dashboard', icon: 'checklist', label: '今日待辦' },
+    { to: '/site-log', icon: 'engineering', label: '現場與品質', tabs: [
       { to: '/site-log', label: '施工日誌' },
       { to: '/quality', label: '品質查驗' },
       { to: '/itp', label: '檢驗停留點' },
       { to: '/safety', label: '工安管理' },
     ] },
-    { to: '/requirements', icon: PencilLine, label: '審查與協作', tabs: [
+    { to: '/requirements', icon: 'rate_review', label: '審查與協作', tabs: [
       { to: '/requirements', label: '契約重點' },
       { to: '/submittals', label: '送審文件' },
       { to: '/rfi', label: '工程疑義' },
       { to: '/change-orders', label: '變更設計' },
     ] },
-    { to: '/boq', icon: Coins, label: '進度與金流', tabs: [
+    { to: '/boq', icon: 'payments', label: '進度與金流', tabs: [
       { to: '/boq', label: '標單工項' },
       { to: '/valuation', label: '估驗計價' },
       { to: '/payments', label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
@@ -38,13 +34,13 @@ export const navGroups = [
       { to: '/progress', label: '進度 S 曲線' },
       { to: '/schedule', label: '逐工項排程', roles: ['contractor'] },        // 廠商內部規劃
     ] },
-    { to: '/contract', icon: CalendarClock, label: '文件與結案', tabs: [
+    { to: '/contract', icon: 'folder', label: '文件與結案', tabs: [
       { to: '/contract', label: '專案文件' },
       { to: '/monthly-report', label: '施工月報' },
       { to: '/supervisor-report', label: '監造報表', roles: ['supervisor'] },
       { to: '/acceptance', label: '驗收結算' },
     ] },
-    { to: '/portfolio', icon: LayoutGrid, label: '專案', tabs: [
+    { to: '/portfolio', icon: 'grid_view', label: '專案', tabs: [
       { to: '/portfolio', label: '跨案總覽' },
       { to: '/activity', label: '活動紀錄' },
       { to: '/members', label: '三方成員' },
@@ -54,7 +50,7 @@ export const navGroups = [
   { title: '平台', items: [
     // 平台管理後台(批 C):AI 用量/成本儀表、功能開關、專案方案。僅平台管理員
     // (profiles.is_platform_admin)可見;一般使用者連群組標題都不渲染。
-    { to: '/admin', icon: ShieldAlert, label: '平台管理', platformAdminOnly: true },
+    { to: '/admin', icon: 'admin_panel_settings', label: '平台管理', platformAdminOnly: true },
   ] },
 ]
 

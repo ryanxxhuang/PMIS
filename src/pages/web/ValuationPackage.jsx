@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
-import { Printer, Sparkles, Images, FileText } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { collectEvidence, photoEvidenceLine } from '../../lib/evidence.js'
@@ -153,13 +153,13 @@ export default function ValuationPackage() {
           {aiEnabled('valuation.summary') ? (
             <button onClick={genSummary} disabled={aiBusy}
               className="text-sm text-[var(--blue-text)] border border-[var(--border)] rounded-lg px-3 py-2 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50 max-sm:min-h-11">
-              <Sparkles size={15} aria-hidden />{aiBusy ? 'AI 產生中…' : '重新產生施工說明'}
+              <MSym name="auto_awesome" size={15} />{aiBusy ? 'AI 產生中…' : '重新產生施工說明'}
             </button>
           ) : (
             <span className="text-xs text-slate-600">AI 施工說明未啟用，請直接編輯下方說明欄</span>
           )}
           <button onClick={() => window.print()} className="bg-[var(--primary)] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--primary-hover)] inline-flex items-center gap-1.5 max-sm:min-h-11">
-            <Printer size={15} aria-hidden />列印 / 另存 PDF
+            <MSym name="print" size={15} />列印 / 另存 PDF
           </button>
         </div>
       </div>
@@ -188,7 +188,7 @@ export default function ValuationPackage() {
         {/* AI 本期施工說明(可編輯,列印含內容)*/}
         <div className="mb-5">
           <div className="text-slate-600 font-medium mb-1 flex items-center gap-1.5">
-            <Sparkles size={13} className="text-[var(--blue)] print:hidden" aria-hidden />本期施工說明
+            <MSym name="auto_awesome" size={13} className="text-[var(--blue)] print:hidden" />本期施工說明
             <span className="text-xs text-slate-500 font-normal print:hidden">（AI 依本期工項與現場照片草擬，可直接修改）</span>
           </div>
           <textarea
@@ -247,7 +247,7 @@ export default function ValuationPackage() {
 
         {/* 佐證照片(按工項)*/}
         <div className="text-slate-600 font-medium mb-2 flex items-center gap-1.5">
-          <Images size={14} className="text-[var(--blue)] print:hidden" aria-hidden />現場佐證照片（按工項）
+          <MSym name="photo_library" size={14} className="text-[var(--blue)] print:hidden" />現場佐證照片（按工項）
         </div>
         {/* 這是第二條紅線的人審提醒(AI 可能誤配),原本卻是全頁最小最淡的字:
             11px/slate-400 在白紙上只有 2.6:1。升到 12px + amber-700 的警示語意 */}
@@ -315,7 +315,7 @@ export default function ValuationPackage() {
         ) : (
           <div className="mt-4 print:break-before-page">
             <div className="text-slate-600 font-medium mb-1 flex items-center gap-1.5">
-              <FileText size={14} className="text-[var(--blue)] print:hidden" aria-hidden />附件：施工日誌
+              <MSym name="description" size={14} className="text-[var(--blue)] print:hidden" />附件：施工日誌
             </div>
             <div className="text-xs text-slate-600 mb-1">
               本期估驗工項之貢獻施工日誌（由日誌數量自動勾稽，

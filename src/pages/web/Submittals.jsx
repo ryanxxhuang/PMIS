@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Sparkles, Upload, Paperclip, FileSearch } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
@@ -137,7 +137,7 @@ export default function Submittals() {
       {/* AI 長任務狀態(P1-10):讀文件需下載→抽字→比對,設時間預期避免以為卡住 */}
       {(readBusy || reviewBusy) && (
         <div className="flex items-center gap-2 text-sm bg-[var(--blue-tint)] text-[var(--blue-text)] rounded-lg px-3 py-2">
-          <Sparkles size={15} className="animate-pulse shrink-0" aria-hidden />
+          <MSym name="auto_awesome" size={15} className="animate-pulse shrink-0" />
           {readBusy ? 'AI 正在下載並讀取送審文件、逐項比對契約規範…較長文件約需 20–30 秒,可離開此頁稍後回來查看。' : 'AI 審查中…'}
         </div>
       )}
@@ -179,12 +179,12 @@ export default function Submittals() {
                     {/* 送審主文件本體:廠商上傳,監造可 AI 審讀 */}
                     <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                       {s.attachment_path
-                        ? <span className="text-xs inline-flex items-center gap-1 text-[var(--blue-text)]"><Paperclip size={12} aria-hidden />已附文件：{s.attachment_name || '文件'}</span>
+                        ? <span className="text-xs inline-flex items-center gap-1 text-[var(--blue-text)]"><MSym name="attach_file" size={12} />已附文件：{s.attachment_name || '文件'}</span>
                         : <span className="text-[11px] text-[var(--text-3)]">尚未上傳文件本體</span>}
                       {can.submit && (s.status === '已提送' || s.status === '審核中' || s.status === '退回補正') && (
                         <label className={`text-xs inline-flex items-center gap-1 rounded px-2 py-0.5 border border-[var(--border)] ${uploadBusy === s.id ? 'opacity-50' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
                           <input type="file" accept=".pdf,.doc,.docx,image/*" disabled={uploadBusy === s.id} onChange={(e) => onUpload(s, e)} className="hidden" />
-                          <Upload size={12} aria-hidden />{uploadBusy === s.id ? '上傳中…' : (s.attachment_path ? '更換文件' : '上傳文件')}
+                          <MSym name="upload" size={12} />{uploadBusy === s.id ? '上傳中…' : (s.attachment_path ? '更換文件' : '上傳文件')}
                         </label>
                       )}
                     </div>
@@ -207,13 +207,13 @@ export default function Submittals() {
                         批 B UX:功能關閉時藏按鈕(真正的閘門在伺服器端) */}
                     {can.approve && aiEnabled('submittal.review') && (s.status === '已提送' || s.status === '審核中') && !aiReview[s.id] && (
                       <Button variant="secondary" disabled={reviewBusy === s.id} onClick={() => onReview(s)}>
-                        <Sparkles size={13} aria-hidden />{reviewBusy === s.id ? ' AI 審查中…' : ' AI 審查助手'}
+                        <MSym name="auto_awesome" size={13} />{reviewBusy === s.id ? ' AI 審查中…' : ' AI 審查助手'}
                       </Button>
                     )}
                     {/* 監造:AI 讀文件審查——讀送審文件本體逐項比對契約需求(需已上傳文件) */}
                     {can.approve && aiEnabled('submittal.read') && s.attachment_path && (s.status === '已提送' || s.status === '審核中') && !aiRead[s.id] && (
                       <Button variant="secondary" disabled={readBusy === s.id} onClick={() => onRead(s)}>
-                        <FileSearch size={13} aria-hidden />{readBusy === s.id ? ' AI 讀文件中…' : ' AI 讀文件審查'}
+                        <MSym name="find_in_page" size={13} />{readBusy === s.id ? ' AI 讀文件中…' : ' AI 讀文件審查'}
                       </Button>
                     )}
                     {can.approve && !aiEnabled('submittal.review') && !aiEnabled('submittal.read') && (s.status === '已提送' || s.status === '審核中') && (
@@ -240,7 +240,7 @@ export default function Submittals() {
                     <div className="mt-3 border-t border-[var(--border-2)] pt-3">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5 flex-wrap">
-                          <Sparkles size={14} className="text-[var(--blue)]" aria-hidden />AI 審查助手
+                          <MSym name="auto_awesome" size={14} className="text-[var(--blue)]" />AI 審查助手
                           {r.suggested_decision && <Badge color={DECISION_COLOR[r.suggested_decision] || 'slate'}>建議：{r.suggested_decision}</Badge>}
                         </div>
                         <button onClick={() => closeReview(s.id)} className="text-xs text-[var(--text-3)] hover:text-[var(--red-text)] shrink-0">收起</button>
@@ -271,7 +271,7 @@ export default function Submittals() {
                     <div className="mt-3 border-t border-[var(--border-2)] pt-3">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5 flex-wrap">
-                          <FileSearch size={14} className="text-[var(--blue)]" aria-hidden />AI 讀文件審查
+                          <MSym name="find_in_page" size={14} className="text-[var(--blue)]" />AI 讀文件審查
                           {d.suggested_decision && <Badge color={DECISION_COLOR[d.suggested_decision] || 'slate'}>建議：{d.suggested_decision}</Badge>}
                           <span className="text-[10px] text-[var(--text-3)] font-normal">{d.mode === 'text' ? '已讀文件文字' : '視覺讀取'}</span>
                         </div>

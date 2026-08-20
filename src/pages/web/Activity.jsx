@@ -1,7 +1,7 @@
 // 稽核事件只供本頁篩選與分頁，不進全域 Store。查詢保持 project-scoped，
 // 若未來第二個頁面需要同一份事件清單，再抽共用函式。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { History, RefreshCw } from 'lucide-react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { Badge, Button, Card, Empty, Input, PageHeader, Select } from '../../components/ui.jsx'
@@ -93,7 +93,7 @@ export default function Activity() {
       <PageHeader title="專案活動紀錄" tagline="Audit History"
         subtitle="狀態變更與執行者專案身分的持久證據紀錄"
         meta={[{ k: '事件數', v: String(total) }]}
-        action={<Button variant="outline" onClick={loadEvents} disabled={loading}><RefreshCw size={14} aria-hidden />重新整理</Button>} />
+        action={<Button variant="outline" onClick={loadEvents} disabled={loading}><MSym name="refresh" size={14} />重新整理</Button>} />
 
       <Card title="篩選" bodyClass="p-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -127,7 +127,7 @@ export default function Activity() {
             {events.map((event) => (
               <li key={event.id} className="flex items-start gap-3 px-4 py-3.5">
                 <span className="w-9 h-9 rounded-lg grid place-items-center bg-[var(--blue-tint)] text-[var(--blue-text)] shrink-0">
-                  <History size={17} aria-hidden />
+                  <MSym name="history" size={17} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">

@@ -5,6 +5,11 @@ import App from './App.jsx'
 import { StoreProvider } from './store.jsx'
 import { initSentry, Sentry } from './lib/sentry.js'
 import { applyTheme, watchSystemTheme } from './lib/theme.js'
+// 字型走 JS import self-host(機關禁外連 CDN):index.css 的 @import 會被
+// Lightning CSS 在 build 時丟棄,JS import 完全繞開。順序須在 index.css 之前,
+// 讓 .material-symbols-outlined 的元件層規則可覆寫套件預設。
+import '@fontsource-variable/noto-sans-tc'
+import '@material-symbols/font-400/outlined.css'
 import './index.css'
 
 initSentry() // 錯誤監控(只在正式站且有 DSN 時啟用)
@@ -20,9 +25,9 @@ function CrashFallback() {
       <div style={{ maxWidth: 420 }}>
         <div style={{ fontSize: 40, marginBottom: 8 }}>⚠️</div>
         <h1 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px' }}>頁面發生錯誤</h1>
-        <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 20px' }}>已自動回報，我們會盡快處理。你的資料已保存，請重新整理再試。</p>
+        <p style={{ fontSize: 14, color: '#5f6368', margin: '0 0 20px' }}>已自動回報，我們會盡快處理。你的資料已保存，請重新整理再試。</p>
         <button onClick={() => window.location.reload()}
-          style={{ background: '#1e5a8a', color: '#fff', border: 0, borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ background: '#0b57d0', color: '#fff', border: 0, borderRadius: 100, padding: '10px 20px', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
           重新整理
         </button>
       </div>

@@ -106,7 +106,7 @@ export default function BOQ() {
             )}
             <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{it.item_no}</span>
             <span className={it.depth <= 2 ? 'text-[var(--text)]' : ''}>{it.description}</span>
-            {it.is_price_adjustable && <span className="ml-2 text-[10px] text-violet-600 align-middle">物調</span>}
+            {it.is_price_adjustable && <span className="ml-2 text-[10px] text-[var(--purple-text)] align-middle">物調</span>}
             {it.item_kind === 'subtotal' && <span className="ml-2 text-[10px] text-[var(--text-3)] align-middle">合計</span>}
           </td>
           <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{it.unit}</td>
@@ -141,7 +141,7 @@ export default function BOQ() {
 
       {canImport && (
         <div className="bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded-lg px-4 py-3 space-y-2">
-          <div className="text-sm text-amber-800">
+          <div className="text-sm text-[var(--amber-text)]">
             此專案<b>尚未匯入標單</b>。到「<Link to="/contract" className="font-medium underline">專案文件</Link>」把標單 XML 和契約等文件<b>一次上傳</b>,系統會自動匯入並整理。
           </div>
           <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" onChange={onPickFile} className="hidden" />
