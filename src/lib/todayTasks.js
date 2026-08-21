@@ -6,7 +6,7 @@
 //   1. 只由既有業務狀態推導;不建 task 資料表、不建 workflow engine。
 //   2. AI 草稿(agent_actions)與未核定 Requirement 永遠不進來——本函式
 //      根本不收這兩種輸入,是結構上的保證,不是靠呼叫端自律。
-//   3. 只有「登入角色在目的頁真的能完成」的事才進 mine:契約義務的完成鈕
+//   3. 只有「登入角色在目的頁真的能完成」的事才進 mine:期限「已提送」鈕
 //      在 /contract 由 can.edit 控制,所以只有廠商責任的義務算待辦;
 //      監造／機關責任的義務留在專案文件頁,不包裝成做不到的假待辦。
 //   4. 「今天已完成」只採可靠的操作時間戳(closed_at / inspected_at),
@@ -26,8 +26,10 @@ export const ORG_SIDES = Object.freeze(['contractor', 'supervisor', 'owner'])
 // 「無法辨識就歸廠商」,那個預設不可複製到前端(會把不明義務塞進廠商待辦)。
 export const RESPONSIBLE_SIDE = Object.freeze({ 廠商: 'contractor', 監造: 'supervisor', 機關: 'owner' })
 
-// 契約義務目前只有廠商能在目的頁完成(Contract.jsx 的狀態鈕吃 can.edit)。
-export const OBLIGATION_ACTIONABLE_SIDE = 'contractor'
+// 期限「已提送」在契約重點頁完成(W11 遷入;狀態鈕吃 can_write 鏡像):
+// 廠商與監造都能對自己責任的期限動作;機關唯讀(can_write 擋機關),
+// 機關責任的期限不進 mine——做不到的事不製造假待辦。
+export const OBLIGATION_ACTIONABLE_SIDES = Object.freeze(['contractor', 'supervisor'])
 
 // 「等待對方」只列與登入角色有直接對手關係的類型(W8-2A §3.2、§5-7)——
 // 首頁不是全案未結項的傾印場,列完所有別人的事只會讓頁面再變長。
@@ -134,18 +136,18 @@ export function buildTodayTasks(input = {}) {
       else if ((waitingScope[it.tag] || []).includes(it.who)) waiting.push(t)
     })
 
-  // ── ② 契約義務(只有廠商責任且廠商可在 /contract 完成的才算待辦)────────
-  if (org === OBLIGATION_ACTIONABLE_SIDE) {
+  // ── ② 契約期限(自己責任、且自己在 /requirements 真的能完成的才算待辦)──
+  if (OBLIGATION_ACTIONABLE_SIDES.includes(org)) {
     for (const ob of obligations) {
       if (ob.status === '已提送' || ob.status === '已完成') continue
-      if (RESPONSIBLE_SIDE[String(ob.responsible ?? '').trim()] !== OBLIGATION_ACTIONABLE_SIDE) continue
+      if (RESPONSIBLE_SIDE[String(ob.responsible ?? '').trim()] !== org) continue
       const dueIso = localISODate(computeObligationDue(ob, anchors, todayLocal))
       if (!dueIso) continue
       const days = daysBetween(dueIso, todayIso)
       if (days == null || days > SOON_DAYS) continue
       mine.push(task({
-        key: `契約:${ob.id ?? ob.title}`, tag: '契約義務', title: ob.title, ball: 'contractor',
-        to: '/contract', due: dueIso, todayIso,
+        key: `契約:${ob.id ?? ob.title}`, tag: '契約重點', title: ob.title, ball: org,
+        to: '/requirements', due: dueIso, todayIso,
         meta: `${dueText(days, dueIso)}${ob.penalty ? `・罰則：${ob.penalty}` : ''}`,
       }))
     }

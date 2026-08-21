@@ -20,7 +20,7 @@ describe('auditProject', () => {
   it('最小證據:資料不足 → 未評估(na),不算通過(P1-2 錯誤安全感)', () => {
     const { checks, summary } = auditProject({
       periodAmounts: [{ period_no: 1, thisAmt: 100 }], // 只有一期:不得稱「平穩」
-      changeOrders: [], defects: [], obligations: [],  // 無契約義務:不得稱「無逾期」
+      changeOrders: [], defects: [], obligations: [],  // 無契約期限:不得稱「無逾期」
       billableTotal: 0,                                // 無標單:變更佔比算不出
     }, TODAY)
     expect(checks.find((c) => c.category === '估驗').status).toBe('na')
@@ -58,7 +58,7 @@ describe('auditProject', () => {
     expect(checks.find((c) => c.category === '變更').status).toBe('warn')
   })
 
-  it('偵測逾期缺失與逾期契約義務', () => {
+  it('偵測逾期缺失與逾期契約期限', () => {
     const { checks, summary } = auditProject({
       defects: [{ title: '蜂窩', status: '開立', due_date: '2026-07-01' }],
       obligations: [{ title: '投保', status: '待辦', trigger_event: 'fixed', fixed_date: '2026-07-01', penalty: '扣款' }],

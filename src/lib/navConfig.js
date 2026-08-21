@@ -34,8 +34,7 @@ export const navGroups = [
       { to: '/progress', label: '進度 S 曲線' },
       { to: '/schedule', label: '逐工項排程', roles: ['contractor'] },        // 廠商內部規劃
     ] },
-    { to: '/contract', icon: 'folder', label: '文件與結案', tabs: [
-      { to: '/contract', label: '專案文件' },
+    { to: '/monthly-report', icon: 'folder', label: '報表與結案', tabs: [
       { to: '/monthly-report', label: '施工月報' },
       { to: '/supervisor-report', label: '監造報表', roles: ['supervisor'] },
       { to: '/acceptance', label: '驗收結算' },
@@ -46,6 +45,9 @@ export const navGroups = [
       { to: '/members', label: '三方成員' },
       { to: '/audit', label: '風險稽核', roles: ['owner'], hidden: true }, // 機關防弊
     ] },
+    // W11 文件管理員:整案文件的唯一上傳/歸檔窗口(第一次+文件更新才用,
+    // 刻意獨立在最下)。上傳後 AI 自動分類歸檔,結果分流到標單工項/契約重點/S曲線。
+    { to: '/contract', icon: 'cloud_upload', label: '專案文件' },
   ] },
   { title: '平台', items: [
     // 平台管理後台(批 C):AI 用量/成本儀表、功能開關、專案方案。僅平台管理員

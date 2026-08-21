@@ -44,11 +44,11 @@ export default function Alerts() {
         </>
       )}
 
-      {/* 契約義務的完成鈕在專案文件頁且只有廠商可按,所以監造／機關責任的義務
+      {/* 期限「已提送」鈕在契約重點頁且只有廠商可按,所以監造／機關責任的期限
           不會出現在上面兩段——不做誠實說明的話,那些期限會像憑空消失。 */}
       <p className="text-xs text-[var(--text-3)]">
-        契約義務的完整時程與責任方在「
-        <Link to="/contract" className="text-[var(--blue-text)] hover:underline">專案文件</Link>
+        契約期限的完整時程與責任方在「
+        <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">契約重點</Link>
         」；這裡只列你這方現在做得到的事。
       </p>
     </div>

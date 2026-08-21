@@ -64,7 +64,7 @@ describe('collectOpenBallItems(與 list_my_open_items 同一份實作)', () => {
     expect(byId['r1']).toMatchObject({ side: 'contractor', kind: '疑義' })
     expect(byId['v1']).toMatchObject({ side: 'owner', kind: '估驗', meta: '待機關撥款' })
     // 義務:responsible 未填 → 廠商;逾期 16 天
-    expect(byId['o1']).toMatchObject({ side: 'contractor', kind: '契約義務', overdue_days: 16 })
+    expect(byId['o1']).toMatchObject({ side: 'contractor', kind: '契約重點', overdue_days: 16 })
     expect(byId['o1'].meta).toContain('第9條')
     // soonDays=7 → 未逾期但 3 天內到期的監造義務也收
     expect(byId['o2']).toMatchObject({ side: 'supervisor', due_date: '2026-07-29' })

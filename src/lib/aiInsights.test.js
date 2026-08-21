@@ -30,7 +30,7 @@ describe('buildInsights', () => {
     expect(ids).toContain('unpaid')
     expect(ids).toContain('pending-co')
   })
-  it('契約義務逾期與即將到期各出一項', () => {
+  it('契約期限逾期與即將到期各出一項', () => {
     expect(ids.filter((x) => x.startsWith('ob-')).length).toBe(2)
   })
   it('只有未結案缺失計入(排除已結案)', () => {

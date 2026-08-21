@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 迴歸:不依賴標單的領域(送審/RFI/觀察/工安/契約義務)寫入分流必須用 isPersistedProject,
+// 迴歸:不依賴標單的領域(送審/RFI/觀察/工安/契約期限)寫入分流必須用 isPersistedProject,
 // 不是 dbMode——真專案在「標單匯入前」dbMode=false,若走 dbMode 分支,寫入只進記憶體、
 // 重新整理就消失(假成功)。此檔用「已選真專案、尚未匯標單」(isPersistedProject=true、
 // dbMode=false)的 ctx 驗證每條寫入路徑都有打到 supabase。
@@ -107,7 +107,7 @@ describe('標單匯入前的真專案:collab 寫入必須進 DB', () => {
   })
 })
 
-describe('標單匯入前的真專案:工安/契約義務寫入必須進 DB', () => {
+describe('標單匯入前的真專案:工安/契約期限寫入必須進 DB', () => {
   it('工安紀錄 create/update/delete 都打 supabase', async () => {
     const r = renderHook(() => useSiteSlice(preBoqCtx))
     await act(async () => { expect((await r.current.createSafetyRecord({ title: '未戴安全帽' })).error).toBeNull() })
@@ -118,7 +118,7 @@ describe('標單匯入前的真專案:工安/契約義務寫入必須進 DB', ()
     expect(wrote('safety_records', 'delete')).toBe(true)
   })
 
-  it('契約義務改狀態打 supabase', async () => {
+  it('契約期限改狀態打 supabase', async () => {
     const r = renderHook(() => useLedgerSlice(preBoqCtx))
     expect(r.current.parseContract).toBeUndefined()
     expect(r.current.parseContractFromText).toBeUndefined()
