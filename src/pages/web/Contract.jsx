@@ -264,7 +264,14 @@ export default function Contract() {
     let pkg = targetPackage
     try {
       if (!pkg) {
-        if (!packageOptions.length) { setMsg('專案身分初始化中,請稍候幾秒再試一次。'); return }
+        if (!packageOptions.length) {
+          // 訊息要誠實:身分掛在「other(未分類)」是資料問題,不是再等幾秒就會好
+          // (伺服器端 ensure_project_identity 已含重掛修復;重新整理會再跑一次)
+          setMsg(currentProjectMembership?.party_type === 'other'
+            ? '你的專案身分尚未分類,系統已嘗試自動修復——請重新整理頁面後再試;仍不行請聯絡平台管理員。'
+            : '專案身分初始化中,請稍候幾秒再試一次。')
+          return
+        }
         pkg = await ensurePackage(packageOptions[0])
       }
       setUploading(true); setMsg('')
@@ -292,7 +299,7 @@ export default function Contract() {
     } finally {
       setUploading(false)
     }
-  }, [canUploadDocs, packageOptions, ensurePackage, pid, currentUser,
+  }, [canUploadDocs, packageOptions, ensurePackage, pid, currentUser, currentProjectMembership,
     reloadRuns, importWorkItems, workItemsSource])
 
   // 修正/確認分類 → 視需要重新路由 AI 分析(也是「重試」的 handler)
