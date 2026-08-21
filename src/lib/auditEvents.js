@@ -33,11 +33,11 @@ export const AUDIT_EVENT_LABELS = Object.freeze({
   'change_order.rejected': '變更設計駁回',
   'change_order.ratification_reopened': '變更設計撤銷核定',
   'change_order.deleted': '變更設計刪除',
-  'requirement.created': '履約需求建立',
-  'requirement.approved': '履約需求核定',
-  'requirement.rejected': '履約需求駁回',
-  'requirement.superseded': '履約需求廢止取代',
-  'requirement.deleted': '履約需求刪除',
+  'requirement.created': '契約重點建立',
+  'requirement.approved': '契約重點核定',
+  'requirement.rejected': '契約重點駁回',
+  'requirement.superseded': '契約重點廢止取代',
+  'requirement.deleted': '契約重點刪除',
   'document.created': '專案文件建立',
   'document.version_created': '文件版本建立',
   'project_party.created': '專案參與方建立',
@@ -54,7 +54,7 @@ export const AUDIT_EVENT_LABELS = Object.freeze({
 
 export const AUDIT_ENTITY_LABELS = Object.freeze({
   valuation: '估驗', inspection: '查驗', defect: '缺失', submittal: '送審文件',
-  rfi: '工程疑義', change_order: '變更設計', requirement: '履約需求',
+  rfi: '工程疑義', change_order: '變更設計', requirement: '契約重點',
   document: '文件', document_version: '文件版本', project_party: '專案參與方',
   project_membership: '專案成員', acceptance_event: '驗收階段',
 })

@@ -90,11 +90,11 @@ describe('W8-3B 契約重點動作', () => {
   it('廠商只能查看，不會出現契約核定捷徑', () => {
     const html = renderRows(deadline, false)
     expect(html).toContain('契約核定由監造／機關辦理')
-    expect(html).not.toContain('核定並加入期限追蹤')
+    expect(html).not.toContain('核定並加入契約義務')
   })
 
   it('已核對且規則完整的期限，只對契約審查者顯示真實捷徑', () => {
-    expect(renderRows(deadline, true)).toContain('核定並加入期限追蹤')
+    expect(renderRows(deadline, true)).toContain('核定並加入契約義務')
   })
 
   it('送審類只能查看內容，不假裝已能建立流程', () => {

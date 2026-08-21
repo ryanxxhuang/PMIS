@@ -15,7 +15,7 @@ const iso = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : d)
 export const SOURCE_ROUTES = {
   進度: '/progress', 施工日誌: '/site-log', 估驗計價: '/valuation', 請款收款: '/payments',
   品質查驗: '/quality', 工安管理: '/safety', 送審文件: '/submittals', 工程疑義: '/rfi',
-  變更設計: '/change-orders', 驗收結算: '/acceptance', 契約與文件: '/contract',
+  變更設計: '/change-orders', 驗收結算: '/acceptance', 專案文件: '/contract',
   施工月報: '/monthly-report', 提醒中心: '/alerts',
 }
 

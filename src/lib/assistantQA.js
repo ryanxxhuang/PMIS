@@ -88,7 +88,7 @@ const INTENTS = [
   (q, d) => has(q, '工期', '開工', '竣工', '完工', '幾天') && d.project ? {
     answer: `本案 ${d.project.project_name}：開工 ${d.project.start_date || '—'}、預定竣工 ${d.project.end_date || '—'}。` +
       (d.anchors?.commencement_date ? `開工基準日 ${d.anchors.commencement_date}。` : ''),
-    sources: [{ label: '契約管制', to: '/contract' }],
+    sources: [{ label: '專案文件', to: '/contract' }],
   } : null,
 
   // 契約 / 罰則 / 保固 / 保險（先做關鍵字搜義務，再退回最近到期）
@@ -97,14 +97,14 @@ const INTENTS = [
     const kw = ['保固', '保證', '保險', '罰則', '違約', '展延', '估驗', '竣工', '開工'].find((k) => q.includes(k))
     const hit = kw ? obs.filter((o) => `${o.title}${o.penalty || ''}${o.category || ''}`.includes(kw)) : []
     if (hit.length) return { answer: hit.slice(0, 3).map((o) => `${o.title}${o.source_clause ? `（${o.source_clause}）` : ''}${o.penalty ? `，罰則：${o.penalty}` : ''}`).join('；') + '。',
-      sources: [{ label: '契約管制', to: '/contract' }] }
+      sources: [{ label: '專案文件', to: '/contract' }] }
     // 沒關鍵字命中 → 列最近到期義務
     const dated = obs.map((o) => ({ o, due: computeObligationDue(o, d.anchors || {}) })).filter((x) => x.due && x.o.status !== '已完成')
       .sort((a, b) => a.due - b.due)
     return { answer: dated.length
       ? `最近的契約義務：${dated.slice(0, 3).map((x) => `${x.o.title}（到期 ${x.due.toISOString().slice(0, 10)}）`).join('、')}。`
-      : `契約義務清單共 ${obs.length} 項，可到契約管制查看時程與罰則。`,
-      sources: [{ label: '契約管制', to: '/contract' }] }
+      : `契約義務清單共 ${obs.length} 項，可到「專案文件」查看時程與罰則。`,
+      sources: [{ label: '專案文件', to: '/contract' }] }
   })() : null,
 ]
 

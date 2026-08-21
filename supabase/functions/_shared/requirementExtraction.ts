@@ -9,7 +9,7 @@
 // * deterministic per-run suggestion IDs so retrying a persistence step inside
 //   the same run cannot insert duplicates.
 
-export const PROMPT_VERSION = 'extract-requirements/v1'
+export const PROMPT_VERSION = 'extract-requirements/v2'
 
 // Vocabulary mirrors the P0-01 requirement domain (src/lib/requirements.js and
 // the requirements table CHECK constraints) plus the legacy contract phase /
@@ -200,6 +200,83 @@ export function mapWorkItemRefs(refs: string[], catalog: WorkItemCatalog): strin
     if (entry && !ids.includes(entry.id)) ids.push(entry.id)
   }
   return ids
+}
+
+// ── 分批抽取(W10)────────────────────────────────────────────────────────────
+// 長契約一次餵給模型有兩個天花板:輸入預算截斷(漏抽後半本)與輸出 max_tokens
+// 截斷(密集義務的章節回到一半被剪掉)。切批是確定性的、以頁為單位、保序:
+// 每批餵一段連續頁,批間互不重疊,模型只看得到該批的頁碼——引註驗證
+// (sourceVerify)仍對全文件頁面查核,批次邊界不影響 source_verified 判定。
+
+export interface BatchPage {
+  page_number: number
+  extracted_text: string | null
+  extraction_method: string
+}
+
+export interface DocumentBatchPlan {
+  batches: BatchPage[][]
+  truncated: boolean            // 超過 maxBatches 而被丟棄的頁存在
+  lastIncludedPage: number | null
+  omittedPageCount: number
+}
+
+// 頁列表 → 批次計畫。單頁超過 batchCharBudget 時自成一批(不切頁內文字——
+// 頁是引註驗證的最小單位,切了會做出驗證不了的引註)。
+export function buildDocumentBatches(
+  pages: BatchPage[],
+  { batchCharBudget, maxBatches }: { batchCharBudget: number; maxBatches: number },
+): DocumentBatchPlan {
+  const batches: BatchPage[][] = []
+  let current: BatchPage[] = []
+  let currentChars = 0
+  let truncated = false
+  let lastIncludedPage: number | null = null
+  let omittedPageCount = 0
+
+  for (const p of pages) {
+    const len = (p.extracted_text || '').length
+    if (current.length && currentChars + len > batchCharBudget) {
+      batches.push(current)
+      current = []
+      currentChars = 0
+    }
+    if (!current.length && batches.length >= maxBatches) {
+      truncated = true
+      omittedPageCount++
+      continue
+    }
+    current.push(p)
+    currentChars += len
+    lastIncludedPage = p.page_number
+  }
+  if (current.length) batches.push(current)
+  return { batches, truncated, lastIncludedPage, omittedPageCount }
+}
+
+// 撞到輸出上限(stop_reason=max_tokens)時把一批對半切重試。
+// 單頁批切不動(回 null)——那是文件本身的極端,交上層記錄並跳過。
+export function splitBatch(batch: BatchPage[]): [BatchPage[], BatchPage[]] | null {
+  if (batch.length < 2) return null
+  const mid = Math.ceil(batch.length / 2)
+  return [batch.slice(0, mid), batch.slice(mid)]
+}
+
+// 多批呼叫的 token 用量合併(記帳一次記總量;缺欄位當 0)
+export interface UsageLike {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
+}
+
+export function mergeUsage(a: UsageLike | null | undefined, b: UsageLike | null | undefined): UsageLike {
+  return {
+    input_tokens: (a?.input_tokens ?? 0) + (b?.input_tokens ?? 0),
+    output_tokens: (a?.output_tokens ?? 0) + (b?.output_tokens ?? 0),
+    cache_read_input_tokens: (a?.cache_read_input_tokens ?? 0) + (b?.cache_read_input_tokens ?? 0),
+    cache_creation_input_tokens: (a?.cache_creation_input_tokens ?? 0) + (b?.cache_creation_input_tokens ?? 0),
+  }
 }
 
 // Deterministic UUID from a stable name (SHA-256 based, v5-style version and

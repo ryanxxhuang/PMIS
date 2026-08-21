@@ -55,7 +55,7 @@ export function auditProject(data = {}, today = new Date()) {
 
   // 4. 契約義務履行：有無逾期義務（可能觸發罰則/爭議）；沒有義務資料不得宣稱「無逾期」
   if (obligations.length === 0) {
-    checks.push({ status: 'na', category: '契約', title: '契約履行：尚無契約義務資料，未評估', detail: '請先在「契約與文件」上傳契約並完成履約需求擷取，才有時程義務可供稽核。' })
+    checks.push({ status: 'na', category: '契約', title: '契約履行：尚無契約義務資料，未評估', detail: '請先在「專案文件」上傳契約並完成契約重點擷取，才有契約義務可供稽核。' })
   } else {
     const overdueOb = []
     for (const ob of obligations) {
@@ -65,7 +65,7 @@ export function auditProject(data = {}, today = new Date()) {
     }
     checks.push(overdueOb.length
       ? { status: 'risk', category: '契約', title: `契約履行：${overdueOb.length} 項義務逾期`, detail: `可能觸發罰則，建議發函督促：${overdueOb.slice(0, 2).map((o) => o.title).join('、')}${overdueOb[0]?.penalty ? `（罰則：${overdueOb[0].penalty}）` : ''}。` }
-      : { status: 'pass', category: '契約', title: '契約履行：無逾期義務', detail: '各項契約時程義務均在期限內。' })
+      : { status: 'pass', category: '契約', title: '契約履行：無逾期義務', detail: '各項契約義務均在期限內。' })
   }
 
   // 5. 進度落後風險

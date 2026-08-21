@@ -58,7 +58,7 @@ export function buildSetupSteps(snap, { imported } = {}) {
       detail: !snap ? '載入中…'
         : snap.ingestionError ? LOAD_FAIL
           : ingestionDone
-            ? 'AI 已完成整理；只有要成為契約規則的內容才需人工核定，不影響開啟正式模式'
+            ? 'AI 已完成整理；只有要成為契約重點的內容才需人工核定，不影響開啟正式模式'
             : '尚未有完成的整理；到專案文件查看處理狀態或重試',
     },
     {

@@ -20,6 +20,7 @@ const RFI = lazy(() => import('./pages/web/RFI.jsx'))
 const Members = lazy(() => import('./pages/web/Members.jsx'))
 const SiteLogPrint = lazy(() => import('./pages/web/SiteLogPrint.jsx'))
 const ChecklistPrint = lazy(() => import('./pages/web/ChecklistPrint.jsx'))
+const ObligationsPrint = lazy(() => import('./pages/web/ObligationsPrint.jsx'))
 const Valuation = lazy(() => import('./pages/web/Valuation.jsx'))
 const ValuationPrint = lazy(() => import('./pages/web/ValuationPrint.jsx'))
 const ValuationPackage = lazy(() => import('./pages/web/ValuationPackage.jsx'))
@@ -155,6 +156,7 @@ const appRoutes = [
   { path: '/rfi', element: <RFI /> },
   { path: '/members', element: <Members /> },
   { path: '/contract', element: <Contract /> },
+  { path: '/contract/print', element: <ObligationsPrint /> },
   { path: '/alerts', element: <Alerts /> },
   { path: '/activity', element: <Activity /> },
   { path: '/requirements', element: <Requirements /> },

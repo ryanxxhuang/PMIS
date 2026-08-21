@@ -70,6 +70,7 @@ const nonNavRouteRules = {
   '/valuation/print': { access: 'authenticated', surface: 'print' },
   '/valuation/package': { access: 'authenticated', surface: 'print' },
   '/quality/checklist-print': { access: 'authenticated', surface: 'print' },
+  '/contract/print': { access: 'authenticated', surface: 'print' },
   '*': { access: 'authenticated', surface: 'not-found' },
 }
 
