@@ -428,8 +428,10 @@ export default function Contract() {
       uploaded: run.started_at || '',
     }
   }), [runs, versionsById, docsById])
-  const { sort: docSort, toggleSort: toggleDocSort, sorted: sortedDocRows } = useTableSort(docTableRows)
-  const { pageRows: docPageRows, pager: docPager } = usePagination(sortedDocRows)
+  const { sort: docSort, toggleSort: toggleDocSort, sorted: sortedDocRows, sortKey: docSortKey } = useTableSort(docTableRows)
+  // resetKey 只給排序:這張表在 AI 分析期間每 5 秒重載一次 runs,
+  // 若讓重載本身重設頁碼,使用者翻到第 2 頁就會一直被彈回第 1 頁
+  const { pageRows: docPageRows, pager: docPager } = usePagination(sortedDocRows, 25, docSortKey)
   const [showTech, setShowTech] = useState(false)
 
   if (isSupabaseConfigured && !currentProject) {

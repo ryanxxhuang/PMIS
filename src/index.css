@@ -24,6 +24,14 @@
   /* Data-dense tool: digits align in every table without per-cell classes */
   font-variant-numeric: tabular-nums;
 
+  /* 原生控件(checkbox/radio/date picker/捲軸/下拉清單面板)的底色是 UA 依
+     color-scheme 決定的,不吃我們的 token。沒宣告就永遠停在亮色——深色模式下
+     按 <input type="date"> 會彈出一塊白面板,勾選框也是亮底。
+     accent-color 讓勾選/選取態吃品牌藍;.dark 已把 --primary 換成淺藍,自動跟上
+     (--primary 定義在本區塊下方,custom property 於計算值階段解析,順序無妨)。 */
+  color-scheme: light;
+  accent-color: var(--primary);
+
   /* ── Google Workspace palette(design_handoff README 定案值)──
      變數名沿用舊 token 讓全站 var() 引用自動跟上;--blue* 即 Material 3 藍。 */
   --bg: #f8fafd;            /* 內容底(g-ground) */
@@ -113,6 +121,9 @@
 }
 
 .dark {
+  /* 與 :root 同特異性,靠「寫在後面」勝出——本區塊所有覆寫都依賴這個順序 */
+  color-scheme: dark;
+
   /* Material 3 dark(原型 .g-dark 定案值) */
   --bg: #202124;
   --surface: #292a2d;
@@ -279,6 +290,19 @@ select option { color: var(--text); background: var(--surface); }
 html.theme-switching, html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
   transition: background-color 200ms var(--ease-in-out), color 200ms var(--ease-in-out),
     border-color 200ms var(--ease-in-out), fill 200ms var(--ease-in-out), stroke 200ms var(--ease-in-out) !important;
+}
+
+/* 列印:表單控件的顏色來自本檔上面那條 unlayered 規則(var(--text)/var(--surface)),
+   深色模式下就是「淺字深底」;瀏覽器預設不印背景色,於是白紙上只剩淺灰字。
+   /valuation/package 的「本期施工說明」textarea 是唯一坐在列印版面裡的控件,
+   實際結果等於整段說明沒印出來。列印一律強制黑字白底。
+   另四條列印路由(site-log/valuation/checklist/contract print)版面內沒有任何
+   input/select/textarea,此規則對它們不生效;一般頁面被 Ctrl+P 印出時同樣受益。 */
+@media print {
+  input, select, textarea {
+    color: #000 !important;
+    background-color: #fff !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { WebLayout } from './components/Layout.jsx'
-import { routeAllowed, routeRegistry } from './lib/navConfig.js'
+import { routeAllowed, routeRegistry, defaultLandingPath } from './lib/navConfig.js'
 import { ConfirmHost } from './components/confirm.jsx'
 import { Surface, Skeleton, SkeletonList, Empty, Button } from './components/ui.jsx'
 import { SnackbarHost } from './components/snackbar.jsx'
@@ -88,7 +88,7 @@ function Web({ children, bare = false, registryPath }) {
           <Empty icon="lock" title="你的角色沒有此頁的存取權限">
             這個工作畫面僅開放給特定角色（如廠商內部成本、監造報表）。
             <span className="block mt-4">
-              <Link to={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} className="inline-flex rounded-full">
+              <Link to={defaultLandingPath(currentUser?.org_type)} className="inline-flex rounded-full">
                 <Button variant="secondary" tabIndex={-1}>回工作首頁</Button>
               </Link>
             </span>
@@ -105,8 +105,8 @@ function Web({ children, bare = false, registryPath }) {
 function NotFound() {
   const { pathname } = useLocation()
   const { currentUser } = useStore()
-  const home = currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'
-  const homeLabel = currentUser?.org_type === 'owner' ? '回到跨案總覽' : '回到今日待辦'
+  const home = defaultLandingPath(currentUser?.org_type)
+  const homeLabel = home === '/portfolio' ? '回到跨案總覽' : '回到今日待辦'
   return (
     <div className="text-center py-20 space-y-3">
       <div className="text-4xl">🧭</div>
@@ -121,7 +121,7 @@ function HomeRedirect() {
   const { currentUser, authReady } = useStore()
   if (!authReady) return <div className="min-h-screen grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
   if (!currentUser) return <Navigate to="/login" replace />
-  return <Navigate to={currentUser.org_type === 'owner' ? '/portfolio' : '/dashboard'} replace />
+  return <Navigate to={defaultLandingPath(currentUser.org_type)} replace />
 }
 
 const appRoutes = [

@@ -8,6 +8,9 @@ const MOBILE = { width: 375, height: 812 }
 // 640-767 的縫:BottomNav 是 md:hidden(<768)所以這裡已是手機版面,
 // 但觸控目標若寫成 max-sm(<640)就會塌回桌機尺寸。744 是 iPad mini 直式寬度。
 const TABLET_GAP = { width: 744, height: 1024 }
+// 768-1279 是 W9 新增的第三段版面(側欄強制收成 icon rail、全域搜尋收成圖示鈕),
+// 上線時零測試覆蓋。1024 取這一段的中間,離 768/1280 兩個斷點都夠遠。
+const TABLET_RAIL = { width: 1024, height: 768 }
 
 // 路由 → 該頁 PageHeader 的 h1 標題。掃描時等「該路由自己的 h1」出現才量寬度——
 // 路由是 lazy chunk,只等 main 非空會量到上一頁殘影,等到專屬 h1 才保證新頁已掛載。
@@ -57,39 +60,84 @@ const OWNER_ROUTES = CONTRACTOR_ROUTES
   .filter((p) => !['/cost', '/schedule'].includes(p))
   .concat('/audit')
 
-// 逐頁等 h1 → 量整份文件寬度。失敗訊息一定帶路由名,掃描一長串才知道紅在哪一頁。
-async function scanNoOverflow(page, role, routes) {
-  await page.setViewportSize(MOBILE)
+// 逐頁等 h1 → 量整份文件寬度。失敗訊息一定帶路由名與尺寸,掃描一長串才知道紅在哪一頁。
+// 尺寸清單走同一份路由、同一次登入:登入要整頁 reload(demo 資料重種),
+// 每個尺寸各登一次會讓這三條測試的時間直接翻倍,矩陣不必爆到那個程度。
+async function scanNoOverflow(page, role, routes, viewports = [MOBILE]) {
+  await page.setViewportSize(viewports[0])
   await loginAs(page, role)
-  for (const path of routes) {
-    const h1 = path === '/agent' ? AGENT_H1[role] : H1[path]
-    await gotoHash(page, path)
-    await expect(
-      page.getByRole('heading', { level: 1, name: h1 }),
-      `路由 ${path} 的頁面標題「${h1}」未出現(頁面未載入或角色被擋)`,
-    ).toBeVisible()
-    const { sw, cw } = await page.evaluate(() => ({
-      sw: document.documentElement.scrollWidth,
-      cw: document.documentElement.clientWidth,
-    }))
-    expect(sw, `375px 溢位:${path} scrollWidth ${sw} > clientWidth ${cw}`).toBeLessThanOrEqual(cw)
+  for (const vp of viewports) {
+    await page.setViewportSize(vp)
+    for (const path of routes) {
+      const h1 = path === '/agent' ? AGENT_H1[role] : H1[path]
+      await gotoHash(page, path)
+      await expect(
+        page.getByRole('heading', { level: 1, name: h1 }),
+        `路由 ${path} 的頁面標題「${h1}」未出現(頁面未載入或角色被擋)`,
+      ).toBeVisible()
+      const { sw, cw } = await page.evaluate(() => ({
+        sw: document.documentElement.scrollWidth,
+        cw: document.documentElement.clientWidth,
+      }))
+      expect(sw, `${vp.width}px 溢位:${path} scrollWidth ${sw} > clientWidth ${cw}`).toBeLessThanOrEqual(cw)
+    }
   }
 }
 
-test.describe('375px 全路由無溢位', () => {
+// 兩段版面各掃一次:375=手機抽屜版面,1024=W9 的 icon rail 版面(側欄佔 80px,
+// 內容區被壓窄,表格/工具列是否溢位與手機不同題)。
+const SCAN_VIEWPORTS = [MOBILE, TABLET_RAIL]
+
+test.describe('375px／1024px 全路由無溢位', () => {
   test('施工廠商:全部可達路由無水平捲動', async ({ page }) => {
-    test.setTimeout(90_000) // 逐頁掃 20+ 條路由,單頁 30s 不夠
-    await scanNoOverflow(page, 'contractor', CONTRACTOR_ROUTES)
+    test.setTimeout(180_000) // 逐頁掃 20+ 條路由 × 兩個尺寸,單頁 30s 不夠
+    await scanNoOverflow(page, 'contractor', CONTRACTOR_ROUTES, SCAN_VIEWPORTS)
   })
 
   test('監造:全部可達路由無水平捲動', async ({ page }) => {
-    test.setTimeout(90_000)
-    await scanNoOverflow(page, 'supervisor', SUPERVISOR_ROUTES)
+    test.setTimeout(180_000)
+    await scanNoOverflow(page, 'supervisor', SUPERVISOR_ROUTES, SCAN_VIEWPORTS)
   })
 
   test('機關:全部可達路由無水平捲動', async ({ page }) => {
-    test.setTimeout(90_000)
-    await scanNoOverflow(page, 'owner', OWNER_ROUTES)
+    test.setTimeout(180_000)
+    await scanNoOverflow(page, 'owner', OWNER_ROUTES, SCAN_VIEWPORTS)
+  })
+})
+
+test.describe('1024px icon rail(W9 平板版面)', () => {
+  // rail 是 W9 全新的第三段版面:側欄強制收合(不吃桌機的 localStorage 偏好)、
+  // 只留圖示+短標。這裡釘住「短標出現、全名收起、但 accessible name 仍是全名」——
+  // 全名靠 NavLink 的 aria-label 恆掛,一旦有人把 aria-label 拿掉,
+  // 報讀器與所有 getByRole('link', { name: 全名 }) 的既有合約會一起斷。
+  test('側欄收成短標 rail,連結的 accessible name 仍是全名', async ({ page }) => {
+    await page.setViewportSize(TABLET_RAIL)
+    await loginAs(page, 'contractor')
+    const nav = page.getByRole('navigation', { name: '主要功能' })
+    await expect(nav.getByText('現場', { exact: true })).toBeVisible()      // NAV_SHORT
+    await expect(nav.getByText('現場與品質', { exact: true })).toBeHidden()  // 全名 span 收起
+    await expect(nav.getByRole('link', { name: '現場與品質', exact: true })).toBeVisible()
+    // 側欄寬 = md:w-20(80px);沒收合就會是 256px,rail 直接沒發生
+    const box = await page.locator('aside').boundingBox()
+    expect(box?.width, `1024px 側欄寬 ${box?.width}px——沒收成 icon rail(應為 80px)`).toBeLessThan(120)
+    // ≥768 不該同時出現底部導覽(那是手機版面);兩套導覽同時在=版面斷點打架
+    await expect(page.getByRole('navigation', { name: '快速導覽' })).toBeHidden()
+  })
+
+  // 平板收合是「衍生值」,不得回寫桌機偏好:在 1024 逛一圈後回到 1280,
+  // 側欄必須自己展開回全寬。W9 若把 isTablet 併進 sidebarCollapsed 就會回退成這條紅。
+  test('平板的強制收合不污染桌機側欄偏好', async ({ page }) => {
+    await page.setViewportSize(TABLET_RAIL)
+    await loginAs(page, 'contractor')
+    await expect(page.getByRole('navigation', { name: '主要功能' }).getByText('現場', { exact: true })).toBeVisible()
+    await page.setViewportSize({ width: 1280, height: 800 })
+    const nav = page.getByRole('navigation', { name: '主要功能' })
+    await expect(nav.getByText('現場與品質', { exact: true })).toBeVisible()
+    // 側欄寬帶 300ms transition,量到的可能是動畫中間值 → poll 到落定
+    await expect
+      .poll(async () => (await page.locator('aside').boundingBox())?.width,
+        { message: '回到 1280 後側欄沒展開回全寬——平板收合污染了桌機偏好' })
+      .toBeGreaterThan(120)
   })
 })
 

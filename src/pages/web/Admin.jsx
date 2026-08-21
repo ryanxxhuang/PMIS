@@ -199,9 +199,9 @@ export default function Admin() {
       <ErrorBanner msg={loadError} onClose={() => setLoadError(null)} />
 
       {tab === 'overview' && <OverviewTab overview={overview} daily={daily} loading={loading} />}
-      {tab === 'byFeature' && <ByFeatureTab rows={byFeature} loading={loading} />}
-      {tab === 'byProject' && <ByProjectTab rows={byProject} loading={loading} />}
-      {tab === 'byUser' && <ByUserTab rows={byUser} loading={loading} />}
+      {tab === 'byFeature' && <ByFeatureTab rows={byFeature} loading={loading} rangeKey={rangeKey} />}
+      {tab === 'byProject' && <ByProjectTab rows={byProject} loading={loading} rangeKey={rangeKey} />}
+      {tab === 'byUser' && <ByUserTab rows={byUser} loading={loading} rangeKey={rangeKey} />}
       {tab === 'features' && (
         <FeaturesTab features={features} setFeatures={setFeatures} loading={loading} reload={reload}
           setFeatureEnabled={setFeatureEnabled} setFeatureMinPlan={setFeatureMinPlan} />
@@ -286,11 +286,13 @@ function DailyBars({ rows, getV, fmt, barClass }) {
 }
 
 // ── 分頁二:依功能 ───────────────────────────────────────────────────────────
-function ByFeatureTab({ rows, loading }) {
+function ByFeatureTab({ rows, loading, rangeKey }) {
   // 排序/分頁都是 client-side:admin RPC 一次回整段期間的彙總列,資料已在記憶體。
   // 佔總成本刻意用「全部列」算,不受排序與換頁影響——那是期間佔比,不是當頁佔比。
-  const { sort, toggleSort, sorted } = useTableSort(rows)
-  const { pageRows, pager } = usePagination(sorted)
+  const { sort, toggleSort, sorted, sortKey } = useTableSort(rows)
+  // 換期間要回第 1 頁,但期間換了列數常常一樣(功能清單固定),光看列數看不出來,
+  // 所以把 rangeKey 一起餵給 resetKey;手動重新整理(reloadKey)刻意不進來
+  const { pageRows, pager } = usePagination(sorted, 25, `${rangeKey}|${sortKey}`)
   const totalCost = rows.reduce((s, r) => s + (Number(r.cost_usd) || 0), 0)
   if (!rows.length) return loading ? <LoadingCard /> : <Card><Empty>{EMPTY_MSG}</Empty></Card>
   return (
@@ -351,9 +353,9 @@ function ByFeatureTab({ rows, loading }) {
 }
 
 // ── 分頁三:依專案 ───────────────────────────────────────────────────────────
-function ByProjectTab({ rows, loading }) {
-  const { sort, toggleSort, sorted } = useTableSort(rows)
-  const { pageRows, pager } = usePagination(sorted)
+function ByProjectTab({ rows, loading, rangeKey }) {
+  const { sort, toggleSort, sorted, sortKey } = useTableSort(rows)
+  const { pageRows, pager } = usePagination(sorted, 25, `${rangeKey}|${sortKey}`)
   if (!rows.length) return loading ? <LoadingCard /> : <Card><Empty>{EMPTY_MSG}</Empty></Card>
   return (
     <Card bodyClass="p-0">
@@ -393,9 +395,9 @@ function ByProjectTab({ rows, loading }) {
 }
 
 // ── 分頁四:依使用者 ─────────────────────────────────────────────────────────
-function ByUserTab({ rows, loading }) {
-  const { sort, toggleSort, sorted } = useTableSort(rows)
-  const { pageRows, pager } = usePagination(sorted)
+function ByUserTab({ rows, loading, rangeKey }) {
+  const { sort, toggleSort, sorted, sortKey } = useTableSort(rows)
+  const { pageRows, pager } = usePagination(sorted, 25, `${rangeKey}|${sortKey}`)
   if (!rows.length) return loading ? <LoadingCard /> : <Card><Empty>{EMPTY_MSG}</Empty></Card>
   return (
     <Card bodyClass="p-0">

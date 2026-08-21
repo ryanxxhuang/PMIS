@@ -42,6 +42,58 @@ test.describe('監造', () => {
     await expect(done.getByText('監造判定不合格')).toBeVisible()
   })
 
+  // ── 缺失複查閉環的後半段(前半段=contractor.spec 的「開始改善 → 提送複查」)──
+  // 三級品管的收尾:球回到監造,只有監造能結案或退回。狀態機歷史上出過 bug
+  // (按下「開始改善」後標籤仍寫「待廠商改善」),所以兩條分支都要釘住
+  // 「狀態 + 球權標籤 + 該角色還能按什麼」三件事一起變。
+  // demo 種子的 DEF-DEMO-1 就落在「待複查」,不必先跑一遍廠商動線
+  // (換角色要重新登入,demo 資料會整份重種,跨角色接力在 demo 模式做不到)。
+  const DEFECT_UNDER_REVIEW = '查驗不合格：外牆窯燒磚打樣'
+  const openDefectRow = async (page) => {
+    await gotoHash(page, '/quality')
+    await page.getByRole('group', { name: '品質分段' }).getByRole('button', { name: /缺失/ }).click()
+    const row = page.getByText(DEFECT_UNDER_REVIEW)
+      .locator('xpath=ancestor::div[contains(@class,"justify-between")][1]')
+    await expect(row.getByText('待監造複查')).toBeVisible()
+    return row
+  }
+
+  test('缺失複查:合格結案 → 已結案、球權歸零、只剩撤銷結案', async ({ page }) => {
+    await loginAs(page, 'supervisor')
+    const row = await openDefectRow(page)
+    await row.getByRole('button', { name: '複查結案' }).click()
+    // 球權歸零(BallChip 由「待監造複查」轉「已結案」),不再是任何一方的待辦
+    await expect(row.getByText('已結案')).toBeVisible()
+    await expect(row.getByText('待監造複查')).toHaveCount(0)
+    // 已結案=改善鏈終點:推進與退回鈕都消失,只留附原因的撤銷結案(不可直接刪)
+    await expect(row.getByRole('button', { name: '複查結案' })).toHaveCount(0)
+    await expect(row.getByRole('button', { name: '退回' })).toHaveCount(0)
+    await expect(row.getByRole('button', { name: '撤銷結案' })).toBeVisible()
+    // closed_at 是系統在按下當刻寫的 → 當天就進「今天已完成」(與查驗同一條規則)
+    await gotoHash(page, '/dashboard')
+    const done = page.getByRole('heading', { name: '今天已完成' })
+      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    await expect(done.getByText(DEFECT_UNDER_REVIEW)).toBeVisible()
+    await expect(done.getByText('監造已結案')).toBeVisible()
+  })
+
+  test('缺失複查:退回 → 回到廠商改善中,球權還給廠商', async ({ page }) => {
+    await loginAs(page, 'supervisor')
+    const row = await openDefectRow(page)
+    await row.getByRole('button', { name: '退回' }).click()
+    await expect(row.getByText('廠商改善中')).toBeVisible()
+    await expect(row.getByText('待監造複查')).toHaveCount(0)
+    // 球在廠商:監造這邊沒有任何可推進的鈕,只看得到「待廠商改善」
+    await expect(row.getByText('待廠商改善')).toBeVisible()
+    await expect(row.getByRole('button', { name: '複查結案' })).toHaveCount(0)
+    await expect(row.getByRole('button', { name: '退回' })).toHaveCount(0)
+    // 退回不是結案:不得混進「今天已完成」(球回廠商 → 只會出現在「等待對方」)
+    await gotoHash(page, '/dashboard')
+    const done = page.getByRole('heading', { name: '今天已完成' })
+      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    await expect(done.getByText(DEFECT_UNDER_REVIEW)).toHaveCount(0)
+  })
+
   test('施工日誌對監造唯讀:摘要式檢視、無假可編欄位', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/site-log')

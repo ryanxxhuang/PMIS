@@ -58,3 +58,19 @@ describe('applyApprovedChangeOrders', () => {
     expect(items[0].quantity).toBe(100) // 原陣列未被改
   })
 })
+
+// 核准變更後的數字口徑(B-02 殘留破口回歸):逐工項排程的完成% 與風險稽核
+// 「接近完成未申請查驗」都以「累計估驗量 ÷ 契約數量」判定,分母必須是
+// 變更後數量——用原契約量,核准追加後 100/125 會被誤算成 100% 完成,
+// 落後判斷失真、機關稽核也會產出假發現。
+describe('核准變更後的完成% 分母口徑', () => {
+  it('核准追加後,完成% 以變更後數量為分母(套用前後結論不同)', () => {
+    const items = [{ id: 'u1', item_key: 'A', quantity: 100, amount: 200000, is_billable: true }]
+    const adj = applyApprovedChangeOrders(items, [
+      { status: '核准', items: [{ work_item_id: 'u1', qty_delta: 25, amount_delta: 50000 }] },
+    ])
+    const billed = 100 // 累計估驗量
+    expect((billed / items[0].quantity) * 100).toBe(100)  // 舊口徑:誤判已完成
+    expect((billed / adj[0].quantity) * 100).toBe(80)     // 正確口徑:還有兩成沒做
+  })
+})

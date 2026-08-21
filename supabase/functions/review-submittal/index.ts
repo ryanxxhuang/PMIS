@@ -63,8 +63,12 @@ Deno.serve(async (req) => {
       '例:一份「施工計畫」不應被要求載明逾期罰款、每月月報期限、竣工文件期限——這些與施工計畫無關的需求一律標「不適用」,' +
       '且**「不適用」與「通用」項目都不得影響你的建議判定**(不得因施工計畫沒寫罰則就建議退回補正)。只有本類別應涵蓋卻缺漏/不符者才影響判定。' +
       '注意:本系統只追蹤送審流程、未附文件本體,凡涉及文件實質內容(圖說尺寸、計算書、試驗數值等)一律標「需監造核對文件」,不得臆斷已符合。語氣正式、精簡、務實。'
+    // 審查品質是產品差異化主打,不能省在模型上:smart(Sonnet)而非 fast(Haiku),
+    // 單次成本約 3 倍但判斷品質(範圍判定/依據引用)差距明顯。maxTokens 提到 4000:
+    // 12 點清單+意見草稿的完整空間——撞頂現在會被 stop_reason=max_tokens 判失敗,
+    // 不能再靠殘缺 JSON 湊巧過關。
     const { data, error, usage, model } = await claudeJson({
-      model: MODELS.fast, name: 'submittal_review', schema: SCHEMA, maxTokens: 1200,
+      model: MODELS.smart, name: 'submittal_review', schema: SCHEMA, maxTokens: 4000,
       system, content: facts,
     })
     if (error) {

@@ -28,17 +28,25 @@ export function useTableSort(rows, initial = null) {
     () => (sort ? [...rows].sort((a, b) => compare(a, b, sort)) : rows),
     [rows, sort],
   )
-  return { sort, toggleSort, sorted }
+  // sort 物件每次 toggle 都是新 identity,不能直接餵給 usePagination 當重設訊號。
+  // sortKey 只在「排序條件真的變了」時變:給 usePagination 的 resetKey 用。
+  const sortKey = sort ? `${sort.field}:${sort.dir}` : ''
+  return { sort, toggleSort, sorted, sortKey }
 }
 
 // pageRows=當頁列;pager 直接展開給 <TablePager {...pager} />。
-// rows 一律吃 useMemo 過的陣列:排序/篩選/重載都會換新陣列 identity,
-// 靠這個 effect 把頁碼歸回第 1 頁(規格要求),不必每個呼叫端自己重設。
-export function usePagination(rows, initialSize = 25) {
+// 頁碼重設刻意「不」綁 rows 的陣列 identity:會輪詢的表(Contract 契約文件表在
+// AI 分析期間每 5 秒重抓一次 run 狀態)每次重載都給新陣列但內容沒換,綁 identity
+// 等於使用者每 5 秒被踢回第 1 頁,翻頁根本停不住。
+// 改用穩定簽章:列數變了=換了資料集;排序/篩選這種「長度可能不變但該回第 1 頁」
+// 的情形由呼叫端傳 resetKey 明示(useTableSort 回傳的 sortKey 就是為此,
+// 期間/篩選條件則自行組進去)。resetKey 請傳字串/數字等原始值。
+export function usePagination(rows, initialSize = 25, resetKey = '') {
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(initialSize)
-  useEffect(() => { setPage(0) }, [rows])
   const total = rows.length
+  const resetSignature = `${total}|${resetKey}`
+  useEffect(() => { setPage(0) }, [resetSignature])
   // effect 歸零前的當幀防呆:資料變少時不渲染一個超出範圍的空頁
   const safePage = Math.min(page, Math.max(0, Math.ceil(total / pageSize) - 1))
   const pageRows = useMemo(

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { navGroups, routeAllowed, routeRegistry, visibleNavGroups } from './navConfig.js'
+import { navGroups, routeAllowed, routeRegistry, visibleNavGroups, defaultLandingPath } from './navConfig.js'
 
 const flatNav = (groups) => groups.flatMap((g) => g.items)
 const ORGS = ['contractor', 'supervisor', 'owner']
@@ -17,9 +17,9 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
     expect(routeAllowed('/cost', 'contractor', false)).toBe(true)
     expect(routeAllowed('/cost', 'supervisor', true)).toBe(true) // override 一律放行
   })
-  it('風險稽核:導覽隱藏(hidden)但角色限制仍在——僅機關可深連結', () => {
-    // 批4 只是「不顯示」手動入口,不是解除機關防弊稽核的角色限制;
-    // 這組斷言釘住 hidden 機制:刪導覽項=靜默鬆綁,絕不允許重演。
+  it('風險稽核:導覽顯示與否不影響角色限制——僅機關可進', () => {
+    // 曾因 hidden 收斂變成全站死功能,現已對機關恢復導覽入口;
+    // 這組斷言釘住 roles:入口顯示/隱藏都不得鬆綁機關防弊的角色限制。
     expect(routeAllowed('/audit', 'contractor', false)).toBe(false)
     expect(routeAllowed('/audit', 'supervisor', false)).toBe(false)
     expect(routeAllowed('/audit', 'owner', false)).toBe(true)
@@ -91,17 +91,22 @@ describe('visibleNavGroups(側欄)', () => {
     expect(items.find((i) => i.label === '報表與結案').tabs.map((t) => t.label))
       .toContain('監造報表')
   })
-  it('機關:進度與金流保留請款,專案工作面不顯示風險稽核', () => {
+  it('機關:進度與金流保留請款,專案工作面顯示風險稽核(機關防弊入口);其他角色不顯示', () => {
     const items = flatNav(visibleNavGroups('owner', false))
     expect(items.find((i) => i.label === '專案').tabs.map((t) => t.label))
-      .not.toContain('風險稽核')
+      .toContain('風險稽核')
     expect(items.find((i) => i.label === '進度與金流').tabs.map((t) => t.label))
       .toEqual(['標單工項', '估驗計價', '請款收款', '進度 S 曲線'])
+    // 對機關的防弊功能,廠商/監造的側欄仍然看不到(roles 過濾)
+    for (const org of ['contractor', 'supervisor']) {
+      expect(flatNav(visibleNavGroups(org, false)).find((i) => i.label === '專案').tabs.map((t) => t.label))
+        .not.toContain('風險稽核')
+    }
   })
-  it('override(試用模式管理者)看得到全部分頁(hidden 除外)', () => {
+  it('override(試用模式管理者)看得到全部分頁', () => {
     const items = flatNav(visibleNavGroups('contractor', true))
     expect(items.find((i) => i.label === '進度與金流').tabs).toHaveLength(6)
-    expect(items.find((i) => i.label === '專案').tabs).toHaveLength(3)
+    expect(items.find((i) => i.label === '專案').tabs).toHaveLength(4)
   })
   // 2026-08-12 dry-run 反轉:曾因「agent 能做就藏入口」收斂,實測連產品擁有者都找不到
   // (問題 #10)。現場工程師每天要填的東西必須在側欄看得到——這條測試就是不讓它再被藏回去。
@@ -188,15 +193,32 @@ describe('roles 定義釘死(批6 搬移不得鬆綁)', () => {
       '/audit': ['owner'],
     })
   })
-  it('hidden 導覽路由只有 /audit；/alerts 與 /agent 以非導覽規則保留深連結', () => {
+  it('hidden 導覽路由已清空(風險稽核已對機關復出)；/alerts 與 /agent 以非導覽規則保留深連結', () => {
     const hidden = []
     for (const g of navGroups) for (const item of g.items) {
       for (const n of (item.tabs || [item])) {
         if (n.hidden) hidden.push(n.to)
       }
     }
-    expect(hidden).toEqual(['/audit'])
+    expect(hidden).toEqual([])
     expect(routeRegistry['/alerts']).toEqual({ access: 'authenticated' })
     expect(routeRegistry['/agent']).toEqual({ access: 'authenticated' })
+  })
+})
+
+describe('defaultLandingPath(角色預設落地頁)', () => {
+  it('管多案的機關與監造落在跨案總覽,只顧一個工地的廠商落在今日待辦', () => {
+    expect(defaultLandingPath('owner')).toBe('/portfolio')
+    expect(defaultLandingPath('supervisor')).toBe('/portfolio')
+    expect(defaultLandingPath('contractor')).toBe('/dashboard')
+  })
+  it('org_type 未知時退回 /dashboard(對齊 store 的 contractor 預設)', () => {
+    expect(defaultLandingPath(undefined)).toBe('/dashboard')
+    expect(defaultLandingPath(null)).toBe('/dashboard')
+  })
+  it('落地頁本身必須是登記過且該角色進得去的路由(否則一登入就撞守衛)', () => {
+    for (const org of ORGS) {
+      expect(routeAllowed(defaultLandingPath(org), org, false)).toBe(true)
+    }
   })
 })

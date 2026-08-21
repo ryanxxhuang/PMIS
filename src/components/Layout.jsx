@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
-import { visibleNavGroups } from '../lib/navConfig.js'
+import { visibleNavGroups, defaultLandingPath } from '../lib/navConfig.js'
 import CopilotFab from './CopilotFab.jsx'
 import BottomNav, { NAV_SHORT } from './BottomNav.jsx'
 import { MSym } from './icons.jsx'
@@ -175,7 +175,7 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
       <div className="flex items-center gap-2 md:gap-3 min-w-0 shrink-0">
         {/* 44px 觸控目標:漢堡鈕只在手機出現,直接升到 w-11;ref 供抽屜關閉時焦點還原 */}
         <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name="menu" size={22} /></button>
-        <NavLink to={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} aria-label="PMIS 公共工程首頁" className="flex items-center gap-1.5 shrink-0">
+        <NavLink to={defaultLandingPath(currentUser?.org_type)} aria-label="PMIS 公共工程首頁" className="flex items-center gap-1.5 shrink-0">
           <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-6 h-6 dark:hidden" />
           <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-6 h-6 hidden dark:block" />
           <span className="text-xl font-medium tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue)]">.ai</span></span>
@@ -421,7 +421,7 @@ export function WebLayout({ children }) {
           )}
         {children}
       </main>
-      <BottomNav items={visibleGroups.flatMap((g) => g.items)} homeTo={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} />
+      <BottomNav items={visibleGroups.flatMap((g) => g.items)} homeTo={defaultLandingPath(currentUser?.org_type)} />
       <CopilotFab />
     </div>
   )

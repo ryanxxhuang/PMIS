@@ -144,13 +144,20 @@ export async function logoutReal(page) {
   await page.locator('button[type="submit"]').waitFor()
 }
 
+// 註冊表單的角色選擇=三張 radio 卡(W12 之前是一顆 1×1px 的隱形 select,
+// 測試點得到、真人點不到)。統一從這裡點,測的就是使用者真的會走的那條路。
+const ORG_CARD_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '機關／業主' }
+export async function pickOrgCard(page, orgType) {
+  await page.getByRole('radio', { name: ORG_CARD_LABEL[orgType], exact: true }).click()
+}
+
 // 走註冊 UI 建立並登入一個新帳號,回傳其 email(建立者一律走真流程,不抄捷徑)
 export async function registerViaUI(page, { email, orgType, name = '建立者', company = '測試單位' }) {
   await gotoHash(page, '/login')
   await page.getByRole('button', { name: '建立帳戶', exact: true }).click()
   await page.getByPlaceholder('姓名').fill(name)
   await page.getByPlaceholder('公司 / 單位').fill(company)
-  await page.locator('select').first().selectOption(orgType)
+  await pickOrgCard(page, orgType)
   await page.getByPlaceholder('Email').fill(email)
   await page.getByPlaceholder('密碼（至少 8 碼，含大小寫英文與數字）').fill(PW)
   await page.getByRole('button', { name: '下一步：驗證信箱' }).click()
