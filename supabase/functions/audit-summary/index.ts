@@ -45,8 +45,12 @@ Deno.serve(async (req) => {
       '嚴禁出現「剔除、補強、打除、停工、罰款、扣款、解約、驗收不合格」等處置字眼(那是結構技師、監造與機關依法定程序的權責)。' +
       '例:試體 7 天未達標,只能建議「確認齡期、設計強度、28 天試驗結果與監造紀錄」,不得建議剔除或補強。' +
       '務必敘明本結果為「值得複查的異常提示,非違規認定」,實際處置應依契約與相關法令查證。'
+    // 機關稽核意見是給機關看的正式文字,品質對齊監造審查:smart(Sonnet)而非
+    // fast(Haiku),單次成本約 3 倍。輸出短(摘要+建議),但 stop_reason=max_tokens
+    // 現在是硬失敗(W10 後不再靜默截斷),Sonnet 又比 Haiku 略囉嗦——上限留 1500
+    // 消除這條失敗路徑(maxTokens 是上限不是計費,放寬零成本)。
     const { data, error, usage, model } = await claudeJson({
-      model: MODELS.fast, name: 'audit_summary', schema: SCHEMA, maxTokens: 900, system, content: facts,
+      model: MODELS.smart, name: 'audit_summary', schema: SCHEMA, maxTokens: 1500, system, content: facts,
     })
     if (error) {
       await closeAiGate(gate, { feature: 'audit.summary', model, usage, status: 'error', errorCode: 'claude_error' })

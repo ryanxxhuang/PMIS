@@ -5,6 +5,7 @@ import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
 import { ErrorBanner, FIELD_BASE, Button, Badge } from '../components/ui.jsx'
 import { friendlyError } from '../lib/errorMessage.js'
+import { defaultLandingPath } from '../lib/navConfig.js'
 
 // ── W12 登入/註冊改版(依 PMIS Mockups v2 登入與建立帳戶兩畫面)──────────────
 // 登入=左右兩欄卡(左品牌+信任說明、右表單);建立帳戶=整張寬卡
@@ -38,10 +39,10 @@ export default function Login() {
   const navigate = useNavigate()
   const [mode, setMode] = useState('signin') // signin | signup | forgot
 
-  // 已登入（含 Supabase session 還原）→ 進首頁。機關承辦管多案 → 預設落在跨案總覽。
+  // 已登入（含 Supabase session 還原）→ 進首頁。落地頁依角色,見 navConfig。
   // 密碼重設流程中例外:recovery session 已生效,但要先設好新密碼才放行。
   useEffect(() => {
-    if (currentUser && !passwordRecovery) navigate(currentUser.org_type === 'owner' ? '/portfolio' : '/dashboard')
+    if (currentUser && !passwordRecovery) navigate(defaultLandingPath(currentUser.org_type))
   }, [currentUser, passwordRecovery, navigate])
 
   const wide = isSupabaseConfigured && !passwordRecovery && mode === 'signup'
@@ -224,6 +225,19 @@ function SignUpCard({ setMode, signUp, resendSignup }) {
   const [sent, setSent] = useState(false) // 註冊後等收驗證信
   const [resendMsg, setResendMsg] = useState('')
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const pickOrg = (value) => setForm((f) => ({ ...f, org_type: value }))
+
+  // radiogroup 的鍵盤合約:方向鍵在組內移動並直接選取(WAI-ARIA radio group),
+  // 配合卡片的 roving tabindex——只有選中的卡進 Tab 序,不會讓三張卡各吃一次 Tab。
+  const onOrgKeyDown = (e) => {
+    const dir = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]
+    if (!dir) return
+    e.preventDefault()
+    const i = ORG_CARDS.findIndex((c) => c.value === form.org_type)
+    const next = ORG_CARDS[(i + dir + ORG_CARDS.length) % ORG_CARDS.length]
+    pickOrg(next.value)
+    e.currentTarget.querySelector(`[data-org="${next.value}"]`)?.focus()
+  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -278,34 +292,28 @@ function SignUpCard({ setMode, signUp, resendSignup }) {
               你在專案裡是哪一方？身分決定你看得到什麼、能簽什麼，註冊後無法自行變更。
             </p>
 
-            {/* e2e-real 合約:registerViaUI 用 page.locator('select').first().selectOption(orgType)
-                選角色,所以角色卡之外保留一顆原生 select 與 form.org_type 雙向同步。
-                Playwright 的 actionable 檢查不接受 display:none → 用 1×1px 透明;
-                鍵盤與報讀器改走下方角色卡 → tabIndex=-1 + aria-hidden。 */}
-            <div className="relative mt-5">
-              <select value={form.org_type} onChange={set('org_type')} tabIndex={-1} aria-hidden="true"
-                className="absolute top-0 left-0 w-px h-px opacity-0">
-                <option value="contractor">施工廠商</option>
-                <option value="supervisor">監造</option>
-                <option value="owner">機關</option>
-              </select>
-              {/* 角色卡:只留圖示+名稱(使用者裁示拿掉說明小字);
-                  選取態用 inset shadow 畫 2px 框而非加粗 border——border 換粗細會位移 */}
-              <div className="grid sm:grid-cols-3 gap-3">
-                {ORG_CARDS.map((c) => {
-                  const selected = form.org_type === c.value
-                  return (
-                    <button key={c.value} type="button" aria-pressed={selected}
-                      onClick={() => setForm((f) => ({ ...f, org_type: c.value }))}
-                      className={`relative rounded-xl border border-[var(--border-card)] px-4 py-5 text-left min-h-11 pressable transition-colors
-                        ${selected ? 'bg-[var(--blue-tint)] shadow-[inset_0_0_0_2px_var(--blue)]' : 'hover:bg-[var(--surface-2)]'}`}>
-                      {selected && <MSym name="check_circle" fill size={20} className="absolute top-2.5 right-2.5 text-[var(--blue)]" />}
-                      <MSym name={c.icon} size={26} fill={selected} className={selected ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} />
-                      <div className="text-[17px] font-medium text-[var(--text)] mt-2">{c.title}</div>
-                    </button>
-                  )
-                })}
-              </div>
+            {/* 角色卡:只留圖示+名稱(使用者裁示拿掉說明小字);
+                選取態用 inset shadow 畫 2px 框而非加粗 border——border 換粗細會位移。
+                三選一 → radiogroup/radio(不是 aria-pressed 的獨立切換鈕)。
+                曾經另掛一顆 1×1px 透明 select 承接 e2e 的 selectOption,結果整個註冊
+                流程唯一被測到的控制項是那顆看不見的 select、真正的卡片點擊路徑零覆蓋;
+                測試改點卡片(getByRole('radio')),假控制項退場。 */}
+            <div role="radiogroup" aria-label="你在專案裡是哪一方" onKeyDown={onOrgKeyDown}
+              className="grid sm:grid-cols-3 gap-3 mt-5">
+              {ORG_CARDS.map((c) => {
+                const selected = form.org_type === c.value
+                return (
+                  <button key={c.value} type="button" role="radio" aria-checked={selected}
+                    data-org={c.value} tabIndex={selected ? 0 : -1}
+                    onClick={() => pickOrg(c.value)}
+                    className={`relative rounded-xl border border-[var(--border-card)] px-4 py-5 text-left min-h-11 pressable transition-colors
+                      ${selected ? 'bg-[var(--blue-tint)] shadow-[inset_0_0_0_2px_var(--blue)]' : 'hover:bg-[var(--surface-2)]'}`}>
+                    {selected && <MSym name="check_circle" fill size={20} className="absolute top-2.5 right-2.5 text-[var(--blue)]" />}
+                    <MSym name={c.icon} size={26} fill={selected} className={selected ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} />
+                    <div className="text-[17px] font-medium text-[var(--text)] mt-2">{c.title}</div>
+                  </button>
+                )
+              })}
             </div>
 
             {/* 欄位:桌機兩欄。mockup 的「專案邀請碼」不做(現行邀請=對方輸入你的
@@ -379,7 +387,7 @@ function ResetPasswordForm({ updatePassword }) {
 function RolePicker({ setCurrentUser, navigate }) {
   const pick = (u) => {
     setCurrentUser(u)
-    navigate(u.org_type === 'owner' ? '/portfolio' : '/dashboard') // 機關落在跨案總覽
+    navigate(defaultLandingPath(u.org_type)) // 機關/監造落在跨案總覽
   }
   return (
     <>

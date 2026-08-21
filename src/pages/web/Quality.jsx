@@ -153,9 +153,15 @@ export default function Quality() {
       if (note === null) return
     }
     setErrMsg(''); setBusy(true)
-    const { error } = await recordInspectionResult(insp, pass, note)
+    const { error, defectError } = await recordInspectionResult(insp, pass, note)
     setBusy(false)
     if (error) { setErrMsg(`查驗判定未寫入：${error.message}`); return }
+    // 判定已寫入但自動開缺失失敗:不能亮「已開立缺失」的綠訊息騙人——
+    // 走既有 ErrorBanner 如實提示手動補開(同檢查表 defectError 的處理慣例)
+    if (defectError) {
+      setErrMsg(`查驗判定已記錄，但缺失開立失敗：${defectError.message}。請至「缺失」分段手動補開缺失。`)
+      return
+    }
     setResultMsg({ pass })
   }
   // 逐狀態計數一次算完:卡片標題、篩選 chips 與分段徽章共用同一份口徑,

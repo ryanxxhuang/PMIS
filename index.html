@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 主題 bootstrap 必須擺在任何樣式表之前且維持同步(不加 defer/async):
+         它要在首繪前把 .dark 掛上 <html>,晚一步就是深色使用者每次載入都閃白。
+         判定邏輯與 src/lib/theme.js 綁在一起,改任一邊都要看 public/theme-boot.js 的說明。 -->
+    <script src="/theme-boot.js"></script>
     <title>PMIS｜公共工程專案管理</title>
     <meta name="description" content="台灣公共工程專案管理：標單估驗、施工日誌、品質工安、契約與協作，由 PMIS 協助整理與追蹤。" />
     <meta property="og:title" content="PMIS｜公共工程專案管理" />

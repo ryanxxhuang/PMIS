@@ -83,16 +83,21 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       inspected_by: currentUser?.user_id, inspected_at: new Date().toISOString(),
     }).eq('id', insp.id)
     if (error) return { error }
+    // 缺失是不合格判定的法定後果:insert 失敗不可靜默吞掉——判定已寫入、缺失卻消失,
+    // 廠商收不到改善待辦,機關「查驗↔缺失」勾稽也對不上。判定成功仍回 error: null,
+    // 另以 defectError 帶回呼叫端如實提示補開(同 createChecklistRecord 的 defectError 慣例)。
+    let defectError = null
     if (!pass) {
-      await supabase.from('defects').insert({
+      const { error: de } = await supabase.from('defects').insert({
         project_id: currentProject.project_id, inspection_id: insp.id, work_item_id: insp.work_item_id || null,
         title: `查驗不合格：${insp.title}`, description: note || null, location: insp.location || null,
         status: '開立', created_by: currentUser?.user_id,
       })
+      defectError = de || null
     }
     await reloadQuality()
     log('監造查驗', `${insp.title} — ${pass ? '合格' : '不合格'}`, { user: currentUser?.name, role: '監造' })
-    return { error: null }
+    return { error: null, defectError }
   }, [dbMode, currentProject, currentUser, reloadQuality, log])
 
   // 開立缺失(統一引擎):domain 分品質/工安;工安缺失可在匯標單前寫入(isPersistedProject)

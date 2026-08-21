@@ -57,7 +57,7 @@ const mmdd = (d) => {
 function DraftInboxCard() {
   // checklistTemplates:store 對外名(store.jsx 把 allChecklistTemplates 以此名輸出),
   // 已含內建 03310 範本——查驗草稿卡片用它把項次 no 對回項目文字
-  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft, checklistTemplates } = useStore()
+  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft, checklistTemplates, currentUser } = useStore()
   const [resolvingId, setResolvingId] = useState(null)
   const [errMsg, setErrMsg] = useState(null)
   const [doneMsg, setDoneMsg] = useState(null) // 接受成功後的提示 { text, to, cta }(帶去補填/查看連結)
@@ -283,6 +283,15 @@ function DraftInboxCard() {
                           : subPayload ? '採用意見' : '接受'}
                   </Button>
                   <Button size="sm" variant="outline" disabled={busy} onClick={() => resolve(a, 'rejected')}>拒絕</Button>
+                  {/* 稽核提示卡只是摘要,完整檢核表/勾稽鏈在風險稽核頁——
+                      沒有這條連結,機關看完摘要就斷頭(該頁曾全站零入口)。
+                      /audit 在 routeRegistry 是 owner-only,而監造(對量)也會收到 audit_note,
+                      對非機關角色渲染這條連結只會撞路由守衛,所以限 owner */}
+                  {a.kind === 'audit_note' && currentUser?.org_type === 'owner' && (
+                    <Link to="/audit" className="inline-flex items-center gap-0.5 text-[11px] max-md:min-h-11 text-[var(--blue-text)] hover:underline">
+                      前往風險稽核查看完整發現<MSym name="arrow_forward" size={12} />
+                    </Link>
+                  )}
                   {/* 不擋接受:有些日子確實沒有可計量的工項,只誠實提醒略過的後果 */}
                   {unfilled > 0 && (
                     <span className="text-[11px] text-[var(--text-3)]">未填數量的工項不會寫入日誌</span>

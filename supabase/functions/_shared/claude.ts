@@ -1,14 +1,14 @@
 // 共用 Claude API 呼叫層(Anthropic Messages API)。
 // 結構化輸出:強制 tool use(tool_choice 指定工具)→ 回傳一定符合 input_schema 的 JSON。
 // 金鑰只在雲端 secret(ANTHROPIC_API_KEY),永不進前端。
-// 模型分工:fast=視覺辨識/短文生成(便宜快);smart=長文件抽取(契約/規範);
-// agent=多輪 tool-use 迴圈主力(見 agent.ts);judge=監造審查/機關稽核等高判斷成本場景。
+// 模型分工:fast=視覺辨識/短文生成(便宜快);smart=長文件抽取與判斷型審查
+// (契約/規範/監造審查/機關稽核);agent=多輪 tool-use 迴圈主力(見 agent.ts)。
 
 export const MODELS = {
   fast: 'claude-haiku-4-5-20251001',
   smart: 'claude-sonnet-5',
   agent: 'claude-sonnet-5',   // agent 多輪迴圈主力
-  judge: 'claude-opus-5',     // 監造審查/機關稽核等高判斷成本
+  judge: 'claude-opus-5',     // 保留給未來更高判斷成本場景(目前無呼叫端引用)
 }
 
 type ContentBlock = Record<string, unknown>
