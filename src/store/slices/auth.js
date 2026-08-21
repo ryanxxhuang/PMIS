@@ -2,7 +2,7 @@
 // 跨領域的登出清理(清專案/日誌/品質資料)由 store.jsx 的 logout 組合。
 import { useState, useCallback, useEffect } from 'react'
 import { users } from '../../data/seed.js'
-import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
+import { supabase, isSupabaseConfigured, setEphemeralAuth } from '../../lib/supabase.js'
 
 // 由 org_type + role 組出顯示用的角色標籤（對應三級品管）
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造', owner: '機關' }
@@ -85,6 +85,7 @@ export function useAuthSlice() {
     (typeof window !== 'undefined' ? window.location.href.split('#')[0] : undefined)
 
   const signUp = useCallback(async ({ email, password, full_name, company, org_type, role }) => {
+    setEphemeralAuth(false) // 註冊一律持久 session(「保持登入」是登入頁的選項)
     const { data, error } = await supabase.auth.signUp({
       email, password,
       options: { data: { full_name, company, org_type, role }, emailRedirectTo: authRedirectTo() },
@@ -102,7 +103,10 @@ export function useAuthSlice() {
     return { error }
   }, [])
 
-  const signIn = useCallback(async ({ email, password }) => {
+  // keep=false(登入頁取消「保持登入」)→ session 進 sessionStorage,
+  // 關閉瀏覽器即登出;機制見 lib/supabase.js 的 authStorage adapter。
+  const signIn = useCallback(async ({ email, password, keep = true }) => {
+    setEphemeralAuth(!keep)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return { error }
   }, [])

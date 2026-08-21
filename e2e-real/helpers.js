@@ -147,11 +147,11 @@ export async function logoutReal(page) {
 // 走註冊 UI 建立並登入一個新帳號,回傳其 email(建立者一律走真流程,不抄捷徑)
 export async function registerViaUI(page, { email, orgType, name = '建立者', company = '測試單位' }) {
   await gotoHash(page, '/login')
-  await page.getByRole('button', { name: '註冊', exact: true }).click()
+  await page.getByRole('button', { name: '建立帳戶', exact: true }).click()
   await page.getByPlaceholder('姓名').fill(name)
   await page.getByPlaceholder('公司 / 單位').fill(company)
   await page.locator('select').first().selectOption(orgType)
   await page.getByPlaceholder('Email').fill(email)
   await page.getByPlaceholder('密碼（至少 8 碼，含大小寫英文與數字）').fill(PW)
-  await page.getByRole('button', { name: '建立帳號並登入' }).click()
+  await page.getByRole('button', { name: '下一步：驗證信箱' }).click()
 }
