@@ -69,7 +69,7 @@ function aiProcessingState(run) {
 export default function Contract() {
   const {
     isSupabaseConfigured, currentProject, isPersistedProject,
-    currentProjectMembership, currentUser, can,
+    currentProjectMembership, currentUser, can, isPlatformAdmin,
     importWorkItems, workItemsSource, reloadMembership,
   } = useStore()
   const [parties, setParties] = useState([])
@@ -265,11 +265,17 @@ export default function Contract() {
     try {
       if (!pkg) {
         if (!packageOptions.length) {
-          // 訊息要誠實:身分掛在「other(未分類)」是資料問題,不是再等幾秒就會好
-          // (伺服器端 ensure_project_identity 已含重掛修復;重新整理會再跑一次)
-          setMsg(currentProjectMembership?.party_type === 'other'
-            ? '你的專案身分尚未分類,系統已嘗試自動修復——請重新整理頁面後再試;仍不行請聯絡平台管理員。'
-            : '專案身分初始化中,請稍候幾秒再試一次。')
+          // 訊息要誠實,三種情況分開講:
+          // * 超級帳號(平台管理員)刻意不屬於任何契約方(使用者定義),
+          //   契約文件要以專案角色帳號上傳——不是等幾秒就會好的事;
+          // * 一般帳號掛在「other(未分類)」是資料問題,伺服器端
+          //   ensure_project_identity 已含重掛修復,重新整理會再跑一次;
+          // * 其餘才是真的初始化 race。
+          setMsg(isPlatformAdmin && currentProjectMembership?.party_type === 'other'
+            ? '超級帳號不屬於任何契約方,無法代表某一方上傳契約文件;請改用專案角色帳號(廠商/監造)上傳。'
+            : currentProjectMembership?.party_type === 'other'
+              ? '你的專案身分尚未分類,系統已嘗試自動修復——請重新整理頁面後再試;仍不行請聯絡平台管理員。'
+              : '專案身分初始化中,請稍候幾秒再試一次。')
           return
         }
         pkg = await ensurePackage(packageOptions[0])
@@ -300,7 +306,7 @@ export default function Contract() {
       setUploading(false)
     }
   }, [canUploadDocs, packageOptions, ensurePackage, pid, currentUser, currentProjectMembership,
-    reloadRuns, importWorkItems, workItemsSource])
+    isPlatformAdmin, reloadRuns, importWorkItems, workItemsSource])
 
   // 修正/確認分類 → 視需要重新路由 AI 分析(也是「重試」的 handler)
   const confirmClassification = useCallback(async (run, newType) => {

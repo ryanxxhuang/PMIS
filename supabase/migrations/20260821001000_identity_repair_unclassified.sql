@@ -13,6 +13,8 @@
 -- 2. 一次性資料修復:把現存所有「掛在 other、且該專案已有對應 party」的
 --    membership 重掛(對應 party 不存在者留給下次開頁的 RPC 自癒,它會先補 party)。
 -- 分類為 other 的 party 列本身保留(可能有歷史文件掛著),只是不再被 membership 指著。
+-- ⚠️ 平台管理員(超級帳號)刻意排除在修復之外:使用者定義超級帳號「不屬於任何
+-- 一方」,其 org_type 是註冊時隨手選的,不得作為重掛依據;它的快照維持未分類。
 
 create or replace function public.ensure_project_identity_for(p uuid, target_uid uuid)
 returns void language plpgsql security definer set search_path = public as $$
@@ -66,10 +68,12 @@ begin
                     where m.project_id = p and m.user_id = target_uid and m.role = 'admin')
             or exists (select 1 from public.projects pr where pr.id = p and pr.created_by = target_uid));
   else
-    -- 修復分支:既有快照掛在未分類 party 上 → 依 org_type 重掛(其餘欄位不動)
+    -- 修復分支:既有快照掛在未分類 party 上 → 依 org_type 重掛(其餘欄位不動)。
+    -- 平台管理員除外:超級帳號不屬於任何一方,維持未分類。
     update public.project_memberships ms
     set project_party_id = my_party
     where ms.project_id = p and ms.user_id = target_uid
+      and not coalesce((select is_platform_admin from public.profiles where id = target_uid), false)
       and exists (select 1 from public.project_parties x
                   where x.id = ms.project_party_id and x.party_type = 'other');
   end if;
@@ -82,8 +86,13 @@ set project_party_id = pp.id
 from public.project_parties po, public.profiles pr, public.project_parties pp
 where po.id = ms.project_party_id and po.party_type = 'other'
   and pr.id = ms.user_id
+  and not coalesce(pr.is_platform_admin, false)
   and pp.project_id = ms.project_id
   and pp.party_type = case coalesce(pr.org_type, 'contractor')
     when 'owner' then 'agency'
     when 'supervisor' then 'supervisor'
     else 'contractor' end;
+
+-- 超級帳號顯示名稱(使用者指示):不再用個人姓名
+update public.profiles set full_name = '超級帳號'
+where id = '2773be9e-5e75-4cec-9e12-9bf0df734a38' and is_platform_admin;
