@@ -121,6 +121,25 @@ describe('interrupted processing recovery', () => {
     expect(staleProcessingPatch(run({ started_at: '2026-07-11T00:50:00Z' }), now)).toBeNull()
     expect(staleProcessingPatch(run({ status: 'completed', stage: 'completed' }), now)).toBeNull()
   })
+
+  it('W13:抽取進度心跳新鮮就不算中斷——長文件多段續跑可以正當超過 20 分鐘', () => {
+    const now = Date.parse('2026-07-11T01:00:00Z')
+    // started_at 已超過 20 分,但 5 分鐘前還有批次進度 → 還活著,不可標中斷
+    expect(staleProcessingPatch(run({
+      started_at: '2026-07-11T00:00:00Z',
+      metadata: { extraction_progress: '7/12', extraction_progress_at: '2026-07-11T00:55:00Z' },
+    }), now)).toBeNull()
+    // 心跳也停了超過 20 分 → 誠實標中斷
+    expect(staleProcessingPatch(run({
+      started_at: '2026-07-11T00:00:00Z',
+      metadata: { extraction_progress: '7/12', extraction_progress_at: '2026-07-11T00:30:00Z' },
+    }), now)).toMatchObject({ status: 'partial', stage: 'failed' })
+    // 心跳是壞字串 → 回退用 started_at 判定,不炸
+    expect(staleProcessingPatch(run({
+      started_at: '2026-07-11T00:00:00Z',
+      metadata: { extraction_progress_at: 'not-a-date' },
+    }), now)).toMatchObject({ status: 'partial', stage: 'failed' })
+  })
 })
 
 describe('mapWithConcurrency', () => {

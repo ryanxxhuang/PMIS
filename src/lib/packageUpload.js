@@ -17,6 +17,7 @@ import { supabase } from './supabase.js'
 import { extractDocumentPages, hasExtractableText } from './documentExtract.js'
 import { fileKind, analysisSupport, storedLimitationLabel } from './packageFileSupport.js'
 import { classifyDocument, shouldExtractRequirements } from './documentClassifier.js'
+import { runRequirementExtraction, extractionSuccessMessage } from './extractRequirements.js'
 
 export const UPLOAD_CONCURRENCY = 2
 export const PROCESSING_STALE_MS = 20 * 60 * 1000
@@ -99,10 +100,17 @@ export function formatElapsed(ms) {
 // Browser processing can be interrupted by a refresh. Persisted rows remain
 // visible immediately; after a conservative timeout they become an honest,
 // retryable partial result instead of an unexplained permanent spinner.
+// W13:過期起算點取「開始時間」與「最後一次抽取進度心跳」較晚者——長文件
+// 多段續跑的總時長可以正當超過 20 分鐘,只要進度還在前進就不是中斷。
 export function staleProcessingPatch(run, now = Date.now(), threshold = PROCESSING_STALE_MS) {
   if (!['pending', 'processing'].includes(run?.status)) return null
   const started = new Date(run.started_at).getTime()
-  if (!Number.isFinite(started) || now - started < threshold) return null
+  const progressAt = new Date(run?.metadata?.extraction_progress_at || 0).getTime()
+  const lastActivity = Math.max(
+    Number.isFinite(started) ? started : 0,
+    Number.isFinite(progressAt) ? progressAt : 0,
+  )
+  if (!lastActivity || now - lastActivity < threshold) return null
   return {
     status: 'partial',
     stage: 'failed',
@@ -400,19 +408,49 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
       stage: 'extracting_requirements',
       metadata: { filename_kind: kind, storage_path: uploadPath, page_count: pages.length },
     })
-    const { data, error } = await supabase.functions.invoke('extract-requirements', {
-      body: { document_version_id: versionId, project_id: projectId },
+    // W13:大文件伺服器端分多個 request 續跑,這裡負責接力;每段進度
+    // best-effort 落庫,重新整理也看得到「第 N/M 批」而不是死轉圈
+    const result = await runRequirementExtraction({
+      documentVersionId: versionId,
+      projectId,
+      onProgress: (p) => report({
+        project_id: projectId, contract_package_id: packageRow.id,
+        document_version_id: versionId, status: 'processing',
+        stage: 'extracting_requirements',
+        metadata: {
+          filename_kind: kind, storage_path: uploadPath, page_count: pages.length,
+          extraction_progress: `${p.batches_completed}/${p.batches_total}`,
+          // 進度心跳:staleProcessingPatch 據此判定續跑還活著
+          extraction_progress_at: new Date().toISOString(),
+        },
+      }).catch(() => {}),
     })
-    if (error || data?.error) {
-      extractionState = 'failed'
-      extractionMessage = data?.error || error?.message || 'AI 分析失敗'
-    } else {
+    if (result.ok) {
       extractionState = 'completed'
       // W10 揭露截斷:未涵蓋整份文件時,成功訊息必須連著講清楚讀到哪裡
-      extractionMessage = `找到 ${data?.extracted_requirement_count ?? 0} 項契約重點建議${
-        data?.coverage_incomplete
-          ? `(未涵蓋整份文件:解析至第 ${data?.last_included_page ?? '?'} 頁/共 ${data?.total_page_count ?? '?'} 頁)`
-          : ''}`
+      extractionMessage = extractionSuccessMessage(result.data)
+    } else if (result.inProgress) {
+      // 已有別的解析在跑(同檔另開分頁/重複上傳):不可蓋寫成失敗——
+      // W13 殭屍事故就是 409 一路把活著的解析蓋成失敗。run 維持 processing,
+      // 由持有那條解析的呼叫端收尾;真斷頭則交 PROCESSING_STALE_MS 誠實逾時。
+      return report({
+        project_id: projectId, contract_package_id: packageRow.id,
+        document_version_id: versionId, status: 'processing',
+        stage: 'extracting_requirements',
+        suggested_document_type: classification.document_type,
+        classification_status: classification.classification_status,
+        classification_confidence: classification.confidence,
+        metadata: {
+          filename_kind: kind, storage_path: uploadPath, page_count: pages.length,
+          classification_reason: classification.reason,
+          requirement_extraction: 'in_progress',
+          requirement_extraction_message: result.message,
+          routed_document_type: documentType,
+        },
+      })
+    } else {
+      extractionState = 'failed'
+      extractionMessage = result.message || 'AI 分析失敗'
     }
   }
 

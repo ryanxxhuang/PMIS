@@ -262,6 +262,43 @@ export function splitBatch(batch: BatchPage[]): [BatchPage[], BatchPage[]] | nul
   return [batch.slice(0, mid), batch.slice(mid)]
 }
 
+// W13 跨 request 續跑:run.metadata 保存的累計進度(每個 request 只跑部分批次,
+// 收尾/暫停時寫回;下一個 request 用這個還原計數器)。欄位缺漏一律回安全預設——
+// 舊版 run 或壞 metadata 不能讓續跑炸掉,頂多從頭統計。
+export interface ResumeState {
+  batchesCompleted: number
+  totalRequirements: number
+  verifiedCount: number
+  needsReviewCount: number
+  rawItemCount: number
+  workItemLinkCount: number
+  rejectedCount: number
+  rejectedItems: { index: string; reason: string }[]
+  clippedBatches: string[]
+}
+
+const nonNegInt = (v: unknown): number =>
+  typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0
+
+export function readResumeState(meta: unknown): ResumeState {
+  const m = (meta && typeof meta === 'object' ? meta : {}) as Record<string, unknown>
+  return {
+    batchesCompleted: nonNegInt(m.batches_completed),
+    totalRequirements: nonNegInt(m.cum_requirement_count),
+    verifiedCount: nonNegInt(m.cum_verified_count),
+    needsReviewCount: nonNegInt(m.cum_needs_review_count),
+    rawItemCount: nonNegInt(m.cum_raw_item_count),
+    workItemLinkCount: nonNegInt(m.cum_work_item_link_count),
+    rejectedCount: nonNegInt(m.cum_rejected_count),
+    rejectedItems: Array.isArray(m.rejected_items)
+      ? (m.rejected_items as { index: string; reason: string }[]).slice(0, 20)
+      : [],
+    clippedBatches: Array.isArray(m.clipped_batches)
+      ? (m.clipped_batches as string[]).filter((x) => typeof x === 'string')
+      : [],
+  }
+}
+
 // 多批呼叫的 token 用量合併(記帳一次記總量;缺欄位當 0)
 export interface UsageLike {
   input_tokens?: number
