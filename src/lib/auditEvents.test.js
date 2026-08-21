@@ -8,7 +8,7 @@ describe('persistent audit event presentation', () => {
   it('maps stable event and entity identifiers deterministically', () => {
     expect(auditEventLabel('valuation.approved')).toBe('估驗核定')
     expect(auditEventLabel('inspection.decided')).toBe('查驗判定')
-    expect(auditEventLabel('requirement.approved')).toBe('履約需求核定')
+    expect(auditEventLabel('requirement.approved')).toBe('契約重點核定')
     expect(auditEventLabel('unknown.event')).toBe('專案活動')
     expect(auditEntityLabel('change_order')).toBe('變更設計')
   })

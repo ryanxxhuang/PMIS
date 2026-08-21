@@ -200,6 +200,7 @@
     "contract_obligations",
     "contract_package_id",
     "contract_packages",
+    "contract_total",
     "contractor",
     "contractor_name",
     "cost_items",

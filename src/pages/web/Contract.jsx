@@ -16,7 +16,7 @@ import {
 import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { useTableSort, usePagination } from '../../lib/useTable.js'
 import { computeObligationDue } from '../../lib/contractDue.js'
-import { estimatePenalty } from '../../lib/penaltyCalc.js'
+import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 import {
   PACKAGE_TYPE_LABELS, PACKAGE_STATUS_LABELS, availablePackageOptions,
@@ -67,17 +67,22 @@ export default function Contract() {
     obligations, updateObligationStatus, updateProjectAnchors, can,
     importWorkItems, workItemsSource, reloadMembership, workItems, submittals,
   } = useStore()
-  const contractTotal = workItems?.meta?.billable_total || 0 // 契約總價(發包工程費),逾期罰款試算基準
+  // 契約總價(逾期罰款試算基準):手填的契約價金總額優先——契約鏈的價值主張是
+  // 「不需要標單就能跑」,而且契約價金總額未必等於標單加總;沒填才退回 BOQ 加總。
+  const manualContractTotal = Number(currentProject?.contract_total) || 0
+  const contractTotal = manualContractTotal > 0 ? manualContractTotal : (workItems?.meta?.billable_total || 0)
   // end_date 也是基準日之一(completion 觸發的義務用它算到期);它在建案表單填一次之後
   // 原本沒有任何 UI 能修改,留白就永遠是 nodate,所以一併納入這張卡(W8-6 ISSUE-1)。
   const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '', end_date: '' })
+  // 契約總價手填草稿:onBlur 才寫 DB(數字輸入逐鍵存檔會打爆 projects update)
+  const [totalDraft, setTotalDraft] = useState('')
   const [parties, setParties] = useState([])
   const [packages, setPackages] = useState([])
   const [selectedPackageId, setSelectedPackageId] = useState(null)
   const [runs, setRuns] = useState([])            // processing runs of the selected package
   const [docsById, setDocsById] = useState(new Map())
   const [versionsById, setVersionsById] = useState(new Map())
-  const [aiCount, setAiCount] = useState(null)    // AI 履約要求建議數(本契約包)
+  const [aiCount, setAiCount] = useState(null)    // AI 契約重點建議數(本契約包)
   const [uploading, setUploading] = useState(false)
   // 標單 XML 走的是另一條路(不建 processing run),自己記忙碌旗標與結果語氣:
   // 成功/略過/失敗原本同一種灰字,失敗會被當成沒事(W8-6 ISSUE-2)。
@@ -94,7 +99,12 @@ export default function Contract() {
   const [evidencePick, setEvidencePick] = useState('')
 
   const pid = currentProject?.project_id
-  const canUploadDocs = isPersistedProject && can.edit
+  // 文件上傳與義務「已提送」的前端閘,鏡像伺服器端 can_write(成員且非機關;
+  // admin 例外走 can.edit)。舊寫法只認 can.edit(廠商/管理者),把監造擋在
+  // 前端——但 DB 的 can_manage_documents/義務狀態欄位授權本來就放行監造,
+  // 監造上傳契約、勾已提送正是事務所場景的主流程(W10)。
+  const canWriteContract = can.edit || currentUser?.org_type === 'supervisor'
+  const canUploadDocs = isPersistedProject && canWriteContract
 
   useEffect(() => {
     setAnchors({
@@ -103,6 +113,7 @@ export default function Contract() {
       commencement_date: currentProject?.commencement_date || '',
       end_date: currentProject?.end_date || '',
     })
+    setTotalDraft(currentProject?.contract_total != null ? String(currentProject.contract_total) : '')
   }, [currentProject])
 
   // DB 成功才更新本地(B-04):非建立者被 RLS 靜默擋下時,原本 UI 直接顯示新日期,
@@ -329,8 +340,14 @@ export default function Contract() {
         metadata: {
           ...(run.metadata || {}),
           requirement_extraction: failed ? 'failed' : 'completed',
+          // W10 揭露截斷:coverage_incomplete 時「找到 N 項」必須連著講清楚
+          // 沒讀到哪裡——只報成功數會讓人以為整份文件都掃過了
           requirement_extraction_message: failed
-            ? (data?.error || error?.message) : `找到 ${data?.extracted_requirement_count ?? 0} 項履約要求建議`,
+            ? (data?.error || error?.message)
+            : `找到 ${data?.extracted_requirement_count ?? 0} 項契約重點建議${
+              data?.coverage_incomplete
+                ? `(未涵蓋整份文件:解析至第 ${data?.last_included_page ?? '?'} 頁/共 ${data?.total_page_count ?? '?'} 頁)`
+                : ''}`,
           routed_document_type: newType,
         },
       }).eq('id', run.id).select().single()
@@ -366,6 +383,23 @@ export default function Contract() {
     ph, list: items.filter((it) => (PHASES.includes(it.ob.category) ? it.ob.category : '其他') === ph)
       .sort((x, y) => (x.due?.getTime() || Infinity) - (y.due?.getTime() || Infinity)),
   })).filter((g) => g.list.length), [items])
+
+  // 契約義務卡動作:列印對照表=可寄給對方的輸出物;手動新增走契約重點的
+  // 人工建立 → 核定流(義務表 system-managed,前端不能直接插列)
+  const obligationCardAction = (
+    <div className="flex items-center gap-2">
+      {isPersistedProject && canWriteContract && (
+        <Link to="/requirements" className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1">
+          <MSym name="add" size={13} /> 手動新增
+        </Link>
+      )}
+      {obligations.length > 0 && (
+        <Link to="/contract/print" className={buttonClass('outline', 'sm')}>
+          <MSym name="print" size={14} /> 列印對照表
+        </Link>
+      )}
+    </div>
+  )
 
   // 檔案列表(依分類分組)與待確認清單
   const fileRows = useMemo(() => runs.map((run) => {
@@ -403,7 +437,7 @@ export default function Contract() {
     // 早退分支與正常態同一個頁首:標題不再出現第二種名字(舊為「契約管制」)
     return (
       <div className="space-y-5">
-        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並抽出履約需求;人工核准的期限會進入義務時程" />
+        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並整理出契約重點;人工核定的期限會進入契約義務" />
         <Card><Empty>請先登入並建立/選擇專案,才能整理契約文件。</Empty></Card>
       </div>
     )
@@ -411,7 +445,7 @@ export default function Contract() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並抽出履約需求;人工核准的期限會進入義務時程" />
+      <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並整理出契約重點;人工核定的期限會進入契約義務" />
 
       <Card title="基準日">
         <div className="flex flex-wrap gap-4">
@@ -428,9 +462,24 @@ export default function Contract() {
                 disabled={!can.edit} />
             </Field>
           ))}
+          {/* W10 手填契約總價:百分比制逾期罰款(契約總價千分之X/日)沒有它算不出來,
+              而沒匯標單的專案(契約期限追蹤是唯一不需要標單的鏈)以前只能顯示
+              「格式需人工確認」的誤導訊息。onBlur 才寫 DB;寫入沿 projects
+              creator-only 政策(與基準日同一條 RLS,失敗會進 anchorErr)。 */}
+          <Field label="契約價金總額(元)">
+            <Input type="number" min="0" step="1" value={totalDraft} placeholder="未填則採標單加總"
+              onChange={(e) => setTotalDraft(e.target.value)}
+              onBlur={() => {
+                const v = totalDraft.trim() === '' ? null : Number(totalDraft)
+                if (v != null && (!Number.isFinite(v) || v < 0)) { setAnchorErr('契約價金總額需為 0 以上的數字'); return }
+                if ((currentProject?.contract_total ?? null) === v) return
+                setAnchor('contract_total', v)
+              }}
+              disabled={!can.edit} />
+          </Field>
         </div>
         <ErrorBanner msg={anchorErr} className="mt-2" />
-        <p className="text-xs text-[var(--text-3)] mt-3">義務時程的到期日、倒數、逾期都依這些基準日即時計算。「開工日」請填實際開工日;建立專案時填的是預計值,在這裡更新才會影響義務時程。</p>
+        <p className="text-xs text-[var(--text-3)] mt-3">契約義務的到期日、倒數、逾期都依這些基準日即時計算。「開工日」請填實際開工日;建立專案時填的是預計值,在這裡更新才會影響契約義務。契約價金總額用於逾期違約金試算,未填時以標單可計價金額代替。</p>
       </Card>
 
       {/* ── 契約文件包:唯一的主要上傳流程 ──────────────────────────────── */}
@@ -506,13 +555,13 @@ export default function Contract() {
           {progress.total === 0 ? (
             <p className="text-sm text-[var(--text-2)]">
               把整包契約文件直接拖進來,或點右上「上傳契約文件」。可一次選擇多個檔案
-              (PDF / Word / TXT / Excel / 圖片…),系統會自動分類、整理並找出履約要求。
+              (PDF / Word / TXT / Excel / 圖片…),系統會自動分類、整理並找出契約重點。
             </p>
           ) : (
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-[var(--text)]">
               <span className="font-medium">已收到 {progress.total} 份文件</span>
               <span>{progress.classified} 已分類</span>
-              <span>{progress.requirementsAnalyzed} 已分析履約要求</span>
+              <span>{progress.requirementsAnalyzed} 已分析契約重點</span>
               {/* 警示/異常計數走五語意 Badge,不再用裸文字色表狀態(UI/UX 統一修正) */}
               {progress.needsClassification > 0 && <Badge color="amber">{progress.needsClassification} 待確認</Badge>}
               {progress.unsupported > 0 && <Badge color="slate">{progress.unsupported} 尚未支援分析</Badge>}
@@ -521,7 +570,7 @@ export default function Contract() {
           )}
           {/* 警語一律吃 --amber-text token:硬編碼 text-amber-600 在深色模式不會跟著切換 */}
           {!isPersistedProject && <p className="text-xs text-[var(--amber-text)] mt-2">Demo 模式不支援,請登入並選擇真實專案。</p>}
-          {isPersistedProject && !can.edit && <p className="text-xs text-[var(--text-3)] mt-2">需編輯權限(施工廠商或專案管理者)。</p>}
+          {isPersistedProject && !canWriteContract && <p className="text-xs text-[var(--text-3)] mt-2">需編輯權限(施工廠商、監造或專案管理者)。</p>}
         </div>
 
         {/* 真實階段進度(持久化;離開頁面不會遺失) */}
@@ -544,7 +593,7 @@ export default function Contract() {
                     [progress.uploaded >= progress.total, `已上傳 ${progress.uploaded} / ${progress.total}`],
                     [progress.textExtracted >= progress.total - progress.unsupported, `已完成文字讀取 ${progress.textExtracted} / ${progress.total - progress.unsupported}`],
                     [progress.classified >= progress.total, `已辨識文件類型 ${progress.classified} / ${progress.total}`],
-                    [progress.active === 0, `已分析履約要求 ${progress.requirementsAnalyzed}`],
+                    [progress.active === 0, `已分析契約重點 ${progress.requirementsAnalyzed}`],
                   ].map(([ok, text]) => (
                     <li key={text} className="flex items-center gap-1.5">
                       <MSym name={ok ? 'check_circle' : 'radio_button_unchecked'} size={13}
@@ -581,12 +630,12 @@ export default function Contract() {
                 句中的「→」是行文標點不是圖示,保留原文 */}
             <ul className="text-xs text-[var(--text-2)] space-y-1">
               {obligations.length > 0 && (
-                <li className="flex items-start gap-1.5"><MSym name="event" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>{obligations.length} 項時程義務已列在下方時間軸——到期會自動出現在<Link to="/alerts" className="text-[var(--blue-text)] hover:underline">提醒中心</Link>。</span></li>
+                <li className="flex items-start gap-1.5"><MSym name="event" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>{obligations.length} 項契約義務已列在下方時間軸——到期會自動出現在<Link to="/alerts" className="text-[var(--blue-text)] hover:underline">提醒中心</Link>。</span></li>
               )}
               {/* W8-3A(D-014):人工核定只針對「要成為契約規則」的內容,不是初始化門檻。
                   ⚠️ 這一行在整理尚未跑完時也會顯示,所以措辭必須中性——不得斷言「AI 已整理完成」
                   (是否完成的唯一判定在 document_ingestion_runs,見 Requirements 的 requirementsIntro)。 */}
-              <li className="flex items-start gap-1.5"><MSym name="search" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>AI 整理完成後,只有要成為契約規則的內容才需人工核定 → <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">前往契約重點</Link>(機關/監造辦理);未核定不影響開啟正式模式。</span></li>
+              <li className="flex items-start gap-1.5"><MSym name="search" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>AI 整理完成後,只有要成為契約重點的內容才需人工核定 → <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">前往契約重點</Link>(機關/監造辦理);未核定不影響開啟正式模式。</span></li>
               {workItemsSource === 'db'
                 ? <li className="flex items-start gap-1.5"><MSym name="checklist" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>標單已就緒 → <Link to="/boq" className="text-[var(--blue-text)] hover:underline">標單工項</Link>;估驗、進度、日誌都掛在它上面。</span></li>
                 : <li className="flex items-start gap-1.5"><MSym name="checklist" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>還沒看到標單:把 PCCES 預算書 XML 也丟進上面同一個框即可自動匯入。</span></li>}
@@ -594,10 +643,10 @@ export default function Contract() {
           </div>
         )}
 
-        {/* AI 履約要求摘要 → 審查收件匣 */}
+        {/* AI 契約重點摘要 → 審查收件匣 */}
         {aiCount != null && aiCount > 0 && (
           <p className="text-sm text-[var(--text)] mt-4">
-            AI 從本契約找到 <span className="font-medium">{aiCount}</span> 項履約要求建議。
+            AI 從本契約找到 <span className="font-medium">{aiCount}</span> 項契約重點建議。
             <Link to="/requirements" className="text-[var(--blue-text)] hover:underline ml-1 inline-flex items-center gap-0.5">查看整理結果 <MSym name="arrow_forward" size={12} /></Link>
           </p>
         )}
@@ -614,7 +663,7 @@ export default function Contract() {
                 <span className="flex-1 truncate text-[var(--text)]" title={doc?.title || '文件'}>{doc?.title || '文件'}</span>
                 {/* amber-tint 底上的 text-3 只有 3.4:1,次要文字改 text-2(≈6.6:1) */}
                 <span className="text-[var(--text-2)]">AI 建議:{DOCUMENT_TYPE_LABELS[run.suggested_document_type] || '無法判斷'}</span>
-                {can.edit && (
+                {canWriteContract && (
                   <div className="flex items-center gap-1.5">
                     <Select defaultValue={run.suggested_document_type || 'other'} className="w-40"
                       onChange={(e) => confirmClassification(run, e.target.value)}>
@@ -628,7 +677,7 @@ export default function Contract() {
                 )}
               </div>
             ))}
-            <p className="text-[11px] text-[var(--text-3)]">選擇正確類型即完成確認;契約/規範/品質計畫類文件會接著自動分析履約要求。</p>
+            <p className="text-[11px] text-[var(--text-3)]">選擇正確類型即完成確認;契約/規範/品質計畫類文件會接著自動分析契約重點。</p>
           </div>
         )}
 
@@ -679,7 +728,7 @@ export default function Contract() {
                               <span className="text-[var(--amber-text)] line-clamp-2 whitespace-pre-line max-w-[220px]"
                                 title={run.error_message}>{run.error_message}</span>
                             )}
-                            {can.edit && run.metadata?.requirement_extraction === 'failed' && (
+                            {canWriteContract && run.metadata?.requirement_extraction === 'failed' && (
                               <button onClick={() => confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')}
                                 className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1">
                                 <MSym name="refresh" size={11} /> 重試分析
@@ -725,8 +774,8 @@ export default function Contract() {
         )}
       </Card>
 
-      {/* ── 義務時程(approved deadline 相容 runtime)────────────────────── */}
-      <Card title="義務時程">
+      {/* ── 契約義務(approved deadline 相容 runtime)────────────────────── */}
+      <Card title="契約義務" action={obligationCardAction}>
         {/* 逾期/將到期/已完成三個計數走共用 Badge:五語意色票全站同一份定義,
             本頁不再自帶一套藥丸樣式(顏色與其他頁的紅/琥珀/綠會對不起來) */}
         <div className="flex flex-wrap gap-2">
@@ -735,7 +784,7 @@ export default function Contract() {
           <Badge color="green">已完成 {counts.done} 項</Badge>
         </div>
         {groups.length === 0 && (
-          <Empty>尚無已核准的期限要求。上傳契約文件並前往「契約重點」；期限核准後會自動出現在這裡。</Empty>
+          <Empty>尚無已核定的契約義務。上傳契約文件,或到「契約重點」核定期限、手動新增;核定後會自動出現在這裡。</Empty>
         )}
         <ErrorBanner msg={obligationMsg} className="mt-2" />
       </Card>
@@ -752,7 +801,7 @@ export default function Contract() {
                 <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
                   <div className="flex justify-between items-start gap-2">
                     <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
-                    {can.edit && <button onClick={async () => {
+                    {canWriteContract && <button onClick={async () => {
                       if (it.done) {
                         // 退回待辦:一併解除佐證連結(W-01)
                         const { error } = await updateObligationStatus(it.ob.id, '待辦', { evidence_submittal_id: null })
@@ -835,8 +884,13 @@ export default function Contract() {
                         </span>
                       </div>
                     ) : (
+                      // 試算不出來的原因要講對:百分比制罰則缺的是契約總價,
+                      // 不是「格式需人工確認」——講錯會讓人去改罰則文字白忙一場
                       <div className="text-xs text-[var(--text-3)] bg-[var(--surface-2)] rounded-md px-2 py-1 mt-1.5 inline-flex items-center gap-1.5">
-                        <MSym name="balance" size={12} className="shrink-0" />偵測到罰則,但金額格式需人工確認試算
+                        <MSym name="balance" size={12} className="shrink-0" />
+                        {parsePenaltyRate(it.ob.penalty)?.perDayFraction != null && !(contractTotal > 0)
+                          ? '偵測到百分比制罰則;填入上方「契約價金總額」即可試算逾期違約金'
+                          : '偵測到罰則,但金額格式需人工確認試算'}
                       </div>
                     )
                   })()}

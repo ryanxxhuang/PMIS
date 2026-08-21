@@ -18,7 +18,7 @@ const TOOL_LABEL = {
   search_boq: '標單工項',
   list_daily_logs: '施工日誌',
   get_valuation: '估驗計價',
-  get_requirements: '履約需求',
+  get_requirements: '契約重點',
   list_my_open_items: '待辦事項',
   find_evidence: '佐證勾稽',
   get_record: '單筆明細',

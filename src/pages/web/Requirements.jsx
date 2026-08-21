@@ -26,14 +26,22 @@ const LIST_LIMIT = 300
 // ⚠️ 有 Requirement 不等於 AI 跑完過(可能是人工建立或舊 run),絕不可反推成「整理完成」。
 export function requirementsIntro(runs = [], rowCount = 0) {
   const ingestionDone = (runs || []).some((r) => r?.status === 'completed')
+  // W10 揭露「漏了什麼」:最近一次成功整理若未涵蓋整份文件(分批抽取的
+  // coverage 欄位),要在這一頁明講——否則使用者以為 AI 讀完了整本契約。
+  const latestCompleted = (runs || []).find((r) => r?.status === 'completed') || null
+  const cm = latestCompleted?.metadata || null
+  const coverageWarning = cm?.coverage_incomplete
+    ? `注意:最近一次 AI 整理未涵蓋整份文件(解析至第 ${cm.last_included_page ?? '?'} 頁/共 ${cm.total_page_count ?? '?'} 頁)。未涵蓋範圍的契約重點需人工新增。`
+    : null
   if (rowCount > 0) {
     return {
       ingestionDone,
       mode: 'list',
+      coverageWarning,
       // 沒有 completed run 時只講審查規則,不宣稱 AI 整理完成
       note: ingestionDone
-        ? 'AI 已完成整理，專案初始化的「AI 整理契約重點」即為完成；下方只有要成為契約規則的內容才需人工核定，未核定不影響開啟正式模式。'
-        : '下方只有要成為契約規則的內容才需人工核定，未核定不影響開啟正式模式。',
+        ? 'AI 已完成整理，專案初始化的「AI 整理契約重點」即為完成；下方只有要成為契約重點的內容才需人工核定，未核定不影響開啟正式模式。'
+        : '下方只有要成為契約重點的內容才需人工核定，未核定不影響開啟正式模式。',
       emptyText: null,
     }
   }
@@ -41,12 +49,23 @@ export function requirementsIntro(runs = [], rowCount = 0) {
   // 不能再給「前往上傳」的 CTA 把人送回原點。
   if (ingestionDone) {
     return {
-      ingestionDone, mode: 'done-empty', note: null,
+      ingestionDone, mode: 'done-empty', note: null, coverageWarning,
       emptyText: 'AI 已完成整理，本次沒有找到契約重點建議，不需處理，也不影響開啟正式模式。',
     }
   }
+  // W10:run 都停了而且有失敗紀錄時要說「失敗了」,不能偽裝成「還沒開始」——
+  // 使用者才知道要去重試,而不是空等。還有 run 在跑就維持「處理中」語意。
+  const anyActive = (runs || []).some((r) => ['pending', 'processing'].includes(r?.status))
+  const latestFailed = (runs || []).find((r) => r?.status === 'failed') || null
+  if (latestFailed && !anyActive) {
+    return {
+      ingestionDone, mode: 'failed', coverageWarning: null,
+      note: null,
+      emptyText: `最近一次 AI 整理失敗${latestFailed.error_message ? `:${latestFailed.error_message}` : ''}。到「專案文件」的文件清單可重試分析。`,
+    }
+  }
   return {
-    ingestionDone, mode: 'not-started', note: null,
+    ingestionDone, mode: 'not-started', note: null, coverageWarning: null,
     emptyText: '尚未有完成的 AI 整理。到「專案文件」上傳契約/規範,或查看目前的處理狀態。',
   }
 }
@@ -93,7 +112,7 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
             <div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
               {kind === 'approved' && r.requirement_type === 'deadline' && (
                 <Link to="/contract" className="w-full sm:w-auto">
-                  <Button size="sm" variant="secondary" className="w-full sm:w-auto max-md:min-h-11">前往期限追蹤 <MSym name="arrow_forward" size={12} /></Button>
+                  <Button size="sm" variant="secondary" className="w-full sm:w-auto max-md:min-h-11">前往契約義務 <MSym name="arrow_forward" size={12} /></Button>
                 </Link>
               )}
               {/* F3 改法:手機要可辨識為按鈕就用 outline 變體,不再以 className 就地幫 ghost
@@ -107,7 +126,7 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
               </Button>
               {quickApprove && (
                 <Button size="sm" variant="success" className="w-full sm:w-auto max-md:min-h-11" onClick={() => onQuickApprove(group)}>
-                  <MSym name="check_circle" size={13} /> 核定並加入期限追蹤
+                  <MSym name="check_circle" size={13} /> 核定並加入契約義務
                 </Button>
               )}
               {/* F4:無核定權的提示要與按鈕有視覺區隔——改共用 Badge(slate),不再自寫 pill 殼 */}
@@ -124,10 +143,25 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
   )
 }
 
+// W10 手動新增契約重點:AI 漏抽或文件未涵蓋的義務,人工補登。走既有的
+// requirement 流(origin='manual'、status='needs_review' → 人工核定 → deadline
+// 型單向物化為契約義務)——義務表是 system-managed,這是唯一正確的補登路徑。
+const MANUAL_BLANK = {
+  title: '', description: '', requirement_type: 'deadline',
+  responsible_party_type: '', lifecycle_phase: '施工中',
+  dueMode: 'relative', trigger_event: 'commencement', offset_days: '', offset_dir: 'after',
+  fixed_date: '', monthly_day: '',
+}
+const MANUAL_TRIGGERS = [
+  ['award', '決標日'], ['notice', '接獲開工通知日'], ['commencement', '開工日'], ['completion', '竣工日'],
+]
+
 export default function Requirements() {
-  const { currentProject, isPersistedProject, currentUser, workItems, reloadObligations } = useStore()
+  const { currentProject, isPersistedProject, currentUser, workItems, reloadObligations, can } = useStore()
   // 鏡像 DB 的 can_review_requirement(機關/監造;刻意無專案管理者例外——技術管理≠契約審核權)
   const canReview = ['owner', 'supervisor'].includes(currentUser?.org_type)
+  // 鏡像 DB 的 can_write(requirements insert 政策):廠商/監造/管理者可補登,機關唯讀
+  const canAddManual = isPersistedProject && (can.edit || currentUser?.org_type === 'supervisor')
   const [rows, setRows] = useState([])
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -143,6 +177,11 @@ export default function Requirements() {
   const [editing, setEditing] = useState(null)    // draft copy while editing content
   const [manualItemNo, setManualItemNo] = useState('')
   const [showTrace, setShowTrace] = useState(false)
+  // W10 手動新增契約重點(AI 漏抽/未涵蓋範圍的人工補登)
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualDraft, setManualDraft] = useState(MANUAL_BLANK)
+  const [manualBusy, setManualBusy] = useState(false)
+  const [manualMsg, setManualMsg] = useState('')
 
   const pid = currentProject?.project_id
   const runsById = useMemo(() => new Map(runs.map((r) => [r.id, r])), [runs])
@@ -157,7 +196,8 @@ export default function Requirements() {
     try {
       const [runResult, requirementResult] = await Promise.all([
         supabase.from('document_ingestion_runs')
-          .select('id, document_version_id, status, started_at, completed_at, model_name, prompt_version')
+          // error_message/metadata:失敗揭露與涵蓋率警示(requirementsIntro)要用
+          .select('id, document_version_id, status, started_at, completed_at, model_name, prompt_version, error_message, metadata')
           .eq('project_id', pid).order('started_at', { ascending: false }).limit(100),
         supabase.from('requirements').select('*')
           .eq('project_id', pid).order('created_at', { ascending: false }).limit(LIST_LIMIT),
@@ -275,9 +315,9 @@ export default function Requirements() {
     select(requirementId)
     return review(
       'approve',
-      '核定並加入期限追蹤',
+      '核定並加入契約義務',
       requirementId,
-      '這會把本項核定為契約規則，並在同一筆伺服器交易中加入期限追蹤。',
+      '這會把本項核定為生效的契約重點，並在同一筆伺服器交易中排入契約義務。',
     )
   }
   const openApprovedTrace = () => {
@@ -324,6 +364,55 @@ export default function Requirements() {
     setLinks((ls) => ls.map((l) => (l.work_item_id === workItemId ? data : l)))
   }
 
+  // 手動補登:insert 走 RLS(can_write);status 固定 needs_review(guard trigger
+  // 禁止直接以已審狀態建立),核定仍走 review_requirement RPC——與 AI 建議同一條審查路。
+  const submitManual = async () => {
+    const d = manualDraft
+    if (!d.title.trim()) { setManualMsg('請填義務標題'); return }
+    let trigger_type = null
+    let trigger_config = {}
+    let frequency_type = null
+    let frequency_config = {}
+    if (d.dueMode === 'relative') {
+      trigger_type = d.trigger_event
+      const days = Number(d.offset_days)
+      if (!(Number.isInteger(days) && days > 0)) { setManualMsg('期限天數需為正整數'); return }
+      trigger_config = { offset_days: days, offset_dir: d.offset_dir }
+    } else if (d.dueMode === 'fixed') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fixed_date)) { setManualMsg('請選擇指定日期'); return }
+      trigger_type = 'fixed'
+      trigger_config = { fixed_date: d.fixed_date }
+    } else if (d.dueMode === 'monthly') {
+      const day = Number(d.monthly_day)
+      if (!(Number.isInteger(day) && day >= 1 && day <= 31)) { setManualMsg('每月幾號需為 1~31'); return }
+      trigger_type = 'monthly'
+      frequency_type = 'monthly'
+      frequency_config = { day }
+    } else if (d.requirement_type === 'deadline') {
+      // 期限型沒有時點就物化不出到期日,擋在前端(伺服器不會擋,但那是一筆廢資料)
+      setManualMsg('期限型契約重點需要一個時點(相對基準日/指定日期/每月)')
+      return
+    }
+    setManualBusy(true)
+    const { data, error } = await supabase.from('requirements').insert({
+      project_id: pid,
+      title: d.title.trim(),
+      description: d.description.trim() || null,
+      requirement_type: d.requirement_type,
+      responsible_party_type: d.responsible_party_type || null,
+      lifecycle_phase: d.lifecycle_phase || null,
+      trigger_type, trigger_config, frequency_type, frequency_config,
+      status: 'needs_review',
+    }).select().single()
+    setManualBusy(false)
+    if (error) { setManualMsg(`新增失敗:${error.message || ''}`); return }
+    setManualMsg('')
+    setManualDraft(MANUAL_BLANK)
+    setManualOpen(false)
+    setRows((rs) => [data, ...rs])
+    select(data.id)
+  }
+
   const addManualLink = async () => {
     const item = (workItems?.items || []).find(
       (it) => it.is_leaf && !it.is_rollup && it.item_no === manualItemNo.trim(),
@@ -338,10 +427,86 @@ export default function Requirements() {
     setLinks((ls) => [...ls, data]); setManualItemNo(''); setMsg('')
   }
 
+  // 手動新增卡(收合時只有說明+入口鈕)。0 筆與正常清單兩個 render 分支都要放:
+  // 「AI 什麼都沒抽到」正是最需要人工補登的時刻。
+  const manualAddCard = canAddManual && (
+    <Card title="手動新增契約重點" action={(
+      <Button variant={manualOpen ? 'ghost' : 'secondary'} size="sm"
+        onClick={() => { setManualOpen((o) => !o); setManualMsg('') }}>
+        {manualOpen ? '收合' : (<><MSym name="add" size={14} /> 新增</>)}
+      </Button>
+    )}>
+      {!manualOpen ? (
+        <p className="text-xs text-[var(--text-3)]">AI 漏抽或文件未涵蓋的義務可在此人工補登;補登後仍需核定,期限型核定後會自動排入契約義務。</p>
+      ) : (
+        <div className="space-y-2">
+          <Input value={manualDraft.title} onChange={(e) => setManualDraft((d) => ({ ...d, title: e.target.value }))}
+            placeholder="義務標題(例:開工前 14 日內提送施工計畫)" />
+          <Textarea rows={2} value={manualDraft.description}
+            onChange={(e) => setManualDraft((d) => ({ ...d, description: e.target.value }))}
+            placeholder="補充描述、契約出處(可留白)" />
+          <div className="flex flex-wrap gap-2">
+            <Select value={manualDraft.requirement_type}
+              onChange={(e) => setManualDraft((d) => ({ ...d, requirement_type: e.target.value }))}>
+              {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </Select>
+            <Select value={manualDraft.lifecycle_phase}
+              onChange={(e) => setManualDraft((d) => ({ ...d, lifecycle_phase: e.target.value }))}>
+              {['開工前', '施工中', '完工', '保固'].map((p) => <option key={p} value={p}>{p}</option>)}
+            </Select>
+            <Select value={manualDraft.responsible_party_type}
+              onChange={(e) => setManualDraft((d) => ({ ...d, responsible_party_type: e.target.value }))}>
+              <option value="">負責方未定</option>
+              {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={manualDraft.dueMode}
+              onChange={(e) => setManualDraft((d) => ({ ...d, dueMode: e.target.value }))}>
+              <option value="relative">相對基準日</option>
+              <option value="fixed">指定日期</option>
+              <option value="monthly">每月固定日</option>
+              <option value="none">無明確時點</option>
+            </Select>
+            {manualDraft.dueMode === 'relative' && (<>
+              <Select value={manualDraft.trigger_event}
+                onChange={(e) => setManualDraft((d) => ({ ...d, trigger_event: e.target.value }))}>
+                {MANUAL_TRIGGERS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </Select>
+              <Select value={manualDraft.offset_dir}
+                onChange={(e) => setManualDraft((d) => ({ ...d, offset_dir: e.target.value }))}>
+                <option value="after">後</option>
+                <option value="before">前</option>
+              </Select>
+              <Input type="number" min="1" className="w-24" value={manualDraft.offset_days}
+                onChange={(e) => setManualDraft((d) => ({ ...d, offset_days: e.target.value }))} placeholder="天數" />
+              <span className="text-xs text-[var(--text-3)]">日內</span>
+            </>)}
+            {manualDraft.dueMode === 'fixed' && (
+              <Input type="date" className="w-44" value={manualDraft.fixed_date}
+                onChange={(e) => setManualDraft((d) => ({ ...d, fixed_date: e.target.value }))} />
+            )}
+            {manualDraft.dueMode === 'monthly' && (<>
+              <span className="text-xs text-[var(--text-2)]">每月</span>
+              <Input type="number" min="1" max="31" className="w-24" value={manualDraft.monthly_day}
+                onChange={(e) => setManualDraft((d) => ({ ...d, monthly_day: e.target.value }))} placeholder="幾號" />
+              <span className="text-xs text-[var(--text-3)]">號</span>
+            </>)}
+          </div>
+          <ErrorBanner msg={manualMsg} />
+          <div className="flex gap-2">
+            <Button size="sm" disabled={manualBusy} onClick={submitManual}>新增(待核定)</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setManualOpen(false); setManualMsg('') }}>取消</Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+
   if (!isPersistedProject) {
     return (
       <div className="space-y-5">
-        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
         <Card title="契約重點"><Empty>需真實專案。於「專案文件」上傳契約或規範後，AI 整理結果會顯示在這裡。</Empty></Card>
       </div>
     )
@@ -350,7 +515,7 @@ export default function Requirements() {
   if (!loaded) {
     return (
       <div className="space-y-5">
-        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
         {/* 載入態走骨架屏,不再借用 Empty(Empty 是空狀態元件;文案由 sr-only 保留給報讀器) */}
         <Card><SkeletonList label="正在載入契約重點…" /></Card>
       </div>
@@ -360,7 +525,7 @@ export default function Requirements() {
   if (loadError) {
     return (
       <div className="space-y-5">
-        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
         <ErrorBanner msg={loadError} />
         <Button className="w-full sm:w-auto" onClick={reload}><MSym name="refresh" size={14} /> 重新載入</Button>
       </div>
@@ -372,24 +537,28 @@ export default function Requirements() {
   if (loaded && !rows.length) {
     return (
       <div className="space-y-5">
-        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
         <Card title="契約重點">
           {intro.mode === 'done-empty'
             ? <Empty>{intro.emptyText}</Empty>
             : (
               <PrerequisiteEmptyState
                 need={intro.emptyText}
-                unlocks="需求審查核定、送審/RFI 的 AI 依規範比對、契約義務時程"
+                unlocks="契約重點核定、送審/RFI 的 AI 依規範比對、契約義務"
                 to="/contract" cta="前往專案文件" />
             )}
+          {intro.coverageWarning && (
+            <p className="mt-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-3 py-2">{intro.coverageWarning}</p>
+          )}
         </Card>
+        {manualAddCard}
       </div>
     )
   }
 
   return (
     <div className="space-y-5">
-      <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+      <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
 
       <Card title="已生效的契約重點" bodyClass="p-0" action={highlights.approved.length > HIGHLIGHT_LIMIT && (
         <Button variant="ghost" size="sm" onClick={openApprovedTrace}>查看全部已生效內容</Button>
@@ -398,6 +567,10 @@ export default function Requirements() {
             這裡的待審數量不是初始化門檻,不必為了開啟正式模式把它清空。
             說明收進第一張卡:根層裸文字會吃掉 space-y-5 整格間距。 */}
         <p className="px-4 sm:px-5 py-3 text-xs text-[var(--text-3)] border-b border-[var(--border)]">{intro.note}</p>
+        {/* W10 涵蓋率警示:分批抽取仍未讀完整份文件時,漏了什麼要在這裡講明 */}
+        {intro.coverageWarning && (
+          <p className="px-4 sm:px-5 py-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border)]">{intro.coverageWarning}</p>
+        )}
         <HighlightRows groups={shownApproved} kind="approved" canReview={canReview}
           verificationByReq={verificationByReq} onSelect={selectHighlight} onQuickApprove={quickApproveDeadline} />
       </Card>
@@ -410,6 +583,8 @@ export default function Requirements() {
           其餘擷取結果已保留在追溯區，不必逐筆清空。
         </div>
       </Card>
+
+      {manualAddCard}
 
       <Card title="查看全部擷取結果" bodyClass="p-0" action={(
         <Button variant="ghost" size="sm" onClick={toggleTrace}>
@@ -486,7 +661,7 @@ export default function Requirements() {
               <Button variant="ghost" size="sm" onClick={() => setEditing({ ...selected })}><MSym name="edit" size={14} /> 修正內容</Button>
             )}
             {EDITABLE_STATUSES.includes(selected.status) && (<>
-              <Button variant="success" size="sm" disabled={!!busy} onClick={() => review('approve', '核定為契約規則')}><MSym name="check_circle" size={14} /> 核定為契約規則</Button>
+              <Button variant="success" size="sm" disabled={!!busy} onClick={() => review('approve', '核定生效')}><MSym name="check_circle" size={14} /> 核定生效</Button>
               <Button variant="danger" size="sm" disabled={!!busy} onClick={() => review('reject', '駁回')}><MSym name="cancel" size={14} /> 駁回</Button>
             </>)}
             {selected.status === 'approved' && (

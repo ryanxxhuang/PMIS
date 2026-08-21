@@ -144,7 +144,7 @@ export function buildTodayTasks(input = {}) {
       const days = daysBetween(dueIso, todayIso)
       if (days == null || days > SOON_DAYS) continue
       mine.push(task({
-        key: `契約:${ob.id ?? ob.title}`, tag: '契約', title: ob.title, ball: 'contractor',
+        key: `契約:${ob.id ?? ob.title}`, tag: '契約義務', title: ob.title, ball: 'contractor',
         to: '/contract', due: dueIso, todayIso,
         meta: `${dueText(days, dueIso)}${ob.penalty ? `・罰則：${ob.penalty}` : ''}`,
       }))

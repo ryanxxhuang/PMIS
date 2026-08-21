@@ -16,6 +16,7 @@ export function normalizeProject(row) {
     supervisor_name: row.supervisor_name, location: row.location,
     start_date: row.start_date, end_date: row.end_date, status: row.status,
     award_date: row.award_date, notice_date: row.notice_date, commencement_date: row.commencement_date,
+    contract_total: row.contract_total ?? null, // 契約價金總額(手填);罰款試算優先於 BOQ 加總
     formal_mode: !!row.formal_mode,
     latitude: row.latitude ?? null, longitude: row.longitude ?? null, // 工地座標(CWA 天氣用)
     ai_plan: row.ai_plan || 'standard', // AI 方案(批 B:前端 aiEnabled 據此隱藏入口)

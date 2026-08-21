@@ -23,16 +23,27 @@ import {
   PROMPT_VERSION, REQUIREMENT_TYPES, RESPONSIBLE_PARTY_TYPES, LIFECYCLE_PHASES,
   TRIGGER_TYPES, OFFSET_DIRS, FREQUENCY_TYPES,
   buildWorkItemCatalog, mapWorkItemRefs, validateSuggestion, deterministicUuid,
+  buildDocumentBatches, splitBatch, mergeUsage,
 } from '../_shared/requirementExtraction.ts'
+import type { BatchPage, UsageLike } from '../_shared/requirementExtraction.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Pages whose normalized text is shorter than this carry no verifiable
 // content (scanned/image pages - OCR is out of scope for P0-06).
 const MIN_PAGE_TEXT_LENGTH = 20
-// Character budget for the document text handed to the model. Pages beyond
-// the budget are omitted and reported in run metadata - never silently.
-const DOCUMENT_CHAR_BUDGET = 160_000
+// W10 分批抽取:每批的輸入字元預算 × 批數上限 = 總預算(舊制單批 160k,長契約
+// 後半本被截斷)。超過總預算的頁一樣會被丟棄,但一律寫進 run metadata 並回傳
+// 給前端揭露 - never silently。
+const BATCH_CHAR_BUDGET = 120_000
+const MAX_BATCHES = 4
+// Edge Function 有平台 wall-clock 上限;逼近前主動停批,把已完成的批次落庫、
+// 標記 stopped_early,而不是被平台砍掉留下永遠 processing 的 run。
+const TIME_BUDGET_MS = 100_000
+// 超過這個時間還掛在 pending/processing 的 run 一定已經死了(單批呼叫逾時
+// 120s + 重試,總長遠小於 10 分鐘)——每次啟動新解析時順手標記失敗,
+// 讓前端不再顯示永遠轉圈的解析中。
+const STALE_RUN_MS = 10 * 60_000
 const WORK_ITEM_CATALOG_LIMIT = 300
 
 const SOURCE_SCHEMA = {
@@ -92,28 +103,16 @@ const SCHEMA = {
   required: ['requirements'],
 }
 
-interface PageRow {
-  page_number: number
-  extracted_text: string | null
-  extraction_method: string
-}
+type PageRow = BatchPage
 
-function buildDocumentText(pages: PageRow[], paginated: boolean) {
-  const parts: string[] = []
-  let used = 0
-  let lastIncludedPage: number | null = null
-  let truncated = false
-  for (const p of pages) {
+// 一批頁 → 模型輸入文字(批已依預算切好,這裡不再截斷)
+function buildBatchText(pages: PageRow[], paginated: boolean) {
+  return pages.map((p) => {
     const header = paginated
       ? `=== 第 ${p.page_number} 頁 ===`
       : `=== 段落 ${p.page_number}(此文件無可靠頁碼)===`
-    const block = `${header}\n${p.extracted_text || ''}\n`
-    if (used + block.length > DOCUMENT_CHAR_BUDGET) { truncated = true; break }
-    parts.push(block)
-    used += block.length
-    lastIncludedPage = p.page_number
-  }
-  return { documentText: parts.join('\n'), truncated, lastIncludedPage }
+    return `${header}\n${p.extracted_text || ''}\n`
+  }).join('\n')
 }
 
 function buildPrompt(opts: {
@@ -122,13 +121,15 @@ function buildPrompt(opts: {
   paginated: boolean
   documentText: string
   catalogLines: string
+  batchNote: string      // 分批時告知模型本段範圍,避免它以為整份文件只有這幾頁
 }) {
   const pageRule = opts.paginated
     ? '每項的 source.page_number 必須是上方「=== 第 N 頁 ===」實際出現的 N,引註原文必須出現在該頁。'
     : '此文件沒有可靠頁碼:source.page_number 一律填 0,改以 section / clause 標明出處。'
   return (
     '以下是台灣公共工程專案文件的逐頁文字。\n' +
-    `文件名稱:${opts.title}\n文件類型:${opts.documentType}\n\n` +
+    `文件名稱:${opts.title}\n文件類型:${opts.documentType}\n` +
+    (opts.batchNote ? `${opts.batchNote}\n` : '') + '\n' +
     '任務:通讀全文,抽出「可執行的履約需求」——必須提送/申報、應辦檢驗/試驗、應通知/會同/見證、' +
     '停留點(未查驗不得續作)、應留存的紀錄/照片/報告、期限與週期義務、允收標準、取樣/試驗頻率等。\n' +
     '不要把以下內容當成需求:一般背景說明、純名詞定義、目錄項目、沒有具體義務的敘述性文字。\n' +
@@ -218,6 +219,34 @@ Deno.serve(async (req) => {
     service = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     })
+
+    // W10 卡死補償:程序被平台砍掉(wall-clock、crash)時 run 會永遠停在
+    // pending/processing,而 review_requirement 只准核定 completed run 的建議
+    // ——整批建議跟著卡死。每次啟動新解析時把本專案明顯過期的 run 標記失敗;
+    // best-effort,失敗不擋主流程。
+    const staleCutoff = new Date(Date.now() - STALE_RUN_MS).toISOString()
+    await service.from('document_ingestion_runs')
+      .update({
+        status: 'failed',
+        completed_at: new Date().toISOString(),
+        error_message: '解析逾時未完成,系統自動標記失敗;可重新啟動解析',
+      })
+      .eq('project_id', projectId)
+      .in('status', ['pending', 'processing'])
+      .lt('started_at', staleCutoff)
+
+    // 同一版本仍有未過期的進行中 run:擋掉重複啟動(重複解析=重複建議+重複燒錢)
+    const { data: activeRun } = await service.from('document_ingestion_runs')
+      .select('id')
+      .eq('document_version_id', documentVersionId)
+      .in('status', ['pending', 'processing'])
+      .gte('started_at', staleCutoff)
+      .limit(1)
+      .maybeSingle()
+    if (activeRun) {
+      return json({ error: '這份文件已在解析中,請等它完成或失敗後再試', run_id: activeRun.id }, 409)
+    }
+
     const { data: run, error: runError } = await service
       .from('document_ingestion_runs')
       .insert({
@@ -268,145 +297,218 @@ Deno.serve(async (req) => {
       .map((e) => `${e.ref} ${e.item_no || '-'} ${e.description}`.slice(0, 120))
       .join('\n')
 
-    // -- AI extraction (page boundaries preserved in the input) ---------------
-    const { documentText, truncated, lastIncludedPage } =
-      buildDocumentText(pageRows, paginated)
-    const prompt = buildPrompt({
-      title: doc.title,
-      documentType: doc.document_type,
-      paginated,
-      documentText,
-      catalogLines,
+    // -- AI extraction in batches (page boundaries preserved) -----------------
+    // 切批是確定性的(頁序、字元預算);每批抽完立刻落庫,中途死掉不會
+    // 整包蒸發。引註驗證一律對全文件頁面查核,與批次邊界無關。
+    const plan = buildDocumentBatches(pageRows, {
+      batchCharBudget: BATCH_CHAR_BUDGET, maxBatches: MAX_BATCHES,
     })
-    const { data: aiData, error: aiError, usage: aiUsage, model: aiModel } = await claudeJson({
-      model: MODELS.smart, name: 'requirement_suggestions', schema: SCHEMA,
-      maxTokens: 16384, content: prompt,
-    })
-    if (aiError) {
-      await closeAiGate(gate, { feature: 'requirements.extract', model: aiModel, usage: aiUsage, status: 'error', errorCode: 'claude_error' })
-      await failRun(service, runId, aiError, {
-        pagination: paginated ? 'paginated' : 'unpaginated',
-        empty_page_numbers: emptyPageNumbers,
-        truncated_input: truncated,
-      })
-      return json({ error: aiError, run_id: runId, status: 'failed' }, 502)
-    }
-    // AI 呼叫成功即記用量(token 已花掉);之後的落庫失敗不影響這筆記帳,
-    // 也不在外層 catch 再記(避免同一次呼叫重複計數)
-    await closeAiGate(gate, { feature: 'requirements.extract', model: aiModel, usage: aiUsage, status: 'ok' })
+    const totalBatches = plan.batches.length
+    const startedAtMs = Date.now()
 
-    // -- Deterministic validation + source verification ------------------------
-    const rawItems = Array.isArray((aiData as Record<string, unknown>)?.requirements)
-      ? (aiData as { requirements: unknown[] }).requirements
-      : []
-    const requirementRows: Record<string, unknown>[] = []
-    const sourceRows: Record<string, unknown>[] = []
-    const workItemRows: Record<string, unknown>[] = []
-    const rejected: { index: number; reason: string }[] = []
+    let totalUsage: UsageLike = {}
+    let usedModel: string | undefined
+    let totalRequirements = 0
     let verifiedCount = 0
     let needsReviewCount = 0
+    let rawItemCount = 0
+    let workItemLinkCount = 0
+    const rejected: { index: string; reason: string }[] = []
+    const clippedBatches: string[] = []
+    let failedBatch: { label: string; error: string } | null = null
+    let batchesCompleted = 0
+    let stoppedEarly = false
 
-    for (let i = 0; i < rawItems.length; i++) {
-      const check = validateSuggestion(rawItems[i])
-      if (!check.ok) {
-        rejected.push({ index: i, reason: check.reason })
-        continue
-      }
-      const s = check.value
-      const { verified, pageNumber } = verifySuggestionSource({
-        source: s.source, pages: pageRows, paginated,
-      })
-      if (verified) verifiedCount++
-      else needsReviewCount++
-
-      // Suggestion identity is run-scoped and positional: retrying the same
-      // persistence step upserts the same rows (no duplicates in one run).
-      const requirementId = await deterministicUuid(`${runId}:requirement:${i}`)
-      requirementRows.push({
-        id: requirementId,
-        project_id: projectId,
-        title: s.title,
-        description: s.description,
-        requirement_type: s.requirement_type,
-        responsible_party_type: s.responsible_party_type,
-        lifecycle_phase: s.lifecycle_phase,
-        trigger_type: s.trigger_type,
-        trigger_config: s.trigger_config,
-        frequency_type: s.frequency_type,
-        frequency_config: s.frequency_config,
-        acceptance_criteria: s.acceptance_criteria,
-        evidence_requirement: s.evidence_requirement,
-        status: verified ? 'draft_ai' : 'needs_review',
-        origin: 'ai',
-        confidence: s.confidence,
-        ingestion_run_id: runId,
-      })
-      sourceRows.push({
-        id: await deterministicUuid(`${runId}:source:${i}`),
-        requirement_id: requirementId,
-        document_version_id: documentVersionId,
-        source_kind: 'document',
-        source_verified: verified,
-        // pageNumber is null unless the claimed page exists in stored
-        // document_pages - fabricated pages are never persisted.
-        page_number: pageNumber,
-        section: s.source.section,
-        clause: s.source.clause,
-        source_text: s.source.quotation,
-      })
-      for (const workItemId of mapWorkItemRefs(s.candidate_work_items, catalog)) {
-        workItemRows.push({
-          requirement_id: requirementId,
-          work_item_id: workItemId,
-          match_type: 'ai',
-          confidence: s.confidence,
-          reviewed: false,
+    // 驗證 + 引註查核 + 落庫一批模型輸出。identity 帶批次標籤
+    // (`${runId}:${label}:…`),同一 run 內重試同一批 upsert 相同的列。
+    const persistBatchItems = async (items: unknown[], label: string): Promise<string | null> => {
+      const requirementRows: Record<string, unknown>[] = []
+      const sourceRows: Record<string, unknown>[] = []
+      const workItemRows: Record<string, unknown>[] = []
+      for (let i = 0; i < items.length; i++) {
+        const check = validateSuggestion(items[i])
+        if (!check.ok) {
+          rejected.push({ index: `${label}:${i}`, reason: check.reason })
+          continue
+        }
+        const s = check.value
+        const { verified, pageNumber } = verifySuggestionSource({
+          source: s.source, pages: pageRows, paginated,
         })
+        if (verified) verifiedCount++
+        else needsReviewCount++
+        const requirementId = await deterministicUuid(`${runId}:${label}:requirement:${i}`)
+        requirementRows.push({
+          id: requirementId,
+          project_id: projectId,
+          title: s.title,
+          description: s.description,
+          requirement_type: s.requirement_type,
+          responsible_party_type: s.responsible_party_type,
+          lifecycle_phase: s.lifecycle_phase,
+          trigger_type: s.trigger_type,
+          trigger_config: s.trigger_config,
+          frequency_type: s.frequency_type,
+          frequency_config: s.frequency_config,
+          acceptance_criteria: s.acceptance_criteria,
+          evidence_requirement: s.evidence_requirement,
+          status: verified ? 'draft_ai' : 'needs_review',
+          origin: 'ai',
+          confidence: s.confidence,
+          ingestion_run_id: runId,
+        })
+        sourceRows.push({
+          id: await deterministicUuid(`${runId}:${label}:source:${i}`),
+          requirement_id: requirementId,
+          document_version_id: documentVersionId,
+          source_kind: 'document',
+          source_verified: verified,
+          // pageNumber is null unless the claimed page exists in stored
+          // document_pages - fabricated pages are never persisted.
+          page_number: pageNumber,
+          section: s.source.section,
+          clause: s.source.clause,
+          source_text: s.source.quotation,
+        })
+        for (const workItemId of mapWorkItemRefs(s.candidate_work_items, catalog)) {
+          workItemRows.push({
+            requirement_id: requirementId,
+            work_item_id: workItemId,
+            match_type: 'ai',
+            confidence: s.confidence,
+            reviewed: false,
+          })
+        }
       }
-    }
-
-    // -- Persist suggestions (idempotent within this run) ----------------------
-    if (requirementRows.length) {
-      const { error: reqError } = await service.from('requirements')
+      if (!requirementRows.length) return null
+      const { error: reqError } = await service!.from('requirements')
         .upsert(requirementRows, { onConflict: 'id', ignoreDuplicates: true })
-      if (reqError) {
-        await failRun(service, runId, reqError.message, {})
-        return json({ error: reqError.message, run_id: runId, status: 'failed' }, 500)
-      }
-      const { error: srcError } = await service.from('requirement_sources')
+      if (reqError) return reqError.message
+      const { error: srcError } = await service!.from('requirement_sources')
         .upsert(sourceRows, { onConflict: 'id', ignoreDuplicates: true })
-      if (srcError) {
-        await failRun(service, runId, srcError.message, {})
-        return json({ error: srcError.message, run_id: runId, status: 'failed' }, 500)
-      }
+      if (srcError) return srcError.message
       if (workItemRows.length) {
-        const { error: wiError } = await service.from('requirement_work_items')
+        const { error: wiError } = await service!.from('requirement_work_items')
           .upsert(workItemRows, {
             onConflict: 'requirement_id,work_item_id', ignoreDuplicates: true,
           })
-        if (wiError) {
-          await failRun(service, runId, wiError.message, {})
-          return json({ error: wiError.message, run_id: runId, status: 'failed' }, 500)
+        if (wiError) return wiError.message
+      }
+      totalRequirements += requirementRows.length
+      workItemLinkCount += workItemRows.length
+      return null
+    }
+
+    // 單批抽取。輸出撞上限(stop_reason=max_tokens)代表這批義務太密,
+    // 對半切重試(最多兩層);單頁批切不動就記進 clipped_batches 揭露。
+    const runBatch = async (pages: PageRow[], label: string, depth: number): Promise<{ ok: boolean; error?: string }> => {
+      const first = pages[0]?.page_number
+      const last = pages[pages.length - 1]?.page_number
+      const batchNote = totalBatches > 1 || depth > 0
+        ? `(本次輸入為此文件的第 ${first}~${last} ${paginated ? '頁' : '段'},其餘部分另行處理;只抽取本段出現的需求)`
+        : ''
+      const prompt = buildPrompt({
+        title: doc.title,
+        documentType: doc.document_type,
+        paginated,
+        documentText: buildBatchText(pages, paginated),
+        catalogLines,
+        batchNote,
+      })
+      const res = await claudeJson({
+        model: MODELS.smart, name: 'requirement_suggestions', schema: SCHEMA,
+        maxTokens: 16384, content: prompt,
+      })
+      totalUsage = mergeUsage(totalUsage, res.usage)
+      if (res.model) usedModel = res.model
+      if (res.errorCode === 'max_tokens') {
+        const halves = depth < 2 ? splitBatch(pages) : null
+        if (!halves) {
+          clippedBatches.push(`${label}(第 ${first}~${last} ${paginated ? '頁' : '段'})`)
+          return { ok: true }
         }
+        const firstHalf = await runBatch(halves[0], `${label}a`, depth + 1)
+        if (!firstHalf.ok) return firstHalf
+        return await runBatch(halves[1], `${label}b`, depth + 1)
+      }
+      if (res.error) return { ok: false, error: res.error }
+      const items = Array.isArray((res.data as Record<string, unknown>)?.requirements)
+        ? (res.data as { requirements: unknown[] }).requirements
+        : []
+      rawItemCount += items.length
+      const persistError = await persistBatchItems(items, label)
+      if (persistError) return { ok: false, error: persistError }
+      return { ok: true }
+    }
+
+    for (let bi = 0; bi < totalBatches; bi++) {
+      // Edge Function 有平台 wall-clock 上限:逼近前主動停批並揭露,
+      // 已落庫的批次保留、run 正常 completed,而不是被砍掉留下殭屍 run
+      if (bi > 0 && Date.now() - startedAtMs > TIME_BUDGET_MS) {
+        stoppedEarly = true
+        break
+      }
+      const result = await runBatch(plan.batches[bi], `b${bi}`, 0)
+      if (!result.ok) {
+        failedBatch = { label: `b${bi}`, error: result.error || '' }
+        break
+      }
+      batchesCompleted = bi + 1
+      if (totalBatches > 1) {
+        // 增量進度(best-effort;完成時會被最終 metadata 覆蓋)
+        await service.from('document_ingestion_runs')
+          .update({ metadata: { batches_total: totalBatches, batches_completed: batchesCompleted } })
+          .eq('id', runId)
       }
     }
+
+    // 已處理的實際涵蓋範圍(供揭露「解析到第幾頁」)
+    const lastProcessedBatch = plan.batches[batchesCompleted - 1]
+    const lastProcessedPage = lastProcessedBatch
+      ? lastProcessedBatch[lastProcessedBatch.length - 1].page_number
+      : null
+    const coverageIncomplete = plan.truncated || stoppedEarly ||
+      failedBatch != null || clippedBatches.length > 0
+
+    const coverageMetadata = {
+      pagination: paginated ? 'paginated' : 'unpaginated',
+      empty_page_numbers: emptyPageNumbers,
+      total_page_count: pageRows.length,
+      batches_total: totalBatches,
+      batches_completed: batchesCompleted,
+      truncated_input: plan.truncated || stoppedEarly,
+      stopped_early: stoppedEarly,
+      omitted_page_count: plan.omittedPageCount,
+      last_included_page: lastProcessedPage,
+      clipped_batches: clippedBatches,
+      failed_batch: failedBatch ? { label: failedBatch.label, error: failedBatch.error.slice(0, 500) } : null,
+      coverage_incomplete: coverageIncomplete,
+    }
+
+    // 一批都沒成:整個 run 失敗(照舊)。有成功批次時即使後面失敗也走
+    // completed + 揭露——已落庫的建議要能被核定,缺的範圍明講。
+    if (failedBatch && batchesCompleted === 0 && totalRequirements === 0) {
+      await closeAiGate(gate, { feature: 'requirements.extract', model: usedModel, usage: totalUsage, status: 'error', errorCode: 'claude_error' })
+      await failRun(service, runId, failedBatch.error, coverageMetadata)
+      return json({ error: failedBatch.error, run_id: runId, status: 'failed' }, 502)
+    }
+    // AI 呼叫結束即記總用量(token 已花掉);之後的收尾失敗不影響這筆記帳,
+    // 也不在外層 catch 再記(避免同一次呼叫重複計數)
+    await closeAiGate(gate, { feature: 'requirements.extract', model: usedModel, usage: totalUsage, status: 'ok' })
 
     const { error: completeError } = await service.from('document_ingestion_runs').update({
       status: 'completed',
       completed_at: new Date().toISOString(),
-      extracted_requirement_count: requirementRows.length,
+      extracted_requirement_count: totalRequirements,
       verified_source_count: verifiedCount,
       unverified_source_count: needsReviewCount,
       metadata: {
-        pagination: paginated ? 'paginated' : 'unpaginated',
-        empty_page_numbers: emptyPageNumbers,
-        truncated_input: truncated,
-        last_included_page: lastIncludedPage,
-        raw_item_count: rawItems.length,
+        ...coverageMetadata,
+        raw_item_count: rawItemCount,
         rejected_item_count: rejected.length,
         rejected_items: rejected.slice(0, 20),
         work_item_catalog_size: catalog.entries.length,
-        work_item_link_count: workItemRows.length,
+        work_item_link_count: workItemLinkCount,
       },
     }).eq('id', runId)
     if (completeError) {
@@ -416,11 +518,16 @@ Deno.serve(async (req) => {
     return json({
       run_id: runId,
       status: 'completed',
-      extracted_requirement_count: requirementRows.length,
+      extracted_requirement_count: totalRequirements,
       verified_source_count: verifiedCount,
       unverified_source_count: needsReviewCount,
       needs_review_count: needsReviewCount,
       rejected_item_count: rejected.length,
+      coverage_incomplete: coverageIncomplete,
+      total_page_count: pageRows.length,
+      last_included_page: lastProcessedPage,
+      batches_total: totalBatches,
+      batches_completed: batchesCompleted,
     }, 200)
   } catch (e) {
     const message = String((e as Error)?.message || e)

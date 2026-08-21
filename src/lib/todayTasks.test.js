@@ -110,14 +110,14 @@ describe('契約義務:精確責任白名單 + 目的頁真的能完成', () => 
   })
   it('只有廠商責任的義務成為待辦;監造/機關/未指定都不製造假待辦', () => {
     const c = build({ org: 'contractor', obligations: rows, anchors })
-    expect(c.mine.filter((t) => t.tag === '契約').map((t) => t.title)).toEqual(['廠商:提送月報'])
+    expect(c.mine.filter((t) => t.tag === '契約義務').map((t) => t.title)).toEqual(['廠商:提送月報'])
     for (const org of ['supervisor', 'owner']) {
       const r = build({ org, obligations: rows, anchors })
-      expect([...r.mine, ...r.waiting].some((t) => t.tag === '契約')).toBe(false)
+      expect([...r.mine, ...r.waiting].some((t) => t.tag === '契約義務')).toBe(false)
     }
   })
   it('逾期天數與罰則寫進說明,並導向專案文件頁', () => {
-    const t = build({ org: 'contractor', obligations: rows, anchors }).mine.find((x) => x.tag === '契約')
+    const t = build({ org: 'contractor', obligations: rows, anchors }).mine.find((x) => x.tag === '契約義務')
     expect(t.overdueDays).toBe(3)
     expect(t.due).toBe('2026-08-10')
     expect(t.meta).toContain('逾期 3 天')
@@ -132,7 +132,7 @@ describe('契約義務:精確責任白名單 + 目的頁真的能完成', () => 
       ob({ id: 'OB-4', title: '沒有到期日', responsible: '廠商', trigger_event: 'other' }),
     ]
     // 只斷言契約段:anchors 的開工錨點涵蓋今天,第⑥類會另推一筆「日誌未填」(那是它的正確行為)
-    expect(build({ org: 'contractor', obligations: later, anchors }).mine.filter((t) => t.tag === '契約')).toEqual([])
+    expect(build({ org: 'contractor', obligations: later, anchors }).mine.filter((t) => t.tag === '契約義務')).toEqual([])
   })
 })
 
@@ -203,7 +203,7 @@ describe('期限型待辦:試體、驗收、停留點', () => {
     const monthly = [{ id: 'OB-M', title: '提送施工月報', status: '待辦', recurring: 'monthly', recurring_day: 15, responsible: '廠商' }]
     // 刻意選一個遠離系統時鐘的日期:讀系統時鐘的話 due 會落在完全不同的月份
     const near = buildTodayTasks({ org: 'contractor', today: new Date('2027-03-10T04:00:00Z'), obligations: monthly })
-      .mine.find((x) => x.tag === '契約')
+      .mine.find((x) => x.tag === '契約義務')
     expect(near.due).toBe('2027-03-15')
     expect(near.meta).toContain('還有 5 天')
     // 已過本月 15 日 → 順延下月,超過 7 日門檻不列

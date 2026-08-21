@@ -40,7 +40,7 @@ export const STAGE_LABELS = Object.freeze({
   uploaded: '已上傳',
   extracting_text: '正在讀取文字',
   classifying: '正在辨識文件類型',
-  extracting_requirements: '正在分析履約要求',
+  extracting_requirements: '正在分析契約重點',
   completed: '已完成',
   failed: '處理失敗',
   unsupported: '尚未支援內容分析',
@@ -408,7 +408,11 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
       extractionMessage = data?.error || error?.message || 'AI 分析失敗'
     } else {
       extractionState = 'completed'
-      extractionMessage = `找到 ${data?.extracted_requirement_count ?? 0} 項履約要求建議`
+      // W10 揭露截斷:未涵蓋整份文件時,成功訊息必須連著講清楚讀到哪裡
+      extractionMessage = `找到 ${data?.extracted_requirement_count ?? 0} 項契約重點建議${
+        data?.coverage_incomplete
+          ? `(未涵蓋整份文件:解析至第 ${data?.last_included_page ?? '?'} 頁/共 ${data?.total_page_count ?? '?'} 頁)`
+          : ''}`
     }
   }
 

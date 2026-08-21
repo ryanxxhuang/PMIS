@@ -32,7 +32,7 @@ export const WORK_ITEM_LINK_STATE_LABELS = Object.freeze({
 
 export const ARTIFACT_TYPE_LABELS = Object.freeze({
   inspection_point: '檢驗停留點', checklist: '檢查表範本', test: '取樣試驗',
-  submittal: '送審文件', evidence: '佐證照片', deadline: '契約期限',
+  submittal: '送審文件', evidence: '佐證照片', deadline: '契約義務',
 })
 
 export const GENERATION_TYPE_LABELS = Object.freeze({

@@ -127,7 +127,7 @@ export const QUERY_TOOLS: ToolDef[] = [
   {
     name: 'get_requirements',
     description:
-      '查本案履約需求:契約應辦事項(含期限規則、罰則、出處條款)與已核定的履約需求清單。' +
+      '查本案契約義務(含期限規則、罰則、出處條款)與已核定的契約重點清單。' +
       '要回答「契約規定什麼時候要交什麼」「有什麼罰則」「這件事的依據條款」時呼叫我。' +
       '引用條款時必須照回傳的 source_clause 原樣引,不可自行補條號。',
     input_schema: {
@@ -461,7 +461,7 @@ async function getRequirements(db: SupabaseClient, projectId: string, input: Rec
   else reqRows = reqs ?? []
 
   if (!obligationRows.length && (Array.isArray(reqRows) ? !reqRows.length : true)) {
-    return { note: topic ? '查無符合主題的履約需求' : '本案尚未匯入契約應辦事項' }
+    return { note: topic ? '查無符合主題的契約義務' : '本案尚未匯入契約義務' }
   }
   return { contract_obligations: obligationRows, approved_requirements: reqRows }
 }
@@ -1589,7 +1589,7 @@ async function draftSubmittalReview(
       kind: 'draft_submittal_review',
       target_table: 'submittals',
       target_id: submittal.id,
-      summary: `送審 ${label} 已依 ${relevant.length} 項履約需求擬好審查意見(建議:${review.suggested_decision})`,
+      summary: `送審 ${label} 已依 ${relevant.length} 項契約重點擬好審查意見(建議:${review.suggested_decision})`,
       rationale,
       evidence: {
         payload: {

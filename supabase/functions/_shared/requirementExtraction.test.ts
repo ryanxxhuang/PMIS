@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildDocumentBatches,
   buildWorkItemCatalog,
   deterministicUuid,
   mapWorkItemRefs,
+  mergeUsage,
+  splitBatch,
   validateSuggestion,
 } from './requirementExtraction.ts'
 
@@ -128,5 +131,87 @@ describe('deterministicUuid', () => {
   it('produces a well-formed UUID', async () => {
     const id = await deterministicUuid('any-name')
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  })
+})
+
+describe('buildDocumentBatches', () => {
+  const page = (n, chars) => ({
+    page_number: n, extracted_text: 'x'.repeat(chars), extraction_method: 'pdf_text',
+  })
+
+  it('packs consecutive pages into one batch under the budget', () => {
+    const plan = buildDocumentBatches([page(1, 100), page(2, 100), page(3, 100)], {
+      batchCharBudget: 1000, maxBatches: 4,
+    })
+    expect(plan.batches).toHaveLength(1)
+    expect(plan.batches[0].map((p) => p.page_number)).toEqual([1, 2, 3])
+    expect(plan.truncated).toBe(false)
+    expect(plan.lastIncludedPage).toBe(3)
+    expect(plan.omittedPageCount).toBe(0)
+  })
+
+  it('splits into multiple batches preserving page order', () => {
+    const plan = buildDocumentBatches(
+      [page(1, 600), page(2, 600), page(3, 600), page(4, 600)],
+      { batchCharBudget: 1000, maxBatches: 4 },
+    )
+    expect(plan.batches.map((b) => b.map((p) => p.page_number))).toEqual([[1], [2], [3], [4]])
+    expect(plan.truncated).toBe(false)
+  })
+
+  it('keeps an oversized single page as its own batch (pages are never split)', () => {
+    const plan = buildDocumentBatches([page(1, 100), page(2, 5000), page(3, 100)], {
+      batchCharBudget: 1000, maxBatches: 4,
+    })
+    expect(plan.batches.map((b) => b.map((p) => p.page_number))).toEqual([[1], [2], [3]])
+  })
+
+  it('drops pages beyond maxBatches and reports the truncation', () => {
+    const plan = buildDocumentBatches(
+      [page(1, 900), page(2, 900), page(3, 900), page(4, 900)],
+      { batchCharBudget: 1000, maxBatches: 2 },
+    )
+    expect(plan.batches).toHaveLength(2)
+    expect(plan.truncated).toBe(true)
+    expect(plan.lastIncludedPage).toBe(2)
+    expect(plan.omittedPageCount).toBe(2)
+  })
+
+  it('handles an empty page list', () => {
+    const plan = buildDocumentBatches([], { batchCharBudget: 1000, maxBatches: 4 })
+    expect(plan.batches).toHaveLength(0)
+    expect(plan.lastIncludedPage).toBe(null)
+    expect(plan.truncated).toBe(false)
+  })
+})
+
+describe('splitBatch', () => {
+  const pages = (ns) => ns.map((n) => ({ page_number: n, extracted_text: '', extraction_method: 'pdf_text' }))
+
+  it('halves a multi-page batch preserving order', () => {
+    const halves = splitBatch(pages([1, 2, 3, 4, 5]))
+    expect(halves[0].map((p) => p.page_number)).toEqual([1, 2, 3])
+    expect(halves[1].map((p) => p.page_number)).toEqual([4, 5])
+  })
+
+  it('refuses to split a single-page batch', () => {
+    expect(splitBatch(pages([1]))).toBe(null)
+    expect(splitBatch(pages([]))).toBe(null)
+  })
+})
+
+describe('mergeUsage', () => {
+  it('sums token fields treating missing values as zero', () => {
+    expect(mergeUsage(
+      { input_tokens: 10, output_tokens: 5 },
+      { input_tokens: 3, cache_read_input_tokens: 7 },
+    )).toEqual({
+      input_tokens: 13, output_tokens: 5,
+      cache_read_input_tokens: 7, cache_creation_input_tokens: 0,
+    })
+    expect(mergeUsage(null, undefined)).toEqual({
+      input_tokens: 0, output_tokens: 0,
+      cache_read_input_tokens: 0, cache_creation_input_tokens: 0,
+    })
   })
 })
