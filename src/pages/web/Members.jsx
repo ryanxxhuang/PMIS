@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, Empty, PageHeader, SkeletonList } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, Empty, PageHeader, SkeletonList, Input, Select, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
 const ORG_COLOR = { contractor: 'blue', supervisor: 'amber', owner: 'purple' }
-const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 
 export default function Members() {
   const { project, listMembers, addMemberByEmail, removeMember, currentUser,
@@ -17,8 +16,10 @@ export default function Members() {
   const [email, setEmail] = useState('')
   const [inviteOrg, setInviteOrg] = useState('') // W4-3:邀請方必須宣告要邀哪一方
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState('')
-  const [formalMsg, setFormalMsg] = useState('')
+  // 結果訊息帶 ok 旗標而非事後 includes() 比對字串:文案一改,語意色就跟著錯,
+  // 而錯誤/成功要走的元件(ErrorBanner／Badge)不同,不能靠文字猜。
+  const [msg, setMsg] = useState(null)
+  const [formalMsg, setFormalMsg] = useState(null)
 
   const reload = useCallback(async () => {
     setMembers(null); setLoadError(null)
@@ -29,7 +30,13 @@ export default function Members() {
   useEffect(() => { reload() }, [reload])
 
   if (isSupabaseConfigured && !currentProject) {
-    return <Card title="專案成員"><Empty>請先登入並選擇專案。</Empty></Card>
+    // 早退分支也給 PageHeader＋space-y-5:未選專案時頁面標題不該憑空消失(與 Activity/RiskAudit 一致)
+    return (
+      <div className="space-y-5">
+        <PageHeader title="專案成員" tagline="Team" subtitle="邀請監造 / 機關 / 協力廠商加入本專案" />
+        <Card bodyClass="p-0"><Empty>請先登入並選擇專案。</Empty></Card>
+      </div>
+    )
   }
 
   // 只有專案建立者(admin)可管理成員
@@ -42,11 +49,11 @@ export default function Members() {
 
   const onAdd = async () => {
     if (!email.trim() || !inviteOrg) return
-    setBusy(true); setMsg('')
+    setBusy(true); setMsg(null)
     const { error } = await addMemberByEmail(email.trim(), 'member', inviteOrg)
     setBusy(false)
-    if (error) { setMsg(error.message || '加入失敗'); return }
-    setEmail(''); setMsg(`已加入(${ORG_LABEL[inviteOrg]})。`)
+    if (error) { setMsg({ ok: false, text: error.message || '加入失敗' }); return }
+    setEmail(''); setMsg({ ok: true, text: `已加入(${ORG_LABEL[inviteOrg]})。` })
     reload()
   }
   const onRemove = async (m) => {
@@ -68,10 +75,10 @@ export default function Members() {
       requireText: project.project_name,
     })
     if (!ok) return
-    setBusy(true); setFormalMsg('')
+    setBusy(true); setFormalMsg(null)
     const { error } = await enableFormalMode()
     setBusy(false)
-    setFormalMsg(error ? (error.message || '開啟失敗') : '正式模式已開啟。')
+    setFormalMsg(error ? { ok: false, text: error.message || '開啟失敗' } : { ok: true, text: '正式模式已開啟。' })
   }
 
   return (
@@ -84,15 +91,15 @@ export default function Members() {
           {/* W4-3(D-009):邀請方宣告受邀方身分,伺服器與對方註冊身分比對,不符即擋 */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[220px]"><Field label="對方帳號 Email">
-              <input className={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="supervisor@example.com" type="email" />
+              <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="supervisor@example.com" type="email" />
             </Field></div>
             <div className="min-w-[140px]"><Field label="受邀方身分">
-              <select className={input} value={inviteOrg} onChange={(e) => setInviteOrg(e.target.value)}>
+              <Select value={inviteOrg} onChange={(e) => setInviteOrg(e.target.value)}>
                 <option value="">請選擇…</option>
                 <option value="contractor">施工廠商</option>
                 <option value="supervisor">監造單位</option>
                 <option value="owner">主辦機關</option>
-              </select>
+              </Select>
             </Field></div>
             {/* min-h 補到與 input/select 同高(py-2+text-sm+1px 框 = 38px):Button 沒有框,
                 差那 2px 會讓整列的底線看起來歪掉。手機的 max-md:min-h-11 仍然勝出(在 media query 內) */}
@@ -101,7 +108,10 @@ export default function Members() {
           {/* hint 拉出來自成一行:掛在 Email 欄的 Field 裡會把該欄整個頂高,
               另兩欄沒有 hint,items-end 下三者中線就錯開(W8-6 ISSUE-3) */}
           <p className="text-xs text-[var(--text-3)] mt-2">對方需先在本系統註冊；與你指定的身分不符時會被擋下,不會誤入專案。</p>
-          {msg && <p className={`text-sm mt-2 ${msg.includes('已加入') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{msg}</p>}
+          {/* 失敗走 ErrorBanner(會換行、帶 error 圖示),成功用 Badge——長錯誤訊息塞進 nowrap 的 Badge 會撐破 375px */}
+          {msg && (msg.ok
+            ? <p className="mt-2"><Badge color="green">{msg.text}</Badge></p>
+            : <ErrorBanner msg={msg.text} className="mt-2" />)}
           {demoMode && <p className="text-xs text-[var(--text-3)] mt-2">（demo 模式為展示用，實際邀請需登入真實專案。）</p>}
         </Card>
       )}
@@ -124,10 +134,11 @@ export default function Members() {
                 <li><b>開啟後不可自行關閉</b>(履約證據完整性)。</li>
               </ul>
               {/* W4-4:開啟前先看得到三方到齊狀態(對話框內會再確認一次) */}
+              {/* 狀態色收進 Badge,句子本身回歸中性內文色;整句包 Badge 會因 nowrap 在 375px 撐出橫捲 */}
               {missingOrgs !== null && (
                 missingOrgs.length
-                  ? <p className="text-sm text-[var(--amber-text)]">三方到齊檢查:尚缺 {missingOrgs.map((o) => ORG_LABEL[o]).join('、')}。</p>
-                  : <p className="text-sm text-[var(--green-text)]">三方到齊檢查:施工廠商、監造單位、主辦機關都已加入。</p>
+                  ? <p className="text-sm text-[var(--text-2)]"><Badge color="amber">三方到齊檢查</Badge>:尚缺 {missingOrgs.map((o) => ORG_LABEL[o]).join('、')}。</p>
+                  : <p className="text-sm text-[var(--text-2)]"><Badge color="green">三方到齊檢查</Badge>:施工廠商、監造單位、主辦機關都已加入。</p>
               )}
               {/* W8-3A(D-014):首頁初始化清單是準備指引,不是開啟正式模式的前置條件。
                   這裡照舊只做三方到齊提醒＋二次確認,不因清單未完成而 disabled。 */}
@@ -139,23 +150,21 @@ export default function Members() {
                 : <p className="text-xs text-[var(--text-3)]">僅專案建立者可開啟。</p>}
             </div>
           )}
-          {formalMsg && <p className={`text-sm mt-2 ${formalMsg.includes('已開啟') ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{formalMsg}</p>}
+          {formalMsg && (formalMsg.ok
+            ? <p className="mt-2"><Badge color="green">{formalMsg.text}</Badge></p>
+            : <ErrorBanner msg={formalMsg.text} className="mt-2" />)}
         </Card>
       )}
 
       <Card title="成員名單" aria-busy={members === null ? 'true' : undefined}>
         {loadError ? (
-          <Empty>
-            <div className="space-y-3">
-              <div>成員載入失敗:{loadError}</div>
-              <Button onClick={reload}>重試</Button>
-            </div>
-          </Empty>
+          // 載入失敗不是空狀態:走 ErrorBanner 才說得出「失敗」並給重試(README 狀態規格)
+          <ErrorBanner msg={`成員載入失敗:${loadError}`} onRetry={reload} />
         ) : members === null ? <SkeletonList rows={3} />
           : members.length === 0 ? <Empty>此專案尚無成員。</Empty> : (
-          <div className="space-y-2">
+          <div className="divide-y divide-[var(--border-2)]">
             {members.map((m) => (
-              <div key={m.user_id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2">
+              <div key={m.user_id} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-full bg-[var(--primary)] text-[var(--primary-fg)] flex items-center justify-center font-medium text-sm shrink-0">{m.full_name?.[0] || '?'}</div>
                   <div className="min-w-0">
@@ -169,7 +178,7 @@ export default function Members() {
                 <div className="flex items-center gap-2 shrink-0">
                   <Badge color={ORG_COLOR[m.org_type] || 'slate'}>{ORG_LABEL[m.org_type] || m.org_type}</Badge>
                   {isAdmin && m.user_id !== currentUser?.user_id && (
-                    <button onClick={() => onRemove(m)} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">移除</button>
+                    <Button size="sm" variant="ghost" onClick={() => onRemove(m)}>移除</Button>
                   )}
                 </div>
               </div>

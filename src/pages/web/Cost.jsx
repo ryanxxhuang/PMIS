@@ -1,14 +1,16 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { MSym } from '../../components/icons.jsx'
+import { Card, Stat, Empty, Badge, Button, Field, Input, Select, PageHeader, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { revisedContractTotal, approvedNetAmount } from '../../lib/changeOrders.js'
 
 const CATS = ['材料', '人工', '機具', '分包', '管理費', '其他']
-const CAT_COLOR = {
-  材料: 'var(--blue-text)', 人工: 'var(--green-text)', 機具: 'var(--amber-text)',
-  分包: 'var(--purple-text)', 管理費: 'var(--slate-text)', 其他: 'var(--text-3)',
+// 分類上色走 Badge 的 color key(五語意+purple),不再 inline style 綁原始色票
+const CAT_BADGE = {
+  材料: 'blue', 人工: 'green', 機具: 'amber',
+  分包: 'purple', 管理費: 'slate', 其他: 'slate',
 }
 const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
@@ -68,9 +70,7 @@ export default function Cost() {
 
   return (
     <div className="space-y-5">
-      <div className="min-w-0">
-        <PageHeader title="成本管理" tagline="預算 vs 實際・毛利" subtitle="合約收入（發包工程費）對照成本與分包，即時算出預估與實際毛利" />
-      </div>
+      <PageHeader title="成本管理" tagline="預算 vs 實際・毛利" subtitle="合約收入（發包工程費）對照成本與分包，即時算出預估與實際毛利" />
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
@@ -84,22 +84,23 @@ export default function Cost() {
       </div>
 
       {byCat.length > 0 && (
-        <Card title="分類成本">
-          <div className="overflow-x-auto -mx-4 -my-4">
+        <Card title="分類成本" bodyClass="p-0">
+          <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[520px]">
               <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
-                  <th className="text-left font-medium py-2 pl-5">分類</th>
-                  <th className="text-right font-medium px-2">項數</th>
-                  <th className="text-right font-medium px-2">預算</th>
-                  <th className="text-right font-medium px-2">實際</th>
-                  <th className="text-right font-medium px-2 pr-5">差異</th>
+                {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決) */}
+                <tr className="border-b border-[var(--border)]">
+                  <th className={`${THEAD_CLS} text-left py-2 pl-5`}>分類</th>
+                  <th className={`${THEAD_CLS} text-right px-2`}>項數</th>
+                  <th className={`${THEAD_CLS} text-right px-2`}>預算</th>
+                  <th className={`${THEAD_CLS} text-right px-2`}>實際</th>
+                  <th className={`${THEAD_CLS} text-right px-2 pr-5`}>差異</th>
                 </tr>
               </thead>
               <tbody>
                 {byCat.map((g) => (
-                  <tr key={g.cat} className="border-b border-[var(--border-2)]">
-                    <td className="py-2 pl-5"><span className="font-medium" style={{ color: CAT_COLOR[g.cat] }}>{g.cat}</span></td>
+                  <tr key={g.cat} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
+                    <td className="py-2 pl-5"><Badge color={CAT_BADGE[g.cat] || 'slate'}>{g.cat}</Badge></td>
                     <td className="px-2 text-right tabular-nums text-[var(--text-3)]">{g.n}</td>
                     <td className="px-2 text-right tabular-nums">{money(g.budget)}</td>
                     <td className="px-2 text-right tabular-nums">{money(g.actual)}</td>
@@ -113,86 +114,90 @@ export default function Cost() {
       )}
 
       <Card title="新增成本 / 分包項目">
+        {/* 表單控件一律 Field+Select/Input(FIELD_BASE):自寫 input class 退場;
+            定寬(金額)/伸縮(名稱)交給外層 div——Field 不收 className */}
         <form onSubmit={onAdd} className="flex flex-wrap items-end gap-3">
-          <label className="block">
-            <span className="block text-xs font-medium text-[var(--text-2)] mb-1">分類</span>
-            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]">
+          <Field label="分類">
+            <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
               {CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
-          <label className="block flex-1 min-w-[160px]">
-            <span className="block text-xs font-medium text-[var(--text-2)] mb-1">項目名稱</span>
-            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如：鋼筋分包、預拌混凝土"
-              className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-          </label>
-          <label className="block flex-1 min-w-[140px]">
-            <span className="block text-xs font-medium text-[var(--text-2)] mb-1">供應商 / 分包商</span>
-            <input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="選填"
-              className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-          </label>
-          <label className="block">
-            <span className="block text-xs font-medium text-[var(--text-2)] mb-1">預算金額</span>
-            <input type="number" min="0" step="any" value={form.budget_amount} onChange={(e) => setForm({ ...form, budget_amount: e.target.value })}
-              className="w-32 text-right border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm tabular-nums" />
-          </label>
-          <label className="block">
-            <span className="block text-xs font-medium text-[var(--text-2)] mb-1">實際金額</span>
-            <input type="number" min="0" step="any" value={form.actual_amount} onChange={(e) => setForm({ ...form, actual_amount: e.target.value })}
-              className="w-32 text-right border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm tabular-nums" />
-          </label>
-          <Button type="submit" disabled={busy || !form.title.trim()}>{busy ? '新增中…' : '＋ 新增'}</Button>
+            </Select>
+          </Field>
+          <div className="flex-1 min-w-[160px]">
+            <Field label="項目名稱">
+              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如：鋼筋分包、預拌混凝土" />
+            </Field>
+          </div>
+          <div className="flex-1 min-w-[140px]">
+            <Field label="供應商 / 分包商">
+              <Input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="選填" />
+            </Field>
+          </div>
+          <div className="w-32">
+            <Field label="預算金額">
+              <Input type="number" min="0" step="any" value={form.budget_amount} onChange={(e) => setForm({ ...form, budget_amount: e.target.value })}
+                className="text-right tabular-nums" />
+            </Field>
+          </div>
+          <div className="w-32">
+            <Field label="實際金額">
+              <Input type="number" min="0" step="any" value={form.actual_amount} onChange={(e) => setForm({ ...form, actual_amount: e.target.value })}
+                className="text-right tabular-nums" />
+            </Field>
+          </div>
+          <Button type="submit" disabled={busy || !form.title.trim()}>{busy ? '新增中…' : <><MSym name="add" size={15} />新增</>}</Button>
         </form>
       </Card>
 
-      <Card title={`成本明細（${costItems.length}）`} action={costItems.length > 0 && (
+      <Card title={`成本明細（${costItems.length}）`} bodyClass="p-0" action={costItems.length > 0 && (
         <button onClick={() => exportCsv(`成本明細_${stamp()}`, costItems, [
           { key: 'category', label: '分類' }, { key: 'title', label: '項目' }, { key: 'vendor', label: '供應商/分包商' },
           { key: 'budget_amount', label: '預算' }, { key: 'actual_amount', label: '實際' }, { key: 'status', label: '狀態' },
-        ])} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ 匯出 CSV</button>
+        ])} className="inline-flex items-center gap-1 text-sm font-medium text-[var(--blue-text)] hover:underline max-md:min-h-11"><MSym name="download" size={16} />匯出 CSV</button>
       )}>
         {costItems.length === 0 ? (
           <Empty>尚無成本項目。把分包發包、材料、人工等成本登進來，這裡會即時對照合約收入算毛利。</Empty>
         ) : (
-          <div className="overflow-x-auto -mx-4 -my-4">
+          <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[760px]">
               <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
-                  <th className="text-left font-medium py-2 pl-5">分類</th>
-                  <th className="text-left font-medium px-2">項目</th>
-                  <th className="text-left font-medium px-2">供應商/分包商</th>
-                  <th className="text-right font-medium px-2">預算</th>
-                  <th className="text-right font-medium px-2">實際</th>
-                  <th className="text-left font-medium px-2">狀態</th>
+                {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決) */}
+                <tr className="border-b border-[var(--border)]">
+                  <th className={`${THEAD_CLS} text-left py-2 pl-5`}>分類</th>
+                  <th className={`${THEAD_CLS} text-left px-2`}>項目</th>
+                  <th className={`${THEAD_CLS} text-left px-2`}>供應商/分包商</th>
+                  <th className={`${THEAD_CLS} text-right px-2`}>預算</th>
+                  <th className={`${THEAD_CLS} text-right px-2`}>實際</th>
+                  <th className={`${THEAD_CLS} text-left px-2`}>狀態</th>
                   <th className="px-2 pr-5"></th>
                 </tr>
               </thead>
               <tbody>
                 {costItems.map((c) => (
                   <tr key={c.id} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
-                    <td className="py-1.5 pl-5"><span className="font-medium whitespace-nowrap" style={{ color: CAT_COLOR[c.category] || 'var(--text-3)' }}>{c.category}</span></td>
+                    <td className="py-1.5 pl-5"><Badge color={CAT_BADGE[c.category] || 'slate'}>{c.category}</Badge></td>
                     <td className="px-2 min-w-[140px]">{c.title}</td>
                     <td className="px-2 text-[var(--text-2)]">{c.vendor || '—'}</td>
                     <td className="px-2 text-right">
                       <input type="number" min="0" step="any" defaultValue={c.budget_amount ?? ''}
                         onBlur={(e) => { const n = parseFloat(e.target.value); onUpdate(c.id, { budget_amount: isNaN(n) ? 0 : n }) }}
-                        className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                        className="w-28 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs tabular-nums" />
                     </td>
                     <td className="px-2 text-right">
                       <input type="number" min="0" step="any" defaultValue={c.actual_amount ?? ''}
                         onBlur={(e) => { const n = parseFloat(e.target.value); onUpdate(c.id, { actual_amount: isNaN(n) ? 0 : n }) }}
-                        className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums" />
+                        className="w-28 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs tabular-nums" />
                     </td>
                     <td className="px-2">
+                      {/* 狀態顯示走 Badge 五語意;切換仍是同一顆按鈕(不加新文案),tooltip 講明可點 */}
                       <button onClick={() => onUpdate(c.id, { status: c.status === '已結算' ? '進行中' : '已結算' })}
-                        className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${c.status === '已結算' ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'bg-[var(--slate-tint)] text-[var(--slate-text)]'}`}>
-                        {c.status}
+                        title="點擊切換 已結算/進行中" className="inline-flex items-center pressable max-md:min-h-11">
+                        <Badge color={c.status === '已結算' ? 'green' : 'slate'}>{c.status}</Badge>
                       </button>
                     </td>
                     <td className="px-2 pr-5 text-right">
                       <button onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) onDelete(c.id) }}
                         aria-label={`刪除 ${c.title}`}
-                        className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm">✕</button>
+                        className="p-2 -m-2 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--red-text)] max-md:min-h-11 max-md:min-w-11"><MSym name="close" size={16} /></button>
                     </td>
                   </tr>
                 ))}

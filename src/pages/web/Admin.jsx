@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, PageHeader, Badge, Select, Input, Stat, Empty, ErrorBanner, SortableTh, TablePager } from '../../components/ui.jsx'
+import { Card, PageHeader, Badge, Select, Input, Stat, Empty, ErrorBanner, SortableTh, TablePager, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
 import { useTableSort, usePagination } from '../../lib/useTable.js'
 import {
   TWD_PER_USD, toTwd, presetRange, customRange, pctOfTotal, overrideToRpcValue, overrideFromDb,
@@ -51,13 +51,18 @@ const PRESETS = [
   { id: 'custom', label: '自訂' },
 ]
 
-// 表頭 11px/500/text-2、內文 13px:對齊 Workspace 表格慣例(README 字級表)。
-// 色寫在 th 自身而非 thead tr——同一列的其他 class 是既有結構,只做字級/色微調。
-const TH = 'text-left font-medium text-[11px] text-[var(--text-2)] py-2 px-3 whitespace-nowrap'
-const THR = 'text-right font-medium text-[11px] text-[var(--text-2)] py-2 px-3 whitespace-nowrap'
+// 表頭字型層吃共用 THEAD_CLS(11px/500/text-2),對齊/內距本頁自決;內文 13px。
+// 顏色只在 th 這一處決定——thead tr 上不得再疊第二層字色,兩層會互相打架。
+const TH = `${THEAD_CLS} text-left py-2 px-3 whitespace-nowrap`
+const THR = `${THEAD_CLS} text-right py-2 px-3 whitespace-nowrap`
 const TD = 'py-2 px-3 text-[13px]'
 const TDR = 'py-2 px-3 text-[13px] text-right num whitespace-nowrap'
+// 資料列 hover 底色全站同一顆 token(不帶 alpha)
+const TR = 'border-b border-[var(--border-2)] last:border-0 hover:bg-[var(--surface-2)]'
 const EMPTY_MSG = '這段期間還沒有 AI 使用紀錄。'
+
+// 載入中走骨架而不是 Empty:Empty 的 inbox 圖示等於先說「沒資料」
+const LoadingCard = () => <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
 
 export default function Admin() {
   const {
@@ -136,10 +141,12 @@ export default function Admin() {
   // 就算兩層都被繞過,DB 端 RPC 仍會 raise,本頁只會是一片載入錯誤。
   if (!isPlatformAdmin) {
     return (
-      <div className="text-center py-20 space-y-2">
-        <MSym name="gpp_maybe" size={28} className="mx-auto text-[var(--text-3)]" />
-        <div className="text-[var(--text)] font-medium">需要平台管理員權限</div>
-        <p className="text-sm text-[var(--text-3)]">此後台僅開放產品營運者;所有資料存取由伺服器端逐一驗證。</p>
+      <div className="space-y-5">
+        <Card>
+          <Empty icon="gpp_maybe" title="需要平台管理員權限">
+            此後台僅開放產品營運者;所有資料存取由伺服器端逐一驗證。
+          </Empty>
+        </Card>
       </div>
     )
   }
@@ -168,16 +175,11 @@ export default function Admin() {
       {/* 期間選擇:用量分頁共用;開關/方案分頁與期間無關,不顯示避免誤導 */}
       {usageTab && (
         <div className="flex flex-wrap items-center gap-2">
-          {/* M3 分段按鈕:選取態沿用 chips 的淺藍底深藍字,與上方分頁同一組色,
-              使用者一眼看得出「這兩排都是切換、不是動作」。 */}
-          <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+          {/* 期間切換與上方分頁說同一種切換語言:同一組 chips 常數,不再是外框滑塊式分段控件 */}
+          <div className="flex items-center gap-2">
             {PRESETS.map((p) => (
-              <button key={p.id} onClick={() => setPreset(p.id)}
-                className={`h-8 max-md:min-h-11 px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors ${
-                  preset === p.id
-                    ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
-                    : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
-                }`}>
+              <button key={p.id} onClick={() => setPreset(p.id)} aria-pressed={preset === p.id}
+                className={`${CHIP_BASE} ${preset === p.id ? CHIP_ON : CHIP_OFF}`}>
                 {p.label}
               </button>
             ))}
@@ -216,9 +218,7 @@ export default function Admin() {
 // ── 分頁一:用量總覽 ─────────────────────────────────────────────────────────
 function OverviewTab({ overview, daily, loading }) {
   const empty = !overview || Number(overview.total_calls) === 0
-  if (empty) {
-    return <Card><Empty>{loading ? '載入中…' : EMPTY_MSG}</Empty></Card>
-  }
+  if (empty) return loading ? <LoadingCard /> : <Card><Empty>{EMPTY_MSG}</Empty></Card>
   const o = overview
   return (
     <div className="space-y-5">
@@ -238,27 +238,30 @@ function OverviewTab({ overview, daily, loading }) {
             ['快取讀取 cache read', o.cache_read_tokens],
             ['快取寫入 cache write', o.cache_write_tokens],
           ].map(([label, v]) => (
+            /* 標籤字級/色對齊 Stat(11px/text-2、無字距):同一頁不要有兩套數字標籤 */
             <div key={label} className="min-w-0">
-              <div className="text-[11px] text-[var(--text-3)] tracking-[0.06em]">{label}</div>
-              <div className="num text-lg font-semibold text-[var(--text)] mt-0.5">{fmtInt(v)}</div>
+              <div className="text-[11px] text-[var(--text-2)]">{label}</div>
+              <div className="num text-lg font-normal text-[var(--text)] mt-0.5">{fmtInt(v)}</div>
             </div>
           ))}
         </div>
       </Card>
       <div className="grid lg:grid-cols-2 gap-5">
         <Card title="每日呼叫數">
-          <DailyBars rows={daily} getV={(r) => Number(r.calls) || 0} fmt={fmtInt} color="var(--blue)" />
+          <DailyBars rows={daily} getV={(r) => Number(r.calls) || 0} fmt={fmtInt} barClass="bg-[var(--blue)]" />
         </Card>
         <Card title="每日成本(USD)">
-          <DailyBars rows={daily} getV={(r) => Number(r.cost_usd) || 0} fmt={fmtUsd} color="var(--accent)" />
+          <DailyBars rows={daily} getV={(r) => Number(r.cost_usd) || 0} fmt={fmtUsd} barClass="bg-[var(--accent)]" />
         </Card>
       </div>
     </div>
   )
 }
 
-// 純 CSS 長條圖(不引入圖表套件):flex 尾端對齊,高度=佔最大值百分比,title 提示各日數值
-function DailyBars({ rows, getV, fmt, color }) {
+// 純 CSS 長條圖(不引入圖表套件):flex 尾端對齊,高度=佔最大值百分比,title 提示各日數值。
+// 顏色走 class(呼叫端傳 barClass),只有高度這種逐列算出來的值才留在 inline style;
+// 也不再壓 opacity——半透明長條疊在卡底上會讓兩張圖看起來不同色。
+function DailyBars({ rows, getV, fmt, barClass }) {
   const max = Math.max(0, ...rows.map(getV))
   if (!rows.length || max <= 0) return <Empty>{EMPTY_MSG}</Empty>
   return (
@@ -268,8 +271,8 @@ function DailyBars({ rows, getV, fmt, color }) {
           const v = getV(r)
           return (
             <div key={r.day} title={`${r.day}:${fmt(v)}`}
-              className="flex-1 min-w-[3px] rounded-t-sm"
-              style={{ height: `${v > 0 ? Math.max((v / max) * 100, 2) : 0}%`, background: color, opacity: 0.85 }} />
+              className={`flex-1 min-w-[3px] rounded-t-sm ${barClass}`}
+              style={{ height: `${v > 0 ? Math.max((v / max) * 100, 2) : 0}%` }} />
           )
         })}
       </div>
@@ -289,13 +292,13 @@ function ByFeatureTab({ rows, loading }) {
   const { sort, toggleSort, sorted } = useTableSort(rows)
   const { pageRows, pager } = usePagination(sorted)
   const totalCost = rows.reduce((s, r) => s + (Number(r.cost_usd) || 0), 0)
-  if (!rows.length) return <Card><Empty>{loading ? '載入中…' : EMPTY_MSG}</Empty></Card>
+  if (!rows.length) return loading ? <LoadingCard /> : <Card><Empty>{EMPTY_MSG}</Empty></Card>
   return (
     <Card bodyClass="p-0">
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[880px]">
           <thead>
-            <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
+            <tr className="border-b border-[var(--border)]">
               <th className={TH}>功能</th>
               <th className={TH}>分類</th>
               <SortableTh className={THR} align="right" numeric label="呼叫" field="calls" sort={sort} onSort={toggleSort} />
@@ -314,7 +317,7 @@ function ByFeatureTab({ rows, loading }) {
               const cat = featureByKey[r.feature_key]?.category
               const pct = pctOfTotal(r.cost_usd, totalCost)
               return (
-                <tr key={r.feature_key} className="border-b border-[var(--border-2)] last:border-0">
+                <tr key={r.feature_key} className={TR}>
                   <td className={TD}>
                     <div className="font-medium text-[var(--text)]">{r.label}</div>
                     <div className="text-[11px] text-[var(--text-3)] num">{r.feature_key}</div>
@@ -351,13 +354,13 @@ function ByFeatureTab({ rows, loading }) {
 function ByProjectTab({ rows, loading }) {
   const { sort, toggleSort, sorted } = useTableSort(rows)
   const { pageRows, pager } = usePagination(sorted)
-  if (!rows.length) return <Card><Empty>{loading ? '載入中…' : EMPTY_MSG}</Empty></Card>
+  if (!rows.length) return loading ? <LoadingCard /> : <Card><Empty>{EMPTY_MSG}</Empty></Card>
   return (
     <Card bodyClass="p-0">
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[640px]">
           <thead>
-            <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
+            <tr className="border-b border-[var(--border)]">
               <th className={TH}>專案</th>
               <th className={TH}>AI 方案</th>
               <SortableTh className={THR} align="right" numeric label="呼叫" field="calls" sort={sort} onSort={toggleSort} />
@@ -368,7 +371,7 @@ function ByProjectTab({ rows, loading }) {
           </thead>
           <tbody>
             {pageRows.map((r) => (
-              <tr key={r.project_id || 'none'} className="border-b border-[var(--border-2)] last:border-0">
+              <tr key={r.project_id || 'none'} className={TR}>
                 <td className={`${TD} font-medium text-[var(--text)]`}>
                   {r.project_name || <span className="text-[var(--text-3)] font-normal">(無專案脈絡或已刪除)</span>}
                 </td>
@@ -393,13 +396,13 @@ function ByProjectTab({ rows, loading }) {
 function ByUserTab({ rows, loading }) {
   const { sort, toggleSort, sorted } = useTableSort(rows)
   const { pageRows, pager } = usePagination(sorted)
-  if (!rows.length) return <Card><Empty>{loading ? '載入中…' : EMPTY_MSG}</Empty></Card>
+  if (!rows.length) return loading ? <LoadingCard /> : <Card><Empty>{EMPTY_MSG}</Empty></Card>
   return (
     <Card bodyClass="p-0">
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[560px]">
           <thead>
-            <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
+            <tr className="border-b border-[var(--border)]">
               <th className={TH}>使用者</th>
               <th className={TH}>公司</th>
               <th className={TH}>身分</th>
@@ -409,7 +412,7 @@ function ByUserTab({ rows, loading }) {
           </thead>
           <tbody>
             {pageRows.map((r) => (
-              <tr key={r.user_id || 'none'} className="border-b border-[var(--border-2)] last:border-0">
+              <tr key={r.user_id || 'none'} className={TR}>
                 <td className={`${TD} font-medium text-[var(--text)]`}>
                   {r.full_name || <span className="text-[var(--text-3)] font-normal">(帳號已刪除)</span>}
                 </td>
@@ -438,8 +441,11 @@ function Toggle({ checked, disabled, onChange, label }) {
       className={`relative shrink-0 w-10 h-[22px] rounded-full transition-colors disabled:opacity-40 disabled:cursor-wait
         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)]
         ${checked ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`}>
-      {/* M3 尺寸:軌 40×22、滑點 18 且上下左右各留 2 → 開啟位移 40−2−18−2 = 18px */}
-      <span className={`absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-[18px]' : ''}`} />
+      {/* M3 尺寸:軌 40×22、滑點 18 且上下左右各留 2 → 開啟位移 40−2−18−2 = 18px。
+          滑點顏色走 token:開啟=--primary-fg(深色模式是深藍字色,配淺藍軌才看得見),
+          關閉=--text-3(灰軌上的深/淺灰滑點,亮暗兩邊都有對比);寫死 bg-white 在深色模式會恆亮。 */}
+      <span className={`absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full [box-shadow:var(--shadow-card)] transition-transform
+        ${checked ? 'translate-x-[18px] bg-[var(--primary-fg)]' : 'bg-[var(--text-3)]'}`} />
     </button>
   )
 }
@@ -479,7 +485,7 @@ function FeaturesTab({ features, setFeatures, loading, reload, setFeatureEnabled
     setBusyKey(null)
   }
 
-  if (!features.length) return <Card><Empty>{loading ? '載入中…' : '尚未載入功能註冊表。'}</Empty></Card>
+  if (!features.length) return loading ? <LoadingCard /> : <Card><Empty>尚未載入功能註冊表。</Empty></Card>
 
   return (
     <div className="space-y-5">
@@ -575,7 +581,7 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
     setBusyFeature(null)
   }
 
-  if (!projects.length) return <Card><Empty>{loading ? '載入中…' : '目前沒有任何專案。'}</Empty></Card>
+  if (!projects.length) return loading ? <LoadingCard /> : <Card><Empty>目前沒有任何專案。</Empty></Card>
 
   const overrideMap = new Map(overrides.map((o) => [o.feature_key, o.enabled]))
 
@@ -586,7 +592,7 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
+              <tr className="border-b border-[var(--border)]">
                 <th className={TH}>專案</th>
                 <th className={TH}>代號</th>
                 <th className={TH}>AI 方案</th>
@@ -601,9 +607,9 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
                 const expanded = expandedId === p.project_id
                 return (
                   <FragmentRow key={p.project_id}>
-                    <tr className={`border-b border-[var(--border-2)] last:border-0 ${expanded ? 'bg-[var(--surface-2)]/40' : ''}`}>
+                    <tr className={`${TR} ${expanded ? 'bg-[var(--surface-2)]' : ''}`}>
                       <td className={`${TD} font-medium text-[var(--text)]`}>
-                        <button onClick={() => toggleExpand(p)} className="flex items-center gap-1.5 text-left hover:text-[var(--blue-text)]"
+                        <button onClick={() => toggleExpand(p)} className="flex items-center gap-1.5 max-md:min-h-11 text-left hover:text-[var(--blue-text)]"
                           aria-expanded={expanded}>
                           {expanded ? <MSym name="expand_more" size={14} /> : <MSym name="chevron_right" size={14} />}
                           {p.name}
@@ -627,7 +633,7 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
                       <td className={TD} />
                     </tr>
                     {expanded && (
-                      <tr className="border-b border-[var(--border-2)] bg-[var(--surface-2)]/40">
+                      <tr className="border-b border-[var(--border-2)] bg-[var(--surface-2)]">
                         <td colSpan={7} className="px-5 pb-4 pt-1">
                           <div className="text-xs text-[var(--text-3)] mb-2">
                             逐功能覆寫:「跟隨方案」=依上方方案與功能門檻判定;「強制開啟/關閉」=無視門檻(但翻不過平台總開關)。
@@ -643,11 +649,12 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
                                     <span className="text-sm text-[var(--text)] truncate flex-1">{f.label}</span>
                                     {!f.enabled && <Badge color="red">平台已停用</Badge>}
                                     <Badge color={PLAN_COLOR[f.min_plan]}>{PLAN_LABEL[f.min_plan]}+</Badge>
-                                    {/* max-sm:!min-h-0:退掉 FIELD_BASE 的手機 44px——專案×功能矩陣是刻意壓縮的
-                                        密集格,拉高會撐爆表格(W8-0 不重寫表格的已知例外;平台後台手機使用頻率低) */}
+                                    {/* max-md:!min-h-0:退掉 FIELD_BASE 的手機 44px——專案×功能矩陣是刻意壓縮的
+                                        密集格,拉高會撐爆表格(W8-0 不重寫表格的已知例外;平台後台手機使用頻率低)。
+                                        斷點必須跟手機層一致(max-md),寫成 max-sm 會讓 640-767 拿到手機版面+桌機尺寸。 */}
                                     <Select value={state} disabled={busyFeature === f.key}
                                       onChange={(e) => changeOverride(p.project_id, f, e.target.value)}
-                                      className={`!w-auto !py-1 text-xs max-sm:!min-h-0 ${state !== 'follow' ? 'font-medium' : ''}`}
+                                      className={`!w-auto !py-1 text-xs max-md:!min-h-0 ${state !== 'follow' ? 'font-medium' : ''}`}
                                       aria-label={`${p.name} 的 ${f.label} 覆寫`}>
                                       <option value="follow">跟隨方案</option>
                                       <option value="on">強制開啟</option>

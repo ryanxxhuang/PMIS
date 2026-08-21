@@ -16,6 +16,10 @@ import { MSym } from '../components/icons.jsx'
 const CONTACT = import.meta.env.VITE_SECURITY_CONTACT || 'security@gov-agent.ai'
 const UPDATED = '2026-08-11'
 
+// 版面上的刻意例外(公開長文頁,不是工作台頁面):
+//   ① 不套 Card/Surface——這是一份要給機關讀完的說明文件,白卡切段會讓長文更難讀
+//   ② 節標題 h2 用 16px/500,夾在 h1(24px/400)與內文(14px)之間形成三階
+//   ③ 頁面根節奏 space-y-10(站內頁面是 space-y-5):段與段要拉開才像文件而非儀表板
 function Section({ icon, title, children }) {
   return (
     <section className="space-y-3">
@@ -37,7 +41,7 @@ export default function Security() {
         <header className="space-y-3">
           {/* 字標與 Layout／Login 同一組 lockup:--accent 已改義為 warn(棕),
               公開頁若還沿用舊字標,機關第一眼看到的品牌就跟站內對不起來 */}
-          <Link to="/login" className="inline-flex items-center gap-1.5" aria-label="PMIS 公共工程登入頁">
+          <Link to="/login" className="inline-flex items-center gap-1.5 max-md:min-h-11" aria-label="PMIS 公共工程登入頁">
             <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-6 h-6 dark:hidden" />
             <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-6 h-6 hidden dark:block" />
             <span className="text-xl font-medium tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue)]">.ai</span></span>
@@ -46,7 +50,8 @@ export default function Security() {
             <MSym name="verified_user" size={16} />
             資通安全
           </div>
-          <h1 className="text-2xl font-medium tracking-tight text-[var(--text)]">漏洞回報與應變機制</h1>
+          {/* 字重/字距對齊 PageHeader 的 h1:公開頁與站內第一眼的標題語言要是同一種 */}
+          <h1 className="text-2xl font-normal tracking-[-0.005em] text-[var(--text)]">漏洞回報與應變機制</h1>
           <p className="text-sm leading-relaxed text-[var(--text-2)]">
             我們把資安當成產品的一部分。若你發現本服務的安全性問題，請依本頁的方式通知我們；
             我們會依下列時限確認、修補並回覆你。本頁同時作為
@@ -128,7 +133,7 @@ export default function Security() {
 
         <footer className="border-t border-[var(--border)] pt-6 text-xs text-[var(--text-3)]">
           <div>本頁最後更新：{UPDATED}</div>
-          <Link to="/login" className="mt-2 inline-block font-medium text-[var(--blue-text)] hover:underline">← 回到登入頁</Link>
+          <Link to="/login" className="mt-2 inline-flex items-center gap-1 min-h-11 font-medium text-[var(--blue-text)] hover:underline"><MSym name="arrow_back" size={16} />回到登入頁</Link>
         </footer>
 
       </main>

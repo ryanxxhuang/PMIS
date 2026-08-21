@@ -11,6 +11,7 @@ import { useTodayTasks } from '../../lib/useTodayTasks.js'
 import { KIND_LABEL } from '../../lib/agentRole.js'
 import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
 import InsightsPanel from '../../components/InsightsPanel.jsx'
+import TaskRow from '../../components/TaskRow.jsx'
 import { appSnackbar } from '../../components/snackbar.jsx'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
@@ -104,7 +105,7 @@ function SetupChecklist({ imported }) {
   return (
     <Card title="專案初始化" action={<span className="num text-xs text-[var(--text-3)]">已完成 {doneCount}/4</span>}>
       <Link to={next.to}
-        className="flex items-center gap-2 rounded-lg bg-[var(--blue-tint)] text-[var(--blue-text)] px-3 py-2 mb-3 text-sm font-medium hover:brightness-95 transition-[filter]">
+        className="flex items-center gap-2 rounded-lg bg-[var(--blue-tint)] text-[var(--blue-text)] px-3 py-2 mb-3 text-sm font-medium hover:bg-[var(--g-search-h)] transition-colors">
         <span className="min-w-0 flex-1">下一步：{next.label}</span>
         <MSym name="chevron_right" size={15} className="shrink-0" />
       </Link>
@@ -220,10 +221,9 @@ export default function Dashboard() {
           { k: '日期', v: todayISO },
         ]}
         action={imported && (
-          <button onClick={exportAll} title="把本專案所有資料打包下載(JSON)"
-            className="inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1.5 border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable">
-            <MSym name="download" size={13} />匯出整案資料
-          </button>
+          <Button variant="outline" size="sm" onClick={exportAll} title="把本專案所有資料打包下載(JSON)">
+            <MSym name="download" size={16} />匯出整案資料
+          </Button>
         )}
       />
 
@@ -236,7 +236,7 @@ export default function Dashboard() {
         isPersistedProject ? <SetupChecklist imported={false} /> : (
           <Card>
             <Empty>
-              此專案尚未匯入標單。請到「<Link to="/contract" className="text-[var(--blue)]">專案文件</Link>」把標單 XML 與契約等文件一次上傳，
+              此專案尚未匯入標單。請到「<Link to="/contract" className="text-[var(--blue-text)] hover:underline">專案文件</Link>」把標單 XML 與契約等文件一次上傳，
               之後估驗、進度、施工日誌、品質查驗才會有資料。
             </Empty>
           </Card>
@@ -294,7 +294,7 @@ export default function Dashboard() {
 
               {/* 次要:最近紀錄。已完成的日誌不是待辦,也不併進「今天已完成」
                   (log_date 是人可回填的業務日期,不等於今天完成了什麼) */}
-              <Card title="最近施工日誌" bodyClass={siteLogs.length ? 'p-0' : 'p-6'}
+              <Card title="最近施工日誌" bodyClass="p-0"
                 action={<Link to="/site-log" className="text-xs font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">施工日誌 <MSym name="chevron_right" size={13} /></Link>}>
                 {siteLogs.length === 0 ? <Empty>尚無施工日誌</Empty> : (
                   <ul className="divide-y divide-[var(--border-2)]">
@@ -345,7 +345,7 @@ function AgentDoneCard() {
   // 依 kind 分組成「種類 × N 件」;未知 kind 原樣顯示(對齊收件匣,不擋新種類)
   const byKind = [...acceptedToday.reduce((m, a) => m.set(a.kind, (m.get(a.kind) || 0) + 1), new Map())]
   return (
-    <Card title="AI 今日已代辦" bodyClass="p-4">
+    <Card title="AI 今日已代辦" bodyClass="p-5">
       {byKind.length > 0 && (
         <ul className="space-y-1.5">
           {byKind.map(([kind, n]) => (
@@ -365,7 +365,7 @@ function AgentDoneCard() {
           </span>
           {/* 手機觸控 ≥44px:連結自己撐高,不靠父層 padding */}
           <Link to="/agent" className="max-md:min-h-11 inline-flex items-center shrink-0 text-xs font-medium text-[var(--blue-text)] hover:underline">
-            到收件匣覆核 →
+            到收件匣覆核 <MSym name="chevron_right" size={13} />
           </Link>
         </div>
       )}
@@ -374,51 +374,16 @@ function AgentDoneCard() {
 }
 
 // 每種待辦的圖示 + 色票(icon 方塊底色/字色)——一眼分辨類型
-const TAG_META = {
-  估驗: { icon: 'payments', c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
-  送審: { icon: 'task', c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
-  疑義: { icon: 'feedback', c: 'var(--purple-text)', bg: 'var(--purple-tint)' },
-  查驗: { icon: 'verified_user', c: 'var(--amber-text)', bg: 'var(--amber-tint)' },
-  缺失: { icon: 'warning', c: 'var(--red-text)', bg: 'var(--red-tint)' },
-  工安缺失: { icon: 'warning', c: 'var(--red-text)', bg: 'var(--red-tint)' },
-  觀察: { icon: 'visibility', c: 'var(--slate-text)', bg: 'var(--slate-tint)' },
-  變更: { icon: 'build', c: 'var(--green-text)', bg: 'var(--green-tint)' },
-  契約: { icon: 'balance', c: 'var(--purple-text)', bg: 'var(--purple-tint)' },
-  試驗: { icon: 'science', c: 'var(--accent-text)', bg: 'var(--accent-tint)' },
-  驗收: { icon: 'verified', c: 'var(--green-text)', bg: 'var(--green-tint)' },
-  停留點: { icon: 'report', c: 'var(--red-text)', bg: 'var(--red-tint)' },
-  日誌: { icon: 'edit_note', c: 'var(--blue-text)', bg: 'var(--blue-tint)' },
-}
-
 // 首頁每段最多 5 筆;完整清單在提醒中心,首頁不再無限長。
 const SECTION_CAP = 5
-
-// 逾期列的期限改紅色 Badge:dueText 的句型固定(todayTasks.js),把「逾期 N 天（到期 date）」
-// 原地換成色票、前後文字一字不動——e2e 以這段完整字串斷言逾期,不能增刪字或換順序。
-// 句型比對不到(理論上不會)就整句退回原本紅字,寧可不美也不丟資訊。
-const OVERDUE_RE = /逾期 \d+ 天（到期 \d{4}-\d{2}-\d{2}）/
-function TaskMeta({ meta, overdue }) {
-  const m = overdue ? String(meta || '').match(OVERDUE_RE) : null
-  if (!m) return <span className={overdue ? 'text-[var(--red-text)] font-medium' : ''}>{meta}</span>
-  return (
-    <>
-      {meta.slice(0, m.index)}
-      <Badge color="red" className="align-middle">{m[0]}</Badge>
-      {meta.slice(m.index + m[0].length)}
-    </>
-  )
-}
 
 function TaskSection({ title, items, empty, hint = null, seeAll = false, done = false }) {
   const shown = items.slice(0, SECTION_CAP)
   const countPill = (
-    <span className={`num text-xs font-semibold px-2 py-0.5 rounded-full ${
-      done ? 'bg-[var(--green-tint)] text-[var(--green-text)]'
-        : items.length ? 'bg-[var(--accent-tint)] text-[var(--accent-text)]' : 'bg-[var(--green-tint)] text-[var(--green-text)]'
-    }`}>{items.length}</span>
+    <Badge color={done || !items.length ? 'green' : 'amber'} className="num">{items.length}</Badge>
   )
   return (
-    <Card title={title} action={countPill} bodyClass={items.length ? 'p-0' : 'p-6'}>
+    <Card title={title} action={countPill} bodyClass="p-0">
       {items.length === 0 ? (
         <Empty>
           {empty}
@@ -427,25 +392,7 @@ function TaskSection({ title, items, empty, hint = null, seeAll = false, done = 
         </Empty>
       ) : (
         <ul className="divide-y divide-[var(--border-2)]">
-          {shown.map((x) => {
-            const m = TAG_META[x.tag] || { icon: 'visibility', c: 'var(--text-3)', bg: 'var(--surface-2)' }
-            return (
-              <li key={x.key}>
-                <Link to={x.to} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">
-                  <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0" style={{ background: m.bg, color: m.c }}>
-                    <MSym name={m.icon} size={16} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm text-[var(--text)]">{x.title}</span>
-                    <span className="block text-[11px] text-[var(--text-3)] leading-snug">
-                      <TaskMeta meta={x.meta} overdue={!!x.overdueDays} />
-                    </span>
-                  </span>
-                  <MSym name="chevron_right" size={16} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-1" />
-                </Link>
-              </li>
-            )
-          })}
+          {shown.map((x) => <li key={x.key}><TaskRow task={x} /></li>)}
           {/* 溢位一定要有出口:提醒中心吃同一份聚合,點過去看得到剩下那幾件 */}
           {items.length > shown.length && seeAll && (
             <li className="px-4 py-2.5">

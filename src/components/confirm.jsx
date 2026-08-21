@@ -13,7 +13,7 @@
 // <ConfirmHost /> 掛在 App 頂層一次；appConfirm / appPrompt 透過模組層 setter 連到 host。
 import { useEffect, useRef, useState } from 'react'
 import { MSym } from './icons.jsx'
-import { Button, Input } from './ui.jsx'
+import { Button, Input, Textarea } from './ui.jsx'
 
 let hostSetter = null
 
@@ -113,9 +113,10 @@ export function ConfirmHost() {
             {isPrompt && (
               <div className="mt-3">
                 {label && <div className="text-xs text-[var(--text-2)] mb-1">{label}</div>}
-                <textarea autoFocus rows={3} value={text} placeholder={placeholder}
-                  onChange={(e) => setText(e.target.value)}
-                  className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20 resize-y" />
+                {/* 同一個對話框裡的兩個欄位都吃 ui.jsx 正本(下方 requireText 用 Input),
+                    自寫 class 會漏掉 placeholder 色、disabled 與手機 44px */}
+                <Textarea autoFocus rows={3} value={text} placeholder={placeholder}
+                  onChange={(e) => setText(e.target.value)} />
                 {required && text.trim() === '' && <div className="text-[11px] text-[var(--text-3)] mt-1">此欄必填。</div>}
               </div>
             )}

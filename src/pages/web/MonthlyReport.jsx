@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, Button, PageHeader, Surface } from '../../components/ui.jsx'
+import { Card, Empty, Button, PageHeader, Surface, Input, Textarea, Field, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { rainDayCount } from '../../lib/weatherMetrics.js'
@@ -97,11 +97,11 @@ export default function MonthlyReport() {
       <div className="print:hidden">
         <PageHeader title="施工月報" tagline="自動彙編" subtitle="選月份 → 自動彙整進度 / 估驗 / 品質 / 工安 / 變更 → 列印或存 PDF"
           action={
-            <div className="flex items-end gap-3">
+            <div className="flex items-end gap-3 flex-wrap">
               <label className="block">
                 <span className="block text-xs font-medium text-[var(--text-2)] mb-1">報告月份</span>
-                <input type="month" value={month} aria-label="月報月份" onChange={(e) => setMonth(e.target.value)}
-                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
+                {/* 欄位吃共用 Input(FIELD_BASE):與監造報表的同一顆月份選擇器同高、同 focus、同手機 44px */}
+                <Input type="month" value={month} aria-label="月報月份" onChange={(e) => setMonth(e.target.value)} className="!w-auto" />
               </label>
               <Button onClick={() => window.print()}><MSym name="print" size={15} />列印 / 存 PDF</Button>
             </div>
@@ -164,26 +164,27 @@ export default function MonthlyReport() {
               <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  <tr className="border-y border-[var(--border)] text-xs text-[var(--text-2)]">
-                    <th className="text-left py-1.5 pr-2 font-medium whitespace-nowrap">項次</th>
-                    <th className="text-left py-1.5 pr-2 font-medium">工項名稱</th>
-                    <th className="text-center py-1.5 px-2 font-medium whitespace-nowrap">單位</th>
-                    <th className="text-right py-1.5 px-2 font-medium whitespace-nowrap">契約數量</th>
-                    <th className="text-right py-1.5 px-2 font-medium whitespace-nowrap">本月完成</th>
-                    <th className="text-right py-1.5 px-2 font-medium whitespace-nowrap">累計完成</th>
-                    <th className="text-right py-1.5 pl-2 font-medium whitespace-nowrap">累計完成率</th>
+                  {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決);列印表的表頭與站內表格同一種語言 */}
+                  <tr className="border-y border-[var(--border)]">
+                    <th className={`${THEAD_CLS} text-left py-1.5 pr-2 whitespace-nowrap`}>項次</th>
+                    <th className={`${THEAD_CLS} text-left py-1.5 pr-2`}>工項名稱</th>
+                    <th className={`${THEAD_CLS} text-center py-1.5 px-2 whitespace-nowrap`}>單位</th>
+                    <th className={`${THEAD_CLS} text-right py-1.5 px-2 whitespace-nowrap`}>契約數量</th>
+                    <th className={`${THEAD_CLS} text-right py-1.5 px-2 whitespace-nowrap`}>本月完成</th>
+                    <th className={`${THEAD_CLS} text-right py-1.5 px-2 whitespace-nowrap`}>累計完成</th>
+                    <th className={`${THEAD_CLS} text-right py-1.5 pl-2 whitespace-nowrap`}>累計完成率</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.itemRows.slice(0, 15).map((r) => (
-                    <tr key={r.key} className="border-b border-[var(--border)]">
-                      <td className="py-1.5 pr-2 text-[var(--text-3)] text-xs tabular-nums whitespace-nowrap">{r.item_no}</td>
+                    <tr key={r.key} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
+                      <td className="py-1.5 pr-2 text-[var(--text-3)] text-xs num whitespace-nowrap">{r.item_no}</td>
                       <td className="py-1.5 pr-2">{r.description}</td>
                       <td className="py-1.5 px-2 text-center text-[var(--text-3)]">{r.unit}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums">{qtyFmt(r.contractQty)}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums font-medium">{qtyFmt(r.qty)}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums">{qtyFmt(r.cum)}</td>
-                      <td className="py-1.5 pl-2 text-right tabular-nums">{r.contractQty ? `${Math.min(100, (r.cum / r.contractQty) * 100).toFixed(1)}%` : '—'}</td>
+                      <td className="py-1.5 px-2 text-right num whitespace-nowrap">{qtyFmt(r.contractQty)}</td>
+                      <td className="py-1.5 px-2 text-right num whitespace-nowrap font-medium">{qtyFmt(r.qty)}</td>
+                      <td className="py-1.5 px-2 text-right num whitespace-nowrap">{qtyFmt(r.cum)}</td>
+                      <td className="py-1.5 pl-2 text-right num whitespace-nowrap">{r.contractQty ? `${Math.min(100, (r.cum / r.contractQty) * 100).toFixed(1)}%` : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -207,7 +208,7 @@ export default function MonthlyReport() {
           ) : (
             <ul className="text-sm space-y-1">
               {data.logs.filter((l) => l.work_summary).map((l) => (
-                <li key={l.id} className="flex gap-2"><span className="text-[var(--text-3)] tabular-nums shrink-0">{l.log_date}</span><span>{l.work_summary}</span></li>
+                <li key={l.id} className="flex gap-2"><span className="text-[var(--text-3)] num shrink-0">{l.log_date}</span><span>{l.work_summary}</span></li>
               ))}
               {data.logs.every((l) => !l.work_summary) && <li className="text-[var(--text-3)]">本月共 {data.logs.length} 筆日誌（無文字摘要）。</li>}
             </ul>
@@ -246,15 +247,16 @@ export default function MonthlyReport() {
 
         {/* 檢討與下月計畫（可填，列印用）*/}
         <Section title="九、檢討與下月工作計畫">
-          <div className="print:hidden mb-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded px-2 py-1 inline-flex items-center gap-1">
-            ⚠ 此兩欄為<b>列印前暫填</b>，離開或重整不會保存；請於列印/存 PDF 前填妥。
+          {/* 提醒條與 ErrorBanner 同一種橫幅語言:tint 底、無描邊、圓角 lg、前置 MSym */}
+          <div className="print:hidden mb-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-lg px-3 py-2 inline-flex items-center gap-1.5">
+            <MSym name="warning" size={14} />此兩欄為<b>列印前暫填</b>，離開或重整不會保存；請於列印/存 PDF 前填妥。
           </div>
           {/* 批 B UX:月報草稿功能關閉時藏 AI 按鈕(demo 一律開;真正的閘門在伺服器端) */}
           {!aiEnabled('report.monthly') && (
             <div className="print:hidden mb-2 text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（施工月報草稿），請人工填寫。</div>
           )}
-          {aiEnabled('report.monthly') && <div className="print:hidden mb-2 flex items-center gap-2">
-            <button onClick={async () => {
+          {aiEnabled('report.monthly') && <div className="print:hidden mb-2 flex items-center gap-2 flex-wrap">
+            <Button variant="secondary" busy={aiBusy} onClick={async () => {
               setAiBusy(true); setAiErr('')
               // facts=程式算好的數據;AI 只改寫、不算數(P1-1)
               const payload = {
@@ -286,32 +288,31 @@ export default function MonthlyReport() {
                 return
               }
               setReview(result.review || ''); setNextPlan(result.next_plan || '')
-            }} disabled={aiBusy}
-              className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border border-[var(--border)] pressable ${aiBusy ? 'opacity-50' : 'hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
-              <MSym name="auto_awesome" size={15} />{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
-            </button>
+            }}>
+              {/* busy 時的旋轉圖示由 Button 提供,這裡就不再疊一顆 auto_awesome */}
+              {!aiBusy && <MSym name="auto_awesome" size={15} />}{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
+            </Button>
             <span className="text-[11px] text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
-            {aiErr && <span className="text-xs text-[var(--red-text)]">{aiErr}</span>}
           </div>}
+          {/* 失敗訊息走共用 ErrorBanner:紅字散裝 span 在長草稿錯誤訊息下會擠掉整列 */}
+          <ErrorBanner msg={aiErr} onClose={() => setAiErr('')} className="print:hidden mb-2" />
           <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <div className="text-sm font-medium mb-1">本月檢討</div>
-              <textarea value={review} onChange={(e) => setReview(e.target.value)} rows={4}
-                placeholder="（填寫本月遭遇問題與因應…）"
-                className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm print:border-none print:px-0" />
-            </div>
-            <div>
-              <div className="text-sm font-medium mb-1">下月工作計畫</div>
-              <textarea value={nextPlan} onChange={(e) => setNextPlan(e.target.value)} rows={4}
-                placeholder="（填寫下月預定施作項目…）"
-                className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm print:border-none print:px-0" />
-            </div>
+            {/* 欄位=Field+Textarea;print: 兩件(去框、去左右內距)是列印版面的合約,以 className 帶入 */}
+            <Field label="本月檢討">
+              <Textarea value={review} onChange={(e) => setReview(e.target.value)} rows={4}
+                placeholder="（填寫本月遭遇問題與因應…）" className="print:border-none print:px-0" />
+            </Field>
+            <Field label="下月工作計畫">
+              <Textarea value={nextPlan} onChange={(e) => setNextPlan(e.target.value)} rows={4}
+                placeholder="（填寫下月預定施作項目…）" className="print:border-none print:px-0" />
+            </Field>
           </div>
         </Section>
 
-        <div className="grid grid-cols-3 gap-6 pt-8 text-center text-sm">
+        {/* 簽章區間距與底線色與監造報表對齊(pt-6/mt-8、--border);--text-3 是文字色 token,不當邊框用 */}
+        <div className="grid grid-cols-3 gap-6 pt-6 text-center text-sm">
           {['承包廠商', '監造單位', '主辦機關'].map((r) => (
-            <div key={r}><div className="border-t border-[var(--text-3)] pt-1.5 mt-10">{r}</div></div>
+            <div key={r}><div className="border-t border-[var(--border)] pt-1.5 mt-8">{r}</div></div>
           ))}
         </div>
       </Surface>
@@ -323,22 +324,26 @@ export default function MonthlyReport() {
   )
 }
 
+// 章節標題=Workspace 卡頭風(15px/500),與監造報表的 Section 同一支長相。
+// 拿掉藍色裝飾條:章節本來就靠「一、二、三」編號分節,再加一條主色短標會讓每一節
+// 都像重點,反而讀不出輕重——兩張報表頁必須說同一種語言。
 function Section({ title, children }) {
   return (
     <section>
-      <h3 className="text-sm font-bold text-[var(--text)] border-l-4 border-[var(--blue)] pl-2 mb-3">{title}</h3>
+      <h3 className="text-[15px] font-medium text-[var(--text)] mb-2">{title}</h3>
       {children}
     </section>
   )
 }
 function Info({ k, v }) {
-  return <div className="flex flex-wrap gap-x-2"><dt className="text-[var(--text-3)]">{k}：</dt><dd className="font-medium min-w-0">{v || '—'}</dd></div>
+  return <div className="flex flex-wrap gap-x-2 text-sm"><dt className="text-[var(--text-3)]">{k}：</dt><dd className="font-medium min-w-0 text-[var(--text)]">{v || '—'}</dd></div>
 }
+// 數字格底色走 token(--surface-2);邊框保留,列印預設不印底色時仍看得出格線
 function Metric({ label, value, color = '' }) {
   return (
-    <div className="border border-[var(--border)] rounded-lg py-3">
-      <div className="text-xs text-[var(--text-3)]">{label}</div>
-      <div className={`text-xl font-bold mt-1 ${color}`}>{value}</div>
+    <div className="border border-[var(--border)] bg-[var(--surface-2)] rounded-lg py-3">
+      <div className="text-[11px] text-[var(--text-2)]">{label}</div>
+      <div className={`text-xl font-normal mt-1 num ${color}`}>{value}</div>
     </div>
   )
 }

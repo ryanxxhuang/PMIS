@@ -5,6 +5,10 @@ import { Link } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 import PageTabs from './PageTabs.jsx'
 
+// 表頭字級單一字串:各頁 <th> 的字型層(對齊/內距由各表自決)。
+// 全站曾有 uppercase tracking-wide / text-3 / 無 font-medium 三種寫法,統一到這份。
+export const THEAD_CLS = 'text-[11px] font-medium text-[var(--text-2)]'
+
 // 卡殼單一字串:Card/Stat/Surface 共用。rounded-2xl 的「class 名」是 e2e xpath
 // 合約(5 處 ancestor 選擇器),值已在 @theme 改為 12px——名不動、視覺照規格。
 const SURFACE = 'min-w-0 bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)]'

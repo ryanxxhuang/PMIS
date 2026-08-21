@@ -48,11 +48,12 @@ function CopilotPanel({ onClose }) {
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-2)] shrink-0">
         <span className="w-7 h-7 rounded-lg grid place-items-center bg-[var(--blue-tint)] text-[var(--blue-text)] shrink-0"><CopilotMark size={16} /></span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-[var(--text)] leading-tight">{label.name} <span className="font-normal text-[10px] text-[var(--text-3)]">新對話</span></div>
-          <div className="text-[10px] text-[var(--text-3)]">與主控台同一個 Agent · 長對話請開<Link to="/agent" onClick={onClose} className="text-[var(--blue-text)] hover:underline">完整頁</Link></div>
+          {/* 面板頭=卡頭:字級對齊 Card title(15px/500);輔助字最小 11px(10px 在 1x 螢幕不可讀) */}
+          <div className="text-[15px] font-medium text-[var(--text)] leading-tight">{label.name} <span className="font-normal text-[11px] text-[var(--text-3)]">新對話</span></div>
+          <div className="text-[11px] text-[var(--text-3)]">與主控台同一個 Agent · 長對話請開<Link to="/agent" onClick={onClose} className="text-[var(--blue-text)] hover:underline">完整頁</Link></div>
         </div>
-        <Link to="/agent" onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><MSym name="open_in_full" size={15} /></Link>
-        <button onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><MSym name="close" size={17} /></button>
+        <Link to="/agent" onClick={onClose} className="inline-flex items-center justify-center max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><MSym name="open_in_full" size={15} /></Link>
+        <button onClick={onClose} className="inline-flex items-center justify-center max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><MSym name="close" size={17} /></button>
       </div>
       <CopilotChat data={data} onAsk={onAsk} fill />
     </div>
@@ -83,14 +84,15 @@ export default function CopilotFab() {
       {/* 展開面板(掛載時才計算 facts) */}
       {open && <CopilotPanel onClose={() => setOpen(false)} />}
 
-      {/* 浮動圓鈕:漸層 + 柔光環,更有質感 */}
+      {/* 浮動圓鈕:品牌漸層是刻意的識別度,但陰影/光環改走 token——
+          Tailwind 原生 shadow-lg 與 ring-white/15 都不是設計色票,深色模式下白環會浮出來 */}
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? '收合 AI 助理' : '開啟 AI 助理'}
-        className={`fixed z-[60] bottom-6 max-md:bottom-[92px] right-6 w-14 h-14 rounded-full grid place-items-center shadow-lg ring-1 transition-transform duration-[var(--dur-press)] [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95
+        className={`fixed z-[60] bottom-6 max-md:bottom-[92px] right-6 w-14 h-14 rounded-full grid place-items-center [box-shadow:var(--shadow-overlay)] transition-transform duration-[var(--dur-press)] [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95
           ${open
-            ? 'bg-[var(--surface-2)] text-[var(--text-2)] border border-[var(--border)] ring-transparent'
-            : 'bg-gradient-to-br from-[var(--blue)] to-[var(--primary)] text-[var(--primary-fg)] ring-white/15 shadow-[var(--blue)]/30'}`}>
+            ? 'bg-[var(--surface-2)] text-[var(--text-2)] border border-[var(--border)]'
+            : 'bg-gradient-to-br from-[var(--blue)] to-[var(--primary)] text-[var(--primary-fg)]'}`}>
         {open ? <MSym name="close" size={22} /> : <CopilotMark size={26} />}
       </button>
     </div>

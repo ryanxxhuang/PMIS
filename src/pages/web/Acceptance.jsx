@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Badge, Button, Field, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { deriveAcceptance, needsFixFlow, acceptanceAlerts, ACCEPTANCE_STAGE_ORGS } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 
@@ -34,8 +34,14 @@ export default function Acceptance() {
   const displayName = demoMode ? DEMO_PORTFOLIO[0].name : project.project_name
 
   // 真實模式但尚未選定專案:登錄只會進記憶體(假成功),擋下
+  // 早退也保留 PageHeader:頁首與工作面分頁不該因為「還沒選專案」整組消失
   if (!demoMode && !isPersistedProject) {
-    return <Card title="驗收結算"><Empty>此功能需真實專案。請先建立或選擇專案。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        <PageHeader title="驗收結算" tagline="Acceptance" subtitle="報竣到保固的法定時程,期限自動起算、逾期即提醒。" />
+        <Card title="驗收結算" bodyClass="p-0"><Empty>此功能需真實專案。請先建立或選擇專案。</Empty></Card>
+      </div>
+    )
   }
 
   return (
@@ -53,7 +59,8 @@ export default function Acceptance() {
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       {demoMode && (
-        <div className="text-xs rounded-lg border border-[var(--border-2)] bg-[var(--blue-tint)]/50 text-[var(--text-2)] px-3 py-2">
+        // 底色用 --blue-tint 原值:對 token 加 /50 是自製色階,深色模式疊底會失真
+        <div className="text-xs rounded-lg border border-[var(--border-2)] bg-[var(--blue-tint)] text-[var(--text-2)] px-3 py-2">
           示範資料：<b>{DEMO_PORTFOLIO[0].name}</b>（驗收中）。真實專案將顯示該案自己的驗收時程。
         </div>
       )}
@@ -64,8 +71,10 @@ export default function Acceptance() {
         <Card title="法定期限提醒" bodyClass="p-0">
           <ul className="divide-y divide-[var(--border-2)]">
             {alerts.map((a) => (
-              <li key={a.stage} className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
+              // 嚴重度不得只靠文字顏色(W8-5):色票標籤與顏色並存,列內距對齊卡頭 px-5
+              <li key={a.stage} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-5 py-2.5 text-sm">
                 <MSym name="warning" size={15} className={a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--amber-text)]'} />
+                <Badge color={a.level === 'overdue' ? 'red' : 'amber'}>{a.level === 'overdue' ? '逾期' : '將到期'}</Badge>
                 <span className={`font-medium ${a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--text)]'}`}>{a.title}</span>
                 <span className="text-[var(--text-3)] text-xs">{a.meta}</span>
               </li>
@@ -124,17 +133,12 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
   // 同為 7 日——同一件事在時間軸與提醒卡不可以有兩套「快到期」定義。
   // 級距只是呈現,天數與逾期判定仍由 acceptance.js 確定性算出。
   const soon = !done && !stage.overdue && stage.daysLeft != null && stage.daysLeft <= 7
+  // 三級都走同一顆 Badge:字級與字重由色票決定,不再逐級跳 11px/12px、medium/semibold
   const dueBadge = !done && stage.due && (
-    <span className={`inline-flex items-center gap-1 num ${
-      stage.overdue
-        ? 'text-xs font-semibold text-[var(--red-text)]'
-        : soon
-          ? 'text-xs font-medium text-[var(--amber-text)]'
-          : 'text-[11px] text-[var(--text-3)]'
-    }`}>
+    <Badge color={stage.overdue ? 'red' : soon ? 'amber' : 'slate'} className="num">
       <MSym name="event" size={12} />
       期限 {stage.due}{stage.daysLeft != null && (stage.overdue ? `（逾期 ${-stage.daysLeft} 天）` : `（還有 ${stage.daysLeft} 天）`)}
-    </span>
+    </Badge>
   )
 
   return (
@@ -177,31 +181,36 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
             需先完成前一階段{stage.due ? `；預計期限 ${stage.due}` : ''}
           </div>
         ) : (
+          // 欄位標籤走共用 Field,寬度交給外層容器——不再用 ! 壓掉 FIELD_BASE 的
+          // 內距(那會連帶壓掉手機 44px 觸控高度),也不再各頁自寫一套 12px 標籤
           <div className="mt-2 flex flex-wrap items-end gap-2">
-            <label className="block">
-              {/* 欄位 label 是輸入依據,不是後設資料:12px + text-2 */}
-              <span className="block text-xs text-[var(--text-2)] mb-0.5">實際辦理日</span>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label={`${stage.label} 實際辦理日`} className="!w-40 !py-1.5" />
-            </label>
+            <div className="w-40">
+              <Field label="實際辦理日">
+                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label={`${stage.label} 實際辦理日`} />
+              </Field>
+            </div>
             {RESULT_STAGES.has(stage.key) && (
-              <label className="block">
-                <span className="block text-xs text-[var(--text-2)] mb-0.5">結果</span>
-                <Select value={result} onChange={(e) => setResult(e.target.value)} aria-label={`${stage.label} 結果`} className="!w-28 !py-1.5">
-                  <option value="">—</option>
-                  <option value="合格">合格</option>
-                  <option value="不合格">不合格</option>
-                </Select>
-              </label>
+              <div className="w-28">
+                <Field label="結果">
+                  <Select value={result} onChange={(e) => setResult(e.target.value)} aria-label={`${stage.label} 結果`}>
+                    <option value="">—</option>
+                    <option value="合格">合格</option>
+                    <option value="不合格">不合格</option>
+                  </Select>
+                </Field>
+              </div>
             )}
-            <label className="block flex-1 min-w-[180px]">
-              <span className="block text-xs text-[var(--text-2)] mb-0.5">備註</span>
-              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="會勘/驗收紀要…" aria-label={`${stage.label} 備註`} className="!py-1.5" />
-            </label>
+            <div className="flex-1 min-w-[180px]">
+              <Field label="備註">
+                <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="會勘/驗收紀要…" aria-label={`${stage.label} 備註`} />
+              </Field>
+            </div>
             <Button size="sm" onClick={save} disabled={!date}>登錄</Button>
             {editing && (
               <>
                 <Button size="sm" variant="outline" onClick={() => setEditing(false)}>取消</Button>
-                <Button size="sm" variant="ghost" className="!text-[var(--red-text)]" onClick={async () => { const res = await onClear(); if (!res?.error) { setEditing(false); setDate(''); setResult(''); setNote('') } }}>撤銷此階段</Button>
+                {/* 破壞性動作用 danger 變體本身表達,不用 ! 把 ghost 改色 */}
+                <Button size="sm" variant="danger" onClick={async () => { const res = await onClear(); if (!res?.error) { setEditing(false); setDate(''); setResult(''); setNote('') } }}>撤銷此階段</Button>
               </>
             )}
           </div>

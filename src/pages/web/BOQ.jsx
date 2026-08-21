@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Empty, Button, PageHeader, SkeletonList } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Surface, Button, PageHeader, SkeletonList, ErrorBanner, FilterChip, THEAD_CLS } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 
@@ -60,14 +60,10 @@ export default function BOQ() {
   }, [data])
 
   if (workItemsSource === 'error') {
+    // 查詢失敗走 ErrorBanner(內建重試),不畫成空狀態——Empty 保留給真的 0 筆
     return (
       <Card title="標單工項">
-        <Empty>
-          <div className="space-y-3">
-            <div>標單工項讀取失敗：{workItemsError || '請稍後再試'}</div>
-            <Button onClick={retryWorkItems}>重試</Button>
-          </div>
-        </Empty>
+        <ErrorBanner msg={`標單工項讀取失敗：${workItemsError || '請稍後再試'}`} onRetry={retryWorkItems} />
       </Card>
     )
   }
@@ -98,13 +94,14 @@ export default function BOQ() {
         >
           {/* table-fixed 下改用「固定寬佔位 span」縮排:padding 縮排會吃掉欄寬,
               深層工項一縮排整欄就被推歪;佔位法讓縮排永不推移其他欄位 */}
-          <td className="py-1.5 pl-3 pr-2">
+          <td className="py-1.5 pl-5 pr-2">
             <span className="flex items-center gap-1 min-w-0">
               <span style={{ width: level * 18 }} className="shrink-0" aria-hidden="true" />
               {hasKids ? (
-                // 圖示 aria-hidden,可及名稱與展開狀態仍由 aria-label/aria-expanded 承擔
+                // 圖示 aria-hidden,可及名稱與展開狀態仍由 aria-label/aria-expanded 承擔;
+                // 手機命中區補到 44px,負 margin 吸收讓流內仍佔 16px、不撐高列(W8-5)
                 <button onClick={() => toggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
-                  className="w-4 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)]">
+                  className="w-4 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] max-md:min-h-11 max-md:min-w-11 max-md:-m-3.5">
                   <MSym name={isOpen ? 'expand_more' : 'chevron_right'} size={16} />
                 </button>
               ) : (
@@ -113,14 +110,15 @@ export default function BOQ() {
               <span className="text-[var(--text-3)] text-xs tabular-nums shrink-0">{it.item_no}</span>
               {/* 長工項名 ellipsis 截斷不換行(列高一致),完整名稱靠 title 提示 */}
               <span className={`truncate ${it.depth <= 2 ? 'text-[var(--text)]' : ''}`} title={it.description}>{it.description}</span>
-              {it.is_price_adjustable && <span className="shrink-0 text-[10px] text-[var(--purple-text)]">物調</span>}
-              {it.item_kind === 'subtotal' && <span className="shrink-0 text-[10px] text-[var(--text-3)]">合計</span>}
+              {/* 列內標記與頁尾說明同語言(Badge 五語意+purple),不再用裸色小字 */}
+              {it.is_price_adjustable && <Badge color="purple" className="shrink-0">物調</Badge>}
+              {it.item_kind === 'subtotal' && <Badge color="slate" className="shrink-0">合計</Badge>}
             </span>
           </td>
           <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{it.unit}</td>
           <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{fmt(it.quantity)}</td>
           <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{fmt(it.unit_price)}</td>
-          <td className="text-right text-[var(--text)] px-2 tabular-nums whitespace-nowrap">{fmt(it.amount)}</td>
+          <td className="text-right text-[var(--text)] px-2 pr-5 tabular-nums whitespace-nowrap">{fmt(it.amount)}</td>
         </tr>
       )
       if (hasKids && isOpen) return [row, ...renderRows(kids, level + 1)]
@@ -138,38 +136,37 @@ export default function BOQ() {
               const { error } = await resetProjectBoq()
               setResetErr(error ? (error.message || '清空失敗,資料未變動') : '')
             }
-          }}>↻ 重新匯入標單</Button>
+          }}><MSym name="refresh" size={15} />重新匯入標單</Button>
         )} />
 
-      {resetErr && (
-        <div className="bg-[var(--red-tint,transparent)] text-sm text-[var(--red-text)] rounded-lg border border-[var(--red-text)]/25 px-4 py-3">
-          清空未執行,所有資料維持原狀：{resetErr}
-        </div>
-      )}
+      {/* 錯誤呈現全站單一形態(ErrorBanner);訊息字串是 chain4 e2e 合約,逐字保留 */}
+      <ErrorBanner msg={resetErr ? `清空未執行,所有資料維持原狀：${resetErr}` : ''} onClose={() => setResetErr('')} />
 
       {canImport && (
-        <div className="bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded-lg px-4 py-3 space-y-2">
+        // 提醒橫幅與 ErrorBanner 同形(tint 底、無邊框)——語意文字色+/25 當邊框在深色模式不可預期
+        <div className="bg-[var(--amber-tint)] rounded-lg px-4 py-3 space-y-2">
           <div className="text-sm text-[var(--amber-text)]">
             此專案<b>尚未匯入標單</b>。到「<Link to="/contract" className="font-medium underline">專案文件</Link>」把標單 XML 和契約等文件<b>一次上傳</b>,系統會自動匯入並整理。
           </div>
           <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" onChange={onPickFile} className="hidden" />
           {!parsed ? (
             <div className="flex items-center gap-3 flex-wrap">
-              <Link to="/contract"><Button>前往專案文件上傳</Button></Link>
+              {/* Link 包 Button 是巢狀互動元素:內層退出 tab 序,focus outline 落在 Link 形狀上(比照 PrerequisiteEmptyState) */}
+              <Link to="/contract" className="inline-flex rounded-full"><Button tabIndex={-1}>前往專案文件上傳</Button></Link>
               {/* 正式專案不提供「範例標單」:避免把示範用 3,262 工項灌進真實案(P1-11)。範例僅在 demo 站呈現。 */}
-              {importErr && <span className="text-sm text-[var(--red-text)]">{importErr}</span>}
             </div>
           ) : (
-            <div className="flex items-center gap-3 flex-wrap bg-[var(--amber-tint)] rounded-lg border border-[var(--amber-text)]/25 px-3 py-2">
+            // 解析結果改白底 Surface:琥珀疊琥珀分不出層次,卡殼也不再自寫
+            <Surface className="flex items-center gap-3 flex-wrap px-3 py-2">
               <div className="text-sm text-[var(--text)]">
                 解析成功：<b>{parsed.meta.project_name || '（未命名）'}</b>　·
                 {fmt(parsed.meta.item_count)} 項工項，發包工程費 <b className="text-[var(--blue-text)]">{yi(parsed.meta.billable_total)}</b>
               </div>
               <Button onClick={() => runImport(parsed)} disabled={importing}>{importing ? '匯入中…' : `匯入 ${fmt(parsed.meta.item_count)} 工項`}</Button>
-              <button onClick={() => setParsed(null)} className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)]">取消</button>
-              {importErr && <span className="text-sm text-[var(--red-text)]">{importErr}</span>}
-            </div>
+              <Button variant="ghost" size="sm" onClick={() => setParsed(null)}>取消</Button>
+            </Surface>
           )}
+          <ErrorBanner msg={importErr} onClose={() => setImportErr('')} />
         </div>
       )}
 
@@ -185,14 +182,13 @@ export default function BOQ() {
 
       <Card
         title="工項階層"
+        bodyClass="p-0"
         action={
-          <label className="flex items-center gap-1.5 text-xs text-[var(--text-2)] cursor-pointer">
-            <input type="checkbox" checked={onlyBillable} onChange={(e) => setOnlyBillable(e.target.checked)} />
-            只看發包工程費
-          </label>
+          // 表格篩選走 FilterChip(aria-pressed 切換),不再用裸 checkbox——手機命中區由 chip 自帶 44px
+          <FilterChip label="只看發包工程費" active={onlyBillable} onToggle={() => setOnlyBillable((v) => !v)} />
         }
       >
-        <div className="overflow-x-auto -mx-4 -my-4">
+        <div className="overflow-x-auto">
           {/* table-fixed + colgroup:欄寬固定,縮排/長名稱不再逐列推擠;
               min-w 保住名稱欄可讀寬度,窄螢幕交給外層 overflow-x-auto 捲動 */}
           <table className="w-full min-w-[640px] table-fixed text-sm">
@@ -204,12 +200,13 @@ export default function BOQ() {
               <col style={{ width: 118 }} />
             </colgroup>
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
-                <th className="text-left font-medium py-2 pl-3">項次 / 工項名稱</th>
-                <th className="text-right font-medium px-2">單位</th>
-                <th className="text-right font-medium px-2">數量</th>
-                <th className="text-right font-medium px-2">單價</th>
-                <th className="text-right font-medium px-2 pr-3">複價</th>
+              {/* 表頭字型層走共用 THEAD_CLS;p-0 卡的表格左右緣一律 pl-5/pr-5 與卡內距對齊 */}
+              <tr className="border-b border-[var(--border)]">
+                <th className={`${THEAD_CLS} text-left py-2 pl-5`}>項次 / 工項名稱</th>
+                <th className={`${THEAD_CLS} text-right px-2`}>單位</th>
+                <th className={`${THEAD_CLS} text-right px-2`}>數量</th>
+                <th className={`${THEAD_CLS} text-right px-2`}>單價</th>
+                <th className={`${THEAD_CLS} text-right px-2 pr-5`}>複價</th>
               </tr>
             </thead>
             <tbody>{renderRows(roots)}</tbody>
@@ -217,11 +214,11 @@ export default function BOQ() {
               {/* 合計取 meta.billable_total(發包工程費,匯入時已算好)——表格含參、肆非發包列,
                   逐列加總會與發包口徑混淆,所以標明口徑、不在前端重算 */}
               <tr className="bg-[var(--surface-2)] font-medium border-t border-[var(--border)]">
-                <td className="py-2 pl-3 pr-2">合計（發包工程費）</td>
+                <td className="py-2 pl-5 pr-2">合計（發包工程費）</td>
                 <td />
                 <td />
                 <td />
-                <td className="text-right px-2 tabular-nums whitespace-nowrap">{fmt(meta.billable_total)}</td>
+                <td className="text-right px-2 pr-5 tabular-nums whitespace-nowrap">{fmt(meta.billable_total)}</td>
               </tr>
             </tfoot>
           </table>

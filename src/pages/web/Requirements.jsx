@@ -8,7 +8,7 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { pageAllInSafe } from '../../lib/pagedQuery.js'
-import { Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select, PrerequisiteEmptyState, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select, PrerequisiteEmptyState, ErrorBanner, Surface, SkeletonList } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import {
   REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
@@ -75,8 +75,9 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
               </Badge>
               <span className="text-xs text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[r.requirement_type] || r.requirement_type}</span>
               {r.responsible_party_type && <span className="text-xs text-[var(--text-3)]">責任：{RESPONSIBLE_LABELS[r.responsible_party_type]}</span>}
-              {verification === 'verified' && <span className="text-xs text-[var(--green-text)]">來源已核對</span>}
-              {verification === 'unverified' && <span className="text-xs text-[var(--amber-text)]">來源待核對</span>}
+              {/* 核對狀態走五語意 Badge,不用裸文字色表狀態(UI/UX 統一修正) */}
+              {verification === 'verified' && <Badge color="green">來源已核對</Badge>}
+              {verification === 'unverified' && <Badge color="amber">來源待核對</Badge>}
               {group.requirements.length > 1 && <span className="text-xs text-[var(--text-3)]">同內容 {group.requirements.length} 筆擷取</span>}
             </div>
             <div className="mt-1.5 text-sm font-semibold text-[var(--text)]">{r.title}</div>
@@ -95,10 +96,11 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
                   <Button size="sm" variant="secondary" className="w-full sm:w-auto max-md:min-h-11">前往期限追蹤 <MSym name="arrow_forward" size={12} /></Button>
                 </Link>
               )}
-              {/* F3:廠商在這裡只有這一個動作,ghost 樣式在手機上全寬置中會被讀成一行說明文字;
-                  補中性邊框讓它像可按的東西,桌機恢復安靜 ghost(實心主動作每組仍只有一個)。 */}
-              <Button size="sm" variant="ghost"
-                className="w-full sm:w-auto max-md:min-h-11 max-sm:border max-sm:border-[var(--border)]"
+              {/* F3 改法:手機要可辨識為按鈕就用 outline 變體,不再以 className 就地幫 ghost
+                  補邊框造出第四種鈕皮(斷點也曾誤用 max-sm,與手機層 max-md 不一致)。
+                  實心主動作每組仍只有一個(快速核定鈕)。 */}
+              <Button size="sm" variant="outline"
+                className="w-full sm:w-auto max-md:min-h-11"
                 onClick={() => onSelect(group)}>
                 {kind === 'suggestion' && r.requirement_type === 'deadline' && canReview && !quickApprove
                   ? '查看並確認期限' : '查看內容與來源'}
@@ -108,11 +110,11 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
                   <MSym name="check_circle" size={13} /> 核定並加入期限追蹤
                 </Button>
               )}
-              {/* F4:無核定權的提示要與按鈕有視覺區隔——淡底短提示列,不是內文也不是死按鈕 */}
+              {/* F4:無核定權的提示要與按鈕有視覺區隔——改共用 Badge(slate),不再自寫 pill 殼 */}
               {kind === 'suggestion' && !canReview && (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-xs text-[var(--text-3)] leading-snug w-full sm:w-auto sm:self-center">
+                <Badge color="slate" className="w-full sm:w-auto justify-center sm:self-center">
                   <MSym name="info" size={12} className="shrink-0" />契約核定由監造／機關辦理
-                </span>
+                </Badge>
               )}
             </div>
           </div>
@@ -349,7 +351,8 @@ export default function Requirements() {
     return (
       <div className="space-y-5">
         <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
-        <Card><Empty>正在載入契約重點…</Empty></Card>
+        {/* 載入態走骨架屏,不再借用 Empty(Empty 是空狀態元件;文案由 sr-only 保留給報讀器) */}
+        <Card><SkeletonList label="正在載入契約重點…" /></Card>
       </div>
     )
   }
@@ -388,13 +391,13 @@ export default function Requirements() {
     <div className="space-y-5">
       <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約規則與 AI 整理結果都保留來源，未核定建議不是待辦。" />
 
-      {/* W8-3A(D-014):與首頁初始化清單第 3 步同一語意——AI 整理完成即算完成,
-          這裡的待審數量不是初始化門檻,不必為了開啟正式模式把它清空。 */}
-      <p className="text-xs text-[var(--text-3)]">{intro.note}</p>
-
       <Card title="已生效的契約重點" bodyClass="p-0" action={highlights.approved.length > HIGHLIGHT_LIMIT && (
         <Button variant="ghost" size="sm" onClick={openApprovedTrace}>查看全部已生效內容</Button>
       )}>
+        {/* W8-3A(D-014):與首頁初始化清單第 3 步同一語意——AI 整理完成即算完成,
+            這裡的待審數量不是初始化門檻,不必為了開啟正式模式把它清空。
+            說明收進第一張卡:根層裸文字會吃掉 space-y-5 整格間距。 */}
+        <p className="px-4 sm:px-5 py-3 text-xs text-[var(--text-3)] border-b border-[var(--border)]">{intro.note}</p>
         <HighlightRows groups={shownApproved} kind="approved" canReview={canReview}
           verificationByReq={verificationByReq} onSelect={selectHighlight} onQuickApprove={quickApproveDeadline} />
       </Card>
@@ -416,31 +419,32 @@ export default function Requirements() {
         {!showTrace ? (
           <p className="px-4 sm:px-5 py-4 text-sm text-[var(--text-2)]">這裡保留原始 AI 擷取、歷史 run 與專業審查資料，不是必須清空的待辦清單。</p>
         ) : (<>
-          {/* F2:六個篩選在手機補 44px 觸控高度(max-md:min-h-11);共用 Select 基底不動,全站統一留 W8-5 */}
+          {/* 六個篩選吃 Select/FIELD_BASE 預設(字級 text-sm、手機 44px 內建),不逐處覆寫;
+              低基數維度不改 FilterChip——四維單選展開成 chips 會爆量,屬多維表單式篩選例外 */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-4 border-b border-[var(--border)] bg-[var(--surface-2)]">
-            <Select value={filters.scope} onChange={(e) => setFilters((f) => ({ ...f, scope: e.target.value, ingestion_run_id: '' }))} className="text-xs max-md:min-h-11">
+            <Select value={filters.scope} onChange={(e) => setFilters((f) => ({ ...f, scope: e.target.value, ingestion_run_id: '' }))}>
               <option value="current">目前範圍（最新成功擷取＋人工）</option>
               <option value="all">全部（含歷史 run）</option>
             </Select>
-            <Select value={filters.status || ''} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="text-xs max-md:min-h-11">
+            <Select value={filters.status || ''} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
               <option value="">全部狀態</option>
               {Object.entries(REQUIREMENT_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
-            <Select value={filters.requirement_type || ''} onChange={(e) => setFilters((f) => ({ ...f, requirement_type: e.target.value }))} className="text-xs max-md:min-h-11">
+            <Select value={filters.requirement_type || ''} onChange={(e) => setFilters((f) => ({ ...f, requirement_type: e.target.value }))}>
               <option value="">全部類型</option>
               {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
-            <Select value={filters.responsible_party_type || ''} onChange={(e) => setFilters((f) => ({ ...f, responsible_party_type: e.target.value }))} className="text-xs max-md:min-h-11">
+            <Select value={filters.responsible_party_type || ''} onChange={(e) => setFilters((f) => ({ ...f, responsible_party_type: e.target.value }))}>
               <option value="">全部負責方</option>
               {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
-            <Select value={filters.verification || ''} onChange={(e) => setFilters((f) => ({ ...f, verification: e.target.value }))} className="text-xs max-md:min-h-11">
+            <Select value={filters.verification || ''} onChange={(e) => setFilters((f) => ({ ...f, verification: e.target.value }))}>
               <option value="">引註不限</option>
               <option value="verified">來源已核對</option>
               <option value="unverified">來源待核對</option>
               <option value="none">無引註</option>
             </Select>
-            <Select value={filters.ingestion_run_id || ''} onChange={(e) => setFilters((f) => ({ ...f, ingestion_run_id: e.target.value, ...(e.target.value ? { scope: 'all' } : {}) }))} className="text-xs max-md:min-h-11">
+            <Select value={filters.ingestion_run_id || ''} onChange={(e) => setFilters((f) => ({ ...f, ingestion_run_id: e.target.value, ...(e.target.value ? { scope: 'all' } : {}) }))}>
               <option value="">全部擷取 run</option>
               {runs.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -455,14 +459,16 @@ export default function Requirements() {
             <div className="divide-y divide-[var(--border)] max-h-[420px] overflow-y-auto">
               {visible.map((r) => (
                 <button key={r.id} onClick={() => select(r.id)}
-                  className={`w-full text-left px-4 py-2.5 hover:bg-[var(--surface-2)] ${r.id === selectedId ? 'bg-[var(--surface-2)]' : ''}`}>
+                  /* 選取態改 blue-tint(對齊 CHIP_ON/FilterChip active):hover 與選中共用
+                     同一個 surface-2 會讓「目前選了哪筆」看不出來 */
+                  className={`w-full text-left px-4 py-2.5 hover:bg-[var(--surface-2)] ${r.id === selectedId ? 'bg-[var(--blue-tint)]' : ''}`}>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge color={STATUS_BADGE[r.status] || 'slate'}>{REQUIREMENT_STATUS_LABELS[r.status] || r.status}</Badge>
                     <span className="text-xs text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[r.requirement_type] || r.requirement_type}</span>
                     {r.responsible_party_type && <span className="text-xs text-[var(--text-3)]">{RESPONSIBLE_LABELS[r.responsible_party_type]}</span>}
                     <span className="text-xs text-[var(--text-3)]">{ORIGIN_LABELS[r.origin] || r.origin}</span>
-                    {verificationByReq.get(r.id) === 'verified' && <span className="text-xs text-[var(--green-text)]">來源已核對</span>}
-                    {verificationByReq.get(r.id) === 'unverified' && <span className="text-xs text-[var(--amber-text)]">來源待核對</span>}
+                    {verificationByReq.get(r.id) === 'verified' && <Badge color="green">來源已核對</Badge>}
+                    {verificationByReq.get(r.id) === 'unverified' && <Badge color="amber">來源待核對</Badge>}
                   </div>
                   {/* 追溯清單靠標題辨識是哪一條,375px 用 truncate 會把整句切掉;改成最多兩行 */}
                   <div className="text-sm font-medium text-[var(--text)] mt-0.5 line-clamp-2">{r.title}</div>
@@ -488,7 +494,8 @@ export default function Requirements() {
             )}
           </div>
         )}>
-          {msg && <p className="text-xs text-[var(--red-text)] mb-3">{msg}</p>}
+          {/* 寫入/審查失敗走全站 ErrorBanner,不用裸紅字 */}
+          <ErrorBanner msg={msg} className="mb-3" />
 
           {editing ? (
             <div className="space-y-2 mb-4">
@@ -534,12 +541,13 @@ export default function Requirements() {
             const run = runsById.get(selected.ingestion_run_id)
             const version = run ? versionsById.get(run.document_version_id) : null
             return (
-              <div className="text-xs text-[var(--text-3)] bg-[var(--surface-2)] rounded-lg px-3 py-2 mb-4">
+              // 溯源說明改吃共用 Surface 殼(自寫 surface-2 圓角底退場)
+              <Surface className="text-xs text-[var(--text-3)] px-3 py-2 mb-4">
                 AI 擷取來源:{version?.documents?.title || '文件'}（{version?.version_label || '?'}）
                 ·模型 {run?.model_name || '?'}·prompt {run?.prompt_version || '?'}
                 ·完成 {fmtTime(run?.completed_at) || run?.status || '?'}
                 。模型出處僅供追溯,不代表契約效力;效力以人工核定為準。
-              </div>
+              </Surface>
             )
           })()}
 
@@ -550,16 +558,17 @@ export default function Requirements() {
             ) : selectedSources.map((s) => {
               const version = s.document_version_id ? versionsById.get(s.document_version_id) : null
               return (
-                <div key={s.id} className={`border rounded-lg px-3 py-2 mb-2 text-xs ${s.source_verified ? 'border-[var(--green-text)]/40 bg-[var(--green-tint)]' : 'border-[var(--amber-text)]/40 bg-[var(--amber-tint)]'}`}>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[var(--text-2)]">
-                    <span className={`font-medium ${s.source_verified ? 'text-[var(--green-text)]' : 'text-[var(--amber-text)]'}`}>{sourceVerificationLabel(s)}</span>
+                // 引註卡殼走中性 Surface,核對狀態改掛 Badge——不再把 *-text token 疊透明度當邊框色
+                <Surface key={s.id} className="px-3 py-2 mb-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[var(--text-2)]">
+                    <Badge color={s.source_verified ? 'green' : 'amber'}>{sourceVerificationLabel(s)}</Badge>
                     {version && <span>{version.documents?.title}（{version.version_label}）</span>}
                     <span>{sourcePageLabel(s)}</span>
                     {s.section && <span>章節 {s.section}</span>}
                     {s.clause && <span>條款 {s.clause}</span>}
                   </div>
                   {s.source_text && <p className="mt-1 text-[var(--text)]">「{s.source_text}」</p>}
-                </div>
+                </Surface>
               )
             })}
           </div>
@@ -581,9 +590,11 @@ export default function Requirements() {
                   <Badge color={l.review_status === 'approved' ? 'green' : l.review_status === 'rejected' ? 'red' : 'blue'}>
                     {WORK_ITEM_LINK_STATE_LABELS[l.review_status] || l.review_status}
                   </Badge>
+                  {/* 綠/紅底線文字鈕不在按鈕三級語言內:核可/駁回改共用 Button(success/danger),
+                      觸控高度由元件內建的 max-md:min-h-11 保證 */}
                   {canReview && l.review_status === 'suggested' && (<>
-                    <button onClick={() => decideLink(l.work_item_id, 'approved')} className="text-[var(--green-text)] hover:underline">核可</button>
-                    <button onClick={() => decideLink(l.work_item_id, 'rejected')} className="text-[var(--red-text)] hover:underline">駁回</button>
+                    <Button size="sm" variant="success" onClick={() => decideLink(l.work_item_id, 'approved')}>核可</Button>
+                    <Button size="sm" variant="danger" onClick={() => decideLink(l.work_item_id, 'rejected')}>駁回</Button>
                   </>)}
                 </div>
               )
@@ -591,7 +602,7 @@ export default function Requirements() {
             {canReview && (
               // 手機直排讓輸入與新增按鈕保有可讀寬度與觸控目標,桌機才並排
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-                <Input value={manualItemNo} onChange={(e) => setManualItemNo(e.target.value)} placeholder="輸入工項編號(如 壹.一.6.3.28)手動連結" className="w-full sm:w-72 min-w-0 text-xs" />
+                <Input value={manualItemNo} onChange={(e) => setManualItemNo(e.target.value)} placeholder="輸入工項編號(如 壹.一.6.3.28)手動連結" className="w-full sm:w-72 min-w-0" />
                 <Button variant="ghost" size="sm" className="w-full sm:w-auto" disabled={!manualItemNo.trim()} onClick={addManualLink}>新增連結</Button>
               </div>
             )}

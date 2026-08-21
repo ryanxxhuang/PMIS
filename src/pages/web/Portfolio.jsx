@@ -114,7 +114,7 @@ export default function Portfolio() {
       />
       {cards.length > 0 && <ExceptionBand ex={portfolioExceptions(cards)} />}
       {cards.length === 0 ? (
-        <Card><Empty>尚無專案。</Empty></Card>
+        <Card bodyClass="p-0"><Empty>尚無專案。</Empty></Card>
       ) : (
         <div className="grid md:grid-cols-2 gap-5">
           {cards.map((c) => <ProjectCard key={c.key || 'current'} c={c} onOpen={() => open(c)} />)}
@@ -148,7 +148,8 @@ function ExceptionBand({ ex }) {
       ) : items.map((i) => {
         return (
           <span key={i.key} className={`flex items-center gap-1.5 ${i.red ? 'text-[var(--red-text)] font-medium' : ''}`}>
-            <MSym name={i.icon} size={14} className={i.red ? 'text-[var(--red-text)]' : i.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-3)]'} />
+            {/* warn 語意一律 --amber-text:--accent(安全橘)是非語意品牌標記,拿來當警示會與逾期/落後打架 */}
+            <MSym name={i.icon} size={14} className={i.red ? 'text-[var(--red-text)]' : i.warn ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'} />
             {i.text}
           </span>
         )
@@ -162,13 +163,14 @@ const STATUS_COLOR = { 施工中: 'blue', 驗收中: 'amber', 保固中: 'green'
 function ProjectCard({ c, onOpen }) {
   const behind = c.plannedPct != null ? c.plannedPct - c.progressPct : null
   const clickable = c.isCurrent || c.projectId || c.to
-  // 卡殼吃共用 Surface(白卡/圓角/框線/陰影一份定義),這裡只留「可點卡片」自己的互動樣式
+  // 卡殼吃共用 Surface(白卡/圓角/框線/陰影一份定義),這裡只留「可點卡片」自己的互動樣式;
+  // hover 陰影走 token:--shadow-* 沒註冊進 @theme,Tailwind 的 shadow-md 吃到的是它自己的黑影
   return (
     <Surface as="button" onClick={onOpen} disabled={!clickable}
-      className={`text-left h-full flex flex-col p-5 pressable ${clickable ? 'hover:border-[var(--blue)] hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
+      className={`text-left h-full flex flex-col p-5 pressable ${clickable ? 'hover:border-[var(--blue)] hover:[box-shadow:var(--shadow-md)] cursor-pointer' : 'cursor-default'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="font-semibold text-[var(--text)] truncate flex items-center gap-2">
+          <div className="text-[15px] font-medium text-[var(--text)] truncate flex items-center gap-2">
             {c.name}
             {c.isCurrent && <Badge color="blue">目前專案</Badge>}
           </div>
@@ -187,9 +189,9 @@ function ProjectCard({ c, onOpen }) {
           {/* 實際 vs 計畫吃五語意色票:落後=red(與進度管制頁同一個 5% 門檻)、超前/正常=green;
               不再用只有這裡看得到的 accent 橘——跨頁看同一件事,顏色要是同一個意思 */}
           {behind != null && (
-            <span className={`text-[11px] font-medium whitespace-nowrap ${behind > 5 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'}`}>
+            <Badge color={behind > 5 ? 'red' : 'green'}>
               {behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '進度正常'}
-            </span>
+            </Badge>
           )}
         </div>
         <div className="relative h-2 rounded-full bg-[var(--surface-2)] mt-2 overflow-hidden">
@@ -213,10 +215,10 @@ function ProjectCard({ c, onOpen }) {
           { icon: 'build', label: '變更', title: '變更設計待核定', v: c.pendingCOs, warn: c.pendingCOs > 0 },
         ].map((s) => {
           return (
-            <div key={s.label} title={s.title} className="flex items-center gap-1.5 rounded-lg bg-[var(--surface-2)]/60 px-2 py-1.5 min-w-0">
-              <MSym name={s.icon} size={13} className={`shrink-0 ${s.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-3)]'}`} />
+            <div key={s.label} title={s.title} className="flex items-center gap-1.5 rounded-lg bg-[var(--surface-2)] px-2 py-1.5 min-w-0">
+              <MSym name={s.icon} size={13} className={`shrink-0 ${s.warn ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`} />
               <span className="text-[var(--text-3)] truncate">{s.label}</span>
-              <span className={`num ml-auto font-semibold ${s.warn ? 'text-[var(--accent-text)]' : 'text-[var(--text-2)]'}`}>{s.v}</span>
+              <span className={`num ml-auto font-semibold ${s.warn ? 'text-[var(--amber-text)]' : 'text-[var(--text-2)]'}`}>{s.v}</span>
             </div>
           )
         })}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, PageHeader, Button, Badge, Surface } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Button, Badge, Surface, Input, Textarea } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { buildSupervisorReport } from '../../lib/supervisorReport.js'
@@ -19,7 +19,8 @@ function Section({ n, title, children }) {
     </div>
   )
 }
-const Kv = ({ k, v }) => (<div className="text-sm"><span className="text-[var(--text-3)]">{k}：</span><span className="text-[var(--text)]">{v}</span></div>)
+// 鍵值列與施工月報的 Info 同一份長相(dt/dd):兩張報表的概況欄不該有兩種標籤色與字重
+const Kv = ({ k, v }) => (<div className="flex flex-wrap gap-x-2 text-sm"><dt className="text-[var(--text-3)]">{k}：</dt><dd className="font-medium min-w-0 text-[var(--text)]">{v || '—'}</dd></div>)
 
 export default function SupervisorReport() {
   const { project, workItems, valuations, progressPlan, siteLogs, inspections, defects, submittals,
@@ -73,9 +74,9 @@ export default function SupervisorReport() {
       <PageHeader title="監造報表" tagline="AI 草擬"
         subtitle="自動彙整本月查驗、缺失、送審與進度 → 監造報表草稿，覆核後列印"
         action={
-          <div className="flex items-center gap-2 print:hidden">
-            <input type="month" value={month} aria-label="報表月份" onChange={(e) => { setMonth(e.target.value); setOpinion(null) }}
-              className="bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--blue)]" />
+          <div className="flex items-center gap-2 flex-wrap print:hidden">
+            {/* 欄位吃共用 Input(FIELD_BASE):與施工月報的月份選擇器同一顆,含 focus ring 與手機 44px */}
+            <Input type="month" value={month} aria-label="報表月份" onChange={(e) => { setMonth(e.target.value); setOpinion(null) }} className="!w-auto" />
             <Button onClick={() => window.print()}><MSym name="print" size={15} />列印 / 存 PDF</Button>
           </div>
         } />
@@ -84,19 +85,20 @@ export default function SupervisorReport() {
           print: 三件是列印版面的合約,原樣保留 */}
       <Surface className="p-6 md:p-8 print:border-0 print:shadow-none print:p-0 space-y-6 text-[var(--text)]">
         <div className="text-center border-b border-[var(--border)] pb-4">
-          <div className="text-lg font-bold">監造報表</div>
+          {/* 列印文件的大標用 h2(與施工月報同):正式文件需要標題語意,不能只是粗體 div */}
+          <h2 className="text-lg font-bold">監造報表</h2>
           <div className="text-sm text-[var(--text-2)] mt-0.5">{project.project_name}</div>
           <div className="text-xs text-[var(--text-3)] mt-1 num">報告月份：{r.monthLabel}　·　監造單位：{project.supervisor_name || '—'}</div>
         </div>
 
         <Section n="一" title="工程概況">
-          <div className="grid sm:grid-cols-2 gap-x-8 gap-y-1">
+          <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-1">
             <Kv k="機關" v={project.owner_name} />
             <Kv k="承包廠商" v={project.contractor_name} />
             {/* 同月報:實際開工日在 commencement_date,建案表單的 start_date 只是預定值 */}
             <Kv k="開工日" v={project.commencement_date || (project.start_date ? `${project.start_date}（預計）` : '—')} />
             <Kv k="預定竣工" v={project.end_date || '—'} />
-          </div>
+          </dl>
         </Section>
 
         <Section n="二" title="施工進度督導">
@@ -140,8 +142,9 @@ export default function SupervisorReport() {
         </Section>
 
         <Section n="六" title="監造意見與建議">
-          <textarea value={opinionText} onChange={(e) => setOpinion(e.target.value)} rows={5}
-            className="w-full text-sm leading-relaxed bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:border-[var(--blue)] print:border-0 print:px-0 resize-y" />
+          {/* print: 兩件(去框、去左右內距)是列印版面的合約,以 className 帶入共用 Textarea */}
+          <Textarea value={opinionText} onChange={(e) => setOpinion(e.target.value)} rows={5}
+            className="leading-relaxed print:border-0 print:px-0" />
           <div className="text-[11px] text-[var(--text-3)] mt-1 print:hidden flex items-center gap-1">
             <MSym name="auto_awesome" size={12} />AI 依本月數據草擬，請監造覆核修改後再列印用印。
           </div>
@@ -149,7 +152,8 @@ export default function SupervisorReport() {
 
         <div className="grid sm:grid-cols-3 gap-6 pt-6 text-center text-xs text-[var(--text-2)]">
           {['監造人員', '監造主管', '機關代表'].map((role) => (
-            <div key={role}><div className="border-t border-[var(--text-3)] pt-1 mt-8">{role}</div></div>
+            /* 簽章底線用邊框 token(--border);--text-3 是文字色,不當邊框用 */
+            <div key={role}><div className="border-t border-[var(--border)] pt-1 mt-8">{role}</div></div>
           ))}
         </div>
       </Surface>

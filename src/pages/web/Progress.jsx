@@ -1,6 +1,7 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surface } from '../../components/ui.jsx'
+import { MSym } from '../../components/icons.jsx'
+import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surface, Input, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
@@ -64,7 +65,8 @@ export default function Progress() {
     return buildCumMap(tree.roots, tree.childrenMap, latest.items || {})
   }, [data, valuations, tree])
 
-  if (!data) return <Empty>載入進度資料中…</Empty>
+  // 載入中不能用 Empty:那顆 inbox 圖示等於先對使用者說「沒資料」(比照 BOQ/Payments 走骨架)
+  if (!data) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入進度資料中…" /></Card>
 
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return (
@@ -77,18 +79,19 @@ export default function Progress() {
   if (!progressPlan) {
     return (
       <div className="space-y-5">
-        <Header billableTotal={billableTotal} project={project} />
+        <Header billableTotal={billableTotal} />
         <Card title="建立預定進度">
           <p className="text-sm text-[var(--text-2)] mb-4">
             標單只提供金額權重、沒有時間分布，需先設定預定進度（廠商施工預定進度表）。
             系統會依開工/竣工切出月份，並產生一條標準 S 曲線當起點，之後可逐月微調。
           </p>
           <div className="flex items-end gap-3 flex-wrap">
-            <Field label="開工日"><input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
-            <Field label="竣工日"><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" /></Field>
+            <Field label="開工日"><Input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="!w-auto" /></Field>
+            <Field label="竣工日"><Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="!w-auto" /></Field>
             <Button onClick={() => onGenerate(start, end)}>產生預定 S 曲線</Button>
-            {errMsg && <span className="text-sm text-[var(--red-text)]">{errMsg}</span>}
           </div>
+          {/* 寫入失敗與主分支同一種橫幅(原本這一支是散裝紅字 span) */}
+          <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} className="mt-3" />
         </Card>
       </div>
     )
@@ -149,7 +152,7 @@ export default function Progress() {
 
   return (
     <div className="space-y-5">
-      <Header billableTotal={billableTotal} project={project} action={
+      <Header billableTotal={billableTotal} action={
         <Button variant="secondary" onClick={() => onGenerate(progressPlan.start, progressPlan.end)}>重產 S 曲線</Button>
       } />
 
@@ -161,7 +164,8 @@ export default function Progress() {
         <Stat label="進度差" value={`${behind >= 0 ? '−' : '+'}${Math.abs(behind).toFixed(1)}%`} sub={behind > 0 ? '落後' : '超前/持平'} color={behind > 5 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />
         {/* 第四格不是 Stat(值是 Badge 不是數字),卡殼改吃共用 Surface 才不會和左邊三格走鐘 */}
         <Surface className="px-4 py-3.5 flex flex-col">
-          <div className="text-[11px] text-[var(--text-3)] tracking-[0.04em]">進度狀態</div>
+          {/* 標籤字級/色對齊 Stat(11px/text-2、無字距),四格才是同一列數字卡 */}
+          <div className="text-[11px] text-[var(--text-2)]">進度狀態</div>
           <div className="mt-1.5">{statusBadge}</div>
           <div className="text-[11px] text-[var(--text-3)] mt-auto pt-2 num">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
         </Surface>
@@ -228,11 +232,11 @@ export default function Progress() {
           <div className="overflow-x-auto"><div className="min-w-[480px] space-y-1.5">
             {laggards.map(({ it, pct, share }) => (
               <div key={it.item_key} className="flex items-center gap-2">
-                <span className="w-20 shrink-0 text-xs text-[var(--text-3)] tabular-nums truncate">{it.item_no}</span>
+                <span className="w-20 shrink-0 text-xs text-[var(--text-3)] num truncate">{it.item_no}</span>
                 <span className="flex-1 text-sm truncate">{it.description}</span>
-                <span className="w-12 text-right text-xs text-[var(--text-3)] tabular-nums" title="占發包工程費權重">{share.toFixed(1)}%</span>
+                <span className="w-12 text-right text-xs text-[var(--text-3)] num" title="占發包工程費權重">{share.toFixed(1)}%</span>
                 <div className="w-28 shrink-0 h-2 rounded-full overflow-hidden bg-[var(--surface-2)]"><div className="h-full bg-[var(--red-text)] rounded-full" style={{ width: `${Math.min(100, pct)}%` }} /></div>
-                <span className="w-10 text-right text-xs tabular-nums">{pct.toFixed(0)}%</span>
+                <span className="w-10 text-right text-xs num">{pct.toFixed(0)}%</span>
               </div>
             ))}
           </div></div>
@@ -242,24 +246,27 @@ export default function Progress() {
 
       <Card title="工項進度（可展開鑽取）">
         <div className="overflow-x-auto"><div className="min-w-[520px]">
-          <div className="flex items-center gap-2 pb-1.5 border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-3)]">
+          {/* div 版表頭也吃 THEAD_CLS:uppercase/tracking-wide 對中文表頭無效,且與真 table 表頭不同語言 */}
+          <div className={`flex items-center gap-2 pb-1.5 border-b border-[var(--border)] ${THEAD_CLS}`}>
             <span className="w-4 shrink-0" /><span className="w-20 shrink-0">項次</span><span className="flex-1">工項</span>
-            <span className="w-12 text-right">權重</span><span className="w-28 text-center shrink-0">完成度</span><span className="w-10 text-right">%</span><span className="w-8 shrink-0" />
+            <span className="w-12 text-right">權重</span><span className="w-28 text-center shrink-0">完成度</span><span className="w-10 text-right">%</span><span className="w-12 shrink-0" />
           </div>
           <ProgressTree nodes={tree.roots} depth={0} expanded={expanded} toggle={toggle}
             childrenMap={tree.childrenMap} nodePct={nodePct} amountMap={amountMap} billableTotal={billableTotal} plannedNow={plannedNow} />
         </div></div>
-        <p className="text-xs text-[var(--text-3)] mt-3">點「▸」展開到更細的工項;紅色長條=該工項落後今日預定。各層百分比為金額加權滾算。</p>
+        {/* 說明不綁字形:展開圖示改成 MSym 之後,寫死「▸」的文案就會失效 */}
+        <p className="text-xs text-[var(--text-3)] mt-3">點展開箭頭可鑽取到更細的工項;紅色長條=該工項落後今日預定。各層百分比為金額加權滾算。</p>
       </Card>
 
-      <Card title="逐月預定進度（可調整）">
-        <div className="overflow-x-auto -mx-4 -my-4">
+      {/* 表格出血改用 bodyClass="p-0",不再用負 margin 抵銷 Card 的 p-5 */}
+      <Card title="逐月預定進度（可調整）" bodyClass="p-0">
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
-                <th className="text-left font-medium py-2 pl-3">月份</th>
-                <th className="text-right font-medium px-3">預定累計%</th>
-                <th className="text-right font-medium px-3 pr-4">實際累計%</th>
+              <tr className="border-b border-[var(--border)]">
+                <th className={`${THEAD_CLS} text-left py-2 pl-3`}>月份</th>
+                <th className={`${THEAD_CLS} text-right px-3`}>預定累計%</th>
+                <th className={`${THEAD_CLS} text-right px-3 pr-4`}>實際累計%</th>
               </tr>
             </thead>
             <tbody>
@@ -267,13 +274,14 @@ export default function Progress() {
                 const act = actualByMonth.get(mm.label)
                 return (
                   <tr key={mm.label} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
-                    <td className="py-1.5 pl-3 text-[var(--text)] tabular-nums">{mm.label}</td>
+                    <td className="py-1.5 pl-3 text-[var(--text)] num whitespace-nowrap">{mm.label}</td>
                     <td className="text-right px-3">
-                      <input type="number" min="0" max="100" value={mm.plannedPct}
+                      {/* 表內輸入吃共用 Input:手機自動放大到 44px,focus ring 與全站一致 */}
+                      <Input type="number" min="0" max="100" value={mm.plannedPct} aria-label={`${mm.label} 預定累計%`}
                         onChange={(e) => { let n = parseFloat(e.target.value); if (isNaN(n)) n = 0; onPlannedPct(i, Math.max(0, Math.min(100, n))) }}
-                        className="w-20 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none" />
+                        className="!w-20 !px-2 !py-1 text-right num" />
                     </td>
-                    <td className="text-right px-3 pr-4 tabular-nums">{act != null ? <span className="text-[var(--blue-text)]">{act.toFixed(1)}%</span> : <span className="text-[var(--text-3)]">—</span>}</td>
+                    <td className="text-right px-3 pr-4 num whitespace-nowrap">{act != null ? <span className="text-[var(--blue-text)]">{act.toFixed(1)}%</span> : <span className="text-[var(--text-3)]">—</span>}</td>
                   </tr>
                 )
               })}
@@ -302,24 +310,26 @@ function ProgressTree({ nodes, depth, expanded, toggle, childrenMap, nodePct, am
         <div className="flex items-center gap-2 py-1.5 border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
           {/* 沒有子項時原本仍渲染一顆點不動的 button,對鍵盤是空殼 tab stop;改成純裝飾 span */}
           {kids.length ? (
+            /* 展開圖示與 BOQ/估驗的工項樹統一(expand_more/chevron_right);手機補 44px 命中區 */
             <button onClick={() => toggle(it.item_key)} style={{ marginLeft: `${depth * 14}px` }}
               aria-expanded={open} aria-label={`${open ? '收合' : '展開'} ${it.item_no}`}
-              className="w-4 shrink-0 text-[var(--text-3)] cursor-pointer hover:text-[var(--text)]">
-              {open ? '▾' : '▸'}
+              className="w-4 max-md:min-h-11 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] cursor-pointer hover:text-[var(--text)]">
+              <MSym name={open ? 'expand_more' : 'chevron_right'} size={16} />
             </button>
           ) : (
             <span style={{ marginLeft: `${depth * 14}px` }} className="w-4 shrink-0 text-[var(--text-3)]" aria-hidden>·</span>
           )}
-          <span className="w-20 shrink-0 text-xs text-[var(--text-3)] tabular-nums truncate">{it.item_no}</span>
+          <span className="w-20 shrink-0 text-xs text-[var(--text-3)] num truncate">{it.item_no}</span>
           <span className="flex-1 text-sm truncate">{it.description}</span>
-          <span className="w-12 text-right text-xs text-[var(--text-3)] tabular-nums">{share.toFixed(1)}%</span>
+          <span className="w-12 text-right text-xs text-[var(--text-3)] num">{share.toFixed(1)}%</span>
           <div className="w-28 shrink-0 h-2 rounded-full overflow-hidden bg-[var(--surface-2)]">
             <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: behind ? 'var(--red-text)' : 'var(--blue)' }} />
           </div>
-          <span className="w-10 text-right text-xs tabular-nums">{pct.toFixed(0)}%</span>
+          <span className="w-10 text-right text-xs num">{pct.toFixed(0)}%</span>
+          {/* 狀態標籤走 Badge(11px/22px),不再自寫 10px 圓 pill */}
           {behind
-            ? <span className="w-8 shrink-0 text-[10px] text-center px-1 py-0.5 rounded-full bg-[var(--red-tint)] text-[var(--red-text)]">落後</span>
-            : <span className="w-8 shrink-0" />}
+            ? <span className="w-12 shrink-0 flex justify-center"><Badge color="red">落後</Badge></span>
+            : <span className="w-12 shrink-0" />}
         </div>
         {open && kids.length > 0 && (
           <ProgressTree nodes={kids} depth={depth + 1} expanded={expanded} toggle={toggle}
@@ -330,14 +340,9 @@ function ProgressTree({ nodes, depth, expanded, toggle, childrenMap, nodePct, am
   })
 }
 
-function Header({ billableTotal, project, action }) {
+// PageHeader 直接置頁根:動作鈕走 action prop。原本把 PageHeader 與動作鈕並排成兄弟節點,
+// 會讓工作面分頁列(PageTabs 渲染在 PageHeader 內)把動作鈕擠到分頁列下方。
+function Header({ billableTotal, action }) {
   const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
-  return (
-    <div className="flex items-end justify-between flex-wrap gap-3">
-      <div className="min-w-0">
-        <PageHeader title="進度管制" tagline="S-Curve" subtitle={`發包工程費 ${yi(billableTotal)}`} />
-      </div>
-      {action}
-    </div>
-  )
+  return <PageHeader title="進度管制" tagline="S-Curve" subtitle={`發包工程費 ${yi(billableTotal)}`} action={action} />
 }

@@ -4,6 +4,11 @@
 // 只接「新場景」的輕量回饋;被 e2e 釘住的既有 inline 回饋(已存檔 ✓ 等)不搬——
 // 4 秒自動消失會讓連續斷言 race。
 //
+// 浮層圓角分三階(全站唯一一份說明,改之前先想清楚要動哪一階):
+//   對話框 rounded-[28px] — confirm.jsx / MarkupEditor,要求使用者停下來回應
+//   常駐面板 rounded-2xl  — CopilotFab,與卡片同一個圓角家族
+//   瞬時浮層 rounded-lg   — snackbar 與各處下拉選單,出現即走、不該搶視覺重量
+//
 // 用法:
 //   appSnackbar('已加入成員')
 //   appSnackbar({ message: '已刪除 1 筆', actionLabel: '復原', onAction: undo })
@@ -40,8 +45,9 @@ export function SnackbarHost() {
           {snack.actionLabel}
         </button>
       )}
+      {/* snackbar 在手機浮在底部導覽附近,關閉鈕更要吃滿 44px(W8-5 觸控標準) */}
       <button onClick={() => setSnack(null)} aria-label="關閉通知"
-        className="shrink-0 w-8 h-8 -mr-2 rounded-full flex items-center justify-center opacity-70 hover:opacity-100">
+        className="shrink-0 w-8 h-8 max-md:w-11 max-md:h-11 -mr-2 rounded-full flex items-center justify-center opacity-70 hover:opacity-100">
         <MSym name="close" size={18} />
       </button>
     </div>

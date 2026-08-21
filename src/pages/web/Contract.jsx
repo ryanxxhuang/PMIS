@@ -8,7 +8,12 @@ import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Card, Empty, PageHeader, Badge, Button, Select, buttonClass, FilterChip, SortableTh, TablePager } from '../../components/ui.jsx'
+import {
+  Card, Empty, PageHeader, Badge, Button, Select, buttonClass, FilterChip, SortableTh, TablePager,
+  Field, Input, Surface, ErrorBanner, THEAD_CLS,
+} from '../../components/ui.jsx'
+// 契約包切換屬「視圖分段」:與工作面分頁/Admin tabs 共用同一套 chips 皮,不再自寫選取卡
+import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { useTableSort, usePagination } from '../../lib/useTable.js'
 import { computeObligationDue } from '../../lib/contractDue.js'
 import { estimatePenalty } from '../../lib/penaltyCalc.js'
@@ -43,15 +48,17 @@ function ruleText(ob) {
   return t
 }
 
-const DOT = { done: 'var(--green-text)', overdue: 'var(--red-text)', soon: 'var(--amber-text)', scheduled: 'var(--blue)', nodate: 'var(--text-3)' }
+// 狀態色點走 class 對照表而非 inline style:顏色一律由 className 帶 token,
+// 才吃得到主題切換與全站色票收斂(UI/UX 統一修正)。
+const DOT_CLS = { done: 'bg-[var(--green-text)]', overdue: 'bg-[var(--red-text)]', soon: 'bg-[var(--amber-text)]', scheduled: 'bg-[var(--blue)]', nodate: 'bg-[var(--text-3)]' }
 // W8-5:狀態不得只靠顏色。色點本身給等價文字(hover 看 title、報讀器讀 aria-label),
 // 色盲與螢幕報讀使用者才拿得到「已逾期/7 日內」這種行動依據。
 const DOT_LABEL = { done: '已完成', overdue: '已逾期', soon: '7 日內到期', scheduled: '排程中', nodate: '無期限' }
-// 文件清單表格欄樣式:字級/內距對齊 Admin 的 TH/TD 常數(11px/500 表頭、13px 內文,
-// README 字級表)。兩頁沒有共用常數的必要,先各自字面;同步點是 README。
-const DOC_TH = 'text-left font-medium text-[11px] text-[var(--text-2)] py-2 px-3 whitespace-nowrap'
+// 文件清單表格欄樣式:表頭字型層吃 ui.jsx 的 THEAD_CLS(全站單一真相),
+// 對齊/內距仍由本表自決(README 表格規範)。
+const DOC_TH = `text-left ${THEAD_CLS} py-2 px-3 whitespace-nowrap`
 // text-left/text-right 同屬性,不可用附加 class 蓋——誰生效取決於產出 CSS 順序
-const DOC_THR = 'text-right font-medium text-[11px] text-[var(--text-2)] py-2 px-3 whitespace-nowrap'
+const DOC_THR = `text-right ${THEAD_CLS} py-2 px-3 whitespace-nowrap`
 const DOC_TD = 'py-2 px-3 text-[13px] align-top'
 export default function Contract() {
   const {
@@ -393,14 +400,18 @@ export default function Contract() {
   const { pageRows: docPageRows, pager: docPager } = usePagination(sortedDocRows)
 
   if (isSupabaseConfigured && !currentProject) {
-    return <Card title="契約管制"><Empty>請先登入並建立/選擇專案,才能整理契約文件。</Empty></Card>
+    // 早退分支與正常態同一個頁首:標題不再出現第二種名字(舊為「契約管制」)
+    return (
+      <div className="space-y-5">
+        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並抽出履約需求;人工核准的期限會進入義務時程" />
+        <Card><Empty>請先登入並建立/選擇專案,才能整理契約文件。</Empty></Card>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-5">
-      <div className="min-w-0">
-        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並抽出履約需求;人工核准的期限會進入義務時程" />
-      </div>
+      <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並抽出履約需求;人工核准的期限會進入義務時程" />
 
       <Card title="基準日">
         <div className="flex flex-wrap gap-4">
@@ -411,15 +422,14 @@ export default function Contract() {
             // 建案表單的「預計竣工日」寫的就是這一欄;完工類義務算不出到期日多半是它留白
             ['end_date', '竣工日(完工義務基準)'],
           ].map(([k, label]) => (
-            <label key={k} className="block">
-              <span className="block text-sm font-medium text-[var(--text)] mb-1">{label}</span>
-              <input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
-                disabled={!can.edit}
-                className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm max-md:min-h-11" />
-            </label>
+            // 共用 Field/Input 取代自寫 label+input 殼:欄位樣式全站一份(UI/UX 統一修正)
+            <Field key={k} label={label}>
+              <Input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
+                disabled={!can.edit} />
+            </Field>
           ))}
         </div>
-        {anchorErr && <p className="text-xs text-[var(--red-text)] mt-2">{anchorErr}</p>}
+        <ErrorBanner msg={anchorErr} className="mt-2" />
         <p className="text-xs text-[var(--text-3)] mt-3">義務時程的到期日、倒數、逾期都依這些基準日即時計算。「開工日」請填實際開工日;建立專案時填的是預計值,在這裡更新才會影響義務時程。</p>
       </Card>
 
@@ -427,7 +437,7 @@ export default function Contract() {
       <Card title="契約文件" action={
         <div className="flex items-center gap-2">
           {(packages.length > 1 || creatableOptions.length > 0) && (
-            <Select value={selectedPackageId || ''} className="text-xs w-48"
+            <Select value={selectedPackageId || ''} className="w-48"
               onChange={async (e) => {
                 const value = e.target.value
                 if (value.startsWith('new:')) {
@@ -458,21 +468,31 @@ export default function Contract() {
           </label>
         </div>
       }>
-        {/* 契約包總覽(依角色只列可見契約包) */}
+        {/* 契約包總覽(依角色只列可見契約包):單選切換走全站 chips 語言
+            (CHIP_BASE/ON/OFF),不再自寫選取卡;副標與狀態改列在 chips 下方的
+            詳情列——只描述目前選取的契約包,資訊不因換皮而消失 */}
         {packages.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {packages.map((p) => {
-              const name = packageDisplayName(p, { partiesById, myPartyId })
-              const active = p.id === selectedPackageId
+          <div className="mb-4">
+            <div className="flex flex-wrap gap-2">
+              {packages.map((p) => {
+                const name = packageDisplayName(p, { partiesById, myPartyId })
+                const active = p.id === selectedPackageId
+                return (
+                  <button key={p.id} onClick={() => setSelectedPackageId(p.id)} aria-pressed={active}
+                    className={`${CHIP_BASE} ${active ? CHIP_ON : CHIP_OFF}`}>
+                    {name.title}
+                  </button>
+                )
+              })}
+            </div>
+            {selectedPackage && (() => {
+              const name = packageDisplayName(selectedPackage, { partiesById, myPartyId })
               return (
-                <button key={p.id} onClick={() => setSelectedPackageId(p.id)}
-                  className={`text-left border rounded-xl px-3 py-2 min-w-[160px] pressable ${active ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border)] hover:bg-[var(--surface-2)]'}`}>
-                  <div className="text-sm font-medium text-[var(--text)]">{name.title}</div>
-                  {name.subtitle && <div className="text-xs text-[var(--text-3)]">{name.subtitle}</div>}
-                  <div className="text-xs text-[var(--text-3)] mt-0.5">{PACKAGE_STATUS_LABELS[p.status] || p.status}</div>
-                </button>
+                <div className="text-xs text-[var(--text-3)] mt-1.5">
+                  {name.subtitle ? `${name.subtitle}·` : ''}{PACKAGE_STATUS_LABELS[selectedPackage.status] || selectedPackage.status}
+                </div>
               )
-            })}
+            })()}
           </div>
         )}
 
@@ -489,13 +509,14 @@ export default function Contract() {
               (PDF / Word / TXT / Excel / 圖片…),系統會自動分類、整理並找出履約要求。
             </p>
           ) : (
-            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-[var(--text)]">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-[var(--text)]">
               <span className="font-medium">已收到 {progress.total} 份文件</span>
               <span>{progress.classified} 已分類</span>
               <span>{progress.requirementsAnalyzed} 已分析履約要求</span>
-              {progress.needsClassification > 0 && <span className="text-[var(--amber-text)]">{progress.needsClassification} 待確認</span>}
-              {progress.unsupported > 0 && <span className="text-[var(--text-3)]">{progress.unsupported} 尚未支援分析</span>}
-              {progress.failed > 0 && <span className="text-[var(--red-text)]">{progress.failed} 失敗</span>}
+              {/* 警示/異常計數走五語意 Badge,不再用裸文字色表狀態(UI/UX 統一修正) */}
+              {progress.needsClassification > 0 && <Badge color="amber">{progress.needsClassification} 待確認</Badge>}
+              {progress.unsupported > 0 && <Badge color="slate">{progress.unsupported} 尚未支援分析</Badge>}
+              {progress.failed > 0 && <Badge color="red">{progress.failed} 失敗</Badge>}
             </div>
           )}
           {/* 警語一律吃 --amber-text token:硬編碼 text-amber-600 在深色模式不會跟著切換 */}
@@ -505,52 +526,70 @@ export default function Contract() {
 
         {/* 真實階段進度(持久化;離開頁面不會遺失) */}
         {(progress.active > 0 || uploading || boqBusy) && (
-          <div className="mt-4 bg-[var(--surface-2)] rounded-xl px-4 py-3 text-sm">
+          // 進度面板改吃共用 Surface 卡殼,不再自組 surface-2 圓角底
+          <Surface className="mt-4 px-4 py-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="font-medium text-[var(--text)]">
                 正在整理{selectedPackage ? packageDisplayName(selectedPackage, { partiesById, myPartyId }).title : '契約文件'}
               </span>
               {elapsed && <span className="text-xs text-[var(--text-3)]">已進行 {elapsed}</span>}
             </div>
+            {/* ●/✓ 文字符號改 MSym:完成=check_circle、進行中=空心圓點,與全站圖示語言一致 */}
             <ul className="mt-2 space-y-1 text-xs text-[var(--text-2)]">
               {/* 只丟標單 XML 時完全沒有 processing run,計數列會是 0/0——那條路徑只報自己的進度 */}
-              {boqBusy && <li>● 正在解析標單 XML…</li>}
+              {boqBusy && <li className="flex items-center gap-1.5"><MSym name="progress_activity" size={13} className="msym-spin text-[var(--text-3)] shrink-0" /> 正在解析標單 XML…</li>}
               {progress.total > 0 && (
                 <>
-                  <li>{progress.uploaded >= progress.total ? '✓' : '●'} 已上傳 {progress.uploaded} / {progress.total}</li>
-                  <li>{progress.textExtracted >= progress.total - progress.unsupported ? '✓' : '●'} 已完成文字讀取 {progress.textExtracted} / {progress.total - progress.unsupported}</li>
-                  <li>{progress.classified >= progress.total ? '✓' : '●'} 已辨識文件類型 {progress.classified} / {progress.total}</li>
-                  <li>{progress.active === 0 ? '✓' : '●'} 已分析履約要求 {progress.requirementsAnalyzed}</li>
+                  {[
+                    [progress.uploaded >= progress.total, `已上傳 ${progress.uploaded} / ${progress.total}`],
+                    [progress.textExtracted >= progress.total - progress.unsupported, `已完成文字讀取 ${progress.textExtracted} / ${progress.total - progress.unsupported}`],
+                    [progress.classified >= progress.total, `已辨識文件類型 ${progress.classified} / ${progress.total}`],
+                    [progress.active === 0, `已分析履約要求 ${progress.requirementsAnalyzed}`],
+                  ].map(([ok, text]) => (
+                    <li key={text} className="flex items-center gap-1.5">
+                      <MSym name={ok ? 'check_circle' : 'radio_button_unchecked'} size={13}
+                        className={`shrink-0 ${ok ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'}`} /> {text}
+                    </li>
+                  ))}
                 </>
               )}
             </ul>
             {/* 「可離開」只對持久化的 processing run 成立;標單匯入是本頁直接呼叫 RPC,離開會中斷 */}
             {progress.total > 0 && <p className="text-xs text-[var(--text-3)] mt-2">你可以離開此頁,處理結果會保留。</p>}
-          </div>
+          </Surface>
         )}
-        {msg && <p className="text-xs text-[var(--red-text)] mt-3">{msg}</p>}
-        {/* 成功/略過/失敗要一眼分得出來:失敗用紅字,成功綠字並直接給下一步入口 */}
-        {boqMsg && (
-          <p className={`text-xs mt-2 ${boqMsg.tone === 'ok' ? 'text-[var(--green-text)]' : boqMsg.tone === 'error' ? 'text-[var(--red-text)]' : 'text-[var(--text-3)]'}`}>
-            {boqMsg.text}
-            {boqMsg.tone === 'ok' && <Link to="/boq" className="text-[var(--blue-text)] hover:underline ml-1">前往標單工項 →</Link>}
-          </p>
-        )}
+        <ErrorBanner msg={msg} className="mt-3" />
+        {/* 成功/略過/失敗要一眼分得出來:失敗走全站 ErrorBanner,成功/略過用圖示+中性文字
+            (訊息是句子不是狀態標籤,塞 Badge 會因 nowrap 爆版) */}
+        {boqMsg && (boqMsg.tone === 'error'
+          ? <ErrorBanner msg={boqMsg.text} className="mt-2" />
+          : (
+            <p className="text-xs mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[var(--text-2)]">
+              <MSym name={boqMsg.tone === 'ok' ? 'check_circle' : 'info'} size={14}
+                className={`shrink-0 ${boqMsg.tone === 'ok' ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'}`} />
+              {boqMsg.text}
+              {boqMsg.tone === 'ok' && <Link to="/boq" className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">前往標單工項 <MSym name="arrow_forward" size={12} /></Link>}
+            </p>
+          ))}
         {/* workItemsSource:只匯了標單的新專案(runs=0、obligations=0)本來看不到後續指引 */}
         {!uploading && !boqBusy && (runs.length > 0 || obligations.length > 0 || workItemsSource === 'db') && (
-          <div className="mt-4 rounded-lg border border-[var(--border-2)] bg-[var(--blue-tint)]/40 px-4 py-3">
-            <div className="text-xs font-semibold text-[var(--text)] mb-1.5">接下來該做什麼</div>
+          // 底色用 --blue-tint 原值:對 token 疊 /40 透明度在深色模式會混出不可預期的對比
+          <div className="mt-4 rounded-lg border border-[var(--border-2)] bg-[var(--blue-tint)] px-4 py-3">
+            {/* font-semibold 不在系統字重表內,小標一律 500 */}
+            <div className="text-xs font-medium text-[var(--text)] mb-1.5">接下來該做什麼</div>
+            {/* emoji 項目符號改 MSym(event/search/checklist 皆在字型子集內),與全站圖示語言一致;
+                句中的「→」是行文標點不是圖示,保留原文 */}
             <ul className="text-xs text-[var(--text-2)] space-y-1">
               {obligations.length > 0 && (
-                <li>📅 {obligations.length} 項時程義務已列在下方時間軸——到期會自動出現在<Link to="/alerts" className="text-[var(--blue-text)] hover:underline">提醒中心</Link>。</li>
+                <li className="flex items-start gap-1.5"><MSym name="event" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>{obligations.length} 項時程義務已列在下方時間軸——到期會自動出現在<Link to="/alerts" className="text-[var(--blue-text)] hover:underline">提醒中心</Link>。</span></li>
               )}
               {/* W8-3A(D-014):人工核定只針對「要成為契約規則」的內容,不是初始化門檻。
                   ⚠️ 這一行在整理尚未跑完時也會顯示,所以措辭必須中性——不得斷言「AI 已整理完成」
                   (是否完成的唯一判定在 document_ingestion_runs,見 Requirements 的 requirementsIntro)。 */}
-              <li>🔍 AI 整理完成後,只有要成為契約規則的內容才需人工核定 → <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">前往契約重點</Link>(機關/監造辦理);未核定不影響開啟正式模式。</li>
+              <li className="flex items-start gap-1.5"><MSym name="search" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>AI 整理完成後,只有要成為契約規則的內容才需人工核定 → <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">前往契約重點</Link>(機關/監造辦理);未核定不影響開啟正式模式。</span></li>
               {workItemsSource === 'db'
-                ? <li>📋 標單已就緒 → <Link to="/boq" className="text-[var(--blue-text)] hover:underline">標單工項</Link>;估驗、進度、日誌都掛在它上面。</li>
-                : <li>📋 還沒看到標單:把 PCCES 預算書 XML 也丟進上面同一個框即可自動匯入。</li>}
+                ? <li className="flex items-start gap-1.5"><MSym name="checklist" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>標單已就緒 → <Link to="/boq" className="text-[var(--blue-text)] hover:underline">標單工項</Link>;估驗、進度、日誌都掛在它上面。</span></li>
+                : <li className="flex items-start gap-1.5"><MSym name="checklist" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>還沒看到標單:把 PCCES 預算書 XML 也丟進上面同一個框即可自動匯入。</span></li>}
             </ul>
           </div>
         )}
@@ -558,24 +597,26 @@ export default function Contract() {
         {/* AI 履約要求摘要 → 審查收件匣 */}
         {aiCount != null && aiCount > 0 && (
           <p className="text-sm text-[var(--text)] mt-4">
-            AI 從本契約找到 <span className="font-semibold">{aiCount}</span> 項履約要求建議。
-            <Link to="/requirements" className="text-[var(--blue-text)] hover:underline ml-1">查看整理結果 →</Link>
+            AI 從本契約找到 <span className="font-medium">{aiCount}</span> 項履約要求建議。
+            <Link to="/requirements" className="text-[var(--blue-text)] hover:underline ml-1 inline-flex items-center gap-0.5">查看整理結果 <MSym name="arrow_forward" size={12} /></Link>
           </p>
         )}
 
         {/* 待確認文件 */}
         {needsReviewRows.length > 0 && (
           <div className="mt-4">
-            <div className="text-sm font-medium text-[var(--amber-text)] mb-1.5">待確認文件({needsReviewRows.length})</div>
+            {/* 標題維持 --text:警示語意由列的 amber-tint 底承擔,標題不用語意色當文字色 */}
+            <div className="text-sm font-medium text-[var(--text)] mb-1.5">待確認文件({needsReviewRows.length})</div>
+            {/* 邊框回 --border-2:*-text token 疊 /40 透明度當邊框色,深色模式對比不可預期 */}
             {needsReviewRows.map(({ run, doc }) => (
-              <div key={run.id} className="flex items-center gap-2 text-xs border border-[var(--amber-text)]/40 bg-[var(--amber-tint)] rounded-lg px-3 py-1.5 mb-1.5">
+              <div key={run.id} className="flex items-center gap-2 text-xs border border-[var(--border-2)] bg-[var(--amber-tint)] rounded-lg px-3 py-1.5 mb-1.5">
                 {/* 文件標題是人據以選分類的依據,被截斷時至少要能 hover 看全名 */}
                 <span className="flex-1 truncate text-[var(--text)]" title={doc?.title || '文件'}>{doc?.title || '文件'}</span>
                 {/* amber-tint 底上的 text-3 只有 3.4:1,次要文字改 text-2(≈6.6:1) */}
                 <span className="text-[var(--text-2)]">AI 建議:{DOCUMENT_TYPE_LABELS[run.suggested_document_type] || '無法判斷'}</span>
                 {can.edit && (
                   <div className="flex items-center gap-1.5">
-                    <Select defaultValue={run.suggested_document_type || 'other'} className="text-xs w-40"
+                    <Select defaultValue={run.suggested_document_type || 'other'} className="w-40"
                       onChange={(e) => confirmClassification(run, e.target.value)}>
                       {CLASSIFIABLE_DOCUMENT_TYPES.map((t) => (
                         <option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</option>
@@ -616,7 +657,7 @@ export default function Contract() {
                   {docPageRows.map(({ run, doc, version, title, group, uploaded }) => {
                     const analyzed = run.metadata?.requirement_extraction === 'completed'
                     return (
-                      <tr key={run.id} className="border-b border-[var(--border-2)] last:border-0">
+                      <tr key={run.id} className="border-b border-[var(--border-2)] last:border-0 hover:bg-[var(--surface-2)]">
                         <td className={`${DOC_TD} max-w-[280px]`}>
                           <div className="flex items-center gap-1.5 min-w-0">
                             <MSym name="description" size={12} className="text-[var(--text-3)] shrink-0" />
@@ -663,8 +704,9 @@ export default function Contract() {
         {/* 技術資訊(內部詞彙只放這裡) */}
         {runs.length > 0 && (
           <div className="mt-3">
+            {/* 第三級文字鈕統一 --blue-text(灰字鈕不在按鈕三級語言內) */}
             <button onClick={() => setShowTech((s) => !s)} aria-expanded={showTech}
-              className="text-xs text-[var(--text-3)] hover:text-[var(--text-2)] inline-flex items-center gap-1 max-md:min-h-11 px-1">
+              className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center gap-1 max-md:min-h-11 px-1">
               <MSym name="chevron_right" size={12} className={`transition-transform duration-[var(--dur-fast)] ${showTech ? 'rotate-90' : ''}`} /> 技術資訊
             </button>
             {showTech && (
@@ -693,18 +735,19 @@ export default function Contract() {
           <Badge color="green">已完成 {counts.done} 項</Badge>
         </div>
         {groups.length === 0 && (
-          <p className="text-xs text-[var(--text-3)] mt-3">尚無已核准的期限要求。上傳契約文件並前往「契約重點」；期限核准後會自動出現在這裡。</p>
+          <Empty>尚無已核准的期限要求。上傳契約文件並前往「契約重點」；期限核准後會自動出現在這裡。</Empty>
         )}
-        {obligationMsg && <p className="text-xs text-[var(--red-text)] mt-2">{obligationMsg}</p>}
+        <ErrorBanner msg={obligationMsg} className="mt-2" />
       </Card>
 
       {groups.map((g) => (
         <div key={g.ph}>
-          <div className="text-sm font-medium text-[var(--text-2)] mb-2">{g.ph}</div>
+          {/* 階段分組是真標題:給語意標籤(與 Submittals 的分組 h2 同語言) */}
+          <h2 className="text-sm font-medium text-[var(--text-2)] mb-2">{g.ph}</h2>
           <div className="space-y-2">
             {g.list.map((it) => (
               <div key={it.ob.id} className="flex gap-3">
-                <span className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0" style={{ background: DOT[it.state] }}
+                <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${DOT_CLS[it.state]}`}
                   role="img" title={DOT_LABEL[it.state]} aria-label={DOT_LABEL[it.state]} />
                 <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
                   <div className="flex justify-between items-start gap-2">
@@ -722,15 +765,21 @@ export default function Contract() {
                         if (error) setObligationMsg(`義務狀態未寫入:${error.message}`)
                       }
                     }}
-                      className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0 inline-flex items-center max-md:min-h-11 ${it.done ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+                      /* 待辦態吃共用 buttonClass(outline/sm),不再自寫鈕殼;已提送態是「狀態兼退回鈕」
+                         (點它退回待辦,e2e 依 name「已提送 ✓」取用——✓ 是 e2e 文案,不改圖示),
+                         綠底沿 Badge 的 green tint token,屬既定的狀態鈕例外 */
+                      className={it.done
+                        ? 'text-xs h-8 px-3 rounded-full font-medium whitespace-nowrap shrink-0 inline-flex items-center max-md:min-h-11 pressable bg-[var(--green-tint)] text-[var(--green-text)]'
+                        : `${buttonClass('outline', 'sm')} shrink-0`}>
                       {it.done ? '已提送 ✓' : '標為已提送'}
                     </button>}
                   </div>
                   {/* W-01 佐證挑選:掛上對應的送審文件,義務完成不再只是空口 toggle */}
                   {evidenceFor === it.ob.id && !it.done && (
-                    <div className="mt-2 p-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex flex-wrap items-center gap-2">
+                    // 佐證挑選面板改吃共用 Surface 殼(自寫 surface-2 圓角底退場)
+                    <Surface className="mt-2 p-2.5 flex flex-wrap items-center gap-2">
                       <span className="text-xs text-[var(--text-2)] shrink-0">佐證送審文件</span>
-                      <Select value={evidencePick} onChange={(e) => setEvidencePick(e.target.value)} className="text-xs flex-1 min-w-[200px]">
+                      <Select value={evidencePick} onChange={(e) => setEvidencePick(e.target.value)} className="flex-1 min-w-[200px]">
                         <option value="">（不掛佐證）</option>
                         {submittals.map((s) => (
                           <option key={s.id} value={s.id}>{s.submittal_no} {s.title}（{s.status}）</option>
@@ -742,16 +791,19 @@ export default function Contract() {
                         if (error) { setObligationMsg(`義務狀態未寫入:${error.message}`); return }
                         setEvidenceFor(null)
                       }}>{evidencePick ? '掛佐證並標為已提送' : '直接標為已提送'}</Button>
-                      <button onClick={() => setEvidenceFor(null)} className="text-xs text-[var(--text-3)] hover:underline inline-flex items-center max-md:min-h-11 px-1">取消</button>
-                    </div>
+                      <Button variant="ghost" size="sm" onClick={() => setEvidenceFor(null)}>取消</Button>
+                    </Surface>
                   )}
                   {/* 佐證連結:已掛送審文件的義務,稽核可一路點到原始送審紀錄 */}
                   {it.ob.evidence_submittal_id && (() => {
                     const ev = submittals.find((s) => s.id === it.ob.evidence_submittal_id)
                     return (
-                      <Link to="/submittals" className="mt-1.5 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] hover:underline">
-                        <MSym name="description" size={11} />
-                        佐證:{ev ? `${ev.submittal_no} ${ev.title}（${ev.status}）` : '送審文件（已不存在或無權檢視）'}
+                      // 佐證連結的色票外殼改共用 Badge(藍),不再手抄 blue-tint 藥丸
+                      <Link to="/submittals" className="mt-1.5 inline-flex hover:underline">
+                        <Badge color="blue">
+                          <MSym name="description" size={11} />
+                          佐證:{ev ? `${ev.submittal_no} ${ev.title}（${ev.status}）` : '送審文件（已不存在或無權檢視）'}
+                        </Badge>
                       </Link>
                     )
                   })()}
@@ -759,10 +811,15 @@ export default function Contract() {
                     {ruleText(it.ob)}{it.due ? `　·　到期 ${iso(it.due)}` : ''}
                     {it.ob.responsible ? `　·　${it.ob.responsible}` : ''}
                   </div>
+                  {/* 逾期/將到期是狀態,走五語意 Badge;一般倒數維持中性文字(非語意色) */}
                   {!it.done && it.due && (
-                    <div className={`text-xs font-medium mt-0.5 ${it.state === 'overdue' ? 'text-[var(--red-text)]' : it.state === 'soon' ? 'text-[var(--amber-text)]' : 'text-[var(--text-2)]'}`}>
-                      {it.state === 'overdue' ? `已逾期 ${-it.diff} 天` : `還有 ${it.diff} 天`}
-                    </div>
+                    it.state === 'overdue' || it.state === 'soon'
+                      ? <div className="mt-1"><Badge color={it.state === 'overdue' ? 'red' : 'amber'}>{it.state === 'overdue' ? `已逾期 ${-it.diff} 天` : `還有 ${it.diff} 天`}</Badge></div>
+                      : (
+                        <div className="text-xs font-medium mt-0.5 text-[var(--text-2)]">
+                          還有 {it.diff} 天
+                        </div>
+                      )
                   )}
                   {it.ob.penalty && (
                     <div className="text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-2 py-1 mt-2 inline-flex items-center gap-1"><MSym name="balance" size={12} /> {it.ob.penalty}</div>

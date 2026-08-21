@@ -4,7 +4,7 @@ import { useStore } from './store.jsx'
 import { WebLayout } from './components/Layout.jsx'
 import { routeAllowed, routeRegistry } from './lib/navConfig.js'
 import { ConfirmHost } from './components/confirm.jsx'
-import { Surface, Skeleton, SkeletonList } from './components/ui.jsx'
+import { Surface, Skeleton, SkeletonList, Empty, Button } from './components/ui.jsx'
 import { SnackbarHost } from './components/snackbar.jsx'
 
 import Login from './pages/Login.jsx'
@@ -82,9 +82,16 @@ function Web({ children, bare = false, registryPath }) {
   if (!routeAllowed(registryPath || pathname, currentUser.org_type || 'contractor', can.override, isPlatformAdmin)) {
     return (
       <WebLayout>
-        <div className="text-center py-20 space-y-2">
-          <div className="text-[var(--text)] font-medium">你的角色沒有此頁的存取權限</div>
-          <p className="text-sm text-[var(--text-3)]">這個工作畫面僅開放給特定角色（如廠商內部成本、監造報表）。</p>
+        {/* 文案逐字保留:supervisor/owner spec 以 getByText 斷言這句 */}
+        <div className="py-12">
+          <Empty icon="lock" title="你的角色沒有此頁的存取權限">
+            這個工作畫面僅開放給特定角色（如廠商內部成本、監造報表）。
+            <span className="block mt-4">
+              <Link to={currentUser?.org_type === 'owner' ? '/portfolio' : '/dashboard'} className="inline-flex rounded-full">
+                <Button variant="secondary" tabIndex={-1}>回工作首頁</Button>
+              </Link>
+            </span>
+          </Empty>
         </div>
       </WebLayout>
     )

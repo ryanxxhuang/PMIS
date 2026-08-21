@@ -3,8 +3,10 @@
 // 座標一律存原圖像素座標(依顯示縮放換算),合成時不失真。
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { MSym } from './icons.jsx'
-import { Button } from './ui.jsx'
+import { Button, Empty, buttonClass } from './ui.jsx'
+import { CHIP_BASE, CHIP_ON, CHIP_OFF } from './PageTabs.jsx'
 import { appPrompt } from './confirm.jsx'
+import { appSnackbar } from './snackbar.jsx'
 // pdf.js worker 自帶,與 documentExtract.js 同一個決定(B-12):
 // 原本這裡是 jsdelivr CDN,機關內網連不出去就標註不了圖面;而且 worker 是會執行的
 // 程式碼,從第三方 CDN 拉本來就不該是預設。bundled worker 版本必然與主程式一致。
@@ -52,7 +54,8 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
     const f = e.target.files?.[0]; e.target.value = ''
     if (!f) return
     setBusy(true)
-    try { setImg(await fileToImageDataUrl(f)); setShapes([]) } catch { alert('讀取檔案失敗（支援圖片與 PDF）') }
+    // 原生 alert 在 e2e 與嵌入式瀏覽器會被封鎖成「按了沒反應」(confirm.jsx 檔頭同一條規矩)
+    try { setImg(await fileToImageDataUrl(f)); setShapes([]) } catch { appSnackbar('讀取檔案失敗（支援圖片與 PDF）') }
     setBusy(false)
   }
 
@@ -130,23 +133,25 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
     onSave(c.toDataURL('image/jpeg', 0.85))
   }
 
+  // 工具切換=分段控制,吃全站 chips 皮:選取態原本用 --accent(現已改義為 warn 棕),
+  // 會跟逾期/落後的語意色打架;CHIP_ON 的 blue-tint 才是「已選取」的統一訊號
   const toolBtn = (t, icon, label) => (
     <button onClick={() => setTool(t)} title={label}
-      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border pressable ${
-        tool === t ? 'border-[var(--accent)] bg-[var(--accent-tint)] text-[var(--accent-text)]' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
-      <MSym name={icon} size={14} />{label}
+      className={`${CHIP_BASE} gap-1 ${tool === t ? CHIP_ON : CHIP_OFF}`}>
+      <MSym name={icon} size={16} />{label}
     </button>
   )
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 print:hidden enter-fade" onClick={onClose}>
-      <div className="bg-[var(--surface)] rounded-lg g-elevation-2 w-full max-w-4xl max-h-[92vh] flex flex-col enter-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-2)]">
-          <h3 className="font-semibold text-[13px] tracking-wide text-[var(--text)]">{title}</h3>
-          <button onClick={onClose} aria-label="關閉" className="text-[var(--text-3)] hover:text-[var(--text)]"><MSym name="close" size={17} /></button>
+    // 遮罩與圓角向 confirm.jsx 的對話框基準看齊(28px + shadow-overlay + black/40 blur)
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4 print:hidden enter-fade" onClick={onClose}>
+      <div className="bg-[var(--surface)] rounded-[28px] border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] overflow-hidden w-full max-w-4xl max-h-[92vh] flex flex-col enter-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--border-2)]">
+          <h3 className="text-[19px] font-normal leading-snug text-[var(--text)]">{title}</h3>
+          <button onClick={onClose} aria-label="關閉" className="inline-flex items-center justify-center p-2 -m-1 max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--text)]"><MSym name="close" size={17} /></button>
         </div>
         <div className="px-4 py-2.5 flex flex-wrap items-center gap-2 border-b border-[var(--border-2)]">
-          <label className="inline-flex items-center text-xs font-medium rounded-md px-2.5 py-1.5 border border-[var(--border)] cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]">
+          <label className={`${buttonClass('secondary', 'sm')} cursor-pointer`}>
             <input type="file" accept="image/*,.pdf" className="hidden" onChange={onFile} />
             {img ? '換一張圖' : '選擇圖面 / 照片（含 PDF）'}
           </label>
@@ -154,14 +159,13 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
             {toolBtn('rect', 'crop_square', '方框')}
             {toolBtn('arrow', 'arrow_outward', '箭頭')}
             {toolBtn('text', 'title', '文字')}
-            <button onClick={() => setShapes((ss) => ss.slice(0, -1))} disabled={!shapes.length} title="復原"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable disabled:opacity-40"><MSym name="undo" size={14} />復原</button>
+            <Button variant="outline" size="sm" onClick={() => setShapes((ss) => ss.slice(0, -1))} disabled={!shapes.length} title="復原"><MSym name="undo" size={16} />復原</Button>
             <span className="text-[11px] text-[var(--text-3)] ml-auto">在圖上拖曳畫{tool === 'rect' ? '框' : tool === 'arrow' ? '箭頭' : '（點一下輸入文字）'}</span>
           </>}
         </div>
         <div className="flex-1 overflow-auto p-4 bg-[var(--surface-2)]">
           {!img ? (
-            <div className="text-center text-sm text-[var(--text-3)] py-16">選擇一張圖面截圖、現場照片或 PDF（取第 1 頁），把有問題的位置匡起來。</div>
+            <Empty icon="image">選擇一張圖面截圖、現場照片或 PDF（取第 1 頁），把有問題的位置匡起來。</Empty>
           ) : dims && (
             <div className="relative mx-auto" style={{ maxWidth: '100%', width: 'fit-content' }}>
               <img src={img} alt="待標註圖面" className="max-w-full h-auto block select-none" draggable={false} />
@@ -175,7 +179,7 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
           )}
         </div>
         <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-[var(--border-2)]">
-          <button onClick={onClose} className="text-sm text-[var(--text-3)] hover:underline">取消</button>
+          <Button variant="ghost" onClick={onClose}>取消</Button>
           <Button onClick={save} disabled={!img} busy={busy}>{busy ? '處理中…' : `儲存標註（${shapes.length} 個記號）`}</Button>
         </div>
       </div>
@@ -196,12 +200,13 @@ export function MarkupThumb({ src, resolve, className = '' }) {
   return (
     <>
       {/* 名稱不能靠內層內容:載入中分支只有「載入中」三字,按鈕名稱會跟著跑掉 */}
-      <button onClick={() => setOpen(true)} aria-label="檢視圖面標註" title="檢視圖面標註" className={`block border border-[var(--border)] rounded overflow-hidden hover:opacity-80 ${className}`}>
-        {url ? <img src={url} alt="圖面標註" className="h-14 w-20 object-cover" /> : <span className="h-14 w-20 flex items-center justify-center text-[10px] text-[var(--text-3)]">載入中</span>}
+      <button onClick={() => setOpen(true)} aria-label="檢視圖面標註" title="檢視圖面標註" className={`block border border-[var(--border)] rounded-lg overflow-hidden hover:opacity-80 ${className}`}>
+        {url ? <img src={url} alt="圖面標註" className="h-14 w-20 object-cover" /> : <span className="h-14 w-20 flex items-center justify-center text-[11px] text-[var(--text-3)]">載入中</span>}
       </button>
       {open && url && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6 print:hidden enter-fade" onClick={() => setOpen(false)}>
-          <img src={url} alt="圖面標註" className="max-w-full max-h-full rounded shadow-2xl enter-modal" />
+        // 燈箱遮罩與陰影同樣走浮層基準,不用 Tailwind 原生 shadow-2xl
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-6 print:hidden enter-fade" onClick={() => setOpen(false)}>
+          <img src={url} alt="圖面標註" className="max-w-full max-h-full rounded-lg [box-shadow:var(--shadow-overlay)] enter-modal" />
         </div>
       )}
     </>

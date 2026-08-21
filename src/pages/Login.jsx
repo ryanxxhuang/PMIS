@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom'
 import { MSym } from '../components/icons.jsx'
 import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
-import { ErrorBanner, FIELD_BASE, Button } from '../components/ui.jsx'
+import { ErrorBanner, FIELD_BASE, Button, Badge } from '../components/ui.jsx'
+import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../components/PageTabs.jsx'
 import { friendlyError } from '../lib/errorMessage.js'
 
 // ── Workspace 登入卡(design_handoff README §Screens 8)──────────────────────
@@ -154,7 +155,8 @@ function AuthForm({ mode, setMode, signIn, signUp, resendSignup, requestPassword
           若 <b>{form.email}</b> 是已註冊的帳號，重設密碼連結已寄達。<br />請點信中連結回來設定新密碼。
         </p>
         <p className="text-xs text-[var(--text-3)]">沒收到？也看一下垃圾郵件匣。</p>
-        <button onClick={() => { setResetSent(false); setMode('signin'); setErr('') }} className="inline-flex items-center min-h-11 px-2 text-sm text-[var(--blue)] hover:underline pressable">← 回登入</button>
+        {/* 第三級文字鈕統一 --blue-text:--blue 是實心鈕底色,當文字色在亮色模式對比不足 */}
+        <button onClick={() => { setResetSent(false); setMode('signin'); setErr('') }} className="inline-flex items-center gap-1 min-h-11 px-2 text-sm text-[var(--blue-text)] hover:underline pressable"><MSym name="arrow_back" size={16} />回登入</button>
       </div>
     )
   }
@@ -169,7 +171,7 @@ function AuthForm({ mode, setMode, signIn, signUp, resendSignup, requestPassword
     return (
       <div className="text-center space-y-3 py-2">
         {/* 註冊選角色是步驟 1,收驗證信是步驟 2——讓等待有進度感 */}
-        <div className="inline-flex items-center rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] text-[11px] font-medium px-2.5 py-1">步驟 2/2·驗證信箱</div>
+        <Badge color="blue">步驟 2/2·驗證信箱</Badge>
         <div className="flex justify-center">
           <span className="w-14 h-14 rounded-full bg-[var(--blue-tint)] flex items-center justify-center">
             <MSym name="mark_email_read" size={28} className="text-[var(--blue-text)]" />
@@ -181,9 +183,9 @@ function AuthForm({ mode, setMode, signIn, signUp, resendSignup, requestPassword
         </p>
         <p className="text-xs text-[var(--text-3)]">沒收到？也看一下垃圾郵件匣。</p>
         <div className="flex items-center justify-center gap-3 pt-1">
-          <button onClick={onResend} className="inline-flex items-center min-h-11 px-2 text-sm text-[var(--blue)] hover:underline pressable">重寄驗證信</button>
+          <button onClick={onResend} className="inline-flex items-center min-h-11 px-2 text-sm text-[var(--blue-text)] hover:underline pressable">重寄驗證信</button>
           <span className="text-[var(--border)]">·</span>
-          <button onClick={() => { setSent(false); setResendMsg(''); setMode('signin') }} className="inline-flex items-center min-h-11 px-2 text-sm text-[var(--blue)] hover:underline pressable">← 回登入</button>
+          <button onClick={() => { setSent(false); setResendMsg(''); setMode('signin') }} className="inline-flex items-center gap-1 min-h-11 px-2 text-sm text-[var(--blue-text)] hover:underline pressable"><MSym name="arrow_back" size={16} />回登入</button>
         </div>
         {resendMsg && <p className="text-xs text-[var(--text-2)]">{resendMsg}</p>}
       </div>
@@ -192,10 +194,12 @@ function AuthForm({ mode, setMode, signIn, signUp, resendSignup, requestPassword
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      <div className="flex rounded-full bg-[var(--surface-2)] p-1 text-sm mb-1">
+      {/* 登入/註冊切換吃全站 chips 皮(CHIP_BASE/ON/OFF),不再自寫滑塊式 segmented;
+          min-h-11 保留(原本就是全尺寸 44px,不因換皮縮成桌機 32px),grid 讓兩顆等寬 */}
+      <div className="grid grid-cols-2 gap-2 mb-1">
         {[['signin', '登入'], ['signup', '註冊']].map(([m, label]) => (
           <button key={m} type="button" onClick={() => { setMode(m); setErr('') }}
-            className={`flex-1 py-1.5 min-h-11 rounded-full pressable ${mode === m ? 'bg-[var(--surface)] shadow-sm font-medium text-[var(--blue-text)]' : 'text-[var(--text-2)]'}`}>
+            className={`${CHIP_BASE} min-h-11 w-full justify-center ${mode === m ? CHIP_ON : CHIP_OFF}`}>
             {label}
           </button>
         ))}
@@ -247,7 +251,7 @@ function AuthForm({ mode, setMode, signIn, signUp, resendSignup, requestPassword
         <>
           <FloatField label="密碼" type="password" placeholder="密碼（至少 8 碼，含大小寫英文與數字）" value={form.password} onChange={set('password')} required minLength={8} />
           {/* placeholder 已隱藏,密碼規則改在註冊時用 hint 講(登入不需要) */}
-          {mode === 'signup' && <p className="text-[11px] text-[var(--text-3)] -mt-1.5 pl-2.5">至少 8 碼，含大小寫英文與數字</p>}
+          {mode === 'signup' && <p className="text-xs text-[var(--text-3)] -mt-1.5 pl-2.5">至少 8 碼，含大小寫英文與數字</p>}
         </>
       )}
 
@@ -256,15 +260,16 @@ function AuthForm({ mode, setMode, signIn, signUp, resendSignup, requestPassword
       <Button type="submit" size="lg" busy={loading} className="w-full">
         {loading ? '處理中…' : mode === 'signin' ? '登入' : mode === 'signup' ? '建立帳號並登入' : '寄送重設連結'}
       </Button>
+      {/* 同一頁三種文字鈕寫法收斂成一種第三級樣式:13px + --blue-text + hover:underline */}
       <div className="text-center pt-0.5">
         {mode === 'signin' && (
-          <button type="button" onClick={() => { setMode('forgot'); setErr('') }} className="inline-flex items-center min-h-11 px-2 text-xs text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">
+          <button type="button" onClick={() => { setMode('forgot'); setErr('') }} className="inline-flex items-center min-h-11 px-2 text-[13px] text-[var(--blue-text)] hover:underline">
             忘記密碼？
           </button>
         )}
         {mode === 'forgot' && (
-          <button type="button" onClick={() => { setMode('signin'); setErr('') }} className="inline-flex items-center min-h-11 px-2 text-xs text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">
-            ← 回登入
+          <button type="button" onClick={() => { setMode('signin'); setErr('') }} className="inline-flex items-center gap-1 min-h-11 px-2 text-[13px] text-[var(--blue-text)] hover:underline">
+            <MSym name="arrow_back" size={16} />回登入
           </button>
         )}
       </div>
@@ -295,7 +300,7 @@ function ResetPasswordForm({ updatePassword }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <FloatField label="新密碼" type="password" placeholder="新密碼（至少 8 碼，含大小寫英文與數字）" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} autoFocus />
-      <p className="text-[11px] text-[var(--text-3)] -mt-1.5 pl-2.5">至少 8 碼，含大小寫英文與數字</p>
+      <p className="text-xs text-[var(--text-3)] -mt-1.5 pl-2.5">至少 8 碼，含大小寫英文與數字</p>
       <FloatField label="再輸入一次新密碼" type="password" placeholder="再輸入一次新密碼" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={8} />
       <ErrorBanner msg={err} />
       <Button type="submit" size="lg" busy={busy} className="w-full">

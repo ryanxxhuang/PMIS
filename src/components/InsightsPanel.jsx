@@ -43,7 +43,11 @@ export default function InsightsPanel({ insights }) {
           )
         })}
         {insights.length > SHOWN && (
-          <li className="px-5 py-2 text-[11px] text-[var(--text-3)]">＋{insights.length - SHOWN} 項</li>
+          // 全形＋在不同字型下寬度會跳,圖示一律 MSym;inline-flex 掛在內層 span——
+          // li 本身要維持 block,否則 divide-y 的分隔線會縮成文字寬度
+          <li className="px-5 py-2 text-[11px] text-[var(--text-3)]">
+            <span className="inline-flex items-center gap-0.5"><MSym name="add" size={12} />{insights.length - SHOWN} 項</span>
+          </li>
         )}
       </ul>
     </Card>
