@@ -23,7 +23,7 @@ import {
   PROMPT_VERSION, REQUIREMENT_TYPES, RESPONSIBLE_PARTY_TYPES, LIFECYCLE_PHASES,
   TRIGGER_TYPES, OFFSET_DIRS, FREQUENCY_TYPES,
   buildWorkItemCatalog, mapWorkItemRefs, validateSuggestion, deterministicUuid,
-  buildDocumentBatches, splitBatch, mergeUsage,
+  buildDocumentBatches, splitBatch, mergeUsage, readResumeState,
 } from '../_shared/requirementExtraction.ts'
 import type { BatchPage, UsageLike } from '../_shared/requirementExtraction.ts'
 
@@ -32,14 +32,26 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Pages whose normalized text is shorter than this carry no verifiable
 // content (scanned/image pages - OCR is out of scope for P0-06).
 const MIN_PAGE_TEXT_LENGTH = 20
-// W10 分批抽取:每批的輸入字元預算 × 批數上限 = 總預算(舊制單批 160k,長契約
-// 後半本被截斷)。超過總預算的頁一樣會被丟棄,但一律寫進 run metadata 並回傳
-// 給前端揭露 - never silently。
-const BATCH_CHAR_BUDGET = 120_000
-const MAX_BATCHES = 4
-// Edge Function 有平台 wall-clock 上限;逼近前主動停批,把已完成的批次落庫、
-// 標記 stopped_early,而不是被平台砍掉留下永遠 processing 的 run。
-const TIME_BUDGET_MS = 100_000
+// W10 分批抽取 → W13 縮批+續跑:單批 120k 字讓 69 頁契約整本塞進一次呼叫,
+// 輸出趕不上 120s 逾時、同尺寸重試三連發直接撞平台 wall-clock 被砍成殭屍 run。
+// 批次縮到單批一次呼叫穩定跑得完;涵蓋範圍改由「跨 request 續跑」承擔,
+// MAX_BATCHES 只再作為成本上限(超過照舊寫進 metadata 並回傳揭露 - never silently)。
+const BATCH_CHAR_BUDGET = 28_000
+const MAX_BATCHES = 12
+// 單一 request 的軟時間預算:超過且還有批次沒跑 → 進度落庫、標 awaiting_continue,
+// 回 in_progress 讓前端帶 continue_run_id 接力(取代舊的 stopped_early 提早完結)。
+// 抓保守——回應得穿過平台/代理的閒置逾時,一個 request 跑 1~2 批就好。
+const TIME_BUDGET_MS = 60_000
+// 單一 request 的絕對時間上限:每次 Claude 呼叫的 timeoutMs 依剩餘預算收斂,
+// (attempts × timeoutMs)最壞總長壓在這條線內,確保永遠低於平台 wall-clock
+// (約 400s)——「呼叫前檢查」擋不住已開始的 120s 呼叫,必須從 timeout 本身收斂
+// (W13 審查確認:未收斂時最壞 419~663s 照樣被砍成殭屍)。
+const REQUEST_ABS_CAP_MS = 350_000
+// 剩餘預算不足以打一次有意義的呼叫時,改走「批內暫停」——本批不計完成,
+// 掛 awaiting_continue 交下一個 request 重跑本批(同 run 同 label,落庫冪等)
+const MIN_CALL_TIMEOUT_MS = 20_000
+// 429/5xx 的同尺寸重試次數(逾時不重試):與動態 timeout 相乘決定最壞批時長
+const CLAUDE_RETRIES = 1
 // 超過這個時間還掛在 pending/processing 的 run 一定已經死了(單批呼叫逾時
 // 120s + 重試,總長遠小於 10 分鐘)——每次啟動新解析時順手標記失敗,
 // 讓前端不再顯示永遠轉圈的解析中。
@@ -183,6 +195,10 @@ Deno.serve(async (req) => {
     if (typeof documentVersionId !== 'string' || !UUID_RE.test(documentVersionId)) {
       return json({ error: '缺少有效的 document_version_id' }, 400)
     }
+    // W13 續跑:前端收到 in_progress 後帶回 continue_run_id 接力下一段批次
+    const continueRunId = typeof body?.continue_run_id === 'string' && UUID_RE.test(body.continue_run_id)
+      ? body.continue_run_id as string
+      : null
 
     // RLS-scoped read proves the caller can see this version and pins the
     // project server-side; project_id from the body is only cross-checked.
@@ -225,6 +241,9 @@ Deno.serve(async (req) => {
     // ——整批建議跟著卡死。每次啟動新解析時把本專案明顯過期的 run 標記失敗;
     // best-effort,失敗不擋主流程。
     const staleCutoff = new Date(Date.now() - STALE_RUN_MS).toISOString()
+    // W13:過期判定看「最後進度」而不只是開跑時間——續跑中的長文件 run 可以
+    // 合法活過 10 分鐘,只要批次持續落庫(last_progress_at 會一直前進)。
+    // ISO 字串比大小=時間先後(同為 UTC Z 結尾),PostgREST 文字比較可用。
     await service.from('document_ingestion_runs')
       .update({
         status: 'failed',
@@ -234,36 +253,88 @@ Deno.serve(async (req) => {
       .eq('project_id', projectId)
       .in('status', ['pending', 'processing'])
       .lt('started_at', staleCutoff)
+      .or(`metadata->>last_progress_at.is.null,metadata->>last_progress_at.lt.${staleCutoff}`)
 
-    // 同一版本仍有未過期的進行中 run:擋掉重複啟動(重複解析=重複建議+重複燒錢)
-    const { data: activeRun } = await service.from('document_ingestion_runs')
-      .select('id')
-      .eq('document_version_id', documentVersionId)
-      .in('status', ['pending', 'processing'])
-      .gte('started_at', staleCutoff)
-      .limit(1)
-      .maybeSingle()
-    if (activeRun) {
-      return json({ error: '這份文件已在解析中,請等它完成或失敗後再試', run_id: activeRun.id }, 409)
+    let resumeState: ReturnType<typeof readResumeState> | null = null
+    let resumeBatchesTotal: number | null = null
+    if (continueRunId) {
+      // W13 續跑認領:只認「同版本、processing、掛著 awaiting_continue」的 run。
+      // 讀後以 contains 條件做 CAS 更新——兩個並發續跑只有一個改得到旗標,
+      // 搶輸的拿 409,不會兩邊同時跑同一批。
+      const { data: runRow, error: runReadError } = await service
+        .from('document_ingestion_runs')
+        .select('id, status, document_version_id, metadata')
+        .eq('id', continueRunId)
+        .maybeSingle()
+      if (runReadError) return json({ error: runReadError.message }, 500)
+      const meta = (runRow?.metadata ?? {}) as Record<string, unknown>
+      if (!runRow || runRow.document_version_id !== documentVersionId
+        || runRow.status !== 'processing' || meta.awaiting_continue !== true) {
+        // code=restart_required:終局狀態,前端必須走失敗收尾,不可當「還在跑」
+        return json({
+          error: '找不到可續跑的解析(可能已完成、失敗或已被接手),請重新整理查看最新狀態',
+          run_id: continueRunId, status: 'failed', code: 'restart_required',
+        }, 409)
+      }
+      const { data: claimed, error: claimError } = await service
+        .from('document_ingestion_runs')
+        .update({ metadata: { ...meta, awaiting_continue: false, last_progress_at: new Date().toISOString() } })
+        .eq('id', continueRunId)
+        .contains('metadata', { awaiting_continue: true })
+        .select('id')
+      if (claimError) return json({ error: claimError.message }, 500)
+      if (!claimed?.length) {
+        return json({ error: '這份文件已在解析中,請等它完成或失敗後再試', run_id: continueRunId, code: 'run_conflict' }, 409)
+      }
+      runId = continueRunId
+      resumeState = readResumeState(meta)
+      resumeBatchesTotal = typeof meta.batches_total === 'number' ? meta.batches_total : null
+    } else {
+      // 同一版本仍有存活的進行中 run:擋掉重複啟動(重複解析=重複建議+重複燒錢)。
+      // 「存活」與上方過期判定對稱:近期開跑或近期有進度都算。
+      const { data: activeRun } = await service.from('document_ingestion_runs')
+        .select('id')
+        .eq('document_version_id', documentVersionId)
+        .in('status', ['pending', 'processing'])
+        .or(`started_at.gte.${staleCutoff},metadata->>last_progress_at.gte.${staleCutoff}`)
+        .limit(1)
+        .maybeSingle()
+      if (activeRun) {
+        return json({ error: '這份文件已在解析中,請等它完成或失敗後再試', run_id: activeRun.id, code: 'run_conflict' }, 409)
+      }
+
+      // 刻意「不」清掉先前 run 的建議:審查清單只收最新 completed run 的建議
+      // (requirementReview.js 的 latestCompletedRunIds),舊 run 的草稿列留在 DB
+      // 無害;反之刪除會誤殺人工已編修的草稿(saveEdit 改內容不改 status)與
+      // 已審的工項連結,且刪在新解析成功之前——Anthropic 一停機審查佇列就被清空
+      // (W13 審查確認後撤掉原本的清理設計)。
+
+      const { data: run, error: runError } = await service
+        .from('document_ingestion_runs')
+        .insert({
+          project_id: projectId,
+          document_version_id: documentVersionId,
+          run_type: 'requirement_extraction',
+          status: 'processing',
+          model_provider: 'anthropic',
+          model_name: MODELS.smart,
+          prompt_version: PROMPT_VERSION,
+          started_by: gate.userId,
+          input_page_count: pageRows.length,
+          metadata: { last_progress_at: new Date().toISOString() },
+        })
+        .select('id')
+        .single()
+      if (runError) {
+        // 23505=撞上 partial unique index(同版本同時只准一條 active run):
+        // check-then-insert 的競態窗由 DB 唯一性收口,輸的請求拿 409(W13 審查)
+        if ((runError as { code?: string }).code === '23505') {
+          return json({ error: '這份文件已在解析中,請等它完成或失敗後再試', code: 'run_conflict' }, 409)
+        }
+        return json({ error: runError.message }, 500)
+      }
+      runId = run.id as string
     }
-
-    const { data: run, error: runError } = await service
-      .from('document_ingestion_runs')
-      .insert({
-        project_id: projectId,
-        document_version_id: documentVersionId,
-        run_type: 'requirement_extraction',
-        status: 'processing',
-        model_provider: 'anthropic',
-        model_name: MODELS.smart,
-        prompt_version: PROMPT_VERSION,
-        started_by: gate.userId,
-        input_page_count: pageRows.length,
-      })
-      .select('id')
-      .single()
-    if (runError) return json({ error: runError.message }, 500)
-    runId = run.id as string
 
     const paginated = pageRows.length > 0 &&
       pageRows.every((p) => p.extraction_method === 'pdf_text')
@@ -306,18 +377,59 @@ Deno.serve(async (req) => {
     const totalBatches = plan.batches.length
     const startedAtMs = Date.now()
 
+    // W13 續跑防呆:切批是確定性的(頁不可變+固定參數),但部署若改了批次參數,
+    // 舊 run 的進度會對不上新計畫——寧可明確失敗要求重跑,不可錯位續抽。
+    if (resumeState && (
+      (resumeBatchesTotal != null && resumeBatchesTotal !== totalBatches)
+      || resumeState.batchesCompleted > totalBatches
+    )) {
+      const msg = '解析批次計畫已變更(系統更新),請重新啟動解析'
+      await failRun(service, runId, msg, { batches_total: totalBatches })
+      return json({ error: msg, run_id: runId, status: 'failed', code: 'restart_required' }, 409)
+    }
+
+    // 計數器從續跑狀態還原(全新 run 全為 0);totalUsage 只記「本 request」的
+    // 用量——每個 request 各記一筆 ai_usage_events,被平台砍掉時最多掉一批在途量
+    const prior = resumeState ?? readResumeState(null)
     let totalUsage: UsageLike = {}
     let usedModel: string | undefined
-    let totalRequirements = 0
-    let verifiedCount = 0
-    let needsReviewCount = 0
-    let rawItemCount = 0
-    let workItemLinkCount = 0
-    const rejected: { index: string; reason: string }[] = []
-    const clippedBatches: string[] = []
+    let totalRequirements = prior.totalRequirements
+    let verifiedCount = prior.verifiedCount
+    let needsReviewCount = prior.needsReviewCount
+    let rawItemCount = prior.rawItemCount
+    let workItemLinkCount = prior.workItemLinkCount
+    let rejectedCount = prior.rejectedCount
+    const rejected: { index: string; reason: string }[] = [...prior.rejectedItems]
+    const clippedBatches: string[] = [...prior.clippedBatches]
     let failedBatch: { label: string; error: string } | null = null
-    let batchesCompleted = 0
-    let stoppedEarly = false
+    let batchesCompleted = prior.batchesCompleted
+    let pausedForContinuation = false
+
+    // 進度 metadata 只寫「最後完成批」當下的計數快照,不寫批內半途的活計數——
+    // 批內暫停後下個 request 會整批重跑,若把半批計數寫進去會重複累計
+    // (落庫本身靠 deterministicUuid 冪等,計數必須跟著同一條邊界走)。
+    // jsonb 是整包覆蓋,不能只寫兩個鍵。awaiting_continue=true 是「暫停待續跑」
+    // 的旗標,續跑認領用 CAS 翻掉它。
+    let committed = {
+      totalRequirements, verifiedCount, needsReviewCount, rawItemCount,
+      workItemLinkCount, rejectedCount,
+      rejectedItems: [...rejected], clippedBatches: [...clippedBatches],
+    }
+    const progressMetadata = (opts: { awaitingContinue: boolean }) => ({
+      pagination: paginated ? 'paginated' : 'unpaginated',
+      batches_total: totalBatches,
+      batches_completed: batchesCompleted,
+      cum_requirement_count: committed.totalRequirements,
+      cum_verified_count: committed.verifiedCount,
+      cum_needs_review_count: committed.needsReviewCount,
+      cum_raw_item_count: committed.rawItemCount,
+      cum_work_item_link_count: committed.workItemLinkCount,
+      cum_rejected_count: committed.rejectedCount,
+      rejected_items: committed.rejectedItems.slice(0, 20),
+      clipped_batches: committed.clippedBatches,
+      awaiting_continue: opts.awaitingContinue,
+      last_progress_at: new Date().toISOString(),
+    })
 
     // 驗證 + 引註查核 + 落庫一批模型輸出。identity 帶批次標籤
     // (`${runId}:${label}:…`),同一 run 內重試同一批 upsert 相同的列。
@@ -328,7 +440,8 @@ Deno.serve(async (req) => {
       for (let i = 0; i < items.length; i++) {
         const check = validateSuggestion(items[i])
         if (!check.ok) {
-          rejected.push({ index: `${label}:${i}`, reason: check.reason })
+          rejectedCount++
+          if (rejected.length < 20) rejected.push({ index: `${label}:${i}`, reason: check.reason })
           continue
         }
         const s = check.value
@@ -401,7 +514,7 @@ Deno.serve(async (req) => {
 
     // 單批抽取。輸出撞上限(stop_reason=max_tokens)代表這批義務太密,
     // 對半切重試(最多兩層);單頁批切不動就記進 clipped_batches 揭露。
-    const runBatch = async (pages: PageRow[], label: string, depth: number): Promise<{ ok: boolean; error?: string }> => {
+    const runBatch = async (pages: PageRow[], label: string, depth: number): Promise<{ ok: boolean; error?: string; paused?: boolean }> => {
       const first = pages[0]?.page_number
       const last = pages[pages.length - 1]?.page_number
       const batchNote = totalBatches > 1 || depth > 0
@@ -415,13 +528,25 @@ Deno.serve(async (req) => {
         catalogLines,
         batchNote,
       })
+      // 依剩餘預算收斂單次呼叫的 timeout:(retries+1)×timeoutMs 必須塞得進
+      // REQUEST_ABS_CAP;塞不下就「批內暫停」——本批不計完成,掛 awaiting_continue
+      // 交下一個 request 重跑本批(同 run 同 label,落庫冪等,重跑不重複)
+      const remainingMs = REQUEST_ABS_CAP_MS - (Date.now() - startedAtMs)
+      const callTimeoutMs = Math.min(120_000, Math.floor(remainingMs / (CLAUDE_RETRIES + 1)))
+      if (callTimeoutMs < MIN_CALL_TIMEOUT_MS) {
+        return { ok: false, paused: true }
+      }
       const res = await claudeJson({
         model: MODELS.smart, name: 'requirement_suggestions', schema: SCHEMA,
-        maxTokens: 16384, content: prompt,
+        maxTokens: 16384, content: prompt, retryTimeouts: false,
+        timeoutMs: callTimeoutMs, retries: CLAUDE_RETRIES,
       })
       totalUsage = mergeUsage(totalUsage, res.usage)
       if (res.model) usedModel = res.model
-      if (res.errorCode === 'max_tokens') {
+      // 輸出撞上限(max_tokens)或單次呼叫逾時都代表「這批太大」:對半切重試。
+      // 逾時不做同尺寸重試(retryTimeouts:false)——同尺寸只會再逾時一次,
+      // 卻把 wall-clock 燒光(W13 殭屍 run 的直接死因)
+      if (res.errorCode === 'max_tokens' || res.errorCode === 'timeout') {
         const halves = depth < 2 ? splitBatch(pages) : null
         if (!halves) {
           clippedBatches.push(`${label}(第 ${first}~${last} ${paginated ? '頁' : '段'})`)
@@ -441,25 +566,54 @@ Deno.serve(async (req) => {
       return { ok: true }
     }
 
-    for (let bi = 0; bi < totalBatches; bi++) {
-      // Edge Function 有平台 wall-clock 上限:逼近前主動停批並揭露,
-      // 已落庫的批次保留、run 正常 completed,而不是被砍掉留下殭屍 run
-      if (bi > 0 && Date.now() - startedAtMs > TIME_BUDGET_MS) {
-        stoppedEarly = true
+    const startBatch = batchesCompleted
+    for (let bi = startBatch; bi < totalBatches; bi++) {
+      // 單一 request 的軟預算:時間到且還有批次沒跑 → 暫停待續跑(awaiting_continue),
+      // 已落庫的批次保留;本 request 的第一批一律照跑,避免閘門/載入耗時導致空轉
+      if (bi > startBatch && Date.now() - startedAtMs > TIME_BUDGET_MS) {
+        pausedForContinuation = true
         break
       }
       const result = await runBatch(plan.batches[bi], `b${bi}`, 0)
       if (!result.ok) {
+        // 批內暫停(剩餘時間不足以再打一次呼叫)≠ 批失敗:走續跑,不記 failed_batch
+        if (result.paused) {
+          pausedForContinuation = true
+          break
+        }
         failedBatch = { label: `b${bi}`, error: result.error || '' }
         break
       }
       batchesCompleted = bi + 1
-      if (totalBatches > 1) {
-        // 增量進度(best-effort;完成時會被最終 metadata 覆蓋)
-        await service.from('document_ingestion_runs')
-          .update({ metadata: { batches_total: totalBatches, batches_completed: batchesCompleted } })
-          .eq('id', runId)
+      committed = {
+        totalRequirements, verifiedCount, needsReviewCount, rawItemCount,
+        workItemLinkCount, rejectedCount,
+        rejectedItems: [...rejected], clippedBatches: [...clippedBatches],
       }
+      // 每批進度落庫(含累計計數快照):續跑靠這個還原,過期判定靠 last_progress_at
+      await service.from('document_ingestion_runs')
+        .update({ metadata: progressMetadata({ awaitingContinue: false }) })
+        .eq('id', runId)
+    }
+
+    // W13 暫停:進度已逐批落庫,掛上 awaiting_continue 讓前端帶 continue_run_id 接力。
+    // 本 request 的 AI 用量先落帳——token 已花掉,下一個 request 另記一筆。
+    if (pausedForContinuation) {
+      await closeAiGate(gate, { feature: 'requirements.extract', model: usedModel, usage: totalUsage, status: 'ok' })
+      const { error: pauseError } = await service.from('document_ingestion_runs')
+        .update({ metadata: progressMetadata({ awaitingContinue: true }) })
+        .eq('id', runId)
+      if (pauseError) {
+        // 旗標掛不上=沒人能續跑,誠實回錯誤;run 會由過期補償收屍
+        return json({ error: `解析進度保存失敗:${pauseError.message}`, run_id: runId, status: 'failed' }, 500)
+      }
+      return json({
+        run_id: runId,
+        status: 'in_progress',
+        batches_total: totalBatches,
+        batches_completed: batchesCompleted,
+        total_page_count: pageRows.length,
+      }, 200)
     }
 
     // 已處理的實際涵蓋範圍(供揭露「解析到第幾頁」)
@@ -467,7 +621,7 @@ Deno.serve(async (req) => {
     const lastProcessedPage = lastProcessedBatch
       ? lastProcessedBatch[lastProcessedBatch.length - 1].page_number
       : null
-    const coverageIncomplete = plan.truncated || stoppedEarly ||
+    const coverageIncomplete = plan.truncated ||
       failedBatch != null || clippedBatches.length > 0
 
     const coverageMetadata = {
@@ -476,13 +630,14 @@ Deno.serve(async (req) => {
       total_page_count: pageRows.length,
       batches_total: totalBatches,
       batches_completed: batchesCompleted,
-      truncated_input: plan.truncated || stoppedEarly,
-      stopped_early: stoppedEarly,
+      truncated_input: plan.truncated,
       omitted_page_count: plan.omittedPageCount,
       last_included_page: lastProcessedPage,
       clipped_batches: clippedBatches,
       failed_batch: failedBatch ? { label: failedBatch.label, error: failedBatch.error.slice(0, 500) } : null,
       coverage_incomplete: coverageIncomplete,
+      awaiting_continue: false,
+      last_progress_at: new Date().toISOString(),
     }
 
     // 一批都沒成:整個 run 失敗(照舊)。有成功批次時即使後面失敗也走
@@ -505,7 +660,7 @@ Deno.serve(async (req) => {
       metadata: {
         ...coverageMetadata,
         raw_item_count: rawItemCount,
-        rejected_item_count: rejected.length,
+        rejected_item_count: rejectedCount,
         rejected_items: rejected.slice(0, 20),
         work_item_catalog_size: catalog.entries.length,
         work_item_link_count: workItemLinkCount,
@@ -522,7 +677,7 @@ Deno.serve(async (req) => {
       verified_source_count: verifiedCount,
       unverified_source_count: needsReviewCount,
       needs_review_count: needsReviewCount,
-      rejected_item_count: rejected.length,
+      rejected_item_count: rejectedCount,
       coverage_incomplete: coverageIncomplete,
       total_page_count: pageRows.length,
       last_included_page: lastProcessedPage,

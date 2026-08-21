@@ -14,6 +14,7 @@
 // nothing is inserted into audit_events from here.
 import { supabase } from './supabase.js'
 import { extractDocumentPages, hasExtractableText } from './documentExtract.js'
+import { runRequirementExtraction } from './extractRequirements.js'
 
 const PAGE_INSERT_BATCH = 200
 
@@ -31,16 +32,6 @@ async function insertPages(pages, versionId) {
     if (error) return error
   }
   return null
-}
-
-// Best-effort extraction of the Edge Function's JSON error body (supabase-js
-// wraps non-2xx responses in a FunctionsHttpError whose message is generic).
-async function functionErrorMessage(error) {
-  try {
-    const body = await error?.context?.json()
-    if (body?.error) return body.error
-  } catch { /* keep generic message */ }
-  return error?.message || '呼叫 AI 擷取服務失敗'
 }
 
 export async function ingestRequirementDocument({ projectId, userId, file, documentType = 'contract' }) {
@@ -130,10 +121,8 @@ export async function ingestRequirementDocument({ projectId, userId, file, docum
     if (pageError) return { error: pageError }
   }
 
-  const { data, error } = await supabase.functions.invoke('extract-requirements', {
-    body: { document_version_id: versionId, project_id: projectId },
-  })
-  if (error) return { error: { message: await functionErrorMessage(error) } }
-  if (data?.error) return { error: { message: data.error }, run: data }
-  return { error: null, run: data, document_id: documentId, document_version_id: versionId }
+  // W13:大文件伺服器端分段續跑,共用接力層負責 in_progress 接續與真錯誤訊息
+  const result = await runRequirementExtraction({ documentVersionId: versionId, projectId })
+  if (!result.ok) return { error: { message: result.message } }
+  return { error: null, run: result.data, document_id: documentId, document_version_id: versionId }
 }
