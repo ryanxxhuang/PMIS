@@ -19,7 +19,7 @@ function deriveState(sch, pct) {
 }
 
 export default function Schedule() {
-  const { project, workItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
+  const { project, workItems, adjustedItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
   const [search, setSearch] = useState('')
   const [errMsg, setErrMsg] = useState('') // 排程寫入失敗必須讓使用者看到(失敗=UI 不變)
   const onSet = async (key, patch) => {
@@ -28,15 +28,18 @@ export default function Schedule() {
     if (error) setErrMsg(`排程未寫入：${error.message}`)
   }
 
-  // 發包末端工項 + 查表
+  // 發包末端工項 + 查表。吃 adjustedItems 而非原始 workItems(財務單一真相層 B-02):
+  // 完成% 的分母是契約數量,核准追加減後不用變更後數量,追加的工項會被誤判「已完成」、
+  // 追減的永遠到不了 100%,落後判斷跟估驗頁分裂。變更只動 quantity/amount 不動樹形,
+  // leaf 集合與 item_key 不受影響。
   const { leaves, byKey } = useMemo(() => {
     if (!workItems) return { leaves: [], byKey: new Map() }
     const childMap = new Map()
-    for (const it of workItems.items) { const k = it.parent_key || '__root__'; if (!childMap.has(k)) childMap.set(k, []); childMap.get(k).push(it) }
-    const m = new Map(workItems.items.map((it) => [it.item_key, it]))
-    const lv = workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
+    for (const it of adjustedItems) { const k = it.parent_key || '__root__'; if (!childMap.has(k)) childMap.set(k, []); childMap.get(k).push(it) }
+    const m = new Map(adjustedItems.map((it) => [it.item_key, it]))
+    const lv = adjustedItems.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
     return { leaves: lv, byKey: m }
-  }, [workItems])
+  }, [workItems, adjustedItems])
 
   // 最新一期估驗的累計完成數量（{ item_key: cum_qty }）
   const cumQty = useMemo(() => {

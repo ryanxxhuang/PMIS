@@ -68,10 +68,13 @@ export default function RiskAudit() {
   }, TODAY), [periodAmounts, changeOrders, defects, obligations, billableTotal, actualPct, plannedNow]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 文件勾稽鏈:逐工項跨文件對帳(全確定性)。以 item_key 為鍵串接估驗/日誌;查驗以 id→key。
+  // leaves 也要吃 adjustedItems(B-02 殘留破口):「接近完成未申請查驗」以 b/q≥0.8 判定,
+  // q 用原契約量的話,核准追加後會拿舊分母算出假發現——機關防弊頁自己產假發現最傷公信力。
+  // 變更只動 quantity/amount,id/item_key/樹形不變,idToKey 與混凝土鍵集合不受影響。
   const integrity = useMemo(() => {
     if (!workItems) return { findings: [], summary: { risk: 0, warn: 0 } }
-    const idToKey = new Map(workItems.items.filter((it) => it.id).map((it) => [it.id, it.item_key]))
-    const leaves = workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childrenMap.get(it.item_key)?.length))
+    const idToKey = new Map(adjustedItems.filter((it) => it.id).map((it) => [it.id, it.item_key]))
+    const leaves = adjustedItems.filter((it) => it.is_billable && !it.is_rollup && !(childrenMap.get(it.item_key)?.length))
     const loggedQty = new Map()
     for (const lg of siteLogs) for (const [k, q] of Object.entries(lg.items || {})) loggedQty.set(k, (loggedQty.get(k) || 0) + (Number(q) || 0))
     const latest = [...valuations].sort((a, b) => a.period_no - b.period_no).slice(-1)[0]
@@ -82,7 +85,7 @@ export default function RiskAudit() {
     const pourSet = new Set()
     for (const lg of siteLogs) if (lg.log_date && Object.entries(lg.items || {}).some(([k, q]) => concreteKeys.has(k) && (Number(q) || 0) > 0)) pourSet.add(lg.log_date)
     return buildIntegrityFindings({ leaves, loggedQty, billedQty, inspStatusByItem, pourDates: [...pourSet].map((date) => ({ date })), testSamples })
-  }, [workItems, childrenMap, siteLogs, valuations, inspections, testSamples])
+  }, [workItems, adjustedItems, childrenMap, siteLogs, valuations, inspections, testSamples])
 
   const genAudit = async () => {
     setAiBusy(true)

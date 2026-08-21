@@ -43,7 +43,9 @@ export const navGroups = [
       { to: '/portfolio', label: '跨案總覽' },
       { to: '/activity', label: '活動紀錄' },
       { to: '/members', label: '三方成員' },
-      { to: '/audit', label: '風險稽核', roles: ['owner'], hidden: true }, // 機關防弊
+      // 機關防弊:對機關的核心賣點不能全站零入口(批4 曾 hidden 收斂成死功能),
+      // roles 限機關;取消 hidden 只是「顯示」,routeRegistry 與角色限制不動
+      { to: '/audit', label: '風險稽核', roles: ['owner'] },
     ] },
     // W11 文件管理員:整案文件的唯一上傳/歸檔窗口(第一次+文件更新才用,
     // 刻意獨立在最下)。上傳後 AI 自動分類歸檔,結果分流到標單工項/契約重點/S曲線。
@@ -97,6 +99,16 @@ export function routeAllowed(pathname, org, override, platformAdmin = false) {
   if (!route) return false
   if (route.access === 'public' || route.access === 'redirect') return true
   return tabAllowed(route, org, override, platformAdmin)
+}
+
+// 預設落地頁的單一真相:一次管多案的角色(機關承辦、監造/事務所)第一眼要看跨案總覽,
+// 只顧一個工地的廠商第一眼要看今日待辦。監造事務所同時監十幾案,落在單案 /dashboard
+// 等於一進門就先叫他選案;/portfolio 沒有 roles 限制,portfolio_summary() 也以
+// my_project_ids() 過濾,監造進去只會看到自己的案。
+// 未知 org_type 退回 /dashboard,與 store 的 org 預設(contractor)一致。
+const PORTFOLIO_FIRST_ORGS = ['owner', 'supervisor']
+export function defaultLandingPath(orgType) {
+  return PORTFOLIO_FIRST_ORGS.includes(orgType) ? '/portfolio' : '/dashboard'
 }
 
 // 側欄可見項:工作台入口=第一個可見分頁;整組分頁都不可見則隱藏入口。

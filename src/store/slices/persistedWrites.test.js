@@ -190,6 +190,36 @@ describe('demo 模式(未設 Supabase):只進記憶體,不打 DB', () => {
     expect(site.current.safetyRecords).toHaveLength(1)
   })
 
+  // 缺失狀態機是三級品管的收尾(開立→改善中→待複查→已結案),歷史上出過
+  // 「狀態換了但畫面標籤沒跟上」的 bug。這裡釘住 patch 的形狀:
+  // 只有結案才蓋 closed_at(「今天已完成」靠它判斷),撤銷結案要留下 correction_reason。
+  it('缺失狀態推進:只有結案蓋 closed_at,撤銷結案留更正原因', async () => {
+    const quality = renderHook(() => useQualitySlice(demoCtx, []))
+    act(() => quality.current.setDefects([{ id: 'DEF-1', domain: 'quality', title: '蜂窩', status: '開立' }]))
+    const current = () => quality.current.defects[0]
+
+    await act(async () => { await quality.current.updateDefectStatus('DEF-1', '改善中') })
+    expect(current().status).toBe('改善中')
+    expect(current().closed_at).toBeUndefined()
+
+    await act(async () => { await quality.current.updateDefectStatus('DEF-1', '待複查', { improvement_note: '已鑿除修補' }) })
+    expect(current().status).toBe('待複查')
+    expect(current().improvement_note).toBe('已鑿除修補')
+    expect(current().closed_at).toBeUndefined() // 提送複查不是完成
+
+    await act(async () => { await quality.current.updateDefectStatus('DEF-1', '已結案') })
+    expect(current().status).toBe('已結案')
+    expect(current().closed_at).toBeTruthy()
+
+    // 撤銷結案:退回改善中並留原因;狀態已非「已結案」,殘留的 closed_at
+    // 不會讓它繼續掛在「今天已完成」(buildDoneToday 先過 status 才看 closed_at)
+    await act(async () => { await quality.current.updateDefectStatus('DEF-1', '改善中', { correction_reason: '複查發現仍有空洞' }) })
+    expect(current().status).toBe('改善中')
+    expect(current().correction_reason).toBe('複查發現仍有空洞')
+
+    expect(h.calls).toEqual([]) // demo 紅線:整條狀態機不碰 supabase
+  })
+
   it('同一組試體反覆判定不合格仍只有一筆有 test_sample_id 的缺失', async () => {
     const quality = renderHook(() => useQualitySlice(demoCtx, []))
     act(() => quality.current.setTestSamples([{

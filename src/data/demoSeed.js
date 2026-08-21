@@ -130,7 +130,9 @@ export function buildDemoData(workItems, project) {
   ]
   // 統一缺失引擎:品質/工安同一狀態機(開立→改善中→待複查→已結案),以 domain 分類
   const defects = [
-    { id: 'DEF-DEMO-1', domain: 'quality', title: '查驗不合格：外牆窯燒磚打樣', description: '磚縫寬度不均，需重新打樣送審', severity: '一般', location: '1F 打樣區', due_date: iso(daysFromNow(4)), status: '改善中', improvement_note: '已重新調整工法，預計本週完成打樣', ...deco(1) },
+    // 待複查:改善鏈的後半段(監造複查結案/退回)在 demo 一定要有得按——
+    // 這一段是三級品管的收尾,storyline 裡缺了它,示範時整個複查閉環看不到。
+    { id: 'DEF-DEMO-1', domain: 'quality', title: '查驗不合格：外牆窯燒磚打樣', description: '磚縫寬度不均，需重新打樣送審', severity: '一般', location: '1F 打樣區', due_date: iso(daysFromNow(4)), status: '待複查', improvement_note: '已重新打樣並調整磚縫工法，請監造複查', ...deco(1) },
     { id: 'DEF-DEMO-2', domain: 'quality', title: '3F 西側牆面蜂窩', description: '澆置振動不確實造成蜂窩，需鑿除修補', severity: '嚴重', location: '3F 西側', due_date: iso(daysFromNow(-2)), status: '開立', improvement_note: null, ...deco(5) },
     { id: 'DEF-DEMO-3', domain: 'quality', title: '2F 樓梯間模板拆除不完全', description: '殘留模板角材', severity: '一般', location: '2F 樓梯間', due_date: iso(daysFromNow(-10)), status: '已結案', improvement_note: '已清除完畢，監造複查通過', ...deco(3) },
     // 自主檢查修訂版次連動:2F 版牆檢查表 Rev.1 更正後改判不合格自動開立(掛鏈根 CLR-DEMO-2)
