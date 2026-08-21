@@ -10,7 +10,7 @@ test.describe('施工廠商', () => {
     for (const section of ['現在輪到我', '等待對方', '今天已完成']) {
       await expect(page.getByRole('heading', { name: section })).toBeVisible()
     }
-    // 期限型待辦已進首頁:OB-6 契約義務(demoSeed 的 fixed_date 相對今天往前推)。
+    // 期限型待辦已進首頁:OB-6 契約期限(demoSeed 的 fixed_date 相對今天往前推)。
     // 逾期天數一定要綁在這一筆上斷言:demo 有多筆待辦會落在同一個到期日,
     // 全頁 getByText(/逾期 N 天/) 會同時命中別筆而觸發 strict mode violation。
     // 天數本身不寫死——demoSeed 以機器本地時鐘產日期,todayTasks 以台北日曆日判斷,
@@ -76,9 +76,9 @@ test.describe('施工廠商', () => {
     await expect(row.getByText('待監造複查').first()).toBeVisible()
   })
 
-  test('契約義務:標為已提送可掛送審佐證(W-01)', async ({ page }) => {
+  test('期限追蹤:標為已提送可掛送審佐證(W-01)', async ({ page }) => {
     await loginAs(page, 'contractor')
-    await gotoHash(page, '/contract')
+    await gotoHash(page, '/requirements')
     // demo 預掛佐證:品質計畫義務 → SUB-001(核准)
     await expect(page.getByText(/佐證:SUB-001/)).toBeVisible()
     // 對「提送施工月報」(待辦)掛 SUB-003 佐證並標為已提送

@@ -1,81 +1,77 @@
-// P0-07.5 契約管制:一個「契約文件包」主流程取代舊的兩個上傳卡。
-// 使用者只做一件事:選契約包 → 一次丟進整包文件 → 系統自動整理、分類、
-// 找出履約要求。進度來自持久化的 document_processing_runs——離開頁面或重新
-// 整理都不會遺失。核准的 deadline Requirement 由資料庫單向建立下方義務時程。
-// 契約包、文件與處理進度只供本頁使用，保留有界的頁面查詢，不塞進全域 Store。
+// W11 專案文件(文件管理員):整案文件的唯一上傳/歸檔窗口。
+// 依 design_handoff_project_documents 版面重建:整頁只有兩張卡——
+//   1.「契約文件」= 上傳入口(拖放區)+ 上傳過程的完整回饋(總進度、逐檔、成功、失敗、重試)
+//   2.「專案文件」= 已入庫文件清單(文件/分類/版本/AI 處理/上傳)
+// 上傳後 AI 自動分類、自動歸檔分流:標單 XML → 標單工項、契約/規範 → 契約重點。
+// 基準日、契約總價與期限追蹤已搬到「審查與協作 › 契約重點」——本頁只管文件,
+// 只有第一次建檔與文件更新時才會用到。
+// 進度來自持久化的 document_processing_runs(離開頁面不遺失);逐檔百分比由
+// STAGE_ORDER 映射(真實階段,不是假進度)。
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import {
-  Card, Empty, PageHeader, Badge, Button, Select, buttonClass, FilterChip, SortableTh, TablePager,
-  Field, Input, Surface, ErrorBanner, THEAD_CLS,
+  Card, Empty, PageHeader, Badge, Select, buttonClass, SortableTh, TablePager,
+  ErrorBanner, THEAD_CLS,
 } from '../../components/ui.jsx'
-// 契約包切換屬「視圖分段」:與工作面分頁/Admin tabs 共用同一套 chips 皮,不再自寫選取卡
+// 契約包切換屬「視圖分段」:與工作面分頁/Admin tabs 共用同一套 chips 皮
 import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { useTableSort, usePagination } from '../../lib/useTable.js'
-import { computeObligationDue } from '../../lib/contractDue.js'
-import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 import {
-  PACKAGE_TYPE_LABELS, PACKAGE_STATUS_LABELS, availablePackageOptions,
+  PACKAGE_STATUS_LABELS, availablePackageOptions,
   packageDisplayName, defaultPackageTitle,
 } from '../../lib/contractPackages.js'
 import { ACCEPT_ATTR } from '../../lib/packageFileSupport.js'
 import {
   DOCUMENT_TYPE_LABELS, CLASSIFIABLE_DOCUMENT_TYPES, EXTRACTABLE_DOCUMENT_TYPES,
-  PRESENTATION_GROUPS, presentationGroup,
+  presentationGroup,
 } from '../../lib/documentClassifier.js'
 import {
   uploadFilesToPackage, summarizePackageProgress, packageStatusFromRuns,
-  formatElapsed, staleProcessingPatch, takeSelectedFiles, STAGE_LABELS, RUN_STATUS_LABELS,
+  formatElapsed, staleProcessingPatch, takeSelectedFiles, STAGE_ORDER, STAGE_LABELS,
 } from '../../lib/packageUpload.js'
 
-const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
-const TRIGGER_LABEL = {
-  award: '決標', notice: '接獲開工通知', commencement: '開工',
-  completion: '完工', monthly: '每月', fixed: '指定日期', other: '其他',
-}
-const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
-const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+// 文件清單表格欄樣式:表頭字型層吃 ui.jsx 的 THEAD_CLS(全站單一真相)
+const DOC_TH = `text-left ${THEAD_CLS} py-2.5 px-3 whitespace-nowrap`
+const DOC_THR = `text-right ${THEAD_CLS} py-2.5 px-3 whitespace-nowrap`
+const DOC_TD = 'py-2.5 px-3 text-[13px] align-top'
 
-function ruleText(ob) {
-  if (ob.recurring === 'monthly') return `每月 ${ob.recurring_day || ''} 日${ob.offset_dir === 'before' ? '前' : ''}`.trim()
-  if (ob.trigger_event === 'fixed') return `指定 ${ob.fixed_date || '日期'}`
-  const t = TRIGGER_LABEL[ob.trigger_event] || ob.trigger_event || ''
-  if (ob.offset_days) return `${t}${ob.offset_dir === 'before' ? '前' : '後'} ${ob.offset_days} 日內`
-  return t
+const TERMINAL_STATUSES = ['completed', 'partial', 'failed', 'unsupported']
+const isTerminal = (r) => TERMINAL_STATUSES.includes(r.status)
+// 逐檔進度 %:持久化 run 的真實階段 → 0/20/40/60/80/100(不是假進度)
+const runPct = (r) => {
+  if (r.status === 'completed') return 100
+  const order = STAGE_ORDER[r.stage] ?? 0
+  return Math.min(100, Math.round((order / 5) * 100))
 }
 
-// 狀態色點走 class 對照表而非 inline style:顏色一律由 className 帶 token,
-// 才吃得到主題切換與全站色票收斂(UI/UX 統一修正)。
-const DOT_CLS = { done: 'bg-[var(--green-text)]', overdue: 'bg-[var(--red-text)]', soon: 'bg-[var(--amber-text)]', scheduled: 'bg-[var(--blue)]', nodate: 'bg-[var(--text-3)]' }
-// W8-5:狀態不得只靠顏色。色點本身給等價文字(hover 看 title、報讀器讀 aria-label),
-// 色盲與螢幕報讀使用者才拿得到「已逾期/7 日內」這種行動依據。
-const DOT_LABEL = { done: '已完成', overdue: '已逾期', soon: '7 日內到期', scheduled: '排程中', nodate: '無期限' }
-// 文件清單表格欄樣式:表頭字型層吃 ui.jsx 的 THEAD_CLS(全站單一真相),
-// 對齊/內距仍由本表自決(README 表格規範)。
-const DOC_TH = `text-left ${THEAD_CLS} py-2 px-3 whitespace-nowrap`
-// text-left/text-right 同屬性,不可用附加 class 蓋——誰生效取決於產出 CSS 順序
-const DOC_THR = `text-right ${THEAD_CLS} py-2 px-3 whitespace-nowrap`
-const DOC_TD = 'py-2 px-3 text-[13px] align-top'
+// AI 處理欄的固定四狀態(mockup):已完成/處理中/待處理/無需處理。
+// 色票只寫狀態,數字與原因寫在下方細節行。
+function aiProcessingState(run) {
+  if (!isTerminal(run)) {
+    return { kind: 'processing', label: '處理中', color: 'blue', detail: STAGE_LABELS[run.stage] || run.stage }
+  }
+  if (run.status === 'unsupported') {
+    return { kind: 'na', label: '無需處理', color: 'slate', detail: run.metadata?.limitation || '尚未支援內容分析' }
+  }
+  if (run.classification_status === 'needs_review') {
+    return { kind: 'attention', label: '待處理', color: 'red', detail: `AI 建議分類:${DOCUMENT_TYPE_LABELS[run.suggested_document_type] || '無法判斷'},請人工確認` }
+  }
+  if (run.status === 'failed' || run.status === 'partial') {
+    return { kind: 'attention', label: '待處理', color: 'red', detail: run.error_message || '處理未完成' }
+  }
+  return { kind: 'done', label: '已完成', color: 'green', detail: run.metadata?.requirement_extraction_message || '已分類歸檔' }
+}
+
 export default function Contract() {
   const {
     isSupabaseConfigured, currentProject, isPersistedProject,
-    currentProjectMembership, currentUser,
-    obligations, updateObligationStatus, updateProjectAnchors, can,
-    importWorkItems, workItemsSource, reloadMembership, workItems, submittals,
+    currentProjectMembership, currentUser, can,
+    importWorkItems, workItemsSource, reloadMembership,
   } = useStore()
-  // 契約總價(逾期罰款試算基準):手填的契約價金總額優先——契約鏈的價值主張是
-  // 「不需要標單就能跑」,而且契約價金總額未必等於標單加總;沒填才退回 BOQ 加總。
-  const manualContractTotal = Number(currentProject?.contract_total) || 0
-  const contractTotal = manualContractTotal > 0 ? manualContractTotal : (workItems?.meta?.billable_total || 0)
-  // end_date 也是基準日之一(completion 觸發的義務用它算到期);它在建案表單填一次之後
-  // 原本沒有任何 UI 能修改,留白就永遠是 nodate,所以一併納入這張卡(W8-6 ISSUE-1)。
-  const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '', end_date: '' })
-  // 契約總價手填草稿:onBlur 才寫 DB(數字輸入逐鍵存檔會打爆 projects update)
-  const [totalDraft, setTotalDraft] = useState('')
   const [parties, setParties] = useState([])
   const [packages, setPackages] = useState([])
   const [selectedPackageId, setSelectedPackageId] = useState(null)
@@ -84,49 +80,24 @@ export default function Contract() {
   const [versionsById, setVersionsById] = useState(new Map())
   const [aiCount, setAiCount] = useState(null)    // AI 契約重點建議數(本契約包)
   const [uploading, setUploading] = useState(false)
-  // 標單 XML 走的是另一條路(不建 processing run),自己記忙碌旗標與結果語氣:
-  // 成功/略過/失敗原本同一種灰字,失敗會被當成沒事(W8-6 ISSUE-2)。
+  // 標單 XML 走另一條路(不建 processing run),自己記忙碌旗標與結果語氣
   const [boqBusy, setBoqBusy] = useState(false)
   const [boqMsg, setBoqMsg] = useState(null)   // { tone: 'ok' | 'skip' | 'error', text }
   const [msg, setMsg] = useState('')
-  const [obligationMsg, setObligationMsg] = useState('')
-  const [showTech, setShowTech] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  // 上傳回饋面板:只列「本批上傳的檔案+仍在處理中的檔案」;關閉(close/略過)
+  // 回到 idle 拖放區,歷史結果一律看下方文件清單。以 document_version_id 記批,
+  // run 列會被 reload 換新物件,version id 才是穩定身分。
+  const [batchVersionIds, setBatchVersionIds] = useState(() => new Set())
+  const [panelDismissed, setPanelDismissed] = useState(false)
   const [, forceTick] = useState(0)
   const tickRef = useRef(null)
-  // W-01 佐證鏈:標為已提送時的送審佐證挑選(evidenceFor=義務 id;'' 表示不掛)
-  const [evidenceFor, setEvidenceFor] = useState(null)
-  const [evidencePick, setEvidencePick] = useState('')
 
   const pid = currentProject?.project_id
-  // 文件上傳與義務「已提送」的前端閘,鏡像伺服器端 can_write(成員且非機關;
-  // admin 例外走 can.edit)。舊寫法只認 can.edit(廠商/管理者),把監造擋在
-  // 前端——但 DB 的 can_manage_documents/義務狀態欄位授權本來就放行監造,
-  // 監造上傳契約、勾已提送正是事務所場景的主流程(W10)。
+  // 前端閘鏡像伺服器端 can_write(成員且非機關;admin 例外走 can.edit)——
+  // 監造上傳契約正是事務所場景的主流程(W10)
   const canWriteContract = can.edit || currentUser?.org_type === 'supervisor'
   const canUploadDocs = isPersistedProject && canWriteContract
-
-  useEffect(() => {
-    setAnchors({
-      award_date: currentProject?.award_date || '',
-      notice_date: currentProject?.notice_date || '',
-      commencement_date: currentProject?.commencement_date || '',
-      end_date: currentProject?.end_date || '',
-    })
-    setTotalDraft(currentProject?.contract_total != null ? String(currentProject.contract_total) : '')
-  }, [currentProject])
-
-  // DB 成功才更新本地(B-04):非建立者被 RLS 靜默擋下時,原本 UI 直接顯示新日期,
-  // 整頁義務時程都建立在沒存進 DB 的基準日上,重整才還原。
-  const [anchorErr, setAnchorErr] = useState('')
-  const setAnchor = async (key, val) => {
-    setAnchorErr('')
-    if (isPersistedProject) {
-      const { error } = await updateProjectAnchors({ [key]: val || null })
-      if (error) { setAnchorErr(`基準日未儲存:${error.message}`); return }
-    }
-    setAnchors((a) => ({ ...a, [key]: val })) // demo:只進本地,供時間軸展示
-  }
 
   // ── 契約包與處理狀態載入(持久化,重新整理不遺失)────────────────────────
   const reloadPackages = useCallback(async () => {
@@ -178,6 +149,19 @@ export default function Contract() {
   }, [isPersistedProject])
   useEffect(() => { reloadRuns(selectedPackageId) }, [reloadRuns, selectedPackageId])
 
+  // 回到頁面時把「仍在處理中」的 run 釘進本批:終結後仍留在面板裡,
+  // 結束摘要才出得來(否則列一條條消失,永遠看不到摘要)
+  useEffect(() => {
+    setBatchVersionIds((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const r of runs) {
+        if (!isTerminal(r) && !next.has(r.document_version_id)) { next.add(r.document_version_id); changed = true }
+      }
+      return changed ? next : prev
+    })
+  }, [runs])
+
   const progress = useMemo(() => summarizePackageProgress(runs), [runs])
   useEffect(() => {
     if (!selectedPackageId || progress.active === 0) return
@@ -194,14 +178,14 @@ export default function Contract() {
     return () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
   }, [progress.active])
   const elapsed = useMemo(() => {
-    const active = runs.filter((r) => !['completed', 'partial', 'failed', 'unsupported'].includes(r.status))
+    const active = runs.filter((r) => !isTerminal(r))
     if (!active.length) return null
     const earliest = Math.min(...active.map((r) => new Date(r.started_at).getTime()))
     return formatElapsed(Date.now() - earliest)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs, progress.active, Date.now()])
 
-  // 身分快照只選「我代表哪個契約方」；能否上傳仍由 project_members/profile 產生的 can.edit 決定。
+  // 身分快照只選「我代表哪個契約方」;能否上傳仍由 can_write 鏡像決定
   const packageOptions = useMemo(
     () => availablePackageOptions({ membership: currentProjectMembership, parties }),
     [currentProjectMembership, parties],
@@ -209,14 +193,13 @@ export default function Contract() {
   const partiesById = useMemo(() => new Map(parties.map((p) => [p.id, p])), [parties])
   const myPartyId = currentProjectMembership?.project_party_id || null
 
-  // 尚未建立的可用契約包:顯示為可選並於首次上傳時建立
-  const creatableOptions = packageOptions.filter((o) => !packages.some(
+  // 「＋新契約包」只給真的能上傳的人:機關按了必被 RLS 擋,不渲染假入口
+  const creatableOptions = !canUploadDocs ? [] : packageOptions.filter((o) => !packages.some(
     (p) => p.package_type === o.package_type
       && p.counterparty_project_party_id === o.counterparty_project_party_id,
   ))
 
-  // 自動補齊專案身分:受邀成員/舊專案缺 parties 或 membership 時,開頁即修——
-  // 不再把使用者導去一個管不了這件事的頁面。冪等 RPC,失敗才顯示訊息。
+  // 自動補齊專案身分:受邀成員/舊專案缺 parties 或 membership 時,開頁即修
   const identityFixTried = useRef(false)
   useEffect(() => {
     if (!isPersistedProject || !pid || !canUploadDocs) return
@@ -249,23 +232,23 @@ export default function Contract() {
     return data
   }, [packages, parties, pid, currentUser])
 
-  // ── 一個主要上傳流程:多檔 → 自動整理 → 履約要求 ───────────────────────
+  // ── 唯一上傳流程:多檔 → 自動分類 → 自動歸檔分流 ─────────────────────────
   const handleFiles = useCallback(async (fileList, targetPackage) => {
     let files = [...(fileList || [])].filter(Boolean)
     if (!files.length || !canUploadDocs) return
-    setBoqMsg(null)   // 上一批的結果不得跨批殘留(否則這次只丟 PDF 也會看到上次的標單訊息)
+    setBoqMsg(null)   // 上一批的結果不得跨批殘留
+    setPanelDismissed(false)
     // 統一窗口:PCCES 標單 XML 直接路由到 BOQ 匯入,其餘進契約包管線
     const xmls = files.filter((f) => /\.xml$/i.test(f.name))
     files = files.filter((f) => !/\.xml$/i.test(f.name))
     // 同批多個 XML:第一份成功後,迴圈內的 workItemsSource 是過期閉包值,
-    // 用本地旗標擋後續檔案——否則第二份會撞伺服器「已有標單」錯誤,蓋掉成功訊息
+    // 用本地旗標擋後續檔案
     let boqImported = workItemsSource === 'db'
     if (xmls.length) {
       setBoqBusy(true)
       try {
         for (const xf of xmls) {
           try {
-            // 略過訊息接在既有訊息後面,語氣沿用前一則:第一份成功、其餘略過時整體仍是成功
             if (boqImported) { setBoqMsg((prev) => ({ tone: prev?.tone || 'skip', text: `${prev?.text ? prev.text + ' ' : ''}標單已匯入過,略過「${xf.name}」(如需重匯請至「標單工項」頁清空重匯)。` })); continue }
             const parsed = parsePccesXml(await xf.text())
             const { error, count } = await importWorkItems(parsed)
@@ -287,10 +270,13 @@ export default function Contract() {
       setUploading(true); setMsg('')
       setSelectedPackageId(pkg.id)
       await supabase.from('contract_packages').update({ status: 'processing' }).eq('id', pkg.id)
-      const onRun = (run) => setRuns((rs) => {
-        const i = rs.findIndex((r) => r.document_version_id === run.document_version_id)
-        return i >= 0 ? rs.map((r, j) => (j === i ? run : r)) : [...rs, run]
-      })
+      const onRun = (run) => {
+        setBatchVersionIds((ids) => new Set(ids).add(run.document_version_id))
+        setRuns((rs) => {
+          const i = rs.findIndex((r) => r.document_version_id === run.document_version_id)
+          return i >= 0 ? rs.map((r, j) => (j === i ? run : r)) : [...rs, run]
+        })
+      }
       const { runs: batchRuns, failures } = await uploadFilesToPackage({
         files, packageRow: pkg, projectId: pid, userId: currentUser?.user_id || null, onRun,
       })
@@ -309,7 +295,7 @@ export default function Contract() {
   }, [canUploadDocs, packageOptions, ensurePackage, pid, currentUser,
     reloadRuns, importWorkItems, workItemsSource])
 
-  // 待確認文件:修正分類 → 視需要重新路由 AI 分析
+  // 修正/確認分類 → 視需要重新路由 AI 分析(也是「重試」的 handler)
   const confirmClassification = useCallback(async (run, newType) => {
     const version = versionsById.get(run.document_version_id)
     const docId = version?.document_id
@@ -340,8 +326,7 @@ export default function Contract() {
         metadata: {
           ...(run.metadata || {}),
           requirement_extraction: failed ? 'failed' : 'completed',
-          // W10 揭露截斷:coverage_incomplete 時「找到 N 項」必須連著講清楚
-          // 沒讀到哪裡——只報成功數會讓人以為整份文件都掃過了
+          // W10 揭露截斷:coverage_incomplete 時「找到 N 項」必須連著講清楚沒讀到哪裡
           requirement_extraction_message: failed
             ? (data?.error || error?.message)
             : `找到 ${data?.extracted_requirement_count ?? 0} 項契約重點建議${
@@ -361,83 +346,83 @@ export default function Contract() {
     await reloadRuns(run.contract_package_id)
   }, [versionsById, pid, reloadRuns])
 
-  // ── 義務時程顯示(approved deadline 的相容 runtime)────────────────────
-  const items = useMemo(() => {
-    // end_date 已在 anchors 內(卡片可編輯),不再另外從 currentProject 取——否則剛改完的
-    // 竣工日要等專案清單重載才會反映到時程上
-    return obligations.map((ob) => {
-      const due = computeObligationDue(ob, anchors)
-      const done = ob.status === '已提送' || ob.status === '已完成'
-      let diff = null, state = 'nodate'
-      if (done) state = 'done'
-      else if (due) { diff = Math.round((due - today0()) / 86400000); state = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'scheduled' }
-      return { ob, due, diff, done, state }
-    })
-  }, [obligations, anchors])
-  const counts = useMemo(() => {
-    let overdue = 0, soon = 0, done = 0
-    for (const it of items) { if (it.state === 'overdue') overdue++; else if (it.state === 'soon') soon++; if (it.done) done++ }
-    return { overdue, soon, done }
-  }, [items])
-  const groups = useMemo(() => PHASES.map((ph) => ({
-    ph, list: items.filter((it) => (PHASES.includes(it.ob.category) ? it.ob.category : '其他') === ph)
-      .sort((x, y) => (x.due?.getTime() || Infinity) - (y.due?.getTime() || Infinity)),
-  })).filter((g) => g.list.length), [items])
-
-  // 契約義務卡動作:列印對照表=可寄給對方的輸出物;手動新增走契約重點的
-  // 人工建立 → 核定流(義務表 system-managed,前端不能直接插列)
-  const obligationCardAction = (
-    <div className="flex items-center gap-2">
-      {isPersistedProject && canWriteContract && (
-        <Link to="/requirements" className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1">
-          <MSym name="add" size={13} /> 手動新增
-        </Link>
-      )}
-      {obligations.length > 0 && (
-        <Link to="/contract/print" className={buttonClass('outline', 'sm')}>
-          <MSym name="print" size={14} /> 列印對照表
-        </Link>
-      )}
-    </div>
-  )
-
-  // 檔案列表(依分類分組)與待確認清單
-  const fileRows = useMemo(() => runs.map((run) => {
+  // ── 上傳回饋面板(mockup 狀態 B/C/D)────────────────────────────────────
+  // 面板列 = 本批上傳的 run + 任何仍在處理中的 run(回到頁面也看得到進行中)
+  const panelRuns = useMemo(() => runs.filter(
+    (r) => batchVersionIds.has(r.document_version_id) || !isTerminal(r),
+  ), [runs, batchVersionIds])
+  const panelBusy = uploading || boqBusy || panelRuns.some((r) => !isTerminal(r))
+  const panelVisible = !panelDismissed && (panelBusy || panelRuns.length > 0)
+  const panelFailed = panelRuns.filter((r) => r.status === 'failed' || r.status === 'partial')
+  // 分類待確認 ≠ 完成:completed 但 needs_review 的檔案抽取被跳過,
+  // 面板若報綠色「已抽取」就是說謊(審查 W11 發現)
+  const panelNeeds = panelRuns.filter((r) => r.status === 'completed' && r.classification_status === 'needs_review')
+  const panelOk = panelRuns.filter((r) =>
+    (r.status === 'completed' && r.classification_status !== 'needs_review') || r.status === 'unsupported')
+  // 「重試」只對 AI 分析失敗有效;上傳失敗/掃描檔重打 edge fn 必敗又蓋掉
+  // 原始錯誤,正確復原是重新上傳同檔(checksum 相同會自動接續)
+  const panelExtractionFailed = panelFailed.filter((r) => r.metadata?.requirement_extraction === 'failed')
+  const overallPct = panelRuns.length
+    ? Math.round(panelRuns.reduce((sum, r) => sum + runPct(r), 0) / panelRuns.length)
+    : 0
+  const panelState = panelBusy ? 'busy' : (panelFailed.length ? 'err' : panelNeeds.length ? 'warn' : 'ok')
+  const PANEL_HEAD = {
+    busy: {
+      icon: 'cloud_upload', fill: false, cls: 'text-[var(--blue-text)]',
+      title: panelRuns.length ? `正在整理 ${panelRuns.length} 個檔案` : '正在解析標單 XML',
+      sub: panelRuns.length
+        ? `已完成 ${panelOk.length + panelNeeds.length} / ${panelRuns.length}${elapsed ? ` · 已進行 ${elapsed}` : ''} · 可離開此頁,處理結果會保留`
+        : '此步驟請勿離開頁面',
+      right: panelRuns.length ? `${overallPct}%` : '', bar: 'bg-[var(--blue)]',
+    },
+    ok: {
+      icon: 'check_circle', fill: true, cls: 'text-[var(--green-text)]',
+      title: `${panelOk.length} 個檔案處理完成`,
+      sub: 'AI 已完成分類歸檔與契約重點抽取。',
+      right: '完成', bar: 'bg-[var(--green-text)]',
+    },
+    warn: {
+      icon: 'error', fill: true, cls: 'text-[var(--amber-text)]',
+      title: `${panelOk.length + panelNeeds.length} 個檔案處理完成,${panelNeeds.length} 個分類待確認`,
+      sub: 'AI 對部分文件的分類沒把握;請在下方清單確認分類,確認後會自動接續分析。',
+      right: `${panelNeeds.length} 待確認`, bar: 'bg-[var(--amber-text)]',
+    },
+    err: {
+      icon: 'error', fill: true, cls: 'text-[var(--red-text)]',
+      title: `${panelRuns.length - panelFailed.length} 個檔案處理完成,${panelFailed.length} 個待處理`,
+      sub: '待處理的檔案不影響已完成的部分。',
+      right: `${panelRuns.length - panelFailed.length}/${panelRuns.length}`, bar: 'bg-[var(--red-text)]',
+    },
+  }[panelState]
+  const dismissPanel = () => { setPanelDismissed(true); setBatchVersionIds(new Set()) }
+  const retryRun = (run) => {
     const version = versionsById.get(run.document_version_id)
     const doc = version ? docsById.get(version.document_id) : null
-    return { run, version, doc }
+    return confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')
+  }
+
+  // ── 文件清單(卡 2)─────────────────────────────────────────────────────
+  const docTableRows = useMemo(() => runs.map((run) => {
+    const version = versionsById.get(run.document_version_id)
+    const doc = version ? docsById.get(version.document_id) : null
+    return {
+      run,
+      doc,
+      version,
+      title: doc?.title || '文件',
+      group: presentationGroup(doc?.document_type || run.suggested_document_type || 'other',
+        run.metadata?.classification_reason),
+      uploaded: run.started_at || '',
+    }
   }), [runs, versionsById, docsById])
-  const needsReviewRows = fileRows.filter((r) => r.run.classification_status === 'needs_review')
-  // 文件清單表格化(README「表格:排序、篩選、分頁」):分類維度沿用既有的
-  // presentationGroup(它把 itp 併進品質類、認得「價格與標單」的 reason 細分),
-  // 不另發明一套 enum。title/uploaded 攤平成欄位供 useTableSort 直接比較。
-  const docTableRows = useMemo(() => fileRows.map(({ run, doc, version }) => ({
-    run,
-    doc,
-    version,
-    title: doc?.title || '文件',
-    group: presentationGroup(doc?.document_type || run.suggested_document_type || 'other',
-      run.metadata?.classification_reason),
-    uploaded: run.started_at || '',
-  })), [fileRows])
-  // chips 只列資料裡實際出現的分類(distinct),順序沿 PRESENTATION_GROUPS 固定
-  const docGroups = useMemo(
-    () => PRESENTATION_GROUPS.filter((g) => docTableRows.some((r) => r.group === g)),
-    [docTableRows],
-  )
-  const [docGroupFilter, setDocGroupFilter] = useState(null) // null=全部(單選篩選)
-  const filteredDocRows = useMemo(
-    () => (docGroupFilter ? docTableRows.filter((r) => r.group === docGroupFilter) : docTableRows),
-    [docTableRows, docGroupFilter],
-  )
-  const { sort: docSort, toggleSort: toggleDocSort, sorted: sortedDocRows } = useTableSort(filteredDocRows)
+  const { sort: docSort, toggleSort: toggleDocSort, sorted: sortedDocRows } = useTableSort(docTableRows)
   const { pageRows: docPageRows, pager: docPager } = usePagination(sortedDocRows)
+  const [showTech, setShowTech] = useState(false)
 
   if (isSupabaseConfigured && !currentProject) {
-    // 早退分支與正常態同一個頁首:標題不再出現第二種名字(舊為「契約管制」)
     return (
       <div className="space-y-5">
-        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並整理出契約重點;人工核定的期限會進入契約義務" />
+        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整包契約文件丟進來,AI 自動分類歸檔:標單進「標單工項」、契約重點送「審查與協作」;要看結果就到對應功能頁" />
         <Card><Empty>請先登入並建立/選擇專案,才能整理契約文件。</Empty></Card>
       </div>
     )
@@ -445,48 +430,13 @@ export default function Contract() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整個專案的文件(契約、標單 XML、規範、圖說)一次丟進來——系統自動分類歸檔並整理出契約重點;人工核定的期限會進入契約義務" />
+      <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整包契約文件丟進來,AI 自動分類歸檔:標單進「標單工項」、契約重點送「審查與協作」;要看結果就到對應功能頁" />
 
-      <Card title="基準日">
-        <div className="flex flex-wrap gap-4">
-          {[
-            ['award_date', '決標日'],
-            ['notice_date', '接獲開工通知日'],
-            ['commencement_date', '開工日'],
-            // 建案表單的「預計竣工日」寫的就是這一欄;完工類義務算不出到期日多半是它留白
-            ['end_date', '竣工日(完工義務基準)'],
-          ].map(([k, label]) => (
-            // 共用 Field/Input 取代自寫 label+input 殼:欄位樣式全站一份(UI/UX 統一修正)
-            <Field key={k} label={label}>
-              <Input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
-                disabled={!can.edit} />
-            </Field>
-          ))}
-          {/* W10 手填契約總價:百分比制逾期罰款(契約總價千分之X/日)沒有它算不出來,
-              而沒匯標單的專案(契約期限追蹤是唯一不需要標單的鏈)以前只能顯示
-              「格式需人工確認」的誤導訊息。onBlur 才寫 DB;寫入沿 projects
-              creator-only 政策(與基準日同一條 RLS,失敗會進 anchorErr)。 */}
-          <Field label="契約價金總額(元)">
-            <Input type="number" min="0" step="1" value={totalDraft} placeholder="未填則採標單加總"
-              onChange={(e) => setTotalDraft(e.target.value)}
-              onBlur={() => {
-                const v = totalDraft.trim() === '' ? null : Number(totalDraft)
-                if (v != null && (!Number.isFinite(v) || v < 0)) { setAnchorErr('契約價金總額需為 0 以上的數字'); return }
-                if ((currentProject?.contract_total ?? null) === v) return
-                setAnchor('contract_total', v)
-              }}
-              disabled={!can.edit} />
-          </Field>
-        </div>
-        <ErrorBanner msg={anchorErr} className="mt-2" />
-        <p className="text-xs text-[var(--text-3)] mt-3">契約義務的到期日、倒數、逾期都依這些基準日即時計算。「開工日」請填實際開工日;建立專案時填的是預計值,在這裡更新才會影響契約義務。契約價金總額用於逾期違約金試算,未填時以標單可計價金額代替。</p>
-      </Card>
-
-      {/* ── 契約文件包:唯一的主要上傳流程 ──────────────────────────────── */}
+      {/* ── 卡 1:契約文件(上傳入口+上傳回饋)──────────────────────────── */}
       <Card title="契約文件" action={
         <div className="flex items-center gap-2">
           {(packages.length > 1 || creatableOptions.length > 0) && (
-            <Select value={selectedPackageId || ''} className="w-48"
+            <Select value={selectedPackageId || ''} className="w-48" disabled={uploading}
               onChange={async (e) => {
                 const value = e.target.value
                 if (value.startsWith('new:')) {
@@ -513,14 +463,12 @@ export default function Contract() {
               disabled={uploading || boqBusy || !canUploadDocs}
               onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)}
               className="hidden" />
-            <MSym name="cloud_upload" size={15} /> {boqBusy ? '解析標單中…' : uploading ? '整理中…' : '上傳契約文件'}
+            <MSym name="cloud_upload" size={15} /> 上傳契約文件
           </label>
         </div>
       }>
-        {/* 契約包總覽(依角色只列可見契約包):單選切換走全站 chips 語言
-            (CHIP_BASE/ON/OFF),不再自寫選取卡;副標與狀態改列在 chips 下方的
-            詳情列——只描述目前選取的契約包,資訊不因換皮而消失 */}
-        {packages.length > 0 && (
+        {/* 契約包切換(多包才顯示):單選 chips + 選取包詳情列 */}
+        {packages.length > 1 && (
           <div className="mb-4">
             <div className="flex flex-wrap gap-2">
               {packages.map((p) => {
@@ -528,7 +476,8 @@ export default function Contract() {
                 const active = p.id === selectedPackageId
                 return (
                   <button key={p.id} onClick={() => setSelectedPackageId(p.id)} aria-pressed={active}
-                    className={`${CHIP_BASE} ${active ? CHIP_ON : CHIP_OFF}`}>
+                    disabled={uploading}
+                    className={`${CHIP_BASE} ${active ? CHIP_ON : CHIP_OFF} ${uploading ? 'opacity-50' : ''}`}>
                     {name.title}
                   </button>
                 )
@@ -545,71 +494,150 @@ export default function Contract() {
           </div>
         )}
 
-        {/* 拖放區 + 摘要 */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); if (canUploadDocs) setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => { e.preventDefault(); setDragOver(false); if (canUploadDocs) handleFiles(e.dataTransfer?.files, selectedPackage) }}
-          className={`border-2 border-dashed rounded-xl px-4 py-4 transition-colors ${dragOver ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border)]'}`}
-        >
-          {progress.total === 0 ? (
-            <p className="text-sm text-[var(--text-2)]">
-              把整包契約文件直接拖進來,或點右上「上傳契約文件」。可一次選擇多個檔案
-              (PDF / Word / TXT / Excel / 圖片…),系統會自動分類、整理並找出契約重點。
-            </p>
-          ) : (
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-[var(--text)]">
-              <span className="font-medium">已收到 {progress.total} 份文件</span>
-              <span>{progress.classified} 已分類</span>
-              <span>{progress.requirementsAnalyzed} 已分析契約重點</span>
-              {/* 警示/異常計數走五語意 Badge,不再用裸文字色表狀態(UI/UX 統一修正) */}
-              {progress.needsClassification > 0 && <Badge color="amber">{progress.needsClassification} 待確認</Badge>}
-              {progress.unsupported > 0 && <Badge color="slate">{progress.unsupported} 尚未支援分析</Badge>}
-              {progress.failed > 0 && <Badge color="red">{progress.failed} 失敗</Badge>}
+        {!panelVisible ? (
+          /* 狀態 A:idle 拖放區 */
+          <div
+            onDragOver={(e) => { e.preventDefault(); if (canUploadDocs) setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); if (canUploadDocs) handleFiles(e.dataTransfer?.files, selectedPackage) }}
+            className={`border border-dashed rounded-xl px-5 py-5 flex items-start gap-3.5 transition-colors ${dragOver ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border-3,var(--border))] bg-[var(--surface-2)]'}`}
+          >
+            <MSym name="cloud_upload" size={26} className="text-[var(--text-3)] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm text-[var(--text)] leading-relaxed">
+                把整包契約文件直接拖進來,或點右上「上傳契約文件」。可一次選擇多個檔案
+                (PDF / Word / TXT / Excel / 圖片…),系統會自動分類、歸檔並找出契約重點。
+              </p>
+              <p className="text-xs text-[var(--text-3)] mt-1.5">
+                標單請丟 PCCES XML(自動匯入標單工項);契約/規範/品質計畫會自動抽取契約重點送審查。
+              </p>
+              {!isPersistedProject && <p className="text-xs text-[var(--amber-text)] mt-1.5">Demo 模式不支援,請登入並選擇真實專案。</p>}
+              {isPersistedProject && !canWriteContract && <p className="text-xs text-[var(--text-3)] mt-1.5">需編輯權限(施工廠商、監造或專案管理者)。</p>}
             </div>
-          )}
-          {/* 警語一律吃 --amber-text token:硬編碼 text-amber-600 在深色模式不會跟著切換 */}
-          {!isPersistedProject && <p className="text-xs text-[var(--amber-text)] mt-2">Demo 模式不支援,請登入並選擇真實專案。</p>}
-          {isPersistedProject && !canWriteContract && <p className="text-xs text-[var(--text-3)] mt-2">需編輯權限(施工廠商、監造或專案管理者)。</p>}
-        </div>
-
-        {/* 真實階段進度(持久化;離開頁面不會遺失) */}
-        {(progress.active > 0 || uploading || boqBusy) && (
-          // 進度面板改吃共用 Surface 卡殼,不再自組 surface-2 圓角底
-          <Surface className="mt-4 px-4 py-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-[var(--text)]">
-                正在整理{selectedPackage ? packageDisplayName(selectedPackage, { partiesById, myPartyId }).title : '契約文件'}
-              </span>
-              {elapsed && <span className="text-xs text-[var(--text-3)]">已進行 {elapsed}</span>}
+          </div>
+        ) : (
+          /* 狀態 B:上傳中/上傳結束的進度面板(逐檔列+總進度) */
+          <div className="border border-[var(--border)] rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <MSym name={PANEL_HEAD.icon} size={20} fill={PANEL_HEAD.fill} className={`shrink-0 ${PANEL_HEAD.cls}`} />
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-[var(--text)]">{PANEL_HEAD.title}</div>
+                  <div className="text-xs text-[var(--text-3)] mt-0.5" aria-live="polite">{PANEL_HEAD.sub}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className={`text-[12.5px] font-medium num ${PANEL_HEAD.cls}`}>{PANEL_HEAD.right}</span>
+                {/* 關閉鈕永遠可按:中斷遺留的 processing run 會讓 busy 掛到
+                    20 分鐘 stale 門檻,不能鎖住整個拖放區(審查 W11 發現) */}
+                <button onClick={dismissPanel} aria-label="關閉上傳結果"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)]">
+                  <MSym name="close" size={18} />
+                </button>
+              </div>
             </div>
-            {/* ●/✓ 文字符號改 MSym:完成=check_circle、進行中=空心圓點,與全站圖示語言一致 */}
-            <ul className="mt-2 space-y-1 text-xs text-[var(--text-2)]">
-              {/* 只丟標單 XML 時完全沒有 processing run,計數列會是 0/0——那條路徑只報自己的進度 */}
-              {boqBusy && <li className="flex items-center gap-1.5"><MSym name="progress_activity" size={13} className="msym-spin text-[var(--text-3)] shrink-0" /> 正在解析標單 XML…</li>}
-              {progress.total > 0 && (
-                <>
-                  {[
-                    [progress.uploaded >= progress.total, `已上傳 ${progress.uploaded} / ${progress.total}`],
-                    [progress.textExtracted >= progress.total - progress.unsupported, `已完成文字讀取 ${progress.textExtracted} / ${progress.total - progress.unsupported}`],
-                    [progress.classified >= progress.total, `已辨識文件類型 ${progress.classified} / ${progress.total}`],
-                    [progress.active === 0, `已分析契約重點 ${progress.requirementsAnalyzed}`],
-                  ].map(([ok, text]) => (
-                    <li key={text} className="flex items-center gap-1.5">
-                      <MSym name={ok ? 'check_circle' : 'radio_button_unchecked'} size={13}
-                        className={`shrink-0 ${ok ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'}`} /> {text}
-                    </li>
-                  ))}
-                </>
-              )}
-            </ul>
-            {/* 「可離開」只對持久化的 processing run 成立;標單匯入是本頁直接呼叫 RPC,離開會中斷 */}
-            {progress.total > 0 && <p className="text-xs text-[var(--text-3)] mt-2">你可以離開此頁,處理結果會保留。</p>}
-          </Surface>
+            {/* 總進度條(各檔真實階段的平均;結束時一律 100%) */}
+            <div className="h-1 bg-[var(--border-2)]" role="progressbar" aria-valuenow={panelBusy ? overallPct : 100} aria-valuemin={0} aria-valuemax={100}>
+              <div className={`h-1 transition-[width] duration-300 ${PANEL_HEAD.bar}`}
+                style={{ width: `${panelBusy ? overallPct : 100}%` }} />
+            </div>
+            {/* 逐檔列 */}
+            {boqBusy && (
+              <div className="flex items-center gap-3 px-3.5 py-2.5 border-t border-[var(--border-2)] text-xs text-[var(--text-2)]">
+                <MSym name="progress_activity" size={19} className="msym-spin text-[var(--blue-text)] shrink-0" />
+                正在解析標單 XML…(此步驟請勿離開頁面)
+              </div>
+            )}
+            {panelRuns.map((r) => {
+              const version = versionsById.get(r.document_version_id)
+              const doc = version ? docsById.get(version.document_id) : null
+              const name = doc?.title || r.metadata?.filename_kind || '文件'
+              const busy = !isTerminal(r)
+              const failed = r.status === 'failed' || r.status === 'partial'
+              const needsReview = !busy && !failed && r.classification_status === 'needs_review'
+              // 只有 AI 分析失敗才可原地重試;上傳失敗/掃描檔要重新上傳同檔
+              const retryable = failed && r.metadata?.requirement_extraction === 'failed'
+              const failMeta = failed
+                ? `${r.error_message || '處理未完成'}${!retryable && !(r.error_message || '').includes('重新上傳') ? ';請重新上傳同一份檔案(內容相同會自動接續)' : ''}`
+                : null
+              return (
+                <div key={r.id} className="grid grid-cols-[22px_1fr_128px] items-center gap-3 px-3.5 py-2.5 border-t border-[var(--border-2)]">
+                  <MSym
+                    name={busy ? 'draft' : failed || needsReview ? 'error' : 'check_circle'}
+                    size={19} fill={!busy}
+                    className={busy ? 'text-[var(--blue-text)]' : failed ? 'text-[var(--red-text)]' : needsReview ? 'text-[var(--amber-text)]' : 'text-[var(--green-text)]'} />
+                  <div className="min-w-0">
+                    <div className="text-[12.5px] text-[var(--text)] truncate" title={name}>{name}</div>
+                    <div className={`text-[11px] mt-0.5 ${failed ? 'text-[var(--red-text)]' : needsReview ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`}>
+                      {busy ? (STAGE_LABELS[r.stage] || r.stage)
+                        : failed ? failMeta
+                          : needsReview ? `AI 建議分類:${DOCUMENT_TYPE_LABELS[r.suggested_document_type] || '無法判斷'};請到下方清單確認,確認後自動接續分析`
+                            : (r.metadata?.requirement_extraction_message || RUN_META_OK(r))}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    {busy ? (<>
+                      <div className="w-[66px] h-1 rounded-full bg-[var(--border-2)] overflow-hidden">
+                        <div className="h-1 rounded-full bg-[var(--blue)] transition-[width] duration-300" style={{ width: `${runPct(r)}%` }} />
+                      </div>
+                      <span className="text-[11.5px] text-[var(--text-3)] num min-w-[34px] text-right">{runPct(r)}%</span>
+                    </>) : failed ? (
+                      retryable && canWriteContract ? (
+                        <button onClick={() => retryRun(r)} className={buttonClass('outline', 'sm')}>重試</button>
+                      ) : <span className="text-[11.5px] font-medium text-[var(--red-text)]">待處理</span>
+                    ) : needsReview ? (
+                      <span className="text-[11.5px] font-medium text-[var(--amber-text)]">待確認</span>
+                    ) : (
+                      <span className="text-[11.5px] font-medium text-[var(--green-text)]">已完成</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+            {/* 狀態 C/D:結束摘要 */}
+            {!panelBusy && panelState === 'ok' && (
+              <div className="m-3.5 rounded-xl bg-[var(--green-tint)] px-3.5 py-3 flex items-start gap-2.5">
+                <MSym name="check_circle" size={19} fill className="text-[var(--green-text)] shrink-0 mt-0.5" />
+                <div className="text-[12.5px] text-[var(--green-text)] leading-relaxed">
+                  {panelOk.length} 個檔案處理完成,已自動分類歸檔。
+                  {aiCount != null && aiCount > 0 && ` AI 從本契約累計找到 ${aiCount} 項契約重點建議(含先前批次)。`}
+                  <br />
+                  <Link to="/requirements" className="font-medium hover:underline inline-flex items-center gap-0.5">前往契約重點核定 <MSym name="arrow_forward" size={12} /></Link>
+                  {workItemsSource === 'db' && (<>
+                    {' '}·{' '}
+                    <Link to="/boq" className="font-medium hover:underline inline-flex items-center gap-0.5">查看標單工項 <MSym name="arrow_forward" size={12} /></Link>
+                  </>)}
+                </div>
+              </div>
+            )}
+            {!panelBusy && panelState === 'err' && (
+              <div className="m-3.5 rounded-xl bg-[var(--red-tint)] px-3.5 py-3">
+                <div className="flex items-start gap-2.5">
+                  <MSym name="error" size={19} fill className="text-[var(--red-text)] shrink-0 mt-0.5" />
+                  <div className="text-[12.5px] text-[var(--red-text)] leading-relaxed">
+                    {panelFailed.length} 個檔案待處理:{panelFailed[0] && (docsById.get(versionsById.get(panelFailed[0].document_version_id)?.document_id)?.title || '文件')}
+                    {panelFailed[0]?.error_message ? `——${panelFailed[0].error_message}` : ''}
+                    。其餘 {panelOk.length} 個檔案已完成,不需重傳。
+                  </div>
+                </div>
+                {panelFailed.length > panelExtractionFailed.length && (
+                  <div className="text-[11.5px] text-[var(--red-text)] mt-1.5 pl-[29.5px]">
+                    上傳失敗或無法讀取的檔案,請重新上傳同一份檔案(內容相同會自動接續處理)。
+                  </div>
+                )}
+                <div className="flex gap-2 mt-2.5 pl-[29.5px]">
+                  {canWriteContract && panelExtractionFailed.length > 0 && (
+                    <button className={buttonClass('primary', 'sm')}
+                      onClick={() => panelExtractionFailed.forEach((r) => retryRun(r))}>重試 AI 分析失敗的檔案</button>
+                  )}
+                  <button className={buttonClass('outline', 'sm')} onClick={dismissPanel}>略過並繼續</button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
         <ErrorBanner msg={msg} className="mt-3" />
-        {/* 成功/略過/失敗要一眼分得出來:失敗走全站 ErrorBanner,成功/略過用圖示+中性文字
-            (訊息是句子不是狀態標籤,塞 Badge 會因 nowrap 爆版) */}
+        {/* 標單匯入結果:單一出口,面板開著也看得到(成功/略過/失敗都不可被面板吞掉) */}
         {boqMsg && (boqMsg.tone === 'error'
           ? <ErrorBanner msg={boqMsg.text} className="mt-2" />
           : (
@@ -620,289 +648,111 @@ export default function Contract() {
               {boqMsg.tone === 'ok' && <Link to="/boq" className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">前往標單工項 <MSym name="arrow_forward" size={12} /></Link>}
             </p>
           ))}
-        {/* workItemsSource:只匯了標單的新專案(runs=0、obligations=0)本來看不到後續指引 */}
-        {!uploading && !boqBusy && (runs.length > 0 || obligations.length > 0 || workItemsSource === 'db') && (
-          // 底色用 --blue-tint 原值:對 token 疊 /40 透明度在深色模式會混出不可預期的對比
-          <div className="mt-4 rounded-lg border border-[var(--border-2)] bg-[var(--blue-tint)] px-4 py-3">
-            {/* font-semibold 不在系統字重表內,小標一律 500 */}
-            <div className="text-xs font-medium text-[var(--text)] mb-1.5">接下來該做什麼</div>
-            {/* emoji 項目符號改 MSym(event/search/checklist 皆在字型子集內),與全站圖示語言一致;
-                句中的「→」是行文標點不是圖示,保留原文 */}
-            <ul className="text-xs text-[var(--text-2)] space-y-1">
-              {obligations.length > 0 && (
-                <li className="flex items-start gap-1.5"><MSym name="event" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>{obligations.length} 項契約義務已列在下方時間軸——到期會自動出現在<Link to="/alerts" className="text-[var(--blue-text)] hover:underline">提醒中心</Link>。</span></li>
-              )}
-              {/* W8-3A(D-014):人工核定只針對「要成為契約規則」的內容,不是初始化門檻。
-                  ⚠️ 這一行在整理尚未跑完時也會顯示,所以措辭必須中性——不得斷言「AI 已整理完成」
-                  (是否完成的唯一判定在 document_ingestion_runs,見 Requirements 的 requirementsIntro)。 */}
-              <li className="flex items-start gap-1.5"><MSym name="search" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>AI 整理完成後,只有要成為契約重點的內容才需人工核定 → <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">前往契約重點</Link>(機關/監造辦理);未核定不影響開啟正式模式。</span></li>
-              {workItemsSource === 'db'
-                ? <li className="flex items-start gap-1.5"><MSym name="checklist" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>標單已就緒 → <Link to="/boq" className="text-[var(--blue-text)] hover:underline">標單工項</Link>;估驗、進度、日誌都掛在它上面。</span></li>
-                : <li className="flex items-start gap-1.5"><MSym name="checklist" size={13} className="mt-0.5 shrink-0 text-[var(--text-3)]" /><span>還沒看到標單:把 PCCES 預算書 XML 也丟進上面同一個框即可自動匯入。</span></li>}
-            </ul>
+      </Card>
+
+      {/* ── 卡 2:專案文件(已入庫清單)────────────────────────────────────── */}
+      <Card title="專案文件" action={
+        <span className="text-[11px] text-[var(--text-3)] num">{docTableRows.length} 件</span>
+      }>
+        {docTableRows.length === 0 ? (
+          <Empty>這個專案還沒有文件。上傳後會自動分類歸檔,並在這裡列出處理狀態。</Empty>
+        ) : (<>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="border-b border-[var(--border)]">
+                  <SortableTh className={DOC_TH} label="文件" field="title" sort={docSort} onSort={toggleDocSort} />
+                  <th className={DOC_TH}>分類</th>
+                  <th className={DOC_TH}>版本</th>
+                  <th className={DOC_TH}>AI 處理</th>
+                  <SortableTh className={DOC_THR} align="right" label="上傳" field="uploaded" sort={docSort} onSort={toggleDocSort} />
+                </tr>
+              </thead>
+              <tbody>
+                {docPageRows.map(({ run, doc, version, title, group, uploaded }) => {
+                  const state = aiProcessingState(run)
+                  const needsClassify = state.kind === 'attention' && run.classification_status === 'needs_review'
+                  // 只有 AI 分析失敗才可原地重試;上傳失敗/掃描檔要重新上傳同檔
+                  const retryable = state.kind === 'attention' && !needsClassify
+                    && run.metadata?.requirement_extraction === 'failed'
+                  const reuploadHint = state.kind === 'attention' && !needsClassify && !retryable
+                    && !(state.detail || '').includes('重新上傳')
+                  return (
+                    <tr key={run.id} className="border-b border-[var(--border-2)] last:border-0 hover:bg-[var(--surface-2)]">
+                      <td className={`${DOC_TD} max-w-[300px]`}>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <MSym name="description" size={12} className="text-[var(--text-3)] shrink-0" />
+                          <span className="truncate text-[var(--text)]" title={title}>{title}</span>
+                        </div>
+                      </td>
+                      <td className={`${DOC_TD} whitespace-nowrap text-[var(--text-2)]`}>{group}</td>
+                      <td className={`${DOC_TD} whitespace-nowrap num text-[var(--text-2)]`}>{version?.version_label || '—'}</td>
+                      <td className={DOC_TD}>
+                        <Badge color={state.color}>{state.label}</Badge>
+                        <div className="text-[11px] text-[var(--text-3)] mt-1 max-w-[300px]">
+                          <span className="line-clamp-2 whitespace-pre-line" title={state.detail}>{state.detail}</span>
+                          {/* 待處理的兩種人工動作:確認分類/重試分析 */}
+                          {needsClassify && canWriteContract && (
+                            <span className="flex items-center gap-1.5 mt-1">
+                              <Select defaultValue={run.suggested_document_type || 'other'} className="w-36"
+                                onChange={(e) => confirmClassification(run, e.target.value)}>
+                                {CLASSIFIABLE_DOCUMENT_TYPES.map((t) => (
+                                  <option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</option>
+                                ))}
+                              </Select>
+                              <button onClick={() => confirmClassification(run, run.suggested_document_type || 'other')}
+                                className="text-[var(--blue-text)] hover:underline whitespace-nowrap inline-flex items-center max-md:min-h-11 px-1">確認此分類</button>
+                            </span>
+                          )}
+                          {retryable && canWriteContract && (
+                            <button onClick={() => retryRun(run)}
+                              className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 mt-0.5">
+                              <MSym name="refresh" size={11} /> 重試分析
+                            </button>
+                          )}
+                          {reuploadHint && (
+                            <span className="block mt-0.5">請重新上傳同一份檔案(內容相同會自動接續處理)</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`${DOC_TD} text-right num whitespace-nowrap text-[var(--text-2)]`}>
+                        {uploaded ? String(uploaded).slice(0, 10) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-
-        {/* AI 契約重點摘要 → 審查收件匣 */}
-        {aiCount != null && aiCount > 0 && (
-          <p className="text-sm text-[var(--text)] mt-4">
-            AI 從本契約找到 <span className="font-medium">{aiCount}</span> 項契約重點建議。
-            <Link to="/requirements" className="text-[var(--blue-text)] hover:underline ml-1 inline-flex items-center gap-0.5">查看整理結果 <MSym name="arrow_forward" size={12} /></Link>
-          </p>
-        )}
-
-        {/* 待確認文件 */}
-        {needsReviewRows.length > 0 && (
-          <div className="mt-4">
-            {/* 標題維持 --text:警示語意由列的 amber-tint 底承擔,標題不用語意色當文字色 */}
-            <div className="text-sm font-medium text-[var(--text)] mb-1.5">待確認文件({needsReviewRows.length})</div>
-            {/* 邊框回 --border-2:*-text token 疊 /40 透明度當邊框色,深色模式對比不可預期 */}
-            {needsReviewRows.map(({ run, doc }) => (
-              <div key={run.id} className="flex items-center gap-2 text-xs border border-[var(--border-2)] bg-[var(--amber-tint)] rounded-lg px-3 py-1.5 mb-1.5">
-                {/* 文件標題是人據以選分類的依據,被截斷時至少要能 hover 看全名 */}
-                <span className="flex-1 truncate text-[var(--text)]" title={doc?.title || '文件'}>{doc?.title || '文件'}</span>
-                {/* amber-tint 底上的 text-3 只有 3.4:1,次要文字改 text-2(≈6.6:1) */}
-                <span className="text-[var(--text-2)]">AI 建議:{DOCUMENT_TYPE_LABELS[run.suggested_document_type] || '無法判斷'}</span>
-                {canWriteContract && (
-                  <div className="flex items-center gap-1.5">
-                    <Select defaultValue={run.suggested_document_type || 'other'} className="w-40"
-                      onChange={(e) => confirmClassification(run, e.target.value)}>
-                      {CLASSIFIABLE_DOCUMENT_TYPES.map((t) => (
-                        <option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</option>
-                      ))}
-                    </Select>
-                    <button onClick={() => confirmClassification(run, run.suggested_document_type || 'other')}
-                      className="text-[var(--blue-text)] hover:underline whitespace-nowrap inline-flex items-center max-md:min-h-11 px-1">確認此分類</button>
-                  </div>
-                )}
-              </div>
-            ))}
-            <p className="text-[11px] text-[var(--text-3)]">選擇正確類型即完成確認;契約/規範/品質計畫類文件會接著自動分析契約重點。</p>
-          </div>
-        )}
-
-        {/* 文件清單表格(README /contract 文件表格):分類 chips 篩選+文件名/上傳日
-            排序+分頁。只表格化「清單呈現」——上傳流程、待確認文件與義務時程都不在
-            此改動範圍(chain3 e2e 依賴義務時程與上傳表單原樣)。 */}
-        {docTableRows.length > 0 && (
-          <div className="mt-4">
-            <div className="flex flex-wrap gap-2 mb-2.5">
-              {docGroups.map((g) => (
-                <FilterChip key={g} label={g} active={docGroupFilter === g}
-                  onToggle={() => setDocGroupFilter((cur) => (cur === g ? null : g))} />
-              ))}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
-                <thead>
-                  <tr className="border-b border-[var(--border)]">
-                    <SortableTh className={DOC_TH} label="文件" field="title" sort={docSort} onSort={toggleDocSort} />
-                    <th className={DOC_TH}>分類</th>
-                    <th className={DOC_TH}>狀態</th>
-                    <SortableTh className={DOC_THR} align="right" label="上傳日" field="uploaded" sort={docSort} onSort={toggleDocSort} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {docPageRows.map(({ run, doc, version, title, group, uploaded }) => {
-                    const analyzed = run.metadata?.requirement_extraction === 'completed'
-                    return (
-                      <tr key={run.id} className="border-b border-[var(--border-2)] last:border-0 hover:bg-[var(--surface-2)]">
-                        <td className={`${DOC_TD} max-w-[280px]`}>
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <MSym name="description" size={12} className="text-[var(--text-3)] shrink-0" />
-                            <span className="truncate text-[var(--text)]" title={title}>{title}</span>
-                            {version?.version_label && <span className="text-[var(--text-3)] shrink-0">{version.version_label}</span>}
-                          </div>
-                        </td>
-                        <td className={`${DOC_TD} whitespace-nowrap text-[var(--text-2)]`}>{group}</td>
-                        <td className={DOC_TD}>
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                            <Badge color={run.status === 'completed' ? 'green' : run.status === 'failed' ? 'red' : run.status === 'unsupported' ? 'slate' : run.status === 'partial' ? 'amber' : 'blue'}>
-                              {run.status === 'processing' ? STAGE_LABELS[run.stage] || run.stage : RUN_STATUS_LABELS[run.status] || run.status}
-                            </Badge>
-                            {analyzed && <span className="text-[var(--green-text)]">{run.metadata?.requirement_extraction_message || '已分析'}</span>}
-                            {run.status === 'unsupported' && <span className="text-[var(--text-2)]">{run.metadata?.limitation || '尚未支援內容分析'}</span>}
-                            {/* 解析失敗原因是「要不要重試」的唯一依據,220px 一定切掉:
-                                改兩行 line-clamp 併 title(同 RFI.jsx 的既有寫法),不再硬截斷 */}
-                            {(run.status === 'partial' || run.status === 'failed') && run.error_message && (
-                              <span className="text-[var(--amber-text)] line-clamp-2 whitespace-pre-line max-w-[220px]"
-                                title={run.error_message}>{run.error_message}</span>
-                            )}
-                            {canWriteContract && run.metadata?.requirement_extraction === 'failed' && (
-                              <button onClick={() => confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')}
-                                className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1">
-                                <MSym name="refresh" size={11} /> 重試分析
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                        <td className={`${DOC_TD} text-right num whitespace-nowrap text-[var(--text-2)]`}>
-                          {uploaded ? String(uploaded).slice(0, 10) : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {/* 卡身已有 p-5,水平內距歸零讓分頁列貼齊表格左右緣 */}
-            <TablePager {...docPager} className="!px-0" />
-          </div>
-        )}
-
-        {/* 技術資訊(內部詞彙只放這裡) */}
-        {runs.length > 0 && (
-          <div className="mt-3">
-            {/* 第三級文字鈕統一 --blue-text(灰字鈕不在按鈕三級語言內) */}
+          <TablePager {...docPager} className="!px-0" />
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--border-2)]">
+            <p className="text-[11.5px] text-[var(--text-3)]">上傳後自動分類歸檔:標單匯入「標單工項」、契約/規範抽取「契約重點」並記錄擷取來源頁碼。</p>
             <button onClick={() => setShowTech((s) => !s)} aria-expanded={showTech}
-              className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center gap-1 max-md:min-h-11 px-1">
+              className="text-[11.5px] text-[var(--blue-text)] hover:underline inline-flex items-center gap-1 shrink-0 max-md:min-h-11 px-1">
               <MSym name="chevron_right" size={12} className={`transition-transform duration-[var(--dur-fast)] ${showTech ? 'rotate-90' : ''}`} /> 技術資訊
             </button>
-            {showTech && (
-              <div className="mt-2 text-[11px] text-[var(--text-3)] space-y-0.5">
-                {runs.map((r) => (
-                  <div key={r.id}>
-                    {versionsById.get(r.document_version_id) ? docsById.get(versionsById.get(r.document_version_id).document_id)?.title : r.document_version_id}
-                    ·status {r.status}·stage {r.stage}·parser {r.parser_type || '-'}
-                    ·信心 {r.classification_confidence != null ? Math.round(r.classification_confidence * 100) + '%' : '-'}
-                    {r.error_message ? `·${r.error_message}` : ''}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-        )}
-      </Card>
-
-      {/* ── 契約義務(approved deadline 相容 runtime)────────────────────── */}
-      <Card title="契約義務" action={obligationCardAction}>
-        {/* 逾期/將到期/已完成三個計數走共用 Badge:五語意色票全站同一份定義,
-            本頁不再自帶一套藥丸樣式(顏色與其他頁的紅/琥珀/綠會對不起來) */}
-        <div className="flex flex-wrap gap-2">
-          <Badge color="red">已逾期 {counts.overdue} 項</Badge>
-          <Badge color="amber">7 日內到期 {counts.soon} 項</Badge>
-          <Badge color="green">已完成 {counts.done} 項</Badge>
-        </div>
-        {groups.length === 0 && (
-          <Empty>尚無已核定的契約義務。上傳契約文件,或到「契約重點」核定期限、手動新增;核定後會自動出現在這裡。</Empty>
-        )}
-        <ErrorBanner msg={obligationMsg} className="mt-2" />
-      </Card>
-
-      {groups.map((g) => (
-        <div key={g.ph}>
-          {/* 階段分組是真標題:給語意標籤(與 Submittals 的分組 h2 同語言) */}
-          <h2 className="text-sm font-medium text-[var(--text-2)] mb-2">{g.ph}</h2>
-          <div className="space-y-2">
-            {g.list.map((it) => (
-              <div key={it.ob.id} className="flex gap-3">
-                <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${DOT_CLS[it.state]}`}
-                  role="img" title={DOT_LABEL[it.state]} aria-label={DOT_LABEL[it.state]} />
-                <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
-                    {canWriteContract && <button onClick={async () => {
-                      if (it.done) {
-                        // 退回待辦:一併解除佐證連結(W-01)
-                        const { error } = await updateObligationStatus(it.ob.id, '待辦', { evidence_submittal_id: null })
-                        if (error) setObligationMsg(`義務狀態未寫入:${error.message}`)
-                      } else if (submittals.length) {
-                        // 有送審文件可掛 → 展開佐證挑選(不強制,可略過)
-                        setEvidenceFor(evidenceFor === it.ob.id ? null : it.ob.id); setEvidencePick('')
-                      } else {
-                        const { error } = await updateObligationStatus(it.ob.id, '已提送')
-                        if (error) setObligationMsg(`義務狀態未寫入:${error.message}`)
-                      }
-                    }}
-                      /* 待辦態吃共用 buttonClass(outline/sm),不再自寫鈕殼;已提送態是「狀態兼退回鈕」
-                         (點它退回待辦,e2e 依 name「已提送 ✓」取用——✓ 是 e2e 文案,不改圖示),
-                         綠底沿 Badge 的 green tint token,屬既定的狀態鈕例外 */
-                      className={it.done
-                        ? 'text-xs h-8 px-3 rounded-full font-medium whitespace-nowrap shrink-0 inline-flex items-center max-md:min-h-11 pressable bg-[var(--green-tint)] text-[var(--green-text)]'
-                        : `${buttonClass('outline', 'sm')} shrink-0`}>
-                      {it.done ? '已提送 ✓' : '標為已提送'}
-                    </button>}
-                  </div>
-                  {/* W-01 佐證挑選:掛上對應的送審文件,義務完成不再只是空口 toggle */}
-                  {evidenceFor === it.ob.id && !it.done && (
-                    // 佐證挑選面板改吃共用 Surface 殼(自寫 surface-2 圓角底退場)
-                    <Surface className="mt-2 p-2.5 flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-[var(--text-2)] shrink-0">佐證送審文件</span>
-                      <Select value={evidencePick} onChange={(e) => setEvidencePick(e.target.value)} className="flex-1 min-w-[200px]">
-                        <option value="">（不掛佐證）</option>
-                        {submittals.map((s) => (
-                          <option key={s.id} value={s.id}>{s.submittal_no} {s.title}（{s.status}）</option>
-                        ))}
-                      </Select>
-                      <Button size="sm" onClick={async () => {
-                        const { error } = await updateObligationStatus(it.ob.id, '已提送',
-                          evidencePick ? { evidence_submittal_id: evidencePick } : {})
-                        if (error) { setObligationMsg(`義務狀態未寫入:${error.message}`); return }
-                        setEvidenceFor(null)
-                      }}>{evidencePick ? '掛佐證並標為已提送' : '直接標為已提送'}</Button>
-                      <Button variant="ghost" size="sm" onClick={() => setEvidenceFor(null)}>取消</Button>
-                    </Surface>
-                  )}
-                  {/* 佐證連結:已掛送審文件的義務,稽核可一路點到原始送審紀錄 */}
-                  {it.ob.evidence_submittal_id && (() => {
-                    const ev = submittals.find((s) => s.id === it.ob.evidence_submittal_id)
-                    return (
-                      // 佐證連結的色票外殼改共用 Badge(藍),不再手抄 blue-tint 藥丸
-                      <Link to="/submittals" className="mt-1.5 inline-flex hover:underline">
-                        <Badge color="blue">
-                          <MSym name="description" size={11} />
-                          佐證:{ev ? `${ev.submittal_no} ${ev.title}（${ev.status}）` : '送審文件（已不存在或無權檢視）'}
-                        </Badge>
-                      </Link>
-                    )
-                  })()}
-                  <div className="text-xs text-[var(--text-3)] mt-1">
-                    {ruleText(it.ob)}{it.due ? `　·　到期 ${iso(it.due)}` : ''}
-                    {it.ob.responsible ? `　·　${it.ob.responsible}` : ''}
-                  </div>
-                  {/* 逾期/將到期是狀態,走五語意 Badge;一般倒數維持中性文字(非語意色) */}
-                  {!it.done && it.due && (
-                    it.state === 'overdue' || it.state === 'soon'
-                      ? <div className="mt-1"><Badge color={it.state === 'overdue' ? 'red' : 'amber'}>{it.state === 'overdue' ? `已逾期 ${-it.diff} 天` : `還有 ${it.diff} 天`}</Badge></div>
-                      : (
-                        <div className="text-xs font-medium mt-0.5 text-[var(--text-2)]">
-                          還有 {it.diff} 天
-                        </div>
-                      )
-                  )}
-                  {it.ob.penalty && (
-                    <div className="text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-2 py-1 mt-2 inline-flex items-center gap-1"><MSym name="balance" size={12} /> {it.ob.penalty}</div>
-                  )}
-                  {/* 逾期罰款金額試算(確定性 regex 抽罰率;抽不出就不顯示——寧缺勿錯) */}
-                  {it.state === 'overdue' && it.ob.penalty && (() => {
-                    const est = estimatePenalty({ penaltyText: it.ob.penalty, overdueDays: -it.diff, contractTotal })
-                    return est ? (
-                      <div className="text-xs font-medium text-[var(--red-text)] bg-[var(--red-tint)] rounded-md px-2 py-1 mt-1.5 flex items-start gap-1.5">
-                        <MSym name="balance" size={12} className="mt-0.5 shrink-0" />
-                        <span>預估逾期違約金約 NT$ {est.amount.toLocaleString('en-US')}{est.capped ? '(已達上限)' : ''}
-                          <span className="font-normal text-[var(--text-3)]"> · {est.basis} · 概算供參,實際依契約認定</span>
-                        </span>
-                      </div>
-                    ) : (
-                      // 試算不出來的原因要講對:百分比制罰則缺的是契約總價,
-                      // 不是「格式需人工確認」——講錯會讓人去改罰則文字白忙一場
-                      <div className="text-xs text-[var(--text-3)] bg-[var(--surface-2)] rounded-md px-2 py-1 mt-1.5 inline-flex items-center gap-1.5">
-                        <MSym name="balance" size={12} className="shrink-0" />
-                        {parsePenaltyRate(it.ob.penalty)?.perDayFraction != null && !(contractTotal > 0)
-                          ? '偵測到百分比制罰則;填入上方「契約價金總額」即可試算逾期違約金'
-                          : '偵測到罰則,但金額格式需人工確認試算'}
-                      </div>
-                    )
-                  })()}
-                  {(it.ob.source_clause || it.ob.source_page) && (
-                    <div className="text-[11px] text-[var(--text-3)] mt-2 flex items-center gap-1"><MSym name="description" size={11} /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>
-                  )}
+          {showTech && (
+            <div className="mt-2 text-[11px] text-[var(--text-3)] space-y-0.5">
+              {runs.map((r) => (
+                <div key={r.id}>
+                  {versionsById.get(r.document_version_id) ? docsById.get(versionsById.get(r.document_version_id).document_id)?.title : r.document_version_id}
+                  ·status {r.status}·stage {r.stage}·parser {r.parser_type || '-'}
+                  ·信心 {r.classification_confidence != null ? Math.round(r.classification_confidence * 100) + '%' : '-'}
+                  {r.error_message ? `·${r.error_message}` : ''}
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+              ))}
+            </div>
+          )}
+        </>)}
+      </Card>
     </div>
   )
+}
+
+// 成功列的 meta fallback(unsupported 也算落地:檔案已保存只是不分析)
+function RUN_META_OK(r) {
+  return r.status === 'unsupported'
+    ? (r.metadata?.limitation || '已保存;此格式尚未支援內容分析')
+    : '已分類歸檔'
 }

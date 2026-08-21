@@ -76,19 +76,19 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
 })
 
 describe('visibleNavGroups(側欄)', () => {
-  it('三角色側欄都固定為六個業務工作面', () => {
+  it('三角色側欄都固定為六個工作面+文件管理員獨立項', () => {
     for (const org of ORGS) {
       expect(flatNav(visibleNavGroups(org, false)).map((i) => i.label)).toEqual([
-        '今日待辦', '現場與品質', '審查與協作', '進度與金流', '文件與結案', '專案',
+        '今日待辦', '現場與品質', '審查與協作', '進度與金流', '報表與結案', '專案', '專案文件',
       ])
     }
-    expect(flatNav(visibleNavGroups('contractor', true))).toHaveLength(6)
+    expect(flatNav(visibleNavGroups('contractor', true))).toHaveLength(7)
   })
-  it('監造:進度與金流無請款/成本/排程,文件與結案包含監造報表', () => {
+  it('監造:進度與金流無請款/成本/排程,報表與結案包含監造報表', () => {
     const items = flatNav(visibleNavGroups('supervisor', false))
     expect(items.find((i) => i.label === '進度與金流').tabs.map((t) => t.label))
       .toEqual(['標單工項', '估驗計價', '進度 S 曲線'])
-    expect(items.find((i) => i.label === '文件與結案').tabs.map((t) => t.label))
+    expect(items.find((i) => i.label === '報表與結案').tabs.map((t) => t.label))
       .toContain('監造報表')
   })
   it('機關:進度與金流保留請款,專案工作面不顯示風險稽核', () => {
@@ -143,19 +143,19 @@ describe('平台管理(/admin):platformAdminOnly 是獨立於專案角色的維�
       expect(routeAllowed('/admin', org, false, true)).toBe(true)
     }
   })
-  it('側欄:非平台管理員完全看不到(連「平台」群組都不渲染),維持六個工作面', () => {
+  it('側欄:非平台管理員完全看不到(連「平台」群組都不渲染),維持七個工作面項', () => {
     for (const org of ORGS) {
       const groups = visibleNavGroups(org, false)
       expect(groups.find((g) => g.title === '平台')).toBeUndefined()
-      expect(flatNav(groups)).toHaveLength(6)
+      expect(flatNav(groups)).toHaveLength(7)
     }
     expect(flatNav(visibleNavGroups('contractor', true)).find((i) => i.to === '/admin')).toBeUndefined()
   })
-  it('側欄:平台管理員在六個工作面外多出獨立「平台管理」', () => {
+  it('側欄:平台管理員在七個工作面項外多出獨立「平台管理」', () => {
     const groups = visibleNavGroups('owner', false, true)
     const platform = groups.find((g) => g.title === '平台')
     expect(platform.items.map((i) => i.label)).toEqual(['平台管理'])
-    expect(flatNav(groups)).toHaveLength(7)
+    expect(flatNav(groups)).toHaveLength(8)
   })
   it('platformAdminOnly 路由清單釘死:只有 /admin,且不得帶 roles(兩維度不可混用)', () => {
     const flagged = []

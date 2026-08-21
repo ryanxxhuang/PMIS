@@ -15,7 +15,7 @@ const iso = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : d)
 export const SOURCE_ROUTES = {
   進度: '/progress', 施工日誌: '/site-log', 估驗計價: '/valuation', 請款收款: '/payments',
   品質查驗: '/quality', 工安管理: '/safety', 送審文件: '/submittals', 工程疑義: '/rfi',
-  變更設計: '/change-orders', 驗收結算: '/acceptance', 專案文件: '/contract',
+  變更設計: '/change-orders', 驗收結算: '/acceptance', 專案文件: '/contract', 契約重點: '/requirements',
   施工月報: '/monthly-report', 提醒中心: '/alerts',
 }
 
@@ -51,7 +51,7 @@ export function buildAssistantFacts(d = {}, today = new Date()) {
   const failedSamples = testSamples.filter((s) => s.status === '不合格')
   const due28 = testSamples.filter((s) => s.d28_due && !(s.d28_values && s.d28_values.length) && s.d28_due >= t0)
 
-  // 契約義務(逾期/即將到期)
+  // 契約期限(逾期/即將到期)
   const obl = obligations.map((o) => ({ o, due: computeObligationDue(o, anchors) }))
   const overdueObl = obl.filter((x) => x.due && iso(x.due) < t0 && !['已完成', '已提送'].includes(x.o.status))
 
@@ -88,7 +88,7 @@ export function buildAssistantFacts(d = {}, today = new Date()) {
       已核准淨增減: Math.round(coApprovedNet),
       待核定件: changeOrders.filter((c) => c.status === '提出' || c.status === '審核中').length },
     驗收: { has: acceptanceEvents.length > 0, 最新階段: lastAccept ? { 階段: lastAccept.stage_key, 日期: lastAccept.event_date, 結果: lastAccept.result || null } : null },
-    契約義務: { has: obligations.length > 0, 總數: obligations.length, 逾期: overdueObl.length,
+    契約期限: { has: obligations.length > 0, 總數: obligations.length, 逾期: overdueObl.length,
       逾期清單: overdueObl.slice(0, 4).map((x) => ({ 事項: x.o.title, 到期: iso(x.due), 罰則: x.o.penalty || null })),
       // 全部義務(供 copilot 引用特定義務如月報/竣工文件期限,含契約出處條款/頁碼)
       清單: obligations.slice(0, 30).map((o) => ({ 事項: o.title, 階段: o.category || null, 責任: o.responsible || null,

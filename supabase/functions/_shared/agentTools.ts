@@ -127,7 +127,7 @@ export const QUERY_TOOLS: ToolDef[] = [
   {
     name: 'get_requirements',
     description:
-      '查本案契約義務(含期限規則、罰則、出處條款)與已核定的契約重點清單。' +
+      '查本案契約重點(含期限規則、罰則、出處條款)與已核定清單。' +
       '要回答「契約規定什麼時候要交什麼」「有什麼罰則」「這件事的依據條款」時呼叫我。' +
       '引用條款時必須照回傳的 source_clause 原樣引,不可自行補條號。',
     input_schema: {
@@ -142,7 +142,7 @@ export const QUERY_TOOLS: ToolDef[] = [
   {
     name: 'list_my_open_items',
     description:
-      '列出「球在我方(使用者所屬單位)」的待辦:未結案缺失、待審送審件、未結案 RFI、待處理估驗、逾期契約義務。' +
+      '列出「球在我方(使用者所屬單位)」的待辦:未結案缺失、待審送審件、未結案 RFI、待處理估驗、逾期契約期限。' +
       '要回答「我現在該處理什麼」「有哪些事卡在我們這邊」「有沒有逾期的」時呼叫我。依到期日排序,最多 30 筆。',
     input_schema: { type: 'object', properties: {}, required: [] },
   },
@@ -461,7 +461,7 @@ async function getRequirements(db: SupabaseClient, projectId: string, input: Rec
   else reqRows = reqs ?? []
 
   if (!obligationRows.length && (Array.isArray(reqRows) ? !reqRows.length : true)) {
-    return { note: topic ? '查無符合主題的契約義務' : '本案尚未匯入契約義務' }
+    return { note: topic ? '查無符合主題的契約重點' : '本案尚未匯入契約重點' }
   }
   return { contract_obligations: obligationRows, approved_requirements: reqRows }
 }
@@ -533,7 +533,7 @@ export async function collectOpenBallItems(
     if (!overdue && (soonDays <= 0 || diffDays(due, today) > soonDays)) continue
     items.push({
       side,
-      kind: '契約義務',
+      kind: '契約重點',
       id: ob.id,
       title: ob.title,
       status: '待辦',

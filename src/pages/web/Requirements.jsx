@@ -8,8 +8,12 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { pageAllInSafe } from '../../lib/pagedQuery.js'
-import { Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select, PrerequisiteEmptyState, ErrorBanner, Surface, SkeletonList } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Badge, Button, Field, Input, Textarea, Select, PrerequisiteEmptyState, ErrorBanner, Surface, SkeletonList, buttonClass } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
+// W11:期限追蹤(原 /contract 義務時程)搬進本頁——契約重點核定後直接在
+// 同一頁長出到期日、已提送與罰款試算,不再跳頁
+import { computeObligationDue } from '../../lib/contractDue.js'
+import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 import {
   REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
   WORK_ITEM_LINK_STATE_LABELS, ARTIFACT_TYPE_LABELS, GENERATION_TYPE_LABELS,
@@ -69,6 +73,26 @@ export function requirementsIntro(runs = [], rowCount = 0) {
     emptyText: '尚未有完成的 AI 整理。到「專案文件」上傳契約/規範,或查看目前的處理狀態。',
   }
 }
+// ── W11 期限追蹤(approved deadline 相容 runtime;自 /contract 遷入)─────────
+const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
+const TRIGGER_LABEL = {
+  award: '決標', notice: '接獲開工通知', commencement: '開工',
+  completion: '完工', monthly: '每月', fixed: '指定日期', other: '其他',
+}
+const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
+const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+function ruleText(ob) {
+  if (ob.recurring === 'monthly') return `每月 ${ob.recurring_day || ''} 日${ob.offset_dir === 'before' ? '前' : ''}`.trim()
+  if (ob.trigger_event === 'fixed') return `指定 ${ob.fixed_date || '日期'}`
+  const t = TRIGGER_LABEL[ob.trigger_event] || ob.trigger_event || ''
+  if (ob.offset_days) return `${t}${ob.offset_dir === 'before' ? '前' : '後'} ${ob.offset_days} 日內`
+  return t
+}
+// 狀態色點走 class 對照表(顏色由 className 帶 token,吃主題切換);
+// 色點附等價文字(title/aria-label),狀態不得只靠顏色(W8-5)
+const DOT_CLS = { done: 'bg-[var(--green-text)]', overdue: 'bg-[var(--red-text)]', soon: 'bg-[var(--amber-text)]', scheduled: 'bg-[var(--blue)]', nodate: 'bg-[var(--text-3)]' }
+const DOT_LABEL = { done: '已完成', overdue: '已逾期', soon: '7 日內到期', scheduled: '排程中', nodate: '無期限' }
+
 const STATUS_BADGE = {
   draft_ai: 'blue', needs_review: 'amber', approved: 'green', rejected: 'red', superseded: 'slate',
 }
@@ -110,11 +134,6 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
                 F1:手機動作鈕補 44px 觸控高度(max-md:min-h-11),桌機維持 sm 尺寸——
                 只在本頁就地補,不動共用 Button(全站控件統一留 W8-5)。 */}
             <div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
-              {kind === 'approved' && r.requirement_type === 'deadline' && (
-                <Link to="/contract" className="w-full sm:w-auto">
-                  <Button size="sm" variant="secondary" className="w-full sm:w-auto max-md:min-h-11">前往契約義務 <MSym name="arrow_forward" size={12} /></Button>
-                </Link>
-              )}
               {/* F3 改法:手機要可辨識為按鈕就用 outline 變體,不再以 className 就地幫 ghost
                   補邊框造出第四種鈕皮(斷點也曾誤用 max-sm,與手機層 max-md 不一致)。
                   實心主動作每組仍只有一個(快速核定鈕)。 */}
@@ -126,7 +145,7 @@ export function HighlightRows({ groups, kind, canReview, verificationByReq, onSe
               </Button>
               {quickApprove && (
                 <Button size="sm" variant="success" className="w-full sm:w-auto max-md:min-h-11" onClick={() => onQuickApprove(group)}>
-                  <MSym name="check_circle" size={13} /> 核定並加入契約義務
+                  <MSym name="check_circle" size={13} /> 核定並排入期限追蹤
                 </Button>
               )}
               {/* F4:無核定權的提示要與按鈕有視覺區隔——改共用 Badge(slate),不再自寫 pill 殼 */}
@@ -157,11 +176,19 @@ const MANUAL_TRIGGERS = [
 ]
 
 export default function Requirements() {
-  const { currentProject, isPersistedProject, currentUser, workItems, reloadObligations, can } = useStore()
+  const {
+    currentProject, isPersistedProject, currentUser, workItems, reloadObligations, can,
+    obligations, updateObligationStatus, updateProjectAnchors, submittals,
+  } = useStore()
   // 鏡像 DB 的 can_review_requirement(機關/監造;刻意無專案管理者例外——技術管理≠契約審核權)
   const canReview = ['owner', 'supervisor'].includes(currentUser?.org_type)
   // 鏡像 DB 的 can_write(requirements insert 政策):廠商/監造/管理者可補登,機關唯讀
   const canAddManual = isPersistedProject && (can.edit || currentUser?.org_type === 'supervisor')
+  // 期限追蹤的「已提送」同樣鏡像 can_write(義務狀態欄位 grant 對非機關成員開放)
+  const canMarkObligation = can.edit || currentUser?.org_type === 'supervisor'
+  // 罰款試算基準:手填契約價金總額優先,沒填退回標單加總(W10)
+  const manualContractTotal = Number(currentProject?.contract_total) || 0
+  const contractTotal = manualContractTotal > 0 ? manualContractTotal : (workItems?.meta?.billable_total || 0)
   const [rows, setRows] = useState([])
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -182,6 +209,52 @@ export default function Requirements() {
   const [manualDraft, setManualDraft] = useState(MANUAL_BLANK)
   const [manualBusy, setManualBusy] = useState(false)
   const [manualMsg, setManualMsg] = useState('')
+  // W11 期限追蹤狀態(自 /contract 遷入):基準日/契約總價草稿、已提送佐證挑選
+  const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '', end_date: '' })
+  const [totalDraft, setTotalDraft] = useState('')
+  const [anchorErr, setAnchorErr] = useState('')
+  const [obligationMsg, setObligationMsg] = useState('')
+  const [evidenceFor, setEvidenceFor] = useState(null)  // 義務 id;'' 表示不掛
+  const [evidencePick, setEvidencePick] = useState('')
+
+  useEffect(() => {
+    setAnchors({
+      award_date: currentProject?.award_date || '',
+      notice_date: currentProject?.notice_date || '',
+      commencement_date: currentProject?.commencement_date || '',
+      end_date: currentProject?.end_date || '',
+    })
+    setTotalDraft(currentProject?.contract_total != null ? String(currentProject.contract_total) : '')
+  }, [currentProject])
+
+  // DB 成功才更新本地(B-04):非建立者被 RLS 靜默擋下時不可樂觀顯示新基準日
+  const setAnchor = async (key, val) => {
+    setAnchorErr('')
+    if (isPersistedProject) {
+      const { error } = await updateProjectAnchors({ [key]: val || null })
+      if (error) { setAnchorErr(`未儲存:${error.message}`); return }
+    }
+    setAnchors((a) => ({ ...a, [key]: val })) // demo:只進本地,供時間軸展示
+  }
+
+  // 期限追蹤:到期日、倒數、階段分組(依基準日即時計算)
+  const dueItems = useMemo(() => obligations.map((ob) => {
+    const due = computeObligationDue(ob, anchors)
+    const done = ob.status === '已提送' || ob.status === '已完成'
+    let diff = null, state = 'nodate'
+    if (done) state = 'done'
+    else if (due) { diff = Math.round((due - today0()) / 86400000); state = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'scheduled' }
+    return { ob, due, diff, done, state }
+  }), [obligations, anchors])
+  const dueCounts = useMemo(() => {
+    let overdue = 0, soon = 0, done = 0
+    for (const it of dueItems) { if (it.state === 'overdue') overdue++; else if (it.state === 'soon') soon++; if (it.done) done++ }
+    return { overdue, soon, done }
+  }, [dueItems])
+  const dueGroups = useMemo(() => PHASES.map((ph) => ({
+    ph, list: dueItems.filter((it) => (PHASES.includes(it.ob.category) ? it.ob.category : '其他') === ph)
+      .sort((x, y) => (x.due?.getTime() || Infinity) - (y.due?.getTime() || Infinity)),
+  })).filter((g) => g.list.length), [dueItems])
 
   const pid = currentProject?.project_id
   const runsById = useMemo(() => new Map(runs.map((r) => [r.id, r])), [runs])
@@ -315,9 +388,9 @@ export default function Requirements() {
     select(requirementId)
     return review(
       'approve',
-      '核定並加入契約義務',
+      '核定並排入期限追蹤',
       requirementId,
-      '這會把本項核定為生效的契約重點，並在同一筆伺服器交易中排入契約義務。',
+      '這會把本項核定為生效的契約重點，並在同一筆伺服器交易中排入上方期限追蹤。',
     )
   }
   const openApprovedTrace = () => {
@@ -368,7 +441,7 @@ export default function Requirements() {
   // 禁止直接以已審狀態建立),核定仍走 review_requirement RPC——與 AI 建議同一條審查路。
   const submitManual = async () => {
     const d = manualDraft
-    if (!d.title.trim()) { setManualMsg('請填義務標題'); return }
+    if (!d.title.trim()) { setManualMsg('請填標題'); return }
     let trigger_type = null
     let trigger_config = {}
     let frequency_type = null
@@ -427,6 +500,168 @@ export default function Requirements() {
     setLinks((ls) => [...ls, data]); setManualItemNo(''); setMsg('')
   }
 
+  // ── W11 期限追蹤區(卡+階段時間軸;demo 與正式分支共用)────────────────
+  const anchorsCard = (
+    <Card title="基準日與契約總價">
+      <div className="flex flex-wrap gap-4">
+        {[
+          ['award_date', '決標日'],
+          ['notice_date', '接獲開工通知日'],
+          ['commencement_date', '開工日'],
+          ['end_date', '竣工日(完工期限基準)'],
+        ].map(([k, label]) => (
+          <Field key={k} label={label}>
+            <Input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
+              disabled={!can.edit} />
+          </Field>
+        ))}
+        {/* 手填契約價金總額:百分比制逾期罰款的試算基準(W10);onBlur 才寫 DB */}
+        <Field label="契約價金總額(元)">
+          <Input type="number" min="0" step="1" value={totalDraft} placeholder="未填則採標單加總"
+            onChange={(e) => setTotalDraft(e.target.value)}
+            onBlur={() => {
+              const v = totalDraft.trim() === '' ? null : Number(totalDraft)
+              if (v != null && (!Number.isFinite(v) || v < 0)) { setAnchorErr('契約價金總額需為 0 以上的數字'); return }
+              if ((currentProject?.contract_total ?? null) === v) return
+              setAnchor('contract_total', v)
+            }}
+            disabled={!can.edit} />
+        </Field>
+      </div>
+      <ErrorBanner msg={anchorErr} className="mt-2" />
+      <p className="text-xs text-[var(--text-3)] mt-3">期限追蹤的到期日、倒數、逾期都依這些基準日即時計算;「開工日」請填實際開工日。契約價金總額用於逾期違約金試算,未填時以標單可計價金額代替。</p>
+    </Card>
+  )
+
+  const deadlineSection = (<>
+    <Card title="期限追蹤" action={
+      <div className="flex items-center gap-2">
+        {obligations.length > 0 && (
+          <Link to="/contract/print" className={buttonClass('outline', 'sm')}>
+            <MSym name="print" size={14} /> 列印對照表
+          </Link>
+        )}
+      </div>
+    }>
+      <div className="flex flex-wrap gap-2">
+        <Badge color="red">已逾期 {dueCounts.overdue} 項</Badge>
+        <Badge color="amber">7 日內到期 {dueCounts.soon} 項</Badge>
+        <Badge color="green">已完成 {dueCounts.done} 項</Badge>
+      </div>
+      {dueGroups.length === 0 && (
+        <Empty>尚無已核定的期限。上傳契約後在下方核定期限型契約重點,或手動新增;核定後會自動出現在這裡。</Empty>
+      )}
+      <ErrorBanner msg={obligationMsg} className="mt-2" />
+    </Card>
+
+    {dueGroups.map((g) => (
+      <div key={g.ph}>
+        <h2 className="text-sm font-medium text-[var(--text-2)] mb-2">{g.ph}</h2>
+        <div className="space-y-2">
+          {g.list.map((it) => (
+            <div key={it.ob.id} className="flex gap-3">
+              <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${DOT_CLS[it.state]}`}
+                role="img" title={DOT_LABEL[it.state]} aria-label={DOT_LABEL[it.state]} />
+              <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
+                <div className="flex justify-between items-start gap-2">
+                  <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
+                  {canMarkObligation && <button onClick={async () => {
+                    if (it.done) {
+                      // 退回待辦:一併解除佐證連結(W-01)
+                      const { error } = await updateObligationStatus(it.ob.id, '待辦', { evidence_submittal_id: null })
+                      if (error) setObligationMsg(`狀態未寫入:${error.message}`)
+                    } else if (submittals.length) {
+                      setEvidenceFor(evidenceFor === it.ob.id ? null : it.ob.id); setEvidencePick('')
+                    } else {
+                      const { error } = await updateObligationStatus(it.ob.id, '已提送')
+                      if (error) setObligationMsg(`狀態未寫入:${error.message}`)
+                    }
+                  }}
+                    className={it.done
+                      ? 'text-xs h-8 px-3 rounded-full font-medium whitespace-nowrap shrink-0 inline-flex items-center max-md:min-h-11 pressable bg-[var(--green-tint)] text-[var(--green-text)]'
+                      : `${buttonClass('outline', 'sm')} shrink-0`}>
+                    {it.done ? '已提送 ✓' : '標為已提送'}
+                  </button>}
+                </div>
+                {/* W-01 佐證挑選:掛上對應的送審文件 */}
+                {evidenceFor === it.ob.id && !it.done && (
+                  <Surface className="mt-2 p-2.5 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-[var(--text-2)] shrink-0">佐證送審文件</span>
+                    <Select value={evidencePick} onChange={(e) => setEvidencePick(e.target.value)} className="flex-1 min-w-[200px]">
+                      <option value="">（不掛佐證）</option>
+                      {submittals.map((s) => (
+                        <option key={s.id} value={s.id}>{s.submittal_no} {s.title}（{s.status}）</option>
+                      ))}
+                    </Select>
+                    <Button size="sm" onClick={async () => {
+                      const { error } = await updateObligationStatus(it.ob.id, '已提送',
+                        evidencePick ? { evidence_submittal_id: evidencePick } : {})
+                      if (error) { setObligationMsg(`狀態未寫入:${error.message}`); return }
+                      setEvidenceFor(null)
+                    }}>{evidencePick ? '掛佐證並標為已提送' : '直接標為已提送'}</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setEvidenceFor(null)}>取消</Button>
+                  </Surface>
+                )}
+                {/* 佐證連結:稽核可一路點到原始送審紀錄 */}
+                {it.ob.evidence_submittal_id && (() => {
+                  const ev = submittals.find((s) => s.id === it.ob.evidence_submittal_id)
+                  return (
+                    <Link to="/submittals" className="mt-1.5 inline-flex hover:underline">
+                      <Badge color="blue">
+                        <MSym name="description" size={11} />
+                        佐證:{ev ? `${ev.submittal_no} ${ev.title}（${ev.status}）` : '送審文件（已不存在或無權檢視）'}
+                      </Badge>
+                    </Link>
+                  )
+                })()}
+                <div className="text-xs text-[var(--text-3)] mt-1">
+                  {ruleText(it.ob)}{it.due ? `　·　到期 ${isoDate(it.due)}` : ''}
+                  {it.ob.responsible ? `　·　${it.ob.responsible}` : ''}
+                </div>
+                {!it.done && it.due && (
+                  it.state === 'overdue' || it.state === 'soon'
+                    ? <div className="mt-1"><Badge color={it.state === 'overdue' ? 'red' : 'amber'}>{it.state === 'overdue' ? `已逾期 ${-it.diff} 天` : `還有 ${it.diff} 天`}</Badge></div>
+                    : (
+                      <div className="text-xs font-medium mt-0.5 text-[var(--text-2)]">
+                        還有 {it.diff} 天
+                      </div>
+                    )
+                )}
+                {it.ob.penalty && (
+                  <div className="text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-2 py-1 mt-2 inline-flex items-center gap-1"><MSym name="balance" size={12} /> {it.ob.penalty}</div>
+                )}
+                {/* 逾期罰款金額試算(確定性 regex 抽罰率;抽不出就不顯示——寧缺勿錯) */}
+                {it.state === 'overdue' && it.ob.penalty && (() => {
+                  const est = estimatePenalty({ penaltyText: it.ob.penalty, overdueDays: -it.diff, contractTotal })
+                  return est ? (
+                    <div className="text-xs font-medium text-[var(--red-text)] bg-[var(--red-tint)] rounded-md px-2 py-1 mt-1.5 flex items-start gap-1.5">
+                      <MSym name="balance" size={12} className="mt-0.5 shrink-0" />
+                      <span>預估逾期違約金約 NT$ {est.amount.toLocaleString('en-US')}{est.capped ? '(已達上限)' : ''}
+                        <span className="font-normal text-[var(--text-3)]"> · {est.basis} · 概算供參,實際依契約認定</span>
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-[var(--text-3)] bg-[var(--surface-2)] rounded-md px-2 py-1 mt-1.5 inline-flex items-center gap-1.5">
+                      <MSym name="balance" size={12} className="shrink-0" />
+                      {parsePenaltyRate(it.ob.penalty)?.perDayFraction != null && !(contractTotal > 0)
+                        ? '偵測到百分比制罰則;填入「契約價金總額」即可試算逾期違約金'
+                        : '偵測到罰則,但金額格式需人工確認試算'}
+                    </div>
+                  )
+                })()}
+                {(it.ob.source_clause || it.ob.source_page) && (
+                  <div className="text-[11px] text-[var(--text-3)] mt-2 flex items-center gap-1"><MSym name="description" size={11} /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+
+    {anchorsCard}
+  </>)
+
   // 手動新增卡(收合時只有說明+入口鈕)。0 筆與正常清單兩個 render 分支都要放:
   // 「AI 什麼都沒抽到」正是最需要人工補登的時刻。
   const manualAddCard = canAddManual && (
@@ -437,11 +672,11 @@ export default function Requirements() {
       </Button>
     )}>
       {!manualOpen ? (
-        <p className="text-xs text-[var(--text-3)]">AI 漏抽或文件未涵蓋的義務可在此人工補登;補登後仍需核定,期限型核定後會自動排入契約義務。</p>
+        <p className="text-xs text-[var(--text-3)]">AI 漏抽或文件未涵蓋的契約重點可在此人工補登;補登後仍需核定,期限型核定後會自動排入期限追蹤。</p>
       ) : (
         <div className="space-y-2">
           <Input value={manualDraft.title} onChange={(e) => setManualDraft((d) => ({ ...d, title: e.target.value }))}
-            placeholder="義務標題(例:開工前 14 日內提送施工計畫)" />
+            placeholder="標題(例:開工前 14 日內提送施工計畫)" />
           <Textarea rows={2} value={manualDraft.description}
             onChange={(e) => setManualDraft((d) => ({ ...d, description: e.target.value }))}
             placeholder="補充描述、契約出處(可留白)" />
@@ -504,10 +739,12 @@ export default function Requirements() {
   )
 
   if (!isPersistedProject) {
+    // demo:期限追蹤吃 seed 義務照常展示(銷售簡報動線);AI 整理需真實專案
     return (
       <div className="space-y-5">
         <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
-        <Card title="契約重點"><Empty>需真實專案。於「專案文件」上傳契約或規範後，AI 整理結果會顯示在這裡。</Empty></Card>
+        {deadlineSection}
+        <Card title="AI 整理結果"><Empty>需真實專案。於「專案文件」上傳契約或規範後,AI 整理結果會顯示在這裡。</Empty></Card>
       </div>
     )
   }
@@ -544,13 +781,16 @@ export default function Requirements() {
             : (
               <PrerequisiteEmptyState
                 need={intro.emptyText}
-                unlocks="契約重點核定、送審/RFI 的 AI 依規範比對、契約義務"
+                unlocks="契約重點核定、送審/RFI 的 AI 依規範比對"
                 to="/contract" cta="前往專案文件" />
             )}
           {intro.coverageWarning && (
             <p className="mt-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-3 py-2">{intro.coverageWarning}</p>
           )}
         </Card>
+        {/* legacy/手動期限可能先於 AI 整理存在:有就照常追蹤;沒有也要給
+            基準日/契約總價編輯入口(全站唯一入口在本頁,不可無路可填) */}
+        {obligations.length > 0 ? deadlineSection : anchorsCard}
         {manualAddCard}
       </div>
     )
@@ -559,6 +799,9 @@ export default function Requirements() {
   return (
     <div className="space-y-5">
       <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+
+      {/* 期限追蹤在最上:核定是一次性的,追蹤到期才是天天要看的 */}
+      {deadlineSection}
 
       <Card title="已生效的契約重點" bodyClass="p-0" action={highlights.approved.length > HIGHLIGHT_LIMIT && (
         <Button variant="ghost" size="sm" onClick={openApprovedTrace}>查看全部已生效內容</Button>

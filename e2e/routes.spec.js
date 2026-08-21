@@ -24,7 +24,7 @@ test.describe('路由治理', () => {
     await loginAs(page, 'contractor')
     await expect(page.getByRole('heading', { name: '今日待辦' })).toBeVisible()
     const nav = page.getByRole('navigation', { name: '主要功能' })
-    for (const label of ['今日待辦', '現場與品質', '審查與協作', '進度與金流', '文件與結案', '專案']) {
+    for (const label of ['今日待辦', '現場與品質', '審查與協作', '進度與金流', '報表與結案', '專案', '專案文件']) {
       await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
     await expect(nav.getByRole('link', { name: '施工日誌', exact: true })).toBeHidden()

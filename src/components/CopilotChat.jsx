@@ -64,7 +64,7 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
     const r = answerQuestion(text, data)
     return r
       ? { role: 'ai', text: r.answer, sources: r.sources || [], mode: 'basic' }
-      : { role: 'ai', text: '這個問題我還答不上來——我目前讀得懂本案的進度、估驗請款、缺失查驗、品管取樣和契約義務。換個說法，或點下面的建議問題試試。', sources: [], mode: 'basic' }
+      : { role: 'ai', text: '這個問題我還答不上來——我目前讀得懂本案的進度、估驗請款、缺失查驗、品管取樣和契約期限。換個說法，或點下面的建議問題試試。', sources: [], mode: 'basic' }
   }
 
   const ask = async (question) => {

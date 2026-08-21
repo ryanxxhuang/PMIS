@@ -4,8 +4,8 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { computeObligationDue } from '../../lib/contractDue.js'
 
-// W10 契約義務對照表——「可寄給對方」的輸出物。事務所/監造對機關、對廠商溝通時
-// 需要一張紙:哪些義務、期限怎麼算、到期日、誰負責、現在狀態、契約出處。
+// W10 契約期限對照表——「可寄給對方」的輸出物。事務所/監造對機關、對廠商溝通時
+// 需要一張紙:哪些期限、怎麼算、到期日、誰負責、現在狀態、契約出處。
 // 不套 WebLayout,整頁即文件;工具列樣式與其他四支列印頁同一組 class
 // (釘死亮色不吃主題 token,理由見 SiteLogPrint)。
 const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-md:min-h-11'
@@ -57,7 +57,7 @@ export default function ObligationsPrint() {
     list: rows.filter((r) => (PHASES.includes(r.ob.category) ? r.ob.category : '其他') === ph)
       .sort((x, y) => (x.due?.getTime() || Infinity) - (y.due?.getTime() || Infinity)),
   })).filter((g) => g.list.length), [rows])
-  // 「漏了什麼」也要進報告:缺基準日而算不出到期日的義務,寄出去的表上必須看得到
+  // 「漏了什麼」也要進報告:缺基準日而算不出到期日的期限,寄出去的表上必須看得到
   const nodateCount = rows.filter((r) => !r.done && !r.due).length
   const missingAnchors = ANCHOR_LABELS.filter(([k]) => !anchors[k]).map(([, label]) => label)
   const overdueCount = rows.filter((r) => r.overdue).length
@@ -66,7 +66,7 @@ export default function ObligationsPrint() {
   if (!obligations.length) {
     return (
       <div className="p-10 text-center text-slate-400">
-        尚無契約義務。<button onClick={() => navigate('/contract')} className="text-[var(--blue-text)] underline">返回專案文件</button>
+        尚無期限資料。<button onClick={() => navigate('/requirements')} className="text-[var(--blue-text)] underline">返回契約重點</button>
       </div>
     )
   }
@@ -75,7 +75,7 @@ export default function ObligationsPrint() {
     <div className="min-h-screen bg-slate-200 print:bg-white py-6 print:py-0">
       {/* 工具列(列印時隱藏)*/}
       <div className="max-w-[210mm] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden px-1">
-        <button onClick={() => navigate('/contract')} className={TOOLBAR_SECONDARY}>← 返回專案文件</button>
+        <button onClick={() => navigate('/requirements')} className={TOOLBAR_SECONDARY}>← 返回契約重點</button>
         <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}>
           <MSym name="print" size={15} />列印 / 存 PDF
         </button>
@@ -83,7 +83,7 @@ export default function ObligationsPrint() {
 
       {/* A4 文件本體:紙面永遠白底黑字,不吃主題 token */}
       <div className="max-w-[210mm] mx-auto bg-white text-slate-900 shadow print:shadow-none px-[14mm] py-[12mm] text-[12px] leading-relaxed">
-        <h1 className="text-center text-lg font-bold">契約義務對照表</h1>
+        <h1 className="text-center text-lg font-bold">契約期限對照表</h1>
         <div className="text-center text-slate-500 mt-0.5">產出日期:{iso(today)}</div>
 
         <table className="w-full mt-3 border-collapse">
@@ -114,11 +114,11 @@ export default function ObligationsPrint() {
         </table>
 
         <div className="mt-2 text-slate-600">
-          合計 {rows.length} 項義務;已完成/已提送 {rows.filter((r) => r.done).length} 項、
+          合計 {rows.length} 項期限;已完成/已提送 {rows.filter((r) => r.done).length} 項、
           已逾期 {overdueCount} 項、無法推算到期日 {nodateCount} 項。
           {missingAnchors.length > 0 && (
             <span className="text-slate-900 font-medium">
-              (注意:{missingAnchors.join('、')}未填,相關義務的到期日無法推算)
+              (注意:{missingAnchors.join('、')}未填,相關期限的到期日無法推算)
             </span>
           )}
         </div>
@@ -129,7 +129,7 @@ export default function ObligationsPrint() {
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className={`${TH} w-[30%]`}>義務事項</th>
+                  <th className={`${TH} w-[30%]`}>期限事項</th>
                   <th className={`${TH} w-[15%]`}>期限規則</th>
                   <th className={`${TH} w-[12%]`}>到期日</th>
                   <th className={`${TH} w-[8%]`}>責任方</th>
@@ -166,7 +166,7 @@ export default function ObligationsPrint() {
         ))}
 
         <p className="mt-4 text-[11px] text-slate-500">
-          本表由 PMIS 系統依契約基準日自動推算產出,供履約管理對照使用;義務內容與期限以契約原文為準。
+          本表由 PMIS 系統依契約基準日自動推算產出,供履約管理對照使用;各項內容與期限以契約原文為準。
           「無法推算」表示對應基準日尚未填寫。
         </p>
       </div>

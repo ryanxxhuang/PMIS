@@ -6,7 +6,7 @@ const TODAY = new Date('2026-07-13T00:00:00')
 describe('buildAssistantFacts(copilot 事實快照)', () => {
   it('每個模組恆在(有無資料都列 has 旗標)——這是修 R4 P2-03 跨模組彙整的關鍵', () => {
     const f = buildAssistantFacts({}, TODAY)
-    for (const k of ['進度', '金流', '品質', '工安', '送審', '工程疑義', '變更設計', '驗收', '契約義務']) {
+    for (const k of ['進度', '金流', '品質', '工安', '送審', '工程疑義', '變更設計', '驗收', '契約期限']) {
       expect(f[k]).toBeDefined()
       expect(f[k].has).toBe(false) // 空專案:每區都在、都標無資料
     }
@@ -37,7 +37,7 @@ describe('buildAssistantFacts(copilot 事實快照)', () => {
     expect(f.品質.未結缺失).toBe(1)      // quality domain, 未結案
     expect(f.品質.逾期缺失).toBe(1)
     expect(f.工安.未結工安缺失).toBe(1)  // safety domain
-    expect(f.契約義務.逾期).toBe(1)
+    expect(f.契約期限.逾期).toBe(1)
     expect(f.送審.待審).toBe(1)
     expect(f.待我處理).toHaveLength(1)
     expect(f.待我處理[0]).toMatchObject({ 類型: '送審', 狀態: '待監造審定', 連結: '/submittals' })
