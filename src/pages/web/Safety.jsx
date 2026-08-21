@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
+import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button, Badge, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, Badge, Field, Input, Select, Textarea, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import DefectTracker from '../../components/DefectTracker.jsx'
@@ -91,19 +92,24 @@ export default function Safety() {
   }
 
   // 工安不依賴標單:真專案選定即可用(寫入走 isPersistedProject),不必等標單匯入
+  // 早退也保留 PageHeader:頁首與工作面分頁不該因為「還沒選專案」整組消失
   if (!isPersistedProject && !demoMode) {
-    return <Card title="工安管理"><Empty>此功能需真實專案。請先建立或選擇專案。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        <PageHeader title="工安管理" tagline="自主檢查・缺失・教育訓練" subtitle="工安缺失走統一缺失引擎;自主檢查、教育訓練與危害告知在此登錄" />
+        <Card title="工安管理" bodyClass="p-0"><Empty>此功能需真實專案。請先建立或選擇專案。</Empty></Card>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-5">
-      <div className="min-w-0">
-        <PageHeader title="工安管理" tagline="自主檢查・缺失・教育訓練" subtitle="工安缺失走統一缺失引擎;自主檢查、教育訓練與危害告知在此登錄" />
-      </div>
+      <PageHeader title="工安管理" tagline="自主檢查・缺失・教育訓練" subtitle="工安缺失走統一缺失引擎;自主檢查、教育訓練與危害告知在此登錄" />
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
-      <div className="grid grid-cols-3 gap-4">
+      {/* Stat 列斷點與 Dashboard 一致:375px 擠三欄會把數字壓成兩行 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Stat label="未結案工安缺失" value={counts.openDef} sub="件" color={counts.openDef > 0 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />
         <Stat label="本月自主檢查" value={counts.checksThisMonth} sub="次" color="text-[var(--blue-text)]" />
         <Stat label="教育訓練累計" value={counts.trainings} sub="場" color="text-[var(--green-text)]" />
@@ -112,62 +118,55 @@ export default function Safety() {
       {/* 工安缺失:統一缺失引擎(與品質缺失同一狀態機/稽核),以 domain=safety 分類 */}
       <DefectTracker domain="safety" />
 
-      <Card title="新增工安紀錄" action={
+      {/* 這排是「新增」動作,不是視圖切換:改共用 Button 的次級,不再自寫實心選取態 chip
+          (選了哪一型由下方表單自己的型別色票說明) */}
+      <Card title="新增工安紀錄" bodyClass={form ? 'p-5' : 'p-0'} action={
         <div className="flex flex-wrap gap-2">
           {creatableTypes.map((t) => (
-            <button key={t} onClick={() => openForm(t)}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium border pressable ${form?.record_type === t ? 'bg-[var(--primary)] text-[var(--primary-fg)] border-transparent' : 'border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
-              ＋ {t}
-            </button>
+            <Button key={t} size="sm" variant="secondary" onClick={() => openForm(t)}>
+              <MSym name="add" size={16} />{t}
+            </Button>
           ))}
         </div>
       }>
         {!form ? (
           creatableTypes.length === 0 ? (
-            <p className="text-xs text-[var(--text-3)]">機關為監督視角：工安紀錄由施工廠商與監造登錄，此頁唯讀。</p>
+            <Empty icon="visibility">機關為監督視角：工安紀錄由施工廠商與監造登錄，此頁唯讀。</Empty>
           ) : (
-            <p className="text-xs text-[var(--text-3)]">
+            <Empty>
               點右上選一種類型新增：{creatableTypes.join('、')}。
               {org === 'supervisor' && ' 監造僅能「新增」觀察/查驗/複查事件，不可改寫廠商原始紀錄。'}
-            </p>
+            </Empty>
           )
         ) : (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 space-y-3">
-            <div className="text-sm font-medium text-[var(--text)]"><Badge color={TYPE_COLOR[form.record_type]}>{form.record_type}</Badge></div>
+            <Badge color={TYPE_COLOR[form.record_type]}>{form.record_type}</Badge>
+            {/* 表單欄位全走共用 Field/Input/Select/Textarea:標籤字級與 focus/disabled/
+                手機 44px 一次由 FIELD_BASE 給,不再各頁自寫一份 input class */}
             <div className="grid sm:grid-cols-2 gap-3">
-              <label className="block">
-                <span className="block text-xs font-medium text-[var(--text-2)] mb-1">{form.record_type === '教育訓練' ? '課程 / 主題' : form.record_type === '危害告知' ? '危害項目' : '項目 / 標題'}</span>
-                <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder={form.record_type === '自主檢查' ? '如：用電設備自主檢查' : ''}
-                  className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-              </label>
-              <label className="block">
-                <span className="block text-xs font-medium text-[var(--text-2)] mb-1">位置 / 場所</span>
-                <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-              </label>
-              <label className="block">
-                <span className="block text-xs font-medium text-[var(--text-2)] mb-1">日期</span>
-                <input type="date" value={form.record_date} onChange={(e) => setForm({ ...form, record_date: e.target.value })}
-                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-              </label>
+              <Field label={form.record_type === '教育訓練' ? '課程 / 主題' : form.record_type === '危害告知' ? '危害項目' : '項目 / 標題'}>
+                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder={form.record_type === '自主檢查' ? '如：用電設備自主檢查' : ''} />
+              </Field>
+              <Field label="位置 / 場所">
+                <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+              </Field>
+              <Field label="日期">
+                <Input type="date" value={form.record_date} onChange={(e) => setForm({ ...form, record_date: e.target.value })} />
+              </Field>
               {form.record_type === '自主檢查' && (
-                <label className="block">
-                  <span className="block text-xs font-medium text-[var(--text-2)] mb-1">檢查結果</span>
+                <Field label="檢查結果">
                   {/* 正常檢查不是缺失:合格即完成,不合格才進改善流程(第二輪 P2-02) */}
-                  <select value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}
-                    className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)]">
+                  <Select value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })}>
                     <option value="合格">合格</option>
                     <option value="不合格">不合格（進改善追蹤）</option>
-                  </select>
-                </label>
+                  </Select>
+                </Field>
               )}
             </div>
-            <label className="block">
-              <span className="block text-xs font-medium text-[var(--text-2)] mb-1">備註 {form.record_type === '教育訓練' ? '（講師 / 參與人數）' : ''}</span>
-              <textarea rows={2} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
-                className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-            </label>
+            <Field label={`備註 ${form.record_type === '教育訓練' ? '（講師 / 參與人數）' : ''}`}>
+              <Textarea rows={2} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+            </Field>
             <div className="flex gap-2">
               <Button onClick={onSubmit} disabled={busy || !form.title.trim()}>{busy ? '新增中…' : '新增'}</Button>
               <Button variant="secondary" onClick={() => setForm(null)}>取消</Button>
@@ -177,17 +176,18 @@ export default function Safety() {
       </Card>
 
       {groups.length === 0 ? (
-        <Card title="工安紀錄"><Empty>尚無工安紀錄。用上方新增自主檢查、教育訓練或危害告知;工安缺失請用上方「工安缺失追蹤」開立。</Empty></Card>
+        <Card title="工安紀錄" bodyClass="p-0"><Empty>尚無工安紀錄。用上方新增自主檢查、教育訓練或危害告知;工安缺失請用上方「工安缺失追蹤」開立。</Empty></Card>
       ) : groups.map((g) => (
-        <Card key={g.t} title={`${g.t}（${g.list.length}）`} action={
-          <button onClick={() => exportCsv(`工安_${g.t}_${stamp()}`, g.list, [
+        <Card key={g.t} title={`${g.t}（${g.list.length}）`} bodyClass="p-0" action={
+          <Button variant="ghost" onClick={() => exportCsv(`工安_${g.t}_${stamp()}`, g.list, [
             { key: 'record_date', label: '日期' }, { key: 'title', label: '項目' }, { key: 'location', label: '位置' },
             { key: 'severity', label: '嚴重度' }, { key: 'status', label: '狀態' }, { key: 'due_date', label: '改善期限' }, { key: 'note', label: '備註' },
-          ])} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>
+          ])}><MSym name="download" size={16} />CSV</Button>
         }>
-          <div className="space-y-2">
+          {/* 清單列走全站同一套:divide-y 分隔、hover 走 --surface-2、內距對齊卡頭 px-5 */}
+          <ul className="divide-y divide-[var(--border-2)]">
             {g.list.map((r) => (
-              <div key={r.id} className="border-b border-[var(--border-2)] pb-2 text-sm">
+              <li key={r.id} className="px-5 py-3 text-sm hover:bg-[var(--surface-2)]">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-[var(--text)]">
@@ -200,35 +200,35 @@ export default function Safety() {
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0 items-center">
+                    {/* 列內動作一律 sm:同一列不並排 36px 與 20px 兩種命中區 */}
                     {canTouch(r) && NEEDS_FLOW(r.record_type) && r.status !== '已完成' && (
-                      <Button variant={r.status === '改善中' ? 'success' : 'secondary'} onClick={() => onFlow(r)} disabled={busy}>
+                      <Button size="sm" variant={r.status === '改善中' ? 'success' : 'secondary'} onClick={() => onFlow(r)} disabled={busy}>
                         {NEXT_LABEL[r.status]}
                       </Button>
                     )}
                     {canTouch(r) && r.status === '已完成' && (
                       <button onClick={() => setCorrecting(correcting?.id === r.id ? null : { id: r.id, reason: '', note: r.note || '', revert: false })}
-                        className="text-xs text-[var(--blue-text)] hover:underline">更正</button>
+                        className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11 px-1">更正</button>
                     )}
                     {canTouch(r) && r.status !== '已完成' && (
-                      <button onClick={() => onDelete(r)} className="text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除紀錄">✕</button>
+                      // p-2 -m-2 只擴命中區、視覺與列高不變(同 DefectTracker/ITP 的刪除鈕)
+                      <button onClick={() => onDelete(r)} className="inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除紀錄"><MSym name="close" size={16} /></button>
                     )}
                   </div>
                 </div>
                 {correcting?.id === r.id && (
                   <div className="mt-2 bg-[var(--surface-2)] rounded-lg p-3 space-y-2">
-                    <label className="block">
-                      <span className="block text-xs font-medium text-[var(--text-2)] mb-1">更正原因（必填，留存稽核）</span>
-                      <input value={correcting.reason} onChange={(e) => setCorrecting({ ...correcting, reason: e.target.value })}
-                        placeholder="如：誤標完成 / 日期登錄錯誤" className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-                    </label>
-                    <label className="block">
-                      <span className="block text-xs font-medium text-[var(--text-2)] mb-1">備註（更正後內容）</span>
-                      <textarea rows={2} value={correcting.note} onChange={(e) => setCorrecting({ ...correcting, note: e.target.value })}
-                        className="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm" />
-                    </label>
+                    <Field label="更正原因（必填，留存稽核）">
+                      <Input value={correcting.reason} onChange={(e) => setCorrecting({ ...correcting, reason: e.target.value })}
+                        placeholder="如：誤標完成 / 日期登錄錯誤" />
+                    </Field>
+                    <Field label="備註（更正後內容）">
+                      <Textarea rows={2} value={correcting.note} onChange={(e) => setCorrecting({ ...correcting, note: e.target.value })} />
+                    </Field>
                     {NEEDS_FLOW(r.record_type) && (
-                      <label className="flex items-center gap-1.5 text-xs text-[var(--text-2)] cursor-pointer">
-                        <input type="checkbox" checked={correcting.revert} onChange={(e) => setCorrecting({ ...correcting, revert: e.target.checked })} />
+                      // 原生 checkbox 預設約 13px,是全站最小的互動元素;w-5 h-5 提到 20px,外層 label 補 44px 命中區
+                      <label className="flex items-center gap-1.5 text-xs text-[var(--text-2)] cursor-pointer max-md:min-h-11">
+                        <input type="checkbox" className="w-5 h-5" checked={correcting.revert} onChange={(e) => setCorrecting({ ...correcting, revert: e.target.checked })} />
                         狀態退回「改善中」（誤標完成）
                       </label>
                     )}
@@ -238,13 +238,13 @@ export default function Safety() {
                     </div>
                   </div>
                 )}
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </Card>
       ))}
 
-      <p className="text-xs text-[var(--text-3)]">
+      <p className="text-xs text-[var(--text-3)] leading-relaxed">
         公共工程必備：工安缺失走與品質缺失相同的統一改善狀態機（開立→改善→複查→結案）；
         廠商的自主檢查、教育訓練與危害告知，加上監造的觀察/查驗/複查事件都集中在此，可逐類匯出 CSV 交件。
         已完成紀錄不可刪除，更正會連同原因留存稽核。

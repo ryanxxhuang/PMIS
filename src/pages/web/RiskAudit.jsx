@@ -2,16 +2,19 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, PageHeader, Button, Surface } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Button, Surface, Badge } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { auditProject } from '../../lib/riskAudit.js'
 import { buildIntegrityFindings, isConcretePourItem } from '../../lib/integrityAudit.js'
 
+// 色票走 class 與 Badge 的 color key,不再是 inline style 的 var() 字串:
+// 狀態顏色的單一真相是 ui.jsx 的五語意色票,inline style 會繞過它自成一份。
+// tile 是完整字面 class(Tailwind 只掃得到原始碼裡的完整字串,不能用樣板拼)。
 const ST = {
-  pass: { icon: 'check_circle', c: 'var(--green-text)', bg: 'var(--green-tint)', label: '通過' },
-  warn: { icon: 'warning', c: 'var(--amber-text)', bg: 'var(--amber-tint)', label: '注意' },
-  risk: { icon: 'gpp_maybe', c: 'var(--red-text)', bg: 'var(--red-tint)', label: '風險' },
-  na: { icon: 'help', c: 'var(--slate-text)', bg: 'var(--slate-tint)', label: '未評估' }, // 資料不足,不算通過
+  pass: { icon: 'check_circle', badge: 'green', tile: 'bg-[var(--green-tint)] text-[var(--green-text)]', label: '通過' },
+  warn: { icon: 'warning', badge: 'amber', tile: 'bg-[var(--amber-tint)] text-[var(--amber-text)]', label: '注意' },
+  risk: { icon: 'gpp_maybe', badge: 'red', tile: 'bg-[var(--red-tint)] text-[var(--red-text)]', label: '風險' },
+  na: { icon: 'help', badge: 'slate', tile: 'bg-[var(--slate-tint)] text-[var(--slate-text)]', label: '未評估' }, // 資料不足,不算通過
 }
 
 export default function RiskAudit() {
@@ -92,7 +95,7 @@ export default function RiskAudit() {
     return (
       <div className="space-y-5">
         <PageHeader title="風險稽核" tagline="AI 防弊" subtitle="系統化檢核估驗、變更、品質、契約與進度的異常樣態" />
-        <Card><Empty>此專案尚未匯入標單，無法稽核。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+        <Card bodyClass="p-0"><Empty>此專案尚未匯入標單，無法稽核。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
       </div>
     )
   }
@@ -110,9 +113,10 @@ export default function RiskAudit() {
       {/* 稽核結果總覽 */}
       <Surface className="p-5 flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex items-center gap-3">
-          <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0" style={{ background: O.bg, color: O.c }}><MSym name={O.icon} size={24} /></span>
+          <span className={`w-11 h-11 rounded-lg grid place-items-center shrink-0 ${O.tile}`}><MSym name={O.icon} size={24} /></span>
           <div>
-            <div className="text-[11px] tracking-[0.04em] text-[var(--text-3)]">稽核結果</div>
+            {/* 小標對齊 Stat 的 label 規格(11px/text-2),不再自帶只有這裡看得到的 tracking */}
+            <div className="text-[11px] text-[var(--text-2)]">稽核結果</div>
             <div className="text-lg font-semibold text-[var(--text)]">
               {overall === 'pass'
                 ? (summary.na ? `未發現異常（${summary.na} 項資料不足未評估）` : '本案未發現明顯異常')
@@ -121,10 +125,10 @@ export default function RiskAudit() {
           </div>
         </div>
         <div className="flex items-center gap-4 ml-auto text-sm">
-          <span className="flex items-center gap-1.5"><MSym name="check_circle" size={15} style={{ color: 'var(--green-text)' }} /><span className="num font-semibold">{summary.pass}</span> 通過</span>
-          <span className="flex items-center gap-1.5"><MSym name="warning" size={15} style={{ color: 'var(--amber-text)' }} /><span className="num font-semibold">{totWarn}</span> 注意</span>
-          <span className="flex items-center gap-1.5"><MSym name="gpp_maybe" size={15} style={{ color: 'var(--red-text)' }} /><span className="num font-semibold">{totRisk}</span> 風險</span>
-          {summary.na > 0 && <span className="flex items-center gap-1.5"><MSym name="help" size={15} style={{ color: 'var(--slate-text)' }} /><span className="num font-semibold">{summary.na}</span> 未評估</span>}
+          <span className="flex items-center gap-1.5"><MSym name="check_circle" size={15} className="text-[var(--green-text)]" /><span className="num font-semibold">{summary.pass}</span> 通過</span>
+          <span className="flex items-center gap-1.5"><MSym name="warning" size={15} className="text-[var(--amber-text)]" /><span className="num font-semibold">{totWarn}</span> 注意</span>
+          <span className="flex items-center gap-1.5"><MSym name="gpp_maybe" size={15} className="text-[var(--red-text)]" /><span className="num font-semibold">{totRisk}</span> 風險</span>
+          {summary.na > 0 && <span className="flex items-center gap-1.5"><MSym name="help" size={15} className="text-[var(--slate-text)]" /><span className="num font-semibold">{summary.na}</span> 未評估</span>}
         </div>
       </Surface>
 
@@ -136,11 +140,11 @@ export default function RiskAudit() {
             const s = ST[c.status]
             return (
               <li key={i} className="flex items-start gap-3 px-5 py-3.5">
-                <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: s.bg, color: s.c }}><MSym name={s.icon} size={17} /></span>
+                <span className={`w-9 h-9 rounded-lg grid place-items-center shrink-0 mt-0.5 ${s.tile}`}><MSym name={s.icon} size={17} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-[var(--text)]">{c.title}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: s.bg, color: s.c }}>{s.label}</span>
+                    <Badge color={s.badge} className="shrink-0">{s.label}</Badge>
                   </div>
                   <div className="text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">{c.detail}</div>
                 </div>
@@ -154,22 +158,23 @@ export default function RiskAudit() {
       <Card title="文件勾稽鏈" bodyClass="p-0"
         action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="compare_arrows" size={12} />估驗 ↔ 日誌 ↔ 查驗 ↔ 試體 對帳</span>}>
         {integrity.findings.length === 0 ? (
-          <div className="px-5 py-6"><Empty>估驗、施工日誌、查驗與試體之間未發現對不起來之處（已勾稽 {integrity.summary.checked || 0} 項計價工項）。</Empty></div>
+          <Empty>估驗、施工日誌、查驗與試體之間未發現對不起來之處（已勾稽 {integrity.summary.checked || 0} 項計價工項）。</Empty>
         ) : (
           <ul className="divide-y divide-[var(--border-2)]">
             {integrity.findings.map((c, i) => {
               const s = ST[c.status]
               return (
                 <li key={i} className="flex items-start gap-3 px-5 py-3.5">
-                  <span className="w-8 h-8 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: s.bg, color: s.c }}><MSym name={s.icon} size={17} /></span>
+                  <span className={`w-9 h-9 rounded-lg grid place-items-center shrink-0 mt-0.5 ${s.tile}`}><MSym name={s.icon} size={17} /></span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-[var(--text)]">{c.title}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: s.bg, color: s.c }}>{s.label}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-3)]">{c.category}</span>
+                      <Badge color={s.badge} className="shrink-0">{s.label}</Badge>
+                      <Badge color="slate" className="shrink-0">{c.category}</Badge>
                     </div>
                     <div className="text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">{c.detail}</div>
-                    {c.route && <button onClick={() => navigate(c.route)} className="text-[11px] text-[var(--blue-text)] hover:underline mt-1">前往查核 →</button>}
+                    {/* 文字箭頭改圖示;手機補 44px 命中區(W8-5) */}
+                    {c.route && <button onClick={() => navigate(c.route)} className="inline-flex items-center gap-0.5 max-md:min-h-11 text-[11px] text-[var(--blue-text)] hover:underline mt-1">前往查核<MSym name="arrow_forward" size={12} /></button>}
                   </div>
                 </li>
               )
@@ -180,17 +185,18 @@ export default function RiskAudit() {
 
       {/* AI 稽核意見:只根據上方確定性發現撰寫。
           批 B UX:功能關閉時藏產生按鈕、留簡短說明(確定性勾稽發現不受影響) */}
-      <Card title="AI 稽核意見" action={
+      <Card title="AI 稽核意見" bodyClass={ai ? 'p-5' : 'p-0'} action={
         aiEnabled('audit.summary') && (
           <Button variant="secondary" onClick={genAudit} disabled={aiBusy}>
             <MSym name="auto_awesome" size={14} />{aiBusy ? '產生中…' : ai ? '重新產生' : '產生稽核意見'}
           </Button>
         )
       }>
+        {/* 未啟用/尚未產生都是空狀態,走 Empty(40px 圖示＋說明),不再各寫一段灰字 */}
         {!aiEnabled('audit.summary') ? (
-          <p className="text-xs text-[var(--text-3)]">此 AI 功能未啟用（機關稽核意見草稿）；上方確定性勾稽發現不受影響,仍可據以人工撰寫稽核意見。</p>
+          <Empty icon="auto_awesome">此 AI 功能未啟用（機關稽核意見草稿）；上方確定性勾稽發現不受影響,仍可據以人工撰寫稽核意見。</Empty>
         ) : !ai ? (
-          <p className="text-xs text-[var(--text-3)]">依上方勾稽發現一鍵生成可交件的稽核意見摘要與建議事項；AI 只根據系統確定性發現撰寫，不臆造未列出的問題。</p>
+          <Empty icon="auto_awesome">依上方勾稽發現一鍵生成可交件的稽核意見摘要與建議事項；AI 只根據系統確定性發現撰寫，不臆造未列出的問題。</Empty>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-[var(--text-2)] leading-relaxed whitespace-pre-line">{ai.opinion}</p>

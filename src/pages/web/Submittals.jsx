@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Button, Field, Input, Select, Textarea, buttonClass, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { submittalBall } from '../../lib/ballInCourt.js'
@@ -10,7 +10,6 @@ const CATEGORIES = ['施工計畫', '品質計畫', '材料設備', '樣品', '�
 const STATUS_COLOR = { 已提送: 'blue', 審核中: 'amber', 核准: 'green', 核備: 'green', 退回補正: 'red', 駁回: 'red' }
 const CHECK_COLOR = { 已於送審敘明: 'green', 需補件: 'amber', 需監造核對文件: 'slate', 不適用: 'slate' }
 const DECISION_COLOR = { 核准: 'green', 核備: 'green', 退回補正: 'red', 需補充後再核: 'amber' }
-const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 // AI 偶爾把換行輸出成 literal「\n」;顯示前正規化成分隔號(P2-03)
 const fixNl = (s) => String(s || '').replace(/\\n|\n/g, '；').replace(/；+/g, '；').replace(/^；|；$/g, '')
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -45,8 +44,14 @@ export default function Submittals() {
     ]
   }, [submittals, currentUser])
 
+  // 早退也保留 PageHeader:頁首與工作面分頁不該因為「還沒選專案」整組消失
   if (isSupabaseConfigured && !currentProject) {
-    return <Card title="送審文件"><Empty>請先登入並選擇專案。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        <PageHeader title="送審文件" tagline="Submittal" subtitle="施工計畫 / 品質計畫 / 材料設備 / 樣品送審 → 監造審核核備" />
+        <Card title="送審文件" bodyClass="p-0"><Empty>請先登入並選擇專案。</Empty></Card>
+      </div>
+    )
   }
 
   const submit = async () => {
@@ -128,8 +133,8 @@ export default function Submittals() {
       <PageHeader title="送審文件" tagline="Submittal" subtitle="施工計畫 / 品質計畫 / 材料設備 / 樣品送審 → 監造審核核備"
         action={
           <div className="flex items-center gap-2">
-            {submittals.length > 0 && <button onClick={exportRows} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
-            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', category: '施工計畫', submitted_date: todayIso(), due_date: '', attachment_note: '' })}>{form ? '取消' : '＋ 提送送審'}</Button>}
+            {submittals.length > 0 && <Button variant="ghost" onClick={exportRows}><MSym name="download" size={16} />CSV</Button>}
+            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', category: '施工計畫', submitted_date: todayIso(), due_date: '', attachment_note: '' })}>{form ? '取消' : <><MSym name="add" size={16} />提送送審</>}</Button>}
           </div>
         } />
 
@@ -145,11 +150,11 @@ export default function Submittals() {
       {form && (
         <Card>
           <div className="grid md:grid-cols-2 gap-3">
-            <Field label="送審名稱"><input className={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如 4F 以上結構體施工計畫" /></Field>
-            <Field label="類別"><select className={input} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
-            <Field label="提送日"><input type="date" className={input} value={form.submitted_date} onChange={(e) => setForm({ ...form, submitted_date: e.target.value })} /></Field>
-            <Field label="監造應審回期限"><input type="date" className={input} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></Field>
-            <div className="md:col-span-2"><Field label="附件說明"><input className={input} value={form.attachment_note} onChange={(e) => setForm({ ...form, attachment_note: e.target.value })} placeholder="如 含出廠證明、CNS 試驗報告（文件另以公文/雲端連結提送）" /></Field></div>
+            <Field label="送審名稱"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如 4F 以上結構體施工計畫" /></Field>
+            <Field label="類別"><Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
+            <Field label="提送日"><Input type="date" value={form.submitted_date} onChange={(e) => setForm({ ...form, submitted_date: e.target.value })} /></Field>
+            <Field label="監造應審回期限"><Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></Field>
+            <div className="md:col-span-2"><Field label="附件說明"><Input value={form.attachment_note} onChange={(e) => setForm({ ...form, attachment_note: e.target.value })} placeholder="如 含出廠證明、CNS 試驗報告（文件另以公文/雲端連結提送）" /></Field></div>
           </div>
           <div className="mt-3"><Button onClick={submit} disabled={busy || !form.title}>{busy ? '提送中…' : '提送'}</Button></div>
         </Card>
@@ -167,7 +172,7 @@ export default function Submittals() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm text-[var(--text)]">
-                      <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{s.submittal_no}</span>{s.title}
+                      <span className="text-[var(--text-3)] text-xs mr-2 num">{s.submittal_no}</span>{s.title}
                       {s.revision > 0 && <span className="text-[var(--text-3)] text-xs ml-1">Rev.{s.revision}</span>}
                       <BallChip ball={submittalBall(s)} />
                     </div>
@@ -180,11 +185,13 @@ export default function Submittals() {
                     <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                       {s.attachment_path
                         ? <span className="text-xs inline-flex items-center gap-1 text-[var(--blue-text)]"><MSym name="attach_file" size={12} />已附文件：{s.attachment_name || '文件'}</span>
-                        : <span className="text-[11px] text-[var(--text-3)]">尚未上傳文件本體</span>}
+                        : <span className="text-[11px] text-[var(--text-2)]">尚未上傳文件本體</span>}
+                      {/* 不能用 <button> 的檔案上傳 label 也吃同一套按鈕皮(藥丸+44px 觸控),
+                          不再自寫 4px 圓角、20px 高的小殼 */}
                       {can.submit && (s.status === '已提送' || s.status === '審核中' || s.status === '退回補正') && (
-                        <label className={`text-xs inline-flex items-center gap-1 rounded px-2 py-0.5 border border-[var(--border)] ${uploadBusy === s.id ? 'opacity-50' : 'cursor-pointer hover:bg-[var(--surface-2)] text-[var(--blue)]'}`}>
+                        <label className={`${buttonClass('outline', 'sm')} ${uploadBusy === s.id ? 'opacity-50' : 'cursor-pointer'}`}>
                           <input type="file" accept=".pdf,.doc,.docx,image/*" disabled={uploadBusy === s.id} onChange={(e) => onUpload(s, e)} className="hidden" />
-                          <MSym name="upload" size={12} />{uploadBusy === s.id ? '上傳中…' : (s.attachment_path ? '更換文件' : '上傳文件')}
+                          <MSym name="upload" size={14} />{uploadBusy === s.id ? '上傳中…' : (s.attachment_path ? '更換文件' : '上傳文件')}
                         </label>
                       )}
                     </div>
@@ -217,20 +224,21 @@ export default function Submittals() {
                       </Button>
                     )}
                     {can.approve && !aiEnabled('submittal.review') && !aiEnabled('submittal.read') && (s.status === '已提送' || s.status === '審核中') && (
-                      <span className="text-[10px] text-[var(--text-3)]">AI 審查功能未啟用</span>
+                      <span className="text-[11px] text-[var(--text-2)]">AI 審查功能未啟用</span>
                     )}
                     {/* 施工:退回補正後修正再送(補正說明必填=實質補正證據) */}
                     {can.submit && s.status === '退回補正' && <Button variant="secondary" disabled={busy} onClick={() => onResubmit(s)}>修正再送</Button>}
                     {/* 待審提示與角色無關(原本拆成 can.approve/!can.approve 兩條分支渲染同一段字,行為等價) */}
-                    {(s.status === '已提送' || s.status === '審核中') && <span className="text-[10px] text-[var(--text-3)]">待監造審定</span>}
-                    {/* 僅「已提送且未經審查」可刪(R3 P0-01:一經受理即為履約證據,DB 另有 guard) */}
+                    {(s.status === '已提送' || s.status === '審核中') && <span className="text-[11px] text-[var(--text-2)]">待監造審定</span>}
+                    {/* 僅「已提送且未經審查」可刪(R3 P0-01:一經受理即為履約證據,DB 另有 guard)。
+                        灰轉紅文字鈕不在三級語言內,改共用 Button 的第三級(順帶拿到 44px 觸控高度) */}
                     {can.submit && s.status === '已提送' && !(s.revision > 0) && (
-                      <button onClick={async () => {
+                      <Button variant="ghost" size="sm" onClick={async () => {
                         if (!(await appConfirm({ title: '刪除此送審？', danger: true, confirmLabel: '刪除' }))) return
                         setErrMsg('')
                         const { error } = await deleteSubmittal(s.id)
                         if (error) setErrMsg(`刪除失敗：${error.message}`)
-                      }} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">刪除</button>
+                      }}>刪除</Button>
                     )}
                   </div>
                 </div>
@@ -243,9 +251,10 @@ export default function Submittals() {
                           <MSym name="auto_awesome" size={14} className="text-[var(--blue)]" />AI 審查助手
                           {r.suggested_decision && <Badge color={DECISION_COLOR[r.suggested_decision] || 'slate'}>建議：{r.suggested_decision}</Badge>}
                         </div>
-                        <button onClick={() => closeReview(s.id)} className="text-xs text-[var(--text-3)] hover:text-[var(--red-text)] shrink-0">收起</button>
+                        {/* 收起不是破壞性動作:不再用灰轉紅,改共用 Button 的第三級 */}
+                        <Button variant="ghost" size="sm" onClick={() => closeReview(s.id)}>收起</Button>
                       </div>
-                      {r.caution && <div className="text-xs text-[var(--amber-text)] mb-2">⚠ {fixNl(r.caution)}</div>}
+                      {r.caution && <div className="text-xs text-[var(--amber-text)] mb-2 flex items-start gap-1"><MSym name="warning" size={14} className="mt-px" />{fixNl(r.caution)}</div>}
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查要點</div>
                       <ul className="space-y-1 mb-3">
                         {(r.checklist || []).map((c, i) => (
@@ -257,9 +266,8 @@ export default function Submittals() {
                         ))}
                       </ul>
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查意見草稿（可修改，核准/核備/退回時自動帶入）</div>
-                      <textarea rows={3} value={aiReview[s.id].opinion}
-                        onChange={(e) => setAiReview((m) => ({ ...m, [s.id]: { ...m[s.id], opinion: e.target.value } }))}
-                        className={input} />
+                      <Textarea rows={3} value={aiReview[s.id].opinion}
+                        onChange={(e) => setAiReview((m) => ({ ...m, [s.id]: { ...m[s.id], opinion: e.target.value } }))} />
                       <p className="text-[11px] text-[var(--text-3)] mt-1">依契約規範/工項自動草擬，僅供監造參考；文件本體仍須人工核對，最終判定由監造裁量。</p>
                     </div>
                   )
@@ -273,12 +281,12 @@ export default function Submittals() {
                         <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5 flex-wrap">
                           <MSym name="find_in_page" size={14} className="text-[var(--blue)]" />AI 讀文件審查
                           {d.suggested_decision && <Badge color={DECISION_COLOR[d.suggested_decision] || 'slate'}>建議：{d.suggested_decision}</Badge>}
-                          <span className="text-[10px] text-[var(--text-3)] font-normal">{d.mode === 'text' ? '已讀文件文字' : '視覺讀取'}</span>
+                          <span className="text-[11px] text-[var(--text-2)] font-normal">{d.mode === 'text' ? '已讀文件文字' : '視覺讀取'}</span>
                         </div>
-                        <button onClick={() => closeRead(s.id)} className="text-xs text-[var(--text-3)] hover:text-[var(--red-text)] shrink-0">收起</button>
+                        <Button variant="ghost" size="sm" onClick={() => closeRead(s.id)}>收起</Button>
                       </div>
                       {d.doc_summary && <div className="text-xs text-[var(--text-2)] mb-2">文件摘要：{d.doc_summary}</div>}
-                      {d.caution && <div className="text-xs text-[var(--amber-text)] mb-2">⚠ {fixNl(d.caution)}</div>}
+                      {d.caution && <div className="text-xs text-[var(--amber-text)] mb-2 flex items-start gap-1"><MSym name="warning" size={14} className="mt-px" />{fixNl(d.caution)}</div>}
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">逐項比對契約需求</div>
                       <ul className="space-y-1 mb-3">
                         {(d.findings || []).map((f, i) => (
@@ -290,9 +298,8 @@ export default function Submittals() {
                         ))}
                       </ul>
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查意見草稿（可修改，核准/核備/退回時自動帶入）</div>
-                      <textarea rows={3} value={d.summary_opinion || ''}
-                        onChange={(e) => setAiRead((m) => ({ ...m, [s.id]: { ...m[s.id], summary_opinion: e.target.value } }))}
-                        className={input} />
+                      <Textarea rows={3} value={d.summary_opinion || ''}
+                        onChange={(e) => setAiRead((m) => ({ ...m, [s.id]: { ...m[s.id], summary_opinion: e.target.value } }))} />
                       <p className="text-[11px] text-[var(--text-3)] mt-1">AI 讀送審文件本體逐項比對契約需求；「需人工確認/未涵蓋」項仍須監造核對，最終判定由監造裁量。</p>
                     </div>
                   )
@@ -305,7 +312,7 @@ export default function Submittals() {
         )}
       </Card>
 
-      <p className="text-xs text-[var(--text-3)]">送審採 ball-in-court：施工提送 → 監造受理審核 → 核准/核備/退回補正；退回補正後施工修正再送（版次 +1）。廠商可上傳送審文件本體（PDF/圖），監造以「AI 讀文件審查」逐項比對契約需求並草擬意見。</p>
+      <p className="text-xs text-[var(--text-3)] leading-relaxed">送審採 ball-in-court：施工提送 → 監造受理審核 → 核准/核備/退回補正；退回補正後施工修正再送（版次 +1）。廠商可上傳送審文件本體（PDF/圖），監造以「AI 讀文件審查」逐項比對契約需求並草擬意見。</p>
     </div>
   )
 }

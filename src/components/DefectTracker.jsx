@@ -4,14 +4,14 @@
 import { useState } from 'react'
 import { MSym } from './icons.jsx'
 import { useStore } from '../store.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner, FIELD_BASE, buttonClass } from './ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner, Input, Select, Textarea, buttonClass } from './ui.jsx'
 import { appConfirm, appPrompt } from './confirm.jsx'
 import { exportCsv, stamp } from '../lib/exportCsv.js'
 import { defectBall } from '../lib/ballInCourt.js'
 import MarkupEditor, { MarkupThumb } from './MarkupEditor.jsx'
 
-// 歷史上這裡抄過一份 FIELD_BASE;改版時收斂回 ui.jsx 正本,樣式永遠同步
-const input = FIELD_BASE
+// 欄位一律用 ui.jsx 的 Input/Select/Textarea:本檔曾抄過一份 FIELD_BASE,
+// 後來改抄字串別名 input——別名同樣會漏掉 Select 的箭頭留白與 Textarea 的 resize-y
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 // 小工項挑選器（搜尋 → 選一個;品質缺失/查驗共用）
@@ -22,16 +22,17 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
     return (
       <div className="flex items-center gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface-2)]">
         <span className="truncate flex-1">{label}</span>
-        {/* ✕ 本身沒有可及名稱;p-2 -m-2 只擴命中區、視覺與列高不變 */}
-        <button onClick={() => onPick(null, '')} aria-label="清除已選工項" className="p-2 -m-2 text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
+        {/* 圖示一律 MSym(裸 ✕ 只留給 ErrorBanner);p-2 -m-2 只擴命中區、視覺與列高不變 */}
+        <button onClick={() => onPick(null, '')} aria-label="清除已選工項" className="inline-flex items-center justify-center p-2 -m-2 text-[var(--text-3)] hover:text-[var(--red-text)]"><MSym name="close" size={16} /></button>
       </div>
     )
   }
   return (
     <div className="relative">
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋並選擇工項（可不填）…" className={input} />
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋並選擇工項（可不填）…" />
       {results.length > 0 && (
-        <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto enter-menu">
+        // 浮層陰影走 token(Tailwind 原生 shadow-lg 是黑色硬陰影,不吃深色模式)
+        <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg [box-shadow:var(--shadow-overlay)] max-h-56 overflow-auto enter-menu">
           {results.map((it) => (
             <button key={it.item_key} onClick={() => { onPick(it.item_key, `${it.item_no} ${it.description}`); setQ('') }}
               className="w-full text-left px-3 py-1.5 text-sm max-md:min-h-11 hover:bg-[var(--surface-2)] truncate">
@@ -65,6 +66,8 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
   const [busy, setBusy] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
   const [aiMsg, setAiMsg] = useState('')
+  // 失敗與否用明確狀態,不用 /失敗/ 比對訊息字串決定狀態色(換句文案就漏色)
+  const [aiErr, setAiErr] = useState('')
   const [errMsg, setErrMsg] = useState('') // 寫入失敗必須讓使用者看到(失敗=UI 不變)
 
   const emptyForm = () => ({
@@ -77,10 +80,10 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
   const onPhoto = async (e) => {
     const file = e.target.files?.[0]; e.target.value = ''
     if (!file) return
-    setAiBusy(true); setAiMsg(isSafety ? 'AI 判讀職安衛中…' : 'AI 辨識中…')
+    setAiBusy(true); setAiErr(''); setAiMsg(isSafety ? 'AI 判讀職安衛中…' : 'AI 辨識中…')
     const { error, result } = await (isSafety ? analyzeSafetyPhoto(file) : describeDefect(file))
     setAiBusy(false)
-    if (error) { setAiMsg(`${isSafety ? '判讀' : '辨識'}失敗:${error.message || ''}`); return }
+    if (error) { setAiMsg(''); setAiErr(`${isSafety ? '判讀' : '辨識'}失敗:${error.message || ''}`); return }
     if (isSafety) {
       // 危害類別 + 現況 + 違反法規依據 + 改善建議,組成 grounded 的工安缺失說明
       const desc = [
@@ -160,10 +163,11 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
 
   return (
     <Card title={`${title}（未結案 ${openCount}）`} action={<div className="flex items-center gap-3">
+      {/* 第三級=純文字連結色 --blue-text(--blue 只作底色/邊框);符號 ⬇ 改 MSym */}
       {list.length > 0 && <button onClick={() => exportCsv(`${isSafety ? '工安缺失' : '缺失'}清單_${stamp()}`, list, csvCols)}
-        className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
+        className="inline-flex items-center gap-1 max-md:min-h-11 text-sm font-medium text-[var(--blue-text)] hover:underline"><MSym name="download" size={16} />CSV</button>}
       {canOpenManually && (
-        <Button variant="secondary" onClick={() => { setForm(form ? null : emptyForm()); setAiMsg('') }}>{form ? '取消' : '＋ 開立缺失'}</Button>
+        <Button variant="secondary" onClick={() => { setForm(form ? null : emptyForm()); setAiMsg(''); setAiErr('') }}>{form ? '取消' : <><MSym name="add" size={16} />開立缺失</>}</Button>
       )}
     </div>}>
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} className="mb-3" />
@@ -173,13 +177,17 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
       {canOpenManually && form && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
           {aiPhotoOn ? (
-            <div className="flex items-center gap-3 flex-wrap">
-              <label className={`${buttonClass('primary', 'sm')} ${aiBusy ? 'opacity-50' : 'cursor-pointer'}`}>
-                <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onPhoto} className="hidden" />
-                <MSym name="photo_camera" size={15} /> {aiBusy ? (isSafety ? 'AI 判讀中…' : 'AI 辨識中…') : (isSafety ? '拍工安照片 AI 判讀' : '拍缺失照片 AI 填表')}
-              </label>
-              <span className={`text-xs ${/失敗/.test(aiMsg) ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>{aiMsg || (isSafety ? '拍現場照片，AI 依職安衛法規判讀危害類別、違反依據並填表(條號請現場核對)。' : '拍缺失現場，AI 自動填標題/說明/嚴重度。')}</span>
-            </div>
+            <>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className={`${buttonClass('primary', 'sm')} ${aiBusy ? 'opacity-50' : 'cursor-pointer'}`}>
+                  <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onPhoto} className="hidden" />
+                  <MSym name="photo_camera" size={15} /> {aiBusy ? (isSafety ? 'AI 判讀中…' : 'AI 辨識中…') : (isSafety ? '拍工安照片 AI 判讀' : '拍缺失照片 AI 填表')}
+                </label>
+                <span className="text-xs text-[var(--text-2)]">{aiMsg || (isSafety ? '拍現場照片，AI 依職安衛法規判讀危害類別、違反依據並填表(條號請現場核對)。' : '拍缺失現場，AI 自動填標題/說明/嚴重度。')}</span>
+              </div>
+              {/* AI 判讀失敗=寫入失敗以外的另一種失敗,同樣走 ErrorBanner,不再用紅字小字 */}
+              <ErrorBanner msg={aiErr} onClose={() => setAiErr('')} />
+            </>
           ) : (
             <p className="text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（{isSafety ? '工安照片判讀' : '缺失照片描述'}），請人工填寫下方欄位。</p>
           )}
@@ -188,16 +196,16 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
               onPick={(k, l) => setForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
           )}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="缺失標題"><input className={input} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder={isSafety ? '如 施工架未掛安全網' : '如 鋼筋保護層不足'} /></Field>
-            <Field label="位置"><input className={input} value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} /></Field>
-            <Field label="嚴重度"><select className={input} value={form.severity} onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}><option>輕微</option><option>一般</option><option>嚴重</option></select></Field>
-            <Field label="改善期限"><input type="date" className={input} value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} /></Field>
-            {isSafety && <Field label="發現日期"><input type="date" className={input} value={form.record_date} onChange={(e) => setForm((f) => ({ ...f, record_date: e.target.value }))} /></Field>}
+            <Field label="缺失標題"><Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder={isSafety ? '如 施工架未掛安全網' : '如 鋼筋保護層不足'} /></Field>
+            <Field label="位置"><Input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} /></Field>
+            <Field label="嚴重度"><Select value={form.severity} onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}><option>輕微</option><option>一般</option><option>嚴重</option></Select></Field>
+            <Field label="改善期限"><Input type="date" value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} /></Field>
+            {isSafety && <Field label="發現日期"><Input type="date" value={form.record_date} onChange={(e) => setForm((f) => ({ ...f, record_date: e.target.value }))} /></Field>}
           </div>
-          <Field label="說明"><textarea className={input} rows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></Field>
+          <Field label="說明"><Textarea rows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></Field>
           <div className="flex items-center gap-3">
             <Button onClick={submit} disabled={busy || !form.title}>開立缺失</Button>
-            <Button variant="secondary" onClick={() => setMarkupOpen(true)}>🖍 圖面/照片標註{form.markup_data ? '（已附）' : ''}</Button>
+            <Button variant="secondary" onClick={() => setMarkupOpen(true)}><MSym name="draw" size={16} />圖面/照片標註{form.markup_data ? '（已附）' : ''}</Button>
             {form.markup_data && <MarkupThumb src={form.markup_data} />}
           </div>
           {markupOpen && <MarkupEditor title="把缺失位置匡起來" initialImage={form.markup_data}
@@ -233,7 +241,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
                   can.approve && <button onClick={() => reopen(d)} className="inline-flex items-center max-md:min-h-11 px-1 text-xs text-[var(--blue-text)] hover:underline">撤銷結案</button>
                 )}
                 {can.edit && d.status !== '已結案' && (
-                  <button onClick={() => remove(d)} className="p-2 -m-2 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除缺失">✕</button>
+                  <button onClick={() => remove(d)} className="inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除缺失"><MSym name="close" size={16} /></button>
                 )}
               </div>
             </div>

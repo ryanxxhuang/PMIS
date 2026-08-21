@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
+import { MSym } from '../../components/icons.jsx'
+import { Card, Stat, Empty, Badge, Button, PageHeader, ErrorBanner, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -8,13 +9,7 @@ import { isPayable, paymentStatus, summarizePayments } from '../../lib/payments.
 
 // Math.round(-0.4)=-0:正規化,避免顯示「-0」(R3 P2-01)
 const money = (n) => (n == null || isNaN(n) ? '—' : (Math.round(n) === 0 ? 0 : Math.round(n)).toLocaleString('en-US'))
-// paymentStatus 只回語意色名,色票對應留在頁面(lib 不綁 Tailwind class)
-const TONE_BADGE = {
-  green: 'bg-[var(--green-tint)] text-[var(--green-text)]',
-  amber: 'bg-[var(--amber-tint)] text-[var(--amber-text)]',
-  blue: 'bg-[var(--blue-tint)] text-[var(--blue-text)]',
-  slate: 'bg-[var(--slate-tint)] text-[var(--slate-text)]',
-}
+// paymentStatus 只回語意色名(green/amber/blue/slate)=Badge 的 color key,直接餵 <Badge>
 // 手機時間線只留月日:窄螢幕一行要塞下期別、金額與狀態,完整日期在桌面表格
 const shortDate = (iso) => (iso ? `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}` : '')
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -59,9 +54,7 @@ export default function Payments() {
 
   return (
     <div className="space-y-5">
-      <div className="min-w-0">
-        <PageHeader title="請款收款" tagline="現金流" subtitle="每期估驗 → 本期應領、保留款、收款追蹤" />
-      </div>
+      <PageHeader title="請款收款" tagline="現金流" subtitle="每期估驗 → 本期應領、保留款、收款追蹤" />
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
@@ -76,33 +69,36 @@ export default function Payments() {
         <Stat label="累計保留款(待退)" value={money(sum.retention)} sub="完工後請領" color="text-[var(--text)]" />
       </div>
 
-      <Card title="逐期請款 / 收款" action={rows.length > 0 && (
+      <Card title="逐期請款 / 收款" bodyClass="p-0" action={rows.length > 0 && (
+        // 第三級文字鈕:--blue-text+底線 hover,MSym 取代文字符號 ⬇(規範 1/7)
         <button onClick={() => exportCsv(`請款收款_${stamp()}`, rows, [
           { label: '期', get: (r) => `第${r.v.period_no}期` }, { label: '估驗日', get: (r) => r.v.valuation_date || '' },
           { label: '累計估驗', get: (r) => Math.round(r.cum) }, { label: '本期估驗', get: (r) => Math.round(r.thisAmt) },
           { label: '本期保留款', get: (r) => Math.round(r.retention) }, { label: '本期應領', get: (r) => Math.round(r.net) },
           { label: '請款日', get: (r) => r.v.invoice_date || '' }, { label: '收款日', get: (r) => r.v.paid_date || '' },
           { label: '實收', get: (r) => r.v.paid_amount ?? '' }, { label: '狀態', get: (r) => paymentStatus(r.v).label },
-        ])} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ 匯出 CSV</button>
+        ])} className="inline-flex items-center gap-1 text-sm font-medium text-[var(--blue-text)] hover:underline max-md:min-h-11"><MSym name="download" size={16} />匯出 CSV</button>
       )}>
         {rows.length === 0 ? (
           <Empty>尚無估驗期。請先到「估驗計價」建立估驗,這裡才會列出每期請款。</Empty>
         ) : (
           <>
-          <div className="overflow-x-auto -mx-4 -my-4 max-sm:hidden">
+          <div className="overflow-x-auto max-sm:hidden">
             <table className="w-full text-sm min-w-[820px]">
               <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
-                  <th className="text-left font-medium py-2 pl-4">期</th>
-                  <th className="text-left font-medium px-2">估驗日</th>
-                  <th className="text-right font-medium px-2">累計估驗</th>
-                  <th className="text-right font-medium px-2">本期估驗</th>
-                  <th className="text-right font-medium px-2">本期保留款</th>
-                  <th className="text-right font-medium px-2">本期應領</th>
-                  <th className="text-left font-medium px-2">請款日</th>
-                  <th className="text-left font-medium px-2">收款日</th>
-                  <th className="text-right font-medium px-2">實收</th>
-                  <th className="text-left font-medium px-2 pr-4">狀態</th>
+                {/* 表頭字型層走共用 THEAD_CLS;p-0 卡的表格左右緣一律 pl-5/pr-5;
+                    「期」等窄欄 whitespace-nowrap,防止中文被壓成直排 */}
+                <tr className="border-b border-[var(--border)]">
+                  <th className={`${THEAD_CLS} text-left py-2 pl-5 whitespace-nowrap`}>期</th>
+                  <th className={`${THEAD_CLS} text-left px-2 whitespace-nowrap`}>估驗日</th>
+                  <th className={`${THEAD_CLS} text-right px-2 whitespace-nowrap`}>累計估驗</th>
+                  <th className={`${THEAD_CLS} text-right px-2 whitespace-nowrap`}>本期估驗</th>
+                  <th className={`${THEAD_CLS} text-right px-2 whitespace-nowrap`}>本期保留款</th>
+                  <th className={`${THEAD_CLS} text-right px-2 whitespace-nowrap`}>本期應領</th>
+                  <th className={`${THEAD_CLS} text-left px-2 whitespace-nowrap`}>請款日</th>
+                  <th className={`${THEAD_CLS} text-left px-2 whitespace-nowrap`}>收款日</th>
+                  <th className={`${THEAD_CLS} text-right px-2 whitespace-nowrap`}>實收</th>
+                  <th className={`${THEAD_CLS} text-left px-2 pr-5 whitespace-nowrap`}>狀態</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,7 +112,7 @@ export default function Payments() {
                   const st = paymentStatus(v)
                   return (
                     <tr key={v.id} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
-                      <td className="py-1.5 pl-4 tabular-nums">第 {v.period_no} 期</td>
+                      <td className="py-1.5 pl-5 tabular-nums whitespace-nowrap">第 {v.period_no} 期</td>
                       <td className="px-2 text-[var(--text-3)] tabular-nums whitespace-nowrap">{v.valuation_date || '—'}</td>
                       <td className="px-2 text-right tabular-nums">{money(cum)}</td>
                       <td className="px-2 text-right tabular-nums">{money(thisAmt)}</td>
@@ -127,14 +123,14 @@ export default function Payments() {
                         <input type="date" key={`inv-${v.id}-${v.invoice_date || ''}`} defaultValue={v.invoice_date || ''}
                           disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期請款日`} max={todayIso()}
                           onBlur={(e) => { const d = e.target.value || null; if (d === (v.invoice_date || null)) return; if (d && d > todayIso()) { setErrMsg(`請款日不可晚於今日（輸入了 ${d}）`); return } onPay(v.id, { invoice_date: d }) }}
-                          className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
+                          className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2">
                         <input type="date" key={`paid-${v.id}-${v.paid_date || ''}`} defaultValue={v.paid_date || ''}
                           disabled={!canPaidDate} title={approved ? (canPaidDate ? undefined : '請先填請款日') : lockTip}
                           aria-label={`第 ${v.period_no} 期收款日`} max={todayIso()} min={v.invoice_date || undefined}
                           onBlur={(e) => { const d = e.target.value || null; if (d === (v.paid_date || null)) return; if (d && d > todayIso()) { setErrMsg(`收款日不可晚於今日（輸入了 ${d}）`); return } if (d && v.invoice_date && d < v.invoice_date) { setErrMsg(`收款日不可早於請款日 ${v.invoice_date}`); return } onPay(v.id, { paid_date: d }) }}
-                          className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
+                          className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 text-right">
                         {/* 平板(≥640px)也會用觸控填這欄:inputMode 讓數字鍵盤直接出來。
@@ -157,20 +153,20 @@ export default function Payments() {
                             }))) { reset(); return }
                             onPay(v.id, { paid_amount: val })
                           }}
-                          className="w-28 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums disabled:opacity-40 disabled:cursor-not-allowed" />
+                          className="w-28 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs tabular-nums disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
-                      <td className="px-2 pr-4">
+                      <td className="px-2 pr-5">
                         <span className="inline-flex items-center gap-1.5">
+                          {/* 狀態走 Badge 五語意;tooltip 掛外層 span(Badge 不透傳 title) */}
                           {approved
-                            ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${TONE_BADGE[st.tone]}`}
-                                title={st.key === 'paid_unrecorded' ? '已登錄收款日但缺實收金額,累計已收不會計入,請補登' : undefined}>{st.label}</span>
-                            : <span className="text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[var(--amber-tint)] text-[var(--amber-text)]" title={lockTip}>{v.status}·未核定</span>}
+                            ? <span className="inline-flex" title={st.key === 'paid_unrecorded' ? '已登錄收款日但缺實收金額,累計已收不會計入,請補登' : undefined}><Badge color={st.tone}>{st.label}</Badge></span>
+                            : <span className="inline-flex" title={lockTip}><Badge color="amber">{v.status}·未核定</Badge></span>}
                           {/* 一鍵清空三欄(單一寫入):退回核定前的正規動線(R3 P1-01) */}
                           {approved && (v.invoice_date || v.paid_date || v.paid_amount != null) && (
-                            <button onClick={async () => {
+                            <Button variant="ghost" size="sm" onClick={async () => {
                               if (!(await appConfirm({ title: `清空第 ${v.period_no} 期請款/收款資料？`, body: '退回核定前需先清空金流欄位;清空後可重新登錄。', danger: true, confirmLabel: '清空' }))) return
                               onPay(v.id, { invoice_date: null, paid_date: null, paid_amount: null })
-                            }} className="text-[11px] text-[var(--text-3)] hover:text-[var(--red-text)] underline whitespace-nowrap" aria-label={`清空第 ${v.period_no} 期金流`}>清空</button>
+                            }} aria-label={`清空第 ${v.period_no} 期金流`}>清空</Button>
                           )}
                         </span>
                       </td>
@@ -183,7 +179,7 @@ export default function Payments() {
 
           {/* 手機:唯讀期別時間線。桌面表格 min-w 820px 在手機只能橫向捲,實際讀不了;
               金流登錄仍只留在桌面(W8-0 §7),所以這裡刻意不放任何輸入或寫入路徑。 */}
-          <div className="sm:hidden -mx-4 -my-4">
+          <div className="sm:hidden">
             <ul className="divide-y divide-[var(--border-2)]">
               {rows.map(({ v, net }) => {
                 // 與表格同一條核定閘門:未核定期別在桌面是鎖定欄位,在手機只說明狀態
@@ -193,7 +189,7 @@ export default function Payments() {
                 // 收款日有、實收沒登錄:與桌面列狀態同一口徑,用琥珀提醒回桌面補登
                 const unrecorded = approved && v.paid_date && v.paid_amount == null
                 return (
-                  <li key={v.id} className="px-4 py-3">
+                  <li key={v.id} className="px-5 py-3">
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-sm font-medium">第 {v.period_no} 期</span>
                       <span className="text-sm font-medium tabular-nums">NT$ {money(net)}</span>
@@ -215,7 +211,7 @@ export default function Payments() {
                 )
               })}
             </ul>
-            <div className="px-4 py-3 border-t border-[var(--border-2)] text-xs text-[var(--text-3)]">
+            <div className="px-5 py-3 border-t border-[var(--border-2)] text-xs text-[var(--text-3)]">
               完整登錄請款日、收款日與實收金額，請使用桌面版。
             </div>
           </div>

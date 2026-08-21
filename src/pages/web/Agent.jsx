@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
-import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input, Surface } from '../../components/ui.jsx'
+import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input, Surface, SkeletonList } from '../../components/ui.jsx'
 import { useStore } from '../../store.jsx'
 import { applyDraftQuantities, draftNeedsInputCount, checklistDraftCounts } from '../../store/slices/agent.js'
 import { useAssistantData } from '../../lib/assistantData.js'
@@ -22,6 +22,13 @@ const REVIEW_STATUS_COLOR = { 已於送審敘明: 'green', 需補件: 'amber', �
 const REVIEW_DECISION_COLOR = { 核准: 'green', 核備: 'green', 退回補正: 'red', 需補充後再核: 'amber' }
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
+
+// 卡中卡(內嵌面板)只有一種語言:描邊版。同一張草稿卡裡本來有「描邊」與「填色」
+// 兩種內嵌容器,看起來像兩種層級其實是同一層,所以統一收在這兩個常數。
+const INSET_PANEL = 'rounded-lg border border-[var(--border-2)]'
+const INSET_ROWS = `${INSET_PANEL} divide-y divide-[var(--border-2)]`
+// 行內展開鈕(勾稽發現/為什麼這樣擬):第三級文字鈕的單一寫法,不再各寫一份灰字
+const EXPANDER_CLS = 'inline-flex items-center gap-0.5 text-[11px] max-md:min-h-11 px-1 -mx-1 text-[var(--blue-text)] hover:underline'
 
 // 待辦的唯一入口是「今日待辦」頁。這裡刻意不顯示件數:件數要正確就得在
 // 這頁再算一次同樣的聚合,一旦兩份實作分岔,使用者會看到兩個不同的數字。
@@ -89,18 +96,19 @@ function DraftInboxCard() {
 
   return (
     <Card title="AI 草稿收件匣"
-      action={pending.length > 0 && <span className="text-[11px] text-[var(--text-3)] tabular-nums">{pending.length} 筆待覆核</span>}>
+      action={pending.length > 0 && <Badge color="blue" className="tabular-nums">{pending.length} 筆待覆核</Badge>}>
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg(null)} className="mb-3" />
+      {/* 成功橫幅與 ErrorBanner 同一種語言:tint 底＋語意圖示＋同一組內距 */}
       {doneMsg && (
-        <div className="mb-3 flex items-center justify-between gap-2 text-xs rounded-lg px-2.5 py-2 bg-[var(--green-tint)] text-[var(--green-text)] enter-row">
-          <span>{doneMsg.text}</span>
+        <div className="mb-3 flex items-center justify-between gap-2.5 text-xs rounded-lg px-3.5 py-2.5 bg-[var(--green-tint)] text-[var(--green-text)] enter-row">
+          <span className="flex items-center gap-2.5 min-w-0"><MSym name="check_circle" size={18} className="shrink-0" />{doneMsg.text}</span>
           <Link to={doneMsg.to} className="shrink-0 inline-flex items-center gap-0.5 font-medium hover:underline">
             {doneMsg.cta} <MSym name="arrow_forward" size={11} />
           </Link>
         </div>
       )}
       {agentActionsLoading ? (
-        <div className="text-sm text-[var(--text-3)] py-6 text-center">載入草稿中…</div>
+        <SkeletonList rows={2} label="載入草稿中…" />
       ) : pending.length === 0 ? (
         <Empty>
           目前沒有待覆核的 AI 草稿。
@@ -146,7 +154,7 @@ function DraftInboxCard() {
                   <div className="text-sm text-[var(--text)] leading-snug min-w-0 flex-1">{a.summary}</div>
                 </div>
                 {draftItems.length > 0 && (
-                  <div className="rounded-lg border border-[var(--border-2)] divide-y divide-[var(--border-2)]">
+                  <div className={INSET_ROWS}>
                     {draftItems.map(([wiId, v]) => (
                       <div key={wiId} className="flex items-center gap-2 px-2.5 py-1.5">
                         {/* 工項描述是人核准 AI 草稿前唯一的判斷依據(紅線 4),被截斷就補 title 看全文 */}
@@ -154,19 +162,20 @@ function DraftInboxCard() {
                           {v?.item_no && <span className="text-[var(--text-3)] mr-1">{v.item_no}</span>}
                           {v?.description || wiId}
                         </div>
-                        {/* !py-1 是刻意壓縮的清單密度;手機只放寬到 !py-2(~38px),不套 min-h-11 以免整份待審清單變兩倍長 */}
+                        {/* !py-1 是刻意壓縮的清單密度;手機只放寬到 !py-2(~38px),不套 min-h-11 以免整份待審清單變兩倍長。
+                            斷點用 max-md 跟手機版面一致——max-sm 會讓 640-767 拿到手機版面卻是桌機密度 */}
                         <Input type="number" min="0" step="any" inputMode="decimal" placeholder="數量"
                           aria-label={`${v?.description || wiId} 本日數量`}
                           value={qtys[wiId] ?? v?.qty_today ?? ''}
                           onChange={(e) => setQty(a.id, wiId, e.target.value)}
-                          className="!w-24 shrink-0 !py-1 max-sm:!py-2 max-sm:!min-h-0 text-right tabular-nums" />
+                          className="!w-24 shrink-0 !py-1 max-md:!py-2 max-md:!min-h-0 text-right tabular-nums" />
                         <span className="w-8 shrink-0 text-[11px] text-[var(--text-3)]">{v?.unit || ''}</span>
                       </div>
                     ))}
                   </div>
                 )}
                 {clPayload && (
-                  <div className="rounded-lg border border-[var(--border-2)] divide-y divide-[var(--border-2)]">
+                  <div className={INSET_ROWS}>
                     <div className="px-2.5 py-1.5 text-xs text-[var(--text-2)]">
                       <span className="font-medium text-[var(--text)]">{clTpl?.title || clPayload.template_title || '檢查表範本'}</span>
                       <span className="text-[var(--text-3)] ml-1.5">{[clPayload.check_date, clPayload.location].filter(Boolean).join('・')}</span>
@@ -178,10 +187,12 @@ function DraftInboxCard() {
                             <span className="text-[var(--text-3)] mr-1">{no}</span>
                             {clItemByNo.get(no)?.item || ''}
                           </div>
-                          <span className={`shrink-0 text-xs ${v.value === false ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>
-                            {v.value === true ? '✓ 符合' : v.value === false ? '✗ 不符' : String(v.value)}
+                          {/* 符合/不符的勾叉改圖示(BallChip 的 ✓/⏳ 才是既定例外) */}
+                          <span className={`shrink-0 inline-flex items-center gap-0.5 text-xs ${v.value === false ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>
+                            {v.value === true ? <><MSym name="check" size={14} />符合</>
+                              : v.value === false ? <><MSym name="close" size={14} />不符</> : String(v.value)}
                           </span>
-                          <Badge color="purple" className="shrink-0 !text-[10px] !px-1.5">AI 建議</Badge>
+                          <Badge color="purple" className="shrink-0">AI 建議</Badge>
                         </div>
                         {/* 依據:AI 憑什麼這樣勾 —— 沒有依據的建議後端已拒收,這裡把依據攤在人眼前 */}
                         {v.ai_basis && (
@@ -197,7 +208,7 @@ function DraftInboxCard() {
                   </div>
                 )}
                 {subPayload && (
-                  <div className="rounded-lg border border-[var(--border-2)] divide-y divide-[var(--border-2)]">
+                  <div className={INSET_ROWS}>
                     <div className="flex items-center gap-2 px-2.5 py-1.5">
                       <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate" title={`${subPayload.submittal_no || ''} ${subPayload.submittal_title || ''}`.trim()}>
                         {subPayload.submittal_no && <span className="text-[var(--text-3)] mr-1">{subPayload.submittal_no}</span>}
@@ -214,7 +225,7 @@ function DraftInboxCard() {
                       <div key={i} className="px-2.5 py-1.5 space-y-0.5">
                         <div className="flex items-start gap-2">
                           <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] leading-snug">{c.point}</div>
-                          <Badge color={REVIEW_STATUS_COLOR[c.status] || 'slate'} className="shrink-0 !text-[10px] !px-1.5">{c.status}</Badge>
+                          <Badge color={REVIEW_STATUS_COLOR[c.status] || 'slate'} className="shrink-0">{c.status}</Badge>
                         </div>
                         {c.basis && <div className="text-[11px] text-[var(--text-3)] leading-snug">依據:{c.basis}</div>}
                       </div>
@@ -228,23 +239,23 @@ function DraftInboxCard() {
                       </div>
                     )}
                     {subPayload.caution && (
-                      <div className="px-2.5 py-1.5 text-[11px] font-medium text-[var(--amber-text)] leading-snug">⚠ {subPayload.caution}</div>
+                      <div className="px-2.5 py-1.5 flex items-start gap-1 text-[11px] font-medium text-[var(--amber-text)] leading-snug"><MSym name="warning" size={14} className="shrink-0" />{subPayload.caution}</div>
                     )}
                   </div>
                 )}
                 {findings.length > 0 && (
                   <button onClick={() => setOpenFindings(findingsOpened ? null : a.id)}
-                    className="inline-flex items-center gap-0.5 text-[11px] max-md:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
+                    className={EXPANDER_CLS}>
                     {findingsOpened ? <MSym name="expand_more" size={11} /> : <MSym name="chevron_right" size={11} />}
                     勾稽發現 {findings.length} 項
                   </button>
                 )}
                 {findingsOpened && findings.length > 0 && (
-                  <div className="rounded-lg border border-[var(--border-2)] divide-y divide-[var(--border-2)] enter-row">
+                  <div className={`${INSET_ROWS} enter-row`}>
                     {findings.map((f, i) => (
                       <div key={i} className="px-2.5 py-2 space-y-1">
                         <div className="flex items-start gap-2">
-                          <Badge color={FINDING_BADGE[f.status]?.color || 'slate'} className="shrink-0 mt-0.5 !text-[10px] !px-1.5">
+                          <Badge color={FINDING_BADGE[f.status]?.color || 'slate'} className="shrink-0 mt-0.5">
                             {FINDING_BADGE[f.status]?.label || f.status}
                           </Badge>
                           <div className="min-w-0 flex-1 text-xs text-[var(--text)] leading-snug">{f.title}</div>
@@ -256,13 +267,13 @@ function DraftInboxCard() {
                 )}
                 {a.rationale && (
                   <button onClick={() => setOpenRationale(opened ? null : a.id)}
-                    className="inline-flex items-center gap-0.5 text-[11px] max-md:min-h-11 px-1 -mx-1 text-[var(--text-3)] hover:text-[var(--text-2)]">
+                    className={EXPANDER_CLS}>
                     {opened ? <MSym name="expand_more" size={11} /> : <MSym name="chevron_right" size={11} />}
                     為什麼這樣擬
                   </button>
                 )}
                 {opened && a.rationale && (
-                  <div className="text-[11px] text-[var(--text-2)] bg-[var(--surface-2)] rounded-lg px-2.5 py-1.5 enter-row">{a.rationale}</div>
+                  <div className={`${INSET_PANEL} text-[11px] text-[var(--text-2)] px-2.5 py-1.5 enter-row`}>{a.rationale}</div>
                 )}
                 <div className="flex items-center gap-2 pt-0.5 flex-wrap">
                   <Button size="sm" disabled={busy} onClick={() => resolve(a, 'accepted')}>
@@ -290,7 +301,7 @@ function DraftInboxCard() {
           日常由照片→agent 草稿→這裡接受。但沒拍照的日子 agent 擬不出草稿,不能讓
           使用者卡死,所以留這個次要手動入口(路由本身保留)。 */}
       <div className="mt-3 pt-3 border-t border-[var(--border-2)] text-right">
-        <Link to="/site-log" className="inline-flex items-center gap-0.5 text-[11px] text-[var(--text-3)] hover:text-[var(--blue-text)]">
+        <Link to="/site-log" className="inline-flex items-center gap-0.5 max-md:min-h-11 text-[11px] text-[var(--blue-text)] hover:underline">
           手動寫施工日誌 <MSym name="arrow_forward" size={11} />
         </Link>
       </div>
@@ -342,10 +353,15 @@ export default function Agent() {
 
       {/* W2-3(D-007):未匯標單不再整頁擋住——文件/成員/期限問題不依賴 BOQ,
           只有工項類(估驗/進度/數量)要先匯入;指引與全站一致(專案文件一次上傳)。 */}
+      {/* 提示橫幅與 ErrorBanner 同一種語言(tint 底＋語意圖示、無邊框);
+          原本的 border-[var(--amber-text)]/25 是對 token 疊 alpha,深色模式不可預期 */}
       {!imported && (
-        <div className="bg-[var(--amber-tint)] border border-[var(--amber-text)]/25 rounded-lg px-4 py-3 text-sm text-[var(--amber-text)]">
-          此專案尚未匯入標單:文件、成員與期限問題可以直接問;估驗、進度、工項數量類問題要先到「
-          <Link to="/contract" className="font-medium underline">專案文件</Link>」上傳標單 XML 才有資料。
+        <div className="flex items-start gap-2.5 bg-[var(--amber-tint)] rounded-lg px-3.5 py-2.5 text-sm text-[var(--amber-text)]">
+          <MSym name="warning" size={18} className="mt-px shrink-0" />
+          <span className="flex-1 leading-relaxed">
+            此專案尚未匯入標單:文件、成員與期限問題可以直接問;估驗、進度、工項數量類問題要先到「
+            <Link to="/contract" className="font-medium underline">專案文件</Link>」上傳標單 XML 才有資料。
+          </span>
         </div>
       )}
 
@@ -355,7 +371,7 @@ export default function Agent() {
           action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="smart_toy" size={12} />會自己查本案資料</span>}>
           {agentOn
             ? <CopilotChat data={data} onAsk={onAsk} minH={360} maxH={560} initialQuestion={initialQuestion} />
-            : <div className="p-4"><Empty>此 AI 功能未啟用（AI Agent 主控台）。今日待辦與草稿收件匣仍可使用；如需開通請聯絡系統管理者。</Empty></div>}
+            : <Empty>此 AI 功能未啟用（AI Agent 主控台）。今日待辦與草稿收件匣仍可使用；如需開通請聯絡系統管理者。</Empty>}
         </Card>
         <div className="space-y-5 order-1 lg:order-2 min-w-0">
           <TodayTasksLink />

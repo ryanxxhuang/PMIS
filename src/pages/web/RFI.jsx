@@ -2,13 +2,12 @@ import { useState } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Button, Field, Input, Textarea, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { rfiBall } from '../../lib/ballInCourt.js'
 
 const STATUS_COLOR = { 待回覆: 'amber', 已回覆: 'blue', 已結案: 'green' }
-const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function RFI() {
@@ -21,8 +20,14 @@ export default function RFI() {
   const [aiDraft, setAiDraft] = useState({}) // { [rfiId]: result } AI 回覆草稿
   const [draftBusy, setDraftBusy] = useState(null)
 
+  // 早退也保留 PageHeader:頁首與工作面分頁不該因為「還沒選專案」整組消失
   if (isSupabaseConfigured && !currentProject) {
-    return <Card title="工程疑義"><Empty>請先登入並選擇專案。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        <PageHeader title="工程疑義" tagline="RFI" subtitle="施工提出疑義 → 監造回覆 → 結案；可標註工期 / 費用影響" />
+        <Card title="工程疑義" bodyClass="p-0"><Empty>請先登入並選擇專案。</Empty></Card>
+      </div>
+    )
   }
 
   const submit = async () => {
@@ -71,8 +76,8 @@ export default function RFI() {
       <PageHeader title="工程疑義" tagline="RFI" subtitle="施工提出疑義 → 監造回覆 → 結案；可標註工期 / 費用影響"
         action={
           <div className="flex items-center gap-2">
-            {rfis.length > 0 && <button onClick={exportRows} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>}
-            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', question: '', asked_date: todayIso(), due_date: '', cost_impact: false, schedule_impact: false })}>{form ? '取消' : '＋ 提出疑義'}</Button>}
+            {rfis.length > 0 && <Button variant="ghost" onClick={exportRows}><MSym name="download" size={16} />CSV</Button>}
+            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', question: '', asked_date: todayIso(), due_date: '', cost_impact: false, schedule_impact: false })}>{form ? '取消' : <><MSym name="add" size={16} />提出疑義</>}</Button>}
           </div>
         } />
 
@@ -81,16 +86,17 @@ export default function RFI() {
       {form && (
         <Card>
           <div className="grid md:grid-cols-2 gap-3">
-            <div className="md:col-span-2"><Field label="主旨"><input className={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如 3F 樑柱接頭鋼筋與機電套管衝突" /></Field></div>
-            <div className="md:col-span-2"><Field label="疑義內容"><textarea rows={3} className={input} value={form.question} onChange={(e) => setForm({ ...form, question: e.target.value })} placeholder="描述現場狀況、涉及圖說編號、請釋疑的事項…" /></Field></div>
-            <Field label="提出日"><input type="date" className={input} value={form.asked_date} onChange={(e) => setForm({ ...form, asked_date: e.target.value })} /></Field>
-            <Field label="希望回覆期限"><input type="date" className={input} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></Field>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.schedule_impact} onChange={(e) => setForm({ ...form, schedule_impact: e.target.checked })} />涉及工期影響</label>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.cost_impact} onChange={(e) => setForm({ ...form, cost_impact: e.target.checked })} />涉及費用影響</label>
+            <div className="md:col-span-2"><Field label="主旨"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如 3F 樑柱接頭鋼筋與機電套管衝突" /></Field></div>
+            <div className="md:col-span-2"><Field label="疑義內容"><Textarea rows={3} value={form.question} onChange={(e) => setForm({ ...form, question: e.target.value })} placeholder="描述現場狀況、涉及圖說編號、請釋疑的事項…" /></Field></div>
+            <Field label="提出日"><Input type="date" value={form.asked_date} onChange={(e) => setForm({ ...form, asked_date: e.target.value })} /></Field>
+            <Field label="希望回覆期限"><Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></Field>
+            {/* 原生 checkbox 預設約 13px,是全站最小的互動元素;w-5 h-5 提到 20px,外層 label 補 44px 命中區 */}
+            <label className="flex items-center gap-2 text-sm max-md:min-h-11"><input type="checkbox" className="w-5 h-5" checked={form.schedule_impact} onChange={(e) => setForm({ ...form, schedule_impact: e.target.checked })} />涉及工期影響</label>
+            <label className="flex items-center gap-2 text-sm max-md:min-h-11"><input type="checkbox" className="w-5 h-5" checked={form.cost_impact} onChange={(e) => setForm({ ...form, cost_impact: e.target.checked })} />涉及費用影響</label>
           </div>
           <div className="mt-3 flex items-center gap-3">
             <Button onClick={submit} disabled={busy || !form.title}>{busy ? '提出中…' : '提出疑義'}</Button>
-            <Button variant="secondary" onClick={() => setMarkupOpen(true)}>🖍 圖面標註{form.markup_data ? '（已附）' : ''}</Button>
+            <Button variant="secondary" onClick={() => setMarkupOpen(true)}><MSym name="draw" size={16} />圖面標註{form.markup_data ? '（已附）' : ''}</Button>
             {form.markup_data && <MarkupThumb src={form.markup_data} />}
           </div>
           {markupOpen && <MarkupEditor title="把圖面有疑義的位置匡起來" initialImage={form.markup_data}
@@ -106,7 +112,7 @@ export default function RFI() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm text-[var(--text)]">
-                      <span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{r.rfi_no}</span>{r.title}
+                      <span className="text-[var(--text-3)] text-xs mr-2 num">{r.rfi_no}</span>{r.title}
                       <BallChip ball={rfiBall(r)} />
                       {r.schedule_impact && <Badge color="amber">工期</Badge>}
                       {r.cost_impact && <Badge color="red">費用</Badge>}
@@ -119,7 +125,7 @@ export default function RFI() {
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     {r.status === '待回覆' && (can.approve
                       ? <Button variant="secondary" disabled={busy} onClick={() => onAnswer(r)}>回覆</Button>
-                      : <span className="text-[10px] text-[var(--text-3)]">待監造回覆</span>)}
+                      : <span className="text-[11px] text-[var(--text-2)]">待監造回覆</span>)}
                     {r.status === '已回覆' && (
                       can.submit ? <Button variant="success" disabled={busy} onClick={() => onClose(r)}>確認結案</Button>
                         : can.approve ? <Button variant="secondary" disabled={busy} onClick={() => onAnswer(r)}>補充回覆</Button> : null
@@ -132,16 +138,17 @@ export default function RFI() {
                       </Button>
                     )}
                     {can.approve && !aiEnabled('rfi.draft_reply') && (r.status === '待回覆' || r.status === '已回覆') && (
-                      <span className="text-[10px] text-[var(--text-3)]">AI 回覆草稿未啟用</span>
+                      <span className="text-[11px] text-[var(--text-2)]">AI 回覆草稿未啟用</span>
                     )}
-                    {/* 僅「待回覆」可刪(已回覆=履約證據,DB 另有 guard) */}
+                    {/* 僅「待回覆」可刪(已回覆=履約證據,DB 另有 guard)。
+                        灰轉紅文字鈕不在三級語言內,改共用 Button 的第三級(順帶拿到 44px 觸控高度) */}
                     {can.submit && r.status === '待回覆' && (
-                      <button onClick={async () => {
+                      <Button variant="ghost" size="sm" onClick={async () => {
                         if (!(await appConfirm({ title: '刪除此疑義？', danger: true, confirmLabel: '刪除' }))) return
                         setErrMsg('')
                         const { error } = await deleteRfi(r.id)
                         if (error) setErrMsg(`刪除失敗：${error.message}`)
-                      }} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">刪除</button>
+                      }}>刪除</Button>
                     )}
                   </div>
                 </div>
@@ -156,9 +163,11 @@ export default function RFI() {
                           {d.schedule_impact && <Badge color="amber">工期</Badge>}
                           {d.cost_impact && <Badge color="red">費用</Badge>}
                         </div>
-                        <button onClick={() => closeDraft(r.id)} className="text-xs text-[var(--text-3)] hover:text-[var(--red-text)] shrink-0">收起</button>
+                        {/* 收起不是破壞性動作:不再用灰轉紅,改共用 Button 的第三級 */}
+                        <Button variant="ghost" size="sm" onClick={() => closeDraft(r.id)}>收起</Button>
                       </div>
-                      <p className="text-sm text-[var(--text-2)] leading-relaxed bg-[var(--blue)]/[0.04] border border-[var(--blue)]/20 rounded-lg px-3 py-2 whitespace-pre-line">{d.answer}</p>
+                      {/* 底色走 --blue-tint 原值:對 --blue 加 4%/20% 是自製色階,深色模式下 --blue 是淺藍會失真 */}
+                      <p className="text-sm text-[var(--text-2)] leading-relaxed bg-[var(--blue-tint)] border border-[var(--border-2)] rounded-lg px-3 py-2 whitespace-pre-line">{d.answer}</p>
                       <div className="text-[11px] text-[var(--text-3)] mt-1">依據：{d.basis || '—'}{d.caution ? ` ｜ ${d.caution}` : ''}</div>
                       <p className="text-[11px] text-[var(--text-3)] mt-1">按上方「{r.status === '待回覆' ? '回覆' : '補充回覆'}」會自動帶入此草稿供修改；回覆為正式契約文件，最終內容由監造裁量。</p>
                     </div>
@@ -170,7 +179,7 @@ export default function RFI() {
         )}
       </Card>
 
-      <p className="text-xs text-[var(--text-3)]">工程疑義（RFI）：施工遇圖說不明、現場衝突或需設計釋疑時正式提出，監造/設計回覆後由施工確認結案；標註工期/費用影響者，後續可作為變更設計或展延的依據。</p>
+      <p className="text-xs text-[var(--text-3)] leading-relaxed">工程疑義（RFI）：施工遇圖說不明、現場衝突或需設計釋疑時正式提出，監造/設計回覆後由施工確認結案；標註工期/費用影響者，後續可作為變更設計或展延的依據。</p>
     </div>
   )
 }

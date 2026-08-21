@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Surface, Button, Field, Badge, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
+import { Card, Button, Field, Badge, Empty, PageHeader, ErrorBanner, SkeletonList, Input, Select, Textarea, FilterChip, THEAD_CLS } from '../../components/ui.jsx'
+import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { judgeChecklist, judgeItem, diffChecklistResults, sampleAlerts } from '../../lib/qc.js'
 import { collaborationItems } from '../../lib/ballInCourt.js'
@@ -10,7 +11,6 @@ import DefectTracker, { WorkItemPicker } from '../../components/DefectTracker.js
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
-const input = 'w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm transition-colors placeholder:text-[var(--text-3)] focus:border-[var(--blue)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/20'
 
 // ── W8-4A 工作佇列「現在要處理」────────────────────────────────────────
 // 佇列超過上限只顯示前幾筆＋「還有 N 項」:佇列是入口不是清單,完整內容在各分段。
@@ -205,28 +205,24 @@ export default function Quality() {
         )}
       </Card>
 
-      {/* 分段控制:等寬五段(375px 不橫捲)。非當前分段不渲染(unmount)——
-          已知取捨:切段會失去該段未送出的表單 state;各段表單皆短,重填成本低,
-          換來的是頁面不再五卡直落、每段各自可專心操作。
-          卡殼改吃 Surface(白卡單一真相);選取態文字走 --primary-fg,深色模式
-          primary 是淺藍底深字,寫死 text-white 會炸對比(token 層已註明) */}
-      <Surface role="group" aria-label="品質分段" className="grid grid-cols-5 gap-1 p-1">
+      {/* 分段控制:與工作面分頁/Admin tabs 同一種 chips 切換語言(CHIP_BASE/ON/OFF),
+          實心 primary 滑塊式 segmented 退場;flex-wrap 保 375px 不橫向溢位。
+          min-h-11 是 a11y e2e 契約(品質分段五顆 ≥44px,桌機同樣保留)。
+          非當前分段不渲染(unmount)——已知取捨:切段會失去該段未送出的表單 state;
+          各段表單皆短,重填成本低,換來的是頁面不再五卡直落、每段各自可專心操作 */}
+      <div role="group" aria-label="品質分段" className="flex flex-wrap gap-1.5">
         {SEGMENTS.map((s) => (
           <button key={s} onClick={() => setSegment(s)} aria-pressed={segment === s}
-            className={`min-h-11 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-1 pressable transition-colors ${
-              segment === s ? 'bg-[var(--primary)] text-[var(--primary-fg)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+            className={`${CHIP_BASE} ${segment === s ? CHIP_ON : CHIP_OFF} min-h-11 gap-1`}>
             {s}
-            {segCount[s] > 0 && (
-              <span className={`min-w-4 px-1 rounded-full text-[10px] font-semibold tabular-nums ${
-                segment === s ? 'bg-[var(--primary-fg)]/20' : 'bg-[var(--surface-2)] text-[var(--text-2)]'}`}>{segCount[s]}</span>
-            )}
+            {segCount[s] > 0 && <span className="num opacity-80">{segCount[s]}</span>}
           </button>
         ))}
-      </Surface>
+      </div>
 
       {/* 查驗:標題同時給「全部」與「待查驗」——這張卡不只是待辦盒,也是本案的查驗履歷 */}
       {segment === '查驗' && (
-      <Card title={`查驗（全部 ${inspCount['全部']}・待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: todayIso(), work_item_key: '', work_item_label: '', checklist_record_id: '' })}>{inspForm ? '取消' : '＋ 查驗申請'}</Button>}>
+      <Card title={`查驗（全部 ${inspCount['全部']}・待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: todayIso(), work_item_key: '', work_item_label: '', checklist_record_id: '' })}>{inspForm ? '取消' : <><MSym name="add" size={16} />查驗申請</>}</Button>}>
         {resultMsg && (
           <div className="flex items-center gap-3 flex-wrap rounded-lg bg-[var(--green-tint)] text-[var(--green-text)] text-sm px-3 py-2 mb-3">
             <span>{resultMsg.pass ? '已判定合格' : '已判定不合格並開立缺失'}</span>
@@ -240,17 +236,17 @@ export default function Quality() {
             {/* 換工項連同清掉已選檢附:候選是「同工項」口徑,留著舊選擇會掛到不相干的表 */}
             <WorkItemPicker leaves={leaves} value={inspForm.work_item_key} label={inspForm.work_item_label} onPick={(k, l) => setInspForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l, checklist_record_id: '' }))} />
             <div className="grid grid-cols-2 gap-3">
-              <Field label="查驗項目"><input className={input} value={inspForm.title} onChange={(e) => setInspForm((f) => ({ ...f, title: e.target.value }))} placeholder="如 混凝土澆置前查驗" /></Field>
-              <Field label="位置"><input className={input} value={inspForm.location} onChange={(e) => setInspForm((f) => ({ ...f, location: e.target.value }))} placeholder="如 A 區 1F" /></Field>
-              <Field label="類型"><select className={input} value={inspForm.inspection_type} onChange={(e) => setInspForm((f) => ({ ...f, inspection_type: e.target.value }))}><option>施工查驗</option><option>材料查驗</option><option>隱蔽查驗</option></select></Field>
+              <Field label="查驗項目"><Input value={inspForm.title} onChange={(e) => setInspForm((f) => ({ ...f, title: e.target.value }))} placeholder="如 混凝土澆置前查驗" /></Field>
+              <Field label="位置"><Input value={inspForm.location} onChange={(e) => setInspForm((f) => ({ ...f, location: e.target.value }))} placeholder="如 A 區 1F" /></Field>
+              <Field label="類型"><Select value={inspForm.inspection_type} onChange={(e) => setInspForm((f) => ({ ...f, inspection_type: e.target.value }))}><option>施工查驗</option><option>材料查驗</option><option>隱蔽查驗</option></Select></Field>
               {/* 預設今天:全站慣例是「事件已發生的記錄日預設今天」(檢查表/取樣皆同),
                   申請查驗這件事就是按下去的當天發生,空白只會讓現場忘了填 */}
-              <Field label="申請查驗日（必填）"><input type="date" className={input} value={inspForm.requested_date} onChange={(e) => setInspForm((f) => ({ ...f, requested_date: e.target.value }))} /></Field>
+              <Field label="申請查驗日（必填）"><Input type="date" value={inspForm.requested_date} onChange={(e) => setInspForm((f) => ({ ...f, requested_date: e.target.value }))} /></Field>
               {/* 檢附自主檢查表(S-2):正式查驗單本來就要附第一級自主檢查證據——
                   選填不擋送出,但監造一眼看得出第一級做了沒。只列已判定的現行版,
                   「僅限已判定」是 UI 收斂(DB 只驗 FK 存在)。 */}
               <Field label="檢附自主檢查表（選填）">
-                <select className={input} value={inspForm.checklist_record_id || ''}
+                <Select value={inspForm.checklist_record_id || ''}
                   onChange={(e) => setInspForm((f) => ({ ...f, checklist_record_id: e.target.value }))}>
                   {attachableChecklists.length === 0 ? (
                     <option value="" disabled>此工項尚無已判定的自主檢查紀錄</option>
@@ -262,7 +258,7 @@ export default function Quality() {
                       </option>
                     ))}
                   </>)}
-                </select>
+                </Select>
               </Field>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
@@ -273,17 +269,12 @@ export default function Quality() {
         )}
         {/* 狀態篩選:判定後的紀錄一直都留在這張清單,但純時間序回答不了
             「擋土牆合格了沒」。flex-wrap 是 375px 的保命符,四個 chip 一行放不下要能換行。
-            Workspace chip 皮(handoff:已套用篩選=accent chip):選取淺藍底深藍字,未選白底細框 */}
+            資料篩選一律 ui.jsx FilterChip(rounded-full 舊 chip 退場;aria-pressed 由元件內建) */}
         {inspections.length > 0 && (
           <div role="group" aria-label="查驗狀態篩選" className="flex flex-wrap gap-1.5 mb-3">
             {INSP_FILTERS.map((f) => (
-              <button key={f} onClick={() => setInspFilter(f)} aria-pressed={inspFilter === f}
-                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium max-md:min-h-11 pressable transition-colors ${
-                  inspFilter === f
-                    ? 'border-[var(--blue)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
-                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
-                {f}<span className="tabular-nums opacity-80">{inspCount[f]}</span>
-              </button>
+              <FilterChip key={f} active={inspFilter === f} onToggle={() => setInspFilter(f)}
+                label={<span className="inline-flex items-center gap-1">{f}<span className="num opacity-80">{inspCount[f]}</span></span>} />
             ))}
           </div>
         )}
@@ -298,9 +289,9 @@ export default function Quality() {
                     {/* 附自主檢查表 chip:點開既有列印檢視(成本最低的下鑽——檢查紀錄
                         本來就以列印頁為完整檢視,查驗列不再自建展開) */}
                     {i.checklist_record_id && (
-                      <button onClick={() => navigate(`/quality/checklist-print?id=${i.checklist_record_id}`)}
-                        title="檢視檢附的自主檢查表"
-                        className="ml-1.5 inline-flex items-center rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--blue)] hover:bg-[var(--surface-2)] pressable align-middle">附自主檢查表</button>
+                      <Button variant="secondary" size="sm" className="ml-1.5 align-middle"
+                        onClick={() => navigate(`/quality/checklist-print?id=${i.checklist_record_id}`)}
+                        title="檢視檢附的自主檢查表">附自主檢查表</Button>
                     )}
                   </div>
                   {/* result_note(不合格原因)排在字串最後最先被切,而這一列沒有詳情頁可下鑽 → 補 title */}
@@ -313,7 +304,7 @@ export default function Quality() {
                     <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
                   </> : <span className="text-xs text-[var(--text-3)]">待監造查驗</span>)}
                   {/* 已判定查驗=品質證據,不提供刪除(DB 另有 guard) */}
-                  {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspection(i.id); if (error) setErrMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除查驗 ${i.title}`}>✕</button>}
+                  {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspection(i.id); if (error) setErrMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除查驗 ${i.title}`}><MSym name="close" size={16} /></button>}
                 </div>
               </div>
             ))}
@@ -378,7 +369,10 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
   const [wiLabel, setWiLabel] = useState('')
   const [values, setValues] = useState({})
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState('')
+  // 訊息 tone 由呼叫端決定(success/warn/error),不再用字串比對「不合格/拒絕」推斷顏色——
+  // 判定不合格是合法結果走 amber,寫入失敗才是 red(五語意色票,不用 --accent)
+  const [msg, setMsgRaw] = useState(null) // { text, tone } | null
+  const setMsg = (text, tone = 'success') => setMsgRaw(text ? { text, tone } : null)
   const [historyOf, setHistoryOf] = useState(null) // 展開歷次版本的鏈根 id
 
   // 紀錄 → 末端工項:demo 存 work_item_key、真 DB 存 work_item_id(uuid),一張表查兩種鍵
@@ -438,27 +432,27 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
       revises: revising || undefined, revision_reason: revising ? reason.trim() : undefined,
     })
     setSaving(false)
-    if (res.error) { setMsg(res.error.message || '存檔失敗'); return }
+    if (res.error) { setMsg(res.error.message || '存檔失敗', 'error'); return }
     const revTag = res.rev ? `Rev.${res.rev}：` : ''
-    if (res.defectAction === 'created') setMsg(`已存檔 ${revTag}判定不合格，系統已自動開立缺失。`)
-    else if (res.defectAction === 'linked') setMsg(`已存檔 ${revTag}判定不合格；此檢查表已有未結案缺失，未重複開立。`)
-    else if (res.defectError) setMsg(`已存檔 ${revTag}判定不合格，但缺失開立失敗：${res.defectError.message}`)
+    if (res.defectAction === 'created') setMsg(`已存檔 ${revTag}判定不合格，系統已自動開立缺失。`, 'warn')
+    else if (res.defectAction === 'linked') setMsg(`已存檔 ${revTag}判定不合格；此檢查表已有未結案缺失，未重複開立。`, 'warn')
+    else if (res.defectError) setMsg(`已存檔 ${revTag}判定不合格，但缺失開立失敗：${res.defectError.message}`, 'error')
     else if (res.overall === '合格' && res.openDefectRemains) setMsg(`已存檔 ${revTag}更正後判定合格。原自動開立的缺失仍在追蹤中，請至缺失區確認後續處理。`)
-    else setMsg(`已存檔 ${revTag}判定${res.overall || '未完成'} ✓`)
+    else setMsg(`已存檔 ${revTag}判定${res.overall || '未完成'} ✓`, res.overall === '不合格' ? 'warn' : 'success')
     closeForm()
   }
   const del = async (r) => {
     if (!(await appConfirm({ title: '刪除此檢查紀錄？', body: '僅未判定的紀錄可刪除；已判定的證據請以「修訂」更正。', danger: true, confirmLabel: '刪除' }))) return
     const res = await onDelete(r.id)
-    if (res?.error) setMsg(res.error.message)
+    if (res?.error) setMsg(res.error.message, 'error')
   }
 
   let lastGroup = null
   return (
     <Card title={`自主檢查表（${chains.length}）`} action={
-      canEdit && <Button variant="secondary" onClick={() => { if (open) closeForm(); else setOpen(true); setMsg('') }}>{open ? '取消' : '＋ 新增檢查'}</Button>
+      canEdit && <Button variant="secondary" onClick={() => { if (open) closeForm(); else setOpen(true); setMsg('') }}>{open ? '取消' : <><MSym name="add" size={16} />新增檢查</>}</Button>
     }>
-      {msg && <p className={`text-sm mb-3 ${msg.includes('不合格') || msg.includes('拒絕') || msg.includes('不可') ? 'text-[var(--accent-text)]' : 'text-[var(--green-text)]'}`}>{msg}</p>}
+      {msg && <p className={`text-sm mb-3 ${msg.tone === 'error' ? 'text-[var(--red-text)]' : msg.tone === 'warn' ? 'text-[var(--amber-text)]' : 'text-[var(--green-text)]'}`}>{msg.text}</p>}
 
       {open && template && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
@@ -472,23 +466,21 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
               {revising ? (
                 <span className="text-sm px-2.5 py-1.5 inline-block">{template.title}</span>
               ) : (
-                // 表單區(非表格)加高安全:原生 select 在手機尤其需要 44px
-                <select value={tplId} onChange={(e) => { setTplId(e.target.value); setValues({}) }}
-                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-md:min-h-11">
+                <Select value={tplId} onChange={(e) => { setTplId(e.target.value); setValues({}) }}>
                   {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-                </select>
+                </Select>
               )}
             </Field>
-            <Field label="檢查日期"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-md:min-h-11" /></Field>
-            <Field label="檢查位置"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="如 4F 版牆" className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-36 max-md:min-h-11" /></Field>
+            <Field label="檢查日期"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+            <Field label="檢查位置"><Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="如 4F 版牆" className="!w-36" /></Field>
             <div className="w-72"><Field label="對應工項（選填）">
               <WorkItemPicker leaves={leaves} value={wiKey} label={wiLabel}
                 onPick={(k, l) => { setWiKey(k || ''); setWiLabel(l) }} />
             </Field></div>
             {revising && (
               <Field label="更正原因（必填）">
-                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="如 坍度登載錯誤，依取樣紀錄更正"
-                  className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] w-72 max-md:min-h-11" />
+                <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="如 坍度登載錯誤，依取樣紀錄更正"
+                  className="!w-72" />
               </Field>
             )}
           </div>
@@ -496,12 +488,13 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[560px]">
               <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
-                  <th className="text-left font-medium py-1.5 w-14">項次</th>
-                  <th className="text-left font-medium">檢查項目</th>
-                  <th className="text-left font-medium px-2">檢查標準</th>
-                  <th className="text-right font-medium px-2 w-36">實測值</th>
-                  <th className="text-center font-medium w-12">判定</th>
+                {/* th 字型層走 THEAD_CLS 單一真相(掛在 tr 由 th 繼承),對齊/內距各表自決 */}
+                <tr className={`${THEAD_CLS} border-b border-[var(--border)]`}>
+                  <th className="text-left py-1.5 w-14">項次</th>
+                  <th className="text-left">檢查項目</th>
+                  <th className="text-left px-2">檢查標準</th>
+                  <th className="text-right px-2 w-36">實測值</th>
+                  <th className="text-center w-12">判定</th>
                 </tr>
               </thead>
               <tbody>
@@ -513,7 +506,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                       <tr key={`g-${it.group}`}><td colSpan={5} className="pt-2 pb-1 text-[11px] font-semibold tracking-[0.08em] text-[var(--text-3)]">{it.group}</td></tr>
                     ),
                     <tr key={it.no} className="border-b border-[var(--border-2)]">
-                      <td className="py-1.5 text-xs text-[var(--text-3)] tabular-nums">{it.no}</td>
+                      <td className="py-1.5 text-xs text-[var(--text-3)] num">{it.no}</td>
                       <td className="py-1.5 pr-2">{it.item}</td>
                       <td className="py-1.5 px-2 text-xs text-[var(--text-2)]">{it.standard}</td>
                       <td className="py-1.5 px-2 text-right">
@@ -539,7 +532,8 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
             </table>
           </div>
           <div className="flex items-center gap-3">
-            <Button onClick={save} disabled={saving || (revising && !reason.trim())}>{saving ? '存檔中…' : revising ? `存檔為 Rev.${(revising.rev || 0) + 1} 並重新判定` : '存檔並判定'}</Button>
+            {/* busy prop:送出中禁用+旋轉圖示由 Button 統一,不再用文字切換載入態 */}
+            <Button onClick={save} busy={saving} disabled={revising && !reason.trim()}>{revising ? `存檔為 Rev.${(revising.rev || 0) + 1} 並重新判定` : '存檔並判定'}</Button>
             {revising && !reason.trim() && <span className="text-xs text-[var(--text-3)]">請先填寫更正原因</span>}
             {live?.overall && (
               <Badge color={live.overall === '合格' ? 'green' : 'red'}>目前判定：{live.overall}{live.failed.length ? `（${live.failed.length} 項不合格）` : ''}</Badge>
@@ -560,7 +554,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
               <div key={rootId} className="border-b border-[var(--border-2)] pb-1.5">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <div className="min-w-0">
-                    <span className="tabular-nums text-[var(--text-3)] text-xs mr-2">{r.check_date}</span>
+                    <span className="num text-[var(--text-3)] text-xs mr-2">{r.check_date}</span>
                     <span className="text-[var(--text)]">{tpl?.title || '（範本已刪除）'}</span>
                     {(r.rev || 0) > 0 && <Badge color="blue">Rev.{r.rev}</Badge>}
                     {r.location && <span className="text-xs text-[var(--text-3)] ml-2">{r.location}</span>}
@@ -569,26 +563,27 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge color={r.overall === '合格' ? 'green' : r.overall === '不合格' ? 'red' : 'slate'}>{r.overall || '未判定'}</Badge>
                     {attachedInsp && (
-                      <span className="text-xs text-[var(--text-3)]" title={`已檢附於查驗:${attachedInsp.title}`}>已附查驗</span>
+                      <span title={`已檢附於查驗:${attachedInsp.title}`}><Badge color="slate">已附查驗</Badge></span>
                     )}
-                    {/* 一級交二級:自檢合格才有資格提查驗;已檢附過就不再給(避免重複送) */}
+                    {/* 一級交二級:自檢合格才有資格提查驗;已檢附過就不再給(避免重複送)。
+                        列動作=第三級文字鈕:一律 --blue-text(--blue 只作底色/邊框)+手機 44px */}
                     {onRequestInspection && r.overall === '合格' && !attachedInsp && (
                       <button onClick={() => onRequestInspection(r, tpl?.title || '', wiOf(r))}
                         title="以此檢查紀錄為附件,預填查驗申請(送出前可改)"
-                        className="text-[var(--blue)] hover:underline text-xs whitespace-nowrap">提出查驗申請</button>
+                        className="text-[var(--blue-text)] hover:underline text-xs whitespace-nowrap inline-flex items-center max-md:min-h-11">提出查驗申請</button>
                     )}
                     <button onClick={() => navigate(`/quality/checklist-print?id=${r.id}`)} title="列印自主檢查表"
-                      className="text-[var(--blue)] hover:underline text-xs inline-flex items-center gap-1"><MSym name="print" size={13} />列印</button>
+                      className="text-[var(--blue-text)] hover:underline text-xs inline-flex items-center gap-1 max-md:min-h-11"><MSym name="print" size={13} />列印</button>
                     {canEdit && tpl && (
                       <button onClick={() => startRevise(r)} title="以修訂版次更正（不覆寫舊證據）"
-                        className="text-[var(--blue)] hover:underline text-xs">修訂</button>
+                        className="text-[var(--blue-text)] hover:underline text-xs inline-flex items-center max-md:min-h-11">修訂</button>
                     )}
                     {history.length > 0 && (
                       <button onClick={() => setHistoryOf(historyOf === rootId ? null : rootId)}
-                        className="text-[var(--text-3)] hover:underline text-xs">歷次 {history.length}</button>
+                        className="text-[var(--blue-text)] hover:underline text-xs inline-flex items-center max-md:min-h-11">歷次 {history.length}</button>
                     )}
                     {canEdit && !r.overall && (
-                      <button onClick={() => del(r)} aria-label="刪除未判定的檢查紀錄" className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2">✕</button>
+                      <button onClick={() => del(r)} aria-label="刪除未判定的檢查紀錄" className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2"><MSym name="close" size={16} /></button>
                     )}
                   </div>
                 </div>
@@ -601,13 +596,13 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                 {historyOf === rootId && history.map((h) => (
                   <div key={h.id} className="flex items-center gap-2 text-xs text-[var(--text-3)] mt-1 pl-4">
                     <span>Rev.{h.rev || 0}</span>
-                    <span className="tabular-nums">{h.check_date}</span>
+                    <span className="num">{h.check_date}</span>
                     <Badge color="slate">{h.overall || '未判定'}</Badge>
                     <span>已由新版取代</span>
                     {/* 更正原因是稽核性說明,這一列沒有下鑽入口 → 至少要能 hover 看全文 */}
                     {(h.rev || 0) > 0 && h.revision_reason && <span className="truncate" title={h.revision_reason}>（{h.revision_reason}）</span>}
                     <button onClick={() => navigate(`/quality/checklist-print?id=${h.id}`)}
-                      className="text-[var(--blue)] hover:underline shrink-0">列印</button>
+                      className="text-[var(--blue-text)] hover:underline shrink-0">列印</button>
                   </div>
                 ))}
               </div>
@@ -643,22 +638,23 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
   const dueCell = (due, filled) => {
     if (!due) return null
     const overdue = !filled && due < today
-    return <span className={`tabular-nums text-xs ${overdue ? 'text-[var(--accent-text)] font-semibold' : 'text-[var(--text-3)]'}`}>{due}{overdue ? ' 逾期' : ''}</span>
+    // 逾期=五語意的 red(全站 Dashboard/Alerts 同語意);--accent 不再當警示色
+    return <span className={`num text-xs ${overdue ? 'text-[var(--red-text)] font-semibold' : 'text-[var(--text-3)]'}`}>{due}{overdue ? ' 逾期' : ''}</span>
   }
 
   return (
     <Card title={`取樣試驗（${samples.length}）`} action={
       canEdit && <div className="flex items-center gap-2">
         <Button variant="secondary" onClick={gen} disabled={busy}><MSym name="bolt" size={14} />從施工日誌帶入</Button>
-        <Button variant="secondary" onClick={() => setAddOpen((o) => !o)}>{addOpen ? '取消' : '＋ 手動新增'}</Button>
+        <Button variant="secondary" onClick={() => setAddOpen((o) => !o)}>{addOpen ? '取消' : <><MSym name="add" size={16} />手動新增</>}</Button>
       </div>
     }>
       {msg && <p className="text-sm mb-3 text-[var(--text-2)]">{msg}</p>}
       {addOpen && (
         <div className="bg-[var(--surface-2)] rounded-lg p-3 mb-4 flex flex-wrap items-end gap-3">
-          <Field label="取樣(澆置)日"><input type="date" value={manual.sampled_date} onChange={(e) => setManual({ ...manual, sampled_date: e.target.value })} className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-md:min-h-11" /></Field>
-          <Field label="fc′ (kgf/cm²)"><input type="number" inputMode="decimal" value={manual.fc} onChange={(e) => setManual({ ...manual, fc: Number(e.target.value) || null })} className="w-28 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] text-right tabular-nums max-md:min-h-11" /></Field>
-          <Field label="位置"><input value={manual.location} onChange={(e) => setManual({ ...manual, location: e.target.value })} className="w-36 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-sm bg-[var(--surface)] max-md:min-h-11" /></Field>
+          <Field label="取樣(澆置)日"><Input type="date" value={manual.sampled_date} onChange={(e) => setManual({ ...manual, sampled_date: e.target.value })} /></Field>
+          <Field label="fc′ (kgf/cm²)"><Input type="number" inputMode="decimal" value={manual.fc} onChange={(e) => setManual({ ...manual, fc: Number(e.target.value) || null })} className="!w-28 text-right num" /></Field>
+          <Field label="位置"><Input value={manual.location} onChange={(e) => setManual({ ...manual, location: e.target.value })} className="!w-36" /></Field>
           <Button onClick={addManual} disabled={busy}>建立試體組</Button>
         </div>
       )}
@@ -669,22 +665,23 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
-                <th className="text-left font-medium py-1.5">試體編號</th>
-                <th className="text-left font-medium px-2">取樣日</th>
-                <th className="text-right font-medium px-2">fc′</th>
-                <th className="text-right font-medium px-2">7天(參考)</th>
-                <th className="text-right font-medium px-2">28天各試體 kgf/cm²</th>
-                <th className="text-center font-medium px-2">判定</th>
+              {/* th 字型層走 THEAD_CLS 單一真相(掛在 tr 由 th 繼承),對齊/內距各表自決 */}
+              <tr className={`${THEAD_CLS} border-b border-[var(--border)]`}>
+                <th className="text-left py-1.5">試體編號</th>
+                <th className="text-left px-2">取樣日</th>
+                <th className="text-right px-2">fc′</th>
+                <th className="text-right px-2">7天(參考)</th>
+                <th className="text-right px-2">28天各試體 kgf/cm²</th>
+                <th className="text-center px-2">判定</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {samples.map((s) => (
-                <tr key={s.id} className="border-b border-[var(--border-2)]">
-                  <td className="py-1.5 tabular-nums text-xs">{s.sample_no}<div className="text-[10px] text-[var(--text-3)]">{s.location}</div></td>
-                  <td className="px-2 tabular-nums text-xs text-[var(--text-2)]">{s.sampled_date}</td>
-                  <td className="px-2 text-right tabular-nums">{s.fc || '—'}</td>
+                <tr key={s.id} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
+                  <td className="py-1.5 num text-xs">{s.sample_no}<div className="text-[10px] text-[var(--text-3)]">{s.location}</div></td>
+                  <td className="px-2 num text-xs text-[var(--text-2)]">{s.sampled_date}</td>
+                  <td className="px-2 text-right num whitespace-nowrap">{s.fc || '—'}</td>
                   <td className="px-2 text-right">
                     {/* 表格內輸入:只加 max-sm:py-2(~38px),不加 min-h 以免試體表列高翻倍 */}
                     <input type="number" step="any" inputMode="decimal" defaultValue={s.d7_value ?? ''} placeholder="值"
@@ -711,7 +708,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                   </td>
                   {/* 已判定試體=品質證據,不提供刪除(DB 另有 guard) */}
                   <td className="text-right pl-2">{s.status === '待試驗' && (
-                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除試體 ${s.sample_no}`}>✕</button>
+                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除試體 ${s.sample_no}`}><MSym name="close" size={16} /></button>
                   )}</td>
                 </tr>
               ))}
@@ -745,18 +742,18 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
 
   return (
     <Card title={`觀察事項（待處理 ${open}）`} action={
-      canWrite && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', description: '', location: '', assigned_to: 'contractor' })}>{form ? '取消' : '＋ 新增觀察'}</Button>
+      canWrite && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', description: '', location: '', assigned_to: 'contractor' })}>{form ? '取消' : <><MSym name="add" size={16} />新增觀察</>}</Button>
     }>
       {form && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
           <div className="grid md:grid-cols-2 gap-3">
-            <Field label="觀察主旨"><input className={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如 4F 東側樓梯開口未設護欄" /></Field>
-            <Field label="位置"><input className={input} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="如 4F 東側" /></Field>
+            <Field label="觀察主旨"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如 4F 東側樓梯開口未設護欄" /></Field>
+            <Field label="位置"><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="如 4F 東側" /></Field>
           </div>
-          <Field label="說明"><textarea rows={2} className={input} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="現場觀察到、提醒改善的事項（尚未到開立缺失的程度）" /></Field>
+          <Field label="說明"><Textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="現場觀察到、提醒改善的事項（尚未到開立缺失的程度）" /></Field>
           <div className="flex items-center gap-3 flex-wrap">
             <Button onClick={submit} disabled={busy || !form.title}>新增觀察</Button>
-            <Button variant="secondary" onClick={() => setMarkupOpen(true)}>🖍 圖面/照片標註{form.markup_data ? '（已附）' : ''}</Button>
+            <Button variant="secondary" onClick={() => setMarkupOpen(true)}><MSym name="draw" size={16} />圖面/照片標註{form.markup_data ? '（已附）' : ''}</Button>
             {form.markup_data && <MarkupThumb src={form.markup_data} />}
           </div>
           {markupOpen && <MarkupEditor title="把觀察位置匡起來" initialImage={form.markup_data}
@@ -764,7 +761,8 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
         </div>
       )}
 
-      {err && <p className="text-xs text-[var(--red-text)] mb-2">{err}</p>}
+      {/* 區塊層錯誤統一走 ErrorBanner,不再自寫紅字段落 */}
+      <ErrorBanner msg={err} onClose={() => setErr('')} className="mb-2" />
       {observations.length === 0 ? <Empty>尚無觀察事項。現場看到「不對但還沒到缺失」的狀況先記為觀察，處理掉或必要時一鍵升級為缺失。</Empty> : (
         <div className="space-y-2">
           {observations.map((o) => (
@@ -781,7 +779,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
                     <Button variant="secondary" disabled={busy} onClick={() => run('標記已處理', () => onUpdate(o.id, { status: '已處理' }))}>標記已處理</Button>
                     <Button variant="outline" disabled={busy} onClick={async () => { if (await appConfirm({ title: '升級為正式缺失？', body: '將自動開立缺失單追蹤改善。', confirmLabel: '升級' })) run('升級為缺失', () => onEscalate(o)) }}>升級為缺失</Button>
                   </>}
-                  <button disabled={busy} onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) run('刪除觀察', () => onDelete(o.id)) }} aria-label={`刪除觀察 ${o.title}`} className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs p-2 -m-2">✕</button>
+                  <button disabled={busy} onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) run('刪除觀察', () => onDelete(o.id)) }} aria-label={`刪除觀察 ${o.title}`} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2"><MSym name="close" size={16} /></button>
                 </div>
               )}
             </div>

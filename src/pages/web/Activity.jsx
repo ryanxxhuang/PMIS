@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Badge, Button, Card, Empty, Input, PageHeader, Select, SkeletonList, TablePager } from '../../components/ui.jsx'
+import { Badge, Button, Card, Empty, ErrorBanner, Input, PageHeader, Select, SkeletonList, TablePager } from '../../components/ui.jsx'
 import {
   AUDIT_ENTITY_LABELS, AUDIT_EVENT_LABELS, auditActorDisplay, auditEntityLabel,
   auditEventLabel, auditEventSubject, normalizeAuditFilters,
@@ -84,7 +84,7 @@ export default function Activity() {
     return (
       <div className="space-y-5">
         <PageHeader title="專案活動紀錄" tagline="Audit History" subtitle="伺服器產生的持久、不可竄改專案事件" />
-        <Card><Empty>範例模式不建立權威活動紀錄；請在真實專案中查看。</Empty></Card>
+        <Card bodyClass="p-0"><Empty>範例模式不建立權威活動紀錄；請在真實專案中查看。</Empty></Card>
       </div>
     )
   }
@@ -96,7 +96,7 @@ export default function Activity() {
         meta={[{ k: '事件數', v: String(total) }]}
         action={<Button variant="outline" onClick={loadEvents} disabled={loading}><MSym name="refresh" size={14} />重新整理</Button>} />
 
-      <Card title="篩選" bodyClass="p-4">
+      <Card title="篩選">
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <Input list="activity-actors" value={filters.actorUserId}
@@ -120,14 +120,17 @@ export default function Activity() {
         </div>
       </Card>
 
-      <Card title={`活動紀錄（第 ${page + 1} 頁）`} bodyClass="p-0" aria-busy={loading ? 'true' : undefined}>
-        {/* 卡片本體是 p-0(清單自帶 px-4),骨架屏得自己補回同一組內距 */}
-        {loading ? <div className="px-4 py-3.5"><SkeletonList rows={3} /></div> : error ? <Empty>{error}</Empty> : events.length === 0 ? (
+      {/* 頁碼交給 TablePager 單一真相:卡頭再寫一次「第 N 頁」等於同一狀態兩份來源 */}
+      <Card title="活動紀錄" bodyClass="p-0" aria-busy={loading ? 'true' : undefined}>
+        {/* 卡片本體是 p-0(清單自帶 px-5),骨架屏與錯誤橫幅得自己補回同一組內距 */}
+        {loading ? <div className="px-5 py-3.5"><SkeletonList rows={3} /></div>
+          : error ? <div className="p-5"><ErrorBanner msg={error} onRetry={loadEvents} /></div>
+          : events.length === 0 ? (
           <Empty>目前沒有符合條件的活動紀錄。</Empty>
         ) : (
           <ul className="divide-y divide-[var(--border-2)]">
             {events.map((event) => (
-              <li key={event.id} className="flex items-start gap-3 px-4 py-3.5">
+              <li key={event.id} className="flex items-start gap-3 px-5 py-3.5">
                 <span className="w-9 h-9 rounded-lg grid place-items-center bg-[var(--blue-tint)] text-[var(--blue-text)] shrink-0">
                   <MSym name="history" size={17} />
                 </span>

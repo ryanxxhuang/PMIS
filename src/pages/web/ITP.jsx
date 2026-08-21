@@ -7,6 +7,8 @@ import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
+// 工項挑選器與品質缺失共用同一份(原本這裡有一份輕量複本,浮層陰影/命中區的修正只落在其中一邊)
+import { WorkItemPicker } from '../../components/DefectTracker.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { POINT_TYPES, itpStatus, itpActivity, itpAlerts } from '../../lib/itp.js'
 
@@ -37,9 +39,16 @@ export default function ITP() {
   }, [workItems])
 
   if (!workItems) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
-  // 停留點掛在標單工項上(slice 寫入走 dbMode):標單未匯入前擋牆,避免寫進記憶體假成功
+  // 停留點掛在標單工項上(slice 寫入走 dbMode):標單未匯入前擋牆,避免寫進記憶體假成功。
+  // 早退也保留 PageHeader:頁首與工作面分頁不該因為「標單還沒匯入」整組消失
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
-    return <Card title="檢驗停留點"><Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML，停留點才能掛在工項上。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        <PageHeader title="檢驗停留點" tagline="ITP"
+          subtitle="H＝停留點（監造未查驗不得續作）、W＝見證點、R＝文審點。施作中未叫驗的 H 點會亮紅並進提醒中心。" />
+        <Card title="檢驗停留點" bodyClass="p-0"><Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML，停留點才能掛在工項上。</Empty></Card>
+      </div>
+    )
   }
 
   const counts = { H: 0, W: 0, R: 0 }
@@ -67,8 +76,10 @@ export default function ITP() {
         <Card bodyClass="p-0">
           <ul className="divide-y divide-[var(--border-2)]">
             {alerts.map((a) => (
-              <li key={a.point.id} className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
+              // 嚴重度不得只靠文字顏色(W8-5):色票標籤與顏色並存,列內距對齊卡頭 px-5
+              <li key={a.point.id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-5 py-2.5 text-sm">
                 <MSym name="warning" size={15} className={a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--amber-text)]'} />
+                <Badge color={a.level === 'overdue' ? 'red' : 'amber'}>{a.level === 'overdue' ? '逾期' : '將到期'}</Badge>
                 <span className={`font-medium ${a.level === 'overdue' ? 'text-[var(--red-text)]' : 'text-[var(--text)]'}`}>{a.title}</span>
                 <span className="text-[var(--text-3)] text-xs">{a.meta}</span>
               </li>
@@ -79,10 +90,10 @@ export default function ITP() {
 
       <Card
         title={`停留點清單（${inspectionPoints.length}）`}
-        bodyClass={inspectionPoints.length ? 'p-0' : 'p-6'}
+        bodyClass="p-0"
         action={can.approve && (
           <Button variant="secondary" onClick={() => setForm(form ? null : { point_type: 'H', title: '', acceptance_criteria: '', frequency: '', source_clause: '', work_item_key: '', work_item_label: '' })}>
-            {form ? '取消' : '＋ 建立停留點'}
+            {form ? '取消' : <><MSym name="add" size={16} />建立停留點</>}
           </Button>
         )}
       >
@@ -92,7 +103,7 @@ export default function ITP() {
               {Object.entries(POINT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label} — {v.desc}</option>)}
             </Select>
             <Input placeholder="停留點名稱（如：柱牆鋼筋查驗（每層））" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
-            <PointItemPicker leaves={leaves} value={form.work_item_key} label={form.work_item_label}
+            <WorkItemPicker leaves={leaves} value={form.work_item_key} label={form.work_item_label}
               onPick={(k, l) => setForm((f) => ({ ...f, work_item_key: k || '', work_item_label: l }))} />
             <Input placeholder="允收標準（如：間距/搭接長度符合圖說）" value={form.acceptance_criteria} onChange={(e) => setForm((f) => ({ ...f, acceptance_criteria: e.target.value }))} />
             <Input placeholder="頻率（每層／每批／每次澆置前…）" value={form.frequency} onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))} />
@@ -116,12 +127,14 @@ export default function ITP() {
               const sm = STATUS_META[st.key]
               const hot = st.key === 'pending' && active && p.point_type === 'H'
               return (
-                <li key={p.id} className={`px-4 py-3 flex flex-wrap items-start gap-x-3 gap-y-1.5 ${hot ? 'bg-[var(--red-tint)]/40' : ''}`}>
+                // 底色走 --red-tint 原值(對 token 加 /40 是自製色階,深色模式會失真);
+                // hover 底色與全站清單列同一條規則
+                <li key={p.id} className={`px-5 py-3 flex flex-wrap items-start gap-x-3 gap-y-1.5 ${hot ? 'bg-[var(--red-tint)]' : 'hover:bg-[var(--surface-2)]'}`}>
                   <Badge color={TYPE_BADGE[p.point_type]} className="mt-0.5 shrink-0">{p.point_type}</Badge>
                   <div className="flex-1 min-w-[220px]">
                     <div className="text-sm font-medium text-[var(--text)]">
                       {p.title}
-                      {hot && <span className="ml-2 text-[11px] font-semibold text-[var(--red-text)]">施作中未叫驗</span>}
+                      {hot && <Badge color="red" className="ml-2">施作中未叫驗</Badge>}
                     </div>
                     <div className="text-[11px] text-[var(--text-3)] mt-0.5 space-x-2">
                       {p.work_item_no && <span className="num">{p.work_item_no} {p.work_item_desc}</span>}
@@ -132,18 +145,21 @@ export default function ITP() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge color={sm.color}><MSym name={sm.icon} size={12} /> {st.label}</Badge>
+                    {/* 列內動作固定次級:緊急性由列底色與「施作中未叫驗」色票承擔,
+                        同一份清單不因逐列狀態長出兩種按鈕階級 */}
                     {st.key === 'pending' && can.submit && p.point_type !== 'R' && (
-                      <Button size="sm" variant={hot ? 'primary' : 'outline'} onClick={async () => { setErrMsg(''); setBusy(true); const { error } = await requestInspectionForPoint(p); setBusy(false); if (error) setErrMsg(`查驗申請未送出:${error.message}`) }} disabled={busy}>
+                      <Button size="sm" variant="secondary" onClick={async () => { setErrMsg(''); setBusy(true); const { error } = await requestInspectionForPoint(p); setBusy(false); if (error) setErrMsg(`查驗申請未送出:${error.message}`) }} disabled={busy}>
                         申請查驗
                       </Button>
                     )}
                     {(st.key === 'requested' || st.key === 'failed') && (
-                      <Link to="/quality" className="text-xs text-[var(--blue-text)] hover:underline">查驗紀錄 →</Link>
+                      <Link to="/quality" className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11">查驗紀錄<MSym name="chevron_right" size={13} /></Link>
                     )}
                     {can.approve && (
+                      // p-2 -m-2 只擴命中區、視覺與列高不變(同 DefectTracker/ChangeOrders 的刪除鈕)
                       <button onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspectionPoint(p.id); if (error) setErrMsg(`刪除失敗:${error.message}`) } }}
                         aria-label={`刪除停留點 ${p.title}`}
-                        className="text-[var(--text-3)] hover:text-[var(--red-text)]">✕</button>
+                        className="inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 text-[var(--text-3)] hover:text-[var(--red-text)]"><MSym name="close" size={16} /></button>
                     )}
                   </div>
                 </li>
@@ -158,35 +174,6 @@ export default function ITP() {
         停留點來源通常是「品質計畫」的檢驗停留點清單與施工規範的檢驗規定；
         之後可用 AI 從上傳的規範自動抽出建議停留點（同契約解析模式），由監造審核後生效。
       </p>
-    </div>
-  )
-}
-
-// 工項搜尋選擇器(與品質頁同 pattern 的輕量版)
-function PointItemPicker({ leaves, value, label, onPick }) {
-  const [q, setQ] = useState('')
-  const results = q.trim() ? leaves.filter((it) => it.description.includes(q.trim()) || (it.item_no || '').includes(q.trim())).slice(0, 12) : []
-  if (value) {
-    return (
-      <div className="flex items-center gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface-2)]">
-        <span className="truncate flex-1">{label}</span>
-        <button onClick={() => onPick(null, '')} aria-label="清除已選工項" className="text-[var(--text-3)] hover:text-[var(--red-text)] text-xs">✕</button>
-      </div>
-    )
-  }
-  return (
-    <div className="relative">
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋並選擇工項（可不填）…" />
-      {results.length > 0 && (
-        <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-56 overflow-auto enter-menu">
-          {results.map((it) => (
-            <button key={it.item_key} onClick={() => { onPick(it.item_key, `${it.item_no} ${it.description}`); setQ('') }}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] truncate">
-              <span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

@@ -1,19 +1,21 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { MSym } from '../../components/icons.jsx'
+import { Card, Stat, Empty, Badge, Input, PageHeader, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
 
-// 依計畫起迄 + 完成% 推導狀態
+// 依計畫起迄 + 完成% 推導狀態。tone 回 Badge 的 color key(語意),
+// 不回原始色字串——顏色的唯一真相在 Badge 的五語意色票,頁面不 inline style 上色
 function deriveState(sch, pct) {
-  if (pct >= 99.99) return { key: 'done', label: '已完成', color: 'var(--green-text)' }
+  if (pct >= 99.99) return { key: 'done', label: '已完成', tone: 'green' }
   const t = today0(), end = parseLocalDate(sch.planned_finish), start = parseLocalDate(sch.planned_start)
-  if (end && t > end) return { key: 'late', label: '落後', color: 'var(--red-text)' }
-  if (start && t >= start) return { key: 'doing', label: '進行中', color: 'var(--blue)' }
-  if (start && t < start) return { key: 'pending', label: '未開始', color: 'var(--text-3)' }
-  return { key: 'noplan', label: '未排定', color: 'var(--text-3)' }
+  if (end && t > end) return { key: 'late', label: '落後', tone: 'red' }
+  if (start && t >= start) return { key: 'doing', label: '進行中', tone: 'blue' }
+  if (start && t < start) return { key: 'pending', label: '未開始', tone: 'slate' }
+  return { key: 'noplan', label: '未排定', tone: 'slate' }
 }
 
 export default function Schedule() {
@@ -65,9 +67,7 @@ export default function Schedule() {
 
   return (
     <div className="space-y-5">
-      <div className="min-w-0">
-        <PageHeader title="逐工項排程" tagline="每項計畫起迄・落後追蹤" subtitle="對關鍵工項設定計畫起迄，依最新估驗完成數量自動判斷落後" />
-      </div>
+      <PageHeader title="逐工項排程" tagline="每項計畫起迄・落後追蹤" subtitle="對關鍵工項設定計畫起迄，依最新估驗完成數量自動判斷落後" />
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
@@ -80,13 +80,12 @@ export default function Schedule() {
 
       <Card title="加入工項排程">
         <div className="relative">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項加入排程…"
-            className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:border-[var(--blue)] focus:outline-none" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項加入排程…" />
           {results.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-lg max-h-64 overflow-auto enter-menu">
+            <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg [box-shadow:var(--shadow-overlay)] max-h-64 overflow-auto enter-menu">
               {results.map((it) => (
                 <button key={it.item_key} onClick={() => { onSet(it.item_key, { planned_start: null, planned_finish: null }); setSearch('') }}
-                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] flex justify-between gap-2">
+                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] flex items-center justify-between gap-2 max-md:min-h-11">
                   <span className="truncate"><span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}</span>
                   <span className="text-[var(--text-3)] text-xs shrink-0">{it.unit}</span>
                 </button>
@@ -97,26 +96,27 @@ export default function Schedule() {
         <p className="text-xs text-[var(--text-3)] mt-2">建議只排關鍵 / 大宗工項。狀態：今天超過「計畫迄」且未完成 → 落後。完成%取自最新一期估驗。</p>
       </Card>
 
-      <Card title={`排程清單（${rows.length}）`} action={rows.length > 0 && (
+      <Card title={`排程清單（${rows.length}）`} bodyClass="p-0" action={rows.length > 0 && (
         <button onClick={() => exportCsv(`逐工項排程_${stamp()}`, rows, [
           { label: '項次', get: (r) => r.it.item_no || '' }, { label: '工項', get: (r) => r.it.description || r.key },
           { label: '單位', get: (r) => r.it.unit || '' }, { label: '計畫起', get: (r) => r.sch.planned_start || '' },
           { label: '計畫迄', get: (r) => r.sch.planned_finish || '' }, { label: '完成%', get: (r) => r.pct.toFixed(1) },
           { label: '狀態', get: (r) => r.state.label },
-        ])} className="text-sm font-medium text-[var(--blue)] hover:underline">⬇ CSV</button>
+        ])} className="inline-flex items-center gap-1 text-sm font-medium text-[var(--blue-text)] hover:underline max-md:min-h-11"><MSym name="download" size={16} />CSV</button>
       )}>
         {rows.length === 0 ? (
           <Empty>尚未排程任何工項。用上方搜尋把關鍵工項加進來，設定計畫起迄。</Empty>
         ) : (
-          <div className="overflow-x-auto -mx-4 -my-4">
+          <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[720px]">
               <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
-                  <th className="text-left font-medium py-2 pl-5">工項</th>
-                  <th className="text-left font-medium px-2">計畫起</th>
-                  <th className="text-left font-medium px-2">計畫迄</th>
-                  <th className="text-right font-medium px-2">完成%</th>
-                  <th className="text-left font-medium px-2">狀態</th>
+                {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決) */}
+                <tr className="border-b border-[var(--border)]">
+                  <th className={`${THEAD_CLS} text-left py-2 pl-5`}>工項</th>
+                  <th className={`${THEAD_CLS} text-left px-2`}>計畫起</th>
+                  <th className={`${THEAD_CLS} text-left px-2`}>計畫迄</th>
+                  <th className={`${THEAD_CLS} text-right px-2`}>完成%</th>
+                  <th className={`${THEAD_CLS} text-left px-2`}>狀態</th>
                   <th className="px-2 pr-5"></th>
                 </tr>
               </thead>
@@ -127,21 +127,21 @@ export default function Schedule() {
                     <td className="px-2">
                       {/* 只送變動的單欄;合併(起+訖)由 setItemSchedule 以 ref 累積+debounce
                           處理,同 tick 連發也會合併成單次正確寫入(R4 P1-01) */}
-                      {/* W8-5:表格內輸入只提到 ~38px(max-sm:py-2),不加 min-h——加了整張表列高會翻倍 */}
+                      {/* W8-5:表格內輸入只提到 ~38px(max-md:py-2,斷點與手機層一致),不加 min-h——加了整張表列高會翻倍 */}
                       <input type="date" value={r.sch.planned_start || ''} onChange={(e) => onSet(r.key, { planned_start: e.target.value || null })}
                         aria-label={`${r.it.description || r.key} 計畫開始日`}
-                        className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs max-sm:py-2" />
+                        className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs" />
                     </td>
                     <td className="px-2">
                       <input type="date" value={r.sch.planned_finish || ''} onChange={(e) => onSet(r.key, { planned_finish: e.target.value || null })}
                         aria-label={`${r.it.description || r.key} 計畫完成日`}
-                        className="border border-[var(--border)] rounded px-1.5 py-0.5 text-xs max-sm:py-2" />
+                        className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs" />
                     </td>
                     <td className="px-2 text-right tabular-nums">{r.pct.toFixed(1)}%</td>
-                    <td className="px-2"><span className="text-xs font-medium" style={{ color: r.state.color }}>{r.state.label}</span></td>
+                    <td className="px-2"><Badge color={r.state.tone}>{r.state.label}</Badge></td>
                     <td className="px-2 pr-5 text-right">
                       <button onClick={() => removeItemSchedule(r.key)} aria-label={`移除 ${r.it.item_no || r.key} 的排程`}
-                        className="text-[var(--text-3)] hover:text-[var(--red-text)] text-sm p-2 -m-2">✕</button>
+                        className="p-2 -m-2 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--red-text)] max-md:min-h-11 max-md:min-w-11"><MSym name="close" size={16} /></button>
                     </td>
                   </tr>
                 ))}
