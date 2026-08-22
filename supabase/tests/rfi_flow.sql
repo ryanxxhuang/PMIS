@@ -2,14 +2,15 @@
 -- 執行方式:本地 supabase(colima)+容器內 psql,整份在交易內執行並 rollback。
 -- 對應 migration 20260711000000_baseline.sql(rfis 表/RLS/rfis_guard)、
 --   20260712001300_formal_mode.sql(rfis_guard 現行定義:admin_override)、
---   20260712001600_evidence_guards.sql(rfis_delete_guard)。
+--   20260712001600_evidence_guards.sql(rfis_delete_guard)、
+--   20260822000200_rfi_answered_state_guard.sql(兩步繞過修補:洗狀態→刪除)。
 -- 為什麼獨立成檔:RFI 是唯一「guard 只被 formal_mode 的 admin 例外測過」的業務鏈,
 --   核心風險(廠商偽造監造正式回覆)若因 my_org_type()/rfis_guard 改動而失守,
 --   既有測試不會發現;此檔把角色矩陣釘住。
 -- 專案開 formal_mode:排除 admin_override 干擾,單純測 org_type 的角色規則。
 begin;
 
-select plan(15);
+select plan(20);
 
 -- ── 結構:guard 掛著才有資格談規則 ───────────────────────────────────────────
 select has_trigger('public', 'rfis', 'rfis_guard', 'RFI 回覆 guard 掛上');
@@ -122,6 +123,45 @@ insert into public.rfis (id, project_id, rfi_no, title, status) values
    'RFI-F02', '誤發疑義', '待回覆');
 select lives_ok($$ delete from public.rfis where id = '36000000-0000-0000-0000-000000000002' $$,
   '廠商可撤回尚未回覆的疑義');
+
+-- ── 兩步繞過刪除防護:洗狀態→刪除,兩步各自都要擋(20260822000200) ─────────────
+-- 修補前:rfis_guard 放行「已回覆/已結案→待回覆」(answer 不動),rfis_delete_guard
+-- 見待回覆即放行——廠商兩步就能刪掉監造正式回覆。此段把兩步各自釘死,
+-- 刻意不把任何一步寫成 lives_ok,避免固化漏洞。
+select pg_temp.become('cccccccc-cccc-cccc-cccc-ccccccccccc1');
+select throws_ok($$ update public.rfis set status = '待回覆'
+  where id = '36000000-0000-0000-0000-000000000001' $$, 'P0001', null,
+  '廠商不可把已結案洗回待回覆(繞過刪除防護的第一步)');
+
+insert into public.rfis (id, project_id, rfi_no, title, question, status) values
+  ('36000000-0000-0000-0000-000000000003','26000000-0000-0000-0000-000000000001',
+   'RFI-F03', '管溝回填級配疑義', '級配料源變更是否需重新送審', '待回覆');
+select pg_temp.become('cccccccc-cccc-cccc-cccc-ccccccccccc2');
+update public.rfis set answer = '依施工規範 02320,料源變更應重新送審', status = '已回覆'
+  where id = '36000000-0000-0000-0000-000000000003';
+
+select pg_temp.become('cccccccc-cccc-cccc-cccc-ccccccccccc1');
+select throws_ok($$ update public.rfis set status = '待回覆'
+  where id = '36000000-0000-0000-0000-000000000003' $$, 'P0001', null,
+  '廠商不可把已回覆洗回待回覆(繞過刪除防護的第一步)');
+
+-- 監造可退回狀態(重新研議);但回覆仍在,狀態洗白也擋不住 answer 判準
+select pg_temp.become('cccccccc-cccc-cccc-cccc-ccccccccccc2');
+select lives_ok($$ update public.rfis set status = '待回覆'
+  where id = '36000000-0000-0000-0000-000000000003' $$,
+  '監造可把已回覆退回待回覆(重新研議是監造的權)');
+select pg_temp.become('cccccccc-cccc-cccc-cccc-ccccccccccc1');
+select throws_ok($$ delete from public.rfis where id = '36000000-0000-0000-0000-000000000003' $$,
+  'P0001', null,
+  '狀態雖是待回覆,監造回覆仍在(answer 非空)就不可刪(第二步也擋)');
+
+-- 監造撤回回覆(answer 清空)後,廠商才回到可撤回的原點——防護不留死路
+select pg_temp.become('cccccccc-cccc-cccc-cccc-ccccccccccc2');
+update public.rfis set answer = null
+  where id = '36000000-0000-0000-0000-000000000003';
+select pg_temp.become('cccccccc-cccc-cccc-cccc-ccccccccccc1');
+select lives_ok($$ delete from public.rfis where id = '36000000-0000-0000-0000-000000000003' $$,
+  '監造撤回回覆後,廠商可撤回疑義');
 
 select * from finish();
 rollback;
