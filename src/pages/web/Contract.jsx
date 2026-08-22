@@ -497,9 +497,9 @@ export default function Contract() {
   const PANEL_HEAD = {
     busy: {
       icon: 'cloud_upload', fill: false, cls: 'text-[var(--blue-text)]',
-      // 「正在解析標單 XML」只屬於 XML 匯入(boqBusy);一般上傳在第一列建出來
-      // 之前也要報對事(W14 使用者實測:沒丟 XML 卻看到 XML 文案)
-      title: panelTotal ? `正在整理 ${panelTotal} 個檔案` : (boqBusy ? '正在解析標單 XML' : '正在準備上傳…'),
+      // 標頭統一報「正在準備上傳」(使用者裁示);XML 匯入的細節由面板內
+      // boqBusy 那一列顯示,不佔標頭
+      title: panelTotal ? `正在整理 ${panelTotal} 個檔案` : '正在準備上傳…',
       // W13 起上傳與 AI 分析的接力由「這個瀏覽器分頁」驅動:可以切到系統其他
       // 功能頁做事(處理會繼續,回來看進度),但關閉/重新整理分頁會中斷
       // (已完成的部分保留,重試會接續)
