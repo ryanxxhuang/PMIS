@@ -36,17 +36,20 @@ const MIN_PAGE_TEXT_LENGTH = 20
 // 輸出趕不上 120s 逾時、同尺寸重試三連發直接撞平台 wall-clock 被砍成殭屍 run。
 // 批次縮到單批一次呼叫穩定跑得完;涵蓋範圍改由「跨 request 續跑」承擔,
 // MAX_BATCHES 只再作為成本上限(超過照舊寫進 metadata 並回傳揭露 - never silently)。
-const BATCH_CHAR_BUDGET = 28_000
-const MAX_BATCHES = 12
+// W14 二修:實測 28k 單批要跑 ~95s,續跑 request 一撞到「API 閘道 150s 逾時」
+// (比 Edge 牆鐘 400s 更緊的真實上限)就 504。批再縮半:單批一次呼叫 30~60s
+// 內穩定跑完,不靠對半切救場;批數上限加倍維持同樣的涵蓋範圍。
+const BATCH_CHAR_BUDGET = 14_000
+const MAX_BATCHES = 24
 // 單一 request 的軟時間預算:超過且還有批次沒跑 → 進度落庫、標 awaiting_continue,
 // 回 in_progress 讓前端帶 continue_run_id 接力(取代舊的 stopped_early 提早完結)。
 // 抓保守——回應得穿過平台/代理的閒置逾時,一個 request 跑 1~2 批就好。
 const TIME_BUDGET_MS = 60_000
 // 單一 request 的絕對時間上限:每次 Claude 呼叫的 timeoutMs 依剩餘預算收斂,
-// (attempts × timeoutMs)最壞總長壓在這條線內,確保永遠低於平台 wall-clock
-// (約 400s)——「呼叫前檢查」擋不住已開始的 120s 呼叫,必須從 timeout 本身收斂
-// (W13 審查確認:未收斂時最壞 419~663s 照樣被砍成殭屍)。
-const REQUEST_ABS_CAP_MS = 350_000
+// (attempts × timeoutMs)最壞總長壓在這條線內。真實天花板不是 Edge 牆鐘
+// (400s)而是 **API 閘道的 150s request 逾時**(2026-08-22 實測 504)——
+// 回應必須在 150s 內送出,否則閘道切線、前端只拿到非 JSON 的 504。
+const REQUEST_ABS_CAP_MS = 140_000
 // 剩餘預算不足以打一次有意義的呼叫時,改走「批內暫停」——本批不計完成,
 // 掛 awaiting_continue 交下一個 request 重跑本批(同 run 同 label,落庫冪等)
 const MIN_CALL_TIMEOUT_MS = 20_000

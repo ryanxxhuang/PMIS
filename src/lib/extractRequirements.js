@@ -24,7 +24,16 @@ export async function functionErrorInfo(error) {
     if (body?.error) {
       return { status, message: body.error, runId: body.run_id || null, code: body.code || null }
     }
-  } catch { /* body 不是 JSON 或已被讀過:退回 generic 訊息 */ }
+  } catch { /* body 不是 JSON 或已被讀過:退回下方判讀 */ }
+  // 閘道逾時/上游斷線(502/504)回的是非 JSON 錯誤頁:進度其實已逐批落庫,
+  // 給人看得懂的指引,不要丟 generic 英文(2026-08-22 實測 504)
+  if (status === 502 || status === 504) {
+    return {
+      status,
+      message: '伺服器處理逾時,已完成的進度已保留;請稍後按「重試」接續',
+      runId: null, code: null,
+    }
+  }
   return { status, message: error?.message || '呼叫 AI 分析服務失敗', runId: null, code: null }
 }
 
