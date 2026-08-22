@@ -279,6 +279,9 @@ export interface ResumeState {
   // 沒有這個,每個 request 都會重演一次註定逾時的完整嘗試(活鎖+燒錢)
   pendingSplitBatch: number
   pendingSplitDepth: number
+  // 該批已完成的子批 label(如 b4a、b4ba):子批總時長可能超過單一 request
+  // 預算,續跑必須能跳過已完成的子批,否則每輪都從 q1 重跑、最後一塊永遠輪不到
+  pendingSplitDone: string[]
 }
 
 const nonNegInt = (v: unknown): number =>
@@ -303,6 +306,9 @@ export function readResumeState(meta: unknown): ResumeState {
     pendingSplitBatch: typeof m.pending_split_batch === 'number' && Number.isInteger(m.pending_split_batch)
       && m.pending_split_batch >= 0 ? m.pending_split_batch : -1,
     pendingSplitDepth: nonNegInt(m.pending_split_depth),
+    pendingSplitDone: Array.isArray(m.pending_split_done)
+      ? (m.pending_split_done as string[]).filter((x) => typeof x === 'string').slice(0, 64)
+      : [],
   }
 }
 
