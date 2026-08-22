@@ -43,12 +43,18 @@ describe('persistent audit event presentation', () => {
   })
 
   it('normalizes server-side filter parameters and makes the end date inclusive', () => {
+    // 日期界線落在台北午夜(+08:00):occurred_at 是 UTC,用純日期比較會把
+    // 台灣 00:00–08:00 的事件錯歸到前一天的區間
     expect(normalizeAuditFilters({
       actorUserId: ' user-id ', eventType: ' valuation.approved ',
       entityType: ' valuation ', dateFrom: '2026-07-01', dateTo: '2026-07-10',
     })).toEqual({
       actorUserId: 'user-id', eventType: 'valuation.approved', entityType: 'valuation',
-      dateFrom: '2026-07-01', dateToExclusive: '2026-07-11',
+      dateFrom: '2026-07-01T00:00:00+08:00', dateToExclusive: '2026-07-11T00:00:00+08:00',
     })
+    // 沒填日期就不產生界線(供呼叫端以 truthiness 決定是否加條件)
+    const empty = normalizeAuditFilters({})
+    expect(empty.dateFrom).toBe('')
+    expect(empty.dateToExclusive).toBe('')
   })
 })

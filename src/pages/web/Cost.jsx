@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
 import { Card, Stat, Empty, Badge, Button, Field, Input, Select, PageHeader, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { revisedContractTotal, approvedNetAmount } from '../../lib/changeOrders.js'
@@ -28,12 +29,12 @@ export default function Cost() {
   const onUpdate = async (id, patch) => {
     setErrMsg('')
     const { error } = await updateCostItem(id, patch)
-    if (error) setErrMsg(`未寫入:${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '成本未寫入'))
   }
   const onDelete = async (id) => {
     setErrMsg('')
     const { error } = await deleteCostItem(id)
-    if (error) setErrMsg(`刪除失敗:${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '成本項刪除未完成'))
   }
 
   const totals = useMemo(() => {
@@ -60,12 +61,20 @@ export default function Cost() {
     setErrMsg(''); setBusy(true)
     const { error } = await createCostItem(form)
     setBusy(false)
-    if (error) { setErrMsg(`新增失敗:${error.message}`); return }
+    if (error) { setErrMsg(friendlyError(error, '成本項新增未完成')); return }
     setForm({ category: form.category, title: '', vendor: '', budget_amount: '', actual_amount: '' })
   }
 
+  // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
+  // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
+  // 使用者會被關在空狀態畫面裡,換不到同工作面的其他頁。
   if (!dbMode && !demoMode) {
-    return <Card title="成本管理"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML，才能對照合約收入計算毛利。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        <PageHeader title="成本管理" tagline="預算 vs 實際・毛利" subtitle="合約收入（發包工程費）對照成本與分包，即時算出預估與實際毛利" />
+        <Card title="成本管理"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML，才能對照合約收入計算毛利。</Empty></Card>
+      </div>
+    )
   }
 
   return (

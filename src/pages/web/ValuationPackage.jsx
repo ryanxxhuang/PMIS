@@ -290,7 +290,7 @@ export default function ValuationPackage() {
                             (縮圖僅 h-28,44px 會蓋掉照片主體,列為已知例外);鍵盤 focus 亦顯形 */}
                         <button onClick={() => toggleExclude(p.id)} title="排除此張(不列入本包)"
                           aria-label={`排除照片 ${line || it.item_no} 不列入本包`}
-                          className="print:hidden absolute top-1 right-1 w-6 h-6 max-sm:w-9 max-sm:h-9 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 max-sm:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">✕</button>
+                          className="print:hidden absolute top-1 right-1 w-6 h-6 max-md:w-9 max-md:h-9 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 max-md:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">✕</button>
                         <figcaption className="text-[10px] text-slate-500 px-1.5 py-1 leading-tight">
                           {line || '—'}{p.taken_at ? ` · ${String(p.taken_at).slice(0, 10)}` : ''}
                         </figcaption>

@@ -7,6 +7,7 @@ import CopilotFab from './CopilotFab.jsx'
 import BottomNav, { NAV_SHORT } from './BottomNav.jsx'
 import { MSym } from './icons.jsx'
 import { ErrorBanner } from './ui.jsx'
+import { friendlyError } from '../lib/errorMessage.js'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 import { useTodayTasks, mineCountForNavItem } from '../lib/useTodayTasks.js'
 
@@ -137,7 +138,10 @@ function GlobalSearch() {
       <button ref={btnRef} onClick={() => setOpen(true)} aria-label="搜尋(問 PMIS 代查)" title="搜尋(問 PMIS 代查)"
         className="w-full h-11 rounded-full bg-[var(--g-search)] hover:bg-[var(--g-search-h)] hidden xl:flex items-center gap-2.5 px-4 pressable">
         <MSym name="search" size={20} className="text-[var(--text-2)]" />
-        <span className="flex-1 text-left text-sm text-[var(--text-2)] truncate">搜尋工項、送審、缺失、契約條文……</span>
+        {/* 文案必須等於行為:這裡沒有檢索引擎,送出是把整句丟給 /agent 代問。
+            舊文案「搜尋工項、送審、缺失、契約條文」承諾了逐條檢索,實際做不到;
+            改成「問 PMIS」開頭,後面只列可問的題材,不再暗示關鍵字搜尋。 */}
+        <span className="flex-1 text-left text-sm text-[var(--text-2)] truncate">問 PMIS：工項、送審、缺失、契約……</span>
         <MSym name="tune" size={20} className="text-[var(--text-2)]" />
       </button>
       <button onClick={() => setOpen(true)} aria-label="搜尋(問 PMIS 代查)" title="搜尋(問 PMIS 代查)"
@@ -412,12 +416,12 @@ export function WebLayout({ children }) {
       <main className={`${collapsed ? 'md:ml-20' : 'md:ml-64'} transition-[margin] duration-300 p-4 md:p-6 pt-20 md:pt-[88px] max-md:pb-24 min-w-0 print:ml-0 print:pt-0`}>
           {workItemsSource === 'error' && (
             <ErrorBanner className="mb-4 print:hidden" onRetry={retryWorkItems}
-              msg={`標單工項讀取失敗：${workItemsError || '連線異常'}。各頁資料可能不完整。`} />
+              msg={`標單工項讀取失敗：${friendlyError(workItemsError, '連線異常')}。各頁資料可能不完整。`} />
           )}
           {/* 領域資料載入失敗(B-09):不再靜默顯示「尚無資料」,如實回報並可重試 */}
           {domainLoadError && (
             <ErrorBanner className="mb-4 print:hidden" onRetry={retryDomainLoad}
-              msg={`${domainLoadError}。各頁資料可能不完整。`} />
+              msg={`${friendlyError(domainLoadError, '專案資料載入失敗')}。各頁資料可能不完整。`} />
           )}
         {children}
       </main>

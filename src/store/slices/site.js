@@ -4,6 +4,8 @@
 import { useState, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
 import { loadSiteLogsFromDB, imageToBase64 } from '../db.js'
+import { compressImage } from '../../lib/imageCompress.js'
+import { readPhotoExif } from '../../lib/exifRead.js'
 import { pageAllInSafe, chunked } from '../../lib/pagedQuery.js'
 import { mutationOutcome } from './billing.js'
 
@@ -100,6 +102,14 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     if (!dailyLogId) return { error: { message: '需先存檔日誌' } }
     const pid = currentProject.project_id
     const id = crypto.randomUUID()
+    // 佐證保全:canvas 重取樣會剝掉 EXIF,而壓縮後原圖即棄置——拍攝時間/GPS 是
+    // 照片僅存的自證中繼資料,必須在壓縮「之前」讀出來回填 photos 列(見 exifRead.js)。
+    // 讀不到(PNG/HEIC/畸形檔)回 null,taken_at 才 fallback 上傳時刻。
+    const exif = await readPhotoExif(file)
+    // 上傳前重取樣(長邊 2000px/JPEG 0.82,取捨見 imageCompress.js):原圖 3–8MB
+    // 直傳後清單與估驗佐證包都抓同一份,egress 隨照片數爆炸。壓縮失敗回原檔照傳。
+    // 必須在取 ext 之前——壓成 JPEG 後 file.name 已改為 .jpg,路徑副檔名要一致。
+    file = await compressImage(file)
     const ext = (file.name?.split('.').pop() || file.type?.split('/')[1] || 'jpg').toLowerCase()
     const path = `${pid}/${dailyLogId}/${id}.${ext}`
     const { error: upErr } = await supabase.storage.from('photos')
@@ -111,7 +121,12 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       storage_path: path, caption: meta.caption || null,
       // 施作區域(W8-7):AI 自查驗黑板/白板抄錄、人已在覆核區確認或清除;辨識不到=null
       location: meta.location || null,
-      taken_at: meta.taken_at || new Date().toISOString(), uploaded_by: currentUser?.user_id,
+      // 呼叫端帶的值優先(未來行動端可能直接給定位);沒帶才用 EXIF 回填。
+      // GPS 在 exifRead 內保證成對(缺一半=兩者皆 null),這裡不必再配對檢查。
+      taken_at: meta.taken_at || exif.takenAt || new Date().toISOString(),
+      gps_lat: meta.gps_lat ?? exif.gpsLat,
+      gps_lng: meta.gps_lng ?? exif.gpsLng,
+      uploaded_by: currentUser?.user_id,
     })
     if (insErr) { await supabase.storage.from('photos').remove([path]); return { error: insErr } } // 回滾孤兒檔
     log('施工日誌照片上傳', meta.caption || file.name || '照片', { user: currentUser?.name || '系統', role: '施工現場' })

@@ -1,7 +1,7 @@
 // Billing slice:估驗計價(掛在 work_items 標單脊椎上)、請款收款、預定進度 S 曲線。
 import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase.js'
-import { parseLocalDate } from '../../lib/dates.js'
+import { parseLocalDate, taipeiToday } from '../../lib/dates.js'
 
 // 估驗明細列(寫 DB 用):同一套「數量→百分比/金額」換算,建立期/改數量/帶入日誌三處共用。
 export function valuationItemRow(wi, valuationId, cumQty, source) {
@@ -34,16 +34,20 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
     const periodNo = valuations.length ? Math.max(...valuations.map((v) => v.period_no)) + 1 : 1
     const prev = valuations.find((v) => v.period_no === periodNo - 1)
     const id = dbMode ? crypto.randomUUID() : `VAL-${Date.now()}`
+    // 估驗日是業務日期:取台北日曆日(UTC 在台灣 00:00–08:00 會落成前一天,
+    // 施工月報以 valuation_date 歸期就會錯月)。UI 副本與 DB 同一格式——
+    // 原本 UI 用 toLocaleDateString('2026/8/22')、DB 用 ISO,重新整理前後長相不一致。
+    const vDate = taipeiToday()
     const v = {
       id, period_no: periodNo,
-      valuation_date: new Date().toLocaleDateString('zh-TW'),
+      valuation_date: vDate,
       retention_pct: retentionPct, status: '草稿',
       items: prev ? { ...prev.items } : {},
     }
     if (dbMode) {
       const { error } = await supabase.from('valuations').insert({
         id, project_id: currentProject.project_id, period_no: periodNo,
-        valuation_date: new Date().toISOString().slice(0, 10),
+        valuation_date: vDate,
         retention_pct: retentionPct, status: '草稿', created_by: currentUser?.user_id,
       })
       if (error) return { v: null, error }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
 import { Card, Stat, Empty, Badge, Button, PageHeader, ErrorBanner, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -22,7 +23,7 @@ export default function Payments() {
   const onPay = async (id, patch) => {
     setErrMsg('')
     const { error } = await updateValuationPayment(id, patch)
-    if (error) setErrMsg(`未寫入：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '請款未寫入'))
   }
 
   // 用「已核准變更套回後」的工項計價(B-02):否則核准追加減後與估驗頁金額分裂
@@ -46,15 +47,31 @@ export default function Payments() {
   // 未核定期數提示只在有草稿/監造審核期時出現,避免正常情況多一行雜訊
   const draftNote = sum.draftCount > 0 ? `另有未核定 ${sum.draftCount} 期未計入` : null
 
+  // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
+  // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
+  // 使用者會被關在載入/空狀態畫面裡,換不到同工作面的其他頁。
+  const header = <PageHeader title="請款收款" tagline="現金流" subtitle="每期估驗 → 本期應領、保留款、收款追蹤" />
   // 載入中用骨架屏:Empty 自帶 inbox 圖示,擺在載入分支等於先跟使用者說「沒資料」
-  if (!data) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入請款資料中…" /></Card>
+  if (!data) {
+    return (
+      <div className="space-y-5">
+        {header}
+        <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入請款資料中…" /></Card>
+      </div>
+    )
+  }
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
-    return <Card title="請款收款"><Empty>此專案的標單尚未匯入資料庫,且需有估驗資料才能彙整請款。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        {header}
+        <Card title="請款收款"><Empty>此專案的標單尚未匯入資料庫,且需有估驗資料才能彙整請款。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-5">
-      <PageHeader title="請款收款" tagline="現金流" subtitle="每期估驗 → 本期應領、保留款、收款追蹤" />
+      {header}
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
@@ -83,7 +100,9 @@ export default function Payments() {
           <Empty>尚無估驗期。請先到「估驗計價」建立估驗,這裡才會列出每期請款。</Empty>
         ) : (
           <>
-          <div className="overflow-x-auto max-sm:hidden">
+          {/* 斷點跟手機層對齊(BottomNav 是 md:hidden):min-w 820px 的表在 744px
+              iPad mini 直式一樣讀不了,寫 max-sm 會讓 640–767 拿到手機版面卻是桌機表格 */}
+          <div className="overflow-x-auto max-md:hidden">
             <table className="w-full text-sm min-w-[820px]">
               <thead>
                 {/* 表頭字型層走共用 THEAD_CLS;p-0 卡的表格左右緣一律 pl-5/pr-5;
@@ -178,8 +197,9 @@ export default function Payments() {
           </div>
 
           {/* 手機:唯讀期別時間線。桌面表格 min-w 820px 在手機只能橫向捲,實際讀不了;
-              金流登錄仍只留在桌面(W8-0 §7),所以這裡刻意不放任何輸入或寫入路徑。 */}
-          <div className="sm:hidden">
+              金流登錄仍只留在桌面(W8-0 §7),所以這裡刻意不放任何輸入或寫入路徑。
+              md 斷點與上方表格的 max-md:hidden 互補,兩者不可各用一套斷點。 */}
+          <div className="md:hidden">
             <ul className="divide-y divide-[var(--border-2)]">
               {rows.map(({ v, net }) => {
                 // 與表格同一條核定閘門:未核定期別在桌面是鎖定欄位,在手機只說明狀態

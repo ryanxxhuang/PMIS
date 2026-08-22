@@ -2,6 +2,7 @@ import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
 import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surface, Input, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
@@ -22,11 +23,11 @@ export default function Progress() {
   const onGenerate = async (s, e) => {
     setErrMsg('')
     const { error } = await generateSchedule(s, e)
-    if (error) setErrMsg(`預定進度未寫入:${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '預定進度未寫入'))
   }
   const onPlannedPct = async (i, pct) => {
     const { error } = await updatePlannedPct(i, pct)
-    if (error) setErrMsg(`第 ${i + 1} 月預定% 未寫入:${error.message}`)
+    if (error) setErrMsg(friendlyError(error, `第 ${i + 1} 月預定% 未寫入`))
   }
 
   // 變更設計調整/變更後契約金額由 store 統一提供(財務單一真相層,B-02)
@@ -65,14 +66,27 @@ export default function Progress() {
     return buildCumMap(tree.roots, tree.childrenMap, latest.items || {})
   }, [data, valuations, tree])
 
+  // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
+  // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
+  // 使用者會被關在載入/空狀態畫面裡,換不到同工作面的其他頁。
   // 載入中不能用 Empty:那顆 inbox 圖示等於先對使用者說「沒資料」(比照 BOQ/Payments 走骨架)
-  if (!data) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入進度資料中…" /></Card>
+  if (!data) {
+    return (
+      <div className="space-y-5">
+        <Header billableTotal={billableTotal} />
+        <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入進度資料中…" /></Card>
+      </div>
+    )
+  }
 
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return (
-      <Card title="進度管制">
-        <Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML，進度才能對齊金額權重。</Empty>
-      </Card>
+      <div className="space-y-5">
+        <Header billableTotal={billableTotal} />
+        <Card title="進度管制">
+          <Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML，進度才能對齊金額權重。</Empty>
+        </Card>
+      </div>
     )
   }
 
@@ -342,7 +356,9 @@ function ProgressTree({ nodes, depth, expanded, toggle, childrenMap, nodePct, am
 
 // PageHeader 直接置頁根:動作鈕走 action prop。原本把 PageHeader 與動作鈕並排成兄弟節點,
 // 會讓工作面分頁列(PageTabs 渲染在 PageHeader 內)把動作鈕擠到分頁列下方。
+// billableTotal 為 0 代表「還沒讀到金額」而不是「發包工程費是 0」——載入中／標單未匯入
+// 的早退分支也要掛頁首(工作面分頁列在 PageHeader 內),此時省掉 subtitle 而不是印 0.00 億。
 function Header({ billableTotal, action }) {
   const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
-  return <PageHeader title="進度管制" tagline="S-Curve" subtitle={`發包工程費 ${yi(billableTotal)}`} action={action} />
+  return <PageHeader title="進度管制" tagline="S-Curve" subtitle={billableTotal ? `發包工程費 ${yi(billableTotal)}` : undefined} action={action} />
 }

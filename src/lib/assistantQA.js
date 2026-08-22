@@ -4,6 +4,7 @@
 import { computeObligationDue } from './contractDue.js'
 import { pendingSamplesFromLogs } from './qc.js'
 import { isRainyLog } from './weatherMetrics.js'
+import { localISODate } from './dates.js'
 
 const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 const has = (q, ...ks) => ks.some((k) => q.includes(k))
@@ -102,7 +103,8 @@ const INTENTS = [
     const dated = obs.map((o) => ({ o, due: computeObligationDue(o, d.anchors || {}) })).filter((x) => x.due && x.o.status !== '已完成')
       .sort((a, b) => a.due - b.due)
     return { answer: dated.length
-      ? `最近到期的契約期限：${dated.slice(0, 3).map((x) => `${x.o.title}（到期 ${x.due.toISOString().slice(0, 10)}）`).join('、')}。`
+      // localISODate:due 是本地午夜 Date,toISOString 會轉 UTC 往前掉一天(台北)
+      ? `最近到期的契約期限：${dated.slice(0, 3).map((x) => `${x.o.title}（到期 ${localISODate(x.due)}）`).join('、')}。`
       : `契約重點期限共 ${obs.length} 項，可到「契約重點」查看時程與罰則。`,
       sources: [{ label: '契約重點', to: '/requirements' }] }
   })() : null,

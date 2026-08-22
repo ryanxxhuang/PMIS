@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Surface, Empty, Button, Badge, Field, Input, buttonClass, THEAD_CLS, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -151,12 +152,12 @@ export default function ChangeOrders() {
                   canReview={can.review} canRatify={can.ratify}
                   // 明細可編=廠商填報權 且 尚未核准(核准後 DB 凍結,UI 同步凍結——P0-02)
                   canEdit={can.edit} itemsEditable={can.edit && co.status !== '核准'}
-                  onStatus={async (s) => { setErrMsg(''); const { error } = await updateChangeOrder(co.id, { status: s }); if (error) setErrMsg(`狀態未更新：${error.message}`) }}
-                  onDelete={async () => { if (await appConfirm({ title: `刪除變更「${co.title}」？`, body: '其明細將一併刪除。', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteChangeOrder(co.id); if (error) setErrMsg(`刪除失敗：${error.message}`) } }}
+                  onStatus={async (s) => { setErrMsg(''); const { error } = await updateChangeOrder(co.id, { status: s }); if (error) setErrMsg(friendlyError(error, '變更狀態未更新')) }}
+                  onDelete={async () => { if (await appConfirm({ title: `刪除變更「${co.title}」？`, body: '其明細將一併刪除。', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteChangeOrder(co.id); if (error) setErrMsg(friendlyError(error, '變更刪除未完成')) } }}
                   onAddItem={(input) => addChangeOrderItem(co.id, input)}
                   onAddItems={(rows) => addChangeOrderItems(co.id, rows)}
-                  onUpdateItem={async (id, patch) => { setErrMsg(''); const { error } = await updateChangeOrderItem(co.id, id, patch); if (error) setErrMsg(`明細未寫入：${error.message}`) }}
-                  onDeleteItem={async (id) => { setErrMsg(''); const { error } = await deleteChangeOrderItem(co.id, id); if (error) setErrMsg(`明細未刪除：${error.message}`) }} />
+                  onUpdateItem={async (id, patch) => { setErrMsg(''); const { error } = await updateChangeOrderItem(co.id, id, patch); if (error) setErrMsg(friendlyError(error, '明細未寫入')) }}
+                  onDeleteItem={async (id) => { setErrMsg(''); const { error } = await deleteChangeOrderItem(co.id, id); if (error) setErrMsg(friendlyError(error, '明細未刪除')) }} />
               ))}
             </div>
           ))}
@@ -191,7 +192,7 @@ function ChangeOrderCard({ co, net, leaves, allItems, canReview, canRatify, canE
       setDiff({ fileName: f.name, ...diffBoq(allItems, parsed.items) })
     } catch (err) {
       setDiff(null)
-      setDiffErr(err.message || '解析失敗')
+      setDiffErr(friendlyError(err, '標單解析失敗'))
     }
   }
   const applyDiff = async () => {

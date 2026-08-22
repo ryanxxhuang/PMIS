@@ -8,6 +8,7 @@ import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner, Input, Select
 import { appConfirm, appPrompt } from './confirm.jsx'
 import { exportCsv, stamp } from '../lib/exportCsv.js'
 import { defectBall } from '../lib/ballInCourt.js'
+import { friendlyError } from '../lib/errorMessage.js'
 import MarkupEditor, { MarkupThumb } from './MarkupEditor.jsx'
 
 // 欄位一律用 ui.jsx 的 Input/Select/Textarea:本檔曾抄過一份 FIELD_BASE,
@@ -83,7 +84,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
     setAiBusy(true); setAiErr(''); setAiMsg(isSafety ? 'AI 判讀職安衛中…' : 'AI 辨識中…')
     const { error, result } = await (isSafety ? analyzeSafetyPhoto(file) : describeDefect(file))
     setAiBusy(false)
-    if (error) { setAiMsg(''); setAiErr(`${isSafety ? '判讀' : '辨識'}失敗:${error.message || ''}`); return }
+    if (error) { setAiMsg(''); setAiErr(friendlyError(error, isSafety ? 'AI 判讀失敗' : 'AI 辨識失敗')); return }
     if (isSafety) {
       // 危害類別 + 現況 + 違反法規依據 + 改善建議,組成 grounded 的工安缺失說明
       const desc = [
@@ -117,7 +118,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
     setErrMsg(''); setBusy(true)
     const { error } = await createDefect({ ...form, domain })
     setBusy(false)
-    if (error) { setErrMsg(`缺失未開立：${error.message}`); return }
+    if (error) { setErrMsg(friendlyError(error, '缺失未開立')); return }
     setForm(null)
   }
 
@@ -133,7 +134,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
       res = await updateDefectStatus(d.id, '待複查', { improvement_note: note })
     }
     else if (d.status === '待複查') res = await updateDefectStatus(d.id, '已結案')
-    if (res?.error) setErrMsg(`缺失狀態未更新：${res.error.message}`)
+    if (res?.error) setErrMsg(friendlyError(res.error, '缺失狀態未更新'))
   }
 
   // 撤銷結案=監造附原因(伺服器留 defect_audits 稽核;已結案不可直接刪改)
@@ -144,14 +145,14 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
     })
     if (reason === null) return
     const res = await updateDefectStatus(d.id, '改善中', { correction_reason: reason })
-    if (res?.error) setErrMsg(`撤銷結案失敗：${res.error.message}`)
+    if (res?.error) setErrMsg(friendlyError(res.error, '撤銷結案未完成'))
   }
 
   const remove = async (d) => {
     if (!await appConfirm({ title: `刪除此${isSafety ? '工安' : ''}缺失？`, danger: true, confirmLabel: '刪除' })) return
     setErrMsg('')
     const { error } = await deleteDefect(d.id)
-    if (error) setErrMsg(`刪除被拒絕：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '缺失刪除被拒絕'))
   }
 
   const csvCols = [

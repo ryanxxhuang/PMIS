@@ -14,7 +14,9 @@
     <meta property="og:type" content="website" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <!-- 字型 self-host(機關禁外連 CDN):main.jsx 以 JS import 載入
-         @fontsource-variable/noto-sans-tc 與 @material-symbols/font-400,零外連。 -->
+         @fontsource-variable/noto-sans-tc 與 src/assets 的 Material Symbols subset,零外連。
+         圖示字型的 preload link 由 vite.config.js 的 pmis-preload-icon-font 於 build 期注入
+         (檔名帶 content hash 不能寫死),所以這裡看不到是正常的;原因見該外掛註解。 -->
   </head>
   <body>
     <div id="root"></div>

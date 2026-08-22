@@ -5,6 +5,7 @@ import { useState, useMemo } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Button, Field, Input, Select, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { deriveAcceptance, needsFixFlow, acceptanceAlerts, ACCEPTANCE_STAGE_ORGS } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 
@@ -94,13 +95,13 @@ export default function Acceptance() {
               onSave={async (patch) => {
                 setErrMsg('')
                 const { error } = await recordAcceptanceEvent(s.key, patch)
-                if (error) setErrMsg(`「${s.label}」登錄失敗：${error.message}`)
+                if (error) setErrMsg(friendlyError(error, `「${s.label}」登錄失敗`))
                 return { error }
               }}
               onClear={async () => {
                 setErrMsg('')
                 const { error } = await clearAcceptanceEvent(s.key)
-                if (error) setErrMsg(`「${s.label}」撤銷失敗：${error.message}`)
+                if (error) setErrMsg(friendlyError(error, `「${s.label}」撤銷失敗`))
                 return { error }
               }} />
           ))}

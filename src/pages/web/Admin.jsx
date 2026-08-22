@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, PageHeader, Badge, Select, Input, Stat, Empty, ErrorBanner, SortableTh, TablePager, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { useTableSort, usePagination } from '../../lib/useTable.js'
 import {
   TWD_PER_USD, toTwd, presetRange, customRange, pctOfTotal, overrideToRpcValue, overrideFromDb,
@@ -105,7 +106,7 @@ export default function Admin() {
     setLoading(true)
     ;(async () => {
       // 依分頁載入需要的資料;任何 RPC 錯誤如實顯示(admin RPC 被 DB 拒絕也會落在這裡)
-      const fail = (e) => { if (active && e) setLoadError(e.message || '載入失敗') }
+      const fail = (e) => { if (active && e) setLoadError(friendlyError(e, '用量資料載入失敗')) }
       if (tab === 'overview') {
         const [o, d] = await Promise.all([loadAdminOverview(from, to), loadAdminDaily(from, to)])
         if (!active) return
@@ -474,7 +475,7 @@ function FeaturesTab({ features, setFeatures, loading, reload, setFeatureEnabled
     setBusyKey(f.key); setActionError(null)
     setFeatures((rows) => rows.map((r) => (r.key === f.key ? { ...r, enabled: next } : r)))
     const { error } = await setFeatureEnabled(f.key, next)
-    if (error) setActionError(`「${f.label}」開關切換失敗:${error.message}`)
+    if (error) setActionError(friendlyError(error, `「${f.label}」開關切換失敗`))
     reload()
     setBusyKey(null)
   }
@@ -482,7 +483,7 @@ function FeaturesTab({ features, setFeatures, loading, reload, setFeatureEnabled
     setBusyKey(f.key); setActionError(null)
     setFeatures((rows) => rows.map((r) => (r.key === f.key ? { ...r, min_plan: plan } : r)))
     const { error } = await setFeatureMinPlan(f.key, plan)
-    if (error) setActionError(`「${f.label}」方案門檻調整失敗:${error.message}`)
+    if (error) setActionError(friendlyError(error, `「${f.label}」方案門檻調整失敗`))
     reload()
     setBusyKey(null)
   }
@@ -546,7 +547,7 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
     setOverridesLoading(true)
     const { rows, error } = await loadProjectOverrides(projectId)
     setOverrides(rows)
-    if (error) setActionError(error.message)
+    if (error) setActionError(friendlyError(error, '覆寫明細載入失敗'))
     setOverridesLoading(false)
   }, [loadProjectOverrides])
 
@@ -562,7 +563,7 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
     setBusyProject(p.project_id); setActionError(null)
     setProjects((rows) => rows.map((r) => (r.project_id === p.project_id ? { ...r, ai_plan: plan } : r)))
     const { error } = await setProjectPlan(p.project_id, plan)
-    if (error) setActionError(`「${p.name}」方案調整失敗:${error.message}`)
+    if (error) setActionError(friendlyError(error, `「${p.name}」方案調整失敗`))
     reload()
     setBusyProject(null)
   }
@@ -577,7 +578,7 @@ function ProjectsTab({ projects, setProjects, features, loading, reload, setProj
       return value === null ? rest : [...rest, { feature_key: f.key, enabled: value }]
     })
     const { error } = await setProjectOverride(projectId, f.key, value)
-    if (error) setActionError(`「${f.label}」覆寫設定失敗:${error.message}`)
+    if (error) setActionError(friendlyError(error, `「${f.label}」覆寫設定失敗`))
     await refreshOverrides(projectId)
     reload() // 覆寫數(override_count)變了,專案列表一併重載
     setBusyFeature(null)

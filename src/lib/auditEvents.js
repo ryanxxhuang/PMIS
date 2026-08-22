@@ -114,13 +114,18 @@ function nextDate(date) {
   return d.toISOString().slice(0, 10)
 }
 
+// 使用者選的是台北日曆日,occurred_at 是 timestamptz(UTC):日期界線要落在
+// 台北的午夜(+08:00),否則篩「某日」會漏掉台灣 00:00–08:00 的事件、
+// 又把隔天凌晨的算進來(界線差 8 小時)。
+const taipeiDayStart = (ymd) => (ymd ? `${ymd}T00:00:00+08:00` : '')
+
 export function normalizeAuditFilters(filters = {}) {
   const clean = (value) => (typeof value === 'string' ? value.trim() : '')
   return {
     actorUserId: clean(filters.actorUserId),
     eventType: clean(filters.eventType),
     entityType: clean(filters.entityType),
-    dateFrom: clean(filters.dateFrom),
-    dateToExclusive: nextDate(clean(filters.dateTo)),
+    dateFrom: taipeiDayStart(clean(filters.dateFrom)),
+    dateToExclusive: taipeiDayStart(nextDate(clean(filters.dateTo))),
   }
 }

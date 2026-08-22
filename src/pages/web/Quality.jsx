@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader, ErrorBanner, SkeletonList, Input, Select, Textarea, FilterChip, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { judgeChecklist, judgeItem, diffChecklistResults, sampleAlerts } from '../../lib/qc.js'
@@ -112,9 +113,25 @@ export default function Quality() {
       .sort((a, b) => (b.check_date || '').localeCompare(a.check_date || ''))
   }, [checklistRecords, leaves, inspForm?.work_item_key])
 
-  if (!workItems) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
+  // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
+  // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
+  // 使用者會被關在載入/空狀態畫面裡,換不到同工作面的其他頁。
+  const header = <PageHeader title="品質查驗" tagline="三級品管" subtitle="查驗、缺失、觀察、檢查表與試驗——先看「現在要處理」，再進分段完成" />
+  if (!workItems) {
+    return (
+      <div className="space-y-5">
+        {header}
+        <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
+      </div>
+    )
+  }
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
-    return <Card title="品質查驗"><Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        {header}
+        <Card title="品質查驗"><Empty>此專案的標單尚未匯入資料庫。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+      </div>
+    )
   }
 
   // 失敗要讓使用者看到、表單不關(B-07:原本吞掉 error,看起來像成功)
@@ -127,7 +144,7 @@ export default function Quality() {
     setErrMsg(''); setBusy(true)
     const { error } = await createInspection(inspForm)
     setBusy(false)
-    if (error) { setErrMsg(`查驗申請未送出:${error.message}`); return }
+    if (error) { setErrMsg(friendlyError(error, '查驗申請未送出')); return }
     setInspForm(null)
   }
   // 三級品管一級交二級的正流程:自主檢查合格 → 提查驗申請並檢附該紀錄。
@@ -155,11 +172,11 @@ export default function Quality() {
     setErrMsg(''); setBusy(true)
     const { error, defectError } = await recordInspectionResult(insp, pass, note)
     setBusy(false)
-    if (error) { setErrMsg(`查驗判定未寫入：${error.message}`); return }
+    if (error) { setErrMsg(friendlyError(error, '查驗判定未寫入')); return }
     // 判定已寫入但自動開缺失失敗:不能亮「已開立缺失」的綠訊息騙人——
     // 走既有 ErrorBanner 如實提示手動補開(同檢查表 defectError 的處理慣例)
     if (defectError) {
-      setErrMsg(`查驗判定已記錄，但缺失開立失敗：${defectError.message}。請至「缺失」分段手動補開缺失。`)
+      setErrMsg(`查驗判定已記錄，但缺失開立失敗：${friendlyError(defectError, '請稍後重試')}。請至「缺失」分段手動補開缺失。`)
       return
     }
     setResultMsg({ pass })
@@ -184,9 +201,7 @@ export default function Quality() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <PageHeader title="品質查驗" tagline="三級品管" subtitle="查驗、缺失、觀察、檢查表與試驗——先看「現在要處理」，再進分段完成" />
-      </div>
+      <div>{header}</div>
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
@@ -310,7 +325,7 @@ export default function Quality() {
                     <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
                   </> : <span className="text-xs text-[var(--text-3)]">待監造查驗</span>)}
                   {/* 已判定查驗=品質證據,不提供刪除(DB 另有 guard) */}
-                  {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspection(i.id); if (error) setErrMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除查驗 ${i.title}`}><MSym name="close" size={16} /></button>}
+                  {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspection(i.id); if (error) setErrMsg(friendlyError(error, '查驗紀錄刪除未完成')) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除查驗 ${i.title}`}><MSym name="close" size={16} /></button>}
                 </div>
               </div>
             ))}
@@ -438,11 +453,11 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
       revises: revising || undefined, revision_reason: revising ? reason.trim() : undefined,
     })
     setSaving(false)
-    if (res.error) { setMsg(res.error.message || '存檔失敗', 'error'); return }
+    if (res.error) { setMsg(friendlyError(res.error, '存檔未完成'), 'error'); return }
     const revTag = res.rev ? `Rev.${res.rev}：` : ''
     if (res.defectAction === 'created') setMsg(`已存檔 ${revTag}判定不合格，系統已自動開立缺失。`, 'warn')
     else if (res.defectAction === 'linked') setMsg(`已存檔 ${revTag}判定不合格；此檢查表已有未結案缺失，未重複開立。`, 'warn')
-    else if (res.defectError) setMsg(`已存檔 ${revTag}判定不合格，但缺失開立失敗：${res.defectError.message}`, 'error')
+    else if (res.defectError) setMsg(`已存檔 ${revTag}判定不合格，但缺失開立失敗：${friendlyError(res.defectError, '請稍後重試')}`, 'error')
     else if (res.overall === '合格' && res.openDefectRemains) setMsg(`已存檔 ${revTag}更正後判定合格。原自動開立的缺失仍在追蹤中，請至缺失區確認後續處理。`)
     else setMsg(`已存檔 ${revTag}判定${res.overall || '未完成'} ✓`, res.overall === '不合格' ? 'warn' : 'success')
     closeForm()
@@ -450,7 +465,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
   const del = async (r) => {
     if (!(await appConfirm({ title: '刪除此檢查紀錄？', body: '僅未判定的紀錄可刪除；已判定的證據請以「修訂」更正。', danger: true, confirmLabel: '刪除' }))) return
     const res = await onDelete(r.id)
-    if (res?.error) setMsg(res.error.message, 'error')
+    if (res?.error) setMsg(friendlyError(res.error, '檢查紀錄刪除未完成'), 'error')
   }
 
   let lastGroup = null
@@ -522,10 +537,11 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                             onChange={(e) => setVal(it.no, e.target.checked)} />
                         ) : (
                           <span className="inline-flex items-center gap-1">
-                            {/* 表格內輸入只提到 ~38px(max-sm:py-2),不加 min-h——加了整張檢查表列高會翻倍 */}
+                            {/* 表格內輸入只提到 ~38px(max-md:py-2),不加 min-h——加了整張檢查表列高會翻倍。
+                                斷點跟手機層對齊(BottomNav 是 md:hidden):寫 max-sm 會讓 640–767 拿到手機版面卻是桌機內距 */}
                             <input type="number" step="any" inputMode="decimal" value={values[it.no] ?? ''}
                               onChange={(e) => setVal(it.no, e.target.value === '' ? '' : Number(e.target.value))}
-                              className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums bg-[var(--surface)] max-sm:py-2" />
+                              className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums bg-[var(--surface)] max-md:py-2" />
                             <span className="text-[10px] text-[var(--text-3)] w-10">{it.unit || ''}</span>
                           </span>
                         )}
@@ -633,7 +649,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
     setBusy(true); setMsg('')
     const { error, count } = await onGenerate()
     setBusy(false)
-    setMsg(error ? (error.message || '帶入失敗') : count ? `已由施工日誌帶入 ${count} 組取樣。` : '施工日誌沒有尚未建檔的澆置紀錄。')
+    setMsg(error ? friendlyError(error, '帶入未完成') : count ? `已由施工日誌帶入 ${count} 組取樣。` : '施工日誌沒有尚未建檔的澆置紀錄。')
   }
   const addManual = async () => {
     if (!manual.sampled_date) return
@@ -689,11 +705,11 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                   <td className="px-2 num text-xs text-[var(--text-2)]">{s.sampled_date}</td>
                   <td className="px-2 text-right num whitespace-nowrap">{s.fc || '—'}</td>
                   <td className="px-2 text-right">
-                    {/* 表格內輸入:只加 max-sm:py-2(~38px),不加 min-h 以免試體表列高翻倍 */}
+                    {/* 表格內輸入:只加 max-md:py-2(~38px),不加 min-h 以免試體表列高翻倍;斷點與手機層(md)一致 */}
                     <input type="number" step="any" inputMode="decimal" defaultValue={s.d7_value ?? ''} placeholder="值"
                       aria-label={`${s.sample_no} 7天參考值`}
-                      onBlur={async (e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n !== s.d7_value) { const { error } = await onUpdate(s.id, { d7_value: n }); if (error) setMsg(`未寫入：${error.message}`) } }}
-                      className="w-16 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums max-sm:py-2" />
+                      onBlur={async (e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n !== s.d7_value) { const { error } = await onUpdate(s.id, { d7_value: n }); if (error) setMsg(friendlyError(error, '試驗值未寫入')) } }}
+                      className="w-16 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums max-md:py-2" />
                     <div>{dueCell(s.d7_due, s.d7_value != null)}</div>
                   </td>
                   <td className="px-2 text-right">
@@ -703,10 +719,10 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                         const arr = e.target.value.split(/[,、\s]+/).map(Number).filter((n) => !isNaN(n) && n > 0)
                         if (JSON.stringify(arr) !== JSON.stringify(s.d28_values || [])) {
                           const { error } = await onUpdate(s.id, { d28_values: arr.length ? arr : null })
-                          if (error) setMsg(`試驗值未寫入：${error.message}`)
+                          if (error) setMsg(friendlyError(error, '試驗值未寫入'))
                         }
                       }}
-                      className="w-36 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums max-sm:py-2" />
+                      className="w-36 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-xs tabular-nums max-md:py-2" />
                     <div>{dueCell(s.d28_due, (s.d28_values || []).length > 0)}</div>
                   </td>
                   <td className="px-2 text-center">
@@ -714,7 +730,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
                   </td>
                   {/* 已判定試體=品質證據,不提供刪除(DB 另有 guard) */}
                   <td className="text-right pl-2">{s.status === '待試驗' && (
-                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(`刪除失敗：${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除試體 ${s.sample_no}`}><MSym name="close" size={16} /></button>
+                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(friendlyError(error, '試體刪除未完成')) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除試體 ${s.sample_no}`}><MSym name="close" size={16} /></button>
                   )}</td>
                 </tr>
               ))}
@@ -740,7 +756,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
     setErr(''); setBusy(true)
     const { error } = (await fn()) || {}
     setBusy(false)
-    if (error) { setErr(`${label}失敗:${error.message}`); return false }
+    if (error) { setErr(friendlyError(error, `${label}未完成`)); return false }
     return true
   }
   const submit = async () => { if (await run('新增觀察', () => onCreate(form))) setForm(null) }

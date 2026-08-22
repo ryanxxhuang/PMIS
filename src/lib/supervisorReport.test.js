@@ -49,4 +49,27 @@ describe('buildSupervisorReport', () => {
     expect(r.opinion).toContain('查驗')
     expect(typeof r.opinion).toBe('string')
   })
+
+  it('台北凌晨(UTC 還在前一天):月份回退與逾期判斷都不退一天', () => {
+    // UTC 7/31 16:30 = 台北 8/1 00:30——舊寫法會把「本月」算成 2026-07、
+    // 7/31 到期的缺失也不會列逾期
+    const t = new Date('2026-07-31T16:30:00Z')
+    const r2 = buildSupervisorReport({
+      defects: [
+        { title: '昨日到期', status: '開立', due_date: '2026-07-31' },
+        { title: '今日到期', status: '開立', due_date: '2026-08-01' },
+      ],
+    }, null, t)
+    expect(r2.monthLabel).toBe('2026-08')
+    expect(r2.defects.overdue).toBe(1) // 7/31 首日即逾期;8/1 今天到期不算
+  })
+
+  it('closed_at / inspected_at 以台北日曆日歸月(UTC 月底晚間=台北下月初)', () => {
+    const r3 = buildSupervisorReport({
+      defects: [{ title: '月初結案', status: '已結案', closed_at: '2026-06-30T17:00:00Z' }], // 台北 7/1 01:00
+      inspections: [{ status: '合格', title: '月初判定', inspected_at: '2026-06-30T18:00:00Z' }],
+    }, '2026-07')
+    expect(r3.defects.closedThisMonth).toBe(1)
+    expect(r3.inspections.total).toBe(1)
+  })
 })

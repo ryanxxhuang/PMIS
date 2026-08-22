@@ -14,6 +14,7 @@
 // Retries are idempotent: same content -> same checksum -> same version ->
 // same processing-run row (unique on document_version_id).
 import { supabase } from './supabase.js'
+import { friendlyError } from './errorMessage.js'
 import { extractDocumentPages, hasExtractableText } from './documentExtract.js'
 import { fileKind, analysisSupport, storedLimitationLabel } from './packageFileSupport.js'
 import { classifyDocument, shouldExtractRequirements, AUTO_ACCEPT_THRESHOLD } from './documentClassifier.js'
@@ -189,7 +190,7 @@ async function upsertRun(run) {
     .upsert(run, { onConflict: 'document_version_id' })
     .select()
     .single()
-  if (error) throw new Error(`處理狀態寫入失敗:${error.message}`)
+  if (error) throw new Error(friendlyError(error, '處理狀態寫入失敗'))
   return data
 }
 
@@ -199,7 +200,7 @@ async function insertPages(pages, versionId) {
       .slice(i, i + PAGE_INSERT_BATCH)
       .map((p) => ({ ...p, document_version_id: versionId }))
     const { error } = await supabase.from('document_pages').insert(batch)
-    if (error) throw new Error(`逐頁保存失敗:${error.message}`)
+    if (error) throw new Error(friendlyError(error, '逐頁保存失敗'))
   }
 }
 
@@ -234,7 +235,7 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
         extractionError = '未能抽取文字（可能為掃描檔），等待 OCR 支援'
       }
     } catch (e) {
-      extractionError = e?.message || '讀取文件失敗'
+      extractionError = friendlyError(e, '讀取文件失敗')
     }
   }
   const firstText = pages
@@ -344,7 +345,7 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
       completed_at: new Date().toISOString(),
       error_message: oversize
         ? '原始檔上傳失敗:檔案超過平台單檔上限。請壓縮或拆分後重新上傳;需要更大上限請調整 Supabase Storage 設定'
-        : `原始檔上傳失敗:${uploadError.message}`,
+        : friendlyError(uploadError, '原始檔上傳失敗'),
       metadata: { filename_kind: kind },
     })
   }
@@ -544,6 +545,7 @@ export async function uploadFilesToPackage({
     return processPackageFile({ file, packageRow, projectId, userId, onRun })
   })
   const runs = results.filter((r) => r.ok).map((r) => r.value)
-  const failures = results.filter((r) => !r.ok).map((r) => r.error?.message || String(r.error))
+  // 失敗清單會整串上畫面:原始錯誤(可能含 DB/Storage 細節)先轉安全訊息
+  const failures = results.filter((r) => !r.ok).map((r) => friendlyError(r.error, '未能開始處理'))
   return { runs, failures }
 }

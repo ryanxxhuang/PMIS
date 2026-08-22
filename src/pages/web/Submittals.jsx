@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Input, Select, Textarea, buttonClass, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { submittalBall } from '../../lib/ballInCourt.js'
@@ -70,7 +71,7 @@ export default function Submittals() {
     setErrMsg(''); setBusy(true)
     const { error } = await decideSubmittal(s.id, status, note || s.review_note)
     setBusy(false)
-    if (error) setErrMsg(`${status}未寫入：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, `${status}未寫入`))
     else { // 審定後收起助手面板
       setAiReview((m) => { const n = { ...m }; delete n[s.id]; return n })
       setAiRead((m) => { const n = { ...m }; delete n[s.id]; return n })
@@ -82,7 +83,7 @@ export default function Submittals() {
     setReviewBusy(s.id); setErrMsg('')
     const { error, result } = await reviewSubmittal(s)
     setReviewBusy(null)
-    if (error) { setErrMsg(`AI 審查助手失敗：${error.message || ''}`); return }
+    if (error) { setErrMsg(friendlyError(error, 'AI 審查助手失敗')); return }
     setAiReview((m) => ({ ...m, [s.id]: { result, opinion: result.opinion || '' } }))
   }
   const closeReview = (id) => setAiReview((m) => { const n = { ...m }; delete n[id]; return n })
@@ -94,14 +95,14 @@ export default function Submittals() {
     setUploadBusy(s.id); setErrMsg('')
     const { error } = await uploadSubmittalFile(s.id, file)
     setUploadBusy(null)
-    if (error) setErrMsg(`文件上傳失敗：${error.message || ''}`)
+    if (error) setErrMsg(friendlyError(error, '文件上傳失敗'))
   }
   // AI 讀文件審查:讀送審文件本體逐項比對契約需求
   const onRead = async (s) => {
     setReadBusy(s.id); setErrMsg('')
     const { error, result } = await readSubmittalDoc(s)
     setReadBusy(null)
-    if (error) { setErrMsg(`AI 讀文件審查失敗：${error.message || ''}`); return }
+    if (error) { setErrMsg(friendlyError(error, 'AI 讀文件審查失敗')); return }
     setAiRead((m) => ({ ...m, [s.id]: result }))
   }
   const closeRead = (id) => setAiRead((m) => { const n = { ...m }; delete n[id]; return n })
@@ -116,7 +117,7 @@ export default function Submittals() {
     setErrMsg(''); setBusy(true)
     const { error } = await resubmitSubmittal(s.id, note)
     setBusy(false)
-    if (error) setErrMsg(`再送未寫入：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '再送未寫入'))
   }
 
   const pending = submittals.filter((s) => s.status === '已提送' || s.status === '審核中').length
@@ -237,7 +238,7 @@ export default function Submittals() {
                         if (!(await appConfirm({ title: '刪除此送審？', danger: true, confirmLabel: '刪除' }))) return
                         setErrMsg('')
                         const { error } = await deleteSubmittal(s.id)
-                        if (error) setErrMsg(`刪除失敗：${error.message}`)
+                        if (error) setErrMsg(friendlyError(error, '送審刪除未完成'))
                       }}>刪除</Button>
                     )}
                   </div>

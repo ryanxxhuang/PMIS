@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input, Surface, SkeletonList } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { useStore } from '../../store.jsx'
 import { applyDraftQuantities, draftNeedsInputCount, checklistDraftCounts } from '../../store/slices/agent.js'
 import { useAssistantData } from '../../lib/assistantData.js'
@@ -76,7 +77,7 @@ function DraftInboxCard() {
     // 接受走 acceptDraft:日誌草稿會先真的建立日誌(saveSiteLog,含卡片上填的數量)才標已接受
     const res = status === 'accepted' ? await acceptDraft(a, qtyDraft[a.id]) : await resolveAgentAction(a.id, status)
     // RPC 在「非本人/已處理過/非法狀態」時 raise 中文訊息,原樣顯示
-    if (res?.error) setErrMsg(res.error?.message || res.error)
+    if (res?.error) setErrMsg(friendlyError(res.error, '草稿處理未完成'))
     else if (res?.applied === 'daily_log') {
       // 成功提示要看「合併人填數量後」還缺不缺:全填了就只導去查看,還有缺才提示去補
       const merged = applyDraftQuantities(a.evidence?.payload, qtyDraft[a.id])

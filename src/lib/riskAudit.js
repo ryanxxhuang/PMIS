@@ -5,14 +5,18 @@
 // 不為了讓機關安心而給沒有證據的「通過」——沒有契約資料卻稱「無逾期義務」、
 // 只有一期估驗卻稱「金額變化平穩」,都是錯誤安全感。
 import { computeObligationDue } from './contractDue.js'
+import { parseLocalDate, taipeiISODate } from './dates.js'
 
 const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 
 export function auditProject(data = {}, today = new Date()) {
   const { periodAmounts = [], changeOrders = [], defects = [], obligations = [], anchors = {}, billableTotal = 0, progress = null } = data
-  const t0 = startOfDay(today)
-  const isoToday = t0.toISOString().slice(0, 10)
+  // 「今天」取台北日曆日:toISOString 是 UTC,台灣 00:00–08:00 會退到前一天,
+  // 逾期缺失/義務的「首日」整個早上不會被列為逾期(法定期限敏感,不能差一天)。
+  // t0(義務用的 Date 比較)也錨在同一個台北日曆日,兩種比較才是同一天。
+  const isoToday = taipeiISODate(today)
+  const t0 = parseLocalDate(isoToday)
   const checks = []
 
   // 1. 估驗計價合理性：單期本期估驗是否異常跳增（灌帳徵兆）；至少三期才有趨勢可言
