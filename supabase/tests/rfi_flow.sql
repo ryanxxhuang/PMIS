@@ -3,7 +3,7 @@
 -- 對應 migration 20260711000000_baseline.sql(rfis 表/RLS/rfis_guard)、
 --   20260712001300_formal_mode.sql(rfis_guard 現行定義:admin_override)、
 --   20260712001600_evidence_guards.sql(rfis_delete_guard)、
---   20260822000100_rfi_answered_state_guard.sql(兩步繞過修補:洗狀態→刪除)。
+--   20260822000200_rfi_answered_state_guard.sql(兩步繞過修補:洗狀態→刪除)。
 -- 為什麼獨立成檔:RFI 是唯一「guard 只被 formal_mode 的 admin 例外測過」的業務鏈,
 --   核心風險(廠商偽造監造正式回覆)若因 my_org_type()/rfis_guard 改動而失守,
 --   既有測試不會發現;此檔把角色矩陣釘住。
@@ -124,7 +124,7 @@ insert into public.rfis (id, project_id, rfi_no, title, status) values
 select lives_ok($$ delete from public.rfis where id = '36000000-0000-0000-0000-000000000002' $$,
   '廠商可撤回尚未回覆的疑義');
 
--- ── 兩步繞過刪除防護:洗狀態→刪除,兩步各自都要擋(20260822000100) ─────────────
+-- ── 兩步繞過刪除防護:洗狀態→刪除,兩步各自都要擋(20260822000200) ─────────────
 -- 修補前:rfis_guard 放行「已回覆/已結案→待回覆」(answer 不動),rfis_delete_guard
 -- 見待回覆即放行——廠商兩步就能刪掉監造正式回覆。此段把兩步各自釘死,
 -- 刻意不把任何一步寫成 lives_ok,避免固化漏洞。
