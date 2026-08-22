@@ -4,6 +4,7 @@ import { MSym } from '../../components/icons.jsx'
 import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader, PrerequisiteEmptyState, SkeletonList, buttonClass, Input, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { CHIP_BASE, CHIP_OFF } from '../../components/PageTabs.jsx'
 import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -155,7 +156,7 @@ export default function SiteLog() {
     setWeatherBusy(true)
     const { error } = await updateProjectAnchors({ latitude: la, longitude: lo })
     setWeatherBusy(false)
-    if (error) { setSavedMsg(`座標未儲存:${error.message}`); return }
+    if (error) { setSavedMsg(friendlyError(error, '座標未儲存')); return }
     setCoordOpen(false)
     // 存好座標後直接撈一次天氣
     setWeatherBusy(true); setSavedMsg('')
@@ -166,16 +167,30 @@ export default function SiteLog() {
     setSavedMsg(`工地座標已儲存;天氣已帶入(${r.source || '中央氣象局'}）`, 'info')
   }
 
-  if (!workItems) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
+  // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
+  // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
+  // 使用者會被關在載入/前置條件畫面裡,換不到同工作面的其他頁。
+  const header = <PageHeader title="施工日誌" tagline="每日進度回報" subtitle="填各工項當日完成數量，估驗可一鍵帶入累計" />
+  if (!workItems) {
+    return (
+      <div className="space-y-5">
+        {header}
+        <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
+      </div>
+    )
+  }
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return (
-      <Card title="施工日誌">
-        <PrerequisiteEmptyState
-          need="施工日誌要掛在標單工項上回報當日完成數量,此專案的標單尚未匯入。"
-          unlocks="工項數量回報、現場照片、天氣帶入、估驗自動累計"
-          to={can.edit ? '/contract' : undefined} cta={can.edit ? '前往專案文件上傳標單' : undefined}
-          who={!can.edit ? '施工日誌由施工廠商填報;待廠商匯入標單並回報後即可檢視。' : undefined} />
-      </Card>
+      <div className="space-y-5">
+        {header}
+        <Card title="施工日誌">
+          <PrerequisiteEmptyState
+            need="施工日誌要掛在標單工項上回報當日完成數量,此專案的標單尚未匯入。"
+            unlocks="工項數量回報、現場照片、天氣帶入、估驗自動累計"
+            to={can.edit ? '/contract' : undefined} cta={can.edit ? '前往專案文件上傳標單' : undefined}
+            who={!can.edit ? '施工日誌由施工廠商填報;待廠商匯入標單並回報後即可檢視。' : undefined} />
+        </Card>
+      </div>
     )
   }
 
@@ -197,7 +212,7 @@ export default function SiteLog() {
       labor, equipment, materials, extras, work_summary: summary, items,
     })
     setSaving(false)
-    if (error) { setSavedMsg(error.message || '存檔失敗'); return }
+    if (error) { setSavedMsg(friendlyError(error, '日誌存檔失敗')); return }
     // 已存檔但重載失敗(ISSUE-6b):保留 dirty——store 還沒有這筆,清了 dirty
     // 會讓載入 effect 在下次 siteLogs 變動時把表單洗回「無日誌」空白
     if (warning) { setSavedMsg(warning); return }
@@ -216,7 +231,7 @@ export default function SiteLog() {
     setPhotoBusy(true)
     for (const f of files) {
       const { error } = await uploadSitePhoto(currentLog.id, f, { caption: summary || null })
-      if (error) { setSavedMsg(error.message || '照片上傳失敗'); break }
+      if (error) { setSavedMsg(friendlyError(error, '照片上傳失敗')); break }
     }
     setPhotos(await listSitePhotos(currentLog.id))
     setPhotoBusy(false)
@@ -224,7 +239,7 @@ export default function SiteLog() {
 
   const onDeletePhoto = async (p) => {
     const { error } = await deleteSitePhoto(p)
-    if (error) { setSavedMsg(`照片刪除失敗:${error.message}`); return }
+    if (error) { setSavedMsg(friendlyError(error, '照片刪除未完成')); return }
     if (currentLog?.id) setPhotos(await listSitePhotos(currentLog.id))
   }
 
@@ -253,7 +268,7 @@ export default function SiteLog() {
           caption: error ? '' : (result.caption || ''), category: error ? '' : (result.category || ''),
           // 施作區域(白板抄錄):舊版 edge fn 沒這欄=undefined,一律視同 null → 空字串(向後相容)
           location: error ? '' : (result.location || ''),
-          errMsg: error ? (error.message || '判讀失敗') : '',
+          errMsg: error ? friendlyError(error, 'AI 判讀失敗') : '',
           notSite: !error && result?.is_construction === false, // AI 判為非工地照,提醒人工確認
           work_item_key: wi?.item_key || '', work_item_label: wi ? `${wi.item_no} ${wi.description}` : '',
         } : p))
@@ -282,14 +297,14 @@ export default function SiteLog() {
           const blob = await (await fetch(ph.url)).blob()
           const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' })
           const { error, result } = await classifySitePhoto(file)
-          if (error) { fail++; firstErr = firstErr || (error.message || 'AI 判讀失敗'); continue }
+          if (error) { fail++; firstErr = firstErr || friendlyError(error, 'AI 判讀失敗'); continue }
           const wi = result?.work_item_hint ? matchLeaf(result.work_item_hint, leaves) : null
           const { error: upErr } = await updateSitePhotoMeta(ph.id, {
             caption: result?.is_construction === false ? '（AI 判讀:疑似非工地照片,請人工確認）' : (result?.caption || ''),
             work_item_key: wi?.item_key,
           })
-          if (upErr) { fail++; firstErr = firstErr || (upErr.message || '寫回失敗') } else { ok++; if (wi) matched++ }
-        } catch (e) { fail++; firstErr = firstErr || (e?.message || '處理失敗') }
+          if (upErr) { fail++; firstErr = firstErr || friendlyError(upErr, '寫回失敗') } else { ok++; if (wi) matched++ }
+        } catch (e) { fail++; firstErr = firstErr || friendlyError(e, '處理失敗') }
         setExistingMsg(`辨識中… ${ok + fail}/${list.length}`)
       }
     }
@@ -327,7 +342,7 @@ export default function SiteLog() {
         log_date: date, weather, weather_am: weather, weather_pm: weatherPm,
         labor: [], equipment: [], materials: [], extras: {}, work_summary: '', items: {},
       })
-      if (cErr || !id) { setBatchBusy(false); setSavedMsg(cErr?.message || '自動建立本日日誌失敗,請先手動存檔再上傳'); return }
+      if (cErr || !id) { setBatchBusy(false); setSavedMsg(friendlyError(cErr, '自動建立本日日誌失敗,請先手動存檔再上傳')); return }
       logId = id
     }
     let ok = 0, fail = 0
@@ -365,7 +380,7 @@ export default function SiteLog() {
     setAiBusy(true); setAiMsg('AI 辨識中…')
     const { error, result } = await readWhiteboard(file)
     setAiBusy(false)
-    if (error) { setAiMsg(`辨識失敗:${error.message || ''}`, 'error'); return }
+    if (error) { setAiMsg(friendlyError(error, 'AI 辨識失敗'), 'error'); return }
     if (result.log_date && /^\d{4}-\d{2}-\d{2}$/.test(result.log_date)) setDate(result.log_date)
     if (result.weather) setWeather(result.weather)
     if (result.work_summary) setSummary((s) => s || result.work_summary)
@@ -403,9 +418,7 @@ export default function SiteLog() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <PageHeader title="施工日誌" tagline="每日進度回報" subtitle="填各工項當日完成數量，估驗可一鍵帶入累計" />
-      </div>
+      <div>{header}</div>
 
       <div className="grid lg:grid-cols-3 gap-5">
         {/* 左欄用 space-y-5 統一卡距,卡片不再自帶 margin */}
@@ -613,9 +626,9 @@ export default function SiteLog() {
                         <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{it.unit}</td>
                         <td className="text-right text-[var(--text-2)] px-2 num whitespace-nowrap">{fmt(it.quantity)}</td>
                         <td className="text-right px-2">
-                          {/* W8-5:表格內輸入只提到 ~38px(max-sm:py-2),不加 min-h——加了整張表列高會翻倍 */}
+                          {/* W8-5:表格內輸入只提到 ~38px(max-md:py-2),不加 min-h——加了整張表列高會翻倍;斷點與手機層(md)一致 */}
                           <input type="number" min="0" step="any" inputMode="decimal" value={items[key] ?? ''} disabled={!can.edit} onChange={(e) => setQty(key, e.target.value)}
-                            className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums max-sm:py-2 focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
+                            className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums max-md:py-2 focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                         </td>
                         {/* p-2 -m-2:命中區擴大但視覺與列高不變;裸 ✕ 退場改 MSym(aria-label 不動) */}
                         <td className="text-right pl-2">{can.edit && <button onClick={() => removeItem(key)} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label="移除此工項"><MSym name="close" size={16} /></button>}</td>
@@ -851,10 +864,11 @@ export default function SiteLog() {
                             )}
                           </div>
                         )}
-                        {/* 手機沒有 hover:opacity-0 等於這顆鈕在手機根本看不見也按不到,所以 max-sm 直接常駐並放大到 36px
+                        {/* 手機沒有 hover:opacity-0 等於這顆鈕在手機根本看不見也按不到,所以 max-md 直接常駐並放大到 36px
+                            (斷點必須與 BottomNav 的 md:hidden 對齊——寫 max-sm 會讓 744px iPad mini 直式這種無 hover 的觸控裝置整顆鈕消失)
                             (縮圖只有半個 grid 欄寬,44px 會蓋掉照片主體,列為 W8-5 已知例外);鍵盤 focus 也要現形 */}
                         {can.edit && <button onClick={() => onDeletePhoto(p)} title="刪除照片" aria-label={`刪除照片 ${p.caption || `現場照片 ${i + 1}`}`}
-                          className="absolute top-1 right-1 w-6 h-6 max-sm:w-9 max-sm:h-9 grid place-items-center rounded-full bg-black/55 text-white opacity-0 max-sm:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"><MSym name="close" size={14} /></button>}
+                          className="absolute top-1 right-1 w-6 h-6 max-md:w-9 max-md:h-9 grid place-items-center rounded-full bg-black/55 text-white opacity-0 max-md:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"><MSym name="close" size={14} /></button>}
                       </div>
                     ))}
                   </div>
@@ -885,7 +899,7 @@ export default function SiteLog() {
                     {/* 日期切換是這一列的主觸控目標:手機補 44px(flex 列只會長高不會破版) */}
                     <button onClick={() => setDate(l.log_date)} className="font-medium text-[var(--text)] num text-left flex-1 truncate max-md:min-h-11">{l.log_date}</button>
                     <span className="text-xs text-[var(--text-3)]">{Object.keys(l.items).length} 工項</span>
-                    {can.edit && <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(`日誌刪除失敗:${error.message}`) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除 ${l.log_date} 日誌`}><MSym name="close" size={16} /></button>}
+                    {can.edit && <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(friendlyError(error, '日誌刪除未完成')) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除 ${l.log_date} 日誌`}><MSym name="close" size={16} /></button>}
                   </div>
                   {l.work_summary && <div className="text-xs text-[var(--text-2)] truncate mt-0.5">{l.work_summary}</div>}
                 </div>

@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
+import { friendlyError } from '../../lib/errorMessage.js'
 import {
   Card, Empty, PageHeader, Badge, Select, buttonClass, SortableTh, TablePager,
   ErrorBanner, THEAD_CLS,
@@ -68,7 +69,7 @@ function aiProcessingState(run) {
     return { kind: 'attention', label: '待處理', color: 'red', detail: `AI 建議分類:${DOCUMENT_TYPE_LABELS[run.suggested_document_type] || '無法判斷'},請人工確認` }
   }
   if (run.status === 'failed' || run.status === 'partial') {
-    return { kind: 'attention', label: '待處理', color: 'red', detail: run.error_message || '處理未完成' }
+    return { kind: 'attention', label: '待處理', color: 'red', detail: friendlyError(run.error_message, '處理未完成') }
   }
   return { kind: 'done', label: '已完成', color: 'green', detail: run.metadata?.requirement_extraction_message || '已分類歸檔' }
 }
@@ -227,7 +228,7 @@ export default function Contract() {
     identityFixTried.current = true
     ;(async () => {
       const { error } = await supabase.rpc('ensure_project_identity', { p: pid })
-      if (error) { setMsg(`初始化專案身分失敗:${error.message}`); return }
+      if (error) { setMsg(friendlyError(error, '初始化專案身分失敗')); return }
       reloadMembership()
       await reloadPackages()
     })()
@@ -247,7 +248,7 @@ export default function Contract() {
       title: defaultPackageTitle(option),
       created_by: currentUser?.user_id || null,
     }).select().single()
-    if (error) throw new Error(`建立契約包失敗:${error.message}`)
+    if (error) throw new Error(friendlyError(error, '建立契約包失敗'))
     setPackages((ps) => [...ps, data])
     return data
   }, [packages, parties, pid, currentUser])
@@ -274,9 +275,9 @@ export default function Contract() {
             const { error, count } = await importWorkItems(parsed)
             if (!error) boqImported = true
             setBoqMsg(error
-              ? { tone: 'error', text: `標單匯入失敗:${error.message}` }
+              ? { tone: 'error', text: friendlyError(error, '標單匯入失敗') }
               : { tone: 'ok', text: `標單已匯入 ${count} 項工項。` })
-          } catch (e) { setBoqMsg({ tone: 'error', text: `標單 XML 解析失敗:${e.message || ''}` }) }
+          } catch (e) { setBoqMsg({ tone: 'error', text: friendlyError(e, '標單 XML 解析失敗') }) }
         }
       } finally { setBoqBusy(false) }
     }
@@ -328,7 +329,7 @@ export default function Contract() {
       }
       await reloadRuns(pkg.id)
     } catch (e) {
-      setMsg(e?.message || '上傳失敗')
+      setMsg(friendlyError(e, '上傳失敗'))
     } finally {
       setUploading(false)
     }
@@ -348,7 +349,7 @@ export default function Contract() {
       if (docId) {
         const { error } = await supabase.from('documents')
           .update({ document_type: newType }).eq('id', docId)
-        if (error) { setMsg(`分類更新失敗:${error.message}`); return }
+        if (error) { setMsg(friendlyError(error, '分類更新失敗')); return }
         setDocsById((m) => new Map(m).set(docId, { ...m.get(docId), document_type: newType }))
       }
       const patch = { classification_status: 'confirmed' }
@@ -395,7 +396,8 @@ export default function Contract() {
         if (!result.ok && result.inProgress) {
           // 已有別的解析在跑(409 run_conflict):不可蓋寫成失敗——W13 殭屍
           // 事故裡,連點的 409 一路把活著的解析蓋成失敗。顯示原話,交持有者收尾。
-          setMsg(result.message)
+          // friendlyError 不會動伺服器的繁中原話,只擋 body 讀不到時的 generic 英文。
+          setMsg(friendlyError(result.message, '此文件已有解析在進行中，請稍候'))
           await reloadRuns(run.contract_package_id)
           return
         }
@@ -457,11 +459,11 @@ export default function Contract() {
     setBusyRunIds(new Set(busyRunsRef.current))
     try {
       const { data: paths, error } = await supabase.rpc('delete_document', { p_document: doc.id })
-      if (error) { setMsg(`刪除失敗:${error.message}`); return }
+      if (error) { setMsg(friendlyError(error, '文件刪除未完成')); return }
       if (paths?.length) {
         // 原始檔清理失敗不擋流程(讀不到的孤兒檔只佔空間),但要誠實留話
         const { error: storageError } = await supabase.storage.from('contract-documents').remove(paths)
-        if (storageError) setMsg(`文件已刪除;原始檔清理未完成:${storageError.message}`)
+        if (storageError) setMsg(`文件已刪除;原始檔清理未完成:${friendlyError(storageError, '請稍後重試')}`)
       }
       setBatchVersionIds((s) => { const n = new Set(s); n.delete(run.document_version_id); return n })
       await reloadRuns(run.contract_package_id)
@@ -583,7 +585,7 @@ export default function Contract() {
                   const option = creatableOptions[Number(value.slice(4))]
                   if (option) {
                     try { const pkg = await ensurePackage(option); setSelectedPackageId(pkg.id) }
-                    catch (err) { setMsg(err.message) }
+                    catch (err) { setMsg(friendlyError(err, '建立契約包失敗')) }
                   }
                 } else setSelectedPackageId(value)
               }}>
@@ -698,7 +700,7 @@ export default function Contract() {
               // 只有 AI 分析失敗才可原地重試;上傳失敗/掃描檔要重新上傳同檔
               const retryable = failed && r.metadata?.requirement_extraction === 'failed'
               const failMeta = failed
-                ? `${r.error_message || '處理未完成'}${!retryable && !(r.error_message || '').includes('重新上傳') ? ';請重新上傳同一份檔案(內容相同會自動接續)' : ''}`
+                ? `${friendlyError(r.error_message, '處理未完成')}${!retryable && !(r.error_message || '').includes('重新上傳') ? ';請重新上傳同一份檔案(內容相同會自動接續)' : ''}`
                 : null
               return (
                 <div key={r.id} className="grid grid-cols-[22px_1fr_128px] items-center gap-3 px-3.5 py-2.5 border-t border-[var(--border-2)]">
@@ -757,7 +759,7 @@ export default function Contract() {
                   <MSym name="error" size={19} fill className="text-[var(--red-text)] shrink-0 mt-0.5" />
                   <div className="text-[12.5px] text-[var(--red-text)] leading-relaxed">
                     {panelFailed.length} 個檔案待處理:{panelFailed[0] && (docsById.get(versionsById.get(panelFailed[0].document_version_id)?.document_id)?.title || '文件')}
-                    {panelFailed[0]?.error_message ? `——${panelFailed[0].error_message}` : ''}
+                    {panelFailed[0]?.error_message ? `——${friendlyError(panelFailed[0].error_message, '處理未完成')}` : ''}
                     {/* 與標頭同一套帳:處理完成=非失敗(含分類待確認),兩處數字不得打架 */}
                     。其餘 {panelRuns.length - panelFailed.length} 個檔案處理完成,不需重傳。
                   </div>
@@ -921,7 +923,7 @@ export default function Contract() {
                   {versionsById.get(r.document_version_id) ? docsById.get(versionsById.get(r.document_version_id).document_id)?.title : r.document_version_id}
                   ·status {r.status}·stage {r.stage}·parser {r.parser_type || '-'}
                   ·信心 {r.classification_confidence != null ? Math.round(r.classification_confidence * 100) + '%' : '-'}
-                  {r.error_message ? `·${r.error_message}` : ''}
+                  {r.error_message ? `·${friendlyError(r.error_message, '處理未完成')}` : ''}
                 </div>
               ))}
             </div>

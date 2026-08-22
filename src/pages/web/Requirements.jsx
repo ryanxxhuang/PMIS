@@ -9,6 +9,7 @@ import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { pageAllInSafe } from '../../lib/pagedQuery.js'
 import { Card, Empty, PageHeader, Badge, Button, Field, Input, Textarea, Select, PrerequisiteEmptyState, ErrorBanner, Surface, SkeletonList, buttonClass } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 // W11:期限追蹤(原 /contract 義務時程)搬進本頁——契約重點核定後直接在
 // 同一頁長出到期日、已提送與罰款試算,不再跳頁
@@ -65,7 +66,7 @@ export function requirementsIntro(runs = [], rowCount = 0) {
     return {
       ingestionDone, mode: 'failed', coverageWarning: null,
       note: null,
-      emptyText: `最近一次 AI 整理失敗${latestFailed.error_message ? `:${latestFailed.error_message}` : ''}。到「專案文件」的文件清單可重試分析。`,
+      emptyText: `最近一次 AI 整理失敗${latestFailed.error_message ? `:${friendlyError(latestFailed.error_message, '請重試')}` : ''}。到「專案文件」的文件清單可重試分析。`,
     }
   }
   return {
@@ -232,7 +233,7 @@ export default function Requirements() {
     setAnchorErr('')
     if (isPersistedProject) {
       const { error } = await updateProjectAnchors({ [key]: val || null })
-      if (error) { setAnchorErr(`未儲存:${error.message}`); return }
+      if (error) { setAnchorErr(friendlyError(error, '基準日未儲存')); return }
     }
     setAnchors((a) => ({ ...a, [key]: val })) // demo:只進本地,供時間軸展示
   }
@@ -308,7 +309,7 @@ export default function Requirements() {
       setSourcesByReq(byReq)
       setVersionsById(new Map(versions.map((v) => [v.id, v])))
     } catch (error) {
-      setLoadError(`契約重點載入失敗：${error?.message || '請稍後再試'}`)
+      setLoadError(friendlyError(error, '契約重點載入失敗'))
     } finally {
       setLoaded(true)
     }
@@ -376,7 +377,7 @@ export default function Requirements() {
       p_requirement_id: requirementId, p_decision: decision,
     })
     setBusy('')
-    if (error) { setMsg(`審查失敗:${error.message || ''}`); return }
+    if (error) { setMsg(friendlyError(error, '審查未完成')); return }
     setRows((rs) => rs.map((r) => (r.id === data.id ? data : r)))
     if (decision === 'approve' && data.requirement_type === 'deadline') await reloadObligations()
     setMsg('')
@@ -423,7 +424,7 @@ export default function Requirements() {
     const { data, error } = await supabase.from('requirements')
       .update(patch).eq('id', selectedId).select().single()
     setBusy('')
-    if (error) { setMsg(`儲存失敗:${error.message || ''}`); return }
+    if (error) { setMsg(friendlyError(error, '儲存未完成')); return }
     setRows((rs) => rs.map((r) => (r.id === data.id ? data : r)))
     setEditing(null); setMsg('')
   }
@@ -433,7 +434,7 @@ export default function Requirements() {
       .update({ review_status })
       .eq('requirement_id', selectedId).eq('work_item_id', workItemId)
       .select().single()
-    if (error) { setMsg(`工項連結更新失敗:${error.message || ''}`); return }
+    if (error) { setMsg(friendlyError(error, '工項連結更新失敗')); return }
     setLinks((ls) => ls.map((l) => (l.work_item_id === workItemId ? data : l)))
   }
 
@@ -478,7 +479,7 @@ export default function Requirements() {
       status: 'needs_review',
     }).select().single()
     setManualBusy(false)
-    if (error) { setManualMsg(`新增失敗:${error.message || ''}`); return }
+    if (error) { setManualMsg(friendlyError(error, '契約重點新增未完成')); return }
     setManualMsg('')
     setManualDraft(MANUAL_BLANK)
     setManualOpen(false)
@@ -496,7 +497,7 @@ export default function Requirements() {
         requirement_id: selectedId, work_item_id: item.id,
         match_type: 'manual', review_status: 'approved',
       }).select().single()
-    if (error) { setMsg(`新增工項連結失敗:${error.message || ''}`); return }
+    if (error) { setMsg(friendlyError(error, '新增工項連結失敗')); return }
     setLinks((ls) => [...ls, data]); setManualItemNo(''); setMsg('')
   }
 
@@ -569,12 +570,12 @@ export default function Requirements() {
                     if (it.done) {
                       // 退回待辦:一併解除佐證連結(W-01)
                       const { error } = await updateObligationStatus(it.ob.id, '待辦', { evidence_submittal_id: null })
-                      if (error) setObligationMsg(`狀態未寫入:${error.message}`)
+                      if (error) setObligationMsg(friendlyError(error, '狀態未寫入'))
                     } else if (submittals.length) {
                       setEvidenceFor(evidenceFor === it.ob.id ? null : it.ob.id); setEvidencePick('')
                     } else {
                       const { error } = await updateObligationStatus(it.ob.id, '已提送')
-                      if (error) setObligationMsg(`狀態未寫入:${error.message}`)
+                      if (error) setObligationMsg(friendlyError(error, '狀態未寫入'))
                     }
                   }}
                     className={it.done
@@ -596,7 +597,7 @@ export default function Requirements() {
                     <Button size="sm" onClick={async () => {
                       const { error } = await updateObligationStatus(it.ob.id, '已提送',
                         evidencePick ? { evidence_submittal_id: evidencePick } : {})
-                      if (error) { setObligationMsg(`狀態未寫入:${error.message}`); return }
+                      if (error) { setObligationMsg(friendlyError(error, '狀態未寫入')); return }
                       setEvidenceFor(null)
                     }}>{evidencePick ? '掛佐證並標為已提送' : '直接標為已提送'}</Button>
                     <Button variant="ghost" size="sm" onClick={() => setEvidenceFor(null)}>取消</Button>
@@ -738,6 +739,14 @@ export default function Requirements() {
     </Card>
   )
 
+  // GTM 第②格:可寄給事務所/監造的「對照報告」入口(抽到哪些、出處對不對、
+  // 漏了什麼)。有分析紀錄或契約重點才顯示——demo 專案沒有真實 run 可報告。
+  const reportAction = isPersistedProject && (runs.length > 0 || rows.length > 0) ? (
+    <Link to="/requirements/report" className={buttonClass('outline', 'sm')}>
+      <MSym name="fact_check" size={14} /> 輸出對照報告
+    </Link>
+  ) : null
+
   if (!isPersistedProject) {
     // demo:期限追蹤吃 seed 義務照常展示(銷售簡報動線);AI 整理需真實專案
     return (
@@ -774,7 +783,8 @@ export default function Requirements() {
   if (loaded && !rows.length) {
     return (
       <div className="space-y-5">
-        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+        {/* 0 筆也給對照報告入口:「AI 讀完了但沒抽到」正是最需要書面揭露涵蓋範圍的時刻 */}
+        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" action={reportAction} />
         <Card title="契約重點">
           {intro.mode === 'done-empty'
             ? <Empty>{intro.emptyText}</Empty>
@@ -798,7 +808,7 @@ export default function Requirements() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+      <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" action={reportAction} />
 
       {/* 期限追蹤在最上:核定是一次性的,追蹤到期才是天天要看的 */}
       {deadlineSection}

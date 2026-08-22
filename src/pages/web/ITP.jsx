@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 // 工項挑選器與品質缺失共用同一份(原本這裡有一份輕量複本,浮層陰影/命中區的修正只落在其中一邊)
 import { WorkItemPicker } from '../../components/DefectTracker.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -38,7 +39,17 @@ export default function ITP() {
     return workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
   }, [workItems])
 
-  if (!workItems) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
+  // 載入分支同樣要保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,
+  // 之前只補了「標單未匯入」那一支,載入中仍會整條分頁列消失。
+  if (!workItems) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="檢驗停留點" tagline="ITP"
+          subtitle="H＝停留點（監造未查驗不得續作）、W＝見證點、R＝文審點。施作中未叫驗的 H 點會亮紅並進提醒中心。" />
+        <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} /></Card>
+      </div>
+    )
+  }
   // 停留點掛在標單工項上(slice 寫入走 dbMode):標單未匯入前擋牆,避免寫進記憶體假成功。
   // 早退也保留 PageHeader:頁首與工作面分頁不該因為「標單還沒匯入」整組消失
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
@@ -58,7 +69,7 @@ export default function ITP() {
     setErrMsg(''); setBusy(true)
     const { error } = await createInspectionPoint(form)
     setBusy(false)
-    if (error) { setErrMsg(`停留點未建立:${error.message}`); return }
+    if (error) { setErrMsg(friendlyError(error, '停留點未建立')); return }
     setForm(null)
   }
 
@@ -148,7 +159,7 @@ export default function ITP() {
                     {/* 列內動作固定次級:緊急性由列底色與「施作中未叫驗」色票承擔,
                         同一份清單不因逐列狀態長出兩種按鈕階級 */}
                     {st.key === 'pending' && can.submit && p.point_type !== 'R' && (
-                      <Button size="sm" variant="secondary" onClick={async () => { setErrMsg(''); setBusy(true); const { error } = await requestInspectionForPoint(p); setBusy(false); if (error) setErrMsg(`查驗申請未送出:${error.message}`) }} disabled={busy}>
+                      <Button size="sm" variant="secondary" onClick={async () => { setErrMsg(''); setBusy(true); const { error } = await requestInspectionForPoint(p); setBusy(false); if (error) setErrMsg(friendlyError(error, '查驗申請未送出')) }} disabled={busy}>
                         申請查驗
                       </Button>
                     )}
@@ -157,7 +168,7 @@ export default function ITP() {
                     )}
                     {can.approve && (
                       // p-2 -m-2 只擴命中區、視覺與列高不變(同 DefectTracker/ChangeOrders 的刪除鈕)
-                      <button onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspectionPoint(p.id); if (error) setErrMsg(`刪除失敗:${error.message}`) } }}
+                      <button onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspectionPoint(p.id); if (error) setErrMsg(friendlyError(error, '停留點刪除未完成')) } }}
                         aria-label={`刪除停留點 ${p.title}`}
                         className="inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 text-[var(--text-3)] hover:text-[var(--red-text)]"><MSym name="close" size={16} /></button>
                     )}

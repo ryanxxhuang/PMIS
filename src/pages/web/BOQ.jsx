@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Surface, Button, PageHeader, SkeletonList, ErrorBanner, FilterChip, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 
@@ -32,7 +33,7 @@ export default function BOQ() {
       const result = parsePccesXml(await file.text())
       setParsed(result)
     } catch (err) {
-      setImportErr(err.message || '解析失敗')
+      setImportErr(friendlyError(err, '標單解析失敗'))
     }
     if (fileRef.current) fileRef.current.value = '' // 允許重選同檔
   }
@@ -41,7 +42,7 @@ export default function BOQ() {
     setImporting(true); setImportErr('')
     const { error } = await importWorkItems(parsedData)
     setImporting(false)
-    if (error) setImportErr(error.message || '匯入失敗')
+    if (error) setImportErr(friendlyError(error, '標單匯入失敗'))
     else setParsed(null)
   }
   // 真專案且標單為空（不再以範例冒充）→ 顯示匯入 onboarding
@@ -59,16 +60,31 @@ export default function BOQ() {
     return map
   }, [data])
 
+  // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
+  // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
+  // 使用者會被關在錯誤/載入畫面裡,換不到同工作面的其他頁。
+  // meta/action 依賴 data,早退分支只給標題與 tagline。
+  const header = <PageHeader title="標單工項" tagline="BOQ / WBS" />
   if (workItemsSource === 'error') {
     // 查詢失敗走 ErrorBanner(內建重試),不畫成空狀態——Empty 保留給真的 0 筆
     return (
-      <Card title="標單工項">
-        <ErrorBanner msg={`標單工項讀取失敗：${workItemsError || '請稍後再試'}`} onRetry={retryWorkItems} />
-      </Card>
+      <div className="space-y-5">
+        {header}
+        <Card title="標單工項">
+          <ErrorBanner msg={`標單工項讀取失敗：${friendlyError(workItemsError, '請稍後再試')}`} onRetry={retryWorkItems} />
+        </Card>
+      </div>
     )
   }
   // 載入中用骨架屏:Empty 自帶 inbox 圖示,擺在載入分支等於先跟使用者說「沒資料」
-  if (!data) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入標單工項中…" /></Card>
+  if (!data) {
+    return (
+      <div className="space-y-5">
+        {header}
+        <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入標單工項中…" /></Card>
+      </div>
+    )
+  }
 
   const { meta } = data
   const roots = (childrenMap.get('__root__') || []).filter((it) => !onlyBillable || it.is_billable)
@@ -134,7 +150,7 @@ export default function BOQ() {
           <Button variant="ghost" onClick={async () => {
             if (await appConfirm({ title: '重新匯入標單？', body: '會清空此專案的標單工項，以及相依的估驗、進度、施工日誌、查驗、缺失。', danger: true, confirmLabel: '清空重匯' })) {
               const { error } = await resetProjectBoq()
-              setResetErr(error ? (error.message || '清空失敗,資料未變動') : '')
+              setResetErr(error ? friendlyError(error, '清空失敗,資料未變動') : '')
             }
           }}><MSym name="refresh" size={15} />重新匯入標單</Button>
         )} />

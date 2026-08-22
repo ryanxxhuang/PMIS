@@ -8,6 +8,7 @@
 
 import { cors, jsonResponse as json } from '../_shared/claude.ts'
 import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
+import { taipeiTodayUTC, formatDate } from '../_shared/contractDue.ts'
 
 const DATASET = 'F-D0047-089' // 鄉鎮天氣預報-臺灣未來 3 天(逐 3 小時,含天氣現象/3小時降雨機率)
 const R = Math.PI / 180
@@ -72,7 +73,8 @@ Deno.serve(async (req) => {
     if (!key) return json({ error: '伺服器未設定 CWA_API_KEY(中央氣象局授權碼)' }, 500)
     const { lat, lon, date } = body || {}
     if (lat == null || lon == null) return json({ error: '缺少工地座標' }, 400)
-    const day = (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) ? date : new Date().toISOString().slice(0, 10)
+    // 回退的「今天」取台北日曆日(伺服器時鐘是 UTC,台灣 00:00–08:00 會查到前一天的預報)
+    const day = (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) ? date : formatDate(taipeiTodayUTC())
 
     const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/${DATASET}?Authorization=${encodeURIComponent(key)}`
     const resp = await fetch(url)

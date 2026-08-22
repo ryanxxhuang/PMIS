@@ -68,4 +68,22 @@ describe('auditProject', () => {
     expect(checks.find((c) => c.category === '契約').status).toBe('risk')
     expect(summary.risk).toBe(1)
   })
+
+  it('台北 00:00–08:00 的「今天」不退到前一天:昨日到期首日凌晨即列逾期', () => {
+    // UTC 7/7 16:30 = 台北 7/8 00:30——舊寫法 toISOString 會把今天算成 7/7,
+    // 7/7 到期的缺失/義務整個早上不會被列為逾期(法定期限敏感)
+    const t = new Date('2026-07-07T16:30:00Z')
+    const { checks } = auditProject({
+      defects: [
+        { title: '昨日到期', status: '開立', due_date: '2026-07-07' },
+        { title: '今日到期', status: '開立', due_date: '2026-07-08' }, // 今天到期還不算逾期
+      ],
+      obligations: [{ title: '投保', status: '待辦', trigger_event: 'fixed', fixed_date: '2026-07-07' }],
+      billableTotal: 1000,
+    }, t)
+    const q = checks.find((c) => c.category === '品質')
+    expect(q.status).toBe('warn')
+    expect(q.title).toContain('1 件') // 只有 7/7 那件;7/8 到期不在內
+    expect(checks.find((c) => c.category === '契約').status).toBe('risk')
+  })
 })

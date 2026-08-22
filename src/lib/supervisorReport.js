@@ -1,13 +1,18 @@
 // AI 監造報表草稿 — 全確定性（無需後端）。把某月的施工日誌、查驗、缺失、送審彙整成
 // 監造視角的報表，並生出一段「監造意見」草稿供監造覆核修改。唯讀：只產草稿，不送出。
 import { rainDayCount } from './weatherMetrics.js'
+import { taipeiISODate } from './dates.js'
 
 const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 const ym = (s) => (s || '').slice(0, 7)
 
-export function buildSupervisorReport(data = {}, monthLabel) {
+// today 可注入:逾期判斷與月份回退才能用固定日期測試,不吃真時鐘。
+export function buildSupervisorReport(data = {}, monthLabel, today = new Date()) {
   const { project = {}, siteLogs = [], inspections = [], defects = [], submittals = [], progress = null } = data
-  const M = monthLabel || ym(new Date().toISOString())
+  // 業務上的「本月/今天」都取台北日曆日:UTC 在台灣 00:00–08:00 還是前一天
+  // (月初凌晨開報表會落回上個月;逾期缺失首日早上不會被列為逾期)。
+  const isoToday = taipeiISODate(today)
+  const M = monthLabel || ym(isoToday)
   const inM = (d) => ym(d) === M
 
   // 施工日誌（本月）
@@ -16,16 +21,17 @@ export function buildSupervisorReport(data = {}, monthLabel) {
   const rainDays = rainDayCount(logs) // 與施工月報/AI 助理同源
   const summaries = logs.map((l) => ({ date: l.log_date, text: l.work_summary })).filter((x) => x.text)
 
-  // 查驗辦理（本月申請或本月判定者）
-  const insp = inspections.filter((i) => inM(i.requested_date) || inM((i.inspected_at || '').slice(0, 10)))
+  // 查驗辦理（本月申請或本月判定者）。inspected_at / closed_at 是 timestamptz(UTC),
+  // 直接 slice 取到的是 UTC 日,月初 00:00–08:00 的判定/結案會被歸到上個月。
+  const insp = inspections.filter((i) => inM(i.requested_date) || inM(taipeiISODate(i.inspected_at)))
   const inspPass = insp.filter((i) => i.status === '合格').length
   const inspFail = insp.filter((i) => i.status === '不合格').length
   const inspPending = inspections.filter((i) => i.status === '待查驗').length
 
   // 缺失督導（現況 + 本月結案）
   const defOpen = defects.filter((d) => d.status !== '已結案')
-  const defClosedM = defects.filter((d) => d.status === '已結案' && inM((d.closed_at || '').slice(0, 10)))
-  const defOverdue = defOpen.filter((d) => d.due_date && d.due_date < new Date().toISOString().slice(0, 10))
+  const defClosedM = defects.filter((d) => d.status === '已結案' && inM(taipeiISODate(d.closed_at)))
+  const defOverdue = defOpen.filter((d) => d.due_date && d.due_date < isoToday)
   const defNoDue = defOpen.filter((d) => !d.due_date)
 
   // 送審審核（本月審定者 + 現況待審）

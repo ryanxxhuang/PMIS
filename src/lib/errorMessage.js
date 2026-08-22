@@ -33,6 +33,14 @@ const AUTH_MESSAGES = [
 // 網路層問題:使用者能自己處理(重試/檢查連線),講清楚比蓋掉有用。
 const NETWORK = /failed to fetch|networkerror|load failed|network request failed/i
 
+// 判斷「這段訊息是不是我們自己寫的」:Postgres/GoTrue/Storage/fetch 的原始錯誤
+// 永遠是英文 ASCII;會出現中日韓表意文字的,只有 store slice 與 edge function
+// 刻意組給使用者看的繁中訊息(例如「需先存檔日誌」「此功能未開放」)。
+// 這些訊息蓋掉反而讓使用者不知道為什麼被擋,所以原樣放行。
+// ⚠️ 前提:全站不得再用樣板字串把 raw error.message 拼進中文訊息
+//(有 errorLeak.scan.test.js 凍結),否則拼進去的英文原始錯誤會搭中文便車外洩。
+const CJK = /[\u3400-\u9fff\uf900-\ufaff]/
+
 /**
  * 把任意錯誤轉成可以安全顯示給使用者的中文訊息。
  *
@@ -48,6 +56,23 @@ export function friendlyError(error, fallback = '操作未完成，請稍後再�
   // 我們自己的業務規則(DB 觸發器 raise exception)——原樣顯示,那是使用者需要知道的事。
   if (code === 'P0001' && raw) return raw
 
+  // 我們自己組的繁中訊息(store slice 防呆、edge function 業務錯誤)——原樣顯示。
+  // 但舊資料有「中文前綴:英文原始錯誤」的樣板拼接(errorLeak.scan.test.js 凍結之前
+  // 寫進 document_ingestion_runs.error_message 的格式),英文尾巴不得搭中文便車:
+  // 首個冒號後若是純非 CJK 的原始錯誤就截掉,只留我們自己寫的中文前綴。
+  if (CJK.test(raw)) {
+    const idx = raw.search(/[:：]/)
+    if (idx > 0) {
+      const prefix = raw.slice(0, idx)
+      const tail = raw.slice(idx + 1)
+      if (CJK.test(prefix) && tail.trim() && !CJK.test(tail)) {
+        console.error('[friendlyError] 已截斷舊樣板的原始錯誤尾巴:', error)
+        return prefix.trim()
+      }
+    }
+    return raw
+  }
+
   for (const [pattern, zh] of AUTH_MESSAGES) {
     if (pattern.test(raw)) return zh
   }
@@ -55,5 +80,8 @@ export function friendlyError(error, fallback = '操作未完成，請稍後再�
   if (NETWORK.test(raw)) return '網路連線不穩，請確認連線後再試一次。'
 
   // 其餘一律不外洩細節。附上短代碼讓使用者回報時我們能對到 Sentry 的事件。
+  // 原始錯誤只進 console(開發者自己的瀏覽器才看得到),畫面上不得出現——
+  // 集中在這裡記,呼叫端就不必每處都補一行 console.error。
+  console.error('[friendlyError] 已遮蔽的原始錯誤:', error)
   return code ? `${fallback}（代碼 ${code}）` : fallback
 }

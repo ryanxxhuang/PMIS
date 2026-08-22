@@ -3,6 +3,7 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 import { Card, Button, Field, Input, Textarea, Badge, BallChip, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { rfiBall } from '../../lib/ballInCourt.js'
@@ -43,7 +44,7 @@ export default function RFI() {
     setErrMsg(''); setBusy(true)
     const { error } = await answerRfi(r.id, ans.trim())
     setBusy(false)
-    if (error) setErrMsg(`回覆未寫入：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '回覆未寫入'))
     else setAiDraft((m) => { const n = { ...m }; delete n[r.id]; return n }) // 回覆後收起草稿
   }
 
@@ -52,7 +53,7 @@ export default function RFI() {
     setDraftBusy(r.id); setErrMsg('')
     const { error, result } = await draftRfiReply(r)
     setDraftBusy(null)
-    if (error) { setErrMsg(`AI 回覆草稿失敗：${error.message || ''}`); return }
+    if (error) { setErrMsg(friendlyError(error, 'AI 回覆草稿失敗')); return }
     setAiDraft((m) => ({ ...m, [r.id]: result }))
   }
   const closeDraft = (id) => setAiDraft((m) => { const n = { ...m }; delete n[id]; return n })
@@ -60,7 +61,7 @@ export default function RFI() {
     setErrMsg(''); setBusy(true)
     const { error } = await closeRfi(r.id)
     setBusy(false)
-    if (error) setErrMsg(`結案未寫入：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '結案未寫入'))
   }
 
   const open = rfis.filter((r) => r.status === '待回覆').length
@@ -147,7 +148,7 @@ export default function RFI() {
                         if (!(await appConfirm({ title: '刪除此疑義？', danger: true, confirmLabel: '刪除' }))) return
                         setErrMsg('')
                         const { error } = await deleteRfi(r.id)
-                        if (error) setErrMsg(`刪除失敗：${error.message}`)
+                        if (error) setErrMsg(friendlyError(error, 'RFI 刪除未完成'))
                       }}>刪除</Button>
                     )}
                   </div>

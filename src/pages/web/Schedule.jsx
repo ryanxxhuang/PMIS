@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
 import { Card, Stat, Empty, Badge, Input, PageHeader, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parseLocalDate } from '../../lib/dates.js'
 
@@ -25,7 +26,7 @@ export default function Schedule() {
   const onSet = async (key, patch) => {
     setErrMsg('')
     const { error } = await setItemSchedule(key, patch)
-    if (error) setErrMsg(`排程未寫入：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '排程未寫入'))
   }
 
   // 發包末端工項 + 查表。吃 adjustedItems 而非原始 workItems(財務單一真相層 B-02):
@@ -64,8 +65,16 @@ export default function Schedule() {
   const q = search.trim()
   const results = q ? leaves.filter((it) => !itemSchedules[it.item_key] && (it.description.includes(q) || (it.item_no || '').includes(q))).slice(0, 15) : []
 
+  // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
+  // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
+  // 使用者會被關在空狀態畫面裡,換不到同工作面的其他頁。
   if (!dbMode && !demoMode) {
-    return <Card title="逐工項排程"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        <PageHeader title="逐工項排程" tagline="每項計畫起迄・落後追蹤" subtitle="對關鍵工項設定計畫起迄，依最新估驗完成數量自動判斷落後" />
+        <Card title="逐工項排程"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+      </div>
+    )
   }
 
   return (

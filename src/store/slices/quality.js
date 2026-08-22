@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase.js'
 import { judgeChecklist, deriveTestSampleUpdate, shouldCreateTestSampleDefect, sampleDues, pendingSamplesFromLogs } from '../../lib/qc.js'
 import { TEMPLATE_03310 } from '../../data/checklist03310.js'
 import { loadQualityFromDB, loadDefectsFromDB } from '../db.js'
+import { taipeiToday } from '../../lib/dates.js'
 import { mutationOutcome } from './billing.js'
 
 export function useQualitySlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }, siteLogs) {
@@ -377,7 +378,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
 
   // 從停留點發起查驗申請:建立查驗並回寫 inspection_id 連結(狀態自此由查驗推導)
   const requestInspectionForPoint = useCallback(async (point) => {
-    const today = new Date().toISOString().slice(0, 10)
+    // 申請日是業務日期:台北日曆日(UTC 在台灣凌晨會落成前一天)
+    const today = taipeiToday()
     if (!dbMode) {
       const inspId = `INSP-${Date.now()}`
       setInspections((is) => [{

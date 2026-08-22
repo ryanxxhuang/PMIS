@@ -12,7 +12,7 @@
 //   4. 「今天已完成」只採可靠的操作時間戳(closed_at / inspected_at),
 //      不把可回填的業務日期(請款日/日誌日期/審定日)當成「今天按下完成」。
 import { collaborationItems } from './ballInCourt.js'
-import { parseLocalDate } from './dates.js'
+import { parseLocalDate, taipeiISODate, localISODate } from './dates.js'
 import { computeObligationDue } from './contractDue.js'
 import { sampleAlerts } from './qc.js'
 import { acceptanceAlerts, deriveAcceptance, ACCEPTANCE_STAGE_ORGS } from './acceptance.js'
@@ -50,22 +50,9 @@ export const WAITING_SCOPE = Object.freeze({
 // 期限型項目只列「已逾期」與 N 日內到期,沿用提醒中心既有門檻。
 const SOON_DAYS = 7
 
-// timestamptz → 台北日曆日。伺服器存 UTC,台灣凌晨的操作在 UTC 下是前一天;
-// 「今天完成」若用 UTC 判斷,早班的結案會整天不出現(W8-2A §3.3)。
-const TAIPEI_YMD = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
-})
-export function taipeiISODate(value) {
-  if (!value) return null
-  const d = value instanceof Date ? value : new Date(value)
-  if (isNaN(d)) return null
-  return TAIPEI_YMD.format(d)
-}
-
-// 本地 Date(computeObligationDue 回傳的形狀)→ 'YYYY-MM-DD'
-const localISODate = (d) => (d instanceof Date && !isNaN(d)
-  ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  : null)
+// taipeiISODate 已抽到 dates.js 當全站業務日期的單一真相;這裡 re-export
+// 維持既有 import 路徑(useTodayTasks / Dashboard / 測試)不動。
+export { taipeiISODate }
 
 const isoToUTC = (iso) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''))

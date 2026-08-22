@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, ErrorBanner, Input, PageHeader } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 
 // 正式站一律留空,用 placeholder 當範例提示;不預填任何真實案值,避免使用者只改名就
 // 建出錯的契約/機關/廠商(P1-04)。施工廠商也不自動帶登入者公司。
@@ -23,7 +24,7 @@ export default function ProjectSetup() {
     setErr(''); setLoading(true)
     const { error } = await createProject(form)
     setLoading(false)
-    if (error) { setErr(error.message || '建立失敗，請再試一次'); return }
+    if (error) { setErr(friendlyError(error, '專案建立失敗，請再試一次')); return }
     // 成功 → 前往專案文件(D-007 文件優先:標單/契約/規範一次上傳,初始化只有這一條路)
     navigate('/contract')
   }

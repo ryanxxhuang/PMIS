@@ -7,9 +7,12 @@
 import { computeObligationDue } from './contractDue.js'
 import { pendingSamplesFromLogs } from './qc.js'
 import { rainDayCount } from './weatherMetrics.js'
+import { localISODate, taipeiISODate } from './dates.js'
 
 const r1 = (n) => (n == null || isNaN(n) ? null : Math.round(n * 10) / 10)
-const iso = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : d)
+// 本地午夜 Date(computeObligationDue 的形狀)→ 'YYYY-MM-DD'。不能用 toISOString:
+// 台北的本地午夜轉 UTC 是前一天 16:00,到期日會整批往前掉一天。
+const iso = (d) => (d instanceof Date ? localISODate(d) : d)
 
 // AI 可引用的路由白名單(label → hash 路由;edge fn 只准從這裡挑 sources)
 export const SOURCE_ROUTES = {
@@ -20,7 +23,9 @@ export const SOURCE_ROUTES = {
 }
 
 export function buildAssistantFacts(d = {}, today = new Date()) {
-  const t0 = iso(today)
+  // 「今天」取台北日曆日:iso(=本地格式化)對「現在」這種帶時間的 Date 仍取本地日,
+  // 但業務日以台灣為準;逾期比較(due < 今天)在台灣 00:00–08:00 才不會差一天。
+  const t0 = taipeiISODate(today)
   const {
     project = {}, progress = {}, finance = {}, valuations = [], defects = [], inspections = [],
     siteLogs = [], testSamples = [], obligations = [], changeOrders = [], submittals = [], rfis = [],

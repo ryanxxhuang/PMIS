@@ -4,6 +4,9 @@
 import { useState, useCallback } from 'react'
 import { users } from '../../data/seed.js'
 import { supabase } from '../../lib/supabase.js'
+// taipeiToday:審定日/提送日/提出日/回覆日是業務日期,用 UTC 落庫的話
+// 台灣 00:00–08:00 的操作會記成前一天(月報歸期、期限起算都跟著錯一天)。
+import { taipeiToday } from '../../lib/dates.js'
 import { mutationOutcome } from './billing.js'
 import { fileToBase64, extractContractText } from '../db.js'
 
@@ -64,7 +67,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
   // 監造審定:審核中|核准|核備|退回補正|駁回。DB 成功才更新 UI(失敗=UI 不變)。
   const decideSubmittal = useCallback(async (id, status, review_note) => {
     const patch = { status, review_note: review_note || null }
-    if (status !== '審核中') patch.decided_date = new Date().toISOString().slice(0, 10)
+    if (status !== '審核中') patch.decided_date = taipeiToday()
     if (isPersistedProject) {
       const res = await supabase.from('submittals').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '審定未寫入:可能無權限或這筆送審已被移除')
@@ -87,7 +90,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       ? `${cur.attachment_note ? `${cur.attachment_note}\n` : ''}補正(Rev.${rev}):${correctionNote.trim()}`
       : cur.attachment_note
     const patch = { status: '已提送', revision: rev, decided_date: null,
-      submitted_date: new Date().toISOString().slice(0, 10), attachment_note: note || null }
+      submitted_date: taipeiToday(), attachment_note: note || null }
     if (isPersistedProject) {
       const res = await supabase.from('submittals').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '再送未寫入:可能無權限或這筆送審已被移除')
@@ -225,7 +228,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       rfi_no: input.rfi_no || nextSerial(rfis, 'rfi_no', 'RFI'),
       title: input.title, question: input.question || null,
       answer: null, status: '待回覆',
-      asked_date: input.asked_date || new Date().toISOString().slice(0, 10),
+      asked_date: input.asked_date || taipeiToday(),
       due_date: input.due_date || null, answered_date: null,
       cost_impact: !!input.cost_impact, schedule_impact: !!input.schedule_impact,
     }
@@ -243,7 +246,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
 
   // 回覆/結案:DB 成功才更新 UI(失敗=UI 不變)。
   const answerRfi = useCallback(async (id, answer) => {
-    const patch = { answer, status: '已回覆', answered_date: new Date().toISOString().slice(0, 10) }
+    const patch = { answer, status: '已回覆', answered_date: taipeiToday() }
     if (isPersistedProject) {
       const res = await supabase.from('rfis').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '回覆未寫入:可能無權限或這筆疑義已被移除')

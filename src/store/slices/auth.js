@@ -47,8 +47,11 @@ export function useAuthSlice() {
       if (!session?.user) { lastUserId = null; if (active) setCurrentUser(null); return }
       if (session.user.id === lastUserId) return
       lastUserId = session.user.id
+      // 不可寫 select('*'):20260822010100 起 authenticated 對 profiles 只有逐欄
+      // SELECT 授權(is_platform_admin 刻意不授,管理員身分走 is_platform_admin()
+      // RPC 判定),select * 會 42501。要用新欄位就明列在這裡。
       const { data: profile } = await supabase
-        .from('profiles').select('*').eq('id', session.user.id).single()
+        .from('profiles').select('full_name, company, org_type, role').eq('id', session.user.id).single()
       if (!active) return
       setCurrentUser({
         user_id: session.user.id,

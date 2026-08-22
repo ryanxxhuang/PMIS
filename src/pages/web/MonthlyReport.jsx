@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, Button, PageHeader, Surface, Input, Textarea, Field, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
 import { rainDayCount } from '../../lib/weatherMetrics.js'
@@ -84,8 +85,17 @@ export default function MonthlyReport() {
     }
   }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, tree, billable, workItems])
 
+  // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
+  // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
+  // 使用者會被關在空狀態畫面裡,換不到同工作面的其他頁。
+  // 主分支的月份選擇器依賴 data,空狀態只給標題三件組。
   if (!dbMode && !demoMode) {
-    return <Card title="施工月報"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+    return (
+      <div className="space-y-5">
+        <PageHeader title="施工月報" tagline="自動彙編" subtitle="選月份 → 自動彙整進度 / 估驗 / 品質 / 工安 / 變更 → 列印或存 PDF" />
+        <Card title="施工月報"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+      </div>
+    )
   }
 
   const cnt = (arr, pred) => arr.filter(pred).length
@@ -280,7 +290,7 @@ export default function MonthlyReport() {
               }
               const { error, result } = await draftMonthlyReview(payload)
               setAiBusy(false)
-              if (error) { setAiErr(error.message || 'AI 草稿失敗'); return }
+              if (error) { setAiErr(friendlyError(error, 'AI 草稿失敗')); return }
               // 確定性驗證:草稿中的數字必須全部出自 facts,否則整份擋下不帶入
               const check = validateDraft(`${result.review || ''}\n${result.next_plan || ''}`, payload)
               if (!check.ok) {

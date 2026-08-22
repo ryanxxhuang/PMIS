@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Badge, Empty, PageHeader, SkeletonList, Input, Select, ErrorBanner } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 
 const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owner: '主辦機關' }
@@ -52,7 +53,7 @@ export default function Members() {
     setBusy(true); setMsg(null)
     const { error } = await addMemberByEmail(email.trim(), 'member', inviteOrg)
     setBusy(false)
-    if (error) { setMsg({ ok: false, text: error.message || '加入失敗' }); return }
+    if (error) { setMsg({ ok: false, text: friendlyError(error, '成員加入失敗') }); return }
     setEmail(''); setMsg({ ok: true, text: `已加入(${ORG_LABEL[inviteOrg]})。` })
     reload()
   }
@@ -78,7 +79,7 @@ export default function Members() {
     setBusy(true); setFormalMsg(null)
     const { error } = await enableFormalMode()
     setBusy(false)
-    setFormalMsg(error ? { ok: false, text: error.message || '開啟失敗' } : { ok: true, text: '正式模式已開啟。' })
+    setFormalMsg(error ? { ok: false, text: friendlyError(error, '正式模式開啟失敗') } : { ok: true, text: '正式模式已開啟。' })
   }
 
   return (
@@ -159,7 +160,7 @@ export default function Members() {
       <Card title="成員名單" aria-busy={members === null ? 'true' : undefined}>
         {loadError ? (
           // 載入失敗不是空狀態:走 ErrorBanner 才說得出「失敗」並給重試(README 狀態規格)
-          <ErrorBanner msg={`成員載入失敗:${loadError}`} onRetry={reload} />
+          <ErrorBanner msg={friendlyError(loadError, '成員載入失敗')} onRetry={reload} />
         ) : members === null ? <SkeletonList rows={3} />
           : members.length === 0 ? <Empty>此專案尚無成員。</Empty> : (
           <div className="divide-y divide-[var(--border-2)]">

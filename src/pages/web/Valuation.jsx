@@ -3,11 +3,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, BallChip, Empty, Surface, PageHeader, PrerequisiteEmptyState, ErrorBanner, SkeletonList, Input, THEAD_CLS } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { collectEvidence, OVER_TOL } from '../../lib/evidence.js'
 import { valuationBall } from '../../lib/ballInCourt.js'
+import { taipeiToday } from '../../lib/dates.js'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
@@ -111,19 +113,34 @@ export default function Valuation() {
     return summarizeValuationDiff(billedLeaves, items, getEvidence)
   }, [selected?.items, keyToItem, childrenMap, getEvidence])
 
+  // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
+  // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
+  // 使用者會被關在載入/前置條件畫面裡,換不到同工作面的其他頁。
+  // 主分支的 subtitle/action 依賴 data,早退分支只給標題與 tagline。
+  const earlyHeader = <PageHeader title="估驗計價" tagline="Valuation" />
   // 載入中用骨架屏:Empty 自帶 inbox 圖示,擺在載入分支等於先跟使用者說「沒資料」
-  if (!data) return <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入估驗資料中…" /></Card>
+  if (!data) {
+    return (
+      <div className="space-y-5">
+        {earlyHeader}
+        <Card bodyClass="p-5" aria-busy="true"><SkeletonList rows={3} label="載入估驗資料中…" /></Card>
+      </div>
+    )
+  }
 
   // 真專案但標單尚未匯入 DB → 估驗無法綁工項，先請匯入
   if (isSupabaseConfigured && currentProject && workItemsSource !== 'db') {
     return (
-      <Card title="估驗計價">
-        <PrerequisiteEmptyState
-          need="估驗計價依標單工項的契約數量/單價逐項計價,此專案的標單尚未匯入。"
-          unlocks="逐期估驗、請款收款、日誌累計帶入、請款佐證包"
-          to={can.edit ? '/contract' : undefined} cta={can.edit ? '前往專案文件上傳標單' : undefined}
-          who={!can.edit ? '待施工廠商匯入標單並提報估驗後即可檢視。' : undefined} />
-      </Card>
+      <div className="space-y-5">
+        {earlyHeader}
+        <Card title="估驗計價">
+          <PrerequisiteEmptyState
+            need="估驗計價依標單工項的契約數量/單價逐項計價,此專案的標單尚未匯入。"
+            unlocks="逐期估驗、請款收款、日誌累計帶入、請款佐證包"
+            to={can.edit ? '/contract' : undefined} cta={can.edit ? '前往專案文件上傳標單' : undefined}
+            who={!can.edit ? '待施工廠商匯入標單並提報估驗後即可檢視。' : undefined} />
+        </Card>
+      </div>
     )
   }
 
@@ -158,21 +175,21 @@ export default function Valuation() {
     n = Math.max(0, maxQ > 0 ? Math.min(maxQ, n) : n)
     if (existing != null && Number(existing) === n) return // 無變化不寫
     const { error } = await updateValuationItem(selected.id, it.item_key, n)
-    if (error) setErrMsg(`數量未儲存（${it.item_no || it.item_key}）：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, `數量未儲存（${it.item_no || it.item_key}）`))
   }
 
   // 建立估驗期(新增一期/第 1 期共用):DB 成功才會拿到 v
   const onCreate = async () => {
     setErrMsg('')
     const { v, error } = await createValuation()
-    if (error) setErrMsg(`建立估驗期失敗：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '建立估驗期未完成'))
     else setSelectedId(v.id)
   }
 
   const onStatus = async (status) => {
     setErrMsg('')
     const { error } = await setValuationStatus(selected.id, status)
-    if (error) setErrMsg(`狀態更新失敗：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '狀態更新未完成'))
   }
   // 退回(監造審核→草稿)與退回核定(已核定→草稿):原因必填,記入本期備註(P1-01/02)。
   // 已核定期若已登錄請款/收款,DB 會擋下並指引先清空——錯誤原樣顯示。
@@ -183,10 +200,10 @@ export default function Valuation() {
     })
     if (reason === null) return
     setErrMsg('')
-    const stamp = new Date().toISOString().slice(0, 10)
+    const stamp = taipeiToday() // 記入備註給人看的業務日期:台北日曆日,凌晨退回不落成前一天
     const note = `${selected.note ? `${selected.note}\n` : ''}${label}(${stamp})：${reason.trim()}`
     const { error } = await setValuationStatus(selected.id, '草稿', { note })
-    if (error) setErrMsg(`${label}失敗：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, `${label}未完成`))
   }
 
   // 佐證欄摘要:0 的類別不顯示;全 0 顯示灰字「無」
@@ -495,7 +512,7 @@ export default function Valuation() {
                 <Button variant="ghost" className="max-sm:w-full" onClick={() => onReject('退回核定')}>退回核定</Button>}
               {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01)。
                   真刪除走 danger 實心紅,不再用 className 蓋 ghost 色票 */}
-              {can.edit && selected.status === '草稿' && <Button variant="danger" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(`刪除失敗：${error.message}`); else setSelectedId(null) } }} className="max-sm:w-full" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
+              {can.edit && selected.status === '草稿' && <Button variant="danger" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(friendlyError(error, '估驗刪除未完成')); else setSelectedId(null) } }} className="max-sm:w-full" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
             </div>
           </Surface>
 
@@ -510,7 +527,7 @@ export default function Valuation() {
                     原本卻掛「AI 估驗草擬」的名字與 Sparkles——既違反「數字由確定性引擎算」
                     的對外敘事,也讓使用者以為不開 AI 就填不了數量(C-9)。 */}
                 {selected.status === '草稿' && can.edit && siteLogs.length > 0 && (
-                  <Button onClick={async () => { setFilling(true); setErrMsg(''); const { count, error } = await fillValuationFromSiteLogs(selected.id); setFilling(false); if (error) { setErrMsg(`帶入未寫入：${error.message}`); return } setFillMsg(count ? `已依 ${siteLogs.length} 筆施工日誌帶入 ${count} 個工項累計，請覆核後送審。` : '施工日誌中查無可帶入的完成數量。') }} disabled={filling} title="依施工日誌逐日完成數量加總，帶入本期各工項累計完成數量（確定性計算，不經 AI）">
+                  <Button onClick={async () => { setFilling(true); setErrMsg(''); const { count, error } = await fillValuationFromSiteLogs(selected.id); setFilling(false); if (error) { setErrMsg(friendlyError(error, '帶入未寫入')); return } setFillMsg(count ? `已依 ${siteLogs.length} 筆施工日誌帶入 ${count} 個工項累計，請覆核後送審。` : '施工日誌中查無可帶入的完成數量。') }} disabled={filling} title="依施工日誌逐日完成數量加總，帶入本期各工項累計完成數量（確定性計算，不經 AI）">
                     <MSym name="calculate" size={14} />{filling ? '帶入中…' : '帶入日誌累計'}
                   </Button>
                 )}

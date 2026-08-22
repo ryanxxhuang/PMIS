@@ -17,6 +17,7 @@ import { project } from './data/seed.js'
 import { buildDemoData } from './data/demoSeed.js'
 import { supabase, isSupabaseConfigured } from './lib/supabase.js'
 import { applyApprovedChangeOrders, approvedNetAmount } from './lib/changeOrders.js'
+import { compressImage } from './lib/imageCompress.js'
 import {
   loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
@@ -86,7 +87,10 @@ export function StoreProvider({ children }) {
   const saveMarkup = useCallback(async (dataUrl, kind) => {
     if (!dataUrl) return null
     if (!isPersistedProject) return dataUrl
-    const blob = await (await fetch(dataUrl)).blob()
+    // MarkupEditor 合成時刻意用原圖像素座標(標註不失真),所以底圖是全解析度
+    // 手機照時 dataURL 一樣好幾 MB——上傳前與日誌照片同一套重取樣
+    // (長邊 2000px/JPEG 0.82,取捨見 imageCompress.js);壓縮失敗回原 blob 照傳。
+    const blob = await compressImage(await (await fetch(dataUrl)).blob())
     const path = `${currentProject.project_id}/markups/${kind}-${crypto.randomUUID()}.jpg`
     const { error } = await supabase.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' })
     return error ? null : path

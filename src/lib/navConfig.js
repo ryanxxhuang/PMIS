@@ -75,6 +75,9 @@ const nonNavRouteRules = {
   '/valuation/package': { access: 'authenticated', surface: 'print' },
   '/quality/checklist-print': { access: 'authenticated', surface: 'print' },
   '/contract/print': { access: 'authenticated', surface: 'print' },
+  // 契約重點對照報告(GTM 第②格):抽到哪些重點、出處對不對、漏了什麼,
+  // 一頁可寄給事務所/監造在會議上翻的輸出物;與期限對照表(/contract/print)互補。
+  '/requirements/report': { access: 'authenticated', surface: 'print' },
   '*': { access: 'authenticated', surface: 'not-found' },
 }
 

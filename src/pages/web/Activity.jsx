@@ -5,6 +5,7 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { Badge, Button, Card, Empty, ErrorBanner, Input, PageHeader, Select, SkeletonList, TablePager } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import {
   AUDIT_ENTITY_LABELS, AUDIT_EVENT_LABELS, auditActorDisplay, auditEntityLabel,
   auditEventLabel, auditEventSubject, normalizeAuditFilters,
@@ -52,7 +53,7 @@ export default function Activity() {
       .range(from, from + pageSize - 1)
     if (requestId !== requestRef.current) return
     if (queryError) {
-      setError(queryError.message || '活動紀錄載入失敗')
+      setError(friendlyError(queryError, '活動紀錄載入失敗'))
       setEvents([])
       setTotal(0)
     } else {

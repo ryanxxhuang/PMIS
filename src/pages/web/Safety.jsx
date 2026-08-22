@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, Button, Badge, Field, Input, Select, Textarea, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import DefectTracker from '../../components/DefectTracker.jsx'
@@ -64,21 +65,21 @@ export default function Safety() {
       : form
     const { error } = await createSafetyRecord(payload)
     setBusy(false)
-    if (error) setErrMsg(`新增失敗：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '工安紀錄新增未完成'))
     else setForm(null)
   }
 
   const onFlow = async (r) => {
     setErrMsg('')
     const { error } = await updateSafetyRecord(r.id, { status: NEXT[r.status] })
-    if (error) setErrMsg(`狀態更新失敗：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '狀態更新未完成'))
   }
 
   const onDelete = async (r) => {
     if (!await appConfirm({ title: '刪除此工安紀錄？', danger: true, confirmLabel: '刪除' })) return
     setErrMsg('')
     const { error } = await deleteSafetyRecord(r.id)
-    if (error) setErrMsg(`刪除失敗：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '工安紀錄刪除未完成'))
   }
 
   const onCorrect = async () => {
@@ -87,7 +88,7 @@ export default function Safety() {
     const patch = { correction_reason: correcting.reason.trim(), note: correcting.note || null }
     if (correcting.revert) patch.status = '改善中'
     const { error } = await updateSafetyRecord(correcting.id, patch)
-    if (error) setErrMsg(`更正失敗：${error.message}`)
+    if (error) setErrMsg(friendlyError(error, '更正未完成'))
     else setCorrecting(null)
   }
 

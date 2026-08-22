@@ -6,6 +6,7 @@ import { MSym } from './icons.jsx'
 import { Badge, Button, Empty, Input } from './ui.jsx'
 import { CHIP_BASE, CHIP_OFF } from './PageTabs.jsx'
 import { answerQuestion, SUGGESTED_QUESTIONS } from '../lib/assistantQA.js'
+import { friendlyError } from '../lib/errorMessage.js'
 
 // 保險:AI 偶爾仍輸出 Markdown,純文字面板會顯示 literal 星號/井號(P2-02)——顯示前清掉標記
 const stripMd = (s) => String(s || '')
@@ -34,7 +35,9 @@ const stepLabels = (steps) =>
 // res.error 相容字串(runAgent)與 { message }(其他 slice)兩種形狀。
 export function replyMessage(res, deterministic) {
   if (res?.answer) return { role: 'ai', text: res.answer, sources: res.sources || [], steps: stepLabels(res.steps), mode: 'ai' }
-  if (res?.error) return { role: 'ai', text: String(res.error.message || res.error), sources: [], mode: 'error' }
+  // friendlyError:伺服器組的繁中錯誤(403 停用/503 閘門)原樣顯示,
+  // 原始英文錯誤(FunctionsHttpError/fetch)只給通用訊息——仍是 error 模式,不偽裝快答。
+  if (res?.error) return { role: 'ai', text: friendlyError(res.error, 'AI 助理暫時無法回應，請稍後再試。'), sources: [], mode: 'error' }
   return deterministic()
 }
 
