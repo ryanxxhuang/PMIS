@@ -135,19 +135,29 @@ function createKit({ total, title, author = 'PMIS.ai' }) {
   function bullets(s, x, y, w, items, mark = 'dash', size = 11, color = C.ink2) {
     const glyph = { tick: '✓', cross: '✕', dash: '—' }[mark]
     const gc = { tick: C.good, cross: C.bad, dash: C.ink3 }[mark]
-    const rowH = size > 11.5 ? 0.32 : 0.29
-    items.forEach((t, i) => {
-      const yy = y + i * rowH
+    // 每條各自算高度。原本是固定行高,一旦某條折成兩行,第二行就會壓到下一條的
+    // 符號上——截圖頁的左欄有一半條列會折行,這個 bug 在那裡最明顯。
+    const base = size > 11.5 ? 0.32 : 0.29
+    const textW = (w - 0.24) * 72
+    let cy = y
+    items.forEach((t) => {
+      // 0.94 是容差:cjkWidth 是估算值,剛好貼齊一行的條列會被算成 1.02 行 →
+      // ceil 之後變兩行高,畫面上就出現一個沒來由的空隙。留 6% 餘裕才不會誤判。
+      const lines = Math.max(1, Math.ceil((cjkWidth(t, size) / textW) * 0.94))
+      const h = lines === 1 ? base : (lines * size * 1.5) / 72 + 0.06
       s.addText(glyph, {
-        x, y: yy, w: 0.24, h: rowH, margin: 0, valign: 'middle',
+        x, y: cy, w: 0.24, h, margin: 0, valign: lines === 1 ? 'middle' : 'top',
         fontFace: F, fontSize: mark === 'dash' ? 8 : 10.5, bold: true, color: gc,
+        // 多行時符號要對齊第一行的視覺中心,不是整塊的中心
+        ...(lines === 1 ? {} : { margin: [size * 0.32, 0, 0, 0] }),
       })
       s.addText(t, {
-        x: x + 0.24, y: yy, w: w - 0.24, h: rowH, margin: 0, valign: 'middle',
-        fontFace: F, fontSize: size, color,
+        x: x + 0.24, y: cy, w: w - 0.24, h, margin: 0, valign: lines === 1 ? 'middle' : 'top',
+        fontFace: F, fontSize: size, color, lineSpacing: size * 1.5,
       })
+      cy += h
     })
-    return y + items.length * rowH
+    return cy
   }
 
   function cite(s, x, y, w, h, label, text) {
