@@ -44,6 +44,7 @@ export async function claudeJson(opts: {
   system?: string
   timeoutMs?: number     // 單次嘗試逾時
   retries?: number       // 僅對 429/5xx/網路錯誤重試
+  retryTimeouts?: boolean // 預設 true;false=逾時立即回報(呼叫端要縮小輸入,原尺寸重試只會再逾時一次)
 }): Promise<{ data?: unknown; error?: string; errorCode?: string; usage?: ClaudeUsage; model?: string; stopReason?: string }> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
   if (!apiKey) return { error: '伺服器未設定 ANTHROPIC_API_KEY', errorCode: 'config' }
@@ -78,6 +79,9 @@ export async function claudeJson(opts: {
       const isTimeout = (e as Error)?.name === 'TimeoutError'
       lastError = isTimeout ? `Claude 呼叫逾時(${Math.round(timeoutMs / 1000)}s)` : `Claude 連線失敗:${String((e as Error)?.message || e)}`
       lastCode = isTimeout ? 'timeout' : 'network'
+      // 逾時通常代表輸入太大/輸出太長,同尺寸重試多半再逾時一次,卻會把
+      // Edge Function 的 wall-clock 燒光(W13:69 頁契約 3×120s 連環逾時直接被平台砍)
+      if (isTimeout && opts.retryTimeouts === false) break
       continue
     }
     if (!resp.ok) {

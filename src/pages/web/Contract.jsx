@@ -33,6 +33,7 @@ import {
   uploadFilesToPackage, summarizePackageProgress, packageStatusFromRuns,
   formatElapsed, staleProcessingPatch, takeSelectedFiles, STAGE_ORDER, STAGE_LABELS,
 } from '../../lib/packageUpload.js'
+import { runRequirementExtraction, extractionSuccessMessage } from '../../lib/extractRequirements.js'
 
 // 文件清單表格欄樣式:表頭字型層吃 ui.jsx 的 THEAD_CLS(全站單一真相)
 const DOC_TH = `text-left ${THEAD_CLS} py-2.5 px-3 whitespace-nowrap`
@@ -47,12 +48,18 @@ const runPct = (r) => {
   const order = STAGE_ORDER[r.stage] ?? 0
   return Math.min(100, Math.round((order / 5) * 100))
 }
+// 處理中細節列:抽取階段有批次進度就顯示「第 N/M 批」(W13 大文件分段續跑)
+const stageDetail = (r) => (
+  r.stage === 'extracting_requirements' && r.metadata?.extraction_progress
+    ? `正在分析契約重點(第 ${r.metadata.extraction_progress} 批)`
+    : (STAGE_LABELS[r.stage] || r.stage)
+)
 
 // AI 處理欄的固定四狀態(mockup):已完成/處理中/待處理/無需處理。
 // 色票只寫狀態,數字與原因寫在下方細節行。
 function aiProcessingState(run) {
   if (!isTerminal(run)) {
-    return { kind: 'processing', label: '處理中', color: 'blue', detail: STAGE_LABELS[run.stage] || run.stage }
+    return { kind: 'processing', label: '處理中', color: 'blue', detail: stageDetail(run) }
   }
   if (run.status === 'unsupported') {
     return { kind: 'na', label: '無需處理', color: 'slate', detail: run.metadata?.limitation || '尚未支援內容分析' }
@@ -89,6 +96,12 @@ export default function Contract() {
   // 回到 idle 拖放區,歷史結果一律看下方文件清單。以 document_version_id 記批,
   // run 列會被 reload 換新物件,version id 才是穩定身分。
   const [batchVersionIds, setBatchVersionIds] = useState(() => new Set())
+  // 防連點:分析已在進行的 run id——W13 殭屍事故的直接肇因就是重試連點,
+  // 兩個請求 17ms 內同穿併發防呆、之後的 409 又把活解析蓋成失敗。
+  // ref 是真正的鎖(同步 check-and-set,await 之前生效);state 只給按鈕
+  // disabled 用——React state 守衛在重新 render 前讀到的是舊 Set,擋不住連點
+  const busyRunsRef = useRef(new Set())
+  const [busyRunIds, setBusyRunIds] = useState(() => new Set())
   const [panelDismissed, setPanelDismissed] = useState(false)
   const [, forceTick] = useState(0)
   const tickRef = useRef(null)
@@ -310,53 +323,92 @@ export default function Contract() {
 
   // 修正/確認分類 → 視需要重新路由 AI 分析(也是「重試」的 handler)
   const confirmClassification = useCallback(async (run, newType) => {
-    const version = versionsById.get(run.document_version_id)
-    const docId = version?.document_id
-    if (docId) {
-      const { error } = await supabase.from('documents')
-        .update({ document_type: newType }).eq('id', docId)
-      if (error) { setMsg(`分類更新失敗:${error.message}`); return }
-      setDocsById((m) => new Map(m).set(docId, { ...m.get(docId), document_type: newType }))
+    // 同步 check-and-set:旗標必須在第一個 await 之前掛上,否則兩下連點
+    // 都讀到「沒在忙」同穿(W13 審查確認);釋放只由掛旗者在 finally 做
+    if (busyRunsRef.current.has(run.id)) return
+    busyRunsRef.current.add(run.id)
+    setBusyRunIds(new Set(busyRunsRef.current))
+    try {
+      const version = versionsById.get(run.document_version_id)
+      const docId = version?.document_id
+      if (docId) {
+        const { error } = await supabase.from('documents')
+          .update({ document_type: newType }).eq('id', docId)
+        if (error) { setMsg(`分類更新失敗:${error.message}`); return }
+        setDocsById((m) => new Map(m).set(docId, { ...m.get(docId), document_type: newType }))
+      }
+      const patch = { classification_status: 'confirmed' }
+      const canExtract = EXTRACTABLE_DOCUMENT_TYPES.includes(newType)
+        && run.parser_type && run.parser_type !== 'none'
+      let updated = null
+      if (canExtract) {
+        // started_at 一併重設:staleProcessingPatch 以它起算 20 分鐘過期,
+        // 不重設的話「上傳很久之後才確認分類/重試」會被輪詢立刻誤判成中斷
+        const restart = {
+          ...patch, status: 'processing', stage: 'extracting_requirements',
+          started_at: new Date().toISOString(), completed_at: null, error_message: null,
+        }
+        await supabase.from('document_processing_runs').update(restart).eq('id', run.id)
+        setRuns((rs) => rs.map((r) => (r.id === run.id ? { ...r, ...restart } : r)))
+        // W13:大文件伺服器端分段續跑,共用接力層負責 in_progress 接續;
+        // 每段進度更新畫面並 best-effort 落庫(重新整理也看得到第 N/M 批)
+        const result = await runRequirementExtraction({
+          documentVersionId: run.document_version_id,
+          projectId: pid,
+          onProgress: (p) => {
+            const progressMeta = {
+              ...(run.metadata || {}),
+              extraction_progress: `${p.batches_completed}/${p.batches_total}`,
+              // 進度心跳:staleProcessingPatch 用它判定「還活著」,長文件多段
+              // 續跑的總時長可以正當超過 20 分鐘
+              extraction_progress_at: new Date().toISOString(),
+            }
+            setRuns((rs) => rs.map((r) => (r.id === run.id
+              ? { ...r, metadata: { ...(r.metadata || {}), ...progressMeta } }
+              : r)))
+            supabase.from('document_processing_runs')
+              .update({ metadata: progressMeta })
+              .eq('id', run.id)
+              .then(() => {}, () => {})
+          },
+        })
+        if (!result.ok && result.inProgress) {
+          // 已有別的解析在跑(409 run_conflict):不可蓋寫成失敗——W13 殭屍
+          // 事故裡,連點的 409 一路把活著的解析蓋成失敗。顯示原話,交持有者收尾。
+          setMsg(result.message)
+          await reloadRuns(run.contract_package_id)
+          return
+        }
+        const failed = !result.ok
+        const data = result.ok ? result.data : null
+        const { data: final } = await supabase.from('document_processing_runs').update({
+          ...patch,
+          status: failed ? 'partial' : 'completed',
+          stage: failed ? 'failed' : 'completed',
+          completed_at: new Date().toISOString(),
+          error_message: failed ? (result.message || 'AI 分析失敗') : null,
+          metadata: {
+            ...(run.metadata || {}),
+            requirement_extraction: failed ? 'failed' : 'completed',
+            // W10 揭露截斷:coverage_incomplete 時「找到 N 項」必須連著講清楚沒讀到哪裡
+            requirement_extraction_message: failed
+              ? result.message
+              : extractionSuccessMessage(data),
+            routed_document_type: newType,
+          },
+        }).eq('id', run.id).select().single()
+        updated = final
+      } else {
+        const { data: final } = await supabase.from('document_processing_runs')
+          .update(patch).eq('id', run.id).select().single()
+        updated = final
+      }
+      if (updated) setRuns((rs) => rs.map((r) => (r.id === updated.id ? updated : r)))
+      await reloadRuns(run.contract_package_id)
+    } finally {
+      busyRunsRef.current.delete(run.id)
+      setBusyRunIds(new Set(busyRunsRef.current))
     }
-    const patch = { classification_status: 'confirmed' }
-    const canExtract = EXTRACTABLE_DOCUMENT_TYPES.includes(newType)
-      && run.parser_type && run.parser_type !== 'none'
-    let updated = null
-    if (canExtract) {
-      await supabase.from('document_processing_runs')
-        .update({ ...patch, status: 'processing', stage: 'extracting_requirements' })
-        .eq('id', run.id)
-      const { data, error } = await supabase.functions.invoke('extract-requirements', {
-        body: { document_version_id: run.document_version_id, project_id: pid },
-      })
-      const failed = error || data?.error
-      const { data: final } = await supabase.from('document_processing_runs').update({
-        ...patch,
-        status: failed ? 'partial' : 'completed',
-        stage: failed ? 'failed' : 'completed',
-        completed_at: new Date().toISOString(),
-        error_message: failed ? (data?.error || error?.message || 'AI 分析失敗') : null,
-        metadata: {
-          ...(run.metadata || {}),
-          requirement_extraction: failed ? 'failed' : 'completed',
-          // W10 揭露截斷:coverage_incomplete 時「找到 N 項」必須連著講清楚沒讀到哪裡
-          requirement_extraction_message: failed
-            ? (data?.error || error?.message)
-            : `找到 ${data?.extracted_requirement_count ?? 0} 項契約重點建議${
-              data?.coverage_incomplete
-                ? `(未涵蓋整份文件:解析至第 ${data?.last_included_page ?? '?'} 頁/共 ${data?.total_page_count ?? '?'} 頁)`
-                : ''}`,
-          routed_document_type: newType,
-        },
-      }).eq('id', run.id).select().single()
-      updated = final
-    } else {
-      const { data: final } = await supabase.from('document_processing_runs')
-        .update(patch).eq('id', run.id).select().single()
-      updated = final
-    }
-    if (updated) setRuns((rs) => rs.map((r) => (r.id === updated.id ? updated : r)))
-    await reloadRuns(run.contract_package_id)
   }, [versionsById, pid, reloadRuns])
 
   // ── 上傳回饋面板(mockup 狀態 B/C/D)────────────────────────────────────
@@ -383,8 +435,10 @@ export default function Contract() {
     busy: {
       icon: 'cloud_upload', fill: false, cls: 'text-[var(--blue-text)]',
       title: panelRuns.length ? `正在整理 ${panelRuns.length} 個檔案` : '正在解析標單 XML',
+      // W13 起 AI 分析的續跑由本分頁驅動:離開頁面會中斷接力(已完成的批次保留,
+      // 之後可重試接續),不能再宣稱「可離開此頁」
       sub: panelRuns.length
-        ? `已完成 ${panelOk.length + panelNeeds.length} / ${panelRuns.length}${elapsed ? ` · 已進行 ${elapsed}` : ''} · 可離開此頁,處理結果會保留`
+        ? `已完成 ${panelOk.length + panelNeeds.length} / ${panelRuns.length}${elapsed ? ` · 已進行 ${elapsed}` : ''} · 分析中請保持此頁開啟;已完成的部分會保留`
         : '此步驟請勿離開頁面',
       right: panelRuns.length ? `${overallPct}%` : '', bar: 'bg-[var(--blue)]',
     },
@@ -584,7 +638,7 @@ export default function Contract() {
                   <div className="min-w-0">
                     <div className="text-[12.5px] text-[var(--text)] truncate" title={name}>{name}</div>
                     <div className={`text-[11px] mt-0.5 ${failed ? 'text-[var(--red-text)]' : needsReview ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`}>
-                      {busy ? (STAGE_LABELS[r.stage] || r.stage)
+                      {busy ? stageDetail(r)
                         : failed ? failMeta
                           : needsReview ? `AI 建議分類:${DOCUMENT_TYPE_LABELS[r.suggested_document_type] || '無法判斷'};請到下方清單確認,確認後自動接續分析`
                             : (r.metadata?.requirement_extraction_message || RUN_META_OK(r))}
@@ -598,7 +652,8 @@ export default function Contract() {
                       <span className="text-[11.5px] text-[var(--text-3)] num min-w-[34px] text-right">{runPct(r)}%</span>
                     </>) : failed ? (
                       retryable && canWriteContract ? (
-                        <button onClick={() => retryRun(r)} className={buttonClass('outline', 'sm')}>重試</button>
+                        <button onClick={() => retryRun(r)} disabled={busyRunIds.has(r.id)}
+                          className={buttonClass('outline', 'sm')}>重試</button>
                       ) : <span className="text-[11.5px] font-medium text-[var(--red-text)]">待處理</span>
                     ) : needsReview ? (
                       <span className="text-[11.5px] font-medium text-[var(--amber-text)]">待確認</span>
@@ -632,7 +687,8 @@ export default function Contract() {
                   <div className="text-[12.5px] text-[var(--red-text)] leading-relaxed">
                     {panelFailed.length} 個檔案待處理:{panelFailed[0] && (docsById.get(versionsById.get(panelFailed[0].document_version_id)?.document_id)?.title || '文件')}
                     {panelFailed[0]?.error_message ? `——${panelFailed[0].error_message}` : ''}
-                    。其餘 {panelOk.length} 個檔案已完成,不需重傳。
+                    {/* 與標頭同一套帳:處理完成=非失敗(含分類待確認),兩處數字不得打架 */}
+                    。其餘 {panelRuns.length - panelFailed.length} 個檔案處理完成,不需重傳。
                   </div>
                 </div>
                 {panelFailed.length > panelExtractionFailed.length && (
@@ -643,6 +699,7 @@ export default function Contract() {
                 <div className="flex gap-2 mt-2.5 pl-[29.5px]">
                   {canWriteContract && panelExtractionFailed.length > 0 && (
                     <button className={buttonClass('primary', 'sm')}
+                      disabled={panelExtractionFailed.every((r) => busyRunIds.has(r.id))}
                       onClick={() => panelExtractionFailed.forEach((r) => retryRun(r))}>重試 AI 分析失敗的檔案</button>
                   )}
                   <button className={buttonClass('outline', 'sm')} onClick={dismissPanel}>略過並繼續</button>
@@ -720,8 +777,8 @@ export default function Contract() {
                             </span>
                           )}
                           {retryable && canWriteContract && (
-                            <button onClick={() => retryRun(run)}
-                              className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 mt-0.5">
+                            <button onClick={() => retryRun(run)} disabled={busyRunIds.has(run.id)}
+                              className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 mt-0.5 disabled:opacity-50 disabled:no-underline">
                               <MSym name="refresh" size={11} /> 重試分析
                             </button>
                           )}

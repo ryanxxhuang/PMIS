@@ -5,6 +5,7 @@ import {
   deterministicUuid,
   mapWorkItemRefs,
   mergeUsage,
+  readResumeState,
   splitBatch,
   validateSuggestion,
 } from './requirementExtraction.ts'
@@ -213,5 +214,52 @@ describe('mergeUsage', () => {
       input_tokens: 0, output_tokens: 0,
       cache_read_input_tokens: 0, cache_creation_input_tokens: 0,
     })
+  })
+})
+
+describe('readResumeState(W13 跨 request 續跑的進度還原)', () => {
+  it('完整 metadata → 各計數器與清單原樣還原', () => {
+    const s = readResumeState({
+      batches_completed: 2,
+      cum_requirement_count: 17,
+      cum_verified_count: 12,
+      cum_needs_review_count: 5,
+      cum_raw_item_count: 21,
+      cum_work_item_link_count: 9,
+      cum_rejected_count: 4,
+      rejected_items: [{ index: 'b0:3', reason: 'bad' }],
+      clipped_batches: ['b1(第 10~12 頁)'],
+    })
+    expect(s.batchesCompleted).toBe(2)
+    expect(s.totalRequirements).toBe(17)
+    expect(s.verifiedCount).toBe(12)
+    expect(s.needsReviewCount).toBe(5)
+    expect(s.rawItemCount).toBe(21)
+    expect(s.workItemLinkCount).toBe(9)
+    expect(s.rejectedCount).toBe(4)
+    expect(s.rejectedItems).toEqual([{ index: 'b0:3', reason: 'bad' }])
+    expect(s.clippedBatches).toEqual(['b1(第 10~12 頁)'])
+  })
+
+  it('缺漏/壞型別/null 一律回安全預設,不炸(舊 run 或壞 metadata)', () => {
+    for (const meta of [null, undefined, 'junk', 42, [],
+      { batches_completed: -3, cum_requirement_count: 'x', rejected_items: 'no', clipped_batches: { a: 1 } }]) {
+      const s = readResumeState(meta)
+      expect(s.batchesCompleted).toBe(0)
+      expect(s.totalRequirements).toBe(0)
+      expect(s.rejectedItems).toEqual([])
+      expect(s.clippedBatches).toEqual([])
+    }
+  })
+
+  it('小數與超長 rejected_items 被正規化(floor + 前 20 筆)', () => {
+    const s = readResumeState({
+      batches_completed: 2.9,
+      rejected_items: Array.from({ length: 30 }, (_, i) => ({ index: `b0:${i}`, reason: 'r' })),
+      clipped_batches: ['ok', 7, 'ok2'],
+    })
+    expect(s.batchesCompleted).toBe(2)
+    expect(s.rejectedItems).toHaveLength(20)
+    expect(s.clippedBatches).toEqual(['ok', 'ok2'])
   })
 })
