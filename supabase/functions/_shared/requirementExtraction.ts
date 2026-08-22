@@ -275,6 +275,10 @@ export interface ResumeState {
   rejectedCount: number
   rejectedItems: { index: string; reason: string }[]
   clippedBatches: string[]
+  // 批內對半切的續跑狀態:哪一批(index)需要從第幾層切開始跑——
+  // 沒有這個,每個 request 都會重演一次註定逾時的完整嘗試(活鎖+燒錢)
+  pendingSplitBatch: number
+  pendingSplitDepth: number
 }
 
 const nonNegInt = (v: unknown): number =>
@@ -296,6 +300,9 @@ export function readResumeState(meta: unknown): ResumeState {
     clippedBatches: Array.isArray(m.clipped_batches)
       ? (m.clipped_batches as string[]).filter((x) => typeof x === 'string')
       : [],
+    pendingSplitBatch: typeof m.pending_split_batch === 'number' && Number.isInteger(m.pending_split_batch)
+      && m.pending_split_batch >= 0 ? m.pending_split_batch : -1,
+    pendingSplitDepth: nonNegInt(m.pending_split_depth),
   }
 }
 

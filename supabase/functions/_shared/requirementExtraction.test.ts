@@ -263,3 +263,17 @@ describe('readResumeState(W13 跨 request 續跑的進度還原)', () => {
     expect(s.clippedBatches).toEqual(['ok', 'ok2'])
   })
 })
+
+describe('readResumeState:批內對半切的續跑欄位(W14 活鎖修正)', () => {
+  it('有記錄就還原,缺漏回安全預設(-1/0)', () => {
+    const s = readResumeState({ pending_split_batch: 2, pending_split_depth: 1 })
+    expect(s.pendingSplitBatch).toBe(2)
+    expect(s.pendingSplitDepth).toBe(1)
+    const d = readResumeState({})
+    expect(d.pendingSplitBatch).toBe(-1)
+    expect(d.pendingSplitDepth).toBe(0)
+    const bad = readResumeState({ pending_split_batch: -5, pending_split_depth: 'x' })
+    expect(bad.pendingSplitBatch).toBe(-1)
+    expect(bad.pendingSplitDepth).toBe(0)
+  })
+})

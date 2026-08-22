@@ -53,7 +53,8 @@ const REQUEST_ABS_CAP_MS = 140_000
 // 剩餘預算不足以打一次有意義的呼叫時,改走「批內暫停」——本批不計完成,
 // 掛 awaiting_continue 交下一個 request 重跑本批(同 run 同 label,落庫冪等)
 const MIN_CALL_TIMEOUT_MS = 20_000
-// 429/5xx 的同尺寸重試次數(逾時不重試):與動態 timeout 相乘決定最壞批時長
+// 429/5xx 的重試次數:這類失敗是秒回的,重試不吃生成窗口;逾時不重試
+// (retryTimeouts:false),所以 timeout 預算不必除以重試次數
 const CLAUDE_RETRIES = 1
 // 超過這個時間還掛在 pending/processing 的 run 一定已經死了(單批呼叫逾時
 // 120s + 重試,總長遠小於 10 分鐘)——每次啟動新解析時順手標記失敗,
@@ -407,6 +408,10 @@ Deno.serve(async (req) => {
     let failedBatch: { label: string; error: string } | null = null
     let batchesCompleted = prior.batchesCompleted
     let pausedForContinuation = false
+    // 批內對半切的跨 request 續跑:上個 request 若在某批逾時後預算見底,
+    // 這裡直接從記錄的切分深度開跑,不重演註定逾時的完整嘗試(活鎖防止)
+    let pendingSplitBatch = prior.pendingSplitBatch
+    let pendingSplitDepth = prior.pendingSplitDepth
 
     // 進度 metadata 只寫「最後完成批」當下的計數快照,不寫批內半途的活計數——
     // 批內暫停後下個 request 會整批重跑,若把半批計數寫進去會重複累計
@@ -430,6 +435,8 @@ Deno.serve(async (req) => {
       cum_rejected_count: committed.rejectedCount,
       rejected_items: committed.rejectedItems.slice(0, 20),
       clipped_batches: committed.clippedBatches,
+      pending_split_batch: pendingSplitBatch,
+      pending_split_depth: pendingSplitDepth,
       awaiting_continue: opts.awaitingContinue,
       last_progress_at: new Date().toISOString(),
     })
@@ -517,7 +524,17 @@ Deno.serve(async (req) => {
 
     // 單批抽取。輸出撞上限(stop_reason=max_tokens)代表這批義務太密,
     // 對半切重試(最多兩層);單頁批切不動就記進 clipped_batches 揭露。
-    const runBatch = async (pages: PageRow[], label: string, depth: number): Promise<{ ok: boolean; error?: string; paused?: boolean }> => {
+    // forceSplitBelow:續跑帶進來的「先切再跑」深度——上個 request 已證明
+    // depth < forceSplitBelow 的尺寸會逾時,直接從切好的子批開始
+    const runBatch = async (pages: PageRow[], label: string, depth: number, forceSplitBelow = 0): Promise<{ ok: boolean; error?: string; paused?: boolean; nextDepth?: number }> => {
+      if (depth < forceSplitBelow) {
+        const halves = splitBatch(pages)
+        if (halves) {
+          const firstHalf = await runBatch(halves[0], `${label}a`, depth + 1, forceSplitBelow)
+          if (!firstHalf.ok) return firstHalf
+          return await runBatch(halves[1], `${label}b`, depth + 1, forceSplitBelow)
+        }
+      }
       const first = pages[0]?.page_number
       const last = pages[pages.length - 1]?.page_number
       const batchNote = totalBatches > 1 || depth > 0
@@ -531,13 +548,15 @@ Deno.serve(async (req) => {
         catalogLines,
         batchNote,
       })
-      // 依剩餘預算收斂單次呼叫的 timeout:(retries+1)×timeoutMs 必須塞得進
-      // REQUEST_ABS_CAP;塞不下就「批內暫停」——本批不計完成,掛 awaiting_continue
-      // 交下一個 request 重跑本批(同 run 同 label,落庫冪等,重跑不重複)
+      // 單次呼叫給滿剩餘預算(留 15s 收尾 margin),不再除以重試次數——
+      // 429/5xx 的重試是秒回的快失敗,逾時則根本不重試(retryTimeouts:false),
+      // 除以次數只會把生成窗口砍到不夠用,製造「每個 request 都逾時」的活鎖
+      // (2026-08-22 實測:67s 窗口跑不完的批,每輪接力重演一次,卡死在 1/5)。
+      // 預算見底就「批內暫停」:記下 nextDepth 交下一個 request 從切好的深度續跑。
       const remainingMs = REQUEST_ABS_CAP_MS - (Date.now() - startedAtMs)
-      const callTimeoutMs = Math.min(120_000, Math.floor(remainingMs / (CLAUDE_RETRIES + 1)))
+      const callTimeoutMs = Math.min(120_000, remainingMs - 15_000)
       if (callTimeoutMs < MIN_CALL_TIMEOUT_MS) {
-        return { ok: false, paused: true }
+        return { ok: false, paused: true, nextDepth: depth }
       }
       const res = await claudeJson({
         model: MODELS.smart, name: 'requirement_suggestions', schema: SCHEMA,
@@ -577,16 +596,25 @@ Deno.serve(async (req) => {
         pausedForContinuation = true
         break
       }
-      const result = await runBatch(plan.batches[bi], `b${bi}`, 0)
+      const result = await runBatch(
+        plan.batches[bi], `b${bi}`, 0,
+        bi === pendingSplitBatch ? pendingSplitDepth : 0,
+      )
       if (!result.ok) {
-        // 批內暫停(剩餘時間不足以再打一次呼叫)≠ 批失敗:走續跑,不記 failed_batch
+        // 批內暫停(剩餘時間不足以再打一次呼叫)≠ 批失敗:記下本批要從哪個
+        // 切分深度續跑,交下一個 request 接手,不記 failed_batch
         if (result.paused) {
+          const priorDepth = bi === pendingSplitBatch ? pendingSplitDepth : 0
+          pendingSplitBatch = bi
+          pendingSplitDepth = Math.max(result.nextDepth ?? 0, priorDepth)
           pausedForContinuation = true
           break
         }
         failedBatch = { label: `b${bi}`, error: result.error || '' }
         break
       }
+      pendingSplitBatch = -1
+      pendingSplitDepth = 0
       batchesCompleted = bi + 1
       committed = {
         totalRequirements, verifiedCount, needsReviewCount, rawItemCount,
