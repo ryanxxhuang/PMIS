@@ -277,3 +277,15 @@ describe('readResumeState:批內對半切的續跑欄位(W14 活鎖修正)', () 
     expect(bad.pendingSplitDepth).toBe(0)
   })
 })
+
+describe('readResumeState:子批完成記錄(pending_split_done)', () => {
+  it('還原字串陣列、過濾非字串、上限 64', () => {
+    expect(readResumeState({ pending_split_done: ['b4a', 'b4b', 7, null] }).pendingSplitDone)
+      .toEqual(['b4a', 'b4b'])
+    expect(readResumeState({}).pendingSplitDone).toEqual([])
+    expect(readResumeState({ pending_split_done: 'b4a' }).pendingSplitDone).toEqual([])
+    expect(readResumeState({
+      pending_split_done: Array.from({ length: 80 }, (_, i) => `x${i}`),
+    }).pendingSplitDone).toHaveLength(64)
+  })
+})

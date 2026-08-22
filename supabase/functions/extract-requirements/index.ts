@@ -412,6 +412,9 @@ Deno.serve(async (req) => {
     // 這裡直接從記錄的切分深度開跑,不重演註定逾時的完整嘗試(活鎖防止)
     let pendingSplitBatch = prior.pendingSplitBatch
     let pendingSplitDepth = prior.pendingSplitDepth
+    // 該批已完成的子批 label:子批總時長可能超過單一 request 預算,續跑要能
+    // 跳過已完成的子批(否則每輪從第一塊重跑,最後一塊永遠輪不到——實測活鎖)
+    let doneSubLabels: string[] = [...prior.pendingSplitDone]
 
     // 進度 metadata 只寫「最後完成批」當下的計數快照,不寫批內半途的活計數——
     // 批內暫停後下個 request 會整批重跑,若把半批計數寫進去會重複累計
@@ -437,6 +440,7 @@ Deno.serve(async (req) => {
       clipped_batches: committed.clippedBatches,
       pending_split_batch: pendingSplitBatch,
       pending_split_depth: pendingSplitDepth,
+      pending_split_done: doneSubLabels.slice(0, 64),
       awaiting_continue: opts.awaitingContinue,
       last_progress_at: new Date().toISOString(),
     })
@@ -535,6 +539,8 @@ Deno.serve(async (req) => {
           return await runBatch(halves[1], `${label}b`, depth + 1, forceSplitBelow)
         }
       }
+      // 已在先前 request 完成並落庫的子批:直接跳過(落庫冪等,但重跑燒時間)
+      if (depth > 0 && doneSubLabels.includes(label)) return { ok: true }
       const first = pages[0]?.page_number
       const last = pages[pages.length - 1]?.page_number
       const batchNote = totalBatches > 1 || depth > 0
@@ -572,6 +578,7 @@ Deno.serve(async (req) => {
         const halves = depth < 2 ? splitBatch(pages) : null
         if (!halves) {
           clippedBatches.push(`${label}(第 ${first}~${last} ${paginated ? '頁' : '段'})`)
+          if (depth > 0) doneSubLabels.push(label)  // 記為已處理,續跑不重clip
           return { ok: true }
         }
         const firstHalf = await runBatch(halves[0], `${label}a`, depth + 1)
@@ -585,6 +592,20 @@ Deno.serve(async (req) => {
       rawItemCount += items.length
       const persistError = await persistBatchItems(items, label)
       if (persistError) return { ok: false, error: persistError }
+      // 子批完成即記錄+落庫:下一個 request 直接跳過,只跑剩下的子批。
+      // 計數快照同步推進——子批已不會重跑(done-labels 防重),把它的計數
+      // 掉在快照外反而會讓最終總數漏掉被跳過的子批
+      if (depth > 0) {
+        doneSubLabels.push(label)
+        committed = {
+          totalRequirements, verifiedCount, needsReviewCount, rawItemCount,
+          workItemLinkCount, rejectedCount,
+          rejectedItems: [...rejected], clippedBatches: [...clippedBatches],
+        }
+        await service!.from('document_ingestion_runs')
+          .update({ metadata: progressMetadata({ awaitingContinue: false }) })
+          .eq('id', runId)
+      }
       return { ok: true }
     }
 
@@ -596,6 +617,8 @@ Deno.serve(async (req) => {
         pausedForContinuation = true
         break
       }
+      // 換到別批就清掉子批完成記錄(它只屬於 pendingSplitBatch 那一批)
+      if (bi !== pendingSplitBatch) doneSubLabels.length = 0
       const result = await runBatch(
         plan.batches[bi], `b${bi}`, 0,
         bi === pendingSplitBatch ? pendingSplitDepth : 0,
@@ -615,6 +638,7 @@ Deno.serve(async (req) => {
       }
       pendingSplitBatch = -1
       pendingSplitDepth = 0
+      doneSubLabels.length = 0
       batchesCompleted = bi + 1
       committed = {
         totalRequirements, verifiedCount, needsReviewCount, rawItemCount,
