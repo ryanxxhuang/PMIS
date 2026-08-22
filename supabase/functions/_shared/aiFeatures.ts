@@ -43,6 +43,7 @@ export const AI_FEATURES: AiFeature[] = [
   { key: 'agent.run', label: 'AI Agent 主控台', category: 'agent', edgeFunction: 'agent-run', minPlan: 'standard', isLlm: true, defaultEnabled: true },
   { key: 'assistant.chat', label: 'AI 問答助理', category: 'agent', edgeFunction: 'assistant-chat', minPlan: 'standard', isLlm: true, defaultEnabled: false }, // W3-3 退場:/agent 是唯一對話入口;列保留供用量歷史對帳
   { key: 'contract.parse', label: '契約解析(時程/罰則)', category: 'document', edgeFunction: 'parse-contract', minPlan: 'standard', isLlm: true, defaultEnabled: true },
+  { key: 'documents.classify', label: '文件自動分類', category: 'document', edgeFunction: 'classify-document', minPlan: 'trial', isLlm: true, defaultEnabled: true }, // 上傳鏈核心,開放所有方案(W14)
   { key: 'requirements.extract', label: '規範需求抽取', category: 'document', edgeFunction: 'extract-requirements', minPlan: 'trial', isLlm: true, defaultEnabled: true }, // 上傳鏈核心,開放所有方案(20260821000200)
   { key: 'submittal.read', label: '送審文件讀取', category: 'document', edgeFunction: 'read-submittal', minPlan: 'pro', isLlm: true, defaultEnabled: true },
   { key: 'submittal.review', label: '監造送審審查意見', category: 'draft', edgeFunction: 'review-submittal', minPlan: 'pro', isLlm: true, defaultEnabled: true },

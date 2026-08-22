@@ -228,6 +228,7 @@
     "decimal",
     "defect",
     "defects",
+    "delete_document",
     "delete_project",
     "desc",
     "descending",

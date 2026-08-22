@@ -9,23 +9,12 @@
 // keyword and classified as 'other', which is never routed to Requirement
 // extraction - a detailed price list must not be read as contract prose.
 import { normalizeSourceText } from '../../supabase/functions/_shared/sourceVerify.ts'
-
-export const CLASSIFIABLE_DOCUMENT_TYPES = Object.freeze([
-  'contract', 'specification', 'quality_plan', 'itp', 'form_package',
-  'submittal_document', 'drawing', 'report', 'other',
-])
-
-export const DOCUMENT_TYPE_LABELS = Object.freeze({
-  contract: '契約核心文件',
-  specification: '施工規範',
-  quality_plan: '品質管理文件',
-  itp: '檢驗停留點計畫',
-  form_package: '表單與附件',
-  submittal_document: '送審文件',
-  drawing: '圖說',
-  report: '報告',
-  other: '其他',
-})
+// W14:值域與標籤的單一真相搬到 _shared/documentTypes.ts(AI 分類 edge function
+// 也要用同一份);這裡 re-export 維持既有 import 路徑不變
+export {
+  CLASSIFIABLE_DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS,
+} from '../../supabase/functions/_shared/documentTypes.ts'
+import { CLASSIFIABLE_DOCUMENT_TYPES } from '../../supabase/functions/_shared/documentTypes.ts'
 
 export const AUTO_ACCEPT_THRESHOLD = 0.8
 
