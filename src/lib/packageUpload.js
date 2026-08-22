@@ -16,11 +16,14 @@
 import { supabase } from './supabase.js'
 import { extractDocumentPages, hasExtractableText } from './documentExtract.js'
 import { fileKind, analysisSupport, storedLimitationLabel } from './packageFileSupport.js'
-import { classifyDocument, shouldExtractRequirements } from './documentClassifier.js'
+import { classifyDocument, shouldExtractRequirements, AUTO_ACCEPT_THRESHOLD } from './documentClassifier.js'
 import { runRequirementExtraction, extractionSuccessMessage } from './extractRequirements.js'
 
 export const UPLOAD_CONCURRENCY = 2
 export const PROCESSING_STALE_MS = 20 * 60 * 1000
+// 單檔上限:對齊 Supabase Dashboard「Storage → Upload file size limit」的設定值,
+// 調整那邊要同步改這裡(W14 建議值 300MB;預檢在前端先擋,伺服器超限另有特判訊息)
+export const MAX_UPLOAD_BYTES = 300 * 1024 * 1024
 const PAGE_INSERT_BATCH = 200
 const FIRST_TEXT_SAMPLE_PAGES = 3
 
@@ -166,6 +169,20 @@ async function sha256Hex(buffer) {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+// W14:AI 分類第二意見(classify-document Edge Function)。任何失敗都回 null,
+// 讓上傳流程靜默退回確定性判定——分類建議永遠不值得擋掉一次上傳。
+async function classifyDocumentWithAi({ versionId, projectId }) {
+  try {
+    const { data, error } = await supabase.functions.invoke('classify-document', {
+      body: { document_version_id: versionId, project_id: projectId },
+    })
+    if (error || data?.error || !data?.document_type) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
 async function upsertRun(run) {
   const { data, error } = await supabase
     .from('document_processing_runs')
@@ -192,6 +209,10 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
   const filename = file.name || '未命名文件'
   const kind = fileKind(filename, file.type || '')
   const analyzable = analysisSupport(kind) === 'full'
+  // 超大檔在前端先擋:丟到伺服器也一定被 Storage 上限退回,先給人看得懂的原因
+  if ((file.size ?? 0) > MAX_UPLOAD_BYTES) {
+    throw new Error(`「${filename}」約 ${Math.round(file.size / 1024 / 1024)}MB,超過單檔上限 ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)}MB;請壓縮或拆分後再上傳`)
+  }
   const report = async (patch) => {
     const run = await upsertRun(patch)
     onRun?.(run)
@@ -220,7 +241,7 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
     .slice(0, FIRST_TEXT_SAMPLE_PAGES)
     .map((p) => p.extracted_text)
     .join('\n')
-  const classification = classifyDocument({
+  let classification = classifyDocument({
     filename, firstText, analyzable: analyzable && !extractionError,
   })
 
@@ -313,12 +334,17 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
     .from('contract-documents')
     .upload(uploadPath, buffer, { contentType: file.type || 'application/octet-stream' })
   if (uploadError && !/exists|duplicate/i.test(uploadError.message || '')) {
+    // 超過平台 Storage 上限:重傳同一份必再失敗,訊息要指向真正的解法,
+    // 不能沿用「重新上傳會自動接續」的通用指引(W14:39-地質鑽探報告實案)
+    const oversize = /exceeded the maximum allowed size/i.test(uploadError.message || '')
     return report({
       contract_package_id: packageRow.id, document_version_id: versionId,
       project_id: projectId,
       status: 'failed', stage: 'failed',
       completed_at: new Date().toISOString(),
-      error_message: `原始檔上傳失敗:${uploadError.message}`,
+      error_message: oversize
+        ? '原始檔上傳失敗:檔案超過平台單檔上限。請壓縮或拆分後重新上傳;需要更大上限請調整 Supabase Storage 設定'
+        : `原始檔上傳失敗:${uploadError.message}`,
       metadata: { filename_kind: kind },
     })
   }
@@ -393,6 +419,40 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
       page_count: pages.length, classification_reason: classification.reason,
     },
   })
+
+  // W14 AI 分類:確定性分類器沒把握、且是第一次入庫的新文件 → 問 AI 第二意見
+  // (既有文件的類型已被人或前批確認,不重問)。信心夠高就自動歸檔並照常路由
+  // 抽取——使用者事後隨時可改分類;信心低只換成更好的建議,照舊進待確認。
+  // AI 失敗(方案關閉/模型錯誤/網路)絕不擋上傳,靜默退回確定性判定。
+  if (!existingDoc && classification.classification_status === 'needs_review' && pages.length) {
+    const ai = await classifyDocumentWithAi({ versionId, projectId })
+    if (ai) {
+      const accepted = ai.confidence >= AUTO_ACCEPT_THRESHOLD
+      classification = {
+        document_type: ai.document_type,
+        confidence: ai.confidence,
+        reason: `AI 分類:${ai.reason}`,
+        classification_status: accepted ? 'auto_accepted' : 'needs_review',
+      }
+      if (accepted && ai.document_type !== documentType) {
+        // 自動歸檔=同步改 documents.document_type(改分類稽核 trigger 會留痕)
+        const { error: retypeError } = await supabase.from('documents')
+          .update({ document_type: ai.document_type }).eq('id', documentId)
+        if (!retypeError) documentType = ai.document_type
+      }
+      await report({
+        project_id: projectId, contract_package_id: packageRow.id,
+        document_version_id: versionId, status: 'processing', stage: 'classifying',
+        suggested_document_type: classification.document_type,
+        classification_status: classification.classification_status,
+        classification_confidence: classification.confidence,
+        metadata: {
+          filename_kind: kind, storage_path: uploadPath,
+          page_count: pages.length, classification_reason: classification.reason,
+        },
+      })
+    }
+  }
 
   // Route only trusted, obligation-bearing types to Requirement extraction.
   const routing = shouldExtractRequirements({

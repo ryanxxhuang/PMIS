@@ -30,10 +30,10 @@ function parseTsFeatures(src) {
 describe('aiFeatures 前後端註冊表同步', () => {
   const tsFeatures = parseTsFeatures(tsSource)
 
-  it('兩邊都是 16 個功能', () => {
-    expect(AI_FEATURES).toHaveLength(16)
-    expect(tsFeatures).toHaveLength(16)
-    expect(AI_FEATURE_KEYS).toHaveLength(16)
+  it('兩邊都是 17 個功能', () => {
+    expect(AI_FEATURES).toHaveLength(17)
+    expect(tsFeatures).toHaveLength(17)
+    expect(AI_FEATURE_KEYS).toHaveLength(17)
   })
 
   it('key 集合與順序完全一致', () => {
@@ -76,7 +76,7 @@ describe('aiFeatures 前後端註冊表同步', () => {
   })
 
   it('key 不重複、edgeFunction 不重複', () => {
-    expect(new Set(AI_FEATURE_KEYS).size).toBe(16)
-    expect(new Set(AI_FEATURES.map((f) => f.edgeFunction)).size).toBe(16)
+    expect(new Set(AI_FEATURE_KEYS).size).toBe(17)
+    expect(new Set(AI_FEATURES.map((f) => f.edgeFunction)).size).toBe(17)
   })
 })

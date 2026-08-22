@@ -102,6 +102,8 @@ export default function Contract() {
   // disabled 用——React state 守衛在重新 render 前讀到的是舊 Set,擋不住連點
   const busyRunsRef = useRef(new Set())
   const [busyRunIds, setBusyRunIds] = useState(() => new Set())
+  // W14 事後治理:哪一列正開著「改分類」的下拉(一次只開一列)
+  const [reclassifyId, setReclassifyId] = useState(null)
   const [panelDismissed, setPanelDismissed] = useState(false)
   const [, forceTick] = useState(0)
   const tickRef = useRef(null)
@@ -311,7 +313,11 @@ export default function Contract() {
       const nextStatus = packageStatusFromRuns(freshRuns || batchRuns)
       await supabase.from('contract_packages').update({ status: nextStatus }).eq('id', pkg.id)
       setPackages((ps) => ps.map((p) => (p.id === pkg.id ? { ...p, status: nextStatus } : p)))
-      if (failures.length) setMsg(`部分檔案未能開始處理:${failures[0]}`)
+      // 全部列出來(最多三件+總數):超限檔 throw 後不會留任何列,
+      // 只報第一件會讓其餘失敗檔無聲消失(W14 審查)
+      if (failures.length) {
+        setMsg(`部分檔案未能開始處理:${failures.slice(0, 3).join(';')}${failures.length > 3 ? ` …共 ${failures.length} 件` : ''}`)
+      }
       await reloadRuns(pkg.id)
     } catch (e) {
       setMsg(e?.message || '上傳失敗')
@@ -338,8 +344,14 @@ export default function Contract() {
         setDocsById((m) => new Map(m).set(docId, { ...m.get(docId), document_type: newType }))
       }
       const patch = { classification_status: 'confirmed' }
+      // 抽取前提:文件真的有逐頁文字。上傳失敗/掃描檔的 run 沒有 document_pages,
+      // 打抽取必吃 422 還會把真正的失敗原因(檔案太大/掃描檔)蓋成錯誤診斷
+      // (W14 審查);page_count>0=本批已落頁,requirement_extraction 有值=
+      // 舊資料曾成功路由過(legacy 列 metadata 可能缺 page_count)。
+      const hasPages = Number(run.metadata?.page_count || 0) > 0
+        || run.metadata?.requirement_extraction != null
       const canExtract = EXTRACTABLE_DOCUMENT_TYPES.includes(newType)
-        && run.parser_type && run.parser_type !== 'none'
+        && run.parser_type && run.parser_type !== 'none' && hasPages
       let updated = null
       if (canExtract) {
         // started_at 一併重設:staleProcessingPatch 以它起算 20 分鐘過期,
@@ -399,8 +411,21 @@ export default function Contract() {
         }).eq('id', run.id).select().single()
         updated = final
       } else {
+        // 改成非抽取類型時,舊的「找到 N 項契約重點」訊息不能留著騙人——
+        // 資料(建議仍在審查佇列)與畫面要說同一件事(W14 審查)
+        const staleExtraction = run.metadata?.requirement_extraction === 'completed'
         const { data: final } = await supabase.from('document_processing_runs')
-          .update(patch).eq('id', run.id).select().single()
+          .update({
+            ...patch,
+            ...(staleExtraction ? {
+              metadata: {
+                ...(run.metadata || {}),
+                requirement_extraction: 'skipped',
+                requirement_extraction_message: '已改為非抽取類型;先前抽取的建議仍保留於審查佇列',
+                routed_document_type: newType,
+              },
+            } : {}),
+          }).eq('id', run.id).select().single()
         updated = final
       }
       if (updated) setRuns((rs) => rs.map((r) => (r.id === updated.id ? updated : r)))
@@ -410,6 +435,33 @@ export default function Contract() {
       setBusyRunIds(new Set(busyRunsRef.current))
     }
   }, [versionsById, pid, reloadRuns])
+
+  // W14 刪除文件:單一守門路徑 delete_document RPC(權限/佐證鏈護欄在伺服器端;
+  // 已核定契約重點引用的文件會被 FK 擋下並回看得懂的訊息)。RPC 回傳 storage
+  // 路徑,前端負責移除原始檔(storage 物件必須走 Storage API 刪)。
+  const deleteDocument = useCallback(async (run, doc) => {
+    if (!doc?.id || busyRunsRef.current.has(run.id)) return
+    const title = doc.title || '這份文件'
+    if (!window.confirm(`確定要刪除「${title}」?原始檔、所有版本與尚未核定的 AI 契約重點建議會一併移除;已核定契約重點引用的文件會被系統擋下。`)) return
+    // 同步佔位:RPC+storage 清理要跑一兩秒,連點第二下會在第一刀 commit 後
+    // 吃到「找不到文件」的誤導錯誤(W14 審查)
+    busyRunsRef.current.add(run.id)
+    setBusyRunIds(new Set(busyRunsRef.current))
+    try {
+      const { data: paths, error } = await supabase.rpc('delete_document', { p_document: doc.id })
+      if (error) { setMsg(`刪除失敗:${error.message}`); return }
+      if (paths?.length) {
+        // 原始檔清理失敗不擋流程(讀不到的孤兒檔只佔空間),但要誠實留話
+        const { error: storageError } = await supabase.storage.from('contract-documents').remove(paths)
+        if (storageError) setMsg(`文件已刪除;原始檔清理未完成:${storageError.message}`)
+      }
+      setBatchVersionIds((s) => { const n = new Set(s); n.delete(run.document_version_id); return n })
+      await reloadRuns(run.contract_package_id)
+    } finally {
+      busyRunsRef.current.delete(run.id)
+      setBusyRunIds(new Set(busyRunsRef.current))
+    }
+  }, [reloadRuns])
 
   // ── 上傳回饋面板(mockup 狀態 B/C/D)────────────────────────────────────
   // 面板列 = 本批上傳的 run + 任何仍在處理中的 run(回到頁面也看得到進行中)
@@ -693,7 +745,7 @@ export default function Contract() {
                 </div>
                 {panelFailed.length > panelExtractionFailed.length && (
                   <div className="text-[11.5px] text-[var(--red-text)] mt-1.5 pl-[29.5px]">
-                    上傳失敗或無法讀取的檔案,請重新上傳同一份檔案(內容相同會自動接續處理)。
+                    上傳失敗或無法讀取的檔案:內容相同重新上傳會自動接續;超過大小上限的請壓縮或拆分後再上傳。
                   </div>
                 )}
                 <div className="flex gap-2 mt-2.5 pl-[29.5px]">
@@ -784,6 +836,45 @@ export default function Contract() {
                           )}
                           {reuploadHint && (
                             <span className="block mt-0.5">請重新上傳同一份檔案(內容相同會自動接續處理)</span>
+                          )}
+                          {/* W14 事後治理:終態文件可改分類/刪除(權限=文件管理)。
+                              改分類只給「曾分類過」的列——上傳失敗的列連頁都沒有,
+                              分類不是它的問題;刪除則全終態可用,含分類待確認列
+                              (待確認的垃圾檔正是最想刪的)。 */}
+                          {canWriteContract && state.kind !== 'processing' && (
+                            reclassifyId === run.id ? (
+                              <span className="flex items-center gap-1.5 mt-1">
+                                <Select defaultValue={doc?.document_type || run.suggested_document_type || 'other'} className="w-36"
+                                  onChange={(e) => {
+                                    const nextType = e.target.value
+                                    setReclassifyId(null)
+                                    // 改成可抽取類型會重跑一次 AI 抽取(新的一批待核建議),
+                                    // 先講清楚再動手;已核定項目不受影響
+                                    if (EXTRACTABLE_DOCUMENT_TYPES.includes(nextType)
+                                      && !window.confirm(`改為「${DOCUMENT_TYPE_LABELS[nextType]}」會重新執行 AI 抽取,產生一批新的待核建議(已核定項目不受影響)。繼續?`)) return
+                                    confirmClassification(run, nextType)
+                                  }}>
+                                  {CLASSIFIABLE_DOCUMENT_TYPES.map((t) => (
+                                    <option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</option>
+                                  ))}
+                                </Select>
+                                <button onClick={() => setReclassifyId(null)}
+                                  className="text-[var(--text-3)] hover:underline px-1 max-md:min-h-11">取消</button>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-2 mt-0.5">
+                                {!needsClassify && run.suggested_document_type != null && (
+                                  <button onClick={() => setReclassifyId(run.id)} disabled={busyRunIds.has(run.id)}
+                                    className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 disabled:opacity-50">
+                                    <MSym name="edit" size={11} /> 改分類
+                                  </button>
+                                )}
+                                <button onClick={() => deleteDocument(run, doc)} disabled={busyRunIds.has(run.id)}
+                                  className="text-[var(--red-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 disabled:opacity-50">
+                                  <MSym name="delete" size={11} /> 刪除
+                                </button>
+                              </span>
+                            )
                           )}
                         </div>
                       </td>

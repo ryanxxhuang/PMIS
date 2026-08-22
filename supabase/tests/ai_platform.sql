@@ -149,8 +149,8 @@ select lives_ok($$
   update public.profiles set full_name = '改個名字'
   where id = 'ab100000-0000-0000-0000-000000000001'
 $$, 'guard 只擋 is_platform_admin,其他 profile 欄位照常可改');
-select is((select count(*)::integer from public.ai_features), 16,
-  'ai_features 一般使用者讀得到全部 16 個功能');
+select is((select count(*)::integer from public.ai_features), 17,
+  'ai_features 一般使用者讀得到全部 17 個功能');
 
 -- ai_feature_allowed 三段邏輯(先驗方案門檻;覆寫與總開關在後台段驗)
 select is(public.ai_feature_allowed('ab200000-0000-0000-0000-00000000000a', 'sitelog.whiteboard'), true,
