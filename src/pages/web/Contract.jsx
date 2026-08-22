@@ -96,6 +96,11 @@ export default function Contract() {
   // 回到 idle 拖放區,歷史結果一律看下方文件清單。以 document_version_id 記批,
   // run 列會被 reload 換新物件,version id 才是穩定身分。
   const [batchVersionIds, setBatchVersionIds] = useState(() => new Set())
+  // 本批選了幾個檔:總數在「選檔當下」定錨。列是開工才建的(並發=2),
+  // 沒有錨的話面板總數會 2→4→6 遞增、進度母數跟著漂(使用者實測指正)。
+  // ref 是真相(closure 不吃 stale state),state 只為觸發 render。
+  const batchTotalRef = useRef(0)
+  const [batchTotal, setBatchTotal] = useState(0)
   // 防連點:分析已在進行的 run id——W13 殭屍事故的直接肇因就是重試連點,
   // 兩個請求 17ms 內同穿併發防呆、之後的 409 又把活解析蓋成失敗。
   // ref 是真正的鎖(同步 check-and-set,await 之前生效);state 只給按鈕
@@ -276,6 +281,9 @@ export default function Contract() {
       } finally { setBoqBusy(false) }
     }
     if (!files.length) return
+    // 面板總數定錨:同一個未關閉的面板連續加批就累加,關閉時歸零(dismissPanel)
+    batchTotalRef.current += files.length
+    setBatchTotal(batchTotalRef.current)
     let pkg = targetPackage
     try {
       if (!pkg) {
@@ -479,20 +487,26 @@ export default function Contract() {
   // 「重試」只對 AI 分析失敗有效;上傳失敗/掃描檔重打 edge fn 必敗又蓋掉
   // 原始錯誤,正確復原是重新上傳同檔(checksum 相同會自動接續)
   const panelExtractionFailed = panelFailed.filter((r) => r.metadata?.requirement_extraction === 'failed')
-  const overallPct = panelRuns.length
-    ? Math.round(panelRuns.reduce((sum, r) => sum + runPct(r), 0) / panelRuns.length)
+  // 進度母數用「選檔總數」不用「已建列數」:列是開工才建的,母數會長大、
+  // 進度會倒退;還沒開工的檔案以 0% 計入才是真實進度
+  const panelTotal = Math.max(panelRuns.length, batchTotal)
+  const overallPct = panelTotal
+    ? Math.round(panelRuns.reduce((sum, r) => sum + runPct(r), 0) / panelTotal)
     : 0
   const panelState = panelBusy ? 'busy' : (panelFailed.length ? 'err' : panelNeeds.length ? 'warn' : 'ok')
   const PANEL_HEAD = {
     busy: {
       icon: 'cloud_upload', fill: false, cls: 'text-[var(--blue-text)]',
-      title: panelRuns.length ? `正在整理 ${panelRuns.length} 個檔案` : '正在解析標單 XML',
-      // W13 起 AI 分析的續跑由本分頁驅動:離開頁面會中斷接力(已完成的批次保留,
-      // 之後可重試接續),不能再宣稱「可離開此頁」
-      sub: panelRuns.length
-        ? `已完成 ${panelOk.length + panelNeeds.length} / ${panelRuns.length}${elapsed ? ` · 已進行 ${elapsed}` : ''} · 分析中請保持此頁開啟;已完成的部分會保留`
+      // 「正在解析標單 XML」只屬於 XML 匯入(boqBusy);一般上傳在第一列建出來
+      // 之前也要報對事(W14 使用者實測:沒丟 XML 卻看到 XML 文案)
+      title: panelTotal ? `正在整理 ${panelTotal} 個檔案` : (boqBusy ? '正在解析標單 XML' : '正在準備上傳…'),
+      // W13 起上傳與 AI 分析的接力由「這個瀏覽器分頁」驅動:可以切到系統其他
+      // 功能頁做事(處理會繼續,回來看進度),但關閉/重新整理分頁會中斷
+      // (已完成的部分保留,重試會接續)
+      sub: panelTotal
+        ? `已完成 ${panelOk.length + panelNeeds.length} / ${panelTotal}${elapsed ? ` · 已進行 ${elapsed}` : ''} · 可切到其他頁做事;請勿關閉或重新整理此分頁`
         : '此步驟請勿離開頁面',
-      right: panelRuns.length ? `${overallPct}%` : '', bar: 'bg-[var(--blue)]',
+      right: panelTotal ? `${overallPct}%` : '', bar: 'bg-[var(--blue)]',
     },
     ok: {
       icon: 'check_circle', fill: true, cls: 'text-[var(--green-text)]',
@@ -513,7 +527,12 @@ export default function Contract() {
       right: `${panelRuns.length - panelFailed.length}/${panelRuns.length}`, bar: 'bg-[var(--red-text)]',
     },
   }[panelState]
-  const dismissPanel = () => { setPanelDismissed(true); setBatchVersionIds(new Set()) }
+  const dismissPanel = () => {
+    setPanelDismissed(true)
+    setBatchVersionIds(new Set())
+    batchTotalRef.current = 0
+    setBatchTotal(0)
+  }
   const retryRun = (run) => {
     const version = versionsById.get(run.document_version_id)
     const doc = version ? docsById.get(version.document_id) : null
