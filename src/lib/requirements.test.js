@@ -56,6 +56,8 @@ describe('requirement domain', () => {
       fixed_date: null,
       recurring: null,
       recurring_day: null,
+      recurring_weekday: null,
+      recurring_month: null,
     }
     const requirement = {
       requirement_type: 'deadline',
@@ -95,6 +97,21 @@ describe('requirement domain', () => {
     expect(deadlineRuleFromRequirement(recurringRequirement)).toMatchObject(recurringObligation)
     expect(ymd(computeRequirementDue(recurringRequirement, anchors)))
       .toBe(ymd(computeObligationDue(recurringObligation, anchors)))
+  })
+
+  it('maps the expanded frequency domain(weekly/quarterly/yearly)to recurrence fields', () => {
+    expect(deadlineRuleFromRequirement({
+      requirement_type: 'deadline', trigger_config: {},
+      frequency_type: 'weekly', frequency_config: { weekday: 3 },
+    })).toMatchObject({ recurring: 'weekly', recurring_weekday: 3, recurring_day: null, recurring_month: null })
+    expect(deadlineRuleFromRequirement({
+      requirement_type: 'deadline', trigger_config: {},
+      frequency_type: 'quarterly', frequency_config: { month: 2, day: 10 },
+    })).toMatchObject({ recurring: 'quarterly', recurring_month: 2, recurring_day: 10 })
+    expect(deadlineRuleFromRequirement({
+      requirement_type: 'deadline', trigger_config: {},
+      frequency_type: 'yearly', frequency_config: { month: 3, day: 31 },
+    })).toMatchObject({ recurring: 'yearly', recurring_month: 3, recurring_day: 31 })
   })
 
   it('does not apply deadline behavior to specialized requirement types', () => {

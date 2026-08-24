@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { computeObligationDue } from '../../lib/contractDue.js'
+import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
 
 // W10 契約期限對照表——「可寄給對方」的輸出物。事務所/監造對機關、對廠商溝通時
 // 需要一張紙:哪些期限、怎麼算、到期日、誰負責、現在狀態、契約出處。
@@ -17,19 +17,7 @@ const ANCHOR_LABELS = [
   ['award_date', '決標日'], ['notice_date', '開工通知日'],
   ['commencement_date', '開工日'], ['end_date', '竣工日'],
 ]
-const TRIGGER_LABEL = {
-  award: '決標', notice: '接獲開工通知', commencement: '開工',
-  completion: '完工', monthly: '每月', fixed: '指定日期', other: '其他',
-}
 const iso = (d) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '')
-
-function ruleText(ob) {
-  if (ob.recurring === 'monthly') return `每月 ${ob.recurring_day || ''} 日${ob.offset_dir === 'before' ? '前' : ''}`.trim()
-  if (ob.trigger_event === 'fixed') return `指定 ${ob.fixed_date || '日期'}`
-  const t = TRIGGER_LABEL[ob.trigger_event] || ob.trigger_event || ''
-  if (ob.offset_days) return `${t}${ob.offset_dir === 'before' ? '前' : '後'} ${ob.offset_days} 日內`
-  return t
-}
 
 const TH = 'border border-slate-400 px-2 py-1 text-left font-medium bg-slate-100'
 const TD = 'border border-slate-400 px-2 py-1 align-top'
@@ -144,7 +132,7 @@ export default function ObligationsPrint() {
                   return (
                     <tr key={ob.id}>
                       <td className={TD}>{ob.title}</td>
-                      <td className={TD}>{ruleText(ob)}</td>
+                      <td className={TD}>{formatObligationRule(ob)}</td>
                       <td className={TD}>
                         {due ? iso(due) : '無法推算'}
                         {overdue && <span className="font-bold">(已逾期)</span>}

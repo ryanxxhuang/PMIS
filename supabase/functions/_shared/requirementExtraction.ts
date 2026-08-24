@@ -9,7 +9,7 @@
 // * deterministic per-run suggestion IDs so retrying a persistence step inside
 //   the same run cannot insert duplicates.
 
-export const PROMPT_VERSION = 'extract-requirements/v2'
+export const PROMPT_VERSION = 'extract-requirements/v3'
 
 // Vocabulary mirrors the P0-01 requirement domain (src/lib/requirements.js and
 // the requirements table CHECK constraints) plus the legacy contract phase /
@@ -24,7 +24,17 @@ export const TRIGGER_TYPES = [
   'award', 'notice', 'commencement', 'completion', 'monthly', 'fixed', 'other',
 ] as const
 export const OFFSET_DIRS = ['before', 'after'] as const
-export const FREQUENCY_TYPES = ['monthly'] as const
+// 頻率值域與各型 config 欄位(真實契約的循環義務:每日施工日誌、每週工安
+// 會議、每月月報、每季/每年保養檢測)。frequency_config 只收各型自己的欄位:
+//   daily     — 無 config(每天都算一次)
+//   weekly    — { weekday: 1..7 }(ISO 慣例,1=週一…7=週日)
+//   monthly   — { day: 1..31 }
+//   quarterly — { month: 1..3(季內第幾個月), day: 1..31 }
+//   yearly    — { month: 1..12, day: 1..31 }
+// 值域改動要同步:extract-requirements 的 SUGGESTION_SCHEMA、前端
+// formatRequirementRule/手動新增表單、materialize_deadline_obligation(migration)
+// 與兩份 contractDue 的下次到期日計算。
+export const FREQUENCY_TYPES = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const
 
 const asTrimmed = (value: unknown): string | null => {
   if (typeof value !== 'string') return null
@@ -113,10 +123,28 @@ export function validateSuggestion(raw: unknown): SuggestionCheck {
     }
   }
 
+  // frequency_config 只收該頻率型別自己的欄位;超出值域的欄位丟棄
+  // (沿用 monthly day 的既有行為:壞欄位不落庫,義務本身保留,
+  // 只是推不出下次到期日)。
   const frequencyConfig: Record<string, unknown> = {}
-  if (frequencyType === 'monthly') {
-    const day = Number(((r.frequency_config ?? {}) as Record<string, unknown>).day)
-    if (Number.isInteger(day) && day >= 1 && day <= 31) frequencyConfig.day = day
+  if (frequencyType != null) {
+    const rawFreq = (r.frequency_config ?? {}) as Record<string, unknown>
+    const intIn = (value: unknown, min: number, max: number): number | null => {
+      const n = Number(value)
+      return Number.isInteger(n) && n >= min && n <= max ? n : null
+    }
+    if (['monthly', 'quarterly', 'yearly'].includes(frequencyType)) {
+      const day = intIn(rawFreq.day, 1, 31)
+      if (day != null) frequencyConfig.day = day
+    }
+    if (frequencyType === 'weekly') {
+      const weekday = intIn(rawFreq.weekday, 1, 7)
+      if (weekday != null) frequencyConfig.weekday = weekday
+    }
+    if (frequencyType === 'quarterly' || frequencyType === 'yearly') {
+      const month = intIn(rawFreq.month, 1, frequencyType === 'quarterly' ? 3 : 12)
+      if (month != null) frequencyConfig.month = month
+    }
   }
 
   let confidence: number | null = null

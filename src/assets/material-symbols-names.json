@@ -221,6 +221,7 @@
     "cwa",
     "d28",
     "d28_values",
+    "daily",
     "daily_log",
     "daily_log_id",
     "daily_log_items",
@@ -387,6 +388,7 @@
     "qty_delta",
     "quality",
     "quality_plan",
+    "quarterly",
     "question",
     "radiogroup",
     "react",
@@ -501,12 +503,14 @@
     "warn",
     "warranty",
     "weather",
+    "weekly",
     "work_item_id",
     "work_item_no",
     "work_items",
     "work_summary",
     "xls",
     "xlsx",
+    "yearly",
     "yesterday"
   ]
 }

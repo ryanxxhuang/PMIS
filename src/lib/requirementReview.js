@@ -64,8 +64,8 @@ export function inDefaultReviewScope(requirement, currentRunIds) {
 }
 
 // 頻率維度(檢索頁篩選):循環義務照 frequency_type 分桶,非循環分「一次性」
-// (有觸發時點)與「無明確時點」。標籤表涵蓋抽取引擎未來的值域(每日/每週/
-// 每季/每年);引擎目前只會產 monthly,值域擴充時這裡自動跟上,未知值原樣顯示。
+// (有觸發時點)與「無明確時點」。標籤表即抽取引擎的完整頻率值域
+// (requirementExtraction.ts 的 FREQUENCY_TYPES);未知值原樣顯示。
 export const FREQUENCY_LABELS = Object.freeze({
   daily: '每日', weekly: '每週', monthly: '每月', quarterly: '每季', yearly: '每年',
 })
@@ -97,12 +97,27 @@ const TRIGGER_LABELS = {
   completion: '完工', monthly: '每月', fixed: '指定日期', other: '其他',
 }
 
+const WEEKDAY_LABELS = ['', '週一', '週二', '週三', '週四', '週五', '週六', '週日']
+
 // Readable trigger/frequency line instead of raw JSON config.
 export function formatRequirementRule(requirement) {
   if (!requirement) return ''
-  if (requirement.frequency_type === 'monthly') {
-    const day = requirement.frequency_config?.day
-    return day ? `每月 ${day} 日` : '每月'
+  if (requirement.frequency_type) {
+    const freq = requirement.frequency_config || {}
+    if (requirement.frequency_type === 'daily') return '每日'
+    if (requirement.frequency_type === 'weekly') {
+      return freq.weekday ? `每${WEEKDAY_LABELS[freq.weekday] || '週'}` : '每週'
+    }
+    if (requirement.frequency_type === 'monthly') {
+      return freq.day ? `每月 ${freq.day} 日` : '每月'
+    }
+    if (requirement.frequency_type === 'quarterly') {
+      return freq.day && freq.month ? `每季第 ${freq.month} 個月 ${freq.day} 日` : '每季'
+    }
+    if (requirement.frequency_type === 'yearly') {
+      return freq.day && freq.month ? `每年 ${freq.month} 月 ${freq.day} 日` : '每年'
+    }
+    return FREQUENCY_LABELS[requirement.frequency_type] || requirement.frequency_type
   }
   if (!requirement.trigger_type) return ''
   const config = requirement.trigger_config || {}

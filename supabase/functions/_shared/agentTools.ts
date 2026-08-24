@@ -429,7 +429,7 @@ async function getRequirements(db: SupabaseClient, projectId: string, input: Rec
 
   let obQ = db
     .from('contract_obligations')
-    .select('id, title, category, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, responsible, penalty, source_clause, source_page, status, note')
+    .select('id, title, category, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, responsible, penalty, source_clause, source_page, status, note')
     .eq('project_id', projectId)
     .neq('status', '不適用')
     .order('sort_order', { ascending: true })
@@ -505,7 +505,7 @@ export async function collectOpenBallItems(
     db.from('rfis').select('id, rfi_no, title, status, due_date').eq('project_id', projectId).in('status', ['待回覆', '已回覆']),
     db.from('valuations').select('id, period_no, status, invoice_date, paid_date').eq('project_id', projectId),
     db.from('projects').select('award_date, notice_date, commencement_date, end_date').eq('id', projectId).maybeSingle(),
-    db.from('contract_obligations').select('id, title, responsible, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, source_clause').eq('project_id', projectId).eq('status', '待辦'),
+    db.from('contract_obligations').select('id, title, responsible, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause').eq('project_id', projectId).eq('status', '待辦'),
   ])
   const firstError = [defects, submittals, rfis, valuations, obligations].find((r) => r.error)
   if (firstError?.error) return { error: firstError.error.message }

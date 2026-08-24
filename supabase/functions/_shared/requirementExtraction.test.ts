@@ -57,7 +57,7 @@ describe('validateSuggestion', () => {
       responsible_party_type: 'subcontractor',
       lifecycle_phase: 'pre-construction',
       trigger_type: 'weekly',
-      frequency_type: 'weekly',
+      frequency_type: 'biweekly',
     })
     expect(check.ok).toBe(true)
     if (!check.ok) return
@@ -68,6 +68,25 @@ describe('validateSuggestion', () => {
     expect(check.value.trigger_config).toEqual({})
     expect(check.value.frequency_type).toBeNull()
     expect(check.value.warnings).toHaveLength(4)
+  })
+
+  it('keeps only in-domain frequency_config fields per frequency type', () => {
+    const freq = (frequency_type: string, frequency_config: Record<string, unknown>) => {
+      const check = validateSuggestion({ ...validRaw, frequency_type, frequency_config })
+      if (!check.ok) throw new Error(check.reason)
+      return { type: check.value.frequency_type, config: check.value.frequency_config }
+    }
+    // 各型只收自己的欄位;其他欄位即使有值也丟棄
+    expect(freq('daily', { weekday: 3, month: 2, day: 10 })).toEqual({ type: 'daily', config: {} })
+    expect(freq('weekly', { weekday: 3, month: 2, day: 10 })).toEqual({ type: 'weekly', config: { weekday: 3 } })
+    expect(freq('monthly', { weekday: 3, month: 2, day: 10 })).toEqual({ type: 'monthly', config: { day: 10 } })
+    expect(freq('quarterly', { month: 2, day: 10 })).toEqual({ type: 'quarterly', config: { month: 2, day: 10 } })
+    expect(freq('yearly', { month: 12, day: 31 })).toEqual({ type: 'yearly', config: { month: 12, day: 31 } })
+    // 值域外的欄位丟棄(義務保留、推不出到期日),不整項否決
+    expect(freq('weekly', { weekday: 9 })).toEqual({ type: 'weekly', config: {} })
+    expect(freq('quarterly', { month: 4, day: 10 })).toEqual({ type: 'quarterly', config: { day: 10 } })
+    expect(freq('yearly', { month: 13, day: 40 })).toEqual({ type: 'yearly', config: {} })
+    expect(freq('monthly', { day: 0 })).toEqual({ type: 'monthly', config: {} })
   })
 
   it('validates fixed dates, clamps confidence, and drops bad page numbers', () => {

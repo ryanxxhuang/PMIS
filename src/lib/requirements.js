@@ -38,6 +38,8 @@ export function deadlineRuleFromRequirement(requirement) {
     fixed_date: trigger.fixed_date || null,
     recurring: requirement.frequency_type || null,
     recurring_day: frequency.day ?? null,
+    recurring_weekday: frequency.weekday ?? null,
+    recurring_month: frequency.month ?? null,
   }
 }
 
