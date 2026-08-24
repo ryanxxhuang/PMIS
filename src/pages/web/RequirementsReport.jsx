@@ -253,19 +253,19 @@ export function ReportBody({ project, generatedAt, coverageRows, versionsById, h
         )}
       </div>
 
-      {/* 二、已核定:經監造/機關人工核定生效的契約重點 */}
+      {/* 二、已確認:轉錄經人工或系統核對無誤的契約重點 */}
       <RequirementSection
-        heading="二、已核定的契約重點"
-        note="經人工審查核定生效;期限型已排入期限追蹤(到期日對照另見「契約期限對照表」)。"
+        heading="二、已確認的契約重點"
+        note="轉錄經確認與契約原文一致(人工簽核或系統逐字核對);期限型已排入期限追蹤(到期日對照另見「契約期限對照表」)。"
         groups={highlights.approved}
         sourcesByReq={sourcesByReq}
         versionsById={versionsById}
       />
 
-      {/* 三、待審:AI 建議尚未經人工確認——身分必須講清楚,不可與已核定混讀 */}
+      {/* 三、待確認:AI 轉錄尚有疑慮——身分必須講清楚,不可與已確認混讀 */}
       <RequirementSection
-        heading="三、待審查的 AI 整理結果"
-        note={`尚未經人工核定,不具契約效力,僅供對照參考${
+        heading="三、待確認的 AI 整理結果"
+        note={`轉錄尚未確認,本節內容不具契約效力;引用前請對照契約原文${
           pendingStatusCounts ? `(${pendingStatusCounts})` : ''}。`}
         groups={highlights.suggestions}
         sourcesByReq={sourcesByReq}
@@ -281,7 +281,7 @@ export function ReportBody({ project, generatedAt, coverageRows, versionsById, h
             <li>本專案契約重點筆數已達本報告的查詢上限,僅列最近 {REQUIREMENT_QUERY_LIMIT} 筆;較早建立的契約重點未列入本報告。</li>
           )}
           {runsCapped && (
-            <li>本專案分析紀錄已達本報告的查詢上限,「一、分析文件與涵蓋範圍」僅涵蓋最近 {RUN_QUERY_LIMIT} 次分析;更早分析的文件未列入該表,其已核定契約重點仍列於第二節。</li>
+            <li>本專案分析紀錄已達本報告的查詢上限,「一、分析文件與涵蓋範圍」僅涵蓋最近 {RUN_QUERY_LIMIT} 次分析;更早分析的文件未列入該表,其已確認契約重點仍列於第二節。</li>
           )}
           {gapNotes.map((note) => <li key={note}>{note}</li>)}
           <li>「引文已核對」表示引文經系統與存檔頁面文字逐字比對一致;「引文待人工確認」表示比對不一致,使用前請對照契約原文。</li>

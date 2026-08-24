@@ -1,4 +1,4 @@
-// 期限追蹤:已核定契約期限的到期管理(自 /requirements 的期限追蹤區塊遷出)。
+// 期限追蹤:已確認契約期限的到期管理(自 /requirements 的期限追蹤區塊遷出)。
 // 契約重點頁改版(design_handoff_contract_highlights)後只留頂部摘要條,
 // 逐項到期清單、標為已提送/佐證掛接、罰款試算與基準日/契約總價編輯全數移到
 // 本頁——今日待辦的契約期限項與摘要條的「開啟期限追蹤」都導到這裡。
@@ -114,7 +114,7 @@ export default function Deadlines() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="期限追蹤" tagline="到期不漏、逾期有數" subtitle="已核定的契約期限依基準日推算到期日;提送後掛上佐證,逾期自動試算違約金。核定新期限請到「契約重點」。" />
+      <PageHeader title="期限追蹤" tagline="到期不漏、逾期有數" subtitle="已確認的契約期限依基準日推算到期日;提送後掛上佐證,逾期自動試算違約金。新期限請到「契約重點」確認。" />
 
       <Card title="期限追蹤" action={
         <div className="flex items-center gap-2">
@@ -131,7 +131,7 @@ export default function Deadlines() {
           <Badge color="green">已完成 {dueCounts.done} 項</Badge>
         </div>
         {dueGroups.length === 0 && (
-          <Empty>尚無已核定的期限。到「契約重點」核定期限型契約重點或手動新增;核定後會自動出現在這裡。</Empty>
+          <Empty>尚無已確認的期限。契約重點的期限型項目確認後會自動出現在這裡(引文與數字核對無誤的會自動確認)。</Empty>
         )}
         <ErrorBanner msg={obligationMsg} className="mt-2" />
       </Card>

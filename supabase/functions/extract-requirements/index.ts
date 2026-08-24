@@ -731,9 +731,26 @@ Deno.serve(async (req) => {
       return json({ error: completeError.message, run_id: runId, status: 'failed' }, 500)
     }
 
+    // 轉錄分流(D-017,確定性引擎):引文已核對且期限數字與引文一致的自動確認
+    // 並物化義務;對不上的標記疑慮進人工。分流失敗不擋 run 完結——列維持待確認,
+    // 安全退化(全部進人工)。
+    let autoConfirmedCount = 0
+    let flaggedCount = 0
+    try {
+      const { data: triageRows, error: triageError } = await service
+        .rpc('apply_transcription_triage', { p_run: runId })
+      const triage = Array.isArray(triageRows) ? triageRows[0] : triageRows
+      if (!triageError && triage) {
+        autoConfirmedCount = Number(triage.auto_confirmed) || 0
+        flaggedCount = Number(triage.flagged) || 0
+      }
+    } catch { /* 安全退化 */ }
+
     return json({
       run_id: runId,
       status: 'completed',
+      auto_confirmed_count: autoConfirmedCount,
+      flagged_count: flaggedCount,
       extracted_requirement_count: totalRequirements,
       verified_source_count: verifiedCount,
       unverified_source_count: needsReviewCount,

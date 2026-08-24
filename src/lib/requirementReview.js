@@ -5,12 +5,14 @@
 
 export const REVIEW_DECISIONS = Object.freeze(['approve', 'reject', 'supersede'])
 
+// D-017 語意:契約本身已是生效文件,人工「確認」的是 AI 轉錄無誤,不是使契約生效。
+// 引文與數字核對無誤的由確定性分流自動確認(reviewed_by null=系統)。
 export const REQUIREMENT_STATUS_LABELS = Object.freeze({
-  draft_ai: 'AI 草稿',
-  needs_review: '待人工確認',
-  approved: '已核定',
-  rejected: '已駁回',
-  superseded: '已廢止取代',
+  draft_ai: 'AI 整理',
+  needs_review: '待確認',
+  approved: '已確認',
+  rejected: '不採用',
+  superseded: '已取代',
 })
 
 export const REQUIREMENT_TYPE_LABELS = Object.freeze({

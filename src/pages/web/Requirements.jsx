@@ -52,8 +52,8 @@ export function requirementsIntro(runs = [], rowCount = 0) {
       coverageWarning,
       // 沒有 completed run 時只講審查規則,不宣稱 AI 整理完成
       note: ingestionDone
-        ? 'AI 已完成整理，專案初始化的「AI 整理契約重點」即為完成；下方只有要成為契約重點的內容才需人工核定，未核定不影響開啟正式模式。'
-        : '下方只有要成為契約重點的內容才需人工核定，未核定不影響開啟正式模式。',
+        ? 'AI 已完成整理，引文與數字核對無誤的已自動確認；其餘只有要成為契約重點的內容才需人工確認，未確認不影響開啟正式模式。'
+        : '下方只有要成為契約重點的內容才需人工確認，未確認不影響開啟正式模式。',
       emptyText: null,
     }
   }
@@ -82,14 +82,14 @@ export function requirementsIntro(runs = [], rowCount = 0) {
   }
 }
 
-// 五色語意(README Design Tokens):待核定=黃(正常待辦不是異常)、已生效=綠、
-// 已駁回=灰(含已廢止取代——README 語意「不成立/已被取代,不計入義務」是同一格,
-// 色票、快篩與計數三處必須同一套帳;廢止細節在詳情的伺服器紀錄行)。選中=藍。
-// 狀態一律色票帶文字,不得只靠顏色。
+// 五色語意(README Design Tokens):待確認=黃(正常待辦不是異常)、已確認=綠、
+// 不採用=灰(含已取代——「不成立/已被取代,不計入義務」是同一格,色票、快篩
+// 與計數三處必須同一套帳;取代細節在詳情的伺服器紀錄行)。選中=藍。
+// D-017:契約本身已生效,「確認」的對象是 AI 轉錄無誤——不是使契約生效。
 const STATUS_PILL = {
-  pending: { label: '待核定', color: 'amber' },
-  approved: { label: '已生效', color: 'green' },
-  rejected: { label: '已駁回', color: 'slate' },
+  pending: { label: '待確認', color: 'amber' },
+  approved: { label: '已確認', color: 'green' },
+  rejected: { label: '不採用', color: 'slate' },
 }
 // 快篩分桶:pending 收 draft_ai+needs_review;rejected 收 rejected+superseded
 // (兩者都「不計入義務」,對檢索者是同一格)
@@ -114,35 +114,39 @@ const chipCls = (active) => `h-[30px] px-3.5 rounded-full border text-xs font-me
   ? 'border-[var(--primary)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
   : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:bg-[var(--bg)]'}`
 
-// 詳情動作列(獨立元件供測試釘權限):核定/駁回只給契約審查者(監造/機關,
+// 詳情動作列(獨立元件供測試釘權限):確認/不採用只給契約審查者(監造/機關,
 // 鏡像 can_review_requirement,刻意無專案管理者例外);其他人看得到內容但
 // 不渲染假操作。
 export function ReviewActions({ requirement, canReview, busy, onReview, onEdit, reviewerName }) {
   const st = requirement.status
-  // README 核定紀錄格式:`桃園市工務局 林淑芬 核定 · 時間`。審查人名由呼叫端
-  // 從 profiles 解析(reviewed_by 是伺服器蓋的);讀不到人名時退回狀態+時間
-  const VERB = { approved: '核定', rejected: '駁回', superseded: '廢止取代' }
+  // 紀錄格式:`桃園市工務局 林淑芬 確認 · 時間`。審查人名由呼叫端從 profiles
+  // 解析(reviewed_by 是伺服器蓋的);reviewed_by 為空的已確認=確定性分流的
+  // 系統自動確認(引文+數字核對無誤),要明講不是人簽的
+  const VERB = { approved: '確認', rejected: '不採用', superseded: '廢止取代' }
+  const autoConfirmed = st === 'approved' && !requirement.reviewed_by && requirement.reviewed_at
   const record = requirement.reviewed_at
-    ? (reviewerName
-      ? `${reviewerName} ${VERB[st] || REQUIREMENT_STATUS_LABELS[st] || st} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
-      : `${REQUIREMENT_STATUS_LABELS[st] || st}·${fmtTime(requirement.reviewed_at)}(伺服器記錄)`)
+    ? (autoConfirmed
+      ? `系統核對無誤・自動確認 · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
+      : reviewerName
+        ? `${reviewerName} ${VERB[st] || REQUIREMENT_STATUS_LABELS[st] || st} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
+        : `${REQUIREMENT_STATUS_LABELS[st] || st}·${fmtTime(requirement.reviewed_at)}(伺服器記錄)`)
     : null
   if (EDITABLE_STATUSES.includes(st)) {
     if (!canReview) {
       return (
         <Badge color="slate">
-          <MSym name="info" size={12} className="shrink-0" />契約核定由監造／機關辦理
+          <MSym name="info" size={12} className="shrink-0" />轉錄確認由監造／機關辦理
         </Badge>
       )
     }
     return (<>
-      <Button size="md" disabled={!!busy} onClick={() => onReview('approve', '核定生效')}>
-        <MSym name="check_circle" size={15} fill /> 核定生效
+      <Button size="md" disabled={!!busy} onClick={() => onReview('approve', '確認無誤')}>
+        <MSym name="check_circle" size={15} fill /> 確認無誤
       </Button>
       <Button variant="outline" size="md" disabled={!!busy} onClick={onEdit}>修正內容</Button>
-      <button type="button" disabled={!!busy} onClick={() => onReview('reject', '駁回')}
+      <button type="button" disabled={!!busy} onClick={() => onReview('reject', '不採用')}
         className="inline-flex items-center justify-center h-9 px-3.5 rounded-full text-sm font-medium text-[var(--red-text)] hover:bg-[var(--red-tint)] pressable max-md:min-h-11 disabled:opacity-40">
-        駁回
+        不採用
       </button>
     </>)
   }
@@ -417,7 +421,7 @@ export default function Requirements() {
     setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('highlight'); return n }, { replace: true })
   }, [pid, setSearchParams])
 
-  // 初次載入:深連結(?highlight=)優先,否則預設選第一條待核定(直接進入待辦)
+  // 初次載入:深連結(?highlight=)優先,否則預設選第一條待確認(直接進入待辦)
   useEffect(() => {
     if (!loaded || initialPicked.current || !rows.length) return
     initialPicked.current = true
@@ -504,7 +508,7 @@ export default function Requirements() {
   }, [manualOpen])
 
   // 生命週期決定:唯一路徑是 review_requirement RPC;成功後以伺服器回傳列刷新。
-  const review = async (decision, confirmText, requirementId = selectedId, body = '此為契約層級決定,將由伺服器記錄審查人與時間。') => {
+  const review = async (decision, confirmText, requirementId = selectedId, body = '確認的是 AI 轉錄與契約原文一致;契約效力以原文為準,紀錄由伺服器寫入。') => {
     if (!(await appConfirm({ title: confirmText, body, confirmLabel: confirmText }))) return
     setBusy(decision)
     const { data, error } = await supabase.rpc('review_requirement', {
@@ -712,6 +716,13 @@ export default function Requirements() {
 
       <ErrorBanner msg={msg} className="mx-4 mt-3" />
 
+      {/* 確定性分流的疑慮:引文/數字對不上的地方,人工聚焦核對這幾點就好 */}
+      {EDITABLE_STATUSES.includes(selected.status) && selected.triage_doubts?.length > 0 && (
+        <p className="mx-4 mt-3 text-xs leading-relaxed text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-3 py-2">
+          需人工核對:{selected.triage_doubts.join('、')}。請對照下方原文出處確認後再按「確認無誤」。
+        </p>
+      )}
+
       {/* 2. 本文:標題/說明/key-value(編輯模式原地換成表單) */}
       {editing ? (
         <div className="p-4 space-y-2">
@@ -784,7 +795,7 @@ export default function Requirements() {
         })}
         {run && (
           <p className="text-[11px] text-[var(--text-3)] leading-relaxed mt-1">
-            AI 擷取:模型 {run.model_name || '?'}·prompt {run.prompt_version || '?'}·完成 {fmtTime(run.completed_at) || run.status || '?'}。模型出處僅供追溯,效力以人工核定為準。
+            AI 擷取:模型 {run.model_name || '?'}·prompt {run.prompt_version || '?'}·完成 {fmtTime(run.completed_at) || run.status || '?'}。模型出處僅供追溯;契約效力以契約原文為準。
           </p>
         )}
       </div>
@@ -831,7 +842,7 @@ export default function Requirements() {
           ))}
           {!selectedObligation && !links.length && !artifactLinks.length && (
             <p className="text-xs text-[var(--text-3)]">
-              {selected.status !== 'approved' ? '未核定內容不會建立或連結任何活躍流程。' : '尚未連結流程項目;本頁不會自動建立送審、查驗或試驗流程。'}
+              {selected.status !== 'approved' ? '未確認內容不會建立或連結任何活躍流程。' : '尚未連結流程項目;本頁不會自動建立送審、查驗或試驗流程。'}
             </p>
           )}
           {canReview && (
@@ -911,7 +922,7 @@ export default function Requirements() {
             <MSym name="close" size={18} />
           </button>
         </div>
-        <p className="text-xs text-[var(--text-3)] mb-3">AI 漏抽或文件未涵蓋的契約重點可在此補登;送出後為「待核定」、來源標記人工新增,期限型核定後自動排入期限追蹤。</p>
+        <p className="text-xs text-[var(--text-3)] mb-3">AI 漏抽或文件未涵蓋的契約重點可在此補登;送出後為「待確認」、來源標記人工新增,期限型確認後自動排入期限追蹤。</p>
         <div className="space-y-2">
           <Input value={manualDraft.title} onChange={(e) => setManualDraft((d) => ({ ...d, title: e.target.value }))}
             placeholder="標題(例:開工前 14 日內提送施工計畫)" />
@@ -1021,7 +1032,7 @@ export default function Requirements() {
           </div>
           <ErrorBanner msg={manualMsg} />
           <div className="flex gap-2 pt-1">
-            <Button size="sm" disabled={manualBusy} onClick={submitManual}>新增(待核定)</Button>
+            <Button size="sm" disabled={manualBusy} onClick={submitManual}>新增(待確認)</Button>
             <Button variant="ghost" size="sm" onClick={() => { setManualOpen(false); setManualMsg('') }}>取消</Button>
           </div>
         </div>
@@ -1077,7 +1088,7 @@ export default function Requirements() {
             : (
               <PrerequisiteEmptyState
                 need={intro.emptyText}
-                unlocks="契約重點核定、送審/RFI 的 AI 依規範比對"
+                unlocks="契約重點確認、送審/RFI 的 AI 依規範比對"
                 to="/contract" cta="前往專案文件" />
             )}
           {intro.coverageWarning && (
@@ -1120,8 +1131,8 @@ export default function Requirements() {
                 className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-[var(--text)] placeholder:text-[var(--text-3)]" />
             </label>
             <div className="flex items-center gap-2 flex-wrap">
-              {[['all', '全部', counts.all], ['pending', '待核定', counts.pending],
-                ['approved', '已生效', counts.approved], ['rejected', '已駁回', counts.rejected]].map(([k, label, n]) => (
+              {[['all', '全部', counts.all], ['pending', '待確認', counts.pending],
+                ['approved', '已確認', counts.approved], ['rejected', '不採用', counts.rejected]].map(([k, label, n]) => (
                 <button key={k} type="button" aria-pressed={filters.status === k}
                   onClick={() => { setFilters((f) => ({ ...f, status: k })); setShownLimit(PAGE_SIZE) }}
                   className={chipCls(filters.status === k)}>
