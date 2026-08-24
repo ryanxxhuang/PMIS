@@ -170,6 +170,7 @@ const MANUAL_BLANK = {
   // 循環時點(頻率值域對齊 requirementExtraction.ts 的 FREQUENCY_TYPES)
   weekly_weekday: '1', freq_month: '', freq_day: '',
   acceptance_criteria: '', source_clause: '', source_page: '',
+  contract_package_id: '',
 }
 const MANUAL_TRIGGERS = [
   ['award', '決標日'], ['notice', '接獲開工通知日'], ['commencement', '開工日'], ['completion', '竣工日'],
@@ -195,6 +196,7 @@ export default function Requirements() {
   const [sourcesByReq, setSourcesByReq] = useState(new Map())
   const [versionsById, setVersionsById] = useState(new Map())
   const [reviewersById, setReviewersById] = useState(new Map())
+  const [packages, setPackages] = useState([])   // 可讀契約包(RLS 過濾;手動補登歸包用)
   const [filters, setFilters] = useState({ q: '', status: 'all', type: '', phase: '', freq: '' })
   const [shownLimit, setShownLimit] = useState(PAGE_SIZE)
   const [selectedId, setSelectedId] = useState(null)
@@ -228,13 +230,15 @@ export default function Requirements() {
     setLoaded(false)
     setLoadError('')
     try {
-      const [runResult, requirementResult] = await Promise.all([
+      const [runResult, requirementResult, packageResult] = await Promise.all([
         supabase.from('document_ingestion_runs')
           // error_message/metadata:失敗揭露與涵蓋率警示(requirementsIntro)要用
           .select('id, document_version_id, status, started_at, completed_at, model_name, prompt_version, error_message, metadata')
           .eq('project_id', pid).order('started_at', { ascending: false }).limit(100),
         supabase.from('requirements').select('*')
           .eq('project_id', pid).order('created_at', { ascending: false }).limit(LIST_LIMIT),
+        supabase.from('contract_packages').select('id, title, package_type')
+          .eq('project_id', pid).order('created_at'),
       ])
       if (runResult.error) throw runResult.error
       if (requirementResult.error) throw requirementResult.error
@@ -280,6 +284,7 @@ export default function Requirements() {
       setSourcesByReq(byReq)
       setVersionsById(new Map(versions.map((v) => [v.id, v])))
       setReviewersById(new Map(reviewers.map((p) => [p.id, p])))
+      setPackages(packageResult.data || [])
     } catch (error) {
       setLoadError(friendlyError(error, '契約重點載入失敗'))
     } finally {
@@ -597,6 +602,10 @@ export default function Requirements() {
       responsible_party_type: d.responsible_party_type || null,
       lifecycle_phase: d.lifecycle_phase || null,
       acceptance_criteria: d.acceptance_criteria.trim() || null,
+      // 分級可見性歸包:預設施工契約(契約脊椎);RLS guard 擋無權/跨案的包
+      contract_package_id: d.contract_package_id
+        || packages.find((cp) => cp.package_type === 'construction')?.id
+        || packages[0]?.id || null,
       trigger_type, trigger_config, frequency_type, frequency_config,
       status: 'needs_review',
     }).select().single()
@@ -989,6 +998,16 @@ export default function Requirements() {
               <span className="text-xs text-[var(--text-3)]">日</span>
             </>)}
           </div>
+          {packages.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--text-2)] shrink-0">所屬契約</span>
+              <Select value={manualDraft.contract_package_id || packages.find((cp) => cp.package_type === 'construction')?.id || packages[0]?.id || ''}
+                className="flex-1"
+                onChange={(e) => setManualDraft((d) => ({ ...d, contract_package_id: e.target.value }))}>
+                {packages.map((cp) => <option key={cp.id} value={cp.id}>{cp.title}</option>)}
+              </Select>
+            </div>
+          )}
           <Input value={manualDraft.acceptance_criteria}
             onChange={(e) => setManualDraft((d) => ({ ...d, acceptance_criteria: e.target.value }))}
             placeholder="允收標準(可留白)" />
