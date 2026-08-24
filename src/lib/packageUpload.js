@@ -60,12 +60,28 @@ export const RUN_STATUS_LABELS = Object.freeze({
   unsupported: '已收到',
 })
 
+// 原始檔是否真的躺在 bucket 裡。version.storage_path 在 INSERT 時就寫入,
+// 上傳前失敗的 run 物件從未落地——開檔/下載與進度統計必須吃同一套訊號:
+// stage 過了 received,且 failed/partial 列必須留有 metadata.storage_path
+// (上傳成功後的每一次 report 都帶;staleProcessingPatch 會把「中斷在
+// received」的列蓋成 partial/failed,只看 stage 會誤判成已落地)。
+export function runFileLanded(run) {
+  return !!run && run.stage !== 'received'
+    && (!['failed', 'partial'].includes(run.status) || !!run.metadata?.storage_path)
+}
+
+// 瀏覽器能直接渲染的格式(PDF/圖片/純文字)開新分頁預覽;其他(docx/xlsx…)
+// 瀏覽器不會渲染,一律改走下載並還原 original_filename——storage key 已退化成
+// ASCII(政府文件幾乎都中文檔名),直接開連結會存成底線醜檔名。
+export function isInlineViewableMime(mime) {
+  return /^(application\/pdf|image\/|text\/plain)/.test(mime || '')
+}
+
 // Real stage counts for the package progress header - no fake percentages.
 export function summarizePackageProgress(runs) {
   const rows = runs || []
   const terminal = (r) => ['completed', 'partial', 'failed', 'unsupported'].includes(r.status)
-  const uploaded = (r) => r.stage !== 'received'
-    && (r.status !== 'failed' || !!r.metadata?.storage_path)
+  const uploaded = runFileLanded
   const textExtracted = (r) => Number(r.metadata?.page_count || 0) > 0
     || ['classifying', 'extracting_requirements', 'completed'].includes(r.stage)
   const analyzable = rows.filter((r) => r.parser_type && r.parser_type !== 'none')

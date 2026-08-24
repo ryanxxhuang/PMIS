@@ -17,5 +17,6 @@ test('真實 Supabase 帳號可登入、重整還原 session、再登出', async
 
   await page.getByRole('button', { name: '登出', exact: true }).click()
   await expect(page).toHaveURL(/#\/login$/)
-  await expect(page.locator('button[type="submit"]')).toHaveText('登入')
+  // W12 登入改版:送出鈕依 mockup 文案為「下一步」(登入能力已由前段斷言驗畢)
+  await expect(page.locator('button[type="submit"]')).toHaveText('下一步')
 })
