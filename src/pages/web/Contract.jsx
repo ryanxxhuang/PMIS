@@ -455,7 +455,7 @@ export default function Contract() {
   const deleteDocument = useCallback(async (run, doc) => {
     if (!doc?.id || busyRunsRef.current.has(run.id)) return
     const title = doc.title || '這份文件'
-    if (!window.confirm(`確定要刪除「${title}」?原始檔、所有版本與尚未核定的 AI 契約重點建議會一併移除;已核定契約重點引用的文件會被系統擋下。`)) return
+    if (!window.confirm(`確定要刪除「${title}」?原始檔、所有版本與尚未確認的 AI 契約重點建議會一併移除;已確認契約重點引用的文件會被系統擋下。`)) return
     // 同步佔位:RPC+storage 清理要跑一兩秒,連點第二下會在第一刀 commit 後
     // 吃到「找不到文件」的誤導錯誤(W14 審查)
     busyRunsRef.current.add(run.id)
@@ -754,7 +754,7 @@ export default function Contract() {
                   {panelOk.length} 個檔案處理完成,已自動分類歸檔。
                   {aiCount != null && aiCount > 0 && ` AI 從本契約累計找到 ${aiCount} 項契約重點建議(含先前批次)。`}
                   <br />
-                  <Link to="/requirements" className="font-medium hover:underline inline-flex items-center gap-0.5">前往契約重點核定 <MSym name="arrow_forward" size={12} /></Link>
+                  <Link to="/requirements" className="font-medium hover:underline inline-flex items-center gap-0.5">前往契約重點 <MSym name="arrow_forward" size={12} /></Link>
                   {workItemsSource === 'db' && (<>
                     {' '}·{' '}
                     <Link to="/boq" className="font-medium hover:underline inline-flex items-center gap-0.5">查看標單工項 <MSym name="arrow_forward" size={12} /></Link>
@@ -893,7 +893,7 @@ export default function Contract() {
                                     // 改成可抽取類型會重跑一次 AI 抽取(新的一批待核建議),
                                     // 先講清楚再動手;已核定項目不受影響
                                     if (EXTRACTABLE_DOCUMENT_TYPES.includes(nextType)
-                                      && !window.confirm(`改為「${DOCUMENT_TYPE_LABELS[nextType]}」會重新執行 AI 抽取,產生一批新的待核建議(已核定項目不受影響)。繼續?`)) return
+                                      && !window.confirm(`改為「${DOCUMENT_TYPE_LABELS[nextType]}」會重新執行 AI 抽取,產生一批新的建議(已確認項目不受影響)。繼續?`)) return
                                     confirmClassification(run, nextType)
                                   }}>
                                   {CLASSIFIABLE_DOCUMENT_TYPES.map((t) => (

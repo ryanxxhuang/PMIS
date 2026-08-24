@@ -176,7 +176,8 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
         + `run metadata=${JSON.stringify(runRow?.metadata || {})}`,
       )
     }
-    expect(['draft_ai', 'needs_review']).toContain(requirement.status)
+    // D-017 分流:引文已核對且日期與引文一致的期限會被確定性引擎自動確認
+    expect(['draft_ai', 'needs_review', 'approved']).toContain(requirement.status)
 
     const { data: source, error: sourceErr } = await c.from('requirement_sources')
       .select('source_kind,document_version_id,source_text')
@@ -215,20 +216,24 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
   //    動作——非審查角色只有「查看」與責任方說明,不渲染假操作 ──────────────
   await gotoHash(page, '/requirements')
   await expect(page.getByText(requirementTitle).first()).toBeVisible()
-  await expect(page.getByText('契約核定由監造／機關辦理').first()).toBeVisible()
-  // 「待核定/已駁回」狀態快篩 chip 也是 button,負向斷言鎖定核定「動作」本身
-  await expect(page.getByRole('button', { name: '核定生效', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: '駁回', exact: true })).toHaveCount(0)
+  await expect(page.getByText('轉錄確認由監造／機關辦理').first()).toBeVisible()
+  // 「待確認/不採用」狀態快篩 chip 也是 button,負向斷言鎖定確認「動作」本身
+  await expect(page.getByRole('button', { name: '確認無誤', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '不採用', exact: true })).toHaveCount(0)
   await logoutReal(page)
 
-  // ── 監造:檢索頁改版後的核定動線——點清單列選取 → 右欄詳情「核定生效」
-  //    (仍走 review_requirement RPC,伺服器蓋審查人;核定當下 D-012 單向物化義務)──
+  // ── 監造:檢索頁的確認動線——點清單列選取 → 右欄詳情「確認無誤」
+  //    (仍走 review_requirement RPC,伺服器蓋審查人;確認當下 D-012 單向物化義務)。
+  //    live 模式下引文+日期核對無誤的列已被分流自動確認 → 直接驗「廢止取代」在場──
   await loginReal(page, supEmail)
   await gotoHash(page, '/requirements')
   await page.getByRole('listitem').filter({ hasText: requirementTitle }).first().click()
-  await page.getByRole('button', { name: '核定生效' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: '核定生效' }).click()
-  // 核定成功=詳情動作列換成僅 approved 才有的「廢止取代」(不樂觀顯示,等伺服器回傳)
+  const confirmBtn = page.getByRole('button', { name: '確認無誤' })
+  if (await confirmBtn.count()) {
+    await confirmBtn.click()
+    await page.getByRole('dialog').getByRole('button', { name: '確認無誤' }).click()
+  }
+  // 確認成功=詳情動作列換成僅 approved 才有的「廢止取代」(不樂觀顯示,等伺服器回傳)
   await expect(page.getByRole('button', { name: '廢止取代' })).toBeVisible()
   // ── 重整後仍為已生效,時點顯示固定到期日(D-012 相容 runtime 已物化) ───────
   await gotoHash(page, '/requirements')

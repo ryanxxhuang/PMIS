@@ -85,22 +85,22 @@ describe('詳情動作列權限(鏡像 can_review_requirement)', () => {
     }),
   )
 
-  it('廠商只能查看:不渲染核定/駁回假操作,顯示責任方說明', () => {
+  it('廠商只能查看:不渲染確認/不採用假操作,顯示責任方說明', () => {
     const html = render(deadline, false)
-    expect(html).toContain('契約核定由監造／機關辦理')
-    expect(html).not.toContain('核定生效')
-    expect(html).not.toContain('駁回')
+    expect(html).toContain('轉錄確認由監造／機關辦理')
+    expect(html).not.toContain('確認無誤')
+    expect(html).not.toContain('不採用')
   })
 
-  it('契約審查者(監造/機關)看到核定生效/修正內容/駁回', () => {
+  it('契約審查者(監造/機關)看到確認無誤/修正內容/不採用', () => {
     const html = render(deadline, true)
-    expect(html).toContain('核定生效')
+    expect(html).toContain('確認無誤')
     expect(html).toContain('修正內容')
-    expect(html).toContain('駁回')
+    expect(html).toContain('不採用')
   })
 
-  it('已生效:顯示伺服器審查紀錄,審查者才有廢止取代', () => {
-    const approved = { ...deadline, status: 'approved', reviewed_at: '2026-08-19T14:20:00Z' }
+  it('已確認:顯示伺服器審查紀錄,審查者才有廢止取代', () => {
+    const approved = { ...deadline, status: 'approved', reviewed_at: '2026-08-19T14:20:00Z', reviewed_by: 'u1' }
     const reviewer = render(approved, true)
     expect(reviewer).toContain('伺服器記錄')
     expect(reviewer).toContain('廢止取代')
@@ -109,10 +109,15 @@ describe('詳情動作列權限(鏡像 can_review_requirement)', () => {
     expect(viewer).not.toContain('廢止取代')
   })
 
-  it('已駁回:只剩紀錄,沒有任何操作', () => {
-    const html = render({ ...deadline, status: 'rejected', reviewed_at: '2026-08-19T16:02:00Z' }, true)
+  it('系統自動確認(reviewed_by 空)要講明不是人簽的', () => {
+    const auto = { ...deadline, status: 'approved', reviewed_at: '2026-08-24T10:00:00Z', reviewed_by: null }
+    expect(render(auto, true)).toContain('系統核對無誤・自動確認')
+  })
+
+  it('不採用:只剩紀錄,沒有任何操作', () => {
+    const html = render({ ...deadline, status: 'rejected', reviewed_at: '2026-08-19T16:02:00Z', reviewed_by: 'u1' }, true)
     expect(html).toContain('伺服器記錄')
-    expect(html).not.toContain('核定生效')
+    expect(html).not.toContain('確認無誤')
     expect(html).not.toContain('廢止取代')
   })
 })
