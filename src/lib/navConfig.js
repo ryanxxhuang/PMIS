@@ -21,7 +21,9 @@ export const navGroups = [
       { to: '/safety', label: '工安管理' },
     ] },
     { to: '/requirements', icon: 'rate_review', label: '審查與協作', tabs: [
-      { to: '/requirements', label: '契約重點' },
+      // pageTabs:false=不渲染頁內分頁條(檢索頁版面自成一體,入口走側欄子項);
+      // 仍留在 tabs 裡=側欄展開清單與 routeRegistry 不變
+      { to: '/requirements', label: '契約重點', pageTabs: false },
       { to: '/submittals', label: '送審文件' },
       { to: '/rfi', label: '工程疑義' },
       { to: '/change-orders', label: '變更設計' },

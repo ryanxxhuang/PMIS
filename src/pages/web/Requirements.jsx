@@ -25,7 +25,7 @@ import { isValidStorageKey } from '../../lib/packageUpload.js'
 import {
   REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
   WORK_ITEM_LINK_STATE_LABELS, ARTIFACT_TYPE_LABELS, GENERATION_TYPE_LABELS,
-  latestCompletedRunIds, inDefaultReviewScope,
+  latestCompletedRunIds, inDefaultReviewScope, requirementFrequencyKey,
   sourceVerificationSummary, sourcePageLabel, formatRequirementRule,
 } from '../../lib/requirementReview.js'
 
@@ -189,7 +189,7 @@ export default function Requirements() {
   const [sourcesByReq, setSourcesByReq] = useState(new Map())
   const [versionsById, setVersionsById] = useState(new Map())
   const [reviewersById, setReviewersById] = useState(new Map())
-  const [filters, setFilters] = useState({ q: '', status: 'all', type: '', phase: '' })
+  const [filters, setFilters] = useState({ q: '', status: 'all', type: '', phase: '', freq: '' })
   const [shownLimit, setShownLimit] = useState(PAGE_SIZE)
   const [selectedId, setSelectedId] = useState(null)
   const [detailOpen, setDetailOpen] = useState(false)  // <lg 抽屜/全螢幕詳情
@@ -326,6 +326,10 @@ export default function Requirements() {
     () => [...new Set(scoped.map((r) => r.lifecycle_phase).filter(Boolean))],
     [scoped],
   )
+  const freqOptions = useMemo(
+    () => [...new Set(scoped.map((r) => requirementFrequencyKey(r)))],
+    [scoped],
+  )
   // 搜尋範圍(README):標題、說明、條款編號、頁碼、原文引述、類型、階段、責任方
   const searchTextByReq = useMemo(() => {
     const map = new Map()
@@ -351,6 +355,7 @@ export default function Requirements() {
     if (filters.status !== 'all') list = list.filter((r) => statusKey(r.status) === filters.status)
     if (filters.type) list = list.filter((r) => r.requirement_type === filters.type)
     if (filters.phase) list = list.filter((r) => r.lifecycle_phase === filters.phase)
+    if (filters.freq) list = list.filter((r) => requirementFrequencyKey(r) === filters.freq)
     const q = filters.q.trim().toLowerCase()
     if (q) list = list.filter((r) => (searchTextByReq.get(r.id) || '').includes(q))
     // 檢索頁走「文件序」(擷取順序≈條文順序),不是審查佇列序:狀態不同不代表
@@ -397,7 +402,7 @@ export default function Requirements() {
     initialPicked.current = false
     setSelectedId(null); setEditing(null); setLinks([]); setArtifactLinks([])
     setDetailOpen(false); setMsg('')
-    setFilters({ q: '', status: 'all', type: '', phase: '' }); setShownLimit(PAGE_SIZE)
+    setFilters({ q: '', status: 'all', type: '', phase: '', freq: '' }); setShownLimit(PAGE_SIZE)
     setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('highlight'); return n }, { replace: true })
   }, [pid, setSearchParams])
 
@@ -1058,6 +1063,12 @@ export default function Requirements() {
                 className="!w-auto max-md:!w-full !h-[30px] !py-0 !text-xs !rounded-lg">
                 <option value="">全部階段</option>
                 {phaseOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </Select>
+              <Select value={filters.freq} aria-label="頻率"
+                onChange={(e) => { setFilters((f) => ({ ...f, freq: e.target.value })); setShownLimit(PAGE_SIZE) }}
+                className="!w-auto max-md:!w-full !h-[30px] !py-0 !text-xs !rounded-lg">
+                <option value="">全部頻率</option>
+                {freqOptions.map((fq) => <option key={fq} value={fq}>{fq}</option>)}
               </Select>
             </div>
           </div>
