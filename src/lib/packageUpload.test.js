@@ -3,8 +3,8 @@ import { vi } from 'vitest'
 vi.mock('./supabase.js', () => ({ supabase: null, isSupabaseConfigured: false }))
 import { describe, expect, it } from 'vitest'
 import {
-  UPLOAD_CONCURRENCY, formatElapsed, mapWithConcurrency,
-  isValidStorageKey, packageStatusFromRuns, staleProcessingPatch, storagePathFor, summarizePackageProgress,
+  UPLOAD_CONCURRENCY, formatElapsed, isInlineViewableMime, mapWithConcurrency,
+  isValidStorageKey, packageStatusFromRuns, runFileLanded, staleProcessingPatch, storagePathFor, summarizePackageProgress,
   takeSelectedFiles,
 } from './packageUpload.js'
 
@@ -110,6 +110,34 @@ describe('elapsed time and storage paths', () => {
       projectId: 'p1', packageId: 'pkg1', documentId: 'd1', versionId: 'v1',
       filename: '../../etc/passwd',
     })).toBe('projects/p1/contract-packages/pkg1/d1/v1/.._.._etc_passwd')
+  })
+})
+
+describe('看上傳的檔案(開檔/下載的前提訊號)', () => {
+  it('runFileLanded:上傳前失敗的 run 原始檔從未落地,不得給開檔入口', () => {
+    // version.storage_path 在 INSERT 時就寫入,不能當「檔案存在」的證據
+    expect(runFileLanded(run({ status: 'failed', stage: 'failed', metadata: {} }))).toBe(false)
+    expect(runFileLanded(run({ status: 'processing', stage: 'received' }))).toBe(false)
+    expect(runFileLanded(null)).toBe(false)
+    // 中斷在 received 的列被 staleProcessingPatch 蓋成 partial/failed(stage 一律
+    // 'failed'、metadata 不動):沒有 storage_path 就是沒落地,不能只看 stage
+    expect(runFileLanded(run({ status: 'partial', stage: 'failed', metadata: { filename_kind: 'pdf' } }))).toBe(false)
+    // 上傳成功後的各種終態/中途態都可開檔
+    expect(runFileLanded(run({ status: 'failed', stage: 'failed', metadata: { storage_path: 'p' } }))).toBe(true)
+    expect(runFileLanded(run({ status: 'partial', stage: 'failed', metadata: { storage_path: 'p' } }))).toBe(true)
+    expect(runFileLanded(run({ status: 'processing', stage: 'extracting_requirements' }))).toBe(true)
+    expect(runFileLanded(run({ status: 'completed', stage: 'completed', metadata: { storage_path: 'p' } }))).toBe(true)
+    expect(runFileLanded(run({ status: 'unsupported', stage: 'unsupported', metadata: { storage_path: 'p' } }))).toBe(true)
+  })
+
+  it('isInlineViewableMime:PDF/圖片/純文字開分頁預覽,其他格式走下載', () => {
+    expect(isInlineViewableMime('application/pdf')).toBe(true)
+    expect(isInlineViewableMime('image/png')).toBe(true)
+    expect(isInlineViewableMime('text/plain')).toBe(true)
+    expect(isInlineViewableMime('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(false)
+    expect(isInlineViewableMime('text/xml')).toBe(false)
+    expect(isInlineViewableMime(null)).toBe(false)
+    expect(isInlineViewableMime('')).toBe(false)
   })
 })
 

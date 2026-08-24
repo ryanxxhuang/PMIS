@@ -33,6 +33,7 @@ import {
 import {
   uploadFilesToPackage, summarizePackageProgress, packageStatusFromRuns,
   formatElapsed, staleProcessingPatch, takeSelectedFiles, STAGE_ORDER, STAGE_LABELS,
+  runFileLanded, isValidStorageKey, isInlineViewableMime,
 } from '../../lib/packageUpload.js'
 import { runRequirementExtraction, extractionSuccessMessage } from '../../lib/extractRequirements.js'
 
@@ -156,7 +157,8 @@ export default function Contract() {
     const docIds = (docRows || []).map((d) => d.id)
     if (docIds.length) {
       const { data: versionRows } = await supabase.from('document_versions')
-        .select('id, document_id, version_label').in('document_id', docIds)
+        .select('id, document_id, version_label, storage_path, original_filename, mime_type')
+        .in('document_id', docIds)
       setVersionsById(new Map((versionRows || []).map((v) => [v.id, v])))
       const { data: ingRuns } = await supabase.from('document_ingestion_runs')
         .select('id').in('document_version_id', (versionRows || []).map((v) => v.id))
@@ -472,6 +474,58 @@ export default function Contract() {
       setBusyRunIds(new Set(busyRunsRef.current))
     }
   }, [reloadRuns])
+
+  // ── 看上傳的檔案:私有 bucket,點了才取(不預簽避免過期)──────────────────
+  // 下載必須還原 original_filename(storage key 已退化成 ASCII,直接存會是底線
+  // 醜檔名)。不靠簽名 URL 的 download 參數:storage server 對非 ASCII 檔名會
+  // 回百分比編碼的 Content-Disposition(e2e 實測存成 %E5..txt),改走 blob +
+  // <a download> 讓檔名由瀏覽器端決定,中文檔名穩定還原
+  const downloadVersionFile = useCallback(async (version) => {
+    if (!isValidStorageKey(version?.storage_path)) return
+    // 讀取留痕先行且 fail-closed:合規要求「資料存取」可歸責(工程會一覽表),
+    // 留不了痕就不給檔;RPC 的權限與 storage policy 同一套,不會多擋人
+    const { error: auditError } = await supabase.rpc('log_document_access',
+      { p_document_version: version.id, p_action: 'download' })
+    if (auditError) { setMsg(friendlyError(auditError, '下載檔案失敗')); return }
+    const { data: blob, error } = await supabase.storage.from('contract-documents')
+      .download(version.storage_path)
+    if (error || !blob) { setMsg(friendlyError(error, '下載檔案失敗')); return }
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = version.original_filename || version.storage_path.split('/').pop() || '文件'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }, [])
+
+  const openVersionFile = useCallback(async (version) => {
+    if (!isValidStorageKey(version?.storage_path)) return
+    // 瀏覽器不會渲染的格式(docx/xlsx…)開分頁只會存成醜檔名,直接改走下載
+    if (!isInlineViewableMime(version.mime_type)) return downloadVersionFile(version)
+    // Safari 會擋 await 之後才開的分頁:先同步開空白分頁,拿到簽名 URL 再導過去。
+    // 彈窗被攔截(企業/機關電腦常見預設)就退回下載——附件下載不經彈窗,永遠可用
+    const win = window.open('', '_blank')
+    if (!win) return downloadVersionFile(version)
+    win.opener = null
+    // 讀取留痕先行且 fail-closed(同 downloadVersionFile 的理由)
+    const { error: auditError } = await supabase.rpc('log_document_access',
+      { p_document_version: version.id, p_action: 'preview' })
+    if (auditError) {
+      win.close()
+      setMsg(friendlyError(auditError, '開啟檔案失敗'))
+      return
+    }
+    const { data, error } = await supabase.storage.from('contract-documents')
+      .createSignedUrl(version.storage_path, 3600)
+    if (error || !data?.signedUrl) {
+      win.close()
+      setMsg(friendlyError(error, '開啟檔案失敗'))
+      return
+    }
+    win.location = data.signedUrl
+  }, [downloadVersionFile])
 
   // ── 上傳回饋面板(mockup 狀態 B/C/D)────────────────────────────────────
   // 面板列 = 本批上傳的 run + 任何仍在處理中的 run(回到頁面也看得到進行中)
@@ -822,12 +876,22 @@ export default function Contract() {
                     && run.metadata?.requirement_extraction === 'failed'
                   const reuploadHint = state.kind === 'attention' && !needsClassify && !retryable
                     && !(state.detail || '').includes('重新上傳')
+                  // 看上傳的檔案:上傳前就失敗的 run 原始檔從未落地,不給開檔入口
+                  const hasFile = runFileLanded(run) && isValidStorageKey(version?.storage_path)
                   return (
                     <tr key={run.id} className="border-b border-[var(--border-2)] last:border-0 hover:bg-[var(--surface-2)]">
                       <td className={`${DOC_TD} max-w-[300px]`}>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <MSym name="description" size={12} className="text-[var(--text-3)] shrink-0" />
-                          <span className="truncate text-[var(--text)]" title={title}>{title}</span>
+                          {hasFile ? (
+                            <button onClick={() => openVersionFile(version)}
+                              className="min-w-0 inline-flex items-center max-md:min-h-11 text-left text-[var(--text)] hover:text-[var(--blue-text)] hover:underline cursor-pointer"
+                              title={version?.original_filename || title}>
+                              <span className="truncate">{title}</span>
+                            </button>
+                          ) : (
+                            <span className="truncate text-[var(--text)]" title={title}>{title}</span>
+                          )}
                         </div>
                       </td>
                       <td className={`${DOC_TD} whitespace-nowrap text-[var(--text-2)]`}>{group}</td>
@@ -861,9 +925,11 @@ export default function Contract() {
                           {/* W14 事後治理:終態文件可改分類/刪除(權限=文件管理)。
                               改分類只給「曾分類過」的列——上傳失敗的列連頁都沒有,
                               分類不是它的問題;刪除則全終態可用,含分類待確認列
-                              (待確認的垃圾檔正是最想刪的)。 */}
-                          {canWriteContract && state.kind !== 'processing' && (
-                            reclassifyId === run.id ? (
+                              (待確認的垃圾檔正是最想刪的)。
+                              下載給所有可讀成員(含機關唯讀):讀權限由 storage
+                              policy 把關,前端只是入口。 */}
+                          {(canWriteContract || hasFile) && state.kind !== 'processing' && (
+                            canWriteContract && reclassifyId === run.id ? (
                               <span className="flex items-center gap-1.5 mt-1">
                                 <Select defaultValue={doc?.document_type || run.suggested_document_type || 'other'} className="w-36"
                                   onChange={(e) => {
@@ -884,16 +950,24 @@ export default function Contract() {
                               </span>
                             ) : (
                               <span className="flex items-center gap-2 mt-0.5">
-                                {!needsClassify && run.suggested_document_type != null && (
+                                {hasFile && (
+                                  <button onClick={() => downloadVersionFile(version)}
+                                    className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1">
+                                    <MSym name="download" size={11} /> 下載
+                                  </button>
+                                )}
+                                {canWriteContract && !needsClassify && run.suggested_document_type != null && (
                                   <button onClick={() => setReclassifyId(run.id)} disabled={busyRunIds.has(run.id)}
                                     className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 disabled:opacity-50">
                                     <MSym name="edit" size={11} /> 改分類
                                   </button>
                                 )}
-                                <button onClick={() => deleteDocument(run, doc)} disabled={busyRunIds.has(run.id)}
-                                  className="text-[var(--red-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 disabled:opacity-50">
-                                  <MSym name="delete" size={11} /> 刪除
-                                </button>
+                                {canWriteContract && (
+                                  <button onClick={() => deleteDocument(run, doc)} disabled={busyRunIds.has(run.id)}
+                                    className="text-[var(--red-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 disabled:opacity-50">
+                                    <MSym name="delete" size={11} /> 刪除
+                                  </button>
+                                )}
                               </span>
                             )
                           )}
@@ -910,7 +984,7 @@ export default function Contract() {
           </div>
           <TablePager {...docPager} className="!px-0" />
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--border-2)]">
-            <p className="text-[11.5px] text-[var(--text-3)]">上傳後自動分類歸檔:標單匯入「標單工項」、契約/規範抽取「契約重點」並記錄擷取來源頁碼。</p>
+            <p className="text-[11.5px] text-[var(--text-3)]">點檔名可開啟原始檔(PDF 直接預覽,其他格式自動下載)。上傳後自動分類歸檔:標單匯入「標單工項」、契約/規範抽取「契約重點」並記錄擷取來源頁碼。</p>
             <button onClick={() => setShowTech((s) => !s)} aria-expanded={showTech}
               className="text-[11.5px] text-[var(--blue-text)] hover:underline inline-flex items-center gap-1 shrink-0 max-md:min-h-11 px-1">
               <MSym name="chevron_right" size={12} className={`transition-transform duration-[var(--dur-fast)] ${showTech ? 'rotate-90' : ''}`} /> 技術資訊
