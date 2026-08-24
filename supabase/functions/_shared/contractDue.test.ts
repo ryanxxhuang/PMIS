@@ -34,6 +34,27 @@ describe('computeObligationDueUTC — 與前端 contractDue.js 同判斷', () =>
     const dec = parseDateUTC('2026-12-20')!
     expect(f(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 5 }, anchors, dec))).toBe('2027-01-05')
   })
+
+  it('每日/每週循環:daily=今天;weekly 未到→本週、今天→今天、已過→下週', () => {
+    // T=2026-07-10 是週五(ISO weekday 5)
+    expect(f(computeObligationDueUTC({ recurring: 'daily' }, anchors, T))).toBe('2026-07-10')
+    expect(f(computeObligationDueUTC({ recurring: 'weekly', recurring_weekday: 5 }, anchors, T))).toBe('2026-07-10')
+    expect(f(computeObligationDueUTC({ recurring: 'weekly', recurring_weekday: 1 }, anchors, T))).toBe('2026-07-13')
+    expect(f(computeObligationDueUTC({ recurring: 'weekly', recurring_weekday: 4 }, anchors, T))).toBe('2026-07-16')
+  })
+
+  it('每季/每年循環:本期已過→下期(含跨年);缺必要欄位 → null', () => {
+    // T 在 Q3(7~9 月):季內第 1 個月 15 日未過 → 本季;5 日已過 → 下季
+    expect(f(computeObligationDueUTC({ recurring: 'quarterly', recurring_month: 1, recurring_day: 15 }, anchors, T))).toBe('2026-07-15')
+    expect(f(computeObligationDueUTC({ recurring: 'quarterly', recurring_month: 1, recurring_day: 5 }, anchors, T))).toBe('2026-10-05')
+    const dec = parseDateUTC('2026-12-20')!
+    expect(f(computeObligationDueUTC({ recurring: 'quarterly', recurring_month: 1, recurring_day: 5 }, anchors, dec))).toBe('2027-01-05')
+    expect(f(computeObligationDueUTC({ recurring: 'yearly', recurring_month: 12, recurring_day: 31 }, anchors, T))).toBe('2026-12-31')
+    expect(f(computeObligationDueUTC({ recurring: 'yearly', recurring_month: 3, recurring_day: 31 }, anchors, T))).toBe('2027-03-31')
+    expect(computeObligationDueUTC({ recurring: 'weekly' }, anchors, T)).toBeNull()
+    expect(computeObligationDueUTC({ recurring: 'quarterly', recurring_day: 10 }, anchors, T)).toBeNull()
+    expect(computeObligationDueUTC({ recurring: 'yearly', recurring_month: 3 }, anchors, T)).toBeNull()
+  })
 })
 
 describe('日期工具', () => {

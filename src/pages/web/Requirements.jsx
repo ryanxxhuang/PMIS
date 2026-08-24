@@ -167,10 +167,16 @@ const MANUAL_BLANK = {
   responsible_party_type: '', lifecycle_phase: '施工中',
   dueMode: 'relative', trigger_event: 'commencement', offset_days: '', offset_dir: 'after',
   fixed_date: '', monthly_day: '',
+  // 循環時點(頻率值域對齊 requirementExtraction.ts 的 FREQUENCY_TYPES)
+  weekly_weekday: '1', freq_month: '', freq_day: '',
   acceptance_criteria: '', source_clause: '', source_page: '',
 }
 const MANUAL_TRIGGERS = [
   ['award', '決標日'], ['notice', '接獲開工通知日'], ['commencement', '開工日'], ['completion', '竣工日'],
+]
+const MANUAL_WEEKDAYS = [
+  ['1', '週一'], ['2', '週二'], ['3', '週三'], ['4', '週四'],
+  ['5', '週五'], ['6', '週六'], ['7', '週日'],
 ]
 
 export default function Requirements() {
@@ -557,9 +563,29 @@ export default function Requirements() {
       trigger_type = 'monthly'
       frequency_type = 'monthly'
       frequency_config = { day }
+    } else if (d.dueMode === 'daily') {
+      frequency_type = 'daily'
+    } else if (d.dueMode === 'weekly') {
+      const weekday = Number(d.weekly_weekday)
+      if (!(Number.isInteger(weekday) && weekday >= 1 && weekday <= 7)) { setManualMsg('請選擇每週星期幾'); return }
+      frequency_type = 'weekly'
+      frequency_config = { weekday }
+    } else if (d.dueMode === 'quarterly' || d.dueMode === 'yearly') {
+      // 頻率 config 值域對齊抽取引擎:quarterly 的 month=季內第幾個月(1~3)、
+      // yearly 的 month=幾月(1~12);day 都是幾日(1~31)
+      const month = Number(d.freq_month)
+      const day = Number(d.freq_day)
+      const monthMax = d.dueMode === 'quarterly' ? 3 : 12
+      if (!(Number.isInteger(month) && month >= 1 && month <= monthMax)) {
+        setManualMsg(d.dueMode === 'quarterly' ? '每季第幾個月需為 1~3' : '每年幾月需為 1~12')
+        return
+      }
+      if (!(Number.isInteger(day) && day >= 1 && day <= 31)) { setManualMsg('幾日需為 1~31'); return }
+      frequency_type = d.dueMode
+      frequency_config = { month, day }
     } else if (d.requirement_type === 'deadline') {
       // 期限型沒有時點就物化不出到期日,擋在前端(伺服器不會擋,但那是一筆廢資料)
-      setManualMsg('期限型契約重點需要一個時點(相對基準日/指定日期/每月)')
+      setManualMsg('期限型契約重點需要一個時點(相對基準日/指定日期/循環)')
       return
     }
     setManualBusy(true)
@@ -903,7 +929,11 @@ export default function Requirements() {
               onChange={(e) => setManualDraft((d) => ({ ...d, dueMode: e.target.value }))}>
               <option value="relative">相對基準日</option>
               <option value="fixed">指定日期</option>
+              <option value="daily">每日</option>
+              <option value="weekly">每週固定日</option>
               <option value="monthly">每月固定日</option>
+              <option value="quarterly">每季固定日</option>
+              <option value="yearly">每年固定日</option>
               <option value="none">無明確時點</option>
             </Select>
             {manualDraft.dueMode === 'relative' && (<>
@@ -929,6 +959,34 @@ export default function Requirements() {
               <Input type="number" min="1" max="31" className="w-24" value={manualDraft.monthly_day}
                 onChange={(e) => setManualDraft((d) => ({ ...d, monthly_day: e.target.value }))} placeholder="幾號" />
               <span className="text-xs text-[var(--text-3)]">號</span>
+            </>)}
+            {manualDraft.dueMode === 'weekly' && (<>
+              <span className="text-xs text-[var(--text-2)]">每</span>
+              <Select value={manualDraft.weekly_weekday} className="w-auto"
+                onChange={(e) => setManualDraft((d) => ({ ...d, weekly_weekday: e.target.value }))}>
+                {MANUAL_WEEKDAYS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </Select>
+            </>)}
+            {manualDraft.dueMode === 'quarterly' && (<>
+              <span className="text-xs text-[var(--text-2)]">每季第</span>
+              <Select value={manualDraft.freq_month} className="w-auto"
+                onChange={(e) => setManualDraft((d) => ({ ...d, freq_month: e.target.value }))}>
+                <option value="">—</option>
+                {['1', '2', '3'].map((m) => <option key={m} value={m}>{m}</option>)}
+              </Select>
+              <span className="text-xs text-[var(--text-2)]">個月</span>
+              <Input type="number" min="1" max="31" className="w-24" value={manualDraft.freq_day}
+                onChange={(e) => setManualDraft((d) => ({ ...d, freq_day: e.target.value }))} placeholder="幾日" />
+              <span className="text-xs text-[var(--text-3)]">日</span>
+            </>)}
+            {manualDraft.dueMode === 'yearly' && (<>
+              <span className="text-xs text-[var(--text-2)]">每年</span>
+              <Input type="number" min="1" max="12" className="w-24" value={manualDraft.freq_month}
+                onChange={(e) => setManualDraft((d) => ({ ...d, freq_month: e.target.value }))} placeholder="幾月" />
+              <span className="text-xs text-[var(--text-2)]">月</span>
+              <Input type="number" min="1" max="31" className="w-24" value={manualDraft.freq_day}
+                onChange={(e) => setManualDraft((d) => ({ ...d, freq_day: e.target.value }))} placeholder="幾日" />
+              <span className="text-xs text-[var(--text-3)]">日</span>
             </>)}
           </div>
           <Input value={manualDraft.acceptance_criteria}

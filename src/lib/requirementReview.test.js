@@ -92,6 +92,19 @@ describe('formatRequirementRule', () => {
     })).toBe('指定 2026-08-01')
   })
 
+  it('formats the expanded frequency domain(daily/weekly/quarterly/yearly)', () => {
+    expect(formatRequirementRule({ frequency_type: 'daily', frequency_config: {} })).toBe('每日')
+    expect(formatRequirementRule({ frequency_type: 'weekly', frequency_config: { weekday: 3 } })).toBe('每週三')
+    expect(formatRequirementRule({ frequency_type: 'weekly', frequency_config: {} })).toBe('每週')
+    expect(formatRequirementRule({ frequency_type: 'monthly', frequency_config: {} })).toBe('每月')
+    expect(formatRequirementRule({ frequency_type: 'quarterly', frequency_config: { month: 2, day: 10 } })).toBe('每季第 2 個月 10 日')
+    expect(formatRequirementRule({ frequency_type: 'quarterly', frequency_config: { day: 10 } })).toBe('每季')
+    expect(formatRequirementRule({ frequency_type: 'yearly', frequency_config: { month: 3, day: 31 } })).toBe('每年 3 月 31 日')
+    expect(formatRequirementRule({ frequency_type: 'yearly', frequency_config: {} })).toBe('每年')
+    // 未知頻率值原樣顯示,不落到 trigger 分支
+    expect(formatRequirementRule({ frequency_type: 'biweekly', trigger_type: 'commencement' })).toBe('biweekly')
+  })
+
   it('returns empty text instead of raw JSON when nothing applies', () => {
     expect(formatRequirementRule({ trigger_type: null, frequency_type: null })).toBe('')
     expect(formatRequirementRule(null)).toBe('')

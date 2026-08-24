@@ -66,6 +66,41 @@ describe('computeObligationDue — 每月重複義務', () => {
   })
 })
 
+describe('computeObligationDue — 每日/每週/每季/每年循環', () => {
+  const today = new Date(2026, 7, 24) // 2026-08-24(週一)
+
+  it('daily:下次到期永遠是今天', () => {
+    expect(ymd(computeObligationDue({ recurring: 'daily' }, anchors, today))).toBe('2026-08-24')
+  })
+
+  it('weekly:本週未到→本週、剛好今天→今天、已過→下週(ISO 1=週一…7=週日)', () => {
+    expect(ymd(computeObligationDue({ recurring: 'weekly', recurring_weekday: 3 }, anchors, today))).toBe('2026-08-26')
+    expect(ymd(computeObligationDue({ recurring: 'weekly', recurring_weekday: 1 }, anchors, today))).toBe('2026-08-24')
+    expect(ymd(computeObligationDue({ recurring: 'weekly', recurring_weekday: 7 }, anchors, today))).toBe('2026-08-30')
+    const wed = new Date(2026, 7, 26) // 週三,週一已過
+    expect(ymd(computeObligationDue({ recurring: 'weekly', recurring_weekday: 1 }, anchors, wed))).toBe('2026-08-31')
+  })
+
+  it('quarterly:recurring_month=季內第幾個月;本季已過→下季(含跨年)', () => {
+    // 今天 2026-08-24 在 Q3(7~9 月)
+    expect(ymd(computeObligationDue({ recurring: 'quarterly', recurring_month: 3, recurring_day: 10 }, anchors, today))).toBe('2026-09-10')
+    expect(ymd(computeObligationDue({ recurring: 'quarterly', recurring_month: 2, recurring_day: 10 }, anchors, today))).toBe('2026-11-10')
+    const dec = new Date(2026, 11, 20) // Q4 的第一個月 5 日已過 → 翌年 Q1
+    expect(ymd(computeObligationDue({ recurring: 'quarterly', recurring_month: 1, recurring_day: 5 }, anchors, dec))).toBe('2027-01-05')
+  })
+
+  it('yearly:今年未到→今年、已過→明年', () => {
+    expect(ymd(computeObligationDue({ recurring: 'yearly', recurring_month: 10, recurring_day: 10 }, anchors, today))).toBe('2026-10-10')
+    expect(ymd(computeObligationDue({ recurring: 'yearly', recurring_month: 3, recurring_day: 31 }, anchors, today))).toBe('2027-03-31')
+  })
+
+  it('缺必要欄位推不出下次到期日 → null(不臆測日期)', () => {
+    expect(computeObligationDue({ recurring: 'weekly' }, anchors, today)).toBeNull()
+    expect(computeObligationDue({ recurring: 'quarterly', recurring_day: 10 }, anchors, today)).toBeNull()
+    expect(computeObligationDue({ recurring: 'yearly', recurring_month: 3 }, anchors, today)).toBeNull()
+  })
+})
+
 describe('summarizeDeadlines — 摘要條四數字(互斥分類)', () => {
   const today = new Date(2026, 7, 24) // 2026-08-24
   it('done/overdue/dueSoon/scheduled 各歸一格,已完成不再算逾期', () => {

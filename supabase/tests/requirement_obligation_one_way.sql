@@ -2,7 +2,7 @@
 -- only an approved deadline becomes one compatibility obligation runtime row.
 begin;
 
-select plan(23);
+select plan(31);
 
 create or replace function public.pmis_w52_login(p_uid uuid)
 returns void language plpgsql as $$
@@ -190,6 +190,80 @@ select results_eq(
 select is((select count(*)::integer from public.contract_obligations
   where requirement_id = '52300000-0000-0000-0000-000000000003'), 1,
   'supersede preserves the compatibility row for audit history');
+
+-- 頻率值域擴充:daily/weekly/quarterly/yearly 的 frequency_config 逐型映射到
+-- 義務列的循環欄位;值域外的 config 映成 null(義務保留、推不出到期日)。
+insert into public.requirements (
+  id, project_id, title, requirement_type, responsible_party_type,
+  lifecycle_phase, trigger_type, trigger_config,
+  frequency_type, frequency_config, status, origin
+) values
+  ('52300000-0000-0000-0000-000000000011',
+   '52100000-0000-0000-0000-000000000001', '每週工安會議', 'deadline',
+   'contractor', '施工中', null, '{}', 'weekly', '{"weekday":3}', 'needs_review', 'manual'),
+  ('52300000-0000-0000-0000-000000000012',
+   '52100000-0000-0000-0000-000000000001', '每季設備保養紀錄', 'deadline',
+   'contractor', '施工中', null, '{}', 'quarterly', '{"month":2,"day":10}', 'needs_review', 'manual'),
+  ('52300000-0000-0000-0000-000000000013',
+   '52100000-0000-0000-0000-000000000001', '每年防災演練', 'deadline',
+   'contractor', '施工中', null, '{}', 'yearly', '{"month":3,"day":31}', 'needs_review', 'manual'),
+  ('52300000-0000-0000-0000-000000000014',
+   '52100000-0000-0000-0000-000000000001', '每日施工日誌(壞 config)', 'deadline',
+   'contractor', '施工中', null, '{}', 'daily', '{"weekday":9,"month":15,"day":40}', 'needs_review', 'manual');
+
+select public.pmis_w52_login('52000000-0000-0000-0000-000000000001');
+set local role authenticated;
+select lives_ok($$
+  select public.review_requirement('52300000-0000-0000-0000-000000000011', 'approve')
+$$, 'weekly deadline can be approved and materialized');
+select lives_ok($$
+  select public.review_requirement('52300000-0000-0000-0000-000000000012', 'approve')
+$$, 'quarterly deadline can be approved and materialized');
+select lives_ok($$
+  select public.review_requirement('52300000-0000-0000-0000-000000000013', 'approve')
+$$, 'yearly deadline can be approved and materialized');
+select lives_ok($$
+  select public.review_requirement('52300000-0000-0000-0000-000000000014', 'approve')
+$$, 'daily deadline can be approved and materialized');
+reset role;
+select public.pmis_w52_login(null);
+
+select results_eq(
+  $$
+    select recurring, recurring_day, recurring_weekday, recurring_month
+    from public.contract_obligations
+    where requirement_id = '52300000-0000-0000-0000-000000000011'
+  $$,
+  $$ values ('weekly'::text, null::int, 3, null::int) $$,
+  'weekly frequency maps weekday only'
+);
+select results_eq(
+  $$
+    select recurring, recurring_day, recurring_weekday, recurring_month
+    from public.contract_obligations
+    where requirement_id = '52300000-0000-0000-0000-000000000012'
+  $$,
+  $$ values ('quarterly'::text, 10, null::int, 2) $$,
+  'quarterly frequency maps month-in-quarter and day'
+);
+select results_eq(
+  $$
+    select recurring, recurring_day, recurring_weekday, recurring_month
+    from public.contract_obligations
+    where requirement_id = '52300000-0000-0000-0000-000000000013'
+  $$,
+  $$ values ('yearly'::text, 31, null::int, 3) $$,
+  'yearly frequency maps month and day'
+);
+select results_eq(
+  $$
+    select recurring, recurring_day, recurring_weekday, recurring_month
+    from public.contract_obligations
+    where requirement_id = '52300000-0000-0000-0000-000000000014'
+  $$,
+  $$ values ('daily'::text, null::int, null::int, null::int) $$,
+  'daily frequency keeps the recurrence and drops out-of-domain config fields'
+);
 
 select * from finish();
 rollback;

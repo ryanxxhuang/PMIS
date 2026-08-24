@@ -12,23 +12,12 @@ import {
   Card, Empty, PageHeader, Badge, Button, Field, Input, Select, ErrorBanner, Surface, buttonClass,
 } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
-import { computeObligationDue } from '../../lib/contractDue.js'
+import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
 import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
-const TRIGGER_LABEL = {
-  award: '決標', notice: '接獲開工通知', commencement: '開工',
-  completion: '完工', monthly: '每月', fixed: '指定日期', other: '其他',
-}
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
 const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-function ruleText(ob) {
-  if (ob.recurring === 'monthly') return `每月 ${ob.recurring_day || ''} 日${ob.offset_dir === 'before' ? '前' : ''}`.trim()
-  if (ob.trigger_event === 'fixed') return `指定 ${ob.fixed_date || '日期'}`
-  const t = TRIGGER_LABEL[ob.trigger_event] || ob.trigger_event || ''
-  if (ob.offset_days) return `${t}${ob.offset_dir === 'before' ? '前' : '後'} ${ob.offset_days} 日內`
-  return t
-}
 // 狀態色點走 class 對照表(顏色由 className 帶 token,吃主題切換);
 // 色點附等價文字(title/aria-label),狀態不得只靠顏色(W8-5)
 const DOT_CLS = { done: 'bg-[var(--green-text)]', overdue: 'bg-[var(--red-text)]', soon: 'bg-[var(--amber-text)]', scheduled: 'bg-[var(--blue)]', nodate: 'bg-[var(--text-3)]' }
@@ -208,7 +197,7 @@ export default function Deadlines() {
                     )
                   })()}
                   <div className="text-xs text-[var(--text-3)] mt-1">
-                    {ruleText(it.ob)}{it.due ? `　·　到期 ${isoDate(it.due)}` : ''}
+                    {formatObligationRule(it.ob)}{it.due ? `　·　到期 ${isoDate(it.due)}` : ''}
                     {it.ob.responsible ? `　·　${it.ob.responsible}` : ''}
                   </div>
                   {!it.done && it.due && (

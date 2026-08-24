@@ -91,11 +91,15 @@ const SUGGESTION_SCHEMA = {
       },
       required: ['offset_days', 'offset_dir', 'fixed_date'],
     },
-    frequency_type: { type: 'string', enum: ['', ...FREQUENCY_TYPES], description: '週期性;每月填 monthly,否則空字串' },
+    frequency_type: { type: 'string', enum: ['', ...FREQUENCY_TYPES], description: '週期性義務的頻率:daily=每日、weekly=每週、monthly=每月、quarterly=每季、yearly=每年;非週期義務空字串' },
     frequency_config: {
       type: 'object',
-      properties: { day: { type: 'number', description: '每月幾號;不適用就 0' } },
-      required: ['day'],
+      properties: {
+        day: { type: 'number', description: '每月/每季/每年的幾日(1~31);不適用就 0' },
+        weekday: { type: 'number', description: 'weekly 時星期幾:1=週一…7=週日;不適用就 0' },
+        month: { type: 'number', description: 'yearly 時幾月(1~12);quarterly 時季內第幾個月(1~3);不適用就 0' },
+      },
+      required: ['day', 'weekday', 'month'],
     },
     acceptance_criteria: { type: 'string', description: '允收/合格標準(引規範數值);沒有就空字串' },
     evidence_requirement: { type: 'string', description: '應留存的佐證(紀錄/照片/報告/試驗單);沒有就空字串' },
@@ -153,6 +157,8 @@ function buildPrompt(opts: {
     '- source.quotation 必須是文件原文的逐字引註(不可改寫、不可摘要),20~80 字。\n' +
     `- ${pageRule}\n` +
     '- 各欄位只能使用列舉值;不確定的欄位留空字串或 0,不要臆測。\n' +
+    '- 循環義務(如每日施工日誌、每週工安會議、每月月報、每季/每年檢測保養)填 frequency_type 與 frequency_config;' +
+    '文件只寫頻率沒寫固定日子時,config 不適用的欄位填 0,不要自己編日期。\n' +
     '- 用中立語言描述義務本身;不要下違法、違約、疏失之類的定性判斷。\n' +
     '- candidate_work_items 只能引用下方工項清單的 W 代號(最多 3 個);沒有明確相關工項就回空陣列。\n\n' +
     (opts.catalogLines
