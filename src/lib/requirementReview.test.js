@@ -2,17 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   ARTIFACT_TYPE_LABELS,
   GENERATION_TYPE_LABELS,
-  HIGHLIGHT_LIMIT,
   WORK_ITEM_LINK_STATE_LABELS,
   buildRequirementHighlights,
-  canQuickApproveDeadline,
-  filterRequirements,
   formatRequirementRule,
   inDefaultReviewScope,
   latestCompletedRunIds,
-  sortForReviewQueue,
   sourcePageLabel,
-  sourceVerificationLabel,
   sourceVerificationSummary,
 } from './requirementReview.js'
 
@@ -61,49 +56,6 @@ describe('inDefaultReviewScope', () => {
   })
 })
 
-describe('sortForReviewQueue', () => {
-  it('orders needs_review first, then draft_ai, then reviewed states, oldest first', () => {
-    const sorted = sortForReviewQueue([
-      { id: 'd', status: 'approved', created_at: '2026-07-01T00:00:00Z' },
-      { id: 'b', status: 'draft_ai', created_at: '2026-07-02T00:00:00Z' },
-      { id: 'a', status: 'needs_review', created_at: '2026-07-03T00:00:00Z' },
-      { id: 'c', status: 'draft_ai', created_at: '2026-07-01T00:00:00Z' },
-    ])
-    expect(sorted.map((r) => r.id)).toEqual(['a', 'c', 'b', 'd'])
-  })
-
-  it('breaks exact ties deterministically by id', () => {
-    const sorted = sortForReviewQueue([
-      { id: 'z', status: 'draft_ai', created_at: '2026-07-01T00:00:00Z' },
-      { id: 'a', status: 'draft_ai', created_at: '2026-07-01T00:00:00Z' },
-    ])
-    expect(sorted.map((r) => r.id)).toEqual(['a', 'z'])
-  })
-})
-
-describe('filterRequirements', () => {
-  const list = [
-    { id: 'r1', status: 'needs_review', requirement_type: 'submittal', responsible_party_type: 'contractor', origin: 'ai', ingestion_run_id: 'run-new' },
-    { id: 'r2', status: 'approved', requirement_type: 'inspection', responsible_party_type: 'supervisor', origin: 'manual', ingestion_run_id: null },
-  ]
-  const verification = new Map([['r1', 'verified'], ['r2', 'none']])
-
-  it('filters by status, type, responsibility, origin, and run', () => {
-    expect(filterRequirements(list, { status: 'approved' }).map((r) => r.id)).toEqual(['r2'])
-    expect(filterRequirements(list, { requirement_type: 'submittal' }).map((r) => r.id)).toEqual(['r1'])
-    expect(filterRequirements(list, { responsible_party_type: 'supervisor' }).map((r) => r.id)).toEqual(['r2'])
-    expect(filterRequirements(list, { origin: 'ai' }).map((r) => r.id)).toEqual(['r1'])
-    expect(filterRequirements(list, { ingestion_run_id: 'run-new' }).map((r) => r.id)).toEqual(['r1'])
-  })
-
-  it('filters by aggregated source verification state', () => {
-    expect(filterRequirements(list, { verification: 'verified' }, verification).map((r) => r.id))
-      .toEqual(['r1'])
-    expect(filterRequirements(list, { verification: 'none' }, verification).map((r) => r.id))
-      .toEqual(['r2'])
-  })
-})
-
 describe('source presentation', () => {
   it('summarizes verification across sources', () => {
     expect(sourceVerificationSummary([])).toBe('none')
@@ -122,8 +74,6 @@ describe('source presentation', () => {
   })
 
   it('uses neutral verified/unverified labels', () => {
-    expect(sourceVerificationLabel({ source_verified: true })).toBe('來源已核對')
-    expect(sourceVerificationLabel({ source_verified: false })).toBe('來源待人工確認')
   })
 })
 
@@ -215,33 +165,6 @@ describe('W8-3B requirement highlights', () => {
     const result = buildRequirementHighlights(rows, currentRunIds, verification)
     expect(result.suggestions.map((g) => g.requirement.id))
       .toEqual(['deadline-verified', 'deadline-unverified', 'report'])
-    expect(HIGHLIGHT_LIMIT).toBe(6)
-  })
-})
-
-describe('W8-3B deadline quick action', () => {
-  const deadline = {
-    status: 'needs_review', requirement_type: 'deadline', origin: 'ai',
-    trigger_type: 'commencement', trigger_config: { offset_days: 14, offset_dir: 'after' },
-  }
-
-  it('allows only a reviewer with a trackable rule and verified AI source', () => {
-    expect(canQuickApproveDeadline(deadline, 'verified', true)).toBe(true)
-    expect(canQuickApproveDeadline(deadline, 'unverified', true)).toBe(false)
-    expect(canQuickApproveDeadline(deadline, 'verified', false)).toBe(false)
-  })
-
-  it('allows human/migration rows without an AI citation, but rejects incomplete deadlines', () => {
-    expect(canQuickApproveDeadline({ ...deadline, origin: 'manual' }, 'none', true)).toBe(true)
-    expect(canQuickApproveDeadline({ ...deadline, origin: 'migration' }, 'none', true)).toBe(true)
-    expect(canQuickApproveDeadline({ ...deadline, trigger_type: 'fixed', trigger_config: {} }, 'verified', true)).toBe(false)
-    expect(canQuickApproveDeadline({ ...deadline, trigger_type: 'fixed', trigger_config: { fixed_date: '2026-02-31' } }, 'verified', true)).toBe(false)
-    expect(canQuickApproveDeadline({ ...deadline, frequency_type: 'monthly', frequency_config: { day: 32 }, trigger_type: null }, 'verified', true)).toBe(false)
-  })
-
-  it('never offers the shortcut for approved or non-deadline requirements', () => {
-    expect(canQuickApproveDeadline({ ...deadline, status: 'approved' }, 'verified', true)).toBe(false)
-    expect(canQuickApproveDeadline({ ...deadline, requirement_type: 'submittal' }, 'verified', true)).toBe(false)
   })
 })
 

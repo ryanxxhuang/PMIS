@@ -39,8 +39,6 @@ export const GENERATION_TYPE_LABELS = Object.freeze({
   manual: '人工', ai_draft: 'AI 草稿', migration: '轉入',
 })
 
-export const HIGHLIGHT_LIMIT = 6
-
 // The current review scope for AI suggestions: the latest COMPLETED run per
 // document version. Failed / processing / pending runs never define scope,
 // and older completed runs stay inspectable through the explicit run filter.
@@ -65,35 +63,6 @@ export function inDefaultReviewScope(requirement, currentRunIds) {
     && currentRunIds.has(requirement.ingestion_run_id)
 }
 
-const STATUS_ORDER = { needs_review: 0, draft_ai: 1, approved: 2, rejected: 3, superseded: 4 }
-
-// Deterministic review ordering: needs_review first, then draft_ai, then the
-// reviewed states; within a status oldest first, id as the final tiebreak.
-export function sortForReviewQueue(list) {
-  return [...(list || [])].sort((a, b) => {
-    const byStatus = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
-    if (byStatus !== 0) return byStatus
-    const byCreated = new Date(a.created_at) - new Date(b.created_at)
-    if (byCreated !== 0) return byCreated
-    return String(a.id).localeCompare(String(b.id))
-  })
-}
-
-// verificationByRequirement: Map(requirement_id -> 'verified'|'unverified'|'none')
-export function filterRequirements(list, filters = {}, verificationByRequirement = new Map()) {
-  return (list || []).filter((r) => {
-    if (filters.status && r.status !== filters.status) return false
-    if (filters.requirement_type && r.requirement_type !== filters.requirement_type) return false
-    if (filters.responsible_party_type
-      && r.responsible_party_type !== filters.responsible_party_type) return false
-    if (filters.origin && r.origin !== filters.origin) return false
-    if (filters.ingestion_run_id && r.ingestion_run_id !== filters.ingestion_run_id) return false
-    if (filters.verification
-      && (verificationByRequirement.get(r.id) || 'none') !== filters.verification) return false
-    return true
-  })
-}
-
 // Aggregate a requirement's sources into one verification state for filtering:
 // any verified source -> 'verified'; sources but none verified -> 'unverified'.
 export function sourceVerificationSummary(sources) {
@@ -109,10 +78,6 @@ export function sourcePageLabel(source) {
   return source?.page_number == null ? '無可靠頁碼' : `第 ${source.page_number} 頁`
 }
 
-// Neutral verification labels - deterministic check result, not an AI promise.
-export function sourceVerificationLabel(source) {
-  return source?.source_verified ? '來源已核對' : '來源待人工確認'
-}
 
 const TRIGGER_LABELS = {
   award: '決標', notice: '接獲開工通知', commencement: '開工',
@@ -215,28 +180,3 @@ export function buildRequirementHighlights(
   return { approved, suggestions }
 }
 
-function hasTrackableDeadlineRule(requirement) {
-  if (requirement?.requirement_type !== 'deadline') return false
-  if (requirement.frequency_type === 'monthly') {
-    const day = Number(requirement.frequency_config?.day)
-    return Number.isInteger(day) && day >= 1 && day <= 31
-  }
-  if (requirement.trigger_type === 'fixed') {
-    const date = requirement.trigger_config?.fixed_date
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return false
-    const [year, month, day] = date.split('-').map(Number)
-    const parsed = new Date(year, month - 1, day)
-    return parsed.getFullYear() === year
-      && parsed.getMonth() === month - 1
-      && parsed.getDate() === day
-  }
-  return ['award', 'notice', 'commencement', 'completion'].includes(requirement.trigger_type)
-}
-
-// 這個捷徑會真正建立 deadline obligation：只有契約審查角色、可追蹤規則，
-// 且 AI 來源已由系統核對時才可出現。人工／轉入列不要求 AI citation。
-export function canQuickApproveDeadline(requirement, verification, canReview) {
-  if (!canReview || !['draft_ai', 'needs_review'].includes(requirement?.status)) return false
-  if (!hasTrackableDeadlineRule(requirement)) return false
-  return requirement.origin !== 'ai' || verification === 'verified'
-}

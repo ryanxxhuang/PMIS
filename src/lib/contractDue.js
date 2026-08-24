@@ -25,3 +25,25 @@ export function computeObligationDue(ob, anchors, today) {
   d.setDate(d.getDate() + (ob.offset_days || 0) * (ob.offset_dir === 'before' ? -1 : 1))
   return d
 }
+
+// 期限追蹤摘要(契約重點頁頂部摘要條的四個數字)。分類互斥:
+//   done      = 已提送/已完成
+//   overdue   = 未完成且已過期
+//   dueSoon   = 未完成且 7 日內到期
+//   scheduled = 到期日在 7 日後(有日期才叫「排程中」)
+// 推不出到期日的義務(基準日未填)四格都不計——語意對齊 /deadlines 頁的
+// 「無期限」灰點;硬塞進排程中會讓兩處數字對不上。
+export function summarizeDeadlines(obligations, anchors, today) {
+  const t = today0(today)
+  const out = { overdue: 0, dueSoon: 0, scheduled: 0, done: 0 }
+  for (const ob of obligations || []) {
+    if (ob.status === '已提送' || ob.status === '已完成') { out.done++; continue }
+    const due = computeObligationDue(ob, anchors || {}, today)
+    if (!due) continue
+    const diff = Math.round((due - t) / 86400000)
+    if (diff < 0) out.overdue++
+    else if (diff <= 7) out.dueSoon++
+    else out.scheduled++
+  }
+  return out
+}

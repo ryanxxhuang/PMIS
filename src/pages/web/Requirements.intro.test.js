@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { HighlightRows, requirementsIntro } from './Requirements.jsx'
+import { ReviewActions, requirementsIntro } from './Requirements.jsx'
 
 const completed = [{ id: 'R1', status: 'completed' }]
 const inFlight = [{ id: 'R1', status: 'processing' }, { id: 'R2', status: 'failed' }]
@@ -72,34 +72,47 @@ describe('判定依據與 Dashboard 第 3 步一致', () => {
   })
 })
 
-describe('W8-3B 契約重點動作', () => {
+describe('詳情動作列權限(鏡像 can_review_requirement)', () => {
   const deadline = {
     id: 'D1', status: 'needs_review', requirement_type: 'deadline', origin: 'ai',
     title: '開工後 14 日內提送計畫', responsible_party_type: 'contractor',
     trigger_type: 'commencement', trigger_config: { offset_days: 14, offset_dir: 'after' },
   }
-  const renderRows = (requirement, canReview) => renderToStaticMarkup(
-    createElement(HighlightRows, {
-      groups: [{ key: requirement.id, requirement, requirements: [requirement] }],
-      kind: 'suggestion', canReview,
-      verificationByReq: new Map([[requirement.id, 'verified']]),
-      onSelect: () => {}, onQuickApprove: () => {},
+  const render = (requirement, canReview) => renderToStaticMarkup(
+    createElement(ReviewActions, {
+      requirement, canReview, busy: '',
+      onReview: () => {}, onEdit: () => {},
     }),
   )
 
-  it('廠商只能查看，不會出現契約核定捷徑', () => {
-    const html = renderRows(deadline, false)
+  it('廠商只能查看:不渲染核定/駁回假操作,顯示責任方說明', () => {
+    const html = render(deadline, false)
     expect(html).toContain('契約核定由監造／機關辦理')
-    expect(html).not.toContain('核定並排入期限追蹤')
+    expect(html).not.toContain('核定生效')
+    expect(html).not.toContain('駁回')
   })
 
-  it('已核對且規則完整的期限，只對契約審查者顯示真實捷徑', () => {
-    expect(renderRows(deadline, true)).toContain('核定並排入期限追蹤')
+  it('契約審查者(監造/機關)看到核定生效/修正內容/駁回', () => {
+    const html = render(deadline, true)
+    expect(html).toContain('核定生效')
+    expect(html).toContain('修正內容')
+    expect(html).toContain('駁回')
   })
 
-  it('送審類只能查看內容，不假裝已能建立流程', () => {
-    const html = renderRows({ ...deadline, id: 'S1', requirement_type: 'submittal', title: '施工計畫送審' }, true)
-    expect(html).toContain('查看內容與來源')
-    expect(html).not.toMatch(/建立.*送審|核定並加入/)
+  it('已生效:顯示伺服器審查紀錄,審查者才有廢止取代', () => {
+    const approved = { ...deadline, status: 'approved', reviewed_at: '2026-08-19T14:20:00Z' }
+    const reviewer = render(approved, true)
+    expect(reviewer).toContain('伺服器記錄')
+    expect(reviewer).toContain('廢止取代')
+    const viewer = render(approved, false)
+    expect(viewer).toContain('伺服器記錄')
+    expect(viewer).not.toContain('廢止取代')
+  })
+
+  it('已駁回:只剩紀錄,沒有任何操作', () => {
+    const html = render({ ...deadline, status: 'rejected', reviewed_at: '2026-08-19T16:02:00Z' }, true)
+    expect(html).toContain('伺服器記錄')
+    expect(html).not.toContain('核定生效')
+    expect(html).not.toContain('廢止取代')
   })
 })

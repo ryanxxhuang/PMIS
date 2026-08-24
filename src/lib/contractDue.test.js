@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { computeObligationDue } from './contractDue.js'
+import { computeObligationDue, summarizeDeadlines } from './contractDue.js'
 
 const anchors = {
   award_date: '2026-01-10',
@@ -63,5 +63,28 @@ describe('computeObligationDue — 每月重複義務', () => {
     expect(ymd(computeObligationDue({ recurring: 'monthly', recurring_day: 5 }, anchors, injected))).toBe('2026-10-05')
     // 含時間的 Date 一樣正規化到當天午夜：當天到期仍算「尚未逾期」
     expect(ymd(computeObligationDue({ recurring: 'monthly', recurring_day: 20 }, anchors, new Date(2026, 8, 20, 23, 30)))).toBe('2026-09-20')
+  })
+})
+
+describe('summarizeDeadlines — 摘要條四數字(互斥分類)', () => {
+  const today = new Date(2026, 7, 24) // 2026-08-24
+  it('done/overdue/dueSoon/scheduled 各歸一格,已完成不再算逾期', () => {
+    const obs = [
+      { status: '已提送', trigger_event: 'fixed', fixed_date: '2026-01-01' },              // done(即使過期)
+      { status: '待辦', trigger_event: 'fixed', fixed_date: '2026-08-20' },                // overdue
+      { status: '待辦', trigger_event: 'fixed', fixed_date: '2026-08-24' },                // dueSoon(當天=0)
+      { status: '待辦', trigger_event: 'fixed', fixed_date: '2026-08-31' },                // dueSoon(=7)
+      { status: '待辦', trigger_event: 'fixed', fixed_date: '2026-09-01' },                // scheduled(=8)
+      { status: '已完成', trigger_event: 'fixed', fixed_date: '2026-12-31' },              // done
+    ]
+    expect(summarizeDeadlines(obs, {}, today)).toEqual({ overdue: 1, dueSoon: 2, scheduled: 1, done: 2 })
+  })
+  it('基準日未填推不出到期日 → 四格都不計(語意對齊 /deadlines 的「無期限」)', () => {
+    const obs = [{ status: '待辦', trigger_event: 'commencement', offset_days: 14 }]
+    expect(summarizeDeadlines(obs, {}, today)).toEqual({ overdue: 0, dueSoon: 0, scheduled: 0, done: 0 })
+  })
+  it('空清單與缺參數安全', () => {
+    expect(summarizeDeadlines([], {}, today)).toEqual({ overdue: 0, dueSoon: 0, scheduled: 0, done: 0 })
+    expect(summarizeDeadlines(null, null, today)).toEqual({ overdue: 0, dueSoon: 0, scheduled: 0, done: 0 })
   })
 })

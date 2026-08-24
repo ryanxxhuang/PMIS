@@ -1,29 +1,36 @@
-// P0-07 履約需求審查頁:AI 建議 → 人工審查 → 核定/駁回 的契約決策邊界。
-// 資料用「有界的」焦點查詢直接向 Supabase 取(不進全域 store);
+// 契約重點(契約條文檢索頁)——依 design_handoff_contract_highlights 改版。
+// 單一目的:上傳契約後,看 AI 爬出來的重要條文並快速檢索。三塊版面:
+//   1. 期限追蹤摘要條(四個數字+連結;逐項清單/已提送/試算/基準日已遷至 /deadlines)
+//   2. 契約重點清單(左,主角):搜尋+狀態快篩+類型/階段下拉,每列一條條文
+//   3. 條文詳情(右,sticky):原文引述、出處頁碼、關聯項目、核定/駁回
+// 明確不做(前一版有、已移除):階段時間軸、罰款試算、基準日卡、追溯區六個
+// 下拉、頁底詳情卡——搬去 /deadlines 或退場,不是憑空刪除功能。
 // 生命週期決定一律走 review_requirement RPC(伺服器蓋審查人/時間戳),
-// 前端絕不樂觀顯示核定結果。工作流 artifact 只列出既有連結(P0-07 不產生)。
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+// 前端絕不樂觀顯示核定結果;權限判斷鏡像 DB(can_review_requirement/can_write)。
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { pageAllInSafe } from '../../lib/pagedQuery.js'
-import { Card, Empty, PageHeader, Badge, Button, Field, Input, Textarea, Select, PrerequisiteEmptyState, ErrorBanner, Surface, SkeletonList, buttonClass } from '../../components/ui.jsx'
+import {
+  Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select,
+  PrerequisiteEmptyState, ErrorBanner, SkeletonList, buttonClass,
+} from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
-// W11:期限追蹤(原 /contract 義務時程)搬進本頁——契約重點核定後直接在
-// 同一頁長出到期日、已提送與罰款試算,不再跳頁
-import { computeObligationDue } from '../../lib/contractDue.js'
-import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
+import { summarizeDeadlines } from '../../lib/contractDue.js'
+import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
+import { isValidStorageKey } from '../../lib/packageUpload.js'
 import {
   REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
   WORK_ITEM_LINK_STATE_LABELS, ARTIFACT_TYPE_LABELS, GENERATION_TYPE_LABELS,
-  latestCompletedRunIds, inDefaultReviewScope, sortForReviewQueue, filterRequirements,
-  sourceVerificationSummary, sourcePageLabel, sourceVerificationLabel, formatRequirementRule,
-  HIGHLIGHT_LIMIT, buildRequirementHighlights, canQuickApproveDeadline,
+  latestCompletedRunIds, inDefaultReviewScope,
+  sourceVerificationSummary, sourcePageLabel, formatRequirementRule,
 } from '../../lib/requirementReview.js'
 
 const LIST_LIMIT = 300
+const PAGE_SIZE = 50
 
 // W8-3A(D-014):「AI 整理完了沒」在全站只有一個判定依據——本案有沒有跑完過一次
 // 履約要求擷取(`document_ingestion_runs.status = 'completed'`)。首頁初始化清單第 3 步
@@ -74,94 +81,83 @@ export function requirementsIntro(runs = [], rowCount = 0) {
     emptyText: '尚未有完成的 AI 整理。到「專案文件」上傳契約/規範,或查看目前的處理狀態。',
   }
 }
-// ── W11 期限追蹤(approved deadline 相容 runtime;自 /contract 遷入)─────────
-const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
-const TRIGGER_LABEL = {
-  award: '決標', notice: '接獲開工通知', commencement: '開工',
-  completion: '完工', monthly: '每月', fixed: '指定日期', other: '其他',
-}
-const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
-const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-function ruleText(ob) {
-  if (ob.recurring === 'monthly') return `每月 ${ob.recurring_day || ''} 日${ob.offset_dir === 'before' ? '前' : ''}`.trim()
-  if (ob.trigger_event === 'fixed') return `指定 ${ob.fixed_date || '日期'}`
-  const t = TRIGGER_LABEL[ob.trigger_event] || ob.trigger_event || ''
-  if (ob.offset_days) return `${t}${ob.offset_dir === 'before' ? '前' : '後'} ${ob.offset_days} 日內`
-  return t
-}
-// 狀態色點走 class 對照表(顏色由 className 帶 token,吃主題切換);
-// 色點附等價文字(title/aria-label),狀態不得只靠顏色(W8-5)
-const DOT_CLS = { done: 'bg-[var(--green-text)]', overdue: 'bg-[var(--red-text)]', soon: 'bg-[var(--amber-text)]', scheduled: 'bg-[var(--blue)]', nodate: 'bg-[var(--text-3)]' }
-const DOT_LABEL = { done: '已完成', overdue: '已逾期', soon: '7 日內到期', scheduled: '排程中', nodate: '無期限' }
 
-const STATUS_BADGE = {
-  draft_ai: 'blue', needs_review: 'amber', approved: 'green', rejected: 'red', superseded: 'slate',
+// 五色語意(README Design Tokens):待核定=黃(正常待辦不是異常)、已生效=綠、
+// 已駁回=灰(含已廢止取代——README 語意「不成立/已被取代,不計入義務」是同一格,
+// 色票、快篩與計數三處必須同一套帳;廢止細節在詳情的伺服器紀錄行)。選中=藍。
+// 狀態一律色票帶文字,不得只靠顏色。
+const STATUS_PILL = {
+  pending: { label: '待核定', color: 'amber' },
+  approved: { label: '已生效', color: 'green' },
+  rejected: { label: '已駁回', color: 'slate' },
 }
+// 快篩分桶:pending 收 draft_ai+needs_review;rejected 收 rejected+superseded
+// (兩者都「不計入義務」,對檢索者是同一格)
+const statusKey = (status) => (
+  status === 'approved' ? 'approved'
+    : ['rejected', 'superseded'].includes(status) ? 'rejected' : 'pending'
+)
 const EDITABLE_STATUSES = ['draft_ai', 'needs_review']
 const fmtTime = (v) => (v ? new Date(v).toLocaleString('zh-TW', { hour12: false }) : '')
 
-export function HighlightRows({ groups, kind, canReview, verificationByReq, onSelect, onQuickApprove }) {
-  if (!groups.length) {
-    return <Empty>{kind === 'approved' ? '尚無已生效的契約重點。' : '目前沒有需要特別留意的未核定內容。'}</Empty>
+// 摘要條色點:五色語意(逾期=紅、7日內=黃、排程中=藍、已完成=綠),吃主題 token
+const DUE_STATS = [
+  ['overdue', '已逾期', 'bg-[var(--red-text)]'],
+  ['dueSoon', '7 日內到期', 'bg-[var(--amber-text)]'],
+  ['scheduled', '排程中', 'bg-[var(--blue)]'],
+  ['done', '已完成', 'bg-[var(--green-text)]'],
+]
+
+// 狀態快篩 chip(README:pill 形、選中=藍框藍底)——與 FilterChip 的
+// toggle+close 語意不同,這裡是單選分段,就地用同一套 token 拼裝
+const chipCls = (active) => `h-[30px] px-3.5 rounded-full border text-xs font-medium inline-flex items-center gap-1.5 pressable max-md:min-h-11 ${active
+  ? 'border-[var(--primary)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
+  : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:bg-[var(--bg)]'}`
+
+// 詳情動作列(獨立元件供測試釘權限):核定/駁回只給契約審查者(監造/機關,
+// 鏡像 can_review_requirement,刻意無專案管理者例外);其他人看得到內容但
+// 不渲染假操作。
+export function ReviewActions({ requirement, canReview, busy, onReview, onEdit, reviewerName }) {
+  const st = requirement.status
+  // README 核定紀錄格式:`桃園市工務局 林淑芬 核定 · 時間`。審查人名由呼叫端
+  // 從 profiles 解析(reviewed_by 是伺服器蓋的);讀不到人名時退回狀態+時間
+  const VERB = { approved: '核定', rejected: '駁回', superseded: '廢止取代' }
+  const record = requirement.reviewed_at
+    ? (reviewerName
+      ? `${reviewerName} ${VERB[st] || REQUIREMENT_STATUS_LABELS[st] || st} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
+      : `${REQUIREMENT_STATUS_LABELS[st] || st}·${fmtTime(requirement.reviewed_at)}(伺服器記錄)`)
+    : null
+  if (EDITABLE_STATUSES.includes(st)) {
+    if (!canReview) {
+      return (
+        <Badge color="slate">
+          <MSym name="info" size={12} className="shrink-0" />契約核定由監造／機關辦理
+        </Badge>
+      )
+    }
+    return (<>
+      <Button size="md" disabled={!!busy} onClick={() => onReview('approve', '核定生效')}>
+        <MSym name="check_circle" size={15} fill /> 核定生效
+      </Button>
+      <Button variant="outline" size="md" disabled={!!busy} onClick={onEdit}>修正內容</Button>
+      <button type="button" disabled={!!busy} onClick={() => onReview('reject', '駁回')}
+        className="inline-flex items-center justify-center h-9 px-3.5 rounded-full text-sm font-medium text-[var(--red-text)] hover:bg-[var(--red-tint)] pressable max-md:min-h-11 disabled:opacity-40">
+        駁回
+      </button>
+    </>)
   }
-  return (
-    <div className="divide-y divide-[var(--border)]">
-      {groups.map((group) => {
-        const r = group.requirement
-        const verification = verificationByReq.get(r.id) || 'none'
-        const quickApprove = kind === 'suggestion'
-          && canQuickApproveDeadline(r, verification, canReview)
-        return (
-          <div key={group.key} className="px-4 sm:px-5 py-3.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge color={kind === 'approved' ? 'green' : 'amber'}>
-                {kind === 'approved' ? '已生效' : '整理結果'}
-              </Badge>
-              <span className="text-xs text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[r.requirement_type] || r.requirement_type}</span>
-              {r.responsible_party_type && <span className="text-xs text-[var(--text-3)]">責任：{RESPONSIBLE_LABELS[r.responsible_party_type]}</span>}
-              {/* 核對狀態走五語意 Badge,不用裸文字色表狀態(UI/UX 統一修正) */}
-              {verification === 'verified' && <Badge color="green">來源已核對</Badge>}
-              {verification === 'unverified' && <Badge color="amber">來源待核對</Badge>}
-              {group.requirements.length > 1 && <span className="text-xs text-[var(--text-3)]">同內容 {group.requirements.length} 筆擷取</span>}
-            </div>
-            <div className="mt-1.5 text-sm font-semibold text-[var(--text)]">{r.title}</div>
-            {r.description && <p className="mt-1 text-sm leading-relaxed text-[var(--text-2)] line-clamp-2">{r.description}</p>}
-            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-3)]">
-              {r.lifecycle_phase && <span>階段：{r.lifecycle_phase}</span>}
-              {formatRequirementRule(r) && <span>時點：{formatRequirementRule(r)}</span>}
-              {r.evidence_requirement && <span>應留存佐證：{r.evidence_requirement}</span>}
-            </div>
-            {/* 手機直排全寬、桌機並排;桌機再加 flex-wrap,窄視窗時按鈕換行而不是擠出卡片。
-                F1:手機動作鈕補 44px 觸控高度(max-md:min-h-11),桌機維持 sm 尺寸——
-                只在本頁就地補,不動共用 Button(全站控件統一留 W8-5)。 */}
-            <div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
-              {/* F3 改法:手機要可辨識為按鈕就用 outline 變體,不再以 className 就地幫 ghost
-                  補邊框造出第四種鈕皮(斷點也曾誤用 max-sm,與手機層 max-md 不一致)。
-                  實心主動作每組仍只有一個(快速核定鈕)。 */}
-              <Button size="sm" variant="outline"
-                className="w-full sm:w-auto max-md:min-h-11"
-                onClick={() => onSelect(group)}>
-                {kind === 'suggestion' && r.requirement_type === 'deadline' && canReview && !quickApprove
-                  ? '查看並確認期限' : '查看內容與來源'}
-              </Button>
-              {quickApprove && (
-                <Button size="sm" variant="success" className="w-full sm:w-auto max-md:min-h-11" onClick={() => onQuickApprove(group)}>
-                  <MSym name="check_circle" size={13} /> 核定並排入期限追蹤
-                </Button>
-              )}
-              {/* F4:無核定權的提示要與按鈕有視覺區隔——改共用 Badge(slate),不再自寫 pill 殼 */}
-              {kind === 'suggestion' && !canReview && (
-                <Badge color="slate" className="w-full sm:w-auto justify-center sm:self-center">
-                  <MSym name="info" size={12} className="shrink-0" />契約核定由監造／機關辦理
-                </Badge>
-              )}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
+  return (<>
+    <span className="flex-1 min-w-0 text-[11.5px] leading-relaxed text-[var(--text-3)] num">{record}</span>
+    {st === 'approved' && canReview && (
+      <Button variant="outline" size="sm" disabled={!!busy} onClick={() => onReview('supersede', '廢止取代')}>廢止取代</Button>
+    )}
+  </>)
 }
+
+// 關聯列外殼:README 8px 圓角框列(icon+文字)。hover 只給真的可點的列——
+// 純資料列(工項對應/流程項目)套上連結外觀會騙人去點
+const LINK_ROW_STATIC = 'flex items-center gap-2 px-2.5 py-2 max-md:min-h-11 border border-[var(--border-2)] rounded-lg text-xs text-[var(--text-2)] min-w-0'
+const LINK_ROW = `${LINK_ROW_STATIC} hover:bg-[var(--bg)]`
 
 // W10 手動新增契約重點:AI 漏抽或文件未涵蓋的義務,人工補登。走既有的
 // requirement 流(origin='manual'、status='needs_review' → 人工核定 → deadline
@@ -171,6 +167,7 @@ const MANUAL_BLANK = {
   responsible_party_type: '', lifecycle_phase: '施工中',
   dueMode: 'relative', trigger_event: 'commencement', offset_days: '', offset_dir: 'after',
   fixed_date: '', monthly_day: '',
+  acceptance_criteria: '', source_clause: '', source_page: '',
 }
 const MANUAL_TRIGGERS = [
   ['award', '決標日'], ['notice', '接獲開工通知日'], ['commencement', '開工日'], ['completion', '竣工日'],
@@ -178,90 +175,47 @@ const MANUAL_TRIGGERS = [
 
 export default function Requirements() {
   const {
-    currentProject, isPersistedProject, currentUser, workItems, reloadObligations, can,
-    obligations, updateObligationStatus, updateProjectAnchors, submittals,
+    currentProject, isPersistedProject, currentUser, workItems, reloadObligations, can, obligations,
   } = useStore()
   // 鏡像 DB 的 can_review_requirement(機關/監造;刻意無專案管理者例外——技術管理≠契約審核權)
   const canReview = ['owner', 'supervisor'].includes(currentUser?.org_type)
   // 鏡像 DB 的 can_write(requirements insert 政策):廠商/監造/管理者可補登,機關唯讀
   const canAddManual = isPersistedProject && (can.edit || currentUser?.org_type === 'supervisor')
-  // 期限追蹤的「已提送」同樣鏡像 can_write(義務狀態欄位 grant 對非機關成員開放)
-  const canMarkObligation = can.edit || currentUser?.org_type === 'supervisor'
-  // 罰款試算基準:手填契約價金總額優先,沒填退回標單加總(W10)
-  const manualContractTotal = Number(currentProject?.contract_total) || 0
-  const contractTotal = manualContractTotal > 0 ? manualContractTotal : (workItems?.meta?.billable_total || 0)
+
   const [rows, setRows] = useState([])
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [runs, setRuns] = useState([])
   const [sourcesByReq, setSourcesByReq] = useState(new Map())
   const [versionsById, setVersionsById] = useState(new Map())
-  const [filters, setFilters] = useState({ scope: 'current' })
+  const [reviewersById, setReviewersById] = useState(new Map())
+  const [filters, setFilters] = useState({ q: '', status: 'all', type: '', phase: '' })
+  const [shownLimit, setShownLimit] = useState(PAGE_SIZE)
   const [selectedId, setSelectedId] = useState(null)
+  const [detailOpen, setDetailOpen] = useState(false)  // <lg 抽屜/全螢幕詳情
   const [links, setLinks] = useState([])          // requirement_work_items of selected
   const [artifactLinks, setArtifactLinks] = useState([])
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
   const [editing, setEditing] = useState(null)    // draft copy while editing content
   const [manualItemNo, setManualItemNo] = useState('')
-  const [showTrace, setShowTrace] = useState(false)
-  // W10 手動新增契約重點(AI 漏抽/未涵蓋範圍的人工補登)
   const [manualOpen, setManualOpen] = useState(false)
   const [manualDraft, setManualDraft] = useState(MANUAL_BLANK)
   const [manualBusy, setManualBusy] = useState(false)
   const [manualMsg, setManualMsg] = useState('')
-  // W11 期限追蹤狀態(自 /contract 遷入):基準日/契約總價草稿、已提送佐證挑選
-  const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '', end_date: '' })
-  const [totalDraft, setTotalDraft] = useState('')
-  const [anchorErr, setAnchorErr] = useState('')
-  const [obligationMsg, setObligationMsg] = useState('')
-  const [evidenceFor, setEvidenceFor] = useState(null)  // 義務 id;'' 表示不掛
-  const [evidencePick, setEvidencePick] = useState('')
-
-  useEffect(() => {
-    setAnchors({
-      award_date: currentProject?.award_date || '',
-      notice_date: currentProject?.notice_date || '',
-      commencement_date: currentProject?.commencement_date || '',
-      end_date: currentProject?.end_date || '',
-    })
-    setTotalDraft(currentProject?.contract_total != null ? String(currentProject.contract_total) : '')
-  }, [currentProject])
-
-  // DB 成功才更新本地(B-04):非建立者被 RLS 靜默擋下時不可樂觀顯示新基準日
-  const setAnchor = async (key, val) => {
-    setAnchorErr('')
-    if (isPersistedProject) {
-      const { error } = await updateProjectAnchors({ [key]: val || null })
-      if (error) { setAnchorErr(friendlyError(error, '基準日未儲存')); return }
-    }
-    setAnchors((a) => ({ ...a, [key]: val })) // demo:只進本地,供時間軸展示
-  }
-
-  // 期限追蹤:到期日、倒數、階段分組(依基準日即時計算)
-  const dueItems = useMemo(() => obligations.map((ob) => {
-    const due = computeObligationDue(ob, anchors)
-    const done = ob.status === '已提送' || ob.status === '已完成'
-    let diff = null, state = 'nodate'
-    if (done) state = 'done'
-    else if (due) { diff = Math.round((due - today0()) / 86400000); state = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'scheduled' }
-    return { ob, due, diff, done, state }
-  }), [obligations, anchors])
-  const dueCounts = useMemo(() => {
-    let overdue = 0, soon = 0, done = 0
-    for (const it of dueItems) { if (it.state === 'overdue') overdue++; else if (it.state === 'soon') soon++; if (it.done) done++ }
-    return { overdue, soon, done }
-  }, [dueItems])
-  const dueGroups = useMemo(() => PHASES.map((ph) => ({
-    ph, list: dueItems.filter((it) => (PHASES.includes(it.ob.category) ? it.ob.category : '其他') === ph)
-      .sort((x, y) => (x.due?.getTime() || Infinity) - (y.due?.getTime() || Infinity)),
-  })).filter((g) => g.list.length), [dueItems])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const searchRef = useRef(null)
 
   const pid = currentProject?.project_id
   const runsById = useMemo(() => new Map(runs.map((r) => [r.id, r])), [runs])
   const currentRunIds = useMemo(() => latestCompletedRunIds(runs), [runs])
-  // 空狀態與頁首說明的唯一判定(見 requirementsIntro):必須在早退之前算,才不會違反 hooks 順序
   const intro = useMemo(() => requirementsIntro(runs, rows.length), [runs, rows.length])
+
+  // 期限追蹤摘要(GET deadlines summary 的前端等價:store 義務+專案基準日即時計算)
+  const dueSummary = useMemo(() => summarizeDeadlines(obligations, {
+    award_date: currentProject?.award_date, notice_date: currentProject?.notice_date,
+    commencement_date: currentProject?.commencement_date, end_date: currentProject?.end_date,
+  }), [obligations, currentProject])
 
   const reload = useCallback(async () => {
     if (!isPersistedProject || !pid) return
@@ -299,15 +253,27 @@ export default function Requirements() {
       ].filter(Boolean))]
       let versions = []
       if (versionIds.length) {
+        // storage 欄位:詳情的「開啟原文」直接開原始檔並跳到出處頁(documentFileAccess)
         const versionResult = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_versions')
-          .select('id, version_label, documents(title, document_type)').in('id', chunk).order('id').range(from, to))
+          .select('id, version_label, storage_path, original_filename, mime_type, documents(title, document_type)')
+          .in('id', chunk).order('id').range(from, to))
         if (versionResult.error) throw versionResult.error
         versions = versionResult.data || []
+      }
+      // 審查人名(README 核定紀錄要可歸責到人):profiles 只授權明確欄位,
+      // 且 RLS 限同案成員——讀不到就退回「狀態+時間」,不擋頁面
+      const reviewerIds = [...new Set(reqRows.map((r) => r.reviewed_by).filter(Boolean))]
+      let reviewers = []
+      if (reviewerIds.length) {
+        const reviewerResult = await pageAllInSafe(reviewerIds, (chunk, from, to) => supabase.from('profiles')
+          .select('id, full_name, company').in('id', chunk).order('id').range(from, to))
+        if (!reviewerResult.error) reviewers = reviewerResult.data || []
       }
       setRuns(runRows)
       setRows(reqRows)
       setSourcesByReq(byReq)
       setVersionsById(new Map(versions.map((v) => [v.id, v])))
+      setReviewersById(new Map(reviewers.map((p) => [p.id, p])))
     } catch (error) {
       setLoadError(friendlyError(error, '契約重點載入失敗'))
     } finally {
@@ -329,45 +295,197 @@ export default function Requirements() {
     setArtifactLinks(artifactRows || [])
   }, [isPersistedProject])
 
-  const select = (id) => {
+  const select = useCallback((id, { openPane = false } = {}) => {
     setSelectedId(id); setEditing(null); setMsg(''); setManualItemNo('')
+    // 抽屜/全螢幕只屬於 <lg:桌機點列不留 detailOpen 殘值,縮窗才不會突然彈出遮罩
+    if (openPane && window.matchMedia('(max-width: 1023.98px)').matches) setDetailOpen(true)
+    // URL 帶單條連結(?highlight=)可分享;replace 不炸掉瀏覽歷史
+    setSearchParams((p) => { const n = new URLSearchParams(p); n.set('highlight', id); return n }, { replace: true })
     loadDetail(id)
-  }
+  }, [loadDetail, setSearchParams])
 
-  const verificationByReq = useMemo(() => {
+  // 檢索範圍:待審 AI 建議只收最新成功擷取(舊 run 的未審建議已過時);
+  // 已審決內容(已生效/已駁回/已廢止)是人做成的契約決定,不受最新 run 限制
+  // ——重新分析同一份文件不得讓已核定的契約重點從清單消失(W8-3B 舊行為)。
+  const scoped = useMemo(
+    () => rows.filter((r) => (EDITABLE_STATUSES.includes(r.status)
+      ? inDefaultReviewScope(r, currentRunIds)
+      : true)),
+    [rows, currentRunIds],
+  )
+  const counts = useMemo(() => {
+    const c = { all: scoped.length, pending: 0, approved: 0, rejected: 0 }
+    for (const r of scoped) c[statusKey(r.status)]++
+    return c
+  }, [scoped])
+  const typeOptions = useMemo(
+    () => [...new Set(scoped.map((r) => r.requirement_type).filter(Boolean))],
+    [scoped],
+  )
+  const phaseOptions = useMemo(
+    () => [...new Set(scoped.map((r) => r.lifecycle_phase).filter(Boolean))],
+    [scoped],
+  )
+  // 搜尋範圍(README):標題、說明、條款編號、頁碼、原文引述、類型、階段、責任方
+  const searchTextByReq = useMemo(() => {
     const map = new Map()
-    for (const r of rows) map.set(r.id, sourceVerificationSummary(sourcesByReq.get(r.id)))
+    for (const r of scoped) {
+      const sources = sourcesByReq.get(r.id) || []
+      map.set(r.id, [
+        r.title, r.description,
+        REQUIREMENT_TYPE_LABELS[r.requirement_type] || r.requirement_type,
+        r.lifecycle_phase, RESPONSIBLE_LABELS[r.responsible_party_type],
+        formatRequirementRule(r),
+        ...sources.flatMap((s) => [
+          s.clause, s.section, s.page_label,
+          s.page_number != null ? `第 ${s.page_number} 頁 ${s.page_number}` : '',
+          s.source_text,
+        ]),
+      ].filter(Boolean).join(' ').toLowerCase())
+    }
     return map
-  }, [rows, sourcesByReq])
+  }, [scoped, sourcesByReq])
 
   const visible = useMemo(() => {
-    let list = rows
-    if (filters.scope === 'current') list = list.filter((r) => inDefaultReviewScope(r, currentRunIds))
-    list = filterRequirements(list, filters, verificationByReq)
-    return sortForReviewQueue(list)
-  }, [rows, filters, currentRunIds, verificationByReq])
+    let list = scoped
+    if (filters.status !== 'all') list = list.filter((r) => statusKey(r.status) === filters.status)
+    if (filters.type) list = list.filter((r) => r.requirement_type === filters.type)
+    if (filters.phase) list = list.filter((r) => r.lifecycle_phase === filters.phase)
+    const q = filters.q.trim().toLowerCase()
+    if (q) list = list.filter((r) => (searchTextByReq.get(r.id) || '').includes(q))
+    // 檢索頁走「文件序」(擷取順序≈條文順序),不是審查佇列序:狀態不同不代表
+    // 條文位置不同,打散順序會讓對照原文的人迷路。待辦入口由預設選取承擔。
+    return [...list].sort((a, b) => (new Date(a.created_at) - new Date(b.created_at))
+      || String(a.id).localeCompare(String(b.id)))
+  }, [scoped, filters, searchTextByReq])
+  const shownRows = visible.slice(0, shownLimit)
 
-  const highlights = useMemo(
-    () => buildRequirementHighlights(rows, currentRunIds, verificationByReq),
-    [rows, currentRunIds, verificationByReq],
-  )
-  const shownApproved = highlights.approved.slice(0, HIGHLIGHT_LIMIT)
+  // 標題列右側:共 N 條 · 來源 X 份文件 · 最近整理 date(有完成的 run 才有後兩段)
+  const listMeta = useMemo(() => {
+    const completed = runs.filter((r) => r.status === 'completed')
+    const docCount = new Set(completed
+      .map((r) => versionsById.get(r.document_version_id)?.documents?.title)
+      .filter(Boolean)).size
+    const latest = completed.map((r) => r.completed_at).filter(Boolean).sort().pop()
+    return [`共 ${scoped.length} 條`, docCount ? `來源 ${docCount} 份文件` : null,
+      latest ? `最近整理 ${latest.slice(0, 10)}` : null].filter(Boolean).join(' · ')
+  }, [runs, versionsById, scoped.length])
 
   const selected = rows.find((r) => r.id === selectedId) || null
-  const selectedHighlight = useMemo(() => (
-    [...highlights.approved, ...highlights.suggestions]
-      .find((group) => group.requirement.id === selectedId) || null
-  ), [highlights, selectedId])
-  const selectedSources = useMemo(() => {
-    if (!selected) return []
-    const selectedRows = selectedHighlight?.requirements || [selected]
-    return selectedRows.flatMap((r) => sourcesByReq.get(r.id) || [])
-  }, [selected, selectedHighlight, sourcesByReq])
+  const selectedSources = useMemo(
+    () => (selected ? sourcesByReq.get(selected.id) || [] : []),
+    [selected, sourcesByReq],
+  )
+  // 期限型已核定 → D-012 物化的義務(關聯列連到期限追蹤)
+  const selectedObligation = useMemo(
+    () => (selected ? obligations.find((o) => o.requirement_id === selected.id) || null : null),
+    [selected, obligations],
+  )
   const wiById = useMemo(() => {
     const map = new Map()
     for (const it of workItems?.items || []) if (it.id) map.set(it.id, it)
     return map
   }, [workItems])
+
+  // 切換專案(不經 route 卸載)時整組重置:殘留他案的 selectedId/?highlight
+  // 會讓右欄空白、URL 指向別案的 requirement
+  const initialPicked = useRef(false)
+  const seenPid = useRef(pid)
+  useEffect(() => {
+    if (seenPid.current === pid) return
+    seenPid.current = pid
+    initialPicked.current = false
+    setSelectedId(null); setEditing(null); setLinks([]); setArtifactLinks([])
+    setDetailOpen(false); setMsg('')
+    setFilters({ q: '', status: 'all', type: '', phase: '' }); setShownLimit(PAGE_SIZE)
+    setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('highlight'); return n }, { replace: true })
+  }, [pid, setSearchParams])
+
+  // 初次載入:深連結(?highlight=)優先,否則預設選第一條待核定(直接進入待辦)
+  useEffect(() => {
+    if (!loaded || initialPicked.current || !rows.length) return
+    initialPicked.current = true
+    const param = searchParams.get('highlight')
+    const deepLinked = param ? rows.find((r) => r.id === param) : null
+    const target = deepLinked
+      || visible.find((r) => EDITABLE_STATUSES.includes(r.status)) || visible[0] || rows[0]
+    if (!target) return
+    select(target.id)
+    if (deepLinked) {
+      // 深連結列可能落在載入上限之後:先把分頁撐到含該列,捲動才有東西可捲
+      const idx = visible.findIndex((r) => r.id === target.id)
+      if (idx >= PAGE_SIZE) setShownLimit(Math.ceil((idx + 1) / PAGE_SIZE) * PAGE_SIZE)
+      setTimeout(() => document.getElementById(`hl-${target.id}`)?.scrollIntoView({ block: 'center' }), 60)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, rows.length])
+
+  // 「開啟原文」:出處的文件版本 + 頁碼 → 簽名 URL 開原始檔(PDF 跳頁)
+  const openableSource = useMemo(() => {
+    for (const s of selectedSources) {
+      const version = s.document_version_id ? versionsById.get(s.document_version_id) : null
+      if (version && isValidStorageKey(version.storage_path)) return { source: s, version }
+    }
+    return null
+  }, [selectedSources, versionsById])
+  const openOriginal = useCallback(() => {
+    if (!openableSource) return
+    openDocumentVersionFile(openableSource.version, {
+      page: openableSource.source.page_number, onError: setMsg,
+    })
+  }, [openableSource])
+
+  // 鍵盤:↑/↓ 移動選取、Enter 開啟原文、/ 聚焦搜尋。只有真正的輸入控件
+  // (input/textarea/select)整組跳過——點過清單列或快篩 chip 後焦點留在
+  // button 上,快捷鍵必須照常運作;Enter 讓 button/link 走原生 click,不搶
+  useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target
+      const inField = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)
+      // 任何 modal 層(手動新增/確認對話框/抽屜)開著就整組停用——
+      // 「/」搶焦點到遮罩後的搜尋框、Enter 在確認框後面開原文都是誤觸
+      const modalUp = manualOpen || editing
+        || document.querySelector('[aria-modal="true"]') != null
+      if (e.key === '/' && !inField && !modalUp) { e.preventDefault(); searchRef.current?.focus(); return }
+      if (inField || modalUp || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'Enter' && t && /^(BUTTON|A)$/.test(t.tagName)) return
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (!shownRows.length) return
+        const idx = shownRows.findIndex((r) => r.id === selectedId)
+        const next = e.key === 'ArrowDown'
+          ? shownRows[Math.min(idx + 1, shownRows.length - 1)]
+          : shownRows[Math.max(idx - 1, 0)]
+        if (next && next.id !== selectedId) {
+          select(next.id)
+          document.getElementById(`hl-${next.id}`)?.scrollIntoView({ block: 'nearest' })
+        }
+      } else if (e.key === 'Enter') {
+        openOriginal()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [shownRows, selectedId, select, openOriginal, manualOpen, editing])
+
+  // 抽屜/全螢幕詳情(<lg)與手動新增 Modal:Esc 關閉+開啟時把焦點帶進面板
+  // (aria-modal 沒有焦點管理=報讀器仍停在遮罩後的清單,W8-5 F2 同一課)
+  const drawerRef = useRef(null)
+  const manualRef = useRef(null)
+  useEffect(() => {
+    if (!detailOpen) return
+    drawerRef.current?.focus()
+    const onKey = (e) => { if (e.key === 'Escape') setDetailOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [detailOpen])
+  useEffect(() => {
+    if (!manualOpen) return
+    manualRef.current?.focus()
+    const onKey = (e) => { if (e.key === 'Escape') setManualOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [manualOpen])
 
   // 生命週期決定:唯一路徑是 review_requirement RPC;成功後以伺服器回傳列刷新。
   const review = async (decision, confirmText, requirementId = selectedId, body = '此為契約層級決定,將由伺服器記錄審查人與時間。') => {
@@ -381,34 +499,6 @@ export default function Requirements() {
     setRows((rs) => rs.map((r) => (r.id === data.id ? data : r)))
     if (decision === 'approve' && data.requirement_type === 'deadline') await reloadObligations()
     setMsg('')
-  }
-
-  const selectHighlight = (group) => select(group.requirement.id)
-  const quickApproveDeadline = (group) => {
-    const requirementId = group.requirement.id
-    select(requirementId)
-    return review(
-      'approve',
-      '核定並排入期限追蹤',
-      requirementId,
-      '這會把本項核定為生效的契約重點，並在同一筆伺服器交易中排入上方期限追蹤。',
-    )
-  }
-  const openApprovedTrace = () => {
-    setFilters({ scope: 'all', status: 'approved' })
-    setShowTrace(true)
-  }
-  const toggleTrace = () => {
-    if (showTrace) {
-      // 追溯區可選到 rejected／superseded／舊 run；收合時必須連詳情一起關閉，
-      // 否則歷史審查資料會殘留在一般契約重點畫面，破壞 W8-3B 的分層。
-      setSelectedId(null)
-      setEditing(null)
-      setLinks([])
-      setArtifactLinks([])
-      setMsg('')
-    }
-    setShowTrace((open) => !open)
   }
 
   const saveEdit = async () => {
@@ -475,16 +565,31 @@ export default function Requirements() {
       requirement_type: d.requirement_type,
       responsible_party_type: d.responsible_party_type || null,
       lifecycle_phase: d.lifecycle_phase || null,
+      acceptance_criteria: d.acceptance_criteria.trim() || null,
       trigger_type, trigger_config, frequency_type, frequency_config,
       status: 'needs_review',
     }).select().single()
+    if (error) { setManualBusy(false); setManualMsg(friendlyError(error, '契約重點新增未完成')); return }
+    // 出處(選填):人工補登也保留條款/頁碼引註——對照報告與詳情的出處區吃同一份資料。
+    // 主檔已建立、引註寫入失敗(瞬斷/5xx)不可靜默吞掉:使用者填的出處會無聲消失
+    let sourceError = null
+    if (d.source_clause.trim() || d.source_page.trim()) {
+      const { data: srcRow, error: srcErr } = await supabase.from('requirement_sources').insert({
+        requirement_id: data.id, source_kind: 'manual', source_verified: false,
+        clause: d.source_clause.trim() || null, page_label: d.source_page.trim() || null,
+      }).select().single()
+      if (srcRow) setSourcesByReq((m) => new Map(m).set(data.id, [srcRow]))
+      else sourceError = srcErr
+    }
     setManualBusy(false)
-    if (error) { setManualMsg(friendlyError(error, '契約重點新增未完成')); return }
     setManualMsg('')
     setManualDraft(MANUAL_BLANK)
     setManualOpen(false)
     setRows((rs) => [data, ...rs])
-    select(data.id)
+    select(data.id, { openPane: true })
+    if (sourceError) {
+      setMsg(`契約重點已新增,但出處未寫入:${friendlyError(sourceError, '請用「修正內容」補上')}`)
+    }
   }
 
   const addManualLink = async () => {
@@ -501,203 +606,295 @@ export default function Requirements() {
     setLinks((ls) => [...ls, data]); setManualItemNo(''); setMsg('')
   }
 
-  // ── W11 期限追蹤區(卡+階段時間軸;demo 與正式分支共用)────────────────
-  const anchorsCard = (
-    <Card title="基準日與契約總價">
-      <div className="flex flex-wrap gap-4">
-        {[
-          ['award_date', '決標日'],
-          ['notice_date', '接獲開工通知日'],
-          ['commencement_date', '開工日'],
-          ['end_date', '竣工日(完工期限基準)'],
-        ].map(([k, label]) => (
-          <Field key={k} label={label}>
-            <Input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
-              disabled={!can.edit} />
-          </Field>
+  // ── 期限追蹤摘要條(只留摘要;逐項管理在 /deadlines)─────────────────────
+  const deadlineBar = (
+    <Card bodyClass="flex items-center gap-x-7 gap-y-2 flex-wrap px-[18px] py-[13px]">
+      <span className="text-[13px] font-medium text-[var(--text)]">期限追蹤</span>
+      <div className="flex items-center gap-5 flex-wrap">
+        {DUE_STATS.map(([key, label, dot]) => (
+          <span key={key} className="inline-flex items-center gap-[7px] text-[12.5px] text-[var(--text-2)]">
+            <span className={`w-2 h-2 rounded-full ${dot}`} aria-hidden="true" />
+            {label} <span className="num font-medium text-[var(--text)]">{dueSummary[key]}</span> 項
+          </span>
         ))}
-        {/* 手填契約價金總額:百分比制逾期罰款的試算基準(W10);onBlur 才寫 DB */}
-        <Field label="契約價金總額(元)">
-          <Input type="number" min="0" step="1" value={totalDraft} placeholder="未填則採標單加總"
-            onChange={(e) => setTotalDraft(e.target.value)}
-            onBlur={() => {
-              const v = totalDraft.trim() === '' ? null : Number(totalDraft)
-              if (v != null && (!Number.isFinite(v) || v < 0)) { setAnchorErr('契約價金總額需為 0 以上的數字'); return }
-              if ((currentProject?.contract_total ?? null) === v) return
-              setAnchor('contract_total', v)
-            }}
-            disabled={!can.edit} />
-        </Field>
       </div>
-      <ErrorBanner msg={anchorErr} className="mt-2" />
-      <p className="text-xs text-[var(--text-3)] mt-3">期限追蹤的到期日、倒數、逾期都依這些基準日即時計算;「開工日」請填實際開工日。契約價金總額用於逾期違約金試算,未填時以標單可計價金額代替。</p>
+      <Link to="/deadlines" className="ml-auto text-[12.5px] text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11">開啟期限追蹤</Link>
     </Card>
   )
 
-  const deadlineSection = (<>
-    <Card title="期限追蹤" action={
-      <div className="flex items-center gap-2">
-        {obligations.length > 0 && (
-          <Link to="/contract/print" className={buttonClass('outline', 'sm')}>
-            <MSym name="print" size={14} /> 列印對照表
-          </Link>
+  // ── 頁首動作:輸出對照報告(GTM 第②格)+ 手動新增 ─────────────────────
+  const headerAction = (
+    <div className="flex flex-wrap items-center gap-2">
+      {isPersistedProject && (runs.length > 0 || rows.length > 0) && (
+        <Link to="/requirements/report" className={buttonClass('outline', 'md')}>
+          <MSym name="fact_check" size={15} /> 輸出對照報告
+        </Link>
+      )}
+      {canAddManual && (
+        <Button variant="secondary" size="md" onClick={() => { setManualOpen(true); setManualMsg('') }}>
+          <MSym name="add" size={16} /> 手動新增
+        </Button>
+      )}
+    </div>
+  )
+
+  const SUBTITLE = 'AI 已讀完契約與規範,把裡面要遵守的條文都整理在這裡。用上方搜尋找條文,右側看原文出處。'
+
+  // ── 詳情內容(桌機 aside 與 <lg 抽屜共用同一份 JSX)────────────────────
+  const detailBody = selected && (() => {
+    const pill = STATUS_PILL[statusKey(selected.status)]
+    const meta = [
+      ['責任方', RESPONSIBLE_LABELS[selected.responsible_party_type] || '未定'],
+      ['階段', selected.lifecycle_phase || '—'],
+      ['時點', formatRequirementRule(selected) || '—'],
+      ['允收標準', selected.acceptance_criteria || '—'],
+      ['應留存', selected.evidence_requirement || '—'],
+    ]
+    const run = selected.origin === 'ai' && selected.ingestion_run_id
+      ? runsById.get(selected.ingestion_run_id) : null
+    const dueState = selectedObligation ? (() => {
+      const done = selectedObligation.status === '已提送' || selectedObligation.status === '已完成'
+      return done ? '已提送' : '追蹤中'
+    })() : null
+    return (<>
+      {/* 1. 標題列:狀態色票+類型+開啟原文 */}
+      <div className="px-4 py-[13px] border-b border-[var(--border)] flex items-center gap-2.5">
+        <Badge color={pill.color}>{pill.label}</Badge>
+        <span className="text-[11.5px] text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[selected.requirement_type] || selected.requirement_type}</span>
+        <span className="text-[11.5px] text-[var(--text-3)]">{ORIGIN_LABELS[selected.origin] || selected.origin}</span>
+        {openableSource && (
+          <button type="button" onClick={openOriginal} title="在原文件中開啟"
+            className="ml-auto text-[11.5px] text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11 px-1">
+            開啟原文
+          </button>
         )}
       </div>
-    }>
-      <div className="flex flex-wrap gap-2">
-        <Badge color="red">已逾期 {dueCounts.overdue} 項</Badge>
-        <Badge color="amber">7 日內到期 {dueCounts.soon} 項</Badge>
-        <Badge color="green">已完成 {dueCounts.done} 項</Badge>
-      </div>
-      {dueGroups.length === 0 && (
-        <Empty>尚無已核定的期限。上傳契約後在下方核定期限型契約重點,或手動新增;核定後會自動出現在這裡。</Empty>
-      )}
-      <ErrorBanner msg={obligationMsg} className="mt-2" />
-    </Card>
 
-    {dueGroups.map((g) => (
-      <div key={g.ph}>
-        <h2 className="text-sm font-medium text-[var(--text-2)] mb-2">{g.ph}</h2>
-        <div className="space-y-2">
-          {g.list.map((it) => (
-            <div key={it.ob.id} className="flex gap-3">
-              <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${DOT_CLS[it.state]}`}
-                role="img" title={DOT_LABEL[it.state]} aria-label={DOT_LABEL[it.state]} />
-              <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
-                <div className="flex justify-between items-start gap-2">
-                  <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
-                  {canMarkObligation && <button onClick={async () => {
-                    if (it.done) {
-                      // 退回待辦:一併解除佐證連結(W-01)
-                      const { error } = await updateObligationStatus(it.ob.id, '待辦', { evidence_submittal_id: null })
-                      if (error) setObligationMsg(friendlyError(error, '狀態未寫入'))
-                    } else if (submittals.length) {
-                      setEvidenceFor(evidenceFor === it.ob.id ? null : it.ob.id); setEvidencePick('')
-                    } else {
-                      const { error } = await updateObligationStatus(it.ob.id, '已提送')
-                      if (error) setObligationMsg(friendlyError(error, '狀態未寫入'))
-                    }
-                  }}
-                    className={it.done
-                      ? 'text-xs h-8 px-3 rounded-full font-medium whitespace-nowrap shrink-0 inline-flex items-center max-md:min-h-11 pressable bg-[var(--green-tint)] text-[var(--green-text)]'
-                      : `${buttonClass('outline', 'sm')} shrink-0`}>
-                    {it.done ? '已提送 ✓' : '標為已提送'}
-                  </button>}
-                </div>
-                {/* W-01 佐證挑選:掛上對應的送審文件 */}
-                {evidenceFor === it.ob.id && !it.done && (
-                  <Surface className="mt-2 p-2.5 flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-[var(--text-2)] shrink-0">佐證送審文件</span>
-                    <Select value={evidencePick} onChange={(e) => setEvidencePick(e.target.value)} className="flex-1 min-w-[200px]">
-                      <option value="">（不掛佐證）</option>
-                      {submittals.map((s) => (
-                        <option key={s.id} value={s.id}>{s.submittal_no} {s.title}（{s.status}）</option>
-                      ))}
-                    </Select>
-                    <Button size="sm" onClick={async () => {
-                      const { error } = await updateObligationStatus(it.ob.id, '已提送',
-                        evidencePick ? { evidence_submittal_id: evidencePick } : {})
-                      if (error) { setObligationMsg(friendlyError(error, '狀態未寫入')); return }
-                      setEvidenceFor(null)
-                    }}>{evidencePick ? '掛佐證並標為已提送' : '直接標為已提送'}</Button>
-                    <Button variant="ghost" size="sm" onClick={() => setEvidenceFor(null)}>取消</Button>
-                  </Surface>
-                )}
-                {/* 佐證連結:稽核可一路點到原始送審紀錄 */}
-                {it.ob.evidence_submittal_id && (() => {
-                  const ev = submittals.find((s) => s.id === it.ob.evidence_submittal_id)
-                  return (
-                    <Link to="/submittals" className="mt-1.5 inline-flex hover:underline">
-                      <Badge color="blue">
-                        <MSym name="description" size={11} />
-                        佐證:{ev ? `${ev.submittal_no} ${ev.title}（${ev.status}）` : '送審文件（已不存在或無權檢視）'}
-                      </Badge>
-                    </Link>
-                  )
-                })()}
-                <div className="text-xs text-[var(--text-3)] mt-1">
-                  {ruleText(it.ob)}{it.due ? `　·　到期 ${isoDate(it.due)}` : ''}
-                  {it.ob.responsible ? `　·　${it.ob.responsible}` : ''}
-                </div>
-                {!it.done && it.due && (
-                  it.state === 'overdue' || it.state === 'soon'
-                    ? <div className="mt-1"><Badge color={it.state === 'overdue' ? 'red' : 'amber'}>{it.state === 'overdue' ? `已逾期 ${-it.diff} 天` : `還有 ${it.diff} 天`}</Badge></div>
-                    : (
-                      <div className="text-xs font-medium mt-0.5 text-[var(--text-2)]">
-                        還有 {it.diff} 天
-                      </div>
-                    )
-                )}
-                {it.ob.penalty && (
-                  <div className="text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-2 py-1 mt-2 inline-flex items-center gap-1"><MSym name="balance" size={12} /> {it.ob.penalty}</div>
-                )}
-                {/* 逾期罰款金額試算(確定性 regex 抽罰率;抽不出就不顯示——寧缺勿錯) */}
-                {it.state === 'overdue' && it.ob.penalty && (() => {
-                  const est = estimatePenalty({ penaltyText: it.ob.penalty, overdueDays: -it.diff, contractTotal })
-                  return est ? (
-                    <div className="text-xs font-medium text-[var(--red-text)] bg-[var(--red-tint)] rounded-md px-2 py-1 mt-1.5 flex items-start gap-1.5">
-                      <MSym name="balance" size={12} className="mt-0.5 shrink-0" />
-                      <span>預估逾期違約金約 NT$ {est.amount.toLocaleString('en-US')}{est.capped ? '(已達上限)' : ''}
-                        <span className="font-normal text-[var(--text-3)]"> · {est.basis} · 概算供參,實際依契約認定</span>
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-[var(--text-3)] bg-[var(--surface-2)] rounded-md px-2 py-1 mt-1.5 inline-flex items-center gap-1.5">
-                      <MSym name="balance" size={12} className="shrink-0" />
-                      {parsePenaltyRate(it.ob.penalty)?.perDayFraction != null && !(contractTotal > 0)
-                        ? '偵測到百分比制罰則;填入「契約價金總額」即可試算逾期違約金'
-                        : '偵測到罰則,但金額格式需人工確認試算'}
-                    </div>
-                  )
-                })()}
-                {(it.ob.source_clause || it.ob.source_page) && (
-                  <div className="text-[11px] text-[var(--text-3)] mt-2 flex items-center gap-1"><MSym name="description" size={11} /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>
-                )}
+      <ErrorBanner msg={msg} className="mx-4 mt-3" />
+
+      {/* 2. 本文:標題/說明/key-value(編輯模式原地換成表單) */}
+      {editing ? (
+        <div className="p-4 space-y-2">
+          <Input value={editing.title} onChange={(e) => setEditing((d) => ({ ...d, title: e.target.value }))} placeholder="需求標題" />
+          <Textarea value={editing.description || ''} onChange={(e) => setEditing((d) => ({ ...d, description: e.target.value }))} placeholder="需求描述" rows={2} />
+          <div className="flex flex-wrap gap-2">
+            <Select value={editing.requirement_type} onChange={(e) => setEditing((d) => ({ ...d, requirement_type: e.target.value }))}>
+              {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </Select>
+            <Select value={editing.responsible_party_type || ''} onChange={(e) => setEditing((d) => ({ ...d, responsible_party_type: e.target.value }))}>
+              <option value="">負責方未定</option>
+              {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </Select>
+            <Input value={editing.lifecycle_phase || ''} onChange={(e) => setEditing((d) => ({ ...d, lifecycle_phase: e.target.value }))} placeholder="階段(開工前/施工中/完工/保固)" className="w-full min-w-0" />
+          </div>
+          <Input value={editing.acceptance_criteria || ''} onChange={(e) => setEditing((d) => ({ ...d, acceptance_criteria: e.target.value }))} placeholder="允收標準" />
+          <Input value={editing.evidence_requirement || ''} onChange={(e) => setEditing((d) => ({ ...d, evidence_requirement: e.target.value }))} placeholder="應留存佐證" />
+          <div className="flex gap-2">
+            <Button size="sm" disabled={busy === 'edit'} onClick={saveEdit}>儲存修正</Button>
+            <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>取消</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4">
+          <div className="text-[15px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{selected.title}</div>
+          {selected.description && <p className="mt-2 text-[12.5px] leading-[1.8] text-[var(--text-2)]">{selected.description}</p>}
+          <div className="mt-3.5 grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-[7px] text-xs leading-relaxed">
+            {meta.map(([k, v]) => (
+              <div key={k} className="contents">
+                <span className="text-[var(--text-3)]">{k}</span>
+                <span className="num text-[var(--text)]">{v}</span>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 3. 原文出處:引述框(blockquote/cite 語意)+核對狀態色票 */}
+      <div className="px-4 pb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <MSym name="description" size={15} className="text-[var(--text-3)]" />
+          <span className="text-[12.5px] font-medium text-[var(--text)]">原文出處</span>
+          {selectedSources.length > 0 && (
+            <Badge color={sourceVerificationSummary(selectedSources) === 'verified' ? 'green' : 'amber'}>
+              {sourceVerificationSummary(selectedSources) === 'verified' ? '來源已核對' : '來源待核對'}
+            </Badge>
+          )}
+        </div>
+        {selectedSources.length === 0 ? (
+          <p className="text-xs text-[var(--text-3)]">無引註。{selected.origin === 'manual' ? '人工新增的內容可於「修正內容」補充。' : ''}</p>
+        ) : selectedSources.map((s) => {
+          const version = s.document_version_id ? versionsById.get(s.document_version_id) : null
+          return (
+            <figure key={s.id} className="m-0 mb-2 bg-[var(--bg)] border border-[var(--border-2)] rounded-lg px-3 py-[11px]">
+              {/* 核對狀態只在小標列的彙總色票講一次;逐筆引述只留出處行,
+                  同一狀態兩種文案(已核對/待人工確認)並排會讓人以為是兩件事 */}
+              <figcaption className="num text-[11px] text-[var(--text-3)] leading-relaxed">
+                <cite className="not-italic">
+                  {[version ? `${version.documents?.title}（${version.version_label}）` : null,
+                    s.clause ? `條款 ${s.clause}` : null,
+                    s.section ? `章節 ${s.section}` : null,
+                    s.page_label || sourcePageLabel(s)].filter(Boolean).join(' · ')}
+                </cite>
+              </figcaption>
+              {s.source_text && (
+                <blockquote className="m-0 mt-[7px] text-xs leading-[1.85] text-[var(--text)]">「{s.source_text}」</blockquote>
+              )}
+            </figure>
+          )
+        })}
+        {run && (
+          <p className="text-[11px] text-[var(--text-3)] leading-relaxed mt-1">
+            AI 擷取:模型 {run.model_name || '?'}·prompt {run.prompt_version || '?'}·完成 {fmtTime(run.completed_at) || run.status || '?'}。模型出處僅供追溯,效力以人工核定為準。
+          </p>
+        )}
+      </div>
+
+      {/* 4. 關聯:期限追蹤/標單工項/流程項目 */}
+      <div className="px-4 pb-4">
+        <div className="text-[12.5px] font-medium text-[var(--text)] mb-2">關聯</div>
+        <div className="flex flex-col gap-1.5">
+          {selectedObligation && (
+            <Link to="/deadlines" className={LINK_ROW}>
+              <MSym name="schedule" size={15} className="text-[var(--text-3)] shrink-0" />
+              <span className="flex-1 min-w-0 truncate num">期限追蹤 · {dueState}{selectedObligation.fixed_date ? ` · ${selectedObligation.fixed_date}` : ''}</span>
+              <MSym name="chevron_right" size={16} className="text-[var(--text-3)] shrink-0" />
+            </Link>
+          )}
+          {links.map((l) => {
+            const item = wiById.get(l.work_item_id)
+            return (
+              <div key={l.work_item_id} className={LINK_ROW_STATIC}>
+                <MSym name="list_alt" size={15} className="text-[var(--text-3)] shrink-0" />
+                <span className="flex-1 min-w-0 truncate">標單工項 {item?.item_no || '—'} {item?.description || ''}</span>
+                {/* 信賴度上色(handoff 門檻 ≥0.89 ok/≤0.72 warn):覆核者一眼挑出 AI 沒把握的配對 */}
+                {l.confidence != null && (
+                  <span className={`num shrink-0 ${l.confidence >= 0.89 ? 'text-[var(--green-text)]' : l.confidence <= 0.72 ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`}>AI {Math.round(l.confidence * 100)}%</span>
+                )}
+                {/* 五色語意:已駁回=灰(已不成立),README 明列「已駁回用紅」是誤用 */}
+                <Badge color={l.review_status === 'approved' ? 'green' : l.review_status === 'rejected' ? 'slate' : 'blue'}>
+                  {WORK_ITEM_LINK_STATE_LABELS[l.review_status] || l.review_status}
+                </Badge>
+                {canReview && l.review_status === 'suggested' && (<>
+                  <Button size="sm" variant="success" onClick={() => decideLink(l.work_item_id, 'approved')}>核可</Button>
+                  <Button size="sm" variant="danger" onClick={() => decideLink(l.work_item_id, 'rejected')}>駁回</Button>
+                </>)}
+              </div>
+            )
+          })}
+          {artifactLinks.map((l) => (
+            <div key={l.id} className={LINK_ROW_STATIC}>
+              <MSym name="link" size={15} className="text-[var(--text-3)] shrink-0" />
+              <Badge color="slate">{ARTIFACT_TYPE_LABELS[l.artifact_type] || l.artifact_type}</Badge>
+              <span className="flex-1 min-w-0 truncate text-[var(--text-3)]">{l.artifact_id}</span>
+              <span className="text-[var(--text-3)] shrink-0">{GENERATION_TYPE_LABELS[l.generation_type] || l.generation_type}</span>
             </div>
           ))}
+          {!selectedObligation && !links.length && !artifactLinks.length && (
+            <p className="text-xs text-[var(--text-3)]">
+              {selected.status !== 'approved' ? '未核定內容不會建立或連結任何活躍流程。' : '尚未連結流程項目;本頁不會自動建立送審、查驗或試驗流程。'}
+            </p>
+          )}
+          {canReview && (
+            <div className="flex items-center gap-2 mt-1">
+              <Input value={manualItemNo} onChange={(e) => setManualItemNo(e.target.value)}
+                placeholder="工項編號(如 壹.一.6.3.28)手動連結" className="flex-1 min-w-0 !text-xs" />
+              <Button variant="ghost" size="sm" disabled={!manualItemNo.trim()} onClick={addManualLink}>連結</Button>
+            </div>
+          )}
         </div>
       </div>
-    ))}
 
-    {anchorsCard}
-  </>)
+      {/* 5. 動作列:依狀態與權限切換(核定紀錄由伺服器蓋,不樂觀顯示) */}
+      {!editing && (
+        <div className="px-4 py-3 border-t border-[var(--border)] flex flex-wrap items-center gap-2">
+          <ReviewActions requirement={selected} canReview={canReview} busy={busy}
+            reviewerName={(() => {
+              const p = selected.reviewed_by ? reviewersById.get(selected.reviewed_by) : null
+              return p ? [p.company, p.full_name].filter(Boolean).join(' ') || null : null
+            })()}
+            onReview={(decision, label) => review(decision, label)}
+            onEdit={() => setEditing({ ...selected })} />
+        </div>
+      )}
+    </>)
+  })()
 
-  // 手動新增卡(收合時只有說明+入口鈕)。0 筆與正常清單兩個 render 分支都要放:
-  // 「AI 什麼都沒抽到」正是最需要人工補登的時刻。
-  const manualAddCard = canAddManual && (
-    <Card title="手動新增契約重點" action={(
-      <Button variant={manualOpen ? 'ghost' : 'secondary'} size="sm"
-        onClick={() => { setManualOpen((o) => !o); setManualMsg('') }}>
-        {manualOpen ? '收合' : (<><MSym name="add" size={14} /> 新增</>)}
-      </Button>
-    )}>
-      {!manualOpen ? (
-        <p className="text-xs text-[var(--text-3)]">AI 漏抽或文件未涵蓋的契約重點可在此人工補登;補登後仍需核定,期限型核定後會自動排入期限追蹤。</p>
-      ) : (
+  // ── 清單列(桌機 3 欄 grid、<768 直排堆疊)────────────────────────────────
+  const listRows = (
+    <div role="list" aria-label="契約重點清單">
+      {shownRows.length === 0 ? (
+        <div className="px-4 py-11 text-center text-[12.5px] leading-[1.8] text-[var(--text-3)]">
+          {filters.q.trim()
+            ? (<>找不到符合「{filters.q.trim()}」的條文。<br />試試條款編號(例 5.3)、頁碼或關鍵字(例 保固、罰則)。</>)
+            : '目前篩選條件下沒有條文。'}
+        </div>
+      ) : shownRows.map((r) => {
+        const pill = STATUS_PILL[statusKey(r.status)]
+        const firstSource = (sourcesByReq.get(r.id) || [])[0]
+        const metaParts = [
+          firstSource?.clause ? `條款 ${firstSource.clause}` : null,
+          firstSource ? (firstSource.page_label || sourcePageLabel(firstSource)) : null,
+          REQUIREMENT_TYPE_LABELS[r.requirement_type] || r.requirement_type,
+          RESPONSIBLE_LABELS[r.responsible_party_type] || null,
+          r.lifecycle_phase || null,
+        ].filter(Boolean)
+        const active = r.id === selectedId
+        return (
+          <button key={r.id} type="button" role="listitem" id={`hl-${r.id}`}
+            aria-current={active || undefined}
+            onClick={() => select(r.id, { openPane: true })}
+            className={`w-full text-left grid grid-cols-[76px_minmax(0,1fr)_150px] max-md:grid-cols-1 gap-3.5 max-md:gap-1 items-start px-[18px] py-3 pl-[15px] border-b border-[var(--border-2)] border-l-[3px] cursor-pointer ${active
+              ? 'bg-[var(--blue-tint)] border-l-[var(--primary)]'
+              : 'border-l-transparent hover:bg-[var(--bg)]'}`}>
+            <span><Badge color={pill.color}>{pill.label}</Badge></span>
+            <span className="min-w-0">
+              <span className="block text-[13px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{r.title}</span>
+              <span className="block mt-[3px] text-[11.5px] leading-relaxed text-[var(--text-3)] num">{metaParts.join(' · ')}</span>
+            </span>
+            <span className="text-right max-md:text-left text-[11.5px] leading-relaxed text-[var(--text-3)] num">{formatRequirementRule(r) || ''}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  // ── 手動新增 Modal(README:送出後為待核定、來源標記人工新增)─────────────
+  const manualModal = manualOpen && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="手動新增契約重點">
+      <div className="absolute inset-0 bg-[rgba(32,33,36,.4)]" onClick={() => setManualOpen(false)} />
+      <div ref={manualRef} tabIndex={-1}
+        className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-[var(--surface)] border border-[var(--border-card)] rounded-2xl [box-shadow:var(--shadow-card)] p-5 outline-none">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="text-[15px] font-medium text-[var(--text)]">手動新增契約重點</h2>
+          <button onClick={() => setManualOpen(false)} aria-label="關閉"
+            className="w-8 h-8 max-md:w-11 max-md:h-11 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)]">
+            <MSym name="close" size={18} />
+          </button>
+        </div>
+        <p className="text-xs text-[var(--text-3)] mb-3">AI 漏抽或文件未涵蓋的契約重點可在此補登;送出後為「待核定」、來源標記人工新增,期限型核定後自動排入期限追蹤。</p>
         <div className="space-y-2">
           <Input value={manualDraft.title} onChange={(e) => setManualDraft((d) => ({ ...d, title: e.target.value }))}
             placeholder="標題(例:開工前 14 日內提送施工計畫)" />
           <Textarea rows={2} value={manualDraft.description}
             onChange={(e) => setManualDraft((d) => ({ ...d, description: e.target.value }))}
-            placeholder="補充描述、契約出處(可留白)" />
+            placeholder="補充描述(可留白)" />
           <div className="flex flex-wrap gap-2">
-            <Select value={manualDraft.requirement_type}
+            <Select value={manualDraft.requirement_type} className="flex-1 min-w-[8rem]"
               onChange={(e) => setManualDraft((d) => ({ ...d, requirement_type: e.target.value }))}>
               {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
-            <Select value={manualDraft.lifecycle_phase}
+            <Select value={manualDraft.lifecycle_phase} className="flex-1 min-w-[8rem]"
               onChange={(e) => setManualDraft((d) => ({ ...d, lifecycle_phase: e.target.value }))}>
               {['開工前', '施工中', '完工', '保固'].map((p) => <option key={p} value={p}>{p}</option>)}
             </Select>
-            <Select value={manualDraft.responsible_party_type}
+            <Select value={manualDraft.responsible_party_type} className="flex-1 min-w-[8rem]"
               onChange={(e) => setManualDraft((d) => ({ ...d, responsible_party_type: e.target.value }))}>
               <option value="">負責方未定</option>
               {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={manualDraft.dueMode}
+            <Select value={manualDraft.dueMode} className="w-auto"
               onChange={(e) => setManualDraft((d) => ({ ...d, dueMode: e.target.value }))}>
               <option value="relative">相對基準日</option>
               <option value="fixed">指定日期</option>
@@ -705,11 +902,11 @@ export default function Requirements() {
               <option value="none">無明確時點</option>
             </Select>
             {manualDraft.dueMode === 'relative' && (<>
-              <Select value={manualDraft.trigger_event}
+              <Select value={manualDraft.trigger_event} className="w-auto"
                 onChange={(e) => setManualDraft((d) => ({ ...d, trigger_event: e.target.value }))}>
                 {MANUAL_TRIGGERS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </Select>
-              <Select value={manualDraft.offset_dir}
+              <Select value={manualDraft.offset_dir} className="w-auto"
                 onChange={(e) => setManualDraft((d) => ({ ...d, offset_dir: e.target.value }))}>
                 <option value="after">後</option>
                 <option value="before">前</option>
@@ -729,63 +926,70 @@ export default function Requirements() {
               <span className="text-xs text-[var(--text-3)]">號</span>
             </>)}
           </div>
+          <Input value={manualDraft.acceptance_criteria}
+            onChange={(e) => setManualDraft((d) => ({ ...d, acceptance_criteria: e.target.value }))}
+            placeholder="允收標準(可留白)" />
+          <div className="flex flex-wrap gap-2">
+            <Input value={manualDraft.source_clause} className="flex-1 min-w-[8rem]"
+              onChange={(e) => setManualDraft((d) => ({ ...d, source_clause: e.target.value }))}
+              placeholder="出處條款(例 5.3,可留白)" />
+            <Input value={manualDraft.source_page} className="flex-1 min-w-[8rem]"
+              onChange={(e) => setManualDraft((d) => ({ ...d, source_page: e.target.value }))}
+              placeholder="出處頁碼(例 第 12 頁,可留白)" />
+          </div>
           <ErrorBanner msg={manualMsg} />
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-1">
             <Button size="sm" disabled={manualBusy} onClick={submitManual}>新增(待核定)</Button>
             <Button variant="ghost" size="sm" onClick={() => { setManualOpen(false); setManualMsg('') }}>取消</Button>
           </div>
         </div>
-      )}
-    </Card>
+      </div>
+    </div>
   )
 
-  // GTM 第②格:可寄給事務所/監造的「對照報告」入口(抽到哪些、出處對不對、
-  // 漏了什麼)。有分析紀錄或契約重點才顯示——demo 專案沒有真實 run 可報告。
-  const reportAction = isPersistedProject && (runs.length > 0 || rows.length > 0) ? (
-    <Link to="/requirements/report" className={buttonClass('outline', 'sm')}>
-      <MSym name="fact_check" size={14} /> 輸出對照報告
-    </Link>
-  ) : null
-
+  // ── 版面分支 ────────────────────────────────────────────────────────────
   if (!isPersistedProject) {
-    // demo:期限追蹤吃 seed 義務照常展示(銷售簡報動線);AI 整理需真實專案
+    // demo:摘要條吃 seed 義務照常展示(銷售簡報動線);AI 整理需真實專案
     return (
-      <div className="space-y-5">
-        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
-        {deadlineSection}
-        <Card title="AI 整理結果"><Empty>需真實專案。於「專案文件」上傳契約或規範後,AI 整理結果會顯示在這裡。</Empty></Card>
+      <div className="space-y-6">
+        <PageHeader title="契約重點" tagline="一條一條,查得到出處" subtitle={SUBTITLE} />
+        {deadlineBar}
+        <Card title="契約重點清單"><Empty>需真實專案。於「專案文件」上傳契約或規範後,AI 整理結果會顯示在這裡。</Empty></Card>
       </div>
     )
   }
 
   if (!loaded) {
     return (
-      <div className="space-y-5">
-        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
-        {/* 載入態走骨架屏,不再借用 Empty(Empty 是空狀態元件;文案由 sr-only 保留給報讀器) */}
-        <Card><SkeletonList label="正在載入契約重點…" /></Card>
+      <div className="space-y-6">
+        <PageHeader title="契約重點" tagline="一條一條,查得到出處" subtitle={SUBTITLE} />
+        {deadlineBar}
+        <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_392px]">
+          <Card><SkeletonList rows={8} label="正在載入契約重點…" /></Card>
+          <Card className="hidden lg:block"><SkeletonList rows={4} label="" /></Card>
+        </div>
       </div>
     )
   }
 
   if (loadError) {
     return (
-      <div className="space-y-5">
-        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" />
+      <div className="space-y-6">
+        <PageHeader title="契約重點" tagline="一條一條,查得到出處" subtitle={SUBTITLE} />
         <ErrorBanner msg={loadError} />
         <Button className="w-full sm:w-auto" onClick={reload}><MSym name="refresh" size={14} /> 重新載入</Button>
       </div>
     )
   }
 
-  // 0 需求時不先堆一排 filter 與空審查區(P2-07)。W8-3A:分「AI 還沒跑完」與
-  // 「跑完但沒找到」兩種——後者不是缺前置條件,給上傳 CTA 只會把人繞回原點。
-  if (loaded && !rows.length) {
+  // 0 筆:分「AI 還沒跑完/失敗」與「跑完但沒找到」——後者不是缺前置條件,
+  // 給上傳 CTA 只會把人繞回原點(W8-3A)。
+  if (!rows.length) {
     return (
-      <div className="space-y-5">
-        {/* 0 筆也給對照報告入口:「AI 讀完了但沒抽到」正是最需要書面揭露涵蓋範圍的時刻 */}
-        <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" action={reportAction} />
-        <Card title="契約重點">
+      <div className="space-y-6">
+        <PageHeader title="契約重點" tagline="一條一條,查得到出處" subtitle={SUBTITLE} action={headerAction} />
+        {deadlineBar}
+        <Card title="契約重點清單">
           {intro.mode === 'done-empty'
             ? <Empty>{intro.emptyText}</Empty>
             : (
@@ -798,262 +1002,101 @@ export default function Requirements() {
             <p className="mt-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-3 py-2">{intro.coverageWarning}</p>
           )}
         </Card>
-        {/* legacy/手動期限可能先於 AI 整理存在:有就照常追蹤;沒有也要給
-            基準日/契約總價編輯入口(全站唯一入口在本頁,不可無路可填) */}
-        {obligations.length > 0 ? deadlineSection : anchorsCard}
-        {manualAddCard}
+        {manualModal}
       </div>
     )
   }
 
   return (
-    <div className="space-y-5">
-      <PageHeader title="契約重點" tagline="先看重點，需要時再追溯" subtitle="已生效的契約重點與 AI 整理結果都保留來源，未核定建議不是待辦。" action={reportAction} />
+    <div className="space-y-6">
+      <PageHeader title="契約重點" tagline="一條一條,查得到出處" subtitle={SUBTITLE} action={headerAction} />
 
-      {/* 期限追蹤在最上:核定是一次性的,追蹤到期才是天天要看的 */}
-      {deadlineSection}
+      {deadlineBar}
 
-      <Card title="已生效的契約重點" bodyClass="p-0" action={highlights.approved.length > HIGHLIGHT_LIMIT && (
-        <Button variant="ghost" size="sm" onClick={openApprovedTrace}>查看全部已生效內容</Button>
-      )}>
-        {/* W8-3A(D-014):與首頁初始化清單第 3 步同一語意——AI 整理完成即算完成,
-            這裡的待審數量不是初始化門檻,不必為了開啟正式模式把它清空。
-            說明收進第一張卡:根層裸文字會吃掉 space-y-5 整格間距。 */}
-        <p className="px-4 sm:px-5 py-3 text-xs text-[var(--text-3)] border-b border-[var(--border)]">{intro.note}</p>
-        {/* W10 涵蓋率警示:分批抽取仍未讀完整份文件時,漏了什麼要在這裡講明 */}
-        {intro.coverageWarning && (
-          <p className="px-4 sm:px-5 py-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border)]">{intro.coverageWarning}</p>
-        )}
-        <HighlightRows groups={shownApproved} kind="approved" canReview={canReview}
-          verificationByReq={verificationByReq} onSelect={selectHighlight} onQuickApprove={quickApproveDeadline} />
-      </Card>
-
-      <Card title="值得留意的整理結果" bodyClass="p-0">
-        <HighlightRows groups={highlights.suggestions.slice(0, HIGHLIGHT_LIMIT)} kind="suggestion"
-          canReview={canReview} verificationByReq={verificationByReq}
-          onSelect={selectHighlight} onQuickApprove={quickApproveDeadline} />
-        <div className="border-t border-[var(--border)] px-4 sm:px-5 py-3 text-xs text-[var(--text-3)]">
-          其餘擷取結果已保留在追溯區，不必逐筆清空。
-        </div>
-      </Card>
-
-      {manualAddCard}
-
-      <Card title="查看全部擷取結果" bodyClass="p-0" action={(
-        <Button variant="ghost" size="sm" onClick={toggleTrace}>
-          {showTrace ? '收合追溯資料' : '展開追溯資料'}
-        </Button>
-      )}>
-        {!showTrace ? (
-          <p className="px-4 sm:px-5 py-4 text-sm text-[var(--text-2)]">這裡保留原始 AI 擷取、歷史 run 與專業審查資料，不是必須清空的待辦清單。</p>
-        ) : (<>
-          {/* 六個篩選吃 Select/FIELD_BASE 預設(字級 text-sm、手機 44px 內建),不逐處覆寫;
-              低基數維度不改 FilterChip——四維單選展開成 chips 會爆量,屬多維表單式篩選例外 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-4 border-b border-[var(--border)] bg-[var(--surface-2)]">
-            <Select value={filters.scope} onChange={(e) => setFilters((f) => ({ ...f, scope: e.target.value, ingestion_run_id: '' }))}>
-              <option value="current">目前範圍（最新成功擷取＋人工）</option>
-              <option value="all">全部（含歷史 run）</option>
-            </Select>
-            <Select value={filters.status || ''} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
-              <option value="">全部狀態</option>
-              {Object.entries(REQUIREMENT_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
-            <Select value={filters.requirement_type || ''} onChange={(e) => setFilters((f) => ({ ...f, requirement_type: e.target.value }))}>
-              <option value="">全部類型</option>
-              {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
-            <Select value={filters.responsible_party_type || ''} onChange={(e) => setFilters((f) => ({ ...f, responsible_party_type: e.target.value }))}>
-              <option value="">全部負責方</option>
-              {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
-            <Select value={filters.verification || ''} onChange={(e) => setFilters((f) => ({ ...f, verification: e.target.value }))}>
-              <option value="">引註不限</option>
-              <option value="verified">來源已核對</option>
-              <option value="unverified">來源待核對</option>
-              <option value="none">無引註</option>
-            </Select>
-            <Select value={filters.ingestion_run_id || ''} onChange={(e) => setFilters((f) => ({ ...f, ingestion_run_id: e.target.value, ...(e.target.value ? { scope: 'all' } : {}) }))}>
-              <option value="">全部擷取 run</option>
-              {runs.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {fmtTime(r.started_at)}·{versionsById.get(r.document_version_id)?.documents?.title || '文件'}·{r.status}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {visible.length === 0 ? (
-            <div className="p-5"><Empty>目前篩選範圍內沒有擷取結果。</Empty></div>
-          ) : (
-            <div className="divide-y divide-[var(--border)] max-h-[420px] overflow-y-auto">
-              {visible.map((r) => (
-                <button key={r.id} onClick={() => select(r.id)}
-                  /* 選取態改 blue-tint(對齊 CHIP_ON/FilterChip active):hover 與選中共用
-                     同一個 surface-2 會讓「目前選了哪筆」看不出來 */
-                  className={`w-full text-left px-4 py-2.5 hover:bg-[var(--surface-2)] ${r.id === selectedId ? 'bg-[var(--blue-tint)]' : ''}`}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge color={STATUS_BADGE[r.status] || 'slate'}>{REQUIREMENT_STATUS_LABELS[r.status] || r.status}</Badge>
-                    <span className="text-xs text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[r.requirement_type] || r.requirement_type}</span>
-                    {r.responsible_party_type && <span className="text-xs text-[var(--text-3)]">{RESPONSIBLE_LABELS[r.responsible_party_type]}</span>}
-                    <span className="text-xs text-[var(--text-3)]">{ORIGIN_LABELS[r.origin] || r.origin}</span>
-                    {verificationByReq.get(r.id) === 'verified' && <Badge color="green">來源已核對</Badge>}
-                    {verificationByReq.get(r.id) === 'unverified' && <Badge color="amber">來源待核對</Badge>}
-                  </div>
-                  {/* 追溯清單靠標題辨識是哪一條,375px 用 truncate 會把整句切掉;改成最多兩行 */}
-                  <div className="text-sm font-medium text-[var(--text)] mt-0.5 line-clamp-2">{r.title}</div>
+      <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_392px]">
+        {/* ── 左欄:契約重點清單 ── */}
+        <Card title="契約重點清單" bodyClass="p-0"
+          action={<span className="num text-[11px] text-[var(--text-3)]">{listMeta}</span>}>
+          {/* 揭露條(涵蓋率/審查規則):資料與畫面要說同一件事,不因改版消失 */}
+          {intro.coverageWarning && (
+            <p className="px-[18px] py-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border-2)]">{intro.coverageWarning}</p>
+          )}
+          {intro.note && (
+            <p className="px-[18px] py-2 text-[11.5px] text-[var(--text-3)] border-b border-[var(--border-2)]">{intro.note}</p>
+          )}
+          {/* 誠實揭露載入上限:計數與搜尋只涵蓋已載入範圍,不得偽裝成全部 */}
+          {rows.length >= LIST_LIMIT && (
+            <p className="px-[18px] py-2 text-[11.5px] text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border-2)]">清單僅載入最近 {LIST_LIMIT} 條擷取,計數與搜尋以此範圍為準;更早的內容請以「輸出對照報告」查閱。</p>
+          )}
+          {/* 檢索區:搜尋+狀態快篩+類型/階段(AND、即時生效) */}
+          <div className="px-[18px] py-3.5 border-b border-[var(--border-2)] flex flex-col gap-3">
+            <label className="flex items-center gap-2.5 h-10 px-3.5 border border-[var(--border)] rounded-full bg-[var(--surface)] focus-within:border-[var(--primary)] transition-colors">
+              <MSym name="search" size={20} className="text-[var(--text-3)] shrink-0" />
+              <input ref={searchRef} type="search" value={filters.q}
+                onChange={(e) => { setFilters((f) => ({ ...f, q: e.target.value })); setShownLimit(PAGE_SIZE) }}
+                placeholder="搜尋條文、關鍵字、條款編號或頁碼…" aria-label="搜尋契約重點"
+                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-[var(--text)] placeholder:text-[var(--text-3)]" />
+            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {[['all', '全部', counts.all], ['pending', '待核定', counts.pending],
+                ['approved', '已生效', counts.approved], ['rejected', '已駁回', counts.rejected]].map(([k, label, n]) => (
+                <button key={k} type="button" aria-pressed={filters.status === k}
+                  onClick={() => { setFilters((f) => ({ ...f, status: k })); setShownLimit(PAGE_SIZE) }}
+                  className={chipCls(filters.status === k)}>
+                  {label}<span className="num opacity-70">{n}</span>
                 </button>
               ))}
+              <span className="w-px h-5 bg-[var(--border-2)] mx-0.5 max-md:hidden" aria-hidden="true" />
+              <Select value={filters.type} aria-label="類型"
+                onChange={(e) => { setFilters((f) => ({ ...f, type: e.target.value })); setShownLimit(PAGE_SIZE) }}
+                className="!w-auto max-md:!w-full !h-[30px] !py-0 !text-xs !rounded-lg">
+                <option value="">全部類型</option>
+                {typeOptions.map((t) => <option key={t} value={t}>{REQUIREMENT_TYPE_LABELS[t] || t}</option>)}
+              </Select>
+              <Select value={filters.phase} aria-label="階段"
+                onChange={(e) => { setFilters((f) => ({ ...f, phase: e.target.value })); setShownLimit(PAGE_SIZE) }}
+                className="!w-auto max-md:!w-full !h-[30px] !py-0 !text-xs !rounded-lg">
+                <option value="">全部階段</option>
+                {phaseOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </Select>
             </div>
-          )}
-        </>)}
-      </Card>
-
-      {selected && (
-        <Card title="契約內容與來源" action={canReview && (
-          <div className="flex flex-wrap justify-start sm:justify-end gap-2">
-            {EDITABLE_STATUSES.includes(selected.status) && !editing && (
-              <Button variant="ghost" size="sm" onClick={() => setEditing({ ...selected })}><MSym name="edit" size={14} /> 修正內容</Button>
-            )}
-            {EDITABLE_STATUSES.includes(selected.status) && (<>
-              <Button variant="success" size="sm" disabled={!!busy} onClick={() => review('approve', '核定生效')}><MSym name="check_circle" size={14} /> 核定生效</Button>
-              <Button variant="danger" size="sm" disabled={!!busy} onClick={() => review('reject', '駁回')}><MSym name="cancel" size={14} /> 駁回</Button>
-            </>)}
-            {selected.status === 'approved' && (
-              <Button variant="ghost" size="sm" disabled={!!busy} onClick={() => review('supersede', '廢止取代')}><MSym name="block" size={14} /> 廢止取代</Button>
-            )}
-          </div>
-        )}>
-          {/* 寫入/審查失敗走全站 ErrorBanner,不用裸紅字 */}
-          <ErrorBanner msg={msg} className="mb-3" />
-
-          {editing ? (
-            <div className="space-y-2 mb-4">
-              <Input value={editing.title} onChange={(e) => setEditing((d) => ({ ...d, title: e.target.value }))} placeholder="需求標題" />
-              <Textarea value={editing.description || ''} onChange={(e) => setEditing((d) => ({ ...d, description: e.target.value }))} placeholder="需求描述" rows={2} />
-              <div className="flex flex-wrap gap-2">
-                <Select value={editing.requirement_type} onChange={(e) => setEditing((d) => ({ ...d, requirement_type: e.target.value }))}>
-                  {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </Select>
-                <Select value={editing.responsible_party_type || ''} onChange={(e) => setEditing((d) => ({ ...d, responsible_party_type: e.target.value }))}>
-                  <option value="">負責方未定</option>
-                  {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </Select>
-                <Input value={editing.lifecycle_phase || ''} onChange={(e) => setEditing((d) => ({ ...d, lifecycle_phase: e.target.value }))} placeholder="階段(開工前/施工中/完工/保固)" className="w-full sm:w-56 min-w-0" />
-              </div>
-              <Input value={editing.acceptance_criteria || ''} onChange={(e) => setEditing((d) => ({ ...d, acceptance_criteria: e.target.value }))} placeholder="允收標準" />
-              <Input value={editing.evidence_requirement || ''} onChange={(e) => setEditing((d) => ({ ...d, evidence_requirement: e.target.value }))} placeholder="應留存佐證" />
-              <div className="flex gap-2">
-                <Button size="sm" disabled={busy === 'edit'} onClick={saveEdit}>儲存修正</Button>
-                <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>取消</Button>
-              </div>
-            </div>
-          ) : (
-            <div className="mb-4">
-              <div className="font-medium text-[var(--text)]">{selected.title}</div>
-              {selected.description && <p className="text-sm text-[var(--text-2)] mt-1">{selected.description}</p>}
-              <div className="text-xs text-[var(--text-3)] mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                <span>類型:{REQUIREMENT_TYPE_LABELS[selected.requirement_type] || selected.requirement_type}</span>
-                <span>負責方:{RESPONSIBLE_LABELS[selected.responsible_party_type] || '未定'}</span>
-                {selected.lifecycle_phase && <span>階段:{selected.lifecycle_phase}</span>}
-                {formatRequirementRule(selected) && <span>時點:{formatRequirementRule(selected)}</span>}
-                {selected.acceptance_criteria && <span>允收:{selected.acceptance_criteria}</span>}
-                {selected.evidence_requirement && <span>佐證:{selected.evidence_requirement}</span>}
-                <span>來源:{ORIGIN_LABELS[selected.origin] || selected.origin}</span>
-              </div>
-              {selected.reviewed_at && (
-                <p className="text-xs text-[var(--text-3)] mt-2">審查:{REQUIREMENT_STATUS_LABELS[selected.status]}·{fmtTime(selected.reviewed_at)}(伺服器記錄)</p>
-              )}
-            </div>
-          )}
-
-          {selected.origin === 'ai' && selected.ingestion_run_id && (() => {
-            const run = runsById.get(selected.ingestion_run_id)
-            const version = run ? versionsById.get(run.document_version_id) : null
-            return (
-              // 溯源說明改吃共用 Surface 殼(自寫 surface-2 圓角底退場)
-              <Surface className="text-xs text-[var(--text-3)] px-3 py-2 mb-4">
-                AI 擷取來源:{version?.documents?.title || '文件'}（{version?.version_label || '?'}）
-                ·模型 {run?.model_name || '?'}·prompt {run?.prompt_version || '?'}
-                ·完成 {fmtTime(run?.completed_at) || run?.status || '?'}
-                。模型出處僅供追溯,不代表契約效力;效力以人工核定為準。
-              </Surface>
-            )
-          })()}
-
-          <div className="mb-4">
-            <div className="text-sm font-medium text-[var(--text)] mb-1.5 flex items-center gap-1"><MSym name="description" size={14} /> 出處引註</div>
-            {selectedSources.length === 0 ? (
-              <p className="text-xs text-[var(--text-3)]">無引註。</p>
-            ) : selectedSources.map((s) => {
-              const version = s.document_version_id ? versionsById.get(s.document_version_id) : null
-              return (
-                // 引註卡殼走中性 Surface,核對狀態改掛 Badge——不再把 *-text token 疊透明度當邊框色
-                <Surface key={s.id} className="px-3 py-2 mb-2 text-xs">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[var(--text-2)]">
-                    <Badge color={s.source_verified ? 'green' : 'amber'}>{sourceVerificationLabel(s)}</Badge>
-                    {version && <span>{version.documents?.title}（{version.version_label}）</span>}
-                    <span>{sourcePageLabel(s)}</span>
-                    {s.section && <span>章節 {s.section}</span>}
-                    {s.clause && <span>條款 {s.clause}</span>}
-                  </div>
-                  {s.source_text && <p className="mt-1 text-[var(--text)]">「{s.source_text}」</p>}
-                </Surface>
-              )
-            })}
           </div>
 
-          <div className="mb-4">
-            <div className="text-sm font-medium text-[var(--text)] mb-1.5">BOQ 工項對應</div>
-            {links.length === 0 && <p className="text-xs text-[var(--text-3)]">尚無工項對應。</p>}
-            {links.map((l) => {
-              const item = wiById.get(l.work_item_id)
-              return (
-                <div key={l.work_item_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1.5">
-                  <span className="font-medium text-[var(--text)] shrink-0">{item?.item_no || '—'}</span>
-                  <span className="flex-1 min-w-[8rem] truncate text-[var(--text-2)]">{item?.description || l.work_item_id}</span>
-                  {/* 信賴度上色(handoff 門檻 ≥0.89 ok／≤0.72 warn):覆核的人要能一眼挑出「AI 沒把握、非人工判斷不可」的配對,
-                      中間帶維持弱色不搶眼。數字照舊,顏色只是加速掃描,不取代旁邊的核可/駁回決定。 */}
-                  {l.confidence != null && (
-                    <span className={l.confidence >= 0.89 ? 'text-[var(--green-text)]' : l.confidence <= 0.72 ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}>AI {Math.round(l.confidence * 100)}%</span>
-                  )}
-                  <Badge color={l.review_status === 'approved' ? 'green' : l.review_status === 'rejected' ? 'red' : 'blue'}>
-                    {WORK_ITEM_LINK_STATE_LABELS[l.review_status] || l.review_status}
-                  </Badge>
-                  {/* 綠/紅底線文字鈕不在按鈕三級語言內:核可/駁回改共用 Button(success/danger),
-                      觸控高度由元件內建的 max-md:min-h-11 保證 */}
-                  {canReview && l.review_status === 'suggested' && (<>
-                    <Button size="sm" variant="success" onClick={() => decideLink(l.work_item_id, 'approved')}>核可</Button>
-                    <Button size="sm" variant="danger" onClick={() => decideLink(l.work_item_id, 'rejected')}>駁回</Button>
-                  </>)}
-                </div>
-              )
-            })}
-            {canReview && (
-              // 手機直排讓輸入與新增按鈕保有可讀寬度與觸控目標,桌機才並排
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-                <Input value={manualItemNo} onChange={(e) => setManualItemNo(e.target.value)} placeholder="輸入工項編號(如 壹.一.6.3.28)手動連結" className="w-full sm:w-72 min-w-0" />
-                <Button variant="ghost" size="sm" className="w-full sm:w-auto" disabled={!manualItemNo.trim()} onClick={addManualLink}>新增連結</Button>
-              </div>
-            )}
-          </div>
+          {listRows}
 
-          <div>
-            <div className="text-sm font-medium text-[var(--text)] mb-1.5 flex items-center gap-1"><MSym name="link" size={14} /> 已連結流程項目</div>
-            {selected.status !== 'approved' && artifactLinks.length === 0 ? (
-              <p className="text-xs text-[var(--text-3)]">未核定內容不會建立或連結任何活躍流程。</p>
-            ) : artifactLinks.length === 0 ? (
-              <p className="text-xs text-[var(--text-3)]">尚未連結流程項目；本頁不會自動建立送審、查驗或試驗流程。</p>
-            ) : artifactLinks.map((l) => (
-              <div key={l.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs border border-[var(--border)] rounded-lg px-3 py-1.5 mb-1.5">
-                <Badge color="slate">{ARTIFACT_TYPE_LABELS[l.artifact_type] || l.artifact_type}</Badge>
-                <span className="flex-1 min-w-[8rem] truncate text-[var(--text-3)]">{l.artifact_id}</span>
-                <span className="text-[var(--text-3)] shrink-0">{GENERATION_TYPE_LABELS[l.generation_type] || l.generation_type}</span>
-                <span className="text-[var(--text-3)] shrink-0">{fmtTime(l.created_at)}</span>
-              </div>
-            ))}
+          <div className="px-[18px] py-3 flex items-center justify-between gap-4">
+            <span className="num text-[11.5px] text-[var(--text-3)]">顯示 {shownRows.length} / {visible.length} 條</span>
+            {visible.length > shownLimit && (
+              <button type="button" onClick={() => setShownLimit((n) => n + PAGE_SIZE)}
+                className="text-[11.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 px-1">載入更多</button>
+            )}
           </div>
         </Card>
+
+        {/* ── 右欄:條文詳情(桌機 sticky;≥1024 常駐) ── */}
+        <Card className="hidden lg:block lg:sticky lg:top-6" bodyClass="p-0" aria-live="polite">
+          {detailBody || <Empty>點左側清單查看條文詳情。</Empty>}
+        </Card>
+      </div>
+
+      {/* <lg:詳情抽屜(768-1023 右滑入)/全螢幕(<768,左上返回) */}
+      {detailOpen && selected && (
+        <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="條文詳情">
+          <div className="absolute inset-0 bg-[rgba(32,33,36,.4)]" onClick={() => setDetailOpen(false)} />
+          <div ref={drawerRef} tabIndex={-1}
+            className="absolute right-0 top-0 h-full w-[min(420px,92vw)] max-md:w-full bg-[var(--surface)] overflow-y-auto [box-shadow:-2px_0_16px_rgba(32,33,36,.16)] outline-none" aria-live="polite">
+            <div className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border-2)] px-3 py-2 flex items-center gap-2">
+              <button type="button" onClick={() => setDetailOpen(false)}
+                className="inline-flex items-center gap-1 text-sm text-[var(--blue-text)] hover:underline min-h-11 px-1">
+                <MSym name="arrow_back" size={18} /> 返回清單
+              </button>
+            </div>
+            {detailBody}
+          </div>
+        </div>
       )}
 
+      {manualModal}
     </div>
   )
 }

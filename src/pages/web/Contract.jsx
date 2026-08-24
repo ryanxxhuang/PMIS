@@ -3,7 +3,7 @@
 //   1.「契約文件」= 上傳入口(拖放區)+ 上傳過程的完整回饋(總進度、逐檔、成功、失敗、重試)
 //   2.「專案文件」= 已入庫文件清單(文件/分類/版本/AI 處理/上傳)
 // 上傳後 AI 自動分類、自動歸檔分流:標單 XML → 標單工項、契約/規範 → 契約重點。
-// 基準日、契約總價與期限追蹤已搬到「審查與協作 › 契約重點」——本頁只管文件,
+// 基準日、契約總價與期限追蹤在獨立的「期限追蹤」頁(/deadlines)——本頁只管文件,
 // 只有第一次建檔與文件更新時才會用到。
 // 進度來自持久化的 document_processing_runs(離開頁面不遺失);逐檔百分比由
 // STAGE_ORDER 映射(真實階段,不是假進度)。
@@ -33,8 +33,9 @@ import {
 import {
   uploadFilesToPackage, summarizePackageProgress, packageStatusFromRuns,
   formatElapsed, staleProcessingPatch, takeSelectedFiles, STAGE_ORDER, STAGE_LABELS,
-  runFileLanded, isValidStorageKey, isInlineViewableMime,
+  runFileLanded, isValidStorageKey,
 } from '../../lib/packageUpload.js'
+import { openDocumentVersionFile, downloadDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { runRequirementExtraction, extractionSuccessMessage } from '../../lib/extractRequirements.js'
 
 // 文件清單表格欄樣式:表頭字型層吃 ui.jsx 的 THEAD_CLS(全站單一真相)
@@ -475,57 +476,11 @@ export default function Contract() {
     }
   }, [reloadRuns])
 
-  // ── 看上傳的檔案:私有 bucket,點了才取(不預簽避免過期)──────────────────
-  // 下載必須還原 original_filename(storage key 已退化成 ASCII,直接存會是底線
-  // 醜檔名)。不靠簽名 URL 的 download 參數:storage server 對非 ASCII 檔名會
-  // 回百分比編碼的 Content-Disposition(e2e 實測存成 %E5..txt),改走 blob +
-  // <a download> 讓檔名由瀏覽器端決定,中文檔名穩定還原
-  const downloadVersionFile = useCallback(async (version) => {
-    if (!isValidStorageKey(version?.storage_path)) return
-    // 讀取留痕先行且 fail-closed:合規要求「資料存取」可歸責(工程會一覽表),
-    // 留不了痕就不給檔;RPC 的權限與 storage policy 同一套,不會多擋人
-    const { error: auditError } = await supabase.rpc('log_document_access',
-      { p_document_version: version.id, p_action: 'download' })
-    if (auditError) { setMsg(friendlyError(auditError, '下載檔案失敗')); return }
-    const { data: blob, error } = await supabase.storage.from('contract-documents')
-      .download(version.storage_path)
-    if (error || !blob) { setMsg(friendlyError(error, '下載檔案失敗')); return }
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = version.original_filename || version.storage_path.split('/').pop() || '文件'
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
-  }, [])
-
-  const openVersionFile = useCallback(async (version) => {
-    if (!isValidStorageKey(version?.storage_path)) return
-    // 瀏覽器不會渲染的格式(docx/xlsx…)開分頁只會存成醜檔名,直接改走下載
-    if (!isInlineViewableMime(version.mime_type)) return downloadVersionFile(version)
-    // Safari 會擋 await 之後才開的分頁:先同步開空白分頁,拿到簽名 URL 再導過去。
-    // 彈窗被攔截(企業/機關電腦常見預設)就退回下載——附件下載不經彈窗,永遠可用
-    const win = window.open('', '_blank')
-    if (!win) return downloadVersionFile(version)
-    win.opener = null
-    // 讀取留痕先行且 fail-closed(同 downloadVersionFile 的理由)
-    const { error: auditError } = await supabase.rpc('log_document_access',
-      { p_document_version: version.id, p_action: 'preview' })
-    if (auditError) {
-      win.close()
-      setMsg(friendlyError(auditError, '開啟檔案失敗'))
-      return
-    }
-    const { data, error } = await supabase.storage.from('contract-documents')
-      .createSignedUrl(version.storage_path, 3600)
-    if (error || !data?.signedUrl) {
-      win.close()
-      setMsg(friendlyError(error, '開啟檔案失敗'))
-      return
-    }
-    win.location = data.signedUrl
-  }, [downloadVersionFile])
+  // ── 看上傳的檔案:共用層負責留痕/彈窗退回/檔名還原(documentFileAccess)──
+  const downloadVersionFile = useCallback(
+    (version) => downloadDocumentVersionFile(version, { onError: setMsg }), [])
+  const openVersionFile = useCallback(
+    (version) => openDocumentVersionFile(version, { onError: setMsg }), [])
 
   // ── 上傳回饋面板(mockup 狀態 B/C/D)────────────────────────────────────
   // 面板列 = 本批上傳的 run + 任何仍在處理中的 run(回到頁面也看得到進行中)

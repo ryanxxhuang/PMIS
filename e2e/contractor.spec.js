@@ -78,7 +78,8 @@ test.describe('施工廠商', () => {
 
   test('期限追蹤:標為已提送可掛送審佐證(W-01)', async ({ page }) => {
     await loginAs(page, 'contractor')
-    await gotoHash(page, '/requirements')
+    // 契約重點改版後,逐項期限管理(標為已提送/佐證)在獨立的期限追蹤頁
+    await gotoHash(page, '/deadlines')
     // demo 預掛佐證:品質計畫義務 → SUB-001(核准)
     await expect(page.getByText(/佐證:SUB-001/)).toBeVisible()
     // 對「提送施工月報」(待辦)掛 SUB-003 佐證並標為已提送
