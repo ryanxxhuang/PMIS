@@ -21,6 +21,8 @@ export default function PageTabs() {
   const groups = visibleNavGroups(org, can?.override, isPlatformAdmin)
   const item = groups.flatMap((g) => g.items).find((i) => i.tabs?.some((t) => t.to === pathname))
   if (!item || item.tabs.length < 2) return null
+  // pageTabs:false 的頁面不渲染分頁條(入口一律走側欄子項)
+  if (item.tabs.find((t) => t.to === pathname)?.pageTabs === false) return null
   return (
     // print:hidden:監造報表等頁面直接 window.print,正式文件頁首不得帶導覽藥丸
     <nav aria-label={`${item.label}分頁`} className="flex gap-2 overflow-x-auto mt-3.5 pb-0.5 print:hidden">

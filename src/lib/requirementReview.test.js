@@ -7,6 +7,7 @@ import {
   formatRequirementRule,
   inDefaultReviewScope,
   latestCompletedRunIds,
+  requirementFrequencyKey,
   sourcePageLabel,
   sourceVerificationSummary,
 } from './requirementReview.js'
@@ -180,5 +181,21 @@ describe('link label mappings', () => {
       ['checklist', 'deadline', 'evidence', 'inspection_point', 'submittal', 'test'],
     )
     expect(GENERATION_TYPE_LABELS.ai_draft).toBe('AI 草稿')
+  })
+})
+
+describe('requirementFrequencyKey(檢索頁頻率維度)', () => {
+  it('循環義務照 frequency_type 分桶,值域擴充自動跟上,未知值原樣顯示', () => {
+    expect(requirementFrequencyKey({ frequency_type: 'monthly' })).toBe('每月')
+    expect(requirementFrequencyKey({ frequency_type: 'daily' })).toBe('每日')
+    expect(requirementFrequencyKey({ frequency_type: 'weekly' })).toBe('每週')
+    expect(requirementFrequencyKey({ frequency_type: 'yearly' })).toBe('每年')
+    expect(requirementFrequencyKey({ frequency_type: 'biweekly' })).toBe('biweekly')
+  })
+  it('非循環:有觸發時點=一次性,否則無明確時點', () => {
+    expect(requirementFrequencyKey({ trigger_type: 'commencement' })).toBe('一次性')
+    expect(requirementFrequencyKey({ trigger_type: 'fixed' })).toBe('一次性')
+    expect(requirementFrequencyKey({})).toBe('無明確時點')
+    expect(requirementFrequencyKey(null)).toBe('無明確時點')
   })
 })

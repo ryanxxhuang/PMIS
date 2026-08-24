@@ -63,6 +63,19 @@ export function inDefaultReviewScope(requirement, currentRunIds) {
     && currentRunIds.has(requirement.ingestion_run_id)
 }
 
+// 頻率維度(檢索頁篩選):循環義務照 frequency_type 分桶,非循環分「一次性」
+// (有觸發時點)與「無明確時點」。標籤表涵蓋抽取引擎未來的值域(每日/每週/
+// 每季/每年);引擎目前只會產 monthly,值域擴充時這裡自動跟上,未知值原樣顯示。
+export const FREQUENCY_LABELS = Object.freeze({
+  daily: '每日', weekly: '每週', monthly: '每月', quarterly: '每季', yearly: '每年',
+})
+export function requirementFrequencyKey(requirement) {
+  if (requirement?.frequency_type) {
+    return FREQUENCY_LABELS[requirement.frequency_type] || requirement.frequency_type
+  }
+  return requirement?.trigger_type ? '一次性' : '無明確時點'
+}
+
 // Aggregate a requirement's sources into one verification state for filtering:
 // any verified source -> 'verified'; sources but none verified -> 'unverified'.
 export function sourceVerificationSummary(sources) {
