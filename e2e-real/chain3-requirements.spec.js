@@ -216,21 +216,21 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
   await gotoHash(page, '/requirements')
   await expect(page.getByText(requirementTitle).first()).toBeVisible()
   await expect(page.getByText('契約核定由監造／機關辦理').first()).toBeVisible()
-  await expect(page.getByRole('button', { name: /核定/ })).toHaveCount(0)
+  // 「待核定/已駁回」狀態快篩 chip 也是 button,負向斷言鎖定核定「動作」本身
+  await expect(page.getByRole('button', { name: '核定生效', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '駁回', exact: true })).toHaveCount(0)
   await logoutReal(page)
 
-  // ── 監造:用契約重點的期限捷徑「核定並排入期限追蹤」(仍走 review_requirement
-  //    RPC,伺服器蓋審查人;核定當下 D-012 單向物化義務)。deterministic fixture
-  //    是 manual origin、live 是已核對來源的 AI deadline,兩者都符合捷徑資格。──
+  // ── 監造:檢索頁改版後的核定動線——點清單列選取 → 右欄詳情「核定生效」
+  //    (仍走 review_requirement RPC,伺服器蓋審查人;核定當下 D-012 單向物化義務)──
   await loginReal(page, supEmail)
   await gotoHash(page, '/requirements')
-  const suggestionRow = page.getByText(requirementTitle).first()
-    .locator('xpath=ancestor::div[contains(@class,"py-3.5")][1]')
-  await suggestionRow.getByRole('button', { name: '核定並排入期限追蹤' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: '核定並排入期限追蹤' }).click()
-  // 核定成功=詳情卡出現僅 approved 才有的「廢止取代」(quickApprove 會先選取該筆)
+  await page.getByRole('listitem').filter({ hasText: requirementTitle }).first().click()
+  await page.getByRole('button', { name: '核定生效' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '核定生效' }).click()
+  // 核定成功=詳情動作列換成僅 approved 才有的「廢止取代」(不樂觀顯示,等伺服器回傳)
   await expect(page.getByRole('button', { name: '廢止取代' })).toBeVisible()
-  // ── 期限追蹤出現同標題(D-012 相容 runtime),狀態待辦、到期日=固定日 ───────
+  // ── 重整後仍為已生效,時點顯示固定到期日(D-012 相容 runtime 已物化) ───────
   await gotoHash(page, '/requirements')
   await expect(page.getByText(requirementTitle).first()).toBeVisible()
   await expect(page.getByText(DEADLINE_DATE).first()).toBeVisible()

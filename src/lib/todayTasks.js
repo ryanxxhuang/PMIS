@@ -123,7 +123,7 @@ export function buildTodayTasks(input = {}) {
       else if ((waitingScope[it.tag] || []).includes(it.who)) waiting.push(t)
     })
 
-  // ── ② 契約期限(自己責任、且自己在 /requirements 真的能完成的才算待辦)──
+  // ── ② 契約期限(自己責任、且自己在 /deadlines 真的能完成的才算待辦)──
   if (OBLIGATION_ACTIONABLE_SIDES.includes(org)) {
     for (const ob of obligations) {
       if (ob.status === '已提送' || ob.status === '已完成') continue
@@ -134,7 +134,8 @@ export function buildTodayTasks(input = {}) {
       if (days == null || days > SOON_DAYS) continue
       mine.push(task({
         key: `契約:${ob.id ?? ob.title}`, tag: '契約重點', title: ob.title, ball: org,
-        to: '/requirements', due: dueIso, todayIso,
+        // 「標為已提送」在期限追蹤頁(契約重點改版後遷出),待辦要導到能完成的地方
+        to: '/deadlines', due: dueIso, todayIso,
         meta: `${dueText(days, dueIso)}${ob.penalty ? `・罰則：${ob.penalty}` : ''}`,
       }))
     }

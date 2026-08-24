@@ -65,13 +65,13 @@ export function buildInsights(data = {}, today = new Date()) {
       id: `ob-${ob.id || ob.title}`, sev: 'risk', roles: ['contractor', 'owner'], tag: '契約',
       title: `契約期限逾期：${ob.title}`,
       detail: `逾期 ${-dd} 天${ob.penalty ? `。罰則：${ob.penalty}` : ''}`,
-      to: '/requirements',
+      to: '/deadlines',
     })
     else if (dd <= 7) out.push({
       id: `ob-${ob.id || ob.title}`, sev: 'watch', roles: ['contractor', 'owner'], tag: '契約',
       title: `契約期限即將到期：${ob.title}`,
       detail: `還有 ${dd} 天到期${ob.penalty ? `。逾期罰則：${ob.penalty}` : ''}`,
-      to: '/requirements',
+      to: '/deadlines',
     })
   }
 

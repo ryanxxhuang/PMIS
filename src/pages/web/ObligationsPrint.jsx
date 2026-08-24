@@ -66,7 +66,7 @@ export default function ObligationsPrint() {
   if (!obligations.length) {
     return (
       <div className="p-10 text-center text-slate-400">
-        尚無期限資料。<button onClick={() => navigate('/requirements')} className="text-[var(--blue-text)] underline">返回契約重點</button>
+        尚無期限資料。<button onClick={() => navigate('/deadlines')} className="text-[var(--blue-text)] underline">返回期限追蹤</button>
       </div>
     )
   }
@@ -75,7 +75,7 @@ export default function ObligationsPrint() {
     <div className="min-h-screen bg-slate-200 print:bg-white py-6 print:py-0">
       {/* 工具列(列印時隱藏)*/}
       <div className="max-w-[210mm] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden px-1">
-        <button onClick={() => navigate('/requirements')} className={TOOLBAR_SECONDARY}>← 返回契約重點</button>
+        <button onClick={() => navigate('/deadlines')} className={TOOLBAR_SECONDARY}>← 返回期限追蹤</button>
         <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}>
           <MSym name="print" size={15} />列印 / 存 PDF
         </button>

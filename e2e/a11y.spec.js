@@ -21,6 +21,7 @@ const H1 = {
   '/itp': '檢驗停留點',
   '/safety': '工安管理',
   '/requirements': '契約重點',
+  '/deadlines': '期限追蹤',
   '/submittals': '送審文件',
   '/rfi': '工程疑義',
   '/change-orders': '變更設計',
@@ -46,7 +47,7 @@ const AGENT_H1 = { contractor: '廠商 Agent', supervisor: '監造 Agent', owner
 // 各角色可達的主要路由(對齊 navConfig 的 roles 限制;print 路由不掃——bare layout 另有守衛測試)
 const CONTRACTOR_ROUTES = [
   '/dashboard', '/site-log', '/quality', '/itp', '/safety',
-  '/requirements', '/submittals', '/rfi', '/change-orders',
+  '/requirements', '/deadlines', '/submittals', '/rfi', '/change-orders',
   '/boq', '/valuation', '/payments', '/cost', '/progress', '/schedule',
   '/contract', '/monthly-report', '/acceptance',
   '/portfolio', '/activity', '/members', '/agent', '/alerts',

@@ -69,6 +69,9 @@ const nonNavRouteRules = {
   '/agent': { access: 'authenticated' },
   // 提醒信仍可深連結；入口已由「今日待辦」承接。
   '/alerts': { access: 'authenticated' },
+  // 期限追蹤:契約重點頁改版後遷出的到期管理(逐項清單/已提送/罰款試算/基準日)。
+  // 入口=契約重點摘要條「開啟期限追蹤」與今日待辦,不進導覽。
+  '/deadlines': { access: 'authenticated' },
   '/project/new': { access: 'authenticated' },
   '/site-log/print': { access: 'authenticated', surface: 'print' },
   '/valuation/print': { access: 'authenticated', surface: 'print' },

@@ -89,7 +89,7 @@ const INTENTS = [
   (q, d) => has(q, '工期', '開工', '竣工', '完工', '幾天') && d.project ? {
     answer: `本案 ${d.project.project_name}：開工 ${d.project.start_date || '—'}、預定竣工 ${d.project.end_date || '—'}。` +
       (d.anchors?.commencement_date ? `開工基準日 ${d.anchors.commencement_date}。` : ''),
-    sources: [{ label: '契約重點', to: '/requirements' }],
+    sources: [{ label: '期限追蹤', to: '/deadlines' }],
   } : null,
 
   // 契約 / 罰則 / 保固 / 保險（先做關鍵字搜義務，再退回最近到期）
@@ -98,15 +98,15 @@ const INTENTS = [
     const kw = ['保固', '保證', '保險', '罰則', '違約', '展延', '估驗', '竣工', '開工'].find((k) => q.includes(k))
     const hit = kw ? obs.filter((o) => `${o.title}${o.penalty || ''}${o.category || ''}`.includes(kw)) : []
     if (hit.length) return { answer: hit.slice(0, 3).map((o) => `${o.title}${o.source_clause ? `（${o.source_clause}）` : ''}${o.penalty ? `，罰則：${o.penalty}` : ''}`).join('；') + '。',
-      sources: [{ label: '契約重點', to: '/requirements' }] }
+      sources: [{ label: '期限追蹤', to: '/deadlines' }] }
     // 沒關鍵字命中 → 列最近到期期限
     const dated = obs.map((o) => ({ o, due: computeObligationDue(o, d.anchors || {}) })).filter((x) => x.due && x.o.status !== '已完成')
       .sort((a, b) => a.due - b.due)
     return { answer: dated.length
       // localISODate:due 是本地午夜 Date,toISOString 會轉 UTC 往前掉一天(台北)
       ? `最近到期的契約期限：${dated.slice(0, 3).map((x) => `${x.o.title}（到期 ${localISODate(x.due)}）`).join('、')}。`
-      : `契約重點期限共 ${obs.length} 項，可到「契約重點」查看時程與罰則。`,
-      sources: [{ label: '契約重點', to: '/requirements' }] }
+      : `契約重點期限共 ${obs.length} 項，可到「期限追蹤」查看時程與罰則。`,
+      sources: [{ label: '期限追蹤', to: '/deadlines' }] }
   })() : null,
 ]
 

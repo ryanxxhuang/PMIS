@@ -116,13 +116,13 @@ describe('契約期限:精確責任白名單 + 目的頁真的能完成', () => 
     const o = build({ org: 'owner', obligations: rows, anchors })
     expect([...o.mine, ...o.waiting].some((t) => t.tag === '契約重點')).toBe(false)
   })
-  it('逾期天數與罰則寫進說明,並導向契約重點頁', () => {
+  it('逾期天數與罰則寫進說明,並導向期限追蹤頁(「標為已提送」在那裡)', () => {
     const t = build({ org: 'contractor', obligations: rows, anchors }).mine.find((x) => x.tag === '契約重點')
     expect(t.overdueDays).toBe(3)
     expect(t.due).toBe('2026-08-10')
     expect(t.meta).toContain('逾期 3 天')
     expect(t.meta).toContain('罰則：每日 0.5‰')
-    expect(t.to).toBe('/requirements')
+    expect(t.to).toBe('/deadlines')
   })
   it('已提送/已完成的義務與 7 天以後才到期的都不列', () => {
     const later = [
