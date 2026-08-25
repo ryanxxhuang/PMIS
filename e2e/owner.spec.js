@@ -8,15 +8,14 @@ import { loginAs, gotoHash } from './helpers.js'
 const REVISED_AFTER_CO2 = '724,388,067'
 
 test.describe('機關', () => {
-  test('登入落在跨案總覽', async ({ page }) => {
+  test('登入落在今日待辦(精修期最小表面);跨案總覽深連結仍可達', async ({ page }) => {
     await loginAs(page, 'owner')
+    await expect(page.getByRole('heading', { name: '今日待辦' })).toBeVisible()
+    // 精修期跨案總覽暫別側欄,但深連結活著(恢復「專案」工作面時還原角色分流落地)
+    await gotoHash(page, '/portfolio')
     await expect(page.getByRole('heading', { name: '跨案總覽' })).toBeVisible()
-    await expect(page.getByText('現在輪到我')).toHaveCount(0) // portfolio 無待辦段(在今日待辦)
-    // 落地第一眼要看到跨案例外數字帶(W8-4C C3),不是只有卡片牆
-    await expect(page.getByText(/未結缺失/).first()).toBeVisible()
-    // 已登入後重新開根路徑仍依角色落地，不被舊的固定 /dashboard 導向帶走。
     await page.goto('/')
-    await expect(page).toHaveURL(/#\/portfolio/)
+    await expect(page).toHaveURL(/#\/dashboard/)
   })
 
   test('核准變更設計 → 變更後契約金額跨頁一致(B-02)', async ({ page }) => {
@@ -64,7 +63,7 @@ test.describe('機關', () => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/no-such-page')
     await expect(page.getByText('找不到這個頁面')).toBeVisible()
-    await page.getByRole('link', { name: /回到跨案總覽/ }).click()
-    await expect(page).toHaveURL(/#\/portfolio/)
+    await page.getByRole('link', { name: /回到今日待辦/ }).click()
+    await expect(page).toHaveURL(/#\/dashboard/)
   })
 })
