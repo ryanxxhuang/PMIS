@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
   )
   const resendKey = Deno.env.get('RESEND_API_KEY')
   const from = Deno.env.get('REMINDER_FROM') || 'PMIS 提醒 <onboarding@resend.dev>'
-  const appUrl = Deno.env.get('APP_URL') || 'https://ryanxxhuang.github.io/PMIS/'
+  const appUrl = Deno.env.get('APP_URL') || 'https://app.gov-agent.ai/'
   const agentUrl = appUrl + '#/agent' // 早報的落點是「你的 Agent」,不是提醒中心
   const todayUTC = taipeiTodayUTC()
 
