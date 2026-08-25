@@ -290,7 +290,7 @@ export function ReportBody({ project, generatedAt, coverageRows, versionsById, h
       </div>
 
       <p className="mt-4 text-[11px] text-slate-500">
-        本報告由 PMIS 系統產出・{project?.project_name || '—'}・產出時間 {fmtDateTime(generatedAt)}
+        本報告由 GovAgent 系統產出・{project?.project_name || '—'}・產出時間 {fmtDateTime(generatedAt)}
       </p>
     </div>
   )

@@ -154,7 +154,7 @@ export default function ObligationsPrint() {
         ))}
 
         <p className="mt-4 text-[11px] text-slate-500">
-          本表由 PMIS 系統依契約基準日自動推算產出,供履約管理對照使用;各項內容與期限以契約原文為準。
+          本表由 GovAgent 系統依契約基準日自動推算產出,供履約管理對照使用;各項內容與期限以契約原文為準。
           「無法推算」表示對應基準日尚未填寫。
         </p>
       </div>

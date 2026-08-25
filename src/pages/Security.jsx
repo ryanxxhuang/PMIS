@@ -41,10 +41,10 @@ export default function Security() {
         <header className="space-y-3">
           {/* 字標與 Layout／Login 同一組 lockup:--accent 已改義為 warn(棕),
               公開頁若還沿用舊字標,機關第一眼看到的品牌就跟站內對不起來 */}
-          <Link to="/login" className="inline-flex items-center gap-1.5 max-md:min-h-11" aria-label="PMIS 公共工程登入頁">
+          <Link to="/login" className="inline-flex items-center gap-1.5 max-md:min-h-11" aria-label="GovAgent 公共工程登入頁">
             <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-6 h-6 dark:hidden" />
             <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-6 h-6 hidden dark:block" />
-            <span className="text-xl font-medium tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue)]">.ai</span></span>
+            <span className="text-xl font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
           </Link>
           <div className="flex items-center gap-2 text-sm text-[var(--text-3)]">
             <MSym name="verified_user" size={16} />

@@ -107,7 +107,7 @@ const THEME_META = {
 
 // 全域搜尋:Gmail 式藥丸「鈕」,點開才出現真 input(浮層)。
 // 刻意不做常駐 input——監造唯讀頁有「全頁 input 計數=0」的 e2e 合約,
-// TopBar 也是頁面的一部分;送出即導 /agent 代問(問 PMIS 是全域問答入口,不另建搜尋資料流)。
+// TopBar 也是頁面的一部分;送出即導 /agent 代問(問 GovAgent 是全域問答入口,不另建搜尋資料流)。
 function GlobalSearch() {
   const navigate = useNavigate()
   const { aiEnabled } = useStore()
@@ -135,16 +135,16 @@ function GlobalSearch() {
   return (
     <div className="relative flex-1 max-w-[560px] min-w-0 hidden md:block">
       {/* ≥1280 全寬藥丸;768–1279 收成圖示鈕(README 平板規格),兩者共用同一浮層 */}
-      <button ref={btnRef} onClick={() => setOpen(true)} aria-label="搜尋(問 PMIS 代查)" title="搜尋(問 PMIS 代查)"
+      <button ref={btnRef} onClick={() => setOpen(true)} aria-label="搜尋(問 GovAgent 代查)" title="搜尋(問 GovAgent 代查)"
         className="w-full h-11 rounded-full bg-[var(--g-search)] hover:bg-[var(--g-search-h)] hidden xl:flex items-center gap-2.5 px-4 pressable">
         <MSym name="search" size={20} className="text-[var(--text-2)]" />
         {/* 文案必須等於行為:這裡沒有檢索引擎,送出是把整句丟給 /agent 代問。
             舊文案「搜尋工項、送審、缺失、契約條文」承諾了逐條檢索,實際做不到;
-            改成「問 PMIS」開頭,後面只列可問的題材,不再暗示關鍵字搜尋。 */}
-        <span className="flex-1 text-left text-sm text-[var(--text-2)] truncate">問 PMIS：工項、送審、缺失、契約……</span>
+            改成「問 GovAgent」開頭,後面只列可問的題材,不再暗示關鍵字搜尋。 */}
+        <span className="flex-1 text-left text-sm text-[var(--text-2)] truncate">問 GovAgent：工項、送審、缺失、契約……</span>
         <MSym name="tune" size={20} className="text-[var(--text-2)]" />
       </button>
-      <button onClick={() => setOpen(true)} aria-label="搜尋(問 PMIS 代查)" title="搜尋(問 PMIS 代查)"
+      <button onClick={() => setOpen(true)} aria-label="搜尋(問 GovAgent 代查)" title="搜尋(問 GovAgent 代查)"
         className="hidden md:flex xl:hidden w-11 h-11 ml-auto rounded-full items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable">
         <MSym name="search" size={22} />
       </button>
@@ -155,7 +155,7 @@ function GlobalSearch() {
             className="absolute top-0 right-0 w-[min(560px,72vw)] xl:w-auto xl:inset-x-0 z-20 h-11 rounded-full bg-[var(--surface)] [box-shadow:var(--shadow-md)] flex items-center gap-2.5 px-4 enter-menu">
             <MSym name="search" size={20} className="text-[var(--text-2)]" />
             <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="問 PMIS:輸入問題,Enter 代查本案資料…"
+              placeholder="問 GovAgent:輸入問題,Enter 代查本案資料…"
               className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-[var(--text)] placeholder:text-[var(--text-3)]" />
           </form>
         </>
@@ -179,10 +179,10 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
       <div className="flex items-center gap-2 md:gap-3 min-w-0 shrink-0">
         {/* 44px 觸控目標:漢堡鈕只在手機出現,直接升到 w-11;ref 供抽屜關閉時焦點還原 */}
         <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name="menu" size={22} /></button>
-        <NavLink to={defaultLandingPath(currentUser?.org_type)} aria-label="PMIS 公共工程首頁" className="flex items-center gap-1.5 shrink-0">
+        <NavLink to={defaultLandingPath(currentUser?.org_type)} aria-label="GovAgent 公共工程首頁" className="flex items-center gap-1.5 shrink-0">
           <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-6 h-6 dark:hidden" />
           <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-6 h-6 hidden dark:block" />
-          <span className="text-xl font-medium tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue)]">.ai</span></span>
+          <span className="text-xl font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
         </NavLink>
         <ProjectSwitcher />
       </div>
@@ -320,16 +320,16 @@ export function WebLayout({ children }) {
               <MSym name={sidebarCollapsed ? "left_panel_open" : "left_panel_close"} size={20} />
             </button>
           </div>
-          {/* 問 PMIS:佔 Gemini 在 Workspace 的位置(白底浮起鈕);自 TopBar 移入。
+          {/* 問 GovAgent:佔 Gemini 在 Workspace 的位置(白底浮起鈕);自 TopBar 移入。
               aria-label 恆掛,收合成純圖示時 accessible name 不變。 */}
-          <NavLink to="/agent" onClick={() => setMenuOpen(false)} aria-label="問 PMIS" title="問 PMIS"
+          <NavLink to="/agent" onClick={() => setMenuOpen(false)} aria-label="問 GovAgent" title="問 GovAgent"
             className={({ isActive }) => `mx-3 mt-2 md:mt-0 mb-3 h-11 rounded-[22px] flex items-center gap-2.5 px-4 text-sm font-medium shrink-0 pressable
               ${collapsed ? 'md:mx-auto md:w-14 md:px-0 md:justify-center md:mt-3' : ''}
               ${isActive
                 ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
                 : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border-card)] [box-shadow:var(--shadow-card)] hover:[box-shadow:var(--shadow-md)]'}`}>
             <MSym name="auto_awesome" size={20} className="text-[var(--ai)]" />
-            <span className={collapsed ? 'md:hidden' : ''}>問 PMIS</span>
+            <span className={collapsed ? 'md:hidden' : ''}>問 GovAgent</span>
           </NavLink>
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
             {visibleGroups.map((g) => (

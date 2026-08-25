@@ -101,7 +101,7 @@ export function briefDateLabel(todayUTC: number): string {
 }
 
 export function briefSubject(role: AgentRole, projectName: string, s: BriefSections): string {
-  return `【PMIS】${AGENT_NAME[role]} · ${projectName}:逾期 ${s.overdue.length} 件、${SOON_DAYS} 日內到期 ${s.dueSoon.length} 件`
+  return `【GovAgent】${AGENT_NAME[role]} · ${projectName}:逾期 ${s.overdue.length} 件、${SOON_DAYS} 日內到期 ${s.dueSoon.length} 件`
 }
 
 function row(color: string, tag: string, title: string, meta: string): string {

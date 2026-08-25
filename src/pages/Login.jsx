@@ -68,7 +68,7 @@ export default function Login() {
                       ? '示範環境:選擇角色即可進入 prototype'
                       : mode === 'forgot'
                         ? '我們會寄一封重設連結到你註冊的信箱'
-                        : '使用機關公務信箱或專案邀請信箱,繼續前往 PMIS.ai'}
+                        : '使用機關公務信箱或專案邀請信箱,繼續前往 GovAgent'}
                 </p>
                 <ul className="mt-8 lg:mt-auto lg:pt-8 space-y-2.5 text-[13px] text-[var(--text-2)]">
                   {TRUST_POINTS.map(([icon, text]) => (
@@ -105,7 +105,7 @@ function Brand() {
     <div className="flex items-center gap-1.5">
       <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-7 h-7 dark:hidden" />
       <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-7 h-7 hidden dark:block" />
-      <span className="text-xl font-medium tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue)]">.ai</span></span>
+      <span className="text-xl font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
     </div>
   )
 }

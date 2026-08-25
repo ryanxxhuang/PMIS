@@ -176,7 +176,7 @@ describe('renderBriefEmail / briefSubject(角色化、確定性)', () => {
     expect(noDrafts).not.toContain('待覆核')
   })
   it('標題含角色與兩段件數;HTML 內容有跳脫', () => {
-    expect(briefSubject('contractor', 'A 區新建工程', sections)).toBe('【PMIS】廠商 Agent · A 區新建工程:逾期 1 件、7 日內到期 1 件')
+    expect(briefSubject('contractor', 'A 區新建工程', sections)).toBe('【GovAgent】廠商 Agent · A 區新建工程:逾期 1 件、7 日內到期 1 件')
     const dirty = renderBriefEmail({
       role: 'contractor', projectName: '<script>alert(1)</script>', todayUTC: TODAY,
       sections, pendingDrafts: 0, agentUrl: 'https://x.test/#/agent',

@@ -166,7 +166,7 @@ export default function Dashboard() {
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `PMIS匯出_${project.project_name}_${todayISO}.json`
+    a.download = `GovAgent匯出_${project.project_name}_${todayISO}.json`
     a.click()
     URL.revokeObjectURL(a.href)
     // 瀏覽器下載沒有可見回饋:不吭一聲會讓人以為按鈕壞了,連按好幾次
@@ -321,7 +321,7 @@ export default function Dashboard() {
       {aiEnabled('agent.run') && (
         <Button size="lg" className="w-full md:hidden"
           onClick={() => navigate('/agent', { state: { q: '今天最該處理什麼？' } })}>
-          <MSym name="smart_toy" size={18} />問 PMIS：今天最該處理什麼？
+          <MSym name="smart_toy" size={18} />問 GovAgent：今天最該處理什麼？
         </Button>
       )}
     </div>

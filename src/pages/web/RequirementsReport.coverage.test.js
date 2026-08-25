@@ -136,7 +136,7 @@ describe('ReportBody:對照報告的誠實語意', () => {
   })
   it('頁尾帶專案名與產出時間', () => {
     expect(html).toContain('中央大學校舍新建工程')
-    expect(html).toContain('本報告由 PMIS 系統產出')
+    expect(html).toContain('本報告由 GovAgent 系統產出')
   })
   it('失敗 run 的原始錯誤訊息不進報告,只講「分析失敗,未產生結果」', () => {
     const failedHtml = renderToStaticMarkup(createElement(ReportBody, {
