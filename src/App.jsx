@@ -36,7 +36,6 @@ const Alerts = lazy(() => import('./pages/web/Alerts.jsx'))
 const Activity = lazy(() => import('./pages/web/Activity.jsx'))
 const Requirements = lazy(() => import('./pages/web/Requirements.jsx'))
 const Deadlines = lazy(() => import('./pages/web/Deadlines.jsx'))
-const RequirementsReport = lazy(() => import('./pages/web/RequirementsReport.jsx'))
 const MonthlyReport = lazy(() => import('./pages/web/MonthlyReport.jsx'))
 // /assistant 已導向 /agent(D-008/W3-1):頁面檔與 edge fn 留待 W3-3 退場
 const AgentConsole = lazy(() => import('./pages/web/Agent.jsx'))
@@ -162,7 +161,6 @@ const appRoutes = [
   { path: '/alerts', element: <Alerts /> },
   { path: '/activity', element: <Activity /> },
   { path: '/requirements', element: <Requirements /> },
-  { path: '/requirements/report', element: <RequirementsReport /> },
   { path: '/deadlines', element: <Deadlines /> },
   { path: '/monthly-report', element: <MonthlyReport /> },
   { path: '/admin', element: <Admin /> },
