@@ -76,14 +76,43 @@ test.describe('施工廠商', () => {
     await expect(row.getByText('待監造複查').first()).toBeVisible()
   })
 
-  test('契約重點摘要條:下拉展開時效性條文一覽', async ({ page }) => {
+  test('契約重點 · 履約時程:義務排上時程,廠商只看自己、動作看歸屬', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/requirements')
-    // 收合時只有四數字;展開後逐項列出(demo seed 義務),含規則與倒數
-    await expect(page.getByText('提送施工月報')).toHaveCount(0)
-    await page.getByRole('button', { name: '期限追蹤' }).click()
+    // 義務直接排在時間軸上(不再收在摘要條下拉),含倒數與狀態色票
     await expect(page.getByText('提送施工月報').first()).toBeVisible()
-    await expect(page.getByText(/每月 5 日/).first()).toBeVisible()
+    // 廠商只看自己:履約執行卡一張、無責任方篩選、監造義務不可見
+    await expect(page.getByText('條義務')).toHaveCount(1)
+    await expect(page.getByLabel('責任方')).toHaveCount(0)
+    await expect(page.getByText('提送監造月報')).toHaveCount(0)
+    // 預設選中第一條已逾期(OB-6 fixed_date 相對今天往前推),詳情動作列=標記完成
+    const row = page.getByRole('listitem').filter({ hasText: '第 5 期估驗計價送審' }).first()
+    await expect(row).toHaveAttribute('aria-current', 'true')
+    await expect(row.getByText(/逾期 \d+ 日/)).toBeVisible()
+    await expect(page.getByRole('button', { name: '標記完成' })).toBeVisible()
+  })
+
+  test('履約時程 → 擷取審核:審核流程遷出後入口不斷鏈', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/requirements')
+    await page.getByRole('link', { name: /擷取審核/ }).click()
+    await expect(page.getByRole('heading', { name: '擷取審核', exact: true })).toBeVisible()
+    // 返回連結回履約時程
+    await page.getByRole('link', { name: /返回履約時程/ }).click()
+    await expect(page.getByText('履約期程').first()).toBeVisible()
+  })
+
+  test('履約時程:標記完成即時反映執行卡與狀態,取消完成可回復', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/requirements')
+    const row = page.getByRole('listitem').filter({ hasText: '第 5 期估驗計價送審' }).first()
+    await expect(row).toHaveAttribute('aria-current', 'true')
+    await page.getByRole('button', { name: '標記完成' }).click()
+    // 倒數欄與狀態色票都寫「已完成」——兩個都在才是整列翻面,取 first 避免 strict 衝突
+    await expect(row.getByText('已完成').first()).toBeVisible()
+    // 動作列翻成取消完成;按下回復待辦(demo 走記憶體,不打 DB)
+    await page.getByRole('button', { name: '取消完成' }).click()
+    await expect(page.getByRole('button', { name: '標記完成' })).toBeVisible()
   })
 
   test('期限追蹤:標為已提送可掛送審佐證(W-01)', async ({ page }) => {

@@ -62,6 +62,7 @@
   /* 五語意狀態色票(README 第三版):red=danger、amber=warn、green=ok、blue=info、slate=mute */
   --slate-tint: #f1f3f4; --slate-text: #5f6368;
   --green-tint: #e6f4ea; --green-text: #137333;
+  --green-bar: #81c995;  /* 完成段軌道(履約期程條);亮暗同值,即深色模式的 ok 綠 */
   --amber-tint: #fef7e0; --amber-text: #b06000;
   --red-tint: #fce8e6;   --red-text: #a50e0e;
   --purple-tint: #f3e8fd; --purple-text: #681da8;

@@ -1,10 +1,10 @@
-// W8-3A 複審修正:首頁初始化第 3 步說「AI 整理完成」,點進 /requirements 卻叫人
+// W8-3A 複審修正:首頁初始化第 3 步說「AI 整理完成」,點進審核頁卻叫人
 // 重新上傳文件——0 筆結果被當成「還沒開始」,使用者被繞回原點。
 // 這支測試釘住:整理完成與否只看 completed ingestion run,兩種 0 筆狀態必須分開。
 import { describe, it, expect } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ReviewActions, requirementsIntro } from './Requirements.jsx'
+import { ReviewActions, requirementsIntro } from './RequirementsReview.jsx'
 
 const completed = [{ id: 'R1', status: 'completed' }]
 const inFlight = [{ id: 'R1', status: 'processing' }, { id: 'R2', status: 'failed' }]
