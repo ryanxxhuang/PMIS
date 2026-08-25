@@ -3,7 +3,6 @@ import {
   ARTIFACT_TYPE_LABELS,
   GENERATION_TYPE_LABELS,
   WORK_ITEM_LINK_STATE_LABELS,
-  buildRequirementHighlights,
   formatRequirementRule,
   inDefaultReviewScope,
   latestCompletedRunIds,
@@ -108,77 +107,6 @@ describe('formatRequirementRule', () => {
   it('returns empty text instead of raw JSON when nothing applies', () => {
     expect(formatRequirementRule({ trigger_type: null, frequency_type: null })).toBe('')
     expect(formatRequirementRule(null)).toBe('')
-  })
-})
-
-describe('W8-3B requirement highlights', () => {
-  const currentRunIds = new Set(['run-new'])
-  const base = {
-    title: '施工計畫送審', description: '開工前提送', requirement_type: 'submittal',
-    responsible_party_type: 'contractor', lifecycle_phase: '開工前', trigger_type: null,
-    trigger_config: null, frequency_type: null, frequency_config: null,
-    acceptance_criteria: null, evidence_requirement: '核定本', origin: 'ai',
-    ingestion_run_id: 'run-new', created_at: '2026-08-01T00:00:00Z',
-  }
-
-  it('always keeps approved contract facts, but only current unreviewed AI suggestions', () => {
-    const rows = [
-      { ...base, id: 'approved-old', status: 'approved', ingestion_run_id: 'run-old' },
-      { ...base, id: 'current', status: 'needs_review', title: '目前建議' },
-      { ...base, id: 'stale', status: 'needs_review', ingestion_run_id: 'run-old', title: '舊建議' },
-      { ...base, id: 'rejected', status: 'rejected', title: '已駁回' },
-      { ...base, id: 'superseded', status: 'superseded', title: '已廢止' },
-    ]
-    const result = buildRequirementHighlights(rows, currentRunIds)
-    expect(result.approved.map((g) => g.requirement.id)).toEqual(['approved-old'])
-    expect(result.suggestions.map((g) => g.requirement.id)).toEqual(['current'])
-  })
-
-  it('groups exact duplicate display rows without changing the source array', () => {
-    const rows = [
-      { ...base, id: 'b', status: 'needs_review', created_at: '2026-08-02T00:00:00Z' },
-      { ...base, id: 'a', status: 'needs_review' },
-    ]
-    const result = buildRequirementHighlights(rows, currentRunIds)
-    expect(result.suggestions).toHaveLength(1)
-    expect(result.suggestions[0].requirement.id).toBe('a')
-    expect(result.suggestions[0].requirements.map((r) => r.id)).toEqual(['a', 'b'])
-    expect(rows).toHaveLength(2)
-  })
-
-  it('never fuzzily merges a different party, phase, rule, or content', () => {
-    const rows = [
-      { ...base, id: 'base', status: 'needs_review' },
-      { ...base, id: 'party', status: 'needs_review', responsible_party_type: 'supervisor' },
-      { ...base, id: 'phase', status: 'needs_review', lifecycle_phase: '施工中' },
-      { ...base, id: 'rule', status: 'needs_review', trigger_type: 'commencement' },
-      { ...base, id: 'content', status: 'needs_review', description: '不同內容' },
-    ]
-    expect(buildRequirementHighlights(rows, currentRunIds).suggestions).toHaveLength(5)
-  })
-
-  it('does not repeat a suggestion when identical approved content already exists', () => {
-    const rows = [
-      { ...base, id: 'approved', status: 'approved', ingestion_run_id: 'run-old' },
-      { ...base, id: 'pending', status: 'needs_review' },
-    ]
-    const result = buildRequirementHighlights(rows, currentRunIds)
-    expect(result.approved).toHaveLength(1)
-    expect(result.suggestions).toHaveLength(0)
-  })
-
-  it('orders important types and verified sources deterministically without using confidence', () => {
-    const rows = [
-      { ...base, id: 'report', status: 'needs_review', requirement_type: 'report', confidence: 0.99 },
-      { ...base, id: 'deadline-unverified', status: 'needs_review', requirement_type: 'deadline', title: '期限 B', confidence: 0.99 },
-      { ...base, id: 'deadline-verified', status: 'needs_review', requirement_type: 'deadline', title: '期限 A', confidence: 0.01 },
-    ]
-    const verification = new Map([
-      ['report', 'verified'], ['deadline-unverified', 'unverified'], ['deadline-verified', 'verified'],
-    ])
-    const result = buildRequirementHighlights(rows, currentRunIds, verification)
-    expect(result.suggestions.map((g) => g.requirement.id))
-      .toEqual(['deadline-verified', 'deadline-unverified', 'report'])
   })
 })
 

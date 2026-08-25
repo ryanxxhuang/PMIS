@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { computeObligationDue, summarizeDeadlines } from './contractDue.js'
+import { computeObligationDue, summarizeDeadlines, buildDueList, formatObligationRule } from './contractDue.js'
 
 const anchors = {
   award_date: '2026-01-10',
@@ -121,5 +121,29 @@ describe('summarizeDeadlines — 摘要條四數字(互斥分類)', () => {
   it('空清單與缺參數安全', () => {
     expect(summarizeDeadlines([], {}, today)).toEqual({ overdue: 0, dueSoon: 0, scheduled: 0, done: 0 })
     expect(summarizeDeadlines(null, null, today)).toEqual({ overdue: 0, dueSoon: 0, scheduled: 0, done: 0 })
+  })
+})
+
+describe('buildDueList — 摘要條下拉的排序與狀態', () => {
+  const today = new Date(2026, 7, 25) // 2026-08-25
+  it('急迫度排序:逾期→7日內→排程中→無期限→已完成;同狀態近期在前', () => {
+    const obs = [
+      { title: 'done', status: '已提送', trigger_event: 'fixed', fixed_date: '2026-08-01' },
+      { title: 'sched', status: '待辦', trigger_event: 'fixed', fixed_date: '2026-10-01' },
+      { title: 'nodate', status: '待辦', trigger_event: 'commencement', offset_days: 14 },
+      { title: 'soonB', status: '待辦', trigger_event: 'fixed', fixed_date: '2026-08-30' },
+      { title: 'soonA', status: '待辦', trigger_event: 'fixed', fixed_date: '2026-08-26' },
+      { title: 'over', status: '待辦', trigger_event: 'fixed', fixed_date: '2026-08-20' },
+    ]
+    const list = buildDueList(obs, {}, today)
+    expect(list.map((x) => x.ob.title)).toEqual(['over', 'soonA', 'soonB', 'sched', 'nodate', 'done'])
+    expect(list[0].state).toBe('overdue')
+    expect(list[0].diff).toBe(-5)
+    expect(list[4].state).toBe('nodate')
+  })
+  it('formatObligationRule 人話版與 /deadlines 同一套(含新頻率值域)', () => {
+    expect(formatObligationRule({ recurring: 'monthly', recurring_day: 5 })).toBe('每月 5 日')
+    expect(formatObligationRule({ trigger_event: 'fixed', fixed_date: '2026-10-31' })).toBe('指定 2026-10-31')
+    expect(formatObligationRule({ recurring: 'daily' })).toBe('每日')
   })
 })

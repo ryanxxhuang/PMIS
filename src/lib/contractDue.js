@@ -85,6 +85,26 @@ export function formatObligationRule(ob) {
   return t
 }
 
+// 摘要條下拉的逐項清單:每筆帶到期日/倒數/狀態,依急迫度排序
+// (已逾期 → 7 日內 → 排程中 → 無期限 → 已完成;同狀態依到期日近的在前)。
+const STATE_ORDER = { overdue: 0, soon: 1, scheduled: 2, nodate: 3, done: 4 }
+export function buildDueList(obligations, anchors, today) {
+  const t = today0(today)
+  return (obligations || []).map((ob) => {
+    const due = computeObligationDue(ob, anchors || {}, today)
+    const done = ob.status === '已提送' || ob.status === '已完成'
+    let diff = null
+    let state = 'nodate'
+    if (done) state = 'done'
+    else if (due) {
+      diff = Math.round((due - t) / 86400000)
+      state = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'scheduled'
+    }
+    return { ob, due, diff, done, state }
+  }).sort((a, b) => (STATE_ORDER[a.state] - STATE_ORDER[b.state])
+    || ((a.due?.getTime() ?? Infinity) - (b.due?.getTime() ?? Infinity)))
+}
+
 // 期限追蹤摘要(契約重點頁頂部摘要條的四個數字)。分類互斥:
 //   done      = 已提送/已完成
 //   overdue   = 未完成且已過期

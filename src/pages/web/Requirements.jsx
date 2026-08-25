@@ -15,11 +15,11 @@ import { supabase } from '../../lib/supabase.js'
 import { pageAllInSafe } from '../../lib/pagedQuery.js'
 import {
   Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select,
-  PrerequisiteEmptyState, ErrorBanner, SkeletonList, buttonClass,
+  PrerequisiteEmptyState, ErrorBanner, SkeletonList,
 } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
-import { summarizeDeadlines } from '../../lib/contractDue.js'
+import { summarizeDeadlines, buildDueList, formatObligationRule } from '../../lib/contractDue.js'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
 import {
@@ -205,6 +205,7 @@ export default function Requirements() {
   const [shownLimit, setShownLimit] = useState(PAGE_SIZE)
   const [selectedId, setSelectedId] = useState(null)
   const [detailOpen, setDetailOpen] = useState(false)  // <lg 抽屜/全螢幕詳情
+  const [dueOpen, setDueOpen] = useState(false)        // 摘要條下拉(時效性條文一覽)
   const [links, setLinks] = useState([])          // requirement_work_items of selected
   const [artifactLinks, setArtifactLinks] = useState([])
   const [busy, setBusy] = useState('')
@@ -224,10 +225,13 @@ export default function Requirements() {
   const intro = useMemo(() => requirementsIntro(runs, rows.length), [runs, rows.length])
 
   // 期限追蹤摘要(GET deadlines summary 的前端等價:store 義務+專案基準日即時計算)
-  const dueSummary = useMemo(() => summarizeDeadlines(obligations, {
+  const dueAnchors = useMemo(() => ({
     award_date: currentProject?.award_date, notice_date: currentProject?.notice_date,
     commencement_date: currentProject?.commencement_date, end_date: currentProject?.end_date,
-  }), [obligations, currentProject])
+  }), [currentProject])
+  const dueSummary = useMemo(() => summarizeDeadlines(obligations, dueAnchors), [obligations, dueAnchors])
+  // 下拉一覽:契約裡有時效性的條文逐項(急迫度排序);點列聯動右欄詳情
+  const dueList = useMemo(() => buildDueList(obligations, dueAnchors), [obligations, dueAnchors])
 
   const reload = useCallback(async () => {
     if (!isPersistedProject || !pid) return
@@ -650,30 +654,65 @@ export default function Requirements() {
     setLinks((ls) => [...ls, data]); setManualItemNo(''); setMsg('')
   }
 
-  // ── 期限追蹤摘要條(只留摘要;逐項管理在 /deadlines)─────────────────────
+  // ── 期限追蹤摘要條:四數字+可展開的「時效性條文一覽」(急迫度排序)。
+  // 逐項的提送/佐證/試算管理仍在 /deadlines;這裡是一目瞭然+點列聯動詳情
+  const DUE_DOT = { overdue: 'bg-[var(--red-text)]', soon: 'bg-[var(--amber-text)]', scheduled: 'bg-[var(--blue)]', nodate: 'bg-[var(--text-3)]', done: 'bg-[var(--green-text)]' }
+  const DUE_DOT_LABEL = { overdue: '已逾期', soon: '7 日內到期', scheduled: '排程中', nodate: '無期限', done: '已完成' }
+  const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const deadlineBar = (
-    <Card bodyClass="flex items-center gap-x-7 gap-y-2 flex-wrap px-[18px] py-[13px]">
-      <span className="text-[13px] font-medium text-[var(--text)]">期限追蹤</span>
-      <div className="flex items-center gap-5 flex-wrap">
-        {DUE_STATS.map(([key, label, dot]) => (
-          <span key={key} className="inline-flex items-center gap-[7px] text-[12.5px] text-[var(--text-2)]">
-            <span className={`w-2 h-2 rounded-full ${dot}`} aria-hidden="true" />
-            {label} <span className="num font-medium text-[var(--text)]">{dueSummary[key]}</span> 項
-          </span>
-        ))}
+    <Card bodyClass="p-0">
+      <div className="flex items-center gap-x-7 gap-y-2 flex-wrap px-[18px] py-[13px]">
+        <button type="button" onClick={() => setDueOpen((o) => !o)} aria-expanded={dueOpen}
+          className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--text)] pressable max-md:min-h-11">
+          <MSym name="chevron_right" size={16}
+            className={`text-[var(--text-3)] transition-transform duration-[var(--dur-fast)] ${dueOpen ? 'rotate-90' : ''}`} />
+          期限追蹤
+        </button>
+        <div className="flex items-center gap-5 flex-wrap">
+          {DUE_STATS.map(([key, label, dot]) => (
+            <span key={key} className="inline-flex items-center gap-[7px] text-[12.5px] text-[var(--text-2)]">
+              <span className={`w-2 h-2 rounded-full ${dot}`} aria-hidden="true" />
+              {label} <span className="num font-medium text-[var(--text)]">{dueSummary[key]}</span> 項
+            </span>
+          ))}
+        </div>
+        <Link to="/deadlines" className="ml-auto text-[12.5px] text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11">開啟期限追蹤</Link>
       </div>
-      <Link to="/deadlines" className="ml-auto text-[12.5px] text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11">開啟期限追蹤</Link>
+      {dueOpen && (
+        <div className="border-t border-[var(--border-2)] max-h-80 overflow-y-auto" role="list" aria-label="時效性條文一覽">
+          {dueList.length === 0 ? (
+            <p className="px-[18px] py-4 text-xs text-[var(--text-3)]">尚無已確認的期限;契約重點的期限型項目確認後會列在這裡(引文與數字核對無誤的自動確認)。</p>
+          ) : dueList.map((it) => {
+            const linked = it.ob.requirement_id && rows.some((r) => r.id === it.ob.requirement_id)
+            const rightText = it.done ? '已提送'
+              : it.state === 'overdue' ? `已逾期 ${-it.diff} 天`
+                : it.diff != null ? `還有 ${it.diff} 天` : '待定基準日'
+            return (
+              <button key={it.ob.id} type="button" role="listitem"
+                onClick={() => { if (linked) select(it.ob.requirement_id, { openPane: true }) }}
+                className={`w-full text-left grid grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-3 px-[18px] py-2 border-b border-[var(--border-2)] last:border-0 ${linked ? 'hover:bg-[var(--bg)] cursor-pointer' : 'cursor-default'}`}>
+                <span className={`w-2 h-2 rounded-full ${DUE_DOT[it.state]}`} role="img"
+                  title={DUE_DOT_LABEL[it.state]} aria-label={DUE_DOT_LABEL[it.state]} />
+                <span className="min-w-0">
+                  <span className="block text-[12.5px] text-[var(--text)] truncate">{it.ob.title}</span>
+                  <span className="block text-[11px] text-[var(--text-3)] num">
+                    {formatObligationRule(it.ob)}{it.due ? ` · 到期 ${isoDay(it.due)}` : ''}{it.ob.responsible ? ` · ${it.ob.responsible}` : ''}
+                  </span>
+                </span>
+                <span className={`text-[11.5px] num whitespace-nowrap ${it.state === 'overdue' ? 'text-[var(--red-text)] font-medium' : it.state === 'soon' ? 'text-[var(--amber-text)] font-medium' : 'text-[var(--text-3)]'}`}>
+                  {rightText}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </Card>
   )
 
-  // ── 頁首動作:輸出對照報告(GTM 第②格)+ 手動新增 ─────────────────────
+  // ── 頁首動作:手動新增(對照報告已退場) ─────────────────────────────────
   const headerAction = (
     <div className="flex flex-wrap items-center gap-2">
-      {isPersistedProject && (runs.length > 0 || rows.length > 0) && (
-        <Link to="/requirements/report" className={buttonClass('outline', 'md')}>
-          <MSym name="fact_check" size={15} /> 輸出對照報告
-        </Link>
-      )}
       {canAddManual && (
         <Button variant="secondary" size="md" onClick={() => { setManualOpen(true); setManualMsg('') }}>
           <MSym name="add" size={16} /> 手動新增
@@ -1119,7 +1158,7 @@ export default function Requirements() {
           )}
           {/* 誠實揭露載入上限:計數與搜尋只涵蓋已載入範圍,不得偽裝成全部 */}
           {rows.length >= LIST_LIMIT && (
-            <p className="px-[18px] py-2 text-[11.5px] text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border-2)]">清單僅載入最近 {LIST_LIMIT} 條擷取,計數與搜尋以此範圍為準;更早的內容請以「輸出對照報告」查閱。</p>
+            <p className="px-[18px] py-2 text-[11.5px] text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border-2)]">清單僅載入最近 {LIST_LIMIT} 條擷取,計數與搜尋以此範圍為準。</p>
           )}
           {/* 檢索區:搜尋+狀態快篩+類型/階段(AND、即時生效) */}
           <div className="px-[18px] py-3.5 border-b border-[var(--border-2)] flex flex-col gap-3">

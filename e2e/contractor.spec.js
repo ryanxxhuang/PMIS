@@ -76,6 +76,16 @@ test.describe('施工廠商', () => {
     await expect(row.getByText('待監造複查').first()).toBeVisible()
   })
 
+  test('契約重點摘要條:下拉展開時效性條文一覽', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/requirements')
+    // 收合時只有四數字;展開後逐項列出(demo seed 義務),含規則與倒數
+    await expect(page.getByText('提送施工月報')).toHaveCount(0)
+    await page.getByRole('button', { name: '期限追蹤' }).click()
+    await expect(page.getByText('提送施工月報').first()).toBeVisible()
+    await expect(page.getByText(/每月 5 日/).first()).toBeVisible()
+  })
+
   test('期限追蹤:標為已提送可掛送審佐證(W-01)', async ({ page }) => {
     await loginAs(page, 'contractor')
     // 契約重點改版後,逐項期限管理(標為已提送/佐證)在獨立的期限追蹤頁
