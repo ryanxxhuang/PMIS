@@ -13,45 +13,45 @@
 // 七枚對應 handoff README 的指定,不做 lucide 字面對譯。
 export const navGroups = [
   { title: '工作面', items: [
+    // ── 精修期最小表面(2026-08-25 使用者指示):側欄只留四個入口,
+    // 一個功能精修完成再逐項取消 hidden。其餘路由/深連結/角色限制全部
+    // 保留——今日待辦與初始化清單仍會導向隱藏頁,routeRegistry 不因隱藏鬆動。
     { to: '/dashboard', icon: 'checklist', label: '今日待辦' },
-    { to: '/site-log', icon: 'engineering', label: '現場與品質', tabs: [
+    { to: '/contract', icon: 'cloud_upload', label: '專案文件' },
+    { to: '/requirements', icon: 'rate_review', label: '契約重點' },
+    { to: '/boq', icon: 'payments', label: '標單工項' },
+    // ── 以下暫別側欄(hidden:true)。定義原樣保留:roles 即權限,刪掉定義
+    // 會讓權限靜默鬆綁(批 3/批 4 教訓);加回=移除 hidden 一行。──
+    { to: '/site-log', icon: 'engineering', label: '現場與品質', hidden: true, tabs: [
       { to: '/site-log', label: '施工日誌' },
       { to: '/quality', label: '品質查驗' },
       { to: '/itp', label: '檢驗停留點' },
       { to: '/safety', label: '工安管理' },
     ] },
-    { to: '/requirements', icon: 'rate_review', label: '審查與協作', tabs: [
-      // pageTabs:false=不渲染頁內分頁條(檢索頁版面自成一體,入口走側欄子項);
-      // 仍留在 tabs 裡=側欄展開清單與 routeRegistry 不變
-      { to: '/requirements', label: '契約重點', pageTabs: false },
+    { to: '/submittals', icon: 'rate_review', label: '審查與協作', hidden: true, tabs: [
       { to: '/submittals', label: '送審文件' },
       { to: '/rfi', label: '工程疑義' },
       { to: '/change-orders', label: '變更設計' },
     ] },
-    { to: '/boq', icon: 'payments', label: '進度與金流', tabs: [
-      { to: '/boq', label: '標單工項' },
+    { to: '/valuation', icon: 'payments', label: '進度與金流', hidden: true, tabs: [
       { to: '/valuation', label: '估驗計價' },
       { to: '/payments', label: '請款收款', roles: ['contractor', 'owner'] }, // 監造不經手請款
       { to: '/cost', label: '成本管理', roles: ['contractor'] },              // 廠商毛利機密
       { to: '/progress', label: '進度 S 曲線' },
       { to: '/schedule', label: '逐工項排程', roles: ['contractor'] },        // 廠商內部規劃
     ] },
-    { to: '/monthly-report', icon: 'folder', label: '報表與結案', tabs: [
+    { to: '/monthly-report', icon: 'folder', label: '報表與結案', hidden: true, tabs: [
       { to: '/monthly-report', label: '施工月報' },
       { to: '/supervisor-report', label: '監造報表', roles: ['supervisor'] },
       { to: '/acceptance', label: '驗收結算' },
     ] },
-    { to: '/portfolio', icon: 'grid_view', label: '專案', tabs: [
+    { to: '/portfolio', icon: 'grid_view', label: '專案', hidden: true, tabs: [
       { to: '/portfolio', label: '跨案總覽' },
       { to: '/activity', label: '活動紀錄' },
       { to: '/members', label: '三方成員' },
-      // 機關防弊:對機關的核心賣點不能全站零入口(批4 曾 hidden 收斂成死功能),
-      // roles 限機關;取消 hidden 只是「顯示」,routeRegistry 與角色限制不動
+      // 機關防弊:roles 限機關;精修期整組暫別側欄,深連結與角色限制不動
       { to: '/audit', label: '風險稽核', roles: ['owner'] },
     ] },
-    // W11 文件管理員:整案文件的唯一上傳/歸檔窗口(第一次+文件更新才用,
-    // 刻意獨立在最下)。上傳後 AI 自動分類歸檔,結果分流到標單工項/契約重點/S曲線。
-    { to: '/contract', icon: 'cloud_upload', label: '專案文件' },
   ] },
   { title: '平台', items: [
     // 平台管理後台(批 C):AI 用量/成本儀表、功能開關、專案方案。僅平台管理員
@@ -106,14 +106,12 @@ export function routeAllowed(pathname, org, override, platformAdmin = false) {
   return tabAllowed(route, org, override, platformAdmin)
 }
 
-// 預設落地頁的單一真相:一次管多案的角色(機關承辦、監造/事務所)第一眼要看跨案總覽,
-// 只顧一個工地的廠商第一眼要看今日待辦。監造事務所同時監十幾案,落在單案 /dashboard
-// 等於一進門就先叫他選案;/portfolio 沒有 roles 限制,portfolio_summary() 也以
-// my_project_ids() 過濾,監造進去只會看到自己的案。
-// 未知 org_type 退回 /dashboard,與 store 的 org 預設(contractor)一致。
-const PORTFOLIO_FIRST_ORGS = ['owner', 'supervisor']
-export function defaultLandingPath(orgType) {
-  return PORTFOLIO_FIRST_ORGS.includes(orgType) ? '/portfolio' : '/dashboard'
+// 預設落地頁:精修期(2026-08-25)最小表面只剩四個入口,跨案總覽暫別側欄——
+// 所有角色一律落在今日待辦。恢復「專案」工作面時,把多案角色(owner/supervisor)
+// 的 /portfolio 分流還原(原邏輯:管十幾案的監造事務所落單案 dashboard 等於
+// 一進門先叫他選案)。
+export function defaultLandingPath(_orgType) {
+  return '/dashboard'
 }
 
 // 側欄可見項:工作台入口=第一個可見分頁;整組分頁都不可見則隱藏入口。

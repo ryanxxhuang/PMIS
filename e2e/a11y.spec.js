@@ -115,9 +115,9 @@ test.describe('1024px icon rail(W9 平板版面)', () => {
     await page.setViewportSize(TABLET_RAIL)
     await loginAs(page, 'contractor')
     const nav = page.getByRole('navigation', { name: '主要功能' })
-    await expect(nav.getByText('現場', { exact: true })).toBeVisible()      // NAV_SHORT
-    await expect(nav.getByText('現場與品質', { exact: true })).toBeHidden()  // 全名 span 收起
-    await expect(nav.getByRole('link', { name: '現場與品質', exact: true })).toBeVisible()
+    await expect(nav.getByText('契約', { exact: true })).toBeVisible()      // NAV_SHORT
+    await expect(nav.getByText('契約重點', { exact: true })).toBeHidden()   // 全名 span 收起
+    await expect(nav.getByRole('link', { name: '契約重點', exact: true })).toBeVisible()
     // 側欄寬 = md:w-20(80px);沒收合就會是 256px,rail 直接沒發生
     const box = await page.locator('aside').boundingBox()
     expect(box?.width, `1024px 側欄寬 ${box?.width}px——沒收成 icon rail(應為 80px)`).toBeLessThan(120)
@@ -130,10 +130,10 @@ test.describe('1024px icon rail(W9 平板版面)', () => {
   test('平板的強制收合不污染桌機側欄偏好', async ({ page }) => {
     await page.setViewportSize(TABLET_RAIL)
     await loginAs(page, 'contractor')
-    await expect(page.getByRole('navigation', { name: '主要功能' }).getByText('現場', { exact: true })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '主要功能' }).getByText('契約', { exact: true })).toBeVisible()
     await page.setViewportSize({ width: 1280, height: 800 })
     const nav = page.getByRole('navigation', { name: '主要功能' })
-    await expect(nav.getByText('現場與品質', { exact: true })).toBeVisible()
+    await expect(nav.getByText('契約重點', { exact: true })).toBeVisible()
     // 側欄寬帶 300ms transition,量到的可能是動畫中間值 → poll 到落定
     await expect
       .poll(async () => (await page.locator('aside').boundingBox())?.width,
@@ -230,12 +230,12 @@ test.describe('鍵盤可達性', () => {
     await loginAs(page, 'contractor')
     await page.getByRole('button', { name: '選單', exact: true }).click()
     const nav = page.getByRole('navigation', { name: '主要功能' })
-    await expect(nav.getByRole('link', { name: '現場與品質', exact: true })).toBeVisible()
+    await expect(nav.getByRole('link', { name: '契約重點', exact: true })).toBeVisible()
     // F2 合約:開啟時焦點移入抽屜(關閉鈕),鍵盤使用者不會被留在遮罩底下
     await expect(page.getByRole('button', { name: '關閉選單' })).toBeFocused()
     await page.keyboard.press('Escape')
     // 關閉=側欄項不可見(visibility/不掛載皆可,但不能只是移出畫面仍可聚焦)
-    await expect(nav.getByRole('link', { name: '現場與品質', exact: true })).toBeHidden()
+    await expect(nav.getByRole('link', { name: '契約重點', exact: true })).toBeHidden()
     await expect(page.getByRole('button', { name: '選單', exact: true })).toBeFocused()
   })
 
