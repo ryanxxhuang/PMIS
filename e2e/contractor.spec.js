@@ -92,6 +92,16 @@ test.describe('施工廠商', () => {
     await expect(page.getByRole('button', { name: '標記完成' })).toBeVisible()
   })
 
+  test('履約時程 → 擷取審核:審核流程遷出後入口不斷鏈', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/requirements')
+    await page.getByRole('link', { name: /擷取審核/ }).click()
+    await expect(page.getByRole('heading', { name: '擷取審核', exact: true })).toBeVisible()
+    // 返回連結回履約時程
+    await page.getByRole('link', { name: /返回履約時程/ }).click()
+    await expect(page.getByText('履約期程').first()).toBeVisible()
+  })
+
   test('履約時程:標記完成即時反映執行卡與狀態,取消完成可回復', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/requirements')

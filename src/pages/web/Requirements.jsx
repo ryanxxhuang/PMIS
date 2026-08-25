@@ -612,8 +612,17 @@ export default function Requirements() {
   )
 
   // ── 版面區塊 ─────────────────────────────────────────────────────────────
+  // 頁首入口:AI 建議的核定/駁回與手動補登在獨立的擷取審核頁(本頁不做審核)。
+  // Link 包 Button:內層退出 tab 序避免 Tab 停兩次(同 PrerequisiteEmptyState 作法)
   const header = (
-    <PageHeader title="契約重點" tagline="履約時程" subtitle={PARTY_BLURB[viewerParty]} />
+    <PageHeader title="契約重點" tagline="履約時程" subtitle={PARTY_BLURB[viewerParty]}
+      action={(
+        <Link to="/requirements/review" className="inline-flex rounded-full">
+          <Button variant="secondary" size="md" tabIndex={-1}>
+            <MSym name="rate_review" size={16} /> 擷取審核
+          </Button>
+        </Link>
+      )} />
   )
 
   // 履約執行卡:每個可見責任方一張(README 2.2)。統計母體=該方全部可見義務
