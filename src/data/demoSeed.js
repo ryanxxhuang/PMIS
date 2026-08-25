@@ -153,6 +153,14 @@ export function buildDemoData(workItems, project) {
     { id: 'OB-6', title: '第 5 期估驗計價送審', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(-3)), responsible: '廠商', penalty: null, source_clause: '第 5 條', source_page: 'p.8', status: '待辦', sort_order: 5 },
     { id: 'OB-7', title: '中間查核點：地上結構體完成 50%', category: '施工中', trigger_event: 'commencement', offset_days: 270, offset_dir: 'after', responsible: '廠商', penalty: '逾查核點未達進度按日計罰 1‰', source_clause: '第 7 條', source_page: 'p.10', status: '待辦', sort_order: 6 },
     { id: 'OB-8', title: '提送竣工圖說', category: '完工', trigger_event: 'completion', offset_days: 30, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 21 條', source_page: 'p.30', status: '待辦', sort_order: 7 },
+    // 監造/機關義務:契約重點 · 履約時程頁的三方檢視 storyline(監造看自己+廠商、
+    // 機關看全部)。責任方值域對齊 contract_obligations.responsible(廠商|監造|機關)。
+    { id: 'OB-9', title: '提送監造計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 30, offset_dir: 'after', responsible: '監造', penalty: null, source_clause: '監造契約第 3 條', source_page: 'p.6', status: '已完成', sort_order: 8 },
+    { id: 'OB-10', title: '提送監造月報', category: '施工中', recurring: 'monthly', recurring_day: 15, responsible: '監造', penalty: null, source_clause: '監造契約第 4 條', source_page: 'p.8', status: '待辦', sort_order: 9 },
+    { id: 'OB-11', title: '送審文件審查(收件後 14 日內)', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(5)), responsible: '監造', penalty: '逾期未回覆者延誤責任由監造負擔', source_clause: '第 8 條', source_page: 'p.11', status: '待辦', sort_order: 10 },
+    { id: 'OB-12', title: '估驗計價審核完成後 30 日內撥付', category: '施工中', recurring: 'monthly', recurring_day: 20, responsible: '機關', penalty: null, source_clause: '第 5 條', source_page: 'p.9', status: '待辦', sort_order: 11 },
+    { id: 'OB-13', title: '竣工後 30 日內辦理初驗', category: '完工', trigger_event: 'completion', offset_days: 30, offset_dir: 'after', responsible: '機關', penalty: null, source_clause: '第 15 條', source_page: 'p.22', status: '待辦', sort_order: 12 },
+    { id: 'OB-14', title: '一般工項保固期滿(1 年)', category: '保固', trigger_event: 'completion', offset_days: 365, offset_dir: 'after', responsible: '廠商', penalty: null, source_clause: '第 18 條', source_page: 'p.26', status: '待辦', sort_order: 13 },
   ]
 
   // ── 成本管理（預算 vs 實際；有超支也有節餘）──
