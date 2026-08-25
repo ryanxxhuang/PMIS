@@ -52,8 +52,8 @@ export function requirementsIntro(runs = [], rowCount = 0) {
       coverageWarning,
       // 沒有 completed run 時只講審查規則,不宣稱 AI 整理完成
       note: ingestionDone
-        ? 'AI 已完成整理，引文與數字核對無誤的已自動確認；其餘只有要成為契約重點的內容才需人工確認，未確認不影響開啟正式模式。'
-        : '下方只有要成為契約重點的內容才需人工確認，未確認不影響開啟正式模式。',
+        ? 'AI 已完成整理並自動歸檔;內容如有出入,以契約原文為準。人工補登的項目仍由監造/機關確認,未確認不影響開啟正式模式。'
+        : '人工補登的項目由監造/機關確認,未確認不影響開啟正式模式;內容如有出入,以契約原文為準。',
       emptyText: null,
     }
   }
@@ -126,7 +126,7 @@ export function ReviewActions({ requirement, canReview, busy, onReview, onEdit, 
   const autoConfirmed = st === 'approved' && !requirement.reviewed_by && requirement.reviewed_at
   const record = requirement.reviewed_at
     ? (autoConfirmed
-      ? `系統核對無誤・自動確認 · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
+      ? `${requirement.triage_doubts?.length ? 'AI 整理・自動確認' : '系統核對無誤・自動確認'} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
       : reviewerName
         ? `${reviewerName} ${VERB[st] || REQUIREMENT_STATUS_LABELS[st] || st} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
         : `${REQUIREMENT_STATUS_LABELS[st] || st}·${fmtTime(requirement.reviewed_at)}(伺服器記錄)`)
@@ -721,7 +721,7 @@ export default function Requirements() {
     </div>
   )
 
-  const SUBTITLE = 'AI 已讀完契約與規範,把裡面要遵守的條文都整理在這裡。用上方搜尋找條文,右側看原文出處。'
+  const SUBTITLE = 'AI 已讀完契約與規範,把裡面要遵守的條文整理在這裡;內容如有出入,一律以契約原文為準。'
 
   // ── 詳情內容(桌機 aside 與 <lg 抽屜共用同一份 JSX)────────────────────
   const detailBody = selected && (() => {
@@ -755,10 +755,10 @@ export default function Requirements() {
 
       <ErrorBanner msg={msg} className="mx-4 mt-3" />
 
-      {/* 確定性分流的疑慮:引文/數字對不上的地方,人工聚焦核對這幾點就好 */}
-      {EDITABLE_STATUSES.includes(selected.status) && selected.triage_doubts?.length > 0 && (
+      {/* D-019 透明度註記:未能逐字核對的地方講明,效力回歸契約原文 */}
+      {selected.triage_doubts?.length > 0 && (
         <p className="mx-4 mt-3 text-xs leading-relaxed text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-3 py-2">
-          需人工核對:{selected.triage_doubts.join('、')}。請對照下方原文出處確認後再按「確認無誤」。
+          未逐字核對:{selected.triage_doubts.join('、')}。內容如有出入,以契約原文為準。
         </p>
       )}
 
