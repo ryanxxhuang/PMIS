@@ -79,12 +79,12 @@ export async function runRequirementExtraction({ documentVersionId, projectId, o
 }
 
 // 完成 payload → 使用者訊息(W10 揭露截斷:未涵蓋整份文件必須連著講清楚;
-// D-017 分流:自動確認幾項、待人工幾項要一眼看到)
+// D-019 全自動:自動歸檔幾項、幾項未逐字核對要一眼看到,效力回歸契約原文)
 export function extractionSuccessMessage(data) {
   const auto = data?.auto_confirmed_count
   const flagged = data?.flagged_count
-  const triage = auto != null && (auto > 0 || flagged > 0)
-    ? `,核對無誤自動確認 ${auto} 項${flagged > 0 ? `、${flagged} 項待人工確認` : ''}`
+  const triage = auto != null && auto > 0
+    ? `,已自動整理歸檔${flagged > 0 ? `(${flagged} 項未逐字核對,以契約原文為準)` : ''}`
     : ''
   return `找到 ${data?.extracted_requirement_count ?? 0} 項契約重點建議${triage}${
     data?.coverage_incomplete

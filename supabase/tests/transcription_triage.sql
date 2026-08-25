@@ -1,9 +1,9 @@
--- 轉錄分流 pgTAP 套件(migration 20260824130000,D-017)。
--- 涵蓋:數字引擎誤配防護、引文核對門檻、期限數字交叉核對、自動確認+義務物化、
--- 疑慮標記、人工列不動、未完成 run 擋下、稽核事件。
+-- 轉錄分流 pgTAP 套件(migration 20260825000100,D-019 全自動確認)。
+-- 涵蓋:數字引擎誤配防護、AI 列全數自動確認+義務物化、疑慮改為透明度註記、
+-- 人工列不動、未完成 run 擋下、稽核事件。
 begin;
 
-select plan(17);
+select plan(18);
 
 -- ── 數字引擎:錨定防誤配 ────────────────────────────────────────────────────
 select ok(public.number_in_text(14, '開工之日起十四日內'), '中文數字 14 命中');
@@ -81,8 +81,8 @@ insert into public.requirement_sources (requirement_id, document_version_id, sou
 -- ── 套用分流 ────────────────────────────────────────────────────────────────
 select results_eq(
   $$ select * from public.apply_transcription_triage('d7600000-0000-0000-0000-000000000001') $$,
-  $$ values (4, 2) $$,
-  '4 筆自動確認、2 筆標記疑慮');
+  $$ values (6, 2) $$,
+  'AI 列 6 筆全數自動確認,其中 2 筆帶疑慮註記');
 
 select is((select status from public.requirements where id = 'd7a00000-0000-0000-0000-000000000001'),
   'approved', '數字一致的期限自動確認');
@@ -92,11 +92,13 @@ select is((select count(*)::int from public.contract_obligations where requireme
   1, '自動確認的期限已物化義務(D-012)');
 
 select is((select status from public.requirements where id = 'd7a00000-0000-0000-0000-000000000002'),
-  'needs_review', '天數對不上 → 待確認');
+  'approved', '天數對不上仍自動確認(D-019),疑慮轉為註記');
 select is((select triage_doubts from public.requirements where id = 'd7a00000-0000-0000-0000-000000000002'),
-  array['期限天數與引文對不上'], '疑慮原因寫明天數不符');
+  array['期限天數與引文對不上'], '疑慮原因保留=前端「以契約原文為準」標註的依據');
+select is((select count(*)::int from public.contract_obligations where requirement_id = 'd7a00000-0000-0000-0000-000000000002'),
+  1, '帶疑慮的期限也物化義務(使用者拍板的全自動)');
 select is((select triage_doubts from public.requirements where id = 'd7a00000-0000-0000-0000-000000000003'),
-  array['來源未核對'], '無已核對引文=來源未核對');
+  array['來源未核對'], '無已核對引文=來源未核對(註記保留)');
 
 select is((select count(*)::int from public.requirements
   where id in ('d7a00000-0000-0000-0000-000000000004','d7a00000-0000-0000-0000-000000000005','d7a00000-0000-0000-0000-000000000006')
@@ -115,7 +117,7 @@ select throws_ok(
 
 select is((select count(*)::int from public.audit_events
   where event_type = 'requirement.approved' and project_id = 'd7100000-0000-0000-0000-000000000001'),
-  4, '自動確認每筆都留稽核事件(actor=system)');
+  6, '自動確認每筆都留稽核事件(actor=system)');
 
 select * from finish();
 rollback;
