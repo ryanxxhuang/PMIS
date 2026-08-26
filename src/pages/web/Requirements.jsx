@@ -48,6 +48,7 @@ const COUNTDOWN_CLS = {
 }
 const REPORT_TYPES = ['條文誤判', '日期算錯', '責任方錯誤', '重複', '其他']
 const fmtDay = (v) => (v ? String(v).slice(0, 10) : '—')
+const fmtTime = (v) => (v ? new Date(v).toLocaleString('zh-TW', { hour12: false }) : '')
 
 // 責任方 pill(README 2.4):自己的=藍框藍底、別人的=線框——顏色留給狀態,
 // 責任方靠文字+icon 分辨(a11y:不可只靠顏色)
@@ -73,9 +74,10 @@ export default function Requirements() {
   } = useStore()
   // 登入身分決定檢視方(README:產品端不渲染身分切換器,demo 換角色重登即可)
   const viewerParty = ORG_TO_PARTY[currentUser?.org_type] || '廠商'
-  // 鏡像 DB 的 can_write(contract_obligations update 政策:廠商/監造/admin
-  // override;機關唯讀)。目標契約是後端逐筆回 canAct,屆時整段判斷刪除。
-  const dbWrite = can.edit || currentUser?.org_type === 'supervisor'
+  // 「擷取有誤」落觀察事項,其 insert 政策仍是 can_write(機關唯讀)——鏡像它,
+  // 不渲染會被 RLS 擋下的假按鈕。義務的標記完成/掛佐證自 migration
+  // 20260825120000 起改為「只看歸屬」(機關也能標自己的),不再吃 can_write。
+  const canReport = can.edit || currentUser?.org_type === 'supervisor'
 
   const [filters, setFilters] = useState({ q: '', status: 'all', type: '', who: '', phase: 'all' })
   const [selectedId, setSelectedId] = useState(null)
@@ -374,7 +376,8 @@ export default function Requirements() {
   const detailBody = selected && (() => {
     const st = OB_STATUS[selected.status]
     const isMine = selected.who === viewerParty
-    const actable = canActOn(selected, viewerParty, dbWrite)
+    // 歸屬即可操作(伺服器同一條 RLS 規則);can.override 鏡像 admin_override()
+    const actable = canActOn(selected, viewerParty) || can.override
     const meta = [
       ['責任方', selected.who],
       ['階段', PHASES.find((p) => p.key === selected.phase)?.name || '—'],
@@ -408,7 +411,13 @@ export default function Requirements() {
       logEntries.push({ when: fmtDay(evidenceSub.submitted_date || evidenceSub.created_at), what: `掛佐證:${evidenceSub.title}`, s: 'scheduled' })
     }
     if (selected.status === 'done') {
-      logEntries.push({ when: '—', what: `${selected.ob.status === '已提送' ? '已標為提送' : '已標記完成'}（時間未記錄）`, s: 'done' })
+      // completed_at 由 DB trigger 蓋(demo 由 slice 鏡像);缺值=migration 前的舊資料
+      const at = selected.ob.completed_at
+      logEntries.push({
+        when: at ? fmtTime(at) : '—',
+        what: `${selected.ob.status === '已提送' ? '已標為提送' : '已標記完成'}${at ? '' : '（時間未記錄）'}`,
+        s: 'done',
+      })
     }
     const activeStatus = ['overdue', 'due', 'scheduled'].includes(selected.status)
     return (<>
@@ -543,17 +552,12 @@ export default function Requirements() {
             {selected.penalty ? '罰則條款,非待辦事項;條件成立時自動轉為待處理。' : '相關基準日尚未設定,推不出到期日,暫非待辦事項。'}
           </span>
         )}
-        {isMine && !actable && (
-          <span className="flex-1 min-w-[180px] text-[11.5px] text-[var(--text-3)] leading-relaxed">
-            由{selected.who}負責執行;線上完成登錄尚未對機關端開放,本頁暫為唯讀。
-          </span>
-        )}
-        {!isMine && (
+        {!isMine && !actable && (
           <span className="flex-1 min-w-[180px] text-[11.5px] text-[var(--text-3)] leading-relaxed">
             由{selected.who}負責執行,本頁為唯讀檢視。
           </span>
         )}
-        {dbWrite && (
+        {canReport && (
           <button type="button" onClick={() => { setReportOpen(true); setReportMsg('') }}
             className="ml-auto inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-sm font-medium text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable max-md:min-h-11">
             擷取有誤
@@ -654,7 +658,7 @@ export default function Requirements() {
             <div className="flex items-baseline gap-[9px] mb-[11px]">
               <span className={`num text-[27px] font-normal leading-none ${rateCls}`}>{stat.rate == null ? '—' : `${stat.rate}%`}</span>
               <span className="text-[11.5px] text-[var(--text-2)] leading-snug">
-                {stat.rate == null ? '尚無到期項目' : `到期 ${stat.settled} 項準時完成 ${stat.n.done} 項`}
+                {stat.rate == null ? '尚無到期項目' : `到期 ${stat.settled} 項準時完成 ${stat.onTime} 項`}
               </span>
             </div>
             <div className="flex h-1.5 rounded-full overflow-hidden bg-[var(--border-2)] mb-2.5" aria-hidden>

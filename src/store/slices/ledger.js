@@ -249,14 +249,27 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
 
   // DB 成功才更新 UI(B-07)。extra 可帶附加欄位:
   // W-01 佐證鏈——標為已提送時掛 evidence_submittal_id(送審文件);退回待辦時清空。
+  // completed_at/by 由 DB trigger 蓋(migration 20260825120000),所以真專案要以
+  // 伺服器回傳列刷新(不 select 整列的話,時間戳要等重載才看得到);demo 在本地
+  // 鏡像同一條 trigger 語意——slice 就是 demo 的「伺服器」。
   const updateObligationStatus = useCallback(async (id, status, extra = {}) => {
     const patch = { status, ...extra }
     if (isPersistedProject) {
-      const res = await supabase.from('contract_obligations').update(patch).eq('id', id).select('id')
+      const res = await supabase.from('contract_obligations').update(patch).eq('id', id).select()
       const { error } = mutationOutcome(res, '未寫入:可能無權限或義務已被移除')
       if (error) return { error }
+      const row = res.data?.[0]
+      setObligations((os) => os.map((o) => (o.id === id ? { ...o, ...(row || patch) } : o)))
+      return { error: null }
     }
-    setObligations((os) => os.map((o) => (o.id === id ? { ...o, ...patch } : o)))
+    setObligations((os) => os.map((o) => {
+      if (o.id !== id) return o
+      const doneOld = o.status === '已提送' || o.status === '已完成'
+      const doneNew = status === '已提送' || status === '已完成'
+      const stamp = doneNew && !doneOld ? { completed_at: new Date().toISOString() }
+        : doneOld && !doneNew ? { completed_at: null } : {}
+      return { ...o, ...patch, ...stamp }
+    }))
     return { error: null }
   }, [isPersistedProject])
 

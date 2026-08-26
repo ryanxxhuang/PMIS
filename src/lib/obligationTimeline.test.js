@@ -45,8 +45,9 @@ describe('動作權限只看歸屬', () => {
     expect(canActOn({ who: '廠商' }, '機關')).toBe(false)
     expect(canActOn({ who: '機關' }, '機關')).toBe(true)
   })
-  it('dbWrite=false(鏡像 can_write:機關唯讀)時,自己的義務也不渲染假按鈕', () => {
-    expect(canActOn({ who: '機關' }, '機關', false)).toBe(false)
+  it('機關對自己的義務同樣可操作(migration 20260825120000 起伺服器同一條規則)', () => {
+    expect(canActOn({ who: '機關' }, '機關')).toBe(true)
+    expect(canActOn({ who: '監造' }, '機關')).toBe(false)
   })
 })
 
@@ -107,10 +108,16 @@ describe('履約執行卡(稽核數字)', () => {
     const s = partyStat(items)
     expect(s.n.overdue + s.n.due + s.n.scheduled + s.n.done + s.n.na).toBe(s.total)
   })
-  it('準時率 = done ÷ (done+overdue),未到期不計;無到期項 → null(顯示 —)', () => {
-    expect(partyStat(items).rate).toBe(67) // 2/3
+  it('應完成項準時率 = 準時完成 ÷ (done+overdue),未到期不計;無到期項 → null(顯示 —)', () => {
+    expect(partyStat(items).rate).toBe(67) // onTime 缺值視為準時:2/3
     expect(partyStat([{ status: 'scheduled' }, { status: 'na' }]).rate).toBe(null)
     expect(partyStat([{ status: 'done' }]).rate).toBe(100)
+  })
+  it('遲交補完成不灌高比率:onTime=false 的已完成留在分母、不進分子', () => {
+    const s = partyStat([{ status: 'done', onTime: false }, { status: 'done', onTime: true }, { status: 'overdue' }])
+    expect(s.settled).toBe(3)
+    expect(s.onTime).toBe(1)
+    expect(s.rate).toBe(33)
   })
 })
 
@@ -178,6 +185,13 @@ describe('檢視模型組裝', () => {
     expect(it2.doc).toContain('工程契約書')
     expect(it2.verified).toBe(true)
     expect(it2.criteria).toBe('月報齊備')
+  })
+  it('completed_at 決定準時:台北日 ≤ 到期日準時、晚於遲交、缺值不臆造歷史(視為準時)', () => {
+    const done = ob({ status: '已完成' }) // 到期 2026-09-30
+    expect(buildTimelineItem({ ...done, completed_at: '2026-09-29T10:00:00Z' }, { anchors, today: TODAY }).onTime).toBe(true)
+    expect(buildTimelineItem({ ...done, completed_at: '2026-10-02T10:00:00Z' }, { anchors, today: TODAY }).onTime).toBe(false)
+    expect(buildTimelineItem(done, { anchors, today: TODAY }).onTime).toBe(true)
+    expect(buildTimelineItem(ob(), { anchors, today: TODAY }).onTime).toBe(null) // 未完成不判定
   })
   it('每月循環義務帶頻率標籤與推算文案', () => {
     const it3 = buildTimelineItem(

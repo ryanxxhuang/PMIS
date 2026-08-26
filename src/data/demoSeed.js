@@ -143,11 +143,17 @@ export function buildDemoData(workItems, project) {
   ]
 
   // ── 契約義務（典型公共工程時程義務 + 罰則）──
+  // completed_at:以開工日推算、皆早於各自到期日(準時)——demo 的準時率維持
+  // 75%/100%;新標記的完成時間由 ledger slice 鏡像 DB trigger 蓋。
+  const afterCommencement = (n) => {
+    const base = project?.commencement_date ? new Date(`${project.commencement_date}T08:00:00`) : daysFromNow(-160)
+    const d = new Date(base); d.setDate(d.getDate() + n); return d.toISOString()
+  }
   const obligations = [
-    { id: 'OB-1', title: '提送施工計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', sort_order: 0 },
+    { id: 'OB-1', title: '提送施工計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', completed_at: afterCommencement(12), sort_order: 0 },
     // W-01 佐證鏈 demo:品質計畫義務掛上核准的 SUB-001,展示「義務→送審」可勾稽
-    { id: 'OB-2', title: '提送品質計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', evidence_submittal_id: 'SUB-DEMO-1', sort_order: 1 },
-    { id: 'OB-3', title: '投保營造綜合保險', category: '開工前', trigger_event: 'commencement', offset_days: 0, offset_dir: 'after', responsible: '廠商', penalty: '未投保者機關得代辦並自價金扣抵', source_clause: '第 13 條', source_page: 'p.18', status: '已完成', sort_order: 2 },
+    { id: 'OB-2', title: '提送品質計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', completed_at: afterCommencement(13), evidence_submittal_id: 'SUB-DEMO-1', sort_order: 1 },
+    { id: 'OB-3', title: '投保營造綜合保險', category: '開工前', trigger_event: 'commencement', offset_days: 0, offset_dir: 'after', responsible: '廠商', penalty: '未投保者機關得代辦並自價金扣抵', source_clause: '第 13 條', source_page: 'p.18', status: '已完成', completed_at: afterCommencement(-2), sort_order: 2 },
     { id: 'OB-4', title: '提送施工月報', category: '施工中', recurring: 'monthly', recurring_day: 5, responsible: '廠商', penalty: null, source_clause: '第 10 條', source_page: 'p.14', status: '待辦', sort_order: 3 },
     { id: 'OB-5', title: '職業安全衛生教育訓練（每季）', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(12)), responsible: '廠商', penalty: null, source_clause: '第 14 條', source_page: 'p.20', status: '待辦', sort_order: 4 },
     { id: 'OB-6', title: '第 5 期估驗計價送審', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(-3)), responsible: '廠商', penalty: null, source_clause: '第 5 條', source_page: 'p.8', status: '待辦', sort_order: 5 },
@@ -155,7 +161,7 @@ export function buildDemoData(workItems, project) {
     { id: 'OB-8', title: '提送竣工圖說', category: '完工', trigger_event: 'completion', offset_days: 30, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 21 條', source_page: 'p.30', status: '待辦', sort_order: 7 },
     // 監造/機關義務:契約重點 · 履約時程頁的三方檢視 storyline(監造看自己+廠商、
     // 機關看全部)。責任方值域對齊 contract_obligations.responsible(廠商|監造|機關)。
-    { id: 'OB-9', title: '提送監造計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 30, offset_dir: 'after', responsible: '監造', penalty: null, source_clause: '監造契約第 3 條', source_page: 'p.6', status: '已完成', sort_order: 8 },
+    { id: 'OB-9', title: '提送監造計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 30, offset_dir: 'after', responsible: '監造', penalty: null, source_clause: '監造契約第 3 條', source_page: 'p.6', status: '已完成', completed_at: afterCommencement(25), sort_order: 8 },
     { id: 'OB-10', title: '提送監造月報', category: '施工中', recurring: 'monthly', recurring_day: 15, responsible: '監造', penalty: null, source_clause: '監造契約第 4 條', source_page: 'p.8', status: '待辦', sort_order: 9 },
     { id: 'OB-11', title: '送審文件審查(收件後 14 日內)', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(5)), responsible: '監造', penalty: '逾期未回覆者延誤責任由監造負擔', source_clause: '第 8 條', source_page: 'p.11', status: '待辦', sort_order: 10 },
     { id: 'OB-12', title: '估驗計價審核完成後 30 日內撥付', category: '施工中', recurring: 'monthly', recurring_day: 20, responsible: '機關', penalty: null, source_clause: '第 5 條', source_page: 'p.9', status: '待辦', sort_order: 11 },
