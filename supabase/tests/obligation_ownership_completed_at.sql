@@ -47,11 +47,20 @@ insert into public.project_members (project_id, user_id, role) values
   ('21000000-0000-0000-0000-000000000001', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'member'),
   ('21000000-0000-0000-0000-000000000001', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb5', 'admin');
 
-insert into public.contract_obligations (id, project_id, title, responsible, status) values
-  ('21100000-0000-0000-0000-00000000000c', '21000000-0000-0000-0000-000000000001', '廠商義務', '廠商', '待辦'),
-  ('21100000-0000-0000-0000-00000000000d', '21000000-0000-0000-0000-000000000001', '監造義務', '監造', '待辦'),
-  ('21100000-0000-0000-0000-00000000000e', '21000000-0000-0000-0000-000000000001', '機關義務', '機關', '待辦'),
-  ('21100000-0000-0000-0000-00000000000f', '21000000-0000-0000-0000-000000000001', '未標責任方義務', null, '待辦');
+-- 義務列強制掛 requirement(requirement_id not null + 一對一):先種對應需求列。
+-- 直接以超級使用者種,status 走預設 needs_review,不碰審核 guard。
+insert into public.requirements (id, project_id, title, requirement_type) values
+  ('21200000-0000-0000-0000-00000000000c', '21000000-0000-0000-0000-000000000001', '廠商義務需求', 'deadline'),
+  ('21200000-0000-0000-0000-00000000000d', '21000000-0000-0000-0000-000000000001', '監造義務需求', 'deadline'),
+  ('21200000-0000-0000-0000-00000000000e', '21000000-0000-0000-0000-000000000001', '機關義務需求', 'deadline'),
+  ('21200000-0000-0000-0000-00000000000f', '21000000-0000-0000-0000-000000000001', '未標責任方需求', 'deadline'),
+  ('21200000-0000-0000-0000-000000000010', '21000000-0000-0000-0000-000000000001', '機關偷渡需求', 'deadline');
+
+insert into public.contract_obligations (id, project_id, requirement_id, title, responsible, status) values
+  ('21100000-0000-0000-0000-00000000000c', '21000000-0000-0000-0000-000000000001', '21200000-0000-0000-0000-00000000000c', '廠商義務', '廠商', '待辦'),
+  ('21100000-0000-0000-0000-00000000000d', '21000000-0000-0000-0000-000000000001', '21200000-0000-0000-0000-00000000000d', '監造義務', '監造', '待辦'),
+  ('21100000-0000-0000-0000-00000000000e', '21000000-0000-0000-0000-000000000001', '21200000-0000-0000-0000-00000000000e', '機關義務', '機關', '待辦'),
+  ('21100000-0000-0000-0000-00000000000f', '21000000-0000-0000-0000-000000000001', '21200000-0000-0000-0000-00000000000f', '未標責任方義務', null, '待辦');
 
 -- 模擬登入者(同時設新舊兩種 claim 形式,相容不同版本的 auth.uid())
 create or replace function pg_temp.become(u uuid) returns void language plpgsql as $$
@@ -170,8 +179,9 @@ select ok((select completed_at is null from public.contract_obligations where id
 select pg_temp.become('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3');
 set local role authenticated;
 select throws_ok(
-  $$ insert into public.contract_obligations (project_id, title, responsible, status)
-     values ('21000000-0000-0000-0000-000000000001', '機關偷渡義務', '機關', '待辦') $$,
+  $$ insert into public.contract_obligations (project_id, requirement_id, title, responsible, status)
+     values ('21000000-0000-0000-0000-000000000001', '21200000-0000-0000-0000-000000000010',
+             '機關偷渡義務', '機關', '待辦') $$,
   '42501', null, '機關 insert 仍被 can_write 擋下(本次只開 update 歸屬)');
 reset role;
 
