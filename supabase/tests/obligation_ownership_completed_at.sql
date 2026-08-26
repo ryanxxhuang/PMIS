@@ -120,13 +120,14 @@ reset role;
 select is((select status from public.contract_obligations where id = '21100000-0000-0000-0000-00000000000f'),
   '已提送', '未標責任方的義務:監造不可操作');
 
--- 讓渡擋下:把自己的義務改掛別方,with check 直接炸(不是靜默 0 列)
+-- 讓渡擋下:responsible 不在欄位 grant(僅 status/evidence_submittal_id 可
+-- update,見 20260812000500),42501 在 policy 之前先炸;with check 是第二層。
 select pg_temp.become('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1');
 set local role authenticated;
 select throws_ok(
   $$ update public.contract_obligations set responsible = '監造'
      where id = '21100000-0000-0000-0000-00000000000c' $$,
-  '42501', null, '改 responsible 讓渡義務被 with check 擋下');
+  '42501', null, '改 responsible 讓渡義務被擋(欄位 grant + with check 雙層)');
 reset role;
 
 -- admin override:非正式模式的專案管理者可跨方(退回機關義務並驗清空)
@@ -142,22 +143,21 @@ select ok((select completed_by is null from public.contract_obligations where id
   '退回未完成態清空 completed_by');
 
 -- ── 時間戳不可竄改 ───────────────────────────────────────────────────────────
--- 種已知時間戳需暫停 trigger(它會還原 client 值——這正是要測的行為)
+-- 第一層:completed_at 不在欄位 grant,client 的 payload 根本進不來(42501);
+-- trigger 的還原邏輯是第二層(definer/未來放寬 grant 時仍守住)。
+select pg_temp.become('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1');
+set local role authenticated;
+select throws_ok(
+  $$ update public.contract_obligations set completed_at = '2020-12-31T00:00:00Z'
+     where id = '21100000-0000-0000-0000-00000000000c' $$,
+  '42501', null, 'client 直寫 completed_at 被欄位 grant 擋下');
+reset role;
+
+-- 種已知時間戳驗「已提送 → 已完成不重蓋」:需暫停 trigger 才種得進去
 alter table public.contract_obligations disable trigger contract_obligations_stamp_completion;
-update public.contract_obligations set completed_at = '2026-01-01T00:00:00Z'
-  where id = '21100000-0000-0000-0000-00000000000c';
 update public.contract_obligations set completed_at = '2026-02-02T00:00:00Z'
   where id = '21100000-0000-0000-0000-00000000000d';
 alter table public.contract_obligations enable trigger contract_obligations_stamp_completion;
-
-select pg_temp.become('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1');
-set local role authenticated;
-update public.contract_obligations
-  set completed_at = '2020-12-31T00:00:00Z', note = '狀態不變,試圖竄改時間戳'
-  where id = '21100000-0000-0000-0000-00000000000c';
-reset role;
-select is((select completed_at from public.contract_obligations where id = '21100000-0000-0000-0000-00000000000c'),
-  '2026-01-01T00:00:00Z'::timestamptz, '狀態不變時 client 送的 completed_at 一律作廢');
 
 select pg_temp.become('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2');
 set local role authenticated;
