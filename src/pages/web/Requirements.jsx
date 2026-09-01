@@ -847,7 +847,7 @@ export default function Requirements() {
         <ErrorBanner msg={enrich.error} onRetry={() => setEnrichKey((k) => k + 1)} />
         <Card title="履約時程">
           {ingestionDone ? (
-            <Empty>AI 已完成整理,目前沒有排入時程的履約義務;契約重點確認後的期限型項目會出現在這裡。</Empty>
+            <Empty>AI 已完成整理,目前沒有排入時程的履約義務;契約重點確認後的項目會出現在這裡。</Empty>
           ) : latestFailed && !anyRunning ? (
             <Empty icon="error">
               最近一次 AI 整理失敗{latestFailed.error_message ? `:${friendlyError(latestFailed.error_message, '請重試')}` : ''}。

@@ -382,7 +382,7 @@ export default function RequirementsReview() {
     () => (selected ? sourcesByReq.get(selected.id) || [] : []),
     [selected, sourcesByReq],
   )
-  // 期限型已核定 → D-012 物化的義務(關聯列連到期限追蹤)
+  // 已確認 → D-012/D-020 物化的義務(關聯列連到期限追蹤;全型別皆物化)
   const selectedObligation = useMemo(
     () => (selected ? obligations.find((o) => o.requirement_id === selected.id) || null : null),
     [selected, obligations],
@@ -650,7 +650,7 @@ export default function RequirementsReview() {
     </div>
   )
 
-  const SUBTITLE = '確認 AI 轉錄與契約原文一致;核定後的期限型項目會物化為義務並排入履約時程。內容如有出入,一律以契約原文為準。'
+  const SUBTITLE = '確認 AI 轉錄與契約原文一致;確認後的項目會排入履約時程。內容如有出入,一律以契約原文為準。'
 
   // ── 詳情內容(桌機 aside 與 <lg 抽屜共用同一份 JSX)────────────────────
   const detailBody = selected && (() => {
@@ -890,7 +890,7 @@ export default function RequirementsReview() {
             <MSym name="close" size={18} />
           </button>
         </div>
-        <p className="text-xs text-[var(--text-3)] mb-3">AI 漏抽或文件未涵蓋的契約重點可在此補登;送出後為「待確認」、來源標記人工新增,期限型確認後自動排入期限追蹤。</p>
+        <p className="text-xs text-[var(--text-3)] mb-3">AI 漏抽或文件未涵蓋的契約重點可在此補登;送出後為「待確認」、來源標記人工新增,確認後自動排入履約時程。</p>
         <div className="space-y-2">
           <Input value={manualDraft.title} onChange={(e) => setManualDraft((d) => ({ ...d, title: e.target.value }))}
             placeholder="標題(例:開工前 14 日內提送施工計畫)" />
