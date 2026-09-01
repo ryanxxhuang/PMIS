@@ -171,6 +171,34 @@ export function pickDefaultId(items) {
   return first?.id ?? null
 }
 
+// 基準日缺口:可見義務裡有幾條是「觸發點對應的基準日沒設」才推不出到期日。
+// 只算 status='na' 且觸發點映得到錨點欄位的項目——fixed(日期在自己身上)、
+// 循環配置完整(從今天推)、無觸發點(本來就無時點)都不是被基準日卡住,不算。
+// 供履約時程頁的「設定基準日」提示與初始化清單引用:數字必須對得上使用者
+// 設完基準日後「多出幾條有日期」的實際變化,不可虛報。
+export const ANCHOR_LABELS = {
+  award_date: '決標日', notice_date: '接獲開工通知日',
+  commencement_date: '開工日', end_date: '竣工日',
+}
+const TRIGGER_ANCHOR = {
+  award: 'award_date', notice: 'notice_date',
+  commencement: 'commencement_date', completion: 'end_date',
+}
+export function anchorGaps(items, anchors) {
+  const counts = {}
+  for (const it of items) {
+    if (it.status !== 'na') continue
+    const key = TRIGGER_ANCHOR[it.ob?.trigger_event]
+    if (!key || anchors?.[key]) continue
+    counts[key] = (counts[key] || 0) + 1
+  }
+  // 依 ANCHOR_LABELS 的固定順序輸出,提示文案不因資料順序跳動
+  const gaps = Object.keys(ANCHOR_LABELS)
+    .filter((key) => counts[key])
+    .map((key) => ({ key, label: ANCHOR_LABELS[key], count: counts[key] }))
+  return { total: gaps.reduce((sum, g) => sum + g.count, 0), gaps }
+}
+
 // 動作權限與角色無關,只看歸屬(README 1)。伺服器同一條規則:
 // contract_obligations 的 update 政策=自己方(或 admin override)才能改
 // (migration 20260825120000);呼叫端要放行 override 時自行 OR 上 can.override。

@@ -16,7 +16,8 @@ import { appSnackbar } from '../../components/snackbar.jsx'
 
 const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 
-// 初始化四步清單(W2-2 建立、W8-3A 依 D-014 修訂):真專案在正式模式開啟前顯示。
+// 初始化五步清單(W2-2 建立、W8-3A 依 D-014 修訂、D-020 後補「設定開工日」):
+// 真專案在正式模式開啟前顯示。
 // 狀態全部由既有資料推導,不建 onboarding 資料表、不做逐步精靈;每步直達既有工作頁。
 //
 // W8-3A 的兩個關鍵修正:
@@ -31,9 +32,11 @@ const ORG_LABEL = { contractor: '廠商', supervisor: '監造', owner: '機關' 
 // 使用者會去重做一次已經做完的事。
 const LOAD_FAIL = '狀態載入失敗，前往專案文件查看'
 
-// 由既有資料推導四步(純函式,便於釘住完成條件)。snap = null 代表仍在載入。
+// 由既有資料推導五步(純函式,便於釘住完成條件)。snap = null 代表仍在載入。
 // 每步固定有:責任方、完成與否、唯一目的地;不提供逐筆打勾、略過或批次核定。
-export function buildSetupSteps(snap, { imported } = {}) {
+// commencement/waitingOnCommencement 來自 store 的 project 與義務列(不進 snap:
+// 它們不需要額外查詢);第 4 步與其他步一樣永遠不擋開啟正式模式(D-014)。
+export function buildSetupSteps(snap, { imported, commencement, waitingOnCommencement } = {}) {
   const missingOrgs = ['contractor', 'supervisor', 'owner'].filter((o) => !snap?.orgs?.has(o))
   const ingestionDone = !!snap && !snap.ingestionError && snap.ingestionCompleted > 0
   return [
@@ -62,6 +65,15 @@ export function buildSetupSteps(snap, { imported } = {}) {
             : '尚未有完成的整理；到專案文件查看處理狀態或重試',
     },
     {
+      // D-020 後全型別義務都進履約時程,開工類義務推不出到期日的主因就是
+      // 開工日沒設——把設定明確排進初始化,目的地是後果看得到的履約時程頁。
+      to: '/requirements', label: '設定開工日', owner: '專案建立者',
+      done: !!commencement,
+      detail: commencement ? `開工日 ${commencement}・開工類期限已可推算到期日`
+        : waitingOnCommencement ? `${waitingOnCommencement} 條契約義務等待開工日才能排入時程;到「契約重點」的履約期程設定`
+          : '接獲開工通知後,到「契約重點」的履約期程設定實際開工日(非預定日)',
+    },
+    {
       to: '/members', label: '開啟正式模式', owner: '專案建立者',
       done: false, // 開啟後整張清單就不再顯示,所以在清單存在期間固定未完成
       detail: '由專案建立者在「專案成員」頁開啟；前面步驟未完成或三方未到齊也可以開啟，系統會再次確認',
@@ -70,7 +82,7 @@ export function buildSetupSteps(snap, { imported } = {}) {
 }
 
 function SetupChecklist({ imported }) {
-  const { listMembers, currentProject } = useStore()
+  const { listMembers, currentProject, obligations } = useStore()
   const [snap, setSnap] = useState(null)
   const pid = currentProject?.project_id
   useEffect(() => {
@@ -97,13 +109,23 @@ function SetupChecklist({ imported }) {
     return () => { active = false }
   }, [pid, imported, listMembers]) // 標單匯入後重推導(文件數會變)
 
-  const steps = buildSetupSteps(snap, { imported })
+  // 開工日步驟的素材:等待開工日的義務數只算還沒完成的(已提送/已完成不催)
+  const waitingOnCommencement = useMemo(
+    () => obligations.filter((ob) => ob.trigger_event === 'commencement'
+      && ob.status !== '已提送' && ob.status !== '已完成').length,
+    [obligations],
+  )
+  const steps = buildSetupSteps(snap, {
+    imported,
+    commencement: currentProject?.commencement_date || null,
+    waitingOnCommencement,
+  })
   const doneCount = steps.filter((s) => s.done).length
-  // 下一步 = 前 3 步第一個未完成;前三步都完成就指向第 4 步(開啟正式模式)
-  const next = steps.slice(0, 3).find((s) => !s.done) || steps[3]
+  // 下一步 = 前 4 步第一個未完成;都完成就指向第 5 步(開啟正式模式)
+  const next = steps.slice(0, 4).find((s) => !s.done) || steps[4]
 
   return (
-    <Card title="專案初始化" action={<span className="num text-xs text-[var(--text-3)]">已完成 {doneCount}/4</span>}>
+    <Card title="專案初始化" action={<span className="num text-xs text-[var(--text-3)]">已完成 {doneCount}/5</span>}>
       <Link to={next.to}
         className="flex items-center gap-2 rounded-lg bg-[var(--blue-tint)] text-[var(--blue-text)] px-3 py-2 mb-3 text-sm font-medium hover:bg-[var(--g-search-h)] transition-colors">
         <span className="min-w-0 flex-1">下一步：{next.label}</span>

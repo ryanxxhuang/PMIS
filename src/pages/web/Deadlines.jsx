@@ -14,6 +14,7 @@ import {
 import { friendlyError } from '../../lib/errorMessage.js'
 import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
 import { ORG_TO_PARTY, obligationParty } from '../../lib/obligationTimeline.js'
+import AnchorDates from '../../components/AnchorDates.jsx'
 import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
@@ -88,17 +89,7 @@ export default function Deadlines() {
   const anchorsCard = (
     <Card title="基準日與契約總價">
       <div className="flex flex-wrap gap-4">
-        {[
-          ['award_date', '決標日'],
-          ['notice_date', '接獲開工通知日'],
-          ['commencement_date', '開工日'],
-          ['end_date', '竣工日(完工期限基準)'],
-        ].map(([k, label]) => (
-          <Field key={k} label={label}>
-            <Input type="date" value={anchors[k]} onChange={(e) => setAnchor(k, e.target.value)}
-              disabled={!can.edit} />
-          </Field>
-        ))}
+        <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!can.edit} />
         {/* 手填契約價金總額:百分比制逾期罰款的試算基準(W10);onBlur 才寫 DB */}
         <Field label="契約價金總額(元)">
           <Input type="number" min="0" step="1" value={totalDraft} placeholder="未填則採標單加總"

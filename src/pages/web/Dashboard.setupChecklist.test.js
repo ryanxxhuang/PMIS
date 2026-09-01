@@ -1,6 +1,7 @@
-// W8-3A:初始化四步清單的完成條件(D-014)。這支測試的存在理由是釘住一條產品紅線——
-// 第 3 步只問「AI 整理完了沒」,永遠不看 Requirement 的待審／核定數。
-// 那 106 筆是 AI 的產出,不是人要清空的初始化門檻,也不得擋住開啟正式模式。
+// W8-3A:初始化清單的完成條件(D-014;D-020 後補第 4 步「設定開工日」成五步)。
+// 這支測試的存在理由是釘住一條產品紅線——第 3 步只問「AI 整理完了沒」,
+// 永遠不看 Requirement 的待審／核定數。那 106 筆是 AI 的產出,不是人要清空的
+// 初始化門檻,也不得擋住開啟正式模式。
 import { describe, it, expect } from 'vitest'
 import { buildSetupSteps } from './Dashboard.jsx'
 
@@ -77,22 +78,43 @@ describe('第 2 步:三方成員', () => {
   })
 })
 
-describe('第 4 步:開啟正式模式不被前面步驟鎖住', () => {
+describe('第 4 步:設定開工日(D-020)', () => {
+  it('有開工日即完成,detail 回顯日期;目的地是履約時程頁', () => {
+    const step = stepOf(snapOf(), { imported: true, commencement: '2026-09-15' })[3]
+    expect(step.done).toBe(true)
+    expect(step.to).toBe('/requirements')
+    expect(step.detail).toContain('2026-09-15')
+  })
+  it('未設且有義務在等 → 講出等待條數,不空泛催辦', () => {
+    const step = stepOf(snapOf(), { imported: true, waitingOnCommencement: 23 })[3]
+    expect(step.done).toBe(false)
+    expect(step.detail).toContain('23 條')
+    expect(step.detail).toContain('開工日')
+  })
+  it('未設也沒有義務在等 → 指引語,不捏造數字', () => {
+    const step = stepOf(snapOf(), { imported: true })[3]
+    expect(step.done).toBe(false)
+    expect(step.detail).not.toMatch(/\d+ 條/)
+    expect(step.detail).toContain('實際開工日')
+  })
+})
+
+describe('第 5 步:開啟正式模式不被前面步驟鎖住', () => {
   it('固定未完成、目的地是成員頁,且文案不得宣稱三方到齊才能開', () => {
     for (const snap of [null, snapOf({ docs: 0, orgs: new Set(), ingestionCompleted: 0 })]) {
-      const step4 = stepOf(snap, { imported: false })[3]
-      expect(step4.done).toBe(false)
-      expect(step4.to).toBe('/members')
-      expect(step4.detail).toContain('也可以開啟')
-      expect(step4.detail).not.toMatch(/三方到齊後.{0,4}才/)
+      const step5 = stepOf(snap, { imported: false })[4]
+      expect(step5.done).toBe(false)
+      expect(step5.to).toBe('/members')
+      expect(step5.detail).toContain('也可以開啟')
+      expect(step5.detail).not.toMatch(/三方到齊後.{0,4}才/)
     }
   })
 })
 
 describe('清單結構與下一步', () => {
-  it('永遠四步,每步都有責任方與唯一目的地', () => {
+  it('永遠五步,每步都有責任方與唯一目的地', () => {
     const steps = stepOf(snapOf(), { imported: true })
-    expect(steps).toHaveLength(4)
+    expect(steps).toHaveLength(5)
     for (const s of steps) {
       expect(s.owner).toBeTruthy()
       expect(s.to).toMatch(/^\/(contract|members|requirements)$/)
@@ -101,16 +123,20 @@ describe('清單結構與下一步', () => {
   })
   it('載入中不謊報完成', () => {
     expect(stepOf(null, { imported: true }).every((s) => s.done === false)).toBe(true)
-    expect(stepOf(null, { imported: true }).every((s) => s.detail === '載入中…' || s.to === '/members')).toBe(true)
+    // 開工日步驟不吃 snap(素材來自 store),載入中照樣顯示指引而非「載入中…」
+    expect(stepOf(null, { imported: true }).every(
+      (s) => s.detail === '載入中…' || s.to === '/members' || s.label === '設定開工日',
+    )).toBe(true)
   })
-  it('下一步取前 3 步第一個未完成;前三步都完成時指向第 4 步', () => {
+  it('下一步取前 4 步第一個未完成;都完成時指向第 5 步', () => {
     const pick = (snap, opts) => {
       const steps = stepOf(snap, opts)
-      return steps.slice(0, 3).find((s) => !s.done) || steps[3]
+      return steps.slice(0, 4).find((s) => !s.done) || steps[4]
     }
     expect(pick(snapOf({ docs: 0 }), { imported: false }).label).toBe('上傳專案文件與標單')
     expect(pick(snapOf({ orgs: new Set(['contractor']) }), { imported: true }).label).toBe('確認三方成員')
     expect(pick(snapOf(), { imported: true }).label).toBe('AI 整理契約重點')
-    expect(pick(snapOf({ ingestionCompleted: 2 }), { imported: true }).label).toBe('開啟正式模式')
+    expect(pick(snapOf({ ingestionCompleted: 2 }), { imported: true }).label).toBe('設定開工日')
+    expect(pick(snapOf({ ingestionCompleted: 2 }), { imported: true, commencement: '2026-09-15' }).label).toBe('開啟正式模式')
   })
 })
