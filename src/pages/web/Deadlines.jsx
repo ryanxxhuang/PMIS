@@ -13,6 +13,7 @@ import {
 } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
+import { ORG_TO_PARTY, obligationParty } from '../../lib/obligationTimeline.js'
 import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
@@ -28,8 +29,12 @@ export default function Deadlines() {
     currentProject, isPersistedProject, currentUser, workItems, can,
     obligations, updateObligationStatus, updateProjectAnchors, submittals,
   } = useStore()
-  // 「已提送」鏡像 can_write(義務狀態欄位 grant 對非機關成員開放)
-  const canMarkObligation = can.edit || currentUser?.org_type === 'supervisor'
+  // 標記權限鏡像 DB(migration 20260825120000_obligation_ownership_completed_at):
+  // 只看歸屬——自己方的義務才能標/退,機關自此也能標自己的(估驗撥付/初驗/驗收);
+  // admin override(非正式模式的專案管理者)照舊放行。跨方按鈕不再渲染,
+  // 否則按下去只會吃 RLS 靜默 0 列的錯誤。
+  const viewerParty = ORG_TO_PARTY[currentUser?.org_type] || '廠商'
+  const canMark = (ob) => can.override || obligationParty(ob) === viewerParty
   // 罰款試算基準:手填契約價金總額優先,沒填退回標單加總(W10)
   const manualContractTotal = Number(currentProject?.contract_total) || 0
   const contractTotal = manualContractTotal > 0 ? manualContractTotal : (workItems?.meta?.billable_total || 0)
@@ -147,7 +152,7 @@ export default function Deadlines() {
                 <div className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
                   <div className="flex justify-between items-start gap-2">
                     <span className="font-medium text-[var(--text)]">{it.ob.title}</span>
-                    {canMarkObligation && <button onClick={async () => {
+                    {canMark(it.ob) && <button onClick={async () => {
                       if (it.done) {
                         // 退回待辦:一併解除佐證連結(W-01)
                         const { error } = await updateObligationStatus(it.ob.id, '待辦', { evidence_submittal_id: null })

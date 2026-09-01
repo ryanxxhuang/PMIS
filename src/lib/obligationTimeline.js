@@ -7,7 +7,7 @@
 // 這裡只剩推導函式。在那之前 contract_obligations 的 RLS 仍是全案成員可讀,
 // 這份過濾只是版面歸屬,不是安全邊界,不可反過來依賴它保密。
 import { computeObligationDue, formatObligationRule } from './contractDue.js'
-import { parseLocalDate, localISODate } from './dates.js'
+import { parseLocalDate, localISODate, taipeiISODate } from './dates.js'
 import { REQUIREMENT_TYPE_LABELS, sourcePageLabel } from './requirementReview.js'
 
 export const PARTIES = ['廠商', '監造', '機關']
@@ -130,15 +130,20 @@ export function phaseWindows(anchors, warrantyEnd, today) {
 }
 
 // 履約執行卡的統計(README 2.2)。統計數字之和必須等於該方義務總數——
-// 這張卡是稽核數字。準時率照現況規格 done ÷ (done + overdue),未到期不計;
-// ⚠️ 已知偏差:逾期後補完成會進分子(見 handoff 待確認問題 3),後端補
-// completed_at 後應改為「完成時間 ≤ 到期日」的應完成項準時率——只改這一支。
+// 這張卡是稽核數字。準時率=應完成項準時率(handoff 待確認問題 3 的定案):
+//   分母 settled = 已完成 + 已逾期(未到期與無需處理不計)
+//   分子 onTime  = 準時完成(完成時間 ≤ 到期日;見 buildTimelineItem 的 onTime)
+// 遲交補完成的項目永遠留在分母、不進分子——補完成不再灌高比率。
 export function partyStat(items) {
   const n = { overdue: 0, due: 0, scheduled: 0, done: 0, na: 0 }
-  for (const it of items) n[it.status]++
+  let onTime = 0
+  for (const it of items) {
+    n[it.status]++
+    if (it.status === 'done' && it.onTime !== false) onTime++
+  }
   const settled = n.done + n.overdue
-  const rate = settled ? Math.round((n.done / settled) * 100) : null
-  return { total: items.length, n, settled, rate }
+  const rate = settled ? Math.round((onTime / settled) * 100) : null
+  return { total: items.length, n, settled, onTime, rate }
 }
 
 // 期程段摘要(README 2.3):文案優先序 逾期 → 即將到期 → 全部完成 → 排程中。
@@ -166,10 +171,11 @@ export function pickDefaultId(items) {
   return first?.id ?? null
 }
 
-// 動作權限與角色無關,只看歸屬(README 1)。dbWrite 鏡像 DB 的 can_write
-// (contract_obligations update 政策:廠商/監造/管理者;機關唯讀)——目標契約
-// 是後端逐筆回 canAct,屆時這裡改讀旗標。
-export const canActOn = (item, viewerParty, dbWrite = true) => item.who === viewerParty && !!dbWrite
+// 動作權限與角色無關,只看歸屬(README 1)。伺服器同一條規則:
+// contract_obligations 的 update 政策=自己方(或 admin override)才能改
+// (migration 20260825120000);呼叫端要放行 override 時自行 OR 上 can.override。
+// 目標契約是後端逐筆回 canAct,屆時這裡改讀旗標。
+export const canActOn = (item, viewerParty) => item.who === viewerParty
 
 // 把 contract_obligations 列 + (選配)關聯 requirement/出處,組成本頁的檢視模型。
 // requirement 缺席(demo/人工補登)時全部欄位退回義務列自身,不臆測內容。
@@ -184,6 +190,13 @@ export function buildTimelineItem(ob, { requirement, sources, versionsById, anch
   const type = requirement
     ? (REQUIREMENT_TYPE_LABELS[requirement.requirement_type] || requirement.requirement_type)
     : (ob.penalty && !ob.trigger_event && !ob.recurring ? '罰則' : '期限')
+  // 準時判定(應完成項準時率):完成時間(台北日)≤ 到期日才算準時。
+  // completed_at 缺值(migration 前完成的舊資料)不視為遲交——不臆造歷史;
+  // 循環義務完成後 computeObligationDue 回的是下一期到期日(必在今天之後),
+  // 等同從寬認定準時——循環項的逐期準時率要等後端有逐期實例才算得準。
+  const onTime = status !== 'done' ? null
+    : (!ob.completed_at || !due) ? true
+      : taipeiISODate(ob.completed_at) <= localISODate(due)
   const item = {
     id: ob.id,
     ob,
@@ -192,6 +205,8 @@ export function buildTimelineItem(ob, { requirement, sources, versionsById, anch
     due,
     diff,
     phase,
+    onTime,
+    completedAt: ob.completed_at || null,
     dateLabel: due ? localISODate(due) : '—',
     countdown: countdownLabel(status, diff),
     title: ob.title,
