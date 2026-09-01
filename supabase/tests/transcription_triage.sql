@@ -57,7 +57,7 @@ insert into public.requirements (id, project_id, title, requirement_type, status
   ('d7a00000-0000-0000-0000-000000000005', 'd7100000-0000-0000-0000-000000000001',
    '每月 5 日前提送估驗', 'deadline', 'needs_review', 'ai', 'd7600000-0000-0000-0000-000000000001',
    'monthly', '{}', 'monthly', '{"day":5}'),
-  -- 6 非期限型:引文已核對即自動確認(不物化)
+  -- 6 非期限型:引文已核對即自動確認(D-020 起同樣物化義務)
   ('d7a00000-0000-0000-0000-000000000006', 'd7100000-0000-0000-0000-000000000001',
    '工地主任常駐', 'other', 'needs_review', 'ai', 'd7600000-0000-0000-0000-000000000001',
    null, '{}', null, '{}');
@@ -104,7 +104,7 @@ select is((select count(*)::int from public.requirements
   where id in ('d7a00000-0000-0000-0000-000000000004','d7a00000-0000-0000-0000-000000000005','d7a00000-0000-0000-0000-000000000006')
     and status = 'approved'), 3, '指定日期/每月/非期限型(引文已核對)都自動確認');
 select is((select count(*)::int from public.contract_obligations where requirement_id = 'd7a00000-0000-0000-0000-000000000006'),
-  0, '非期限型不物化義務');
+  1, '非期限型也物化義務(D-020:接進履約時程)');
 
 select is((select status || ':' || coalesce(triage_doubts::text, 'null')
   from public.requirements where id = 'd7a00000-0000-0000-0000-000000000007'),

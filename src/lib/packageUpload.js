@@ -553,7 +553,7 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
 }
 
 // Whole-package upload. Requirement extraction is the only contractual AI
-// pipeline; approved deadlines are materialized by the database review action.
+// pipeline; approved requirements are materialized by the database review action.
 export async function uploadFilesToPackage({
   files, packageRow, projectId, userId, onRun,
 }) {

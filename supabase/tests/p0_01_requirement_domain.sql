@@ -267,11 +267,11 @@ select is((select count(*)::integer from public.authoritative_requirements where
 select is((select count(*)::integer from public.authoritative_requirements where id = '30000000-0000-0000-0000-000000000005'), 0, 'superseded is excluded from authoritative_requirements');
 
 
--- D-012: Requirement owns contractual content. Only an approved deadline is
--- adapted into the obligation runtime, and repeated materialization preserves
--- the runtime fields that users operate.
-select has_function('public', 'materialize_deadline_obligation', array['uuid'],
-  'approved deadline materialization boundary exists');
+-- D-012/D-020: Requirement owns contractual content. Any approved Requirement
+-- is adapted into the obligation runtime, and repeated materialization
+-- preserves the runtime fields that users operate.
+select has_function('public', 'materialize_requirement_obligation', array['uuid'],
+  'approved Requirement materialization boundary exists');
 select is((select count(*)::integer from pg_trigger
   where tgrelid = 'public.contract_obligations'::regclass
     and tgname = 'contract_obligations_sync_requirement' and not tgisinternal), 0,
@@ -302,7 +302,7 @@ insert into public.requirements (
   null, '{}', 'needs_review', 'manual'
 );
 
-select is(public.materialize_deadline_obligation(
+select is(public.materialize_requirement_obligation(
   '90000000-0000-0000-0000-000000000001'), null::uuid,
   'unapproved deadline does not create an obligation');
 select is((select count(*)::integer from public.contract_obligations
@@ -312,7 +312,7 @@ select is((select count(*)::integer from public.contract_obligations
 update public.requirements set status = 'approved', reviewed_at = now()
 where id = '90000000-0000-0000-0000-000000000001';
 select lives_ok($$
-  select public.materialize_deadline_obligation('90000000-0000-0000-0000-000000000001')
+  select public.materialize_requirement_obligation('90000000-0000-0000-0000-000000000001')
 $$, 'approved deadline materializes successfully');
 select results_eq(
   $$
@@ -335,7 +335,7 @@ where requirement_id = '90000000-0000-0000-0000-000000000001';
 update public.requirements
 set title = 'Updated quality plan', trigger_config = '{"offset_days":45,"offset_dir":"before"}'
 where id = '90000000-0000-0000-0000-000000000001';
-select is(public.materialize_deadline_obligation(
+select is(public.materialize_requirement_obligation(
   '90000000-0000-0000-0000-000000000001'),
   '90000000-0000-0000-0000-000000000001'::uuid,
   'materialization retry returns the existing obligation identity');

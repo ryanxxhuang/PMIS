@@ -136,7 +136,7 @@ export default function Deadlines() {
           <Badge color="green">已完成 {dueCounts.done} 項</Badge>
         </div>
         {dueGroups.length === 0 && (
-          <Empty>尚無已確認的期限。契約重點的期限型項目確認後會自動出現在這裡(引文與數字核對無誤的會自動確認)。</Empty>
+          <Empty>尚無已確認的履約義務。契約重點的項目確認後會自動出現在這裡(帶時點的會推算到期日)。</Empty>
         )}
         <ErrorBanner msg={obligationMsg} className="mt-2" />
       </Card>

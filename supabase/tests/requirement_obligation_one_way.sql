@@ -1,8 +1,9 @@
--- W5-2 focused pgTAP suite: Requirement is the contractual source of truth;
--- only an approved deadline becomes one compatibility obligation runtime row.
+-- W5-2/D-020 focused pgTAP suite: Requirement is the contractual source of
+-- truth; any approved Requirement becomes one compatibility obligation
+-- runtime row (D-020 widened the adapter beyond requirement_type='deadline').
 begin;
 
-select plan(31);
+select plan(34);
 
 create or replace function public.pmis_w52_login(p_uid uuid)
 returns void language plpgsql as $$
@@ -18,8 +19,10 @@ end; $$;
 
 select public.pmis_w52_login(null);
 
-select has_function('public', 'materialize_deadline_obligation', array['uuid'],
-  'internal approved-deadline adapter exists');
+select has_function('public', 'materialize_requirement_obligation', array['uuid'],
+  'internal approved-Requirement adapter exists');
+select hasnt_function('public', 'materialize_deadline_obligation', array['uuid'],
+  'deadline-only adapter name is retired (D-020)');
 select is((select count(*)::integer from pg_trigger
   where tgrelid = 'public.contract_obligations'::regclass
     and tgname = 'contract_obligations_sync_requirement' and not tgisinternal), 0,
@@ -84,9 +87,20 @@ set local role authenticated;
 select lives_ok($$
   select public.review_requirement('52300000-0000-0000-0000-000000000001', 'approve')
 $$, 'non-deadline Requirement can still be approved');
-select is((select count(*)::integer from public.contract_obligations
-  where requirement_id = '52300000-0000-0000-0000-000000000001'), 0,
-  'approved non-deadline Requirement creates no obligation');
+select results_eq(
+  $$
+    select title, category, trigger_event, offset_days, recurring,
+           responsible, status, requirement_id::text
+    from public.contract_obligations
+    where requirement_id = '52300000-0000-0000-0000-000000000001'
+  $$,
+  $$ values (
+    '非時程履約要求'::text, '施工中'::text, null::text,
+    null::int, null::text, '監造'::text, '待辦'::text,
+    '52300000-0000-0000-0000-000000000001'::text
+  ) $$,
+  'approved non-deadline Requirement materializes an undated obligation (D-020)'
+);
 select lives_ok($$
   select public.review_requirement('52300000-0000-0000-0000-000000000002', 'reject')
 $$, 'deadline Requirement can be rejected');
@@ -141,7 +155,7 @@ update public.requirements
 set title = '品質計畫修正版', trigger_config = '{"offset_days":20,"offset_dir":"before"}'
 where id = '52300000-0000-0000-0000-000000000003';
 
-select is(public.materialize_deadline_obligation(
+select is(public.materialize_requirement_obligation(
   '52300000-0000-0000-0000-000000000003'),
   '52300000-0000-0000-0000-000000000003'::uuid,
   'materialization retry reuses the existing obligation identity');
@@ -190,6 +204,18 @@ select results_eq(
 select is((select count(*)::integer from public.contract_obligations
   where requirement_id = '52300000-0000-0000-0000-000000000003'), 1,
   'supersede preserves the compatibility row for audit history');
+
+-- D-020:取代非期限型時,其義務列同樣退場(不再分型別)。
+select public.pmis_w52_login('52000000-0000-0000-0000-000000000001');
+set local role authenticated;
+select lives_ok($$
+  select public.review_requirement('52300000-0000-0000-0000-000000000001', 'supersede')
+$$, 'superseding an approved non-deadline Requirement is a valid transition');
+reset role;
+select public.pmis_w52_login(null);
+select is((select status from public.contract_obligations
+  where requirement_id = '52300000-0000-0000-0000-000000000001'), '不適用',
+  'superseding a non-deadline Requirement retires its obligation runtime');
 
 -- 頻率值域擴充:daily/weekly/quarterly/yearly 的 frequency_config 逐型映射到
 -- 義務列的循環欄位;值域外的 config 映成 null(義務保留、推不出到期日)。
