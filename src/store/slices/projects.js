@@ -196,6 +196,15 @@ export function useProjectsSlice({ currentUser, log }) {
     })
     if (!error && data) {
       const np = normalizeProject(data)
+      // 實際開工日(選填,導入進行中案):建立者身分直接補寫(RLS 僅建立者可更新,
+      // 此刻必然是建立者)。DB-first:寫入生效才進本地,失敗就留空——不做幽靈成功,
+      // 履約時程的基準日提示與初始化清單會接手引導使用者補設。
+      if (input.commencement_date) {
+        const { data: updated } = await supabase.from('projects')
+          .update({ commencement_date: input.commencement_date })
+          .eq('id', np.project_id).select('id')
+        if (updated?.length) np.commencement_date = input.commencement_date
+      }
       setProjects((prev) => [...prev, np])
       setCurrentProjectId(np.project_id)
       try { localStorage.setItem('pmis-current-project', np.project_id) } catch { /* noop */ }

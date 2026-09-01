@@ -8,7 +8,7 @@ import { friendlyError } from '../../lib/errorMessage.js'
 // 建出錯的契約/機關/廠商(P1-04)。施工廠商也不自動帶登入者公司。
 const DEFAULTS = {
   project_name: '', project_code: '', owner_name: '', contractor_name: '',
-  supervisor_name: '', location: '', start_date: '', end_date: '',
+  supervisor_name: '', location: '', start_date: '', end_date: '', commencement_date: '',
 }
 
 export default function ProjectSetup() {
@@ -48,12 +48,14 @@ export default function ProjectSetup() {
             <Field label="施工廠商"><Input value={form.contractor_name} onChange={set('contractor_name')} placeholder="施作廠商名稱" /></Field>
             <Field label="監造單位"><Input value={form.supervisor_name} onChange={set('supervisor_name')} placeholder="監造單位名稱" /></Field>
           </div>
-          {/* 這兩欄寫的是 projects.start_date/end_date(契約預定值),不是期限引擎的開工基準
-              ——引擎讀的是另一欄 commencement_date,由「契約重點→基準日與契約總價」登錄。
-              同標籤兩欄位會讓使用者以為在這裡填了開工日,期限追蹤就會開始倒數,所以標題明寫「預計」。 */}
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="預計開工日" hint="實際開工日於接獲開工通知後,到「契約重點→基準日與契約總價」登錄。"><Input type="date" value={form.start_date} onChange={set('start_date')} /></Field>
-            <Field label="預計竣工日" hint="完工類期限以此為到期基準;可日後在「契約重點→基準日與契約總價」修改。"><Input type="date" value={form.end_date} onChange={set('end_date')} /></Field>
+          {/* 前兩欄寫 projects.start_date/end_date(契約預定值);期限引擎的開工基準是
+              另一欄 commencement_date——預定與實際刻意分開,引擎照猜的日期跑會發錯提醒。
+              第三欄(選填)服務「導入進行中案」:開工日早已知道,不該逼使用者建完案
+              再去找設定入口;還沒開工就留空,之後在「契約重點」的履約期程設定。 */}
+          <div className="grid grid-cols-3 gap-4">
+            <Field label="預計開工日" hint="契約預定值,僅供參考;期限引擎不用它起算。"><Input type="date" value={form.start_date} onChange={set('start_date')} /></Field>
+            <Field label="預計竣工日" hint="完工類期限以此為到期基準;可日後在「契約重點」的履約期程修改。"><Input type="date" value={form.end_date} onChange={set('end_date')} /></Field>
+            <Field label="實際開工日(選填)" hint="已開工的案子才填,開工類期限以此起算;未開工請留空,接獲開工通知後再到「契約重點」的履約期程設定。"><Input type="date" value={form.commencement_date} onChange={set('commencement_date')} /></Field>
           </div>
           <ErrorBanner msg={err} />
           <Button type="submit" disabled={loading}>{loading ? '建立中…' : '建立專案'}</Button>

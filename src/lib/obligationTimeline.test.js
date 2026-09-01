@@ -7,6 +7,7 @@ import {
   VISIBLE, PARTIES, ORG_TO_PARTY, obligationParty, canActOn,
   deriveStatus, countdownLabel, phaseOf, phaseWindows,
   partyStat, phaseStat, pickDefaultId, buildTimelineItem, matchesFilters,
+  anchorGaps,
 } from './obligationTimeline.js'
 
 const TODAY = new Date(2026, 7, 25) // 2026-08-25
@@ -200,5 +201,58 @@ describe('檢視模型組裝', () => {
     )
     expect(it3.kind).toBe('每月循環')
     expect(it3.calc).toContain('每月 5 日')
+  })
+})
+
+describe('基準日缺口(anchorGaps):數字必須等於「設完基準日會多出到期日」的條數', () => {
+  const item = (over, anc) => buildTimelineItem(ob(over), { anchors: anc, today: TODAY })
+  it('觸發點映到缺值錨點才算;輸出照固定順序、含中文標籤', () => {
+    const none = {}
+    const items = [
+      item({ trigger_event: 'commencement', fixed_date: null, offset_days: 14 }, none),
+      item({ trigger_event: 'commencement', fixed_date: null, offset_days: 30 }, none),
+      item({ trigger_event: 'award', fixed_date: null, offset_days: 7 }, none),
+    ]
+    expect(anchorGaps(items, none)).toEqual({
+      total: 3,
+      gaps: [
+        { key: 'award_date', label: '決標日', count: 1 },
+        { key: 'commencement_date', label: '開工日', count: 2 },
+      ],
+    })
+  })
+  it('基準日已設 → 缺口歸零(項目有到期日,不再是 na)', () => {
+    const anc = { commencement_date: '2026-03-01', award_date: '2026-01-15' }
+    const items = [
+      item({ trigger_event: 'commencement', fixed_date: null, offset_days: 14 }, anc),
+      item({ trigger_event: 'award', fixed_date: null, offset_days: 7 }, anc),
+    ]
+    expect(anchorGaps(items, anc).total).toBe(0)
+  })
+  it('不是被基準日卡住的 na 不算:fixed 缺日期、無觸發點', () => {
+    const none = {}
+    const items = [
+      item({ trigger_event: 'fixed', fixed_date: null }, none),
+      item({ trigger_event: null, fixed_date: null }, none),
+    ]
+    expect(anchorGaps(items, none).total).toBe(0)
+  })
+  it('已完成的不算(status=done,不是 na);循環配置完整的有到期日也不算', () => {
+    const none = {}
+    const items = [
+      item({ trigger_event: 'commencement', fixed_date: null, status: '已完成' }, none),
+      item({ trigger_event: null, fixed_date: null, recurring: 'monthly', recurring_day: 5 }, none),
+    ]
+    expect(anchorGaps(items, none).total).toBe(0)
+  })
+  it('循環配置破損落回基準日分支:開工觸發+缺開工日 → 照算', () => {
+    const none = {}
+    const items = [
+      item({ trigger_event: 'commencement', fixed_date: null, recurring: 'monthly', recurring_day: null }, none),
+    ]
+    expect(anchorGaps(items, none)).toEqual({
+      total: 1,
+      gaps: [{ key: 'commencement_date', label: '開工日', count: 1 }],
+    })
   })
 })

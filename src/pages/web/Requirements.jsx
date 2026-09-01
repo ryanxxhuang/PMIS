@@ -31,8 +31,9 @@ import { localISODate } from '../../lib/dates.js'
 import {
   PARTY_META, VISIBLE, ORG_TO_PARTY, PARTY_BLURB, OB_STATUS, STATUS_KEYS, PHASES,
   buildTimelineItem, matchesFilters, partyStat, phaseStat, phaseWindows,
-  pickDefaultId, canActOn,
+  pickDefaultId, canActOn, anchorGaps,
 } from '../../lib/obligationTimeline.js'
+import AnchorDates from '../../components/AnchorDates.jsx'
 
 // 期程段軌道/摘要語意色 → 全站 token(五色語意:紅=逾期、綠=完成、藍=當前、灰=其他)
 const TRACK_BG = {
@@ -70,7 +71,7 @@ const StatusDot = ({ status }) => (
 export default function Requirements() {
   const {
     currentProject, project, isPersistedProject, currentUser, obligations,
-    updateObligationStatus, submittals, createObservation, can,
+    updateObligationStatus, submittals, createObservation, can, updateProjectAnchors,
   } = useStore()
   // 登入身分決定檢視方(README:產品端不渲染身分切換器,demo 換角色重登即可)
   const viewerParty = ORG_TO_PARTY[currentUser?.org_type] || '廠商'
@@ -90,6 +91,8 @@ export default function Requirements() {
   const [reportDraft, setReportDraft] = useState({ type: REPORT_TYPES[0], note: '' })
   const [reportBusy, setReportBusy] = useState(false)
   const [reportMsg, setReportMsg] = useState('')
+  const [anchorOpen, setAnchorOpen] = useState(false)  // 履約期程卡的基準日編輯列
+  const [anchorErr, setAnchorErr] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
   const searchRef = useRef(null)
 
@@ -217,6 +220,18 @@ export default function Requirements() {
       `可見 ${pool.length} 條`,
     ].filter(Boolean).join(' · ')
   }, [phaseWin, pool.length])
+
+  // 基準日缺口與就地設定:開工類義務推不出到期日的主因就是開工日沒設,而設定
+  // 入口原本只在隱藏的期限追蹤頁——把設定放在後果看得到的地方(履約期程卡)。
+  // 寫入 DB-first(同 B-04):updateProjectAnchors 成功才更新 store 的 project,
+  // anchors/items 隨之重算,使用者當場看到「未觸發」翻成有日期。demo 不出現
+  // (種子案基準日齊全,且 updateProjectAnchors 需真專案)。
+  const gaps = useMemo(() => anchorGaps(pool, anchors), [pool, anchors])
+  const setAnchor = async (key, val) => {
+    setAnchorErr('')
+    const { error } = await updateProjectAnchors({ [key]: val || null })
+    if (error) setAnchorErr(friendlyError(error, '基準日未儲存'))
+  }
 
   // 篩選後選中項被篩掉:保留右欄內容不清空(README 3),清單中無高亮列
   const selected = pool.find((it) => it.id === selectedId) || null
@@ -685,8 +700,38 @@ export default function Requirements() {
     <Card bodyClass="px-[18px] pt-[15px] pb-[17px]">
       <div className="flex items-baseline justify-between gap-4 mb-[13px] flex-wrap">
         <span className="text-[13px] font-medium text-[var(--text)]">履約期程</span>
-        <span className="num text-[11px] text-[var(--text-2)]">{milestoneMeta}</span>
+        <span className="inline-flex items-baseline gap-3">
+          <span className="num text-[11px] text-[var(--text-2)]">{milestoneMeta}</span>
+          {isPersistedProject && (
+            <button type="button" onClick={() => setAnchorOpen((v) => !v)} aria-expanded={anchorOpen}
+              className="inline-flex items-center gap-1 text-[11.5px] text-[var(--blue-text)] hover:underline pressable">
+              <MSym name="edit_calendar" size={14} />設定基準日
+            </button>
+          )}
+        </span>
       </div>
+      {/* 缺口提示:幾條義務在等哪個基準日——數字來自 anchorGaps,設完就消失 */}
+      {isPersistedProject && !anchorOpen && gaps.total > 0 && (
+        <button type="button" onClick={() => setAnchorOpen(true)}
+          className="w-full mb-3 flex items-center gap-2.5 rounded-[10px] bg-[var(--amber-tint)] px-3.5 py-2.5 text-left pressable">
+          <MSym name="event_busy" size={16} className="text-[var(--amber-text)] shrink-0" />
+          <span className="min-w-0 flex-1 text-[12px] leading-snug text-[var(--amber-text)]">
+            {gaps.gaps.map((g) => `${g.count} 條義務等待${g.label}`).join('、')}——設定後自動排入時程並開始倒數
+          </span>
+          <span className="text-[12px] font-medium text-[var(--amber-text)] shrink-0">設定</span>
+        </button>
+      )}
+      {isPersistedProject && anchorOpen && (
+        <div className="mb-3 rounded-[10px] border border-[var(--border-card)] bg-[var(--bg)] px-3.5 pt-3 pb-3.5">
+          <div className="flex flex-wrap gap-4">
+            <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!can.edit} />
+          </div>
+          <ErrorBanner msg={anchorErr} className="mt-2" />
+          <p className="text-xs text-[var(--text-3)] mt-2">
+            到期日、倒數與逾期都依基準日即時計算;「開工日」請填實際開工日(非預定日),填了系統就會照它發提醒。
+          </p>
+        </div>
+      )}
       <div className="flex items-stretch gap-0.5 max-xl:overflow-x-auto max-xl:pb-1">
         {PHASES.map((ph) => {
           const s = phaseStat(pool, ph.key, phaseWin.nowPhase)
