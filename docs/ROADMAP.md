@@ -1,7 +1,7 @@
 # GovAgent／PMIS 整理路線
 
 > 狀態：**ACTIVE（W0–W14 與精修期系列全數合併部署；最新 PR #58，2026-09-01；目前沒有進行中的已核准工作包）**
-> 最後更新：2026-09-02（文件補記：依 PR #23～#58 回填 W8-8～W14、體檢 P1、契約重點改版系列與 D-020；基線 71 檔 767 Vitest／42 Demo E2E／33 pgTAP；正式庫 migration 套用狀態待核對，見 CURRENT.md §6）
+> 最後更新：2026-09-02（文件補記：依 PR #23～#58 回填 W8-8～W14、體檢 P1、契約重點改版系列與 D-020；基線 71 檔 767 Vitest／42 Demo E2E／33 pgTAP；正式庫 migration 已核對與 repo 一致，見 CURRENT.md §6）
 > 依《產品全案評估報告 2026-08-12》與已核准的 W8-0 第三版（方向已定案為 D-007～D-015）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
 
@@ -276,7 +276,7 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   遺留（PR #55 已知後端缺口）：依身分過濾查詢＋逐筆 `canAct`、`report-issue`／`re-extract` 端點——`can_write` 與 `completed_at` 兩項已由 PR #56 補上。
 - [x] **D-020 履約時程全型別＋開工日入口（PR #56／#57／#58）**
   範圍：義務 UPDATE 政策只看歸屬＋伺服器完成時間戳（#56）；任何已核定 Requirement 都物化義務（#57，D-020）；開工日三入口（#58）。
-  驗收證據：767 Vitest、42 Demo E2E、build 綠；#57 本機全套 pgTAP 927 項、rollback down→up 循環通過。**#56／#57 註明 merge 不會自動套 migration**；PR #58 描述顯示 D-020 回填已在正式案生效，但 tracker 未核對（見 CURRENT.md §6）。
+  驗收證據：767 Vitest、42 Demo E2E、build 綠；#57 本機全套 pgTAP 927 項、rollback down→up 循環通過。#56／#57 註明 merge 不會自動套 migration；2026-09-02 以 `supabase migration list --linked` 核對，`20260825120000` 與 `20260901040000` 都已在正式庫。
 
 ---
 
@@ -299,4 +299,4 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 - （PR #54）五個 hidden 工作面逐項復出——加回一個功能＝移除一行 hidden；跨案總覽回側欄時還原多案角色分流
 - （PR #55 後端缺口）依身分過濾的義務查詢＋逐筆 `canAct` 旗標（屆時刪除前端 `VISIBLE` shim）；`report-issue`／`re-extract` 專用端點
 - （PR #57）`/deadlines` 無時點的「無期限」列是否過濾（目前排序在最後）
-- （2026-09-02 健檢）補 `20260824130000`／`20260825000100`／`20260825120000` 三支 rollback；以 `supabase migration list` 核對正式庫並回填 CURRENT.md；關閉 GitHub Pages＋刪 `gh-pages` 分支、處理 `pmis.pages.dev` 舊部署；刪 34 條已合併分支；確認 `claude/trusting-heyrovsky-203d6c`（PostgREST 分頁）是否已由他路徑進 main；`npm audit fix`＋移除 `gh-pages` 套件；React 19／Vite 8／Vitest 4 大版升級另立工作包；CLAUDE.md 與 DEVELOPMENT.md 續接點同步（尚未做）
+- （2026-09-02 健檢）補 `20260824130000`／`20260825000100`／`20260825120000` 三支 rollback；~~以 `supabase migration list` 核對正式庫~~（2026-09-02 已核對一致）；關閉 GitHub Pages＋刪 `gh-pages` 分支、處理 `pmis.pages.dev` 舊部署；刪 34 條已合併分支；確認 `claude/trusting-heyrovsky-203d6c`（PostgREST 分頁）是否已由他路徑進 main；`npm audit fix`＋移除 `gh-pages` 套件；React 19／Vite 8／Vitest 4 大版升級另立工作包；CLAUDE.md 與 DEVELOPMENT.md 續接點同步（尚未做）

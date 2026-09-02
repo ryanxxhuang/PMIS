@@ -106,7 +106,7 @@ contract_packages
 
 最近一次全套驗證（本機，2026-09-02，main `ba6ab45`）：767 Vitest、42 Demo E2E 與 production build 全綠；main 最近 10 次 CI（含 pgTAP workflow）全部成功；`app.gov-agent.ai` 的 `/`、`/login`、`/agent`、`/requirements`、`/security`、`/site-log/print` 均回 200，HSTS／CSP／X-Frame-Options／X-Content-Type-Options／Referrer-Policy／Permissions-Policy／COOP 七項標頭齊全，線上 bundle 已含 PR #58 的 `AnchorDates` chunk。真後端 E2E 最近一次紀錄為 PR #54（6/6）。
 
-**正式資料庫 migration 套用狀態需核對**：文件最後一次明確紀錄是 PR #48（`20260824000200` 已套用）與 PR #50（收編正式庫已由 MCP 直接套用的 `20260824123253`）。PR #34、#42、#56、#57 都註明「merge 不會自動套 migration」，而 `20260821000200`、`20260822010000`、`20260822010100`、`20260824000900`、`20260824130000`、`20260825000100`、`20260825120000`、`20260901040000` 是否已套用正式庫，repo 內沒有紀錄；PR #58 描述「D-020 回填後正式案 23 條開工類義務等待開工日」可推斷 `20260901040000` 已生效，但 tracker 未核對。續接前以 `supabase migration list` 核對並回填本段，不得假設已套用。
+**正式資料庫 migration 已核對（2026-09-02，`supabase migration list --linked`，project `buylyonwoyvqdbvkkkbx`）**：本機 57 支與遠端 57 筆逐一相符，遠端最新為 `20260901040000`，沒有只在一邊的版本。2026-08-19 之後合併的 18 支（含 PR #34、#42、#56、#57 註明「merge 不會自動套」的那幾支）都已套用；PR #50 收編的 `20260824123253` 在遠端有對應列。Edge Function 線上版本仍未逐支核對，最後一次文件紀錄是 PR #48（extract-requirements／agent-run／send-reminders）與 PR #51（extract-requirements）重佈。
 
 標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 
@@ -204,7 +204,7 @@ W8-5 由 PR #19 交付並部署，W8（W8-1～W8-5）全數完成：手機觸控
 5. **Migration 回復檔覆蓋 4／57**：改寫 `apply_transcription_triage` 狀態機的 `20260824130000`、`20260825000100` 與改 UPDATE 政策的 `20260825120000` 沒有 down 檔。
 6. **五個工作面處於 hidden**：PR #54 起 `/site-log`、`/quality`、`/valuation`、`/payments`、`/portfolio` 等只能深連結或由今日待辦導入；逐項復出是產品決定，不是技術債，但 E2E 對這些頁的守衛仍在跑。
 7. **過時部署仍可公開存取**：`pmis.pages.dev`（舊 Cloudflare 部署，bundle 落後）與 `ryanxxhuang.github.io/PMIS`（GitHub Pages 仍啟用，`gh-pages` 分支停在 2026-08-11，舊品牌）都帶正式 anon key。待關閉 GitHub Pages、刪 `gh-pages` 分支、處理舊 Cloudflare 專案（2026-09-02 健檢列為 P1）。
-8. **正式庫 migration tracker 缺核對紀錄**：見 §6「正式資料庫 migration 套用狀態需核對」。
+8. **Edge Function 線上版本未逐支核對**：migration tracker 已於 2026-09-02 核對一致（§6），但 17 支 Edge Function 的線上版本與 `main` 是否一致沒有紀錄，最後一次重佈紀錄是 PR #51；下次動 `supabase/functions/` 時順手以 `supabase functions list` 對帳。
 
 ## 8. 文件權威順序
 

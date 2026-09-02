@@ -11,7 +11,7 @@
 - **`/requirements` 現在是「契約重點 · 履約時程」三方共用檢視頁（PR #55）**，本頁不做審核；規則在 `src/lib/obligationTimeline.js`，可見範圍看角色、動作只看歸屬；`VISIBLE` 表是前端 shim 不是安全邊界。期限管理動作在 `/deadlines`。
 - **側欄處於精修期最小表面（PR #54）**：只露今日待辦／專案文件／契約重點／標單工項；其餘五個工作面 `hidden: true`，定義、角色限制、路由與深連結全部保留。要加回功能＝移除一行 hidden，不要重建導覽。
 - **部署位置**：App 在 `app.gov-agent.ai`（Cloudflare Workers，push `main` 即部署）；apex `gov-agent.ai` 是 `PMIS.marketing` 的行銷站，App 路由在 apex 會 404，冒煙測試要打 `app.` 子網域。品牌字樣目前是 GovAgent（PR #24 改 PMIS 後於 08-25 改回）。
-- **正式庫 migration 套用狀態未核對**：repo 已到 `20260901040000`，但 `20260821000200` 之後共 8 支 migration 在 repo 內沒有套用紀錄（清單見 `CURRENT.md` §6）。PR #42 的兩支必須**先部署前端再 db push**。續接任何動 DB 的工作前先跑 `supabase migration list` 核對並回填 CURRENT.md。
+- **正式庫 migration 已核對一致（2026-09-02）**：本機 57 支＝遠端 57 筆，遠端最新 `20260901040000`。之後每次套 migration 或重佈 Edge Function，版本號要寫回 `CURRENT.md` §6（DEVELOPMENT.md 完成定義第 3 條）；動 DB 前仍先跑 `supabase migration list --linked` 看一眼。
 - **基線（2026-09-02 本機實測）**：71 檔 767 Vitest、42 Demo E2E、33 pgTAP、production build 全綠；真後端 E2E 最近紀錄 PR #54（6/6）。
 - 續接仍以 `docs/ROADMAP.md` 未排入清單與使用者新核准範圍為準；新工作包從最新 `main` 建分支，不沿用已合併分支（遠端仍有 34 條已合併分支未刪）。
 
