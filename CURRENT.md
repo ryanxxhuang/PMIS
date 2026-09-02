@@ -1,7 +1,7 @@
 # GovAgent／PMIS — 目前系統真相
 
 > 狀態：**CURRENT（現況權威文件）**
-> 最後核對：2026-08-15
+> 最後核對：2026-09-02（依 PR #23～#58 回填；main `ba6ab45`）
 > 用途：回答「產品現在是什麼、已經做到哪裡、哪份文件說了算」。
 
 ## 1. 一句話定義
@@ -11,8 +11,8 @@
 目前只做第一個垂直領域：**公共工程專案管理**。因此：
 
 - **GovAgent**：長期產品與平台名稱。
-- **PMIS**：目前公共工程垂直領域的 repo／工程專案代稱；介面主品牌已在 W8-1 統一為 `GovAgent｜公共工程`。
-- **`gov-agent.ai`**：目前正式站網域。
+- **PMIS**：目前公共工程垂直領域的 repo／工程專案代稱。介面品牌字樣在 W8-1 統一為 `GovAgent｜公共工程`，2026-08-19 曾依使用者決定改為 `PM·IS`／「問 PMIS」（PR #24），2026-08-25 又改回 GovAgent（commit `4f5c084`，隨 PR #52 合併）；目前頁首、登入頁與 `index.html` 均為 GovAgent，「問 GovAgent」是全域入口。
+- **`app.gov-agent.ai`**：App 正式站（Cloudflare Workers）。apex **`gov-agent.ai`** 自 2026-08-25 起由 `PMIS.marketing` repo 的行銷站（GitHub Pages）承接，App 路由在 apex 會回 404；行銷站的「開始使用」連到 `app.` 子網域。
 
 在公共工程階段驗證完成前，不因長期願景而提早開發戶政、社福等其他領域，也不為假想需求建立外掛系統或 DSL。
 
@@ -94,18 +94,19 @@ contract_packages
 
 ## 6. 目前技術現況
 
-截至 2026-08-14 的盤點：
+截至 2026-09-02 的盤點（main `ba6ab45`，PR #58）：
 
-- React 18、Vite 6、Tailwind CSS 4 的靜態 SPA。
+- React 18、Vite 6、Tailwind CSS 4 的靜態 SPA；Sentry 錯誤回報（`src/lib/sentry.js`，DSN 走環境變數）。
 - Supabase Postgres、Auth、RLS、Storage 與 Deno Edge Functions。
-- Cloudflare Workers 靜態資產部署，正式站為 <https://gov-agent.ai>。
-- 36 條 React 路由、33 個頁面檔、9 個 Store slices。
-- 50 張 migration 建立的資料表、1 個權威 Requirement View。
-- 16 個已註冊的 AI／整合功能與 16 個 Edge Functions（`assistant.chat` 已於 W3-3 停用，列與用量歷史保留）。
-- 36 個 migrations；`supabase/migrations/` 是資料庫唯一真相。
-- 63 個 Vitest 測試檔，共 607 個測試；30 個 Playwright Demo 三角色／路由／無障礙 E2E（含 `e2e/a11y.spec.js` 的三角色 375px 全路由無溢位掃描與鍵盤合約）；5 條手動真 Supabase E2E（auth 冒煙＋四條業務鏈）（chain3 含 live AI 成功路徑，2026-08-15 驗證）；23 組 pgTAP SQL 測試（自 2026-08-13 起由獨立 CI workflow 在資料庫相關變更的 push/PR 自動全套執行）。
+- Cloudflare Workers 靜態資產部署（`wrangler.jsonc`，push 到 `main` 即部署），App 正式站為 <https://app.gov-agent.ai>；apex <https://gov-agent.ai> 是行銷站，見 §1。
+- 39 條登記路由（`routeRegistry`）、40 個業務頁面檔、9 個 Store slices。側欄自 PR #54 起只露出今日待辦／專案文件／契約重點／標單工項四個扁平入口，其餘五個工作面（現場與品質、審查與協作、進度與金流、報表與結案、專案）`hidden: true`——定義、角色限制與深連結全部保留，今日待辦與初始化清單仍會導向隱藏頁；加回一個功能＝移除一行 hidden。
+- 57 個 migrations 建立 51 張資料表、1 個權威 Requirement View；`supabase/migrations/` 是資料庫唯一真相。`supabase/rollbacks/` 只有 4 支 down 檔（`20260712001400`、`20260712001700`、`20260812000500`、`20260901040000`）。
+- 17 個已註冊的 AI／整合功能與 17 個 Edge Functions（`assistant.chat` 停用保留；PR #37 新增 `documents.classify`＝`classify-document`）。
+- 71 個 Vitest 測試檔，共 767 個測試；42 個 Playwright Demo E2E（三角色／路由／無障礙／RFI／送審球權）；6 條真 Supabase E2E（auth 冒煙＋四條業務鏈＋檔案檢視 `file-viewing.spec.js`）；33 組 pgTAP SQL 測試（DB 相關變更的 push／PR 自動全套執行）。
 
-最近一次全套驗證（W7 PR #9，2026-08-13）：530 個單元測試、14 個 Demo E2E、5 個真 Supabase E2E 與 production build 全數通過。PR #8 已讓 23 檔 pgTAP 自動進 CI；其 main run 與一般 CI 均成功。W0～W5、W6 PR #7、pgTAP CI PR #8 與 W7 PR #9 已合併部署；PR #9 的 main CI 與 Cloudflare Workers build 成功，正式站首頁、`/requirements`、`/security` 與 `/site-log/print` 均回 HTTP 200。正式資料庫維持 `20260812000600`，W7 沒有資料庫變更。
+最近一次全套驗證（本機，2026-09-02，main `ba6ab45`）：767 Vitest、42 Demo E2E 與 production build 全綠；main 最近 10 次 CI（含 pgTAP workflow）全部成功；`app.gov-agent.ai` 的 `/`、`/login`、`/agent`、`/requirements`、`/security`、`/site-log/print` 均回 200，HSTS／CSP／X-Frame-Options／X-Content-Type-Options／Referrer-Policy／Permissions-Policy／COOP 七項標頭齊全，線上 bundle 已含 PR #58 的 `AnchorDates` chunk。真後端 E2E 最近一次紀錄為 PR #54（6/6）。
+
+**正式資料庫 migration 套用狀態需核對**：文件最後一次明確紀錄是 PR #48（`20260824000200` 已套用）與 PR #50（收編正式庫已由 MCP 直接套用的 `20260824123253`）。PR #34、#42、#56、#57 都註明「merge 不會自動套 migration」，而 `20260821000200`、`20260822010000`、`20260822010100`、`20260824000900`、`20260824130000`、`20260825000100`、`20260825120000`、`20260901040000` 是否已套用正式庫，repo 內沒有紀錄；PR #58 描述「D-020 回填後正式案 23 條開工類義務等待開工日」可推斷 `20260901040000` 已生效，但 tracker 未核對。續接前以 `supabase migration list` 核對並回填本段，不得假設已套用。
 
 標單重設與匯入自 W1 起走單一交易 RPC（`reset_project_boq`／`import_work_items`，migration `20260812000200`）：全成或全敗，權限沿用 `can_write`，證據 guard 擋下時整包 rollback 並留 `audit_events`；前端不再逐表刪除或分批寫入。
 
@@ -151,6 +152,40 @@ W8-5 由 PR #19 交付並部署，W8（W8-1～W8-5）全數完成：手機觸控
 
 **W8-7（PR #22）交付並部署**：照片先行→AI 填日誌——未存檔即可批次「選照片 AI 辨識後上傳」，確認上傳時自動 upsert 建空白草稿日誌再掛照片（人觸發，紅線一不破）；辨識結果只回填表單（配到的工項自動加列、數量留空，caption 彙整成「AI 草稿:」摘要僅空時預填），落庫仍由人按存檔，與 W8-6 dirty 防護相容。`photos.location`（migration `20260819120000`）＋ classify-site-photo schema/prompt 結構化白板施作區域（只准照抄、嚴禁推測、辨識不到=null、required 保證鍵存在），覆核區可清除 chip、佐證包照片說明前綴區域（`photoEvidenceLine`）。查驗↔自主檢查表縫合：`inspections.checklist_record_id` FK（migration `20260819120100`，on delete set null；pgTAP `inspection_checklist_link.sql` plan 11）；查驗申請可檢附已判定現行版檢查紀錄並在查驗列顯示 chip；檢查表分段對自檢合格的紀錄提供「提出查驗申請」一鍵預填（工項／項目／位置／檢附／申請日，送出仍由人），整鏈任一版已被檢附則顯示「已附查驗」不再給入口。基線：65 檔 640 Vitest、30 Demo E2E、build 全綠；PR 與 main CI＋pgTAP 全綠；兩支 migration 先於前端套用正式庫（remote `20260819120100`），classify-site-photo 以 `--use-api` 重新部署。仍未做：機關模板估驗計價單套版、進度網圖驅動提醒、查驗單正式列印格式（見 ROADMAP 未排入）。
 
+> 以上 W8-1～W8-7 段落中關於側欄六工作面、`/requirements` 畫面、「核定生效」語意與品牌字樣的描述，已被 2026-08-20 之後的改版取代；現況以 §6.2 為準，舊段落保留作為決策脈絡。
+
+### 6.2 2026-08-19 之後的交付（PR #23～#58）
+
+**CI 與品牌**（PR #23、#24）：CI 以 lockfile 的 Playwright 版號快取 Chromium，CDN 劣化不再撞 timeout。品牌字樣改 PMIS 後於 08-25 改回 GovAgent（見 §1）；網址與 repo 名不變。
+
+**W9 Google Workspace 風格改版**（PR #25／#26／#27／#28，08-20～08-21）：純視覺與互動層換殼——token 換值不換名、Noto Sans TC 與 Material Symbols 全面 self-host（零 CDN，CSP `font-src 'self' data:`）、lucide 退場；App bar 搜尋藥丸鈕導 `/agent` 代問；<768 底部導覽、768–1279 icon rail、≥1280 完整側欄；M3 深色全表。W9b 補側欄件數 badge（`useTodayTasks` 為聚合唯一入口，Layout 與 Dashboard 同一份）、`SortableTh`／`FilterChip`／`TablePager`＋`useTable.js`、「AI 今日已代辦」純統計卡、信賴度門檻上色。W9 修正批修掉 P0「手機存檔列被 BottomNav 蓋住」（`--bottom-nav-h`）、71 處觸控目標 `max-sm`→`max-md` 對齊手機層定義、對比 token 過 AA、圖示字型 subset 103KB→15KB。W9c 依統一規範修約 160 項：CHIP／FilterChip 為唯一切換語言、`TaskRow` 待辦列單一渲染、按鈕三級制、表格與輸入回共用元件。四包均未動 `routeRegistry`、roles、slices、RPC、RLS。
+
+**W10 契約期限追蹤鏈精修**（PR #29，08-21）：`_shared/claude.ts` 補 `stop_reason` 檢查（max_tokens 視為失敗）、單次 120s 逾時與 429／5xx 指數退避；`extract-requirements` 分批抽取、逐批落庫、涵蓋率（truncated／stopped_early／clipped／failed_batch）進 metadata、`PROMPT_VERSION` v2；啟動時自動標記逾時 run 失敗，同版本進行中 run 擋重複啟動。監造可上傳契約與勾已提送；`projects.contract_total` 手填契約總價（migration `20260821000100`），罰款試算優先吃手填；手動新增契約重點（manual→needs_review→核定→物化，零 schema 變更）。命名收斂：上游「契約重點」、下游「契約義務」。
+
+**W11 文件管理員獨立**（PR #30，08-21）：側欄「專案文件」抽出為獨立項；`/contract` 依 mockup 重建為上傳＋回饋面板與文件清單（AI 處理四狀態），上傳後自動分類自動歸檔分流；期限追蹤整組併入 `/requirements`，「契約義務」一詞自 UI 退場（PR #46 再拆出 `/deadlines`）。35 agents 審查 29 項全數處理：重試條件收窄回「AI 分析失敗」、needs_review 誠實顯示待確認。無 DB 變更。
+
+**W12 登入與身分**（PR #31／#32，08-21）：登入／建立帳戶頁依 mockup 重建，GSN SSO 移除，「保持登入」為真機制（sessionStorage ephemeral session）；註冊角色卡改 radiogroup＋roving tabindex；e2e-real 選擇器同步。`ensure_project_identity_for` 補「掛在 other 的舊 membership 依 `profiles.org_type` 重掛」修復分支＋一次性資料修復（migration `20260821001000`），前端不再謊稱「稍候幾秒」。
+
+**W13 大文件抽取可續跑**（PR #36／#40／#41／#43，08-21～08-22）：69 頁契約單批必逾時被平台砍成殭屍 run 的死路，改為跨 request 續跑——批次 14k 字元（上限 24 批）、單 request 絕對上限 140s 對齊 Supabase API 閘道 150s 真實天花板、進度與計數快照落庫、`awaiting_continue` 由前端共用接力層帶 `continue_run_id` 續跑；partial unique index 保證同版本最多一條 active run（migration `20260822000100`，23505→409，`run_conflict`／`restart_required` 分流）；stale 判定吃進度心跳（`last_progress_at`）；每個 request 各記一筆 `ai_usage_events`；對半切深度與子批完成 label 持久化（`pending_split_batch`／`pending_split_depth`／`pending_split_done`），修掉兩層活鎖。撤掉重新解析前的建議清理（會誤刪人工編修）；前端 502／504 特判為「進度已保留，稍後重試接續」。
+
+**W14 文件治理四件套**（PR #37／#38／#39／#44，08-22）：確定性分類器沒把握時問 `classify-document`（Haiku），信心 ≥0.8 自動歸檔並照常路由抽取（四紅線齊備：伺服器閘門＋計量＋雙註冊表＋migration `20260822000400`，`documents.classify` min_plan=trial；值域單一真相 `_shared/documentTypes.ts`）；任何終態文件可事後改分類（改成可抽取類型先警告會重跑）；`delete_document` RPC 為唯一刪除路徑（migration `20260822000300`；`documents` 不開 RLS DELETE、`requirement_sources` FK RESTRICT 護佐證鏈、未審 AI 建議隨文件走、`document.deleted` 留痕、storage 只准清孤兒檔；pgTAP `document_delete.sql` 20 案）；300MB 前端預檢與 Storage 超限特判。上傳面板誠實化：總數選檔即定錨、「正在解析標單 XML」只在 boqBusy 出現、可切到其他頁處理不中斷。一次性修正跨部署 run 的顯示計數（migration `20260822010200`）。
+
+**體檢 P1 修正批**（PR #33／#34／#35／#42，08-21～08-22，依 2026-08-21 上線前全案體檢）：`requirements.extract` 開放所有方案（migration `20260821000200`；上傳鏈核心不做方案差異化，差異化留給草稿／審查類）。監造／機關預設落地 `/portfolio`（`navConfig.defaultLandingPath()`，後被 PR #54 精修期改為一律今日待辦）；`public/theme-boot.js` 首繪前套主題（CSP `script-src 'self'` 不允 inline）；`review-submittal`／`audit-summary` 升 Sonnet；`usePagination` 穩定簽章不再被輪詢踢回第 1 頁；查驗不合格自動開缺失的 insert 錯誤不再被吞；Schedule／RiskAudit 勾稽改吃核准變更後數量；機關端補 `/audit` 入口。RFI 兩步繞過修補（migration `20260822000200`：離開已回覆／已結案僅監造可執行、待回覆刪除加驗 `answer is null`；pgTAP `rfi_flow.sql` 20 斷言，紅綠對照證明漏洞可重現）。業務日期「今天」統一台北時區（`src/lib/dates.js`，系統時戳維持 UTC）；photos 凍結防護（migration `20260822010000`：已核定估驗涵蓋或契約重點連結的照片擋刪擋洗欄位，pgTAP 41）與 `profiles` select 收斂為自己＋共案成員＋平台管理員、逐欄授權（migration `20260822010100`，pgTAP 19；**部署順序必須先前端後 db push**，舊前端 `select('*')` 會撞 42501）；`friendlyError` 收斂 22 頁約 110 處 raw `error.message`，`errorLeak.scan.test.js` 掃描式防回歸；照片上傳壓縮（長邊 2000px）＋零依賴 EXIF 回填 taken_at／GPS；10 頁 16 個空狀態補 PageHeader；手機語意斷點 640→768。體檢誤報（已由 W10／W11 修）與刻意跳過項列於 ROADMAP 未排入。
+
+**契約重點改版系列**（PR #45～#55，08-24～08-25）：
+
+- PR #45 文件清單「看上傳的檔案」：私有 bucket 一次性簽名 URL 預覽、blob 下載還原中文檔名（storage 對非 ASCII 檔名回百分比編碼）、下載開放所有可讀成員、`runFileLanded` 單一落地訊號、`log_document_access` RPC 讀取留痕（migration `20260824000100`，fail-closed，pgTAP 9；新增 `e2e-real/file-viewing.spec.js`）。
+- PR #46 `/requirements` 重建為契約條文檢索頁（搜尋＋狀態快篩＋類型／階段下拉 AND、文件序、每頁 50 條、300 筆上限誠實揭露、sticky 詳情、「開啟原文」走留痕 RPC、`?highlight` 深連結）；檢索範圍只濾待審 AI 建議，已審決內容不受最新 run 限制。期限追蹤獨立為 `/deadlines`（時間軸、已提送＋佐證、罰款試算、基準日與契約總價、列印對照表）。PR #47 契約重點頁移除頁內分頁條（`pageTabs:false`）、檢索加頻率維度（`requirementFrequencyKey`）。
+- PR #48 頻率值域擴充 daily／weekly／monthly／quarterly／yearly：抽取逐型 `frequency_config` 驗證（值域外欄位丟棄不整項否決）、`PROMPT_VERSION` v3；`contract_obligations` 加 `recurring_weekday`／`recurring_month`，物化逐型映射（migration `20260824000200`，已套用正式庫，extract-requirements／agent-run／send-reminders 已重佈）；前端／Edge 兩份 `contractDue` 支援新循環（缺必要欄位回 null）；規則文字共用 `formatObligationRule`。
+- PR #49 契約分級可見性補完（D-018，migration `20260824000900`）：`contract_obligations` SELECT／UPDATE 依 requirement 可見範圍（AI 走出處鏈、手動走歸包、都無＝全案 legacy）；`requirements.contract_package_id` 手動補登歸包（guard：同專案＋不可歸入無權讀取的包）；`can_read_requirement_scope`／`can_read_requirement_row` 五張表共用；pgTAP `contract_grading_completion.sql` 15。
+- PR #50 收編正式庫已由 MCP 直接套用、repo 沒有檔案的 `20260824123253`（行銷站 Demo 申請表 `demo_requests`），解除 db push 阻擋。
+- PR #51 D-017 語意改版（待核定→待確認、核定生效→確認無誤、已生效→已確認、駁回→不採用；估驗／變更設計的「核定」是另一業務語意未動）與確定性轉錄分流（migration `20260824130000`：引文 sourceVerify 逐字＋期限數字交叉核對，含中文數字與民國年、「140 不放行 14」錨定防誤配；兩關全過由 DB 函式自動確認並照 D-012 物化，任一疑慮標 `triage_doubts` 進人工；歷史 completed run 一次性回填；pgTAP `transcription_triage.sql`）。PR #52 摘要條「期限追蹤」改展開鈕，逐項列出時效性條文（`buildDueList` 進 `contractDue.js`，急迫度排序）；`/requirements/report` 對照報告依使用者指示退場。
+- PR #53 D-019 全自動確認（migration `20260825000100`）：AI 從已核定契約整理出的內容全部自動確認歸檔，確定性核對降為透明度註記（「系統核對無誤・自動確認」或「未逐字核對，以契約原文為準」橫幅）；帶疑慮的期限型也物化進期限追蹤，風險已向使用者揭露；人工補登仍由監造／機關確認；「不影響開啟正式模式」不變量保留。
+- PR #54 精修期最小表面：側欄只留四入口，其餘工作面 `hidden:true`（見本節盤點）；落地頁一律今日待辦。
+- PR #55 `/requirements` 改版為「契約重點 · 履約時程」三方共用檢視頁：審核流程自本頁退場，只剩標記完成、掛佐證、回報 AI 擷取有誤；規則收在 `src/lib/obligationTimeline.js`——可見範圍看角色（廠商＝[廠商]、監造＝[監造,廠商]、機關＝全部），動作與角色無關只看歸屬（`item.who === viewerParty`），三角色共用同版面零 if-else；`VISIBLE` 表是後端依身分過濾前的前端 shim，**不是安全邊界**。版面四塊：履約執行卡（每責任方一張，五狀態加總＝義務總數的稽核不變量有測試釘住）、五段履約期程條、時間軸清單、sticky 詳情；`?obligation=` 深連結、鍵盤快捷、aria-live；四斷點 RWD。
+
+**D-020 履約時程接入全部類型與開工日入口**（PR #56／#57／#58，09-01）：`contract_obligations` UPDATE 政策由 `can_write` 改為只看歸屬——機關自此可標記自己的義務完成，廠商／監造不能跨方改狀態，改 `responsible` 讓渡被擋，admin_override 照舊；`completed_at`／`completed_by` 由 trigger 蓋伺服器時間與操作人，client 送值作廢、退回清空，歷史完成列不回填（migration `20260825120000`，pgTAP 27）。準時率改「應完成項準時率」：分子＝完成時間 ≤ 到期日、分母＝已完成＋已逾期，遲交補完成永遠留在分母。D-020：D-012 轉接器更名 `materialize_requirement_obligation`，任何已核定 Requirement 都物化一列義務（正式庫實測 106 條核定項只有 15 條期限型進 timeline、91 條卡住）；無時點型別為「未觸發」無到期日義務，期程段照 `lifecycle_phase` 歸位；`apply_transcription_triage` 與 `review_requirement` 不再分型別；既有卡住的核定項一次回填（migration `20260901040000`＋rollback 檔；pgTAP one_way 34、triage 18；前端零邏輯改動）。今日待辦與提醒信只消費推得出到期日且七日內的項目；`/deadlines` 會多出「無期限」列，是否過濾待 UX 決定。PR #58 開工日三入口：履約時程頁「設定基準日」就地展開四個基準日（決標／接獲開工通知／開工／竣工，共用 `AnchorDates`；`anchorGaps` 純函式只算「觸發點映到缺值錨點」的未觸發項，設完必須歸零）、初始化清單擴為五步（第 4 步設定開工日；第 5 步開啟正式模式仍不被任何步驟鎖住，D-014 不動）、建案選填「實際開工日」。不動 DB。
+
 ### 6.1 前端資料存取規則
 
 - 跨頁共享、需要同步更新的資料放 Store。
@@ -164,7 +199,12 @@ W8-5 由 PR #19 交付並部署，W8（W8-1～W8-5）全數完成：手機觸控
 
 1. **雙成員資料仍保留相近名稱**：W5-3 已用單一架構規則、schema comment 與高風險呼叫點註解降低誤用；為維持相容，未改表名、刪相容 helper 或動 RLS。
 2. **雙引擎同步**：W5-4 已修正試體不合格缺失的漏開／重複開漂移；其餘 Demo／前端與伺服器 Trigger／Edge 規則仍有人工同步點，詳見 `docs/architecture/dual-engine-sync.md`。
-3. **期限相容層仍存在**：W5-2 已把方向收斂為 approved deadline Requirement → obligation，但時間軸、提醒與部分 Agent 查詢仍讀 `contract_obligations`；它是有 rollback 的 runtime 相容層，不是第二份契約權威。正式站已套用 `20260812000500`，舊的 obligation → Requirement triggers 已退役。
+3. **期限相容層仍存在**：W5-2 已把方向收斂為 approved deadline Requirement → obligation，但時間軸、提醒與部分 Agent 查詢仍讀 `contract_obligations`；它是有 rollback 的 runtime 相容層，不是第二份契約權威。正式站已套用 `20260812000500`，舊的 obligation → Requirement triggers 已退役。 D-020 起所有已核定 Requirement 都物化一列義務，`contract_obligations` 現在是履約時程頁的直接資料來源；方向仍是單向，未改變權威。
+4. **履約時程可見範圍仍是前端 shim**：PR #55 的 `VISIBLE` 表與逐筆 `canAct` 尚未由後端依身分回傳。PR #56 已把 UPDATE 政策收到歸屬、D-018 提供 SELECT 分級，安全邊界在 RLS；但前端仍自行過濾可見集合，目標契約是後端逐筆回 `canAct` 後整表刪除。
+5. **Migration 回復檔覆蓋 4／57**：改寫 `apply_transcription_triage` 狀態機的 `20260824130000`、`20260825000100` 與改 UPDATE 政策的 `20260825120000` 沒有 down 檔。
+6. **五個工作面處於 hidden**：PR #54 起 `/site-log`、`/quality`、`/valuation`、`/payments`、`/portfolio` 等只能深連結或由今日待辦導入；逐項復出是產品決定，不是技術債，但 E2E 對這些頁的守衛仍在跑。
+7. **過時部署仍可公開存取**：`pmis.pages.dev`（舊 Cloudflare 部署，bundle 落後）與 `ryanxxhuang.github.io/PMIS`（GitHub Pages 仍啟用，`gh-pages` 分支停在 2026-08-11，舊品牌）都帶正式 anon key。待關閉 GitHub Pages、刪 `gh-pages` 分支、處理舊 Cloudflare 專案（2026-09-02 健檢列為 P1）。
+8. **正式庫 migration tracker 缺核對紀錄**：見 §6「正式資料庫 migration 套用狀態需核對」。
 
 ## 8. 文件權威順序
 
@@ -183,6 +223,11 @@ W8-5 由 PR #19 交付並部署，W8（W8-1～W8-5）全數完成：手機觸控
 | 今日待辦的三段聚合、球權與完成條件 | `src/lib/todayTasks.js`（Dashboard 與 `/alerts` 共用；協作項球權仍在 `src/lib/ballInCourt.js`） |
 | 資料庫 Schema、RLS、RPC、Trigger | `supabase/migrations/` |
 | AI 功能註冊 | DB `ai_features`；程式鏡像為 `src/lib/aiFeatures.js` 與 `supabase/functions/_shared/aiFeatures.ts` |
+| 履約時程可見範圍與動作歸屬（前端） | `src/lib/obligationTimeline.js`；安全邊界仍是 RLS（D-018、`20260825120000`） |
+| 契約重點期限與循環規則文字 | `src/lib/contractDue.js`（`buildDueList`、`formatObligationRule`）與 Edge 端同名引擎，兩份需人工同步 |
+| 文件類型值域 | `supabase/functions/_shared/documentTypes.ts` |
+| 業務日期「今天」 | `src/lib/dates.js`（台北時區；系統時戳維持 UTC） |
+| 部署位置 | App `app.gov-agent.ai`（Cloudflare Workers，`wrangler.jsonc`）；apex 為 `PMIS.marketing` 行銷站 |
 | 測試與建置基線 | 實際執行 `npm test`、`npm run test:e2e`、`npm run build` 與 `supabase/tests/` |
 
 `SCOPE.md` 與 `PRD.md` 是歷史規劃快照；日期式驗收、UX、資安與簡報文件是當時證據，不是目前功能清單。

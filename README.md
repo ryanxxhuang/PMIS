@@ -3,7 +3,7 @@
 > **GovAgent** 是最終產品：讓政府機關每位承辦人都有一個懂業務、法規與文書格式的 AI Agent。
 > **PMIS** 是目前第一個垂直領域——公共工程專案管理——的專案名稱與程式庫名稱。
 
-- 正式站：<https://gov-agent.ai>
+- App 正式站：<https://app.gov-agent.ai>（apex <https://gov-agent.ai> 是行銷站，App 路由在 apex 會 404）
 - 目前系統真相：[CURRENT.md](CURRENT.md)
 - 開發基準：[DEVELOPMENT.md](DEVELOPMENT.md)
 - 已定案決策：[docs/DECISIONS.md](docs/DECISIONS.md)
@@ -149,7 +149,7 @@ npm run test:e2e:real
 
 資料庫的 RLS、RPC 與狀態轉移測試在 [supabase/tests](supabase/tests)。
 
-2026-08-13 W7 PR #9 基線：57 個 Vitest 測試檔共 530 項、14 個 Demo Playwright E2E、5 個真 Supabase E2E 與 production build 全數通過；main CI、Cloudflare build 與正式站 HTTP 冒煙成功。23 組 pgTAP 已由 PR #8 納入獨立 CI。`extract-requirements` live AI 成功路徑仍待 CLI 修復或一次性 hosted staging 驗證，不能以人工 fixture 代替。
+2026-09-02 基線（main `ba6ab45`，PR #58）：71 個 Vitest 測試檔共 767 項、42 個 Demo Playwright E2E 與 production build 全數通過；33 組 pgTAP 由獨立 CI 在資料庫相關變更時自動執行；6 條真 Supabase E2E 最近一次紀錄為 PR #54（6/6）。`extract-requirements` live AI 成功路徑已於 2026-08-15 驗證。
 
 ## Supabase 與部署
 
@@ -169,15 +169,15 @@ src/
 ├── components/             共用 UI、Layout、Copilot、缺失與標註元件
 ├── data/                   Demo 與內建工程資料
 ├── lib/                    確定性引擎、文件、需求、稽核與支援函式
-├── pages/                  33 個頁面檔
+├── pages/                  40 個業務頁面檔（`pages/web/`）＋登入等 3 個
 ├── store.jsx               Store 組合根與跨領域派生資料
 └── store/slices/           9 個狀態／資料操作 slices
 
 supabase/
-├── functions/              16 個 Edge Functions 與共用 Agent／AI 層
+├── functions/              17 個 Edge Functions 與共用 Agent／AI 層
 ├── migrations/             Schema、RLS、RPC、Trigger 的唯一真相
 ├── tests/                  pgTAP 安全與狀態流程測試
-├── rollbacks/              少數明確支援的回復腳本
+├── rollbacks/              少數明確支援的回復腳本（4／57）
 └── SETUP.md                後端設定
 
 docs/

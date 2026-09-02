@@ -4,16 +4,16 @@
 
 ---
 
-## 0. 目前續接點（2026-08-13）
+## 0. 目前續接點（2026-09-02）
 
-- W0～W5 已合併至 `main` 並部署；W6 PR #7 與 pgTAP CI PR #8 已合併並部署。不要重做文件基準、標單原子化、初始化流程、單一 Agent、成員／正式模式、W5 架構債或 W6 真後端基建。
-- **W5-1 已完成**：唯讀盤點與 A／B 代價見 `docs/W5-1-Requirement-Obligation-決策書.md`。
-- 使用者已選 A（D-012）：`requirements` 是唯一權威，approved deadline Requirement 單向產生 obligation；obligation 執行狀態不反向改寫 Requirement。
-- **W5-2～W5-4 已由 PR #6 部署，不要重做**：Requirement 單向 migration／rollback、legacy caller 退場、成員模型防誤用，以及試體缺失 Demo／DB 漂移修正均已完成；PR 審查補上 supersede 不得殘留待辦提醒的回歸，保留資料與歷史但從現行前端／Agent 清單排除。正式資料庫已到 `20260812000600`，引用共用工具的 `agent-run` v9／`send-reminders` v10 也已部署。
-- **W6-1～W6-5 已由 PR #7 合併部署**：獨立 `playwright.real.config.js`／`e2e-real/`、staging-only 防呆、環境變數注入、登入與四條鏈於 2026-08-13 重跑 5/5 通過，fixture 與 Storage 殘留 0。W6-4 的人工待審 fixture 會綁定真上傳文件版本，但 Supabase CLI 2.113.0 的本機 Edge main worker 目前在模型呼叫前即發生 entrypoint boot error，**不包含 `extract-requirements` live AI 成功路徑**；不要在同一版本反覆重試，也不得把 5/5 說成外部模型串接已驗證。細節見 `docs/REAL_BACKEND_E2E.md`。
-- **W7 路由治理已由 PR #9 合併部署（D-013）**：36 條 App 路由全部進 `routeRegistry`，未登記路由預設拒絕；公開頁、重新導向、列印與 404 明確標記，四條列印路由改走共同登入／專案守衛。基線為 530 Vitest、14 Demo E2E、5 真 Supabase E2E 與 production build 全綠；main CI、Cloudflare build 與正式站四條 HTTP 冒煙成功，W7 不動 DB。
-- 正式庫 preflight：65 obligations／113 requirements／48 筆差額；差額全是未核定建議，orphan legacy = 0、approved deadline 缺 obligation = 0。
-- 每次續接仍以 `docs/ROADMAP.md` 的未排入清單與使用者新核准範圍為準；新工作包從最新 `main` 建立，不沿用已合併分支。
+- **W0～W14 與精修期系列（PR #2～#58）已全部合併至 `main` 並部署前端**；目前沒有進行中的已核准工作包。完整交付紀錄見 `CURRENT.md` §6.2 與 `docs/ROADMAP.md` 進度總覽，不要重做任何已勾選的包。
+- **已定案決策到 D-020**（`docs/DECISIONS.md`）：D-017 契約重點是「確認轉錄」不是「核定生效」；D-019 AI 整理全自動確認歸檔、核對結果只是透明度註記；D-020 任何已核定 Requirement 都物化一列義務（無時點＝「未觸發」）。寫契約重點相關程式前先讀這三條，舊文案「待核定／核定生效」已退場。
+- **`/requirements` 現在是「契約重點 · 履約時程」三方共用檢視頁（PR #55）**，本頁不做審核；規則在 `src/lib/obligationTimeline.js`，可見範圍看角色、動作只看歸屬；`VISIBLE` 表是前端 shim 不是安全邊界。期限管理動作在 `/deadlines`。
+- **側欄處於精修期最小表面（PR #54）**：只露今日待辦／專案文件／契約重點／標單工項；其餘五個工作面 `hidden: true`，定義、角色限制、路由與深連結全部保留。要加回功能＝移除一行 hidden，不要重建導覽。
+- **部署位置**：App 在 `app.gov-agent.ai`（Cloudflare Workers，push `main` 即部署）；apex `gov-agent.ai` 是 `PMIS.marketing` 的行銷站，App 路由在 apex 會 404，冒煙測試要打 `app.` 子網域。品牌字樣目前是 GovAgent（PR #24 改 PMIS 後於 08-25 改回）。
+- **正式庫 migration 套用狀態未核對**：repo 已到 `20260901040000`，但 `20260821000200` 之後共 8 支 migration 在 repo 內沒有套用紀錄（清單見 `CURRENT.md` §6）。PR #42 的兩支必須**先部署前端再 db push**。續接任何動 DB 的工作前先跑 `supabase migration list` 核對並回填 CURRENT.md。
+- **基線（2026-09-02 本機實測）**：71 檔 767 Vitest、42 Demo E2E、33 pgTAP、production build 全綠；真後端 E2E 最近紀錄 PR #54（6/6）。
+- 續接仍以 `docs/ROADMAP.md` 未排入清單與使用者新核准範圍為準；新工作包從最新 `main` 建分支，不沿用已合併分支（遠端仍有 34 條已合併分支未刪）。
 
 ---
 
