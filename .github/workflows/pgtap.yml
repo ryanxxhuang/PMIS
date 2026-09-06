@@ -1,23 +1,15 @@
 name: pgTAP
 
 # 資料庫護欄(P2-08):RLS/RPC/Guard Trigger 是安全邊界,全套 pgTAP 必須在
-# 資料庫相關變更的 PR 上自動執行——不能只靠本機記得跑。
-# 只在動到 migrations/tests/config 時觸發,不拖慢一般前端 PR。
+# 每個 PR 與 main 上自動執行。原本只在動到 migrations/tests/config 時觸發,
+# 但 2026-09-06 健檢把 pgtap 列為 main ruleset 的必要 status check——
+# 路徑過濾會讓沒動 DB 的 PR 永遠拿不到這個 check 而無法合併(E-10),
+# 且前端改 RPC 呼叫參數也不會觸發 DB 測試。改為一律執行(約 3–5 分鐘)。
 on:
   push:
     branches: [main]
-    paths:
-      - 'supabase/migrations/**'
-      - 'supabase/tests/**'
-      - 'supabase/config.toml'
-      - '.github/workflows/pgtap.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'supabase/migrations/**'
-      - 'supabase/tests/**'
-      - 'supabase/config.toml'
-      - '.github/workflows/pgtap.yml'
 
 jobs:
   pgtap:
