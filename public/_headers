@@ -25,8 +25,8 @@
   # --- CSP ---
   # script-src 維持嚴格 'self':全站 JS 皆自載,無任何第三方 CDN(所以 SRI 那項掃描警告也不適用)。
   # style-src 需要 'unsafe-inline':React 的 style={{...}} 會產生行內樣式屬性。
-  # 字型已全面 self-host(@fontsource-variable/noto-sans-tc + @material-symbols/font-400 打包進
-  #   /assets/),font-src 不再開放任何外部主機;data: 留給 pdfjs 內嵌標準字型。
+  # 字型已全面 self-host(@fontsource-variable/noto-sans-tc 打包進 /assets/),font-src 不再
+  #   開放任何外部主機;data: 留給 pdfjs 內嵌標準字型。圖示是 lucide-react 的 inline SVG,不吃 font-src。
   # connect-src:Supabase(REST/Storage/Auth)+ Sentry 錯誤回報。前端不直接呼叫 Claude API,
   #   所有 LLM 呼叫都走 edge function,故不需開放 Anthropic 網域。
   # worker-src blob::pdfjs-dist 解析 PDF 時會用 worker。
