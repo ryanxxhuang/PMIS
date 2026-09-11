@@ -33,7 +33,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 ### 6.1 前端
 
-- UI 採 [Apple 規範](docs/UIUX-Apple-設計規範.md)，token 在 `src/index.css`，圖示 `lucide-react`。`listDetail.jsx` 共用清單／詳情殼已供契約兩頁、工安頁、檢驗停留點與提醒中心使用；列印用 `.paper` 與 `PrintToolbar`。
+- UI 採 [Apple 規範](docs/UIUX-Apple-設計規範.md)，token 在 `src/index.css`，圖示 `lucide-react`。`listDetail.jsx` 共用清單／詳情殼已供契約重點、擷取審核、工安、疑義、期限、送審、變更設計、停留點、提醒中心、三方成員、活動紀錄、風險稽核、品質三段與專案文件共十四頁使用；列印用 `.paper` 與 `PrintToolbar`。
 - `navConfig.js` 是路由／導覽單一真相，未登記拒絕。側欄依來源模型分區：球在誰手上（持有 `/dashboard`）→ 工作（五組群組＋子頁，子頁依角色過濾）→ 參考（契約重點／專案文件／標單工項）→ 平台；目前無 hidden 項。
 - 首頁為「現在輪到我／等待對方／今天已完成」單桶收件匣，`?ball=` 選桶；不放頁面摘要卡。待辦共用 `todayTasks.js`／`useTodayTasks`。
 - 預定進度在首頁、進度頁、稽核、監造報告、跨案總覽與 AI 資料共用 `src/lib/progressPlan.js`。沿用月份座標、30 天換算與線性內插；不變更 S 曲線產生或 DB 計算。
