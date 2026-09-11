@@ -164,7 +164,7 @@ test.describe('施工廠商', () => {
     const drawer = page.getByRole('dialog', { name: '工安缺失詳情' })
     await expect(drawer.getByRole('region', { name: '工安缺失詳情' })).toContainText('4F 臨邊開口未設護欄')
     await expect(drawer.getByRole('button', { name: '開始改善', exact: true })).toBeVisible()
-    await expect(drawer.getByRole('button', { name: '返回清單', exact: true })).toBeVisible()
+    await expect(drawer.getByRole('button', { name: '返回', exact: true })).toBeVisible()
   })
 
   test('契約重點 · 履約時程:義務排上時程,廠商只看自己、動作看歸屬', async ({ page }) => {

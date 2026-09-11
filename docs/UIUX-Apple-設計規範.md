@@ -270,6 +270,7 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
 
 ### 9.6 表格頁在手機＝唯讀摘要
 - `/valuation`（1040px 標單樹）、`/cost`（520/760）、`/schedule`（720）、`/boq`（640）、`/monthly-report`（433）在 <md 隱藏寬表，改渲染卡片／時間線摘要（照 `/payments` 前例），並明講「編輯在桌面進行」。**決策：手機不提供這五頁的寫入。**
+- 「寫入」包含審核動作：`/valuation` 的送監造審核／核定／退回在手機一併不渲染（狀態 Badge 仍可見）。核定要看標單樹的數量，手機沒有樹就不該給核定鈕——沒看到細節就按下去的核定不是核定。五頁的提示句收成同一個 `MobileReadOnlyNote`，措辭只寫一處。
 
 ### 9.7 收件匣直達那一筆
 - 稽核：待辦每一筆的連結都指向「頁面」（`#/quality`、`#/safety`、`#/deadlines`），落在頁首要再找一次。
@@ -280,10 +281,11 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
 - Stat 卡在手機改單列數字條（三格並排、`py-2`），不佔第一屏——`/safety` 三張 Stat 卡把「開立缺失」推到 y=475。
 - `/site-log`：日期／天氣（上午）／天氣（下午）在手機排兩欄，工作摘要獨佔一列；照片段落順序不動（「照片優先」是產品決策，另案）。
 
-### 9.9 落地進度
-- M1 字級＋觸控目標（9.1、9.2）：待做
-- M2 Chrome＋推入＋浮動鈕（9.3、9.4、9.5）：已落地（2026-09-12；`--top-bar-h`、BottomNav「更多」、portal＋`present-push`／`present-sheet`＋`useScrollLock`、`--vvh`、手機 FAB 退場）
-- M3 收件匣直達（9.7）：待做
-- M4 表格頁唯讀摘要＋site-log（9.6、9.8 第三條）：待做
-- M5 /safety 缺失套殼＋Stat 條（9.8 前兩條）：待做
-
+### 9.9 落地進度（2026-09-12 全部落地，分支 `ui/mobile-shape`）
+- M1 字級＋觸控目標（9.1、9.2）：`288c434`——`index.css` 單一 `@media (max-width: 767.98px)` 覆寫八階；primitives 補 `max-md:min-w-11`；放大後 375 只溢位一處（Requirements 期程列）以 flex-wrap 修。
+- M1b 圖示鈕收斂（9.2）：`d11d286`——新 `IconButton` primitive，20 處手寫圖示鈕改用；三顆樹狀展開鈕另抽 `TreeToggle`（M4）。
+- M2 Chrome＋推入＋浮動鈕（9.3、9.4、9.5）：`2fe5b42`——`--top-bar-h`、BottomNav「更多」、DetailDrawer portal＋`present-push`／`present-sheet`＋`useScrollLock`、`--vvh`、手機 FAB 退場。
+- M3 收件匣直達（9.7）：`dd2db75`——`detailLink()` 住在 `ballInCourt.collaborationItems`（同時餵 Agent 的待辦，連結只能一個答案）；深連結進頁 `select(id, { openPane: true })`。
+- M4 表格頁唯讀摘要＋site-log（9.6、9.8 第三條）：`c73b0f3`——五頁 `<md` 零表格、`MobileReadOnlyNote`；site-log 天氣兩欄；`TreeToggle`；Acceptance 修改鈕改 `Button`。
+- M5 缺失套殼＋Stat 條（9.8 前兩條）：`5262a91`——`DefectTracker` 內建殼（`?defect=`，/quality 與 /safety 共用）、動作移進詳情欄、Stat 手機三格條（`index.css` `.grid:has(> .stat-card)`，九處容器零編輯）。順手修真 bug：同頁兩個殼 `setSearchParams(fn)` 吃 render 快照互蓋 query；預設選取不再寫 URL（否則 reload 變深連結、手機疊兩層抽屜）。
+- ⚠️ 手機驗證的限制：鍵盤遮擋全用 `--vvh` 模擬（headless 沒有軟鍵盤），真機上網址列收合會讓 `visualViewport.height` 變動，上線後要在 iPhone 實機走一次三個現場流程（日誌、開缺失、待辦→回覆）。
