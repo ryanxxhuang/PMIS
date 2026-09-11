@@ -38,7 +38,7 @@
 
 ## 6. 完成定義
 
-實作在授權範圍、相關驗證通過，並同步 **CURRENT、受影響架構／操作指南、BASELINE**。未驗證能力不能寫成已完成；正式 migration／Edge 部署版本記入 CURRENT §6.3。commit、push、部署、正式 migration 都需使用者明確要求。
+實作在授權範圍、相關驗證通過，並同步 **CURRENT、受影響架構／操作指南、BASELINE**。未驗證能力不能寫成已完成；正式 migration／Edge 部署版本記入 CURRENT §6.3。commit、push、部署與正式 migration 依 D-023 常設授權執行，事後附驗收清單並寫回 CURRENT §6.3。
 
 ## 7. 文件維護
 

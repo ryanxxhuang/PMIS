@@ -92,4 +92,8 @@
 
 狀態：ACCEPTED。`is_project_admin()` 只看 `project_members.role='admin'`；成員邀請／移除、members 管理 policy 與 projects 更新 policy 統一用該函式，非建立者 admin 也可管理成員。`created_by` 欄位、建案完整性約束、組織自己的 created_by policy 保留。
 
-建立者依賴 `on_project_created`／create_project RPC 補 admin 列，沒有該列就沒有管理權。2026-09-11 正式庫唯讀盤點：13 案建立者均有 admin、無非建立者 admin，當時套用不改任何人的權限。migration `20260911110000_project_admin_single_source` 與 rollback、pgTAP 角色矩陣已提交；**尚未套用正式庫**。
+建立者依賴 `on_project_created`／create_project RPC 補 admin 列，沒有該列就沒有管理權。2026-09-11 正式庫唯讀盤點：13 案建立者均有 admin、無非建立者 admin，當時套用不改任何人的權限。migration `20260911110000_project_admin_single_source` 與 rollback、pgTAP 角色矩陣已提交，2026-09-11 已套用正式庫。
+
+## D-023｜commit／push／部署的常設授權
+
+狀態：ACCEPTED。2026-07-11 授權、2026-09-11 重申：相關驗證通過（lint、test、build、check:docs；動 DB 含 pgTAP；動 Edge 含 check:edge）後，AI 協作者可直接 commit、push、開 PR 並在 CI 綠後合併、套用正式 migration、重佈 Edge，不逐次詢問；完成後附驗收清單，部署版本寫回 CURRENT §6.3。仍須先問的例外：會產生新雲端費用的資源、刪除正式資料或遠端資源、沒有回復路徑的破壞性操作。
