@@ -41,12 +41,15 @@
 
 ## 現行架構
 
-架構文件的逐份狀態集中在 [`architecture/README.md`](architecture/README.md)。目前主要文件（碰四條紅線先讀前兩份）：
+架構文件的逐份狀態集中在 [`architecture/README.md`](architecture/README.md)。目前主要文件（碰四條紅線先讀前兩份；碰錯誤回應讀 `error-masking.md`；碰上傳鏈讀 `document-processing-pipeline.md`；碰待辦與球權讀 `ball-in-court.md`）：
 
 - [`architecture/ai-gate-and-metering.md`](architecture/ai-gate-and-metering.md)：第四條紅線本體——功能註冊表、伺服器端閘門（D-010 fail-closed）、用量記帳、平台管理員防護、新增 AI 功能的路徑。
 - [`architecture/agent-tool-boundary.md`](architecture/agent-tool-boundary.md)：第一與第三條紅線的執行機制——工具白名單、`agent_actions` 留痕、`handoff`／`handoff_sent`、已知的唯讀軌跡缺口。
 - [`architecture/route-registry-governance.md`](architecture/route-registry-governance.md)：D-013 的實作——`routeRegistry` fail-closed、`hidden` 不等於移除權限、列印不是公開、`platformAdminOnly` 獨立維度。
 - [`architecture/resumable-extraction.md`](architecture/resumable-extraction.md)：W13 契約重點抽取的跨 request 續跑與其失效條件。
+- [`architecture/document-processing-pipeline.md`](architecture/document-processing-pipeline.md)：W14 專案文件管線——契約包、`document_processing_runs` 階段機器、確定性分類與 AI 第二意見、路由到抽取的條件、兩張 run 表的分工、過期修復與契約包 `ready`／`needs_attention` 語意。
+- [`architecture/error-masking.md`](architecture/error-masking.md)：附表十構面五的執行機制——伺服器 `publicError.ts` 與前端 `friendlyError` 共用一條判準、遮罩做在源頭、`errorLeak.scan` 凍結的前提（機制已提交、未部署）。
+- [`architecture/ball-in-court.md`](architecture/ball-in-court.md)：「球在誰手上」的責任語言——判定表、今日待辦三桶、前後端兩份實作的同步點、`dueText` 句型合約、`?ball=` 三桶。
 - [`architecture/three-party-role-model.md`](architecture/three-party-role-model.md)：廠商／監造／機關三方角色，以及雙成員模型的唯一判斷規則。
 - [`architecture/contract-first-foundation.md`](architecture/contract-first-foundation.md)：工程財務與文件履約兩條資料脊椎。
 - [`architecture/traceable-document-ingestion.md`](architecture/traceable-document-ingestion.md)：文件版本、分頁、AI 擷取與來源。
