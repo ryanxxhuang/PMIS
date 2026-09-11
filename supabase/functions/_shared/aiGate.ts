@@ -14,11 +14,10 @@
 //    「正常回 false」(403 明確關閉)與「查詢失敗」(503 稍後再試)分開回報。
 
 import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2'
-import { jsonResponse as json } from './claude.ts'
+import { jsonResponse as json, dbErrorResponse } from './claude.ts'
+import { UUID_RE } from './uuid.ts'
 import { featureByKey } from './aiFeatures.ts'
 import { gateVerdict } from './gatePolicy.ts'
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Anthropic Messages API 的 usage 形狀(欄位可能缺,缺就當 0)
 export type AiUsage = {
@@ -124,7 +123,7 @@ export async function openAiGate(req: Request, opts: {
       .select('id')
       .eq('id', projectId)
       .maybeSingle()
-    if (projectError) return { ok: false, response: json({ error: projectError.message }, 500) }
+    if (projectError) return { ok: false, response: dbErrorResponse(`aiGate.projects(${opts.feature})`, projectError) }
     if (!project) return { ok: false, response: json({ error: '找不到專案或無權限' }, 404) }
   }
 

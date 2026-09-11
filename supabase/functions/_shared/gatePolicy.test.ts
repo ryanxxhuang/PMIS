@@ -1,6 +1,7 @@
 // AI 閘門 fail-closed 判定(W3-4/D-010)。
 // gatePolicy 是純函式可直接測;aiGate.ts / agent-run 有 npm: import 進不了 node,
-// 改以原始碼比對釘住「兩個閘門都走 gateVerdict、沒有人偷偷改回保守放行」
+// 改以原始碼比對釘住「閘門走 gateVerdict、沒有人偷偷改回保守放行,且 agent-run
+// 自 B1 起只透過 openAiGate 進閘、不再內嵌第二份判定」
 // (同 aiFeatures.test.js 讀 TS 原始碼的既有手法)。
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
@@ -50,9 +51,11 @@ describe('閘門接線:兩個判定點都走 gateVerdict,保守放行已絕跡',
     expect(aiGateSrc).not.toContain('保守放行)')
   })
 
-  it('agent-run 內嵌閘門使用 gateVerdict 且不再保守放行', () => {
-    expect(agentRunSrc).toContain("from '../_shared/gatePolicy.ts'")
-    expect(agentRunSrc).toContain('gateVerdict(')
+  it('agent-run 改走 openAiGate(B1 / M-1):不再內嵌第二份閘門,D-010 判定只在 aiGate 一處', () => {
+    expect(agentRunSrc).toContain("from '../_shared/aiGate.ts'")
+    expect(agentRunSrc).toContain('openAiGate(')
+    expect(agentRunSrc).not.toContain("rpc('ai_feature_allowed'")
+    expect(agentRunSrc).not.toContain('gateVerdict(')
     expect(agentRunSrc).not.toContain('保守放行)')
   })
 

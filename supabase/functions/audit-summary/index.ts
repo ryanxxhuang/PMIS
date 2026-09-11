@@ -7,8 +7,8 @@
 // 金鑰只存雲端 secret(ANTHROPIC_API_KEY);verify_jwt 預設開啟。
 // 部署(colima 下必須 --use-api):supabase functions deploy audit-summary --use-api
 
-import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
-import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
+import { MODELS } from '../_shared/claude.ts'
+import { aiJsonHandler } from '../_shared/aiHandler.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -22,18 +22,13 @@ const SCHEMA = {
   required: ['opinion', 'recommendations'],
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
-  const p = await req.json().catch(() => null) || {}
-  const gate = await openAiGate(req, { feature: 'audit.summary', projectId: p?.project_id })
-  if (!gate.ok) return gate.response
-  try {
+Deno.serve(aiJsonHandler({
+  feature: 'audit.summary',
+  build: ({ body: p }) => {
     const findings = (p.findings || []).slice(0, 20)
     if (!findings.length) {
       // 無發現走確定性罐頭回覆、不打 LLM——仍記一筆 ok(token 0)計次
-      await closeAiGate(gate, { feature: 'audit.summary', status: 'ok' })
-      return json({ opinion: '本案經文件勾稽鏈自動比對(估驗、施工日誌、查驗、試體),未發現明顯對不起來之處,證據鏈大致完整。仍請依契約與相關法令續行常態監督。', recommendations: [] }, 200)
+      return { reply: { opinion: '本案經文件勾稽鏈自動比對(估驗、施工日誌、查驗、試體),未發現明顯對不起來之處,證據鏈大致完整。仍請依契約與相關法令續行常態監督。', recommendations: [] } }
     }
     const list = findings.map((f: Record<string, unknown>, i: number) =>
       `${i + 1}.[${f.status === 'risk' ? '風險' : '注意'}/${f.category}] ${f.title}:${f.detail}`).join('\n')
@@ -49,17 +44,8 @@ Deno.serve(async (req) => {
     // fast(Haiku),單次成本約 3 倍。輸出短(摘要+建議),但 stop_reason=max_tokens
     // 現在是硬失敗(W10 後不再靜默截斷),Sonnet 又比 Haiku 略囉嗦——上限留 1500
     // 消除這條失敗路徑(maxTokens 是上限不是計費,放寬零成本)。
-    const { data, error, usage, model } = await claudeJson({
+    return {
       model: MODELS.smart, name: 'audit_summary', schema: SCHEMA, maxTokens: 1500, system, content: facts,
-    })
-    if (error) {
-      await closeAiGate(gate, { feature: 'audit.summary', model, usage, status: 'error', errorCode: 'claude_error' })
-      return json({ error }, 502)
     }
-    await closeAiGate(gate, { feature: 'audit.summary', model, usage, status: 'ok' })
-    return json(data, 200)
-  } catch (e) {
-    await closeAiGate(gate, { feature: 'audit.summary', status: 'error', errorCode: 'exception' })
-    return json({ error: String((e as Error)?.message || e) }, 500)
-  }
-})
+  },
+}))

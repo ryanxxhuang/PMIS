@@ -255,7 +255,12 @@ export async function loadDocumentPages(build: (from: number, to: number) => Pro
   let expected: number | null = null
   do {
     const { data, count, error } = await build(pages.length, pages.length + 999)
-    if (error) throw new Error(`文件頁面讀取失敗:${error.message}`)
+    if (error) {
+      // PostgREST 原文只進 log;throw 純中文,extract-requirements 的例外遮罩
+      //(maskException)才會把它當我們自己的業務訊息原樣放行給使用者
+      console.error('[loadDocumentPages] PostgREST 錯誤:', error.message)
+      throw new Error('文件頁面讀取失敗，請稍後再試')
+    }
     if (count == null || !Number.isInteger(count) || count < 0) {
       throw new Error('無法核對文件總頁數，請重新整理後重試')
     }

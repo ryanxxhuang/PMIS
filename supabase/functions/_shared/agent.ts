@@ -14,7 +14,8 @@
 //   ③ tools 最後一個定義 ④ messages 的「滾動斷點」(每輪移動到最後一則訊息尾,
 //   讓累積的 tool_result 吃到快取)。前綴必須逐位元組穩定(facts 用 stableStringify 排序 key)。
 
-import { MODELS } from './claude.ts'
+import { MODELS, readEnv } from './claude.ts'
+import { maskClaudeError, maskException } from './publicError.ts'
 
 export type ToolDef = {
   name: string
@@ -117,14 +118,10 @@ export async function claudeAgent(opts: {
     cache_creation_input_tokens: 0,
   }
 
-  // Deno.env 只能在函式內取用、且要能容忍 Deno 不存在:
-  // 此檔會被 vitest(Node)import 測試,模組頂層或裸寫 Deno.env 會直接 ReferenceError。
-  const apiKey =
-    (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno?.env?.get?.(
-      'ANTHROPIC_API_KEY',
-    ) ?? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.ANTHROPIC_API_KEY
+  // 金鑰讀取容忍 Deno 不存在(vitest 在 Node 載入本檔),見 claude.ts readEnv
+  const apiKey = readEnv('ANTHROPIC_API_KEY')
   if (!apiKey) {
-    return { text: '', steps, usage, stopReason: 'error', error: '伺服器未設定 ANTHROPIC_API_KEY' }
+    return { text: '', steps, usage, stopReason: 'error', error: maskClaudeError('agent', 'config', '未設定 ANTHROPIC_API_KEY').message }
   }
 
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch
@@ -190,13 +187,10 @@ export async function claudeAgent(opts: {
       }),
     })
     if (!resp.ok) {
-      return {
-        text: lastText,
-        steps,
-        usage,
-        stopReason: 'error',
-        error: `Claude ${resp.status}: ${await resp.text()}`,
-      }
+      // 回應本文(request id / 額度 / 模型名)只進 log;agent-run 會把 error 以 200
+      // 回前端,所以這裡就得是遮罩後的短語(B1 / H-1,重構前原文未截斷直接外洩)
+      const pub = maskClaudeError('agent', `http_${resp.status}`, await resp.text())
+      return { text: lastText, steps, usage, stopReason: 'error', error: pub.message }
     }
 
     const data = await resp.json()
@@ -245,10 +239,15 @@ export async function claudeAgent(opts: {
               result: { type: 'tool_result', tool_use_id: tu.id, content: text } as Block,
             }
           } catch (e) {
-            const msg = String((e as { message?: unknown })?.message ?? e)
+            // 例外原文(可能含 PostgREST policy 名或 runtime 內部訊息)只留在 step
+            //(伺服器端;agent-run 回前端前只取 tool/ok/ms)與 log。給模型的
+            // tool_result 一律遮罩短語——模型會把 tool_result 原文複述給使用者;
+            // 程式刻意 throw 的繁中訊息照 maskException 規則原樣放行,模型才能修正
+            const pub = maskException(`agent.tool.${name}`, e)
+            const raw = String((e as { message?: unknown })?.message ?? e)
             return {
-              step: { tool: name, input, ok: false, ms: Date.now() - t0, error: msg } as AgentStep,
-              result: { type: 'tool_result', tool_use_id: tu.id, content: msg, is_error: true } as Block,
+              step: { tool: name, input, ok: false, ms: Date.now() - t0, error: raw } as AgentStep,
+              result: { type: 'tool_result', tool_use_id: tu.id, content: pub.message, is_error: true } as Block,
             }
           }
         }),

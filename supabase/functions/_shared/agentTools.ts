@@ -27,9 +27,11 @@ import type { BallSide } from './agentRole.ts'
 export type { BallSide }
 import { computeObligationDueUTC, diffDays, formatDate, parseDateUTC, taipeiTodayUTC } from './contractDue.ts'
 import { buildIntegrityFindings, isConcretePourItem } from './integrityAudit.ts'
+import { isUuid } from './uuid.ts'
+import { maskDbError, isOwnMessage } from './publicError.ts'
+import type { DbErrorLike } from './publicError.ts'
 import type { IntegrityLeaf, PourDate, TestSample } from './integrityAudit.ts'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 // ilike 用:跳脫萬用字元;另移除 PostgREST or() 語法的分隔字元(逗號/括號),
@@ -40,7 +42,12 @@ function likePattern(raw: string): string {
 }
 
 const isDate = (v: unknown): v is string => typeof v === 'string' && DATE_RE.test(v)
-const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v)
+
+// PostgREST 錯誤不得原樣進 tool_result:模型會把 policy / constraint 名稱複述給
+// 使用者(B1 / M-9)。統一走遮罩、原文進 log;P0001 業務規則照 maskDbError 規則放行。
+function toolError(scope: string, error: DbErrorLike): { error: string } {
+  return { error: maskDbError(`agentTools.${scope}`, error).message }
+}
 
 // 限制 embed 明細筆數,避免單一 tool_result 撐爆 context(agent.ts 另有 20000 字元截斷保險)
 const EMBED_CAP = 200
@@ -350,7 +357,7 @@ async function searchBoq(db: SupabaseClient, projectId: string, input: Record<st
     .or(`item_no.ilike.${pat},ref_item_code.ilike.${pat},description.ilike.${pat}`)
     .order('sort_order', { ascending: true })
     .limit(limit)
-  if (error) return { error: error.message }
+  if (error) return toolError('searchBoq', error)
   if (!data?.length) return { note: '查無符合的工項,換個關鍵字試試' }
   return { items: data }
 }
@@ -371,7 +378,7 @@ async function listDailyLogs(db: SupabaseClient, projectId: string, input: Recor
     .gte('log_date', input.from)
     .lte('log_date', input.to)
     .order('log_date', { ascending: true })
-  if (error) return { error: error.message }
+  if (error) return toolError('listDailyLogs', error)
 
   let logs = (data ?? []) as Array<Record<string, unknown> & { daily_log_items?: Array<{ work_item_id: string }> }>
   if (workItemId) {
@@ -400,7 +407,7 @@ async function getValuation(db: SupabaseClient, projectId: string, input: Record
     q = q.order('period_no', { ascending: false }).limit(1)
   }
   const { data, error } = await q
-  if (error) return { error: error.message }
+  if (error) return toolError('getValuation', error)
   const row = (data ?? [])[0] as (Record<string, unknown> & { valuation_items?: unknown[] }) | undefined
   if (!row) return { note: input.period_no !== undefined ? '查無此期估驗' : '本案尚無估驗紀錄' }
   const capped = capList(row.valuation_items as unknown[])
@@ -436,7 +443,7 @@ async function getRequirements(db: SupabaseClient, projectId: string, input: Rec
     .limit(limit)
   if (pat) obQ = obQ.or(`title.ilike.${pat},penalty.ilike.${pat},note.ilike.${pat}`)
   const { data: obligations, error: obError } = await obQ
-  if (obError) return { error: obError.message }
+  if (obError) return toolError('getRequirements', obError)
 
   const obligationRows = (obligations ?? []).map((ob) => {
     const due = proj ? computeObligationDueUTC(ob, proj, today) : null
@@ -508,7 +515,7 @@ export async function collectOpenBallItems(
     db.from('contract_obligations').select('id, title, responsible, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause').eq('project_id', projectId).eq('status', '待辦'),
   ])
   const firstError = [defects, submittals, rfis, valuations, obligations].find((r) => r.error)
-  if (firstError?.error) return { error: firstError.error.message }
+  if (firstError?.error) return toolError('collectOpenBallItems', firstError.error)
 
   for (const d of defects.data ?? []) {
     push(defectBall(d), d.domain === 'safety' ? '工安缺失' : '缺失', d.id, d.title, d.status, d.due_date)
@@ -618,7 +625,7 @@ async function findEvidence(db: SupabaseClient, projectId: string, input: Record
 
   const [logs, inspections, checklists, photos] = await Promise.all([logQ, inspQ, chkQ, photoQ])
   const firstError = [logs, inspections, checklists, photos].find((r) => r.error)
-  if (firstError?.error) return { error: firstError.error.message }
+  if (firstError?.error) return toolError('findEvidence', firstError.error)
 
   const logCap = capList(logs.data)
   const photoCap = capList(photos.data)
@@ -660,7 +667,7 @@ async function getRecord(db: SupabaseClient, projectId: string, input: Record<st
     .eq('id', input.id)
     .eq('project_id', projectId)
     .maybeSingle()
-  if (error) return { error: error.message }
+  if (error) return toolError('getRecord', error)
   if (!data) return { note: '找不到這筆紀錄(或不屬於本案/無權限)' }
   const row = data as Record<string, unknown> & { valuation_items?: unknown[] }
   if (Array.isArray(row.valuation_items)) {
@@ -821,7 +828,7 @@ async function draftDailyLog(
     .eq('project_id', projectId)
     .eq('log_date', logDate)
     .maybeSingle()
-  if (exErr) return { error: exErr.message }
+  if (exErr) return toolError('draftDailyLog', exErr)
   if (existing) return { error: `該日(${logDate})已有施工日誌,請直接編輯` }
 
   // 當日照片(台北時區界):taken_at 落在該日;有無配對工項分開統計,誠實揭露
@@ -832,7 +839,7 @@ async function draftDailyLog(
     .gte('taken_at', `${logDate}T00:00:00+08:00`)
     .lte('taken_at', `${logDate}T23:59:59+08:00`)
     .order('taken_at', { ascending: true })
-  if (phErr) return { error: phErr.message }
+  if (phErr) return toolError('draftDailyLog', phErr)
   const allPhotos = dayPhotos ?? []
   if (!allPhotos.length) {
     // 誠實回報,不是失敗 —— agent 要能把這句話轉述給使用者
@@ -850,7 +857,7 @@ async function draftDailyLog(
     .select('id, item_key, item_no, description, unit, sort_order')
     .eq('project_id', projectId)
     .in('id', wiIds)
-  if (wiErr) return { error: wiErr.message }
+  if (wiErr) return toolError('draftDailyLog', wiErr)
   const wiById = new Map((workItems ?? []).map((w) => [w.id, w]))
   tagged = tagged.filter((p) => wiById.has(p.work_item_id)) // 照片指向他案/已刪工項 → 不納入
   if (!tagged.length) {
@@ -907,7 +914,7 @@ async function draftDailyLog(
     })
     .select('id')
     .single()
-  if (insErr) return { error: insErr.message }
+  if (insErr) return toolError('draftDailyLog', insErr)
 
   // 回給模型的是「草稿已放入收件匣」的事實 —— 讓它據實轉述,不可宣稱日誌已建立
   return {
@@ -946,7 +953,7 @@ async function fetchAllRows<T>(
   const size = 1000
   for (let from = 0; ; from += size) {
     const { data, error } = await page(from, from + size - 1)
-    if (error) return { rows: all, error: error.message }
+    if (error) return { rows: all, error: toolError('fetchAllRows', error).error }
     const batch = data ?? []
     all.push(...batch)
     if (batch.length < size) break
@@ -1033,7 +1040,7 @@ async function runIntegrityAudit(
     .order('period_no', { ascending: false })
     .limit(1)
     .maybeSingle()
-  if (valErr) return { error: valErr.message }
+  if (valErr) return toolError('runIntegrityAudit', valErr)
   const billedQty = new Map<string, number>()
   if (latestVal) {
     const vItems = await fetchAllRows<{ work_item_id: string; cum_qty: number | null }>((f, t) =>
@@ -1115,7 +1122,7 @@ async function runIntegrityAudit(
       })
       .select('id')
       .single()
-    if (insErr) return { error: insErr.message }
+    if (insErr) return toolError('runIntegrityAudit', insErr)
     draftInfo = {
       agent_action_id: action.id,
       draft_note: '稽核發現已寫成草稿放進使用者的草稿收件匣,由使用者本人決定如何處理。',
@@ -1323,7 +1330,7 @@ async function draftInspection(
     .select('id, title, source, items')
     .eq('project_id', projectId)
     .order('created_at', { ascending: true })
-  if (tErr) return { error: tErr.message }
+  if (tErr) return toolError('draftInspection', tErr)
   const templates = (tplData ?? []) as TemplateRow[]
   if (!templates.length) {
     // 誠實回報,不是失敗 —— agent 要能把這句話轉述給使用者
@@ -1339,7 +1346,7 @@ async function draftInspection(
       .eq('project_id', projectId)
       .eq('id', input.work_item_id)
       .maybeSingle()
-    if (wiErr) return { error: wiErr.message }
+    if (wiErr) return toolError('draftInspection', wiErr)
     if (!wi) return { error: '找不到此工項(或不屬於本案),可先用 search_boq 查正確的 work_item_id' }
     workItem = wi
   }
@@ -1377,7 +1384,7 @@ async function draftInspection(
       .gte('taken_at', `${checkDate}T00:00:00+08:00`)
       .lte('taken_at', `${checkDate}T23:59:59+08:00`)
       .order('taken_at', { ascending: true })
-    if (phErr) return { error: phErr.message }
+    if (phErr) return toolError('draftInspection', phErr)
     photoIds = (photos ?? []).map((p) => p.id)
     const cap = (photos ?? []).map((p) => (p.caption || '').trim()).find((c) => c)
     if (cap) locationHint = cap.slice(0, 50)
@@ -1415,7 +1422,7 @@ async function draftInspection(
     })
     .select('id')
     .single()
-  if (insErr) return { error: insErr.message }
+  if (insErr) return toolError('draftInspection', insErr)
 
   // 回給模型的是「草稿已放入收件匣」的事實 —— 讓它據實轉述,不可宣稱檢查表已建立
   return {
@@ -1465,7 +1472,7 @@ async function draftSubmittalReview(
       .eq('project_id', projectId)
       .eq('id', input.submittal_id)
       .maybeSingle()
-    if (error) return { error: error.message }
+    if (error) return toolError('draftSubmittalReview', error)
     if (!data) return { note: '找不到這筆送審(或不屬於本案/無權限)' }
     const row = data as SubRow
     if (!PENDING_SUBMITTAL_STATUSES.includes(row.status)) {
@@ -1487,7 +1494,7 @@ async function draftSubmittalReview(
       .order('submitted_date', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
       .limit(1)
-    if (error) return { error: error.message }
+    if (error) return toolError('draftSubmittalReview', error)
     const row = (data ?? [])[0] as SubRow | undefined
     if (!row) return { note: '本案目前沒有待審(已提送/審核中)的送審件。' }
     submittal = row
@@ -1558,14 +1565,20 @@ async function draftSubmittalReview(
         })),
       },
     })
-    if (error) return { error: `AI 審查暫時無法使用:${error.message || String(error)}` }
-    if (data?.error) return { error: `AI 審查暫時無法使用:${data.error}` }
+    // invoke 層(FunctionsHttpError / 網路)原文只進 log;review-submittal 回的
+    // data.error 已是遮罩短語——非中文代表部署空窗的舊版回應,照遮
+    if (error) {
+      console.error('[agentTools.draftSubmittalReview] review-submittal invoke 失敗:', String(error.message || error))
+      return { error: 'AI 審查暫時無法使用，請稍後再試' }
+    }
+    if (data?.error) return { error: `AI 審查暫時無法使用，${isOwnMessage(data.error) ? data.error : '請稍後再試'}` }
     if (!data || !Array.isArray(data.checklist) || typeof data.opinion !== 'string' || typeof data.suggested_decision !== 'string') {
       return { error: 'AI 審查回傳格式不符,請稍後再試' }
     }
     review = data
   } catch (e) {
-    return { error: `AI 審查暫時無法使用:${String((e as Error)?.message || e)}` }
+    console.error('[agentTools.draftSubmittalReview] review-submittal 例外:', String((e as Error)?.message || e))
+    return { error: 'AI 審查暫時無法使用，請稍後再試' }
   }
 
   const checklist = review.checklist
@@ -1605,7 +1618,7 @@ async function draftSubmittalReview(
     })
     .select('id')
     .single()
-  if (insErr) return { error: insErr.message }
+  if (insErr) return toolError('draftSubmittalReview', insErr)
 
   // 5) 回給模型的是「草稿已放入收件匣」的事實 —— 建議判定只是建議,審定權在監造本人
   return {
@@ -1671,7 +1684,7 @@ async function raiseTo(
   // 來源；project_role／職稱不參與交接分流。同方多人時依 RPC 的加入順序取第一位。
   const { data: members, error: mErr } = await db
     .rpc('list_project_members', { p_project: projectId })
-  if (mErr) return { error: mErr.message }
+  if (mErr) return toolError('raiseTo', mErr)
   const recipient = (members ?? []).find((m) => m.org_type === to && m.user_id !== userId)
   if (!recipient) {
     return { error: `本案沒有其他「${label}」成員,無法交接。請先將對方加入專案。` }
@@ -1702,7 +1715,7 @@ async function raiseTo(
     })
     .select('id')
     .single()
-  if (insErr) return { error: insErr.message }
+  if (insErr) return toolError('raiseTo', insErr)
 
   return {
     ok: true,

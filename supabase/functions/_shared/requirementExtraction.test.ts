@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { vi, describe, expect, it } from 'vitest'
 import {
   buildDocumentBatches,
   buildWorkItemCatalog,
@@ -28,10 +28,16 @@ describe('完整文件頁面載入', () => {
     const pages = makePages(1001)
     expect(await loadDocumentPages(async (from) => ({ data: pages.slice(from, from + 500), count: pages.length, error: null }))).toEqual(pages)
   })
-  it('後半讀取失敗必須拒絕，不回半份資料', async () => {
+  it('後半讀取失敗必須拒絕，不回半份資料;PostgREST 原文只進 log、不在 Error 訊息裡', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     await expect(loadDocumentPages(async (from) => from === 0
       ? { data: makePages(1000), count: 1001, error: null }
       : { data: null, count: null, error: { message: 'network' } })).rejects.toThrow('文件頁面讀取失敗')
+    await expect(loadDocumentPages(async (from) => from === 0
+      ? { data: makePages(1000), count: 1001, error: null }
+      : { data: null, count: null, error: { message: 'policy "secret_pages_select" denied' } })).rejects.not.toThrow('secret_pages_select')
+    expect(errSpy.mock.calls.flat().map(String).join('\n')).toContain('secret_pages_select')
+    errSpy.mockRestore()
   })
   it.each([
     { data: makePages(1), count: null, error: null },

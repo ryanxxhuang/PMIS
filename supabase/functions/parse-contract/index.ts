@@ -8,8 +8,8 @@
 // 前端(store.jsx)會先抽出文字再呼叫:Word(.docx)、數位 PDF → 送純文字(準);
 // 掃描 PDF/圖片抽不到字 → 退回送 base64 由模型「看」。本函式兩種輸入都吃。
 
-import { claudeJson, imageBlock, pdfBlock, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
-import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
+import { imageBlock, pdfBlock, MODELS, jsonResponse as json } from '../_shared/claude.ts'
+import { aiJsonHandler } from '../_shared/aiHandler.ts'
 
 const OBLIGATION = {
   type: 'object',
@@ -48,18 +48,14 @@ const PROMPT =
   '每一項請標出:應辦事項、所屬階段、觸發點(對應列舉值)、期限天數與在觸發點之前/之後、是否為每月等週期性、' +
   '負責方、逾期或未提送的罰則、以及出處條款與頁碼。只根據契約內容、不要臆測;找不到的欄位留空字串或 0。盡量找齊。'
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
-  const body = await req.json().catch(() => null)
-  const gate = await openAiGate(req, { feature: 'contract.parse', projectId: body?.project_id })
-  if (!gate.ok) return gate.response
-  try {
+Deno.serve(aiJsonHandler({
+  feature: 'contract.parse',
+  build: ({ body }) => {
     const { text, file_base64, mime_type, filename } = body || {}
     if (!text && !file_base64) return json({ error: '缺少 text 或 file_base64' }, 400)
 
     // 優先用前端抽好的純文字(準);沒有才退回讓模型「看」PDF/圖片。
-    let content
+    let content: Record<string, unknown>[]
     if (text) {
       content = [{ type: 'text', text: `${PROMPT}\n\n=== 契約全文 ===\n${text}` }]
     } else {
@@ -69,19 +65,9 @@ Deno.serve(async (req) => {
         isPdf ? pdfBlock(file_base64) : imageBlock(file_base64, mime_type || 'image/jpeg'),
       ]
     }
-
-    const { data, error, usage, model } = await claudeJson({
+    return {
       model: MODELS.smart, name: 'contract_obligations', schema: SCHEMA, maxTokens: 8192,
       content,
-    })
-    if (error) {
-      await closeAiGate(gate, { feature: 'contract.parse', model, usage, status: 'error', errorCode: 'claude_error' })
-      return json({ error }, 502)
     }
-    await closeAiGate(gate, { feature: 'contract.parse', model, usage, status: 'ok' })
-    return json(data, 200)
-  } catch (e) {
-    await closeAiGate(gate, { feature: 'contract.parse', status: 'error', errorCode: 'exception' })
-    return json({ error: String((e as Error)?.message || e) }, 500)
-  }
-})
+  },
+}))

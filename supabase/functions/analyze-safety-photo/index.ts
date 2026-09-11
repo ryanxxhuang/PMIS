@@ -10,8 +10,8 @@
 // 金鑰只存雲端 secret(ANTHROPIC_API_KEY);verify_jwt 預設開啟。
 // 部署(colima 下必須 --use-api):supabase functions deploy analyze-safety-photo --use-api
 
-import { claudeJson, imageBlock, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
-import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
+import { imageBlock, MODELS, jsonResponse as json } from '../_shared/claude.ts'
+import { aiJsonHandler } from '../_shared/aiHandler.ts'
 
 // 台灣營造業常見職災危害 → 適用職安衛法規(名稱+主題,不含臆造條號)。
 // 依此清單 grounding,模型只能從中挑,避免捏造法條。
@@ -59,27 +59,14 @@ const PROMPT =
   '若照片看不出明顯危害,has_violation 回 false、hazard_type 回「無」、title 空字串,並在 description 說明照片看到的作業內容。\n\n' +
   SAFETY_REF
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
-  const body = await req.json().catch(() => null)
-  const gate = await openAiGate(req, { feature: 'safety.photo', projectId: body?.project_id })
-  if (!gate.ok) return gate.response
-  try {
+Deno.serve(aiJsonHandler({
+  feature: 'safety.photo',
+  build: ({ body }) => {
     const { image_base64, mime_type } = body || {}
     if (!image_base64) return json({ error: '缺少 image_base64' }, 400)
-    const { data, error, usage, model } = await claudeJson({
+    return {
       model: MODELS.fast, name: 'safety_hazard', schema: SCHEMA, maxTokens: 640,
       content: [{ type: 'text', text: PROMPT }, imageBlock(image_base64, mime_type || 'image/jpeg')],
-    })
-    if (error) {
-      await closeAiGate(gate, { feature: 'safety.photo', model, usage, status: 'error', errorCode: 'claude_error' })
-      return json({ error }, 502)
     }
-    await closeAiGate(gate, { feature: 'safety.photo', model, usage, status: 'ok' })
-    return json(data, 200)
-  } catch (e) {
-    await closeAiGate(gate, { feature: 'safety.photo', status: 'error', errorCode: 'exception' })
-    return json({ error: String((e as Error)?.message || e) }, 500)
-  }
-})
+  },
+}))

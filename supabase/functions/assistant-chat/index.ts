@@ -7,8 +7,8 @@
 //
 // 部署(colima 下必須 --use-api):supabase functions deploy assistant-chat --use-api
 
-import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
-import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
+import { MODELS, jsonResponse as json } from '../_shared/claude.ts'
+import { aiJsonHandler } from '../_shared/aiHandler.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -43,38 +43,26 @@ const SYSTEM =
   '(9) 用繁體中文,語氣務實、簡潔;金額可加千分位但數值需與快照一致。' +
   '(10) 回答用純文字,不要使用 Markdown 標記(不要用 ** 粗體、# 標題、- 條列符號),需要分項時直接用數字或頓號。'
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
-  const body = await req.json().catch(() => null)
-  const gate = await openAiGate(req, { feature: 'assistant.chat', projectId: body?.project_id })
-  if (!gate.ok) return gate.response
-  try {
+Deno.serve(aiJsonHandler({
+  feature: 'assistant.chat',
+  build: ({ body }) => {
     const { question, facts } = body || {}
     if (!question || !facts) return json({ error: '缺少 question 或 facts' }, 400)
-
-    const { data, error, usage, model } = await claudeJson({
+    return {
       model: MODELS.fast, name: 'project_answer', schema: SCHEMA, maxTokens: 1500, system: SYSTEM,
       content:
         `本案事實快照(唯一資料來源):\n${JSON.stringify(facts)}\n\n` +
         `使用者問題:${question}\n\n只根據上面快照回答,附出處。`,
-    })
-    if (error) {
-      await closeAiGate(gate, { feature: 'assistant.chat', model, usage, status: 'error', errorCode: 'claude_error' })
-      return json({ error }, 502)
     }
-    await closeAiGate(gate, { feature: 'assistant.chat', model, usage, status: 'ok' })
-
+  },
+  finish: (data, { body }) => {
     // 出處路由白名單防呆:過濾掉不在快照可引用路由內的 route(避免 AI 生假連結)
-    const allow = new Set(Object.values(facts.可引用路由 || {}))
+    const allow = new Set(Object.values(body.facts.可引用路由 || {}))
     const sources = Array.isArray((data as { sources?: unknown[] }).sources)
       ? (data as { sources: { label: string; route: string }[] }).sources
           .filter((s) => s && typeof s.route === 'string' && allow.has(s.route))
           .map((s) => ({ label: s.label, to: s.route }))
       : []
-    return json({ answer: (data as { answer: string }).answer, sources }, 200)
-  } catch (e) {
-    await closeAiGate(gate, { feature: 'assistant.chat', status: 'error', errorCode: 'exception' })
-    return json({ error: String((e as Error)?.message || e) }, 500)
-  }
-})
+    return { answer: (data as { answer: string }).answer, sources }
+  },
+}))

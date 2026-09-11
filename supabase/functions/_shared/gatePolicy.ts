@@ -1,6 +1,7 @@
 // AI 功能閘門的判定策略(W3-4/D-010)——純函式,無任何 runtime 依賴,
 // 讓 vitest 可直接測(aiGate.ts 有 npm: import,node 端載不進來)。
-// aiGate.openAiGate 與 agent-run 的內嵌閘門都必須走這裡,不得各自判定。
+// aiGate.openAiGate 與 send-reminders 的逐專案閘門都必須走這裡,不得各自判定
+//(agent-run 原本內嵌的第二份閘門自 B1 起改走 openAiGate)。
 //
 // D-010(使用者 2026-08-12 定案):ai_feature_allowed 查詢「失敗」時 fail-closed
 // ——kill switch 在 DB 故障時仍必須有效;寧可 AI 暫停,不可失控放行。

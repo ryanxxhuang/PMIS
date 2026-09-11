@@ -24,6 +24,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 // (本函式無使用者 JWT、以 service role 掃全部專案,不適用 openAiGate)
 import { recordAiUsage } from '../_shared/aiGate.ts'
 import { gateVerdict } from '../_shared/gatePolicy.ts'
+import { maskDbError } from '../_shared/publicError.ts'
 import { taipeiTodayUTC, formatDate } from '../_shared/contractDue.ts'
 import { agentRoleOf, AGENT_NAME } from '../_shared/agentRole.ts'
 import type { AgentRole } from '../_shared/agentPersona.ts'
@@ -53,7 +54,11 @@ Deno.serve(async (req) => {
 
   const { data: projects, error: pErr } = await supabase.from('projects')
     .select('id, name, end_date, award_date, notice_date, commencement_date')
-  if (pErr) return new Response(JSON.stringify({ error: pErr.message }), { status: 500 })
+  if (pErr) {
+    // 回應只有 pg_cron / 營運人員看得到,但仍不放 PostgREST 原文(原文進 log)
+    const pub = maskDbError('send-reminders.projects', pErr)
+    return new Response(JSON.stringify({ error: pub.message, code: pub.code }), { status: 500 })
+  }
 
   // 跨專案快取:email 與 org_type 都是「使用者層」資料,查一次就好
   const emailCache = new Map<string, string | null>()

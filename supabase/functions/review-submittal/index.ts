@@ -9,8 +9,8 @@
 // 金鑰只存雲端 secret(ANTHROPIC_API_KEY);verify_jwt 預設開啟。
 // 部署(colima 下必須 --use-api):supabase functions deploy review-submittal --use-api
 
-import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
-import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
+import { MODELS } from '../_shared/claude.ts'
+import { aiJsonHandler } from '../_shared/aiHandler.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -35,13 +35,9 @@ const SCHEMA = {
   required: ['checklist', 'opinion', 'suggested_decision', 'caution'],
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
-  const p = await req.json().catch(() => null) || {}
-  const gate = await openAiGate(req, { feature: 'submittal.review', projectId: p?.project_id })
-  if (!gate.ok) return gate.response
-  try {
+Deno.serve(aiJsonHandler({
+  feature: 'submittal.review',
+  build: ({ body: p }) => {
     const sub = p.submittal || {}
     const wi = p.work_item
     const reqs = (p.requirements || []).slice(0, 25)
@@ -67,18 +63,9 @@ Deno.serve(async (req) => {
     // 單次成本約 3 倍但判斷品質(範圍判定/依據引用)差距明顯。maxTokens 提到 4000:
     // 12 點清單+意見草稿的完整空間——撞頂現在會被 stop_reason=max_tokens 判失敗,
     // 不能再靠殘缺 JSON 湊巧過關。
-    const { data, error, usage, model } = await claudeJson({
+    return {
       model: MODELS.smart, name: 'submittal_review', schema: SCHEMA, maxTokens: 4000,
       system, content: facts,
-    })
-    if (error) {
-      await closeAiGate(gate, { feature: 'submittal.review', model, usage, status: 'error', errorCode: 'claude_error' })
-      return json({ error }, 502)
     }
-    await closeAiGate(gate, { feature: 'submittal.review', model, usage, status: 'ok' })
-    return json(data, 200)
-  } catch (e) {
-    await closeAiGate(gate, { feature: 'submittal.review', status: 'error', errorCode: 'exception' })
-    return json({ error: String((e as Error)?.message || e) }, 500)
-  }
-})
+  },
+}))

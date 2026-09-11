@@ -6,7 +6,7 @@
 //
 // 回 { am, pm, township, source } 或 { error }。防禦式解析 CWA 新舊欄位大小寫。
 
-import { cors, jsonResponse as json } from '../_shared/claude.ts'
+import { cors, jsonResponse as json, exceptionResponse } from '../_shared/claude.ts'
 import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 import { taipeiTodayUTC, formatDate } from '../_shared/contractDue.ts'
 
@@ -121,6 +121,6 @@ Deno.serve(async (req) => {
     return json({ am, pm, township, source: `中央氣象局 ${township}` }, 200)
   } catch (e) {
     await closeAiGate(gate, { feature: 'weather.fetch', status: 'error', errorCode: 'exception' })
-    return json({ error: String((e as Error)?.message || e) }, 500)
+    return exceptionResponse('fetch-weather', e)
   }
 })

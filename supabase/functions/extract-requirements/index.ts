@@ -16,7 +16,10 @@
 // 權限(system-managed),對 requirements 的 RLS 寫入權限屬於審查角色。
 
 import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2'
-import { claudeJson, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
+import { claudeJson, MODELS, cors, jsonResponse as json, errorResponse, dbErrorResponse } from '../_shared/claude.ts'
+import { maskDbError, maskException } from '../_shared/publicError.ts'
+import type { PublicError } from '../_shared/publicError.ts'
+import { isUuid } from '../_shared/uuid.ts'
 import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
 import { normalizeSourceText, verifySuggestionSource } from '../_shared/sourceVerify.ts'
 import {
@@ -27,8 +30,6 @@ import {
   loadDocumentPages, extractionCoverageIncomplete,
 } from '../_shared/requirementExtraction.ts'
 import type { BatchPage, UsageLike } from '../_shared/requirementExtraction.ts'
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Pages whose normalized text is shorter than this carry no verifiable
 // content (scanned/image pages - OCR is out of scope for P0-06).
@@ -169,15 +170,19 @@ function buildPrompt(opts: {
   )
 }
 
+// 只存分類碼＋中文短語(B1 / H-2):error_message 整案成員可讀(policy
+// document_ingestion_runs_select)且前端 packageUpload / Contract 會顯示,重構前
+// 把 PostgREST / Claude 原文 slice(0,2000) 存進去等於持久化外洩。原文由各遮罩點
+// console.error;代碼落在 metadata.error_code(不動 schema、對前端純加法)。
 async function failRun(
-  service: SupabaseClient, runId: string, message: string,
+  service: SupabaseClient, runId: string, pub: PublicError,
   metadata: Record<string, unknown>,
 ) {
   await service.from('document_ingestion_runs').update({
     status: 'failed',
     completed_at: new Date().toISOString(),
-    error_message: message.slice(0, 2000),
-    metadata,
+    error_message: pub.message.slice(0, 2000),
+    metadata: { ...metadata, error_code: pub.code },
   }).eq('id', runId)
 }
 
@@ -203,13 +208,11 @@ Deno.serve(async (req) => {
   let runId: string | null = null
   try {
     const documentVersionId = body?.document_version_id
-    if (typeof documentVersionId !== 'string' || !UUID_RE.test(documentVersionId)) {
+    if (!isUuid(documentVersionId)) {
       return json({ error: '缺少有效的 document_version_id' }, 400)
     }
     // W13 續跑:前端收到 in_progress 後帶回 continue_run_id 接力下一段批次
-    const continueRunId = typeof body?.continue_run_id === 'string' && UUID_RE.test(body.continue_run_id)
-      ? body.continue_run_id as string
-      : null
+    const continueRunId = isUuid(body?.continue_run_id) ? body.continue_run_id as string : null
 
     // RLS-scoped read proves the caller can see this version and pins the
     // project server-side; project_id from the body is only cross-checked.
@@ -218,7 +221,7 @@ Deno.serve(async (req) => {
       .select('id, document_id, documents!inner(id, project_id, title, document_type)')
       .eq('id', documentVersionId)
       .maybeSingle()
-    if (versionError) return json({ error: versionError.message }, 500)
+    if (versionError) return dbErrorResponse('extract-requirements.version', versionError)
     if (!version) return json({ error: '找不到文件版本或無權限' }, 404)
     const doc = version.documents as unknown as {
       id: string; project_id: string; title: string; document_type: string
@@ -230,14 +233,17 @@ Deno.serve(async (req) => {
 
     const { data: canManage, error: permError } =
       await userClient.rpc('can_manage_documents', { p: projectId })
-    if (permError) return json({ error: permError.message }, 500)
+    if (permError) return dbErrorResponse('extract-requirements.can_manage_documents', permError)
     if (canManage !== true) return json({ error: '無文件管理權限,不可啟動 AI 需求擷取' }, 403)
 
     // -- Load stored page text (RLS-scoped) -----------------------------------
     const { data: processingRun, error: processingError } = await userClient
       .from('document_processing_runs').select('metadata')
       .eq('document_version_id', documentVersionId).maybeSingle()
-    if (processingError) return json({ error: '無法讀取文件上傳紀錄，請重試' }, 500)
+    if (processingError) {
+      console.error('[extract-requirements.processing_run] PostgREST 錯誤:', processingError.message)
+      return json({ error: '無法讀取文件上傳紀錄，請重試', code: 'db_error' }, 500)
+    }
     // 舊攝取流程可能沒有 processing run；有上傳頁數時必須對得上，不能把
     // 只存入前半的連續頁當成完整文件。這不是對原始檔語意/OCR 品質的保證。
     const pageRows = await loadDocumentPages((from, to) => userClient
@@ -282,7 +288,7 @@ Deno.serve(async (req) => {
         .select('id, status, document_version_id, metadata')
         .eq('id', continueRunId)
         .maybeSingle()
-      if (runReadError) return json({ error: runReadError.message }, 500)
+      if (runReadError) return dbErrorResponse('extract-requirements.run_read', runReadError)
       const meta = (runRow?.metadata ?? {}) as Record<string, unknown>
       if (!runRow || runRow.document_version_id !== documentVersionId
         || runRow.status !== 'processing' || meta.awaiting_continue !== true) {
@@ -298,7 +304,7 @@ Deno.serve(async (req) => {
         .eq('id', continueRunId)
         .contains('metadata', { awaiting_continue: true })
         .select('id')
-      if (claimError) return json({ error: claimError.message }, 500)
+      if (claimError) return dbErrorResponse('extract-requirements.run_claim', claimError)
       if (!claimed?.length) {
         return json({ error: '這份文件已在解析中,請等它完成或失敗後再試', run_id: continueRunId, code: 'run_conflict' }, 409)
       }
@@ -347,7 +353,7 @@ Deno.serve(async (req) => {
         if ((runError as { code?: string }).code === '23505') {
           return json({ error: '這份文件已在解析中,請等它完成或失敗後再試', code: 'run_conflict' }, 409)
         }
-        return json({ error: runError.message }, 500)
+        return dbErrorResponse('extract-requirements.run_insert', runError)
       }
       runId = run.id as string
     }
@@ -361,11 +367,12 @@ Deno.serve(async (req) => {
     if (!pageRows.length || emptyPageNumbers.length === pageRows.length) {
       const message =
         '文件沒有可用的已抽取文字(可能為掃描件或影像 PDF);P0-06 不含 OCR,無法建立可追溯的需求建議'
-      await failRun(service, runId, message, {
+      const pub = { message, code: 'no_text' }
+      await failRun(service, runId, pub, {
         pagination: paginated ? 'paginated' : 'unpaginated',
         empty_page_numbers: emptyPageNumbers,
       })
-      return json({ error: message, run_id: runId, status: 'failed' }, 422)
+      return errorResponse(pub, 422, { run_id: runId, status: 'failed' })
     }
 
     // -- Bounded BOQ catalog (identity fields only - never prices/costs) ------
@@ -376,8 +383,9 @@ Deno.serve(async (req) => {
       .order('sort_order')
       .limit(2000)
     if (workItemsError) {
-      await failRun(service, runId, workItemsError.message, {})
-      return json({ error: workItemsError.message, run_id: runId, status: 'failed' }, 500)
+      const pub = maskDbError('extract-requirements.work_items', workItemsError)
+      await failRun(service, runId, pub, {})
+      return errorResponse(pub, 500, { run_id: runId, status: 'failed' })
     }
     const catalog = buildWorkItemCatalog(workItems ?? [], WORK_ITEM_CATALOG_LIMIT)
     const catalogLines = catalog.entries
@@ -399,9 +407,9 @@ Deno.serve(async (req) => {
       (resumeBatchesTotal != null && resumeBatchesTotal !== totalBatches)
       || resumeState.batchesCompleted > totalBatches
     )) {
-      const msg = '解析批次計畫已變更(系統更新),請重新啟動解析'
-      await failRun(service, runId, msg, { batches_total: totalBatches })
-      return json({ error: msg, run_id: runId, status: 'failed', code: 'restart_required' }, 409)
+      const pub = { message: '解析批次計畫已變更(系統更新),請重新啟動解析', code: 'restart_required' }
+      await failRun(service, runId, pub, { batches_total: totalBatches })
+      return errorResponse(pub, 409, { run_id: runId, status: 'failed' })
     }
 
     // 計數器從續跑狀態還原(全新 run 全為 0);totalUsage 只記「本 request」的
@@ -417,7 +425,7 @@ Deno.serve(async (req) => {
     let rejectedCount = prior.rejectedCount
     const rejected: { index: string; reason: string }[] = [...prior.rejectedItems]
     const clippedBatches: string[] = [...prior.clippedBatches]
-    let failedBatch: { label: string; error: string } | null = null
+    let failedBatch: { label: string; message: string; code: string } | null = null
     let batchesCompleted = prior.batchesCompleted
     let pausedForContinuation = false
     // 批內對半切的跨 request 續跑:上個 request 若在某批逾時後預算見底,
@@ -522,16 +530,16 @@ Deno.serve(async (req) => {
       if (!requirementRows.length) return null
       const { error: reqError } = await service!.from('requirements')
         .upsert(requirementRows, { onConflict: 'id', ignoreDuplicates: true })
-      if (reqError) return reqError.message
+      if (reqError) return maskDbError('extract-requirements.persist.requirements', reqError)
       const { error: srcError } = await service!.from('requirement_sources')
         .upsert(sourceRows, { onConflict: 'id', ignoreDuplicates: true })
-      if (srcError) return srcError.message
+      if (srcError) return maskDbError('extract-requirements.persist.sources', srcError)
       if (workItemRows.length) {
         const { error: wiError } = await service!.from('requirement_work_items')
           .upsert(workItemRows, {
             onConflict: 'requirement_id,work_item_id', ignoreDuplicates: true,
           })
-        if (wiError) return wiError.message
+        if (wiError) return maskDbError('extract-requirements.persist.work_items', wiError)
       }
       totalRequirements += requirementRows.length
       workItemLinkCount += workItemRows.length
@@ -542,7 +550,7 @@ Deno.serve(async (req) => {
     // 對半切重試(最多兩層);單頁批切不動就記進 clipped_batches 揭露。
     // forceSplitBelow:續跑帶進來的「先切再跑」深度——上個 request 已證明
     // depth < forceSplitBelow 的尺寸會逾時,直接從切好的子批開始
-    const runBatch = async (pages: PageRow[], label: string, depth: number, forceSplitBelow = 0): Promise<{ ok: boolean; error?: string; paused?: boolean; nextDepth?: number }> => {
+    const runBatch = async (pages: PageRow[], label: string, depth: number, forceSplitBelow = 0): Promise<{ ok: boolean; fail?: PublicError; paused?: boolean; nextDepth?: number }> => {
       if (depth < forceSplitBelow) {
         const halves = splitBatch(pages)
         if (halves) {
@@ -597,14 +605,15 @@ Deno.serve(async (req) => {
         if (!firstHalf.ok) return firstHalf
         return await runBatch(halves[1], `${label}b`, depth + 1)
       }
-      if (res.error) return { ok: false, error: res.error }
+      // res.error 已是 claudeJson 遮罩後的短語(原文在它的 log),errorCode 一路帶到 failRun
+      if (res.error) return { ok: false, fail: { message: res.error, code: res.errorCode ?? 'claude_error' } }
       if (!Array.isArray((res.data as Record<string, unknown>)?.requirements)) {
-        return { ok: false, error: 'AI 回傳缺少契約重點清單，無法判定本批已完整整理' }
+        return { ok: false, fail: { message: 'AI 回傳缺少契約重點清單，無法判定本批已完整整理', code: 'no_requirements' } }
       }
       const items = (res.data as { requirements: unknown[] }).requirements
       rawItemCount += items.length
       const persistError = await persistBatchItems(items, label)
-      if (persistError) return { ok: false, error: persistError }
+      if (persistError) return { ok: false, fail: persistError }
       // 子批完成即記錄+落庫:下一個 request 直接跳過,只跑剩下的子批。
       // 計數快照同步推進——子批已不會重跑(done-labels 防重),把它的計數
       // 掉在快照外反而會讓最終總數漏掉被跳過的子批
@@ -646,7 +655,7 @@ Deno.serve(async (req) => {
           pausedForContinuation = true
           break
         }
-        failedBatch = { label: `b${bi}`, error: result.error || '' }
+        failedBatch = { label: `b${bi}`, ...(result.fail ?? { message: '', code: 'batch_failed' }) }
         break
       }
       pendingSplitBatch = -1
@@ -673,7 +682,7 @@ Deno.serve(async (req) => {
         .eq('id', runId)
       if (pauseError) {
         // 旗標掛不上=沒人能續跑,誠實回錯誤;run 會由過期補償收屍
-        return json({ error: `解析進度保存失敗:${pauseError.message}`, run_id: runId, status: 'failed' }, 500)
+        return dbErrorResponse('extract-requirements.pause', pauseError, 500, { run_id: runId, status: 'failed' })
       }
       return json({
         run_id: runId,
@@ -705,7 +714,8 @@ Deno.serve(async (req) => {
       omitted_page_count: plan.omittedPageCount,
       last_included_page: lastProcessedPage,
       clipped_batches: clippedBatches,
-      failed_batch: failedBatch ? { label: failedBatch.label, error: failedBatch.error.slice(0, 500) } : null,
+      // metadata 的 error 鍵名沿用(前端相容);內容已是遮罩短語
+      failed_batch: failedBatch ? { label: failedBatch.label, error: failedBatch.message.slice(0, 500), code: failedBatch.code } : null,
       coverage_incomplete: coverageIncomplete,
       awaiting_continue: false,
       last_progress_at: new Date().toISOString(),
@@ -715,8 +725,9 @@ Deno.serve(async (req) => {
     // completed + 揭露——已落庫的建議要能被核定,缺的範圍明講。
     if (failedBatch && batchesCompleted === 0 && totalRequirements === 0) {
       await closeAiGate(gate, { feature: 'requirements.extract', model: usedModel, usage: totalUsage, status: 'error', errorCode: 'claude_error' })
-      await failRun(service, runId, failedBatch.error, coverageMetadata)
-      return json({ error: failedBatch.error, run_id: runId, status: 'failed' }, 502)
+      const pub = { message: failedBatch.message, code: failedBatch.code }
+      await failRun(service, runId, pub, coverageMetadata)
+      return errorResponse(pub, 502, { run_id: runId, status: 'failed' })
     }
     // AI 呼叫結束即記總用量(token 已花掉);之後的收尾失敗不影響這筆記帳,
     // 也不在外層 catch 再記(避免同一次呼叫重複計數)
@@ -738,7 +749,7 @@ Deno.serve(async (req) => {
       },
     }).eq('id', runId)
     if (completeError) {
-      return json({ error: completeError.message, run_id: runId, status: 'failed' }, 500)
+      return dbErrorResponse('extract-requirements.complete', completeError, 500, { run_id: runId, status: 'failed' })
     }
 
     // 轉錄分流(D-017,確定性引擎):引文已核對且期限數字與引文一致的自動確認
@@ -775,8 +786,9 @@ Deno.serve(async (req) => {
       batches_completed: batchesCompleted,
     }, 200)
   } catch (e) {
-    const message = String((e as Error)?.message || e)
-    if (service && runId) await failRun(service, runId, message, {})
-    return json({ error: message, ...(runId ? { run_id: runId, status: 'failed' } : {}) }, 500)
+    // loadDocumentPages 等刻意 throw 的繁中訊息原樣放行,runtime 原文遮罩(規則見 publicError.ts)
+    const pub = maskException('extract-requirements', e)
+    if (service && runId) await failRun(service, runId, pub, {})
+    return errorResponse(pub, 500, runId ? { run_id: runId, status: 'failed' } : {})
   }
 })

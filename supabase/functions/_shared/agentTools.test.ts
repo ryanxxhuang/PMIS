@@ -2,7 +2,7 @@
 // buildDailyLogDraft 的「數量誠實原則」(數量永遠留空標 needs_input,昨日數量
 // 只進 rationale 供參考,絕不預填),以及批4 buildInspectionDraft 的
 // 「實測值不讓 AI 讀」紅線(num 項不存在任何賦值路徑)。
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL, DRAFT_INSPECTION_TOOL, DRAFT_SUBMITTAL_REVIEW_TOOL, RAISE_TO_TOOL, RUN_INTEGRITY_AUDIT_TOOL,
   toolsForRole, buildDailyLogDraft, buildInspectionDraft, pickChecklistTemplate, makeToolExec,
@@ -366,5 +366,38 @@ describe('makeToolExec 的 draft_submittal_review 防護', () => {
   it('工具定義的描述明講「不能替監造做審定」(反幻覺紅線寫進 description)', () => {
     expect(DRAFT_SUBMITTAL_REVIEW_TOOL.description).toContain('不能替監造做審定')
     expect(DRAFT_SUBMITTAL_REVIEW_TOOL.description).toContain('法定裁量')
+  })
+})
+
+// ── toolError:PostgREST 原文不進 tool_result(B1 / M-9) ──────────────────────
+// 模型會把 tool_result 原文複述給使用者;policy / constraint 名只准進伺服器 log。
+describe('toolError(makeToolExec 查詢失敗)', () => {
+  it('search_boq 撞到 RLS 42501:給模型的是短語＋db_error,policy 名只在 console.error', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pgError = { code: '42501', message: 'permission denied for policy "work_items_select_secret"' }
+    // searchBoq 的鏈 from→select→eq→or→order→limit,最後一段回 PostgREST 錯誤
+    const chain: Record<string, unknown> = {}
+    for (const m of ['from', 'select', 'eq', 'or', 'order']) chain[m] = () => chain
+    chain.limit = async () => ({ data: null, error: pgError })
+    const exec = makeToolExec(chain as never, '00000000-0000-0000-0000-000000000000')
+    const out = (await exec('search_boq', { keyword: '混凝土' })) as { error?: string }
+    expect(out.error).toBeDefined()
+    expect(out.error).not.toContain('work_items_select_secret')
+    expect(out.error).not.toContain('42501')
+    expect(out.error).toContain('db_error')
+    expect(errSpy.mock.calls.flat().map(String).join('\n')).toContain('work_items_select_secret')
+    expect(errSpy.mock.calls.flat().map(String).join('\n')).toContain('agentTools.searchBoq')
+    errSpy.mockRestore()
+  })
+
+  it('P0001 繁中業務規則(DB 觸發器)原樣回給模型,讓它據此修正', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const chain: Record<string, unknown> = {}
+    for (const m of ['from', 'select', 'eq', 'or', 'order']) chain[m] = () => chain
+    chain.limit = async () => ({ data: null, error: { code: 'P0001', message: '本案標單尚未匯入' } })
+    const exec = makeToolExec(chain as never, '00000000-0000-0000-0000-000000000000')
+    const out = (await exec('search_boq', { keyword: '混凝土' })) as { error?: string }
+    expect(out.error).toBe('本案標單尚未匯入')
+    errSpy.mockRestore()
   })
 })
