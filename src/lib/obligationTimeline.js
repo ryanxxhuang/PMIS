@@ -246,6 +246,9 @@ export function buildTimelineItem(ob, { requirement, sources, versionsById, anch
     doc: version ? `${version.documents?.title || '契約文件'}（${version.version_label || ''}）` : '',
     quote: src?.source_text || '',
     verified: src ? !!src.source_verified : null,
+    // 詳情欄的原文高亮要知道 quote 出自哪一筆出處(document_version_id + page_number)
+    // 才取得到那一頁全文;和 quote/verified 同一筆,不讓頁面自己再挑一次。
+    source: src,
     calc: formatObligationRule(ob),
     criteria: requirement?.acceptance_criteria || '',
     evidenceReq: requirement?.evidence_requirement || '',
