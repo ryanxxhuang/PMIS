@@ -194,7 +194,11 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
 - **IA 殼**：**落地點已完成**——側欄有「球在誰手上」來源群組（現在輪到我／等待對方／今天已完成），主畫面依 `?ball=` 一次聚焦一段，四張指標卡已依判準第 2 條移除。**三欄（來源 → 清單 → 詳情）尚未實作**，詳情仍是跳頁而非同位置替換。
   - ⚠️ 過渡期的已知重複：工作面的「今日待辦」與球權來源指向同一條路由。`aria-current` 已去重複（只給最具體的球權來源），但兩個入口並存本身是過渡狀態，等來源模型完全取代「工作面」時「今日待辦」那一項會退場。動它要同步改 `e2e/routes.spec.js` 的「四個扁平入口」與 `BottomNav` 的前四項。
   - ⚠️ Dashboard 的「最近施工日誌」卡**不可移除**：`/site-log` 與 `/valuation` 都是 `hidden: true`，那張卡是可見表面通往施工日誌的最後一條路（2026-08-12 實測事故：藏到連擁有者都找不到）。解封「現場與品質」工作面之後才可以拿掉。
-- **字級收斂**：全站 243 處 `text-[Npx]` 尚未換成新階梯。
-- **圖示**：仍是 Material Symbols subset 字型（96 個相異圖示 / 320 呼叫點 / 29 處動態名）。目標換 lucide-react，`build-icon-font.mjs` 退場（它本來就沒接進 `package.json`）。`MSym` 的 FILL 選取態軸 lucide 沒有對應，導覽選取態要重新設計。
+- **字級收斂**：**已完成**。`@theme` 把 Tailwind 內建 `text-xs/sm/base/lg` 對映到階梯（460+ 處零編輯生效），另逐處改寫 158 個任意值。殘留 78 處在 `Contract.jsx` / `Requirements.jsx` / `RequirementsReview.jsx`——那三支有契約抽取那條線的未提交工作，等它合併後另開一包收尾。
+- **圖示**：**已換成 lucide-react**（98 個對映）。做法是改寫 `MSym` 的實作而不動 271 個呼叫點——元件名、`name`/`size`/`fill`/`className` props 全部不變，名字沿用 Material Symbols 的 ligature 名（那些名字散在 `navConfig`／`agentRole`／`aiInsights` 等資料層，改名等於同時改資料與呼叫端）。subset 字型、`build-icon-font.mjs`、`icon-names.mjs`、`iconFont.test.js` 一併退場。
+  - `fill`（Material 的 FILL 軸）lucide 沒有對應，退化成描邊加重一階。Apple 的選取態本來就是「淺色底＋主色圖示」而不是填滿字形。
+  - 新增圖示＝在 `src/components/icons.jsx` 的 `ICONS` 加一行。漏對映會畫中性圓圈並在 dev console 警告——**刻意不用長得像真圖示的東西當退路**，實測就發生過 `shield` 漏對映卻剛好畫出盾牌，只有警告抓得到。
+  - 驗證方式：走過 35 條路由收 console 警告，比正則掃描可靠（正則抓不到 `<Section icon="…">` 與 `toolBtn('rect', 'crop_square', …)` 這類寫法）。
+- **品牌資產**：`public/` 的品牌標記仍是 Google 四色點（9 個檔 39 處），與 Apple 色票不一致，待獨立處理。
 - **手機**：不是桌機縮小版。現場戴手套、單手、太陽下與辦公室審查是兩種工作，要另做形狀。
 - **行銷站**：`PMIS_site`（repo `PMIS.marketing`）尚未套用；三支 skill 已複製到該 repo 的 `.claude/skills/`。

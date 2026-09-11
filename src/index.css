@@ -1,6 +1,6 @@
 @import "tailwindcss";
-/* 字型改由 main.jsx 以 JS import 載入(@fontsource-variable/noto-sans-tc、
-   src/assets/material-symbols.css 的 subset 圖示字型):本檔的 @import 放在
+/* 字型改由 main.jsx 以 JS import 載入(@fontsource-variable/noto-sans-tc):
+   本檔的 @import 放在
    tailwind 展開後會落在規則之後,Lightning CSS 於 build 時整行丟棄
    → 正式站字型靜默失效(dev 看得到、prod 沒有)。JS import 完全繞開這個坑。 */
 
@@ -351,12 +351,6 @@ select option { color: var(--text); background: var(--surface); }
 
 /* 頁首:large title 靠留白分層,無底線裝飾 */
 .title-block { padding-bottom: 4px; }
-
-/* Material Symbols:選取態用 FILL 1(可變軸),尺寸由元件 inline fontSize 控制。
-   字符走 ::before + attr(),ligature 名不進 textContent(見 icons.jsx 的說明)。
-   ⚠️ 圖示系統將於後續工作包換成 lucide-react;在那之前這段留著。 */
-.material-symbols-outlined { user-select: none; }
-.material-symbols-outlined[data-i]::before { content: attr(data-i); }
 
 /* 骨架屏:列高與欄位位置必須等於載入後,避免位移 */
 @keyframes g-shimmer { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }

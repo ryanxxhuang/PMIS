@@ -23,8 +23,8 @@ const initialSidebarCollapsed = () => {
 // 展開鈕由呼叫端各自負責(工作面列多一顆展開鈕,球權列沒有)。
 // 列殼=Workspace 藥丸:貼齊左緣、右側全圓(0 100px 100px 0);選取=淺藍底深藍字。
 // 收合(md+ rail)時縮成置中圓形。selected=淺藍底;open=工作面已展開子頁,只加粗不上底。
-// (旗標用布林不用字串:scripts/icon-names.mjs 把 src 內所有小寫字串字面值當圖示候選,
-// selected 這類字不在 manifest 會讓 iconFont.test 紅。)
+// (旗標用布林不用字串純粹是介面偏好;原本是為了閃避 subset 字型的 manifest
+// 掃描,那套工具已隨 lucide 改版移除,這裡維持布林是因為它本來就比較好讀。)
 const rowClass = ({ selected = false, open = false }, collapsed) => `mr-4 my-0.5 rounded-r-full transition-colors flex items-center ${
   selected
     ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'

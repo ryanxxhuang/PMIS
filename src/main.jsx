@@ -6,12 +6,10 @@ import { StoreProvider } from './store.jsx'
 import { initSentry, Sentry } from './lib/sentry.js'
 import { applyTheme, watchSystemTheme } from './lib/theme.js'
 // 字型走 JS import self-host(機關禁外連 CDN):index.css 的 @import 會被
-// Lightning CSS 在 build 時丟棄,JS import 完全繞開。順序須在 index.css 之前,
-// 讓 .material-symbols-outlined 的元件層規則可覆寫預設。
-// 圖示字型是 subset(~100KB,整包 480KB 弱網首載會噴英文字):
-// 新增圖示要跑 node scripts/build-icon-font.mjs,守門測試 iconFont.test.js 會提醒。
+// Lightning CSS 在 build 時丟棄,JS import 完全繞開。
+// 圖示已改成 lucide-react 的 SVG 元件(見 components/icons.jsx),不再有圖示字型——
+// 也就不再有「漏字會靜默渲染成英文字」那個坑,漏對映在 dev 會 console 警告。
 import '@fontsource-variable/noto-sans-tc'
-import './assets/material-symbols.css'
 import './index.css'
 
 initSentry() // 錯誤監控(只在正式站且有 DSN 時啟用)
