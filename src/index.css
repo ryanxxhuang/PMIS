@@ -419,6 +419,59 @@ html.theme-switching, html.theme-switching *, html.theme-switching *::before, ht
     border-color 200ms var(--ease-in-out), fill 200ms var(--ease-in-out), stroke 200ms var(--ease-in-out) !important;
 }
 
+/* ── 紙面(列印文件本體):全站唯一「刻意不吃主題」的地方 ─────────────────
+   /site-log/print、/valuation/print、/valuation/package、/quality/checklist-print、
+   /contract/print 的產物是交給機關的正式文件(施工日誌、估驗計價單、佐證包、
+   自主檢查表、契約期限對照表),/site-log 唯讀檢視也嵌同一張紙(SiteLogOfficialSheet)。
+   紙永遠白底黑字:深色模式下工具列(PrintToolbar)與桌面(.paper-desk)跟主題走,紙不動——
+   Preview.app 的深色 chrome 壓白紙就是這個關係。原本散在六支檔案 167 個
+   slate-、red-、amber- 系列 class 的用色收斂到這一組;顏色只在這裡改,版面、欄寬、分頁不歸這裡管。
+
+   對比度怎麼算(與螢幕不同的兩點):
+   ① 分母只有一個——白紙 #ffffff,不像螢幕要對 surface/bg/surface-2 三個底各驗一次;
+      括號內就是對白紙的 WCAG 2.x 實算值((L_lighter+.05)/(L_darker+.05))。
+   ② 機關普遍黑白雷射列印:色相全部丟失、只剩相對亮度 L,而「對白紙的對比值」正是 L 的
+      單調函數——同一個數字同時回答「螢幕上讀不讀得到」和「轉灰後印不印得出」。
+      所以紙面語意色必須夠深(文字 ≥ 4.5、框線 ≥ 3.0 才不會印成淺灰),
+      而且一律顏色+文字並存,不能只靠紅/橘傳達。
+   值取自 :root 亮色 token(2026-09-11),刻意複製而非 var() 引用:紙是固定印刷品,
+   不跟主題,也不需要跟著 App 日後的亮色微調走。 */
+.paper {
+  background: #ffffff;
+  color: #1d1d1f;                 /* ink 16.83 */
+  /* 語意 token 在紙面釘回亮色值:.dark 把 --red-text 換成 #ff8a80(對白紙只有 2.28)、
+     --amber-text 換成 #ffbe55(1.65),深色模式下印出來會是粉紅字/淡黃字白紙。
+     .paper 比 html.dark 更靠近使用點,後代一律拿到這組;值必須等於 :root 亮色同名 token。 */
+  --red-text: #b3000f;            /* 7.18 */
+  --danger: #d70015;              /* 5.38(框線,圖形門檻 3:1) */
+  --amber-text: #a32b00;          /* 7.23 */
+  --accent: #c93400;              /* 5.28(框線) */
+}
+/* 紙上的表單控件(佐證包的「本期施工說明」textarea)跟紙,不跟本檔上面那條
+   input/textarea 主題規則:否則深色模式下是一塊深底淺字壓在白紙上。
+   :where() 讓特異性維持在 .paper 這一層;下面 @media print 的 #000/#fff !important 照舊。 */
+.paper :where(input, select, textarea) { color: #1d1d1f; background-color: #ffffff; }
+
+/* 桌面(紙後面的底):這是 chrome 不是紙,跟主題走;列印時退成白,免得開了「列印背景圖形」
+   的瀏覽器把深色底印出來(舊寫法 bg-slate-200 print:bg-white 的等價物,集中在此)。 */
+.paper-desk { background: var(--bg); }
+@media print { .paper-desk { background: #ffffff; } }
+
+/* 紙面 utility:用 @utility 進 utilities layer,才能被 focus:/print: 等變體覆寫
+   (裸寫 .paper-rule 是 unlayered,會壓掉 textarea 的 focus:border-[var(--blue)])。
+   三階灰字(slate-400/500/600)收成一個 paper-mute:slate-400 對白紙只有 2.56,
+   黑白印出來是淺灰,W8-5 在佐證包已經修過一次,這次全部收掉。 */
+@utility paper-ink { color: #1d1d1f; }                /* 16.83 —— 坐在 paper-mute 容器內要回黑時用 */
+@utility paper-mute { color: #56565a; }               /*  7.31 —— 欄位標籤/表頭/單位/註腳 */
+@utility paper-fill { background-color: #efeff4; }    /*  1.15 —— 表頭/區塊標題/合計列底;不承載語意(黑白列印多半不印背景) */
+@utility paper-rule { border-color: #d2d2d7; }        /*  1.51 —— 表頭格線/分隔線 */
+@utility paper-rule-2 { border-color: #e5e5ea; }      /*  1.26 —— 明細格線(hairline) */
+@utility paper-rule-strong { border-color: #7c7c81; } /*  4.15 —— 外框/簽章線(≥ 3:1,黑白印得出) */
+@utility paper-warn { color: var(--amber-text); }     /*  7.23 —— 佐證包定性聲明/照片誤配提醒 */
+@utility paper-warn-rule { border-color: var(--accent); }   /* 5.28 */
+@utility paper-danger { color: var(--red-text); }     /*  7.18 —— 自主檢查表「已被修訂版取代」 */
+@utility paper-danger-rule { border-color: var(--danger); } /* 5.38 */
+
 /* 列印:表單控件的顏色來自本檔上面那條 unlayered 規則(var(--text)/var(--surface)),
    深色模式下就是「淺字深底」;瀏覽器預設不印背景色,於是白紙上只剩淺灰字。
    /valuation/package 的「本期施工說明」textarea 是唯一坐在列印版面裡的控件,

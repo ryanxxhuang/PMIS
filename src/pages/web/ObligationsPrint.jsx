@@ -1,17 +1,14 @@
 import { useMemo } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
-import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
+import PrintToolbar from '../../components/PrintToolbar.jsx'
 import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
 import { parseLocalDate, localISODate, taipeiToday } from '../../lib/dates.js'
 
 // W10 契約期限對照表——「可寄給對方」的輸出物。事務所/監造對機關、對廠商溝通時
 // 需要一張紙:哪些期限、怎麼算、到期日、誰負責、現在狀態、契約出處。
-// 不套 WebLayout,整頁即文件;工具列樣式與其他四支列印頁同一組 class
-// (釘死亮色不吃主題 token,理由見 SiteLogPrint)。
-const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-md:min-h-11'
-const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[#0b57d0] text-white hover:bg-[#0842a0]`
-const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white text-[#0b57d0] border border-[#dadce0] hover:bg-[#e8f0fe]`
+// 不套 WebLayout,整頁即文件;工具列(chrome,吃主題 token)與紙面(.paper,固定白底黑字)
+// 分開處理,理由見 PrintToolbar 與 index.css。
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
 const ANCHOR_LABELS = [
@@ -20,8 +17,8 @@ const ANCHOR_LABELS = [
 ]
 const iso = (d) => localISODate(d) || ''
 
-const TH = 'border border-slate-400 px-2 py-1 text-left font-medium bg-slate-100'
-const TD = 'border border-slate-400 px-2 py-1 align-top'
+const TH = 'border paper-rule-strong px-2 py-1 text-left font-medium paper-fill'
+const TD = 'border paper-rule-strong px-2 py-1 align-top'
 
 export default function ObligationsPrint() {
   const { currentProject, obligations, currentUser, submittals } = useStore()
@@ -54,47 +51,41 @@ export default function ObligationsPrint() {
   if (!currentUser) return <Navigate to="/login" replace />
   if (!obligations.length) {
     return (
-      <div className="p-10 text-center text-slate-400">
+      <div className="p-10 text-center text-[var(--text-2)]">
         尚無期限資料。<button onClick={() => navigate('/deadlines')} className="text-[var(--blue-text)] underline">返回期限追蹤</button>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-200 print:bg-white py-6 print:py-0">
-      {/* 工具列(列印時隱藏)*/}
-      <div className="max-w-[210mm] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden px-1">
-        <button onClick={() => navigate('/deadlines')} className={TOOLBAR_SECONDARY}>← 返回期限追蹤</button>
-        <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}>
-          <MSym name="print" size={15} />列印 / 存 PDF
-        </button>
-      </div>
+    <div className="min-h-screen paper-desk py-6 print:py-0">
+      <PrintToolbar backTo="/deadlines" backLabel="返回期限追蹤" />
 
-      {/* A4 文件本體:紙面永遠白底黑字,不吃主題 token */}
-      <div className="max-w-[210mm] mx-auto bg-white text-slate-900 shadow print:shadow-none px-[14mm] py-[12mm] text-footnote leading-relaxed">
+      {/* A4 文件本體:紙面永遠白底黑字,不吃主題 token(.paper) */}
+      <div className="max-w-[210mm] mx-auto paper shadow print:shadow-none px-[14mm] py-[12mm] text-footnote leading-relaxed">
         <h1 className="text-center text-lg font-bold">契約期限對照表</h1>
-        <div className="text-center text-slate-500 mt-0.5">產出日期:{iso(today)}</div>
+        <div className="text-center paper-mute mt-0.5">產出日期:{iso(today)}</div>
 
         <table className="w-full mt-3 border-collapse">
           <tbody>
             <tr>
-              <td className={`${TD} w-24 bg-slate-100`}>工程名稱</td>
+              <td className={`${TD} w-24 paper-fill`}>工程名稱</td>
               <td className={TD} colSpan={3}>{currentProject?.project_name || '—'}</td>
             </tr>
             <tr>
-              <td className={`${TD} bg-slate-100`}>機關</td>
+              <td className={`${TD} paper-fill`}>機關</td>
               <td className={TD}>{currentProject?.owner_name || '—'}</td>
-              <td className={`${TD} w-24 bg-slate-100`}>監造單位</td>
+              <td className={`${TD} w-24 paper-fill`}>監造單位</td>
               <td className={TD}>{currentProject?.supervisor_name || '—'}</td>
             </tr>
             <tr>
-              <td className={`${TD} bg-slate-100`}>施工廠商</td>
+              <td className={`${TD} paper-fill`}>施工廠商</td>
               <td className={TD}>{currentProject?.contractor_name || '—'}</td>
-              <td className={`${TD} bg-slate-100`}>契約價金總額</td>
+              <td className={`${TD} paper-fill`}>契約價金總額</td>
               <td className={TD}>{currentProject?.contract_total ? `NT$ ${Number(currentProject.contract_total).toLocaleString('en-US')}` : '—'}</td>
             </tr>
             <tr>
-              <td className={`${TD} bg-slate-100`}>基準日</td>
+              <td className={`${TD} paper-fill`}>基準日</td>
               <td className={TD} colSpan={3}>
                 {ANCHOR_LABELS.map(([k, label]) => `${label} ${anchors[k] || '未填'}`).join('・')}
               </td>
@@ -102,11 +93,11 @@ export default function ObligationsPrint() {
           </tbody>
         </table>
 
-        <div className="mt-2 text-slate-600">
+        <div className="mt-2 paper-mute">
           合計 {rows.length} 項期限;已完成/已提送 {rows.filter((r) => r.done).length} 項、
           已逾期 {overdueCount} 項、無法推算到期日 {nodateCount} 項。
           {missingAnchors.length > 0 && (
-            <span className="text-slate-900 font-medium">
+            <span className="paper-ink font-medium">
               (注意:{missingAnchors.join('、')}未填,相關期限的到期日無法推算)
             </span>
           )}
@@ -154,7 +145,7 @@ export default function ObligationsPrint() {
           </div>
         ))}
 
-        <p className="mt-4 text-caption text-slate-500">
+        <p className="mt-4 text-caption paper-mute">
           本表由 GovAgent 系統依契約基準日自動推算產出,供履約管理對照使用;各項內容與期限以契約原文為準。
           「無法推算」表示對應基準日尚未填寫。
         </p>
