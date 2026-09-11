@@ -58,6 +58,29 @@
   --text-title1: 28px;
   --text-title1--line-height: 34px;
   --text-title1--letter-spacing: -0.021em;
+
+  /* Tailwind 內建字級對映到同一份階梯(全站 text-xs 280 處、text-sm 180 處)。
+     沿用「@theme 只改值不改名」——逐一改寫 460 個呼叫點既貴又會動到 e2e 綁的
+     class 名,改值則零編輯生效。四個都是「等值或更小」,不會觸發全路由的
+     scrollWidth <= clientWidth 斷言:
+       xs 12→12(行高收緊)、sm 14→13、base 16→15、lg 18→17
+     xl(20)與 2xl(24)刻意不對映:階梯下一階是 22/28,對映會放大;那 7 個呼叫點
+     逐一改成明確的階梯 class。 */
+  --text-xs: var(--text-footnote);
+  --text-xs--line-height: var(--text-footnote--line-height);
+  --text-xs--letter-spacing: var(--text-footnote--letter-spacing);
+
+  --text-sm: var(--text-body);
+  --text-sm--line-height: var(--text-body--line-height);
+  --text-sm--letter-spacing: var(--text-body--letter-spacing);
+
+  --text-base: var(--text-callout);
+  --text-base--line-height: var(--text-callout--line-height);
+  --text-base--letter-spacing: var(--text-callout--letter-spacing);
+
+  --text-lg: var(--text-title3);
+  --text-lg--line-height: var(--text-title3--line-height);
+  --text-lg--letter-spacing: var(--text-title3--letter-spacing);
 }
 
 /* dark: 變體綁 .dark class(theme.js 三態都經由它),不是 prefers-color-scheme——

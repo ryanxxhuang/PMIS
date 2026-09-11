@@ -10,13 +10,19 @@ const completed = [{ id: 'R1', status: 'completed' }]
 const inFlight = [{ id: 'R1', status: 'processing' }, { id: 'R2', status: 'failed' }]
 
 describe('AI 已完成整理但 0 筆結果', () => {
+  it('沒有結果但有缺漏時不得宣稱不需處理', () => {
+    const intro = requirementsIntro([{ status: 'completed', metadata: { empty_page_numbers: [2] } }], 0)
+    expect(intro.emptyText).toContain('尚未完整整理')
+    expect(intro.emptyText).not.toContain('不需')
+    expect(intro.coverageWarning).toContain('文字不足')
+  })
   it('視為完成,說明「不需處理」且不影響正式模式', () => {
     const intro = requirementsIntro(completed, 0)
     expect(intro.ingestionDone).toBe(true)
     expect(intro.mode).toBe('done-empty')
     expect(intro.emptyText).toContain('AI 已完成整理')
     expect(intro.emptyText).toContain('沒有找到契約重點建議')
-    expect(intro.emptyText).toContain('不需處理')
+    expect(intro.emptyText).toContain('不需逐條確認')
     expect(intro.emptyText).toContain('不影響開啟正式模式')
   })
   it('不得再叫使用者去上傳文件(那會繞回原點)', () => {
@@ -110,8 +116,14 @@ describe('詳情動作列權限(鏡像 can_review_requirement)', () => {
   })
 
   it('系統自動確認(reviewed_by 空)要講明不是人簽的', () => {
-    const auto = { ...deadline, status: 'approved', reviewed_at: '2026-08-24T10:00:00Z', reviewed_by: null }
+    const auto = { ...deadline, status: 'approved', reviewed_at: '2026-08-24T10:00:00Z', reviewed_by: null, triage_doubts: [] }
     expect(render(auto, true)).toContain('系統核對無誤・自動確認')
+  })
+
+  it.each([undefined, null, ['期限數字不符']])('自動確認的核對缺值或疑慮不可被誤標無誤', (triage_doubts) => {
+    const html = render({ ...deadline, status: 'approved', reviewed_at: '2026-09-08T01:00:00Z', reviewed_by: null, triage_doubts }, true)
+    expect(html).not.toContain('系統核對無誤')
+    expect(html).toContain('AI 整理')
   })
 
   it('不採用:只剩紀錄,沒有任何操作', () => {

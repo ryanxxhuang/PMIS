@@ -74,9 +74,9 @@ export default function ValuationPrint() {
       </div>
 
       {/* 文件本體 A4 */}
-      <div className="max-w-[820px] mx-auto bg-white my-6 print:my-0 p-10 print:p-0 shadow-sm print:shadow-none text-[13px] text-slate-800">
+      <div className="max-w-[820px] mx-auto bg-white my-6 print:my-0 p-10 print:p-0 shadow-sm print:shadow-none text-body text-slate-800">
         <div className="text-center mb-5">
-          <h1 className="text-xl font-bold tracking-wide">估 驗 計 價 單</h1>
+          <h1 className="text-title2 font-bold tracking-wide">估 驗 計 價 單</h1>
           <div className="text-slate-500 mt-1">第 {selected.period_no} 期</div>
         </div>
 
@@ -105,8 +105,8 @@ export default function ValuationPrint() {
         </div>
 
         {/* 明細 */}
-        <div className="text-[11px] text-slate-500 mb-1">本期估驗明細（僅列累計有完成之工項）</div>
-        <table className="w-full border-collapse text-[12px]">
+        <div className="text-caption text-slate-500 mb-1">本期估驗明細（僅列累計有完成之工項）</div>
+        <table className="w-full border-collapse text-footnote">
           <thead>
             <tr className="bg-slate-100">
               {['項次', '工項名稱', '單位', '契約數量', '單價', '累計完成數量', '累計金額', '本期金額'].map((h) => (
@@ -144,7 +144,7 @@ export default function ValuationPrint() {
           {['承包廠商', '監造單位', '主管機關'].map((r) => (
             <div key={r}>
               <div className="h-16 border-b border-slate-300" />
-              <div className="mt-1.5 text-[12px]">{r}（簽章）</div>
+              <div className="mt-1.5 text-footnote">{r}（簽章）</div>
             </div>
           ))}
         </div>

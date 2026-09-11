@@ -147,7 +147,7 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4 print:hidden enter-fade" onClick={onClose}>
       <div className="bg-[var(--surface)] rounded-[28px] border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] overflow-hidden w-full max-w-4xl max-h-[92vh] flex flex-col enter-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--border-2)]">
-          <h3 className="text-[19px] font-normal leading-snug text-[var(--text)]">{title}</h3>
+          <h3 className="text-title3 font-normal leading-snug text-[var(--text)]">{title}</h3>
           <button onClick={onClose} aria-label="關閉" className="inline-flex items-center justify-center p-2 -m-1 max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--text)]"><MSym name="close" size={17} /></button>
         </div>
         <div className="px-4 py-2.5 flex flex-wrap items-center gap-2 border-b border-[var(--border-2)]">
@@ -160,7 +160,7 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
             {toolBtn('arrow', 'arrow_outward', '箭頭')}
             {toolBtn('text', 'title', '文字')}
             <Button variant="outline" size="sm" onClick={() => setShapes((ss) => ss.slice(0, -1))} disabled={!shapes.length} title="復原"><MSym name="undo" size={16} />復原</Button>
-            <span className="text-[11px] text-[var(--text-3)] ml-auto">在圖上拖曳畫{tool === 'rect' ? '框' : tool === 'arrow' ? '箭頭' : '（點一下輸入文字）'}</span>
+            <span className="text-caption text-[var(--text-3)] ml-auto">在圖上拖曳畫{tool === 'rect' ? '框' : tool === 'arrow' ? '箭頭' : '（點一下輸入文字）'}</span>
           </>}
         </div>
         <div className="flex-1 overflow-auto p-4 bg-[var(--surface-2)]">
@@ -201,7 +201,7 @@ export function MarkupThumb({ src, resolve, className = '' }) {
     <>
       {/* 名稱不能靠內層內容:載入中分支只有「載入中」三字,按鈕名稱會跟著跑掉 */}
       <button onClick={() => setOpen(true)} aria-label="檢視圖面標註" title="檢視圖面標註" className={`block border border-[var(--border)] rounded-lg overflow-hidden hover:opacity-80 ${className}`}>
-        {url ? <img src={url} alt="圖面標註" className="h-14 w-20 object-cover" /> : <span className="h-14 w-20 flex items-center justify-center text-[11px] text-[var(--text-3)]">載入中</span>}
+        {url ? <img src={url} alt="圖面標註" className="h-14 w-20 object-cover" /> : <span className="h-14 w-20 flex items-center justify-center text-caption text-[var(--text-3)]">載入中</span>}
       </button>
       {open && url && (
         // 燈箱遮罩與陰影同樣走浮層基準,不用 Tailwind 原生 shadow-2xl

@@ -170,11 +170,11 @@ function ProjectCard({ c, onOpen }) {
       className={`text-left h-full flex flex-col p-5 pressable ${clickable ? 'hover:border-[var(--blue)] hover:[box-shadow:var(--shadow-md)] cursor-pointer' : 'cursor-default'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[15px] font-medium text-[var(--text)] truncate flex items-center gap-2">
+          <div className="text-callout font-medium text-[var(--text)] truncate flex items-center gap-2">
             {c.name}
             {c.isCurrent && <Badge color="blue">目前專案</Badge>}
           </div>
-          <div className="text-[11px] text-[var(--text-3)] num mt-0.5">{c.code || '—'}</div>
+          <div className="text-caption text-[var(--text-3)] num mt-0.5">{c.code || '—'}</div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Badge color={STATUS_COLOR[c.status] || 'slate'}>{c.status}</Badge>
@@ -202,13 +202,13 @@ function ProjectCard({ c, onOpen }) {
               role="img" title={`今日預定 ${c.plannedPct.toFixed(1)}%`} aria-label={`今日預定 ${c.plannedPct.toFixed(1)}%`} />
           )}
         </div>
-        <div className="num text-[11px] text-[var(--text-3)] mt-1.5 text-right">
+        <div className="num text-caption text-[var(--text-3)] mt-1.5 text-right">
           <span className="whitespace-nowrap">累計估驗 NT$ {fmt(c.cum)}</span> ／ <span className="whitespace-nowrap">{fmt(c.billable)}</span>
         </div>
       </div>
 
       {/* 待辦計數(mt-auto 把底部區塊釘齊卡底,三張卡對齊) */}
-      <div className="mt-auto pt-4 grid grid-cols-3 gap-2 text-[11px] w-full">
+      <div className="mt-auto pt-4 grid grid-cols-3 gap-2 text-caption w-full">
         {[
           { icon: 'warning', label: '缺失', title: '未結案缺失', v: c.openDefects, warn: c.openDefects > 0 },
           { icon: 'verified_user', label: '待查驗', title: '待監造查驗', v: c.pendingInspections, warn: c.pendingInspections > 0 },
@@ -225,7 +225,7 @@ function ProjectCard({ c, onOpen }) {
       </div>
 
       {/* 驗收階段:永遠顯示同一列(沒進驗收就淡色),三張卡底部才會整齊 */}
-      <div className="mt-3 flex items-center gap-2 text-[12px] w-full">
+      <div className="mt-3 flex items-center gap-2 text-footnote w-full">
         <MSym name="verified" size={14} className={!c.acceptance ? 'text-[var(--text-3)] opacity-60' : c.acceptance.overdue ? 'text-[var(--red-text)]' : c.acceptance.finished ? 'text-[var(--green-text)]' : 'text-[var(--blue-text)]'} />
         <span className={c.acceptance ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}>
           驗收：{c.acceptance ? c.acceptance.label : '尚未進入驗收程序'}

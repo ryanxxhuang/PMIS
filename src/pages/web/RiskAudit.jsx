@@ -119,7 +119,7 @@ export default function RiskAudit() {
           <span className={`w-11 h-11 rounded-lg grid place-items-center shrink-0 ${O.tile}`}><MSym name={O.icon} size={24} /></span>
           <div>
             {/* 小標對齊 Stat 的 label 規格(11px/text-2),不再自帶只有這裡看得到的 tracking */}
-            <div className="text-[11px] text-[var(--text-2)]">稽核結果</div>
+            <div className="text-caption text-[var(--text-2)]">稽核結果</div>
             <div className="text-lg font-semibold text-[var(--text)]">
               {overall === 'pass'
                 ? (summary.na ? `未發現異常（${summary.na} 項資料不足未評估）` : '本案未發現明顯異常')
@@ -137,7 +137,7 @@ export default function RiskAudit() {
 
       {/* 檢核明細 */}
       <Card title="稽核檢核表" bodyClass="p-0"
-        action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="auto_awesome" size={12} />自動檢核</span>}>
+        action={<span className="inline-flex items-center gap-1 text-caption text-[var(--text-3)]"><MSym name="auto_awesome" size={12} />自動檢核</span>}>
         <ul className="divide-y divide-[var(--border-2)]">
           {checks.map((c, i) => {
             const s = ST[c.status]
@@ -159,7 +159,7 @@ export default function RiskAudit() {
 
       {/* 文件勾稽鏈:逐工項跨文件對帳(全確定性) */}
       <Card title="文件勾稽鏈" bodyClass="p-0"
-        action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="compare_arrows" size={12} />估驗 ↔ 日誌 ↔ 查驗 ↔ 試體 對帳</span>}>
+        action={<span className="inline-flex items-center gap-1 text-caption text-[var(--text-3)]"><MSym name="compare_arrows" size={12} />估驗 ↔ 日誌 ↔ 查驗 ↔ 試體 對帳</span>}>
         {integrity.findings.length === 0 ? (
           <Empty>估驗、施工日誌、查驗與試體之間未發現對不起來之處（已勾稽 {integrity.summary.checked || 0} 項計價工項）。</Empty>
         ) : (
@@ -177,7 +177,7 @@ export default function RiskAudit() {
                     </div>
                     <div className="text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">{c.detail}</div>
                     {/* 文字箭頭改圖示;手機補 44px 命中區(W8-5) */}
-                    {c.route && <button onClick={() => navigate(c.route)} className="inline-flex items-center gap-0.5 max-md:min-h-11 text-[11px] text-[var(--blue-text)] hover:underline mt-1">前往查核<MSym name="arrow_forward" size={12} /></button>}
+                    {c.route && <button onClick={() => navigate(c.route)} className="inline-flex items-center gap-0.5 max-md:min-h-11 text-caption text-[var(--blue-text)] hover:underline mt-1">前往查核<MSym name="arrow_forward" size={12} /></button>}
                   </div>
                 </li>
               )
@@ -215,7 +215,7 @@ export default function RiskAudit() {
         )}
       </Card>
 
-      <p className="text-[11px] text-[var(--text-3)] leading-relaxed">
+      <p className="text-caption text-[var(--text-3)] leading-relaxed">
         <MSym name="verified_user" size={13} className="inline align-text-bottom mr-1" />
         稽核結果為<b className="text-[var(--text-2)] font-medium">「值得複查的異常提示」，非違規認定</b>；供機關監督參考，實際處置請依契約與相關法令。多案時可於 <Link to="/dashboard" className="text-[var(--blue-text)] hover:underline">總覽</Link> 比較各案風險。
       </p>

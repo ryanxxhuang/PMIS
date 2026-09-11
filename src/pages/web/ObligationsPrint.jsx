@@ -70,7 +70,7 @@ export default function ObligationsPrint() {
       </div>
 
       {/* A4 文件本體:紙面永遠白底黑字,不吃主題 token */}
-      <div className="max-w-[210mm] mx-auto bg-white text-slate-900 shadow print:shadow-none px-[14mm] py-[12mm] text-[12px] leading-relaxed">
+      <div className="max-w-[210mm] mx-auto bg-white text-slate-900 shadow print:shadow-none px-[14mm] py-[12mm] text-footnote leading-relaxed">
         <h1 className="text-center text-lg font-bold">契約期限對照表</h1>
         <div className="text-center text-slate-500 mt-0.5">產出日期:{iso(today)}</div>
 
@@ -113,7 +113,7 @@ export default function ObligationsPrint() {
 
         {groups.map((g) => (
           <div key={g.ph} className="mt-4 break-inside-avoid-page">
-            <h2 className="font-bold text-[13px] mb-1">{g.ph}({g.list.length} 項)</h2>
+            <h2 className="font-bold text-body mb-1">{g.ph}({g.list.length} 項)</h2>
             <table className="w-full border-collapse">
               <thead>
                 <tr>
@@ -153,7 +153,7 @@ export default function ObligationsPrint() {
           </div>
         ))}
 
-        <p className="mt-4 text-[11px] text-slate-500">
+        <p className="mt-4 text-caption text-slate-500">
           本表由 GovAgent 系統依契約基準日自動推算產出,供履約管理對照使用;各項內容與期限以契約原文為準。
           「無法推算」表示對應基準日尚未填寫。
         </p>

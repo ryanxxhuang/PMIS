@@ -14,7 +14,7 @@ const curMonth = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 function Section({ n, title, children }) {
   return (
     <div>
-      <h3 className="text-[15px] font-medium text-[var(--text)] mb-2">{n}、{title}</h3>
+      <h3 className="text-callout font-medium text-[var(--text)] mb-2">{n}、{title}</h3>
       <div className="pl-3">{children}</div>
     </div>
   )
@@ -145,7 +145,7 @@ export default function SupervisorReport() {
           {/* print: 兩件(去框、去左右內距)是列印版面的合約,以 className 帶入共用 Textarea */}
           <Textarea value={opinionText} onChange={(e) => setOpinion(e.target.value)} rows={5}
             className="leading-relaxed print:border-0 print:px-0" />
-          <div className="text-[11px] text-[var(--text-3)] mt-1 print:hidden flex items-center gap-1">
+          <div className="text-caption text-[var(--text-3)] mt-1 print:hidden flex items-center gap-1">
             <MSym name="auto_awesome" size={12} />AI 依本月數據草擬，請監造覆核修改後再列印用印。
           </div>
         </Section>

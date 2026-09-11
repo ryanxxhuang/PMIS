@@ -56,6 +56,12 @@ describe('summarizePackageProgress (real stage counts, no fake percentage)', () 
 })
 
 describe('packageStatusFromRuns', () => {
+  it('部分完成或已完成但有覆蓋缺漏的契約仍需留意', () => {
+    expect(packageStatusFromRuns([run({ status: 'partial', stage: 'failed' })])).toBe('needs_attention')
+    expect(packageStatusFromRuns([run({ status: 'completed', stage: 'completed',
+      metadata: { requirement_extraction_warning: '第 2 頁文字不足' },
+    })])).toBe('needs_attention')
+  })
   it('reports processing while any file is still active', () => {
     expect(packageStatusFromRuns([run({ stage: 'classifying' })])).toBe('processing')
   })

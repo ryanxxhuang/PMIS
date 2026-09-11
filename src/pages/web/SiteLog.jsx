@@ -456,7 +456,7 @@ export default function SiteLog() {
                   <div className="overflow-x-auto rounded-xl border border-[var(--border-card)] bg-white p-3">
                     <SiteLogOfficialSheet project={project} log={currentLog} siteLogs={siteLogs} itemList={adjustedItems} className="min-w-[640px]" />
                   </div>
-                  <p className="mt-1.5 text-[11px] text-[var(--text-3)]">公定格式(固定白底)</p>
+                  <p className="mt-1.5 text-caption text-[var(--text-3)]">公定格式(固定白底)</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -540,7 +540,7 @@ export default function SiteLog() {
               )}
               {/* CWA 預報資料集只涵蓋未來約 3 天,過去日期打 API 必然帶不到——先講明,不讓使用者按了才看到失敗 */}
               {can.edit && date < todayStr() && (
-                <span className="text-[11px] text-[var(--text-3)] pb-2">僅支援近 3 天預報,過去日期請手動填寫</span>
+                <span className="text-caption text-[var(--text-3)] pb-2">僅支援近 3 天預報,過去日期請手動填寫</span>
               )}
               {/* 零輸入:一鍵帶入前一筆日誌的班組/機具/材料(僅新日期、且有前一筆時) */}
               {can.edit && !dateHasLog && prevLog && (
@@ -560,7 +560,7 @@ export default function SiteLog() {
               </div>
             )}
             {can.edit && hasCoords && !coordOpen && (
-              <div className="mb-4 -mt-1 text-[11px] text-[var(--text-3)]">
+              <div className="mb-4 -mt-1 text-caption text-[var(--text-3)]">
                 工地座標 {Number(currentProject.latitude).toFixed(4)}, {Number(currentProject.longitude).toFixed(4)}
                 <button onClick={() => { setLat(currentProject.latitude); setLon(currentProject.longitude); setCoordOpen(true) }} className="ml-2 text-[var(--blue-text)] hover:underline">修改</button>
               </div>
@@ -572,7 +572,7 @@ export default function SiteLog() {
             {can.edit && aiEnabled('sitelog.whiteboard') && <div className="mb-3 p-3 rounded-2xl bg-[var(--ai-tint)]">
               <div className="flex items-center gap-1 mb-2">
                 <MSym name="auto_awesome" size={14} className="text-[var(--ai)]" />
-                <span className="text-[11px] font-medium text-[var(--ai-text)]">AI 草稿</span>
+                <span className="text-caption font-medium text-[var(--ai-text)]">AI 草稿</span>
               </div>
               <label className={`${buttonClass('primary', 'md')} ${aiBusy ? 'opacity-50' : 'cursor-pointer'}`}>
                 <input type="file" accept="image/*" capture="environment" disabled={aiBusy} onChange={onWhiteboard} className="hidden" />
@@ -583,7 +583,7 @@ export default function SiteLog() {
               </p>
             </div>}
             {can.edit && !aiEnabled('sitelog.whiteboard') && (
-              <p className="mb-3 text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（工程告示板辨識），請直接於下方手動填寫。</p>
+              <p className="mb-3 text-caption text-[var(--text-3)]">此 AI 功能未啟用（工程告示板辨識），請直接於下方手動填寫。</p>
             )}
 
             <div className="relative mb-3">
@@ -646,7 +646,7 @@ export default function SiteLog() {
                 className="w-full flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--text-2)] hover:bg-[var(--surface-2)] rounded-lg">
                 <MSym name="chevron_right" size={15} className={`transition-transform duration-[var(--dur-fast)] ${officialOpen ? 'rotate-90' : ''}`} />
                 公定格式欄位（出工人數・機具・材料・安衛…）
-                <span className="ml-auto text-[11px] text-[var(--text-3)] font-normal">
+                <span className="ml-auto text-caption text-[var(--text-3)] font-normal">
                   {/* ISSUE-5a:這是工程會公定格式的法定欄位,副標不用「選填」降級,改中性說明 */}
                   {labor.length + equipment.length + materials.length > 0 ? `已填 ${labor.length + equipment.length + materials.length} 列` : '公定格式日誌欄位，列印時輸出'}
                 </span>
@@ -686,7 +686,7 @@ export default function SiteLog() {
                         <label className="inline-flex items-center gap-1.5">新進勞工提報勞保
                           {/* 行內小控件對齊 TablePager 的裸 select 規格(rounded-md/13px),不吃 FIELD_BASE 全寬 */}
                           <select value={extras.insured || '無新進勞工'} disabled={!can.edit} onChange={(e) => setExtras({ ...extras, insured: e.target.value })}
-                            className="bg-transparent border border-[var(--border)] rounded-md px-1.5 py-0.5 text-[13px] text-[var(--text)] max-md:min-h-11 disabled:opacity-50">
+                            className="bg-transparent border border-[var(--border)] rounded-md px-1.5 py-0.5 text-body text-[var(--text)] max-md:min-h-11 disabled:opacity-50">
                             {['有', '無', '無新進勞工'].map((s) => <option key={s}>{s}</option>)}
                           </select>
                         </label>
@@ -853,12 +853,12 @@ export default function SiteLog() {
                         </div>
                         {(p.caption || p.work_item_id || p.location) && (
                           <div className="px-1.5 py-1 bg-[var(--surface)] border-t border-[var(--border-2)]">
-                            {p.caption && <div className="text-[11px] leading-tight text-[var(--text-2)] truncate" title={p.caption}>{p.caption}</div>}
+                            {p.caption && <div className="text-caption leading-tight text-[var(--text-2)] truncate" title={p.caption}>{p.caption}</div>}
                             {/* 施作區域(W8-7):同工項不同區域靠這行分辨;舊照片無 location(null)不渲染,顯示不受影響 */}
-                            {p.location && <div className="text-[10px] leading-tight text-[var(--text-3)] truncate" title={`施作區域 ${p.location}`}><MSym name="location_on" size={10} className="inline -mt-0.5" /> {p.location}</div>}
+                            {p.location && <div className="text-micro leading-tight text-[var(--text-3)] truncate" title={`施作區域 ${p.location}`}><MSym name="location_on" size={10} className="inline -mt-0.5" /> {p.location}</div>}
                             {/* 賣點的可見性:配到的工項一定要看得到,否則配對成功=白做(dry-run #17 教訓) */}
                             {p.work_item_id && byId.get(p.work_item_id) && (
-                              <div className="text-[10px] leading-tight text-[var(--blue-text)] truncate" title={`${byId.get(p.work_item_id).item_no} ${byId.get(p.work_item_id).description}`}>
+                              <div className="text-micro leading-tight text-[var(--blue-text)] truncate" title={`${byId.get(p.work_item_id).item_no} ${byId.get(p.work_item_id).description}`}>
                                 <MSym name="link" size={10} className="inline -mt-0.5" /> {byId.get(p.work_item_id).item_no} {byId.get(p.work_item_id).description}
                               </div>
                             )}
@@ -925,7 +925,7 @@ function FreqChips({ items, label, onAdd }) {
   if (!items?.length) return null
   return (
     <div className="flex flex-wrap items-center gap-1 mb-1.5">
-      <span className="text-[11px] text-[var(--text-3)]">常用</span>
+      <span className="text-caption text-[var(--text-3)]">常用</span>
       {/* 一鍵加入 chips 改吃 CHIP_BASE/CHIP_OFF(rounded-full 舊 chip 退場);
           手機 44px 由 CHIP_BASE 內建,flex-wrap 容器只會變高不會破版 */}
       {items.map((r, i) => (

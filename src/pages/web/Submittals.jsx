@@ -186,7 +186,7 @@ export default function Submittals() {
                     <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                       {s.attachment_path
                         ? <span className="text-xs inline-flex items-center gap-1 text-[var(--blue-text)]"><MSym name="attach_file" size={12} />已附文件：{s.attachment_name || '文件'}</span>
-                        : <span className="text-[11px] text-[var(--text-2)]">尚未上傳文件本體</span>}
+                        : <span className="text-caption text-[var(--text-2)]">尚未上傳文件本體</span>}
                       {/* 不能用 <button> 的檔案上傳 label 也吃同一套按鈕皮(藥丸+44px 觸控),
                           不再自寫 4px 圓角、20px 高的小殼 */}
                       {can.submit && (s.status === '已提送' || s.status === '審核中' || s.status === '退回補正') && (
@@ -225,12 +225,12 @@ export default function Submittals() {
                       </Button>
                     )}
                     {can.approve && !aiEnabled('submittal.review') && !aiEnabled('submittal.read') && (s.status === '已提送' || s.status === '審核中') && (
-                      <span className="text-[11px] text-[var(--text-2)]">AI 審查功能未啟用</span>
+                      <span className="text-caption text-[var(--text-2)]">AI 審查功能未啟用</span>
                     )}
                     {/* 施工:退回補正後修正再送(補正說明必填=實質補正證據) */}
                     {can.submit && s.status === '退回補正' && <Button variant="secondary" disabled={busy} onClick={() => onResubmit(s)}>修正再送</Button>}
                     {/* 待審提示與角色無關(原本拆成 can.approve/!can.approve 兩條分支渲染同一段字,行為等價) */}
-                    {(s.status === '已提送' || s.status === '審核中') && <span className="text-[11px] text-[var(--text-2)]">待監造審定</span>}
+                    {(s.status === '已提送' || s.status === '審核中') && <span className="text-caption text-[var(--text-2)]">待監造審定</span>}
                     {/* 僅「已提送且未經審查」可刪(R3 P0-01:一經受理即為履約證據,DB 另有 guard)。
                         灰轉紅文字鈕不在三級語言內,改共用 Button 的第三級(順帶拿到 44px 觸控高度) */}
                     {can.submit && s.status === '已提送' && !(s.revision > 0) && (
@@ -269,7 +269,7 @@ export default function Submittals() {
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查意見草稿（可修改，核准/核備/退回時自動帶入）</div>
                       <Textarea rows={3} value={aiReview[s.id].opinion}
                         onChange={(e) => setAiReview((m) => ({ ...m, [s.id]: { ...m[s.id], opinion: e.target.value } }))} />
-                      <p className="text-[11px] text-[var(--text-3)] mt-1">依契約規範/工項自動草擬，僅供監造參考；文件本體仍須人工核對，最終判定由監造裁量。</p>
+                      <p className="text-caption text-[var(--text-3)] mt-1">依契約規範/工項自動草擬，僅供監造參考；文件本體仍須人工核對，最終判定由監造裁量。</p>
                     </div>
                   )
                 })()}
@@ -282,7 +282,7 @@ export default function Submittals() {
                         <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5 flex-wrap">
                           <MSym name="find_in_page" size={14} className="text-[var(--blue)]" />AI 讀文件審查
                           {d.suggested_decision && <Badge color={DECISION_COLOR[d.suggested_decision] || 'slate'}>建議：{d.suggested_decision}</Badge>}
-                          <span className="text-[11px] text-[var(--text-2)] font-normal">{d.mode === 'text' ? '已讀文件文字' : '視覺讀取'}</span>
+                          <span className="text-caption text-[var(--text-2)] font-normal">{d.mode === 'text' ? '已讀文件文字' : '視覺讀取'}</span>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => closeRead(s.id)}>收起</Button>
                       </div>
@@ -301,7 +301,7 @@ export default function Submittals() {
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查意見草稿（可修改，核准/核備/退回時自動帶入）</div>
                       <Textarea rows={3} value={d.summary_opinion || ''}
                         onChange={(e) => setAiRead((m) => ({ ...m, [s.id]: { ...m[s.id], summary_opinion: e.target.value } }))} />
-                      <p className="text-[11px] text-[var(--text-3)] mt-1">AI 讀送審文件本體逐項比對契約需求；「需人工確認/未涵蓋」項仍須監造核對，最終判定由監造裁量。</p>
+                      <p className="text-caption text-[var(--text-3)] mt-1">AI 讀送審文件本體逐項比對契約需求；「需人工確認/未涵蓋」項仍須監造核對，最終判定由監造裁量。</p>
                     </div>
                   )
                 })()}

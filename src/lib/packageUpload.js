@@ -18,7 +18,7 @@ import { friendlyError } from './errorMessage.js'
 import { extractDocumentPages, hasExtractableText } from './documentExtract.js'
 import { fileKind, analysisSupport, storedLimitationLabel } from './packageFileSupport.js'
 import { classifyDocument, shouldExtractRequirements, AUTO_ACCEPT_THRESHOLD } from './documentClassifier.js'
-import { runRequirementExtraction, extractionSuccessMessage } from './extractRequirements.js'
+import { runRequirementExtraction, extractionSuccessMessage, extractionCoverageWarning } from './extractRequirements.js'
 
 export const UPLOAD_CONCURRENCY = 2
 export const PROCESSING_STALE_MS = 20 * 60 * 1000
@@ -94,6 +94,7 @@ export function summarizePackageProgress(runs) {
       (r) => r.status === 'completed' && r.metadata?.requirement_extraction === 'completed',
     ).length,
     completed: rows.filter((r) => r.status === 'completed').length,
+    incomplete: rows.filter((r) => r.metadata?.requirement_extraction_warning).length,
     partial: rows.filter((r) => r.status === 'partial').length,
     failed: rows.filter((r) => r.status === 'failed').length,
     unsupported: rows.filter((r) => r.status === 'unsupported').length,
@@ -106,7 +107,7 @@ export function packageStatusFromRuns(runs) {
   const s = summarizePackageProgress(runs)
   if (s.total === 0) return 'draft'
   if (s.active > 0) return 'processing'
-  if (s.failed > 0 || s.needsClassification > 0) return 'needs_attention'
+  if (s.failed > 0 || s.partial > 0 || s.incomplete > 0 || s.needsClassification > 0) return 'needs_attention'
   return 'ready'
 }
 
@@ -478,6 +479,7 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
   })
   let extractionState = 'skipped'
   let extractionMessage = null
+  let extractionWarning = null
   if (routing) {
     await report({
       project_id: projectId, contract_package_id: packageRow.id,
@@ -506,6 +508,7 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
       extractionState = 'completed'
       // W10 揭露截斷:未涵蓋整份文件時,成功訊息必須連著講清楚讀到哪裡
       extractionMessage = extractionSuccessMessage(result.data)
+      extractionWarning = extractionCoverageWarning(result.data)
     } else if (result.inProgress) {
       // 已有別的解析在跑(同檔另開分頁/重複上傳):不可蓋寫成失敗——
       // W13 殭屍事故就是 409 一路把活著的解析蓋成失敗。run 維持 processing,
@@ -547,6 +550,7 @@ async function processPackageFile({ file, packageRow, projectId, userId, onRun }
       classification_reason: classification.reason,
       requirement_extraction: extractionState,
       requirement_extraction_message: extractionMessage,
+      requirement_extraction_warning: extractionWarning,
       routed_document_type: documentType,
     },
   })

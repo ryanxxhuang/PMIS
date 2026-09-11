@@ -9,7 +9,38 @@ import {
   requirementFrequencyKey,
   sourcePageLabel,
   sourceVerificationSummary,
+  requirementVerification,
 } from './requirementReview.js'
+
+describe('核對例外分流（不依模型信心分數）', () => {
+  const auto = { origin: 'ai', status: 'approved', reviewed_at: '2026-09-08T01:00:00Z', reviewed_by: null, triage_doubts: [] }
+  it('有疑慮的自動確認仍需留意，不能宣稱核對無誤', () => {
+    const verdict = requirementVerification({ ...auto, confidence: 1, triage_doubts: ['期限數字不符'] })
+    expect(verdict.attention).toBe(true)
+    expect(verdict.label).not.toContain('核對無誤')
+    expect(verdict.note).toContain('期限數字不符')
+  })
+  it.each([null, undefined, ''])('缺少有效的疑慮陣列 %j 應列未知', (triage_doubts) => {
+    expect(requirementVerification({ ...auto, triage_doubts }).attention).toBe(true)
+    expect(requirementVerification({ ...auto, triage_doubts }).label).not.toContain('核對無誤')
+  })
+  it('通過既有核對不宣稱沒有漏項', () => {
+    const verdict = requirementVerification({ ...auto, confidence: 0.2 })
+    expect(verdict.attention).toBe(false)
+    expect(verdict.label).toContain('系統核對無誤')
+    expect(verdict.note).toContain('不代表已驗證全部語意或沒有漏項')
+  })
+  it('人工已確認不因原有 AI 疑慮重複要求查看', () => {
+    const verdict = requirementVerification({ ...auto, reviewed_by: 'reviewer', triage_doubts: ['原有疑慮'] })
+    expect(verdict).toMatchObject({ attention: false, label: '已由人工確認' })
+  })
+  it.each(['rejected', 'superseded'])('已退出的 %s 不進需留意', (status) => {
+    expect(requirementVerification({ ...auto, status, triage_doubts: ['疑慮'] }).attention).toBe(false)
+  })
+  it('人工補登尚待確認保留人工責任', () => {
+    expect(requirementVerification({ status: 'needs_review', origin: 'manual' }).attention).toBe(true)
+  })
+})
 
 const runs = [
   { id: 'run-old', document_version_id: 'v1', status: 'completed', started_at: '2026-07-01T10:00:00Z' },

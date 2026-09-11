@@ -228,7 +228,7 @@ export default function Deadlines() {
                     )
                   })()}
                   {(it.ob.source_clause || it.ob.source_page) && (
-                    <div className="text-[11px] text-[var(--text-3)] mt-2 flex items-center gap-1"><MSym name="description" size={11} /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>
+                    <div className="text-caption text-[var(--text-3)] mt-2 flex items-center gap-1"><MSym name="description" size={11} /> 契約 {it.ob.source_clause} {it.ob.source_page}</div>
                   )}
                 </div>
               </div>

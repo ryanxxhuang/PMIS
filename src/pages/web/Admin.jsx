@@ -56,8 +56,8 @@ const PRESETS = [
 // 顏色只在 th 這一處決定——thead tr 上不得再疊第二層字色,兩層會互相打架。
 const TH = `${THEAD_CLS} text-left py-2 px-3 whitespace-nowrap`
 const THR = `${THEAD_CLS} text-right py-2 px-3 whitespace-nowrap`
-const TD = 'py-2 px-3 text-[13px]'
-const TDR = 'py-2 px-3 text-[13px] text-right num whitespace-nowrap'
+const TD = 'py-2 px-3 text-body'
+const TDR = 'py-2 px-3 text-body text-right num whitespace-nowrap'
 // 資料列 hover 底色全站同一顆 token(不帶 alpha)
 const TR = 'border-b border-[var(--border-2)] last:border-0 hover:bg-[var(--surface-2)]'
 const EMPTY_MSG = '這段期間還沒有 AI 使用紀錄。'
@@ -241,7 +241,7 @@ function OverviewTab({ overview, daily, loading }) {
           ].map(([label, v]) => (
             /* 標籤字級/色對齊 Stat(11px/text-2、無字距):同一頁不要有兩套數字標籤 */
             <div key={label} className="min-w-0">
-              <div className="text-[11px] text-[var(--text-2)]">{label}</div>
+              <div className="text-caption text-[var(--text-2)]">{label}</div>
               <div className="num text-lg font-normal text-[var(--text)] mt-0.5">{fmtInt(v)}</div>
             </div>
           ))}
@@ -277,7 +277,7 @@ function DailyBars({ rows, getV, fmt, barClass }) {
           )
         })}
       </div>
-      <div className="flex justify-between text-[10px] text-[var(--text-3)] num mt-1.5">
+      <div className="flex justify-between text-micro text-[var(--text-3)] num mt-1.5">
         <span>{rows[0].day}</span>
         <span>最高 {fmt(max)}</span>
         <span>{rows[rows.length - 1].day}</span>
@@ -323,7 +323,7 @@ function ByFeatureTab({ rows, loading, rangeKey }) {
                 <tr key={r.feature_key} className={TR}>
                   <td className={TD}>
                     <div className="font-medium text-[var(--text)]">{r.label}</div>
-                    <div className="text-[11px] text-[var(--text-3)] num">{r.feature_key}</div>
+                    <div className="text-caption text-[var(--text-3)] num">{r.feature_key}</div>
                   </td>
                   <td className={TD}>{cat && <Badge color={CATEGORY_COLOR[cat]}>{CATEGORY_LABEL[cat] || cat}</Badge>}</td>
                   <td className={TDR}>{fmtInt(r.calls)}</td>
@@ -339,7 +339,7 @@ function ByFeatureTab({ rows, loading, rangeKey }) {
                       <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden min-w-[60px]">
                         <div className="h-full rounded-full bg-[var(--blue)]" style={{ width: `${Math.min(100, pct)}%` }} />
                       </div>
-                      <span className="num text-[11px] text-[var(--text-2)] w-11 text-right">{pct.toFixed(1)}%</span>
+                      <span className="num text-caption text-[var(--text-2)] w-11 text-right">{pct.toFixed(1)}%</span>
                     </div>
                   </td>
                 </tr>
@@ -507,7 +507,7 @@ function FeaturesTab({ features, setFeatures, loading, reload, setFeatureEnabled
                     {f.label}
                     {!f.enabled && <Badge color="red">已停用</Badge>}
                   </div>
-                  <div className="text-[11px] text-[var(--text-3)] num mt-0.5">
+                  <div className="text-caption text-[var(--text-3)] num mt-0.5">
                     {f.key} → {f.edge_function}
                   </div>
                 </div>

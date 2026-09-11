@@ -4,8 +4,8 @@
 //   可操作   = item.who === viewerParty(與角色無關,只看歸屬)
 // ⚠️ VISIBLE 是前端的展示過濾(shim):目標契約是後端依登入身分回傳已過濾
 // 集合並附 canAct 旗標(RLS/view),前端不做權限判斷——屆時整張表刪除、
-// 這裡只剩推導函式。在那之前 contract_obligations 的 RLS 仍是全案成員可讀,
-// 這份過濾只是版面歸屬,不是安全邊界,不可反過來依賴它保密。
+// 這裡只剩推導函式。D-018 起 contract_obligations 的 RLS 已依來源契約分級；
+// 這份責任方過濾只是版面歸屬，不是安全邊界，不可反過來依賴它保密。
 import { computeObligationDue, formatObligationRule } from './contractDue.js'
 import { parseLocalDate, localISODate, taipeiISODate } from './dates.js'
 import { REQUIREMENT_TYPE_LABELS, sourcePageLabel } from './requirementReview.js'
@@ -26,9 +26,9 @@ export const VISIBLE = { 廠商: ['廠商'], 監造: ['監造', '廠商'], 機�
 
 // 頁首副標(README 2.1,依角色換文案;標點照設計稿)
 export const PARTY_BLURB = {
-  廠商: 'AI 已讀完契約與規範,把你要遵守的每一條排到時程上——從開工第一天到保固期滿,什麼時候該做什麼、依據哪一條,都在這裡。',
-  監造: 'AI 已讀完契約與規範,逐條排到時程上。這裡可以看到你自己與廠商的履約執行情形。',
-  機關: 'AI 已讀完契約與規範,逐條排到時程上。這裡可以一次看到廠商與監造的履約執行情形。',
+  廠商: '依契約整理的履約事項，從開工到保固追蹤期限與佐證。內容如有出入，以契約原文為準。',
+  監造: '查看自己與廠商的履約事項、期限與佐證。內容如有出入，以契約原文為準。',
+  機關: '查看三方的履約事項、期限與佐證。內容如有出入，以契約原文為準。',
 }
 
 // 五色語意(README:紅=逾期、黃=7日內、藍=排程中、綠=已完成、灰=未觸發)。
@@ -38,7 +38,7 @@ export const OB_STATUS = {
   due: { label: '即將到期', badge: 'amber', dot: 'var(--accent)' },
   scheduled: { label: '排程中', badge: 'blue', dot: 'var(--primary)' },
   done: { label: '已完成', badge: 'green', dot: 'var(--success)' },
-  na: { label: '無需處理', badge: 'slate', dot: 'var(--chart-today)' },
+  na: { label: '無到期日', badge: 'slate', dot: 'var(--chart-today)' },
 }
 export const STATUS_KEYS = ['overdue', 'due', 'scheduled', 'done', 'na']
 
@@ -82,7 +82,7 @@ export function deriveStatus(ob, anchors, today) {
 // 倒數文案(README 2.4)
 export function countdownLabel(statusKey, diff) {
   if (statusKey === 'done') return '已完成'
-  if (statusKey === 'na') return '未觸發'
+  if (statusKey === 'na') return '無到期日'
   if (diff == null) return ''
   if (diff < 0) return `逾期 ${-diff} 日`
   if (diff === 0) return '今天到期'

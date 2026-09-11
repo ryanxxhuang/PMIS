@@ -263,7 +263,7 @@ export default function MonthlyReport() {
           </div>
           {/* 批 B UX:月報草稿功能關閉時藏 AI 按鈕(demo 一律開;真正的閘門在伺服器端) */}
           {!aiEnabled('report.monthly') && (
-            <div className="print:hidden mb-2 text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（施工月報草稿），請人工填寫。</div>
+            <div className="print:hidden mb-2 text-caption text-[var(--text-3)]">此 AI 功能未啟用（施工月報草稿），請人工填寫。</div>
           )}
           {aiEnabled('report.monthly') && <div className="print:hidden mb-2 flex items-center gap-2 flex-wrap">
             <Button variant="secondary" busy={aiBusy} onClick={async () => {
@@ -302,7 +302,7 @@ export default function MonthlyReport() {
               {/* busy 時的旋轉圖示由 Button 提供,這裡就不再疊一顆 auto_awesome */}
               {!aiBusy && <MSym name="auto_awesome" size={15} />}{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
             </Button>
-            <span className="text-[11px] text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
+            <span className="text-caption text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
           </div>}
           {/* 失敗訊息走共用 ErrorBanner:紅字散裝 span 在長草稿錯誤訊息下會擠掉整列 */}
           <ErrorBanner msg={aiErr} onClose={() => setAiErr('')} className="print:hidden mb-2" />
@@ -340,7 +340,7 @@ export default function MonthlyReport() {
 function Section({ title, children }) {
   return (
     <section>
-      <h3 className="text-[15px] font-medium text-[var(--text)] mb-2">{title}</h3>
+      <h3 className="text-callout font-medium text-[var(--text)] mb-2">{title}</h3>
       {children}
     </section>
   )
@@ -352,8 +352,8 @@ function Info({ k, v }) {
 function Metric({ label, value, color = '' }) {
   return (
     <div className="border border-[var(--border)] bg-[var(--surface-2)] rounded-lg py-3">
-      <div className="text-[11px] text-[var(--text-2)]">{label}</div>
-      <div className={`text-xl font-normal mt-1 num ${color}`}>{value}</div>
+      <div className="text-caption text-[var(--text-2)]">{label}</div>
+      <div className={`text-title3 font-normal mt-1 num ${color}`}>{value}</div>
     </div>
   )
 }

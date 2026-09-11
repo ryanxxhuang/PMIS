@@ -80,16 +80,42 @@ export async function runRequirementExtraction({ documentVersionId, projectId, o
 
 // 完成 payload → 使用者訊息(W10 揭露截斷:未涵蓋整份文件必須連著講清楚;
 // D-019 全自動:自動歸檔幾項、幾項未逐字核對要一眼看到,效力回歸契約原文)
+export function extractionCoverageWarning(data) {
+  const empty = Array.isArray(data?.empty_page_numbers) ? data.empty_page_numbers : []
+  const rejected = Number(data?.rejected_item_count) || 0
+  const clipped = Array.isArray(data?.clipped_batches) ? data.clipped_batches.length : 0
+  if (!data?.coverage_incomplete && !empty.length && !rejected && !clipped) return null
+  const details = []
+  if (empty.length) details.push(`${empty.length} 頁文字不足（頁／段 ${empty.slice(0, 10).join('、')}${empty.length > 10 ? '…' : ''}，可能含掃描內容）`)
+  if (rejected) details.push(`${rejected} 項輸出未通過格式檢查`)
+  if (clipped) details.push(`${clipped} 批未完整輸出`)
+  details.push(`最後處理位置 ${data?.last_included_page ?? '?'}／共 ${data?.total_page_count ?? '?'} 頁或段`)
+  return `未涵蓋整份文件：${details.join('；')}。請到專案文件查看原檔與處理狀態。`
+}
+
+// 每個文件版本各自檢查最近一次已完成整理，避免另一份成功文件蓋掉缺漏警示。
+export function extractionCoverageWarnings(runs = []) {
+  const latest = new Map()
+  for (const run of runs || []) {
+    if (run?.status !== 'completed') continue
+    const key = run.document_version_id || run.id || 'legacy'
+    const previous = latest.get(key)
+    if (!previous || String(run.started_at || run.completed_at || '') > String(previous.started_at || previous.completed_at || '')) latest.set(key, run)
+  }
+  return [...latest.values()].flatMap((r) => {
+    const warning = extractionCoverageWarning(r.metadata)
+    return warning ? [`${r.document_title ? `「${r.document_title}」` : ''}${warning}`] : []
+  })
+}
+
 export function extractionSuccessMessage(data) {
   const auto = data?.auto_confirmed_count
   const flagged = data?.flagged_count
   const triage = auto != null && auto > 0
     ? `,已自動整理歸檔${flagged > 0 ? `(${flagged} 項未逐字核對,以契約原文為準)` : ''}`
     : ''
-  return `找到 ${data?.extracted_requirement_count ?? 0} 項契約重點建議${triage}${
-    data?.coverage_incomplete
-      ? `(未涵蓋整份文件:解析至第 ${data?.last_included_page ?? '?'} 頁/共 ${data?.total_page_count ?? '?'} 頁)`
-      : ''}`
+  const coverage = extractionCoverageWarning(data)
+  return `找到 ${data?.extracted_requirement_count ?? 0} 項契約重點建議${triage}${coverage ? `（${coverage}）` : ''}`
 }
 
 // in_progress payload → 進度短語(面板/清單的「處理中」細節列用)

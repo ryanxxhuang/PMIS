@@ -108,7 +108,7 @@ export function ConfirmHost() {
           <MSym name={danger ? 'delete_forever' : isPrompt ? 'edit' : 'help'} size={24}
             className={`mt-0.5 ${danger ? 'text-[var(--danger)]' : 'text-[var(--blue-text)]'}`} />
           <div className="min-w-0 flex-1">
-            <div className="text-[19px] font-normal leading-snug">{title}</div>
+            <div className="text-title3 font-normal leading-snug">{title}</div>
             {body && <p className="text-sm text-[var(--text-2)] mt-1.5 whitespace-pre-line leading-relaxed">{body}</p>}
             {isPrompt && (
               <div className="mt-3">
@@ -117,7 +117,7 @@ export function ConfirmHost() {
                     自寫 class 會漏掉 placeholder 色、disabled 與手機 44px */}
                 <Textarea autoFocus rows={3} value={text} placeholder={placeholder}
                   onChange={(e) => setText(e.target.value)} />
-                {required && text.trim() === '' && <div className="text-[11px] text-[var(--text-3)] mt-1">此欄必填。</div>}
+                {required && text.trim() === '' && <div className="text-caption text-[var(--text-3)] mt-1">此欄必填。</div>}
               </div>
             )}
             {requireText && (

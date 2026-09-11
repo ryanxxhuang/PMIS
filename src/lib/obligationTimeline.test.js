@@ -74,7 +74,7 @@ describe('狀態推導(7 日門檻與 contractDue 同一套帳)', () => {
     expect(countdownLabel('scheduled', 60)).toBe('還有 2 個月')
     expect(countdownLabel('scheduled', 730)).toBe('還有 2.0 年')
     expect(countdownLabel('done', null)).toBe('已完成')
-    expect(countdownLabel('na', null)).toBe('未觸發')
+    expect(countdownLabel('na', null)).toBe('無到期日')
   })
 })
 

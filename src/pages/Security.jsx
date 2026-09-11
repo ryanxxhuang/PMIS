@@ -44,14 +44,14 @@ export default function Security() {
           <Link to="/login" className="inline-flex items-center gap-1.5 max-md:min-h-11" aria-label="GovAgent 公共工程登入頁">
             <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-6 h-6 dark:hidden" />
             <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-6 h-6 hidden dark:block" />
-            <span className="text-xl font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
+            <span className="text-title3 font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
           </Link>
           <div className="flex items-center gap-2 text-sm text-[var(--text-3)]">
             <MSym name="verified_user" size={16} />
             資通安全
           </div>
           {/* 字重/字距對齊 PageHeader 的 h1:公開頁與站內第一眼的標題語言要是同一種 */}
-          <h1 className="text-2xl font-normal tracking-[-0.005em] text-[var(--text)]">漏洞回報與應變機制</h1>
+          <h1 className="text-title2 font-normal tracking-[-0.005em] text-[var(--text)]">漏洞回報與應變機制</h1>
           <p className="text-sm leading-relaxed text-[var(--text-2)]">
             我們把資安當成產品的一部分。若你發現本服務的安全性問題，請依本頁的方式通知我們；
             我們會依下列時限確認、修補並回覆你。本頁同時作為

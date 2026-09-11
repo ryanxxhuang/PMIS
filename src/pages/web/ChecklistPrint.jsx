@@ -35,8 +35,8 @@ export default function ChecklistPrint() {
     )
   }
 
-  const Th = ({ children, right, w }) => <th className={`border border-slate-300 px-1.5 py-1 font-medium text-[12px] ${right ? 'text-right' : 'text-left'} ${w || ''}`}>{children}</th>
-  const Td = ({ children, right, center }) => <td className={`border border-slate-300 px-1.5 py-1 text-[12px] ${right ? 'text-right tabular-nums' : center ? 'text-center' : ''}`}>{children}</td>
+  const Th = ({ children, right, w }) => <th className={`border border-slate-300 px-1.5 py-1 font-medium text-footnote ${right ? 'text-right' : 'text-left'} ${w || ''}`}>{children}</th>
+  const Td = ({ children, right, center }) => <td className={`border border-slate-300 px-1.5 py-1 text-footnote ${right ? 'text-right tabular-nums' : center ? 'text-center' : ''}`}>{children}</td>
 
   let lastGroup = null
   return (
@@ -50,15 +50,15 @@ export default function ChecklistPrint() {
 
       <div className="max-w-[210mm] mx-auto bg-white text-slate-900 shadow print:shadow-none p-[12mm] print:p-0">
         <h1 className="text-center text-lg font-bold tracking-widest">自 主 檢 查 表</h1>
-        <p className="text-center text-[12px] text-slate-500 mt-0.5 mb-2">（承攬廠商一級品管）{(rec.rev || 0) > 0 && <span className="ml-2 font-semibold text-slate-700">修訂版次 Rev.{rec.rev}</span>}</p>
+        <p className="text-center text-footnote text-slate-500 mt-0.5 mb-2">（承攬廠商一級品管）{(rec.rev || 0) > 0 && <span className="ml-2 font-semibold text-slate-700">修訂版次 Rev.{rec.rev}</span>}</p>
 
         {supersededBy && (
-          <div className="border border-red-400 text-red-700 text-[12px] font-semibold px-2 py-1 mb-2">
+          <div className="border border-red-400 text-red-700 text-footnote font-semibold px-2 py-1 mb-2">
             本表已由修訂版 Rev.{supersededBy.rev || '？'}（{roc(supersededBy.check_date)}）取代，僅供歷史查考。
           </div>
         )}
 
-        <div className="border border-slate-400 text-[13px]">
+        <div className="border border-slate-400 text-body">
           <div className="grid grid-cols-2">
             <div className="px-2 py-1 border-b border-r border-slate-300"><span className="text-slate-500">工程名稱：</span>{project.project_name}</div>
             <div className="px-2 py-1 border-b border-slate-300"><span className="text-slate-500">檢查表：</span>{tpl.title}</div>
@@ -86,7 +86,7 @@ export default function ChecklistPrint() {
               lastGroup = it.group
               return [
                 groupRow && (
-                  <tr key={`g-${it.group}`}><td colSpan={5} className="border border-slate-300 bg-slate-100 px-1.5 py-0.5 text-[12px] font-bold">{it.group}</td></tr>
+                  <tr key={`g-${it.group}`}><td colSpan={5} className="border border-slate-300 bg-slate-100 px-1.5 py-0.5 text-footnote font-bold">{it.group}</td></tr>
                 ),
                 <tr key={it.no}>
                   <Td center>{it.no}</Td>
@@ -100,18 +100,18 @@ export default function ChecklistPrint() {
           </tbody>
         </table>
 
-        <div className="border border-slate-400 border-t-0 text-[13px] px-2 py-1.5">
+        <div className="border border-slate-400 border-t-0 text-body px-2 py-1.5">
           檢查結果：
           <span className="mx-2">{rec.overall === '合格' ? '■' : '□'} 全部合格</span>
           <span className="mx-2">{rec.overall === '不合格' ? '■' : '□'} 有缺失（系統已自動開立缺失單追蹤改善）</span>
           {rec.note && <div className="mt-1"><span className="text-slate-500">備註：</span>{rec.note}</div>}
         </div>
 
-        <div className="grid grid-cols-2 gap-10 mt-8 text-center text-[13px]">
+        <div className="grid grid-cols-2 gap-10 mt-8 text-center text-body">
           <div><div className="border-t border-slate-500 pt-1 mt-8">檢查人員（簽章）</div></div>
           <div><div className="border-t border-slate-500 pt-1 mt-8">工地主任（簽章）</div></div>
         </div>
-        <p className="text-[11px] text-slate-400 mt-4">
+        <p className="text-caption text-slate-400 mt-4">
           ○＝合格　✕＝不合格　／＝本次未檢查。判定由系統依範本量化標準自動產生。
         </p>
       </div>

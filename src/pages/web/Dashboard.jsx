@@ -140,7 +140,7 @@ function SetupChecklist({ imported }) {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
                   <span className={`text-sm ${s.done ? 'text-[var(--text-3)] line-through' : 'text-[var(--text)] font-medium'}`}>{i + 1}. {s.label}</span>
-                  <span className="text-[11px] text-[var(--text-3)]">{s.owner}</span>
+                  <span className="text-caption text-[var(--text-3)]">{s.owner}</span>
                 </div>
                 <div className="text-xs text-[var(--text-3)] mt-0.5 leading-snug">{s.detail}</div>
               </div>
@@ -445,7 +445,7 @@ function TaskSection({ title, items, empty, emptyTitle, emptyTo = null, hint = n
             </li>
           )}
           {items.length > shown.length && !seeAll && (
-            <li className="px-4 py-2 text-[11px] text-[var(--text-3)]">還有 {items.length - shown.length} 項…</li>
+            <li className="px-4 py-2 text-caption text-[var(--text-3)]">還有 {items.length - shown.length} 項…</li>
           )}
         </ul>
       )}

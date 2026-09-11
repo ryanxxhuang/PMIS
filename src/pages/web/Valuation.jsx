@@ -358,10 +358,10 @@ export default function Valuation() {
                 placeholder="0"
                 className="w-20 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none"
               />
-              <span className="text-[10px] text-[var(--text-3)] w-9 text-right tabular-nums">{pct.toFixed(0)}%</span>
+              <span className="text-micro text-[var(--text-3)] w-9 text-right tabular-nums">{pct.toFixed(0)}%</span>
             </span>
           ) : (
-            <span className="text-[var(--text-2)] tabular-nums">{fmt(cumQty)} <span className="text-[10px] text-[var(--text-3)]">({pct.toFixed(0)}%)</span></span>
+            <span className="text-[var(--text-2)] tabular-nums">{fmt(cumQty)} <span className="text-micro text-[var(--text-3)]">({pct.toFixed(0)}%)</span></span>
           )}
         </td>
         <td className="text-right text-[var(--text)] px-2 tabular-nums whitespace-nowrap">{fmt(cum)}</td>
@@ -386,7 +386,7 @@ export default function Valuation() {
               {overBilled && (
                 // 警示原本只有琥珀色+title,手機沒有 hover 就完全讀不到語意;
                 // 補圖示與「疑超計」字樣,顏色只是輔助(W8-0 §8-6)
-                <span className="inline-flex items-center gap-0.5 text-[11px] text-[var(--amber-text)]" title="累計估驗數量高於施工日誌累計完成量逾 5%,可能超計,建議查核佐證後再計價">
+                <span className="inline-flex items-center gap-0.5 text-caption text-[var(--amber-text)]" title="累計估驗數量高於施工日誌累計完成量逾 5%,可能超計,建議查核佐證後再計價">
                   <MSym name="warning" size={11} />疑超計 估驗 {fmt(cumQty)} &gt; 日誌 {fmt(ev.loggedTotal)}
                 </span>
               )}
@@ -420,13 +420,13 @@ export default function Valuation() {
             {selected && (
               <div className="flex flex-col gap-0.5 max-w-[10rem]">
                 <Button variant="secondary" onClick={() => navigate(`/valuation/print?p=${selected.id}`)}><MSym name="print" size={15} />列印估驗單</Button>
-                <span className="text-[11px] text-[var(--text-3)] leading-tight">正式計價金額文件</span>
+                <span className="text-caption text-[var(--text-3)] leading-tight">正式計價金額文件</span>
               </div>
             )}
             {selected && (
               <div className="flex flex-col gap-0.5 max-w-[10rem]">
                 <Button variant="secondary" onClick={() => navigate(`/valuation/package?p=${selected.id}`)} title="彙整本期估驗明細＋AI 施工說明＋佐證照片"><MSym name="auto_awesome" size={15} />組請款佐證包</Button>
-                <span className="text-[11px] text-[var(--text-3)] leading-tight">佐證彙整，非正式計價單</span>
+                <span className="text-caption text-[var(--text-3)] leading-tight">佐證彙整，非正式計價單</span>
               </div>
             )}
             {can.edit && <Button variant="secondary" onClick={onCreate}>＋ 新增估驗期</Button>}

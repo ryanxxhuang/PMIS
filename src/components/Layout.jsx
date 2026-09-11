@@ -225,7 +225,7 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
         <NavLink to={defaultLandingPath(currentUser?.org_type)} aria-label="GovAgent 公共工程首頁" className="flex items-center gap-1.5 shrink-0">
           <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-6 h-6 dark:hidden" />
           <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-6 h-6 hidden dark:block" />
-          <span className="text-xl font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
+          <span className="text-title3 font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
         </NavLink>
         <ProjectSwitcher />
       </div>
@@ -241,10 +241,10 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
         </NavLink>
         {/* 帳戶區(兩行):登入者本人,沒有角色切換——身分在註冊時決定 */}
         <div className="hidden sm:flex items-center gap-2 pl-1.5 pr-2 py-1 ml-0.5 rounded-full">
-          <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center font-medium text-[13px] text-[var(--primary-fg)]">{currentUser?.name?.[0]}</div>
+          <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center font-medium text-body text-[var(--primary-fg)]">{currentUser?.name?.[0]}</div>
           <div className="leading-tight text-left hidden sm:block">
-            <div className="text-[12.5px] font-medium text-[var(--text)] whitespace-nowrap">{currentUser?.name}</div>
-            <div className="text-[11px] text-[var(--text-2)] whitespace-nowrap">{currentUser?.label}</div>
+            <div className="text-footnote font-medium text-[var(--text)] whitespace-nowrap">{currentUser?.name}</div>
+            <div className="text-caption text-[var(--text-2)] whitespace-nowrap">{currentUser?.label}</div>
           </div>
         </div>
         {/* 44px 觸控目標:純文字鈕撐高、負 margin 吸收 padding,視覺間距不變 */}

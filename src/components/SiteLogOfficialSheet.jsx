@@ -17,12 +17,12 @@ const roc = (iso) => {
 // Sec/Th/Td/Check 不閉包任何 state,提到模組層免每次 render 重建
 const Sec = ({ n, title, children }) => (
   <div className="border border-slate-400 border-t-0">
-    <div className="px-2 py-1 text-[13px] font-bold bg-slate-100 border-b border-slate-300">{n}、{title}</div>
-    <div className="px-2 py-1.5 text-[13px]">{children}</div>
+    <div className="px-2 py-1 text-body font-bold bg-slate-100 border-b border-slate-300">{n}、{title}</div>
+    <div className="px-2 py-1.5 text-body">{children}</div>
   </div>
 )
-const Th = ({ children, right }) => <th className={`border border-slate-300 px-1.5 py-0.5 font-medium text-[12px] ${right ? 'text-right' : 'text-left'}`}>{children}</th>
-const Td = ({ children, right }) => <td className={`border border-slate-300 px-1.5 py-0.5 text-[12px] ${right ? 'text-right tabular-nums' : ''}`}>{children}</td>
+const Th = ({ children, right }) => <th className={`border border-slate-300 px-1.5 py-0.5 font-medium text-footnote ${right ? 'text-right' : 'text-left'}`}>{children}</th>
+const Td = ({ children, right }) => <td className={`border border-slate-300 px-1.5 py-0.5 text-footnote ${right ? 'text-right tabular-nums' : ''}`}>{children}</td>
 const Check = ({ on, label }) => <span className="mr-3">{on ? '■' : '□'} {label}</span>
 
 export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList, className = '' }) {
@@ -59,10 +59,10 @@ export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList,
   return (
     <div className={`max-w-[210mm] mx-auto bg-white text-slate-900 shadow print:shadow-none p-[12mm] print:p-0 ${className}`}>
       <h1 className="text-center text-lg font-bold tracking-widest">公共工程施工日誌</h1>
-      <p className="text-center text-[12px] text-slate-500 mt-0.5 mb-2">（承攬廠商每日填報）</p>
+      <p className="text-center text-footnote text-slate-500 mt-0.5 mb-2">（承攬廠商每日填報）</p>
 
       {/* 表頭 */}
-      <div className="border border-slate-400 text-[13px]">
+      <div className="border border-slate-400 text-body">
         <div className="grid grid-cols-2">
           <div className="px-2 py-1 border-b border-r border-slate-300"><span className="text-slate-500">工程名稱：</span>{project?.project_name}</div>
           <div className="px-2 py-1 border-b border-slate-300"><span className="text-slate-500">承攬廠商：</span>{project?.contractor_name || '—'}</div>
@@ -151,11 +151,11 @@ export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList,
       <Sec n="八" title="重要事項紀錄">{ex.important || '無。'}</Sec>
 
       {/* 簽章 */}
-      <div className="grid grid-cols-2 gap-10 mt-8 text-center text-[13px]">
+      <div className="grid grid-cols-2 gap-10 mt-8 text-center text-body">
         <div><div className="border-t border-slate-500 pt-1 mt-8">工地主任（簽章）</div></div>
         <div><div className="border-t border-slate-500 pt-1 mt-8">專任工程人員（簽章）</div></div>
       </div>
-      <p className="text-[11px] text-slate-400 mt-4">
+      <p className="text-caption text-slate-400 mt-4">
         依行政院公共工程委員會 101.10.17 修正「公共工程施工日誌」格式編製；累計數量由系統自施工日誌自動彙計。
       </p>
     </div>

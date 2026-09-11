@@ -59,7 +59,7 @@ export default function TaskRow({ task }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm text-[var(--text)]">{task.title}</span>
-        <span className="block text-[11px] text-[var(--text-3)] leading-snug">
+        <span className="block text-caption text-[var(--text-3)] leading-snug">
           <TaskMeta meta={task.meta} overdue={!!task.overdueDays} />
         </span>
       </span>

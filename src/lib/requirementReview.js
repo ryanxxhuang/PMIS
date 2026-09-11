@@ -1,12 +1,40 @@
 // P0-07 requirement review presentation and queue helpers (pure functions).
-// The Requirements page queries bounded data from Supabase; everything that
+// The Requirements pages load their scoped data with pagination; everything that
 // decides what the reviewer sees - default queue scope, ordering, filters,
 // source/citation labels - lives here so it is deterministic and testable.
 
 export const REVIEW_DECISIONS = Object.freeze(['approve', 'reject', 'supersede'])
 
+// 兩個契約頁共用同一份事實判斷。模型 confidence 不參與；自動確認也不代表
+// 完全正確。缺少核對欄位時保留未知，不可用 undefined?.length 當核對通過。
+export function requirementVerification(requirement) {
+  const r = requirement
+  if (!r) return { label: '尚無可用核對紀錄', attention: false, note: '內容如有出入，以契約原文為準。' }
+  if (['rejected', 'superseded'].includes(r.status)) {
+    return { label: REQUIREMENT_STATUS_LABELS[r.status], attention: false, note: '' }
+  }
+  if (r.reviewed_by && r.status === 'approved') {
+    return { label: '已由人工確認', attention: false, note: '內容如有出入，以契約原文為準。' }
+  }
+  if (r.status !== 'approved' || !r.reviewed_at) {
+    return { label: '尚待確認', attention: true, note: '此項尚無完成確認的紀錄。' }
+  }
+  if (r.origin !== 'ai') {
+    return { label: '確認來源待查', attention: true, note: '未取得人工確認者紀錄，以契約原文為準。' }
+  }
+  if (!Array.isArray(r.triage_doubts)) {
+    return { label: 'AI 整理・核對結果未取得', attention: true, note: '尚無可用的核對結果，以契約原文為準。' }
+  }
+  if (r.triage_doubts.length) {
+    return { label: 'AI 整理・自動確認', attention: true,
+      note: `需留意：${r.triage_doubts.join('、')}。內容如有出入，以契約原文為準。` }
+  }
+  return { label: '系統核對無誤・自動確認', attention: false,
+    note: '已通過引文與適用期限數字核對；不代表已驗證全部語意或沒有漏項。內容如有出入，以契約原文為準。' }
+}
+
 // D-017 語意:契約本身已是生效文件,人工「確認」的是 AI 轉錄無誤,不是使契約生效。
-// 引文與數字核對無誤的由確定性分流自動確認(reviewed_by null=系統)。
+// D-019 起 AI-origin 全自動確認；引文與數字核對結果另作透明度註記。
 export const REQUIREMENT_STATUS_LABELS = Object.freeze({
   draft_ai: 'AI 整理',
   needs_review: '待確認',
@@ -132,5 +160,3 @@ export function formatRequirementRule(requirement) {
   }
   return base
 }
-
-

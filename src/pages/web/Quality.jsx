@@ -505,7 +505,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
               </Field>
             )}
           </div>
-          <p className="text-[11px] text-[var(--text-3)]">依據：{template.source}。填實測值即時判定；未填的項目視為未檢，不列入判定。</p>
+          <p className="text-caption text-[var(--text-3)]">依據：{template.source}。填實測值即時判定；未填的項目視為未檢，不列入判定。</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[560px]">
               <thead>
@@ -524,7 +524,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                   lastGroup = it.group
                   return [
                     groupRow && (
-                      <tr key={`g-${it.group}`}><td colSpan={5} className="pt-2 pb-1 text-[11px] font-semibold tracking-[0.08em] text-[var(--text-3)]">{it.group}</td></tr>
+                      <tr key={`g-${it.group}`}><td colSpan={5} className="pt-2 pb-1 text-caption font-semibold tracking-[0.08em] text-[var(--text-3)]">{it.group}</td></tr>
                     ),
                     <tr key={it.no} className="border-b border-[var(--border-2)]">
                       <td className="py-1.5 text-xs text-[var(--text-3)] num">{it.no}</td>
@@ -542,7 +542,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                             <input type="number" step="any" inputMode="decimal" value={values[it.no] ?? ''}
                               onChange={(e) => setVal(it.no, e.target.value === '' ? '' : Number(e.target.value))}
                               className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums bg-[var(--surface)] max-md:py-2" />
-                            <span className="text-[10px] text-[var(--text-3)] w-10">{it.unit || ''}</span>
+                            <span className="text-micro text-[var(--text-3)] w-10">{it.unit || ''}</span>
                           </span>
                         )}
                       </td>
@@ -610,7 +610,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
                   </div>
                 </div>
                 {(r.rev || 0) > 0 && r.revision_reason && (
-                  <div className="text-[11px] text-[var(--text-3)] mt-0.5">
+                  <div className="text-caption text-[var(--text-3)] mt-0.5">
                     更正原因：{r.revision_reason}
                     {diffs.length > 0 && <span className="ml-2">異動：{diffs.map((d) => `${d.no} ${fmtVal(d.from)}→${fmtVal(d.to)}`).join('、')}</span>}
                   </div>
@@ -632,7 +632,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
           })}
         </div>
       )}
-      <p className="text-[11px] text-[var(--text-3)] mt-2">檢查表存檔後即為品質證據，不可就地修改：更正一律以「修訂」建立 Rev.N 留存差異與原因，並重新自動判定；改判不合格會自動開立缺失（同一張表已有未結案缺失時不重複開）。僅未判定的紀錄可刪除。</p>
+      <p className="text-caption text-[var(--text-3)] mt-2">檢查表存檔後即為品質證據，不可就地修改：更正一律以「修訂」建立 Rev.N 留存差異與原因，並重新自動判定；改判不合格會自動開立缺失（同一張表已有未結案缺失時不重複開）。僅未判定的紀錄可刪除。</p>
     </Card>
   )
 }
@@ -701,7 +701,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
             <tbody>
               {samples.map((s) => (
                 <tr key={s.id} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
-                  <td className="py-1.5 num text-xs">{s.sample_no}<div className="text-[10px] text-[var(--text-3)]">{s.location}</div></td>
+                  <td className="py-1.5 num text-xs">{s.sample_no}<div className="text-micro text-[var(--text-3)]">{s.location}</div></td>
                   <td className="px-2 num text-xs text-[var(--text-2)]">{s.sampled_date}</td>
                   <td className="px-2 text-right num whitespace-nowrap">{s.fc || '—'}</td>
                   <td className="px-2 text-right">
@@ -738,7 +738,7 @@ function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, can
           </table>
         </div>
       )}
-      <p className="text-[11px] text-[var(--text-3)] mt-2">28 天判定標準（03310）：任一試體 ≥ 0.85 fc′ 且平均 ≥ fc′；不合格自動開立缺失。到期未試驗會出現在提醒中心。</p>
+      <p className="text-caption text-[var(--text-3)] mt-2">28 天判定標準（03310）：任一試體 ≥ 0.85 fc′ 且平均 ≥ fc′；不合格自動開立缺失。到期未試驗會出現在提醒中心。</p>
     </Card>
   )
 }
@@ -808,7 +808,7 @@ function ObservationsSection({ observations, canWrite, onCreate, onUpdate, onEsc
           ))}
         </div>
       )}
-      <p className="text-[11px] text-[var(--text-3)] mt-2">觀察事項是比缺失輕的提醒（現場口頭提醒的數位化）：可標記已處理，或在必要時一鍵升級為正式缺失單（進入改善→複查→結案流程）。</p>
+      <p className="text-caption text-[var(--text-3)] mt-2">觀察事項是比缺失輕的提醒（現場口頭提醒的數位化）：可標記已處理，或在必要時一鍵升級為正式缺失單（進入改善→複查→結案流程）。</p>
     </Card>
   )
 }

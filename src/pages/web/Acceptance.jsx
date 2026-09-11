@@ -156,7 +156,7 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
           <span className={`text-sm font-medium ${done ? 'text-[var(--text)]' : stage.state === 'due' ? 'text-[var(--text)]' : 'text-[var(--text-3)]'}`}>
             {stage.label}
           </span>
-          <span className="text-[11px] text-[var(--text-3)]">主辦：{stage.by}</span>
+          <span className="text-caption text-[var(--text-3)]">主辦：{stage.by}</span>
           {stage.event?.result && <Badge color={stage.event.result === '合格' ? 'green' : 'red'}>{stage.event.result}</Badge>}
           {dueBadge}
         </div>
@@ -168,17 +168,17 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             {/* 方點欄不再有 20px 圖示撐高後,14px 的日期會壓過同列的階段標題;
                 降到 13px 讓「階段→依據→日期」三行由大到小收斂成一列時序 */}
-            <span className="num text-[13px] text-[var(--text)]">{stage.event.event_date}</span>
+            <span className="num text-body text-[var(--text)]">{stage.event.event_date}</span>
             {stage.event.note && <span className="text-[var(--text-2)] text-xs">{stage.event.note}</span>}
             {/* 「修改」是進入該階段編輯的唯一入口,原本只有 16px 命中區 */}
             {allowed && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11 px-1">修改</button>}
           </div>
         ) : !allowed ? (
           (stage.state === 'due' || stage.state === 'pending') && (
-            <div className="mt-1.5 text-[11px] text-[var(--text-3)]">由{stage.by === '—' ? '機關' : stage.by}登錄</div>
+            <div className="mt-1.5 text-caption text-[var(--text-3)]">由{stage.by === '—' ? '機關' : stage.by}登錄</div>
           )
         ) : !editing && !sequentialOk ? (
-          <div className="mt-1.5 text-[11px] text-[var(--text-3)]">
+          <div className="mt-1.5 text-caption text-[var(--text-3)]">
             需先完成前一階段{stage.due ? `；預計期限 ${stage.due}` : ''}
           </div>
         ) : (

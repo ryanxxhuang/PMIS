@@ -179,9 +179,9 @@ export default function Progress() {
         {/* 第四格不是 Stat(值是 Badge 不是數字),卡殼改吃共用 Surface 才不會和左邊三格走鐘 */}
         <Surface className="px-4 py-3.5 flex flex-col">
           {/* 標籤字級/色對齊 Stat(11px/text-2、無字距),四格才是同一列數字卡 */}
-          <div className="text-[11px] text-[var(--text-2)]">進度狀態</div>
+          <div className="text-caption text-[var(--text-2)]">進度狀態</div>
           <div className="mt-1.5">{statusBadge}</div>
-          <div className="text-[11px] text-[var(--text-3)] mt-auto pt-2 num">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
+          <div className="text-caption text-[var(--text-3)] mt-auto pt-2 num">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
         </Surface>
       </div>
 

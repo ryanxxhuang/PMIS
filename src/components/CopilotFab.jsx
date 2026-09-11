@@ -49,8 +49,8 @@ function CopilotPanel({ onClose }) {
         <span className="w-7 h-7 rounded-lg grid place-items-center bg-[var(--blue-tint)] text-[var(--blue-text)] shrink-0"><CopilotMark size={16} /></span>
         <div className="min-w-0 flex-1">
           {/* 面板頭=卡頭:字級對齊 Card title(15px/500);輔助字最小 11px(10px 在 1x 螢幕不可讀) */}
-          <div className="text-[15px] font-medium text-[var(--text)] leading-tight">{label.name} <span className="font-normal text-[11px] text-[var(--text-3)]">新對話</span></div>
-          <div className="text-[11px] text-[var(--text-3)]">與主控台同一個 Agent · 長對話請開<Link to="/agent" onClick={onClose} className="text-[var(--blue-text)] hover:underline">完整頁</Link></div>
+          <div className="text-callout font-medium text-[var(--text)] leading-tight">{label.name} <span className="font-normal text-caption text-[var(--text-3)]">新對話</span></div>
+          <div className="text-caption text-[var(--text-3)]">與主控台同一個 Agent · 長對話請開<Link to="/agent" onClick={onClose} className="text-[var(--blue-text)] hover:underline">完整頁</Link></div>
         </div>
         <Link to="/agent" onClick={onClose} className="inline-flex items-center justify-center max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><MSym name="open_in_full" size={15} /></Link>
         <button onClick={onClose} className="inline-flex items-center justify-center max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><MSym name="close" size={17} /></button>

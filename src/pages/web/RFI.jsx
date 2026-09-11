@@ -126,7 +126,7 @@ export default function RFI() {
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     {r.status === '待回覆' && (can.approve
                       ? <Button variant="secondary" disabled={busy} onClick={() => onAnswer(r)}>回覆</Button>
-                      : <span className="text-[11px] text-[var(--text-2)]">待監造回覆</span>)}
+                      : <span className="text-caption text-[var(--text-2)]">待監造回覆</span>)}
                     {r.status === '已回覆' && (
                       can.submit ? <Button variant="success" disabled={busy} onClick={() => onClose(r)}>確認結案</Button>
                         : can.approve ? <Button variant="secondary" disabled={busy} onClick={() => onAnswer(r)}>補充回覆</Button> : null
@@ -139,7 +139,7 @@ export default function RFI() {
                       </Button>
                     )}
                     {can.approve && !aiEnabled('rfi.draft_reply') && (r.status === '待回覆' || r.status === '已回覆') && (
-                      <span className="text-[11px] text-[var(--text-2)]">AI 回覆草稿未啟用</span>
+                      <span className="text-caption text-[var(--text-2)]">AI 回覆草稿未啟用</span>
                     )}
                     {/* 僅「待回覆」可刪(已回覆=履約證據,DB 另有 guard)。
                         灰轉紅文字鈕不在三級語言內,改共用 Button 的第三級(順帶拿到 44px 觸控高度) */}
@@ -169,8 +169,8 @@ export default function RFI() {
                       </div>
                       {/* 底色走 --blue-tint 原值:對 --blue 加 4%/20% 是自製色階,深色模式下 --blue 是淺藍會失真 */}
                       <p className="text-sm text-[var(--text-2)] leading-relaxed bg-[var(--blue-tint)] border border-[var(--border-2)] rounded-lg px-3 py-2 whitespace-pre-line">{d.answer}</p>
-                      <div className="text-[11px] text-[var(--text-3)] mt-1">依據：{d.basis || '—'}{d.caution ? ` ｜ ${d.caution}` : ''}</div>
-                      <p className="text-[11px] text-[var(--text-3)] mt-1">按上方「{r.status === '待回覆' ? '回覆' : '補充回覆'}」會自動帶入此草稿供修改；回覆為正式契約文件，最終內容由監造裁量。</p>
+                      <div className="text-caption text-[var(--text-3)] mt-1">依據：{d.basis || '—'}{d.caution ? ` ｜ ${d.caution}` : ''}</div>
+                      <p className="text-caption text-[var(--text-3)] mt-1">按上方「{r.status === '待回覆' ? '回覆' : '補充回覆'}」會自動帶入此草稿供修改；回覆為正式契約文件，最終內容由監造裁量。</p>
                     </div>
                   )
                 })()}

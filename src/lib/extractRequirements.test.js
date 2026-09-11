@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { supabase } from './supabase.js'
 import {
   runRequirementExtraction, functionErrorInfo,
-  extractionSuccessMessage, extractionProgressLabel,
+  extractionSuccessMessage, extractionProgressLabel, extractionCoverageWarning, extractionCoverageWarnings,
 } from './extractRequirements.js'
 
 const invoke = supabase.functions.invoke
@@ -135,11 +135,33 @@ describe('extraction 訊息組裝', () => {
     expect(extractionSuccessMessage({
       extracted_requirement_count: 8, coverage_incomplete: true,
       last_included_page: 41, total_page_count: 69,
-    })).toBe('找到 8 項契約重點建議(未涵蓋整份文件:解析至第 41 頁/共 69 頁)')
+    })).toContain('未涵蓋整份文件：最後處理位置 41／共 69 頁或段')
   })
 
   it('進度短語', () => {
     expect(extractionProgressLabel({ batches_completed: 2, batches_total: 3 }))
       .toBe('正在分析契約重點(第 2/3 批)')
+  })
+})
+
+describe('覆蓋警示不掩蓋缺漏', () => {
+  it('文字不足、丟棄輸出、截斷批次都要明講，不只顯示最後頁', () => {
+    const text = extractionCoverageWarning({ coverage_incomplete: true, empty_page_numbers: [2, 3],
+      rejected_item_count: 1, clipped_batches: ['b1'], total_page_count: 10, last_included_page: 10 })
+    expect(text).toContain('頁／段 2、3')
+    expect(text).toContain('1 項輸出未通過格式檢查')
+    expect(text).toContain('1 批未完整輸出')
+  })
+  it('舊紀錄旗標漏寫但有無文字頁時仍警示', () => {
+    expect(extractionCoverageWarning({ empty_page_numbers: [5] })).toContain('文字不足')
+  })
+  it('不同文件的成功不得抹掉缺漏，同文件的完整重跑可以解除', () => {
+    const partial = { id: 'r1', document_version_id: 'v1', document_title: '施工契約', status: 'completed',
+      started_at: '2026-09-01', metadata: { coverage_incomplete: true } }
+    const other = { id: 'r2', document_version_id: 'v2', status: 'completed', started_at: '2026-09-08', metadata: {} }
+    expect(extractionCoverageWarnings([other, partial])).toHaveLength(1)
+    expect(extractionCoverageWarnings([other, partial])[0]).toContain('施工契約')
+    expect(extractionCoverageWarnings([partial, { ...other, document_version_id: 'v1' }])).toEqual([])
+    expect(extractionCoverageWarnings([{ ...other, document_version_id: 'v1', status: 'failed' }, partial])).toHaveLength(1)
   })
 })

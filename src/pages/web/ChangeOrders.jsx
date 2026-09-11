@@ -392,10 +392,10 @@ function ChangeOrderCard({ co, net, leaves, allItems, canReview, canRatify, canE
           </div>
           <Button onClick={submit} disabled={adding || !draft.description.trim()}>{adding ? '…' : <><MSym name="add" size={16} />明細</>}</Button>
         </div>
-        <p className="text-[11px] text-[var(--text-3)] mt-1.5">追加填正數量、減帳填負數量。金額 = 數量 × 單價，自動計算。</p>
+        <p className="text-caption text-[var(--text-3)] mt-1.5">追加填正數量、減帳填負數量。金額 = 數量 × 單價，自動計算。</p>
       </div>}
       {!itemsEditable && co.status === '核准' && (
-        <p className="text-[11px] text-[var(--text-3)]">此變更已核准，明細凍結；如需調整請由機關撤銷核准後再修改（D-016：撤銷為機關專屬）。</p>
+        <p className="text-caption text-[var(--text-3)]">此變更已核准，明細凍結；如需調整請由機關撤銷核准後再修改（D-016：撤銷為機關專屬）。</p>
       )}
     </Card>
   )

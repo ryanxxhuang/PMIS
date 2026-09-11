@@ -190,7 +190,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
               <ErrorBanner msg={aiErr} onClose={() => setAiErr('')} />
             </>
           ) : (
-            <p className="text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（{isSafety ? '工安照片判讀' : '缺失照片描述'}），請人工填寫下方欄位。</p>
+            <p className="text-caption text-[var(--text-3)]">此 AI 功能未啟用（{isSafety ? '工安照片判讀' : '缺失照片描述'}），請人工填寫下方欄位。</p>
           )}
           {!isSafety && leaves.length > 0 && (
             <WorkItemPicker leaves={leaves} value={form.work_item_key} label={form.work_item_label}
@@ -250,7 +250,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
           })}
         </div>
       )}
-      <p className="text-[11px] text-[var(--text-3)] mt-2">
+      <p className="text-caption text-[var(--text-3)] mt-2">
         {isSafety
           ? '工安缺失與品質缺失共用同一套改善狀態機：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'
           : '品質缺失由監造判查驗不合格、或自主檢查表／試體判定不合格時自動開立，廠商不自行開立。缺失改善鏈：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'}
