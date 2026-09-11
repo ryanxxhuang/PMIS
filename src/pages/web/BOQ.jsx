@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Surface, Button, PageHeader, SkeletonList, ErrorBanner, FilterChip, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Surface, Button, PageHeader, SkeletonList, ErrorBanner, FilterChip, MobileReadOnlyNote, TreeToggle, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -62,6 +62,22 @@ export default function BOQ() {
     return map
   }, [data])
 
+  // 手機章節摘要用的「這一章底下共幾項」。只數項數——金額一律取 it.amount(匯入時就算好的
+  // 複價),UI 不重算任何金額(§1 三條不可退讓)。跟著「只看發包工程費」一起變,
+  // 否則篩選後章節列的項數會與桌機表格對不上。
+  const descendantCount = useMemo(() => {
+    const counts = new Map()
+    const walk = (it) => {
+      const kids = (childrenMap.get(it.item_key) || []).filter((k) => !onlyBillable || k.is_billable)
+      let n = kids.length
+      for (const k of kids) n += walk(k)
+      counts.set(it.item_key, n)
+      return n
+    }
+    for (const r of (childrenMap.get('__root__') || [])) walk(r)
+    return counts
+  }, [childrenMap, onlyBillable])
+
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
   // 使用者會被關在錯誤/載入畫面裡,換不到同工作面的其他頁。
@@ -116,12 +132,8 @@ export default function BOQ() {
             <span className="flex items-center gap-1 min-w-0">
               <span style={{ width: level * 18 }} className="shrink-0" aria-hidden="true" />
               {hasKids ? (
-                // 圖示 aria-hidden,可及名稱與展開狀態仍由 aria-label/aria-expanded 承擔;
-                // 手機命中區補到 44px,負 margin 吸收讓流內仍佔 16px、不撐高列(W8-5)
-                <button onClick={() => toggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
-                  className="w-4 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] max-md:min-h-11 max-md:min-w-11 max-md:-m-3.5">
-                  <MSym name={isOpen ? 'expand_more' : 'chevron_right'} size={16} />
-                </button>
+                // 形狀(16px 溝槽 / 手機 44 命中區 / 圖示)收斂在 TreeToggle,這裡只給語意
+                <TreeToggle open={isOpen} label={`${isOpen ? '收合' : '展開'} ${it.item_no}`} onClick={() => toggle(it.item_key)} />
               ) : (
                 <span className="w-4 shrink-0 inline-block" />
               )}
@@ -149,7 +161,8 @@ export default function BOQ() {
         subtitle={`${meta.project_name}　·　${meta.owner_name}`}
         meta={meta.contract_no ? [{ k: '契約編號', v: meta.contract_no }] : []}
         action={dbMode && workItemsSource === 'db' && (can.edit || can.admin) && (
-          <Button variant="ghost" onClick={async () => {
+          // 清空重匯是破壞性寫入(連帶清掉估驗/進度/日誌/查驗/缺失):手機不渲染(§9.6)
+          <Button variant="ghost" className="max-md:hidden" onClick={async () => {
             if (await appConfirm({ title: '重新匯入標單？', body: '會清空此專案的標單工項，以及相依的估驗、進度、施工日誌、查驗、缺失。', danger: true, confirmLabel: '清空重匯' })) {
               const { error } = await resetProjectBoq()
               setResetErr(error ? friendlyError(error, '清空失敗,資料未變動') : '')
@@ -206,7 +219,9 @@ export default function BOQ() {
           <FilterChip label="只看發包工程費" active={onlyBillable} onToggle={() => setOnlyBillable((v) => !v)} />
         }
       >
-        <div className="overflow-x-auto">
+        {/* 斷點跟手機層對齊(BottomNav 是 md:hidden):640px 五欄樹在 390 要橫捲 1.6 個螢幕寬,
+            而且標單樹的價值在「逐項對數字」——那是桌機的事。手機改列章節摘要(§9.6) */}
+        <div className="overflow-x-auto max-md:hidden">
           {/* table-fixed + colgroup:欄寬固定,縮排/長名稱不再逐列推擠;
               min-w 保住名稱欄可讀寬度,窄螢幕交給外層 overflow-x-auto 捲動 */}
           <table className="w-full min-w-[640px] table-fixed text-sm">
@@ -240,6 +255,28 @@ export default function BOQ() {
               </tr>
             </tfoot>
           </table>
+        </div>
+
+        {/* 手機:只到第一層(章)。標單合計=發包工程費已在上方 Stat 卡,這裡不重複;
+            每章的複價直接取 it.amount,項數取 descendantCount,都不是在這裡算出來的。
+            「非發包」沿用桌機表格的灰字語意,改成文字標記(顏色不可單獨承載語意,§2)。 */}
+        <div className="md:hidden">
+          <MobileReadOnlyNote of="各章金額與項數" className="px-5 py-3 border-b border-[var(--border-2)]" />
+          <ul role="list" className="divide-y divide-[var(--border-2)]">
+            {roots.map((it) => (
+              <li key={it.item_key} className="px-5 py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-body font-medium min-w-0 truncate">
+                    <span className="text-[var(--text-3)] tabular-nums mr-2">{it.item_no}</span>{it.description}
+                  </span>
+                  <span className="text-body font-medium tabular-nums shrink-0">{fmt(it.amount)}</span>
+                </div>
+                <p className="mt-0.5 text-footnote text-[var(--text-3)] tabular-nums">
+                  {descendantCount.get(it.item_key) || 0} 項{it.is_billable ? '' : '・非發包'}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
       </Card>
 

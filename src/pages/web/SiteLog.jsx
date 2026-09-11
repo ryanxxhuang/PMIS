@@ -407,10 +407,18 @@ export default function SiteLog() {
             {/* 表單欄位一律 <Input>(FIELD_BASE):disabled/焦點/手機 44px 由元件統一;
                 固定寬用 ! 蓋掉 FIELD_BASE 的 w-full(Agent.jsx 同法) */}
             <div className="flex items-end gap-3 flex-wrap mb-2">
-              <Field label="日期"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-              <Field label="天氣(上午)"><Input value={weather} disabled={!can.edit} onChange={(e) => setWeather(e.target.value)} className="!w-20" /></Field>
-              <Field label="天氣(下午)"><Input value={weatherPm} disabled={!can.edit} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="!w-20" /></Field>
-              <div className="w-full sm:w-auto"><Field label="工作摘要"><Input value={summary} disabled={!can.edit} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="sm:!w-64" /></Field></div>
+              {/* 規範 §9.8 第三條:手機把日期/天氣排成兩欄格線,工作摘要獨佔一列。
+                  稽核在 390 量到這四欄各自塌成一整列(日誌第一屏只剩四個輸入框)。
+                  為什麼日期獨佔一列、天氣兩欄並排:390 扣掉版面內距只剩 ~358,一半約 171px;
+                  手機字級走 iOS 17px(§9.1),date 控件光是「2026-09-12」加日曆圖示就要 ~170px,
+                  並排會被擠掉;天氣兩欄各 2-4 個字,半欄綽綽有餘。
+                  寬度寫在外層 div、斷點一律 max-md/md(不用 sm):640-767 的 iPad mini 直式
+                  已經是手機版面(BottomNav md:hidden),用 sm 會讓那一段拿到桌機排法。
+                  桌機(≥768)三欄仍是原本的 flex 自然寬與 80px 天氣欄,視覺零變化。 */}
+              <div className="max-md:w-full"><Field label="日期"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field></div>
+              <div className="max-md:w-[calc(50%-0.375rem)]"><Field label="天氣(上午)"><Input value={weather} disabled={!can.edit} onChange={(e) => setWeather(e.target.value)} className="md:!w-20" /></Field></div>
+              <div className="max-md:w-[calc(50%-0.375rem)]"><Field label="天氣(下午)"><Input value={weatherPm} disabled={!can.edit} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="md:!w-20" /></Field></div>
+              <div className="w-full md:w-auto"><Field label="工作摘要"><Input value={summary} disabled={!can.edit} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="md:!w-64" /></Field></div>
               {can.edit && (
                 <Button variant="secondary" onClick={pullWeather} disabled={weatherBusy} title="依工地座標向中央氣象局帶入今日天氣">
                   <MSym name="partly_cloudy_day" size={14} />{weatherBusy ? '帶入中…' : '帶入天氣'}

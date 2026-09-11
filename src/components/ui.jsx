@@ -244,6 +244,52 @@ export const IconButton = forwardRef(function IconButton({ name, label, size = '
   )
 })
 
+// ── 樹狀展開鈕(TreeToggle):工項樹那顆坐在 16px 溝槽裡的 chevron ──────────────
+// 為什麼不用 IconButton:IconButton 是 32px 圓鈕(還墊一層 hover 底色),塞進工項樹
+// 只有 16px 寬的縮排溝槽會把整列往右推 16px,而且每多一層縮排就再歪一次——樹狀鈕的
+// 形狀約束是「在版面流裡永遠只佔 16px」,與圖示鈕的「自己就是一顆 32/40px 的鈕」不同,
+// 兩者不該共用同一支。
+// 手機命中區怎麼長到 44 又不撐歪樹:w-11/h-11 先撐成 44×44,再用 -m-3.5 把多出來的
+// 28px 用負 margin 吸回去(44−14−14=16)——命中面積 44×44(規範 §9.2),流內寬高一格不動,
+// 列高也不會翻倍。斷點走 max-md 與 BottomNav 的 md:hidden 對齊(理由見 BTN_SIZES)。
+// 收斂的是既有三處手抄:BOQ 與估驗各抄一份 `w-4 … max-md:min-h-11 max-md:min-w-11 -m-3.5`,
+// /progress 那顆只抄到 min-h,稽核在 390 量到 16×44(寬度不足)。
+// aria-expanded 必填:樹狀鈕沒有文字節點,展開狀態只能靠它傳給報讀器,圖示本身 aria-hidden;
+// label 的理由同 IconButton(e2e 也靠 getByRole('button', { name }) 定位)。
+// 焦點沿用 index.css @layer base 的預設外框(不掛 FOCUS_VISIBLE):三處原本就是那個樣子,
+// 本輪只收形狀、不順手改桌機的焦點視覺。
+export function TreeToggle({ open, label, className = '', ...props }) {
+  if (!label && import.meta.env?.DEV) {
+    console.warn('[TreeToggle] 樹狀展開鈕沒有 label,報讀器會讀到一顆無名按鈕')
+  }
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={label}
+      className={`w-4 h-4 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)]
+        max-md:w-11 max-md:h-11 max-md:-m-3.5 ${className}`}
+      {...props}
+    >
+      <MSym name={open ? 'expand_more' : 'chevron_right'} size={16} />
+    </button>
+  )
+}
+
+// ── 手機唯讀提示(MobileReadOnlyNote):表格頁在 <md 換成摘要時的那一句話 ────────
+// 規範 §9.6:估驗/成本/排程/標單/月報五頁在手機隱藏寬表、改渲染唯讀摘要,並且要
+// 明講編輯留在桌面——不講的話,使用者讀到的是「這頁在手機壞掉了」而不是「這是刻意的」。
+// 收成一支而不是各頁寫一行 <p>:五頁同一句話、同一個字級與色票,各頁自抄 class 字串
+// 正是深色對比漏修的來源(§6);措辭也只需要在這裡改一次。
+// md:hidden 寫在元件裡:這句話在桌機沒有意義(桌機看得到完整表格),不該由呼叫端記得加。
+export function MobileReadOnlyNote({ of, className = '' }) {
+  return (
+    <p className={`md:hidden text-footnote text-[var(--text-3)] ${className}`}>
+      手機只顯示{of}的唯讀摘要，編輯在桌面進行。
+    </p>
+  )
+}
+
 // ── 分段控制(macOS/iOS Segmented Control):同一視圖內的「顯示模式」切換 ────────
 // 外框 --surface-2 底、2px 內距、9px 圓角;選中段 --surface 底(亮色即白、深色即卡面)
 // + --shadow-card、7px 圓角——內外圓角差 2px 正好等於內距,內段才與外框同心。

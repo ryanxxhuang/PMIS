@@ -14,6 +14,7 @@
 import { memo } from 'react'
 import { MSym } from '../icons.jsx'
 import { fmtAmount as fmt } from '../../lib/format.js'
+import { TreeToggle } from '../ui.jsx'
 import { OVER_TOL, evSummary } from '../../lib/evidence.js'
 import EvidenceRow from './EvidenceRow.jsx'
 
@@ -37,11 +38,9 @@ function ValuationRow({ it, level, hasKids, isOpen, evIsOpen, cum, prevCum, qtyI
         <span className="flex items-center gap-1 min-w-0">
           <span style={{ width: level * 18 }} className="shrink-0" aria-hidden="true" />
           {hasKids ? (
-            // 圖示 aria-hidden,可及名稱與展開狀態仍由 aria-label/aria-expanded 承擔
-            <button onClick={() => onToggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
-              className="w-4 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] max-md:min-h-11 max-md:min-w-11 max-md:-m-3.5">
-              <MSym name={isOpen ? 'expand_more' : 'chevron_right'} size={16} />
-            </button>
+            // 形狀(16px 溝槽 / 手機 44 命中區 / 圖示)收斂在 TreeToggle,這裡只給語意:
+            // 可及名稱與展開狀態由 aria-label/aria-expanded 承擔,圖示本身 aria-hidden
+            <TreeToggle open={isOpen} label={`${isOpen ? '收合' : '展開'} ${it.item_no}`} onClick={() => onToggle(it.item_key)} />
           ) : <span className="w-4 shrink-0 inline-block" />}
           <span className="text-[var(--text-3)] text-xs tabular-nums shrink-0">{it.item_no}</span>
           {/* 長工項名 ellipsis 截斷不換行(列高一致),完整名稱靠 title 提示 */}
