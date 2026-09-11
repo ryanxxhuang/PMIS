@@ -1,6 +1,6 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-11｜`refactor/product-wide`，全專案程式、文件與驗證工具整理。
+> ACTIVE｜2026-09-11｜main（PR #64），全專案程式、文件與驗證工具整理。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
@@ -10,6 +10,7 @@
 | Vitest | 95 檔、1128 測試通過 | `npm test`；含新人工期限、管理頁競態、Requirement runtime 更新、Agent 查詢與檢查腳本回歸 |
 | 預定進度時區回歸 | 同日第一輪：14 測試在 UTC 與 America/Los_Angeles 各通過；此輪未再改公式 | `TZ=UTC node node_modules/vitest/vitest.mjs run src/lib/progressPlan.test.js`，另改 TZ 重跑 |
 | Demo E2E | 8 檔、48 測試通過 | `npm run test:e2e`，本機 Vite／Chromium，未連真 DB |
+| GitHub 合併檢查 | PR #64 與合併提交 `8be082a` 的 unit／e2e／pgtap 全過 | 正常 merge commit 合併，未 bypass；Cloudflare main 建置成功，正式版本見 CURRENT §6.3 |
 | ESLint | 0 error／0 warning | `npm run lint` |
 | production build | 通過；仍有 >500 kB chunk 警告 | `npm run build` |
 | 文件檢查 | 45 份 Markdown 的本機檔案／標題連結通過 | `npm run check:docs`；不連網驗外部網址 |
@@ -40,4 +41,4 @@
 
 15 份架構文件與操作指南已對齊現行程式；歷史資安／採購證據、驗收原句、仍有效設計／簡報來源及選用設計 skills 保留。過期檔可用 Git 追溯。未完成產品能力集中 ROADMAP，正式版本集中 CURRENT，不在各文件複製交付計數。
 
-尚未驗證真模型語意準確率、真人手機／真案三角色、正式部署與備份還原。所有通過結果只支持上述測試範圍，不代表零缺陷或正式驗收完成。
+尚未驗證真模型語意準確率、真人手機／真案三角色、正式後端部署與備份還原。所有通過結果只支持上述測試範圍，不代表零缺陷或正式驗收完成。

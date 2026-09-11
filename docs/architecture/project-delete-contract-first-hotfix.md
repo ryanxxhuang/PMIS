@@ -1,6 +1,6 @@
 # 真專案模式與刪案邊界
 
-> CURRENT｜2026-09-11。D-022 本分支已實作，正式 migration 尚未套用。
+> CURRENT｜2026-09-11。D-022 已合併 main，正式 migration 尚未套用。
 
 `isPersistedProject` 表示已登入且選取真實 Supabase 專案，文件、契約重點、基準日與義務不需等待標單匯入。`hasDbBoq`／`dbMode` 表示真案已載入 DB 工項；依標單的流程仍用較窄的條件，避免把 Demo 工項 ID 寫入真案。
 
