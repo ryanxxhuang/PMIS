@@ -28,7 +28,7 @@ export function buildQualityQueue(org, data = {}, today) {
     if (it.who !== org) return
     const segment = QUEUE_SEGMENT_OF[it.tag]
     if (!segment) return
-    // id 帶出去:缺失分段已是清單＋詳情殼,頁面點佇列時用它寫 ?defect= 直接選中那一筆
+    // id 給頁面寫 URL 單條連結(點佇列直接選中那一筆);沒有 id 的項目只切段
     out.push({ key: `${it.tag}:${it.id ?? `${it.title}#${i}`}`, id: it.id ?? null, tag: it.tag, title: it.title, meta: it.meta, segment })
   })
   // 試驗到期只給廠商:填試驗值的欄位在試驗分段吃 can.edit(=廠商),
@@ -37,6 +37,7 @@ export function buildQualityQueue(org, data = {}, today) {
     for (const a of sampleAlerts(testSamples, today)) {
       out.push({
         key: `試驗:${a.sample.id ?? a.sample.sample_no}:${a.label}`,
+        id: a.sample.id ?? null,
         tag: '試驗',
         title: `${a.sample.sample_no || ''} ${a.sample.test_item || ''} ${a.label}`.trim(),
         meta: dueText(a.days, a.due),

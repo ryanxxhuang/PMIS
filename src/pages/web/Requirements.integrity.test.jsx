@@ -161,4 +161,35 @@ describe('契約核對的實際頁面流程', () => {
     expect(container.textContent).toContain('頁／段 2')
     expect(container.textContent).toContain('需要檢查完整性')
   })
+
+  // 手機 a11y(e2e/a11y.spec 的可及名稱掃描只跑得到 demo 的空狀態):修正內容的表單
+  // 與手動新增 Modal 只在真專案出現,名稱合約在這裡釘——每個控件都要有非 placeholder 的名稱
+  const unnamedControls = (scope) => [...scope.querySelectorAll('input, select, textarea')]
+    .filter((el) => !(el.getAttribute('aria-label')?.trim() || el.closest('label')?.textContent?.trim()))
+    .map((el) => `${el.tagName.toLowerCase()} placeholder=${el.getAttribute('placeholder') || ''}`)
+
+  it('修正內容表單與手動新增表單:每個控制項都有可及名稱(不靠 placeholder)', async () => {
+    state.db.setTable('requirements', [{ ...req(1), status: 'needs_review' }])
+    state.db.setTable('contract_packages', [{ id: 'pkg1', project_id: 'p1', title: '甲契約' }, { id: 'pkg2', project_id: 'p1', title: '乙契約' }])
+    await render(RequirementsReview, '/requirements/review?highlight=r0001')
+    await clickByText('修正內容')
+    expect(unnamedControls(container)).toEqual([])
+    expect(container.querySelector('[aria-label="階段"]')).toBeTruthy()
+    await clickByText('取消')
+    // 頁首鈕帶圖示,textContent 有前導空白,clickByText 的全等比對吃不到
+    const manual = [...container.querySelectorAll('button')].find((b) => b.textContent.trim() === '手動新增')
+    expect(manual, '手動新增').toBeTruthy()
+    await act(async () => manual.click())
+    // ModalShell 以 createPortal 掛在 document.body(規範 §9.4:手機貼底 sheet 不能被
+    // 祖先的 transform/space-y 劫走定位),所以對話框不在 container 裡,要從 document 找
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog).toBeTruthy()
+    expect(unnamedControls(dialog)).toEqual([])
+    // 時點方式每一種分支的控件都要有名(切換後才渲染)
+    const mode = dialog.querySelector('[aria-label="時點方式"]')
+    for (const v of ['fixed', 'monthly', 'weekly', 'quarterly', 'yearly']) {
+      await act(async () => { mode.value = v; mode.dispatchEvent(new Event('change', { bubbles: true })) })
+      expect(unnamedControls(dialog), `時點方式 ${v}`).toEqual([])
+    }
+  })
 })

@@ -86,10 +86,14 @@
 
 狀態：ACCEPTED。App 與行銷站依 [Apple 設計規範](UIUX-Apple-設計規範.md)：收件匣落地、來源→清單→詳情、契約原文與條文高亮方向。token／字級／材質集中 index.css，圖示 lucide-react。舊 Google handoff 退場。路由／三方角色／RLS 不變；圓角改 token 值須保留仍被 E2E 使用的 class 名。
 
-落地：token、圖示、字級、球權側欄、收件匣與契約／工安共用清單詳情殼已實作並隨 PR #64 的前端部署上線；其他頁面的殼、原文高亮、行銷站與登入頁整合仍待續接，不能當成全產品已完成。
+落地：token、圖示、字級、球權側欄、收件匣與契約／工安共用清單詳情殼已實作並隨 PR #64 的前端部署上線；清單／詳情殼已於 2026-09-11 推廣到十四頁（見規範 §8），表格型頁（估驗／請款／成本／排程）與施工日誌依規範不套殼；行銷站整合仍待續接；登入頁（登入／註冊／忘記密碼／demo 入口）已於 2026-09-11 依規範 §2～§6 套用 Apple style，流程與 Supabase 呼叫不變。
 
 ## D-022｜專案授權只有 `project_members` 一個來源
 
 狀態：ACCEPTED。`is_project_admin()` 只看 `project_members.role='admin'`；成員邀請／移除、members 管理 policy 與 projects 更新 policy 統一用該函式，非建立者 admin 也可管理成員。`created_by` 欄位、建案完整性約束、組織自己的 created_by policy 保留。
 
-建立者依賴 `on_project_created`／create_project RPC 補 admin 列，沒有該列就沒有管理權。2026-09-11 正式庫唯讀盤點：13 案建立者均有 admin、無非建立者 admin，當時套用不改任何人的權限。migration `20260911110000_project_admin_single_source` 與 rollback、pgTAP 角色矩陣已提交；**尚未套用正式庫**。
+建立者依賴 `on_project_created`／create_project RPC 補 admin 列，沒有該列就沒有管理權。2026-09-11 正式庫唯讀盤點：13 案建立者均有 admin、無非建立者 admin，當時套用不改任何人的權限。migration `20260911110000_project_admin_single_source` 與 rollback、pgTAP 角色矩陣已提交，2026-09-11 已套用正式庫。
+
+## D-023｜commit／push／部署的常設授權
+
+狀態：ACCEPTED。2026-07-11 授權、2026-09-11 重申：相關驗證通過（lint、test、build、check:docs；動 DB 含 pgTAP；動 Edge 含 check:edge）後，AI 協作者可直接 commit、push、開 PR 並在 CI 綠後合併、套用正式 migration、重佈 Edge，不逐次詢問；完成後附驗收清單，部署版本寫回 CURRENT §6.3。仍須先問的例外：會產生新雲端費用的資源、刪除正式資料或遠端資源、沒有回復路徑的破壞性操作。

@@ -58,10 +58,15 @@ test.describe('施工廠商', () => {
   test('提醒中心與今日待辦同一份來源,溢位看得到完整清單', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/alerts')
-    await expect(page.getByRole('heading', { name: /現在輪到我/ })).toBeVisible()
-    await expect(page.getByText('第 5 期估驗計價送審')).toBeVisible()
+    await expect(page.getByRole('heading', { name: '提醒中心' })).toBeVisible()
+    // 殼化後同一筆會在清單列與詳情欄各出現一次,斷言鎖在清單內(getByRole('listitem'))
+    const list = page.getByRole('list', { name: '提醒清單' })
+    await expect(list.getByRole('listitem').filter({ hasText: '第 5 期估驗計價送審' })).toHaveCount(1)
     // 首頁被 5 筆上限截掉的期限型待辦,在這裡看得到
-    await expect(page.getByText(/停留點|7天試驗|28天抗壓試驗/).first()).toBeVisible()
+    await expect(list.getByRole('listitem').filter({ hasText: /停留點|7天試驗|28天抗壓試驗/ }).first()).toBeVisible()
+    // 詳情欄跟著預設選取渲染,唯一動作是「前往處理」(提醒不能在這頁完成)
+    const detail = page.getByRole('region', { name: '提醒詳情' })
+    await expect(detail.getByRole('button', { name: '前往處理', exact: true })).toBeVisible()
   })
 
   test('施工日誌:複製昨日 → 存檔 → 列印鈕/照片區解鎖', async ({ page }) => {

@@ -45,6 +45,7 @@ export function StoreProvider({ children }) {
   const {
     currentUser, authReady, setCurrentUser, signUp, resendSignup, signIn, signOutBase,
     passwordRecovery, requestPasswordReset, updatePassword,
+    mfaRequired, verifyMfa, listMfaFactors, enrollMfa, confirmMfaEnrollment, unenrollMfa,
   } = useAuthSlice()
   const {
     projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
@@ -303,6 +304,7 @@ export function StoreProvider({ children }) {
     project: currentProject || project, currentUser, authReady, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     passwordRecovery, requestPasswordReset, updatePassword,
+    mfaRequired, verifyMfa, listMfaFactors, enrollMfa, confirmMfaEnrollment, unenrollMfa,
     currentProject, projects, projectLoading, createProject, switchProject,
     workItems, workItemsSource, workItemsError, retryWorkItems, importWorkItems, dbMode, demoMode, isPersistedProject, can,
     // AI 功能開關(批 B,UX 層——真正的閘門在伺服器端 openAiGate):關閉的功能把入口藏起來

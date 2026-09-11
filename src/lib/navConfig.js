@@ -100,7 +100,12 @@ const nonNavRouteRules = {
   '/': { access: 'redirect' },
   '/login': { access: 'public' },
   '/security': { access: 'public' },
+  // 服務條款／隱私權政策:採購資安查核與個資法告知義務都要求不登入即可讀。
+  '/terms': { access: 'public' },
+  '/privacy': { access: 'public' },
   '/assistant': { access: 'redirect' },
+  // 帳號安全(兩步驟驗證啟用/停用):個人層,不限角色、不進導覽,入口在頁首「帳號」。
+  '/account': { access: 'authenticated' },
   // 收件匣(今日待辦):球權來源三個入口共用這條路由(?ball= 分流)。來源不是 navGroups
   // 的項目,所以登記在這裡;不限角色——它同時是落地頁,人人都必須進得去。
   '/dashboard': { access: 'authenticated' },

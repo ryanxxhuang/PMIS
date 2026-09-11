@@ -33,10 +33,11 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 ### 6.1 前端
 
-- UI 採 [Apple 規範](docs/UIUX-Apple-設計規範.md)，token 在 `src/index.css`，圖示 `lucide-react`。`listDetail.jsx` 共用清單／詳情殼已推廣到契約兩頁、工安、疑義、期限、送審、變更設計與缺失追蹤（`DefectTracker` 內建殼，/quality 與 /safety 共用）；手機形狀依規範 §9（iOS 字級一處覆寫、44px 頂欄＋五格底欄、詳情推入、表格頁唯讀摘要、收件匣直達那一筆）。列印用 `.paper` 與 `PrintToolbar`。
+- UI 採 [Apple 規範](docs/UIUX-Apple-設計規範.md)，token 在 `src/index.css`，圖示 `lucide-react`。`listDetail.jsx` 共用清單／詳情殼已供契約重點、擷取審核、工安、疑義、期限、送審、變更設計、停留點、提醒中心、三方成員、活動紀錄、風險稽核、品質三段、專案文件與缺失追蹤（`DefectTracker` 內建殼，/quality 與 /safety 共用）共十五頁使用；手機形狀依規範 §9（iOS 字級一處覆寫、44px 頂欄＋五格底欄、詳情推入、表格頁唯讀摘要、收件匣直達那一筆）。列印用 `.paper` 與 `PrintToolbar`。
 - `navConfig.js` 是路由／導覽單一真相，未登記拒絕。側欄依來源模型分區：球在誰手上（持有 `/dashboard`）→ 工作（五組群組＋子頁，子頁依角色過濾）→ 參考（契約重點／專案文件／標單工項）→ 平台；目前無 hidden 項。
 - 首頁為「現在輪到我／等待對方／今天已完成」單桶收件匣，`?ball=` 選桶；不放頁面摘要卡。待辦共用 `todayTasks.js`／`useTodayTasks`。
 - 預定進度在首頁、進度頁、稽核、監造報告、跨案總覽與 AI 資料共用 `src/lib/progressPlan.js`。沿用月份座標、30 天換算與線性內插；不變更 S 曲線產生或 DB 計算。
+- 公開頁 `/security`、`/terms`、`/privacy`（條款／隱私為 0.9 草稿，待律師審閱）。帳號安全 `/account`：兩步驟驗證（Supabase TOTP）每帳號自選；有已驗證因子時登入頁在 aal1 停在驗證碼畫面（`mfaRequired`），通過後才載入 profile。RLS 未依 aal 分級，這層是 UX 閘門。
 
 ### 6.2 驗證
 
@@ -46,7 +47,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 - **DB**：2026-09-11 `supabase db push` 套用 `20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`；`migration list --linked` 核對本地與遠端 60 筆全部對齊，最新 `20260911110000`。
 - **Edge**：2026-09-11 以 `--use-api` 從 main（含 `_shared/` 重構）重佈全部 17 支；`functions list` 核對每支版本均 +1（agent-run 14、extract-requirements 13、send-reminders 16、classify-document 3 等）。線上另有 `demo-request` 一支由行銷站 repo 部署，不在本 repo。
-- **前端**：2026-09-11 PR #64 合併提交 `8be082a` 的 Cloudflare Workers 建置成功，版本 `fc99c933-32f5-47c6-b0e6-726e50b2956e`。正式首頁已切換新版 JS／CSS，首頁 HEAD 200、七項安全標頭齊全；這不代表登入後業務流程或正式後端已驗證。後續純文件提交可能觸發同功能版本重建。
+- **前端**：main 每次合併由 Cloudflare Workers 自動建置。2026-09-11 PR #64（`8be082a`）建置版本 `fc99c933-32f5-47c6-b0e6-726e50b2956e`，首頁 HEAD 200、七項安全標頭齊全；同日 PR #67／#69／#70／#76／#78 及 2026-09-12 PR #79 陸續合併，各次建置版本未逐一記錄，以 Cloudflare 後台為準。這不代表登入後業務流程或正式後端已驗證。
 - **舊站**：2026-09-11 GitHub Pages API 仍回 built，來源為 `gh-pages`；此部署分支保留。`pmis.pages.dev` 最後核對為 2026-09-07，退場待另行處理。
 - 部署依 [runbook](docs/operations/deploy.md) 執行；套用後在本節記日期、migration／Edge 版本與驗證。2026-09-11 已完成三面同步：前端由 main 自動部署、DB 三支 migration 套用、17 支 Edge 重佈；登入後業務流程與真模型抽取仍未在正式站實測。
 

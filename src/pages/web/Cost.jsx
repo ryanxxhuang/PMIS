@@ -1,13 +1,19 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
-import { Card, Stat, Empty, Badge, Button, Field, IconButton, Input, Select, PageHeader, ErrorBanner, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Badge, Dot, Button, Field, IconButton, Input, Select, PageHeader, ErrorBanner, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
+import { SearchField, StatusChip } from '../../components/listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { revisedContractTotal, approvedNetAmount } from '../../lib/changeOrders.js'
 import { fmtAmount as money, fmtYi as yi } from '../../lib/format.js'
 
+// 這一頁刻意「不套」清單／詳情殼(規範 §8 不套殼那句):成本明細是逐列就地編輯的帳冊
+// (預算/實際每格本來就可改、狀態一點就翻),與 /payments 同形狀——每列有兩個可編輯數字,
+// 硬套成「清單只選取、詳情欄編輯」會把原本一步的改數字變成兩步(判準第 3 條)。
+// 只借殼零件整理:SearchField + 分類快篩 chip(單選、再點取消、附件數)放在明細表卡頭下,
+// CSV 匯出「目前篩選結果」,表內數字欄改吃共用 Input。
 const CATS = ['材料', '人工', '機具', '分包', '管理費', '其他']
 // 分類上色走 Badge 的 color key(五語意+purple),不再 inline style 綁原始色票
 const CAT_BADGE = {
@@ -15,6 +21,18 @@ const CAT_BADGE = {
   分包: 'purple', 管理費: 'slate', 其他: 'slate',
 }
 const pct = (n) => (isFinite(n) ? n.toFixed(1) : '—')
+// 不在六類內的歷史分類一律歸「其他」:分類成本表與快篩 chip 用同一把尺,件數才對得上
+const catOf = (c) => (CATS.includes(c.category) ? c.category : '其他')
+const DEFAULT_FILTERS = { q: '', category: '' }
+const CSV_COLUMNS = [
+  { key: 'category', label: '分類' }, { key: 'title', label: '項目' }, { key: 'vendor', label: '供應商/分包商' },
+  { key: 'budget_amount', label: '預算' }, { key: 'actual_amount', label: '實際' }, { key: 'status', label: '狀態' },
+]
+// 檔名反映匯出範圍:成本明細_{分類|全部}[_搜尋-關鍵字]_{日期}(與 /safety 同一套規則)
+const csvName = ({ q, category }) => {
+  const kw = q.trim().replace(/[\\/:*?"<>|\s]+/g, '-').slice(0, 20)
+  return ['成本明細', category || '全部', kw ? `搜尋-${kw}` : null, stamp()].filter(Boolean).join('_')
+}
 
 export default function Cost() {
   const { workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem, changeOrders } = useStore()
@@ -25,6 +43,22 @@ export default function Cost() {
   const [form, setForm] = useState({ category: '分包', title: '', vendor: '', budget_amount: '', actual_amount: '' })
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 寫入失敗如實回報(B-07)
+  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  const searchRef = useRef(null)
+
+  // 分類件數走全體(不受搜尋影響);0 件的分類也留著——「還沒登任何人工成本」本身就是資訊
+  const catCounts = useMemo(
+    () => Object.fromEntries(CATS.map((cat) => [cat, costItems.filter((c) => catOf(c) === cat).length])),
+    [costItems],
+  )
+  // 目前畫面上的明細:分類 AND 關鍵字(項目/供應商/備註),順序沿用 store(sort_order)
+  const ordered = useMemo(() => {
+    const q = filters.q.trim().toLowerCase()
+    return costItems
+      .filter((c) => !filters.category || catOf(c) === filters.category)
+      .filter((c) => !q || [c.title, c.vendor, c.note].some((v) => (v || '').toLowerCase().includes(q)))
+  }, [costItems, filters])
+  const anyFilter = filters.q.trim() !== '' || filters.category !== ''
   const onUpdate = async (id, patch) => {
     setErrMsg('')
     const { error } = await updateCostItem(id, patch)
@@ -43,7 +77,7 @@ export default function Cost() {
   }, [costItems])
 
   const byCat = useMemo(() => CATS.map((cat) => {
-    const list = costItems.filter((c) => (CATS.includes(c.category) ? c.category : '其他') === cat)
+    const list = costItems.filter((c) => catOf(c) === cat)
     const budget = list.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0)
     const actual = list.reduce((s, c) => s + (Number(c.actual_amount) || 0), 0)
     return { cat, n: list.length, budget, actual }
@@ -177,21 +211,44 @@ export default function Cost() {
         </form>
       </Card>
 
+      {/* CSV 匯出的是目前篩選結果——匯出你看到的;鈕上帶件數,按下去前就知道會拿到幾筆 */}
       <Card title={`成本明細（${costItems.length}）`} bodyClass="p-0" action={costItems.length > 0 && (
-        <button onClick={() => exportCsv(`成本明細_${stamp()}`, costItems, [
-          { key: 'category', label: '分類' }, { key: 'title', label: '項目' }, { key: 'vendor', label: '供應商/分包商' },
-          { key: 'budget_amount', label: '預算' }, { key: 'actual_amount', label: '實際' }, { key: 'status', label: '狀態' },
-        ])} className="inline-flex items-center gap-1 text-sm font-medium text-[var(--blue-text)] hover:underline max-md:min-h-11"><MSym name="download" size={16} />匯出 CSV</button>
+        <Button variant="ghost" onClick={() => exportCsv(csvName(filters), ordered, CSV_COLUMNS)}
+          disabled={ordered.length === 0} title="匯出目前篩選結果">
+          <MSym name="download" size={16} />CSV（{ordered.length}）
+        </Button>
       )}>
         {costItems.length === 0 ? (
           <Empty>尚無成本項目。把分包發包、材料、人工等成本登進來，這裡會即時對照合約收入算毛利。</Empty>
-        ) : (
-          <>
+        ) : (<>
+          {/* 卡頭下方:搜尋 + 六分類快篩(件數走全體),兩條件 AND——殼零件,版面不是殼 */}
+          <div className="px-5 py-3.5 border-b border-[var(--border-2)] flex flex-col gap-3">
+            <SearchField ref={searchRef} value={filters.q}
+              onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+              placeholder="搜尋項目、供應商或備註…" aria-label="搜尋成本項目" />
+            <div className="flex items-center gap-2 flex-wrap">
+              {CATS.map((cat) => (
+                <StatusChip key={cat} active={filters.category === cat} count={catCounts[cat]}
+                  onClick={() => setFilters((f) => ({ ...f, category: f.category === cat ? '' : cat }))}>
+                  <Dot color={CAT_BADGE[cat]} />{cat}
+                </StatusChip>
+              ))}
+              {anyFilter && (
+                <Button variant="ghost" size="sm" onClick={() => setFilters(DEFAULT_FILTERS)}>清除篩選</Button>
+              )}
+            </div>
+          </div>
+          {ordered.length === 0 ? (
+            <div className="px-5 py-12 text-center text-footnote leading-[1.8] text-[var(--text-3)]">
+              沒有符合條件的成本項目。<br />換一個分類,或試試項目名稱、供應商關鍵字。
+            </div>
+          ) : (<>
           {/* 斷點跟手機層對齊(BottomNav 是 md:hidden):760px 七欄表在 390 要橫捲兩個螢幕寬,
               而且金額格是就地編輯——表格內輸入在手機明文豁免 44px(§9.2),等於既讀不了也點不準。
-              手機改渲染唯讀清單,寫入(改金額、切狀態、刪除)一律留在桌機(§9.6)。 */}
+              手機改渲染唯讀清單,寫入(改金額、切狀態、刪除)一律留在桌機(§9.6)。
+              搜尋與分類快篩兩邊共用:手機清單也走 ordered,篩了什麼就看什麼。 */}
           <div className="overflow-x-auto max-md:hidden">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm min-w-[760px]" aria-label="成本明細">
               <thead>
                 {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決) */}
                 <tr className="border-b border-[var(--border)]">
@@ -205,20 +262,26 @@ export default function Cost() {
                 </tr>
               </thead>
               <tbody>
-                {costItems.map((c) => (
+                {ordered.map((c) => (
                   <tr key={c.id} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
                     <td className="py-1.5 pl-5"><Badge color={CAT_BADGE[c.category] || 'slate'}>{c.category}</Badge></td>
                     <td className="px-2 min-w-[140px]">{c.title}</td>
                     <td className="px-2 text-[var(--text-2)]">{c.vendor || '—'}</td>
+                    {/* 就地編輯的數字欄改吃共用 Input(FIELD_BASE 給 focus/手機 44px);定寬交給外層 div,
+                        aria-label 帶項目名,報讀器才分得出是哪一列的預算 */}
                     <td className="px-2 text-right">
-                      <input type="number" min="0" step="any" defaultValue={c.budget_amount ?? ''}
-                        onBlur={(e) => { const n = parseFloat(e.target.value); onUpdate(c.id, { budget_amount: isNaN(n) ? 0 : n }) }}
-                        className="w-28 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs tabular-nums" />
+                      <div className="w-28 ml-auto">
+                        <Input type="number" min="0" step="any" defaultValue={c.budget_amount ?? ''} aria-label={`${c.title} 預算金額`}
+                          onBlur={(e) => { const n = parseFloat(e.target.value); onUpdate(c.id, { budget_amount: isNaN(n) ? 0 : n }) }}
+                          className="text-right tabular-nums" />
+                      </div>
                     </td>
                     <td className="px-2 text-right">
-                      <input type="number" min="0" step="any" defaultValue={c.actual_amount ?? ''}
-                        onBlur={(e) => { const n = parseFloat(e.target.value); onUpdate(c.id, { actual_amount: isNaN(n) ? 0 : n }) }}
-                        className="w-28 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs tabular-nums" />
+                      <div className="w-28 ml-auto">
+                        <Input type="number" min="0" step="any" defaultValue={c.actual_amount ?? ''} aria-label={`${c.title} 實際金額`}
+                          onBlur={(e) => { const n = parseFloat(e.target.value); onUpdate(c.id, { actual_amount: isNaN(n) ? 0 : n }) }}
+                          className="text-right tabular-nums" />
+                      </div>
                     </td>
                     <td className="px-2">
                       {/* 狀態顯示走 Badge 五語意;切換仍是同一顆按鈕(不加新文案),tooltip 講明可點 */}
@@ -244,7 +307,7 @@ export default function Cost() {
           <div className="md:hidden">
             <MobileReadOnlyNote of="各成本項金額與佔比" className="px-5 py-3 border-b border-[var(--border-2)]" />
             <ul role="list" className="divide-y divide-[var(--border-2)]">
-              {costItems.map((c) => {
+              {ordered.map((c) => {
                 const actual = Number(c.actual_amount) || 0
                 return (
                   <li key={c.id} className="px-5 py-3">
@@ -263,8 +326,8 @@ export default function Cost() {
               })}
             </ul>
           </div>
-          </>
-        )}
+          </>)}
+        </>)}
       </Card>
 
       <p className="text-xs text-[var(--text-3)]">

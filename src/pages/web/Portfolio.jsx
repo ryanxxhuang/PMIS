@@ -5,7 +5,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Badge, Empty, PageHeader, Surface } from '../../components/ui.jsx'
+import { Card, Badge, PageHeader, Surface, ErrorBanner, SkeletonList, PrerequisiteEmptyState } from '../../components/ui.jsx'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow } from '../../lib/progressPlan.js'
 import { fmtAmount as fmt } from '../../lib/format.js'
@@ -43,7 +44,12 @@ export default function Portfolio() {
   }, [workItems, adjustedItems, revisedTotal, valuations, plannedNow, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
 
   // ── 其他專案:真實模式走 RPC;demo 用靜態示範案 ──
+  // others=null 代表「還不知道」(載入中或失敗),不是 0 案:失敗時 RPC 回空列,若當成
+  // 0 筆畫出來,例外帶會說「1 案 各案均無未結例外」——那是假的 0(規範 §6:查詢失敗
+  // 要說失敗並給重試)。attempt 只為了重跑同一個 effect,不改查詢語意。
   const [others, setOthers] = useState(null)
+  const [loadErr, setLoadErr] = useState(null)
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     if (demoMode) {
       setOthers(DEMO_PORTFOLIO.map((p) => ({ ...p, demo: true })))
@@ -51,8 +57,10 @@ export default function Portfolio() {
     }
     if (!isSupabaseConfigured) return
     let active = true
-    loadPortfolio().then(({ rows }) => {
+    setLoadErr(null)
+    loadPortfolio().then(({ rows, error }) => {
       if (!active) return
+      if (error) { setLoadErr(error); setOthers(null); return }
       const nameById = new Map(projects.map((p) => [p.project_id, p]))
       setOthers(rows
         .filter((r) => r.project_id !== currentProject?.project_id)
@@ -69,9 +77,12 @@ export default function Portfolio() {
             acceptance: acceptanceStageSummary(r.acceptance_events || []),
           }
         }))
-    })
+    }).catch((e) => { if (active) { setLoadErr(e); setOthers(null) } }) // 網路層例外也不能靜默成 0 案
     return () => { active = false }
-  }, [demoMode, isSupabaseConfigured, projects, currentProject, loadPortfolio])
+  }, [demoMode, isSupabaseConfigured, projects, currentProject, loadPortfolio, attempt])
+  const retry = () => setAttempt((n) => n + 1)
+  // 載入中=真實模式、還沒拿到結果、也還沒失敗;demo 的 others 是同步設的,不會進這裡
+  const loading = !demoMode && isSupabaseConfigured && others === null && !loadErr
 
   const cards = [current, ...(others || [])].filter(Boolean)
 
@@ -88,9 +99,25 @@ export default function Portfolio() {
         title="跨案總覽" tagline="Portfolio"
         subtitle="手上所有專案的進度、待辦與驗收階段,一頁比較;點卡片切換到該案。"
       />
-      {cards.length > 0 && <ExceptionBand ex={portfolioExceptions(cards)} />}
+      {/* 彙總失敗:說失敗、給重試;下方仍列本案即時卡(它不經 RPC),但明講其他案沒列出 */}
+      {loadErr && (
+        <ErrorBanner onRetry={retry}
+          msg={`跨案彙總讀取失敗：${friendlyError(loadErr, '連線異常')}。下方只有目前專案的即時數字,其他專案未列出。`} />
+      )}
+      {loading && <p role="status" className="text-xs text-[var(--text-3)]">正在載入其他專案的彙總…</p>}
+      {/* 例外帶只在「全部都到齊」時畫:載入中/失敗時案數與例外數都是殘缺的,畫出來就是假的 0 */}
+      {cards.length > 0 && others !== null && <ExceptionBand ex={portfolioExceptions(cards)} />}
       {cards.length === 0 ? (
-        <Card bodyClass="p-0"><Empty>尚無專案。</Empty></Card>
+        loadErr ? null : loading ? (
+          <Card><SkeletonList rows={2} label="正在載入跨案彙總…" /></Card>
+        ) : (
+          <Card bodyClass="p-0">
+            <PrerequisiteEmptyState
+              need="尚無任何專案。建立專案並上傳專案文件後,你被加入的每個專案都會列在這裡。"
+              unlocks="跨案比較進度、未結缺失／查驗／變更與驗收階段"
+              to="/project/new" cta="建立專案" />
+          </Card>
+        )
       ) : (
         <div className="grid md:grid-cols-2 gap-5">
           {cards.map((c) => <ProjectCard key={c.key || 'current'} c={c} onOpen={() => open(c)} />)}

@@ -1,19 +1,19 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-11｜main（PR #64），全專案程式、文件與驗證工具整理。
+> ACTIVE｜2026-09-12｜main（PR #67–#79），瘦身、正式後端三面同步、Apple 殼十四頁、公開條款／隱私、Storage 備份腳本、兩步驟驗證。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
 
 | 項目 | 結果 | 指令／範圍 |
 |---|---|---|
-| Vitest | 95 檔、1128 測試通過 | `npm test`；含新人工期限、管理頁競態、Requirement runtime 更新、Agent 查詢與檢查腳本回歸 |
+| Vitest | 98 檔、1158 測試通過 | `npm test`；含機關責任期限進待辦、Portfolio error state、Requirement 表單可及名稱、兩步驟驗證閘門（`auth.mfa.test.js`）。worktree 內 node_modules 為 symlink 時需以 `server.fs.allow` 覆寫設定執行 |
 | 預定進度時區回歸 | 同日第一輪：14 測試在 UTC 與 America/Los_Angeles 各通過；此輪未再改公式 | `TZ=UTC node node_modules/vitest/vitest.mjs run src/lib/progressPlan.test.js`，另改 TZ 重跑 |
-| Demo E2E | 8 檔、48 測試通過 | `npm run test:e2e`，本機 Vite／Chromium，未連真 DB |
-| GitHub 合併檢查 | PR #64 與合併提交 `8be082a` 的 unit／e2e／pgtap 全過 | 正常 merge commit 合併，未 bypass；Cloudflare main 建置成功，正式版本見 CURRENT §6.3 |
+| Demo E2E | 9 檔、56 測試通過（含 `reachability.spec.js` 三角色側欄可達性、三頁 375px a11y） | `npm run test:e2e`，本機 Vite／Chromium，未連真 DB。5188 被其他 checkout 的 dev server 佔用時 `reuseExistingServer` 會打到別人的程式碼，改用獨立埠設定跑 |
+| GitHub 合併檢查 | PR #67、#69、#70、#76、#78（整合 #71–#75、#77）的 unit／e2e／pgtap 全過後合併；#79 見 PR | 正常 merge commit 合併，未 bypass；Cloudflare main 建置由 push 觸發，正式版本見 CURRENT §6.3 |
 | ESLint | 0 error／0 warning | `npm run lint` |
 | production build | 通過；仍有 >500 kB chunk 警告 | `npm run build` |
-| 文件檢查 | 45 份 Markdown 的本機檔案／標題連結通過 | `npm run check:docs`；不連網驗外部網址 |
+| 文件檢查 | 47 份 Markdown 的本機檔案／標題連結通過 | `npm run check:docs`；不連網驗外部網址 |
 | pgTAP | 40 檔、1048 通過、0 失敗 | `npm run test:db`；既有本機 Supabase DB，未 reset、未改 migration。跑法見 [SETUP](../supabase/SETUP.md) |
 | 真後端 E2E | 6 測試通過；本機真 DB／Auth／Storage，固定契約資料模式 | `ANTHROPIC_API_KEY= npm run test:e2e:real`；測試自行建立／清理登入帳號。未呼叫真模型，見 [指南](REAL_BACKEND_E2E.md) |
 | Deno 型別檢查 | 17 支入口及其共用依賴通過 | Deno 2.9.6，`npm run check:edge`；依賴鎖定於 functions/deno.lock，已納 CI。未部署或驗證線上 Edge |
@@ -25,7 +25,7 @@
 | 項目 | 本輪核對 | 現查方式 |
 |---|---|---|
 | migrations／rollbacks | 60／10 | `rg --files supabase/migrations supabase/rollbacks` |
-| 待套正式 migration | 3 支，版本與最後核對日期見 CURRENT §6.3 | 部署前 `supabase migration list --linked`，本輪未查正式庫 |
+| 待套正式 migration | 0 支（2026-09-11 `migration list --linked` 60／60 對齊） | 部署前 `supabase migration list --linked` |
 | pgTAP | 40 檔、plan 加總 1048 | `rg 'plan\(' supabase/tests`；加總不等同實跑 |
 | Edge／shared 非測試模組 | 17／29 | `rg --files supabase/functions` |
 | web 非測試頁面／Store slices | 34／9 | `rg --files src/pages/web src/store/slices` |

@@ -225,6 +225,16 @@ function LogoutButton({ className = '' }) {
   )
 }
 
+// 帳號(兩步驟驗證):與登出同一組、同一形狀,桌機頂欄、手機抽屜底部。
+// 只在真後端有意義——demo 沒有 Supabase Auth,不顯示。
+function AccountLink({ className = '' }) {
+  const { demoMode } = useStore()
+  if (demoMode) return null
+  return (
+    <Link to="/account" className={`items-center justify-center h-11 max-md:min-w-11 px-2 text-sm text-[var(--text-2)] hover:text-[var(--text)] ${className}`}>帳號</Link>
+  )
+}
+
 function TopBar({ scrolled, dueCount = 0, mode, onCycleTheme, copilotOpen, onCopilotToggle }) {
   const { currentUser } = useStore()
   const copilotAvailable = useCopilotAvailable()
@@ -270,6 +280,7 @@ function TopBar({ scrolled, dueCount = 0, mode, onCycleTheme, copilotOpen, onCop
             <div className="text-caption text-[var(--text-2)] whitespace-nowrap">{currentUser?.label}</div>
           </div>
         </div>
+        <AccountLink className="hidden md:inline-flex" />
         <LogoutButton className="hidden md:inline-flex" />
       </div>
     </header>
@@ -492,6 +503,7 @@ export function WebLayout({ children }) {
             </span>
             <div className="md:hidden ml-auto flex items-center gap-1">
               <ThemeToggle mode={themeMode} onCycle={cycleTheme} className="flex" />
+              <AccountLink className="inline-flex" />
               <LogoutButton className="inline-flex" />
             </div>
           </div>

@@ -48,7 +48,7 @@ export const WAITING_SCOPE = Object.freeze({
 })
 
 // 期限型項目只列「已逾期」與 N 日內到期,沿用提醒中心既有門檻。
-const SOON_DAYS = 7
+export const SOON_DAYS = 7
 
 // taipeiISODate 已抽到 dates.js 當全站業務日期的單一真相;這裡 re-export
 // 維持既有 import 路徑(useTodayTasks / Dashboard / 測試)不動。

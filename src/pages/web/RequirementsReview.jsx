@@ -418,20 +418,22 @@ export default function RequirementsReview() {
       {/* 2. 本文:標題/說明/key-value(編輯模式原地換成表單) */}
       {editing ? (
         <div className="p-4 space-y-2">
-          <Input value={editing.title} onChange={(e) => setEditing((d) => ({ ...d, title: e.target.value }))} placeholder="需求標題" />
-          <Textarea value={editing.description || ''} onChange={(e) => setEditing((d) => ({ ...d, description: e.target.value }))} placeholder="需求描述" rows={2} />
+          {/* 編輯表單走 placeholder 當提示、aria-label 當名稱:placeholder 一打字就消失,
+              報讀器與 e2e(a11y.spec 的可及名稱掃描)都不能只靠它;名稱與 MetaGrid 的欄名同字 */}
+          <Input value={editing.title} onChange={(e) => setEditing((d) => ({ ...d, title: e.target.value }))} placeholder="需求標題" aria-label="標題" />
+          <Textarea value={editing.description || ''} onChange={(e) => setEditing((d) => ({ ...d, description: e.target.value }))} placeholder="需求描述" rows={2} aria-label="描述" />
           <div className="flex flex-wrap gap-2">
-            <Select value={editing.requirement_type} onChange={(e) => setEditing((d) => ({ ...d, requirement_type: e.target.value }))}>
+            <Select value={editing.requirement_type} onChange={(e) => setEditing((d) => ({ ...d, requirement_type: e.target.value }))} aria-label="類型">
               {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
-            <Select value={editing.responsible_party_type || ''} onChange={(e) => setEditing((d) => ({ ...d, responsible_party_type: e.target.value }))}>
+            <Select value={editing.responsible_party_type || ''} onChange={(e) => setEditing((d) => ({ ...d, responsible_party_type: e.target.value }))} aria-label="責任方">
               <option value="">負責方未定</option>
               {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </Select>
-            <Input value={editing.lifecycle_phase || ''} onChange={(e) => setEditing((d) => ({ ...d, lifecycle_phase: e.target.value }))} placeholder="階段(開工前/施工中/完工/保固)" className="w-full min-w-0" />
+            <Input value={editing.lifecycle_phase || ''} onChange={(e) => setEditing((d) => ({ ...d, lifecycle_phase: e.target.value }))} placeholder="階段(開工前/施工中/完工/保固)" aria-label="階段" className="w-full min-w-0" />
           </div>
-          <Input value={editing.acceptance_criteria || ''} onChange={(e) => setEditing((d) => ({ ...d, acceptance_criteria: e.target.value }))} placeholder="允收標準" />
-          <Input value={editing.evidence_requirement || ''} onChange={(e) => setEditing((d) => ({ ...d, evidence_requirement: e.target.value }))} placeholder="應留存佐證" />
+          <Input value={editing.acceptance_criteria || ''} onChange={(e) => setEditing((d) => ({ ...d, acceptance_criteria: e.target.value }))} placeholder="允收標準" aria-label="允收標準" />
+          <Input value={editing.evidence_requirement || ''} onChange={(e) => setEditing((d) => ({ ...d, evidence_requirement: e.target.value }))} placeholder="應留存佐證" aria-label="應留存佐證" />
           <div className="flex gap-2">
             <Button size="sm" disabled={busy === 'edit'} onClick={saveEdit}>儲存修正</Button>
             <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>取消</Button>
@@ -523,7 +525,7 @@ export default function RequirementsReview() {
           {canReview && (
             <div className="flex items-center gap-2 mt-1">
               <Input value={manualItemNo} onChange={(e) => setManualItemNo(e.target.value)}
-                placeholder="工項編號(如 壹.一.6.3.28)手動連結" className="flex-1 min-w-0 !text-xs" />
+                placeholder="工項編號(如 壹.一.6.3.28)手動連結" aria-label="手動連結的工項編號" className="flex-1 min-w-0 !text-xs" />
               <Button variant="ghost" size="sm" disabled={!manualItemNo.trim()} onClick={addManualLink}>連結</Button>
             </div>
           )}

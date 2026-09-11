@@ -152,6 +152,8 @@ export const SearchField = forwardRef(function SearchField({ value, onChange, pl
   return (
     <label className={`flex items-center gap-2.5 h-10 max-md:h-11 px-3.5 border border-[var(--border)] rounded-lg bg-[var(--surface)] transition-colors focus-within:outline-[3px] focus-within:outline-offset-0 focus-within:outline-[var(--focus-glow)] focus-within:border-[var(--focus)] ${className}`}>
       <MSym name="search" size={20} className="text-[var(--text-3)] shrink-0" />
+      {/* 手機觸控目標 ≥ 44px(規範 §6)落在 label 外框(max-md:h-11):整個框都是點了就聚焦的命中區,
+          與 Button 的 max-md:min-h-11 同一個斷點 */}
       <input ref={ref} type="search" value={value} onChange={onChange} placeholder={placeholder}
         className="flex-1 min-w-0 bg-transparent border-0 outline-none text-body text-[var(--text)] placeholder:text-[var(--text-3)]" {...props} />
     </label>

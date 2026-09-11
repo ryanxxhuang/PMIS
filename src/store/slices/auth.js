@@ -20,6 +20,24 @@ function restoreDemoUser() {
   } catch { return null }
 }
 
+// Supabase 的 AAL:currentLevel 是這個 session 的等級,nextLevel 是這個帳號能到的等級。
+// 帳號有已驗證 TOTP 因子時 nextLevel='aal2';session 還在 aal1 就代表要補驗證碼。
+async function needsMfaUpgrade() {
+  try {
+    const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (error || !data) return false
+    return data.nextLevel === 'aal2' && data.currentLevel !== 'aal2'
+  } catch { return false }
+}
+
+// 只認已驗證(verified)的 TOTP 因子;enroll 到一半沒驗證的 unverified 因子不算啟用。
+async function verifiedTotpFactor() {
+  const { data, error } = await supabase.auth.mfa.listFactors()
+  if (error) return { error }
+  const factor = (data?.totp || []).find((f) => f.status === 'verified') || null
+  return { factor, error: null }
+}
+
 export function useAuthSlice() {
   const [currentUser, setCurrentUserState] = useState(restoreDemoUser)
   // session 恢復完成前不可判定「未登入」——否則 F5 深連結會先被導去 /login,
@@ -28,6 +46,11 @@ export function useAuthSlice() {
   // 密碼重設流程中:使用者點了重設信連結回來(PASSWORD_RECOVERY)。此時 session 已生效,
   // 但必須先讓他設新密碼——App 守衛與 Login 依此旗標擋住一般導向、改顯示設定新密碼畫面。
   const [passwordRecovery, setPasswordRecovery] = useState(false)
+  // 多因子驗證(TOTP)進行中:帳密已對、session 是 aal1,但使用者有已驗證的 TOTP 因子,
+  // 必須輸入驗證碼升到 aal2 才算登入。此時 currentUser 維持 null(守衛照常擋住業務頁),
+  // Login 依此旗標改顯示驗證碼畫面。MFA 是每個帳號自選啟用(帳號安全頁),
+  // 不做全站強制——工程會一覽表 SaaS 套裝型・普級不要求 MFA,高級才要求。
+  const [mfaRequired, setMfaRequired] = useState(false)
   // demo 選角色時持久化;真實模式由 Supabase session 管,不動 localStorage
   const setCurrentUser = useCallback((u) => {
     if (!isSupabaseConfigured) {
@@ -46,6 +69,14 @@ export function useAuthSlice() {
     const loadProfile = async (session) => {
       if (!session?.user) { lastUserId = null; if (active) setCurrentUser(null); return }
       if (session.user.id === lastUserId) return
+      // 有已驗證的 TOTP 因子但 session 還是 aal1 → 先要驗證碼,不載入 profile。
+      // AAL 查詢失敗視為不需 MFA(這層只是 UX 閘門;RLS 未依 aal 分級,不因暫時性錯誤鎖死登入)。
+      if (await needsMfaUpgrade()) {
+        lastUserId = null
+        if (active) { setMfaRequired(true); setCurrentUser(null) }
+        return
+      }
+      if (active) setMfaRequired(false)
       lastUserId = session.user.id
       // 不可寫 select('*'):20260822010100 起 authenticated 對 profiles 只有逐欄
       // SELECT 授權(is_platform_admin 刻意不授,管理員身分走 is_platform_admin()
@@ -131,11 +162,48 @@ export function useAuthSlice() {
   // 登出的 auth 部分：真實模式呼叫 Supabase signOut；跨 slice 清理在 store.jsx
   const signOutBase = useCallback(async () => {
     if (isSupabaseConfigured) { try { await supabase.auth.signOut() } catch { /* noop */ } }
+    setMfaRequired(false)
     setCurrentUser(null)
   }, [setCurrentUser])
+
+  // ── 多因子驗證(TOTP,每帳號自選)─────────────────────────────────────
+  // 登入時的驗證碼:找已驗證因子 → challengeAndVerify。成功後 Supabase 發
+  // MFA_CHALLENGE_VERIFIED 事件帶 aal2 session,上面的 listener 會接著載入 profile。
+  const verifyMfa = useCallback(async (code) => {
+    const { factor, error: listErr } = await verifiedTotpFactor()
+    if (listErr) return { error: listErr }
+    if (!factor) return { error: new Error('此帳號沒有可用的驗證因子') }
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code: String(code || '').trim() })
+    return { error }
+  }, [])
+
+  // 帳號安全頁用:列因子、啟用(回 QR 與金鑰,尚未生效)、以第一組驗證碼確認、停用。
+  const listMfaFactors = useCallback(async () => {
+    const { data, error } = await supabase.auth.mfa.listFactors()
+    return { factors: data?.totp || [], error }
+  }, [])
+  const enrollMfa = useCallback(async () => {
+    // 同名 unverified 殘留(上次沒驗完)會讓 enroll 422;先清掉再建。
+    const { data: existing } = await supabase.auth.mfa.listFactors()
+    for (const f of existing?.totp || []) {
+      if (f.status !== 'verified') { try { await supabase.auth.mfa.unenroll({ factorId: f.id }) } catch { /* noop */ } }
+    }
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'GovAgent TOTP' })
+    if (error) return { error }
+    return { factorId: data.id, qrCode: data.totp?.qr_code, secret: data.totp?.secret, error: null }
+  }, [])
+  const confirmMfaEnrollment = useCallback(async (factorId, code) => {
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: String(code || '').trim() })
+    return { error }
+  }, [])
+  const unenrollMfa = useCallback(async (factorId) => {
+    const { error } = await supabase.auth.mfa.unenroll({ factorId })
+    return { error }
+  }, [])
 
   return {
     currentUser, authReady, setCurrentUser, signUp, resendSignup, signIn, signOutBase,
     passwordRecovery, requestPasswordReset, updatePassword,
+    mfaRequired, verifyMfa, listMfaFactors, enrollMfa, confirmMfaEnrollment, unenrollMfa,
   }
 }

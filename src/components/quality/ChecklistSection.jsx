@@ -1,9 +1,13 @@
-// 由 pages/web/Quality.jsx 原地搬出(重構波次 7):零邏輯改動,只換檔案位置與 import。
 // 自主檢查表分段:選範本 → 填實測值 → 依量化標準自動判定 → 不合格自動開缺失。
+// 這一段刻意不套清單／詳情殼(規範 §8):它的主體是「範本表格編輯器」(新增/修訂都是
+// 一張逐項填實測值的表),修訂鏈列只是證據索引,列上動作全是導向(列印)或開表單(修訂),
+// 沒有需要「就地處理」的狀態轉移;硬套殼只會把表格編輯器塞進 400px 詳情欄。
+// 只借殼的零件整理:判定快篩 chip(StatusChip)＋ <ul role="list">/<li> 清單語意。
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../icons.jsx'
-import { Card, Button, Field, Badge, Empty, IconButton, Input, Select, THEAD_CLS } from '../ui.jsx'
+import { Card, Button, Field, Badge, Dot, Empty, Input, Select, THEAD_CLS } from '../ui.jsx'
+import { StatusChip } from '../listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../confirm.jsx'
 import { judgeChecklist, judgeItem, diffChecklistResults } from '../../lib/qc.js'
@@ -41,6 +45,7 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
   const [msg, setMsgRaw] = useState(null) // { text, tone } | null
   const setMsg = (text, tone = 'success') => setMsgRaw(text ? { text, tone } : null)
   const [historyOf, setHistoryOf] = useState(null) // 展開歷次版本的鏈根 id
+  const [judgeFilter, setJudgeFilter] = useState('') // 判定快篩:''=全部(單選、再點取消)
 
   // 紀錄 → 末端工項:demo 存 work_item_key、真 DB 存 work_item_id(uuid),一張表查兩種鍵
   const leafByRef = useMemo(() => {
@@ -113,6 +118,12 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
     const res = await onDelete(r.id)
     if (res?.error) setMsg(friendlyError(res.error, '檢查紀錄刪除未完成'), 'error')
   }
+
+  // 判定快篩:件數走全體修訂鏈(現行版的判定),0 件也留著——「還沒有不合格」本身是資訊
+  const JUDGE_FILTERS = [['合格', 'green'], ['不合格', 'red'], ['未判定', 'slate']]
+  const judgeOf = (r) => r.overall || '未判定'
+  const judgeCounts = Object.fromEntries(JUDGE_FILTERS.map(([j]) => [j, chains.filter((c) => judgeOf(c.current) === j).length]))
+  const shownChains = judgeFilter ? chains.filter((c) => judgeOf(c.current) === judgeFilter) : chains
 
   let lastGroup = null
   return (
@@ -210,16 +221,29 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
         </div>
       )}
 
-      {chains.length === 0 ? <Empty>尚無自主檢查紀錄。選範本填實測值，系統依量化標準自動判定。</Empty> : (
-        <div className="space-y-1.5">
-          {chains.map(({ current: r, history }) => {
+      {chains.length > 0 && (
+        <div role="group" aria-label="檢查表判定篩選" className="flex items-center gap-2 flex-wrap mb-3">
+          {JUDGE_FILTERS.map(([j, color]) => (
+            <StatusChip key={j} active={judgeFilter === j} count={judgeCounts[j]}
+              onClick={() => setJudgeFilter(judgeFilter === j ? '' : j)}>
+              <Dot color={color} />{j}
+            </StatusChip>
+          ))}
+        </div>
+      )}
+      {chains.length === 0 ? <Empty>尚無自主檢查紀錄。選範本填實測值，系統依量化標準自動判定。</Empty> : shownChains.length === 0 ? (
+        <Empty>沒有「{judgeFilter}」的檢查紀錄。</Empty>
+      ) : (
+        // role="list" 要明寫:Tailwind preflight 的 list-style: none 會讓 Safari 拿掉 <ul> 清單語意
+        <ul role="list" className="space-y-1.5">
+          {shownChains.map(({ current: r, history }) => {
             const tpl = templates.find((t) => t.id === r.template_id)
             const rootId = r.root_id || r.id
             const prev = history.find((h) => h.id === r.supersedes_id)
             const diffs = (r.rev || 0) > 0 && tpl && prev ? diffChecklistResults(tpl, prev.results, r.results) : []
             const attachedInsp = attachedInspOfChain(r, history)
             return (
-              <div key={rootId} className="border-b border-[var(--border-2)] pb-1.5">
+              <li key={rootId} className="border-b border-[var(--border-2)] pb-1.5">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <div className="min-w-0">
                     <span className="num text-[var(--text-3)] text-xs mr-2">{r.check_date}</span>
@@ -251,7 +275,7 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
                         className="text-[var(--blue-text)] hover:underline text-xs inline-flex items-center max-md:min-h-11">歷次 {history.length}</button>
                     )}
                     {canEdit && !r.overall && (
-                      <IconButton name="close" label="刪除未判定的檢查紀錄" onClick={() => del(r)} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
+                      <button onClick={() => del(r)} aria-label="刪除未判定的檢查紀錄" className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2"><MSym name="close" size={16} /></button>
                     )}
                   </div>
                 </div>
@@ -273,10 +297,10 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
                       className="text-[var(--blue-text)] hover:underline shrink-0">列印</button>
                   </div>
                 ))}
-              </div>
+              </li>
             )
           })}
-        </div>
+        </ul>
       )}
       <p className="text-caption text-[var(--text-3)] mt-2">檢查表存檔後即為品質證據，不可就地修改：更正一律以「修訂」建立 Rev.N 留存差異與原因，並重新自動判定；改判不合格會自動開立缺失（同一張表已有未結案缺失時不重複開）。僅未判定的紀錄可刪除。</p>
     </Card>

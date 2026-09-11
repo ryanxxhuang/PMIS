@@ -99,7 +99,7 @@ done
 curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security|x-frame|x-content-type|referrer-policy|permissions-policy|cross-origin-opener"
 ```
 
-2026-09-02 基線：六條路由皆 200（SPA fallback），七項安全標頭齊全（HSTS／CSP／X-Frame-Options／X-Content-Type-Options／Referrer-Policy／Permissions-Policy／COOP）。HTTP 標頭檢查**不代表登入後業務流程驗收**；真案驗收走 [`../上線前-真案-dry-run-檢查清單-2026-07-13.md`](../上線前-真案-dry-run-檢查清單-2026-07-13.md)。
+2026-09-02 基線：六條路由皆 200（SPA fallback），七項安全標頭齊全（HSTS／CSP／X-Frame-Options／X-Content-Type-Options／Referrer-Policy／Permissions-Policy／COOP）。HTTP 標頭檢查**不代表登入後業務流程驗收**；真案驗收項目見 [ROADMAP](../ROADMAP.md) 與 CURRENT §6.2。
 
 可加驗：線上 bundle 是否含本次新 chunk（例如 PR #58 以 `AnchorDates` chunk 名確認）。
 
@@ -110,6 +110,7 @@ curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security
 | 設定 | 在哪 | 現值核對狀態 |
 |---|---|---|
 | Supabase Auth **Site URL** 與 **Redirect URLs** | Supabase Dashboard → Authentication → URL Configuration | 應使用 App 網域 `https://app.gov-agent.ai` 與相應回跳白名單；正式 Dashboard 現值仍未查證。 |
+| Supabase Auth **MFA → TOTP** 啟用 | Supabase Dashboard → Authentication → Multi-Factor | `/account` 的兩步驟驗證與登入驗證碼閘門靠它；Supabase 預設開啟，正式 Dashboard 現值未查證，第一次啟用前先確認。 |
 | 自訂 SMTP／Resend 寄件網域 | Resend Dashboard ＋ Supabase SMTP Settings | `REMINDER_FROM` 需已驗證網域；未驗證前 `onboarding@resend.dev` 只能寄到自己帳號 |
 | pg_cron 排程 | Supabase SQL Editor（`cron.sql`） | `select * from cron.job;` 現查 |
 | Sentry DSN／環境 | Cloudflare 建置環境變數 | 未查證現值 |

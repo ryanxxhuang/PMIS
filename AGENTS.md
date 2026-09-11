@@ -12,6 +12,6 @@
 4. 採最小改動；沒有第二個實際使用點前不新增抽象層。
 5. 已套用 migration 不回頭修改；資料庫變更新增 migration 並補對應 pgTAP。
 6. 修改完成時同步現況與架構文件；不得把未完成能力寫成已實作。
-7. 未經使用者明確要求，不 commit、push、部署或套用正式環境 migration。
+7. commit、push、合併、部署與正式 migration 依 [D-023](docs/DECISIONS.md#d-023commitpush部署的常設授權) 常設授權：驗證通過即可執行，不逐次詢問；會產生新雲端費用、刪除正式資料或遠端資源的操作仍須先問。
 
 其餘開發、測試、文件衝突與完成定義以 [`DEVELOPMENT.md`](DEVELOPMENT.md) 為準。
