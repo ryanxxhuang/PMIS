@@ -225,7 +225,8 @@ function buildDoneToday({ org, todayIso, defects, inspections }) {
       ts: new Date(d.closed_at).getTime(),
       task: task({
         key: `已完成缺失:${d.id ?? d.title}`, tag: safety ? '工安缺失' : '缺失', title: d.title,
-        meta: '監造已結案', ball: 'supervisor', to: safety ? '/safety' : '/quality',
+        // 與 collaborationItems 同一條規則:缺失追蹤已套殼,?defect=<id> 直達該筆(規範 §9.7)
+        meta: '監造已結案', ball: 'supervisor', to: detailLink(safety ? '/safety' : '/quality', 'defect', d.id),
       }),
     })
   }

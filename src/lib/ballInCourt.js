@@ -84,12 +84,13 @@ export function collaborationItems(data = {}) {
   valuations.forEach((v) => push(valuationBall(v), {
     id: v.id, tag: '估驗', title: `第 ${v.period_no} 期估驗`, to: valuationRoute(v),
   }))
-  // 查驗/缺失/觀察的頁(/quality)還沒有殼;/safety 的殼是工安紀錄(?record=),缺失追蹤
-  // 要等它套殼(規範 §9.8)才有單條 query——在那之前維持頁面連結,不帶對不上的 id。
+  // 查驗/觀察的頁(/quality 的查驗與觀察分段)還沒有殼,維持頁面連結,不帶對不上的 id。
   inspections.forEach((i) => push(inspectionBall(i), { id: i.id, tag: '查驗', title: i.title, to: '/quality' }))
+  // 缺失追蹤已套殼(DefectTracker,規範 §9.8):?defect=<id> 在 /safety(工安)與 /quality
+  // (品質,頁面依這個 query 自動切到「缺失」分段)都直達該筆
   defects.forEach((d) => push(defectBall(d), {
     id: d.id, tag: d.domain === 'safety' ? '工安缺失' : '缺失', title: d.title,
-    to: d.domain === 'safety' ? '/safety' : '/quality', due: d.due_date,
+    to: detailLink(d.domain === 'safety' ? '/safety' : '/quality', 'defect', d.id), due: d.due_date,
   }))
   observations.forEach((o) => push(observationBall(o), { id: o.id, tag: '觀察', title: o.title, to: '/quality' }))
   changeOrders.forEach((c) => push(changeOrderBall(c), {

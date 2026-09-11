@@ -316,7 +316,8 @@ export default function Safety() {
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
-      {/* Stat 列斷點與 Dashboard 一致:375px 擠三欄會把數字壓成兩行 */}
+      {/* Stat 列:<md 由 index.css 的 .stat-card 規則統一收成三格數字條(規範 §9.8),
+          這裡的 grid-cols-2 只管 md 以上未達三欄前的過渡 */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Stat label="未結案工安缺失" value={counts.openDef} sub="件" color={counts.openDef > 0 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />
         <Stat label="本月自主檢查" value={counts.checksThisMonth} sub="次" color="text-[var(--blue-text)]" />

@@ -354,14 +354,17 @@ export function Segmented({ value, onChange, options, size = 'md', className = '
   )
 }
 
+// 手機(<md)是「數字條」不是卡(規範 §9.8 第二條):內距收到 py-2/px-3、行距收緊,三格並排
+// 由 index.css 的 .stat-card 規則對父層格線統一處理——稽核量到 /safety 三張卡各佔半行,
+// 把「開立缺失」推到 y=475。數值字級照舊走 container query,窄卡自動降到 15px 不破框。
 export function Stat({ label, value, sub, color = 'text-[var(--text)]' }) {
   return (
-    <div className={`stat-card ${SURFACE} px-4 py-3.5`}>
-      <div className="text-caption text-[var(--text-2)]">{label}</div>
+    <div className={`stat-card ${SURFACE} px-4 py-3.5 max-md:px-3 max-md:py-2`}>
+      <div className="text-caption text-[var(--text-2)] max-md:leading-snug">{label}</div>
       {/* 數值字級由 index.css 的 .stat-value 以 container query 決定(卡寬縮就縮),
           這裡只給字重與字距:Apple 的大數字是中粗+緊字距;字距收緊剛好抵掉字重帶來的寬度 */}
-      <div className={`stat-value leading-tight font-medium mt-1 tabular-nums tracking-[-0.02em] ${color}`}>{value}</div>
-      {sub && <div className="text-caption text-[var(--text-3)] mt-1 tabular-nums leading-snug">{sub}</div>}
+      <div className={`stat-value leading-tight font-medium mt-1 max-md:mt-0.5 tabular-nums tracking-[-0.02em] ${color}`}>{value}</div>
+      {sub && <div className="text-caption text-[var(--text-3)] mt-1 max-md:mt-0.5 tabular-nums leading-snug">{sub}</div>}
     </div>
   )
 }

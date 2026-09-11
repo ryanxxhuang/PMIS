@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
@@ -28,8 +29,29 @@ export default function Quality() {
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 判定寫入失敗必須讓使用者看到(失敗=UI 不變)
-  // 預設分段固定「查驗」:三角色一致,監造判定動線不必先切段
-  const [segment, setSegment] = useState('查驗')
+  // 預設分段固定「查驗」:三角色一致,監造判定動線不必先切段。例外是 URL 帶 ?defect=
+  // (收件匣的缺失待辦直達那一筆,規範 §9.7):缺失分段是清單＋詳情殼,query 要落到它身上
+  // 才有意義,所以帶 query 進頁直接落在「缺失」。
+  const [params, setSearchParams] = useSearchParams()
+  const [segment, setSegment] = useState(() => (params.has('defect') ? '缺失' : '查驗'))
+  // 缺失殼的重掛鍵:佇列點一筆缺失時 +1,讓殼重新讀 ?defect= 選中那一筆(殼只在掛載時讀深連結;
+  // 已經停在缺失分段時不重掛就只會換 URL、不會換選取)
+  const [defectFocus, setDefectFocus] = useState(0)
+  // ?defect= 只在缺失分段有意義:離開分段就拿掉,否則切回來時殼會把它當深連結、<lg 又彈一次抽屜
+  const changeSegment = (s) => {
+    if (s !== '缺失' && params.has('defect')) {
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('defect'); return n }, { replace: true })
+    }
+    setSegment(s)
+  }
+  // 佇列點缺失:寫 ?defect=<id> 再進缺失分段,殼掛載時讀到就選中它(<lg 直接推入詳情)
+  const focusQueueItem = (q) => {
+    if (q.tag === '缺失' && q.id) {
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('defect', q.id); return n }, { replace: true })
+      setDefectFocus((k) => k + 1)
+    }
+    setSegment(q.segment)
+  }
   // 判定成功的原地回饋(沿用各區塊 savedMsg 模式,不進全域狀態):
   // 判不合格開的缺失在「缺失」分段,不給入口使用者會以為判定沒發生
   const [resultMsg, setResultMsg] = useState(null) // null | { pass: boolean }
@@ -101,7 +123,7 @@ export default function Quality() {
   // 只預填表單(工項/項目/位置/檢附/申請日),送出仍由人按——與檢附 select 的
   // 候選規則一致(現行版+已判定),所以預填的 id 一定會出現在下拉裡。
   const requestInspectionFromChecklist = (r, tplTitle, wi) => {
-    setSegment('查驗')
+    changeSegment('查驗')
     setInspForm({
       title: tplTitle || '', location: r.location || '',
       inspection_type: '施工查驗', requested_date: taipeiToday(),
@@ -164,7 +186,7 @@ export default function Quality() {
               // 整列可點的鈕,手機補到 44px 不會破版。這裡刻意不是 <li>:缺失列/查驗列
               // 才是清單,contractor/supervisor spec 用 getByRole('listitem') 鎖那兩處的列,
               // 佇列若也當 listitem 會雙重命中
-              <button key={q.key} onClick={() => setSegment(q.segment)}
+              <button key={q.key} onClick={() => focusQueueItem(q)}
                 className="w-full flex items-center gap-3 text-left text-sm rounded-lg px-2 py-1.5 max-md:min-h-11 hover:bg-[var(--surface-2)] pressable">
                 <Badge color={QUEUE_TAG_COLOR[q.tag] || 'slate'}>{q.tag}</Badge>
                 <span className="min-w-0 flex-1 truncate text-[var(--text)]">{q.title}</span>
@@ -185,7 +207,7 @@ export default function Quality() {
           各段表單皆短,重填成本低,換來的是頁面不再五卡直落、每段各自可專心操作 */}
       <div role="group" aria-label="品質分段" className="flex flex-wrap gap-1.5">
         {SEGMENTS.map((s) => (
-          <button key={s} onClick={() => setSegment(s)} aria-pressed={segment === s}
+          <button key={s} onClick={() => changeSegment(s)} aria-pressed={segment === s}
             className={`${CHIP_BASE} ${segment === s ? CHIP_ON : CHIP_OFF} min-h-11 gap-1`}>
             {s}
             {segCount[s] > 0 && <span className="num opacity-80">{segCount[s]}</span>}
@@ -197,13 +219,14 @@ export default function Quality() {
       {segment === '查驗' && (
       <InspectionsSection inspections={inspections} inspCount={inspCount} filter={inspFilter} onFilter={setInspFilter}
         form={inspForm} onFormChange={setInspForm} onSubmit={submitInsp} busy={busy}
-        resultMsg={resultMsg} onShowDefects={() => setSegment('缺失')}
+        resultMsg={resultMsg} onShowDefects={() => changeSegment('缺失')}
         leaves={leaves} attachableChecklists={attachableChecklists} templates={checklistTemplates}
         can={can} onResult={onResult} onDelete={onDeleteInsp} />
       )}
 
-      {/* 缺失:統一缺失引擎(與工安缺失同狀態機),此處只列品質 domain */}
-      {segment === '缺失' && <DefectTracker domain="quality" leaves={leaves} />}
+      {/* 缺失:統一缺失引擎(與工安缺失同狀態機),此處只列品質 domain。清單＋詳情殼住在元件裡,
+          key 見 defectFocus */}
+      {segment === '缺失' && <DefectTracker key={defectFocus} domain="quality" leaves={leaves} />}
 
       {/* 觀察事項:比缺失輕的現場提醒,可升級成正式缺失 */}
       {segment === '觀察' && (

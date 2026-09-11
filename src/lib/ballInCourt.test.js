@@ -72,7 +72,7 @@ describe('detailLink / collaborationItems 的直達連結', () => {
     const odd = 'a b&c=d/e'
     expect(new URL(detailLink('/rfi', 'rfi', odd), 'http://x').searchParams.get('rfi')).toBe(odd)
   })
-  it('疑義 / 送審 / 變更直達該列 id;缺失 / 查驗 / 觀察 / 估驗仍是頁面連結', () => {
+  it('疑義 / 送審 / 變更 / 缺失(品質與工安)直達該列 id;查驗 / 觀察 / 估驗仍是頁面連結', () => {
     const items = collaborationItems({
       rfis: [{ id: 'R1', rfi_no: 'RFI-001', title: '疑義', status: '待回覆' }],
       submittals: [{ id: 'S1', submittal_no: 'SUB-001', title: '送審', status: '已提送' }],
@@ -85,15 +85,21 @@ describe('detailLink / collaborationItems 的直達連結', () => {
     const to = Object.fromEntries(items.map((i) => [i.tag, i.to]))
     expect(to).toEqual({
       疑義: '/rfi?rfi=R1', 送審: '/submittals?submittal=S1', 變更: '/change-orders?co=C1',
-      缺失: '/quality', 工安缺失: '/safety', 查驗: '/quality', 觀察: '/quality', 估驗: '/valuation',
+      缺失: '/quality?defect=D1', 工安缺失: '/safety?defect=DS', 查驗: '/quality', 觀察: '/quality', 估驗: '/valuation',
     })
+    // query 值 === 該列 id(DefectTracker 的 rows 就是 store 的 defects),不是字串長得像
+    const byTag = Object.fromEntries(items.map((i) => [i.tag, i]))
+    for (const tag of ['缺失', '工安缺失']) {
+      expect(new URL(byTag[tag].to, 'http://x').searchParams.get('defect')).toBe(byTag[tag].id)
+    }
   })
   it('無 id 的列(demo 舊形狀)退回頁面連結', () => {
     const items = collaborationItems({
       rfis: [{ rfi_no: 'RFI-001', title: '疑義', status: '待回覆' }],
       submittals: [{ submittal_no: 'SUB-001', title: '送審', status: '已提送' }],
       changeOrders: [{ co_no: 'CO-001', title: '變更', status: '提出' }],
+      defects: [{ title: '缺失', status: '開立' }, { title: '工安', status: '開立', domain: 'safety' }],
     })
-    expect(items.map((i) => i.to)).toEqual(['/rfi', '/submittals', '/change-orders'])
+    expect(items.map((i) => i.to)).toEqual(['/rfi', '/submittals', '/quality', '/safety', '/change-orders'])
   })
 })
