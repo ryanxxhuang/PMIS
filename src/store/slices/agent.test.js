@@ -3,8 +3,9 @@
 // 也不得讓整包存檔失敗——一律略過,由人到 /site-log 補填。
 import { describe, it, expect, vi } from 'vitest'
 
+import { unconfigured } from '../../testUtils/supabaseMock.js'
 // 純函式不打網路;mock 掉 supabase 讓本檔在 node 環境零依賴載入
-vi.mock('../../lib/supabase.js', () => ({ supabase: null, isSupabaseConfigured: false }))
+vi.mock('../../lib/supabase.js', () => unconfigured())
 
 import { draftPayloadToSiteLog, draftNeedsInputCount, applyDraftQuantities, draftPayloadToChecklist, checklistDraftCounts, extractInvokeError } from './agent.js'
 

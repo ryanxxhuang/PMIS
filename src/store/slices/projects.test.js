@@ -2,8 +2,9 @@
 // 分流:demo/無專案→sample;真專案 0 筆→empty;查詢失敗→error(不得偽裝成無資料);有資料→db。
 import { describe, it, expect, vi } from 'vitest'
 
+import { unconfigured } from '../../testUtils/supabaseMock.js'
 // resolveWorkItems 是純函式,但模組 import 鏈會建立真的 supabase client(node 環境無 WebSocket)
-vi.mock('../../lib/supabase.js', () => ({ supabase: null, isSupabaseConfigured: false }))
+vi.mock('../../lib/supabase.js', () => unconfigured())
 
 import { resolveWorkItems } from './projects.js'
 

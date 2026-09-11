@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
+import { unconfigured } from '../testUtils/supabaseMock.js'
 // 模組 import 鏈會建立真的 supabase client(node 環境無 WebSocket),測試裡換成空殼
-vi.mock('./supabase.js', () => ({ supabase: null, isSupabaseConfigured: false }))
+vi.mock('./supabase.js', () => unconfigured())
 import { describe, expect, it } from 'vitest'
 import {
   UPLOAD_CONCURRENCY, formatElapsed, isInlineViewableMime, mapWithConcurrency,

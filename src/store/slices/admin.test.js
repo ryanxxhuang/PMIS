@@ -2,8 +2,9 @@
 // hook 本身(RPC 呼叫)不在此測——admin RPC 的權限與行為由 DB 端 pgTAP 把關。
 import { describe, it, expect, vi } from 'vitest'
 
+import { unconfigured } from '../../testUtils/supabaseMock.js'
 // 模組 import 鏈會建立真的 supabase client(node 環境無 WebSocket),照慣例 mock 掉
-vi.mock('../../lib/supabase.js', () => ({ supabase: null, isSupabaseConfigured: false }))
+vi.mock('../../lib/supabase.js', () => unconfigured())
 
 import {
   TWD_PER_USD, toTwd, presetRange, customRange, pctOfTotal, overrideToRpcValue, overrideFromDb,

@@ -2,11 +2,9 @@
 // W4-1/P1-05:listMembers 必須回 { rows, error }——RPC 失敗不得吞錯回空陣列,
 // 否則成員頁分不出「載入失敗」與「真的沒成員」,會永遠顯示「載入中…」。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createElement } from 'react'
 import { act } from 'react'
-import { createRoot } from 'react-dom/client'
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+import { configured } from '../../testUtils/supabaseMock.js'
+import { renderHook } from '../../testUtils/renderHook.js'
 
 const h = vi.hoisted(() => {
   const rpcResults = new Map()
@@ -24,17 +22,10 @@ const h = vi.hoisted(() => {
     },
   }
 })
-vi.mock('../../lib/supabase.js', () => ({ supabase: h.client, isSupabaseConfigured: true }))
+vi.mock('../../lib/supabase.js', () => configured(h.client))
 
 import { useCollabSlice } from './collab.js'
 
-function renderHook(useHook) {
-  const result = { current: null }
-  const Harness = () => { result.current = useHook(); return null }
-  const root = createRoot(document.createElement('div'))
-  act(() => root.render(createElement(Harness)))
-  return result
-}
 
 const realCtx = {
   dbMode: true, demoMode: false, isPersistedProject: true,

@@ -4,11 +4,9 @@
 // 重新整理就消失(假成功)。此檔用「已選真專案、尚未匯標單」(isPersistedProject=true、
 // dbMode=false)的 ctx 驗證每條寫入路徑都有打到 supabase。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createElement } from 'react'
 import { act } from 'react'
-import { createRoot } from 'react-dom/client'
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+import { configured } from '../../testUtils/supabaseMock.js'
+import { renderHook } from '../../testUtils/renderHook.js'
 
 // 可斷言的 supabase 空殼:記錄 from(table) 與後續鏈式呼叫,await 時回成功結果
 // (.single() → 物件、其餘 → 一列的陣列,滿足 mutationOutcome 的「有寫到列」判定)。
@@ -41,7 +39,7 @@ const h = vi.hoisted(() => {
     },
   }
 })
-vi.mock('../../lib/supabase.js', () => ({ supabase: h.client, isSupabaseConfigured: true }))
+vi.mock('../../lib/supabase.js', () => configured(h.client))
 
 import { useCollabSlice } from './collab.js'
 import { useSiteSlice } from './site.js'
@@ -50,15 +48,6 @@ import { useQualitySlice } from './quality.js'
 import { useAgentSlice } from './agent.js'
 
 const wrote = (table, op) => h.calls.some((c) => c.table === table && c.op === op)
-
-// 最小 hook harness(專案未裝 @testing-library,用 react-dom/client 直接掛)
-function renderHook(useHook) {
-  const result = { current: null }
-  const Harness = () => { result.current = useHook(); return null }
-  const root = createRoot(document.createElement('div'))
-  act(() => root.render(createElement(Harness)))
-  return result
-}
 
 // 真專案已選定、標單尚未匯入:dbMode=false、isPersistedProject=true
 const preBoqCtx = {

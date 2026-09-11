@@ -7,11 +7,9 @@
 //   4. 重設失敗(被證據 guard 擋下)時不清快取、不觸發重載——DB 已 rollback,
 //      前端不能假裝成功(P0-01 驗收的「UI 顯示錯誤且不清快取」)。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createElement } from 'react'
 import { act } from 'react'
-import { createRoot } from 'react-dom/client'
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+import { configured } from '../../testUtils/supabaseMock.js'
+import { renderHook } from '../../testUtils/renderHook.js'
 
 // 可斷言的 supabase 空殼(同 persistedWrites.test.js 模式):
 // from(table) 記錄鏈式呼叫;rpc 的回傳值可由測試逐案指定(失敗注入點)。
@@ -42,7 +40,7 @@ const h = vi.hoisted(() => {
     },
   }
 })
-vi.mock('../../lib/supabase.js', () => ({ supabase: h.client, isSupabaseConfigured: true }))
+vi.mock('../../lib/supabase.js', () => configured(h.client))
 
 // db.js 部分替換:快取寫入用 spy(斷言「失敗不寫快取」),其餘維持真實作
 const dbSpies = vi.hoisted(() => ({
@@ -56,13 +54,6 @@ vi.mock('../db.js', async (importOriginal) => ({ ...(await importOriginal()), ..
 
 import { useProjectsSlice } from './projects.js'
 
-function renderHook(useHook) {
-  const result = { current: null }
-  const Harness = () => { result.current = useHook(); return null }
-  const root = createRoot(document.createElement('div'))
-  act(() => root.render(createElement(Harness)))
-  return result
-}
 
 // useProjectsSlice 的載入 effect 依賴 [currentUser]:物件必須是穩定參考,
 // 否則每次 render 都重跑載入 → 無限循環(這也是真實呼叫端的使用契約)
