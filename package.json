@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "test:e2e": "playwright test",
     "test:e2e:real": "node --env-file-if-exists=.env.e2e.real ./node_modules/@playwright/test/cli.js test --config=playwright.real.config.js",
     "test:e2e:ui": "playwright test --ui",
