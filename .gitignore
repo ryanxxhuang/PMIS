@@ -41,3 +41,7 @@ UIUX/*.zip
 
 # 公司營運文件(非產品文件),留在本機不入版控
 docs/青創基地/
+
+# 行銷站產品畫面:由 scripts/capture-appshots.mjs 從 demo 建置重截,可重建的產物;
+# 入版控的是行銷站 repo 那份(消費端),這裡只留 README。
+UIUX/appshots/*.png
