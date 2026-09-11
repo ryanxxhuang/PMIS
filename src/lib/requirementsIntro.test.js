@@ -4,7 +4,8 @@
 import { describe, it, expect } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ReviewActions, requirementsIntro } from './RequirementsReview.jsx'
+import { requirementsIntro } from './requirementsIntro.js'
+import ReviewActions from '../components/requirements/ReviewActions.jsx'
 
 const completed = [{ id: 'R1', status: 'completed' }]
 const inFlight = [{ id: 'R1', status: 'processing' }, { id: 'R2', status: 'failed' }]

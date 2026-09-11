@@ -10,8 +10,11 @@
 //    蓋寫成 failed——W13 殭屍事故裡,連點重試的 409 一路把活著的解析蓋成失敗。
 import { supabase } from './supabase.js'
 
-// 續跑上限:MAX_BATCHES=12、單 request 至少跑一批,再加對半切的餘裕。
+// 續跑上限:伺服器端 MAX_BATCHES=24(supabase/functions/extract-requirements/
+// index.ts)、單 request 至少跑一批,再加對半切與重試的餘裕。
 // 撞到上限代表伺服器端邏輯有問題(每個 request 都該有進度),誠實回報。
+// ⚠️ 這個數字必須 > 伺服器的 MAX_BATCHES,否則前端會在伺服器還有批次要跑時
+//    先放棄,使用者看到的是「沒跑完卻停了」。改伺服器那個值要回來看這裡。
 const MAX_CONTINUATIONS = 40
 
 // FunctionsHttpError → { status, message, runId, code }。context 是 fetch

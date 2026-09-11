@@ -144,7 +144,7 @@ export default function MarkupEditor({ title = '圖面標註', initialImage = nu
 
   return (
     // 遮罩與圓角向 confirm.jsx 的對話框基準看齊(28px + shadow-overlay + black/40 blur)
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4 print:hidden enter-fade" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-[var(--scrim)] backdrop-blur-[2px] flex items-center justify-center p-4 print:hidden enter-fade" onClick={onClose}>
       <div className="bg-[var(--surface)] rounded-[28px] border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] overflow-hidden w-full max-w-4xl max-h-[92vh] flex flex-col enter-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--border-2)]">
           <h3 className="text-title3 font-normal leading-snug text-[var(--text)]">{title}</h3>
@@ -205,7 +205,7 @@ export function MarkupThumb({ src, resolve, className = '' }) {
       </button>
       {open && url && (
         // 燈箱遮罩與陰影同樣走浮層基準,不用 Tailwind 原生 shadow-2xl
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-6 print:hidden enter-fade" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-[var(--scrim)] backdrop-blur-[2px] flex items-center justify-center p-6 print:hidden enter-fade" onClick={() => setOpen(false)}>
           <img src={url} alt="圖面標註" className="max-w-full max-h-full rounded-lg [box-shadow:var(--shadow-overlay)] enter-modal" />
         </div>
       )}

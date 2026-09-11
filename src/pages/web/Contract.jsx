@@ -34,11 +34,15 @@ import {
   uploadFilesToPackage, summarizePackageProgress, summarizeUploadBatch, packageStatusFromRuns,
   formatElapsed, takeSelectedFiles, isTerminalRun,
 } from '../../lib/packageUpload.js'
-import { loadPackageRuns, healStaleRuns, reclassifyProcessingRun } from '../../lib/packageRuns.js'
+import { loadPackageRuns, healStaleRuns, reclassifyProcessingRun, RUN_POLL_MS } from '../../lib/packageRuns.js'
 import { openDocumentVersionFile, downloadDocumentVersionFile } from '../../lib/documentFileAccess.js'
 
 // 統一窗口:PCCES 標單 XML 直接路由到 BOQ 匯入,其餘進契約包管線
 const isPccesXml = (file) => /\.xml$/i.test(file.name)
+
+// 「已處理 mm:ss」的重繪節拍。與 RUN_POLL_MS 是兩件事:那個打網路,這個只重算
+// 本機時間差,所以可以快得多;秒數顯示到秒,再快也看不出差別。
+const ELAPSED_TICK_MS = 1000
 
 export default function Contract() {
   const {
@@ -92,10 +96,8 @@ export default function Contract() {
   const runs = loadedPackageId === selectedPackageId ? storedRuns : []
   const runRequest = useRef(0)
   const packageRequest = useRef(0)
-  // 前端閘鏡像伺服器端 can_write(成員且非機關;admin 例外走 can.edit)——
-  // 監造上傳契約正是事務所場景的主流程(W10)
-  const canWriteContract = can.edit || currentUser?.org_type === 'supervisor'
-  const canUploadDocs = isPersistedProject && canWriteContract
+  // 前端閘鏡像伺服器端 can_write(規則的單一來源在 store.jsx 的 can.write)
+  const canUploadDocs = isPersistedProject && can.write
 
   // 鎖與解鎖成對:同步 check-and-set,釋放只由掛旗者在 finally 做
   const lockRun = (runId) => {
@@ -198,12 +200,12 @@ export default function Contract() {
   const progress = useMemo(() => summarizePackageProgress(runs), [runs])
   useEffect(() => {
     if (!selectedPackageId || progress.active === 0) return
-    const id = setInterval(() => reloadRuns(selectedPackageId), 5000)
+    const id = setInterval(() => reloadRuns(selectedPackageId), RUN_POLL_MS)
     return () => clearInterval(id)
   }, [selectedPackageId, progress.active, reloadRuns])
   useEffect(() => {
     if (progress.active > 0 && !tickRef.current) {
-      tickRef.current = setInterval(() => forceTick((n) => n + 1), 1000)
+      tickRef.current = setInterval(() => forceTick((n) => n + 1), ELAPSED_TICK_MS)
     }
     if (progress.active === 0 && tickRef.current) {
       clearInterval(tickRef.current); tickRef.current = null
@@ -528,7 +530,7 @@ export default function Contract() {
             onDragOver={(e) => { e.preventDefault(); if (canUploadDocs) setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => { e.preventDefault(); setDragOver(false); if (canUploadDocs) handleFiles(e.dataTransfer?.files, selectedPackage) }}
-            className={`border border-dashed rounded-xl px-5 py-5 flex items-start gap-3.5 transition-colors ${dragOver ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border-3,var(--border))] bg-[var(--surface-2)]'}`}
+            className={`border border-dashed rounded-xl px-5 py-5 flex items-start gap-3.5 transition-colors ${dragOver ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border)] bg-[var(--surface-2)]'}`}
           >
             <MSym name="cloud_upload" size={26} className="text-[var(--text-3)] shrink-0 mt-0.5" />
             <div className="min-w-0">
@@ -539,14 +541,14 @@ export default function Contract() {
                 可自動分析：文字型 PDF、DOCX、TXT。圖片、掃描頁、Excel 與舊版 Word 目前無法自動讀取內容；可保留原檔。PCCES XML 另匯入標單工項。
               </p>
               {!isPersistedProject && <p className="text-xs text-[var(--amber-text)] mt-1.5">Demo 模式不支援,請登入並選擇真實專案。</p>}
-              {isPersistedProject && !canWriteContract && <p className="text-xs text-[var(--text-3)] mt-1.5">目前為檢視模式；請由施工廠商、監造或具文件管理權限的成員上傳。</p>}
+              {isPersistedProject && !can.write && <p className="text-xs text-[var(--text-3)] mt-1.5">目前為檢視模式；請由施工廠商、監造或具文件管理權限的成員上傳。</p>}
             </div>
           </div>
         ) : (
           /* 狀態 B/C/D:上傳中/上傳結束的進度面板(逐檔列+總進度+結束摘要) */
           <UploadPanel batch={batch} busy={panelBusy} boqBusy={boqBusy} elapsed={elapsed}
             docsById={docsById} versionsById={versionsById}
-            canWriteContract={canWriteContract} busyRunIds={busyRunIds}
+            canWriteContract={can.write} busyRunIds={busyRunIds}
             onRetry={retryRun} onDismiss={dismissPanel}
             aiCount={aiCount} packageId={selectedPackageId} boqImported={workItemsSource === 'db'} />
         )}
@@ -584,7 +586,7 @@ export default function Contract() {
       <DocumentTable runs={runs} versionsById={versionsById} docsById={docsById}
         loading={packagesLoading || (runsLoading && loadedPackageId !== selectedPackageId)}
         error={runsError} blocked={!!packagesError} onRetryLoad={() => reloadRuns(selectedPackageId)}
-        canWriteContract={canWriteContract} busyRunIds={busyRunIds}
+        canWriteContract={can.write} busyRunIds={busyRunIds}
         onClassify={confirmClassification} onRetry={retryRun} onDelete={deleteDocument}
         onOpen={openVersionFile} onDownload={downloadVersionFile} />
     </div>

@@ -11,7 +11,7 @@
 // canvas 記憶體不足…)一律 fallback 原圖照傳——寧可多花流量,不能讓佐證傳不上去。
 
 export const MAX_EDGE_PX = 2000        // 長邊上限(見上方品質取捨)
-export const JPEG_QUALITY = 0.82
+const JPEG_QUALITY = 0.82
 export const SKIP_BELOW_BYTES = 300 * 1024 // 已經夠小的檔再壓只是白耗手機 CPU
 
 // 等比縮放後的目標尺寸(純邏輯,可測)。只縮不放大:小圖放大只會變糊變大。

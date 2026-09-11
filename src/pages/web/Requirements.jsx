@@ -31,6 +31,7 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { appSnackbar } from '../../components/snackbar.jsx'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
+import { RUN_POLL_MS } from '../../lib/packageRuns.js'
 import { localISODate } from '../../lib/dates.js'
 import { fmtDateTime } from '../../lib/format.js'
 import {
@@ -83,9 +84,10 @@ export default function Requirements() {
   // 登入身分決定檢視方(README:產品端不渲染身分切換器,demo 換角色重登即可)
   const viewerParty = ORG_TO_PARTY[currentUser?.org_type] || '廠商'
   // 「擷取有誤」落觀察事項,其 insert 政策仍是 can_write(機關唯讀)——鏡像它,
-  // 不渲染會被 RLS 擋下的假按鈕。義務的標記完成/掛佐證自 migration
-  // 20260825120000 起改為「只看歸屬」(機關也能標自己的),不再吃 can_write。
-  const canReport = can.edit || currentUser?.org_type === 'supervisor'
+  // 不渲染會被 RLS 擋下的假按鈕(規則的單一來源在 store.jsx 的 can.write)。
+  // 義務的標記完成/掛佐證自 migration 20260825120000 起改為「只看歸屬」
+  // (機關也能標自己的),不再吃 can_write。
+  const canReport = can.write
 
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [busy, setBusy] = useState('')
@@ -121,7 +123,7 @@ export default function Requirements() {
   const analyzing = runs.some((r) => ['pending', 'processing'].includes(r.status))
   useEffect(() => {
     if (!analyzing) return
-    const timer = setInterval(() => { reloadEnrich(); reloadObligations?.() }, 5000)
+    const timer = setInterval(() => { reloadEnrich(); reloadObligations?.() }, RUN_POLL_MS)
     return () => clearInterval(timer)
   }, [analyzing, reloadEnrich, reloadObligations])
 

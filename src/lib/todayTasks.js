@@ -19,7 +19,7 @@ import { acceptanceAlerts, deriveAcceptance, ACCEPTANCE_STAGE_ORGS } from './acc
 import { itpAlerts } from './itp.js'
 
 // 專案角色只有三方(D-002)。design 不是角色,設計釋疑由監造轉呈。
-export const ORG_SIDES = Object.freeze(['contractor', 'supervisor', 'owner'])
+const ORG_SIDES = Object.freeze(['contractor', 'supervisor', 'owner'])
 
 // 契約義務 responsible → 專案角色。精確白名單:null、空字串、其他與未知文字
 // 一律視為「未指定」,不歸給任何角色。伺服器 collectOpenBallItems 目前是
@@ -29,7 +29,7 @@ export const RESPONSIBLE_SIDE = Object.freeze({ 廠商: 'contractor', 監造: 's
 // 期限「已提送」在契約重點頁完成(W11 遷入;狀態鈕吃 can_write 鏡像):
 // 廠商與監造都能對自己責任的期限動作;機關唯讀(can_write 擋機關),
 // 機關責任的期限不進 mine——做不到的事不製造假待辦。
-export const OBLIGATION_ACTIONABLE_SIDES = Object.freeze(['contractor', 'supervisor'])
+const OBLIGATION_ACTIONABLE_SIDES = Object.freeze(['contractor', 'supervisor'])
 
 // 「等待對方」只列與登入角色有直接對手關係的類型(W8-2A §3.2、§5-7)——
 // 首頁不是全案未結項的傾印場,列完所有別人的事只會讓頁面再變長。

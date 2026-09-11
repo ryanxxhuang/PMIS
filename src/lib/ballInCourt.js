@@ -42,7 +42,7 @@ export function inspectionBall(i) {
   return { who: 'done', label: i.status } // 合格 / 不合格
 }
 
-export function observationBall(o) {
+function observationBall(o) {
   if (o.status === '待處理') return { who: o.assigned_to || 'contractor', label: '待處理' }
   return { who: 'done', label: o.status } // 已處理 / 轉缺失
 }
@@ -65,7 +65,7 @@ export function tallyBalls({ rfis = [], submittals = [], valuations = [], defect
 // 原本以「球在機關」判斷,結果廠商的「待廠商請款」被導到估驗頁——那頁沒有請款日欄位,
 // 使用者點進去找不到可做的事(W8-2A §1.4-1)。
 const VALUATION_PAGE_LABELS = new Set(['待廠商送審', '待監造核定'])
-export function valuationRoute(v) {
+function valuationRoute(v) {
   return VALUATION_PAGE_LABELS.has(valuationBall(v).label) ? '/valuation' : '/payments'
 }
 

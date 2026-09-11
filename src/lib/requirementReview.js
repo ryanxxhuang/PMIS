@@ -3,8 +3,6 @@
 // decides what the reviewer sees - default queue scope, ordering, filters,
 // source/citation labels - lives here so it is deterministic and testable.
 
-export const REVIEW_DECISIONS = Object.freeze(['approve', 'reject', 'supersede'])
-
 // 兩個契約頁共用同一份事實判斷。模型 confidence 不參與；自動確認也不代表
 // 完全正確。缺少核對欄位時保留未知，不可用 undefined?.length 當核對通過。
 export function requirementVerification(requirement) {
@@ -96,7 +94,7 @@ export function inDefaultReviewScope(requirement, currentRunIds) {
 // 頻率維度(檢索頁篩選):循環義務照 frequency_type 分桶,非循環分「一次性」
 // (有觸發時點)與「無明確時點」。標籤表即抽取引擎的完整頻率值域
 // (requirementExtraction.ts 的 FREQUENCY_TYPES);未知值原樣顯示。
-export const FREQUENCY_LABELS = Object.freeze({
+const FREQUENCY_LABELS = Object.freeze({
   daily: '每日', weekly: '每週', monthly: '每月', quarterly: '每季', yearly: '每年',
 })
 export function requirementFrequencyKey(requirement) {

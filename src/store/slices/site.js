@@ -2,7 +2,7 @@
 // 施工日誌掛在標單工項上(數量回報)→ dbMode;工安紀錄不依賴標單 → isPersistedProject,
 // 真專案匯標單前也要寫 DB(否則只進記憶體,重新整理就消失)。
 import { useState, useCallback } from 'react'
-import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
+import { supabase, isSupabaseConfigured, SIGNED_URL_TTL_S } from '../../lib/supabase.js'
 import { loadSiteLogsFromDB, imageToBase64 } from '../db.js'
 import { compressImage } from '../../lib/imageCompress.js'
 import { readPhotoExif } from '../../lib/exifRead.js'
@@ -90,7 +90,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     if (!data?.length) return []
     // 私有 bucket → 批次產生簽名 URL 供 <img> 顯示
     const { data: signed } = await supabase.storage.from('photos')
-      .createSignedUrls(data.map((p) => p.storage_path), 3600)
+      .createSignedUrls(data.map((p) => p.storage_path), SIGNED_URL_TTL_S)
     const urlByPath = new Map((signed || []).map((s) => [s.path, s.signedUrl]))
     return data.map((p) => ({ ...p, url: urlByPath.get(p.storage_path) || null }))
   }, [dbMode])
@@ -171,7 +171,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     // 簽名 URL 也有批次上限,照片分頁後跟著分批簽
     const urlByPath = new Map()
     for (const batch of chunked(data.map((p) => p.storage_path))) {
-      const { data: signed } = await supabase.storage.from('photos').createSignedUrls(batch, 3600)
+      const { data: signed } = await supabase.storage.from('photos').createSignedUrls(batch, SIGNED_URL_TTL_S)
       for (const s of signed || []) urlByPath.set(s.path, s.signedUrl)
     }
     return data.map((p) => ({ ...p, url: urlByPath.get(p.storage_path) || null, work_item_key: wiMaps.idToKey.get(p.work_item_id) || null }))

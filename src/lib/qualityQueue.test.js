@@ -4,7 +4,7 @@
 // 3) AI 草稿(agent_actions)與未核定 Requirement 是「結構上進不來」——函式根本不收
 //    這兩種輸入,塞了也不改變輸出;這是紅線的保證方式,不是靠呼叫端自律。
 import { describe, it, expect } from 'vitest'
-import { buildQualityQueue, QUALITY_QUEUE_LIMIT } from './Quality.jsx'
+import { buildQualityQueue, QUALITY_QUEUE_LIMIT } from './qualityQueue.js'
 
 // today 固定注入:純函式不讀時鐘,逾期天數才能寫死斷言
 const TODAY = '2026-08-15'

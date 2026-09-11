@@ -2,12 +2,13 @@
 // W3-2(D-008)薄入口定位:與 /agent 是同一個 Agent(同 runtime/persona/工具),
 // 面板每次打開都是新對話(不帶 history,長對話請開完整頁);真專案不需先匯標單
 // (對齊 W2-3——文件/成員/期限問題不依賴 BOQ)。列印頁隱藏;行動版為全寬 bottom sheet。
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 import { useStore } from '../store.jsx'
 import { useAssistantData } from '../lib/assistantData.js'
 import { displayAgentRole, AGENT_LABEL } from '../lib/agentRole.js'
+import { useEscape } from '../lib/useEscape.js'
 import CopilotChat from './CopilotChat.jsx'
 
 // 自訂 AI 標記:對話泡泡 + 靈感火花(比通用 Sparkles 更有識別度、更「設計感」)。
@@ -66,13 +67,7 @@ export default function CopilotFab() {
   const available = isPersistedProject || demoMode
   const [open, setOpen] = useState(false)
 
-  // Esc 關閉
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+  useEscape(open, () => setOpen(false))
 
   if (!available) return null // 尚未選定專案(或未設 Supabase 又非 demo)時不顯示
   // 批 B UX:agent 對話功能關閉時整顆 FAB 藏起來(面板走 agent-run),

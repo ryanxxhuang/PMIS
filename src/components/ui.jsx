@@ -111,19 +111,6 @@ export function BallChip({ ball }) {
   return <Badge color={BALL_COLOR[ball.who] || 'slate'}>{ball.who === 'done' ? '✓' : '⏳'} {ball.label}</Badge>
 }
 
-// Pick a chip color from a status string
-export function StatusBadge({ status }) {
-  const map = {
-    Review: 'amber', 'Not Started': 'slate', Submitted: 'blue', 'Submitted for Review': 'blue',
-    'Under Review': 'amber', Approved: 'green', Closed: 'green', Rejected: 'red', Overdue: 'red',
-    Open: 'red', 'In Progress': 'amber', '已上傳': 'slate', 'AI 已解析': 'purple',
-    '草稿': 'slate', '已發布': 'green', '已送出': 'blue', '已產出': 'green', '施工中': 'blue',
-    '審核中': 'amber', '核准': 'green', '核准(具註記)': 'green', '退回修正': 'red', '駁回': 'red', '已結案': 'green',
-    '待回覆': 'amber', '已回覆': 'blue',
-  }
-  return <Badge color={map[status] || 'slate'}>{status}</Badge>
-}
-
 // ── 狀態圓點 ───────────────────────────────────────────────────────────────
 // 取代各頁自寫的 w-2 h-2 rounded-full bg-[…]。色鍵沿用 badge(slate/blue/green/amber/red/purple)。
 // 圓點是「圖形」,門檻是 WCAG 1.4.11 的 3:1 而非文字的 4.5:1;但淺灰也過不了 3:1,
@@ -308,15 +295,6 @@ export function Field({ label, children, hint, required = false }) {
   )
 }
 
-export function SourceTag({ doc, page, section }) {
-  return (
-    <div className="text-footnote text-[var(--text-2)] bg-[var(--bg)] border border-[var(--border-2)] rounded-lg px-2.5 py-1.5">
-      <MSym name="description" size={12} className="inline -mt-0.5 mr-1 text-[var(--text-3)]" /><span className="font-medium text-[var(--text)]">{doc}</span> · {page}
-      {section && <span className="block text-[var(--text-3)] mt-0.5">{section}</span>}
-    </div>
-  )
-}
-
 // 空狀態:置中 40px inbox 圖示+說明。children=說明文字,
 // 呼叫端可自帶連結/按鈕;title 選填(多數空狀態一句話就夠)。
 export function Empty({ icon = 'inbox', title, children }) {
@@ -395,8 +373,8 @@ export function SortableTh({ label, field, sort, onSort, numeric = false, align 
 // 篩選 chip:未套用=白底+前置圖示(filter_list/calendar_month);已套用=淺藍底
 // 深藍字+尾端 close。class 字面值與 PageTabs 的 CHIP_BASE/CHIP_ON/CHIP_OFF 對齊
 // ——刻意複製而非 import:不想再加深 ui↔PageTabs 的耦合,改 chips 皮時兩處一起動。
-// 本輪只動本檔:這裡的 text-body 與 PageTabs 仍寫著的 text-[13px] 等值(13px),
-// 視覺沒有漂移;PageTabs 換皮那輪再把它的字面值也換成階梯名。圓角維持 8px。
+// 兩邊現在都是 text-body(PageTabs 的 CHIP_BASE 已換成階梯名),字面值逐字對齊。
+// 圓角維持 8px。
 // 同一顆 button 負責套用與移除(aria-pressed 供報讀器分辨),close 只是視覺提示。
 export function FilterChip({ label, icon = 'filter_list', active = false, onToggle }) {
   return (

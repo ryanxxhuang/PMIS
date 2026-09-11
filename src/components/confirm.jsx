@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { MSym } from './icons.jsx'
 import { Button, Input, Textarea } from './ui.jsx'
+import { useEscape } from '../lib/useEscape.js'
 
 let hostSetter = null
 
@@ -49,19 +50,20 @@ export function ConfirmHost() {
     // 無輸入欄時聚焦確認鈕 → Enter 直接確認、Tab 可到取消
     if (req && !req.requireText && !req.prompt) confirmBtn.current?.focus()
   }, [req])
-  // Esc 與 Tab 掛 window 層:對話框根 div 不可聚焦,使用者一點到標題文字焦點就落到
-  // body,綁在 div 的 onKeyDown 收不到 → Esc 死路。Tab 在此做最小 focus trap
-  // （首尾循環）,擋住焦點跑進 aria-modal 蓋住的背景頁面。
+  // Esc 取消走共用的 useEscape(掛 window 層的理由見該檔:對話框根 div 不可聚焦,
+  // 使用者一點到標題文字焦點就落到 body,綁在 div 的 onKeyDown 收不到 → Esc 死路)。
+  useEscape(!!req, () => {
+    if (!req) return
+    setReq(null)
+    req.resolve(req.prompt ? null : false)
+    const el = lastFocused.current
+    if (el?.isConnected) el.focus()
+  })
+  // Tab 在此做最小 focus trap（首尾循環）,擋住焦點跑進 aria-modal 蓋住的背景頁面。
+  // 同樣掛 window 層,理由與 Esc 相同。
   useEffect(() => {
     if (!req) return
-    const cancel = () => {
-      setReq(null)
-      req.resolve(req.prompt ? null : false)
-      const el = lastFocused.current
-      if (el?.isConnected) el.focus()
-    }
     const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); cancel(); return }
       if (e.key !== 'Tab') return
       // 取消鈕永遠存在,nodes 不會是空的;確認鈕 disabled 時自然被排除在循環外
       const nodes = dialogRef.current?.querySelectorAll(
@@ -101,7 +103,7 @@ export function ConfirmHost() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print:hidden" role="dialog" aria-modal="true" aria-label={title} onKeyDown={onKeyDown}>
-      <div aria-hidden="true" className="absolute inset-0 bg-black/40 backdrop-blur-[2px] enter-fade" onClick={() => close(false)} />
+      <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-[2px] enter-fade" onClick={() => close(false)} />
       {/* Workspace 對話框:28px 圓角、24px 內距、標題 19px/400 配 24px 圖示(README) */}
       <div ref={dialogRef} className="relative bg-[var(--surface)] text-[var(--text)] rounded-[28px] border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] w-full max-w-sm p-6 enter-modal">
         <div className="flex items-start gap-3">

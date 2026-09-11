@@ -20,7 +20,7 @@ export const TXT_EXTRACTION_METHOD = 'txt_text_unpaginated'
 // Below this normalized length a page has no verifiable content.
 export const MIN_PAGE_TEXT_LENGTH = 20
 // DOCX storage segment size (characters, before normalization).
-export const DOCX_SEGMENT_LENGTH = 4000
+const DOCX_SEGMENT_LENGTH = 4000
 
 // rawPages: per-page arrays of pdf.js text items ({ str, hasEOL }). Items are
 // joined preserving pdf.js end-of-line markers; section/clause numbering in

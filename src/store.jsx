@@ -15,7 +15,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { createTrackedContext } from './store/tracked.jsx'
 import { project } from './data/seed.js'
 import { buildDemoData } from './data/demoSeed.js'
-import { supabase, isSupabaseConfigured } from './lib/supabase.js'
+import { supabase, isSupabaseConfigured, SIGNED_URL_TTL_S } from './lib/supabase.js'
 import { applyApprovedChangeOrders, approvedNetAmount } from './lib/changeOrders.js'
 import { compressImage } from './lib/imageCompress.js'
 import {
@@ -64,6 +64,10 @@ export function StoreProvider({ children }) {
   // 不會被自己的 org_type 卡死；「正式模式」開啟後 override 關閉,人人依 org 行事,
   // admin 只保留專案管理（成員/設定/刪除）。demo 模式刻意不套用 admin 例外。
   // (伺服器端同規則:admin_override()+guard trigger,見 migrations formal_mode 段)
+  //
+  // ⚠️ 這裡整包只是 UX,不是安全邊界(CLAUDE.md §4)。收斂到這一處的目的是「規則
+  // 只有一份」——頁面各自抄一次 org_type 比對,改 RLS 時一定會漏掉某一頁,漏掉的
+  // 那頁會渲染出被伺服器擋下的假按鈕。真正的授權永遠在 RLS／guard trigger。
   const can = useMemo(() => {
     const org = currentUser?.org_type || 'contractor'
     const isAdmin = !demoMode && myMemberRoles[currentProjectId] === 'admin'
@@ -76,6 +80,14 @@ export function StoreProvider({ children }) {
       review: override || org === 'supervisor',    // 變更設計受理審查/退回（監造；核准前必經審核中）
       oversee: org === 'owner',                    // 機關監督視角（首頁行動中心＝核定/撥款）
       readonly: !override && org === 'owner',
+      // 鏡像 DB 的 can_write():契約文件、契約重點補登、觀察事項 insert 都吃這條。
+      // 與 edit 的差別:edit 是「日常填報」(廠商),write 多了監造——事務所場景裡
+      // 監造上傳契約與補登重點正是主流程(W10)。原本三頁各自寫
+      // 「can.edit || org_type === 'supervisor'」,規則散成三份。
+      write: override || org === 'contractor' || org === 'supervisor',
+      // 鏡像 DB 的 can_review_requirement():機關/監造。刻意沒有 admin 例外——
+      // 技術管理 ≠ 契約審核權(RequirementsReview 原註)。
+      reviewRequirement: ['owner', 'supervisor'].includes(org),
       override,                                    // 看得到全部側欄工具/路由（角色化導覽的例外）
       admin: isAdmin,                              // 專案管理：成員/設定/刪除（不受正式模式影響）
     }
@@ -98,7 +110,7 @@ export function StoreProvider({ children }) {
 
   const resolveMarkup = useCallback(async (path) => {
     if (!path || path.startsWith('data:')) return path
-    const { data } = await supabase.storage.from('photos').createSignedUrl(path, 3600)
+    const { data } = await supabase.storage.from('photos').createSignedUrl(path, SIGNED_URL_TTL_S)
     return data?.signedUrl || null
   }, [])
 

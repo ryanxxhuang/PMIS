@@ -21,10 +21,12 @@ import { classifyDocument, shouldExtractRequirements, AUTO_ACCEPT_THRESHOLD } fr
 import { runRequirementExtraction, extractionSuccessMessage, extractionCoverageWarning } from './extractRequirements.js'
 
 export const UPLOAD_CONCURRENCY = 2
+// export 是為了可測性:packageRuns.test.js 用它推算「剛好過期／還沒過期」的
+// started_at,測試裡再寫死一次 20 分鐘就會在改門檻時靜默失準。
 export const PROCESSING_STALE_MS = 20 * 60 * 1000
 // 單檔上限:對齊 Supabase Dashboard「Storage → Upload file size limit」的設定值,
 // 調整那邊要同步改這裡(W14 建議值 300MB;預檢在前端先擋,伺服器超限另有特判訊息)
-export const MAX_UPLOAD_BYTES = 300 * 1024 * 1024
+const MAX_UPLOAD_BYTES = 300 * 1024 * 1024
 const PAGE_INSERT_BATCH = 200
 const FIRST_TEXT_SAMPLE_PAGES = 3
 
@@ -69,15 +71,6 @@ export const STAGE_LABELS = Object.freeze({
   completed: '已完成',
   failed: '處理失敗',
   unsupported: '尚未支援內容分析',
-})
-
-export const RUN_STATUS_LABELS = Object.freeze({
-  pending: '等待處理',
-  processing: '處理中',
-  completed: '已完成',
-  partial: '部分完成',
-  failed: '處理失敗',
-  unsupported: '已收到',
 })
 
 // 原始檔是否真的躺在 bucket 裡。version.storage_path 在 INSERT 時就寫入,

@@ -4,7 +4,7 @@
 // 基準日講出不同名字。回傳 Fragment,排版容器(flex-wrap/grid)由呼叫端決定。
 import { Field, Input } from './ui.jsx'
 
-export const ANCHOR_FIELDS = [
+const ANCHOR_FIELDS = [
   ['award_date', '決標日'],
   ['notice_date', '接獲開工通知日'],
   ['commencement_date', '開工日'],

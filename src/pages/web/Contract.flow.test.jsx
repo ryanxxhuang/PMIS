@@ -30,7 +30,8 @@ beforeEach(() => {
   state.db.setTable('contract_packages', [pkg])
   state.db.setTable('project_parties', [{ id: 'party1', project_id: 'p1', party_type: 'contractor', display_name: '施工單位' }])
   state.store = { currentProject: { project_id: 'p1' }, isSupabaseConfigured: true, isPersistedProject: true,
-    currentUser: { org_type: 'contractor', user_id: 'u1' }, can: { edit: true },
+    // can.write = 前端鏡像 DB can_write();規則本體在 store.jsx,這裡只給結果
+    currentUser: { org_type: 'contractor', user_id: 'u1' }, can: { write: true },
     currentProjectMembership: { party_type: 'contractor', project_party_id: 'party1' },
     reloadMembership: vi.fn(), reloadObligations: vi.fn(), workItemsSource: 'empty' }
   container = document.createElement('div'); document.body.append(container); root = createRoot(container)
@@ -91,7 +92,7 @@ it('完成但覆蓋不完整的文件顯示部分整理，不顯示已完成', a
 })
 
 it('機關檢視不顯示不可用的上傳按鈕，也不寫處理狀態', async () => {
-  state.store.currentUser.org_type = 'owner'; state.store.can.edit = false
+  state.store.currentUser.org_type = 'owner'; state.store.can.write = false
   seedResult()
   await render()
   expect(container.textContent).toContain('主辦機關視角')

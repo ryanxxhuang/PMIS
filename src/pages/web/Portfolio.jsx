@@ -11,24 +11,7 @@ import { parseLocalDate } from '../../lib/dates.js'
 import { fmtAmount as fmt } from '../../lib/format.js'
 import { acceptanceStageSummary } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
-
-
-// 跨案例外彙總:機關承辦進來第一眼要看的是「哪裡出事」,不是逐卡自己加總。
-// 純函式抽出來是為了能單測——卡片形狀有三種來源(本案即時計算/demo 靜態/RPC),
-// 欄位可能缺,少一張卡就會讓整條摘要帶算錯,所以一律當可選欄位處理。
-export function portfolioExceptions(cards = []) {
-  const list = (cards || []).filter(Boolean)
-  const sum = (pick) => list.reduce((acc, c) => acc + (Number(pick(c)) || 0), 0)
-  return {
-    projects: list.length,
-    openDefects: sum((c) => c.openDefects),
-    pendingInspections: sum((c) => c.pendingInspections),
-    pendingCOs: sum((c) => c.pendingCOs),
-    // 沒進驗收程序的案子 acceptance 是 null;已結案(finished)不算「驗收中」
-    acceptanceActive: list.filter((c) => c.acceptance && !c.acceptance.finished).length,
-    acceptanceOverdue: list.filter((c) => c.acceptance?.overdue).length,
-  }
-}
+import { portfolioExceptions } from '../../lib/portfolioExceptions.js'
 
 export default function Portfolio() {
   const {

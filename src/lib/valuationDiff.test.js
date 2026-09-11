@@ -4,8 +4,8 @@
 // 2) 只計 cum>0 的項:沒計價的工項不進任何計數(決策列不掃整棵樹的前提)。
 // 3) 純計數不動金額——函式輸出只有件數與 key,沒有任何金額欄位可被改寫。
 import { describe, it, expect } from 'vitest'
-import { summarizeValuationDiff } from './Valuation.jsx'
-import { OVER_TOL } from '../../lib/evidence.js'
+import { summarizeValuationDiff } from './valuationDiff.js'
+import { OVER_TOL } from './evidence.js'
 
 // 佐證形狀對齊 collectEvidence 的回傳(只取本函式會讀的欄位)
 const ev = (loggedTotal = 0, counts = {}) => ({

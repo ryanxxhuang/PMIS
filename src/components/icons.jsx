@@ -131,8 +131,6 @@ const ICONS = {
 // 「畫一個中性圓圈 + dev 警告」——版面不會塌,但看得出來是缺的。
 // 刻意不用 Shield 之類長得像真圖示的東西當退路:那會讓漏對映看起來正常
 // (實測就發生過 shield 漏對映卻剛好畫出盾牌,只有 console 警告才抓得到)。
-export const ICON_NAMES = Object.keys(ICONS)
-
 export function MSym({ name, size = 20, fill = false, className = '', style, ...props }) {
   const Icon = ICONS[name] || Circle
   if (!ICONS[name] && import.meta.env?.DEV) {

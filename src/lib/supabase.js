@@ -30,6 +30,13 @@ const authStorage = {
   },
 }
 
+// 私有 bucket 簽名 URL 的有效期(秒)。全站四個簽名點(照片清單、跨工項照片、
+// 專案文件開檔、標註底圖)共用同一個值:URL 會被貼進 <img src>、開新分頁、
+// 存進佐證包預覽,四處各寫一個 3600 的時候調整只會改到其中一處,剩下的靜默不一致。
+// 1 小時 = 「看完一整份佐證包不會中途失效」與「外流的連結不會長期可用」的折衷;
+// 真正的授權是 storage policy,這個 TTL 只是縮短既簽出連結的暴露窗口。
+export const SIGNED_URL_TTL_S = 3600
+
 // 尚未設定 Supabase 時為 null，App 會 fallback 回 prototype 模式，不會壞掉
 export const supabase = url && anonKey
   ? createClient(url, anonKey, { auth: { storage: authStorage } })

@@ -9,22 +9,14 @@
 import { forwardRef, useEffect, useRef } from 'react'
 import { MSym } from './icons.jsx'
 import { Button } from './ui.jsx'
+import { useEscape } from '../lib/useEscape.js'
 
 // 抽屜與 Modal 共用:開啟時把焦點帶進面板(aria-modal 沒有焦點管理=報讀器仍停在
-// 遮罩後的清單,W8-5 F2 同一課)、Esc 關閉掛 window 層(焦點落到 body 時 div 的
-// onKeyDown 收不到)。onClose 走 ref:呼叫端多半傳 inline 箭頭函式,不能讓它進依賴
-// 害每次 render 都重新 focus。
+// 遮罩後的清單,W8-5 F2 同一課)。Esc 關閉走共用的 useEscape(理由見該檔)。
 function useDismissable(open, onClose) {
   const ref = useRef(null)
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
-  useEffect(() => {
-    if (!open) return undefined
-    ref.current?.focus()
-    const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current?.() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+  useEscape(open, onClose)
+  useEffect(() => { if (open) ref.current?.focus() }, [open])
   return ref
 }
 
@@ -35,9 +27,9 @@ export function DetailDrawer({ open, onClose, label, children }) {
   if (!open) return null
   return (
     <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={label}>
-      <div className="absolute inset-0 bg-[rgba(32,33,36,.4)] enter-fade" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--scrim)] enter-fade" onClick={onClose} />
       <div ref={ref} tabIndex={-1}
-        className="absolute right-0 top-0 h-full w-[min(440px,92vw)] max-md:w-full bg-[var(--surface)] overflow-y-auto [box-shadow:-2px_0_16px_rgba(32,33,36,.16)] outline-none" aria-live="polite">
+        className="absolute right-0 top-0 h-full w-[min(440px,92vw)] max-md:w-full bg-[var(--surface)] overflow-y-auto [box-shadow:var(--shadow-drawer)] outline-none" aria-live="polite">
         <div className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border-2)] px-3 py-2 flex items-center gap-2">
           {/* min-h-11 不帶 max-md:抽屜本身就是 <lg 的觸控版面,平板也要 44px */}
           <Button variant="ghost" size="md" className="min-h-11" onClick={onClose}>
@@ -61,7 +53,7 @@ export function ModalShell({ open, onClose, title, label = title, size = 'md', c
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={label}>
-      <div className="absolute inset-0 bg-[rgba(32,33,36,.4)] enter-fade" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--scrim)] enter-fade" onClick={onClose} />
       <div ref={ref} tabIndex={-1}
         className={`relative w-full ${MODAL_SIZES[size] || MODAL_SIZES.md} max-h-[90vh] overflow-y-auto bg-[var(--surface)] border border-[var(--border-card)] rounded-2xl [box-shadow:var(--shadow-overlay)] p-5 outline-none enter-modal`}>
         <div className="flex items-center justify-between gap-3 mb-2">

@@ -10,6 +10,21 @@ import { taipeiToday } from '../../lib/dates.js'
 import { mutationOutcome } from './billing.js'
 import { fileToBase64, extractContractText } from '../db.js'
 
+// ── 餵給 AI 的契約重點上限 ────────────────────────────────────────────────
+// 三個 AI 草稿功能都會先撈「已核定/待確認的 requirements」當上下文。這裡的上限是
+// 靜默截斷(撈不到的條文不會有任何提示),所以值必須是刻意的、而且看得出為什麼:
+//
+// - 撈進來的條文會整段進 prompt,token 成本與延遲跟條數線性成長;
+// - 超過幾十條之後模型的注意力反而被稀釋,草稿品質下降而不是上升;
+// - 三個功能的上限不同,因為它們的輸入量不同——送審審查另外還塞一整份文件全文。
+//
+// 紅線:這三條都只產「草稿」,人必須逐項覆核;截斷造成的遺漏由人補,
+// 不是靠調大數字解決(真正的解法是先用工項/類型縮小候選,見 SUBMITTAL_REVIEW_*)。
+const SUBMITTAL_REVIEW_REQ_LIMIT = 60   // 先撈 60 條,再依工項關聯排序後只取前 25 條進 prompt
+const SUBMITTAL_REVIEW_PROMPT_REQS = 25 // 實際進 prompt 的條數(與上面同一條式子的兩端)
+const SUBMITTAL_DOC_REVIEW_REQ_LIMIT = 30 // 另外還要塞 24k 字的文件全文,條文得讓位
+const RFI_REPLY_REQ_LIMIT = 25          // 疑義回覆只需要「與這個問題相關」的少數條文
+
 // 各類送審的「通用審查要點」——demo 或尚未解析契約規範時的回退清單(標「通用」)。
 const SUBMITTAL_REVIEW_POINTS = {
   材料設備: ['出廠證明 / 品質保證書齊備', 'CNS 或契約指定規範之試驗報告', '型錄規格與契約規範相符', '樣品經核可(如契約要求)', '進場數量與需求/估驗相符'],
@@ -124,14 +139,14 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     const { data: reqs } = await supabase.from('requirements')
       .select('id,title,requirement_type,acceptance_criteria,evidence_requirement,status')
       .eq('project_id', pid).in('status', ['approved', 'needs_review'])
-      .in('requirement_type', ['submittal', 'test', 'evidence', 'checklist', 'inspection', 'report', 'other']).limit(60)
+      .in('requirement_type', ['submittal', 'test', 'evidence', 'checklist', 'inspection', 'report', 'other']).limit(SUBMITTAL_REVIEW_REQ_LIMIT)
     let relevant = reqs || []
     if (submittal.work_item_id && relevant.length) {
       const { data: links } = await supabase.from('requirement_work_items').select('requirement_id').eq('work_item_id', submittal.work_item_id)
       const linkedIds = new Set((links || []).map((l) => l.requirement_id))
       const linked = relevant.filter((r) => linkedIds.has(r.id))
-      relevant = (linked.length ? [...linked, ...relevant.filter((r) => !linkedIds.has(r.id))] : relevant).slice(0, 25)
-    } else relevant = relevant.slice(0, 25)
+      relevant = (linked.length ? [...linked, ...relevant.filter((r) => !linkedIds.has(r.id))] : relevant).slice(0, SUBMITTAL_REVIEW_PROMPT_REQS)
+    } else relevant = relevant.slice(0, SUBMITTAL_REVIEW_PROMPT_REQS)
     const payload = {
       project_id: pid, // 批 B:伺服器閘門(openAiGate)驗成員資格與功能開關
       submittal: { title: submittal.title, category: submittal.category, attachment_note: submittal.attachment_note, revision: submittal.revision },
@@ -180,7 +195,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     const pid = currentProject.project_id
     const { data: reqs } = await supabase.from('requirements')
       .select('title,acceptance_criteria,evidence_requirement,status')
-      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(30)
+      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(SUBMITTAL_DOC_REVIEW_REQ_LIMIT)
     const body = {
       project_id: pid, // 批 B:伺服器閘門(openAiGate)驗成員資格與功能開關
       submittal: { title: submittal.title, category: submittal.category },
@@ -210,7 +225,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     const pid = currentProject.project_id
     const { data: reqs } = await supabase.from('requirements')
       .select('title,acceptance_criteria,evidence_requirement,status')
-      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(25)
+      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(RFI_REPLY_REQ_LIMIT)
     const payload = {
       project_id: pid, // 批 B:伺服器閘門(openAiGate)驗成員資格與功能開關
       rfi: { title: rfi.title, question: rfi.question, cost_impact: rfi.cost_impact, schedule_impact: rfi.schedule_impact },

@@ -22,6 +22,12 @@ import { runRequirementExtraction, extractionSuccessMessage, extractionCoverageW
 
 const RUNS = 'document_processing_runs'
 
+// 處理中時重讀 run 的間隔。沒有 realtime 訂閱,靠輪詢;5 秒是「使用者盯著進度條
+// 看不出卡住」與「一份文件解析 1-3 分鐘不要打幾百次 PostgREST」的折衷。
+// 專案文件頁(Contract)與履約時程頁(Requirements)輪的是同一批 run,共用同一個值——
+// 兩頁各寫一個 5000 的時候,調快一邊會讓兩頁的進度看起來不同步。
+export const RUN_POLL_MS = 5000
+
 // 回傳 { runs, docs, versions, aiCount }。runs 已合併「最近一次完成的擷取」的涵蓋率
 // 警示(每個文件版本各自看最近一次 completed run——與契約兩頁 latestCompletedRunIds
 // 同一判定,不能讓另一份成功文件蓋掉缺漏警示);aiCount=本包已歸檔的契約重點數。

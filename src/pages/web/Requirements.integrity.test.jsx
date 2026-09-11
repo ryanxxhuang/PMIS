@@ -29,7 +29,7 @@ beforeEach(() => {
   state.db = createFakePostgrest()
   state.store = {
     currentProject: { project_id: 'p1' }, project: {}, isPersistedProject: true,
-    currentUser: { org_type: 'supervisor' }, can: { edit: true },
+    currentUser: { org_type: 'supervisor' }, can: { write: true },
     workItems: { items: [] }, obligations: [], submittals: [], reloadObligations: vi.fn(),
   }
   container = document.createElement('div')

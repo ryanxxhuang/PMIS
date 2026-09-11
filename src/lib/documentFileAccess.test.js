@@ -24,7 +24,7 @@ const h = vi.hoisted(() => {
     },
   }
 })
-vi.mock('./supabase.js', () => ({ supabase: h.client, isSupabaseConfigured: true }))
+vi.mock('./supabase.js', () => ({ supabase: h.client, isSupabaseConfigured: true, SIGNED_URL_TTL_S: 3600 }))
 
 import { downloadDocumentVersionFile, openDocumentVersionFile } from './documentFileAccess.js'
 

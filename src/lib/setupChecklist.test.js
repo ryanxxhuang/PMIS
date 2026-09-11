@@ -3,7 +3,7 @@
 // 永遠不看 Requirement 的待審／核定數。那 106 筆是 AI 的產出,不是人要清空的
 // 初始化門檻,也不得擋住開啟正式模式。
 import { describe, it, expect } from 'vitest'
-import { buildSetupSteps } from './Dashboard.jsx'
+import { buildSetupSteps } from './setupChecklist.js'
 
 const ALL_ORGS = new Set(['contractor', 'supervisor', 'owner'])
 const snapOf = (over = {}) => ({

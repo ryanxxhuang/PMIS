@@ -2,7 +2,7 @@
 // 欄位不齊是常態:RPC 尚未回來時陣列裡只有本案,demo 卡沒有 acceptance。
 // 這支測試釘住「少欄位不能炸、也不能算錯」——摘要帶算錯比不顯示更糟。
 import { describe, it, expect } from 'vitest'
-import { portfolioExceptions } from './Portfolio.jsx'
+import { portfolioExceptions } from './portfolioExceptions.js'
 
 const currentCard = {
   isCurrent: true, openDefects: 3, pendingInspections: 2, pendingCOs: 1,

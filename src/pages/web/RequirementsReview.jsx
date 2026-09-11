@@ -27,9 +27,10 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
-import { extractionCoverageWarnings } from '../../lib/extractRequirements.js'
 import { fmtDateTime } from '../../lib/format.js'
 import { useContractEnrichment } from '../../lib/useContractEnrichment.js'
+import { requirementsIntro } from '../../lib/requirementsIntro.js'
+import ReviewActions from '../../components/requirements/ReviewActions.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import {
   REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
@@ -41,57 +42,6 @@ import {
 
 const PAGE_SIZE = 50
 const DEFAULT_FILTERS = { q: '', status: 'all', type: '', phase: '', freq: '' }
-
-// W8-3A(D-014):「AI 整理完了沒」在全站只有一個判定依據——本案有沒有跑完過一次
-// 履約要求擷取(`document_ingestion_runs.status = 'completed'`)。首頁初始化清單第 3 步
-// 用它,這一頁也必須用它,否則會出現「首頁說整理完成 → 點進來卻叫你重新上傳」的死路。
-// ⚠️ 有 Requirement 不等於 AI 跑完過(可能是人工建立或舊 run),絕不可反推成「整理完成」。
-export function requirementsIntro(runs = [], rowCount = 0) {
-  const ingestionDone = (runs || []).some((r) => r?.status === 'completed')
-  // 每個文件版本的最近一次完成整理各自檢查 coverage，不能讓另一份成功
-  // 文件蓋掉缺漏警示，也不能把跑完批次當成沒有漏項的證明。
-  const warnings = extractionCoverageWarnings(runs)
-  const coverageWarning = warnings.length
-    ? `注意：目前整理紀錄中有 ${warnings.length} 份文件需要檢查。${warnings.join(' ')}`
-    : null
-  if (rowCount > 0) {
-    return {
-      ingestionDone,
-      mode: 'list',
-      coverageWarning,
-      // 沒有 completed run 時只講審查規則,不宣稱 AI 整理完成
-      note: ingestionDone
-        ? 'AI 已完成整理並自動歸檔;內容如有出入,以契約原文為準。人工補登的項目仍由監造/機關確認,未確認不影響開啟正式模式。'
-        : '人工補登的項目由監造/機關確認,未確認不影響開啟正式模式;內容如有出入,以契約原文為準。',
-      emptyText: null,
-    }
-  }
-  // 整理完成但 0 筆:這是有效結果(AI 讀完了沒找到),不是失敗,也沒有事情要做——
-  // 不能再給「前往上傳」的 CTA 把人送回原點。
-  if (ingestionDone) {
-    return {
-      ingestionDone, mode: 'done-empty', note: null, coverageWarning,
-      emptyText: coverageWarning
-        ? '本次沒有找到契約重點建議，但文件尚未完整整理；請先查看缺漏範圍。'
-        : 'AI 已完成整理，本次沒有找到契約重點建議，不需逐條確認，也不影響開啟正式模式；這不代表已證明文件沒有任何義務。',
-    }
-  }
-  // W10:run 都停了而且有失敗紀錄時要說「失敗了」,不能偽裝成「還沒開始」——
-  // 使用者才知道要去重試,而不是空等。還有 run 在跑就維持「處理中」語意。
-  const anyActive = (runs || []).some((r) => ['pending', 'processing'].includes(r?.status))
-  const latestFailed = (runs || []).find((r) => r?.status === 'failed') || null
-  if (latestFailed && !anyActive) {
-    return {
-      ingestionDone, mode: 'failed', coverageWarning: null,
-      note: null,
-      emptyText: `最近一次 AI 整理失敗${latestFailed.error_message ? `:${friendlyError(latestFailed.error_message, '請重試')}` : ''}。到「專案文件」的文件清單可重試分析。`,
-    }
-  }
-  return {
-    ingestionDone, mode: 'not-started', note: null, coverageWarning: null,
-    emptyText: '尚未有完成的 AI 整理。到「專案文件」上傳契約/規範,或查看目前的處理狀態。',
-  }
-}
 
 // 五色語意(README Design Tokens):待確認=黃(正常待辦不是異常)、已確認=綠、
 // 不採用=灰(含已取代——「不成立/已被取代,不計入義務」是同一格,色票、快篩
@@ -110,52 +60,6 @@ const statusKey = (status) => (
 )
 const EDITABLE_STATUSES = ['draft_ai', 'needs_review']
 const fmtTime = (v) => fmtDateTime(v, { empty: '' })
-
-// 詳情動作列(獨立元件供測試釘權限):確認/不採用只給契約審查者(監造/機關,
-// 鏡像 can_review_requirement,刻意無專案管理者例外);其他人看得到內容但
-// 不渲染假操作。
-export function ReviewActions({ requirement, canReview, busy, onReview, onEdit, reviewerName }) {
-  const st = requirement.status
-  // 紀錄格式:`桃園市工務局 林淑芬 確認 · 時間`。審查人名由呼叫端從 profiles
-  // 解析(reviewed_by 是伺服器蓋的);reviewed_by 為空的已確認=確定性分流的
-  // 系統自動確認(引文+數字核對無誤),要明講不是人簽的
-  const VERB = { approved: '確認', rejected: '不採用', superseded: '廢止取代' }
-  const autoConfirmed = st === 'approved' && !requirement.reviewed_by && requirement.reviewed_at
-  const record = requirement.reviewed_at
-    ? (autoConfirmed
-      ? `${requirementVerification(requirement).label} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
-      : reviewerName
-        ? `${reviewerName} ${VERB[st] || REQUIREMENT_STATUS_LABELS[st] || st} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
-        : `${REQUIREMENT_STATUS_LABELS[st] || st}·${fmtTime(requirement.reviewed_at)}(伺服器記錄)`)
-    : null
-  if (EDITABLE_STATUSES.includes(st)) {
-    if (!canReview) {
-      return (
-        <Badge color="slate">
-          <MSym name="info" size={12} className="shrink-0" />轉錄確認由監造／機關辦理
-        </Badge>
-      )
-    }
-    return (<>
-      <Button size="md" disabled={!!busy} onClick={() => onReview('approve', '確認無誤')}>
-        <MSym name="check_circle" size={15} fill /> 確認無誤
-      </Button>
-      <Button variant="outline" size="md" disabled={!!busy} onClick={onEdit}>修正內容</Button>
-      {/* 不採用=紅字 ghost:ui.jsx 沒有 ghost-danger 變體,這裡以 ! 覆蓋 ghost 的藍;
-          下次開 ui.jsx 時補一個變體,呼叫端就能拿掉這兩個 ! */}
-      <Button variant="ghost" size="md" disabled={!!busy} onClick={() => onReview('reject', '不採用')}
-        className="!text-[var(--red-text)] hover:!bg-[var(--red-tint)]">
-        不採用
-      </Button>
-    </>)
-  }
-  return (<>
-    <span className="flex-1 min-w-0 text-caption leading-relaxed text-[var(--text-3)] num">{record}</span>
-    {st === 'approved' && canReview && (
-      <Button variant="outline" size="sm" disabled={!!busy} onClick={() => onReview('supersede', '廢止取代')}>廢止取代</Button>
-    )}
-  </>)
-}
 
 // 關聯列外殼:README 8px 圓角框列(icon+文字)。hover 只給真的可點的列——
 // 純資料列(工項對應/流程項目)套上連結外觀會騙人去點
@@ -185,12 +89,11 @@ const MANUAL_WEEKDAYS = [
 
 export default function RequirementsReview() {
   const {
-    currentProject, isPersistedProject, currentUser, workItems, reloadObligations, can, obligations,
+    currentProject, isPersistedProject, workItems, reloadObligations, can, obligations,
   } = useStore()
-  // 鏡像 DB 的 can_review_requirement(機關/監造;刻意無專案管理者例外——技術管理≠契約審核權)
-  const canReview = ['owner', 'supervisor'].includes(currentUser?.org_type)
-  // 鏡像 DB 的 can_write(requirements insert 政策):廠商/監造/管理者可補登,機關唯讀
-  const canAddManual = isPersistedProject && (can.edit || currentUser?.org_type === 'supervisor')
+  // 兩條都鏡像 DB 的同名 helper;規則的單一來源在 store.jsx 的 can
+  const canReview = can.reviewRequirement          // can_review_requirement()
+  const canAddManual = isPersistedProject && can.write  // can_write():requirements insert 政策
 
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [shownLimit, setShownLimit] = useState(PAGE_SIZE)

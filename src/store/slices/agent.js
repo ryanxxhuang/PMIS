@@ -108,8 +108,15 @@ export function applyDraftQuantities(payload, quantities) {
   return { ...payload, items }
 }
 
+// 收件匣一次載入的草稿筆數上限。這是靜默截斷(超過的舊草稿不會有任何提示),
+// 之所以可接受:收件匣的用途是「還沒覆核的近期草稿」,UI 只顯示 pending,
+// 而一個人在一個專案裡積到 50 筆未覆核草稿之前早就該處理了。
+// 完整歷史屬於稽核軌跡(agent_actions 全表 + /activity),不是這個清單的職責——
+// 要做「歷史」時正確做法是分頁,不是把這個數字調大。
+const AGENT_INBOX_LIMIT = 50
+
 export function useAgentSlice({ demoMode, isPersistedProject, currentProject, currentUser, wiMaps }, { saveSiteLog, createChecklistRecord, allChecklistTemplates, decideSubmittal } = {}) {
-  // AI 草稿收件匣(pending 由 UI 篩;保留近 50 筆含已處理,之後可做歷史)
+  // AI 草稿收件匣(pending 由 UI 篩;保留近 AGENT_INBOX_LIMIT 筆含已處理)
   const [agentActions, setAgentActions] = useState([])
   const [agentActionsLoading, setAgentActionsLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
@@ -130,7 +137,7 @@ export function useAgentSlice({ demoMode, isPersistedProject, currentProject, cu
       const { data, error } = await supabase.from('agent_actions').select('*')
         .eq('project_id', currentProject.project_id)
         .eq('actor_user', currentUser.user_id)
-        .order('created_at', { ascending: false }).limit(50)
+        .order('created_at', { ascending: false }).limit(AGENT_INBOX_LIMIT)
       if (!active) return
       if (error) console.warn('AI 草稿收件匣載入失敗:', error.message)
       else setAgentActions(data || [])

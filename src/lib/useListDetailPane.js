@@ -14,6 +14,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+// 「<lg」的 JS 版本,必須等於 Tailwind 的 lg(1024)——listDetail.jsx 的 DetailDrawer
+// 寫的是 `lg:hidden`,兩邊不一致會出現「JS 認為要開抽屜、CSS 卻把抽屜藏起來」的
+// 死狀態(1024px 整數點最容易踩到,所以上界寫 1023.98 而不是 1024)。
+const BELOW_LG_QUERY = '(max-width: 1023.98px)'
+
 // param:URL 單條連結的 query 名(?obligation= / ?highlight=);idPrefix:清單列 DOM id
 // 前綴(ob-/hl-);scope:字串,變了就整組重置(專案、身分、契約範圍);
 // ready:可以做初次自動選取了(資料載好且有列);rows:深連結查找母體;
@@ -33,7 +38,7 @@ export function useListDetailPane({
     setSelectedId(id)
     latest.current.onSelect?.(id)
     // 抽屜/全螢幕只屬於 <lg:桌機點列不留 detailOpen 殘值,縮窗才不會突然彈出遮罩
-    if (openPane && window.matchMedia('(max-width: 1023.98px)').matches) setDetailOpen(true)
+    if (openPane && window.matchMedia(BELOW_LG_QUERY).matches) setDetailOpen(true)
     // URL 帶單條連結可分享;replace 不炸掉瀏覽歷史
     setSearchParams((p) => { const n = new URLSearchParams(p); n.set(param, id); return n }, { replace: true })
   }, [param, setSearchParams])

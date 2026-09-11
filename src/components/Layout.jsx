@@ -10,8 +10,15 @@ import { ErrorBanner } from './ui.jsx'
 import { friendlyError } from '../lib/errorMessage.js'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 import { useTodayTasks, mineCountForNavItem } from '../lib/useTodayTasks.js'
+import { useEscape } from '../lib/useEscape.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
+
+// 平板區間 = Tailwind 的 md(768)起、xl(1280)前。寫成 1279.98 是 media query
+// 的老規矩:上下界都用 min-width 會在剛好 1280px 時兩條同時成立。
+// 兩個使用點(初值與 change 監聽)必須是同一條字串——寫兩次時改一邊就會變成
+// 「初始判定與後續判定不同斷點」,縮放到邊界才會發現。
+const TABLET_QUERY = '(min-width: 768px) and (max-width: 1279.98px)'
 
 
 const initialSidebarCollapsed = () => {
@@ -69,14 +76,7 @@ function ProjectSwitcher() {
   const triggerRef = useRef(null)
   const firstItemRef = useRef(null)
   const prevOpen = useRef(false)
-  // Esc 掛 window 層:原本綁在包裹 div 的 onKeyDown,焦點一離開該子樹（點了遮罩外
-  // 或被移走）Esc 就失效,變成只能滑鼠關閉。開啟時才掛、關閉即拆,不常駐監聽。
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+  useEscape(open, () => setOpen(false))
   // 鍵盤焦點:開啟移入第一個選單項（role=menu 慣例）、關閉還給觸發鈕,
   // 避免焦點落回 body 讓鍵盤使用者迷路。prevOpen 擋掉初掛載時的誤搶焦點。
   useEffect(() => {
@@ -158,12 +158,8 @@ function GlobalSearch() {
   const [q, setQ] = useState('')
   const inputRef = useRef(null)
   const btnRef = useRef(null)
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); btnRef.current?.focus() } }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+  // Esc 關閉後把焦點還給觸發鈕,鍵盤使用者不會掉回 body
+  useEscape(open, () => { setOpen(false); btnRef.current?.focus() })
   useEffect(() => { if (open) inputRef.current?.focus() }, [open])
   const submit = (e) => {
     e.preventDefault()
@@ -259,13 +255,7 @@ export function WebLayout({ children }) {
   const menuBtnRef = useRef(null)
   const drawerCloseRef = useRef(null)
   const prevMenuOpen = useRef(false)
-  // 手機抽屜 Esc 關閉:掛 window 層（同 CopilotFab 寫法）,開著才監聽
-  useEffect(() => {
-    if (!menuOpen) return
-    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [menuOpen])
+  useEscape(menuOpen, () => setMenuOpen(false))
   // 抽屜焦點管理:開啟移到關閉鈕、關閉還給漢堡鈕。prevMenuOpen 擋初載誤搶焦點
   // （桌機 menuOpen 恆為 false,不會進到還原分支）。
   // 開啟聚焦不能同步做也不能只推遲一個 frame:visibility 在 transition 清單裡,
@@ -291,9 +281,9 @@ export function WebLayout({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
   // 平板(768–1279)一律 icon rail:collapsed 是「衍生值」不回寫 localStorage,
   // 平板逛一圈不會污染桌機(≥1280)的收合偏好;Playwright 預設 1280×720 落在記憶分支。
-  const [isTablet, setIsTablet] = useState(() => window.matchMedia?.('(min-width: 768px) and (max-width: 1279.98px)').matches ?? false)
+  const [isTablet, setIsTablet] = useState(() => window.matchMedia?.(TABLET_QUERY).matches ?? false)
   useEffect(() => {
-    const mq = window.matchMedia?.('(min-width: 768px) and (max-width: 1279.98px)')
+    const mq = window.matchMedia?.(TABLET_QUERY)
     if (!mq) return
     const onChange = () => setIsTablet(mq.matches)
     mq.addEventListener('change', onChange)
@@ -347,7 +337,7 @@ export function WebLayout({ children }) {
     <div className="min-h-screen bg-[var(--bg)]">
       <TopBar onMenu={() => setMenuOpen(true)} scrolled={scrolled} menuBtnRef={menuBtnRef} dueCount={dueMine.length} />
       {/* 手機:點背景關閉抽屜(蓋過頂欄,抽屜再蓋過遮罩);純滑鼠 scrim,對報讀器隱藏 */}
-      {menuOpen && <div aria-hidden="true" className="fixed inset-0 z-50 bg-black/40 md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <div aria-hidden="true" className="fixed inset-0 z-50 bg-[var(--scrim)] md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
       {/* 關閉時 max-md:invisible:visibility hidden = 不可聚焦＋離開 a11y 樹,擋掉
           「Tab 進看不見的抽屜」;visibility 進 transition 清單讓滑出動畫跑完才隱藏
           （hidden→visible 則是動畫起點就顯示,開啟不閃爍）。桌機 md 斷點不受影響。 */}
@@ -441,7 +431,7 @@ export function WebLayout({ children }) {
                           <button type="button" onClick={() => toggleWorkbench(n.to)}
                             aria-expanded={expanded} aria-controls={`nav-children-${n.to.slice(1)}`}
                             aria-label={`${expanded ? '收合' : '展開'}${n.label}子頁`}
-                            className={`w-11 h-11 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-black/5 hover:text-[var(--text)] ${collapsed ? 'md:hidden' : ''}`}>
+                            className={`w-11 h-11 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] ${collapsed ? 'md:hidden' : ''}`}>
                             <MSym name={expanded ? "expand_more" : "chevron_right"} size={18} />
                           </button>
                         )}
