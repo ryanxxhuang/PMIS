@@ -496,7 +496,9 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
   - **A｜成員管理改用 `is_project_admin()`**：admin 成員也能邀人／移除人。建立者不失能力（`is_project_admin` 已含 `created_by`）。是擴權，要確認這是想要的。轉移問題自然消失（建立者離職後其他 admin 仍能管理）。
   - **B｜維持「只有建立者能管成員」，另補 `transfer_project_ownership` RPC**：權限邊界不變，只補上離職的路。最小風險，但「能刪專案卻不能邀人」的不對稱仍在。
   - **C｜把 `created_by` 從 `is_project_admin()` 拿掉，純看 `project_members.role='admin'`（並同時做 A）**：最貼近唯一授權模型。建立者由 `on_project_created` trigger 自動成為 admin member（實查：`insert … values (new.id, new.created_by, 'admin') on conflict do nothing`），所以不失能力。
-    **前置條件（必須先在正式庫查，本機查不到）**：`select count(*) from projects p where not exists (select 1 from project_members m where m.project_id=p.id and m.user_id=p.created_by and m.role='admin');` 回 0 才安全；不為 0 代表有專案的建立者會在 migration 後突然失去權限，要先補資料。
+    **前置條件已於 2026-09-11 在正式庫查證（`supabase db query --linked`，唯讀）**：13 個專案、建立者缺 `admin` 成員列 **0** 個、`created_by` 為 null **0** 個、`role='admin'` 共 13 列、**admin 但非建立者 0 人**。
+
+    因此 `is_project_admin()` 的兩個分支在正式資料上**目前完全等價**，C＋A **今天是零行為改變**：沒有人會失去權限（每個建立者都已有 admin 列），也沒有人會多拿到權限（不存在非建立者的 admin）。這是關掉這個不一致的最低成本時點——等到真的授出第一個非建立者 admin 之後再改，就會變成實質擴權，要重新評估。
 
   建議 **C**（配 A 一起做）：它讓授權只有一個來源，其餘兩個選項都是把不一致留著。但它是三者中風險最高的，且卡在上面那筆正式庫查詢。拍板後才寫 D-022 進 `DECISIONS.md`（該檔依其檔頭只收已確認的決策）。
 - （同上）紅線三缺口：agent 唯讀工具的呼叫軌跡不落庫。`agent-run` 只把 steps 的 tool／ok／ms 回前端，`ai_usage_events` 沒有欄位可放。一旦有爭議（agent 講了錯誤金額），無法重建它查了哪些表、帶什麼參數。最小改法是 `ai_usage_events` 加 `metadata jsonb`，完整作法是 append-only `agent_runs` 表——但「記錄每一次查詢與參數」牽涉個資最小化，要先決定記到什麼粒度。
