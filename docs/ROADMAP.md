@@ -482,7 +482,23 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 - （同上，只記錄）本機所有 public 表的 `anon` 都帶 `TRUNCATE`（Supabase 本身的 default ACL `anon=Dxtm`）。PostgREST 不暴露 TRUNCATE，實務風險低，但 TRUNCATE **不受 RLS 約束**。
 
 - （2026-09-11 重構審計點名，需你決定）`demo_requests` 的個資留存與清除：該表存 email／phone／ip／user_agent，但 `docs/資安/日誌留存政策.md` 與個資委外文件都沒列到它，也沒有清除排程。保存多久是政策決定，不是工程決定，所以只登記不自行訂定。
-- （同上，需先立 Decision）兩套「專案管理者」定義並存：`add_member_by_email`／`remove_member`／`organizations_*` policy 走 `projects.created_by`，而 `delete_project`／估驗與變更 guard／`acceptance_events_rbac`／`safety_records_rbac` 走 `is_project_admin()`。結果是被授 admin 的成員能刪專案、改狀態機，卻不能邀人；建立者離職也沒有轉移路徑。這讓 `created_by` 成為 `project_members` 之外的第四個隱性授權來源，與 `three-party-role-model.md` 的唯一授權模型相違。修它要動 RLS 與多支 RPC，屬安全邊界。
+- **（2026-09-11 重構審計，Decision 草案待使用者拍板）成員管理權限的不對稱**。實查（本機 `supabase db reset` 後查 `pg_get_functiondef`）：
+
+  | | `is_project_admin(p)` | 只認 `created_by` |
+  |---|---|---|
+  | 定義 | `project_members.role='admin'` **或** `projects.created_by = auth.uid()` | `projects.created_by = auth.uid()` |
+  | 使用處 | `delete_project`、`valuations_guard`、`change_orders_guard`、`acceptance_events_rbac`、`safety_records_rbac` | `add_member_by_email`、`remove_member`（錯誤訊息寫死「只有專案建立者可以管理成員」）、`organizations_*` policies、`members_manage_by_creator`、`projects_update_creator` |
+
+  結果：**被授 `role='admin'` 的成員可以刪掉整個專案、覆寫估驗與變更的狀態機，卻不能邀一個人進來。** 且 `created_by` 沒有轉移路徑——建立者離職，成員管理永久卡死。`created_by` 因此成為 `project_members` 之外的隱性授權來源，與 [`architecture/three-party-role-model.md`](architecture/three-party-role-model.md) 的「`project_members` 管授權」唯一規則相違。
+
+  三個選項（都動安全邊界，要 pgTAP 擴充 `invite_org_confirm.sql` 的矩陣）：
+
+  - **A｜成員管理改用 `is_project_admin()`**：admin 成員也能邀人／移除人。建立者不失能力（`is_project_admin` 已含 `created_by`）。是擴權，要確認這是想要的。轉移問題自然消失（建立者離職後其他 admin 仍能管理）。
+  - **B｜維持「只有建立者能管成員」，另補 `transfer_project_ownership` RPC**：權限邊界不變，只補上離職的路。最小風險，但「能刪專案卻不能邀人」的不對稱仍在。
+  - **C｜把 `created_by` 從 `is_project_admin()` 拿掉，純看 `project_members.role='admin'`（並同時做 A）**：最貼近唯一授權模型。建立者由 `on_project_created` trigger 自動成為 admin member（實查：`insert … values (new.id, new.created_by, 'admin') on conflict do nothing`），所以不失能力。
+    **前置條件（必須先在正式庫查，本機查不到）**：`select count(*) from projects p where not exists (select 1 from project_members m where m.project_id=p.id and m.user_id=p.created_by and m.role='admin');` 回 0 才安全；不為 0 代表有專案的建立者會在 migration 後突然失去權限，要先補資料。
+
+  建議 **C**（配 A 一起做）：它讓授權只有一個來源，其餘兩個選項都是把不一致留著。但它是三者中風險最高的，且卡在上面那筆正式庫查詢。拍板後才寫 D-022 進 `DECISIONS.md`（該檔依其檔頭只收已確認的決策）。
 - （同上）紅線三缺口：agent 唯讀工具的呼叫軌跡不落庫。`agent-run` 只把 steps 的 tool／ok／ms 回前端，`ai_usage_events` 沒有欄位可放。一旦有爭議（agent 講了錯誤金額），無法重建它查了哪些表、帶什麼參數。最小改法是 `ai_usage_events` 加 `metadata jsonb`，完整作法是 append-only `agent_runs` 表——但「記錄每一次查詢與參數」牽涉個資最小化，要先決定記到什麼粒度。
 - （同上）`exportCsv.js` 的 formula injection 防護有三處已知邊界：前置空白／tab 可繞過 `/^[=+\-@]/`、`\r` 不觸發 quote、科學記號字串誤判。已寫成「現行邊界行為（記錄用，非背書）」的測試釘住；收緊會連帶影響加前綴後的 quote 判斷，不是一行改完的事。
 
