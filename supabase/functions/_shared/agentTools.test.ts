@@ -1,13 +1,18 @@
-// 驗證批3/批4 agentTools:角色工具分發的順序穩定性(prompt cache 前綴)、
+// 驗證批3/批4 agent 工具層(B4 拆檔後分佈在 agentToolDefs / draftDailyLog /
+// draftInspection / raiseTo / agentTools 分派器):角色工具分發的順序穩定性(prompt cache 前綴)、
 // buildDailyLogDraft 的「數量誠實原則」(數量永遠留空標 needs_input,昨日數量
 // 只進 rationale 供參考,絕不預填),以及批4 buildInspectionDraft 的
 // 「實測值不讓 AI 讀」紅線(num 項不存在任何賦值路徑)。
 import { describe, it, expect, vi } from 'vitest'
 import {
   QUERY_TOOLS, DRAFT_DAILY_LOG_TOOL, DRAFT_INSPECTION_TOOL, DRAFT_SUBMITTAL_REVIEW_TOOL, RAISE_TO_TOOL, RUN_INTEGRITY_AUDIT_TOOL,
-  toolsForRole, buildDailyLogDraft, buildInspectionDraft, pickChecklistTemplate, makeToolExec,
-} from './agentTools.ts'
-import type { DailyLogDraftInput, InspectionDraftInput } from './agentTools.ts'
+  toolsForRole,
+} from './agentToolDefs.ts'
+import { buildDailyLogDraft } from './draftDailyLog.ts'
+import type { DailyLogDraftInput } from './draftDailyLog.ts'
+import { buildInspectionDraft, pickChecklistTemplate } from './draftInspection.ts'
+import type { InspectionDraftInput } from './draftInspection.ts'
+import { makeToolExec } from './agentTools.ts'
 
 describe('toolsForRole(批4 角色分發:查詢在前、角色草稿工具居中、raise_to 殿後)', () => {
   const queryNames = QUERY_TOOLS.map((t) => t.name)
@@ -35,6 +40,12 @@ describe('toolsForRole(批4 角色分發:查詢在前、角色草稿工具居中
 
   it('contractor 沒有 draft_submittal_review（只給 supervisor）', () => {
     expect(toolsForRole('contractor').map((t) => t.name)).not.toContain('draft_submittal_review')
+  })
+
+  it('查詢七支的名稱與順序逐項釘死(B4 拆檔到 agentToolDefs.ts 後仍不可變)', () => {
+    expect(queryNames).toEqual([
+      'search_boq', 'list_daily_logs', 'get_valuation', 'get_requirements', 'list_my_open_items', 'find_evidence', 'get_record',
+    ])
   })
 
   it('每個角色多次呼叫回傳同一參考(模組層常數,不重建 → 快取前綴逐位元組穩定)', () => {
@@ -319,31 +330,106 @@ describe('makeToolExec 的 draft_inspection / raise_to 防護', () => {
       .toBe('伺服器未設定,暫時無法建立草稿')
   })
 
-  it('raise_to:只依三方 org_type 找收件人，不讀 project_role', async () => {
-    let inserted: Record<string, unknown> | null = null
-    const db = {
-      rpc: async () => ({
-        data: [
-          { user_id: 'user-1', full_name: '廠商甲', org_type: 'contractor', project_role: 'quality_engineer' },
-          { user_id: 'user-2', full_name: '監造乙', org_type: 'supervisor', project_role: 'viewer' },
-        ],
-        error: null,
-      }),
-    }
+  // raise_to 會寫兩筆 agent_actions(對方的 handoff + 發起人的 handoff_sent):
+  // service 假件依序收下每一列、依序回不同 id;failAt 讓第 N 筆(0 起算)寫入失敗。
+  const membersDb = {
+    rpc: async () => ({
+      data: [
+        { user_id: 'user-1', full_name: '廠商甲', org_type: 'contractor', project_role: 'quality_engineer' },
+        { user_id: 'user-2', full_name: '監造乙', org_type: 'supervisor', project_role: 'viewer' },
+      ],
+      error: null,
+    }),
+  }
+  const makeService = (failAt?: number) => {
+    const inserted: Record<string, unknown>[] = []
     const service = {
       from: () => ({
         insert: (row: Record<string, unknown>) => {
-          inserted = row
-          return { select: () => ({ single: async () => ({ data: { id: 'action-1' }, error: null }) }) }
+          const i = inserted.push(row) - 1
+          return {
+            select: () => ({
+              single: async () => (failAt === i
+                ? { data: null, error: { code: '42501', message: 'permission denied for table agent_actions_secret' } }
+                : { data: { id: `action-${i + 1}` }, error: null }),
+            }),
+          }
         },
       }),
     }
-    const exec = makeToolExec(db as never, pid, service as never, 'user-1', 'contractor')
+    return { service, inserted }
+  }
+
+  it('raise_to:只依三方 org_type 找收件人，不讀 project_role', async () => {
+    const { service, inserted } = makeService()
+    const exec = makeToolExec(membersDb as never, pid, service as never, 'user-1', 'contractor')
     const out = await exec('raise_to', { to_role: 'supervisor', subject: '缺失改善完成，請複查' }) as Record<string, unknown>
 
     expect(out.ok).toBe(true)
     expect(out.交接對象).toBe('監造乙(監造)')
-    expect(inserted).toMatchObject({ actor_user: 'user-2', agent_role: 'supervisor' })
+    expect(inserted[0]).toMatchObject({ actor_user: 'user-2', agent_role: 'supervisor' })
+  })
+
+  // ── B4 紅線三:發起人名下也要有留痕 ────────────────────────────────────────
+  // agent_actions_select policy 只給 actor_user 本人看;只寫對方那筆,發起人查不到
+  // 自己的 agent 送出了什麼。修法不動 RLS,改成兩筆各落各的名下、evidence 互相對應。
+  it('raise_to:發起人與收件人各留一筆,actor_user 分別正確、kind 可辨識、兩筆可對應', async () => {
+    const { service, inserted } = makeService()
+    const exec = makeToolExec(membersDb as never, pid, service as never, 'user-1', 'contractor')
+    const out = await exec('raise_to', {
+      to_role: 'supervisor', subject: '缺失改善完成，請複查', note: '3F 柱牆已補強', target_table: 'defects', target_id: pid,
+    }) as Record<string, unknown>
+
+    expect(out.ok).toBe(true)
+    expect(inserted).toHaveLength(2)
+    // 第一筆:對方的待辦(既有行為原樣)
+    expect(inserted[0]).toMatchObject({
+      actor_user: 'user-2', agent_role: 'supervisor', kind: 'handoff',
+      target_table: 'defects', target_id: pid, summary: '缺失改善完成，請複查',
+      evidence: { from_user: 'user-1', from_role: 'contractor', to_role: 'supervisor', note: '3F 柱牆已補強' },
+    })
+    // 第二筆:發起人自己名下的留痕,指向對方那筆的 id
+    expect(inserted[1]).toMatchObject({
+      actor_user: 'user-1', agent_role: 'contractor', kind: 'handoff_sent',
+      target_table: 'defects', target_id: pid,
+      evidence: { handoff_action_id: 'action-1', from_user: 'user-1', to_user: 'user-2', to_role: 'supervisor', note: '3F 柱牆已補強' },
+    })
+    expect(String(inserted[1].summary)).toContain('已交接給 監造乙(監造)')
+    expect(String(inserted[1].summary)).toContain('缺失改善完成，請複查')
+    expect(inserted[1]).not.toHaveProperty('status') // status 沿用既有慣例:不設,走預設 pending
+    expect(out.agent_action_id).toBe('action-1')
+    expect(out.sent_action_id).toBe('action-2')
+  })
+
+  it('raise_to:發起人留痕寫入失敗不弄掛主要動作 —— 仍 ok,原文只進 console.error', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { service, inserted } = makeService(1)
+    const exec = makeToolExec(membersDb as never, pid, service as never, 'user-1', 'contractor')
+    const out = await exec('raise_to', { to_role: 'supervisor', subject: '缺失改善完成，請複查' }) as Record<string, unknown>
+
+    expect(inserted).toHaveLength(2)
+    expect(out.ok).toBe(true)
+    expect(out.agent_action_id).toBe('action-1')
+    expect(out.sent_action_id).toBeUndefined()
+    expect(String(out.發起人留痕)).toContain('交接本身已送達對方')
+    expect(String(out.發起人留痕)).toContain('db_error')
+    expect(String(out.發起人留痕)).not.toContain('agent_actions_secret')
+    const logged = errSpy.mock.calls.flat().map(String).join('\n')
+    expect(logged).toContain('agentTools.raiseTo.sent')
+    expect(logged).toContain('agent_actions_secret')
+    errSpy.mockRestore()
+  })
+
+  it('raise_to:對方那筆寫入失敗 → 回錯誤、不補登發起人(既有慣例不變)', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { service, inserted } = makeService(0)
+    const exec = makeToolExec(membersDb as never, pid, service as never, 'user-1', 'contractor')
+    const out = await exec('raise_to', { to_role: 'supervisor', subject: '缺失改善完成，請複查' }) as Record<string, unknown>
+
+    expect(out.ok).toBeUndefined()
+    expect(String(out.error)).toContain('db_error')
+    expect(inserted).toHaveLength(1)
+    errSpy.mockRestore()
   })
 })
 

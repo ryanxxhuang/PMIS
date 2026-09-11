@@ -18,7 +18,8 @@ import { claudeAgent, stableStringify } from '../_shared/agent.ts'
 import { openAiGate, recordAiUsage } from '../_shared/aiGate.ts'
 import { personaSystem } from '../_shared/agentPersona.ts'
 import type { AgentRole } from '../_shared/agentPersona.ts'
-import { makeToolExec, toolsForRole } from '../_shared/agentTools.ts'
+import { makeToolExec } from '../_shared/agentTools.ts'
+import { toolsForRole } from '../_shared/agentToolDefs.ts'
 import { agentRoleOf } from '../_shared/agentRole.ts'
 
 // 輸入上限(M-7):history 早有 20 則 × 4000 字元的上限,message 與 facts 原本
