@@ -86,9 +86,28 @@ it('載入失敗顯示可重試的錯誤，不顯示尚無文件', async () => {
 it('完成但覆蓋不完整的文件顯示部分整理，不顯示已完成', async () => {
   seedResult({ metadata: { requirement_extraction: 'completed', requirement_extraction_warning: '第 2 頁文字不足' } })
   await render()
-  const table = container.querySelector('table')
-  expect(table.textContent).toContain('部分整理')
-  expect(table.textContent).toContain('第 2 頁文字不足')
+  // 清單列只寫狀態;原因全文在詳情欄(初次載入自動選中第一筆待處理列)
+  const list = container.querySelector('[role="list"][aria-label="專案文件"]')
+  expect(list.textContent).toContain('部分整理')
+  expect(list.textContent).not.toContain('已完成')
+  const detail = container.querySelector('section[aria-label="契約.pdf 詳情"]')
+  expect(detail.textContent).toContain('部分整理')
+  expect(detail.textContent).toContain('第 2 頁文字不足')
+})
+
+it('分類待確認的文件:詳情欄以 AI 第二意見呈現建議,確認鈕就地可按', async () => {
+  seedResult({ classification_status: 'needs_review', suggested_document_type: 'specification', classification_confidence: 0.6,
+    metadata: { classification_reason: '檔名含規範', page_count: 12 } })
+  await render()
+  const detail = container.querySelector('section[aria-label="契約.pdf 詳情"]')
+  expect(detail.textContent).toContain('AI 第二意見')
+  expect(detail.textContent).toContain('建議分類:施工規範')
+  expect(detail.textContent).toContain('信心 60%')
+  expect(detail.textContent).toContain('12 頁')
+  expect([...detail.querySelectorAll('button')].some((b) => b.textContent === '確認此分類')).toBe(true)
+  // 待確認列不給「改分類」(確認就是分類動作),但可刪除
+  expect([...detail.querySelectorAll('button')].some((b) => b.textContent.includes('改分類'))).toBe(false)
+  expect([...detail.querySelectorAll('button')].some((b) => b.textContent.includes('刪除'))).toBe(true)
 })
 
 it('機關檢視不顯示不可用的上傳按鈕，也不寫處理狀態', async () => {

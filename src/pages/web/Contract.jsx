@@ -2,19 +2,24 @@
 // 依 design_handoff_project_documents 版面重建:整頁只有兩張卡——
 //   1.「契約文件」= 上傳入口(拖放區)+ 上傳過程的完整回饋(總進度、逐檔、成功、失敗、重試)
 //      → 回饋面板在 components/UploadPanel.jsx,帳目在 lib/packageUpload.js summarizeUploadBatch
-//   2.「專案文件」= 已入庫文件清單(文件/分類/版本/AI 處理/上傳)→ components/DocumentTable.jsx
+//   2.「專案文件」= 已入庫文件清單 → 清單／詳情殼(components/DocumentList.jsx):左欄
+//      搜尋＋狀態/類型快篩＋列,右欄所選文件的版本、頁數、分類與 AI 第二意見、抽取
+//      狀態,以及確認分類/重試/改分類/刪除/開檔/下載等動作就地處理(規範 §8 IA 殼)
 // 上傳後 AI 自動分類、自動歸檔分流:標單 XML → 標單工項、契約/規範 → 契約重點。
 // 基準日、契約總價與期限追蹤在獨立的「期限追蹤」頁(/deadlines)——本頁只管文件,
 // 只有第一次建檔與文件更新時才會用到。
 // 進度來自持久化的 document_processing_runs(離開頁面不遺失;讀取/中斷復原/改分類
 // 狀態機在 lib/packageRuns.js);逐檔百分比由 STAGE_ORDER 映射(真實階段,不是假進度)。
 // 這支只剩:載入與範圍守衛(切案/切包時舊回應不覆蓋新畫面)、上傳分流、三個動 DB
-// 的事件處理器(確認分類/重試、刪除、開檔)與版面組裝。
+// 的事件處理器(確認分類/重試、刪除、開檔)、殼的選取/篩選狀態與版面組裝。
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import ContractFlow from '../../components/ContractFlow.jsx'
 import UploadPanel from '../../components/UploadPanel.jsx'
-import DocumentTable from '../../components/DocumentTable.jsx'
+import { DocumentList, DocumentDetail, buildDocumentRows } from '../../components/DocumentList.jsx'
+import { ListDetailLayout } from '../../components/listDetail.jsx'
+import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
+import { DOCUMENT_TYPE_LABELS, EXTRACTABLE_DOCUMENT_TYPES } from '../../lib/documentClassifier.js'
 import { pageAllSafe } from '../../lib/pagedQuery.js'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
@@ -46,6 +51,8 @@ const ELAPSED_TICK_MS = 1000
 // 尚未載入選定包的 runs 時給的空清單。放模組層是為了 identity 穩定:寫成
 // `? storedRuns : []` 會每次 render 造新陣列,吃 runs 的 effect/memo 全部每次重跑。
 const EMPTY_RUNS = []
+// 清單快篩:關鍵字 AND 狀態(四段,單選)AND 類型分群(單選);切包/切案整組重設
+const DEFAULT_FILTERS = { q: '', state: '', group: '' }
 
 export default function Contract() {
   const {
@@ -90,6 +97,10 @@ export default function Contract() {
   const busyRunsRef = useRef(new Set())
   const [busyRunIds, setBusyRunIds] = useState(() => new Set())
   const [panelDismissed, setPanelDismissed] = useState(false)
+  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  // W14 事後治理:詳情欄正開著「改分類」下拉的 run id(一次只開一筆,換選取即收)
+  const [reclassifyId, setReclassifyId] = useState(null)
+  const searchRef = useRef(null)
   const [, forceTick] = useState(0)
   const tickRef = useRef(null)
 
@@ -366,6 +377,33 @@ export default function Contract() {
     } finally { uploadLock.current = false }
   }, [canUploadDocs, packagesLoading, packagesError, importBoqFiles, uploadToPackage])
 
+  // ── 清單／詳情殼:列＝run+version+document,上傳新→舊;快篩件數走全體 ────────
+  const rows = useMemo(() => buildDocumentRows(runs, versionsById, docsById), [runs, versionsById, docsById])
+  const stateCounts = useMemo(() => rows.reduce((m, r) => { m[r.state.kind] = (m[r.state.kind] || 0) + 1; return m }, {}), [rows])
+  const groupCounts = useMemo(() => rows.reduce((m, r) => { m[r.group] = (m[r.group] || 0) + 1; return m }, {}), [rows])
+  const ordered = useMemo(() => {
+    const q = filters.q.trim().toLowerCase()
+    return rows
+      .filter((r) => !filters.state || r.state.kind === filters.state)
+      .filter((r) => !filters.group || r.group === filters.group)
+      .filter((r) => !q || [r.title, r.group, r.state.label, r.state.detail, DOCUMENT_TYPE_LABELS[r.doc?.document_type]]
+        .some((v) => (v || '').toLowerCase().includes(q)))
+  }, [rows, filters])
+  // 選取/深連結(?doc=)/切案切包重置/初次自動選取:共用殼 hook。scope 帶專案與契約包——
+  // 換包整份清單都換,殘留的 selectedId 會指向別包的列。預設選第一筆待處理(有事要做的
+  // 先看),沒有就最新一筆。換選取收掉改分類下拉:下拉綁的是上一筆的 run。
+  const { selectedId, detailOpen, select, closeDetail } = useListDetailPane({
+    param: 'doc', idPrefix: 'doc-',
+    scope: `${pid}/${selectedPackageId || ''}`,
+    ready: rows.length > 0, rows,
+    pickDefault: () => (ordered.find((r) => r.state.kind === 'attention') || ordered[0])?.id,
+    onSelect: () => setReclassifyId(null),
+    onReset: () => { setReclassifyId(null); setFilters(DEFAULT_FILTERS) },
+  })
+  // 篩選後選中項被篩掉:右欄內容保留(與 /safety 同),清單中只是沒有高亮列
+  const selected = rows.find((r) => r.id === selectedId) || null
+  useListKeyboardNav({ ordered, selectedId, select, idPrefix: 'doc-', searchRef })
+
   // ── 動 DB 的三個事件處理器 ───────────────────────────────────────────────
   // 修正/確認分類 → 視需要重新路由 AI 分析(也是「重試」的 handler);狀態機在
   // lib/packageRuns.js,這裡只管鎖、畫面寫回與收尾重載
@@ -414,12 +452,13 @@ export default function Contract() {
         if (storageError) setMsg(`文件已刪除;原始檔清理未完成:${friendlyError(storageError, '請稍後重試')}`)
       }
       setBatchVersionIds((s) => { const n = new Set(s); n.delete(run.document_version_id); return n })
+      closeDetail() // <lg 抽屜承載的正是這筆,刪掉後不留 detailOpen 殘值
       await reloadRuns(run.contract_package_id)
       if (scopeRef.current.pid === pid) await reloadObligations()
     } finally {
       unlockRun(run.id)
     }
-  }, [pid, reloadRuns, reloadObligations])
+  }, [pid, reloadRuns, reloadObligations, closeDetail])
 
   // ── 看上傳的檔案:共用層負責留痕/彈窗退回/檔名還原(documentFileAccess)──
   const downloadVersionFile = useCallback(
@@ -445,6 +484,18 @@ export default function Contract() {
     const doc = version ? docsById.get(version.document_id) : null
     return confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')
   }
+  // 改成可抽取類型會重跑一次 AI 抽取(新的一批待核建議),先講清楚再動手;
+  // 已核定項目不受影響。走 appConfirm(全站同一套對話框;原生 confirm 在自動化
+  // 測試與嵌入式瀏覽器會被封鎖成「按了沒反應」)。
+  const reclassify = async (run, nextType) => {
+    setReclassifyId(null)
+    if (EXTRACTABLE_DOCUMENT_TYPES.includes(nextType) && !(await appConfirm({
+      title: `改為「${DOCUMENT_TYPE_LABELS[nextType]}」會重新執行 AI 抽取`,
+      body: '會產生一批新的建議(已確認項目不受影響)。繼續?',
+      confirmLabel: '繼續',
+    }))) return
+    confirmClassification(run, nextType)
+  }
 
   if (isSupabaseConfigured && !currentProject) {
     return (
@@ -455,143 +506,172 @@ export default function Contract() {
     )
   }
 
+  // ── 詳情欄:所選文件(殼的右欄/抽屜)。動作全走既有的三個 DB handler,
+  // 條件與改版前表格細節行逐條相同(見 DocumentDetail 註解)。
+  const packageName = selectedPackage ? packageDisplayName(selectedPackage, { partiesById, myPartyId }).title : ''
+  const detailBody = selected ? (
+    <DocumentDetail row={selected} packageName={packageName} packageId={selectedPackageId}
+      canWriteContract={can.write} busy={busyRunIds.has(selected.run.id)}
+      reclassifying={reclassifyId === selected.run.id}
+      onReclassifyOpen={() => setReclassifyId(selected.run.id)}
+      onReclassifyCancel={() => setReclassifyId(null)}
+      onReclassify={reclassify}
+      onClassify={confirmClassification} onRetry={retryRun} onDelete={deleteDocument}
+      onOpen={openVersionFile} onDownload={downloadVersionFile} />
+  ) : null
+
   return (
     <div className="space-y-5">
       <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="上傳契約與附件，AI 自動整理責任、期限與應辦事項，再依登入角色查看契約重點。" />
 
       <ContractFlow active="documents" role={currentUser?.org_type} packageId={selectedPackageId} />
       <ErrorBanner msg={packagesError} onRetry={reloadPackages} />
-      {/* ── 卡 1:契約文件(上傳入口+上傳回饋)──────────────────────────── */}
-      <Card title="契約文件" className="[&>div:first-child]:flex-wrap" action={
-        <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
-          {(packages.length > 1 || creatableOptions.length > 0) && (
-            <Select value={selectedPackageId || ''} aria-label="選擇契約" className="w-full sm:w-48" disabled={uploading || packagesLoading}
-              onChange={async (e) => {
-                const value = e.target.value
-                if (value.startsWith('new:')) {
-                  const option = creatableOptions[Number(value.slice(4))]
-                  if (option) {
-                    try { const pkg = await ensurePackage(option); setSelectedPackageId(pkg.id) }
-                    catch (err) { setMsg(friendlyError(err, '建立契約包失敗')) }
-                  }
-                } else setSelectedPackageId(value)
-              }}>
-              {packages.map((p) => {
-                const name = packageDisplayName(p, { partiesById, myPartyId })
-                return <option key={p.id} value={p.id}>{name.title}</option>
-              })}
-              {creatableOptions.map((o, i) => (
-                <option key={o.package_type + o.counterparty_project_party_id} value={`new:${i}`}>
-                  ＋ {o.label}
-                </option>
-              ))}
-            </Select>
-          )}
-          {canUploadDocs && <>
-            <input ref={fileInputRef} type="file" multiple accept={ACCEPT_ATTR} aria-label="選擇契約文件"
-              disabled={uploading || boqBusy || packagesLoading || !!packagesError}
-              onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)} className="hidden" />
-            <button type="button" className={buttonClass('primary', 'md')}
-              disabled={uploading || boqBusy || packagesLoading || !!packagesError}
-              onClick={() => fileInputRef.current?.click()}>
-              <MSym name="cloud_upload" size={15} /> 上傳契約文件
-            </button>
-          </>}
+      {/* 頁級訊息(上傳/分類/刪除的結果與身分提示):動作現在分散在上傳卡與詳情欄,
+          訊息放頁級才不會出現「在右欄按刪除、錯誤跑到左上卡片裡」 */}
+      <ErrorBanner msg={msg} onClose={() => setMsg('')} />
 
-        </div>
-      }>
-        {/* 契約包切換(多包才顯示):單選 chips + 選取包詳情列 */}
-        {packages.length > 1 && (
-          <div className="mb-4">
-            <div className="flex flex-wrap gap-2">
-              {packages.map((p) => {
-                const name = packageDisplayName(p, { partiesById, myPartyId })
-                const active = p.id === selectedPackageId
-                return (
-                  <button key={p.id} onClick={() => setSelectedPackageId(p.id)} aria-pressed={active}
-                    disabled={uploading}
-                    className={`${CHIP_BASE} ${active ? CHIP_ON : CHIP_OFF} ${uploading ? 'opacity-50' : ''}`}>
-                    {name.title}
-                  </button>
-                )
-              })}
-            </div>
-            {selectedPackage && (() => {
-              const name = packageDisplayName(selectedPackage, { partiesById, myPartyId })
-              return (
-                <div className="text-xs text-[var(--text-3)] mt-1.5">
-                  {name.subtitle ? `${name.subtitle}·` : ''}{PACKAGE_STATUS_LABELS[selectedPackage.status] || selectedPackage.status}
-                </div>
-              )
-            })()}
-          </div>
-        )}
-
-        {!panelVisible ? (
-          /* 狀態 A:idle 拖放區 */
-          <div
-            onDragOver={(e) => { e.preventDefault(); if (canUploadDocs) setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); if (canUploadDocs) handleFiles(e.dataTransfer?.files, selectedPackage) }}
-            className={`border border-dashed rounded-xl px-5 py-5 flex items-start gap-3.5 transition-colors ${dragOver ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border)] bg-[var(--surface-2)]'}`}
-          >
-            <MSym name="cloud_upload" size={26} className="text-[var(--text-3)] shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <p className="text-sm text-[var(--text)] leading-relaxed">
-                {canUploadDocs ? '拖入契約與附件，或點「上傳契約文件」一次選擇多個檔案。' : '在這裡查看契約文件、AI 處理狀態與原始檔案。'}
-              </p>
-              <p className="text-xs text-[var(--text-3)] mt-1.5">
-                可自動分析：文字型 PDF、DOCX、TXT。圖片、掃描頁、Excel 與舊版 Word 目前無法自動讀取內容；可保留原檔。PCCES XML 另匯入標單工項。
-              </p>
-              {!isPersistedProject && <p className="text-xs text-[var(--amber-text)] mt-1.5">Demo 模式不支援,請登入並選擇真實專案。</p>}
-              {isPersistedProject && !can.write && <p className="text-xs text-[var(--text-3)] mt-1.5">目前為檢視模式；請由施工廠商、監造或具文件管理權限的成員上傳。</p>}
-            </div>
-          </div>
-        ) : (
-          /* 狀態 B/C/D:上傳中/上傳結束的進度面板(逐檔列+總進度+結束摘要) */
-          <UploadPanel batch={batch} busy={panelBusy} boqBusy={boqBusy} elapsed={elapsed}
-            docsById={docsById} versionsById={versionsById}
-            canWriteContract={can.write} busyRunIds={busyRunIds}
-            onRetry={retryRun} onDismiss={dismissPanel}
-            aiCount={aiCount} packageId={selectedPackageId} boqImported={workItemsSource === 'db'} />
-        )}
-        <ErrorBanner msg={msg} className="mt-3" />
-        {/* 標單匯入結果:單一出口,面板開著也看得到(成功/略過/失敗都不可被面板吞掉) */}
-        {boqMsg && (boqMsg.tone === 'error'
-          ? <ErrorBanner msg={boqMsg.text} className="mt-2" />
-          : (
-            <p className="text-xs mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[var(--text-2)]">
-              <MSym name={boqMsg.tone === 'ok' ? 'check_circle' : 'info'} size={14}
-                className={`shrink-0 ${boqMsg.tone === 'ok' ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'}`} />
-              {boqMsg.text}
-              {boqMsg.tone === 'ok' && <Link to="/boq" className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">前往標單工項 <MSym name="arrow_forward" size={12} /></Link>}
-            </p>
-          ))}
-      </Card>
-
-      {selectedPackage && !runsLoading && !runsError && loadedPackageId === selectedPackageId && (
-        <Card title="下一步：查看整理結果">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm leading-relaxed text-[var(--text-2)]">
-              <p>{progress.active > 0 ? 'AI 正在整理，已產出的重點可先查看。' : `目前可查看 ${aiCount ?? 0} 項已歸檔契約重點`}</p>
-              <p className="mt-1 text-xs text-[var(--text-3)]">按責任方、期限與類型閱讀；需要確認內容時直接對照來源原文。</p>
-              {(progress.incomplete > 0 || progress.partial > 0 || progress.failed > 0 || progress.needsClassification > 0) && (
-                <p className="mt-2 text-xs text-[var(--amber-text)]">有文件尚未完整整理，請一併查看下方的處理原因。已產出的重點仍可先閱讀。</p>
+      {/* 殼:左欄=上傳卡＋下一步＋文件清單,右欄=所選文件詳情(<lg 走抽屜)。
+          沒有文件時也走殼——上傳卡在有/無文件兩態寬度一致,不會上傳完整片位移 */}
+      <ListDetailLayout
+        detail={detailBody}
+        detailLabel="文件詳情"
+        detailEmpty={<Empty>{rows.length ? '點左側清單查看文件的版本、分類與處理狀態。' : '上傳文件後,點左側清單查看每一份的版本、分類與處理狀態。'}</Empty>}
+        drawerOpen={detailOpen && !!selected}
+        onDrawerClose={closeDetail}>
+        <div className="space-y-5 min-w-0">
+          {/* ── 卡 1:契約文件(上傳入口+上傳回饋)──────────────────────────── */}
+          <Card title="契約文件" className="[&>div:first-child]:flex-wrap" action={
+            <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
+              {(packages.length > 1 || creatableOptions.length > 0) && (
+                <Select value={selectedPackageId || ''} aria-label="選擇契約" className="w-full sm:w-48" disabled={uploading || packagesLoading}
+                  onChange={async (e) => {
+                    const value = e.target.value
+                    if (value.startsWith('new:')) {
+                      const option = creatableOptions[Number(value.slice(4))]
+                      if (option) {
+                        try { const pkg = await ensurePackage(option); setSelectedPackageId(pkg.id) }
+                        catch (err) { setMsg(friendlyError(err, '建立契約包失敗')) }
+                      }
+                    } else setSelectedPackageId(value)
+                  }}>
+                  {packages.map((p) => {
+                    const name = packageDisplayName(p, { partiesById, myPartyId })
+                    return <option key={p.id} value={p.id}>{name.title}</option>
+                  })}
+                  {creatableOptions.map((o, i) => (
+                    <option key={o.package_type + o.counterparty_project_party_id} value={`new:${i}`}>
+                      ＋ {o.label}
+                    </option>
+                  ))}
+                </Select>
               )}
+              {canUploadDocs && <>
+                <input ref={fileInputRef} type="file" multiple accept={ACCEPT_ATTR} aria-label="選擇契約文件"
+                  disabled={uploading || boqBusy || packagesLoading || !!packagesError}
+                  onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)} className="hidden" />
+                <button type="button" className={buttonClass('primary', 'md')}
+                  disabled={uploading || boqBusy || packagesLoading || !!packagesError}
+                  onClick={() => fileInputRef.current?.click()}>
+                  <MSym name="cloud_upload" size={15} /> 上傳契約文件
+                </button>
+              </>}
+
             </div>
-            <Link to={`/requirements?package=${encodeURIComponent(selectedPackageId)}`} className={buttonClass('primary', 'md')}>
-              查看這份契約重點 <MSym name="arrow_forward" size={16} />
-            </Link>
-          </div>
-        </Card>
-      )}
-      {/* ── 卡 2:專案文件(已入庫清單)────────────────────────────────────── */}
-      <DocumentTable runs={runs} versionsById={versionsById} docsById={docsById}
-        loading={packagesLoading || (runsLoading && loadedPackageId !== selectedPackageId)}
-        error={runsError} blocked={!!packagesError} onRetryLoad={() => reloadRuns(selectedPackageId)}
-        canWriteContract={can.write} busyRunIds={busyRunIds}
-        onClassify={confirmClassification} onRetry={retryRun} onDelete={deleteDocument}
-        onOpen={openVersionFile} onDownload={downloadVersionFile} />
+          }>
+            {/* 契約包切換(多包才顯示):單選 chips + 選取包詳情列 */}
+            {packages.length > 1 && (
+              <div className="mb-4">
+                <div className="flex flex-wrap gap-2">
+                  {packages.map((p) => {
+                    const name = packageDisplayName(p, { partiesById, myPartyId })
+                    const active = p.id === selectedPackageId
+                    return (
+                      <button key={p.id} onClick={() => setSelectedPackageId(p.id)} aria-pressed={active}
+                        disabled={uploading}
+                        className={`${CHIP_BASE} ${active ? CHIP_ON : CHIP_OFF} ${uploading ? 'opacity-50' : ''}`}>
+                        {name.title}
+                      </button>
+                    )
+                  })}
+                </div>
+                {selectedPackage && (() => {
+                  const name = packageDisplayName(selectedPackage, { partiesById, myPartyId })
+                  return (
+                    <div className="text-xs text-[var(--text-3)] mt-1.5">
+                      {name.subtitle ? `${name.subtitle}·` : ''}{PACKAGE_STATUS_LABELS[selectedPackage.status] || selectedPackage.status}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+
+            {!panelVisible ? (
+              /* 狀態 A:idle 拖放區 */
+              <div
+                onDragOver={(e) => { e.preventDefault(); if (canUploadDocs) setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setDragOver(false); if (canUploadDocs) handleFiles(e.dataTransfer?.files, selectedPackage) }}
+                className={`border border-dashed rounded-xl px-5 py-5 flex items-start gap-3.5 transition-colors ${dragOver ? 'border-[var(--primary)] bg-[var(--blue-tint)]' : 'border-[var(--border)] bg-[var(--surface-2)]'}`}
+              >
+                <MSym name="cloud_upload" size={26} className="text-[var(--text-3)] shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm text-[var(--text)] leading-relaxed">
+                    {canUploadDocs ? '拖入契約與附件，或點「上傳契約文件」一次選擇多個檔案。' : '在這裡查看契約文件、AI 處理狀態與原始檔案。'}
+                  </p>
+                  <p className="text-xs text-[var(--text-3)] mt-1.5">
+                    可自動分析：文字型 PDF、DOCX、TXT。圖片、掃描頁、Excel 與舊版 Word 目前無法自動讀取內容；可保留原檔。PCCES XML 另匯入標單工項。
+                  </p>
+                  {!isPersistedProject && <p className="text-xs text-[var(--amber-text)] mt-1.5">Demo 模式不支援,請登入並選擇真實專案。</p>}
+                  {isPersistedProject && !can.write && <p className="text-xs text-[var(--text-3)] mt-1.5">目前為檢視模式；請由施工廠商、監造或具文件管理權限的成員上傳。</p>}
+                </div>
+              </div>
+            ) : (
+              /* 狀態 B/C/D:上傳中/上傳結束的進度面板(逐檔列+總進度+結束摘要) */
+              <UploadPanel batch={batch} busy={panelBusy} boqBusy={boqBusy} elapsed={elapsed}
+                docsById={docsById} versionsById={versionsById}
+                canWriteContract={can.write} busyRunIds={busyRunIds}
+                onRetry={retryRun} onDismiss={dismissPanel}
+                aiCount={aiCount} packageId={selectedPackageId} boqImported={workItemsSource === 'db'} />
+            )}
+            {/* 標單匯入結果:單一出口,面板開著也看得到(成功/略過/失敗都不可被面板吞掉) */}
+            {boqMsg && (boqMsg.tone === 'error'
+              ? <ErrorBanner msg={boqMsg.text} className="mt-2" />
+              : (
+                <p className="text-xs mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[var(--text-2)]">
+                  <MSym name={boqMsg.tone === 'ok' ? 'check_circle' : 'info'} size={14}
+                    className={`shrink-0 ${boqMsg.tone === 'ok' ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'}`} />
+                  {boqMsg.text}
+                  {boqMsg.tone === 'ok' && <Link to="/boq" className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">前往標單工項 <MSym name="arrow_forward" size={12} /></Link>}
+                </p>
+              ))}
+          </Card>
+
+          {selectedPackage && !runsLoading && !runsError && loadedPackageId === selectedPackageId && (
+            <Card title="下一步：查看整理結果">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm leading-relaxed text-[var(--text-2)]">
+                  <p>{progress.active > 0 ? 'AI 正在整理，已產出的重點可先查看。' : `目前可查看 ${aiCount ?? 0} 項已歸檔契約重點`}</p>
+                  <p className="mt-1 text-xs text-[var(--text-3)]">按責任方、期限與類型閱讀；需要確認內容時直接對照來源原文。</p>
+                  {(progress.incomplete > 0 || progress.partial > 0 || progress.failed > 0 || progress.needsClassification > 0) && (
+                    <p className="mt-2 text-xs text-[var(--amber-text)]">有文件尚未完整整理，請一併查看下方的處理原因。已產出的重點仍可先閱讀。</p>
+                  )}
+                </div>
+                <Link to={`/requirements?package=${encodeURIComponent(selectedPackageId)}`} className={buttonClass('primary', 'md')}>
+                  查看這份契約重點 <MSym name="arrow_forward" size={16} />
+                </Link>
+              </div>
+            </Card>
+          )}
+
+          {/* ── 卡 2:專案文件(已入庫清單,只負責選取;動作在詳情欄)──────────── */}
+          <DocumentList rows={rows} ordered={ordered} selectedId={selectedId}
+            onSelect={(id) => select(id, { openPane: true })}
+            filters={filters} setFilters={setFilters} searchRef={searchRef}
+            stateCounts={stateCounts} groupCounts={groupCounts}
+            loading={packagesLoading || (runsLoading && loadedPackageId !== selectedPackageId)}
+            error={runsError} blocked={!!packagesError} onRetryLoad={() => reloadRuns(selectedPackageId)} />
+        </div>
+      </ListDetailLayout>
     </div>
   )
 }
