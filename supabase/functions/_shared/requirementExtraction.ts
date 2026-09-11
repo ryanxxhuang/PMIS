@@ -9,8 +9,6 @@
 // * deterministic per-run suggestion IDs so retrying a persistence step inside
 //   the same run cannot insert duplicates.
 
-export const PROMPT_VERSION = 'extract-requirements/v3'
-
 // Vocabulary mirrors the P0-01 requirement domain (src/lib/requirements.js and
 // the requirements table CHECK constraints) plus the legacy contract phase /
 // trigger vocabulary already used by contract_obligations and lib/contractDue.
@@ -31,7 +29,7 @@ export const OFFSET_DIRS = ['before', 'after'] as const
 //   monthly   — { day: 1..31 }
 //   quarterly — { month: 1..3(季內第幾個月), day: 1..31 }
 //   yearly    — { month: 1..12, day: 1..31 }
-// 值域改動要同步:extract-requirements 的 SUGGESTION_SCHEMA、前端
+// 值域改動要同步:requirementPrompt.ts 的 SUGGESTION_SCHEMA(並升 PROMPT_VERSION)、前端
 // formatRequirementRule/手動新增表單、materialize_requirement_obligation(migration)
 // 與兩份 contractDue 的下次到期日計算。
 export const FREQUENCY_TYPES = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const
@@ -240,6 +238,53 @@ export interface BatchPage {
   page_number: number
   extracted_text: string | null
   extraction_method: string
+}
+
+// 逐頁讀取必須有 exact count：PostgREST 可能套比請求更小的 max_rows，
+// 因此不能用「回傳少於 1000」推論已讀完。頁序也要完整，否則不把半份文字送模型。
+export async function loadDocumentPages(build: (from: number, to: number) => PromiseLike<{
+  data: BatchPage[] | null; count: number | null; error: { message: string } | null
+}>, expectedPageCount?: unknown): Promise<BatchPage[]> {
+  if (expectedPageCount != null && (typeof expectedPageCount !== 'number'
+    || !Number.isInteger(expectedPageCount) || expectedPageCount < 0)) {
+    throw new Error('上傳頁數紀錄無效，請重新上傳文件')
+  }
+  const pages: BatchPage[] = []
+  let expected: number | null = null
+  do {
+    const { data, count, error } = await build(pages.length, pages.length + 999)
+    if (error) {
+      // PostgREST 原文只進 log;throw 純中文,extract-requirements 的例外遮罩
+      //(maskException)才會把它當我們自己的業務訊息原樣放行給使用者
+      console.error('[loadDocumentPages] PostgREST 錯誤:', error.message)
+      throw new Error('文件頁面讀取失敗，請稍後再試')
+    }
+    if (count == null || !Number.isInteger(count) || count < 0) {
+      throw new Error('無法核對文件總頁數，請重新整理後重試')
+    }
+    if (expected != null && count !== expected) throw new Error('文件頁面仍在更新，請完成上傳後重試')
+    expected = count
+    if (expectedPageCount != null && count !== expectedPageCount) {
+      throw new Error('文件頁數與上傳紀錄不符，請完成上傳後重試')
+    }
+    if (!data?.length && pages.length < expected) throw new Error('文件頁面讀取不完整，請重試')
+    for (const page of data || []) {
+      if (page.page_number !== pages.length + 1) throw new Error('文件頁序不完整，請重新上傳文件')
+      pages.push(page)
+    }
+    if (pages.length > expected) throw new Error('文件頁數不一致，請重試')
+  } while (pages.length < expected)
+  return pages
+}
+
+// 處理覆蓋與語意正確率是不同指標。即使批次跑完，無文字頁與被丟棄的
+// 模型項目也不能算「整份已完整整理」；D-019 自動歸檔規則不因此改變。
+export function extractionCoverageIncomplete(opts: {
+  truncated: boolean; failed: boolean; clippedCount: number;
+  emptyPageCount: number; rejectedCount: number
+}): boolean {
+  return opts.truncated || opts.failed || opts.clippedCount > 0
+    || opts.emptyPageCount > 0 || opts.rejectedCount > 0
 }
 
 export interface DocumentBatchPlan {

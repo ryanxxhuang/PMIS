@@ -13,21 +13,33 @@
 // 差異只有可見義務集合、執行卡張數(1/2/3)、責任方篩選是否出現。
 // 寫入走 updateObligationStatus(DB 成功才更新 UI,B-07——刻意不樂觀更新);
 // 「擷取有誤」落到觀察事項(observations)由監造/機關複查,不憑空造新資料域。
+// 「清單＋詳情」殼(選取/深連結/鍵盤/抽屜/Modal/搜尋/快篩)與擷取審核頁共用:
+// 行為在 lib/useListDetailPane.js、外殼在 components/listDetail.jsx。
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import ContractFlow from '../../components/ContractFlow.jsx'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { supabase } from '../../lib/supabase.js'
-import { pageAllInSafe } from '../../lib/pagedQuery.js'
 import {
-  Card, Surface, Empty, PageHeader, Badge, Button, Select, Textarea,
+  Card, Surface, Empty, PageHeader, Badge, Button, Select, Textarea, Dot,
   PrerequisiteEmptyState, ErrorBanner, SkeletonList, Skeleton,
 } from '../../components/ui.jsx'
+import {
+  ListDetailLayout, LIST_DETAIL_GRID, ModalShell, SearchField, StatusChip, MetaGrid, SourceQuote,
+} from '../../components/listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appSnackbar } from '../../components/snackbar.jsx'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
+import { RUN_POLL_MS } from '../../lib/packageRuns.js'
 import { localISODate } from '../../lib/dates.js'
+import { fmtDateTime } from '../../lib/format.js'
+import {
+  requirementVerification, inPackage, runsInPackage, ingestionSummary,
+} from '../../lib/requirementReview.js'
+import { extractionCoverageWarnings } from '../../lib/extractRequirements.js'
+import { useContractEnrichment } from '../../lib/useContractEnrichment.js'
+import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import {
   PARTY_META, VISIBLE, ORG_TO_PARTY, PARTY_BLURB, OB_STATUS, STATUS_KEYS, PHASES,
   buildTimelineItem, matchesFilters, partyStat, phaseStat, phaseWindows,
@@ -48,14 +60,15 @@ const COUNTDOWN_CLS = {
   overdue: 'text-[var(--red-text)]', due: 'text-[var(--amber-text)]',
 }
 const REPORT_TYPES = ['條文誤判', '日期算錯', '責任方錯誤', '重複', '其他']
+const DEFAULT_FILTERS = { q: '', status: 'all', type: '', who: '', phase: 'all' }
 const fmtDay = (v) => (v ? String(v).slice(0, 10) : '—')
-const fmtTime = (v) => (v ? new Date(v).toLocaleString('zh-TW', { hour12: false }) : '')
+const fmtTime = (v) => fmtDateTime(v, { empty: '' })
 
 // 責任方 pill(README 2.4):自己的=藍框藍底、別人的=線框——顏色留給狀態,
-// 責任方靠文字+icon 分辨(a11y:不可只靠顏色)
+// 責任方靠文字+icon 分辨(a11y:不可只靠顏色)。capsule 是責任方標籤的例外(規範 §4)。
 function WhoPill({ who, self }) {
   return (
-    <span className={`inline-flex items-center gap-[5px] h-[18px] px-[7px] rounded-full border text-[10.5px] font-medium whitespace-nowrap ${self
+    <span className={`inline-flex items-center gap-[5px] h-[18px] px-[7px] rounded-full border text-micro font-medium whitespace-nowrap ${self
       ? 'border-[var(--primary)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
       : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)]'}`}>
       <MSym name={PARTY_META[who]?.icon || 'engineering'} size={13} />{who}
@@ -63,26 +76,20 @@ function WhoPill({ who, self }) {
   )
 }
 
-const StatusDot = ({ status }) => (
-  <span className="w-[7px] h-[7px] rounded-full shrink-0" aria-hidden
-    style={{ background: OB_STATUS[status].dot }} />
-)
-
 export default function Requirements() {
   const {
     currentProject, project, isPersistedProject, currentUser, obligations,
-    updateObligationStatus, submittals, createObservation, can, updateProjectAnchors,
+    updateObligationStatus, submittals, createObservation, can, updateProjectAnchors, reloadObligations,
   } = useStore()
   // 登入身分決定檢視方(README:產品端不渲染身分切換器,demo 換角色重登即可)
   const viewerParty = ORG_TO_PARTY[currentUser?.org_type] || '廠商'
   // 「擷取有誤」落觀察事項,其 insert 政策仍是 can_write(機關唯讀)——鏡像它,
-  // 不渲染會被 RLS 擋下的假按鈕。義務的標記完成/掛佐證自 migration
-  // 20260825120000 起改為「只看歸屬」(機關也能標自己的),不再吃 can_write。
-  const canReport = can.edit || currentUser?.org_type === 'supervisor'
+  // 不渲染會被 RLS 擋下的假按鈕(規則的單一來源在 store.jsx 的 can.write)。
+  // 義務的標記完成/掛佐證自 migration 20260825120000 起改為「只看歸屬」
+  // (機關也能標自己的),不再吃 can_write。
+  const canReport = can.write
 
-  const [filters, setFilters] = useState({ q: '', status: 'all', type: '', who: '', phase: 'all' })
-  const [selectedId, setSelectedId] = useState(null)
-  const [detailOpen, setDetailOpen] = useState(false)  // <lg 抽屜/全螢幕詳情
+  const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
   const [evidenceOpen, setEvidenceOpen] = useState(false)
@@ -95,73 +102,30 @@ export default function Requirements() {
   const [anchorErr, setAnchorErr] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
   const searchRef = useRef(null)
+  const packageId = searchParams.get('package') || ''
 
   const pid = currentProject?.project_id
 
   // ── 出處/紀錄 enrich(真專案):義務掛的 requirement + 引述出處 + 文件版本 +
   // ingestion runs(頁底「AI 最近整理」與空狀態分流)。demo 不打 DB,直接可用。
-  const [enrich, setEnrich] = useState({
-    reqById: new Map(), sourcesByReq: new Map(), versionsById: new Map(),
-    runs: [], loaded: false, error: '',
-  })
-  const [enrichKey, setEnrichKey] = useState(0)
-  const reqKey = useMemo(
-    () => [...new Set(obligations.map((o) => o.requirement_id).filter(Boolean))].sort().join(','),
-    [obligations],
+  const requirementIds = useMemo(() => obligations.map((o) => o.requirement_id), [obligations])
+  const {
+    reqById, sourcesByReq, versionsById, runs, runsById, packages,
+    loaded: enrichLoaded, error: enrichError, reload: reloadEnrich,
+  } = useContractEnrichment({ pid, enabled: isPersistedProject, requirementIds })
+  const coverageWarnings = useMemo(
+    () => extractionCoverageWarnings(runsInPackage(runs, packageId, { versionsById })),
+    [runs, versionsById, packageId],
   )
+
+  // 從文件頁進來先重讀自動物化結果；分析仍在進行時刷新已完成的部分。
+  useEffect(() => { if (isPersistedProject) reloadObligations?.() }, [isPersistedProject, pid, reloadObligations])
+  const analyzing = runs.some((r) => ['pending', 'processing'].includes(r.status))
   useEffect(() => {
-    if (!isPersistedProject || !pid) {
-      setEnrich((e) => (e.loaded ? e : { ...e, loaded: true }))
-      return undefined
-    }
-    let active = true
-    setEnrich((e) => ({ ...e, loaded: false, error: '' }))
-    ;(async () => {
-      try {
-        const reqIds = reqKey ? reqKey.split(',') : []
-        const [runRes, reqRes, srcRes] = await Promise.all([
-          supabase.from('document_ingestion_runs')
-            .select('id, document_version_id, status, completed_at, error_message')
-            .eq('project_id', pid).order('started_at', { ascending: false }).limit(50),
-          reqIds.length ? pageAllInSafe(reqIds, (chunk, from, to) => supabase.from('requirements')
-            .select('id, requirement_type, description, acceptance_criteria, evidence_requirement, origin, created_at, reviewed_at, reviewed_by')
-            .in('id', chunk).order('id').range(from, to)) : { data: [], error: null },
-          reqIds.length ? pageAllInSafe(reqIds, (chunk, from, to) => supabase.from('requirement_sources')
-            .select('*').in('requirement_id', chunk).order('id').range(from, to)) : { data: [], error: null },
-        ])
-        if (runRes.error) throw runRes.error
-        if (reqRes.error) throw reqRes.error
-        if (srcRes.error) throw srcRes.error
-        const sourcesByReq = new Map()
-        for (const s of srcRes.data || []) {
-          if (!sourcesByReq.has(s.requirement_id)) sourcesByReq.set(s.requirement_id, [])
-          sourcesByReq.get(s.requirement_id).push(s)
-        }
-        const versionIds = [...new Set([
-          ...(srcRes.data || []).map((s) => s.document_version_id),
-          ...(runRes.data || []).map((r) => r.document_version_id),
-        ].filter(Boolean))]
-        let versions = []
-        if (versionIds.length) {
-          const vRes = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_versions')
-            .select('id, version_label, storage_path, original_filename, mime_type, documents(title)')
-            .in('id', chunk).order('id').range(from, to))
-          if (vRes.error) throw vRes.error
-          versions = vRes.data || []
-        }
-        if (!active) return
-        setEnrich({
-          reqById: new Map((reqRes.data || []).map((r) => [r.id, r])),
-          sourcesByReq,
-          versionsById: new Map(versions.map((v) => [v.id, v])),
-          runs: runRes.data || [], loaded: true, error: '',
-        })
-      } catch (error) {
-        if (active) setEnrich((e) => ({ ...e, loaded: true, error: friendlyError(error, '契約出處載入失敗') }))
-      }
-    })()
-    return () => { active = false }
-  }, [isPersistedProject, pid, reqKey, enrichKey])
+    if (!analyzing) return
+    const timer = setInterval(() => { reloadEnrich(); reloadObligations?.() }, RUN_POLL_MS)
+    return () => clearInterval(timer)
+  }, [analyzing, reloadEnrich, reloadObligations])
 
   // ── 檢視模型:義務列 + enrich → 狀態/期程/倒數/出處(純函式,見 obligationTimeline)
   // 基準日吃 store 的 project(demo 落回種子專案;與今日待辦同一份錨點,數字才對得上)
@@ -170,16 +134,20 @@ export default function Requirements() {
     commencement_date: project?.commencement_date, end_date: project?.end_date,
   }), [project])
   const items = useMemo(() => obligations.map((ob) => buildTimelineItem(ob, {
-    requirement: ob.requirement_id ? enrich.reqById.get(ob.requirement_id) : null,
-    sources: ob.requirement_id ? enrich.sourcesByReq.get(ob.requirement_id) : null,
-    versionsById: enrich.versionsById,
+    requirement: ob.requirement_id ? reqById.get(ob.requirement_id) : null,
+    sources: ob.requirement_id ? sourcesByReq.get(ob.requirement_id) : null,
+    versionsById,
     anchors,
-  })), [obligations, enrich, anchors])
+  })), [obligations, reqById, sourcesByReq, versionsById, anchors])
 
   // 可見義務=角色可見集合(前端 shim;目標是後端依身分回傳已過濾集合,見 lib 註記)
+  // × 契約範圍(packageOf:列自己的歸包,沒有才由 run → 文件版本回推)。依賴就是它
+  // 真正讀的三張 Map——改版前這裡靠 runsById 恰好與 enrich 同一次 setState 換
+  // identity 才沒壞,現在寫對。
   const pool = useMemo(
-    () => items.filter((it) => VISIBLE[viewerParty].includes(it.who)),
-    [items, viewerParty],
+    () => items.filter((it) => VISIBLE[viewerParty].includes(it.who)
+      && inPackage(it.ob.requirement_id ? reqById.get(it.ob.requirement_id) : null, packageId, { versionsById, runsById })),
+    [items, viewerParty, packageId, reqById, versionsById, runsById],
   )
   const filtered = useMemo(() => pool.filter((it) => matchesFilters(it, filters)), [pool, filters])
   const byDue = (a, b) => ((a.due?.getTime() ?? Infinity) - (b.due?.getTime() ?? Infinity))
@@ -233,105 +201,35 @@ export default function Requirements() {
     if (error) setAnchorErr(friendlyError(error, '基準日未儲存'))
   }
 
+  // ── 選取/深連結(?obligation=)/切案重置/初次自動選取:共用殼 hook。
+  // 預設選第一條已逾期 → 第一條即將到期 → 清單第一條(README 3)。
+  const { selectedId, detailOpen, select, closeDetail } = useListDetailPane({
+    param: 'obligation', idPrefix: 'ob-',
+    scope: `${pid}/${viewerParty}/${packageId}`,
+    ready: pool.length > 0, rows: pool,
+    pickDefault: () => pickDefaultId(ordered.length ? ordered : pool),
+    onSelect: () => { setMsg(''); setEvidenceOpen(false) },
+    onReset: () => { setMsg(''); setEvidenceOpen(false); setFilters(DEFAULT_FILTERS) },
+  })
   // 篩選後選中項被篩掉:保留右欄內容不清空(README 3),清單中無高亮列
   const selected = pool.find((it) => it.id === selectedId) || null
-
-  const select = useCallback((id, { openPane = false } = {}) => {
-    setSelectedId(id); setMsg(''); setEvidenceOpen(false)
-    // 抽屜/全螢幕只屬於 <lg:桌機點列不留 detailOpen 殘值,縮窗才不會突然彈出遮罩
-    if (openPane && window.matchMedia('(max-width: 1023.98px)').matches) setDetailOpen(true)
-    // URL 帶單條連結(?obligation=)可分享;replace 不炸掉瀏覽歷史
-    setSearchParams((p) => { const n = new URLSearchParams(p); n.set('obligation', id); return n }, { replace: true })
-  }, [setSearchParams])
-
-  // 切換專案(不經 route 卸載)時整組重置:殘留他案的 selectedId/?obligation
-  // 會讓右欄空白、URL 指向別案的義務
-  const initialPicked = useRef(false)
-  const seenPid = useRef(pid)
-  useEffect(() => {
-    if (seenPid.current === pid) return
-    seenPid.current = pid
-    initialPicked.current = false
-    setSelectedId(null); setDetailOpen(false); setMsg(''); setEvidenceOpen(false)
-    setFilters({ q: '', status: 'all', type: '', who: '', phase: 'all' })
-    setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('obligation'); return n }, { replace: true })
-  }, [pid, setSearchParams])
-
-  // 初次載入:深連結(?obligation=)優先並捲到該列;否則預設選第一條已逾期 →
-  // 第一條即將到期 → 清單第一條(README 3)
-  useEffect(() => {
-    if (initialPicked.current || !pool.length) return
-    initialPicked.current = true
-    const param = searchParams.get('obligation')
-    const deep = param ? pool.find((it) => it.id === param) : null
-    const targetId = deep ? deep.id : pickDefaultId(ordered.length ? ordered : pool)
-    if (!targetId) return
-    select(targetId)
-    if (deep) setTimeout(() => document.getElementById(`ob-${deep.id}`)?.scrollIntoView({ block: 'center' }), 60)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pool.length])
 
   // 「開啟原文」:出處的文件版本+頁碼 → 簽名 URL 開原始檔(PDF 跳頁)
   const openable = useMemo(() => {
     if (!selected?.ob.requirement_id) return null
-    for (const s of enrich.sourcesByReq.get(selected.ob.requirement_id) || []) {
-      const version = s.document_version_id ? enrich.versionsById.get(s.document_version_id) : null
+    for (const s of sourcesByReq.get(selected.ob.requirement_id) || []) {
+      const version = s.document_version_id ? versionsById.get(s.document_version_id) : null
       if (version && isValidStorageKey(version.storage_path)) return { source: s, version }
     }
     return null
-  }, [selected, enrich])
+  }, [selected, sourcesByReq, versionsById])
   const openOriginal = useCallback(() => {
     if (!openable) return
     openDocumentVersionFile(openable.version, { page: openable.source.page_number, onError: setMsg })
   }, [openable])
 
-  // 鍵盤:↑/↓ 移動選取、Enter 開啟原文、/ 聚焦搜尋。只有真正的輸入控件整組跳過;
-  // 任何 modal 層(回報/抽屜/確認框)開著就停用,Enter 讓 button/link 走原生 click
-  useEffect(() => {
-    const onKey = (e) => {
-      const t = e.target
-      const inField = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)
-      const modalUp = reportOpen || document.querySelector('[aria-modal="true"]') != null
-      if (e.key === '/' && !inField && !modalUp) { e.preventDefault(); searchRef.current?.focus(); return }
-      if (inField || modalUp || e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Enter' && t && /^(BUTTON|A)$/.test(t.tagName)) return
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault()
-        if (!ordered.length) return
-        const idx = ordered.findIndex((it) => it.id === selectedId)
-        const next = e.key === 'ArrowDown'
-          ? ordered[Math.min(idx + 1, ordered.length - 1)]
-          : ordered[Math.max(idx - 1, 0)]
-        if (next && next.id !== selectedId) {
-          select(next.id)
-          document.getElementById(`ob-${next.id}`)?.scrollIntoView({ block: 'nearest' })
-        }
-      } else if (e.key === 'Enter') {
-        openOriginal()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [ordered, selectedId, select, openOriginal, reportOpen])
-
-  // 抽屜與回報 Modal:Esc 關閉+開啟時把焦點帶進面板(aria-modal 沒有焦點管理
-  // =報讀器仍停在遮罩後的清單)
-  const drawerRef = useRef(null)
-  const reportRef = useRef(null)
-  useEffect(() => {
-    if (!detailOpen) return undefined
-    drawerRef.current?.focus()
-    const onKey = (e) => { if (e.key === 'Escape') setDetailOpen(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [detailOpen])
-  useEffect(() => {
-    if (!reportOpen) return undefined
-    reportRef.current?.focus()
-    const onKey = (e) => { if (e.key === 'Escape') setReportOpen(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [reportOpen])
+  // 鍵盤:↑/↓ 移動選取、Enter 開啟原文、/ 聚焦搜尋(共用殼 hook;回報 Modal 開著就停用)
+  useListKeyboardNav({ ordered, selectedId, select, idPrefix: 'ob-', onEnter: openOriginal, modalUp: reportOpen, searchRef })
 
   // ── 動作:標記完成/取消完成/掛佐證(DB 成功才更新 UI,失敗顯示 inline 錯誤)
   const markDone = async () => {
@@ -376,11 +274,7 @@ export default function Requirements() {
   }
 
   // ── 頁底 meta 與空狀態分流(有 completed run 才講「AI 最近整理」)──────────
-  const completedRuns = enrich.runs.filter((r) => r.status === 'completed')
-  const docCount = new Set(completedRuns
-    .map((r) => enrich.versionsById.get(r.document_version_id)?.documents?.title)
-    .filter(Boolean)).size
-  const latestRun = completedRuns.map((r) => r.completed_at).filter(Boolean).sort().pop()
+  const { docCount, latest: latestRun } = ingestionSummary(runs, versionsById)
   const footerMeta = [
     `顯示 ${filtered.length} / ${pool.length} 條`,
     docCount ? `來源 ${docCount} 份文件` : null,
@@ -402,7 +296,8 @@ export default function Requirements() {
       ['應留存', selected.evidenceReq || '—'],
       ...(selected.penalty ? [['罰則', selected.penalty]] : []),
     ]
-    const req = selected.ob.requirement_id ? enrich.reqById.get(selected.ob.requirement_id) : null
+    const req = selected.ob.requirement_id ? reqById.get(selected.ob.requirement_id) : null
+    const verification = requirementVerification(req)
     const evidenceSub = selected.ob.evidence_submittal_id
       ? submittals.find((s) => s.id === selected.ob.evidence_submittal_id) : null
     // 執行紀錄:由現有事實組裝(AI 擷取/確認、佐證、完成標記)。義務完成沒有
@@ -418,7 +313,7 @@ export default function Requirements() {
     if (req?.reviewed_at) {
       logEntries.push({
         when: fmtDay(req.reviewed_at),
-        what: req.reviewed_by ? '已確認 AI 轉錄與契約原文一致' : '系統核對無誤・自動確認',
+        what: verification.label,
         s: 'done',
       })
     }
@@ -441,34 +336,37 @@ export default function Requirements() {
         <Badge color={st.badge}>{st.label}</Badge>
         <WhoPill who={selected.who} self={isMine} />
         {openable && (
-          <button type="button" onClick={openOriginal} title="在原文件中開啟"
-            className="ml-auto text-[11.5px] text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11 px-1">
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={openOriginal} title="在原文件中開啟">
             開啟原文
-          </button>
+          </Button>
         )}
       </div>
 
       <ErrorBanner msg={msg} onClose={() => setMsg('')} className="mx-4 mt-3" />
 
+      <div className={`mx-4 mt-3 rounded-md px-3 py-2 text-xs leading-relaxed ${verification.attention
+        ? 'text-[var(--amber-text)] bg-[var(--amber-tint)]' : 'text-[var(--text-2)] bg-[var(--surface-2)]'}`}>
+        <p className="font-medium">{verification.label}</p>
+        <p>{verification.note}</p>
+        {verification.attention && req?.id && (
+          <Link to={`/requirements/review?highlight=${req.id}${packageId ? `&package=${encodeURIComponent(packageId)}` : ''}`} className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline">
+            查看這項與原文
+          </Link>
+        )}
+      </div>
+
       {/* 2. 本文:標題/說明/key-value */}
       <div className="p-4">
-        <div className="text-[15px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{selected.title}</div>
-        {selected.desc && <p className="mt-2 text-[12.5px] leading-[1.8] text-[var(--text-2)]">{selected.desc}</p>}
-        <div className="mt-3.5 grid grid-cols-[70px_minmax(0,1fr)] gap-x-3 gap-y-[7px] text-xs leading-relaxed">
-          {meta.map(([k, v]) => (
-            <div key={k} className="contents">
-              <span className="text-[var(--text-3)]">{k}</span>
-              <span className="num text-[var(--text)]">{v}</span>
-            </div>
-          ))}
-        </div>
+        <div className="text-callout font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{selected.title}</div>
+        {selected.desc && <p className="mt-2 text-footnote leading-[1.8] text-[var(--text-2)]">{selected.desc}</p>}
+        <MetaGrid rows={meta} className="mt-3.5" />
       </div>
 
       {/* 3. 執行紀錄:讓監造/機關看得到「實際發生了什麼」,不只狀態標籤 */}
       <div className="px-4 pb-4">
         <div className="flex items-center gap-2 mb-2">
           <MSym name="history" size={15} className="text-[var(--text-3)]" />
-          <span className="text-[12.5px] font-medium text-[var(--text)]">執行紀錄</span>
+          <span className="text-footnote font-medium text-[var(--text)]">執行紀錄</span>
         </div>
         {logEntries.length === 0 ? (
           <p className="text-xs text-[var(--text-3)]">尚無執行紀錄。</p>
@@ -476,11 +374,10 @@ export default function Requirements() {
           <div key={i} className="grid grid-cols-[14px_minmax(0,1fr)] gap-2.5 items-start">
             <span className="relative flex justify-center self-stretch min-h-[26px]">
               <span className="w-[2px] bg-[var(--border-2)]" aria-hidden />
-              <span className="absolute top-[5px] w-[7px] h-[7px] rounded-full" aria-hidden
-                style={{ background: OB_STATUS[e.s].dot }} />
+              <Dot color={OB_STATUS[e.s].badge} className="absolute top-[5px]" />
             </span>
             <span className="pb-[9px] flex flex-col gap-px">
-              <span className="num text-[11px] text-[var(--text-3)] leading-normal">{e.when}</span>
+              <span className="num text-caption text-[var(--text-3)] leading-normal">{e.when}</span>
               <span className="text-xs leading-relaxed text-[var(--text)]">{e.what}</span>
             </span>
           </div>
@@ -491,30 +388,23 @@ export default function Requirements() {
       <div className="px-4 pb-4">
         <div className="flex items-center gap-2 mb-2">
           <MSym name="description" size={15} className="text-[var(--text-3)]" />
-          <span className="text-[12.5px] font-medium text-[var(--text)]">AI 擷取依據</span>
+          <span className="text-footnote font-medium text-[var(--text)]">AI 擷取依據</span>
           {selected.verified != null && (
             <Badge color={selected.verified ? 'green' : 'amber'}>{selected.verified ? '來源已核對' : '來源待核對'}</Badge>
           )}
         </div>
         {selected.quote ? (
-          <figure className="m-0 bg-[var(--bg)] border border-[var(--border-2)] rounded-lg px-3 py-[11px]">
-            <figcaption className="num text-[11px] text-[var(--text-3)] leading-relaxed">
-              <cite className="not-italic">
-                {[selected.doc, selected.clause ? `契約條款 ${selected.clause}` : null, selected.page]
-                  .filter(Boolean).join(' · ')}
-              </cite>
-            </figcaption>
-            <blockquote className="m-0 mt-[7px] text-xs leading-[1.85] text-[var(--text)]">「{selected.quote}」</blockquote>
-          </figure>
+          <SourceQuote quote={selected.quote}
+            cite={[selected.doc, selected.clause ? `契約條款 ${selected.clause}` : null, selected.page].filter(Boolean).join(' · ')} />
         ) : (selected.clause || selected.page) ? (
-          <p className="num text-[11px] text-[var(--text-3)] leading-relaxed">
+          <p className="num text-caption text-[var(--text-3)] leading-relaxed">
             出處 {[selected.clause, selected.page].filter(Boolean).join(' · ')}(原文請至專案文件查閱)
           </p>
         ) : (
           <p className="text-xs text-[var(--text-3)]">無引註。</p>
         )}
         {selected.calc && (
-          <div className="mt-2 flex items-start gap-[7px] text-[11.5px] text-[var(--text-3)] leading-relaxed">
+          <div className="mt-2 flex items-start gap-[7px] text-caption text-[var(--text-3)] leading-relaxed">
             <MSym name="function" size={15} className="flex-none mt-px" />
             <span className="num">到期日推算:{selected.calc}{selected.dateLabel !== '—' ? ` · 本期 ${selected.dateLabel}` : ''}</span>
           </div>
@@ -523,7 +413,7 @@ export default function Requirements() {
 
       {/* 5. 關聯 */}
       <div className="px-4 pb-4">
-        <div className="text-[12.5px] font-medium text-[var(--text)] mb-2">關聯</div>
+        <div className="text-footnote font-medium text-[var(--text)] mb-2">關聯</div>
         <div className="flex flex-col gap-1.5">
           {evidenceSub && (
             <Link to="/submittals" className="flex items-center gap-2 px-2.5 py-2 max-md:min-h-11 border border-[var(--border-2)] rounded-lg text-xs text-[var(--text-2)] min-w-0 hover:bg-[var(--bg)]">
@@ -563,20 +453,19 @@ export default function Requirements() {
           </Button>
         )}
         {actable && selected.status === 'na' && (
-          <span className="flex-1 min-w-[180px] text-[11.5px] text-[var(--text-3)] leading-relaxed">
+          <span className="flex-1 min-w-[180px] text-caption text-[var(--text-3)] leading-relaxed">
             {selected.penalty ? '罰則條款,非待辦事項;條件成立時自動轉為待處理。' : '相關基準日尚未設定,推不出到期日,暫非待辦事項。'}
           </span>
         )}
         {!isMine && !actable && (
-          <span className="flex-1 min-w-[180px] text-[11.5px] text-[var(--text-3)] leading-relaxed">
+          <span className="flex-1 min-w-[180px] text-caption text-[var(--text-3)] leading-relaxed">
             由{selected.who}負責執行,本頁為唯讀檢視。
           </span>
         )}
         {canReport && (
-          <button type="button" onClick={() => { setReportOpen(true); setReportMsg('') }}
-            className="ml-auto inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-sm font-medium text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable max-md:min-h-11">
+          <Button variant="ghost" size="md" className="ml-auto" onClick={() => { setReportOpen(true); setReportMsg('') }}>
             擷取有誤
-          </button>
+          </Button>
         )}
       </div>
       {evidenceOpen && actable && (
@@ -588,7 +477,7 @@ export default function Requirements() {
               {submittals.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
             </Select>
             <Button size="sm" disabled={!evidencePick || busy === 'evidence'} onClick={attachEvidence}>掛上佐證</Button>
-            <span className="w-full text-[11px] text-[var(--text-3)]">掛佐證不會自動標記完成。</span>
+            <span className="w-full text-caption text-[var(--text-3)]">掛佐證不會自動標記完成。</span>
           </>) : (
             <span className="text-xs text-[var(--text-3)]">尚無送審文件可掛;至「送審文件」建立後再回來掛佐證。</span>
           )}
@@ -598,50 +487,67 @@ export default function Requirements() {
   })()
 
   // ── 回報擷取有誤 Modal ───────────────────────────────────────────────────
-  const reportModal = reportOpen && selected && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="回報 AI 擷取有誤">
-      <div className="absolute inset-0 bg-[rgba(32,33,36,.4)] enter-fade" onClick={() => setReportOpen(false)} />
-      <div ref={reportRef} tabIndex={-1}
-        className="relative w-full max-w-md bg-[var(--surface)] border border-[var(--border-card)] rounded-2xl [box-shadow:var(--shadow-overlay)] p-5 outline-none enter-modal">
-        <div className="flex items-center justify-between gap-3 mb-2">
-          <h2 className="text-[15px] font-medium text-[var(--text)]">回報 AI 擷取有誤</h2>
-          <button onClick={() => setReportOpen(false)} aria-label="關閉"
-            className="w-8 h-8 max-md:w-11 max-md:h-11 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)]">
-            <MSym name="close" size={18} />
-          </button>
-        </div>
-        <p className="text-xs text-[var(--text-3)] mb-3 leading-relaxed">
-          「{selected.title}」——送出後由監造/機關複查;契約效力一律以原文為準。
-        </p>
-        <div className="space-y-2">
-          <Select value={reportDraft.type} aria-label="錯誤類型"
-            onChange={(e) => setReportDraft((d) => ({ ...d, type: e.target.value }))}>
-            {REPORT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </Select>
-          <Textarea rows={3} value={reportDraft.note} placeholder="說明哪裡擷取錯了(可留白)"
-            onChange={(e) => setReportDraft((d) => ({ ...d, note: e.target.value }))} />
-          <ErrorBanner msg={reportMsg} />
-          <div className="flex gap-2 pt-1">
-            <Button size="sm" busy={reportBusy} onClick={submitReport}>送出回報</Button>
-            <Button variant="ghost" size="sm" onClick={() => setReportOpen(false)}>取消</Button>
-          </div>
+  const reportModal = selected && (
+    <ModalShell open={reportOpen} onClose={() => setReportOpen(false)} title="回報 AI 擷取有誤">
+      <p className="text-xs text-[var(--text-3)] mb-3 leading-relaxed">
+        「{selected.title}」——送出後由監造/機關複查;契約效力一律以原文為準。
+      </p>
+      <div className="space-y-2">
+        <Select value={reportDraft.type} aria-label="錯誤類型"
+          onChange={(e) => setReportDraft((d) => ({ ...d, type: e.target.value }))}>
+          {REPORT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </Select>
+        <Textarea rows={3} value={reportDraft.note} placeholder="說明哪裡擷取錯了(可留白)"
+          onChange={(e) => setReportDraft((d) => ({ ...d, note: e.target.value }))} />
+        <ErrorBanner msg={reportMsg} />
+        <div className="flex gap-2 pt-1">
+          <Button size="sm" busy={reportBusy} onClick={submitReport}>送出回報</Button>
+          <Button variant="ghost" size="sm" onClick={() => setReportOpen(false)}>取消</Button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   )
 
   // ── 版面區塊 ─────────────────────────────────────────────────────────────
   // 頁首入口:AI 建議的核定/駁回與手動補登在獨立的擷取審核頁(本頁不做審核)。
-  // Link 包 Button:內層退出 tab 序避免 Tab 停兩次(同 PrerequisiteEmptyState 作法)
+  // Link 包 Button:內層退出 tab 序避免 Tab 停兩次(同 PrerequisiteEmptyState 作法);
+  // Link 的圓角跟 md 按鈕走 rounded-lg,焦點框才不會比按鈕圓。
   const header = (
+    <div className="space-y-3">
     <PageHeader title="契約重點" tagline="履約時程" subtitle={PARTY_BLURB[viewerParty]}
       action={(
-        <Link to="/requirements/review" className="inline-flex rounded-full">
+        <Link to={packageId ? `/requirements/review?package=${encodeURIComponent(packageId)}` : '/requirements/review'} className="inline-flex rounded-lg">
           <Button variant="secondary" size="md" tabIndex={-1}>
             <MSym name="rate_review" size={16} /> 擷取審核
           </Button>
         </Link>
       )} />
+    <ContractFlow active="highlights" role={currentUser?.org_type} packageId={packageId} />
+    {isPersistedProject && (packages.length > 0 || packageId) && (
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <label className="flex items-center gap-2 min-w-0">契約範圍
+          <Select aria-label="契約範圍" value={packageId} className="max-w-[240px]"
+            onChange={(e) => setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('obligation');
+              if (e.target.value) n.set('package', e.target.value); else n.delete('package'); return n })}>
+            <option value="">全部可見契約</option>
+            {packageId && !packages.some((p) => p.id === packageId) && <option value={packageId}>指定契約（未取得）</option>}
+            {packages.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+          </Select>
+        </label>
+        <span className="text-[var(--text-3)]">目前範圍共 {pool.length} 項履約事項</span>
+      </div>
+    )}
+    {analyzing && <p role="status" className="text-xs text-[var(--blue-text)]">AI 仍在整理，已完成的結果會自動更新。請保留啟動上傳的瀏覽器分頁。</p>}
+    {coverageWarnings.length > 0 && (
+      <div role="status" className="rounded-md px-4 py-3 text-xs leading-relaxed text-[var(--amber-text)] bg-[var(--amber-tint)]">
+        <p className="font-medium">目前整理紀錄中有 {coverageWarnings.length} 份文件需要檢查完整性</p>
+        <ul className="list-disc pl-4 mt-1 space-y-1">
+          {coverageWarnings.map((warning, i) => <li key={i}>{warning}</li>)}
+        </ul>
+        <Link to="/contract" className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline">查看專案文件</Link>
+      </div>
+    )}
+    </div>
   )
 
   // 履約執行卡:每個可見責任方一張(README 2.2)。統計母體=該方全部可見義務
@@ -657,22 +563,22 @@ export default function Requirements() {
         const rows = [
           ['逾期', stat.n.overdue, 'overdue'], ['即將到期', stat.n.due, 'due'],
           ['排程中', stat.n.scheduled, 'scheduled'], ['已完成', stat.n.done, 'done'],
-          ...(stat.n.na ? [['無需處理', stat.n.na, 'na']] : []),
+          ...(stat.n.na ? [[OB_STATUS.na.label, stat.n.na, 'na']] : []),
         ]
         return (
-          <Surface key={name} className="flex-1 min-w-[260px] max-xl:min-w-[calc(50%-6px)] max-md:min-w-full px-4 py-3.5 border-l-[3px]"
+          <Surface key={name} className="stat-card flex-1 min-w-[260px] max-xl:min-w-[calc(50%-6px)] max-md:min-w-full px-4 py-3.5 border-l-[3px]"
             style={{ borderLeftColor: PARTY_META[name].mark }}>
             <div className="flex items-center gap-2 mb-[11px]">
               <MSym name={PARTY_META[name].icon} size={18} className="text-[var(--text-2)]" />
-              <span className="text-[13px] font-medium text-[var(--text)]">{name}</span>
+              <span className="text-body font-medium text-[var(--text)]">{name}</span>
               {name === viewerParty && (
-                <span className="inline-flex items-center h-[18px] px-[7px] rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] text-[10px] font-medium">自己</span>
+                <span className="inline-flex items-center h-[18px] px-[7px] rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] text-micro font-medium">自己</span>
               )}
-              <span className="num ml-auto text-[11px] text-[var(--text-2)]">{stat.total} 條義務</span>
+              <span className="num ml-auto text-caption text-[var(--text-2)]">{stat.total} 條義務</span>
             </div>
             <div className="flex items-baseline gap-[9px] mb-[11px]">
-              <span className={`num text-[27px] font-normal leading-none ${rateCls}`}>{stat.rate == null ? '—' : `${stat.rate}%`}</span>
-              <span className="text-[11.5px] text-[var(--text-2)] leading-snug">
+              <span className={`num stat-value font-normal leading-none ${rateCls}`}>{stat.rate == null ? '—' : `${stat.rate}%`}</span>
+              <span className="text-caption text-[var(--text-2)] leading-snug">
                 {stat.rate == null ? '尚無到期項目' : `到期 ${stat.settled} 項準時完成 ${stat.onTime} 項`}
               </span>
             </div>
@@ -683,8 +589,8 @@ export default function Requirements() {
             </div>
             <div className="flex items-center gap-3.5 flex-wrap">
               {rows.map(([label, v, k]) => (
-                <span key={k} className="inline-flex items-center gap-1.5 text-[11.5px] text-[var(--text-2)]">
-                  <StatusDot status={k} />{label}
+                <span key={k} className="inline-flex items-center gap-1.5 text-caption text-[var(--text-2)]">
+                  <Dot color={OB_STATUS[k].badge} />{label}
                   <span className="num font-medium text-[var(--text)]">{v}</span>
                 </span>
               ))}
@@ -699,12 +605,12 @@ export default function Requirements() {
   const phaseBar = (
     <Card bodyClass="px-[18px] pt-[15px] pb-[17px]">
       <div className="flex items-baseline justify-between gap-4 mb-[13px] flex-wrap">
-        <span className="text-[13px] font-medium text-[var(--text)]">履約期程</span>
+        <span className="text-body font-medium text-[var(--text)]">履約期程</span>
         <span className="inline-flex items-baseline gap-3">
-          <span className="num text-[11px] text-[var(--text-2)]">{milestoneMeta}</span>
+          <span className="num text-caption text-[var(--text-2)]">{milestoneMeta}</span>
           {isPersistedProject && (
             <button type="button" onClick={() => setAnchorOpen((v) => !v)} aria-expanded={anchorOpen}
-              className="inline-flex items-center gap-1 text-[11.5px] text-[var(--blue-text)] hover:underline pressable">
+              className="inline-flex items-center gap-1 text-caption text-[var(--blue-text)] hover:underline pressable">
               <MSym name="edit_calendar" size={14} />設定基準日
             </button>
           )}
@@ -715,10 +621,10 @@ export default function Requirements() {
         <button type="button" onClick={() => setAnchorOpen(true)}
           className="w-full mb-3 flex items-center gap-2.5 rounded-[10px] bg-[var(--amber-tint)] px-3.5 py-2.5 text-left pressable">
           <MSym name="event_busy" size={16} className="text-[var(--amber-text)] shrink-0" />
-          <span className="min-w-0 flex-1 text-[12px] leading-snug text-[var(--amber-text)]">
+          <span className="min-w-0 flex-1 text-footnote leading-snug text-[var(--amber-text)]">
             {gaps.gaps.map((g) => `${g.count} 條義務等待${g.label}`).join('、')}——設定後自動排入時程並開始倒數
           </span>
-          <span className="text-[12px] font-medium text-[var(--amber-text)] shrink-0">設定</span>
+          <span className="text-footnote font-medium text-[var(--amber-text)] shrink-0">設定</span>
         </button>
       )}
       {isPersistedProject && anchorOpen && (
@@ -743,14 +649,14 @@ export default function Requirements() {
                 ? 'border-[var(--primary)] bg-[var(--blue-tint)]'
                 : 'border-[var(--border-card)] bg-[var(--surface)] hover:bg-[var(--bg)]'}`}>
               <span className="flex items-center gap-[7px] min-h-[17px]">
-                <span className="text-[12.5px] font-medium text-[var(--text)] whitespace-nowrap">{ph.name}</span>
+                <span className="text-footnote font-medium text-[var(--text)] whitespace-nowrap">{ph.name}</span>
                 {ph.key === phaseWin.nowPhase && (
-                  <span className="num inline-flex items-center h-[17px] px-1.5 rounded-full bg-[var(--primary)] text-[var(--primary-fg)] text-[10px] font-medium">今天</span>
+                  <span className="num inline-flex items-center h-[17px] px-1.5 rounded-full bg-[var(--primary)] text-[var(--primary-fg)] text-micro font-medium">今天</span>
                 )}
               </span>
-              <span className="num text-[10.5px] text-[var(--text-2)] leading-snug">{phaseWin.ranges[ph.key]}</span>
+              <span className="num text-micro text-[var(--text-2)] leading-snug">{phaseWin.ranges[ph.key]}</span>
               <span className="h-1.5 rounded-full" style={{ background: TRACK_BG[s.track] }} aria-hidden />
-              <span className={`num text-[10.5px] leading-snug ${TONE_CLS[s.tone]}`}>{s.note}</span>
+              <span className={`num text-micro leading-snug ${TONE_CLS[s.tone]}`}>{s.note}</span>
             </button>
           )
         })}
@@ -761,23 +667,15 @@ export default function Requirements() {
   // 檢索區:搜尋 + 五狀態快篩 + 責任方(可見多方才有)/類型下拉,三種條件 AND
   const filterBar = (
     <div className="px-[18px] py-3.5 border-b border-[var(--border-2)] flex flex-col gap-3">
-      <label className="flex items-center gap-2.5 h-10 px-3.5 border border-[var(--border)] rounded-full bg-[var(--surface)] focus-within:border-[var(--primary)] transition-colors">
-        <MSym name="search" size={20} className="text-[var(--text-3)] shrink-0" />
-        <input ref={searchRef} type="search" value={filters.q}
-          onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
-          placeholder="搜尋條文、關鍵字、條款編號或頁碼…" aria-label="搜尋契約義務"
-          className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-[var(--text)] placeholder:text-[var(--text-3)]" />
-      </label>
+      <SearchField ref={searchRef} value={filters.q}
+        onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+        placeholder="搜尋條文、關鍵字、條款編號或頁碼…" aria-label="搜尋契約義務" />
       <div className="flex items-center gap-2 flex-wrap">
         {STATUS_KEYS.map((k) => (
-          <button key={k} type="button" aria-pressed={filters.status === k}
-            onClick={() => setFilters((f) => ({ ...f, status: f.status === k ? 'all' : k }))}
-            className={`h-[30px] px-3 rounded-full border text-xs font-medium inline-flex items-center gap-[7px] pressable max-md:min-h-11 ${filters.status === k
-              ? 'border-[var(--primary)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
-              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:bg-[var(--bg)]'}`}>
-            <StatusDot status={k} />{OB_STATUS[k].label}
-            <span className="num opacity-75">{counts[k]}</span>
-          </button>
+          <StatusChip key={k} active={filters.status === k} count={counts[k]}
+            onClick={() => setFilters((f) => ({ ...f, status: f.status === k ? 'all' : k }))}>
+            <Dot color={OB_STATUS[k].badge} />{OB_STATUS[k].label}
+          </StatusChip>
         ))}
         <span className="w-px h-5 bg-[var(--border-2)] mx-0.5 max-md:hidden" aria-hidden="true" />
         {multiParty && (
@@ -795,11 +693,7 @@ export default function Requirements() {
           {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
         </Select>
         {anyFilter && (
-          <button type="button"
-            onClick={() => setFilters({ q: '', status: 'all', type: '', who: '', phase: 'all' })}
-            className="h-[30px] px-2.5 rounded-full text-xs font-medium text-[var(--blue-text)] hover:bg-[var(--blue-tint)] pressable max-md:min-h-11">
-            清除篩選
-          </button>
+          <Button variant="ghost" size="sm" onClick={() => setFilters(DEFAULT_FILTERS)}>清除篩選</Button>
         )}
       </div>
     </div>
@@ -809,7 +703,7 @@ export default function Requirements() {
   const listRows = (
     <div role="list" aria-label="履約義務時間軸">
       {ordered.length === 0 ? (
-        <div className="px-[18px] py-12 text-center text-[12.5px] leading-[1.8] text-[var(--text-3)]">
+        <div className="px-[18px] py-12 text-center text-footnote leading-[1.8] text-[var(--text-3)]">
           沒有符合條件的義務。<br />試試條款編號(例 5.3)、頁碼,或關鍵字(例 保固、罰則、送審)。
         </div>
       ) : grouped.map((g) => {
@@ -817,10 +711,10 @@ export default function Requirements() {
         return (
           <div key={g.key}>
             <div className="flex items-center gap-3 px-[18px] pt-[13px] pb-[11px] bg-[var(--bg)] border-b border-[var(--border-2)]">
-              <span className="text-[12.5px] font-medium text-[var(--text)] whitespace-nowrap">{g.name}</span>
-              <span className="num text-[11px] text-[var(--text-2)] whitespace-nowrap">{phaseWin.ranges[g.key]}</span>
+              <span className="text-footnote font-medium text-[var(--text)] whitespace-nowrap">{g.name}</span>
+              <span className="num text-caption text-[var(--text-2)] whitespace-nowrap">{phaseWin.ranges[g.key]}</span>
               <span className="flex-1 h-px bg-[var(--border-2)]" aria-hidden />
-              <span className={`num text-[11px] whitespace-nowrap ${TONE_CLS[s.tone]}`}>{s.note}</span>
+              <span className={`num text-caption whitespace-nowrap ${TONE_CLS[s.tone]}`}>{s.note}</span>
             </div>
             {g.items.map((it) => {
               const active = it.id === selectedId
@@ -832,7 +726,7 @@ export default function Requirements() {
                     ? 'bg-[var(--blue-tint)]' : 'hover:bg-[var(--bg)]'}`}>
                   <span className="py-3 pl-[18px] max-md:p-0 max-md:order-2 flex flex-col max-md:flex-row gap-[3px] max-md:gap-2 max-md:items-center">
                     <span className="num text-xs font-medium text-[var(--text)]">{it.dateLabel}</span>
-                    <span className={`num text-[10.5px] leading-normal ${COUNTDOWN_CLS[it.status] || 'text-[var(--text-2)]'}`}>{it.countdown}</span>
+                    <span className={`num text-micro leading-normal ${COUNTDOWN_CLS[it.status] || 'text-[var(--text-2)]'}`}>{it.countdown}</span>
                   </span>
                   <span className="relative flex justify-center max-md:hidden" aria-hidden>
                     <i className="w-[2px] bg-[var(--border-2)]" />
@@ -843,11 +737,11 @@ export default function Requirements() {
                     <span className="flex items-center gap-[7px] flex-wrap">
                       <WhoPill who={it.who} self={it.who === viewerParty} />
                       {it.kind && (
-                        <span className="inline-flex items-center h-[18px] px-1.5 rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] text-[10px] font-medium whitespace-nowrap">{it.kind}</span>
+                        <span className="inline-flex items-center h-[18px] px-1.5 rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] text-micro font-medium whitespace-nowrap">{it.kind}</span>
                       )}
                     </span>
-                    <span className="text-[13px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{it.title}</span>
-                    <span className="num text-[11.5px] leading-relaxed text-[var(--text-2)]">
+                    <span className="text-body font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{it.title}</span>
+                    <span className="num text-caption leading-relaxed text-[var(--text-2)]">
                       {[it.clause ? `契約條款 ${it.clause}` : null, it.page || null, it.type].filter(Boolean).join(' · ')}
                     </span>
                   </span>
@@ -872,27 +766,29 @@ export default function Requirements() {
         <Surface className="flex-1 p-4 max-md:hidden"><SkeletonList rows={2} label="" /></Surface>
       </div>
       <Card><Skeleton className="h-16" /></Card>
-      <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_400px]">
+      <div className={LIST_DETAIL_GRID}>
         <Card><SkeletonList rows={8} label="" /></Card>
         <Card className="hidden lg:block"><SkeletonList rows={4} label="" /></Card>
       </div>
     </div>
   )
-  if (isPersistedProject && !enrich.loaded && !obligations.length) return skeleton
+  if (isPersistedProject && !enrichLoaded && !obligations.length) return skeleton
 
   // 真專案 0 筆義務:分「還沒擷取」「AI 跑完但沒有義務」「最近一次失敗」——
   // 跑完的 0 筆是有效結果,不能把人繞回上傳原點
-  if (isPersistedProject && enrich.loaded && !obligations.length) {
-    const ingestionDone = enrich.runs.some((r) => r.status === 'completed')
-    const anyRunning = enrich.runs.some((r) => ['pending', 'processing'].includes(r.status))
-    const latestFailed = enrich.runs.find((r) => r.status === 'failed')
+  if (isPersistedProject && enrichLoaded && !obligations.length) {
+    const ingestionDone = runs.some((r) => r.status === 'completed')
+    const anyRunning = runs.some((r) => ['pending', 'processing'].includes(r.status))
+    const latestFailed = runs.find((r) => r.status === 'failed')
     return (
       <div className="space-y-6">
         {header}
-        <ErrorBanner msg={enrich.error} onRetry={() => setEnrichKey((k) => k + 1)} />
+        <ErrorBanner msg={enrichError} onRetry={reloadEnrich} />
         <Card title="履約時程">
-          {ingestionDone ? (
-            <Empty>AI 已完成整理,目前沒有排入時程的履約義務;契約重點確認後的項目會出現在這裡。</Empty>
+          {anyRunning ? (
+            <Empty>AI 正在整理契約，完成的內容會自動出現在這裡。</Empty>
+          ) : ingestionDone ? (
+            <Empty>目前沒有可見的履約義務。AI 整理內容會自動歸檔；可到專案文件查看完整性與處理狀態，無需逐條確認。</Empty>
           ) : latestFailed && !anyRunning ? (
             <Empty icon="error">
               最近一次 AI 整理失敗{latestFailed.error_message ? `:${friendlyError(latestFailed.error_message, '請重試')}` : ''}。
@@ -913,46 +809,29 @@ export default function Requirements() {
     <div className="space-y-6">
       {header}
 
-      <ErrorBanner msg={enrich.error} onRetry={() => setEnrichKey((k) => k + 1)} />
+      <ErrorBanner msg={enrichError} onRetry={reloadEnrich} />
 
       {execCards}
       {phaseBar}
 
-      <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_400px]">
-        {/* ── 左欄:時間軸清單 ── */}
+      <ListDetailLayout
+        detail={detailBody}
+        detailLabel="義務詳情"
+        detailEmpty={<Empty>點左側清單查看義務詳情。</Empty>}
+        drawerOpen={detailOpen && !!selected}
+        onDrawerClose={closeDetail}>
+        {/* ── 左欄:時間軸清單(右欄與抽屜由殼統一,見 components/listDetail.jsx) ── */}
         <Card bodyClass="p-0">
           {filterBar}
           {listRows}
           <div className="px-[18px] py-3 flex items-center justify-between gap-4 flex-wrap">
-            <span className="num text-[11.5px] text-[var(--text-3)]">{footerMeta}</span>
+            <span className="num text-caption text-[var(--text-3)]">{footerMeta}</span>
             {isPersistedProject && (
-              <Link to="/contract" className="text-[11.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 inline-flex items-center">重新整理擷取結果</Link>
+              <Link to="/contract" className="text-caption text-[var(--blue-text)] hover:underline max-md:min-h-11 inline-flex items-center">查看文件與整理狀態</Link>
             )}
           </div>
         </Card>
-
-        {/* ── 右欄:義務詳情(桌機 sticky;≥1024 常駐) ── */}
-        <Card className="hidden lg:block lg:sticky lg:top-6" bodyClass="p-0" aria-live="polite">
-          {detailBody || <Empty>點左側清單查看義務詳情。</Empty>}
-        </Card>
-      </div>
-
-      {/* <lg:詳情抽屜(768-1023 右滑入)/全螢幕(<768,左上返回) */}
-      {detailOpen && selected && (
-        <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="義務詳情">
-          <div className="absolute inset-0 bg-[rgba(32,33,36,.4)] enter-fade" onClick={() => setDetailOpen(false)} />
-          <div ref={drawerRef} tabIndex={-1}
-            className="absolute right-0 top-0 h-full w-[min(440px,92vw)] max-md:w-full bg-[var(--surface)] overflow-y-auto [box-shadow:-2px_0_16px_rgba(32,33,36,.16)] outline-none" aria-live="polite">
-            <div className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border-2)] px-3 py-2 flex items-center gap-2">
-              <button type="button" onClick={() => setDetailOpen(false)}
-                className="inline-flex items-center gap-1 text-sm text-[var(--blue-text)] hover:underline min-h-11 px-1">
-                <MSym name="arrow_back" size={18} /> 返回清單
-              </button>
-            </div>
-            {detailBody}
-          </div>
-        </div>
-      )}
+      </ListDetailLayout>
 
       {reportModal}
     </div>

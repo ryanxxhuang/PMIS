@@ -4,8 +4,7 @@
 // (can_access_contract_package); these helpers only derive the SAME options
 // for the UI so users are never offered a package they cannot touch.
 
-export const PACKAGE_TYPES = Object.freeze(['construction', 'supervision', 'other'])
-
+// 契約包型別的封閉集合就是這份標籤表的鍵(construction/supervision/other)。
 export const PACKAGE_TYPE_LABELS = Object.freeze({
   construction: '施工契約',
   supervision: '監造契約',

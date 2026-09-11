@@ -2,23 +2,19 @@ import { useMemo, useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
+import PrintToolbar from '../../components/PrintToolbar.jsx'
+import { Button } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { collectEvidence, photoEvidenceLine } from '../../lib/evidence.js'
+import { fmtAmount as fmt } from '../../lib/format.js'
 
-const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
-
-// 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
-// 顏色釘死亮色、不吃主題 token(理由見 SiteLogPrint.jsx):工具列跟紙不跟主題。
-const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-md:min-h-11'
-const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[#0b57d0] text-white hover:bg-[#0842a0]`
-const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white text-[#0b57d0] border border-[#dadce0] hover:bg-[#e8f0fe]`
 
 // 估驗請款佐證包(可列印 / 另存 PDF)——本期估驗明細 + AI 本期施工說明 + 佐證照片(按工項)。
 // 佐證照片吃 classify-site-photo 配好的工項標籤,估驗時自動歸位;不套 WebLayout,整頁即文件。
-// 配色刻意不吃主題 token(與 SiteLogPrint 同):整份是固定白紙,套 --text-*／--amber-text
-// 在深色模式會變成淺字壓白底、列印也會失真。W8-5 只把過淡的 slate-400(白底 2.6:1)
-// 調深到符合 AA,警語另用 amber-700(白底 5.7:1),不改成 token。
+// 工具列(chrome,吃主題 token)與紙面(.paper,固定白底黑字)分開處理,理由見 PrintToolbar 與 index.css:
+// 紙面警語走 paper-warn(在 .paper 內釘回亮色的 --amber-text,深色模式不會變成淺字壓白紙),
+// 對比度數字統一寫在 index.css 的 .paper 區塊,本檔不再出現色碼或 Tailwind 調色盤 class。
 export default function ValuationPackage() {
   const { project, workItems, valuations, currentUser, siteLogs,
     adjustedItems: adjItems, revisedTotal,
@@ -42,6 +38,9 @@ export default function ValuationPackage() {
   const periodAmtOf = (key) => (cumThis.get(key) || 0) - (cumPrev.get(key) || 0) // 本期金額 = buildCumMap 金額差
 
   // 本期有完成的末端工項(本期量 > 0)
+  // 刻意不換成 boqCalc.billableLeaves:那支的父子對照建在「全部 items」上,
+  // 這裡吃的是 buildBillableTree 的 childrenMap(只含可計價非合計列)。
+  // 子項全是合計列的分項在兩把尺下結果不同,要併必須先定案哪一個是規則。
   const leaves = useMemo(() => {
     if (!workItems) return []
     return adjItems
@@ -139,52 +138,43 @@ export default function ValuationPackage() {
   if (!currentUser) return <Navigate to="/login" replace />
   if (!workItems || !selected) {
     return (
-      <div className="p-10 text-center text-slate-600">
+      <div className="p-10 text-center text-[var(--text-2)]">
         無估驗資料。<button onClick={() => navigate('/valuation')} className="text-[var(--blue-text)] underline inline-flex items-center max-md:min-h-11 px-1">返回估驗計價</button>
       </div>
     )
   }
 
   const Info = ({ label, children }) => (
-    <div className="flex"><span className="text-slate-500 w-20 shrink-0">{label}</span><span className="font-medium text-slate-800">{children}</span></div>
+    <div className="flex"><span className="paper-mute w-20 shrink-0">{label}</span><span className="font-medium">{children}</span></div>
   )
 
   return (
-    <div className="min-h-screen bg-slate-100 print:bg-white">
-      {/* 工具列(列印時隱藏)*/}
-      <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-2 z-10">
-        <button onClick={() => navigate('/valuation')} className={TOOLBAR_SECONDARY}>← 返回估驗計價</button>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* 批 B UX:估驗施工說明草稿功能關閉時藏按鈕、留簡短說明(說明欄仍可人工填)。
-              AI 鈕沿用次要藥丸,只把字換成藍色標示這是 AI 動作;同樣走固定色階而非
-              --blue-text——深色模式下 token 會變成淺字壓白底。 */}
-          {aiEnabled('valuation.summary') ? (
-            <button onClick={genSummary} disabled={aiBusy}
-              className={`${TOOLBAR_SECONDARY} disabled:opacity-50`}>
-              <MSym name="auto_awesome" size={15} />{aiBusy ? 'AI 產生中…' : '重新產生施工說明'}
-            </button>
-          ) : (
-            <span className="text-xs text-slate-600">AI 施工說明未啟用，請直接編輯下方說明欄</span>
-          )}
-          <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}>
-            <MSym name="print" size={15} />列印 / 另存 PDF
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen paper-desk">
+      <PrintToolbar sticky backTo="/valuation" backLabel="返回估驗計價" printLabel="列印 / 另存 PDF">
+        {/* 批 B UX:估驗施工說明草稿功能關閉時藏按鈕、留簡短說明(說明欄仍可人工填)。
+            AI 鈕是工具列 chrome,跟其他鈕一樣吃 ui.jsx 的 secondary 皮;busy 走 primitive 的旋轉+禁用。 */}
+        {aiEnabled('valuation.summary') ? (
+          <Button variant="secondary" onClick={genSummary} busy={aiBusy}>
+            {!aiBusy && <MSym name="auto_awesome" size={15} />}{aiBusy ? 'AI 產生中…' : '重新產生施工說明'}
+          </Button>
+        ) : (
+          <span className="text-xs text-[var(--text-2)]">AI 施工說明未啟用，請直接編輯下方說明欄</span>
+        )}
+      </PrintToolbar>
 
       {/* 文件本體 A4 */}
-      <div className="max-w-[820px] mx-auto bg-white my-6 print:my-0 p-10 print:p-0 shadow-sm print:shadow-none text-[13px] text-slate-800">
+      <div className="max-w-[820px] mx-auto paper my-6 print:my-0 p-10 print:p-0 shadow-sm print:shadow-none text-body">
         <div className="text-center mb-5">
-          <h1 className="text-xl font-bold tracking-wide">估 驗 請 款 佐 證 包</h1>
-          <div className="text-slate-500 mt-1">第 {selected.period_no} 期</div>
+          <h1 className="text-title2 font-bold tracking-wide">估 驗 請 款 佐 證 包</h1>
+          <div className="paper-mute mt-1">第 {selected.period_no} 期</div>
           {/* 本文件的定性必須跟著紙本走:原本這句藏在頁尾 11px 且 print:hidden,
               列印出去就完全不見,機關很可能拿佐證包當計價依據。提到頁首常駐、列印同印。 */}
-          <div className="mt-2 inline-block text-[12px] text-amber-700 border border-amber-300 rounded px-3 py-1.5">
+          <div className="mt-2 inline-block text-footnote paper-warn border paper-warn-rule rounded px-3 py-1.5">
             本包為佐證彙整，正式估驗金額以「估驗計價單」為準。
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-8 gap-y-1 mb-5 border-y border-slate-300 py-3">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-1 mb-5 border-y paper-rule py-3">
           <Info label="工程名稱">{project.project_name}</Info>
           <Info label="契約編號">{project.project_code || '—'}</Info>
           <Info label="機　　關">{project.owner_name || '—'}</Info>
@@ -195,26 +185,26 @@ export default function ValuationPackage() {
 
         {/* AI 本期施工說明(可編輯,列印含內容)*/}
         <div className="mb-5">
-          <div className="text-slate-600 font-medium mb-1 flex items-center gap-1.5">
+          <div className="paper-mute font-medium mb-1 flex items-center gap-1.5">
             <MSym name="auto_awesome" size={13} className="text-[var(--blue)] print:hidden" />本期施工說明
-            <span className="text-xs text-slate-500 font-normal print:hidden">（AI 依本期工項與現場照片草擬，可直接修改）</span>
+            <span className="text-xs paper-mute font-normal print:hidden">（AI 依本期工項與現場照片草擬，可直接修改）</span>
           </div>
           <textarea
             value={aiBusy && !summary ? 'AI 產生中…' : summary}
             onChange={(e) => setSummary(e.target.value)}
             rows={4}
-            className="w-full text-[13px] leading-relaxed text-slate-800 border border-slate-200 print:border-0 rounded p-2 print:p-0 resize-none focus:outline-none focus:border-[var(--blue)]"
+            className="w-full text-body leading-relaxed border paper-rule-2 print:border-0 rounded p-2 print:p-0 resize-none focus:outline-none focus:border-[var(--blue)]"
           />
         </div>
 
         {/* 本期估驗明細(手機:表格自身橫捲,不讓整頁水平漂移——P1-08)*/}
-        <div className="text-xs text-slate-600 mb-1">本期估驗明細（僅列本期有完成之工項）</div>
+        <div className="text-xs paper-mute mb-1">本期估驗明細（僅列本期有完成之工項）</div>
         <div className="overflow-x-auto -mx-1 mb-6 print:overflow-visible print:mx-0">
-        <table className="w-full border-collapse text-[12px] min-w-[560px] print:min-w-0">
+        <table className="w-full border-collapse text-footnote min-w-[560px] print:min-w-0">
           <thead>
-            <tr className="bg-slate-100">
+            <tr className="paper-fill">
               {['項次', '工項名稱', '單位', '本期完成數量', '單價', '本期金額', '佐證'].map((h) => (
-                <th key={h} className="border border-slate-300 px-1.5 py-1 font-medium text-slate-600 whitespace-nowrap">{h}</th>
+                <th key={h} className="border paper-rule px-1.5 py-1 font-medium paper-mute whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -225,13 +215,13 @@ export default function ValuationPackage() {
               const n = incl(photosByItem[it.item_key]).length
               return (
                 <tr key={it.item_key}>
-                  <td className="border border-slate-200 px-1.5 py-1 text-slate-500 whitespace-nowrap">{it.item_no}</td>
-                  <td className="border border-slate-200 px-1.5 py-1">{it.description}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-center text-slate-500 whitespace-nowrap">{it.unit}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmtQ(qty)}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(it.unit_price)}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(amt)}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-center text-slate-500 whitespace-nowrap">{n ? `${n} 張` : '—'}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 paper-mute whitespace-nowrap">{it.item_no}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1">{it.description}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-center paper-mute whitespace-nowrap">{it.unit}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmtQ(qty)}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(it.unit_price)}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(amt)}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-center paper-mute whitespace-nowrap">{n ? `${n} 張` : '—'}</td>
                 </tr>
               )
             })}
@@ -239,31 +229,31 @@ export default function ValuationPackage() {
                 明講是「本期無新增」而非無資料,並指向累計數字該去哪裡看(C-11)。 */}
             {leaves.length === 0 && (
               <tr>
-                <td className="border border-slate-200 px-1.5 py-3 text-center text-slate-600" colSpan={7}>
+                <td className="border paper-rule-2 px-1.5 py-3 text-center paper-mute" colSpan={7}>
                   第 {selected.period_no} 期尚無本期新增完成數量；累計完成請見估驗計價單。
                 </td>
               </tr>
             )}
-            <tr className="bg-slate-50 font-semibold">
-              <td className="border border-slate-300 px-1.5 py-1 text-right" colSpan={5}>本期估驗合計</td>
-              <td className="border border-slate-300 px-1.5 py-1 text-right tabular-nums">{fmt(periodAmt)}</td>
-              <td className="border border-slate-300 px-1.5 py-1 text-center text-slate-500">{inclCount} 張</td>
+            <tr className="paper-fill font-semibold">
+              <td className="border paper-rule px-1.5 py-1 text-right" colSpan={5}>本期估驗合計</td>
+              <td className="border paper-rule px-1.5 py-1 text-right tabular-nums">{fmt(periodAmt)}</td>
+              <td className="border paper-rule px-1.5 py-1 text-center paper-mute">{inclCount} 張</td>
             </tr>
           </tbody>
         </table>
         </div>
 
         {/* 佐證照片(按工項)*/}
-        <div className="text-slate-600 font-medium mb-2 flex items-center gap-1.5">
+        <div className="paper-mute font-medium mb-2 flex items-center gap-1.5">
           <MSym name="photo_library" size={14} className="text-[var(--blue)] print:hidden" />現場佐證照片（按工項）
         </div>
         {/* 這是第二條紅線的人審提醒(AI 可能誤配),原本卻是全頁最小最淡的字:
-            11px/slate-400 在白紙上只有 2.6:1。升到 12px + amber-700 的警示語意 */}
-        <p className="text-xs text-amber-700 mb-2 print:hidden">照片由 AI 依工項自動歸位,可能誤配;<b className="text-amber-800">列印/送審前請逐張確認</b>,點 ✕ 可將誤配或非佐證照片排除本包。</p>
+            11px/slate-400 在白紙上只有 2.6:1。升到 12px + paper-warn 的警示語意 */}
+        <p className="text-xs paper-warn mb-2 print:hidden">照片由 AI 依工項自動歸位,可能誤配;<b>列印/送審前請逐張確認</b>,點 ✕ 可將誤配或非佐證照片排除本包。</p>
         {!loaded ? (
-          <div className="text-slate-500 text-[12px] py-4">照片載入中…</div>
+          <div className="paper-mute text-footnote py-4">照片載入中…</div>
         ) : inclCount === 0 ? (
-          <div className="text-slate-600 text-[12px] py-4 border border-dashed border-slate-200 rounded px-3 print:border-0">
+          <div className="paper-mute text-footnote py-4 border border-dashed paper-rule-2 rounded px-3 print:border-0">
             {photoCount === 0
               ? '本期工項尚無已配對的佐證照片。可到「施工日誌 → AI 批次辨識照片」上傳現場照,AI 會自動配到對應工項,估驗時即自動歸入本包。'
               : '本期佐證照片已全部排除。'}
@@ -272,8 +262,8 @@ export default function ValuationPackage() {
           <div className="space-y-4">
             {leaves.filter((it) => incl(photosByItem[it.item_key]).length).map((it) => (
               <div key={it.item_key} className="break-inside-avoid">
-                <div className="text-[12px] font-medium text-slate-700 mb-1">
-                  <span className="text-slate-500 mr-1.5">{it.item_no}</span>{it.description}
+                <div className="text-footnote font-medium mb-1">
+                  <span className="paper-mute mr-1.5">{it.item_no}</span>{it.description}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {incl(photosByItem[it.item_key]).map((p) => {
@@ -282,7 +272,7 @@ export default function ValuationPackage() {
                     // 舊照片沒有這欄(null)就退回只顯示說明,呈現完全不變。
                     const line = photoEvidenceLine(p)
                     return (
-                      <figure key={p.id} className="relative border border-slate-200 rounded overflow-hidden break-inside-avoid group">
+                      <figure key={p.id} className="relative border paper-rule-2 rounded overflow-hidden break-inside-avoid group">
                         {/* 佐證照片本身就是送審內容,無 caption 時仍要說得出「這是哪個工項的照片」 */}
                         {p.url && <img src={p.url} alt={line || `${it.item_no} ${it.description} 佐證照片`} className="w-full h-28 object-cover" />}
                         {/* 手機沒有 hover:原本 opacity-0 讓這顆鈕在手機上看不見也點不到,
@@ -291,7 +281,7 @@ export default function ValuationPackage() {
                         <button onClick={() => toggleExclude(p.id)} title="排除此張(不列入本包)"
                           aria-label={`排除照片 ${line || it.item_no} 不列入本包`}
                           className="print:hidden absolute top-1 right-1 w-6 h-6 max-md:w-9 max-md:h-9 rounded-full bg-black/55 text-white text-xs leading-none opacity-0 max-md:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">✕</button>
-                        <figcaption className="text-[10px] text-slate-500 px-1.5 py-1 leading-tight">
+                        <figcaption className="text-micro paper-mute px-1.5 py-1 leading-tight">
                           {line || '—'}{p.taken_at ? ` · ${String(p.taken_at).slice(0, 10)}` : ''}
                         </figcaption>
                       </figure>
@@ -304,55 +294,55 @@ export default function ValuationPackage() {
         )}
 
         {/* 簽核 */}
-        <div className="grid grid-cols-3 gap-4 mt-10 text-center text-slate-500 break-inside-avoid">
+        <div className="grid grid-cols-3 gap-4 mt-10 text-center paper-mute break-inside-avoid">
           {['承包廠商', '監造單位', '主管機關'].map((r) => (
             <div key={r}>
-              <div className="h-16 border-b border-slate-300" />
-              <div className="mt-1.5 text-[12px]">{r}（簽章）</div>
+              <div className="h-16 border-b paper-rule" />
+              <div className="mt-1.5 text-footnote">{r}（簽章）</div>
             </div>
           ))}
         </div>
         {/* 附件:施工日誌(旗艦承諾:紙本輸出自動夾附平時的施工日誌)*/}
-        <label className="print:hidden flex items-center gap-2 mt-8 text-[12px] text-slate-600 select-none cursor-pointer max-md:min-h-11">
+        <label className="print:hidden flex items-center gap-2 mt-8 text-footnote paper-mute select-none cursor-pointer max-md:min-h-11">
           {/* 原生 checkbox 預設約 13px,是全頁最小的觸控目標 */}
           <input type="checkbox" className="w-5 h-5" checked={attachLogs} onChange={(e) => setAttachLogs(e.target.checked)} />
           夾附施工日誌（列印時自動附上本期估驗工項的貢獻日誌清單）
         </label>
         {attachLogs && (logAttachment.rows.length === 0 ? (
-          <div className="print:hidden text-xs text-slate-600 mt-1">本期估驗工項尚無對應的施工日誌，列印時不會產生附件。</div>
+          <div className="print:hidden text-xs paper-mute mt-1">本期估驗工項尚無對應的施工日誌，列印時不會產生附件。</div>
         ) : (
           <div className="mt-4 print:break-before-page">
-            <div className="text-slate-600 font-medium mb-1 flex items-center gap-1.5">
+            <div className="paper-mute font-medium mb-1 flex items-center gap-1.5">
               <MSym name="description" size={14} className="text-[var(--blue)] print:hidden" />附件：施工日誌
             </div>
-            <div className="text-xs text-slate-600 mb-1">
+            <div className="text-xs paper-mute mb-1">
               本期估驗工項之貢獻施工日誌（由日誌數量自動勾稽，
               {logAttachment.total > LOG_CAP ? `共 ${logAttachment.total} 筆，列出最近 ${LOG_CAP} 筆` : `共 ${logAttachment.total} 筆`}
               ；完整日誌以「施工日誌」頁列印版為準）
             </div>
             <div className="overflow-x-auto -mx-1 print:overflow-visible print:mx-0">
-            <table className="w-full border-collapse text-[11px] min-w-[560px] print:min-w-0">
+            <table className="w-full border-collapse text-caption min-w-[560px] print:min-w-0">
               <thead>
-                <tr className="bg-slate-100">
+                <tr className="paper-fill">
                   {['日期', '天氣', '本期相關工項與當日數量', '工作摘要'].map((h) => (
-                    <th key={h} className="border border-slate-300 px-1.5 py-1 font-medium text-slate-600 whitespace-nowrap">{h}</th>
+                    <th key={h} className="border paper-rule px-1.5 py-1 font-medium paper-mute whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {logAttachment.rows.map((r) => (
                   <tr key={r.date} className="break-inside-avoid align-top">
-                    <td className="border border-slate-200 px-1.5 py-1 tabular-nums whitespace-nowrap text-slate-600">{r.date}</td>
-                    <td className="border border-slate-200 px-1.5 py-1 whitespace-nowrap text-slate-500">{r.weather}</td>
-                    <td className="border border-slate-200 px-1.5 py-1">
+                    <td className="border paper-rule-2 px-1.5 py-1 tabular-nums whitespace-nowrap paper-mute">{r.date}</td>
+                    <td className="border paper-rule-2 px-1.5 py-1 whitespace-nowrap paper-mute">{r.weather}</td>
+                    <td className="border paper-rule-2 px-1.5 py-1">
                       {r.items.map((it) => (
                         <div key={it.item_no} className="leading-snug">
-                          <span className="text-slate-500 mr-1">{it.item_no}</span>{it.description}
-                          <span className="tabular-nums text-slate-600 ml-1">{fmtQ(it.qty)} {it.unit}</span>
+                          <span className="paper-mute mr-1">{it.item_no}</span>{it.description}
+                          <span className="tabular-nums paper-mute ml-1">{fmtQ(it.qty)} {it.unit}</span>
                         </div>
                       ))}
                     </td>
-                    <td className="border border-slate-200 px-1.5 py-1 text-slate-600">{r.summary || '—'}</td>
+                    <td className="border paper-rule-2 px-1.5 py-1 paper-mute">{r.summary || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -362,7 +352,7 @@ export default function ValuationPackage() {
         ))}
 
         {/* 釐清句已提到頁首常駐,這裡只留保留款比例 */}
-        <div className="text-[11px] text-slate-500 mt-3 print:hidden">
+        <div className="text-caption paper-mute mt-3 print:hidden">
           保留款 {retPct}%。
         </div>
       </div>

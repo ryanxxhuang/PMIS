@@ -10,6 +10,21 @@ import { taipeiToday } from '../../lib/dates.js'
 import { mutationOutcome } from './billing.js'
 import { fileToBase64, extractContractText } from '../db.js'
 
+// ── 餵給 AI 的契約重點上限 ────────────────────────────────────────────────
+// 三個 AI 草稿功能都會先撈「已核定/待確認的 requirements」當上下文。這裡的上限是
+// 靜默截斷(撈不到的條文不會有任何提示),所以值必須是刻意的、而且看得出為什麼:
+//
+// - 撈進來的條文會整段進 prompt,token 成本與延遲跟條數線性成長;
+// - 超過幾十條之後模型的注意力反而被稀釋,草稿品質下降而不是上升;
+// - 三個功能的上限不同,因為它們的輸入量不同——送審審查另外還塞一整份文件全文。
+//
+// 紅線:這三條都只產「草稿」,人必須逐項覆核;截斷造成的遺漏由人補,
+// 不是靠調大數字解決(真正的解法是先用工項/類型縮小候選,見 SUBMITTAL_REVIEW_*)。
+const SUBMITTAL_REVIEW_REQ_LIMIT = 60   // 先撈 60 條,再依工項關聯排序後只取前 25 條進 prompt
+const SUBMITTAL_REVIEW_PROMPT_REQS = 25 // 實際進 prompt 的條數(與上面同一條式子的兩端)
+const SUBMITTAL_DOC_REVIEW_REQ_LIMIT = 30 // 另外還要塞 24k 字的文件全文,條文得讓位
+const RFI_REPLY_REQ_LIMIT = 25          // 疑義回覆只需要「與這個問題相關」的少數條文
+
 // 各類送審的「通用審查要點」——demo 或尚未解析契約規範時的回退清單(標「通用」)。
 const SUBMITTAL_REVIEW_POINTS = {
   材料設備: ['出廠證明 / 品質保證書齊備', 'CNS 或契約指定規範之試驗報告', '型錄規格與契約規範相符', '樣品經核可(如契約要求)', '進場數量與需求/估驗相符'],
@@ -38,7 +53,7 @@ function nextSerial(list, field, prefix) {
   return `${prefix}-${String(max + 1).padStart(3, '0')}`
 }
 
-export function useCollabSlice({ isPersistedProject, demoMode, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
+export function useCollabSlice({ isPersistedProject, demoMode, currentProject, currentUser, wiMaps, saveMarkup }, createDefect) {
   // 監造協作:送審與工程疑義
   const [submittals, setSubmittals] = useState([])
   const [rfis, setRfis] = useState([])
@@ -60,9 +75,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setSubmittals((ss) => [data, ...ss])
-    log('提送送審', `${row.submittal_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, submittals, log])
+  }, [isPersistedProject, currentProject, currentUser, submittals])
 
   // 監造審定:審核中|核准|核備|退回補正|駁回。DB 成功才更新 UI(失敗=UI 不變)。
   const decideSubmittal = useCallback(async (id, status, review_note) => {
@@ -72,11 +86,10 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       const res = await supabase.from('submittals').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '審定未寫入:可能無權限或這筆送審已被移除')
       if (error) return { error }
-      log('送審審定', `${status}`, { user: currentUser?.name, role: '監造' })
     }
     setSubmittals((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
     return { error: null }
-  }, [isPersistedProject, currentUser, log])
+  }, [isPersistedProject])
 
   // 施工修正再送:退回補正 → 已提送(revision +1)
   // 修正再送:退回補正 → 已提送(版次+1)。DB 成功才更新 UI(P0-01:原本樂觀
@@ -95,11 +108,10 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       const res = await supabase.from('submittals').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '再送未寫入:可能無權限或這筆送審已被移除')
       if (error) return { error }
-      log('送審修正再送', `${cur.submittal_no} Rev.${rev}`, { user: currentUser?.name, role: '施工' })
     }
     setSubmittals((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
     return { error: null }
-  }, [isPersistedProject, submittals, currentUser, log])
+  }, [isPersistedProject, submittals])
 
   // DB 成功才移除(R3 P0-01:stale 分頁刪除已受理送審曾假成功;DB 另有 delete guard)
   const deleteSubmittal = useCallback(async (id) => {
@@ -124,14 +136,14 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     const { data: reqs } = await supabase.from('requirements')
       .select('id,title,requirement_type,acceptance_criteria,evidence_requirement,status')
       .eq('project_id', pid).in('status', ['approved', 'needs_review'])
-      .in('requirement_type', ['submittal', 'test', 'evidence', 'checklist', 'inspection', 'report', 'other']).limit(60)
+      .in('requirement_type', ['submittal', 'test', 'evidence', 'checklist', 'inspection', 'report', 'other']).limit(SUBMITTAL_REVIEW_REQ_LIMIT)
     let relevant = reqs || []
     if (submittal.work_item_id && relevant.length) {
       const { data: links } = await supabase.from('requirement_work_items').select('requirement_id').eq('work_item_id', submittal.work_item_id)
       const linkedIds = new Set((links || []).map((l) => l.requirement_id))
       const linked = relevant.filter((r) => linkedIds.has(r.id))
-      relevant = (linked.length ? [...linked, ...relevant.filter((r) => !linkedIds.has(r.id))] : relevant).slice(0, 25)
-    } else relevant = relevant.slice(0, 25)
+      relevant = (linked.length ? [...linked, ...relevant.filter((r) => !linkedIds.has(r.id))] : relevant).slice(0, SUBMITTAL_REVIEW_PROMPT_REQS)
+    } else relevant = relevant.slice(0, SUBMITTAL_REVIEW_PROMPT_REQS)
     const payload = {
       project_id: pid, // 批 B:伺服器閘門(openAiGate)驗成員資格與功能開關
       submittal: { title: submittal.title, category: submittal.category, attachment_note: submittal.attachment_note, revision: submittal.revision },
@@ -163,9 +175,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     // 換副檔名重傳:清掉舊路徑,不留孤兒檔(B-15;失敗不影響本次上傳)
     if (prevPath && prevPath !== path) await supabase.storage.from('photos').remove([prevPath]).catch(() => {})
     setSubmittals((ss) => ss.map((s) => (s.id === submittalId ? { ...s, ...patch } : s)))
-    log('送審文件上傳', patch.attachment_name, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, submittals, log])
+  }, [isPersistedProject, currentProject, submittals])
 
   // AI 審讀送審文件:下載附件 → 抽文字(數位 PDF/docx,比看圖準)或轉 base64(掃描/圖走視覺)
   // → 交 read-submittal edge fn 逐項比對契約需求。反幻覺全在 edge fn(未涵蓋不臆測符合)。
@@ -180,7 +191,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     const pid = currentProject.project_id
     const { data: reqs } = await supabase.from('requirements')
       .select('title,acceptance_criteria,evidence_requirement,status')
-      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(30)
+      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(SUBMITTAL_DOC_REVIEW_REQ_LIMIT)
     const body = {
       project_id: pid, // 批 B:伺服器閘門(openAiGate)驗成員資格與功能開關
       submittal: { title: submittal.title, category: submittal.category },
@@ -210,7 +221,7 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     const pid = currentProject.project_id
     const { data: reqs } = await supabase.from('requirements')
       .select('title,acceptance_criteria,evidence_requirement,status')
-      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(25)
+      .eq('project_id', pid).in('status', ['approved', 'needs_review']).limit(RFI_REPLY_REQ_LIMIT)
     const payload = {
       project_id: pid, // 批 B:伺服器閘門(openAiGate)驗成員資格與功能開關
       rfi: { title: rfi.title, question: rfi.question, cost_impact: rfi.cost_impact, schedule_impact: rfi.schedule_impact },
@@ -240,9 +251,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setRfis((rs) => [data, ...rs])
-    log('提出工程疑義', `${row.rfi_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, rfis, saveMarkup, log])
+  }, [isPersistedProject, currentProject, currentUser, rfis, saveMarkup])
 
   // 回覆/結案:DB 成功才更新 UI(失敗=UI 不變)。
   const answerRfi = useCallback(async (id, answer) => {
@@ -251,11 +261,10 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       const res = await supabase.from('rfis').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '回覆未寫入:可能無權限或這筆疑義已被移除')
       if (error) return { error }
-      log('回覆工程疑義', answer.slice(0, 30), { user: currentUser?.name, role: '監造' })
     }
     setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
     return { error: null }
-  }, [isPersistedProject, currentUser, log])
+  }, [isPersistedProject])
 
   const closeRfi = useCallback(async (id) => {
     if (isPersistedProject) {
@@ -295,9 +304,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       .select().single()
     if (error) return { error }
     setObservations((os) => [data, ...os])
-    log('新增觀察事項', input.title, { user: currentUser?.name, role: '監造' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup, log])
+  }, [isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup])
 
   // DB 成功才更新 UI(B-07:RLS 靜默 0 列時原本假成功,重整即還原)
   const updateObservation = useCallback(async (id, patch) => {
@@ -355,9 +363,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     })
     if (error) return { error }
     if (data === 'not_found') return { error: { message: '找不到這個 email 的帳號，請對方先註冊。' } }
-    log('加入成員', email, { user: currentUser?.name, role: '專案' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, log])
+  }, [isPersistedProject, currentProject])
 
   const removeMember = useCallback(async (userId) => {
     if (!isPersistedProject) return { error: { message: 'demo 模式不支援移除成員' } }

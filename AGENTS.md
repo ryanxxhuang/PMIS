@@ -1,5 +1,9 @@
 # Repository instructions
 
+> 狀態：**ACTIVE**
+> 最後更新：2026-09-11
+> 用途：AI 協作者的 repo 入口規則；細節以 `DEVELOPMENT.md` 為準。
+
 後續 AI 協作者在修改本 repo 前必須：
 
 1. 先讀 [`DEVELOPMENT.md`](DEVELOPMENT.md)、[`CURRENT.md`](CURRENT.md) 與 [`docs/DECISIONS.md`](docs/DECISIONS.md)。

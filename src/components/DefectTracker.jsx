@@ -9,11 +9,11 @@ import { appConfirm, appPrompt } from './confirm.jsx'
 import { exportCsv, stamp } from '../lib/exportCsv.js'
 import { defectBall } from '../lib/ballInCourt.js'
 import { friendlyError } from '../lib/errorMessage.js'
+import { taipeiToday } from '../lib/dates.js'
 import MarkupEditor, { MarkupThumb } from './MarkupEditor.jsx'
 
 // 欄位一律用 ui.jsx 的 Input/Select/Textarea:本檔曾抄過一份 FIELD_BASE,
 // 後來改抄字串別名 input——別名同樣會漏掉 Select 的箭頭留白與 Textarea 的 resize-y
-const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 // 小工項挑選器（搜尋 → 選一個;品質缺失/查驗共用）
 export function WorkItemPicker({ leaves, value, label, onPick }) {
@@ -73,7 +73,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
 
   const emptyForm = () => ({
     title: '', description: '', severity: '一般', location: '', due_date: '',
-    work_item_key: '', work_item_label: '', ...(isSafety ? { record_date: todayIso() } : {}),
+    work_item_key: '', work_item_label: '', ...(isSafety ? { record_date: taipeiToday() } : {}),
   })
 
   // 拍缺失照片 → AI 填表。品質缺失=describe-defect(描述缺失);
@@ -190,7 +190,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
               <ErrorBanner msg={aiErr} onClose={() => setAiErr('')} />
             </>
           ) : (
-            <p className="text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（{isSafety ? '工安照片判讀' : '缺失照片描述'}），請人工填寫下方欄位。</p>
+            <p className="text-caption text-[var(--text-3)]">此 AI 功能未啟用（{isSafety ? '工安照片判讀' : '缺失照片描述'}），請人工填寫下方欄位。</p>
           )}
           {!isSafety && leaves.length > 0 && (
             <WorkItemPicker leaves={leaves} value={form.work_item_key} label={form.work_item_label}
@@ -250,7 +250,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
           })}
         </div>
       )}
-      <p className="text-[11px] text-[var(--text-3)] mt-2">
+      <p className="text-caption text-[var(--text-3)] mt-2">
         {isSafety
           ? '工安缺失與品質缺失共用同一套改善狀態機：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'
           : '品質缺失由監造判查驗不合格、或自主檢查表／試體判定不合格時自動開立，廠商不自行開立。缺失改善鏈：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'}

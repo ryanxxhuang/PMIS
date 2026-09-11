@@ -3,6 +3,8 @@
 // 監造調閱的本來就是這張正式格式,不該只有摘要。工項清單以 itemList prop 傳入——
 // 列印頁維持原本 workItems.items 口徑、唯讀頁用套變更後的 adjustedItems,兩邊輸出口徑各自不變。
 // 純顯示、無任何 input（唯讀 /site-log 的 e2e 契約:除日期外不得出現 input）。
+// 用色一律走 index.css 的 .paper / paper-* (紙面固定白底黑字,不吃主題;對比度數字在那裡),
+// 本檔不出現任何色碼或 Tailwind 調色盤 class。
 import { useMemo } from 'react'
 import { parseLocalDate } from '../lib/dates.js'
 
@@ -16,13 +18,13 @@ const roc = (iso) => {
 
 // Sec/Th/Td/Check 不閉包任何 state,提到模組層免每次 render 重建
 const Sec = ({ n, title, children }) => (
-  <div className="border border-slate-400 border-t-0">
-    <div className="px-2 py-1 text-[13px] font-bold bg-slate-100 border-b border-slate-300">{n}、{title}</div>
-    <div className="px-2 py-1.5 text-[13px]">{children}</div>
+  <div className="border paper-rule-strong border-t-0">
+    <div className="px-2 py-1 text-body font-bold paper-fill border-b paper-rule">{n}、{title}</div>
+    <div className="px-2 py-1.5 text-body">{children}</div>
   </div>
 )
-const Th = ({ children, right }) => <th className={`border border-slate-300 px-1.5 py-0.5 font-medium text-[12px] ${right ? 'text-right' : 'text-left'}`}>{children}</th>
-const Td = ({ children, right }) => <td className={`border border-slate-300 px-1.5 py-0.5 text-[12px] ${right ? 'text-right tabular-nums' : ''}`}>{children}</td>
+const Th = ({ children, right }) => <th className={`border paper-rule px-1.5 py-0.5 font-medium text-footnote ${right ? 'text-right' : 'text-left'}`}>{children}</th>
+const Td = ({ children, right }) => <td className={`border paper-rule px-1.5 py-0.5 text-footnote ${right ? 'text-right tabular-nums' : ''}`}>{children}</td>
 const Check = ({ on, label }) => <span className="mr-3">{on ? '■' : '□'} {label}</span>
 
 export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList, className = '' }) {
@@ -57,20 +59,20 @@ export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList,
     .sort((a, b) => (a.it.sort_order || 0) - (b.it.sort_order || 0))
 
   return (
-    <div className={`max-w-[210mm] mx-auto bg-white text-slate-900 shadow print:shadow-none p-[12mm] print:p-0 ${className}`}>
+    <div className={`max-w-[210mm] mx-auto paper shadow print:shadow-none p-[12mm] print:p-0 ${className}`}>
       <h1 className="text-center text-lg font-bold tracking-widest">公共工程施工日誌</h1>
-      <p className="text-center text-[12px] text-slate-500 mt-0.5 mb-2">（承攬廠商每日填報）</p>
+      <p className="text-center text-footnote paper-mute mt-0.5 mb-2">（承攬廠商每日填報）</p>
 
       {/* 表頭 */}
-      <div className="border border-slate-400 text-[13px]">
+      <div className="border paper-rule-strong text-body">
         <div className="grid grid-cols-2">
-          <div className="px-2 py-1 border-b border-r border-slate-300"><span className="text-slate-500">工程名稱：</span>{project?.project_name}</div>
-          <div className="px-2 py-1 border-b border-slate-300"><span className="text-slate-500">承攬廠商：</span>{project?.contractor_name || '—'}</div>
+          <div className="px-2 py-1 border-b border-r paper-rule"><span className="paper-mute">工程名稱：</span>{project?.project_name}</div>
+          <div className="px-2 py-1 border-b paper-rule"><span className="paper-mute">承攬廠商：</span>{project?.contractor_name || '—'}</div>
         </div>
         <div className="grid grid-cols-3">
-          <div className="px-2 py-1 border-r border-slate-300"><span className="text-slate-500">日期：</span>{roc(log.log_date)}{calDay ? `（開工後第 ${calDay} 日曆天）` : ''}</div>
-          <div className="px-2 py-1 border-r border-slate-300"><span className="text-slate-500">天氣（上午）：</span>{log.weather_am || log.weather || '—'}</div>
-          <div className="px-2 py-1"><span className="text-slate-500">天氣（下午）：</span>{log.weather_pm || log.weather_am || log.weather || '—'}</div>
+          <div className="px-2 py-1 border-r paper-rule"><span className="paper-mute">日期：</span>{roc(log.log_date)}{calDay ? `（開工後第 ${calDay} 日曆天）` : ''}</div>
+          <div className="px-2 py-1 border-r paper-rule"><span className="paper-mute">天氣（上午）：</span>{log.weather_am || log.weather || '—'}</div>
+          <div className="px-2 py-1"><span className="paper-mute">天氣（下午）：</span>{log.weather_pm || log.weather_am || log.weather || '—'}</div>
         </div>
       </div>
 
@@ -89,7 +91,7 @@ export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList,
             </tbody>
           </table>
         )}
-        {log.work_summary && <div className="mt-1"><span className="text-slate-500">工作摘要：</span>{log.work_summary}</div>}
+        {log.work_summary && <div className="mt-1"><span className="paper-mute">工作摘要：</span>{log.work_summary}</div>}
       </Sec>
 
       {/* 二、材料 */}
@@ -151,11 +153,11 @@ export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList,
       <Sec n="八" title="重要事項紀錄">{ex.important || '無。'}</Sec>
 
       {/* 簽章 */}
-      <div className="grid grid-cols-2 gap-10 mt-8 text-center text-[13px]">
-        <div><div className="border-t border-slate-500 pt-1 mt-8">工地主任（簽章）</div></div>
-        <div><div className="border-t border-slate-500 pt-1 mt-8">專任工程人員（簽章）</div></div>
+      <div className="grid grid-cols-2 gap-10 mt-8 text-center text-body">
+        <div><div className="border-t paper-rule-strong pt-1 mt-8">工地主任（簽章）</div></div>
+        <div><div className="border-t paper-rule-strong pt-1 mt-8">專任工程人員（簽章）</div></div>
       </div>
-      <p className="text-[11px] text-slate-400 mt-4">
+      <p className="text-caption paper-mute mt-4">
         依行政院公共工程委員會 101.10.17 修正「公共工程施工日誌」格式編製；累計數量由系統自施工日誌自動彙計。
       </p>
     </div>

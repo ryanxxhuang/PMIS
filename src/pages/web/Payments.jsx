@@ -7,16 +7,15 @@ import { appConfirm } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { isPayable, paymentStatus, summarizePayments } from '../../lib/payments.js'
+import { taipeiToday } from '../../lib/dates.js'
+import { fmtAmount as money } from '../../lib/format.js'
 
-// Math.round(-0.4)=-0:正規化,避免顯示「-0」(R3 P2-01)
-const money = (n) => (n == null || isNaN(n) ? '—' : (Math.round(n) === 0 ? 0 : Math.round(n)).toLocaleString('en-US'))
 // paymentStatus 只回語意色名(green/amber/blue/slate)=Badge 的 color key,直接餵 <Badge>
 // 手機時間線只留月日:窄螢幕一行要塞下期別、金額與狀態,完整日期在桌面表格
 const shortDate = (iso) => (iso ? `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}` : '')
-const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function Payments() {
-  const { project, workItems: data, valuations, updateValuationPayment, isSupabaseConfigured, currentProject, workItemsSource,
+  const { workItems: data, valuations, updateValuationPayment, isSupabaseConfigured, currentProject, workItemsSource,
     adjustedItems } = useStore()
   const [errMsg, setErrMsg] = useState('')
   // 請款/收款欄位寫入失敗必須讓使用者看到(DB-first,失敗=UI 不變)
@@ -140,15 +139,15 @@ export default function Payments() {
                       <td className="px-2">
                         {/* onBlur 才寫入:避免打字打到一半就把半成品(或空值)存進 DB */}
                         <input type="date" key={`inv-${v.id}-${v.invoice_date || ''}`} defaultValue={v.invoice_date || ''}
-                          disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期請款日`} max={todayIso()}
-                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.invoice_date || null)) return; if (d && d > todayIso()) { setErrMsg(`請款日不可晚於今日（輸入了 ${d}）`); return } onPay(v.id, { invoice_date: d }) }}
+                          disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期請款日`} max={taipeiToday()}
+                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.invoice_date || null)) return; if (d && d > taipeiToday()) { setErrMsg(`請款日不可晚於今日（輸入了 ${d}）`); return } onPay(v.id, { invoice_date: d }) }}
                           className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2">
                         <input type="date" key={`paid-${v.id}-${v.paid_date || ''}`} defaultValue={v.paid_date || ''}
                           disabled={!canPaidDate} title={approved ? (canPaidDate ? undefined : '請先填請款日') : lockTip}
-                          aria-label={`第 ${v.period_no} 期收款日`} max={todayIso()} min={v.invoice_date || undefined}
-                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.paid_date || null)) return; if (d && d > todayIso()) { setErrMsg(`收款日不可晚於今日（輸入了 ${d}）`); return } if (d && v.invoice_date && d < v.invoice_date) { setErrMsg(`收款日不可早於請款日 ${v.invoice_date}`); return } onPay(v.id, { paid_date: d }) }}
+                          aria-label={`第 ${v.period_no} 期收款日`} max={taipeiToday()} min={v.invoice_date || undefined}
+                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.paid_date || null)) return; if (d && d > taipeiToday()) { setErrMsg(`收款日不可晚於今日（輸入了 ${d}）`); return } if (d && v.invoice_date && d < v.invoice_date) { setErrMsg(`收款日不可早於請款日 ${v.invoice_date}`); return } onPay(v.id, { paid_date: d }) }}
                           className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 text-right">

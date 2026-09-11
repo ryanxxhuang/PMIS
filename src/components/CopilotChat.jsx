@@ -113,7 +113,7 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
               </div>
               {/* agent 真的去查過哪些模組——透明化查詢路徑,建立「答案有憑有據」的信任 */}
               {m.steps?.length > 0 && (
-                <div className="text-[11px] text-[var(--text-3)] mt-1 px-1">查了:{m.steps.join('、')}</div>
+                <div className="text-caption text-[var(--text-3)] mt-1 px-1">查了:{m.steps.join('、')}</div>
               )}
               {/* 確定性回退要看得出來(實際踩過:demo 站拿到回退答案卻以為是 agent 在回)——
                   只有 mode:'basic'(demo/未設 Supabase/AI 失敗)才顯示,agent 正常回答不顯示 */}
@@ -129,7 +129,7 @@ export default function CopilotChat({ data, onAsk, minH = 180, maxH = 360, fill 
               {m.mode === 'error' && (
                 <div className="mt-1 px-1">
                   <button onClick={() => ask(m.retry)} disabled={busy}
-                    className="inline-flex items-center max-md:min-h-11 text-[11px] font-medium text-[var(--blue-text)] hover:underline pressable disabled:opacity-40">
+                    className="inline-flex items-center max-md:min-h-11 text-caption font-medium text-[var(--blue-text)] hover:underline pressable disabled:opacity-40">
                     重試
                   </button>
                 </div>

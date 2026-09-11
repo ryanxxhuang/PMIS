@@ -38,10 +38,10 @@ export function SnackbarHost() {
     <div role="status" aria-live="polite"
       className="fixed left-4 bottom-4 max-md:bottom-[84px] z-[90] max-w-[calc(100vw-2rem)] sm:max-w-md flex items-center gap-4 rounded-lg px-4 py-3.5 print:hidden enter-row
         bg-[var(--snackbar-bg)] text-[var(--snackbar-text)] [box-shadow:var(--shadow-md)]">
-      <span className="text-[13px] leading-snug flex-1 min-w-0">{snack.message}</span>
+      <span className="text-body leading-snug flex-1 min-w-0">{snack.message}</span>
       {snack.actionLabel && (
         <button onClick={() => { snack.onAction?.(); setSnack(null) }}
-          className="shrink-0 text-[13px] font-medium text-[var(--snackbar-action)] hover:underline pressable">
+          className="shrink-0 text-body font-medium text-[var(--snackbar-action)] hover:underline pressable">
           {snack.actionLabel}
         </button>
       )}

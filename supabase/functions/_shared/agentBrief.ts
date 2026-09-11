@@ -5,12 +5,12 @@
 // 硬要求:內容一律確定性產生,絕不呼叫 LLM ——
 //   ① 每天 × 每人 × 每案的 LLM 成本不合理
 //   ② 信寄出去無法收回,寧可樸素也不能寫錯
-//   ③ 「球在誰手上」「到期日」的判斷邏輯既有、確定且測過(agentTools/contractDue)
+//   ③ 「球在誰手上」「到期日」的判斷邏輯既有、確定且測過(ballInCourt/contractDue)
 // 本檔全部是純函式(不碰 DB、不碰網路),供 send-reminders 組信、也供單元測試。
 
 import type { AgentRole } from './agentPersona.ts'
 import { AGENT_NAME, SIDE_BY_AGENT_ROLE } from './agentRole.ts'
-import type { OpenBallItem } from './agentTools.ts'
+import type { OpenBallItem } from './ballInCourt.ts'
 import { diffDays, formatDate, parseDateUTC } from './contractDue.ts'
 
 export const SOON_DAYS = 7

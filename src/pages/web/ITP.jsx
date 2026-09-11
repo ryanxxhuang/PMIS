@@ -12,6 +12,7 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { WorkItemPicker } from '../../components/DefectTracker.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { POINT_TYPES, itpStatus, itpActivity, itpAlerts } from '../../lib/itp.js'
+import { billableLeaves } from '../../lib/boqCalc.js'
 
 const TYPE_BADGE = { H: 'red', W: 'blue', R: 'slate' }
 const STATUS_META = {
@@ -34,9 +35,7 @@ export default function ITP() {
   const alerts = useMemo(() => itpAlerts(inspectionPoints, inspections, siteLogs), [inspectionPoints, inspections, siteLogs])
   const leaves = useMemo(() => {
     if (!workItems) return []
-    const childMap = new Map()
-    for (const it of workItems.items) { const k = it.parent_key || '__root__'; if (!childMap.has(k)) childMap.set(k, []); childMap.get(k).push(it) }
-    return workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
+    return billableLeaves(workItems.items)
   }, [workItems])
 
   // 載入分支同樣要保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,
@@ -147,7 +146,7 @@ export default function ITP() {
                       {p.title}
                       {hot && <Badge color="red" className="ml-2">施作中未叫驗</Badge>}
                     </div>
-                    <div className="text-[11px] text-[var(--text-3)] mt-0.5 space-x-2">
+                    <div className="text-caption text-[var(--text-3)] mt-0.5 space-x-2">
                       {p.work_item_no && <span className="num">{p.work_item_no} {p.work_item_desc}</span>}
                       {p.acceptance_criteria && <span>標準：{p.acceptance_criteria}</span>}
                       {p.frequency && <span>頻率：{p.frequency}</span>}

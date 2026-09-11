@@ -1,7 +1,7 @@
 # 三方角色模型
 
 > 狀態：**ACTIVE**
-> 決策日期：2026-08-12
+> 核對：2026-09-11；D-022 在本分支，尚未套用正式庫。
 
 ## 決策
 
@@ -20,7 +20,7 @@ PMIS 的系統角色只有三種：
 | 資料 | 唯一責任 | 不負責 |
 |---|---|---|
 | `profiles.org_type` | 目前三方業務角色與 Agent 身分 | 專案是否可進入、專案管理權 |
-| `project_members` | 專案存取資格與 legacy `admin/member` 管理旗標 | 現場／品管分工、文件契約方身分 |
+| `project_members` | 專案存取資格與 `admin/member` 管理旗標 | 現場／品管分工、文件契約方身分 |
 | `project_parties` + `project_memberships` | 文件歸屬、契約相對方、稽核 actor 身分快照 | 業務授權與 Agent persona |
 
 `project_memberships.project_role` 暫時保留作歷史相容與描述性職稱，不得用於 RLS、功能導覽、Agent 工具或提醒分流。
@@ -39,6 +39,8 @@ PMIS 的系統角色只有三種：
 | 身分快照表本身的技術管理與舊 policy 相容 | `my_project_ids_v2`、`is_project_member_v2`、`is_project_admin_v2` | `v2` 名稱不代表新版授權；不得套到一般業務表 |
 
 `project_memberships.is_project_admin` 與 `is_project_admin_v2` 只管理身分快照資料，不能取代 `project_members.role = 'admin'` 的專案授權。
+
+`projects.created_by` 不是授權來源（D-022）。建立者的權限來自 on_project_created／create_project 補上的 admin 列；沒有該列就沒有管理權。停用 trigger 建測試資料時須明確補 admin。邀請、移除、刪案與專案更新都依 project_members.role 判斷，不能恢復「建立者例外」。
 
 ## Agent 模型
 

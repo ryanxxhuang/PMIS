@@ -32,6 +32,9 @@ export const KIND_LABEL = {
   draft_submittal_review: '審查意見',
   audit_note: '稽核提示',
   handoff: '交接事項',
+  // 發起方的留痕(B4):對方那筆是 handoff、自己這筆是 handoff_sent。
+  // 沒有這兩個對映,發起人的收件匣會直接顯示原始字串 handoff_sent。
+  handoff_sent: '已送出交接',
 }
 export const KIND_COLOR = {
   draft_daily_log: 'blue',
@@ -39,4 +42,5 @@ export const KIND_COLOR = {
   draft_submittal_review: 'amber',
   audit_note: 'purple',
   handoff: 'red', // 球轉到你手上,視覺上要跳出來
+  handoff_sent: 'slate', // 自己送出去的存查紀錄,球不在自己手上,不該搶注意力
 }

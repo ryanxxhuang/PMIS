@@ -6,7 +6,7 @@
 // 不繞過權限;afterAll 走 delete_project RPC+admin API 清理,殘留 0。
 import { test, expect } from '@playwright/test'
 import {
-  password, uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
+  uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
   signInClient, loginReal, logoutReal, gotoHash, runCleanup,
 } from './helpers.js'
 

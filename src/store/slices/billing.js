@@ -1,7 +1,7 @@
 // Billing slice:估驗計價(掛在 work_items 標單脊椎上)、請款收款、預定進度 S 曲線。
 import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase.js'
-import { parseLocalDate, taipeiToday } from '../../lib/dates.js'
+import { parseLocalDate, taipeiToday, localISOMonth } from '../../lib/dates.js'
 
 // 估驗明細列(寫 DB 用):同一套「數量→百分比/金額」換算,建立期/改數量/帶入日誌三處共用。
 export function valuationItemRow(wi, valuationId, cumQty, source) {
@@ -22,7 +22,7 @@ export function mutationOutcome({ data, error }, deniedMessage) {
   return { error: null }
 }
 
-export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, log }, siteLogs) {
+export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps }, siteLogs) {
   // 估驗計價：每期一個物件，items 為 { [work_item_key]: 累計完成數量 }
   const [valuations, setValuations] = useState([])
   // 預定進度 S 曲線：{ start, end, months: [{ label, plannedPct }] }
@@ -66,9 +66,8 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
       }
     }
     setValuations((vs) => [...vs, v])
-    log('建立估驗期', `第 ${periodNo} 期估驗`, { user: '陳怡君', role: '施工品管' })
     return { v, error: null }
-  }, [valuations, dbMode, currentProject, currentUser, wiMaps, log])
+  }, [valuations, dbMode, currentProject, currentUser, wiMaps])
 
   // 更新某期某工項的「累計完成數量」。
   // 打字需要即時回饋 → 先更新 UI,DB 失敗再還原「這一格」並回傳 error。
@@ -110,9 +109,8 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
       if (error) return { error }
     }
     setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, ...patch } : v)))
-    log('估驗狀態更新', status, { user: status === '已核定' ? '王建國' : '陳怡君', role: status === '已核定' ? '監造' : '施工品管' })
     return { error: null }
-  }, [dbMode, log])
+  }, [dbMode])
 
   // 請款/收款:更新某期的請款日 / 收款日 / 實收金額（demo 模式只更新本機）。
   // DB 成功才更新 UI,避免撥款欄位顯示假成功。
@@ -159,9 +157,8 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
       if (error) return { error, count: 0 }
     }
     setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, items: { ...v.items, ...accum } } : v)))
-    log('估驗帶入施工日誌數量', `${rows.length} 工項`, { user: currentUser?.name || '系統', role: '施工品管' })
     return { error: null, count: rows.length }
-  }, [dbMode, siteLogs, valuations, wiMaps, currentUser, log])
+  }, [dbMode, siteLogs, valuations, wiMaps])
 
   // 預定進度 S 曲線。依開工/竣工切出月份桶，預設用 smoothstep 產生標準 S 曲線。
   // DB 寫入改為 upsert+await(B-08):原本 fire-and-forget 先刪後插,失敗時 UI 上
@@ -175,7 +172,7 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
     const N = buckets.length || 1
     const smoothstep = (t) => t * t * (3 - 2 * t) // 0→1 的 S 形累計
     const months = buckets.map((d, i) => ({
-      label: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      label: localISOMonth(d),
       plannedPct: +(smoothstep((i + 1) / N) * 100).toFixed(1),
     }))
     const plan = { start, end, months }
@@ -191,9 +188,8 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
       if (delErr) return { plan: null, error: delErr }
     }
     setProgressPlan(plan)
-    log('產生預定進度', `${start} ~ ${end}，共 ${N} 個月`, { user: '陳怡君', role: '施工品管' })
     return { plan, error: null }
-  }, [dbMode, currentProject, log])
+  }, [dbMode, currentProject])
 
   // DB 成功才更新 UI(B-08:原本 .then(()=>{}) 吞掉結果,靜默失敗)
   const updatePlannedPct = useCallback(async (i, pct) => {

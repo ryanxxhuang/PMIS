@@ -40,7 +40,7 @@ export default function Members() {
     )
   }
 
-  // 只有專案建立者(admin)可管理成員
+  // 只有 project_members.role='admin' 可管理成員(D-022:created_by 已退出授權判斷)
   const isAdmin = demoMode ? true : (members || []).find((m) => m.user_id === currentUser?.user_id)?.member_role === 'admin'
 
   // W4-4:三方到齊檢查——null=名單未載入(載入中/失敗),無法確認;[]=到齊

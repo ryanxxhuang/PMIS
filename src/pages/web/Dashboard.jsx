@@ -1,85 +1,20 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMemo, useState, useEffect } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Badge, Button, Card, Empty, PageHeader, Stat } from '../../components/ui.jsx'
+import { Badge, Button, Card, Empty, PageHeader, Segmented } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
-import { taipeiISODate } from '../../lib/todayTasks.js'
+import { plannedPctNow } from '../../lib/progressPlan.js'
+import { taipeiISODate } from '../../lib/dates.js'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
+import { BALL_SOURCES, resolveBallKey } from '../../lib/navConfig.js'
 import { KIND_LABEL } from '../../lib/agentRole.js'
 import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
+import { buildSetupSteps } from '../../lib/setupChecklist.js'
 import InsightsPanel from '../../components/InsightsPanel.jsx'
 import TaskRow from '../../components/TaskRow.jsx'
 import { appSnackbar } from '../../components/snackbar.jsx'
-
-const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
-
-// 初始化五步清單(W2-2 建立、W8-3A 依 D-014 修訂、D-020 後補「設定開工日」):
-// 真專案在正式模式開啟前顯示。
-// 狀態全部由既有資料推導,不建 onboarding 資料表、不做逐步精靈;每步直達既有工作頁。
-//
-// W8-3A 的兩個關鍵修正:
-//   ① 第 3 步只問「AI 整理完了沒」——`document_ingestion_runs` 有沒有一筆 completed。
-//      不再讀 Requirement 的待審／核定數:那 106 筆是 AI 的產出,不是人要清空的初始化
-//      門檻,更不該擋住開啟正式模式(D-014)。擷取結果 0 筆也算整理完成,那代表
-//      「AI 讀完了但沒找到建議」,不是失敗。
-//   ② 第 4 步永遠不因前三步或三方未到齊而卡住;原本「三方到齊後才能開啟」的文案
-//      與 W4-4 已定案行為不符(不齊也可開,只是要二次確認)。
-const ORG_LABEL = { contractor: '廠商', supervisor: '監造', owner: '機關' }
-// 查詢失敗要說失敗,不能靜默當成 0 筆 —— 那會把「查不到」演成「還沒開始」,
-// 使用者會去重做一次已經做完的事。
-const LOAD_FAIL = '狀態載入失敗，前往專案文件查看'
-
-// 由既有資料推導五步(純函式,便於釘住完成條件)。snap = null 代表仍在載入。
-// 每步固定有:責任方、完成與否、唯一目的地;不提供逐筆打勾、略過或批次核定。
-// commencement/waitingOnCommencement 來自 store 的 project 與義務列(不進 snap:
-// 它們不需要額外查詢);第 4 步與其他步一樣永遠不擋開啟正式模式(D-014)。
-export function buildSetupSteps(snap, { imported, commencement, waitingOnCommencement } = {}) {
-  const missingOrgs = ['contractor', 'supervisor', 'owner'].filter((o) => !snap?.orgs?.has(o))
-  const ingestionDone = !!snap && !snap.ingestionError && snap.ingestionCompleted > 0
-  return [
-    {
-      to: '/contract', label: '上傳專案文件與標單', owner: '施工廠商／專案建立者',
-      done: !!snap && !snap.docsError && snap.docs > 0 && !!imported,
-      detail: !snap ? '載入中…'
-        : snap.docsError ? LOAD_FAIL
-          : `文件 ${snap.docs} 件・標單${imported ? '已匯入' : '未匯入'}`,
-    },
-    {
-      to: '/members', label: '確認三方成員', owner: '專案建立者',
-      done: !!snap && !snap.membersError && missingOrgs.length === 0,
-      detail: !snap ? '載入中…'
-        : snap.membersError ? `${snap.membersError},到成員頁重試`
-          : missingOrgs.length ? `尚缺:${missingOrgs.map((o) => ORG_LABEL[o]).join('、')}` : '廠商、監造、機關都已加入',
-    },
-    {
-      // 完成後才導去看結果;沒整理完就回專案文件看處理狀態或重試(那裡才有上傳與重跑)
-      to: ingestionDone ? '/requirements' : '/contract',
-      label: 'AI 整理契約重點', owner: '系統自動', done: ingestionDone,
-      detail: !snap ? '載入中…'
-        : snap.ingestionError ? LOAD_FAIL
-          : ingestionDone
-            ? 'AI 已完成整理並自動歸檔，不影響開啟正式模式；內容如有出入，以契約原文為準'
-            : '尚未有完成的整理；到專案文件查看處理狀態或重試',
-    },
-    {
-      // D-020 後全型別義務都進履約時程,開工類義務推不出到期日的主因就是
-      // 開工日沒設——把設定明確排進初始化,目的地是後果看得到的履約時程頁。
-      to: '/requirements', label: '設定開工日', owner: '專案建立者',
-      done: !!commencement,
-      detail: commencement ? `開工日 ${commencement}・開工類期限已可推算到期日`
-        : waitingOnCommencement ? `${waitingOnCommencement} 條契約義務等待開工日才能排入時程;到「契約重點」的履約期程設定`
-          : '接獲開工通知後,到「契約重點」的履約期程設定實際開工日(非預定日)',
-    },
-    {
-      to: '/members', label: '開啟正式模式', owner: '專案建立者',
-      done: false, // 開啟後整張清單就不再顯示,所以在清單存在期間固定未完成
-      detail: '由專案建立者在「專案成員」頁開啟；前面步驟未完成或三方未到齊也可以開啟，系統會再次確認',
-    },
-  ]
-}
 
 function SetupChecklist({ imported }) {
   const { listMembers, currentProject, obligations } = useStore()
@@ -141,7 +76,7 @@ function SetupChecklist({ imported }) {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
                   <span className={`text-sm ${s.done ? 'text-[var(--text-3)] line-through' : 'text-[var(--text)] font-medium'}`}>{i + 1}. {s.label}</span>
-                  <span className="text-[11px] text-[var(--text-3)]">{s.owner}</span>
+                  <span className="text-caption text-[var(--text-3)]">{s.owner}</span>
                 </div>
                 <div className="text-xs text-[var(--text-3)] mt-0.5 leading-snug">{s.detail}</div>
               </div>
@@ -163,7 +98,7 @@ export default function Dashboard() {
   const imported = workItemsSource === 'db' || demoMode
   // 「今天」每次 render 取:工地平板整週不關分頁,模組層常數會讓日期/逾期判斷停在開頁那天(B-11)
   const TODAY = new Date()
-  const todayISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}-${String(TODAY.getDate()).padStart(2, '0')}`
+  const todayISO = taipeiISODate(TODAY)
   const myOrg = currentUser?.org_type || 'contractor'
   const anchors = {
     award_date: project?.award_date, notice_date: project?.notice_date,
@@ -173,6 +108,12 @@ export default function Dashboard() {
   // 改吃 useTodayTasks 這支「唯一」hook(側欄 badge 與提醒中心同源)——
   // 首頁再自己組一次 buildTodayTasks,件數遲早跟側欄分岔。
   const tasks = useTodayTasks()
+  // 球權聚焦(Apple 改版第二包,疊合版 IA §0):主畫面不是 dashboard,是收件匣。
+  // 側欄「球在誰手上」選哪個來源,這裡就只渲染那一組(mine/waiting/doneToday 1:1
+  // 對上 BALL_SOURCES),處理完就消失;?ball= 的解析與側欄選取態同一支(navConfig)。
+  const [searchParams] = useSearchParams()
+  const ball = resolveBallKey(searchParams)
+  const sourceTo = (key) => BALL_SOURCES.find((b) => b.key === key).to
 
   // 整案資料匯出:所有模組打包成一個 JSON 檔——資料是使用者的,隨時拿得走
   const exportAll = () => {
@@ -195,7 +136,11 @@ export default function Dashboard() {
     appSnackbar('已匯出整案資料（JSON）')
   }
 
-  // 財務單一真相層(B-02):完成率/金額一律以「已核准變更套回後」計算,與估驗/進度頁一致
+  // 財務單一真相層(B-02):完成率/金額一律以「已核准變更套回後」計算,與估驗/進度頁一致。
+  // 四張指標卡(累計進度/發包工程費/累計估驗/剩餘工期)已自主畫面退場(判準 2:
+  // 不會被點、不改變決定的數字一律刪;金額在估驗/標單頁、工期在契約重點頁都追得到來源)。
+  // completion/plannedNow 留下來只因為風險警示引擎(buildInsights)拿它們判「進度落後」,
+  // 不再當裝飾數字渲染;剩餘工期(remainDays)沒有下游,連同計算一起清掉。
   const { roots, childrenMap } = useMemo(
     () => (workItems ? buildBillableTree(adjustedItems) : { roots: [], childrenMap: new Map() }),
     [workItems, adjustedItems],
@@ -208,23 +153,7 @@ export default function Dashboard() {
   )
   const completion = billableTotal ? (actualCum / billableTotal) * 100 : 0
 
-  // 剩餘工期:契約迄日(end_date)減今天。end_date 是當地午夜(parseLocalDate),
-  // 除以整天後無條件進位,今天下午看「明天到期」仍算 1 天;無迄日不硬掰數字。
-  const endDate = anchors.end_date ? parseLocalDate(anchors.end_date) : null
-  const remainDays = endDate ? Math.ceil((endDate - TODAY) / 86400000) : null
-
-  const plannedNow = useMemo(() => {
-    if (!progressPlan) return null
-    const months = progressPlan.months, N = months.length
-    const start = parseLocalDate(progressPlan.start)
-    const elapsed = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
-    if (elapsed <= 0) return 0
-    if (elapsed >= N - 1) return months[N - 1].plannedPct
-    const lo = Math.floor(elapsed), f = elapsed - lo
-    return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progressPlan, todayISO])
-  const behind = plannedNow != null ? plannedNow - completion : null
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   // AI 主動觀察(§9-8:從 AI 助理搬來——Dashboard=待辦+風險,助理只留問答)
   const insights = useMemo(() => insightsForRole(buildInsights({
@@ -232,8 +161,34 @@ export default function Dashboard() {
     obligations, valuations, changeOrders, anchors,
   }, TODAY), myOrg), [completion, plannedNow, siteLogs, defects, testSamples, obligations, valuations, changeOrders, myOrg, todayISO]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 球權聚焦的清單:三組共用 TaskSection,只差來源、文案與空狀態的指路。
+  // 空狀態不說「沒有資料」(規範 §6):說球不在誰手上、要去哪裡看——mine 空了指向
+  // 等對方,waiting/done 空了指回待我處理;件數為 0 就不掛數字,免得寫出「看 0 件」。
+  const withCount = (label, n) => (n ? `${label}（${n} 件）` : label)
+  const focus = ball === 'waiting' ? (
+    <TaskSection title="等待對方" items={tasks.waiting} seeAll
+      emptyTitle="沒有在等任何人" empty="目前沒有送出去等其他單位回覆的事項。"
+      emptyTo={{ to: sourceTo('mine'), label: withCount('回到待我處理', tasks.mine.length) }} />
+  ) : ball === 'done' ? (
+    <TaskSection title="今天已完成" items={tasks.doneToday} done
+      emptyTitle="今天還沒有完成紀錄" empty="今天你這方還沒有缺失結案或查驗判定的紀錄。"
+      emptyTo={{ to: sourceTo('mine'), label: withCount('去看待我處理', tasks.mine.length) }} />
+  ) : (
+    // 真人驗收(2026-08-19):什麼都還沒上傳的專案也說「都跟上了」會誤導。
+    // store 沒有文件清單、不為此加查詢,退而求其次用「義務為空」當代理條件:
+    // 義務由契約解析而來,義務空=多半連契約都還沒整理,補一句指路即可
+    <TaskSection title="現在輪到我" items={tasks.mine} seeAll
+      emptyTitle="球不在你手上" empty="目前沒有輪到你處理的事項；有人把球交回來時，它會出現在這裡。"
+      hint={obligations.length === 0 ? '上傳契約後，AI 會整理期限並在此提醒。' : null}
+      emptyTo={{ to: sourceTo('waiting'), label: withCount('看等對方', tasks.waiting.length) }} />
+  )
+
   return (
     <div className="space-y-5">
+      {/* 頁首維持「今日待辦」:這個名字全站都在用(/agent 的「前往今日待辦」、
+          /alerts 的「回到今日待辦」),h1 改叫來源名會變成同一個地方兩個名字,
+          違反 wayfinding。三個球權桶改用 Segmented 露在頁首下方——側欄的來源
+          是落地點,頁內的分段控制讓人不必回側欄就能切,兩者選取態同一份 ?ball=。 */}
       <PageHeader
         title="今日待辦"
         tagline={project.project_name}
@@ -247,6 +202,18 @@ export default function Dashboard() {
             <MSym name="download" size={16} />匯出整案資料
           </Button>
         )}
+      />
+
+      <Segmented
+        aria-label="球在誰手上"
+        value={ball}
+        onChange={(key) => navigate(sourceTo(key))}
+        options={BALL_SOURCES.map((b) => ({
+          value: b.key,
+          label: b.label,
+          count: b.key === 'mine' ? tasks.mine.length
+            : b.key === 'waiting' ? tasks.waiting.length : tasks.doneToday.length,
+        }))}
       />
 
       {workItemsSource === 'error' ? (
@@ -265,64 +232,33 @@ export default function Dashboard() {
         )
       ) : (
         <div className="space-y-5">
-          {isPersistedProject && !project.formal_mode && <SetupChecklist imported />}
+          {/* 初始化清單、風險警示、AI 今日已代辦只跟著「待我處理」走:它們是「現在該做
+              什麼」的脈絡,不是「等對方」或「已完成」的脈絡。單欄直排:收件匣就是一條清單。
+              ⚠️「最近施工日誌」卡刻意保留:/site-log 目前是 hidden:true,而其餘連得到它的
+              /valuation 也 hidden,拿掉這張卡等於拆掉可見表面通往施工日誌的最後一條路——
+              2026-08-12 實測就是「藏到連擁有者都找不到」。解封現場與品質工作面之前不要動它。 */}
+          {ball === 'mine' && isPersistedProject && !project.formal_mode && <SetupChecklist imported />}
 
-          {/* 指標卡列(對齊原型 dash):原「進度摘要一條帶」收斂成四張 Stat。
-              落後/超前門檻與文案照舊,只是從色帶搬進「累計實際進度」卡的小字;
-              落後改吃 amber 語意色票(不再借品牌 accent 當警示色) */}
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            <Stat label="累計實際進度" value={`${completion.toFixed(1)}%`}
-              sub={plannedNow != null ? (
-                <span className="inline-flex flex-wrap items-center gap-1.5">
-                  <span className="num">目標 {plannedNow.toFixed(1)}%</span>
-                  {behind != null && (
-                    <Badge color={behind > 5 ? 'amber' : behind < -2 ? 'green' : 'slate'}>
-                      {behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '進度正常'}
-                    </Badge>
-                  )}
-                </span>
-              ) : null} />
-            <Stat label="發包工程費" value={`NT$ ${fmt(billableTotal)}`} color="text-[var(--blue-text)]" />
-            <Stat label="累計估驗" value={`NT$ ${fmt(actualCum)}`} />
-            <Stat label="剩餘工期" value={remainDays == null ? '—' : `${fmt(remainDays)} 天`}
-              sub={anchors.end_date ? `迄 ${anchors.end_date}` : null}
-              color={remainDays != null && remainDays < 0 ? 'text-[var(--red-text)]' : 'text-[var(--text)]'} />
-          </div>
+          {/* 狀態全部由既有業務流程更新——在目的頁做完事就自動退出,
+              不需要回這裡打勾;這裡也永遠不會出現 AI 自己產生的工作。 */}
+          {focus}
 
-          {/* 主體兩欄(原型 1.35fr/1fr):左=三段待辦,右=風險警示+最近日誌;
-              手機維持單欄堆疊(grid 單欄的 gap 與原本 space-y-5 一致) */}
-          <div className="grid gap-5 lg:grid-cols-[1.35fr_1fr] lg:items-start">
-            <div className="min-w-0 space-y-5">
-              {/* 三段今日待辦。狀態全部由既有業務流程更新——在目的頁做完事就自動退出,
-                  不需要回這裡打勾;這裡也永遠不會出現 AI 自己產生的工作。 */}
-              {/* 真人驗收(2026-08-19):什麼都還沒上傳的專案也說「都跟上了」會誤導。
-                  store 沒有文件清單、不為此加查詢,退而求其次用「義務為空」當代理條件:
-                  義務由契約解析而來,義務空=多半連契約都還沒整理,補一句指路即可 */}
-              <TaskSection title="現在輪到我" items={tasks.mine} seeAll
-                empty="目前沒有輪到你處理的事項 — 都跟上了。"
-                hint={obligations.length === 0 ? '上傳契約後，AI 會整理期限並在此提醒。' : null} />
-              <TaskSection title="等待對方" items={tasks.waiting} seeAll
-                empty="目前沒有在等其他單位的事項。" />
-              <TaskSection title="今天已完成" items={tasks.doneToday} done
-                empty="今天還沒有你這方完成的紀錄。" />
-            </div>
-
-            <div className="min-w-0 space-y-5">
+          {ball === 'mine' && (
+            <>
               {/* AI 主動觀察:風險警示卡,不是待辦(AI 不得替人產生人工工作) */}
               <InsightsPanel insights={insights} />
-
-              {/* AI 今日已代辦(README dash 右下):agent 今天替你做掉了什麼 */}
+              {/* AI 今日已代辦:agent 今天替你做掉了什麼 */}
               <AgentDoneCard />
-
-              {/* 次要:最近紀錄。已完成的日誌不是待辦,也不併進「今天已完成」
-                  (log_date 是人可回填的業務日期,不等於今天完成了什麼) */}
+              {/* 最近施工日誌:這張卡的存在理由不是「首頁該有摘要」,而是可發現性——
+                  /site-log 與 /valuation 都是 hidden:true,拿掉它之後可見表面就沒有
+                  任何一條路通往施工日誌。解封「現場與品質」工作面之後才可以移除。 */}
               <Card title="最近施工日誌" bodyClass="p-0"
-                action={<Link to="/site-log" className="text-xs font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">施工日誌 <MSym name="chevron_right" size={13} /></Link>}>
+                action={<Link to="/site-log" className="text-footnote font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">施工日誌 <MSym name="chevron_right" size={13} /></Link>}>
                 {siteLogs.length === 0 ? <Empty>尚無施工日誌</Empty> : (
                   <ul className="divide-y divide-[var(--border-2)]">
                     {siteLogs.slice(0, 6).map((l) => (
                       <li key={l.id}>
-                        <Link to="/site-log" className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-[var(--surface-2)] transition-colors">
+                        <Link to="/site-log" className="flex items-center justify-between gap-3 px-5 py-2.5 text-body hover:bg-[var(--surface-2)] transition-colors">
                           <span className="num text-[var(--text-2)] shrink-0">{l.log_date}</span>
                           <span className="text-[var(--text)] truncate ml-3 flex-1 text-right">{l.work_summary || `${Object.keys(l.items).length} 工項`}</span>
                         </Link>
@@ -331,16 +267,17 @@ export default function Dashboard() {
                   </ul>
                 )}
               </Card>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       )}
 
       {/* 手機 CTA(README 手機今日待辦):滑到最底不知道下一步該做什麼時,一句話問 agent。
           與 App bar 全域搜尋走同一條代問機制(router state 帶 q,Agent 頁消費即清),
           也吃同一個 aiEnabled 閘門——功能關閉就整顆不渲染,不擺一顆按了會失望的鈕。
-          在內容流最底而非 fixed:不與 bottom nav / FAB 疊,也不遮住任何待辦列。 */}
-      {aiEnabled('agent.run') && (
+          在內容流最底而非 fixed:不與 bottom nav / FAB 疊,也不遮住任何待辦列。
+          只在「待我處理」出現:問的是「現在該做什麼」,不是等對方或已完成的脈絡。 */}
+      {ball === 'mine' && aiEnabled('agent.run') && (
         <Button size="lg" className="w-full md:hidden"
           onClick={() => navigate('/agent', { state: { q: '今天最該處理什麼？' } })}>
           <MSym name="smart_toy" size={18} />問 GovAgent：今天最該處理什麼？
@@ -399,7 +336,9 @@ function AgentDoneCard() {
 // 首頁每段最多 5 筆;完整清單在提醒中心,首頁不再無限長。
 const SECTION_CAP = 5
 
-function TaskSection({ title, items, empty, hint = null, seeAll = false, done = false }) {
+// emptyTitle/emptyTo:空狀態的一句話標題與指路連結(規範 §6:空狀態要說缺什麼、
+// 輪到誰、去哪裡看),由呼叫端依球權來源決定文案,這裡只負責排版。
+function TaskSection({ title, items, empty, emptyTitle, emptyTo = null, hint = null, seeAll = false, done = false }) {
   const shown = items.slice(0, SECTION_CAP)
   const countPill = (
     <Badge color={done || !items.length ? 'green' : 'amber'} className="num">{items.length}</Badge>
@@ -407,10 +346,18 @@ function TaskSection({ title, items, empty, hint = null, seeAll = false, done = 
   return (
     <Card title={title} action={countPill} bodyClass="p-0">
       {items.length === 0 ? (
-        <Empty>
+        <Empty title={emptyTitle}>
           {empty}
           {/* 次要說明:只在呼叫端判斷「空得可疑」時出現(如義務為空=契約可能還沒上傳) */}
-          {hint && <div className="mt-1 text-xs text-[var(--text-3)]">{hint}</div>}
+          {hint && <div className="mt-1 text-footnote text-[var(--text-3)]">{hint}</div>}
+          {emptyTo && (
+            <div className="mt-3">
+              {/* 手機觸控 ≥44px:連結自己撐高 */}
+              <Link to={emptyTo.to} className="inline-flex items-center gap-0.5 max-md:min-h-11 text-body font-medium text-[var(--blue-text)] hover:underline">
+                {emptyTo.label} <MSym name="chevron_right" size={14} />
+              </Link>
+            </div>
+          )}
         </Empty>
       ) : (
         <ul className="divide-y divide-[var(--border-2)]">
@@ -424,7 +371,7 @@ function TaskSection({ title, items, empty, hint = null, seeAll = false, done = 
             </li>
           )}
           {items.length > shown.length && !seeAll && (
-            <li className="px-4 py-2 text-[11px] text-[var(--text-3)]">還有 {items.length - shown.length} 項…</li>
+            <li className="px-4 py-2 text-caption text-[var(--text-3)]">還有 {items.length - shown.length} 項…</li>
           )}
         </ul>
       )}

@@ -84,10 +84,8 @@ export function shouldExtractRequirements({ document_type, classification_status
 
 // Presentation groups for the package file list. These are labels over the
 // persistent document types (plus the price-guard reason) - not new enums.
-export const PRESENTATION_GROUPS = Object.freeze([
-  '契約核心文件', '施工規範', '品質管理文件', '價格與標單', '表單與附件', '圖說', '其他',
-])
-
+// 封閉集合就是下面這七個回傳值:契約核心文件／施工規範／品質管理文件／
+// 價格與標單／表單與附件／圖說／其他。
 export function presentationGroup(documentType, reason = '') {
   if (documentType === 'contract') return '契約核心文件'
   if (documentType === 'specification') return '施工規範'

@@ -1,7 +1,9 @@
 // 把表格資料匯出成 CSV 下載。加 UTF-8 BOM 讓 Excel 正確顯示中文。
 // rows = 物件陣列;columns = [{ key, label }]。未給 columns 則用第一筆的 keys。
 
-function cell(v) {
+// export 只為了測試:B-14 的防護全在這一行 regex 裡,改壞不會有任何紅燈,
+// 而機關端匯出的 CSV 是給人用 Excel 開的——退化就是可被利用的注入面。
+export function cell(v) {
   if (v == null) return ''
   let s = String(v)
   // Formula injection 防護(B-14):自由文字若以 = + - @ 開頭,Excel 會當公式執行。

@@ -7,7 +7,7 @@
 // - 下載走 blob + <a download> 還原 original_filename:storage server 對非 ASCII
 //   檔名會回百分比編碼的 Content-Disposition(e2e 實測存成 %E5..txt)。
 // - 預覽只給瀏覽器會渲染的格式;彈窗被攔截(機關電腦常見預設)退回下載。
-import { supabase } from './supabase.js'
+import { supabase, SIGNED_URL_TTL_S } from './supabase.js'
 import { friendlyError } from './errorMessage.js'
 import { isValidStorageKey, isInlineViewableMime } from './packageUpload.js'
 
@@ -55,7 +55,7 @@ export async function openDocumentVersionFile(version, { page, onError } = {}) {
     return
   }
   const { data, error } = await supabase.storage.from(BUCKET)
-    .createSignedUrl(version.storage_path, 3600)
+    .createSignedUrl(version.storage_path, SIGNED_URL_TTL_S)
   if (error || !data?.signedUrl) {
     win.close()
     onError?.(friendlyError(error, '開啟檔案失敗'))

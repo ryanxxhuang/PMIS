@@ -2,14 +2,14 @@
 // 施工日誌掛在標單工項上(數量回報)→ dbMode;工安紀錄不依賴標單 → isPersistedProject,
 // 真專案匯標單前也要寫 DB(否則只進記憶體,重新整理就消失)。
 import { useState, useCallback } from 'react'
-import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
+import { supabase, isSupabaseConfigured, SIGNED_URL_TTL_S } from '../../lib/supabase.js'
 import { loadSiteLogsFromDB, imageToBase64 } from '../db.js'
 import { compressImage } from '../../lib/imageCompress.js'
 import { readPhotoExif } from '../../lib/exifRead.js'
 import { pageAllInSafe, chunked } from '../../lib/pagedQuery.js'
 import { mutationOutcome } from './billing.js'
 
-export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, log }) {
+export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps }) {
   // 施工日誌（真 DB；每筆 items 為 { work_item_key: 當日完成數量 }）
   const [siteLogs, setSiteLogs] = useState([])
   // 工安紀錄（真 DB）
@@ -59,16 +59,14 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     const delQuery = supabase.from('daily_log_items').delete().eq('daily_log_id', up.id)
     const { error: e3 } = await (nextRows.length ? delQuery.not('work_item_id', 'in', `(${keep})`) : delQuery)
     if (e3) return { error: e3 }
-    const rows = nextRows
     // 寫入已成功;重載失敗不可偽裝成存檔失敗(B-09 載入層會 throw),但也不能靜默吞掉——
     // ISSUE-6b:UI 顯示「已存檔 ✓」但 siteLogs 沒這筆,切日期即空白。保留現況、回 warning 讓 UI 提示。
     let warning = null
     try { setSiteLogs(await loadSiteLogsFromDB(currentProject.project_id, wiMaps.idToKey)) }
     catch { warning = '已存檔,但畫面同步失敗,請重新整理後再確認' }
-    log('施工日誌送出', `${log_date}（${rows.length} 工項）`, { user: currentUser?.name || '系統', role: '施工現場' })
     // id 給「照片先行」自動建檔後立刻掛照片用(setSiteLogs 是非同步 state,呼叫端拿不到)
     return { error: null, warning, id: up.id }
-  }, [dbMode, currentProject, currentUser, wiMaps, log])
+  }, [dbMode, currentProject, currentUser, wiMaps])
 
   // DB 刪成功才從 UI 移除(B-07:RLS 拒絕時原本假消失,重整即復活)
   const deleteSiteLog = useCallback(async (logId) => {
@@ -90,7 +88,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     if (!data?.length) return []
     // 私有 bucket → 批次產生簽名 URL 供 <img> 顯示
     const { data: signed } = await supabase.storage.from('photos')
-      .createSignedUrls(data.map((p) => p.storage_path), 3600)
+      .createSignedUrls(data.map((p) => p.storage_path), SIGNED_URL_TTL_S)
     const urlByPath = new Map((signed || []).map((s) => [s.path, s.signedUrl]))
     return data.map((p) => ({ ...p, url: urlByPath.get(p.storage_path) || null }))
   }, [dbMode])
@@ -129,9 +127,8 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       uploaded_by: currentUser?.user_id,
     })
     if (insErr) { await supabase.storage.from('photos').remove([path]); return { error: insErr } } // 回滾孤兒檔
-    log('施工日誌照片上傳', meta.caption || file.name || '照片', { user: currentUser?.name || '系統', role: '施工現場' })
     return { error: null, id }
-  }, [dbMode, currentProject, currentUser, wiMaps, log])
+  }, [dbMode, currentProject, currentUser, wiMaps])
 
   // 先刪 DB 列(有 RLS/guard 把關,失敗如實回報),成功後再清 Storage 檔
   // (Storage 清失敗=孤兒檔,遠比「檔沒了、列還在」安全)——B-07。
@@ -171,7 +168,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     // 簽名 URL 也有批次上限,照片分頁後跟著分批簽
     const urlByPath = new Map()
     for (const batch of chunked(data.map((p) => p.storage_path))) {
-      const { data: signed } = await supabase.storage.from('photos').createSignedUrls(batch, 3600)
+      const { data: signed } = await supabase.storage.from('photos').createSignedUrls(batch, SIGNED_URL_TTL_S)
       for (const s of signed || []) urlByPath.set(s.path, s.signedUrl)
     }
     return data.map((p) => ({ ...p, url: urlByPath.get(p.storage_path) || null, work_item_key: wiMaps.idToKey.get(p.work_item_id) || null }))
@@ -335,9 +332,8 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setSafetyRecords((rs) => [data, ...rs])
-    log('新增工安紀錄', `${row.record_type}·${row.title}`, { user: currentUser?.name || '系統', role: '工安' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, log])
+  }, [isPersistedProject, currentProject, currentUser])
 
   // 更新工安紀錄:DB 成功才更新 UI(guard 拒絕——他方紀錄/已完成未附原因——如實回報)
   const updateSafetyRecord = useCallback(async (id, patch) => {

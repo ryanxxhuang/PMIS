@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
+      color: #1D1D1F;
+    }
+    a { color: #0071E3; text-decoration: none; }
+    a:hover { color: #0058B0; text-decoration: underline; }
+  </style>
+</helmet>
+
+<div style="height: 900px; background: radial-gradient(120% 80% at 50% -10%, #FFFFFF 0%, #F5F5F7 46%, #EFEFF4 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px;">
+
+  <!-- 品牌 -->
+  <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 26px;">
+    <div style="width: 34px; height: 34px; border-radius: 9px; background: #0071E3; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,113,227,.28);">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.6a2 2 0 0 0 1.3 1.3L19.5 10.5l-4.6 1.6a2 2 0 0 0-1.3 1.3L12 18l-1.6-4.6a2 2 0 0 0-1.3-1.3L4.5 10.5l4.6-1.6a2 2 0 0 0 1.3-1.3z"></path></svg>
+    </div>
+    <div style="display: flex; align-items: baseline;">
+      <span style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: #1D1D1F;">PMIS</span>
+      <span style="font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: #0071E3;">.ai</span>
+    </div>
+  </div>
+
+  <!-- 登入卡 -->
+  <div style="width: 408px; background: rgba(255,255,255,.86); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); border-radius: 18px; box-shadow: 0 12px 40px rgba(0,0,0,.10), 0 0 0 .5px rgba(0,0,0,.08); padding: 32px 34px 28px; box-sizing: border-box;">
+
+    <h1 style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Noto Sans TC', sans-serif; font-size: 24px; line-height: 30px; font-weight: 600; letter-spacing: -0.019em; margin: 0; color: #1D1D1F; text-align: center;">登入</h1>
+    <p style="font-size: 13px; line-height: 19px; color: #6E6E73; margin: 7px 0 0; text-align: center;">機關、監造與廠商共用同一套帳號；專案內的身分依契約方授權而定。</p>
+
+    <!-- 浮動標籤欄位 -->
+    <div style="margin-top: 24px;">
+      <div style="position: relative; height: 52px; border-radius: 10px; background: #FFFFFF; box-shadow: inset 0 0 0 1px #D2D2D7; padding: 0 14px; display: flex; flex-direction: column; justify-content: center; box-sizing: border-box;">
+        <span style="font-size: 10px; color: #86868B;">電子信箱 · Email</span>
+        <span style="font-size: 14px; color: #1D1D1F; margin-top: 1px;">lin.jh@sinotech.com.tw</span>
+      </div>
+
+      <div style="position: relative; height: 52px; border-radius: 10px; background: #FFFFFF; box-shadow: inset 0 0 0 1px #0071E3, 0 0 0 3.5px rgba(0,113,227,.16); padding: 0 14px; display: flex; flex-direction: column; justify-content: center; margin-top: 12px; box-sizing: border-box;">
+        <span style="font-size: 10px; color: #0071E3;">密碼 · Password</span>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+          <span style="font-size: 14px; letter-spacing: 0.16em; color: #1D1D1F;">••••••••••</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: auto;"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 14px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="width: 30px; height: 18px; border-radius: 999px; background: #248A3D; padding: 2px; box-sizing: border-box; display: flex; justify-content: flex-end;">
+          <div style="width: 14px; height: 14px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.2);"></div>
+        </div>
+        <span style="font-size: 13px; color: #1D1D1F;">保持登入</span>
+      </div>
+      <span style="font-size: 13px; color: #0071E3;">忘記密碼？</span>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 10px; background: #0071E3; color: #FFFFFF; font-size: 15px; font-weight: 510; letter-spacing: -0.005em; margin-top: 20px;">繼續</div>
+
+    <div style="display: flex; align-items: center; gap: 12px; margin: 20px 0 16px;">
+      <div style="flex: 1; height: 1px; background: #E5E5EA;"></div>
+      <span style="font-size: 11px; color: #86868B;">還沒有帳號</span>
+      <div style="flex: 1; height: 1px; background: #E5E5EA;"></div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 10px; background: #FFFFFF; color: #0071E3; font-size: 15px; font-weight: 510; box-shadow: inset 0 0 0 1px #D2D2D7;">建立帳戶</div>
+  </div>
+
+  <!-- 合規列 -->
+  <div style="display: flex; align-items: center; gap: 22px; margin-top: 26px;">
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg>
+      <span style="font-size: 11px; color: #6E6E73;">資通系統防護基準 · 普通級</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg>
+      <span style="font-size: 11px; color: #6E6E73;">個資境內存放，未境外傳輸</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
+      <span style="font-size: 11px; color: #6E6E73;">操作全程留存稽核軌跡</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

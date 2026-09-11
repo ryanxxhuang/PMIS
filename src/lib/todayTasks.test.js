@@ -379,3 +379,15 @@ describe('單一真相:Dashboard 與提醒中心吃同一份', () => {
     expect(build(input)).toEqual(build(input))
   })
 })
+
+// ── 波次 7:dueText 改為 export 給品質頁工作佇列共用,句型是 TaskRow OVERDUE_RE 與 e2e 的契約 ──
+import { dueText } from './todayTasks.js'
+
+describe('dueText(到期句的單一真相)', () => {
+  it('三種句型固定;逾期句必須符合 TaskRow 的 OVERDUE_RE', () => {
+    expect(dueText(-3, '2026-08-10')).toBe('逾期 3 天（到期 2026-08-10）')
+    expect(dueText(0, '2026-08-13')).toBe('今天到期（2026-08-13）')
+    expect(dueText(5, '2026-08-18')).toBe('還有 5 天（到期 2026-08-18）')
+    expect(dueText(-3, '2026-08-10')).toMatch(/逾期 \d+ 天（到期 \d{4}-\d{2}-\d{2}）/)
+  })
+})

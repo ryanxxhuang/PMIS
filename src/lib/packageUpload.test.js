@@ -1,10 +1,12 @@
 import { vi } from 'vitest'
+import { unconfigured } from '../testUtils/supabaseMock.js'
 // 模組 import 鏈會建立真的 supabase client(node 環境無 WebSocket),測試裡換成空殼
-vi.mock('./supabase.js', () => ({ supabase: null, isSupabaseConfigured: false }))
+vi.mock('./supabase.js', () => unconfigured())
 import { describe, expect, it } from 'vitest'
 import {
   UPLOAD_CONCURRENCY, formatElapsed, isInlineViewableMime, mapWithConcurrency,
   isValidStorageKey, packageStatusFromRuns, runFileLanded, staleProcessingPatch, storagePathFor, summarizePackageProgress,
+  STAGE_ORDER, runPct, summarizeUploadBatch,
   takeSelectedFiles,
 } from './packageUpload.js'
 
@@ -56,6 +58,12 @@ describe('summarizePackageProgress (real stage counts, no fake percentage)', () 
 })
 
 describe('packageStatusFromRuns', () => {
+  it('部分完成或已完成但有覆蓋缺漏的契約仍需留意', () => {
+    expect(packageStatusFromRuns([run({ status: 'partial', stage: 'failed' })])).toBe('needs_attention')
+    expect(packageStatusFromRuns([run({ status: 'completed', stage: 'completed',
+      metadata: { requirement_extraction_warning: '第 2 頁文字不足' },
+    })])).toBe('needs_attention')
+  })
   it('reports processing while any file is still active', () => {
     expect(packageStatusFromRuns([run({ stage: 'classifying' })])).toBe('processing')
   })
@@ -185,5 +193,51 @@ describe('mapWithConcurrency', () => {
     expect(results.filter((r) => r.ok).map((r) => r.value)).toEqual([10, 20, 40, 50, 60])
     const failed = results.find((r) => !r.ok)
     expect(failed.error.message).toBe('boom')
+  })
+})
+
+describe('runPct / summarizeUploadBatch(上傳回饋面板的帳)', () => {
+  it('runPct 由 STAGE_ORDER 終態值推導:階段等分刻度,completed 一律 100', () => {
+    const last = STAGE_ORDER.completed
+    for (const [stage, order] of Object.entries(STAGE_ORDER)) {
+      expect(runPct(run({ stage }))).toBe(Math.min(100, Math.round((order / last) * 100)))
+    }
+    expect(runPct(run({ stage: 'received' }))).toBe(0)
+    expect(runPct(run({ stage: 'classifying' }))).toBe(60)
+    expect(runPct(run({ stage: 'uploaded', status: 'completed' }))).toBe(100)
+    expect(runPct(run({ stage: 'nonsense' }))).toBe(0)
+  })
+  it('面板列=本批(以 version id 記)+任何仍在處理中的 run;歷史終態列不進面板', () => {
+    const rows = [
+      run({ id: 'a', document_version_id: 'v-a', status: 'completed', stage: 'completed', classification_status: 'auto_accepted' }),
+      run({ id: 'b', document_version_id: 'v-b', status: 'processing', stage: 'classifying' }),
+      run({ id: 'c', document_version_id: 'v-c', status: 'completed', stage: 'completed' }),
+    ]
+    const batch = summarizeUploadBatch(rows, { batchVersionIds: new Set(['v-a']), batchTotal: 2 })
+    expect(batch.rows.map((r) => r.id)).toEqual(['a', 'b'])
+    expect(batch.active).toBe(true)
+  })
+  it('分類待確認/覆蓋不完整 ≠ 完成;unsupported 算落地完成;重試只認 AI 分析失敗', () => {
+    const rows = [
+      run({ id: 'ok', document_version_id: 'v1', status: 'completed', stage: 'completed', classification_status: 'auto_accepted' }),
+      run({ id: 'needs', document_version_id: 'v2', status: 'completed', stage: 'completed', classification_status: 'needs_review' }),
+      run({ id: 'partial-cov', document_version_id: 'v3', status: 'completed', stage: 'completed', classification_status: 'confirmed', metadata: { requirement_extraction_warning: '未涵蓋整份文件' } }),
+      run({ id: 'unsup', document_version_id: 'v4', status: 'unsupported', stage: 'unsupported' }),
+      run({ id: 'ai-fail', document_version_id: 'v5', status: 'partial', stage: 'failed', metadata: { requirement_extraction: 'failed' } }),
+      run({ id: 'upload-fail', document_version_id: 'v6', status: 'failed', stage: 'failed' }),
+    ]
+    const ids = (list) => list.map((r) => r.id)
+    const batch = summarizeUploadBatch(rows, { batchVersionIds: new Set(['v1', 'v2', 'v3', 'v4', 'v5', 'v6']) })
+    expect(ids(batch.ok)).toEqual(['ok', 'unsup'])
+    expect(ids(batch.needs)).toEqual(['needs', 'partial-cov'])
+    expect(ids(batch.failed)).toEqual(['ai-fail', 'upload-fail'])
+    expect(ids(batch.extractionFailed)).toEqual(['ai-fail'])
+    expect(batch.active).toBe(false)
+  })
+  it('進度母數定錨在選檔總數:還沒建列的檔案以 0% 計入,母數不會隨列增加而倒退', () => {
+    const rows = [run({ document_version_id: 'v1', status: 'processing', stage: 'uploaded' })]  // 20%
+    expect(summarizeUploadBatch(rows, { batchVersionIds: new Set(['v1']), batchTotal: 4 })).toMatchObject({ total: 4, overallPct: 5 })
+    expect(summarizeUploadBatch(rows, { batchVersionIds: new Set(['v1']), batchTotal: 0 })).toMatchObject({ total: 1, overallPct: 20 })
+    expect(summarizeUploadBatch([], { batchVersionIds: new Set() })).toMatchObject({ total: 0, overallPct: 0, active: false })
   })
 })

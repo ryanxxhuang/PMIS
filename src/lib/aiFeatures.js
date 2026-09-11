@@ -30,7 +30,7 @@ export const PLAN_RANK = { trial: 0, standard: 1, pro: 2 }
 export const AI_FEATURES = [
   { key: 'agent.run', label: 'AI Agent 主控台', category: 'agent', edgeFunction: 'agent-run', minPlan: 'standard', isLlm: true, defaultEnabled: true },
   { key: 'assistant.chat', label: 'AI 問答助理', category: 'agent', edgeFunction: 'assistant-chat', minPlan: 'standard', isLlm: true, defaultEnabled: false }, // W3-3 退場:/agent 是唯一對話入口;列保留供用量歷史對帳
-  { key: 'contract.parse', label: '契約解析(時程/罰則)', category: 'document', edgeFunction: 'parse-contract', minPlan: 'standard', isLlm: true, defaultEnabled: true },
+  { key: 'contract.parse', label: '契約解析(時程/罰則)', category: 'document', edgeFunction: 'parse-contract', minPlan: 'standard', isLlm: true, defaultEnabled: false }, // B5 退場(D-012):requirements 是唯一權威,parse-contract 繞過 sourceVerify/ingestion_runs;DB 開關見 20260911100100
   { key: 'documents.classify', label: '文件自動分類', category: 'document', edgeFunction: 'classify-document', minPlan: 'trial', isLlm: true, defaultEnabled: true }, // 上傳鏈核心,開放所有方案(W14)
   { key: 'requirements.extract', label: '規範需求抽取', category: 'document', edgeFunction: 'extract-requirements', minPlan: 'trial', isLlm: true, defaultEnabled: true }, // 上傳鏈核心,開放所有方案(20260821000200)
   { key: 'submittal.read', label: '送審文件讀取', category: 'document', edgeFunction: 'read-submittal', minPlan: 'pro', isLlm: true, defaultEnabled: true },

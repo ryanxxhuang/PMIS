@@ -58,7 +58,7 @@ export default function Login() {
               {/* 左欄:品牌+標題+信任說明(lg 兩欄、手機直排) */}
               <div className="p-6 sm:p-10 lg:pr-6 flex flex-col">
                 <Brand />
-                <h1 className="text-[32px] leading-10 font-normal text-[var(--text)] mt-6">
+                <h1 className="text-title1 leading-10 font-semibold text-[var(--text)] mt-6">
                   {passwordRecovery ? '設定新密碼' : !isSupabaseConfigured ? '登入' : mode === 'forgot' ? '重設密碼' : '登入'}
                 </h1>
                 <p className="text-sm text-[var(--text-2)] mt-2">
@@ -70,7 +70,7 @@ export default function Login() {
                         ? '我們會寄一封重設連結到你註冊的信箱'
                         : '使用機關公務信箱或專案邀請信箱,繼續前往 GovAgent'}
                 </p>
-                <ul className="mt-8 lg:mt-auto lg:pt-8 space-y-2.5 text-[13px] text-[var(--text-2)]">
+                <ul className="mt-8 lg:mt-auto lg:pt-8 space-y-2.5 text-body text-[var(--text-2)]">
                   {TRUST_POINTS.map(([icon, text]) => (
                     <li key={icon} className="flex items-center gap-2">
                       <MSym name={icon} size={16} className="text-[var(--green-text)]" />
@@ -105,7 +105,7 @@ function Brand() {
     <div className="flex items-center gap-1.5">
       <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-7 h-7 dark:hidden" />
       <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-7 h-7 hidden dark:block" />
-      <span className="text-xl font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
+      <span className="text-title3 font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
     </div>
   )
 }
@@ -118,7 +118,7 @@ function FloatField({ label, className = '', ...props }) {
     <label className="relative block">
       <input className={`${FIELD_BASE} peer h-[52px] placeholder:text-transparent! ${className}`} {...props} />
       {/* -top-2(-8px)+surface 底=蓋住邊框;focus 時與邊框一起轉主色(peer) */}
-      <span className="absolute -top-2 left-2.5 px-1 rounded bg-[var(--surface)] text-[11.5px] leading-4 text-[var(--text-2)] pointer-events-none transition-colors peer-focus:text-[var(--blue)]">
+      <span className="absolute -top-2 left-2.5 px-1 rounded bg-[var(--surface)] text-caption leading-4 text-[var(--text-2)] pointer-events-none transition-colors peer-focus:text-[var(--blue)]">
         {label}
       </span>
     </label>
@@ -189,7 +189,7 @@ function SignInForm({ mode, setMode, signIn, requestPasswordReset }) {
               保持登入
             </label>
             <button type="button" onClick={() => { setMode('forgot'); setErr('') }}
-              className="inline-flex items-center min-h-11 px-2 text-[13px] text-[var(--blue-text)] hover:underline">
+              className="inline-flex items-center min-h-11 px-2 text-body text-[var(--blue-text)] hover:underline">
               忘記密碼？
             </button>
           </div>
@@ -260,7 +260,7 @@ function SignUpCard({ setMode, signUp, resendSignup }) {
       {/* 頂列:品牌+步驟指示 */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <Brand />
-        <span className="text-[13px] text-[var(--text-2)]">{sent ? '步驟 2 / 2 · 驗證信箱' : '步驟 1 / 2 · 選擇身分'}</span>
+        <span className="text-body text-[var(--text-2)]">{sent ? '步驟 2 / 2 · 驗證信箱' : '步驟 1 / 2 · 選擇身分'}</span>
       </div>
 
       {sent
@@ -287,8 +287,8 @@ function SignUpCard({ setMode, signUp, resendSignup }) {
         )
         : (
           <form onSubmit={submit}>
-            <h1 className="text-[26px] leading-9 font-normal text-[var(--text)] mt-6">建立帳戶</h1>
-            <p className="text-[13px] text-[var(--text-2)] mt-1.5">
+            <h1 className="text-title1 leading-9 font-semibold text-[var(--text)] mt-6">建立帳戶</h1>
+            <p className="text-body text-[var(--text-2)] mt-1.5">
               你在專案裡是哪一方？身分決定你看得到什麼、能簽什麼，註冊後無法自行變更。
             </p>
 
@@ -310,7 +310,7 @@ function SignUpCard({ setMode, signUp, resendSignup }) {
                       ${selected ? 'bg-[var(--blue-tint)] shadow-[inset_0_0_0_2px_var(--blue)]' : 'hover:bg-[var(--surface-2)]'}`}>
                     {selected && <MSym name="check_circle" fill size={20} className="absolute top-2.5 right-2.5 text-[var(--blue)]" />}
                     <MSym name={c.icon} size={26} fill={selected} className={selected ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} />
-                    <div className="text-[17px] font-medium text-[var(--text)] mt-2">{c.title}</div>
+                    <div className="text-title3 font-medium text-[var(--text)] mt-2">{c.title}</div>
                   </button>
                 )
               })}
@@ -330,7 +330,7 @@ function SignUpCard({ setMode, signUp, resendSignup }) {
             </div>
 
             {/* 資訊列(mockup):藍底說明,講清楚機關帳戶與平台後台的邊界 */}
-            <div className="mt-5 rounded-xl bg-[var(--blue-tint)] px-4 py-3 flex items-start gap-2.5 text-[13px] text-[var(--text)]">
+            <div className="mt-5 rounded-xl bg-[var(--blue-tint)] px-4 py-3 flex items-start gap-2.5 text-body text-[var(--text)]">
               <MSym name="info" size={17} className="shrink-0 mt-0.5 text-[var(--blue-text)]" />
               機關帳戶可建立專案並開啟正式模式；平台管理後台不屬於專案角色，僅平台營運者可見。
             </div>

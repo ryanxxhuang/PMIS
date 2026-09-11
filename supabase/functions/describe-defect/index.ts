@@ -5,8 +5,8 @@
 //
 // 部署:supabase functions deploy describe-defect
 
-import { claudeJson, imageBlock, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
-import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
+import { imageBlock, MODELS, jsonResponse as json } from '../_shared/claude.ts'
+import { aiJsonHandler } from '../_shared/aiHandler.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -25,27 +25,14 @@ const PROMPT =
   '產出:缺失標題、狀況描述、嚴重度(輕微/一般/嚴重)、位置線索、改善建議。' +
   '只根據照片可見內容,不要臆測;若照片看不出明顯缺失,title 回空字串並在 description 說明。'
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
-  const body = await req.json().catch(() => null)
-  const gate = await openAiGate(req, { feature: 'defect.describe', projectId: body?.project_id })
-  if (!gate.ok) return gate.response
-  try {
+Deno.serve(aiJsonHandler({
+  feature: 'defect.describe',
+  build: ({ body }) => {
     const { image_base64, mime_type } = body || {}
     if (!image_base64) return json({ error: '缺少 image_base64' }, 400)
-    const { data, error, usage, model } = await claudeJson({
+    return {
       model: MODELS.fast, name: 'defect', schema: SCHEMA, maxTokens: 512,
       content: [{ type: 'text', text: PROMPT }, imageBlock(image_base64, mime_type || 'image/jpeg')],
-    })
-    if (error) {
-      await closeAiGate(gate, { feature: 'defect.describe', model, usage, status: 'error', errorCode: 'claude_error' })
-      return json({ error }, 502)
     }
-    await closeAiGate(gate, { feature: 'defect.describe', model, usage, status: 'ok' })
-    return json(data, 200)
-  } catch (e) {
-    await closeAiGate(gate, { feature: 'defect.describe', status: 'error', errorCode: 'exception' })
-    return json({ error: String((e as Error)?.message || e) }, 500)
-  }
-})
+  },
+}))

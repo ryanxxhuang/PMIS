@@ -32,7 +32,7 @@ export default function BottomNav({ items, homeTo = '/dashboard' }) {
             <span className={`w-14 h-[30px] rounded-full flex items-center justify-center ${active ? 'bg-[var(--blue-tint)]' : ''}`}>
               <MSym name={n.icon} size={20} fill={active} className={active ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} />
             </span>
-            <span className={`text-[11px] font-medium leading-none ${active ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'}`}>{NAV_SHORT[n.label] || n.label}</span>
+            <span className={`text-caption font-medium leading-none ${active ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'}`}>{NAV_SHORT[n.label] || n.label}</span>
           </Link>
         )
       })}

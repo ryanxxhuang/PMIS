@@ -54,3 +54,53 @@ describe('addUniqueRow', () => {
     expect(addUniqueRow(rows, { type: '模板工', count: '' }, keyOf)).toHaveLength(2)
   })
 })
+
+// ── 波次 7 由 SiteLog.jsx 搬出的兩支純函式 ──
+import { readOnlyOfficialRows, flattenSiteLogsForCsv, SITE_LOG_CSV_COLUMNS } from './siteLogHelpers.js'
+
+describe('readOnlyOfficialRows(唯讀摘要的公定格式各節)', () => {
+  it('無日誌回空陣列', () => {
+    expect(readOnlyOfficialRows(null)).toEqual([])
+    expect(readOnlyOfficialRows(undefined)).toEqual([])
+  })
+  it('只列有資料的節;人力/機具/材料壓成一句,材料帶單位', () => {
+    const rows = readOnlyOfficialRows({
+      labor: [{ type: '鋼筋工', count: 8 }, { type: '', count: 3 }], // 空工別不算
+      equipment: [{ name: '吊車', count: 1 }, { name: '挖土機' }],  // 無數量顯示 —
+      materials: [{ name: '鋼筋', unit: 'T', qty: 3 }, { name: '模板', qty: 10 }],
+      extras: { technicians: '混凝土工程技術士 2 名', sampling: '', notice: null, important: '颱風警報' },
+    })
+    expect(rows).toEqual([
+      ['出工人數', '鋼筋工×8'],
+      ['機具使用', '吊車×1、挖土機×—'],
+      ['材料使用', '鋼筋×3 T、模板×10'],
+      ['四、應置技術士', '混凝土工程技術士 2 名'],
+      ['八、重要事項紀錄', '颱風警報'],
+    ])
+  })
+  it('五、安衛:勾選壓成一句;insured 預設「無新進勞工」不算有值', () => {
+    expect(readOnlyOfficialRows({ extras: { edu: true, ppe: true, insured: '無新進勞工' } }))
+      .toEqual([['五、職業安全衛生', '勤前教育（含危害告知）、檢查個人防護具']])
+    expect(readOnlyOfficialRows({ extras: { insured: '有' } }))
+      .toEqual([['五、職業安全衛生', '新進勞工提報勞保:有']])
+    expect(readOnlyOfficialRows({ extras: { insured: '無新進勞工' } })).toEqual([]) // 全無=整節不出現
+  })
+})
+
+describe('flattenSiteLogsForCsv', () => {
+  const byKey = new Map([['a', { item_no: '1.1', description: '鋼筋', unit: 'T' }]])
+  it('每筆日誌的每個工項攤一列,日期/天氣/摘要重複帶;查不到的 key 以 key 當名稱', () => {
+    const flat = flattenSiteLogsForCsv([
+      { log_date: '2026-07-10', weather: '晴', work_summary: '綁紮', items: { a: 5, zzz: 2 } },
+      { log_date: '2026-07-11', items: {} },
+    ], byKey)
+    expect(flat).toEqual([
+      { log_date: '2026-07-10', weather: '晴', work_summary: '綁紮', item_no: '1.1', description: '鋼筋', unit: 'T', qty: 5 },
+      { log_date: '2026-07-10', weather: '晴', work_summary: '綁紮', item_no: '', description: 'zzz', unit: '', qty: 2 },
+    ])
+  })
+  it('欄位規格與攤平結果的 key 一一對應', () => {
+    const [row] = flattenSiteLogsForCsv([{ log_date: 'd', items: { a: 1 } }], byKey)
+    expect(SITE_LOG_CSV_COLUMNS.map((c) => c.key)).toEqual(Object.keys(row))
+  })
+})

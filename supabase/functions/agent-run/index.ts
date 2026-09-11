@@ -10,82 +10,49 @@
 //
 // 部署:supabase functions deploy agent-run --use-api(colima 下必須 --use-api)
 
-import { createClient } from 'npm:@supabase/supabase-js@2'
-import { cors, jsonResponse as json, MODELS } from '../_shared/claude.ts'
-import { claudeAgent } from '../_shared/agent.ts'
-// 批 B:功能閘門檢查沿用本函式既有的 userClient/serviceClient(不重跑 openAiGate
-// 的身分/成員流程),記帳走同一支低階 recordAiUsage(紅線:記帳失敗絕不影響回應)
-import { recordAiUsage } from '../_shared/aiGate.ts'
-import { featureByKey } from '../_shared/aiFeatures.ts'
-import { gateVerdict } from '../_shared/gatePolicy.ts'
+import { cors, jsonResponse as json, MODELS, exceptionResponse } from '../_shared/claude.ts'
+import { claudeAgent, stableStringify } from '../_shared/agent.ts'
+// 批 B 閘門與記帳:身分/成員資格/功能開關(D-010 fail-closed)全走 openAiGate,
+// 記帳走同一支低階 recordAiUsage(紅線:記帳失敗絕不影響回應)。B1 之前這裡
+// 手抄了一份閘門流程(M-1),fail-closed 判定因此寫在兩處;現在只剩 aiGate 一處。
+import { openAiGate, recordAiUsage } from '../_shared/aiGate.ts'
 import { personaSystem } from '../_shared/agentPersona.ts'
 import type { AgentRole } from '../_shared/agentPersona.ts'
-import { makeToolExec, toolsForRole } from '../_shared/agentTools.ts'
+import { makeToolExec } from '../_shared/agentTools.ts'
+import { toolsForRole } from '../_shared/agentToolDefs.ts'
 import { agentRoleOf } from '../_shared/agentRole.ts'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// 輸入上限(M-7):history 早有 20 則 × 4000 字元的上限,message 與 facts 原本
+// 沒有——兩者都進 prompt,無上限等於讓前端決定要燒多少 token。message 比照
+// history 單則上限;facts 是前端 assistantFacts 組的有界快照(各清單 5~30 筆,
+// 實測數 KB),100k 字元是「正常永遠碰不到、失控一定擋下」的線。超過回 400。
+const MESSAGE_MAX_CHARS = 4_000
+const FACTS_MAX_CHARS = 100_000
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  const startedAt = Date.now() // 批 B:用量事件的 duration 起點
+  const body = await req.json().catch(() => null)
+  const message = body?.message
+  if (typeof message !== 'string' || !message.trim()) {
+    return json({ error: '缺少 message' }, 400)
+  }
+  if (message.length > MESSAGE_MAX_CHARS) {
+    return json({ error: `message 過長(上限 ${MESSAGE_MAX_CHARS} 字元)`, code: 'message_too_long' }, 400)
+  }
+  const facts = body?.facts
+  // 用進 prompt 的同一種序列化量長度,量到的就是實際會送出的大小
+  if (facts !== undefined && stableStringify(facts).length > FACTS_MAX_CHARS) {
+    return json({ error: `facts 快照過大(上限 ${FACTS_MAX_CHARS} 字元)`, code: 'facts_too_large' }, 400)
+  }
+
+  // gate.serviceClient 只給 draft_daily_log 寫 agent_actions 用(該表 authenticated
+  // 無寫入權)。缺 SUPABASE_SERVICE_ROLE_KEY 不整支失敗 —— 查詢工具照常可用,
+  // 只有 draft_daily_log 會回「伺服器未設定,暫時無法建立草稿」。
+  const gate = await openAiGate(req, { feature: 'agent.run', projectId: body?.project_id })
+  if (!gate.ok) return gate.response
+  const { userClient, serviceClient, userId, startedAt } = gate
+  const projectId = gate.projectId as string // requireProject 預設 true,過閘即非 null
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
-    if (!supabaseUrl || !anonKey) return json({ error: '伺服器未設定 Supabase 環境變數' }, 500)
-    // service role:只給 draft_daily_log 寫 agent_actions 用(該表 authenticated 無
-    // 寫入權)。缺 SUPABASE_SERVICE_ROLE_KEY 不整支失敗 —— 查詢工具照常可用,
-    // 只有 draft_daily_log 會回「伺服器未設定,暫時無法建立草稿」。
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    const serviceClient = serviceKey
-      ? createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
-      : null
-
-    const body = await req.json().catch(() => null)
-    const projectId = body?.project_id
-    const message = body?.message
-    if (typeof projectId !== 'string' || !UUID_RE.test(projectId)) {
-      return json({ error: '缺少有效的 project_id' }, 400)
-    }
-    if (typeof message !== 'string' || !message.trim()) {
-      return json({ error: '缺少 message' }, 400)
-    }
-
-    // -- 呼叫者 JWT 建 client(照 extract-requirements 的模式)-----------------
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: req.headers.get('Authorization') || '' } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
-    const { data: userData } = await userClient.auth.getUser()
-    const user = userData?.user
-    if (!user) return json({ error: '未登入' }, 401)
-
-    // RLS-scoped read 驗成員資格:看不到這個專案 = 不是成員
-    const { data: project, error: projectError } = await userClient
-      .from('projects')
-      .select('id')
-      .eq('id', projectId)
-      .maybeSingle()
-    if (projectError) return json({ error: projectError.message }, 500)
-    if (!project) return json({ error: '找不到專案或無權限' }, 404)
-
-    // -- 批 B:AI 功能閘門——查詢失敗 fail-closed(W3-4/D-010,判定同 aiGate)------
-    // kill switch 與方案限制在 DB 故障時仍必須有效;正常回 false(平台關閉/方案
-    // 不足)回 403,查詢失敗回 503,兩者都記 blocked 用量。
-    const { data: allowed, error: allowError } = await userClient
-      .rpc('ai_feature_allowed', { p_project: projectId, p_feature: 'agent.run' })
-    if (allowError) {
-      console.error('ai_feature_allowed 查詢失敗(agent.run,fail-closed 擋下):', allowError.message)
-    }
-    const label = featureByKey['agent.run']?.label || 'agent.run'
-    const verdict = gateVerdict(label, allowed as boolean | null, !!allowError)
-    if (!verdict.allow) {
-      await recordAiUsage(serviceClient, {
-        feature: 'agent.run', projectId, userId: user.id, actor: 'user',
-        durationMs: Date.now() - startedAt, status: 'blocked', errorCode: verdict.code,
-      })
-      return json({ error: verdict.message, code: verdict.code }, verdict.status)
-    }
-
     // -- 角色由伺服器決定 ------------------------------------------------------
     const { data: orgType } = await userClient.rpc('my_org_type')
     const role: AgentRole = agentRoleOf(typeof orgType === 'string' ? orgType : null)
@@ -113,23 +80,24 @@ Deno.serve(async (req) => {
     const result = await claudeAgent({
       system: personaSystem(role),
       tools: toolsForRole(role),
-      exec: makeToolExec(userClient, projectId, serviceClient, user.id, role),
+      exec: makeToolExec(userClient, projectId, serviceClient, userId, role),
       userMessage: message,
-      facts: body?.facts,
+      facts,
       history,
     })
 
     // 批 B:記用量(claudeAgent 已彙總多輪 usage;model 即其預設的 MODELS.agent)。
     // recordAiUsage 內部吞掉一切錯誤——記帳失敗絕不能讓 agent 回應失敗。
     await recordAiUsage(serviceClient, {
-      feature: 'agent.run', projectId, userId: user.id, actor: 'user',
+      feature: 'agent.run', projectId, userId, actor: 'user',
       model: MODELS.agent, usage: result.usage,
       durationMs: Date.now() - startedAt,
       status: result.error ? 'error' : 'ok',
       errorCode: result.error ? 'claude_error' : null,
     })
 
-    // steps 只回摘要(tool/ok/ms),工具輸出不回前端 —— 前端只該看到最終回答
+    // steps 只回摘要(tool/ok/ms),工具輸出與 step.error 原文不回前端 —— 前端只該
+    // 看到最終回答;result.error 已是 agent.ts 遮罩後的短語
     return json({
       text: result.text,
       role,
@@ -139,6 +107,6 @@ Deno.serve(async (req) => {
       ...(result.error ? { error: result.error } : {}),
     }, 200)
   } catch (e) {
-    return json({ error: String((e as Error)?.message || e) }, 500)
+    return exceptionResponse('agent-run', e)
   }
 })

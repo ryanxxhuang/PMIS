@@ -132,6 +132,6 @@ PCCES 標單樹、估驗計價公式、ITP 檢驗停留點、自主檢查表、�
 - `docs/README.md` — 文件索引與時效分類
 - `docs/DECISIONS.md` — 已定案產品與架構決策
 - `docs/ROADMAP.md` — 尚未核准的候選改動
-- `docs/AI-Agent-大改版-產品重定位報告-2026-07-25.md` — 已被三方模型取代的歷史分析
+- 四 Agent 的歷史分析已由三方模型取代，原文見 Git `c39e395`
 - `docs/architecture/` — 各項平台層機制的設計說明（契約優先、佐證鏈、稽核事件、需求審查邊界）
-- `CLAUDE.md` — 給 AI 協作者的常駐規則（本文件的執行摘要在那裡）
+- `AGENTS.md`／`DEVELOPMENT.md` — AI 協作入口與共用規則；`CLAUDE.md` 只指向同一份

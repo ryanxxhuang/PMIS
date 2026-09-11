@@ -3,18 +3,19 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader, Button, Badge, Surface, Input, Textarea } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
+import { plannedPctNow } from '../../lib/progressPlan.js'
+import { taipeiToday } from '../../lib/dates.js'
 import { buildSupervisorReport } from '../../lib/supervisorReport.js'
 
 // 每次呼叫取「今天」(B-11):模組層常數會讓長開分頁凍結在開頁那天
-const curMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+const curMonth = () => taipeiToday().slice(0, 7)
 
 // 章節標題=Workspace 卡頭風(15px/500)。拿掉藍色短標:章節本來就靠「一、二、三」
 // 編號分節,再加一條主色裝飾條會讓每一節都像重點,反而讀不出輕重。
 function Section({ n, title, children }) {
   return (
     <div>
-      <h3 className="text-[15px] font-medium text-[var(--text)] mb-2">{n}、{title}</h3>
+      <h3 className="text-callout font-medium text-[var(--text)] mb-2">{n}、{title}</h3>
       <div className="pl-3">{children}</div>
     </div>
   )
@@ -41,16 +42,7 @@ export default function SupervisorReport() {
     if (!latestVal || !billableTotal) return 0
     return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) / billableTotal) * 100
   }, [roots, childrenMap, latestVal, billableTotal])
-  const plannedNow = useMemo(() => {
-    if (!progressPlan) return null
-    const months = progressPlan.months, N = months.length
-    const start = parseLocalDate(progressPlan.start)
-    const el = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
-    if (el <= 0) return 0
-    if (el >= N - 1) return months[N - 1].plannedPct
-    const lo = Math.floor(el), f = el - lo
-    return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
-  }, [progressPlan])
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   const r = useMemo(() => buildSupervisorReport({
     project, siteLogs, inspections, defects, submittals,
@@ -88,7 +80,7 @@ export default function SupervisorReport() {
           {/* 列印文件的大標用 h2(與施工月報同):正式文件需要標題語意,不能只是粗體 div */}
           <h2 className="text-lg font-bold">監造報表</h2>
           <div className="text-sm text-[var(--text-2)] mt-0.5">{project.project_name}</div>
-          <div className="text-xs text-[var(--text-3)] mt-1 num">報告月份：{r.monthLabel}　·　監造單位：{project.supervisor_name || '—'}</div>
+          <div className="text-xs text-[var(--text-3)] mt-1 num">報告月份：{r.monthLabel}&#x3000;·&#x3000;監造單位：{project.supervisor_name || '—'}</div>
         </div>
 
         <Section n="一" title="工程概況">
@@ -145,7 +137,7 @@ export default function SupervisorReport() {
           {/* print: 兩件(去框、去左右內距)是列印版面的合約,以 className 帶入共用 Textarea */}
           <Textarea value={opinionText} onChange={(e) => setOpinion(e.target.value)} rows={5}
             className="leading-relaxed print:border-0 print:px-0" />
-          <div className="text-[11px] text-[var(--text-3)] mt-1 print:hidden flex items-center gap-1">
+          <div className="text-caption text-[var(--text-3)] mt-1 print:hidden flex items-center gap-1">
             <MSym name="auto_awesome" size={12} />AI 依本月數據草擬，請監造覆核修改後再列印用印。
           </div>
         </Section>

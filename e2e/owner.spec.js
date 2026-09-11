@@ -33,8 +33,11 @@ test.describe('機關', () => {
     // 跨頁一致:估驗頁分母、Dashboard 發包工程費都是同一個數字
     await gotoHash(page, '/valuation')
     await expect(page.getByText(/變更後契約金額 7\.24 億/)).toBeVisible()
-    await gotoHash(page, '/dashboard')
-    await expect(page.getByText(`NT$ ${REVISED_AFTER_CO2}`)).toBeVisible()
+    // Apple 改版後首頁不再放指標卡(判準:不會被點的數字一律刪),第三個面改用
+    // 跨案總覽——它與估驗頁同吃 store 的 revisedTotal(財務單一真相層 B-02),
+    // 那裡渲染成不帶 NT$ 的裸數字,所以比對數字本身。
+    await gotoHash(page, '/portfolio')
+    await expect(page.getByText(REVISED_AFTER_CO2, { exact: false }).first()).toBeVisible()
   })
 
   test('今日待辦:機關拿得到驗收法定期限,拿不到廠商責任的事', async ({ page }) => {

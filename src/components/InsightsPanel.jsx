@@ -22,7 +22,7 @@ export default function InsightsPanel({ insights }) {
   return (
     <Card
       title={<span className="inline-flex items-center gap-2"><MSym name="warning" size={20} className="text-[var(--danger)]" />風險警示</span>}
-      action={<span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-3)] shrink-0"><MSym name="auto_awesome" size={12} />AI 幫你看到的 {insights.length} 件</span>}
+      action={<span className="inline-flex items-center gap-1.5 text-caption text-[var(--text-3)] shrink-0"><MSym name="auto_awesome" size={12} />AI 幫你看到的 {insights.length} 件</span>}
       bodyClass="p-0"
     >
       <ul className="divide-y divide-[var(--border-2)]">
@@ -35,7 +35,7 @@ export default function InsightsPanel({ insights }) {
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm text-[var(--text)]">{it.title}</span>
                   {/* 依據原本藏在 title tooltip,手機摸不到;改成可見小字 */}
-                  {it.detail && <span className="block text-[11px] text-[var(--text-3)] leading-snug mt-0.5">{it.detail}</span>}
+                  {it.detail && <span className="block text-caption text-[var(--text-3)] leading-snug mt-0.5">{it.detail}</span>}
                 </span>
                 <MSym name="chevron_right" size={16} className="text-[var(--text-3)] group-hover:text-[var(--text-2)] shrink-0 mt-1" />
               </Link>
@@ -45,7 +45,7 @@ export default function InsightsPanel({ insights }) {
         {insights.length > SHOWN && (
           // 全形＋在不同字型下寬度會跳,圖示一律 MSym;inline-flex 掛在內層 span——
           // li 本身要維持 block,否則 divide-y 的分隔線會縮成文字寬度
-          <li className="px-5 py-2 text-[11px] text-[var(--text-3)]">
+          <li className="px-5 py-2 text-caption text-[var(--text-3)]">
             <span className="inline-flex items-center gap-0.5"><MSym name="add" size={12} />{insights.length - SHOWN} 項</span>
           </li>
         )}

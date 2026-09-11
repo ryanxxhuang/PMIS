@@ -11,8 +11,8 @@
 // 金鑰只存雲端 secret(ANTHROPIC_API_KEY);verify_jwt 預設開啟。
 // 部署(colima 下必須 --use-api):supabase functions deploy read-submittal --use-api
 
-import { claudeJson, imageBlock, pdfBlock, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
-import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
+import { imageBlock, pdfBlock, MODELS, jsonResponse as json } from '../_shared/claude.ts'
+import { aiJsonHandler } from '../_shared/aiHandler.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -45,13 +45,9 @@ const SYS =
   '且**「不適用」項目不得影響建議判定**(不得因施工計畫沒寫罰則就建議退回)。只有本類別應涵蓋卻「未涵蓋/不符」者才影響判定。' +
   '逐項給判定與理由(引用文件相關敘述),再給文件摘要、審查意見草稿與建議判定。'
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
-  const p = await req.json().catch(() => null) || {}
-  const gate = await openAiGate(req, { feature: 'submittal.read', projectId: p?.project_id })
-  if (!gate.ok) return gate.response
-  try {
+Deno.serve(aiJsonHandler({
+  feature: 'submittal.read',
+  build: ({ body: p }) => {
     const reqs = (p.requirements || []).slice(0, 20)
     const reqText = reqs.length
       ? reqs.map((r: Record<string, unknown>, i: number) =>
@@ -59,7 +55,7 @@ Deno.serve(async (req) => {
       : '(本專案尚無已解析的契約履約需求;請以送審類別之通用要點審視,並將各項標為需人工確認。)'
     const head = `送審名稱:${p.submittal?.title || ''}(類別:${p.submittal?.category || ''})\n\n契約履約需求:\n${reqText}\n\n以下為送審文件內容,請據實逐項比對:`
 
-    let content: unknown
+    let content: string | Record<string, unknown>[]
     if (p.doc_text && String(p.doc_text).trim()) {
       content = `${head}\n\n=== 送審文件文字 ===\n${p.doc_text}`
     } else if (p.file_base64) {
@@ -68,18 +64,8 @@ Deno.serve(async (req) => {
     } else {
       return json({ error: '缺少送審文件內容(doc_text 或 file_base64)' }, 400)
     }
-
-    const { data, error, usage, model } = await claudeJson({
+    return {
       model: MODELS.smart, name: 'submittal_read', schema: SCHEMA, maxTokens: 2400, system: SYS, content,
-    })
-    if (error) {
-      await closeAiGate(gate, { feature: 'submittal.read', model, usage, status: 'error', errorCode: 'claude_error' })
-      return json({ error }, 502)
     }
-    await closeAiGate(gate, { feature: 'submittal.read', model, usage, status: 'ok' })
-    return json(data, 200)
-  } catch (e) {
-    await closeAiGate(gate, { feature: 'submittal.read', status: 'error', errorCode: 'exception' })
-    return json({ error: String((e as Error)?.message || e) }, 500)
-  }
-})
+  },
+}))

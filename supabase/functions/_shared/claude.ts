@@ -3,6 +3,12 @@
 // 金鑰只在雲端 secret(ANTHROPIC_API_KEY),永不進前端。
 // 模型分工:fast=視覺辨識/短文生成(便宜快);smart=長文件抽取與判斷型審查
 // (契約/規範/監造審查/機關稽核);agent=多輪 tool-use 迴圈主力(見 agent.ts)。
+// 錯誤遮罩(B1 / H-1):Anthropic 的回應本文含 request id / 額度 / 模型名,
+// 只進 console.error;回傳的 error 一律是 publicError.ts 的中文短語＋代碼,
+// 呼叫端可以直接 `json({ error })` 回前端而不外洩。
+
+import { maskClaudeError, maskDbError, maskException } from './publicError.ts'
+import type { PublicError, DbErrorLike } from './publicError.ts'
 
 export const MODELS = {
   fast: 'claude-haiku-4-5-20251001',
@@ -29,12 +35,20 @@ const RETRY_BASE_DELAY_MS = 1_000
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+// Deno.env 只能在函式內取用、且要能容忍 Deno 不存在:本檔與 agent.ts 會被
+// vitest(Node)import 測試,模組頂層或裸寫 Deno.env 會直接 ReferenceError。
+export function readEnv(key: string): string | undefined {
+  return (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno?.env?.get?.(key)
+    ?? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[key]
+}
+
 // 回傳除 { data, error } 外亦帶 usage / model(批 B 計量用,純加法——
 // 既有呼叫端只解構 { data, error } 完全不受影響)。
 // errorCode / stopReason 亦為純加法:
 // * errorCode='max_tokens' = 輸出撞上 maxTokens 上限,tool_use 內容不可信——
 //   呼叫端可縮小輸入分批重試;沒檢查 stop_reason 前這種情況會靜默吃到殘缺 JSON。
 // * errorCode='timeout' / 'http_<status>' / 'network' 供呼叫端分類記帳。
+// * error 永遠是遮罩後的中文短語(含代碼),不含上游原文——見檔頭。
 export async function claudeJson(opts: {
   model: string
   content: ContentBlock[] | string
@@ -46,8 +60,8 @@ export async function claudeJson(opts: {
   retries?: number       // 僅對 429/5xx/網路錯誤重試
   retryTimeouts?: boolean // 預設 true;false=逾時立即回報(呼叫端要縮小輸入,原尺寸重試只會再逾時一次)
 }): Promise<{ data?: unknown; error?: string; errorCode?: string; usage?: ClaudeUsage; model?: string; stopReason?: string }> {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!apiKey) return { error: '伺服器未設定 ANTHROPIC_API_KEY', errorCode: 'config' }
+  const apiKey = readEnv('ANTHROPIC_API_KEY')
+  if (!apiKey) return { error: maskClaudeError(opts.name, 'config', '未設定 ANTHROPIC_API_KEY').message, errorCode: 'config' }
 
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const retries = opts.retries ?? DEFAULT_RETRIES
@@ -77,16 +91,18 @@ export async function claudeJson(opts: {
       })
     } catch (e) {
       const isTimeout = (e as Error)?.name === 'TimeoutError'
-      lastError = isTimeout ? `Claude 呼叫逾時(${Math.round(timeoutMs / 1000)}s)` : `Claude 連線失敗:${String((e as Error)?.message || e)}`
       lastCode = isTimeout ? 'timeout' : 'network'
+      // 連線層例外的原文只進 log;每次嘗試都記一筆,重試耗盡時 log 才看得出經過
+      lastError = maskClaudeError(opts.name, lastCode,
+        isTimeout ? `逾時 ${Math.round(timeoutMs / 1000)}s(第 ${attempt + 1} 次嘗試)` : (e as Error)?.message ?? e).message
       // 逾時通常代表輸入太大/輸出太長,同尺寸重試多半再逾時一次,卻會把
       // Edge Function 的 wall-clock 燒光(W13:69 頁契約 3×120s 連環逾時直接被平台砍)
       if (isTimeout && opts.retryTimeouts === false) break
       continue
     }
     if (!resp.ok) {
-      lastError = `Claude ${resp.status}: ${(await resp.text()).slice(0, 500)}`
       lastCode = `http_${resp.status}`
+      lastError = maskClaudeError(opts.name, lastCode, await resp.text()).message
       // 429(限流)與 5xx(含 529 過載)可重試;其他 4xx 是請求本身的問題,重試無益
       if (resp.status === 429 || resp.status >= 500) continue
       return { error: lastError, errorCode: lastCode, model: opts.model }
@@ -99,10 +115,12 @@ export async function claudeJson(opts: {
     // stop_reason=max_tokens:tool_use input 可能中途被截斷,即使 JSON 湊巧完整
     // 也可能少了後半的項目——一律視為失敗,交呼叫端決定縮小輸入重試
     if (stopReason === 'max_tokens') {
-      return { error: 'AI 輸出超過長度上限(stop_reason=max_tokens),結果不完整', errorCode: 'max_tokens', usage, model, stopReason }
+      return { error: maskClaudeError(opts.name, 'max_tokens', 'stop_reason=max_tokens').message, errorCode: 'max_tokens', usage, model, stopReason }
     }
     const tu = (data.content || []).find((b: { type: string }) => b.type === 'tool_use')
-    if (!tu?.input) return { error: 'AI 未回傳結構化內容', errorCode: 'no_tool_use', usage, model, stopReason }
+    if (!tu?.input) {
+      return { error: maskClaudeError(opts.name, 'no_tool_use', `stop_reason=${stopReason}`).message, errorCode: 'no_tool_use', usage, model, stopReason }
+    }
     return { data: tu.input, usage, model, stopReason }
   }
   return { error: lastError, errorCode: lastCode, model: opts.model }
@@ -123,3 +141,15 @@ export const cors = {
 export function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...cors, 'content-type': 'application/json' } })
 }
+
+// 錯誤回應的唯一出口形狀:{ error: 中文短語, code: 穩定代碼, ...extra }。
+// 前端只讀 error(字串)與 code(extract-requirements 的 run_conflict /
+// restart_required 分流),extra 放 run_id / status 這類呼叫端既有欄位。
+export function errorResponse(pub: PublicError, status: number, extra: Record<string, unknown> = {}) {
+  return jsonResponse({ error: pub.message, code: pub.code, ...extra }, status)
+}
+// PostgREST 錯誤 / 未預期例外 → 遮罩後回應(原文進 log);scope 寫「函式.步驟」讓 log 找得到
+export const dbErrorResponse = (scope: string, error: DbErrorLike, status = 500, extra?: Record<string, unknown>) =>
+  errorResponse(maskDbError(scope, error), status, extra)
+export const exceptionResponse = (scope: string, e: unknown, status = 500, extra?: Record<string, unknown>) =>
+  errorResponse(maskException(scope, e), status, extra)

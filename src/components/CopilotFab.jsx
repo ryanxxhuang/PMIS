@@ -2,12 +2,13 @@
 // W3-2(D-008)薄入口定位:與 /agent 是同一個 Agent(同 runtime/persona/工具),
 // 面板每次打開都是新對話(不帶 history,長對話請開完整頁);真專案不需先匯標單
 // (對齊 W2-3——文件/成員/期限問題不依賴 BOQ)。列印頁隱藏;行動版為全寬 bottom sheet。
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 import { useStore } from '../store.jsx'
 import { useAssistantData } from '../lib/assistantData.js'
 import { displayAgentRole, AGENT_LABEL } from '../lib/agentRole.js'
+import { useEscape } from '../lib/useEscape.js'
 import CopilotChat from './CopilotChat.jsx'
 
 // 自訂 AI 標記:對話泡泡 + 靈感火花(比通用 Sparkles 更有識別度、更「設計感」)。
@@ -49,8 +50,8 @@ function CopilotPanel({ onClose }) {
         <span className="w-7 h-7 rounded-lg grid place-items-center bg-[var(--blue-tint)] text-[var(--blue-text)] shrink-0"><CopilotMark size={16} /></span>
         <div className="min-w-0 flex-1">
           {/* 面板頭=卡頭:字級對齊 Card title(15px/500);輔助字最小 11px(10px 在 1x 螢幕不可讀) */}
-          <div className="text-[15px] font-medium text-[var(--text)] leading-tight">{label.name} <span className="font-normal text-[11px] text-[var(--text-3)]">新對話</span></div>
-          <div className="text-[11px] text-[var(--text-3)]">與主控台同一個 Agent · 長對話請開<Link to="/agent" onClick={onClose} className="text-[var(--blue-text)] hover:underline">完整頁</Link></div>
+          <div className="text-callout font-medium text-[var(--text)] leading-tight">{label.name} <span className="font-normal text-caption text-[var(--text-3)]">新對話</span></div>
+          <div className="text-caption text-[var(--text-3)]">與主控台同一個 Agent · 長對話請開<Link to="/agent" onClick={onClose} className="text-[var(--blue-text)] hover:underline">完整頁</Link></div>
         </div>
         <Link to="/agent" onClick={onClose} className="inline-flex items-center justify-center max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="開啟完整頁面" title="開啟完整頁面"><MSym name="open_in_full" size={15} /></Link>
         <button onClick={onClose} className="inline-flex items-center justify-center max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--text)] p-1" aria-label="關閉"><MSym name="close" size={17} /></button>
@@ -66,13 +67,7 @@ export default function CopilotFab() {
   const available = isPersistedProject || demoMode
   const [open, setOpen] = useState(false)
 
-  // Esc 關閉
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+  useEscape(open, () => setOpen(false))
 
   if (!available) return null // 尚未選定專案(或未設 Supabase 又非 demo)時不顯示
   // 批 B UX:agent 對話功能關閉時整顆 FAB 藏起來(面板走 agent-run),

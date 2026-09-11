@@ -1,0 +1,431 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Noto Sans TC", "PingFang TC", sans-serif; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; color: #1D1D1F; }
+    a { color: #0071E3; text-decoration: none; }
+    a:hover { color: #0058B0; text-decoration: underline; }
+  </style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 1000px; box-sizing: border-box; overflow: hidden; background: #EFEFF4; font-size: 13px; line-height: 19px; color: #1D1D1F;">
+
+  <!-- ══ 畫板標頭：方向名稱與核心主張 ══ -->
+  <div style="position: absolute; left: 40px; top: 18px; width: 1100px; display: flex; flex-direction: column; gap: 4px;">
+    <div style="font-size: 11px; line-height: 15px; color: #86868B;">PMIS.ai · 設計方向畫板 · 2026-09-11 · 監造視角</div>
+    <div style="display: flex; align-items: baseline; gap: 14px;">
+      <div style="font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.017em; color: #1D1D1F;">方向 A · <span style="color: #0071E3;">收件匣</span></div>
+      <div style="font-size: 13px; line-height: 19px; color: #6E6E73;">這個 App 沒有 dashboard。打開就是「球在你手上的事」，一件一件處理掉，處理完就消失。</div>
+    </div>
+  </div>
+
+  <!-- ══ HIG 原則對照（右上） ══ -->
+  <div style="position: absolute; left: 1164px; top: 18px; width: 236px; display: flex; flex-direction: column; gap: 4px;">
+    <div style="font-size: 11px; line-height: 15px; font-weight: 600; color: #86868B;">HIG · Principles of Great Design</div>
+    <div style="display: flex; flex-direction: column; gap: 1px; font-size: 11px; line-height: 15px; color: #6E6E73;">
+      <div><span style="font-weight: 600; color: #1D1D1F;">Purpose</span>　四張指標卡全部退場</div>
+      <div><span style="font-weight: 600; color: #1D1D1F;">Simplicity</span>　參考層降到 ⌘K 與引用</div>
+      <div><span style="font-weight: 600; color: #1D1D1F;">Direct manipulation</span>　展開即處理</div>
+      <div><span style="font-weight: 600; color: #1D1D1F;">Agency</span>　完成／延後皆可撤回</div>
+    </div>
+  </div>
+
+  <!-- ══ macOS 視窗 1100 × 868 ══ -->
+  <div style="position: absolute; left: 40px; top: 92px; width: 1100px; height: 868px; box-sizing: border-box; border-radius: 12px; overflow: hidden; background: #F5F5F7; box-shadow: 0 10px 32px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.10); display: grid; grid-template-rows: 52px minmax(0, 1fr);">
+
+    <!-- 工具列：統一材質，左邊紅綠燈，中間專案切換，右邊 ⌘K -->
+    <div style="display: grid; grid-template-columns: 168px minmax(0, 1fr); background: rgba(255,255,255,.80); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: inset 0 -0.5px 0 rgba(0,0,0,.10);">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 0 0 0 16px;">
+        <div style="width: 12px; height: 12px; border-radius: 999px; background: #D2D2D7; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.12);"></div>
+        <div style="width: 12px; height: 12px; border-radius: 999px; background: #D2D2D7; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.12);"></div>
+        <div style="width: 12px; height: 12px; border-radius: 999px; background: #D2D2D7; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.12);"></div>
+        <div style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; padding: 0 0 0 10px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 13px; font-weight: 590; color: #1D1D1F;">桃園市立圖書館新建工程</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          <span style="font-size: 11px; color: #86868B; padding: 0 0 0 6px;">監造 · 中興顧問</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; width: 280px; height: 28px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; background: #EFEFF4;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <span style="flex: 1; font-size: 12px; color: #86868B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">搜尋或問 PMIS：文件、契約、工項…</span>
+            <span style="font-size: 11px; color: #86868B;">⌘K</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #F5EDF9;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8944AB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.6a2 2 0 0 0 1.3 1.3L19.5 10.5l-4.6 1.6a2 2 0 0 0-1.3 1.3L12 18l-1.6-4.6a2 2 0 0 0-1.3-1.3L4.5 10.5l4.6-1.6a2 2 0 0 0 1.3-1.3z"></path><path d="M19 15.5v3"></path><path d="M17.5 17h3"></path></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 視窗主體：極窄側欄 + 收件匣 -->
+    <div style="display: grid; grid-template-columns: 168px minmax(0, 1fr); min-height: 0;">
+
+      <!-- 側欄：只有三個清單與一個摺疊的參考層 -->
+      <aside style="display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; padding: 12px 10px 14px; background: rgba(246,246,248,.86); backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%); box-shadow: inset -0.5px 0 0 rgba(0,0,0,.10);">
+        <nav style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px; background: #E8F1FD;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0058B0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+            <span style="flex: 1; font-size: 13px; font-weight: 590; color: #0058B0;">收件匣</span>
+            <span style="font-size: 11px; font-weight: 590; color: #0058B0;">7</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span style="flex: 1; font-size: 13px; color: #1D1D1F;">稍後</span>
+            <span style="font-size: 11px; color: #86868B;">2</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            <span style="flex: 1; font-size: 13px; color: #1D1D1F;">已完成</span>
+          </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; padding: 12px 0 0; border-top: 1px solid #E5E5EA;">
+          <div style="display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+            <span style="flex: 1; font-size: 13px; color: #1D1D1F;">參考</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </div>
+          <div style="padding: 0 9px; font-size: 11px; line-height: 15px; color: #86868B;">專案文件 · 契約重點 ·<br>標單工項<br>從 ⌘K 或卡片引用進入</div>
+          </div>
+        </nav>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 0 4px;">
+          <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 999px; background: #E8F1FD; font-size: 12px; font-weight: 600; color: #0058B0;">林</div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 590; color: #1D1D1F;">林建宏</span>
+            <span style="font-size: 11px; line-height: 14px; color: #86868B;">中興顧問 · 監造</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- 主體：收件匣清單 + 側邊書頁 -->
+      <main style="display: grid; grid-template-columns: minmax(0, 1fr) 316px; column-gap: 16px; box-sizing: border-box; padding: 12px 20px; min-height: 0;">
+
+        <!-- 收件匣欄：標題 / 卡片 / 狀態列 -->
+        <section style="display: grid; grid-template-rows: auto minmax(0, 1fr) auto; row-gap: 10px; min-height: 0;">
+
+          <div style="display: flex; align-items: flex-end; justify-content: space-between; height: 49px;">
+            <div style="display: flex; flex-direction: column;">
+              <div style="font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.021em; color: #1D1D1F;">收件匣</div>
+              <div style="font-size: 11px; line-height: 15px; color: #6E6E73;">今天 2026-09-11 · 7 件球在你手上 · 依期限排序 · 處理完就消失</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 15px; color: #86868B;">
+              <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px; background: #E8F1FD; color: #0058B0; font-weight: 590;">你 3</span>
+              <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px; background: #EFEFF4; color: #6E6E73; font-weight: 590;">廠商 3</span>
+              <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px; background: #F5EDF9; color: #703A8C; font-weight: 590;">AI 草稿 1</span>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; min-height: 0;">
+
+            <!-- 1 逾期 · 廠商 -->
+            <div style="display: flex; align-items: center; gap: 12px; height: 48px; box-sizing: border-box; padding: 0 12px 0 14px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07);">
+              <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 20px; border-radius: 6px; background: #FDECEB; color: #B3000F; font-size: 11px; font-weight: 590; flex-shrink: 0;">逾期 4 日</div>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                <div style="font-size: 13px; line-height: 18px; font-weight: 590; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">查驗缺失改善逾期未回報</div>
+                <div style="font-size: 11px; line-height: 14px; color: #6E6E73; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">監造 08-31 通知，應於 7 日內完成改善並回報 · 契約第 8 條第 3 項</div>
+              </div>
+              <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: #EFEFF4; color: #6E6E73; font-size: 11px; font-weight: 590; flex-shrink: 0;">廠商</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+
+            <!-- 2 今日到期 · 估驗第 6 期（展開狀態＝處理介面） -->
+            <div style="display: flex; flex-direction: column; border-radius: 12px; background: #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,.06), 0 0 0 .5px rgba(0,0,0,.07);">
+              <div style="display: flex; align-items: center; gap: 12px; height: 48px; box-sizing: border-box; padding: 0 12px 0 14px;">
+                <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 20px; border-radius: 6px; background: #FDF0E7; color: #A32B00; font-size: 11px; font-weight: 590; flex-shrink: 0;">今日到期</div>
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                  <div style="font-size: 13px; line-height: 18px; font-weight: 590; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">估驗計價第 6 期待審</div>
+                  <div style="font-size: 11px; line-height: 14px; color: #6E6E73; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">廠商已送出，本期金額 34,820,000 · AI 對量差異 4 項</div>
+                </div>
+                <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: #E8F1FD; color: #0058B0; font-size: 11px; font-weight: 590; flex-shrink: 0;">你</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0071E3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; padding: 12px 16px 14px; border-top: 1px solid #E5E5EA;">
+
+                <!-- 摘要列：金額 / 差額 / 佐證與引用 -->
+                <div style="display: grid; grid-template-columns: 124px minmax(0, 1fr) 176px; column-gap: 12px;">
+                  <div style="display: flex; flex-direction: column;">
+                    <div style="font-size: 11px; line-height: 15px; color: #86868B;">本期金額 · 2026-08</div>
+                    <div style="font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.017em; color: #1D1D1F;">34,820,000</div>
+                  </div>
+                  <div style="display: flex; flex-direction: column;">
+                    <div style="font-size: 11px; line-height: 15px; color: #86868B;">對量差額 4 項 · 引擎計算</div>
+                    <div style="display: flex; align-items: baseline; gap: 6px;">
+                      <span style="font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.017em; color: #B3000F;">−174,420</span>
+                      <span style="font-size: 11px; line-height: 15px; color: #86868B;">日誌−申報 × 單價</span>
+                    </div>
+                  </div>
+                  <div style="display: flex; flex-direction: column;">
+                    <div style="font-size: 11px; line-height: 15px; color: #86868B;">佐證與引用</div>
+                    <div style="font-size: 11px; line-height: 15px; white-space: nowrap;"><a href="#">本期估驗明細</a><span style="color: #86868B;"> · </span><a href="#">施工日誌 8 月</a><span style="color: #86868B;"> · </span><a href="#">照片</a></div>
+                    <div style="display: flex; align-items: center; height: 15px;">
+                      <span style="display: inline-flex; align-items: center; gap: 4px; height: 15px; padding: 0 5px; border-radius: 4px; background: #E8F1FD; color: #0058B0; font-size: 11px; font-weight: 590; white-space: nowrap;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0058B0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                        契約第 5 條 估驗計價
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- AI 對量差異逐項表 -->
+                <div style="display: flex; flex-direction: column;">
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 84px 84px 96px; column-gap: 8px; height: 20px; align-items: center; border-bottom: 1px solid #E5E5EA; font-size: 11px; line-height: 15px; font-weight: 600; color: #86868B;">
+                    <div>工項 · 單位 · 單價</div>
+                    <div style="text-align: right;">申報數量</div>
+                    <div style="text-align: right;">日誌累計</div>
+                    <div style="text-align: right;">差額金額</div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 84px 84px 96px; column-gap: 8px; height: 28px; align-items: center; border-bottom: 1px solid #E5E5EA; font-size: 12px; line-height: 16px;">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">鋼筋 SD420W #8 以下 <span style="font-size: 11px; color: #86868B;">TON · 28,500</span></div>
+                    <div style="text-align: right; color: #1D1D1F;">186.40</div>
+                    <div style="text-align: right; color: #1D1D1F;">181.20</div>
+                    <div style="text-align: right; font-weight: 590; color: #B3000F;">−148,200</div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 84px 84px 96px; column-gap: 8px; height: 28px; align-items: center; border-bottom: 1px solid #E5E5EA; font-size: 12px; line-height: 16px;">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">混凝土 fc′=350 kgf/cm² <span style="font-size: 11px; color: #86868B;">M³ · 3,180</span></div>
+                    <div style="text-align: right; color: #1D1D1F;">1,240.0</div>
+                    <div style="text-align: right; color: #1D1D1F;">1,286.5</div>
+                    <div style="text-align: right; font-weight: 590; color: #1B6B2E;">+147,870</div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 84px 84px 96px; column-gap: 8px; height: 28px; align-items: center; border-bottom: 1px solid #E5E5EA; font-size: 12px; line-height: 16px;">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">模板 普通模板 <span style="font-size: 11px; color: #86868B;">M² · 680</span></div>
+                    <div style="text-align: right; color: #1D1D1F;">4,860.0</div>
+                    <div style="text-align: right; color: #1D1D1F;">4,512.0</div>
+                    <div style="text-align: right; font-weight: 590; color: #B3000F;">−236,640</div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 84px 84px 96px; column-gap: 8px; height: 28px; align-items: center; font-size: 12px; line-height: 16px;">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">鋼筋 SD420W #10 以上 <span style="font-size: 11px; color: #86868B;">TON · 27,800</span></div>
+                    <div style="text-align: right; color: #1D1D1F;">92.60</div>
+                    <div style="text-align: right; color: #1D1D1F;">94.85</div>
+                    <div style="text-align: right; font-weight: 590; color: #1B6B2E;">+62,550</div>
+                  </div>
+                </div>
+
+                <!-- 動作列：就地核准／退回 -->
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: center; height: 30px; padding: 0 14px; border-radius: 8px; background: #0071E3; color: #FFFFFF; font-size: 12px; font-weight: 590;">核准本期</div>
+                    <div style="display: flex; align-items: center; justify-content: center; height: 30px; padding: 0 14px; border-radius: 8px; background: #FFFFFF; color: #1D1D1F; font-size: 12px; font-weight: 590; box-shadow: 0 0 0 .5px rgba(0,0,0,.18), 0 1px 1px rgba(0,0,0,.05);">退回補正</div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px; font-size: 11px; line-height: 15px; color: #703A8C; white-space: nowrap;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8944AB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.6a2 2 0 0 0 1.3 1.3L19.5 10.5l-4.6 1.6a2 2 0 0 0-1.3 1.3L12 18l-1.6-4.6a2 2 0 0 0-1.3-1.3L4.5 10.5l4.6-1.6a2 2 0 0 0 1.3-1.3z"></path></svg>
+                    <span>退回意見 AI 已草擬：3 項疑日誌漏登、1 項申報多報</span>
+                    <a href="#" style="color: #703A8C; font-weight: 590;">檢視</a>
+                  </div>
+                </div>
+                <div style="font-size: 11px; line-height: 15px; color: #86868B;">AI 只產生草稿；核定、判定與簽章由人執行，全程留存稽核軌跡。</div>
+              </div>
+            </div>
+
+            <!-- 3 今日到期 · 你 -->
+            <div style="display: flex; align-items: center; gap: 12px; height: 48px; box-sizing: border-box; padding: 0 12px 0 14px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07);">
+              <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 20px; border-radius: 6px; background: #FDF0E7; color: #A32B00; font-size: 11px; font-weight: 590; flex-shrink: 0;">今日到期</div>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                <div style="font-size: 13px; line-height: 18px; font-weight: 590; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">鋼筋續接器試體報告待查驗</div>
+                <div style="font-size: 11px; line-height: 14px; color: #6E6E73; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">B2 層 柱 C3–C7 · 檢驗停留點 W（見證點）</div>
+              </div>
+              <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: #E8F1FD; color: #0058B0; font-size: 11px; font-weight: 590; flex-shrink: 0;">你</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+
+            <!-- 4 三日後 · 廠商（滑動中：卡片左移 168px，露出延後／完成） -->
+            <div style="position: relative; height: 48px; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.06), 0 0 0 .5px rgba(0,0,0,.07);">
+              <div style="position: absolute; top: 0; right: 0; bottom: 0; width: 96px; display: flex;">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 48px; background: #C93400; color: #FFFFFF;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  <span style="font-size: 11px; line-height: 13px; font-weight: 590;">延後</span>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 48px; background: #1B6B2E; color: #FFFFFF;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span style="font-size: 11px; line-height: 13px; font-weight: 590;">完成</span>
+                </div>
+              </div>
+              <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; transform: translateX(-96px); display: flex; align-items: center; gap: 12px; box-sizing: border-box; padding: 0 12px 0 14px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,.06), 0 0 0 .5px rgba(0,0,0,.07);">
+                <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 20px; border-radius: 6px; background: #EFEFF4; color: #6E6E73; font-size: 11px; font-weight: 590; flex-shrink: 0;">3 日後</div>
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                  <div style="font-size: 13px; line-height: 18px; font-weight: 590; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">環境保護計畫變更待回覆</div>
+                  <div style="font-size: 11px; line-height: 14px; color: #6E6E73; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">監造意見 3 則待廠商回覆 · 送審編號 SUB-0142</div>
+                </div>
+                <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: #EFEFF4; color: #6E6E73; font-size: 11px; font-weight: 590; flex-shrink: 0;">廠商</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+            </div>
+
+            <!-- 5 五日後 · AI 草稿 -->
+            <div style="display: flex; align-items: center; gap: 12px; height: 48px; box-sizing: border-box; padding: 0 12px 0 14px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07);">
+              <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 20px; border-radius: 6px; background: #EFEFF4; color: #6E6E73; font-size: 11px; font-weight: 590; flex-shrink: 0;">5 日後</div>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                <div style="font-size: 13px; line-height: 18px; font-weight: 590; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">施工月報（8 月）待彙整</div>
+                <div style="font-size: 11px; line-height: 14px; color: #6E6E73; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">AI 已備妥草稿，待監造覆核後送機關</div>
+              </div>
+              <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px; background: #F5EDF9; color: #703A8C; font-size: 11px; font-weight: 590; flex-shrink: 0;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8944AB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.6a2 2 0 0 0 1.3 1.3L19.5 10.5l-4.6 1.6a2 2 0 0 0-1.3 1.3L12 18l-1.6-4.6a2 2 0 0 0-1.3-1.3L4.5 10.5l4.6-1.6a2 2 0 0 0 1.3-1.3z"></path></svg>
+                AI 草稿
+              </span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+
+            <!-- 6 九日後 · 廠商 -->
+            <div style="display: flex; align-items: center; gap: 12px; height: 48px; box-sizing: border-box; padding: 0 12px 0 14px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07);">
+              <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 20px; border-radius: 6px; background: #EFEFF4; color: #6E6E73; font-size: 11px; font-weight: 590; flex-shrink: 0;">9 日後</div>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                <div style="font-size: 13px; line-height: 18px; font-weight: 590; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">混凝土 28 日抗壓試體報告</div>
+                <div style="font-size: 11px; line-height: 14px; color: #6E6E73; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">3F 梁版 · 澆置日 2026-08-20 · 試體編號 C-0318</div>
+              </div>
+              <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: #EFEFF4; color: #6E6E73; font-size: 11px; font-weight: 590; flex-shrink: 0;">廠商</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+
+            <!-- 7 十二日後 · 你 -->
+            <div style="display: flex; align-items: center; gap: 12px; height: 48px; box-sizing: border-box; padding: 0 12px 0 14px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07);">
+              <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 20px; border-radius: 6px; background: #EFEFF4; color: #6E6E73; font-size: 11px; font-weight: 590; flex-shrink: 0;">12 日後</div>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                <div style="font-size: 13px; line-height: 18px; font-weight: 590; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">地下室外牆防水查驗</div>
+                <div style="font-size: 11px; line-height: 14px; color: #6E6E73; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">B1 層 東側 · 檢驗停留點 H（停止點）</div>
+              </div>
+              <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: #E8F1FD; color: #0058B0; font-size: 11px; font-weight: 590; flex-shrink: 0;">你</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+
+          </div>
+
+          <!-- 狀態列：AI 代辦紀錄 + 復原 -->
+          <div style="display: flex; align-items: center; justify-content: space-between; height: 32px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; background: rgba(255,255,255,.80); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07);">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8944AB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.6a2 2 0 0 0 1.3 1.3L19.5 10.5l-4.6 1.6a2 2 0 0 0-1.3 1.3L12 18l-1.6-4.6a2 2 0 0 0-1.3-1.3L4.5 10.5l4.6-1.6a2 2 0 0 0 1.3-1.3z"></path></svg>
+              <span style="font-size: 12px; font-weight: 590; color: #703A8C; white-space: nowrap;">AI 今日已代辦 4 項</span>
+              <span style="font-size: 11px; color: #86868B; white-space: nowrap;">附件整理 · 天氣帶入 · 日誌數量 · 退回意見草稿</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+            <div style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6E6E73; white-space: nowrap;">
+              <span>剛才已完成 1 件</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0071E3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              <a href="#" style="font-weight: 590;">復原</a>
+            </div>
+          </div>
+        </section>
+
+        <!-- 側邊書頁：從卡片引用開啟的參考層（只讀） -->
+        <aside style="display: grid; grid-template-rows: auto minmax(0, 1fr) auto; row-gap: 12px; box-sizing: border-box; padding: 14px 16px; border-radius: 16px; background: #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,.06), 0 0 0 .5px rgba(0,0,0,.07); min-height: 0;">
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0071E3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+              <span style="flex: 1; font-size: 15px; line-height: 20px; font-weight: 600; letter-spacing: -0.008em; color: #1D1D1F;">契約原文</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </div>
+            <div style="font-size: 11px; line-height: 15px; color: #6E6E73;">第 5 條 契約價金之給付條件 · 第 1 項第 2 款</div>
+            <div style="font-size: 11px; line-height: 15px; color: #86868B;">由「估驗計價第 6 期待審」的引用開啟</div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 12px; min-height: 0;">
+            <div style="display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; padding: 12px; border-radius: 10px; background: #F5F5F7;">
+              <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">估驗計價：廠商應於每月月底提出當月估驗計價申請；監造單位應於收到申請後<span style="background: #E8F1FD; color: #0058B0; font-weight: 590; padding: 0 2px; border-radius: 3px;">7 日內</span>完成審查；機關應於收到審查結果後<span style="background: #E8F1FD; color: #0058B0; font-weight: 590; padding: 0 2px; border-radius: 3px;">15 工作天內</span>完成審核及付款。估驗數量以實際完成並經監造單位查驗合格者為限。</div>
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 15px; color: #86868B; white-space: nowrap;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                <span style="flex: 1;">契約本文 p.7 · 已確認轉錄</span>
+                <a href="#" style="display: inline-flex; align-items: center; gap: 2px;">原始 PDF<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0071E3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></a>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-size: 11px; line-height: 15px; font-weight: 600; color: #86868B;">由此條衍生的履約義務</div>
+              <div style="display: flex; align-items: center; justify-content: space-between; height: 30px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; border: 1px solid #E5E5EA;">
+                <span style="font-size: 12px; color: #1D1D1F;">估驗申請</span>
+                <span style="font-size: 11px; color: #6E6E73;">廠商 · 每月 1 次</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; height: 30px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; background: #E8F1FD;">
+                <span style="font-size: 12px; font-weight: 590; color: #0058B0;">估驗審查</span>
+                <span style="font-size: 11px; color: #0058B0;">監造 · 收件後 7 日 → 今日到期</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; height: 30px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; border: 1px solid #E5E5EA;">
+                <span style="font-size: 12px; color: #1D1D1F;">審核付款</span>
+                <span style="font-size: 11px; color: #6E6E73;">機關 · 15 工作天</span>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-size: 11px; line-height: 15px; font-weight: 600; color: #86868B;">同一條的其他重點</div>
+              <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 10px; border-radius: 8px;">
+                <span style="flex: 1; font-size: 12px; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">保留款比例與退還條件</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 10px; border-radius: 8px;">
+                <span style="flex: 1; font-size: 12px; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">物價指數調整之計價方式</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-size: 11px; line-height: 15px; font-weight: 600; color: #86868B;">引用這條的待辦</div>
+              <div style="display: flex; align-items: center; gap: 8px; height: 34px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; border: 1px solid #E5E5EA;">
+                <div style="display: flex; align-items: center; justify-content: center; height: 18px; padding: 0 6px; border-radius: 6px; background: #FDF0E7; color: #A32B00; font-size: 11px; font-weight: 590; flex-shrink: 0;">今日到期</div>
+                <span style="flex: 1; font-size: 12px; color: #1D1D1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">估驗計價第 6 期待審</span>
+                <span style="font-size: 11px; color: #86868B; white-space: nowrap;">這張卡</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="font-size: 11px; line-height: 15px; color: #86868B; border-top: 1px solid #E5E5EA; padding: 10px 0 0;">參考層只讀，不做審核。核准與退回仍在收件匣的卡片上，關閉書頁即回到原位。</div>
+        </aside>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ══ 流程標註：畫面上的編號圓點 ══ -->
+  <div style="position: absolute; left: 779px; top: 164px; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0,0,0,.18);">1</div>
+  <div style="position: absolute; left: 779px; top: 286px; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0,0,0,.18);">2</div>
+  <div style="position: absolute; left: 781px; top: 681px; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0,0,0,.18);">3</div>
+  <div style="position: absolute; left: 779px; top: 361px; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0,0,0,.18);">4</div>
+  <div style="position: absolute; left: 779px; top: 923px; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0,0,0,.18);">5</div>
+  <div style="position: absolute; left: 181px; top: 268px; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0,0,0,.18);">6</div>
+
+  <!-- ══ 流程標註：右側說明小卡 ══ -->
+  <div style="position: absolute; left: 1164px; top: 128px; width: 236px; box-sizing: border-box; display: flex; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.12);">
+    <div style="flex-shrink: 0; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">1</div>
+    <div style="font-size: 11px; line-height: 15px; color: #1D1D1F;"><span style="font-weight: 600;">開啟 App</span> → 直接看到球在你手上的 7 件事。沒有指標卡、沒有圖表、沒有總覽。契約金額與工期只在需要時從 ⌘K 叫出。</div>
+  </div>
+  <div style="position: absolute; left: 1164px; top: 232px; width: 236px; box-sizing: border-box; display: flex; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.12);">
+    <div style="flex-shrink: 0; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">2</div>
+    <div style="font-size: 11px; line-height: 15px; color: #1D1D1F;"><span style="font-weight: 600;">點一下展開</span> → 就地處理，不跳頁。金額、逐項對量差異、核准／退回都在卡片裡；差額由引擎算，AI 只草擬退回意見。</div>
+  </div>
+  <div style="position: absolute; left: 1164px; top: 336px; width: 236px; box-sizing: border-box; display: flex; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.12);">
+    <div style="flex-shrink: 0; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">3</div>
+    <div style="font-size: 11px; line-height: 15px; color: #1D1D1F;"><span style="font-weight: 600;">左滑</span> → 延後／完成。動作立刻生效、卡片立刻消失；狀態列右側的「復原」隨時撤回。</div>
+  </div>
+  <div style="position: absolute; left: 1164px; top: 425px; width: 236px; box-sizing: border-box; display: flex; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.12);">
+    <div style="flex-shrink: 0; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">4</div>
+    <div style="font-size: 11px; line-height: 15px; color: #1D1D1F;"><span style="font-weight: 600;">需要查契約原文</span> → 點卡片內的引用「契約第 5 條」，右側開側邊書頁，不離開收件匣。書頁只讀，動作仍回到卡片。</div>
+  </div>
+  <div style="position: absolute; left: 1164px; top: 529px; width: 236px; box-sizing: border-box; display: flex; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.12);">
+    <div style="flex-shrink: 0; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">5</div>
+    <div style="font-size: 11px; line-height: 15px; color: #1D1D1F;"><span style="font-weight: 600;">處理完就消失</span> → AI 代辦的事不進收件匣，只在狀態列記一筆，可展開追溯。清單會變空，這是設計目標。</div>
+  </div>
+  <div style="position: absolute; left: 1164px; top: 633px; width: 236px; box-sizing: border-box; display: flex; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.12);">
+    <div style="flex-shrink: 0; width: 18px; height: 18px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">6</div>
+    <div style="font-size: 11px; line-height: 15px; color: #1D1D1F;"><span style="font-weight: 600;">參考層摺疊</span> → 專案文件／契約重點／標單工項不再是側欄同級項目；從 ⌘K 或卡片引用進入，路由與權限全部保留。</div>
+  </div>
+
+  <!-- ══ 誠實的代價 ══ -->
+  <div style="position: absolute; left: 1164px; top: 752px; width: 236px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: #FDF0E7; box-shadow: 0 0 0 .5px rgba(0,0,0,.08);">
+    <div style="font-size: 11px; line-height: 15px; font-weight: 600; color: #A32B00;">這個賭注的代價</div>
+    <div style="font-size: 11px; line-height: 15px; color: #1D1D1F;">機關角色是監督不是處理，收件匣可能是空的。空狀態不放統計，改列「本週你在監督的事」：逾期未回報、停留點、待付款——每列仍是可點的事，不是圖表。</div>
+    <div style="font-size: 11px; line-height: 15px; color: #1D1D1F;">沒有全景。想看整體進度要多按一次 ⌘K，這是刻意的；若三方都抱怨，退回方案是在收件匣清空時才顯示摘要。</div>
+  </div>
+
+  <!-- ══ 畫板註腳 ══ -->
+  <div style="position: absolute; left: 40px; top: 970px; width: 1100px; font-size: 11px; line-height: 15px; color: #86868B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">1440 × 1000 · macOS 視窗 1100 × 868 · 桃園市立圖書館新建工程 · 契約金額 486,200,000 · 實際開工 2026-02-14 · 竣工期限 2027-01-27 · 今天 2026-09-11 · 這些數字仍在，只在 ⌘K 與參考層出現，不佔首屏。</div>
+
+</div>
+</x-dc>
+</body>
+</html>

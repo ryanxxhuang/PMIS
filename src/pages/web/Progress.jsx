@@ -4,11 +4,13 @@ import { MSym } from '../../components/icons.jsx'
 import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surface, Input, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
+import { plannedPctNow, progressMonthIndex } from '../../lib/progressPlan.js'
+import { parseLocalDate, localISOMonth } from '../../lib/dates.js'
+import { fmtYi } from '../../lib/format.js'
 
 const monthLabel = (str) => {
   const d = parseLocalDate(str)
-  return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : null
+  return d ? localISOMonth(d) : null
 }
 export default function Progress() {
   const TODAY = new Date() // 每次 render 取(B-11):模組層常數會讓長開分頁的「今天」凍結在開頁那天
@@ -121,17 +123,9 @@ export default function Progress() {
   const actualNow = actualPoints.length ? actualPoints[actualPoints.length - 1].pct : 0
 
   // 今天落在第幾個月（小數）+ 內插預定進度
-  const planStart = parseLocalDate(progressPlan.start)
-  const elapsed = (TODAY.getFullYear() - planStart.getFullYear()) * 12
-    + (TODAY.getMonth() - planStart.getMonth())
-    + (TODAY.getDate() - 1) / 30
+  const elapsed = progressMonthIndex(progressPlan.start, TODAY)
   const todayFrac = Math.max(0, Math.min(N - 1, elapsed))
-  const plannedNow = (() => {
-    if (elapsed <= 0) return 0
-    if (elapsed >= N - 1) return months[N - 1].plannedPct
-    const lo = Math.floor(todayFrac), hi = Math.ceil(todayFrac), f = todayFrac - lo
-    return months[lo].plannedPct + (months[hi].plannedPct - months[lo].plannedPct) * f
-  })()
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
   const behind = plannedNow - actualNow
   const statusBadge = behind > 5
     ? <Badge color="red">落後 {behind.toFixed(1)}%</Badge>
@@ -141,6 +135,9 @@ export default function Progress() {
 
   // 工項層級進度:各節點實際完成%(累計估驗金額 ÷ 該節點發包額)
   const nodePct = (key) => { const amt = amountMap.get(key) || 0; return amt > 0 ? (latestCumMap.get(key) || 0) / amt * 100 : 0 }
+  // 刻意不換成 boqCalc.billableLeaves:那支的父子對照建在「全部 items」上,
+  // 這裡吃的是 buildBillableTree 的 childrenMap(只含可計價非合計列)。
+  // 子項全是合計列的分項在兩把尺下結果不同,要併必須先定案哪一個是規則。
   const leafList = adjItems.filter((it) => it.is_billable && !it.is_rollup && !(tree.childrenMap.get(it.item_key)?.length))
   const laggards = leafList
     .map((it) => { const pct = nodePct(it.item_key); const share = billableTotal ? (amountMap.get(it.item_key) || 0) / billableTotal * 100 : 0; return { it, pct, share, drag: share * Math.max(0, plannedNow - pct) / 100 } })
@@ -179,9 +176,9 @@ export default function Progress() {
         {/* 第四格不是 Stat(值是 Badge 不是數字),卡殼改吃共用 Surface 才不會和左邊三格走鐘 */}
         <Surface className="px-4 py-3.5 flex flex-col">
           {/* 標籤字級/色對齊 Stat(11px/text-2、無字距),四格才是同一列數字卡 */}
-          <div className="text-[11px] text-[var(--text-2)]">進度狀態</div>
+          <div className="text-caption text-[var(--text-2)]">進度狀態</div>
           <div className="mt-1.5">{statusBadge}</div>
-          <div className="text-[11px] text-[var(--text-3)] mt-auto pt-2 num">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
+          <div className="text-caption text-[var(--text-3)] mt-auto pt-2 num">今天 {TODAY.toLocaleDateString('zh-TW')}</div>
         </Surface>
       </div>
 
@@ -359,6 +356,5 @@ function ProgressTree({ nodes, depth, expanded, toggle, childrenMap, nodePct, am
 // billableTotal 為 0 代表「還沒讀到金額」而不是「發包工程費是 0」——載入中／標單未匯入
 // 的早退分支也要掛頁首(工作面分頁列在 PageHeader 內),此時省掉 subtitle 而不是印 0.00 億。
 function Header({ billableTotal, action }) {
-  const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
-  return <PageHeader title="進度管制" tagline="S-Curve" subtitle={billableTotal ? `發包工程費 ${yi(billableTotal)}` : undefined} action={action} />
+  return <PageHeader title="進度管制" tagline="S-Curve" subtitle={billableTotal ? `發包工程費 ${fmtYi(billableTotal)}` : undefined} action={action} />
 }

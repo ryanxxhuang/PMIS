@@ -4,10 +4,10 @@
 import { pendingSamplesFromLogs, sampleAlerts } from './qc.js'
 import { computeObligationDue } from './contractDue.js'
 import { parseLocalDate } from './dates.js'
+import { fmtNtd as money } from './format.js'
 
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 const dayDiff = (a, b) => Math.round((startOfDay(a) - startOfDay(b)) / 86400000)
-const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 
 export function buildInsights(data = {}, today = new Date()) {
   const {

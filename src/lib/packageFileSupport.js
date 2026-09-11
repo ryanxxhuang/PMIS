@@ -34,10 +34,6 @@ export function analysisSupport(kind) {
   return kind === 'pdf' || kind === 'docx' || kind === 'txt' ? 'full' : 'stored'
 }
 
-export function isAnalyzable(filename, mimeType) {
-  return analysisSupport(fileKind(filename, mimeType)) === 'full'
-}
-
 // Neutral limitation labels for accepted-but-unanalyzed files. Images/TIFF
 // wait for OCR; spreadsheets/legacy formats wait for structured parsing.
 export function storedLimitationLabel(kind) {

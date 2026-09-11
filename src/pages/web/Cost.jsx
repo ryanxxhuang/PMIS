@@ -6,6 +6,7 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { revisedContractTotal, approvedNetAmount } from '../../lib/changeOrders.js'
+import { fmtAmount as money, fmtYi as yi } from '../../lib/format.js'
 
 const CATS = ['材料', '人工', '機具', '分包', '管理費', '其他']
 // 分類上色走 Badge 的 color key(五語意+purple),不再 inline style 綁原始色票
@@ -13,12 +14,10 @@ const CAT_BADGE = {
   材料: 'blue', 人工: 'green', 機具: 'amber',
   分包: 'purple', 管理費: 'slate', 其他: 'slate',
 }
-const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
-const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 const pct = (n) => (isFinite(n) ? n.toFixed(1) : '—')
 
 export default function Cost() {
-  const { project, workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem, changeOrders } = useStore()
+  const { workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem, changeOrders } = useStore()
   // 合約收入 = 變更後契約金額(原發包 + 已核准追加減)
   const revenue = revisedContractTotal(workItems?.meta.billable_total || 0, changeOrders)
   const coNet = approvedNetAmount(changeOrders)

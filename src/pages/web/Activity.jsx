@@ -6,6 +6,7 @@ import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { Badge, Button, Card, Empty, ErrorBanner, Input, PageHeader, Select, SkeletonList, TablePager } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
+import { fmtDateTime } from '../../lib/format.js'
 import {
   AUDIT_ENTITY_LABELS, AUDIT_EVENT_LABELS, auditActorDisplay, auditEntityLabel,
   auditEventLabel, auditEventSubject, normalizeAuditFilters,
@@ -13,10 +14,6 @@ import {
 
 const EMPTY_FILTERS = { actorUserId: '', eventType: '', entityType: '', dateFrom: '', dateTo: '' }
 
-function formatTime(value) {
-  if (!value) return '—'
-  return new Date(value).toLocaleString('zh-TW', { hour12: false })
-}
 
 export default function Activity() {
   const { currentProject, isPersistedProject } = useStore()
@@ -142,7 +139,7 @@ export default function Activity() {
                   </div>
                   <div className="text-sm text-[var(--text-2)] mt-0.5 truncate">{auditEventSubject(event)}</div>
                   <div className="text-xs text-[var(--text-3)] mt-1">
-                    {auditActorDisplay(event)} · {formatTime(event.occurred_at)}
+                    {auditActorDisplay(event)} · {fmtDateTime(event.occurred_at)}
                     {event.entity_id && <span className="ml-2 font-mono">{event.entity_id.slice(0, 8)}</span>}
                   </div>
                 </div>

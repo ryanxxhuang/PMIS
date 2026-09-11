@@ -9,8 +9,10 @@
 import { TEMPLATE_03310 } from './checklist03310.js'
 import { judgeChecklist } from '../lib/qc.js'
 import { isConcretePourItem } from '../lib/integrityAudit.js'
+import { localISODate as iso, localISOMonth } from '../lib/dates.js'
 
-const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+// 「今天」刻意仍跟瀏覽器走（不是 taipeiToday）：demo 是銷售簡報素材，相對日期要貼著
+// 看簡報的人螢幕上的今天；種子資料沒有法定期限語意，不屬於「業務日期」那條規則。
 const daysFromNow = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d }
 const monthsFromNow = (n, day) => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + n, day) }
 
@@ -41,7 +43,7 @@ export function buildDemoData(workItems, project) {
   while (cur <= last) { buckets.push(new Date(cur)); cur.setMonth(cur.getMonth() + 1) }
   const N = buckets.length || 1
   const months = buckets.map((d, i) => ({
-    label: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+    label: localISOMonth(d),
     plannedPct: +(smoothstep((i + 1) / N) * 100).toFixed(1),
   }))
   const progressPlan = { start: project.start_date, end: project.end_date, months }

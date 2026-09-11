@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { useStore } from '../store.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from './boqCalc.js'
-import { parseLocalDate } from './dates.js'
+import { plannedPctNow } from './progressPlan.js'
 import { buildAssistantFacts } from './assistantFacts.js'
 import { myOpenItems } from './ballInCourt.js'
 
@@ -28,16 +28,7 @@ export function useAssistantData() {
     [roots, childrenMap, latestVal],
   )
   const actualPct = billableTotal ? (actualCum / billableTotal) * 100 : 0
-  const plannedNow = useMemo(() => {
-    if (!progressPlan) return null
-    const months = progressPlan.months, N = months.length
-    const start = parseLocalDate(progressPlan.start)
-    const elapsed = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
-    if (elapsed <= 0) return 0
-    if (elapsed >= N - 1) return months[N - 1].plannedPct
-    const lo = Math.floor(elapsed), f = elapsed - lo
-    return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
-  }, [progressPlan])
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   const anchors = {
     award_date: project?.award_date, notice_date: project?.notice_date,

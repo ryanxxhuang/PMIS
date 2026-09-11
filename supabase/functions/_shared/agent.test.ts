@@ -1,6 +1,6 @@
 // 驗證 agent.ts 多輪 tool-use 迴圈:用注入的 fetchImpl 假造 Claude 回應,
 // 重點盯「會 400 的地方」——tool_result 同一則 user 訊息、快取斷點位置、禁傳參數。
-import { describe, it, expect, beforeEach } from 'vitest'
+import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { claudeAgent, stableStringify } from './agent.ts'
 
 beforeEach(() => {
@@ -96,6 +96,7 @@ describe('claudeAgent — 多輪 tool-use 迴圈', () => {
   })
 
   it('工具丟例外:對應 tool_result 帶 is_error、迴圈繼續、steps 記 ok:false', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {}) // 例外原文進 log,不污染測試輸出
     const { fn, bodies } = mockFetch([toolUseTurn(), endTurn('部分資料查不到。')])
     const r = await claudeAgent({
       system: 'sys',
@@ -120,8 +121,9 @@ describe('claudeAgent — 多輪 tool-use 迴圈', () => {
     const ra = results.find((b) => b.tool_use_id === 'tu_1')!
     const rb = results.find((b) => b.tool_use_id === 'tu_2')!
     expect(ra.is_error).toBe(true)
-    expect(ra.content).toContain('資料庫連線失敗')
+    expect(ra.content).toContain('資料庫連線失敗') // 繁中=我們自己 throw 的業務訊息,原樣給模型修正
     expect(rb.is_error).toBeUndefined()
+    errSpy.mockRestore()
   })
 
   it('maxSteps 用盡:stopReason 為 max_steps,不無限迴圈', async () => {
@@ -140,8 +142,9 @@ describe('claudeAgent — 多輪 tool-use 迴圈', () => {
     expect(r.steps).toHaveLength(4) // 兩輪 × 兩工具
   })
 
-  it('HTTP 500:stopReason 為 error 且訊息含狀態碼', async () => {
-    const { fn } = mockFetch([new Response('boom', { status: 500 })])
+  it('HTTP 500:stopReason 為 error、訊息含代碼 http_500,回應本文不外洩(B1 / H-1)', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { fn } = mockFetch([new Response('boom request_id=req_SECRET', { status: 500 })])
     const r = await claudeAgent({
       system: 'sys',
       tools: TOOLS,
@@ -150,8 +153,37 @@ describe('claudeAgent — 多輪 tool-use 迴圈', () => {
       fetchImpl: fn,
     })
     expect(r.stopReason).toBe('error')
-    expect(r.error).toContain('500')
-    expect(r.error).toContain('boom')
+    expect(r.error).toContain('http_500')
+    expect(r.error).not.toContain('boom')
+    expect(r.error).not.toContain('req_SECRET')
+    // 原文只進伺服器 log
+    expect(errSpy.mock.calls.flat().map(String).join('\n')).toContain('req_SECRET')
+    errSpy.mockRestore()
+  })
+
+  it('工具丟英文 runtime 例外:給模型的 tool_result 是遮罩短語,原文只留 step.error(伺服器端)與 log', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { fn, bodies } = mockFetch([toolUseTurn(), endTurn('好')])
+    const r = await claudeAgent({
+      system: 'sys',
+      tools: TOOLS,
+      exec: async (name) => {
+        if (name === 'tool_a') throw new TypeError('permission denied for policy "secret_policy_name"')
+        return { ok: true }
+      },
+      userMessage: '查',
+      fetchImpl: fn,
+    })
+    const stepA = r.steps.find((s) => s.tool === 'tool_a')!
+    expect(stepA.error).toContain('secret_policy_name') // agent-run 回前端前只取 tool/ok/ms
+    const results = (bodies[1].messages as Array<{ content: unknown }>)[2]
+      .content as Array<{ tool_use_id: string; is_error?: boolean; content: string }>
+    const ra = results.find((b) => b.tool_use_id === 'tu_1')!
+    expect(ra.is_error).toBe(true)
+    expect(ra.content).not.toContain('secret_policy_name')
+    expect(ra.content).toContain('internal')
+    expect(errSpy.mock.calls.flat().map(String).join('\n')).toContain('secret_policy_name')
+    errSpy.mockRestore()
   })
 
   it('快取佈局:persona/facts 各佔 system 一個 block 且都有斷點,facts 不在 user 訊息', async () => {

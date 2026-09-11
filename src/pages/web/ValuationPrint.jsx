@@ -1,19 +1,14 @@
 import { useMemo } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
-import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
+import PrintToolbar from '../../components/PrintToolbar.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
+import { fmtAmount as fmt } from '../../lib/format.js'
 
-const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
 
-// 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
-// 顏色釘死亮色、不吃主題 token(理由見 SiteLogPrint.jsx):工具列跟紙不跟主題。
-const TOOLBAR_BTN = 'inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-medium max-md:min-h-11'
-const TOOLBAR_PRIMARY = `${TOOLBAR_BTN} bg-[#0b57d0] text-white hover:bg-[#0842a0]`
-const TOOLBAR_SECONDARY = `${TOOLBAR_BTN} bg-white text-[#0b57d0] border border-[#dadce0] hover:bg-[#e8f0fe]`
-
-// 估驗計價單（可列印 / 另存 PDF）— 不套 WebLayout，整頁就是文件
+// 估驗計價單（可列印 / 另存 PDF）— 不套 WebLayout，整頁就是文件。
+// 工具列(chrome,吃主題 token)與紙面(.paper,固定白底黑字)分開處理,理由見 PrintToolbar 與 index.css。
 export default function ValuationPrint() {
   const { project, workItems, valuations, currentUser, adjustedItems: adjItems, coNet, revisedTotal } = useStore()
   const [sp] = useSearchParams()
@@ -34,16 +29,19 @@ export default function ValuationPrint() {
   if (!currentUser) return <Navigate to="/login" replace />
   // 標單尚未載入(workItems 為 null)≠ 這期沒有估驗資料:兩者混成同一畫面時,
   // 深連結進來的載入瞬間會直接告訴使用者「無估驗資料」,誤導成資料不存在(C-11)
-  if (!workItems) return <div className="p-10 text-center text-slate-600">載入中…</div>
+  if (!workItems) return <div className="p-10 text-center text-[var(--text-2)]">載入中…</div>
   if (!selected) {
     return (
-      <div className="p-10 text-center text-slate-600">
+      <div className="p-10 text-center text-[var(--text-2)]">
         無估驗資料。<button onClick={() => navigate('/valuation')} className="text-[var(--blue-text)] underline">返回估驗計價</button>
       </div>
     )
   }
 
   const billableTotal = revisedTotal
+  // 刻意不換成 boqCalc.billableLeaves:那支的父子對照建在「全部 items」上,
+  // 這裡吃的是 buildBillableTree 的 childrenMap(只含可計價非合計列)。
+  // 子項全是合計列的分項在兩把尺下結果不同,要併必須先定案哪一個是規則。
   const leaves = adjItems
     .filter((it) => it.is_billable && !it.is_rollup && !(childrenMap.get(it.item_key)?.length) && (cumThis.get(it.item_key) || 0) > 0)
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
@@ -56,37 +54,33 @@ export default function ValuationPrint() {
   const completion = billableTotal ? (totalCum / billableTotal) * 100 : 0
 
   const Info = ({ label, children }) => (
-    <div className="flex"><span className="text-slate-500 w-20 shrink-0">{label}</span><span className="font-medium text-slate-800">{children}</span></div>
+    <div className="flex"><span className="paper-mute w-20 shrink-0">{label}</span><span className="font-medium">{children}</span></div>
   )
   const Sum = ({ label, value, strong }) => (
-    <div className="flex justify-between border-b border-slate-200 py-1">
-      <span className="text-slate-600">{label}</span>
-      <span className={`tabular-nums ${strong ? 'font-bold text-slate-900' : 'text-slate-800'}`}>{value}</span>
+    <div className="flex justify-between border-b paper-rule-2 py-1">
+      <span className="paper-mute">{label}</span>
+      <span className={`tabular-nums ${strong ? 'font-bold' : ''}`}>{value}</span>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-slate-100 print:bg-white">
-      {/* 工具列（列印時隱藏）*/}
-      <div className="print:hidden sticky top-0 bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-2">
-        <button onClick={() => navigate('/valuation')} className={TOOLBAR_SECONDARY}>← 返回估驗計價</button>
-        <button onClick={() => window.print()} className={TOOLBAR_PRIMARY}><MSym name="print" size={15} />列印 / 另存 PDF</button>
-      </div>
+    <div className="min-h-screen paper-desk">
+      <PrintToolbar sticky backTo="/valuation" backLabel="返回估驗計價" printLabel="列印 / 另存 PDF" />
 
       {/* 文件本體 A4 */}
-      <div className="max-w-[820px] mx-auto bg-white my-6 print:my-0 p-10 print:p-0 shadow-sm print:shadow-none text-[13px] text-slate-800">
+      <div className="max-w-[820px] mx-auto paper my-6 print:my-0 p-10 print:p-0 shadow-sm print:shadow-none text-body">
         <div className="text-center mb-5">
-          <h1 className="text-xl font-bold tracking-wide">估 驗 計 價 單</h1>
-          <div className="text-slate-500 mt-1">第 {selected.period_no} 期</div>
+          <h1 className="text-title2 font-bold tracking-wide">估 驗 計 價 單</h1>
+          <div className="paper-mute mt-1">第 {selected.period_no} 期</div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-8 gap-y-1 mb-5 border-y border-slate-300 py-3">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-1 mb-5 border-y paper-rule py-3">
           <Info label="工程名稱">{project.project_name}</Info>
           <Info label="契約編號">{project.project_code || '—'}</Info>
           <Info label="機　　關">{project.owner_name || '—'}</Info>
           <Info label="承包廠商">{project.contractor_name || '—'}</Info>
           <Info label="估驗日期">{selected.valuation_date}</Info>
-          <Info label={coNet !== 0 ? '變更後契約金額' : '發包工程費'}>NT$ {fmt(billableTotal)}{coNet !== 0 && <span className="text-slate-500 font-normal">（原發包 {fmt(billableTotal - coNet)}）</span>}</Info>
+          <Info label={coNet !== 0 ? '變更後契約金額' : '發包工程費'}>NT$ {fmt(billableTotal)}{coNet !== 0 && <span className="paper-mute font-normal">（原發包 {fmt(billableTotal - coNet)}）</span>}</Info>
         </div>
 
         {/* 金額彙總 */}
@@ -105,12 +99,12 @@ export default function ValuationPrint() {
         </div>
 
         {/* 明細 */}
-        <div className="text-[11px] text-slate-500 mb-1">本期估驗明細（僅列累計有完成之工項）</div>
-        <table className="w-full border-collapse text-[12px]">
+        <div className="text-caption paper-mute mb-1">本期估驗明細（僅列累計有完成之工項）</div>
+        <table className="w-full border-collapse text-footnote">
           <thead>
-            <tr className="bg-slate-100">
+            <tr className="paper-fill">
               {['項次', '工項名稱', '單位', '契約數量', '單價', '累計完成數量', '累計金額', '本期金額'].map((h) => (
-                <th key={h} className="border border-slate-300 px-1.5 py-1 font-medium text-slate-600 whitespace-nowrap">{h}</th>
+                <th key={h} className="border paper-rule px-1.5 py-1 font-medium paper-mute whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -120,31 +114,31 @@ export default function ValuationPrint() {
               const per = cum - (cumPrev.get(it.item_key) || 0)
               return (
                 <tr key={it.item_key}>
-                  <td className="border border-slate-200 px-1.5 py-1 text-slate-500 whitespace-nowrap">{it.item_no}</td>
-                  <td className="border border-slate-200 px-1.5 py-1">{it.description}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-center text-slate-500 whitespace-nowrap">{it.unit}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmtQ(it.quantity)}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(it.unit_price)}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmtQ(selected.items[it.item_key])}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(cum)}</td>
-                  <td className="border border-slate-200 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(per)}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 paper-mute whitespace-nowrap">{it.item_no}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1">{it.description}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-center paper-mute whitespace-nowrap">{it.unit}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmtQ(it.quantity)}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(it.unit_price)}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmtQ(selected.items[it.item_key])}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(cum)}</td>
+                  <td className="border paper-rule-2 px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{fmt(per)}</td>
                 </tr>
               )
             })}
-            <tr className="bg-slate-50 font-semibold">
-              <td className="border border-slate-300 px-1.5 py-1 text-right" colSpan={6}>合計</td>
-              <td className="border border-slate-300 px-1.5 py-1 text-right tabular-nums">{fmt(totalCum)}</td>
-              <td className="border border-slate-300 px-1.5 py-1 text-right tabular-nums">{fmt(periodAmt)}</td>
+            <tr className="paper-fill font-semibold">
+              <td className="border paper-rule px-1.5 py-1 text-right" colSpan={6}>合計</td>
+              <td className="border paper-rule px-1.5 py-1 text-right tabular-nums">{fmt(totalCum)}</td>
+              <td className="border paper-rule px-1.5 py-1 text-right tabular-nums">{fmt(periodAmt)}</td>
             </tr>
           </tbody>
         </table>
 
         {/* 簽核 */}
-        <div className="grid grid-cols-3 gap-4 mt-10 text-center text-slate-500">
+        <div className="grid grid-cols-3 gap-4 mt-10 text-center paper-mute">
           {['承包廠商', '監造單位', '主管機關'].map((r) => (
             <div key={r}>
-              <div className="h-16 border-b border-slate-300" />
-              <div className="mt-1.5 text-[12px]">{r}（簽章）</div>
+              <div className="h-16 border-b paper-rule" />
+              <div className="mt-1.5 text-footnote">{r}（簽章）</div>
             </div>
           ))}
         </div>

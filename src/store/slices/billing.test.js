@@ -3,8 +3,9 @@
 // - mutationOutcome:RLS 靜默擋下(0 rows)也必須視為失敗,不得偽裝成功
 import { describe, it, expect, vi } from 'vitest'
 
+import { unconfigured } from '../../testUtils/supabaseMock.js'
 // 模組 import 鏈會建立真的 supabase client(node 環境無 WebSocket),測試裡換成空殼
-vi.mock('../../lib/supabase.js', () => ({ supabase: null, isSupabaseConfigured: false }))
+vi.mock('../../lib/supabase.js', () => unconfigured())
 
 import { valuationItemRow, mutationOutcome } from './billing.js'
 

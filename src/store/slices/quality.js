@@ -9,7 +9,7 @@ import { loadQualityFromDB, loadDefectsFromDB } from '../db.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { mutationOutcome } from './billing.js'
 
-export function useQualitySlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }, siteLogs) {
+export function useQualitySlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup }, siteLogs) {
   // 品質：查驗 + 缺失（真 DB）
   const [inspections, setInspections] = useState([])
   const [defects, setDefects] = useState([])
@@ -58,9 +58,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     })
     if (error) return { error }
     await reloadQuality()
-    log('查驗申請', input.title, { user: currentUser?.name, role: '施工品管' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, wiMaps, reloadQuality, log])
+  }, [dbMode, currentProject, currentUser, wiMaps, reloadQuality])
 
   // 監造查驗：合格 / 不合格（不合格可一併開缺失）
   const recordInspectionResult = useCallback(async (insp, pass, note) => {
@@ -97,9 +96,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       defectError = de || null
     }
     await reloadQuality()
-    log('監造查驗', `${insp.title} — ${pass ? '合格' : '不合格'}`, { user: currentUser?.name, role: '監造' })
     return { error: null, defectError }
-  }, [dbMode, currentProject, currentUser, reloadQuality, log])
+  }, [dbMode, currentProject, currentUser, reloadQuality])
 
   // 開立缺失(統一引擎):domain 分品質/工安;工安缺失可在匯標單前寫入(isPersistedProject)
   const createDefect = useCallback(async (input) => {
@@ -132,9 +130,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     })
     if (error) return { error }
     await reloadDefects()
-    log('開立缺失', input.title, { user: currentUser?.name, role: domain === 'safety' ? '工安' : '監造' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup, reloadDefects, log])
+  }, [isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup, reloadDefects])
 
   // 缺失狀態推進：開立 → 改善中 → 待複查 → 已結案;撤銷結案須附 correction_reason(留稽核)
   const updateDefectStatus = useCallback(async (defectId, status, extra = {}) => {
@@ -150,9 +147,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     const { error } = mutationOutcome(res, '未寫入:可能無權限或缺失已被移除')
     if (error) return { error }
     await reloadDefects()
-    log('缺失更新', status, { user: currentUser?.name, role: '品管' })
     return { error: null }
-  }, [isPersistedProject, currentUser, reloadDefects, log])
+  }, [isPersistedProject, reloadDefects])
 
   // DB 成功才移除(已判定查驗=品質證據,DB delete guard 會擋)
   const deleteInspection = useCallback(async (id) => {
@@ -256,9 +252,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     if (error) return { error }
     setChecklistRecords((rs) => [rec, ...rs])
     const link = await syncDefect(rec.root_id, rec.rev)
-    log('自主檢查', `${template.title} ${check_date}${rec.rev ? ` Rev.${rec.rev}` : ''} → ${overall || '未判定'}`, { user: currentUser?.name, role: '施工品管' })
     return { error: null, overall, rev: rec.rev, ...link }
-  }, [dbMode, currentProject, currentUser, wiMaps, defects, createDefect, log])
+  }, [dbMode, currentProject, currentUser, wiMaps, defects, createDefect])
 
   // 刪除檢查紀錄:DB 先行(已判定/被修訂引用由 guard 擋下,不可假消失)
   const deleteChecklistRecord = useCallback(async (id) => {
@@ -290,9 +285,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       .select()
     if (error) return { error }
     setTestSamples((ss) => [...data, ...ss].sort((a, b) => b.sampled_date.localeCompare(a.sampled_date)))
-    log('建立取樣試體', `${data.length} 組`, { user: currentUser?.name, role: '施工品管' })
     return { error: null, count: data.length }
-  }, [dbMode, currentProject, currentUser, log])
+  }, [dbMode, currentProject, currentUser])
 
   // 掃施工日誌(材料含混凝土) → 補建缺漏的取樣組
   const generateSamplesFromLogs = useCallback(async () => {
@@ -361,9 +355,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     setInspectionPoints((ps) => [...ps, {
       ...data, work_item_key: wi?.item_key || null, work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
     }])
-    log('建立停留點', `${row.point_type}·${row.title}`, { user: currentUser?.name, role: '監造' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, wiMaps, log])
+  }, [dbMode, currentProject, currentUser, wiMaps])
 
   // DB 刪成功才從 UI 移除(B-07:原本樂觀移除,RLS 拒絕時假消失)
   const deleteInspectionPoint = useCallback(async (id) => {
@@ -402,9 +395,8 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     if (e2) return { error: e2 }
     setInspectionPoints((ps) => ps.map((p) => (p.id === point.id ? { ...p, inspection_id: inspId } : p)))
     await reloadQuality()
-    log('停留點申請查驗', point.title, { user: currentUser?.name, role: '施工品管' })
     return { error: null }
-  }, [dbMode, currentProject, currentUser, reloadQuality, log])
+  }, [dbMode, currentProject, currentUser, reloadQuality])
 
   return {
     inspections, setInspections, defects, setDefects,

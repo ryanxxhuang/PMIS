@@ -1,12 +1,12 @@
 // 驗證「你的 agent 早報」(send-reminders)確定性內容組裝:
-//   * collectOpenBallItems(agentTools):全陣營收集 + obligationSoonDays 行為
+//   * collectOpenBallItems(ballInCourt):全陣營收集 + obligationSoonDays 行為
 //   * testSampleItems:試體齡期 → 廠商早報項
 //   * itemsForRecipient:只依廠商／監造／機關三方陣營過濾
 //   * splitBrief / shouldSendBrief:「沒有屬於這個角色的事就不寄」
 //   * renderBriefEmail / briefSubject:角色化信件(確定性,無 LLM)
 import { describe, it, expect } from 'vitest'
-import { collectOpenBallItems } from './agentTools.ts'
-import type { OpenBallItem } from './agentTools.ts'
+import { collectOpenBallItems } from './ballInCourt.ts'
+import type { OpenBallItem } from './ballInCourt.ts'
 import { parseDateUTC } from './contractDue.ts'
 import {
   testSampleItems, itemsForRecipient, splitBrief, shouldSendBrief,

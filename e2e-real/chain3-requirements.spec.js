@@ -1,12 +1,8 @@
-// W6-4｜鏈 3:文件上傳 → Requirement → 人工核定 → 義務時程(真 Supabase)。
-// 走 D-012 單向鏈的真路徑:上傳契約文件(Storage+documents)→ 待審 deadline
-// Requirement → 監造在 /requirements 核定(review_requirement RPC,伺服器蓋
-// 審查人)→ 核定當下單向物化 contract_obligations → /contract 義務時程出現。
-// 廠商端負向斷言:非審查角色(contractor)看不到核定鈕(鏡像 can_review_requirement,
-// 刻意無專案管理者例外)。
-// 有 ANTHROPIC_API_KEY 時,必須另以 `supabase functions serve extract-requirements`
-// 啟動本機 Edge runtime,本 spec 會要求 live AI 成功並驗 ingestion run/citation。
-// 沒有 key 時仍可跑 deterministic 部分,但不得視為 W6-4 完整驗收。
+// 真 Supabase:文件上傳 → Requirement → obligation → 履約時程。
+// 固定資料模式由監造在 /requirements/review 確認人工 Requirement;
+// live 模式依 D-019 自動確認 AI 轉錄,兩者均在 /requirements 驗證履約項。
+// 廠商不能確認或取代 Requirement。有 ANTHROPIC_API_KEY 時須另啟本機
+// extract-requirements Edge runtime;無 key 只驗固定資料,不代表真模型通過。
 import { test, expect } from '@playwright/test'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
@@ -28,17 +24,16 @@ const CONTRACT_TEXT = [
 // 與 _shared/sourceVerify.ts normalizeSourceText 同義的測試側鏡像(NFKC+去零寬+去空白):
 // 引文比對必須用引擎自己的正規化口徑——原始字串完全相等比 sourceVerify 的驗證條件
 // 還嚴,模型只要把全形空白正規化就會假紅燈。spec 是 Node 端無法直接 import .ts,故鏡像。
+// 零寬字元寫成 \u200b-\u200d 範圍(=ZWSP/ZWNJ/ZWJ 三碼,與 sourceVerify.ts 的 ZERO_WIDTH 逐碼相同):
+// 逐字列出時 ESLint 會把夾在中間的 ZWJ 誤判成「連接序列」。
 const normalizeSource = (text) => String(text ?? '')
   .normalize('NFKC')
-  .replace(/[\u200b\u200c\u200d\u2060\ufeff]/g, '')
+  .replace(/[\u200b-\u200d\u2060\ufeff]/g, '')
   .replace(/\u00ad/g, '')
   .replace(/\s+/g, '')
-// requirements.extract 的 min_plan='pro'(migration 20260728000100),create_project
-// 預設 standard——不升級方案,openAiGate 會在模型呼叫前 403,live 驗收會被誤讀成
-// 「AI 串接失敗」。唯一的產品窄門是 admin_set_project_plan(平台管理員限定),而平台
-// 管理員只能來自 platform_admin_bootstrap 名單(migration 20260728000000 寫死一筆
-// email)。在拋棄式 staging 用該 email 建測試帳號即自動成為平台管理員;真正式庫上
-// 這個 email 已註冊,createUser 會大聲失敗——這本身就是「別對正式庫跑」的第二道閘。
+// Live fixture 明確設 pro,避免依賴預設方案與試用狀態;走平台管理 RPC。
+// Bootstrap 帳號可能已存在,只清理本次建立者。這不能證明環境隔離,
+// 執行前仍須依 REAL_BACKEND_E2E.md 確認目標是可拋棄的本機或 staging。
 const BOOTSTRAP_ADMIN_EMAIL = 'ryanxhuang1212@gmail.com'
 const conEmail = uniqueEmail('w6c3-con')
 const supEmail = uniqueEmail('w6c3-sup')
@@ -212,29 +207,30 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
   }
   await c.auth.signOut()
 
-  // ── 廠商在 /requirements(W8-3B 契約重點版面)看得到整理結果,但沒有任何核定
-  //    動作——非審查角色只有「查看」與責任方說明,不渲染假操作 ──────────────
+  // 審核與履約已分頁:從可見的「擷取審核」入口檢視人工／AI 整理來源。
   await gotoHash(page, '/requirements')
-  await expect(page.getByText(requirementTitle).first()).toBeVisible()
-  await expect(page.getByText('轉錄確認由監造／機關辦理').first()).toBeVisible()
-  // 「待確認/不採用」狀態快篩 chip 也是 button,負向斷言鎖定確認「動作」本身
+  await page.getByRole('link', { name: '擷取審核', exact: true }).click()
+  await page.getByRole('listitem').filter({ hasText: requirementTitle }).first().click()
   await expect(page.getByRole('button', { name: '確認無誤', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: '不採用', exact: true })).toHaveCount(0)
+  // quick filter「不採用」也是 button,只在詳情動作區驗沒有審查按鈕。
+  await expect(page.getByRole('button', { name: '廢止取代', exact: true })).toHaveCount(0)
   await logoutReal(page)
 
-  // ── 監造:檢索頁的確認動線——點清單列選取 → 右欄詳情「確認無誤」
-  //    (仍走 review_requirement RPC,伺服器蓋審查人;確認當下 D-012 單向物化義務)。
-  //    live 模式下引文+日期核對無誤的列已被分流自動確認 → 直接驗「廢止取代」在場──
   await loginReal(page, supEmail)
   await gotoHash(page, '/requirements')
+  await page.getByRole('link', { name: '擷取審核', exact: true }).click()
   await page.getByRole('listitem').filter({ hasText: requirementTitle }).first().click()
-  const confirmBtn = page.getByRole('button', { name: '確認無誤' })
-  if (await confirmBtn.count()) {
+  const confirmBtn = page.getByRole('button', { name: '確認無誤', exact: true })
+  if (!LIVE_EDGE) {
+    // 固定 fixture 必須實際走人工 RPC,不能因按鈕消失而跳過核心驗證。
+    await expect(confirmBtn).toBeVisible()
     await confirmBtn.click()
-    await page.getByRole('dialog').getByRole('button', { name: '確認無誤' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '確認無誤', exact: true }).click()
+  } else if (await confirmBtn.count()) {
+    await confirmBtn.click()
+    await page.getByRole('dialog').getByRole('button', { name: '確認無誤', exact: true }).click()
   }
-  // 確認成功=詳情動作列換成僅 approved 才有的「廢止取代」(不樂觀顯示,等伺服器回傳)
-  await expect(page.getByRole('button', { name: '廢止取代' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '廢止取代', exact: true })).toBeVisible()
   // ── 重整後仍為已生效,時點顯示固定到期日(D-012 相容 runtime 已物化) ───────
   await gotoHash(page, '/requirements')
   await expect(page.getByText(requirementTitle).first()).toBeVisible()

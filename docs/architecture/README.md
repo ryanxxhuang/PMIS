@@ -1,30 +1,22 @@
-# 架構文件索引
+# 架構索引
 
-> 狀態：**ACTIVE**
-> 最後盤點：2026-08-12
-> 架構文件說明設計責任；資料庫實際狀態仍以 `supabase/migrations/` 為準。
+> ACTIVE｜2026-09-11。只讀改動相關的文件；規則看 [決策](../DECISIONS.md)，實際 DB 看 migrations。
 
-## 現行文件
+| 改動範圍 | 先讀 |
+|---|---|
+| 三方身分、專案 admin、成員 | [three-party-role-model](three-party-role-model.md) |
+| AI 註冊、閘門、用量 | [ai-gate-and-metering](ai-gate-and-metering.md) |
+| Agent 工具與動作留痕 | [agent-tool-boundary](agent-tool-boundary.md) |
+| 錯誤回應 | [error-masking](error-masking.md) |
+| 路由、導覽、列印守衛 | [route-registry-governance](route-registry-governance.md) |
+| 待辦、球權、提醒 | [ball-in-court](ball-in-court.md)、[dual-engine-sync](dual-engine-sync.md) |
+| 文件與標單資料脊椎 | [contract-first-foundation](contract-first-foundation.md) |
+| 文件版本、頁碼、來源 | [traceable-document-ingestion](traceable-document-ingestion.md) |
+| 上傳、分類、契約包、processing run | [document-processing-pipeline](document-processing-pipeline.md) |
+| 抽取、續跑、ingestion run | [resumable-extraction](resumable-extraction.md) |
+| Requirement 確認與產物 | [requirement-review-boundary](requirement-review-boundary.md) |
+| 稽核事件 | [audit-events](audit-events.md) |
+| Demo／前端與後端規則 | [dual-engine-sync](dual-engine-sync.md) |
+| 真案／BOQ 模式與刪案 | [project-delete-contract-first-hotfix](project-delete-contract-first-hotfix.md) |
 
-| 文件 | 狀態 | 責任 |
-|---|---|---|
-| [`three-party-role-model.md`](three-party-role-model.md) | `ACCEPTED` | 廠商／監造／機關三方授權、Agent 身分與雙成員模型的唯一規則 |
-| [`contract-first-foundation.md`](contract-first-foundation.md) | `CURRENT` | 文件、Requirement 與 BOQ 兩條資料脊椎 |
-| [`traceable-document-ingestion.md`](traceable-document-ingestion.md) | `CURRENT` | 文件攝取、版本、分頁與 AI 擷取 |
-| [`requirement-review-boundary.md`](requirement-review-boundary.md) | `CURRENT` | Requirement 審查、來源凍結與履約產物連結 |
-| [`audit-events.md`](audit-events.md) | `CURRENT` | append-only 稽核事件與 actor snapshot |
-| [`dual-engine-sync.md`](dual-engine-sync.md) | `ACTIVE CHECKLIST` | Demo 前端與正式伺服器規則的人工同步點 |
-| [`project-delete-contract-first-hotfix.md`](project-delete-contract-first-hotfix.md) | `CURRENT NOTE` | 真專案、BOQ 模式與刪案的窄邊界 |
-
-## 歷史文件
-
-| 文件 | 狀態 | 注意事項 |
-|---|---|---|
-| [`project-party-role-model.md`](project-party-role-model.md) | `HISTORICAL FOUNDATION` | 保留 P0-02 原始建模；跨案角色與 `project_role` 授權方向已取消 |
-
-## 閱讀原則
-
-1. 角色問題先讀 `three-party-role-model.md`，不要依 P0-02 舊角色清單開發。
-2. `schema.sql` 已凍結；Schema、RLS、RPC 與 Trigger 只看 migrations。
-3. 文件寫 `CURRENT` 但與 migration 或實測不符時，先修文件並停止擴充，不自行猜測目標行為。
-4. 尚未核准的架構候選放在 [`../ROADMAP.md`](../ROADMAP.md)，不能混入現行文件。
+`CURRENT` 標記不是正確性的保證；與程式不符就修正。未核准設計只放 ROADMAP。

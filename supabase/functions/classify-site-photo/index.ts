@@ -10,8 +10,8 @@
 // 金鑰只存雲端 secret(ANTHROPIC_API_KEY);verify_jwt 預設開啟。
 // 部署(colima 下必須 --use-api):supabase functions deploy classify-site-photo --use-api
 
-import { claudeJson, imageBlock, MODELS, cors, jsonResponse as json } from '../_shared/claude.ts'
-import { openAiGate, closeAiGate } from '../_shared/aiGate.ts'
+import { imageBlock, MODELS, jsonResponse as json } from '../_shared/claude.ts'
+import { aiJsonHandler } from '../_shared/aiHandler.ts'
 
 const SCHEMA = {
   type: 'object',
@@ -42,27 +42,14 @@ const PROMPT =
   '6) 施作區域(location):**優先從查驗黑板/告示板/白板抄錄施作區域或樓層欄位**(如「A區1F」「B棟3F 柱牆」),照抄板上文字即可;照片中沒有板子、板上沒寫區域、或字跡讀不清楚,一律回 null,**不得從畫面推測**;說明(caption)裡仍可自然提到位置,兩者互不取代。\n' +
   '只根據照片「可見」內容判讀,不要臆測看不到的東西;寧可留空也不要編。'
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  // 批 B 閘門:登入+成員資格+功能開關(擋下記 blocked);通過後 AI 呼叫結果記用量
-  const body = await req.json().catch(() => null)
-  const gate = await openAiGate(req, { feature: 'photo.classify', projectId: body?.project_id })
-  if (!gate.ok) return gate.response
-  try {
+Deno.serve(aiJsonHandler({
+  feature: 'photo.classify',
+  build: ({ body }) => {
     const { image_base64, mime_type } = body || {}
     if (!image_base64) return json({ error: '缺少 image_base64' }, 400)
-    const { data, error, usage, model } = await claudeJson({
+    return {
       model: MODELS.fast, name: 'site_photo', schema: SCHEMA, maxTokens: 400,
       content: [{ type: 'text', text: PROMPT }, imageBlock(image_base64, mime_type || 'image/jpeg')],
-    })
-    if (error) {
-      await closeAiGate(gate, { feature: 'photo.classify', model, usage, status: 'error', errorCode: 'claude_error' })
-      return json({ error }, 502)
     }
-    await closeAiGate(gate, { feature: 'photo.classify', model, usage, status: 'ok' })
-    return json(data, 200)
-  } catch (e) {
-    await closeAiGate(gate, { feature: 'photo.classify', status: 'error', errorCode: 'exception' })
-    return json({ error: String((e as Error)?.message || e) }, 500)
-  }
-})
+  },
+}))

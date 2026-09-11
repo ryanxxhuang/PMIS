@@ -9,7 +9,42 @@ import {
   requirementFrequencyKey,
   sourcePageLabel,
   sourceVerificationSummary,
+  requirementVerification,
+  packageOf,
+  inPackage,
+  runsInPackage,
+  ingestionSummary,
 } from './requirementReview.js'
+
+describe('核對例外分流（不依模型信心分數）', () => {
+  const auto = { origin: 'ai', status: 'approved', reviewed_at: '2026-09-08T01:00:00Z', reviewed_by: null, triage_doubts: [] }
+  it('有疑慮的自動確認仍需留意，不能宣稱核對無誤', () => {
+    const verdict = requirementVerification({ ...auto, confidence: 1, triage_doubts: ['期限數字不符'] })
+    expect(verdict.attention).toBe(true)
+    expect(verdict.label).not.toContain('核對無誤')
+    expect(verdict.note).toContain('期限數字不符')
+  })
+  it.each([null, undefined, ''])('缺少有效的疑慮陣列 %j 應列未知', (triage_doubts) => {
+    expect(requirementVerification({ ...auto, triage_doubts }).attention).toBe(true)
+    expect(requirementVerification({ ...auto, triage_doubts }).label).not.toContain('核對無誤')
+  })
+  it('通過既有核對不宣稱沒有漏項', () => {
+    const verdict = requirementVerification({ ...auto, confidence: 0.2 })
+    expect(verdict.attention).toBe(false)
+    expect(verdict.label).toContain('系統核對無誤')
+    expect(verdict.note).toContain('不代表已驗證全部語意或沒有漏項')
+  })
+  it('人工已確認不因原有 AI 疑慮重複要求查看', () => {
+    const verdict = requirementVerification({ ...auto, reviewed_by: 'reviewer', triage_doubts: ['原有疑慮'] })
+    expect(verdict).toMatchObject({ attention: false, label: '已由人工確認' })
+  })
+  it.each(['rejected', 'superseded'])('已退出的 %s 不進需留意', (status) => {
+    expect(requirementVerification({ ...auto, status, triage_doubts: ['疑慮'] }).attention).toBe(false)
+  })
+  it('人工補登尚待確認保留人工責任', () => {
+    expect(requirementVerification({ status: 'needs_review', origin: 'manual' }).attention).toBe(true)
+  })
+})
 
 const runs = [
   { id: 'run-old', document_version_id: 'v1', status: 'completed', started_at: '2026-07-01T10:00:00Z' },
@@ -138,5 +173,85 @@ describe('requirementFrequencyKey(檢索頁頻率維度)', () => {
     expect(requirementFrequencyKey({ trigger_type: 'fixed' })).toBe('一次性')
     expect(requirementFrequencyKey({})).toBe('無明確時點')
     expect(requirementFrequencyKey(null)).toBe('無明確時點')
+  })
+})
+
+describe('契約包歸屬(packageOf:履約時程／擷取審核共用的單一判斷)', () => {
+  const versionsById = new Map([
+    ['v1', { id: 'v1', documents: { title: '施工契約', contract_package_id: 'pkg1' } }],
+    ['v2', { id: 'v2', documents: { title: '監造契約', contract_package_id: 'pkg2' } }],
+    ['v-orphan', { id: 'v-orphan', documents: { title: '無包文件' } }],
+  ])
+  const runsById = new Map([
+    ['run1', { id: 'run1', document_version_id: 'v1' }],
+    ['run2', { id: 'run2', document_version_id: 'v2' }],
+    ['run-orphan', { id: 'run-orphan', document_version_id: 'v-orphan' }],
+  ])
+  const ctx = { versionsById, runsById }
+
+  it('列上自己的 contract_package_id 優先,不再看 run', () => {
+    expect(packageOf({ contract_package_id: 'pkg2', ingestion_run_id: 'run1' }, ctx)).toBe('pkg2')
+    // document_processing_runs(專案文件頁)自帶歸包欄位,同一條路
+    expect(packageOf({ contract_package_id: 'pkg1', document_version_id: 'v2' }, ctx)).toBe('pkg1')
+  })
+  it('沒有歸包欄位的 requirement 列:列 → run → 文件版本 → 文件的契約包', () => {
+    expect(packageOf({ ingestion_run_id: 'run1' }, ctx)).toBe('pkg1')
+    expect(packageOf({ ingestion_run_id: 'run2', contract_package_id: null }, ctx)).toBe('pkg2')
+  })
+  it('ingestion run 列直接走文件版本', () => {
+    expect(packageOf({ id: 'run2', document_version_id: 'v2' }, ctx)).toBe('pkg2')
+  })
+  it.each([
+    ['空值', null],
+    ['人工補登無 run 無歸包', { origin: 'manual', ingestion_run_id: null }],
+    ['run 不在 Map', { ingestion_run_id: 'run-missing' }],
+    ['文件版本不在 Map', { id: 'r', document_version_id: 'v-missing' }],
+    ['文件沒有契約包', { ingestion_run_id: 'run-orphan' }],
+  ])('推不出歸包(%s)回 null,不回 undefined', (_label, row) => {
+    expect(packageOf(row, ctx)).toBeNull()
+  })
+  it('ctx 缺 Map 也不炸(頁面初次 render 尚未載入)', () => {
+    expect(packageOf({ ingestion_run_id: 'run1' })).toBeNull()
+    expect(packageOf({ contract_package_id: 'pkg1' })).toBe('pkg1')
+  })
+  it('inPackage:未指定契約=全部可見;指定契約只留該包,推不出的不可見', () => {
+    const row = { ingestion_run_id: 'run1' }
+    expect(inPackage(row, '', ctx)).toBe(true)
+    expect(inPackage(row, 'pkg1', ctx)).toBe(true)
+    expect(inPackage(row, 'pkg2', ctx)).toBe(false)
+    expect(inPackage({ ingestion_run_id: 'run-orphan' }, 'pkg1', ctx)).toBe(false)
+    expect(inPackage(null, 'pkg1', ctx)).toBe(false)
+  })
+  it('runsInPackage:限定契約並補 document_title 給涵蓋率警示', () => {
+    const runs = [
+      { id: 'run1', document_version_id: 'v1', status: 'completed' },
+      { id: 'run2', document_version_id: 'v2', status: 'completed' },
+    ]
+    expect(runsInPackage(runs, 'pkg2', { versionsById })).toEqual([
+      { id: 'run2', document_version_id: 'v2', status: 'completed', document_title: '監造契約' },
+    ])
+    expect(runsInPackage(runs, '', { versionsById }).map((r) => r.document_title)).toEqual(['施工契約', '監造契約'])
+    expect(runsInPackage(undefined, 'pkg1', { versionsById })).toEqual([])
+  })
+})
+
+describe('整理摘要(ingestionSummary:頁底 meta 與清單標題列共用)', () => {
+  const versionsById = new Map([
+    ['v1', { documents: { title: '施工契約' } }],
+    ['v1b', { documents: { title: '施工契約' } }],
+    ['v2', { documents: { title: '規範' } }],
+  ])
+  it('只認 completed;同一文件多版本算一份;最近整理取最大完成時間', () => {
+    const runs = [
+      { document_version_id: 'v1', status: 'completed', completed_at: '2026-09-01T01:00:00Z' },
+      { document_version_id: 'v1b', status: 'completed', completed_at: '2026-09-03T01:00:00Z' },
+      { document_version_id: 'v2', status: 'processing', completed_at: null },
+      { document_version_id: 'v2', status: 'failed', completed_at: '2026-09-09T01:00:00Z' },
+    ]
+    expect(ingestionSummary(runs, versionsById)).toEqual({ docCount: 1, latest: '2026-09-03T01:00:00Z' })
+  })
+  it('沒有 completed run → 0 份、latest null(頁面不得講「AI 最近整理」)', () => {
+    expect(ingestionSummary([{ status: 'pending' }], versionsById)).toEqual({ docCount: 0, latest: null })
+    expect(ingestionSummary(undefined, undefined)).toEqual({ docCount: 0, latest: null })
   })
 })

@@ -8,79 +8,42 @@
 // 期限追蹤摘要條已由履約時程頁承接,本頁不再渲染。
 // 生命週期決定一律走 review_requirement RPC(伺服器蓋審查人/時間戳),
 // 前端絕不樂觀顯示核定結果;權限判斷鏡像 DB(can_review_requirement/can_write)。
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+// 「清單＋詳情」殼(選取/深連結/鍵盤/抽屜/Modal/搜尋/快篩)與履約時程頁共用:
+// 行為在 lib/useListDetailPane.js、外殼在 components/listDetail.jsx;
+// 資料載入在 lib/useContractEnrichment.js(全案 requirements + 出處 + 審查人)。
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { pageAllInSafe } from '../../lib/pagedQuery.js'
 import {
   Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select,
   PrerequisiteEmptyState, ErrorBanner, SkeletonList,
 } from '../../components/ui.jsx'
+import {
+  ListDetailLayout, LIST_DETAIL_GRID, SearchField, StatusChip, MetaGrid, SourceQuote,
+} from '../../components/listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
+import { fmtDateTime } from '../../lib/format.js'
+import { useContractEnrichment } from '../../lib/useContractEnrichment.js'
+import { requirementsIntro } from '../../lib/requirementsIntro.js'
+import ReviewActions from '../../components/requirements/ReviewActions.jsx'
+import ManualRequirementModal from '../../components/requirements/ManualRequirementModal.jsx'
+import { MANUAL_BLANK, manualRequirementTiming } from '../../lib/manualRequirement.js'
+import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import {
-  REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
+  REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
   WORK_ITEM_LINK_STATE_LABELS, ARTIFACT_TYPE_LABELS, GENERATION_TYPE_LABELS,
   latestCompletedRunIds, inDefaultReviewScope, requirementFrequencyKey,
-  sourceVerificationSummary, sourcePageLabel, formatRequirementRule,
+  sourceVerificationSummary, sourcePageLabel, formatRequirementRule, requirementVerification,
+  inPackage, runsInPackage, ingestionSummary,
 } from '../../lib/requirementReview.js'
 
-const LIST_LIMIT = 300
 const PAGE_SIZE = 50
-
-// W8-3A(D-014):「AI 整理完了沒」在全站只有一個判定依據——本案有沒有跑完過一次
-// 履約要求擷取(`document_ingestion_runs.status = 'completed'`)。首頁初始化清單第 3 步
-// 用它,這一頁也必須用它,否則會出現「首頁說整理完成 → 點進來卻叫你重新上傳」的死路。
-// ⚠️ 有 Requirement 不等於 AI 跑完過(可能是人工建立或舊 run),絕不可反推成「整理完成」。
-export function requirementsIntro(runs = [], rowCount = 0) {
-  const ingestionDone = (runs || []).some((r) => r?.status === 'completed')
-  // W10 揭露「漏了什麼」:最近一次成功整理若未涵蓋整份文件(分批抽取的
-  // coverage 欄位),要在這一頁明講——否則使用者以為 AI 讀完了整本契約。
-  const latestCompleted = (runs || []).find((r) => r?.status === 'completed') || null
-  const cm = latestCompleted?.metadata || null
-  const coverageWarning = cm?.coverage_incomplete
-    ? `注意:最近一次 AI 整理未涵蓋整份文件(解析至第 ${cm.last_included_page ?? '?'} 頁/共 ${cm.total_page_count ?? '?'} 頁)。未涵蓋範圍的契約重點需人工新增。`
-    : null
-  if (rowCount > 0) {
-    return {
-      ingestionDone,
-      mode: 'list',
-      coverageWarning,
-      // 沒有 completed run 時只講審查規則,不宣稱 AI 整理完成
-      note: ingestionDone
-        ? 'AI 已完成整理並自動歸檔;內容如有出入,以契約原文為準。人工補登的項目仍由監造/機關確認,未確認不影響開啟正式模式。'
-        : '人工補登的項目由監造/機關確認,未確認不影響開啟正式模式;內容如有出入,以契約原文為準。',
-      emptyText: null,
-    }
-  }
-  // 整理完成但 0 筆:這是有效結果(AI 讀完了沒找到),不是失敗,也沒有事情要做——
-  // 不能再給「前往上傳」的 CTA 把人送回原點。
-  if (ingestionDone) {
-    return {
-      ingestionDone, mode: 'done-empty', note: null, coverageWarning,
-      emptyText: 'AI 已完成整理，本次沒有找到契約重點建議，不需處理，也不影響開啟正式模式。',
-    }
-  }
-  // W10:run 都停了而且有失敗紀錄時要說「失敗了」,不能偽裝成「還沒開始」——
-  // 使用者才知道要去重試,而不是空等。還有 run 在跑就維持「處理中」語意。
-  const anyActive = (runs || []).some((r) => ['pending', 'processing'].includes(r?.status))
-  const latestFailed = (runs || []).find((r) => r?.status === 'failed') || null
-  if (latestFailed && !anyActive) {
-    return {
-      ingestionDone, mode: 'failed', coverageWarning: null,
-      note: null,
-      emptyText: `最近一次 AI 整理失敗${latestFailed.error_message ? `:${friendlyError(latestFailed.error_message, '請重試')}` : ''}。到「專案文件」的文件清單可重試分析。`,
-    }
-  }
-  return {
-    ingestionDone, mode: 'not-started', note: null, coverageWarning: null,
-    emptyText: '尚未有完成的 AI 整理。到「專案文件」上傳契約/規範,或查看目前的處理狀態。',
-  }
-}
+const DEFAULT_FILTERS = { q: '', status: 'all', type: '', phase: '', freq: '' }
 
 // 五色語意(README Design Tokens):待確認=黃(正常待辦不是異常)、已確認=綠、
 // 不採用=灰(含已取代——「不成立/已被取代,不計入義務」是同一格,色票、快篩
@@ -98,105 +61,25 @@ const statusKey = (status) => (
     : ['rejected', 'superseded'].includes(status) ? 'rejected' : 'pending'
 )
 const EDITABLE_STATUSES = ['draft_ai', 'needs_review']
-const fmtTime = (v) => (v ? new Date(v).toLocaleString('zh-TW', { hour12: false }) : '')
-
-// 狀態快篩 chip(README:pill 形、選中=藍框藍底)——與 FilterChip 的
-// toggle+close 語意不同,這裡是單選分段,就地用同一套 token 拼裝
-const chipCls = (active) => `h-[30px] px-3.5 rounded-full border text-xs font-medium inline-flex items-center gap-1.5 pressable max-md:min-h-11 ${active
-  ? 'border-[var(--primary)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
-  : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:bg-[var(--bg)]'}`
-
-// 詳情動作列(獨立元件供測試釘權限):確認/不採用只給契約審查者(監造/機關,
-// 鏡像 can_review_requirement,刻意無專案管理者例外);其他人看得到內容但
-// 不渲染假操作。
-export function ReviewActions({ requirement, canReview, busy, onReview, onEdit, reviewerName }) {
-  const st = requirement.status
-  // 紀錄格式:`桃園市工務局 林淑芬 確認 · 時間`。審查人名由呼叫端從 profiles
-  // 解析(reviewed_by 是伺服器蓋的);reviewed_by 為空的已確認=確定性分流的
-  // 系統自動確認(引文+數字核對無誤),要明講不是人簽的
-  const VERB = { approved: '確認', rejected: '不採用', superseded: '廢止取代' }
-  const autoConfirmed = st === 'approved' && !requirement.reviewed_by && requirement.reviewed_at
-  const record = requirement.reviewed_at
-    ? (autoConfirmed
-      ? `${requirement.triage_doubts?.length ? 'AI 整理・自動確認' : '系統核對無誤・自動確認'} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
-      : reviewerName
-        ? `${reviewerName} ${VERB[st] || REQUIREMENT_STATUS_LABELS[st] || st} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
-        : `${REQUIREMENT_STATUS_LABELS[st] || st}·${fmtTime(requirement.reviewed_at)}(伺服器記錄)`)
-    : null
-  if (EDITABLE_STATUSES.includes(st)) {
-    if (!canReview) {
-      return (
-        <Badge color="slate">
-          <MSym name="info" size={12} className="shrink-0" />轉錄確認由監造／機關辦理
-        </Badge>
-      )
-    }
-    return (<>
-      <Button size="md" disabled={!!busy} onClick={() => onReview('approve', '確認無誤')}>
-        <MSym name="check_circle" size={15} fill /> 確認無誤
-      </Button>
-      <Button variant="outline" size="md" disabled={!!busy} onClick={onEdit}>修正內容</Button>
-      <button type="button" disabled={!!busy} onClick={() => onReview('reject', '不採用')}
-        className="inline-flex items-center justify-center h-9 px-3.5 rounded-full text-sm font-medium text-[var(--red-text)] hover:bg-[var(--red-tint)] pressable max-md:min-h-11 disabled:opacity-40">
-        不採用
-      </button>
-    </>)
-  }
-  return (<>
-    <span className="flex-1 min-w-0 text-[11.5px] leading-relaxed text-[var(--text-3)] num">{record}</span>
-    {st === 'approved' && canReview && (
-      <Button variant="outline" size="sm" disabled={!!busy} onClick={() => onReview('supersede', '廢止取代')}>廢止取代</Button>
-    )}
-  </>)
-}
+const fmtTime = (v) => fmtDateTime(v, { empty: '' })
 
 // 關聯列外殼:README 8px 圓角框列(icon+文字)。hover 只給真的可點的列——
 // 純資料列(工項對應/流程項目)套上連結外觀會騙人去點
 const LINK_ROW_STATIC = 'flex items-center gap-2 px-2.5 py-2 max-md:min-h-11 border border-[var(--border-2)] rounded-lg text-xs text-[var(--text-2)] min-w-0'
 const LINK_ROW = `${LINK_ROW_STATIC} hover:bg-[var(--bg)]`
 
-// W10 手動新增契約重點:AI 漏抽或文件未涵蓋的義務,人工補登。走既有的
-// requirement 流(origin='manual'、status='needs_review' → 人工核定 → deadline
-// 型單向物化為契約義務)——義務表是 system-managed,這是唯一正確的補登路徑。
-const MANUAL_BLANK = {
-  title: '', description: '', requirement_type: 'deadline',
-  responsible_party_type: '', lifecycle_phase: '施工中',
-  dueMode: 'relative', trigger_event: 'commencement', offset_days: '', offset_dir: 'after',
-  fixed_date: '', monthly_day: '',
-  // 循環時點(頻率值域對齊 requirementExtraction.ts 的 FREQUENCY_TYPES)
-  weekly_weekday: '1', freq_month: '', freq_day: '',
-  acceptance_criteria: '', source_clause: '', source_page: '',
-  contract_package_id: '',
-}
-const MANUAL_TRIGGERS = [
-  ['award', '決標日'], ['notice', '接獲開工通知日'], ['commencement', '開工日'], ['completion', '竣工日'],
-]
-const MANUAL_WEEKDAYS = [
-  ['1', '週一'], ['2', '週二'], ['3', '週三'], ['4', '週四'],
-  ['5', '週五'], ['6', '週六'], ['7', '週日'],
-]
+// 人工補登從 needs_review 經 RPC 確認,所有類型均由伺服器單向物化履約事項。
 
 export default function RequirementsReview() {
   const {
-    currentProject, isPersistedProject, currentUser, workItems, reloadObligations, can, obligations,
+    currentProject, isPersistedProject, workItems, reloadObligations, can, obligations,
   } = useStore()
-  // 鏡像 DB 的 can_review_requirement(機關/監造;刻意無專案管理者例外——技術管理≠契約審核權)
-  const canReview = ['owner', 'supervisor'].includes(currentUser?.org_type)
-  // 鏡像 DB 的 can_write(requirements insert 政策):廠商/監造/管理者可補登,機關唯讀
-  const canAddManual = isPersistedProject && (can.edit || currentUser?.org_type === 'supervisor')
+  // 兩條都鏡像 DB 的同名 helper;規則的單一來源在 store.jsx 的 can
+  const canReview = can.reviewRequirement          // can_review_requirement()
+  const canAddManual = isPersistedProject && can.write  // can_write():requirements insert 政策
 
-  const [rows, setRows] = useState([])
-  const [loaded, setLoaded] = useState(false)
-  const [loadError, setLoadError] = useState('')
-  const [runs, setRuns] = useState([])
-  const [sourcesByReq, setSourcesByReq] = useState(new Map())
-  const [versionsById, setVersionsById] = useState(new Map())
-  const [reviewersById, setReviewersById] = useState(new Map())
-  const [packages, setPackages] = useState([])   // 可讀契約包(RLS 過濾;手動補登歸包用)
-  const [filters, setFilters] = useState({ q: '', status: 'all', type: '', phase: '', freq: '' })
+  const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [shownLimit, setShownLimit] = useState(PAGE_SIZE)
-  const [selectedId, setSelectedId] = useState(null)
-  const [detailOpen, setDetailOpen] = useState(false)  // <lg 抽屜/全螢幕詳情
   const [links, setLinks] = useState([])          // requirement_work_items of selected
   const [artifactLinks, setArtifactLinks] = useState([])
   const [busy, setBusy] = useState('')
@@ -207,116 +90,56 @@ export default function RequirementsReview() {
   const [manualDraft, setManualDraft] = useState(MANUAL_BLANK)
   const [manualBusy, setManualBusy] = useState(false)
   const [manualMsg, setManualMsg] = useState('')
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const searchRef = useRef(null)
+  const packageId = searchParams.get('package') || ''
 
   const pid = currentProject?.project_id
-  const runsById = useMemo(() => new Map(runs.map((r) => [r.id, r])), [runs])
+  const detailGeneration = useRef(0)
+
+  // 全案 requirements + 出處 + 文件版本 + ingestion runs + 契約包(可讀,RLS 過濾;
+  // 手動補登歸包用)+ 審查人 profiles。切案清空、同案重載保留舊列。
+  const {
+    rows, sourcesByReq, versionsById, runs, runsById, packages, reviewersById,
+    loaded, error: loadError, reload, patch,
+  } = useContractEnrichment({ pid, enabled: isPersistedProject, requirementIds: 'all', reviewers: true })
   const currentRunIds = useMemo(() => latestCompletedRunIds(runs), [runs])
-  const intro = useMemo(() => requirementsIntro(runs, rows.length), [runs, rows.length])
-
-  const reload = useCallback(async () => {
-    if (!isPersistedProject || !pid) return
-    setLoaded(false)
-    setLoadError('')
-    try {
-      const [runResult, requirementResult, packageResult] = await Promise.all([
-        supabase.from('document_ingestion_runs')
-          // error_message/metadata:失敗揭露與涵蓋率警示(requirementsIntro)要用
-          .select('id, document_version_id, status, started_at, completed_at, model_name, prompt_version, error_message, metadata')
-          .eq('project_id', pid).order('started_at', { ascending: false }).limit(100),
-        supabase.from('requirements').select('*')
-          .eq('project_id', pid).order('created_at', { ascending: false }).limit(LIST_LIMIT),
-        supabase.from('contract_packages').select('id, title, package_type')
-          .eq('project_id', pid).order('created_at'),
-      ])
-      if (runResult.error) throw runResult.error
-      if (requirementResult.error) throw requirementResult.error
-      const runRows = runResult.data || []
-      const reqRows = requirementResult.data || []
-      const ids = reqRows.map((r) => r.id)
-      // 一則需求可有多筆出處:300 則需求的出處合計會破單次上限,要分批 + 分頁
-      const sourceResult = ids.length
-        ? await pageAllInSafe(ids, (chunk, from, to) => supabase.from('requirement_sources')
-          .select('*').in('requirement_id', chunk).order('id').range(from, to))
-        : { data: [], error: null }
-      if (sourceResult.error) throw sourceResult.error
-      const sourceRows = sourceResult.data || []
-      const byReq = new Map()
-      for (const s of sourceRows) {
-        if (!byReq.has(s.requirement_id)) byReq.set(s.requirement_id, [])
-        byReq.get(s.requirement_id).push(s)
-      }
-      const versionIds = [...new Set([
-        ...sourceRows.map((s) => s.document_version_id),
-        ...runRows.map((r) => r.document_version_id),
-      ].filter(Boolean))]
-      let versions = []
-      if (versionIds.length) {
-        // storage 欄位:詳情的「開啟原文」直接開原始檔並跳到出處頁(documentFileAccess)
-        const versionResult = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_versions')
-          .select('id, version_label, storage_path, original_filename, mime_type, documents(title, document_type)')
-          .in('id', chunk).order('id').range(from, to))
-        if (versionResult.error) throw versionResult.error
-        versions = versionResult.data || []
-      }
-      // 審查人名(README 核定紀錄要可歸責到人):profiles 只授權明確欄位,
-      // 且 RLS 限同案成員——讀不到就退回「狀態+時間」,不擋頁面
-      const reviewerIds = [...new Set(reqRows.map((r) => r.reviewed_by).filter(Boolean))]
-      let reviewers = []
-      if (reviewerIds.length) {
-        const reviewerResult = await pageAllInSafe(reviewerIds, (chunk, from, to) => supabase.from('profiles')
-          .select('id, full_name, company').in('id', chunk).order('id').range(from, to))
-        if (!reviewerResult.error) reviewers = reviewerResult.data || []
-      }
-      setRuns(runRows)
-      setRows(reqRows)
-      setSourcesByReq(byReq)
-      setVersionsById(new Map(versions.map((v) => [v.id, v])))
-      setReviewersById(new Map(reviewers.map((p) => [p.id, p])))
-      setPackages(packageResult.data || [])
-    } catch (error) {
-      setLoadError(friendlyError(error, '契約重點載入失敗'))
-    } finally {
-      setLoaded(true)
-    }
-  }, [isPersistedProject, pid])
-
-  useEffect(() => { reload() }, [reload])
+  const packageRuns = useMemo(() => runsInPackage(runs, packageId, { versionsById }), [runs, versionsById, packageId])
+  const packageRows = useMemo(
+    () => rows.filter((r) => inPackage(r, packageId, { versionsById, runsById })),
+    [rows, runsById, versionsById, packageId],
+  )
+  const intro = useMemo(() => requirementsIntro(packageRuns, packageRows.length), [packageRuns, packageRows.length])
 
   const loadDetail = useCallback(async (requirementId) => {
     if (!isPersistedProject) return
+    const generation = ++detailGeneration.current
     const [{ data: linkRows }, { data: artifactRows }] = await Promise.all([
       supabase.from('requirement_work_items').select('*')
         .eq('requirement_id', requirementId).order('created_at'),
       supabase.from('requirement_artifact_links').select('*')
         .eq('requirement_id', requirementId).order('created_at'),
     ])
+    if (generation !== detailGeneration.current) return
     setLinks(linkRows || [])
     setArtifactLinks(artifactRows || [])
   }, [isPersistedProject])
-
-  const select = useCallback((id, { openPane = false } = {}) => {
-    setSelectedId(id); setEditing(null); setMsg(''); setManualItemNo('')
-    // 抽屜/全螢幕只屬於 <lg:桌機點列不留 detailOpen 殘值,縮窗才不會突然彈出遮罩
-    if (openPane && window.matchMedia('(max-width: 1023.98px)').matches) setDetailOpen(true)
-    // URL 帶單條連結(?highlight=)可分享;replace 不炸掉瀏覽歷史
-    setSearchParams((p) => { const n = new URLSearchParams(p); n.set('highlight', id); return n }, { replace: true })
-    loadDetail(id)
-  }, [loadDetail, setSearchParams])
 
   // 檢索範圍:待審 AI 建議只收最新成功擷取(舊 run 的未審建議已過時);
   // 已審決內容(已生效/已駁回/已廢止)是人做成的契約決定,不受最新 run 限制
   // ——重新分析同一份文件不得讓已核定的契約重點從清單消失(W8-3B 舊行為)。
   const scoped = useMemo(
-    () => rows.filter((r) => (EDITABLE_STATUSES.includes(r.status)
+    () => packageRows.filter((r) => (EDITABLE_STATUSES.includes(r.status)
       ? inDefaultReviewScope(r, currentRunIds)
       : true)),
-    [rows, currentRunIds],
+    [packageRows, currentRunIds],
   )
   const counts = useMemo(() => {
-    const c = { all: scoped.length, pending: 0, approved: 0, rejected: 0 }
-    for (const r of scoped) c[statusKey(r.status)]++
+    const c = { all: scoped.length, attention: 0, pending: 0, approved: 0, rejected: 0 }
+    for (const r of scoped) {
+      c[statusKey(r.status)]++
+      if (requirementVerification(r).attention) c.attention++
+    }
     return c
   }, [scoped])
   const typeOptions = useMemo(
@@ -353,7 +176,8 @@ export default function RequirementsReview() {
 
   const visible = useMemo(() => {
     let list = scoped
-    if (filters.status !== 'all') list = list.filter((r) => statusKey(r.status) === filters.status)
+    if (filters.status === 'attention') list = list.filter((r) => requirementVerification(r).attention)
+    else if (filters.status !== 'all') list = list.filter((r) => statusKey(r.status) === filters.status)
     if (filters.type) list = list.filter((r) => r.requirement_type === filters.type)
     if (filters.phase) list = list.filter((r) => r.lifecycle_phase === filters.phase)
     if (filters.freq) list = list.filter((r) => requirementFrequencyKey(r) === filters.freq)
@@ -368,16 +192,33 @@ export default function RequirementsReview() {
 
   // 標題列右側:共 N 條 · 來源 X 份文件 · 最近整理 date(有完成的 run 才有後兩段)
   const listMeta = useMemo(() => {
-    const completed = runs.filter((r) => r.status === 'completed')
-    const docCount = new Set(completed
-      .map((r) => versionsById.get(r.document_version_id)?.documents?.title)
-      .filter(Boolean)).size
-    const latest = completed.map((r) => r.completed_at).filter(Boolean).sort().pop()
+    const { docCount, latest } = ingestionSummary(runs, versionsById)
     return [`共 ${scoped.length} 條`, docCount ? `來源 ${docCount} 份文件` : null,
       latest ? `最近整理 ${latest.slice(0, 10)}` : null].filter(Boolean).join(' · ')
   }, [runs, versionsById, scoped.length])
 
-  const selected = rows.find((r) => r.id === selectedId) || null
+  // ── 選取/深連結(?highlight=)/切案重置/初次自動選取:共用殼 hook。
+  // 預設選第一條待確認(直接進入待辦)→ 清單第一條 → 範圍內第一條。
+  const { selectedId, setSelectedId, detailOpen, setDetailOpen, select, closeDetail } = useListDetailPane({
+    param: 'highlight', idPrefix: 'hl-',
+    scope: `${pid}/${packageId}`,
+    ready: loaded && packageRows.length > 0, rows: packageRows,
+    pickDefault: () => (visible.find((r) => EDITABLE_STATUSES.includes(r.status)) || visible[0] || packageRows[0])?.id,
+    onSelect: (id) => { setEditing(null); setMsg(''); setManualItemNo(''); loadDetail(id) },
+    onReset: () => {
+      // 在途的詳情查詢作廢:切案後回來的 links 不能掛到新案的選取上
+      detailGeneration.current++
+      setEditing(null); setLinks([]); setArtifactLinks([]); setMsg('')
+      setFilters(DEFAULT_FILTERS); setShownLimit(PAGE_SIZE)
+    },
+    onDeepLink: (row) => {
+      // 深連結列可能落在載入上限之後:先把分頁撐到含該列,捲動才有東西可捲
+      const idx = visible.findIndex((r) => r.id === row.id)
+      if (idx >= PAGE_SIZE) setShownLimit(Math.ceil((idx + 1) / PAGE_SIZE) * PAGE_SIZE)
+    },
+  })
+
+  const selected = packageRows.find((r) => r.id === selectedId) || null
   const selectedSources = useMemo(
     () => (selected ? sourcesByReq.get(selected.id) || [] : []),
     [selected, sourcesByReq],
@@ -392,39 +233,6 @@ export default function RequirementsReview() {
     for (const it of workItems?.items || []) if (it.id) map.set(it.id, it)
     return map
   }, [workItems])
-
-  // 切換專案(不經 route 卸載)時整組重置:殘留他案的 selectedId/?highlight
-  // 會讓右欄空白、URL 指向別案的 requirement
-  const initialPicked = useRef(false)
-  const seenPid = useRef(pid)
-  useEffect(() => {
-    if (seenPid.current === pid) return
-    seenPid.current = pid
-    initialPicked.current = false
-    setSelectedId(null); setEditing(null); setLinks([]); setArtifactLinks([])
-    setDetailOpen(false); setMsg('')
-    setFilters({ q: '', status: 'all', type: '', phase: '', freq: '' }); setShownLimit(PAGE_SIZE)
-    setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('highlight'); return n }, { replace: true })
-  }, [pid, setSearchParams])
-
-  // 初次載入:深連結(?highlight=)優先,否則預設選第一條待確認(直接進入待辦)
-  useEffect(() => {
-    if (!loaded || initialPicked.current || !rows.length) return
-    initialPicked.current = true
-    const param = searchParams.get('highlight')
-    const deepLinked = param ? rows.find((r) => r.id === param) : null
-    const target = deepLinked
-      || visible.find((r) => EDITABLE_STATUSES.includes(r.status)) || visible[0] || rows[0]
-    if (!target) return
-    select(target.id)
-    if (deepLinked) {
-      // 深連結列可能落在載入上限之後:先把分頁撐到含該列,捲動才有東西可捲
-      const idx = visible.findIndex((r) => r.id === target.id)
-      if (idx >= PAGE_SIZE) setShownLimit(Math.ceil((idx + 1) / PAGE_SIZE) * PAGE_SIZE)
-      setTimeout(() => document.getElementById(`hl-${target.id}`)?.scrollIntoView({ block: 'center' }), 60)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, rows.length])
 
   // 「開啟原文」:出處的文件版本 + 頁碼 → 簽名 URL 開原始檔(PDF 跳頁)
   const openableSource = useMemo(() => {
@@ -441,57 +249,11 @@ export default function RequirementsReview() {
     })
   }, [openableSource])
 
-  // 鍵盤:↑/↓ 移動選取、Enter 開啟原文、/ 聚焦搜尋。只有真正的輸入控件
-  // (input/textarea/select)整組跳過——點過清單列或快篩 chip 後焦點留在
-  // button 上,快捷鍵必須照常運作;Enter 讓 button/link 走原生 click,不搶
-  useEffect(() => {
-    const onKey = (e) => {
-      const t = e.target
-      const inField = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)
-      // 任何 modal 層(手動新增/確認對話框/抽屜)開著就整組停用——
-      // 「/」搶焦點到遮罩後的搜尋框、Enter 在確認框後面開原文都是誤觸
-      const modalUp = manualOpen || editing
-        || document.querySelector('[aria-modal="true"]') != null
-      if (e.key === '/' && !inField && !modalUp) { e.preventDefault(); searchRef.current?.focus(); return }
-      if (inField || modalUp || e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Enter' && t && /^(BUTTON|A)$/.test(t.tagName)) return
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault()
-        if (!shownRows.length) return
-        const idx = shownRows.findIndex((r) => r.id === selectedId)
-        const next = e.key === 'ArrowDown'
-          ? shownRows[Math.min(idx + 1, shownRows.length - 1)]
-          : shownRows[Math.max(idx - 1, 0)]
-        if (next && next.id !== selectedId) {
-          select(next.id)
-          document.getElementById(`hl-${next.id}`)?.scrollIntoView({ block: 'nearest' })
-        }
-      } else if (e.key === 'Enter') {
-        openOriginal()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [shownRows, selectedId, select, openOriginal, manualOpen, editing])
-
-  // 抽屜/全螢幕詳情(<lg)與手動新增 Modal:Esc 關閉+開啟時把焦點帶進面板
-  // (aria-modal 沒有焦點管理=報讀器仍停在遮罩後的清單,W8-5 F2 同一課)
-  const drawerRef = useRef(null)
-  const manualRef = useRef(null)
-  useEffect(() => {
-    if (!detailOpen) return
-    drawerRef.current?.focus()
-    const onKey = (e) => { if (e.key === 'Escape') setDetailOpen(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [detailOpen])
-  useEffect(() => {
-    if (!manualOpen) return
-    manualRef.current?.focus()
-    const onKey = (e) => { if (e.key === 'Escape') setManualOpen(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [manualOpen])
+  // 鍵盤:↑/↓ 移動選取、Enter 開啟原文、/ 聚焦搜尋(共用殼 hook;手動新增/編輯中停用)
+  useListKeyboardNav({
+    ordered: shownRows, selectedId, select, idPrefix: 'hl-', onEnter: openOriginal,
+    modalUp: manualOpen || !!editing, searchRef,
+  })
 
   // 生命週期決定:唯一路徑是 review_requirement RPC;成功後以伺服器回傳列刷新。
   const review = async (decision, confirmText, requirementId = selectedId, body = '確認的是 AI 轉錄與契約原文一致;契約效力以原文為準,紀錄由伺服器寫入。') => {
@@ -502,14 +264,15 @@ export default function RequirementsReview() {
     })
     setBusy('')
     if (error) { setMsg(friendlyError(error, '審查未完成')); return }
-    setRows((rs) => rs.map((r) => (r.id === data.id ? data : r)))
-    if (decision === 'approve' && data.requirement_type === 'deadline') await reloadObligations()
+    patch((d) => ({ rows: d.rows.map((r) => (r.id === data.id ? data : r)) }))
+    // D-020:所有類型都會更新履約 runtime;取代也會取消尚待辦的義務。
+    if (decision === 'approve' || decision === 'supersede') await reloadObligations()
     setMsg('')
   }
 
   const saveEdit = async () => {
     setBusy('edit')
-    const patch = {
+    const patchRow = {
       title: editing.title, description: editing.description || null,
       requirement_type: editing.requirement_type,
       responsible_party_type: editing.responsible_party_type || null,
@@ -518,10 +281,10 @@ export default function RequirementsReview() {
       evidence_requirement: editing.evidence_requirement || null,
     }
     const { data, error } = await supabase.from('requirements')
-      .update(patch).eq('id', selectedId).select().single()
+      .update(patchRow).eq('id', selectedId).select().single()
     setBusy('')
     if (error) { setMsg(friendlyError(error, '儲存未完成')); return }
-    setRows((rs) => rs.map((r) => (r.id === data.id ? data : r)))
+    patch((d) => ({ rows: d.rows.map((r) => (r.id === data.id ? data : r)) }))
     setEditing(null); setMsg('')
   }
 
@@ -539,50 +302,9 @@ export default function RequirementsReview() {
   const submitManual = async () => {
     const d = manualDraft
     if (!d.title.trim()) { setManualMsg('請填標題'); return }
-    let trigger_type = null
-    let trigger_config = {}
-    let frequency_type = null
-    let frequency_config = {}
-    if (d.dueMode === 'relative') {
-      trigger_type = d.trigger_event
-      const days = Number(d.offset_days)
-      if (!(Number.isInteger(days) && days > 0)) { setManualMsg('期限天數需為正整數'); return }
-      trigger_config = { offset_days: days, offset_dir: d.offset_dir }
-    } else if (d.dueMode === 'fixed') {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fixed_date)) { setManualMsg('請選擇指定日期'); return }
-      trigger_type = 'fixed'
-      trigger_config = { fixed_date: d.fixed_date }
-    } else if (d.dueMode === 'monthly') {
-      const day = Number(d.monthly_day)
-      if (!(Number.isInteger(day) && day >= 1 && day <= 31)) { setManualMsg('每月幾號需為 1~31'); return }
-      trigger_type = 'monthly'
-      frequency_type = 'monthly'
-      frequency_config = { day }
-    } else if (d.dueMode === 'daily') {
-      frequency_type = 'daily'
-    } else if (d.dueMode === 'weekly') {
-      const weekday = Number(d.weekly_weekday)
-      if (!(Number.isInteger(weekday) && weekday >= 1 && weekday <= 7)) { setManualMsg('請選擇每週星期幾'); return }
-      frequency_type = 'weekly'
-      frequency_config = { weekday }
-    } else if (d.dueMode === 'quarterly' || d.dueMode === 'yearly') {
-      // 頻率 config 值域對齊抽取引擎:quarterly 的 month=季內第幾個月(1~3)、
-      // yearly 的 month=幾月(1~12);day 都是幾日(1~31)
-      const month = Number(d.freq_month)
-      const day = Number(d.freq_day)
-      const monthMax = d.dueMode === 'quarterly' ? 3 : 12
-      if (!(Number.isInteger(month) && month >= 1 && month <= monthMax)) {
-        setManualMsg(d.dueMode === 'quarterly' ? '每季第幾個月需為 1~3' : '每年幾月需為 1~12')
-        return
-      }
-      if (!(Number.isInteger(day) && day >= 1 && day <= 31)) { setManualMsg('幾日需為 1~31'); return }
-      frequency_type = d.dueMode
-      frequency_config = { month, day }
-    } else if (d.requirement_type === 'deadline') {
-      // 期限型沒有時點就物化不出到期日,擋在前端(伺服器不會擋,但那是一筆廢資料)
-      setManualMsg('期限型契約重點需要一個時點(相對基準日/指定日期/循環)')
-      return
-    }
+    const timing = manualRequirementTiming(d)
+    if (timing.error) { setManualMsg(timing.error); return }
+    const { trigger_type, trigger_config, frequency_type, frequency_config } = timing
     setManualBusy(true)
     const { data, error } = await supabase.from('requirements').insert({
       project_id: pid,
@@ -603,19 +325,23 @@ export default function RequirementsReview() {
     // 出處(選填):人工補登也保留條款/頁碼引註——對照報告與詳情的出處區吃同一份資料。
     // 主檔已建立、引註寫入失敗(瞬斷/5xx)不可靜默吞掉:使用者填的出處會無聲消失
     let sourceError = null
+    let sourceRow = null
     if (d.source_clause.trim() || d.source_page.trim()) {
       const { data: srcRow, error: srcErr } = await supabase.from('requirement_sources').insert({
         requirement_id: data.id, source_kind: 'manual', source_verified: false,
         clause: d.source_clause.trim() || null, page_label: d.source_page.trim() || null,
       }).select().single()
-      if (srcRow) setSourcesByReq((m) => new Map(m).set(data.id, [srcRow]))
+      if (srcRow) sourceRow = srcRow
       else sourceError = srcErr
     }
     setManualBusy(false)
     setManualMsg('')
     setManualDraft(MANUAL_BLANK)
     setManualOpen(false)
-    setRows((rs) => [data, ...rs])
+    patch((prev) => ({
+      rows: [data, ...prev.rows],
+      sourcesByReq: sourceRow ? new Map(prev.sourcesByReq).set(data.id, [sourceRow]) : prev.sourcesByReq,
+    }))
     select(data.id, { openPane: true })
     if (sourceError) {
       setMsg(`契約重點已新增,但出處未寫入:${friendlyError(sourceError, '請用「修正內容」補上')}`)
@@ -639,7 +365,7 @@ export default function RequirementsReview() {
   // ── 頁首動作:手動新增(對照報告已退場) ─────────────────────────────────
   const headerAction = (
     <div className="flex flex-wrap items-center gap-2">
-      <Link to="/requirements" className="inline-flex items-center gap-1 text-[12.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 px-1">
+      <Link to={packageId ? `/requirements?package=${encodeURIComponent(packageId)}` : '/requirements'} className="inline-flex items-center gap-1 text-footnote text-[var(--blue-text)] hover:underline max-md:min-h-11 px-1">
         <MSym name="arrow_back" size={16} /> 返回履約時程
       </Link>
       {canAddManual && (
@@ -672,24 +398,22 @@ export default function RequirementsReview() {
       {/* 1. 標題列:狀態色票+類型+開啟原文 */}
       <div className="px-4 py-[13px] border-b border-[var(--border)] flex items-center gap-2.5">
         <Badge color={pill.color}>{pill.label}</Badge>
-        <span className="text-[11.5px] text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[selected.requirement_type] || selected.requirement_type}</span>
-        <span className="text-[11.5px] text-[var(--text-3)]">{ORIGIN_LABELS[selected.origin] || selected.origin}</span>
+        <span className="text-caption text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[selected.requirement_type] || selected.requirement_type}</span>
+        <span className="text-caption text-[var(--text-3)]">{ORIGIN_LABELS[selected.origin] || selected.origin}</span>
         {openableSource && (
-          <button type="button" onClick={openOriginal} title="在原文件中開啟"
-            className="ml-auto text-[11.5px] text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11 px-1">
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={openOriginal} title="在原文件中開啟">
             開啟原文
-          </button>
+          </Button>
         )}
       </div>
 
       <ErrorBanner msg={msg} className="mx-4 mt-3" />
 
-      {/* D-019 透明度註記:未能逐字核對的地方講明,效力回歸契約原文 */}
-      {selected.triage_doubts?.length > 0 && (
-        <p className="mx-4 mt-3 text-xs leading-relaxed text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-3 py-2">
-          未逐字核對:{selected.triage_doubts.join('、')}。內容如有出入,以契約原文為準。
-        </p>
-      )}
+      {/* 自動歸檔與核對結果分開；通過現有核對也不宣稱已證明沒有漏項。 */}
+      <p className={`mx-4 mt-3 text-xs leading-relaxed rounded-md px-3 py-2 ${requirementVerification(selected).attention
+        ? 'text-[var(--amber-text)] bg-[var(--amber-tint)]' : 'text-[var(--text-2)] bg-[var(--surface-2)]'}`}>
+        {requirementVerification(selected).label}。{requirementVerification(selected).note}
+      </p>
 
       {/* 2. 本文:標題/說明/key-value(編輯模式原地換成表單) */}
       {editing ? (
@@ -715,16 +439,9 @@ export default function RequirementsReview() {
         </div>
       ) : (
         <div className="p-4">
-          <div className="text-[15px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{selected.title}</div>
-          {selected.description && <p className="mt-2 text-[12.5px] leading-[1.8] text-[var(--text-2)]">{selected.description}</p>}
-          <div className="mt-3.5 grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-[7px] text-xs leading-relaxed">
-            {meta.map(([k, v]) => (
-              <div key={k} className="contents">
-                <span className="text-[var(--text-3)]">{k}</span>
-                <span className="num text-[var(--text)]">{v}</span>
-              </div>
-            ))}
-          </div>
+          <div className="text-callout font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{selected.title}</div>
+          {selected.description && <p className="mt-2 text-footnote leading-[1.8] text-[var(--text-2)]">{selected.description}</p>}
+          <MetaGrid rows={meta} className="mt-3.5" />
         </div>
       )}
 
@@ -732,7 +449,7 @@ export default function RequirementsReview() {
       <div className="px-4 pb-4">
         <div className="flex items-center gap-2 mb-2">
           <MSym name="description" size={15} className="text-[var(--text-3)]" />
-          <span className="text-[12.5px] font-medium text-[var(--text)]">原文出處</span>
+          <span className="text-footnote font-medium text-[var(--text)]">原文出處</span>
           {selectedSources.length > 0 && (
             <Badge color={sourceVerificationSummary(selectedSources) === 'verified' ? 'green' : 'amber'}>
               {sourceVerificationSummary(selectedSources) === 'verified' ? '來源已核對' : '來源待核對'}
@@ -744,25 +461,15 @@ export default function RequirementsReview() {
         ) : selectedSources.map((s) => {
           const version = s.document_version_id ? versionsById.get(s.document_version_id) : null
           return (
-            <figure key={s.id} className="m-0 mb-2 bg-[var(--bg)] border border-[var(--border-2)] rounded-lg px-3 py-[11px]">
-              {/* 核對狀態只在小標列的彙總色票講一次;逐筆引述只留出處行,
-                  同一狀態兩種文案(已核對/待人工確認)並排會讓人以為是兩件事 */}
-              <figcaption className="num text-[11px] text-[var(--text-3)] leading-relaxed">
-                <cite className="not-italic">
-                  {[version ? `${version.documents?.title}（${version.version_label}）` : null,
-                    s.clause ? `條款 ${s.clause}` : null,
-                    s.section ? `章節 ${s.section}` : null,
-                    s.page_label || sourcePageLabel(s)].filter(Boolean).join(' · ')}
-                </cite>
-              </figcaption>
-              {s.source_text && (
-                <blockquote className="m-0 mt-[7px] text-xs leading-[1.85] text-[var(--text)]">「{s.source_text}」</blockquote>
-              )}
-            </figure>
+            <SourceQuote key={s.id} className="mb-2" quote={s.source_text}
+              cite={[version ? `${version.documents?.title}（${version.version_label}）` : null,
+                s.clause ? `條款 ${s.clause}` : null,
+                s.section ? `章節 ${s.section}` : null,
+                s.page_label || sourcePageLabel(s)].filter(Boolean).join(' · ')} />
           )
         })}
         {run && (
-          <p className="text-[11px] text-[var(--text-3)] leading-relaxed mt-1">
+          <p className="text-caption text-[var(--text-3)] leading-relaxed mt-1">
             AI 擷取:模型 {run.model_name || '?'}·prompt {run.prompt_version || '?'}·完成 {fmtTime(run.completed_at) || run.status || '?'}。模型出處僅供追溯;契約效力以契約原文為準。
           </p>
         )}
@@ -770,7 +477,7 @@ export default function RequirementsReview() {
 
       {/* 4. 關聯:期限追蹤/標單工項/流程項目 */}
       <div className="px-4 pb-4">
-        <div className="text-[12.5px] font-medium text-[var(--text)] mb-2">關聯</div>
+        <div className="text-footnote font-medium text-[var(--text)] mb-2">關聯</div>
         <div className="flex flex-col gap-1.5">
           {selectedObligation && (
             <Link to="/deadlines" className={LINK_ROW}>
@@ -842,7 +549,7 @@ export default function RequirementsReview() {
   const listRows = (
     <div role="list" aria-label="契約重點清單">
       {shownRows.length === 0 ? (
-        <div className="px-4 py-11 text-center text-[12.5px] leading-[1.8] text-[var(--text-3)]">
+        <div className="px-4 py-11 text-center text-footnote leading-[1.8] text-[var(--text-3)]">
           {filters.q.trim()
             ? (<>找不到符合「{filters.q.trim()}」的條文。<br />試試條款編號(例 5.3)、頁碼或關鍵字(例 保固、罰則)。</>)
             : '目前篩選條件下沒有條文。'}
@@ -867,10 +574,10 @@ export default function RequirementsReview() {
               : 'border-l-transparent hover:bg-[var(--bg)]'}`}>
             <span><Badge color={pill.color}>{pill.label}</Badge></span>
             <span className="min-w-0">
-              <span className="block text-[13px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{r.title}</span>
-              <span className="block mt-[3px] text-[11.5px] leading-relaxed text-[var(--text-3)] num">{metaParts.join(' · ')}</span>
+              <span className="block text-body font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{r.title}</span>
+              <span className="block mt-[3px] text-caption leading-relaxed text-[var(--text-3)] num">{metaParts.join(' · ')}</span>
             </span>
-            <span className="text-right max-md:text-left text-[11.5px] leading-relaxed text-[var(--text-3)] num">{formatRequirementRule(r) || ''}</span>
+            <span className="text-right max-md:text-left text-caption leading-relaxed text-[var(--text-3)] num">{formatRequirementRule(r) || ''}</span>
           </button>
         )
       })}
@@ -878,135 +585,11 @@ export default function RequirementsReview() {
   )
 
   // ── 手動新增 Modal(README:送出後為待核定、來源標記人工新增)─────────────
-  const manualModal = manualOpen && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="手動新增契約重點">
-      <div className="absolute inset-0 bg-[rgba(32,33,36,.4)]" onClick={() => setManualOpen(false)} />
-      <div ref={manualRef} tabIndex={-1}
-        className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-[var(--surface)] border border-[var(--border-card)] rounded-2xl [box-shadow:var(--shadow-card)] p-5 outline-none">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h2 className="text-[15px] font-medium text-[var(--text)]">手動新增契約重點</h2>
-          <button onClick={() => setManualOpen(false)} aria-label="關閉"
-            className="w-8 h-8 max-md:w-11 max-md:h-11 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)]">
-            <MSym name="close" size={18} />
-          </button>
-        </div>
-        <p className="text-xs text-[var(--text-3)] mb-3">AI 漏抽或文件未涵蓋的契約重點可在此補登;送出後為「待確認」、來源標記人工新增,確認後自動排入履約時程。</p>
-        <div className="space-y-2">
-          <Input value={manualDraft.title} onChange={(e) => setManualDraft((d) => ({ ...d, title: e.target.value }))}
-            placeholder="標題(例:開工前 14 日內提送施工計畫)" />
-          <Textarea rows={2} value={manualDraft.description}
-            onChange={(e) => setManualDraft((d) => ({ ...d, description: e.target.value }))}
-            placeholder="補充描述(可留白)" />
-          <div className="flex flex-wrap gap-2">
-            <Select value={manualDraft.requirement_type} className="flex-1 min-w-[8rem]"
-              onChange={(e) => setManualDraft((d) => ({ ...d, requirement_type: e.target.value }))}>
-              {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
-            <Select value={manualDraft.lifecycle_phase} className="flex-1 min-w-[8rem]"
-              onChange={(e) => setManualDraft((d) => ({ ...d, lifecycle_phase: e.target.value }))}>
-              {['開工前', '施工中', '完工', '保固'].map((p) => <option key={p} value={p}>{p}</option>)}
-            </Select>
-            <Select value={manualDraft.responsible_party_type} className="flex-1 min-w-[8rem]"
-              onChange={(e) => setManualDraft((d) => ({ ...d, responsible_party_type: e.target.value }))}>
-              <option value="">負責方未定</option>
-              {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={manualDraft.dueMode} className="w-auto"
-              onChange={(e) => setManualDraft((d) => ({ ...d, dueMode: e.target.value }))}>
-              <option value="relative">相對基準日</option>
-              <option value="fixed">指定日期</option>
-              <option value="daily">每日</option>
-              <option value="weekly">每週固定日</option>
-              <option value="monthly">每月固定日</option>
-              <option value="quarterly">每季固定日</option>
-              <option value="yearly">每年固定日</option>
-              <option value="none">無明確時點</option>
-            </Select>
-            {manualDraft.dueMode === 'relative' && (<>
-              <Select value={manualDraft.trigger_event} className="w-auto"
-                onChange={(e) => setManualDraft((d) => ({ ...d, trigger_event: e.target.value }))}>
-                {MANUAL_TRIGGERS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </Select>
-              <Select value={manualDraft.offset_dir} className="w-auto"
-                onChange={(e) => setManualDraft((d) => ({ ...d, offset_dir: e.target.value }))}>
-                <option value="after">後</option>
-                <option value="before">前</option>
-              </Select>
-              <Input type="number" min="1" className="w-24" value={manualDraft.offset_days}
-                onChange={(e) => setManualDraft((d) => ({ ...d, offset_days: e.target.value }))} placeholder="天數" />
-              <span className="text-xs text-[var(--text-3)]">日內</span>
-            </>)}
-            {manualDraft.dueMode === 'fixed' && (
-              <Input type="date" className="w-44" value={manualDraft.fixed_date}
-                onChange={(e) => setManualDraft((d) => ({ ...d, fixed_date: e.target.value }))} />
-            )}
-            {manualDraft.dueMode === 'monthly' && (<>
-              <span className="text-xs text-[var(--text-2)]">每月</span>
-              <Input type="number" min="1" max="31" className="w-24" value={manualDraft.monthly_day}
-                onChange={(e) => setManualDraft((d) => ({ ...d, monthly_day: e.target.value }))} placeholder="幾號" />
-              <span className="text-xs text-[var(--text-3)]">號</span>
-            </>)}
-            {manualDraft.dueMode === 'weekly' && (<>
-              <span className="text-xs text-[var(--text-2)]">每</span>
-              <Select value={manualDraft.weekly_weekday} className="w-auto"
-                onChange={(e) => setManualDraft((d) => ({ ...d, weekly_weekday: e.target.value }))}>
-                {MANUAL_WEEKDAYS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </Select>
-            </>)}
-            {manualDraft.dueMode === 'quarterly' && (<>
-              <span className="text-xs text-[var(--text-2)]">每季第</span>
-              <Select value={manualDraft.freq_month} className="w-auto"
-                onChange={(e) => setManualDraft((d) => ({ ...d, freq_month: e.target.value }))}>
-                <option value="">—</option>
-                {['1', '2', '3'].map((m) => <option key={m} value={m}>{m}</option>)}
-              </Select>
-              <span className="text-xs text-[var(--text-2)]">個月</span>
-              <Input type="number" min="1" max="31" className="w-24" value={manualDraft.freq_day}
-                onChange={(e) => setManualDraft((d) => ({ ...d, freq_day: e.target.value }))} placeholder="幾日" />
-              <span className="text-xs text-[var(--text-3)]">日</span>
-            </>)}
-            {manualDraft.dueMode === 'yearly' && (<>
-              <span className="text-xs text-[var(--text-2)]">每年</span>
-              <Input type="number" min="1" max="12" className="w-24" value={manualDraft.freq_month}
-                onChange={(e) => setManualDraft((d) => ({ ...d, freq_month: e.target.value }))} placeholder="幾月" />
-              <span className="text-xs text-[var(--text-2)]">月</span>
-              <Input type="number" min="1" max="31" className="w-24" value={manualDraft.freq_day}
-                onChange={(e) => setManualDraft((d) => ({ ...d, freq_day: e.target.value }))} placeholder="幾日" />
-              <span className="text-xs text-[var(--text-3)]">日</span>
-            </>)}
-          </div>
-          {packages.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[var(--text-2)] shrink-0">所屬契約</span>
-              <Select value={manualDraft.contract_package_id || packages.find((cp) => cp.package_type === 'construction')?.id || packages[0]?.id || ''}
-                className="flex-1"
-                onChange={(e) => setManualDraft((d) => ({ ...d, contract_package_id: e.target.value }))}>
-                {packages.map((cp) => <option key={cp.id} value={cp.id}>{cp.title}</option>)}
-              </Select>
-            </div>
-          )}
-          <Input value={manualDraft.acceptance_criteria}
-            onChange={(e) => setManualDraft((d) => ({ ...d, acceptance_criteria: e.target.value }))}
-            placeholder="允收標準(可留白)" />
-          <div className="flex flex-wrap gap-2">
-            <Input value={manualDraft.source_clause} className="flex-1 min-w-[8rem]"
-              onChange={(e) => setManualDraft((d) => ({ ...d, source_clause: e.target.value }))}
-              placeholder="出處條款(例 5.3,可留白)" />
-            <Input value={manualDraft.source_page} className="flex-1 min-w-[8rem]"
-              onChange={(e) => setManualDraft((d) => ({ ...d, source_page: e.target.value }))}
-              placeholder="出處頁碼(例 第 12 頁,可留白)" />
-          </div>
-          <ErrorBanner msg={manualMsg} />
-          <div className="flex gap-2 pt-1">
-            <Button size="sm" disabled={manualBusy} onClick={submitManual}>新增(待確認)</Button>
-            <Button variant="ghost" size="sm" onClick={() => { setManualOpen(false); setManualMsg('') }}>取消</Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  const manualModal = <ManualRequirementModal
+    manualOpen={manualOpen} onClose={() => setManualOpen(false)}
+    manualDraft={manualDraft} setManualDraft={setManualDraft} packages={packages}
+    manualMsg={manualMsg} manualBusy={manualBusy} submitManual={submitManual}
+    onClearMessage={() => setManualMsg('')} />
 
   // ── 版面分支 ────────────────────────────────────────────────────────────
   if (!isPersistedProject) {
@@ -1023,7 +606,7 @@ export default function RequirementsReview() {
     return (
       <div className="space-y-6">
         <PageHeader title="擷取審核" tagline="AI 轉錄確認" subtitle={SUBTITLE} action={headerAction} />
-          <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_392px]">
+          <div className={LIST_DETAIL_GRID}>
           <Card><SkeletonList rows={8} label="正在載入契約重點…" /></Card>
           <Card className="hidden lg:block"><SkeletonList rows={4} label="" /></Card>
         </div>
@@ -1070,38 +653,45 @@ export default function RequirementsReview() {
       <PageHeader title="擷取審核" tagline="AI 轉錄確認" subtitle={SUBTITLE} action={headerAction} />
 
 
-      <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_392px]">
-        {/* ── 左欄:契約重點清單 ── */}
+      <ListDetailLayout
+        detail={detailBody}
+        detailLabel="條文詳情"
+        detailEmpty={<Empty>點左側清單查看條文詳情。</Empty>}
+        drawerOpen={detailOpen && !!selected}
+        onDrawerClose={closeDetail}>
+        {/* ── 左欄:契約重點清單(右欄與抽屜由殼統一) ── */}
         <Card title="契約重點清單" bodyClass="p-0"
-          action={<span className="num text-[11px] text-[var(--text-3)]">{listMeta}</span>}>
+          action={<span className="num text-caption text-[var(--text-3)]">{listMeta}</span>}>
           {/* 揭露條(涵蓋率/審查規則):資料與畫面要說同一件事,不因改版消失 */}
           {intro.coverageWarning && (
             <p className="px-[18px] py-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border-2)]">{intro.coverageWarning}</p>
           )}
           {intro.note && (
-            <p className="px-[18px] py-2 text-[11.5px] text-[var(--text-3)] border-b border-[var(--border-2)]">{intro.note}</p>
+            <p className="px-[18px] py-2 text-caption text-[var(--text-3)] border-b border-[var(--border-2)]">{intro.note}</p>
           )}
-          {/* 誠實揭露載入上限:計數與搜尋只涵蓋已載入範圍,不得偽裝成全部 */}
-          {rows.length >= LIST_LIMIT && (
-            <p className="px-[18px] py-2 text-[11.5px] text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border-2)]">清單僅載入最近 {LIST_LIMIT} 條擷取,計數與搜尋以此範圍為準。</p>
-          )}
+          <div className="px-[18px] py-3 text-xs leading-relaxed bg-[var(--surface-2)] border-b border-[var(--border-2)]">
+            <p>目前載入範圍有 {counts.attention} 項需留意。AI 內容維持自動歸檔，無須逐條按確認；可先查看有核對疑慮、缺少核對結果或尚待人工確認的項目。</p>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => {
+              setFilters({ ...DEFAULT_FILTERS, status: 'attention' })
+              setShownLimit(PAGE_SIZE)
+              setSelectedId(null); setDetailOpen(false)
+            }}>只看需留意項目</Button>
+          </div>
           {/* 檢索區:搜尋+狀態快篩+類型/階段(AND、即時生效) */}
           <div className="px-[18px] py-3.5 border-b border-[var(--border-2)] flex flex-col gap-3">
-            <label className="flex items-center gap-2.5 h-10 px-3.5 border border-[var(--border)] rounded-full bg-[var(--surface)] focus-within:border-[var(--primary)] transition-colors">
-              <MSym name="search" size={20} className="text-[var(--text-3)] shrink-0" />
-              <input ref={searchRef} type="search" value={filters.q}
-                onChange={(e) => { setFilters((f) => ({ ...f, q: e.target.value })); setShownLimit(PAGE_SIZE) }}
-                placeholder="搜尋條文、關鍵字、條款編號或頁碼…" aria-label="搜尋契約重點"
-                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-[var(--text)] placeholder:text-[var(--text-3)]" />
-            </label>
+            <SearchField ref={searchRef} value={filters.q}
+              onChange={(e) => { setFilters((f) => ({ ...f, q: e.target.value })); setShownLimit(PAGE_SIZE) }}
+              placeholder="搜尋條文、關鍵字、條款編號或頁碼…" aria-label="搜尋契約重點" />
             <div className="flex items-center gap-2 flex-wrap">
-              {[['all', '全部', counts.all], ['pending', '待確認', counts.pending],
+              {[['all', '全部', counts.all], ['attention', '需留意', counts.attention], ['pending', '待確認', counts.pending],
                 ['approved', '已確認', counts.approved], ['rejected', '不採用', counts.rejected]].map(([k, label, n]) => (
-                <button key={k} type="button" aria-pressed={filters.status === k}
-                  onClick={() => { setFilters((f) => ({ ...f, status: k })); setShownLimit(PAGE_SIZE) }}
-                  className={chipCls(filters.status === k)}>
-                  {label}<span className="num opacity-70">{n}</span>
-                </button>
+                <StatusChip key={k} active={filters.status === k} count={n}
+                  onClick={() => {
+                    setFilters((f) => ({ ...f, status: k })); setShownLimit(PAGE_SIZE)
+                    if (k === 'attention') { setSelectedId(null); setDetailOpen(false) }
+                  }}>
+                  {label}
+                </StatusChip>
               ))}
               <span className="w-px h-5 bg-[var(--border-2)] mx-0.5 max-md:hidden" aria-hidden="true" />
               <Select value={filters.type} aria-label="類型"
@@ -1128,36 +718,13 @@ export default function RequirementsReview() {
           {listRows}
 
           <div className="px-[18px] py-3 flex items-center justify-between gap-4">
-            <span className="num text-[11.5px] text-[var(--text-3)]">顯示 {shownRows.length} / {visible.length} 條</span>
+            <span className="num text-caption text-[var(--text-3)]">顯示 {shownRows.length} / {visible.length} 條</span>
             {visible.length > shownLimit && (
-              <button type="button" onClick={() => setShownLimit((n) => n + PAGE_SIZE)}
-                className="text-[11.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 px-1">載入更多</button>
+              <Button variant="ghost" size="sm" onClick={() => setShownLimit((n) => n + PAGE_SIZE)}>載入更多</Button>
             )}
           </div>
         </Card>
-
-        {/* ── 右欄:條文詳情(桌機 sticky;≥1024 常駐) ── */}
-        <Card className="hidden lg:block lg:sticky lg:top-6" bodyClass="p-0" aria-live="polite">
-          {detailBody || <Empty>點左側清單查看條文詳情。</Empty>}
-        </Card>
-      </div>
-
-      {/* <lg:詳情抽屜(768-1023 右滑入)/全螢幕(<768,左上返回) */}
-      {detailOpen && selected && (
-        <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="條文詳情">
-          <div className="absolute inset-0 bg-[rgba(32,33,36,.4)]" onClick={() => setDetailOpen(false)} />
-          <div ref={drawerRef} tabIndex={-1}
-            className="absolute right-0 top-0 h-full w-[min(420px,92vw)] max-md:w-full bg-[var(--surface)] overflow-y-auto [box-shadow:-2px_0_16px_rgba(32,33,36,.16)] outline-none" aria-live="polite">
-            <div className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border-2)] px-3 py-2 flex items-center gap-2">
-              <button type="button" onClick={() => setDetailOpen(false)}
-                className="inline-flex items-center gap-1 text-sm text-[var(--blue-text)] hover:underline min-h-11 px-1">
-                <MSym name="arrow_back" size={18} /> 返回清單
-              </button>
-            </div>
-            {detailBody}
-          </div>
-        </div>
-      )}
+      </ListDetailLayout>
 
       {manualModal}
     </div>

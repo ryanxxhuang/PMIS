@@ -7,28 +7,11 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader, Surface } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
+import { plannedPctNow } from '../../lib/progressPlan.js'
+import { fmtAmount as fmt } from '../../lib/format.js'
 import { acceptanceStageSummary } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
-
-const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
-
-// 跨案例外彙總:機關承辦進來第一眼要看的是「哪裡出事」,不是逐卡自己加總。
-// 純函式抽出來是為了能單測——卡片形狀有三種來源(本案即時計算/demo 靜態/RPC),
-// 欄位可能缺,少一張卡就會讓整條摘要帶算錯,所以一律當可選欄位處理。
-export function portfolioExceptions(cards = []) {
-  const list = (cards || []).filter(Boolean)
-  const sum = (pick) => list.reduce((acc, c) => acc + (Number(pick(c)) || 0), 0)
-  return {
-    projects: list.length,
-    openDefects: sum((c) => c.openDefects),
-    pendingInspections: sum((c) => c.pendingInspections),
-    pendingCOs: sum((c) => c.pendingCOs),
-    // 沒進驗收程序的案子 acceptance 是 null;已結案(finished)不算「驗收中」
-    acceptanceActive: list.filter((c) => c.acceptance && !c.acceptance.finished).length,
-    acceptanceOverdue: list.filter((c) => c.acceptance?.overdue).length,
-  }
-}
+import { portfolioExceptions } from '../../lib/portfolioExceptions.js'
 
 export default function Portfolio() {
   const {
@@ -38,6 +21,7 @@ export default function Portfolio() {
   } = useStore()
   const navigate = useNavigate()
   const TODAY = new Date() // 每次 render 取(B-11)
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   // ── 本案(目前載入中的專案)即時計算——與 Dashboard 同一套數學 ──
   const current = useMemo(() => {
@@ -47,24 +31,16 @@ export default function Portfolio() {
     const billable = revisedTotal
     const latest = valuations[valuations.length - 1]
     const cum = latest ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latest.items)) : 0
-    let planned = null
-    if (progressPlan) {
-      const months = progressPlan.months, N = months.length
-      const start = parseLocalDate(progressPlan.start)
-      const elapsed = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
-      planned = elapsed <= 0 ? 0 : elapsed >= N - 1 ? months[N - 1].plannedPct
-        : months[Math.floor(elapsed)].plannedPct + (months[Math.floor(elapsed) + 1].plannedPct - months[Math.floor(elapsed)].plannedPct) * (elapsed - Math.floor(elapsed))
-    }
     return {
       name: project.project_name, code: project.project_code, status: project.status || '施工中',
-      billable, cum, progressPct: billable ? (cum / billable) * 100 : 0, plannedPct: planned,
+      billable, cum, progressPct: billable ? (cum / billable) * 100 : 0, plannedPct: plannedNow,
       openDefects: defects.filter((d) => d.status !== '已結案').length,
       pendingInspections: inspections.filter((i) => i.status === '待查驗').length,
       pendingCOs: changeOrders.filter((c) => c.status === '提出' || c.status === '審核中').length,
       acceptance: acceptanceStageSummary(demoMode ? [] : acceptanceEvents), // demo 的驗收事件屬 B 區 storyline
       isCurrent: true,
     }
-  }, [workItems, adjustedItems, revisedTotal, valuations, progressPlan, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
+  }, [workItems, adjustedItems, revisedTotal, valuations, plannedNow, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
 
   // ── 其他專案:真實模式走 RPC;demo 用靜態示範案 ──
   const [others, setOthers] = useState(null)
@@ -170,11 +146,11 @@ function ProjectCard({ c, onOpen }) {
       className={`text-left h-full flex flex-col p-5 pressable ${clickable ? 'hover:border-[var(--blue)] hover:[box-shadow:var(--shadow-md)] cursor-pointer' : 'cursor-default'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[15px] font-medium text-[var(--text)] truncate flex items-center gap-2">
+          <div className="text-callout font-medium text-[var(--text)] truncate flex items-center gap-2">
             {c.name}
             {c.isCurrent && <Badge color="blue">目前專案</Badge>}
           </div>
-          <div className="text-[11px] text-[var(--text-3)] num mt-0.5">{c.code || '—'}</div>
+          <div className="text-caption text-[var(--text-3)] num mt-0.5">{c.code || '—'}</div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Badge color={STATUS_COLOR[c.status] || 'slate'}>{c.status}</Badge>
@@ -202,13 +178,13 @@ function ProjectCard({ c, onOpen }) {
               role="img" title={`今日預定 ${c.plannedPct.toFixed(1)}%`} aria-label={`今日預定 ${c.plannedPct.toFixed(1)}%`} />
           )}
         </div>
-        <div className="num text-[11px] text-[var(--text-3)] mt-1.5 text-right">
+        <div className="num text-caption text-[var(--text-3)] mt-1.5 text-right">
           <span className="whitespace-nowrap">累計估驗 NT$ {fmt(c.cum)}</span> ／ <span className="whitespace-nowrap">{fmt(c.billable)}</span>
         </div>
       </div>
 
       {/* 待辦計數(mt-auto 把底部區塊釘齊卡底,三張卡對齊) */}
-      <div className="mt-auto pt-4 grid grid-cols-3 gap-2 text-[11px] w-full">
+      <div className="mt-auto pt-4 grid grid-cols-3 gap-2 text-caption w-full">
         {[
           { icon: 'warning', label: '缺失', title: '未結案缺失', v: c.openDefects, warn: c.openDefects > 0 },
           { icon: 'verified_user', label: '待查驗', title: '待監造查驗', v: c.pendingInspections, warn: c.pendingInspections > 0 },
@@ -225,7 +201,7 @@ function ProjectCard({ c, onOpen }) {
       </div>
 
       {/* 驗收階段:永遠顯示同一列(沒進驗收就淡色),三張卡底部才會整齊 */}
-      <div className="mt-3 flex items-center gap-2 text-[12px] w-full">
+      <div className="mt-3 flex items-center gap-2 text-footnote w-full">
         <MSym name="verified" size={14} className={!c.acceptance ? 'text-[var(--text-3)] opacity-60' : c.acceptance.overdue ? 'text-[var(--red-text)]' : c.acceptance.finished ? 'text-[var(--green-text)]' : 'text-[var(--blue-text)]'} />
         <span className={c.acceptance ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}>
           驗收：{c.acceptance ? c.acceptance.label : '尚未進入驗收程序'}

@@ -26,7 +26,7 @@ export async function resolveWorkItems({ configured, project, fetchCount, fetchD
   return { workItems: { items: json.items, meta: json.meta }, source: 'sample', error: null }
 }
 
-export function useProjectsSlice({ currentUser, log }) {
+export function useProjectsSlice({ currentUser }) {
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState(null)
   // AUTHORIZATION：來自 project_members，供專案存取/admin 與 Store can 使用。
@@ -155,7 +155,6 @@ export function useProjectsSlice({ currentUser, log }) {
       setAiOverrides(o.error ? {} : Object.fromEntries((o.data || []).map((r) => [r.feature_key, r.enabled])))
     })
     return () => { active = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject?.project_id, currentUser?.real])
 
   // 與 DB 版 ai_feature_allowed 同三段邏輯:平台總開關 → 專案覆寫 → 方案門檻。
@@ -169,7 +168,7 @@ export function useProjectsSlice({ currentUser, log }) {
     if (featureKey in aiOverrides) return aiOverrides[featureKey]
     const plan = currentProject?.ai_plan || 'standard'
     return (PLAN_RANK[plan] ?? 1) >= (PLAN_RANK[row.min_plan] ?? 0)
-  }, [aiFeatureRows, aiOverrides, currentProject?.ai_plan]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aiFeatureRows, aiOverrides, currentProject?.ai_plan])
 
   // 工項查表（item_key↔work_item uuid）+ 是否走真 DB（估驗/進度才寫回 DB）
   const wiMaps = useMemo(() => {
@@ -237,9 +236,8 @@ export function useProjectsSlice({ currentUser, log }) {
     wiCachePut(currentProject.project_id, fresh)
     setWorkItems(dbToWorkItems(fresh, currentProject))
     setWorkItemsSource('db')
-    log('匯入標單工項', `${count ?? items.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
     return { error: null, count: count ?? items.length }
-  }, [currentProject, currentUser, log])
+  }, [currentProject])
 
   // 清空標單與相依資料(估驗/進度/日誌/查驗)——單一 RPC 交易,全成或全敗(P0-01)。
   // 失敗(被證據 guard 擋下)時不清快取、不觸發重載:DB 已 rollback,前端不能假裝成功。

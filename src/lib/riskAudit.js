@@ -6,8 +6,8 @@
 // 只有一期估驗卻稱「金額變化平穩」,都是錯誤安全感。
 import { computeObligationDue } from './contractDue.js'
 import { parseLocalDate, taipeiISODate } from './dates.js'
+import { fmtNtd as money } from './format.js'
 
-const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 
 export function auditProject(data = {}, today = new Date()) {

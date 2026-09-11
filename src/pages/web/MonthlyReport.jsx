@@ -1,20 +1,20 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, Button, PageHeader, Surface, Input, Textarea, Field, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
+import { parseLocalDate, localISOMonth, taipeiToday } from '../../lib/dates.js'
+import { fmtAmount as money } from '../../lib/format.js'
 import { rainDayCount } from '../../lib/weatherMetrics.js'
 import { validateDraft } from '../../lib/factsValidator.js'
 
-const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const qtyFmt = (n) => (n == null || isNaN(n) ? '—' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }))
-const thisMonthStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+const thisMonthStr = () => taipeiToday().slice(0, 7)
 const inMonth = (d, m) => (d || '').slice(0, 7) === m
 // 某月最後一天（用來算「截至月底」的累計）
 const monthEnd = (m) => { const [y, mo] = m.split('-').map(Number); return new Date(y, mo, 0) }
-const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return localISOMonth(d) }
 
 export default function MonthlyReport() {
   const { project, workItems, dbMode, demoMode, valuations, progressPlan, siteLogs,
@@ -31,13 +31,14 @@ export default function MonthlyReport() {
 
   const tree = useMemo(() => (workItems ? buildBillableTree(adjustedItems) : { roots: [], childrenMap: new Map() }), [workItems, adjustedItems])
 
-  // 截至某 cutoff 日的累計估驗金額（取 valuation_date 在 cutoff（含）以前、期數最大的一期）
-  const cumAt = (cutoff) => {
+  // 截至某 cutoff 日的累計估驗金額（取 valuation_date 在 cutoff（含）以前、期數最大的一期）。
+  // useCallback 讓它能如實列進 data memo 的依賴:它讀的 valuations/tree 本來就在那份依賴裡。
+  const cumAt = useCallback((cutoff) => {
     const eligible = valuations.filter((v) => !v.valuation_date || parseLocalDate(v.valuation_date) <= cutoff)
     if (!eligible.length) return 0
     const latest = eligible.reduce((a, b) => (b.period_no > a.period_no ? b : a))
     return totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, latest.items))
-  }
+  }, [valuations, tree])
 
   const data = useMemo(() => {
     const mEnd = monthEnd(month), pEnd = monthEnd(prevMonth(month))
@@ -83,7 +84,7 @@ export default function MonthlyReport() {
       paidCum: valuations.reduce((s, v) => s + (v.paid_amount || 0), 0),
       invoicedCount: valuations.filter((v) => v.invoice_date).length,
     }
-  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, tree, billable, workItems])
+  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, billable, workItems, cumAt])
 
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
@@ -263,7 +264,7 @@ export default function MonthlyReport() {
           </div>
           {/* 批 B UX:月報草稿功能關閉時藏 AI 按鈕(demo 一律開;真正的閘門在伺服器端) */}
           {!aiEnabled('report.monthly') && (
-            <div className="print:hidden mb-2 text-[11px] text-[var(--text-3)]">此 AI 功能未啟用（施工月報草稿），請人工填寫。</div>
+            <div className="print:hidden mb-2 text-caption text-[var(--text-3)]">此 AI 功能未啟用（施工月報草稿），請人工填寫。</div>
           )}
           {aiEnabled('report.monthly') && <div className="print:hidden mb-2 flex items-center gap-2 flex-wrap">
             <Button variant="secondary" busy={aiBusy} onClick={async () => {
@@ -302,7 +303,7 @@ export default function MonthlyReport() {
               {/* busy 時的旋轉圖示由 Button 提供,這裡就不再疊一顆 auto_awesome */}
               {!aiBusy && <MSym name="auto_awesome" size={15} />}{aiBusy ? 'AI 撰寫中…' : 'AI 產生草稿'}
             </Button>
-            <span className="text-[11px] text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
+            <span className="text-caption text-[var(--text-3)]">依本月數據自動起草，可再編修</span>
           </div>}
           {/* 失敗訊息走共用 ErrorBanner:紅字散裝 span 在長草稿錯誤訊息下會擠掉整列 */}
           <ErrorBanner msg={aiErr} onClose={() => setAiErr('')} className="print:hidden mb-2" />
@@ -340,7 +341,7 @@ export default function MonthlyReport() {
 function Section({ title, children }) {
   return (
     <section>
-      <h3 className="text-[15px] font-medium text-[var(--text)] mb-2">{title}</h3>
+      <h3 className="text-callout font-medium text-[var(--text)] mb-2">{title}</h3>
       {children}
     </section>
   )
@@ -352,8 +353,8 @@ function Info({ k, v }) {
 function Metric({ label, value, color = '' }) {
   return (
     <div className="border border-[var(--border)] bg-[var(--surface-2)] rounded-lg py-3">
-      <div className="text-[11px] text-[var(--text-2)]">{label}</div>
-      <div className={`text-xl font-normal mt-1 num ${color}`}>{value}</div>
+      <div className="text-caption text-[var(--text-2)]">{label}</div>
+      <div className={`text-title3 font-normal mt-1 num ${color}`}>{value}</div>
     </div>
   )
 }

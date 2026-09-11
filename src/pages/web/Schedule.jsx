@@ -5,6 +5,7 @@ import { Card, Stat, Empty, Badge, Input, PageHeader, ErrorBanner, THEAD_CLS } f
 import { friendlyError } from '../../lib/errorMessage.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parseLocalDate } from '../../lib/dates.js'
+import { billableLeaves } from '../../lib/boqCalc.js'
 
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
 
@@ -20,7 +21,7 @@ function deriveState(sch, pct) {
 }
 
 export default function Schedule() {
-  const { project, workItems, adjustedItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
+  const { workItems, adjustedItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
   const [search, setSearch] = useState('')
   const [errMsg, setErrMsg] = useState('') // 排程寫入失敗必須讓使用者看到(失敗=UI 不變)
   const onSet = async (key, patch) => {
@@ -35,10 +36,8 @@ export default function Schedule() {
   // leaf 集合與 item_key 不受影響。
   const { leaves, byKey } = useMemo(() => {
     if (!workItems) return { leaves: [], byKey: new Map() }
-    const childMap = new Map()
-    for (const it of adjustedItems) { const k = it.parent_key || '__root__'; if (!childMap.has(k)) childMap.set(k, []); childMap.get(k).push(it) }
     const m = new Map(adjustedItems.map((it) => [it.item_key, it]))
-    const lv = adjustedItems.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
+    const lv = billableLeaves(adjustedItems)
     return { leaves: lv, byKey: m }
   }, [workItems, adjustedItems])
 

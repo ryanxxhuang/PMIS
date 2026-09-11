@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rfiBall, submittalBall, valuationBall, changeOrderBall, defectBall, inspectionBall, tallyBalls, myOpenItems } from './ballInCourt.js'
+import { rfiBall, submittalBall, valuationBall, changeOrderBall, defectBall, inspectionBall, myOpenItems } from './ballInCourt.js'
 
 describe('ball-in-court per record', () => {
   it('RFI', () => {
@@ -34,21 +34,6 @@ describe('ball-in-court per record', () => {
     expect(defectBall({ status: '已結案' }).who).toBe('done')
     expect(inspectionBall({ status: '待查驗' }).who).toBe('supervisor')
     expect(inspectionBall({ status: '合格' }).who).toBe('done')
-  })
-})
-
-describe('tallyBalls', () => {
-  it('跨模組加總、排除已完成', () => {
-    const t = tallyBalls({
-      rfis: [{ status: '待回覆' }, { status: '已結案' }],       // supervisor +1
-      submittals: [{ status: '退回補正' }],                      // contractor +1
-      valuations: [{ status: '監造審核' },                       // supervisor +1
-        { status: '已核定', invoice_date: '2026-07-01', paid_date: null }], // owner +1 (待撥款)
-      defects: [{ status: '開立' }, { status: '已結案' }],       // contractor +1
-      inspections: [{ status: '待查驗' }],                       // supervisor +1
-      changeOrders: [{ status: '審核中' }],                      // owner +1 (待核定)
-    })
-    expect(t).toEqual({ contractor: 2, supervisor: 3, owner: 2, design: 0 })
   })
 })
 

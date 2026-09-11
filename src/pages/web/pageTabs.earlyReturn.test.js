@@ -58,7 +58,7 @@ function pageLevelReturns(source) {
   const body = lines.slice(start, end)
   const found = []
   for (let i = 0; i < body.length; i++) {
-    const m = /^(  |    )(?:if \(.*\) )?return[ (]/.exec(body[i])
+    const m = /^( {2}| {4})(?:if \(.*\) )?return[ (]/.exec(body[i])
     if (!m) continue
     const indent = m[1].length
     const block = [body[i]]

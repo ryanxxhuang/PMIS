@@ -29,7 +29,7 @@ const ORG_LABEL = { contractor: '施工廠商', supervisor: '監造單位', owne
 const INSET_PANEL = 'rounded-lg border border-[var(--border-2)]'
 const INSET_ROWS = `${INSET_PANEL} divide-y divide-[var(--border-2)]`
 // 行內展開鈕(勾稽發現/為什麼這樣擬):第三級文字鈕的單一寫法,不再各寫一份灰字
-const EXPANDER_CLS = 'inline-flex items-center gap-0.5 text-[11px] max-md:min-h-11 px-1 -mx-1 text-[var(--blue-text)] hover:underline'
+const EXPANDER_CLS = 'inline-flex items-center gap-0.5 text-caption max-md:min-h-11 px-1 -mx-1 text-[var(--blue-text)] hover:underline'
 
 // 待辦的唯一入口是「今日待辦」頁。這裡刻意不顯示件數:件數要正確就得在
 // 這頁再算一次同樣的聚合,一旦兩份實作分岔,使用者會看到兩個不同的數字。
@@ -170,7 +170,7 @@ function DraftInboxCard() {
                           value={qtys[wiId] ?? v?.qty_today ?? ''}
                           onChange={(e) => setQty(a.id, wiId, e.target.value)}
                           className="!w-24 shrink-0 !py-1 max-md:!py-2 max-md:!min-h-0 text-right tabular-nums" />
-                        <span className="w-8 shrink-0 text-[11px] text-[var(--text-3)]">{v?.unit || ''}</span>
+                        <span className="w-8 shrink-0 text-caption text-[var(--text-3)]">{v?.unit || ''}</span>
                       </div>
                     ))}
                   </div>
@@ -197,12 +197,12 @@ function DraftInboxCard() {
                         </div>
                         {/* 依據:AI 憑什麼這樣勾 —— 沒有依據的建議後端已拒收,這裡把依據攤在人眼前 */}
                         {v.ai_basis && (
-                          <div className="text-[11px] text-[var(--text-3)] leading-snug">依據:{v.ai_basis}</div>
+                          <div className="text-caption text-[var(--text-3)] leading-snug">依據:{v.ai_basis}</div>
                         )}
                       </div>
                     ))}
                     {clCounts?.needsInput > 0 && (
-                      <div className="px-2.5 py-1.5 text-[11px] text-[var(--text-3)]">
+                      <div className="px-2.5 py-1.5 text-caption text-[var(--text-3)]">
                         {clCounts.needsInput} 項實測值待你填——AI 不猜數值,接受後到品質管理補填,判定由系統依量化標準自動跑
                       </div>
                     )}
@@ -228,19 +228,19 @@ function DraftInboxCard() {
                           <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] leading-snug">{c.point}</div>
                           <Badge color={REVIEW_STATUS_COLOR[c.status] || 'slate'} className="shrink-0">{c.status}</Badge>
                         </div>
-                        {c.basis && <div className="text-[11px] text-[var(--text-3)] leading-snug">依據:{c.basis}</div>}
+                        {c.basis && <div className="text-caption text-[var(--text-3)] leading-snug">依據:{c.basis}</div>}
                       </div>
                     ))}
                     {subPayload.opinion && (
                       <div className="px-2.5 py-1.5">
-                        <div className="text-[11px] text-[var(--text-3)] mb-0.5">審查意見草稿</div>
+                        <div className="text-caption text-[var(--text-3)] mb-0.5">審查意見草稿</div>
                         <div className="text-xs text-[var(--text)] leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
                           {subPayload.opinion}
                         </div>
                       </div>
                     )}
                     {subPayload.caution && (
-                      <div className="px-2.5 py-1.5 flex items-start gap-1 text-[11px] font-medium text-[var(--amber-text)] leading-snug"><MSym name="warning" size={14} className="shrink-0" />{subPayload.caution}</div>
+                      <div className="px-2.5 py-1.5 flex items-start gap-1 text-caption font-medium text-[var(--amber-text)] leading-snug"><MSym name="warning" size={14} className="shrink-0" />{subPayload.caution}</div>
                     )}
                   </div>
                 )}
@@ -261,7 +261,7 @@ function DraftInboxCard() {
                           </Badge>
                           <div className="min-w-0 flex-1 text-xs text-[var(--text)] leading-snug">{f.title}</div>
                         </div>
-                        {f.detail && <div className="text-[11px] text-[var(--text-2)] leading-relaxed">{f.detail}</div>}
+                        {f.detail && <div className="text-caption text-[var(--text-2)] leading-relaxed">{f.detail}</div>}
                       </div>
                     ))}
                   </div>
@@ -274,7 +274,7 @@ function DraftInboxCard() {
                   </button>
                 )}
                 {opened && a.rationale && (
-                  <div className={`${INSET_PANEL} text-[11px] text-[var(--text-2)] px-2.5 py-1.5 enter-row`}>{a.rationale}</div>
+                  <div className={`${INSET_PANEL} text-caption text-[var(--text-2)] px-2.5 py-1.5 enter-row`}>{a.rationale}</div>
                 )}
                 <div className="flex items-center gap-2 pt-0.5 flex-wrap">
                   <Button size="sm" disabled={busy} onClick={() => resolve(a, 'accepted')}>
@@ -289,17 +289,17 @@ function DraftInboxCard() {
                       /audit 在 routeRegistry 是 owner-only,而監造(對量)也會收到 audit_note,
                       對非機關角色渲染這條連結只會撞路由守衛,所以限 owner */}
                   {a.kind === 'audit_note' && currentUser?.org_type === 'owner' && (
-                    <Link to="/audit" className="inline-flex items-center gap-0.5 text-[11px] max-md:min-h-11 text-[var(--blue-text)] hover:underline">
+                    <Link to="/audit" className="inline-flex items-center gap-0.5 text-caption max-md:min-h-11 text-[var(--blue-text)] hover:underline">
                       前往風險稽核查看完整發現<MSym name="arrow_forward" size={12} />
                     </Link>
                   )}
                   {/* 不擋接受:有些日子確實沒有可計量的工項,只誠實提醒略過的後果 */}
                   {unfilled > 0 && (
-                    <span className="text-[11px] text-[var(--text-3)]">未填數量的工項不會寫入日誌</span>
+                    <span className="text-caption text-[var(--text-3)]">未填數量的工項不會寫入日誌</span>
                   )}
                   {/* 審定紅線的使用者話術:採用≠審定,決定權在人 */}
                   {subPayload && (
-                    <span className="text-[11px] text-[var(--text-3)]">採用只會存下意見草稿,核准/退回仍需你在送審頁面自行審定</span>
+                    <span className="text-caption text-[var(--text-3)]">採用只會存下意見草稿,核准/退回仍需你在送審頁面自行審定</span>
                   )}
                 </div>
               </div>
@@ -311,7 +311,7 @@ function DraftInboxCard() {
           日常由照片→agent 草稿→這裡接受。但沒拍照的日子 agent 擬不出草稿,不能讓
           使用者卡死,所以留這個次要手動入口(路由本身保留)。 */}
       <div className="mt-3 pt-3 border-t border-[var(--border-2)] text-right">
-        <Link to="/site-log" className="inline-flex items-center gap-0.5 max-md:min-h-11 text-[11px] text-[var(--blue-text)] hover:underline">
+        <Link to="/site-log" className="inline-flex items-center gap-0.5 max-md:min-h-11 text-caption text-[var(--blue-text)] hover:underline">
           手動寫施工日誌 <MSym name="arrow_forward" size={11} />
         </Link>
       </div>
@@ -378,7 +378,7 @@ export default function Agent() {
       {/* 桌機:對話為主排左、草稿收件匣排右 */}
       <div className="grid gap-5 lg:grid-cols-[1fr_380px] items-start">
         <Card title="跟你的 agent 說" bodyClass="p-0" className="order-2 lg:order-1"
-          action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="smart_toy" size={12} />會自己查本案資料</span>}>
+          action={<span className="inline-flex items-center gap-1 text-caption text-[var(--text-3)]"><MSym name="smart_toy" size={12} />會自己查本案資料</span>}>
           {agentOn
             ? <CopilotChat data={data} onAsk={onAsk} minH={360} maxH={560} initialQuestion={initialQuestion} />
             : <Empty>此 AI 功能未啟用（AI Agent 主控台）。今日待辦與草稿收件匣仍可使用；如需開通請聯絡系統管理者。</Empty>}

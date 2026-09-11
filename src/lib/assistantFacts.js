@@ -6,7 +6,6 @@
 //     (不自己算 → 不幻覺)。③附 sourceRoutes,讓 AI 引用真實路由。
 import { computeObligationDue } from './contractDue.js'
 import { pendingSamplesFromLogs } from './qc.js'
-import { rainDayCount } from './weatherMetrics.js'
 import { localISODate, taipeiISODate } from './dates.js'
 
 const r1 = (n) => (n == null || isNaN(n) ? null : Math.round(n * 10) / 10)

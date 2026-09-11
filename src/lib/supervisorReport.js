@@ -3,7 +3,6 @@
 import { rainDayCount } from './weatherMetrics.js'
 import { taipeiISODate } from './dates.js'
 
-const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 const ym = (s) => (s || '').slice(0, 7)
 
 // today 可注入:逾期判斷與月份回退才能用固定日期測試,不吃真時鐘。
@@ -73,5 +72,3 @@ export function buildSupervisorReport(data = {}, monthLabel, today = new Date())
     opinion,
   }
 }
-
-export { money as _money }

@@ -1,6 +1,6 @@
 // Ball-in-court:每個協作項目「現在等誰處理」。學自 Procore——全平台一致的
 // 責任語言,任何人打開都知道球在誰手上、該催誰。
-// who:'contractor'(廠商) | 'supervisor'(監造) | 'owner'(機關) | 'design'(設計) | 'done'(已完成)
+// who 通常為 contractor / supervisor / owner / done;觀察事項 assigned_to 可為自由文字,聚合時再過濾。
 
 export function rfiBall(r) {
   if (r.status === '待回覆') return { who: 'supervisor', label: '待監造/設計回覆' }
@@ -42,30 +42,17 @@ export function inspectionBall(i) {
   return { who: 'done', label: i.status } // 合格 / 不合格
 }
 
-export function observationBall(o) {
+function observationBall(o) {
   if (o.status === '待處理') return { who: o.assigned_to || 'contractor', label: '待處理' }
   return { who: 'done', label: o.status } // 已處理 / 轉缺失
 }
 
-// Dashboard 彙整:跨模組數「球在廠商 / 監造 / 機關」的未結案件數
-export function tallyBalls({ rfis = [], submittals = [], valuations = [], defects = [], inspections = [], observations = [], changeOrders = [] }) {
-  const t = { contractor: 0, supervisor: 0, owner: 0, design: 0 }
-  const add = (b) => { if (b.who !== 'done' && t[b.who] != null) t[b.who] += 1 }
-  rfis.forEach((r) => add(rfiBall(r)))
-  submittals.forEach((s) => add(submittalBall(s)))
-  valuations.forEach((v) => add(valuationBall(v)))
-  defects.forEach((d) => add(defectBall(d)))
-  inspections.forEach((i) => add(inspectionBall(i)))
-  observations.forEach((o) => add(observationBall(o)))
-  changeOrders.forEach((c) => add(changeOrderBall(c)))
-  return t
-}
 
 // 估驗該去哪一頁完成:送審與核定在估驗頁,請款日與收款日都在請款收款頁。
 // 原本以「球在機關」判斷,結果廠商的「待廠商請款」被導到估驗頁——那頁沒有請款日欄位,
 // 使用者點進去找不到可做的事(W8-2A §1.4-1)。
 const VALUATION_PAGE_LABELS = new Set(['待廠商送審', '待監造核定'])
-export function valuationRoute(v) {
+function valuationRoute(v) {
   return VALUATION_PAGE_LABELS.has(valuationBall(v).label) ? '/valuation' : '/payments'
 }
 

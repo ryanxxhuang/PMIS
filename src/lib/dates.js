@@ -33,3 +33,9 @@ export const taipeiToday = () => taipeiISODate(new Date())
 export const localISODate = (d) => (d instanceof Date && !isNaN(d)
   ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   : null)
+
+// 本地 Date → 'YYYY-MM'(月份桶的鍵:估驗月報、S 曲線月份、進度月標)。
+// 與 localISODate 同理由不能走 toISOString();月別報表跨月底會整批錯一個月。
+export const localISOMonth = (d) => (d instanceof Date && !isNaN(d)
+  ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  : null)

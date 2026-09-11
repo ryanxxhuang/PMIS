@@ -6,17 +6,16 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { submittalBall } from '../../lib/ballInCourt.js'
+import { taipeiToday } from '../../lib/dates.js'
 
 const CATEGORIES = ['施工計畫', '品質計畫', '材料設備', '樣品', '配比', '其他']
-const STATUS_COLOR = { 已提送: 'blue', 審核中: 'amber', 核准: 'green', 核備: 'green', 退回補正: 'red', 駁回: 'red' }
 const CHECK_COLOR = { 已於送審敘明: 'green', 需補件: 'amber', 需監造核對文件: 'slate', 不適用: 'slate' }
 const DECISION_COLOR = { 核准: 'green', 核備: 'green', 退回補正: 'red', 需補充後再核: 'amber' }
 // AI 偶爾把換行輸出成 literal「\n」;顯示前正規化成分隔號(P2-03)
 const fixNl = (s) => String(s || '').replace(/\\n|\n/g, '；').replace(/；+/g, '；').replace(/^；|；$/g, '')
-const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function Submittals() {
-  const { project, submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
+  const { submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
     uploadSubmittalFile, readSubmittalDoc, isSupabaseConfigured, currentProject, currentUser, can, aiEnabled } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -135,7 +134,7 @@ export default function Submittals() {
         action={
           <div className="flex items-center gap-2">
             {submittals.length > 0 && <Button variant="ghost" onClick={exportRows}><MSym name="download" size={16} />CSV</Button>}
-            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', category: '施工計畫', submitted_date: todayIso(), due_date: '', attachment_note: '' })}>{form ? '取消' : <><MSym name="add" size={16} />提送送審</>}</Button>}
+            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', category: '施工計畫', submitted_date: taipeiToday(), due_date: '', attachment_note: '' })}>{form ? '取消' : <><MSym name="add" size={16} />提送送審</>}</Button>}
           </div>
         } />
 
@@ -186,7 +185,7 @@ export default function Submittals() {
                     <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                       {s.attachment_path
                         ? <span className="text-xs inline-flex items-center gap-1 text-[var(--blue-text)]"><MSym name="attach_file" size={12} />已附文件：{s.attachment_name || '文件'}</span>
-                        : <span className="text-[11px] text-[var(--text-2)]">尚未上傳文件本體</span>}
+                        : <span className="text-caption text-[var(--text-2)]">尚未上傳文件本體</span>}
                       {/* 不能用 <button> 的檔案上傳 label 也吃同一套按鈕皮(藥丸+44px 觸控),
                           不再自寫 4px 圓角、20px 高的小殼 */}
                       {can.submit && (s.status === '已提送' || s.status === '審核中' || s.status === '退回補正') && (
@@ -225,12 +224,12 @@ export default function Submittals() {
                       </Button>
                     )}
                     {can.approve && !aiEnabled('submittal.review') && !aiEnabled('submittal.read') && (s.status === '已提送' || s.status === '審核中') && (
-                      <span className="text-[11px] text-[var(--text-2)]">AI 審查功能未啟用</span>
+                      <span className="text-caption text-[var(--text-2)]">AI 審查功能未啟用</span>
                     )}
                     {/* 施工:退回補正後修正再送(補正說明必填=實質補正證據) */}
                     {can.submit && s.status === '退回補正' && <Button variant="secondary" disabled={busy} onClick={() => onResubmit(s)}>修正再送</Button>}
                     {/* 待審提示與角色無關(原本拆成 can.approve/!can.approve 兩條分支渲染同一段字,行為等價) */}
-                    {(s.status === '已提送' || s.status === '審核中') && <span className="text-[11px] text-[var(--text-2)]">待監造審定</span>}
+                    {(s.status === '已提送' || s.status === '審核中') && <span className="text-caption text-[var(--text-2)]">待監造審定</span>}
                     {/* 僅「已提送且未經審查」可刪(R3 P0-01:一經受理即為履約證據,DB 另有 guard)。
                         灰轉紅文字鈕不在三級語言內,改共用 Button 的第三級(順帶拿到 44px 觸控高度) */}
                     {can.submit && s.status === '已提送' && !(s.revision > 0) && (
@@ -269,7 +268,7 @@ export default function Submittals() {
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查意見草稿（可修改，核准/核備/退回時自動帶入）</div>
                       <Textarea rows={3} value={aiReview[s.id].opinion}
                         onChange={(e) => setAiReview((m) => ({ ...m, [s.id]: { ...m[s.id], opinion: e.target.value } }))} />
-                      <p className="text-[11px] text-[var(--text-3)] mt-1">依契約規範/工項自動草擬，僅供監造參考；文件本體仍須人工核對，最終判定由監造裁量。</p>
+                      <p className="text-caption text-[var(--text-3)] mt-1">依契約規範/工項自動草擬，僅供監造參考；文件本體仍須人工核對，最終判定由監造裁量。</p>
                     </div>
                   )
                 })()}
@@ -282,7 +281,7 @@ export default function Submittals() {
                         <div className="text-sm font-medium text-[var(--text)] inline-flex items-center gap-1.5 flex-wrap">
                           <MSym name="find_in_page" size={14} className="text-[var(--blue)]" />AI 讀文件審查
                           {d.suggested_decision && <Badge color={DECISION_COLOR[d.suggested_decision] || 'slate'}>建議：{d.suggested_decision}</Badge>}
-                          <span className="text-[11px] text-[var(--text-2)] font-normal">{d.mode === 'text' ? '已讀文件文字' : '視覺讀取'}</span>
+                          <span className="text-caption text-[var(--text-2)] font-normal">{d.mode === 'text' ? '已讀文件文字' : '視覺讀取'}</span>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => closeRead(s.id)}>收起</Button>
                       </div>
@@ -301,7 +300,7 @@ export default function Submittals() {
                       <div className="text-xs font-medium text-[var(--text-2)] mb-1">審查意見草稿（可修改，核准/核備/退回時自動帶入）</div>
                       <Textarea rows={3} value={d.summary_opinion || ''}
                         onChange={(e) => setAiRead((m) => ({ ...m, [s.id]: { ...m[s.id], summary_opinion: e.target.value } }))} />
-                      <p className="text-[11px] text-[var(--text-3)] mt-1">AI 讀送審文件本體逐項比對契約需求；「需人工確認/未涵蓋」項仍須監造核對，最終判定由監造裁量。</p>
+                      <p className="text-caption text-[var(--text-3)] mt-1">AI 讀送審文件本體逐項比對契約需求；「需人工確認/未涵蓋」項仍須監造核對，最終判定由監造裁量。</p>
                     </div>
                   )
                 })()}

@@ -1,0 +1,35 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "核准方向" },
+    { "id": "page-2", "name": "基礎規格" }
+  ],
+  "artboards": [
+    { "file": "Principles.dc.html", "x": 0, "y": 0, "w": 1240, "h": 1900, "page": "page-1", "title": "判準 · Apple 設計精神 → PMIS" },
+    { "file": "Main.dc.html", "x": 1360, "y": 0, "w": 1440, "h": 1000, "page": "page-1", "title": "方向 B · 三欄檢閱台（核准殼）" },
+    { "file": "DirectionA.dc.html", "x": 2880, "y": 0, "w": 1440, "h": 1000, "page": "page-1", "title": "方向 A · 收件匣" },
+    { "file": "DirectionC.dc.html", "x": 1360, "y": 1120, "w": 1440, "h": 1000, "page": "page-1", "title": "方向 C · 文件即介面" },
+
+    { "file": "Foundations.dc.html", "x": 0, "y": 0, "w": 1240, "h": 2200, "page": "page-2", "title": "基礎規格 · Tokens" },
+    { "file": "Marketing.dc.html", "x": 1360, "y": 0, "w": 1440, "h": 1060, "page": "page-2", "title": "行銷站首頁 Hero" },
+    { "file": "Login.dc.html", "x": 1360, "y": 1180, "w": 1440, "h": 900, "page": "page-2", "title": "登入 /login" }
+  ],
+  "annotations": [
+    {
+      "id": "pick",
+      "x": 0,
+      "y": -190,
+      "w": 700,
+      "page": "page-1",
+      "text": "2026-09-11 已核准 A＋B＋C 疊合：A 為收件匣落點，B 為三欄殼，C 為原文詳情。\n實作以 docs/UIUX-Apple-設計規範.md 為準，完成範圍查 CURRENT.md。"
+    },
+    {
+      "id": "v1note",
+      "x": 0,
+      "y": 2290,
+      "w": 700,
+      "page": "page-2",
+      "text": "色票、字級、材質與動效為共用基礎。\n行銷站與登入頁仍是待落地的設計來源，不能當成已實作畫面。"
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}

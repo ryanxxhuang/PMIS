@@ -4,6 +4,7 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader, Button, Surface, Badge } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
+import { plannedPctNow } from '../../lib/progressPlan.js'
 import { auditProject } from '../../lib/riskAudit.js'
 import { buildIntegrityFindings, isConcretePourItem } from '../../lib/integrityAudit.js'
 
@@ -50,16 +51,7 @@ export default function RiskAudit() {
     if (!latest || !billableTotal) return 0
     return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latest.items)) / billableTotal) * 100
   }, [valuations, roots, childrenMap, billableTotal])
-  const plannedNow = useMemo(() => {
-    if (!progressPlan) return null
-    const months = progressPlan.months, N = months.length
-    const start = new Date(progressPlan.start)
-    const el = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
-    if (el <= 0) return 0
-    if (el >= N - 1) return months[N - 1].plannedPct
-    const lo = Math.floor(el), f = el - lo
-    return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
-  }, [progressPlan])
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   const anchors = { award_date: project?.award_date, notice_date: project?.notice_date, commencement_date: project?.commencement_date, end_date: project?.end_date }
   const { checks, summary } = useMemo(() => auditProject({
@@ -74,6 +66,9 @@ export default function RiskAudit() {
   const integrity = useMemo(() => {
     if (!workItems) return { findings: [], summary: { risk: 0, warn: 0 } }
     const idToKey = new Map(adjustedItems.filter((it) => it.id).map((it) => [it.id, it.item_key]))
+    // 刻意不換成 boqCalc.billableLeaves:那支的父子對照建在「全部 items」上,
+    // 這裡吃的是 buildBillableTree 的 childrenMap(只含可計價非合計列)。
+    // 子項全是合計列的分項在兩把尺下結果不同,要併必須先定案哪一個是規則。
     const leaves = adjustedItems.filter((it) => it.is_billable && !it.is_rollup && !(childrenMap.get(it.item_key)?.length))
     const loggedQty = new Map()
     for (const lg of siteLogs) for (const [k, q] of Object.entries(lg.items || {})) loggedQty.set(k, (loggedQty.get(k) || 0) + (Number(q) || 0))
@@ -119,7 +114,7 @@ export default function RiskAudit() {
           <span className={`w-11 h-11 rounded-lg grid place-items-center shrink-0 ${O.tile}`}><MSym name={O.icon} size={24} /></span>
           <div>
             {/* 小標對齊 Stat 的 label 規格(11px/text-2),不再自帶只有這裡看得到的 tracking */}
-            <div className="text-[11px] text-[var(--text-2)]">稽核結果</div>
+            <div className="text-caption text-[var(--text-2)]">稽核結果</div>
             <div className="text-lg font-semibold text-[var(--text)]">
               {overall === 'pass'
                 ? (summary.na ? `未發現異常（${summary.na} 項資料不足未評估）` : '本案未發現明顯異常')
@@ -137,7 +132,7 @@ export default function RiskAudit() {
 
       {/* 檢核明細 */}
       <Card title="稽核檢核表" bodyClass="p-0"
-        action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="auto_awesome" size={12} />自動檢核</span>}>
+        action={<span className="inline-flex items-center gap-1 text-caption text-[var(--text-3)]"><MSym name="auto_awesome" size={12} />自動檢核</span>}>
         <ul className="divide-y divide-[var(--border-2)]">
           {checks.map((c, i) => {
             const s = ST[c.status]
@@ -159,7 +154,7 @@ export default function RiskAudit() {
 
       {/* 文件勾稽鏈:逐工項跨文件對帳(全確定性) */}
       <Card title="文件勾稽鏈" bodyClass="p-0"
-        action={<span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-3)]"><MSym name="compare_arrows" size={12} />估驗 ↔ 日誌 ↔ 查驗 ↔ 試體 對帳</span>}>
+        action={<span className="inline-flex items-center gap-1 text-caption text-[var(--text-3)]"><MSym name="compare_arrows" size={12} />估驗 ↔ 日誌 ↔ 查驗 ↔ 試體 對帳</span>}>
         {integrity.findings.length === 0 ? (
           <Empty>估驗、施工日誌、查驗與試體之間未發現對不起來之處（已勾稽 {integrity.summary.checked || 0} 項計價工項）。</Empty>
         ) : (
@@ -177,7 +172,7 @@ export default function RiskAudit() {
                     </div>
                     <div className="text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">{c.detail}</div>
                     {/* 文字箭頭改圖示;手機補 44px 命中區(W8-5) */}
-                    {c.route && <button onClick={() => navigate(c.route)} className="inline-flex items-center gap-0.5 max-md:min-h-11 text-[11px] text-[var(--blue-text)] hover:underline mt-1">前往查核<MSym name="arrow_forward" size={12} /></button>}
+                    {c.route && <button onClick={() => navigate(c.route)} className="inline-flex items-center gap-0.5 max-md:min-h-11 text-caption text-[var(--blue-text)] hover:underline mt-1">前往查核<MSym name="arrow_forward" size={12} /></button>}
                   </div>
                 </li>
               )
@@ -215,7 +210,7 @@ export default function RiskAudit() {
         )}
       </Card>
 
-      <p className="text-[11px] text-[var(--text-3)] leading-relaxed">
+      <p className="text-caption text-[var(--text-3)] leading-relaxed">
         <MSym name="verified_user" size={13} className="inline align-text-bottom mr-1" />
         稽核結果為<b className="text-[var(--text-2)] font-medium">「值得複查的異常提示」，非違規認定</b>；供機關監督參考，實際處置請依契約與相關法令。多案時可於 <Link to="/dashboard" className="text-[var(--blue-text)] hover:underline">總覽</Link> 比較各案風險。
       </p>
