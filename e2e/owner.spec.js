@@ -65,7 +65,8 @@ test.describe('機關', () => {
     // 提醒中心仍可深連結(W7 路由治理不回退),且吃同一份聚合
     await gotoHash(page, '/alerts')
     await expect(page.getByRole('heading', { name: '提醒中心' })).toBeVisible()
-    await expect(page.getByText('初驗期限將至')).toBeVisible()
+    // 殼化後同一筆會在清單列與詳情欄各出現一次,斷言鎖在清單內
+    await expect(page.getByRole('list', { name: '提醒清單' }).getByRole('listitem').filter({ hasText: '初驗期限將至' })).toHaveCount(1)
   })
 
   test('路由守衛:機關進不了廠商成本頁', async ({ page }) => {
