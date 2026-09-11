@@ -1,5 +1,12 @@
 name: CI
 
+# 拆成 unit 與 e2e 兩個 job(2026-09-11):原本是單一 test-and-build 串行,
+# npm test 一紅就拿不到 build 與 E2E 的任何訊號,一次只能修一層。拆開後
+# 兩條線各自回報,單元測試的 PR 也不必付 Playwright 瀏覽器那段成本。
+# ⚠️ main ruleset 的必要 status check 已同步改成 unit + e2e + pgtap ——
+# 兩邊的 job 名稱是合約,改名要同時改 ruleset,否則 PR 會等一個永遠不會
+# 出現的 check。
+
 on:
   push:
     branches: [main]
@@ -7,9 +14,10 @@ on:
     branches: [main]
 
 jobs:
-  test-and-build:
+  unit:
+    name: unit
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,7 +29,19 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      # E2E 護欄:三角色簽核鏈(Playwright,demo 模式跑 demoSeed,不碰 Supabase、無 secret)
+
+  # E2E 護欄:三角色簽核鏈(Playwright,demo 模式跑 demoSeed,不碰 Supabase、無 secret)
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       # 瀏覽器快取:Playwright CDN 偶發劣化會讓下載卡死撞 timeout(2026-08-19 main
       # 連三次紅燈,程式無誤)。以實際安裝的 Playwright 版號當 key——升版自動換 key
       # 重抓,同版直接還原 ~/.cache/ms-playwright,不再每次 run 都碰 CDN。
