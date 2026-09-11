@@ -37,6 +37,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 - `navConfig.js` 是路由／導覽單一真相，未登記拒絕。側欄依來源模型分區：球在誰手上（持有 `/dashboard`）→ 工作（五組群組＋子頁，子頁依角色過濾）→ 參考（契約重點／專案文件／標單工項）→ 平台；目前無 hidden 項。
 - 首頁為「現在輪到我／等待對方／今天已完成」單桶收件匣，`?ball=` 選桶；不放頁面摘要卡。待辦共用 `todayTasks.js`／`useTodayTasks`。
 - 預定進度在首頁、進度頁、稽核、監造報告、跨案總覽與 AI 資料共用 `src/lib/progressPlan.js`。沿用月份座標、30 天換算與線性內插；不變更 S 曲線產生或 DB 計算。
+- 公開頁 `/security`、`/terms`、`/privacy`（條款／隱私為 0.9 草稿，待律師審閱）。帳號安全 `/account`：兩步驟驗證（Supabase TOTP）每帳號自選；有已驗證因子時登入頁在 aal1 停在驗證碼畫面（`mfaRequired`），通過後才載入 profile。RLS 未依 aal 分級，這層是 UX 閘門。
 
 ### 6.2 驗證
 

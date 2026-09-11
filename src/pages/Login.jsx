@@ -49,7 +49,7 @@ const TEXT_BTN = 'inline-flex items-center gap-1 min-h-11 px-2 rounded-lg text-b
 
 export default function Login() {
   const { isSupabaseConfigured, setCurrentUser, currentUser, signIn, signUp, resendSignup,
-    passwordRecovery, requestPasswordReset, updatePassword } = useStore()
+    passwordRecovery, requestPasswordReset, updatePassword, mfaRequired, verifyMfa, logout } = useStore()
   const navigate = useNavigate()
   const [mode, setMode] = useState('signin') // signin | signup | forgot
 
@@ -60,9 +60,11 @@ export default function Login() {
   }, [currentUser, passwordRecovery, navigate])
 
   const wide = isSupabaseConfigured && !passwordRecovery && mode === 'signup'
-  const title = passwordRecovery ? '設定新密碼' : mode === 'forgot' ? '重設密碼' : '登入'
+  const title = passwordRecovery ? '設定新密碼' : mfaRequired ? '輸入驗證碼' : mode === 'forgot' ? '重設密碼' : '登入'
   const subtitle = passwordRecovery
     ? '你剛透過重設連結回來，請設定新密碼後繼續。'
+    : mfaRequired
+      ? '這個帳號已啟用兩步驟驗證，請輸入驗證器 App 顯示的 6 位數。'
     : !isSupabaseConfigured
       ? '示範環境：選擇角色即可進入 prototype'
       : mode === 'forgot'
@@ -84,6 +86,8 @@ export default function Login() {
               <div className="mt-6">
                 {passwordRecovery
                   ? <ResetPasswordForm updatePassword={updatePassword} />
+                  : mfaRequired
+                    ? <MfaForm verifyMfa={verifyMfa} logout={logout} />
                   : isSupabaseConfigured
                     ? <SignInForm mode={mode} setMode={setMode} signIn={signIn} requestPasswordReset={requestPasswordReset} />
                     : <RolePicker setCurrentUser={setCurrentUser} navigate={navigate} />}
@@ -400,6 +404,37 @@ function SignUpCard({ setMode, signUp, resendSignup }) {
 }
 
 // ── 設定新密碼(點重設信連結回來,recovery session 已生效)─────────────────
+// ── 兩步驟驗證(帳密已對、session 仍 aal1;輸入 TOTP 6 位數升到 aal2)──────
+// 成功後 store 的 auth listener 收到 MFA_CHALLENGE_VERIFIED 載入 profile → 自動導向。
+// 「改用其他帳號」= 登出:aal1 的 session 留著沒有用,只會讓下次開頁又停在這裡。
+function MfaForm({ verifyMfa, logout }) {
+  const [code, setCode] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setErr(''); setBusy(true)
+    const { error } = await verifyMfa(code)
+    setBusy(false)
+    if (error) { setErr(friendlyError(error, '驗證碼不正確或已過期，請看驗證器 App 重新輸入')); setCode('') }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <FloatField label="驗證碼" placeholder="6 位數驗證碼" inputMode="numeric" pattern="[0-9]{6}" maxLength={6}
+        autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} required autoFocus />
+      <ErrorBanner msg={err} />
+      <Button type="submit" size="lg" busy={busy} disabled={code.length !== 6} className="w-full mt-1">
+        {busy ? '驗證中…' : '驗證並登入'}
+      </Button>
+      <div className="text-center">
+        <button type="button" onClick={() => logout()} className={TEXT_BTN}>改用其他帳號</button>
+      </div>
+    </form>
+  )
+}
+
 function ResetPasswordForm({ updatePassword }) {
   const [pw, setPw] = useState('')
   const [pw2, setPw2] = useState('')

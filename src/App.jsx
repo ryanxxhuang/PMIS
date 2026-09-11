@@ -46,6 +46,7 @@ const Portfolio = lazy(() => import('./pages/web/Portfolio.jsx'))
 const Acceptance = lazy(() => import('./pages/web/Acceptance.jsx'))
 const ITP = lazy(() => import('./pages/web/ITP.jsx'))
 const Admin = lazy(() => import('./pages/web/Admin.jsx'))
+const Account = lazy(() => import('./pages/web/Account.jsx'))
 // 漏洞回報頁刻意不掛 <Web>:機關要能不登入就讀到,否則「公開回報機制」不成立。
 const Security = lazy(() => import('./pages/Security.jsx'))
 // 服務條款／隱私權政策同理:採購資安查核與個資告知義務要求不登入就能讀到。
@@ -171,6 +172,7 @@ const appRoutes = [
   { path: '/deadlines', element: <Deadlines /> },
   { path: '/monthly-report', element: <MonthlyReport /> },
   { path: '/admin', element: <Admin /> },
+  { path: '/account', element: <Account /> },
   { path: '*', element: <NotFound /> },
 ]
 
