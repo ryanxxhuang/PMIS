@@ -4,7 +4,7 @@
 
 ## 本機後端
 
-安裝 Docker 相容 runtime 與 [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)。macOS 可用 Homebrew；不要用不支援的 `npm install -g supabase`。資料庫唯一真相是 [migrations](migrations/)，schema.sql 只作凍結歷史參考。
+安裝 Docker 相容 runtime 與 [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)。macOS 可用 Homebrew；不要用不支援的 `npm install -g supabase`。資料庫唯一真相是 [migrations](migrations/)；舊 schema.sql 已移除，歷史可由 Git 追溯。
 
 ```bash
 supabase start

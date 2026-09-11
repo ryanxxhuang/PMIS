@@ -50,11 +50,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 - **舊站**：2026-09-11 GitHub Pages API 仍回 built，來源為 `gh-pages`；此部署分支保留。`pmis.pages.dev` 最後核對為 2026-09-07，退場待另行處理。
 - 部署依 [runbook](docs/operations/deploy.md) 執行；套用後在本節記日期、migration／Edge 版本與驗證。本輪已完成 Git 整併、歷史開發分支清理及前端自動部署；未套正式 migration、未重佈 Edge。
 
-### 6.4 已整併成果
-
-契約整理補頁面完整性、核對例外篩選、載入錯誤與切案防護；Apple token／圖示／字級與收件匣已落地；巨型頁面與 Edge 拆分、錯誤遮罩／AI 骨架共用、日期／金額共用化、lint／測試補強、D-022 及工安清單／詳情殼已提交。後續整理拆開 Admin 的用量／設定面板與人工 Requirement 表單，移除未使用匯出及 Store 空 logger；修正管理設定切案競態與所有類型 Requirement 審核後的 runtime 更新。Edge 型別、文件連結與共用 pgTAP runner 已納 CI。細節從 Git commit／PR 追溯。
-
-### 6.5 主要機制
+### 6.4 主要機制
 
 - 建案後進專案文件。Dashboard 初始化為五步（含開工日）；AI 步驟只看存在 completed run，正式模式不因三方未齊而鎖住。D-014 舊四步條文仍待正式修訂。
 - 標單匯入／重設走單一交易 RPC；真正專案與已載入 DB 標單是兩種模式，不能將 Demo 工項寫入真專案。
@@ -64,7 +60,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 - `/requirements` 為三方履約時程，`/requirements/review` 為擷取審核，`/deadlines` 管期限／罰則／基準日。D-018 RLS 保護契約分級；可見範圍的前端 `VISIBLE` shim 仍保留，動作依歸屬。
 - 照片辨識只回填日誌草稿，仍須人存檔；查驗可檢附自檢表；試體 28 天不合格與開缺失同交易並去重。`audit_events` append-only。
 
-### 6.6 資料存取
+### 6.5 資料存取
 
 跨頁資料由 `store.jsx`／slices 管理；單頁有界資料可直接查 Supabase。目前直接查詢頁為 Contract、Requirements、RequirementsReview、Activity、Dashboard。契約共用查詢配方在 `useContractEnrichment`，不是共用狀態。重複計算／查詢放 lib；業務日期用 `dates.js`，金額格式用 `format.js`。
 

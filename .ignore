@@ -1,0 +1,9 @@
+# ripgrep／Claude Code 搜尋忽略清單（不影響 git、vite、eslint）。
+# 這些是產生物、大型資料或二進位／設計原檔，搜尋時只會浪費 token。
+src/data/*.json
+package-lock.json
+supabase/functions/deno.lock
+docs/pitch/shots/
+docs/pitch/brand/
+UIUX/design_apple_style/*.dc.html
+docs/資安/弱點掃描-*/

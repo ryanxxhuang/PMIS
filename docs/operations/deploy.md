@@ -57,7 +57,7 @@ supabase migration list --linked         # 套完再核一次，版本號寫回 
 
 規則：
 
-- `supabase/migrations/` 是唯一真相；`schema.sql` 已凍結，不用來初始化或同步。已套用的 migration 不回頭修改，變更一律新增（`DEVELOPMENT.md` §5）。
+- `supabase/migrations/` 是唯一真相；舊 `schema.sql` 已移除，不用來初始化或同步。已套用的 migration 不回頭修改，變更一律新增（`DEVELOPMENT.md` §5）。
 - **透過 MCP 或 SQL Editor 直接對正式庫套過的 migration，必須把檔案收編回 repo**，否則 `db push` 會被阻擋（PR #50 的教訓：`20260824123253` 曾在正式庫有、repo 沒有）。
 - 新表要檢查 grants：基線的 `alter default privileges` 會讓新表自動帶 authenticated 寫入授權，migration 內要明確 `revoke`（`DEVELOPMENT.md` §5）。
 - 回復：`supabase/rollbacks/*.down.sql` 只覆蓋少數 migration（現查 `ls supabase/rollbacks/ | wc -l` 對 `ls supabase/migrations/ | wc -l`），且**僅 W5-2 與 D-020 曾記錄 down→up，其他未演練**（`CURRENT.md` §7）；不能因檔案存在就推論可安全還原。
