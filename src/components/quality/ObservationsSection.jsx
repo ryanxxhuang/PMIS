@@ -4,7 +4,7 @@
 // 詳情欄完整顯示。升級為缺失沿用 store 的 escalateObservation(缺失建立失敗即中止)。
 import { useMemo, useRef, useState } from 'react'
 import { MSym } from '../icons.jsx'
-import { Card, Button, Field, Badge, Dot, Empty, ErrorBanner, Input, Textarea } from '../ui.jsx'
+import { Card, Button, Field, Badge, Dot, Empty, ErrorBanner, IconButton, Input, Textarea } from '../ui.jsx'
 import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../listDetail.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { friendlyError } from '../../lib/errorMessage.js'
@@ -103,8 +103,8 @@ export default function ObservationsSection({ observations, canWrite, onCreate, 
               <Button size="sm" variant="secondary" disabled={busy} onClick={() => run('標記已處理', () => onUpdate(o.id, { status: '已處理' }))}>標記已處理</Button>
               <Button size="sm" variant="outline" disabled={busy} onClick={() => onEscalateClick(o)}>升級為缺失</Button>
             </>)}
-            <button disabled={busy} onClick={() => onDeleteClick(o)} aria-label={`刪除觀察 ${o.title}`}
-              className="ml-auto inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 text-[var(--text-3)] hover:text-[var(--red-text)]"><MSym name="close" size={16} /></button>
+            <IconButton name="close" label={`刪除觀察 ${o.title}`} disabled={busy} onClick={() => onDeleteClick(o)}
+              className="ml-auto -m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
           </div>
         )}
       </section>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState, SkeletonList, buttonClass, Input, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Button, Field, Empty, IconButton, PageHeader, PrerequisiteEmptyState, SkeletonList, buttonClass, Input, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { CHIP_BASE, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -407,10 +407,18 @@ export default function SiteLog() {
             {/* 表單欄位一律 <Input>(FIELD_BASE):disabled/焦點/手機 44px 由元件統一;
                 固定寬用 ! 蓋掉 FIELD_BASE 的 w-full(Agent.jsx 同法) */}
             <div className="flex items-end gap-3 flex-wrap mb-2">
-              <Field label="日期"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-              <Field label="天氣(上午)"><Input value={weather} disabled={!can.edit} onChange={(e) => setWeather(e.target.value)} className="!w-20" /></Field>
-              <Field label="天氣(下午)"><Input value={weatherPm} disabled={!can.edit} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="!w-20" /></Field>
-              <div className="w-full sm:w-auto"><Field label="工作摘要"><Input value={summary} disabled={!can.edit} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="sm:!w-64" /></Field></div>
+              {/* 規範 §9.8 第三條:手機把日期/天氣排成兩欄格線,工作摘要獨佔一列。
+                  稽核在 390 量到這四欄各自塌成一整列(日誌第一屏只剩四個輸入框)。
+                  為什麼日期獨佔一列、天氣兩欄並排:390 扣掉版面內距只剩 ~358,一半約 171px;
+                  手機字級走 iOS 17px(§9.1),date 控件光是「2026-09-12」加日曆圖示就要 ~170px,
+                  並排會被擠掉;天氣兩欄各 2-4 個字,半欄綽綽有餘。
+                  寬度寫在外層 div、斷點一律 max-md/md(不用 sm):640-767 的 iPad mini 直式
+                  已經是手機版面(BottomNav md:hidden),用 sm 會讓那一段拿到桌機排法。
+                  桌機(≥768)三欄仍是原本的 flex 自然寬與 80px 天氣欄,視覺零變化。 */}
+              <div className="max-md:w-full"><Field label="日期"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field></div>
+              <div className="max-md:w-[calc(50%-0.375rem)]"><Field label="天氣(上午)"><Input value={weather} disabled={!can.edit} onChange={(e) => setWeather(e.target.value)} className="md:!w-20" /></Field></div>
+              <div className="max-md:w-[calc(50%-0.375rem)]"><Field label="天氣(下午)"><Input value={weatherPm} disabled={!can.edit} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="md:!w-20" /></Field></div>
+              <div className="w-full md:w-auto"><Field label="工作摘要"><Input value={summary} disabled={!can.edit} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="md:!w-64" /></Field></div>
               {can.edit && (
                 <Button variant="secondary" onClick={pullWeather} disabled={weatherBusy} title="依工地座標向中央氣象局帶入今日天氣">
                   <MSym name="partly_cloudy_day" size={14} />{weatherBusy ? '帶入中…' : '帶入天氣'}
@@ -508,8 +516,8 @@ export default function SiteLog() {
                           <input type="number" min="0" step="any" inputMode="decimal" value={items[key] ?? ''} disabled={!can.edit} onChange={(e) => setQty(key, e.target.value)}
                             className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums max-md:py-2 focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                         </td>
-                        {/* p-2 -m-2:命中區擴大但視覺與列高不變;裸 ✕ 退場改 MSym(aria-label 不動) */}
-                        <td className="text-right pl-2">{can.edit && <button onClick={() => removeItem(key)} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label="移除此工項"><MSym name="close" size={16} /></button>}</td>
+                        {/* 負 margin 吸回流內寬:命中區桌機 32、手機 44,列高不變 */}
+                        <td className="text-right pl-2">{can.edit && <IconButton name="close" label="移除此工項" onClick={() => removeItem(key)} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />}</td>
                       </tr>
                     )
                   })}
@@ -590,14 +598,11 @@ export default function SiteLog() {
             {/* W8-0 §7:手機存檔列貼底固定——公定格式欄位展開後表單很長,捲到底才找得到存檔鈕
                 是現場回報的痛點;-mx-5 抵掉 Card 內距讓底條滿版。
                 這一列只有可編視角會渲染(唯讀已在上方走摘要分支),can.edit 條件保留是讓 DOM 與歷史版本逐字一致。
-                pl-5/pr-20 拆開寫而不用 px-5,是避免 padding-inline 與 padding-right 的 cascade 順序不確定。
 
                 ⚠️ bottom 必須是 --bottom-nav-h 不能是 0:W9 的 BottomNav 是 fixed bottom-0 z-40,
                 而這一列是 sticky z-10——貼到 0 會被整個蓋住,存檔鈕在手機上完全點不到(實測命中的是
-                BottomNav 的 span)。斷點也必須是 max-md 與 BottomNav 的 md:hidden 對齊,不能用 max-sm。
-                pr-20(80px)是讓開右下 Copilot FAB:FAB 在手機是 bottom-[92px] right-6 w-14,
-                往上挪之後兩者垂直重疊,右側要留滿 24+56=80px 才不會壓到。 */}
-            <div className={`flex items-center gap-3 mt-4${can.edit ? ' max-md:sticky max-md:bottom-[var(--bottom-nav-h)] max-md:z-10 max-md:bg-[var(--surface)] max-md:border-t max-md:border-[var(--border-2)] max-md:-mx-5 max-md:pl-5 max-md:pr-20 max-md:py-2.5 md:static md:border-0' : ''}`}>
+                BottomNav 的 span)。斷點也必須是 max-md 與 BottomNav 的 md:hidden 對齊,不能用 max-sm。 */}
+            <div className={`flex items-center gap-3 mt-4${can.edit ? ' max-md:sticky max-md:bottom-[var(--bottom-nav-h)] max-md:z-10 max-md:bg-[var(--surface)] max-md:border-t max-md:border-[var(--border-2)] max-md:-mx-5 max-md:px-5 max-md:py-2.5 md:static md:border-0' : ''}`}>
               {/* busy prop:送出中禁用+旋轉圖示由 Button 統一,「存檔」文案不變(e2e 凍結字串) */}
               {can.edit ? <Button onClick={onSave} busy={saving}>存檔</Button> : <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>}
               {currentLog && (
@@ -629,7 +634,7 @@ export default function SiteLog() {
                     {/* 日期切換是這一列的主觸控目標:手機補 44px(flex 列只會長高不會破版) */}
                     <button onClick={() => setDate(l.log_date)} className="font-medium text-[var(--text)] num text-left flex-1 truncate max-md:min-h-11">{l.log_date}</button>
                     <span className="text-xs text-[var(--text-3)]">{Object.keys(l.items).length} 工項</span>
-                    {can.edit && <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(friendlyError(error, '日誌刪除未完成')) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除 ${l.log_date} 日誌`}><MSym name="close" size={16} /></button>}
+                    {can.edit && <IconButton name="close" label={`刪除 ${l.log_date} 日誌`} onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(friendlyError(error, '日誌刪除未完成')) } }} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />}
                   </div>
                   {l.work_summary && <div className="text-xs text-[var(--text-2)] truncate mt-0.5">{l.work_summary}</div>}
                 </div>
@@ -691,7 +696,7 @@ function RowsEditor({ title, rows, onChange, fields, disabled = false }) {
               onChange={(e) => set(i, f.key, f.num ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
               className={`${f.w} ${f.num ? 'text-right num' : ''}`} />
           ))}
-          {!disabled && <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label="刪除此列"><MSym name="close" size={16} /></button>}
+          {!disabled && <IconButton name="close" label="刪除此列" onClick={() => del(i)} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />}
         </div>
       ))}
     </div>

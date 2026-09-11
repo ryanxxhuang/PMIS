@@ -5,7 +5,7 @@
 // demo 走本地 judgeConcrete + 去重),本元件只寫值,一條語意都不改。
 import { useMemo, useRef, useState } from 'react'
 import { MSym } from '../icons.jsx'
-import { Card, Button, Field, Badge, Dot, Empty, Input } from '../ui.jsx'
+import { Card, Button, Field, Badge, Dot, Empty, IconButton, Input } from '../ui.jsx'
 import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../listDetail.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { friendlyError } from '../../lib/errorMessage.js'
@@ -130,7 +130,7 @@ export default function SamplesSection({ samples, onGenerate, onCreate, onUpdate
         {s.status === '待試驗' && (
           <div className="px-4 py-3 border-t border-[var(--border-2)] flex items-center gap-2">
             <span className="text-footnote text-[var(--text-3)]">填入 28 天值後依 fc′ 自動判定</span>
-            <button onClick={() => onDeleteClick(s)} className="ml-auto inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label={`刪除試體 ${s.sample_no}`}><MSym name="close" size={16} /></button>
+            <IconButton name="close" label={`刪除試體 ${s.sample_no}`} onClick={() => onDeleteClick(s)} className="ml-auto -m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
           </div>
         )}
       </section>

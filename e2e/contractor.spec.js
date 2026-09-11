@@ -31,6 +31,19 @@ test.describe('施工廠商', () => {
     await expect(page.getByRole('heading', { name: '現在輪到我' })).toHaveCount(0)
   })
 
+  // 規範 §9.7:契約期限待辦帶 ?obligation=<id>,落在 /deadlines 就是該筆的詳情。
+  // OB-6(第 5 期估驗計價送審)是 demo 唯一穩定逾期的廠商義務;它同時也是該頁的預設
+  // 選取,所以 URL 帶 query 是這條的關鍵斷言,region 只證明落地後詳情真的在。
+  test('收件匣直達那一筆:契約期限落在 /deadlines 且該筆已選中', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/dashboard?ball=mine')
+    const mine = page.getByRole('group', { name: '現在輪到我', exact: true })
+    await mine.getByRole('listitem').filter({ hasText: '第 5 期估驗計價送審' }).getByRole('link').click()
+    await expect(page).toHaveURL(/#\/deadlines\?obligation=OB-6/)
+    await expect(page.getByRole('listitem').filter({ hasText: '第 5 期估驗計價送審' })).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByRole('region', { name: '第 5 期估驗計價送審 詳情' })).toBeVisible()
+  })
+
   test('Agent 不再重複待辦清單,只留前往今日待辦的入口', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/agent')
@@ -74,19 +87,89 @@ test.describe('施工廠商', () => {
     await gotoHash(page, '/quality')
     // 預設分段是查驗;由分段控制切到「缺失」操作 demo 種子(佇列點擊走同一條路)
     await page.getByRole('group', { name: '品質分段' }).getByRole('button', { name: /缺失/ }).click()
-    // 鎖定「3F 西側牆面蜂窩」(開立)那一列:缺失列是 DefectTracker 的 <li>,「現在要處理」
-    // 佇列項是 button,所以 listitem 只會命中缺失列(與已轉殼的五頁同一套定位法)
+    // 鎖定「3F 西側牆面蜂窩」(開立)那一列:缺失列是 DefectTracker 殼的 listitem,「現在要處理」
+    // 佇列項是 button,所以 listitem 只會命中缺失列(與已轉殼的頁同一套定位法)。
+    // 列只負責選取,動作在 region「缺失詳情」裡(規範 §9.8):先選中、證明詳情在顯示這一筆
     const row = page.getByRole('listitem').filter({ hasText: '3F 西側牆面蜂窩' })
-    await row.getByRole('button', { name: '開始改善' }).click()
+    await row.click()
+    const detail = page.getByRole('region', { name: '缺失詳情' })
+    await expect(detail).toContainText('3F 西側牆面蜂窩')
+    await detail.getByRole('button', { name: '開始改善', exact: true }).click()
     await expect(row.getByText('廠商改善中')).toBeVisible()
     // 提送複查走 appPrompt:改善說明必填
-    await row.getByRole('button', { name: '提送複查' }).click()
+    await detail.getByRole('button', { name: '提送複查', exact: true }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText(/提送複查：/)).toBeVisible()
     await dialog.locator('textarea').fill('已鑿除蜂窩並以無收縮水泥砂漿修補完成')
-    await dialog.getByRole('button', { name: '提送複查' }).click()
-    // 待複查=球轉監造(BallChip 與狀態列都寫「待監造複查」)
-    await expect(row.getByText('待監造複查').first()).toBeVisible()
+    await dialog.getByRole('button', { name: '提送複查', exact: true }).click()
+    // 待複查=球轉監造(列的 BallChip 寫「待監造複查」;詳情欄動作列只剩等待文案、廠商改善說明顯示出來)
+    await expect(row.getByText('待監造複查')).toBeVisible()
+    // exact:詳情欄的狀態列 BallChip 也寫「⏳ 待監造複查」,這裡要的是動作列那句等待文案
+    await expect(detail.getByText('待監造複查', { exact: true })).toBeVisible()
+    await expect(detail).toContainText('已鑿除蜂窩並以無收縮水泥砂漿修補完成')
+    await expect(detail.getByRole('button', { name: '提送複查', exact: true })).toHaveCount(0)
+  })
+
+  // 規範 §9.7 + §9.8:缺失待辦帶 ?defect=<id>;/quality 的預設分段是查驗,帶 query 進頁要自動落在
+  // 「缺失」分段並選中那一筆(DEF-DEMO-2 不是預設選取——demo 順序第一筆是 DEF-DEMO-1)
+  test('收件匣直達缺失:/quality?defect= 自動落在缺失分段並選中該筆;離開分段就拿掉 query', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/quality?defect=DEF-DEMO-2')
+    const segments = page.getByRole('group', { name: '品質分段' })
+    await expect(segments.getByRole('button', { name: /缺失/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('listitem').filter({ hasText: '3F 西側牆面蜂窩' })).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByRole('listitem').filter({ hasText: '查驗不合格：外牆窯燒磚打樣' })).not.toHaveAttribute('aria-current', 'true')
+    await expect(page.getByRole('region', { name: '缺失詳情' })).toContainText('3F 西側牆面蜂窩')
+    // 換到查驗分段:URL 不再帶 ?defect=,切回缺失分段時殼才不會把它當深連結、<lg 又彈一次抽屜
+    await segments.getByRole('button', { name: /查驗/ }).click()
+    await expect(page).not.toHaveURL(/defect=/)
+    await expect(page).toHaveURL(/#\/quality/)
+  })
+
+  // 規範 §9.8 第一條:工安缺失追蹤是清單＋詳情殼。開立 → 出現在清單 → 選中 → 狀態動作在詳情欄
+  // → 快篩件數跟著變。廠商在 /safety 可自行開立(工安缺失不是自動開立的那種)。
+  // 卡頭「開立缺失」與表單「送出缺失」改版前同名,這裡按名字就必須 exact。
+  test('工安缺失套殼:開立 → 列出 → 選中 → 詳情內開始改善,快篩件數跟著變', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/safety')
+    const tracker = page.getByRole('group', { name: /工安缺失追蹤/ })
+    await expect(tracker.getByRole('button', { name: '待廠商改善 1', exact: true })).toBeVisible()
+    await tracker.getByRole('button', { name: '開立缺失', exact: true }).click()
+    await tracker.getByLabel('缺失標題').fill('E2E 安全網未掛設')
+    await tracker.getByRole('button', { name: '送出缺失', exact: true }).click()
+    const row = page.getByRole('listitem').filter({ hasText: 'E2E 安全網未掛設' })
+    await expect(row).toBeVisible()
+    await expect(tracker.getByRole('button', { name: '待廠商改善 2', exact: true })).toBeVisible()
+    await row.click()
+    await expect(row).toHaveAttribute('aria-current', 'true')
+    const detail = page.getByRole('region', { name: '工安缺失詳情' })
+    await expect(detail).toContainText('E2E 安全網未掛設')
+    await detail.getByRole('button', { name: '開始改善', exact: true }).click()
+    await expect(row.getByText('廠商改善中')).toBeVisible()
+    await expect(tracker.getByRole('button', { name: '待廠商改善 1', exact: true })).toBeVisible()
+    await expect(tracker.getByRole('button', { name: '廠商改善中 2', exact: true })).toBeVisible()
+  })
+
+  // 規範 §9.8 兩條的手機面:Stat 收成三格數字條後「開立缺失」留在第一屏(稽核量到 y=475);
+  // 點列推入抽屜(dialog),狀態動作在抽屜裡的 region。視窗尺寸在登入前就設好——桌機載入後
+  // 再縮窗,側欄等殼件的版面不會重算,量到的幾何不是手機的幾何。
+  test('390:工安缺失的開立鈕在第一屏,點列推入抽屜且動作在抽屜裡', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/safety')
+    const tracker = page.getByRole('group', { name: /工安缺失追蹤/ })
+    const openBtn = tracker.getByRole('button', { name: '開立缺失', exact: true })
+    await expect(openBtn).toBeVisible()
+    // 門檻 400 是規範 §9.8 的驗收值(改版前量到 475);量的是頂緣,與稽核同一個基準
+    const box = await openBtn.boundingBox()
+    expect(box.y, `開立缺失鈕頂緣 y=${box.y}px,不在第一屏`).toBeLessThan(400)
+    // 預設選取不開抽屜(規範 §9.7:只有深連結才推入);先證明沒有 dialog,再點列
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await page.getByRole('listitem').filter({ hasText: '4F 臨邊開口未設護欄' }).click()
+    const drawer = page.getByRole('dialog', { name: '工安缺失詳情' })
+    await expect(drawer.getByRole('region', { name: '工安缺失詳情' })).toContainText('4F 臨邊開口未設護欄')
+    await expect(drawer.getByRole('button', { name: '開始改善', exact: true })).toBeVisible()
+    await expect(drawer.getByRole('button', { name: '返回', exact: true })).toBeVisible()
   })
 
   test('契約重點 · 履約時程:義務排上時程,廠商只看自己、動作看歸屬', async ({ page }) => {

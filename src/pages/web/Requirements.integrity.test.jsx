@@ -180,7 +180,9 @@ describe('契約核對的實際頁面流程', () => {
     const manual = [...container.querySelectorAll('button')].find((b) => b.textContent.trim() === '手動新增')
     expect(manual, '手動新增').toBeTruthy()
     await act(async () => manual.click())
-    const dialog = container.querySelector('[role="dialog"]')
+    // ModalShell 以 createPortal 掛在 document.body(規範 §9.4:手機貼底 sheet 不能被
+    // 祖先的 transform/space-y 劫走定位),所以對話框不在 container 裡,要從 document 找
+    const dialog = document.querySelector('[role="dialog"]')
     expect(dialog).toBeTruthy()
     expect(unnamedControls(dialog)).toEqual([])
     // 時點方式每一種分支的控件都要有名(切換後才渲染)

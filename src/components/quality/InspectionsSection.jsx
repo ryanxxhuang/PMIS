@@ -10,7 +10,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../icons.jsx'
-import { Card, Button, Field, Badge, Dot, Empty, Input, Select } from '../ui.jsx'
+import { Card, Button, Field, Badge, Dot, Empty, IconButton, Input, Select } from '../ui.jsx'
 import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../listDetail.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { appConfirm } from '../confirm.jsx'
@@ -132,7 +132,7 @@ export default function InspectionsSection({
             )}
             {deletable && (
               // p-2 -m-2 只擴命中區、視覺與列高不變;ml-auto 靠右與主動作拉開
-              <button onClick={() => onDeleteClick(i)} className="ml-auto inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label={`刪除查驗 ${i.title}`}><MSym name="close" size={16} /></button>
+              <IconButton name="close" label={`刪除查驗 ${i.title}`} onClick={() => onDeleteClick(i)} className="ml-auto -m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
             )}
           </div>
         )}

@@ -218,5 +218,76 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
   - 新增圖示＝在 `src/components/icons.jsx` 的 `ICONS` 加一行。漏對映會畫中性圓圈並在 dev console 警告——**刻意不用長得像真圖示的東西當退路**，實測就發生過 `shield` 漏對映卻剛好畫出盾牌，只有警告抓得到。
   - 驗證方式：走過 35 條路由收 console 警告，比正則掃描可靠（正則抓不到 `<Section icon="…">` 與 `toolBtn('rect', 'crop_square', …)` 這類寫法）。
 - **品牌資產**：**已完成**（`0c7570c`）——`public/` 的品牌標記換成 Apple 色票，三個點對應契約三方。
-- **手機**：不是桌機縮小版。現場戴手套、單手、太陽下與辦公室審查是兩種工作，要另做形狀。
-- **行銷站**：`PMIS_site`（repo `PMIS.marketing`）尚未套用；三支 skill 已複製到該 repo 的 `.claude/skills/`。
+- **手機**：不是桌機縮小版。現場戴手套、單手、太陽下與辦公室審查是兩種工作，要另做形狀——**形狀已定案，見 §9**；落地進度記在 §9 末。
+- **行銷站**：**已完成並部署**（`PMIS_site` `53bf78f`，gov-agent.ai）：① 基礎層（token／品牌／圖示）→ ② 產品畫面改用真實 App 截圖（PMIS `scripts/capture-appshots.mjs`）→ ③ 版面改 Apple.com 語彙、字級全走階梯。
+
+---
+
+## 9. 手機形狀（③，2026-09-11 定案）
+
+**前提**：手機使用者是現場——廠商工地主任、監造現場人員。手機上的工作只有三種：寫日誌（含照片）、開缺失／查驗（拍照）、處理「現在輪到我」的**那一筆**。辦公室審查（估驗、請款、成本、排程、變更設計的表格）留在桌機；手機只給唯讀摘要。這條線不是妥協，是 `/payments` 已經走過並寫進註解的前例（820px 十欄表 `max-md:hidden`、改渲染期別時間線、「金流登錄仍只留在桌面」）。
+
+稽核依據：2026-09-11 以 demo build 在 390×844 走 69 組路由×角色，**水平溢位 0 件**（§7 護欄有效），問題全在形狀。以下每條都對應稽核量到的根因，不是逐頁修補。
+
+### 9.1 字級：手機走 iOS 階梯，同名不同值
+- macOS 階梯（body 13）在太陽下戴手套不可讀：稽核量到可見文字節點平均六成 <13px，`/requirements`、`/agent` 到八成。
+- 做法：**只在 `src/index.css` 一處**以 `@media (max-width: 767.98px)` 覆寫 `:root` 的 `--text-*` 變數（Tailwind 4 的 `text-body` 等 utility 輸出的是 `var(--text-body)`，覆寫變數＝全站零編輯生效；`text-xs/sm/base/lg` 別名跟著走）。不改名、不加新 class。
+- 值（iOS Dynamic Type 預設級距，字距取 SF 的 tracking 表）：
+
+| 名 | 桌機 | 手機 | 行高 | 字距 |
+|---|---|---|---|---|
+| micro | 10 | 12 | 16 | 0 |
+| caption | 11 | 13 | 18 | -0.006em |
+| footnote | 12 | 15 | 20 | -0.016em |
+| body | 13 | 17 | 22 | -0.025em |
+| callout | 15 | 17 | 22 | -0.025em |
+| title3 | 17 | 20 | 25 | +0.019em |
+| title2 | 22 | 22 | 28 | +0.016em |
+| title1 | 28 | 28 | 34 | +0.013em |
+
+- callout 在手機與 body 同值：iOS 的 callout（16）本來就小於 body（17），這裡取等值保住「callout ≥ body」的階梯順序；它的強調靠字重，不靠尺寸。
+- ⚠️ 放大後 `e2e/a11y.spec.js` 的 375 全路由溢位掃描會紅。**只能用斷行與版面修（換行、`min-w-0`、格線改單欄），不准把字縮回去、不准加 `text-[Npx]`。** 顏色不變，§2 的對比值全部沿用。
+
+### 9.2 觸控目標：44×44 是最小面積，不是最小高度
+- 稽核量到的 <44 幾乎全是**寬度**不足（`/itp` 刪除 32×44、`/acceptance` 修改 32×44、`/agent` 送出 39×44）：primitives 只補了 `max-md:min-h-11`。
+- 做法：`BTN_SIZES`、`Segmented`、`FilterChip`、`StatusChip`、`TablePager`、`SearchField`（整顆 `h-10` 寫死）、頂欄品牌連結（102×24）與「登出」一律補 `max-md:min-w-11`／`max-md:h-11`。
+- 表格內就地編輯格（SiteLog／Payments／Cost／Schedule 明文豁免）不追 44——那些表在手機不提供編輯（§9.6）。
+
+### 9.3 Chrome：iOS 尺寸，一個入口
+- 頂欄手機 44px（iOS navigation bar），桌機維持 64。高度登記成 token `--top-bar-h`，`header` 高與 `main` 的上內距都從它算，不再各寫一份 `h-16`／`pt-20`。
+- BottomNav 5 格 ＝ 現在輪到我 ＋ 前 3 個工作組 ＋ **「更多」**（iOS tab bar 上限 5）。「更多」開既有的導覽抽屜；頂欄漢堡在 <md 退場——同一份抽屜兩個入口是稽核點名的「兩層平行導覽」。抽屜的 e2e 合約（`navigation[name=主要功能]`、開啟聚焦關閉鈕、Esc 關閉並還焦點給**觸發它的鈕**）不變，觸發鈕改由「更多」承接：accessible name 就是可見文字「更多」（WCAG 2.5.3 label-in-name，不用 aria-label 蓋成別的字），`aria-expanded` 綁抽屜開合，e2e 改點「更多」、焦點回「更多」。手機頂欄只留品牌、專案切換、AI 助理鈕、提醒；主題切換與登出移到抽屜底部的模式列（稽核量到頂欄 434 > 375）。
+- PageTabs 在手機：`scroll-snap-x`、兩側邊緣漸淡提示可捲、選中 chip `scrollIntoView({ inline: 'nearest' })`——稽核在 `/valuation`、`/payments` 量到分頁列 468 > 358，「逐工項排程」整個在畫面外、沒有任何捲動提示。
+
+### 9.4 詳情＝推入（push），不是換頁
+- `DetailDrawer` <md：全螢幕從右滑入／向右滑出（`--dur-modal`、`--ease-drawer`；`prefers-reduced-motion` 直接切換）。稽核量到面板 `animation: none`，清單→詳情是「整頁瞬間換掉」。
+- 開啟鎖背景捲動（記住 `scrollY`，`body` 定位固定），關閉還原——稽核實測 `/requirements` 進入時 946 → 返回變 1446，原本那一筆已不在畫面上。
+- 根節點 `inset-0` ＋ `100dvh`（`/rfi` 量到 824、`/requirements` 844，同一元件不同高）。**根因**：抽屜渲染在頁面的 `space-y-5` 容器裡且不是末子，吃到 `margin-block-end: 20px`，fixed + inset-0 + height:auto 就少 20；`/requirements` 剛好是末子才沒事。修法是 `DetailDrawer`／`ModalShell` portal 到 body——浮層不住在頁面流裡，space-y 的 margin 與祖先 transform 都劫不走它。
+- 返回鈕留左上（iOS 慣例）並帶「返回」文字；Esc／返回鍵走 `useEscape`。
+- 鍵盤：`ModalShell`／`DetailDrawer` 的可捲區 `max-height` 綁 `visualViewport.height`（`lib/useVisualViewport.js` 寫 `--vvh`，`Layout` 掛一次），軟鍵盤升起時動作列仍在可見範圍——稽核量到「補充回覆」的 `取消`／`送出回覆` 兩顆都壓在鍵盤下。「補充回覆」實際是 `appPrompt`（`confirm.jsx`），同樣綁 `--vvh`，但維持置中不改 sheet：確認／輸入原因是 iOS alert 語彙，sheet 給表單與詳情。`ModalShell` 在 <md 改成底部 sheet（`--dur-sheet`、標題列 sticky、內容可捲）。
+
+### 9.5 浮動鈕退場（手機）
+- FAB 是 Material 語彙。`CopilotFab` `z-[60]` 高於抽屜與對話框的 z-50，連詳情全螢幕時都浮著，`SiteLog.jsx` 已被逼手寫 `max-md:pr-20` 讓位。
+- 做法：<md 不渲染 FAB，AI 助理入口改為頂欄尾端圖示鈕（與提醒中心並列，`aria-label` 沿用「開啟 AI 助理」）；面板在手機以底部 sheet 呈現。`SiteLog` 的讓位 hack 移除。
+- z 階梯登記：頂欄／底欄 40 → 遮罩 50 → 導覽抽屜 55 → Copilot 面板 60（桌機才有 FAB）。
+
+### 9.6 表格頁在手機＝唯讀摘要
+- `/valuation`（1040px 標單樹）、`/cost`（520/760）、`/schedule`（720）、`/boq`（640）、`/monthly-report`（433）在 <md 隱藏寬表，改渲染卡片／時間線摘要（照 `/payments` 前例），並明講「編輯在桌面進行」。**決策：手機不提供這五頁的寫入。**
+- 「寫入」包含審核動作：`/valuation` 的送監造審核／核定／退回在手機一併不渲染（狀態 Badge 仍可見）。核定要看標單樹的數量，手機沒有樹就不該給核定鈕——沒看到細節就按下去的核定不是核定。五頁的提示句收成同一個 `MobileReadOnlyNote`，措辭只寫一處。
+
+### 9.7 收件匣直達那一筆
+- 稽核：待辦每一筆的連結都指向「頁面」（`#/quality`、`#/safety`、`#/deadlines`），落在頁首要再找一次。
+- 做法：`todayTasks` 的 `to` 帶單條 query（七個殼頁的 `useListDetailPane` 已支援：`/rfi?rfi=`、`/submittals?submittal=`、`/change-orders?co=`、`/deadlines?obligation=`、`/requirements?obligation=`、`/requirements/review?highlight=`、`/safety?record=`）；<lg 深連結進入時直接開抽屜（`select(id, { openPane: true })`）。沒有殼的頁（品質、ITP、驗收）維持頁面連結，等它們套殼再補。
+
+### 9.8 頁面形狀
+- `/safety`：缺失追蹤（`DefectTracker`）改走 `ListDetailLayout`，與同頁的工安紀錄同形——稽核指出兩套清單外觀一樣但一個有詳情、一個沒有；兩顆同名「開立缺失」（切換／送出）改名區分。
+- Stat 卡在手機改單列數字條（三格並排、`py-2`），不佔第一屏——`/safety` 三張 Stat 卡把「開立缺失」推到 y=475。
+- `/site-log`：日期／天氣（上午）／天氣（下午）在手機排兩欄，工作摘要獨佔一列；照片段落順序不動（「照片優先」是產品決策，另案）。
+
+### 9.9 落地進度（2026-09-12 全部落地，分支 `ui/mobile-shape`）
+- M1 字級＋觸控目標（9.1、9.2）：`288c434`——`index.css` 單一 `@media (max-width: 767.98px)` 覆寫八階；primitives 補 `max-md:min-w-11`；放大後 375 只溢位一處（Requirements 期程列）以 flex-wrap 修。
+- M1b 圖示鈕收斂（9.2）：`d11d286`——新 `IconButton` primitive，20 處手寫圖示鈕改用；三顆樹狀展開鈕另抽 `TreeToggle`（M4）。
+- M2 Chrome＋推入＋浮動鈕（9.3、9.4、9.5）：`2fe5b42`——`--top-bar-h`、BottomNav「更多」、DetailDrawer portal＋`present-push`／`present-sheet`＋`useScrollLock`、`--vvh`、手機 FAB 退場。
+- M3 收件匣直達（9.7）：`dd2db75`——`detailLink()` 住在 `ballInCourt.collaborationItems`（同時餵 Agent 的待辦，連結只能一個答案）；深連結進頁 `select(id, { openPane: true })`。
+- M4 表格頁唯讀摘要＋site-log（9.6、9.8 第三條）：`c73b0f3`——五頁 `<md` 零表格、`MobileReadOnlyNote`；site-log 天氣兩欄；`TreeToggle`；Acceptance 修改鈕改 `Button`。
+- M5 缺失套殼＋Stat 條（9.8 前兩條）：`5262a91`——`DefectTracker` 內建殼（`?defect=`，/quality 與 /safety 共用）、動作移進詳情欄、Stat 手機三格條（`index.css` `.grid:has(> .stat-card)`，九處容器零編輯）。順手修真 bug：同頁兩個殼 `setSearchParams(fn)` 吃 render 快照互蓋 query；預設選取不再寫 URL（否則 reload 變深連結、手機疊兩層抽屜）。
+- ⚠️ 手機驗證的限制：鍵盤遮擋全用 `--vvh` 模擬（headless 沒有軟鍵盤），真機上網址列收合會讓 `visualViewport.height` 變動，上線後要在 iPhone 實機走一次三個現場流程（日誌、開缺失、待辦→回覆）。

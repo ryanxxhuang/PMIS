@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rfiBall, submittalBall, valuationBall, changeOrderBall, defectBall, inspectionBall, myOpenItems } from './ballInCourt.js'
+import { rfiBall, submittalBall, valuationBall, changeOrderBall, defectBall, inspectionBall, myOpenItems, collaborationItems, detailLink } from './ballInCourt.js'
 
 describe('ball-in-court per record', () => {
   it('RFI', () => {
@@ -58,5 +58,48 @@ describe('myOpenItems', () => {
   })
   it('廠商只看到待改善', () => {
     expect(myOpenItems('contractor', data).map((i) => i.tag)).toEqual(['缺失'])
+  })
+})
+
+// 規範 §9.7:有「清單＋詳情」殼的頁,協作項的 to 帶單條 query 直達那一筆。
+// 這份組裝同時餵首頁收件匣與 Agent 的「待我處理」——連結只有一個答案。
+describe('detailLink / collaborationItems 的直達連結', () => {
+  it('detailLink:有 id 才帶 query,值經 URL 編碼且能被 URLSearchParams 原樣讀回', () => {
+    expect(detailLink('/rfi', 'rfi', 'R1')).toBe('/rfi?rfi=R1')
+    expect(detailLink('/rfi', 'rfi', null)).toBe('/rfi')
+    expect(detailLink('/rfi', 'rfi', undefined)).toBe('/rfi')
+    expect(detailLink('/rfi', 'rfi', '')).toBe('/rfi')
+    const odd = 'a b&c=d/e'
+    expect(new URL(detailLink('/rfi', 'rfi', odd), 'http://x').searchParams.get('rfi')).toBe(odd)
+  })
+  it('疑義 / 送審 / 變更 / 缺失(品質與工安)直達該列 id;查驗 / 觀察 / 估驗仍是頁面連結', () => {
+    const items = collaborationItems({
+      rfis: [{ id: 'R1', rfi_no: 'RFI-001', title: '疑義', status: '待回覆' }],
+      submittals: [{ id: 'S1', submittal_no: 'SUB-001', title: '送審', status: '已提送' }],
+      changeOrders: [{ id: 'C1', co_no: 'CO-001', title: '變更', status: '提出' }],
+      defects: [{ id: 'D1', title: '缺失', status: '開立' }, { id: 'DS', title: '工安', status: '開立', domain: 'safety' }],
+      inspections: [{ id: 'I1', title: '查驗', status: '待查驗' }],
+      observations: [{ id: 'O1', title: '觀察', status: '待處理', assigned_to: 'contractor' }],
+      valuations: [{ id: 'V1', period_no: 5, status: '監造審核' }],
+    })
+    const to = Object.fromEntries(items.map((i) => [i.tag, i.to]))
+    expect(to).toEqual({
+      疑義: '/rfi?rfi=R1', 送審: '/submittals?submittal=S1', 變更: '/change-orders?co=C1',
+      缺失: '/quality?defect=D1', 工安缺失: '/safety?defect=DS', 查驗: '/quality', 觀察: '/quality', 估驗: '/valuation',
+    })
+    // query 值 === 該列 id(DefectTracker 的 rows 就是 store 的 defects),不是字串長得像
+    const byTag = Object.fromEntries(items.map((i) => [i.tag, i]))
+    for (const tag of ['缺失', '工安缺失']) {
+      expect(new URL(byTag[tag].to, 'http://x').searchParams.get('defect')).toBe(byTag[tag].id)
+    }
+  })
+  it('無 id 的列(demo 舊形狀)退回頁面連結', () => {
+    const items = collaborationItems({
+      rfis: [{ rfi_no: 'RFI-001', title: '疑義', status: '待回覆' }],
+      submittals: [{ submittal_no: 'SUB-001', title: '送審', status: '已提送' }],
+      changeOrders: [{ co_no: 'CO-001', title: '變更', status: '提出' }],
+      defects: [{ title: '缺失', status: '開立' }, { title: '工安', status: '開立', domain: 'safety' }],
+    })
+    expect(items.map((i) => i.to)).toEqual(['/rfi', '/submittals', '/quality', '/safety', '/change-orders'])
   })
 })

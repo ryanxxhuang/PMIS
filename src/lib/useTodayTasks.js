@@ -29,7 +29,13 @@ export function useTodayTasks() {
 }
 
 // 「現在輪到我」依工作面分組計數(側欄/rail badge 用)。
-// item 來自 navConfig 的 visibleNavGroups 輸出;task.to 是目的頁路由。
+// item 來自 navConfig 的 visibleNavGroups 輸出;task.to 是目的頁路由,自規範 §9.7 起
+// 可帶單條 query(/rfi?rfi=…)直達那一筆——比對只看路徑,否則直達的待辦一筆都對不上
+// 側欄項,badge 會憑空少算。
+const pathOf = (to) => String(to || '').split('?')[0]
 export function mineCountForNavItem(mine, item) {
-  return mine.filter((t) => t.to === item.to || item.tabs?.some((tab) => tab.to === t.to)).length
+  return mine.filter((t) => {
+    const path = pathOf(t.to)
+    return path === item.to || item.tabs?.some((tab) => tab.to === path)
+  }).length
 }

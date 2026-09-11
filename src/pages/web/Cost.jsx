@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
-import { Card, Stat, Empty, Badge, Dot, Button, Field, Input, Select, PageHeader, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Badge, Dot, Button, Field, IconButton, Input, Select, PageHeader, ErrorBanner, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
 import { SearchField, StatusChip } from '../../components/listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -127,7 +127,9 @@ export default function Cost() {
 
       {byCat.length > 0 && (
         <Card title="分類成本" bodyClass="p-0">
-          <div className="overflow-x-auto">
+          {/* 斷點跟手機層對齊(BottomNav 是 md:hidden);520px 五欄表在 390 要橫捲 1.3 個
+              螢幕寬,手機改列同一份資料的卡片摘要(規範 §9.6) */}
+          <div className="overflow-x-auto max-md:hidden">
             <table className="w-full text-sm min-w-[520px]">
               <thead>
                 {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決) */}
@@ -152,10 +154,29 @@ export default function Cost() {
               </tbody>
             </table>
           </div>
+
+          {/* 手機:同一份 byCat(已算好的分類加總),一列一個分類。實際擺主位、預算擺佐證,
+              因為毛利看的是實際;差異一欄在手機省掉——它等於兩個已顯示數字的減法。 */}
+          <ul role="list" className="md:hidden divide-y divide-[var(--border-2)]">
+            {byCat.map((g) => (
+              <li key={g.cat} className="px-5 py-3 flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 min-w-0">
+                  <Badge color={CAT_BADGE[g.cat] || 'slate'}>{g.cat}</Badge>
+                  <span className="text-footnote text-[var(--text-3)] tabular-nums">{g.n} 項</span>
+                </span>
+                <span className="text-right shrink-0">
+                  <span className={`block text-body tabular-nums ${g.actual > g.budget ? 'text-[var(--red-text)]' : ''}`}>{money(g.actual)}</span>
+                  <span className="block text-footnote text-[var(--text-3)] tabular-nums">預算 {money(g.budget)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 
-      <Card title="新增成本 / 分包項目">
+      {/* 新增成本項是寫入:手機整張卡不渲染(規範 §9.6 的決策——成本是辦公室作業,
+          手機只給唯讀摘要)。桌機零變化。 */}
+      <Card title="新增成本 / 分包項目" className="max-md:hidden">
         {/* 表單控件一律 Field+Select/Input(FIELD_BASE):自寫 input class 退場;
             定寬(金額)/伸縮(名稱)交給外層 div——Field 不收 className */}
         <form onSubmit={onAdd} className="flex flex-wrap items-end gap-3">
@@ -221,8 +242,12 @@ export default function Cost() {
             <div className="px-5 py-12 text-center text-footnote leading-[1.8] text-[var(--text-3)]">
               沒有符合條件的成本項目。<br />換一個分類,或試試項目名稱、供應商關鍵字。
             </div>
-          ) : (
-          <div className="overflow-x-auto">
+          ) : (<>
+          {/* 斷點跟手機層對齊(BottomNav 是 md:hidden):760px 七欄表在 390 要橫捲兩個螢幕寬,
+              而且金額格是就地編輯——表格內輸入在手機明文豁免 44px(§9.2),等於既讀不了也點不準。
+              手機改渲染唯讀清單,寫入(改金額、切狀態、刪除)一律留在桌機(§9.6)。
+              搜尋與分類快篩兩邊共用:手機清單也走 ordered,篩了什麼就看什麼。 */}
+          <div className="overflow-x-auto max-md:hidden">
             <table className="w-full text-sm min-w-[760px]" aria-label="成本明細">
               <thead>
                 {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決) */}
@@ -266,16 +291,42 @@ export default function Cost() {
                       </button>
                     </td>
                     <td className="px-2 pr-5 text-right">
-                      <button onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) onDelete(c.id) }}
-                        aria-label={`刪除 ${c.title}`}
-                        className="p-2 -m-2 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--red-text)] max-md:min-h-11 max-md:min-w-11"><MSym name="close" size={16} /></button>
+                      <IconButton name="close" label={`刪除 ${c.title}`}
+                        onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) onDelete(c.id) }}
+                        className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          )}
+
+          {/* 手機:每個成本項一列(名稱、實際金額、佔實際成本合計的比例)。
+              佔比的分母是上方已算好的 totals.actual,不是在這裡另外加總一次金額;
+              合計為 0 時不硬印 0%,直接留「—」。 */}
+          <div className="md:hidden">
+            <MobileReadOnlyNote of="各成本項金額與佔比" className="px-5 py-3 border-b border-[var(--border-2)]" />
+            <ul role="list" className="divide-y divide-[var(--border-2)]">
+              {ordered.map((c) => {
+                const actual = Number(c.actual_amount) || 0
+                return (
+                  <li key={c.id} className="px-5 py-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-body font-medium min-w-0 truncate">{c.title}</span>
+                      <span className="text-body font-medium tabular-nums shrink-0">{money(actual)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      <Badge color={CAT_BADGE[c.category] || 'slate'}>{c.category}</Badge>
+                      <span className="text-footnote text-[var(--text-3)] tabular-nums">
+                        佔實際成本 {totals.actual ? `${pct((actual / totals.actual) * 100)}%` : '—'}・預算 {money(Number(c.budget_amount) || 0)}
+                      </span>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+          </>)}
         </>)}
       </Card>
 

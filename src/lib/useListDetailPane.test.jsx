@@ -12,11 +12,11 @@ import { useListDetailPane, useListKeyboardNav } from './useListDetailPane.js'
 let container, root, spies
 const ROWS = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
 
-function Harness({ rows = ROWS, ready = true, scope = 'p1', modalUp = false, pickDefault }) {
+function Harness({ rows = ROWS, ready = true, scope = 'p1', modalUp = false, pickDefault, param = 'sel' }) {
   const searchRef = useRef(null)
   const [params] = useSearchParams()
   const pane = useListDetailPane({
-    param: 'sel', idPrefix: 'row-', scope, ready, rows,
+    param, idPrefix: 'row-', scope, ready, rows,
     pickDefault: pickDefault || (() => rows[0]?.id ?? null),
     onSelect: spies.onSelect, onReset: spies.onReset, onDeepLink: spies.onDeepLink,
   })
@@ -28,7 +28,7 @@ function Harness({ rows = ROWS, ready = true, scope = 'p1', modalUp = false, pic
     <div>
       <input ref={searchRef} aria-label="搜尋" />
       <output data-testid="sel">{pane.selectedId ?? ''}</output>
-      <output data-testid="url">{params.get('sel') ?? ''}</output>
+      <output data-testid="url">{params.get(param) ?? ''}</output>
       <output data-testid="drawer">{String(pane.detailOpen)}</output>
       <button type="button" onClick={() => pane.select('c', { openPane: true })}>open-c</button>
       {rows.map((r) => <div key={r.id} id={`row-${r.id}`} />)}
@@ -63,10 +63,10 @@ afterEach(async () => {
 })
 
 describe('初次自動選取', () => {
-  it('無深連結:選頁面給的預設列並寫回 URL', async () => {
+  it('無深連結:選頁面給的預設列,但不寫 URL(預設不是使用者的選擇,reload 不該因此變成深連結彈抽屜)', async () => {
     await render(<Harness pickDefault={() => 'b'} />)
     expect(text('sel')).toBe('b')
-    expect(text('url')).toBe('b')
+    expect(text('url')).toBe('')
     expect(spies.onSelect).toHaveBeenCalledWith('b')
     expect(spies.onDeepLink).not.toHaveBeenCalled()
   })
@@ -155,7 +155,7 @@ describe('切換 scope 與抽屜', () => {
     await act(async () => { container.querySelector('button').click() })
     expect(spies.onReset).toHaveBeenCalledTimes(1)
     expect(text('sel')).toBe('x')
-    expect(text('url')).toBe('x')
+    expect(text('url')).toBe('') // 舊參數清掉、新預設不寫(與初次自動選取同一條規則)
   })
   it('首次掛載不算切換:不呼叫 onReset、不清深連結', async () => {
     await render(<Harness />, '/?sel=c')
@@ -171,5 +171,55 @@ describe('切換 scope 與抽屜', () => {
     window.matchMedia.mockReturnValue({ matches: true })
     await act(async () => btn.click())
     expect(text('drawer')).toBe('true')
+  })
+})
+
+// 同一頁兩個殼(/safety:缺失 ?defect= 與工安紀錄 ?record=)。react-router 的 setSearchParams(fn)
+// 給的是 render 快照,兩支 hook 在同一個 commit 先後寫 URL 會互相蓋掉——hook 改以「最後
+// 一次寫出的 search」為基底後,這裡釘住:各自的預設選取互不干擾、深連結各帶各的、
+// 切 scope 的重置只刪自己的 param(兩個殼同時重置也不會留下對方的舊值)。
+describe('同頁兩個殼', () => {
+  function Both({ scopeA = 'p1', scopeB = 'p1' }) {
+    const [params] = useSearchParams()
+    return (
+      <>
+        <Harness param="a" scope={scopeA} pickDefault={() => 'a'} />
+        <Harness param="b" scope={scopeB} pickDefault={() => 'b'} />
+        <output data-testid="both">{`${params.get('a') ?? ''}|${params.get('b') ?? ''}`}</output>
+      </>
+    )
+  }
+  const sels = () => [...container.querySelectorAll('[data-testid="sel"]')].map((o) => o.textContent)
+  it('同一 commit 各選自己的預設,URL 不寫任何一個', async () => {
+    await render(<Both />)
+    expect(sels()).toEqual(['a', 'b'])
+    expect(text('both')).toBe('|')
+  })
+  it('深連結各帶各的:兩筆都選中,URL 原樣保留', async () => {
+    await render(<Both />, '/?a=c&b=c')
+    expect(text('both')).toBe('c|c')
+    expect(sels()).toEqual(['c', 'c'])
+  })
+  it('一個殼切 scope 重置:只刪自己的 param,另一個殼的深連結不動', async () => {
+    function Wrap() {
+      const [scope, setScope] = useState('p1')
+      return <><button type="button" onClick={() => setScope('p2')}>switch</button><Both scopeA={scope} /></>
+    }
+    await render(<Wrap />, '/?a=c&b=c')
+    await act(async () => { container.querySelector('button').click() })
+    // 殼 A 重置後依新 scope 重選預設 a(不寫 URL);殼 B 的 c 沒被清掉
+    expect(sels()).toEqual(['a', 'c'])
+    expect(text('both')).toBe('|c')
+    expect(spies.onReset).toHaveBeenCalledTimes(1)
+  })
+  it('兩個殼同一 commit 一起重置(切案):各刪各的,URL 不留任何一方的舊 id', async () => {
+    function Wrap() {
+      const [scope, setScope] = useState('p1')
+      return <><button type="button" onClick={() => setScope('p2')}>switch</button><Both scopeA={scope} scopeB={scope} /></>
+    }
+    await render(<Wrap />, '/?a=c&b=c')
+    await act(async () => { container.querySelector('button').click() })
+    expect(text('both')).toBe('|')
+    expect(sels()).toEqual(['a', 'b'])
   })
 })

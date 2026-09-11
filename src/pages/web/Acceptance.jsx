@@ -170,8 +170,11 @@ function StageRow({ stage, last, allowed, sequentialOk, onSave, onClear }) {
                 降到 13px 讓「階段→依據→日期」三行由大到小收斂成一列時序 */}
             <span className="num text-body text-[var(--text)]">{stage.event.event_date}</span>
             {stage.event.note && <span className="text-[var(--text-2)] text-xs">{stage.event.note}</span>}
-            {/* 「修改」是進入該階段編輯的唯一入口,原本只有 16px 命中區 */}
-            {allowed && <button onClick={() => setEditing(true)} className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11 px-1">修改</button>}
+            {/* 「修改」是進入該階段編輯的唯一入口。原本是手寫 <button>+一堆 class,只補了
+                min-h,稽核在 390 量到 37×44(寬度不足,規範 §9.2 講的是最小面積)。
+                改吃共用 Button:ghost 保住原本「藍字、無框」的第三級視覺,sm 是這一列
+                (階段→依據→日期)的字級,44×44 由 BTN_SIZES 一次給,不再各頁自己補。 */}
+            {allowed && <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>修改</Button>}
           </div>
         ) : !allowed ? (
           (stage.state === 'due' || stage.state === 'pending') && (

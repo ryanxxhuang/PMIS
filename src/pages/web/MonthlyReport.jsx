@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, Button, PageHeader, Surface, Input, Textarea, Field, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Empty, Button, PageHeader, Surface, Input, Textarea, Field, ErrorBanner, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate, localISOMonth, taipeiToday } from '../../lib/dates.js'
@@ -128,6 +128,13 @@ export default function MonthlyReport() {
           <p className="text-xs text-[var(--text-3)] mt-1">報告月份：{month.replace('-', ' 年 ')} 月</p>
         </div>
 
+        {/* 規範 §9.6:月報在手機只給唯讀摘要——下面兩處在 <md 不渲染:
+            「四、本月完成主要工項數量」的七欄表(433px,390 要橫捲)改成清單,
+            「九、檢討與下月工作計畫」的兩個文字欄與 AI 草稿鈕整段收起(就地編輯留在桌機)。
+            月份選擇與「列印 / 存 PDF」保留:兩者都是唯讀操作,匯出本來就該在手機拿得到。
+            print:hidden——這句話是螢幕上的提示,不該印進對外文件。 */}
+        <MobileReadOnlyNote of="月報主要數字" className="print:hidden text-center" />
+
         {/* 基本資料 */}
         <Section title="一、工程概要">
           <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-sm">
@@ -171,8 +178,9 @@ export default function MonthlyReport() {
             <p className="text-sm text-[var(--text-3)]">本月施工日誌無工項數量紀錄。</p>
           ) : (
             <>
-              {/* 窄螢幕表格自行橫捲,不撐破報告版面;列印時寬度足夠、不受影響 */}
-              <div className="overflow-x-auto">
+              {/* 窄螢幕表格自行橫捲,不撐破報告版面;列印時寬度足夠、不受影響。
+                  max-md:hidden 只吃螢幕寬度:列印版面(A4 約 794px)仍在 md 以上,表格照印。 */}
+              <div className="overflow-x-auto max-md:hidden">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決);列印表的表頭與站內表格同一種語言 */}
@@ -201,6 +209,26 @@ export default function MonthlyReport() {
                 </tbody>
               </table>
               </div>
+
+              {/* 手機:同一份 itemRows 的前 15 項,一列一項。數量直接取 itemRows 已彙整好的
+                  qty/cum/contractQty,完成率沿用表格那一列的同一式——金額類數字一個都沒有
+                  在 UI 重算(§1 三條不可退讓:數字由確定性引擎算)。 */}
+              <ul role="list" className="md:hidden divide-y divide-[var(--border-2)]">
+                {data.itemRows.slice(0, 15).map((r) => (
+                  <li key={r.key} className="py-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-body min-w-0 truncate">
+                        <span className="text-[var(--text-3)] num mr-2">{r.item_no}</span>{r.description}
+                      </span>
+                      <span className="text-body font-medium num shrink-0">{qtyFmt(r.qty)} {r.unit}</span>
+                    </div>
+                    <p className="mt-0.5 text-footnote text-[var(--text-3)] num">
+                      累計 {qtyFmt(r.cum)} / 契約 {qtyFmt(r.contractQty)}
+                      {r.contractQty ? `（${Math.min(100, (r.cum / r.contractQty) * 100).toFixed(1)}%）` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
               {data.itemRows.length > 15 && (
                 <p className="text-xs text-[var(--text-3)] mt-2">依本月完成金額列前 15 項，其餘 {data.itemRows.length - 15} 項略（詳估驗計價明細）。</p>
               )}
@@ -256,7 +284,11 @@ export default function MonthlyReport() {
           </Section>
         )}
 
-        {/* 檢討與下月計畫（可填，列印用）*/}
+        {/* 檢討與下月計畫（可填，列印用）。
+            整段在 <md 不渲染:兩個文字欄是就地編輯、AI 草稿鈕會改寫欄位內容,都是寫入路徑,
+            規範 §9.6 的決策是這五頁在手機不提供寫入。列印版面(A4 約 794px)在 md 以上,
+            桌機列印仍照印這一段。 */}
+        <div className="max-md:hidden">
         <Section title="九、檢討與下月工作計畫">
           {/* 提醒條與 ErrorBanner 同一種橫幅語言:tint 底、無描邊、圓角 lg、前置 MSym */}
           <div className="print:hidden mb-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-lg px-3 py-2 inline-flex items-center gap-1.5">
@@ -319,6 +351,7 @@ export default function MonthlyReport() {
             </Field>
           </div>
         </Section>
+        </div>
 
         {/* 簽章區間距與底線色與監造報表對齊(pt-6/mt-8、--border);--text-3 是文字色 token,不當邊框用 */}
         <div className="grid grid-cols-3 gap-6 pt-6 text-center text-sm">

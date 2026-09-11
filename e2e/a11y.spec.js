@@ -225,10 +225,15 @@ test.describe('貼底元素不得被 BottomNav 蓋住', () => {
 })
 
 test.describe('鍵盤可達性', () => {
-  test('375px 抽屜:Esc 關閉並把焦點還給選單鈕', async ({ page }) => {
+  // 觸發鈕是 BottomNav 的「更多」(規範 §9.3;頂欄漢堡在 <md 退場)。合約是行為不是按鈕名:
+  // 開啟聚焦關閉鈕、Esc 關閉、焦點還給觸發它的那顆鈕。
+  test('375px 抽屜:Esc 關閉並把焦點還給觸發鈕(更多)', async ({ page }) => {
     await page.setViewportSize(MOBILE)
     await loginAs(page, 'contractor')
-    await page.getByRole('button', { name: '選單', exact: true }).click()
+    const more = page.getByRole('navigation', { name: '快速導覽' }).getByRole('button', { name: '更多', exact: true })
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    await more.click()
+    await expect(more).toHaveAttribute('aria-expanded', 'true')
     const nav = page.getByRole('navigation', { name: '主要功能' })
     await expect(nav.getByRole('link', { name: '契約重點', exact: true })).toBeVisible()
     // F2 合約:開啟時焦點移入抽屜(關閉鈕),鍵盤使用者不會被留在遮罩底下
@@ -236,7 +241,7 @@ test.describe('鍵盤可達性', () => {
     await page.keyboard.press('Escape')
     // 關閉=側欄項不可見(visibility/不掛載皆可,但不能只是移出畫面仍可聚焦)
     await expect(nav.getByRole('link', { name: '契約重點', exact: true })).toBeHidden()
-    await expect(page.getByRole('button', { name: '選單', exact: true })).toBeFocused()
+    await expect(more).toBeFocused()
   })
 
   test('appPrompt:Esc 取消判定,對話框消失且頁面狀態不變', async ({ page }) => {
@@ -355,8 +360,8 @@ test.describe('深連結頁手機 a11y(375px)', () => {
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole('region', { name: '提送施工月報 詳情' })).toBeVisible()
     expect(await dialog.evaluate((el) => el.contains(document.activeElement)), '抽屜開啟後焦點不在面板內').toBe(true)
-    const back = dialog.getByRole('button', { name: '返回清單', exact: true })
-    expect((await back.boundingBox())?.height, '返回清單鈕未達 44px').toBeGreaterThanOrEqual(44)
+    const back = dialog.getByRole('button', { name: '返回', exact: true })
+    expect((await back.boundingBox())?.height, '返回鈕未達 44px').toBeGreaterThanOrEqual(44)
     // 抽屜內的動作鈕與挑選器也是觸控目標
     await dialog.getByRole('button', { name: '標為已提送', exact: true }).click()
     const combo = dialog.getByRole('combobox', { name: '佐證送審文件' })

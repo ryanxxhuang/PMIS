@@ -3,7 +3,7 @@
 // 純顯示元件:staging/photos 的 state 與所有動作留在頁面——「全部上傳」會回填日誌表單
 // (工項列骨架/摘要草稿),跟表單 state 綁在一起,搬進來只會多一層 props 轉手。
 import { MSym } from '../icons.jsx'
-import { Card, Button, Badge, Empty, buttonClass, Input } from '../ui.jsx'
+import { Card, Button, Badge, Empty, IconButton, buttonClass, Input } from '../ui.jsx'
 import { WorkItemPicker } from '../DefectTracker.jsx'
 
 export default function SitePhotosCard({
@@ -106,8 +106,8 @@ export default function SitePhotosCard({
                         </>
                       )}
                     </div>
-                    <button onClick={() => removeStaging(s.key)} disabled={batchBusy} title="移除此張" aria-label="移除此張待上傳照片"
-                      className="shrink-0 text-[var(--text-3)] hover:text-[var(--red-text)] leading-none p-2 -m-2"><MSym name="close" size={16} /></button>
+                    <IconButton name="close" label="移除此張待上傳照片" title="移除此張" onClick={() => removeStaging(s.key)} disabled={batchBusy}
+                      className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
                   </div>
                 ))}
               </div>

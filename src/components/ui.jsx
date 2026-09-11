@@ -162,10 +162,14 @@ export function Dot({ color = 'slate', size = 7, className = '' }) {
 // max-md:min-h-11:手機主要操作至少 44px(W8-5)。斷點必須跟「手機層」一致——
 // BottomNav 是 md:hidden(<768),所以觸控目標也走 max-md;W9 初版寫成 max-sm(<640)
 // 會讓 640-767(iPad mini 直式 744px)拿到手機版面卻是桌機尺寸的觸控目標。
+// max-md:min-w-11:44×44 是最小「面積」不是最小高度(規範 §9.2)。稽核量到的 <44
+// 幾乎全是寬度——純圖示鈕(/itp 刪除 32×44、/acceptance 修改 32×44)只有 padding
+// 撐寬。文字鈕本來就 >44 寬,min-w 對它們是 no-op;shrink-0+nowrap 的鈕不參與
+// flex 收縮,min-w 不會改變任何既有版面。
 const BTN_SIZES = {
-  sm: 'h-7 px-3 text-footnote gap-1 rounded-lg max-md:min-h-11',
-  md: 'h-8 px-4 text-body gap-1.5 rounded-lg max-md:min-h-11',
-  lg: 'h-10 px-5 text-callout gap-2 rounded-[10px] max-md:min-h-11',
+  sm: 'h-7 px-3 text-footnote gap-1 rounded-lg max-md:min-h-11 max-md:min-w-11',
+  md: 'h-8 px-4 text-body gap-1.5 rounded-lg max-md:min-h-11 max-md:min-w-11',
+  lg: 'h-10 px-5 text-callout gap-2 rounded-[10px] max-md:min-h-11 max-md:min-w-11',
 }
 const BTN_VARIANTS = {
   primary: 'bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]',
@@ -197,6 +201,95 @@ export const Button = forwardRef(function Button({ variant = 'primary', size = '
   )
 })
 
+// ── 純圖示鈕(IconButton):按鈕內只有一顆圖示、沒有文字的那一類動作 ──────────
+// 為什麼要有這支:規範 §9.2 講「44×44 是最小面積不是最小高度」,但全站二十幾處
+// 圖示鈕是各頁自己刻的(`p-2 -m-2 max-md:min-h-11` 手抄一份),只補高沒補寬——
+// 稽核在 390 量到 /itp 刪除 32×44、/safety 刪除 32×44。逐處補一個 min-w 是治標,
+// 根因是「沒有共用的圖示鈕 primitive,所以每頁自己刻」。這支把形狀收斂到一處,
+// call site 只剩語意(要哪顆圖示、叫什麼名字、按了做什麼)。
+// 形狀取自頂欄既有的圖示鈕(主題切換):圓形、hover 墊一層 --surface-2、
+// 桌機 32(md)/40(lg)、手機一律 44。手機用 w/h 寫死而不是 min-w/min-h:
+// 圖示鈕沒有文字要撐開,固定值比 min 好預測,也不會被 flex 收縮成非方形。
+// 斷點 max-md 必須與 BottomNav 的 md:hidden 對齊,理由見上面 BTN_SIZES 那段。
+// label 必填:圖示鈕沒有文字節點,少了 aria-label 就是報讀器上的無名按鈕,
+// e2e 也全靠 getByRole('button', { name }) 定位——所以 dev 下沒給就 warn。
+// 顏色只定基準色與 hover「底色」;hover 的「文字色」刻意留在 call site:
+// 刪除鈕 hover 轉紅是語意不是形狀。而且 hover:text-* 與基準 text-* 是不同
+// variant,疊在 className 上不會踩到 Tailwind 同層同屬性的輸出順序不確定性
+// (選中態的 --blue-text 則與基準色三元運算二選一,同樣不讓兩個 text-* 並存)。
+const ICONBTN_SIZES = {
+  md: { box: 'w-8 h-8 max-md:w-11 max-md:h-11', icon: 18 },
+  lg: { box: 'w-10 h-10 max-md:w-11 max-md:h-11', icon: 20 },
+}
+export const IconButton = forwardRef(function IconButton({ name, label, size = 'md', active = false, className = '', ...props }, ref) {
+  if (!label && import.meta.env?.DEV) {
+    console.warn(`[IconButton] 圖示鈕「${name}」沒有 label,報讀器會讀到一顆無名按鈕`)
+  }
+  const s = ICONBTN_SIZES[size] || ICONBTN_SIZES.md
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-label={label}
+      className={`${s.box} shrink-0 inline-flex items-center justify-center rounded-full pressable
+        ${active ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-3)]'}
+        hover:bg-[var(--surface-2)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent
+        ${FOCUS_VISIBLE} ${className}`}
+      {...props}
+    >
+      {/* 圖示由 name 決定而不是 children:呼叫端只給語意,才不會又長出
+          「同一種鈕有人塞 16px 有人塞 18px」的散裝尺寸 */}
+      <MSym name={name} size={s.icon} />
+    </button>
+  )
+})
+
+// ── 樹狀展開鈕(TreeToggle):工項樹那顆坐在 16px 溝槽裡的 chevron ──────────────
+// 為什麼不用 IconButton:IconButton 是 32px 圓鈕(還墊一層 hover 底色),塞進工項樹
+// 只有 16px 寬的縮排溝槽會把整列往右推 16px,而且每多一層縮排就再歪一次——樹狀鈕的
+// 形狀約束是「在版面流裡永遠只佔 16px」,與圖示鈕的「自己就是一顆 32/40px 的鈕」不同,
+// 兩者不該共用同一支。
+// 手機命中區怎麼長到 44 又不撐歪樹:w-11/h-11 先撐成 44×44,再用 -m-3.5 把多出來的
+// 28px 用負 margin 吸回去(44−14−14=16)——命中面積 44×44(規範 §9.2),流內寬高一格不動,
+// 列高也不會翻倍。斷點走 max-md 與 BottomNav 的 md:hidden 對齊(理由見 BTN_SIZES)。
+// 收斂的是既有三處手抄:BOQ 與估驗各抄一份 `w-4 … max-md:min-h-11 max-md:min-w-11 -m-3.5`,
+// /progress 那顆只抄到 min-h,稽核在 390 量到 16×44(寬度不足)。
+// aria-expanded 必填:樹狀鈕沒有文字節點,展開狀態只能靠它傳給報讀器,圖示本身 aria-hidden;
+// label 的理由同 IconButton(e2e 也靠 getByRole('button', { name }) 定位)。
+// 焦點沿用 index.css @layer base 的預設外框(不掛 FOCUS_VISIBLE):三處原本就是那個樣子,
+// 本輪只收形狀、不順手改桌機的焦點視覺。
+export function TreeToggle({ open, label, className = '', ...props }) {
+  if (!label && import.meta.env?.DEV) {
+    console.warn('[TreeToggle] 樹狀展開鈕沒有 label,報讀器會讀到一顆無名按鈕')
+  }
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={label}
+      className={`w-4 h-4 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)]
+        max-md:w-11 max-md:h-11 max-md:-m-3.5 ${className}`}
+      {...props}
+    >
+      <MSym name={open ? 'expand_more' : 'chevron_right'} size={16} />
+    </button>
+  )
+}
+
+// ── 手機唯讀提示(MobileReadOnlyNote):表格頁在 <md 換成摘要時的那一句話 ────────
+// 規範 §9.6:估驗/成本/排程/標單/月報五頁在手機隱藏寬表、改渲染唯讀摘要,並且要
+// 明講編輯留在桌面——不講的話,使用者讀到的是「這頁在手機壞掉了」而不是「這是刻意的」。
+// 收成一支而不是各頁寫一行 <p>:五頁同一句話、同一個字級與色票,各頁自抄 class 字串
+// 正是深色對比漏修的來源(§6);措辭也只需要在這裡改一次。
+// md:hidden 寫在元件裡:這句話在桌機沒有意義(桌機看得到完整表格),不該由呼叫端記得加。
+export function MobileReadOnlyNote({ of, className = '' }) {
+  return (
+    <p className={`md:hidden text-footnote text-[var(--text-3)] ${className}`}>
+      手機只顯示{of}的唯讀摘要，編輯在桌面進行。
+    </p>
+  )
+}
+
 // ── 分段控制(macOS/iOS Segmented Control):同一視圖內的「顯示模式」切換 ────────
 // 外框 --surface-2 底、2px 內距、9px 圓角;選中段 --surface 底(亮色即白、深色即卡面)
 // + --shadow-card、7px 圓角——內外圓角差 2px 正好等於內距,內段才與外框同心。
@@ -212,6 +305,9 @@ export const Button = forwardRef(function Button({ variant = 'primary', size = '
 // 焦點環包整個控件,不包單一段。
 // overflow-x-auto + max-w-full:選項多於手機寬度時在控件內捲,不撐寬頁面
 // (e2e 全路由 375px 的 scrollWidth 斷言)。
+// 每段 max-md:min-w-11:44 是最小面積(規範 §9.2),單字段(「月」「週」)只靠 padding
+// 撐不到 44 寬;justify-center 讓 min-w 咬到時標籤仍置中——桌機段寬由內容決定,
+// justify-center 在那裡是 no-op。
 // ...rest 直通 tablist 根節點:呼叫端要給 aria-label,無名的 tablist 對報讀器只是「分頁」。
 const SEG_SIZES = {
   sm: 'h-6 px-2.5 text-footnote',
@@ -246,7 +342,7 @@ export function Segmented({ value, onChange, options, size = 'md', className = '
             tabIndex={on || (idx < 0 && i === 0) ? 0 : -1}
             ref={(el) => { refs.current[i] = el }}
             onClick={() => onChange?.(o.value)}
-            className={`${SEG_SIZES[size] || SEG_SIZES.md} max-md:min-h-11 shrink-0 inline-flex items-center gap-1 rounded-[7px] font-medium whitespace-nowrap pressable
+            className={`${SEG_SIZES[size] || SEG_SIZES.md} max-md:min-h-11 max-md:min-w-11 shrink-0 inline-flex items-center justify-center gap-1 rounded-[7px] font-medium whitespace-nowrap pressable
               focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-[var(--focus)]
               ${on ? 'bg-[var(--surface)] text-[var(--text)] [box-shadow:var(--shadow-card)]' : 'text-[var(--text-2)] hover:text-[var(--text)]'}`}>
             {o.label}
@@ -258,14 +354,17 @@ export function Segmented({ value, onChange, options, size = 'md', className = '
   )
 }
 
+// 手機(<md)是「數字條」不是卡(規範 §9.8 第二條):內距收到 py-2/px-3、行距收緊,三格並排
+// 由 index.css 的 .stat-card 規則對父層格線統一處理——稽核量到 /safety 三張卡各佔半行,
+// 把「開立缺失」推到 y=475。數值字級照舊走 container query,窄卡自動降到 15px 不破框。
 export function Stat({ label, value, sub, color = 'text-[var(--text)]' }) {
   return (
-    <div className={`stat-card ${SURFACE} px-4 py-3.5`}>
-      <div className="text-caption text-[var(--text-2)]">{label}</div>
+    <div className={`stat-card ${SURFACE} px-4 py-3.5 max-md:px-3 max-md:py-2`}>
+      <div className="text-caption text-[var(--text-2)] max-md:leading-snug">{label}</div>
       {/* 數值字級由 index.css 的 .stat-value 以 container query 決定(卡寬縮就縮),
           這裡只給字重與字距:Apple 的大數字是中粗+緊字距;字距收緊剛好抵掉字重帶來的寬度 */}
-      <div className={`stat-value leading-tight font-medium mt-1 tabular-nums tracking-[-0.02em] ${color}`}>{value}</div>
-      {sub && <div className="text-caption text-[var(--text-3)] mt-1 tabular-nums leading-snug">{sub}</div>}
+      <div className={`stat-value leading-tight font-medium mt-1 max-md:mt-0.5 tabular-nums tracking-[-0.02em] ${color}`}>{value}</div>
+      {sub && <div className="text-caption text-[var(--text-3)] mt-1 max-md:mt-0.5 tabular-nums leading-snug">{sub}</div>}
     </div>
   )
 }
@@ -384,10 +483,11 @@ export function SortableTh({ label, field, sort, onSort, numeric = false, align 
 // 兩邊現在都是 text-body(PageTabs 的 CHIP_BASE 已換成階梯名),字面值逐字對齊。
 // 圓角維持 8px。
 // 同一顆 button 負責套用與移除(aria-pressed 供報讀器分辨),close 只是視覺提示。
+// max-md:min-w-11:44 是最小面積(規範 §9.2);帶圖示的 chip 本來就 >44 寬,這是防呆。
 export function FilterChip({ label, icon = 'filter_list', active = false, onToggle }) {
   return (
     <button type="button" aria-pressed={active} onClick={onToggle}
-      className={`h-8 max-md:min-h-11 shrink-0 inline-flex items-center gap-1.5 px-3.5 rounded-lg text-body font-medium whitespace-nowrap pressable ${active
+      className={`h-8 max-md:min-h-11 max-md:min-w-11 shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 rounded-lg text-body font-medium whitespace-nowrap pressable ${active
         ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
         : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'}`}>
       {!active && <MSym name={icon} size={16} />}
@@ -401,31 +501,30 @@ export function FilterChip({ label, icon = 'filter_list', active = false, onTogg
 // 不可用的箭頭降 --border 且 disabled;頁碼 0-based,對外顯示才 +1。
 // 箭頭鈕維持正圓(rounded-full):按鈕去藥丸只針對文字鈕,Apple 的純圖示鈕本來就是正圓。
 // select 用裸樣式而非 FIELD_BASE——這裡要的是行內小控件,不是全寬表單欄位。
+// select 也補 max-md:min-w-11:兩位數字+px-1 只有 ~36 寬,44 是最小面積(規範 §9.2);
+// 箭頭鈕原本就 min-w-11。
 // disabled=true 供伺服器分頁的表在載入中整組鎖住(client-side 表用不到)。
 export function TablePager({ page, pageSize, total, onPage, onPageSize, sizes = [10, 25, 50], disabled = false, className = '' }) {
   const start = total === 0 ? 0 : page * pageSize + 1
   const end = Math.min(total, (page + 1) * pageSize)
   const canPrev = !disabled && page > 0
   const canNext = !disabled && end < total
-  const arrow = (ok) => `w-8 h-8 max-md:min-h-11 max-md:min-w-11 grid place-items-center rounded-full ${ok ? 'text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable' : 'text-[var(--border)]'}`
   return (
     <div className={`flex flex-wrap items-center justify-end gap-x-3 gap-y-1 px-4 py-1.5 border-t border-[var(--border-2)] text-body text-[var(--text-2)] ${className}`}>
       <label className="flex items-center gap-1.5">
         每頁列數
         <select value={pageSize} disabled={disabled} aria-label="每頁列數"
           onChange={(e) => onPageSize(Number(e.target.value))}
-          className="num bg-transparent border border-[var(--border)] rounded-md px-1 py-0.5 max-md:min-h-11 text-body text-[var(--text)] disabled:opacity-50">
+          className="num bg-transparent border border-[var(--border)] rounded-md px-1 py-0.5 max-md:min-h-11 max-md:min-w-11 text-body text-[var(--text)] disabled:opacity-50">
           {sizes.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </label>
       <span className="num">{start}–{end} / {total}</span>
       <div className="flex items-center">
-        <button type="button" onClick={() => onPage(page - 1)} disabled={!canPrev} aria-label="上一頁" className={arrow(canPrev)}>
-          <MSym name="chevron_left" size={20} />
-        </button>
-        <button type="button" onClick={() => onPage(page + 1)} disabled={!canNext} aria-label="下一頁" className={arrow(canNext)}>
-          <MSym name="chevron_right" size={20} />
-        </button>
+        {/* 原本的 arrow() 就是 IconButton 的手抄版(同樣 w-8/圓形/hover --surface-2);
+            停用態從自寫的 --border 灰改吃 IconButton 的 disabled:opacity-40,與 Button 同一套 */}
+        <IconButton name="chevron_left" label="上一頁" onClick={() => onPage(page - 1)} disabled={!canPrev} />
+        <IconButton name="chevron_right" label="下一頁" onClick={() => onPage(page + 1)} disabled={!canNext} />
       </div>
     </div>
   )

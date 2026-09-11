@@ -56,6 +56,15 @@ function valuationRoute(v) {
   return VALUATION_PAGE_LABELS.has(valuationBall(v).label) ? '/valuation' : '/payments'
 }
 
+// 有「清單＋詳情」殼的頁(useListDetailPane)吃單條 query 就直接選中那一筆(規範 §9.7):
+// 收件匣點進去要落在該筆的詳情,不是落在頁首再找一次。query 名以各頁
+// useListDetailPane({ param }) 為準、值是該頁 rows[].id(這幾頁的 rows 就是 store 的
+// rfis / submittals / changeOrders / obligations,id 同一個欄位),這裡不另立對照表。
+// id 缺值(demo 舊形狀、尚未寫回 DB 的列)退回頁面連結——?rfi=null 是殼找不到列的死連結。
+export function detailLink(page, param, id) {
+  return id == null || id === '' ? page : `${page}?${param}=${encodeURIComponent(id)}`
+}
+
 // 全案未結協作項(不分角色):{ id, who, tag, title, meta(=ball.label), to, due }。
 // myOpenItems 與今日待辦聚合(todayTasks.js)共用這一份組裝——「哪些協作項算未結、
 // 標題怎麼組、要導去哪一頁」只有一個答案,不會首頁一套、Agent 一套。
@@ -67,22 +76,25 @@ export function collaborationItems(data = {}) {
     out.push({ id: id ?? null, who: ball.who, tag, title: title || '（未命名）', meta: ball.label, to, due: due || null })
   }
   rfis.forEach((r) => push(rfiBall(r), {
-    id: r.id, tag: '疑義', title: `${r.rfi_no ? r.rfi_no + ' ' : ''}${r.title || ''}`.trim(), to: '/rfi', due: r.due_date,
+    id: r.id, tag: '疑義', title: `${r.rfi_no ? r.rfi_no + ' ' : ''}${r.title || ''}`.trim(), to: detailLink('/rfi', 'rfi', r.id), due: r.due_date,
   }))
   submittals.forEach((s) => push(submittalBall(s), {
-    id: s.id, tag: '送審', title: `${s.submittal_no ? s.submittal_no + ' ' : ''}${s.title || ''}`.trim(), to: '/submittals', due: s.due_date,
+    id: s.id, tag: '送審', title: `${s.submittal_no ? s.submittal_no + ' ' : ''}${s.title || ''}`.trim(), to: detailLink('/submittals', 'submittal', s.id), due: s.due_date,
   }))
   valuations.forEach((v) => push(valuationBall(v), {
     id: v.id, tag: '估驗', title: `第 ${v.period_no} 期估驗`, to: valuationRoute(v),
   }))
+  // 查驗/觀察的頁(/quality 的查驗與觀察分段)還沒有殼,維持頁面連結,不帶對不上的 id。
   inspections.forEach((i) => push(inspectionBall(i), { id: i.id, tag: '查驗', title: i.title, to: '/quality' }))
+  // 缺失追蹤已套殼(DefectTracker,規範 §9.8):?defect=<id> 在 /safety(工安)與 /quality
+  // (品質,頁面依這個 query 自動切到「缺失」分段)都直達該筆
   defects.forEach((d) => push(defectBall(d), {
     id: d.id, tag: d.domain === 'safety' ? '工安缺失' : '缺失', title: d.title,
-    to: d.domain === 'safety' ? '/safety' : '/quality', due: d.due_date,
+    to: detailLink(d.domain === 'safety' ? '/safety' : '/quality', 'defect', d.id), due: d.due_date,
   }))
   observations.forEach((o) => push(observationBall(o), { id: o.id, tag: '觀察', title: o.title, to: '/quality' }))
   changeOrders.forEach((c) => push(changeOrderBall(c), {
-    id: c.id, tag: '變更', title: `${c.co_no ? c.co_no + ' ' : ''}${c.title || ''}`.trim(), to: '/change-orders',
+    id: c.id, tag: '變更', title: `${c.co_no ? c.co_no + ' ' : ''}${c.title || ''}`.trim(), to: detailLink('/change-orders', 'co', c.id),
   }))
   return out
 }

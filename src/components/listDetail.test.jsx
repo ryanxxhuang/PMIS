@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 // 抽屜/Modal 的無障礙合約(W8-5 F2):開啟時焦點進面板、Esc 關閉、aria-modal/aria-label
 // 齊全;關閉時不渲染。搜尋欄 ref 直通 input(「/」快捷鍵靠它)、快篩 chip 帶 aria-pressed。
+// 抽屜/Modal portal 到 document.body(理由見 listDetail.jsx),所以對話框用 document 查,
+// 不在 container 裡;其餘小件仍在 container。
 import { act, createRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
@@ -26,20 +28,20 @@ describe('DetailDrawer', () => {
   it('開啟:dialog/aria-modal/aria-label、焦點進面板;Esc 與返回鈕都關閉', async () => {
     const onClose = vi.fn()
     await render(<DetailDrawer open onClose={onClose} label="義務詳情"><p>內容</p></DetailDrawer>)
-    const dialog = container.querySelector('[role="dialog"]')
+    const dialog = document.querySelector('[role="dialog"]')
     expect(dialog.getAttribute('aria-modal')).toBe('true')
     expect(dialog.getAttribute('aria-label')).toBe('義務詳情')
     expect(dialog.contains(document.activeElement)).toBe(true)
     await esc()
     expect(onClose).toHaveBeenCalledTimes(1)
-    const back = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('返回清單'))
+    const back = [...dialog.querySelectorAll('button')].find((b) => b.textContent.includes('返回'))
     await act(async () => back.click())
     expect(onClose).toHaveBeenCalledTimes(2)
   })
   it('關閉時不渲染,Esc 也不再呼叫 onClose', async () => {
     const onClose = vi.fn()
     await render(<DetailDrawer open={false} onClose={onClose} label="義務詳情">x</DetailDrawer>)
-    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
     await esc()
     expect(onClose).not.toHaveBeenCalled()
   })
@@ -49,18 +51,18 @@ describe('ModalShell', () => {
   it('標題、關閉圖示鈕(aria-label=關閉)、Esc、遮罩點擊都關閉;焦點進面板', async () => {
     const onClose = vi.fn()
     await render(<ModalShell open onClose={onClose} title="回報 AI 擷取有誤"><p>表單</p></ModalShell>)
-    const dialog = container.querySelector('[role="dialog"]')
+    const dialog = document.querySelector('[role="dialog"]')
     expect(dialog.getAttribute('aria-label')).toBe('回報 AI 擷取有誤')
-    expect(container.querySelector('h2').textContent).toBe('回報 AI 擷取有誤')
+    expect(dialog.querySelector('h2').textContent).toBe('回報 AI 擷取有誤')
     expect(dialog.contains(document.activeElement)).toBe(true)
-    await act(async () => container.querySelector('button[aria-label="關閉"]').click())
+    await act(async () => dialog.querySelector('button[aria-label="關閉"]').click())
     await esc()
     await act(async () => dialog.firstElementChild.click())
     expect(onClose).toHaveBeenCalledTimes(3)
   })
   it('onClose 換 identity 不會重新搶焦點', async () => {
     await render(<ModalShell open onClose={() => {}} title="t"><input aria-label="欄位" /></ModalShell>)
-    const input = container.querySelector('input')
+    const input = document.querySelector('[role="dialog"] input')
     await act(async () => input.focus())
     await render(<ModalShell open onClose={() => {}} title="t"><input aria-label="欄位" /></ModalShell>)
     expect(document.activeElement).toBe(input)
