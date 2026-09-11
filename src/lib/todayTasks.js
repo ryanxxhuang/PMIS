@@ -11,7 +11,7 @@
 //      監造／機關責任的義務留在專案文件頁,不包裝成做不到的假待辦。
 //   4. 「今天已完成」只採可靠的操作時間戳(closed_at / inspected_at),
 //      不把可回填的業務日期(請款日/日誌日期/審定日)當成「今天按下完成」。
-import { collaborationItems } from './ballInCourt.js'
+import { collaborationItems, detailLink } from './ballInCourt.js'
 import { parseLocalDate, taipeiISODate, localISODate } from './dates.js'
 import { computeObligationDue } from './contractDue.js'
 import { sampleAlerts } from './qc.js'
@@ -136,8 +136,9 @@ export function buildTodayTasks(input = {}) {
       if (days == null || days > SOON_DAYS) continue
       mine.push(task({
         key: `契約:${ob.id ?? ob.title}`, tag: '契約重點', title: ob.title, ball: org,
-        // 「標為已提送」在期限追蹤頁(契約重點改版後遷出),待辦要導到能完成的地方
-        to: '/deadlines', due: dueIso, todayIso,
+        // 「標為已提送」在期限追蹤頁(契約重點改版後遷出),待辦要導到能完成的地方;
+        // 帶 ?obligation=<id> 直達該筆(規範 §9.7)——/deadlines 的 rows 是 dueItems,id 就是 ob.id
+        to: detailLink('/deadlines', 'obligation', ob.id), due: dueIso, todayIso,
         meta: `${dueText(days, dueIso)}${ob.penalty ? `・罰則：${ob.penalty}` : ''}`,
       }))
     }

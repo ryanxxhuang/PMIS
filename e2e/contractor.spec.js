@@ -31,6 +31,19 @@ test.describe('施工廠商', () => {
     await expect(page.getByRole('heading', { name: '現在輪到我' })).toHaveCount(0)
   })
 
+  // 規範 §9.7:契約期限待辦帶 ?obligation=<id>,落在 /deadlines 就是該筆的詳情。
+  // OB-6(第 5 期估驗計價送審)是 demo 唯一穩定逾期的廠商義務;它同時也是該頁的預設
+  // 選取,所以 URL 帶 query 是這條的關鍵斷言,region 只證明落地後詳情真的在。
+  test('收件匣直達那一筆:契約期限落在 /deadlines 且該筆已選中', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/dashboard?ball=mine')
+    const mine = page.getByRole('group', { name: '現在輪到我', exact: true })
+    await mine.getByRole('listitem').filter({ hasText: '第 5 期估驗計價送審' }).getByRole('link').click()
+    await expect(page).toHaveURL(/#\/deadlines\?obligation=OB-6/)
+    await expect(page.getByRole('listitem').filter({ hasText: '第 5 期估驗計價送審' })).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByRole('region', { name: '第 5 期估驗計價送審 詳情' })).toBeVisible()
+  })
+
   test('Agent 不再重複待辦清單,只留前往今日待辦的入口', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/agent')
