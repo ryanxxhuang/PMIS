@@ -3,8 +3,8 @@
 // 預填 inspForm 再切段,分段是非當前不渲染(unmount)的,表單 state 住這裡會在切段瞬間消失;
 // errMsg 也是頁層 ErrorBanner。所以本元件只收 props,判定/刪除/送出的邏輯全在頁面。
 //
-// ⚠️ 查驗列的 `flex items-center justify-between` 是 e2e 契約(supervisor/a11y spec 以
-// justify-between 祖先鎖列),class 名與 DOM 層級不可動。
+// 查驗列是 <ul role="list">/<li>:supervisor/a11y spec 用 getByRole('listitem')
+// .filter({ hasText }) 鎖列——列的 class 名不再是測試合約,但 <li> 這層語意不可拿掉。
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../icons.jsx'
 import { Card, Button, Field, Badge, Empty, Input, Select, FilterChip } from '../ui.jsx'
@@ -88,9 +88,11 @@ export default function InspectionsSection({
       {inspections.length === 0 ? <Empty>尚無查驗紀錄</Empty> : shownInsp.length === 0 ? (
         <Empty>沒有「{filter}」的查驗紀錄</Empty>
       ) : (
-        <div className="space-y-2">
+        // role="list" 要明寫:Tailwind preflight 給 ul 加了 list-style: none,Safari 在
+        // list-style: none 時會拿掉 <ul> 的清單語意(VoiceOver 不再報「清單,N 項」)
+        <ul role="list" className="space-y-2">
           {shownInsp.map((i) => (
-            <div key={i.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
+            <li key={i.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
               <div className="min-w-0">
                 <div className="text-[var(--text)]">{i.title} <Badge color={inspColor[i.status] || 'slate'}>{i.status}</Badge>
                   {/* 附自主檢查表 chip:點開既有列印檢視(成本最低的下鑽——檢查紀錄
@@ -113,9 +115,9 @@ export default function InspectionsSection({
                 {/* 已判定查驗=品質證據,不提供刪除(DB 另有 guard) */}
                 {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) onDelete(i.id) }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除查驗 ${i.title}`}><MSym name="close" size={16} /></button>}
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </Card>
   )

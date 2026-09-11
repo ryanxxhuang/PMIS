@@ -171,15 +171,15 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
 
 | Class | 在哪 | 狀態 |
 |---|---|---|
-| `rounded-2xl` | `ui.jsx` 的 `SURFACE` 卡殼（`supervisor` / `owner` 的查驗與變更卡） | 仍在 |
-| `justify-between` | `DefectTracker` 缺失列、`Quality` 判定列 | 仍在 |
+| ~~`rounded-2xl`~~ | `ui.jsx` 的 `SURFACE` 卡殼 | 已解除（`Card` 有 `title` 即 `role="group"` + `aria-labelledby`，改用 `getByRole('group', { name })`） |
+| ~~`justify-between`~~ | `DefectTracker` 缺失列、`Quality` 查驗列 | 已解除（兩處改成 `<ul role="list">`/`<li>`，改用 `getByRole('listitem')`） |
 | ~~`rounded-lg`~~ | 送審列、RFI 列 | 已解除（兩頁轉殼時改成語意定位） |
 | ~~`rounded-xl`~~ | `/deadlines` 期限卡 | 已解除（同上） |
 | ~~`space-y-2`~~ | 送審球權分群容器 | 已解除（分群改快篩 chip） |
 
-**剩下的兩組是最後的視覺耦合。** 它們綁的是尚未轉殼的地方：`Quality` 是路由器（清單在子元件）、`DefectTracker` 是跨頁共用元件。要解除得先讓那兩處提供語意錨點（`role="listitem"` ＋ `aria-label`），不是改 e2e 就好。
+**class 定位器已歸零**（上面那道 grep 應為 0）。最後兩組的解法都是補語意、不是改 e2e：`Card` 有 `title` 就掛 `role="group"` + `aria-labelledby`（用 `group` 不用 `region`——有名稱的 `section` 是 landmark，每張卡都掛會把報讀器的地標清單灌爆；沒有 `title` 的卡維持純 div）；缺失列與查驗列改成真正的 `<ul>`/`<li>`，`<ul>` 明寫 `role="list"`，因為 Tailwind preflight 的 `list-style: none` 會讓 Safari 拿掉清單語意。`/quality` 的「現在要處理」佇列刻意維持 button 不當 `<li>`，否則 `getByRole('listitem')` 會雙重命中。
 
-**繞法：`@theme` 只改值不改名。** `src/index.css` 的 `@theme { --radius-2xl: 12px }` 就是這招，Apple 圓角沿用同一手法即可零成本保住。反之，把 `SURFACE` 改寫成 `rounded-[14px]` 或新 class，7 條測試同時掛掉。
+**`@theme` 只改值不改名**仍是圓角的做法（`src/index.css` 的 `@theme { --radius-2xl: 12px }`），但 `rounded-2xl` 這個名已不再是測試合約。
 
 ### 幾何斷言
 

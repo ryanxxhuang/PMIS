@@ -17,9 +17,8 @@ test.describe('監造', () => {
   test('查驗:判不合格(必填原因)→ 自動開立缺失', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/quality')
-    // 鎖定「4F 柱牆鋼筋查驗」那一列的不合格鈕(頁上有多筆待查驗)
-    const row = page.getByText('4F 柱牆鋼筋查驗', { exact: false })
-      .locator('xpath=ancestor::div[contains(@class,"justify-between")][1]')
+    // 鎖定「4F 柱牆鋼筋查驗」那一列的不合格鈕(頁上有多筆待查驗;查驗列是 <li>)
+    const row = page.getByRole('listitem').filter({ hasText: '4F 柱牆鋼筋查驗' })
     await row.getByRole('button', { name: '不合格' }).click()
     // appPrompt 對話框:原因必填,空白時確認鈕鎖住
     const dialog = page.getByRole('dialog')
@@ -37,8 +36,8 @@ test.describe('監造', () => {
     // 剛判定的查驗當天就進「今天已完成」(demo 與真後端同樣寫 inspected_at)。
     // Apple 改版後三段不同時列出,要帶 ?ball=done 才聚焦到已完成那一段。
     await gotoHash(page, '/dashboard?ball=done')
-    const done = page.getByRole('heading', { name: '今天已完成' })
-      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    // Card 有 title 就是 role="group" 並以標題命名,「標題為 X 的那張卡」直接用名稱定位
+    const done = page.getByRole('group', { name: '今天已完成', exact: true })
     await expect(done.getByText('4F 柱牆鋼筋查驗')).toBeVisible()
     await expect(done.getByText('監造判定不合格')).toBeVisible()
   })
@@ -53,8 +52,7 @@ test.describe('監造', () => {
   const openDefectRow = async (page) => {
     await gotoHash(page, '/quality')
     await page.getByRole('group', { name: '品質分段' }).getByRole('button', { name: /缺失/ }).click()
-    const row = page.getByText(DEFECT_UNDER_REVIEW)
-      .locator('xpath=ancestor::div[contains(@class,"justify-between")][1]')
+    const row = page.getByRole('listitem').filter({ hasText: DEFECT_UNDER_REVIEW })
     await expect(row.getByText('待監造複查')).toBeVisible()
     return row
   }
@@ -72,8 +70,7 @@ test.describe('監造', () => {
     await expect(row.getByRole('button', { name: '撤銷結案' })).toBeVisible()
     // closed_at 是系統在按下當刻寫的 → 當天就進「今天已完成」(與查驗同一條規則)
     await gotoHash(page, '/dashboard?ball=done')
-    const done = page.getByRole('heading', { name: '今天已完成' })
-      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const done = page.getByRole('group', { name: '今天已完成', exact: true })
     await expect(done.getByText(DEFECT_UNDER_REVIEW)).toBeVisible()
     await expect(done.getByText('監造已結案')).toBeVisible()
   })
@@ -90,8 +87,11 @@ test.describe('監造', () => {
     await expect(row.getByRole('button', { name: '退回' })).toHaveCount(0)
     // 退回不是結案:不得混進「今天已完成」(球回廠商 → 只會出現在「等待對方」)
     await gotoHash(page, '/dashboard?ball=done')
-    const done = page.getByRole('heading', { name: '今天已完成' })
-      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const done = page.getByRole('group', { name: '今天已完成', exact: true })
+    // 否定斷言前先證明卡片真的渲染出來且有內容(規範 §8 坑②):demo 種子沒有任何當天的
+    // closed_at/inspected_at,退回也不寫這兩個欄位 → 卡片就是「今天還沒有完成紀錄」空狀態
+    await expect(done).toBeVisible()
+    await expect(done.getByText('今天還沒有完成紀錄')).toBeVisible()
     await expect(done.getByText(DEFECT_UNDER_REVIEW)).toHaveCount(0)
   })
 
@@ -104,9 +104,9 @@ test.describe('監造', () => {
     await expect(page.getByRole('button', { name: '存檔', exact: true })).toHaveCount(0)
     await expect(page.getByText('選照片 AI 辨識後上傳', { exact: true })).toHaveCount(0) // U-01:不給死按鈕(P0 #11 改名後同步)
     // 切到 demo 種子最近一筆日誌(右欄清單第一筆=昨天),摘要直接顯示該日內容
-    const list = page.getByRole('heading', { name: /施工日誌（/ }).locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const list = page.getByRole('group', { name: /施工日誌（/ })
     await list.getByRole('button', { name: /^\d{4}-\d{2}-\d{2}$/ }).first().click()
-    const card = page.getByRole('heading', { name: '本日日誌' }).locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const card = page.getByRole('group', { name: '本日日誌', exact: true })
     await expect(card.getByText('4F 版牆混凝土澆置、養護')).toBeVisible() // demoSeed 最近一筆(-1 天)的工作摘要
     await expect(page.getByRole('button', { name: '列印公定格式日誌' })).toBeVisible()
     // 有日誌的日期一樣是純文字摘要,不會長出可編欄位

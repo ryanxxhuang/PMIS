@@ -69,10 +69,9 @@ test.describe('施工廠商', () => {
     await gotoHash(page, '/quality')
     // 預設分段是查驗;由分段控制切到「缺失」操作 demo 種子(佇列點擊走同一條路)
     await page.getByRole('group', { name: '品質分段' }).getByRole('button', { name: /缺失/ }).click()
-    // 鎖定「3F 西側牆面蜂窩」(開立)那一列:佇列項是 button 不含 justify-between div,
-    // 此 xpath 只會命中 DefectTracker 的缺失列
-    const row = page.getByText('3F 西側牆面蜂窩')
-      .locator('xpath=ancestor::div[contains(@class,"justify-between")][1]')
+    // 鎖定「3F 西側牆面蜂窩」(開立)那一列:缺失列是 DefectTracker 的 <li>,「現在要處理」
+    // 佇列項是 button,所以 listitem 只會命中缺失列(與已轉殼的五頁同一套定位法)
+    const row = page.getByRole('listitem').filter({ hasText: '3F 西側牆面蜂窩' })
     await row.getByRole('button', { name: '開始改善' }).click()
     await expect(row.getByText('廠商改善中')).toBeVisible()
     // 提送複查走 appPrompt:改善說明必填

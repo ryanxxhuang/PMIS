@@ -57,8 +57,7 @@ test.describe('機關', () => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/dashboard')
     // demoSeed:報竣 -28、竣工確認 -25 → 初驗法定 30 日內,期限將至
-    const mine = page.getByRole('heading', { name: '現在輪到我' })
-      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const mine = page.getByRole('group', { name: '現在輪到我', exact: true })
     await expect(mine.getByText('初驗期限將至')).toBeVisible()
     // 廠商責任的契約義務不得變成機關做不到的假待辦(AI 觀察那一行仍可提醒,但不是待辦)
     await expect(mine.getByText('第 5 期估驗計價送審')).toHaveCount(0)
