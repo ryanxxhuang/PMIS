@@ -332,6 +332,11 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 
 ## 未排入（已知、刻意不順手做；要做需回報告或另立決策）
 
+- （2026-09-11 重構審計點名，需你決定）`demo_requests` 的個資留存與清除：該表存 email／phone／ip／user_agent，但 `docs/資安/日誌留存政策.md` 與個資委外文件都沒列到它，也沒有清除排程。保存多久是政策決定，不是工程決定，所以只登記不自行訂定。
+- （同上，需先立 Decision）兩套「專案管理者」定義並存：`add_member_by_email`／`remove_member`／`organizations_*` policy 走 `projects.created_by`，而 `delete_project`／估驗與變更 guard／`acceptance_events_rbac`／`safety_records_rbac` 走 `is_project_admin()`。結果是被授 admin 的成員能刪專案、改狀態機，卻不能邀人；建立者離職也沒有轉移路徑。這讓 `created_by` 成為 `project_members` 之外的第四個隱性授權來源，與 `three-party-role-model.md` 的唯一授權模型相違。修它要動 RLS 與多支 RPC，屬安全邊界。
+- （同上）紅線三缺口：agent 唯讀工具的呼叫軌跡不落庫。`agent-run` 只把 steps 的 tool／ok／ms 回前端，`ai_usage_events` 沒有欄位可放。一旦有爭議（agent 講了錯誤金額），無法重建它查了哪些表、帶什麼參數。最小改法是 `ai_usage_events` 加 `metadata jsonb`，完整作法是 append-only `agent_runs` 表——但「記錄每一次查詢與參數」牽涉個資最小化，要先決定記到什麼粒度。
+- （同上）`exportCsv.js` 的 formula injection 防護有三處已知邊界：前置空白／tab 可繞過 `/^[=+\-@]/`、`\r` 不觸發 quote、科學記號字串誤判。已寫成「現行邊界行為（記錄用，非背書）」的測試釘住；收緊會連帶影響加前綴後的 quote 判斷，不是一行改完的事。
+
 - ~~P1-08 路由治理（route registry 預設拒絕）~~ — W7 完成，見 D-013
 - P1-09 以外的 P2 全部（品牌統一、載入效能、列印、OCR 支援矩陣…見報告 §6.3）
 - `(project_id, item_key)` 部分唯一索引（待正式資料盤點：`select project_id, item_key, count(*) from work_items where item_key is not null group by 1,2 having count(*) > 1;` 回空＝可加索引）
