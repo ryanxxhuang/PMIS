@@ -5,8 +5,7 @@ import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { Badge, Button, Card, Empty, PageHeader, Segmented } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
-import { taipeiISODate } from '../../lib/todayTasks.js'
+import { parseLocalDate, taipeiISODate } from '../../lib/dates.js'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
 import { BALL_SOURCES, resolveBallKey } from '../../lib/navConfig.js'
 import { KIND_LABEL } from '../../lib/agentRole.js'
@@ -162,7 +161,7 @@ export default function Dashboard() {
   const imported = workItemsSource === 'db' || demoMode
   // 「今天」每次 render 取:工地平板整週不關分頁,模組層常數會讓日期/逾期判斷停在開頁那天(B-11)
   const TODAY = new Date()
-  const todayISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}-${String(TODAY.getDate()).padStart(2, '0')}`
+  const todayISO = taipeiISODate(TODAY)
   const myOrg = currentUser?.org_type || 'contractor'
   const anchors = {
     award_date: project?.award_date, notice_date: project?.notice_date,

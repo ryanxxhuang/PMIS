@@ -3,16 +3,11 @@
 // 比對鍵：item_key（PCCES itemKey）優先；未中者以「名稱+單位」一對一後備比對（項次重編時）。
 // 單價變更以兩筆表達（減帳原量@原價 + 追加新量@新價），與追加減帳表實務一致，
 // 也維持 amount_delta = qty_delta × unit_price 的既有不變式。
+import { billableLeaves } from './boqCalc.js'
 
-export function billableLeaves(items) {
-  const childMap = new Map()
-  for (const it of items) {
-    const k = it.parent_key || '__root__'
-    if (!childMap.has(k)) childMap.set(k, [])
-    childMap.get(k).push(it)
-  }
-  return items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
-}
+// 末端可計價工項的定義已搬到 boqCalc.js(那裡是標單計算的家,多頁共用);
+// 這裡轉發,讓既有 import 路徑與釘住規則的 coDiff.test.js 不必跟著改。
+export { billableLeaves }
 
 const round2 = (n) => Math.round(n * 100) / 100
 const descKey = (it) => `${(it.description || '').replace(/\s/g, '')}||${(it.unit || '').trim()}`

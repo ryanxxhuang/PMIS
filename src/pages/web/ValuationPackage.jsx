@@ -4,8 +4,8 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { collectEvidence, photoEvidenceLine } from '../../lib/evidence.js'
+import { fmtAmount as fmt } from '../../lib/format.js'
 
-const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
 const fmtQ = (n) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('en-US'))
 
 // 工具列藥丸鈕:與其餘三支列印頁同一組 class(列印頁不 import ui.jsx,就地複寫)。
@@ -42,6 +42,9 @@ export default function ValuationPackage() {
   const periodAmtOf = (key) => (cumThis.get(key) || 0) - (cumPrev.get(key) || 0) // 本期金額 = buildCumMap 金額差
 
   // 本期有完成的末端工項(本期量 > 0)
+  // 刻意不換成 boqCalc.billableLeaves:那支的父子對照建在「全部 items」上,
+  // 這裡吃的是 buildBillableTree 的 childrenMap(只含可計價非合計列)。
+  // 子項全是合計列的分項在兩把尺下結果不同,要併必須先定案哪一個是規則。
   const leaves = useMemo(() => {
     if (!workItems) return []
     return adjItems

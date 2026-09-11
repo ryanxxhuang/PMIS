@@ -7,6 +7,8 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { judgeChecklist, judgeItem, diffChecklistResults, sampleAlerts } from '../../lib/qc.js'
+import { taipeiToday } from '../../lib/dates.js'
+import { billableLeaves } from '../../lib/boqCalc.js'
 import { collaborationItems } from '../../lib/ballInCourt.js'
 import DefectTracker, { WorkItemPicker } from '../../components/DefectTracker.jsx'
 import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
@@ -86,9 +88,7 @@ export default function Quality() {
 
   const leaves = useMemo(() => {
     if (!workItems) return []
-    const childMap = new Map()
-    for (const it of workItems.items) { const k = it.parent_key || '__root__'; if (!childMap.has(k)) childMap.set(k, []); childMap.get(k).push(it) }
-    return workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
+    return billableLeaves(workItems.items)
   }, [workItems])
 
   // 檢附自主檢查表(S-2)候選:已判定(合格/不合格皆可)的「現行版」檢查紀錄。
@@ -154,7 +154,7 @@ export default function Quality() {
     setSegment('查驗')
     setInspForm({
       title: tplTitle || '', location: r.location || '',
-      inspection_type: '施工查驗', requested_date: todayIso(),
+      inspection_type: '施工查驗', requested_date: taipeiToday(),
       work_item_key: wi?.item_key || '', work_item_label: wi ? `${wi.item_no} ${wi.description}` : '',
       checklist_record_id: r.id,
     })
@@ -191,7 +191,7 @@ export default function Quality() {
 
   // 「今天」每次 render 取(B-11:工地平板整週不關分頁,模組層常數會停在開頁那天)。
   // 傳日曆日字串給期限引擎:含時間的「現在」會把 8 個日曆日壓成 7(W8-2 踩過的坑)。
-  const today = todayIso()
+  const today = taipeiToday()
   const myOrg = currentUser?.org_type || 'contractor'
   const queue = buildQualityQueue(myOrg, { inspections, defects, observations, testSamples }, today)
   // 分段計數:各分段「還有幾件事沒完」,與區塊內既有的計數口徑一致
@@ -243,7 +243,7 @@ export default function Quality() {
 
       {/* 查驗:標題同時給「全部」與「待查驗」——這張卡不只是待辦盒,也是本案的查驗履歷 */}
       {segment === '查驗' && (
-      <Card title={`查驗（全部 ${inspCount['全部']}・待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: todayIso(), work_item_key: '', work_item_label: '', checklist_record_id: '' })}>{inspForm ? '取消' : <><MSym name="add" size={16} />查驗申請</>}</Button>}>
+      <Card title={`查驗（全部 ${inspCount['全部']}・待查驗 ${openInsp}）`} action={can.submit && <Button variant="secondary" onClick={() => setInspForm(inspForm ? null : { title: '', location: '', inspection_type: '施工查驗', requested_date: taipeiToday(), work_item_key: '', work_item_label: '', checklist_record_id: '' })}>{inspForm ? '取消' : <><MSym name="add" size={16} />查驗申請</>}</Button>}>
         {resultMsg && (
           <div className="flex items-center gap-3 flex-wrap rounded-lg bg-[var(--green-tint)] text-[var(--green-text)] text-sm px-3 py-2 mb-3">
             <span>{resultMsg.pass ? '已判定合格' : '已判定不合格並開立缺失'}</span>
@@ -370,7 +370,6 @@ function PassMark({ pass }) {
   return <span className="text-[var(--text-3)]">—</span>
 }
 
-const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 // 修訂差異的值顯示:✓/✗(bool)、數值、—(未檢)
 const fmtVal = (v) => (v === true ? '✓' : v === false ? '✗' : v ?? '—')
@@ -384,7 +383,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
   const [revising, setRevising] = useState(null) // 修訂模式:被修訂的紀錄(現行版)
   const [reason, setReason] = useState('')
   const [tplId, setTplId] = useState(templates[0]?.id)
-  const [date, setDate] = useState(todayIso())
+  const [date, setDate] = useState(taipeiToday())
   const [location, setLocation] = useState('')
   const [wiKey, setWiKey] = useState('') // 對應工項(選填,佐證鏈:估驗佐證欄靠它對回檢查表)
   const [wiLabel, setWiLabel] = useState('')
@@ -439,7 +438,7 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
   const closeForm = () => { setOpen(false); setRevising(null); setValues({}); setReason(''); setWiKey(''); setWiLabel('') }
   const startRevise = (r) => {
     setMsg(''); setRevising(r); setOpen(true); setReason('')
-    setDate(r.check_date || todayIso()); setLocation(r.location || '')
+    setDate(r.check_date || taipeiToday()); setLocation(r.location || '')
     const wi = wiOf(r) // 修訂帶入原紀錄的工項關聯,可改可清
     setWiKey(wi?.item_key || ''); setWiLabel(wi ? `${wi.item_no} ${wi.description}` : '')
     setValues(Object.fromEntries(
@@ -641,9 +640,9 @@ function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, lea
 function SamplesSection({ samples, onGenerate, onCreate, onUpdate, onDelete, canEdit }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
-  const [manual, setManual] = useState({ sampled_date: todayIso(), fc: 420, location: '' })
+  const [manual, setManual] = useState({ sampled_date: taipeiToday(), fc: 420, location: '' })
   const [addOpen, setAddOpen] = useState(false)
-  const today = todayIso()
+  const today = taipeiToday()
 
   const gen = async () => {
     setBusy(true); setMsg('')

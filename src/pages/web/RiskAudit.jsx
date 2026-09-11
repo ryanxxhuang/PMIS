@@ -74,6 +74,9 @@ export default function RiskAudit() {
   const integrity = useMemo(() => {
     if (!workItems) return { findings: [], summary: { risk: 0, warn: 0 } }
     const idToKey = new Map(adjustedItems.filter((it) => it.id).map((it) => [it.id, it.item_key]))
+    // 刻意不換成 boqCalc.billableLeaves:那支的父子對照建在「全部 items」上,
+    // 這裡吃的是 buildBillableTree 的 childrenMap(只含可計價非合計列)。
+    // 子項全是合計列的分項在兩把尺下結果不同,要併必須先定案哪一個是規則。
     const leaves = adjustedItems.filter((it) => it.is_billable && !it.is_rollup && !(childrenMap.get(it.item_key)?.length))
     const loggedQty = new Map()
     for (const lg of siteLogs) for (const [k, q] of Object.entries(lg.items || {})) loggedQty.set(k, (loggedQty.get(k) || 0) + (Number(q) || 0))

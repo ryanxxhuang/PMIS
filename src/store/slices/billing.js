@@ -1,7 +1,7 @@
 // Billing slice:估驗計價(掛在 work_items 標單脊椎上)、請款收款、預定進度 S 曲線。
 import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase.js'
-import { parseLocalDate, taipeiToday } from '../../lib/dates.js'
+import { parseLocalDate, taipeiToday, localISOMonth } from '../../lib/dates.js'
 
 // 估驗明細列(寫 DB 用):同一套「數量→百分比/金額」換算,建立期/改數量/帶入日誌三處共用。
 export function valuationItemRow(wi, valuationId, cumQty, source) {
@@ -175,7 +175,7 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps, l
     const N = buckets.length || 1
     const smoothstep = (t) => t * t * (3 - 2 * t) // 0→1 的 S 形累計
     const months = buckets.map((d, i) => ({
-      label: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      label: localISOMonth(d),
       plannedPct: +(smoothstep((i + 1) / N) * 100).toFixed(1),
     }))
     const plan = { start, end, months }

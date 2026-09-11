@@ -4,11 +4,12 @@ import { MSym } from '../../components/icons.jsx'
 import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surface, Input, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
+import { parseLocalDate, localISOMonth } from '../../lib/dates.js'
+import { fmtYi } from '../../lib/format.js'
 
 const monthLabel = (str) => {
   const d = parseLocalDate(str)
-  return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : null
+  return d ? localISOMonth(d) : null
 }
 export default function Progress() {
   const TODAY = new Date() // 每次 render 取(B-11):模組層常數會讓長開分頁的「今天」凍結在開頁那天
@@ -141,6 +142,9 @@ export default function Progress() {
 
   // 工項層級進度:各節點實際完成%(累計估驗金額 ÷ 該節點發包額)
   const nodePct = (key) => { const amt = amountMap.get(key) || 0; return amt > 0 ? (latestCumMap.get(key) || 0) / amt * 100 : 0 }
+  // 刻意不換成 boqCalc.billableLeaves:那支的父子對照建在「全部 items」上,
+  // 這裡吃的是 buildBillableTree 的 childrenMap(只含可計價非合計列)。
+  // 子項全是合計列的分項在兩把尺下結果不同,要併必須先定案哪一個是規則。
   const leafList = adjItems.filter((it) => it.is_billable && !it.is_rollup && !(tree.childrenMap.get(it.item_key)?.length))
   const laggards = leafList
     .map((it) => { const pct = nodePct(it.item_key); const share = billableTotal ? (amountMap.get(it.item_key) || 0) / billableTotal * 100 : 0; return { it, pct, share, drag: share * Math.max(0, plannedNow - pct) / 100 } })
@@ -359,6 +363,5 @@ function ProgressTree({ nodes, depth, expanded, toggle, childrenMap, nodePct, am
 // billableTotal 為 0 代表「還沒讀到金額」而不是「發包工程費是 0」——載入中／標單未匯入
 // 的早退分支也要掛頁首(工作面分頁列在 PageHeader 內),此時省掉 subtitle 而不是印 0.00 億。
 function Header({ billableTotal, action }) {
-  const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
-  return <PageHeader title="進度管制" tagline="S-Curve" subtitle={billableTotal ? `發包工程費 ${yi(billableTotal)}` : undefined} action={action} />
+  return <PageHeader title="進度管制" tagline="S-Curve" subtitle={billableTotal ? `發包工程費 ${fmtYi(billableTotal)}` : undefined} action={action} />
 }

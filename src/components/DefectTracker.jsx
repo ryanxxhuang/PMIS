@@ -9,11 +9,11 @@ import { appConfirm, appPrompt } from './confirm.jsx'
 import { exportCsv, stamp } from '../lib/exportCsv.js'
 import { defectBall } from '../lib/ballInCourt.js'
 import { friendlyError } from '../lib/errorMessage.js'
+import { taipeiToday } from '../lib/dates.js'
 import MarkupEditor, { MarkupThumb } from './MarkupEditor.jsx'
 
 // 欄位一律用 ui.jsx 的 Input/Select/Textarea:本檔曾抄過一份 FIELD_BASE,
 // 後來改抄字串別名 input——別名同樣會漏掉 Select 的箭頭留白與 Textarea 的 resize-y
-const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 // 小工項挑選器（搜尋 → 選一個;品質缺失/查驗共用）
 export function WorkItemPicker({ leaves, value, label, onPick }) {
@@ -73,7 +73,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
 
   const emptyForm = () => ({
     title: '', description: '', severity: '一般', location: '', due_date: '',
-    work_item_key: '', work_item_label: '', ...(isSafety ? { record_date: todayIso() } : {}),
+    work_item_key: '', work_item_label: '', ...(isSafety ? { record_date: taipeiToday() } : {}),
   })
 
   // 拍缺失照片 → AI 填表。品質缺失=describe-defect(描述缺失);

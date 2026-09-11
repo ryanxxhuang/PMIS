@@ -12,12 +12,10 @@ import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { previousLog, copyableFromLog, frequentItems, addUniqueRow } from '../../lib/siteLogHelpers.js'
 import { mergeDraftItems, draftSummaryFromCaptions } from '../../lib/photoLogDraft.js' // 照片先行:辨識結果 → 日誌表單草稿(純函式)
 import { WorkItemPicker } from '../../components/DefectTracker.jsx'
+import { taipeiToday } from '../../lib/dates.js'
+import { fmtAmount as fmt } from '../../lib/format.js'
+import { billableLeaves } from '../../lib/boqCalc.js'
 
-const fmt = (n) => (n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('en-US'))
-const todayStr = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 // 把 AI 讀到的工項文字模糊比對到標單末端工項（回 work item 或 null）。
 // 含子串 → 取長度比;否則用字元交集 ×0.6;門檻 0.5。使用者最後會確認,寧可漏配也不要錯配。
@@ -25,7 +23,7 @@ export default function SiteLog() {
   const { project, workItems, adjustedItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource, dbMode,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can, aiEnabled } = useStore()
   const navigate = useNavigate()
-  const [date, setDate] = useState(todayStr())
+  const [date, setDate] = useState(taipeiToday())
   const [weather, setWeatherRaw] = useState('晴')       // 上午天氣（相容舊欄位）
   const [weatherPm, setWeatherPmRaw] = useState('')     // 下午天氣
   const [weatherBusy, setWeatherBusy] = useState(false)
@@ -83,14 +81,8 @@ export default function SiteLog() {
   // 當日回報上限(setQty 夾在 0~契約數量)仍卡在舊契約數量。
   const { leaves, byKey, byId } = useMemo(() => {
     if (!workItems) return { leaves: [], byKey: new Map(), byId: new Map() }
-    const childMap = new Map()
-    for (const it of adjustedItems) {
-      const k = it.parent_key || '__root__'
-      if (!childMap.has(k)) childMap.set(k, [])
-      childMap.get(k).push(it)
-    }
     const m = new Map(adjustedItems.map((it) => [it.item_key, it]))
-    const lv = adjustedItems.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
+    const lv = billableLeaves(adjustedItems)
     // byId:照片卡顯示「配到哪個工項」用(photos.work_item_id → 工項)
     const idMap = new Map(adjustedItems.filter((it) => it.id).map((it) => [it.id, it]))
     return { leaves: lv, byKey: m, byId: idMap }
@@ -539,7 +531,7 @@ export default function SiteLog() {
                 </Button>
               )}
               {/* CWA 預報資料集只涵蓋未來約 3 天,過去日期打 API 必然帶不到——先講明,不讓使用者按了才看到失敗 */}
-              {can.edit && date < todayStr() && (
+              {can.edit && date < taipeiToday() && (
                 <span className="text-caption text-[var(--text-3)] pb-2">僅支援近 3 天預報,過去日期請手動填寫</span>
               )}
               {/* 零輸入:一鍵帶入前一筆日誌的班組/機具/材料(僅新日期、且有前一筆時) */}

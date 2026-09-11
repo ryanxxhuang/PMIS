@@ -6,6 +6,7 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { submittalBall } from '../../lib/ballInCourt.js'
+import { taipeiToday } from '../../lib/dates.js'
 
 const CATEGORIES = ['施工計畫', '品質計畫', '材料設備', '樣品', '配比', '其他']
 const STATUS_COLOR = { 已提送: 'blue', 審核中: 'amber', 核准: 'green', 核備: 'green', 退回補正: 'red', 駁回: 'red' }
@@ -13,7 +14,6 @@ const CHECK_COLOR = { 已於送審敘明: 'green', 需補件: 'amber', 需監造
 const DECISION_COLOR = { 核准: 'green', 核備: 'green', 退回補正: 'red', 需補充後再核: 'amber' }
 // AI 偶爾把換行輸出成 literal「\n」;顯示前正規化成分隔號(P2-03)
 const fixNl = (s) => String(s || '').replace(/\\n|\n/g, '；').replace(/；+/g, '；').replace(/^；|；$/g, '')
-const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function Submittals() {
   const { project, submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
@@ -135,7 +135,7 @@ export default function Submittals() {
         action={
           <div className="flex items-center gap-2">
             {submittals.length > 0 && <Button variant="ghost" onClick={exportRows}><MSym name="download" size={16} />CSV</Button>}
-            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', category: '施工計畫', submitted_date: todayIso(), due_date: '', attachment_note: '' })}>{form ? '取消' : <><MSym name="add" size={16} />提送送審</>}</Button>}
+            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', category: '施工計畫', submitted_date: taipeiToday(), due_date: '', attachment_note: '' })}>{form ? '取消' : <><MSym name="add" size={16} />提送送審</>}</Button>}
           </div>
         } />
 

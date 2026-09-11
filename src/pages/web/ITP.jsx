@@ -12,6 +12,7 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { WorkItemPicker } from '../../components/DefectTracker.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
 import { POINT_TYPES, itpStatus, itpActivity, itpAlerts } from '../../lib/itp.js'
+import { billableLeaves } from '../../lib/boqCalc.js'
 
 const TYPE_BADGE = { H: 'red', W: 'blue', R: 'slate' }
 const STATUS_META = {
@@ -34,9 +35,7 @@ export default function ITP() {
   const alerts = useMemo(() => itpAlerts(inspectionPoints, inspections, siteLogs), [inspectionPoints, inspections, siteLogs])
   const leaves = useMemo(() => {
     if (!workItems) return []
-    const childMap = new Map()
-    for (const it of workItems.items) { const k = it.parent_key || '__root__'; if (!childMap.has(k)) childMap.set(k, []); childMap.get(k).push(it) }
-    return workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
+    return billableLeaves(workItems.items)
   }, [workItems])
 
   // 載入分支同樣要保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,

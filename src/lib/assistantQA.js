@@ -5,8 +5,8 @@ import { computeObligationDue } from './contractDue.js'
 import { pendingSamplesFromLogs } from './qc.js'
 import { isRainyLog } from './weatherMetrics.js'
 import { localISODate } from './dates.js'
+import { fmtNtd as money } from './format.js'
 
-const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 const has = (q, ...ks) => ks.some((k) => q.includes(k))
 
 const INTENTS = [

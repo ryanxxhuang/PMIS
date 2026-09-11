@@ -2,7 +2,7 @@
 // 檢查表項目 kind:'num'(數值,依 min/max 判) | 'bool'(勾選=合格)。
 // 混凝土抗壓依規範 03310:預拌混凝土任一試體 ≥0.85fc′ 且平均 ≥fc′。
 
-import { parseLocalDate } from './dates.js'
+import { parseLocalDate, localISODate } from './dates.js'
 
 // 單項判定:回 true(合格)/false(不合格)/null(未檢,不列入)
 export function judgeItem(item, value) {
@@ -74,7 +74,7 @@ export function shouldCreateTestSampleDefect(defects, testSampleId) {
 const addDays = (iso, days) => {
   const d = parseLocalDate(iso)
   d.setDate(d.getDate() + days)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return localISODate(d)
 }
 
 // 由取樣日推 7/28 天試驗到期日

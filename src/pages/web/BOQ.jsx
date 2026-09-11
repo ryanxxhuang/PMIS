@@ -6,9 +6,11 @@ import { Card, Stat, Badge, Surface, Button, PageHeader, SkeletonList, ErrorBann
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
+import { fmtAmount, fmtYi as yi } from '../../lib/format.js'
 
-const fmt = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-US'))
-const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
+// 分項(母項)列結構上就沒有數量與單價,那是「本來沒有」不是「資料缺漏」,
+// 整棵樹畫滿破折號反而讀不出哪裡真的缺值 → 這一頁明示留白。
+const fmt = (n) => fmtAmount(n, { empty: '' })
 
 // 標單工項（BOQ）— 工項樹來自 store：有真專案讀 Supabase work_items，否則範例 JSON。
 export default function BOQ() {

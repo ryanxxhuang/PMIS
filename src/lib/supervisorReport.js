@@ -2,8 +2,8 @@
 // 監造視角的報表，並生出一段「監造意見」草稿供監造覆核修改。唯讀：只產草稿，不送出。
 import { rainDayCount } from './weatherMetrics.js'
 import { taipeiISODate } from './dates.js'
+import { fmtNtd as money } from './format.js'
 
-const money = (n) => `NT$ ${Math.round(n || 0).toLocaleString('en-US')}`
 const ym = (s) => (s || '').slice(0, 7)
 
 // today 可注入:逾期判斷與月份回退才能用固定日期測試,不吃真時鐘。

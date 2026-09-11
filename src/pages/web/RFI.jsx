@@ -7,9 +7,9 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { rfiBall } from '../../lib/ballInCourt.js'
+import { taipeiToday } from '../../lib/dates.js'
 
 const STATUS_COLOR = { 待回覆: 'amber', 已回覆: 'blue', 已結案: 'green' }
-const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function RFI() {
   const { project, rfis, createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply, resolveMarkup,
@@ -78,7 +78,7 @@ export default function RFI() {
         action={
           <div className="flex items-center gap-2">
             {rfis.length > 0 && <Button variant="ghost" onClick={exportRows}><MSym name="download" size={16} />CSV</Button>}
-            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', question: '', asked_date: todayIso(), due_date: '', cost_impact: false, schedule_impact: false })}>{form ? '取消' : <><MSym name="add" size={16} />提出疑義</>}</Button>}
+            {can.submit && <Button variant="secondary" onClick={() => setForm(form ? null : { title: '', question: '', asked_date: taipeiToday(), due_date: '', cost_impact: false, schedule_impact: false })}>{form ? '取消' : <><MSym name="add" size={16} />提出疑義</>}</Button>}
           </div>
         } />
 

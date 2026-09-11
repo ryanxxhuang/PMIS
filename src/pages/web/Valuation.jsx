@@ -10,9 +10,8 @@ import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
 import { collectEvidence, OVER_TOL } from '../../lib/evidence.js'
 import { valuationBall } from '../../lib/ballInCourt.js'
 import { taipeiToday } from '../../lib/dates.js'
+import { fmtAmount as fmt, fmtYi as yi } from '../../lib/format.js'
 
-const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
-const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 
 const statusColor = { 草稿: 'slate', 監造審核: 'amber', 已核定: 'green' }
 

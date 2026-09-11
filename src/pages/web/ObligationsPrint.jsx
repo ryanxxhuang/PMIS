@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
+import { parseLocalDate, localISODate, taipeiToday } from '../../lib/dates.js'
 
 // W10 契約期限對照表——「可寄給對方」的輸出物。事務所/監造對機關、對廠商溝通時
 // 需要一張紙:哪些期限、怎麼算、到期日、誰負責、現在狀態、契約出處。
@@ -17,7 +18,7 @@ const ANCHOR_LABELS = [
   ['award_date', '決標日'], ['notice_date', '開工通知日'],
   ['commencement_date', '開工日'], ['end_date', '竣工日'],
 ]
-const iso = (d) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '')
+const iso = (d) => localISODate(d) || ''
 
 const TH = 'border border-slate-400 px-2 py-1 text-left font-medium bg-slate-100'
 const TD = 'border border-slate-400 px-2 py-1 align-top'
@@ -33,7 +34,7 @@ export default function ObligationsPrint() {
     end_date: currentProject?.end_date || '',
   }), [currentProject])
 
-  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }, [])
+  const today = useMemo(() => parseLocalDate(taipeiToday()), [])
   const rows = useMemo(() => obligations.map((ob) => {
     const due = computeObligationDue(ob, anchors)
     const done = ob.status === '已提送' || ob.status === '已完成'

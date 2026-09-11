@@ -29,6 +29,7 @@ import { appSnackbar } from '../../components/snackbar.jsx'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
 import { localISODate } from '../../lib/dates.js'
+import { fmtDateTime } from '../../lib/format.js'
 import { requirementVerification } from '../../lib/requirementReview.js'
 import { extractionCoverageWarnings } from '../../lib/extractRequirements.js'
 import {
@@ -52,7 +53,7 @@ const COUNTDOWN_CLS = {
 }
 const REPORT_TYPES = ['條文誤判', '日期算錯', '責任方錯誤', '重複', '其他']
 const fmtDay = (v) => (v ? String(v).slice(0, 10) : '—')
-const fmtTime = (v) => (v ? new Date(v).toLocaleString('zh-TW', { hour12: false }) : '')
+const fmtTime = (v) => fmtDateTime(v, { empty: '' })
 
 // 責任方 pill(README 2.4):自己的=藍框藍底、別人的=線框——顏色留給狀態,
 // 責任方靠文字+icon 分辨(a11y:不可只靠顏色)

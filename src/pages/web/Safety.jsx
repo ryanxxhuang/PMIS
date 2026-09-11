@@ -6,6 +6,7 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import DefectTracker from '../../components/DefectTracker.jsx'
+import { taipeiToday } from '../../lib/dates.js'
 
 // 伺服器 safety_records_guard 矩陣的鏡像(僅 UX;真正強制在 DB trigger,
 // 見 migrations 20260712000200 + 20260712001400):廠商=三類原始紀錄,監造=監造三類,機關唯讀。
@@ -18,8 +19,7 @@ const STATUS_COLOR = { 待改善: 'red', 改善中: 'amber', 已完成: 'green' 
 const NEEDS_FLOW = (t) => t === '自主檢查'
 const NEXT = { 待改善: '改善中', 改善中: '已完成' }
 const NEXT_LABEL = { 待改善: '開始改善', 改善中: '標為完成' }
-const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
-const thisMonth = () => todayStr().slice(0, 7)
+const thisMonth = () => taipeiToday().slice(0, 7)
 
 export default function Safety() {
   const { project, isPersistedProject, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord, defects, currentUser, can } = useStore()
@@ -52,7 +52,7 @@ export default function Safety() {
   })).filter((g) => g.list.length), [safetyRecords])
 
   const openForm = (type) => setForm({
-    record_type: type, title: '', location: '', record_date: todayStr(), note: '', result: '合格',
+    record_type: type, title: '', location: '', record_date: taipeiToday(), note: '', result: '合格',
   })
 
   const onSubmit = async () => {

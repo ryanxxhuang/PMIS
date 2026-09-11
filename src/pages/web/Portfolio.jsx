@@ -8,10 +8,10 @@ import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader, Surface } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { parseLocalDate } from '../../lib/dates.js'
+import { fmtAmount as fmt } from '../../lib/format.js'
 import { acceptanceStageSummary } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 
-const fmt = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 
 // 跨案例外彙總:機關承辦進來第一眼要看的是「哪裡出事」,不是逐卡自己加總。
 // 純函式抽出來是為了能單測——卡片形狀有三種來源(本案即時計算/demo 靜態/RPC),

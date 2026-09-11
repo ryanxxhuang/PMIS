@@ -16,10 +16,11 @@ import { computeObligationDue, formatObligationRule } from '../../lib/contractDu
 import { ORG_TO_PARTY, obligationParty } from '../../lib/obligationTimeline.js'
 import AnchorDates from '../../components/AnchorDates.jsx'
 import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
+import { parseLocalDate, localISODate, taipeiToday } from '../../lib/dates.js'
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
-const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
-const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+// 逾期/即將到期的分界點:台北日曆日的午夜,不跟瀏覽器時區(法定期限跟著台灣時區走)
+const today0 = () => parseLocalDate(taipeiToday())
 // 狀態色點走 class 對照表(顏色由 className 帶 token,吃主題切換);
 // 色點附等價文字(title/aria-label),狀態不得只靠顏色(W8-5)
 const DOT_CLS = { done: 'bg-[var(--green-text)]', overdue: 'bg-[var(--red-text)]', soon: 'bg-[var(--amber-text)]', scheduled: 'bg-[var(--blue)]', nodate: 'bg-[var(--text-3)]' }
@@ -193,7 +194,7 @@ export default function Deadlines() {
                     )
                   })()}
                   <div className="text-xs text-[var(--text-3)] mt-1">
-                    {formatObligationRule(it.ob)}{it.due ? `　·　到期 ${isoDate(it.due)}` : ''}
+                    {formatObligationRule(it.ob)}{it.due ? `　·　到期 ${localISODate(it.due)}` : ''}
                     {it.ob.responsible ? `　·　${it.ob.responsible}` : ''}
                   </div>
                   {!it.done && it.due && (

@@ -23,6 +23,7 @@ import { appConfirm } from '../../components/confirm.jsx'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
 import { extractionCoverageWarnings } from '../../lib/extractRequirements.js'
+import { fmtDateTime } from '../../lib/format.js'
 import {
   REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
   WORK_ITEM_LINK_STATE_LABELS, ARTIFACT_TYPE_LABELS, GENERATION_TYPE_LABELS,
@@ -99,7 +100,7 @@ const statusKey = (status) => (
     : ['rejected', 'superseded'].includes(status) ? 'rejected' : 'pending'
 )
 const EDITABLE_STATUSES = ['draft_ai', 'needs_review']
-const fmtTime = (v) => (v ? new Date(v).toLocaleString('zh-TW', { hour12: false }) : '')
+const fmtTime = (v) => fmtDateTime(v, { empty: '' })
 
 // 狀態快篩 chip(README:pill 形、選中=藍框藍底)——與 FilterChip 的
 // toggle+close 語意不同,這裡是單選分段,就地用同一套 token 拼裝

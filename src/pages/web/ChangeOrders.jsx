@@ -7,12 +7,12 @@ import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 import { diffBoq } from '../../lib/coDiff.js'
+import { taipeiToday } from '../../lib/dates.js'
+import { fmtAmount as money, fmtYi as yi } from '../../lib/format.js'
+import { billableLeaves } from '../../lib/boqCalc.js'
 
-const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
-const yi = (n) => (n / 1e8).toFixed(2) + ' 億'
 const STATUS_COLOR = { 提出: 'slate', 審核中: 'amber', 核准: 'green', 駁回: 'red' }
 const isPending = (status) => status === '提出' || status === '審核中'
-const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 export default function ChangeOrders() {
   const { project, workItems, dbMode, demoMode, changeOrders, can,
@@ -20,7 +20,7 @@ export default function ChangeOrders() {
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem } = useStore()
   const original = workItems?.meta.billable_total || 0
 
-  const [head, setHead] = useState({ co_no: '', title: '', co_date: todayStr() })
+  const [head, setHead] = useState({ co_no: '', title: '', co_date: taipeiToday() })
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 明細/狀態寫入失敗必須讓使用者看到(失敗=UI 不變)
   const [submitted, setSubmitted] = useState(false) // 廠商送出後就地回饋(O-4:提出≠已受理,球在監造)
@@ -28,9 +28,7 @@ export default function ChangeOrders() {
   // 發包末端工項（給明細連結既有工項用）
   const leaves = useMemo(() => {
     if (!workItems) return []
-    const childMap = new Map()
-    for (const it of workItems.items) { const k = it.parent_key || '__root__'; if (!childMap.has(k)) childMap.set(k, []); childMap.get(k).push(it) }
-    return workItems.items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
+    return billableLeaves(workItems.items)
   }, [workItems])
 
   const coNet = (co) => co.items.reduce((s, it) => s + (Number(it.amount_delta) || 0), 0)
@@ -67,7 +65,7 @@ export default function ChangeOrders() {
     setBusy(true)
     const { error } = await createChangeOrder(head)
     setBusy(false)
-    if (!error) { setHead({ co_no: '', title: '', co_date: todayStr() }); setSubmitted(true) }
+    if (!error) { setHead({ co_no: '', title: '', co_date: taipeiToday() }); setSubmitted(true) }
   }
 
   // 早退也保留 PageHeader:頁首與工作面分頁不該因為「還沒匯入標單」整組消失

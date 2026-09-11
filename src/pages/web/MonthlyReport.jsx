@@ -4,17 +4,17 @@ import { useStore } from '../../store.jsx'
 import { Card, Empty, Button, PageHeader, Surface, Input, Textarea, Field, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
+import { parseLocalDate, localISOMonth, taipeiToday } from '../../lib/dates.js'
+import { fmtAmount as money } from '../../lib/format.js'
 import { rainDayCount } from '../../lib/weatherMetrics.js'
 import { validateDraft } from '../../lib/factsValidator.js'
 
-const money = (n) => (n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'))
 const qtyFmt = (n) => (n == null || isNaN(n) ? '—' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }))
-const thisMonthStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+const thisMonthStr = () => taipeiToday().slice(0, 7)
 const inMonth = (d, m) => (d || '').slice(0, 7) === m
 // 某月最後一天（用來算「截至月底」的累計）
 const monthEnd = (m) => { const [y, mo] = m.split('-').map(Number); return new Date(y, mo, 0) }
-const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return localISOMonth(d) }
 
 export default function MonthlyReport() {
   const { project, workItems, dbMode, demoMode, valuations, progressPlan, siteLogs,

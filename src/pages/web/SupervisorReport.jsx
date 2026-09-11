@@ -3,11 +3,11 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader, Button, Badge, Surface, Input, Textarea } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
+import { parseLocalDate, taipeiToday } from '../../lib/dates.js'
 import { buildSupervisorReport } from '../../lib/supervisorReport.js'
 
 // 每次呼叫取「今天」(B-11):模組層常數會讓長開分頁凍結在開頁那天
-const curMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+const curMonth = () => taipeiToday().slice(0, 7)
 
 // 章節標題=Workspace 卡頭風(15px/500)。拿掉藍色短標:章節本來就靠「一、二、三」
 // 編號分節,再加一條主色裝飾條會讓每一節都像重點,反而讀不出輕重。

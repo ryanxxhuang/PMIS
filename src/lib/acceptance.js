@@ -4,7 +4,7 @@
 //
 // 資料形狀:events = [{ stage_key, event_date, result, note }](一階段一筆,後蓋前)。
 // deriveAcceptance(events, today) → 各階段 { ...def, event, due, overdue, daysLeft, state }。
-import { parseLocalDate } from './dates.js'
+import { parseLocalDate, localISODate } from './dates.js'
 
 // 標準流程定義。dueDays/dueFrom:自某階段實際日起算的法定/慣例期限。
 // optional:缺失改善/複驗只有初驗不合格才會走。
@@ -33,7 +33,7 @@ const addDays = (dateStr, n) => {
   const d = parseLocalDate(dateStr)
   if (!d) return null
   d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return localISODate(d)
 }
 
 const dayDiff = (dateStr, today) => {

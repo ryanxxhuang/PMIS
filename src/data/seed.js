@@ -3,10 +3,12 @@
 //  · users：Login 在無 Supabase 金鑰時的假角色選單（RolePicker）
 //  · 完整 demo storyline（估驗/日誌/查驗/工安…）見 demoSeed.js
 // 真實模式（已設金鑰）完全不會用到這兩支。
+import { localISODate as iso } from '../lib/dates.js'
 
 // 常青日期：demo 永遠呈現「開工第 6 個月、預定進度 ~33%」的施工中專案，
 // 不會因為時間流逝變成過期或未開工的死資料。
-const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+// 這裡的「現在」刻意仍跟瀏覽器走（不是 taipeiToday）：demo 是銷售簡報素材，
+// 相對日期要貼著看簡報的人螢幕上的今天，不是台灣的今天；它沒有法定期限語意。
 const monthsFromNow = (n, day) => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + n, day) }
 
 const START = monthsFromNow(-5, 15)   // 開工：5 個半月前
