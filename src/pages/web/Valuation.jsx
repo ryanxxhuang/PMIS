@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, BallChip, Empty, Surface, PageHeader, PrerequisiteEmptyState, ErrorBanner, SkeletonList, Input, THEAD_CLS } from '../../components/ui.jsx'
@@ -11,9 +11,13 @@ import { collectEvidence, OVER_TOL } from '../../lib/evidence.js'
 import { valuationBall } from '../../lib/ballInCourt.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { fmtAmount as fmt, fmtYi as yi } from '../../lib/format.js'
+import ValuationRow from '../../components/valuation/ValuationRow.jsx' // memo 列:數千列標單的效能槓桿
 
 
 const statusColor = { 草稿: 'slate', 監造審核: 'amber', 已核定: 'green' }
+
+// 搜尋結果上限:真實 PCCES 標單有數千末端工項,一次渲染整包搜尋結果會卡住頁面(P1-3)
+const SEARCH_LIMIT = 120
 
 // 決策列差異彙總(W8-4B B2):純計數,不動任何金額——金額仍由 boqCalc 確定性引擎算。
 // 超計與明細列的 overBilled 是同一條式子(OVER_TOL 同源),兩處判定不可分裂;
@@ -70,7 +74,6 @@ export default function Valuation() {
 
   // 搜尋攤平末端工項:結果設上限——真實 PCCES 標單有數千末端工項,
   // 一次渲染整包搜尋結果會卡住頁面(P1-3);超過上限提示縮小關鍵字。
-  const SEARCH_LIMIT = 120
   const { leaves, matchCount } = useMemo(() => {
     const q = search.trim()
     if (!q) return { leaves: [], matchCount: 0 }
@@ -112,6 +115,40 @@ export default function Valuation() {
     return summarizeValuationDiff(billedLeaves, items, getEvidence)
   }, [selected?.items, keyToItem, childrenMap, getEvidence])
 
+  // 列的 callback 一律釘住 identity(useCallback),否則 ValuationRow 的 memo 形同虛設。
+  // toggle/toggleEv 只用 functional setState,沒有外部依賴。
+  const toggle = useCallback((key) =>
+    setExpanded((p) => {
+      const n = new Set(p)
+      n.has(key) ? n.delete(key) : n.add(key)
+      return n
+    }), [])
+
+  const toggleEv = useCallback((key) =>
+    setEvOpen((p) => {
+      const n = new Set(p)
+      n.has(key) ? n.delete(key) : n.add(key)
+      return n
+    }), [])
+
+  // 輸入「累計完成數量」，夾在 0 ~ 契約數量;DB 失敗時 slice 會還原該格,這裡顯示原因。
+  // onBlur 才寫入(P1-3):打字中不觸發 DB upsert 與全樹重算——大標單每鍵一次會卡死。
+  // 本體依賴 selected(每改一格就換)——若直接 useCallback 在 selected 上,每次改數量所有列
+  // 都拿到新 onQty 而整樹重畫;改走 ref:對外 identity 永遠不變,內部永遠讀最新的 selected。
+  const onQtyRef = useRef(null)
+  onQtyRef.current = async (it, val) => {
+    const existing = selected?.items?.[it.item_key]
+    if (val === '' && existing == null) return          // 沒填過又留空:不寫 0 列
+    let n = parseFloat(val)
+    if (isNaN(n)) n = 0
+    const maxQ = it.quantity || 0
+    n = Math.max(0, maxQ > 0 ? Math.min(maxQ, n) : n)
+    if (existing != null && Number(existing) === n) return // 無變化不寫
+    const { error } = await updateValuationItem(selected.id, it.item_key, n)
+    if (error) setErrMsg(friendlyError(error, `數量未儲存（${it.item_no || it.item_key}）`))
+  }
+  const onQty = useCallback((it, val) => onQtyRef.current(it, val), [])
+
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
   // 使用者會被關在載入/前置條件畫面裡,換不到同工作面的其他頁。
@@ -146,36 +183,10 @@ export default function Valuation() {
   const totalCum = roots.reduce((s, r) => s + (cumThis.get(r.item_key) || 0), 0)
   const totalPrev = roots.reduce((s, r) => s + (cumPrev.get(r.item_key) || 0), 0)
   const periodAmt = totalCum - totalPrev
-  const ret = (selected?.retention_pct ?? 5) / 100
+  // 保留款比例:DB 欄位 not null default 5,?? 5 只為 demo/舊資料的缺值;三處顯示與計算同一個值
+  const retPct = selected?.retention_pct ?? 5
+  const ret = retPct / 100
   const completion = billableTotal ? (totalCum / billableTotal) * 100 : 0
-
-  const toggle = (key) =>
-    setExpanded((p) => {
-      const n = new Set(p)
-      n.has(key) ? n.delete(key) : n.add(key)
-      return n
-    })
-
-  const toggleEv = (key) =>
-    setEvOpen((p) => {
-      const n = new Set(p)
-      n.has(key) ? n.delete(key) : n.add(key)
-      return n
-    })
-
-  // 輸入「累計完成數量」，夾在 0 ~ 契約數量;DB 失敗時 slice 會還原該格,這裡顯示原因。
-  // onBlur 才寫入(P1-3):打字中不觸發 DB upsert 與全樹重算——大標單每鍵一次會卡死。
-  const onQty = async (it, val) => {
-    const existing = selected?.items?.[it.item_key]
-    if (val === '' && existing == null) return          // 沒填過又留空:不寫 0 列
-    let n = parseFloat(val)
-    if (isNaN(n)) n = 0
-    const maxQ = it.quantity || 0
-    n = Math.max(0, maxQ > 0 ? Math.min(maxQ, n) : n)
-    if (existing != null && Number(existing) === n) return // 無變化不寫
-    const { error } = await updateValuationItem(selected.id, it.item_key, n)
-    if (error) setErrMsg(friendlyError(error, `數量未儲存（${it.item_no || it.item_key}）`))
-  }
 
   // 建立估驗期(新增一期/第 1 期共用):DB 成功才會拿到 v
   const onCreate = async () => {
@@ -205,203 +216,19 @@ export default function Valuation() {
     if (error) setErrMsg(friendlyError(error, `${label}未完成`))
   }
 
-  // 佐證欄摘要:0 的類別不顯示;全 0 顯示灰字「無」
-  const evSummary = (c) => {
-    const parts = []
-    if (c.logs) parts.push(`${c.logs} 日誌`)
-    if (c.inspections) parts.push(`${c.inspections} 查驗`)
-    if (c.checklists) parts.push(`${c.checklists} 檢查表`)
-    if (c.samples) parts.push(`${c.samples} 試體`)
-    return parts.join(' · ')
-  }
-  // 佐證狀態走 Badge 五語意(顏色+文字並存,色盲可讀),不再只靠文字色
-  const evStatusColor = (s) => (s === '合格' ? 'green' : s === '不合格' ? 'red' : 'slate')
-  const EV_LOG_LIMIT = 30
-
-  // 佐證展開細節:沿用樹狀列展開的語彙(該列下方插一列),不開 modal
-  const renderEvidenceRow = (it, ev, level) => (
-    <tr key={`${it.item_key}::ev`} className="border-b border-[var(--border-2)] bg-[var(--surface-2)]">
-      {/* 縮排同明細列改佔位 span(+20 對齊展開鈕後的文字起點),colSpan 結構不動 */}
-      <td colSpan={8} className="py-2.5 pl-5 pr-5">
-        <div className="flex">
-          <span style={{ width: level * 18 + 20 }} className="shrink-0" aria-hidden="true" />
-          <div className="space-y-2 text-xs min-w-0">
-          {ev.logs.length > 0 && (
-            <div>
-              <div className="font-medium text-[var(--text-2)] mb-0.5">
-                施工日誌 <span className="text-[var(--text-3)] font-normal">{ev.logs.length} 筆</span>
-                <Link to="/site-log" className="ml-2 inline-flex items-center gap-0.5 align-[-2px] text-[var(--blue-text)] hover:underline font-normal">前往日誌<MSym name="arrow_forward" size={12} /></Link>
-              </div>
-              <ul className="space-y-0.5">
-                {ev.logs.slice(0, EV_LOG_LIMIT).map((l) => (
-                  <li key={l.log_date} className="text-[var(--text-3)]">
-                    <span className="tabular-nums text-[var(--text-2)]">{l.log_date}</span>
-                    <span className="mx-1.5 tabular-nums">{l.qty.toLocaleString('en-US')} {it.unit}</span>
-                    {l.note && <span className="text-[var(--text-3)]">— {l.note}</span>}
-                  </li>
-                ))}
-                {ev.logs.length > EV_LOG_LIMIT && (
-                  <li className="text-[var(--text-3)]">共 {ev.logs.length} 筆,僅列最近 {EV_LOG_LIMIT} 筆</li>
-                )}
-              </ul>
-            </div>
-          )}
-          {ev.inspections.length > 0 && (
-            <div>
-              <div className="font-medium text-[var(--text-2)] mb-0.5">
-                查驗 <span className="text-[var(--text-3)] font-normal">{ev.inspections.length} 筆</span>
-                <Link to="/quality" className="ml-2 inline-flex items-center gap-0.5 align-[-2px] text-[var(--blue-text)] hover:underline font-normal">前往品質查驗<MSym name="arrow_forward" size={12} /></Link>
-              </div>
-              <ul className="space-y-0.5">
-                {ev.inspections.map((i) => (
-                  <li key={i.id} className="text-[var(--text-3)]">
-                    {i.title}
-                    <Badge color={evStatusColor(i.status)} className="ml-1.5">{i.status}</Badge>
-                    {i.inspected_at && <span className="ml-1.5 tabular-nums">{String(i.inspected_at).slice(0, 10)}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {ev.checklists.length > 0 && (
-            <div>
-              <div className="font-medium text-[var(--text-2)] mb-0.5">
-                自主檢查表 <span className="text-[var(--text-3)] font-normal">{ev.checklists.length} 筆</span>
-                <Link to="/quality" className="ml-2 inline-flex items-center gap-0.5 align-[-2px] text-[var(--blue-text)] hover:underline font-normal">前往自主檢查<MSym name="arrow_forward" size={12} /></Link>
-              </div>
-              <ul className="space-y-0.5">
-                {ev.checklists.map((r) => (
-                  <li key={r.id} className="text-[var(--text-3)]">
-                    {r.title}
-                    <span className="ml-1.5 tabular-nums">{r.check_date}</span>
-                    <Badge color={evStatusColor(r.overall)} className="ml-1.5">{r.overall || '未判定'}</Badge>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {ev.samples.length > 0 && (
-            <div>
-              <div className="font-medium text-[var(--text-2)] mb-0.5">
-                取樣試體 <span className="text-[var(--text-3)] font-normal">{ev.samples.length} 組(以澆置日對應)</span>
-                <Link to="/quality" className="ml-2 inline-flex items-center gap-0.5 align-[-2px] text-[var(--blue-text)] hover:underline font-normal">前往取樣試驗<MSym name="arrow_forward" size={12} /></Link>
-              </div>
-              <ul className="space-y-0.5">
-                {ev.samples.map((s) => (
-                  <li key={s.id} className="text-[var(--text-3)]">
-                    <span className="text-[var(--text-2)]">{s.sample_no}</span>
-                    <span className="ml-1.5 tabular-nums">取樣 {s.sampled_date}</span>
-                    <Badge color={evStatusColor(s.status)} className="ml-1.5">{s.status}</Badge>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {ev.counts.logs + ev.counts.inspections + ev.counts.checklists + ev.counts.samples === 0 && (
-            <div className="text-[var(--text-3)]">此工項尚無任何現場紀錄佐證(施工日誌/查驗/檢查表/試體均查無對應)。</div>
-          )}
-          </div>
-        </div>
-      </td>
-    </tr>
+  // 每列只收自己的純量與穩定 reference(memo 才會生效,理由見 ValuationRow.jsx 檔頭);
+  // qtyInput 傳原值(可能 undefined):列內同時要「?? 0 算比例」與「?? '' 給輸入框」兩種預設
+  const rowEl = (it, level) => (
+    <ValuationRow key={it.item_key} it={it} level={level} hasKids={(childrenMap.get(it.item_key) || []).length > 0}
+      isOpen={expanded.has(it.item_key)} evIsOpen={evOpen.has(it.item_key)}
+      cum={cumThis.get(it.item_key) || 0} prevCum={cumPrev.get(it.item_key) || 0}
+      qtyInput={selected?.items?.[it.item_key]} editable={editable} selectedId={selected?.id}
+      getEvidence={getEvidence} onToggle={toggle} onToggleEv={toggleEv} onQty={onQty} />
   )
-
-  const renderRow = (it, level) => {
-    const kids = childrenMap.get(it.item_key) || []
-    const hasKids = kids.length > 0
-    const isOpen = expanded.has(it.item_key)
-    const cum = cumThis.get(it.item_key) || 0
-    const per = cum - (cumPrev.get(it.item_key) || 0)
-    const cumQty = selected?.items?.[it.item_key] ?? 0
-    // 佐證只對渲染到的葉項計算(getEvidence 內部有快取)
-    const ev = hasKids ? null : getEvidence(it)
-    // 差異警示:估驗累計 > 日誌累計 ×1.05(與稽核頁 OVER_TOL 同一容忍值)——
-    // 把送審後才會被勾稽出的「超前計價」提前呈現在填報當下
-    const overBilled = ev && Number(cumQty) > 0 && Number(cumQty) > ev.loggedTotal * OVER_TOL
-    // 完成百分比：父項用金額比、葉項用數量比
-    const pct = hasKids
-      ? (it.amount ? (cum / it.amount) * 100 : 0)
-      : (it.quantity ? (cumQty / it.quantity) * 100 : 0)
-    const row = (
-      <tr key={it.item_key} className={`border-b border-[var(--border-2)] hover:bg-[var(--surface-2)] ${hasKids ? 'bg-[var(--bg)] font-medium' : ''}`}>
-        {/* table-fixed 下改用「固定寬佔位 span」縮排:padding 縮排會吃掉欄寬,
-            深層工項一縮排整欄就被推歪;佔位法讓縮排永不推移其他欄位 */}
-        <td className="py-1.5 pl-5 pr-2">
-          <span className="flex items-center gap-1 min-w-0">
-            <span style={{ width: level * 18 }} className="shrink-0" aria-hidden="true" />
-            {hasKids ? (
-              // 圖示 aria-hidden,可及名稱與展開狀態仍由 aria-label/aria-expanded 承擔
-              <button onClick={() => toggle(it.item_key)} aria-expanded={isOpen} aria-label={`${isOpen ? '收合' : '展開'} ${it.item_no}`}
-                className="w-4 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] max-md:min-h-11 max-md:min-w-11 max-md:-m-3.5">
-                <MSym name={isOpen ? 'expand_more' : 'chevron_right'} size={16} />
-              </button>
-            ) : <span className="w-4 shrink-0 inline-block" />}
-            <span className="text-[var(--text-3)] text-xs tabular-nums shrink-0">{it.item_no}</span>
-            {/* 長工項名 ellipsis 截斷不換行(列高一致),完整名稱靠 title 提示 */}
-            <span className={`truncate ${it.depth <= 2 ? 'text-[var(--text)]' : ''}`} title={it.description}>{it.description}</span>
-          </span>
-        </td>
-        <td className="text-right text-[var(--text-3)] text-xs px-2 whitespace-nowrap">{hasKids ? '' : it.unit}</td>
-        <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{hasKids ? '' : fmt(it.quantity)}</td>
-        <td className="text-right text-[var(--text-2)] px-2 tabular-nums whitespace-nowrap">{hasKids ? '' : fmt(it.unit_price)}</td>
-        <td className="text-right px-2 whitespace-nowrap">
-          {hasKids ? (
-            <span className="text-[var(--text-3)] tabular-nums">{pct.toFixed(1)}%</span>
-          ) : editable ? (
-            <span className="inline-flex items-center gap-1 justify-end">
-              <input
-                type="number" min="0" max={it.quantity || undefined} step="any"
-                key={`${selected.id}:${it.item_key}:${cumQty}`}
-                defaultValue={selected?.items?.[it.item_key] ?? ''}
-                onBlur={(e) => onQty(it, e.target.value)}
-                placeholder="0"
-                className="w-20 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-sm tabular-nums focus:border-[var(--blue)] focus:outline-none"
-              />
-              <span className="text-micro text-[var(--text-3)] w-9 text-right tabular-nums">{pct.toFixed(0)}%</span>
-            </span>
-          ) : (
-            <span className="text-[var(--text-2)] tabular-nums">{fmt(cumQty)} <span className="text-micro text-[var(--text-3)]">({pct.toFixed(0)}%)</span></span>
-          )}
-        </td>
-        <td className="text-right text-[var(--text)] px-2 tabular-nums whitespace-nowrap">{fmt(cum)}</td>
-        <td className={`text-right px-2 tabular-nums whitespace-nowrap ${per > 0 ? 'text-[var(--blue-text)] font-medium' : 'text-[var(--text-3)]'}`}>{fmt(per)}</td>
-        {/* 佐證欄非數字欄:固定欄寬(colgroup 200px)下拿掉 nowrap 讓摘要與警示可換行,
-            否則「疑超計」長字串會溢出儲存格蓋到相鄰欄 */}
-        <td className="text-left px-2 pr-5 text-xs">
-          {!hasKids && ev && (
-            <span className="inline-flex flex-wrap items-center gap-1.5">
-              {ev.counts.logs + ev.counts.inspections + ev.counts.checklists + ev.counts.samples === 0 ? (
-                <span className="text-[var(--text-3)]">無</span>
-              ) : (
-                <button
-                  onClick={() => toggleEv(it.item_key)}
-                  aria-expanded={evOpen.has(it.item_key)}
-                  title="展開佐證細節(日誌/查驗/檢查表/試體)"
-                  className="inline-flex items-center gap-0.5 text-[var(--blue-text)] hover:underline"
-                >
-                  <MSym name={evOpen.has(it.item_key) ? 'expand_more' : 'chevron_right'} size={14} />{evSummary(ev.counts)}
-                </button>
-              )}
-              {overBilled && (
-                // 警示原本只有琥珀色+title,手機沒有 hover 就完全讀不到語意;
-                // 補圖示與「疑超計」字樣,顏色只是輔助(W8-0 §8-6)
-                <span className="inline-flex items-center gap-0.5 text-caption text-[var(--amber-text)]" title="累計估驗數量高於施工日誌累計完成量逾 5%,可能超計,建議查核佐證後再計價">
-                  <MSym name="warning" size={11} />疑超計 估驗 {fmt(cumQty)} &gt; 日誌 {fmt(ev.loggedTotal)}
-                </span>
-              )}
-            </span>
-          )}
-        </td>
-      </tr>
-    )
-    if (!hasKids && evOpen.has(it.item_key)) return [row, renderEvidenceRow(it, ev, level)]
-    return row
-  }
-
   const renderTree = (items, level = 0) =>
     items.flatMap((it) => {
       const kids = childrenMap.get(it.item_key) || []
-      const row = renderRow(it, level)
+      const row = rowEl(it, level)
       if (kids.length && expanded.has(it.item_key)) return [row, ...renderTree(kids, level + 1)]
       return [row]
     })
@@ -411,7 +238,7 @@ export default function Valuation() {
       <PageHeader title="估驗計價" tagline="Valuation"
         subtitle={`${coNet !== 0
           ? `變更後契約金額 ${yi(billableTotal)}（原發包 ${yi(billableTotal - coNet)}，核准追加減 ${coNet > 0 ? '+' : ''}${fmt(coNet)}）`
-          : `發包工程費 ${yi(billableTotal)}`}（保留款 ${selected?.retention_pct ?? 5}%）`}
+          : `發包工程費 ${yi(billableTotal)}`}（保留款 ${retPct}%）`}
         action={
           // 兩份輸出常被搞混(C-11):差異原本只寫在 title tooltip,手機根本讀不到。
           // 副文字常駐,講清楚哪一份是計價依據、哪一份只是佐證彙整。
@@ -463,7 +290,7 @@ export default function Valuation() {
             <Stat label="本期估驗金額" value={fmt(periodAmt)} sub={`第 ${selected.period_no} 期`} color="text-[var(--blue-text)]" />
             <Stat label="累計估驗金額" value={fmt(totalCum)} sub={`占發包 ${completion.toFixed(1)}%`} />
             <Stat label="累計完成度" value={`${completion.toFixed(1)}%`} sub={`/ ${yi(billableTotal)}`} color="text-[var(--green-text)]" />
-            <Stat label="本期保留款" value={fmt(periodAmt * ret)} sub={`${selected.retention_pct}%`} color="text-[var(--text-2)]" />
+            <Stat label="本期保留款" value={fmt(periodAmt * ret)} sub={`${retPct}%`} color="text-[var(--text-2)]" />
             <Stat label="本期應付" value={fmt(periodAmt * (1 - ret))} sub="本期估驗 − 保留款" color="text-[var(--blue-text)]" />
           </div>
 
@@ -572,7 +399,7 @@ export default function Valuation() {
                   </tr>
                 </thead>
                 <tbody>
-                  {search ? leaves.map((it) => renderRow(it, 0)) : renderTree(roots)}
+                  {search ? leaves.map((it) => rowEl(it, 0)) : renderTree(roots)}
                   {search && matchCount > leaves.length && (
                     <tr><td colSpan={8} className="py-2 px-5 text-xs text-[var(--text-3)]">
                       符合 {matchCount} 筆,僅顯示前 {leaves.length} 筆——請輸入更精確的關鍵字或工項編號。

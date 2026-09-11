@@ -66,7 +66,9 @@ export function daysBetween(dueIso, todayIso) {
   return a == null || b == null ? null : Math.round((a - b) / 86400000)
 }
 
-const dueText = (days, dueIso) => (days < 0
+// 到期句的單一真相:今日待辦與品質頁工作佇列共用同一支——TaskRow 的 OVERDUE_RE 與
+// e2e 都綁死「逾期 N 天（到期 YYYY-MM-DD）」這個句型,兩處各抄一份一漂移就斷。
+export const dueText = (days, dueIso) => (days < 0
   ? `逾期 ${-days} 天（到期 ${dueIso}）`
   : days === 0 ? `今天到期（${dueIso}）` : `還有 ${days} 天（到期 ${dueIso}）`)
 

@@ -59,6 +59,20 @@ export function collectEvidence(itemKey, {
   }
 }
 
+// 估驗頁佐證欄的摘要句:0 的類別不顯示;全 0 回空字串,由呼叫端決定顯示「無」。
+export function evSummary(c) {
+  const parts = []
+  if (c.logs) parts.push(`${c.logs} 日誌`)
+  if (c.inspections) parts.push(`${c.inspections} 查驗`)
+  if (c.checklists) parts.push(`${c.checklists} 檢查表`)
+  if (c.samples) parts.push(`${c.samples} 試體`)
+  return parts.join(' · ')
+}
+
+// 佐證狀態 → Badge 五語意色(顏色+文字並存,色盲可讀);查驗/檢查表/試體三種紀錄的
+// 判定值同一套字面(合格/不合格),其餘(待查驗/未判定/待試驗)一律中性 slate。
+export const evStatusColor = (s) => (s === '合格' ? 'green' : s === '不合格' ? 'red' : 'slate')
+
 // 佐證照片的說明行:機關看紙本佐證時第一個問的是「這張拍在哪」,
 // 所以 classify-site-photo 抄下來的施作區域(photos.location,如「A區1F」)要走在說明前面——
 // 同一工項不同樓層/區域的照片,光看 caption 分不出來(W8-5 ISSUE-4)。

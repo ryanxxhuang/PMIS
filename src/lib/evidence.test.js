@@ -123,3 +123,23 @@ describe('photoEvidenceLine', () => {
     expect(photoEvidenceLine({ location: '  ', caption: '  ' })).toBe('') // 空白字串不算辨識到
   })
 })
+
+// ── 波次 7 由 Valuation.jsx 搬出的佐證欄顯示用純函式 ──
+import { evSummary, evStatusColor } from './evidence.js'
+
+describe('evSummary(佐證欄摘要句)', () => {
+  it('0 的類別不顯示;全 0 回空字串(「無」由呼叫端決定)', () => {
+    expect(evSummary({ logs: 3, inspections: 0, checklists: 1, samples: 0 })).toBe('3 日誌 · 1 檢查表')
+    expect(evSummary({ logs: 1, inspections: 2, checklists: 3, samples: 4 })).toBe('1 日誌 · 2 查驗 · 3 檢查表 · 4 試體')
+    expect(evSummary({ logs: 0, inspections: 0, checklists: 0, samples: 0 })).toBe('')
+  })
+})
+
+describe('evStatusColor(佐證狀態 → Badge 語意色)', () => {
+  it('合格綠、不合格紅、其餘一律 slate', () => {
+    expect(evStatusColor('合格')).toBe('green')
+    expect(evStatusColor('不合格')).toBe('red')
+    expect(evStatusColor('待查驗')).toBe('slate')
+    expect(evStatusColor(undefined)).toBe('slate')
+  })
+})
