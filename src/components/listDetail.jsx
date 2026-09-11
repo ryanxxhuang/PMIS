@@ -1,6 +1,6 @@
-// 「清單＋詳情」殼的共用件(履約時程 /requirements 與擷取審核 /requirements/review
-// 兩頁原本各抄一份):<lg 詳情抽屜、置中 Modal 外殼、搜尋欄、狀態快篩 chip、
-// 詳情 key-value 格、出處引述。狀態與鍵盤行為在 lib/useListDetailPane.js。
+// 「清單＋詳情」殼的共用件:兩欄版面、<lg 詳情抽屜、置中 Modal 外殼、搜尋欄、
+// 狀態快篩 chip、詳情 key-value 格、出處引述。狀態與鍵盤行為在 lib/useListDetailPane.js。
+// 這是已核准 IA(規範 §0「疊合版」)的「殼」:詳情永遠出現在同一個位置,不跳頁。
 // 這裡的每一件都有兩個實際使用點才抽(DEVELOPMENT.md §3 第 2 條);單頁專屬的
 // 版面(履約執行卡、期程條、手動新增表單)留在各自頁面。
 // 顏色一律走 token、字級走 @theme 階梯(規範 docs/UIUX-Apple-設計規範.md)。
@@ -8,8 +8,39 @@
 // 下次 ui.jsx 開檔時把 SearchField/StatusChip 併過去,呼叫端只改 import 路徑。
 import { forwardRef, useEffect, useRef } from 'react'
 import { MSym } from './icons.jsx'
-import { Button } from './ui.jsx'
+import { Button, Card } from './ui.jsx'
 import { useEscape } from '../lib/useEscape.js'
+
+// 兩欄版面的欄寬與間距。骨架與正式版面必須共用這一份——兩邊不同寬的話
+// 載入完成會整片位移(規範:載入完成不位移)。Tailwind 掃的是字面值,所以
+// 這裡只能是完整字串,不能用變數拼 400px。
+//
+// 400 是定案值。抽出來之前 /requirements 寫 400、/requirements/review 寫 392,
+// 同一個殼在兩頁差 8px——沒有人決定過那 8px,它就是複製貼上漂掉的。
+export const LIST_DETAIL_GRID = 'grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_400px]'
+
+// 兩欄殼:左欄由呼叫端給(各頁的清單長得不一樣,連 Card 的 title/action 都不同),
+// 右欄與抽屜由殼統一——它們正是「詳情永遠在同一個位置」這條 IA 的載體,
+// 交給各頁自己寫就會像先前那樣各漂各的。
+// detail 為空時右欄顯示 detailEmpty(要說「點左側清單查看」,不要只說沒有資料)。
+export function ListDetailLayout({ children, detail, detailLabel, detailEmpty = null, drawerOpen = false, onDrawerClose, className = '' }) {
+  return (
+    <>
+      <div className={`${LIST_DETAIL_GRID} ${className}`}>
+        {children}
+        {/* sticky top-6:長清單捲動時詳情不會跟著捲走。aria-live 讓報讀器在
+            選取換人時唸出新內容——桌機不開抽屜,沒有這個就完全無聲。 */}
+        <Card className="hidden lg:block lg:sticky lg:top-6" bodyClass="p-0" aria-live="polite">
+          {detail || detailEmpty}
+        </Card>
+      </div>
+      {/* <lg 沒有右欄,同一份 detail 改由抽屜承載(768-1023 右滑入,<768 全螢幕) */}
+      <DetailDrawer open={drawerOpen} onClose={onDrawerClose} label={detailLabel}>
+        {detail}
+      </DetailDrawer>
+    </>
+  )
+}
 
 // 抽屜與 Modal 共用:開啟時把焦點帶進面板(aria-modal 沒有焦點管理=報讀器仍停在
 // 遮罩後的清單,W8-5 F2 同一課)。Esc 關閉走共用的 useEscape(理由見該檔)。

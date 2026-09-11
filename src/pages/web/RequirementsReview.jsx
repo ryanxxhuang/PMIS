@@ -21,7 +21,7 @@ import {
   PrerequisiteEmptyState, ErrorBanner, SkeletonList,
 } from '../../components/ui.jsx'
 import {
-  DetailDrawer, ModalShell, SearchField, StatusChip, MetaGrid, SourceQuote,
+  ListDetailLayout, LIST_DETAIL_GRID, ModalShell, SearchField, StatusChip, MetaGrid, SourceQuote,
 } from '../../components/listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -776,7 +776,7 @@ export default function RequirementsReview() {
     return (
       <div className="space-y-6">
         <PageHeader title="擷取審核" tagline="AI 轉錄確認" subtitle={SUBTITLE} action={headerAction} />
-          <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_392px]">
+          <div className={LIST_DETAIL_GRID}>
           <Card><SkeletonList rows={8} label="正在載入契約重點…" /></Card>
           <Card className="hidden lg:block"><SkeletonList rows={4} label="" /></Card>
         </div>
@@ -823,8 +823,13 @@ export default function RequirementsReview() {
       <PageHeader title="擷取審核" tagline="AI 轉錄確認" subtitle={SUBTITLE} action={headerAction} />
 
 
-      <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_392px]">
-        {/* ── 左欄:契約重點清單 ── */}
+      <ListDetailLayout
+        detail={detailBody}
+        detailLabel="條文詳情"
+        detailEmpty={<Empty>點左側清單查看條文詳情。</Empty>}
+        drawerOpen={detailOpen && !!selected}
+        onDrawerClose={closeDetail}>
+        {/* ── 左欄:契約重點清單(右欄與抽屜由殼統一) ── */}
         <Card title="契約重點清單" bodyClass="p-0"
           action={<span className="num text-caption text-[var(--text-3)]">{listMeta}</span>}>
           {/* 揭露條(涵蓋率/審查規則):資料與畫面要說同一件事,不因改版消失 */}
@@ -889,17 +894,7 @@ export default function RequirementsReview() {
             )}
           </div>
         </Card>
-
-        {/* ── 右欄:條文詳情(桌機 sticky;≥1024 常駐) ── */}
-        <Card className="hidden lg:block lg:sticky lg:top-6" bodyClass="p-0" aria-live="polite">
-          {detailBody || <Empty>點左側清單查看條文詳情。</Empty>}
-        </Card>
-      </div>
-
-      {/* <lg:詳情抽屜(768-1023 右滑入)/全螢幕(<768,左上返回) */}
-      <DetailDrawer open={detailOpen && !!selected} onClose={closeDetail} label="條文詳情">
-        {detailBody}
-      </DetailDrawer>
+      </ListDetailLayout>
 
       {manualModal}
     </div>

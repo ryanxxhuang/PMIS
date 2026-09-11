@@ -25,7 +25,7 @@ import {
   PrerequisiteEmptyState, ErrorBanner, SkeletonList, Skeleton,
 } from '../../components/ui.jsx'
 import {
-  DetailDrawer, ModalShell, SearchField, StatusChip, MetaGrid, SourceQuote,
+  ListDetailLayout, LIST_DETAIL_GRID, ModalShell, SearchField, StatusChip, MetaGrid, SourceQuote,
 } from '../../components/listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appSnackbar } from '../../components/snackbar.jsx'
@@ -766,7 +766,7 @@ export default function Requirements() {
         <Surface className="flex-1 p-4 max-md:hidden"><SkeletonList rows={2} label="" /></Surface>
       </div>
       <Card><Skeleton className="h-16" /></Card>
-      <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_400px]">
+      <div className={LIST_DETAIL_GRID}>
         <Card><SkeletonList rows={8} label="" /></Card>
         <Card className="hidden lg:block"><SkeletonList rows={4} label="" /></Card>
       </div>
@@ -814,8 +814,13 @@ export default function Requirements() {
       {execCards}
       {phaseBar}
 
-      <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_400px]">
-        {/* ── 左欄:時間軸清單 ── */}
+      <ListDetailLayout
+        detail={detailBody}
+        detailLabel="義務詳情"
+        detailEmpty={<Empty>點左側清單查看義務詳情。</Empty>}
+        drawerOpen={detailOpen && !!selected}
+        onDrawerClose={closeDetail}>
+        {/* ── 左欄:時間軸清單(右欄與抽屜由殼統一,見 components/listDetail.jsx) ── */}
         <Card bodyClass="p-0">
           {filterBar}
           {listRows}
@@ -826,17 +831,7 @@ export default function Requirements() {
             )}
           </div>
         </Card>
-
-        {/* ── 右欄:義務詳情(桌機 sticky;≥1024 常駐) ── */}
-        <Card className="hidden lg:block lg:sticky lg:top-6" bodyClass="p-0" aria-live="polite">
-          {detailBody || <Empty>點左側清單查看義務詳情。</Empty>}
-        </Card>
-      </div>
-
-      {/* <lg:詳情抽屜(768-1023 右滑入)/全螢幕(<768,左上返回) */}
-      <DetailDrawer open={detailOpen && !!selected} onClose={closeDetail} label="義務詳情">
-        {detailBody}
-      </DetailDrawer>
+      </ListDetailLayout>
 
       {reportModal}
     </div>
