@@ -4,6 +4,7 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader, Button, Surface, Badge } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
+import { plannedPctNow } from '../../lib/progressPlan.js'
 import { auditProject } from '../../lib/riskAudit.js'
 import { buildIntegrityFindings, isConcretePourItem } from '../../lib/integrityAudit.js'
 
@@ -15,20 +16,6 @@ const ST = {
   warn: { icon: 'warning', badge: 'amber', tile: 'bg-[var(--amber-tint)] text-[var(--amber-text)]', label: '注意' },
   risk: { icon: 'gpp_maybe', badge: 'red', tile: 'bg-[var(--red-tint)] text-[var(--red-text)]', label: '風險' },
   na: { icon: 'help', badge: 'slate', tile: 'bg-[var(--slate-tint)] text-[var(--slate-text)]', label: '未評估' }, // 資料不足,不算通過
-}
-
-// 累計預定進度 %:progressPlan.months 的 plannedPct 是逐月累計值,對「今天」線性內插。
-// 純算術、每次 render 重算,不放 useMemo——只認 progressPlan 的 memo 會把「今天」凍在
-// 它上次變動那天,長開分頁的預定進度就停住(B-11 每次 render 取「今天」的用意就沒了)。
-function plannedPctNow(progressPlan, today) {
-  if (!progressPlan) return null
-  const months = progressPlan.months, N = months.length
-  const start = new Date(progressPlan.start)
-  const el = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth()) + (today.getDate() - 1) / 30
-  if (el <= 0) return 0
-  if (el >= N - 1) return months[N - 1].plannedPct
-  const lo = Math.floor(el), f = el - lo
-  return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
 }
 
 export default function RiskAudit() {

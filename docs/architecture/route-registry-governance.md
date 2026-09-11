@@ -88,7 +88,7 @@ node -e "import('./src/lib/navConfig.js').then(m=>{const r=m.routeRegistry;conso
 grep -n "hidden: true" src/lib/navConfig.js
 ```
 
-2026-09-11 現查參考值：39 條登記路由、2 個 nav 群組（工作面／平台）、5 個 `hidden: true` 的工作面組定義（`/site-log`、`/submittals`、`/valuation`、`/monthly-report`、`/portfolio`）、5 條帶 `roles` 的路由、1 條 `platformAdminOnly`。**CLAUDE.md 與 CURRENT.md 寫的「6 處 `hidden: true`」是 `grep -c` 含檔頭註解的計數；定義本身是 5 個，由 `navConfig.test.js` 的 hidden 集合斷言釘住。** 對不上時以測試與現查為準。
+2026-09-11 現查參考值：39 條登記路由、2 個 nav 群組（工作面／平台）、5 個 `hidden: true` 的工作面組定義（`/site-log`、`/submittals`、`/valuation`、`/monthly-report`、`/portfolio`）、5 條帶 `roles` 的路由、1 條 `platformAdminOnly`。**`grep -c` 會把檔頭註解算入；定義本身是 5 個，由 `navConfig.test.js` 的 hidden 集合斷言釘住。** 對不上時以測試與現查為準。
 
 ## 8. 改動路由時的最小流程
 

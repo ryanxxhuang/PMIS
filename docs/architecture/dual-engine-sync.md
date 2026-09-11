@@ -65,3 +65,9 @@
 3. 載入中切案由各 effect 的 `active` flag 取消,不會把前案資料寫進後案畫面。
 
 結論:現行結構是正確解,**不要**為了「看起來乾淨」合併它們。
+
+## 前端預定進度內插
+
+`src/lib/progressPlan.js` 的 `plannedPctNow` 共用於 Dashboard、Progress、RiskAudit、SupervisorReport、Portfolio 與 assistantData；`progressMonthIndex` 同時供圖表今日游標使用。月份起點為整數，日數按 30 天換算，超出範圍取 0／最後累計值；未設定或空月份回 null。呼叫端每次 render 傳入日期，不在模組內快取今天。此處保留既有瀏覽器當地日曆語意；RiskAudit 的 start 改與其他五處同用 parseLocalDate，避免 UTC 以西掉回前月。S 曲線產生、台北日曆日的其他業務規則與伺服器 portfolio 計算均未改動。
+
+驗證：`src/lib/progressPlan.test.js` 涵蓋插值、月界、跨年、閏日、空／單月與日期重算；可用不同 `TZ` 重跑。

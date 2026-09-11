@@ -2,8 +2,8 @@
 
 > 狀態：**ACTIVE RUNBOOK**
 > 最後核對：2026-09-11（分支 `refactor/product-wide`；正式站 `app.gov-agent.ai` 跑的仍是 PR #62 的版本）
-> 用途：把散在 `CLAUDE.md`、`CURRENT.md`、`wrangler.jsonc`、`supabase/SETUP.md`、CI workflow 與 PR 描述裡的部署地雷收攏成一份可照做的流程。取代兩份 `HISTORICAL` 文件的「目前怎麼部署」角色：[`../Cloudflare搬家-逐步設定指南.md`](../Cloudflare搬家-逐步設定指南.md)（2026-08-11 搬遷紀錄）與 [`../上線設定指南-2026-07-16.md`](../上線設定指南-2026-07-16.md)（舊 GitHub Pages 快照）——那兩份只供追溯，不得照表套用。
-> 授權邊界：commit、push、部署與正式 migration **只在使用者明確要求後執行**（`DEVELOPMENT.md` §6 第 5 條）。本文件教怎麼做，不授權做。
+> 用途：把散在 `CLAUDE.md`、`CURRENT.md`、`wrangler.jsonc`、`supabase/SETUP.md`、CI workflow 與 PR 描述裡的部署地雷收攏成一份可照做的流程。取代兩份 `HISTORICAL` 文件的「目前怎麼部署」角色：[`../Cloudflare搬家-逐步設定指南.md`（歷史）](https://github.com/ryanxxhuang/PMIS/blob/c39e395fff5608813a8c2fa4c79700e87d607e3b/docs/Cloudflare%E6%90%AC%E5%AE%B6-%E9%80%90%E6%AD%A5%E8%A8%AD%E5%AE%9A%E6%8C%87%E5%8D%97.md)（2026-08-11 搬遷紀錄）與 [`../上線設定指南-2026-07-16.md`（歷史）](https://github.com/ryanxxhuang/PMIS/blob/c39e395fff5608813a8c2fa4c79700e87d607e3b/docs/%E4%B8%8A%E7%B7%9A%E8%A8%AD%E5%AE%9A%E6%8C%87%E5%8D%97-2026-07-16.md)（舊 GitHub Pages 快照）——那兩份只供追溯，不得照表套用。
+> 授權邊界：commit、push、部署與正式 migration **只在使用者明確要求後執行**（`DEVELOPMENT.md` §6）。本文件教怎麼做，不授權做。
 
 ## 0. 一頁摘要
 
@@ -19,7 +19,7 @@
 
 - **App 正式站**：<https://app.gov-agent.ai>，Cloudflare Workers（`wrangler.jsonc`：`name: "pmis"`、`assets.directory: "./dist/"`、`not_found_handling: "single-page-application"`）。
 - **apex `gov-agent.ai`**：`PMIS.marketing` repo 的行銷站（GitHub Pages），2026-08-25 起承接；App 路由在 apex 會回 404，行銷站的「開始使用」連到 `app.`。**任何冒煙、curl、E2E 對正式站都要打 `app.` 子網域。**
-- **舊部署仍可公開存取**（`CURRENT.md` §7 債項 7）：`pmis.pages.dev`（舊 Cloudflare 部署，bundle 落後）與 `ryanxxhuang.github.io/PMIS`（GitHub Pages 仍啟用，`gh-pages` 分支停在 2026-08-11）都帶正式 anon key。關閉 GitHub Pages、刪 `gh-pages` 分支、處理舊 Cloudflare 專案列在 ROADMAP 未排入。
+- **舊部署仍可公開存取**（`CURRENT.md` §6.3）：`pmis.pages.dev`（舊 Cloudflare 部署，bundle 落後）與 `ryanxxhuang.github.io/PMIS`（GitHub Pages 仍啟用，`gh-pages` 分支停在 2026-08-11）都帶正式 anon key。關閉 GitHub Pages、刪 `gh-pages` 分支、處理舊 Cloudflare 專案列在 ROADMAP 未排入。
 - Supabase：Postgres＋Auth＋Storage＋Edge Functions（Deno）。project ref 不寫在本文件；`supabase link` 後 CLI 自己知道。
 
 ## 2. 前端：push `main` 即部署
@@ -62,8 +62,8 @@ supabase migration list --linked         # 套完再核一次，版本號寫回 
 
 - `supabase/migrations/` 是唯一真相；`schema.sql` 已凍結，不用來初始化或同步。已套用的 migration 不回頭修改，變更一律新增（`DEVELOPMENT.md` §5）。
 - **透過 MCP 或 SQL Editor 直接對正式庫套過的 migration，必須把檔案收編回 repo**，否則 `db push` 會被阻擋（PR #50 的教訓：`20260824123253` 曾在正式庫有、repo 沒有）。
-- 新表要檢查 grants：基線的 `alter default privileges` 會讓新表自動帶 authenticated 寫入授權，migration 內要明確 `revoke`（`CLAUDE.md` §5）。
-- 回復：`supabase/rollbacks/*.down.sql` 只覆蓋少數 migration（現查 `ls supabase/rollbacks/ | wc -l` 對 `ls supabase/migrations/ | wc -l`），且**從未演練過回復**（`CURRENT.md` §7 債項 5）；不能因檔案存在就推論可安全還原。
+- 新表要檢查 grants：基線的 `alter default privileges` 會讓新表自動帶 authenticated 寫入授權，migration 內要明確 `revoke`（`DEVELOPMENT.md` §5）。
+- 回復：`supabase/rollbacks/*.down.sql` 只覆蓋少數 migration（現查 `ls supabase/rollbacks/ | wc -l` 對 `ls supabase/migrations/ | wc -l`），且**僅 W5-2 與 D-020 曾記錄 down→up，其他未演練**（`CURRENT.md` §7）；不能因檔案存在就推論可安全還原。
 
 **前端與 DB 的套用順序——不是固定答案，看變更性質**：
 
@@ -84,11 +84,11 @@ supabase functions deploy send-reminders --no-verify-jwt --use-api   # 唯一例
 supabase functions list                                        # 對帳線上版本
 ```
 
-- **colima 環境下 `supabase functions deploy` 必須加 `--use-api`**（`CLAUDE.md` 環境地雷；`agent-run/index.ts` 檔頭也寫著）。
+- **colima 環境下 `supabase functions deploy` 必須加 `--use-api`**（`DEVELOPMENT.md` §5 環境地雷；`agent-run/index.ts` 檔頭也寫著）。
 - **`_shared/` 改了要重佈所有 import 它的函式**：Deno 部署只打包 `supabase/functions/`，每支函式各自帶一份 `_shared` 的快照。現查誰要重佈：`grep -l "_shared/<檔名>" supabase/functions/*/index.ts`（間接 import 也算：`aiGate.ts` 被 `aiHandler.ts` 與四支自管函式引用，2026-09-11 現查 `grep -l "aiGate\|aiHandler" supabase/functions/*/index.ts | wc -l` 為 17，即全部）。
 - 只關功能開關（`ai_features.enabled = false`）**不需要重佈**：伺服器端閘門讀 DB 即時生效（見 [`../architecture/ai-gate-and-metering.md`](../architecture/ai-gate-and-metering.md)）。
 - `SUPABASE_URL`／`SUPABASE_ANON_KEY`／`SUPABASE_SERVICE_ROLE_KEY` 由平台注入，不需手動 set；缺 service key 時 AI 功能照常回應但不記帳、agent 草稿工具會回「伺服器未設定」。
-- **線上版本未逐支核對**（`CURRENT.md` §7 債項 8）：17 支函式的線上版本與 `main` 是否一致沒有紀錄，最後一次重佈紀錄是 PR #51。下次動 `supabase/functions/` 時順手用 `supabase functions list` 對帳並記進 `CURRENT.md` §6。
+- **線上版本未逐支核對**（`CURRENT.md` §6.3）：17 支函式的線上版本與 `main` 是否一致沒有紀錄，最後一次重佈紀錄是 PR #51。下次動 `supabase/functions/` 時順手用 `supabase functions list` 對帳並記進 `CURRENT.md` §6。
 - 每日提醒排程：`supabase/cron.sql`（pg_cron ＋ pg_net，每日 00:00 UTC ＝ 台北 08:00 呼叫 `send-reminders`），換 `CRON_SECRET` 或 project ref 要重跑它；乾跑 `curl -X POST ".../functions/v1/send-reminders?dry=1" -H "x-cron-secret: ..."`。
 
 ## 6. 部署後：冒煙與寫回
@@ -106,7 +106,7 @@ curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security
 
 可加驗：線上 bundle 是否含本次新 chunk（例如 PR #58 以 `AnchorDates` chunk 名確認）。
 
-**寫回文件（`DEVELOPMENT.md` §6 完成定義第 3 條）**：正式庫套用 migration 或重佈 Edge Function 後，把**套用的 migration 版本號、重佈的函式名與日期**寫進 `CURRENT.md` §6；`CLAUDE.md` §0 續接點若涉及也同步。2026-08-19～09-01 有 36 個 PR 未同步文件造成續接點失真，是這條被加註的原因。
+**寫回文件（`DEVELOPMENT.md` §6 完成定義）**：正式庫套用 migration 或重佈 Edge Function 後，把**套用的 migration 版本號、重佈的函式名與日期**寫進 `CURRENT.md` §6；相關待部署事項同步更新 `docs/ROADMAP.md`。2026-08-19～09-01 有 36 個 PR 未同步文件造成續接點失真，是這條被加註的原因。
 
 ## 7. 不在 repo 內的外部設定（改網域、換信箱時要一起動）
 

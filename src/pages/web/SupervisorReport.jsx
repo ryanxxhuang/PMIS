@@ -3,7 +3,8 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader, Button, Badge, Surface, Input, Textarea } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate, taipeiToday } from '../../lib/dates.js'
+import { plannedPctNow } from '../../lib/progressPlan.js'
+import { taipeiToday } from '../../lib/dates.js'
 import { buildSupervisorReport } from '../../lib/supervisorReport.js'
 
 // 每次呼叫取「今天」(B-11):模組層常數會讓長開分頁凍結在開頁那天
@@ -21,20 +22,6 @@ function Section({ n, title, children }) {
 }
 // 鍵值列與施工月報的 Info 同一份長相(dt/dd):兩張報表的概況欄不該有兩種標籤色與字重
 const Kv = ({ k, v }) => (<div className="flex flex-wrap gap-x-2 text-sm"><dt className="text-[var(--text-3)]">{k}：</dt><dd className="font-medium min-w-0 text-[var(--text)]">{v || '—'}</dd></div>)
-
-// 累計預定進度 %:progressPlan.months 的 plannedPct 是逐月累計值,對「今天」線性內插。
-// 純算術、每次 render 重算,不放 useMemo——只認 progressPlan 的 memo 會把「今天」凍在
-// 它上次變動那天,長開分頁的預定進度就停住(B-11 每次 render 取「今天」的用意就沒了)。
-function plannedPctNow(progressPlan, today) {
-  if (!progressPlan) return null
-  const months = progressPlan.months, N = months.length
-  const start = parseLocalDate(progressPlan.start)
-  const el = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth()) + (today.getDate() - 1) / 30
-  if (el <= 0) return 0
-  if (el >= N - 1) return months[N - 1].plannedPct
-  const lo = Math.floor(el), f = el - lo
-  return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
-}
 
 export default function SupervisorReport() {
   const { project, workItems, valuations, progressPlan, siteLogs, inspections, defects, submittals,

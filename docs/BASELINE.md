@@ -1,57 +1,38 @@
-# 測試與規模基線（唯一出處）
+# 驗證與規模基線
 
-> 狀態：**ACTIVE（手動核對快照）**
-> 核對日期：2026-09-11 ｜ 分支 `refactor/product-wide` @ `b68bece`（重構最後一個 commit；未合併 `main`、未部署）
-> 核對方式：由人在本機執行 §1／§2 的指令得出，**沒有 CI 自動產生這份檔案**（09-06 健檢 E-01 建議由 CI 產出單一 BASELINE，尚未實作；目前是手動快照）。數字會隨 commit 過期：改動測試、migration、Edge Function、頁面檔或架構文件的人，要重跑對應指令並改這一份，同時改檔頭的核對日期與 commit。
-> 用途：`CLAUDE.md` §0、`README.md`、`CURRENT.md` §6、`docs/ROADMAP.md` 不再各抄一份數字，一律連到這裡。日期式報告與當日快照裡的數字是當時證據，不回頭改（`DEVELOPMENT.md` §7）。
+> ACTIVE｜2026-09-11｜`refactor/product-wide`，本輪進度共用化與文件精簡。
+> 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
-## 1. 測試（2026-09-11 本機實跑）
+## 1. 本輪驗證
 
-| 層 | 結果 | 指令 | 備註 |
-|---|---|---|---|
-| Vitest | **90 檔 1081 測試**全過 | `npm test` | 含 `src/` 與 `supabase/functions/` 兩個範圍 |
-| Demo E2E（Playwright） | **48 tests in 8 files** 全過 | `npm run test:e2e` | 三角色／路由／無障礙／RFI／送審球權／契約流程 |
-| pgTAP | **40 檔 1048 條斷言**全過 | 本機 `supabase db reset`（從零套用全部 migration）後照 [`../supabase/SETUP.md`](../supabase/SETUP.md) 跑 `supabase/tests/*.sql`；CI 跑法見 `.github/workflows/pgtap.yml` | 靜態交叉核對：`grep -ho "plan([0-9]*)" supabase/tests/*.sql`（`plan()` 加總應等於實跑斷言數） |
-| ESLint | **0 error 0 warning** | `npm run lint`（`eslint . --max-warnings 0`） | 2026-09-11 導入；只開會抓到真 bug 的規則，`supabase/functions/` 排除（Deno，該走 `deno check`） |
-| production build | 通過 | `npm run build` | 主 bundle 仍有大於 500 kB chunk 警告（已知，見 ROADMAP 未排入） |
-| 真後端 E2E（6 條，`e2e-real/`） | **本輪未跑** | `npm run test:e2e:real`（環境見 [`REAL_BACKEND_E2E.md`](REAL_BACKEND_E2E.md)） | chain3 需有效模型金鑰，目前失效；最近一次成功紀錄 PR #54（6/6，2026-08-25） |
-| Deno 型別檢查 | **未做** | `deno check supabase/functions/**/*.ts` | 本機無 deno；重構期間 17 支 Edge Function 只過 esbuild bundle。B6（`c620fd5`）發現舊型別標註錯誤，暗示線上版本從未過 `deno check`（ROADMAP 未排入） |
-| `npm audit --omit=dev` | 0 漏洞（2026-09-11 前次核對） | `npm audit --omit=dev` | 含 dev 依賴有 2 個 moderate（`@vitest/mocker`），修復需升 vitest 大版 |
-
-## 2. 規模（2026-09-11，檔案計數）
-
-| 項目 | 數字 | 指令 |
+| 項目 | 結果 | 指令／範圍 |
 |---|---|---|
-| migrations | **60** 支；最新 `20260911110000` | `ls supabase/migrations/*.sql \| wc -l` |
-| 其中尚未套用正式庫 | **3** 支：`20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`（D-022） | `supabase migration list --linked`（動 DB 前必看） |
-| rollbacks（down 檔） | **10** 支（未演練回復） | `ls supabase/rollbacks/*.sql \| wc -l` |
-| pgTAP 檔 | **40**（斷言 1048） | `ls supabase/tests/*.sql \| wc -l` |
-| Edge Functions | **17** | `ls -d supabase/functions/*/ \| grep -v _shared \| wc -l` |
-| `_shared/` 非測試模組 | **29** | `ls supabase/functions/_shared/*.ts \| grep -v '\.test\.' \| wc -l` |
-| `src/pages/web/` 非測試 jsx | **34**（另有 `src/pages/Login.jsx`、`Security.jsx`） | `ls src/pages/web/*.jsx \| grep -v '\.test\.' \| wc -l` |
-| Store slices | 9 | `ls src/store/slices` |
-| 登記路由（`routeRegistry`） | 以程式為準 | `node -e "import('./src/lib/navConfig.js').then(m=>console.log(Object.keys(m.routeRegistry).length))"` |
-| AI／整合功能註冊 | 以程式為準 | `node -e "import('./src/lib/aiFeatures.js').then(m=>console.log(m.AI_FEATURES.length))"`；`aiFeatures.test.js` 釘住與 `_shared/aiFeatures.ts` 一致 |
-| `docs/architecture/` 文件 | **16** 份 | `ls docs/architecture/*.md \| wc -l` |
-| RLS 覆蓋 | **51 張表全部啟用**：49 張有明確 policy 共 143 條，2 張（`demo_requests`、`platform_admin_bootstrap`）刻意零 policy 走 fail-closed | `supabase db reset` 後查 `pg_class.relrowsecurity` 與 `pg_policies`（做法見 [`資安/資通系統防護基準-普通級-符合性對照.md`](資安/資通系統防護基準-普通級-符合性對照.md) 檔頭） |
+| Vitest | 91 檔、1095 測試通過 | `npm test` |
+| 預定進度時區回歸 | 14 測試在 UTC 與 America/Los_Angeles 各通過 | `TZ=UTC node node_modules/vitest/vitest.mjs run src/lib/progressPlan.test.js`，另改 TZ 重跑 |
+| Demo E2E | 8 檔、48 測試通過 | `npm run test:e2e`，本機 Vite／Chromium，未連真 DB |
+| ESLint | 0 error／0 warning | `npm run lint` |
+| production build | 通過；仍有 >500 kB chunk 警告 | `npm run build` |
+| 文件檢查 | 本輪刪除路徑的本地 Markdown 引用已修復，保留文件無失效的本地檔案連結 | 檔案存在檢查；歷史引用固定至 `c39e395` |
+| pgTAP | 本輪未重跑；前次同日紀錄 40 檔／1048 通過 | 本輪未改 migration、DB 或權限。跑法見 [SETUP](../supabase/SETUP.md)／`.github/workflows/pgtap.yml` |
+| 真後端 E2E | 本輪未跑 | 先前 chain3 模型金鑰失效；最近成功紀錄 PR #54（2026-08-25），見 [指南](REAL_BACKEND_E2E.md) |
+| Deno 型別檢查 | 未完成 | 本輪未改 Edge；前次僅做 esbuild bundle，不等同 deno check |
+| 依賴 audit | 本輪未重跑 | 前次 2026-09-11 紀錄 production 0、dev 2 moderate；非即時結果 |
 
-## 3. 正式環境（本機核不到，只記最後一次核對）
+## 2. 檔案規模
 
-| 項目 | 最後核對 | 狀態 |
+| 項目 | 本輪核對 | 現查方式 |
 |---|---|---|
-| 正式庫 migration tracker | 2026-09-02（`supabase migration list --linked`） | 當時本機 57 支＝遠端 57 筆，遠端最新 `20260901040000`。之後新增 §2 的三支**尚未套用**；未重核 |
-| Edge Function 線上版本 | 從未逐支核對 | 最後重佈紀錄 PR #48（`extract-requirements`／`agent-run`／`send-reminders`）與 PR #51（`extract-requirements`）；重構的 `_shared/` 改動（B1 錯誤遮罩、B4 agentTools 拆分、B6 extract-requirements 拆檔）**未部署**，正式站仍跑舊行為 |
-| 正式站前端 | 2026-09-07 HEAD 檢查 | `app.gov-agent.ai` 首頁 200、七項安全標頭齊全；線上 bundle 為 PR #62 版本 |
-| CI 與分支保護 | 2026-09-07 | `main` 有 active ruleset（需 PR、`unit`、`e2e`、`pgtap` —— 2026-09-11 隨 CI 拆 job 同步改名）；pgTAP 自 PR #62 起每個 PR 一律跑；仍允許 RepositoryRole 5 bypass、未要求核准人數與分支先更新 |
+| migrations／rollbacks | 60／10 | `rg --files supabase/migrations supabase/rollbacks` |
+| 待套正式 migration | 3 支，版本與最後核對日期見 CURRENT §6.3 | 部署前 `supabase migration list --linked`，本輪未查正式庫 |
+| pgTAP | 40 檔、plan 加總 1048 | `rg 'plan\(' supabase/tests`；加總不等同實跑 |
+| Edge／shared 非測試模組 | 17／29 | `rg --files supabase/functions` |
+| web 非測試頁面／Store slices | 34／9 | `rg --files src/pages/web src/store/slices` |
+| 架構文件（含索引） | 15 | `rg --files docs/architecture -g '*.md'` |
 
-## 4. 起點對照（本次重構）
+路由數與 AI 功能數直接查 `src/lib/navConfig.js`、`src/lib/aiFeatures.js`；不另維護重複計數。
 
-| | 重構起點（`ui/apple-foundation` @ `8b87c9e`，2026-09-11 上午） | 現在（`b68bece`） |
-|---|---|---|
-| Vitest | 72 檔 818 | 90 檔 1081 |
-| Demo E2E | 48（8 檔） | 48（8 檔） |
-| pgTAP | 33 檔／`plan()` 加總 927（當時靜態統計） | 40 檔 1048（實跑） |
-| migrations／rollbacks | 57／7 | 59／9 |
-| 巨型檔 | `agentTools.ts` 1759、`Contract.jsx` 1080、`RequirementsReview.jsx` 1196、`Requirements.jsx` 1032、`Quality.jsx` 813、`SiteLog.jsx` 961、`Valuation.jsx` 610、`extract-requirements/index.ts` 794 | 62／592／1004／842／272／696／437／534 |
+## 3. 文件精簡
 
-更早的歷史數字（PR #58 時 71 檔 767、09-08 兩批 73 檔 820、Apple 四包後 72 檔 818）保留在各自的報告與 `docs/ROADMAP.md` 交付紀錄裡，不在此重述。
+本輪刪除 33 份過期 Markdown 與 17 個舊 handoff HTML／圖像資產，共 50 檔；原文仍在 Git。必讀入口（AGENTS、DEVELOPMENT、CURRENT、DECISIONS、CLAUDE）由 37,066 降至 10,875 字元，減少約 71%。這是字元量比較，不是模型 tokenizer 的 token 實測。
+
+保留 ACTIVE 架構、部署、資安／採購證據、簡報來源與尚需執行的真人驗收。ROADMAP 只留未完成事項，交付歷程查 Git／PR。

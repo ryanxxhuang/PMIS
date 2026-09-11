@@ -3,7 +3,7 @@
 > 狀態：**CURRENT（機制已提交、尚未部署）** ｜ 最後核對：2026-09-11（分支 `refactor/product-wide`；伺服器端遮罩由重構波次 B1 commit `bc2b2ea` 建立，**已提交、未合併 `main`、未部署——正式站的 Edge Function 仍跑舊行為**；前端 `friendlyError` 早於本波，已隨先前 PR 部署）
 > 對應程式：`supabase/functions/_shared/publicError.ts`（唯一遮罩點）、`_shared/claude.ts`（`claudeJson` 與 `errorResponse`／`dbErrorResponse`／`exceptionResponse`）、`_shared/agent.ts`（`claudeAgent`）、`_shared/aiHandler.ts`（骨架）、`_shared/agentToolCommon.ts`（`toolError`）、`_shared/ingestionRun.ts`（`failRun`；B6 commit `c620fd5` 自 `extract-requirements/index.ts` 純搬移，機制不變，`extract-requirements/index.ts` 仍是唯一呼叫端）；前端 `src/lib/errorMessage.js`（`friendlyError`）、`src/lib/extractRequirements.js`（`functionErrorInfo`）
 > 測試：`_shared/publicError.test.ts`、`_shared/errorLeak.scan.test.ts`、`src/lib/errorMessage.test.js`、`src/lib/errorLeak.scan.test.js`
-> 合規依據：資通系統防護基準附表十構面五「開發階段」第三款——錯誤時使用者頁面僅顯示簡短訊息及代碼，不含詳細錯誤訊息（對照表見 [`../資安/資通系統防護基準-普通級-符合性對照.md`](../資安/資通系統防護基準-普通級-符合性對照.md)；缺口由 [`../健檢-2026-09-06/A-安全與權限.md`](../健檢-2026-09-06/A-安全與權限.md) 指出）。本文件寫機制怎麼運作；沒有對應的 D-編號決策，這是合規基線而不是產品決策。
+> 合規依據：資通系統防護基準附表十構面五「開發階段」第三款——錯誤時使用者頁面僅顯示簡短訊息及代碼，不含詳細錯誤訊息（對照表見 [`../資安/資通系統防護基準-普通級-符合性對照.md`](../資安/資通系統防護基準-普通級-符合性對照.md)；缺口由 [`../健檢-2026-09-06/A-安全與權限.md`（歷史）](https://github.com/ryanxxhuang/PMIS/blob/c39e395fff5608813a8c2fa4c79700e87d607e3b/docs/%E5%81%A5%E6%AA%A2-2026-09-06/A-%E5%AE%89%E5%85%A8%E8%88%87%E6%AC%8A%E9%99%90.md) 指出）。本文件寫機制怎麼運作；沒有對應的 D-編號決策，這是合規基線而不是產品決策。
 
 ## 1. 這層在守什麼
 

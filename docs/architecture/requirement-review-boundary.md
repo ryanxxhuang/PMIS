@@ -10,7 +10,7 @@
 - 人工補登仍經 `review_requirement`，一般瀏覽器不能直接偽造確認狀態或 reviewer。估驗、變更等正式業務核定不在這項自動確認例外內。
 - D-020：全部已確認 Requirement 類型都由 `materialize_requirement_obligation` 單向物化義務，並非僅 deadline；義務執行狀態不反向改寫 Requirement。
 - 現行函式以 `supabase/migrations/20260901040000_materialize_all_requirement_types.sql` 及其後續 migration 為準；產品決策見 [`../DECISIONS.md`](../DECISIONS.md) D-019／D-020。
-- 2026-09-07 發現的主頁核對誤標，已於 09-08 在本機修正，尚未部署；歷史健檢見 [`../產品健檢與開發方向-2026-09-07.md`](../產品健檢與開發方向-2026-09-07.md)。
+- 2026-09-07 發現的主頁核對誤標，已於 09-08 在本機修正，尚未部署；歷史健檢見 [`../產品健檢與開發方向-2026-09-07.md`（歷史）](https://github.com/ryanxxhuang/PMIS/blob/c39e395fff5608813a8c2fa4c79700e87d607e3b/docs/%E7%94%A2%E5%93%81%E5%81%A5%E6%AA%A2%E8%88%87%E9%96%8B%E7%99%BC%E6%96%B9%E5%90%91-2026-09-07.md)。
 
 ## 2026-09-08 介面與完整性補記（本機完成、未部署）
 

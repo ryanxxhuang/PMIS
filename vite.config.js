@@ -13,8 +13,8 @@ export default defineConfig({
     host: 'localhost',
     // 尊重外部指定的 PORT(preview/CI 自動配 port),沒有就用 Vite 預設 5173
     port: Number(process.env.PORT) || undefined,
-    // 避免編輯 .claude 設定或文件時觸發整頁 reload、清掉 demo 進行中的記憶體狀態
-    watch: { ignored: ['**/.claude/**', '**/PRD.md'] },
+    // 避免編輯協作設定或文件時觸發整頁 reload、清掉 demo 進行中的記憶體狀態
+    watch: { ignored: ['**/.claude/**', '**/*.md'] },
   },
   test: {
     environment: 'node', // parsePcces 需要 DOM 的測試檔自帶 @vitest-environment jsdom

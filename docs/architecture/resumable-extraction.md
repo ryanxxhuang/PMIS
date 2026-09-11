@@ -150,7 +150,7 @@ insert 撞上它回 SQLSTATE `23505`，函式端轉成 409 `run_conflict`。建 
 
 ## 14. 已知限制與未查證
 
-- 24 批上限、無 OCR、語意漏抽與跨條款理解未解；準確率／召回率未用真實契約量測（[`../契約自動整理品質優化-2026-09-08.md`](../契約自動整理品質優化-2026-09-08.md) 列了評測方法，尚未實作）。
+- 24 批上限、無 OCR、語意漏抽與跨條款理解未解；準確率／召回率未用真實契約量測（[`../契約自動整理品質優化-2026-09-08.md`（歷史）](https://github.com/ryanxxhuang/PMIS/blob/c39e395fff5608813a8c2fa4c79700e87d607e3b/docs/%E5%A5%91%E7%B4%84%E8%87%AA%E5%8B%95%E6%95%B4%E7%90%86%E5%93%81%E8%B3%AA%E5%84%AA%E5%8C%96-2026-09-08.md) 列了評測方法，尚未實作）。
 - partial unique index 的 pgTAP 已由 `6f1ccb2` 補上 8 條（indexdef 字面、同版本進行中唯一、終態可累積與讓位；變異檢查確認拿掉索引會紅），§6 的「無 pgTAP」已不成立，現查 `grep -l one_active_per_version supabase/tests/*.sql`。
 - 某批 upsert 失敗但先前批次成功時 run 仍走 `completed`，`verified_source_count` 會含失敗批已計、實際未落庫的驗證數（B6 拆檔時發現、純搬移未改，單測釘住現況；要不要修列在 ROADMAP 未排入）。
 - 前端接力層註解的 `MAX_BATCHES=12` 過期（§2）。

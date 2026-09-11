@@ -5,7 +5,8 @@ import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { Badge, Button, Card, Empty, PageHeader, Segmented } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate, taipeiISODate } from '../../lib/dates.js'
+import { plannedPctNow } from '../../lib/progressPlan.js'
+import { taipeiISODate } from '../../lib/dates.js'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
 import { BALL_SOURCES, resolveBallKey } from '../../lib/navConfig.js'
 import { KIND_LABEL } from '../../lib/agentRole.js'
@@ -152,17 +153,7 @@ export default function Dashboard() {
   )
   const completion = billableTotal ? (actualCum / billableTotal) * 100 : 0
 
-  const plannedNow = useMemo(() => {
-    if (!progressPlan) return null
-    const months = progressPlan.months, N = months.length
-    const start = parseLocalDate(progressPlan.start)
-    const elapsed = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
-    if (elapsed <= 0) return 0
-    if (elapsed >= N - 1) return months[N - 1].plannedPct
-    const lo = Math.floor(elapsed), f = elapsed - lo
-    return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progressPlan, todayISO])
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   // AI 主動觀察(§9-8:從 AI 助理搬來——Dashboard=待辦+風險,助理只留問答)
   const insights = useMemo(() => insightsForRole(buildInsights({

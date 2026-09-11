@@ -6,14 +6,14 @@
 
 - 同日後續流程優化：`Contract` 的 packages／runs／documents 與下游版本、抽取結果使用分頁查詢，錯誤提供重試；舊案請求遲到不覆蓋新案。結果入口以 `?package=` 延續到重點與審核頁，已歸檔數量以 approved Requirement 計數。上傳／重試後呼叫既有 `reloadObligations`，結果頁進入時重讀並在 ingestion 進行中輪詢。
 - `document_processing_runs.metadata.requirement_extraction_warning` 保存完成結果的覆蓋警示字串；舊列可在讀取時從最近 completed ingestion 的 metadata 還原，僅作 UI 揭露。部分整理與待分類皆提示需留意；`packageStatusFromRuns` 將 partial／覆蓋不完整列為 needs_attention，既有自動確認規則不變。
-- 手機文件列在同一表格元件中改為直向排列，直接呈現檔名、分類、版本、AI 狀態、原因及動作；格式說明清楚區分 PDF／DOCX／TXT 文字分析與圖片／掃描／試算表等能力限制。具體驗證見 [`../契約整理流程-UIUX-2026-09-08.md`](../契約整理流程-UIUX-2026-09-08.md)。
+- 手機文件列在同一表格元件中改為直向排列，直接呈現檔名、分類、版本、AI 狀態、原因及動作；格式說明清楚區分 PDF／DOCX／TXT 文字分析與圖片／掃描／試算表等能力限制。具體驗證見 [`../契約整理流程-UIUX-2026-09-08.md`（歷史）](https://github.com/ryanxxhuang/PMIS/blob/c39e395fff5608813a8c2fa4c79700e87d607e3b/docs/%E5%A5%91%E7%B4%84%E6%95%B4%E7%90%86%E6%B5%81%E7%A8%8B-UIUX-2026-09-08.md)。
 
 - D-019 已將完成抽取的 AI-origin Requirement 自動確認，包括帶 `triage_doubts` 的項目；D-020 已讓所有 approved 類型進入義務 runtime。下方 P0-06 的「僅產生待人工確認建議」是歷史基礎，不是現行放行規則。決策見 [`../DECISIONS.md`](../DECISIONS.md)。
 - `extract-requirements` 透過使用者 RLS client 分批讀取全部 `document_pages`，每批要求 exact count，核對總數穩定與從 1 開始連續頁序；即使伺服器每次只回 500 列，也會依實收筆數續讀。中途錯誤不會把半份資料送模型。
 - 同時讀取 `document_processing_runs.metadata.page_count`。有此上傳紀錄時，儲存頁數必須相符；缺頁、重複、總數變動或不符均停止並回報。舊流程沒有這個欄位時維持可用，但只能驗證已儲存文字的讀取完整性，無法證明原檔沒有遺失尾頁。
 - 模型未回傳 `requirements` 陣列視為該批失敗；合法空陣列仍可成功。無文字頁、被格式驗證拒收的項目、模型輸出截斷、失敗批次或既有批次上限，都使 `coverage_incomplete` 為 true，並在完成 metadata／回應保留細節。
 - 前端契約重點與擷取審核逐文件版本顯示最近一次 completed run 的完整性警示，成功處理另一份文件不會清掉舊警示。部分產出的既有 completed 語意與 D-019 自動確認維持不變；`completed` 不等同內容全對。
-- 本次沒有新增 OCR、獨立語意覆核、漏項偵測、真實契約評測或解除 24 批上限；處理完整性與語意準確率必須分開衡量。交付詳見 [`../契約自動整理品質優化-2026-09-08.md`](../契約自動整理品質優化-2026-09-08.md)。
+- 本次沒有新增 OCR、獨立語意覆核、漏項偵測、真實契約評測或解除 24 批上限；處理完整性與語意準確率必須分開衡量。交付詳見 [`../契約自動整理品質優化-2026-09-08.md`（歷史）](https://github.com/ryanxxhuang/PMIS/blob/c39e395fff5608813a8c2fa4c79700e87d607e3b/docs/%E5%A5%91%E7%B4%84%E8%87%AA%E5%8B%95%E6%95%B4%E7%90%86%E5%93%81%E8%B3%AA%E5%84%AA%E5%8C%96-2026-09-08.md)。
 
 以下保留 P0-06 基礎流程背景；涉及放行與後續工作流程的敘述，以上述補記及較新 Decision 為準。
 

@@ -7,24 +7,11 @@ import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader, Surface } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate } from '../../lib/dates.js'
+import { plannedPctNow } from '../../lib/progressPlan.js'
 import { fmtAmount as fmt } from '../../lib/format.js'
 import { acceptanceStageSummary } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 import { portfolioExceptions } from '../../lib/portfolioExceptions.js'
-
-// 累計預定進度 %:progressPlan.months 的 plannedPct 是逐月累計值,對「今天」線性內插。
-// 純算術、每次 render 重算,不放進下面那顆 memo——memo 的 deps 沒有(也不能有,每次
-// render 都是新物件的)TODAY,「今天」會凍在資料上次變動那天(B-11)。算好的數字是
-// primitive,當 memo 的依賴才會如實在跨日時重算。
-function plannedPctNow(progressPlan, today) {
-  if (!progressPlan) return null
-  const months = progressPlan.months, N = months.length
-  const start = parseLocalDate(progressPlan.start)
-  const elapsed = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth()) + (today.getDate() - 1) / 30
-  return elapsed <= 0 ? 0 : elapsed >= N - 1 ? months[N - 1].plannedPct
-    : months[Math.floor(elapsed)].plannedPct + (months[Math.floor(elapsed) + 1].plannedPct - months[Math.floor(elapsed)].plannedPct) * (elapsed - Math.floor(elapsed))
-}
 
 export default function Portfolio() {
   const {

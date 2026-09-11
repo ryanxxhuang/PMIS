@@ -4,6 +4,7 @@ import { MSym } from '../../components/icons.jsx'
 import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surface, Input, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
+import { plannedPctNow, progressMonthIndex } from '../../lib/progressPlan.js'
 import { parseLocalDate, localISOMonth } from '../../lib/dates.js'
 import { fmtYi } from '../../lib/format.js'
 
@@ -122,17 +123,9 @@ export default function Progress() {
   const actualNow = actualPoints.length ? actualPoints[actualPoints.length - 1].pct : 0
 
   // 今天落在第幾個月（小數）+ 內插預定進度
-  const planStart = parseLocalDate(progressPlan.start)
-  const elapsed = (TODAY.getFullYear() - planStart.getFullYear()) * 12
-    + (TODAY.getMonth() - planStart.getMonth())
-    + (TODAY.getDate() - 1) / 30
+  const elapsed = progressMonthIndex(progressPlan.start, TODAY)
   const todayFrac = Math.max(0, Math.min(N - 1, elapsed))
-  const plannedNow = (() => {
-    if (elapsed <= 0) return 0
-    if (elapsed >= N - 1) return months[N - 1].plannedPct
-    const lo = Math.floor(todayFrac), hi = Math.ceil(todayFrac), f = todayFrac - lo
-    return months[lo].plannedPct + (months[hi].plannedPct - months[lo].plannedPct) * f
-  })()
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
   const behind = plannedNow - actualNow
   const statusBadge = behind > 5
     ? <Badge color="red">落後 {behind.toFixed(1)}%</Badge>

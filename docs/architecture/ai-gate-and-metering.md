@@ -7,7 +7,7 @@
 
 ## 1. 這層在守什麼
 
-CLAUDE.md §2 第四條紅線：每個 AI 功能都是可獨立開關的模組。這條紅線不是靠前端藏按鈕，而是靠三件事一起成立：
+DEVELOPMENT.md §4 的 AI 功能規則：每個 AI 功能都是可獨立開關的模組。這條紅線不是靠前端藏按鈕，而是靠三件事一起成立：
 
 1. **註冊表**：功能有身分（`feature_key`），沒登記的 key 在執行期一律被擋。
 2. **伺服器端閘門**：每支 AI Edge Function 進入業務邏輯前先問資料庫「這個專案現在能不能用這個功能」。
@@ -38,7 +38,7 @@ grep -c "key: '" src/lib/aiFeatures.js            # 前端註冊筆數
 # 線上真相（需連正式庫）：select key, enabled, min_plan, sort_order from ai_features order by sort_order;
 ```
 
-**退場功能的做法（只關開關，不刪列、不刪檔）**：`assistant.chat` 由 `20260812000300` 關閉（D-008）；`contract.parse`（`parse-contract`）D-012 起前端已無呼叫者，但 `ai_features.enabled` 一直是 true——任何登入成員仍可直接打 `/functions/v1/parse-contract`，產出繞過 `sourceVerify`／`document_ingestion_runs` 的結果。2026-09-11 重構波次 B5 在工作區以同一手法補關：兩份註冊表 `defaultEnabled: false`、新增 migration `20260911100100_contract_parse_retire.sql`（`update ai_features set enabled = false`）與對應 rollback；伺服器端閘門讀到 `enabled = false` 直接擋並記 `blocked`，不需重佈函式。**狀態：本文件核對時這些改動在工作區尚未提交、未合併 `main`、未套用正式庫**，以該波次落地後的 `ai_features.enabled` 與兩份註冊表為準。退場列一律保留：後台清單與 `ai_usage_events` 歷史要能對到。
+**退場功能的做法（只關開關，不刪列、不刪檔）**：`assistant.chat` 由 `20260812000300` 關閉（D-008）；`contract.parse`（`parse-contract`）D-012 起前端已無呼叫者，但 `ai_features.enabled` 一直是 true——任何登入成員仍可直接打 `/functions/v1/parse-contract`，產出繞過 `sourceVerify`／`document_ingestion_runs` 的結果。2026-09-11 重構波次 B5 在工作區以同一手法補關：兩份註冊表 `defaultEnabled: false`、新增 migration `20260911100100_contract_parse_retire.sql`（`update ai_features set enabled = false`）與對應 rollback；伺服器端閘門讀到 `enabled = false` 直接擋並記 `blocked`，不需重佈函式。**狀態：B5 已由 `d873b07` 提交，未合併 `main`、未套用正式庫**，以該波次落地後的 `ai_features.enabled` 與兩份註冊表為準。退場列一律保留：後台清單與 `ai_usage_events` 歷史要能對到。
 
 ## 3. 資料模型（`20260728000100`）
 
@@ -53,7 +53,7 @@ ai_usage_events       append-only 用量事件；project_id / user_id 皆 on del
 
 方案階序 `trial(0) < standard(1) < pro(2)` 在三處各寫一份：JS `PLAN_RANK`、TS `PLAN_RANK`（測試釘住相等）、DB `ai_feature_allowed` 內的 `case` 表達式（pgTAP `ai_platform.sql` 釘住行為）。
 
-表級權限：四張表都 `enable row level security` 並明確 `revoke insert, update, delete ... from public, anon, authenticated`——原因是基線 migration `20260712001200` 的 `alter default privileges` 會讓**每張新表自動帶寫入授權**，不收回就等於 authenticated 可以偽造用量或改開關。這是本 repo 新增任何表都要重複的動作（CLAUDE.md §5 也提醒）。讀取範圍：`ai_features` 全體 authenticated 可讀（功能名稱與門檻不是機密）；`project_ai_overrides` 專案成員或平台管理員；`ai_model_pricing` 與 `ai_usage_events` **只有平台管理員**（token 用量是跨租戶資料，成員看得到彼此呼叫量會洩漏工作模式）。
+表級權限：四張表都 `enable row level security` 並明確 `revoke insert, update, delete ... from public, anon, authenticated`——原因是基線 migration `20260712001200` 的 `alter default privileges` 會讓**每張新表自動帶寫入授權**，不收回就等於 authenticated 可以偽造用量或改開關。這是本 repo 新增任何表都要重複的動作（DEVELOPMENT.md §5 也提醒）。讀取範圍：`ai_features` 全體 authenticated 可讀（功能名稱與門檻不是機密）；`project_ai_overrides` 專案成員或平台管理員；`ai_model_pricing` 與 `ai_usage_events` **只有平台管理員**（token 用量是跨租戶資料，成員看得到彼此呼叫量會洩漏工作模式）。
 
 ## 4. `ai_feature_allowed(p_project, p_feature)`：執行期唯一的「可不可以用」判定
 
@@ -135,7 +135,7 @@ D-010 的「結果」段同時寫下這條：用量記錄失敗不阻擋 AI 回�
 | `src/lib/aiFeatures.test.js` | 兩份註冊表逐欄一致、總數、順序、`PLAN_RANK`、非 LLM 集合、`defaultEnabled` 例外、`edgeFunction` 目錄存在、key／目錄不重複 |
 | `supabase/functions/_shared/gatePolicy.test.ts` | `gateVerdict` 三種結果與 HTTP／code |
 | `supabase/tests/ai_platform.sql` | 結構與表級權限契約、bootstrap 升級與自我升權被擋、`record_ai_usage` 計價與唯一寫入路徑、`ai_feature_allowed` 三段邏輯（含 kill switch 蓋過覆寫）、`admin_*` 守門與行為 |
-| `supabase/tests/ai_features_retired.sql`（B5 工作區新增，本文件核對時未提交） | 退場功能在 DB 側 `enabled = false` |
+| `supabase/tests/ai_features_retired.sql`（B5 新增，已由 d873b07 提交） | 退場功能在 DB 側 `enabled = false` |
 | `supabase/functions/_shared/errorLeak.scan.test.ts` | 錯誤回應不外洩 PostgREST／Claude 原文（閘門與記帳的錯誤路徑也在掃描範圍） |
 
 ## 10. 新增一個 AI 功能的完整路徑

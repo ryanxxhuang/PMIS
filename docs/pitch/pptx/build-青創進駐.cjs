@@ -5,7 +5,7 @@
 // 頁數：內頁 15 頁（附件4 上限），另有封面與封底（不計入頁數）。
 // 講述：每組 6 分鐘 ＋ 統問統答 3 分鐘 —— 每頁 speaker notes 都寫了秒數配額。
 //
-// 【視覺來源：UIUX/design_handoff_pmis_google_ui/README.md ＋ src/index.css】
+// 【歷史視覺來源：Git c39e395 的 UIUX/design_handoff_pmis_google_ui/README.md ＋當時 src/index.css；本簡報尚未改版】
 // 這份簡報不是「配色抄產品」，是直接套產品的 design token 與版面語彙：
 //   · 字型     一套 Noto Sans TC 中英共用（index.css 的 harmonized family）
 //   · 字級     照 handoff 的 px 值當 pt 用（頁面標題 24、卡片標題 15、正文 13、輔助 11.5、大數字 28）

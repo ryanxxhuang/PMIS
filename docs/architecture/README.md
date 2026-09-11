@@ -1,38 +1,22 @@
-# 架構文件索引
+# 架構索引
 
-> 狀態：**ACTIVE**
-> 最後盤點：2026-09-11（補四份紅線與治理機制文件；同日 D1 波次再補錯誤遮罩、球權、文件處理管線三份；D2 波次把 `resumable-extraction`／`error-masking`／`document-processing-pipeline` 的對應程式路徑對齊 B6 拆檔（`_shared/ingestionRun.ts`／`requirementPrompt.ts`／`requirementPersist.ts`）與 4b 的 `packageRuns.js`，並在 `dual-engine-sync` 補兩條球權差異）
-> 架構文件說明設計責任與**機制怎麼運作**；為什麼這樣定看 [`../DECISIONS.md`](../DECISIONS.md)；資料庫實際狀態仍以 `supabase/migrations/` 為準。
+> ACTIVE｜2026-09-11。只讀改動相關的文件；規則看 [決策](../DECISIONS.md)，實際 DB 看 migrations。
 
-## 現行文件
+| 改動範圍 | 先讀 |
+|---|---|
+| 三方身分、專案 admin、成員 | [three-party-role-model](three-party-role-model.md) |
+| AI 註冊、閘門、用量 | [ai-gate-and-metering](ai-gate-and-metering.md) |
+| Agent 工具與動作留痕 | [agent-tool-boundary](agent-tool-boundary.md) |
+| 錯誤回應 | [error-masking](error-masking.md) |
+| 路由、導覽、列印守衛 | [route-registry-governance](route-registry-governance.md) |
+| 待辦、球權、提醒 | [ball-in-court](ball-in-court.md)、[dual-engine-sync](dual-engine-sync.md) |
+| 文件與標單資料脊椎 | [contract-first-foundation](contract-first-foundation.md) |
+| 文件版本、頁碼、來源 | [traceable-document-ingestion](traceable-document-ingestion.md) |
+| 上傳、分類、契約包、processing run | [document-processing-pipeline](document-processing-pipeline.md) |
+| 抽取、續跑、ingestion run | [resumable-extraction](resumable-extraction.md) |
+| Requirement 確認與產物 | [requirement-review-boundary](requirement-review-boundary.md)（D-019／D-020 優先於歷史章節） |
+| 稽核事件 | [audit-events](audit-events.md) |
+| Demo／前端與後端規則 | [dual-engine-sync](dual-engine-sync.md) |
+| 真案／BOQ 模式與刪案 | [project-delete-contract-first-hotfix](project-delete-contract-first-hotfix.md)（刪案 guard 敘述待核，見 ROADMAP） |
 
-| 文件 | 狀態 | 責任 |
-|---|---|---|
-| [`ai-gate-and-metering.md`](ai-gate-and-metering.md) | `CURRENT` | 第四條紅線本體：三份功能註冊表、`ai_feature_allowed` 三段判定、D-010 fail-closed 語意、記帳絕不影響回應、平台管理員自我升權防護、新增 AI 功能的完整路徑 |
-| [`agent-tool-boundary.md`](agent-tool-boundary.md) | `CURRENT` | 第一與第三條紅線的執行機制：12 支工具白名單（7 唯讀＋5 草稿）、順序＝prompt cache 前提、`agent_actions` 與 `resolve_agent_action` 留痕、`handoff`／`handoff_sent` 對應、紅線二在工具層的落實、唯讀軌跡不落庫的已知缺口 |
-| [`error-masking.md`](error-masking.md) | `CURRENT`（機制已提交、未部署） | 附表十構面五的執行機制：`publicError.ts` 唯一遮罩點、遮罩做在 `claudeJson`／`claudeAgent` 源頭、伺服器與前端 `friendlyError` 共用「CJK＝我們自己寫的」判準、訊息不得含冒號、兩支 `errorLeak.scan` 凍結的前提、代碼值域與分流不變、持久化欄位紀律、正式站仍為舊行為 |
-| [`three-party-role-model.md`](three-party-role-model.md) | `ACCEPTED` | 廠商／監造／機關三方授權、Agent 身分與雙成員模型的唯一規則 |
-| [`contract-first-foundation.md`](contract-first-foundation.md) | `CURRENT` | 文件、Requirement 與 BOQ 兩條資料脊椎 |
-| [`traceable-document-ingestion.md`](traceable-document-ingestion.md) | `CURRENT` | 文件攝取、版本、分頁與 AI 擷取 |
-| [`document-processing-pipeline.md`](document-processing-pipeline.md) | `CURRENT` | W14 專案文件管線：契約包三方可見性與寫入權、`document_processing_runs` 的 `STAGE_ORDER` 階段機器與 DB 合法組合、確定性分類優先／AI 只做第二意見、`shouldExtractRequirements` 路由、與 `document_ingestion_runs` 的分工與三處交叉、20 分鐘過期判定與修復拆分、契約包 `ready`／`needs_attention` 語意（09-08 起 partial 不算 ready）、與 `resumable-extraction.md` 的交界 |
-| [`resumable-extraction.md`](resumable-extraction.md) | `CURRENT` | W13 契約重點抽取的跨 request 續跑：瀏覽器 driver、CAS 認領與過期標記、partial unique index 與 23505→409、活鎖防護、改批次參數作廢在途 run、逐頁讀取完整性檢查 |
-| [`requirement-review-boundary.md`](requirement-review-boundary.md) | `CURRENT` | Requirement 審查、來源凍結與履約產物連結 |
-| [`route-registry-governance.md`](route-registry-governance.md) | `CURRENT` | D-013 的實作：`routeRegistry` fail-closed、`hidden` ≠ 移除權限、公開與列印必須明確標記、`platformAdminOnly` 獨立維度、現況現查方式 |
-| [`audit-events.md`](audit-events.md) | `CURRENT` | append-only 稽核事件與 actor snapshot |
-| [`ball-in-court.md`](ball-in-court.md) | `CURRENT` | 「球在誰手上」的責任語言：單筆狀態→球權的確定性判定表、前端 `collaborationItems`→`buildTodayTasks` 三桶與三個白名單、伺服器 `collectOpenBallItems` 的兩個消費者、兩份實作的同步點與已知差異、`dueText` 句型被 `OVERDUE_RE` 與 e2e 綁死、`?ball=` 走 query param 不開新路由 |
-| [`dual-engine-sync.md`](dual-engine-sync.md) | `ACTIVE CHECKLIST` | Demo 前端與正式伺服器規則的人工同步點 |
-| [`project-delete-contract-first-hotfix.md`](project-delete-contract-first-hotfix.md) | `CURRENT NOTE` | 真專案、BOQ 模式與刪案的窄邊界 |
-
-## 歷史文件
-
-| 文件 | 狀態 | 注意事項 |
-|---|---|---|
-| [`project-party-role-model.md`](project-party-role-model.md) | `HISTORICAL FOUNDATION` | 保留 P0-02 原始建模；跨案角色與 `project_role` 授權方向已取消 |
-
-## 閱讀原則
-
-0. 碰四條紅線（CLAUDE.md §2）的程式，先讀 `ai-gate-and-metering.md`（第四條）與 `agent-tool-boundary.md`（第一、三條）；碰前端路由先讀 `route-registry-governance.md`；碰 `extract-requirements` 先讀 `resumable-extraction.md`；碰上傳／分類／契約包（`packageUpload.js`、`packageRuns.js`、`classify-document`）先讀 `document-processing-pipeline.md`；碰任何 Edge Function 的錯誤回應或前端錯誤顯示先讀 `error-masking.md`；碰今日待辦、側欄件數、早報或 `list_my_open_items` 先讀 `ball-in-court.md`。
-1. 角色問題先讀 `three-party-role-model.md`，不要依 P0-02 舊角色清單開發。
-2. `schema.sql` 已凍結；Schema、RLS、RPC 與 Trigger 只看 migrations。
-3. 文件寫 `CURRENT` 但與 migration 或實測不符時，先修文件並停止擴充，不自行猜測目標行為。
-4. 尚未核准的架構候選放在 [`../ROADMAP.md`](../ROADMAP.md)，不能混入現行文件。
+`CURRENT` 標記不是正確性的保證；與程式不符就修正。未核准設計只放 ROADMAP。
