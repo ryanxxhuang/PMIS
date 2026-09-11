@@ -21,13 +21,23 @@ test.describe('機關', () => {
   test('核准變更設計 → 變更後契約金額跨頁一致(B-02)', async ({ page }) => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/change-orders')
-    // 待核定的變更排在最前面,機關進來第一眼就是要核的東西(W8-4C C1)
-    await expect(page.getByRole('heading', { name: /待核定/ })).toBeVisible()
-    // CO-002 卡片上的「核准」動作鈕(機關 can.ratify;D-016 取代四值下拉,
-    // 監造只剩受理審查/退回,核准/駁回=機關專屬)
-    const co2Card = page.locator('h3', { hasText: 'CO-002' })
-      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
-    await co2Card.getByRole('button', { name: '核准', exact: true }).click()
+    // 改版後兩段分群是快篩 chip(不再是區段標題):「待核定 1」帶件數,機關進來第一眼
+    // 就看到還有幾筆要核(W8-4C C1)。件數會隨劇本變,用 ^ 錨定標籤
+    await expect(page.getByRole('button', { name: /^待核定/ })).toBeVisible()
+    // 列只負責選取、核定動作全在詳情欄:先選中 CO-002,再在以編號命名的 region
+    // (「CO-002 詳情」)裡按「核准」(機關 can.ratify;監造只剩受理審查/退回,
+    // 核准/駁回=機關專屬,D-016)。定位一律走 role / aria-label / 文字,不綁視覺 class
+    const row = page.getByRole('listitem').filter({ hasText: 'CO-002' })
+    await row.click()
+    await expect(row).toHaveAttribute('aria-current', 'true')
+    const d2 = page.getByRole('region', { name: 'CO-002 詳情' })
+    // 明細表真的在詳情欄裡(減帳與追加各一列),不是空面板
+    await expect(d2.getByText('花崗石地坪（新增）')).toBeVisible()
+    // 按鈕名一律 exact:快篩 chip「已核定／已結 1」會被子字串比對吃成按鈕名
+    await d2.getByRole('button', { name: '核准', exact: true }).click()
+    // 清單列的狀態章即時翻成核准、核准鈕消失(不是只有彙總數字變)
+    await expect(row.getByText('核准', { exact: true })).toBeVisible()
+    await expect(d2.getByRole('button', { name: '核准', exact: true })).toHaveCount(0)
     // 本頁彙總即時更新
     await expect(page.getByText(`NT$ ${REVISED_AFTER_CO2}`).first()).toBeVisible()
     // 跨頁一致:估驗頁分母、Dashboard 發包工程費都是同一個數字

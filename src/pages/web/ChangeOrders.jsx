@@ -1,21 +1,36 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Surface, Empty, Button, Badge, Field, Input, buttonClass, THEAD_CLS, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, Badge, Dot, Field, Input, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { ListDetailLayout, SearchField, StatusChip } from '../../components/listDetail.jsx'
+import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
-import { parsePccesXml } from '../../lib/parsePcces.js'
-import { diffBoq } from '../../lib/coDiff.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { fmtAmount as money, fmtYi as yi } from '../../lib/format.js'
 import { billableLeaves } from '../../lib/boqCalc.js'
+import ChangeOrderDetail, { STATUS_COLOR, isPending, signCls, signed } from './ChangeOrderDetail.jsx'
 
-const STATUS_COLOR = { 提出: 'slate', 審核中: 'amber', 核准: 'green', 駁回: 'red' }
-const isPending = (status) => status === '提出' || status === '審核中'
+// 版面:改版前每筆變更是一張可展開的卡,依「待核定／已核定」分成兩段各疊一疊——
+// 追加/減帳明細表、匯入差異預覽、新增明細編輯器全攤在卡上,一筆變更就是一整屏,
+// 核准鈕離它影響的明細隔了整張卡的高(判準第 3、4 條)。現在是一份清單(只負責選取)
+// ＋詳情欄:明細表、巢狀編輯器、核定動作永遠在同一個位置(規範 §0 疊合版)。
+// 詳情走殼的寬版(width="wide",640px):追加/減帳明細與匯入差異是兩張約 620px 的
+// 表格,400px 只會逼這一頁自己刻一套寬度(理由見 listDetail.jsx LIST_DETAIL_GRID_WIDE)。
+// 已定案變更的明細不再收合:改版前收合是因為多張卡疊在一起,詳情欄一次只顯示一筆。
+//
+// 狀態快篩:兩段沿用改版前的分群語意(待核定=提出/審核中、已核定／已結=核准/駁回),
+// 件數掛在 chip 上;機關來這頁只為了「還沒定案的要不要核」,清單順序仍是待核定在前。
+const GROUP_FILTERS = [
+  { key: 'pending', label: '待核定', color: 'amber' },
+  { key: 'settled', label: '已核定／已結', color: 'slate' },
+]
+const groupOf = (co) => (isPending(co.status) ? 'pending' : 'settled')
+const DEFAULT_FILTERS = { q: '', group: '' }
 
 export default function ChangeOrders() {
-  const { workItems, dbMode, demoMode, changeOrders, can,
+  const { workItems, dbMode, demoMode, changeOrders, can, currentProject, currentUser,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem } = useStore()
   const original = workItems?.meta.billable_total || 0
@@ -24,6 +39,8 @@ export default function ChangeOrders() {
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 明細/狀態寫入失敗必須讓使用者看到(失敗=UI 不變)
   const [submitted, setSubmitted] = useState(false) // 廠商送出後就地回饋(O-4:提出≠已受理,球在監造)
+  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  const searchRef = useRef(null)
 
   // 發包末端工項（給明細連結既有工項用）
   const leaves = useMemo(() => {
@@ -45,16 +62,41 @@ export default function ChangeOrders() {
     return { approvedNet, pendingNet, add, reduce, pendingCount }
   }, [changeOrders])
 
-  // 機關來這頁只為了「還沒定案的要不要核」——待核定排前面,已定案的往下沉;
-  // 兩群各自維持原相對順序,避免使用者記憶中的清單順序被打亂。
-  const groups = useMemo(() => {
-    const pending = [], settled = []
-    for (const co of changeOrders) (isPending(co.status) ? pending : settled).push(co)
-    return [
-      { key: 'pending', label: '待核定', list: pending },
-      { key: 'settled', label: '已核定／已結', list: settled },
-    ]
+  // 件數走全體(不受搜尋影響):chip 上的數字是「本案有幾筆還沒定案」,0 也保留
+  const counts = useMemo(() => {
+    const c = { pending: 0, settled: 0 }
+    for (const co of changeOrders) c[groupOf(co)]++
+    return c
   }, [changeOrders])
+  // 目前畫面上的清單:狀態段 AND 關鍵字(編號/事由/理由/明細工項)。待核定排前面、
+  // 已定案往下沉,兩段各自維持 store 順序(sort 穩定)——與改版前兩段分群的閱讀順序
+  // 完全相同:機關進來第一眼就是要核的東西,使用者記憶中的清單順序不被打亂。
+  const ordered = useMemo(() => {
+    const q = filters.q.trim().toLowerCase()
+    return changeOrders
+      .filter((co) => !filters.group || groupOf(co) === filters.group)
+      .filter((co) => !q || [co.co_no, co.title, co.reason, ...co.items.map((it) => it.description)]
+        .some((v) => (v || '').toLowerCase().includes(q)))
+      .sort((a, b) => (isPending(a.status) ? 0 : 1) - (isPending(b.status) ? 0 : 1))
+  }, [changeOrders, filters])
+  const anyFilter = filters.q.trim() !== '' || filters.group !== ''
+
+  // 選取/深連結(?co=)/切案重置/初次自動選取:共用殼 hook。預設選第一筆待核定
+  // (開頁就落在該核的那一筆),沒有就選清單第一筆。
+  const pid = currentProject?.project_id
+  const org = currentUser?.org_type || 'contractor'
+  const { selectedId, detailOpen, select, closeDetail } = useListDetailPane({
+    param: 'co', idPrefix: 'co-',
+    scope: `${pid}/${org}`,
+    ready: changeOrders.length > 0, rows: changeOrders,
+    pickDefault: () => (ordered.find((co) => isPending(co.status)) || ordered[0])?.id,
+    onSelect: () => setErrMsg(''),
+    onReset: () => setFilters(DEFAULT_FILTERS),
+  })
+  // 篩選後選中項被篩掉:右欄內容保留(與 /submittals 同),清單中只是沒有高亮列——
+  // 核准後這一筆離開「待核定」,詳情還在,機關看得到自己剛核了什麼
+  const selected = changeOrders.find((co) => co.id === selectedId) || null
+  useListKeyboardNav({ ordered, selectedId, select, idPrefix: 'co-', searchRef })
 
   const revised = original + totals.approvedNet
   const ratio = original ? (totals.approvedNet / original) * 100 : 0
@@ -91,6 +133,81 @@ export default function ChangeOrders() {
     ])
   }
 
+  // ── 詳情欄:巢狀編輯器(搜標單、匯入差異、新增明細)的狀態住在子元件、以 co.id 為 key,
+  // 換選取就整組重置——否則會出現「詳情是 B、搜到一半的工項是 A 的」。
+  // D-016 三段流程:監造受理審查/退回(can.review),機關核准/駁回(can.ratify);
+  // 明細可編=廠商填報權 且 尚未核准(核准後 DB 凍結,UI 同步凍結——P0-02)
+  const detailBody = selected ? (
+    <ChangeOrderDetail key={selected.id} co={selected} net={coNet(selected)} leaves={leaves} allItems={workItems?.items || []}
+      canReview={can.review} canRatify={can.ratify}
+      canEdit={can.edit} itemsEditable={can.edit && selected.status !== '核准'}
+      onStatus={async (s) => { setErrMsg(''); const { error } = await updateChangeOrder(selected.id, { status: s }); if (error) setErrMsg(friendlyError(error, '變更狀態未更新')) }}
+      onDelete={async () => {
+        if (!(await appConfirm({ title: `刪除變更「${selected.title}」？`, body: '其明細將一併刪除。', danger: true, confirmLabel: '刪除' }))) return
+        setErrMsg('')
+        const { error } = await deleteChangeOrder(selected.id)
+        if (error) setErrMsg(friendlyError(error, '變更刪除未完成'))
+        else closeDetail() // <lg 抽屜承載的正是這筆,刪掉後不留 detailOpen 殘值
+      }}
+      onAddItem={(input) => addChangeOrderItem(selected.id, input)}
+      onAddItems={(rows) => addChangeOrderItems(selected.id, rows)}
+      onUpdateItem={async (id, patch) => { setErrMsg(''); const { error } = await updateChangeOrderItem(selected.id, id, patch); if (error) setErrMsg(friendlyError(error, '明細未寫入')) }}
+      onDeleteItem={async (id) => { setErrMsg(''); const { error } = await deleteChangeOrderItem(selected.id, id); if (error) setErrMsg(friendlyError(error, '明細未刪除')) }} />
+  ) : null
+
+  // ── 左欄卡頭下方:搜尋 + 兩段狀態快篩(件數走全體),兩條件 AND
+  const filterBar = (
+    <div className="px-5 py-3.5 border-b border-[var(--border-2)] flex flex-col gap-3">
+      <SearchField ref={searchRef} value={filters.q}
+        onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+        placeholder="搜尋編號、事由、工項…" aria-label="搜尋變更設計" />
+      <div className="flex items-center gap-2 flex-wrap">
+        {GROUP_FILTERS.map((f) => (
+          <StatusChip key={f.key} active={filters.group === f.key} count={counts[f.key]}
+            onClick={() => setFilters((x) => ({ ...x, group: x.group === f.key ? '' : f.key }))}>
+            <Dot color={f.color} />{f.label}
+          </StatusChip>
+        ))}
+        {anyFilter && (
+          <Button variant="ghost" size="sm" onClick={() => setFilters(DEFAULT_FILTERS)}>清除篩選</Button>
+        )}
+      </div>
+    </div>
+  )
+
+  // ── 清單列:只負責選取(動作全在詳情欄),兩行=編號＋事由＋狀態 / 日期·筆數·淨額。
+  // 淨額進列是改版前卡頭就有的數字(機關掃清單要先看金額量級再決定看哪一筆)。
+  // role=listitem + aria-current 與 /rfi、/submittals 同一套選取語意。
+  const listRows = (
+    <div role="list" aria-label="變更清單" className="divide-y divide-[var(--border-2)]">
+      {ordered.length === 0 ? (
+        <div className="px-5 py-12 text-center text-footnote leading-[1.8] text-[var(--text-3)]">
+          沒有符合條件的變更。<br />換一段狀態,或試試編號、事由、工項關鍵字。
+        </div>
+      ) : ordered.map((co) => {
+        const active = co.id === selectedId
+        const net = coNet(co)
+        return (
+          <button key={co.id} type="button" role="listitem" id={`co-${co.id}`}
+            aria-current={active || undefined}
+            onClick={() => select(co.id, { openPane: true })}
+            className={`w-full text-left px-5 py-3 max-md:min-h-11 cursor-pointer ${active
+              ? 'bg-[var(--blue-tint)]' : 'hover:bg-[var(--surface-2)]'}`}>
+            <span className="flex items-center gap-2 flex-wrap">
+              {co.co_no && <span className="num text-caption text-[var(--text-3)]">{co.co_no}</span>}
+              <span className="text-body text-[var(--text)] min-w-0 [text-wrap:pretty]">{co.title}</span>
+              <Badge color={STATUS_COLOR[co.status] || 'slate'}>{co.status}</Badge>
+            </span>
+            <span className="block mt-0.5 num text-caption text-[var(--text-3)] truncate">
+              {[co.co_date, `${co.items.length} 筆明細`].filter(Boolean).join(' · ')}
+              <span className={`ml-2 font-medium ${signCls(net)}`}>{signed(net)}</span>
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+
   return (
     <div className="space-y-5">
       <PageHeader title="變更設計" tagline="追加減帳・契約金額調整" subtitle="追加/減帳工項 → 僅「核准」的計入變更後契約金額" />
@@ -103,7 +220,7 @@ export default function ChangeOrders() {
       </div>
       {totals.pendingNet !== 0 && (
         // 不用負 margin 硬拉近 Stat 列:頁面根層 space-y-5 的節奏由容器決定
-        <p className="text-xs text-[var(--text-3)] leading-relaxed">另有 {totals.pendingCount} 件審核中/提出的變更淨額 <span className={totals.pendingNet >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}>{totals.pendingNet >= 0 ? '+' : ''}{money(totals.pendingNet)}</span>（尚未計入變更後契約金額）。</p>
+        <p className="text-xs text-[var(--text-3)] leading-relaxed">另有 {totals.pendingCount} 件審核中/提出的變更淨額 <span className={signCls(totals.pendingNet)}>{signed(totals.pendingNet)}</span>（尚未計入變更後契約金額）。</p>
       )}
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
@@ -136,265 +253,26 @@ export default function ChangeOrders() {
       {changeOrders.length === 0 ? (
         <Card title="變更清單" bodyClass="p-0"><Empty>尚無變更設計。新增一筆後，在其中加入追加/減帳工項。</Empty></Card>
       ) : (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <Button variant="ghost" onClick={exportAll}><MSym name="download" size={16} />匯出全部 CSV</Button>
-          </div>
-          {groups.map((g) => g.list.length === 0 ? null : (
-            // 群標題只是安靜的分隔線索,不做成 Card——多一層卡片框會讓清單看起來更重
-            <div key={g.key} className="space-y-4">
-              <h2 className="text-sm font-medium text-[var(--text-2)]">{g.label}（{g.list.length}）</h2>
-              {g.list.map((co) => (
-                <ChangeOrderCard key={co.id} co={co} net={coNet(co)} leaves={leaves} allItems={workItems?.items || []}
-                  // D-016 三段流程:監造受理審查/退回(can.review),機關核准/駁回(can.ratify)
-                  canReview={can.review} canRatify={can.ratify}
-                  // 明細可編=廠商填報權 且 尚未核准(核准後 DB 凍結,UI 同步凍結——P0-02)
-                  canEdit={can.edit} itemsEditable={can.edit && co.status !== '核准'}
-                  onStatus={async (s) => { setErrMsg(''); const { error } = await updateChangeOrder(co.id, { status: s }); if (error) setErrMsg(friendlyError(error, '變更狀態未更新')) }}
-                  onDelete={async () => { if (await appConfirm({ title: `刪除變更「${co.title}」？`, body: '其明細將一併刪除。', danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteChangeOrder(co.id); if (error) setErrMsg(friendlyError(error, '變更刪除未完成')) } }}
-                  onAddItem={(input) => addChangeOrderItem(co.id, input)}
-                  onAddItems={(rows) => addChangeOrderItems(co.id, rows)}
-                  onUpdateItem={async (id, patch) => { setErrMsg(''); const { error } = await updateChangeOrderItem(co.id, id, patch); if (error) setErrMsg(friendlyError(error, '明細未寫入')) }}
-                  onDeleteItem={async (id) => { setErrMsg(''); const { error } = await deleteChangeOrderItem(co.id, id); if (error) setErrMsg(friendlyError(error, '明細未刪除')) }} />
-              ))}
-            </div>
-          ))}
-        </div>
+        <ListDetailLayout width="wide"
+          detail={detailBody}
+          detailLabel="變更詳情"
+          detailEmpty={<Empty>點左側清單查看變更的追加/減帳明細與核定動作。</Empty>}
+          drawerOpen={detailOpen && !!selected}
+          onDrawerClose={closeDetail}>
+          {/* ── 左欄:一份清單(右欄與抽屜由殼統一,見 components/listDetail.jsx)。
+              匯出從清單上方的獨立一列搬到卡頭:它匯的就是這份清單 */}
+          <Card title={`變更清單（${changeOrders.length}）`} bodyClass="p-0" action={
+            <Button variant="ghost" size="sm" onClick={exportAll}><MSym name="download" size={14} />匯出 CSV</Button>
+          }>
+            {filterBar}
+            {listRows}
+          </Card>
+        </ListDetailLayout>
       )}
 
       <p className="text-xs text-[var(--text-3)] leading-relaxed">
         變更後契約金額 = 原契約金額 + 已「核准」變更的追加減淨額。追加填正數量、減帳填負數量；連結既有工項會自動帶入單價，也可直接新增全新工項。
       </p>
     </div>
-  )
-}
-
-const KIND_COLOR = { 數量增減: 'blue', '單價變更-減': 'amber', '單價變更-加': 'amber', 新增項: 'green', 刪除項: 'red' }
-
-function ChangeOrderCard({ co, net, leaves, allItems, canReview, canRatify, canEdit, itemsEditable, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem }) {
-  const [draft, setDraft] = useState({ work_item_key: '', item_no: '', description: '', unit: '', qty_delta: '', unit_price: '', note: '' })
-  const [search, setSearch] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [showItems, setShowItems] = useState(false) // 已定案變更的明細收合(預設收起,同原 <details>)
-  const [diff, setDiff] = useState(null) // { fileName, rows, summary }
-  const [diffErr, setDiffErr] = useState('')
-  const [applying, setApplying] = useState(false)
-
-  const onDiffFile = async (e) => {
-    const f = e.target.files?.[0]
-    e.target.value = ''
-    if (!f) return
-    setDiffErr('')
-    try {
-      const parsed = parsePccesXml(await f.text())
-      setDiff({ fileName: f.name, ...diffBoq(allItems, parsed.items) })
-    } catch (err) {
-      setDiff(null)
-      setDiffErr(friendlyError(err, '標單解析失敗'))
-    }
-  }
-  const applyDiff = async () => {
-    setApplying(true)
-    const { error } = await onAddItems(diff.rows)
-    setApplying(false)
-    if (!error) setDiff(null)
-  }
-
-  const results = search.trim() ? leaves.filter((it) => it.description.includes(search.trim()) || (it.item_no || '').includes(search.trim())).slice(0, 10) : []
-  const pick = (it) => {
-    setDraft((d) => ({ ...d, work_item_key: it.item_key, item_no: it.item_no, description: it.description, unit: it.unit, unit_price: it.unit_price ?? '' }))
-    setSearch('')
-  }
-  const submit = async () => {
-    if (!draft.description.trim()) return
-    setAdding(true)
-    const { error } = await onAddItem(draft)
-    setAdding(false)
-    if (!error) setDraft({ work_item_key: '', item_no: '', description: '', unit: '', qty_delta: '', unit_price: '', note: '' })
-  }
-
-  // 已定案(核准/駁回)的變更不再需要逐項核對,明細收進 details;待核定的維持完全攤開
-  const settled = !isPending(co.status)
-  const itemsTable = (
-    <table className="w-full text-sm min-w-[620px]">
-      <thead>
-        {/* 表頭字型層走共用 THEAD_CLS(全站曾有 uppercase/tracking-wide/text-3 三種寫法) */}
-        <tr className={`${THEAD_CLS} border-b border-[var(--border)]`}>
-          <th className="text-left py-1.5">工項</th>
-          <th className="text-right px-2">單位</th>
-          <th className="text-right px-2 whitespace-nowrap">數量增減</th>
-          <th className="text-right px-2">單價</th>
-          <th className="text-right px-2 whitespace-nowrap">金額增減</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        {/* 已核准或無填報權=唯讀呈現(P0-02:先由狀態×角色決定唯讀,再渲染,不靠 API 事後擋) */}
-        {co.items.map((it) => (
-          <tr key={it.id} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
-            <td className="py-1.5"><span className="text-[var(--text-3)] text-xs mr-2 num">{it.item_no}</span>{it.description}</td>
-            <td className="px-2 text-right text-[var(--text-3)] text-xs whitespace-nowrap">{it.unit}</td>
-            <td className="px-2 text-right num whitespace-nowrap">
-              {itemsEditable ? (
-                // 表格內輸入:圓角回到系統的 rounded-md,觸控斷點與全站手機層(max-md)一致
-                <input type="number" step="any" inputMode="decimal" defaultValue={it.qty_delta ?? ''} aria-label={`${it.description} 數量增減`}
-                  key={`q-${it.id}-${it.qty_delta ?? ''}`}
-                  onBlur={(e) => { const n = parseFloat(e.target.value); if ((isNaN(n) ? 0 : n) !== (Number(it.qty_delta) || 0)) onUpdateItem(it.id, { qty_delta: isNaN(n) ? 0 : n }) }}
-                  className="w-20 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 text-xs num max-md:py-2" />
-              ) : <span>{it.qty_delta ?? 0}</span>}
-            </td>
-            <td className="px-2 text-right num whitespace-nowrap">
-              {itemsEditable ? (
-                <input type="number" step="any" inputMode="decimal" defaultValue={it.unit_price ?? ''} aria-label={`${it.description} 單價`}
-                  key={`p-${it.id}-${it.unit_price ?? ''}`}
-                  onBlur={(e) => { const n = parseFloat(e.target.value); if ((isNaN(n) ? 0 : n) !== (Number(it.unit_price) || 0)) onUpdateItem(it.id, { unit_price: isNaN(n) ? 0 : n }) }}
-                  className="w-24 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 text-xs num max-md:py-2" />
-              ) : <span>{money(it.unit_price)}</span>}
-            </td>
-            <td className={`px-2 text-right num whitespace-nowrap font-medium ${(Number(it.amount_delta) || 0) >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{(Number(it.amount_delta) || 0) >= 0 ? '+' : ''}{money(it.amount_delta)}</td>
-            {/* p-2 -m-2:命中區擴到約 32px 但視覺與列高完全不變(表格內拉到 44px 會讓每列翻倍) */}
-            <td className="text-right pl-2">{itemsEditable && <button onClick={() => onDeleteItem(it.id)} aria-label={`刪除明細 ${it.description}`} className="inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2"><MSym name="close" size={16} /></button>}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-
-  return (
-    <Card title={`${co.co_no ? co.co_no + '　' : ''}${co.title}`} action={
-      <div className="flex items-center gap-2">
-        <span className={`text-sm font-medium num whitespace-nowrap ${net >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{net >= 0 ? '+' : ''}{money(net)}</span>
-        {/* D-016 三段流程動作鈕取代四值下拉:能按什麼=角色×狀態,順序(提出→審核中→
-            核准/駁回)由 DB guard 強制,這裡只渲染當下合法的動作——監造看不到核准鈕 */}
-        {co.status === '提出' && canReview && (
-          <Button size="sm" variant="outline" onClick={() => onStatus('審核中')}>受理審查</Button>
-        )}
-        {co.status === '審核中' && canReview && (
-          <Button size="sm" variant="outline" onClick={() => onStatus('提出')}>退回</Button>
-        )}
-        {co.status === '審核中' && canRatify && (<>
-          <Button size="sm" onClick={() => onStatus('核准')}>核准</Button>
-          <Button size="sm" variant="danger" onClick={() => onStatus('駁回')}>駁回</Button>
-        </>)}
-        {canEdit && <button onClick={onDelete} aria-label={`刪除變更單 ${co.title || co.co_no}`} className="inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2"><MSym name="close" size={16} /></button>}
-      </div>
-    }>
-      <div className="flex items-center gap-2 mb-3 text-xs text-[var(--text-3)]">
-        <Badge color={STATUS_COLOR[co.status] || 'slate'}>{co.status}</Badge>
-        {co.co_date && <span>{co.co_date}</span>}
-      </div>
-
-      {co.items.length > 0 && (settled ? (
-        // 收合走與專案文件同一套(button + chevron 旋轉),不交給瀏覽器預設三角形
-        <div className="mb-3">
-          <button onClick={() => setShowItems((s) => !s)} aria-expanded={showItems}
-            className="text-sm text-[var(--text-2)] hover:text-[var(--text)] inline-flex items-center gap-1 max-md:min-h-11 px-1">
-            <MSym name="chevron_right" size={14} className={`transition-transform duration-[var(--dur-fast)] ${showItems ? 'rotate-90' : ''}`} />
-            工項明細（{co.items.length} 筆）
-          </button>
-          {showItems && <div className="overflow-x-auto mt-2">{itemsTable}</div>}
-        </div>
-      ) : (
-        <div className="overflow-x-auto mb-3">{itemsTable}</div>
-      ))}
-
-      {/* 變更後預算書 diff → 自動產生明細(僅未核准且有填報權) */}
-      {itemsEditable && <div className="mb-3">
-        {/* 不能用 <button> 的檔案上傳 label 也吃同一套按鈕皮(藥丸+44px 觸控)。
-            用 sm:按鈕皮帶 whitespace-nowrap,這行文案在 md(14px)下會撐破 375px 的卡身 */}
-        <label className={`${buttonClass('outline', 'sm')} ${applying ? 'opacity-40' : 'cursor-pointer'}`}>
-          <MSym name="upload_file" size={14} />上傳變更後預算書 XML，自動產生明細
-          <input type="file" accept=".xml" className="hidden" onChange={onDiffFile} disabled={applying} />
-        </label>
-        {diffErr && <p className="text-xs text-[var(--red-text)] mt-1.5">{diffErr}</p>}
-        {diff && (
-          <Surface className="mt-2 p-3">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-2)]">
-              <span className="font-medium text-[var(--text)]">{diff.fileName}</span>
-              <span>數量增減 {diff.summary.changed} 項</span>
-              <span>單價變更 {diff.summary.priceChanged} 項</span>
-              <span>新增 {diff.summary.added} 項</span>
-              <span>刪除 {diff.summary.removed} 項</span>
-              <span className={`font-medium num whitespace-nowrap ${diff.summary.net >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>淨額 {diff.summary.net >= 0 ? '+' : ''}{money(diff.summary.net)}</span>
-            </div>
-            {diff.rows.length === 0 ? (
-              <Empty>與現行標單無差異。</Empty>
-            ) : (
-              <>
-                <div className="overflow-auto max-h-64 mt-2">
-                  <table className="w-full text-sm min-w-[620px]">
-                    <thead>
-                      <tr className={`${THEAD_CLS} border-b border-[var(--border)]`}>
-                        <th className="text-left py-1">類型</th>
-                        <th className="text-left px-2">工項</th>
-                        <th className="text-right px-2">單位</th>
-                        <th className="text-right px-2 whitespace-nowrap">數量增減</th>
-                        <th className="text-right px-2">單價</th>
-                        <th className="text-right px-2 whitespace-nowrap">金額增減</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {diff.rows.map((r, i) => (
-                        <tr key={i} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
-                          <td className="py-1"><Badge color={KIND_COLOR[r.kind] || 'slate'}>{r.kind}</Badge></td>
-                          <td className="px-2"><span className="text-[var(--text-3)] text-xs mr-2 num">{r.item_no}</span>{r.description}</td>
-                          <td className="px-2 text-right text-[var(--text-3)] text-xs whitespace-nowrap">{r.unit}</td>
-                          <td className="px-2 text-right num whitespace-nowrap">{r.qty_delta}</td>
-                          <td className="px-2 text-right num whitespace-nowrap">{money(r.unit_price)}</td>
-                          <td className={`px-2 text-right num whitespace-nowrap font-medium ${r.amount_delta >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{r.amount_delta >= 0 ? '+' : ''}{money(r.amount_delta)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <Button onClick={applyDiff} disabled={applying}>{applying ? '套用中…' : `套用 ${diff.rows.length} 筆明細`}</Button>
-                  <Button variant="ghost" onClick={() => setDiff(null)}>取消</Button>
-                </div>
-              </>
-            )}
-          </Surface>
-        )}
-      </div>}
-
-      {/* 新增明細(僅未核准且有填報權) */}
-      {itemsEditable && <div className="bg-[var(--surface-2)] rounded-lg p-3">
-        {/* 輸入全走共用 Input(focus ring/disabled/手機 44px 一次到位),寬度交給外層容器 */}
-        <div className="relative mb-2">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋既有工項連結（可留空直接新增全新項）…" />
-          {results.length > 0 && (
-            // 浮層陰影走 token(Tailwind 原生 shadow-lg 是黑色硬陰影,不吃深色模式)
-            <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg [box-shadow:var(--shadow-overlay)] max-h-56 overflow-auto enter-menu">
-              {results.map((it) => (
-                <button key={it.item_key} onClick={() => pick(it)} className="w-full text-left px-3 py-1.5 text-sm max-md:min-h-11 hover:bg-[var(--surface-2)] truncate">
-                  <span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex-1 min-w-[140px]">
-            <Input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="工項名稱" />
-          </div>
-          <div className="w-16">
-            <Input value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="單位" />
-          </div>
-          <div className="w-24">
-            <Input type="number" step="any" value={draft.qty_delta} onChange={(e) => setDraft({ ...draft, qty_delta: e.target.value })} placeholder="數量±"
-              aria-label="新明細數量增減" className="text-right num" />
-          </div>
-          <div className="w-24">
-            <Input type="number" step="any" value={draft.unit_price} onChange={(e) => setDraft({ ...draft, unit_price: e.target.value })} placeholder="單價"
-              aria-label="新明細單價" className="text-right num" />
-          </div>
-          <Button onClick={submit} disabled={adding || !draft.description.trim()}>{adding ? '…' : <><MSym name="add" size={16} />明細</>}</Button>
-        </div>
-        <p className="text-caption text-[var(--text-3)] mt-1.5">追加填正數量、減帳填負數量。金額 = 數量 × 單價，自動計算。</p>
-      </div>}
-      {!itemsEditable && co.status === '核准' && (
-        <p className="text-caption text-[var(--text-3)]">此變更已核准，明細凍結；如需調整請由機關撤銷核准後再修改（D-016：撤銷為機關專屬）。</p>
-      )}
-    </Card>
   )
 }
