@@ -31,12 +31,8 @@ self-inspection.png
 # 換一台機器 clone 後只要有人開 worktree,整包就會裸露在 git status。
 .claude/worktrees/
 
-# 簡報成品與中間產物:都可由 docs/pitch/pptx/ 的建置腳本重建,不入版控。
-# 腳本本身、brand/ 標誌與 shots/ 來源截圖則是常備資產,要追蹤。
-docs/pitch/*.pptx
-docs/pitch/*.pdf
-docs/pitch/shots-crop/
-docs/pitch/_to_delete/
+# 簡報素材已移至 PMIS.marketing repo 的 docs/pitch/;本機殘留的成品不入版控。
+docs/pitch/
 UIUX/*.zip
 
 # 公司營運文件(非產品文件),留在本機不入版控
