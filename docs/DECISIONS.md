@@ -1,7 +1,7 @@
 # GovAgent／PMIS 已定案決策
 
 > 狀態：**ACTIVE**
-> 最後更新：2026-09-11（D-021 UIUX Apple style 補登；D-020 於 2026-09-01 定案）
+> 最後更新：2026-09-11（D-022 專案授權單一來源；D-021 UIUX Apple style 補登；D-020 於 2026-09-01 定案）
 > 這裡只記已確認的決策。想法、建議與待辦放在 [`ROADMAP.md`](ROADMAP.md)。
 
 ## D-001｜產品名稱與範圍
@@ -136,3 +136,10 @@
   - `7aa94e9` 字級——全站 13 種任意字級（含 11.5／12.5／10.5 半像素）收斂到七階；Tailwind 內建 `--text-xs/sm/base/lg` 對映同一份階梯（只改值不改名），另逐處改寫 35 檔 158 處任意值。`Contract.jsx`／`Requirements.jsx`／`RequirementsReview.jsx` 共 78 處刻意未處理，避免與契約抽取那條工作線混進同一個 commit。
   - `8b87c9e` 圖示——Material Symbols 自架 subset 字型退場，改 `lucide-react`（1.5px 描邊 `absoluteStrokeWidth`）；`MSym` 元件名與 props 不變，271 個呼叫點零改動，98 個對映逐一對照 lucide 1.44 實際匯出驗證；漏對映退路是中性圓圈＋dev console 警告，不畫成像真圖示的東西。bundle 924.51→980.88 kB（gzip 286.93→300.99）。
 - **結果**：圓角 class 名一個都不能改——e2e 有 15 條選擇器綁死視覺 class 名，其中 10 條綁圓角；沿用 W9 的「`@theme` 只改值不改名」繞法。本決策是既成事實補登（四個 commit 早於本條寫入），不是新提案；補登原因是 DEVELOPMENT.md §2 要求改變產品邊界先進 DECISIONS，當時未辦。尚未做的部分（三欄殼實作、行銷站套用、登入頁依三欄殼重做、`Contract`／`Requirements`／`RequirementsReview` 字級收尾）仍在 ROADMAP，不得當成已完成。
+
+## D-022｜專案授權只有 `project_members` 一個來源
+
+- **狀態**：ACCEPTED（2026-09-11，使用者拍板）
+- **決策**：`is_project_admin()` 只看 `project_members.role='admin'`，`projects.created_by` 退出授權判斷（選項 C）；成員管理——`add_member_by_email`、`remove_member`、`project_members` 的管理 policy、`projects` 的更新 policy——改由 `is_project_admin()` 守門（選項 A），被授 `admin` 的成員自此也能邀人／移除人／更新專案，與早已能做的 `delete_project`、`admin_override` 對稱。兩條 policy 隨語意改名：`members_manage_by_creator`→`members_manage_by_admin`、`projects_update_creator`→`projects_update_admin`；三則錯誤訊息不再提「建立者」（`只有專案管理者可以管理成員`、`只有專案管理者可以刪除專案`）。migration `20260911110000_project_admin_single_source`＋`rollbacks/*.down.sql`。
+- **不變的邊界**：`organizations_select/insert/update/delete` 的 `created_by = auth.uid()` 不動——組織不是專案，那是「你擁有自己建立的紀錄」，與專案角色授權是兩個概念；`projects_insert_self` 的 `with check (auth.uid() = created_by)` 不動——插入時的完整性約束（只能把自己填成建立者），不是角色授權；`projects.created_by` 欄位保留（稽核用途、`on_project_created` 需要它）。D-002 三方角色、RLS 是安全邊界而前端 `can` 只是 UX，照舊。
+- **結果**：背景是 2026-09-11 重構審計：授權有兩個來源且不對稱——admin 成員能 `delete_project`、能經 `admin_override` 覆寫估驗與變更設計狀態機，卻不能邀一個人進來；`created_by` 沒有轉移路徑，建立者離職成員管理永久卡死；違反 [`architecture/three-party-role-model.md`](architecture/three-party-role-model.md)「`project_members` 管授權」的唯一規則。**正式庫 2026-09-11 唯讀查證**（`supabase db query --linked`）：13 個專案、建立者缺 `admin` 列 **0**、`created_by` 為 null **0**、`role='admin'` 13 列、admin 但非建立者 **0** 人——舊函式的兩個分支在正式資料上完全等價，**今天是零行為改變**（沒有人失去權限、沒有人多拿到權限）；等授出第一個非建立者 admin 之後再改就是實質擴權，所以現在改。**建立者的權限自此完全依賴 `on_project_created` trigger**（`add_creator_as_member` 在 `projects` AFTER INSERT 寫 admin 列，`on conflict do nothing`；`create_project` RPC 另顯式插同一列）——誰停用該 trigger 又不補列，建立者就失去管理權，pgTAP 正是用這個手法造「建立者但無 admin 列」情境來釘 C。pgTAP `invite_org_confirm.sql` 11→41 項釘住矩陣（建立者有 admin 列可／非建立者 admin 可／member 不可／非成員不可／未登入不可／建立者無 admin 列不可，涵蓋 RPC、兩條 RLS policy 的直接寫表與 `delete_project`）；全套 40 檔 1018→1048，**既有測試零紅**——停用 trigger 建案的 39 個既有測試裡，16 個的專案根本不填 `created_by`（沒有建立者概念）、19 個手動替建立者補了 admin 列；其餘 4 個（`payment_flow` 建立者刻意只是 `member`、`photos_storage` 的外案、`profiles_org_type_guard` 的他人案、`ingestion_run_active_unique` 全程不切換身分）建立者從未以管理者身分行動，所以沒有任何既有斷言依賴 `created_by` 後備，不是測試假設過期、也沒有破壞行為。前端 `Members.jsx` 的 `isAdmin` 本來就看 `member_role === 'admin'`，不需改動。migration **尚未套用正式庫**（隨 `refactor/product-wide`，合併前先 `migration list --linked`）。
