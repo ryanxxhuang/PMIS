@@ -79,7 +79,7 @@ test.describe('路由治理', () => {
   test('375px 抽屜:同一階層的分區與子頁,角色限制的子頁不出現,長清單可捲、無溢位,直達無內容區下拉', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 })
     await loginAs(page, 'supervisor')
-    await page.getByRole('button', { name: '選單', exact: true }).click()
+    await page.getByRole('button', { name: '更多', exact: true }).click()
     const nav = page.getByRole('navigation', { name: '主要功能' })
     for (const label of [...BALL, ...WORK, ...REFERENCE]) {
       await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible()
@@ -101,7 +101,7 @@ test.describe('路由治理', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 
     // 子頁直達:點品質查驗 → 該頁;內容區不重複子頁導覽(無下拉、無 tablist)
-    await page.getByRole('button', { name: '選單', exact: true }).click()
+    await page.getByRole('button', { name: '更多', exact: true }).click()
     await nav.getByRole('button', { name: '展開現場與品質子頁' }).click()
     await nav.getByRole('link', { name: '品質查驗', exact: true }).click()
     await expect(page.getByRole('heading', { name: '品質查驗' })).toBeVisible()
@@ -109,7 +109,7 @@ test.describe('路由治理', () => {
     await expect(page.getByRole('tablist', { name: '現場與品質' })).toHaveCount(0)
 
     // 參考項直達:契約重點是扁平項,點了直達且頁內沒有任何 tablist
-    await page.getByRole('button', { name: '選單', exact: true }).click()
+    await page.getByRole('button', { name: '更多', exact: true }).click()
     await nav.getByRole('link', { name: '契約重點', exact: true }).click()
     await expect(page.getByRole('heading', { name: '契約重點', exact: true })).toBeVisible()
     await expect(page.getByRole('tablist')).toHaveCount(0)

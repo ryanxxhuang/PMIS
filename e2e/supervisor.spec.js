@@ -135,7 +135,7 @@ test.describe('監造', () => {
     await expect(page).toHaveURL(/#\/rfi\?rfi=RFI-DEMO-2/)
     const drawer = page.getByRole('dialog', { name: '疑義詳情' })
     await expect(drawer.getByRole('region', { name: 'RFI-002 詳情' })).toContainText('3F 樑柱接頭鋼筋與機電套管衝突')
-    await expect(drawer.getByRole('button', { name: '返回清單', exact: true })).toBeVisible()
+    await expect(drawer.getByRole('button', { name: '返回', exact: true })).toBeVisible()
   })
 
   test('路由守衛:監造進不了請款收款', async ({ page }) => {

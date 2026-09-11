@@ -7,9 +7,13 @@
 // 這些本該住在 ui.jsx(規範 §6「primitives 一律從 ui.jsx 取」);本波不動 ui.jsx,
 // 下次 ui.jsx 開檔時把 SearchField/StatusChip 併過去,呼叫端只改 import 路徑。
 import { forwardRef, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { MSym } from './icons.jsx'
 import { Button, Card } from './ui.jsx'
 import { useEscape } from '../lib/useEscape.js'
+import { usePresence } from '../lib/usePresence.js'
+import { useScrollLock } from '../lib/useScrollLock.js'
+import { BELOW_MD_QUERY, BELOW_LG_QUERY } from '../lib/useMediaQuery.js'
 
 // 兩欄版面的欄寬與間距。骨架與正式版面必須共用這一份——兩邊不同寬的話
 // 載入完成會整片位移(規範:載入完成不位移)。Tailwind 掃的是字面值,所以
@@ -43,7 +47,7 @@ export function ListDetailLayout({ children, detail, detailLabel, detailEmpty = 
           {detail || detailEmpty}
         </Card>
       </div>
-      {/* <lg 沒有右欄,同一份 detail 改由抽屜承載(768-1023 右滑入,<768 全螢幕) */}
+      {/* <lg 沒有右欄,同一份 detail 改由抽屜承載(768-1023 右滑入,<768 全螢幕推入) */}
       <DetailDrawer open={drawerOpen} onClose={onDrawerClose} label={detailLabel}>
         {detail}
       </DetailDrawer>
@@ -60,52 +64,81 @@ function useDismissable(open, onClose) {
   return ref
 }
 
-// <lg 詳情抽屜(768-1023 右滑入)/全螢幕(<768,左上返回)。桌機(≥1024)不渲染,
-// 詳情常駐右欄。label=對話框的 accessible name(義務詳情/條文詳情)。
+// 抽屜與 Modal 都 portal 到 body,不留在頁面的流式容器裡。
+// 稽核量到 /rfi 的抽屜根節點 824、/requirements 844,同一個元件不同高:根因是 /rfi 的
+// 抽屜是 div.space-y-5 的「非末子」(後面還有一段說明文字),吃到 space-y 的
+// margin-block-end: 20px;fixed + inset-0 + height:auto 會把 margin 算進去 → 844-20=824。
+// /requirements 的抽屜剛好是末子(reportModal 關閉時是 null)所以沒事。補 padding 或釘
+// 高度都只是蓋住症狀:fixed 浮層住在頁面流裡,任何 space-y 的 margin、任何祖先的
+// transform/filter(.enter-row 過渡中就有)都會劫走它的定位基準。portal 一次解掉整類問題。
+// 不論 open 都回 null 以外的同一棵 React 樹,事件冒泡、context、useEscape 都不受影響。
+
+// <lg 詳情抽屜:768-1023 右滑入側板、<768 全螢幕推入(規範 §9.4「詳情=推入,不是換頁」),
+// 兩者同一條路徑進出(present-push:自右推入、向右推出;usePresence 等出場再卸載)。
+// 桌機(≥1024)不渲染,詳情常駐右欄。label=對話框的 accessible name(義務詳情/條文詳情)。
+// 開啟鎖背景捲動、關閉還原(useScrollLock);根節點 inset-0 + 100dvh;可捲區 max-height
+// 綁 --vvh,軟鍵盤升起時表單的動作列仍在可見範圍。overscroll-contain:面板捲到底的剩餘
+// 動量不得鏈到頁面——實測在面板上滾完立刻按返回,鏈上去的 19px 會讓還原後的位置偏掉。
 export function DetailDrawer({ open, onClose, label, children }) {
   const ref = useDismissable(open, onClose)
-  if (!open) return null
-  return (
-    <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={label}>
-      <div className="absolute inset-0 bg-[var(--scrim)] enter-fade" onClick={onClose} />
-      <div ref={ref} tabIndex={-1}
-        className="absolute right-0 top-0 h-full w-[min(440px,92vw)] max-md:w-full bg-[var(--surface)] overflow-y-auto [box-shadow:var(--shadow-drawer)] outline-none" aria-live="polite">
-        <div className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border-2)] px-3 py-2 flex items-center gap-2">
-          {/* min-h-11 不帶 max-md:抽屜本身就是 <lg 的觸控版面,平板也要 44px */}
-          <Button variant="ghost" size="md" className="min-h-11" onClick={onClose}>
-            <MSym name="arrow_back" size={18} /> 返回清單
+  useScrollLock(open)
+  const { mounted, state, onTransitionEnd } = usePresence(open, BELOW_LG_QUERY)
+  if (!mounted) return null
+  return createPortal(
+    <div className="lg:hidden fixed inset-0 h-[100dvh] z-50" role="dialog" aria-modal="true" aria-label={label} data-state={state}>
+      <div className="absolute inset-0 bg-[var(--scrim)] enter-fade" data-state={state} onClick={onClose} />
+      <div ref={ref} tabIndex={-1} data-state={state} onTransitionEnd={onTransitionEnd}
+        className="present-push absolute right-0 top-0 h-full max-h-[var(--vvh)] w-[min(440px,92vw)] max-md:w-full bg-[var(--surface)] overflow-y-auto overscroll-contain [box-shadow:var(--shadow-drawer)] outline-none" aria-live="polite">
+        {/* 返回鈕留左上(iOS 慣例)、chevron+「返回」;列高就是 44,不再加垂直內距。
+            min-h-11 不帶 max-md:抽屜本身就是 <lg 的觸控版面,平板也要 44px */}
+        <div className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border-2)] px-2 flex items-center gap-2">
+          <Button variant="ghost" size="md" className="min-h-11 pl-1.5" onClick={onClose}>
+            <MSym name="chevron_left" size={20} /> 返回
           </Button>
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
-// 置中 Modal 外殼:遮罩淡入、面板微縮放浮現(index.css enter-*);標題列右側是關閉
-// 圖示鈕(圖示鈕維持正圓——藥丸退場只針對文字鈕)。size:md=表單一欄、xl=手動新增
-// 那種多欄表單;面板 90vh 內捲,手機不會撐破。
+// Modal 外殼:桌機(md+)置中對話框,遮罩淡入、面板微縮放浮現(index.css enter-modal),
+// 出場即時;手機(<md)改成貼底的 sheet(規範 §9.4):rounded-t-2xl、自下滑入/向下滑出
+// (present-sheet + usePresence)、標題列 sticky 在 sheet 頂、內容可捲。
+// 根節點高綁 --vvh:sheet 貼的是「可視視口」的底,軟鍵盤升起時整個 sheet 上移、
+// 動作列不會壓在鍵盤下;可捲區 max-height 同樣綁 --vvh(桌機 90%、手機留頂欄高度露出背景)。
+// 標題列右側是關閉圖示鈕(圖示鈕維持正圓——藥丸退場只針對文字鈕)。size:md=表單一欄、
+// xl=手動新增那種多欄表單。
 // Contract.jsx 的上傳面板關閉鈕是同一顆圖示鈕;下一波接上時再抽 IconButton,
 // 現在只有這一個使用點,不先抽。
 const MODAL_SIZES = { md: 'max-w-md', xl: 'max-w-xl' }
 export function ModalShell({ open, onClose, title, label = title, size = 'md', children }) {
   const ref = useDismissable(open, onClose)
-  if (!open) return null
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={label}>
-      <div className="absolute inset-0 bg-[var(--scrim)] enter-fade" onClick={onClose} />
-      <div ref={ref} tabIndex={-1}
-        className={`relative w-full ${MODAL_SIZES[size] || MODAL_SIZES.md} max-h-[90vh] overflow-y-auto bg-[var(--surface)] border border-[var(--border-card)] rounded-2xl [box-shadow:var(--shadow-overlay)] p-5 outline-none enter-modal`}>
-        <div className="flex items-center justify-between gap-3 mb-2">
+  useScrollLock(open)
+  const { mounted, state, onTransitionEnd } = usePresence(open, BELOW_MD_QUERY)
+  if (!mounted) return null
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 max-md:h-[var(--vvh)] max-md:items-end max-md:p-0"
+      role="dialog" aria-modal="true" aria-label={label} data-state={state}>
+      <div className="absolute inset-0 bg-[var(--scrim)] enter-fade" data-state={state} onClick={onClose} />
+      <div ref={ref} tabIndex={-1} data-state={state} onTransitionEnd={onTransitionEnd}
+        className={`relative w-full ${MODAL_SIZES[size] || MODAL_SIZES.md} max-h-[calc(var(--vvh)*0.9)] overflow-y-auto overscroll-contain bg-[var(--surface)] border border-[var(--border-card)] rounded-2xl [box-shadow:var(--shadow-overlay)] p-5 outline-none enter-modal present-sheet
+          max-md:max-w-none max-md:max-h-[calc(var(--vvh)_-_var(--top-bar-h))] max-md:rounded-b-none max-md:border-0 max-md:p-0`}>
+        <div className="flex items-center justify-between gap-3 mb-2 max-md:sticky max-md:top-0 max-md:z-10 max-md:mb-0 max-md:px-5 max-md:py-2 max-md:bg-[var(--surface)] max-md:border-b max-md:border-[var(--border-2)]">
           <h2 className="text-callout font-medium text-[var(--text)]">{title}</h2>
           <button type="button" onClick={onClose} aria-label="關閉"
             className="w-8 h-8 max-md:w-11 max-md:h-11 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)]">
             <MSym name="close" size={18} />
           </button>
         </div>
-        {children}
+        {/* 手機把面板的 p-5 拿掉、改包在內容層:標題列才能貼齊 sheet 頂緣 sticky;底部多留 home indicator 安全區 */}
+        <div className="max-md:px-5 max-md:pt-3 max-md:pb-[calc(20px_+_env(safe-area-inset-bottom))]">
+          {children}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

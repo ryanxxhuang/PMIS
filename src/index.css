@@ -286,6 +286,30 @@
      66px = BottomNav.jsx 的 pt-2 + 圖示列 30px + gap + 標籤 + pb-3,改那支要同步改這裡。
      ⚠️ e2e/a11y.spec.js 有存檔鈕底緣 <= BottomNav 頂緣的斷言綁著這個值。 */
   --bottom-nav-h: calc(66px + env(safe-area-inset-bottom));
+
+  /* 頂欄高度(規範 §9.3):桌機 64、手機 44(iOS navigation bar)。header 的高、main 的
+     上內距、側欄/抽屜的 top 都從這個 token 算,不再各寫一份 h-16/pt-20/pt-[88px]——
+     三份數字分開寫,改一份另外兩份就漂。手機值在本區塊下方的 767.98 media 覆寫
+     (與字級階梯同一個斷點,理由見上面字級區的註解)。 */
+  --top-bar-h: 64px;
+
+  /* 可視視口高:軟鍵盤升起時 100dvh 不會縮,只有 visualViewport.height 會。
+     lib/useVisualViewport.js(Layout 掛一次)把量到的 px 寫進 :root 的 inline style 蓋掉
+     這個預設;沒有 visualViewport 的環境維持 100dvh。sheet/抽屜/對話框的可捲區
+     max-height 與 sheet 貼底的容器高都綁它,鍵盤升起時動作列才會留在可見範圍。 */
+  --vvh: 100dvh;
+
+  /* z 階梯(規範 §9.5)。實際 class 要對齊這張表,改層級先改這裡:
+       頂欄 / 底欄 BottomNav         z-40
+       遮罩(導覽抽屜 scrim、DetailDrawer、ModalShell 根節點)  z-50
+       導覽抽屜 aside(手機)          z-[55]   蓋過自己的遮罩;桌機側欄退到 md:z-30(頂欄之下,ISSUE-9)
+       Copilot 面板 / 桌機 FAB       z-[60]   手機不渲染 FAB,入口在頂欄
+       snackbar z-[90]、confirm z-[100] 在全部之上:撤回提示與確認框不能被任何浮層蓋住。 */
+}
+
+/* 手機頂欄 44:斷點與 BottomNav 的 md:hidden、字級階梯的覆寫同一條(767.98 的理由見字級區) */
+@media (max-width: 767.98px) {
+  :root { --top-bar-h: 44px; }
 }
 
 .dark {
@@ -477,6 +501,48 @@ select option { color: var(--text); background: var(--surface); }
 .enter-row {             /* 清單新增列/橫幅:防「突然出現」的最小位移 */
   transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
   @starting-style { opacity: 0; transform: translateY(2px); }
+}
+
+/* ── 進出場配對(手機/平板):.enter-* 只管進場,這兩組還管出場。
+   規範 §5 第 5 條「從哪裡出來就回哪裡去」——清單→詳情若是瞬間換頁,回來就沒有空間連續性
+   (稽核根因 8)。呼叫端用 lib/usePresence.js:關閉時仍掛載、data-state 切成 closed,
+   這裡把它過渡回起點,transitionend 才卸載;出場一半再開會從當前位置續動(可中斷)。
+   prefers-reduced-motion 走檔尾的 .01ms 全域規則=直接切換,不另寫。 ── */
+.present-push {          /* 詳情抽屜(<lg):自右推入、向右推出。≥lg 是 display:none,規則掛著無害 */
+  transition: transform var(--dur-modal) var(--ease-drawer);
+  @starting-style { transform: translateX(100%); }
+}
+.present-push[data-state="closed"] { transform: translateX(100%); }
+/* 底部 sheet:只在 <md 生效,與 .enter-modal / .enter-panel 疊用——≥md 由那兩個決定
+   (桌機對話框維持置中微縮放、Copilot 維持右下錨定,出場即時,既有決定不動)。
+   寫在 .enter-* 之後,同特異性靠順序蓋掉它們的 @starting-style。 */
+@media (max-width: 767.98px) {
+  .present-sheet {
+    transition: transform var(--dur-sheet) var(--ease-drawer);
+    @starting-style { opacity: 1; transform: translateY(100%); }
+  }
+  .present-sheet[data-state="closed"] { transform: translateY(100%); }
+}
+/* 遮罩跟著面板出場;沒掛 data-state 的既有遮罩(導覽抽屜、MarkupEditor)不受影響 */
+.enter-fade[data-state="closed"] { opacity: 0; }
+
+/* ── 分頁列(手機):可捲時兩側漸淡,提示「還有」(規範 §9.3;稽核在 /valuation、/payments
+   量到分頁列 468 > 358,「逐工項排程」整個在畫面外、零提示)。CSS 沒有「只在可捲時」
+   的選擇器,PageTabs 量 scrollWidth/scrollLeft 後寫 data-fade=left|right|both,
+   這裡只負責畫,而且只畫還有內容的那一側。≥md 不掛:桌機分頁列不捲。 ── */
+@media (max-width: 767.98px) {
+  .tabs-scroll[data-fade="right"] {
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+    mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+  }
+  .tabs-scroll[data-fade="left"] {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 32px);
+    mask-image: linear-gradient(to right, transparent, black 32px);
+  }
+  .tabs-scroll[data-fade="both"] {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 32px, black calc(100% - 32px), transparent);
+    mask-image: linear-gradient(to right, transparent, black 32px, black calc(100% - 32px), transparent);
+  }
 }
 
 /* Stat 數值自適應(container query):字級跟著「卡片」寬度縮放——

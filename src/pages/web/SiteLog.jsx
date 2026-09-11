@@ -590,14 +590,11 @@ export default function SiteLog() {
             {/* W8-0 §7:手機存檔列貼底固定——公定格式欄位展開後表單很長,捲到底才找得到存檔鈕
                 是現場回報的痛點;-mx-5 抵掉 Card 內距讓底條滿版。
                 這一列只有可編視角會渲染(唯讀已在上方走摘要分支),can.edit 條件保留是讓 DOM 與歷史版本逐字一致。
-                pl-5/pr-20 拆開寫而不用 px-5,是避免 padding-inline 與 padding-right 的 cascade 順序不確定。
 
                 ⚠️ bottom 必須是 --bottom-nav-h 不能是 0:W9 的 BottomNav 是 fixed bottom-0 z-40,
                 而這一列是 sticky z-10——貼到 0 會被整個蓋住,存檔鈕在手機上完全點不到(實測命中的是
-                BottomNav 的 span)。斷點也必須是 max-md 與 BottomNav 的 md:hidden 對齊,不能用 max-sm。
-                pr-20(80px)是讓開右下 Copilot FAB:FAB 在手機是 bottom-[92px] right-6 w-14,
-                往上挪之後兩者垂直重疊,右側要留滿 24+56=80px 才不會壓到。 */}
-            <div className={`flex items-center gap-3 mt-4${can.edit ? ' max-md:sticky max-md:bottom-[var(--bottom-nav-h)] max-md:z-10 max-md:bg-[var(--surface)] max-md:border-t max-md:border-[var(--border-2)] max-md:-mx-5 max-md:pl-5 max-md:pr-20 max-md:py-2.5 md:static md:border-0' : ''}`}>
+                BottomNav 的 span)。斷點也必須是 max-md 與 BottomNav 的 md:hidden 對齊,不能用 max-sm。 */}
+            <div className={`flex items-center gap-3 mt-4${can.edit ? ' max-md:sticky max-md:bottom-[var(--bottom-nav-h)] max-md:z-10 max-md:bg-[var(--surface)] max-md:border-t max-md:border-[var(--border-2)] max-md:-mx-5 max-md:px-5 max-md:py-2.5 md:static md:border-0' : ''}`}>
               {/* busy prop:送出中禁用+旋轉圖示由 Button 統一,「存檔」文案不變(e2e 凍結字串) */}
               {can.edit ? <Button onClick={onSave} busy={saving}>存檔</Button> : <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>}
               {currentLog && (

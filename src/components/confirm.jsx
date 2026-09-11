@@ -101,11 +101,15 @@ export function ConfirmHost() {
     e.preventDefault(); close(true)
   }
 
+  // 根節點高綁 --vvh(可視視口,lib/useVisualViewport.js):appPrompt 的多行輸入會叫出軟鍵盤,
+  // 對話框若以 100vh 置中,取消/送出兩顆就壓在鍵盤下(稽核在 /rfi「補充回覆」量到)。
+  // 綁可視視口後對話框在鍵盤上方置中,面板 max-h-full + 內捲保證動作列一定看得到。
+  // 維持置中不改 sheet:這是 iOS alert 語彙(確認/輸入原因),sheet 給的是表單與詳情。
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print:hidden" role="dialog" aria-modal="true" aria-label={title} onKeyDown={onKeyDown}>
+    <div className="fixed inset-0 h-[var(--vvh)] z-[100] flex items-center justify-center p-4 print:hidden" role="dialog" aria-modal="true" aria-label={title} onKeyDown={onKeyDown}>
       <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-[2px] enter-fade" onClick={() => close(false)} />
       {/* Workspace 對話框:28px 圓角、24px 內距、標題 19px/400 配 24px 圖示(README) */}
-      <div ref={dialogRef} className="relative bg-[var(--surface)] text-[var(--text)] rounded-[28px] border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] w-full max-w-sm p-6 enter-modal">
+      <div ref={dialogRef} className="relative bg-[var(--surface)] text-[var(--text)] rounded-[28px] border border-[var(--border-card)] [box-shadow:var(--shadow-overlay)] w-full max-w-sm max-h-full overflow-y-auto p-6 enter-modal">
         <div className="flex items-start gap-3">
           <MSym name={danger ? 'delete_forever' : isPrompt ? 'edit' : 'help'} size={24}
             className={`mt-0.5 ${danger ? 'text-[var(--danger)]' : 'text-[var(--blue-text)]'}`} />

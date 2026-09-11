@@ -3,7 +3,7 @@ import { NavLink, Link, useNavigate, useLocation, useSearchParams } from 'react-
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
 import { visibleNavGroups, defaultLandingPath, BALL_SOURCES, resolveBallKey } from '../lib/navConfig.js'
-import CopilotFab from './CopilotFab.jsx'
+import CopilotFab, { CopilotMark, useCopilotAvailable } from './CopilotFab.jsx'
 import BottomNav, { NAV_SHORT } from './BottomNav.jsx'
 import { MSym } from './icons.jsx'
 import { ErrorBanner } from './ui.jsx'
@@ -11,15 +11,11 @@ import { friendlyError } from '../lib/errorMessage.js'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 import { useTodayTasks, mineCountForNavItem } from '../lib/useTodayTasks.js'
 import { useEscape } from '../lib/useEscape.js'
+import { useMediaQuery, TABLET_QUERY } from '../lib/useMediaQuery.js'
+import { useScrollLock } from '../lib/useScrollLock.js'
+import { useVisualViewport } from '../lib/useVisualViewport.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
-
-// 平板區間 = Tailwind 的 md(768)起、xl(1280)前。寫成 1279.98 是 media query
-// 的老規矩:上下界都用 min-width 會在剛好 1280px 時兩條同時成立。
-// 兩個使用點(初值與 change 監聽)必須是同一條字串——寫兩次時改一邊就會變成
-// 「初始判定與後續判定不同斷點」,縮放到邊界才會發現。
-const TABLET_QUERY = '(min-width: 768px) and (max-width: 1279.98px)'
-
 
 const initialSidebarCollapsed = () => {
   try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1' } catch { return false }
@@ -203,21 +199,39 @@ function GlobalSearch() {
   )
 }
 
-function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
-  const { currentUser, logout } = useStore()
+// 主題切換鈕:桌機在頂欄、手機在導覽抽屜底部(規範 §9.3:手機頂欄只留品牌、專案、AI、提醒)。
+// 兩個使用點共用同一個 mode(state 在 WebLayout),不各存一份——各存會在手機切完、轉成
+// 桌機視窗時顯示過期的圖示。
+function ThemeToggle({ mode, onCycle, className = '' }) {
+  return (
+    <button onClick={onCycle} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`}
+      className={`w-10 h-10 max-md:w-11 max-md:h-11 rounded-full items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable ${className}`}>
+      <MSym name={THEME_META[mode].icon} size={20} />
+    </button>
+  )
+}
+
+// 登出:同上,桌機頂欄、手機抽屜底部。
+// 44px 觸控目標:純文字鈕撐高(h-11)、px-2 撐寬。稽核量到 42×44——兩個字在桌機
+// 13px 只有 26 寬,+16 padding 差 2px。max-md:min-w-11 把面積補到 44×44(規範 §9.2);
+// justify-center 讓 min-w 咬到時文字仍置中。手機階梯下兩個字 34 寬,+16 已是 50,
+// min-w 實際不會咬到,所以視覺間距不變、不需要負 margin 吸收。
+function LogoutButton({ className = '' }) {
+  const { logout } = useStore()
   const navigate = useNavigate()
-  const [mode, setMode] = useState(getThemeMode)
-  const cycleTheme = () => {
-    const next = THEME_MODES[(THEME_MODES.indexOf(mode) + 1) % THEME_MODES.length]
-    setThemeMode(next)
-    setMode(next)
-  }
+  return (
+    <button onClick={async () => { await logout(); navigate('/login') }}
+      className={`items-center justify-center h-11 max-md:min-w-11 px-2 text-sm text-[var(--text-2)] hover:text-[var(--text)] ${className}`}>登出</button>
+  )
+}
+
+function TopBar({ scrolled, dueCount = 0, mode, onCycleTheme, copilotOpen, onCopilotToggle }) {
+  const { currentUser } = useStore()
+  const copilotAvailable = useCopilotAvailable()
   const base = import.meta.env.BASE_URL
   return (
-    <header data-scrolled={scrolled} className="chrome-bar chrome-edge fixed top-0 inset-x-0 z-40 h-16 flex items-center gap-3 md:gap-5 px-3 md:px-4 print:hidden">
+    <header data-scrolled={scrolled} className="chrome-bar chrome-edge fixed top-0 inset-x-0 z-40 h-[var(--top-bar-h)] flex items-center gap-3 md:gap-5 px-3 md:px-4 print:hidden">
       <div className="flex items-center gap-2 md:gap-3 min-w-0 shrink-0">
-        {/* 44px 觸控目標:漢堡鈕只在手機出現,直接升到 w-11;ref 供抽屜關閉時焦點還原 */}
-        <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name="menu" size={22} /></button>
         {/* 44px 觸控目標:品牌連結稽核量到 102×24——寬夠、高只有圖示的 24。max-md:h-11 撐高,
             header 是 flex items-center 且比 44 高,連結沒有底色,撐高後視覺位置一個像素都不動,
             所以這裡不需要負 margin(那招是給「有 padding 撐寬」的鈕吸收水平間距用的)。 */}
@@ -230,7 +244,16 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
       </div>
       <GlobalSearch />
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-auto">
-        <button onClick={cycleTheme} aria-label={`主題:${THEME_META[mode].label}(點擊切換)`} title={`主題:${THEME_META[mode].label}(點擊切換)`} className="w-10 h-10 max-md:w-11 max-md:h-11 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name={THEME_META[mode].icon} size={20} /></button>
+        {/* 手機的 AI 助理入口(規範 §9.5):FAB 在 <md 退場,改成頂欄尾端與提醒並列的圖示鈕;
+            aria-label 沿用 FAB 的兩態文案。開合 state 在 WebLayout,與 CopilotFab 同一份。
+            可用性(未選專案 / agent.run 關閉)與 FAB 同一支 hook 判斷,功能關閉時整顆不渲染。 */}
+        {copilotAvailable && (
+          <button type="button" onClick={onCopilotToggle} aria-label={copilotOpen ? '收合 AI 助理' : '開啟 AI 助理'} aria-expanded={copilotOpen}
+            className={`md:hidden w-11 h-11 rounded-full flex items-center justify-center pressable ${copilotOpen ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
+            <CopilotMark size={22} />
+          </button>
+        )}
+        <ThemeToggle mode={mode} onCycle={onCycleTheme} className="hidden md:flex" />
         <NavLink to="/alerts" aria-label="提醒中心" title="提醒中心"
           className={({ isActive }) => `relative w-10 h-10 max-md:w-11 max-md:h-11 rounded-full flex items-center justify-center pressable ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
           <MSym name="notifications" size={20} />
@@ -238,19 +261,16 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
               count 語意由側欄 badge 與今日待辦頁承擔 */}
           {dueCount > 0 && <span aria-hidden className="absolute top-2 right-2.5 w-[7px] h-[7px] rounded-full bg-[var(--danger)] border-[1.5px] border-[var(--surface)]" />}
         </NavLink>
-        {/* 帳戶區(兩行):登入者本人,沒有角色切換——身分在註冊時決定 */}
-        <div className="hidden sm:flex items-center gap-2 pl-1.5 pr-2 py-1 ml-0.5 rounded-full">
+        {/* 帳戶區(兩行):登入者本人,沒有角色切換——身分在註冊時決定。
+            md 起才顯示:手機頂欄 44px 塞不下兩行帳戶區,稽核量到頂欄 434 > 375(「登出」在畫面外)。 */}
+        <div className="hidden md:flex items-center gap-2 pl-1.5 pr-2 py-1 ml-0.5 rounded-full">
           <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center font-medium text-body text-[var(--primary-fg)]">{currentUser?.name?.[0]}</div>
-          <div className="leading-tight text-left hidden sm:block">
+          <div className="leading-tight text-left">
             <div className="text-footnote font-medium text-[var(--text)] whitespace-nowrap">{currentUser?.name}</div>
             <div className="text-caption text-[var(--text-2)] whitespace-nowrap">{currentUser?.label}</div>
           </div>
         </div>
-        {/* 44px 觸控目標:純文字鈕撐高(h-11)、px-2 撐寬。稽核量到 42×44——兩個字在桌機
-            13px 只有 26 寬,+16 padding 差 2px。max-md:min-w-11 把面積補到 44×44(規範 §9.2);
-            justify-center 讓 min-w 咬到時文字仍置中。手機階梯下兩個字 34 寬,+16 已是 50,
-            min-w 實際不會咬到,所以視覺間距不變、不需要負 margin 吸收。 */}
-        <button onClick={async () => { await logout(); navigate('/login') }} className="inline-flex items-center justify-center h-11 max-md:min-w-11 px-2 text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
+        <LogoutButton className="hidden md:inline-flex" />
       </div>
     </header>
   )
@@ -258,11 +278,26 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
 
 export function WebLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const menuBtnRef = useRef(null)
+  // 抽屜的觸發鈕是 BottomNav 的「更多」(規範 §9.3;頂欄漢堡已退場),關閉時焦點還給它
+  const moreBtnRef = useRef(null)
   const drawerCloseRef = useRef(null)
   const prevMenuOpen = useRef(false)
   useEscape(menuOpen, () => setMenuOpen(false))
-  // 抽屜焦點管理:開啟移到關閉鈕、關閉還給漢堡鈕。prevMenuOpen 擋初載誤搶焦點
+  // 抽屜開著鎖背景捲動;與 DetailDrawer / ModalShell 同一支 hook(引用計數,疊開不互相干擾)
+  useScrollLock(menuOpen)
+  // --vvh(可視視口高)全站只寫這一次;sheet / 抽屜 / 對話框的高度都讀它
+  useVisualViewport()
+  // Copilot 開合只有這一份 state:桌機 FAB 與手機頂欄鈕都是它的觸發器(規範 §9.5)
+  const [copilotOpen, setCopilotOpen] = useState(false)
+  // 主題三態(U-07):亮 → 暗 → 跟隨系統 → 亮。state 在這一層,頂欄(桌機)與抽屜底部(手機)
+  // 兩顆切換鈕共用同一個 mode。
+  const [themeMode, setThemeModeState] = useState(getThemeMode)
+  const cycleTheme = () => {
+    const next = THEME_MODES[(THEME_MODES.indexOf(themeMode) + 1) % THEME_MODES.length]
+    setThemeMode(next)
+    setThemeModeState(next)
+  }
+  // 抽屜焦點管理:開啟移到關閉鈕、關閉還給「更多」鈕。prevMenuOpen 擋初載誤搶焦點
   // （桌機 menuOpen 恆為 false,不會進到還原分支）。
   // 開啟聚焦不能同步做也不能只推遲一個 frame:visibility 在 transition 清單裡,
   // transition progress=0 時 computed 仍是 hidden,hidden 元素不可聚焦、focus()
@@ -281,20 +316,13 @@ export function WebLayout({ children }) {
       attempt()
       return () => clearTimeout(timer)
     }
-    if (prevMenuOpen.current) menuBtnRef.current?.focus()
+    if (prevMenuOpen.current) moreBtnRef.current?.focus()
     prevMenuOpen.current = false
   }, [menuOpen])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
   // 平板(768–1279)一律 icon rail:collapsed 是「衍生值」不回寫 localStorage,
   // 平板逛一圈不會污染桌機(≥1280)的收合偏好;Playwright 預設 1280×720 落在記憶分支。
-  const [isTablet, setIsTablet] = useState(() => window.matchMedia?.(TABLET_QUERY).matches ?? false)
-  useEffect(() => {
-    const mq = window.matchMedia?.(TABLET_QUERY)
-    if (!mq) return
-    const onChange = () => setIsTablet(mq.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
+  const isTablet = useMediaQuery(TABLET_QUERY)
   const collapsed = isTablet || sidebarCollapsed
   // 「工作」群組預設收合；展開狀態只保留在本次瀏覽，不製造另一份持久導覽設定。
   const [expandedWorkbenches, setExpandedWorkbenches] = useState(() => new Set())
@@ -337,18 +365,20 @@ export function WebLayout({ children }) {
   }
   return (
     <div className="min-h-screen bg-[var(--bg)]">
-      <TopBar onMenu={() => setMenuOpen(true)} scrolled={scrolled} menuBtnRef={menuBtnRef} dueCount={dueMine.length} />
+      <TopBar scrolled={scrolled} dueCount={dueMine.length} mode={themeMode} onCycleTheme={cycleTheme}
+        copilotOpen={copilotOpen} onCopilotToggle={() => setCopilotOpen((o) => !o)} />
       {/* 手機:點背景關閉抽屜(蓋過頂欄,抽屜再蓋過遮罩);純滑鼠 scrim,對報讀器隱藏 */}
       {menuOpen && <div aria-hidden="true" className="fixed inset-0 z-50 bg-[var(--scrim)] md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
       {/* 關閉時 max-md:invisible:visibility hidden = 不可聚焦＋離開 a11y 樹,擋掉
           「Tab 進看不見的抽屜」;visibility 進 transition 清單讓滑出動畫跑完才隱藏
           （hidden→visible 則是動畫起點就顯示,開啟不閃爍）。桌機 md 斷點不受影響。 */}
-      {/* 分層:手機抽屜要蓋過 z-50 遮罩故 z-[55];桌機側欄必須退到頂欄(z-40)之下——
-          專案下拉/搜尋浮層錨定在頂欄,側欄若壓過頂欄,下拉會被蓋住、誤點直接觸發
-          側欄導覽而換頁(ISSUE-9)。chrome 材質(側欄 chrome-glass/頂欄 chrome-bar)不改層級關係。 */}
-      <aside
+      {/* 分層(登記在 index.css 的 z 階梯):手機抽屜要蓋過 z-50 遮罩故 z-[55];桌機側欄必須退到
+          頂欄(z-40)之下——專案下拉/搜尋浮層錨定在頂欄,側欄若壓過頂欄,下拉會被蓋住、誤點直接
+          觸發側欄導覽而換頁(ISSUE-9)。chrome 材質(側欄 chrome-glass/頂欄 chrome-bar)不改層級關係。
+          id 給 BottomNav「更多」的 aria-controls。 */}
+      <aside id="app-drawer"
         className={`chrome-glass w-72 ${collapsed ? 'md:w-20' : 'md:w-64'} border-r border-[var(--border-card)] flex flex-col print:hidden
-          fixed top-16 bottom-0 left-0 z-[55] md:z-30 transition-[width,transform,visibility] duration-300 [transition-timing-function:var(--ease-drawer)]
+          fixed top-[var(--top-bar-h)] bottom-0 left-0 z-[55] md:z-30 transition-[width,transform,visibility] duration-300 [transition-timing-function:var(--ease-drawer)]
           md:translate-x-0
           ${menuOpen ? 'translate-x-0' : '-translate-x-full max-md:invisible'}`}
       >
@@ -452,15 +482,22 @@ export function WebLayout({ children }) {
               </div>
             ))}
           </nav>
-          {/* 底部模式列:正式模式=稽核中(綠);未開正式=準備模式;demo=示範模式 */}
-          <div className={`shrink-0 px-4 py-3 flex items-center gap-2 text-xs text-[var(--text-2)] ${collapsed ? 'md:justify-center md:px-0' : ''}`}>
+          {/* 底部模式列:正式模式=稽核中(綠);未開正式=準備模式;demo=示範模式。
+              手機(<md)右側並排主題切換與登出——它們從 44px 的頂欄移進來(規範 §9.3);
+              兩顆都是 44 高,列的垂直內距縮到 py-1.5 讓列高維持 56,底下留 home indicator 安全區。 */}
+          <div className={`shrink-0 px-4 py-3 max-md:py-1.5 max-md:pb-[calc(6px_+_env(safe-area-inset-bottom))] flex items-center gap-2 text-xs text-[var(--text-2)] ${collapsed ? 'md:justify-center md:px-0' : ''}`}>
             <MSym name="verified_user" size={16} className={project?.formal_mode ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'} />
             <span className={collapsed ? 'md:hidden' : ''}>
               {demoMode ? '示範模式' : project?.formal_mode ? '正式模式 · 稽核中' : '準備模式'}
             </span>
+            <div className="md:hidden ml-auto flex items-center gap-1">
+              <ThemeToggle mode={themeMode} onCycle={cycleTheme} className="flex" />
+              <LogoutButton className="inline-flex" />
+            </div>
           </div>
       </aside>
-      <main className={`${collapsed ? 'md:ml-20' : 'md:ml-64'} transition-[margin] duration-300 p-4 md:p-6 pt-20 md:pt-[88px] max-md:pb-24 min-w-0 print:ml-0 print:pt-0`}>
+      {/* 上內距從 --top-bar-h 算:手機 44+16、桌機 64+24(=先前的 pt-20 / pt-[88px]) */}
+      <main className={`${collapsed ? 'md:ml-20' : 'md:ml-64'} transition-[margin] duration-300 p-4 md:p-6 pt-[calc(var(--top-bar-h)_+_16px)] md:pt-[calc(var(--top-bar-h)_+_24px)] max-md:pb-24 min-w-0 print:ml-0 print:pt-0`}>
           {workItemsSource === 'error' && (
             <ErrorBanner className="mb-4 print:hidden" onRetry={retryWorkItems}
               msg={`標單工項讀取失敗：${friendlyError(workItemsError, '連線異常')}。各頁資料可能不完整。`} />
@@ -474,8 +511,9 @@ export function WebLayout({ children }) {
       </main>
       {/* 主畫面槽=「現在輪到我」:它的 to 就是落地頁(/dashboard),等對方/已完成是同頁的分段,
           頁內 Segmented 就能切,不佔手機的格子 */}
-      <BottomNav items={visibleGroups.flatMap((g) => g.items)} home={BALL_SOURCES.find((b) => b.key === 'mine')} />
-      <CopilotFab />
+      <BottomNav items={visibleGroups.flatMap((g) => g.items)} home={BALL_SOURCES.find((b) => b.key === 'mine')}
+        menuOpen={menuOpen} onMore={() => setMenuOpen(true)} moreRef={moreBtnRef} />
+      <CopilotFab open={copilotOpen} onOpenChange={setCopilotOpen} />
     </div>
   )
 }

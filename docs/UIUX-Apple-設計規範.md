@@ -253,15 +253,15 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
 
 ### 9.3 Chrome：iOS 尺寸，一個入口
 - 頂欄手機 44px（iOS navigation bar），桌機維持 64。高度登記成 token `--top-bar-h`，`header` 高與 `main` 的上內距都從它算，不再各寫一份 `h-16`／`pt-20`。
-- BottomNav 5 格 ＝ 現在輪到我 ＋ 前 3 個工作組 ＋ **「更多」**（iOS tab bar 上限 5）。「更多」開既有的導覽抽屜；頂欄漢堡在 <md 退場——同一份抽屜兩個入口是稽核點名的「兩層平行導覽」。抽屜的 e2e 合約（`navigation[name=主要功能]`、開啟聚焦關閉鈕、Esc 關閉並還焦點）不變，觸發鈕改由「更多」承接（`aria-label="選單"` 保留）。
+- BottomNav 5 格 ＝ 現在輪到我 ＋ 前 3 個工作組 ＋ **「更多」**（iOS tab bar 上限 5）。「更多」開既有的導覽抽屜；頂欄漢堡在 <md 退場——同一份抽屜兩個入口是稽核點名的「兩層平行導覽」。抽屜的 e2e 合約（`navigation[name=主要功能]`、開啟聚焦關閉鈕、Esc 關閉並還焦點給**觸發它的鈕**）不變，觸發鈕改由「更多」承接：accessible name 就是可見文字「更多」（WCAG 2.5.3 label-in-name，不用 aria-label 蓋成別的字），`aria-expanded` 綁抽屜開合，e2e 改點「更多」、焦點回「更多」。手機頂欄只留品牌、專案切換、AI 助理鈕、提醒；主題切換與登出移到抽屜底部的模式列（稽核量到頂欄 434 > 375）。
 - PageTabs 在手機：`scroll-snap-x`、兩側邊緣漸淡提示可捲、選中 chip `scrollIntoView({ inline: 'nearest' })`——稽核在 `/valuation`、`/payments` 量到分頁列 468 > 358，「逐工項排程」整個在畫面外、沒有任何捲動提示。
 
 ### 9.4 詳情＝推入（push），不是換頁
 - `DetailDrawer` <md：全螢幕從右滑入／向右滑出（`--dur-modal`、`--ease-drawer`；`prefers-reduced-motion` 直接切換）。稽核量到面板 `animation: none`，清單→詳情是「整頁瞬間換掉」。
 - 開啟鎖背景捲動（記住 `scrollY`，`body` 定位固定），關閉還原——稽核實測 `/requirements` 進入時 946 → 返回變 1446，原本那一筆已不在畫面上。
-- 根節點 `inset-0` ＋ `100dvh`（`/rfi` 量到 824、`/requirements` 844，同一元件不同高）。
+- 根節點 `inset-0` ＋ `100dvh`（`/rfi` 量到 824、`/requirements` 844，同一元件不同高）。**根因**：抽屜渲染在頁面的 `space-y-5` 容器裡且不是末子，吃到 `margin-block-end: 20px`，fixed + inset-0 + height:auto 就少 20；`/requirements` 剛好是末子才沒事。修法是 `DetailDrawer`／`ModalShell` portal 到 body——浮層不住在頁面流裡，space-y 的 margin 與祖先 transform 都劫不走它。
 - 返回鈕留左上（iOS 慣例）並帶「返回」文字；Esc／返回鍵走 `useEscape`。
-- 鍵盤：`ModalShell`／`DetailDrawer` 的可捲區 `max-height` 綁 `visualViewport.height`（一支共用 hook 寫 `--vvh`），軟鍵盤升起時動作列仍在可見範圍——稽核量到「補充回覆」的 `取消`／`送出回覆` 兩顆都壓在鍵盤下。
+- 鍵盤：`ModalShell`／`DetailDrawer` 的可捲區 `max-height` 綁 `visualViewport.height`（`lib/useVisualViewport.js` 寫 `--vvh`，`Layout` 掛一次），軟鍵盤升起時動作列仍在可見範圍——稽核量到「補充回覆」的 `取消`／`送出回覆` 兩顆都壓在鍵盤下。「補充回覆」實際是 `appPrompt`（`confirm.jsx`），同樣綁 `--vvh`，但維持置中不改 sheet：確認／輸入原因是 iOS alert 語彙，sheet 給表單與詳情。`ModalShell` 在 <md 改成底部 sheet（`--dur-sheet`、標題列 sticky、內容可捲）。
 
 ### 9.5 浮動鈕退場（手機）
 - FAB 是 Material 語彙。`CopilotFab` `z-[60]` 高於抽屜與對話框的 z-50，連詳情全螢幕時都浮著，`SiteLog.jsx` 已被逼手寫 `max-md:pr-20` 讓位。
@@ -282,7 +282,7 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
 
 ### 9.9 落地進度
 - M1 字級＋觸控目標（9.1、9.2）：待做
-- M2 Chrome＋推入＋浮動鈕（9.3、9.4、9.5）：待做
+- M2 Chrome＋推入＋浮動鈕（9.3、9.4、9.5）：已落地（2026-09-12；`--top-bar-h`、BottomNav「更多」、portal＋`present-push`／`present-sheet`＋`useScrollLock`、`--vvh`、手機 FAB 退場）
 - M3 收件匣直達（9.7）：待做
 - M4 表格頁唯讀摘要＋site-log（9.6、9.8 第三條）：待做
 - M5 /safety 缺失套殼＋Stat 條（9.8 前兩條）：待做
