@@ -2,11 +2,11 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Button, BallChip, Empty, Surface, PageHeader, PrerequisiteEmptyState, ErrorBanner, SkeletonList, Input, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Button, BallChip, Empty, Surface, PageHeader, PrerequisiteEmptyState, ErrorBanner, SkeletonList, Input, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
-import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
+import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { collectEvidence } from '../../lib/evidence.js'
 import { summarizeValuationDiff } from '../../lib/valuationDiff.js'
 import { valuationBall } from '../../lib/ballInCourt.js'
@@ -52,6 +52,19 @@ export default function Valuation() {
 
   const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected?.items || {}), [roots, childrenMap, selected?.items])
   const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev?.items || {}), [roots, childrenMap, prev?.items])
+
+  // 手機期別摘要用的逐期金額(規範 §9.6:標單樹不進手機,改列每期金額與狀態)。
+  // 走 boqCalc 的 buildCumMap/totalCumAmount——與 /payments 的逐期表同一組函式、
+  // 同一條「本期 = 本期累計 − 前期累計」的定義;UI 不自己加總金額(§1 三條不可退讓)。
+  // 桌機不渲染這份清單,但 hook 必須無條件呼叫(2026-08-12 hooks 順序事故的同型地雷)。
+  const periodRows = useMemo(() => {
+    let prevCum = 0
+    return [...valuations].sort((a, b) => a.period_no - b.period_no).map((v) => {
+      const cum = totalCumAmount(roots, buildCumMap(roots, childrenMap, v.items || {}))
+      const amt = cum - prevCum; prevCum = cum
+      return { v, cum, amt }
+    })
+  }, [valuations, roots, childrenMap])
 
   // 搜尋攤平末端工項:結果設上限——真實 PCCES 標單有數千末端工項,
   // 一次渲染整包搜尋結果會卡住頁面(P1-3);超過上限提示縮小關鍵字。
@@ -236,7 +249,8 @@ export default function Valuation() {
                 <span className="text-caption text-[var(--text-3)] leading-tight">佐證彙整，非正式計價單</span>
               </div>
             )}
-            {can.edit && <Button variant="secondary" onClick={onCreate}>＋ 新增估驗期</Button>}
+            {/* 新增估驗期是寫入:手機不渲染(§9.6,五個表格頁的寫入一律留在桌機) */}
+            {can.edit && <Button variant="secondary" className="max-md:hidden" onClick={onCreate}>＋ 新增估驗期</Button>}
           </div>
         } />
 
@@ -246,7 +260,8 @@ export default function Valuation() {
         <Card>
           <Empty>
             尚無估驗期。每月對已完成工項提報估驗，系統依標單單價自動計算本期/累計金額與保留款。
-            {can.edit && <div className="mt-4"><Button onClick={onCreate}>建立第 1 期估驗</Button></div>}
+            {/* 同上:建立估驗期是寫入,手機不渲染(§9.6) */}
+            {can.edit && <div className="mt-4 max-md:hidden"><Button onClick={onCreate}>建立第 1 期估驗</Button></div>}
           </Empty>
         </Card>
       ) : (
@@ -308,18 +323,22 @@ export default function Valuation() {
                 </>
               )}
             </div>
-            {/* Button 已內建 max-md:min-h-11,這裡只留手機滿版 */}
+            {/* Button 已內建 max-md:min-h-11,這裡只留手機滿版。
+                每顆動作鈕再加 max-md:hidden:送審/退回/核定/刪除都是寫入,規範 §9.6 的決策是
+                「手機不提供這五頁的寫入」(估驗是辦公室審查,留在桌機)。max-md:hidden 掛在
+                鈕上而不是這個容器上,是為了讓「待監造核定」那顆 Badge 在手機仍看得到——
+                它是狀態不是動作,而且同一狀態下 BallChip 刻意不重複標示責任方。 */}
             <div className="flex items-center gap-2 sm:ml-auto max-sm:flex-col max-sm:items-stretch">
-              {selected.status === '草稿' && can.submit && <Button variant="secondary" className="max-sm:w-full" onClick={() => onStatus('監造審核')}>送監造審核</Button>}
+              {selected.status === '草稿' && can.submit && <Button variant="secondary" className="max-sm:w-full max-md:hidden" onClick={() => onStatus('監造審核')}>送監造審核</Button>}
               {selected.status === '監造審核' && (can.approve ? <>
-                <Button variant="ghost" className="max-sm:w-full" onClick={() => onReject('退回')}>退回</Button>
-                <Button variant="success" className="max-sm:w-full" onClick={() => onStatus('已核定')}>核定估驗</Button>
+                <Button variant="ghost" className="max-sm:w-full max-md:hidden" onClick={() => onReject('退回')}>退回</Button>
+                <Button variant="success" className="max-sm:w-full max-md:hidden" onClick={() => onStatus('已核定')}>核定估驗</Button>
               </> : <Badge color="amber">待監造核定</Badge>)}
               {selected.status === '已核定' && can.approve &&
-                <Button variant="ghost" className="max-sm:w-full" onClick={() => onReject('退回核定')}>退回核定</Button>}
+                <Button variant="ghost" className="max-sm:w-full max-md:hidden" onClick={() => onReject('退回核定')}>退回核定</Button>}
               {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01)。
                   真刪除走 danger 實心紅,不再用 className 蓋 ghost 色票 */}
-              {can.edit && selected.status === '草稿' && <Button variant="danger" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(friendlyError(error, '估驗刪除未完成')); else setSelectedId(null) } }} className="max-sm:w-full" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
+              {can.edit && selected.status === '草稿' && <Button variant="danger" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(friendlyError(error, '估驗刪除未完成')); else setSelectedId(null) } }} className="max-sm:w-full max-md:hidden" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
             </div>
           </Surface>
 
@@ -327,7 +346,9 @@ export default function Valuation() {
             title={`第 ${selected.period_no} 期 估驗明細`}
             bodyClass="p-0"
             action={
-              <div className="flex items-center gap-2">
+              // 整組卡頭動作在手機不渲染:搜尋框篩的是下面那張被隱藏的標單樹(篩一張看不到的表
+              // 等於空轉),「帶入日誌累計」則是把數量寫進估驗期——兩者都只在桌機有意義(§9.6)
+              <div className="flex items-center gap-2 max-md:hidden">
                 {/* !w-40:FIELD_BASE 是 w-full,卡頭行內搜尋框需要定寬(比照 Agent.jsx 的 !w-24) */}
                 <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項…" className="!w-40" />
                 {/* 這顆是確定性引擎(fillValuationFromSiteLogs 逐日加總,無任何模型呼叫),
@@ -352,7 +373,9 @@ export default function Valuation() {
             {selected.note && (
               <p className="text-xs text-[var(--amber-text)] mx-5 mt-3 whitespace-pre-line">本期備註：{selected.note}</p>
             )}
-            <div className="overflow-x-auto">
+            {/* 斷點跟手機層對齊(BottomNav 是 md:hidden):1040px 八欄標單樹在 390 只看得到
+                37%、要橫捲 2.7 個螢幕寬,寫 max-sm 會讓 640–767 拿到手機摘要卻是桌機表格 */}
+            <div className="overflow-x-auto max-md:hidden">
               {/* table-fixed + colgroup:欄寬固定,縮排/長名稱不再逐列推擠;
                   min-w 保住名稱欄可讀寬度,窄螢幕交給外層 overflow-x-auto 捲動 */}
               <table className="w-full min-w-[1040px] table-fixed text-sm">
@@ -402,6 +425,29 @@ export default function Valuation() {
                   </tr>
                 </tfoot>
               </table>
+            </div>
+
+            {/* 手機:唯讀期別摘要(規範 §9.6,照 /payments 的前例)。標單樹不進手機是決策
+                不是妥協——390 螢幕讀不了八欄樹,填數量更不可能。本期/累計估驗金額已經在
+                上方 Stat 卡(手機兩欄),這裡不重複一次(§1 判準二:不會被行動的數字就刪),
+                只補「每一期各是多少、卡在哪個狀態」——那是手機上唯一有用的那個切面。
+                金額全部來自 periodRows(boqCalc 逐期加總),UI 不重算。 */}
+            <div className="md:hidden">
+              <MobileReadOnlyNote of="各期估驗金額與狀態" className="px-5 py-3 border-b border-[var(--border-2)]" />
+              <ul role="list" className="divide-y divide-[var(--border-2)]">
+                {periodRows.map(({ v, cum, amt }) => (
+                  <li key={v.id} className="px-5 py-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-body font-medium">第 {v.period_no} 期</span>
+                      <span className="text-body font-medium tabular-nums">NT$ {fmt(amt)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Badge color={statusColor[v.status] || 'slate'}>{v.status}</Badge>
+                      <span className="text-footnote text-[var(--text-3)] tabular-nums">累計 NT$ {fmt(cum)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
           </Card>
 

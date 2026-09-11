@@ -1,7 +1,6 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../../store.jsx'
-import { MSym } from '../../components/icons.jsx'
-import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surface, Input, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surface, Input, SkeletonList, TreeToggle, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow, progressMonthIndex } from '../../lib/progressPlan.js'
@@ -321,12 +320,16 @@ function ProgressTree({ nodes, depth, expanded, toggle, childrenMap, nodePct, am
         <div className="flex items-center gap-2 py-1.5 border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
           {/* 沒有子項時原本仍渲染一顆點不動的 button,對鍵盤是空殼 tab stop;改成純裝飾 span */}
           {kids.length ? (
-            /* 展開圖示與 BOQ/估驗的工項樹統一(expand_more/chevron_right);手機補 44px 命中區 */
-            <button onClick={() => toggle(it.item_key)} style={{ marginLeft: `${depth * 14}px` }}
-              aria-expanded={open} aria-label={`${open ? '收合' : '展開'} ${it.item_no}`}
-              className="w-4 max-md:min-h-11 shrink-0 inline-flex items-center justify-center text-[var(--text-3)] cursor-pointer hover:text-[var(--text)]">
-              <MSym name={open ? 'expand_more' : 'chevron_right'} size={16} />
-            </button>
+            /* 縮排從鈕身搬到外層 span:TreeToggle 在手機用 -m-3.5 把 44px 命中區吸回 16px
+               流寬,而 inline style 的 margin-left 會蓋掉那個負的左 margin——鈕在流內就變成
+               30px 寬,每一層縮排再推一次,390 螢幕這一整列會被擠出去(§7 溢位斷言)。
+               外層 span 只負責縮排,鈕身的負 margin 不受影響;桌機兩者寬度都是 16px,零變化。
+               cursor-pointer 留在呼叫端:這一列原本就有(BOQ/估驗那兩顆沒有),
+               收進 primitive 會順手改到桌機視覺,本輪不做。 */
+            <span style={{ marginLeft: `${depth * 14}px` }} className="shrink-0 inline-flex">
+              <TreeToggle open={open} label={`${open ? '收合' : '展開'} ${it.item_no}`}
+                onClick={() => toggle(it.item_key)} className="cursor-pointer" />
+            </span>
           ) : (
             <span style={{ marginLeft: `${depth * 14}px` }} className="w-4 shrink-0 text-[var(--text-3)]" aria-hidden>·</span>
           )}

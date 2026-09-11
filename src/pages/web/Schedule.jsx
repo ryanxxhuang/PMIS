@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
-import { Card, Stat, Empty, Badge, IconButton, Input, PageHeader, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Badge, IconButton, Input, PageHeader, ErrorBanner, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { parseLocalDate } from '../../lib/dates.js'
@@ -55,6 +55,14 @@ export default function Schedule() {
     return { key, it, sch, pct, state: deriveState(sch, pct) }
   }).sort((a, b) => (a.sch.planned_start || '').localeCompare(b.sch.planned_start || '')), [itemSchedules, byKey, cumQty])
 
+  // 手機摘要只列「還要處理的」:落後 + 進行中(已完成/未開始不進手機清單,見下方註解)。
+  // 排序沿用 rows(計畫起日),落後排在進行中之前才是「先看最急的」。
+  const active = useMemo(
+    () => rows.filter((r) => r.state.key === 'late' || r.state.key === 'doing')
+      .sort((a, b) => (a.state.key === b.state.key ? 0 : a.state.key === 'late' ? -1 : 1)),
+    [rows],
+  )
+
   const counts = useMemo(() => {
     let late = 0, doing = 0, done = 0
     for (const r of rows) { if (r.state.key === 'late') late++; else if (r.state.key === 'doing') doing++; else if (r.state.key === 'done') done++ }
@@ -89,7 +97,9 @@ export default function Schedule() {
         <Stat label="已完成" value={counts.done} sub="項" color="text-[var(--green-text)]" />
       </div>
 
-      <Card title="加入工項排程">
+      {/* 加入工項排程=寫入(建一列排程):手機整張卡不渲染。規範 §9.6 的決策是這五頁
+          在手機只給唯讀摘要,排程的計畫起迄是辦公室作業,留在桌機。 */}
+      <Card title="加入工項排程" className="max-md:hidden">
         <div className="relative">
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項加入排程…" />
           {results.length > 0 && (
@@ -118,7 +128,11 @@ export default function Schedule() {
         {rows.length === 0 ? (
           <Empty>尚未排程任何工項。用上方搜尋把關鍵工項加進來，設定計畫起迄。</Empty>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* 斷點跟手機層對齊(BottomNav 是 md:hidden):720px 六欄表在 390 要橫捲近兩個
+              螢幕寬,兩欄又是就地編輯的日期格(表格內輸入在手機明文豁免 44px,§9.2)——
+              稽核在這一頁量到 22 個 <44 目標,是全站最多的一頁。手機改渲染唯讀摘要。 */}
+          <div className="overflow-x-auto max-md:hidden">
             <table className="w-full text-sm min-w-[720px]">
               <thead>
                 {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決) */}
@@ -159,6 +173,34 @@ export default function Schedule() {
               </tbody>
             </table>
           </div>
+
+          {/* 手機:只列「落後 / 進行中」。整體進度(已排程/落後/進行中/已完成)在上方 Stat 卡,
+              這裡不重複;未開始與已完成的工項在工地現場不需要逐項確認,列出來只是把
+              真正要處理的那幾項推到畫面外(§1 判準二)。完成% 與狀態沿用 rows 已算好的值。 */}
+          <div className="md:hidden">
+            <MobileReadOnlyNote of="落後與進行中工項" className="px-5 py-3 border-b border-[var(--border-2)]" />
+            {active.length === 0 ? (
+              <p className="px-5 py-3 text-body text-[var(--text-3)]">目前沒有落後或進行中的工項（其餘為未開始或已完成，見上方統計）。</p>
+            ) : (
+              <ul role="list" className="divide-y divide-[var(--border-2)]">
+                {active.map((r) => (
+                  <li key={r.key} className="px-5 py-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-body font-medium min-w-0 truncate">{r.it.description || r.key}</span>
+                      <span className="text-body font-medium tabular-nums shrink-0">{r.pct.toFixed(1)}%</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      <Badge color={r.state.tone}>{r.state.label}</Badge>
+                      <span className="text-footnote text-[var(--text-3)] tabular-nums">
+                        計畫 {r.sch.planned_start || '未定'} ～ {r.sch.planned_finish || '未定'}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          </>
         )}
       </Card>
 
