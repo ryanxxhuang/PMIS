@@ -159,17 +159,25 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
 
 ## 7. 測試合約（改版時的地雷）
 
-`src/**/*.test.*` 的 64 支測試**零視覺耦合**（全部用 `aria-label`／`role`／文字內容定位），不會被改版打壞。地雷全在 e2e：
+`src/**/*.test.*` **零視覺耦合**（全部用 `aria-label`／`role`／文字內容定位），不會被改版打壞。地雷全在 e2e。
 
-### 不可改的 class 名（15 條 e2e 選擇器靠它定位）
+> 本節刻意不寫死數量——寫死的數字只會過期（這份文件就出現過「64 支測試／15 條選擇器」對不上實際的情況）。用指令查當下的真實值：
+> ```bash
+> grep -rn 'contains(@class' e2e/ | wc -l
+> ```
 
-| Class | 條數 | 在哪 |
+
+### 不可改的 class 名（e2e 選擇器靠它定位）
+
+| Class | 在哪 | 狀態 |
 |---|---|---|
-| `rounded-2xl` | 7 | `ui.jsx` 的 `SURFACE` 卡殼 |
-| `justify-between` | 4 | 查驗列、`DefectTracker`、`Quality` 判定列 |
-| `rounded-lg` | 2 | 送審列、RFI 列 |
-| `rounded-xl` | 1 | `/deadlines` 期限卡 |
-| `space-y-2` | 1 | 送審球權分群容器 |
+| `rounded-2xl` | `ui.jsx` 的 `SURFACE` 卡殼（`supervisor` / `owner` 的查驗與變更卡） | 仍在 |
+| `justify-between` | `DefectTracker` 缺失列、`Quality` 判定列 | 仍在 |
+| ~~`rounded-lg`~~ | 送審列、RFI 列 | 已解除（兩頁轉殼時改成語意定位） |
+| ~~`rounded-xl`~~ | `/deadlines` 期限卡 | 已解除（同上） |
+| ~~`space-y-2`~~ | 送審球權分群容器 | 已解除（分群改快篩 chip） |
+
+**剩下的兩組是最後的視覺耦合。** 它們綁的是尚未轉殼的地方：`Quality` 是路由器（清單在子元件）、`DefectTracker` 是跨頁共用元件。要解除得先讓那兩處提供語意錨點（`role="listitem"` ＋ `aria-label`），不是改 e2e 就好。
 
 **繞法：`@theme` 只改值不改名。** `src/index.css` 的 `@theme { --radius-2xl: 12px }` 就是這招，Apple 圓角沿用同一手法即可零成本保住。反之，把 `SURFACE` 改寫成 `rounded-[14px]` 或新 class，7 條測試同時掛掉。
 
