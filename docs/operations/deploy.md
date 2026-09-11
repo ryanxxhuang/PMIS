@@ -1,9 +1,6 @@
 # 部署 Runbook（前端／資料庫／Edge Functions）
 
-> 狀態：**ACTIVE RUNBOOK**
-> 最後核對：2026-09-11（分支 `refactor/product-wide`；正式站 `app.gov-agent.ai` 跑的仍是 PR #62 的版本）
-> 用途：把散在 `CLAUDE.md`、`CURRENT.md`、`wrangler.jsonc`、`supabase/SETUP.md`、CI workflow 與 PR 描述裡的部署地雷收攏成一份可照做的流程。取代兩份 `HISTORICAL` 文件的「目前怎麼部署」角色：[`../Cloudflare搬家-逐步設定指南.md`（歷史）](https://github.com/ryanxxhuang/PMIS/blob/c39e395fff5608813a8c2fa4c79700e87d607e3b/docs/Cloudflare%E6%90%AC%E5%AE%B6-%E9%80%90%E6%AD%A5%E8%A8%AD%E5%AE%9A%E6%8C%87%E5%8D%97.md)（2026-08-11 搬遷紀錄）與 [`../上線設定指南-2026-07-16.md`（歷史）](https://github.com/ryanxxhuang/PMIS/blob/c39e395fff5608813a8c2fa4c79700e87d607e3b/docs/%E4%B8%8A%E7%B7%9A%E8%A8%AD%E5%AE%9A%E6%8C%87%E5%8D%97-2026-07-16.md)（舊 GitHub Pages 快照）——那兩份只供追溯，不得照表套用。
-> 授權邊界：commit、push、部署與正式 migration **只在使用者明確要求後執行**（`DEVELOPMENT.md` §6）。本文件教怎麼做，不授權做。
+> ACTIVE RUNBOOK｜2026-09-11。正式狀態只見 [CURRENT §6.3](../../CURRENT.md#63-正式環境最後核對不是即時狀態)，本文件不授權部署。
 
 ## 0. 一頁摘要
 
@@ -44,9 +41,9 @@
 
 ## 3. 部署前的門檻
 
-- `main` 有 active ruleset：要求 PR，且 `test-and-build`（`ci.yml`：`npm test`、`npm run build`、Demo E2E）與 `pgtap`（`pgtap.yml`：起本機 Supabase → `db reset` 套全部 migrations → 容器內 psql 逐檔跑 `supabase/tests/*.sql`）兩個 status check 必須綠。pgTAP 自 2026-09-06 起**每個 PR 一律執行**（不再依路徑觸發）。
+- repo CI job 名為 `unit`、`e2e`、`pgtap`，需與 main ruleset 一致。unit 跑 Deno 型別、文件連結、lint、Vitest 與 build；e2e 跑 Demo；pgtap 從零套 migrations 後用共用 runner 驗 DB。改 job 名須同步確認 ruleset；本輪沒有重查 GitHub 後台。
 - 已知限制（2026-09-07 健檢）：RepositoryRole 5 可 bypass、未要求人工核准人數、未要求分支先更新到 base——**不能宣稱完全不可繞過**。
-- 本機至少跑 `npm test`、`npm run build`；動 DB 跑 pgTAP（§8）；動 `supabase/functions/` 時 esbuild bundle 通過**不等於** Deno 實機驗證。
+- 本機至少跑 `npm run lint`、`npm test`、`npm run build`、`npm run check:docs`；動 DB 跑 pgTAP（§8）；動 `supabase/functions/` 跑 `npm run check:edge`；型別通過仍不等於真模型／Deno 執行驗收。
 - 真後端 E2E（`npm run test:e2e:real`）不進 CI、只在本機對一次性 staging 手動跑，見 [`../REAL_BACKEND_E2E.md`](../REAL_BACKEND_E2E.md)。
 
 ## 4. 資料庫 migration
@@ -112,7 +109,7 @@ curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security
 
 | 設定 | 在哪 | 現值核對狀態 |
 |---|---|---|
-| Supabase Auth **Site URL** 與 **Redirect URLs** | Supabase Dashboard → Authentication → URL Configuration | `supabase/SETUP.md` §7.1 仍寫 `https://gov-agent.ai`／`https://gov-agent.ai/**`；App 已於 2026-08-25 搬到 `app.` 子網域，**正式環境是否已改為 `https://app.gov-agent.ai/**` 未查證**。填法一律用 `/**` glob（尾斜線坑，2026-07-16 文件實測）。 |
+| Supabase Auth **Site URL** 與 **Redirect URLs** | Supabase Dashboard → Authentication → URL Configuration | 應使用 App 網域 `https://app.gov-agent.ai` 與相應回跳白名單；正式 Dashboard 現值仍未查證。 |
 | 自訂 SMTP／Resend 寄件網域 | Resend Dashboard ＋ Supabase SMTP Settings | `REMINDER_FROM` 需已驗證網域；未驗證前 `onboarding@resend.dev` 只能寄到自己帳號 |
 | pg_cron 排程 | Supabase SQL Editor（`cron.sql`） | `select * from cron.job;` 現查 |
 | Sentry DSN／環境 | Cloudflare 建置環境變數 | 未查證現值 |
@@ -123,9 +120,9 @@ curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security
 
 - **全域 `~/.npmrc` 有 `os=linux`**：mac 本機 `npm install` 會缺 darwin native binding 導致 `vite build` 爆。救法 `npm i --os=darwin --cpu=arm64`。
 - **colima 要掛載 repo 所在磁碟**：repo 在外接 SSD 時 `colima start --mount "$HOME:w" --mount "/Volumes/GameSSD:w"`，否則 edge-runtime 容器看到的 functions 目錄是空的（`failed to determine entrypoint`）。
-- **本機 Supabase 最小服務組**：`supabase start -x analytics,vector,edge-runtime,imgproxy,inbucket,realtime,storage,studio`（pgTAP 用不到那些）；`supabase db reset` 從零套全部 migrations。
+- **本機 Supabase 最小服務組**：`supabase start -x analytics,vector,edge-runtime,imgproxy,inbucket,realtime,storage,studio`（pgTAP 用不到那些）；`supabase db reset` 只可在可丟棄 DB 從零套 migrations，會清掉本機資料。
 - **新版 CLI 本機 stack 對 `service_role` 沒有表級 GRANT**（secure-by-default）：`supabase/seed.sql` 在 `start`／`db reset` 時把本機 service_role 對齊 hosted 預設，**永遠不進正式部署**；已在跑的 stack 可 `docker exec -i supabase_db_PMIS psql -U postgres < supabase/seed.sql` 補。
-- **本機跑 pgTAP**（與 `pgtap.yml` 同一套）：容器名由目錄名推導 `supabase_db_<dir>`；`docker exec <db> psql -U postgres -d postgres -c "create extension if not exists pgtap with schema public;"`，再對每個 `supabase/tests/*.sql` 以 `-v ON_ERROR_STOP=1` 餵進 psql，`not ok`／psql 非零／plan 數不符／整檔無 ok 四種都算失敗。
+- **本機 pgTAP**：`npm run test:db`；容器依 `supabase/config.toml` 的 project_id 決定，可指定 DB_CONTAINER。與 CI 共用 runner，不 reset DB。
 - 真後端 E2E 的殭屍 ssh 佔埠、smoke 帳號重佈建、functions serve 需有效金鑰等坑，見 [`../REAL_BACKEND_E2E.md`](../REAL_BACKEND_E2E.md)。
 
 ## 9. 回滾

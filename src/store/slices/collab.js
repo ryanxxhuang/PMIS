@@ -53,7 +53,7 @@ function nextSerial(list, field, prefix) {
   return `${prefix}-${String(max + 1).padStart(3, '0')}`
 }
 
-export function useCollabSlice({ isPersistedProject, demoMode, currentProject, currentUser, wiMaps, log, saveMarkup }, createDefect) {
+export function useCollabSlice({ isPersistedProject, demoMode, currentProject, currentUser, wiMaps, saveMarkup }, createDefect) {
   // 監造協作:送審與工程疑義
   const [submittals, setSubmittals] = useState([])
   const [rfis, setRfis] = useState([])
@@ -75,9 +75,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setSubmittals((ss) => [data, ...ss])
-    log('提送送審', `${row.submittal_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, submittals, log])
+  }, [isPersistedProject, currentProject, currentUser, submittals])
 
   // 監造審定:審核中|核准|核備|退回補正|駁回。DB 成功才更新 UI(失敗=UI 不變)。
   const decideSubmittal = useCallback(async (id, status, review_note) => {
@@ -87,11 +86,10 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       const res = await supabase.from('submittals').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '審定未寫入:可能無權限或這筆送審已被移除')
       if (error) return { error }
-      log('送審審定', `${status}`, { user: currentUser?.name, role: '監造' })
     }
     setSubmittals((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
     return { error: null }
-  }, [isPersistedProject, currentUser, log])
+  }, [isPersistedProject])
 
   // 施工修正再送:退回補正 → 已提送(revision +1)
   // 修正再送:退回補正 → 已提送(版次+1)。DB 成功才更新 UI(P0-01:原本樂觀
@@ -110,11 +108,10 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       const res = await supabase.from('submittals').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '再送未寫入:可能無權限或這筆送審已被移除')
       if (error) return { error }
-      log('送審修正再送', `${cur.submittal_no} Rev.${rev}`, { user: currentUser?.name, role: '施工' })
     }
     setSubmittals((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
     return { error: null }
-  }, [isPersistedProject, submittals, currentUser, log])
+  }, [isPersistedProject, submittals])
 
   // DB 成功才移除(R3 P0-01:stale 分頁刪除已受理送審曾假成功;DB 另有 delete guard)
   const deleteSubmittal = useCallback(async (id) => {
@@ -178,9 +175,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     // 換副檔名重傳:清掉舊路徑,不留孤兒檔(B-15;失敗不影響本次上傳)
     if (prevPath && prevPath !== path) await supabase.storage.from('photos').remove([prevPath]).catch(() => {})
     setSubmittals((ss) => ss.map((s) => (s.id === submittalId ? { ...s, ...patch } : s)))
-    log('送審文件上傳', patch.attachment_name, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, submittals, log])
+  }, [isPersistedProject, currentProject, submittals])
 
   // AI 審讀送審文件:下載附件 → 抽文字(數位 PDF/docx,比看圖準)或轉 base64(掃描/圖走視覺)
   // → 交 read-submittal edge fn 逐項比對契約需求。反幻覺全在 edge fn(未涵蓋不臆測符合)。
@@ -255,9 +251,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setRfis((rs) => [data, ...rs])
-    log('提出工程疑義', `${row.rfi_no} ${row.title}`, { user: currentUser?.name, role: '施工' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, rfis, saveMarkup, log])
+  }, [isPersistedProject, currentProject, currentUser, rfis, saveMarkup])
 
   // 回覆/結案:DB 成功才更新 UI(失敗=UI 不變)。
   const answerRfi = useCallback(async (id, answer) => {
@@ -266,11 +261,10 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       const res = await supabase.from('rfis').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '回覆未寫入:可能無權限或這筆疑義已被移除')
       if (error) return { error }
-      log('回覆工程疑義', answer.slice(0, 30), { user: currentUser?.name, role: '監造' })
     }
     setRfis((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
     return { error: null }
-  }, [isPersistedProject, currentUser, log])
+  }, [isPersistedProject])
 
   const closeRfi = useCallback(async (id) => {
     if (isPersistedProject) {
@@ -310,9 +304,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       .select().single()
     if (error) return { error }
     setObservations((os) => [data, ...os])
-    log('新增觀察事項', input.title, { user: currentUser?.name, role: '監造' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup, log])
+  }, [isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup])
 
   // DB 成功才更新 UI(B-07:RLS 靜默 0 列時原本假成功,重整即還原)
   const updateObservation = useCallback(async (id, patch) => {
@@ -370,9 +363,8 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
     })
     if (error) return { error }
     if (data === 'not_found') return { error: { message: '找不到這個 email 的帳號，請對方先註冊。' } }
-    log('加入成員', email, { user: currentUser?.name, role: '專案' })
     return { error: null }
-  }, [isPersistedProject, currentProject, currentUser, log])
+  }, [isPersistedProject, currentProject])
 
   const removeMember = useCallback(async (userId) => {
     if (!isPersistedProject) return { error: { message: 'demo 模式不支援移除成員' } }

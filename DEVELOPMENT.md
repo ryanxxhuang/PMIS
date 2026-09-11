@@ -33,7 +33,7 @@
 - `supabase/migrations/` 是 DB 唯一真相；`schema.sql` 是凍結歷史。已套用 migration 不回改，新增 migration 並附資料保留、相容與回復說明及 pgTAP；新表檢查 default grants。
 - 權限／狀態轉移必須有 pgTAP；確定性計算必須有單元測試。
 - 可能超過 1,000 列的查詢使用既有分頁工具，避免 PostgREST 靜默截斷。
-- 驗證：`npm run lint`、`npm test`、`npm run build`；依範圍跑 Demo E2E、真後端 E2E／pgTAP，操作見 [README](README.md) 與 [Supabase 設定](supabase/SETUP.md)。
+- 驗證：`npm run check:docs`、`npm run lint`、`npm test`、`npm run build`；Edge 改動跑 `npm run check:edge`；依範圍跑 Demo E2E、真後端 E2E／`npm run test:db`，操作見 [README](README.md) 與 [Supabase 設定](supabase/SETUP.md)。
 - 本機 npm 若因全域 `os=linux` 缺 darwin binding，使用 `npm i --os=darwin --cpu=arm64`；Edge 部署在 colima 下需 `--use-api`。
 
 ## 6. 完成定義

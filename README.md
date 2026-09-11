@@ -11,7 +11,7 @@ GovAgent 的第一個垂直領域是公共工程專案管理：施工廠商、�
 需要 Node.js 22.13.0 以上。
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run dev
 ```
@@ -21,13 +21,15 @@ npm run dev
 ## 驗證
 
 ```bash
+npm run check:docs
+npm run check:edge  # Deno 2.9.6
 npm run lint
 npm test
 npm run build
 npm run test:e2e
 ```
 
-真後端測試：`npm run test:e2e:real`，依 [操作指南](docs/REAL_BACKEND_E2E.md) 準備一次性 staging；DB 測試依 [Supabase 設定](supabase/SETUP.md) 跑 pgTAP。測試結果只維護在 [BASELINE](docs/BASELINE.md)。
+真後端測試：`npm run test:e2e:real`，依 [操作指南](docs/REAL_BACKEND_E2E.md) 準備一次性 staging；DB 測試用 `npm run test:db`，依 [Supabase 設定](supabase/SETUP.md) 跑 pgTAP。測試結果只維護在 [BASELINE](docs/BASELINE.md)。
 
 ## 程式入口
 

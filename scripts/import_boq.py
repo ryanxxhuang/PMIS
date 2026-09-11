@@ -11,7 +11,7 @@ PCCES 預算書/標單（eTender XML）→ work_items 匯入器。
 不帶參數時，預設讀取本案附的預算書。輸出含：
   meta  — 專案抬頭（名稱/機關/契約編號）與金額彙總
   items — 扁平工項陣列（含 parent_key，前端自行組樹）
-純結構化解析，不依賴 AI，可重現、100% 準確。
+依輸入結構解析，不依賴 AI；輸出須與原始標單核對。
 """
 import sys, os, json, argparse
 import xml.etree.ElementTree as ET

@@ -8,8 +8,6 @@ const required = [
   'E2E_REAL_SUPABASE_URL',
   'E2E_REAL_SUPABASE_ANON_KEY',
   'E2E_REAL_SERVICE_ROLE_KEY',
-  'E2E_REAL_EMAIL',
-  'E2E_REAL_PASSWORD',
 ]
 const missing = required.filter((name) => !process.env[name]?.trim())
 

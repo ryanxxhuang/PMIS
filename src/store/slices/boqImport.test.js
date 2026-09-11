@@ -59,7 +59,6 @@ import { useProjectsSlice } from './projects.js'
 // 否則每次 render 都重跑載入 → 無限循環(這也是真實呼叫端的使用契約)
 const realUser = { real: true, user_id: 'u1', name: '測試員' }
 const guestUser = { real: false }
-const noop = () => {}
 
 const parsedFixture = {
   items: [
@@ -70,7 +69,7 @@ const parsedFixture = {
 }
 
 async function mountSlice(expectSource = 'empty') {
-  const r = renderHook(() => useProjectsSlice({ currentUser: realUser, log: noop }))
+  const r = renderHook(() => useProjectsSlice({ currentUser: realUser }))
   await act(async () => { // 等專案清單與標單載入 effect 完成
     for (let i = 0; i < 100 && r.current.workItemsSource !== expectSource; i++) await new Promise((res) => setTimeout(res, 10))
   })
@@ -144,7 +143,7 @@ describe('W1:標單匯入原子化(import_work_items RPC)', () => {
   })
 
   it('未選專案:不打任何網路', async () => {
-    const r = renderHook(() => useProjectsSlice({ currentUser: guestUser, log: noop }))
+    const r = renderHook(() => useProjectsSlice({ currentUser: guestUser }))
     // 無專案 → 載入 effect 走「範例標單」動態 import;等它 resolve,
     // 否則 promise 會在環境 teardown 後才完成而報 unhandled error
     await act(async () => {

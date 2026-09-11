@@ -39,9 +39,7 @@ import { useAdminSlice } from './store/slices/admin.js'
 const { Provider: TrackedProvider, useTracked } = createTrackedContext()
 
 export function StoreProvider({ children }) {
-  // P0-05:記憶體假 audit 已除役——權威事件由 DB trigger 寫入 audit_events(不可竄改),
-  // /activity 頁讀取。slice 呼叫點保留 log() 形狀,維持最小侵入。
-  const log = useCallback(() => {}, [])
+  // 稽核事件由 DB trigger 寫入 audit_events,由 /activity 讀取。
 
   // ── 身分與專案(其他 slice 的共同上游)────────────────────────────────────
   const {
@@ -53,7 +51,7 @@ export function StoreProvider({ children }) {
     workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership, aiEnabled,
     switchProject, createProject, importWorkItems, resetProjectBoqDb, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
     loadPortfolio,
-  } = useProjectsSlice({ currentUser, log })
+  } = useProjectsSlice({ currentUser })
 
   // AUTHORIZATION：UI 權限只讀 project_members 的 admin 旗標 + profiles.org_type；
   // currentProjectMembership 是契約方身分快照，絕不能餵給 can。
@@ -115,7 +113,7 @@ export function StoreProvider({ children }) {
   }, [])
 
   // ── 各領域 slice ─────────────────────────────────────────────────────────
-  const ctx = { dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, log, saveMarkup }
+  const ctx = { dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup }
   const {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,

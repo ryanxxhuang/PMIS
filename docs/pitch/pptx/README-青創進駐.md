@@ -1,6 +1,6 @@
 # 青創基地進駐簡報：怎麼重建
 
-> **文件狀態：ACTIVE BUILD NOTE。**
+> DATED BUILD NOTE｜2026-08。重建當時簡報的說明；產品與外部數字不是即時現況。共用環境與驗版見 [建置指南](README.md)。
 
 | 檔 | 對象 |
 |---|---|
@@ -26,9 +26,9 @@ python3 docs/pitch/pptx/brand_mark.py docs/pitch/brand \
 `sv-rail`、`sv-contract`、`ct-sitelog`、`sv-quality`、`sv-valuation`。
 找不到檔案時不會靜靜略過——會畫藍色佔位框寫「缺截圖」，並讓 exit code = 1。
 
-## 視覺來源：`UIUX/design_handoff_pmis_google_ui/README.md` ＋ `src/index.css`
+## 原版視覺來源（已被 Apple 規範取代）
 
-這份簡報不是「配色抄產品」，是直接套產品的 design token：
+下表記錄 2026-08 原版 Google token，不再是現行 index.css；重建原稿可保留，發布新版需依 Apple 規範另改。原 handoff 已由 Git 保存。
 
 | 項目 | 值 | 出處 |
 |---|---|---|

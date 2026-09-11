@@ -26,7 +26,7 @@ export async function resolveWorkItems({ configured, project, fetchCount, fetchD
   return { workItems: { items: json.items, meta: json.meta }, source: 'sample', error: null }
 }
 
-export function useProjectsSlice({ currentUser, log }) {
+export function useProjectsSlice({ currentUser }) {
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState(null)
   // AUTHORIZATION：來自 project_members，供專案存取/admin 與 Store can 使用。
@@ -236,9 +236,8 @@ export function useProjectsSlice({ currentUser, log }) {
     wiCachePut(currentProject.project_id, fresh)
     setWorkItems(dbToWorkItems(fresh, currentProject))
     setWorkItemsSource('db')
-    log('匯入標單工項', `${count ?? items.length} 項`, { user: currentUser?.name || '系統', role: '施工品管' })
     return { error: null, count: count ?? items.length }
-  }, [currentProject, currentUser, log])
+  }, [currentProject])
 
   // 清空標單與相依資料(估驗/進度/日誌/查驗)——單一 RPC 交易,全成或全敗(P0-01)。
   // 失敗(被證據 guard 擋下)時不清快取、不觸發重載:DB 已 rollback,前端不能假裝成功。

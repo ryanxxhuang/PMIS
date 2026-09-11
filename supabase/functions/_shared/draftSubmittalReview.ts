@@ -57,7 +57,7 @@ export async function draftSubmittalReview(
     // 同日以 created_at 決,平手決策確定性)
     const { data, error } = await db
       .from('submittals')
-      .select(SUB_SELECT + ', submitted_date, created_at')
+      .select('id, submittal_no, title, category, revision, status, attachment_note, work_item_id, submitted_date, created_at')
       .eq('project_id', projectId)
       .in('status', PENDING_SUBMITTAL_STATUSES)
       .order('submitted_date', { ascending: true, nullsFirst: false })

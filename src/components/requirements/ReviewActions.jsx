@@ -21,7 +21,7 @@ export default function ReviewActions({ requirement, canReview, busy, onReview, 
   const st = requirement.status
   // 紀錄格式:`桃園市工務局 林淑芬 確認 · 時間`。審查人名由呼叫端從 profiles
   // 解析(reviewed_by 是伺服器蓋的);reviewed_by 為空的已確認=確定性分流的
-  // 系統自動確認(引文+數字核對無誤),要明講不是人簽的
+  // 系統自動確認(可能仍有核對疑慮),須依實際註記揭露
   const VERB = { approved: '確認', rejected: '不採用', superseded: '廢止取代' }
   const autoConfirmed = st === 'approved' && !requirement.reviewed_by && requirement.reviewed_at
   const record = requirement.reviewed_at

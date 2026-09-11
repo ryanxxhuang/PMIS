@@ -31,7 +31,6 @@ const ctx = (over = {}) => ({
   currentProject: { project_id: 'p1' },
   currentUser: { user_id: 'u1', name: '測試員' },
   wiMaps: { byKey: new Map([['A1', WI]]), idToKey: new Map(), byId: new Map() },
-  log: vi.fn(),
   ...over,
 })
 const demoCtx = (over = {}) => ctx({ dbMode: false, isPersistedProject: false, currentProject: null, ...over })
@@ -47,7 +46,7 @@ describe('成本項目:寫入失敗不得動快取', () => {
     expect(r.current.costItems[0]).toMatchObject({ title: '假設工程', category: '其他', budget_amount: 1000, actual_amount: 0, sort_order: 0 })
   })
 
-  it('DB insert 失敗 → 回 error、快取空的、不留痕', async () => {
+  it('DB insert 失敗 → 回 error、快取維持空白', async () => {
     const c = ctx()
     const r = mount(c)
     pg.script('cost_items', 'insert', { data: null, error: { message: 'new row violates row-level security policy' } })
@@ -55,7 +54,6 @@ describe('成本項目:寫入失敗不得動快取', () => {
     await act(async () => { res = await r.current.createCostItem({ title: '假設工程' }) })
     expect(res.error.message).toContain('row-level security')
     expect(r.current.costItems).toHaveLength(0)
-    expect(c.log).not.toHaveBeenCalled()
   })
 
   it('update 被 RLS 靜默擋下(0 列)→ 回失敗訊息,快取值不變(B-07)', async () => {

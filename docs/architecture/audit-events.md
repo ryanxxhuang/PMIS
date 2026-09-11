@@ -1,150 +1,29 @@
-# Persistent Audit Events (P0-05)
+# 持久化稽核事件
 
-> 狀態：**CURRENT** ｜ 對應已實作 migration 與 `/activity` 行為。
+> CURRENT｜2026-09-11。`/activity` 讀歷史事件；`/audit` 依現有資料計算風險，兩者分工不同。
 
-## Purpose and product boundary
+## 寫入與不可變性
 
-`audit_events` is the persistent evidence history for high-value project
-workflow and identity changes. It answers who acted, which project party and
-role they represented at that time, which row changed, the before/after state,
-and when the change committed.
+`audit_events` 保存專案、entity、語意 event_type、動作時間、before／after、metadata 與操作時的身分快照。業務 AFTER trigger 呼叫內部 `record_audit_event`；業務變更與事件同交易成功或回滾。前端不 INSERT 事件，已移除 Store 內無作用的 `log()` 相容層。
 
-This is separate from `/audit` **Risk Audit**. Risk Audit computes anomaly and
-governance warnings from current project data. `/activity` reads immutable
-historical events. P0-05 does not rename, replace, or feed the Risk Audit.
+authenticated 只有 SELECT，INSERT／UPDATE／DELETE grants 收回；immutable guard 也擋有 JWT 的特權寫入，沒有專案 admin 例外。`auth.uid() is null` 的 DBA 維護是獨立邊界。刪專案的 FK cascade 依父列已消失放行，不提供使用者刪改單筆歷史的 API。
 
-## Schema
+專案 BEFORE DELETE trigger 將案名、操作人、時間、IP 與原事件數寫入獨立的 `project_deletion_records`；該表不掛專案 FK，只供平台管理員讀取，禁止 UPDATE／DELETE。它保留刪除證據，不保留原 audit_events 的內容。
 
-Each `audit_events` row contains:
+## 身分與可見性
 
-- immutable event identity: `id`, `project_id`, `event_type`, `entity_type`,
-  `entity_id`, `action`, `occurred_at`;
-- actor-at-time snapshot: `actor_user_id`, `actor_project_party_id`,
-  `actor_party_type`, `actor_project_role`, `actor_is_project_admin`;
-- optional evidence: `before_data`, `after_data`, and object `metadata`;
-- optional `correlation_id` for a future controlled request context.
+actor 快照由 auth.uid → 本案 project_memberships → active project_party 解析；找不到保留 user id 並標 authenticated_unresolved，無 JWT 則 actor_kind=system，不虛造操作人。party／project_role 只是當時身分紀錄，不是目前授權。IP 留存依 [政策](../資安/日誌留存政策.md)。
 
-Indexes support project/time pagination plus entity, actor, event-type, and
-non-null correlation lookups. There is no broad analytics index set.
+SELECT 同時要求 project_members 存取資格與 `can_read_audit_entity`：文件、版本、包與抽取來源依契約分級；實體已刪除則退回專案可讀。不能宣稱所有事件永遠全案公開，也不能宣稱刪除後仍有原實體分級保證。
 
-## Append-only invariant
+不對 cost_items 建共享稽核；before／after 不包含廠商私有預算、成本或利潤。`/activity` 單頁有界查詢，依時間降冪、每頁 50 筆，過濾條件送到伺服器，不在 Store 初始化載全歷史。
 
-Authenticated application roles have SELECT only. INSERT, UPDATE, and DELETE
-privileges are revoked, and RLS defines only `audit_events_select`. There is no
-project-admin exception. `guard_audit_event_immutability()` additionally rejects
-UPDATE/DELETE whenever an authenticated JWT is present, protecting against a
-future overly privileged RPC.
+## 事件範圍
 
-Privileged database maintenance with `auth.uid() is null` is an explicit DBA
-boundary. P0-05 provides no application retention, archive, or deletion API.
+估驗／金流、查驗、缺失、送審、RFI、變更、Requirement、文件版本與分類、契約包、三方身分快照、驗收與 Agent 動作覆核都有各自語意 trigger；精確值域與中文標籤以 [auditEvents](../../src/lib/auditEvents.js) 及 migrations 為準。建立只需 after、刪除只需 before，轉移保留兩者；不為每個無害編輯發 generic updated。
 
-## Server-generated insertion and transactions
+correlation_id 已有欄位但沒有跨請求 context，現行 trigger 多傳 null。平台 AI 設定不屬單一專案，不寫此表；另由 updated_by／updated_at 與用量表記錄。稽核不是法律認證、加密簽章或 SIEM，也沒有應用層保留期／封存 API。
 
-`record_audit_event(...)` is an internal `SECURITY DEFINER` helper. Execution is
-revoked from `PUBLIC`, `anon`, and `authenticated`; focused AFTER triggers call
-it only after the authoritative row has passed RLS and transition guards.
+## 驗證
 
-The business change and audit insert are in the same PostgreSQL transaction:
-both commit or both roll back. There is no frontend audit INSERT, async queue,
-external logging call, or trigger on `audit_events` itself. Child cascades during
-project deletion are ignored once the project root is disappearing, preventing
-pathological transient event creation.
-
-## Actor identity snapshot
-
-For authenticated changes, the helper resolves:
-
-```text
-auth.uid()
-→ project_memberships for event.project_id
-→ active project_parties row
-```
-
-The five actor fields are copied into the event. Later membership or party
-changes do not rewrite history. `actor_is_project_admin` remains a separate
-technical flag and never changes `actor_party_type` or `actor_project_role`.
-
-If no active project identity resolves, the user ID is retained and
-`metadata.actor_kind = authenticated_unresolved`. When `auth.uid()` is null,
-all actor identity fields are null and `metadata.actor_kind = system`; the
-system never fabricates a user.
-
-## Audited workflows and vocabulary
-
-Stable machine event types are mapped from actual database transitions:
-
-- valuations: `created`, `submitted`, `returned`, `approved`, `claimed`,
-  `payment_updated`, `deleted`;
-- inspections: `created`, `decided`, `reopened`, `deleted`;
-- defects: `created`, meaningful `remediation_updated`, `closed`, `reopened`,
-  `deleted`;
-- submittals: `created`, `resubmitted`, `approved`, `approved_as_noted`,
-  `returned`, `rejected`, `deleted`;
-- RFIs: `created`, `answered`, `closed`, `deleted`;
-- change orders: `created`, `review_started`, `returned`, `approved`,
-  `rejected`, `ratification_reopened`, `deleted`;
-- Requirements: `created`, `approved`, `rejected`, `superseded`, `deleted`;
-- documents: `document.created`, `document.version_created` only—document
-  review remains P0-08;
-- project identity: party creation/update/deactivation and membership
-  creation/role/admin/removal;
-- acceptance: `stage_recorded`, `stage_updated`, `stage_removed`, with
-  `stage_key` in metadata.
-
-The frontend uses a deterministic label map. It never asks an LLM to interpret
-event identifiers or fabricate actor names.
-
-## Before/after evidence policy
-
-Creation events normally have only `after_data`; deletion events only
-`before_data`; transitions carry both authoritative row images. No generic
-`*.updated` event is emitted for harmless edits. Domain triggers emit semantic
-events only for meaningful workflow or evidence-field changes. Payment events
-also identify changed payment fields in metadata.
-
-Document-version metadata explicitly includes document ID, version label,
-revision number, original filename, and checksum when present. Requirement
-transition snapshots preserve title, type, responsibility, status, and review
-fields as part of the row image.
-
-## Contractor-private exclusion
-
-There is deliberately no `cost_items` audit trigger. Shared audit JSON never
-contains contractor budget, actual cost, subcontract cost, margin, or profit.
-This preserves the P0-03 contractor-private boundary while `/activity` remains
-readable to every project member. A future private audit scope would require an
-explicit architecture decision; P0-05 does not create one.
-
-## Visibility and activity UI
-
-SELECT uses the compatibility project read boundary:
-
-```sql
-project_id in (select public.my_project_ids())
-```
-
-Audit visibility grants no business authority. `/activity` queries the selected
-project directly, orders by `occurred_at desc`, and loads at most 50 rows per
-page. Actor, event type, entity type, and date filters are applied to the server
-query. The global React store does not load audit history during project load.
-
-## Correlation IDs
-
-The insertion helper accepts a correlation ID, but current row triggers pass
-null because the application has no controlled request-correlation context.
-P0-05 does not fabricate one random ID per row and does not build distributed
-tracing.
-
-## Legacy in-memory compatibility decision
-
-The previous React `audit` state had no reader and was not persistent. It has
-been removed. Existing domain slices still call the internal `log()` callback;
-that callback is temporarily a no-op so P0-05 does not expand into unrelated
-slice refactoring. No UI or documentation treats those calls as authoritative.
-
-## Deliberate non-goals
-
-P0-05 does not implement SIEM, telemetry, behavioral analytics, AI audit
-scoring/summarization, PDF export, legal certification, cryptographic chaining,
-signatures, blockchain, retention/archive policy, document review, Requirement
-review UI, AI ingestion, onboarding, or any P0-06+ feature.
+[稽核 pgTAP](../../supabase/tests/p0_05_audit_events.sql)、[actor IP](../../supabase/tests/audit_events_actor_ip.sql)、[文件讀取留痕](../../supabase/tests/document_access_audit.sql)、[Agent 覆核](../../supabase/tests/agent_actions.sql)。

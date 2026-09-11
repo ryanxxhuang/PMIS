@@ -1,141 +1,36 @@
-# Contract-First Foundation
+# 契約與標單資料模型
 
-> 狀態：**CURRENT** ｜ 描述目前已實作的 P0-01 基礎與相容行為。
+> CURRENT｜2026-09-11。描述本分支實作；部署狀態只見 [CURRENT](../../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
-This document describes the implemented P0-01 persistence foundation. It does
-not describe future workflow as if it already exists.
-
-## 1. Two structural spines
-
-The financial/progress spine remains unchanged:
+## 兩條資料鏈
 
 ```text
-PCCES BOQ -> work_items -> daily quantity -> valuation -> payment/progress/cost
+PCCES → work_items → 日誌數量 → 估驗 → 請款／付款／進度
+契約包 → documents → document_versions → document_pages → ingestion run
+                                                   ↓
+requirements → requirement_sources
+             → requirement_work_items → work_items
+             → contract_obligations（履約 runtime）
 ```
 
-P0-01 establishes the root of the execution/compliance spine:
+`requirements.status = 'approved'` 是契約要求唯一權威；`is_authoritative` 為生成欄位。來源 `ai/manual/migration`、審查時間與履約完成狀態都不能單獨賦予權威。
 
-```text
-documents -> document_versions -> document_pages
-                                  |
-                                  v
-requirements -> requirement_sources
-             -> requirement_work_items -> work_items
-```
+## 不變條件
 
-## 2. Document domain
+- `documents` 是邏輯文件；版本是確切原檔身分，替換檔案建立新版本。版本的路徑、檔名、MIME、大小、checksum、上傳人／時間不得由使用者改寫；`supersedes_version_id` 只能指同文件。
+- `document_pages` 在同版本內頁序正整數且唯一。Requirement、文件與工項的專案身分不可變；來源與工項橋接都有同案檢查。
+- `requirement_sources.source_kind` 區分 document／manual／legacy；document 必須指真實版本，其他來源可無版本。不得為舊頁碼虛造原檔或已驗證引註。算法見 [來源驗證](traceable-document-ingestion.md)。
+- `requirement_work_items` 是多對多橋接，`review_status` 是 suggested／approved／rejected 的權威欄位，舊 `reviewed` boolean 由 trigger 同步推導。不是新增一條標單資料來源。
+- 三方與契約方快照已實作，見 [身分模型](three-party-role-model.md)。Requirement 的責任標籤不是授權角色。
 
-- `documents` is the project-scoped logical document root.
-- `document_versions` identifies an exact uploaded file. Application users
-  cannot change its document, path, filename, MIME type, size, checksum, uploader,
-  or upload time; a replacement file requires a new version row.
-- `supersedes_version_id` may only reference a version of the same document.
-- `document_pages` stores page-numbered extracted text for one exact version.
-  Page numbers are positive and unique within that version.
+## 單向履約 runtime
 
-P0-01 creates persistence and integrity rules only. It does not upload files or
-extract page text.
+D-012 移除了 obligation → Requirement 的同步／刪除 trigger。D-019 自動確認 AI 轉錄；D-020 將所有已確認類型冪等物化一列 obligation。更新契約欄位時保留 runtime 身分、執行狀態、佐證、罰則與歷史；廢止取代只讓仍待辦的 runtime 變成「不適用」。無時點項目沒有到期日，也不產生到期提醒。
 
-## 3. Requirement domain
+`legacy_contract_obligation_id` 是歷史來源識別，刻意沒有反向 FK，避免循環依賴。現行期限頁、提醒、Agent 與 Demo 都還讀 obligation，因此不能刪表。`parse-contract` 沒有前端呼叫者，但退場功能列與 Edge 仍保留供歷史用量／回復；功能關閉 migration 的部署狀態見 CURRENT。
 
-- `requirements` is the common project-scoped root for deadlines, submittals,
-  inspections, tests, checklists, evidence, photos, reports, and other rules.
-- `requirement_sources` stores document, legacy, or manual citations.
-- `requirement_work_items` links a requirement to one or more PCCES BOQ items.
-  A database trigger rejects cross-project links.
-- Project identity is immutable on `requirements`, `documents`, and
-  `work_items`, so a valid bridge cannot become cross-project through later
-  parent reassignment.
-- `responsible_project_party_id` is a nullable P0-02 placeholder. Until the
-  project-party model exists, `responsible_party_type` is limited to `agency`,
-  `supervisor`, `contractor`, or `other` and is not an authorization source.
+## 程式與驗證入口
 
-## 4. Requirement authority lifecycle
+[單向 adapter migration](../../supabase/migrations/20260812000500_requirement_obligation_one_way.sql)、[全部類型物化](../../supabase/migrations/20260901040000_materialize_all_requirement_types.sql)；確認流程見 [審核邊界](requirement-review-boundary.md)。
 
-Requirement lifecycle values are:
-
-```text
-draft_ai -> needs_review -> approved | rejected
-approved -> superseded
-```
-
-The database permits these five explicit states: `draft_ai`, `needs_review`,
-`approved`, `rejected`, and `superseded`. Review metadata records who/when; it
-does not grant authority.
-
-Requirement provenance is independent of lifecycle:
-
-- `ai`: extracted or proposed by AI
-- `manual`: created by a person
-- `migration`: mirrored from legacy `contract_obligations`
-
-## 5. Authoritative Requirement invariant
-
-Only `status = 'approved'` is authoritative. The generated
-`is_authoritative` column and `authoritative_requirements` view both enforce
-that invariant. Origin, `reviewed_at`, and legacy execution state do not grant
-authority.
-
-## 6. Legacy `contract_obligations` compatibility boundary
-
-The current Contract screen, reminders, alerts, and deadline calculations keep
-using `contract_obligations`. Each legacy row has a one-to-one
-`requirement_id`, and the mirrored requirement retains the same UUID.
-
-`requirements.legacy_contract_obligation_id` records explicit provenance. It
-is unique but deliberately has no foreign key: `contract_obligations` already
-references `requirements`, so a reverse FK would create a brittle circular
-dependency.
-
-## 7. Legacy migration and reprocessing behavior
-
-Legacy rows are mirrored deterministically as:
-
-```text
-origin = migration
-status = needs_review
-legacy_contract_obligation_id = contract_obligations.id
-```
-
-Operational status changes remain on `contract_obligations` and never promote
-or demote the Requirement lifecycle. While a Requirement is `draft_ai` or
-`needs_review`, repeated synchronization updates the same root/source and
-removes the deterministic legacy source when its page/clause metadata is
-cleared. Once the Requirement is approved, rejected, or superseded, its content
-and citation snapshot are frozen against later legacy changes. Parser
-replacement may remove draft/needs-review mirrors, but explicit lifecycle
-outcomes survive.
-
-## 8. Source traceability semantics
-
-`requirement_sources.source_kind` distinguishes:
-
-- `document`: requires a real `document_version_id`
-- `legacy`: may lack a stored document version
-- `manual`: may lack a stored document version
-
-`source_verified` is explicit and defaults to false. Legacy page/clause data is
-preserved without fabricating a document version, quotation, or verification.
-A trigger rejects citations where the Requirement and document version belong
-to different projects.
-
-## 9. Requirement to BOQ work-item linkage
-
-`requirement_work_items` is a many-to-many bridge with match type, confidence,
-and review state. It connects the compliance spine to the existing BOQ spine
-without changing PCCES import or downstream financial calculations.
-
-## 10. Deliberate P0-01 non-goals
-
-P0-01 does not implement document upload/extraction, embeddings, Requirement
-review UI, generated workflow artifacts, document review, submittal versioning,
-project-party authorization, audit events, onboarding changes, or AI assistant
-tool routing. The existing Contract UI is not moved to the Requirement Graph.
-
-## 11. Deferred dependencies
-
-- P0-02: organizations, project parties, memberships, and the deferred party FK
-- P0-03: contractual workflow authority
-- P0-06: traceable multi-document AI ingestion and page extraction
-- P0-07: Requirement review and downstream artifact generation
-- P0-08: document review and submittal integration
+pgTAP：[資料模型](../../supabase/tests/p0_01_requirement_domain.sql)、[單向 runtime](../../supabase/tests/requirement_obligation_one_way.sql)、[契約分級](../../supabase/tests/contract_grading_completion.sql)。

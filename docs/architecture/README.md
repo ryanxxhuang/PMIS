@@ -14,9 +14,9 @@
 | 文件版本、頁碼、來源 | [traceable-document-ingestion](traceable-document-ingestion.md) |
 | 上傳、分類、契約包、processing run | [document-processing-pipeline](document-processing-pipeline.md) |
 | 抽取、續跑、ingestion run | [resumable-extraction](resumable-extraction.md) |
-| Requirement 確認與產物 | [requirement-review-boundary](requirement-review-boundary.md)（D-019／D-020 優先於歷史章節） |
+| Requirement 確認與產物 | [requirement-review-boundary](requirement-review-boundary.md) |
 | 稽核事件 | [audit-events](audit-events.md) |
 | Demo／前端與後端規則 | [dual-engine-sync](dual-engine-sync.md) |
-| 真案／BOQ 模式與刪案 | [project-delete-contract-first-hotfix](project-delete-contract-first-hotfix.md)（刪案 guard 敘述待核，見 ROADMAP） |
+| 真案／BOQ 模式與刪案 | [project-delete-contract-first-hotfix](project-delete-contract-first-hotfix.md) |
 
 `CURRENT` 標記不是正確性的保證；與程式不符就修正。未核准設計只放 ROADMAP。

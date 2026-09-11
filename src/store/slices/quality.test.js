@@ -39,7 +39,7 @@ const ctx = (over = {}) => ({
   currentProject: { project_id: 'p1' },
   currentUser: { user_id: 'u1', name: '測試員' },
   wiMaps: { byKey: new Map([['A1', WI]]), idToKey: new Map([['wi-1', 'A1']]), byId: new Map([['wi-1', WI]]) },
-  log: vi.fn(), saveMarkup: vi.fn(async (d) => d || null),
+  saveMarkup: vi.fn(async (d) => d || null),
   ...over,
 })
 const demoCtx = (over = {}) => ctx({ dbMode: false, isPersistedProject: false, currentProject: null, ...over })

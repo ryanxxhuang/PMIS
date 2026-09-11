@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { supabase } from './supabase.js'
 import {
   runRequirementExtraction, functionErrorInfo,
-  extractionSuccessMessage, extractionProgressLabel, extractionCoverageWarning, extractionCoverageWarnings,
+  extractionSuccessMessage, extractionCoverageWarning, extractionCoverageWarnings,
 } from './extractRequirements.js'
 
 const invoke = supabase.functions.invoke
@@ -139,8 +139,6 @@ describe('extraction 訊息組裝', () => {
   })
 
   it('進度短語', () => {
-    expect(extractionProgressLabel({ batches_completed: 2, batches_total: 3 }))
-      .toBe('正在分析契約重點(第 2/3 批)')
   })
 })
 

@@ -6,7 +6,7 @@ import { loadObligationsFromDB } from '../db.js'
 import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/documentIngestion.js'
 import { mutationOutcome } from './billing.js'
 
-export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps, log }) {
+export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps }) {
   // 成本項目（真 DB；預算 vs 實際、分包）
   const [costItems, setCostItems] = useState([])
   // 變更設計 / 追加減帳（真 DB；每筆含 items 明細）
@@ -36,9 +36,8 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
       .insert({ ...row, project_id: currentProject.project_id }).select().single()
     if (error) return { error }
     setCostItems((cs) => [...cs, data])
-    log('新增成本項目', `${row.category}·${row.title}`, { user: currentUser?.name || '系統', role: '工程' })
     return { error: null }
-  }, [dbMode, currentProject, costItems, currentUser, log])
+  }, [dbMode, currentProject, costItems])
 
   // DB 成功才更新 UI(B-07:RLS 靜默 0 列時原本假成功,重整即還原)
   const updateCostItem = useCallback(async (id, patch) => {
@@ -115,9 +114,8 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
       .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setChangeOrders((cs) => [...cs, { ...data, items: [] }])
-    log('新增變更設計', `${row.co_no || ''} ${row.title}`, { user: currentUser?.name || '系統', role: '工程' })
     return { error: null }
-  }, [dbMode, currentProject, changeOrders, currentUser, log])
+  }, [dbMode, currentProject, changeOrders, currentUser])
 
   // 表頭/狀態:DB 成功才更新 UI(核准=契約級動作,不可假成功)
   const updateChangeOrder = useCallback(async (id, patch) => {
@@ -294,9 +292,8 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
       .select().single()
     if (error) return { error }
     setAcceptanceEvents((es) => [...es, data])
-    log('驗收階段登錄', `${stage_key} ${event_date || ''}`, { user: currentUser?.name || '系統', role: '機關' })
     return { error: null }
-  }, [isPersistedProject, acceptanceEvents, currentProject, currentUser, log])
+  }, [isPersistedProject, acceptanceEvents, currentProject, currentUser])
 
   // 驗收:撤銷某階段的登錄(登錯日期重來)。
   // DB 刪成功才從 UI 移除;guard 拒絕(他方事件/角色不符)或 RLS 靜默 0-row 都如實回報。

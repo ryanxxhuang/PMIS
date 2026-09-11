@@ -54,7 +54,7 @@ const preBoqCtx = {
   dbMode: false, demoMode: false, isPersistedProject: true,
   currentProject: { project_id: 'p1' }, currentUser: { user_id: 'u1', name: '測試員', org_type: 'contractor' },
   wiMaps: { byKey: new Map(), idToKey: new Map(), byId: new Map() },
-  log: () => {}, saveMarkup: async (d) => d || null,
+  saveMarkup: async (d) => d || null,
 }
 // demo 模式:兩者皆 false → 只進記憶體,完全不打 DB
 const demoCtx = { ...preBoqCtx, demoMode: true, isPersistedProject: false, currentProject: null }

@@ -5,11 +5,12 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'
 import { createFakePostgrest } from '../../testUtils/fakePostgrest.js'
 
-const state = vi.hoisted(() => ({ db: null, store: null }))
+const state = vi.hoisted(() => ({ db: null, store: null, rpc: vi.fn() }))
 vi.mock('../../lib/supabase.js', () => ({
   isSupabaseConfigured: true,
-  supabase: { from: (...args) => state.db.supabase.from(...args) },
+  supabase: { from: (...args) => state.db.supabase.from(...args), rpc: (...args) => state.rpc(...args) },
 }))
+vi.mock('../../components/confirm.jsx', () => ({ appConfirm: async () => true }))
 vi.mock('../../store.jsx', () => ({ useStore: () => state.store }))
 import RequirementsReview from './RequirementsReview.jsx'
 import Requirements from './Requirements.jsx'
@@ -27,9 +28,10 @@ beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
   state.db = createFakePostgrest()
+  state.rpc.mockReset()
   state.store = {
     currentProject: { project_id: 'p1' }, project: {}, isPersistedProject: true,
-    currentUser: { org_type: 'supervisor' }, can: { write: true },
+    currentUser: { org_type: 'supervisor' }, can: { write: true, reviewRequirement: true },
     workItems: { items: [] }, obligations: [], submittals: [], reloadObligations: vi.fn(),
   }
   container = document.createElement('div')
@@ -55,6 +57,22 @@ async function clickByText(text) {
 }
 
 describe('契約核對的實際頁面流程', () => {
+  it.each([
+    ['deadline', 'needs_review', 'approve', '確認無誤'],
+    ['evidence', 'needs_review', 'approve', '確認無誤'],
+    ['report', 'approved', 'supersede', '廢止取代'],
+  ])('D-020 %s 的 %s 審查完成後重新載入履約義務', async (type, status, decision, label) => {
+    const row = { ...req(1), requirement_type: type, status, origin: 'manual' }
+    state.db.setTable('requirements', [row])
+    state.rpc.mockResolvedValue({ data: { ...row, status: decision === 'approve' ? 'approved' : 'superseded' }, error: null })
+    await render(RequirementsReview, '/requirements/review?highlight=r0001')
+    state.store.reloadObligations.mockClear()
+    const button = [...container.querySelectorAll('button')].find((b) => b.textContent.trim() === label)
+    expect(button).toBeTruthy()
+    await act(async () => button.click())
+    expect(state.rpc).toHaveBeenCalledWith('review_requirement', { p_requirement_id: row.id, p_decision: decision })
+    expect(state.store.reloadObligations).toHaveBeenCalledOnce()
+  })
   it('從文件帶入契約範圍，只顯示該契約重點，也保留返回文件的範圍', async () => {
     state.db.setTable('contract_packages', [{ id: 'pkg1', project_id: 'p1', title: '甲契約' }, { id: 'pkg2', project_id: 'p1', title: '乙契約' }])
     state.db.setTable('requirements', [1, 2].map((i) => ({ ...req(i), ingestion_run_id: `run${i}` })))

@@ -29,6 +29,11 @@ jobs:
       - run: npm ci
       # --max-warnings 0(script 內):這個 repo 之前沒有 linter,卻累積了 17 處
       # 裝飾性的 eslint-disable。警告能無聲累積就會重演同一件事,所以讓它擋。
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - run: npm run check:edge
+      - run: npm run check:docs
       - run: npm run lint
       - run: npm test
       - run: npm run build

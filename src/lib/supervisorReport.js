@@ -2,7 +2,6 @@
 // 監造視角的報表，並生出一段「監造意見」草稿供監造覆核修改。唯讀：只產草稿，不送出。
 import { rainDayCount } from './weatherMetrics.js'
 import { taipeiISODate } from './dates.js'
-import { fmtNtd as money } from './format.js'
 
 const ym = (s) => (s || '').slice(0, 7)
 
@@ -73,5 +72,3 @@ export function buildSupervisorReport(data = {}, monthLabel, today = new Date())
     opinion,
   }
 }
-
-export { money as _money }

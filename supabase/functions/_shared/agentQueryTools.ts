@@ -70,8 +70,7 @@ export async function getValuation(db: SupabaseClient, projectId: string, input:
   let q = db
     .from('valuations')
     .select(
-      'id, period_no, period_start, period_end, valuation_date, retention_pct, status, note, invoice_date, paid_date, paid_amount, ' +
-        'valuation_items(work_item_id, cum_qty, cum_pct, amount_cum, amount_period, source, work_items(item_no, description, unit))',
+      'id, period_no, period_start, period_end, valuation_date, retention_pct, status, note, invoice_date, paid_date, paid_amount, valuation_items(work_item_id, cum_qty, cum_pct, amount_cum, amount_period, source, work_items(item_no, description, unit))',
     )
     .eq('project_id', projectId)
   if (input.period_no !== undefined) {
@@ -228,7 +227,7 @@ export async function findEvidence(db: SupabaseClient, projectId: string, input:
 }
 
 // 白名單:table 名 → select 字串(含合理的明細 embed)。絕不動態拼接任意表名。
-export const RECORD_SELECTS: Record<string, string> = {
+export const RECORD_SELECTS = {
   daily_logs: '*, daily_log_items(work_item_id, qty_today, note)',
   inspections: '*',
   defects: '*',
@@ -237,7 +236,7 @@ export const RECORD_SELECTS: Record<string, string> = {
   change_orders: '*, change_order_items(item_no, description, unit, qty_delta, unit_price, amount_delta, note)',
   valuations: '*, valuation_items(work_item_id, cum_qty, cum_pct, amount_cum, amount_period, source)',
   safety_records: '*',
-}
+} as const
 
 export async function getRecord(db: SupabaseClient, projectId: string, input: Record<string, unknown>) {
   const table = input.table
@@ -248,13 +247,15 @@ export async function getRecord(db: SupabaseClient, projectId: string, input: Re
   if (!isUuid(input.id)) return { error: 'id 必須是 UUID' }
   const { data, error } = await db
     .from(table)
-    .select(RECORD_SELECTS[table])
+    .select(RECORD_SELECTS[table as keyof typeof RECORD_SELECTS])
     .eq('id', input.id)
     .eq('project_id', projectId)
     .maybeSingle()
+    // 動態白名單 select 無法由 PostgREST 的字串型別解析器推導。
+    .returns<Record<string, unknown> & { valuation_items?: unknown[] }>()
   if (error) return toolError('getRecord', error)
   if (!data) return { note: '找不到這筆紀錄(或不屬於本案/無權限)' }
-  const row = data as Record<string, unknown> & { valuation_items?: unknown[] }
+  const row = data
   if (Array.isArray(row.valuation_items)) {
     const capped = capList(row.valuation_items)
     row.valuation_items = capped.rows

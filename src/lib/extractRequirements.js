@@ -120,10 +120,3 @@ export function extractionSuccessMessage(data) {
   const coverage = extractionCoverageWarning(data)
   return `找到 ${data?.extracted_requirement_count ?? 0} 項契約重點建議${triage}${coverage ? `（${coverage}）` : ''}`
 }
-
-// in_progress payload → 進度短語(面板/清單的「處理中」細節列用)
-export function extractionProgressLabel(data) {
-  const done = data?.batches_completed ?? 0
-  const total = data?.batches_total ?? '?'
-  return `正在分析契約重點(第 ${done}/${total} 批)`
-}

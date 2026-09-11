@@ -7,7 +7,7 @@
 **這份文件是規範，不是建議。** 2026-09-11 定案：PMIS 全產品（App 與行銷站）的 UI/UX 一律依本文件；本文件取代 `UIUX/design_handoff_pmis_google_ui/README.md`（W9 Google Workspace／Material 3，已退場）。
 
 定調畫布：`UIUX/design_apple_style/`（`pmis-apple-style.html` 為發佈版，`*.dc.html` 為可再編輯的來源）。
-來源：Apple HIG《Principles of Great Design》、WWDC《Designing Fluid Interfaces》、《The Details of UI Typography》。兩支 skill 已裝在 `.claude/skills/`（`apple-design`、`emil-design-eng`、`review-animations`），寫 UI 前先讀。
+來源：Apple HIG《Principles of Great Design》、WWDC《Designing Fluid Interfaces》、《The Details of UI Typography》。三支 skill 已裝在 `.claude/skills/`（`apple-design`、`emil-design-eng`、`review-animations`），寫 UI 前先讀。
 
 ---
 
@@ -19,7 +19,7 @@
 | **殼** | 全站只有一個殼：**來源欄 → 清單欄 → 詳情欄**。所有工作面都是這個殼的實例，詳情永遠出現在同一個位置。 | 方向 B |
 | **詳情** | 選到履約事項時，詳情欄呈現**契約原文＋條文高亮**，不是欄位表格。 | 方向 C |
 
-「工作面」從導覽單位降級為「來源」。`navConfig.js` 的 `routeRegistry` 與角色限制照舊是安全邊界，不因改版鬆綁。
+「工作面」從導覽單位降級為「來源」。`navConfig.js` 的 `routeRegistry` 與角色限制照舊提供前端守衛，真正安全邊界為 RLS／RPC／trigger，不因改版鬆綁。
 
 ---
 
@@ -38,7 +38,7 @@
 
 與 `DEVELOPMENT.md` §4 的產品邊界重疊，任何方向都不得違反：
 
-- **AI 只產草稿。** 介面上 AI 產物必須看得出是 AI 產物（固定用 `--ai` 紫色身分），且人覆核前不進任何統計。
+- **AI 草稿須可辨識。** 業務草稿以 `--ai` 紫色身分呈現，人覆核前不進正式統計；契約轉錄依 D-019／D-020 自動確認與物化，仍揭露原文優先及核對疑慮。
 - **數字由確定性引擎算。** 介面要能一路追到來源。
 - **每個動作留痕。** 稽核軌跡要看得見，不是藏起來。
 

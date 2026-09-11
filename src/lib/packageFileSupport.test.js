@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ACCEPT_ATTR, ACCEPTED_EXTENSIONS, analysisSupport, fileKind,
-  isAnalyzable, storedLimitationLabel,
+  storedLimitationLabel,
 } from './packageFileSupport.js'
 
 describe('file acceptance', () => {
@@ -19,14 +19,13 @@ describe('fileKind / analysisSupport', () => {
     expect(analysisSupport(fileKind('契約.pdf'))).toBe('full')
     expect(analysisSupport(fileKind('規範.docx'))).toBe('full')
     expect(analysisSupport(fileKind('備註.txt'))).toBe('full')
-    expect(isAnalyzable('契約.PDF')).toBe(true)
+    expect(analysisSupport(fileKind('契約.PDF'))).toBe('full')
   })
 
   it('accepts but does not analyze DOC/XLSX/XLS/CSV/images', () => {
     for (const name of ['舊契約.doc', '價目表.xlsx', '清單.xls', '數量.csv',
       '掃描附件.jpg', '照片.jpeg', '圖.png', '圖說.tif', '圖說.tiff']) {
       expect(analysisSupport(fileKind(name))).toBe('stored')
-      expect(isAnalyzable(name)).toBe(false)
     }
   })
 

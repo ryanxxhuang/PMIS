@@ -21,7 +21,7 @@ import {
   PrerequisiteEmptyState, ErrorBanner, SkeletonList,
 } from '../../components/ui.jsx'
 import {
-  ListDetailLayout, LIST_DETAIL_GRID, ModalShell, SearchField, StatusChip, MetaGrid, SourceQuote,
+  ListDetailLayout, LIST_DETAIL_GRID, SearchField, StatusChip, MetaGrid, SourceQuote,
 } from '../../components/listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -31,6 +31,8 @@ import { fmtDateTime } from '../../lib/format.js'
 import { useContractEnrichment } from '../../lib/useContractEnrichment.js'
 import { requirementsIntro } from '../../lib/requirementsIntro.js'
 import ReviewActions from '../../components/requirements/ReviewActions.jsx'
+import ManualRequirementModal from '../../components/requirements/ManualRequirementModal.jsx'
+import { MANUAL_BLANK, manualRequirementTiming } from '../../lib/manualRequirement.js'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import {
   REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
@@ -66,26 +68,7 @@ const fmtTime = (v) => fmtDateTime(v, { empty: '' })
 const LINK_ROW_STATIC = 'flex items-center gap-2 px-2.5 py-2 max-md:min-h-11 border border-[var(--border-2)] rounded-lg text-xs text-[var(--text-2)] min-w-0'
 const LINK_ROW = `${LINK_ROW_STATIC} hover:bg-[var(--bg)]`
 
-// W10 手動新增契約重點:AI 漏抽或文件未涵蓋的義務,人工補登。走既有的
-// requirement 流(origin='manual'、status='needs_review' → 人工核定 → deadline
-// 型單向物化為契約義務)——義務表是 system-managed,這是唯一正確的補登路徑。
-const MANUAL_BLANK = {
-  title: '', description: '', requirement_type: 'deadline',
-  responsible_party_type: '', lifecycle_phase: '施工中',
-  dueMode: 'relative', trigger_event: 'commencement', offset_days: '', offset_dir: 'after',
-  fixed_date: '', monthly_day: '',
-  // 循環時點(頻率值域對齊 requirementExtraction.ts 的 FREQUENCY_TYPES)
-  weekly_weekday: '1', freq_month: '', freq_day: '',
-  acceptance_criteria: '', source_clause: '', source_page: '',
-  contract_package_id: '',
-}
-const MANUAL_TRIGGERS = [
-  ['award', '決標日'], ['notice', '接獲開工通知日'], ['commencement', '開工日'], ['completion', '竣工日'],
-]
-const MANUAL_WEEKDAYS = [
-  ['1', '週一'], ['2', '週二'], ['3', '週三'], ['4', '週四'],
-  ['5', '週五'], ['6', '週六'], ['7', '週日'],
-]
+// 人工補登從 needs_review 經 RPC 確認,所有類型均由伺服器單向物化履約事項。
 
 export default function RequirementsReview() {
   const {
@@ -282,7 +265,8 @@ export default function RequirementsReview() {
     setBusy('')
     if (error) { setMsg(friendlyError(error, '審查未完成')); return }
     patch((d) => ({ rows: d.rows.map((r) => (r.id === data.id ? data : r)) }))
-    if (decision === 'approve' && data.requirement_type === 'deadline') await reloadObligations()
+    // D-020:所有類型都會更新履約 runtime;取代也會取消尚待辦的義務。
+    if (decision === 'approve' || decision === 'supersede') await reloadObligations()
     setMsg('')
   }
 
@@ -318,50 +302,9 @@ export default function RequirementsReview() {
   const submitManual = async () => {
     const d = manualDraft
     if (!d.title.trim()) { setManualMsg('請填標題'); return }
-    let trigger_type = null
-    let trigger_config = {}
-    let frequency_type = null
-    let frequency_config = {}
-    if (d.dueMode === 'relative') {
-      trigger_type = d.trigger_event
-      const days = Number(d.offset_days)
-      if (!(Number.isInteger(days) && days > 0)) { setManualMsg('期限天數需為正整數'); return }
-      trigger_config = { offset_days: days, offset_dir: d.offset_dir }
-    } else if (d.dueMode === 'fixed') {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fixed_date)) { setManualMsg('請選擇指定日期'); return }
-      trigger_type = 'fixed'
-      trigger_config = { fixed_date: d.fixed_date }
-    } else if (d.dueMode === 'monthly') {
-      const day = Number(d.monthly_day)
-      if (!(Number.isInteger(day) && day >= 1 && day <= 31)) { setManualMsg('每月幾號需為 1~31'); return }
-      trigger_type = 'monthly'
-      frequency_type = 'monthly'
-      frequency_config = { day }
-    } else if (d.dueMode === 'daily') {
-      frequency_type = 'daily'
-    } else if (d.dueMode === 'weekly') {
-      const weekday = Number(d.weekly_weekday)
-      if (!(Number.isInteger(weekday) && weekday >= 1 && weekday <= 7)) { setManualMsg('請選擇每週星期幾'); return }
-      frequency_type = 'weekly'
-      frequency_config = { weekday }
-    } else if (d.dueMode === 'quarterly' || d.dueMode === 'yearly') {
-      // 頻率 config 值域對齊抽取引擎:quarterly 的 month=季內第幾個月(1~3)、
-      // yearly 的 month=幾月(1~12);day 都是幾日(1~31)
-      const month = Number(d.freq_month)
-      const day = Number(d.freq_day)
-      const monthMax = d.dueMode === 'quarterly' ? 3 : 12
-      if (!(Number.isInteger(month) && month >= 1 && month <= monthMax)) {
-        setManualMsg(d.dueMode === 'quarterly' ? '每季第幾個月需為 1~3' : '每年幾月需為 1~12')
-        return
-      }
-      if (!(Number.isInteger(day) && day >= 1 && day <= 31)) { setManualMsg('幾日需為 1~31'); return }
-      frequency_type = d.dueMode
-      frequency_config = { month, day }
-    } else if (d.requirement_type === 'deadline') {
-      // 期限型沒有時點就物化不出到期日,擋在前端(伺服器不會擋,但那是一筆廢資料)
-      setManualMsg('期限型契約重點需要一個時點(相對基準日/指定日期/循環)')
-      return
-    }
+    const timing = manualRequirementTiming(d)
+    if (timing.error) { setManualMsg(timing.error); return }
+    const { trigger_type, trigger_config, frequency_type, frequency_config } = timing
     setManualBusy(true)
     const { data, error } = await supabase.from('requirements').insert({
       project_id: pid,
@@ -642,124 +585,11 @@ export default function RequirementsReview() {
   )
 
   // ── 手動新增 Modal(README:送出後為待核定、來源標記人工新增)─────────────
-  const manualModal = (
-    <ModalShell open={manualOpen} onClose={() => setManualOpen(false)} title="手動新增契約重點" size="xl">
-      <p className="text-xs text-[var(--text-3)] mb-3">AI 漏抽或文件未涵蓋的契約重點可在此補登;送出後為「待確認」、來源標記人工新增,確認後自動排入履約時程。</p>
-      <div className="space-y-2">
-        <Input value={manualDraft.title} onChange={(e) => setManualDraft((d) => ({ ...d, title: e.target.value }))}
-          placeholder="標題(例:開工前 14 日內提送施工計畫)" />
-        <Textarea rows={2} value={manualDraft.description}
-          onChange={(e) => setManualDraft((d) => ({ ...d, description: e.target.value }))}
-          placeholder="補充描述(可留白)" />
-        <div className="flex flex-wrap gap-2">
-          <Select value={manualDraft.requirement_type} className="flex-1 min-w-[8rem]"
-            onChange={(e) => setManualDraft((d) => ({ ...d, requirement_type: e.target.value }))}>
-            {Object.entries(REQUIREMENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </Select>
-          <Select value={manualDraft.lifecycle_phase} className="flex-1 min-w-[8rem]"
-            onChange={(e) => setManualDraft((d) => ({ ...d, lifecycle_phase: e.target.value }))}>
-            {['開工前', '施工中', '完工', '保固'].map((p) => <option key={p} value={p}>{p}</option>)}
-          </Select>
-          <Select value={manualDraft.responsible_party_type} className="flex-1 min-w-[8rem]"
-            onChange={(e) => setManualDraft((d) => ({ ...d, responsible_party_type: e.target.value }))}>
-            <option value="">負責方未定</option>
-            {Object.entries(RESPONSIBLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </Select>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={manualDraft.dueMode} className="w-auto"
-            onChange={(e) => setManualDraft((d) => ({ ...d, dueMode: e.target.value }))}>
-            <option value="relative">相對基準日</option>
-            <option value="fixed">指定日期</option>
-            <option value="daily">每日</option>
-            <option value="weekly">每週固定日</option>
-            <option value="monthly">每月固定日</option>
-            <option value="quarterly">每季固定日</option>
-            <option value="yearly">每年固定日</option>
-            <option value="none">無明確時點</option>
-          </Select>
-          {manualDraft.dueMode === 'relative' && (<>
-            <Select value={manualDraft.trigger_event} className="w-auto"
-              onChange={(e) => setManualDraft((d) => ({ ...d, trigger_event: e.target.value }))}>
-              {MANUAL_TRIGGERS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
-            <Select value={manualDraft.offset_dir} className="w-auto"
-              onChange={(e) => setManualDraft((d) => ({ ...d, offset_dir: e.target.value }))}>
-              <option value="after">後</option>
-              <option value="before">前</option>
-            </Select>
-            <Input type="number" min="1" className="w-24" value={manualDraft.offset_days}
-              onChange={(e) => setManualDraft((d) => ({ ...d, offset_days: e.target.value }))} placeholder="天數" />
-            <span className="text-xs text-[var(--text-3)]">日內</span>
-          </>)}
-          {manualDraft.dueMode === 'fixed' && (
-            <Input type="date" className="w-44" value={manualDraft.fixed_date}
-              onChange={(e) => setManualDraft((d) => ({ ...d, fixed_date: e.target.value }))} />
-          )}
-          {manualDraft.dueMode === 'monthly' && (<>
-            <span className="text-xs text-[var(--text-2)]">每月</span>
-            <Input type="number" min="1" max="31" className="w-24" value={manualDraft.monthly_day}
-              onChange={(e) => setManualDraft((d) => ({ ...d, monthly_day: e.target.value }))} placeholder="幾號" />
-            <span className="text-xs text-[var(--text-3)]">號</span>
-          </>)}
-          {manualDraft.dueMode === 'weekly' && (<>
-            <span className="text-xs text-[var(--text-2)]">每</span>
-            <Select value={manualDraft.weekly_weekday} className="w-auto"
-              onChange={(e) => setManualDraft((d) => ({ ...d, weekly_weekday: e.target.value }))}>
-              {MANUAL_WEEKDAYS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
-          </>)}
-          {manualDraft.dueMode === 'quarterly' && (<>
-            <span className="text-xs text-[var(--text-2)]">每季第</span>
-            <Select value={manualDraft.freq_month} className="w-auto"
-              onChange={(e) => setManualDraft((d) => ({ ...d, freq_month: e.target.value }))}>
-              <option value="">—</option>
-              {['1', '2', '3'].map((m) => <option key={m} value={m}>{m}</option>)}
-            </Select>
-            <span className="text-xs text-[var(--text-2)]">個月</span>
-            <Input type="number" min="1" max="31" className="w-24" value={manualDraft.freq_day}
-              onChange={(e) => setManualDraft((d) => ({ ...d, freq_day: e.target.value }))} placeholder="幾日" />
-            <span className="text-xs text-[var(--text-3)]">日</span>
-          </>)}
-          {manualDraft.dueMode === 'yearly' && (<>
-            <span className="text-xs text-[var(--text-2)]">每年</span>
-            <Input type="number" min="1" max="12" className="w-24" value={manualDraft.freq_month}
-              onChange={(e) => setManualDraft((d) => ({ ...d, freq_month: e.target.value }))} placeholder="幾月" />
-            <span className="text-xs text-[var(--text-2)]">月</span>
-            <Input type="number" min="1" max="31" className="w-24" value={manualDraft.freq_day}
-              onChange={(e) => setManualDraft((d) => ({ ...d, freq_day: e.target.value }))} placeholder="幾日" />
-            <span className="text-xs text-[var(--text-3)]">日</span>
-          </>)}
-        </div>
-        {packages.length > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--text-2)] shrink-0">所屬契約</span>
-            <Select value={manualDraft.contract_package_id || packages.find((cp) => cp.package_type === 'construction')?.id || packages[0]?.id || ''}
-              className="flex-1"
-              onChange={(e) => setManualDraft((d) => ({ ...d, contract_package_id: e.target.value }))}>
-              {packages.map((cp) => <option key={cp.id} value={cp.id}>{cp.title}</option>)}
-            </Select>
-          </div>
-        )}
-        <Input value={manualDraft.acceptance_criteria}
-          onChange={(e) => setManualDraft((d) => ({ ...d, acceptance_criteria: e.target.value }))}
-          placeholder="允收標準(可留白)" />
-        <div className="flex flex-wrap gap-2">
-          <Input value={manualDraft.source_clause} className="flex-1 min-w-[8rem]"
-            onChange={(e) => setManualDraft((d) => ({ ...d, source_clause: e.target.value }))}
-            placeholder="出處條款(例 5.3,可留白)" />
-          <Input value={manualDraft.source_page} className="flex-1 min-w-[8rem]"
-            onChange={(e) => setManualDraft((d) => ({ ...d, source_page: e.target.value }))}
-            placeholder="出處頁碼(例 第 12 頁,可留白)" />
-        </div>
-        <ErrorBanner msg={manualMsg} />
-        <div className="flex gap-2 pt-1">
-          <Button size="sm" disabled={manualBusy} onClick={submitManual}>新增(待確認)</Button>
-          <Button variant="ghost" size="sm" onClick={() => { setManualOpen(false); setManualMsg('') }}>取消</Button>
-        </div>
-      </div>
-    </ModalShell>
-  )
+  const manualModal = <ManualRequirementModal
+    manualOpen={manualOpen} onClose={() => setManualOpen(false)}
+    manualDraft={manualDraft} setManualDraft={setManualDraft} packages={packages}
+    manualMsg={manualMsg} manualBusy={manualBusy} submitManual={submitManual}
+    onClearMessage={() => setManualMsg('')} />
 
   // ── 版面分支 ────────────────────────────────────────────────────────────
   if (!isPersistedProject) {

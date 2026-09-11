@@ -31,7 +31,7 @@ const realCtx = {
   dbMode: true, demoMode: false, isPersistedProject: true,
   currentProject: { project_id: 'p1' }, currentUser: { user_id: 'u1', name: '測試員', org_type: 'contractor' },
   wiMaps: { byKey: new Map(), idToKey: new Map(), byId: new Map() },
-  log: () => {}, saveMarkup: async (d) => d || null,
+  saveMarkup: async (d) => d || null,
 }
 const demoCtx = { ...realCtx, dbMode: false, demoMode: true, isPersistedProject: false, currentProject: null }
 

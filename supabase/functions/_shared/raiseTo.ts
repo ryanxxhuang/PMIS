@@ -55,15 +55,16 @@ export async function raiseTo(
 
   // 找對方：list_project_members 已依本案成員資格限縮，org_type 是唯一三方角色
   // 來源；project_role／職稱不參與交接分流。同方多人時依 RPC 的加入順序取第一位。
-  const { data: members, error: mErr } = await db
+  const { data: memberRows, error: mErr } = await db
     .rpc('list_project_members', { p_project: projectId })
   if (mErr) return toolError('raiseTo', mErr)
-  const recipient = (members ?? []).find((m) => m.org_type === to && m.user_id !== userId)
+  const members = (memberRows ?? []) as { user_id: string; org_type: string; full_name: string | null }[]
+  const recipient = members.find((m) => m.org_type === to && m.user_id !== userId)
   if (!recipient) {
     return { error: `本案沒有其他「${label}」成員,無法交接。請先將對方加入專案。` }
   }
 
-  const callerName = (members ?? []).find((m) => m.user_id === userId)?.full_name || '同案成員'
+  const callerName = members.find((m) => m.user_id === userId)?.full_name || '同案成員'
   const recipientName = recipient.full_name || `${label}成員`
 
   const noteText = typeof note === 'string' && note.trim() ? note.trim() : null
