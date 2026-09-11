@@ -33,6 +33,7 @@
 | 6 | [`PROJECT_TREE.md`](PROJECT_TREE.md) | 詳細目錄、模組責任與修改入口 |
 | 7 | [`REAL_BACKEND_E2E.md`](REAL_BACKEND_E2E.md) | 手動真 Supabase staging 測試與清理 |
 | 8 | [`UIUX-Apple-設計規範.md`](UIUX-Apple-設計規範.md) | `ACTIVE`（D-021，2026-09-11 生效）：全產品 UIUX 單一真相，動任何介面前必讀 |
+| 9 | [`operations/README.md`](operations/README.md) | 部署與營運 runbook 入口；要部署、套 migration 或重佈 Edge Function 前讀 [`operations/deploy.md`](operations/deploy.md) |
 
 目前產品整理評估見 [`產品全案評估報告-2026-08-12.md`](產品全案評估報告-2026-08-12.md)；全產品 UI/UX 第三版計畫、當時 36 條路由的處置（現為 39 條，以 `src/lib/navConfig.js` 的 `routeRegistry` 為準）與 2026-08-14 常駐階層側欄修正見 [`W8-0-UIUX-全產品評估與改版藍圖-2026-08-13.md`](W8-0-UIUX-全產品評估與改版藍圖-2026-08-13.md)。第三版已獲使用者核准，W8-1R 已由 PR #14 交付並部署；W8-3B 的規格見 [`W8-3B-契約重點與後續動作規格-2026-08-14.md`](W8-3B-契約重點與後續動作規格-2026-08-14.md)，已由 PR #15 於 2026-08-15 合併並部署（真案三角色實機目視當時未執行，屬驗收待補，不是未交付）。後續工作以 `ROADMAP.md` 為準。Requirement／obligation 的決策與正式庫匿名基線見 [`W5-1-Requirement-Obligation-決策書.md`](W5-1-Requirement-Obligation-決策書.md)；已實作現況以 `CURRENT.md` 為準。
 
@@ -40,8 +41,12 @@
 
 ## 現行架構
 
-架構文件的逐份狀態集中在 [`architecture/README.md`](architecture/README.md)。目前主要文件：
+架構文件的逐份狀態集中在 [`architecture/README.md`](architecture/README.md)。目前主要文件（碰四條紅線先讀前兩份）：
 
+- [`architecture/ai-gate-and-metering.md`](architecture/ai-gate-and-metering.md)：第四條紅線本體——功能註冊表、伺服器端閘門（D-010 fail-closed）、用量記帳、平台管理員防護、新增 AI 功能的路徑。
+- [`architecture/agent-tool-boundary.md`](architecture/agent-tool-boundary.md)：第一與第三條紅線的執行機制——工具白名單、`agent_actions` 留痕、`handoff`／`handoff_sent`、已知的唯讀軌跡缺口。
+- [`architecture/route-registry-governance.md`](architecture/route-registry-governance.md)：D-013 的實作——`routeRegistry` fail-closed、`hidden` 不等於移除權限、列印不是公開、`platformAdminOnly` 獨立維度。
+- [`architecture/resumable-extraction.md`](architecture/resumable-extraction.md)：W13 契約重點抽取的跨 request 續跑與其失效條件。
 - [`architecture/three-party-role-model.md`](architecture/three-party-role-model.md)：廠商／監造／機關三方角色，以及雙成員模型的唯一判斷規則。
 - [`architecture/contract-first-foundation.md`](architecture/contract-first-foundation.md)：工程財務與文件履約兩條資料脊椎。
 - [`architecture/traceable-document-ingestion.md`](architecture/traceable-document-ingestion.md)：文件版本、分頁、AI 擷取與來源。
@@ -57,10 +62,13 @@
 
 | 文件 | 狀態 | 用途 |
 |---|---|---|
+| [`operations/README.md`](operations/README.md) | `ACTIVE` | 營運與部署文件入口（含歷史部署文件的指路） |
+| [`operations/deploy.md`](operations/deploy.md) | `ACTIVE RUNBOOK` | 前端／DB／Edge Functions 部署流程、套用順序判斷、冒煙、寫回 `CURRENT.md` 的規則、本機地雷、回滾 |
+| [`REAL_BACKEND_E2E.md`](REAL_BACKEND_E2E.md) | `ACTIVE` | 手動真 Supabase staging 測試與清理（檔案留在本目錄，`operations/README.md` 有指路） |
 | [`../supabase/SETUP.md`](../supabase/SETUP.md) | `ACTIVE` | 本機 Supabase、Edge、Email 與 pgTAP 設定 |
 | [`上線前-真案-dry-run-檢查清單-2026-07-13.md`](上線前-真案-dry-run-檢查清單-2026-07-13.md) | `ACTIVE CHECKLIST` | 正式站真案驗收；以執行當日環境為準 |
-| [`Cloudflare搬家-逐步設定指南.md`](Cloudflare搬家-逐步設定指南.md) | `HISTORICAL RUNBOOK` | 2026-08-11 搬遷紀錄，不是目前部署規格 |
-| [`上線設定指南-2026-07-16.md`](上線設定指南-2026-07-16.md) | `HISTORICAL` | 舊 GitHub Pages／Supabase 設定快照 |
+| [`Cloudflare搬家-逐步設定指南.md`](Cloudflare搬家-逐步設定指南.md) | `HISTORICAL RUNBOOK` | 2026-08-11 搬遷紀錄，不是目前部署規格；現行流程見 `operations/deploy.md` |
+| [`上線設定指南-2026-07-16.md`](上線設定指南-2026-07-16.md) | `HISTORICAL` | 舊 GitHub Pages／Supabase 設定快照；現行流程見 `operations/deploy.md` |
 | [`上線衝刺-課表-2026-08.md`](上線衝刺-課表-2026-08.md) | `PLANNING SNAPSHOT` | 2026-08 商業上線時程，不是產品規格 |
 
 ## 資安與採購
