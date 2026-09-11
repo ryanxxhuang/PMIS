@@ -1,5 +1,12 @@
 # Handoff: 契約重點 · Contract Highlights（契約條文檢索頁）
 
+> 狀態：**SUPERSEDED（2026-09-11 由 `docs/UIUX-Apple-設計規範.md` 取代）**
+> 依據 D-021：全產品 UIUX 改採 Apple style，本包的 **W9 Google Workspace／Material 3 視覺規格（色票、字級、圓角、陰影、Material Symbols 圖示、M3 深色表）一律作廢**，不要照做。
+> **資訊架構、角色可見範圍與流程敘述仍可參考**，但要先與現況（`CURRENT.md`、`src/lib/navConfig.js`）對照。
+> 本檔只加此檔頭，內文完整保留當時交付原貌，不回頭改寫。
+
+> ⚠️ 內文含 D-017 已退場的「待核定／核定生效／已生效／駁回」文案；現行語意是「待確認／確認無誤／已確認／不採用」，且 D-019 起 AI 整理內容全自動確認。改任何文案前先讀 `docs/DECISIONS.md` D-017／D-019。
+
 ## Overview
 PMIS.ai 的「契約重點」頁。單一目的：**使用者上傳契約文件後，來這裡看 AI 從契約裡爬出來的重要條文，並能快速檢索**。
 

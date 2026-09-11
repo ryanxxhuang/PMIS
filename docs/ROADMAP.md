@@ -1,9 +1,38 @@
 # GovAgent／PMIS 整理路線
 
-> 狀態：**ACTIVE（歷史工作包見下；2026-09-08 契約品質修正已在本機完成，未提交／未部署）**
-> 最後更新：2026-09-08（本機基線 73 檔 820 Vitest／48 Demo E2E／build；09-07 核對 HEAD 為 PR #62，正式環境歷史核對紀錄見 CURRENT.md §6）
+> 狀態：**ACTIVE（歷史工作包見下；09-08 契約兩批與 09-11 Apple UIUX 四包都已提交於 `refactor/product-wide`，未合併 `main`、未部署）**
+> 最後更新：2026-09-11（本機基線 72 檔 818 Vitest／48 Demo E2E／build 全綠；73 檔 820 降為 72 檔 818 是 commit `8b87c9e` 刪除 `src/lib/iconFont.test.js`，不是測試遺失。pgTAP 33 檔／`plan()` 加總 927 條為靜態統計，本輪未實跑；正式環境未重核，歷史核對紀錄見 CURRENT.md §6）
 > 依《產品全案評估報告 2026-08-12》與已核准的 W8-0 第三版（方向已定案為 D-007～D-015）。
 > 每個小任務一個 commit；每個工作包一個 PR。完成就把 `[ ]` 改 `[x]` 並填 PR 編號。
+
+## 2026-09-11｜全案重構（進行中，使用者已核准）
+
+問題：Apple 改版與契約整理兩條工作線併進後，前端累積碼債、後端錯誤遮罩與骨架不一致，文件數字與續接點失真。
+目標：分四到八個波次收斂——前端碼債、後端錯誤遮罩與骨架收斂、文件事實校正、測試補強——每波獨立可驗證。
+不做：不改產品邊界與權限、不動 RLS／migration、不新增功能、不合併 main、不部署；文件波次只改 `.md`，不碰 `src/`、`supabase/` 與設定檔。
+影響：`src/`（前端碼債波）、`supabase/functions/`（錯誤遮罩波）、根目錄與 `docs/` 文件（本波）、既有測試。
+驗收：①每波後 Vitest／Demo E2E／build 維持全綠；②文件數字與實測一致且未驗證項不升級為已驗證；③歷史報告內容不被竄改；④不新增未經核准的功能或抽象層；⑤波次之間互不回滾對方成果。
+
+- [x] 波次 1 前端碼債：清掉圖示字型退場留下的死碼與過期註解（commit `b13f469`）。
+- [x] 波次 3 文件事實校正：CURRENT／ROADMAP／DECISIONS／CLAUDE／README／docs 索引數字校正，補登 D-021 與 Apple 改版紀錄，補狀態標記與索引（本次）。
+- [ ] 其餘波次（後端錯誤遮罩與骨架收斂、測試補強）依使用者指示續行。
+
+基線（2026-09-11 本機實測）：72 檔 818 Vitest、48 Demo E2E、production build 全綠。
+
+## 2026-09-11｜全產品 UIUX 改採 Apple style（已交付，D-021）
+
+問題：W9 的 Google Workspace／Material 3 外觀與 PMIS 的定位不合，且全站累積 13 種任意字級、243 處 `text-[Npx]`，Material Symbols 自架字型是「Google 感」的最大來源。
+目標：全產品（App 與行銷站）改 Apple style，落地點改收件匣，色票／字級／材質／圖示走同一份常駐規範。
+不做：不動 `routeRegistry`、角色限制、RLS、資料庫與 Edge Function；不解封任何 `hidden` 工作面；不改圓角 class 名（e2e 綁死）；本輪不做三欄殼實作與行銷站套用。
+影響：`src/index.css`、`src/components/ui.jsx`、`src/components/icons.jsx`、`src/components/Layout.jsx`、`src/lib/navConfig.js`、`src/pages/`（字級）、`e2e/` 三支、新增 `docs/UIUX-Apple-設計規範.md` 與 `UIUX/design_apple_style/`。
+驗收：①色票亮暗雙軌且對比度實算過；②字級全站收斂到七階；③圖示零漏對映、271 個呼叫點零改動；④全路由無水平溢位、`aria-current` 唯一；⑤Vitest／Demo E2E／build 全綠。
+
+- [x] 基礎層 token ＋ primitives ＋ 常駐規範 — commit `c848c59`
+- [x] 球權來源進側欄、主畫面改收件匣 — commit `2d3068f`
+- [x] 字級全站收斂到 Apple 階梯 — commit `7aa94e9`
+- [x] 圖示換 lucide-react、subset 字型退場 — commit `8b87c9e`
+
+**狀態：四包已提交於 `refactor/product-wide`，未合併 `main`、未部署。** 驗證：72 檔 818 Vitest、48 Demo E2E、production build 全綠；未跑 pgTAP（未動 DB 與權限）、未跑真後端 E2E。遺留：三欄殼實作、行銷站套用、登入頁依三欄殼重做、`Contract.jsx`／`Requirements.jsx`／`RequirementsReview.jsx` 共 78 處字級收尾（刻意留待契約線合併後另開一包）；`src/assets/material-symbols-names.json` 也待那條線合併後隨清理刪除。
 
 ## 2026-09-08｜契約自動整理可信度（使用者已核准開始優化）
 
@@ -13,7 +42,7 @@
 影響：extract-requirements、既有抽取與審核 helpers、契約重點／擷取審核頁、相關測試與文件；無 schema 變更。
 驗收：①超過 1,000 頁讀取完整且失敗不回半份；②無文字頁／被丟棄輸出揭露；③核對狀態跨頁一致且缺值不當作通過；④可只看需留意項且保留全覽與深連結；⑤相關回歸與建置通過。
 
-- [x] 文件完整性與核對例外修正、測試、現況同步。72 檔／807 Vitest、42 Demo E2E、build 通過；**本機完成、未部署、未提交**。本次沒有 commit／push 授權，依 DEVELOPMENT.md §6 保留工作區交付，不套用下方歷史自動提交規則。詳見 [`契約自動整理品質優化-2026-09-08.md`](契約自動整理品質優化-2026-09-08.md)。
+- [x] 文件完整性與核對例外修正、測試、現況同步。當日 72 檔／807 Vitest、42 Demo E2E、build 通過；**已由 commit `d047437` 提交於 `refactor/product-wide`，未合併 `main`、未部署**。詳見 [`契約自動整理品質優化-2026-09-08.md`](契約自動整理品質優化-2026-09-08.md)。
 
 ## 2026-09-08｜契約上傳到三方重點的完整體驗（使用者已核准）
 
@@ -23,7 +52,7 @@
 影響：專案文件、契約重點及共用流程提示，既有上傳結果 metadata、載入與跨頁更新、回歸測試及文件；優先沿用現有資料與 RLS。
 驗收：①上傳入口與格式能力清楚且鍵盤可用；②進行中／部分完成／失敗各有真實狀態與下一步；③結果入口保留契約範圍且自動更新；④三角色與切換案件不混資料；⑤回歸、建置、桌面／手機檢查通過。
 
-- [x] 完整流程與 UI/UX 修正、測試及文件同步；73 檔／820 Vitest、48 Demo E2E、build 通過，另完成桌面／手機元件目視。本機交付，未提交／未部署。詳見 [`契約整理流程-UIUX-2026-09-08.md`](契約整理流程-UIUX-2026-09-08.md)。
+- [x] 完整流程與 UI/UX 修正、測試及文件同步；當日 73 檔／820 Vitest、48 Demo E2E、build 通過，另完成桌面／手機元件目視。**已由 commit `d047437` 提交於 `refactor/product-wide`，未合併 `main`、未部署**。詳見 [`契約整理流程-UIUX-2026-09-08.md`](契約整理流程-UIUX-2026-09-08.md)。
 
 ## 續接規則（給任何新 session／新 AI，防止 token 用盡後重來）
 
@@ -65,6 +94,7 @@
 - [x] W14 文件治理四件套 — PR #37（migrations `20260822000300`／`20260822000400`）、#38、#39、#44（migration `20260822010200`）
 - [x] 契約重點改版系列 — PR #45（`20260824000100`）、#46、#47、#48（`20260824000200`）、#49（D-018，`20260824000900`）、#50（收編 `20260824123253`）、#51（D-017，`20260824130000`）、#52、#53（D-019，`20260825000100`）、#54、#55
 - [x] D-020 履約時程全型別＋開工日入口 — PR #56（`20260825120000`）、#57（D-020，`20260901040000`＋rollback）、#58
+- [x] 全產品 UIUX 改採 Apple style — commits `c848c59`／`2d3068f`／`7aa94e9`／`8b87c9e`（D-021）；**已提交於 `refactor/product-wide`，未合併 `main`、未部署**
 
 D-014 已依核准報告修訂：保留四步專案初始化設定精靈，第 3 步採「AI 整理完成」，不要求清空全部待審。全產品方向見 D-015。
 
@@ -319,4 +349,5 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 - （PR #54）五個 hidden 工作面逐項復出——加回一個功能＝移除一行 hidden；跨案總覽回側欄時還原多案角色分流
 - （PR #55 後端缺口）依身分過濾的義務查詢＋逐筆 `canAct` 旗標（屆時刪除前端 `VISIBLE` shim）；`report-issue`／`re-extract` 專用端點
 - （PR #57）`/deadlines` 無時點的「無期限」列是否過濾（目前排序在最後）
+- （2026-09-11 文件校正波發現）W11 決議「契約義務」一詞自 UI 退場，但程式仍有三處使用者可見字串未改：`src/pages/web/Dashboard.jsx:72`（「N 條契約義務等待開工日…」）、`src/pages/web/Requirements.jsx:838`（`aria-label="搜尋契約義務"`，報讀器會唸到）、`src/pages/web/Requirements.jsx:976`（`unlocks` 文案）。其餘 `src/` 內的「契約義務」都是註解或內部資料層命名，不在此列。改文案要順便確認 e2e 沒有綁這些字串。
 - （2026-09-02 健檢）補 `20260824130000`／`20260825000100`／`20260825120000` 三支 rollback；~~以 `supabase migration list` 核對正式庫~~（2026-09-02 已核對一致）；關閉 GitHub Pages＋刪 `gh-pages` 分支、處理 `pmis.pages.dev` 舊部署；刪 34 條已合併分支；確認 `claude/trusting-heyrovsky-203d6c`（PostgREST 分頁）是否已由他路徑進 main；`npm audit fix`＋移除 `gh-pages` 套件；React 19／Vite 8／Vitest 4 大版升級另立工作包；CLAUDE.md 與 DEVELOPMENT.md 續接點同步（尚未做）

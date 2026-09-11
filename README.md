@@ -72,7 +72,7 @@ flowchart TB
 資料存取只遵守三條規則：
 
 1. 多頁共用、需要同步更新的專案資料放進 [src/store.jsx](src/store.jsx) 與 [src/store/slices](src/store/slices)。
-2. 只屬於單一頁面的有界資料，由頁面直接查 Supabase；目前只有 `Contract`、`Requirements`、`Activity` 三頁。
+2. 只屬於單一頁面的有界資料，由頁面直接查 Supabase；目前是 `Contract`、`Requirements`、`RequirementsReview`、`Activity` 與 `Dashboard`（只為初始化清單查兩個 count）五頁。
 3. 相同查詢真的出現兩次以上，才抽到 `src/lib` 或 `src/store/db.js`；不為形式統一新增 repository 層。
 
 ## 角色與 AI 邊界
@@ -92,7 +92,7 @@ flowchart TB
 3. 只產生草稿與建議，不核定、判定、結案或驗收。
 4. 草稿寫入 `agent_actions`，由人接受或拒絕。
 
-目前 16 個 AI／整合功能的註冊表位於：
+目前 17 個 AI／整合功能的註冊表位於（數量以 `src/lib/aiFeatures.js` 的 `AI_FEATURES` 為準）：
 
 - [src/lib/aiFeatures.js](src/lib/aiFeatures.js)：前端顯示鏡像。
 - [supabase/functions/_shared/aiFeatures.ts](supabase/functions/_shared/aiFeatures.ts)：Edge Functions 鏡像。
@@ -149,7 +149,9 @@ npm run test:e2e:real
 
 資料庫的 RLS、RPC 與狀態轉移測試在 [supabase/tests](supabase/tests)。
 
-2026-09-02 基線（main `ba6ab45`，PR #58）：71 個 Vitest 測試檔共 767 項、42 個 Demo Playwright E2E 與 production build 全數通過；33 組 pgTAP 由獨立 CI 在資料庫相關變更時自動執行；6 條真 Supabase E2E 最近一次紀錄為 PR #54（6/6）。`extract-requirements` live AI 成功路徑已於 2026-08-15 驗證。
+2026-09-11 基線（分支 `refactor/product-wide`；`main` 最後合併的是 PR #62）：72 個 Vitest 測試檔共 818 項、48 個 Demo Playwright E2E（8 檔）與 production build 全數通過，`npm audit --omit=dev` 0 漏洞。33 組 pgTAP（`plan()` 加總 927 條斷言，靜態統計、本輪未實跑）由獨立 CI 在資料庫相關變更時自動執行；6 條真 Supabase E2E 最近一次紀錄為 PR #54（6/6）。`extract-requirements` live AI 成功路徑已於 2026-08-15 驗證。
+
+測試數由 09-08 的 73 檔 820 降為 72 檔 818，是 commit `8b87c9e` 隨圖示字型工具一併刪除 `src/lib/iconFont.test.js`（2 個測試），不是測試遺失。
 
 ## Supabase 與部署
 
@@ -169,7 +171,7 @@ src/
 ├── components/             共用 UI、Layout、Copilot、缺失與標註元件
 ├── data/                   Demo 與內建工程資料
 ├── lib/                    確定性引擎、文件、需求、稽核與支援函式
-├── pages/                  40 個業務頁面檔（`pages/web/`）＋登入等 3 個
+├── pages/                  34 個業務頁面檔（`pages/web/`）＋ `Login.jsx`／`Security.jsx`
 ├── store.jsx               Store 組合根與跨領域派生資料
 └── store/slices/           9 個狀態／資料操作 slices
 
@@ -177,7 +179,7 @@ supabase/
 ├── functions/              17 個 Edge Functions 與共用 Agent／AI 層
 ├── migrations/             Schema、RLS、RPC、Trigger 的唯一真相
 ├── tests/                  pgTAP 安全與狀態流程測試
-├── rollbacks/              少數明確支援的回復腳本（4／57）
+├── rollbacks/              少數明確支援的回復腳本（7／57；未演練回復）
 └── SETUP.md                後端設定
 
 docs/

@@ -1,5 +1,10 @@
 # Handoff：PMIS.ai 介面改版（Google Workspace 風格）
 
+> 狀態：**SUPERSEDED（2026-09-11 由 `docs/UIUX-Apple-設計規範.md` 取代）**
+> 依據 D-021：全產品 UIUX 改採 Apple style，本包的 **W9 Google Workspace／Material 3 視覺規格（色票、字級、圓角、陰影、Material Symbols 圖示、M3 深色表）一律作廢**，不要照做。
+> **資訊架構、角色可見範圍與流程敘述仍可參考**，但要先與現況（`CURRENT.md`、`src/lib/navConfig.js`）對照。
+> 本檔只加此檔頭，內文完整保留當時交付原貌，不回頭改寫。
+
 ## Overview
 把現有 PMIS.ai（React + Vite + Supabase，繁中，三角色：廠商／監造／機關）的視覺與互動改成 Google Workspace 風格：白底藥丸導覽、64px App bar、`#f8fafd` 灰底＋白卡、Material chips、Material Symbols 圖示、Material 3 深色模式。導覽資訊架構（六個工作面 + 平台管理）與路由**不變**，只換外觀與少數互動模式。
 

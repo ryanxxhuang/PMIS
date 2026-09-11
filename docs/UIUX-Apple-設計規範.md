@@ -1,5 +1,9 @@
 # UIUX 設計規範 — Apple Style
 
+> 狀態：**ACTIVE ｜ 生效：2026-09-11**
+> 決策依據：[`DECISIONS.md`](DECISIONS.md) D-021。`CLAUDE.md` §4 指定本檔為全產品 UIUX 單一真相。
+> 取代：`UIUX/design_handoff_pmis_google_ui/`、`UIUX/design_handoff_contract_highlights/`、`UIUX/design_handoff_contract_highlights_timeline/`（均已標 `SUPERSEDED`）。
+
 **這份文件是規範，不是建議。** 2026-09-11 定案：PMIS 全產品（App 與行銷站）的 UI/UX 一律依本文件；本文件取代 `UIUX/design_handoff_pmis_google_ui/README.md`（W9 Google Workspace／Material 3，已退場）。
 
 定調畫布：`UIUX/design_apple_style/`（`pmis-apple-style.html` 為發佈版，`*.dc.html` 為可再編輯的來源）。

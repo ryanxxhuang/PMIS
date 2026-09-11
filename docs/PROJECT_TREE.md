@@ -1,8 +1,9 @@
 # GovAgent／PMIS 專案樹狀圖
 
 > 狀態：**CURRENT**
-> 最後盤點：2026-08-13
-> 用途：回答「功能放在哪裡、要改哪一層」。數量以本次盤點為準，新增或移動主要模組時要同步更新。
+> 最後盤點：2026-09-11（分支 `refactor/product-wide`）
+> 用途：回答「功能放在哪裡、要改哪一層」。
+> **數量易腐，一律現查不抄表**：migrations `ls supabase/migrations`、Edge Functions `ls -d supabase/functions/*/`、pgTAP `ls supabase/tests/*.sql`、頁面 `ls src/pages/web/*.jsx`、路由 `src/lib/navConfig.js` 的 `routeRegistry`。本檔只寫責任分層與修改入口；下方數字是盤點當日的參考值，對不上時以現查結果為準。
 
 ## 根目錄
 
@@ -148,7 +149,6 @@ pages/
     │   ├── ProjectSetup.jsx  建案與基本資料
     │   ├── Members.jsx       成員管理
     │   ├── Agent.jsx         三方 Agent 主頁
-    │   ├── Assistant.jsx     傳統助理頁
     │   ├── Admin.jsx         平台營運管理
     │   └── Activity.jsx      稽核事件
     ├── 工程、數量與財務
@@ -167,6 +167,9 @@ pages/
     ├── 契約與協作
     │   ├── Contract.jsx
     │   ├── Requirements.jsx
+    │   ├── RequirementsReview.jsx
+    │   ├── Deadlines.jsx
+    │   ├── ObligationsPrint.jsx
     │   ├── Submittals.jsx
     │   ├── RFI.jsx
     │   ├── Acceptance.jsx
@@ -180,6 +183,8 @@ pages/
     └── 監造報表
         └── SupervisorReport.jsx
 ```
+
+`Assistant.jsx` 已隨 D-008／W3 退場，`/assistant` 由 `App.jsx` 導向 `/agent`；路由仍登記在 `routeRegistry`（`access: 'redirect'`）。
 
 ### `src/store/`
 
@@ -205,34 +210,17 @@ store/
 supabase/
 ├── SETUP.md                 本機與後端設定 runbook
 ├── config.toml              Supabase local／function 設定
-├── migrations/              36 個依序套用的資料庫變更；唯一 schema 真相
-├── functions/               16 個 Edge Functions + `_shared`
-├── tests/                   23 組 pgTAP 權限與狀態流程測試
-├── rollbacks/               3 個明確支援的 down script
+├── migrations/              57 個依序套用的資料庫變更；唯一 schema 真相（現查 `ls supabase/migrations`）
+├── functions/               17 個 Edge Functions + `_shared`（現查 `ls -d supabase/functions/*/`）
+├── tests/                   33 組 pgTAP 權限與狀態流程測試（現查 `ls supabase/tests/*.sql`）
+├── rollbacks/               7 個明確支援的 down script；未演練回復
 ├── cron.sql                 排程參考
 └── schema.sql               凍結歷史參考，不再初始化 DB
 ```
 
 ### migrations 分段
 
-```text
-20260711000000  baseline：既有 PMIS 主資料與 RLS
-202607120001-002 驗收、工安角色權限
-202607120003-008 文件／Requirement／稽核／契約包 P0 基礎
-202607120009-010 專案身分與邀請相容
-202607120011-019 估驗付款、正式模式、缺失、檢查表、座標
-202607130000-002 送審附件、Storage policy、估驗金額限制
-20260716000000  義務佐證
-20260725000000  Agent 草稿 actions
-202607280000-002 平台管理、AI 計量、org_type 防提權
-202608110001-002 稽核 IP、刪案紀錄
-20260812000100  三方 Agent 角色收斂
-20260812000200  W1 標單重設／匯入單一交易
-20260812000300  W3 AI 閘門 fail-closed
-20260812000400  W4 邀請三方身分確認
-20260812000500  W5-2 Requirement → obligation 單向相容（已部署）
-20260812000600  W5-3 雙成員模型 schema 註解（已部署）
-```
+**不在此抄清單。** migration 檔名本身帶日期與用途，逐一列出的清單一定會過期（本檔曾停在 `20260812000600`，實際已到 `20260901040000`）。要看有哪些、最新是哪一支，直接 `ls supabase/migrations`；要看某支做了什麼，讀該檔開頭的註解；要看它為什麼存在，查 `docs/DECISIONS.md` 與 `CURRENT.md` §6.2 的 PR 對應。正式庫是否已套用一律以 `supabase migration list --linked` 為準，不以 repo 有檔推論。
 
 規則：只能新增 migration；不能修改已套用檔案。權限與狀態變更同步更新 `supabase/tests/`。
 
@@ -243,6 +231,7 @@ functions/
 ├── agent-run/                    三方 Agent runtime
 ├── assistant-chat/               助理問答
 ├── audit-summary/                AI 稽核摘要
+├── classify-document/            文件自動分類（W14，信心 ≥0.8 自動歸檔）
 ├── extract-requirements/         可追溯 Requirement 擷取
 ├── parse-contract/               舊期限解析；檔案保留供相容／rollback，前端無 caller
 ├── read-submittal/               送審文件讀取

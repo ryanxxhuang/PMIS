@@ -4,16 +4,18 @@
 
 ---
 
-## 0. 目前續接點（2026-09-02）
+## 0. 目前續接點（2026-09-11）
 
-- **W0～W14 與精修期系列（PR #2～#58）已全部合併至 `main` 並部署前端**；目前沒有進行中的已核准工作包。完整交付紀錄見 `CURRENT.md` §6.2 與 `docs/ROADMAP.md` 進度總覽，不要重做任何已勾選的包。
-- **已定案決策到 D-020**（`docs/DECISIONS.md`）：D-017 契約重點是「確認轉錄」不是「核定生效」；D-019 AI 整理全自動確認歸檔、核對結果只是透明度註記；D-020 任何已核定 Requirement 都物化一列義務（無時點＝「未觸發」）。寫契約重點相關程式前先讀這三條，舊文案「待核定／核定生效」已退場。
+- **目前不在 `main` 上**：工作分支是 `refactor/product-wide`。`main` 最後合併的是 PR #62；之後有三批工作已提交但**未合併、未部署**——09-08 契約兩批（commit `d047437`）、09-11 Apple UIUX 四包（`c848c59`／`2d3068f`／`7aa94e9`／`8b87c9e`）、進行中的全案重構波次（`b13f469` 起）。正式站 `app.gov-agent.ai` 跑的仍是 PR #62 的版本。
+- **有進行中的已核准工作**（2026-09-02 那句「沒有進行中的工作包」已不成立）：09-07 健檢、09-08 兩批契約工作、09-11 Apple UIUX 改版、本次全案重構（分四到八波：前端碼債、後端錯誤遮罩與骨架收斂、文件事實校正、測試補強）。範圍與進度見 `docs/ROADMAP.md` 最上面兩格。
+- **UIUX 已改 Apple style（D-021，2026-09-11 定案）**：單一真相是 `docs/UIUX-Apple-設計規範.md`，W9 的 Google／Material 3 handoff 已標 `SUPERSEDED`。落地點是收件匣（側欄有「球在誰手上」三個桶，走 `?ball=`）、圖示是 `lucide-react`、字級走七階。寫任何 UI 前先讀那份規範。
+- **已定案決策到 D-021**（`docs/DECISIONS.md`）：D-017 契約重點是「確認轉錄」不是「核定生效」；D-019 AI 整理全自動確認歸檔、核對結果只是透明度註記；D-020 任何已核定 Requirement 都物化一列義務（無時點＝「未觸發」）。寫契約重點相關程式前先讀這三條，舊文案「待核定／核定生效」已退場。
 - **`/requirements` 現在是「契約重點 · 履約時程」三方共用檢視頁（PR #55）**，本頁不做審核；規則在 `src/lib/obligationTimeline.js`，可見範圍看角色、動作只看歸屬；`VISIBLE` 表是前端 shim 不是安全邊界。期限管理動作在 `/deadlines`。
-- **側欄處於精修期最小表面（PR #54）**：只露今日待辦／專案文件／契約重點／標單工項；其餘五個工作面 `hidden: true`，定義、角色限制、路由與深連結全部保留。要加回功能＝移除一行 hidden，不要重建導覽。
+- **側欄仍是精修期最小表面（PR #54）**：工作面只露今日待辦／專案文件／契約重點／標單工項；其餘五個 `hidden: true`（`navConfig.js` 共 6 處），定義、角色限制、路由與深連結全部保留。要加回功能＝移除一行 hidden，不要重建導覽。
 - **部署位置**：App 在 `app.gov-agent.ai`（Cloudflare Workers，push `main` 即部署）；apex `gov-agent.ai` 是 `PMIS.marketing` 的行銷站，App 路由在 apex 會 404，冒煙測試要打 `app.` 子網域。品牌字樣目前是 GovAgent（PR #24 改 PMIS 後於 08-25 改回）。
-- **正式庫 migration 已核對一致（2026-09-02）**：本機 57 支＝遠端 57 筆，遠端最新 `20260901040000`。之後每次套 migration 或重佈 Edge Function，版本號要寫回 `CURRENT.md` §6（DEVELOPMENT.md 完成定義第 3 條）；動 DB 前仍先跑 `supabase migration list --linked` 看一眼。
-- **基線（2026-09-02 本機實測）**：71 檔 767 Vitest、42 Demo E2E、33 pgTAP、production build 全綠；真後端 E2E 最近紀錄 PR #54（6/6）。
-- 續接仍以 `docs/ROADMAP.md` 未排入清單與使用者新核准範圍為準；新工作包從最新 `main` 建分支，不沿用已合併分支（遠端仍有 34 條已合併分支未刪）。
+- **正式庫 migration 最後一次核對是 2026-09-02**：當時本機 57 支＝遠端 57 筆，遠端最新 `20260901040000`；之後未重核，Edge Function 線上版本從未逐支核對。每次套 migration 或重佈 Edge Function，版本號要寫回 `CURRENT.md` §6（DEVELOPMENT.md 完成定義第 3 條）；動 DB 前先跑 `supabase migration list --linked` 看一眼。
+- **基線（2026-09-11 本機實測）**：72 檔 818 Vitest、48 Demo E2E、production build 全綠，`npm audit --omit=dev` 0 漏洞。**Vitest 由 09-08 的 73 檔 820 降為 72 檔 818，是 `8b87c9e` 刪掉 `src/lib/iconFont.test.js`（2 個測試）隨圖示字型工具一起退場，不是測試遺失。** pgTAP 33 檔、`plan()` 加總 927 條是靜態統計，本輪未實跑；真後端 E2E 最近紀錄仍是 PR #54（6/6）。
+- 續接以 `docs/ROADMAP.md` 最上面兩格與未排入清單、加上使用者新核准範圍為準；新工作包從最新 `main` 建分支，不沿用已合併分支（遠端仍有 34 條已合併分支未刪）。
 
 ---
 
@@ -77,7 +79,7 @@
 - **權限**：伺服器端 RBAC（RLS ＋ 狀態轉移 trigger），前端 `can` 只是 UX，不是安全邊界
 - **成員模型**：`project_members`＝授權；`project_memberships`＝契約方身分快照。唯一規則見 `docs/architecture/three-party-role-model.md`
 - **路由與導覽單一真相**：`src/lib/navConfig.js` 的 `routeRegistry`／`navGroups`（未登記路由 fail-closed；公開與列印路由必須明確標記；`hidden: true` ≠ 移除權限）
-- **UIUX 單一真相**：**`docs/UIUX-Apple-設計規範.md`**（2026-09-11 起全產品 Apple style，取代 W9 Google handoff）。顏色／字級／圓角／材質一律走 `src/index.css` 的 token，不得硬編碼色碼或用 Tailwind 內建調色盤；禁止 `text-[Npx]` 任意字級；改色值要重算對比度並把數字寫回註解。e2e 有 15 條選擇器綁死視覺 class 名，改圓角只改 `@theme` 的值、不改 class 名
+- **UIUX 單一真相**：**`docs/UIUX-Apple-設計規範.md`**（2026-09-11 起全產品 Apple style，取代 W9 Google handoff）。顏色／字級／圓角／材質一律走 `src/index.css` 的 token，不得硬編碼色碼或用 Tailwind 內建調色盤；禁止 `text-[Npx]` 任意字級；改色值要重算對比度並把數字寫回註解。e2e 有 15 條選擇器綁死視覺 class 名（`grep -rn 'contains(@class' e2e/`），其中 **10 條綁圓角**（`rounded-2xl` 7、`rounded-lg` 2、`rounded-xl` 1），另 5 條綁版面 class（`justify-between` 4、`space-y-2` 1）——改圓角只改 `@theme` 的值、不改 class 名
 - **Store**：`src/store.jsx` 組合根 ＋ `src/store/slices/*`
 - **資料存取**：跨頁共享資料才進 Store；單頁專屬資料可直接查 Supabase；同一查詢重複兩次以上才抽共用層
 

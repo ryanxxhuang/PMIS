@@ -1,7 +1,7 @@
 # GovAgent／PMIS 已定案決策
 
 > 狀態：**ACTIVE**
-> 最後更新：2026-09-01（D-020；2026-09-02 核對檔頭日期）
+> 最後更新：2026-09-11（D-021 UIUX Apple style 補登；D-020 於 2026-09-01 定案）
 > 這裡只記已確認的決策。想法、建議與待辦放在 [`ROADMAP.md`](ROADMAP.md)。
 
 ## D-001｜產品名稱與範圍
@@ -124,3 +124,15 @@
 - **狀態**：ACCEPTED(2026-09-01)
 - **決策**:D-012 轉接器只物化 `requirement_type='deadline'`,其餘八型(送審/檢驗/試驗/檢查表/佐證/照片/報告/其他)核定後卡在 requirements 表、永不出現在「契約重點 · 履約時程」——與頁首「把你要遵守的每一條排到時程上」不符(正式庫實測 91/106 條卡住)。改為**任何已核定 Requirement 都物化一列義務**:轉接器更名 `materialize_requirement_obligation`(映射逐欄不變,只放寬型別),`apply_transcription_triage` 與 `review_requirement` 的核定/取代不再分型別,既有卡住的核定項一次回填。
 - **結果**:無時點的型別映出來是無到期日義務——前端語意「未觸發」,期程段照 `lifecycle_phase` 歸位;timeline 的類型標籤/篩選本已按 `requirement_type` 實作,前端零邏輯改動(只改文案)。今日待辦/提醒信只消費推得出到期日且七日內的項目,無時點義務不產生提醒;期限追蹤頁會多出「無期限」列(排序在後),是否過濾屬後續 UX 決定。migration `20260901040000` + rollback 檔;pgTAP 改釘全型別物化(one_way 34 項、triage 18 項)。
+
+## D-021｜全產品 UIUX 改採 Apple style（取代 W9 的 Google／Material 3 方向）
+
+- **狀態**：ACCEPTED（2026-09-11，使用者拍板）
+- **決策**：PMIS 全產品——App 與行銷站——的 UI/UX 一律依 [`UIUX-Apple-設計規範.md`](UIUX-Apple-設計規範.md)，此後所有 UIUX 工作都 follow 這一份。D-015 與 W9 建立的 Google Workspace／Material 3 視覺方向退場；`UIUX/design_handoff_pmis_google_ui/` 與兩份契約重點 handoff 降為 `SUPERSEDED`（資訊架構部分仍可參考，視覺部分作廢）。資訊架構採**疊合版**：落地點是收件匣（開啟 App 直接落在「現在輪到我」，不做 dashboard 指標卡）、殼是「來源欄 → 清單欄 → 詳情欄」、履約事項的詳情呈現契約原文＋條文高亮。「工作面」從導覽單位降級為「來源」。
+- **不變的邊界**：`navConfig.js` 的 `routeRegistry`、角色限制、RLS 與四條紅線不因改版鬆動；D-013 路由 fail-closed、D-002 三方角色、D-003 AI 只做草稿照舊。改版只動視覺、互動與導覽呈現，不動權限與資料。
+- **落地狀況（2026-09-11，四個 commit，已提交於 `refactor/product-wide`，未合併 `main`、未部署）**：
+  - `c848c59` 基礎層——`src/index.css` 色票換 Apple 系統色（亮暗雙軌、每個值實算對比度並寫回註解）、字級階梯進 `@theme`、毛玻璃只給 chrome（側欄／工具列／彈出層）內容卡一律實心、reduced-motion／reduced-transparency／contrast-more 三訊號分開處理；`ui.jsx` 按鈕去藥丸並改 Apple 焦點環，新增 `Segmented` 與 `Dot`，既有 26 個匯出的 API 形狀不變；新增常駐規範 `docs/UIUX-Apple-設計規範.md`，`CLAUDE.md` 指向它為 UIUX 單一真相。
+  - `2d3068f` 落地點——側欄新增「球在誰手上」群組（現在輪到我／等待對方／今天已完成，走 `?ball=` query param 不新增路由），主畫面移除四張指標卡改收件匣式單桶聚焦；`navGroups`／`routeRegistry`／`routeAllowed`／`defaultLandingPath` 一行未動，未解封任何 `hidden` 工作面。
+  - `7aa94e9` 字級——全站 13 種任意字級（含 11.5／12.5／10.5 半像素）收斂到七階；Tailwind 內建 `--text-xs/sm/base/lg` 對映同一份階梯（只改值不改名），另逐處改寫 35 檔 158 處任意值。`Contract.jsx`／`Requirements.jsx`／`RequirementsReview.jsx` 共 78 處刻意未處理，避免與契約抽取那條工作線混進同一個 commit。
+  - `8b87c9e` 圖示——Material Symbols 自架 subset 字型退場，改 `lucide-react`（1.5px 描邊 `absoluteStrokeWidth`）；`MSym` 元件名與 props 不變，271 個呼叫點零改動，98 個對映逐一對照 lucide 1.44 實際匯出驗證；漏對映退路是中性圓圈＋dev console 警告，不畫成像真圖示的東西。bundle 924.51→980.88 kB（gzip 286.93→300.99）。
+- **結果**：圓角 class 名一個都不能改——e2e 有 15 條選擇器綁死視覺 class 名，其中 10 條綁圓角；沿用 W9 的「`@theme` 只改值不改名」繞法。本決策是既成事實補登（四個 commit 早於本條寫入），不是新提案；補登原因是 DEVELOPMENT.md §2 要求改變產品邊界先進 DECISIONS，當時未辦。尚未做的部分（三欄殼實作、行銷站套用、登入頁依三欄殼重做、`Contract`／`Requirements`／`RequirementsReview` 字級收尾）仍在 ROADMAP，不得當成已完成。

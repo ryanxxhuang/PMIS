@@ -1,25 +1,35 @@
 # GovAgent／PMIS — 目前系統真相
 
 > 狀態：**CURRENT（現況權威文件）**
-> 最後核對：2026-09-08（本機 `bc1c3e5` 加未提交的契約品質修正；正式 Supabase 未重核、未部署，歷史部署日期分別保留）
+> 最後核對：2026-09-11（分支 `refactor/product-wide`；09-08 契約兩批與 09-11 Apple UIUX 四包都**已提交、尚未合併 `main`、尚未部署**；正式 Supabase migration tracker 與 Edge Function 線上版本未重核，歷史部署日期分別保留）
 > 用途：回答「產品現在是什麼、已經做到哪裡、哪份文件說了算」。
 
-### 2026-09-08 契約完整流程與 UI/UX（本機完成、未部署）
+### 2026-09-11 Apple style UIUX 改版（四包已提交於 `refactor/product-wide`，未合併 `main`、未部署）
+
+- 使用者於 2026-09-11 拍板：全產品（App 與行銷站）UIUX 一律改 Apple style，取代 W9 的 Google Workspace／Material 3 方向；此後所有 UIUX 都 follow [`docs/UIUX-Apple-設計規範.md`](docs/UIUX-Apple-設計規範.md)。決策補登為 D-021，資訊架構採疊合版（落地點＝收件匣、殼＝來源欄／清單欄／詳情欄、詳情＝契約原文＋條文高亮）。
+- `c848c59` 基礎層：`src/index.css` 換 Apple 系統色票（亮暗雙軌，每個值實算對比度並寫回註解）、字級階梯進 `@theme`、毛玻璃只給 chrome 而內容卡實心、reduced-motion／reduced-transparency／contrast-more 三訊號分開處理；`ui.jsx` 按鈕去藥丸改 Apple 焦點環，新增 `Segmented` 與 `Dot`，26 個既有匯出的 API 形狀與 props 不變。圓角 class 名一個未改。
+- `2d3068f` 落地點：側欄新增「球在誰手上」群組（現在輪到我／等待對方／今天已完成），走 `?ball=` query param 不新增路由；主畫面四張指標卡退場改收件匣式單桶聚焦，「最近施工日誌」卡刻意保留（`/site-log` 與 `/valuation` 都是 `hidden: true`，那是可見表面通往施工日誌的最後一條路）。`navGroups`／`routeRegistry`／`routeAllowed`／`visibleNavGroups`／`defaultLandingPath` 一行未動，未解封任何 hidden 工作面。
+- `7aa94e9` 字級：全站 13 種任意字級（含 11.5／12.5／10.5 半像素）收斂到七階；Tailwind 內建 `--text-xs/sm/base/lg` 對映同一份階梯（只改值不改名，460+ 處零編輯生效），另逐處改寫 35 檔 158 處。`Contract.jsx`／`Requirements.jsx`／`RequirementsReview.jsx` 共 78 處刻意未處理，避免與契約抽取那條工作線混進同一個 commit，待另一包收尾。
+- `8b87c9e` 圖示：Material Symbols 自架 subset 字型退場改 `lucide-react`；`MSym` 元件名與 props 不變、271 個呼叫點零改動，98 個對映逐一對照 lucide 1.44 實際匯出驗證，漏對映退路是中性圓圈＋dev console 警告。bundle 924.51→980.88 kB（gzip 286.93→300.99）。`src/lib/iconFont.test.js`（2 個測試）隨字型工具一起退場——**這就是 Vitest 由 820 降為 818、檔數由 73 降為 72 的原因，不是測試遺失**。
+- 基線（2026-09-11 本機實測）：72 檔 818 Vitest、48 Demo E2E、production build 全綠。未跑 pgTAP、未跑真後端 E2E、未部署。尚未做：三欄殼實作、行銷站套用、登入頁依三欄殼重做（見 ROADMAP）。
+
+### 2026-09-08 契約完整流程與 UI/UX（已提交於 `refactor/product-wide`，未合併 `main`、未部署）
 
 - 使用者後續明確聚焦「契約上傳 → AI 自動爬梳 → 重點整理 → 不同角色看不同內容」。已在既有 `/contract`、`/requirements`、`/requirements/review` 完成流程銜接；無新路由／角色／權限規則。
 - 文件與重點頁共用流程入口及登入角色說明；上傳格式能力如實區分，使用可鍵盤操作的上傳按鈕；手機文件表改為直向列，AI 狀態與原因不需橫向捲動。一般機關檢視帳號不顯示上傳按鈕。
 - 文件結果入口帶 `?package=`，重點頁可選契約範圍，審核與返回連結延續同一契約。AI-origin 由 ingestion run 的文件版本推導契約，人工項目使用既有 `contract_package_id`。前端篩選只作展示，D-018 RLS 仍為資料安全邊界。
 - 上傳／重試後刷新義務；進入重點頁重新載入義務，仍有 ingestion run 處理中時輪詢刷新。文件查詢分頁且載入錯誤可重試，不偽裝無文件；切案時舊載入回應不能覆蓋新畫面。處理覆蓋警示落入 processing metadata，亦可從既有 ingestion metadata 還原；部分整理不再顯示綠色已完成，契約包 partial 亦不再算 ready。
 - 無可計算到期日的義務統一顯示「無到期日」，避免「無需處理」造成忽略；未改期限計算、確認或業務執行權限。
-- 本輪 73 檔／820 Vitest、48 Demo E2E、production build 通過；另以真元件＋測試資料檢查上傳頁 1440／375px，無水平溢出且部分整理原因在可見寬度內。未驗證正式契約、真模型或新一輪真 Supabase／pgTAP。交付與限制見 [`docs/契約整理流程-UIUX-2026-09-08.md`](docs/契約整理流程-UIUX-2026-09-08.md)。
+- 本輪當日 73 檔／820 Vitest、48 Demo E2E、production build 通過；另以真元件＋測試資料檢查上傳頁 1440／375px，無水平溢出且部分整理原因在可見寬度內。未驗證正式契約、真模型或新一輪真 Supabase／pgTAP。交付與限制見 [`docs/契約整理流程-UIUX-2026-09-08.md`](docs/契約整理流程-UIUX-2026-09-08.md)。（此後 `8b87c9e` 刪除 `src/lib/iconFont.test.js`，目前基線為 72 檔／818。）
+- 交付已由 commit `d047437` 提交於 `refactor/product-wide`，仍未合併 `main`、未部署。
 
-### 2026-09-08 契約自動整理品質修正（前一批，本機完成、未部署）
+### 2026-09-08 契約自動整理品質修正（前一批，已提交於 `refactor/product-wide`，未合併 `main`、未部署）
 
 - 使用者要求減少逐條人工審核並開始優化。此次保留 D-019：AI-origin 仍自動確認，有疑慮亦可進履約 runtime；新增「只看需留意項目」入口，不新增人工放行門檻。
 - 契約重點／擷取審核兩頁共用核對狀態：明確空陣列 `triage_doubts = []` 才顯示既有核對通過標示；有疑慮與未取得核對結果分別揭露。主頁已補讀核對欄位，修正 09-07 健檢的誤標問題。通過引文／適用期限數字核對不等於全部語意正確或沒有漏項。
 - 擷取審核移除最近 300 筆限制，以既有分頁工具讀取目前權限可見資料；runs 亦分頁讀取。每個文件版本的最近一次 completed run 都檢查完整性，另一份成功文件不再遮蔽警示。
 - Edge 抽取逐頁讀取並檢查 exact count、連續頁序；有上傳 `metadata.page_count` 時再比對該頁數。讀取失敗、缺頁或上傳頁數不符不開始模型抽取。無文字頁、無效輸出與截斷均揭露為處理不完整，缺少模型清單不再偽裝成成功空結果。
-- 無資料庫／權限變更、無 migration；前端與 `extract-requirements` 都尚未部署。舊流程沒有上傳頁數時只能核對已儲存資料；24 批上限、OCR、語意漏抽與跨條款理解仍未解決，也尚未用真實契約量測準確率／召回率。
+- 無資料庫／權限變更、無 migration；前端與 `extract-requirements` 都已提交於 `refactor/product-wide`，仍未合併 `main`、未部署。舊流程沒有上傳頁數時只能核對已儲存資料；24 批上限、OCR、語意漏抽與跨條款理解仍未解決，也尚未用真實契約量測準確率／召回率。
 - 本次本機 72 檔／807 Vitest、42 Demo E2E、production build 通過；Edge 入口 esbuild bundle 通過，不等同 Deno 實機驗證。build 仍有大於 500 kB chunk 警告；未重跑真 Supabase／模型端到端或 pgTAP（本次無 DB 變更）。
 - 交付範圍、驗證與下一階段建議見 [`docs/契約自動整理品質優化-2026-09-08.md`](docs/契約自動整理品質優化-2026-09-08.md)。下方 09-07 報告與部署紀錄保留當日狀態。
 
@@ -123,17 +133,19 @@ contract_packages
 
 ## 6. 目前技術現況
 
-截至 2026-09-02 的盤點（main `ba6ab45`，PR #58）：
+截至 2026-09-11 的盤點（分支 `refactor/product-wide`；最後合併進 `main` 的是 PR #62，之後的 09-08 契約兩批與 09-11 Apple UIUX 四包尚未合併、尚未部署）：
 
 - React 18、Vite 6、Tailwind CSS 4 的靜態 SPA；Sentry 錯誤回報（`src/lib/sentry.js`，DSN 走環境變數）。
 - Supabase Postgres、Auth、RLS、Storage 與 Deno Edge Functions。
 - Cloudflare Workers 靜態資產部署（`wrangler.jsonc`，push 到 `main` 即部署），App 正式站為 <https://app.gov-agent.ai>；apex <https://gov-agent.ai> 是行銷站，見 §1。
-- 39 條登記路由（`routeRegistry`）、40 個業務頁面檔、9 個 Store slices。側欄自 PR #54 起只露出今日待辦／專案文件／契約重點／標單工項四個扁平入口，其餘五個工作面（現場與品質、審查與協作、進度與金流、報表與結案、專案）`hidden: true`——定義、角色限制與深連結全部保留，今日待辦與初始化清單仍會導向隱藏頁；加回一個功能＝移除一行 hidden。
-- 57 個 migrations 建立 51 張資料表、1 個權威 Requirement View；`supabase/migrations/` 是資料庫唯一真相。`supabase/rollbacks/` 只有 4 支 down 檔（`20260712001400`、`20260712001700`、`20260812000500`、`20260901040000`）。
+- 39 條登記路由（`routeRegistry`）、34 個業務頁面檔（`src/pages/web/`，另有 `Login.jsx` 與 `Security.jsx`，總頁面 36）、9 個 Store slices。側欄自 PR #54 起只露出今日待辦／專案文件／契約重點／標單工項四個扁平入口，其餘五個工作面（現場與品質、審查與協作、進度與金流、報表與結案、專案）`hidden: true`（`navConfig.js` 共 6 處 `hidden: true`）——定義、角色限制與深連結全部保留，今日待辦與初始化清單仍會導向隱藏頁；加回一個功能＝移除一行 hidden。commit `2d3068f` 另在工作面之上加了「球在誰手上」群組（現在輪到我／等待對方／今天已完成，走 `?ball=` 不新增路由），側欄不再只有四個扁平入口。
+- 57 個 migrations 建立 51 張資料表、1 個權威 Requirement View；`supabase/migrations/` 是資料庫唯一真相（檔數與最新版本以 `ls supabase/migrations` 為準，最新為 `20260901040000`）。`supabase/rollbacks/` 有 7 支 down 檔（與 §7 債項 5 一致）；補齊三支不等於已演練回復。
 - 17 個已註冊的 AI／整合功能與 17 個 Edge Functions（`assistant.chat` 停用保留；PR #37 新增 `documents.classify`＝`classify-document`）。
-- 71 個 Vitest 測試檔，共 767 個測試；42 個 Playwright Demo E2E（三角色／路由／無障礙／RFI／送審球權）；6 條真 Supabase E2E（auth 冒煙＋四條業務鏈＋檔案檢視 `file-viewing.spec.js`）；33 組 pgTAP SQL 測試（DB 相關變更的 push／PR 自動全套執行）。
+- 72 個 Vitest 測試檔，共 818 個測試；48 個 Playwright Demo E2E（8 檔，三角色／路由／無障礙／RFI／送審球權）；6 條真 Supabase E2E（auth 冒煙＋四條業務鏈＋檔案檢視 `file-viewing.spec.js`）；33 組 pgTAP SQL 測試，`plan()` 加總 927 條斷言（**靜態統計，本輪未實跑**；DB 相關變更的 push／PR 由 CI 自動全套執行）。
 
-最近一次全套驗證（本機，2026-09-02，main `ba6ab45`）：767 Vitest、42 Demo E2E 與 production build 全綠；main 最近 10 次 CI（含 pgTAP workflow）全部成功；`app.gov-agent.ai` 的 `/`、`/login`、`/agent`、`/requirements`、`/security`、`/site-log/print` 均回 200，HSTS／CSP／X-Frame-Options／X-Content-Type-Options／Referrer-Policy／Permissions-Policy／COOP 七項標頭齊全，線上 bundle 已含 PR #58 的 `AnchorDates` chunk。真後端 E2E 最近一次紀錄為 PR #54（6/6）。
+最近一次本機驗證（2026-09-11，分支 `refactor/product-wide`）：72 檔 818 Vitest、48 Demo E2E 與 production build 全綠；`npm audit --omit=dev` 回報 0 漏洞（含 dev 依賴則有 2 個 moderate，都在 `@vitest/mocker`，修復需升 vitest 5 大版）。本輪未跑 pgTAP、未跑真後端 E2E、未連正式環境核對 migration tracker 或 Edge Function 線上版本。Vitest 由 09-08 的 73 檔 820 降為 72 檔 818，是 commit `8b87c9e` 隨圖示字型工具刪除 `src/lib/iconFont.test.js`（2 個測試），不是測試遺失。
+
+前一次在 `main` 上的全套驗證（本機，2026-09-02，main `ba6ab45`）：767 Vitest、42 Demo E2E 與 production build 全綠；main 最近 10 次 CI（含 pgTAP workflow）全部成功；`app.gov-agent.ai` 的 `/`、`/login`、`/agent`、`/requirements`、`/security`、`/site-log/print` 均回 200，HSTS／CSP／X-Frame-Options／X-Content-Type-Options／Referrer-Policy／Permissions-Policy／COOP 七項標頭齊全，線上 bundle 已含 PR #58 的 `AnchorDates` chunk。真後端 E2E 最近一次紀錄為 PR #54（6/6）。
 
 **正式資料庫 migration 已核對（2026-09-02，`supabase migration list --linked`，project `buylyonwoyvqdbvkkkbx`）**：本機 57 支與遠端 57 筆逐一相符，遠端最新為 `20260901040000`，沒有只在一邊的版本。2026-08-19 之後合併的 18 支（含 PR #34、#42、#56、#57 註明「merge 不會自動套」的那幾支）都已套用；PR #50 收編的 `20260824123253` 在遠端有對應列。Edge Function 線上版本仍未逐支核對，最後一次文件紀錄是 PR #48（extract-requirements／agent-run／send-reminders）與 PR #51（extract-requirements）重佈。
 
@@ -218,7 +230,7 @@ W8-5 由 PR #19 交付並部署，W8（W8-1～W8-5）全數完成：手機觸控
 ### 6.1 前端資料存取規則
 
 - 跨頁共享、需要同步更新的資料放 Store。
-- `Contract`、`Requirements`、`Activity` 的資料只在各自頁面使用，因此保留有界的頁面查詢。
+- 目前直接查 Supabase 的頁面有五個：`Contract`、`Requirements`、`RequirementsReview`、`Activity`，以及 `Dashboard`（只為初始化清單第 1／3 步各查一個 `count: 'exact', head: true`，見 `Dashboard.jsx:93`）。這些資料只在各自頁面使用，因此保留有界的頁面查詢。
 - 純計算與重複查詢才放 `src/lib` 或 `src/store/db.js`。
 - 同一段查詢沒有重複前，不新增 repository、service 或額外 Store slice。
 
@@ -247,6 +259,7 @@ W8-5 由 PR #19 交付並部署，W8（W8-1～W8-5）全數完成：手機觸控
 | 尚未核准的候選改動 | `docs/ROADMAP.md`；不得當成現況或實作授權 |
 | 長期產品北極星 | `docs/北極星-政府機關-Agent-平台.md` |
 | AI 協作入口 | `AGENTS.md`；細節仍以 `DEVELOPMENT.md` 為準 |
+| UI/UX 設計規範 | `docs/UIUX-Apple-設計規範.md`（D-021，2026-09-11 起取代 W9 的 Google／Material 3 handoff） |
 | 前端頁面與元件對應 | `src/App.jsx` |
 | 路由登記、導覽、分頁與前端角色限制 | `src/lib/navConfig.js` 的 `routeRegistry`／`navGroups` |
 | 今日待辦的三段聚合、球權與完成條件 | `src/lib/todayTasks.js`（Dashboard 與 `/alerts` 共用；協作項球權仍在 `src/lib/ballInCourt.js`） |
