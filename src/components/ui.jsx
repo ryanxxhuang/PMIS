@@ -162,10 +162,14 @@ export function Dot({ color = 'slate', size = 7, className = '' }) {
 // max-md:min-h-11:手機主要操作至少 44px(W8-5)。斷點必須跟「手機層」一致——
 // BottomNav 是 md:hidden(<768),所以觸控目標也走 max-md;W9 初版寫成 max-sm(<640)
 // 會讓 640-767(iPad mini 直式 744px)拿到手機版面卻是桌機尺寸的觸控目標。
+// max-md:min-w-11:44×44 是最小「面積」不是最小高度(規範 §9.2)。稽核量到的 <44
+// 幾乎全是寬度——純圖示鈕(/itp 刪除 32×44、/acceptance 修改 32×44)只有 padding
+// 撐寬。文字鈕本來就 >44 寬,min-w 對它們是 no-op;shrink-0+nowrap 的鈕不參與
+// flex 收縮,min-w 不會改變任何既有版面。
 const BTN_SIZES = {
-  sm: 'h-7 px-3 text-footnote gap-1 rounded-lg max-md:min-h-11',
-  md: 'h-8 px-4 text-body gap-1.5 rounded-lg max-md:min-h-11',
-  lg: 'h-10 px-5 text-callout gap-2 rounded-[10px] max-md:min-h-11',
+  sm: 'h-7 px-3 text-footnote gap-1 rounded-lg max-md:min-h-11 max-md:min-w-11',
+  md: 'h-8 px-4 text-body gap-1.5 rounded-lg max-md:min-h-11 max-md:min-w-11',
+  lg: 'h-10 px-5 text-callout gap-2 rounded-[10px] max-md:min-h-11 max-md:min-w-11',
 }
 const BTN_VARIANTS = {
   primary: 'bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)]',
@@ -212,6 +216,9 @@ export const Button = forwardRef(function Button({ variant = 'primary', size = '
 // 焦點環包整個控件,不包單一段。
 // overflow-x-auto + max-w-full:選項多於手機寬度時在控件內捲,不撐寬頁面
 // (e2e 全路由 375px 的 scrollWidth 斷言)。
+// 每段 max-md:min-w-11:44 是最小面積(規範 §9.2),單字段(「月」「週」)只靠 padding
+// 撐不到 44 寬;justify-center 讓 min-w 咬到時標籤仍置中——桌機段寬由內容決定,
+// justify-center 在那裡是 no-op。
 // ...rest 直通 tablist 根節點:呼叫端要給 aria-label,無名的 tablist 對報讀器只是「分頁」。
 const SEG_SIZES = {
   sm: 'h-6 px-2.5 text-footnote',
@@ -246,7 +253,7 @@ export function Segmented({ value, onChange, options, size = 'md', className = '
             tabIndex={on || (idx < 0 && i === 0) ? 0 : -1}
             ref={(el) => { refs.current[i] = el }}
             onClick={() => onChange?.(o.value)}
-            className={`${SEG_SIZES[size] || SEG_SIZES.md} max-md:min-h-11 shrink-0 inline-flex items-center gap-1 rounded-[7px] font-medium whitespace-nowrap pressable
+            className={`${SEG_SIZES[size] || SEG_SIZES.md} max-md:min-h-11 max-md:min-w-11 shrink-0 inline-flex items-center justify-center gap-1 rounded-[7px] font-medium whitespace-nowrap pressable
               focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-[var(--focus)]
               ${on ? 'bg-[var(--surface)] text-[var(--text)] [box-shadow:var(--shadow-card)]' : 'text-[var(--text-2)] hover:text-[var(--text)]'}`}>
             {o.label}
@@ -384,10 +391,11 @@ export function SortableTh({ label, field, sort, onSort, numeric = false, align 
 // 兩邊現在都是 text-body(PageTabs 的 CHIP_BASE 已換成階梯名),字面值逐字對齊。
 // 圓角維持 8px。
 // 同一顆 button 負責套用與移除(aria-pressed 供報讀器分辨),close 只是視覺提示。
+// max-md:min-w-11:44 是最小面積(規範 §9.2);帶圖示的 chip 本來就 >44 寬,這是防呆。
 export function FilterChip({ label, icon = 'filter_list', active = false, onToggle }) {
   return (
     <button type="button" aria-pressed={active} onClick={onToggle}
-      className={`h-8 max-md:min-h-11 shrink-0 inline-flex items-center gap-1.5 px-3.5 rounded-lg text-body font-medium whitespace-nowrap pressable ${active
+      className={`h-8 max-md:min-h-11 max-md:min-w-11 shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 rounded-lg text-body font-medium whitespace-nowrap pressable ${active
         ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
         : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'}`}>
       {!active && <MSym name={icon} size={16} />}
@@ -401,6 +409,8 @@ export function FilterChip({ label, icon = 'filter_list', active = false, onTogg
 // 不可用的箭頭降 --border 且 disabled;頁碼 0-based,對外顯示才 +1。
 // 箭頭鈕維持正圓(rounded-full):按鈕去藥丸只針對文字鈕,Apple 的純圖示鈕本來就是正圓。
 // select 用裸樣式而非 FIELD_BASE——這裡要的是行內小控件,不是全寬表單欄位。
+// select 也補 max-md:min-w-11:兩位數字+px-1 只有 ~36 寬,44 是最小面積(規範 §9.2);
+// 箭頭鈕原本就 min-w-11。
 // disabled=true 供伺服器分頁的表在載入中整組鎖住(client-side 表用不到)。
 export function TablePager({ page, pageSize, total, onPage, onPageSize, sizes = [10, 25, 50], disabled = false, className = '' }) {
   const start = total === 0 ? 0 : page * pageSize + 1
@@ -414,7 +424,7 @@ export function TablePager({ page, pageSize, total, onPage, onPageSize, sizes = 
         每頁列數
         <select value={pageSize} disabled={disabled} aria-label="每頁列數"
           onChange={(e) => onPageSize(Number(e.target.value))}
-          className="num bg-transparent border border-[var(--border)] rounded-md px-1 py-0.5 max-md:min-h-11 text-body text-[var(--text)] disabled:opacity-50">
+          className="num bg-transparent border border-[var(--border)] rounded-md px-1 py-0.5 max-md:min-h-11 max-md:min-w-11 text-body text-[var(--text)] disabled:opacity-50">
           {sizes.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </label>

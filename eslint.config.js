@@ -23,7 +23,10 @@ export default [
     ignores: ['dist/**', 'node_modules/**', 'playwright-report/**', 'test-results/**',
       // Deno edge functions:跑的是 Deno runtime(npm:/jsr: import、Deno 全域),
       // 用 Node 的 parser 掃會誤報;CI 另跑 npm run check:edge。
-      'supabase/functions/**'],
+      'supabase/functions/**',
+      // 子代理的 git worktree 住在 repo 底下(gitignored),裡面是整份 repo 的副本;
+      // 不忽略的話本機 lint 會把別的 session 的工作也掃進來(實測 3000+ 錯全來自這裡)。
+      '.claude/**'],
   },
   js.configs.recommended,
   {

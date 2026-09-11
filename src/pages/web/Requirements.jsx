@@ -810,11 +810,15 @@ export default function Requirements() {
         const s = phaseStat(pool, g.key, phaseWin.nowPhase)
         return (
           <div key={g.key}>
-            <div className="flex items-center gap-3 px-[18px] pt-[13px] pb-[11px] bg-[var(--bg)] border-b border-[var(--border-2)]">
+            {/* flex-wrap:三段 nowrap 文字(期程名/日期區間/件數註記)在手機階梯(caption 13、
+                footnote 15)下加起來 >341px,是 375 全路由掃描唯一紅的一處。註記段 ml-auto:
+                掉到第二行時靠右,與桌機「註記在右端」的閱讀位置一致;桌機第一行的剩餘空間
+                全被 flex-1 髮絲線吃掉,ml-auto 拿到 0,版面不變。 */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-[18px] pt-[13px] pb-[11px] bg-[var(--bg)] border-b border-[var(--border-2)]">
               <span className="text-footnote font-medium text-[var(--text)] whitespace-nowrap">{g.name}</span>
               <span className="num text-caption text-[var(--text-2)] whitespace-nowrap">{phaseWin.ranges[g.key]}</span>
               <span className="flex-1 h-px bg-[var(--border-2)]" aria-hidden />
-              <span className={`num text-caption whitespace-nowrap ${TONE_CLS[s.tone]}`}>{s.note}</span>
+              <span className={`num text-caption whitespace-nowrap ml-auto ${TONE_CLS[s.tone]}`}>{s.note}</span>
             </div>
             {g.items.map((it) => {
               const active = it.id === selectedId

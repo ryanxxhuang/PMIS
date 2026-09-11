@@ -218,7 +218,10 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
       <div className="flex items-center gap-2 md:gap-3 min-w-0 shrink-0">
         {/* 44px 觸控目標:漢堡鈕只在手機出現,直接升到 w-11;ref 供抽屜關閉時焦點還原 */}
         <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name="menu" size={22} /></button>
-        <NavLink to={defaultLandingPath(currentUser?.org_type)} aria-label="GovAgent 公共工程首頁" className="flex items-center gap-1.5 shrink-0">
+        {/* 44px 觸控目標:品牌連結稽核量到 102×24——寬夠、高只有圖示的 24。max-md:h-11 撐高,
+            header 是 flex items-center 且比 44 高,連結沒有底色,撐高後視覺位置一個像素都不動,
+            所以這裡不需要負 margin(那招是給「有 padding 撐寬」的鈕吸收水平間距用的)。 */}
+        <NavLink to={defaultLandingPath(currentUser?.org_type)} aria-label="GovAgent 公共工程首頁" className="flex items-center gap-1.5 shrink-0 max-md:h-11 max-md:min-w-11">
           <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-6 h-6 dark:hidden" />
           <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-6 h-6 hidden dark:block" />
           <span className="text-title3 font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
@@ -243,8 +246,11 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
             <div className="text-caption text-[var(--text-2)] whitespace-nowrap">{currentUser?.label}</div>
           </div>
         </div>
-        {/* 44px 觸控目標:純文字鈕撐高、負 margin 吸收 padding,視覺間距不變 */}
-        <button onClick={async () => { await logout(); navigate('/login') }} className="inline-flex items-center h-11 px-2 text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
+        {/* 44px 觸控目標:純文字鈕撐高(h-11)、px-2 撐寬。稽核量到 42×44——兩個字在桌機
+            13px 只有 26 寬,+16 padding 差 2px。max-md:min-w-11 把面積補到 44×44(規範 §9.2);
+            justify-center 讓 min-w 咬到時文字仍置中。手機階梯下兩個字 34 寬,+16 已是 50,
+            min-w 實際不會咬到,所以視覺間距不變、不需要負 margin 吸收。 */}
+        <button onClick={async () => { await logout(); navigate('/login') }} className="inline-flex items-center justify-center h-11 max-md:min-w-11 px-2 text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
       </div>
     </header>
   )

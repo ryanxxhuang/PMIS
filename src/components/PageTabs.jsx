@@ -10,7 +10,9 @@ import { visibleNavGroups } from '../lib/navConfig.js'
 // chips 皮膚常數:Admin 頁內真 tabs(role=tablist)與這裡共用同一套,
 // 「兩排都是切換」的視覺意圖不因只改一邊而漂移。
 // 不放 ui.jsx——PageHeader→PageTabs 已成鏈,反向 import 會成環。
-export const CHIP_BASE = 'h-8 max-md:min-h-11 shrink-0 inline-flex items-center px-3.5 rounded-lg text-body font-medium whitespace-nowrap pressable'
+// max-md:min-w-11 + justify-center 與 ui.jsx 的 FilterChip 同步補(規範 §9.2 的 44 面積);
+// 兩處字面值刻意對齊,改一邊另一邊要跟。
+export const CHIP_BASE = 'h-8 max-md:min-h-11 max-md:min-w-11 shrink-0 inline-flex items-center justify-center px-3.5 rounded-lg text-body font-medium whitespace-nowrap pressable'
 export const CHIP_ON = 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
 export const CHIP_OFF = 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
 

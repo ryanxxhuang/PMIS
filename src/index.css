@@ -83,6 +83,64 @@
   --text-lg--letter-spacing: var(--text-title3--letter-spacing);
 }
 
+/* 手機字級:同名不同值,走 iOS Dynamic Type 預設級距(規範 §9.1)。
+   macOS 階梯(body 13)是給坐辦公室看表格的;手機使用者在工地太陽下戴手套,
+   稽核量到可見文字六成 <13px。這裡是**全站唯一**的手機字級覆寫點,不改名、不加 class。
+
+   為什麼能生效:Tailwind 4 的 text-body 等 utility 輸出的是 font-size: var(--text-body)
+   (不是把 13px 內嵌進去),而 @theme 的變數宣告落在 @layer theme 的 :root 上;
+   本區塊是 unlayered 規則,cascade 上 unlayered 永遠壓過任何 @layer,所以同一個
+   :root 選擇器在這裡重宣告就能蓋掉 theme 層的值——與本檔其他 :root/.dark 覆寫同一個道理。
+   text-xs/sm/base/lg 別名寫的是 var(--text-footnote) 等,計算時再解析,自動跟著走。
+   ⚠️ 若有人把 @theme 改成 @theme inline,utility 會內嵌字面值,這裡就整個失效——
+   build 後到 dist/assets/*.css 確認 .text-body 仍是 var(--text-body)。
+
+   為什麼是 767.98:手機層的邊界是 md(768)——BottomNav 是 md:hidden、觸控目標走
+   max-md,Tailwind 4 的 max-md 是 (width < 48rem)(build 後 Lightning CSS 降級成
+   not all and (min-width:48rem),語意同樣是 <768);這裡用 max-width 寫法要避開 768
+   本身,取 767.98 與它等價(.98 是 Bootstrap 沿用的小數位,避免 768.0 兩邊都命中)。
+
+   callout 與 body 同值(17):iOS 的 callout(16)本來就小於 body(17),取等值保住
+   「callout ≥ body」的階梯順序;callout 的強調靠 font-medium,不靠尺寸。
+   title2/title1 不放大:22/28 已是 iOS 的 title2/title1 原值。字距取 SF 的 tracking 表:
+   小字負、大字正(與桌機階梯方向相反,因為 SF Text/Display 的 optical size 不同)。
+   顏色一個都不動,§2 的對比值全部沿用。 */
+@media (max-width: 767.98px) {
+  :root {
+    --text-micro: 12px;
+    --text-micro--line-height: 16px;
+    --text-micro--letter-spacing: 0em;
+
+    --text-caption: 13px;
+    --text-caption--line-height: 18px;
+    --text-caption--letter-spacing: -0.006em;
+
+    --text-footnote: 15px;
+    --text-footnote--line-height: 20px;
+    --text-footnote--letter-spacing: -0.016em;
+
+    --text-body: 17px;
+    --text-body--line-height: 22px;
+    --text-body--letter-spacing: -0.025em;
+
+    --text-callout: 17px;
+    --text-callout--line-height: 22px;
+    --text-callout--letter-spacing: -0.025em;
+
+    --text-title3: 20px;
+    --text-title3--line-height: 25px;
+    --text-title3--letter-spacing: 0.019em;
+
+    --text-title2: 22px;
+    --text-title2--line-height: 28px;
+    --text-title2--letter-spacing: 0.016em;
+
+    --text-title1: 28px;
+    --text-title1--line-height: 34px;
+    --text-title1--letter-spacing: 0.013em;
+  }
+}
+
 /* dark: 變體綁 .dark class(theme.js 三態都經由它),不是 prefers-color-scheme——
    否則手動選亮色時 dark: utilities 仍跟著 OS 走,兩套判定打架。 */
 @custom-variant dark (&:where(.dark, .dark *));

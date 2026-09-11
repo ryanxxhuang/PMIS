@@ -113,9 +113,11 @@ export function ModalShell({ open, onClose, title, label = title, size = 'md', c
 // (3px 光暈+1px 主色描邊)掛在 focus-within,input 自己 outline-none。
 // 8px 圓角:藥丸退場(規範 §4),capsule 不再給文字控件。
 // ref 直通 input:頁面的「/」快捷鍵要能聚焦它。
+// h-10 是桌機的 40;手機 max-md:h-11 補到 44(規範 §9.2)——稽核量到七個清單頁的
+// 搜尋欄全在 44 以下,因為整顆高度寫死、沒走 FIELD_BASE 的 max-md:min-h-11。
 export const SearchField = forwardRef(function SearchField({ value, onChange, placeholder, className = '', ...props }, ref) {
   return (
-    <label className={`flex items-center gap-2.5 h-10 px-3.5 border border-[var(--border)] rounded-lg bg-[var(--surface)] transition-colors focus-within:outline-[3px] focus-within:outline-offset-0 focus-within:outline-[var(--focus-glow)] focus-within:border-[var(--focus)] ${className}`}>
+    <label className={`flex items-center gap-2.5 h-10 max-md:h-11 px-3.5 border border-[var(--border)] rounded-lg bg-[var(--surface)] transition-colors focus-within:outline-[3px] focus-within:outline-offset-0 focus-within:outline-[var(--focus-glow)] focus-within:border-[var(--focus)] ${className}`}>
       <MSym name="search" size={20} className="text-[var(--text-3)] shrink-0" />
       <input ref={ref} type="search" value={value} onChange={onChange} placeholder={placeholder}
         className="flex-1 min-w-0 bg-transparent border-0 outline-none text-body text-[var(--text)] placeholder:text-[var(--text-3)]" {...props} />
@@ -127,10 +129,12 @@ export const SearchField = forwardRef(function SearchField({ value, onChange, pl
 // FilterChip 是「套用/移除」語意(帶 filter_list/close 圖示),Segmented 是 role=tablist
 // (e2e/routes.spec.js 釘 /requirements 的 tablist 數為 0,而且它是給顯示模式用的)。
 // 8px 圓角:藥丸退場。children 放圓點+文字(顏色不可單獨承載語意,規範 §2)。
+// max-md:min-w-11:44 是最小面積(規範 §9.2);單字狀態(「全部」是兩字,但呼叫端可能
+// 只給圓點)靠 px-3 撐不到 44 寬,justify-center 讓咬到 min-w 時內容仍置中。
 export function StatusChip({ active, onClick, count, children, className = '' }) {
   return (
     <button type="button" aria-pressed={active} onClick={onClick}
-      className={`h-[30px] px-3 rounded-lg border text-footnote font-medium inline-flex items-center gap-1.5 pressable max-md:min-h-11 ${active
+      className={`h-[30px] px-3 rounded-lg border text-footnote font-medium inline-flex items-center justify-center gap-1.5 pressable max-md:min-h-11 max-md:min-w-11 ${active
         ? 'border-[var(--primary)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
         : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:bg-[var(--bg)]'} ${className}`}>
       {children}
