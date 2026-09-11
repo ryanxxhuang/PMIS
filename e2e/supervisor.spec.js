@@ -17,9 +17,13 @@ test.describe('監造', () => {
   test('查驗:判不合格(必填原因)→ 自動開立缺失', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/quality')
-    // 鎖定「4F 柱牆鋼筋查驗」那一列的不合格鈕(頁上有多筆待查驗;查驗列是 <li>)
+    // 清單＋詳情殼:列只負責選取,判定鈕在詳情欄。先選中「4F 柱牆鋼筋查驗」那一列
+    // (頁上有多筆待查驗;查驗列是 listitem),再在以項目命名的 region 按不合格
     const row = page.getByRole('listitem').filter({ hasText: '4F 柱牆鋼筋查驗' })
-    await row.getByRole('button', { name: '不合格' }).click()
+    await row.click()
+    const detail = page.getByRole('region', { name: '4F 柱牆鋼筋查驗 詳情' })
+    await expect(detail.getByRole('button', { name: '合格', exact: true })).toBeVisible()
+    await detail.getByRole('button', { name: '不合格', exact: true }).click()
     // appPrompt 對話框:原因必填,空白時確認鈕鎖住
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText(/判定不合格：/)).toBeVisible()
