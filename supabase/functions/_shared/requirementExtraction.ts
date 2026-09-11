@@ -9,8 +9,6 @@
 // * deterministic per-run suggestion IDs so retrying a persistence step inside
 //   the same run cannot insert duplicates.
 
-export const PROMPT_VERSION = 'extract-requirements/v3'
-
 // Vocabulary mirrors the P0-01 requirement domain (src/lib/requirements.js and
 // the requirements table CHECK constraints) plus the legacy contract phase /
 // trigger vocabulary already used by contract_obligations and lib/contractDue.
@@ -31,7 +29,7 @@ export const OFFSET_DIRS = ['before', 'after'] as const
 //   monthly   — { day: 1..31 }
 //   quarterly — { month: 1..3(季內第幾個月), day: 1..31 }
 //   yearly    — { month: 1..12, day: 1..31 }
-// 值域改動要同步:extract-requirements 的 SUGGESTION_SCHEMA、前端
+// 值域改動要同步:requirementPrompt.ts 的 SUGGESTION_SCHEMA(並升 PROMPT_VERSION)、前端
 // formatRequirementRule/手動新增表單、materialize_requirement_obligation(migration)
 // 與兩份 contractDue 的下次到期日計算。
 export const FREQUENCY_TYPES = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const
