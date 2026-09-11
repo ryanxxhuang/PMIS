@@ -138,7 +138,7 @@ contract_packages
 - React 18、Vite 6、Tailwind CSS 4 的靜態 SPA；Sentry 錯誤回報（`src/lib/sentry.js`，DSN 走環境變數）。
 - Supabase Postgres、Auth、RLS、Storage 與 Deno Edge Functions。
 - Cloudflare Workers 靜態資產部署（`wrangler.jsonc`，push 到 `main` 即部署），App 正式站為 <https://app.gov-agent.ai>；apex <https://gov-agent.ai> 是行銷站，見 §1。
-- 39 條登記路由（`routeRegistry`）、34 個業務頁面檔（`src/pages/web/`，另有 `Login.jsx` 與 `Security.jsx`，總頁面 36）、9 個 Store slices。側欄自 PR #54 起只露出今日待辦／專案文件／契約重點／標單工項四個扁平入口，其餘五個工作面（現場與品質、審查與協作、進度與金流、報表與結案、專案）`hidden: true`（`navConfig.js` 共 6 處 `hidden: true`）——定義、角色限制與深連結全部保留，今日待辦與初始化清單仍會導向隱藏頁；加回一個功能＝移除一行 hidden。commit `2d3068f` 另在工作面之上加了「球在誰手上」群組（現在輪到我／等待對方／今天已完成，走 `?ball=` 不新增路由），側欄不再只有四個扁平入口。
+- 39 條登記路由（`routeRegistry`）、34 個業務頁面檔（`src/pages/web/`，另有 `Login.jsx` 與 `Security.jsx`，總頁面 36）、9 個 Store slices。側欄自 PR #54 起只露出今日待辦／專案文件／契約重點／標單工項四個扁平入口，其餘五個工作面（現場與品質、審查與協作、進度與金流、報表與結案、專案）`hidden: true`（5 個定義，`navConfig.test.js` 釘住集合；`grep -c` 數到 6 是連檔頭註解一起算進去了）——定義、角色限制與深連結全部保留，今日待辦與初始化清單仍會導向隱藏頁；加回一個功能＝移除一行 hidden。commit `2d3068f` 另在工作面之上加了「球在誰手上」群組（現在輪到我／等待對方／今天已完成，走 `?ball=` 不新增路由），側欄不再只有四個扁平入口。
 - 57 個 migrations 建立 51 張資料表、1 個權威 Requirement View；`supabase/migrations/` 是資料庫唯一真相（檔數與最新版本以 `ls supabase/migrations` 為準，最新為 `20260901040000`）。`supabase/rollbacks/` 有 7 支 down 檔（與 §7 債項 5 一致）；補齊三支不等於已演練回復。
 - 17 個已註冊的 AI／整合功能與 17 個 Edge Functions（`assistant.chat` 停用保留；PR #37 新增 `documents.classify`＝`classify-document`）。
 - 72 個 Vitest 測試檔，共 818 個測試；48 個 Playwright Demo E2E（8 檔，三角色／路由／無障礙／RFI／送審球權）；6 條真 Supabase E2E（auth 冒煙＋四條業務鏈＋檔案檢視 `file-viewing.spec.js`）；33 組 pgTAP SQL 測試，`plan()` 加總 927 條斷言（**靜態統計，本輪未實跑**；DB 相關變更的 push／PR 由 CI 自動全套執行）。

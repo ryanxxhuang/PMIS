@@ -37,10 +37,23 @@ describe('gateVerdict:D-010 fail-closed', () => {
     }
   })
 
-  it('恢復後正常:allowed=true → 放行;null(未登記功能的既有行為)→ 放行', () => {
+  it('恢復後正常:只有明確的 true 才放行', () => {
     expect(gateVerdict('X', true, false)).toEqual({ allow: true })
-    expect(gateVerdict('X', null, false)).toEqual({ allow: true })
-    expect(gateVerdict('X', undefined, false)).toEqual({ allow: true })
+  })
+
+  // 原本這裡斷言 null/undefined → 放行,理由寫「ai_feature_allowed 對未登記功能
+  // 回 null」。2026-09-11 實查該函式對未登記 key 回的是 false,前提不成立 ——
+  // 那條分支沒有任何已知觸發路徑,卻會在「RPC 說成功卻沒給答案」時放行,
+  // 與 D-010 相反。收成擋下後,這支測試就是防止它被改回去的護欄。
+  it('RPC 成功卻回 null/undefined:閘門沒作用,照 D-010 往擋的方向倒', () => {
+    for (const v of [gateVerdict('X', null, false), gateVerdict('X', undefined, false)]) {
+      expect(v.allow).toBe(false)
+      if (!v.allow) {
+        // 503 而非 403:我們並不知道平台是否真的關了這個功能,不能謊稱「已明確關閉」
+        expect(v.code).toBe('gate_unavailable')
+        expect(v.status).toBe(503)
+      }
+    }
   })
 })
 

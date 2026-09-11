@@ -11,7 +11,7 @@
 - **UIUX 已改 Apple style（D-021，2026-09-11 定案）**：單一真相是 `docs/UIUX-Apple-設計規範.md`，W9 的 Google／Material 3 handoff 已標 `SUPERSEDED`。落地點是收件匣（側欄有「球在誰手上」三個桶，走 `?ball=`）、圖示是 `lucide-react`、字級走七階。寫任何 UI 前先讀那份規範。
 - **已定案決策到 D-021**（`docs/DECISIONS.md`）：D-017 契約重點是「確認轉錄」不是「核定生效」；D-019 AI 整理全自動確認歸檔、核對結果只是透明度註記；D-020 任何已核定 Requirement 都物化一列義務（無時點＝「未觸發」）。寫契約重點相關程式前先讀這三條，舊文案「待核定／核定生效」已退場。
 - **`/requirements` 現在是「契約重點 · 履約時程」三方共用檢視頁（PR #55）**，本頁不做審核；規則在 `src/lib/obligationTimeline.js`，可見範圍看角色、動作只看歸屬；`VISIBLE` 表是前端 shim 不是安全邊界。期限管理動作在 `/deadlines`。
-- **側欄仍是精修期最小表面（PR #54）**：工作面只露今日待辦／專案文件／契約重點／標單工項；其餘五個 `hidden: true`（`navConfig.js` 共 6 處），定義、角色限制、路由與深連結全部保留。要加回功能＝移除一行 hidden，不要重建導覽。
+- **側欄仍是精修期最小表面（PR #54）**：工作面只露今日待辦／專案文件／契約重點／標單工項；其餘五個 `hidden: true`（`navConfig.js` 有 5 個定義，`navConfig.test.js` 釘住這個集合；`grep -c` 會數到 6 是因為檔頭註解也含這個字串），定義、角色限制、路由與深連結全部保留。要加回功能＝移除一行 hidden，不要重建導覽。
 - **部署位置**：App 在 `app.gov-agent.ai`（Cloudflare Workers，push `main` 即部署）；apex `gov-agent.ai` 是 `PMIS.marketing` 的行銷站，App 路由在 apex 會 404，冒煙測試要打 `app.` 子網域。品牌字樣目前是 GovAgent（PR #24 改 PMIS 後於 08-25 改回）。
 - **正式庫 migration 最後一次核對是 2026-09-02**：當時本機 57 支＝遠端 57 筆，遠端最新 `20260901040000`；之後未重核，Edge Function 線上版本從未逐支核對。每次套 migration 或重佈 Edge Function，版本號要寫回 `CURRENT.md` §6（DEVELOPMENT.md 完成定義第 3 條）；動 DB 前先跑 `supabase migration list --linked` 看一眼。
 - **基線（2026-09-11 本機實測）**：72 檔 818 Vitest、48 Demo E2E、production build 全綠，`npm audit --omit=dev` 0 漏洞。**Vitest 由 09-08 的 73 檔 820 降為 72 檔 818，是 `8b87c9e` 刪掉 `src/lib/iconFont.test.js`（2 個測試）隨圖示字型工具一起退場，不是測試遺失。** pgTAP 33 檔、`plan()` 加總 927 條是靜態統計，本輪未實跑；真後端 E2E 最近紀錄仍是 PR #54（6/6）。
