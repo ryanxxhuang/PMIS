@@ -10,9 +10,8 @@
 | 驗證結果／指令 | [BASELINE](BASELINE.md) |
 | UI／設計來源 | [Apple 規範](UIUX-Apple-設計規範.md)、[設計原檔](../UIUX/design_apple_style/README.md) |
 | 部署／後端／真後端 E2E | [部署](operations/deploy.md)、[Supabase](../supabase/SETUP.md)、[E2E](REAL_BACKEND_E2E.md) |
-| 真案與手機驗收 | [真案檢查清單](上線前-真案-dry-run-檢查清單-2026-07-13.md)、[三角色驗收](W8-5-三角色真實使用者驗收清單-2026-08-15.md)（使用前依現況校正） |
+| 備份與還原 | [備份 runbook](operations/backup.md) |
 | 長期方向 | [北極星](北極星-政府機關-Agent-平台.md) |
 | 資安／採購 | `資安/`、`採購/`（有日期的證據不能當即時符合性聲明） |
-| 簡報重建 | [操作說明](pitch/pptx/README.md)、[青創進駐](pitch/pptx/README-青創進駐.md) |
 
-已被現況、Decision 或架構取代的 PRD／SCOPE、日期式開發報告、舊 UI handoff 與重複目錄樹已刪除。歷史可用 `git log -- <路徑>` 或 `git show c39e395:<路徑>` 取得。交付內容寫 commit／PR，不再新增一份日期式續接報告。
+已被現況、Decision 或架構取代的 PRD／SCOPE、日期式開發報告、驗收清單、舊 UI handoff 與重複目錄樹已刪除；簡報素材（截圖、pptx 產生器）已移至 `PMIS.marketing` repo 的 `docs/pitch/`。真案驗收項目集中在 [ROADMAP](ROADMAP.md)。歷史可用 `git log -- <路徑>` 或 `git show c39e395:<路徑>` 取得。交付內容寫 commit／PR，不再新增一份日期式續接報告。

@@ -59,10 +59,10 @@ export default [
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {
-    // 簡報建置腳本:CommonJS + Node,不是前端模組。
-    // 只套 .cjs:package.json 是 "type": "module",同目錄的 .js/.mjs(shots.js)本來就是 ESM,
-    // 走上面的預設區塊;硬標 commonjs 會直接 parse error。
-    files: ['docs/pitch/pptx/**/*.cjs', 'scripts/**/*.cjs'],
+    // CommonJS 的 Node 腳本(.cjs):package.json 是 "type": "module",同目錄的 .js/.mjs
+    // 本來就是 ESM 走上面的預設區塊;硬標 commonjs 會直接 parse error。
+    // (簡報建置腳本已隨 docs/pitch 移至 PMIS.marketing repo。)
+    files: ['scripts/**/*.cjs'],
     languageOptions: { sourceType: 'commonjs', globals: { ...globals.node } },
   },
   {

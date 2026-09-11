@@ -99,7 +99,7 @@ done
 curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security|x-frame|x-content-type|referrer-policy|permissions-policy|cross-origin-opener"
 ```
 
-2026-09-02 基線：六條路由皆 200（SPA fallback），七項安全標頭齊全（HSTS／CSP／X-Frame-Options／X-Content-Type-Options／Referrer-Policy／Permissions-Policy／COOP）。HTTP 標頭檢查**不代表登入後業務流程驗收**；真案驗收走 [`../上線前-真案-dry-run-檢查清單-2026-07-13.md`](../上線前-真案-dry-run-檢查清單-2026-07-13.md)。
+2026-09-02 基線：六條路由皆 200（SPA fallback），七項安全標頭齊全（HSTS／CSP／X-Frame-Options／X-Content-Type-Options／Referrer-Policy／Permissions-Policy／COOP）。HTTP 標頭檢查**不代表登入後業務流程驗收**；真案驗收項目見 [ROADMAP](../ROADMAP.md) 與 CURRENT §6.2。
 
 可加驗：線上 bundle 是否含本次新 chunk（例如 PR #58 以 `AnchorDates` chunk 名確認）。
 
