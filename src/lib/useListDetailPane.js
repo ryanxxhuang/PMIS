@@ -12,12 +12,38 @@
 // - Enter 落在 button/link 上讓原生 click 走,不搶;
 // - 抽屜/全螢幕只屬於 <lg:桌機點列不留 detailOpen 殘值,縮窗才不會突然彈出遮罩。
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 // 「<lg」的 JS 版本,必須等於 Tailwind 的 lg(1024)——listDetail.jsx 的 DetailDrawer
 // 寫的是 `lg:hidden`,兩邊不一致會出現「JS 認為要開抽屜、CSS 卻把抽屜藏起來」的
 // 死狀態(1024px 整數點最容易踩到,所以上界寫 1023.98 而不是 1024)。
 const BELOW_LG_QUERY = '(max-width: 1023.98px)'
+
+// 改寫 URL query 的共用件。不用 react-router 的 setSearchParams(fn):它給 fn 的是「這次
+// render 的快照」,不是當下的 URL。同一頁掛兩個殼(/safety:缺失 ?defect= 與工安紀錄
+// ?record=)時,兩支 hook 的掛載 effect 在同一個 commit 先後寫——第二支拿的仍是舊快照,
+// 會把第一支剛寫進去的參數蓋掉(實測 /safety 開頁後 URL 只剩 ?record=,缺失的預設選取
+// 沒寫進去;切案重置時更會留下他案的舊 id)。
+// 解法:記住「最後一次寫出的 search」與它是從哪一個 location 物件算出來的。同一個
+// commit 內所有殼拿到的是同一個 location 物件(Router 的 context 只在 location 變時換新),
+// 物件相同=router 還沒跟上,就以最後寫出的為基底;物件換了(router 已跟上、或換頁了)
+// 就自然作廢,不需要清。模組層而非 context:不必為此在 App 外再包一層 provider。
+// 讀也走同一份:切 scope 的重置與重新選取在同一個 commit,重選若讀 render 快照會把
+// 剛刪掉的深連結又撿回來。
+let lastWrite = null
+function useLiveSearch() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const read = useCallback(() => (lastWrite?.loc === location ? lastWrite.next : location.search), [location])
+  const write = useCallback((mutate) => {
+    const n = new URLSearchParams(read())
+    mutate(n)
+    lastWrite = { loc: location, next: n.toString() }
+    // 相對路徑 "?x=1" 保住目前 pathname、清 hash;replace 不炸掉瀏覽歷史(與 setSearchParams 同義)
+    navigate(`?${n}`, { replace: true })
+  }, [location, navigate, read])
+  return [read, write]
+}
 
 // param:URL 單條連結的 query 名(?obligation= / ?highlight=);idPrefix:清單列 DOM id
 // 前綴(ob-/hl-);scope:字串,變了就整組重置(專案、身分、契約範圍);
@@ -28,20 +54,23 @@ const BELOW_LG_QUERY = '(max-width: 1023.98px)'
 export function useListDetailPane({
   param, idPrefix, scope, ready, rows, pickDefault, onSelect, onReset, onDeepLink,
 }) {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [readSearch, writeSearch] = useLiveSearch()
   const [selectedId, setSelectedId] = useState(null)
   const [detailOpen, setDetailOpen] = useState(false)  // <lg 抽屜/全螢幕詳情
   const latest = useRef({})
-  latest.current = { rows, pickDefault, onSelect, onReset, onDeepLink, searchParams }
+  latest.current = { rows, pickDefault, onSelect, onReset, onDeepLink, readSearch }
 
-  const select = useCallback((id, { openPane = false } = {}) => {
+  // writeUrl=false 只給初次自動選取用:預設選取不是使用者的選擇,寫進 URL 後 reload 就變成
+  // 深連結、<lg 會憑空彈出抽屜(/safety 兩個殼各寫一個,reload 疊兩層抽屜)。分享 URL 也沒有
+  // 損失——沒帶 query 的頁本來就會選到同一個預設。
+  const select = useCallback((id, { openPane = false, writeUrl = true } = {}) => {
     setSelectedId(id)
     latest.current.onSelect?.(id)
     // 抽屜/全螢幕只屬於 <lg:桌機點列不留 detailOpen 殘值,縮窗才不會突然彈出遮罩
     if (openPane && window.matchMedia(BELOW_LG_QUERY).matches) setDetailOpen(true)
-    // URL 帶單條連結可分享;replace 不炸掉瀏覽歷史
-    setSearchParams((p) => { const n = new URLSearchParams(p); n.set(param, id); return n }, { replace: true })
-  }, [param, setSearchParams])
+    // URL 帶單條連結可分享
+    if (writeUrl) writeSearch((n) => n.set(param, id))
+  }, [param, writeSearch])
   const closeDetail = useCallback(() => setDetailOpen(false), [])
 
   // 切換專案/契約範圍(不經 route 卸載)時整組重置:殘留他案的 selectedId/URL 參數
@@ -54,8 +83,8 @@ export function useListDetailPane({
     initialPicked.current = false
     setSelectedId(null); setDetailOpen(false)
     latest.current.onReset?.()
-    setSearchParams((p) => { const n = new URLSearchParams(p); n.delete(param); return n }, { replace: true })
-  }, [scope, param, setSearchParams])
+    writeSearch((n) => n.delete(param))  // 只刪自己的 param:同頁另一個殼的深連結不受影響
+  }, [scope, param, writeSearch])
 
   // 初次載入:深連結優先並捲到該列;否則交給頁面的預設規則(第一條已逾期→即將到期
   // →清單第一條 / 第一條待確認)。只選一次,之後由使用者主導。
@@ -69,12 +98,13 @@ export function useListDetailPane({
   useEffect(() => {
     if (initialPicked.current || !ready) return
     initialPicked.current = true
-    const { rows: pool, pickDefault: pick, onDeepLink: deepHook, searchParams: params } = latest.current
-    const wanted = params.get(param)
+    const { rows: pool, pickDefault: pick, onDeepLink: deepHook, readSearch: read } = latest.current
+    const wanted = new URLSearchParams(read()).get(param)
     const deep = wanted ? pool.find((r) => r.id === wanted) : null
     const targetId = deep ? deep.id : pick?.()
     if (!targetId) return
-    select(targetId, { openPane: !!deep })
+    // 深連結的 query 本來就在 URL 裡、預設選取不該進 URL:初次選取一律不寫(理由見 select)
+    select(targetId, { openPane: !!deep, writeUrl: false })
     if (deep) {
       deepHook?.(deep)
       scrollTimer.current = setTimeout(() => document.getElementById(`${idPrefix}${deep.id}`)?.scrollIntoView({ block: 'center' }), 60)

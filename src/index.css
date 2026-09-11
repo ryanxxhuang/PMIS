@@ -487,6 +487,15 @@ select option { color: var(--text); background: var(--surface); }
   font-size: 22px;
   font-size: clamp(15px, 11cqw, 27px);
 }
+/* 手機數字條(規範 §9.8 第二條):Stat 卡的直接父層格線在 <md 一律三格並排、間距收到 8px,
+   不佔第一屏——稽核量到 /safety 三張卡各佔半行把「開立缺失」推到 y=475。
+   從卡反推父層(:has)而不是改九個容器的 class:容器散在九頁(其中五頁是表格頁,另案在改),
+   一處生效、頁面零編輯;特異性 (0,2,0) 高過 Tailwind 的 grid-cols-N 與 gap-N,不必 !important。
+   4/5 張時最後一張落單只有三分之一寬,讓它橫跨整列(nth-child(3n+1):last-child)。 */
+@media (max-width: 767.98px) {
+  .grid:has(> .stat-card) { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .grid:has(> .stat-card) > .stat-card:nth-child(3n+1):last-child { grid-column: 1 / -1; }
+}
 
 /* 主題切換平滑化:只在切換瞬間掛上,避免亮↔暗全畫面突跳。
    平時不掛,免得所有元素常駐 color transition 造成 hover 遲滯。 */

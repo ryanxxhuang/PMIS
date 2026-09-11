@@ -344,7 +344,7 @@ describe('今天已完成:只認可靠的操作時間戳', () => {
       defects: [{ id: 'DS', title: '安全網破損', domain: 'safety', status: '已結案', closed_at: '2026-08-13T02:00:00Z' }],
     })
     expect(doneToday[0].tag).toBe('工安缺失')
-    expect(doneToday[0].to).toBe('/safety')
+    expect(doneToday[0].to).toBe('/safety?defect=DS')
   })
 })
 
@@ -435,7 +435,7 @@ describe('收件匣直達那一筆(規範 §9.7):有殼的頁 to 帶單條 query
     expect(mine.find((t) => t.tag === '契約重點').to).toBe('/deadlines')
     expect(mine.some((t) => /=null|=undefined/.test(t.to))).toBe(false)
   })
-  it('沒有殼的頁維持頁面連結:缺失/工安缺失/查驗/觀察/試驗/驗收/停留點/日誌/估驗', () => {
+  it('缺失(品質/工安)直達該筆;沒有殼的頁維持頁面連結:查驗/觀察/試驗/驗收/停留點/日誌/估驗', () => {
     const { mine } = build({
       org: 'contractor', anchors: { commencement_date: '2026-03-01', end_date: '2027-02-28' },
       defects: [{ id: 'D1', title: '模板殘料', status: '開立' }, { id: 'DS', title: '安全網', status: '開立', domain: 'safety' }],
@@ -446,9 +446,9 @@ describe('收件匣直達那一筆(規範 §9.7):有殼的頁 to 帶單條 query
       siteLogs: [{ log_date: '2026-08-12', items: { 'WI-1': 12 } }],
     })
     const to = (tag) => mine.filter((t) => t.tag === tag).map((t) => t.to)
-    // /safety 的殼是工安紀錄(?record=),缺失追蹤要等它套殼(規範 §9.8)才有單條 query
-    expect(to('缺失')).toEqual(['/quality'])
-    expect(to('工安缺失')).toEqual(['/safety'])
+    // 缺失追蹤已套殼(規範 §9.8):品質與工安都帶 ?defect=<id>,值就是該列 id
+    expect(to('缺失')).toEqual(['/quality?defect=D1'])
+    expect(to('工安缺失')).toEqual(['/safety?defect=DS'])
     expect(to('觀察')).toEqual(['/quality'])
     expect(to('估驗')).toEqual(['/valuation'])
     expect(to('試驗')).toEqual(['/quality'])
@@ -458,8 +458,8 @@ describe('收件匣直達那一筆(規範 §9.7):有殼的頁 to 帶單條 query
       acceptanceEvents: [{ stage_key: 'report', event_date: '2026-08-08' }] })
     expect(s.mine.find((t) => t.tag === '查驗').to).toBe('/quality')
     expect(s.mine.find((t) => t.tag === '驗收').to).toBe('/acceptance')
-    // 今天已完成:缺失結案/查驗判定也還沒有殼可直達
+    // 今天已完成:缺失結案同樣直達該筆(與 collaborationItems 同一條規則);查驗判定仍無殼
     const done = build({ org: 'supervisor', defects: [{ id: 'D9', title: '結案', status: '已結案', closed_at: '2026-08-13T02:00:00Z' }] }).doneToday
-    expect(done[0].to).toBe('/quality')
+    expect(done[0].to).toBe('/quality?defect=D9')
   })
 })

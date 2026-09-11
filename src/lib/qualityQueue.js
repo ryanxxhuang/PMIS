@@ -28,7 +28,8 @@ export function buildQualityQueue(org, data = {}, today) {
     if (it.who !== org) return
     const segment = QUEUE_SEGMENT_OF[it.tag]
     if (!segment) return
-    out.push({ key: `${it.tag}:${it.id ?? `${it.title}#${i}`}`, tag: it.tag, title: it.title, meta: it.meta, segment })
+    // id 帶出去:缺失分段已是清單＋詳情殼,頁面點佇列時用它寫 ?defect= 直接選中那一筆
+    out.push({ key: `${it.tag}:${it.id ?? `${it.title}#${i}`}`, id: it.id ?? null, tag: it.tag, title: it.title, meta: it.meta, segment })
   })
   // 試驗到期只給廠商:填試驗值的欄位在試驗分段吃 can.edit(=廠商),
   // 塞給監造/機關只會是點了做不到的假待辦
