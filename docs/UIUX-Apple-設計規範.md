@@ -208,7 +208,7 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
   - **分群一律改快篩 chip，不在清單內保留區段標題**。四頁原本各自分群（工安按型別、期限按期程、送審與疑義按球權），統一成 `StatusChip` + 件數。兩套分群語彙並存會讓人搞不清誰是主軸。
   - **動作移進詳情欄**是這個殼的核心。連帶的測試代價要一起付：`e2e` 原本大量靠「在那一列裡面找按鈕」定位，改版後必然失效，本輪把 `rfi` / `submittals` / `contractor`(期限追蹤) / `owner`(B-02) 四支改成 `getByRole('listitem')` + `getByRole('region', { name: '… 詳情' })`，class 定位器歸零。
   - ⚠️ **改寫 e2e 時的兩個坑**（都實際踩過）：① 按鈕名一律 `exact: true`，否則快篩 chip 的文字（例如「待廠商確認結案 0」）會被子字串比對吃成按鈕名。② 動作改成只在詳情欄渲染之後，**不選中任何一筆就斷言「某顆鈕不存在」會變成空洞測試**——本來就沒渲染，當然是 0。要先選中讓詳情欄渲染，再加一條正向斷言證明面板有內容，然後才斷言 `toHaveCount(0)`。那類斷言多半是權限測試，失效了不會有人發現。
-  - **不套殼的三頁**：`/quality`（只是路由器，清單在子元件）、`/valuation`（1040px 標單樹）、`/payments`（10 欄就地編輯表，每格本來就可編）。它們沿用殼的零件即可，不要硬套版面。
+  - **不套殼的四頁**：`/quality`（只是路由器，清單在子元件）、`/valuation`（1040px 標單樹）、`/payments`（10 欄就地編輯表，每格本來就可編）、`/cost`（預算／實際兩欄就地編輯的帳冊，與 `/payments` 同形狀；只借 `SearchField`＋分類快篩 chip）。它們沿用殼的零件即可，不要硬套版面。
   - 導覽的地雷：`navConfig.js` 同時是路由與權限的單一真相，重劃分區只能動 `title` 與 `hidden`，每個 item／tab 的 `roles` 一字不改（`navConfig.test.js` 直接對定義做結構斷言，`routeRegistry` 的鍵集合也釘死）。`/dashboard` 登記在非導覽表，由球權來源持有——不要再把它加回工作或參考分區，那會回到兩個入口指向同一頁的老路。
 - **字級收斂**：**已完成**。`@theme` 把 Tailwind 內建 `text-xs/sm/base/lg` 對映到階梯（460+ 處零編輯生效），另逐處改寫 158 個任意值。`Contract.jsx` / `Requirements.jsx` / `RequirementsReview.jsx` 的其餘字級已由 `b7a1000` 收尾；本輪核對三頁無任意 px 字級。
 - **圖示**：**已換成 lucide-react**（98 個對映）。做法是改寫 `MSym` 的實作而不動 271 個呼叫點——元件名、`name`/`size`/`fill`/`className` props 全部不變，名字沿用 Material Symbols 的 ligature 名（那些名字散在 `navConfig`／`agentRole`／`aiInsights` 等資料層，改名等於同時改資料與呼叫端）。subset 字型、`build-icon-font.mjs`、`icon-names.mjs`、`iconFont.test.js` 一併退場。

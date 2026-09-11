@@ -69,6 +69,31 @@ test.describe('機關', () => {
     await expect(page.getByRole('list', { name: '提醒清單' }).getByRole('listitem').filter({ hasText: '初驗期限將至' })).toHaveCount(1)
   })
 
+  test('風險稽核:清單＋詳情殼——嚴重度快篩、詳情欄判定依據、AI 稽核意見貼在該項底下', async ({ page }) => {
+    await loginAs(page, 'owner')
+    await gotoHash(page, '/audit')
+    await expect(page.getByRole('heading', { name: '風險稽核' })).toBeVisible()
+    // 檢核表與勾稽發現混成一份清單,嚴重度是快篩 chip(帶件數,件數隨劇本變,用 ^ 錨定標籤)
+    await expect(page.getByRole('button', { name: /^風險/ })).toBeVisible()
+    const rows = page.getByRole('list', { name: '稽核項目' }).getByRole('listitem')
+    await expect(rows.first()).toBeVisible()
+    // 開頁預設選最嚴重的一項;詳情欄是以標題命名的 region,判定依據完整顯示在裡面
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true')
+    const detail = page.getByRole('region', { name: /詳情$/ })
+    await expect(detail.getByText('判定依據')).toBeVisible()
+    // 選一筆文件勾稽發現:AI 只對勾稽發現寫文字,判定是確定性引擎的結果
+    const chainRow = rows.filter({ hasText: '文件勾稽' }).first()
+    await chainRow.click()
+    await expect(chainRow).toHaveAttribute('aria-current', 'true')
+    await expect(detail.getByText('對應工項／項目')).toBeVisible()
+    // 按鈕名一律 exact:快篩 chip「風險 2」會被子字串比對吃成按鈕名
+    await detail.getByRole('button', { name: '產生 AI 稽核意見', exact: true }).click()
+    await expect(detail.getByText('AI 稽核意見', { exact: true })).toBeVisible()
+    await expect(detail.getByText(/非違規認定/)).toBeVisible()
+    // 清單列只負責選取:AI 鈕不在列裡
+    await expect(chainRow.getByRole('button')).toHaveCount(0)
+  })
+
   test('路由守衛:機關進不了廠商成本頁', async ({ page }) => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/cost')
