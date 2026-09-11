@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Empty, Button, Badge, Dot, Field, Input, Select, Textarea, PageHeader, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Button, Badge, Dot, Field, IconButton, Input, Select, Textarea, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../components/listDetail.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { friendlyError } from '../../lib/errorMessage.js'
@@ -222,8 +222,9 @@ export default function Safety() {
             <Button size="sm" variant="secondary" onClick={() => setCorrecting({ id: r.id, reason: '', note: r.note || '', revert: false })}>更正</Button>
           )}
           {deletable && (
-            // p-2 -m-2 只擴命中區、視覺與列高不變(同 DefectTracker/ITP 的刪除鈕);ml-auto 靠右與主動作拉開
-            <button onClick={() => onDelete(r)} className="ml-auto inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除紀錄"><MSym name="close" size={16} /></button>
+            // 同 /itp 那顆:原本只有 min-h,手機量到 32×44。IconButton 給滿 44×44,
+            // 負 margin 吸回流內寬;ml-auto 靠右與主動作拉開
+            <IconButton name="close" label="刪除紀錄" onClick={() => onDelete(r)} className="ml-auto -m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
           )}
         </div>
       )}

@@ -6,7 +6,7 @@
 // 顏色走 token、字級走 @theme 階梯(規範 docs/UIUX-Apple-設計規範.md)。
 import { Link } from 'react-router-dom'
 import { MSym } from './icons.jsx'
-import { buttonClass } from './ui.jsx'
+import { IconButton, buttonClass } from './ui.jsx'
 import { friendlyError } from '../lib/errorMessage.js'
 import { DOCUMENT_TYPE_LABELS } from '../lib/documentClassifier.js'
 import { isTerminalRun, runPct, stageDetail } from '../lib/packageUpload.js'
@@ -80,10 +80,7 @@ export default function UploadPanel({
           <span className={`text-footnote font-medium num ${head.cls}`}>{head.right}</span>
           {/* 關閉鈕永遠可按:中斷遺留的 processing run 會讓 busy 掛到
               20 分鐘 stale 門檻,不能鎖住整個拖放區(審查 W11 發現) */}
-          <button onClick={onDismiss} aria-label="關閉上傳結果"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)]">
-            <MSym name="close" size={18} />
-          </button>
+          <IconButton name="close" label="關閉上傳結果" onClick={onDismiss} />
         </div>
       </div>
       {/* 總進度條(各檔真實階段的平均;結束時一律 100%) */}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
-import { Card, Button, Field, Empty, PageHeader, PrerequisiteEmptyState, SkeletonList, buttonClass, Input, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Button, Field, Empty, IconButton, PageHeader, PrerequisiteEmptyState, SkeletonList, buttonClass, Input, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { CHIP_BASE, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { appConfirm } from '../../components/confirm.jsx'
@@ -508,8 +508,8 @@ export default function SiteLog() {
                           <input type="number" min="0" step="any" inputMode="decimal" value={items[key] ?? ''} disabled={!can.edit} onChange={(e) => setQty(key, e.target.value)}
                             className="w-24 text-right border border-[var(--border)] rounded px-1.5 py-0.5 text-sm tabular-nums max-md:py-2 focus:border-[var(--blue)] focus:outline-none disabled:opacity-50 disabled:bg-[var(--surface-2)]" />
                         </td>
-                        {/* p-2 -m-2:命中區擴大但視覺與列高不變;裸 ✕ 退場改 MSym(aria-label 不動) */}
-                        <td className="text-right pl-2">{can.edit && <button onClick={() => removeItem(key)} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label="移除此工項"><MSym name="close" size={16} /></button>}</td>
+                        {/* 負 margin 吸回流內寬:命中區桌機 32、手機 44,列高不變 */}
+                        <td className="text-right pl-2">{can.edit && <IconButton name="close" label="移除此工項" onClick={() => removeItem(key)} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />}</td>
                       </tr>
                     )
                   })}
@@ -629,7 +629,7 @@ export default function SiteLog() {
                     {/* 日期切換是這一列的主觸控目標:手機補 44px(flex 列只會長高不會破版) */}
                     <button onClick={() => setDate(l.log_date)} className="font-medium text-[var(--text)] num text-left flex-1 truncate max-md:min-h-11">{l.log_date}</button>
                     <span className="text-xs text-[var(--text-3)]">{Object.keys(l.items).length} 工項</span>
-                    {can.edit && <button onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(friendlyError(error, '日誌刪除未完成')) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除 ${l.log_date} 日誌`}><MSym name="close" size={16} /></button>}
+                    {can.edit && <IconButton name="close" label={`刪除 ${l.log_date} 日誌`} onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(friendlyError(error, '日誌刪除未完成')) } }} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />}
                   </div>
                   {l.work_summary && <div className="text-xs text-[var(--text-2)] truncate mt-0.5">{l.work_summary}</div>}
                 </div>
@@ -691,7 +691,7 @@ function RowsEditor({ title, rows, onChange, fields, disabled = false }) {
               onChange={(e) => set(i, f.key, f.num ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
               className={`${f.w} ${f.num ? 'text-right num' : ''}`} />
           ))}
-          {!disabled && <button onClick={() => del(i)} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label="刪除此列"><MSym name="close" size={16} /></button>}
+          {!disabled && <IconButton name="close" label="刪除此列" onClick={() => del(i)} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />}
         </div>
       ))}
     </div>

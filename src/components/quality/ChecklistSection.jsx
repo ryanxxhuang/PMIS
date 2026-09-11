@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../icons.jsx'
-import { Card, Button, Field, Badge, Empty, Input, Select, THEAD_CLS } from '../ui.jsx'
+import { Card, Button, Field, Badge, Empty, IconButton, Input, Select, THEAD_CLS } from '../ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../confirm.jsx'
 import { judgeChecklist, judgeItem, diffChecklistResults } from '../../lib/qc.js'
@@ -251,7 +251,7 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
                         className="text-[var(--blue-text)] hover:underline text-xs inline-flex items-center max-md:min-h-11">歷次 {history.length}</button>
                     )}
                     {canEdit && !r.overall && (
-                      <button onClick={() => del(r)} aria-label="刪除未判定的檢查紀錄" className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2"><MSym name="close" size={16} /></button>
+                      <IconButton name="close" label="刪除未判定的檢查紀錄" onClick={() => del(r)} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
                     )}
                   </div>
                 </div>

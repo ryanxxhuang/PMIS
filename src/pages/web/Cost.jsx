@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
-import { Card, Stat, Empty, Badge, Button, Field, Input, Select, PageHeader, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Stat, Empty, Badge, Button, Field, IconButton, Input, Select, PageHeader, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -203,9 +203,9 @@ export default function Cost() {
                       </button>
                     </td>
                     <td className="px-2 pr-5 text-right">
-                      <button onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) onDelete(c.id) }}
-                        aria-label={`刪除 ${c.title}`}
-                        className="p-2 -m-2 inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--red-text)] max-md:min-h-11 max-md:min-w-11"><MSym name="close" size={16} /></button>
+                      <IconButton name="close" label={`刪除 ${c.title}`}
+                        onClick={async () => { if (await appConfirm({ title: `刪除「${c.title}」？`, danger: true, confirmLabel: '刪除' })) onDelete(c.id) }}
+                        className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
                     </td>
                   </tr>
                 ))}

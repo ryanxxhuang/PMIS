@@ -1,7 +1,7 @@
 // 由 pages/web/Quality.jsx 原地搬出(重構波次 7):零邏輯改動,只換檔案位置與 import。
 import { useState } from 'react'
 import { MSym } from '../icons.jsx'
-import { Card, Button, Field, Badge, Empty, Input, THEAD_CLS } from '../ui.jsx'
+import { Card, Button, Field, Badge, Empty, IconButton, Input, THEAD_CLS } from '../ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../confirm.jsx'
 import { taipeiToday } from '../../lib/dates.js'
@@ -99,7 +99,7 @@ export default function SamplesSection({ samples, onGenerate, onCreate, onUpdate
                   </td>
                   {/* 已判定試體=品質證據,不提供刪除(DB 另有 guard) */}
                   <td className="text-right pl-2">{s.status === '待試驗' && (
-                    <button onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(friendlyError(error, '試體刪除未完成')) } }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除試體 ${s.sample_no}`}><MSym name="close" size={16} /></button>
+                    <IconButton name="close" label={`刪除試體 ${s.sample_no}`} onClick={async () => { if (await appConfirm({ title: `刪除試體 ${s.sample_no}？`, danger: true, confirmLabel: '刪除' })) { const { error } = await onDelete(s.id); if (error) setMsg(friendlyError(error, '試體刪除未完成')) } }} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
                   )}</td>
                 </tr>
               ))}

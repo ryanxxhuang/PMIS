@@ -201,6 +201,49 @@ export const Button = forwardRef(function Button({ variant = 'primary', size = '
   )
 })
 
+// ── 純圖示鈕(IconButton):按鈕內只有一顆圖示、沒有文字的那一類動作 ──────────
+// 為什麼要有這支:規範 §9.2 講「44×44 是最小面積不是最小高度」,但全站二十幾處
+// 圖示鈕是各頁自己刻的(`p-2 -m-2 max-md:min-h-11` 手抄一份),只補高沒補寬——
+// 稽核在 390 量到 /itp 刪除 32×44、/safety 刪除 32×44。逐處補一個 min-w 是治標,
+// 根因是「沒有共用的圖示鈕 primitive,所以每頁自己刻」。這支把形狀收斂到一處,
+// call site 只剩語意(要哪顆圖示、叫什麼名字、按了做什麼)。
+// 形狀取自頂欄既有的圖示鈕(主題切換):圓形、hover 墊一層 --surface-2、
+// 桌機 32(md)/40(lg)、手機一律 44。手機用 w/h 寫死而不是 min-w/min-h:
+// 圖示鈕沒有文字要撐開,固定值比 min 好預測,也不會被 flex 收縮成非方形。
+// 斷點 max-md 必須與 BottomNav 的 md:hidden 對齊,理由見上面 BTN_SIZES 那段。
+// label 必填:圖示鈕沒有文字節點,少了 aria-label 就是報讀器上的無名按鈕,
+// e2e 也全靠 getByRole('button', { name }) 定位——所以 dev 下沒給就 warn。
+// 顏色只定基準色與 hover「底色」;hover 的「文字色」刻意留在 call site:
+// 刪除鈕 hover 轉紅是語意不是形狀。而且 hover:text-* 與基準 text-* 是不同
+// variant,疊在 className 上不會踩到 Tailwind 同層同屬性的輸出順序不確定性
+// (選中態的 --blue-text 則與基準色三元運算二選一,同樣不讓兩個 text-* 並存)。
+const ICONBTN_SIZES = {
+  md: { box: 'w-8 h-8 max-md:w-11 max-md:h-11', icon: 18 },
+  lg: { box: 'w-10 h-10 max-md:w-11 max-md:h-11', icon: 20 },
+}
+export const IconButton = forwardRef(function IconButton({ name, label, size = 'md', active = false, className = '', ...props }, ref) {
+  if (!label && import.meta.env?.DEV) {
+    console.warn(`[IconButton] 圖示鈕「${name}」沒有 label,報讀器會讀到一顆無名按鈕`)
+  }
+  const s = ICONBTN_SIZES[size] || ICONBTN_SIZES.md
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-label={label}
+      className={`${s.box} shrink-0 inline-flex items-center justify-center rounded-full pressable
+        ${active ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-3)]'}
+        hover:bg-[var(--surface-2)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent
+        ${FOCUS_VISIBLE} ${className}`}
+      {...props}
+    >
+      {/* 圖示由 name 決定而不是 children:呼叫端只給語意,才不會又長出
+          「同一種鈕有人塞 16px 有人塞 18px」的散裝尺寸 */}
+      <MSym name={name} size={s.icon} />
+    </button>
+  )
+})
+
 // ── 分段控制(macOS/iOS Segmented Control):同一視圖內的「顯示模式」切換 ────────
 // 外框 --surface-2 底、2px 內距、9px 圓角;選中段 --surface 底(亮色即白、深色即卡面)
 // + --shadow-card、7px 圓角——內外圓角差 2px 正好等於內距,內段才與外框同心。
@@ -417,7 +460,6 @@ export function TablePager({ page, pageSize, total, onPage, onPageSize, sizes = 
   const end = Math.min(total, (page + 1) * pageSize)
   const canPrev = !disabled && page > 0
   const canNext = !disabled && end < total
-  const arrow = (ok) => `w-8 h-8 max-md:min-h-11 max-md:min-w-11 grid place-items-center rounded-full ${ok ? 'text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable' : 'text-[var(--border)]'}`
   return (
     <div className={`flex flex-wrap items-center justify-end gap-x-3 gap-y-1 px-4 py-1.5 border-t border-[var(--border-2)] text-body text-[var(--text-2)] ${className}`}>
       <label className="flex items-center gap-1.5">
@@ -430,12 +472,10 @@ export function TablePager({ page, pageSize, total, onPage, onPageSize, sizes = 
       </label>
       <span className="num">{start}–{end} / {total}</span>
       <div className="flex items-center">
-        <button type="button" onClick={() => onPage(page - 1)} disabled={!canPrev} aria-label="上一頁" className={arrow(canPrev)}>
-          <MSym name="chevron_left" size={20} />
-        </button>
-        <button type="button" onClick={() => onPage(page + 1)} disabled={!canNext} aria-label="下一頁" className={arrow(canNext)}>
-          <MSym name="chevron_right" size={20} />
-        </button>
+        {/* 原本的 arrow() 就是 IconButton 的手抄版(同樣 w-8/圓形/hover --surface-2);
+            停用態從自寫的 --border 灰改吃 IconButton 的 disabled:opacity-40,與 Button 同一套 */}
+        <IconButton name="chevron_left" label="上一頁" onClick={() => onPage(page - 1)} disabled={!canPrev} />
+        <IconButton name="chevron_right" label="下一頁" onClick={() => onPage(page + 1)} disabled={!canNext} />
       </div>
     </div>
   )
