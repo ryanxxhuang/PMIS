@@ -25,7 +25,7 @@
     {
       "name": "pmis-site",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "python3 -m http.server ${PORT:-8788} -d /Volumes/GameSSD/Projects/pmis-site"],
+      "runtimeArgs": ["-c", "cd /Volumes/GameSSD/Projects/PMIS_site && npx astro preview --host 127.0.0.1 --port ${PORT:-8788}"],
       "port": 8788,
       "autoPort": true
     }
