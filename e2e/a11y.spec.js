@@ -242,9 +242,12 @@ test.describe('鍵盤可達性', () => {
   test('appPrompt:Esc 取消判定,對話框消失且頁面狀態不變', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/quality')
-    // 與 supervisor.spec 同一列定位法(查驗列是 <li>),但這裡走「取消」分支,不與其成功路徑重複
+    // 與 supervisor.spec 同一定位法(選中 listitem → 以項目命名的 region 裡按判定鈕),
+    // 但這裡走「取消」分支,不與其成功路徑重複
     const row = page.getByRole('listitem').filter({ hasText: '4F 柱牆鋼筋查驗' })
-    await row.getByRole('button', { name: '不合格' }).click()
+    await row.click()
+    const detail = page.getByRole('region', { name: '4F 柱牆鋼筋查驗 詳情' })
+    await detail.getByRole('button', { name: '不合格', exact: true }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText(/判定不合格：/)).toBeVisible()
     // F2 合約:Esc 掛在 window 層——即使焦點不在對話框內也要能取消
@@ -252,6 +255,6 @@ test.describe('鍵盤可達性', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0)
     // 取消=什麼都沒發生:沒有成功提示、該筆查驗仍可判定
     await expect(page.getByText('已判定不合格並開立缺失')).toHaveCount(0)
-    await expect(row.getByRole('button', { name: '不合格' })).toBeVisible()
+    await expect(detail.getByRole('button', { name: '不合格', exact: true })).toBeVisible()
   })
 })
