@@ -40,6 +40,10 @@ PMIS 的系統角色只有三種：
 
 `project_memberships.is_project_admin` 與 `is_project_admin_v2` 只管理身分快照資料，不能取代 `project_members.role = 'admin'` 的專案授權。
 
+**`projects.created_by` 不是授權來源**（[D-022](../DECISIONS.md)，2026-09-11）。它曾經是：`is_project_admin()` 原本是「有 admin 列 **或** 是建立者」，而成員管理（`add_member_by_email`／`remove_member`／`project_members` 的管理 policy）只認建立者——結果被授 `admin` 的成員能刪掉整個專案，卻不能邀一個人進來，而建立者離職又沒有轉移路徑。現在兩邊都只看 `project_members.role = 'admin'`；`created_by` 只留作稽核欄位與 `on_project_created` trigger 的輸入。
+
+因此**建立者的權限完全來自 `on_project_created` 自動插入的那一列 admin**（`create_project` RPC 另會顯式插同一列）。造測試資料時若停用該 trigger，記得手動補這一列，否則那個「建立者」不是管理者——`supabase/tests/invite_org_confirm.sql` 就是用這個手法釘住本規則。
+
 ## Agent 模型
 
 Agent 身分與三方角色一對一：
