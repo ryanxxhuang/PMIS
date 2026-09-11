@@ -34,8 +34,9 @@ test.describe('監造', () => {
     await page.getByRole('button', { name: '查看缺失' }).click()
     // 查驗變不合格 + 缺失清單多一筆連動缺失
     await expect(page.getByText('查驗不合格：4F 柱牆鋼筋查驗')).toBeVisible()
-    // 剛判定的查驗當天就進「今天已完成」(demo 與真後端同樣寫 inspected_at)
-    await gotoHash(page, '/dashboard')
+    // 剛判定的查驗當天就進「今天已完成」(demo 與真後端同樣寫 inspected_at)。
+    // Apple 改版後三段不同時列出,要帶 ?ball=done 才聚焦到已完成那一段。
+    await gotoHash(page, '/dashboard?ball=done')
     const done = page.getByRole('heading', { name: '今天已完成' })
       .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
     await expect(done.getByText('4F 柱牆鋼筋查驗')).toBeVisible()
@@ -70,7 +71,7 @@ test.describe('監造', () => {
     await expect(row.getByRole('button', { name: '退回' })).toHaveCount(0)
     await expect(row.getByRole('button', { name: '撤銷結案' })).toBeVisible()
     // closed_at 是系統在按下當刻寫的 → 當天就進「今天已完成」(與查驗同一條規則)
-    await gotoHash(page, '/dashboard')
+    await gotoHash(page, '/dashboard?ball=done')
     const done = page.getByRole('heading', { name: '今天已完成' })
       .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
     await expect(done.getByText(DEFECT_UNDER_REVIEW)).toBeVisible()
@@ -88,7 +89,7 @@ test.describe('監造', () => {
     await expect(row.getByRole('button', { name: '複查結案' })).toHaveCount(0)
     await expect(row.getByRole('button', { name: '退回' })).toHaveCount(0)
     // 退回不是結案:不得混進「今天已完成」(球回廠商 → 只會出現在「等待對方」)
-    await gotoHash(page, '/dashboard')
+    await gotoHash(page, '/dashboard?ball=done')
     const done = page.getByRole('heading', { name: '今天已完成' })
       .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
     await expect(done.getByText(DEFECT_UNDER_REVIEW)).toHaveCount(0)

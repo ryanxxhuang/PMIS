@@ -3,13 +3,19 @@ import { test, expect } from '@playwright/test'
 import { loginAs, gotoHash } from './helpers.js'
 
 test.describe('施工廠商', () => {
-  test('今日待辦:進度摘要與三段待辦(現在輪到我/等待對方/今天已完成)', async ({ page }) => {
+  // Apple 改版(疊合版 IA):主畫面是收件匣不是 dashboard。四張指標卡依判準
+  // 「不會被點、不會改變決定的數字一律刪」移除,金額改到 /boq 與 /valuation 看;
+  // 三段待辦不再同時列出,改成球權 Segmented 一次聚焦一段。
+  test('今日待辦:球權三段各自聚焦(現在輪到我/等待對方/今天已完成)', async ({ page }) => {
     await loginAs(page, 'contractor')
-    await expect(page.getByText('累計實際進度')).toBeVisible()
-    await expect(page.getByText('發包工程費')).toBeVisible()
-    for (const section of ['現在輪到我', '等待對方', '今天已完成']) {
-      await expect(page.getByRole('heading', { name: section })).toBeVisible()
-    }
+    // 指標卡已退場:再出現代表有人把「多放一點資訊比較安全」加回來了
+    await expect(page.getByText('累計實際進度')).toHaveCount(0)
+    await expect(page.getByText('發包工程費')).toHaveCount(0)
+    // 預設落在「現在輪到我」,另外兩段要切才看得到(一次一件事)
+    const balls = page.getByRole('tablist', { name: '球在誰手上' })
+    await expect(balls.getByRole('tab', { name: /現在輪到我/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('heading', { name: '現在輪到我' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '等待對方' })).toHaveCount(0)
     // 期限型待辦已進首頁:OB-6 契約期限(demoSeed 的 fixed_date 相對今天往前推)。
     // 逾期天數一定要綁在這一筆上斷言:demo 有多筆待辦會落在同一個到期日,
     // 全頁 getByText(/逾期 N 天/) 會同時命中別筆而觸發 strict mode violation。
@@ -18,8 +24,11 @@ test.describe('施工廠商', () => {
     const overdueObligation = page.getByRole('link').filter({ hasText: '第 5 期估驗計價送審' })
     await expect(overdueObligation).toHaveCount(1) // 標題必須唯一命中,否則就是又出現重複入口
     await expect(overdueObligation).toContainText(/逾期 \d+ 天（到期 \d{4}-\d{2}-\d{2}）/)
-    // 等待對方只列直接相關的對手項:SUB-003 球在監造
+    // 切到「等待對方」才看得到對手項:SUB-003 球在監造
+    await balls.getByRole('tab', { name: /等待對方/ }).click()
+    await expect(page.getByRole('heading', { name: '等待對方' })).toBeVisible()
     await expect(page.getByText(/SUB-003/)).toBeVisible()
+    await expect(page.getByRole('heading', { name: '現在輪到我' })).toHaveCount(0)
   })
 
   test('Agent 不再重複待辦清單,只留前往今日待辦的入口', async ({ page }) => {

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
-import { visibleNavGroups, defaultLandingPath } from '../lib/navConfig.js'
+import { visibleNavGroups, defaultLandingPath, BALL_SOURCES, resolveBallKey } from '../lib/navConfig.js'
 import CopilotFab from './CopilotFab.jsx'
 import BottomNav, { NAV_SHORT } from './BottomNav.jsx'
 import { MSym } from './icons.jsx'
@@ -16,6 +16,49 @@ const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
 
 const initialSidebarCollapsed = () => {
   try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1' } catch { return false }
+}
+
+// ── 側欄列(工作面列與球權列共用)────────────────────────────────────
+// 樣式只有這一份:散裝複本正是深色對比漏修的來源(規範 §6)。外層連結與 tabs
+// 展開鈕由呼叫端各自負責(工作面列多一顆展開鈕,球權列沒有)。
+// 列殼=Workspace 藥丸:貼齊左緣、右側全圓(0 100px 100px 0);選取=淺藍底深藍字。
+// 收合(md+ rail)時縮成置中圓形。selected=淺藍底;open=工作面已展開子頁,只加粗不上底。
+// (旗標用布林不用字串:scripts/icon-names.mjs 把 src 內所有小寫字串字面值當圖示候選,
+// selected 這類字不在 manifest 會讓 iconFont.test 紅。)
+const rowClass = ({ selected = false, open = false }, collapsed) => `mr-4 my-0.5 rounded-r-full transition-colors flex items-center ${
+  selected
+    ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
+    : open
+      ? 'text-[var(--text)] font-medium'
+      : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
+} ${collapsed ? 'md:mx-0 md:mr-0 md:my-1 md:rounded-none md:bg-transparent md:justify-center' : ''}`
+const linkClass = (collapsed) => `min-w-0 min-h-11 flex-1 flex items-center gap-3.5 pl-4 pr-3 text-sm rounded-r-full ${
+  collapsed ? 'md:flex-none md:w-16 md:flex-col md:gap-1 md:justify-center md:px-0 md:py-1 md:rounded-2xl' : ''
+}`
+// 列內容:圖示＋全名/短標＋件數。rail(collapsed,md+):56×32 藥丸圖示+短標直排,
+// 件數改掛藥丸右上角小數字。件數一律 aria-hidden——e2e 用 exact accessible name
+// 抓連結,數字不得混進名字;count 語意由目的頁承擔。alert=rail 小數字用紅色
+// (輪到我的未處理數);等對方與已完成不是警訊,不借紅色(顏色不可單獨承載語意)。
+function NavRowContent({ icon, label, short, active, count = 0, alert = false, collapsed }) {
+  const rowCountCls = active ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'
+  const railCountCls = alert ? 'text-[var(--red-text)]' : rowCountCls
+  return (
+    <>
+      <span className={`relative flex items-center justify-center ${collapsed ? `md:w-14 md:h-8 md:rounded-full ${active ? 'md:bg-[var(--blue-tint)]' : ''}` : ''}`}>
+        <MSym name={icon} size={20} fill={active} className={active ? 'text-[var(--blue-text)]' : 'opacity-80'} />
+        {collapsed && count > 0 && (
+          <span aria-hidden className={`hidden md:block absolute -top-1 right-0.5 text-micro leading-none font-medium num ${railCountCls}`}>{count}</span>
+        )}
+      </span>
+      {/* 手機抽屜永遠全名(collapsed 只影響 md+ 的 rail);rail 用短標 */}
+      <span className={collapsed ? 'md:hidden' : ''}>{label}</span>
+      {collapsed && <span className="hidden md:block text-micro leading-none font-medium">{short}</span>}
+      {/* 展開態:右側件數 */}
+      {count > 0 && (
+        <span aria-hidden className={`ml-auto text-footnote font-medium num ${rowCountCls} ${collapsed ? 'md:hidden' : ''}`}>{count}</span>
+      )}
+    </>
+  )
 }
 
 // Top-bar project picker: switch / create / delete (real backend only).
@@ -175,7 +218,7 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
   }
   const base = import.meta.env.BASE_URL
   return (
-    <header data-scrolled={scrolled} className="chrome-glass chrome-edge fixed top-0 inset-x-0 z-40 h-16 flex items-center gap-3 md:gap-5 px-3 md:px-4 print:hidden">
+    <header data-scrolled={scrolled} className="chrome-bar chrome-edge fixed top-0 inset-x-0 z-40 h-16 flex items-center gap-3 md:gap-5 px-3 md:px-4 print:hidden">
       <div className="flex items-center gap-2 md:gap-3 min-w-0 shrink-0">
         {/* 44px 觸控目標:漢堡鈕只在手機出現,直接升到 w-11;ref 供抽屜關閉時焦點還原 */}
         <button ref={menuBtnRef} onClick={onMenu} aria-label="選單" className="md:hidden w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable"><MSym name="menu" size={22} /></button>
@@ -270,8 +313,17 @@ export function WebLayout({ children }) {
   const { currentUser, can, workItemsSource, workItemsError, retryWorkItems, domainLoadError, retryDomainLoad, isPlatformAdmin, project, demoMode } = useStore()
   // 件數單一真相:與今日待辦頁同一支聚合(useTodayTasks),側欄 badge/通知紅點
   // 不另算一份——兩套實作的數字遲早對不上(W8-2A §2.1)
-  const { mine: dueMine } = useTodayTasks()
+  const { mine: dueMine, waiting: dueWaiting, doneToday: dueDone } = useTodayTasks()
   const { pathname } = useLocation()
+  // 球權來源的選取態:三個入口共用 /dashboard,NavLink 的 isActive 只比 pathname
+  // 會三個同時亮;改比 ?ball=,與 Dashboard 的聚焦同一支解析(resolveBallKey)。
+  const [searchParams] = useSearchParams()
+  const ballKey = pathname === '/dashboard' ? resolveBallKey(searchParams) : null
+  const ballCounts = { mine: dueMine.length, waiting: dueWaiting.length, done: dueDone.length }
+  // 球權群組目前無條件渲染(三個來源都指向 /dashboard,所有角色皆可達)。抽成具名
+  // 常數是為了讓下面「工作面的今日待辦不重複掛 aria-current」那條跟著它走——
+  // 哪天球權群組改成有條件顯示,去重複的判斷不會漏掉。
+  const ballGroupShown = true
   // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——非正式模式的
   // admin(專案建立者)看得到全部;正式模式後回歸自己的角色視角。
   // isPlatformAdmin 是獨立的「平台」維度(僅控制 /admin 入口可見;真正把關在 DB 的 admin RPC)。
@@ -301,7 +353,7 @@ export function WebLayout({ children }) {
           （hidden→visible 則是動畫起點就顯示,開啟不閃爍）。桌機 md 斷點不受影響。 */}
       {/* 分層:手機抽屜要蓋過 z-50 遮罩故 z-[55];桌機側欄必須退到頂欄(z-40)之下——
           專案下拉/搜尋浮層錨定在頂欄,側欄若壓過頂欄,下拉會被蓋住、誤點直接觸發
-          側欄導覽而換頁(ISSUE-9)。chrome 已改實心(毛玻璃退場),但層級關係不變。 */}
+          側欄導覽而換頁(ISSUE-9)。chrome 材質(側欄 chrome-glass/頂欄 chrome-bar)不改層級關係。 */}
       <aside
         className={`chrome-glass w-72 ${collapsed ? 'md:w-20' : 'md:w-64'} border-r border-[var(--border-card)] flex flex-col print:hidden
           fixed top-16 bottom-0 left-0 z-[55] md:z-30 transition-[width,transform,visibility] duration-300 [transition-timing-function:var(--ease-drawer)]
@@ -332,10 +384,34 @@ export function WebLayout({ children }) {
             <span className={collapsed ? 'md:hidden' : ''}>問 GovAgent</span>
           </NavLink>
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
+            {/* 球權來源(疊合版 IA §0):主畫面是收件匣,側欄先問「球在誰手上」。
+                三個入口共用 /dashboard 的登記與角色判斷,以 ?ball= 分流(為何不開新路由
+                見 navConfig BALL_SOURCES)。件數與工作面 badge 同源(useTodayTasks),
+                不另算一份;不進 BottomNav(手機仍走漢堡抽屜)。 */}
+            <div className="mb-2">
+              <div className={`px-4 pt-3 pb-1.5 ${collapsed ? 'md:hidden' : ''}`}>
+                <span className="text-caption font-medium text-[var(--text-2)]">球在誰手上</span>
+              </div>
+              {BALL_SOURCES.map((b) => {
+                const active = ballKey === b.key
+                return (
+                  <div key={b.key} className={rowClass({ selected: active }, collapsed)}>
+                    {/* Link 而非 NavLink:isActive 只比 pathname,三個來源會同時亮;
+                        aria-current 自己掛,報讀器仍知道現在在哪一個來源 */}
+                    <Link to={b.to} onClick={() => setMenuOpen(false)} aria-current={active ? 'page' : undefined}
+                      title={collapsed ? b.label : undefined} aria-label={collapsed ? b.label : undefined}
+                      className={linkClass(collapsed)}>
+                      <NavRowContent icon={b.icon} label={b.label} short={b.short} active={active}
+                        count={ballCounts[b.key]} alert={b.key === 'mine'} collapsed={collapsed} />
+                    </Link>
+                  </div>
+                )
+              })}
+            </div>
             {visibleGroups.map((g) => (
               <div key={g.title} className="mb-2">
                 <div className={`px-4 pt-3 pb-1.5 ${collapsed ? 'md:hidden' : ''}`}>
-                  <span className="text-[11px] font-medium text-[var(--text-2)]">{g.title}</span>
+                  <span className="text-caption font-medium text-[var(--text-2)]">{g.title}</span>
                 </div>
                 {g.items.map((n) => {
                   // 工作面與角色子頁都來自 navConfig，不在 Layout 重寫清單。
@@ -343,39 +419,24 @@ export function WebLayout({ children }) {
                   const wbActive = n.tabs?.some((t) => t.to === pathname)
                   const itemActive = pathname === n.to || wbActive
                   const expanded = expandedWorkbenches.has(n.to)
+                  // 「今日待辦」與球權來源指向同一條路由,兩邊都掛 aria-current 的話
+                  // 報讀器會讀到兩個「目前頁面」。aria-current 只給最具體的那一個
+                  // (球權來源永遠有一個被選中),所以這個工作面項改用 Link 不用 NavLink
+                  // ——NavLink 會自己塞 aria-current,沒有公開的關閉方式。
+                  // 視覺選取態仍照舊(itemActive),使用者知道自己在這個區段裡。
+                  // 這個重複本身是過渡狀態:等來源模型完全取代「工作面」時,這一項會退場。
+                  const coveredByBallGroup = ballGroupShown && n.to === '/dashboard'
+                  const RowLink = coveredByBallGroup ? Link : NavLink
                   return (
                     <div key={n.to}>
-                      {/* Workspace 藥丸:貼齊左緣、右側全圓(0 100px 100px 0);
-                          選取=淺藍底深藍字+FILL 1 圖示。收合時縮成置中圓形。 */}
-                      <div className={`mr-4 my-0.5 rounded-r-full transition-colors flex items-center ${
-                        itemActive && (!n.tabs || !expanded)
-                          ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
-                          : itemActive
-                            ? 'text-[var(--text)] font-medium'
-                            : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
-                      } ${collapsed ? 'md:mx-0 md:mr-0 md:my-1 md:rounded-none md:bg-transparent md:justify-center' : ''}`}>
-                        <NavLink to={n.to} onClick={() => setMenuOpen(false)} title={collapsed ? n.label : undefined}
+                      <div className={rowClass({ selected: itemActive && (!n.tabs || !expanded), open: itemActive }, collapsed)}>
+                        <RowLink to={n.to} onClick={() => setMenuOpen(false)} title={collapsed ? n.label : undefined}
                           aria-label={collapsed ? n.label : undefined}
-                          className={() => `min-w-0 min-h-11 flex-1 flex items-center gap-3.5 pl-4 pr-3 text-sm rounded-r-full ${
-                            collapsed ? 'md:flex-none md:w-16 md:flex-col md:gap-1 md:justify-center md:px-0 md:py-1 md:rounded-2xl' : ''
-                          }`}>
-                          {/* rail(collapsed):56×32 藥丸圖示+10.5px 短標直排(README 平板規格) */}
-                          <span className={`relative flex items-center justify-center ${collapsed ? `md:w-14 md:h-8 md:rounded-full ${itemActive ? 'md:bg-[var(--blue-tint)]' : ''}` : ''}`}>
-                            <MSym name={n.icon} size={20} fill={itemActive} className={itemActive ? 'text-[var(--blue-text)]' : 'opacity-80'} />
-                            {/* rail 的未處理數:藥丸右上紅色小數字 */}
-                            {collapsed && mineCount > 0 && (
-                              <span aria-hidden className="hidden md:block absolute -top-1 right-0.5 text-[10px] leading-none font-medium num text-[var(--red-text)]">{mineCount}</span>
-                            )}
-                          </span>
-                          {/* 手機抽屜永遠全名(collapsed 只影響 md+ 的 rail);rail 用短標 */}
-                          <span className={collapsed ? 'md:hidden' : ''}>{n.label}</span>
-                          {collapsed && <span className="hidden md:block text-[10.5px] leading-none font-medium">{NAV_SHORT[n.label] || n.label}</span>}
-                          {/* 展開態:右側未處理件數(README 導覽規格)。aria-hidden——
-                              e2e 用 exact accessible name 抓連結,數字不得混進名字 */}
-                          {mineCount > 0 && (
-                            <span aria-hidden className={`ml-auto text-xs font-medium num ${itemActive ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} ${collapsed ? 'md:hidden' : ''}`}>{mineCount}</span>
-                          )}
-                        </NavLink>
+                          className={coveredByBallGroup ? linkClass(collapsed) : () => linkClass(collapsed)}>
+                          {/* 未處理件數(README 導覽規格)=「現在輪到我」落在此工作面的數 */}
+                          <NavRowContent icon={n.icon} label={n.label} short={NAV_SHORT[n.label] || n.label}
+                            active={itemActive} count={mineCount} alert collapsed={collapsed} />
+                        </RowLink>
                         {n.tabs && (
                           <button type="button" onClick={() => toggleWorkbench(n.to)}
                             aria-expanded={expanded} aria-controls={`nav-children-${n.to.slice(1)}`}

@@ -60,6 +60,34 @@ export const navGroups = [
   ] },
 ]
 
+// ── 球權來源(Apple 改版第二包,疊合版 IA §0)──────────────────────────
+// 主畫面不是 dashboard,是收件匣:側欄先問「球在誰手上」,三個來源 1:1 對上
+// buildTodayTasks 回傳的 { mine, waiting, doneToday },不新增任何查詢。
+// 走 query param 而不是新路由:routeRegistry 以 pathname 為鍵,query 不進
+// routeAllowed,三個來源共用 /dashboard 的登記與角色判斷——權限零變動,
+// 也不必為同一頁登記三條假路由。
+// short 是刻意的例外(表現欄位進 navConfig):NAV_SHORT 是 BottomNav 的顯示層 map,
+// 球權來源不進 BottomNav,所以不共用那份;rail 短標跟著定義走,免得再開第三份對照表。
+// icon 只能挑 subset 字型 manifest 已包的字符(hourglass_top 不在裡面,
+// 而 build-icon-font.mjs 沒接進 package.json),「等對方」以 schedule(時鐘)代之。
+// label 沿用頁內區塊既有的產品用語(現在輪到我/等待對方/今天已完成),不另造一組
+// 「待我處理/等對方/已完成」——同一件事兩套詞會讓側欄與頁內對不起來,也會讓既有
+// e2e 與使用者記憶失效。side rail 的短標才縮。
+export const BALL_SOURCES = [
+  { key: 'mine', label: '現在輪到我', short: '輪到我', icon: 'inbox', to: '/dashboard' },
+  { key: 'waiting', label: '等待對方', short: '等對方', icon: 'schedule', to: '/dashboard?ball=waiting' },
+  { key: 'done', label: '今天已完成', short: '已完成', icon: 'task_alt', to: '/dashboard?ball=done' },
+]
+
+// 解析 ?ball=:缺省或未知值一律落回 mine(fail-safe:亂打參數看到的是「待我處理」,
+// 不是空白頁)。Layout 的選取態與 Dashboard 的聚焦都吃這一支,兩邊各解析一次遲早分岔。
+// 參數名用反引號是刻意的:scripts/icon-names.mjs 把 src 內所有小寫單引號字串當
+// 圖示候選,ball 不在 manifest 會讓 iconFont.test 紅;下次重跑 build-icon-font 再改回。
+export function resolveBallKey(searchParams) {
+  const v = searchParams?.get(`ball`)
+  return BALL_SOURCES.some((b) => b.key === v) ? v : 'mine'
+}
+
 // 不出現在導覽的路由也必須明確登記。access 只描述路由表面；
 // authenticated 路由一律由 App 的共同 Web guard 驗證登入與專案狀態。
 // print 只代表不套 WebLayout，不代表公開。
