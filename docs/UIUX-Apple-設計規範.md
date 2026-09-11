@@ -187,6 +187,8 @@ Token：`--dur-press`(100) `--dur-fast`(180) `--dur-menu`(200) `--dur-modal`(250
 - 側欄 1024px 收成 <120px、1280px 展回 >120px。
 - 存檔鈕底緣 ≤ BottomNav 頂緣（綁 `--bottom-nav-h`）。
 - 按鈕高度 ≥ 44px 抽查。
+- 深連結三頁（`/requirements/review`、`/deadlines`、`/project/new`）375px 逐顆掃：`main` 內所有互動元素 ≥ 44px（只有「label 裡除了控件沒有字」的 SearchField 外框算命中區）、表單控制項有非 placeholder 的可及名稱、Tab 進去的第一個元素有 `outline` 焦點環、`/deadlines` 抽屜開啟時焦點進面板 — `a11y.spec.js`。
+- 點擊可達性：三角色從側欄用點的走到 `visibleNavGroups` 每個子頁與參考項、球權三來源，URL 與 `aria-current` 都對 — `reachability.spec.js`。期望值直接算自 `navConfig.js`，不手抄。
 - `nav` 收合時顯示短標（`NAV_SHORT`）。
 
 ### 其他
