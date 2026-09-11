@@ -27,7 +27,9 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ['**/*.{js,jsx}'],
+    // .mjs 要明列:ESLint 預設就會掃 .mjs,但沒列進這裡只吃 recommended、沒有 Node 全域,
+    // console/process 全報 no-undef(scripts/capture-appshots.mjs 就是 .mjs)。
+    files: ['**/*.{js,mjs,jsx}'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
