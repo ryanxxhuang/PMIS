@@ -19,14 +19,23 @@ import { useEscape } from '../lib/useEscape.js'
 // 同一個殼在兩頁差 8px——沒有人決定過那 8px,它就是複製貼上漂掉的。
 export const LIST_DETAIL_GRID = 'grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_400px]'
 
+// 寬版:詳情內容本身就是寬的(表格、巢狀編輯器)時用。殼承諾的是「詳情永遠出現在
+// 同一個位置」,不是「詳情永遠 400px」——變更設計的追加/減帳明細是兩張約 620px
+// 的表格,硬塞進 400px 只會逼那一頁自己在頁面裡刻一套寬度,漂移就從這裡開始
+// (先前 400 vs 392 那 8px 就是這樣來的)。
+// 640 = 620 表格 + 左右內距。同樣只能是完整字面值,Tailwind 掃的是字串。
+export const LIST_DETAIL_GRID_WIDE = 'grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_640px]'
+
 // 兩欄殼:左欄由呼叫端給(各頁的清單長得不一樣,連 Card 的 title/action 都不同),
 // 右欄與抽屜由殼統一——它們正是「詳情永遠在同一個位置」這條 IA 的載體,
 // 交給各頁自己寫就會像先前那樣各漂各的。
 // detail 為空時右欄顯示 detailEmpty(要說「點左側清單查看」,不要只說沒有資料)。
-export function ListDetailLayout({ children, detail, detailLabel, detailEmpty = null, drawerOpen = false, onDrawerClose, className = '' }) {
+// width='wide' 只給詳情含表格或巢狀編輯器的頁面(見 LIST_DETAIL_GRID_WIDE)。
+// 不開放任意寬度:一開放就會回到每頁自己填一個數字的老路。
+export function ListDetailLayout({ children, detail, detailLabel, detailEmpty = null, drawerOpen = false, onDrawerClose, width = 'default', className = '' }) {
   return (
     <>
-      <div className={`${LIST_DETAIL_GRID} ${className}`}>
+      <div className={`${width === 'wide' ? LIST_DETAIL_GRID_WIDE : LIST_DETAIL_GRID} ${className}`}>
         {children}
         {/* sticky top-6:長清單捲動時詳情不會跟著捲走。aria-live 讓報讀器在
             選取換人時唸出新內容——桌機不開抽屜,沒有這個就完全無聲。 */}

@@ -30,6 +30,8 @@ import {
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appSnackbar } from '../../components/snackbar.jsx'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
+import { supabase } from '../../lib/supabase.js'
+import { locateQuotationInPage } from '../../../supabase/functions/_shared/sourceVerify.ts'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
 import { RUN_POLL_MS } from '../../lib/packageRuns.js'
 import { localISODate } from '../../lib/dates.js'
@@ -73,6 +75,79 @@ function WhoPill({ who, self }) {
       : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)]'}`}>
       <MSym name={PARTY_META[who]?.icon || 'engineering'} size={13} />{who}
     </span>
+  )
+}
+
+// ── 契約原文(方向 C):選中義務時取出處那一頁的逐頁全文,把引述定位後高亮 ──
+// 單頁專屬資料,直接查 Supabase 不進 store(CLAUDE.md §4)。document_pages 的 RLS
+// 與 requirement_sources 同一級契約分級把關(can_read_document_version),讀它
+// 不會繞過分級。同一頁常被多條義務引用(切換相鄰義務多半落在同一頁),以
+// 「版本+頁碼」做元件內快取,離開頁面即丟。
+// 不用查的情況一律 idle:demo(沒有 supabase)、無出處、無頁碼(DOCX 出處刻意
+// 沒有頁碼,見 verifySuggestionSource)。查到空頁或查詢失敗都是 text=null——
+// 對 UI 兩者同一條退路(退回引述),失敗不另起錯誤橫幅:高亮是加值,不是主資料。
+function useSourcePageText(source, enabled) {
+  const versionId = source?.document_version_id || null
+  const pageNumber = source?.page_number ?? null
+  const key = enabled && supabase && versionId && pageNumber != null ? `${versionId}:${pageNumber}` : ''
+  const cache = useRef(new Map())
+  const [state, setState] = useState({ key: '', text: null })
+  useEffect(() => {
+    if (!key) return undefined
+    if (cache.current.has(key)) { setState({ key, text: cache.current.get(key) }); return undefined }
+    let active = true
+    ;(async () => {
+      const { data, error } = await supabase.from('document_pages')
+        .select('extracted_text')
+        .eq('document_version_id', versionId).eq('page_number', pageNumber)
+      const text = data?.[0]?.extracted_text || null
+      // 失敗不進快取:下次選回來再試一次;「該頁沒有文字」是確定事實,可以記住
+      if (!error) cache.current.set(key, text)
+      if (active) setState({ key, text })
+    })()
+    return () => { active = false }
+  }, [key, versionId, pageNumber])
+  if (!key) return { status: 'idle', text: null }
+  // key 換了但 effect 還沒落地:回 loading 而不是上一條義務的頁文字(不串頁)
+  if (state.key !== key) return { status: 'loading', text: null }
+  return { status: 'ready', text: state.text }
+}
+
+// 原文＋高亮:整頁逐頁文字放進固定高度的捲動框,引述那一段用 <mark> 標起來並
+// 捲到框的中間。固定高度(不是 max-h)有兩個理由:詳情欄在桌機是 sticky,整頁契約
+// 原文攤開會比視窗還高、sticky 就失效;骨架與正式框同高,載入完成不位移。
+// 捲動只捲這個框、算 scrollTop,不用 scrollIntoView——那會連外層(視窗/抽屜)
+// 一起捲,選一條義務整頁跳走。text 為空=載入中,框內放骨架。
+// 字級走階梯的 text-body,行高放寬到 1.75(原文是閱讀用,不是掃描用);換行照
+// 逐頁文字原樣(pre-wrap):PDF 的條號、項次靠換行分段,壓成一段反而難讀。
+// 高亮底色用 --blue-tint(選取態語意;--text 在其上對比 14.77 / 深色 12.38);
+// 不用 --amber-tint——上方核對橫幅的 attention 態就是 amber,同色會讀成警示。
+function SourcePassage({ text, range, cite }) {
+  const boxRef = useRef(null)
+  const markRef = useRef(null)
+  useEffect(() => {
+    const box = boxRef.current
+    const mark = markRef.current
+    if (!box || !mark) return
+    box.scrollTop = Math.max(0, mark.offsetTop - (box.clientHeight - mark.offsetHeight) / 2)
+  }, [text, range])
+  return (
+    <figure className="m-0 bg-[var(--bg)] border border-[var(--border-2)] rounded-lg overflow-hidden">
+      <figcaption className="num text-caption text-[var(--text-3)] leading-relaxed px-3 pt-[11px]">
+        <cite className="not-italic">{cite}</cite>
+      </figcaption>
+      {/* role=region + tabIndex:可捲動區要能用鍵盤捲,generic div 不准掛 aria-label */}
+      <div ref={boxRef} role="region" aria-label="契約原文" tabIndex={0}
+        className="relative h-[320px] overflow-y-auto px-3 pt-[7px] pb-[11px] text-body leading-[1.75] text-[var(--text)] whitespace-pre-wrap break-words outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">
+        {text ? (<>
+          {text.slice(0, range.start)}
+          <mark ref={markRef} className="bg-[var(--blue-tint)] text-[var(--text)] rounded-sm px-0.5 -mx-0.5 box-decoration-clone">
+            {text.slice(range.start, range.end)}
+          </mark>
+          {text.slice(range.end)}
+        </>) : <SkeletonList rows={4} label="正在載入契約原文…" />}
+      </div>
+    </figure>
   )
 }
 
@@ -227,6 +302,17 @@ export default function Requirements() {
     if (!openable) return
     openDocumentVersionFile(openable.version, { page: openable.source.page_number, onError: setMsg })
   }, [openable])
+
+  // 契約原文＋高亮(方向 C):出處那一頁的全文 + 引述在其中的精確位置。
+  // 定位器與 source_verified 用同一套正規化規則(sourceVerify.ts,刻意同檔);
+  // 定不到(標點寬容才驗過、對照守門觸發、引述太短)回 null → 退回引述並明說。
+  const passage = useSourcePageText(selected?.source, isPersistedProject)
+  const passageRange = useMemo(
+    () => (passage.text && selected?.quote
+      ? locateQuotationInPage({ quotation: selected.quote, pageText: passage.text })
+      : null),
+    [passage.text, selected?.quote],
+  )
 
   // 鍵盤:↑/↓ 移動選取、Enter 開啟原文、/ 聚焦搜尋(共用殼 hook;回報 Modal 開著就停用)
   useListKeyboardNav({ ordered, selectedId, select, idPrefix: 'ob-', onEnter: openOriginal, modalUp: reportOpen, searchRef })
@@ -393,10 +479,24 @@ export default function Requirements() {
             <Badge color={selected.verified ? 'green' : 'amber'}>{selected.verified ? '來源已核對' : '來源待核對'}</Badge>
           )}
         </div>
-        {selected.quote ? (
-          <SourceQuote quote={selected.quote}
-            cite={[selected.doc, selected.clause ? `契約條款 ${selected.clause}` : null, selected.page].filter(Boolean).join(' · ')} />
-        ) : (selected.clause || selected.page) ? (
+        {/* 退路鏈(每一段都有對應 UI):① 無出處/無頁碼 → 引述照舊(idle);
+            ② 該頁沒有逐頁文字或查不到 → 引述;③ 有頁文字但定不到位置 → 引述+明說;
+            ④ 定位成功 → 整頁原文+高亮。載入中先擺同高的骨架框,落地不位移。 */}
+        {selected.quote ? (() => {
+          const cite = [selected.doc, selected.clause ? `契約條款 ${selected.clause}` : null, selected.page].filter(Boolean).join(' · ')
+          if (passage.status === 'loading') return <SourcePassage text={null} range={null} cite={cite} />
+          if (passage.status === 'ready' && passage.text && passageRange) {
+            return <SourcePassage text={passage.text} range={passageRange} cite={cite} />
+          }
+          return (<>
+            <SourceQuote quote={selected.quote} cite={cite} />
+            {passage.status === 'ready' && passage.text && !passageRange && (
+              <p className="mt-1.5 text-caption text-[var(--text-3)] leading-relaxed">
+                原文比對不到精確位置,僅顯示 AI 引述;可按「開啟原文」到該頁核對。
+              </p>
+            )}
+          </>)
+        })() : (selected.clause || selected.page) ? (
           <p className="num text-caption text-[var(--text-3)] leading-relaxed">
             出處 {[selected.clause, selected.page].filter(Boolean).join(' · ')}(原文請至專案文件查閱)
           </p>

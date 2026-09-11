@@ -215,13 +215,17 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
       )}
 
       {list.length === 0 ? <Empty>尚無{isSafety ? '工安' : ''}缺失</Empty> : (
-        <div className="space-y-2">
+        // 缺失列是真正的清單:<ul>/<li> 讓報讀器報「清單,N 項」,e2e 用
+        // getByRole('listitem').filter({ hasText }) 鎖列(與已轉殼的五頁同一套),
+        // 不再靠 justify-between 祖先。role="list" 要明寫:Tailwind preflight 給 ul
+        // 加了 list-style: none,Safari 在 list-style: none 時會拿掉 <ul> 的清單語意。
+        <ul role="list" className="space-y-2">
           {list.map((d) => {
             // 期限與改善說明排在字串後段,375px 一定被 truncate 切掉,而缺失沒有詳情頁可下鑽,
             // 所以同一串文字要同時掛 title,滑鼠/報讀器至少拿得到全文
             const meta = [isSafety ? d.record_date : d.work_item_no, d.location, d.due_date ? `期限 ${d.due_date}` : '', d.improvement_note ? `改善：${d.improvement_note}` : ''].filter(Boolean).join(' · ')
             return (
-            <div key={d.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
+            <li key={d.id} className="flex items-center justify-between gap-3 border-b border-[var(--border-2)] pb-2 text-sm">
               <div className="min-w-0">
                 <div className="text-[var(--text)]">{d.title} <BallChip ball={defectBall(d)} /> {d.severity === '嚴重' && <Badge color="red">嚴重</Badge>} {d.correction_reason && <Badge color="amber">已更正</Badge>}</div>
                 <div className="text-xs text-[var(--text-3)] truncate" title={meta}>
@@ -245,10 +249,10 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
                   <button onClick={() => remove(d)} className="inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除缺失"><MSym name="close" size={16} /></button>
                 )}
               </div>
-            </div>
+            </li>
             )
           })}
-        </div>
+        </ul>
       )}
       <p className="text-caption text-[var(--text-3)] mt-2">
         {isSafety

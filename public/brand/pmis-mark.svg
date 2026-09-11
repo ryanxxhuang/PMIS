@@ -1,6 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <path d="M24 12.4 L34.4 30.4 L13.6 30.4 Z" fill="none" stroke="#dadce0" stroke-width="3" stroke-linejoin="round"></path>
-  <circle cx="24" cy="12.4" r="5.2" fill="#1a73e8"></circle>
-  <circle cx="34.4" cy="30.4" r="5.2" fill="#ea4335"></circle>
-  <circle cx="13.6" cy="30.4" r="5.2" fill="#fbbc04"></circle>
+  <!-- 三角形三個頂點=契約三方,顏色沿用 ui.jsx 的 BALL_COLOR:
+       頂=廠商藍、右下=監造 amber、左下=機關 purple。
+       改版前是 Google 四色(藍/紅/黃),對應不到任何東西。
+       三個點對白底皆 >= 3:1(4.70 / 5.28 / 6.04,WCAG 1.4.11 圖形門檻);
+       三角描邊 1.51 低於門檻是刻意的——它只是連接線,資訊在三個點上。 -->
+  <path d="M24 12.4 L34.4 30.4 L13.6 30.4 Z" fill="none" stroke="#d2d2d7" stroke-width="3" stroke-linejoin="round"></path>
+  <circle cx="24" cy="12.4" r="5.2" fill="#0071e3"></circle>
+  <circle cx="34.4" cy="30.4" r="5.2" fill="#c93400"></circle>
+  <circle cx="13.6" cy="30.4" r="5.2" fill="#8944ab"></circle>
 </svg>

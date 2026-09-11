@@ -1,5 +1,5 @@
-// 機關(李淑芬)動線:落地跨案總覽 → 核准變更設計 → 變更後契約金額跨頁一致(B-02)
-// → 廠商成本頁被擋 → 404 頁。
+// 機關(李淑芬)動線:落地收件匣、從側欄「專案」到跨案總覽 → 核准變更設計 →
+// 變更後契約金額跨頁一致(B-02)→ 廠商成本頁被擋 → 404 頁。
 import { test, expect } from '@playwright/test'
 import { loginAs, gotoHash } from './helpers.js'
 
@@ -8,11 +8,14 @@ import { loginAs, gotoHash } from './helpers.js'
 const REVISED_AFTER_CO2 = '724,388,067'
 
 test.describe('機關', () => {
-  test('登入落在今日待辦(精修期最小表面);跨案總覽深連結仍可達', async ({ page }) => {
+  test('登入落在今日待辦(收件匣);跨案總覽從側欄「專案」子頁可達,風險稽核只給機關', async ({ page }) => {
     await loginAs(page, 'owner')
     await expect(page.getByRole('heading', { name: '今日待辦' })).toBeVisible()
-    // 精修期跨案總覽暫別側欄,但深連結活著(恢復「專案」工作面時還原角色分流落地)
-    await gotoHash(page, '/portfolio')
+    // 落地不依角色分流(規範 §0 方向 A):多案角色要看跨案總覽,從「專案」群組一格就到
+    const nav = page.getByRole('navigation', { name: '主要功能' })
+    await nav.getByRole('button', { name: '展開專案子頁' }).click()
+    await expect(nav.getByRole('link', { name: '風險稽核', exact: true })).toBeVisible() // roles: owner
+    await nav.getByRole('link', { name: '跨案總覽', exact: true }).click()
     await expect(page.getByRole('heading', { name: '跨案總覽' })).toBeVisible()
     await page.goto('/')
     await expect(page).toHaveURL(/#\/dashboard/)
@@ -21,13 +24,23 @@ test.describe('機關', () => {
   test('核准變更設計 → 變更後契約金額跨頁一致(B-02)', async ({ page }) => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/change-orders')
-    // 待核定的變更排在最前面,機關進來第一眼就是要核的東西(W8-4C C1)
-    await expect(page.getByRole('heading', { name: /待核定/ })).toBeVisible()
-    // CO-002 卡片上的「核准」動作鈕(機關 can.ratify;D-016 取代四值下拉,
-    // 監造只剩受理審查/退回,核准/駁回=機關專屬)
-    const co2Card = page.locator('h3', { hasText: 'CO-002' })
-      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
-    await co2Card.getByRole('button', { name: '核准', exact: true }).click()
+    // 改版後兩段分群是快篩 chip(不再是區段標題):「待核定 1」帶件數,機關進來第一眼
+    // 就看到還有幾筆要核(W8-4C C1)。件數會隨劇本變,用 ^ 錨定標籤
+    await expect(page.getByRole('button', { name: /^待核定/ })).toBeVisible()
+    // 列只負責選取、核定動作全在詳情欄:先選中 CO-002,再在以編號命名的 region
+    // (「CO-002 詳情」)裡按「核准」(機關 can.ratify;監造只剩受理審查/退回,
+    // 核准/駁回=機關專屬,D-016)。定位一律走 role / aria-label / 文字,不綁視覺 class
+    const row = page.getByRole('listitem').filter({ hasText: 'CO-002' })
+    await row.click()
+    await expect(row).toHaveAttribute('aria-current', 'true')
+    const d2 = page.getByRole('region', { name: 'CO-002 詳情' })
+    // 明細表真的在詳情欄裡(減帳與追加各一列),不是空面板
+    await expect(d2.getByText('花崗石地坪（新增）')).toBeVisible()
+    // 按鈕名一律 exact:快篩 chip「已核定／已結 1」會被子字串比對吃成按鈕名
+    await d2.getByRole('button', { name: '核准', exact: true }).click()
+    // 清單列的狀態章即時翻成核准、核准鈕消失(不是只有彙總數字變)
+    await expect(row.getByText('核准', { exact: true })).toBeVisible()
+    await expect(d2.getByRole('button', { name: '核准', exact: true })).toHaveCount(0)
     // 本頁彙總即時更新
     await expect(page.getByText(`NT$ ${REVISED_AFTER_CO2}`).first()).toBeVisible()
     // 跨頁一致:估驗頁分母、Dashboard 發包工程費都是同一個數字
@@ -44,8 +57,7 @@ test.describe('機關', () => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/dashboard')
     // demoSeed:報竣 -28、竣工確認 -25 → 初驗法定 30 日內,期限將至
-    const mine = page.getByRole('heading', { name: '現在輪到我' })
-      .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const mine = page.getByRole('group', { name: '現在輪到我', exact: true })
     await expect(mine.getByText('初驗期限將至')).toBeVisible()
     // 廠商責任的契約義務不得變成機關做不到的假待辦(AI 觀察那一行仍可提醒,但不是待辦)
     await expect(mine.getByText('第 5 期估驗計價送審')).toHaveCount(0)

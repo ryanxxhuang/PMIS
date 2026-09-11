@@ -4,7 +4,7 @@
 // 不再寫 text-[Npx]。規範文件:docs/UIUX-Apple-設計規範.md,改皮之前先讀那份。
 // ⚠️ 本輪換皮的鐵律:字級只准「等值或更小」的替換(e2e 全路由 375/1024px 有
 // scrollWidth <= clientWidth 斷言),任何一階放大都會整片翻紅。
-import { forwardRef, useRef } from 'react'
+import { forwardRef, useId, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 import PageTabs from './PageTabs.jsx'
@@ -14,9 +14,9 @@ import PageTabs from './PageTabs.jsx'
 // text-caption=11px,與舊 text-[11px] 等值,只是多帶階梯的行高與字距。
 export const THEAD_CLS = 'text-caption font-medium text-[var(--text-2)]'
 
-// 卡殼單一字串:Card/Stat/Surface 共用。rounded-2xl 的「class 名」是 e2e xpath
-// 合約(7 條 ancestor::div[contains(@class,"rounded-2xl")] 選擇器靠它定位卡殼),
-// 值已在 @theme 改為 12px——名一個字都不能動、視覺照規格。
+// 卡殼單一字串:Card/Stat/Surface 共用。圓角值在 @theme 把 --radius-2xl 改為 12px,
+// 視覺照規格。rounded-2xl 的 class 名已不再是 e2e 合約——卡片改由 Card 的
+// role="group" + 標題名稱定位(見下方 Card),要換名只需連 @theme 那條一起搬。
 const SURFACE = 'min-w-0 bg-[var(--surface)] rounded-2xl border border-[var(--border-card)] [box-shadow:var(--shadow-card)]'
 
 // ── 鍵盤焦點(Apple):3px 主色 18% 外光暈 + 1px 主色描邊 ──────────────────
@@ -35,14 +35,22 @@ export function Surface({ as: Tag = 'div', className = '', children, ...props })
 }
 
 export function Card({ title, action, children, className = '', bodyClass = 'p-5', ...rest }) {
-  // ...rest 直通根節點:呼叫端的 aria-busy/data-* 才不會被靜默丟棄
+  // 有標題的卡=有可及名稱的 group(role="group" + aria-labelledby 指向標題 h3):
+  // 報讀器與 e2e 都能用「標題為 X 的那張卡」定位(getByRole('group', { name })),
+  // 不必再從 h3 往上爬 rounded-2xl 祖先。用 group 不用 region/<section>:有可及名稱
+  // 的 section 就是 landmark,每張卡都掛會變成地標洪水,把報讀器的地標清單灌爆;
+  // group 同樣可被 getByRole('group', { name }) 定位但不進地標,Quality 的「品質分段」
+  // 已經是這套。沒有 title 的卡維持純 div——沒名稱就不該宣告成有名稱的 group。
+  const titleId = useId()
+  const named = title ? { role: 'group', 'aria-labelledby': titleId } : {}
+  // ...rest 直通根節點(放在 named 之後):呼叫端的 aria-busy/data-* 不會被靜默丟棄
   return (
-    <div className={`${SURFACE} ${className}`} {...rest}>
+    <div {...named} className={`${SURFACE} ${className}`} {...rest}>
       {title && (
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[var(--border-2)]">
           {/* text-callout=15px 與舊 text-[15px] 等值;卡標題升 semibold 是 Apple 的
               分區標題字重,CJK 字寬不隨字重變,不影響溢位斷言 */}
-          <h3 className="font-semibold text-[var(--text)] text-callout">{title}</h3>
+          <h3 id={titleId} className="font-semibold text-[var(--text)] text-callout">{title}</h3>
           {action}
         </div>
       )}

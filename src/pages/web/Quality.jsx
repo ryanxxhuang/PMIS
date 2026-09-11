@@ -161,8 +161,9 @@ export default function Quality() {
         {queue.length === 0 ? <Empty>目前沒有輪到你處理的品質事項</Empty> : (
           <div className="space-y-1">
             {queue.slice(0, QUALITY_QUEUE_LIMIT).map((q) => (
-              // 整列可點的鈕,手機補到 44px 不會破版(class 刻意仍不含 justify-between:
-              // contractor/supervisor spec 用 justify-between 祖先鎖缺失/查驗列)
+              // 整列可點的鈕,手機補到 44px 不會破版。這裡刻意不是 <li>:缺失列/查驗列
+              // 才是清單,contractor/supervisor spec 用 getByRole('listitem') 鎖那兩處的列,
+              // 佇列若也當 listitem 會雙重命中
               <button key={q.key} onClick={() => setSegment(q.segment)}
                 className="w-full flex items-center gap-3 text-left text-sm rounded-lg px-2 py-1.5 max-md:min-h-11 hover:bg-[var(--surface-2)] pressable">
                 <Badge color={QUEUE_TAG_COLOR[q.tag] || 'slate'}>{q.tag}</Badge>

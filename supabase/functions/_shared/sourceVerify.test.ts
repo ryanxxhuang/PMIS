@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MIN_VERIFIABLE_QUOTATION_LENGTH,
+  locateQuotationInPage,
   normalizeSourceText,
   stripComparablePunctuation,
   verifySourceQuotation,
@@ -129,5 +130,87 @@ describe('verifySuggestionSource', () => {
 describe('stripComparablePunctuation', () => {
   it('strips only the bounded punctuation list, never content characters', () => {
     expect(stripComparablePunctuation('第12條:提送(監造)審查。')).toBe('第12條提送監造審查')
+  })
+})
+
+describe('locateQuotationInPage', () => {
+  // 高亮的定義:回傳區段 slice 原文後,正規化結果恰等於引述的正規化結果
+  const sliceOf = (pageText: string, quotation: string) => {
+    const loc = locateQuotationInPage({ quotation, pageText })
+    expect(loc).not.toBeNull()
+    const text = pageText.slice(loc!.start, loc!.end)
+    expect(normalizeSourceText(text)).toBe(normalizeSourceText(quotation))
+    return text
+  }
+
+  it('locates a clause across line breaks, full-width punctuation and zero-width characters', () => {
+    const pageText =
+      '第十二條\u3000施工計畫\n施工\u200b廠商應於開工前 14 日內，檢送施工計畫書\n' +
+      '予監造單位審查，未經核定不得施工。\n第十三條 品質計畫'
+    const quotation = '施工廠商應於開工前14日內,檢送施工計畫書予監造單位審查'
+    const text = sliceOf(pageText, quotation)
+    // 區段起訖落在條文本身:不吃到前面的標題換行,也不吃到後面的句號
+    expect(text.startsWith('施工')).toBe(true)
+    expect(text.endsWith('審查')).toBe(true)
+    expect(text).toContain('\n')
+    // 和驗證器講同一個事實
+    expect(verifySourceQuotation({ quotation, pageText })).toBe(true)
+  })
+
+  it('returns UTF-16 offsets that survive astral characters before the clause', () => {
+    // 𠀋(CJK Ext-B,代理對佔 2 個 code unit)在條文前面:偏移仍要對得上 slice
+    const pageText = '𠀋 補充說明\n施工廠商應於開工前14日內檢送施工計畫書予監造單位審查'
+    const text = sliceOf(pageText, '施工廠商應於開工前14日內檢送施工計畫書予監造單位審查')
+    expect(text).toBe('施工廠商應於開工前14日內檢送施工計畫書予監造單位審查')
+  })
+
+  it('picks the first occurrence when the clause appears more than once', () => {
+    const clause = '施工廠商應於開工前14日內檢送施工計畫書予監造單位審查'
+    const pageText = `${clause}。\n(重申)${clause}。`
+    expect(locateQuotationInPage({ quotation: clause, pageText })).toEqual({ start: 0, end: clause.length })
+  })
+
+  it('returns null when the quotation is not on the page', () => {
+    expect(locateQuotationInPage({
+      quotation: '施工廠商應於開工前 30 日內提送品質計畫',
+      pageText: '施工廠商應於開工前14日內檢送施工計畫書予監造單位審查',
+    })).toBeNull()
+  })
+
+  it('returns null for quotations too short to prove anything', () => {
+    expect('施工計畫'.length).toBeLessThan(MIN_VERIFIABLE_QUOTATION_LENGTH)
+    expect(locateQuotationInPage({ quotation: '施工計畫', pageText: '第十二條 施工計畫' })).toBeNull()
+  })
+
+  it('returns null when only punctuation-tolerant matching succeeds (verified, but not locatable)', () => {
+    const pageText = '施工廠商應於開工前14日內,檢送施工計畫書予監造單位審查'
+    const quotation = '施工廠商應於開工前14日內、檢送施工計畫書予監造單位審查'
+    expect(verifySourceQuotation({ quotation, pageText })).toBe(true)
+    expect(locateQuotationInPage({ quotation, pageText })).toBeNull()
+  })
+
+  it('returns null when per-character normalization diverges from whole-string normalization', () => {
+    // 'e' + U+0301 整串 NFKC 會結合成 'é',逐字元不會:對照表不可信,整頁放棄——
+    // 即使引述本身在別處完全比得上、驗證器判 true,也不高亮
+    const pageText = 'Cafe\u0301 附錄\n施工廠商應於開工前14日內檢送施工計畫書予監造單位審查'
+    const quotation = '施工廠商應於開工前14日內檢送施工計畫書予監造單位審查'
+    expect(verifySourceQuotation({ quotation, pageText })).toBe(true)
+    expect(locateQuotationInPage({ quotation, pageText })).toBeNull()
+  })
+
+  it('returns null instead of cutting through a character that NFKC expands', () => {
+    // '㎡' → 'm2':引述從展開後的 '2' 起頭,區段勢必多含 'm' 那半個字
+    const pageText = '面積 100㎡ 以上之工程應設置圍籬'
+    const quotation = '2以上之工程應設置圍籬'
+    expect(verifySourceQuotation({ quotation, pageText })).toBe(true)
+    expect(locateQuotationInPage({ quotation, pageText })).toBeNull()
+    // 整個字都在引述裡就沒問題
+    expect(sliceOf(pageText, '100㎡以上之工程')).toBe('100㎡ 以上之工程')
+  })
+
+  it('returns null for non-string inputs', () => {
+    expect(locateQuotationInPage({ quotation: null, pageText: '施工廠商應於開工前14日內檢送' })).toBeNull()
+    expect(locateQuotationInPage({ quotation: '施工廠商應於開工前14日內檢送', pageText: null })).toBeNull()
+    expect(locateQuotationInPage({ quotation: '施工廠商應於開工前14日內檢送', pageText: 42 })).toBeNull()
   })
 })

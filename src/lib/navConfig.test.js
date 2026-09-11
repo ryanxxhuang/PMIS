@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { navGroups, routeAllowed, routeRegistry, visibleNavGroups, defaultLandingPath } from './navConfig.js'
+import { navGroups, routeAllowed, routeRegistry, visibleNavGroups, defaultLandingPath, BALL_SOURCES } from './navConfig.js'
 
 const flatNav = (groups) => groups.flatMap((g) => g.items)
 const ORGS = ['contractor', 'supervisor', 'owner']
+// 側欄大綱:[分區, [[項目, 子頁標籤 | null]]]——三個角色各自看到什麼,直接對 label 斷言
+const outline = (groups) => groups.map((g) => [g.title, g.items.map((i) => [i.label, i.tabs ? i.tabs.map((t) => t.label) : null])])
 
 describe('routeAllowed(路由守衛與導覽同源)', () => {
   it('請款收款:監造擋、施工/機關放行、override 放行', () => {
@@ -75,33 +77,99 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
   })
 })
 
-describe('visibleNavGroups(側欄)——精修期最小表面(2026-08-25 使用者指示)', () => {
-  it('三角色側欄都只有四個入口:今日待辦/專案文件/契約重點/標單工項', () => {
-    for (const org of ORGS) {
-      expect(flatNav(visibleNavGroups(org, false)).map((i) => i.label)).toEqual([
-        '今日待辦', '專案文件', '契約重點', '標單工項',
-      ])
-    }
-    expect(flatNav(visibleNavGroups('contractor', true))).toHaveLength(4)
+describe('routeRegistry(登記表的集合不因導覽重劃而變)', () => {
+  // 導覽從「工作面」遷到來源模型只是換分區與解封,路由集合一條不增不減——
+  // 這份清單一旦要改,代表真的新增/移除了路由,不該是導覽重排的副作用。
+  it('登記的路由集合釘死', () => {
+    expect(Object.keys(routeRegistry).sort()).toEqual([
+      '*', '/', '/acceptance', '/activity', '/admin', '/agent', '/alerts', '/assistant', '/audit', '/boq',
+      '/change-orders', '/contract', '/contract/print', '/cost', '/dashboard', '/deadlines', '/itp', '/login',
+      '/members', '/monthly-report', '/payments', '/portfolio', '/progress', '/project/new', '/quality',
+      '/quality/checklist-print', '/requirements', '/requirements/review', '/rfi', '/safety', '/schedule',
+      '/security', '/site-log', '/site-log/print', '/submittals', '/supervisor-report', '/valuation',
+      '/valuation/package', '/valuation/print',
+    ])
   })
-  // 2026-08-12 dry-run 曾證明亂藏入口會做出死功能;這次是使用者主導的整批收斂,
-  // 約定=路由與深連結全部活著(今日待辦/初始化清單仍導向這些頁),精修完逐項復出。
-  it('暫別側欄的頁面:深連結與角色限制原封不動', () => {
-    for (const org of ORGS) {
-      for (const path of ['/site-log', '/quality', '/submittals', '/valuation', '/monthly-report', '/portfolio', '/members', '/activity']) {
-        expect(routeAllowed(path, org, false)).toBe(true)
-      }
-    }
-    // roles 限制不因隱藏鬆動
-    expect(routeAllowed('/payments', 'supervisor', false)).toBe(false)
-    expect(routeAllowed('/cost', 'owner', false)).toBe(false)
-    expect(routeAllowed('/audit', 'contractor', false)).toBe(false)
-    expect(routeAllowed('/audit', 'owner', false)).toBe(true)
+  it('/dashboard 登記在非導覽表(由球權來源持有),不限角色', () => {
+    expect(routeRegistry['/dashboard']).toEqual({ access: 'authenticated' })
+    for (const org of ORGS) expect(routeAllowed('/dashboard', org, false)).toBe(true)
   })
-  it('四個入口都是扁平項(無分頁列),PageTabs 不再於任何保留頁渲染', () => {
-    for (const item of flatNav(visibleNavGroups('contractor', true))) {
-      expect(item.tabs).toBeUndefined()
+  it('球權來源三個入口的 pathname 都是登記路由且各角色可進(query 不進守衛)', () => {
+    for (const b of BALL_SOURCES) {
+      const pathname = b.to.split('?')[0]
+      expect(routeRegistry[pathname]).toBeTruthy()
+      for (const org of ORGS) expect(routeAllowed(pathname, org, false)).toBe(true)
     }
+  })
+})
+
+describe('visibleNavGroups(側欄)——來源模型(規範 §0:工作面降級為來源)', () => {
+  const WORK = ['現場與品質', '審查與協作', '進度與金流', '報表與結案', '專案']
+  const REFERENCE = ['契約重點', '專案文件', '標單工項']
+  it('分區固定為「工作」「參考」(平台另測);工作五組、參考三項,順序釘死,三角色皆同', () => {
+    for (const org of ORGS) {
+      const groups = visibleNavGroups(org, false)
+      expect(groups.map((g) => g.title)).toEqual(['工作', '參考'])
+      expect(groups[0].items.map((i) => i.label)).toEqual(WORK)
+      expect(groups[1].items.map((i) => i.label)).toEqual(REFERENCE)
+    }
+  })
+  it('今日待辦不再是側欄項:/dashboard 由球權來源獨佔,導覽定義裡沒有第二個入口指向它', () => {
+    // 兩個入口指向同一頁正是先前 aria-current 要去重複的根因;這條釘住根因不回來。
+    for (const g of navGroups) for (const item of g.items) {
+      expect(item.to).not.toBe('/dashboard')
+      for (const t of (item.tabs || [])) expect(t.to).not.toBe('/dashboard')
+    }
+    expect(BALL_SOURCES.map((b) => b.to.split('?')[0])).toEqual(['/dashboard', '/dashboard', '/dashboard'])
+  })
+  it('工作五組都是群組+子頁(≥2),參考三項都是扁平項', () => {
+    const groups = visibleNavGroups('contractor', true)
+    for (const item of groups[0].items) expect(item.tabs.length).toBeGreaterThanOrEqual(2)
+    for (const item of groups[1].items) expect(item.tabs).toBeUndefined()
+  })
+  it('施工廠商:看得到請款/成本/排程,看不到監造報表與風險稽核', () => {
+    expect(outline(visibleNavGroups('contractor', false))).toEqual([
+      ['工作', [
+        ['現場與品質', ['施工日誌', '品質查驗', '檢驗停留點', '工安管理']],
+        ['審查與協作', ['送審文件', '工程疑義', '變更設計']],
+        ['進度與金流', ['估驗計價', '請款收款', '成本管理', '進度 S 曲線', '逐工項排程']],
+        ['報表與結案', ['施工月報', '驗收結算']],
+        ['專案', ['跨案總覽', '活動紀錄', '三方成員']],
+      ]],
+      ['參考', [['契約重點', null], ['專案文件', null], ['標單工項', null]]],
+    ])
+  })
+  it('監造:不經手請款、看不到廠商成本/排程;多監造報表', () => {
+    expect(outline(visibleNavGroups('supervisor', false))).toEqual([
+      ['工作', [
+        ['現場與品質', ['施工日誌', '品質查驗', '檢驗停留點', '工安管理']],
+        ['審查與協作', ['送審文件', '工程疑義', '變更設計']],
+        ['進度與金流', ['估驗計價', '進度 S 曲線']],
+        ['報表與結案', ['施工月報', '監造報表', '驗收結算']],
+        ['專案', ['跨案總覽', '活動紀錄', '三方成員']],
+      ]],
+      ['參考', [['契約重點', null], ['專案文件', null], ['標單工項', null]]],
+    ])
+  })
+  it('機關:看不到廠商成本/排程;多風險稽核(機關防弊)', () => {
+    expect(outline(visibleNavGroups('owner', false))).toEqual([
+      ['工作', [
+        ['現場與品質', ['施工日誌', '品質查驗', '檢驗停留點', '工安管理']],
+        ['審查與協作', ['送審文件', '工程疑義', '變更設計']],
+        ['進度與金流', ['估驗計價', '請款收款', '進度 S 曲線']],
+        ['報表與結案', ['施工月報', '驗收結算']],
+        ['專案', ['跨案總覽', '活動紀錄', '三方成員', '風險稽核']],
+      ]],
+      ['參考', [['契約重點', null], ['專案文件', null], ['標單工項', null]]],
+    ])
+  })
+  it('群組入口=第一個可見子頁;override(非正式模式專案管理者)看到全部子頁', () => {
+    for (const org of ORGS) {
+      expect(visibleNavGroups(org, false)[0].items.find((i) => i.label === '進度與金流').to).toBe('/valuation')
+    }
+    const money = visibleNavGroups('supervisor', true)[0].items.find((i) => i.label === '進度與金流')
+    expect(money.tabs.map((t) => t.label)).toEqual(['估驗計價', '請款收款', '成本管理', '進度 S 曲線', '逐工項排程'])
+    expect(flatNav(visibleNavGroups('supervisor', true))).toHaveLength(8)
   })
 })
 
@@ -120,19 +188,19 @@ describe('平台管理(/admin):platformAdminOnly 是獨立於專案角色的維�
       expect(routeAllowed('/admin', org, false, true)).toBe(true)
     }
   })
-  it('側欄:非平台管理員完全看不到(連「平台」群組都不渲染),維持四個工作面項', () => {
+  it('側欄:非平台管理員完全看不到(連「平台」分區都不渲染),維持工作五組+參考三項', () => {
     for (const org of ORGS) {
       const groups = visibleNavGroups(org, false)
       expect(groups.find((g) => g.title === '平台')).toBeUndefined()
-      expect(flatNav(groups)).toHaveLength(4)
+      expect(flatNav(groups)).toHaveLength(8)
     }
     expect(flatNav(visibleNavGroups('contractor', true)).find((i) => i.to === '/admin')).toBeUndefined()
   })
-  it('側欄:平台管理員在四個工作面項外多出獨立「平台管理」', () => {
+  it('側欄:平台管理員在工作/參考之外多出獨立「平台」分區,只有平台管理一項', () => {
     const groups = visibleNavGroups('owner', false, true)
-    const platform = groups.find((g) => g.title === '平台')
-    expect(platform.items.map((i) => i.label)).toEqual(['平台管理'])
-    expect(flatNav(groups)).toHaveLength(5)
+    expect(groups.map((g) => g.title)).toEqual(['工作', '參考', '平台'])
+    expect(groups.at(-1).items.map((i) => i.label)).toEqual(['平台管理'])
+    expect(flatNav(groups)).toHaveLength(9)
   })
   it('platformAdminOnly 路由清單釘死:只有 /admin,且不得帶 roles(兩維度不可混用)', () => {
     const flagged = []
@@ -148,7 +216,7 @@ describe('平台管理(/admin):platformAdminOnly 是獨立於專案角色的維�
   })
 })
 
-describe('roles 定義釘死(批6 搬移不得鬆綁)', () => {
+describe('roles 定義釘死(解封與重劃分區都不得鬆綁)', () => {
   // 直接對 navGroups 定義做結構斷言:哪些路由帶 roles、帶哪些 roles,一字不差。
   it('帶 roles 的路由清單與內容完全不變', () => {
     const rolesMap = {}
@@ -165,7 +233,8 @@ describe('roles 定義釘死(批6 搬移不得鬆綁)', () => {
       '/audit': ['owner'],
     })
   })
-  it('精修期 hidden 集合釘死:五個工作面組暫別側欄;/alerts 與 /agent 照舊非導覽', () => {
+  it('hidden 集合為空(2026-09-11 解封五個群組);/alerts 與 /agent 照舊非導覽', () => {
+    // hidden 機制保留給下一次收斂;現在若有人加回 hidden,這條會先紅,收斂必須是有意識的決策。
     const hidden = []
     for (const g of navGroups) for (const item of g.items) {
       if (item.hidden) hidden.push(item.to)
@@ -173,17 +242,19 @@ describe('roles 定義釘死(批6 搬移不得鬆綁)', () => {
         if (n.hidden) hidden.push(n.to)
       }
     }
-    expect(hidden).toEqual(['/site-log', '/submittals', '/valuation', '/monthly-report', '/portfolio'])
+    expect(hidden).toEqual([])
     expect(routeRegistry['/alerts']).toEqual({ access: 'authenticated' })
     expect(routeRegistry['/agent']).toEqual({ access: 'authenticated' })
   })
 })
 
 describe('defaultLandingPath(角色預設落地頁)', () => {
-  it('精修期一律落在今日待辦(跨案總覽暫別側欄;恢復「專案」工作面時還原分流)', () => {
+  it('所有角色一律落在收件匣(規範 §0 方向 A),與球權來源「現在輪到我」同一條路由', () => {
     expect(defaultLandingPath('owner')).toBe('/dashboard')
     expect(defaultLandingPath('supervisor')).toBe('/dashboard')
     expect(defaultLandingPath('contractor')).toBe('/dashboard')
+    // BottomNav 的主畫面槽就是這個來源:落地頁與手機第一格必須是同一頁
+    expect(BALL_SOURCES.find((b) => b.key === 'mine').to).toBe(defaultLandingPath('contractor'))
   })
   it('org_type 未知時退回 /dashboard(對齊 store 的 contractor 預設)', () => {
     expect(defaultLandingPath(undefined)).toBe('/dashboard')

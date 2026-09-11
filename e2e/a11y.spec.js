@@ -242,9 +242,8 @@ test.describe('鍵盤可達性', () => {
   test('appPrompt:Esc 取消判定,對話框消失且頁面狀態不變', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/quality')
-    // 與 supervisor.spec 同一列定位法,但這裡走「取消」分支,不與其成功路徑重複
-    const row = page.getByText('4F 柱牆鋼筋查驗', { exact: false })
-      .locator('xpath=ancestor::div[contains(@class,"justify-between")][1]')
+    // 與 supervisor.spec 同一列定位法(查驗列是 <li>),但這裡走「取消」分支,不與其成功路徑重複
+    const row = page.getByRole('listitem').filter({ hasText: '4F 柱牆鋼筋查驗' })
     await row.getByRole('button', { name: '不合格' }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText(/判定不合格：/)).toBeVisible()
