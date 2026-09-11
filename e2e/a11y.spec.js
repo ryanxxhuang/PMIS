@@ -242,9 +242,12 @@ test.describe('鍵盤可達性', () => {
   test('appPrompt:Esc 取消判定,對話框消失且頁面狀態不變', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/quality')
-    // 與 supervisor.spec 同一列定位法(查驗列是 <li>),但這裡走「取消」分支,不與其成功路徑重複
+    // 與 supervisor.spec 同一定位法(選中 listitem → 以項目命名的 region 裡按判定鈕),
+    // 但這裡走「取消」分支,不與其成功路徑重複
     const row = page.getByRole('listitem').filter({ hasText: '4F 柱牆鋼筋查驗' })
-    await row.getByRole('button', { name: '不合格' }).click()
+    await row.click()
+    const detail = page.getByRole('region', { name: '4F 柱牆鋼筋查驗 詳情' })
+    await detail.getByRole('button', { name: '不合格', exact: true }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText(/判定不合格：/)).toBeVisible()
     // F2 合約:Esc 掛在 window 層——即使焦點不在對話框內也要能取消
@@ -252,6 +255,114 @@ test.describe('鍵盤可達性', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0)
     // 取消=什麼都沒發生:沒有成功提示、該筆查驗仍可判定
     await expect(page.getByText('已判定不合格並開立缺失')).toHaveCount(0)
-    await expect(row.getByRole('button', { name: '不合格' })).toBeVisible()
+    await expect(detail.getByRole('button', { name: '不合格', exact: true })).toBeVisible()
+  })
+})
+
+// ── 三條不進導覽的深連結頁(ROADMAP「履約與可達性」):/requirements/review、/deadlines、
+// /project/new 從未被逐頁掃過手機 a11y。上面的全路由掃描只量溢位;這裡對三頁多守四條:
+// 觸控目標 ≥ 44px、表單控制項有「非 placeholder」的可及名稱(placeholder 一打字就消失,
+// 報讀器也不一定唸)、鍵盤焦點環看得見(outline 不是 none)、抽屜開啟時焦點進面板。
+// 掃描寫成通用函式而不是逐頁列舉控制項:新加一顆鈕就自動納入,不用回來補清單。
+const DEEP_LINK_PAGES = [
+  ['/requirements/review', '擷取審核'],
+  ['/deadlines', '期限追蹤'],
+  ['/project/new', '建立專案'],
+]
+
+// main 內所有「看得見」的互動元素(頁首/側欄另有測試,BottomNav 是 fixed 不在 main)
+const INTERACTIVE = 'main :is(a[href], button, input, select, textarea, [role="button"])'
+
+async function auditMobilePage(page, path, h1) {
+  await gotoHash(page, path)
+  await expect(page.getByRole('heading', { level: 1, name: h1 }),
+    `路由 ${path} 的頁面標題「${h1}」未出現`).toBeVisible()
+  const { sw, cw } = await page.evaluate(() => ({
+    sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
+  }))
+  expect(sw, `375px 溢位:${path} scrollWidth ${sw} > clientWidth ${cw}`).toBeLessThanOrEqual(cw)
+
+  // 觸控目標:逐顆量高度。disabled 也要量——停用鈕之後會啟用,尺寸不會跟著變。
+  // 命中區=控件本身;唯一例外是「label 裡除了控件什麼字都沒有」(SearchField 那種
+  // icon+input 的外框),整個 label 點了就聚焦,量的是外框。有標籤文字的 Field 不套這條——
+  // 那個 label 含標題列,量它會讓 30px 的 input 也過關。
+  const targets = await page.locator(INTERACTIVE).evaluateAll((els) => els
+    .filter((el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden')
+    .map((el) => {
+      const label = el.matches('input, select, textarea') ? el.closest('label') : null
+      const hit = label && !label.textContent.trim() ? label : el
+      return {
+        tag: el.tagName.toLowerCase(),
+        name: (el.getAttribute('aria-label') || el.textContent || el.getAttribute('placeholder') || '').trim().slice(0, 30),
+        h: hit.getBoundingClientRect().height,
+      }
+    }))
+  expect(targets.length, `${path} 找不到任何互動元素——頁面沒渲染?`).toBeGreaterThan(0)
+  const small = targets.filter((t) => t.h < 44)
+  expect(small, `${path} 觸控目標未達 44px:${JSON.stringify(small)}`).toEqual([])
+
+  // 表單控制項可及名稱:aria-label / aria-labelledby / 包住它的 <label> / label[for] / title;
+  // 刻意不接受 placeholder(HTML-AAM 雖把它列為最後退路,但輸入後就不見了)
+  const unnamed = await page.locator('main :is(input, select, textarea)').evaluateAll((els) => els
+    .filter((el) => el.getClientRects().length > 0 && el.type !== 'hidden')
+    .filter((el) => {
+      const byId = el.getAttribute('aria-labelledby')
+      const labelled = byId && byId.split(/\s+/).some((id) => document.getElementById(id)?.textContent?.trim())
+      const wrapped = el.closest('label')?.textContent?.trim()
+      const forLabel = el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)?.textContent?.trim()
+      return !(el.getAttribute('aria-label')?.trim() || labelled || wrapped || forLabel || el.title?.trim())
+    })
+    .map((el) => `${el.tagName.toLowerCase()}[${el.type || ''}] placeholder=${el.getAttribute('placeholder') || ''}`))
+  expect(unnamed, `${path} 表單控制項缺可及名稱:${JSON.stringify(unnamed)}`).toEqual([])
+
+  // 焦點環:用鍵盤 Tab 進 main 內第一個可聚焦元素,outline 必須存在(規範 §6 用 outline 不用 ring)
+  await page.locator('main').first().evaluate((el) => { el.tabIndex = -1; el.focus() })
+  let focusedInMain = false
+  for (let i = 0; i < 6 && !focusedInMain; i++) {
+    await page.keyboard.press('Tab')
+    focusedInMain = await page.evaluate(() => {
+      const main = document.querySelector('main')
+      return !!main && main.contains(document.activeElement) && document.activeElement !== main
+    })
+  }
+  expect(focusedInMain, `${path} Tab 六次都進不了 main 的互動元素`).toBe(true)
+  const ring = await page.evaluate(() => {
+    const el = document.activeElement
+    const cs = getComputedStyle(el)
+    return { tag: el.tagName, style: cs.outlineStyle, width: parseFloat(cs.outlineWidth) }
+  })
+  expect(ring.style !== 'none' && ring.width > 0, `${path} 焦點在 ${ring.tag} 上沒有 outline 焦點環:${JSON.stringify(ring)}`).toBe(true)
+}
+
+test.describe('深連結頁手機 a11y(375px)', () => {
+  for (const [path, h1] of DEEP_LINK_PAGES) {
+    test(`${path}:無溢位、觸控目標 ≥ 44px、控制項有名、焦點環可見`, async ({ page }) => {
+      await page.setViewportSize(MOBILE)
+      await loginAs(page, 'contractor')
+      await auditMobilePage(page, path, h1)
+    })
+  }
+
+  // 抽屜:<lg 點列開詳情抽屜,焦點必須進面板(否則報讀器仍停在遮罩後的清單);
+  // Esc 關閉。只釘 /deadlines——/requirements/review 在 demo 是空狀態(需真專案),
+  // 抽屜零件兩頁共用(listDetail.jsx DetailDrawer),守一頁即守到零件。
+  test('/deadlines 375px:點列開抽屜,焦點進面板,返回鈕 ≥ 44px,Esc 關閉', async ({ page }) => {
+    await page.setViewportSize(MOBILE)
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/deadlines')
+    await page.getByRole('listitem').filter({ hasText: '提送施工月報' }).click()
+    const dialog = page.getByRole('dialog', { name: '期限詳情' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('region', { name: '提送施工月報 詳情' })).toBeVisible()
+    expect(await dialog.evaluate((el) => el.contains(document.activeElement)), '抽屜開啟後焦點不在面板內').toBe(true)
+    const back = dialog.getByRole('button', { name: '返回清單', exact: true })
+    expect((await back.boundingBox())?.height, '返回清單鈕未達 44px').toBeGreaterThanOrEqual(44)
+    // 抽屜內的動作鈕與挑選器也是觸控目標
+    await dialog.getByRole('button', { name: '標為已提送', exact: true }).click()
+    const combo = dialog.getByRole('combobox', { name: '佐證送審文件' })
+    await expect(combo).toBeVisible()
+    expect((await combo.boundingBox())?.height, '佐證挑選器未達 44px').toBeGreaterThanOrEqual(44)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 })

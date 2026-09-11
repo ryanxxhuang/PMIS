@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
@@ -35,6 +36,18 @@ export default function Quality() {
   const [resultMsg, setResultMsg] = useState(null) // null | { pass: boolean }
   // 查驗清單的狀態篩選(S-4 查驗履歷):預設「全部」,不改變既有清單的預設內容
   const [inspFilter, setInspFilter] = useState('全部')
+  // 佇列點一筆=切段並把該筆寫進 URL 單條連結參數:分段是非當前不渲染的,切段時
+  // 重新掛載,殼 hook 的初次自動選取會優先吃深連結,詳情欄直接落在那一筆
+  // (規範 §1 判準第 3 題:從發現到完成少一步)。
+  const [, setSearchParams] = useSearchParams()
+  // 已經在同一分段時分段不會重新掛載、深連結不會被讀——用 key 強制該分段重掛
+  const [queueTick, setQueueTick] = useState(0)
+  const QUEUE_PARAM = { 查驗: 'inspection', 觀察: 'observation', 試驗: 'sample' }
+  const openQueueItem = (q) => {
+    const param = QUEUE_PARAM[q.segment]
+    if (param && q.id) setSearchParams((p) => { const n = new URLSearchParams(p); n.set(param, q.id); return n }, { replace: true })
+    setSegment(q.segment); setQueueTick((t) => t + 1)
+  }
 
   const leaves = useMemo(() => {
     if (!workItems) return []
@@ -149,6 +162,8 @@ export default function Quality() {
   const openDefects = defects.filter((d) => (d.domain || 'quality') === 'quality' && d.status !== '已結案').length
   const openObs = observations.filter((o) => o.status === '待處理').length
   const segCount = { 查驗: openInsp, 缺失: openDefects, 觀察: openObs, 檢查表: null, 試驗: sampleAlerts(testSamples, today).length }
+  // 三個轉殼分段的切案重置範圍(殼 hook 的 scope):換專案或身分就清掉選取與 URL 參數
+  const paneScope = `${currentProject?.project_id || 'demo'}/${myOrg}`
 
   return (
     <div className="space-y-5">
@@ -156,7 +171,7 @@ export default function Quality() {
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
-      {/* 工作佇列:輪到登入角色處理的品質事項,點一筆切到對應分段(不捲頁) */}
+      {/* 工作佇列:輪到登入角色處理的品質事項,點一筆切到對應分段並直接選中那一筆(不捲頁) */}
       <Card title="現在要處理">
         {queue.length === 0 ? <Empty>目前沒有輪到你處理的品質事項</Empty> : (
           <div className="space-y-1">
@@ -164,7 +179,7 @@ export default function Quality() {
               // 整列可點的鈕,手機補到 44px 不會破版。這裡刻意不是 <li>:缺失列/查驗列
               // 才是清單,contractor/supervisor spec 用 getByRole('listitem') 鎖那兩處的列,
               // 佇列若也當 listitem 會雙重命中
-              <button key={q.key} onClick={() => setSegment(q.segment)}
+              <button key={q.key} onClick={() => openQueueItem(q)}
                 className="w-full flex items-center gap-3 text-left text-sm rounded-lg px-2 py-1.5 max-md:min-h-11 hover:bg-[var(--surface-2)] pressable">
                 <Badge color={QUEUE_TAG_COLOR[q.tag] || 'slate'}>{q.tag}</Badge>
                 <span className="min-w-0 flex-1 truncate text-[var(--text)]">{q.title}</span>
@@ -195,11 +210,11 @@ export default function Quality() {
 
       {/* 查驗:標題同時給「全部」與「待查驗」——這張卡不只是待辦盒,也是本案的查驗履歷 */}
       {segment === '查驗' && (
-      <InspectionsSection inspections={inspections} inspCount={inspCount} filter={inspFilter} onFilter={setInspFilter}
+      <InspectionsSection key={queueTick} inspections={inspections} inspCount={inspCount} filter={inspFilter} onFilter={setInspFilter}
         form={inspForm} onFormChange={setInspForm} onSubmit={submitInsp} busy={busy}
         resultMsg={resultMsg} onShowDefects={() => setSegment('缺失')}
         leaves={leaves} attachableChecklists={attachableChecklists} templates={checklistTemplates}
-        can={can} onResult={onResult} onDelete={onDeleteInsp} />
+        can={can} onResult={onResult} onDelete={onDeleteInsp} scope={paneScope} />
       )}
 
       {/* 缺失:統一缺失引擎(與工安缺失同狀態機),此處只列品質 domain */}
@@ -207,9 +222,9 @@ export default function Quality() {
 
       {/* 觀察事項:比缺失輕的現場提醒,可升級成正式缺失 */}
       {segment === '觀察' && (
-      <ObservationsSection observations={observations} canWrite={can.edit || can.approve}
+      <ObservationsSection key={queueTick} observations={observations} canWrite={can.edit || can.approve}
         onCreate={createObservation} onUpdate={updateObservation} onEscalate={escalateObservation}
-        onDelete={deleteObservation} resolveMarkup={resolveMarkup} />
+        onDelete={deleteObservation} resolveMarkup={resolveMarkup} scope={paneScope} />
       )}
 
       {/* 自主檢查表:量化標準 → 實測值 → 自動判定 */}
@@ -221,8 +236,8 @@ export default function Quality() {
 
       {/* 取樣試驗:試體齡期追蹤 + fc′ 自動判定 */}
       {segment === '試驗' && (
-      <SamplesSection samples={testSamples} onGenerate={generateSamplesFromLogs} canEdit={can.edit}
-        onCreate={createTestSamples} onUpdate={updateTestSample} onDelete={deleteTestSample} />
+      <SamplesSection key={queueTick} samples={testSamples} onGenerate={generateSamplesFromLogs} canEdit={can.edit}
+        onCreate={createTestSamples} onUpdate={updateTestSample} onDelete={deleteTestSample} scope={paneScope} />
       )}
 
       {/* 三級品管說明:所有分段共用,固定頁尾 */}
