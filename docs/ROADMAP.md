@@ -12,7 +12,7 @@
 ## 待使用者決策
 
 - 導覽 hidden 工作面的恢復策略、成員頁入口、機關多案落地；D-014 五步初始化條文同步。
-- AI 成本上限與超額行為（原定監看不擋）、定價與 DB plan 對應、條款／隱私／DPA 與境外模型揭露。
+- AI 成本上限與超額行為（原定監看不擋）、定價與 DB plan 對應、DPA 附約內容。`/terms`／`/privacy` 已於 2026-09-11 依現行架構草擬上線（版本 0.9，含境外模型揭露），**待律師審閱**後升 1.0。
 - `demo_requests` 個資保存期／清除；Agent 唯讀呼叫軌跡粒度；刪案後原稽核事件保存責任；Edge log 可能含 DB 失敗列內容的存取／留存。
 - 客戶簡報與 D-019 自動確認語意、品牌／買方／銷售路徑的敘事對齊。
 - 後台設定：模型金鑰、Anthropic 月上限、Auth leaked-password／autoconfirm／SMTP、repo 可見性、正式殘留專案與 Storage 孤兒清理。現值須重新查證，舊盤點不代表目前數量。
@@ -33,7 +33,7 @@
 - `item_schedules` 缺 `guard_project_identity`，可能跨案引用 work_item；需 migration 與跨案 pgTAP。
 - `work_items(project_id,item_key)` 部分唯一索引；正式資料重查重複後再做。部分領域狀態欄無 CHECK（含 obligation）；processing run 無轉移 guard。
 - DB 顧問問題需重核：熱點／FK 索引、auth_rls_initplan、重複 permissive policy、search_path、security-definer grants、pg_net schema。public 表 anon 的 TRUNCATE default grant 不受 RLS 控制，PostgREST 不暴露該操作。
-- 刪案串 Storage 清理；`project_deletion_records` 已留刪除行為與事件數，不保存原事件內容。目前 DB 備份不包含 Storage 物件，需獨立備份與 restore/RTO 演練。rollback 判準／缺口與 `repair_` 命名尚待整理。
+- 刪案串 Storage 清理；`project_deletion_records` 已留刪除行為與事件數，不保存原事件內容。DB 備份不含 Storage 物件：`scripts/backup-storage.mjs` 與 [備份 runbook](operations/backup.md) 已就位，但**未對正式 bucket 實跑、未做 restore/RTO 演練**。rollback 判準／缺口與 `repair_` 命名尚待整理。
 - `agent_actions`／`ai_usage_events` append-only、防個資送模型、唯讀軌跡留存、使用量記帳失敗留 audit；不得自行決定個資保存粒度。
 - CSV formula injection 的前置空白／tab、CR quote、科學記號判定邊界仍存在，測試只記錄現況。
 - AI 成本原子預留／rate limit、MFA／鎖定／停用、試用申請分頁／清理須依前節政策實作。

@@ -133,7 +133,11 @@ export default function Security() {
 
         <footer className="border-t border-[var(--border)] pt-6 text-xs text-[var(--text-3)]">
           <div>本頁最後更新：{UPDATED}</div>
-          <Link to="/login" className="mt-2 inline-flex items-center gap-1 min-h-11 font-medium text-[var(--blue-text)] hover:underline"><MSym name="arrow_back" size={16} />回到登入頁</Link>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <Link to="/terms" className="min-h-11 inline-flex items-center hover:underline">服務條款</Link>
+            <Link to="/privacy" className="min-h-11 inline-flex items-center hover:underline">隱私權政策</Link>
+          </div>
+          <Link to="/login" className="mt-1 inline-flex items-center gap-1 min-h-11 font-medium text-[var(--blue-text)] hover:underline"><MSym name="arrow_back" size={16} />回到登入頁</Link>
         </footer>
 
       </main>

@@ -48,6 +48,9 @@ const ITP = lazy(() => import('./pages/web/ITP.jsx'))
 const Admin = lazy(() => import('./pages/web/Admin.jsx'))
 // 漏洞回報頁刻意不掛 <Web>:機關要能不登入就讀到,否則「公開回報機制」不成立。
 const Security = lazy(() => import('./pages/Security.jsx'))
+// 服務條款／隱私權政策同理:採購資安查核與個資告知義務要求不登入就能讀到。
+const Terms = lazy(() => import('./pages/Terms.jsx'))
+const Privacy = lazy(() => import('./pages/Privacy.jsx'))
 
 // 路由 chunk 載入:骨架卡吃共用 Surface/SkeletonList——卡殼規格再調時
 // 載入畫面跟著走,不會「載入完成變一個樣」;載入語意由 SkeletonList 的 sr-only 承擔
@@ -130,6 +133,8 @@ const appRoutes = [
   { path: '/', element: <HomeRedirect /> },
   { path: '/login', element: <Login /> },
   { path: '/security', element: <Security /> },
+  { path: '/terms', element: <Terms /> },
+  { path: '/privacy', element: <Privacy /> },
   { path: '/dashboard', element: <Dashboard /> },
   // D-008(W3-1):/agent 是唯一完整 AI 入口；/assistant 只保留相容導向。
   { path: '/assistant', element: <Navigate to="/agent" replace /> },

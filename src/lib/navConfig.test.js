@@ -66,6 +66,8 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
   it('公開、重新導向與 404 路由都有明確類型', () => {
     expect(routeRegistry['/login']).toEqual({ access: 'public' })
     expect(routeRegistry['/security']).toEqual({ access: 'public' })
+    expect(routeRegistry['/terms']).toEqual({ access: 'public' })
+    expect(routeRegistry['/privacy']).toEqual({ access: 'public' })
     expect(routeRegistry['/']).toEqual({ access: 'redirect' })
     expect(routeRegistry['/assistant']).toEqual({ access: 'redirect' })
     expect(routeRegistry['*']).toEqual({ access: 'authenticated', surface: 'not-found' })
@@ -84,9 +86,9 @@ describe('routeRegistry(登記表的集合不因導覽重劃而變)', () => {
     expect(Object.keys(routeRegistry).sort()).toEqual([
       '*', '/', '/acceptance', '/activity', '/admin', '/agent', '/alerts', '/assistant', '/audit', '/boq',
       '/change-orders', '/contract', '/contract/print', '/cost', '/dashboard', '/deadlines', '/itp', '/login',
-      '/members', '/monthly-report', '/payments', '/portfolio', '/progress', '/project/new', '/quality',
+      '/members', '/monthly-report', '/payments', '/portfolio', '/privacy', '/progress', '/project/new', '/quality',
       '/quality/checklist-print', '/requirements', '/requirements/review', '/rfi', '/safety', '/schedule',
-      '/security', '/site-log', '/site-log/print', '/submittals', '/supervisor-report', '/valuation',
+      '/security', '/site-log', '/site-log/print', '/submittals', '/supervisor-report', '/terms', '/valuation',
       '/valuation/package', '/valuation/print',
     ])
   })
