@@ -1,7 +1,7 @@
 # 契約重點抽取的跨 request 續跑（W13）
 
 > 狀態：**CURRENT** ｜ 最後核對：2026-09-11（分支 `refactor/product-wide`）。W13 本體（PR #36／#40／#41／#43，2026-08-21～22）已部署；2026-09-08 的逐頁完整性檢查與 B1 錯誤遮罩（`bc2b2ea`）已提交、未合併 `main`、未部署。
-> 對應程式：`supabase/functions/extract-requirements/index.ts`、`_shared/requirementExtraction.ts`（純函式：切批、續跑狀態、逐頁讀取）、`_shared/claude.ts`（`claudeJson`）、前端 `src/lib/extractRequirements.js`（接力層）、`src/lib/documentIngestion.js`／`packageUpload.js`（呼叫端）
+> 對應程式：`supabase/functions/extract-requirements/index.ts`（request 編排：閘門、載頁、批次迴圈、續跑暫停、收尾；B6 commit `c620fd5` 純搬移拆檔後 534 行）、`_shared/ingestionRun.ts`（run 生命週期：`markStaleRuns` 過期標記、`claimContinuationRun` CAS 認領、`createExtractionRun` 新建與 23505→409、`failRun`）、`_shared/requirementPrompt.ts`（`SCHEMA`／`buildBatchText`／`buildPrompt`，與 `PROMPT_VERSION` 同檔——改 prompt 必須同時升版）、`_shared/requirementPersist.ts`（`persistBatchItems` 逐批冪等落庫，回傳本批增量由呼叫端累加）、`_shared/requirementExtraction.ts`（純函式：切批、續跑狀態、逐頁讀取）、`_shared/claude.ts`（`claudeJson`）、前端 `src/lib/extractRequirements.js`（接力層）、`src/lib/documentIngestion.js`／`packageUpload.js`（呼叫端）
 > 對應 migration：`20260712000600_p0_06_document_ingestion.sql`（`document_ingestion_runs`）、`20260822000100_ingestion_run_active_unique.sql`（partial unique index）、`20260822010200_repair_w14_run_counts.sql`（一次性計數修正）
 > 上游脈絡：[`traceable-document-ingestion.md`](traceable-document-ingestion.md)（P0-06 管線與引註驗證）、[`requirement-review-boundary.md`](requirement-review-boundary.md)（完成後的自動確認）。本文件只寫「為什麼要續跑、怎麼續跑、哪裡會斷」。
 
@@ -143,6 +143,7 @@ insert 撞上它回 SQLSTATE `23505`，函式端轉成 409 `run_conflict`。建 
 
 | 測試 | 釘什麼 |
 |---|---|
+| `_shared/requirementPersist.test.ts` | `persistBatchItems`：驗證／引註／丟棄計數在迴圈內就算（不論落庫成敗）、`totalRequirements` 只在三張表都成功才計、rejected 的 20 筆上限跨批累計留在呼叫端；另釘住現況——某批 upsert 失敗但先前批成功時 run 仍 `completed`、`verified_source_count` 含未落庫的驗證數（記錄用，非背書） |
 | `_shared/requirementExtraction.test.ts` | `loadDocumentPages`（500 列上限仍讀完、後半失敗拒絕、count 變動、缺尾頁、格式錯誤不放行）、`extractionCoverageIncomplete`、`buildDocumentBatches`（保序、單頁不切、超過 maxBatches 揭露）、`splitBatch`、`mergeUsage`、`readResumeState`（完整還原、壞 metadata 安全預設、對半切欄位） |
 | `src/lib/extractRequirements.test.js` | 接力（一次完成、多段 `in_progress`）、409 兩種 code 分流、無 code 的 409 保守處理、403／422 原話、接力上限中止、覆蓋警示不互相掩蓋 |
 | `supabase/tests/p0_06_document_ingestion.sql` | run 的 provenance 完整性、跨案隔離、system-managed 寫入邊界（不含 W13 的唯一 index） |
@@ -150,7 +151,8 @@ insert 撞上它回 SQLSTATE `23505`，函式端轉成 409 `run_conflict`。建 
 ## 14. 已知限制與未查證
 
 - 24 批上限、無 OCR、語意漏抽與跨條款理解未解；準確率／召回率未用真實契約量測（[`../契約自動整理品質優化-2026-09-08.md`](../契約自動整理品質優化-2026-09-08.md) 列了評測方法，尚未實作）。
-- partial unique index 無 pgTAP（§6）。
+- partial unique index 的 pgTAP 已由 `6f1ccb2` 補上 8 條（indexdef 字面、同版本進行中唯一、終態可累積與讓位；變異檢查確認拿掉索引會紅），§6 的「無 pgTAP」已不成立，現查 `grep -l one_active_per_version supabase/tests/*.sql`。
+- 某批 upsert 失敗但先前批次成功時 run 仍走 `completed`，`verified_source_count` 會含失敗批已計、實際未落庫的驗證數（B6 拆檔時發現、純搬移未改，單測釘住現況；要不要修列在 ROADMAP 未排入）。
 - 前端接力層註解的 `MAX_BATCHES=12` 過期（§2）。
 - 使用者關閉分頁後的 run 只能等過期補償或人工重啟；沒有伺服器端排程接手（刻意不做背景工作框架）。
 - 2026-09-08 的完整性修正只在本機通過 Vitest 與 esbuild bundle，Deno 實機與真模型端到端未重跑。

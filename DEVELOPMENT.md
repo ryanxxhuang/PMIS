@@ -1,7 +1,7 @@
 # GovAgent／PMIS 開發基準
 
 > 狀態：**ACTIVE**
-> 最後更新：2026-09-02
+> 最後更新：2026-09-11（第 1 節補 ROADMAP 是唯一續接依據、第 6 節第 3 條指向 `docs/BASELINE.md`；規則本身未變）
 > 用途：後續任何人或 AI 開發前都必須遵守的最小規則。
 
 ## 1. 開發前先讀什麼
@@ -10,7 +10,7 @@
 
 1. [`CURRENT.md`](CURRENT.md)：系統現在真的怎麼運作。
 2. [`docs/DECISIONS.md`](docs/DECISIONS.md)：已定案且不得自行推翻的決策。
-3. [`docs/ROADMAP.md`](docs/ROADMAP.md)：下一步候選與是否已獲准實作。
+3. [`docs/ROADMAP.md`](docs/ROADMAP.md)：下一步候選與是否已獲准實作；它是**唯一的續接依據**，日期式健檢報告的排程節只留證據。
 4. 與本次功能直接相關的 [`docs/architecture/`](docs/architecture/) 文件。
 
 長期產品方向才查 [`docs/北極星-政府機關-Agent-平台.md`](docs/北極星-政府機關-Agent-平台.md)。日期式報告、舊 PRD 與舊驗收報告只供追溯，不是開發規格。
@@ -63,7 +63,7 @@
 
 1. 實作符合已核准文件，沒有自行擴大範圍。
 2. 相關單元測試、建置、E2E／pgTAP 依改動範圍通過。
-3. `CURRENT.md`、架構文件、設定指南與數字基線已同步；正式庫套用 migration 或重佈 Edge Function 後，套用的版本號要留在 `CURRENT.md` §6（2026-08-19～09-01 的 36 個 PR 未同步文件，造成續接點失真，是本條加註的原因）。
+3. `CURRENT.md`、架構文件、設定指南與數字基線（[`docs/BASELINE.md`](docs/BASELINE.md)，手動核對快照）已同步；正式庫套用 migration 或重佈 Edge Function 後，套用的版本號要留在 `CURRENT.md` §6（2026-08-19～09-01 的 36 個 PR 未同步文件，造成續接點失真，是本條加註的原因）。
 4. 沒有把未完成能力寫成現況，也沒有把歷史報告當現行規格。
 5. commit、push、部署與正式資料 migration 只在使用者明確要求後執行。
 

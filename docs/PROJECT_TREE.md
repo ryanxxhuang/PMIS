@@ -210,17 +210,17 @@ store/
 supabase/
 ├── SETUP.md                 本機與後端設定 runbook
 ├── config.toml              Supabase local／function 設定
-├── migrations/              57 個依序套用的資料庫變更；唯一 schema 真相（現查 `ls supabase/migrations`）
-├── functions/               17 個 Edge Functions + `_shared`（現查 `ls -d supabase/functions/*/`）
-├── tests/                   33 組 pgTAP 權限與狀態流程測試（現查 `ls supabase/tests/*.sql`）
-├── rollbacks/               7 個明確支援的 down script；未演練回復
+├── migrations/              依序套用的資料庫變更；唯一 schema 真相（數量見 `docs/BASELINE.md`，現查 `ls supabase/migrations`）
+├── functions/               Edge Functions + `_shared`（數量見 `docs/BASELINE.md`，現查 `ls -d supabase/functions/*/`）
+├── tests/                   pgTAP 權限與狀態流程測試（數量見 `docs/BASELINE.md`，現查 `ls supabase/tests/*.sql`）
+├── rollbacks/               少數明確支援的 down script（數量見 `docs/BASELINE.md`）；未演練回復
 ├── cron.sql                 排程參考
 └── schema.sql               凍結歷史參考，不再初始化 DB
 ```
 
 ### migrations 分段
 
-**不在此抄清單。** migration 檔名本身帶日期與用途，逐一列出的清單一定會過期（本檔曾停在 `20260812000600`，實際已到 `20260901040000`）。要看有哪些、最新是哪一支，直接 `ls supabase/migrations`；要看某支做了什麼，讀該檔開頭的註解；要看它為什麼存在，查 `docs/DECISIONS.md` 與 `CURRENT.md` §6.2 的 PR 對應。正式庫是否已套用一律以 `supabase migration list --linked` 為準，不以 repo 有檔推論。
+**不在此抄清單。** migration 檔名本身帶日期與用途，逐一列出的清單一定會過期（本檔曾停在 `20260812000600`，實際已到 `20260901040000`）。要看有哪些、最新是哪一支，直接 `ls supabase/migrations`；要看某支做了什麼，讀該檔開頭的註解；要看它為什麼存在，查 `docs/DECISIONS.md` 與 `docs/ROADMAP.md` 交付紀錄的 PR 對應。正式庫是否已套用一律以 `supabase migration list --linked` 為準，不以 repo 有檔推論。
 
 規則：只能新增 migration；不能修改已套用檔案。權限與狀態變更同步更新 `supabase/tests/`。
 

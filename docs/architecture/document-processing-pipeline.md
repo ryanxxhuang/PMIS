@@ -1,6 +1,6 @@
 # 專案文件處理管線（上傳 → 分類 → 契約包歸屬 → 抽取）
 
-> 狀態：**CURRENT** ｜ 最後核對：2026-09-11（分支 `refactor/product-wide`。契約包與處理 run 本體（P0-07.5，migration `20260712000800`）與 W14 四件套（PR #37／#38／#39／#44）已部署；2026-09-08 兩批——`packageRuns.js` 讀寫拆分、覆蓋警示併入 processing metadata、契約包 `partial` 不算 `ready`、`extract-requirements` 讀 `metadata.page_count` 核對頁數——**已提交、未合併 `main`、未部署**。`src/pages/web/Contract.jsx` 在本文件核對時正由另一條工作線修改，本文件只描述它呼叫的機制，不抄其內容）
+> 狀態：**CURRENT** ｜ 最後核對：2026-09-11（分支 `refactor/product-wide`。契約包與處理 run 本體（P0-07.5，migration `20260712000800`）與 W14 四件套（PR #37／#38／#39／#44）已部署；2026-09-08 兩批——`packageRuns.js` 讀寫拆分、覆蓋警示併入 processing metadata、契約包 `partial` 不算 `ready`、`extract-requirements` 讀 `metadata.page_count` 核對頁數——**已提交、未合併 `main`、未部署**。`src/pages/web/Contract.jsx` 已由重構波次 4b commit `b7a1000` 抽取完成（1080→592）：`loadPackageRuns`（純讀）與 `healStaleRuns`（中斷復原寫入）拆進 `src/lib/packageRuns.js`，原頁內 `confirmClassification` 的 run 狀態機亦搬進同檔為 `reclassifyProcessingRun`；本文件只描述機制，不抄頁面內容）
 > 對應程式：`src/lib/packageUpload.js`（逐檔流程、`STAGE_ORDER`、`packageStatusFromRuns`、`staleProcessingPatch`）、`src/lib/packageRuns.js`（上傳後的讀取、修復、改分類／重試）、`src/lib/documentClassifier.js`（確定性分類）、`src/lib/packageFileSupport.js`（收件與可分析的分界）、`src/lib/documentExtract.js`（逐頁抽文字）、`src/lib/extractRequirements.js`（抽取接力層）、`src/lib/documentIngestion.js`（不歸包的單檔舊路徑）、`supabase/functions/classify-document/index.ts`、`_shared/documentTypes.ts`（值域單一真相）、`extract-requirements/index.ts`（讀 `page_count` 核對）
 > 對應 migration：`20260712000800_p0_07_5_contract_packages.sql`（`contract_packages`、`document_processing_runs`、分級 RLS、私有 bucket、留痕 trigger）、`20260822000300_document_delete.sql`（`delete_document` RPC）、`20260822000400_ai_classify_document.sql`（`documents.classify` 功能列）、`20260822010200_repair_w14_run_counts.sql`（一次性計數修正）、`20260824000900_contract_grading_completion.sql`（手動補登歸包）
 > 測試：`src/lib/packageUpload.test.js`、`packageRuns.test.js`、`documentClassifier.test.js`、`packageFileSupport.test.js`、`documentExtract.test.js`、`src/pages/web/Contract.flow.test.jsx`；pgTAP `supabase/tests/p0_07_5_contract_packages.sql`、`document_delete.sql`；e2e `contract-flow.spec.js`
@@ -199,7 +199,7 @@ npx vitest run src/lib/packageUpload.test.js src/lib/packageRuns.test.js src/lib
 
 ## 14. 已知缺口與未查證
 
-- `Contract.jsx` 本文件核對時正在變動；§8 的包狀態寫回時機與 §7 的「只有能管理文件的人才修」以該檔當下的接線為準，之後以現查為準。
+- `Contract.jsx` 的抽取（`b7a1000`）已落地：§7 的「只有能管理文件的人才修」現為頁面在 `canUploadDocs` 為真時才呼叫 `healStaleRuns`（現查 `grep -n "healStaleRuns" src/pages/web/Contract.jsx`），§8 的包狀態寫回時機不變；之後仍以現查為準。
 - `contract_packages.status` 由前端推導寫回，修復與重試後不重算（§8）；轉成 `needs_attention` 不留痕（§2）。
 - 處理 run 的狀態機只有 DB CHECK 守合法組合，沒有 trigger 守轉移順序——任何有上傳權的人都能把列改成任一合法組合（它是 UX 狀態，migration 明寫非權威）。pgTAP 只釘了 unsupported 那一條 CHECK，其餘組合未逐一釘住。
 - 兩個過期時鐘（20 分鐘 processing、10 分鐘 ingestion）各管各的表（§7）。

@@ -149,9 +149,7 @@ npm run test:e2e:real
 
 資料庫的 RLS、RPC 與狀態轉移測試在 [supabase/tests](supabase/tests)。
 
-2026-09-11 基線（分支 `refactor/product-wide`；`main` 最後合併的是 PR #62）：72 個 Vitest 測試檔共 818 項、48 個 Demo Playwright E2E（8 檔）與 production build 全數通過，`npm audit --omit=dev` 0 漏洞。33 組 pgTAP（`plan()` 加總 927 條斷言，靜態統計、本輪未實跑）由獨立 CI 在資料庫相關變更時自動執行；6 條真 Supabase E2E 最近一次紀錄為 PR #54（6/6）。`extract-requirements` live AI 成功路徑已於 2026-08-15 驗證。
-
-測試數由 09-08 的 73 檔 820 降為 72 檔 818，是 commit `8b87c9e` 隨圖示字型工具一併刪除 `src/lib/iconFont.test.js`（2 個測試），不是測試遺失。
+測試與規模的基線數字只寫在一處：[docs/BASELINE.md](docs/BASELINE.md)（手動核對快照，含每個數字的指令與核對日期；目前沒有 CI 自動產生它）。要現值就重跑那些指令，不要抄本檔或其他文件裡的舊數字。哪些層驗過、哪些沒有（真後端 E2E、`deno check`、正式環境核對）見 [CURRENT.md](CURRENT.md) §6.2。pgTAP 自 PR #62 起在每個 PR 的獨立 CI 一律執行；`extract-requirements` live AI 成功路徑最近一次驗證是 2026-08-15。
 
 ## Supabase 與部署
 
@@ -171,21 +169,22 @@ src/
 ├── components/             共用 UI、Layout、Copilot、缺失與標註元件
 ├── data/                   Demo 與內建工程資料
 ├── lib/                    確定性引擎、文件、需求、稽核與支援函式
-├── pages/                  34 個業務頁面檔（`pages/web/`）＋ `Login.jsx`／`Security.jsx`
+├── pages/                  業務頁面檔（`pages/web/`，數量見 docs/BASELINE.md）＋ `Login.jsx`／`Security.jsx`
 ├── store.jsx               Store 組合根與跨領域派生資料
 └── store/slices/           9 個狀態／資料操作 slices
 
 supabase/
-├── functions/              17 個 Edge Functions 與共用 Agent／AI 層
+├── functions/              Edge Functions（數量見 docs/BASELINE.md）與共用 `_shared/` Agent／AI 層
 ├── migrations/             Schema、RLS、RPC、Trigger 的唯一真相
 ├── tests/                  pgTAP 安全與狀態流程測試
-├── rollbacks/              少數明確支援的回復腳本（7／57；未演練回復）
+├── rollbacks/              少數明確支援的回復腳本（數量見 docs/BASELINE.md；未演練回復）
 └── SETUP.md                後端設定
 
 docs/
 ├── README.md               文件索引與狀態
 ├── DECISIONS.md            已定案決策
-├── ROADMAP.md              待確認的整理順序
+├── ROADMAP.md              唯一的續接依據：工作包、交付紀錄、候選與未排入
+├── BASELINE.md             測試與規模數字的唯一出處（手動核對快照）
 ├── architecture/           已實作架構決策
 ├── 資安/                   資安政策、符合性與弱掃證據
 ├── 採購/                   採購與簽辦資料
@@ -197,7 +196,7 @@ docs/
 1. [DEVELOPMENT.md](DEVELOPMENT.md)：文件先行、簡單化原則與完成定義。
 2. [CURRENT.md](CURRENT.md)：目前產品、系統現況與已知架構債。
 3. [docs/DECISIONS.md](docs/DECISIONS.md)：已定案且不得自行推翻的決策。
-4. [docs/ROADMAP.md](docs/ROADMAP.md)：候選改動；未核准前不得實作。
+4. [docs/ROADMAP.md](docs/ROADMAP.md)：唯一的續接依據；候選改動未核准前不得實作。
 5. [docs/README.md](docs/README.md)：其餘文件的用途與時效。
 6. [docs/PROJECT_TREE.md](docs/PROJECT_TREE.md)：完整專案樹與各目錄責任。
 

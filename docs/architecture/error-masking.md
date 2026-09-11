@@ -1,7 +1,7 @@
 # 對外錯誤遮罩（政府合規：錯誤只顯示簡短訊息及代碼）
 
 > 狀態：**CURRENT（機制已提交、尚未部署）** ｜ 最後核對：2026-09-11（分支 `refactor/product-wide`；伺服器端遮罩由重構波次 B1 commit `bc2b2ea` 建立，**已提交、未合併 `main`、未部署——正式站的 Edge Function 仍跑舊行為**；前端 `friendlyError` 早於本波，已隨先前 PR 部署）
-> 對應程式：`supabase/functions/_shared/publicError.ts`（唯一遮罩點）、`_shared/claude.ts`（`claudeJson` 與 `errorResponse`／`dbErrorResponse`／`exceptionResponse`）、`_shared/agent.ts`（`claudeAgent`）、`_shared/aiHandler.ts`（骨架）、`_shared/agentToolCommon.ts`（`toolError`）、`extract-requirements/index.ts`（`failRun`；核對時另一條 B6 工作線正把它純搬移到 `_shared/ingestionRun.ts`，機制不變，路徑以 `grep -rn "function failRun" supabase/functions` 現查）；前端 `src/lib/errorMessage.js`（`friendlyError`）、`src/lib/extractRequirements.js`（`functionErrorInfo`）
+> 對應程式：`supabase/functions/_shared/publicError.ts`（唯一遮罩點）、`_shared/claude.ts`（`claudeJson` 與 `errorResponse`／`dbErrorResponse`／`exceptionResponse`）、`_shared/agent.ts`（`claudeAgent`）、`_shared/aiHandler.ts`（骨架）、`_shared/agentToolCommon.ts`（`toolError`）、`_shared/ingestionRun.ts`（`failRun`；B6 commit `c620fd5` 自 `extract-requirements/index.ts` 純搬移，機制不變，`extract-requirements/index.ts` 仍是唯一呼叫端）；前端 `src/lib/errorMessage.js`（`friendlyError`）、`src/lib/extractRequirements.js`（`functionErrorInfo`）
 > 測試：`_shared/publicError.test.ts`、`_shared/errorLeak.scan.test.ts`、`src/lib/errorMessage.test.js`、`src/lib/errorLeak.scan.test.js`
 > 合規依據：資通系統防護基準附表十構面五「開發階段」第三款——錯誤時使用者頁面僅顯示簡短訊息及代碼，不含詳細錯誤訊息（對照表見 [`../資安/資通系統防護基準-普通級-符合性對照.md`](../資安/資通系統防護基準-普通級-符合性對照.md)；缺口由 [`../健檢-2026-09-06/A-安全與權限.md`](../健檢-2026-09-06/A-安全與權限.md) 指出）。本文件寫機制怎麼運作；沒有對應的 D-編號決策，這是合規基線而不是產品決策。
 
@@ -43,7 +43,7 @@
 | 未預期例外 → HTTP 回應 | `exceptionResponse(scope, e, status?, extra?)` | `aiHandler` 的最外層 catch、`agent-run`／`fetch-weather` 的 catch 都走這支 |
 | PostgREST 錯誤 → agent 工具的 `tool_result` | `toolError(scope, error)`（`agentToolCommon.ts`） | 模型會把 tool_result 原文複述給使用者，所以工具回傳值也是對外邊界 |
 | 工具執行丟例外 → `tool_result` | `agent.ts` 迴圈內 `maskException('agent.tool.<name>', e)` | 給模型的 `tool_result` 是短語（`is_error: true`）；例外原文只留在伺服器端的 `step.error`，`agent-run` 回前端前只取 `tool`／`ok`／`ms` |
-| 抽取 run 失敗 → 持久化 | `failRun(service, runId, pub, metadata)`（`extract-requirements`；B6 搬往 `_shared/ingestionRun.ts`） | `error_message` 只存 `pub.message`，代碼落 `metadata.error_code`（不動 schema） |
+| 抽取 run 失敗 → 持久化 | `failRun(service, runId, pub, metadata)`（`_shared/ingestionRun.ts`，由 `extract-requirements/index.ts` 呼叫） | `error_message` 只存 `pub.message`，代碼落 `metadata.error_code`（不動 schema） |
 | `send-reminders` 讀 `projects` 失敗 | `maskDbError('send-reminders.projects', pErr)` | 回應只有 pg_cron 看得到，仍不放原文 |
 
 `aiGate.ts` 的 401「未登入」、400「缺少有效的 project_id」、404「找不到專案或無權限」與 `gateVerdict` 的訊息本來就是我們自己寫的中文，直接 `json({ error })`——它們正是判準要放行的那一類。
@@ -147,7 +147,8 @@ grep -rn "dbErrorResponse(\|exceptionResponse(\|maskDbError(\|maskException(\|ma
 
 - **未部署**。commit `bc2b2ea` 已提交於 `refactor/product-wide`，未合併 `main`、未重佈任何 Edge Function。正式站 `app.gov-agent.ai` 對應的 Edge Function 仍是舊行為：Claude 回應本文與 PostgREST 原文仍會回到 API 呼叫者、仍會寫進 `document_ingestion_runs.error_message`。畫面層因既有 `friendlyError` 已合規；API 層要等部署。部署順序與寫回 `CURRENT.md` §6 的規則見 [`../operations/deploy.md`](../operations/deploy.md)。
 - B1 的驗證極限（commit 訊息自述）：本機沒有 deno，未做 `deno check` 型別檢查、未做 Deno 實機或真後端 E2E；帶 `npm:` import 的 `aiHandler`／`aiGate` 只靠原始碼比對測試釘住接線；17 支 Edge Function 只過 esbuild bundle。
-- `ai_usage_events.error_code` 只記 `claude_error`／`exception` 粗分類（§5）。
+- `ai_usage_events.error_code` 只記 `claude_error`／`exception` 粗分類（§5）；用量表分不出逾時與限流（ROADMAP 未排入）。
+- B6（`c620fd5`）拆檔時發現舊 `persistBatchItems` 的回傳型別標註是 `Promise<string | null>`，但 B1 之後實際回的是 `PublicError` 物件——Deno 型別檢查應該會擋，暗示線上 edge function 從未過 `deno check`；新簽名已取代它，執行期行為不變。這件事支持把 `deno check` 加進 CI（ROADMAP 未排入）。
 - 伺服器 log 含 PostgREST `details`（可能有列內容）與例外 stack（§4）；這是刻意的（除錯需要），但 log 存取範圍與留存期要對得上日誌政策。
 - Sentry 是否會以 breadcrumb 帶出 supabase-js 的原始錯誤本文：**未查證**（健檢 A 報告提到此可能，本波未驗）。
 - `friendlyError` 的 `AUTH_MESSAGES` 是對 GoTrue 版本敏感的子字串比對；GoTrue 改文案會退回第 6 條的 fallback＋代碼，不會外洩但會失去中文化。

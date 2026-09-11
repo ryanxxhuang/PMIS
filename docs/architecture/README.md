@@ -1,7 +1,7 @@
 # 架構文件索引
 
 > 狀態：**ACTIVE**
-> 最後盤點：2026-09-11（補四份紅線與治理機制文件；同日 D1 波次再補錯誤遮罩、球權、文件處理管線三份）
+> 最後盤點：2026-09-11（補四份紅線與治理機制文件；同日 D1 波次再補錯誤遮罩、球權、文件處理管線三份；D2 波次把 `resumable-extraction`／`error-masking`／`document-processing-pipeline` 的對應程式路徑對齊 B6 拆檔（`_shared/ingestionRun.ts`／`requirementPrompt.ts`／`requirementPersist.ts`）與 4b 的 `packageRuns.js`，並在 `dual-engine-sync` 補兩條球權差異）
 > 架構文件說明設計責任與**機制怎麼運作**；為什麼這樣定看 [`../DECISIONS.md`](../DECISIONS.md)；資料庫實際狀態仍以 `supabase/migrations/` 為準。
 
 ## 現行文件

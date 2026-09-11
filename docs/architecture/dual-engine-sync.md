@@ -1,6 +1,6 @@
 # 雙引擎同步清單(demo 本地判定 ↔ 伺服器權威判定)
 
-> 狀態：**ACTIVE CHECKLIST** ｜ 建立：2026-07-16。demo 模式(未設 Supabase)所有判定跑前端本地引擎;
+> 狀態：**ACTIVE CHECKLIST** ｜ 建立：2026-07-16 ｜ 最後核對：2026-09-11（分支 `refactor/product-wide`；第 5 項的伺服器路徑隨 B4 拆檔更新，並補兩條寫 `ball-in-court.md` 時發現的差異）。demo 模式(未設 Supabase)所有判定跑前端本地引擎;
 > 真專案的同一判定下沉到 DB trigger / Edge Function。**兩邊規則改版必須同步**,
 > 否則銷售 demo 展示的行為會與正式版不符。改任何一側前先對照此表。
 
@@ -12,7 +12,7 @@
 | 2 | 試體 28 天抗壓判定+自動開缺失 | `src/lib/qc.js` `deriveTestSampleUpdate`／`shouldCreateTestSampleDefect` + `quality.js` demo 分支 | `judge_test_sample`／`test_sample_defect` trigger(`20260712001600_evidence_guards.sql`) | W5-4 已用 Vitest＋整合回歸釘住「同步判定、保存 `test_sample_id`、不重複開」；0.85fc′／平均門檻仍人工同步 |
 | 3 | 檢查表修訂鏈 rev/root_id | `quality.js createChecklistRecord` demo 分支本地計算 | DB guard 依鏈計算(前端真專案不算,寫入後 reload 取回) | 無自動保證,**人工同步** |
 | 4 | 契約義務到期日計算 | `src/lib/contractDue.js` | `supabase/functions/_shared/contractDue.ts`(send-reminders 用) | ✅ `contractDue.test.ts` 與前端**同一組測試案例**對齊 |
-| 5 | 今日待辦／提醒彙整規則 | `src/lib/todayTasks.js`(W8-2B 起;Dashboard 與 `Alerts.jsx` 共用同一支,前端只有這一份) | `_shared/agentTools.ts` 的 `collectOpenBallItems`(`list_my_open_items` 工具與 `send-reminders` 早報共用) | 無自動保證,**人工同步**;前端規則有 `todayTasks.test.js` 釘住,兩側**已知差異**見下方 |
+| 5 | 今日待辦／提醒彙整規則 | `src/lib/todayTasks.js`(W8-2B 起;Dashboard 與 `Alerts.jsx` 共用同一支,前端只有這一份);單筆球權判定在 `src/lib/ballInCourt.js` | `_shared/ballInCourt.ts` 的 `collectOpenBallItems`(B4 commit `eddcf18` 自 `agentTools.ts` 拆出;`list_my_open_items` 工具與 `send-reminders` 早報共用) | 無自動保證,**人工同步**;前端規則有 `todayTasks.test.js` 釘住,兩側**已知差異**見下方 |
 | 6 | 預定進度 smoothstep S 曲線 | `billing.js generateSchedule` | —(demoSeed.js 複製同公式產 demo 資料) | 無自動保證,**人工同步** |
 | 7 | 角色權限矩陣(can) | `store.jsx` 的 `can` useMemo | RLS 分角色 policy + guard triggers + `admin_override()`(formal_mode) | E2E 蓋部分(路由守衛/核定流);矩陣全表靠 pgTAP |
 | 8 | 金流三欄順序(請款→收款→實收) | `Payments.jsx` 欄位鎖定邏輯 | `valuations_payment_gate` trigger(`20260712001800_payment_flow.sql`) | pgTAP 蓋 trigger;UI 鎖僅體驗,權威在 DB |
@@ -48,6 +48,8 @@
 | 涵蓋類型 | 疑義、送審、估驗、查驗、缺失、觀察、變更、契約義務、試體、驗收、ITP | 缺失、送審、疑義、估驗、契約義務（無查驗／觀察／變更／試體／驗收／ITP） |
 | `responsible` 無法辨識時 | 視為未指定，**不歸任何角色** | 預設歸廠商 |
 | 監造／機關責任的契約義務 | 2026-09-07 核對：監造已列入，機關仍排除；履約時程的機關自有義務已能完成，待辦尚未跟上 | 一律列入該方；是否顯示即將到期項依呼叫端 `obligationSoonDays` |
+| 單筆球權判定涵蓋的單據（2026-09-11 寫 `ball-in-court.md` 時核對） | `ballInCourt.js` 七支判定：疑義、送審、估驗、缺失、變更設計、查驗、觀察 | `ballInCourt.ts` 只有前四支（疑義、送審、估驗、缺失），**缺變更設計、查驗、觀察三類**——agent 回答「我現在該處理什麼」與早報看不到待查驗與待核定的變更（[`ball-in-court.md`](ball-in-court.md) §2、§4） |
+| 契約義務「未結」的 `status` 判定（同上） | `store/db.js` 載入時 `neq('status','不適用')`，`todayTasks` 再跳過已提送／已完成 | `collectOpenBallItems` 直接 `eq('status','待辦')`。`contract_obligations.status` **沒有 CHECK 約束**（baseline 只有註解列出四值），兩側只在現行四值域（待辦／已提送／已完成／不適用）下等價；出現第五種值時前端會列、伺服器不會（ROADMAP 未排入） |
 
 因此網頁的今日待辦與每日提醒信目前不是同一份清單。改任一側前先回到這張表。
 
