@@ -40,6 +40,26 @@ export const STAGE_ORDER = Object.freeze({
   extracting_requirements: 4, completed: 5, failed: 5, unsupported: 5,
 })
 
+// 終態=四種收尾狀態;面板列、文件表與套件進度統計吃同一個判定
+export const TERMINAL_RUN_STATUSES = Object.freeze(['completed', 'partial', 'failed', 'unsupported'])
+export const isTerminalRun = (run) => TERMINAL_RUN_STATUSES.includes(run?.status)
+
+// 逐檔進度 %:持久化 run 的真實階段 → 等分刻度(不是假進度)。母數由 STAGE_ORDER
+// 的終態值推導——階段數一改刻度跟著變;原本頁面硬寫 /5,加一個階段就靜默算錯。
+const STAGE_LAST = STAGE_ORDER.completed
+export function runPct(run) {
+  if (run?.status === 'completed') return 100
+  const order = STAGE_ORDER[run?.stage] ?? 0
+  return Math.min(100, Math.round((order / STAGE_LAST) * 100))
+}
+
+// 處理中細節列:抽取階段有批次進度就顯示「第 N/M 批」(W13 大文件分段續跑)
+export function stageDetail(run) {
+  return run?.stage === 'extracting_requirements' && run.metadata?.extraction_progress
+    ? `正在分析契約重點(第 ${run.metadata.extraction_progress} 批)`
+    : (STAGE_LABELS[run?.stage] || run?.stage)
+}
+
 export const STAGE_LABELS = Object.freeze({
   received: '已收到',
   uploaded: '已上傳',
@@ -80,7 +100,7 @@ export function isInlineViewableMime(mime) {
 // Real stage counts for the package progress header - no fake percentages.
 export function summarizePackageProgress(runs) {
   const rows = runs || []
-  const terminal = (r) => ['completed', 'partial', 'failed', 'unsupported'].includes(r.status)
+  const terminal = isTerminalRun
   const uploaded = runFileLanded
   const textExtracted = (r) => Number(r.metadata?.page_count || 0) > 0
     || ['classifying', 'extracting_requirements', 'completed'].includes(r.stage)
@@ -100,6 +120,31 @@ export function summarizePackageProgress(runs) {
     unsupported: rows.filter((r) => r.status === 'unsupported').length,
     needsClassification: rows.filter((r) => r.classification_status === 'needs_review').length,
     active: rows.filter((r) => !terminal(r)).length,
+  }
+}
+
+// 上傳回饋面板的帳(mockup 狀態 B/C/D):
+// - 面板列=本批上傳的 run(以 document_version_id 記,run 列會被 reload 換新物件,
+//   version id 才是穩定身分)+ 任何仍在處理中的 run(回到頁面也看得到進行中);
+// - 分類待確認/覆蓋不完整 ≠ 完成:completed 但 needs_review 的檔案抽取被跳過,
+//   面板報綠色「已抽取」就是說謊(審查 W11 發現);
+// - 「重試」只對 AI 分析失敗有效;上傳失敗/掃描檔重打 edge fn 必敗又蓋掉原始錯誤,
+//   正確復原是重新上傳同檔(checksum 相同會自動接續);
+// - 進度母數用「選檔總數」不用「已建列數」:列是開工才建的,母數會長大、進度會倒退;
+//   還沒開工的檔案以 0% 計入才是真實進度。
+export function summarizeUploadBatch(runs, { batchVersionIds, batchTotal = 0 } = {}) {
+  const rows = (runs || []).filter((r) => batchVersionIds?.has(r.document_version_id) || !isTerminalRun(r))
+  const failed = rows.filter((r) => r.status === 'failed' || r.status === 'partial')
+  const needs = rows.filter((r) => r.status === 'completed'
+    && (r.classification_status === 'needs_review' || r.metadata?.requirement_extraction_warning))
+  const ok = rows.filter((r) => (r.status === 'completed' && r.classification_status !== 'needs_review'
+    && !r.metadata?.requirement_extraction_warning) || r.status === 'unsupported')
+  const extractionFailed = failed.filter((r) => r.metadata?.requirement_extraction === 'failed')
+  const total = Math.max(rows.length, batchTotal)
+  const overallPct = total ? Math.round(rows.reduce((sum, r) => sum + runPct(r), 0) / total) : 0
+  return {
+    rows, failed, needs, ok, extractionFailed, total, overallPct,
+    active: rows.some((r) => !isTerminalRun(r)),
   }
 }
 

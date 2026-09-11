@@ -67,7 +67,7 @@ const fmtTime = (v) => fmtDateTime(v, { empty: '' })
 // 責任方靠文字+icon 分辨(a11y:不可只靠顏色)。capsule 是責任方標籤的例外(規範 §4)。
 function WhoPill({ who, self }) {
   return (
-    <span className={`inline-flex items-center gap-[5px] h-[18px] px-[7px] rounded-full border text-[10.5px] font-medium whitespace-nowrap ${self
+    <span className={`inline-flex items-center gap-[5px] h-[18px] px-[7px] rounded-full border text-micro font-medium whitespace-nowrap ${self
       ? 'border-[var(--primary)] bg-[var(--blue-tint)] text-[var(--blue-text)]'
       : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)]'}`}>
       <MSym name={PARTY_META[who]?.icon || 'engineering'} size={13} />{who}
@@ -355,8 +355,8 @@ export default function Requirements() {
 
       {/* 2. 本文:標題/說明/key-value */}
       <div className="p-4">
-        <div className="text-[15px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{selected.title}</div>
-        {selected.desc && <p className="mt-2 text-[12.5px] leading-[1.8] text-[var(--text-2)]">{selected.desc}</p>}
+        <div className="text-callout font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{selected.title}</div>
+        {selected.desc && <p className="mt-2 text-footnote leading-[1.8] text-[var(--text-2)]">{selected.desc}</p>}
         <MetaGrid rows={meta} className="mt-3.5" />
       </div>
 
@@ -364,7 +364,7 @@ export default function Requirements() {
       <div className="px-4 pb-4">
         <div className="flex items-center gap-2 mb-2">
           <MSym name="history" size={15} className="text-[var(--text-3)]" />
-          <span className="text-[12.5px] font-medium text-[var(--text)]">執行紀錄</span>
+          <span className="text-footnote font-medium text-[var(--text)]">執行紀錄</span>
         </div>
         {logEntries.length === 0 ? (
           <p className="text-xs text-[var(--text-3)]">尚無執行紀錄。</p>
@@ -375,7 +375,7 @@ export default function Requirements() {
               <Dot color={OB_STATUS[e.s].badge} className="absolute top-[5px]" />
             </span>
             <span className="pb-[9px] flex flex-col gap-px">
-              <span className="num text-[11px] text-[var(--text-3)] leading-normal">{e.when}</span>
+              <span className="num text-caption text-[var(--text-3)] leading-normal">{e.when}</span>
               <span className="text-xs leading-relaxed text-[var(--text)]">{e.what}</span>
             </span>
           </div>
@@ -386,7 +386,7 @@ export default function Requirements() {
       <div className="px-4 pb-4">
         <div className="flex items-center gap-2 mb-2">
           <MSym name="description" size={15} className="text-[var(--text-3)]" />
-          <span className="text-[12.5px] font-medium text-[var(--text)]">AI 擷取依據</span>
+          <span className="text-footnote font-medium text-[var(--text)]">AI 擷取依據</span>
           {selected.verified != null && (
             <Badge color={selected.verified ? 'green' : 'amber'}>{selected.verified ? '來源已核對' : '來源待核對'}</Badge>
           )}
@@ -395,14 +395,14 @@ export default function Requirements() {
           <SourceQuote quote={selected.quote}
             cite={[selected.doc, selected.clause ? `契約條款 ${selected.clause}` : null, selected.page].filter(Boolean).join(' · ')} />
         ) : (selected.clause || selected.page) ? (
-          <p className="num text-[11px] text-[var(--text-3)] leading-relaxed">
+          <p className="num text-caption text-[var(--text-3)] leading-relaxed">
             出處 {[selected.clause, selected.page].filter(Boolean).join(' · ')}(原文請至專案文件查閱)
           </p>
         ) : (
           <p className="text-xs text-[var(--text-3)]">無引註。</p>
         )}
         {selected.calc && (
-          <div className="mt-2 flex items-start gap-[7px] text-[11.5px] text-[var(--text-3)] leading-relaxed">
+          <div className="mt-2 flex items-start gap-[7px] text-caption text-[var(--text-3)] leading-relaxed">
             <MSym name="function" size={15} className="flex-none mt-px" />
             <span className="num">到期日推算:{selected.calc}{selected.dateLabel !== '—' ? ` · 本期 ${selected.dateLabel}` : ''}</span>
           </div>
@@ -411,7 +411,7 @@ export default function Requirements() {
 
       {/* 5. 關聯 */}
       <div className="px-4 pb-4">
-        <div className="text-[12.5px] font-medium text-[var(--text)] mb-2">關聯</div>
+        <div className="text-footnote font-medium text-[var(--text)] mb-2">關聯</div>
         <div className="flex flex-col gap-1.5">
           {evidenceSub && (
             <Link to="/submittals" className="flex items-center gap-2 px-2.5 py-2 max-md:min-h-11 border border-[var(--border-2)] rounded-lg text-xs text-[var(--text-2)] min-w-0 hover:bg-[var(--bg)]">
@@ -451,12 +451,12 @@ export default function Requirements() {
           </Button>
         )}
         {actable && selected.status === 'na' && (
-          <span className="flex-1 min-w-[180px] text-[11.5px] text-[var(--text-3)] leading-relaxed">
+          <span className="flex-1 min-w-[180px] text-caption text-[var(--text-3)] leading-relaxed">
             {selected.penalty ? '罰則條款,非待辦事項;條件成立時自動轉為待處理。' : '相關基準日尚未設定,推不出到期日,暫非待辦事項。'}
           </span>
         )}
         {!isMine && !actable && (
-          <span className="flex-1 min-w-[180px] text-[11.5px] text-[var(--text-3)] leading-relaxed">
+          <span className="flex-1 min-w-[180px] text-caption text-[var(--text-3)] leading-relaxed">
             由{selected.who}負責執行,本頁為唯讀檢視。
           </span>
         )}
@@ -475,7 +475,7 @@ export default function Requirements() {
               {submittals.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
             </Select>
             <Button size="sm" disabled={!evidencePick || busy === 'evidence'} onClick={attachEvidence}>掛上佐證</Button>
-            <span className="w-full text-[11px] text-[var(--text-3)]">掛佐證不會自動標記完成。</span>
+            <span className="w-full text-caption text-[var(--text-3)]">掛佐證不會自動標記完成。</span>
           </>) : (
             <span className="text-xs text-[var(--text-3)]">尚無送審文件可掛;至「送審文件」建立後再回來掛佐證。</span>
           )}
@@ -564,19 +564,19 @@ export default function Requirements() {
           ...(stat.n.na ? [[OB_STATUS.na.label, stat.n.na, 'na']] : []),
         ]
         return (
-          <Surface key={name} className="flex-1 min-w-[260px] max-xl:min-w-[calc(50%-6px)] max-md:min-w-full px-4 py-3.5 border-l-[3px]"
+          <Surface key={name} className="stat-card flex-1 min-w-[260px] max-xl:min-w-[calc(50%-6px)] max-md:min-w-full px-4 py-3.5 border-l-[3px]"
             style={{ borderLeftColor: PARTY_META[name].mark }}>
             <div className="flex items-center gap-2 mb-[11px]">
               <MSym name={PARTY_META[name].icon} size={18} className="text-[var(--text-2)]" />
-              <span className="text-[13px] font-medium text-[var(--text)]">{name}</span>
+              <span className="text-body font-medium text-[var(--text)]">{name}</span>
               {name === viewerParty && (
-                <span className="inline-flex items-center h-[18px] px-[7px] rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] text-[10px] font-medium">自己</span>
+                <span className="inline-flex items-center h-[18px] px-[7px] rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] text-micro font-medium">自己</span>
               )}
-              <span className="num ml-auto text-[11px] text-[var(--text-2)]">{stat.total} 條義務</span>
+              <span className="num ml-auto text-caption text-[var(--text-2)]">{stat.total} 條義務</span>
             </div>
             <div className="flex items-baseline gap-[9px] mb-[11px]">
-              <span className={`num text-[27px] font-normal leading-none ${rateCls}`}>{stat.rate == null ? '—' : `${stat.rate}%`}</span>
-              <span className="text-[11.5px] text-[var(--text-2)] leading-snug">
+              <span className={`num stat-value font-normal leading-none ${rateCls}`}>{stat.rate == null ? '—' : `${stat.rate}%`}</span>
+              <span className="text-caption text-[var(--text-2)] leading-snug">
                 {stat.rate == null ? '尚無到期項目' : `到期 ${stat.settled} 項準時完成 ${stat.onTime} 項`}
               </span>
             </div>
@@ -587,7 +587,7 @@ export default function Requirements() {
             </div>
             <div className="flex items-center gap-3.5 flex-wrap">
               {rows.map(([label, v, k]) => (
-                <span key={k} className="inline-flex items-center gap-1.5 text-[11.5px] text-[var(--text-2)]">
+                <span key={k} className="inline-flex items-center gap-1.5 text-caption text-[var(--text-2)]">
                   <Dot color={OB_STATUS[k].badge} />{label}
                   <span className="num font-medium text-[var(--text)]">{v}</span>
                 </span>
@@ -603,12 +603,12 @@ export default function Requirements() {
   const phaseBar = (
     <Card bodyClass="px-[18px] pt-[15px] pb-[17px]">
       <div className="flex items-baseline justify-between gap-4 mb-[13px] flex-wrap">
-        <span className="text-[13px] font-medium text-[var(--text)]">履約期程</span>
+        <span className="text-body font-medium text-[var(--text)]">履約期程</span>
         <span className="inline-flex items-baseline gap-3">
-          <span className="num text-[11px] text-[var(--text-2)]">{milestoneMeta}</span>
+          <span className="num text-caption text-[var(--text-2)]">{milestoneMeta}</span>
           {isPersistedProject && (
             <button type="button" onClick={() => setAnchorOpen((v) => !v)} aria-expanded={anchorOpen}
-              className="inline-flex items-center gap-1 text-[11.5px] text-[var(--blue-text)] hover:underline pressable">
+              className="inline-flex items-center gap-1 text-caption text-[var(--blue-text)] hover:underline pressable">
               <MSym name="edit_calendar" size={14} />設定基準日
             </button>
           )}
@@ -619,10 +619,10 @@ export default function Requirements() {
         <button type="button" onClick={() => setAnchorOpen(true)}
           className="w-full mb-3 flex items-center gap-2.5 rounded-[10px] bg-[var(--amber-tint)] px-3.5 py-2.5 text-left pressable">
           <MSym name="event_busy" size={16} className="text-[var(--amber-text)] shrink-0" />
-          <span className="min-w-0 flex-1 text-[12px] leading-snug text-[var(--amber-text)]">
+          <span className="min-w-0 flex-1 text-footnote leading-snug text-[var(--amber-text)]">
             {gaps.gaps.map((g) => `${g.count} 條義務等待${g.label}`).join('、')}——設定後自動排入時程並開始倒數
           </span>
-          <span className="text-[12px] font-medium text-[var(--amber-text)] shrink-0">設定</span>
+          <span className="text-footnote font-medium text-[var(--amber-text)] shrink-0">設定</span>
         </button>
       )}
       {isPersistedProject && anchorOpen && (
@@ -647,14 +647,14 @@ export default function Requirements() {
                 ? 'border-[var(--primary)] bg-[var(--blue-tint)]'
                 : 'border-[var(--border-card)] bg-[var(--surface)] hover:bg-[var(--bg)]'}`}>
               <span className="flex items-center gap-[7px] min-h-[17px]">
-                <span className="text-[12.5px] font-medium text-[var(--text)] whitespace-nowrap">{ph.name}</span>
+                <span className="text-footnote font-medium text-[var(--text)] whitespace-nowrap">{ph.name}</span>
                 {ph.key === phaseWin.nowPhase && (
-                  <span className="num inline-flex items-center h-[17px] px-1.5 rounded-full bg-[var(--primary)] text-[var(--primary-fg)] text-[10px] font-medium">今天</span>
+                  <span className="num inline-flex items-center h-[17px] px-1.5 rounded-full bg-[var(--primary)] text-[var(--primary-fg)] text-micro font-medium">今天</span>
                 )}
               </span>
-              <span className="num text-[10.5px] text-[var(--text-2)] leading-snug">{phaseWin.ranges[ph.key]}</span>
+              <span className="num text-micro text-[var(--text-2)] leading-snug">{phaseWin.ranges[ph.key]}</span>
               <span className="h-1.5 rounded-full" style={{ background: TRACK_BG[s.track] }} aria-hidden />
-              <span className={`num text-[10.5px] leading-snug ${TONE_CLS[s.tone]}`}>{s.note}</span>
+              <span className={`num text-micro leading-snug ${TONE_CLS[s.tone]}`}>{s.note}</span>
             </button>
           )
         })}
@@ -701,7 +701,7 @@ export default function Requirements() {
   const listRows = (
     <div role="list" aria-label="履約義務時間軸">
       {ordered.length === 0 ? (
-        <div className="px-[18px] py-12 text-center text-[12.5px] leading-[1.8] text-[var(--text-3)]">
+        <div className="px-[18px] py-12 text-center text-footnote leading-[1.8] text-[var(--text-3)]">
           沒有符合條件的義務。<br />試試條款編號(例 5.3)、頁碼,或關鍵字(例 保固、罰則、送審)。
         </div>
       ) : grouped.map((g) => {
@@ -709,10 +709,10 @@ export default function Requirements() {
         return (
           <div key={g.key}>
             <div className="flex items-center gap-3 px-[18px] pt-[13px] pb-[11px] bg-[var(--bg)] border-b border-[var(--border-2)]">
-              <span className="text-[12.5px] font-medium text-[var(--text)] whitespace-nowrap">{g.name}</span>
-              <span className="num text-[11px] text-[var(--text-2)] whitespace-nowrap">{phaseWin.ranges[g.key]}</span>
+              <span className="text-footnote font-medium text-[var(--text)] whitespace-nowrap">{g.name}</span>
+              <span className="num text-caption text-[var(--text-2)] whitespace-nowrap">{phaseWin.ranges[g.key]}</span>
               <span className="flex-1 h-px bg-[var(--border-2)]" aria-hidden />
-              <span className={`num text-[11px] whitespace-nowrap ${TONE_CLS[s.tone]}`}>{s.note}</span>
+              <span className={`num text-caption whitespace-nowrap ${TONE_CLS[s.tone]}`}>{s.note}</span>
             </div>
             {g.items.map((it) => {
               const active = it.id === selectedId
@@ -724,7 +724,7 @@ export default function Requirements() {
                     ? 'bg-[var(--blue-tint)]' : 'hover:bg-[var(--bg)]'}`}>
                   <span className="py-3 pl-[18px] max-md:p-0 max-md:order-2 flex flex-col max-md:flex-row gap-[3px] max-md:gap-2 max-md:items-center">
                     <span className="num text-xs font-medium text-[var(--text)]">{it.dateLabel}</span>
-                    <span className={`num text-[10.5px] leading-normal ${COUNTDOWN_CLS[it.status] || 'text-[var(--text-2)]'}`}>{it.countdown}</span>
+                    <span className={`num text-micro leading-normal ${COUNTDOWN_CLS[it.status] || 'text-[var(--text-2)]'}`}>{it.countdown}</span>
                   </span>
                   <span className="relative flex justify-center max-md:hidden" aria-hidden>
                     <i className="w-[2px] bg-[var(--border-2)]" />
@@ -735,11 +735,11 @@ export default function Requirements() {
                     <span className="flex items-center gap-[7px] flex-wrap">
                       <WhoPill who={it.who} self={it.who === viewerParty} />
                       {it.kind && (
-                        <span className="inline-flex items-center h-[18px] px-1.5 rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] text-[10px] font-medium whitespace-nowrap">{it.kind}</span>
+                        <span className="inline-flex items-center h-[18px] px-1.5 rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] text-micro font-medium whitespace-nowrap">{it.kind}</span>
                       )}
                     </span>
-                    <span className="text-[13px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{it.title}</span>
-                    <span className="num text-[11.5px] leading-relaxed text-[var(--text-2)]">
+                    <span className="text-body font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{it.title}</span>
+                    <span className="num text-caption leading-relaxed text-[var(--text-2)]">
                       {[it.clause ? `契約條款 ${it.clause}` : null, it.page || null, it.type].filter(Boolean).join(' · ')}
                     </span>
                   </span>
@@ -818,9 +818,9 @@ export default function Requirements() {
           {filterBar}
           {listRows}
           <div className="px-[18px] py-3 flex items-center justify-between gap-4 flex-wrap">
-            <span className="num text-[11.5px] text-[var(--text-3)]">{footerMeta}</span>
+            <span className="num text-caption text-[var(--text-3)]">{footerMeta}</span>
             {isPersistedProject && (
-              <Link to="/contract" className="text-[11.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 inline-flex items-center">查看文件與整理狀態</Link>
+              <Link to="/contract" className="text-caption text-[var(--blue-text)] hover:underline max-md:min-h-11 inline-flex items-center">查看文件與整理狀態</Link>
             )}
           </div>
         </Card>

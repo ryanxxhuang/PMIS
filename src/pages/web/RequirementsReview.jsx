@@ -150,7 +150,7 @@ export function ReviewActions({ requirement, canReview, busy, onReview, onEdit, 
     </>)
   }
   return (<>
-    <span className="flex-1 min-w-0 text-[11.5px] leading-relaxed text-[var(--text-3)] num">{record}</span>
+    <span className="flex-1 min-w-0 text-caption leading-relaxed text-[var(--text-3)] num">{record}</span>
     {st === 'approved' && canReview && (
       <Button variant="outline" size="sm" disabled={!!busy} onClick={() => onReview('supersede', '廢止取代')}>廢止取代</Button>
     )}
@@ -519,7 +519,7 @@ export default function RequirementsReview() {
   // ── 頁首動作:手動新增(對照報告已退場) ─────────────────────────────────
   const headerAction = (
     <div className="flex flex-wrap items-center gap-2">
-      <Link to={packageId ? `/requirements?package=${encodeURIComponent(packageId)}` : '/requirements'} className="inline-flex items-center gap-1 text-[12.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 px-1">
+      <Link to={packageId ? `/requirements?package=${encodeURIComponent(packageId)}` : '/requirements'} className="inline-flex items-center gap-1 text-footnote text-[var(--blue-text)] hover:underline max-md:min-h-11 px-1">
         <MSym name="arrow_back" size={16} /> 返回履約時程
       </Link>
       {canAddManual && (
@@ -552,8 +552,8 @@ export default function RequirementsReview() {
       {/* 1. 標題列:狀態色票+類型+開啟原文 */}
       <div className="px-4 py-[13px] border-b border-[var(--border)] flex items-center gap-2.5">
         <Badge color={pill.color}>{pill.label}</Badge>
-        <span className="text-[11.5px] text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[selected.requirement_type] || selected.requirement_type}</span>
-        <span className="text-[11.5px] text-[var(--text-3)]">{ORIGIN_LABELS[selected.origin] || selected.origin}</span>
+        <span className="text-caption text-[var(--text-3)]">{REQUIREMENT_TYPE_LABELS[selected.requirement_type] || selected.requirement_type}</span>
+        <span className="text-caption text-[var(--text-3)]">{ORIGIN_LABELS[selected.origin] || selected.origin}</span>
         {openableSource && (
           <Button variant="ghost" size="sm" className="ml-auto" onClick={openOriginal} title="在原文件中開啟">
             開啟原文
@@ -593,8 +593,8 @@ export default function RequirementsReview() {
         </div>
       ) : (
         <div className="p-4">
-          <div className="text-[15px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{selected.title}</div>
-          {selected.description && <p className="mt-2 text-[12.5px] leading-[1.8] text-[var(--text-2)]">{selected.description}</p>}
+          <div className="text-callout font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{selected.title}</div>
+          {selected.description && <p className="mt-2 text-footnote leading-[1.8] text-[var(--text-2)]">{selected.description}</p>}
           <MetaGrid rows={meta} className="mt-3.5" />
         </div>
       )}
@@ -603,7 +603,7 @@ export default function RequirementsReview() {
       <div className="px-4 pb-4">
         <div className="flex items-center gap-2 mb-2">
           <MSym name="description" size={15} className="text-[var(--text-3)]" />
-          <span className="text-[12.5px] font-medium text-[var(--text)]">原文出處</span>
+          <span className="text-footnote font-medium text-[var(--text)]">原文出處</span>
           {selectedSources.length > 0 && (
             <Badge color={sourceVerificationSummary(selectedSources) === 'verified' ? 'green' : 'amber'}>
               {sourceVerificationSummary(selectedSources) === 'verified' ? '來源已核對' : '來源待核對'}
@@ -623,7 +623,7 @@ export default function RequirementsReview() {
           )
         })}
         {run && (
-          <p className="text-[11px] text-[var(--text-3)] leading-relaxed mt-1">
+          <p className="text-caption text-[var(--text-3)] leading-relaxed mt-1">
             AI 擷取:模型 {run.model_name || '?'}·prompt {run.prompt_version || '?'}·完成 {fmtTime(run.completed_at) || run.status || '?'}。模型出處僅供追溯;契約效力以契約原文為準。
           </p>
         )}
@@ -631,7 +631,7 @@ export default function RequirementsReview() {
 
       {/* 4. 關聯:期限追蹤/標單工項/流程項目 */}
       <div className="px-4 pb-4">
-        <div className="text-[12.5px] font-medium text-[var(--text)] mb-2">關聯</div>
+        <div className="text-footnote font-medium text-[var(--text)] mb-2">關聯</div>
         <div className="flex flex-col gap-1.5">
           {selectedObligation && (
             <Link to="/deadlines" className={LINK_ROW}>
@@ -703,7 +703,7 @@ export default function RequirementsReview() {
   const listRows = (
     <div role="list" aria-label="契約重點清單">
       {shownRows.length === 0 ? (
-        <div className="px-4 py-11 text-center text-[12.5px] leading-[1.8] text-[var(--text-3)]">
+        <div className="px-4 py-11 text-center text-footnote leading-[1.8] text-[var(--text-3)]">
           {filters.q.trim()
             ? (<>找不到符合「{filters.q.trim()}」的條文。<br />試試條款編號(例 5.3)、頁碼或關鍵字(例 保固、罰則)。</>)
             : '目前篩選條件下沒有條文。'}
@@ -728,10 +728,10 @@ export default function RequirementsReview() {
               : 'border-l-transparent hover:bg-[var(--bg)]'}`}>
             <span><Badge color={pill.color}>{pill.label}</Badge></span>
             <span className="min-w-0">
-              <span className="block text-[13px] font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{r.title}</span>
-              <span className="block mt-[3px] text-[11.5px] leading-relaxed text-[var(--text-3)] num">{metaParts.join(' · ')}</span>
+              <span className="block text-body font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{r.title}</span>
+              <span className="block mt-[3px] text-caption leading-relaxed text-[var(--text-3)] num">{metaParts.join(' · ')}</span>
             </span>
-            <span className="text-right max-md:text-left text-[11.5px] leading-relaxed text-[var(--text-3)] num">{formatRequirementRule(r) || ''}</span>
+            <span className="text-right max-md:text-left text-caption leading-relaxed text-[var(--text-3)] num">{formatRequirementRule(r) || ''}</span>
           </button>
         )
       })}
@@ -923,13 +923,13 @@ export default function RequirementsReview() {
       <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_392px]">
         {/* ── 左欄:契約重點清單 ── */}
         <Card title="契約重點清單" bodyClass="p-0"
-          action={<span className="num text-[11px] text-[var(--text-3)]">{listMeta}</span>}>
+          action={<span className="num text-caption text-[var(--text-3)]">{listMeta}</span>}>
           {/* 揭露條(涵蓋率/審查規則):資料與畫面要說同一件事,不因改版消失 */}
           {intro.coverageWarning && (
             <p className="px-[18px] py-2 text-xs text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border-2)]">{intro.coverageWarning}</p>
           )}
           {intro.note && (
-            <p className="px-[18px] py-2 text-[11.5px] text-[var(--text-3)] border-b border-[var(--border-2)]">{intro.note}</p>
+            <p className="px-[18px] py-2 text-caption text-[var(--text-3)] border-b border-[var(--border-2)]">{intro.note}</p>
           )}
           <div className="px-[18px] py-3 text-xs leading-relaxed bg-[var(--surface-2)] border-b border-[var(--border-2)]">
             <p>目前載入範圍有 {counts.attention} 項需留意。AI 內容維持自動歸檔，無須逐條按確認；可先查看有核對疑慮、缺少核對結果或尚待人工確認的項目。</p>
@@ -980,7 +980,7 @@ export default function RequirementsReview() {
           {listRows}
 
           <div className="px-[18px] py-3 flex items-center justify-between gap-4">
-            <span className="num text-[11.5px] text-[var(--text-3)]">顯示 {shownRows.length} / {visible.length} 條</span>
+            <span className="num text-caption text-[var(--text-3)]">顯示 {shownRows.length} / {visible.length} 條</span>
             {visible.length > shownLimit && (
               <Button variant="ghost" size="sm" onClick={() => setShownLimit((n) => n + PAGE_SIZE)}>載入更多</Button>
             )}

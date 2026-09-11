@@ -1,27 +1,29 @@
 // W11 專案文件(文件管理員):整案文件的唯一上傳/歸檔窗口。
 // 依 design_handoff_project_documents 版面重建:整頁只有兩張卡——
 //   1.「契約文件」= 上傳入口(拖放區)+ 上傳過程的完整回饋(總進度、逐檔、成功、失敗、重試)
-//   2.「專案文件」= 已入庫文件清單(文件/分類/版本/AI 處理/上傳)
+//      → 回饋面板在 components/UploadPanel.jsx,帳目在 lib/packageUpload.js summarizeUploadBatch
+//   2.「專案文件」= 已入庫文件清單(文件/分類/版本/AI 處理/上傳)→ components/DocumentTable.jsx
 // 上傳後 AI 自動分類、自動歸檔分流:標單 XML → 標單工項、契約/規範 → 契約重點。
 // 基準日、契約總價與期限追蹤在獨立的「期限追蹤」頁(/deadlines)——本頁只管文件,
 // 只有第一次建檔與文件更新時才會用到。
-// 進度來自持久化的 document_processing_runs(離開頁面不遺失);逐檔百分比由
-// STAGE_ORDER 映射(真實階段,不是假進度)。
+// 進度來自持久化的 document_processing_runs(離開頁面不遺失;讀取/中斷復原/改分類
+// 狀態機在 lib/packageRuns.js);逐檔百分比由 STAGE_ORDER 映射(真實階段,不是假進度)。
+// 這支只剩:載入與範圍守衛(切案/切包時舊回應不覆蓋新畫面)、上傳分流、三個動 DB
+// 的事件處理器(確認分類/重試、刪除、開檔)與版面組裝。
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import ContractFlow from '../../components/ContractFlow.jsx'
-import { pageAllSafe, pageAllInSafe } from '../../lib/pagedQuery.js'
+import UploadPanel from '../../components/UploadPanel.jsx'
+import DocumentTable from '../../components/DocumentTable.jsx'
+import { pageAllSafe } from '../../lib/pagedQuery.js'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { friendlyError } from '../../lib/errorMessage.js'
-import {
-  Card, Empty, PageHeader, Badge, Select, buttonClass, SortableTh, TablePager,
-  ErrorBanner, SkeletonList, THEAD_CLS,
-} from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Select, buttonClass, ErrorBanner } from '../../components/ui.jsx'
+import { appConfirm } from '../../components/confirm.jsx'
 // 契約包切換屬「視圖分段」:與工作面分頁/Admin tabs 共用同一套 chips 皮
 import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
-import { useTableSort, usePagination } from '../../lib/useTable.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 import {
   PACKAGE_STATUS_LABELS, availablePackageOptions,
@@ -29,57 +31,14 @@ import {
 } from '../../lib/contractPackages.js'
 import { ACCEPT_ATTR } from '../../lib/packageFileSupport.js'
 import {
-  DOCUMENT_TYPE_LABELS, CLASSIFIABLE_DOCUMENT_TYPES, EXTRACTABLE_DOCUMENT_TYPES,
-  presentationGroup,
-} from '../../lib/documentClassifier.js'
-import {
-  uploadFilesToPackage, summarizePackageProgress, packageStatusFromRuns,
-  formatElapsed, staleProcessingPatch, takeSelectedFiles, STAGE_ORDER, STAGE_LABELS,
-  runFileLanded, isValidStorageKey,
+  uploadFilesToPackage, summarizePackageProgress, summarizeUploadBatch, packageStatusFromRuns,
+  formatElapsed, takeSelectedFiles, isTerminalRun,
 } from '../../lib/packageUpload.js'
+import { loadPackageRuns, healStaleRuns, reclassifyProcessingRun } from '../../lib/packageRuns.js'
 import { openDocumentVersionFile, downloadDocumentVersionFile } from '../../lib/documentFileAccess.js'
-import { runRequirementExtraction, extractionSuccessMessage, extractionCoverageWarning } from '../../lib/extractRequirements.js'
 
-// 文件清單表格欄樣式:表頭字型層吃 ui.jsx 的 THEAD_CLS(全站單一真相)
-const DOC_TH = `text-left ${THEAD_CLS} py-2.5 px-3 whitespace-nowrap`
-const DOC_THR = `text-right ${THEAD_CLS} py-2.5 px-3 whitespace-nowrap`
-const DOC_TD = 'py-2.5 px-3 text-[13px] align-top max-md:px-0 max-md:py-1.5 max-md:min-w-0'
-
-const TERMINAL_STATUSES = ['completed', 'partial', 'failed', 'unsupported']
-const isTerminal = (r) => TERMINAL_STATUSES.includes(r.status)
-// 逐檔進度 %:持久化 run 的真實階段 → 0/20/40/60/80/100(不是假進度)
-const runPct = (r) => {
-  if (r.status === 'completed') return 100
-  const order = STAGE_ORDER[r.stage] ?? 0
-  return Math.min(100, Math.round((order / 5) * 100))
-}
-// 處理中細節列:抽取階段有批次進度就顯示「第 N/M 批」(W13 大文件分段續跑)
-const stageDetail = (r) => (
-  r.stage === 'extracting_requirements' && r.metadata?.extraction_progress
-    ? `正在分析契約重點(第 ${r.metadata.extraction_progress} 批)`
-    : (STAGE_LABELS[r.stage] || r.stage)
-)
-
-// AI 處理欄的固定四狀態(mockup):已完成/處理中/待處理/無需處理。
-// 色票只寫狀態,數字與原因寫在下方細節行。
-function aiProcessingState(run) {
-  if (!isTerminal(run)) {
-    return { kind: 'processing', label: '處理中', color: 'blue', detail: stageDetail(run) }
-  }
-  if (run.status === 'unsupported') {
-    return { kind: 'na', label: '無需處理', color: 'slate', detail: run.metadata?.limitation || '尚未支援內容分析' }
-  }
-  if (run.classification_status === 'needs_review') {
-    return { kind: 'attention', label: '待處理', color: 'red', detail: `AI 建議分類:${DOCUMENT_TYPE_LABELS[run.suggested_document_type] || '無法判斷'},請人工確認` }
-  }
-  if (run.metadata?.requirement_extraction_warning) {
-    return { kind: 'attention', label: '部分整理', color: 'amber', detail: run.metadata.requirement_extraction_warning }
-  }
-  if (run.status === 'failed' || run.status === 'partial') {
-    return { kind: 'attention', label: '待處理', color: 'red', detail: friendlyError(run.error_message, '處理未完成') }
-  }
-  return { kind: 'done', label: '已完成', color: 'green', detail: run.metadata?.requirement_extraction_message || '已分類歸檔' }
-}
+// 統一窗口:PCCES 標單 XML 直接路由到 BOQ 匯入,其餘進契約包管線
+const isPccesXml = (file) => /\.xml$/i.test(file.name)
 
 export default function Contract() {
   const {
@@ -123,8 +82,6 @@ export default function Contract() {
   // disabled 用——React state 守衛在重新 render 前讀到的是舊 Set,擋不住連點
   const busyRunsRef = useRef(new Set())
   const [busyRunIds, setBusyRunIds] = useState(() => new Set())
-  // W14 事後治理:哪一列正開著「改分類」的下拉(一次只開一列)
-  const [reclassifyId, setReclassifyId] = useState(null)
   const [panelDismissed, setPanelDismissed] = useState(false)
   const [, forceTick] = useState(0)
   const tickRef = useRef(null)
@@ -139,6 +96,23 @@ export default function Contract() {
   // 監造上傳契約正是事務所場景的主流程(W10)
   const canWriteContract = can.edit || currentUser?.org_type === 'supervisor'
   const canUploadDocs = isPersistedProject && canWriteContract
+
+  // 鎖與解鎖成對:同步 check-and-set,釋放只由掛旗者在 finally 做
+  const lockRun = (runId) => {
+    if (busyRunsRef.current.has(runId)) return false
+    busyRunsRef.current.add(runId)
+    setBusyRunIds(new Set(busyRunsRef.current))
+    return true
+  }
+  const unlockRun = (runId) => {
+    busyRunsRef.current.delete(runId)
+    setBusyRunIds(new Set(busyRunsRef.current))
+  }
+  // 就地換列:run 狀態機的重啟/進度回呼只給部分欄位,metadata 要與畫面上的列合併
+  const patchRun = useCallback((runId, fields) => setRuns((rs) => rs.map((r) => (r.id !== runId ? r : {
+    ...r, ...fields,
+    ...(fields.metadata ? { metadata: { ...(r.metadata || {}), ...fields.metadata } } : {}),
+  }))), [])
 
   // ── 契約包與處理狀態載入(持久化,重新整理不遺失)────────────────────────
   const reloadPackages = useCallback(async () => {
@@ -182,6 +156,8 @@ export default function Contract() {
 
   const selectedPackage = packages.find((p) => p.id === selectedPackageId) || null
 
+  // 讀與寫分開(lib/packageRuns.js):loadPackageRuns 純讀;中斷復原的寫入只有
+  // 能管理文件的人才做(讀者=機關唯讀不寫處理狀態),而且每筆寫入前再確認範圍沒變。
   const reloadRuns = useCallback(async (packageId) => {
     if (scopeRef.current.pid !== pid || scopeRef.current.packageId !== packageId) return
     const request = ++runRequest.current
@@ -190,54 +166,14 @@ export default function Contract() {
     if (!isPersistedProject || !packageId) { setRuns([]); setRunsLoading(false); return }
     setRunsLoading(true); setRunsError('')
     try {
-      const [runResult, docResult] = await Promise.all([
-        pageAllSafe((from, to) => supabase.from('document_processing_runs').select('*')
-          .eq('contract_package_id', packageId).order('started_at').order('id').range(from, to)),
-        pageAllSafe((from, to) => supabase.from('documents').select('id, title, document_type')
-          .eq('contract_package_id', packageId).order('id').range(from, to)),
-      ])
-      if (runResult.error) throw runResult.error
-      if (docResult.error) throw docResult.error
-      const runRows = runResult.data
-      const docRows = docResult.data
-      const versionResult = await pageAllInSafe(docRows.map((d) => d.id), (ids, from, to) => supabase.from('document_versions')
-        .select('id, document_id, version_label, storage_path, original_filename, mime_type')
-        .in('document_id', ids).order('id').range(from, to))
-      if (versionResult.error) throw versionResult.error
-      const ingResult = await pageAllInSafe(versionResult.data.map((v) => v.id), (ids, from, to) => supabase.from('document_ingestion_runs')
-        .select('id, document_version_id, status, started_at, metadata').in('document_version_id', ids)
-        .order('started_at', { ascending: false }).order('id').range(from, to))
-      if (ingResult.error) throw ingResult.error
-      const latestCoverage = new Map()
-      for (const ingestion of ingResult.data) {
-        if (ingestion.status === 'completed' && !latestCoverage.has(ingestion.document_version_id)) {
-          latestCoverage.set(ingestion.document_version_id, extractionCoverageWarning(ingestion.metadata))
-        }
-      }
-      for (let i = 0; i < runRows.length; i++) {
-        const run = runRows[i]
-        if (run.metadata?.requirement_extraction === 'completed' && latestCoverage.has(run.document_version_id)) {
-          runRows[i] = { ...run, metadata: { ...run.metadata,
-            requirement_extraction_warning: latestCoverage.get(run.document_version_id) } }
-        }
-      }
-      const reqResult = await pageAllInSafe(ingResult.data.map((r) => r.id), (ids, from, to) => supabase.from('requirements')
-        .select('id').eq('status', 'approved').in('ingestion_run_id', ids).order('id').range(from, to))
-      if (reqResult.error) throw reqResult.error
+      const { runs: loaded, docs, versions, aiCount: approved } = await loadPackageRuns(packageId)
       if (!current()) return
-      // 讀者不寫處理狀態；可管理文件的人才沿用既有中斷復原。
-      if (canUploadDocs) for (let i = 0; i < runRows.length; i++) {
-        const patch = staleProcessingPatch(runRows[i])
-        if (!patch || !current()) continue
-        const { data: recovered } = await supabase.from('document_processing_runs')
-          .update(patch).eq('id', runRows[i].id).select().single()
-        if (recovered) runRows[i] = recovered
-      }
+      const runRows = canUploadDocs ? await healStaleRuns(loaded, { shouldContinue: current }) : loaded
       if (!current()) return
       setRuns(runRows); setLoadedPackageId(packageId)
-      setDocsById(new Map(docRows.map((d) => [d.id, d])))
-      setVersionsById(new Map(versionResult.data.map((v) => [v.id, v])))
-      setAiCount(reqResult.data.length)
+      setDocsById(new Map(docs.map((d) => [d.id, d])))
+      setVersionsById(new Map(versions.map((v) => [v.id, v])))
+      setAiCount(approved)
     } catch (error) {
       if (current()) setRunsError(friendlyError(error, '文件處理狀態載入失敗'))
     } finally {
@@ -253,7 +189,7 @@ export default function Contract() {
       let changed = false
       const next = new Set(prev)
       for (const r of runs) {
-        if (!isTerminal(r) && !next.has(r.document_version_id)) { next.add(r.document_version_id); changed = true }
+        if (!isTerminalRun(r) && !next.has(r.document_version_id)) { next.add(r.document_version_id); changed = true }
       }
       return changed ? next : prev
     })
@@ -275,7 +211,7 @@ export default function Contract() {
     return () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
   }, [progress.active])
   const elapsed = useMemo(() => {
-    const active = runs.filter((r) => !isTerminal(r))
+    const active = runs.filter((r) => !isTerminalRun(r))
     if (!active.length) return null
     const earliest = Math.min(...active.map((r) => new Date(r.started_at).getTime()))
     return formatElapsed(Date.now() - earliest)
@@ -329,37 +265,29 @@ export default function Contract() {
     return data
   }, [packages, parties, pid, currentUser])
 
-  // ── 唯一上傳流程:多檔 → 自動分類 → 自動歸檔分流 ─────────────────────────
-  const handleFiles = useCallback(async (fileList, targetPackage) => {
-    let files = [...(fileList || [])].filter(Boolean)
-    if (!files.length || !canUploadDocs || uploadLock.current || packagesLoading || packagesError) return
-    uploadLock.current = true
-    try {
-    setBoqMsg(null)   // 上一批的結果不得跨批殘留
-    setPanelDismissed(false)
-    // 統一窗口:PCCES 標單 XML 直接路由到 BOQ 匯入,其餘進契約包管線
-    const xmls = files.filter((f) => /\.xml$/i.test(f.name))
-    files = files.filter((f) => !/\.xml$/i.test(f.name))
-    // 同批多個 XML:第一份成功後,迴圈內的 workItemsSource 是過期閉包值,
-    // 用本地旗標擋後續檔案
+  // ── 上傳分流(統一窗口)──────────────────────────────────────────────────
+  // 標單 XML:不建 processing run,直接匯入標單工項。同批多個 XML:第一份成功後,
+  // 迴圈內的 workItemsSource 是過期閉包值,用本地旗標擋後續檔案
+  const importBoqFiles = useCallback(async (xmls) => {
     let boqImported = workItemsSource === 'db'
-    if (xmls.length) {
-      setBoqBusy(true)
-      try {
-        for (const xf of xmls) {
-          try {
-            if (boqImported) { setBoqMsg((prev) => ({ tone: prev?.tone || 'skip', text: `${prev?.text ? prev.text + ' ' : ''}標單已匯入過,略過「${xf.name}」(如需重匯請至「標單工項」頁清空重匯)。` })); continue }
-            const parsed = parsePccesXml(await xf.text())
-            const { error, count } = await importWorkItems(parsed)
-            if (!error) boqImported = true
-            setBoqMsg(error
-              ? { tone: 'error', text: friendlyError(error, '標單匯入失敗') }
-              : { tone: 'ok', text: `標單已匯入 ${count} 項工項。` })
-          } catch (e) { setBoqMsg({ tone: 'error', text: friendlyError(e, '標單 XML 解析失敗') }) }
-        }
-      } finally { setBoqBusy(false) }
-    }
-    if (!files.length) return
+    setBoqBusy(true)
+    try {
+      for (const xf of xmls) {
+        try {
+          if (boqImported) { setBoqMsg((prev) => ({ tone: prev?.tone || 'skip', text: `${prev?.text ? prev.text + ' ' : ''}標單已匯入過,略過「${xf.name}」(如需重匯請至「標單工項」頁清空重匯)。` })); continue }
+          const parsed = parsePccesXml(await xf.text())
+          const { error, count } = await importWorkItems(parsed)
+          if (!error) boqImported = true
+          setBoqMsg(error
+            ? { tone: 'error', text: friendlyError(error, '標單匯入失敗') }
+            : { tone: 'ok', text: `標單已匯入 ${count} 項工項。` })
+        } catch (e) { setBoqMsg({ tone: 'error', text: friendlyError(e, '標單 XML 解析失敗') }) }
+      }
+    } finally { setBoqBusy(false) }
+  }, [importWorkItems, workItemsSource])
+
+  // 契約包管線:多檔 → 自動分類 → 自動歸檔分流(lib/packageUpload.js)
+  const uploadToPackage = useCallback(async (files, targetPackage) => {
     // 面板總數定錨:同一個未關閉的面板連續加批就累加,關閉時歸零(dismissPanel)
     batchTotalRef.current += files.length
     setBatchTotal(batchTotalRef.current)
@@ -416,122 +344,47 @@ export default function Contract() {
     } finally {
       if (scopeRef.current.pid === pid) setUploading(false)
     }
-    } finally { uploadLock.current = false }
-  }, [canUploadDocs, packagesLoading, packagesError, packageOptions, ensurePackage, pid, currentUser, currentProjectMembership,
-    isPlatformAdmin, reloadRuns, reloadObligations, importWorkItems, workItemsSource])
+  }, [packageOptions, ensurePackage, pid, currentUser, currentProjectMembership, isPlatformAdmin, reloadRuns, reloadObligations])
 
-  // 修正/確認分類 → 視需要重新路由 AI 分析(也是「重試」的 handler)
-  const confirmClassification = useCallback(async (run, newType) => {
-    // 同步 check-and-set:旗標必須在第一個 await 之前掛上,否則兩下連點
-    // 都讀到「沒在忙」同穿(W13 審查確認);釋放只由掛旗者在 finally 做
-    if (busyRunsRef.current.has(run.id)) return
-    busyRunsRef.current.add(run.id)
-    setBusyRunIds(new Set(busyRunsRef.current))
+  // 唯一上傳入口(拖放與選檔都進這裡):分流 XML 與契約文件,批次期間上鎖防重入
+  const handleFiles = useCallback(async (fileList, targetPackage) => {
+    const files = [...(fileList || [])].filter(Boolean)
+    if (!files.length || !canUploadDocs || uploadLock.current || packagesLoading || packagesError) return
+    uploadLock.current = true
     try {
-      const version = versionsById.get(run.document_version_id)
-      const docId = version?.document_id
-      if (docId) {
-        const { error } = await supabase.from('documents')
-          .update({ document_type: newType }).eq('id', docId)
-        if (error) { setMsg(friendlyError(error, '分類更新失敗')); return }
-        setDocsById((m) => new Map(m).set(docId, { ...m.get(docId), document_type: newType }))
+      setBoqMsg(null)   // 上一批的結果不得跨批殘留
+      setPanelDismissed(false)
+      const xmls = files.filter(isPccesXml)
+      const documents = files.filter((f) => !isPccesXml(f))
+      if (xmls.length) await importBoqFiles(xmls)
+      if (documents.length) await uploadToPackage(documents, targetPackage)
+    } finally { uploadLock.current = false }
+  }, [canUploadDocs, packagesLoading, packagesError, importBoqFiles, uploadToPackage])
+
+  // ── 動 DB 的三個事件處理器 ───────────────────────────────────────────────
+  // 修正/確認分類 → 視需要重新路由 AI 分析(也是「重試」的 handler);狀態機在
+  // lib/packageRuns.js,這裡只管鎖、畫面寫回與收尾重載
+  const confirmClassification = useCallback(async (run, newType) => {
+    if (!lockRun(run.id)) return
+    try {
+      const docId = versionsById.get(run.document_version_id)?.document_id
+      const result = await reclassifyProcessingRun({
+        run, newType, documentId: docId, projectId: pid,
+        onRunPatch: (fields) => patchRun(run.id, fields),
+        onDocumentTyped: (id, type) => setDocsById((m) => new Map(m).set(id, { ...m.get(id), document_type: type })),
+      })
+      if (!result.ok) {
+        setMsg(result.message)
+        if (result.inProgress) await reloadRuns(run.contract_package_id)
+        return
       }
-      const patch = { classification_status: 'confirmed' }
-      // 抽取前提:文件真的有逐頁文字。上傳失敗/掃描檔的 run 沒有 document_pages,
-      // 打抽取必吃 422 還會把真正的失敗原因(檔案太大/掃描檔)蓋成錯誤診斷
-      // (W14 審查);page_count>0=本批已落頁,requirement_extraction 有值=
-      // 舊資料曾成功路由過(legacy 列 metadata 可能缺 page_count)。
-      const hasPages = Number(run.metadata?.page_count || 0) > 0
-        || run.metadata?.requirement_extraction != null
-      const canExtract = EXTRACTABLE_DOCUMENT_TYPES.includes(newType)
-        && run.parser_type && run.parser_type !== 'none' && hasPages
-      let updated = null
-      if (canExtract) {
-        // started_at 一併重設:staleProcessingPatch 以它起算 20 分鐘過期,
-        // 不重設的話「上傳很久之後才確認分類/重試」會被輪詢立刻誤判成中斷
-        const restart = {
-          ...patch, status: 'processing', stage: 'extracting_requirements',
-          started_at: new Date().toISOString(), completed_at: null, error_message: null,
-        }
-        await supabase.from('document_processing_runs').update(restart).eq('id', run.id)
-        setRuns((rs) => rs.map((r) => (r.id === run.id ? { ...r, ...restart } : r)))
-        // W13:大文件伺服器端分段續跑,共用接力層負責 in_progress 接續;
-        // 每段進度更新畫面並 best-effort 落庫(重新整理也看得到第 N/M 批)
-        const result = await runRequirementExtraction({
-          documentVersionId: run.document_version_id,
-          projectId: pid,
-          onProgress: (p) => {
-            const progressMeta = {
-              ...(run.metadata || {}),
-              extraction_progress: `${p.batches_completed}/${p.batches_total}`,
-              // 進度心跳:staleProcessingPatch 用它判定「還活著」,長文件多段
-              // 續跑的總時長可以正當超過 20 分鐘
-              extraction_progress_at: new Date().toISOString(),
-            }
-            setRuns((rs) => rs.map((r) => (r.id === run.id
-              ? { ...r, metadata: { ...(r.metadata || {}), ...progressMeta } }
-              : r)))
-            supabase.from('document_processing_runs')
-              .update({ metadata: progressMeta })
-              .eq('id', run.id)
-              .then(() => {}, () => {})
-          },
-        })
-        if (!result.ok && result.inProgress) {
-          // 已有別的解析在跑(409 run_conflict):不可蓋寫成失敗——W13 殭屍
-          // 事故裡,連點的 409 一路把活著的解析蓋成失敗。顯示原話,交持有者收尾。
-          // friendlyError 不會動伺服器的繁中原話,只擋 body 讀不到時的 generic 英文。
-          setMsg(friendlyError(result.message, '此文件已有解析在進行中，請稍候'))
-          await reloadRuns(run.contract_package_id)
-          return
-        }
-        const failed = !result.ok
-        const data = result.ok ? result.data : null
-        const { data: final } = await supabase.from('document_processing_runs').update({
-          ...patch,
-          status: failed ? 'partial' : 'completed',
-          stage: failed ? 'failed' : 'completed',
-          completed_at: new Date().toISOString(),
-          error_message: failed ? (result.message || 'AI 分析失敗') : null,
-          metadata: {
-            ...(run.metadata || {}),
-            requirement_extraction: failed ? 'failed' : 'completed',
-            // W10 揭露截斷:coverage_incomplete 時「找到 N 項」必須連著講清楚沒讀到哪裡
-            requirement_extraction_message: failed
-              ? result.message
-              : extractionSuccessMessage(data),
-            requirement_extraction_warning: data ? extractionCoverageWarning(data) : null,
-            routed_document_type: newType,
-          },
-        }).eq('id', run.id).select().single()
-        updated = final
-      } else {
-        // 改成非抽取類型時,舊的「找到 N 項契約重點」訊息不能留著騙人——
-        // 資料(建議仍在審查佇列)與畫面要說同一件事(W14 審查)
-        const staleExtraction = run.metadata?.requirement_extraction === 'completed'
-        const { data: final } = await supabase.from('document_processing_runs')
-          .update({
-            ...patch,
-            ...(staleExtraction ? {
-              metadata: {
-                ...(run.metadata || {}),
-                requirement_extraction: 'skipped',
-                requirement_extraction_warning: null,
-                requirement_extraction_message: '已改為非抽取類型;先前抽取的建議仍保留於審查佇列',
-                routed_document_type: newType,
-              },
-            } : {}),
-          }).eq('id', run.id).select().single()
-        updated = final
-      }
-      if (updated) setRuns((rs) => rs.map((r) => (r.id === updated.id ? updated : r)))
+      if (result.run) setRuns((rs) => rs.map((r) => (r.id === result.run.id ? result.run : r)))
       await reloadRuns(run.contract_package_id)
       if (scopeRef.current.pid === pid) await reloadObligations()
     } finally {
-      busyRunsRef.current.delete(run.id)
-      setBusyRunIds(new Set(busyRunsRef.current))
+      unlockRun(run.id)
     }
-  }, [versionsById, pid, reloadRuns, reloadObligations])
+  }, [versionsById, pid, patchRun, reloadRuns, reloadObligations])
 
   // W14 刪除文件:單一守門路徑 delete_document RPC(權限/佐證鏈護欄在伺服器端;
   // 已核定契約重點引用的文件會被 FK 擋下並回看得懂的訊息)。RPC 回傳 storage
@@ -539,11 +392,14 @@ export default function Contract() {
   const deleteDocument = useCallback(async (run, doc) => {
     if (!doc?.id || busyRunsRef.current.has(run.id)) return
     const title = doc.title || '這份文件'
-    if (!window.confirm(`確定要刪除「${title}」?原始檔、所有版本與尚未確認的 AI 契約重點建議會一併移除;已確認契約重點引用的文件會被系統擋下。`)) return
+    if (!(await appConfirm({
+      title: `確定要刪除「${title}」?`,
+      body: '原始檔、所有版本與尚未確認的 AI 契約重點建議會一併移除;已確認契約重點引用的文件會被系統擋下。',
+      danger: true, confirmLabel: '刪除',
+    }))) return
     // 同步佔位:RPC+storage 清理要跑一兩秒,連點第二下會在第一刀 commit 後
     // 吃到「找不到文件」的誤導錯誤(W14 審查)
-    busyRunsRef.current.add(run.id)
-    setBusyRunIds(new Set(busyRunsRef.current))
+    if (!lockRun(run.id)) return
     try {
       const { data: paths, error } = await supabase.rpc('delete_document', { p_document: doc.id })
       if (error) { setMsg(friendlyError(error, '文件刪除未完成')); return }
@@ -556,8 +412,7 @@ export default function Contract() {
       await reloadRuns(run.contract_package_id)
       if (scopeRef.current.pid === pid) await reloadObligations()
     } finally {
-      busyRunsRef.current.delete(run.id)
-      setBusyRunIds(new Set(busyRunsRef.current))
+      unlockRun(run.id)
     }
   }, [reloadRuns])
 
@@ -567,62 +422,13 @@ export default function Contract() {
   const openVersionFile = useCallback(
     (version) => openDocumentVersionFile(version, { onError: setMsg }), [])
 
-  // ── 上傳回饋面板(mockup 狀態 B/C/D)────────────────────────────────────
-  // 面板列 = 本批上傳的 run + 任何仍在處理中的 run(回到頁面也看得到進行中)
-  const panelRuns = useMemo(() => runs.filter(
-    (r) => batchVersionIds.has(r.document_version_id) || !isTerminal(r),
-  ), [runs, batchVersionIds])
-  const panelBusy = uploading || boqBusy || panelRuns.some((r) => !isTerminal(r))
-  const panelVisible = !panelDismissed && (panelBusy || panelRuns.length > 0)
-  const panelFailed = panelRuns.filter((r) => r.status === 'failed' || r.status === 'partial')
-  // 分類待確認 ≠ 完成:completed 但 needs_review 的檔案抽取被跳過,
-  // 面板若報綠色「已抽取」就是說謊(審查 W11 發現)
-  const panelNeeds = panelRuns.filter((r) => r.status === 'completed' && (r.classification_status === 'needs_review' || r.metadata?.requirement_extraction_warning))
-  const panelOk = panelRuns.filter((r) =>
-    (r.status === 'completed' && r.classification_status !== 'needs_review' && !r.metadata?.requirement_extraction_warning) || r.status === 'unsupported')
-  // 「重試」只對 AI 分析失敗有效;上傳失敗/掃描檔重打 edge fn 必敗又蓋掉
-  // 原始錯誤,正確復原是重新上傳同檔(checksum 相同會自動接續)
-  const panelExtractionFailed = panelFailed.filter((r) => r.metadata?.requirement_extraction === 'failed')
-  // 進度母數用「選檔總數」不用「已建列數」:列是開工才建的,母數會長大、
-  // 進度會倒退;還沒開工的檔案以 0% 計入才是真實進度
-  const panelTotal = Math.max(panelRuns.length, batchTotal)
-  const overallPct = panelTotal
-    ? Math.round(panelRuns.reduce((sum, r) => sum + runPct(r), 0) / panelTotal)
-    : 0
-  const panelState = panelBusy ? 'busy' : (panelFailed.length ? 'err' : panelNeeds.length ? 'warn' : 'ok')
-  const PANEL_HEAD = {
-    busy: {
-      icon: 'cloud_upload', fill: false, cls: 'text-[var(--blue-text)]',
-      // 標頭統一報「正在準備上傳」(使用者裁示);XML 匯入的細節由面板內
-      // boqBusy 那一列顯示,不佔標頭
-      title: panelTotal ? `正在整理 ${panelTotal} 個檔案` : '正在準備上傳…',
-      // W13 起上傳與 AI 分析的接力由「這個瀏覽器分頁」驅動:可以切到系統其他
-      // 功能頁做事(處理會繼續,回來看進度),但關閉/重新整理分頁會中斷
-      // (已完成的部分保留,重試會接續)
-      sub: panelTotal
-        ? `已完成 ${panelOk.length + panelNeeds.length} / ${panelTotal}${elapsed ? ` · 已進行 ${elapsed}` : ''} · 可切到其他頁做事;請勿關閉或重新整理此分頁`
-        : '此步驟請勿離開頁面',
-      right: panelTotal ? `${overallPct}%` : '', bar: 'bg-[var(--blue)]',
-    },
-    ok: {
-      icon: 'check_circle', fill: true, cls: 'text-[var(--green-text)]',
-      title: `${panelOk.length} 個檔案處理完成`,
-      sub: '檔案已歸檔；各檔是否完成內容分析，請看下方狀態。',
-      right: '完成', bar: 'bg-[var(--green-text)]',
-    },
-    warn: {
-      icon: 'error', fill: true, cls: 'text-[var(--amber-text)]',
-      title: `${panelOk.length + panelNeeds.length} 個檔案處理完成,${panelNeeds.length} 個需留意`,
-      sub: '部分文件需要確認分類或補齊內容；請查看下方各檔的原因與處理方式。',
-      right: `${panelNeeds.length} 待確認`, bar: 'bg-[var(--amber-text)]',
-    },
-    err: {
-      icon: 'error', fill: true, cls: 'text-[var(--red-text)]',
-      title: `${panelRuns.length - panelFailed.length} 個檔案處理完成,${panelFailed.length} 個待處理`,
-      sub: '待處理的檔案不影響已完成的部分。',
-      right: `${panelRuns.length - panelFailed.length}/${panelRuns.length}`, bar: 'bg-[var(--red-text)]',
-    },
-  }[panelState]
+  // ── 上傳回饋面板的帳(lib)與開關 ─────────────────────────────────────────
+  const batch = useMemo(
+    () => summarizeUploadBatch(runs, { batchVersionIds, batchTotal }),
+    [runs, batchVersionIds, batchTotal],
+  )
+  const panelBusy = uploading || boqBusy || batch.active
+  const panelVisible = !panelDismissed && (panelBusy || batch.rows.length > 0)
   const dismissPanel = () => {
     setPanelDismissed(true)
     setBatchVersionIds(new Set())
@@ -634,26 +440,6 @@ export default function Contract() {
     const doc = version ? docsById.get(version.document_id) : null
     return confirmClassification(run, doc?.document_type || run.suggested_document_type || 'other')
   }
-
-  // ── 文件清單(卡 2)─────────────────────────────────────────────────────
-  const docTableRows = useMemo(() => runs.map((run) => {
-    const version = versionsById.get(run.document_version_id)
-    const doc = version ? docsById.get(version.document_id) : null
-    return {
-      run,
-      doc,
-      version,
-      title: doc?.title || '文件',
-      group: presentationGroup(doc?.document_type || run.suggested_document_type || 'other',
-        run.metadata?.classification_reason),
-      uploaded: run.started_at || '',
-    }
-  }), [runs, versionsById, docsById])
-  const { sort: docSort, toggleSort: toggleDocSort, sorted: sortedDocRows, sortKey: docSortKey } = useTableSort(docTableRows)
-  // resetKey 只給排序:這張表在 AI 分析期間每 5 秒重載一次 runs,
-  // 若讓重載本身重設頁碼,使用者翻到第 2 頁就會一直被彈回第 1 頁
-  const { pageRows: docPageRows, pager: docPager } = usePagination(sortedDocRows, 25, docSortKey)
-  const [showTech, setShowTech] = useState(false)
 
   if (isSupabaseConfigured && !currentProject) {
     return (
@@ -757,129 +543,12 @@ export default function Contract() {
             </div>
           </div>
         ) : (
-          /* 狀態 B:上傳中/上傳結束的進度面板(逐檔列+總進度) */
-          <div className="border border-[var(--border)] rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-3.5 py-3">
-              <div className="flex items-start gap-2.5 min-w-0">
-                <MSym name={PANEL_HEAD.icon} size={20} fill={PANEL_HEAD.fill} className={`shrink-0 ${PANEL_HEAD.cls}`} />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-[var(--text)]">{PANEL_HEAD.title}</div>
-                  <div className="text-xs text-[var(--text-3)] mt-0.5" aria-live="polite">{PANEL_HEAD.sub}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className={`text-[12.5px] font-medium num ${PANEL_HEAD.cls}`}>{PANEL_HEAD.right}</span>
-                {/* 關閉鈕永遠可按:中斷遺留的 processing run 會讓 busy 掛到
-                    20 分鐘 stale 門檻,不能鎖住整個拖放區(審查 W11 發現) */}
-                <button onClick={dismissPanel} aria-label="關閉上傳結果"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-2)]">
-                  <MSym name="close" size={18} />
-                </button>
-              </div>
-            </div>
-            {/* 總進度條(各檔真實階段的平均;結束時一律 100%) */}
-            <div className="h-1 bg-[var(--border-2)]" role="progressbar" aria-valuenow={panelBusy ? overallPct : 100} aria-valuemin={0} aria-valuemax={100}>
-              <div className={`h-1 transition-[width] duration-300 ${PANEL_HEAD.bar}`}
-                style={{ width: `${panelBusy ? overallPct : 100}%` }} />
-            </div>
-            {/* 逐檔列 */}
-            {boqBusy && (
-              <div className="flex items-center gap-3 px-3.5 py-2.5 border-t border-[var(--border-2)] text-xs text-[var(--text-2)]">
-                <MSym name="progress_activity" size={19} className="msym-spin text-[var(--blue-text)] shrink-0" />
-                正在解析標單 XML…(此步驟請勿離開頁面)
-              </div>
-            )}
-            {panelRuns.map((r) => {
-              const version = versionsById.get(r.document_version_id)
-              const doc = version ? docsById.get(version.document_id) : null
-              const name = doc?.title || r.metadata?.filename_kind || '文件'
-              const busy = !isTerminal(r)
-              const failed = r.status === 'failed' || r.status === 'partial'
-              const needsReview = !busy && !failed && r.classification_status === 'needs_review'
-              const incomplete = !busy && !failed && r.metadata?.requirement_extraction_warning
-              // 只有 AI 分析失敗才可原地重試;上傳失敗/掃描檔要重新上傳同檔
-              const retryable = failed && r.metadata?.requirement_extraction === 'failed'
-              const failMeta = failed
-                ? `${friendlyError(r.error_message, '處理未完成')}${!retryable && !(r.error_message || '').includes('重新上傳') ? ';請重新上傳同一份檔案(內容相同會自動接續)' : ''}`
-                : null
-              return (
-                <div key={r.id} className="grid grid-cols-[22px_1fr_128px] items-center gap-3 px-3.5 py-2.5 border-t border-[var(--border-2)]">
-                  <MSym
-                    name={busy ? 'draft' : failed || needsReview || incomplete ? 'error' : 'check_circle'}
-                    size={19} fill={!busy}
-                    className={busy ? 'text-[var(--blue-text)]' : failed ? 'text-[var(--red-text)]' : needsReview || incomplete ? 'text-[var(--amber-text)]' : 'text-[var(--green-text)]'} />
-                  <div className="min-w-0">
-                    <div className="text-[12.5px] text-[var(--text)] truncate" title={name}>{name}</div>
-                    <div className={`text-[11px] mt-0.5 ${failed ? 'text-[var(--red-text)]' : needsReview ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`}>
-                      {busy ? stageDetail(r)
-                        : failed ? failMeta
-                          : needsReview ? `AI 建議分類:${DOCUMENT_TYPE_LABELS[r.suggested_document_type] || '無法判斷'};請到下方清單確認,確認後自動接續分析`
-                            : (r.metadata?.requirement_extraction_message || RUN_META_OK(r))}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end gap-2">
-                    {busy ? (<>
-                      <div className="w-[66px] h-1 rounded-full bg-[var(--border-2)] overflow-hidden">
-                        <div className="h-1 rounded-full bg-[var(--blue)] transition-[width] duration-300" style={{ width: `${runPct(r)}%` }} />
-                      </div>
-                      <span className="text-[11.5px] text-[var(--text-3)] num min-w-[34px] text-right">{runPct(r)}%</span>
-                    </>) : failed ? (
-                      retryable && canWriteContract ? (
-                        <button onClick={() => retryRun(r)} disabled={busyRunIds.has(r.id)}
-                          className={buttonClass('outline', 'sm')}>重試</button>
-                      ) : <span className="text-[11.5px] font-medium text-[var(--red-text)]">待處理</span>
-                    ) : needsReview || incomplete ? (
-                      <span className="text-[11.5px] font-medium text-[var(--amber-text)]">{incomplete ? '部分整理' : '待確認'}</span>
-                    ) : (
-                      <span className="text-[11.5px] font-medium text-[var(--green-text)]">已完成</span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-            {/* 狀態 C/D:結束摘要 */}
-            {!panelBusy && panelState === 'ok' && (
-              <div className="m-3.5 rounded-xl bg-[var(--green-tint)] px-3.5 py-3 flex items-start gap-2.5">
-                <MSym name="check_circle" size={19} fill className="text-[var(--green-text)] shrink-0 mt-0.5" />
-                <div className="text-[12.5px] text-[var(--green-text)] leading-relaxed">
-                  {panelOk.length} 個檔案處理完成,已自動分類歸檔。
-                  {aiCount != null && aiCount > 0 && ` 本契約目前有 ${aiCount} 項已歸檔契約重點。`}
-                  <br />
-                  <Link to={`/requirements?package=${encodeURIComponent(selectedPackageId || '')}`} className="font-medium hover:underline inline-flex items-center gap-0.5">前往契約重點 <MSym name="arrow_forward" size={12} /></Link>
-                  {workItemsSource === 'db' && (<>
-                    {' '}·{' '}
-                    <Link to="/boq" className="font-medium hover:underline inline-flex items-center gap-0.5">查看標單工項 <MSym name="arrow_forward" size={12} /></Link>
-                  </>)}
-                </div>
-              </div>
-            )}
-            {!panelBusy && panelState === 'err' && (
-              <div className="m-3.5 rounded-xl bg-[var(--red-tint)] px-3.5 py-3">
-                <div className="flex items-start gap-2.5">
-                  <MSym name="error" size={19} fill className="text-[var(--red-text)] shrink-0 mt-0.5" />
-                  <div className="text-[12.5px] text-[var(--red-text)] leading-relaxed">
-                    {panelFailed.length} 個檔案待處理:{panelFailed[0] && (docsById.get(versionsById.get(panelFailed[0].document_version_id)?.document_id)?.title || '文件')}
-                    {panelFailed[0]?.error_message ? `——${friendlyError(panelFailed[0].error_message, '處理未完成')}` : ''}
-                    {/* 與標頭同一套帳:處理完成=非失敗(含分類待確認),兩處數字不得打架 */}
-                    。其餘 {panelRuns.length - panelFailed.length} 個檔案處理完成,不需重傳。
-                  </div>
-                </div>
-                {panelFailed.length > panelExtractionFailed.length && (
-                  <div className="text-[11.5px] text-[var(--red-text)] mt-1.5 pl-[29.5px]">
-                    上傳失敗或無法讀取的檔案:內容相同重新上傳會自動接續;超過大小上限的請壓縮或拆分後再上傳。
-                  </div>
-                )}
-                <div className="flex gap-2 mt-2.5 pl-[29.5px]">
-                  {canWriteContract && panelExtractionFailed.length > 0 && (
-                    <button className={buttonClass('primary', 'sm')}
-                      disabled={panelExtractionFailed.every((r) => busyRunIds.has(r.id))}
-                      onClick={() => panelExtractionFailed.forEach((r) => retryRun(r))}>重試 AI 分析失敗的檔案</button>
-                  )}
-                  <button className={buttonClass('outline', 'sm')} onClick={dismissPanel}>略過並繼續</button>
-                </div>
-              </div>
-            )}
-          </div>
+          /* 狀態 B/C/D:上傳中/上傳結束的進度面板(逐檔列+總進度+結束摘要) */
+          <UploadPanel batch={batch} busy={panelBusy} boqBusy={boqBusy} elapsed={elapsed}
+            docsById={docsById} versionsById={versionsById}
+            canWriteContract={canWriteContract} busyRunIds={busyRunIds}
+            onRetry={retryRun} onDismiss={dismissPanel}
+            aiCount={aiCount} packageId={selectedPackageId} boqImported={workItemsSource === 'db'} />
         )}
         <ErrorBanner msg={msg} className="mt-3" />
         {/* 標單匯入結果:單一出口,面板開著也看得到(成功/略過/失敗都不可被面板吞掉) */}
@@ -912,169 +581,12 @@ export default function Contract() {
         </Card>
       )}
       {/* ── 卡 2:專案文件(已入庫清單)────────────────────────────────────── */}
-      <Card title="專案文件" action={
-        <span className="text-[11px] text-[var(--text-3)] num">{docTableRows.length} 件</span>
-      }>
-        <ErrorBanner msg={runsError} onRetry={() => reloadRuns(selectedPackageId)} />
-        {packagesLoading || (runsLoading && loadedPackageId !== selectedPackageId) ? <SkeletonList rows={3} label="正在載入契約文件…" /> : packagesError || runsError ? null : docTableRows.length === 0 ? (
-          <Empty>這份契約尚無文件。上傳後會在這裡列出各檔的處理狀態。</Empty>
-        ) : (<>
-          <div className="overflow-x-auto">
-            <table aria-label="專案文件處理狀態" className="w-full text-sm min-w-[640px] max-md:min-w-0 max-md:block">
-              <thead className="max-md:sr-only">
-                <tr className="border-b border-[var(--border)]">
-                  <SortableTh className={DOC_TH} label="文件" field="title" sort={docSort} onSort={toggleDocSort} />
-                  <th className={DOC_TH}>分類</th>
-                  <th className={DOC_TH}>版本</th>
-                  <th className={DOC_TH}>AI 處理</th>
-                  <SortableTh className={DOC_THR} align="right" label="上傳" field="uploaded" sort={docSort} onSort={toggleDocSort} />
-                </tr>
-              </thead>
-              <tbody className="max-md:block">
-                {docPageRows.map(({ run, doc, version, title, group, uploaded }) => {
-                  const state = aiProcessingState(run)
-                  const needsClassify = state.kind === 'attention' && run.classification_status === 'needs_review'
-                  // 只有 AI 分析失敗才可原地重試;上傳失敗/掃描檔要重新上傳同檔
-                  const retryable = state.kind === 'attention' && !needsClassify
-                    && run.metadata?.requirement_extraction === 'failed'
-                  const reuploadHint = state.kind === 'attention' && !needsClassify && !retryable && !run.metadata?.requirement_extraction_warning
-                    && !(state.detail || '').includes('重新上傳')
-                  // 看上傳的檔案:上傳前就失敗的 run 原始檔從未落地,不給開檔入口
-                  const hasFile = runFileLanded(run) && isValidStorageKey(version?.storage_path)
-                  return (
-                    <tr key={run.id} className="border-b border-[var(--border-2)] last:border-0 hover:bg-[var(--surface-2)] max-md:grid max-md:grid-cols-2 max-md:py-3">
-                      <td className={`${DOC_TD} max-w-[300px] max-md:max-w-none max-md:col-span-2`}>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <MSym name="description" size={12} className="text-[var(--text-3)] shrink-0" />
-                          {hasFile ? (
-                            <button onClick={() => openVersionFile(version)}
-                              className="min-w-0 inline-flex items-center max-md:min-h-11 text-left text-[var(--text)] hover:text-[var(--blue-text)] hover:underline cursor-pointer"
-                              title={version?.original_filename || title}>
-                              <span className="truncate">{title}</span>
-                            </button>
-                          ) : (
-                            <span className="truncate text-[var(--text)]" title={title}>{title}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className={`${DOC_TD} text-[var(--text-2)]`}><span className="md:hidden text-[var(--text-3)]">分類：</span>{group}</td>
-                      <td className={`${DOC_TD} whitespace-nowrap num text-[var(--text-2)] max-md:text-right`}><span className="md:hidden text-[var(--text-3)]">版本：</span>{version?.version_label || '—'}</td>
-                      <td className={`${DOC_TD} max-md:col-span-2`}>
-                        <Badge color={state.color}>{state.label}</Badge>
-                        <div className="text-[11px] text-[var(--text-3)] mt-1 max-w-[300px]">
-                          <span className="line-clamp-2 max-md:line-clamp-none whitespace-pre-line" title={state.detail}>{state.detail}</span>
-                          {/* 待處理的兩種人工動作:確認分類/重試分析 */}
-                          {needsClassify && canWriteContract && (
-                            <span className="flex flex-wrap items-center gap-1.5 mt-1">
-                              <Select defaultValue={run.suggested_document_type || 'other'} className="w-36"
-                                onChange={(e) => confirmClassification(run, e.target.value)}>
-                                {CLASSIFIABLE_DOCUMENT_TYPES.map((t) => (
-                                  <option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</option>
-                                ))}
-                              </Select>
-                              <button onClick={() => confirmClassification(run, run.suggested_document_type || 'other')}
-                                className="text-[var(--blue-text)] hover:underline whitespace-nowrap inline-flex items-center max-md:min-h-11 px-1">確認此分類</button>
-                            </span>
-                          )}
-                          {retryable && canWriteContract && (
-                            <button onClick={() => retryRun(run)} disabled={busyRunIds.has(run.id)}
-                              className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 mt-0.5 disabled:opacity-50 disabled:no-underline">
-                              <MSym name="refresh" size={11} /> 重試分析
-                            </button>
-                          )}
-                          {reuploadHint && (
-                            <span className="block mt-0.5">請重新上傳同一份檔案(內容相同會自動接續處理)</span>
-                          )}
-                          {/* W14 事後治理:終態文件可改分類/刪除(權限=文件管理)。
-                              改分類只給「曾分類過」的列——上傳失敗的列連頁都沒有,
-                              分類不是它的問題;刪除則全終態可用,含分類待確認列
-                              (待確認的垃圾檔正是最想刪的)。
-                              下載給所有可讀成員(含機關唯讀):讀權限由 storage
-                              policy 把關,前端只是入口。 */}
-                          {(canWriteContract || hasFile) && state.kind !== 'processing' && (
-                            canWriteContract && reclassifyId === run.id ? (
-                              <span className="flex items-center gap-1.5 mt-1">
-                                <Select defaultValue={doc?.document_type || run.suggested_document_type || 'other'} className="w-36"
-                                  onChange={(e) => {
-                                    const nextType = e.target.value
-                                    setReclassifyId(null)
-                                    // 改成可抽取類型會重跑一次 AI 抽取(新的一批待核建議),
-                                    // 先講清楚再動手;已核定項目不受影響
-                                    if (EXTRACTABLE_DOCUMENT_TYPES.includes(nextType)
-                                      && !window.confirm(`改為「${DOCUMENT_TYPE_LABELS[nextType]}」會重新執行 AI 抽取,產生一批新的建議(已確認項目不受影響)。繼續?`)) return
-                                    confirmClassification(run, nextType)
-                                  }}>
-                                  {CLASSIFIABLE_DOCUMENT_TYPES.map((t) => (
-                                    <option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</option>
-                                  ))}
-                                </Select>
-                                <button onClick={() => setReclassifyId(null)}
-                                  className="text-[var(--text-3)] hover:underline px-1 max-md:min-h-11">取消</button>
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-2 mt-0.5">
-                                {hasFile && (
-                                  <button onClick={() => downloadVersionFile(version)}
-                                    className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1">
-                                    <MSym name="download" size={11} /> 下載
-                                  </button>
-                                )}
-                                {canWriteContract && !needsClassify && run.suggested_document_type != null && (
-                                  <button onClick={() => setReclassifyId(run.id)} disabled={busyRunIds.has(run.id)}
-                                    className="text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 disabled:opacity-50">
-                                    <MSym name="edit" size={11} /> 改分類
-                                  </button>
-                                )}
-                                {canWriteContract && (
-                                  <button onClick={() => deleteDocument(run, doc)} disabled={busyRunIds.has(run.id)}
-                                    className="text-[var(--red-text)] hover:underline inline-flex items-center gap-0.5 max-md:min-h-11 px-1 disabled:opacity-50">
-                                    <MSym name="delete" size={11} /> 刪除
-                                  </button>
-                                )}
-                              </span>
-                            )
-                          )}
-                        </div>
-                      </td>
-                      <td className={`${DOC_TD} text-right num whitespace-nowrap text-[var(--text-2)] max-md:col-span-2 max-md:text-left`}>
-                        <span className="md:hidden text-[var(--text-3)]">上傳：</span>
-                        {uploaded ? String(uploaded).slice(0, 10) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <TablePager {...docPager} className="!px-0" />
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--border-2)]">
-            <p className="text-[11.5px] text-[var(--text-3)]">點檔名可開啟原始檔(PDF 直接預覽,其他格式自動下載)。上傳後自動分類歸檔:標單匯入「標單工項」、契約/規範抽取「契約重點」並記錄擷取來源頁碼。</p>
-            <button onClick={() => setShowTech((s) => !s)} aria-expanded={showTech}
-              className="text-[11.5px] text-[var(--blue-text)] hover:underline inline-flex items-center gap-1 shrink-0 max-md:min-h-11 px-1">
-              <MSym name="chevron_right" size={12} className={`transition-transform duration-[var(--dur-fast)] ${showTech ? 'rotate-90' : ''}`} /> 技術資訊
-            </button>
-          </div>
-          {showTech && (
-            <div className="mt-2 text-[11px] text-[var(--text-3)] space-y-0.5">
-              {runs.map((r) => (
-                <div key={r.id}>
-                  {versionsById.get(r.document_version_id) ? docsById.get(versionsById.get(r.document_version_id).document_id)?.title : r.document_version_id}
-                  ·status {r.status}·stage {r.stage}·parser {r.parser_type || '-'}
-                  ·信心 {r.classification_confidence != null ? Math.round(r.classification_confidence * 100) + '%' : '-'}
-                  {r.error_message ? `·${friendlyError(r.error_message, '處理未完成')}` : ''}
-                </div>
-              ))}
-            </div>
-          )}
-        </>)}
-      </Card>
+      <DocumentTable runs={runs} versionsById={versionsById} docsById={docsById}
+        loading={packagesLoading || (runsLoading && loadedPackageId !== selectedPackageId)}
+        error={runsError} blocked={!!packagesError} onRetryLoad={() => reloadRuns(selectedPackageId)}
+        canWriteContract={canWriteContract} busyRunIds={busyRunIds}
+        onClassify={confirmClassification} onRetry={retryRun} onDelete={deleteDocument}
+        onOpen={openVersionFile} onDownload={downloadVersionFile} />
     </div>
   )
-}
-
-// 成功列的 meta fallback(unsupported 也算落地:檔案已保存只是不分析)
-function RUN_META_OK(r) {
-  return r.status === 'unsupported'
-    ? (r.metadata?.limitation || '已保存;此格式尚未支援內容分析')
-    : '已分類歸檔'
 }
