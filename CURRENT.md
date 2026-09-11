@@ -11,7 +11,7 @@ GovAgent 讓政府承辦人使用懂業務的 AI Agent；PMIS 是目前公共工
 
 專案業務角色只有廠商 `contractor`、監造 `supervisor`、機關 `owner`。現場、品管、工安是廠商內部分工。平台管理員負責營運，不是第四個專案業務角色。
 
-`profiles.org_type` 管三方業務身分；`project_members` 管專案存取與 admin；`project_parties`／`project_memberships` 管契約方身分快照。`project_role` 不作授權。D-022 已將專案管理統一由 `project_members.role='admin'` 決定，`created_by` 僅作稽核／建案用途；migration 尚未套用正式庫。
+`profiles.org_type` 管三方業務身分；`project_members` 管專案存取與 admin；`project_parties`／`project_memberships` 管契約方身分快照。`project_role` 不作授權。D-022 已將專案管理統一由 `project_members.role='admin'` 決定，`created_by` 僅作稽核／建案用途；migration 已於 2026-09-11 套用正式庫。
 
 ## 3. 技術層次
 
@@ -44,11 +44,11 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 ### 6.3 正式環境最後核對（不是即時狀態）
 
-- **DB**：2026-09-02 核對遠端 57 筆 migration，最新 `20260901040000`。其後本地新增三支：`20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`；依既有紀錄均未套用正式庫，本輪未重核。
-- **Edge**：未逐支核對線上版本；最後重佈紀錄是 PR #48／#51。`_shared/` 重構尚未部署；部署時需將 17 支 Edge 一併重佈與核對版本。
+- **DB**：2026-09-11 `supabase db push` 套用 `20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`；`migration list --linked` 核對本地與遠端 60 筆全部對齊，最新 `20260911110000`。
+- **Edge**：2026-09-11 以 `--use-api` 從 main（含 `_shared/` 重構）重佈全部 17 支；`functions list` 核對每支版本均 +1（agent-run 14、extract-requirements 13、send-reminders 16、classify-document 3 等）。線上另有 `demo-request` 一支由行銷站 repo 部署，不在本 repo。
 - **前端**：2026-09-11 PR #64 合併提交 `8be082a` 的 Cloudflare Workers 建置成功，版本 `fc99c933-32f5-47c6-b0e6-726e50b2956e`。正式首頁已切換新版 JS／CSS，首頁 HEAD 200、七項安全標頭齊全；這不代表登入後業務流程或正式後端已驗證。後續純文件提交可能觸發同功能版本重建。
 - **舊站**：2026-09-11 GitHub Pages API 仍回 built，來源為 `gh-pages`；此部署分支保留。`pmis.pages.dev` 最後核對為 2026-09-07，退場待另行處理。
-- 部署依 [runbook](docs/operations/deploy.md) 執行；套用後在本節記日期、migration／Edge 版本與驗證。本輪已完成 Git 整併、歷史開發分支清理及前端自動部署；未套正式 migration、未重佈 Edge。
+- 部署依 [runbook](docs/operations/deploy.md) 執行；套用後在本節記日期、migration／Edge 版本與驗證。2026-09-11 已完成三面同步：前端由 main 自動部署、DB 三支 migration 套用、17 支 Edge 重佈；登入後業務流程與真模型抽取仍未在正式站實測。
 
 ### 6.4 主要機制
 
@@ -66,11 +66,11 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 ## 7. 仍存在的限制
 
-- 前端／Edge 的待辦涵蓋類型與期限條件有差異；機關自有期限未進首頁。循環履約沒有逐期資料。詳見 [雙引擎](docs/architecture/dual-engine-sync.md)。
-- 正式且已匯標單的專案缺一般成員頁入口。
+- 前端／Edge 的待辦涵蓋類型與期限條件有差異（機關責任期限已進首頁，Edge 早報仍缺變更／查驗／觀察）。循環履約沒有逐期資料。詳見 [雙引擎](docs/architecture/dual-engine-sync.md)。
+- 正式且已匯標單的專案是否缺一般成員頁入口，待實測確認。
 - obligation runtime、雙成員相容欄位與 `VISIBLE` shim 仍有使用端，不可直接刪除。
 - rollback 檔僅覆蓋少數，存在檔案不代表回復演練通過。部分領域狀態欄無 CHECK，processing run 無轉移 guard。
-- Edge 新遮罩未部署；唯讀 Agent 呼叫軌跡不落庫。其餘已知缺口與待決事項集中 [ROADMAP](docs/ROADMAP.md)。
+- 唯讀 Agent 呼叫軌跡不落庫。其餘已知缺口與待決事項集中 [ROADMAP](docs/ROADMAP.md)。
 
 ## 8. 文件權威
 
