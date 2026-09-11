@@ -108,13 +108,14 @@ describe('契約期限:精確責任白名單 + 目的頁真的能完成', () => 
   it('責任映射只接受三個精確值', () => {
     expect(RESPONSIBLE_SIDE).toEqual({ 廠商: 'contractor', 監造: 'supervisor', 機關: 'owner' })
   })
-  it('廠商與監造各拿到自己責任的期限;機關/未指定不製造假待辦(W11)', () => {
+  it('三方各拿到自己責任的期限;未指定/不明責任不製造假待辦(機關依 20260825120000 可標自己的)', () => {
     const c = build({ org: 'contractor', obligations: rows, anchors })
     expect(c.mine.filter((t) => t.tag === '契約重點').map((t) => t.title)).toEqual(['廠商:提送月報'])
     const s = build({ org: 'supervisor', obligations: rows, anchors })
     expect(s.mine.filter((t) => t.tag === '契約重點').map((t) => t.title)).toEqual(['監造:提送監造報表'])
     const o = build({ org: 'owner', obligations: rows, anchors })
-    expect([...o.mine, ...o.waiting].some((t) => t.tag === '契約重點')).toBe(false)
+    expect(o.mine.filter((t) => t.tag === '契約重點').map((t) => t.title)).toEqual(['機關:核定計畫'])
+    expect(o.waiting.some((t) => t.tag === '契約重點')).toBe(false)
   })
   it('逾期天數與罰則寫進說明,並導向期限追蹤頁(「標為已提送」在那裡)', () => {
     const t = build({ org: 'contractor', obligations: rows, anchors }).mine.find((x) => x.tag === '契約重點')

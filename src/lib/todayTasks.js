@@ -26,10 +26,10 @@ const ORG_SIDES = Object.freeze(['contractor', 'supervisor', 'owner'])
 // 「無法辨識就歸廠商」,那個預設不可複製到前端(會把不明義務塞進廠商待辦)。
 export const RESPONSIBLE_SIDE = Object.freeze({ 廠商: 'contractor', 監造: 'supervisor', 機關: 'owner' })
 
-// 期限「已提送」在契約重點頁完成(W11 遷入;狀態鈕吃 can_write 鏡像):
-// 廠商與監造都能對自己責任的期限動作;機關唯讀(can_write 擋機關),
-// 機關責任的期限不進 mine——做不到的事不製造假待辦。
-const OBLIGATION_ACTIONABLE_SIDES = Object.freeze(['contractor', 'supervisor'])
+// 期限「已提送」在期限追蹤頁完成。DB policy(migration 20260825120000)只看歸屬:
+// 三方都能對自己責任的期限標記/退回,機關自 2026-08-25 起也能標自己的
+// (估驗撥付/初驗/驗收),所以三方責任的期限都進 mine;責任不明的不歸任何方。
+const OBLIGATION_ACTIONABLE_SIDES = ORG_SIDES
 
 // 「等待對方」只列與登入角色有直接對手關係的類型(W8-2A §3.2、§5-7)——
 // 首頁不是全案未結項的傾印場,列完所有別人的事只會讓頁面再變長。
