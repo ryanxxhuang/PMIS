@@ -204,7 +204,7 @@ function GlobalSearch() {
 }
 
 function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
-  const { currentUser, logout } = useStore()
+  const { currentUser, logout, demoMode } = useStore()
   const navigate = useNavigate()
   const [mode, setMode] = useState(getThemeMode)
   const cycleTheme = () => {
@@ -244,6 +244,8 @@ function TopBar({ onMenu, scrolled, menuBtnRef, dueCount = 0 }) {
           </div>
         </div>
         {/* 44px 觸控目標:純文字鈕撐高、負 margin 吸收 padding,視覺間距不變 */}
+        {/* 帳號安全(兩步驟驗證)只在真後端有意義;demo 沒有 Supabase Auth,不顯示 */}
+        {!demoMode && <Link to="/account" className="inline-flex items-center h-11 px-2 text-sm text-[var(--text-2)] hover:text-[var(--text)]">帳號</Link>}
         <button onClick={async () => { await logout(); navigate('/login') }} className="inline-flex items-center h-11 px-2 text-sm text-[var(--text-2)] hover:text-[var(--text)]">登出</button>
       </div>
     </header>

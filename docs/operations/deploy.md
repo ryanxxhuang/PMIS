@@ -110,6 +110,7 @@ curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security
 | 設定 | 在哪 | 現值核對狀態 |
 |---|---|---|
 | Supabase Auth **Site URL** 與 **Redirect URLs** | Supabase Dashboard → Authentication → URL Configuration | 應使用 App 網域 `https://app.gov-agent.ai` 與相應回跳白名單；正式 Dashboard 現值仍未查證。 |
+| Supabase Auth **MFA → TOTP** 啟用 | Supabase Dashboard → Authentication → Multi-Factor | `/account` 的兩步驟驗證與登入驗證碼閘門靠它；Supabase 預設開啟，正式 Dashboard 現值未查證，第一次啟用前先確認。 |
 | 自訂 SMTP／Resend 寄件網域 | Resend Dashboard ＋ Supabase SMTP Settings | `REMINDER_FROM` 需已驗證網域；未驗證前 `onboarding@resend.dev` 只能寄到自己帳號 |
 | pg_cron 排程 | Supabase SQL Editor（`cron.sql`） | `select * from cron.job;` 現查 |
 | Sentry DSN／環境 | Cloudflare 建置環境變數 | 未查證現值 |

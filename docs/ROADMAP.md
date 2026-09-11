@@ -36,7 +36,7 @@
 - 刪案串 Storage 清理；`project_deletion_records` 已留刪除行為與事件數，不保存原事件內容。DB 備份不含 Storage 物件：`scripts/backup-storage.mjs` 與 [備份 runbook](operations/backup.md) 已就位，但**未對正式 bucket 實跑、未做 restore/RTO 演練**。rollback 判準／缺口與 `repair_` 命名尚待整理。
 - `agent_actions`／`ai_usage_events` append-only、防個資送模型、唯讀軌跡留存、使用量記帳失敗留 audit；不得自行決定個資保存粒度。
 - CSV formula injection 的前置空白／tab、CR quote、科學記號判定邊界仍存在，測試只記錄現況。
-- AI 成本原子預留／rate limit、MFA／鎖定／停用、試用申請分頁／清理須依前節政策實作。
+- AI 成本原子預留／rate limit、帳號鎖定／停用、試用申請分頁／清理須依前節政策實作。兩步驟驗證（TOTP）已於 2026-09-12 以「每帳號自選」上線（`/account`、登入驗證碼閘門）；全站強制與 RLS 依 aal 分級待機關契約明訂後再做，且需在 Supabase Dashboard 確認 Auth → MFA → TOTP 為啟用。
 
 ### 抽取與 Agent
 
@@ -49,7 +49,7 @@
 ### 工程維護與其餘產品
 
 - CI 綠後才部署的流程；Deno check、文件連結、ESLint 與 React hooks lint 已納 CI。大 bundle／字型載入、Sentry Replay lazy load、Demo requirements 種子、真後端 preflight、頁面層測試與 RPC 簽章比對待評估。
-- Apple 清單／詳情殼已用在契約與工安；其餘業務頁、原文高亮、登入頁／行銷站、品牌四色點整合仍未完成。
+- Apple 殼已推廣到十四頁、登入頁已套 Apple style（2026-09-11，見規範 §8）；施工日誌與表格型頁依規範不套殼。仍未完成：行銷站整合、品牌四色點整合、`FloatField`／`PasswordField`／`KeepSwitch` 抽進 `ui.jsx`。
 - 機關模板估驗套版／全標單列印、查驗正式列印、排程驅動施作提醒、請款收款資訊層級與估驗／佐證包入口待另立工作包。
 - 關閉舊 Pages 站點、依賴漏洞與大版升級分開處理，不藉文件清理刪遠端資源。
 
