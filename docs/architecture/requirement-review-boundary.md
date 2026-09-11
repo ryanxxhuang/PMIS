@@ -1,6 +1,28 @@
 # P0-07 — Requirement Review and Artifact Link Boundary
 
-> 狀態：**CURRENT** ｜ 描述已實作的 Requirement 人工審查安全邊界。
+> 狀態：**CURRENT（含歷史基礎章節）** ｜ 2026-09-08 補記本機核對例外介面；未部署。
+
+## 現行規則優先（2026-09-07）
+
+以下 P0-07 章節保留人工審查的原始設計脈絡；其中「只有人工核准才會成為 approved」不能再視為完整現況：
+
+- D-019：已完成抽取 run 的 AI-origin 待審項由 `apply_transcription_triage` 自動轉 `approved`，`reviewed_by = null`、伺服器蓋 `reviewed_at`；有疑慮也自動確認，保留 `triage_doubts`，核對結果是透明度註記而非放行門檻。
+- 人工補登仍經 `review_requirement`，一般瀏覽器不能直接偽造確認狀態或 reviewer。估驗、變更等正式業務核定不在這項自動確認例外內。
+- D-020：全部已確認 Requirement 類型都由 `materialize_requirement_obligation` 單向物化義務，並非僅 deadline；義務執行狀態不反向改寫 Requirement。
+- 現行函式以 `supabase/migrations/20260901040000_materialize_all_requirement_types.sql` 及其後續 migration 為準；產品決策見 [`../DECISIONS.md`](../DECISIONS.md) D-019／D-020。
+- 2026-09-07 發現的主頁核對誤標，已於 09-08 在本機修正，尚未部署；歷史健檢見 [`../產品健檢與開發方向-2026-09-07.md`](../產品健檢與開發方向-2026-09-07.md)。
+
+## 2026-09-08 介面與完整性補記（本機完成、未部署）
+
+- 同日後續 UI/UX：文件 → 履約重點 → 擷取審核 → 返回的 `?package=` 保留契約範圍；AI 項目由 ingestion run／document version 所屬契約推導，人工項目讀 `requirements.contract_package_id`。這是 RLS 後的展示篩選，不提供跨契約授權。三方視角由登入 `profiles.org_type` 決定，沒有可任意切換身分的產品控制項。
+- 重點頁進入時刷新義務，processing／pending ingestion 期間持續刷新，空結果不再誘導使用者逐條確認。無日期項目改顯示「無到期日」，不推論沒有履約責任。審核讀取及詳情請求加上世代防護，舊請求不覆蓋新專案／新選取項目。
+
+- 主頁 `/requirements` 與擷取審核 `/requirements/review` 共用 `requirementVerification`。只有 AI 已確認、具 `reviewed_at` 且 `triage_doubts` 明確為空陣列，才顯示既有「系統核對無誤」標示，並註明僅為引文與適用期限數字核對；缺值與有疑慮分別揭露。
+- 「只看需留意項目」集中顯示現行範圍中有核對疑慮、缺核對結果或待確認等資料；不包含已駁回／已取代項目，已有人工確認的項目也不因舊 AI 疑慮再次列入。保留全部瀏覽、歷史範圍與指定條款深連結。這是檢查入口，不改 D-019 的自動確認與下游 runtime。
+- 審核 requirements／runs 已改為既有分頁工具載入，不再套 300／100 筆清單上限；主頁 runs 也不再只取 50 筆。此分頁工具沿用目前 PostgREST 1,000 列設定，並非任意 server cap 的通用保證。來源子表仍依 ID 分批載入。
+- 每個文件版本的最近一次 completed run 各自顯示覆蓋警示，含無文字頁、被丟棄的無效輸出與截斷。空清單仍會揭露不完整，不能當成契約沒有義務。舊版本的警示仍保留，不推定新版本已處理相同缺漏。
+
+以下為歷史基礎章節；舊頁面路由、筆數上限與只限人工確認等敘述，以上述現況及 D-019／D-020 為準。
 
 ## 1. Human review boundary
 

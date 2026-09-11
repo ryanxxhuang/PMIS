@@ -8,14 +8,16 @@
 // 進度來自持久化的 document_processing_runs(離開頁面不遺失);逐檔百分比由
 // STAGE_ORDER 映射(真實階段,不是假進度)。
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import ContractFlow from '../../components/ContractFlow.jsx'
+import { pageAllSafe, pageAllInSafe } from '../../lib/pagedQuery.js'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import {
   Card, Empty, PageHeader, Badge, Select, buttonClass, SortableTh, TablePager,
-  ErrorBanner, THEAD_CLS,
+  ErrorBanner, SkeletonList, THEAD_CLS,
 } from '../../components/ui.jsx'
 // 契約包切換屬「視圖分段」:與工作面分頁/Admin tabs 共用同一套 chips 皮
 import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
@@ -36,12 +38,12 @@ import {
   runFileLanded, isValidStorageKey,
 } from '../../lib/packageUpload.js'
 import { openDocumentVersionFile, downloadDocumentVersionFile } from '../../lib/documentFileAccess.js'
-import { runRequirementExtraction, extractionSuccessMessage } from '../../lib/extractRequirements.js'
+import { runRequirementExtraction, extractionSuccessMessage, extractionCoverageWarning } from '../../lib/extractRequirements.js'
 
 // 文件清單表格欄樣式:表頭字型層吃 ui.jsx 的 THEAD_CLS(全站單一真相)
 const DOC_TH = `text-left ${THEAD_CLS} py-2.5 px-3 whitespace-nowrap`
 const DOC_THR = `text-right ${THEAD_CLS} py-2.5 px-3 whitespace-nowrap`
-const DOC_TD = 'py-2.5 px-3 text-[13px] align-top'
+const DOC_TD = 'py-2.5 px-3 text-[13px] align-top max-md:px-0 max-md:py-1.5 max-md:min-w-0'
 
 const TERMINAL_STATUSES = ['completed', 'partial', 'failed', 'unsupported']
 const isTerminal = (r) => TERMINAL_STATUSES.includes(r.status)
@@ -70,6 +72,9 @@ function aiProcessingState(run) {
   if (run.classification_status === 'needs_review') {
     return { kind: 'attention', label: '待處理', color: 'red', detail: `AI 建議分類:${DOCUMENT_TYPE_LABELS[run.suggested_document_type] || '無法判斷'},請人工確認` }
   }
+  if (run.metadata?.requirement_extraction_warning) {
+    return { kind: 'attention', label: '部分整理', color: 'amber', detail: run.metadata.requirement_extraction_warning }
+  }
   if (run.status === 'failed' || run.status === 'partial') {
     return { kind: 'attention', label: '待處理', color: 'red', detail: friendlyError(run.error_message, '處理未完成') }
   }
@@ -80,12 +85,20 @@ export default function Contract() {
   const {
     isSupabaseConfigured, currentProject, isPersistedProject,
     currentProjectMembership, currentUser, can, isPlatformAdmin,
-    importWorkItems, workItemsSource, reloadMembership,
+    importWorkItems, workItemsSource, reloadMembership, reloadObligations,
   } = useStore()
+  const [searchParams] = useSearchParams()
+  const [packagesLoading, setPackagesLoading] = useState(true)
+  const [packagesError, setPackagesError] = useState('')
+  const [runsLoading, setRunsLoading] = useState(false)
+  const [runsError, setRunsError] = useState('')
+  const [loadedPackageId, setLoadedPackageId] = useState(null)
+  const fileInputRef = useRef(null)
+  const uploadLock = useRef(false)
   const [parties, setParties] = useState([])
   const [packages, setPackages] = useState([])
-  const [selectedPackageId, setSelectedPackageId] = useState(null)
-  const [runs, setRuns] = useState([])            // processing runs of the selected package
+  const [selectedPackageId, setSelectedPackageId] = useState(searchParams.get('package'))
+  const [storedRuns, setRuns] = useState([])            // processing runs of the selected package
   const [docsById, setDocsById] = useState(new Map())
   const [versionsById, setVersionsById] = useState(new Map())
   const [aiCount, setAiCount] = useState(null)    // AI 契約重點建議數(本契約包)
@@ -117,6 +130,11 @@ export default function Contract() {
   const tickRef = useRef(null)
 
   const pid = currentProject?.project_id
+  const scopeRef = useRef(null)
+  scopeRef.current = { pid, packageId: selectedPackageId }
+  const runs = loadedPackageId === selectedPackageId ? storedRuns : []
+  const runRequest = useRef(0)
+  const packageRequest = useRef(0)
   // 前端閘鏡像伺服器端 can_write(成員且非機關;admin 例外走 can.edit)——
   // 監造上傳契約正是事務所場景的主流程(W10)
   const canWriteContract = can.edit || currentUser?.org_type === 'supervisor'
@@ -124,53 +142,108 @@ export default function Contract() {
 
   // ── 契約包與處理狀態載入(持久化,重新整理不遺失)────────────────────────
   const reloadPackages = useCallback(async () => {
-    if (!isPersistedProject || !pid) return
-    const [{ data: partyRows }, { data: packageRows }] = await Promise.all([
-      supabase.from('project_parties').select('id, party_type, display_name').eq('project_id', pid),
-      supabase.from('contract_packages').select('*').eq('project_id', pid).order('created_at'),
-    ])
-    setParties(partyRows || [])
-    setPackages(packageRows || [])
-    setSelectedPackageId((prev) => prev && (packageRows || []).some((p) => p.id === prev)
-      ? prev
-      : (packageRows?.[0]?.id || null))
+    const request = ++packageRequest.current
+    if (!isPersistedProject || !pid) { setPackagesLoading(false); return }
+    setPackagesLoading(true); setPackagesError('')
+    try {
+      const [partyResult, packageResult] = await Promise.all([
+        pageAllSafe((from, to) => supabase.from('project_parties').select('id, party_type, display_name')
+          .eq('project_id', pid).order('id').range(from, to)),
+        pageAllSafe((from, to) => supabase.from('contract_packages').select('*')
+          .eq('project_id', pid).order('created_at').order('id').range(from, to)),
+      ])
+      if (partyResult.error) throw partyResult.error
+      if (packageResult.error) throw packageResult.error
+      if (request !== packageRequest.current || scopeRef.current.pid !== pid) return
+      setParties(partyResult.data)
+      setPackages(packageResult.data)
+      setSelectedPackageId((prev) => packageResult.data.some((p) => p.id === prev)
+        ? prev : (packageResult.data[0]?.id || null))
+    } catch (error) {
+      if (request === packageRequest.current && scopeRef.current.pid === pid) {
+        setPackagesError(friendlyError(error, '契約清單載入失敗'))
+      }
+    } finally {
+      if (request === packageRequest.current && scopeRef.current.pid === pid) setPackagesLoading(false)
+    }
   }, [isPersistedProject, pid])
-  useEffect(() => { reloadPackages() }, [reloadPackages])
+  useEffect(() => {
+    setPackages([]); setParties([]); setSelectedPackageId(searchParams.get('package'))
+    setRuns([]); setLoadedPackageId(null); setAiCount(null); setBatchVersionIds(new Set())
+    setUploading(false); setMsg(''); identityFixTried.current = false
+    reloadPackages()
+    // URL 的契約選取另由下方 effect 處理；專案切換先清掉舊案結果。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadPackages])
+  useEffect(() => {
+    const wanted = searchParams.get('package')
+    if (wanted && packages.some((p) => p.id === wanted)) setSelectedPackageId(wanted)
+  }, [searchParams, packages])
 
   const selectedPackage = packages.find((p) => p.id === selectedPackageId) || null
 
   const reloadRuns = useCallback(async (packageId) => {
-    if (!isPersistedProject || !packageId) { setRuns([]); return }
-    const { data: persistedRows } = await supabase.from('document_processing_runs')
-      .select('*').eq('contract_package_id', packageId).order('started_at')
-    const runRows = [...(persistedRows || [])]
-    for (let i = 0; i < runRows.length; i++) {
-      const patch = staleProcessingPatch(runRows[i])
-      if (!patch) continue
-      const { data: recovered } = await supabase.from('document_processing_runs')
-        .update(patch).eq('id', runRows[i].id).select().single()
-      if (recovered) runRows[i] = recovered
-    }
-    setRuns(runRows)
-    const { data: docRows } = await supabase.from('documents')
-      .select('id, title, document_type').eq('contract_package_id', packageId)
-    setDocsById(new Map((docRows || []).map((d) => [d.id, d])))
-    const docIds = (docRows || []).map((d) => d.id)
-    if (docIds.length) {
-      const { data: versionRows } = await supabase.from('document_versions')
+    if (scopeRef.current.pid !== pid || scopeRef.current.packageId !== packageId) return
+    const request = ++runRequest.current
+    const current = () => request === runRequest.current && scopeRef.current.pid === pid
+      && scopeRef.current.packageId === packageId
+    if (!isPersistedProject || !packageId) { setRuns([]); setRunsLoading(false); return }
+    setRunsLoading(true); setRunsError('')
+    try {
+      const [runResult, docResult] = await Promise.all([
+        pageAllSafe((from, to) => supabase.from('document_processing_runs').select('*')
+          .eq('contract_package_id', packageId).order('started_at').order('id').range(from, to)),
+        pageAllSafe((from, to) => supabase.from('documents').select('id, title, document_type')
+          .eq('contract_package_id', packageId).order('id').range(from, to)),
+      ])
+      if (runResult.error) throw runResult.error
+      if (docResult.error) throw docResult.error
+      const runRows = runResult.data
+      const docRows = docResult.data
+      const versionResult = await pageAllInSafe(docRows.map((d) => d.id), (ids, from, to) => supabase.from('document_versions')
         .select('id, document_id, version_label, storage_path, original_filename, mime_type')
-        .in('document_id', docIds)
-      setVersionsById(new Map((versionRows || []).map((v) => [v.id, v])))
-      const { data: ingRuns } = await supabase.from('document_ingestion_runs')
-        .select('id').in('document_version_id', (versionRows || []).map((v) => v.id))
-      if (ingRuns?.length) {
-        const { count } = await supabase.from('requirements')
-          .select('id', { count: 'exact', head: true })
-          .in('ingestion_run_id', ingRuns.map((r) => r.id))
-        setAiCount(count ?? null)
-      } else setAiCount(0)
-    } else { setVersionsById(new Map()); setAiCount(0) }
-  }, [isPersistedProject])
+        .in('document_id', ids).order('id').range(from, to))
+      if (versionResult.error) throw versionResult.error
+      const ingResult = await pageAllInSafe(versionResult.data.map((v) => v.id), (ids, from, to) => supabase.from('document_ingestion_runs')
+        .select('id, document_version_id, status, started_at, metadata').in('document_version_id', ids)
+        .order('started_at', { ascending: false }).order('id').range(from, to))
+      if (ingResult.error) throw ingResult.error
+      const latestCoverage = new Map()
+      for (const ingestion of ingResult.data) {
+        if (ingestion.status === 'completed' && !latestCoverage.has(ingestion.document_version_id)) {
+          latestCoverage.set(ingestion.document_version_id, extractionCoverageWarning(ingestion.metadata))
+        }
+      }
+      for (let i = 0; i < runRows.length; i++) {
+        const run = runRows[i]
+        if (run.metadata?.requirement_extraction === 'completed' && latestCoverage.has(run.document_version_id)) {
+          runRows[i] = { ...run, metadata: { ...run.metadata,
+            requirement_extraction_warning: latestCoverage.get(run.document_version_id) } }
+        }
+      }
+      const reqResult = await pageAllInSafe(ingResult.data.map((r) => r.id), (ids, from, to) => supabase.from('requirements')
+        .select('id').eq('status', 'approved').in('ingestion_run_id', ids).order('id').range(from, to))
+      if (reqResult.error) throw reqResult.error
+      if (!current()) return
+      // 讀者不寫處理狀態；可管理文件的人才沿用既有中斷復原。
+      if (canUploadDocs) for (let i = 0; i < runRows.length; i++) {
+        const patch = staleProcessingPatch(runRows[i])
+        if (!patch || !current()) continue
+        const { data: recovered } = await supabase.from('document_processing_runs')
+          .update(patch).eq('id', runRows[i].id).select().single()
+        if (recovered) runRows[i] = recovered
+      }
+      if (!current()) return
+      setRuns(runRows); setLoadedPackageId(packageId)
+      setDocsById(new Map(docRows.map((d) => [d.id, d])))
+      setVersionsById(new Map(versionResult.data.map((v) => [v.id, v])))
+      setAiCount(reqResult.data.length)
+    } catch (error) {
+      if (current()) setRunsError(friendlyError(error, '文件處理狀態載入失敗'))
+    } finally {
+      if (current()) setRunsLoading(false)
+    }
+  }, [isPersistedProject, pid, canUploadDocs])
   useEffect(() => { reloadRuns(selectedPackageId) }, [reloadRuns, selectedPackageId])
 
   // 回到頁面時把「仍在處理中」的 run 釘進本批:終結後仍留在面板裡,
@@ -226,7 +299,7 @@ export default function Contract() {
   // 自動補齊專案身分:受邀成員/舊專案缺 parties 或 membership 時,開頁即修
   const identityFixTried = useRef(false)
   useEffect(() => {
-    if (!isPersistedProject || !pid || !canUploadDocs) return
+    if (!isPersistedProject || !pid || !canUploadDocs || packagesLoading || packagesError) return
     if (packageOptions.length > 0 || identityFixTried.current) return
     identityFixTried.current = true
     ;(async () => {
@@ -236,7 +309,7 @@ export default function Contract() {
       await reloadPackages()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPersistedProject, pid, canUploadDocs, packageOptions.length])
+  }, [isPersistedProject, pid, canUploadDocs, packageOptions.length, packagesLoading, packagesError])
 
   const ensurePackage = useCallback(async (option) => {
     const existing = packages.find((p) => p.package_type === option.package_type
@@ -259,7 +332,9 @@ export default function Contract() {
   // ── 唯一上傳流程:多檔 → 自動分類 → 自動歸檔分流 ─────────────────────────
   const handleFiles = useCallback(async (fileList, targetPackage) => {
     let files = [...(fileList || [])].filter(Boolean)
-    if (!files.length || !canUploadDocs) return
+    if (!files.length || !canUploadDocs || uploadLock.current || packagesLoading || packagesError) return
+    uploadLock.current = true
+    try {
     setBoqMsg(null)   // 上一批的結果不得跨批殘留
     setPanelDismissed(false)
     // 統一窗口:PCCES 標單 XML 直接路由到 BOQ 匯入,其餘進契約包管線
@@ -311,6 +386,8 @@ export default function Contract() {
       setSelectedPackageId(pkg.id)
       await supabase.from('contract_packages').update({ status: 'processing' }).eq('id', pkg.id)
       const onRun = (run) => {
+        if (scopeRef.current.pid !== pid || scopeRef.current.packageId !== pkg.id) return
+        setLoadedPackageId(pkg.id)
         setBatchVersionIds((ids) => new Set(ids).add(run.document_version_id))
         setRuns((rs) => {
           const i = rs.findIndex((r) => r.document_version_id === run.document_version_id)
@@ -320,10 +397,12 @@ export default function Contract() {
       const { runs: batchRuns, failures } = await uploadFilesToPackage({
         files, packageRow: pkg, projectId: pid, userId: currentUser?.user_id || null, onRun,
       })
-      const { data: freshRuns } = await supabase.from('document_processing_runs')
-        .select('*').eq('contract_package_id', pkg.id).order('started_at')
+      const { data: freshRuns, error: freshError } = await pageAllSafe((from, to) => supabase.from('document_processing_runs')
+        .select('*').eq('contract_package_id', pkg.id).order('started_at').order('id').range(from, to))
+      if (freshError) throw freshError
       const nextStatus = packageStatusFromRuns(freshRuns || batchRuns)
       await supabase.from('contract_packages').update({ status: nextStatus }).eq('id', pkg.id)
+      if (scopeRef.current.pid !== pid) return
       setPackages((ps) => ps.map((p) => (p.id === pkg.id ? { ...p, status: nextStatus } : p)))
       // 全部列出來(最多三件+總數):超限檔 throw 後不會留任何列,
       // 只報第一件會讓其餘失敗檔無聲消失(W14 審查)
@@ -331,13 +410,15 @@ export default function Contract() {
         setMsg(`部分檔案未能開始處理:${failures.slice(0, 3).join(';')}${failures.length > 3 ? ` …共 ${failures.length} 件` : ''}`)
       }
       await reloadRuns(pkg.id)
+      if (scopeRef.current.pid === pid) await reloadObligations()
     } catch (e) {
-      setMsg(friendlyError(e, '上傳失敗'))
+      if (scopeRef.current.pid === pid) setMsg(friendlyError(e, '上傳失敗'))
     } finally {
-      setUploading(false)
+      if (scopeRef.current.pid === pid) setUploading(false)
     }
-  }, [canUploadDocs, packageOptions, ensurePackage, pid, currentUser, currentProjectMembership,
-    isPlatformAdmin, reloadRuns, importWorkItems, workItemsSource])
+    } finally { uploadLock.current = false }
+  }, [canUploadDocs, packagesLoading, packagesError, packageOptions, ensurePackage, pid, currentUser, currentProjectMembership,
+    isPlatformAdmin, reloadRuns, reloadObligations, importWorkItems, workItemsSource])
 
   // 修正/確認分類 → 視需要重新路由 AI 分析(也是「重試」的 handler)
   const confirmClassification = useCallback(async (run, newType) => {
@@ -419,6 +500,7 @@ export default function Contract() {
             requirement_extraction_message: failed
               ? result.message
               : extractionSuccessMessage(data),
+            requirement_extraction_warning: data ? extractionCoverageWarning(data) : null,
             routed_document_type: newType,
           },
         }).eq('id', run.id).select().single()
@@ -434,6 +516,7 @@ export default function Contract() {
               metadata: {
                 ...(run.metadata || {}),
                 requirement_extraction: 'skipped',
+                requirement_extraction_warning: null,
                 requirement_extraction_message: '已改為非抽取類型;先前抽取的建議仍保留於審查佇列',
                 routed_document_type: newType,
               },
@@ -443,11 +526,12 @@ export default function Contract() {
       }
       if (updated) setRuns((rs) => rs.map((r) => (r.id === updated.id ? updated : r)))
       await reloadRuns(run.contract_package_id)
+      if (scopeRef.current.pid === pid) await reloadObligations()
     } finally {
       busyRunsRef.current.delete(run.id)
       setBusyRunIds(new Set(busyRunsRef.current))
     }
-  }, [versionsById, pid, reloadRuns])
+  }, [versionsById, pid, reloadRuns, reloadObligations])
 
   // W14 刪除文件:單一守門路徑 delete_document RPC(權限/佐證鏈護欄在伺服器端;
   // 已核定契約重點引用的文件會被 FK 擋下並回看得懂的訊息)。RPC 回傳 storage
@@ -470,6 +554,7 @@ export default function Contract() {
       }
       setBatchVersionIds((s) => { const n = new Set(s); n.delete(run.document_version_id); return n })
       await reloadRuns(run.contract_package_id)
+      if (scopeRef.current.pid === pid) await reloadObligations()
     } finally {
       busyRunsRef.current.delete(run.id)
       setBusyRunIds(new Set(busyRunsRef.current))
@@ -492,9 +577,9 @@ export default function Contract() {
   const panelFailed = panelRuns.filter((r) => r.status === 'failed' || r.status === 'partial')
   // 分類待確認 ≠ 完成:completed 但 needs_review 的檔案抽取被跳過,
   // 面板若報綠色「已抽取」就是說謊(審查 W11 發現)
-  const panelNeeds = panelRuns.filter((r) => r.status === 'completed' && r.classification_status === 'needs_review')
+  const panelNeeds = panelRuns.filter((r) => r.status === 'completed' && (r.classification_status === 'needs_review' || r.metadata?.requirement_extraction_warning))
   const panelOk = panelRuns.filter((r) =>
-    (r.status === 'completed' && r.classification_status !== 'needs_review') || r.status === 'unsupported')
+    (r.status === 'completed' && r.classification_status !== 'needs_review' && !r.metadata?.requirement_extraction_warning) || r.status === 'unsupported')
   // 「重試」只對 AI 分析失敗有效;上傳失敗/掃描檔重打 edge fn 必敗又蓋掉
   // 原始錯誤,正確復原是重新上傳同檔(checksum 相同會自動接續)
   const panelExtractionFailed = panelFailed.filter((r) => r.metadata?.requirement_extraction === 'failed')
@@ -522,13 +607,13 @@ export default function Contract() {
     ok: {
       icon: 'check_circle', fill: true, cls: 'text-[var(--green-text)]',
       title: `${panelOk.length} 個檔案處理完成`,
-      sub: 'AI 已完成分類歸檔與契約重點抽取。',
+      sub: '檔案已歸檔；各檔是否完成內容分析，請看下方狀態。',
       right: '完成', bar: 'bg-[var(--green-text)]',
     },
     warn: {
       icon: 'error', fill: true, cls: 'text-[var(--amber-text)]',
-      title: `${panelOk.length + panelNeeds.length} 個檔案處理完成,${panelNeeds.length} 個分類待確認`,
-      sub: 'AI 對部分文件的分類沒把握;請在下方清單確認分類,確認後會自動接續分析。',
+      title: `${panelOk.length + panelNeeds.length} 個檔案處理完成,${panelNeeds.length} 個需留意`,
+      sub: '部分文件需要確認分類或補齊內容；請查看下方各檔的原因與處理方式。',
       right: `${panelNeeds.length} 待確認`, bar: 'bg-[var(--amber-text)]',
     },
     err: {
@@ -573,7 +658,7 @@ export default function Contract() {
   if (isSupabaseConfigured && !currentProject) {
     return (
       <div className="space-y-5">
-        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整包契約文件丟進來,AI 自動分類歸檔:標單進「標單工項」、契約重點送「審查與協作」;要看結果就到對應功能頁" />
+        <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="上傳契約與附件，AI 自動整理責任、期限與應辦事項，再依登入角色查看契約重點。" />
         <Card><Empty>請先登入並建立/選擇專案,才能整理契約文件。</Empty></Card>
       </div>
     )
@@ -581,13 +666,15 @@ export default function Contract() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="把整包契約文件丟進來,AI 自動分類歸檔:標單進「標單工項」、契約重點送「審查與協作」;要看結果就到對應功能頁" />
+      <PageHeader title="專案文件" tagline="一次上傳,自動整理" subtitle="上傳契約與附件，AI 自動整理責任、期限與應辦事項，再依登入角色查看契約重點。" />
 
+      <ContractFlow active="documents" role={currentUser?.org_type} packageId={selectedPackageId} />
+      <ErrorBanner msg={packagesError} onRetry={reloadPackages} />
       {/* ── 卡 1:契約文件(上傳入口+上傳回饋)──────────────────────────── */}
-      <Card title="契約文件" action={
-        <div className="flex items-center gap-2">
+      <Card title="契約文件" className="[&>div:first-child]:flex-wrap" action={
+        <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
           {(packages.length > 1 || creatableOptions.length > 0) && (
-            <Select value={selectedPackageId || ''} className="w-48" disabled={uploading}
+            <Select value={selectedPackageId || ''} aria-label="選擇契約" className="w-full sm:w-48" disabled={uploading || packagesLoading}
               onChange={async (e) => {
                 const value = e.target.value
                 if (value.startsWith('new:')) {
@@ -609,13 +696,17 @@ export default function Contract() {
               ))}
             </Select>
           )}
-          <label className={`${buttonClass('primary', 'md')} ${uploading || boqBusy || !canUploadDocs ? 'opacity-50' : 'cursor-pointer'}`}>
-            <input type="file" multiple accept={ACCEPT_ATTR}
-              disabled={uploading || boqBusy || !canUploadDocs}
-              onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)}
-              className="hidden" />
-            <MSym name="cloud_upload" size={15} /> 上傳契約文件
-          </label>
+          {canUploadDocs && <>
+            <input ref={fileInputRef} type="file" multiple accept={ACCEPT_ATTR} aria-label="選擇契約文件"
+              disabled={uploading || boqBusy || packagesLoading || !!packagesError}
+              onChange={(e) => handleFiles(takeSelectedFiles(e.target), selectedPackage)} className="hidden" />
+            <button type="button" className={buttonClass('primary', 'md')}
+              disabled={uploading || boqBusy || packagesLoading || !!packagesError}
+              onClick={() => fileInputRef.current?.click()}>
+              <MSym name="cloud_upload" size={15} /> 上傳契約文件
+            </button>
+          </>}
+
         </div>
       }>
         {/* 契約包切換(多包才顯示):單選 chips + 選取包詳情列 */}
@@ -656,14 +747,13 @@ export default function Contract() {
             <MSym name="cloud_upload" size={26} className="text-[var(--text-3)] shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm text-[var(--text)] leading-relaxed">
-                把整包契約文件直接拖進來,或點右上「上傳契約文件」。可一次選擇多個檔案
-                (PDF / Word / TXT / Excel / 圖片…),系統會自動分類、歸檔並找出契約重點。
+                {canUploadDocs ? '拖入契約與附件，或點「上傳契約文件」一次選擇多個檔案。' : '在這裡查看契約文件、AI 處理狀態與原始檔案。'}
               </p>
               <p className="text-xs text-[var(--text-3)] mt-1.5">
-                標單請丟 PCCES XML(自動匯入標單工項);契約/規範/品質計畫會自動抽取契約重點送審查。
+                可自動分析：文字型 PDF、DOCX、TXT。圖片、掃描頁、Excel 與舊版 Word 目前無法自動讀取內容；可保留原檔。PCCES XML 另匯入標單工項。
               </p>
               {!isPersistedProject && <p className="text-xs text-[var(--amber-text)] mt-1.5">Demo 模式不支援,請登入並選擇真實專案。</p>}
-              {isPersistedProject && !canWriteContract && <p className="text-xs text-[var(--text-3)] mt-1.5">需編輯權限(施工廠商、監造或專案管理者)。</p>}
+              {isPersistedProject && !canWriteContract && <p className="text-xs text-[var(--text-3)] mt-1.5">目前為檢視模式；請由施工廠商、監造或具文件管理權限的成員上傳。</p>}
             </div>
           </div>
         ) : (
@@ -706,6 +796,7 @@ export default function Contract() {
               const busy = !isTerminal(r)
               const failed = r.status === 'failed' || r.status === 'partial'
               const needsReview = !busy && !failed && r.classification_status === 'needs_review'
+              const incomplete = !busy && !failed && r.metadata?.requirement_extraction_warning
               // 只有 AI 分析失敗才可原地重試;上傳失敗/掃描檔要重新上傳同檔
               const retryable = failed && r.metadata?.requirement_extraction === 'failed'
               const failMeta = failed
@@ -714,9 +805,9 @@ export default function Contract() {
               return (
                 <div key={r.id} className="grid grid-cols-[22px_1fr_128px] items-center gap-3 px-3.5 py-2.5 border-t border-[var(--border-2)]">
                   <MSym
-                    name={busy ? 'draft' : failed || needsReview ? 'error' : 'check_circle'}
+                    name={busy ? 'draft' : failed || needsReview || incomplete ? 'error' : 'check_circle'}
                     size={19} fill={!busy}
-                    className={busy ? 'text-[var(--blue-text)]' : failed ? 'text-[var(--red-text)]' : needsReview ? 'text-[var(--amber-text)]' : 'text-[var(--green-text)]'} />
+                    className={busy ? 'text-[var(--blue-text)]' : failed ? 'text-[var(--red-text)]' : needsReview || incomplete ? 'text-[var(--amber-text)]' : 'text-[var(--green-text)]'} />
                   <div className="min-w-0">
                     <div className="text-[12.5px] text-[var(--text)] truncate" title={name}>{name}</div>
                     <div className={`text-[11px] mt-0.5 ${failed ? 'text-[var(--red-text)]' : needsReview ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`}>
@@ -737,8 +828,8 @@ export default function Contract() {
                         <button onClick={() => retryRun(r)} disabled={busyRunIds.has(r.id)}
                           className={buttonClass('outline', 'sm')}>重試</button>
                       ) : <span className="text-[11.5px] font-medium text-[var(--red-text)]">待處理</span>
-                    ) : needsReview ? (
-                      <span className="text-[11.5px] font-medium text-[var(--amber-text)]">待確認</span>
+                    ) : needsReview || incomplete ? (
+                      <span className="text-[11.5px] font-medium text-[var(--amber-text)]">{incomplete ? '部分整理' : '待確認'}</span>
                     ) : (
                       <span className="text-[11.5px] font-medium text-[var(--green-text)]">已完成</span>
                     )}
@@ -752,9 +843,9 @@ export default function Contract() {
                 <MSym name="check_circle" size={19} fill className="text-[var(--green-text)] shrink-0 mt-0.5" />
                 <div className="text-[12.5px] text-[var(--green-text)] leading-relaxed">
                   {panelOk.length} 個檔案處理完成,已自動分類歸檔。
-                  {aiCount != null && aiCount > 0 && ` AI 從本契約累計找到 ${aiCount} 項契約重點建議(含先前批次)。`}
+                  {aiCount != null && aiCount > 0 && ` 本契約目前有 ${aiCount} 項已歸檔契約重點。`}
                   <br />
-                  <Link to="/requirements" className="font-medium hover:underline inline-flex items-center gap-0.5">前往契約重點 <MSym name="arrow_forward" size={12} /></Link>
+                  <Link to={`/requirements?package=${encodeURIComponent(selectedPackageId || '')}`} className="font-medium hover:underline inline-flex items-center gap-0.5">前往契約重點 <MSym name="arrow_forward" size={12} /></Link>
                   {workItemsSource === 'db' && (<>
                     {' '}·{' '}
                     <Link to="/boq" className="font-medium hover:underline inline-flex items-center gap-0.5">查看標單工項 <MSym name="arrow_forward" size={12} /></Link>
@@ -804,16 +895,33 @@ export default function Contract() {
           ))}
       </Card>
 
+      {selectedPackage && !runsLoading && !runsError && loadedPackageId === selectedPackageId && (
+        <Card title="下一步：查看整理結果">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm leading-relaxed text-[var(--text-2)]">
+              <p>{progress.active > 0 ? 'AI 正在整理，已產出的重點可先查看。' : `目前可查看 ${aiCount ?? 0} 項已歸檔契約重點`}</p>
+              <p className="mt-1 text-xs text-[var(--text-3)]">按責任方、期限與類型閱讀；需要確認內容時直接對照來源原文。</p>
+              {(progress.incomplete > 0 || progress.partial > 0 || progress.failed > 0 || progress.needsClassification > 0) && (
+                <p className="mt-2 text-xs text-[var(--amber-text)]">有文件尚未完整整理，請一併查看下方的處理原因。已產出的重點仍可先閱讀。</p>
+              )}
+            </div>
+            <Link to={`/requirements?package=${encodeURIComponent(selectedPackageId)}`} className={buttonClass('primary', 'md')}>
+              查看這份契約重點 <MSym name="arrow_forward" size={16} />
+            </Link>
+          </div>
+        </Card>
+      )}
       {/* ── 卡 2:專案文件(已入庫清單)────────────────────────────────────── */}
       <Card title="專案文件" action={
         <span className="text-[11px] text-[var(--text-3)] num">{docTableRows.length} 件</span>
       }>
-        {docTableRows.length === 0 ? (
-          <Empty>這個專案還沒有文件。上傳後會自動分類歸檔,並在這裡列出處理狀態。</Empty>
+        <ErrorBanner msg={runsError} onRetry={() => reloadRuns(selectedPackageId)} />
+        {packagesLoading || (runsLoading && loadedPackageId !== selectedPackageId) ? <SkeletonList rows={3} label="正在載入契約文件…" /> : packagesError || runsError ? null : docTableRows.length === 0 ? (
+          <Empty>這份契約尚無文件。上傳後會在這裡列出各檔的處理狀態。</Empty>
         ) : (<>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
-              <thead>
+            <table aria-label="專案文件處理狀態" className="w-full text-sm min-w-[640px] max-md:min-w-0 max-md:block">
+              <thead className="max-md:sr-only">
                 <tr className="border-b border-[var(--border)]">
                   <SortableTh className={DOC_TH} label="文件" field="title" sort={docSort} onSort={toggleDocSort} />
                   <th className={DOC_TH}>分類</th>
@@ -822,20 +930,20 @@ export default function Contract() {
                   <SortableTh className={DOC_THR} align="right" label="上傳" field="uploaded" sort={docSort} onSort={toggleDocSort} />
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="max-md:block">
                 {docPageRows.map(({ run, doc, version, title, group, uploaded }) => {
                   const state = aiProcessingState(run)
                   const needsClassify = state.kind === 'attention' && run.classification_status === 'needs_review'
                   // 只有 AI 分析失敗才可原地重試;上傳失敗/掃描檔要重新上傳同檔
                   const retryable = state.kind === 'attention' && !needsClassify
                     && run.metadata?.requirement_extraction === 'failed'
-                  const reuploadHint = state.kind === 'attention' && !needsClassify && !retryable
+                  const reuploadHint = state.kind === 'attention' && !needsClassify && !retryable && !run.metadata?.requirement_extraction_warning
                     && !(state.detail || '').includes('重新上傳')
                   // 看上傳的檔案:上傳前就失敗的 run 原始檔從未落地,不給開檔入口
                   const hasFile = runFileLanded(run) && isValidStorageKey(version?.storage_path)
                   return (
-                    <tr key={run.id} className="border-b border-[var(--border-2)] last:border-0 hover:bg-[var(--surface-2)]">
-                      <td className={`${DOC_TD} max-w-[300px]`}>
+                    <tr key={run.id} className="border-b border-[var(--border-2)] last:border-0 hover:bg-[var(--surface-2)] max-md:grid max-md:grid-cols-2 max-md:py-3">
+                      <td className={`${DOC_TD} max-w-[300px] max-md:max-w-none max-md:col-span-2`}>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <MSym name="description" size={12} className="text-[var(--text-3)] shrink-0" />
                           {hasFile ? (
@@ -849,15 +957,15 @@ export default function Contract() {
                           )}
                         </div>
                       </td>
-                      <td className={`${DOC_TD} whitespace-nowrap text-[var(--text-2)]`}>{group}</td>
-                      <td className={`${DOC_TD} whitespace-nowrap num text-[var(--text-2)]`}>{version?.version_label || '—'}</td>
-                      <td className={DOC_TD}>
+                      <td className={`${DOC_TD} text-[var(--text-2)]`}><span className="md:hidden text-[var(--text-3)]">分類：</span>{group}</td>
+                      <td className={`${DOC_TD} whitespace-nowrap num text-[var(--text-2)] max-md:text-right`}><span className="md:hidden text-[var(--text-3)]">版本：</span>{version?.version_label || '—'}</td>
+                      <td className={`${DOC_TD} max-md:col-span-2`}>
                         <Badge color={state.color}>{state.label}</Badge>
                         <div className="text-[11px] text-[var(--text-3)] mt-1 max-w-[300px]">
-                          <span className="line-clamp-2 whitespace-pre-line" title={state.detail}>{state.detail}</span>
+                          <span className="line-clamp-2 max-md:line-clamp-none whitespace-pre-line" title={state.detail}>{state.detail}</span>
                           {/* 待處理的兩種人工動作:確認分類/重試分析 */}
                           {needsClassify && canWriteContract && (
-                            <span className="flex items-center gap-1.5 mt-1">
+                            <span className="flex flex-wrap items-center gap-1.5 mt-1">
                               <Select defaultValue={run.suggested_document_type || 'other'} className="w-36"
                                 onChange={(e) => confirmClassification(run, e.target.value)}>
                                 {CLASSIFIABLE_DOCUMENT_TYPES.map((t) => (
@@ -928,7 +1036,8 @@ export default function Contract() {
                           )}
                         </div>
                       </td>
-                      <td className={`${DOC_TD} text-right num whitespace-nowrap text-[var(--text-2)]`}>
+                      <td className={`${DOC_TD} text-right num whitespace-nowrap text-[var(--text-2)] max-md:col-span-2 max-md:text-left`}>
+                        <span className="md:hidden text-[var(--text-3)]">上傳：</span>
                         {uploaded ? String(uploaded).slice(0, 10) : '—'}
                       </td>
                     </tr>

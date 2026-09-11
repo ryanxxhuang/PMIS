@@ -13,7 +13,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { pageAllInSafe } from '../../lib/pagedQuery.js'
+import { pageAllSafe, pageAllInSafe } from '../../lib/pagedQuery.js'
 import {
   Card, Empty, PageHeader, Badge, Button, Input, Textarea, Select,
   PrerequisiteEmptyState, ErrorBanner, SkeletonList,
@@ -22,14 +22,14 @@ import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
+import { extractionCoverageWarnings } from '../../lib/extractRequirements.js'
 import {
   REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
   WORK_ITEM_LINK_STATE_LABELS, ARTIFACT_TYPE_LABELS, GENERATION_TYPE_LABELS,
   latestCompletedRunIds, inDefaultReviewScope, requirementFrequencyKey,
-  sourceVerificationSummary, sourcePageLabel, formatRequirementRule,
+  sourceVerificationSummary, sourcePageLabel, formatRequirementRule, requirementVerification,
 } from '../../lib/requirementReview.js'
 
-const LIST_LIMIT = 300
 const PAGE_SIZE = 50
 
 // W8-3A(D-014):「AI 整理完了沒」在全站只有一個判定依據——本案有沒有跑完過一次
@@ -38,12 +38,11 @@ const PAGE_SIZE = 50
 // ⚠️ 有 Requirement 不等於 AI 跑完過(可能是人工建立或舊 run),絕不可反推成「整理完成」。
 export function requirementsIntro(runs = [], rowCount = 0) {
   const ingestionDone = (runs || []).some((r) => r?.status === 'completed')
-  // W10 揭露「漏了什麼」:最近一次成功整理若未涵蓋整份文件(分批抽取的
-  // coverage 欄位),要在這一頁明講——否則使用者以為 AI 讀完了整本契約。
-  const latestCompleted = (runs || []).find((r) => r?.status === 'completed') || null
-  const cm = latestCompleted?.metadata || null
-  const coverageWarning = cm?.coverage_incomplete
-    ? `注意:最近一次 AI 整理未涵蓋整份文件(解析至第 ${cm.last_included_page ?? '?'} 頁/共 ${cm.total_page_count ?? '?'} 頁)。未涵蓋範圍的契約重點需人工新增。`
+  // 每個文件版本的最近一次完成整理各自檢查 coverage，不能讓另一份成功
+  // 文件蓋掉缺漏警示，也不能把跑完批次當成沒有漏項的證明。
+  const warnings = extractionCoverageWarnings(runs)
+  const coverageWarning = warnings.length
+    ? `注意：目前整理紀錄中有 ${warnings.length} 份文件需要檢查。${warnings.join(' ')}`
     : null
   if (rowCount > 0) {
     return {
@@ -62,7 +61,9 @@ export function requirementsIntro(runs = [], rowCount = 0) {
   if (ingestionDone) {
     return {
       ingestionDone, mode: 'done-empty', note: null, coverageWarning,
-      emptyText: 'AI 已完成整理，本次沒有找到契約重點建議，不需處理，也不影響開啟正式模式。',
+      emptyText: coverageWarning
+        ? '本次沒有找到契約重點建議，但文件尚未完整整理；請先查看缺漏範圍。'
+        : 'AI 已完成整理，本次沒有找到契約重點建議，不需逐條確認，也不影響開啟正式模式；這不代表已證明文件沒有任何義務。',
     }
   }
   // W10:run 都停了而且有失敗紀錄時要說「失敗了」,不能偽裝成「還沒開始」——
@@ -118,7 +119,7 @@ export function ReviewActions({ requirement, canReview, busy, onReview, onEdit, 
   const autoConfirmed = st === 'approved' && !requirement.reviewed_by && requirement.reviewed_at
   const record = requirement.reviewed_at
     ? (autoConfirmed
-      ? `${requirement.triage_doubts?.length ? 'AI 整理・自動確認' : '系統核對無誤・自動確認'} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
+      ? `${requirementVerification(requirement).label} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
       : reviewerName
         ? `${reviewerName} ${VERB[st] || REQUIREMENT_STATUS_LABELS[st] || st} · ${fmtTime(requirement.reviewed_at)}(伺服器記錄)`
         : `${REQUIREMENT_STATUS_LABELS[st] || st}·${fmtTime(requirement.reviewed_at)}(伺服器記錄)`)
@@ -209,24 +210,36 @@ export default function RequirementsReview() {
   const [manualMsg, setManualMsg] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
   const searchRef = useRef(null)
+  const packageId = searchParams.get('package') || ''
 
   const pid = currentProject?.project_id
+  const projectRef = useRef(pid)
+  projectRef.current = pid
+  const loadGeneration = useRef(0)
+  const detailGeneration = useRef(0)
   const runsById = useMemo(() => new Map(runs.map((r) => [r.id, r])), [runs])
   const currentRunIds = useMemo(() => latestCompletedRunIds(runs), [runs])
-  const intro = useMemo(() => requirementsIntro(runs, rows.length), [runs, rows.length])
+  const packageRuns = useMemo(() => runs.filter((r) => !packageId || versionsById.get(r.document_version_id)?.documents?.contract_package_id === packageId), [runs, versionsById, packageId])
+  const packageRows = useMemo(() => rows.filter((r) => !packageId || r.contract_package_id === packageId
+    || versionsById.get(runsById.get(r.ingestion_run_id)?.document_version_id)?.documents?.contract_package_id === packageId), [rows, runsById, versionsById, packageId])
+  const intro = useMemo(() => requirementsIntro(packageRuns.map((run) => ({
+    ...run, document_title: versionsById.get(run.document_version_id)?.documents?.title,
+  })), packageRows.length), [packageRuns, packageRows.length, versionsById])
 
   const reload = useCallback(async () => {
     if (!isPersistedProject || !pid) return
+    const generation = ++loadGeneration.current
+    const current = () => projectRef.current === pid && loadGeneration.current === generation
     setLoaded(false)
     setLoadError('')
     try {
       const [runResult, requirementResult, packageResult] = await Promise.all([
-        supabase.from('document_ingestion_runs')
+        pageAllSafe((from, to) => supabase.from('document_ingestion_runs')
           // error_message/metadata:失敗揭露與涵蓋率警示(requirementsIntro)要用
           .select('id, document_version_id, status, started_at, completed_at, model_name, prompt_version, error_message, metadata')
-          .eq('project_id', pid).order('started_at', { ascending: false }).limit(100),
-        supabase.from('requirements').select('*')
-          .eq('project_id', pid).order('created_at', { ascending: false }).limit(LIST_LIMIT),
+          .eq('project_id', pid).order('started_at', { ascending: false }).order('id').range(from, to)),
+        pageAllSafe((from, to) => supabase.from('requirements').select('*')
+          .eq('project_id', pid).order('created_at', { ascending: false }).order('id').range(from, to)),
         supabase.from('contract_packages').select('id, title, package_type')
           .eq('project_id', pid).order('created_at'),
       ])
@@ -255,7 +268,7 @@ export default function RequirementsReview() {
       if (versionIds.length) {
         // storage 欄位:詳情的「開啟原文」直接開原始檔並跳到出處頁(documentFileAccess)
         const versionResult = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_versions')
-          .select('id, version_label, storage_path, original_filename, mime_type, documents(title, document_type)')
+          .select('id, version_label, storage_path, original_filename, mime_type, documents(title, document_type, contract_package_id)')
           .in('id', chunk).order('id').range(from, to))
         if (versionResult.error) throw versionResult.error
         versions = versionResult.data || []
@@ -269,6 +282,7 @@ export default function RequirementsReview() {
           .select('id, full_name, company').in('id', chunk).order('id').range(from, to))
         if (!reviewerResult.error) reviewers = reviewerResult.data || []
       }
+      if (!current()) return
       setRuns(runRows)
       setRows(reqRows)
       setSourcesByReq(byReq)
@@ -276,22 +290,28 @@ export default function RequirementsReview() {
       setReviewersById(new Map(reviewers.map((p) => [p.id, p])))
       setPackages(packageResult.data || [])
     } catch (error) {
-      setLoadError(friendlyError(error, '契約重點載入失敗'))
+      if (current()) setLoadError(friendlyError(error, '契約重點載入失敗'))
     } finally {
-      setLoaded(true)
+      if (current()) setLoaded(true)
     }
   }, [isPersistedProject, pid])
 
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => {
+    setRows([]); setRuns([]); setPackages([]); setSourcesByReq(new Map()); setVersionsById(new Map())
+    detailGeneration.current++
+    reload()
+  }, [reload])
 
   const loadDetail = useCallback(async (requirementId) => {
     if (!isPersistedProject) return
+    const generation = ++detailGeneration.current
     const [{ data: linkRows }, { data: artifactRows }] = await Promise.all([
       supabase.from('requirement_work_items').select('*')
         .eq('requirement_id', requirementId).order('created_at'),
       supabase.from('requirement_artifact_links').select('*')
         .eq('requirement_id', requirementId).order('created_at'),
     ])
+    if (generation !== detailGeneration.current) return
     setLinks(linkRows || [])
     setArtifactLinks(artifactRows || [])
   }, [isPersistedProject])
@@ -309,14 +329,17 @@ export default function RequirementsReview() {
   // 已審決內容(已生效/已駁回/已廢止)是人做成的契約決定,不受最新 run 限制
   // ——重新分析同一份文件不得讓已核定的契約重點從清單消失(W8-3B 舊行為)。
   const scoped = useMemo(
-    () => rows.filter((r) => (EDITABLE_STATUSES.includes(r.status)
+    () => packageRows.filter((r) => (EDITABLE_STATUSES.includes(r.status)
       ? inDefaultReviewScope(r, currentRunIds)
       : true)),
-    [rows, currentRunIds],
+    [packageRows, currentRunIds],
   )
   const counts = useMemo(() => {
-    const c = { all: scoped.length, pending: 0, approved: 0, rejected: 0 }
-    for (const r of scoped) c[statusKey(r.status)]++
+    const c = { all: scoped.length, attention: 0, pending: 0, approved: 0, rejected: 0 }
+    for (const r of scoped) {
+      c[statusKey(r.status)]++
+      if (requirementVerification(r).attention) c.attention++
+    }
     return c
   }, [scoped])
   const typeOptions = useMemo(
@@ -353,7 +376,8 @@ export default function RequirementsReview() {
 
   const visible = useMemo(() => {
     let list = scoped
-    if (filters.status !== 'all') list = list.filter((r) => statusKey(r.status) === filters.status)
+    if (filters.status === 'attention') list = list.filter((r) => requirementVerification(r).attention)
+    else if (filters.status !== 'all') list = list.filter((r) => statusKey(r.status) === filters.status)
     if (filters.type) list = list.filter((r) => r.requirement_type === filters.type)
     if (filters.phase) list = list.filter((r) => r.lifecycle_phase === filters.phase)
     if (filters.freq) list = list.filter((r) => requirementFrequencyKey(r) === filters.freq)
@@ -377,7 +401,7 @@ export default function RequirementsReview() {
       latest ? `最近整理 ${latest.slice(0, 10)}` : null].filter(Boolean).join(' · ')
   }, [runs, versionsById, scoped.length])
 
-  const selected = rows.find((r) => r.id === selectedId) || null
+  const selected = packageRows.find((r) => r.id === selectedId) || null
   const selectedSources = useMemo(
     () => (selected ? sourcesByReq.get(selected.id) || [] : []),
     [selected, sourcesByReq],
@@ -396,25 +420,26 @@ export default function RequirementsReview() {
   // 切換專案(不經 route 卸載)時整組重置:殘留他案的 selectedId/?highlight
   // 會讓右欄空白、URL 指向別案的 requirement
   const initialPicked = useRef(false)
-  const seenPid = useRef(pid)
+  const selectionScope = `${pid}/${packageId}`
+  const seenPid = useRef(selectionScope)
   useEffect(() => {
-    if (seenPid.current === pid) return
-    seenPid.current = pid
+    if (seenPid.current === selectionScope) return
+    seenPid.current = selectionScope
     initialPicked.current = false
     setSelectedId(null); setEditing(null); setLinks([]); setArtifactLinks([])
     setDetailOpen(false); setMsg('')
     setFilters({ q: '', status: 'all', type: '', phase: '', freq: '' }); setShownLimit(PAGE_SIZE)
     setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('highlight'); return n }, { replace: true })
-  }, [pid, setSearchParams])
+  }, [selectionScope, setSearchParams])
 
   // 初次載入:深連結(?highlight=)優先,否則預設選第一條待確認(直接進入待辦)
   useEffect(() => {
-    if (!loaded || initialPicked.current || !rows.length) return
+    if (!loaded || initialPicked.current || !packageRows.length) return
     initialPicked.current = true
     const param = searchParams.get('highlight')
-    const deepLinked = param ? rows.find((r) => r.id === param) : null
+    const deepLinked = param ? packageRows.find((r) => r.id === param) : null
     const target = deepLinked
-      || visible.find((r) => EDITABLE_STATUSES.includes(r.status)) || visible[0] || rows[0]
+      || visible.find((r) => EDITABLE_STATUSES.includes(r.status)) || visible[0] || packageRows[0]
     if (!target) return
     select(target.id)
     if (deepLinked) {
@@ -424,7 +449,7 @@ export default function RequirementsReview() {
       setTimeout(() => document.getElementById(`hl-${target.id}`)?.scrollIntoView({ block: 'center' }), 60)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, rows.length])
+  }, [loaded, packageRows, selectionScope])
 
   // 「開啟原文」:出處的文件版本 + 頁碼 → 簽名 URL 開原始檔(PDF 跳頁)
   const openableSource = useMemo(() => {
@@ -639,7 +664,7 @@ export default function RequirementsReview() {
   // ── 頁首動作:手動新增(對照報告已退場) ─────────────────────────────────
   const headerAction = (
     <div className="flex flex-wrap items-center gap-2">
-      <Link to="/requirements" className="inline-flex items-center gap-1 text-[12.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 px-1">
+      <Link to={packageId ? `/requirements?package=${encodeURIComponent(packageId)}` : '/requirements'} className="inline-flex items-center gap-1 text-[12.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 px-1">
         <MSym name="arrow_back" size={16} /> 返回履約時程
       </Link>
       {canAddManual && (
@@ -684,12 +709,11 @@ export default function RequirementsReview() {
 
       <ErrorBanner msg={msg} className="mx-4 mt-3" />
 
-      {/* D-019 透明度註記:未能逐字核對的地方講明,效力回歸契約原文 */}
-      {selected.triage_doubts?.length > 0 && (
-        <p className="mx-4 mt-3 text-xs leading-relaxed text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-md px-3 py-2">
-          未逐字核對:{selected.triage_doubts.join('、')}。內容如有出入,以契約原文為準。
-        </p>
-      )}
+      {/* 自動歸檔與核對結果分開；通過現有核對也不宣稱已證明沒有漏項。 */}
+      <p className={`mx-4 mt-3 text-xs leading-relaxed rounded-md px-3 py-2 ${requirementVerification(selected).attention
+        ? 'text-[var(--amber-text)] bg-[var(--amber-tint)]' : 'text-[var(--text-2)] bg-[var(--surface-2)]'}`}>
+        {requirementVerification(selected).label}。{requirementVerification(selected).note}
+      </p>
 
       {/* 2. 本文:標題/說明/key-value(編輯模式原地換成表單) */}
       {editing ? (
@@ -1081,10 +1105,14 @@ export default function RequirementsReview() {
           {intro.note && (
             <p className="px-[18px] py-2 text-[11.5px] text-[var(--text-3)] border-b border-[var(--border-2)]">{intro.note}</p>
           )}
-          {/* 誠實揭露載入上限:計數與搜尋只涵蓋已載入範圍,不得偽裝成全部 */}
-          {rows.length >= LIST_LIMIT && (
-            <p className="px-[18px] py-2 text-[11.5px] text-[var(--amber-text)] bg-[var(--amber-tint)] border-b border-[var(--border-2)]">清單僅載入最近 {LIST_LIMIT} 條擷取,計數與搜尋以此範圍為準。</p>
-          )}
+          <div className="px-[18px] py-3 text-xs leading-relaxed bg-[var(--surface-2)] border-b border-[var(--border-2)]">
+            <p>目前載入範圍有 {counts.attention} 項需留意。AI 內容維持自動歸檔，無須逐條按確認；可先查看有核對疑慮、缺少核對結果或尚待人工確認的項目。</p>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => {
+              setFilters({ q: '', status: 'attention', type: '', phase: '', freq: '' })
+              setShownLimit(PAGE_SIZE)
+              setSelectedId(null); setDetailOpen(false)
+            }}>只看需留意項目</Button>
+          </div>
           {/* 檢索區:搜尋+狀態快篩+類型/階段(AND、即時生效) */}
           <div className="px-[18px] py-3.5 border-b border-[var(--border-2)] flex flex-col gap-3">
             <label className="flex items-center gap-2.5 h-10 px-3.5 border border-[var(--border)] rounded-full bg-[var(--surface)] focus-within:border-[var(--primary)] transition-colors">
@@ -1095,10 +1123,13 @@ export default function RequirementsReview() {
                 className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-[var(--text)] placeholder:text-[var(--text-3)]" />
             </label>
             <div className="flex items-center gap-2 flex-wrap">
-              {[['all', '全部', counts.all], ['pending', '待確認', counts.pending],
+              {[['all', '全部', counts.all], ['attention', '需留意', counts.attention], ['pending', '待確認', counts.pending],
                 ['approved', '已確認', counts.approved], ['rejected', '不採用', counts.rejected]].map(([k, label, n]) => (
                 <button key={k} type="button" aria-pressed={filters.status === k}
-                  onClick={() => { setFilters((f) => ({ ...f, status: k })); setShownLimit(PAGE_SIZE) }}
+                  onClick={() => {
+                    setFilters((f) => ({ ...f, status: k })); setShownLimit(PAGE_SIZE)
+                    if (k === 'attention') { setSelectedId(null); setDetailOpen(false) }
+                  }}
                   className={chipCls(filters.status === k)}>
                   {label}<span className="num opacity-70">{n}</span>
                 </button>

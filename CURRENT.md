@@ -1,8 +1,37 @@
 # GovAgent／PMIS — 目前系統真相
 
 > 狀態：**CURRENT（現況權威文件）**
-> 最後核對：2026-09-02（依 PR #23～#58 回填；main `ba6ab45`）
+> 最後核對：2026-09-08（本機 `bc1c3e5` 加未提交的契約品質修正；正式 Supabase 未重核、未部署，歷史部署日期分別保留）
 > 用途：回答「產品現在是什麼、已經做到哪裡、哪份文件說了算」。
+
+### 2026-09-08 契約完整流程與 UI/UX（本機完成、未部署）
+
+- 使用者後續明確聚焦「契約上傳 → AI 自動爬梳 → 重點整理 → 不同角色看不同內容」。已在既有 `/contract`、`/requirements`、`/requirements/review` 完成流程銜接；無新路由／角色／權限規則。
+- 文件與重點頁共用流程入口及登入角色說明；上傳格式能力如實區分，使用可鍵盤操作的上傳按鈕；手機文件表改為直向列，AI 狀態與原因不需橫向捲動。一般機關檢視帳號不顯示上傳按鈕。
+- 文件結果入口帶 `?package=`，重點頁可選契約範圍，審核與返回連結延續同一契約。AI-origin 由 ingestion run 的文件版本推導契約，人工項目使用既有 `contract_package_id`。前端篩選只作展示，D-018 RLS 仍為資料安全邊界。
+- 上傳／重試後刷新義務；進入重點頁重新載入義務，仍有 ingestion run 處理中時輪詢刷新。文件查詢分頁且載入錯誤可重試，不偽裝無文件；切案時舊載入回應不能覆蓋新畫面。處理覆蓋警示落入 processing metadata，亦可從既有 ingestion metadata 還原；部分整理不再顯示綠色已完成，契約包 partial 亦不再算 ready。
+- 無可計算到期日的義務統一顯示「無到期日」，避免「無需處理」造成忽略；未改期限計算、確認或業務執行權限。
+- 本輪 73 檔／820 Vitest、48 Demo E2E、production build 通過；另以真元件＋測試資料檢查上傳頁 1440／375px，無水平溢出且部分整理原因在可見寬度內。未驗證正式契約、真模型或新一輪真 Supabase／pgTAP。交付與限制見 [`docs/契約整理流程-UIUX-2026-09-08.md`](docs/契約整理流程-UIUX-2026-09-08.md)。
+
+### 2026-09-08 契約自動整理品質修正（前一批，本機完成、未部署）
+
+- 使用者要求減少逐條人工審核並開始優化。此次保留 D-019：AI-origin 仍自動確認，有疑慮亦可進履約 runtime；新增「只看需留意項目」入口，不新增人工放行門檻。
+- 契約重點／擷取審核兩頁共用核對狀態：明確空陣列 `triage_doubts = []` 才顯示既有核對通過標示；有疑慮與未取得核對結果分別揭露。主頁已補讀核對欄位，修正 09-07 健檢的誤標問題。通過引文／適用期限數字核對不等於全部語意正確或沒有漏項。
+- 擷取審核移除最近 300 筆限制，以既有分頁工具讀取目前權限可見資料；runs 亦分頁讀取。每個文件版本的最近一次 completed run 都檢查完整性，另一份成功文件不再遮蔽警示。
+- Edge 抽取逐頁讀取並檢查 exact count、連續頁序；有上傳 `metadata.page_count` 時再比對該頁數。讀取失敗、缺頁或上傳頁數不符不開始模型抽取。無文字頁、無效輸出與截斷均揭露為處理不完整，缺少模型清單不再偽裝成成功空結果。
+- 無資料庫／權限變更、無 migration；前端與 `extract-requirements` 都尚未部署。舊流程沒有上傳頁數時只能核對已儲存資料；24 批上限、OCR、語意漏抽與跨條款理解仍未解決，也尚未用真實契約量測準確率／召回率。
+- 本次本機 72 檔／807 Vitest、42 Demo E2E、production build 通過；Edge 入口 esbuild bundle 通過，不等同 Deno 實機驗證。build 仍有大於 500 kB chunk 警告；未重跑真 Supabase／模型端到端或 pgTAP（本次無 DB 變更）。
+- 交付範圍、驗證與下一階段建議見 [`docs/契約自動整理品質優化-2026-09-08.md`](docs/契約自動整理品質優化-2026-09-08.md)。下方 09-07 報告與部署紀錄保留當日狀態。
+
+### 2026-09-07 健檢補記
+
+- PR #59、#60、#61、#62 已在目前 HEAD 歷史中合併。本次本機 71 檔／767 Vitest、42 Demo E2E、production build 全通過；同一 commit 的 GitHub pgTAP 為 33 檔／927 斷言通過。production 依賴 `npm audit --omit=dev` 回報已知弱點 0；不代表開發／Deno 依賴或全系統無漏洞。
+- main 已有 active ruleset，要求 PR 與 `test-and-build`、`pgtap`；pgTAP 已改為所有 PR／main push 執行。仍有 RepositoryRole 5 的 PR bypass，未要求人工核准人數與分支先更新到 base，不能宣稱完全不可繞過。
+- migrations 仍為 57 支，rollback 現為 7 支；新增三份回復檔不等於已做回復演練。本次未重核正式 migration tracker 或 Edge Function 版本；真後端 E2E 因本機 Docker daemon 未啟動而未重跑。
+- 目前今日待辦的契約期限包含廠商、監造，仍排除機關；但履約時程已允許機關操作自己的義務。循環期限只推算下次日期，尚無逐期完成／逾期紀錄；循環項的準時率不是逐期準時率。
+- 履約時程的自動確認標示未讀 `triage_doubts`，帶疑慮資料仍可能顯示「系統核對無誤」；本次只記錄問題，尚未修正。已匯標單且為正式模式時，初始化卡不再顯示，成員頁的一般介面入口有缺口。
+- `app.gov-agent.ai` 首頁本次 HEAD 回 200 且七項既有安全標頭齊全；兩個舊網址仍回 200。HTTP 標頭檢查不代表登入後業務流程驗收。
+- 完整發現、驗證限制與尚未核准的開發建議見 [`docs/產品健檢與開發方向-2026-09-07.md`](docs/產品健檢與開發方向-2026-09-07.md)。下方日期式工作包敘述保留當時脈絡；有衝突時以本補記與較新的已接受 Decision 為準。
 
 ## 1. 一句話定義
 
@@ -82,11 +111,11 @@ contract_packages
           → requirement_artifact_links
 ```
 
-只有 `status = 'approved'` 的 Requirement 才是權威要求。W5-2 已由 PR #6 部署：人工核准的 deadline Requirement 會在同一審查交易中冪等建立／更新一筆 `contract_obligations` 提醒 runtime；obligation 只保留狀態、佐證、罰則與歷史，不反向改寫契約內容。已核准期限被人工取代時，只把仍在待辦的相容提醒標成「不適用」並退出現行清單，原列與佐證／歷史仍保留。
+只有 `status = 'approved'` 的 Requirement 才是權威要求。D-019 起，已完成抽取的 AI-origin 項目由伺服器自動確認（含帶 `triage_doubts` 的項目），人工補登仍走人工確認；D-020 起，所有已確認類型都冪等建立／更新一筆 `contract_obligations` runtime。obligation 保留執行狀態、佐證、罰則與歷史，不反向改寫契約內容。已確認要求被人工取代時，只把仍待辦的相容提醒標成「不適用」，保留原列與歷史。W5-2 的「人工核准 deadline-only」是此流程的歷史起點，已由上述決策擴充。
 
 ## 5. AI 的不可跨越邊界
 
-1. AI 只能查詢、彙整與產生草稿，不能核定、判定、結案、驗收或凍結。
+1. AI 不能代替人執行業務核定、判定、結案、驗收或凍結。契約轉錄另有 D-019 的已接受例外：AI-origin 整理內容由伺服器全自動確認歸檔，即使帶核對疑慮也會進履約 runtime；必須保留疑慮並揭露原文優先，不能把自動確認等同核對無誤。
 2. 數字由確定性引擎計算，AI 只能引用工具回傳值。
 3. Agent 草稿與動作寫入 `agent_actions`，必須由人接受或拒絕。
 4. 每個 AI 功能都要經伺服器端功能閘門，並記錄 `ai_usage_events`；閘門查詢失敗時 fail-closed（D-010），用量記帳失敗則絕不影響回應。
@@ -201,7 +230,7 @@ W8-5 由 PR #19 交付並部署，W8（W8-1～W8-5）全數完成：手機觸控
 2. **雙引擎同步**：W5-4 已修正試體不合格缺失的漏開／重複開漂移；其餘 Demo／前端與伺服器 Trigger／Edge 規則仍有人工同步點，詳見 `docs/architecture/dual-engine-sync.md`。
 3. **期限相容層仍存在**：W5-2 已把方向收斂為 approved deadline Requirement → obligation，但時間軸、提醒與部分 Agent 查詢仍讀 `contract_obligations`；它是有 rollback 的 runtime 相容層，不是第二份契約權威。正式站已套用 `20260812000500`，舊的 obligation → Requirement triggers 已退役。 D-020 起所有已核定 Requirement 都物化一列義務，`contract_obligations` 現在是履約時程頁的直接資料來源；方向仍是單向，未改變權威。
 4. **履約時程可見範圍仍是前端 shim**：PR #55 的 `VISIBLE` 表與逐筆 `canAct` 尚未由後端依身分回傳。PR #56 已把 UPDATE 政策收到歸屬、D-018 提供 SELECT 分級，安全邊界在 RLS；但前端仍自行過濾可見集合，目標契約是後端逐筆回 `canAct` 後整表刪除。
-5. **Migration 回復檔覆蓋 4／57**：改寫 `apply_transcription_triage` 狀態機的 `20260824130000`、`20260825000100` 與改 UPDATE 政策的 `20260825120000` 沒有 down 檔。
+5. **Migration 回復檔現為 7／57**：PR #60 已補 `20260824130000`、`20260825000100`、`20260825120000` 的 down 檔；本次未演練其回復與重升，不能僅由檔案存在推論可安全還原。
 6. **五個工作面處於 hidden**：PR #54 起 `/site-log`、`/quality`、`/valuation`、`/payments`、`/portfolio` 等只能深連結或由今日待辦導入；逐項復出是產品決定，不是技術債，但 E2E 對這些頁的守衛仍在跑。
 7. **過時部署仍可公開存取**：`pmis.pages.dev`（舊 Cloudflare 部署，bundle 落後）與 `ryanxxhuang.github.io/PMIS`（GitHub Pages 仍啟用，`gh-pages` 分支停在 2026-08-11，舊品牌）都帶正式 anon key。待關閉 GitHub Pages、刪 `gh-pages` 分支、處理舊 Cloudflare 專案（2026-09-02 健檢列為 P1）。
 8. **Edge Function 線上版本未逐支核對**：migration tracker 已於 2026-09-02 核對一致（§6），但 17 支 Edge Function 的線上版本與 `main` 是否一致沒有紀錄，最後一次重佈紀錄是 PR #51；下次動 `supabase/functions/` 時順手以 `supabase functions list` 對帳。

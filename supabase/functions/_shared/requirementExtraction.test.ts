@@ -8,7 +8,68 @@ import {
   readResumeState,
   splitBatch,
   validateSuggestion,
+  loadDocumentPages,
+  extractionCoverageIncomplete,
 } from './requirementExtraction.ts'
+
+describe('完整文件頁面載入', () => {
+  const makePages = (n: number) => Array.from({ length: n }, (_, i) => ({
+    page_number: i + 1, extraction_method: 'pdf_text', extracted_text: `第 ${i + 1} 頁獨有條款`,
+  }))
+  it.each([999, 1000, 1001, 2001])('讀完 %i 頁，包括最後一頁獨有條款', async (n) => {
+    const pages = makePages(n)
+    const result = await loadDocumentPages(async (from, to) => ({
+      data: pages.slice(from, to + 1), count: n, error: null,
+    }))
+    expect(result).toEqual(pages)
+    expect(result.at(-1)?.extracted_text).toBe(`第 ${n} 頁獨有條款`)
+  })
+  it('伺服器上限只有 500 列仍依 exact count 讀完', async () => {
+    const pages = makePages(1001)
+    expect(await loadDocumentPages(async (from) => ({ data: pages.slice(from, from + 500), count: pages.length, error: null }))).toEqual(pages)
+  })
+  it('後半讀取失敗必須拒絕，不回半份資料', async () => {
+    await expect(loadDocumentPages(async (from) => from === 0
+      ? { data: makePages(1000), count: 1001, error: null }
+      : { data: null, count: null, error: { message: 'network' } })).rejects.toThrow('文件頁面讀取失敗')
+  })
+  it.each([
+    { data: makePages(1), count: null, error: null },
+    { data: [], count: 1, error: null },
+    { data: [makePages(2)[1]], count: 1, error: null },
+    { data: [...makePages(1), ...makePages(1)], count: 2, error: null },
+  ])('缺 count、停滯、缺頁或重複頁不能靜默通過', async (response) => {
+    await expect(loadDocumentPages(async () => response)).rejects.toThrow()
+  })
+  it('途中總頁數改變必須重試', async () => {
+    await expect(loadDocumentPages(async (from) => ({
+      data: makePages(1001).slice(from, from + 1000), count: from ? 1002 : 1001, error: null,
+    }))).rejects.toThrow('仍在更新')
+  })
+  it('即使儲存頁序連續，也不能忽略上傳紀錄指示的缺失尾頁', async () => {
+    await expect(loadDocumentPages(async () => ({ data: makePages(2), count: 2, error: null }), 3))
+      .rejects.toThrow('與上傳紀錄不符')
+  })
+  it('合法上傳頁數一致時通過，舊流程無頁數紀錄仍能讀取', async () => {
+    const query = async () => ({ data: makePages(2), count: 2, error: null })
+    expect(await loadDocumentPages(query, 2)).toHaveLength(2)
+    expect(await loadDocumentPages(query, null)).toHaveLength(2)
+  })
+  it('格式錯誤的上傳頁數不能降級為未知而放行', async () => {
+    await expect(loadDocumentPages(async () => ({ data: makePages(2), count: 2, error: null }), '2'))
+      .rejects.toThrow('上傳頁數紀錄無效')
+  })
+})
+
+describe('文件處理完整性', () => {
+  const full = { truncated: false, failed: false, clippedCount: 0, emptyPageCount: 0, rejectedCount: 0 }
+  it('全部處理完且無異常才可回完整', () => expect(extractionCoverageIncomplete(full)).toBe(false))
+  it.each([
+    { truncated: true }, { failed: true }, { clippedCount: 1 }, { emptyPageCount: 1 }, { rejectedCount: 1 },
+  ])('部分缺漏不能被已完成批數掩蓋：%j', (gap) => {
+    expect(extractionCoverageIncomplete({ ...full, ...gap })).toBe(true)
+  })
+})
 
 const validRaw = {
   title: '開工前提送施工計畫書',

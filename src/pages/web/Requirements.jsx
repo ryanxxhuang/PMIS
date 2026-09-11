@@ -15,10 +15,11 @@
 // 「擷取有誤」落到觀察事項(observations)由監造/機關複查,不憑空造新資料域。
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import ContractFlow from '../../components/ContractFlow.jsx'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { pageAllInSafe } from '../../lib/pagedQuery.js'
+import { pageAllSafe, pageAllInSafe } from '../../lib/pagedQuery.js'
 import {
   Card, Surface, Empty, PageHeader, Badge, Button, Select, Textarea,
   PrerequisiteEmptyState, ErrorBanner, SkeletonList, Skeleton,
@@ -28,6 +29,8 @@ import { appSnackbar } from '../../components/snackbar.jsx'
 import { openDocumentVersionFile } from '../../lib/documentFileAccess.js'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
 import { localISODate } from '../../lib/dates.js'
+import { requirementVerification } from '../../lib/requirementReview.js'
+import { extractionCoverageWarnings } from '../../lib/extractRequirements.js'
 import {
   PARTY_META, VISIBLE, ORG_TO_PARTY, PARTY_BLURB, OB_STATUS, STATUS_KEYS, PHASES,
   buildTimelineItem, matchesFilters, partyStat, phaseStat, phaseWindows,
@@ -71,7 +74,7 @@ const StatusDot = ({ status }) => (
 export default function Requirements() {
   const {
     currentProject, project, isPersistedProject, currentUser, obligations,
-    updateObligationStatus, submittals, createObservation, can, updateProjectAnchors,
+    updateObligationStatus, submittals, createObservation, can, updateProjectAnchors, reloadObligations,
   } = useStore()
   // 登入身分決定檢視方(README:產品端不渲染身分切換器,demo 換角色重登即可)
   const viewerParty = ORG_TO_PARTY[currentUser?.org_type] || '廠商'
@@ -95,6 +98,7 @@ export default function Requirements() {
   const [anchorErr, setAnchorErr] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
   const searchRef = useRef(null)
+  const packageId = searchParams.get('package') || ''
 
   const pid = currentProject?.project_id
 
@@ -102,9 +106,12 @@ export default function Requirements() {
   // ingestion runs(頁底「AI 最近整理」與空狀態分流)。demo 不打 DB,直接可用。
   const [enrich, setEnrich] = useState({
     reqById: new Map(), sourcesByReq: new Map(), versionsById: new Map(),
-    runs: [], loaded: false, error: '',
+    runs: [], packages: [], loaded: false, error: '',
   })
   const [enrichKey, setEnrichKey] = useState(0)
+  const coverageWarnings = useMemo(() => extractionCoverageWarnings(enrich.runs.filter((run) => !packageId || enrich.versionsById.get(run.document_version_id)?.documents?.contract_package_id === packageId).map((run) => ({
+    ...run, document_title: enrich.versionsById.get(run.document_version_id)?.documents?.title,
+  }))), [enrich.runs, enrich.versionsById, packageId])
   const reqKey = useMemo(
     () => [...new Set(obligations.map((o) => o.requirement_id).filter(Boolean))].sort().join(','),
     [obligations],
@@ -115,23 +122,28 @@ export default function Requirements() {
       return undefined
     }
     let active = true
-    setEnrich((e) => ({ ...e, loaded: false, error: '' }))
+    setEnrich((e) => ({ ...e,
+      ...(e.projectId === pid ? {} : { reqById: new Map(), sourcesByReq: new Map(), versionsById: new Map(), runs: [], packages: [] }),
+      projectId: pid, loaded: false, error: '' }))
     ;(async () => {
       try {
         const reqIds = reqKey ? reqKey.split(',') : []
-        const [runRes, reqRes, srcRes] = await Promise.all([
-          supabase.from('document_ingestion_runs')
-            .select('id, document_version_id, status, completed_at, error_message')
-            .eq('project_id', pid).order('started_at', { ascending: false }).limit(50),
+        const [runRes, reqRes, srcRes, packageRes] = await Promise.all([
+          pageAllSafe((from, to) => supabase.from('document_ingestion_runs')
+            .select('id, document_version_id, status, started_at, completed_at, error_message, metadata')
+            .eq('project_id', pid).order('started_at', { ascending: false }).order('id').range(from, to)),
           reqIds.length ? pageAllInSafe(reqIds, (chunk, from, to) => supabase.from('requirements')
-            .select('id, requirement_type, description, acceptance_criteria, evidence_requirement, origin, created_at, reviewed_at, reviewed_by')
+            .select('id, ingestion_run_id, contract_package_id, status, requirement_type, description, acceptance_criteria, evidence_requirement, origin, created_at, reviewed_at, reviewed_by, triage_doubts')
             .in('id', chunk).order('id').range(from, to)) : { data: [], error: null },
           reqIds.length ? pageAllInSafe(reqIds, (chunk, from, to) => supabase.from('requirement_sources')
             .select('*').in('requirement_id', chunk).order('id').range(from, to)) : { data: [], error: null },
+          pageAllSafe((from, to) => supabase.from('contract_packages').select('id, title')
+            .eq('project_id', pid).order('id').range(from, to)),
         ])
         if (runRes.error) throw runRes.error
         if (reqRes.error) throw reqRes.error
         if (srcRes.error) throw srcRes.error
+        if (packageRes.error) throw packageRes.error
         const sourcesByReq = new Map()
         for (const s of srcRes.data || []) {
           if (!sourcesByReq.has(s.requirement_id)) sourcesByReq.set(s.requirement_id, [])
@@ -144,17 +156,18 @@ export default function Requirements() {
         let versions = []
         if (versionIds.length) {
           const vRes = await pageAllInSafe(versionIds, (chunk, from, to) => supabase.from('document_versions')
-            .select('id, version_label, storage_path, original_filename, mime_type, documents(title)')
+            .select('id, version_label, storage_path, original_filename, mime_type, documents(title, contract_package_id)')
             .in('id', chunk).order('id').range(from, to))
           if (vRes.error) throw vRes.error
           versions = vRes.data || []
         }
         if (!active) return
         setEnrich({
+          projectId: pid,
           reqById: new Map((reqRes.data || []).map((r) => [r.id, r])),
           sourcesByReq,
           versionsById: new Map(versions.map((v) => [v.id, v])),
-          runs: runRes.data || [], loaded: true, error: '',
+          runs: runRes.data || [], packages: packageRes.data || [], loaded: true, error: '',
         })
       } catch (error) {
         if (active) setEnrich((e) => ({ ...e, loaded: true, error: friendlyError(error, '契約出處載入失敗') }))
@@ -162,6 +175,23 @@ export default function Requirements() {
     })()
     return () => { active = false }
   }, [isPersistedProject, pid, reqKey, enrichKey])
+
+  // 從文件頁進來先重讀自動物化結果；分析仍在進行時刷新已完成的部分。
+  useEffect(() => { if (isPersistedProject) reloadObligations?.() }, [isPersistedProject, pid, reloadObligations])
+  const analyzing = enrich.runs.some((r) => ['pending', 'processing'].includes(r.status))
+  useEffect(() => {
+    if (!analyzing) return
+    const timer = setInterval(() => { setEnrichKey((k) => k + 1); reloadObligations?.() }, 5000)
+    return () => clearInterval(timer)
+  }, [analyzing, reloadObligations])
+  const runsById = useMemo(() => new Map(enrich.runs.map((r) => [r.id, r])), [enrich.runs])
+  const inPackage = (item) => {
+    if (!packageId) return true
+    const req = enrich.reqById.get(item.ob.requirement_id)
+    if (req?.contract_package_id === packageId) return true
+    const run = runsById.get(req?.ingestion_run_id)
+    return enrich.versionsById.get(run?.document_version_id)?.documents?.contract_package_id === packageId
+  }
 
   // ── 檢視模型:義務列 + enrich → 狀態/期程/倒數/出處(純函式,見 obligationTimeline)
   // 基準日吃 store 的 project(demo 落回種子專案;與今日待辦同一份錨點,數字才對得上)
@@ -178,8 +208,8 @@ export default function Requirements() {
 
   // 可見義務=角色可見集合(前端 shim;目標是後端依身分回傳已過濾集合,見 lib 註記)
   const pool = useMemo(
-    () => items.filter((it) => VISIBLE[viewerParty].includes(it.who)),
-    [items, viewerParty],
+    () => items.filter((it) => VISIBLE[viewerParty].includes(it.who) && inPackage(it)),
+    [items, viewerParty, packageId, runsById],
   )
   const filtered = useMemo(() => pool.filter((it) => matchesFilters(it, filters)), [pool, filters])
   const byDue = (a, b) => ((a.due?.getTime() ?? Infinity) - (b.due?.getTime() ?? Infinity))
@@ -247,15 +277,16 @@ export default function Requirements() {
   // 切換專案(不經 route 卸載)時整組重置:殘留他案的 selectedId/?obligation
   // 會讓右欄空白、URL 指向別案的義務
   const initialPicked = useRef(false)
-  const seenPid = useRef(pid)
+  const selectionScope = `${pid}/${viewerParty}/${packageId}`
+  const seenPid = useRef(selectionScope)
   useEffect(() => {
-    if (seenPid.current === pid) return
-    seenPid.current = pid
+    if (seenPid.current === selectionScope) return
+    seenPid.current = selectionScope
     initialPicked.current = false
     setSelectedId(null); setDetailOpen(false); setMsg(''); setEvidenceOpen(false)
     setFilters({ q: '', status: 'all', type: '', who: '', phase: 'all' })
     setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('obligation'); return n }, { replace: true })
-  }, [pid, setSearchParams])
+  }, [selectionScope, setSearchParams])
 
   // 初次載入:深連結(?obligation=)優先並捲到該列;否則預設選第一條已逾期 →
   // 第一條即將到期 → 清單第一條(README 3)
@@ -269,7 +300,7 @@ export default function Requirements() {
     select(targetId)
     if (deep) setTimeout(() => document.getElementById(`ob-${deep.id}`)?.scrollIntoView({ block: 'center' }), 60)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pool.length])
+  }, [pool, selectionScope])
 
   // 「開啟原文」:出處的文件版本+頁碼 → 簽名 URL 開原始檔(PDF 跳頁)
   const openable = useMemo(() => {
@@ -403,6 +434,7 @@ export default function Requirements() {
       ...(selected.penalty ? [['罰則', selected.penalty]] : []),
     ]
     const req = selected.ob.requirement_id ? enrich.reqById.get(selected.ob.requirement_id) : null
+    const verification = requirementVerification(req)
     const evidenceSub = selected.ob.evidence_submittal_id
       ? submittals.find((s) => s.id === selected.ob.evidence_submittal_id) : null
     // 執行紀錄:由現有事實組裝(AI 擷取/確認、佐證、完成標記)。義務完成沒有
@@ -418,7 +450,7 @@ export default function Requirements() {
     if (req?.reviewed_at) {
       logEntries.push({
         when: fmtDay(req.reviewed_at),
-        what: req.reviewed_by ? '已確認 AI 轉錄與契約原文一致' : '系統核對無誤・自動確認',
+        what: verification.label,
         s: 'done',
       })
     }
@@ -449,6 +481,17 @@ export default function Requirements() {
       </div>
 
       <ErrorBanner msg={msg} onClose={() => setMsg('')} className="mx-4 mt-3" />
+
+      <div className={`mx-4 mt-3 rounded-md px-3 py-2 text-xs leading-relaxed ${verification.attention
+        ? 'text-[var(--amber-text)] bg-[var(--amber-tint)]' : 'text-[var(--text-2)] bg-[var(--surface-2)]'}`}>
+        <p className="font-medium">{verification.label}</p>
+        <p>{verification.note}</p>
+        {verification.attention && req?.id && (
+          <Link to={`/requirements/review?highlight=${req.id}${packageId ? `&package=${encodeURIComponent(packageId)}` : ''}`} className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline">
+            查看這項與原文
+          </Link>
+        )}
+      </div>
 
       {/* 2. 本文:標題/說明/key-value */}
       <div className="p-4">
@@ -634,14 +677,41 @@ export default function Requirements() {
   // 頁首入口:AI 建議的核定/駁回與手動補登在獨立的擷取審核頁(本頁不做審核)。
   // Link 包 Button:內層退出 tab 序避免 Tab 停兩次(同 PrerequisiteEmptyState 作法)
   const header = (
+    <div className="space-y-3">
     <PageHeader title="契約重點" tagline="履約時程" subtitle={PARTY_BLURB[viewerParty]}
       action={(
-        <Link to="/requirements/review" className="inline-flex rounded-full">
+        <Link to={packageId ? `/requirements/review?package=${encodeURIComponent(packageId)}` : '/requirements/review'} className="inline-flex rounded-full">
           <Button variant="secondary" size="md" tabIndex={-1}>
             <MSym name="rate_review" size={16} /> 擷取審核
           </Button>
         </Link>
       )} />
+    <ContractFlow active="highlights" role={currentUser?.org_type} packageId={packageId} />
+    {isPersistedProject && (enrich.packages.length > 0 || packageId) && (
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <label className="flex items-center gap-2 min-w-0">契約範圍
+          <Select aria-label="契約範圍" value={packageId} className="max-w-[240px]"
+            onChange={(e) => setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('obligation');
+              if (e.target.value) n.set('package', e.target.value); else n.delete('package'); return n })}>
+            <option value="">全部可見契約</option>
+            {packageId && !enrich.packages.some((p) => p.id === packageId) && <option value={packageId}>指定契約（未取得）</option>}
+            {enrich.packages.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+          </Select>
+        </label>
+        <span className="text-[var(--text-3)]">目前範圍共 {pool.length} 項履約事項</span>
+      </div>
+    )}
+    {analyzing && <p role="status" className="text-xs text-[var(--blue-text)]">AI 仍在整理，已完成的結果會自動更新。請保留啟動上傳的瀏覽器分頁。</p>}
+    {coverageWarnings.length > 0 && (
+      <div role="status" className="rounded-md px-4 py-3 text-xs leading-relaxed text-[var(--amber-text)] bg-[var(--amber-tint)]">
+        <p className="font-medium">目前整理紀錄中有 {coverageWarnings.length} 份文件需要檢查完整性</p>
+        <ul className="list-disc pl-4 mt-1 space-y-1">
+          {coverageWarnings.map((warning, i) => <li key={i}>{warning}</li>)}
+        </ul>
+        <Link to="/contract" className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline">查看專案文件</Link>
+      </div>
+    )}
+    </div>
   )
 
   // 履約執行卡:每個可見責任方一張(README 2.2)。統計母體=該方全部可見義務
@@ -657,7 +727,7 @@ export default function Requirements() {
         const rows = [
           ['逾期', stat.n.overdue, 'overdue'], ['即將到期', stat.n.due, 'due'],
           ['排程中', stat.n.scheduled, 'scheduled'], ['已完成', stat.n.done, 'done'],
-          ...(stat.n.na ? [['無需處理', stat.n.na, 'na']] : []),
+          ...(stat.n.na ? [[OB_STATUS.na.label, stat.n.na, 'na']] : []),
         ]
         return (
           <Surface key={name} className="flex-1 min-w-[260px] max-xl:min-w-[calc(50%-6px)] max-md:min-w-full px-4 py-3.5 border-l-[3px]"
@@ -891,8 +961,10 @@ export default function Requirements() {
         {header}
         <ErrorBanner msg={enrich.error} onRetry={() => setEnrichKey((k) => k + 1)} />
         <Card title="履約時程">
-          {ingestionDone ? (
-            <Empty>AI 已完成整理,目前沒有排入時程的履約義務;契約重點確認後的項目會出現在這裡。</Empty>
+          {anyRunning ? (
+            <Empty>AI 正在整理契約，完成的內容會自動出現在這裡。</Empty>
+          ) : ingestionDone ? (
+            <Empty>目前沒有可見的履約義務。AI 整理內容會自動歸檔；可到專案文件查看完整性與處理狀態，無需逐條確認。</Empty>
           ) : latestFailed && !anyRunning ? (
             <Empty icon="error">
               最近一次 AI 整理失敗{latestFailed.error_message ? `:${friendlyError(latestFailed.error_message, '請重試')}` : ''}。
@@ -926,7 +998,7 @@ export default function Requirements() {
           <div className="px-[18px] py-3 flex items-center justify-between gap-4 flex-wrap">
             <span className="num text-[11.5px] text-[var(--text-3)]">{footerMeta}</span>
             {isPersistedProject && (
-              <Link to="/contract" className="text-[11.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 inline-flex items-center">重新整理擷取結果</Link>
+              <Link to="/contract" className="text-[11.5px] text-[var(--blue-text)] hover:underline max-md:min-h-11 inline-flex items-center">查看文件與整理狀態</Link>
             )}
           </div>
         </Card>

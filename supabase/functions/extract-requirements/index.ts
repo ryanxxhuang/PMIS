@@ -24,6 +24,7 @@ import {
   TRIGGER_TYPES, OFFSET_DIRS, FREQUENCY_TYPES,
   buildWorkItemCatalog, mapWorkItemRefs, validateSuggestion, deterministicUuid,
   buildDocumentBatches, splitBatch, mergeUsage, readResumeState,
+  loadDocumentPages, extractionCoverageIncomplete,
 } from '../_shared/requirementExtraction.ts'
 import type { BatchPage, UsageLike } from '../_shared/requirementExtraction.ts'
 
@@ -233,13 +234,18 @@ Deno.serve(async (req) => {
     if (canManage !== true) return json({ error: '無文件管理權限,不可啟動 AI 需求擷取' }, 403)
 
     // -- Load stored page text (RLS-scoped) -----------------------------------
-    const { data: pages, error: pagesError } = await userClient
+    const { data: processingRun, error: processingError } = await userClient
+      .from('document_processing_runs').select('metadata')
+      .eq('document_version_id', documentVersionId).maybeSingle()
+    if (processingError) return json({ error: '無法讀取文件上傳紀錄，請重試' }, 500)
+    // 舊攝取流程可能沒有 processing run；有上傳頁數時必須對得上，不能把
+    // 只存入前半的連續頁當成完整文件。這不是對原始檔語意/OCR 品質的保證。
+    const pageRows = await loadDocumentPages((from, to) => userClient
       .from('document_pages')
-      .select('page_number, extracted_text, extraction_method')
+      .select('page_number, extracted_text, extraction_method', { count: 'exact' })
       .eq('document_version_id', documentVersionId)
       .order('page_number')
-    if (pagesError) return json({ error: pagesError.message }, 500)
-    const pageRows = (pages ?? []) as PageRow[]
+      .range(from, to), processingRun?.metadata?.page_count)
 
     // -- Start the traceability run (service role, system-managed table) ------
     service = createClient(supabaseUrl, serviceKey, {
@@ -592,9 +598,10 @@ Deno.serve(async (req) => {
         return await runBatch(halves[1], `${label}b`, depth + 1)
       }
       if (res.error) return { ok: false, error: res.error }
-      const items = Array.isArray((res.data as Record<string, unknown>)?.requirements)
-        ? (res.data as { requirements: unknown[] }).requirements
-        : []
+      if (!Array.isArray((res.data as Record<string, unknown>)?.requirements)) {
+        return { ok: false, error: 'AI 回傳缺少契約重點清單，無法判定本批已完整整理' }
+      }
+      const items = (res.data as { requirements: unknown[] }).requirements
       rawItemCount += items.length
       const persistError = await persistBatchItems(items, label)
       if (persistError) return { ok: false, error: persistError }
@@ -682,8 +689,11 @@ Deno.serve(async (req) => {
     const lastProcessedPage = lastProcessedBatch
       ? lastProcessedBatch[lastProcessedBatch.length - 1].page_number
       : null
-    const coverageIncomplete = plan.truncated ||
-      failedBatch != null || clippedBatches.length > 0
+    const coverageIncomplete = extractionCoverageIncomplete({
+      truncated: plan.truncated, failed: failedBatch != null,
+      clippedCount: clippedBatches.length, emptyPageCount: emptyPageNumbers.length,
+      rejectedCount,
+    })
 
     const coverageMetadata = {
       pagination: paginated ? 'paginated' : 'unpaginated',
@@ -757,6 +767,8 @@ Deno.serve(async (req) => {
       needs_review_count: needsReviewCount,
       rejected_item_count: rejectedCount,
       coverage_incomplete: coverageIncomplete,
+      empty_page_numbers: emptyPageNumbers,
+      clipped_batches: clippedBatches,
       total_page_count: pageRows.length,
       last_included_page: lastProcessedPage,
       batches_total: totalBatches,
