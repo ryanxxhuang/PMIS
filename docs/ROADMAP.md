@@ -22,7 +22,7 @@
 ### 履約與可達性
 
 - 正式且已匯標單時成員頁缺一般入口（待實測確認是否仍成立）。驗收應從首頁可見控制到目的頁，三方期限不混入別方；機關責任期限已於 2026-09-11 進 `todayTasks`。
-- 五個 hidden 工作面依決策復出、補點擊可達性 E2E；補 `/requirements/review`、`/deadlines`、`/project/new` 手機 a11y 與 Portfolio error state。
+- ~~五個 hidden 工作面依決策復出、補點擊可達性 E2E；補 `/requirements/review`、`/deadlines`、`/project/new` 手機 a11y 與 Portfolio error state。~~ 已完成（2026-09-11）：`e2e/reachability.spec.js` 三角色從側欄點到 navConfig 每個可見子頁；`e2e/a11y.spec.js` 三頁 375px 四條合約；Portfolio 失敗橫幅＋重試。仍缺：`/requirements/review` 的抽屜與編輯表單只在真專案出現，demo e2e 只掃得到空狀態（名稱合約改由 `Requirements.integrity.test.jsx` 釘）。
 - 循環義務目前只算下次日期；逐期資料、月末／跨年／29～31 日、基準日更正與準時率需產品決策＋migration／pgTAP。先揭露限制，再接送審／佐證流程。
 - 後端依身分回義務集合與 `canAct` 才可刪前端 `VISIBLE`；`report-issue`／`re-extract` 專用端點仍未做。
 - `/deadlines` 無期限列是否隱藏、義務預警窗 7→14 天、機關撤銷已核准變更的 UI 入口、工項重設 guard 訊息均待決。
