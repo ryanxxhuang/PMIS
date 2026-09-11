@@ -1,21 +1,29 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { EyeOff } from 'lucide-react'
 import { MSym } from '../components/icons.jsx'
 import { useStore } from '../store.jsx'
 import { users } from '../data/seed.js'
-import { ErrorBanner, FIELD_BASE, Button, Badge } from '../components/ui.jsx'
+import { ErrorBanner, Button } from '../components/ui.jsx'
 import { friendlyError } from '../lib/errorMessage.js'
 import { defaultLandingPath } from '../lib/navConfig.js'
 
-// ── W12 登入/註冊改版(依 PMIS Mockups v2 登入與建立帳戶兩畫面)──────────────
-// 登入=左右兩欄卡(左品牌+信任說明、右表單);建立帳戶=整張寬卡
-// (步驟 1/2 選擇身分 → 角色卡只留圖示+名稱 → 步驟 2/2 驗證信箱)。
-// 與 mockup 的刻意差異(不做假 UI):
-// * 「專案邀請碼」欄位不做——現行邀請機制是邀請方輸入 email(D-009),沒有邀請碼後端;
-// * GSN SSO 不做(使用者裁示拿掉);
-// * 密碼欄保留在註冊表單(Supabase 註冊需要密碼,mockup 漏了);
-// * 「保持登入」不寫 30 天(token 效期由後台設定,不在前端控制)——
-//   checkbox 是真機制:取消勾選 → session 進 sessionStorage,關瀏覽器即登出。
+// ── 登入頁 Apple style(D-021;版面依 UIUX/design_apple_style/Login.dc.html)────
+// 一張置中的窄卡(408px):品牌在卡外上方、標題置中、浮動標籤欄位、
+// 「保持登入」開關、一顆實心主鈕、分隔線後一顆次要鈕(建立帳戶)、
+// 卡外底部是合規三點。建立帳戶用同一張卡放寬到 640px(三張身分卡＋兩欄欄位)。
+// 與設計稿的刻意差異:
+// * 卡面實心,不做毛玻璃——規範 §4「毛玻璃只給 chrome,內容卡一律實心」;
+// * 合規三點沿用產品真的有做的事(工程會一覽表普級、三方隔離、稽核 6 個月),
+//   不抄設計稿的「個資境內存放」——沒有查證過的承諾不能上登入頁;
+// * 品牌字樣維持 PMIS(public/brand 的 lockup),.ai 走 --blue-text 而非 --blue
+//   (規範 §2:--blue 是填色不是文字色)。
+// 流程、org_type 值域、Supabase 呼叫、錯誤訊息語意、demo 入口全部不動。
+//
+// 測試合約(e2e-real/helpers.js、auth-smoke、routes.spec):placeholder「Email」
+// 「密碼(至少 8 碼,含大小寫英文與數字)」「姓名」「公司 / 單位」原字保留、
+// 送出鈕文字「下一步」「下一步:驗證信箱」、按鈕名「建立帳戶」、radio 名三方、
+// 副標含「使用機關公務信箱或專案邀請信箱」、demo 文字「選擇 demo 角色登入:」。
 
 // 信任說明:三條都是產品真的有做的事——工程會共通規範一覽表(SaaS 套裝型·普級)
 // 文件在 docs/資安;audit_events 帶 actor IP 留存(對應稽核軌跡 6 個月政策)。
@@ -33,6 +41,12 @@ const ORG_CARDS = [
 ]
 const ORG_NAME_LABEL = { contractor: '公司名稱', supervisor: '公司／單位名稱', owner: '機關名稱' }
 
+// 登入卡是全站唯一 18px 圓角的卡(規範 §4「18 登入卡」),浮在視窗底上走 --shadow-overlay;
+// 刻意不吃 ui.jsx 的 Surface(那是 12px 內容卡)。
+const CARD = 'w-full bg-[var(--surface)] rounded-[18px] [box-shadow:var(--shadow-overlay)]'
+// 卡內文字鈕(忘記密碼、回登入、已有帳戶):44px 命中區、--blue-text、不做藥丸。
+const TEXT_BTN = 'inline-flex items-center gap-1 min-h-11 px-2 rounded-lg text-body font-medium text-[var(--blue-text)] hover:underline pressable'
+
 export default function Login() {
   const { isSupabaseConfigured, setCurrentUser, currentUser, signIn, signUp, resendSignup,
     passwordRecovery, requestPasswordReset, updatePassword } = useStore()
@@ -46,86 +60,137 @@ export default function Login() {
   }, [currentUser, passwordRecovery, navigate])
 
   const wide = isSupabaseConfigured && !passwordRecovery && mode === 'signup'
+  const title = passwordRecovery ? '設定新密碼' : mode === 'forgot' ? '重設密碼' : '登入'
+  const subtitle = passwordRecovery
+    ? '你剛透過重設連結回來，請設定新密碼後繼續。'
+    : !isSupabaseConfigured
+      ? '示範環境：選擇角色即可進入 prototype'
+      : mode === 'forgot'
+        ? '我們會寄一封重設連結到你註冊的信箱'
+        : '使用機關公務信箱或專案邀請信箱登入；專案內的身分依契約方授權而定。'
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg)] p-4 sm:p-6">
-      {/* 登入卡是全站唯一 28px 圓角的卡(README),刻意不吃 Surface */}
-      <div className={`w-full bg-[var(--surface)] rounded-[28px] border border-[var(--border-card)] [box-shadow:var(--shadow-card)] ${wide ? 'max-w-[1080px]' : 'max-w-[980px]'}`}>
+    // 視窗底:亮色由上而下 surface → bg → surface-2 的柔光(設計稿);深色三階的
+    // 明度順序倒過來(surface 比 bg 亮),漸層會變成「中間暗、四周亮」,深色只鋪 --bg。
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg)] px-4 py-8 sm:py-10 [background-image:radial-gradient(120%_80%_at_50%_-10%,var(--surface)_0%,var(--bg)_46%,var(--surface-2)_100%)] dark:[background-image:none]">
+      <Brand />
+      <div className={`${CARD} ${wide ? 'max-w-[640px]' : 'max-w-[408px]'} p-6 sm:px-8 sm:pt-8 sm:pb-7`}>
         {wide
           ? <SignUpCard setMode={setMode} signUp={signUp} resendSignup={resendSignup} />
           : (
-            <div className="grid lg:grid-cols-2">
-              {/* 左欄:品牌+標題+信任說明(lg 兩欄、手機直排) */}
-              <div className="p-6 sm:p-10 lg:pr-6 flex flex-col">
-                <Brand />
-                <h1 className="text-title1 leading-10 font-semibold text-[var(--text)] mt-6">
-                  {passwordRecovery ? '設定新密碼' : !isSupabaseConfigured ? '登入' : mode === 'forgot' ? '重設密碼' : '登入'}
-                </h1>
-                <p className="text-sm text-[var(--text-2)] mt-2">
-                  {passwordRecovery
-                    ? '你剛透過重設連結回來,請設定新密碼後繼續。'
-                    : !isSupabaseConfigured
-                      ? '示範環境:選擇角色即可進入 prototype'
-                      : mode === 'forgot'
-                        ? '我們會寄一封重設連結到你註冊的信箱'
-                        : '使用機關公務信箱或專案邀請信箱,繼續前往 GovAgent'}
-                </p>
-                <ul className="mt-8 lg:mt-auto lg:pt-8 space-y-2.5 text-body text-[var(--text-2)]">
-                  {TRUST_POINTS.map(([icon, text]) => (
-                    <li key={icon} className="flex items-center gap-2">
-                      <MSym name={icon} size={16} className="text-[var(--green-text)]" />
-                      {text}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              {/* 右欄:表單 */}
-              <div className="p-6 sm:p-10 lg:pl-6 flex flex-col justify-center">
+            <>
+              <h1 className="text-title2 font-semibold text-[var(--text)] text-center">{title}</h1>
+              <p className="text-body text-[var(--text-2)] text-center mt-1.5">{subtitle}</p>
+              <div className="mt-6">
                 {passwordRecovery
                   ? <ResetPasswordForm updatePassword={updatePassword} />
                   : isSupabaseConfigured
                     ? <SignInForm mode={mode} setMode={setMode} signIn={signIn} requestPasswordReset={requestPasswordReset} />
                     : <RolePicker setCurrentUser={setCurrentUser} navigate={navigate} />}
               </div>
-            </div>
+            </>
           )}
       </div>
-      {/* 卡外底部列:左語言、右連結。只放真有目的地的連結(目前僅 /security) */}
-      <div className={`w-full flex items-center justify-between flex-wrap gap-x-4 px-4 sm:px-6 mt-2 text-xs text-[var(--text-3)] ${wide ? 'max-w-[1080px]' : 'max-w-[980px]'}`}>
-        <span className="inline-flex items-center min-h-11">繁體中文 · Traditional Chinese</span>
-        <Link to="/security" className="inline-flex items-center min-h-11 px-2 hover:text-[var(--blue-text)] hover:underline">資安漏洞回報</Link>
-      </div>
+      {/* 卡外合規列:三點+唯一有目的地的連結(/security)。語言標示拿掉——沒有可切換的東西就不佔版面 */}
+      <ul role="list" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 mt-6 px-2 text-caption text-[var(--text-3)]">
+        {TRUST_POINTS.map(([icon, text]) => (
+          <li key={icon} className="inline-flex items-center gap-1.5">
+            <MSym name={icon} size={14} />
+            {text}
+          </li>
+        ))}
+      </ul>
+      <Link to="/security" className="inline-flex items-center min-h-11 px-2 mt-1 text-caption text-[var(--text-3)] hover:text-[var(--blue-text)] hover:underline">
+        資安漏洞回報
+      </Link>
     </div>
   )
 }
 
+// 品牌:三方三點標記(public/brand)+ PMIS 字樣。.ai 用 --blue-text,不用 lockup 的 --blue
+// (規範 §2:--blue 是填色,小字對 surface-2 不過 AA;22px 半粗雖算大字,仍統一走文字色)。
 function Brand() {
   const base = import.meta.env.BASE_URL
   return (
-    <div className="flex items-center gap-1.5">
-      <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-7 h-7 dark:hidden" />
-      <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-7 h-7 hidden dark:block" />
-      <span className="text-title3 font-medium tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue)]">Agent</span></span>
+    <div className="flex items-center gap-2 mb-6">
+      <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-8 h-8 dark:hidden" />
+      <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-8 h-8 hidden dark:block" />
+      <span className="text-title2 font-semibold tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue-text)]">.ai</span></span>
     </div>
   )
 }
 
-// ── 浮動標籤輸入框(52px 高、label 騎在上緣邊框)────────────────────────────
+// ── 浮動標籤輸入框(52px、10px 圓角;label 坐在框內上緣,值在其下)────────────
 // placeholder「屬性」是 e2e-real getByPlaceholder 的填表合約,必須原字保留;
 // 視覺說明改由浮動 label 承擔,placeholder 用 text-transparent 隱藏。
-function FloatField({ label, className = '', ...props }) {
+// 沒有沿用 ui.jsx 的 FIELD_BASE:它的 rounded-lg/px-3/py-2 與這裡的 10px/52px 幾何
+// 會在同一屬性上互撞,改由這裡持有完整字串;焦點寫法(outline 光暈+邊框轉色)與它一致。
+// 建議日後抽到 ui.jsx 成 FloatInput——目前只有登入頁用,先留在這裡。
+const FLOAT_INPUT = 'peer w-full h-[52px] rounded-[10px] bg-[var(--surface)] text-callout text-[var(--text)] border border-[var(--border)] px-3.5 pt-4 pb-0.5 transition-[border-color,background-color] placeholder:text-transparent! focus:outline-[3px] focus:outline-offset-0 focus:outline-[var(--focus-glow)] focus:border-[var(--focus)] disabled:opacity-50'
+
+function FloatField({ label, className = '', trailing, ...props }) {
   return (
     <label className="relative block">
-      <input className={`${FIELD_BASE} peer h-[52px] placeholder:text-transparent! ${className}`} {...props} />
-      {/* -top-2(-8px)+surface 底=蓋住邊框;focus 時與邊框一起轉主色(peer) */}
-      <span className="absolute -top-2 left-2.5 px-1 rounded bg-[var(--surface)] text-caption leading-4 text-[var(--text-2)] pointer-events-none transition-colors peer-focus:text-[var(--blue)]">
+      <input className={`${FLOAT_INPUT} ${trailing ? 'pr-12' : ''} ${className}`} {...props} />
+      <span className="absolute top-1.5 left-3.5 text-caption text-[var(--text-3)] pointer-events-none transition-colors peer-focus:text-[var(--blue-text)]">
         {label}
       </span>
+      {trailing}
     </label>
   )
 }
 
-// ── 登入(mockup:Email/密碼、保持登入、忘記密碼、建立帳戶+下一步)──────────
+// 密碼欄:右側顯示/隱藏切換(aria-pressed),只改 input type,不動送出的值。
+// EyeOff 直接從 lucide-react 拿——ICONS 表沒有 visibility_off,登入頁不動共用檔;
+// 建議日後在 icons.jsx 補一行 `visibility_off: EyeOff` 後改回 MSym。
+function PasswordField({ label, ...props }) {
+  const [show, setShow] = useState(false)
+  return (
+    <FloatField label={label} {...props} type={show ? 'text' : 'password'}
+      trailing={(
+        <button type="button" onClick={() => setShow((s) => !s)} aria-pressed={show}
+          aria-label={show ? '隱藏密碼' : '顯示密碼'}
+          className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 inline-flex items-center justify-center rounded-lg text-[var(--text-3)] hover:text-[var(--text)] pressable">
+          {show ? <EyeOff aria-hidden size={18} strokeWidth={1.5} absoluteStrokeWidth /> : <MSym name="visibility" size={18} />}
+        </button>
+      )} />
+  )
+}
+
+// 「保持登入」:iOS 開關(role=switch)。真機制:關閉 → session 進 sessionStorage,
+// 關瀏覽器即登出。整列是一顆 44px 高的鈕,文字就是它的無障礙名稱。
+function KeepSwitch({ checked, onChange }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+      className="inline-flex items-center gap-2 min-h-11 pr-2 rounded-lg text-body text-[var(--text)] pressable">
+      <span aria-hidden className={`relative inline-block w-[30px] h-[18px] rounded-full transition-colors ${checked ? 'bg-[var(--success)]' : 'bg-[var(--border)]'}`}>
+        {/* 旋鈕兩種模式都是近白(HIG):亮色 --surface=白、深色 --text=#f5f5f7 */}
+        <span className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full bg-[var(--surface)] dark:bg-[var(--text)] [box-shadow:0_1px_2px_rgba(0,0,0,.2)] transition-transform ${checked ? 'translate-x-3' : ''}`} />
+      </span>
+      保持登入
+    </button>
+  )
+}
+
+// 寄出後的確認畫面(重設連結/驗證信共用):圖示圓、標題、說明、動作列
+function SentNotice({ title, children, actions, note }) {
+  return (
+    <div className="text-center space-y-3 py-2">
+      <div className="flex justify-center">
+        <span className="w-14 h-14 rounded-full bg-[var(--blue-tint)] flex items-center justify-center">
+          <MSym name="mark_email_read" size={28} className="text-[var(--blue-text)]" />
+        </span>
+      </div>
+      <div className="text-callout font-medium text-[var(--text)]">{title}</div>
+      <p className="text-body text-[var(--text-2)]">{children}</p>
+      <p className="text-footnote text-[var(--text-3)]">沒收到？也看一下垃圾郵件匣。</p>
+      <div className="flex items-center justify-center gap-3 pt-1">{actions}</div>
+      {note && <p className="text-footnote text-[var(--text-2)]">{note}</p>}
+    </div>
+  )
+}
+
+// ── 登入(Email/密碼、保持登入、忘記密碼、主鈕「下一步」、次鈕「建立帳戶」)──────
 function SignInForm({ mode, setMode, signIn, requestPasswordReset }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -152,72 +217,63 @@ function SignInForm({ mode, setMode, signIn, requestPasswordReset }) {
 
   if (resetSent) {
     return (
-      <div className="text-center space-y-3 py-2">
-        <div className="flex justify-center">
-          <span className="w-14 h-14 rounded-full bg-[var(--blue-tint)] flex items-center justify-center">
-            <MSym name="mark_email_read" size={28} className="text-[var(--blue-text)]" />
-          </span>
-        </div>
-        <div className="font-medium text-[var(--text)]">重設連結已寄出</div>
-        <p className="text-sm text-[var(--text-2)]">
-          若 <b>{email}</b> 是已註冊的帳號，重設密碼連結已寄達。<br />請點信中連結回來設定新密碼。
-        </p>
-        <p className="text-xs text-[var(--text-3)]">沒收到？也看一下垃圾郵件匣。</p>
-        <button onClick={() => { setResetSent(false); setMode('signin'); setErr('') }} className="inline-flex items-center gap-1 min-h-11 px-2 text-sm text-[var(--blue-text)] hover:underline pressable"><MSym name="arrow_back" size={16} />回登入</button>
-      </div>
+      <SentNotice title="重設連結已寄出"
+        actions={(
+          <button onClick={() => { setResetSent(false); setMode('signin'); setErr('') }} className={TEXT_BTN}>
+            <MSym name="arrow_back" size={16} />回登入
+          </button>
+        )}>
+        若 <b>{email}</b> 是已註冊的帳號，重設密碼連結已寄達。<br />請點信中連結回來設定新密碼。
+      </SentNotice>
     )
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <FloatField label="電子信箱 · Email" type="email" placeholder="Email"
+    <form onSubmit={submit} className="space-y-3">
+      <FloatField label="電子信箱 · Email" type="email" placeholder="Email" autoComplete="email"
         value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
       {mode !== 'forgot' && (
-        <FloatField label="密碼 · Password" type="password" placeholder="密碼（至少 8 碼，含大小寫英文與數字）"
+        <PasswordField label="密碼 · Password" placeholder="密碼（至少 8 碼，含大小寫英文與數字）" autoComplete="current-password"
           value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
       )}
       {mode === 'forgot'
-        ? (
-          <p className="text-xs text-[var(--text-2)]">輸入註冊時的 Email，我們會寄一封「重設密碼」連結給你。</p>
-        )
+        ? <p className="text-footnote text-[var(--text-2)]">輸入註冊時的 Email，我們會寄一封「重設密碼」連結給你。</p>
         : (
           <div className="flex items-center justify-between gap-2">
-            {/* 真機制:取消勾選 → session 進 sessionStorage,關閉瀏覽器即登出 */}
-            <label className="inline-flex items-center gap-2 text-sm text-[var(--text-2)] min-h-11 cursor-pointer select-none">
-              <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)}
-                className="w-4 h-4 accent-[var(--primary)]" />
-              保持登入
-            </label>
-            <button type="button" onClick={() => { setMode('forgot'); setErr('') }}
-              className="inline-flex items-center min-h-11 px-2 text-body text-[var(--blue-text)] hover:underline">
+            <KeepSwitch checked={keep} onChange={setKeep} />
+            <button type="button" onClick={() => { setMode('forgot'); setErr('') }} className={`${TEXT_BTN} font-normal`}>
               忘記密碼？
             </button>
           </div>
         )}
       <ErrorBanner msg={err} />
-      <div className="flex items-center justify-between gap-2 pt-1">
-        {mode === 'forgot'
-          ? (
-            <button type="button" onClick={() => { setMode('signin'); setErr('') }}
-              className="inline-flex items-center gap-1 min-h-11 px-2 text-sm text-[var(--blue-text)] hover:underline">
+      {/* 一個情境只有一顆實心主鈕;建立帳戶是次要鈕(規範 §6) */}
+      <Button type="submit" size="lg" busy={loading} className="w-full mt-1">
+        {loading ? '處理中…' : mode === 'forgot' ? '寄送重設連結' : '下一步'}
+      </Button>
+      {mode === 'forgot'
+        ? (
+          <div className="flex justify-center">
+            <button type="button" onClick={() => { setMode('signin'); setErr('') }} className={TEXT_BTN}>
               <MSym name="arrow_back" size={16} />回登入
             </button>
-          )
-          : (
-            <button type="button" onClick={() => { setMode('signup'); setErr('') }}
-              className="inline-flex items-center min-h-11 px-2 text-sm font-medium text-[var(--blue-text)] hover:underline">
+          </div>
+        )
+        : (
+          <>
+            <div className="flex items-center gap-3 pt-2 text-caption text-[var(--text-3)]" aria-hidden>
+              <span className="flex-1 h-px bg-[var(--border-2)]" />還沒有帳號<span className="flex-1 h-px bg-[var(--border-2)]" />
+            </div>
+            <Button type="button" variant="secondary" size="lg" className="w-full" onClick={() => { setMode('signup'); setErr('') }}>
               建立帳戶
-            </button>
-          )}
-        <Button type="submit" size="lg" busy={loading} className="px-8">
-          {loading ? '處理中…' : mode === 'forgot' ? '寄送重設連結' : '下一步'}
-        </Button>
-      </div>
+            </Button>
+          </>
+        )}
     </form>
   )
 }
 
-// ── 建立帳戶(mockup:整張寬卡、步驟 1/2 選擇身分 → 步驟 2/2 驗證信箱)────────
+// ── 建立帳戶(同一張卡放寬:步驟 1/2 選擇身分 → 步驟 2/2 驗證信箱)────────────
 function SignUpCard({ setMode, signUp, resendSignup }) {
   const [form, setForm] = useState({ email: '', password: '', full_name: '', company: '', org_type: 'contractor', role: '' })
   const [err, setErr] = useState('')
@@ -256,45 +312,37 @@ function SignUpCard({ setMode, signUp, resendSignup }) {
   }
 
   return (
-    <div className="p-6 sm:p-10 lg:p-12">
-      {/* 頂列:品牌+步驟指示 */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Brand />
-        <span className="text-body text-[var(--text-2)]">{sent ? '步驟 2 / 2 · 驗證信箱' : '步驟 1 / 2 · 選擇身分'}</span>
+    <>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h1 className="text-title2 font-semibold text-[var(--text)]">{sent ? '驗證信箱' : '建立帳戶'}</h1>
+        <span className="text-footnote text-[var(--text-3)]">{sent ? '步驟 2 / 2' : '步驟 1 / 2'}</span>
       </div>
 
       {sent
         ? (
-          <div className="text-center space-y-3 py-10 max-w-md mx-auto">
-            <Badge color="blue">步驟 2/2·驗證信箱</Badge>
-            <div className="flex justify-center">
-              <span className="w-14 h-14 rounded-full bg-[var(--blue-tint)] flex items-center justify-center">
-                <MSym name="mark_email_read" size={28} className="text-[var(--blue-text)]" />
-              </span>
-            </div>
-            <div className="font-medium text-[var(--text)]">驗證信已寄出</div>
-            <p className="text-sm text-[var(--text-2)]">
+          <div className="max-w-md mx-auto mt-4">
+            <SentNotice title="驗證信已寄出" note={resendMsg}
+              actions={(
+                <>
+                  <button onClick={onResend} className={TEXT_BTN}>重寄驗證信</button>
+                  <span className="text-[var(--border)]" aria-hidden>·</span>
+                  <button onClick={() => { setSent(false); setResendMsg(''); setMode('signin') }} className={TEXT_BTN}>
+                    <MSym name="arrow_back" size={16} />回登入
+                  </button>
+                </>
+              )}>
               已寄到 <b>{form.email}</b>。請到信箱點擊連結完成驗證，<br />再回來登入。
-            </p>
-            <p className="text-xs text-[var(--text-3)]">沒收到？也看一下垃圾郵件匣。</p>
-            <div className="flex items-center justify-center gap-3 pt-1">
-              <button onClick={onResend} className="inline-flex items-center min-h-11 px-2 text-sm text-[var(--blue-text)] hover:underline pressable">重寄驗證信</button>
-              <span className="text-[var(--border)]">·</span>
-              <button onClick={() => { setSent(false); setResendMsg(''); setMode('signin') }} className="inline-flex items-center gap-1 min-h-11 px-2 text-sm text-[var(--blue-text)] hover:underline pressable"><MSym name="arrow_back" size={16} />回登入</button>
-            </div>
-            {resendMsg && <p className="text-xs text-[var(--text-2)]">{resendMsg}</p>}
+            </SentNotice>
           </div>
         )
         : (
           <form onSubmit={submit}>
-            <h1 className="text-title1 leading-9 font-semibold text-[var(--text)] mt-6">建立帳戶</h1>
             <p className="text-body text-[var(--text-2)] mt-1.5">
               你在專案裡是哪一方？身分決定你看得到什麼、能簽什麼，註冊後無法自行變更。
             </p>
 
-            {/* 角色卡:只留圖示+名稱(使用者裁示拿掉說明小字);
-                選取態用 inset shadow 畫 2px 框而非加粗 border——border 換粗細會位移。
-                三選一 → radiogroup/radio(不是 aria-pressed 的獨立切換鈕)。
+            {/* 角色卡:只留圖示+名稱;選取態=淺色底+主色圖示+inset 2px 框
+                (border 換粗細會位移,用 inset shadow)。三選一 → radiogroup/radio。
                 曾經另掛一顆 1×1px 透明 select 承接 e2e 的 selectOption,結果整個註冊
                 流程唯一被測到的控制項是那顆看不見的 select、真正的卡片點擊路徑零覆蓋;
                 測試改點卡片(getByRole('radio')),假控制項退場。 */}
@@ -306,49 +354,48 @@ function SignUpCard({ setMode, signUp, resendSignup }) {
                   <button key={c.value} type="button" role="radio" aria-checked={selected}
                     data-org={c.value} tabIndex={selected ? 0 : -1}
                     onClick={() => pickOrg(c.value)}
-                    className={`relative rounded-xl border border-[var(--border-card)] px-4 py-5 text-left min-h-11 pressable transition-colors
+                    className={`relative rounded-[10px] border border-[var(--border)] px-4 py-4 text-left min-h-11 pressable
                       ${selected ? 'bg-[var(--blue-tint)] shadow-[inset_0_0_0_2px_var(--blue)]' : 'hover:bg-[var(--surface-2)]'}`}>
-                    {selected && <MSym name="check_circle" fill size={20} className="absolute top-2.5 right-2.5 text-[var(--blue)]" />}
-                    <MSym name={c.icon} size={26} fill={selected} className={selected ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} />
-                    <div className="text-title3 font-medium text-[var(--text)] mt-2">{c.title}</div>
+                    {selected && <MSym name="check_circle" fill size={18} className="absolute top-2.5 right-2.5 text-[var(--blue-text)]" />}
+                    <MSym name={c.icon} size={24} fill={selected} className={selected ? 'text-[var(--blue-text)]' : 'text-[var(--text-2)]'} />
+                    <div className="text-callout font-medium text-[var(--text)] mt-2">{c.title}</div>
                   </button>
                 )
               })}
             </div>
 
-            {/* 欄位:桌機兩欄。mockup 的「專案邀請碼」不做(現行邀請=對方輸入你的
-                email,沒有邀請碼機制);密碼欄 mockup 沒畫但註冊需要,補在信箱旁 */}
-            <div className="grid sm:grid-cols-2 gap-x-5 gap-y-4 mt-6">
-              <FloatField label="姓名" placeholder="姓名" value={form.full_name} onChange={set('full_name')} required />
-              <FloatField label={ORG_NAME_LABEL[form.org_type]} placeholder="公司 / 單位" value={form.company} onChange={set('company')} />
-              <FloatField label="公務／公司信箱" type="email" placeholder="Email" value={form.email} onChange={set('email')} required />
+            {/* 欄位:桌機兩欄。「專案邀請碼」不做(現行邀請=對方輸入你的 email,
+                沒有邀請碼機制);密碼欄註冊需要,補在信箱旁 */}
+            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3 mt-5">
+              <FloatField label="姓名" placeholder="姓名" autoComplete="name" value={form.full_name} onChange={set('full_name')} required />
+              <FloatField label={ORG_NAME_LABEL[form.org_type]} placeholder="公司 / 單位" autoComplete="organization" value={form.company} onChange={set('company')} />
+              <FloatField label="公務／公司信箱" type="email" placeholder="Email" autoComplete="email" value={form.email} onChange={set('email')} required />
               <div>
-                <FloatField label="密碼" type="password" placeholder="密碼（至少 8 碼，含大小寫英文與數字）"
+                <PasswordField label="密碼" placeholder="密碼（至少 8 碼，含大小寫英文與數字）" autoComplete="new-password"
                   value={form.password} onChange={set('password')} required minLength={8} />
-                <p className="text-xs text-[var(--text-3)] mt-1 pl-2.5">至少 8 碼，含大小寫英文與數字</p>
+                <p className="text-footnote text-[var(--text-3)] mt-1 pl-3.5">至少 8 碼，含大小寫英文與數字</p>
               </div>
             </div>
 
-            {/* 資訊列(mockup):藍底說明,講清楚機關帳戶與平台後台的邊界 */}
-            <div className="mt-5 rounded-xl bg-[var(--blue-tint)] px-4 py-3 flex items-start gap-2.5 text-body text-[var(--text)]">
-              <MSym name="info" size={17} className="shrink-0 mt-0.5 text-[var(--blue-text)]" />
+            {/* 資訊列:講清楚機關帳戶與平台後台的邊界 */}
+            <div className="mt-4 rounded-[10px] bg-[var(--blue-tint)] px-4 py-3 flex items-start gap-2.5 text-body text-[var(--text)]">
+              <MSym name="info" size={16} className="shrink-0 mt-0.5 text-[var(--blue-text)]" />
               機關帳戶可建立專案並開啟正式模式；平台管理後台不屬於專案角色，僅平台營運者可見。
             </div>
 
             <ErrorBanner msg={err} className="mt-3" />
 
-            <div className="flex items-center justify-between gap-3 mt-6 flex-wrap">
-              <button type="button" onClick={() => setMode('signin')}
-                className="inline-flex items-center min-h-11 px-2 text-sm font-medium text-[var(--blue-text)] hover:underline">
+            <Button type="submit" size="lg" busy={loading} className="w-full mt-5">
+              {loading ? '處理中…' : '下一步：驗證信箱'}
+            </Button>
+            <div className="flex justify-center mt-2">
+              <button type="button" onClick={() => setMode('signin')} className={TEXT_BTN}>
                 已有帳戶？登入
               </button>
-              <Button type="submit" size="lg" busy={loading} className="px-6">
-                {loading ? '處理中…' : '下一步：驗證信箱'}
-              </Button>
             </div>
           </form>
         )}
-    </div>
+    </>
   )
 }
 
@@ -372,11 +419,13 @@ function ResetPasswordForm({ updatePassword }) {
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      <FloatField label="新密碼" type="password" placeholder="新密碼（至少 8 碼，含大小寫英文與數字）" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} autoFocus />
-      <p className="text-xs text-[var(--text-3)] -mt-1.5 pl-2.5">至少 8 碼，含大小寫英文與數字</p>
-      <FloatField label="再輸入一次新密碼" type="password" placeholder="再輸入一次新密碼" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={8} />
+      <div>
+        <PasswordField label="新密碼" placeholder="新密碼（至少 8 碼，含大小寫英文與數字）" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} autoFocus />
+        <p className="text-footnote text-[var(--text-3)] mt-1 pl-3.5">至少 8 碼，含大小寫英文與數字</p>
+      </div>
+      <PasswordField label="再輸入一次新密碼" placeholder="再輸入一次新密碼" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={8} />
       <ErrorBanner msg={err} />
-      <Button type="submit" size="lg" busy={busy} className="w-full">
+      <Button type="submit" size="lg" busy={busy} className="w-full mt-1">
         {busy ? '更新中…' : '設定新密碼並登入'}
       </Button>
     </form>
@@ -384,6 +433,7 @@ function ResetPasswordForm({ updatePassword }) {
 }
 
 // ── Prototype 假登入（未設定 Supabase 時的 fallback）───────────────────
+// 「選擇 demo 角色登入:」是 routes.spec 的定位文字;角色鈕以人名為無障礙名稱(helpers.loginAs)。
 function RolePicker({ setCurrentUser, navigate }) {
   const pick = (u) => {
     setCurrentUser(u)
@@ -391,20 +441,22 @@ function RolePicker({ setCurrentUser, navigate }) {
   }
   return (
     <>
-      <div className="text-sm text-[var(--text-2)] mb-3 font-medium">選擇 demo 角色登入：</div>
-      <div className="space-y-2">
+      <div className="text-footnote font-medium text-[var(--text-2)] mb-2">選擇 demo 角色登入：</div>
+      <ul role="list" className="space-y-2">
         {users.map((u) => (
-          <button key={u.user_id} onClick={() => pick(u)}
-            className="w-full flex items-center gap-3 p-3 rounded-xl border border-[var(--border-card)] bg-[var(--surface)] hover:bg-[var(--surface-2)] pressable text-left min-h-11">
-            <div className="w-10 h-10 rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] flex items-center justify-center font-bold shrink-0">{u.name[0]}</div>
-            <div className="min-w-0">
-              <div className="font-medium text-[var(--text)]">{u.name}</div>
-              <div className="text-xs text-[var(--text-2)] truncate">{u.label} · {u.company}</div>
-            </div>
-          </button>
+          <li key={u.user_id}>
+            <button onClick={() => pick(u)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] pressable text-left min-h-11">
+              <span className="w-9 h-9 rounded-full bg-[var(--blue-tint)] text-[var(--blue-text)] flex items-center justify-center text-callout font-semibold shrink-0" aria-hidden>{u.name[0]}</span>
+              <span className="min-w-0">
+                <span className="block text-callout font-medium text-[var(--text)]">{u.name}</span>
+                <span className="block text-footnote text-[var(--text-2)] truncate">{u.label} · {u.company}</span>
+              </span>
+            </button>
+          </li>
         ))}
-      </div>
-      <div className="text-center text-xs text-[var(--text-3)] mt-6">點任一角色即可進入 prototype</div>
+      </ul>
+      <p className="text-center text-footnote text-[var(--text-3)] mt-5">點任一角色即可進入 prototype</p>
     </>
   )
 }
