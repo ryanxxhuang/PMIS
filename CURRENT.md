@@ -47,7 +47,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 - **DB**：2026-09-11 `supabase db push` 套用 `20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`；`migration list --linked` 核對本地與遠端 60 筆全部對齊，最新 `20260911110000`。
 - **Edge**：2026-09-11 以 `--use-api` 從 main（含 `_shared/` 重構）重佈全部 17 支；`functions list` 核對每支版本均 +1（agent-run 14、extract-requirements 13、send-reminders 16、classify-document 3 等）。線上另有 `demo-request` 一支由行銷站 repo 部署，不在本 repo。
-- **前端**：2026-09-11 PR #64 合併提交 `8be082a` 的 Cloudflare Workers 建置成功，版本 `fc99c933-32f5-47c6-b0e6-726e50b2956e`。正式首頁已切換新版 JS／CSS，首頁 HEAD 200、七項安全標頭齊全；這不代表登入後業務流程或正式後端已驗證。後續純文件提交可能觸發同功能版本重建。
+- **前端**：main 每次合併由 Cloudflare Workers 自動建置。2026-09-11 PR #64（`8be082a`）建置版本 `fc99c933-32f5-47c6-b0e6-726e50b2956e`，首頁 HEAD 200、七項安全標頭齊全；同日 PR #67／#69／#70／#76／#78 及 2026-09-12 PR #79 陸續合併，各次建置版本未逐一記錄，以 Cloudflare 後台為準。這不代表登入後業務流程或正式後端已驗證。
 - **舊站**：2026-09-11 GitHub Pages API 仍回 built，來源為 `gh-pages`；此部署分支保留。`pmis.pages.dev` 最後核對為 2026-09-07，退場待另行處理。
 - 部署依 [runbook](docs/operations/deploy.md) 執行；套用後在本節記日期、migration／Edge 版本與驗證。2026-09-11 已完成三面同步：前端由 main 自動部署、DB 三支 migration 套用、17 支 Edge 重佈；登入後業務流程與真模型抽取仍未在正式站實測。
 
