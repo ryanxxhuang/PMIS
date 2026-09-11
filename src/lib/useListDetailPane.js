@@ -59,6 +59,9 @@ export function useListDetailPane({
 
   // 初次載入:深連結優先並捲到該列;否則交給頁面的預設規則(第一條已逾期→即將到期
   // →清單第一條 / 第一條待確認)。只選一次,之後由使用者主導。
+  // 深連結才 openPane(規範 §9.7):收件匣點「那一筆」進來,<lg 直接推入詳情,不是停在
+  // 清單再點一次;≥lg 的 select 本來就忽略 openPane(詳情常駐右欄)。預設選取不開——
+  // 手機打開一頁就彈全螢幕詳情,等於把清單藏起來。
   // 捲動延後 60ms 等列掛上;計時器只在卸載時清(scrollTimer),不能掛在這個 effect 的
   // cleanup——select() 改了 URL 就會讓 select 換 identity、effect 重跑,捲動會被自己取消。
   const scrollTimer = useRef(null)
@@ -71,7 +74,7 @@ export function useListDetailPane({
     const deep = wanted ? pool.find((r) => r.id === wanted) : null
     const targetId = deep ? deep.id : pick?.()
     if (!targetId) return
-    select(targetId)
+    select(targetId, { openPane: !!deep })
     if (deep) {
       deepHook?.(deep)
       scrollTimer.current = setTimeout(() => document.getElementById(`${idPrefix}${deep.id}`)?.scrollIntoView({ block: 'center' }), 60)

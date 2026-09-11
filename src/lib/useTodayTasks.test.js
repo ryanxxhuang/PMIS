@@ -41,4 +41,15 @@ describe('mineCountForNavItem', () => {
   it('前綴相同但不同路由不得誤算(/quality 不吃 /quality-report)', () => {
     expect(mineCountForNavItem([t('/quality-report')], { to: '/quality' })).toBe(0)
   })
+
+  // 規範 §9.7:待辦的 to 自此可帶單條 query(/rfi?rfi=R1)。分組只看路徑——
+  // 否則直達那一筆的待辦一筆都對不上側欄項,badge 會憑空少算。
+  it('帶單條 query 的直達連結仍算進該頁與其母項', () => {
+    const deep = [t('/rfi?rfi=R1'), t('/rfi'), t('/submittals?submittal=S1'), t('/deadlines?obligation=OB-6')]
+    expect(mineCountForNavItem(deep, { to: '/rfi' })).toBe(2)
+    expect(mineCountForNavItem(deep, { to: '/submittals', tabs: [{ to: '/submittals' }, { to: '/rfi' }] })).toBe(3)
+    expect(mineCountForNavItem(deep, { to: '/deadlines' })).toBe(1)
+    // query 不參與比對,但路徑仍須完全相同
+    expect(mineCountForNavItem(deep, { to: '/rfi-report' })).toBe(0)
+  })
 })

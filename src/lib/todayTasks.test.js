@@ -117,13 +117,13 @@ describe('契約期限:精確責任白名單 + 目的頁真的能完成', () => 
     expect(o.mine.filter((t) => t.tag === '契約重點').map((t) => t.title)).toEqual(['機關:核定計畫'])
     expect(o.waiting.some((t) => t.tag === '契約重點')).toBe(false)
   })
-  it('逾期天數與罰則寫進說明,並導向期限追蹤頁(「標為已提送」在那裡)', () => {
+  it('逾期天數與罰則寫進說明,並直達期限追蹤頁的那一筆(「標為已提送」在那裡)', () => {
     const t = build({ org: 'contractor', obligations: rows, anchors }).mine.find((x) => x.tag === '契約重點')
     expect(t.overdueDays).toBe(3)
     expect(t.due).toBe('2026-08-10')
     expect(t.meta).toContain('逾期 3 天')
     expect(t.meta).toContain('罰則：每日 0.5‰')
-    expect(t.to).toBe('/deadlines')
+    expect(t.to).toBe('/deadlines?obligation=OB-C')
   })
   it('已提送/已完成的義務與 7 天以後才到期的都不列', () => {
     const later = [
@@ -390,5 +390,76 @@ describe('dueText(到期句的單一真相)', () => {
     expect(dueText(0, '2026-08-13')).toBe('今天到期（2026-08-13）')
     expect(dueText(5, '2026-08-18')).toBe('還有 5 天（到期 2026-08-18）')
     expect(dueText(-3, '2026-08-10')).toMatch(/逾期 \d+ 天（到期 \d{4}-\d{2}-\d{2}）/)
+  })
+})
+
+// ── 規範 §9.7 收件匣直達那一筆:有「清單＋詳情」殼的頁,to 帶單條 query ──
+// query 名與 id 必須對上該頁 useListDetailPane({ param }) 與 rows[].id:
+//   /rfi?rfi=<rfis.id>、/submittals?submittal=<submittals.id>、/change-orders?co=<changeOrders.id>、
+//   /deadlines?obligation=<obligations.id>(dueItems 的 id 就是 ob.id)。
+// 對錯 id 等於沒帶(殼找不到列就退回預設選取),所以斷言的是「query 值＝該列的 id」,不是字串長得像。
+const queryOf = (to, param) => new URL(to, 'http://x').searchParams.get(param)
+
+describe('收件匣直達那一筆(規範 §9.7):有殼的頁 to 帶單條 query,無殼的頁維持頁面連結', () => {
+  const anchors = { commencement_date: '2026-01-01' }
+  const data = {
+    rfis: [{ id: 'R1', rfi_no: 'RFI-002', title: '版厚疑義', status: '已回覆' }],                       // contractor
+    submittals: [{ id: 'S1', submittal_no: 'SUB-003', title: '材料送審', status: '退回補正' }],        // contractor
+    changeOrders: [{ id: 'C1', co_no: 'CO-002', title: '地坪變更', status: '審核中' }],                 // owner
+    obligations: [{ id: 'OB-C', title: '提送月報', status: '待辦', trigger_event: 'fixed', fixed_date: '2026-08-10', responsible: '廠商' }],
+  }
+  it('疑義 / 送審 / 變更 / 契約期限:query 值就是該列的 id', () => {
+    const c = build({ org: 'contractor', ...data, anchors })
+    const byTag = (list, tag) => list.find((t) => t.tag === tag)
+    expect(byTag(c.mine, '疑義').to).toBe('/rfi?rfi=R1')
+    expect(queryOf(byTag(c.mine, '疑義').to, 'rfi')).toBe(data.rfis[0].id)
+    expect(byTag(c.mine, '送審').to).toBe('/submittals?submittal=S1')
+    expect(queryOf(byTag(c.mine, '送審').to, 'submittal')).toBe(data.submittals[0].id)
+    expect(byTag(c.mine, '契約重點').to).toBe('/deadlines?obligation=OB-C')
+    expect(queryOf(byTag(c.mine, '契約重點').to, 'obligation')).toBe(data.obligations[0].id)
+    // 等待對方那一段是同一份組裝:廠商等機關核定的變更也直達
+    expect(byTag(c.waiting, '變更').to).toBe('/change-orders?co=C1')
+    expect(queryOf(byTag(c.waiting, '變更').to, 'co')).toBe(data.changeOrders[0].id)
+    expect(byTag(build({ org: 'owner', ...data }).mine, '變更').to).toBe('/change-orders?co=C1')
+  })
+  it('id 缺值(demo 舊形狀)退回頁面連結,不產生 ?rfi=null 這種死連結', () => {
+    const { mine } = build({
+      org: 'contractor',
+      rfis: [{ rfi_no: 'RFI-009', title: '沒有 id', status: '已回覆' }],
+      submittals: [{ submittal_no: 'SUB-009', title: '沒有 id', status: '退回補正' }],
+      obligations: [{ title: '沒有 id 的義務', status: '待辦', trigger_event: 'fixed', fixed_date: '2026-08-10', responsible: '廠商' }],
+      anchors,
+    })
+    expect(mine.find((t) => t.tag === '疑義').to).toBe('/rfi')
+    expect(mine.find((t) => t.tag === '送審').to).toBe('/submittals')
+    expect(mine.find((t) => t.tag === '契約重點').to).toBe('/deadlines')
+    expect(mine.some((t) => /=null|=undefined/.test(t.to))).toBe(false)
+  })
+  it('沒有殼的頁維持頁面連結:缺失/工安缺失/查驗/觀察/試驗/驗收/停留點/日誌/估驗', () => {
+    const { mine } = build({
+      org: 'contractor', anchors: { commencement_date: '2026-03-01', end_date: '2027-02-28' },
+      defects: [{ id: 'D1', title: '模板殘料', status: '開立' }, { id: 'DS', title: '安全網', status: '開立', domain: 'safety' }],
+      observations: [{ id: 'O1', title: '樓梯口動線', status: '待處理', assigned_to: 'contractor' }],
+      valuations: [{ id: 'V1', period_no: 6, status: '草稿' }],
+      testSamples: [{ id: 'TS1', sample_no: 'CS-003', sampled_date: '2026-08-04', d7_due: '2026-08-11', d28_due: '2026-09-01' }],
+      inspectionPoints: [{ id: 'P1', point_type: 'H', title: '柱牆鋼筋查驗', work_item_key: 'WI-1', inspection_id: null }],
+      siteLogs: [{ log_date: '2026-08-12', items: { 'WI-1': 12 } }],
+    })
+    const to = (tag) => mine.filter((t) => t.tag === tag).map((t) => t.to)
+    // /safety 的殼是工安紀錄(?record=),缺失追蹤要等它套殼(規範 §9.8)才有單條 query
+    expect(to('缺失')).toEqual(['/quality'])
+    expect(to('工安缺失')).toEqual(['/safety'])
+    expect(to('觀察')).toEqual(['/quality'])
+    expect(to('估驗')).toEqual(['/valuation'])
+    expect(to('試驗')).toEqual(['/quality'])
+    expect(to('停留點')).toEqual(['/itp'])
+    expect(to('日誌')).toEqual(['/site-log'])
+    const s = build({ org: 'supervisor', inspections: [{ id: 'I1', title: '4F 鋼筋查驗', status: '待查驗' }],
+      acceptanceEvents: [{ stage_key: 'report', event_date: '2026-08-08' }] })
+    expect(s.mine.find((t) => t.tag === '查驗').to).toBe('/quality')
+    expect(s.mine.find((t) => t.tag === '驗收').to).toBe('/acceptance')
+    // 今天已完成:缺失結案/查驗判定也還沒有殼可直達
+    const done = build({ org: 'supervisor', defects: [{ id: 'D9', title: '結案', status: '已結案', closed_at: '2026-08-13T02:00:00Z' }] }).doneToday
+    expect(done[0].to).toBe('/quality')
   })
 })

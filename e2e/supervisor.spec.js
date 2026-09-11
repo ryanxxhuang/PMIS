@@ -113,6 +113,31 @@ test.describe('監造', () => {
     await expect(page.locator('input:not([type="date"])')).toHaveCount(0)
   })
 
+  // 規範 §9.7 收件匣直達那一筆:待辦連結帶單條 query,落地就是該筆的詳情,不是頁首。
+  // 選 SUB-002 與 RFI-002:兩筆是 demo 監造待辦裡到期最近的,穩定落在首頁 5 筆上限內。
+  // SUB-002 不是 /submittals 的預設選取(預設是「待我處理」第一筆 SUB-003)——選中它
+  // 才證明是 query 在選,不是頁面自己選到。定位零 class:group → listitem → region。
+  test('收件匣直達那一筆:點待辦落在該頁且該筆已選中;375 直接推入詳情', async ({ page }) => {
+    await loginAs(page, 'supervisor')
+    await gotoHash(page, '/dashboard?ball=mine')
+    const mine = page.getByRole('group', { name: '現在輪到我', exact: true })
+    await mine.getByRole('listitem').filter({ hasText: 'SUB-002' }).getByRole('link').click()
+    await expect(page).toHaveURL(/#\/submittals\?submittal=SUB-DEMO-2/)
+    await expect(page.getByRole('listitem').filter({ hasText: 'SUB-002' })).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByRole('listitem').filter({ hasText: 'SUB-003' })).not.toHaveAttribute('aria-current', 'true')
+    await expect(page.getByRole('region', { name: 'SUB-002 詳情' })).toContainText('4F 以上結構體施工計畫')
+
+    // <lg:深連結進頁直接開抽屜(select(id, { openPane: true })),清單不用再點一次。
+    // 抽屜是 dialog(aria-label=疑義詳情),該筆的 region 要在抽屜裡才算推入了詳情。
+    await page.setViewportSize({ width: 375, height: 812 })
+    await gotoHash(page, '/dashboard?ball=mine')
+    await mine.getByRole('listitem').filter({ hasText: 'RFI-002' }).getByRole('link').click()
+    await expect(page).toHaveURL(/#\/rfi\?rfi=RFI-DEMO-2/)
+    const drawer = page.getByRole('dialog', { name: '疑義詳情' })
+    await expect(drawer.getByRole('region', { name: 'RFI-002 詳情' })).toContainText('3F 樑柱接頭鋼筋與機電套管衝突')
+    await expect(drawer.getByRole('button', { name: '返回清單', exact: true })).toBeVisible()
+  })
+
   test('路由守衛:監造進不了請款收款', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/payments')
