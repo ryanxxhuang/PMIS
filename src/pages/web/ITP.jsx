@@ -6,7 +6,7 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Badge, Button, Input, Select, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
+import { Card, Badge, Button, IconButton, Input, Select, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 // 工項挑選器與品質缺失共用同一份(原本這裡有一份輕量複本,浮層陰影/命中區的修正只落在其中一邊)
 import { WorkItemPicker } from '../../components/DefectTracker.jsx'
@@ -166,10 +166,11 @@ export default function ITP() {
                       <Link to="/quality" className="text-xs text-[var(--blue-text)] hover:underline inline-flex items-center max-md:min-h-11">查驗紀錄<MSym name="chevron_right" size={13} /></Link>
                     )}
                     {can.approve && (
-                      // p-2 -m-2 只擴命中區、視覺與列高不變(同 DefectTracker/ChangeOrders 的刪除鈕)
-                      <button onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspectionPoint(p.id); if (error) setErrMsg(friendlyError(error, '停留點刪除未完成')) } }}
-                        aria-label={`刪除停留點 ${p.title}`}
-                        className="inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 text-[var(--text-3)] hover:text-[var(--red-text)]"><MSym name="close" size={16} /></button>
+                      // 這顆就是稽核量到 32×44 的那顆:只補了 min-h 沒補 min-w。改吃 IconButton
+                      // 拿到 44×44,負 margin 吸回流內寬(同 DefectTracker/ChangeOrders 的刪除鈕)
+                      <IconButton name="close" label={`刪除停留點 ${p.title}`}
+                        onClick={async () => { if (await appConfirm({ title: `刪除停留點「${p.title}」？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteInspectionPoint(p.id); if (error) setErrMsg(friendlyError(error, '停留點刪除未完成')) } }}
+                        className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
                     )}
                   </div>
                 </li>

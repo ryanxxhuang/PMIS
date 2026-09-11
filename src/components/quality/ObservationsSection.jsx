@@ -1,7 +1,7 @@
 // 由 pages/web/Quality.jsx 原地搬出(重構波次 7):零邏輯改動,只換檔案位置與 import。
 import { useState } from 'react'
 import { MSym } from '../icons.jsx'
-import { Card, Button, Field, Badge, Empty, ErrorBanner, Input, Textarea } from '../ui.jsx'
+import { Card, Button, Field, Badge, Empty, ErrorBanner, IconButton, Input, Textarea } from '../ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../confirm.jsx'
 import MarkupEditor, { MarkupThumb } from '../MarkupEditor.jsx'
@@ -64,7 +64,7 @@ export default function ObservationsSection({ observations, canWrite, onCreate, 
                     <Button variant="secondary" disabled={busy} onClick={() => run('標記已處理', () => onUpdate(o.id, { status: '已處理' }))}>標記已處理</Button>
                     <Button variant="outline" disabled={busy} onClick={async () => { if (await appConfirm({ title: '升級為正式缺失？', body: '將自動開立缺失單追蹤改善。', confirmLabel: '升級' })) run('升級為缺失', () => onEscalate(o)) }}>升級為缺失</Button>
                   </>}
-                  <button disabled={busy} onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) run('刪除觀察', () => onDelete(o.id)) }} aria-label={`刪除觀察 ${o.title}`} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2"><MSym name="close" size={16} /></button>
+                  <IconButton name="close" label={`刪除觀察 ${o.title}`} disabled={busy} onClick={async () => { if (await appConfirm({ title: '刪除此觀察？', danger: true, confirmLabel: '刪除' })) run('刪除觀察', () => onDelete(o.id)) }} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
                 </div>
               )}
             </div>

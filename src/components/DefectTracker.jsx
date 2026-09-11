@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { MSym } from './icons.jsx'
 import { useStore } from '../store.jsx'
-import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner, Input, Select, Textarea, buttonClass } from './ui.jsx'
+import { Card, Button, Field, Badge, BallChip, Empty, ErrorBanner, IconButton, Input, Select, Textarea, buttonClass } from './ui.jsx'
 import { appConfirm, appPrompt } from './confirm.jsx'
 import { exportCsv, stamp } from '../lib/exportCsv.js'
 import { defectBall } from '../lib/ballInCourt.js'
@@ -23,8 +23,9 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
     return (
       <div className="flex items-center gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface-2)]">
         <span className="truncate flex-1">{label}</span>
-        {/* 圖示一律 MSym(裸 ✕ 只留給 ErrorBanner);p-2 -m-2 只擴命中區、視覺與列高不變 */}
-        <button onClick={() => onPick(null, '')} aria-label="清除已選工項" className="inline-flex items-center justify-center p-2 -m-2 text-[var(--text-3)] hover:text-[var(--red-text)]"><MSym name="close" size={16} /></button>
+        {/* 圖示鈕統一走 IconButton。負 margin 是「吸回流內寬」的對齊手法:IconButton 方框
+            桌機 32、手機 44,減掉 -m-2／-m-3.5 後流內都回到原本的 16px——命中區長大、版面不動 */}
+        <IconButton name="close" label="清除已選工項" onClick={() => onPick(null, '')} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
       </div>
     )
   }
@@ -246,7 +247,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
                   can.approve && <button onClick={() => reopen(d)} className="inline-flex items-center max-md:min-h-11 px-1 text-xs text-[var(--blue-text)] hover:underline">撤銷結案</button>
                 )}
                 {can.edit && d.status !== '已結案' && (
-                  <button onClick={() => remove(d)} className="inline-flex items-center justify-center p-2 -m-2 max-md:min-h-11 max-md:min-w-11 text-[var(--text-3)] hover:text-[var(--red-text)]" aria-label="刪除缺失"><MSym name="close" size={16} /></button>
+                  <IconButton name="close" label="刪除缺失" onClick={() => remove(d)} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
                 )}
               </div>
             </li>

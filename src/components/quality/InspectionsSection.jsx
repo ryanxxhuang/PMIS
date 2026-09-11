@@ -7,7 +7,7 @@
 // .filter({ hasText }) 鎖列——列的 class 名不再是測試合約,但 <li> 這層語意不可拿掉。
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../icons.jsx'
-import { Card, Button, Field, Badge, Empty, Input, Select, FilterChip } from '../ui.jsx'
+import { Card, Button, Field, Badge, Empty, IconButton, Input, Select, FilterChip } from '../ui.jsx'
 import { appConfirm } from '../confirm.jsx'
 import { taipeiToday } from '../../lib/dates.js'
 import { WorkItemPicker } from '../DefectTracker.jsx'
@@ -113,7 +113,7 @@ export default function InspectionsSection({
                   <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
                 </> : <span className="text-xs text-[var(--text-3)]">待監造查驗</span>)}
                 {/* 已判定查驗=品質證據,不提供刪除(DB 另有 guard) */}
-                {can.edit && i.status === '待查驗' && <button onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) onDelete(i.id) }} className="text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2" aria-label={`刪除查驗 ${i.title}`}><MSym name="close" size={16} /></button>}
+                {can.edit && i.status === '待查驗' && <IconButton name="close" label={`刪除查驗 ${i.title}`} onClick={async () => { if (await appConfirm({ title: '刪除此查驗紀錄？', danger: true, confirmLabel: '刪除' })) onDelete(i.id) }} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />}
               </div>
             </li>
           ))}

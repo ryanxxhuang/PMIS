@@ -7,7 +7,7 @@
 // 清單列與快篩靠它們,子件的狀態列與明細表也靠它們,同一個狀態在列與詳情不得兩種顏色。
 import { useState } from 'react'
 import { MSym } from '../../components/icons.jsx'
-import { Surface, Empty, Button, Badge, Input, buttonClass, THEAD_CLS } from '../../components/ui.jsx'
+import { Surface, Empty, Button, Badge, IconButton, Input, buttonClass, THEAD_CLS } from '../../components/ui.jsx'
 import { MetaGrid } from '../../components/listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -116,8 +116,9 @@ export default function ChangeOrderDetail({ co, net, leaves, allItems, canReview
               ) : <span>{money(it.unit_price)}</span>}
             </td>
             <td className={`px-2 text-right num whitespace-nowrap font-medium ${signCls(Number(it.amount_delta) || 0)}`}>{signed(Number(it.amount_delta) || 0)}</td>
-            {/* p-2 -m-2:命中區擴到約 32px 但視覺與列高完全不變(表格內拉到 44px 會讓每列翻倍) */}
-            <td className="text-right pl-2">{itemsEditable && <button onClick={() => onDeleteItem(it.id)} aria-label={`刪除明細 ${it.description}`} className="inline-flex items-center justify-center text-[var(--text-3)] hover:text-[var(--red-text)] p-2 -m-2"><MSym name="close" size={16} /></button>}</td>
+            {/* 命中區桌機 32、手機 44,但負 margin 讓流內寬仍是 16px——表格列高完全不變
+                (原本怕「拉到 44 會讓每列翻倍」,吸回流內寬之後就不會) */}
+            <td className="text-right pl-2">{itemsEditable && <IconButton name="close" label={`刪除明細 ${it.description}`} onClick={() => onDeleteItem(it.id)} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />}</td>
           </tr>
         ))}
       </tbody>
