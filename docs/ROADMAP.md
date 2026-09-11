@@ -332,6 +332,9 @@ W5 統一收尾（2026-08-13）：W5-1 決策與正式庫匿名基線、W5-2 單
 
 ## 未排入（已知、刻意不順手做；要做需回報告或另立決策）
 
+- （2026-09-11 B5 波次實查發現，需你決定要不要加 trigger）`item_schedules` 沒有 `guard_project_identity`：A 案廠商理論上可把排程掛到猜中 UUID 的 B 案 `work_item`（`project_id` 仍填 A）。RLS 擋不住這種跨表不一致，要 trigger 才擋得住。尚未寫測試（寫了會紅）。
+- （同上，只記錄）本機所有 public 表的 `anon` 都帶 `TRUNCATE`（Supabase 本身的 default ACL `anon=Dxtm`）。PostgREST 不暴露 TRUNCATE，實務風險低，但 TRUNCATE **不受 RLS 約束**。
+
 - （2026-09-11 重構審計點名，需你決定）`demo_requests` 的個資留存與清除：該表存 email／phone／ip／user_agent，但 `docs/資安/日誌留存政策.md` 與個資委外文件都沒列到它，也沒有清除排程。保存多久是政策決定，不是工程決定，所以只登記不自行訂定。
 - （同上，需先立 Decision）兩套「專案管理者」定義並存：`add_member_by_email`／`remove_member`／`organizations_*` policy 走 `projects.created_by`，而 `delete_project`／估驗與變更 guard／`acceptance_events_rbac`／`safety_records_rbac` 走 `is_project_admin()`。結果是被授 admin 的成員能刪專案、改狀態機，卻不能邀人；建立者離職也沒有轉移路徑。這讓 `created_by` 成為 `project_members` 之外的第四個隱性授權來源，與 `three-party-role-model.md` 的唯一授權模型相違。修它要動 RLS 與多支 RPC，屬安全邊界。
 - （同上）紅線三缺口：agent 唯讀工具的呼叫軌跡不落庫。`agent-run` 只把 steps 的 tool／ok／ms 回前端，`ai_usage_events` 沒有欄位可放。一旦有爭議（agent 講了錯誤金額），無法重建它查了哪些表、帶什麼參數。最小改法是 `ai_usage_events` 加 `metadata jsonb`，完整作法是 append-only `agent_runs` 表——但「記錄每一次查詢與參數」牽涉個資最小化，要先決定記到什麼粒度。
