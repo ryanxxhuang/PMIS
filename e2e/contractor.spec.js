@@ -128,16 +128,23 @@ test.describe('施工廠商', () => {
     await loginAs(page, 'contractor')
     // 契約重點改版後,逐項期限管理(標為已提送/佐證)在獨立的期限追蹤頁
     await gotoHash(page, '/deadlines')
-    // demo 預掛佐證:品質計畫義務 → SUB-001(核准)
-    await expect(page.getByText(/佐證:SUB-001/)).toBeVisible()
+    // 清單＋詳情殼:列只負責選取,佐證 Badge、挑選器與動作全在詳情欄(region 以義務
+    // 標題命名——找得到這個 region 就證明詳情欄正在顯示這一筆)。定位走 role/文字,
+    // 不綁視覺 class。按鈕名一律 exact:「直接標為已提送」含「標為已提送」子字串
+    const row = (title) => page.getByRole('listitem').filter({ hasText: title })
+    const detail = (title) => page.getByRole('region', { name: `${title} 詳情` })
+    // demo 預掛佐證:品質計畫義務 → SUB-001(核准);選中後佐證 Badge 在詳情欄
+    await row('提送品質計畫書').click()
+    await expect(detail('提送品質計畫書').getByText(/佐證:SUB-001/)).toBeVisible()
     // 對「提送施工月報」(待辦)掛 SUB-003 佐證並標為已提送
-    const card = page.getByText('提送施工月報')
-      .locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]')
-    await card.getByRole('button', { name: '標為已提送' }).click()
-    await card.getByRole('combobox').selectOption('SUB-DEMO-3')
-    await card.getByRole('button', { name: '掛佐證並標為已提送' }).click()
-    await expect(card.getByText(/佐證:SUB-003/)).toBeVisible()
-    await expect(card.getByRole('button', { name: '已提送 ✓' })).toBeVisible()
+    await row('提送施工月報').click()
+    await expect(row('提送施工月報')).toHaveAttribute('aria-current', 'true')
+    const d = detail('提送施工月報')
+    await d.getByRole('button', { name: '標為已提送', exact: true }).click()
+    await d.getByRole('combobox', { name: '佐證送審文件' }).selectOption('SUB-DEMO-3')
+    await d.getByRole('button', { name: '掛佐證並標為已提送', exact: true }).click()
+    await expect(d.getByText(/佐證:SUB-003/)).toBeVisible()
+    await expect(d.getByRole('button', { name: '已提送 ✓', exact: true })).toBeVisible()
   })
 
   test('估驗:新增估驗期 → 送監造審核', async ({ page }) => {
