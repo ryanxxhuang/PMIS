@@ -11,7 +11,7 @@ export const ROLES = {
 export async function loginAs(page, role) {
   await page.goto('/')
   await page.getByRole('button', { name: ROLES[role] }).click()
-  // 落地頁對齊 navConfig 的 defaultLandingPath:精修期一律 → 今日待辦
+  // 落地頁對齊 navConfig 的 defaultLandingPath:所有角色一律 → 收件匣(今日待辦),不依角色分流
   await expect(page).toHaveURL(/#\/dashboard/)
 }
 

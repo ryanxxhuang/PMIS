@@ -290,7 +290,7 @@ export function WebLayout({ children }) {
     return () => mq.removeEventListener('change', onChange)
   }, [])
   const collapsed = isTablet || sidebarCollapsed
-  // 工作面預設收合；展開狀態只保留在本次瀏覽，不製造另一份持久導覽設定。
+  // 「工作」群組預設收合；展開狀態只保留在本次瀏覽，不製造另一份持久導覽設定。
   const [expandedWorkbenches, setExpandedWorkbenches] = useState(() => new Set())
   // scroll edge:內容捲到 chrome 底下才浮出界線(置頂時頂欄與背景齊平)
   const [scrolled, setScrolled] = useState(false)
@@ -310,10 +310,6 @@ export function WebLayout({ children }) {
   const [searchParams] = useSearchParams()
   const ballKey = pathname === '/dashboard' ? resolveBallKey(searchParams) : null
   const ballCounts = { mine: dueMine.length, waiting: dueWaiting.length, done: dueDone.length }
-  // 球權群組目前無條件渲染(三個來源都指向 /dashboard,所有角色皆可達)。抽成具名
-  // 常數是為了讓下面「工作面的今日待辦不重複掛 aria-current」那條跟著它走——
-  // 哪天球權群組改成有條件顯示,去重複的判斷不會漏掉。
-  const ballGroupShown = true
   // 角色化導覽:依 org_type 過濾工具（成本/請款/排程等）——非正式模式的
   // admin(專案建立者)看得到全部;正式模式後回歸自己的角色視角。
   // isPlatformAdmin 是獨立的「平台」維度(僅控制 /admin 入口可見;真正把關在 DB 的 admin RPC)。
@@ -376,8 +372,9 @@ export function WebLayout({ children }) {
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
             {/* 球權來源(疊合版 IA §0):主畫面是收件匣,側欄先問「球在誰手上」。
                 三個入口共用 /dashboard 的登記與角色判斷,以 ?ball= 分流(為何不開新路由
-                見 navConfig BALL_SOURCES)。件數與工作面 badge 同源(useTodayTasks),
-                不另算一份;不進 BottomNav(手機仍走漢堡抽屜)。 */}
+                見 navConfig BALL_SOURCES)。/dashboard 只有這一組入口——下方的工作/參考
+                分區沒有任何項目指向它,所以 aria-current 天然只落一處,不需要去重複。
+                件數與工作項 badge 同源(useTodayTasks),不另算一份。 */}
             <div className="mb-2">
               <div className={`px-4 pt-3 pb-1.5 ${collapsed ? 'md:hidden' : ''}`}>
                 <span className="text-caption font-medium text-[var(--text-2)]">球在誰手上</span>
@@ -404,29 +401,22 @@ export function WebLayout({ children }) {
                   <span className="text-caption font-medium text-[var(--text-2)]">{g.title}</span>
                 </div>
                 {g.items.map((n) => {
-                  // 工作面與角色子頁都來自 navConfig，不在 Layout 重寫清單。
+                  // 群組與角色子頁都來自 navConfig，不在 Layout 重寫清單。
                   const mineCount = mineCountForNavItem(dueMine, n)
                   const wbActive = n.tabs?.some((t) => t.to === pathname)
                   const itemActive = pathname === n.to || wbActive
                   const expanded = expandedWorkbenches.has(n.to)
-                  // 「今日待辦」與球權來源指向同一條路由,兩邊都掛 aria-current 的話
-                  // 報讀器會讀到兩個「目前頁面」。aria-current 只給最具體的那一個
-                  // (球權來源永遠有一個被選中),所以這個工作面項改用 Link 不用 NavLink
-                  // ——NavLink 會自己塞 aria-current,沒有公開的關閉方式。
-                  // 視覺選取態仍照舊(itemActive),使用者知道自己在這個區段裡。
-                  // 這個重複本身是過渡狀態:等來源模型完全取代「工作面」時,這一項會退場。
-                  const coveredByBallGroup = ballGroupShown && n.to === '/dashboard'
-                  const RowLink = coveredByBallGroup ? Link : NavLink
                   return (
                     <div key={n.to}>
                       <div className={rowClass({ selected: itemActive && (!n.tabs || !expanded), open: itemActive }, collapsed)}>
-                        <RowLink to={n.to} onClick={() => setMenuOpen(false)} title={collapsed ? n.label : undefined}
+                        {/* className 走函式形:字串形會被 NavLink 自動補一個 "active" class */}
+                        <NavLink to={n.to} onClick={() => setMenuOpen(false)} title={collapsed ? n.label : undefined}
                           aria-label={collapsed ? n.label : undefined}
-                          className={coveredByBallGroup ? linkClass(collapsed) : () => linkClass(collapsed)}>
-                          {/* 未處理件數(README 導覽規格)=「現在輪到我」落在此工作面的數 */}
+                          className={() => linkClass(collapsed)}>
+                          {/* 未處理件數(README 導覽規格)=「現在輪到我」落在此群組的數 */}
                           <NavRowContent icon={n.icon} label={n.label} short={NAV_SHORT[n.label] || n.label}
                             active={itemActive} count={mineCount} alert collapsed={collapsed} />
-                        </RowLink>
+                        </NavLink>
                         {n.tabs && (
                           <button type="button" onClick={() => toggleWorkbench(n.to)}
                             aria-expanded={expanded} aria-controls={`nav-children-${n.to.slice(1)}`}
@@ -476,7 +466,9 @@ export function WebLayout({ children }) {
           )}
         {children}
       </main>
-      <BottomNav items={visibleGroups.flatMap((g) => g.items)} homeTo={defaultLandingPath(currentUser?.org_type)} />
+      {/* 主畫面槽=「現在輪到我」:它的 to 就是落地頁(/dashboard),等對方/已完成是同頁的分段,
+          頁內 Segmented 就能切,不佔手機的格子 */}
+      <BottomNav items={visibleGroups.flatMap((g) => g.items)} home={BALL_SOURCES.find((b) => b.key === 'mine')} />
       <CopilotFab />
     </div>
   )

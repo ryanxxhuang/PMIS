@@ -1,5 +1,5 @@
-// 機關(李淑芬)動線:落地跨案總覽 → 核准變更設計 → 變更後契約金額跨頁一致(B-02)
-// → 廠商成本頁被擋 → 404 頁。
+// 機關(李淑芬)動線:落地收件匣、從側欄「專案」到跨案總覽 → 核准變更設計 →
+// 變更後契約金額跨頁一致(B-02)→ 廠商成本頁被擋 → 404 頁。
 import { test, expect } from '@playwright/test'
 import { loginAs, gotoHash } from './helpers.js'
 
@@ -8,11 +8,14 @@ import { loginAs, gotoHash } from './helpers.js'
 const REVISED_AFTER_CO2 = '724,388,067'
 
 test.describe('機關', () => {
-  test('登入落在今日待辦(精修期最小表面);跨案總覽深連結仍可達', async ({ page }) => {
+  test('登入落在今日待辦(收件匣);跨案總覽從側欄「專案」子頁可達,風險稽核只給機關', async ({ page }) => {
     await loginAs(page, 'owner')
     await expect(page.getByRole('heading', { name: '今日待辦' })).toBeVisible()
-    // 精修期跨案總覽暫別側欄,但深連結活著(恢復「專案」工作面時還原角色分流落地)
-    await gotoHash(page, '/portfolio')
+    // 落地不依角色分流(規範 §0 方向 A):多案角色要看跨案總覽,從「專案」群組一格就到
+    const nav = page.getByRole('navigation', { name: '主要功能' })
+    await nav.getByRole('button', { name: '展開專案子頁' }).click()
+    await expect(nav.getByRole('link', { name: '風險稽核', exact: true })).toBeVisible() // roles: owner
+    await nav.getByRole('link', { name: '跨案總覽', exact: true }).click()
     await expect(page.getByRole('heading', { name: '跨案總覽' })).toBeVisible()
     await page.goto('/')
     await expect(page).toHaveURL(/#\/dashboard/)

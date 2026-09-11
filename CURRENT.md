@@ -34,8 +34,8 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 ### 6.1 前端
 
 - UI 採 [Apple 規範](docs/UIUX-Apple-設計規範.md)，token 在 `src/index.css`，圖示 `lucide-react`。`listDetail.jsx` 共用清單／詳情殼已供契約兩頁與工安頁使用；列印用 `.paper` 與 `PrintToolbar`。
-- `navConfig.js` 是路由／導覽單一真相，未登記拒絕。側欄只露今日待辦、專案文件、契約重點、標單工項；五個 hidden 工作面仍保留角色守衛與深連結。
-- 首頁為「現在輪到我／等待對方／今天已完成」單桶收件匣，`?ball=` 選桶；保留最近施工日誌入口。待辦共用 `todayTasks.js`／`useTodayTasks`。
+- `navConfig.js` 是路由／導覽單一真相，未登記拒絕。側欄依來源模型分區：球在誰手上（持有 `/dashboard`）→ 工作（五組群組＋子頁，子頁依角色過濾）→ 參考（契約重點／專案文件／標單工項）→ 平台；目前無 hidden 項。
+- 首頁為「現在輪到我／等待對方／今天已完成」單桶收件匣，`?ball=` 選桶；不放頁面摘要卡。待辦共用 `todayTasks.js`／`useTodayTasks`。
 - 預定進度在首頁、進度頁、稽核、監造報告、跨案總覽與 AI 資料共用 `src/lib/progressPlan.js`。沿用月份座標、30 天換算與線性內插；不變更 S 曲線產生或 DB 計算。
 
 ### 6.2 驗證
@@ -71,7 +71,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 ## 7. 仍存在的限制
 
 - 前端／Edge 的待辦涵蓋類型與期限條件有差異；機關自有期限未進首頁。循環履約沒有逐期資料。詳見 [雙引擎](docs/architecture/dual-engine-sync.md)。
-- 正式且已匯標單的專案缺一般成員頁入口；hidden 工作面要依產品決策復出。
+- 正式且已匯標單的專案缺一般成員頁入口。
 - obligation runtime、雙成員相容欄位與 `VISIBLE` shim 仍有使用端，不可直接刪除。
 - rollback 檔僅覆蓋少數，存在檔案不代表回復演練通過。部分領域狀態欄無 CHECK，processing run 無轉移 guard。
 - Edge 新遮罩未部署；唯讀 Agent 呼叫軌跡不落庫。其餘已知缺口與待決事項集中 [ROADMAP](docs/ROADMAP.md)。

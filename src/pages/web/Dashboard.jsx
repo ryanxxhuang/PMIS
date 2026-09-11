@@ -234,9 +234,8 @@ export default function Dashboard() {
         <div className="space-y-5">
           {/* 初始化清單、風險警示、AI 今日已代辦只跟著「待我處理」走:它們是「現在該做
               什麼」的脈絡,不是「等對方」或「已完成」的脈絡。單欄直排:收件匣就是一條清單。
-              ⚠️「最近施工日誌」卡刻意保留:/site-log 目前是 hidden:true,而其餘連得到它的
-              /valuation 也 hidden,拿掉這張卡等於拆掉可見表面通往施工日誌的最後一條路——
-              2026-08-12 實測就是「藏到連擁有者都找不到」。解封現場與品質工作面之前不要動它。 */}
+              這裡沒有任何頁面摘要卡(判準 2):施工日誌等入口都在側欄「工作」分區,
+              首頁不替導覽補路。 */}
           {ball === 'mine' && isPersistedProject && !project.formal_mode && <SetupChecklist imported />}
 
           {/* 狀態全部由既有業務流程更新——在目的頁做完事就自動退出,
@@ -249,24 +248,6 @@ export default function Dashboard() {
               <InsightsPanel insights={insights} />
               {/* AI 今日已代辦:agent 今天替你做掉了什麼 */}
               <AgentDoneCard />
-              {/* 最近施工日誌:這張卡的存在理由不是「首頁該有摘要」,而是可發現性——
-                  /site-log 與 /valuation 都是 hidden:true,拿掉它之後可見表面就沒有
-                  任何一條路通往施工日誌。解封「現場與品質」工作面之後才可以移除。 */}
-              <Card title="最近施工日誌" bodyClass="p-0"
-                action={<Link to="/site-log" className="text-footnote font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">施工日誌 <MSym name="chevron_right" size={13} /></Link>}>
-                {siteLogs.length === 0 ? <Empty>尚無施工日誌</Empty> : (
-                  <ul className="divide-y divide-[var(--border-2)]">
-                    {siteLogs.slice(0, 6).map((l) => (
-                      <li key={l.id}>
-                        <Link to="/site-log" className="flex items-center justify-between gap-3 px-5 py-2.5 text-body hover:bg-[var(--surface-2)] transition-colors">
-                          <span className="num text-[var(--text-2)] shrink-0">{l.log_date}</span>
-                          <span className="text-[var(--text)] truncate ml-3 flex-1 text-right">{l.work_summary || `${Object.keys(l.items).length} 工項`}</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Card>
             </>
           )}
         </div>
