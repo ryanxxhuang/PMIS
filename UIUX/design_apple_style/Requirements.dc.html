@@ -1,0 +1,350 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
+      color: #1D1D1F;
+    }
+    a { color: #0071E3; text-decoration: none; }
+    a:hover { color: #0058B0; text-decoration: underline; }
+  </style>
+</helmet>
+
+<div style="display: grid; grid-template-columns: 240px minmax(0, 1fr); height: 900px; background: #F5F5F7;">
+
+  <!-- ══ 側欄 ══ -->
+  <aside style="background: rgba(246,246,248,.86); backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%); box-shadow: inset -1px 0 0 rgba(0,0,0,.07); display: flex; flex-direction: column; padding: 0 10px 12px;">
+    <div style="display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 8px; flex-shrink: 0;">
+      <span style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; font-size: 17px; font-weight: 600; letter-spacing: -0.015em; color: #1D1D1F;">PMIS</span>
+      <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.015em; color: #0071E3;">.ai</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 11px; border-radius: 9px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 0 0 .5px rgba(0,0,0,.07); margin-bottom: 18px;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0071E3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.6a2 2 0 0 0 1.3 1.3L19.5 10.5l-4.6 1.6a2 2 0 0 0-1.3 1.3L12 18l-1.6-4.6a2 2 0 0 0-1.3-1.3L4.5 10.5l4.6-1.6a2 2 0 0 0 1.3-1.3z"></path><path d="M19 15.5v3"></path><path d="M17.5 17h3"></path></svg>
+      <span style="font-size: 13px; font-weight: 510; color: #1D1D1F;">問 PMIS</span>
+      <span style="margin-left: auto; font-size: 11px; color: #86868B;">⌘K</span>
+    </div>
+    <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #86868B; padding: 0 10px 6px;">工作面</div>
+    <nav style="display: flex; flex-direction: column; gap: 2px;">
+      <div style="display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"></path><path d="m3 7 2 2 4-4"></path><path d="M13 6h8"></path><path d="M13 12h8"></path><path d="M13 18h8"></path></svg>
+        <span style="font-size: 13px; color: #1D1D1F;">今日待辦</span>
+        <span style="margin-left: auto; font-size: 11px; color: #86868B;">7</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
+        <span style="font-size: 13px; color: #1D1D1F;">專案文件</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px; background: rgba(0,113,227,.10);">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0071E3" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12h-5"></path><path d="M15 8h-5"></path><path d="M19 17V5a2 2 0 0 0-2-2H4"></path><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"></path></svg>
+        <span style="font-size: 13px; font-weight: 510; color: #0058B0;">契約重點</span>
+        <span style="margin-left: auto; font-size: 11px; font-weight: 510; color: #0058B0;">11</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"></rect><path d="M8 6h8"></path><path d="M8 11h.01"></path><path d="M12 11h.01"></path><path d="M16 11h.01"></path><path d="M8 15h.01"></path><path d="M12 15h.01"></path><path d="M16 15v4"></path></svg>
+        <span style="font-size: 13px; color: #1D1D1F;">標單工項</span>
+      </div>
+    </nav>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 7px; padding: 0 9px;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#248A3D" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>
+      <span style="font-size: 11px; color: #6E6E73;">正式模式 · 稽核中</span>
+    </div>
+  </aside>
+
+  <!-- ══ 主區 ══ -->
+  <main style="display: flex; flex-direction: column; min-width: 0;">
+
+    <div style="display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 20px; background: rgba(255,255,255,.80); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: inset 0 -1px 0 rgba(0,0,0,.07); flex-shrink: 0;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path></svg>
+      <div style="display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px 0 10px; border-radius: 8px; background: #EFEFF4;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
+        <span style="font-size: 13px; color: #1D1D1F;">桃園市立圖書館新建工程</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+      </div>
+      <div style="display: flex; align-items: center; gap: 7px; height: 28px; width: 300px; padding: 0 10px; border-radius: 8px; background: #FFFFFF; box-shadow: inset 0 0 0 1px #D2D2D7; margin-left: 8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+        <span style="font-size: 13px; color: #86868B;">搜尋履約要求、條號、佐證⋯⋯</span>
+      </div>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 14px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+        <div style="position: relative; display: flex;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+          <span style="position: absolute; top: -1px; right: -1px; width: 7px; height: 7px; border-radius: 999px; background: #D70015; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9);"></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; padding-left: 6px;">
+          <div style="width: 26px; height: 26px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 12px; font-weight: 590; display: flex; align-items: center; justify-content: center;">林</div>
+          <div style="line-height: 1.25;">
+            <div style="font-size: 12px; font-weight: 510; color: #1D1D1F;">林建宏</div>
+            <div style="font-size: 10px; color: #86868B;">中興顧問 · 監造</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex: 1; min-height: 0; overflow: hidden; padding: 22px 28px 0;">
+
+      <!-- 頁首 -->
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;">
+        <div style="max-width: 680px;">
+          <h1 style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Noto Sans TC', sans-serif; font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.021em; margin: 0; color: #1D1D1F;">契約重點 · 履約時程</h1>
+          <p style="font-size: 13px; line-height: 19px; color: #6E6E73; margin: 5px 0 0;">查看自己與廠商的履約事項、期限與佐證。本頁不做審核；內容如有出入，以契約原文為準。</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 8px; font-size: 12px; font-weight: 510; background: #FFFFFF; color: #1D1D1F; box-shadow: inset 0 0 0 1px #D2D2D7;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>
+            篩選
+          </span>
+          <span style="display: inline-flex; align-items: center; height: 28px; padding: 0 13px; border-radius: 8px; font-size: 12px; font-weight: 510; background: #0071E3; color: #FFFFFF;">履約期程設定</span>
+        </div>
+      </div>
+
+      <!-- 分段控制 + 履約執行統計 -->
+      <div style="display: flex; align-items: center; gap: 14px; margin: 16px 0 14px;">
+        <div style="display: inline-flex; padding: 2px; border-radius: 9px; background: #EFEFF4; gap: 2px; flex-shrink: 0;">
+          <span style="display: inline-flex; align-items: center; height: 26px; padding: 0 15px; border-radius: 7px; font-size: 12px; font-weight: 510; background: #FFFFFF; color: #1D1D1F; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 .5px rgba(0,0,0,.04);">全部 118</span>
+          <span style="display: inline-flex; align-items: center; height: 26px; padding: 0 15px; border-radius: 7px; font-size: 12px; font-weight: 500; color: #6E6E73;">廠商 74</span>
+          <span style="display: inline-flex; align-items: center; height: 26px; padding: 0 15px; border-radius: 7px; font-size: 12px; font-weight: 500; color: #6E6E73;">監造 29</span>
+          <span style="display: inline-flex; align-items: center; height: 26px; padding: 0 15px; border-radius: 7px; font-size: 12px; font-weight: 500; color: #6E6E73;">機關 15</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 7px; flex-wrap: wrap;">
+          <span style="display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #FDECEB; color: #B3000F;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #D70015;"></span>已逾期 8</span>
+          <span style="display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #FDF0E7; color: #A32B00;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #C93400;"></span>即將到期 3</span>
+          <span style="display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #E8F1FD; color: #0058B0;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #0071E3;"></span>排程中 41</span>
+          <span style="display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #E8F6EC; color: #1B6B2E;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #248A3D;"></span>已完成 54</span>
+          <span style="display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #EFEFF4; color: #6E6E73;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #86868B;"></span>未觸發 12</span>
+        </div>
+        <div style="margin-left: auto; font-size: 11px; color: #86868B; flex-shrink: 0;">已完成 <span style="font-weight: 590; color: #1D1D1F;">54</span> · 待處理 <span style="font-weight: 590; color: #1D1D1F;">52</span> · 未觸發 <span style="font-weight: 590; color: #1D1D1F;">12</span></div>
+      </div>
+
+      <!-- 履約期程軸 -->
+      <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 14px 18px 16px; margin-bottom: 16px;">
+        <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;">
+          <h3 style="font-size: 14px; font-weight: 600; letter-spacing: -0.006em; margin: 0; color: #1D1D1F;">履約期程</h3>
+          <span style="font-size: 11px; color: #86868B;">基準日：實際開工日 2026-02-14　·　竣工期限 2027-01-27</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px;">
+          <div style="border-radius: 9px; background: #F7F7F9; padding: 10px 12px 11px; box-shadow: inset 0 0 0 .5px #E5E5EA;">
+            <div style="height: 3px; border-radius: 999px; background: #248A3D;"></div>
+            <div style="font-size: 12px; font-weight: 590; color: #1D1D1F; margin-top: 8px;">開工前</div>
+            <div style="font-size: 10px; color: #86868B; margin-top: 2px;">— ～ 02-14</div>
+            <div style="font-size: 11px; color: #1B6B2E; margin-top: 5px;">9 項 · 全部完成</div>
+          </div>
+          <div style="border-radius: 9px; background: #F7F7F9; padding: 10px 12px 11px; box-shadow: inset 0 0 0 .5px #E5E5EA;">
+            <div style="height: 3px; border-radius: 999px; background: linear-gradient(90deg, #248A3D 0 74%, #D70015 74% 100%);"></div>
+            <div style="font-size: 12px; font-weight: 590; color: #1D1D1F; margin-top: 8px;">開工後 30 日內</div>
+            <div style="font-size: 10px; color: #86868B; margin-top: 2px;">02-14 ～ 03-16</div>
+            <div style="font-size: 11px; color: #B3000F; margin-top: 5px;">19 項 · 2 項逾期</div>
+          </div>
+          <div style="border-radius: 9px; background: #FFFFFF; padding: 10px 12px 11px; box-shadow: inset 0 0 0 1.5px #0071E3; position: relative;">
+            <div style="height: 3px; border-radius: 999px; background: linear-gradient(90deg, #248A3D 0 58%, #E5E5EA 58% 100%); position: relative;">
+              <span style="position: absolute; left: 58%; top: -3px; width: 2px; height: 9px; border-radius: 1px; background: #0071E3;"></span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
+              <span style="font-size: 12px; font-weight: 590; color: #1D1D1F;">施工中</span>
+              <span style="display: inline-flex; align-items: center; height: 16px; padding: 0 6px; border-radius: 4px; font-size: 9px; font-weight: 590; background: #E8F1FD; color: #0058B0;">今天</span>
+            </div>
+            <div style="font-size: 10px; color: #86868B; margin-top: 2px;">03-16 ～ 2027-01-27</div>
+            <div style="font-size: 11px; color: #B3000F; margin-top: 5px;">63 項 · 6 項逾期 · 3 項即將到期</div>
+          </div>
+          <div style="border-radius: 9px; background: #F7F7F9; padding: 10px 12px 11px; box-shadow: inset 0 0 0 .5px #E5E5EA;">
+            <div style="height: 3px; border-radius: 999px; background: #E5E5EA;"></div>
+            <div style="font-size: 12px; font-weight: 590; color: #1D1D1F; margin-top: 8px;">完工後</div>
+            <div style="font-size: 10px; color: #86868B; margin-top: 2px;">2027-01-27 ～ 驗收</div>
+            <div style="font-size: 11px; color: #6E6E73; margin-top: 5px;">15 項 · 排程中</div>
+          </div>
+          <div style="border-radius: 9px; background: #F7F7F9; padding: 10px 12px 11px; box-shadow: inset 0 0 0 .5px #E5E5EA;">
+            <div style="height: 3px; border-radius: 999px; background: #E5E5EA;"></div>
+            <div style="font-size: 12px; font-weight: 590; color: #1D1D1F; margin-top: 8px;">保固</div>
+            <div style="font-size: 10px; color: #86868B; margin-top: 2px;">驗收合格後 3 年</div>
+            <div style="font-size: 11px; color: #6E6E73; margin-top: 5px;">12 項 · 未觸發</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主從：清單 + 詳情 -->
+      <div style="display: grid; grid-template-columns: 1fr 1.06fr; gap: 16px;">
+
+        <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 11px 16px; border-bottom: 1px solid #E5E5EA;">
+            <h3 style="font-size: 14px; font-weight: 600; letter-spacing: -0.006em; margin: 0; color: #1D1D1F;">履約事項</h3>
+            <span style="font-size: 11px; color: #86868B;">依到期日排序</span>
+          </div>
+
+          <div style="display: flex; gap: 11px; padding: 10px 16px; background: rgba(0,113,227,.10); border-bottom: 1px solid #E5E5EA;">
+            <span style="width: 7px; height: 7px; border-radius: 999px; background: #D70015; flex-shrink: 0; margin-top: 6px;"></span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 590; color: #0058B0;">第 8 條第 3 項</span>
+                <span style="font-size: 10px; color: #0058B0;">品質管理</span>
+              </div>
+              <div style="font-size: 13px; font-weight: 510; color: #0058B0; margin-top: 2px;">查驗缺失改善後回報監造</div>
+            </div>
+            <div style="text-align: right; flex-shrink: 0;">
+              <div style="font-size: 11px; font-weight: 590; color: #B3000F;">逾期 4 日</div>
+              <div style="font-size: 10px; color: #0058B0; margin-top: 2px;">廠商</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 11px; padding: 10px 16px; border-bottom: 1px solid #E5E5EA;">
+            <span style="width: 7px; height: 7px; border-radius: 999px; background: #D70015; flex-shrink: 0; margin-top: 6px;"></span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 590; color: #6E6E73;">第 16 條第 2 項</span>
+                <span style="font-size: 10px; color: #86868B;">工安</span>
+              </div>
+              <div style="font-size: 13px; color: #1D1D1F; margin-top: 2px;">每月工地安全衛生會議紀錄提送</div>
+            </div>
+            <div style="text-align: right; flex-shrink: 0;">
+              <div style="font-size: 11px; font-weight: 590; color: #B3000F;">逾期 2 日</div>
+              <div style="font-size: 10px; color: #86868B; margin-top: 2px;">廠商</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 11px; padding: 10px 16px; border-bottom: 1px solid #E5E5EA;">
+            <span style="width: 7px; height: 7px; border-radius: 999px; background: #C93400; flex-shrink: 0; margin-top: 6px;"></span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 590; color: #6E6E73;">第 12 條第 4 項</span>
+                <span style="font-size: 10px; color: #86868B;">估驗計價</span>
+              </div>
+              <div style="font-size: 13px; color: #1D1D1F; margin-top: 2px;">估驗計價申請後 14 日內完成審核</div>
+            </div>
+            <div style="text-align: right; flex-shrink: 0;">
+              <div style="font-size: 11px; font-weight: 590; color: #A32B00;">今日到期</div>
+              <div style="font-size: 10px; color: #86868B; margin-top: 2px;">監造</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 11px; padding: 10px 16px; border-bottom: 1px solid #E5E5EA;">
+            <span style="width: 7px; height: 7px; border-radius: 999px; background: #C93400; flex-shrink: 0; margin-top: 6px;"></span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 590; color: #6E6E73;">第 18 條第 3 項</span>
+                <span style="font-size: 10px; color: #86868B;">環境保護</span>
+              </div>
+              <div style="font-size: 13px; color: #1D1D1F; margin-top: 2px;">季報：空氣污染防制費申報</div>
+            </div>
+            <div style="text-align: right; flex-shrink: 0;">
+              <div style="font-size: 11px; font-weight: 590; color: #A32B00;">3 日後</div>
+              <div style="font-size: 10px; color: #86868B; margin-top: 2px;">廠商</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 11px; padding: 10px 16px; border-bottom: 1px solid #E5E5EA;">
+            <span style="width: 7px; height: 7px; border-radius: 999px; background: #0071E3; flex-shrink: 0; margin-top: 6px;"></span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 590; color: #6E6E73;">第 14 條第 1 項</span>
+                <span style="font-size: 10px; color: #86868B;">進度管理</span>
+              </div>
+              <div style="font-size: 13px; color: #1D1D1F; margin-top: 2px;">每月 5 日前提送施工月報</div>
+            </div>
+            <div style="text-align: right; flex-shrink: 0;">
+              <div style="font-size: 11px; color: #6E6E73;">10-05</div>
+              <div style="font-size: 10px; color: #86868B; margin-top: 2px;">廠商</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 11px; padding: 10px 16px; border-bottom: 1px solid #E5E5EA;">
+            <span style="width: 7px; height: 7px; border-radius: 999px; background: #248A3D; flex-shrink: 0; margin-top: 6px;"></span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 590; color: #6E6E73;">第 5 條第 1 項</span>
+                <span style="font-size: 10px; color: #86868B;">開工</span>
+              </div>
+              <div style="font-size: 13px; color: #1D1D1F; margin-top: 2px;">開工後 7 日內提送施工預定進度表</div>
+            </div>
+            <div style="text-align: right; flex-shrink: 0;">
+              <div style="font-size: 11px; color: #1B6B2E;">已完成</div>
+              <div style="font-size: 10px; color: #86868B; margin-top: 2px;">廠商</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 11px; padding: 10px 16px;">
+            <span style="width: 7px; height: 7px; border-radius: 999px; background: #86868B; flex-shrink: 0; margin-top: 6px;"></span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 590; color: #6E6E73;">第 23 條第 2 項</span>
+                <span style="font-size: 10px; color: #86868B;">保固</span>
+              </div>
+              <div style="font-size: 13px; color: #1D1D1F; margin-top: 2px;">保固期內接獲通知 7 日內派員處理</div>
+            </div>
+            <div style="text-align: right; flex-shrink: 0;">
+              <div style="font-size: 11px; color: #86868B;">未觸發</div>
+              <div style="font-size: 10px; color: #86868B; margin-top: 2px;">廠商</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 詳情 -->
+        <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 11px 18px; border-bottom: 1px solid #E5E5EA;">
+            <span style="width: 7px; height: 7px; border-radius: 999px; background: #D70015;"></span>
+            <h3 style="font-size: 14px; font-weight: 600; letter-spacing: -0.006em; margin: 0; color: #1D1D1F;">第 8 條第 3 項</h3>
+            <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 5px; font-size: 10px; font-weight: 590; background: #FDECEB; color: #B3000F;">已逾期 4 日</span>
+            <span style="margin-left: auto; display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 10px; font-weight: 590; background: #EFEFF4; color: #6E6E73;">責任方 · 廠商</span>
+          </div>
+
+          <div style="padding: 16px 18px 18px; flex: 1; min-height: 0;">
+            <div style="font-size: 15px; line-height: 22px; font-weight: 510; color: #1D1D1F; letter-spacing: -0.006em;">查驗缺失改善後回報監造</div>
+            <div style="font-size: 13px; line-height: 20px; color: #1D1D1F; margin-top: 10px; padding: 12px 14px; background: #F7F7F9; border-radius: 9px; box-shadow: inset 0 0 0 .5px #E5E5EA;">
+              乙方接獲監造單位查驗缺失通知後，應於七日內完成改善並回報；經複驗合格始得繼續後續工項。逾期未回報者，按日以契約總價千分之一計罰。
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px;">
+              <div>
+                <div style="font-size: 10px; color: #86868B;">基準事件</div>
+                <div style="font-size: 13px; color: #1D1D1F; margin-top: 2px;">缺失通知 08-31</div>
+              </div>
+              <div>
+                <div style="font-size: 10px; color: #86868B;">推算到期日</div>
+                <div style="font-size: 13px; font-weight: 590; color: #B3000F; margin-top: 2px;">2026-09-07</div>
+              </div>
+              <div>
+                <div style="font-size: 10px; color: #86868B;">罰則</div>
+                <div style="font-size: 13px; color: #1D1D1F; margin-top: 2px;">486,200 / 日</div>
+              </div>
+            </div>
+
+            <div style="font-size: 10px; color: #86868B; margin-top: 16px;">來源</div>
+            <div style="display: flex; align-items: center; gap: 9px; margin-top: 5px; padding: 9px 12px; border-radius: 8px; background: #FFFFFF; box-shadow: inset 0 0 0 1px #E5E5EA;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
+              <span style="font-size: 12px; color: #1D1D1F;">工程契約_桃園市立圖書館新建工程.pdf</span>
+              <span style="font-size: 11px; color: #86868B;">· 第 16 頁</span>
+              <span style="margin-left: auto; font-size: 11px; color: #0071E3;">查看原文</span>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 12px; border-radius: 8px; background: #F5EDF9;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#703A8C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 12 2 2 4-4"></path><circle cx="12" cy="12" r="10"></circle></svg>
+              <span style="font-size: 11px; line-height: 16px; color: #703A8C;">AI 整理後已由程式逐字比對原文通過，自動確認歸檔。核對結果僅為透明度註記，不是核定。</span>
+            </div>
+
+            <div style="font-size: 10px; color: #86868B; margin-top: 16px;">佐證</div>
+            <div style="display: flex; align-items: center; gap: 9px; margin-top: 5px; padding: 12px; border-radius: 8px; background: #FDECEB;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#B3000F" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
+              <span style="font-size: 12px; color: #B3000F;">尚無改善回報與複驗紀錄，履約事項維持未完成。</span>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+              <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: #0071E3; color: #FFFFFF;">通知責任方</span>
+              <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: #FFFFFF; color: #0071E3; box-shadow: inset 0 0 0 1px #D2D2D7;">上傳佐證</span>
+              <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: #EFEFF4; color: #1D1D1F;">到期限管理</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+</body>
+</html>

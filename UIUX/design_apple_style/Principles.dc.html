@@ -1,0 +1,244 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Noto Sans TC", "PingFang TC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
+      color: #1D1D1F;
+    }
+    a { color: #0071E3; text-decoration: none; }
+    a:hover { color: #0058B0; text-decoration: underline; }
+    .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; }
+  </style>
+</helmet>
+
+<div style="width: 1240px; min-height: 1900px; box-sizing: border-box; background: #F5F5F7; padding: 44px 48px 56px;">
+
+  <!-- 標頭 -->
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; padding-bottom: 20px; border-bottom: 1px solid #D2D2D7;">
+    <div style="max-width: 760px;">
+      <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #86868B;">PMIS.ai · UIUX 判準</div>
+      <h1 style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Noto Sans TC', sans-serif; font-size: 34px; line-height: 40px; font-weight: 600; letter-spacing: -0.022em; margin: 8px 0 0;">Apple 設計精神 → PMIS 判準</h1>
+      <p style="font-size: 14px; line-height: 21px; color: #6E6E73; margin: 10px 0 0;">色票與圓角只是結果。真正決定「像不像 Apple」的是下面這四組判準：<strong style="color: #1D1D1F; font-weight: 590;">憑什麼存在、走幾步、摸得到嗎、撤得回嗎</strong>。任何新畫面在動手前要能回答第 4 節的六個問題。</p>
+    </div>
+    <div style="flex-shrink: 0; text-align: right;">
+      <div style="font-size: 11px; color: #86868B;">來源</div>
+      <div style="font-size: 13px; font-weight: 500; margin-top: 4px;">HIG《Principles of Great Design》</div>
+      <div style="font-size: 13px; font-weight: 500;">WWDC《Designing Fluid Interfaces》</div>
+    </div>
+  </div>
+
+  <!-- §1 八原則 -->
+  <div style="display: flex; align-items: baseline; gap: 12px; margin: 32px 0 14px;">
+    <h2 style="font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.015em; margin: 0;">1 · 八原則對照</h2>
+    <span style="font-size: 13px; color: #86868B;">左邊是原則，右邊是這個產品現在哪裡違反、要改成什麼</span>
+  </div>
+
+  <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+    <div style="display: grid; grid-template-columns: 150px 1fr 1fr; gap: 0; padding: 10px 20px; border-bottom: 1px solid #E5E5EA; background: #FAFAFC;">
+      <div style="font-size: 11px; font-weight: 590; color: #6E6E73;">原則</div>
+      <div style="font-size: 11px; font-weight: 590; color: #B3000F;">現在違反的地方</div>
+      <div style="font-size: 11px; font-weight: 590; color: #1B6B2E;">改成</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 150px 1fr 1fr; gap: 16px; padding: 13px 20px; border-bottom: 1px solid #F0F0F3;">
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">Purpose</div>
+        <div style="font-size: 11px; color: #86868B; margin-top: 2px;">決定不做什麼</div>
+      </div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">今日待辦頂端四張指標卡（實際進度／契約金額／已計價／剩餘工期）沒有任何一個會被點。它們是裝飾，不是行動。</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">主畫面只放「球在你手上的事」。數字要看的時候再去看，不常駐佔版面。</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 150px 1fr 1fr; gap: 16px; padding: 13px 20px; border-bottom: 1px solid #F0F0F3;">
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">Agency</div>
+        <div style="font-size: 11px; color: #86868B; margin-top: 2px;">人保有控制權</div>
+      </div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">動作靠 confirm 對話框把關，而且到處都是。確認框用多了，人只會一路按確定。</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">先做再給撤回（snackbar undo）。確認框只留給真正不可逆的：核定、簽章、刪除。</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 150px 1fr 1fr; gap: 16px; padding: 13px 20px; border-bottom: 1px solid #F0F0F3;">
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">Responsibility</div>
+        <div style="font-size: 11px; color: #86868B; margin-top: 2px;">為使用者的利益行動</div>
+      </div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">「AI 只產草稿」寫在頁尾 11px 小字。對政府客戶，這是產品最重要的一句話，卻被當免責聲明藏起來。</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">升級成介面本身：AI 產物有固定的紫色身分、來源引用一鍵回原文、人覆核前不得進入任何統計。</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 150px 1fr 1fr; gap: 16px; padding: 13px 20px; border-bottom: 1px solid #F0F0F3;">
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">Familiarity</div>
+        <div style="font-size: 11px; color: #86868B; margin-top: 2px;">長得一樣就要行為一樣</div>
+      </div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">同一種「清單＋詳情」在契約重點、送審、缺失、估驗各長一套，位置與動作都不同。</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">全站共用一個殼。詳情永遠出現在同一個位置，動作永遠在同一條列上。</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 150px 1fr 1fr; gap: 16px; padding: 13px 20px; border-bottom: 1px solid #F0F0F3;">
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">Flexibility</div>
+        <div style="font-size: 11px; color: #86868B; margin-top: 2px;">適應情境與裝置</div>
+      </div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">手機版＝桌機版縮小＋底部導覽。但現場戴手套、單手、太陽下，跟辦公室審查是兩種工作。</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">手機是另一個形狀：大目標、少欄位、拍照與語音先行；桌機才做深度檢閱與批次。</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 150px 1fr 1fr; gap: 16px; padding: 13px 20px; border-bottom: 1px solid #F0F0F3;">
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">Simplicity</div>
+        <div style="font-size: 11px; color: #86868B; margin-top: 2px;">不是極簡</div>
+      </div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">五個工作面 <span class="mono" style="font-size: 11px;">hidden: true</span> 藏起來當精簡。實測結果是連擁有者都找不到施工日誌——看起來極簡，但不簡單。</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">常用路徑先出現，進階選項放下一層而不是刪掉入口。藏東西的前提是替代路徑高度可發現。</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 150px 1fr 1fr; gap: 16px; padding: 13px 20px; border-bottom: 1px solid #F0F0F3;">
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">Craft</div>
+        <div style="font-size: 11px; color: #86868B; margin-top: 2px;">每個值都要能辯護</div>
+      </div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">全站 243 處 <span class="mono" style="font-size: 11px;">text-[Npx]</span> 任意字級，13 種尺寸還含 11.5／12.5 半像素。沒有型階，只有當下順手。</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">收斂成六階，字距隨字級走（大字負字距、內文近 0），間距用 rem 讓系統字級設定能放大整個版面。</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 150px 1fr 1fr; gap: 16px; padding: 13px 20px;">
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">Delight</div>
+        <div style="font-size: 11px; color: #86868B; margin-top: 2px;">前七項做對的結果</div>
+      </div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">目前沒有明確想讓人感受到什麼；介面情緒是「一張又一張表單」。</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F;">要的情緒是<strong style="font-weight: 590;">篤定</strong>：我知道現在該做什麼、我知道這個數字哪來的、我知道按下去會發生什麼。不是驚喜，是安心。</div>
+    </div>
+  </div>
+
+  <!-- §2 流動性 -->
+  <div style="display: flex; align-items: baseline; gap: 12px; margin: 32px 0 14px;">
+    <h2 style="font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.015em; margin: 0;">2 · 流動性六條</h2>
+    <span style="font-size: 13px; color: #86868B;">介面「有生命」的來源不是動畫好看，是它一直在回應你</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;">
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 15px 17px 17px;">
+      <div style="font-size: 13px; font-weight: 600;">回饋在按下，不在放開</div>
+      <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 6px;">手指一碰就有反應，等 click 才變色等於死掉。順手清掉每一個 debounce 與人為延遲。</div>
+      <div style="font-size: 11px; line-height: 16px; color: #0058B0; margin-top: 8px;">PMIS：核准鈕、清單列、側欄項全部 pointer-down 就 scale(.98)。</div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 15px 17px 17px;">
+      <div style="font-size: 13px; font-weight: 600;">1:1 追蹤</div>
+      <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 6px;">拖曳時東西要黏在手指上，而且要尊重「你抓的是哪一點」。抓住就跳到中心，幻覺立刻破。</div>
+      <div style="font-size: 11px; line-height: 16px; color: #0058B0; margin-top: 8px;">PMIS：履約時程上拖日期、分欄拉寬、手機左滑延後。</div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 15px 17px 17px;">
+      <div style="font-size: 13px; font-weight: 600;">可中斷（最重要）</div>
+      <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 6px;">動畫飛到一半要能抓住反向，而且從當前呈現值續動，不是從目標值。過場期間永不鎖輸入。</div>
+      <div style="font-size: 11px; line-height: 16px; color: #0058B0; margin-top: 8px;">PMIS：側邊面板、確認框、手機抽屜關到一半都能抓回來。</div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 15px 17px 17px;">
+      <div style="font-size: 13px; font-weight: 600;">彈簧，不是時長</div>
+      <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 6px;">手勢驅動的東西用彈簧（damping 1.0 / response 0.3–0.4）；只有甩出去的動作才給 0.8 的回彈。</div>
+      <div style="font-size: 11px; line-height: 16px; color: #0058B0; margin-top: 8px;">PMIS：純淡入淡出的浮層留 CSS 過場即可，不必全面上彈簧。</div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 15px 17px 17px;">
+      <div style="font-size: 13px; font-weight: 600;">空間一致</div>
+      <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 6px;">從哪裡出來就回哪裡去，並且從觸發它的那個東西長出來。右邊進來、底部出去＝迷路。</div>
+      <div style="font-size: 11px; line-height: 16px; color: #0058B0; margin-top: 8px;">PMIS：<span class="mono" style="font-size: 10px;">transform-origin</span> 對準觸發鈕，進出走同一條路徑。</div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 15px 17px 17px;">
+      <div style="font-size: 13px; font-weight: 600;">邊界是橡皮筋</div>
+      <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 6px;">到底了要漸進阻尼，不要硬停。硬停讀起來是「當掉」，阻尼讀起來是「這裡沒有了，但我還活著」。</div>
+      <div style="font-size: 11px; line-height: 16px; color: #0058B0; margin-top: 8px;">PMIS：長表格捲到頂／底、時程軸拖出範圍。</div>
+    </div>
+  </div>
+
+  <!-- §3 紅線 -->
+  <div style="display: flex; align-items: baseline; gap: 12px; margin: 32px 0 14px;">
+    <h2 style="font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.015em; margin: 0;">3 · 三條不可退讓</h2>
+    <span style="font-size: 13px; color: #86868B;">Apple 的 Responsibility 與本產品的紅線剛好重疊；任何方向都不得違反</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;">
+    <div style="background: #F5EDF9; border-radius: 12px; box-shadow: 0 0 0 .5px rgba(137,68,171,.22); padding: 15px 17px 17px;">
+      <div style="font-size: 13px; font-weight: 600; color: #703A8C;">AI 只產草稿</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F; margin-top: 6px;">核定、判定、結案、驗收、凍結不在 agent 的工具箱裡。介面上 AI 產物必須看得出是 AI 產物，且人覆核前不進任何統計。</div>
+    </div>
+    <div style="background: #E8F1FD; border-radius: 12px; box-shadow: 0 0 0 .5px rgba(0,113,227,.20); padding: 15px 17px 17px;">
+      <div style="font-size: 13px; font-weight: 600; color: #0058B0;">數字由確定性引擎算</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F; margin-top: 6px;">金額、期限、判定一律由程式算。介面要能一路追到來源：這個數字＝哪個工項×哪個單價，這個日期＝哪個基準事件＋幾日。</div>
+    </div>
+    <div style="background: #E8F6EC; border-radius: 12px; box-shadow: 0 0 0 .5px rgba(27,107,46,.20); padding: 15px 17px 17px;">
+      <div style="font-size: 13px; font-weight: 600; color: #1B6B2E;">每個動作留痕</div>
+      <div style="font-size: 12px; line-height: 18px; color: #1D1D1F; margin-top: 6px;">誰、什麼時候、依據什麼、人怎麼覆核，都要寫進稽核軌跡。這是政府客戶信任的來源，介面要讓它看得見而不是藏起來。</div>
+    </div>
+  </div>
+
+  <!-- §4 判準清單 -->
+  <div style="display: flex; align-items: baseline; gap: 12px; margin: 32px 0 14px;">
+    <h2 style="font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.015em; margin: 0;">4 · 動手前的六個問題</h2>
+    <span style="font-size: 13px; color: #86868B;">任何新畫面、新元件、新流程，六題都要能回答；答不出來就是還沒想清楚</span>
+  </div>
+
+  <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 6px 22px;">
+    <div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 0; border-bottom: 1px solid #F0F0F3;">
+      <span style="width: 20px; height: 20px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;">1</span>
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">我在哪？能去哪？那裡有什麼？怎麼出去？</div>
+        <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 2px;">四題任一個答不出來，這個畫面就會困住人。導覽項要用內容命名（「履約時程」），不要用空泛的傘（「總覽」）。</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 0; border-bottom: 1px solid #F0F0F3;">
+      <span style="width: 20px; height: 20px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;">2</span>
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">這個元素憑什麼佔版面？有人會對它採取行動嗎？</div>
+        <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 2px;">不會被點、不會改變決定的數字與圖示，一律刪。「多放一點資訊比較安全」是這個產品最貴的習慣。</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 0; border-bottom: 1px solid #F0F0F3;">
+      <span style="width: 20px; height: 20px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;">3</span>
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">從發現到完成，走幾步？能不能少一步？</div>
+        <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 2px;">跳頁算一步、開對話框算一步、回上一頁算一步。能就地處理就不要跳頁。</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 0; border-bottom: 1px solid #F0F0F3;">
+      <span style="width: 20px; height: 20px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;">4</span>
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">控制項離它影響的東西夠近嗎？</div>
+        <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 2px;">如果需要一個標籤來解釋這個控制項在幹嘛，代表擺錯位置了。期限的動作就該長在期限旁邊。</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 0; border-bottom: 1px solid #F0F0F3;">
+      <span style="width: 20px; height: 20px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;">5</span>
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">做錯了能不能撤回？真的需要確認框嗎？</div>
+        <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 2px;">預設是「先做，給 undo」。確認框只留給不可逆：核定、簽章、刪除。濫用確認框＝訓練使用者盲按。</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: flex-start; gap: 13px; padding: 13px 0;">
+      <span style="width: 20px; height: 20px; border-radius: 999px; background: #0071E3; color: #FFFFFF; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;">6</span>
+      <div>
+        <div style="font-size: 13px; font-weight: 590;">這個數字來自哪裡？點得進去嗎？</div>
+        <div style="font-size: 12px; line-height: 18px; color: #6E6E73; margin-top: 2px;">金額、期限、判定都要能一路追到來源工項、基準事件或契約條文。追不進去的數字，在政府案裡等於沒有。</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="font-size: 11px; line-height: 17px; color: #86868B; margin-top: 24px; padding-top: 14px; border-top: 1px solid #D2D2D7;">
+    這張板子是規則本身，不是風格建議。方向 A／B／C 三張畫板各自對這四組判準給出不同的答案；挑定之後，這張板子連同基礎規格板一起寫成 repo 裡的常駐規範文件。
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

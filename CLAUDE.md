@@ -77,6 +77,7 @@
 - **權限**：伺服器端 RBAC（RLS ＋ 狀態轉移 trigger），前端 `can` 只是 UX，不是安全邊界
 - **成員模型**：`project_members`＝授權；`project_memberships`＝契約方身分快照。唯一規則見 `docs/architecture/three-party-role-model.md`
 - **路由與導覽單一真相**：`src/lib/navConfig.js` 的 `routeRegistry`／`navGroups`（未登記路由 fail-closed；公開與列印路由必須明確標記；`hidden: true` ≠ 移除權限）
+- **UIUX 單一真相**：**`docs/UIUX-Apple-設計規範.md`**（2026-09-11 起全產品 Apple style，取代 W9 Google handoff）。顏色／字級／圓角／材質一律走 `src/index.css` 的 token，不得硬編碼色碼或用 Tailwind 內建調色盤；禁止 `text-[Npx]` 任意字級；改色值要重算對比度並把數字寫回註解。e2e 有 15 條選擇器綁死視覺 class 名，改圓角只改 `@theme` 的值、不改 class 名
 - **Store**：`src/store.jsx` 組合根 ＋ `src/store/slices/*`
 - **資料存取**：跨頁共享資料才進 Store；單頁專屬資料可直接查 Supabase；同一查詢重複兩次以上才抽共用層
 

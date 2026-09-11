@@ -1,0 +1,430 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
+      color: #1D1D1F;
+    }
+    a { color: #0071E3; text-decoration: none; }
+    a:hover { color: #0058B0; text-decoration: underline; }
+    .mono { font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace; }
+  </style>
+</helmet>
+
+<div style="background: #F5F5F7; padding: 44px 48px 56px; min-height: 100%; box-sizing: border-box;">
+
+  <!-- ── 標頭 ───────────────────────────────────────── -->
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; padding-bottom: 22px; border-bottom: 1px solid #D2D2D7;">
+    <div style="max-width: 720px;">
+      <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #86868B;">PMIS.ai · 設計語言</div>
+      <h1 style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Noto Sans TC', sans-serif; font-size: 34px; line-height: 40px; font-weight: 600; letter-spacing: -0.022em; margin: 8px 0 0; color: #1D1D1F;">Apple Style 基礎規格</h1>
+      <p style="font-size: 14px; line-height: 21px; color: #6E6E73; margin: 10px 0 0; text-wrap: pretty;">這張板子是 <span class="mono" style="font-size: 13px; color: #1D1D1F;">src/index.css</span> 的下一版來源。色票採 Apple 無障礙系統色，文字用色對白底皆 ≥ 4.5:1（綠色須加深，見下），字體走系統堆疊讓 SF 在 Apple 裝置原生生效、中文落到 PingFang TC。按鈕從藥丸改回圓角矩形，毛玻璃材質回歸——這兩項是與 Google Workspace 版最明顯的分野。</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px; text-align: right; flex-shrink: 0;">
+      <div style="font-size: 11px; color: #86868B;">語彙來源</div>
+      <div style="font-size: 13px; color: #1D1D1F; font-weight: 500;">macOS · iPadOS HIG</div>
+      <div style="font-size: 11px; color: #86868B;">行銷站另走 Apple.com 語彙</div>
+    </div>
+  </div>
+
+  <!-- ── 1. 色彩 · 亮色 ───────────────────────────────── -->
+  <div style="display: flex; align-items: baseline; gap: 12px; margin: 36px 0 16px;">
+    <h2 style="font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.015em; margin: 0; color: #1D1D1F;">1 · 色彩</h2>
+    <span style="font-size: 13px; color: #86868B;">亮色 · 每格標示對 <span class="mono" style="font-size: 12px;">--surface</span> 白底的小字對比</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;">
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: #F5F5F7; border-bottom: 1px solid #E5E5EA;"></div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">視窗底</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--bg #F5F5F7</div>
+      </div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: #FFFFFF; border-bottom: 1px solid #E5E5EA;"></div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">卡面</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--surface #FFFFFF</div>
+      </div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: #EFEFF4; border-bottom: 1px solid #E5E5EA;"></div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">次層／chip 底</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--surface-2 #EFEFF4</div>
+      </div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: #D2D2D7; border-bottom: 1px solid #E5E5EA;"></div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">分隔線</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--separator #D2D2D7</div>
+      </div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: #E5E5EA; border-bottom: 1px solid #E5E5EA;"></div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">髮絲線</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--hairline #E5E5EA</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 12px;">
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: {{accent}}; display: flex; align-items: flex-end; padding: 8px 10px;">
+        <span style="font-size: 11px; color: #FFFFFF; font-weight: 500;">白字 4.7:1</span>
+      </div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">主色 · systemBlue</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--blue {{accent}} · 4.7:1</div>
+      </div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: #D70015; display: flex; align-items: flex-end; padding: 8px 10px;">
+        <span style="font-size: 11px; color: #FFFFFF; font-weight: 500;">逾期 · 退回</span>
+      </div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">危險 · systemRed</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--red #D70015 · 5.4:1</div>
+      </div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: #C93400; display: flex; align-items: flex-end; padding: 8px 10px;">
+        <span style="font-size: 11px; color: #FFFFFF; font-weight: 500;">即將到期 · 待確認</span>
+      </div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">警告 · systemOrange</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--orange #C93400 · 5.3:1</div>
+      </div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: #1B6B2E; display: flex; align-items: flex-end; padding: 8px 10px;">
+        <span style="font-size: 11px; color: #FFFFFF; font-weight: 500;">合格 · 已完成</span>
+      </div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">成功 · systemGreen</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--green #1B6B2E · 6.6:1</div>
+        <div style="font-size: 10px; line-height: 14px; color: #86868B; margin-top: 3px;">Apple 原值 #248A3D 對白底 4.39:1，未達小字 AA；只當圖形色（過 3:1 門檻）</div>
+      </div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); overflow: hidden;">
+      <div style="height: 64px; background: #8944AB; display: flex; align-items: flex-end; padding: 8px 10px;">
+        <span style="font-size: 11px; color: #FFFFFF; font-weight: 500;">AI 草稿 · 物調</span>
+      </div>
+      <div style="padding: 10px 12px 12px;">
+        <div style="font-size: 13px; font-weight: 500; color: #1D1D1F;">AI · systemPurple</div>
+        <div class="mono" style="font-size: 11px; color: #6E6E73; margin-top: 3px;">--purple #8944AB · 6.0:1</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 語意 tint 列 -->
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center;">
+    <span style="font-size: 12px; color: #86868B; margin-right: 4px;">狀態色票（底 tint ＋ 深字，顏色與文字必須並存）</span>
+    <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #FDECEB; color: #B3000F;">已逾期 8</span>
+    <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #FDF0E7; color: #A32B00;">即將到期 3</span>
+    <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #E8F1FD; color: #0058B0;">排程中 41</span>
+    <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #E8F6EC; color: #1B6B2E;">已完成 54</span>
+    <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #EFEFF4; color: #6E6E73;">未觸發 12</span>
+    <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #F5EDF9; color: #703A8C;">AI 已整理</span>
+  </div>
+
+  <!-- ── 色彩 · 暗色 ─────────────────────────────────── -->
+  <div style="background: #1C1C1E; border-radius: 16px; padding: 22px 24px 24px; margin-top: 20px; box-shadow: 0 0 0 .5px rgba(0,0,0,.12);">
+    <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;">
+      <h3 style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0; color: #F5F5F7;">暗色 · Apple Dark</h3>
+      <span style="font-size: 12px; color: #8E8E93;">卡面不是純黑，靠 surface 階層與髮絲線分層；狀態色換成暗色系統色</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px;">
+      <div style="background: #2C2C2E; border-radius: 10px; padding: 12px; box-shadow: 0 0 0 .5px #38383A;">
+        <div style="height: 30px; border-radius: 6px; background: #1C1C1E; box-shadow: inset 0 0 0 .5px #38383A;"></div>
+        <div style="font-size: 12px; color: #F5F5F7; margin-top: 8px;">視窗底</div>
+        <div class="mono" style="font-size: 10px; color: #8E8E93; margin-top: 2px;">#1C1C1E</div>
+      </div>
+      <div style="background: #2C2C2E; border-radius: 10px; padding: 12px; box-shadow: 0 0 0 .5px #38383A;">
+        <div style="height: 30px; border-radius: 6px; background: #2C2C2E; box-shadow: inset 0 0 0 .5px #48484A;"></div>
+        <div style="font-size: 12px; color: #F5F5F7; margin-top: 8px;">卡面</div>
+        <div class="mono" style="font-size: 10px; color: #8E8E93; margin-top: 2px;">#2C2C2E</div>
+      </div>
+      <div style="background: #2C2C2E; border-radius: 10px; padding: 12px; box-shadow: 0 0 0 .5px #38383A;">
+        <div style="height: 30px; border-radius: 6px; background: #3A3A3C;"></div>
+        <div style="font-size: 12px; color: #F5F5F7; margin-top: 8px;">次層</div>
+        <div class="mono" style="font-size: 10px; color: #8E8E93; margin-top: 2px;">#3A3A3C</div>
+      </div>
+      <div style="background: #2C2C2E; border-radius: 10px; padding: 12px; box-shadow: 0 0 0 .5px #38383A;">
+        <div style="height: 30px; border-radius: 6px; background: #0A84FF;"></div>
+        <div style="font-size: 12px; color: #F5F5F7; margin-top: 8px;">主色</div>
+        <div class="mono" style="font-size: 10px; color: #8E8E93; margin-top: 2px;">#0A84FF</div>
+      </div>
+      <div style="background: #2C2C2E; border-radius: 10px; padding: 12px; box-shadow: 0 0 0 .5px #38383A;">
+        <div style="display: flex; gap: 4px;">
+          <div style="flex: 1; height: 30px; border-radius: 6px; background: #FF453A;"></div>
+          <div style="flex: 1; height: 30px; border-radius: 6px; background: #FF9F0A;"></div>
+          <div style="flex: 1; height: 30px; border-radius: 6px; background: #30D158;"></div>
+          <div style="flex: 1; height: 30px; border-radius: 6px; background: #BF5AF2;"></div>
+        </div>
+        <div style="font-size: 12px; color: #F5F5F7; margin-top: 8px;">狀態四色</div>
+        <div class="mono" style="font-size: 10px; color: #8E8E93; margin-top: 2px;">FF453A · FF9F0A · 30D158 · BF5AF2</div>
+      </div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center;">
+      <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #3A1F1D; color: #FF6961;">已逾期 8</span>
+      <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #3A2A12; color: #FFB340;">即將到期 3</span>
+      <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #10304F; color: #64B5FF;">排程中 41</span>
+      <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #17321F; color: #5FD87F;">已完成 54</span>
+      <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 590; background: #3A3A3C; color: #AEAEB2;">未觸發 12</span>
+      <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: #0A84FF; color: #FFFFFF;">主要按鈕</span>
+      <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: #3A3A3C; color: #F5F5F7;">次要按鈕</span>
+    </div>
+  </div>
+
+  <!-- ── 2. 字級階梯 ─────────────────────────────────── -->
+  <div style="display: flex; align-items: baseline; gap: 12px; margin: 36px 0 16px;">
+    <h2 style="font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.015em; margin: 0; color: #1D1D1F;">2 · 字級階梯</h2>
+    <span style="font-size: 13px; color: #86868B;">SF 的視覺尺寸軸：越大字距越緊。內文維持 13px——資料密集工具的密度不退讓</span>
+  </div>
+
+  <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 4px 24px;">
+    <div style="display: flex; align-items: baseline; gap: 24px; padding: 14px 0; border-bottom: 1px solid #E5E5EA;">
+      <span class="mono" style="width: 150px; flex-shrink: 0; font-size: 11px; color: #86868B;">largeTitle 28/34 600</span>
+      <span style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Noto Sans TC', sans-serif; font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.021em; color: #1D1D1F;">契約重點 · 履約時程</span>
+      <span style="margin-left: auto; font-size: 11px; color: #86868B; flex-shrink: 0;">頁首大標</span>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 24px; padding: 14px 0; border-bottom: 1px solid #E5E5EA;">
+      <span class="mono" style="width: 150px; flex-shrink: 0; font-size: 11px; color: #86868B;">title1 22/28 600</span>
+      <span style="font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.017em; color: #1D1D1F;">今日待辦</span>
+      <span style="margin-left: auto; font-size: 11px; color: #86868B; flex-shrink: 0;">區塊標題</span>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 24px; padding: 14px 0; border-bottom: 1px solid #E5E5EA;">
+      <span class="mono" style="width: 150px; flex-shrink: 0; font-size: 11px; color: #86868B;">title3 15/20 600</span>
+      <span style="font-size: 15px; line-height: 20px; font-weight: 600; letter-spacing: -0.008em; color: #1D1D1F;">履約執行狀況</span>
+      <span style="margin-left: auto; font-size: 11px; color: #86868B; flex-shrink: 0;">卡片標題</span>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 24px; padding: 14px 0; border-bottom: 1px solid #E5E5EA;">
+      <span class="mono" style="width: 150px; flex-shrink: 0; font-size: 11px; color: #86868B;">body 13/19 400</span>
+      <span style="font-size: 13px; line-height: 19px; color: #1D1D1F;">開工後 30 日內提送品質計畫書送監造單位審查，逾期按日計罰契約總價千分之一。</span>
+      <span style="margin-left: auto; font-size: 11px; color: #86868B; flex-shrink: 0;">內文 · 表格</span>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 24px; padding: 14px 0; border-bottom: 1px solid #E5E5EA;">
+      <span class="mono" style="width: 150px; flex-shrink: 0; font-size: 11px; color: #86868B;">footnote 11/15 400</span>
+      <span style="font-size: 11px; line-height: 15px; color: #6E6E73;">來源：工程契約 · 第 14 頁 · 第 7 條第 2 項　｜　內容如有出入，以契約原文為準</span>
+      <span style="margin-left: auto; font-size: 11px; color: #86868B; flex-shrink: 0;">佐證 · 註記</span>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 24px; padding: 14px 0;">
+      <span class="mono" style="width: 150px; flex-shrink: 0; font-size: 11px; color: #86868B;">numeric 30/34 600</span>
+      <span style="font-size: 30px; line-height: 34px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: #1D1D1F;">486,200,000</span>
+      <span style="margin-left: auto; font-size: 11px; color: #86868B; flex-shrink: 0;">指標卡數字 · tabular</span>
+    </div>
+  </div>
+
+  <!-- ── 3. 形狀 · 材質 ──────────────────────────────── -->
+  <div style="display: flex; align-items: baseline; gap: 12px; margin: 36px 0 16px;">
+    <h2 style="font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.015em; margin: 0; color: #1D1D1F;">3 · 形狀與材質</h2>
+    <span style="font-size: 13px; color: #86868B;">藥丸只留給真正的標籤；深度靠半像素描邊與模糊，不靠濃陰影</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1.05fr 1fr; gap: 16px;">
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 18px 20px 20px;">
+      <div style="font-size: 13px; font-weight: 600; color: #1D1D1F;">圓角</div>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 14px;">
+        <div style="text-align: center;">
+          <div style="height: 52px; background: #EFEFF4; border-radius: 6px; box-shadow: inset 0 0 0 .5px #D2D2D7;"></div>
+          <div class="mono" style="font-size: 10px; color: #6E6E73; margin-top: 6px;">6 badge</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="height: 52px; background: #EFEFF4; border-radius: 8px; box-shadow: inset 0 0 0 .5px #D2D2D7;"></div>
+          <div class="mono" style="font-size: 10px; color: #6E6E73; margin-top: 6px;">8 按鈕·輸入</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="height: 52px; background: #EFEFF4; border-radius: 10px; box-shadow: inset 0 0 0 .5px #D2D2D7;"></div>
+          <div class="mono" style="font-size: 10px; color: #6E6E73; margin-top: 6px;">10 大按鈕</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="height: 52px; background: #EFEFF4; border-radius: 12px; box-shadow: inset 0 0 0 .5px #D2D2D7;"></div>
+          <div class="mono" style="font-size: 10px; color: #6E6E73; margin-top: 6px;">12 卡片</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="height: 52px; background: #EFEFF4; border-radius: 16px; box-shadow: inset 0 0 0 .5px #D2D2D7;"></div>
+          <div class="mono" style="font-size: 10px; color: #6E6E73; margin-top: 6px;">16 面板</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="height: 52px; background: #EFEFF4; border-radius: 999px; box-shadow: inset 0 0 0 .5px #D2D2D7;"></div>
+          <div class="mono" style="font-size: 10px; color: #6E6E73; margin-top: 6px;">999 標籤·正圓</div>
+        </div>
+      </div>
+      <div style="font-size: 11px; line-height: 16px; color: #86868B; margin-top: 12px;">Google 版的 100px 藥丸按鈕全面退場：按鈕、分頁、導覽項改 8–10px 圓角矩形；capsule 只用在人名與責任方標籤、圖示鈕與狀態圓點。另有兩個登記值：側欄列與分段內層 7px、登入卡 18px。<br /><span style="color: #A32B00;">例外：行銷站沿用 Apple.com 語彙，其 CTA 維持藥丸——此例外僅限行銷站，不進 App。</span></div>
+    </div>
+
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 18px 20px 20px;">
+      <div style="font-size: 13px; font-weight: 600; color: #1D1D1F;">深度與材質</div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px;">
+        <div>
+          <div style="height: 56px; background: #FFFFFF; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07);"></div>
+          <div class="mono" style="font-size: 10px; color: #6E6E73; margin-top: 6px;">card</div>
+        </div>
+        <div>
+          <div style="height: 56px; background: #FFFFFF; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.06), 0 0 0 .5px rgba(0,0,0,.07);"></div>
+          <div class="mono" style="font-size: 10px; color: #6E6E73; margin-top: 6px;">raised</div>
+        </div>
+        <div>
+          <div style="height: 56px; background: #FFFFFF; border-radius: 10px; box-shadow: 0 10px 32px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.10);"></div>
+          <div class="mono" style="font-size: 10px; color: #6E6E73; margin-top: 6px;">popover</div>
+        </div>
+      </div>
+      <div style="position: relative; height: 74px; border-radius: 10px; margin-top: 14px; overflow: hidden; background: linear-gradient(115deg, {{accent}} 0%, #8944AB 52%, #C93400 100%);">
+        <div style="position: absolute; inset: 14px; border-radius: 8px; background: rgba(246,246,248,.86); backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.6); display: flex; align-items: center; padding: 0 14px;">
+          <span style="font-size: 12px; line-height: 17px; font-weight: 500; color: #1D1D1F;">側欄 rgba(246,246,248,.86)/blur(40px)　·　工具列 rgba(255,255,255,.80)/blur(30px)　·　彈出層與登入卡 rgba(255,255,255,.86)/blur(30px)。全部加 saturate(180%)；不透明退路 #F6F6F8。</span>
+        </div>
+      </div>
+      <div style="font-size: 11px; line-height: 16px; color: #86868B; margin-top: 10px;">毛玻璃回歸，但只給 chrome（側欄、工具列、彈出層）；內容卡一律實心，避免資料表在半透明底上難讀。</div>
+    </div>
+  </div>
+
+  <!-- ── 4. 元件 ─────────────────────────────────────── -->
+  <div style="display: flex; align-items: baseline; gap: 12px; margin: 36px 0 16px;">
+    <h2 style="font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.015em; margin: 0; color: #1D1D1F;">4 · 元件</h2>
+    <span style="font-size: 13px; color: #86868B;">對映 <span class="mono" style="font-size: 12px;">src/components/ui.jsx</span>；控件高度 26 緊湊／28 標準／30 強調（手機觸控一律補到 44）</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+    <!-- 按鈕 -->
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 18px 20px 20px;">
+      <div style="font-size: 13px; font-weight: 600; color: #1D1D1F;">按鈕階層</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;">
+        <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: {{accent}}; color: #FFFFFF;">核定</span>
+        <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: #FFFFFF; color: {{accent}}; box-shadow: inset 0 0 0 1px #D2D2D7;">退回修正</span>
+        <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: #EFEFF4; color: #1D1D1F;">另存草稿</span>
+        <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 510; color: {{accent}};">取消</span>
+        <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: #D70015; color: #FFFFFF;">刪除</span>
+        <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 510; background: #EFEFF4; color: #86868B;">已停用</span>
+      </div>
+      <div style="font-size: 11px; line-height: 16px; color: #86868B; margin-top: 12px;">一個情境只有一顆實心主鈕。按壓回饋在 pointer-down 觸發，scale(0.98) / 100ms。</div>
+    </div>
+
+    <!-- segmented + 輸入 -->
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 18px 20px 20px;">
+      <div style="font-size: 13px; font-weight: 600; color: #1D1D1F;">分段控制與輸入</div>
+      <div style="display: inline-flex; padding: 2px; border-radius: 9px; background: #EFEFF4; margin-top: 14px; gap: 2px;">
+        <span style="display: inline-flex; align-items: center; height: 26px; padding: 0 14px; border-radius: 7px; font-size: 12px; font-weight: 510; background: #FFFFFF; color: #1D1D1F; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 .5px rgba(0,0,0,.04);">全部</span>
+        <span style="display: inline-flex; align-items: center; height: 26px; padding: 0 14px; border-radius: 7px; font-size: 12px; font-weight: 500; color: #6E6E73;">廠商</span>
+        <span style="display: inline-flex; align-items: center; height: 26px; padding: 0 14px; border-radius: 7px; font-size: 12px; font-weight: 500; color: #6E6E73;">監造</span>
+        <span style="display: inline-flex; align-items: center; height: 26px; padding: 0 14px; border-radius: 7px; font-size: 12px; font-weight: 500; color: #6E6E73;">機關</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 8px; background: #FFFFFF; box-shadow: inset 0 0 0 1px #D2D2D7; margin-top: 12px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+        <span style="font-size: 13px; color: #86868B;">搜尋工項、履約要求、缺失⋯⋯</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 8px; background: #FFFFFF; box-shadow: inset 0 0 0 1px {{accent}}, 0 0 0 3px {{accentGlow}}; margin-top: 8px;">
+        <span style="font-size: 13px; color: #1D1D1F;">2026-10-15</span>
+      </div>
+      <div style="font-size: 11px; line-height: 16px; color: #86868B; margin-top: 12px;">焦點環是 3px 主色 18% 外光暈＋1px 主色描邊，不位移版面。</div>
+    </div>
+
+    <!-- 列表列 -->
+    <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 18px 20px 20px;">
+      <div style="font-size: 13px; font-weight: 600; color: #1D1D1F;">列表列 · 選取態</div>
+      <div style="border-radius: 9px; overflow: hidden; box-shadow: inset 0 0 0 .5px #E5E5EA; margin-top: 14px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #FFFFFF; border-bottom: 1px solid #E5E5EA;">
+          <span style="width: 7px; height: 7px; border-radius: 999px; background: #248A3D; flex-shrink: 0;"></span>
+          <span style="font-size: 13px; color: #1D1D1F; flex: 1;">施工計畫書</span>
+          <span style="font-size: 11px; color: #86868B; font-variant-numeric: tabular-nums;">09-02</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: rgba(0,113,227,.10); border-bottom: 1px solid #E5E5EA;">
+          <span style="width: 7px; height: 7px; border-radius: 999px; background: #D70015; flex-shrink: 0;"></span>
+          <span style="font-size: 13px; color: #0058B0; font-weight: 510; flex: 1;">缺失改善回報</span>
+          <span style="font-size: 11px; color: #0058B0; font-variant-numeric: tabular-nums;">逾期 4 日</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #FFFFFF;">
+          <span style="width: 7px; height: 7px; border-radius: 999px; background: #C93400; flex-shrink: 0;"></span>
+          <span style="font-size: 13px; color: #1D1D1F; flex: 1;">環境保護計畫</span>
+          <span style="font-size: 11px; color: #86868B; font-variant-numeric: tabular-nums;">3 日後</span>
+        </div>
+      </div>
+      <div style="font-size: 11px; line-height: 16px; color: #86868B; margin-top: 12px;">選取態＝主色 10% 填色＋深藍字，不是實心藍；狀態同時用顏色與文字表達。</div>
+    </div>
+  </div>
+
+  <!-- ── 5. 圖示 ─────────────────────────────────────── -->
+  <div style="display: flex; align-items: baseline; gap: 12px; margin: 36px 0 16px;">
+    <h2 style="font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.015em; margin: 0; color: #1D1D1F;">5 · 圖示</h2>
+    <span style="font-size: 13px; color: #86868B;">lucide · 1.5px 描邊、圓端點、24 格。SF Symbols 授權限 Apple 平台，不能上 web</span>
+  </div>
+
+  <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07); padding: 20px 24px 22px;">
+    <div style="display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 16px;">
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"></path><path d="m3 7 2 2 4-4"></path><path d="M13 6h8"></path><path d="M13 12h8"></path><path d="M13 18h8"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">今日待辦</div>
+      </div>
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">專案文件</div>
+      </div>
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12h-5"></path><path d="M15 8h-5"></path><path d="M19 17V5a2 2 0 0 0-2-2H4"></path><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">契約重點</div>
+      </div>
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"></rect><path d="M8 6h8"></path><path d="M8 11h.01"></path><path d="M12 11h.01"></path><path d="M16 11h.01"></path><path d="M8 15h.01"></path><path d="M12 15h.01"></path><path d="M16 15v4"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">標單工項</div>
+      </div>
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.6a2 2 0 0 0 1.3 1.3L19.5 10.5l-4.6 1.6a2 2 0 0 0-1.3 1.3L12 18l-1.6-4.6a2 2 0 0 0-1.3-1.3L4.5 10.5l4.6-1.6a2 2 0 0 0 1.3-1.3z"></path><path d="M19 15.5v3"></path><path d="M17.5 17h3"></path><path d="M5 4v2.5"></path><path d="M3.8 5.2h2.4"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">問 PMIS</div>
+      </div>
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#248A3D" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">稽核中</div>
+      </div>
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D70015" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">風險警示</div>
+      </div>
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">期限</div>
+      </div>
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">搜尋</div>
+      </div>
+      <div style="text-align: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M22 8c0-2.3-.8-4.3-2-6"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path><path d="M4 2C2.8 3.7 2 5.7 2 8"></path></svg>
+        <div style="font-size: 10px; color: #6E6E73; margin-top: 6px;">通知</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="font-size: 11px; line-height: 17px; color: #86868B; margin-top: 26px; padding-top: 16px; border-top: 1px solid #D2D2D7;">
+    動效：曲線 <span class="mono" style="font-size: 11px;">cubic-bezier(.32,.72,0,1)</span>（iOS 抽屜曲線）；按壓 100ms、hover 180ms、彈出 250ms、面板 350ms。所有過場必須可中斷，且從當前呈現值出發而非目標值。<span class="mono" style="font-size: 11px;">prefers-reduced-motion</span> 一律降到 0.01ms。
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#0071E3","options":["#0071E3","#0058B0","#8944AB","#C93400"],"section":"主色"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    // 焦點環的外光暈必須跟著主色走，否則換成紫／橘時會留下藍圈
+    var accent = this.props.accent || '#0071E3';
+    var hex = accent.replace('#', '');
+    var r = parseInt(hex.substring(0, 2), 16);
+    var g = parseInt(hex.substring(2, 4), 16);
+    var b = parseInt(hex.substring(4, 6), 16);
+    return { accent: accent, accentGlow: 'rgba(' + r + ',' + g + ',' + b + ',.18)' };
+  }
+}
+</script>
+</body>
+</html>

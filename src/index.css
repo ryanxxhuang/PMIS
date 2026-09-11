@@ -4,10 +4,60 @@
    tailwind 展開後會落在規則之後,Lightning CSS 於 build 時整行丟棄
    → 正式站字型靜默失效(dev 看得到、prod 沒有)。JS import 完全繞開這個坑。 */
 
-/* 卡片圓角規格是 12px,但 e2e 有 5 處 xpath 綁死 rounded-2xl 的 class 名——
-   在 theme 層把 2xl 的「值」改成 12px:class 名不動、視覺照規格。 */
+/* ─────────────────────────────────────────────────────────────
+   Apple style 基礎層(2026-09-11 定案,取代 W9 Google Workspace/M3)
+   規範文件:docs/UIUX-Apple-設計規範.md ── 改這裡之前先讀那份。
+   色值全部實算過對比度,數字寫在各行;改任何一個都要重算,不要憑感覺。
+   ───────────────────────────────────────────────────────────── */
+
+/* 圓角:class 名一律不動,只改「值」。
+   e2e 有 15 條 xpath 用 ancestor::div[contains(@class,"rounded-*")] 定位,
+   其中 rounded-2xl 佔 7 條——W9 就是靠這招零成本保住,Apple 版繼續沿用。
+   Apple 的卡片圓角同樣是 12px,所以 2xl 不必動;lg(8)=輸入與按鈕、
+   xl(12)=卡,原生值剛好對上 Apple 階梯,全部維持。 */
 @theme {
   --radius-2xl: 12px;
+}
+
+/* 字級階梯(Apple 視覺尺寸軸):取代全站 243 處 text-[Npx] 任意值。
+   命名沿用 Apple 的語意名,不是 xs/sm/lg——那組相對名稱正是當初各頁
+   各自加半像素的起點。字距隨字級走:大字負字距、內文近 0(HIG §Typography)。
+   ⚠️ 放大任何一階之前,先跑 e2e 的 scrollWidth <= clientWidth 全路由斷言
+   (375/1024px),字級一放大整片會紅。 */
+@theme {
+  /* micro 只給密度極高的 meta 標籤(PageHeader 的 dt)。9px 在 1x 螢幕幾乎不可讀
+     且對比不足(W8-5 實測),所以階梯到 10 為止,不再往下。 */
+  --text-micro: 10px;
+  --text-micro--line-height: 13px;
+  --text-micro--letter-spacing: 0.006em;
+
+  --text-caption: 11px;
+  --text-caption--line-height: 15px;
+  --text-caption--letter-spacing: 0.004em;
+
+  --text-footnote: 12px;
+  --text-footnote--line-height: 17px;
+  --text-footnote--letter-spacing: 0.002em;
+
+  --text-body: 13px;
+  --text-body--line-height: 19px;
+  --text-body--letter-spacing: 0em;
+
+  --text-callout: 15px;
+  --text-callout--line-height: 20px;
+  --text-callout--letter-spacing: -0.008em;
+
+  --text-title3: 17px;
+  --text-title3--line-height: 22px;
+  --text-title3--letter-spacing: -0.012em;
+
+  --text-title2: 22px;
+  --text-title2--line-height: 28px;
+  --text-title2--letter-spacing: -0.017em;
+
+  --text-title1: 28px;
+  --text-title1--line-height: 34px;
+  --text-title1--letter-spacing: -0.021em;
 }
 
 /* dark: 變體綁 .dark class(theme.js 三態都經由它),不是 prefers-color-scheme——
@@ -15,109 +65,134 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* One harmonized family for both Chinese and Latin — avoids the mixed-metrics look.
-     "Google Sans Text" 只在使用者本機有裝時吃到(非公開授權不 self-host);
-     fontsource 宣告的 family 名是 "Noto Sans TC Variable",不是 "Noto Sans TC"——
-     漏了 Variable 後綴會靜默退回系統字。 */
-  font-family: "Google Sans Text", "Noto Sans TC Variable", "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  /* 系統字堆疊:SF 在 Apple 裝置原生生效(授權允許,因為是系統字不是自帶字檔),
+     中文落到 PingFang TC;非 Apple 平台才吃 fontsource 的 Noto Sans TC。
+     SF Pro 的字檔本身授權限 Apple 平台,不可 self-host——只能走 -apple-system。
+     fontsource 宣告的 family 名是 "Noto Sans TC Variable",漏了 Variable 後綴
+     會靜默退回系統字。 */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+    "Noto Sans TC Variable", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   /* Data-dense tool: digits align in every table without per-cell classes */
   font-variant-numeric: tabular-nums;
 
   /* 原生控件(checkbox/radio/date picker/捲軸/下拉清單面板)的底色是 UA 依
      color-scheme 決定的,不吃我們的 token。沒宣告就永遠停在亮色——深色模式下
-     按 <input type="date"> 會彈出一塊白面板,勾選框也是亮底。
-     accent-color 讓勾選/選取態吃品牌藍;.dark 已把 --primary 換成淺藍,自動跟上
-     (--primary 定義在本區塊下方,custom property 於計算值階段解析,順序無妨)。 */
+     按 <input type="date"> 會彈出一塊白面板,勾選框也是亮底。 */
   color-scheme: light;
   accent-color: var(--primary);
 
-  /* ── Google Workspace palette(design_handoff README 定案值)──
-     變數名沿用舊 token 讓全站 var() 引用自動跟上;--blue* 即 Material 3 藍。 */
-  --bg: #f8fafd;            /* 內容底(g-ground) */
-  --surface: #ffffff;       /* 卡面(g-card) */
-  --surface-2: #f1f3f4;     /* chip 底/hover */
-  --text: #202124;
-  --text-2: #5f6368;
-  --text-3: #6a6e73;        /* 弱字(meta/註記)。校準要對「三個底色」都過 AA,只驗白卡會漏:
-                               對 --surface #ffffff 5.13、--bg #f8fafd 4.91、--surface-2 #f1f3f4 4.61。
-                               W9 初版的 #70757a 只驗了白卡(4.65),對 --bg 只有 4.45——而 PageHeader 的
-                               tagline 正是直接坐在 --bg 上,等於全站頁首副標低於 AA。 */
-  --border: #dadce0;        /* divider(卡內分隔) */
-  --border-2: #e8eaed;      /* 更弱分隔 */
+  /* ── 中性階(Apple 灰,冷調)───────────────────────────────
+     三個底色是全站文字對比的分母:--surface 白卡、--bg 視窗底、--surface-2 chip。
+     任何文字色都必須對這三個都 >= 4.5(小字 AA),只驗白卡會漏——W9 初版就是
+     只驗白卡,導致頁首副標坐在 --bg 上低於 AA。 */
+  --bg: #f5f5f7;            /* 視窗底 */
+  --surface: #ffffff;       /* 卡面 */
+  --surface-2: #efeff4;     /* chip 底/hover */
+  --text: #1d1d1f;          /* 16.83 / 15.46 / 14.68 */
+  --text-2: #56565a;        /*  7.31 /  6.71 /  6.37 */
+  --text-3: #68686d;        /*  5.54 /  5.09 /  4.84 —— 三個底都過 AA */
+  --border: #d2d2d7;        /* separator(卡內分隔) */
+  --border-2: #e5e5ea;      /* hairline(更弱分隔) */
 
-  --blue: #0b57d0;          /* primary: Material 3 blue,小字對比 5.3:1 */
-  --blue-text: #174ea6;     /* info 色票字 */
-  --blue-tint: #e8f0fe;     /* info 色票底/導覽選取態 */
-  --primary: #0b57d0;
-  --primary-hover: #0842a0;
-  --primary-fg: #ffffff;    /* 深色模式 primary 鈕是淺藍底深字,寫死 text-white 會炸對比 */
+  /* ── 主色 ──────────────────────────────────────────────
+     ⚠️ --blue/--primary 是「填色」,白字對它 4.70 過 AA;
+     但它自己當小字在 --surface-2 上只有 4.10,不可當文字色。
+     文字一律用 --blue-text(6.95/6.38/6.06)。ui.jsx 的 ghost/secondary
+     已經是這樣分的,新元件照辦。 */
+  --blue: #0071e3;
+  --blue-text: #0058b0;
+  --blue-tint: #e8f1fd;     /* info 色票底/導覽選取態 */
+  --primary: #0071e3;
+  --primary-hover: #0058b0;
+  --primary-fg: #ffffff;
 
-  /* --accent 原是安全橘「注意」訊號:對映到 warn 家族保留語意(落後/試驗/待處理數),
-     不對映到藍——藍在新系統是 primary/info,「注意」變藍會誤導。 */
-  --accent: #a05a00;
-  --accent-text: #8a4b00;
-  --accent-tint: #fef7e0;
+  /* --accent 是「注意」訊號(落後/試驗/待處理數),對映 warn 家族。
+     不對映到藍——藍在本系統是 primary/info,「注意」變藍會誤導。 */
+  --accent: #c93400;
+  --accent-text: #a32b00;   /* 7.23 / 6.64 / 6.31 */
+  --accent-tint: #fdf0e7;
 
-  /* 五語意狀態色票(README 第三版):red=danger、amber=warn、green=ok、blue=info、slate=mute */
-  --slate-tint: #f1f3f4; --slate-text: #5f6368;
-  --green-tint: #e6f4ea; --green-text: #137333;
-  --green-bar: #81c995;  /* 完成段軌道(履約期程條);亮暗同值,即深色模式的 ok 綠 */
-  --amber-tint: #fef7e0; --amber-text: #b06000;
-  --red-tint: #fce8e6;   --red-text: #a50e0e;
-  --purple-tint: #f3e8fd; --purple-text: #681da8;
+  /* 五語意狀態色票:red=danger、amber=warn、green=ok、blue=info、slate=mute
+     (purple 留給 AI 產物與物調等非五語意標記)。
+     *-text 是坐在 *-tint 上的字,括號內是對 tint 的實算值。 */
+  --slate-tint: #efeff4; --slate-text: #56565a;   /* 6.37 */
+  --green-tint: #e8f6ec; --green-text: #1b6b2e;   /* 5.90 */
+  --green-bar: #34c759;  /* 完成段軌道(履約期程條);圖形元素,亮暗同值 */
+  --amber-tint: #fdf0e7; --amber-text: #a32b00;   /* 6.47 */
+  --red-tint: #fdeceb;   --red-text: #b3000f;     /* 6.28 */
+  --purple-tint: #f5edf9; --purple-text: #703a8c; /* 6.87 */
 
-  --success: #146c2e;   --success-hover: #0f5223;
-  --danger: #b3261e;    --danger-hover: #8c1d18;
+  /* 實心鈕:白字對底的實算值在括號內,全部 >= AA 4.5 */
+  --success: #1b6b2e;   --success-hover: #165825;  /* 6.58 / 8.09 */
+  --danger: #d70015;    --danger-hover: #b3000f;   /* 5.38 / 7.18 */
 
-  /* AI 面板(問 PMIS/AI 草稿卡):accent-100 淺藍底+accent-800 深字 */
-  --ai: #0b57d0;
-  --ai-tint: #ecf3fe;
-  --ai-text: #062e6f;
+  /* 狀態圓點與圖示(WCAG 1.4.11 圖形門檻 3:1,不是 4.5)。
+     未觸發的灰點必須用 --dot-mute 而不是 --text-3 之外的淺灰:
+     #a8a8ad 只有 2.37,看得到但不合規。 */
+  --dot-mute: #7c7c81;  /* 4.15 / 3.81 / 3.62 */
 
-  /* App bar 搜尋框 */
-  --g-search: #ecf3fe;
-  --g-search-h: #dfeafd;
+  /* AI 產物(問 PMIS/AI 草稿卡):紫色是 AI 的固定身分,不要挪作他用。
+     紅線:AI 產物必須看得出是 AI 產物,人覆核前不進任何統計。 */
+  --ai: #8944ab;
+  --ai-tint: #f5edf9;
+  --ai-text: #703a8c;
 
-  /* Snackbar(M2 深灰底,亮暗同值) */
-  --snackbar-bg: #3c4043;
-  --snackbar-text: #e8eaed;
-  --snackbar-action: #8ab4f8;
+  /* 工具列搜尋框 */
+  --g-search: #efeff4;
+  --g-search-h: #e5e5ea;
 
-  /* 鍵盤焦點(README:亮 #1a73e8/暗 #8ab4f8,不與 --blue 綁死) */
-  --focus: #1a73e8;
+  /* Snackbar(深色實心,亮暗同值)。undo 是 Agency 原則的主要載體:
+     先做再給撤回,確認框只留給不可逆動作。 */
+  --snackbar-bg: #2c2c2e;
+  --snackbar-text: #f5f5f7;
+  --snackbar-action: #6fb4ff;
+
+  /* 鍵盤焦點:3px 主色 18% 外光暈 + 1px 描邊,用 outline 不佔版面流 */
+  --focus: #0071e3;
+  --focus-glow: rgba(0, 113, 227, .18);
 
   /* Chart tokens — SVG charts must read these, never hardcode */
-  --chart-grid: #e8eaed;
-  --chart-axis-text: #70757a;
-  --chart-muted-line: #80868b;
-  --chart-today: #bdc1c6;
+  --chart-grid: #e5e5ea;
+  --chart-axis-text: #68686d;
+  --chart-muted-line: #7c7c81;
+  --chart-today: #0071e3;
 
-  /* Google 三層陰影:card=卡片/浮起鈕、md=選單/懸浮、overlay=對話框 */
-  --shadow-md: 0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.1);
-  --shadow-card: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.08);
-  --shadow-overlay: 0 2px 6px rgba(60,64,67,.3), 0 8px 24px 6px rgba(60,64,67,.12);
+  /* ── 深度:Apple 靠半像素描邊 + 輕影,不靠濃陰影 ────────────
+     card=卡片、md=選單/懸浮、overlay=對話框/彈出層 */
+  --shadow-card: 0 1px 2px rgba(0,0,0,.04), 0 0 0 .5px rgba(0,0,0,.07);
+  --shadow-md: 0 2px 8px rgba(0,0,0,.06), 0 0 0 .5px rgba(0,0,0,.07);
+  --shadow-overlay: 0 10px 32px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.10);
 
-  /* chrome(頂欄/側欄):Google 風是實心白,不再毛玻璃 */
-  --chrome-bg: #ffffff;
-  --border-card: #e3e6ea;   /* 卡框(g-line)——與 --border(divider)是兩個值,不可合併 */
-  --edge-shadow: 0 1px 0 var(--border-2), 0 8px 24px -16px rgba(60,64,67,.25);
+  /* ── 材質:毛玻璃回歸,但只給 chrome ────────────────────────
+     內容卡一律實心——資料表坐在半透明底上會難讀(HIG:不可把淺色半透明
+     疊在另一層半透明上)。W9 把毛玻璃整個拿掉,Apple 版拿回來但限定範圍。 */
+  --chrome-bg: rgba(246, 246, 248, .86);      /* 側欄:較重,分隔結構區域 */
+  --chrome-bar: rgba(255, 255, 255, .80);     /* 工具列:較輕 */
+  --chrome-blur: blur(40px) saturate(180%);
+  --chrome-bar-blur: blur(30px) saturate(180%);
+  --chrome-solid: #f6f6f8;                    /* 不支援 backdrop-filter 時的退路 */
+  --border-card: #e3e3e8;   /* 卡框——與 --border(divider)是兩個值,不可合併 */
+  --edge-shadow: 0 1px 0 var(--border-2), 0 8px 24px -16px rgba(0,0,0,.18);
 
-  /* ── Motion system ──
-     資料密集工程工具:動效只做「回饋」與「防突變」,快、脆、不表演。
-     曲線用強化版 ease-out/in-out(內建 CSS easing 太弱),UI 一律 <300ms。 */
+  /* ── Motion ──────────────────────────────────────────────
+     Apple 的流動性靠「可中斷 + 從當前呈現值出發」,不是靠曲線好看。
+     手勢驅動的東西要用彈簧(見規範文件 §流動性六條);純進出場的浮層
+     用下面的曲線就夠,不必為了 Apple 味把所有東西都上彈簧。 */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);  /* iOS 抽屜曲線(進出對稱) */
-  --dur-press: 140ms;   /* 按壓回饋 */
-  --dur-fast: 160ms;    /* hover、小型浮層 */
-  --dur-menu: 180ms;    /* 下拉選單、popover */
-  --dur-modal: 220ms;   /* 對話框、側面板 */
+  --dur-press: 100ms;   /* 按壓回饋——回饋在 pointer-down,不等 click */
+  --dur-fast: 180ms;    /* hover、小型浮層 */
+  --dur-menu: 200ms;    /* 下拉選單、popover */
+  --dur-modal: 250ms;   /* 對話框、側面板 */
+  --dur-sheet: 350ms;   /* 底部抽屜 */
 
   /* 手機底部導覽的實際佔位高度(含 iOS home indicator 安全區)。
      BottomNav 是 fixed + z-40,任何「貼底」的頁面元素都必須讓開這個高度,
      否則會被它蓋住而且點不到——W9 上線時 /site-log 的手機存檔列就是這樣壞的。
-     66px = BottomNav.jsx 的 pt-2 + 圖示列 30px + gap + 標籤 + pb-3,改那支要同步改這裡。 */
+     66px = BottomNav.jsx 的 pt-2 + 圖示列 30px + gap + 標籤 + pb-3,改那支要同步改這裡。
+     ⚠️ e2e/a11y.spec.js 有存檔鈕底緣 <= BottomNav 頂緣的斷言綁著這個值。 */
   --bottom-nav-h: calc(66px + env(safe-area-inset-bottom));
 }
 
@@ -125,62 +200,75 @@
   /* 與 :root 同特異性,靠「寫在後面」勝出——本區塊所有覆寫都依賴這個順序 */
   color-scheme: dark;
 
-  /* Material 3 dark(原型 .g-dark 定案值) */
-  --bg: #202124;
-  --surface: #292a2d;
-  --surface-2: #35363a;
-  --text: #e8eaed;
-  --text-2: #bdc1c6;
-  --text-3: #9aa0a6;
-  --border: #3c4043;
-  --border-2: #35363a;
+  /* Apple Dark:卡面不是純黑,靠 surface 階層與髮絲線分層 */
+  --bg: #1c1c1e;
+  --surface: #2c2c2e;
+  --surface-2: #3a3a3c;
+  --text: #f5f5f7;          /* 12.80 / 15.63 / 10.42 */
+  --text-2: #c7c7cc;
+  --text-3: #a8a8ad;        /*  5.89 /  7.19 /  4.79 —— 三個底都過 AA */
+  --border: #48484a;
+  --border-2: #38383a;
 
-  --blue: #a8c7fa;
-  --blue-text: #d2e3fc;
-  --blue-tint: #0d2f5f;
-  --primary: #a8c7fa;
-  --primary-hover: #c2d9fd;
-  --primary-fg: #062e6f;
+  /* ⚠️ 深色的 primary 是「淺藍底 + 深藍字」,不是藍底白字:
+     白字對 #0a84ff 只有 3.65,小字不過 AA。#2e8fff + #00204a = 4.97。
+     寫死 text-white 的呼叫端會在深色炸掉對比,一律走 --primary-fg。 */
+  --blue: #2e8fff;
+  --blue-text: #6fb4ff;     /* 6.40 / 7.82 / 5.21 */
+  --blue-tint: #10304f;
+  --primary: #2e8fff;
+  --primary-hover: #55a4ff;
+  --primary-fg: #00204a;    /* 4.97 對 --primary */
 
-  --accent: #fdd663;
-  --accent-text: #fdd663;
-  --accent-tint: #3a3020;
+  --accent: #ff9f0a;
+  --accent-text: #ffbe55;
+  --accent-tint: #3a2a12;
 
-  --slate-tint: #35363a; --slate-text: #bdc1c6;
-  --green-tint: #1f2d24; --green-text: #81c995;
-  --amber-tint: #3a3020; --amber-text: #fdd663;
-  --red-tint: #3d2724;   --red-text: #f28b82;
-  --purple-tint: #33283f; --purple-text: #d0bcff;
+  --slate-tint: #3a3a3c; --slate-text: #c7c7cc;
+  --green-tint: #17321f; --green-text: #5fd87f;   /* 7.68 */
+  --amber-tint: #3a2a12; --amber-text: #ffbe55;   /* 8.39 */
+  --red-tint: #3a1f1d;   --red-text: #ff8a80;     /* 6.60 */
+  --purple-tint: #2e1f3a; --purple-text: #d9a6f5; /* 7.81 */
 
-  /* 實心鈕深色仍配白字。這四個值是「白字對底色」實算過的,改動前務必重算:
-     success 5.32 / success-hover 4.69 / danger 4.56 / danger-hover 5.84,全部 >= AA 4.5。
-     ⚠️ --danger 刻意不再調深:它同時被 confirm.jsx 與 InsightsPanel.jsx 當圖示色用,
-     #dc362e 對 --surface 是 3.15(過 1.4.11 的 3:1 圖形門檻),再深就破。
-     --success/--success-hover/--danger-hover 各自只有 ui.jsx 的實心鈕一個消費者,可自由調深。 */
-  --success: #1e7a4d;   --success-hover: #1f8452;
-  --danger: #dc362e;    --danger-hover: #c02a22;
+  /* 實心鈕深色仍配白字。這四個值是白字對底色實算過的,改動前務必重算:
+     success 6.73 / success-hover 5.35 / danger 6.23 / danger-hover 5.26,全部 >= AA 4.5。
+     注意 hover 態比 base 亮,所以 hover 的對比一定比 base 低——兩個都要驗。 */
+  --success: #17693c;   --success-hover: #1f7a45;
+  --danger: #b3302a;    --danger-hover: #c7362c;
 
-  --ai: #a8c7fa;
-  --ai-tint: #0d2f5f;
-  --ai-text: #d2e3fc;
+  /* 狀態圓點:深色用 Apple 的暗色系統色,對 --surface / --surface-2 都過 3:1 */
+  --dot-mute: #8e8e93;  /* 4.27 / 3.48 */
 
-  --g-search: #303134;
-  --g-search-h: #3c4043;
+  --ai: #bf5af2;
+  --ai-tint: #2e1f3a;
+  --ai-text: #d9a6f5;
 
-  --focus: #8ab4f8;
+  --g-search: #3a3a3c;
+  --g-search-h: #48484a;
 
-  --chart-grid: #35363a;
-  --chart-axis-text: #9aa0a6;
-  --chart-muted-line: #80868b;
-  --chart-today: #5f6368;
+  --snackbar-bg: #3a3a3c;
+  --snackbar-text: #f5f5f7;
+  --snackbar-action: #6fb4ff;
 
-  --shadow-md: 0 1px 3px rgba(0,0,0,.35), 0 4px 8px 3px rgba(0,0,0,.25);
-  --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.2);
-  --shadow-overlay: 0 2px 6px rgba(0,0,0,.4), 0 8px 24px 6px rgba(0,0,0,.4);
+  --focus: #6fb4ff;
+  --focus-glow: rgba(111, 180, 255, .22);
 
-  --chrome-bg: #292a2d;
-  --border-card: #3c4043;
-  --edge-shadow: 0 1px 0 var(--border-2), 0 8px 24px -16px rgba(0,0,0,.55);
+  --chart-grid: #38383a;
+  --chart-axis-text: #a8a8ad;
+  --chart-muted-line: #8e8e93;
+  --chart-today: #2e8fff;
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,.30), 0 0 0 .5px rgba(255,255,255,.06);
+  --shadow-md: 0 2px 10px rgba(0,0,0,.40), 0 0 0 .5px rgba(255,255,255,.07);
+  --shadow-overlay: 0 12px 36px rgba(0,0,0,.55), 0 0 0 .5px rgba(255,255,255,.09);
+
+  --chrome-bg: rgba(34, 34, 36, .84);
+  --chrome-bar: rgba(28, 28, 30, .78);
+  --chrome-solid: #222224;
+  --border-card: #3a3a3c;
+  --edge-shadow: 0 1px 0 var(--border-2), 0 8px 24px -16px rgba(0,0,0,.6);
+
+  --green-bar: #30d158;
 }
 
 html, body, #root { height: 100%; margin: 0; }
@@ -207,24 +295,43 @@ select option { color: var(--text); background: var(--surface); }
 /* 大面積浮面(modal/燈箱)加框加深影;MarkupEditor 燈箱在用 */
 .g-elevation-2 { border: 1px solid var(--border-card); box-shadow: var(--shadow-overlay); }
 
-/* chrome(頂欄/側欄):Google 風實心白,無邊線靠 --bg 灰底分層。
-   class 名保留(Layout 掛著),毛玻璃退場。 */
-.chrome-glass { background: var(--chrome-bg); }
-/* scroll edge(§12):置頂時無界線;內容捲到 chrome 底下才浮出 hairline+柔影 */
-.chrome-edge { transition: box-shadow 200ms var(--ease-out); }
+/* chrome(頂欄/側欄):Apple 材質回歸。class 名保留(Layout 掛著)。
+   不支援 backdrop-filter 的瀏覽器落回 --chrome-solid,無破壞。
+   ⚠️ 只有 chrome 能用;內容卡一律實心。 */
+.chrome-glass {
+  background: var(--chrome-solid);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .chrome-glass {
+    background: var(--chrome-bg);
+    backdrop-filter: var(--chrome-blur);
+    -webkit-backdrop-filter: var(--chrome-blur);
+  }
+  .chrome-bar {
+    background: var(--chrome-bar);
+    backdrop-filter: var(--chrome-bar-blur);
+    -webkit-backdrop-filter: var(--chrome-bar-blur);
+  }
+}
+.chrome-bar { background: var(--chrome-solid); }
+
+/* scroll edge:置頂時無界線;內容捲到 chrome 底下才浮出 hairline+柔影
+   (HIG §12:用 scroll edge effect,不要常駐 1px 分隔線) */
+.chrome-edge { transition: box-shadow var(--dur-menu) var(--ease-out); }
 .chrome-edge[data-scrolled="true"] { box-shadow: var(--edge-shadow); }
 
-/* 全站數據體:Google 規格數字不用等寬字體,tabular-nums 就能對齊(.num 為語意別名) */
+/* 全站數據體:數字不用等寬字體,tabular-nums 就能對齊(.num 為語意別名) */
 .tabular-nums, .num {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-/* 頁首:標題 24px/400,無底線裝飾(Google 頁首靠留白分層) */
+/* 頁首:large title 靠留白分層,無底線裝飾 */
 .title-block { padding-bottom: 4px; }
 
 /* Material Symbols:選取態用 FILL 1(可變軸),尺寸由元件 inline fontSize 控制。
-   字符走 ::before + attr(),ligature 名不進 textContent(見 icons.jsx 的說明)。 */
+   字符走 ::before + attr(),ligature 名不進 textContent(見 icons.jsx 的說明)。
+   ⚠️ 圖示系統將於後續工作包換成 lucide-react;在那之前這段留著。 */
 .material-symbols-outlined { user-select: none; }
 .material-symbols-outlined[data-i]::before { content: attr(data-i); }
 
@@ -239,20 +346,22 @@ select option { color: var(--text); background: var(--surface); }
 @keyframes g-spin { to { transform: rotate(360deg); } }
 .msym-spin { animation: g-spin .9s linear infinite; }
 
-/* ── 互動回饋:按壓即時縮放(pointer-down 就回饋,不等 click)──
-   所有可按元素共用;disabled 不回饋。縮放輕(0.97),專業不花。
-   過渡表在此統一(transform+顏色),用了 .pressable 就別再掛 transition-colors,
-   兩者的 transition 宣告會互蓋。 */
+/* ── 互動回饋:按壓即時縮放 ────────────────────────────────
+   HIG §1 Response:回饋在 pointer-down,不等 click。:active 就是 pointer-down,
+   不要改成 onClick 後才加 class——那正是「感覺死掉」的來源。
+   所有可按元素共用;disabled 不回饋。過渡表在此統一(transform+顏色),
+   用了 .pressable 就別再掛 transition-colors,兩者的 transition 宣告會互蓋。 */
 .pressable {
   transition: transform var(--dur-press) var(--ease-out),
     background-color var(--dur-fast) ease, color var(--dur-fast) ease,
     border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
-.pressable:active:not(:disabled) { transform: scale(0.97); }
+.pressable:active:not(:disabled) { transform: scale(0.98); }
 
 /* ── 進場過渡:掛載時從 @starting-style 過渡到常態(只動 transform/opacity)。
    出場一律即時(高頻工具,關閉要快);不支援 @starting-style 的瀏覽器
-   直接顯示,無動畫、零破壞。方向遵守空間一致性:從觸發源長出來。 ── */
+   直接顯示,無動畫、零破壞。
+   HIG §7 空間一致:從觸發源長出來,而且進出走同一條路徑。 ── */
 .enter-fade {            /* 遮罩 scrim:純淡入 */
   transition: opacity var(--dur-menu) var(--ease-out);
   @starting-style { opacity: 0; }
@@ -304,8 +413,33 @@ html.theme-switching, html.theme-switching *, html.theme-switching *::before, ht
     color: #000 !important;
     background-color: #fff !important;
   }
+  /* 毛玻璃在列印是一塊灰:chrome 一律印成白底 */
+  .chrome-glass, .chrome-bar {
+    background: #fff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
 }
 
+/* HIG §14:降低動態不等於沒有回饋,而是換成不引發前庭反應的等價物。
+   三個訊號各自獨立,要分開處理。 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+/* 降低透明度:材質改成不透明,別只是降 blur——半透明本身就是問題 */
+@media (prefers-reduced-transparency: reduce) {
+  .chrome-glass, .chrome-bar {
+    background: var(--chrome-solid);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+/* 高對比:材質實心化並補上明確邊界 */
+@media (prefers-contrast: more) {
+  .chrome-glass, .chrome-bar {
+    background: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: var(--text-2);
+  }
 }

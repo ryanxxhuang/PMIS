@@ -1,0 +1,35 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "方向選擇" },
+    { "id": "page-2", "name": "基礎規格" }
+  ],
+  "artboards": [
+    { "file": "Principles.dc.html", "x": 0, "y": 0, "w": 1240, "h": 1900, "page": "page-1", "title": "判準 · Apple 設計精神 → PMIS" },
+    { "file": "Main.dc.html", "x": 1360, "y": 0, "w": 1440, "h": 1000, "page": "page-1", "title": "方向 B · 三欄檢閱台（建議）" },
+    { "file": "DirectionA.dc.html", "x": 2880, "y": 0, "w": 1440, "h": 1000, "page": "page-1", "title": "方向 A · 收件匣" },
+    { "file": "DirectionC.dc.html", "x": 1360, "y": 1120, "w": 1440, "h": 1000, "page": "page-1", "title": "方向 C · 文件即介面" },
+
+    { "file": "Foundations.dc.html", "x": 0, "y": 0, "w": 1240, "h": 2200, "page": "page-2", "title": "基礎規格 · Tokens" },
+    { "file": "Marketing.dc.html", "x": 1360, "y": 0, "w": 1440, "h": 1060, "page": "page-2", "title": "行銷站首頁 Hero" },
+    { "file": "Login.dc.html", "x": 1360, "y": 1180, "w": 1440, "h": 900, "page": "page-2", "title": "登入 /login" }
+  ],
+  "annotations": [
+    {
+      "id": "pick",
+      "x": 0,
+      "y": -190,
+      "w": 700,
+      "page": "page-1",
+      "text": "先看左邊的判準板，再看三個方向。\n三個方向對同一組判準給出不同答案，差別在「這個 App 以什麼為中心」——待辦、清單，還是契約本身。\n挑一個，我把它展開成完整的一套，然後才開始改 code。"
+    },
+    {
+      "id": "v1note",
+      "x": 0,
+      "y": 2290,
+      "w": 700,
+      "page": "page-2",
+      "text": "色票、字級、材質、動效曲線這一層仍然成立，三個方向共用。\n行銷站與登入頁是 v1 換皮版，等方向定了再一起重做。"
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}
