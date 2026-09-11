@@ -63,8 +63,10 @@ describe('aiFeatures 前後端註冊表同步', () => {
       .toEqual(['weather.fetch', 'reminder.daily'])
   })
 
-  it('defaultEnabled:僅退場的 assistant.chat 為 false,其餘為 true(W3-3/D-008)', () => {
-    for (const f of AI_FEATURES) expect(f.defaultEnabled, f.key).toBe(f.key !== 'assistant.chat')
+  it('defaultEnabled:僅退場的 assistant.chat(W3-3/D-008)與 contract.parse(B5/D-012)為 false,其餘為 true', () => {
+    // 退場功能列保留供用量歷史對帳,只關開關;DB 側對應 20260812000300 / 20260911100100
+    const retired = new Set(['assistant.chat', 'contract.parse'])
+    for (const f of AI_FEATURES) expect(f.defaultEnabled, f.key).toBe(!retired.has(f.key))
   })
 
   it('每個 edgeFunction 目錄確實存在於 supabase/functions/', () => {
