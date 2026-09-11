@@ -1,32 +1,65 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, PageHeader, Button, Surface, Badge } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Button, Badge, Dot, ErrorBanner } from '../../components/ui.jsx'
+import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../components/listDetail.jsx'
+import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
+import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow } from '../../lib/progressPlan.js'
 import { auditProject } from '../../lib/riskAudit.js'
 import { buildIntegrityFindings, isConcretePourItem } from '../../lib/integrityAudit.js'
 
-// 色票走 class 與 Badge 的 color key,不再是 inline style 的 var() 字串:
-// 狀態顏色的單一真相是 ui.jsx 的五語意色票,inline style 會繞過它自成一份。
-// tile 是完整字面 class(Tailwind 只掃得到原始碼裡的完整字串,不能用樣板拼)。
+// 版面:改版前是「總覽色塊＋檢核表卡＋勾稽鏈卡＋AI 意見卡」四張直排——同一種東西
+// (稽核項目)被來源切成兩張卡,判定依據被塞在一行 text-xs 裡,AI 意見又是整案一段、
+// 對不回是哪一項發現。現在是一份清單(檢核表＋勾稽發現混排,嚴重度高的在前)＋詳情欄:
+// 判定依據、對應工項、來源單據與 AI 稽核意見都貼在該項底下(規範 §0 疊合版、判準第 6 條
+// 「這個數字來自哪裡?點得進去嗎?」)。判定仍全由確定性引擎(riskAudit.js/integrityAudit.js)
+// 給,這一頁只排版與呈現;AI 只對「文件勾稽鏈」發現寫文字(edge fn audit-summary 的
+// system prompt 就是這樣寫的),不參與判定,也不對檢核表項目開口。
+//
+// 色票走 Badge/Dot 的 color key,不再是 inline style 的 var() 字串:狀態顏色的單一真相
+// 是 ui.jsx 的五語意色票。na=資料不足未評估,不算通過(riskAudit.js 最小證據原則)。
 const ST = {
-  pass: { icon: 'check_circle', badge: 'green', tile: 'bg-[var(--green-tint)] text-[var(--green-text)]', label: '通過' },
-  warn: { icon: 'warning', badge: 'amber', tile: 'bg-[var(--amber-tint)] text-[var(--amber-text)]', label: '注意' },
-  risk: { icon: 'gpp_maybe', badge: 'red', tile: 'bg-[var(--red-tint)] text-[var(--red-text)]', label: '風險' },
-  na: { icon: 'help', badge: 'slate', tile: 'bg-[var(--slate-tint)] text-[var(--slate-text)]', label: '未評估' }, // 資料不足,不算通過
+  risk: { icon: 'gpp_maybe', color: 'red', label: '風險' },
+  warn: { icon: 'warning', color: 'amber', label: '注意' },
+  na: { icon: 'help', color: 'slate', label: '未評估' },
+  pass: { icon: 'check_circle', color: 'green', label: '通過' },
+}
+// 嚴重度快篩的順序=清單排序:機關開頁第一眼看到的是最該複查的那一項
+const SEVERITIES = ['risk', 'warn', 'na', 'pass']
+const RANK = Object.fromEntries(SEVERITIES.map((s, i) => [s, i]))
+// 兩個來源:檢核表(riskAudit.js,五個面向各一項)與文件勾稽鏈(integrityAudit.js,逐工項對帳)
+const SOURCE_LABEL = { check: '自動檢核', chain: '文件勾稽' }
+// 來源單據:勾稽發現自帶 route;檢核表依面向對到該面向的工作面(判準第 6 條:金額、
+// 期限、判定都要能追到來源)。這只是連結對照,不是判定邏輯。
+const CHECK_ROUTE = { 估驗: '/valuation', 變更: '/change-orders', 品質: '/quality', 契約: '/deadlines', 進度: '/progress' }
+const ROUTE_LABEL = { '/valuation': '估驗計價', '/change-orders': '變更設計', '/quality': '品質查驗', '/deadlines': '期限追蹤', '/progress': '進度管制' }
+const DEFAULT_FILTERS = { q: '', status: '' }
+
+// 兩個引擎的 detail 都是「依據說明:對應項目、對應項目 等 N 項。」的形狀(整段文字,
+// 沒有結構化工項欄位)。在第一個冒號切開,前半是判定依據、後半是對應工項/日期/缺失。
+// 這是呈現層的切法,不動引擎;沒有冒號的(如「目前無待核定變更。」)整段當依據。
+const splitDetail = (detail = '') => {
+  const m = detail.match(/[:：]/)
+  if (!m) return { basis: detail, items: '' }
+  return { basis: detail.slice(0, m.index), items: detail.slice(m.index + 1).replace(/。$/, '') }
 }
 
 export default function RiskAudit() {
   const { project, workItems, valuations, progressPlan, changeOrders, defects, obligations,
     siteLogs, inspections, testSamples, auditSummary, demoMode, workItemsSource,
-    adjustedItems, revisedTotal, aiEnabled } = useStore()
+    adjustedItems, revisedTotal, aiEnabled, currentProject } = useStore()
   const imported = workItemsSource === 'db' || demoMode
   const navigate = useNavigate()
   const TODAY = new Date() // 每次 render 取(B-11):長開分頁的「今天」不可凍結在開頁那天
-  const [ai, setAi] = useState(null)       // { opinion, recommendations }
-  const [aiBusy, setAiBusy] = useState(false)
+  const [aiById, setAiById] = useState({}) // { [rowId]: { opinion, recommendations } } 逐項 AI 稽核意見
+  const [aiBusy, setAiBusy] = useState(null) // 產生中的 rowId
+  const [errMsg, setErrMsg] = useState('')
+  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  const searchRef = useRef(null)
+  const aiOn = aiEnabled('audit.summary')
 
   // 財務單一真相層(B-02):稽核分母與估驗/進度頁一致(含已核准變更)
   const { roots, childrenMap } = useMemo(
@@ -82,13 +115,59 @@ export default function RiskAudit() {
     return buildIntegrityFindings({ leaves, loggedQty, billedQty, inspStatusByItem, pourDates: [...pourSet].map((date) => ({ date })), testSamples })
   }, [workItems, adjustedItems, childrenMap, siteLogs, valuations, inspections, testSamples])
 
-  const genAudit = async () => {
-    setAiBusy(true)
-    const { error, result } = await auditSummary({ project_name: project?.project_name, findings: integrity.findings, summary: integrity.summary })
-    setAiBusy(false)
-    if (!error && result) setAi(result)
+  // 一份清單:檢核表(每個面向恰一項,id 以面向命名)＋勾稽發現(每種對帳至多一項,
+  // id 以標題冒號前的固定字串命名)。兩者 id 在資料變動下都穩定,深連結 ?finding= 才有意義。
+  // 嚴重度高的在前(風險→注意→未評估→通過),同級維持引擎順序。
+  const rows = useMemo(() => [
+    ...checks.map((c) => ({ ...c, id: `check-${c.category}`, source: 'check', route: CHECK_ROUTE[c.category] })),
+    ...integrity.findings.map((f) => ({ ...f, id: `chain-${f.title.split(/[:：]/)[0]}`, source: 'chain' })),
+  ].sort((a, b) => RANK[a.status] - RANK[b.status]), [checks, integrity])
+
+  // 件數走全體(不受搜尋影響):chip 上的數字是「本案有幾項是這個嚴重度」,0 也保留——
+  // 「0 項風險」本身就是機關要的資訊
+  const counts = useMemo(
+    () => Object.fromEntries(SEVERITIES.map((s) => [s, rows.filter((r) => r.status === s).length])),
+    [rows],
+  )
+  // 目前畫面上的清單:嚴重度 AND 關鍵字(標題/依據/面向)
+  const ordered = useMemo(() => {
+    const q = filters.q.trim().toLowerCase()
+    return rows
+      .filter((r) => !filters.status || r.status === filters.status)
+      .filter((r) => !q || [r.title, r.detail, r.category].some((v) => (v || '').toLowerCase().includes(q)))
+  }, [rows, filters])
+  const anyFilter = filters.q.trim() !== '' || filters.status !== ''
+
+  // 選取/深連結(?finding=)/切案重置/初次自動選取:共用殼 hook。預設選排序後第一項
+  // (=最嚴重的那一項),開頁就看到最該複查的事。
+  const pid = currentProject?.project_id
+  const { selectedId, detailOpen, select, closeDetail } = useListDetailPane({
+    param: 'finding', idPrefix: 'aud-',
+    scope: `${pid}`,
+    ready: imported && rows.length > 0, rows,
+    pickDefault: () => ordered[0]?.id,
+    onSelect: () => setErrMsg(''),
+    onReset: () => { setFilters(DEFAULT_FILTERS); setAiById({}) },
+  })
+  // 篩選後選中項被篩掉:右欄內容保留(與 /safety 同),清單中只是沒有高亮列
+  const selected = rows.find((r) => r.id === selectedId) || null
+  useListKeyboardNav({ ordered, selectedId, select, idPrefix: 'aud-', searchRef })
+
+  // AI 稽核意見:只對「這一項」勾稽發現寫文字;統計數字照該項給(風險 1/注意 1),
+  // 已勾稽工項數沿用整案,讓 AI 知道母體大小。判定不經 AI(integrityAudit.js 已定)。
+  const genAudit = async (r) => {
+    setAiBusy(r.id); setErrMsg('')
+    const { error, result } = await auditSummary({
+      project_name: project?.project_name,
+      findings: [r],
+      summary: { risk: r.status === 'risk' ? 1 : 0, warn: r.status === 'warn' ? 1 : 0, checked: integrity.summary.checked },
+    })
+    setAiBusy(null)
+    if (error) { setErrMsg(friendlyError(error, 'AI 稽核意見產生失敗')); return }
+    if (result) setAiById((m) => ({ ...m, [r.id]: result }))
   }
 
+  // 早退也保留 PageHeader:頁首與工作面分頁不該因為「還沒匯入標單」整組消失
   if (!imported) {
     return (
       <div className="space-y-5">
@@ -98,117 +177,179 @@ export default function RiskAudit() {
     )
   }
 
-  const totRisk = summary.risk + integrity.summary.risk
-  const totWarn = summary.warn + integrity.summary.warn
-  const overall = totRisk ? 'risk' : totWarn ? 'warn' : 'pass'
-  const O = ST[overall]
+  // 整案結論一句話(改版前總覽色塊的內容):風險/注意各幾項,或未發現異常(含未評估件數)
+  const totRisk = counts.risk, totWarn = counts.warn
+  const verdict = totRisk ? `${totRisk} 項風險 · ${totWarn} 項注意`
+    : totWarn ? `${totWarn} 項需注意`
+    : summary.na ? `未發現異常（${summary.na} 項資料不足未評估）` : '本案未發現明顯異常'
+
+  // ── 詳情欄:狀態列 / 標題與 meta / 判定依據 / 對應工項 / AI 意見 / 動作列。
+  // region 以標題命名:報讀器走地標時直接聽到「估驗超前施工日誌:3 項工項 詳情」,
+  // e2e 也用同一個名字確認詳情欄正在顯示哪一項。
+  let detailBody = null
+  if (selected) {
+    const r = selected
+    const s = ST[r.status]
+    const { basis, items } = splitDetail(r.detail)
+    const ai = aiById[r.id]
+    // AI 只對勾稽發現開口(edge fn 的 system prompt 就是「文件勾稽鏈稽核」);通過/未評估
+    // 沒有可寫的異常,不給按鈕
+    const aiEligible = r.source === 'chain' && (r.status === 'risk' || r.status === 'warn')
+    detailBody = (
+      <section aria-label={`${r.title} 詳情`}>
+        {/* 狀態列:嚴重度＋面向＋來源;顏色＋文字並存 */}
+        <div className="px-4 py-[13px] border-b border-[var(--border)] flex items-center gap-2 flex-wrap">
+          <Badge color={s.color}><MSym name={s.icon} size={13} />{s.label}</Badge>
+          <Badge color="slate">{r.category}</Badge>
+          <Badge color="blue">{SOURCE_LABEL[r.source]}</Badge>
+        </div>
+
+        <div className="p-4">
+          <div className="text-callout font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{r.title}</div>
+          {/* 空值一律顯示 —:四格固定,眼睛掃同一位置就知道有沒有填 */}
+          <MetaGrid className="mt-3.5" rows={[
+            ['判定', s.label],
+            ['面向', r.category || '—'],
+            ['來源', SOURCE_LABEL[r.source]],
+            ['單據', r.route ? ROUTE_LABEL[r.route] || r.route : '—'],
+          ]} />
+        </div>
+
+        {/* 判定依據:引擎給的說明,完整顯示不再 text-xs 一行——這段就是機關要複查的理由 */}
+        <div className="px-4 pb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <MSym name="fact_check" size={15} className="text-[var(--text-3)]" />
+            <span className="text-footnote font-medium text-[var(--text)]">判定依據</span>
+          </div>
+          <p className="text-body leading-[1.8] text-[var(--text)] break-words">{basis || '—'}</p>
+        </div>
+
+        {/* 對應工項/日期/缺失:冒號後那段;沒有就不渲染(不放空區塊) */}
+        {items && (
+          <div className="px-4 pb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <MSym name="list_alt" size={15} className="text-[var(--text-3)]" />
+              <span className="text-footnote font-medium text-[var(--text)]">對應工項／項目</span>
+            </div>
+            <p className="text-body leading-[1.8] text-[var(--text)] break-words bg-[var(--surface-2)] rounded-lg px-3 py-2">{items}</p>
+          </div>
+        )}
+
+        {/* AI 稽核意見:--ai 紫色身分(規範 §1 三條不可退讓「AI 草稿須可辨識」),
+            內容只根據上面那項確定性發現撰寫,不臆造未列出的問題 */}
+        {ai && (
+          <div className="px-4 pb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <MSym name="auto_awesome" size={15} className="text-[var(--ai)]" />
+              <span className="text-footnote font-medium text-[var(--ai-text)]">AI 稽核意見</span>
+              <Badge color="purple">草稿</Badge>
+            </div>
+            <div className="bg-[var(--ai-tint)] rounded-lg px-3 py-2 space-y-2">
+              <p className="text-body leading-relaxed text-[var(--text)] whitespace-pre-line break-words">{ai.opinion}</p>
+              {ai.recommendations?.length > 0 && (
+                <div>
+                  <div className="text-caption font-medium text-[var(--ai-text)] mb-1">建議事項</div>
+                  <ul className="list-decimal list-inside space-y-1 text-body text-[var(--text-2)]">
+                    {ai.recommendations.map((t, i) => <li key={i}>{t}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <p className="text-caption text-[var(--text-3)] mt-1">AI 只根據系統確定性發現撰寫,判定不經 AI;供人工撰寫稽核意見參考,非正式文件。</p>
+          </div>
+        )}
+
+        {/* 動作列:前往來源單據 / 產生 AI 稽核意見。都是次級鈕,這個情境沒有主動作
+            (稽核只提醒、不做任何處置)。AI 功能關閉時藏按鈕、留簡短說明(真正的閘門在伺服器端) */}
+        <div className="px-4 py-3 border-t border-[var(--border-2)] flex items-center gap-2 flex-wrap">
+          {r.route && (
+            <Button variant="secondary" onClick={() => navigate(r.route)}>
+              前往{ROUTE_LABEL[r.route] || '查核'}<MSym name="arrow_forward" size={14} />
+            </Button>
+          )}
+          {aiEligible && aiOn && (
+            <Button variant="secondary" disabled={aiBusy === r.id} onClick={() => genAudit(r)}>
+              <MSym name="auto_awesome" size={13} className="text-[var(--ai)]" />{aiBusy === r.id ? ' AI 產生中…' : ai ? ' 重新產生 AI 稽核意見' : ' 產生 AI 稽核意見'}
+            </Button>
+          )}
+          {aiEligible && !aiOn && <span className="text-footnote text-[var(--text-2)]">AI 稽核意見未啟用</span>}
+        </div>
+      </section>
+    )
+  }
+
+  // ── 左欄卡頭下方:搜尋 + 四段嚴重度快篩(件數走全體),兩條件 AND
+  const filterBar = (
+    <div className="px-5 py-3.5 border-b border-[var(--border-2)] flex flex-col gap-3">
+      <SearchField ref={searchRef} value={filters.q}
+        onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+        placeholder="搜尋項目、依據或面向…" aria-label="搜尋稽核項目" />
+      <div className="flex items-center gap-2 flex-wrap">
+        {SEVERITIES.map((sv) => (
+          <StatusChip key={sv} active={filters.status === sv} count={counts[sv]}
+            onClick={() => setFilters((f) => ({ ...f, status: f.status === sv ? '' : sv }))}>
+            <Dot color={ST[sv].color} />{ST[sv].label}
+          </StatusChip>
+        ))}
+        {anyFilter && (
+          <Button variant="ghost" size="sm" onClick={() => setFilters(DEFAULT_FILTERS)}>清除篩選</Button>
+        )}
+      </div>
+    </div>
+  )
+
+  // ── 清單列:只負責選取(動作全在詳情欄),兩行=嚴重度＋標題＋面向 / 來源＋依據摘要。
+  // role=listitem + aria-current 與 /safety 同一套選取語意。
+  const listRows = (
+    <div role="list" aria-label="稽核項目" className="divide-y divide-[var(--border-2)]">
+      {ordered.length === 0 ? (
+        <div className="px-5 py-12 text-center text-footnote leading-[1.8] text-[var(--text-3)]">
+          沒有符合條件的稽核項目。<br />換一個嚴重度,或試試項目、依據關鍵字。
+        </div>
+      ) : ordered.map((r) => {
+        const s = ST[r.status]
+        const active = r.id === selectedId
+        return (
+          <button key={r.id} type="button" role="listitem" id={`aud-${r.id}`}
+            aria-current={active || undefined}
+            onClick={() => select(r.id, { openPane: true })}
+            className={`w-full text-left px-5 py-3 max-md:min-h-11 cursor-pointer ${active
+              ? 'bg-[var(--blue-tint)]' : 'hover:bg-[var(--surface-2)]'}`}>
+            <span className="flex items-center gap-2 flex-wrap">
+              <Badge color={s.color}><MSym name={s.icon} size={13} />{s.label}</Badge>
+              <span className="text-body text-[var(--text)] min-w-0 [text-wrap:pretty]">{r.title}</span>
+              <Badge color="slate">{r.category}</Badge>
+            </span>
+            <span className="block mt-0.5 text-caption text-[var(--text-3)] truncate">
+              {SOURCE_LABEL[r.source]} · {r.detail}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
 
   return (
     <div className="space-y-5">
       <PageHeader title="風險稽核" tagline="AI 防弊"
         subtitle="系統化檢核本案的估驗、變更、品質、契約與進度，標出值得複查的異常" />
 
-      {/* 稽核結果總覽 */}
-      <Surface className="p-5 flex flex-wrap items-center gap-x-6 gap-y-3">
-        <div className="flex items-center gap-3">
-          <span className={`w-11 h-11 rounded-lg grid place-items-center shrink-0 ${O.tile}`}><MSym name={O.icon} size={24} /></span>
-          <div>
-            {/* 小標對齊 Stat 的 label 規格(11px/text-2),不再自帶只有這裡看得到的 tracking */}
-            <div className="text-caption text-[var(--text-2)]">稽核結果</div>
-            <div className="text-lg font-semibold text-[var(--text)]">
-              {overall === 'pass'
-                ? (summary.na ? `未發現異常（${summary.na} 項資料不足未評估）` : '本案未發現明顯異常')
-                : overall === 'warn' ? `${totWarn} 項需注意` : `${totRisk} 項風險 · ${totWarn} 項注意`}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 ml-auto text-sm">
-          <span className="flex items-center gap-1.5"><MSym name="check_circle" size={15} className="text-[var(--green-text)]" /><span className="num font-semibold">{summary.pass}</span> 通過</span>
-          <span className="flex items-center gap-1.5"><MSym name="warning" size={15} className="text-[var(--amber-text)]" /><span className="num font-semibold">{totWarn}</span> 注意</span>
-          <span className="flex items-center gap-1.5"><MSym name="gpp_maybe" size={15} className="text-[var(--red-text)]" /><span className="num font-semibold">{totRisk}</span> 風險</span>
-          {summary.na > 0 && <span className="flex items-center gap-1.5"><MSym name="help" size={15} className="text-[var(--slate-text)]" /><span className="num font-semibold">{summary.na}</span> 未評估</span>}
-        </div>
-      </Surface>
+      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
-      {/* 檢核明細 */}
-      <Card title="稽核檢核表" bodyClass="p-0"
-        action={<span className="inline-flex items-center gap-1 text-caption text-[var(--text-3)]"><MSym name="auto_awesome" size={12} />自動檢核</span>}>
-        <ul className="divide-y divide-[var(--border-2)]">
-          {checks.map((c, i) => {
-            const s = ST[c.status]
-            return (
-              <li key={i} className="flex items-start gap-3 px-5 py-3.5">
-                <span className={`w-9 h-9 rounded-lg grid place-items-center shrink-0 mt-0.5 ${s.tile}`}><MSym name={s.icon} size={17} /></span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-[var(--text)]">{c.title}</span>
-                    <Badge color={s.badge} className="shrink-0">{s.label}</Badge>
-                  </div>
-                  <div className="text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">{c.detail}</div>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-      </Card>
-
-      {/* 文件勾稽鏈:逐工項跨文件對帳(全確定性) */}
-      <Card title="文件勾稽鏈" bodyClass="p-0"
-        action={<span className="inline-flex items-center gap-1 text-caption text-[var(--text-3)]"><MSym name="compare_arrows" size={12} />估驗 ↔ 日誌 ↔ 查驗 ↔ 試體 對帳</span>}>
-        {integrity.findings.length === 0 ? (
-          <Empty>估驗、施工日誌、查驗與試體之間未發現對不起來之處（已勾稽 {integrity.summary.checked || 0} 項計價工項）。</Empty>
-        ) : (
-          <ul className="divide-y divide-[var(--border-2)]">
-            {integrity.findings.map((c, i) => {
-              const s = ST[c.status]
-              return (
-                <li key={i} className="flex items-start gap-3 px-5 py-3.5">
-                  <span className={`w-9 h-9 rounded-lg grid place-items-center shrink-0 mt-0.5 ${s.tile}`}><MSym name={s.icon} size={17} /></span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-[var(--text)]">{c.title}</span>
-                      <Badge color={s.badge} className="shrink-0">{s.label}</Badge>
-                      <Badge color="slate" className="shrink-0">{c.category}</Badge>
-                    </div>
-                    <div className="text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">{c.detail}</div>
-                    {/* 文字箭頭改圖示;手機補 44px 命中區(W8-5) */}
-                    {c.route && <button onClick={() => navigate(c.route)} className="inline-flex items-center gap-0.5 max-md:min-h-11 text-caption text-[var(--blue-text)] hover:underline mt-1">前往查核<MSym name="arrow_forward" size={12} /></button>}
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </Card>
-
-      {/* AI 稽核意見:只根據上方確定性發現撰寫。
-          批 B UX:功能關閉時藏產生按鈕、留簡短說明(確定性勾稽發現不受影響) */}
-      <Card title="AI 稽核意見" bodyClass={ai ? 'p-5' : 'p-0'} action={
-        aiEnabled('audit.summary') && (
-          <Button variant="secondary" onClick={genAudit} disabled={aiBusy}>
-            <MSym name="auto_awesome" size={14} />{aiBusy ? '產生中…' : ai ? '重新產生' : '產生稽核意見'}
-          </Button>
-        )
-      }>
-        {/* 未啟用/尚未產生都是空狀態,走 Empty(40px 圖示＋說明),不再各寫一段灰字 */}
-        {!aiEnabled('audit.summary') ? (
-          <Empty icon="auto_awesome">此 AI 功能未啟用（機關稽核意見草稿）；上方確定性勾稽發現不受影響,仍可據以人工撰寫稽核意見。</Empty>
-        ) : !ai ? (
-          <Empty icon="auto_awesome">依上方勾稽發現一鍵生成可交件的稽核意見摘要與建議事項；AI 只根據系統確定性發現撰寫，不臆造未列出的問題。</Empty>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-[var(--text-2)] leading-relaxed whitespace-pre-line">{ai.opinion}</p>
-            {ai.recommendations?.length > 0 && (
-              <div>
-                <div className="text-xs font-medium text-[var(--text-2)] mb-1">建議事項</div>
-                <ul className="list-decimal list-inside space-y-1 text-sm text-[var(--text-2)]">
-                  {ai.recommendations.map((r, i) => <li key={i}>{r}</li>)}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
+      <ListDetailLayout
+        detail={detailBody}
+        detailLabel="稽核項目詳情"
+        detailEmpty={<Empty>點左側清單查看判定依據、對應工項與來源單據。</Empty>}
+        drawerOpen={detailOpen && !!selected}
+        onDrawerClose={closeDetail}>
+        {/* ── 左欄:一份清單(右欄與抽屜由殼統一,見 components/listDetail.jsx)。
+            整案結論一句放卡頭右側:改版前的總覽色塊只剩這句有人會讀,件數都在快篩 chip 上 */}
+        <Card title={`稽核項目（${rows.length}）`} bodyClass="p-0"
+          action={<span className="text-footnote text-[var(--text-2)] num text-right">{verdict} · 已勾稽 {integrity.summary.checked || 0} 項計價工項</span>}>
+          {filterBar}
+          {listRows}
+        </Card>
+      </ListDetailLayout>
 
       <p className="text-caption text-[var(--text-3)] leading-relaxed">
         <MSym name="verified_user" size={13} className="inline align-text-bottom mr-1" />
