@@ -33,7 +33,7 @@ import { requirementsIntro } from '../../lib/requirementsIntro.js'
 import ReviewActions from '../../components/requirements/ReviewActions.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import {
-  REQUIREMENT_STATUS_LABELS, REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
+  REQUIREMENT_TYPE_LABELS, RESPONSIBLE_LABELS, ORIGIN_LABELS,
   WORK_ITEM_LINK_STATE_LABELS, ARTIFACT_TYPE_LABELS, GENERATION_TYPE_LABELS,
   latestCompletedRunIds, inDefaultReviewScope, requirementFrequencyKey,
   sourceVerificationSummary, sourcePageLabel, formatRequirementRule, requirementVerification,

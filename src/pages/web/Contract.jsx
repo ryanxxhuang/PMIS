@@ -43,6 +43,9 @@ const isPccesXml = (file) => /\.xml$/i.test(file.name)
 // 「已處理 mm:ss」的重繪節拍。與 RUN_POLL_MS 是兩件事:那個打網路,這個只重算
 // 本機時間差,所以可以快得多;秒數顯示到秒,再快也看不出差別。
 const ELAPSED_TICK_MS = 1000
+// 尚未載入選定包的 runs 時給的空清單。放模組層是為了 identity 穩定:寫成
+// `? storedRuns : []` 會每次 render 造新陣列,吃 runs 的 effect/memo 全部每次重跑。
+const EMPTY_RUNS = []
 
 export default function Contract() {
   const {
@@ -93,7 +96,7 @@ export default function Contract() {
   const pid = currentProject?.project_id
   const scopeRef = useRef(null)
   scopeRef.current = { pid, packageId: selectedPackageId }
-  const runs = loadedPackageId === selectedPackageId ? storedRuns : []
+  const runs = loadedPackageId === selectedPackageId ? storedRuns : EMPTY_RUNS
   const runRequest = useRef(0)
   const packageRequest = useRef(0)
   // 前端閘鏡像伺服器端 can_write(規則的單一來源在 store.jsx 的 can.write)
@@ -416,7 +419,7 @@ export default function Contract() {
     } finally {
       unlockRun(run.id)
     }
-  }, [reloadRuns])
+  }, [pid, reloadRuns, reloadObligations])
 
   // ── 看上傳的檔案:共用層負責留痕/彈窗退回/檔名還原(documentFileAccess)──
   const downloadVersionFile = useCallback(

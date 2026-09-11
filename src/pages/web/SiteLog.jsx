@@ -110,7 +110,10 @@ export default function SiteLog() {
       setLaborRaw(lg.labor || []); setEquipmentRaw(lg.equipment || []); setMaterialsRaw(lg.materials || []); setExtrasRaw(lg.extras || {})
     } else { setItemsRaw({}); setSummaryRaw(''); setWeatherPmRaw(''); setLaborRaw([]); setEquipmentRaw([]); setMaterialsRaw([]); setExtrasRaw({}) }
     if (dateChanged) setDirty(false) // 新日期從乾淨狀態開始
-  }, [date, currentLog, dirty])
+    // raw setter 全是 useState 的 setter(useDirtyState 原樣回傳),identity 穩定;列進來只是讓
+    // linter 看得懂這個 effect 讀了什麼,不會因此多跑一次。
+  }, [date, currentLog, dirty, setWeatherRaw, setWeatherPmRaw, setSummaryRaw, setItemsRaw,
+    setLaborRaw, setEquipmentRaw, setMaterialsRaw, setExtrasRaw])
 
   // 切換日期 → 載入該日已存日誌的現場照片（未存檔的日期沒有 daily_log_id，無照片）
   useEffect(() => {

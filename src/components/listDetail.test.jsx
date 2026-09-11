@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // 抽屜/Modal 的無障礙合約(W8-5 F2):開啟時焦點進面板、Esc 關閉、aria-modal/aria-label
 // 齊全;關閉時不渲染。搜尋欄 ref 直通 input(「/」快捷鍵靠它)、快篩 chip 帶 aria-pressed。
-import React, { act, createRef } from 'react'
+import { act, createRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'

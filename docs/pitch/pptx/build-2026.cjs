@@ -208,7 +208,7 @@ function chain(s, x, y, w, steps, o = {}) {
   const cw = (w - arrow * (n - 1)) / n
   steps.forEach(([t, b, tone], i) => {
     const cx = x + i * (cw + arrow)
-    const [bg, fg] = TONE[tone || 'blue']
+    const [, fg] = TONE[tone || 'blue']
     card(s, cx, y, cw, o.h || 1.5, { flat: true })
     s.addShape(pres.ShapeType.rect, { x: cx, y, w: cw, h: 0.055, fill: { color: fg } })
     s.addText(t, {

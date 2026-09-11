@@ -21,7 +21,7 @@ function deriveState(sch, pct) {
 }
 
 export default function Schedule() {
-  const { project, workItems, adjustedItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
+  const { workItems, adjustedItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
   const [search, setSearch] = useState('')
   const [errMsg, setErrMsg] = useState('') // 排程寫入失敗必須讓使用者看到(失敗=UI 不變)
   const onSet = async (key, patch) => {

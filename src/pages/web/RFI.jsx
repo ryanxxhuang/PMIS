@@ -9,10 +9,9 @@ import { exportCsv, stamp } from '../../lib/exportCsv.js'
 import { rfiBall } from '../../lib/ballInCourt.js'
 import { taipeiToday } from '../../lib/dates.js'
 
-const STATUS_COLOR = { 待回覆: 'amber', 已回覆: 'blue', 已結案: 'green' }
 
 export default function RFI() {
-  const { project, rfis, createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply, resolveMarkup,
+  const { rfis, createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply, resolveMarkup,
     isSupabaseConfigured, currentProject, can, aiEnabled } = useStore()
   const [markupOpen, setMarkupOpen] = useState(false)
   const [form, setForm] = useState(null)

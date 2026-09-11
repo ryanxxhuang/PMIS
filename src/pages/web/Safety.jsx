@@ -22,7 +22,7 @@ const NEXT_LABEL = { 待改善: '開始改善', 改善中: '標為完成' }
 const thisMonth = () => taipeiToday().slice(0, 7)
 
 export default function Safety() {
-  const { project, isPersistedProject, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord, defects, currentUser, can } = useStore()
+  const { isPersistedProject, demoMode, safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord, defects, currentUser, can } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('')

@@ -15,7 +15,7 @@ const STATUS_COLOR = { 提出: 'slate', 審核中: 'amber', 核准: 'green', 駁
 const isPending = (status) => status === '提出' || status === '審核中'
 
 export default function ChangeOrders() {
-  const { project, workItems, dbMode, demoMode, changeOrders, can,
+  const { workItems, dbMode, demoMode, changeOrders, can,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem } = useStore()
   const original = workItems?.meta.billable_total || 0

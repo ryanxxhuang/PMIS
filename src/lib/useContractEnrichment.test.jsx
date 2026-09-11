@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // 契約 enrich hook 的載入合約:指定 id 只拉那些 requirement(出處與之並行)、'all'
 // 拉全案;審查人只在要求時查;切案清空、同案重載保留舊列;patch 就地換列。
-import React, { act } from 'react'
+import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'
 import { createFakePostgrest } from '../testUtils/fakePostgrest.js'

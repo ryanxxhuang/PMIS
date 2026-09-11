@@ -33,7 +33,7 @@ describe('itpAlerts', () => {
     const alerts = itpAlerts([mk('H', 'K1'), mk('W', 'K3'), mk('R', 'K1')], [], logs)
     expect(alerts).toHaveLength(2)
     expect(alerts[0].level).toBe('overdue')
-    expect(alerts[0].title).toContain('不申請查驗' === '' ? '' : 'H')
+    expect(alerts[0].title).toContain('H 停留點未申請查驗')
     expect(alerts[1].level).toBe('soon')
   })
 

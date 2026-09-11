@@ -60,9 +60,8 @@ const T = { title: 24, sub: 13, cardTitle: 15, body: 13, small: 11.5, meta: 10.5
 const R = { card: 0.167, chip: 0.111, status: 0.083, big: 0.39 }
 const SHADOW = { type: 'outer', angle: 90, blur: 3, offset: 0.014, color: '3C4043', opacity: 0.22 }
 
-const W = 13.333, H = 7.5, M = 0.7, CW = W - M * 2
+const W = 13.333, M = 0.7, CW = W - M * 2
 const TOP = 2.0            // 內容起點
-const BOT = 6.76           // 內容底線
 const TOTAL = 15
 let PAGE = 0
 const MISSING = []

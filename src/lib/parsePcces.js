@@ -23,7 +23,7 @@ const num = (s) => {
 const ROLLUP_KINDS = new Set(['subtotal']) // 合計列：金額重複母項，加總時排除（formula 是真實金額不排除）
 
 export function parsePccesXml(xmlString) {
-  const clean = (xmlString || '').replace(/^﻿/, '') // 去 BOM
+  const clean = (xmlString || '').replace(/^\uFEFF/, '') // 去 BOM
   const doc = new DOMParser().parseFromString(clean, 'application/xml')
   if (doc.querySelector('parsererror')) throw new Error('XML 解析失敗，檔案格式不正確')
   const root = doc.documentElement

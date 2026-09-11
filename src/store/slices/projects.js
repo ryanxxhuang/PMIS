@@ -155,7 +155,6 @@ export function useProjectsSlice({ currentUser, log }) {
       setAiOverrides(o.error ? {} : Object.fromEntries((o.data || []).map((r) => [r.feature_key, r.enabled])))
     })
     return () => { active = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject?.project_id, currentUser?.real])
 
   // 與 DB 版 ai_feature_allowed 同三段邏輯:平台總開關 → 專案覆寫 → 方案門檻。
@@ -169,7 +168,7 @@ export function useProjectsSlice({ currentUser, log }) {
     if (featureKey in aiOverrides) return aiOverrides[featureKey]
     const plan = currentProject?.ai_plan || 'standard'
     return (PLAN_RANK[plan] ?? 1) >= (PLAN_RANK[row.min_plan] ?? 0)
-  }, [aiFeatureRows, aiOverrides, currentProject?.ai_plan]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aiFeatureRows, aiOverrides, currentProject?.ai_plan])
 
   // 工項查表（item_key↔work_item uuid）+ 是否走真 DB（估驗/進度才寫回 DB）
   const wiMaps = useMemo(() => {

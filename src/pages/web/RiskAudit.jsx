@@ -17,6 +17,20 @@ const ST = {
   na: { icon: 'help', badge: 'slate', tile: 'bg-[var(--slate-tint)] text-[var(--slate-text)]', label: '未評估' }, // 資料不足,不算通過
 }
 
+// 累計預定進度 %:progressPlan.months 的 plannedPct 是逐月累計值,對「今天」線性內插。
+// 純算術、每次 render 重算,不放 useMemo——只認 progressPlan 的 memo 會把「今天」凍在
+// 它上次變動那天,長開分頁的預定進度就停住(B-11 每次 render 取「今天」的用意就沒了)。
+function plannedPctNow(progressPlan, today) {
+  if (!progressPlan) return null
+  const months = progressPlan.months, N = months.length
+  const start = new Date(progressPlan.start)
+  const el = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth()) + (today.getDate() - 1) / 30
+  if (el <= 0) return 0
+  if (el >= N - 1) return months[N - 1].plannedPct
+  const lo = Math.floor(el), f = el - lo
+  return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
+}
+
 export default function RiskAudit() {
   const { project, workItems, valuations, progressPlan, changeOrders, defects, obligations,
     siteLogs, inspections, testSamples, auditSummary, demoMode, workItemsSource,
@@ -50,16 +64,7 @@ export default function RiskAudit() {
     if (!latest || !billableTotal) return 0
     return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latest.items)) / billableTotal) * 100
   }, [valuations, roots, childrenMap, billableTotal])
-  const plannedNow = useMemo(() => {
-    if (!progressPlan) return null
-    const months = progressPlan.months, N = months.length
-    const start = new Date(progressPlan.start)
-    const el = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
-    if (el <= 0) return 0
-    if (el >= N - 1) return months[N - 1].plannedPct
-    const lo = Math.floor(el), f = el - lo
-    return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
-  }, [progressPlan])
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   const anchors = { award_date: project?.award_date, notice_date: project?.notice_date, commencement_date: project?.commencement_date, end_date: project?.end_date }
   const { checks, summary } = useMemo(() => auditProject({

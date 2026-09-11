@@ -17,7 +17,7 @@ const CAT_BADGE = {
 const pct = (n) => (isFinite(n) ? n.toFixed(1) : '—')
 
 export default function Cost() {
-  const { project, workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem, changeOrders } = useStore()
+  const { workItems, dbMode, demoMode, costItems, createCostItem, updateCostItem, deleteCostItem, changeOrders } = useStore()
   // 合約收入 = 變更後契約金額(原發包 + 已核准追加減)
   const revenue = revisedContractTotal(workItems?.meta.billable_total || 0, changeOrders)
   const coNet = approvedNetAmount(changeOrders)

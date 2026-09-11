@@ -3,7 +3,7 @@
 // 深連結優先於預設選取、↑/↓ 只在清單序內移動並同步 URL、Enter 開原文但不搶
 // button/link 的原生 click、「/」聚焦搜尋、輸入控件與 modal 層內整組停用、
 // 切換 scope 整組重置並清 URL 參數、<lg 點列才開抽屜。
-import React, { act, useRef, useState } from 'react'
+import { act, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, useSearchParams } from 'react-router-dom'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'

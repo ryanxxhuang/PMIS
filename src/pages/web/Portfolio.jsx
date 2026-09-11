@@ -13,6 +13,19 @@ import { acceptanceStageSummary } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 import { portfolioExceptions } from '../../lib/portfolioExceptions.js'
 
+// 累計預定進度 %:progressPlan.months 的 plannedPct 是逐月累計值,對「今天」線性內插。
+// 純算術、每次 render 重算,不放進下面那顆 memo——memo 的 deps 沒有(也不能有,每次
+// render 都是新物件的)TODAY,「今天」會凍在資料上次變動那天(B-11)。算好的數字是
+// primitive,當 memo 的依賴才會如實在跨日時重算。
+function plannedPctNow(progressPlan, today) {
+  if (!progressPlan) return null
+  const months = progressPlan.months, N = months.length
+  const start = parseLocalDate(progressPlan.start)
+  const elapsed = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth()) + (today.getDate() - 1) / 30
+  return elapsed <= 0 ? 0 : elapsed >= N - 1 ? months[N - 1].plannedPct
+    : months[Math.floor(elapsed)].plannedPct + (months[Math.floor(elapsed) + 1].plannedPct - months[Math.floor(elapsed)].plannedPct) * (elapsed - Math.floor(elapsed))
+}
+
 export default function Portfolio() {
   const {
     demoMode, isSupabaseConfigured, projects, currentProject, switchProject, loadPortfolio,
@@ -21,6 +34,7 @@ export default function Portfolio() {
   } = useStore()
   const navigate = useNavigate()
   const TODAY = new Date() // 每次 render 取(B-11)
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   // ── 本案(目前載入中的專案)即時計算——與 Dashboard 同一套數學 ──
   const current = useMemo(() => {
@@ -30,24 +44,16 @@ export default function Portfolio() {
     const billable = revisedTotal
     const latest = valuations[valuations.length - 1]
     const cum = latest ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latest.items)) : 0
-    let planned = null
-    if (progressPlan) {
-      const months = progressPlan.months, N = months.length
-      const start = parseLocalDate(progressPlan.start)
-      const elapsed = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
-      planned = elapsed <= 0 ? 0 : elapsed >= N - 1 ? months[N - 1].plannedPct
-        : months[Math.floor(elapsed)].plannedPct + (months[Math.floor(elapsed) + 1].plannedPct - months[Math.floor(elapsed)].plannedPct) * (elapsed - Math.floor(elapsed))
-    }
     return {
       name: project.project_name, code: project.project_code, status: project.status || '施工中',
-      billable, cum, progressPct: billable ? (cum / billable) * 100 : 0, plannedPct: planned,
+      billable, cum, progressPct: billable ? (cum / billable) * 100 : 0, plannedPct: plannedNow,
       openDefects: defects.filter((d) => d.status !== '已結案').length,
       pendingInspections: inspections.filter((i) => i.status === '待查驗').length,
       pendingCOs: changeOrders.filter((c) => c.status === '提出' || c.status === '審核中').length,
       acceptance: acceptanceStageSummary(demoMode ? [] : acceptanceEvents), // demo 的驗收事件屬 B 區 storyline
       isCurrent: true,
     }
-  }, [workItems, adjustedItems, revisedTotal, valuations, progressPlan, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
+  }, [workItems, adjustedItems, revisedTotal, valuations, plannedNow, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
 
   // ── 其他專案:真實模式走 RPC;demo 用靜態示範案 ──
   const [others, setOthers] = useState(null)

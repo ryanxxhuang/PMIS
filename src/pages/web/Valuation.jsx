@@ -21,8 +21,8 @@ const statusColor = { 草稿: 'slate', 監造審核: 'amber', 已核定: 'green'
 const SEARCH_LIMIT = 120
 
 export default function Valuation() {
-  const { project, workItems: data, valuations, createValuation, updateValuationItem, setValuationStatus,
-    isSupabaseConfigured, currentProject, workItemsSource, siteLogs, fillValuationFromSiteLogs, dbMode, deleteValuation,
+  const { workItems: data, valuations, createValuation, updateValuationItem, setValuationStatus,
+    isSupabaseConfigured, currentProject, workItemsSource, siteLogs, fillValuationFromSiteLogs, deleteValuation,
     inspections, checklistRecords, checklistTemplates, testSamples,
     adjustedItems, coNet, revisedTotal, can } = useStore()
   const [filling, setFilling] = useState(false)

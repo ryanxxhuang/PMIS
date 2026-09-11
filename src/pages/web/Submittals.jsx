@@ -9,14 +9,13 @@ import { submittalBall } from '../../lib/ballInCourt.js'
 import { taipeiToday } from '../../lib/dates.js'
 
 const CATEGORIES = ['施工計畫', '品質計畫', '材料設備', '樣品', '配比', '其他']
-const STATUS_COLOR = { 已提送: 'blue', 審核中: 'amber', 核准: 'green', 核備: 'green', 退回補正: 'red', 駁回: 'red' }
 const CHECK_COLOR = { 已於送審敘明: 'green', 需補件: 'amber', 需監造核對文件: 'slate', 不適用: 'slate' }
 const DECISION_COLOR = { 核准: 'green', 核備: 'green', 退回補正: 'red', 需補充後再核: 'amber' }
 // AI 偶爾把換行輸出成 literal「\n」;顯示前正規化成分隔號(P2-03)
 const fixNl = (s) => String(s || '').replace(/\\n|\n/g, '；').replace(/；+/g, '；').replace(/^；|；$/g, '')
 
 export default function Submittals() {
-  const { project, submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
+  const { submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
     uploadSubmittalFile, readSubmittalDoc, isSupabaseConfigured, currentProject, currentUser, can, aiEnabled } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)

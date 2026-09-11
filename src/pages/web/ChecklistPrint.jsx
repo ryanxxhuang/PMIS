@@ -102,7 +102,7 @@ export default function ChecklistPrint() {
           <div><div className="border-t paper-rule-strong pt-1 mt-8">工地主任（簽章）</div></div>
         </div>
         <p className="text-caption paper-mute mt-4">
-          ○＝合格　✕＝不合格　／＝本次未檢查。判定由系統依範本量化標準自動產生。
+          ○＝合格&#x3000;✕＝不合格&#x3000;／＝本次未檢查。判定由系統依範本量化標準自動產生。
         </p>
       </div>
     </div>

@@ -45,7 +45,7 @@ const K = createKit({
   title: 'PMIS.ai — 合作簡報（事務所／工程顧問公司）',
   author: 'PMIS.ai',
 })
-const { pres, C, F, W, M, CW, TOP, WARN,
+const { pres, C, F, W, M, CW, WARN,
   slide, head, card, cardText, chip, bullets, cite, table, chain, stat, shot,
   th, td, tdb, tds } = K
 

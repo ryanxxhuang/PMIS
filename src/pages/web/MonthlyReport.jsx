@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, Button, PageHeader, Surface, Input, Textarea, Field, ErrorBanner, THEAD_CLS } from '../../components/ui.jsx'
@@ -31,13 +31,14 @@ export default function MonthlyReport() {
 
   const tree = useMemo(() => (workItems ? buildBillableTree(adjustedItems) : { roots: [], childrenMap: new Map() }), [workItems, adjustedItems])
 
-  // 截至某 cutoff 日的累計估驗金額（取 valuation_date 在 cutoff（含）以前、期數最大的一期）
-  const cumAt = (cutoff) => {
+  // 截至某 cutoff 日的累計估驗金額（取 valuation_date 在 cutoff（含）以前、期數最大的一期）。
+  // useCallback 讓它能如實列進 data memo 的依賴:它讀的 valuations/tree 本來就在那份依賴裡。
+  const cumAt = useCallback((cutoff) => {
     const eligible = valuations.filter((v) => !v.valuation_date || parseLocalDate(v.valuation_date) <= cutoff)
     if (!eligible.length) return 0
     const latest = eligible.reduce((a, b) => (b.period_no > a.period_no ? b : a))
     return totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, latest.items))
-  }
+  }, [valuations, tree])
 
   const data = useMemo(() => {
     const mEnd = monthEnd(month), pEnd = monthEnd(prevMonth(month))
@@ -83,7 +84,7 @@ export default function MonthlyReport() {
       paidCum: valuations.reduce((s, v) => s + (v.paid_amount || 0), 0),
       invoicedCount: valuations.filter((v) => v.invoice_date).length,
     }
-  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, tree, billable, workItems])
+  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, billable, workItems, cumAt])
 
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,

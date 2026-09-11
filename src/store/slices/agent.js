@@ -144,7 +144,6 @@ export function useAgentSlice({ demoMode, isPersistedProject, currentProject, cu
       setAgentActionsLoading(false)
     })()
     return () => { active = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, isPersistedProject, currentProject?.project_id, currentUser?.user_id, reloadKey])
 
   // 對話:送本案 facts 快照 + 對話 history 給 agent-run,agent 自行呼叫唯讀工具再回答。

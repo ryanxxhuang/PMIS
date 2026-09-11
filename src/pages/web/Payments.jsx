@@ -15,7 +15,7 @@ import { fmtAmount as money } from '../../lib/format.js'
 const shortDate = (iso) => (iso ? `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}` : '')
 
 export default function Payments() {
-  const { project, workItems: data, valuations, updateValuationPayment, isSupabaseConfigured, currentProject, workItemsSource,
+  const { workItems: data, valuations, updateValuationPayment, isSupabaseConfigured, currentProject, workItemsSource,
     adjustedItems } = useStore()
   const [errMsg, setErrMsg] = useState('')
   // 請款/收款欄位寫入失敗必須讓使用者看到(DB-first,失敗=UI 不變)

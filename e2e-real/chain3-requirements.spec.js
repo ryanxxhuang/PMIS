@@ -28,9 +28,11 @@ const CONTRACT_TEXT = [
 // 與 _shared/sourceVerify.ts normalizeSourceText 同義的測試側鏡像(NFKC+去零寬+去空白):
 // 引文比對必須用引擎自己的正規化口徑——原始字串完全相等比 sourceVerify 的驗證條件
 // 還嚴,模型只要把全形空白正規化就會假紅燈。spec 是 Node 端無法直接 import .ts,故鏡像。
+// 零寬字元寫成 \u200b-\u200d 範圍(=ZWSP/ZWNJ/ZWJ 三碼,與 sourceVerify.ts 的 ZERO_WIDTH 逐碼相同):
+// 逐字列出時 ESLint 會把夾在中間的 ZWJ 誤判成「連接序列」。
 const normalizeSource = (text) => String(text ?? '')
   .normalize('NFKC')
-  .replace(/[\u200b\u200c\u200d\u2060\ufeff]/g, '')
+  .replace(/[\u200b-\u200d\u2060\ufeff]/g, '')
   .replace(/\u00ad/g, '')
   .replace(/\s+/g, '')
 // requirements.extract 的 min_plan='pro'(migration 20260728000100),create_project

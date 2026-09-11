@@ -177,7 +177,7 @@ export default function BOQ() {
             // 解析結果改白底 Surface:琥珀疊琥珀分不出層次,卡殼也不再自寫
             <Surface className="flex items-center gap-3 flex-wrap px-3 py-2">
               <div className="text-sm text-[var(--text)]">
-                解析成功：<b>{parsed.meta.project_name || '（未命名）'}</b>　·
+                解析成功：<b>{parsed.meta.project_name || '（未命名）'}</b>&#x3000;·
                 {fmt(parsed.meta.item_count)} 項工項，發包工程費 <b className="text-[var(--blue-text)]">{yi(parsed.meta.billable_total)}</b>
               </div>
               <Button onClick={() => runImport(parsed)} disabled={importing}>{importing ? '匯入中…' : `匯入 ${fmt(parsed.meta.item_count)} 工項`}</Button>

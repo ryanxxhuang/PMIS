@@ -19,7 +19,7 @@ const QUEUE_TAG_COLOR = { 查驗: 'amber', 缺失: 'red', 觀察: 'slate', 試�
 const SEGMENTS = ['查驗', '缺失', '觀察', '檢查表', '試驗']
 
 export default function Quality() {
-  const { project, workItems, inspections, createInspection, recordInspectionResult, deleteInspection,
+  const { workItems, inspections, createInspection, recordInspectionResult, deleteInspection,
     checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,

@@ -22,6 +22,20 @@ function Section({ n, title, children }) {
 // 鍵值列與施工月報的 Info 同一份長相(dt/dd):兩張報表的概況欄不該有兩種標籤色與字重
 const Kv = ({ k, v }) => (<div className="flex flex-wrap gap-x-2 text-sm"><dt className="text-[var(--text-3)]">{k}：</dt><dd className="font-medium min-w-0 text-[var(--text)]">{v || '—'}</dd></div>)
 
+// 累計預定進度 %:progressPlan.months 的 plannedPct 是逐月累計值,對「今天」線性內插。
+// 純算術、每次 render 重算,不放 useMemo——只認 progressPlan 的 memo 會把「今天」凍在
+// 它上次變動那天,長開分頁的預定進度就停住(B-11 每次 render 取「今天」的用意就沒了)。
+function plannedPctNow(progressPlan, today) {
+  if (!progressPlan) return null
+  const months = progressPlan.months, N = months.length
+  const start = parseLocalDate(progressPlan.start)
+  const el = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth()) + (today.getDate() - 1) / 30
+  if (el <= 0) return 0
+  if (el >= N - 1) return months[N - 1].plannedPct
+  const lo = Math.floor(el), f = el - lo
+  return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
+}
+
 export default function SupervisorReport() {
   const { project, workItems, valuations, progressPlan, siteLogs, inspections, defects, submittals,
     demoMode, workItemsSource, adjustedItems, revisedTotal } = useStore()
@@ -41,16 +55,7 @@ export default function SupervisorReport() {
     if (!latestVal || !billableTotal) return 0
     return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) / billableTotal) * 100
   }, [roots, childrenMap, latestVal, billableTotal])
-  const plannedNow = useMemo(() => {
-    if (!progressPlan) return null
-    const months = progressPlan.months, N = months.length
-    const start = parseLocalDate(progressPlan.start)
-    const el = (TODAY.getFullYear() - start.getFullYear()) * 12 + (TODAY.getMonth() - start.getMonth()) + (TODAY.getDate() - 1) / 30
-    if (el <= 0) return 0
-    if (el >= N - 1) return months[N - 1].plannedPct
-    const lo = Math.floor(el), f = el - lo
-    return months[lo].plannedPct + (months[lo + 1].plannedPct - months[lo].plannedPct) * f
-  }, [progressPlan])
+  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   const r = useMemo(() => buildSupervisorReport({
     project, siteLogs, inspections, defects, submittals,
@@ -88,7 +93,7 @@ export default function SupervisorReport() {
           {/* 列印文件的大標用 h2(與施工月報同):正式文件需要標題語意,不能只是粗體 div */}
           <h2 className="text-lg font-bold">監造報表</h2>
           <div className="text-sm text-[var(--text-2)] mt-0.5">{project.project_name}</div>
-          <div className="text-xs text-[var(--text-3)] mt-1 num">報告月份：{r.monthLabel}　·　監造單位：{project.supervisor_name || '—'}</div>
+          <div className="text-xs text-[var(--text-3)] mt-1 num">報告月份：{r.monthLabel}&#x3000;·&#x3000;監造單位：{project.supervisor_name || '—'}</div>
         </div>
 
         <Section n="一" title="工程概況">

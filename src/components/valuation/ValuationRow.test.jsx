@@ -6,7 +6,7 @@
 //   ② 該列自己的 prop 變(展開佐證/改數量) → 探針 +1,且畫面確實更新(沒有過度 memo);
 //   ③ 祖先展開/收合 → 只有祖先重畫,葉列不動;
 //   ④ 反證:callback 每次換 identity → 探針每次都增,所以頁面必須 useCallback 釘住。
-import React, { act, useState, useCallback } from 'react'
+import { act, useState, useCallback } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'

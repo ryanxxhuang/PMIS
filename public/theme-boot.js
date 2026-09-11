@@ -13,7 +13,7 @@
 ;(function () {
   var v = null
   // localStorage 在隱私模式/企業政策下會 throw;與 getThemeMode 一樣退回 system
-  try { v = localStorage.getItem('pmis-theme') } catch (e) { /* noop */ }
+  try { v = localStorage.getItem('pmis-theme') } catch { /* noop */ }
   var mode = ['light', 'dark', 'system'].indexOf(v) >= 0 ? v : 'system'
   var dark = mode === 'dark'
     || (mode === 'system' && !!window.matchMedia
