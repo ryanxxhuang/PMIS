@@ -68,6 +68,9 @@ function useDismissable(open, onClose, returnFocusRef) {
     ref.current?.focus()
     const trap = (e) => {
       if (e.key !== 'Tab' || !ref.current) return
+      // 確認視窗位於 App 根節點，DOM 順序可能早於 portal；不可搶走其鍵盤焦點。
+      const focusedDialog = document.activeElement?.closest('[aria-modal="true"]')
+      if (focusedDialog && !focusedDialog.contains(ref.current)) return
       const topDialog = [...document.querySelectorAll('[aria-modal="true"]')].at(-1)
       if (topDialog && !topDialog.contains(ref.current)) return
       const controls = [...ref.current.querySelectorAll('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')]
