@@ -614,7 +614,7 @@ export default function Requirements() {
   // Link 的圓角跟 md 按鈕走 rounded-lg,焦點框才不會比按鈕圓。
   const header = (
     <div className="space-y-3">
-    <PageHeader title="契約重點" tagline="履約時程" subtitle={PARTY_BLURB[viewerParty]}
+    <PageHeader title="契約重點" tagline="履約時程" subtitle={PARTY_BLURB[viewerParty]} keepSubtitle
       action={(
         <Link to={packageId ? `/requirements/review?package=${encodeURIComponent(packageId)}` : '/requirements/review'} className="inline-flex rounded-lg">
           <Button variant="secondary" size="md" tabIndex={-1}>

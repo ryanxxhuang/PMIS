@@ -86,6 +86,32 @@ export const BALL_SOURCES = [
   { key: 'done', label: '今天已完成', short: '已完成', icon: 'task_alt', to: '/dashboard?ball=done' },
 ]
 
+// 操作提示與常用入口只描述既有流程；不參與授權或推導單據狀態。
+export const ROLE_WORK = {
+  contractor: { label: '廠商', summary: '記錄現場、提送資料，追蹤補正與請款。', paths: ['/site-log', '/quality', '/submittals'] },
+  supervisor: { label: '監造', summary: '查驗現場、審查提送，將需核定事項交給機關。', paths: ['/quality', '/submittals', '/supervisor-report'] },
+  owner: { label: '機關', summary: '辦理核定與付款，掌握履約風險及驗收。', paths: ['/change-orders', '/payments', '/acceptance'] },
+}
+
+export const WORK_GUIDANCE = {
+  '/site-log': { contractor: '填寫日期、施作數量與照片，儲存後可供估驗帶入數量。', supervisor: '查閱廠商日誌與現場佐證，需要查驗時前往品質查驗。', owner: '查閱每日施工紀錄與照片，掌握現場執行情形。' },
+  '/quality': { contractor: '完成自主檢查後申請查驗；收到缺失時改善，再提送監造複查。', supervisor: '選擇待查驗項目記錄判定；不合格開立缺失，改善後複查結案。', owner: '查閱查驗結果與缺失改善紀錄，追蹤尚未結案的事項。' },
+  '/submittals': { contractor: '新增提送文件交監造審查；退回時依審查意見補正後重新提送。', supervisor: '選擇已提送文件，檢視附件後審定或退回補正。', owner: '查閱文件提送與監造審定結果，追蹤待辦進度。' },
+  '/rfi': { contractor: '提出工程疑義交監造回覆；確認答覆後結案，有疑問可繼續追問。', supervisor: '檢視疑義及相關資料，回覆後交廠商確認結案。', owner: '查閱工程疑義及往返答覆，掌握未解決問題。' },
+  '/change-orders': { contractor: '提出變更內容及追加減明細，交監造受理，再由機關核定。', supervisor: '檢視變更內容，受理後交機關核定；資料不足可退回。', owner: '選擇審核中的變更，核對內容與金額後核准或駁回。' },
+  '/valuation': { contractor: '建立估驗期，帶入日誌數量並核對佐證，送監造審核；核定後到請款收款。', supervisor: '選擇待審期別，核對累計數量與佐證後核定或退回。', owner: '查閱監造核定的估驗內容，付款登錄請到請款收款。' },
+  '/payments': { contractor: '核定後登錄請款日，再追蹤收款日與實收金額。', owner: '依核定估驗與請款紀錄辦理付款，登錄收款日及實收金額。' },
+  '/safety': { contractor: '登錄巡檢與工安紀錄，處理缺失並提送監造複查。', supervisor: '查閱工安紀錄，開立缺失並複查廠商改善結果。', owner: '追蹤工安紀錄與尚未結案的缺失。' },
+  '/acceptance': { contractor: '準備竣工與驗收資料，依各階段要求完成改善。', supervisor: '確認竣工與改善情形，協助機關辦理驗收。', owner: '依竣工、初驗與驗收階段登錄結果，追蹤期限及改善。' },
+  '/requirements': { contractor: '查閱契約原文與履約時程；需登錄提送時，從事項詳情進入期限追蹤。', supervisor: '查閱契約原文與三方履約責任，追蹤提送期限。', owner: '查閱契約原文與三方履約責任，追蹤機關核定及付款期限。' },
+}
+
+export function roleWorkLinks(org, override = false, platformAdmin = false) {
+  const routes = visibleNavGroups(org, override, platformAdmin).flatMap((g) => g.items.flatMap((n) =>
+    (n.tabs || [n]).map((t) => ({ ...t, icon: n.icon }))))
+  return (ROLE_WORK[org]?.paths || []).map((path) => routes.find((r) => r.to === path)).filter(Boolean)
+}
+
 // 解析 ?ball=:缺省或未知值一律落回 mine(fail-safe:亂打參數看到的是「待我處理」,
 // 不是空白頁)。Layout 的選取態與 Dashboard 的聚焦都吃這一支,兩邊各解析一次遲早分岔。
 export function resolveBallKey(searchParams) {

@@ -39,7 +39,7 @@ function useLiveSearch() {
     mutate(n)
     lastWrite = { loc: location, next: n.toString() }
     // 相對路徑 "?x=1" 保住目前 pathname、清 hash;replace 不炸掉瀏覽歷史(與 setSearchParams 同義)
-    navigate(`?${n}`, { replace: true })
+    navigate(`?${n}`, { replace: true, state: location.state })
   }, [location, navigate, read])
   return [read, write]
 }

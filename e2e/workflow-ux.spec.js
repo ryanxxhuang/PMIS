@@ -1,0 +1,129 @@
+import { test, expect } from '@playwright/test'
+import { loginAs, gotoHash } from './helpers.js'
+
+const common = {
+  contractor: ['施工日誌', '品質查驗', '送審文件'],
+  supervisor: ['品質查驗', '送審文件', '監造報表'],
+  owner: ['變更設計', '請款收款', '驗收結算'],
+}
+
+for (const [role, names] of Object.entries(common)) {
+  test(`${role}:常用工作與手機捷徑對應角色，功能搜尋保持權限`, async ({ page }) => {
+    await loginAs(page, role)
+    const quick = page.getByRole('navigation', { name: '常用工作' })
+    await expect(quick.getByRole('link')).toHaveText(names)
+    await page.setViewportSize({ width: 375, height: 812 })
+    const bottom = page.getByRole('navigation', { name: '快速導覽' })
+    for (const name of names) await expect(bottom.getByRole('link', { name, exact: true })).toBeVisible()
+    await bottom.getByRole('link', { name: names[0], exact: true }).click()
+    await expect(page.getByRole('heading', { name: names[0], level: 1 })).toBeVisible()
+    await page.getByRole('button', { name: '更多', exact: true }).click()
+    await page.getByRole('button', { name: '尋找功能', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '尋找功能' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('navigation')).not.toContainText('平台管理')
+    if (role !== 'contractor') await expect(dialog.getByRole('navigation')).not.toContainText('成本管理')
+    if (role === 'supervisor') await expect(dialog.getByRole('navigation')).not.toContainText('請款收款')
+    await dialog.getByRole('searchbox').fill('三方成員')
+    await dialog.getByRole('link', { name: /三方成員/ }).click()
+    await expect(page).toHaveURL(/#\/members$/)
+    await expect(page.getByRole('heading', { name: '三方成員', level: 1 })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  })
+}
+
+test('機關:篩選待辦直接進入指定付款期，返回保留查詢與焦點', async ({ page }) => {
+  await loginAs(page, 'owner')
+  await page.getByRole('searchbox', { name: '搜尋待辦' }).fill('第 4 期')
+  const list = page.getByRole('list', { name: '現在輪到我清單' })
+  await expect(list.getByRole('link')).toHaveCount(1)
+  await list.getByRole('link').click()
+  await expect(page).toHaveURL(/#\/payments\?period=VAL-DEMO-4$/)
+  await expect(page.getByText('正在處理第 4 期估驗的請款紀錄')).toBeVisible()
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(2)
+  await page.getByRole('link', { name: '返回今日待辦', exact: true }).click()
+  await expect(page.getByRole('searchbox', { name: '搜尋待辦' })).toHaveValue('第 4 期')
+  await expect(list.getByRole('link')).toBeFocused()
+  await page.getByRole('button', { name: '清除篩選' }).click()
+  await expect(list.getByRole('link')).toHaveCount(4)
+})
+
+test('監造:手機從待辦直達查驗，判定後可直接返回原清單', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await loginAs(page, 'supervisor')
+  await page.getByRole('button', { name: '篩選待辦', exact: true }).click()
+  await page.getByRole('combobox', { name: '待辦類型' }).selectOption('查驗')
+  const list = page.getByRole('list', { name: '現在輪到我清單' })
+  await expect(list.getByRole('link').first()).toHaveAttribute('href', /inspection=/)
+  const taskTitle = await list.getByRole('link').first().innerText()
+  await list.getByRole('link').first().click()
+  await expect(page).toHaveURL(/#\/quality\?inspection=/)
+  const drawer = page.getByRole('dialog')
+  await expect(drawer).toContainText(taskTitle.split('\n')[0])
+  await drawer.getByRole('button', { name: '合格', exact: true }).click()
+  await expect(drawer).toContainText('合格')
+  await drawer.getByRole('link', { name: '返回今日待辦', exact: true }).click()
+  await expect(page.getByRole('combobox', { name: '待辦類型' })).toHaveValue('查驗')
+  await expect(page.getByRole('group', { name: '現在輪到我', exact: true })).not.toContainText(taskTitle.split('\n')[0])
+})
+
+test('廠商:首頁顯示五筆以後的工作，可直接進入試體分段', async ({ page }) => {
+  await loginAs(page, 'contractor')
+  const list = page.getByRole('list', { name: '現在輪到我清單' })
+  await expect.poll(() => list.getByRole('link').count()).toBeGreaterThan(5)
+  await page.getByRole('combobox', { name: '待辦類型' }).selectOption('試驗')
+  await list.getByRole('link').first().click()
+  await expect(page).toHaveURL(/#\/quality\?sample=/)
+  await expect(page.getByRole('group', { name: '品質分段' }).getByRole('button', { name: /^試驗/ })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('region', { name: /詳情/ })).toBeVisible()
+})
+
+test('1024px:可從功能搜尋直達子頁，鍵盤焦點留在搜尋視窗', async ({ page }) => {
+  await loginAs(page, 'owner')
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.getByRole('button', { name: '尋找功能', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '尋找功能' })
+  await dialog.getByRole('searchbox').fill('驗收')
+  // 使用鍵盤循環一次：最後連結 Tab 應回到對話框關閉鈕。
+  await dialog.getByRole('link', { name: /^驗收結算/ }).press('Tab')
+  expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+  await dialog.getByRole('link', { name: /^驗收結算/ }).click()
+  await expect(page).toHaveURL(/#\/acceptance$/)
+  await gotoHash(page, '/dashboard')
+  await page.getByRole('button', { name: '尋找功能', exact: true }).click()
+  await dialog.getByRole('searchbox').fill('不存在的功能')
+  await expect(dialog.getByRole('status')).toContainText('找不到相符功能')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: '尋找功能', exact: true })).toBeFocused()
+})
+
+test('手機:首頁先顯示待辦，搜尋可展開與關閉並還原焦點', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await loginAs(page, 'owner')
+  const firstTask = page.getByRole('list', { name: '現在輪到我清單' }).getByRole('link').first()
+  await expect(firstTask).toBeVisible()
+  expect((await firstTask.boundingBox()).y).toBeLessThan(400)
+  await expect(page.getByRole('searchbox', { name: '搜尋待辦' })).not.toBeVisible()
+  await page.getByRole('button', { name: '篩選待辦', exact: true }).click()
+  await expect(page.getByRole('searchbox', { name: '搜尋待辦' })).toBeVisible()
+  await page.getByRole('button', { name: '更多', exact: true }).click()
+  await page.getByRole('button', { name: '尋找功能', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '尋找功能' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '關閉', exact: true }).click()
+  await expect(page.getByRole('button', { name: '更多', exact: true })).toBeFocused()
+})
+
+test('指定估驗期不存在時，不顯示其他期的可編輯明細', async ({ page }) => {
+  await loginAs(page, 'contractor')
+  await gotoHash(page, '/valuation?period=missing')
+  await expect(page.getByText('找不到指定的估驗期', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '送監造審核', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: '查看現有估驗期' }).click()
+  await expect(page.getByRole('button', { name: /第 5 期/ })).toBeVisible()
+  await gotoHash(page, '/payments?period=missing')
+  await expect(page.getByText('找不到指定的估驗期，請查看現有期別。')).toBeVisible()
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(1)
+  await page.getByRole('button', { name: '顯示全部期別' }).click()
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(6)
+})

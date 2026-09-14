@@ -82,17 +82,16 @@ export function collaborationItems(data = {}) {
     id: s.id, tag: '送審', title: `${s.submittal_no ? s.submittal_no + ' ' : ''}${s.title || ''}`.trim(), to: detailLink('/submittals', 'submittal', s.id), due: s.due_date,
   }))
   valuations.forEach((v) => push(valuationBall(v), {
-    id: v.id, tag: '估驗', title: `第 ${v.period_no} 期估驗`, to: valuationRoute(v),
+    id: v.id, tag: '估驗', title: `第 ${v.period_no} 期估驗`, to: detailLink(valuationRoute(v), 'period', v.id),
   }))
-  // 查驗/觀察的頁(/quality 的查驗與觀察分段)還沒有殼,維持頁面連結,不帶對不上的 id。
-  inspections.forEach((i) => push(inspectionBall(i), { id: i.id, tag: '查驗', title: i.title, to: '/quality' }))
+  inspections.forEach((i) => push(inspectionBall(i), { id: i.id, tag: '查驗', title: i.title, to: detailLink('/quality', 'inspection', i.id) }))
   // 缺失追蹤已套殼(DefectTracker,規範 §9.8):?defect=<id> 在 /safety(工安)與 /quality
   // (品質,頁面依這個 query 自動切到「缺失」分段)都直達該筆
   defects.forEach((d) => push(defectBall(d), {
     id: d.id, tag: d.domain === 'safety' ? '工安缺失' : '缺失', title: d.title,
     to: detailLink(d.domain === 'safety' ? '/safety' : '/quality', 'defect', d.id), due: d.due_date,
   }))
-  observations.forEach((o) => push(observationBall(o), { id: o.id, tag: '觀察', title: o.title, to: '/quality' }))
+  observations.forEach((o) => push(observationBall(o), { id: o.id, tag: '觀察', title: o.title, to: detailLink('/quality', 'observation', o.id) }))
   changeOrders.forEach((c) => push(changeOrderBall(c), {
     id: c.id, tag: '變更', title: `${c.co_no ? c.co_no + ' ' : ''}${c.title || ''}`.trim(), to: detailLink('/change-orders', 'co', c.id),
   }))

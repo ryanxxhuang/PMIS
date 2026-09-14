@@ -5,7 +5,9 @@
 // ⚠️ 本輪換皮的鐵律:字級只准「等值或更小」的替換(e2e 全路由 375/1024px 有
 // scrollWidth <= clientWidth 斷言),任何一階放大都會整片翻紅。
 import { forwardRef, useId, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+import { useStore } from '../store.jsx'
+import { WORK_GUIDANCE } from '../lib/navConfig.js'
 import { MSym } from './icons.jsx'
 import PageTabs from './PageTabs.jsx'
 
@@ -63,7 +65,10 @@ export function Card({ title, action, children, className = '', bodyClass = 'p-5
 // 右側資訊格與動作鈕;標題塊下方自動長出工作面 chips 分頁列(PageTabs 反查 navConfig,26 頁零改動)。
 // 標題用 text-title2(22px)不用 title1(28px):比舊 24px 小 2px,e2e 全路由 375/1024px
 // 的 scrollWidth 斷言絕不會因此翻紅;字距/行高交給階梯,不再自帶 tracking/leading。
-export function PageHeader({ title, tagline, subtitle, meta = [], action }) {
+export function PageHeader({ title, tagline, subtitle, keepSubtitle = false, meta = [], action }) {
+  const { pathname } = useLocation()
+  const { currentUser } = useStore()
+  const guidance = WORK_GUIDANCE[pathname]?.[currentUser?.org_type]
   return (
     <div className="title-block">
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end justify-between gap-x-6 gap-y-3">
@@ -72,7 +77,8 @@ export function PageHeader({ title, tagline, subtitle, meta = [], action }) {
             <h1 className="text-title2 font-semibold text-[var(--text)]">{title}</h1>
             {tagline && <span className="text-body font-normal text-[var(--text-3)]">{tagline}</span>}
           </div>
-          {subtitle && <p className="text-body leading-relaxed text-[var(--text-2)] mt-1.5 max-w-[660px]">{subtitle}</p>}
+          {(guidance || subtitle) && <p className="text-body leading-relaxed text-[var(--text-2)] mt-1.5 max-w-[660px]">{guidance || subtitle}</p>}
+          {guidance && keepSubtitle && subtitle && <p className="text-footnote leading-relaxed text-[var(--text-2)] mt-1.5 max-w-[660px]">{subtitle}</p>}
         </div>
         <div className="flex w-full sm:w-auto flex-wrap items-center gap-2 sm:gap-3 min-w-0">
           {meta.length > 0 && (

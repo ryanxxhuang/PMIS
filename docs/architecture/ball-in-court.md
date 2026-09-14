@@ -23,11 +23,17 @@
 [todayTasks](../../src/lib/todayTasks.js) 的 buildTodayTasks 回 mine／waiting／doneToday：
 
 - 協作項依 who 歸 mine，waiting 只收 WAITING_SCOPE 白名單的對方事項。
-- 契約義務目前只收廠商／監造，責任採精確白名單；排除已提送／完成／不適用，有到期日且 7 天內才進 mine。
+- 契約義務收廠商／監造／機關，責任採精確白名單；排除已提送／完成／不適用，有到期日且 7 天內才進 mine。
 - 試體／ITP／施工已開始但未填的今日日誌屬廠商；驗收期限依 stage 的角色白名單。
 - doneToday 只收系統時間戳 closed_at／inspected_at，依完成方過濾，不使用可回填業務日期；現行廠商／機關因此沒有此類完成項。
 
 輸入沒有 agent_actions 或未確認 Requirement，不把 AI 草稿當人工待辦。mine／waiting 依到期升冪、無日期最後；doneToday 依操作時間降冪。先正規化台北日曆日，useTodayTasks 每次 render 取日期，不在模組啟動時凍結今天。
+
+## 操作入口（2026-09-14）
+
+首頁每次 20 件，可搜尋、類型／期限篩選及原地顯示更多；不再以五筆截斷後跳提醒中心。「今天已完成」仍只用既有可靠時間戳，頁面明示涵蓋範圍並連到活動紀錄。
+
+協作項以原單據 id 深連結：查驗 `?inspection=`、觀察 `?observation=`、試體 `?sample=`、ITP `?point=`；估驗與付款以 `?period=` 選期。既有疑義／送審／缺失／變更／契約連結維持。沒有 id 時退回頁面入口，不產生假 id。日誌／驗收仍為頁面入口。單據狀態及三方權責不變，僅改善定位及返回動線。
 
 ## Edge／早報
 

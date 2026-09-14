@@ -95,7 +95,7 @@ export default function Members() {
     // 早退分支也給 PageHeader＋space-y-5:未選專案時頁面標題不該憑空消失(與 Activity/RiskAudit 一致)
     return (
       <div className="space-y-5">
-        <PageHeader title="專案成員" tagline="Team" subtitle="邀請監造 / 機關 / 協力廠商加入本專案" />
+        <PageHeader title="三方成員" tagline="專案協作" subtitle="邀請監造 / 機關 / 協力廠商加入本專案" />
         <Card bodyClass="p-0"><Empty>請先登入並選擇專案。</Empty></Card>
       </div>
     )
@@ -141,7 +141,7 @@ export default function Members() {
   }
 
   // 寫成同一行的 `const header = <PageHeader`:pageTabs.earlyReturn.test 靠這個字面辨認頁首變數
-  const header = <PageHeader title="專案成員" tagline="Team" subtitle="邀請監造 / 機關 / 協力廠商加入本專案"
+  const header = <PageHeader title="三方成員" tagline="專案協作" subtitle="邀請監造 / 機關 / 協力廠商加入本專案"
       meta={[{ k: '成員數', v: members ? String(members.length) : '—' }]}
       action={isAdmin && members && (
         <Button variant="secondary" onClick={() => { setInvite(invite ? null : { ...BLANK_INVITE }); setMsg(null) }}>

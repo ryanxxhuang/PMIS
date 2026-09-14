@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
 import { Card, Stat, Empty, Badge, Button, PageHeader, ErrorBanner, SkeletonList, THEAD_CLS } from '../../components/ui.jsx'
@@ -18,6 +19,9 @@ export default function Payments() {
   const { workItems: data, valuations, updateValuationPayment, isSupabaseConfigured, currentProject, workItemsSource,
     adjustedItems } = useStore()
   const [errMsg, setErrMsg] = useState('')
+  const [params, setParams] = useSearchParams()
+  const { state } = useLocation()
+  const requestedPeriod = params.get('period')
   // 請款/收款欄位寫入失敗必須讓使用者看到(DB-first,失敗=UI 不變)
   const onPay = async (id, patch) => {
     setErrMsg('')
@@ -39,6 +43,9 @@ export default function Payments() {
       return { v, cum, thisAmt, retention, net: thisAmt - retention }
     })
   }, [data, valuations, tree])
+
+  const focused = rows.find((r) => r.v.id === requestedPeriod)
+  const displayedRows = requestedPeriod ? (focused ? [focused] : []) : rows
 
   // 統計卡只彙總已核定期別(ISSUE-13):逐期表把未核定的期別鎖住不讓登錄金流,
   // 卡片卻把它們算進累計應領,兩邊口徑不一致會讓人以為系統少收或多算了錢。
@@ -72,6 +79,10 @@ export default function Payments() {
     <div className="space-y-5">
       {header}
 
+      {requestedPeriod && <div className="flex flex-wrap items-center gap-3 text-body text-[var(--text)]">
+        <span>{focused ? `正在處理第 ${focused.v.period_no} 期估驗的請款紀錄` : '找不到指定的估驗期，請查看現有期別。'}</span>
+        <Button variant="outline" size="sm" onClick={() => setParams((p) => { const next = new URLSearchParams(p); next.delete('period'); return next }, { replace: true, state })}>顯示全部期別</Button>
+      </div>}
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -120,7 +131,7 @@ export default function Payments() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ v, cum, thisAmt, retention, net }) => {
+                {displayedRows.map(({ v, cum, thisAmt, retention, net }) => {
                   // 金流閘門:未核定的期別鎖定請款/收款(DB trigger 同規則強制)
                   const approved = isPayable(v.status)
                   const lockTip = approved ? undefined : '估驗尚未核定,不可登錄請款/收款'
@@ -200,7 +211,7 @@ export default function Payments() {
               md 斷點與上方表格的 max-md:hidden 互補,兩者不可各用一套斷點。 */}
           <div className="md:hidden">
             <ul className="divide-y divide-[var(--border-2)]">
-              {rows.map(({ v, net }) => {
+              {displayedRows.map(({ v, net }) => {
                 // 與表格同一條核定閘門:未核定期別在桌面是鎖定欄位,在手機只說明狀態
                 const approved = isPayable(v.status)
                 // 實收超過本期應領=資料異常(非正常 KPI),與 Stat「未收款」轉紅同一條判斷

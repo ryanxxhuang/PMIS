@@ -1,6 +1,6 @@
 # 目前系統現況
 
-> CURRENT｜2026-09-11｜main；全案重構已由 PR #64 合併。
+> CURRENT｜2026-09-14｜三方操作流程優化；正式發布狀態見 §6.3。
 > 包含契約整理、Apple UI、D-022、工安清單／詳情殼，以及全案程式與文件整理；驗證見 [BASELINE](docs/BASELINE.md)。前端已由 main 自動部署；DB／Edge 尚未同步，版本與核對範圍見 §6.3。
 
 ## 1. 產品與範圍
@@ -35,7 +35,9 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 - UI 採 [Apple 規範](docs/UIUX-Apple-設計規範.md)，token 在 `src/index.css`，圖示 `lucide-react`。`listDetail.jsx` 共用清單／詳情殼已供契約重點、擷取審核、工安、疑義、期限、送審、變更設計、停留點、提醒中心、三方成員、活動紀錄、風險稽核、品質三段、專案文件與缺失追蹤（`DefectTracker` 內建殼，/quality 與 /safety 共用）共十五頁使用；手機形狀依規範 §9（iOS 字級一處覆寫、44px 頂欄＋五格底欄、詳情推入、表格頁唯讀摘要、收件匣直達那一筆）。列印用 `.paper` 與 `PrintToolbar`。
 - `navConfig.js` 是路由／導覽單一真相，未登記拒絕。側欄依來源模型分區：球在誰手上（持有 `/dashboard`）→ 工作（五組群組＋子頁，子頁依角色過濾）→ 參考（契約重點／專案文件／標單工項）→ 平台；目前無 hidden 項。
-- 首頁為「現在輪到我／等待對方／今天已完成」單桶收件匣，`?ball=` 選桶；不放頁面摘要卡。待辦共用 `todayTasks.js`／`useTodayTasks`。
+- 首頁為「現在輪到我／等待對方／今天已完成」單桶收件匣，`?ball=` 選桶；可搜尋、依類型／逾期與今天到期篩選、每次 20 件原地顯示更多。篩選及載入筆數保存在 URL，待辦進入單據後可返回原清單。手機篩選預設收合。待辦共用 `todayTasks.js`／`useTodayTasks`；今天已完成明示僅含有可靠時間戳的缺失與查驗。
+- 三方常用入口由 `navConfig.ROLE_WORK`／`roleWorkLinks` 產生：廠商（日誌／品質／送審）、監造（品質／送審／監造報表）、機關（變更／請款／驗收）。桌機在首頁操作列，手機在五格底欄；側欄新增「尋找功能」，依既有權限搜尋頁面名稱與操作提示，不呼叫 AI。各工作頁頁首說明依角色呈現。
+- 查驗／觀察／試體／停留點待辦直達詳情；估驗與付款 `?period=` 指定期別，不存在的期別提供重新選擇入口。共用詳情 sticky 避開頂欄，對話框支援焦點圈限與返回觸發點。
 - 預定進度在首頁、進度頁、稽核、監造報告、跨案總覽與 AI 資料共用 `src/lib/progressPlan.js`。沿用月份座標、30 天換算與線性內插；不變更 S 曲線產生或 DB 計算。
 - 公開頁 `/security`、`/terms`、`/privacy`（條款／隱私為 0.9 草稿，待律師審閱）。帳號安全 `/account`：兩步驟驗證（Supabase TOTP）每帳號自選；有已驗證因子時登入頁在 aal1 停在驗證碼畫面（`mfaRequired`），通過後才載入 profile。RLS 未依 aal 分級，這層是 UX 閘門。
 
@@ -44,6 +46,8 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 當前結果與指令只見 [BASELINE](docs/BASELINE.md)。單元、Demo E2E、本機真後端 E2E 固定資料模式、pgTAP、17 支 Edge 的 Deno 型別檢查均通過；本輪未動 migration。真模型抽取仍未驗，抽取準確率／召回率未用真契約量測；`completed` 不代表語意正確。真人手機輪與真案三角色實機驗收仍待完成。
 
 ### 6.3 正式環境最後核對（不是即時狀態）
+
+- **2026-09-14 UIUX 工作包**：本機驗證通過，分支 `ui/three-party-workflows` 待 CI／合併。前端變更，不含 DB migration 或 Edge 部署；正式發布尚未核對。
 
 - **DB**：2026-09-11 `supabase db push` 套用 `20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`；`migration list --linked` 核對本地與遠端 60 筆全部對齊，最新 `20260911110000`。
 - **Edge**：2026-09-11 以 `--use-api` 從 main（含 `_shared/` 重構）重佈全部 17 支；`functions list` 核對每支版本均 +1（agent-run 14、extract-requirements 13、send-reminders 16、classify-document 3 等）。線上另有 `demo-request` 一支由行銷站 repo 部署，不在本 repo。

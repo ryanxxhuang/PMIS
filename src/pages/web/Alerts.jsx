@@ -1,10 +1,8 @@
-// 提醒中心:今日待辦的完整清單(首頁每桶只亮 5 筆,溢位往這裡)。
-// 存在理由只有一個——首頁是「球在誰手上」的收件匣,一次一桶、五筆封頂;這裡是同一份
-// 聚合(useTodayTasks)的全量視圖,改成以「期限」切:逾期／即將到期／待處理。
+// 提醒中心與首頁共用 useTodayTasks；此處供跨責任方按期限查閱。
 // 期限不在這裡算:due/overdueDays 由 lib/todayTasks.js 給,本頁只做分類與呈現。
 // 版面走清單／詳情殼(規範 §0 疊合版):列只負責選取,詳情欄放來源單據摘要與「前往」。
 import { useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, BallChip, Button, Dot, Empty, PageHeader } from '../../components/ui.jsx'
@@ -31,6 +29,7 @@ const ORG_LABEL = { contractor: '廠商', supervisor: '監造', owner: '機關' 
 const DEFAULT_FILTERS = { q: '', bucket: '' }
 
 export default function Alerts() {
+  const location = useLocation()
   const { currentProject, isSupabaseConfigured, currentUser } = useStore()
   const tasks = useTodayTasks()
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
@@ -107,7 +106,7 @@ export default function Alerts() {
         </div>
         {/* 前往=這一頁唯一的動作:提醒本身不能在這裡完成,要到來源單據所在的頁面 */}
         <div className="px-4 py-3 border-t border-[var(--border-2)] flex items-center gap-2 flex-wrap">
-          <Link to={r.to} className="inline-flex rounded-lg">
+          <Link to={r.to} state={{ taskReturn: { to: `${location.pathname}${location.search}`, label: '提醒中心', key: r.key } }} className="inline-flex rounded-lg">
             <Button tabIndex={-1}>前往處理<MSym name="chevron_right" size={14} /></Button>
           </Link>
         </div>
@@ -164,7 +163,7 @@ export default function Alerts() {
   return (
     <div className="space-y-5">
       <PageHeader title="提醒中心" tagline="逾期與到期的完整清單"
-        subtitle="與首頁「今日待辦」同一份來源:首頁每桶只列前 5 筆,這裡看全部,依逾期／即將到期／待處理切。" />
+        subtitle="將我方與等待對方的事項依逾期、即將到期及待處理分類。點選一筆可查看來源，並前往單據處理。" />
 
       {rows.length === 0 ? (
         <Card title="提醒" bodyClass="p-0"><Empty>目前沒有逾期或待處理事項 — 都跟上了。</Empty></Card>
