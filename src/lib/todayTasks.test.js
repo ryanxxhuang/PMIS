@@ -69,9 +69,9 @@ describe('現在輪到我 / 等待對方:協作項三分類', () => {
   })
   it('估驗待請款導向請款收款頁(那裡才有請款日欄位)', () => {
     const { mine } = build({ org: 'contractor', valuations: [{ id: 'V2', period_no: 4, status: '已核定', invoice_date: null }] })
-    expect(mine[0].to).toBe('/payments')
+    expect(mine[0].to).toBe('/payments?period=V2')
     const draft = build({ org: 'contractor', valuations: [{ id: 'V3', period_no: 6, status: '草稿' }] })
-    expect(draft.mine[0].to).toBe('/valuation')
+    expect(draft.mine[0].to).toBe('/valuation?period=V3')
   })
   it('等待對方的白名單就是宣告的那一份,沒有第二套判斷', () => {
     expect(Object.keys(WAITING_SCOPE).sort()).toEqual(['contractor', 'owner', 'supervisor'])
@@ -144,7 +144,7 @@ describe('期限型待辦:試體、驗收、停留點', () => {
     const t = c.mine.find((x) => x.tag === '試驗')
     expect(t.ball).toBe('contractor')
     expect(t.overdueDays).toBe(2)
-    expect(t.to).toBe('/quality')
+    expect(t.to).toBe('/quality?sample=TS1')
     for (const org of ['supervisor', 'owner']) {
       expect(build({ org, testSamples }).mine.some((x) => x.tag === '試驗')).toBe(false)
     }
@@ -178,7 +178,7 @@ describe('期限型待辦:試體、驗收、停留點', () => {
     const t = build({ org: 'contractor', inspectionPoints, siteLogs }).mine.find((x) => x.tag === '停留點')
     expect(t.ball).toBe('contractor')
     expect(t.due).toBeNull()
-    expect(t.to).toBe('/itp')
+    expect(t.to).toBe('/itp?point=P1')
     expect(build({ org: 'supervisor', inspectionPoints, siteLogs }).mine.some((x) => x.tag === '停留點')).toBe(false)
   })
   // 回歸:期限引擎用 Date 相減再 Math.round,傳含時間的「現在」會把 8 個日曆日
@@ -435,7 +435,7 @@ describe('收件匣直達那一筆(規範 §9.7):有殼的頁 to 帶單條 query
     expect(mine.find((t) => t.tag === '契約重點').to).toBe('/deadlines')
     expect(mine.some((t) => /=null|=undefined/.test(t.to))).toBe(false)
   })
-  it('缺失(品質/工安)直達該筆;沒有殼的頁維持頁面連結:查驗/觀察/試驗/驗收/停留點/日誌/估驗', () => {
+  it('缺失、查驗、觀察、試驗、停留點與估驗直達該筆；驗收與日誌保留頁面入口', () => {
     const { mine } = build({
       org: 'contractor', anchors: { commencement_date: '2026-03-01', end_date: '2027-02-28' },
       defects: [{ id: 'D1', title: '模板殘料', status: '開立' }, { id: 'DS', title: '安全網', status: '開立', domain: 'safety' }],
@@ -449,16 +449,16 @@ describe('收件匣直達那一筆(規範 §9.7):有殼的頁 to 帶單條 query
     // 缺失追蹤已套殼(規範 §9.8):品質與工安都帶 ?defect=<id>,值就是該列 id
     expect(to('缺失')).toEqual(['/quality?defect=D1'])
     expect(to('工安缺失')).toEqual(['/safety?defect=DS'])
-    expect(to('觀察')).toEqual(['/quality'])
-    expect(to('估驗')).toEqual(['/valuation'])
-    expect(to('試驗')).toEqual(['/quality'])
-    expect(to('停留點')).toEqual(['/itp'])
+    expect(to('觀察')).toEqual(['/quality?observation=O1'])
+    expect(to('估驗')).toEqual(['/valuation?period=V1'])
+    expect(to('試驗')).toEqual(['/quality?sample=TS1'])
+    expect(to('停留點')).toEqual(['/itp?point=P1'])
     expect(to('日誌')).toEqual(['/site-log'])
     const s = build({ org: 'supervisor', inspections: [{ id: 'I1', title: '4F 鋼筋查驗', status: '待查驗' }],
       acceptanceEvents: [{ stage_key: 'report', event_date: '2026-08-08' }] })
-    expect(s.mine.find((t) => t.tag === '查驗').to).toBe('/quality')
+    expect(s.mine.find((t) => t.tag === '查驗').to).toBe('/quality?inspection=I1')
     expect(s.mine.find((t) => t.tag === '驗收').to).toBe('/acceptance')
-    // 今天已完成:缺失結案同樣直達該筆(與 collaborationItems 同一條規則);查驗判定仍無殼
+    // 今天已完成:缺失結案同樣直達該筆(與 collaborationItems 同一條規則);查驗同樣使用 inspection 參數
     const done = build({ org: 'supervisor', defects: [{ id: 'D9', title: '結案', status: '已結案', closed_at: '2026-08-13T02:00:00Z' }] }).doneToday
     expect(done[0].to).toBe('/quality?defect=D9')
   })

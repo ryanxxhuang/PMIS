@@ -8,6 +8,7 @@
 // 下次 ui.jsx 開檔時把 SearchField/StatusChip 併過去,呼叫端只改 import 路徑。
 import { forwardRef, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 import { Button, Card } from './ui.jsx'
 import { useEscape } from '../lib/useEscape.js'
@@ -43,7 +44,7 @@ export function ListDetailLayout({ children, detail, detailLabel, detailEmpty = 
         {children}
         {/* sticky top-6:長清單捲動時詳情不會跟著捲走。aria-live 讓報讀器在
             選取換人時唸出新內容——桌機不開抽屜,沒有這個就完全無聲。 */}
-        <Card className="hidden lg:block lg:sticky lg:top-6" bodyClass="p-0" aria-live="polite">
+        <Card className="hidden lg:block lg:sticky lg:top-[calc(var(--top-bar-h)_+_16px)]" bodyClass="p-0" aria-live="polite">
           {detail || detailEmpty}
         </Card>
       </div>
@@ -57,10 +58,34 @@ export function ListDetailLayout({ children, detail, detailLabel, detailEmpty = 
 
 // 抽屜與 Modal 共用:開啟時把焦點帶進面板(aria-modal 沒有焦點管理=報讀器仍停在
 // 遮罩後的清單,W8-5 F2 同一課)。Esc 關閉走共用的 useEscape(理由見該檔)。
-function useDismissable(open, onClose) {
+function useDismissable(open, onClose, returnFocusRef) {
   const ref = useRef(null)
   useEscape(open, onClose)
-  useEffect(() => { if (open) ref.current?.focus() }, [open])
+  useEffect(() => {
+    if (!open) return
+    const previous = document.activeElement
+    const returnTarget = returnFocusRef?.current || previous
+    ref.current?.focus()
+    const trap = (e) => {
+      if (e.key !== 'Tab' || !ref.current) return
+      // 確認視窗位於 App 根節點，DOM 順序可能早於 portal；不可搶走其鍵盤焦點。
+      const focusedDialog = document.activeElement?.closest('[aria-modal="true"]')
+      if (focusedDialog && !focusedDialog.contains(ref.current)) return
+      const topDialog = [...document.querySelectorAll('[aria-modal="true"]')].at(-1)
+      if (topDialog && !topDialog.contains(ref.current)) return
+      const controls = [...ref.current.querySelectorAll('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')]
+        .filter((el) => el.getClientRects().length > 0)
+      const first = controls[0], last = controls.at(-1)
+      if (!first) { e.preventDefault(); ref.current.focus(); return }
+      if (e.shiftKey && (document.activeElement === first || !controls.includes(document.activeElement))) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && (document.activeElement === last || !ref.current.contains(document.activeElement))) { e.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', trap)
+    return () => {
+      document.removeEventListener('keydown', trap)
+      if (returnTarget?.isConnected) returnTarget.focus({ preventScroll: true })
+    }
+  }, [open, returnFocusRef])
   return ref
 }
 
@@ -80,6 +105,8 @@ function useDismissable(open, onClose) {
 // 綁 --vvh,軟鍵盤升起時表單的動作列仍在可見範圍。overscroll-contain:面板捲到底的剩餘
 // 動量不得鏈到頁面——實測在面板上滾完立刻按返回,鏈上去的 19px 會讓還原後的位置偏掉。
 export function DetailDrawer({ open, onClose, label, children }) {
+  const { state: locationState } = useLocation()
+  const back = locationState?.taskReturn
   const ref = useDismissable(open, onClose)
   useScrollLock(open)
   const { mounted, state, onTransitionEnd } = usePresence(open, BELOW_LG_QUERY)
@@ -95,6 +122,8 @@ export function DetailDrawer({ open, onClose, label, children }) {
           <Button variant="ghost" size="md" className="min-h-11 pl-1.5" onClick={onClose}>
             <MSym name="chevron_left" size={20} /> 返回
           </Button>
+          {back && /^\/(dashboard|alerts)(\?|$)/.test(back.to) && <Link to={back.to} state={{ returnedTask: back.key }}
+            className="ml-auto min-h-11 inline-flex items-center px-2 text-footnote font-medium text-[var(--blue-text)]">返回{back.label}</Link>}
         </div>
         {children}
       </div>
@@ -113,8 +142,8 @@ export function DetailDrawer({ open, onClose, label, children }) {
 // Contract.jsx 的上傳面板關閉鈕是同一顆圖示鈕;下一波接上時再抽 IconButton,
 // 現在只有這一個使用點,不先抽。
 const MODAL_SIZES = { md: 'max-w-md', xl: 'max-w-xl' }
-export function ModalShell({ open, onClose, title, label = title, size = 'md', children }) {
-  const ref = useDismissable(open, onClose)
+export function ModalShell({ open, onClose, title, label = title, size = 'md', children, returnFocusRef }) {
+  const ref = useDismissable(open, onClose, returnFocusRef)
   useScrollLock(open)
   const { mounted, state, onTransitionEnd } = usePresence(open, BELOW_MD_QUERY)
   if (!mounted) return null

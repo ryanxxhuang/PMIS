@@ -151,7 +151,7 @@ export function buildTodayTasks(input = {}) {
       mine.push(task({
         key: `試驗:${a.sample.id ?? a.sample.sample_no}:${a.label}`, tag: '試驗',
         title: `${a.sample.sample_no || ''} ${a.sample.test_item || ''} ${a.label}`.trim(),
-        ball: 'contractor', to: '/quality', due: a.due, todayIso,
+        ball: 'contractor', to: detailLink('/quality', 'sample', a.sample.id), due: a.due, todayIso,
         meta: days == null ? a.label : dueText(days, a.due),
       }))
     }
@@ -174,7 +174,7 @@ export function buildTodayTasks(input = {}) {
     for (const a of itpAlerts(inspectionPoints, inspections, siteLogs)) {
       mine.push(task({
         key: `停留點:${a.point.id ?? a.point.title}`, tag: '停留點', title: a.title, meta: a.meta,
-        ball: 'contractor', to: '/itp',
+        ball: 'contractor', to: detailLink('/itp', 'point', a.point.id),
       }))
     }
   }
@@ -237,7 +237,7 @@ function buildDoneToday({ org, todayIso, defects, inspections }) {
       ts: new Date(i.inspected_at).getTime(),
       task: task({
         key: `已完成查驗:${i.id ?? i.title}`, tag: '查驗', title: i.title,
-        meta: `監造判定${i.status}`, ball: 'supervisor', to: '/quality',
+        meta: `監造判定${i.status}`, ball: 'supervisor', to: detailLink('/quality', 'inspection', i.id),
       }),
     })
   }

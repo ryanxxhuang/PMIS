@@ -37,7 +37,7 @@ const H1 = {
   '/acceptance': '驗收結算',
   '/portfolio': '跨案總覽',
   '/activity': '專案活動紀錄',
-  '/members': '專案成員',
+  '/members': '三方成員',
   '/alerts': '提醒中心',
   '/audit': '風險稽核',
 }

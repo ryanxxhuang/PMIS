@@ -2,7 +2,7 @@
 // 必須長一樣。W9c 之前 Alerts 自寫一套(逐列外框+inline style 色票+文字箭頭),
 // 與首頁分岔;tag 色票也各留一份且值已漂移(工安缺失兩頁不同色)。
 // 現在列樣式與 tag→圖示/色票都只有這一份。
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 import { Badge } from './ui.jsx'
 
@@ -19,6 +19,7 @@ const TAG_META = {
   觀察: { icon: 'visibility', tone: 'slate' },
   變更: { icon: 'build', tone: 'green' },
   契約: { icon: 'balance', tone: 'purple' },
+  契約重點: { icon: 'balance', tone: 'purple' },
   試驗: { icon: 'science', tone: 'amber' },
   驗收: { icon: 'verified', tone: 'green' },
   停留點: { icon: 'report', tone: 'red' },
@@ -51,15 +52,18 @@ function TaskMeta({ meta, overdue }) {
 }
 
 export default function TaskRow({ task }) {
+  const { pathname, search } = useLocation()
+  const label = pathname === '/dashboard' ? '今日待辦' : '提醒中心'
   const m = TAG_META[task.tag] || { icon: 'visibility', tone: 'slate' }
   return (
-    <Link to={task.to} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">
+    <Link id={`task-${task.key}`} to={task.to} state={{ taskReturn: { to: `${pathname}${search}`, label, key: task.key } }}
+      className="group flex items-start gap-3 px-4 py-4 hover:bg-[var(--surface-2)] transition-colors">
       <span className={`w-8 h-8 rounded-lg grid place-items-center shrink-0 ${TILE[m.tone]}`}>
         <MSym name={m.icon} size={16} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm text-[var(--text)]">{task.title}</span>
-        <span className="block text-caption text-[var(--text-3)] leading-snug">
+        <span className="block text-body font-medium text-[var(--text)]">{task.title}</span>
+        <span className="block mt-1 text-footnote text-[var(--text-2)] leading-snug">
           <TaskMeta meta={task.meta} overdue={!!task.overdueDays} />
         </span>
       </span>

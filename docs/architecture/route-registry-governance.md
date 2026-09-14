@@ -15,9 +15,13 @@
 
 `hidden` 只隱藏入口，仍保留登記、角色守衛與深連結；不能以刪掉定義代替隱藏。`roles` 僅三方，platformAdminOnly 不同時帶 roles。`surface: print` 只去掉工作台外框，仍經登入與專案守衛。公開頁為 login／security，redirect 為根路徑／assistant；精確路由清單由程式與測試維護。
 
-`visibleNavGroups` 過濾角色與 hidden tabs，入口指向第一個可見 tab，無可見項則藏整組。defaultLandingPath 現行全部到 `/dashboard`；五個工作面仍 hidden，不能因整理程式自行復出。
+`visibleNavGroups` 過濾角色與 hidden tabs，入口指向第一個可見 tab，無可見項則藏整組。defaultLandingPath 現行全部到 `/dashboard`；五組工作群組均可見，子頁依角色過濾。
 
 球權來源使用 `?ball=`，不新增路由；resolveBallKey 未知值回 mine。query 不改權限，側欄與頁面讀同一個參數；選取態不要只比 pathname，否則三個來源會一起亮。
+
+`ROLE_WORK`／`roleWorkLinks` 從同一份可見路由取三方常用子頁，供桌機首頁與手機底欄使用，不新增權限。`WORK_GUIDANCE` 是角色操作提示，供頁首與「尋找功能」搜尋結果共用；不是狀態機。`FindWork` 對 `visibleNavGroups` 的結果做本機文字搜尋，不依賴 AI，不包含未授權頁面。
+
+今日待辦連結的 router state 帶返回來源；`useListDetailPane` 更新 query 時保留 state。`WorkContext` 與手機 `DetailDrawer` 僅接受 `/dashboard`、`/alerts` 的站內返回路徑。Dashboard 的搜尋、類型、到期篩選與載入筆數在 query；回來可還原原篩選並聚焦原筆（已完成則移到搜尋）。
 
 ## 維護與驗證
 

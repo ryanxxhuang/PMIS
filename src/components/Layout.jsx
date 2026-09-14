@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { NavLink, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
-import { visibleNavGroups, defaultLandingPath, BALL_SOURCES, resolveBallKey } from '../lib/navConfig.js'
+import { visibleNavGroups, defaultLandingPath, BALL_SOURCES, resolveBallKey, roleWorkLinks } from '../lib/navConfig.js'
+import { FindWork, WorkContext } from './WorkNavigation.jsx'
 import CopilotFab, { CopilotMark, useCopilotAvailable } from './CopilotFab.jsx'
 import BottomNav, { NAV_SHORT } from './BottomNav.jsx'
 import { MSym } from './icons.jsx'
@@ -24,18 +25,18 @@ const initialSidebarCollapsed = () => {
 // ── 側欄列(工作面列與球權列共用)────────────────────────────────────
 // 樣式只有這一份:散裝複本正是深色對比漏修的來源(規範 §6)。外層連結與 tabs
 // 展開鈕由呼叫端各自負責(工作面列多一顆展開鈕,球權列沒有)。
-// 列殼=Workspace 藥丸:貼齊左緣、右側全圓(0 100px 100px 0);選取=淺藍底深藍字。
+// 列殼採圓角矩形，選取以淺藍底深藍字標示。
 // 收合(md+ rail)時縮成置中圓形。selected=淺藍底;open=工作面已展開子頁,只加粗不上底。
 // (旗標用布林不用字串純粹是介面偏好;原本是為了閃避 subset 字型的 manifest
 // 掃描,那套工具已隨 lucide 改版移除,這裡維持布林是因為它本來就比較好讀。)
-const rowClass = ({ selected = false, open = false }, collapsed) => `mr-4 my-0.5 rounded-r-full transition-colors flex items-center ${
+const rowClass = ({ selected = false, open = false }, collapsed) => `mx-2 my-0.5 rounded-lg transition-colors flex items-center ${
   selected
     ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
     : open
       ? 'text-[var(--text)] font-medium'
       : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
 } ${collapsed ? 'md:mx-0 md:mr-0 md:my-1 md:rounded-none md:bg-transparent md:justify-center' : ''}`
-const linkClass = (collapsed) => `min-w-0 min-h-11 flex-1 flex items-center gap-3.5 pl-4 pr-3 text-sm rounded-r-full ${
+const linkClass = (collapsed) => `min-w-0 min-h-11 flex-1 flex items-center gap-3 pl-3 pr-3 text-sm rounded-lg ${
   collapsed ? 'md:flex-none md:w-16 md:flex-col md:gap-1 md:justify-center md:px-0 md:py-1 md:rounded-2xl' : ''
 }`
 // 列內容:圖示＋全名/短標＋件數。rail(collapsed,md+):56×32 藥丸圖示+短標直排,
@@ -327,7 +328,7 @@ export function WebLayout({ children }) {
       attempt()
       return () => clearTimeout(timer)
     }
-    if (prevMenuOpen.current) moreBtnRef.current?.focus()
+    if (prevMenuOpen.current && !document.querySelector('[aria-modal="true"]')) moreBtnRef.current?.focus()
     prevMenuOpen.current = false
   }, [menuOpen])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
@@ -408,7 +409,7 @@ export function WebLayout({ children }) {
           {/* 問 GovAgent:佔 Gemini 在 Workspace 的位置(白底浮起鈕);自 TopBar 移入。
               aria-label 恆掛,收合成純圖示時 accessible name 不變。 */}
           <NavLink to="/agent" onClick={() => setMenuOpen(false)} aria-label="問 GovAgent" title="問 GovAgent"
-            className={({ isActive }) => `mx-3 mt-2 md:mt-0 mb-3 h-11 rounded-[22px] flex items-center gap-2.5 px-4 text-sm font-medium shrink-0 pressable
+            className={({ isActive }) => `mx-3 mt-2 md:mt-0 mb-3 h-11 rounded-lg flex items-center gap-2.5 px-4 text-sm font-medium shrink-0 pressable
               ${collapsed ? 'md:mx-auto md:w-14 md:px-0 md:justify-center md:mt-3' : ''}
               ${isActive
                 ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
@@ -416,6 +417,7 @@ export function WebLayout({ children }) {
             <MSym name="auto_awesome" size={20} className="text-[var(--ai)]" />
             <span className={collapsed ? 'md:hidden' : ''}>問 GovAgent</span>
           </NavLink>
+          <FindWork collapsed={collapsed} onNavigate={() => setMenuOpen(false)} mobileReturnRef={moreBtnRef} />
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
             {/* 球權來源(疊合版 IA §0):主畫面是收件匣,側欄先問「球在誰手上」。
                 三個入口共用 /dashboard 的登記與角色判斷,以 ?ball= 分流(為何不開新路由
@@ -459,6 +461,7 @@ export function WebLayout({ children }) {
                         {/* className 走函式形:字串形會被 NavLink 自動補一個 "active" class */}
                         <NavLink to={n.to} onClick={() => setMenuOpen(false)} title={collapsed ? n.label : undefined}
                           aria-label={collapsed ? n.label : undefined}
+                          aria-current={itemActive && (!n.tabs || !expanded) ? 'page' : false}
                           className={() => linkClass(collapsed)}>
                           {/* 未處理件數(README 導覽規格)=「現在輪到我」落在此群組的數 */}
                           <NavRowContent icon={n.icon} label={n.label} short={NAV_SHORT[n.label] || n.label}
@@ -477,7 +480,7 @@ export function WebLayout({ children }) {
                         <div id={`nav-children-${n.to.slice(1)}`} className={`pb-1 ${collapsed ? 'md:hidden' : ''}`}>
                           {n.tabs.map((tab) => (
                             <NavLink key={tab.to} to={tab.to} onClick={() => setMenuOpen(false)}
-                              className={({ isActive }) => `min-h-11 mr-4 pl-[54px] pr-3 rounded-r-full flex items-center text-sm transition-colors ${
+                              className={({ isActive }) => `min-h-11 mx-2 pl-11 pr-3 rounded-lg flex items-center text-sm transition-colors ${
                                 isActive
                                   ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'
                                   : 'text-[var(--text-2)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
@@ -519,11 +522,12 @@ export function WebLayout({ children }) {
             <ErrorBanner className="mb-4 print:hidden" onRetry={retryDomainLoad}
               msg={`${friendlyError(domainLoadError, '專案資料載入失敗')}。各頁資料可能不完整。`} />
           )}
+        <WorkContext />
         {children}
       </main>
       {/* 主畫面槽=「現在輪到我」:它的 to 就是落地頁(/dashboard),等對方/已完成是同頁的分段,
           頁內 Segmented 就能切,不佔手機的格子 */}
-      <BottomNav items={visibleGroups.flatMap((g) => g.items)} home={BALL_SOURCES.find((b) => b.key === 'mine')}
+      <BottomNav items={roleWorkLinks(org, can?.override, isPlatformAdmin)} home={BALL_SOURCES.find((b) => b.key === 'mine')}
         menuOpen={menuOpen} onMore={() => setMenuOpen(true)} moreRef={moreBtnRef} />
       <CopilotFab open={copilotOpen} onOpenChange={setCopilotOpen} />
     </div>

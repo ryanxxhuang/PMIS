@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Stat, Badge, Button, BallChip, Empty, Surface, PageHeader, PrerequisiteEmptyState, ErrorBanner, SkeletonList, Input, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
@@ -31,7 +31,17 @@ export default function Valuation() {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(() => new Set())
   const [evOpen, setEvOpen] = useState(() => new Set()) // 佐證欄展開的工項
-  const [selectedId, setSelectedId] = useState(null)
+  const [params, setParams] = useSearchParams()
+  const { state } = useLocation()
+  const selectedId = params.get('period')
+  const choosePeriod = (id) => {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous)
+      if (id) next.set('period', id)
+      else next.delete('period')
+      return next
+    }, { replace: true, state })
+  }
   const [search, setSearch] = useState('')
 
   useEffect(() => {
@@ -46,7 +56,7 @@ export default function Valuation() {
   )
   const billableTotal = revisedTotal
 
-  const selected = valuations.find((v) => v.id === selectedId) || valuations[valuations.length - 1]
+  const selected = selectedId ? valuations.find((v) => v.id === selectedId) : valuations[valuations.length - 1]
   const prev = selected ? valuations.find((v) => v.period_no === selected.period_no - 1) : null
   const editable = selected?.status === '草稿' && can.edit
 
@@ -187,7 +197,7 @@ export default function Valuation() {
     setErrMsg('')
     const { v, error } = await createValuation()
     if (error) setErrMsg(friendlyError(error, '建立估驗期未完成'))
-    else setSelectedId(v.id)
+    else choosePeriod(v.id)
   }
 
   const onStatus = async (status) => {
@@ -229,7 +239,7 @@ export default function Valuation() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="估驗計價" tagline="Valuation"
+      <PageHeader title="估驗計價" tagline="Valuation" keepSubtitle
         subtitle={`${coNet !== 0
           ? `變更後契約金額 ${yi(billableTotal)}（原發包 ${yi(billableTotal - coNet)}，核准追加減 ${coNet > 0 ? '+' : ''}${fmt(coNet)}）`
           : `發包工程費 ${yi(billableTotal)}`}（保留款 ${retPct}%）`}
@@ -264,6 +274,8 @@ export default function Valuation() {
             {can.edit && <div className="mt-4 max-md:hidden"><Button onClick={onCreate}>建立第 1 期估驗</Button></div>}
           </Empty>
         </Card>
+      ) : !selected ? (
+        <Card><Empty title="找不到指定的估驗期">該期別可能已移除，請重新選擇。<div className="mt-3"><Button variant="outline" onClick={() => choosePeriod(null)}>查看現有估驗期</Button></div></Empty></Card>
       ) : (
         <>
           {/* 期數頁籤:視圖切換走共用 CHIP 皮(與工作面分頁同語言)。
@@ -272,7 +284,7 @@ export default function Valuation() {
             {valuations.map((v) => (
               <button
                 key={v.id}
-                onClick={() => setSelectedId(v.id)}
+                onClick={() => choosePeriod(v.id)}
                 className={`${CHIP_BASE} gap-1.5 ${v.id === selected?.id ? CHIP_ON : CHIP_OFF}`}
               >
                 第 {v.period_no} 期
@@ -338,7 +350,7 @@ export default function Valuation() {
                 <Button variant="ghost" className="max-sm:w-full max-md:hidden" onClick={() => onReject('退回核定')}>退回核定</Button>}
               {/* 僅草稿可刪(送審/核定後為履約證據,DB 另有 valuations_delete_guard;R4 P2-01)。
                   真刪除走 danger 實心紅,不再用 className 蓋 ghost 色票 */}
-              {can.edit && selected.status === '草稿' && <Button variant="danger" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(friendlyError(error, '估驗刪除未完成')); else setSelectedId(null) } }} className="max-sm:w-full max-md:hidden" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
+              {can.edit && selected.status === '草稿' && <Button variant="danger" onClick={async () => { if (await appConfirm({ title: `刪除第 ${selected.period_no} 期估驗？`, danger: true, confirmLabel: '刪除' })) { setErrMsg(''); const { error } = await deleteValuation(selected.id); if (error) setErrMsg(friendlyError(error, '估驗刪除未完成')); else choosePeriod(null) } }} className="max-sm:w-full max-md:hidden" aria-label="刪除估驗期"><MSym name="delete" size={15} /></Button>}
             </div>
           </Surface>
 

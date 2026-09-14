@@ -1,4 +1,4 @@
-// 手機 bottom navigation(<768,規範 §9.3):五格 = 主畫面槽 + 前 3 個可見工作/參考項 + 「更多」
+// 手機 bottom navigation(<768,規範 §9.3):五格 = 主畫面槽 + 三個角色常用子頁 + 「更多」
 // (iOS tab bar 上限 5)。選取=56×30 藥丸+描邊加重圖示+caption/500 標籤。
 // 「更多」開既有的導覽抽屜——稽核點名手機有「兩層平行導覽」:頂欄漢堡與底欄各開一套,
 // 現在同一份抽屜只剩這一個入口,頂欄漢堡在 <md 退場。
@@ -32,8 +32,8 @@ const isActive = (n, pathname) => pathname === n.to || n.tabs?.some((t) => t.to 
 export default function BottomNav({ items, home, menuOpen = false, onMore, moreRef }) {
   const { pathname } = useLocation()
   const shown = [home, ...items.slice(0, 3)]
-  // 現在的頁面落在「更多」裡(第 4 個之後的項目)也要亮:回答「我在哪裡」,不然五格全暗
-  const moreActive = menuOpen || items.slice(3).some((n) => isActive(n, pathname))
+  // 不在常用捷徑中的頁面讓「更多」亮起，維持位置感。
+  const moreActive = menuOpen || !shown.some((n) => isActive(n, pathname))
   return (
     <nav aria-label="快速導覽"
       className="md:hidden print:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--bg)] border-t border-[var(--border-2)] grid pb-[env(safe-area-inset-bottom)]"

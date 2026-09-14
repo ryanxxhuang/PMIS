@@ -1,19 +1,21 @@
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useMemo, useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { supabase } from '../../lib/supabase.js'
-import { Badge, Button, Card, Empty, PageHeader, Segmented } from '../../components/ui.jsx'
+import { Badge, Button, Card, Empty, PageHeader, Segmented, Select } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow } from '../../lib/progressPlan.js'
 import { taipeiISODate } from '../../lib/dates.js'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
-import { BALL_SOURCES, resolveBallKey } from '../../lib/navConfig.js'
+import { BALL_SOURCES, resolveBallKey, ROLE_WORK } from '../../lib/navConfig.js'
 import { KIND_LABEL } from '../../lib/agentRole.js'
 import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
 import { buildSetupSteps } from '../../lib/setupChecklist.js'
 import InsightsPanel from '../../components/InsightsPanel.jsx'
 import TaskRow from '../../components/TaskRow.jsx'
+import { CommonWork } from '../../components/WorkNavigation.jsx'
+import { SearchField, StatusChip } from '../../components/listDetail.jsx'
 import { appSnackbar } from '../../components/snackbar.jsx'
 
 function SetupChecklist({ imported }) {
@@ -166,7 +168,7 @@ export default function Dashboard() {
   // 等對方,waiting/done 空了指回待我處理;件數為 0 就不掛數字,免得寫出「看 0 件」。
   const withCount = (label, n) => (n ? `${label}（${n} 件）` : label)
   const focus = ball === 'waiting' ? (
-    <TaskSection title="等待對方" items={tasks.waiting} seeAll
+    <TaskSection title="等待對方" items={tasks.waiting}
       emptyTitle="沒有在等任何人" empty="目前沒有送出去等其他單位回覆的事項。"
       emptyTo={{ to: sourceTo('mine'), label: withCount('回到待我處理', tasks.mine.length) }} />
   ) : ball === 'done' ? (
@@ -177,7 +179,7 @@ export default function Dashboard() {
     // 真人驗收(2026-08-19):什麼都還沒上傳的專案也說「都跟上了」會誤導。
     // store 沒有文件清單、不為此加查詢,退而求其次用「義務為空」當代理條件:
     // 義務由契約解析而來,義務空=多半連契約都還沒整理,補一句指路即可
-    <TaskSection title="現在輪到我" items={tasks.mine} seeAll
+    <TaskSection title="現在輪到我" items={tasks.mine}
       emptyTitle="球不在你手上" empty="目前沒有輪到你處理的事項；有人把球交回來時，它會出現在這裡。"
       hint={obligations.length === 0 ? '上傳契約後，AI 會整理期限並在此提醒。' : null}
       emptyTo={{ to: sourceTo('waiting'), label: withCount('看等對方', tasks.waiting.length) }} />
@@ -192,17 +194,14 @@ export default function Dashboard() {
       <PageHeader
         title="今日待辦"
         tagline={project.project_name}
-        subtitle={`${project.owner_name} · 施工：${project.contractor_name || '—'} · 監造：${project.supervisor_name || '—'}`}
+        subtitle={`${ROLE_WORK[myOrg].label}工作清單 · ${ROLE_WORK[myOrg].summary}`}
         meta={[
           { k: '工程代碼', v: project.project_code || '—' },
           { k: '日期', v: todayISO },
         ]}
-        action={imported && (
-          <Button variant="outline" size="sm" onClick={exportAll} title="把本專案所有資料打包下載(JSON)">
-            <MSym name="download" size={16} />匯出整案資料
-          </Button>
-        )}
       />
+
+      <CommonWork />
 
       <Segmented
         aria-label="球在誰手上"
@@ -234,13 +233,12 @@ export default function Dashboard() {
         <div className="space-y-5">
           {/* 初始化清單、風險警示、AI 今日已代辦只跟著「待我處理」走:它們是「現在該做
               什麼」的脈絡,不是「等對方」或「已完成」的脈絡。單欄直排:收件匣就是一條清單。
-              這裡沒有任何頁面摘要卡(判準 2):施工日誌等入口都在側欄「工作」分區,
-              首頁不替導覽補路。 */}
+              三方常用入口在頁首，主體保留工作清單而不加頁面摘要卡。 */}
           {ball === 'mine' && isPersistedProject && !project.formal_mode && <SetupChecklist imported />}
 
           {/* 狀態全部由既有業務流程更新——在目的頁做完事就自動退出,
               不需要回這裡打勾;這裡也永遠不會出現 AI 自己產生的工作。 */}
-          {focus}
+          <div key={ball}>{focus}</div>
 
           {ball === 'mine' && (
             <>
@@ -252,6 +250,11 @@ export default function Dashboard() {
           )}
         </div>
       )}
+
+      {imported && <details className="text-footnote text-[var(--text-3)] print:hidden">
+        <summary className="cursor-pointer min-h-11 inline-flex items-center gap-1">專案資料工具<MSym name="expand_more" size={14} /></summary>
+        <div className="mt-2"><Button variant="outline" size="sm" onClick={exportAll}><MSym name="download" size={16} />匯出整案資料</Button></div>
+      </details>}
 
       {/* 手機 CTA(README 手機今日待辦):滑到最底不知道下一步該做什麼時,一句話問 agent。
           與 App bar 全域搜尋走同一條代問機制(router state 帶 q,Agent 頁消費即清),
@@ -313,48 +316,74 @@ function AgentDoneCard() {
   )
 }
 
-// 每種待辦的圖示 + 色票(icon 方塊底色/字色)——一眼分辨類型
-// 首頁每段最多 5 筆;完整清單在提醒中心,首頁不再無限長。
-const SECTION_CAP = 5
-
-// emptyTitle/emptyTo:空狀態的一句話標題與指路連結(規範 §6:空狀態要說缺什麼、
-// 輪到誰、去哪裡看),由呼叫端依球權來源決定文案,這裡只負責排版。
-function TaskSection({ title, items, empty, emptyTitle, emptyTo = null, hint = null, seeAll = false, done = false }) {
-  const shown = items.slice(0, SECTION_CAP)
-  const countPill = (
-    <Badge color={done || !items.length ? 'green' : 'amber'} className="num">{items.length}</Badge>
-  )
+// 清單、篩選、載入筆數都留在同一頁；URL 保存篩選，從單據返回不必重新找。
+function TaskSection({ title, items, empty, emptyTitle, emptyTo = null, hint = null, done = false }) {
+  const [params, setParams] = useSearchParams()
+  const { state } = useLocation()
+  const q = params.get('q') || ''
+  const searchRef = useRef(null)
+  const type = params.get('type') || ''
+  const urgent = params.get('urgent') === '1'
+  const [filtersOpen, setFiltersOpen] = useState(() => !!(q || type || urgent))
+  const limit = Math.max(20, Math.min(10000, Number(params.get('limit')) || 20))
+  const today = taipeiISODate(new Date())
+  const tags = [...new Set(items.map((t) => t.tag))]
+  if (type && !tags.includes(type)) tags.push(type)
+  const matched = items.filter((t) => (!type || t.tag === type)
+    && (!urgent || (t.due && t.due <= today))
+    && `${t.title} ${t.meta} ${t.tag}`.toLocaleLowerCase().includes(q.trim().toLocaleLowerCase()))
+  const shown = matched.slice(0, limit)
+  const change = (patch) => setParams((previous) => {
+    const next = new URLSearchParams(previous)
+    next.delete('limit')
+    for (const [key, value] of Object.entries(patch)) value ? next.set(key, value) : next.delete(key)
+    return next
+  }, { replace: true })
+  useEffect(() => {
+    if (!state?.returnedTask) return
+    const el = document.getElementById(`task-${state.returnedTask}`)
+    if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'center' }) }
+    else searchRef.current?.focus()
+  }, [state])
   return (
-    <Card title={title} action={countPill} bodyClass="p-0">
+    <Card title={title} action={<div className="flex items-center gap-2">
+      <Badge color={done || !items.length ? 'green' : 'amber'} className="num">{items.length}</Badge>
+      {items.length > 0 && <Button variant="ghost" size="sm" className="md:hidden" aria-expanded={filtersOpen} aria-label="篩選待辦" onClick={() => setFiltersOpen((v) => !v)}><MSym name="tune" size={16} />篩選</Button>}
+    </div>} bodyClass="p-0">
+      {items.length > 0 && <div className={`p-4 border-b border-[var(--border-2)] space-y-3 ${filtersOpen ? '' : 'max-md:hidden'}`}>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <SearchField ref={searchRef} aria-label="搜尋待辦" placeholder="搜尋事項、編號或處理內容" value={q} onChange={(e) => change({ q: e.target.value })} className="flex-1" />
+          <Select aria-label="待辦類型" className="sm:w-48" value={type} onChange={(e) => change({ type: e.target.value })}>
+            <option value="">所有類型</option>
+            {tags.map((tag) => <option key={tag} value={tag}>{tag}（{items.filter((t) => t.tag === tag).length}）</option>)}
+          </Select>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!done && <StatusChip active={urgent} onClick={() => change({ urgent: urgent ? '' : '1' })}>逾期與今天到期</StatusChip>}
+          {(q || type || urgent) && <Button variant="ghost" size="sm" onClick={() => change({ q: '', type: '', urgent: '' })}>清除篩選</Button>}
+          <span role="status" className="text-footnote text-[var(--text-3)] sm:ml-auto">顯示 {shown.length} / {matched.length} 件</span>
+        </div>
+      </div>}
+      {done && <p className="px-4 pt-3 text-footnote text-[var(--text-3)]">此處僅列有完成時間的缺失結案與查驗判定。其他操作請查閱<Link to="/activity" className="text-[var(--blue-text)] inline-flex items-center min-h-11">活動紀錄</Link>。</p>}
       {items.length === 0 ? (
         <Empty title={emptyTitle}>
           {empty}
-          {/* 次要說明:只在呼叫端判斷「空得可疑」時出現(如義務為空=契約可能還沒上傳) */}
           {hint && <div className="mt-1 text-footnote text-[var(--text-3)]">{hint}</div>}
-          {emptyTo && (
-            <div className="mt-3">
-              {/* 手機觸控 ≥44px:連結自己撐高 */}
-              <Link to={emptyTo.to} className="inline-flex items-center gap-0.5 max-md:min-h-11 text-body font-medium text-[var(--blue-text)] hover:underline">
-                {emptyTo.label} <MSym name="chevron_right" size={14} />
-              </Link>
-            </div>
-          )}
+          {emptyTo && <div className="mt-3"><Link to={emptyTo.to} className="inline-flex items-center gap-0.5 min-h-11 text-body font-medium text-[var(--blue-text)] hover:underline">
+            {emptyTo.label}<MSym name="chevron_right" size={14} />
+          </Link></div>}
         </Empty>
+      ) : matched.length === 0 ? (
+        <Empty title="沒有符合篩選的事項">請更換關鍵字或清除篩選，查看其他待辦。</Empty>
       ) : (
-        <ul className="divide-y divide-[var(--border-2)]">
-          {shown.map((x) => <li key={x.key}><TaskRow task={x} /></li>)}
-          {/* 溢位一定要有出口:提醒中心吃同一份聚合,點過去看得到剩下那幾件 */}
-          {items.length > shown.length && seeAll && (
-            <li className="px-4 py-2.5">
-              <Link to="/alerts" className="text-xs font-medium text-[var(--blue-text)] hover:underline inline-flex items-center gap-0.5">
-                看全部 {items.length} 件 <MSym name="chevron_right" size={13} />
-              </Link>
-            </li>
-          )}
-          {items.length > shown.length && !seeAll && (
-            <li className="px-4 py-2 text-caption text-[var(--text-3)]">還有 {items.length - shown.length} 項…</li>
-          )}
-        </ul>
+        <>
+          <ul role="list" aria-label={`${title}清單`} className="divide-y divide-[var(--border-2)]">
+            {shown.map((x) => <li key={x.key}><TaskRow task={x} /></li>)}
+          </ul>
+          {matched.length > shown.length && <div className="p-3 border-t border-[var(--border-2)] text-center">
+            <Button variant="outline" onClick={() => change({ limit: String(limit + 20) })}>顯示更多（還有 {matched.length - shown.length} 件）</Button>
+          </div>}
+        </>
       )}
     </Card>
   )
