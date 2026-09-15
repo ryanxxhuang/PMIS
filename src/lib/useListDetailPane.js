@@ -110,7 +110,7 @@ export function useListDetailPane({
     select(targetId, { openPane: !!deep, writeUrl: false })
     if (deep) {
       deepHook?.(deep)
-      scrollTimer.current = setTimeout(() => document.getElementById(`${idPrefix}${deep.id}`)?.scrollIntoView({ block: 'center' }), 60)
+      scrollTimer.current = setTimeout(() => document.getElementById(`${idPrefix}${deep.id}`)?.scrollIntoView?.({ block: 'center' }), 60)
     }
   }, [ready, rows, scope, param, idPrefix, select, writeSearch])
 
@@ -138,7 +138,7 @@ export function useListKeyboardNav({ ordered, selectedId, select, idPrefix, onEn
           : ordered[Math.max(idx - 1, 0)]
         if (next && next.id !== selectedId) {
           select(next.id)
-          document.getElementById(`${idPrefix}${next.id}`)?.scrollIntoView({ block: 'nearest' })
+          document.getElementById(`${idPrefix}${next.id}`)?.scrollIntoView?.({ block: 'nearest' })
         }
       } else if (e.key === 'Enter') {
         onEnter?.()

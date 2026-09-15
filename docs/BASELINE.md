@@ -9,7 +9,7 @@
 
 - `npm test`：114 檔、1,218 項通過；新增 `useUrlFilters.test.jsx`（寫入／函式型更新／等於預設即刪／由 URL 回填）、`useListDetailPane.missing.test.jsx`（失效深連結回報並清參數、有效深連結不回報）；擴充 `SiteLog.dailyLog.test.jsx`（`?d=` 直達）、`Dashboard.setup.test.jsx`（返回但原項已離開清單的說明）、`todayTasks.test.js`（日誌待辦帶 `?d=`）。
 - `npm run test:e2e` 全部 10 檔：70 項通過（三角色側欄可達、深連結、篩選返回、375／1024 無溢位皆不變）。
-- `npm run lint`（零警告）、`npm run build`、`npm run check:docs` 通過。
+- `npm run lint`（零警告）、`npm run build`、`npm run check:docs` 通過。先前各階段整批偶發的 `Requirements.integrity.test.jsx` unhandled error（深連結 60 ms 捲動計時器呼叫 jsdom 沒有的 `scrollIntoView`）已在 `useListDetailPane.js` 以可選呼叫修正（PR #86），本機連跑兩次無 Errors。
 - Demo 預覽 1440 px 三組旅程實測：機關 CO-002 待辦→詳情摘要→確認框→核准→返回今日待辦顯示原項已離開；機關初驗待辦→`?stage=initial` 當前列；`/submittals?submittal=NOPE` 顯示找不到並清參數；提醒中心 `?bucket=overdue` 前往處理再返回篩選保留；廠商日誌待辦→`/site-log?d=今天`；監造 SUB-003 待辦→待受理摘要→受理→返回今日待辦原項取得焦點。矩陣見 `docs/reviews/2026-09-15-uiux-stage6-acceptance.md`。**真人驗收未完成；正式後端未測。**
 
 ### 2026-09-15 UIUX 階段 5C：驗收當前階段與下一步（本機 diff，未發布）
