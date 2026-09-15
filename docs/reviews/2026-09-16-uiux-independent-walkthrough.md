@@ -41,7 +41,7 @@
 - 未完整走所有終局分支、刪除／復原、正式列印成品、手機平板、完整無障礙與效能測試。
 - 9 月 15 日與 16 日跨日後的倒數差異不算產品錯誤；跨日重載造成的 Demo 重置，也不拿來支持 W01。W01 是同一個廠商操作段落中的側欄來回。
 
-截圖保存於 [本次證據目錄](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough)。截圖是狀態證據；步驟與前後差異由下列操作紀錄補充，不是錄影。
+截圖保存於 [本次證據目錄](../../docs/reviews/assets/2026-09-15-walkthrough)。截圖是狀態證據；步驟與前後差異由下列操作紀錄補充，不是錄影。
 
 ## 3. 三角色的實際操作結果
 
@@ -96,7 +96,7 @@
 
 **驗收：**有未存摘要、數量或班組時，側欄／首頁入口離開都能取消並保留；放棄後才清除；存檔後不多問。另補瀏覽器上一頁測試，本次尚未實測該分支。
 
-證據：[離開前](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/07-log-unsaved.png)、[返回後](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/08-log-lost-after-navigation.png)。程式核對：[SiteLog.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/SiteLog.jsx) 第 68、138 行；[unsavedEdits.js](/Volumes/GameSSD/Projects/PMIS/src/lib/unsavedEdits.js) 第 18～29 行。現有登記與 beforeunload 不等於所有站內導覽已受保護。
+證據：[離開前](../../docs/reviews/assets/2026-09-15-walkthrough/07-log-unsaved.png)、[返回後](../../docs/reviews/assets/2026-09-15-walkthrough/08-log-lost-after-navigation.png)。程式核對：[SiteLog.jsx](../../src/pages/web/SiteLog.jsx) 第 68、138 行；[unsavedEdits.js](../../src/lib/unsavedEdits.js) 第 18～29 行。現有登記與 beforeunload 不等於所有站內導覽已受保護。
 
 ### W02｜P1｜最新審查意見被誤標為「上次退回原因」
 
@@ -110,7 +110,7 @@
 
 **驗收：**補正再送件的受理、再次編輯意見、AI 草稿帶入，都不會將新意見標成舊退回原因；沒有歷史資料時明確顯示未留存。
 
-證據：[受理前](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/12-supervisor-review.png)、[受理後](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/13-review-history-mislabeled.png)。程式核對：[Submittals.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Submittals.jsx) 第 159～169、311～329 行：寫入與歷史標籤讀的是同一個最新意見欄位。
+證據：[受理前](../../docs/reviews/assets/2026-09-15-walkthrough/12-supervisor-review.png)、[受理後](../../docs/reviews/assets/2026-09-15-walkthrough/13-review-history-mislabeled.png)。程式核對：[Submittals.jsx](../../src/pages/web/Submittals.jsx) 第 159～169、311～329 行：寫入與歷史標籤讀的是同一個最新意見欄位。
 
 ### W03｜P1｜部分項目合格，被摘要呈現成整張檢查表合格
 
@@ -124,7 +124,7 @@
 
 **驗收：**只填一項、多項、全填、含不合格、完全未填皆能分辨「覆蓋程度」與「判定」。本包不修改 `overall` 或授權規則。
 
-證據：[部分填寫保存後](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/09-checklist-partial-pass.png)。程式核對：[qc.js](/Volumes/GameSSD/Projects/PMIS/src/lib/qc.js) 第 21～33 行；[ChecklistSection.jsx](/Volumes/GameSSD/Projects/PMIS/src/components/quality/ChecklistSection.jsx) 第 125、179、270～279 行。
+證據：[部分填寫保存後](../../docs/reviews/assets/2026-09-15-walkthrough/09-checklist-partial-pass.png)。程式核對：[qc.js](../../src/lib/qc.js) 第 21～33 行；[ChecklistSection.jsx](../../src/components/quality/ChecklistSection.jsx) 第 125、179、270～279 行。
 
 ### W04｜P1｜報表草稿包含資料不能支持的完成事實
 
@@ -138,7 +138,7 @@
 
 **驗收：**零照片不出現已附照片；有日誌不等於監造每日到場；進度落後不等於已通知趕工；存在待查驗不代表全部查驗合格。避免在修文案時順手更改金額與核定邏輯。
 
-證據：[監造報表](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/15-supervisor-report-draft.png)、[佐證包上半部草稿](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/18-package-no-photos.png)。0 張與未配對提示另由當次完整頁面文字讀取確認，該截圖不保證同時包含頁尾。程式核對：[supervisorReport.js](/Volumes/GameSSD/Projects/PMIS/src/lib/supervisorReport.js) 第 43～63 行；[site.js](/Volumes/GameSSD/Projects/PMIS/src/store/slices/site.js) 第 259～270 行。
+證據：[監造報表](../../docs/reviews/assets/2026-09-15-walkthrough/15-supervisor-report-draft.png)、[佐證包上半部草稿](../../docs/reviews/assets/2026-09-15-walkthrough/18-package-no-photos.png)。0 張與未配對提示另由當次完整頁面文字讀取確認，該截圖不保證同時包含頁尾。程式核對：[supervisorReport.js](../../src/lib/supervisorReport.js) 第 43～63 行；[site.js](../../src/store/slices/site.js) 第 259～270 行。
 
 ### W05｜P2｜查驗接到缺失後，返回原待辦的入口消失
 
@@ -148,7 +148,7 @@
 
 **驗收：**上述鏈路以及分段／佇列換件後，返回入口還在；直接開品質頁不虛構來源。
 
-證據：[轉缺失後](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/14-quality-return-lost.png)。程式核對：[Quality.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Quality.jsx) 第 53～68 行，更新 query 時未帶原導航 state；返回元件使用該來源資訊。
+證據：[轉缺失後](../../docs/reviews/assets/2026-09-15-walkthrough/14-quality-return-lost.png)。程式核對：[Quality.jsx](../../src/pages/web/Quality.jsx) 第 53～68 行，更新 query 時未帶原導航 state；返回元件使用該來源資訊。
 
 ### W06｜P2｜完成後推薦的去處不一定包含剛才那件
 
@@ -158,7 +158,7 @@
 
 **驗收：**不同類型完成後都能回到那一筆；不把不在該清單範圍的事項指向今天已完成。
 
-證據：[返回後提示](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/03-owner-return-message.png)。程式核對：[Dashboard.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Dashboard.jsx) 第 378 行。
+證據：[返回後提示](../../docs/reviews/assets/2026-09-15-walkthrough/03-owner-return-message.png)。程式核對：[Dashboard.jsx](../../src/pages/web/Dashboard.jsx) 第 378 行。
 
 ### W07｜P2｜相同報告月份，進度比較的時間口徑不同
 
@@ -170,7 +170,7 @@
 
 **驗收：**查看同月與過去月份時，能說清楚每個進度數字截至何日、是否含待核定估驗。不可僅把兩頁數字硬改相同。
 
-證據：[施工月報](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/16-monthly-report-progress.png)、[監造報表](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/15-supervisor-report-draft.png)、[今日進度](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/17-progress-labels.png)。程式核對：[MonthlyReport.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/MonthlyReport.jsx) 第 35～51 行；[SupervisorReport.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/SupervisorReport.jsx) 第 40～50 行。
+證據：[施工月報](../../docs/reviews/assets/2026-09-15-walkthrough/16-monthly-report-progress.png)、[監造報表](../../docs/reviews/assets/2026-09-15-walkthrough/15-supervisor-report-draft.png)、[今日進度](../../docs/reviews/assets/2026-09-15-walkthrough/17-progress-labels.png)。程式核對：[MonthlyReport.jsx](../../src/pages/web/MonthlyReport.jsx) 第 35～51 行；[SupervisorReport.jsx](../../src/pages/web/SupervisorReport.jsx) 第 40～50 行。
 
 ### W08｜P2｜建立後提示補附件說明，卻沒有對應編輯動作
 
@@ -180,7 +180,7 @@
 
 **驗收：**以未填外部交件方式建立一筆後，每條「請補充」提示都能帶到合法可用的下一步。
 
-證據：[新件成功後](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/10-submittal-created.png)。程式核對：[Submittals.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Submittals.jsx) 第 283、379～401、630 行。
+證據：[新件成功後](../../docs/reviews/assets/2026-09-15-walkthrough/10-submittal-created.png)。程式核對：[Submittals.jsx](../../src/pages/web/Submittals.jsx) 第 283、379～401、630 行。
 
 ### W09｜P2｜進度排行的名稱讓粗估看起來像施工落後診斷
 
@@ -190,7 +190,7 @@
 
 **建議：**先更名為「估驗完成率差距（依金額權重）」，直接註明不是工項排程落後判定。要排除間接費或改用個別工項排程，另列產品／計算議題，不在 UI 包偷改公式。
 
-證據：[進度排行](/Volumes/GameSSD/Projects/PMIS/docs/reviews/assets/2026-09-15-walkthrough/17-progress-labels.png)。程式核對：[Progress.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Progress.jsx) 第 141～142、238～254 行。
+證據：[進度排行](../../docs/reviews/assets/2026-09-15-walkthrough/17-progress-labels.png)。程式核對：[Progress.jsx](../../src/pages/web/Progress.jsx) 第 141～142、238～254 行。
 
 ## 5. 版面與操作感受：值得再精簡，但排在上面問題之後
 
