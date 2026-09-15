@@ -284,16 +284,16 @@
 
 | 對應 | 檔案與定位 |
 | --- | --- |
-| U01／U10 | [Acceptance.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Acceptance.jsx)：`StageRow.save`、結果 Select、`PageHeader`、階段時間軸 |
-| U02／U03／U06／U08 | [Submittals.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Submittals.jsx)：`submit`、`onUpload`、`onResubmit`、`aiRead`／`aiReview`、詳細頁動作 |
-| U02／U13 | [RFI.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/RFI.jsx)：`submit`、`canClose`／`canSupplement`；[collab.js](/Volumes/GameSSD/Projects/PMIS/src/store/slices/collab.js)：建立函式回傳值、AI 回傳來源 |
-| U04／U12／U13 | [navConfig.js](/Volumes/GameSSD/Projects/PMIS/src/lib/navConfig.js)、[Layout.jsx](/Volumes/GameSSD/Projects/PMIS/src/components/Layout.jsx)、[PageTabs.jsx](/Volumes/GameSSD/Projects/PMIS/src/components/PageTabs.jsx)、[ui.jsx](/Volumes/GameSSD/Projects/PMIS/src/components/ui.jsx)、[WorkNavigation.jsx](/Volumes/GameSSD/Projects/PMIS/src/components/WorkNavigation.jsx) |
-| U05／U11 | [Dashboard.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Dashboard.jsx)：`!imported`；[todayTasks.js](/Volumes/GameSSD/Projects/PMIS/src/lib/todayTasks.js)；[Alerts.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Alerts.jsx)：本地 filters |
-| U07 | [Quality.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Quality.jsx)：`changeSegment`、`queueTick`；[ChecklistSection.jsx](/Volumes/GameSSD/Projects/PMIS/src/components/quality/ChecklistSection.jsx)：編輯狀態 |
-| U09 | [Payments.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/Payments.jsx)：`onPay`、三個 onBlur、`displayedRows`、統計與匯出 |
-| U10 | [ChangeOrderDetail.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/ChangeOrderDetail.jsx)：差異明細與 `canRule` |
-| U14 | [SiteLog.jsx](/Volumes/GameSSD/Projects/PMIS/src/pages/web/SiteLog.jsx)：`useDirtyState`、`officialOpen`、照片流程及貼底存檔 |
-| 共用既有能力 | [listDetail.jsx](/Volumes/GameSSD/Projects/PMIS/src/components/listDetail.jsx)、[ContractFlow.jsx](/Volumes/GameSSD/Projects/PMIS/src/components/ContractFlow.jsx)、[DefectTracker.jsx](/Volumes/GameSSD/Projects/PMIS/src/components/DefectTracker.jsx) |
-| 規範 | [DEVELOPMENT.md](/Volumes/GameSSD/Projects/PMIS/DEVELOPMENT.md)、[CURRENT.md](/Volumes/GameSSD/Projects/PMIS/CURRENT.md)、[DECISIONS.md](/Volumes/GameSSD/Projects/PMIS/docs/DECISIONS.md)、[Apple 設計規範](/Volumes/GameSSD/Projects/PMIS/docs/UIUX-Apple-設計規範.md) |
+| U01／U10 | [Acceptance.jsx](../../src/pages/web/Acceptance.jsx)：`StageRow.save`、結果 Select、`PageHeader`、階段時間軸 |
+| U02／U03／U06／U08 | [Submittals.jsx](../../src/pages/web/Submittals.jsx)：`submit`、`onUpload`、`onResubmit`、`aiRead`／`aiReview`、詳細頁動作 |
+| U02／U13 | [RFI.jsx](../../src/pages/web/RFI.jsx)：`submit`、`canClose`／`canSupplement`；[collab.js](../../src/store/slices/collab.js)：建立函式回傳值、AI 回傳來源 |
+| U04／U12／U13 | [navConfig.js](../../src/lib/navConfig.js)、[Layout.jsx](../../src/components/Layout.jsx)、[PageTabs.jsx](../../src/components/PageTabs.jsx)、[ui.jsx](../../src/components/ui.jsx)、[WorkNavigation.jsx](../../src/components/WorkNavigation.jsx) |
+| U05／U11 | [Dashboard.jsx](../../src/pages/web/Dashboard.jsx)：`!imported`；[todayTasks.js](../../src/lib/todayTasks.js)；[Alerts.jsx](../../src/pages/web/Alerts.jsx)：本地 filters |
+| U07 | [Quality.jsx](../../src/pages/web/Quality.jsx)：`changeSegment`、`queueTick`；[ChecklistSection.jsx](../../src/components/quality/ChecklistSection.jsx)：編輯狀態 |
+| U09 | [Payments.jsx](../../src/pages/web/Payments.jsx)：`onPay`、三個 onBlur、`displayedRows`、統計與匯出 |
+| U10 | [ChangeOrderDetail.jsx](../../src/pages/web/ChangeOrderDetail.jsx)：差異明細與 `canRule` |
+| U14 | [SiteLog.jsx](../../src/pages/web/SiteLog.jsx)：`useDirtyState`、`officialOpen`、照片流程及貼底存檔 |
+| 共用既有能力 | [listDetail.jsx](../../src/components/listDetail.jsx)、[ContractFlow.jsx](../../src/components/ContractFlow.jsx)、[DefectTracker.jsx](../../src/components/DefectTracker.jsx) |
+| 規範 | [DEVELOPMENT.md](../../DEVELOPMENT.md)、[CURRENT.md](../../CURRENT.md)、[DECISIONS.md](../../docs/DECISIONS.md)、[Apple 設計規範](../../docs/UIUX-Apple-設計規範.md) |
 
-下一步使用 [Claude Code 分階段 prompts](/Volumes/GameSSD/Projects/PMIS/docs/reviews/2026-09-15-claude-uiux-prompts.md)。
+下一步使用 [Claude Code 分階段 prompts](../../docs/reviews/2026-09-15-claude-uiux-prompts.md)。

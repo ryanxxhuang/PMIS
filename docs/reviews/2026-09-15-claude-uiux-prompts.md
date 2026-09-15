@@ -1,7 +1,7 @@
 # PMIS UIUX：交給 Claude Code 的分階段 prompts
 
 > CANDIDATE｜2026-09-15｜這是可複製的任務提示，不是要求自動執行整份文件。
-> 搭配 [診斷報告](/Volumes/GameSSD/Projects/PMIS/docs/reviews/2026-09-15-uiux-diagnosis.md)。
+> 搭配 [診斷報告](../../docs/reviews/2026-09-15-uiux-diagnosis.md)。
 
 ## 使用方式
 
