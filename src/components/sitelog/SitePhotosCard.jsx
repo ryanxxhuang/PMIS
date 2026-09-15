@@ -8,13 +8,14 @@ import { WorkItemPicker } from '../DefectTracker.jsx'
 
 export default function SitePhotosCard({
   currentLog, can, aiEnabled, leaves, byId,
-  photos, photosNeedingAI, photoBusy, existingBusy, existingMsg,
+  photos, photosNeedingAI, photoBusy, existingBusy, existingMsg, photoMsg = null,
   staging, batchBusy,
   onBatchPhotos, onClassifyExisting, onAddPhotos, onDeletePhoto,
   patchStaging, removeStaging, cancelBatch, confirmBatchUpload,
+  embedded = false, // true=併在本日日誌卡內(可編視角,UIUX 階段 3C);false=獨立卡(唯讀視角)
 }) {
-  return (
-    <Card title="現場照片">
+  const body = (
+    <>
       {/* 照片先行(W8-7 C-6):可編角色不再被「先存檔」擋住——沒日誌也直接給批次辨識入口,
           「全部上傳」時自動建草稿日誌。唯讀角色維持等待文案(W8-4B,也不得長出 input——唯讀 e2e 契約);
           AI 辨識未啟用時沒有「辨識→確認」那步可觸發自動建檔,維持先存檔的原提示 */}
@@ -57,6 +58,8 @@ export default function SitePhotosCard({
               <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? (aiEnabled('photo.classify') ? '　·　AI 辨識＝自動生說明並配對工項' : '　·　AI 批次辨識未啟用') : '（照片由施工廠商上傳）'}</span>
             )}
             {existingMsg && <span className={`text-xs font-medium ${existingMsg.tone === 'error' ? 'text-[var(--red-text)]' : existingMsg.tone === 'success' ? 'text-[var(--green-text)]' : 'text-[var(--text-2)]'}`}>{existingMsg.text}</span>}
+            {/* 照片上傳/刪除的結果只在這裡講,不混進日誌存檔的訊息 */}
+            {photoMsg && <span role="status" className={`text-xs font-medium ${photoMsg.tone === 'error' ? 'text-[var(--red-text)]' : photoMsg.tone === 'success' ? 'text-[var(--green-text)]' : 'text-[var(--text-2)]'}`}>{photoMsg.text}</span>}
           </div>
 
           {/* 批次辨識覆核區:AI 逐張判讀後,人可改說明/工項再一鍵全上傳 */}
@@ -156,6 +159,15 @@ export default function SitePhotosCard({
           )}
         </>
       )}
-    </Card>
+    </>
   )
+  if (embedded) {
+    return (
+      <section aria-label="現場照片" className="mt-5 pt-4 border-t border-[var(--border-2)]">
+        <h3 className="text-callout font-semibold text-[var(--text)] mb-3">現場照片</h3>
+        {body}
+      </section>
+    )
+  }
+  return <Card title="現場照片">{body}</Card>
 }

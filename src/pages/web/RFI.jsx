@@ -5,6 +5,7 @@ import MarkupEditor, { MarkupThumb } from '../../components/MarkupEditor.jsx'
 import { Card, Button, Field, Input, Textarea, Badge, BallChip, Dot, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../components/listDetail.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
+import { useUrlFilters } from '../../lib/useUrlFilters.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -48,7 +49,10 @@ export default function RFI() {
   const [errMsg, setErrMsg] = useState('') // 回覆/結案寫入失敗必須讓使用者看到(失敗=UI 不變)
   const [aiDraft, setAiDraft] = useState({}) // { [rfiId]: result } AI 回覆草稿
   const [draftBusy, setDraftBusy] = useState(null)
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  // 篩選保存在 URL(U11):從單據返回、重新整理、分享網址都保留關鍵字與分段
+  const [filters, setFilters] = useUrlFilters(DEFAULT_FILTERS)
+  // 提送/提出的連點防護走 ref 而非 busy state:同一個事件迴圈裡的第二次 click 看到的 busy 仍是舊值
+  const submitting = useRef(false)
   const searchRef = useRef(null)
 
   const org = currentUser?.org_type || 'contractor'
@@ -73,7 +77,7 @@ export default function RFI() {
   // 選取/深連結(?rfi=)/切案重置/初次自動選取:共用殼 hook。預設選「球在我手上」的
   // 第一筆(開頁就看到該做的事),沒有就選清單第一筆。
   const pid = currentProject?.project_id
-  const { selectedId, detailOpen, select, closeDetail } = useListDetailPane({
+  const { selectedId, detailOpen, select, closeDetail, missingId } = useListDetailPane({
     param: 'rfi', idPrefix: 'rfi-',
     scope: `${pid}/${org}`,
     ready: rfis.length > 0, rows: rfis,
@@ -97,8 +101,25 @@ export default function RFI() {
     )
   }
 
+  // 建立失敗不收表單(主旨、內容、圖面標註全部保留、可重試),成功才收起並選中新疑義。
+  // 「未建立」而非「一定失敗」:逾時時伺服器可能已寫入。try/finally 保證 busy 收尾。
   const submit = async () => {
-    setBusy(true); await createRfi(form); setBusy(false); setForm(null)
+    if (submitting.current) return
+    submitting.current = true
+    setErrMsg(''); setBusy(true)
+    try {
+      const { error, id } = (await createRfi(form)) || { error: { message: '未收到寫入結果，請確認清單後再決定是否重送' } }
+      if (error) { setErrMsg(friendlyError(error, '疑義未建立，內容已保留，請重試；若清單已出現同名紀錄，表示先前已寫入，請勿重複提出')); return }
+      setForm(null)
+      // 新疑義是「待回覆」,廠商的球權快篩可能把它濾掉——清掉篩選讓新紀錄一定找得到
+      setFilters(DEFAULT_FILTERS)
+      if (id) select(id, { openPane: true })
+    } catch (e) {
+      setErrMsg(friendlyError(e, '疑義未建立，內容已保留，請重試'))
+    } finally {
+      submitting.current = false
+      setBusy(false)
+    }
   }
   const onAnswer = async (r) => {
     const ans = await appPrompt({
@@ -308,6 +329,7 @@ export default function RFI() {
         } />
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
+      {missingId && <p role="status" className="rounded-lg px-3 py-2 text-footnote bg-[var(--amber-tint)] text-[var(--amber-text)]">找不到指定的疑義（{missingId}），可能已刪除或不在本專案；已顯示清單預設的一筆，網址已改為不指向該筆。</p>}
 
       {form && (
         <Card>

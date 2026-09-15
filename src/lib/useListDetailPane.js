@@ -56,6 +56,9 @@ export function useListDetailPane({
   const [readSearch, writeSearch] = useLiveSearch()
   const [selectedId, setSelectedId] = useState(null)
   const [detailOpen, setDetailOpen] = useState(false)  // <lg 抽屜/全螢幕詳情
+  // 深連結指到不存在的那一筆(已刪除/不在本案/打錯):記下來讓頁面說清楚,並把參數從 URL 拿掉——
+  // 不能默默改選另一筆卻讓網址仍指著原單,使用者會以為看的還是原來那件(UIUX 階段 6 U11)
+  const [missingId, setMissingId] = useState(null)
   const latest = useRef({})
   latest.current = { rows, pickDefault, onSelect, onReset, onDeepLink, readSearch }
 
@@ -80,7 +83,7 @@ export function useListDetailPane({
     if (seenScope.current === scope) return
     seenScope.current = scope
     initialPicked.current = false
-    setSelectedId(null); setDetailOpen(false)
+    setSelectedId(null); setDetailOpen(false); setMissingId(null)
     latest.current.onReset?.()
     writeSearch((n) => n.delete(param))  // 只刪自己的 param:同頁另一個殼的深連結不受影響
   }, [scope, param, writeSearch])
@@ -100,6 +103,7 @@ export function useListDetailPane({
     const { rows: pool, pickDefault: pick, onDeepLink: deepHook, readSearch: read } = latest.current
     const wanted = new URLSearchParams(read()).get(param)
     const deep = wanted ? pool.find((r) => r.id === wanted) : null
+    if (wanted && !deep) { setMissingId(wanted); writeSearch((n) => n.delete(param)) }
     const targetId = deep ? deep.id : pick?.()
     if (!targetId) return
     // 深連結的 query 本來就在 URL 裡、預設選取不該進 URL:初次選取一律不寫(理由見 select)
@@ -108,9 +112,9 @@ export function useListDetailPane({
       deepHook?.(deep)
       scrollTimer.current = setTimeout(() => document.getElementById(`${idPrefix}${deep.id}`)?.scrollIntoView({ block: 'center' }), 60)
     }
-  }, [ready, rows, scope, param, idPrefix, select])
+  }, [ready, rows, scope, param, idPrefix, select, writeSearch])
 
-  return { selectedId, setSelectedId, detailOpen, setDetailOpen, select, closeDetail }
+  return { selectedId, setSelectedId, detailOpen, setDetailOpen, select, closeDetail, missingId }
 }
 
 // 鍵盤:↑/↓ 移動選取、Enter 開啟原文、/ 聚焦搜尋。ordered=目前畫面上的走訪序

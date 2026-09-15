@@ -36,18 +36,20 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
 
   const createInspection = useCallback(async (input) => {
     const wi = input.work_item_key ? wiMaps.byKey.get(input.work_item_key) : null
+    // 回傳新 id:頁面送出成功後直接選中這一筆(UIUX 階段 3B)
     if (!dbMode) {
+      const id = `INSP-${Date.now()}`
       setInspections((is) => [{
-        id: `INSP-${Date.now()}`, title: input.title, location: input.location || null,
+        id, title: input.title, location: input.location || null,
         inspection_type: input.inspection_type || '施工查驗',
         requested_date: input.requested_date || null, status: '待查驗', result_note: null,
         // 檢附自主檢查表(S-2):單向引用第一級證據,demo 與真 DB 同欄名才不會雙引擎漂移
         checklist_record_id: input.checklist_record_id || null,
         work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
       }, ...is])
-      return { error: null }
+      return { error: null, id }
     }
-    const { error } = await supabase.from('inspections').insert({
+    const { data, error } = await supabase.from('inspections').insert({
       project_id: currentProject.project_id, work_item_id: wi?.id || null,
       title: input.title, location: input.location || null,
       inspection_type: input.inspection_type || '施工查驗',
@@ -55,10 +57,10 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       // 檢附自主檢查表(S-2):只在申請時掛上,查驗結果不回寫檢查紀錄(單向)
       checklist_record_id: input.checklist_record_id || null,
       requested_by: currentUser?.user_id, status: '待查驗',
-    })
+    }).select('id').single()
     if (error) return { error }
     await reloadQuality()
-    return { error: null }
+    return { error: null, id: data?.id }
   }, [dbMode, currentProject, currentUser, wiMaps, reloadQuality])
 
   // 監造查驗：合格 / 不合格（不合格可一併開缺失）

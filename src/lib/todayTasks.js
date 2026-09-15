@@ -164,7 +164,8 @@ export function buildTodayTasks(input = {}) {
       if (!(ACCEPTANCE_STAGE_ORGS[a.stage] || []).includes(org)) continue
       mine.push(task({
         key: `驗收:${a.stage}`, tag: '驗收', title: a.title, meta: a.meta,
-        ball: org, to: '/acceptance', due: dueByStage.get(a.stage) || null, todayIso,
+        // 直達當前階段(UIUX 階段 5C):頁面用 ?stage= 定位並說明實際狀態,不自動開別的階段編輯
+        ball: org, to: detailLink('/acceptance', 'stage', a.stage), due: dueByStage.get(a.stage) || null, todayIso,
       }))
     }
   }
@@ -198,7 +199,7 @@ export function buildTodayTasks(input = {}) {
       mine.push(task({
         // 日誌沒有法定到期日,不掛 due 假造期限;無 due 者排在期限型待辦之後
         key: `日誌:${todayIso}`, tag: '日誌', title: '今天的施工日誌尚未填寫',
-        ball: 'contractor', to: '/site-log', meta: `今天（${todayIso}）還沒有日誌紀錄`,
+        ball: 'contractor', to: `/site-log?d=${todayIso}`, meta: `今天（${todayIso}）還沒有日誌紀錄`,
       }))
     }
   }

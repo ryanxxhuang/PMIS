@@ -1,0 +1,563 @@
+<title>PMIS 階段 0 入口與畫面草圖</title>
+<style>
+  :root{
+    --bg:#f5f5f7;--surface:#fff;--surface-2:#efeff4;--text:#1d1d1f;--text-2:#56565a;--text-3:#68686d;
+    --border:#d2d2d7;--border-2:#e5e5ea;--blue:#0071e3;--blue-text:#0058b0;--blue-tint:#e8f1fd;
+    --green-tint:#e8f6ec;--green-text:#1b6b2e;--amber-tint:#fdf0e7;--amber-text:#a32b00;--red-tint:#fdeceb;--red-text:#b3000f;
+    --ai:#8944ab;--ai-tint:#f5edf9;--wire:#dcdce1;--wire-2:#c9c9cf;--mark:#a32b00;
+  }
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+    --bg:#1c1c1e;--surface:#2c2c2e;--surface-2:#3a3a3c;--text:#f5f5f7;--text-2:#c7c7cc;--text-3:#a8a8ad;
+    --border:#48484a;--border-2:#38383a;--blue:#2e8fff;--blue-text:#6fb4ff;--blue-tint:#10304f;
+    --green-tint:#17321f;--green-text:#5fd87f;--amber-tint:#3a2a12;--amber-text:#ffbe55;--red-tint:#3a1f1d;--red-text:#ff8a80;
+    --ai:#bf5af2;--ai-tint:#2e1f3a;--wire:#48484a;--wire-2:#5a5a5e;--mark:#ffbe55;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#1c1c1e;--surface:#2c2c2e;--surface-2:#3a3a3c;--text:#f5f5f7;--text-2:#c7c7cc;--text-3:#a8a8ad;
+    --border:#48484a;--border-2:#38383a;--blue:#2e8fff;--blue-text:#6fb4ff;--blue-tint:#10304f;
+    --green-tint:#17321f;--green-text:#5fd87f;--amber-tint:#3a2a12;--amber-text:#ffbe55;--red-tint:#3a1f1d;--red-text:#ff8a80;
+    --ai:#bf5af2;--ai-tint:#2e1f3a;--wire:#48484a;--wire-2:#5a5a5e;--mark:#ffbe55;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang TC","Noto Sans TC","Segoe UI",sans-serif;font-size:14px;line-height:1.55;padding-inline:20px;padding-block:32px 64px;font-variant-numeric:tabular-nums}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:28px;line-height:1.2;letter-spacing:-.02em;font-weight:600;margin:0 0 6px;text-wrap:balance}
+  h2{font-size:22px;letter-spacing:-.017em;font-weight:600;margin:48px 0 6px;padding-top:24px;border-top:1px solid var(--border)}
+  h3{font-size:15px;font-weight:600;margin:24px 0 8px}
+  p{max-width:68ch;color:var(--text-2);margin:0 0 10px}
+  .eyebrow{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);font-weight:600}
+  .stamp{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--amber-tint);color:var(--amber-text);margin-bottom:12px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12px;color:var(--text-2);margin:8px 0 16px}
+  .legend b{font-weight:600;color:var(--text)}
+  .row{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+  .col{flex:1 1 340px;min-width:0}
+  .note{font-size:12px;color:var(--text-2);margin-top:8px;max-width:68ch}
+  .note li{margin:2px 0}
+  .rec{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:var(--green-tint);color:var(--green-text);margin-left:6px;vertical-align:middle}
+  .warn{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:var(--red-tint);color:var(--red-text);margin-left:6px;vertical-align:middle}
+
+  /* ── 1440 frame at 0.5 scale ─────────────────────────── */
+  .scroller{overflow-x:auto;padding-bottom:6px}
+  .frame{position:relative;width:720px;height:450px;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:9px;line-height:1.3;color:var(--text-2);flex:none}
+  .top{position:absolute;inset:0 0 auto 0;height:32px;background:var(--surface);border-bottom:1px solid var(--border-2);display:flex;align-items:center;gap:8px;padding:0 10px}
+  .top .brand{font-weight:700;color:var(--text);font-size:10px}
+  .top .proj{padding:2px 6px;border:1px solid var(--border);border-radius:6px}
+  .top .ask{flex:1;max-width:220px;height:18px;border:1px solid var(--border);border-radius:9px;padding:0 8px;display:flex;align-items:center;color:var(--text-3)}
+  .top .sp{flex:1}
+  .top .ic{width:14px;height:14px;border-radius:50%;background:var(--surface-2)}
+  .side{position:absolute;top:32px;bottom:0;left:0;width:128px;background:var(--surface);border-right:1px solid var(--border-2);padding:6px 6px}
+  .side.rail{width:40px}
+  .side .sec{font-size:8px;color:var(--text-3);margin:6px 4px 2px}
+  .side .it{display:flex;align-items:center;gap:5px;padding:3px 5px;border-radius:5px;color:var(--text)}
+  .side .it i{width:9px;height:9px;border-radius:2px;background:var(--wire-2);flex:none}
+  .side .it.on{background:var(--blue-tint);color:var(--blue-text);font-weight:600}
+  .side .it.sub{padding-left:19px;color:var(--text-2)}
+  .side .it.sub.on{color:var(--blue-text)}
+  .side .it .chev{margin-left:auto;color:var(--text-3)}
+  .side .btn{border:1px solid var(--border);border-radius:5px;padding:3px 6px;margin:3px 0;display:flex;gap:5px;align-items:center;color:var(--text)}
+  .side .btn.ai{box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .side .btn.ai i{width:8px;height:8px;border-radius:50%;background:var(--ai)}
+  .side.rail .it,.side.rail .btn{justify-content:center;padding:4px 0}
+  .side.rail .it span,.side.rail .btn span,.side.rail .sec,.side.rail .chev{display:none}
+  .main{position:absolute;top:32px;left:128px;right:0;bottom:0;padding:14px 16px;overflow:hidden}
+  .side.rail ~ .main{left:40px}
+  .main .h1{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-.01em}
+  .main .h1 small{font-weight:400;color:var(--text-3);font-size:9px;margin-left:4px}
+  .main .sub{color:var(--text-2);margin-top:2px}
+  .tabs{display:flex;gap:4px;margin-top:8px}
+  .tabs span{padding:2px 7px;border-radius:5px;border:1px solid var(--border);background:var(--surface)}
+  .tabs span.on{background:var(--blue-tint);color:var(--blue-text);border-color:transparent;font-weight:600}
+  .chips{display:flex;gap:4px;margin-top:8px;align-items:center}
+  .chips .lab{color:var(--text-3);margin-right:2px}
+  .chips span{padding:2px 7px;border:1px solid var(--border);border-radius:5px;background:var(--surface)}
+  .seg{display:inline-flex;margin-top:8px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .seg span{padding:2px 8px;border-right:1px solid var(--border)}
+  .seg span:last-child{border-right:0}
+  .seg span.on{background:var(--surface-2);font-weight:600;color:var(--text)}
+  .card{margin-top:10px;background:var(--surface);border:1px solid var(--border-2);border-radius:8px;padding:8px 10px}
+  .card .ct{font-weight:600;color:var(--text);margin-bottom:6px}
+  .line{height:8px;border-radius:3px;background:var(--wire);margin:5px 0}
+  .line.w60{width:60%}.line.w40{width:40%}.line.w80{width:80%}
+  .callout{position:absolute;width:16px;height:16px;border-radius:50%;background:var(--mark);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg)}
+  .co-list{font-size:12px;color:var(--text-2);margin:8px 0 0;padding-left:0;list-style:none}
+  .co-list li{display:flex;gap:8px;margin:4px 0}
+  .co-list .n{flex:none;width:18px;height:18px;border-radius:50%;background:var(--mark);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+  .frame-title{font-size:13px;font-weight:600;margin:0 0 6px}
+  .frame-title small{font-weight:400;color:var(--text-3);margin-left:6px}
+
+  /* ── detail column wireframes ─────────────────────────── */
+  .pane{background:var(--surface);border:1px solid var(--border-2);border-radius:10px;overflow:hidden;font-size:12px;color:var(--text-2)}
+  .pane .bar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .pane .blk{padding:10px 12px;border-bottom:1px solid var(--border-2)}
+  .pane .blk:last-child{border-bottom:0}
+  .pane .bt{font-weight:600;color:var(--text);font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+  .pane .bt .new{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--amber-tint);color:var(--amber-text)}
+  .pane .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 10px}
+  .pane .kv div{font-size:11px}
+  .pane .kv b{display:block;font-weight:400;color:var(--text-3);font-size:10px}
+  .pane .no{color:var(--text);font-size:11px}
+  .pane .ttl{color:var(--text);font-weight:500;font-size:14px}
+  .pane .summary{background:var(--blue-tint);color:var(--blue-text);border-radius:8px;padding:8px 10px;line-height:1.45}
+  .pane .summary b{color:inherit}
+  .pane .amber{background:var(--amber-tint);color:var(--amber-text);border-radius:8px;padding:6px 10px}
+  .pane .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 12px;border-top:1px solid var(--border-2)}
+  .b{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:7px;font-size:12px;font-weight:600;border:1px solid transparent;color:var(--text)}
+  .b.p{background:var(--blue);color:#fff}.b.s{background:var(--surface-2);color:var(--text)}.b.d{background:var(--red-tint);color:var(--red-text)}
+  .b.ok{background:var(--green-tint);color:var(--green-text)}.b.g{color:var(--blue-text)}.b.o{border-color:var(--border);color:var(--text)}
+  .b.ai{background:var(--ai-tint);color:var(--ai)}
+  .pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px}
+  .pill.blue{background:var(--blue-tint);color:var(--blue-text)}.pill.amber{background:var(--amber-tint);color:var(--amber-text)}
+  .pill.slate{background:var(--surface-2);color:var(--text-2)}.pill.green{background:var(--green-tint);color:var(--green-text)}
+  .pill.red{background:var(--red-tint);color:var(--red-text)}.pill.ai{background:var(--ai-tint);color:var(--ai)}
+  .muted{color:var(--text-3);font-size:11px}
+  .unsaved{display:inline-flex;gap:4px;align-items:center;font-size:11px;font-weight:600;color:var(--amber-text)}
+  .unsaved::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber-text)}
+  .pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start}
+  .pair-h{font-size:12px;font-weight:600;color:var(--text-3);margin:0 0 6px;letter-spacing:.04em}
+  .table{width:100%;border-collapse:collapse;font-size:11px}
+  .table th,.table td{text-align:left;padding:3px 4px;border-bottom:1px solid var(--border-2);color:var(--text-2)}
+  .table th{font-weight:500;color:var(--text-3);font-size:10px}
+  .table td.num{text-align:right;color:var(--text)}
+  .table td.plus{color:var(--green-text);text-align:right}.table td.minus{color:var(--red-text);text-align:right}
+  .sticky{background:var(--surface);border-top:1px solid var(--border);padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 -2px 6px rgba(0,0,0,.05)}
+
+  /* ── flows ───────────────────────────────────────────── */
+  .flow{margin:10px 0 4px;padding:12px 14px;background:var(--surface);border:1px solid var(--border-2);border-radius:10px}
+  .flow .fh{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline;margin-bottom:8px}
+  .flow .fh b{font-size:14px;color:var(--text)}
+  .flow .fh span{font-size:11px;color:var(--text-3)}
+  .lane{display:flex;align-items:flex-start;gap:8px;margin:6px 0 10px}
+  .lane .ln{flex:none;width:44px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-3);padding-top:8px}
+  .lane.pro .ln{color:var(--green-text)}
+  .steps{display:flex;flex-wrap:wrap;gap:6px 0;align-items:stretch;min-width:0}
+  .st{display:flex;align-items:center}
+  .st .bx{border:1px solid var(--border);background:var(--surface);border-radius:7px;padding:5px 8px;font-size:11.5px;color:var(--text);max-width:210px;line-height:1.35}
+  .st .bx small{display:block;color:var(--text-3);font-size:10px}
+  .st .ar{color:var(--text-3);padding:0 5px;font-size:12px}
+  .lane.pro .st .bx{border-color:var(--green-text);border-style:dashed}
+  .st.stop .bx{border-color:var(--red-text);background:var(--red-tint)}
+  .st.find .bx{border-color:var(--amber-text);background:var(--amber-tint)}
+  .st.gap .bx{border-style:dotted;border-color:var(--text-3);background:var(--surface-2)}
+  .st .tag{font-size:10px;font-weight:700;margin-right:3px}
+  .st.stop .tag{color:var(--red-text)}.st.find .tag{color:var(--amber-text)}.st.gap .tag{color:var(--text-3)}
+  .lane.pro .st.new .bx{background:var(--green-tint)}
+  .key{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-2);margin:6px 0 14px}
+  .key i{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--border);vertical-align:-2px;margin-right:4px}
+  .key .k1 i{border-color:var(--red-text);background:var(--red-tint)}.key .k2 i{border-color:var(--amber-text);background:var(--amber-tint)}
+  .key .k3 i{border-style:dotted;background:var(--surface-2)}.key .k4 i{border-color:var(--green-text);border-style:dashed;background:var(--green-tint)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  @media (max-width:640px){h2{margin-top:36px}.pane .kv{grid-template-columns:repeat(2,1fr)}}
+</style>
+<div class="wrap">
+  <div class="stamp">CANDIDATE · 2026-09-15 · 階段 0 · 只交付設計</div>
+  <div class="eyebrow">PMIS UIUX · 桌機網頁版 1440 px · 基準 7156aeff</div>
+  <h1>入口方案與三個代表畫面草圖</h1>
+  <p>低擬真線框，沿用現有色票、字級與元件，不做新品牌。手機／平板延後。所有頁面名稱、按鈕字樣與單據編號都取自現行程式或 Demo 資料。決策說明與 U01–U14 核對在同目錄的設計文件。</p>
+  <div class="legend"><span><b>灰塊</b>＝既有內容，不改</span><span><b>橘色數字</b>＝本方案改動或說明點</span><span><b>藍底</b>＝選取態（沿用 --blue-tint）</span></div>
+
+  <!-- ═══════════ 1. 入口方案 ═══════════ -->
+  <h2>1 · 導覽入口：三個方案</h2>
+  <p>同一畫面：監造在 1440 px 開啟「送審文件」。差別只在側欄與頁首分頁列誰負責同組子頁切換。</p>
+
+  <div class="row">
+    <div class="col">
+      <p class="frame-title">方案 A · 維持雙軌（現況）<small>D-015 需修訂</small></p>
+      <div class="scroller"><div class="frame">
+        <div class="top"><span class="brand">GovAgent</span><span class="proj">A 區新建工程</span><span class="ask">問 GovAgent：工項、送審、缺失、契約……</span><span class="sp"></span><span class="ic"></span><span class="ic"></span><span>王監造 · 監造</span></div>
+        <div class="side">
+          <div class="btn ai"><i></i><span>問 GovAgent</span></div>
+          <div class="btn"><i></i><span>尋找功能</span></div>
+          <div class="sec">球在誰手上</div>
+          <div class="it"><i></i><span>現在輪到我</span><span class="chev">3</span></div>
+          <div class="it"><i></i><span>等待對方</span></div>
+          <div class="it"><i></i><span>今天已完成</span></div>
+          <div class="sec">工作</div>
+          <div class="it"><i></i><span>現場與品質</span><span class="chev">›</span></div>
+          <div class="it on"><i></i><span>審查與協作</span><span class="chev">›</span></div>
+          <div class="it"><i></i><span>進度與金流</span><span class="chev">›</span></div>
+          <div class="it"><i></i><span>報表與結案</span><span class="chev">›</span></div>
+          <div class="it"><i></i><span>專案</span><span class="chev">›</span></div>
+          <div class="sec">參考</div>
+          <div class="it"><i></i><span>契約重點</span></div>
+          <div class="it"><i></i><span>專案文件</span></div>
+          <div class="it"><i></i><span>標單工項</span></div>
+        </div>
+        <div class="main">
+          <div class="h1">送審文件<small>Submittal</small></div>
+          <div class="sub">選擇已提送文件，檢視附件後審定或退回補正。</div>
+          <div class="tabs"><span class="on">送審文件</span><span>工程疑義</span><span>變更設計</span></div>
+          <div class="card"><div class="ct">送審清單 (3)</div><div class="line w80"></div><div class="line w60"></div><div class="line w60"></div></div>
+        </div>
+        <span class="callout" style="left:110px;top:190px">1</span>
+        <span class="callout" style="left:196px;top:96px">2</span>
+        <span class="callout" style="left:8px;top:44px">3</span>
+      </div></div>
+      <ul class="co-list">
+        <li><span class="n">1</span>群組列點文字會跳到第一子頁，點箭頭才展開；同一列兩種意思。子頁預設收著。</li>
+        <li><span class="n">2</span>頁首分頁列常駐，與側欄子頁重複：D-015「內容區不重複子頁導覽」不成立，需修訂條文。</li>
+        <li><span class="n">3</span>桌機同尺寸有三個 AI 入口：頂欄輸入框、側欄大按鈕、右下 Copilot。</li>
+      </ul>
+    </div>
+
+    <div class="col">
+      <p class="frame-title">方案 B · 側欄為主，分頁列只當替代 <span class="rec">推薦</span><small>D-015 不改，規範 §0 加註</small></p>
+      <div class="scroller"><div class="frame">
+        <div class="top"><span class="brand">GovAgent</span><span class="proj">A 區新建工程</span><span class="ask">問 GovAgent：工項、送審、缺失、契約……</span><span class="sp"></span><span class="ic"></span><span class="ic"></span><span>王監造 · 監造</span></div>
+        <div class="side">
+          <div class="btn"><i></i><span>尋找功能</span></div>
+          <div class="sec">球在誰手上</div>
+          <div class="it"><i></i><span>現在輪到我</span><span class="chev">3</span></div>
+          <div class="it"><i></i><span>等待對方</span></div>
+          <div class="it"><i></i><span>今天已完成</span></div>
+          <div class="sec">工作</div>
+          <div class="it"><i></i><span>現場與品質</span><span class="chev">›</span></div>
+          <div class="it"><i></i><span>審查與協作</span><span class="chev">⌄</span></div>
+          <div class="it sub on"><span>送審文件</span></div>
+          <div class="it sub"><span>工程疑義</span></div>
+          <div class="it sub"><span>變更設計</span></div>
+          <div class="it"><i></i><span>進度與金流</span><span class="chev">›</span></div>
+          <div class="it"><i></i><span>報表與結案</span><span class="chev">›</span></div>
+          <div class="it"><i></i><span>專案</span><span class="chev">›</span></div>
+          <div class="sec">參考</div>
+          <div class="it"><i></i><span>契約重點</span></div>
+          <div class="it"><i></i><span>專案文件</span></div>
+        </div>
+        <div class="main">
+          <div class="h1">送審文件<small>Submittal</small></div>
+          <div class="sub">選擇已提送文件，檢視附件後審定或退回補正。</div>
+          <div class="card"><div class="ct">送審清單 (3)</div><div class="line w80"></div><div class="line w60"></div><div class="line w60"></div></div>
+        </div>
+        <span class="callout" style="left:110px;top:168px">1</span>
+        <span class="callout" style="left:150px;top:78px">2</span>
+        <span class="callout" style="left:8px;top:34px">3</span>
+      </div></div>
+      <ul class="co-list">
+        <li><span class="n">1</span>進到任一子頁，所屬群組自動展開並列出同組子頁，選中子頁亮藍；箭頭仍可手動收合。</li>
+        <li><span class="n">2</span>側欄已列子頁時不畫頁首分頁列；側欄收合或 1024–1279 px 時才出現（見下方兩張）。</li>
+        <li><span class="n">3</span>側欄「問 GovAgent」大按鈕降級或移除，桌機 AI 入口剩頂欄輸入框＋右下 Copilot；「尋找功能」不動。</li>
+      </ul>
+    </div>
+
+    <div class="col">
+      <p class="frame-title">方案 C · 移除分頁列 <span class="warn">不建議</span><small>平板失去唯一子頁入口</small></p>
+      <div class="scroller"><div class="frame">
+        <div class="top"><span class="brand">GovAgent</span><span class="proj">A 區新建工程</span><span class="ask">問 GovAgent：工項、送審、缺失、契約……</span><span class="sp"></span><span class="ic"></span><span class="ic"></span><span>王監造 · 監造</span></div>
+        <div class="side rail">
+          <div class="btn"><i></i></div>
+          <div class="it"><i></i></div><div class="it"><i></i></div><div class="it"><i></i></div>
+          <div class="it"><i></i></div><div class="it on"><i></i></div><div class="it"><i></i></div><div class="it"><i></i></div><div class="it"><i></i></div>
+          <div class="it"><i></i></div><div class="it"><i></i></div><div class="it"><i></i></div>
+        </div>
+        <div class="main">
+          <div class="h1">送審文件<small>Submittal</small></div>
+          <div class="sub">選擇已提送文件，檢視附件後審定或退回補正。</div>
+          <div class="chips"><span class="lab">審查與協作 ▾</span></div>
+          <div class="card"><div class="ct">送審清單 (3)</div><div class="line w80"></div><div class="line w60"></div><div class="line w60"></div></div>
+        </div>
+        <span class="callout" style="left:36px;top:150px">1</span>
+        <span class="callout" style="left:104px;top:88px">2</span>
+      </div></div>
+      <ul class="co-list">
+        <li><span class="n">1</span>側欄收合（或 768–1279 px 平板）時只剩圖示列，看不到子頁。</li>
+        <li><span class="n">2</span>要補一個新的「群組下拉」元件才能切同組子頁；多一個元件、多一套可達性測試，換來的只是把分頁列換個形狀。</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>方案 B 在兩種側欄狀態下的樣子</h3>
+  <div class="row">
+    <div class="col">
+      <p class="frame-title">≥1280 px，側欄展開<small>分頁列不出現</small></p>
+      <div class="scroller"><div class="frame" style="height:230px">
+        <div class="top"><span class="brand">GovAgent</span><span class="proj">A 區新建工程</span><span class="ask">問 GovAgent…</span><span class="sp"></span><span>王監造 · 監造</span></div>
+        <div class="side">
+          <div class="sec">工作</div>
+          <div class="it"><i></i><span>現場與品質</span><span class="chev">›</span></div>
+          <div class="it"><i></i><span>審查與協作</span><span class="chev">⌄</span></div>
+          <div class="it sub on"><span>送審文件</span></div>
+          <div class="it sub"><span>工程疑義</span></div>
+          <div class="it sub"><span>變更設計</span></div>
+          <div class="it"><i></i><span>進度與金流</span><span class="chev">›</span></div>
+        </div>
+        <div class="main">
+          <div class="h1">送審文件<small>Submittal</small></div>
+          <div class="sub">選擇已提送文件，檢視附件後審定或退回補正。</div>
+          <div class="card"><div class="ct">送審清單 (3)</div><div class="line w80"></div><div class="line w60"></div></div>
+        </div>
+      </div></div>
+    </div>
+    <div class="col">
+      <p class="frame-title">側欄收合，或 1024–1279 px<small>分頁列回來，行為與今天相同</small></p>
+      <div class="scroller"><div class="frame" style="height:230px">
+        <div class="top"><span class="brand">GovAgent</span><span class="proj">A 區新建工程</span><span class="ask">問 GovAgent…</span><span class="sp"></span><span>王監造 · 監造</span></div>
+        <div class="side rail">
+          <div class="btn"><i></i></div>
+          <div class="it"><i></i></div><div class="it"><i></i></div><div class="it"><i></i></div>
+          <div class="it"><i></i></div><div class="it on"><i></i></div><div class="it"><i></i></div>
+        </div>
+        <div class="main">
+          <div class="h1">送審文件<small>Submittal</small></div>
+          <div class="sub">選擇已提送文件，檢視附件後審定或退回補正。</div>
+          <div class="tabs"><span class="on">送審文件</span><span>工程疑義</span><span>變更設計</span></div>
+          <div class="card"><div class="ct">送審清單 (3)</div><div class="line w80"></div><div class="line w60"></div></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <h3>今日待辦頁的入口分工（三方案共用，PR #83 已有）</h3>
+  <div class="row">
+    <div class="col">
+      <div class="scroller"><div class="frame" style="height:300px">
+        <div class="top"><span class="brand">GovAgent</span><span class="proj">A 區新建工程</span><span class="ask">問 GovAgent：工項、送審、缺失、契約……</span><span class="sp"></span><span>李淑芬 · 機關</span></div>
+        <div class="side">
+          <div class="btn"><i></i><span>尋找功能</span></div>
+          <div class="sec">球在誰手上</div>
+          <div class="it on"><i></i><span>現在輪到我</span><span class="chev">4</span></div>
+          <div class="it"><i></i><span>等待對方</span><span class="chev">6</span></div>
+          <div class="it"><i></i><span>今天已完成</span></div>
+          <div class="sec">工作</div>
+          <div class="it"><i></i><span>現場與品質</span><span class="chev">›</span></div>
+          <div class="it"><i></i><span>審查與協作</span><span class="chev">›</span></div>
+          <div class="it"><i></i><span>進度與金流</span><span class="chev">›</span></div>
+        </div>
+        <div class="main">
+          <div class="h1">今日待辦<small>A 區新建工程</small></div>
+          <div class="sub">機關工作清單 · 辦理核定與付款，掌握履約風險及驗收。</div>
+          <div class="chips"><span class="lab">機關常用</span><span>變更設計</span><span>請款收款</span><span>驗收結算</span></div>
+          <div class="seg"><span class="on">現在輪到我 4</span><span>等待對方 6</span><span>今天已完成 0</span></div>
+          <div class="card"><div class="ct">現在輪到我</div><div class="line w80"></div><div class="line w60"></div><div class="line w80"></div></div>
+        </div>
+        <span class="callout" style="left:8px;top:70px">A</span>
+        <span class="callout" style="left:8px;top:34px">B</span>
+        <span class="callout" style="left:150px;top:96px">C</span>
+        <span class="callout" style="left:8px;top:160px">D</span>
+      </div></div>
+    </div>
+    <div class="col">
+      <ul class="co-list">
+        <li><span class="n">A</span><b>球在誰手上</b>：工作起點。一筆待辦直達單據，單據頁首「返回今日待辦」帶回原篩選。</li>
+        <li><span class="n">B</span><b>尋找功能</b>：知道名稱或想做什麼、不知道在哪組。確定性搜尋頁名與角色提示，不碰 AI。</li>
+        <li><span class="n">C</span><b>常用工作列</b>：每個角色三個「今天最常去」，只在這一頁；不擴到每頁、不做偏好設定。</li>
+        <li><span class="n">D</span><b>工作群組＋子頁</b>：完整功能目錄，所有合法頁面唯一的分類入口。方案 B 讓它跟著當前頁展開。</li>
+        <li><span class="n">·</span><b>問 GovAgent</b>（頂欄）：問答與代查，不是導覽。aria-label 改成與可見文字相同。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ═══════════ 2. 三個代表畫面 ═══════════ -->
+  <h2>2 · 三個代表畫面：目前 → 建議</h2>
+  <p>只畫詳情欄（或日誌主卡）。左欄清單、頁首、色票與元件全部沿用。橘色「新」＝新增區塊或搬動；其餘為既有內容重排。</p>
+
+  <h3>2.1 送審詳情 · 監造視角 · SUB-003 補正再送件</h3>
+  <div class="pair">
+    <div>
+      <p class="pair-h">目前</p>
+      <div class="pane">
+        <div class="bar"><span class="pill blue">現在輪到我</span><span class="pill slate" style="margin-left:auto">材料設備</span></div>
+        <div class="blk"><div class="no">SUB-003</div><div class="ttl">外牆窯燒磚 材料送審(修正版)</div>
+          <div class="kv" style="margin-top:8px"><div><b>類別</b>材料設備</div><div><b>版次</b>Rev.1</div><div><b>狀態</b>已提送</div><div><b>提送日</b>2026-09-13</div><div><b>審查期限</b>2026-09-20</div><div><b>審定日</b>—</div></div></div>
+        <div class="blk"><div class="bt">附件</div>含出廠證明、CNS 試驗報告<br>補正(Rev.1):已補試驗報告<br><span class="muted">尚未上傳文件本體</span></div>
+        <div class="blk"><div class="bt">審查意見</div><div class="amber">第一次退回:未附出廠證明與試驗報告</div></div>
+        <div class="acts"><span class="b s">受理審核</span><span class="b d">退回補正</span><span class="b s">✦ AI 審查助手</span><span class="b s">✦ AI 讀文件審查</span></div>
+      </div>
+      <ul class="note"><li>「上次為何退回」與「這次補了什麼」分散在審查意見與附件說明字串裡。</li><li>受理與審定靠按鈕出現與否表達；AI 結果離頁即失。</li></ul>
+    </div>
+    <div>
+      <p class="pair-h">建議</p>
+      <div class="pane">
+        <div class="bar"><span class="pill blue">現在輪到我</span><span class="pill slate" style="margin-left:auto">材料設備</span></div>
+        <div class="blk"><div class="bt">輪到我做什麼 <span class="new">新</span></div>
+          <div class="summary"><b>待受理 · Rev.1 補正再送</b><br>上次退回原因：未附出廠證明與試驗報告<br>本次補正說明：已補試驗報告 <span class="muted" style="color:inherit">（首次提送時顯示「首次提送 · 無退回紀錄」）</span></div></div>
+        <div class="blk"><div class="no">SUB-003</div><div class="ttl">外牆窯燒磚 材料送審(修正版)</div>
+          <div class="kv" style="margin-top:8px"><div><b>類別</b>材料設備</div><div><b>版次</b>Rev.1</div><div><b>狀態</b>已提送</div><div><b>提送日</b>2026-09-13</div><div><b>審查期限</b>2026-09-20</div><div><b>審定日</b>—</div></div></div>
+        <div class="blk"><div class="bt">文件與 AI 助手 <span class="new">合併</span></div>含出廠證明、CNS 試驗報告 · <span class="muted">尚未上傳文件本體</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><span class="b ai">✦ AI 審查助手</span><span class="b ai">✦ AI 讀文件審查</span></div>
+          <div class="muted" style="margin-top:6px">審查助手依契約規範與工項；讀文件審查讀已上傳文件本體。結果只保留在本頁，離開後需重新執行。</div></div>
+        <div class="blk"><div class="bt">審查意見與決定 <span class="new">分段</span></div><div class="amber">第一次退回:未附出廠證明與試驗報告</div>
+          <div class="muted" style="margin-top:8px">受理</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"><span class="b s">受理審核</span><span class="b d">退回補正</span></div>
+          <div class="muted" style="margin-top:8px">審定（受理後才出現）</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;opacity:.5"><span class="b ok">核准</span><span class="b s">核備</span><span class="b d">退回補正</span><span class="b d">駁回（終局）</span></div></div>
+        <div class="acts"><span class="muted">審定後：「已核准 · 交廠商」</span><span class="b g" style="margin-left:auto">‹ 返回今日待辦</span><span class="b o">下一件待審 (2)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>2.2 廠商施工日誌 · 2026-09-15</h3>
+  <div class="pair">
+    <div>
+      <p class="pair-h">目前（本日日誌卡）</p>
+      <div class="pane">
+        <div class="blk"><div class="bt">本日日誌</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="b o">2026-09-15 ▾</span><span class="b o">晴</span><span class="b o">同上午</span><span class="b o" style="min-width:120px">今日施工概況</span><span class="b s">帶入天氣</span><span class="b s">複製昨日</span></div></div>
+        <div class="blk"><div class="pill ai">AI 草稿</div> <span class="b p" style="margin-left:6px">📷 AI 拍照自動填寫</span></div>
+        <div class="blk"><div class="bt">工項數量</div><table class="table"><tr><th>工項</th><th>單位</th><th>今日數量</th></tr><tr><td>4F 版牆混凝土澆置</td><td>M3</td><td class="num">120</td></tr><tr><td>4F 柱鋼筋綁紮</td><td>T</td><td class="num">8.5</td></tr></table></div>
+        <div class="blk"><div class="bt">▾ 公定格式欄位（出工人數・機具・材料・安衛…）<span class="muted" style="margin-left:auto">已填 3 列</span></div>
+          <div class="line"></div><div class="line w80"></div><div class="line w60"></div><div class="line"></div><div class="line w80"></div><div class="line w60"></div><div class="line w40"></div></div>
+        <div class="acts"><span class="b p">存檔</span><span class="b s">列印公定格式日誌</span><span class="muted">已存檔 ✓</span></div>
+      </div>
+      <div class="pane" style="margin-top:10px"><div class="blk"><div class="bt">現場照片（另一張卡）</div><span class="muted">請先存檔本日日誌，才能上傳照片</span></div></div>
+      <ul class="note"><li>公定欄位預設展開，存檔鈕被推到最底；桌機不貼底。</li><li>存檔前沒有「未存檔」標記；照片在另一張卡，訊息兩處。</li></ul>
+    </div>
+    <div>
+      <p class="pair-h">建議（同一頁，不加精靈）</p>
+      <div class="pane">
+        <div class="bar"><span class="b o">2026-09-15 ▾</span><span class="unsaved">未存檔</span><span class="muted">（存檔中 / 已存檔 14:32）</span><span class="b s" style="margin-left:auto">帶入天氣</span><span class="b s">複製昨日</span><span class="new" style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--amber-tint);color:var(--amber-text)">新</span></div>
+        <div class="blk"><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="b o">晴</span><span class="b o">同上午</span><span class="b o" style="min-width:160px">今日施工概況</span></div></div>
+        <div class="blk"><div class="pill ai">AI 草稿</div> <span class="b p" style="margin-left:6px">📷 AI 拍照自動填寫</span> <span class="muted">帶入後請覆核數量再存檔</span></div>
+        <div class="blk"><div class="bt">本日施作數量</div><table class="table"><tr><th>工項</th><th>單位</th><th>今日數量</th></tr><tr><td>4F 版牆混凝土澆置</td><td>M3</td><td class="num">120</td></tr><tr><td>4F 柱鋼筋綁紮</td><td>T</td><td class="num">8.5</td></tr></table></div>
+        <div class="blk"><div class="bt">現場照片 <span class="new">搬入</span></div><span class="muted">先存檔本日日誌才能上傳 · 上傳後：「照片 3 張已上傳，1 張失敗可重試」</span></div>
+        <div class="blk"><div class="bt">› 公定格式欄位 <span class="new">預設收合</span><span class="muted" style="margin-left:auto">已填 3 列 · 尚有必填未填：出工人數</span></div></div>
+        <div class="sticky"><span class="b p">存檔</span><span class="b s">列印公定格式日誌</span><span class="muted">已存檔 14:32 ✓</span><span class="new" style="margin-left:auto;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--amber-tint);color:var(--amber-text)">桌機也貼底</span></div>
+      </div>
+      <ul class="note"><li>有未存檔輸入時切日期或離頁：共用確認框「離開將遺失未存檔內容」，取消可繼續。</li><li>待辦帶 <code>?d=2026-09-15</code> 直達當日。</li></ul>
+    </div>
+  </div>
+
+  <h3>2.3 機關變更設計詳情 · CO-002 待核定</h3>
+  <div class="pair">
+    <div>
+      <p class="pair-h">目前</p>
+      <div class="pane" style="margin-bottom:10px"><div class="blk"><div class="bt">頁面上方四張全案 Stat 卡</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px"><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div></div><span class="muted">原契約金額 7.21 億 · 累計追加 1,260,000 · 累計減帳 0 · 變更後金額 7.23 億</span></div></div>
+      <div class="pane">
+        <div class="bar"><span class="pill amber">審核中</span><span style="margin-left:auto;color:var(--green-text);font-weight:600">淨額 +1,764,000</span></div>
+        <div class="blk"><div class="no">CO-002</div><div class="ttl">1F 大廳地坪材質變更</div>
+          <div class="kv" style="margin-top:8px"><div><b>日期</b>2026-09-03</div><div><b>狀態</b>審核中</div><div><b>明細</b>2 筆</div><div><b>理由</b>業主要求由拋光石英磚改為石材</div></div></div>
+        <div class="blk"><div class="bt">追加／減帳明細</div><table class="table"><tr><th>工項</th><th>單位</th><th>數量增減</th><th>單價</th><th>金額增減</th></tr><tr><td>拋光石英磚地坪（取消）</td><td>M2</td><td class="num">-420</td><td class="num">2,600</td><td class="minus">-1,092,000</td></tr><tr><td>花崗石地坪（新增）</td><td>M2</td><td class="num">420</td><td class="num">6,800</td><td class="plus">+2,856,000</td></tr></table></div>
+        <div class="acts"><span class="b p">核准</span><span class="b d">駁回</span></div>
+      </div>
+      <ul class="note"><li>核准／駁回直接寫入，沒有確認框；核准後明細凍結，撤銷入口仍待決。</li><li>工期影響、監造意見、附件：資料模型沒有，畫面也沒說。</li></ul>
+    </div>
+    <div>
+      <p class="pair-h">建議</p>
+      <div class="pane">
+        <div class="bar"><span class="pill amber">審核中</span><span style="margin-left:auto;color:var(--green-text);font-weight:600">淨額 +1,764,000</span></div>
+        <div class="blk"><div class="bt">待你核定 <span class="new">新</span></div>
+          <div class="summary"><b>CO-002 1F 大廳地坪材質變更</b><br>理由：業主要求由拋光石英磚改為石材 · 提出 2026-09-03 · 明細 2 筆<br>核准後契約金額將為 <b>NT$ 722,624,067 → 724,388,067</b>（＋0.24%）</div></div>
+        <div class="blk"><div class="bt">追加／減帳明細</div><table class="table"><tr><th>工項</th><th>單位</th><th>數量增減</th><th>單價</th><th>金額增減</th></tr><tr><td>拋光石英磚地坪（取消）</td><td>M2</td><td class="num">-420</td><td class="num">2,600</td><td class="minus">-1,092,000</td></tr><tr><td>花崗石地坪（新增）</td><td>M2</td><td class="num">420</td><td class="num">6,800</td><td class="plus">+2,856,000</td></tr></table></div>
+        <div class="blk"><div class="bt">本系統未登錄 <span class="new">新</span></div>
+          <div class="kv" style="grid-template-columns:repeat(3,1fr)"><div><b>工期影響</b>未登錄</div><div><b>監造審查意見</b>未提供</div><div><b>附件</b>無</div></div>
+          <div class="muted" style="margin-top:4px">固定三行，資料不存在就明寫，不由 AI 補。</div></div>
+        <div class="acts"><span class="b p">核准</span><span class="b d">駁回</span><span class="muted" style="margin-left:6px">各加確認框：「核准 CO-002，淨額 ＋1,764,000」</span><span class="b g" style="margin-left:auto">刪除</span></div>
+      </div>
+      <ul class="note"><li>四張全案 Stat 卡移到清單下方，或收成一行「變更後契約金額 7.23 億（＋0.2%）」。</li><li>監造只見受理／退回；廠商依既有規則編輯。狀態機與金額公式不動。</li></ul>
+    </div>
+  </div>
+
+  <!-- ═══════════ 3. 流程 ═══════════ -->
+  <h2>3 · 六條任務流程：目前 → 建議</h2>
+  <div class="key"><span class="k1"><i></i>⛔ 中斷</span><span class="k2"><i></i>🔁 重找</span><span class="k3"><i></i>❓ 資料不足</span><span class="k4"><i></i>建議（虛線＝改動處，綠底＝新增）</span></div>
+
+  <div class="flow"><div class="fh"><b>C-A 廠商 · 每日填報</b><span>/site-log</span></div>
+    <div class="lane"><span class="ln">目前</span><div class="steps">
+      <span class="st"><span class="bx">今日待辦<small>今天還沒有日誌紀錄</small></span><span class="ar">→</span></span>
+      <span class="st find"><span class="bx"><span class="tag">🔁</span>/site-log<small>不帶日期，預設今天</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">日期／天氣／摘要 · 複製昨日</span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">工項數量</span><span class="ar">→</span></span>
+      <span class="st find"><span class="bx"><span class="tag">🔁</span>公定欄位預設展開<small>存檔鈕被推到底</small></span><span class="ar">→</span></span>
+      <span class="st gap"><span class="bx"><span class="tag">❓</span>存檔<small>存檔前無「未存檔」標記</small></span><span class="ar">→</span></span>
+      <span class="st find"><span class="bx"><span class="tag">🔁</span>往下捲到「現場照片」卡<small>需先存檔</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">上傳照片<small>結果訊息在另一處</small></span></span>
+    </div></div>
+    <div class="lane pro"><span class="ln">建議</span><div class="steps">
+      <span class="st"><span class="bx">今日待辦</span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">/site-log?d=…<small>卡頭：日期＋保存狀態</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">本日施作數量</span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">現場照片（同卡）</span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">公定欄位收合<small>尚有必填未填：…</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">貼底存檔列<small>已存檔 14:32 / 照片 3 張已上傳</small></span></span>
+    </div></div>
+  </div>
+
+  <div class="flow"><div class="fh"><b>C-B 廠商 · 送審與補正</b><span>/submittals</span></div>
+    <div class="lane"><span class="ln">目前</span><div class="steps">
+      <span class="st"><span class="bx">提送送審 → 表單<small>附件說明：「文件另以公文/雲端連結提送」</small></span><span class="ar">→</span></span>
+      <span class="st stop"><span class="bx"><span class="tag">⛔</span>提送<small>成功失敗都收表單</small></span><span class="ar">→</span></span>
+      <span class="st find"><span class="bx"><span class="tag">🔁</span>新件在清單頂<small>右欄仍是原本那筆</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">詳情 · 上傳文件</span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">待監造審定</span><span class="ar">⋯</span></span>
+      <span class="st"><span class="bx">待辦：退回補正<small>?submittal=</small></span><span class="ar">→</span></span>
+      <span class="st find"><span class="bx"><span class="tag">🔁</span>更換文件 ↔ 修正再送<small>兩區，無先後</small></span><span class="ar">→</span></span>
+      <span class="st gap"><span class="bx"><span class="tag">❓</span>Rev.+1 已提送<small>補正說明併入附件說明</small></span></span>
+    </div></div>
+    <div class="lane pro"><span class="ln">建議</span><div class="steps">
+      <span class="st"><span class="bx">提送 → 失敗保留表單</span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">成功自動選取新件<small>「提送紀錄已建立 · 尚未附文件」</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">文件與提送方式（同區）<small>上傳後由監造受理</small></span><span class="ar">⋯</span></span>
+      <span class="st new"><span class="bx">退回件頂端：原因＋兩步<small>① 更換文件 ② 修正再送</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">「Rev.2 已再送，待監造受理」<small>返回今日待辦</small></span></span>
+    </div></div>
+  </div>
+
+  <div class="flow"><div class="fh"><b>S-A 監造 · 送審審查</b><span>/submittals?submittal=…</span></div>
+    <div class="lane"><span class="ln">目前</span><div class="steps">
+      <span class="st"><span class="bx">今日待辦<small>SUB-002 待監造審定</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">詳情：球權 → MetaGrid → 附件 → 審查意見</span><span class="ar">→</span></span>
+      <span class="st gap"><span class="bx"><span class="tag">❓</span>補正件<small>看不到「上次退回 vs 本次補正」</small></span><span class="ar">→</span></span>
+      <span class="st stop"><span class="bx"><span class="tag">⛔</span>AI 讀文件審查<small>「可離頁回來看」但離頁即失</small></span><span class="ar">→</span></span>
+      <span class="st find"><span class="bx"><span class="tag">🔁</span>受理審核 → 核准／核備／退回補正／駁回<small>兩階段靠按鈕出現</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">審定 → 返回今日待辦<small>已可用</small></span></span>
+    </div></div>
+    <div class="lane pro"><span class="ln">建議</span><div class="steps">
+      <span class="st"><span class="bx">今日待辦</span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">輪到我做什麼<small>待受理 · Rev.1 · 退回原因／補正說明</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">文件與 AI 助手<small>結果只保留在本頁</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">審查意見與決定<small>受理段 / 審定段</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">「已核准 · 交廠商」<small>返回今日待辦 / 下一件（人點）</small></span></span>
+    </div></div>
+  </div>
+
+  <div class="flow"><div class="fh"><b>S-B 監造 · 查驗判定</b><span>/quality?inspection=…</span></div>
+    <div class="lane"><span class="ln">目前</span><div class="steps">
+      <span class="st"><span class="bx">今日待辦 → /quality?inspection=</span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">現在要處理 → 查驗分段<small>詳情含「附自主檢查表」</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">判定合格／不合格<small>不合格必填原因</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">「已開立缺失」→ 查看缺失</span><span class="ar">→</span></span>
+      <span class="st find"><span class="bx"><span class="tag">🔁</span>切到缺失分段<small>佇列點一筆會重掛，篩選／表單重置</small></span></span>
+    </div></div>
+    <div class="lane pro"><span class="ln">建議</span><div class="steps">
+      <span class="st"><span class="bx">流程與判定對話框不變</span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">判定成功帶 ?defect= 深連結<small>切段不重掛整段</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">詳情頂端一行<small>申請日／申請人／檢附自檢表 Rev.</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">返回今日待辦</span></span>
+    </div></div>
+  </div>
+
+  <div class="flow"><div class="fh"><b>O-A 機關 · 變更核定</b><span>/change-orders?co=…</span></div>
+    <div class="lane"><span class="ln">目前</span><div class="steps">
+      <span class="st"><span class="bx">今日待辦<small>CO-002 待機關核定</small></span><span class="ar">→</span></span>
+      <span class="st find"><span class="bx"><span class="tag">🔁</span>四張全案 Stat 卡先出現<small>待核定件被推到下方</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">詳情：狀態＋淨額 → 事由 → 明細</span><span class="ar">→</span></span>
+      <span class="st gap"><span class="bx"><span class="tag">❓</span>工期／監造意見／附件<small>資料模型沒有，畫面沒說</small></span><span class="ar">→</span></span>
+      <span class="st stop"><span class="bx"><span class="tag">⛔</span>核准／駁回直接寫入<small>無確認框；核准後凍結</small></span></span>
+    </div></div>
+    <div class="lane pro"><span class="ln">建議</span><div class="steps">
+      <span class="st"><span class="bx">今日待辦</span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">Stat 卡下移或收一行</span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">待你核定<small>事由 · 理由 · 淨額 · 核准後契約金額</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">明細與差異</span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">本系統未登錄<small>工期／意見／附件三行明寫</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">核准／駁回＋確認框<small>指向 CO-002 與淨額</small></span></span>
+    </div></div>
+  </div>
+
+  <div class="flow"><div class="fh"><b>O-B 機關 · 驗收登錄</b><span>/acceptance</span></div>
+    <div class="lane"><span class="ln">目前</span><div class="steps">
+      <span class="st"><span class="bx">今日待辦<small>初驗期限將至</small></span><span class="ar">→</span></span>
+      <span class="st find"><span class="bx"><span class="tag">🔁</span>/acceptance<small>不帶階段</small></span><span class="ar">→</span></span>
+      <span class="st gap"><span class="bx"><span class="tag">❓</span>頁首副標＝角色提示<small>專案名稱被取代</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">時間軸找到第一個未完成階段</span><span class="ar">→</span></span>
+      <span class="st stop"><span class="bx"><span class="tag">⛔</span>只填日期就登錄<small>結果空白 → 寫入「合格」</small></span><span class="ar">→</span></span>
+      <span class="st"><span class="bx">列變已完成<small>沒有「下一階段」接續句</small></span></span>
+    </div></div>
+    <div class="lane pro"><span class="ln">建議</span><div class="steps">
+      <span class="st new"><span class="bx">/acceptance?stage=初驗<small>捲到並高亮該階段</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">當前階段展開<small>前置條件 · 主辦 · 期限；其他收一行</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">結果必選 合格／不合格<small>核對句「初驗 2026-09-20 合格」</small></span><span class="ar">→</span></span>
+      <span class="st new"><span class="bx">已登錄 → 下一階段自動展開<small>正式驗收（機關）· 期限 …</small></span></span>
+    </div></div>
+  </div>
+
+  <p class="note" style="margin-top:28px">本頁為候選設計，未經真人任務測試；U01–U14 核對、方案比較、待決邊界與下一包切法見同目錄 <code>2026-09-15-uiux-stage0-design.md</code>。</p>
+</div>

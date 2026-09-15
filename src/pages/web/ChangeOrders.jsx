@@ -4,6 +4,7 @@ import { useStore } from '../../store.jsx'
 import { Card, Stat, Empty, Button, Badge, Dot, Field, Input, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { ListDetailLayout, SearchField, StatusChip } from '../../components/listDetail.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
+import { useUrlFilters } from '../../lib/useUrlFilters.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -39,7 +40,8 @@ export default function ChangeOrders() {
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 明細/狀態寫入失敗必須讓使用者看到(失敗=UI 不變)
   const [submitted, setSubmitted] = useState(false) // 廠商送出後就地回饋(O-4:提出≠已受理,球在監造)
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  // 篩選保存在 URL(U11):從單據返回、重新整理、分享網址都保留關鍵字與分段
+  const [filters, setFilters] = useUrlFilters(DEFAULT_FILTERS)
   const searchRef = useRef(null)
 
   // 發包末端工項（給明細連結既有工項用）
@@ -85,7 +87,7 @@ export default function ChangeOrders() {
   // (開頁就落在該核的那一筆),沒有就選清單第一筆。
   const pid = currentProject?.project_id
   const org = currentUser?.org_type || 'contractor'
-  const { selectedId, detailOpen, select, closeDetail } = useListDetailPane({
+  const { selectedId, detailOpen, select, closeDetail, missingId } = useListDetailPane({
     param: 'co', idPrefix: 'co-',
     scope: `${pid}/${org}`,
     ready: changeOrders.length > 0, rows: changeOrders,
@@ -139,7 +141,7 @@ export default function ChangeOrders() {
   // 明細可編=廠商填報權 且 尚未核准(核准後 DB 凍結,UI 同步凍結——P0-02)
   const detailBody = selected ? (
     <ChangeOrderDetail key={selected.id} co={selected} net={coNet(selected)} leaves={leaves} allItems={workItems?.items || []}
-      canReview={can.review} canRatify={can.ratify}
+      canReview={can.review} canRatify={can.ratify} revised={revised}
       canEdit={can.edit} itemsEditable={can.edit && selected.status !== '核准'}
       onStatus={async (s) => { setErrMsg(''); const { error } = await updateChangeOrder(selected.id, { status: s }); if (error) setErrMsg(friendlyError(error, '變更狀態未更新')) }}
       onDelete={async () => {
@@ -212,18 +214,8 @@ export default function ChangeOrders() {
     <div className="space-y-5">
       <PageHeader title="變更設計" tagline="追加減帳・契約金額調整" subtitle="追加/減帳工項 → 僅「核准」的計入變更後契約金額" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat label="原契約金額" value={yi(original)} sub={`NT$ ${money(original)}`} color="text-[var(--text)]" />
-        <Stat label="累計追加(核准)" value={money(totals.add)} sub="NT$" color="text-[var(--green-text)]" />
-        <Stat label="累計減帳(核准)" value={money(Math.abs(totals.reduce))} sub="NT$" color="text-[var(--red-text)]" />
-        <Stat label="變更後契約金額" value={yi(revised)} sub={`${ratio >= 0 ? '+' : ''}${ratio.toFixed(1)}% · NT$ ${money(revised)}`} color="text-[var(--blue-text)]" />
-      </div>
-      {totals.pendingNet !== 0 && (
-        // 不用負 margin 硬拉近 Stat 列:頁面根層 space-y-5 的節奏由容器決定
-        <p className="text-xs text-[var(--text-3)] leading-relaxed">另有 {totals.pendingCount} 件審核中/提出的變更淨額 <span className={signCls(totals.pendingNet)}>{signed(totals.pendingNet)}</span>（尚未計入變更後契約金額）。</p>
-      )}
-
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
+      {missingId && <p role="status" className="rounded-lg px-3 py-2 text-footnote bg-[var(--amber-tint)] text-[var(--amber-text)]">找不到指定的變更單（{missingId}），可能已刪除或不在本專案；已顯示清單預設的一筆，網址已改為不指向該筆。</p>}
 
       {/* W8-5:表單區非表格,手機補到 44px 觸控目標不會壓縮任何列高 */}
       {can.edit && <Card title="新增變更設計">
@@ -268,6 +260,18 @@ export default function ChangeOrders() {
             {listRows}
           </Card>
         </ListDetailLayout>
+      )}
+
+      {/* 全案金額移到清單與詳情之後(UIUX 階段 5B):機關進來先看待核定件,全案累計是對照不是起點 */}
+      <h2 className="text-footnote font-medium text-[var(--text-2)] -mb-2">全案金額（只計已核准變更）</h2>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="原契約金額" value={yi(original)} sub={`NT$ ${money(original)}`} color="text-[var(--text)]" />
+        <Stat label="累計追加(核准)" value={money(totals.add)} sub="NT$" color="text-[var(--green-text)]" />
+        <Stat label="累計減帳(核准)" value={money(Math.abs(totals.reduce))} sub="NT$" color="text-[var(--red-text)]" />
+        <Stat label="變更後契約金額" value={yi(revised)} sub={`${ratio >= 0 ? '+' : ''}${ratio.toFixed(1)}% · NT$ ${money(revised)}`} color="text-[var(--blue-text)]" />
+      </div>
+      {totals.pendingNet !== 0 && (
+        <p className="text-xs text-[var(--text-3)] leading-relaxed">另有 {totals.pendingCount} 件審核中/提出的變更淨額 <span className={signCls(totals.pendingNet)}>{signed(totals.pendingNet)}</span>（尚未計入變更後契約金額）。</p>
       )}
 
       <p className="text-xs text-[var(--text-3)] leading-relaxed">

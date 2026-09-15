@@ -29,7 +29,7 @@ export const EMPTY_INSP_FORM = () => ({ title: '', location: '', inspection_type
 
 export default function InspectionsSection({
   inspections, inspCount, filter, onFilter,
-  form, onFormChange, onSubmit, busy, resultMsg, onShowDefects,
+  form, onFormChange, onSubmit, busy, resultMsg, notice = '', onCloseNotice = null, onShowDefects,
   leaves, attachableChecklists, templates, can, onResult, onDelete, scope = '',
 }) {
   const navigate = useNavigate() // 詳情欄的「附自主檢查表」導向既有列印檢視
@@ -199,6 +199,13 @@ export default function InspectionsSection({
   // 判定成功的原地回饋與申請表單住在清單卡頂端:所有視口都看得到(詳情欄在 <lg 是抽屜,
   // 判定後抽屜可能已關),「查看缺失」入口才不會跟著消失
   const cardTop = (<>
+    {/* 查驗申請送出成功(廠商):已送出＋檢附了什麼＋等待監造;失敗走頁層 ErrorBanner、表單留著 */}
+    {notice && (
+      <div role="status" className="mx-5 mt-4 flex items-center gap-3 flex-wrap rounded-lg bg-[var(--green-tint)] text-[var(--green-text)] text-sm px-3 py-2">
+        <span className="min-w-0">{notice}</span>
+        {onCloseNotice && <button onClick={onCloseNotice} className="ml-auto font-medium underline hover:opacity-80 max-md:min-h-11">關閉</button>}
+      </div>
+    )}
     {resultMsg && (
       <div className="mx-5 mt-4 flex items-center gap-3 flex-wrap rounded-lg bg-[var(--green-tint)] text-[var(--green-text)] text-sm px-3 py-2">
         <span>{resultMsg.pass ? '已判定合格' : '已判定不合格並開立缺失'}</span>

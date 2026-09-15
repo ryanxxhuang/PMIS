@@ -12,8 +12,10 @@ import { friendlyError } from '../lib/errorMessage.js'
 import { getThemeMode, setThemeMode, THEME_MODES } from '../lib/theme.js'
 import { useTodayTasks, mineCountForNavItem } from '../lib/useTodayTasks.js'
 import { useEscape } from '../lib/useEscape.js'
-import { useMediaQuery, TABLET_QUERY } from '../lib/useMediaQuery.js'
+import { useMediaQuery, TABLET_QUERY, BELOW_MD_QUERY } from '../lib/useMediaQuery.js'
+import { SidebarNavContext } from '../lib/sidebarNav.js'
 import { useScrollLock } from '../lib/useScrollLock.js'
+import { unsavedEditLabels } from '../lib/unsavedEdits.js'
 import { useVisualViewport } from '../lib/useVisualViewport.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
@@ -82,6 +84,13 @@ function ProjectSwitcher() {
     prevOpen.current = open
   }, [open])
 
+  // 切換/新增專案會卸載目前頁面的編輯狀態:有未存檔輸入(unsavedEdits 登記簿)就先問,
+  // 取消就留在原案繼續(UIUX 階段 3B:切案不靜默丟棄)
+  const confirmLeaveEdits = async () => {
+    const labels = unsavedEditLabels()
+    if (!labels.length) return true
+    return appConfirm({ title: '切換專案將遺失未存檔內容', body: `尚未存檔：${labels.join('、')}。要放棄並切換嗎？`, danger: true, confirmLabel: '放棄並切換' })
+  }
   // Workspace 專案 chip:folder_open + 專案名 + 下拉箭頭(demo/單專案時純顯示)
   const chipClass = 'flex items-center gap-1.5 min-w-0 h-10 max-md:min-h-11 rounded-full bg-[var(--surface-2)] pl-3 pr-2'
   if (!isSupabaseConfigured || !currentProject) {
@@ -109,7 +118,7 @@ function ProjectSwitcher() {
               return (
                 // aria-current＋Check:目前專案不能只靠底色/色點表達（色弱與報讀器都讀不到）
                 <button key={p.project_id} ref={i === 0 ? firstItemRef : undefined}
-                  onClick={() => { switchProject(p.project_id); setOpen(false) }}
+                  onClick={async () => { if (isCurrent) { setOpen(false); return } if (!(await confirmLeaveEdits())) return; switchProject(p.project_id); setOpen(false) }}
                   aria-current={isCurrent ? 'true' : undefined}
                   className={`w-full text-left px-3 py-2 min-h-11 text-sm hover:bg-[var(--surface-2)] flex items-center gap-2 ${isCurrent ? 'bg-[var(--blue-tint)]' : ''}`}>
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isCurrent ? 'bg-[var(--blue)]' : 'bg-[var(--border)]'}`} />
@@ -119,7 +128,7 @@ function ProjectSwitcher() {
               )
             })}
             <div className="border-t border-[var(--border-2)] my-1" />
-            <button onClick={() => { setOpen(false); navigate('/project/new') }}
+            <button onClick={async () => { if (!(await confirmLeaveEdits())) return; setOpen(false); navigate('/project/new') }}
               className="w-full text-left px-3 py-2 min-h-11 text-sm text-[var(--blue-text)] hover:bg-[var(--surface-2)] flex items-center gap-1.5"><MSym name="add" size={16} /> 新增專案</button>
             <button onClick={async () => {
               setOpen(false)
@@ -171,7 +180,8 @@ function GlobalSearch() {
   return (
     <div className="relative flex-1 max-w-[560px] min-w-0 hidden md:block">
       {/* ≥1280 全寬藥丸;768–1279 收成圖示鈕(README 平板規格),兩者共用同一浮層 */}
-      <button ref={btnRef} onClick={() => setOpen(true)} aria-label="搜尋(問 GovAgent 代查)" title="搜尋(問 GovAgent 代查)"
+      {/* 可及性名稱等於可見文字與行為:這是問答入口,不是搜尋(UIUX 階段 2 U12) */}
+      <button ref={btnRef} onClick={() => setOpen(true)} aria-label="問 GovAgent" title="問 GovAgent"
         className="w-full h-11 rounded-full bg-[var(--g-search)] hover:bg-[var(--g-search-h)] hidden xl:flex items-center gap-2.5 px-4 pressable">
         <MSym name="search" size={20} className="text-[var(--text-2)]" />
         {/* 文案必須等於行為:這裡沒有檢索引擎,送出是把整句丟給 /agent 代問。
@@ -180,9 +190,9 @@ function GlobalSearch() {
         <span className="flex-1 text-left text-sm text-[var(--text-2)] truncate">問 GovAgent：工項、送審、缺失、契約……</span>
         <MSym name="tune" size={20} className="text-[var(--text-2)]" />
       </button>
-      <button onClick={() => setOpen(true)} aria-label="搜尋(問 GovAgent 代查)" title="搜尋(問 GovAgent 代查)"
+      <button onClick={() => setOpen(true)} aria-label="問 GovAgent" title="問 GovAgent"
         className="hidden md:flex xl:hidden w-11 h-11 ml-auto rounded-full items-center justify-center text-[var(--text-2)] hover:bg-[var(--surface-2)] pressable">
-        <MSym name="search" size={22} />
+        <MSym name="auto_awesome" size={22} />
       </button>
       {open && (
         <>
@@ -336,8 +346,8 @@ export function WebLayout({ children }) {
   // 平板逛一圈不會污染桌機(≥1280)的收合偏好;Playwright 預設 1280×720 落在記憶分支。
   const isTablet = useMediaQuery(TABLET_QUERY)
   const collapsed = isTablet || sidebarCollapsed
-  // 「工作」群組預設收合；展開狀態只保留在本次瀏覽，不製造另一份持久導覽設定。
-  const [expandedWorkbenches, setExpandedWorkbenches] = useState(() => new Set())
+  // <md 側欄是抽屜,不是常駐導覽:內容區的分頁列必須照常出現(手機形狀不在本輪範圍,只保證不回歸)
+  const isBelowMd = useMediaQuery(BELOW_MD_QUERY)
   // scroll edge:內容捲到 chrome 底下才浮出界線(置頂時頂欄與背景齊平)
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
@@ -361,6 +371,21 @@ export function WebLayout({ children }) {
   // isPlatformAdmin 是獨立的「平台」維度(僅控制 /admin 入口可見;真正把關在 DB 的 admin RPC)。
   const org = currentUser?.org_type || 'contractor'
   const visibleGroups = visibleNavGroups(org, can?.override, isPlatformAdmin)
+  // 目前頁所屬的工作群組(參考項與 /dashboard 沒有群組 → null)
+  const groupOf = (path) => visibleGroups.flatMap((g) => g.items).find((n) => n.tabs?.some((t) => t.to === path)) || null
+  const activeGroup = groupOf(pathname)
+  // 「工作」群組:進頁或切換路由時,目前頁所屬群組自動展開(入口方案 B,2026-09-15);
+  // 其餘群組維持預設收合。使用者仍可手動收合/展開;展開狀態只保留在本次瀏覽,
+  // 不製造另一份持久導覽設定。初值就從第一個 pathname 算,深連結進頁不會先畫分頁列再收掉。
+  const [expandedWorkbenches, setExpandedWorkbenches] = useState(() => new Set(activeGroup ? [activeGroup.to] : []))
+  const activeGroupTo = activeGroup?.to || null
+  useEffect(() => {
+    if (!activeGroupTo) return
+    setExpandedWorkbenches((current) => (current.has(activeGroupTo) ? current : new Set(current).add(activeGroupTo)))
+  }, [pathname, activeGroupTo]) // pathname 在依賴裡是刻意的:同組內換頁、使用者先前手動收合過,也要再展開
+  // 側欄此刻是否正列出目前頁的同組子頁:桌機(≥md)、非 icon rail、群組展開才算。
+  // 交給 PageTabs 決定要不要畫分頁列——側欄提供不了同組導航時,分頁列就是唯一入口。
+  const sidebarTabsFor = !isBelowMd && !collapsed && activeGroupTo && expandedWorkbenches.has(activeGroupTo) ? activeGroupTo : null
   const setDesktopCollapsed = () => {
     setSidebarCollapsed((value) => {
       const next = !value
@@ -406,17 +431,15 @@ export function WebLayout({ children }) {
               <MSym name={sidebarCollapsed ? "left_panel_open" : "left_panel_close"} size={20} />
             </button>
           </div>
-          {/* 問 GovAgent:佔 Gemini 在 Workspace 的位置(白底浮起鈕);自 TopBar 移入。
-              aria-label 恆掛,收合成純圖示時 accessible name 不變。 */}
-          <NavLink to="/agent" onClick={() => setMenuOpen(false)} aria-label="問 GovAgent" title="問 GovAgent"
-            className={({ isActive }) => `mx-3 mt-2 md:mt-0 mb-3 h-11 rounded-lg flex items-center gap-2.5 px-4 text-sm font-medium shrink-0 pressable
-              ${collapsed ? 'md:mx-auto md:w-14 md:px-0 md:justify-center md:mt-3' : ''}
-              ${isActive
-                ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]'
-                : 'bg-[var(--surface)] text-[var(--text)] border border-[var(--border-card)] [box-shadow:var(--shadow-card)] hover:[box-shadow:var(--shadow-md)]'}`}>
-            <MSym name="auto_awesome" size={20} className="text-[var(--ai)]" />
-            <span className={collapsed ? 'md:hidden' : ''}>問 GovAgent</span>
-          </NavLink>
+          {/* 問 GovAgent:/agent 的導覽入口(D-008 完整 AI 入口)。原本是白底浮起大按鈕,與頂欄
+              輸入框、Copilot 三個同權重入口並列(U12);降成一般導覽列,「問問題」的主要入口留給
+              頂欄輸入框,側欄只負責「到那一頁」。aria-label 恆掛,收合成純圖示時 accessible name 不變。 */}
+          <div className={`mt-2 md:mt-0 ${rowClass({ selected: pathname === '/agent' }, collapsed)}`}>
+            <NavLink to="/agent" onClick={() => setMenuOpen(false)} aria-label="問 GovAgent" title="問 GovAgent"
+              aria-current={pathname === '/agent' ? 'page' : undefined} className={() => linkClass(collapsed)}>
+              <NavRowContent icon="auto_awesome" label="問 GovAgent" short="問答" active={pathname === '/agent'} collapsed={collapsed} />
+            </NavLink>
+          </div>
           <FindWork collapsed={collapsed} onNavigate={() => setMenuOpen(false)} mobileReturnRef={moreBtnRef} />
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
             {/* 球權來源(疊合版 IA §0):主畫面是收件匣,側欄先問「球在誰手上」。
@@ -523,7 +546,7 @@ export function WebLayout({ children }) {
               msg={`${friendlyError(domainLoadError, '專案資料載入失敗')}。各頁資料可能不完整。`} />
           )}
         <WorkContext />
-        {children}
+        <SidebarNavContext.Provider value={sidebarTabsFor}>{children}</SidebarNavContext.Provider>
       </main>
       {/* 主畫面槽=「現在輪到我」:它的 to 就是落地頁(/dashboard),等對方/已完成是同頁的分段,
           頁內 Segmented 就能切,不佔手機的格子 */}

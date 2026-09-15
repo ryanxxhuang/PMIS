@@ -21,6 +21,10 @@ const SEGMENTS = ['查驗', '缺失', '觀察', '檢查表', '試驗']
 // 分段 → 該分段殼的 URL 單條參數名(與各段 useListDetailPane 的 param 一致;檢查表沒有殼)
 const QUEUE_PARAM = { 查驗: 'inspection', 缺失: 'defect', 觀察: 'observation', 試驗: 'sample' }
 const SEGMENT_OF_PARAM = Object.entries(QUEUE_PARAM)
+// 分段本身也進 URL(?seg=,UIUX 階段 3B):重新整理、從單據返回、分享網址都回到同一段;
+// 用 ASCII 鍵不用中文,網址才讀得出來。單條參數(?defect= 等)仍優先決定分段。
+const SEG_KEY = { 查驗: 'inspections', 缺失: 'defects', 觀察: 'observations', 檢查表: 'checklist', 試驗: 'samples' }
+const SEG_OF_KEY = Object.fromEntries(Object.entries(SEG_KEY).map(([seg, k]) => [k, seg]))
 
 export default function Quality() {
   const { workItems, inspections, createInspection, recordInspectionResult, deleteInspection,
@@ -38,18 +42,30 @@ export default function Quality() {
   const [params, setSearchParams] = useSearchParams()
   // 預設分段固定「查驗」(三角色一致,監造判定動線不必先切段);例外是 URL 已帶某分段的
   // 單條參數(收件匣的 ?defect= / 佇列的 ?inspection= 等)——query 要落到那個殼身上才有意義。
-  const [segment, setSegment] = useState(() => SEGMENT_OF_PARAM.find(([, k]) => params.has(k))?.[0] || '查驗')
+  const [segment, setSegment] = useState(() => SEGMENT_OF_PARAM.find(([, k]) => params.has(k))?.[0] || SEG_OF_KEY[params.get('seg')] || '查驗')
+  // 自主檢查表有未存檔輸入:分段 chip 標「未存檔」,切走也看得到還有東西沒存
+  const [checklistDirty, setChecklistDirty] = useState(false)
+  // 查驗申請送出成功的回饋(只講真的成功的部分:已送出、等待監造;有檢附就說檢附了什麼)
+  const [inspNotice, setInspNotice] = useState('')
   // 已經在同一分段時分段不會重新掛載、深連結不會被讀——用 key 強制該分段重掛
   const [queueTick, setQueueTick] = useState(0)
   // 單條參數只在自己的分段有意義:離開分段就拿掉,否則切回來時殼會把它當深連結、<lg 又彈一次抽屜
   const changeSegment = (s) => {
     const stale = SEGMENT_OF_PARAM.filter(([seg, k]) => seg !== s && params.has(k)).map(([, k]) => k)
-    if (stale.length) setSearchParams((p) => { const n = new URLSearchParams(p); stale.forEach((k) => n.delete(k)); return n }, { replace: true })
+    setSearchParams((p) => { const n = new URLSearchParams(p); stale.forEach((k) => n.delete(k)); n.set('seg', SEG_KEY[s]); return n }, { replace: true })
     setSegment(s)
   }
+  // 佇列點一筆:寫入該段的單條參數並重掛該段的殼(初次自動選取才會讀深連結)。
+  // 自主檢查表不在佇列裡、也不重掛(它常駐、只是隱藏),編輯中的檢查表不受影響。
   const openQueueItem = (q) => {
     const param = QUEUE_PARAM[q.segment]
-    if (param && q.id) setSearchParams((p) => { const n = new URLSearchParams(p); n.set(param, q.id); return n }, { replace: true })
+    setSearchParams((p) => {
+      const n = new URLSearchParams(p)
+      SEGMENT_OF_PARAM.filter(([seg]) => seg !== q.segment).forEach(([, k]) => n.delete(k))
+      if (param && q.id) n.set(param, q.id)
+      n.set('seg', SEG_KEY[q.segment])
+      return n
+    }, { replace: true })
     setSegment(q.segment); setQueueTick((t) => t + 1)
   }
   // 判定成功的原地回饋(沿用各區塊 savedMsg 模式,不進全域狀態):
@@ -112,11 +128,19 @@ export default function Quality() {
     if (!inspForm.title || !inspForm.requested_date) {
       setErrMsg('查驗申請未送出:查驗項目與申請查驗日必填。'); return
     }
-    setErrMsg(''); setBusy(true)
-    const { error } = await createInspection(inspForm)
+    setErrMsg(''); setBusy(true); setInspNotice('')
+    const { error, id } = await createInspection(inspForm)
     setBusy(false)
+    // 失敗:表單與已選的檢附紀錄都留著,可重試
     if (error) { setErrMsg(friendlyError(error, '查驗申請未送出')); return }
+    const attached = inspForm.checklist_record_id ? checklistRecords.find((r) => r.id === inspForm.checklist_record_id) : null
+    const attachedText = attached
+      ? `，已檢附自主檢查表 ${attached.check_date}${attached.rev ? ` Rev.${attached.rev}` : ''}（${attached.overall || '未判定'}）`
+      : ''
+    setInspNotice(`查驗申請「${inspForm.title}」已送出${attachedText}，等待監造現場查驗。`)
     setInspForm(null)
+    // 新送出的查驗直接選中(與佇列點一筆同一條路:寫 ?inspection= 並重掛殼)
+    if (id) openQueueItem({ segment: '查驗', id })
   }
   // 三級品管一級交二級的正流程:自主檢查合格 → 提查驗申請並檢附該紀錄。
   // 只預填表單(工項/項目/位置/檢附/申請日),送出仍由人按——與檢附 select 的
@@ -204,14 +228,15 @@ export default function Quality() {
       {/* 分段控制:與工作面分頁/Admin tabs 同一種 chips 切換語言(CHIP_BASE/ON/OFF),
           實心 primary 滑塊式 segmented 退場;flex-wrap 保 375px 不橫向溢位。
           min-h-11 是 a11y e2e 契約(品質分段五顆 ≥44px,桌機同樣保留)。
-          非當前分段不渲染(unmount)——已知取捨:切段會失去該段未送出的表單 state;
-          各段表單皆短,重填成本低,換來的是頁面不再五卡直落、每段各自可專心操作 */}
+          非當前分段不渲染(unmount),頁面不會五卡直落;例外是自主檢查表(常駐隱藏,見下),
+          其餘各段表單皆短、重填成本低 */}
       <div role="group" aria-label="品質分段" className="flex flex-wrap gap-1.5">
         {SEGMENTS.map((s) => (
           <button key={s} onClick={() => changeSegment(s)} aria-pressed={segment === s}
             className={`${CHIP_BASE} ${segment === s ? CHIP_ON : CHIP_OFF} min-h-11 gap-1`}>
             {s}
             {segCount[s] > 0 && <span className="num opacity-80">{segCount[s]}</span>}
+            {s === '檢查表' && checklistDirty && <span className="text-caption text-[var(--amber-text)]">未存檔</span>}
           </button>
         ))}
       </div>
@@ -220,7 +245,7 @@ export default function Quality() {
       {segment === '查驗' && (
       <InspectionsSection key={queueTick} inspections={inspections} inspCount={inspCount} filter={inspFilter} onFilter={setInspFilter}
         form={inspForm} onFormChange={setInspForm} onSubmit={submitInsp} busy={busy}
-        resultMsg={resultMsg} onShowDefects={() => changeSegment('缺失')}
+        resultMsg={resultMsg} notice={inspNotice} onCloseNotice={() => setInspNotice('')} onShowDefects={() => changeSegment('缺失')}
         leaves={leaves} attachableChecklists={attachableChecklists} templates={checklistTemplates}
         can={can} onResult={onResult} onDelete={onDeleteInsp} scope={paneScope} />
       )}
@@ -236,12 +261,16 @@ export default function Quality() {
         onDelete={deleteObservation} resolveMarkup={resolveMarkup} scope={paneScope} />
       )}
 
-      {/* 自主檢查表:量化標準 → 實測值 → 自動判定 */}
-      {segment === '檢查表' && (
-      <ChecklistSection templates={checklistTemplates} records={checklistRecords} canEdit={can.edit} leaves={leaves}
-        onCreate={createChecklistRecord} onDelete={deleteChecklistRecord}
-        inspections={inspections} onRequestInspection={can.submit ? requestInspectionFromChecklist : null} />
-      )}
+      {/* 自主檢查表:量化標準 → 實測值 → 自動判定。
+          常駐掛載、非當前分段只隱藏(UIUX 階段 3B U07):實測值與更正原因是本地 state,
+          切段或點佇列若卸載就靜默丟失;隱藏即保留,切回來接著填。key 綁專案/身分:
+          換案必須重置,不同專案不能沿用同一份未存檔資料(換案前由 Layout 的專案切換先問)。
+          不套 queueTick:檢查表不在佇列裡,重掛只會破壞正在編輯的內容。 */}
+      <div hidden={segment !== '檢查表'}>
+        <ChecklistSection key={paneScope} templates={checklistTemplates} records={checklistRecords} canEdit={can.edit} leaves={leaves}
+          onCreate={createChecklistRecord} onDelete={deleteChecklistRecord} onDirtyChange={setChecklistDirty}
+          inspections={inspections} onRequestInspection={can.submit ? requestInspectionFromChecklist : null} />
+      </div>
 
       {/* 取樣試驗:試體齡期追蹤 + fc′ 自動判定 */}
       {segment === '試驗' && (
