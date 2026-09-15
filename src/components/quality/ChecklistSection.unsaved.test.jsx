@@ -46,6 +46,9 @@ describe('自主檢查表未存檔保護', () => {
     await typeNumber(24)
     expect(numInput().value).toBe('24')
     expect(unsavedEditLabels()).toEqual(['自主檢查表（未存檔）'])
+    // W03:只檢一項時,判定旁邊要說覆蓋程度,不讓「合格」被讀成整表完成
+    expect(container.textContent).toContain('目前判定：合格')
+    expect(container.textContent).toContain('已檢 1／15，14 項未檢；判定僅依已檢項')
     expect(onDirtyChange).toHaveBeenLastCalledWith(true)
     expect(container.querySelector('[role="status"]')?.textContent).toContain('未存檔')
 
@@ -78,6 +81,7 @@ describe('自主檢查表未存檔保護', () => {
 
     await act(async () => button('存檔並判定').click())
     expect(container.textContent).toContain('已存檔')
+    expect(container.textContent).toContain('（已檢 1／15，14 項未檢）')
     expect(numInput()).toBeNull()
     expect(unsavedEditLabels()).toEqual([])
   })

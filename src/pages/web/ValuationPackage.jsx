@@ -122,6 +122,7 @@ export default function ValuationPackage() {
         period_amount: periodAmtOf(it.item_key),       // 金額另附,供 AI 引用不必自乘
       })),
       photo_captions: Object.values(photosByItem).flatMap((l) => incl(l)).map((p) => p.caption).filter(Boolean).slice(0, 12),
+      photo_count: photoCount, // 草稿不得宣稱沒有的照片(W04)
       log_summaries: siteLogs.map((l) => l.work_summary).filter(Boolean).slice(-12),
     }
     const { error, result } = await draftValuationSummary(payload)

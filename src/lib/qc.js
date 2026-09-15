@@ -33,6 +33,18 @@ export function judgeChecklist(template, values) {
   return { results, overall: checked === 0 ? null : ok ? '合格' : '不合格', failed }
 }
 
+// 覆蓋程度(W03,只是呈現,不改 overall):已檢=results 裡 pass 不為 null 的項;total 依範本。
+// 範本已刪除時 total 為 null,只報已檢數。overall 是「已檢項的判定」,unchecked>0 時畫面要一併說
+export function checklistCoverage(template, results) {
+  const checked = Object.values(results || {}).filter((r) => r && r.pass != null).length
+  const total = template?.items?.length ?? null
+  return { checked, total, unchecked: total == null ? null : Math.max(0, total - checked) }
+}
+export function coverageText(cov) {
+  if (!cov) return ''
+  return cov.total == null ? `已檢 ${cov.checked} 項` : `已檢 ${cov.checked}／${cov.total}${cov.unchecked ? `，${cov.unchecked} 項未檢` : ''}`
+}
+
 // 修訂差異:比對前後版 results({no:{value,pass}}),回傳值或判定有變的項目
 // (給修訂版次 UI 顯示「這次更正動了哪幾項」)
 export function diffChecklistResults(template, prevResults, nextResults) {

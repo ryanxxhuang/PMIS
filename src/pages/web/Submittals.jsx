@@ -324,8 +324,12 @@ export default function Submittals() {
                   ? '為何輪到你：廠商已提送，先「受理審核」才能審定；資料明顯不足可直接退回補正。'
                   : '為何輪到你：本件已受理，請核對文件後核准、核備或退回補正；駁回為終局。'}
               </p>
+              {/* review_note 只有最新一則:再送後尚未受理(已提送)時它仍是退回原因;受理/審定後會被新意見
+                  覆蓋,此時只能誠實標「最新審查意見」,不把新意見冒充成舊退回原因(W02) */}
               {resubmitted ? (<>
-                <p className="mt-1 text-footnote leading-relaxed text-[var(--text-2)] whitespace-pre-line break-words">上次退回原因：{s.review_note || '未留存'}</p>
+                {s.status === '已提送'
+                  ? <p className="mt-1 text-footnote leading-relaxed text-[var(--text-2)] whitespace-pre-line break-words">上次退回原因：{s.review_note || '未留存'}</p>
+                  : <p className="mt-1 text-footnote leading-relaxed text-[var(--text-2)] whitespace-pre-line break-words">最新審查意見：{s.review_note || '尚無'}<span className="text-[var(--text-3)]">（本系統只保存最新一則意見，歷次退回原因未另行留存）</span></p>}
                 <p className="text-footnote leading-relaxed text-[var(--text-2)] whitespace-pre-line break-words">本次補正說明：{latestCorrection ? latestCorrection.replace(/^補正\(Rev\.\d+\):/, '') : '廠商未填寫'}</p>
               </>) : (
                 <p className="mt-1 text-footnote text-[var(--text-2)]">無退回紀錄。</p>

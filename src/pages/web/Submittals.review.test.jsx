@@ -81,6 +81,10 @@ describe('監造審查順序', () => {
     let d = detail()
     expect(d.textContent).toContain('已受理審核，本件現在輪到你審定')
     expect(d.textContent).toContain('待審定 · Rev.1 補正再送')
+    // W02:受理後 review_note 可能已被新意見覆蓋,不能再標成「上次退回原因」
+    expect(d.textContent).not.toContain('上次退回原因')
+    expect(d.textContent).toContain('最新審查意見：')
+    expect(d.textContent).toContain('歷次退回原因未另行留存')
     expect(btnIn(d, '受理審核')).toBeUndefined()
     for (const name of ['核准', '核備', '退回補正', '駁回']) expect(btnIn(d, name)).toBeTruthy()
     expect(d.textContent).toContain('駁回＝終局')

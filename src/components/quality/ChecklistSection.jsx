@@ -10,7 +10,7 @@ import { Card, Button, Field, Badge, Dot, Empty, Input, Select, THEAD_CLS } from
 import { StatusChip } from '../listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../confirm.jsx'
-import { judgeChecklist, judgeItem, diffChecklistResults } from '../../lib/qc.js'
+import { judgeChecklist, judgeItem, diffChecklistResults, checklistCoverage, coverageText } from '../../lib/qc.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { WorkItemPicker } from '../DefectTracker.jsx'
 import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
@@ -118,11 +118,14 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
     setSaving(false)
     if (res.error) { setMsg(friendlyError(res.error, '存檔未完成'), 'error'); return }
     const revTag = res.rev ? `Rev.${res.rev}：` : ''
+    // 判定只看已檢項:存檔訊息一併說覆蓋程度,「合格」不會被讀成「整表已完成」(W03)
+    const cov = coverageText(checklistCoverage(template, live?.results))
+    const covTag = cov ? `（${cov}）` : ''
     if (res.defectAction === 'created') setMsg(`已存檔 ${revTag}判定不合格，系統已自動開立缺失。`, 'warn')
     else if (res.defectAction === 'linked') setMsg(`已存檔 ${revTag}判定不合格；此檢查表已有未結案缺失，未重複開立。`, 'warn')
     else if (res.defectError) setMsg(`已存檔 ${revTag}判定不合格，但缺失開立失敗：${friendlyError(res.defectError, '請稍後重試')}`, 'error')
     else if (res.overall === '合格' && res.openDefectRemains) setMsg(`已存檔 ${revTag}更正後判定合格。原自動開立的缺失仍在追蹤中，請至缺失區確認後續處理。`)
-    else setMsg(`已存檔 ${revTag}判定${res.overall || '未完成'} ✓`, res.overall === '不合格' ? 'warn' : 'success')
+    else setMsg(`已存檔 ${revTag}判定${res.overall || '未完成'}${covTag} ✓`, res.overall === '不合格' ? 'warn' : 'success')
     closeForm()
   }
   const del = async (r) => {
@@ -228,9 +231,14 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
             {/* busy prop:送出中禁用+旋轉圖示由 Button 統一,不再用文字切換載入態 */}
             <Button onClick={save} busy={saving} disabled={revising && !reason.trim()}>{revising ? `存檔為 Rev.${(revising.rev || 0) + 1} 並重新判定` : '存檔並判定'}</Button>
             {revising && !reason.trim() && <span className="text-xs text-[var(--text-3)]">請先填寫更正原因</span>}
-            {live?.overall && (
-              <Badge color={live.overall === '合格' ? 'green' : 'red'}>目前判定：{live.overall}{live.failed.length ? `（${live.failed.length} 項不合格）` : ''}</Badge>
-            )}
+            {live?.overall && (() => {
+              const cov = checklistCoverage(template, live.results)
+              return (<>
+                <Badge color={live.overall === '合格' ? 'green' : 'red'}>目前判定：{live.overall}{live.failed.length ? `（${live.failed.length} 項不合格）` : ''}</Badge>
+                {/* 覆蓋程度與判定並列:已檢項合格 ≠ 整表已完成 */}
+                <span className={`text-caption ${cov.unchecked ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`}>{coverageText(cov)}{cov.unchecked ? '；判定僅依已檢項' : ''}</span>
+              </>)
+            })()}
           </div>
         </div>
       )}
@@ -268,6 +276,7 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge color={r.overall === '合格' ? 'green' : r.overall === '不合格' ? 'red' : 'slate'}>{r.overall || '未判定'}</Badge>
+                    {(() => { const cov = checklistCoverage(tpl, r.results); return <span className={`text-caption whitespace-nowrap ${cov.unchecked ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`}>{coverageText(cov)}</span> })()}
                     {attachedInsp && (
                       <span title={`已檢附於查驗:${attachedInsp.title}`}><Badge color="slate">已附查驗</Badge></span>
                     )}
