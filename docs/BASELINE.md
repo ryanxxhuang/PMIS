@@ -5,6 +5,13 @@
 
 ## 1. 本輪驗證
 
+### 2026-09-16 補強包 A：輸入與資訊可信度（W01–W04；本機 diff，未發布）
+
+- `npm test`：116 檔、1,226 項通過；新增 `unsavedEdits.guard.test.jsx`（無登記不攔、有登記換路徑先問且取消不放行、確認後清登記並重觸發同一連結、同路徑／外部連結／修飾鍵不攔）、`qc.coverage.test.js`（只填一項 1／15 與 14 項未檢、全填、含不合格、未填、範本已刪除）；擴充 `Submittals.review.test.jsx`（受理後標「最新審查意見」不再標「上次退回原因」）、`supervisorReport.test.js`（無「按日到場／已促請／尚符合契約／均符合設計圖說／督導情形良好／追蹤改善」，含「請補充」）、`ChecklistSection.unsaved.test.jsx` 與 `Quality.journey.test.jsx`（編輯判定旁、存檔訊息、紀錄列、檢附選項的覆蓋程度）。
+- `npm run test:e2e` 監造／廠商／送審／a11y／workflow-ux／reachability 六檔：52 項通過。
+- `npm run lint`（零警告）、`npm run build`、`npm run check:docs` 通過。
+- Demo 預覽 1440 px：廠商在日誌填摘要後點側欄「品質查驗」出現「離開將遺失未存檔內容」確認框，取消留在原頁且摘要仍在，確認後到 `/quality`；檢查表只填一項時判定旁顯示「已檢 1／15，14 項未檢；判定僅依已檢項」，紀錄列亦標覆蓋程度（Demo 種子紀錄顯示「已檢 9／15，6 項未檢」）；監造受理 SUB-003 後摘要改標「最新審查意見」；監造報表意見不含「按日到場／已促請／尚符合契約」。未測：瀏覽器返回鍵、正式 Edge 生成的佐證包文案、真人驗收。
+
 ### 2026-09-15 UIUX 階段 6：跨角色旅程驗收與收尾（本機 diff，未發布）
 
 - `npm test`：114 檔、1,218 項通過；新增 `useUrlFilters.test.jsx`（寫入／函式型更新／等於預設即刪／由 URL 回填）、`useListDetailPane.missing.test.jsx`（失效深連結回報並清參數、有效深連結不回報）；擴充 `SiteLog.dailyLog.test.jsx`（`?d=` 直達）、`Dashboard.setup.test.jsx`（返回但原項已離開清單的說明）、`todayTasks.test.js`（日誌待辦帶 `?d=`）。

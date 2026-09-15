@@ -49,6 +49,14 @@ describe('buildSupervisorReport', () => {
     expect(r.opinion).toContain('查驗')
     expect(typeof r.opinion).toBe('string')
   })
+  it('監造意見不預填資料不能支持的既成事實(W04):到場、促請、品質符合由人填', () => {
+    for (const phrase of ['按日到場', '已促請', '尚符合契約', '均符合設計圖說', '督導情形良好', '追蹤改善']) {
+      expect(r.opinion).not.toContain(phrase)
+    }
+    expect(r.opinion).toContain('請依監造日誌補充')
+    expect(r.opinion).toContain('請補充')
+    expect(r.opinion).toContain('整體品質評述請由監造依本月查核結果填寫')
+  })
 
   it('台北凌晨(UTC 還在前一天):月份回退與逾期判斷都不退一天', () => {
     // UTC 7/31 16:30 = 台北 8/1 00:30——舊寫法會把「本月」算成 2026-07、

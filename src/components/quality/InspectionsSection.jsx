@@ -15,6 +15,7 @@ import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../listDeta
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { appConfirm } from '../confirm.jsx'
 import { taipeiToday } from '../../lib/dates.js'
+import { checklistCoverage, coverageText } from '../../lib/qc.js'
 import { WorkItemPicker } from '../DefectTracker.jsx'
 
 const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
@@ -112,10 +113,18 @@ export default function InspectionsSection({
             <MSym name="checklist" size={15} className="text-[var(--text-3)]" />
             <span className="text-footnote font-medium text-[var(--text)]">第一級自主檢查</span>
           </div>
-          {i.checklist_record_id ? (
-            <Button variant="secondary" size="sm" onClick={() => navigate(`/quality/checklist-print?id=${i.checklist_record_id}`)}
-              title="檢視檢附的自主檢查表">附自主檢查表</Button>
-          ) : (
+          {i.checklist_record_id ? (() => {
+            // 監造看到的摘要也要有覆蓋程度(W03):現行版紀錄在 attachableChecklists 找得到;舊版就只給連結
+            const rec = attachableChecklists.find((r) => r.id === i.checklist_record_id)
+            const cov = rec ? checklistCoverage(templates.find((t) => t.id === rec.template_id), rec.results) : null
+            return (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="secondary" size="sm" onClick={() => navigate(`/quality/checklist-print?id=${i.checklist_record_id}`)}
+                  title="檢視檢附的自主檢查表">附自主檢查表</Button>
+                {rec && <span className={`text-footnote ${cov.unchecked ? 'text-[var(--amber-text)]' : 'text-[var(--text-2)]'}`}>{rec.overall || '未判定'}（{coverageText(cov)}）</span>}
+              </div>
+            )
+          })() : (
             <p className="text-footnote text-[var(--text-3)]">未檢附自主檢查表。</p>
           )}
         </div>
@@ -237,7 +246,7 @@ export default function InspectionsSection({
                 <option value="">不檢附</option>
                 {attachableChecklists.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.check_date} {templates.find((t) => t.id === r.template_id)?.title || '自主檢查表'}{r.rev ? ` Rev.${r.rev}` : ''}{r.location ? `（${r.location}）` : ''} — {r.overall}
+                    {r.check_date} {templates.find((t) => t.id === r.template_id)?.title || '自主檢查表'}{r.rev ? ` Rev.${r.rev}` : ''}{r.location ? `（${r.location}）` : ''} — {r.overall}（{coverageText(checklistCoverage(templates.find((t) => t.id === r.template_id), r.results))}）
                   </option>
                 ))}
               </>)}

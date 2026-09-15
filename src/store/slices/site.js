@@ -263,11 +263,13 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
       const its = payload.items || []
       const top = its.slice(0, 4).map((i) => i.name).filter(Boolean)
       const cap = (payload.photo_captions || []).slice(0, 3)
+      // 照片為零就直說尚未檢附(W04):不替使用者宣稱沒有的佐證。photo_count 由佐證包頁面帶入
+      const photoCount = payload.photo_count ?? cap.length
       const summary =
         `本期估驗金額 NT$ ${Math.round(payload.period_amount || 0).toLocaleString()}，累計完成 ${(payload.completion_pct || 0).toFixed(1)}%。` +
         (top.length ? `本期主要施作:${top.join('、')}等 ${its.length} 項工項。` : '') +
         (cap.length ? `現場佐證含${cap.join('、')}等紀錄。` : '') +
-        `各工項完成數量已依施工日誌逐日累計，並附現場照片佐證,檢附估驗計價單辦理本期估驗計價。`
+        `各工項完成數量已依施工日誌逐日累計，${photoCount > 0 ? `並附現場照片 ${photoCount} 張佐證，` : '本期尚未檢附現場照片，'}檢附估驗計價單辦理本期估驗計價。`
       return { error: null, result: { summary } }
     }
     if (!isSupabaseConfigured) return { error: { message: '需登入（Supabase 未設定）' } }

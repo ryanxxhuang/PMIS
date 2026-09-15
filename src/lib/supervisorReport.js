@@ -37,30 +37,31 @@ export function buildSupervisorReport(data = {}, monthLabel, today = new Date())
   const subDecidedM = submittals.filter((s) => inM((s.decided_date || '').slice(0, 10)))
   const subPending = submittals.filter((s) => s.status === '已提送' || s.status === '審核中')
 
-  // 監造意見草稿（依數據套語）
+  // 監造意見草稿:只寫資料能支持的數量與現況;「已到場、已促請、品質符合」等判斷由監造填(W04)。
+  // 沒有對應紀錄的地方放「請補充…」,不預填肯定句——有免責提示也擋不住漏改後交付。
   const behind = progress && progress.plannedPct != null ? progress.plannedPct - progress.actualPct : null
   const opinion = [
-    `本月工地施工計 ${workDays} 日（含雨天 ${rainDays} 日），監造人員按日到場查核施工品質與安全衛生。`,
+    `本月施工日誌計 ${workDays} 日（含雨天 ${rainDays} 日）；監造到場查核日數與情形請依監造日誌補充。`,
     behind != null
       ? (behind > 5
-        ? `累計實際進度 ${progress.actualPct.toFixed(1)}%，較預定 ${progress.plannedPct.toFixed(1)}% 落後 ${behind.toFixed(1)}%，已促請廠商檢討要徑工項並提報趕工計畫。`
-        : `累計實際進度 ${progress.actualPct.toFixed(1)}%，與預定 ${progress.plannedPct.toFixed(1)}% 尚屬相當，進度受控。`)
+        ? `累計實際進度 ${progress.actualPct.toFixed(1)}%，較預定 ${progress.plannedPct.toFixed(1)}% 落後 ${behind.toFixed(1)}%；是否已通知廠商提報趕工計畫及其回覆，請補充。`
+        : `累計實際進度 ${progress.actualPct.toFixed(1)}%，與預定 ${progress.plannedPct.toFixed(1)}% 差距 ${Math.abs(behind).toFixed(1)}%。`)
       : '',
     insp.length
-      ? `本月辦理查驗 ${insp.length} 件（合格 ${inspPass} 件${inspFail ? `、不合格 ${inspFail} 件，均已開立缺失並追蹤改善` : '，均符合設計圖說與規範'}）。`
+      ? `本月辦理查驗 ${insp.length} 件（合格 ${inspPass} 件${inspFail ? `、不合格 ${inspFail} 件，系統已開立缺失` : ''}${inspPending ? `；另有 ${inspPending} 件待查驗` : ''}）。`
       : '本月無新辦理查驗。',
     defOpen.length
       // 最小證據原則(R3 P1-06):未設期限的缺失不得宣稱「期限內」——那是錯誤安全感
       ? `目前未結案缺失 ${defOpen.length} 件${defOverdue.length
-          ? `（其中 ${defOverdue.length} 件已逾改善期限，將發函督促限期改善）`
+          ? `（其中 ${defOverdue.length} 件已逾改善期限，督促情形請補充）`
           : defNoDue.length
             ? `（其中 ${defNoDue.length} 件未設改善期限，請補訂期限後追蹤）`
-            : '，均在改善期限內追蹤'}${defClosedM.length ? `；本月複查結案 ${defClosedM.length} 件` : ''}。`
-      : '目前無未結案缺失，品質督導情形良好。',
+            : '，尚在改善期限內'}${defClosedM.length ? `；本月複查結案 ${defClosedM.length} 件` : ''}。`
+      : '目前無未結案缺失。',
     subDecidedM.length || subPending.length
       ? `送審文件本月審定 ${subDecidedM.length} 件，尚有 ${subPending.length} 件審核中。`
       : '',
-    '整體施工品質尚符合契約與規範要求，將持續落實三級品管抽查與工安巡檢。',
+    '整體品質評述請由監造依本月查核結果填寫。',
   ].filter(Boolean).join('')
 
   return {

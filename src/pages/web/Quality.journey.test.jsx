@@ -21,7 +21,7 @@ function LocationSpy() {
 
 let container, root
 const template = { id: 'T1', ...TEMPLATE_03310 }
-const record = { id: 'CR1', template_id: 'T1', check_date: '2026-09-15', location: '4F 版牆', overall: '合格', rev: 0, results: { B4: { value: 24 } } }
+const record = { id: 'CR1', template_id: 'T1', check_date: '2026-09-15', location: '4F 版牆', overall: '合格', rev: 0, results: { B4: { value: 24, pass: true } } }
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -93,6 +93,7 @@ describe('廠商品質旅程', () => {
     await act(async () => button('存檔並判定').click())
     await render()
     expect(container.textContent).toContain('已存檔')
+    expect(container.textContent).toContain('已檢 1／15，14 項未檢')
     expect(segChip('檢查表').textContent).not.toContain('未存檔')
     expect(unsavedEditLabels()).toEqual([])
 
@@ -104,6 +105,8 @@ describe('廠商品質旅程', () => {
     const attachSelect = [...container.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'CR1'))
     expect(attachSelect.value).toBe('CR1')
     expect(attachSelect.selectedOptions[0].textContent).toContain('2026-09-15')
+    // W03:檢附選項與紀錄列都帶覆蓋程度
+    expect(attachSelect.selectedOptions[0].textContent).toContain('合格（已檢 1／15，14 項未檢）')
 
     // 送出:成功後表單收起、回饋說已送出＋檢附了什麼＋等待監造,並選中新查驗
     state.store.createInspection.mockImplementationOnce(async (input) => {

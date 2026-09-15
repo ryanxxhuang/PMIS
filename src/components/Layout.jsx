@@ -15,7 +15,7 @@ import { useEscape } from '../lib/useEscape.js'
 import { useMediaQuery, TABLET_QUERY, BELOW_MD_QUERY } from '../lib/useMediaQuery.js'
 import { SidebarNavContext } from '../lib/sidebarNav.js'
 import { useScrollLock } from '../lib/useScrollLock.js'
-import { unsavedEditLabels } from '../lib/unsavedEdits.js'
+import { unsavedEditLabels, useInAppLeaveGuard } from '../lib/unsavedEdits.js'
 import { useVisualViewport } from '../lib/useVisualViewport.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'pmis-sidebar-collapsed'
@@ -68,6 +68,9 @@ function NavRowContent({ icon, label, short, active, count = 0, alert = false, c
 }
 
 // Top-bar project picker: switch / create / delete (real backend only).
+// 站內離頁的確認文案(與專案切換共用同一句型);模組層函式,identity 穩定
+const leaveConfirm = (labels) => appConfirm({ title: '離開將遺失未存檔內容', body: `尚未存檔：${labels.join('、')}。要放棄並離開嗎？`, danger: true, confirmLabel: '放棄並離開' })
+
 function ProjectSwitcher() {
   const { project, projects, currentProject, switchProject, deleteProject, isSupabaseConfigured } = useStore()
   const navigate = useNavigate()
@@ -309,6 +312,8 @@ export function WebLayout({ children }) {
   useScrollLock(menuOpen)
   // --vvh(可視視口高)全站只寫這一次;sheet / 抽屜 / 對話框的高度都讀它
   useVisualViewport()
+  // 站內離頁保護(W01):有未存檔輸入(施工日誌、自主檢查表)時,點任何站內連結先問;取消留在原頁
+  useInAppLeaveGuard(leaveConfirm)
   // Copilot 開合只有這一份 state:桌機 FAB 與手機頂欄鈕都是它的觸發器(規範 §9.5)
   const [copilotOpen, setCopilotOpen] = useState(false)
   // 主題三態(U-07):亮 → 暗 → 跟隨系統 → 亮。state 在這一層,頂欄(桌機)與抽屜底部(手機)

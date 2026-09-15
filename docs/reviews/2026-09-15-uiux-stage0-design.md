@@ -353,6 +353,14 @@
 - **影響**：新增 `src/lib/useUrlFilters.js`（四頁共用）、`useListDetailPane.js` 回報 `missingId`；`Submittals.jsx`／`RFI.jsx`／`ChangeOrders.jsx`／`Alerts.jsx`／`SiteLog.jsx`／`Dashboard.jsx`／`todayTasks.js`／`navConfig.js`；新增 `useUrlFilters.test.jsx`、`useListDetailPane.missing.test.jsx`，擴充日誌、首頁、待辦測試；新增 `docs/reviews/2026-09-15-uiux-stage6-acceptance.md`。
 - **驗收**：見該文件 §3 矩陣；真人驗收與正式後端未做，明寫於文件。
 
+## 5.15 補強包 A 工作紀錄（2026-09-16 實作，本機 diff；依 Codex 實測報告 W01–W04）
+
+- **逐條核對（main `56ac7da`）**：W01 仍成立（`unsavedEdits.js` 只有 `beforeunload`，站內連結無攔截）；W02 仍成立（`Submittals.jsx` 以 `revision>0` 即標「上次退回原因」，`review_note` 受理後會被覆蓋）；W03 仍成立（`qc.js` 的 `overall` 只看已檢項，畫面無覆蓋程度）；W04 仍成立（`supervisorReport.js` 固定套語「按日到場」「已促請」「尚符合契約」，`site.js` Demo 佐證包草稿固定「並附現場照片佐證」）。
+- **問題／目標**：不讓使用者白做工、不把不同意思放同一標籤、不替使用者宣稱沒有證據的事實。
+- **不做**：不新增歷史資料表、不改 QC 判定與提送資格、不改正式 Edge 生成、不做跨頁本機暫存、不攔瀏覽器返回鍵。
+- **影響**：`unsavedEdits.js`（`guardInAppNavigation`／`useInAppLeaveGuard`／`clearUnsavedEdits`）、`Layout.jsx`、`SiteLog.jsx`（列印鈕確認）、`Submittals.jsx`（W02 標籤）、`qc.js`（`checklistCoverage`／`coverageText`）、`ChecklistSection.jsx`、`InspectionsSection.jsx`、`supervisorReport.js`、`site.js`、`ValuationPackage.jsx`（`photo_count`）；新增 `unsavedEdits.guard.test.jsx`、`qc.coverage.test.js`，擴充送審審查、監造報表、檢查表、品質旅程測試。
+- **驗收**：W01 保留／放棄／存檔後離開（jsdom＋Demo）；W02 受理前後標籤；W03 只填一項、全填、含不合格、未填的覆蓋文字；W04 報表意見無既成事實、零照片不說已附照片。未測分支：瀏覽器返回鍵、正式 Edge 生成的佐證包文案。
+
 ## 6. 證據標記與未驗項
 
 - 程式確認：§1 全部行號、§2 的動作名稱。

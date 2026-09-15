@@ -678,7 +678,11 @@ export default function SiteLog() {
               {/* busy prop:送出中禁用+旋轉圖示由 Button 統一,「存檔」文案不變(e2e 凍結字串) */}
               {can.edit ? <Button onClick={onSave} busy={saving}>存檔</Button> : <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>}
               {currentLog && (
-                <Button variant="secondary" onClick={() => navigate(`/site-log/print?d=${date}`)}>
+                <Button variant="secondary" onClick={async () => {
+                  // 列印頁是另一條路由,程式導覽不經站內連結保護:有未存檔輸入先問
+                  if (dirty && !(await appConfirm({ title: '離開將遺失未存檔內容', body: `${date} 的日誌尚未存檔，列印頁只會輸出已存檔內容。要放棄未存檔內容並前往列印嗎？`, danger: true, confirmLabel: '放棄並前往' }))) return
+                  navigate(`/site-log/print?d=${date}`)
+                }}>
                   <MSym name="print" size={15} />列印公定格式日誌
                 </Button>
               )}
