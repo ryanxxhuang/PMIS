@@ -58,7 +58,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 ### 6.3 正式環境最後核對（不是即時狀態）
 
-- **2026-09-15 UIUX 階段 1–6（桌機三角色流程）**：本機驗證通過（114 檔 1,218 項單元、10 檔 70 項 Demo E2E、lint／build／check:docs），分支 `ui/uiux-stages-1-6`，PR 依 D-023 於 CI 綠後合併，合併後由 Cloudflare 自動建置前端。前端變更，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
+- **2026-09-15 UIUX 階段 1–6（桌機三角色流程）**：PR #85 已合併（merge commit `afdaefb`，分支 `ui/uiux-stages-1-6`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（114 檔 1,218 項單元、10 檔 70 項 Demo E2E、lint／build／check:docs）；前端由 Cloudflare 自動建置，建置版本以 Cloudflare 後台為準。前端變更，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
 - **2026-09-14 UIUX 工作包**：已隨 PR #83 合併（`7156aef`）。前端變更，不含 DB migration 或 Edge 部署。
 
 - **DB**：2026-09-11 `supabase db push` 套用 `20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`；`migration list --linked` 核對本地與遠端 60 筆全部對齊，最新 `20260911110000`。
