@@ -38,6 +38,14 @@ test.describe('機關', () => {
     await expect(d2.getByText('花崗石地坪（新增）')).toBeVisible()
     // 按鈕名一律 exact:快篩 chip「已核定／已結 1」會被子字串比對吃成按鈕名
     await d2.getByRole('button', { name: '核准', exact: true }).click()
+    // 核定是不可逆的正式動作(UIUX 階段 5B):確認框指向明確單據與淨額,取消不改狀態
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('核准 CO-002？')).toBeVisible()
+    await expect(dialog.getByText(/核准後變更後契約金額將為/)).toBeVisible()
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+    await expect(row.getByText('審核中', { exact: true })).toBeVisible()
+    await d2.getByRole('button', { name: '核准', exact: true }).click()
+    await dialog.getByRole('button', { name: '核准', exact: true }).click()
     // 清單列的狀態章即時翻成核准、核准鈕消失(不是只有彙總數字變)
     await expect(row.getByText('核准', { exact: true })).toBeVisible()
     await expect(d2.getByRole('button', { name: '核准', exact: true })).toHaveCount(0)

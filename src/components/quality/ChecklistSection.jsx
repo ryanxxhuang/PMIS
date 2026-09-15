@@ -3,7 +3,7 @@
 // 一張逐項填實測值的表),修訂鏈列只是證據索引,列上動作全是導向(列印)或開表單(修訂),
 // 沒有需要「就地處理」的狀態轉移;硬套殼只會把表格編輯器塞進 400px 詳情欄。
 // 只借殼的零件整理:判定快篩 chip(StatusChip)＋ <ul role="list">/<li> 清單語意。
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../icons.jsx'
 import { Card, Button, Field, Badge, Dot, Empty, Input, Select, THEAD_CLS } from '../ui.jsx'
@@ -13,6 +13,7 @@ import { appConfirm } from '../confirm.jsx'
 import { judgeChecklist, judgeItem, diffChecklistResults } from '../../lib/qc.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { WorkItemPicker } from '../DefectTracker.jsx'
+import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
 
 // 判定章:○ 合格 / ✕ 不合格 / — 未檢
 function PassMark({ pass }) {
@@ -28,7 +29,7 @@ const fmtVal = (v) => (v === true ? '✓' : v === false ? '✗' : v ?? '—')
 // ── 自主檢查表:選範本 → 填實測值 → 依量化標準自動判定 → 不合格自動開缺失。
 // 存檔後為證據不可就地修改:更正一律建立修訂版次 Rev.N(必附原因),重新判定
 // 並連動缺失(同鏈不重複開);僅未判定的紀錄可刪除。
-export default function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, leaves = [], inspections = [], onRequestInspection = null }) {
+export default function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, leaves = [], inspections = [], onRequestInspection = null, onDirtyChange = null }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [revising, setRevising] = useState(null) // 修訂模式:被修訂的紀錄(現行版)
@@ -87,7 +88,18 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
     [current, ...history].map((rev) => attachedInspByRecordId.get(rev.id)).find(Boolean) || null
 
   const setVal = (no, v) => setValues((p) => ({ ...p, [no]: v }))
+  // 未存檔=表單開著且已填了什麼(實測值/位置/更正原因/工項)。只開表單沒填不算,免得每次取消都被問。
+  const dirty = open && (Object.values(values).some((v) => v !== '' && v != null) || !!location.trim() || !!reason.trim() || !!wiKey)
+  const dirtyLabel = dirty ? (revising ? `自主檢查表修訂 Rev.${(revising.rev || 0) + 1}（未存檔）` : '自主檢查表（未存檔）') : null
+  // 登記到未存檔登記簿(切換專案先問、重新整理由瀏覽器提示),並回報給頁面標在分段 chip 上
+  useUnsavedEdit('quality-checklist', dirtyLabel)
+  useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
   const closeForm = () => { setOpen(false); setRevising(null); setValues({}); setReason(''); setWiKey(''); setWiLabel('') }
+  // 取消:有未存檔輸入先確認,取消確認就留在表單繼續填
+  const cancelForm = async () => {
+    if (dirty && !(await appConfirm({ title: '放棄未存檔的檢查表？', body: '已填的實測值、位置與更正原因將遺失。', danger: true, confirmLabel: '放棄' }))) return
+    closeForm()
+  }
   const startRevise = (r) => {
     setMsg(''); setRevising(r); setOpen(true); setReason('')
     setDate(r.check_date || taipeiToday()); setLocation(r.location || '')
@@ -128,12 +140,14 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
   let lastGroup = null
   return (
     <Card title={`自主檢查表（${chains.length}）`} action={
-      canEdit && <Button variant="secondary" onClick={() => { if (open) closeForm(); else setOpen(true); setMsg('') }}>{open ? '取消' : <><MSym name="add" size={16} />新增檢查</>}</Button>
+      canEdit && <Button variant="secondary" onClick={() => { if (open) cancelForm(); else { setOpen(true); setMsg('') } }}>{open ? '取消' : <><MSym name="add" size={16} />新增檢查</>}</Button>
     }>
       {msg && <p className={`text-sm mb-3 ${msg.tone === 'error' ? 'text-[var(--red-text)]' : msg.tone === 'warn' ? 'text-[var(--amber-text)]' : 'text-[var(--green-text)]'}`}>{msg.text}</p>}
 
       {open && template && (
         <div className="bg-[var(--surface-2)] rounded-lg p-4 mb-4 space-y-3">
+          {/* 未存檔標記:填到一半切去別段再回來,一眼知道這份還沒存 */}
+          {dirty && <p role="status" className="text-footnote font-medium text-[var(--amber-text)]">未存檔：這份檢查表尚未存檔，切換分段會保留輸入，切換專案或關閉頁面前請先存檔。</p>}
           {revising && (
             <p className="text-sm font-medium text-[var(--text)]">
               修訂 Rev.{(revising.rev || 0) + 1} — 原版{revising.rev ? ` Rev.${revising.rev}` : ''}（{revising.check_date} 判定{revising.overall || '未判定'}）不會被覆寫，將以新版次留存差異。

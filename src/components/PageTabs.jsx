@@ -3,11 +3,12 @@
 // 這裡永遠說同一份清單;分頁是真路由(深連結保留),所以是 nav+NavLink,
 // 刻意不用 role=tablist(e2e 明文禁止工作面 tablist,語意上也不是 tab)。
 // 不 import ui.jsx:PageHeader 引用本元件,反向引用會成環。
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { visibleNavGroups } from '../lib/navConfig.js'
 import { BELOW_MD_QUERY } from '../lib/useMediaQuery.js'
+import { SidebarNavContext } from '../lib/sidebarNav.js'
 
 // chips 皮膚常數:Admin 頁內真 tabs(role=tablist)與這裡共用同一套,
 // 「兩排都是切換」的視覺意圖不因只改一邊而漂移。
@@ -33,6 +34,8 @@ function fadeFor(el) {
 export default function PageTabs() {
   const { pathname } = useLocation()
   const { currentUser, can, isPlatformAdmin } = useStore()
+  // 側欄正列出哪一組子頁(WebLayout 提供;不在 Layout 底下時為 null → 一律渲染)
+  const sidebarTabsFor = useContext(SidebarNavContext)
   const navRef = useRef(null)
   const [fade, setFade] = useState('none')
   // hooks 必須在下面的早退之前;沒有分頁列時 navRef 是 null,effect 直接略過
@@ -59,6 +62,10 @@ export default function PageTabs() {
   if (!item || item.tabs.length < 2) return null
   // pageTabs:false 的頁面不渲染分頁條(入口一律走側欄子項)
   if (item.tabs.find((t) => t.to === pathname)?.pageTabs === false) return null
+  // 入口方案 B(2026-09-15):側欄已展開並列出這一組子頁時,內容區不再重複同一組導覽
+  // (D-015)。側欄收合成 icon rail、平板、手機抽屜、或使用者手動收合這一組時,這裡照畫——
+  // 分頁列是那些情況下唯一的同組入口,不能消失。
+  if (sidebarTabsFor === item.to) return null
   return (
     // print:hidden:監造報表等頁面直接 window.print,正式文件頁首不得帶導覽藥丸
     // max-md:snap-x snap-proximity:手機捲停時靠近 chip 邊界就吸附,不強制(mandatory 會擋住細捲)

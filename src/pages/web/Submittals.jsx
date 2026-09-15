@@ -4,6 +4,7 @@ import { useStore } from '../../store.jsx'
 import { Card, Button, Field, Input, Select, Textarea, buttonClass, Badge, BallChip, Dot, Empty, PageHeader, ErrorBanner } from '../../components/ui.jsx'
 import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../components/listDetail.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
+import { useUrlFilters } from '../../lib/useUrlFilters.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
@@ -66,7 +67,14 @@ export default function Submittals() {
   const [aiRead, setAiRead] = useState({})     // { [submittalId]: result } AI 讀文件審查結果
   const [readBusy, setReadBusy] = useState(null)
   const [uploadBusy, setUploadBusy] = useState(null)
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  // 篩選保存在 URL(U11):從單據返回、重新整理、分享網址都保留關鍵字與分段
+  const [filters, setFilters] = useUrlFilters(DEFAULT_FILTERS)
+  // 本件最近一次動作的結果(只講真的完成的那一部分,UIUX 階段 3A U06):
+  // { id, kind: 'created' | 'uploaded' | 'uploadFailed' | 'resubmitted', name?, rev? }
+  // 只存在本頁 state:換選別筆就清掉(onSelect),不持久化。
+  const [notice, setNotice] = useState(null)
+  // 提送/提出的連點防護走 ref 而非 busy state:同一個事件迴圈裡的第二次 click 看到的 busy 仍是舊值
+  const submitting = useRef(false)
   const searchRef = useRef(null)
 
   const org = currentUser?.org_type || 'contractor'
@@ -95,12 +103,13 @@ export default function Submittals() {
   // 選取/深連結(?submittal=)/切案重置/初次自動選取:共用殼 hook。預設選「待我處理」
   // 的第一筆(開頁就看到該做的事),沒有就選清單第一筆。
   const pid = currentProject?.project_id
-  const { selectedId, detailOpen, select, closeDetail } = useListDetailPane({
+  const { selectedId, detailOpen, select, closeDetail, missingId } = useListDetailPane({
     param: 'submittal', idPrefix: 'sub-',
     scope: `${pid}/${org}`,
     ready: submittals.length > 0, rows: submittals,
     pickDefault: () => (ordered.find((s) => ballKey(s, org) === 'mine') || ordered[0])?.id,
-    onSelect: () => setErrMsg(''),
+    // 換選別筆才清結果提示;殼的初次自動選取會再選一次同一筆(第一筆送審時),不能把剛建立的提示洗掉
+    onSelect: (id) => { setErrMsg(''); setNotice((n) => (n && n.id !== id ? null : n)) },
     onReset: () => setFilters(DEFAULT_FILTERS),
   })
   // 篩選後選中項被篩掉:右欄內容保留(與 /rfi 同),清單中只是沒有高亮列——
@@ -120,8 +129,29 @@ export default function Submittals() {
     )
   }
 
+  // 建立失敗不收表單(輸入全部保留、可重試),成功才收起並選中新件。
+  // 「未建立」而非「一定失敗」:網路逾時時伺服器可能已寫入,文案不能替結果背書。
+  // try/finally:store 若丟非預期例外,busy 也要收尾,否則提送鈕永遠灰掉。
   const submit = async () => {
-    setBusy(true); await createSubmittal(form); setBusy(false); setForm(null)
+    if (submitting.current) return
+    submitting.current = true
+    setErrMsg(''); setBusy(true)
+    try {
+      // 沒拿到寫入結果(store 例外回傳)也不能當成功:結果未知就說未知
+      const { error, id } = (await createSubmittal(form)) || { error: { message: '未收到寫入結果，請確認清單後再決定是否重送' } }
+      if (error) { setErrMsg(friendlyError(error, '送審未建立，內容已保留，請重試；若清單已出現同名紀錄，表示先前已寫入，請勿重複提送')); return }
+      setForm(null)
+      // 新件是「等待監造」,廠商的球權快篩可能把它濾掉——清掉篩選讓新紀錄一定找得到
+      setFilters(DEFAULT_FILTERS)
+      if (id) select(id, { openPane: true })
+      // 進到該筆詳情後明示「紀錄已建立」與附件狀態(建立與上傳不是同一個動作)
+      if (id) setNotice({ id, kind: 'created' })
+    } catch (e) {
+      setErrMsg(friendlyError(e, '送審未建立，內容已保留，請重試'))
+    } finally {
+      submitting.current = false
+      setBusy(false)
+    }
   }
   const onDecide = async (s, status) => {
     const required = status === '退回補正' || status === '駁回'
@@ -133,11 +163,14 @@ export default function Submittals() {
       defaultValue: aiOpinion || (required ? '' : (s.review_note || '')), required, danger: required, confirmLabel: status,
     })
     if (note === null) return
-    setErrMsg(''); setBusy(true)
+    // 退回/駁回原因必填:對話框已擋,這裡再擋一次(fallback 的 window.prompt 不會擋)
+    if (required && !note.trim()) { setErrMsg(`${status}未寫入：需填寫${status}原因，廠商才知道要補什麼`); return }
+    setErrMsg(''); setBusy(true); setNotice(null)
     const { error } = await decideSubmittal(s.id, status, note || s.review_note)
     setBusy(false)
     if (error) setErrMsg(friendlyError(error, `${status}未寫入`))
-    else { // 審定後收起助手面板
+    else { // 審定後收起助手面板;留下結果與下一責任方(不自動換單,下一件由人點)
+      setNotice({ id: s.id, kind: 'decided', status })
       setAiReview((m) => { const n = { ...m }; delete n[s.id]; return n })
       setAiRead((m) => { const n = { ...m }; delete n[s.id]; return n })
     }
@@ -157,10 +190,13 @@ export default function Submittals() {
   const onUpload = async (s, e) => {
     const file = e.target.files?.[0]; e.target.value = ''
     if (!file) return
-    setUploadBusy(s.id); setErrMsg('')
+    setUploadBusy(s.id); setErrMsg(''); setNotice(null)
     const { error } = await uploadSubmittalFile(s.id, file)
     setUploadBusy(null)
-    if (error) setErrMsg(friendlyError(error, '文件上傳失敗'))
+    // 失敗:提送紀錄不受影響、附件狀態仍是「尚未上傳」,input 已清空可重選同一檔;
+    // 成功:只講文件已上傳,狀態是否回到待審由 status 決定(退回補正件仍要再送)
+    if (error) { setErrMsg(friendlyError(error, '文件上傳失敗')); setNotice({ id: s.id, kind: 'uploadFailed' }); return }
+    setNotice({ id: s.id, kind: 'uploaded', name: file.name })
   }
   // AI 讀文件審查:讀送審文件本體逐項比對契約需求
   const onRead = async (s) => {
@@ -179,10 +215,12 @@ export default function Submittals() {
       label: '補正說明（必填，將併入附件說明留存）', required: true, confirmLabel: `再送（Rev.${(s.revision || 0) + 1}）`,
     })
     if (note === null) return
-    setErrMsg(''); setBusy(true)
+    const rev = (s.revision || 0) + 1
+    setErrMsg(''); setBusy(true); setNotice(null)
     const { error } = await resubmitSubmittal(s.id, note)
     setBusy(false)
-    if (error) setErrMsg(friendlyError(error, '再送未寫入'))
+    if (error) { setErrMsg(friendlyError(error, '再送未寫入')); return }
+    setNotice({ id: s.id, kind: 'resubmitted', rev })
   }
   const onDelete = async (s) => {
     if (!(await appConfirm({ title: '刪除此送審？', danger: true, confirmLabel: '刪除' }))) return
@@ -222,7 +260,9 @@ export default function Submittals() {
     const canUpload = can.submit && (pending || s.status === '退回補正')
     const canDelete = can.submit && s.status === '已提送' && !(s.revision > 0)
     // 已結案且無可做的事(廠商看核准件)就不畫動作列:空的一條框線只會讓人找按鈕
-    const hasActions = canDecide || canResubmit || canDelete || pending
+    // 修正再送搬進「本件被退回」區塊(下一步就在退回原因旁),動作列不再重複
+    // 監造的決定鈕與 AI 助手已搬進「審查意見與決定」與文件區;動作列只剩等待字樣與刪除
+    const hasActions = canDelete || (pending && !canDecide)
     // region 以編號命名:報讀器走地標時直接聽到「SUB-002 詳情」,e2e 也用同一個名字
     // 確認詳情欄正在顯示哪一筆
     detailBody = (
@@ -233,6 +273,80 @@ export default function Submittals() {
           <BallChip ball={submittalBall(s)} />
           <Badge color="slate" className="ml-auto">{s.category}</Badge>
         </div>
+
+        {/* 最近一次動作的結果:只描述真的成功的部分。建立紀錄≠文件已送到,兩件事分開講 */}
+        {notice?.id === s.id && (() => {
+          const tone = notice.kind === 'uploadFailed' ? 'red' : notice.kind === 'created' ? 'blue' : 'green'
+          const text = notice.kind === 'created'
+            ? `提送紀錄已建立（${s.submittal_no}，Rev.${s.revision || 0}，狀態：已提送）。${s.attachment_path
+              ? '文件本體已附上。'
+              : '尚未上傳文件本體：請在下方「文件與提送方式」上傳；若以公文或雲端連結另送，請在附件說明註明。'}`
+            : notice.kind === 'uploaded'
+              ? (s.status === '退回補正'
+                ? `文件「${notice.name}」已更換，監造已可查看；仍需「修正再送」本件才會回到待審。`
+                : `文件「${notice.name}」已上傳。提送紀錄與文件都已就緒，等待監造受理。`)
+              : notice.kind === 'uploadFailed'
+                ? '文件上傳失敗：本件仍是「尚未上傳文件本體」，提送紀錄不受影響，可重新選擇檔案再試。'
+                : notice.kind === 'decided'
+                  ? ({ 審核中: '已受理審核，本件現在輪到你審定（核准／核備／退回補正／駁回）。',
+                    核准: '已核准 · 交廠商依核定版執行；本件離開「待我處理」。',
+                    核備: '已核備 · 交廠商；本件離開「待我處理」。',
+                    退回補正: '已退回補正 · 交廠商補正後再送，再送會回到「待我處理」。',
+                    駁回: '已駁回（終局）· 交廠商；本件不再受理再送。' }[notice.status] || `已${notice.status}。`)
+                  : `Rev.${notice.rev} 已再送，狀態回到已提送，等待監造受理審核；補正說明已併入附件說明留存。`
+          // 完成後的接續(監造):回原篩選佇列由頁首「返回今日待辦」與左欄清單承擔;
+          // 「下一件待審」明確由人點,不在核准瞬間自動換單
+          const nextMine = notice.kind === 'decided' && notice.status !== '審核中'
+            ? ordered.filter((x) => x.id !== s.id && ballKey(x, org) === 'mine') : []
+          return (
+            <div role="status" className={`mx-4 mt-4 rounded-lg px-3 py-2 text-footnote leading-relaxed bg-[var(--${tone}-tint)] text-[var(--${tone}-text)] flex items-center gap-3 flex-wrap`}>
+              <span className="min-w-0 flex-1">{text}</span>
+              {nextMine.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => select(nextMine[0].id, { openPane: true })}>下一件待審（{nextMine.length}）</Button>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* 監造:輪到我做什麼(UIUX 階段 4 U08)——階段、版次、為何輪到我、本次補正、上次退回原因。
+            全部讀既有欄位:review_note 只有最新一次意見,歷次退回原因不可分列,沒有就明說 */}
+        {canDecide && (() => {
+          const corrections = (s.attachment_note || '').split('\n').filter((l) => /^補正\(Rev\.\d+\):/.test(l))
+          const latestCorrection = corrections.at(-1) || null
+          const resubmitted = (s.revision || 0) > 0
+          return (
+            <div className="mx-4 mt-4 rounded-lg px-3 py-2.5 bg-[var(--blue-tint)]">
+              <div className="text-footnote font-medium text-[var(--blue-text)]">
+                {s.status === '已提送' ? '待受理' : '待審定'} · Rev.{s.revision || 0}{resubmitted ? ' 補正再送' : ' 首次提送'}
+              </div>
+              <p className="mt-1 text-footnote leading-relaxed text-[var(--blue-text)]">
+                {s.status === '已提送'
+                  ? '為何輪到你：廠商已提送，先「受理審核」才能審定；資料明顯不足可直接退回補正。'
+                  : '為何輪到你：本件已受理，請核對文件後核准、核備或退回補正；駁回為終局。'}
+              </p>
+              {resubmitted ? (<>
+                <p className="mt-1 text-footnote leading-relaxed text-[var(--text-2)] whitespace-pre-line break-words">上次退回原因：{s.review_note || '未留存'}</p>
+                <p className="text-footnote leading-relaxed text-[var(--text-2)] whitespace-pre-line break-words">本次補正說明：{latestCorrection ? latestCorrection.replace(/^補正\(Rev\.\d+\):/, '') : '廠商未填寫'}</p>
+              </>) : (
+                <p className="mt-1 text-footnote text-[var(--text-2)]">無退回紀錄。</p>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* 退回補正件(廠商):先看退回原因與目前資料,下一步就在原因旁邊。
+            資料模型只有最新一次 review_note,歷次退回原因不可分列——這裡不假造歷史 */}
+        {canResubmit && (
+          <div className="mx-4 mt-4 rounded-lg px-3 py-2.5 bg-[var(--amber-tint)]">
+            <div className="text-footnote font-medium text-[var(--amber-text)]">本件被監造退回，輪到你補正（目前 Rev.{s.revision || 0}）</div>
+            <p className="mt-1 text-footnote leading-relaxed text-[var(--amber-text)] whitespace-pre-line break-words">退回原因：{s.review_note || '監造未填寫原因'}</p>
+            <ol className="mt-1.5 text-footnote leading-relaxed text-[var(--text-2)] list-decimal pl-5">
+              <li>需要時先在下方「文件與提送方式」更換文件（目前{s.attachment_path ? `已附：${s.attachment_name || '文件'}` : '尚未上傳文件本體'}）。</li>
+              <li>按「修正再送」填寫補正說明，版次將成為 Rev.{(s.revision || 0) + 1}，狀態回到已提送。</li>
+            </ol>
+            <div className="mt-2"><Button size="sm" disabled={busy} onClick={() => onResubmit(s)}>修正再送</Button></div>
+          </div>
+        )}
 
         <div className="p-4">
           <div className="num text-caption text-[var(--text-3)]">{s.submittal_no}</div>
@@ -248,15 +362,30 @@ export default function Submittals() {
           ]} />
         </div>
 
-        {/* 附件:說明文字＋文件本體(廠商上傳,監造可 AI 審讀)。上傳鈕就放在「尚未上傳」
-            旁邊——控制項離它影響的東西最近(判準第 4 條) */}
+        {/* 文件與提送方式:附件說明、補正紀錄、文件本體與上傳/更換、外部提送說明放同一區
+            (U06)。上傳鈕就放在「尚未上傳」旁邊——控制項離它影響的東西最近(判準第 4 條)。
+            補正紀錄由 resubmitSubmittal 併進 attachment_note 的「補正(Rev.n):」行拆出來顯示,
+            只是呈現,不改資料 */}
+        {(() => {
+          const lines = (s.attachment_note || '').split('\n')
+          const corrections = lines.filter((l) => /^補正\(Rev\.\d+\):/.test(l))
+          const plainNote = lines.filter((l) => !/^補正\(Rev\.\d+\):/.test(l)).join('\n').trim()
+          return (
         <div className="px-4 pb-4">
           <div className="flex items-center gap-2 mb-2">
             <MSym name="attach_file" size={15} className="text-[var(--text-3)]" />
-            <span className="text-footnote font-medium text-[var(--text)]">附件</span>
+            <span className="text-footnote font-medium text-[var(--text)]">文件與提送方式</span>
           </div>
-          {s.attachment_note && <p className="text-footnote leading-relaxed text-[var(--text-2)] whitespace-pre-line break-words">{s.attachment_note}</p>}
-          <div className={`flex items-center gap-2 flex-wrap ${s.attachment_note ? 'mt-2' : ''}`}>
+          {plainNote && <p className="text-footnote leading-relaxed text-[var(--text-2)] whitespace-pre-line break-words"><span className="text-[var(--text-3)]">附件說明：</span>{plainNote}</p>}
+          {corrections.length > 0 && (
+            <div className={plainNote ? 'mt-2' : ''}>
+              <div className="text-caption font-medium text-[var(--text-2)]">補正紀錄</div>
+              <ul className="text-footnote leading-relaxed text-[var(--text-2)]">
+                {corrections.map((c, i) => <li key={i} className="break-words">{c}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className={`flex items-center gap-2 flex-wrap ${plainNote || corrections.length ? 'mt-2' : ''}`}>
             {s.attachment_path
               ? <span className="text-footnote inline-flex items-center gap-1 text-[var(--blue-text)]"><MSym name="description" size={13} />已附文件：{s.attachment_name || '文件'}</span>
               : <span className="text-footnote text-[var(--text-3)]">尚未上傳文件本體</span>}
@@ -268,21 +397,45 @@ export default function Submittals() {
               </label>
             )}
           </div>
-        </div>
-
-        {/* 審查意見:改版前擠在列裡的一行 amber 字;這是監造留給廠商的正式文字,
-            完整顯示、保留換行。尚無意見時明說,不留空白格 */}
-        <div className="px-4 pb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <MSym name="rate_review" size={15} className="text-[var(--text-3)]" />
-            <span className="text-footnote font-medium text-[var(--text)]">審查意見</span>
-          </div>
-          {s.review_note ? (
-            <p className="text-body leading-[1.8] text-[var(--amber-text)] whitespace-pre-line break-words bg-[var(--amber-tint)] rounded-lg px-3 py-2">{s.review_note}</p>
-          ) : (
-            <p className="text-footnote text-[var(--text-3)]">尚無審查意見。</p>
+          {canUpload && (
+            <p className="mt-2 text-caption leading-relaxed text-[var(--text-3)]">建立提送紀錄與上傳文件是兩個步驟；文件若以公文或雲端連結另送，請在附件說明註明，監造才知道去哪裡取件。</p>
+          )}
+          {/* 監造:AI 助手是可選工具,放在文件旁邊——兩項能力的資料範圍不同,結果只留在本頁;
+              沒有 AI 也能審(決定鈕在下方);文件本體沒上傳就如實說讀不了,不生出不存在的審查資料 */}
+          {canDecide && (
+            <div className="mt-3 pt-3 border-t border-[var(--border-2)]">
+              <div className="text-caption font-medium text-[var(--text-2)] mb-1.5">AI 助手（可選，結果只保留在本頁，離開後需重新執行）</div>
+              {aiOff ? (
+                <p className="text-footnote text-[var(--text-3)]">AI 審查功能未啟用，請直接依文件審定。</p>
+              ) : (
+                <ul className="space-y-1.5 text-footnote text-[var(--text-2)]">
+                  {aiEnabled('submittal.review') && (
+                    <li className="flex items-center gap-2 flex-wrap">
+                      {canAiReview ? (
+                        <Button size="sm" variant="secondary" disabled={reviewBusy === s.id} onClick={() => onReview(s)}>
+                          <MSym name="auto_awesome" size={13} />{reviewBusy === s.id ? ' AI 審查中…' : ' AI 審查助手'}
+                        </Button>
+                      ) : <span className="font-medium text-[var(--text)]">AI 審查助手</span>}
+                      <span>依契約規範與工項列審查要點、草擬意見；不讀文件本體。</span>
+                    </li>
+                  )}
+                  {aiEnabled('submittal.read') && (
+                    <li className="flex items-center gap-2 flex-wrap">
+                      {canAiRead ? (
+                        <Button size="sm" variant="secondary" disabled={readBusy === s.id} onClick={() => onRead(s)}>
+                          <MSym name="find_in_page" size={13} />{readBusy === s.id ? ' AI 讀文件中…' : ' AI 讀文件審查'}
+                        </Button>
+                      ) : <span className="font-medium text-[var(--text)]">AI 讀文件審查</span>}
+                      <span>{s.attachment_path ? '讀已上傳的文件本體，逐項比對契約需求。' : '尚未上傳文件本體，無法執行；請廠商上傳或依外部提送文件人工核對。'}</span>
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
           )}
         </div>
+          )
+        })()}
 
         {/* 監造:AI 審查助手——依契約規範/工項產生審查要點+意見草稿。
             草稿只是草稿:按審定鈕才帶入對話框,最終判定由監造裁量 */}
@@ -312,7 +465,7 @@ export default function Submittals() {
               <div className="text-caption font-medium text-[var(--text-2)] mb-1">審查意見草稿（可修改，核准/核備/退回時自動帶入）</div>
               <Textarea rows={3} value={review.opinion}
                 onChange={(e) => setAiReview((m) => ({ ...m, [s.id]: { ...m[s.id], opinion: e.target.value } }))} />
-              <p className="text-caption text-[var(--text-3)] mt-1">依契約規範/工項自動草擬，僅供監造參考；文件本體仍須人工核對，最終判定由監造裁量。</p>
+              <p className="text-caption text-[var(--text-3)] mt-1">依契約規範/工項自動草擬，僅供監造參考；文件本體仍須人工核對，最終判定由監造裁量。結果只保留在本頁，離開後需重新執行。</p>
             </div>
           )
         })()}
@@ -342,34 +495,51 @@ export default function Submittals() {
             <div className="text-caption font-medium text-[var(--text-2)] mb-1">審查意見草稿（可修改，核准/核備/退回時自動帶入）</div>
             <Textarea rows={3} value={read.summary_opinion || ''}
               onChange={(e) => setAiRead((m) => ({ ...m, [s.id]: { ...m[s.id], summary_opinion: e.target.value } }))} />
-            <p className="text-caption text-[var(--text-3)] mt-1">AI 讀送審文件本體逐項比對契約需求；「需人工確認/未涵蓋」項仍須監造核對，最終判定由監造裁量。</p>
+            <p className="text-caption text-[var(--text-3)] mt-1">AI 讀送審文件本體逐項比對契約需求；「需人工確認/未涵蓋」項仍須監造核對，最終判定由監造裁量。結果只保留在本頁，離開後需重新執行。</p>
           </div>
         )}
+
+        {/* 審查意見與決定:意見是監造留給廠商的正式文字,完整顯示、保留換行;決定鈕就在意見底下
+            (同一工作脈絡),受理段與審定段分開列、退回補正與駁回各自說明後果(UIUX 階段 4 U08)。
+            合法轉移不變:已提送→受理審核/退回補正;審核中→核准/核備/退回補正/駁回 */}
+        <div className="px-4 pb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <MSym name="rate_review" size={15} className="text-[var(--text-3)]" />
+            <span className="text-footnote font-medium text-[var(--text)]">{canDecide ? '審查意見與決定' : '審查意見'}</span>
+          </div>
+          {s.review_note ? (
+            <p className="text-body leading-[1.8] text-[var(--amber-text)] whitespace-pre-line break-words bg-[var(--amber-tint)] rounded-lg px-3 py-2">{s.review_note}</p>
+          ) : (
+            <p className="text-footnote text-[var(--text-3)]">尚無審查意見。</p>
+          )}
+          {canAccept && (
+            <div className="mt-3">
+              <div className="text-caption font-medium text-[var(--text-2)] mb-1.5">受理階段</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '審核中')}>受理審核</Button>
+                <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '退回補正')}>退回補正</Button>
+                <span className="text-caption text-[var(--text-3)]">受理後才能核准／核備；退回補正需填原因，廠商補正後可再送。</span>
+              </div>
+            </div>
+          )}
+          {canRule && (
+            <div className="mt-3">
+              <div className="text-caption font-medium text-[var(--text-2)] mb-1.5">審定階段</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="success" disabled={busy} onClick={() => onDecide(s, '核准')}>核准</Button>
+                <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '核備')}>核備</Button>
+                <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '退回補正')}>退回補正</Button>
+                <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '駁回')}>駁回</Button>
+              </div>
+              <p className="mt-1.5 text-caption leading-relaxed text-[var(--text-3)]">退回補正＝交廠商補正後再送（版次 +1）；駁回＝終局，不再受理再送。兩者都需填原因。</p>
+            </div>
+          )}
+        </div>
 
         {/* 動作列:同一時間最多一顆實心鈕(核准);其餘次級/第三級。
             批 B UX:AI 功能關閉時藏按鈕、留簡短說明(真正的閘門在伺服器端) */}
         {hasActions && <div className="px-4 py-3 border-t border-[var(--border-2)] flex items-center gap-2 flex-wrap">
-          {canAccept && <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '審核中')}>受理審核</Button>}
-          {canRule && <>
-            <Button variant="success" disabled={busy} onClick={() => onDecide(s, '核准')}>核准</Button>
-            <Button variant="secondary" disabled={busy} onClick={() => onDecide(s, '核備')}>核備</Button>
-          </>}
-          {canDecide && <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '退回補正')}>退回補正</Button>}
-          {canRule && <Button variant="danger" disabled={busy} onClick={() => onDecide(s, '駁回')}>駁回</Button>}
-          {canAiReview && (
-            <Button variant="secondary" disabled={reviewBusy === s.id} onClick={() => onReview(s)}>
-              <MSym name="auto_awesome" size={13} />{reviewBusy === s.id ? ' AI 審查中…' : ' AI 審查助手'}
-            </Button>
-          )}
-          {canAiRead && (
-            <Button variant="secondary" disabled={readBusy === s.id} onClick={() => onRead(s)}>
-              <MSym name="find_in_page" size={13} />{readBusy === s.id ? ' AI 讀文件中…' : ' AI 讀文件審查'}
-            </Button>
-          )}
-          {aiOff && <span className="text-footnote text-[var(--text-2)]">AI 審查功能未啟用</span>}
-          {/* 施工:退回補正後修正再送(補正說明必填=實質補正證據) */}
-          {canResubmit && <Button variant="secondary" disabled={busy} onClick={() => onResubmit(s)}>修正再送</Button>}
-          {pending && <span className="text-footnote text-[var(--text-2)]">待監造審定</span>}
+          {pending && !canDecide && <span className="text-footnote text-[var(--text-2)]">待監造審定</span>}
           {/* 灰轉紅文字鈕不在三級語言內,改共用 Button 的第三級;ml-auto 靠右與主動作拉開 */}
           {canDelete && <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onDelete(s)}>刪除</Button>}
         </div>}
@@ -439,11 +609,14 @@ export default function Submittals() {
         } />
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
+      {missingId && <p role="status" className="rounded-lg px-3 py-2 text-footnote bg-[var(--amber-tint)] text-[var(--amber-text)]">找不到指定的送審（{missingId}），可能已刪除或不在本專案；已顯示清單預設的一筆，網址已改為不指向該筆。</p>}
       {/* AI 長任務狀態(P1-10):讀文件需下載→抽字→比對,設時間預期避免以為卡住 */}
       {(readBusy || reviewBusy) && (
         <div className="flex items-center gap-2 text-sm bg-[var(--blue-tint)] text-[var(--blue-text)] rounded-lg px-3 py-2">
           <MSym name="auto_awesome" size={15} className="animate-pulse shrink-0" />
-          {readBusy ? 'AI 正在下載並讀取送審文件、逐項比對契約規範…較長文件約需 20–30 秒,可離開此頁稍後回來查看。' : 'AI 審查中…'}
+          {/* 結果只存在本頁 state(aiRead/aiReview 是 useState,沒有載入歷史結果的流程):
+              不能承諾「離開稍後回來看」——離頁或重新整理就得重新執行。 */}
+          {readBusy ? 'AI 正在下載並讀取送審文件、逐項比對契約規範…較長文件約需 20–30 秒。結果只保留在本頁，離開或重新整理後需重新執行。' : 'AI 審查中…結果只保留在本頁，離開或重新整理後需重新執行。'}
         </div>
       )}
 
@@ -454,9 +627,13 @@ export default function Submittals() {
             <Field label="類別"><Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
             <Field label="提送日"><Input type="date" value={form.submitted_date} onChange={(e) => setForm({ ...form, submitted_date: e.target.value })} /></Field>
             <Field label="監造應審回期限"><Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></Field>
-            <div className="md:col-span-2"><Field label="附件說明"><Input value={form.attachment_note} onChange={(e) => setForm({ ...form, attachment_note: e.target.value })} placeholder="如 含出廠證明、CNS 試驗報告（文件另以公文/雲端連結提送）" /></Field></div>
+            <div className="md:col-span-2"><Field label="附件說明"><Input value={form.attachment_note} onChange={(e) => setForm({ ...form, attachment_note: e.target.value })} placeholder="如 含出廠證明、CNS 試驗報告；文件若以公文或雲端連結另送，請在此註明" /></Field></div>
           </div>
-          <div className="mt-3"><Button onClick={submit} disabled={busy || !form.title}>{busy ? '提送中…' : '提送'}</Button></div>
+          <div className="mt-3 flex items-center gap-3 flex-wrap">
+            <Button onClick={submit} disabled={busy || !form.title}>{busy ? '提送中…' : '提送'}</Button>
+            {/* 不宣稱建立紀錄與上傳是一個原子操作:文件本體在建立後於詳情上傳 */}
+            <span className="text-caption text-[var(--text-3)]">「提送」只建立提送紀錄（狀態為已提送）；文件本體在建立後於詳情上傳，兩者是分開的步驟。</span>
+          </div>
         </Card>
       )}
 

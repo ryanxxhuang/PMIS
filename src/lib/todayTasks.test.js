@@ -236,7 +236,7 @@ describe('今日施工日誌未填(第⑥類,僅廠商)', () => {
     const t = build({ org: 'contractor', anchors }).mine.find((x) => x.tag === '日誌')
     expect(t).toBeTruthy()
     expect(t.title).toBe('今天的施工日誌尚未填寫')
-    expect(t.to).toBe('/site-log')
+    expect(t.to).toMatch(/^\/site-log\?d=\d{4}-\d{2}-\d{2}$/)
     expect(t.ball).toBe('contractor')
     expect(t.due).toBeNull() // 日誌沒有法定期限,不假造 due
   })
@@ -453,11 +453,13 @@ describe('收件匣直達那一筆(規範 §9.7):有殼的頁 to 帶單條 query
     expect(to('估驗')).toEqual(['/valuation?period=V1'])
     expect(to('試驗')).toEqual(['/quality?sample=TS1'])
     expect(to('停留點')).toEqual(['/itp?point=P1'])
-    expect(to('日誌')).toEqual(['/site-log'])
+    // 日誌待辦直達當日(U11):帶 ?d=今天
+    expect(to('日誌')).toEqual([expect.stringMatching(/^\/site-log\?d=\d{4}-\d{2}-\d{2}$/)])
     const s = build({ org: 'supervisor', inspections: [{ id: 'I1', title: '4F 鋼筋查驗', status: '待查驗' }],
       acceptanceEvents: [{ stage_key: 'report', event_date: '2026-08-08' }] })
     expect(s.mine.find((t) => t.tag === '查驗').to).toBe('/quality?inspection=I1')
-    expect(s.mine.find((t) => t.tag === '驗收').to).toBe('/acceptance')
+    // 驗收待辦直達當前階段(UIUX 階段 5C):帶 ?stage=,頁面據此定位並說明實際狀態
+    expect(s.mine.find((t) => t.tag === '驗收').to).toMatch(/^\/acceptance\?stage=[a-z]+$/)
     // 今天已完成:缺失結案同樣直達該筆(與 collaborationItems 同一條規則);查驗同樣使用 inspection 參數
     const done = build({ org: 'supervisor', defects: [{ id: 'D9', title: '結案', status: '已結案', closed_at: '2026-08-13T02:00:00Z' }] }).doneToday
     expect(done[0].to).toBe('/quality?defect=D9')

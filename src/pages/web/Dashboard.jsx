@@ -19,7 +19,7 @@ import { SearchField, StatusChip } from '../../components/listDetail.jsx'
 import { appSnackbar } from '../../components/snackbar.jsx'
 
 function SetupChecklist({ imported }) {
-  const { listMembers, currentProject, obligations } = useStore()
+  const { listMembers, currentProject, obligations, can } = useStore()
   const [snap, setSnap] = useState(null)
   const pid = currentProject?.project_id
   useEffect(() => {
@@ -63,6 +63,11 @@ function SetupChecklist({ imported }) {
 
   return (
     <Card title="專案初始化" action={<span className="num text-xs text-[var(--text-3)]">已完成 {doneCount}/5</span>}>
+      {/* 一般成員不被要求越權設定(UIUX 階段 2 U05):清單仍可看(知道案子準備到哪),
+          但明說由誰完成、自己該做什麼;can.admin 只是 UX,伺服器仍由 is_project_admin() 把關 */}
+      {!can?.admin && (
+        <p className="text-footnote text-[var(--text-2)] mb-3">初始化由專案管理者完成，你不需要執行這些設定；輪到你的事項列在下方，可直接處理。</p>
+      )}
       <Link to={next.to}
         className="flex items-center gap-2 rounded-lg bg-[var(--blue-tint)] text-[var(--blue-text)] px-3 py-2 mb-3 text-sm font-medium hover:bg-[var(--g-search-h)] transition-colors">
         <span className="min-w-0 flex-1">下一步：{next.label}</span>
@@ -219,28 +224,32 @@ export default function Dashboard() {
         <Card>
           <Empty>標單工項讀取失敗，資料暫時無法顯示。請用上方紅色橫幅的「重試」重新載入。</Empty>
         </Card>
-      ) : !imported ? (
-        // 未匯標單:初始化清單就是指引(第 2 步=到專案文件一次上傳,與全站說法一致)
-        isPersistedProject ? <SetupChecklist imported={false} /> : (
-          <Card>
-            <Empty>
-              此專案尚未匯入標單。請到「<Link to="/contract" className="text-[var(--blue-text)] hover:underline">專案文件</Link>」把標單 XML 與契約等文件一次上傳，
-              之後估驗、進度、施工日誌、品質查驗才會有資料。
-            </Empty>
-          </Card>
-        )
       ) : (
         <div className="space-y-5">
           {/* 初始化清單、風險警示、AI 今日已代辦只跟著「待我處理」走:它們是「現在該做
               什麼」的脈絡,不是「等對方」或「已完成」的脈絡。單欄直排:收件匣就是一條清單。
-              三方常用入口在頁首，主體保留工作清單而不加頁面摘要卡。 */}
-          {ball === 'mine' && isPersistedProject && !project.formal_mode && <SetupChecklist imported />}
+              三方常用入口在頁首，主體保留工作清單而不加頁面摘要卡。
+              未匯標單(UIUX 階段 2 U05):初始化是「有責任人的準備事項」,與已可執行的待辦並存——
+              送審/疑義/履約期限不靠標單就能做,不能被整頁的初始化取代;真正依賴標單的頁
+              (估驗、進度、品質查驗)仍由各頁自己揭露前置條件。 */}
+          {ball === 'mine' && !imported && (
+            isPersistedProject ? <SetupChecklist imported={false} /> : (
+              <Card>
+                <Empty>
+                  此專案尚未匯入標單。請到「<Link to="/contract" className="text-[var(--blue-text)] hover:underline">專案文件</Link>」把標單 XML 與契約等文件一次上傳，
+                  之後估驗、進度、施工日誌、品質查驗才會有資料。
+                </Empty>
+              </Card>
+            )
+          )}
+          {ball === 'mine' && imported && isPersistedProject && !project.formal_mode && <SetupChecklist imported />}
 
           {/* 狀態全部由既有業務流程更新——在目的頁做完事就自動退出,
               不需要回這裡打勾;這裡也永遠不會出現 AI 自己產生的工作。 */}
           <div key={ball}>{focus}</div>
 
-          {ball === 'mine' && (
+          {/* 風險警示與 AI 代辦以標單/進度為素材,沒有標單就沒有可靠依據,不畫 */}
+          {ball === 'mine' && imported && (
             <>
               {/* AI 主動觀察:風險警示卡,不是待辦(AI 不得替人產生人工工作) */}
               <InsightsPanel insights={insights} />
@@ -339,11 +348,13 @@ function TaskSection({ title, items, empty, emptyTitle, emptyTo = null, hint = n
     for (const [key, value] of Object.entries(patch)) value ? next.set(key, value) : next.delete(key)
     return next
   }, { replace: true })
+  // 從單據返回:原項還在就聚焦它;已不在(做完了、球交給對方)就明說,不讓人以為被吃掉(U11)
+  const [returnedGone, setReturnedGone] = useState(false)
   useEffect(() => {
     if (!state?.returnedTask) return
     const el = document.getElementById(`task-${state.returnedTask}`)
-    if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'center' }) }
-    else searchRef.current?.focus()
+    if (el) { el.focus({ preventScroll: true }); el.scrollIntoView?.({ block: 'center' }); setReturnedGone(false) }
+    else { searchRef.current?.focus(); setReturnedGone(true) }
   }, [state])
   return (
     <Card title={title} action={<div className="flex items-center gap-2">
@@ -364,6 +375,7 @@ function TaskSection({ title, items, empty, emptyTitle, emptyTo = null, hint = n
           <span role="status" className="text-footnote text-[var(--text-3)] sm:ml-auto">顯示 {shown.length} / {matched.length} 件</span>
         </div>
       </div>}
+      {returnedGone && <p role="status" className="px-4 pt-3 text-footnote text-[var(--text-2)]">剛才處理的事項已不在這份清單，可能已完成或已交給對方；可到「等待對方」或「今天已完成」查看。</p>}
       {done && <p className="px-4 pt-3 text-footnote text-[var(--text-3)]">此處僅列有完成時間的缺失結案與查驗判定。其他操作請查閱<Link to="/activity" className="text-[var(--blue-text)] inline-flex items-center min-h-11">活動紀錄</Link>。</p>}
       {items.length === 0 ? (
         <Empty title={emptyTitle}>

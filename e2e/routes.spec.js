@@ -57,13 +57,26 @@ test.describe('路由治理', () => {
     }
     await expect(page.getByRole('link', { name: '問 GovAgent' })).toBeVisible()
 
-    // 深連結進子頁:所在群組仍預設收合,可展開再收合
+    // 深連結進子頁(入口方案 B):所在群組自動展開、子頁列在側欄,內容區不重複同組分頁列;
+    // 手動收合後分頁列回來(入口不消失),再展開又收掉
+    const tabsBar = page.getByRole('main').getByRole('navigation', { name: '現場與品質分頁' })
     await gotoHash(page, '/quality')
-    await expect(nav.getByRole('link', { name: '品質查驗', exact: true })).toBeHidden()
-    await nav.getByRole('button', { name: '展開現場與品質子頁' }).click()
     await expect(nav.getByRole('link', { name: '品質查驗', exact: true })).toBeVisible()
+    await expect(nav.getByRole('link', { name: '品質查驗', exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(tabsBar).toHaveCount(0)
     await nav.getByRole('button', { name: '收合現場與品質子頁' }).click()
     await expect(nav.getByRole('link', { name: '品質查驗', exact: true })).toBeHidden()
+    await expect(tabsBar).toBeVisible()
+    await expect(tabsBar.getByRole('link', { name: '品質查驗', exact: true })).toHaveAttribute('aria-current', 'page')
+    await nav.getByRole('button', { name: '展開現場與品質子頁' }).click()
+    await expect(nav.getByRole('link', { name: '品質查驗', exact: true })).toBeVisible()
+    await expect(tabsBar).toHaveCount(0)
+    // 同組換頁(分頁列已收掉,改走側欄子頁):群組保持展開
+    await nav.getByRole('link', { name: '施工日誌', exact: true }).click()
+    await expect(page).toHaveURL(/#\/site-log(\?|$)/)
+    await expect(nav.getByRole('link', { name: '施工日誌', exact: true })).toHaveAttribute('aria-current', 'page')
+    await nav.getByRole('button', { name: '收合現場與品質子頁' }).click()
+    await expect(nav.getByRole('link', { name: '施工日誌', exact: true })).toBeHidden()
 
     await page.getByRole('button', { name: '收合側邊欄' }).click()
     await expect(page.getByRole('button', { name: '展開側邊欄' })).toBeVisible()

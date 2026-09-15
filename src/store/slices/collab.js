@@ -67,15 +67,17 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       submitted_date: input.submitted_date || null, due_date: input.due_date || null,
       decided_date: null, review_note: null, attachment_note: input.attachment_note || null,
     }
+    // 回傳新 id:頁面成功後要選中這一筆(建立失敗不收表單、成功才定位,UIUX 階段 1 U02)
     if (!isPersistedProject) {
-      setSubmittals((ss) => [{ ...row, id: `SUB-${Date.now()}` }, ...ss])
-      return { error: null }
+      const id = `SUB-${Date.now()}`
+      setSubmittals((ss) => [{ ...row, id }, ...ss])
+      return { error: null, id }
     }
     const { data, error } = await supabase.from('submittals')
       .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setSubmittals((ss) => [data, ...ss])
-    return { error: null }
+    return { error: null, id: data.id }
   }, [isPersistedProject, currentProject, currentUser, submittals])
 
   // 監造審定:審核中|核准|核備|退回補正|駁回。DB 成功才更新 UI(失敗=UI 不變)。
@@ -243,15 +245,17 @@ export function useCollabSlice({ isPersistedProject, demoMode, currentProject, c
       due_date: input.due_date || null, answered_date: null,
       cost_impact: !!input.cost_impact, schedule_impact: !!input.schedule_impact,
     }
+    // 回傳新 id:與 createSubmittal 同,頁面成功後定位新疑義
     if (!isPersistedProject) {
-      setRfis((rs) => [{ ...row, id: `RFI-${Date.now()}` }, ...rs])
-      return { error: null }
+      const id = `RFI-${Date.now()}`
+      setRfis((rs) => [{ ...row, id }, ...rs])
+      return { error: null, id }
     }
     const { data, error } = await supabase.from('rfis')
       .insert({ ...row, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
     if (error) return { error }
     setRfis((rs) => [data, ...rs])
-    return { error: null }
+    return { error: null, id: data.id }
   }, [isPersistedProject, currentProject, currentUser, rfis, saveMarkup])
 
   // 回覆/結案:DB 成功才更新 UI(失敗=UI 不變)。

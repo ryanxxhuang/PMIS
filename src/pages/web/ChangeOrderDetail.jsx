@@ -10,6 +10,7 @@ import { MSym } from '../../components/icons.jsx'
 import { Surface, Empty, Button, Badge, IconButton, Input, buttonClass, THEAD_CLS } from '../../components/ui.jsx'
 import { MetaGrid } from '../../components/listDetail.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
+import { appConfirm } from '../../components/confirm.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
 import { diffBoq } from '../../lib/coDiff.js'
 import { fmtAmount as money } from '../../lib/format.js'
@@ -31,7 +32,9 @@ const KIND_COLOR = { 數量增減: 'blue', '單價變更-減': 'amber', '單價�
 //   canDelete = can.edit             → 刪除變更單(廠商;改版前是卡頭的 ✕ 圖示鈕)
 //   waiting   = 待核定 ∧ 看的人在這一步沒有動作 → 等待字樣(改版前不渲染;現在把
 //               「為什麼沒有按鈕」講出來,與 /rfi 的「待監造回覆」同一做法)
-export default function ChangeOrderDetail({ co, net, leaves, allItems, canReview, canRatify, canEdit, itemsEditable, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem }) {
+// revised=目前變更後契約金額(已核准者已計入,store 的財務單一真相);待核定件的「核准後將為」
+// 由 revised+net 確定推導,不另加資料來源。工期影響/監造意見/附件:資料模型沒有這些欄位,明示未提供。
+export default function ChangeOrderDetail({ co, net, leaves, allItems, canReview, canRatify, canEdit, itemsEditable, onStatus, onDelete, onAddItem, onAddItems, onUpdateItem, onDeleteItem, revised = null }) {
   const [draft, setDraft] = useState({ work_item_key: '', item_no: '', description: '', unit: '', qty_delta: '', unit_price: '', note: '' })
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
@@ -44,6 +47,16 @@ export default function ChangeOrderDetail({ co, net, leaves, allItems, canReview
   const canRule = co.status === '審核中' && canRatify
   const canDelete = canEdit
   const waiting = co.status === '提出' && !canReview ? '待監造受理審查' : co.status === '審核中' && !canRatify ? '待機關核定' : ''
+  const label = co.co_no || co.title
+  // 機關核定是不可逆的正式動作(核准後明細凍結、撤銷另走機關專屬流程):確認框指向明確單據與金額;
+  // 取消或 API 失敗都不改狀態(onStatus 失敗由頁面 ErrorBanner 呈現,這裡不預先改畫面)
+  const rule = async (status) => {
+    const ok = await appConfirm(status === '核准'
+      ? { title: `核准 ${label}？`, body: `淨額 ${signed(net)}${revised != null ? `；核准後變更後契約金額將為 NT$ ${money(revised + net)}` : ''}。核准後明細凍結，撤銷需由機關另行辦理。`, confirmLabel: '核准' }
+      : { title: `駁回 ${label}？`, body: `淨額 ${signed(net)} 不計入契約金額。駁回後本件結束，廠商需另提新的變更單。`, danger: true, confirmLabel: '駁回' })
+    if (!ok) return
+    await onStatus(status)
+  }
 
   const onDiffFile = async (e) => {
     const f = e.target.files?.[0]
@@ -136,15 +149,39 @@ export default function ChangeOrderDetail({ co, net, leaves, allItems, canReview
         <span className={`ml-auto num text-footnote font-medium whitespace-nowrap ${signCls(net)}`}>淨額 {signed(net)}</span>
       </div>
 
+      {/* 決策摘要(UIUX 階段 5B U10):事由與目前責任 → 已知金額影響 → 缺資料處。
+          全部由既有欄位與 revised+net 確定推導;沒有的資料明寫未提供,不由 AI 補 */}
+      {(() => {
+        const pending = co.status === '提出' || co.status === '審核中'
+        const heading = co.status === '提出' ? (canReview ? '輪到你受理審查' : '待監造受理審查')
+          : co.status === '審核中' ? (canRatify ? '待你核定' : '待機關核定')
+            : co.status === '核准' ? '已核准（已計入變更後契約金額）' : '已駁回（不計入契約金額）'
+        const tone = pending ? (canRatify && co.status === '審核中' ? 'blue' : 'amber') : co.status === '核准' ? 'green' : 'slate'
+        const toneCls = tone === 'blue' ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : tone === 'amber' ? 'bg-[var(--amber-tint)] text-[var(--amber-text)]'
+          : tone === 'green' ? 'bg-[var(--green-tint)] text-[var(--green-text)]' : 'bg-[var(--surface-2)] text-[var(--text-2)]'
+        const pct = revised ? (net / revised) * 100 : null
+        return (
+          <div className={`mx-4 mt-4 rounded-lg px-3 py-2.5 ${toneCls}`}>
+            <div className="text-footnote font-medium">{heading} · {label}</div>
+            <p className="mt-1 text-footnote leading-relaxed text-[var(--text-2)] whitespace-pre-line break-words">事由：{co.title}{co.reason ? `\n理由：${co.reason}` : '\n理由：未填寫'}</p>
+            <p className="mt-1 text-footnote leading-relaxed text-[var(--text-2)]">
+              金額影響：淨額 <span className={`font-medium ${signCls(net)}`}>{signed(net)}</span>（{co.items.length} 筆明細）
+              {pending && revised != null && `；核准後變更後契約金額將為 NT$ ${money(revised + net)}${pct != null ? `（${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%）` : ''}`}
+              {co.status === '核准' && revised != null && `；已計入變更後契約金額 NT$ ${money(revised)}`}
+            </p>
+          </div>
+        )
+      })()}
+
       <div className="p-4">
         {co.co_no && <div className="num text-caption text-[var(--text-3)]">{co.co_no}</div>}
         <div className="mt-0.5 text-callout font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{co.title}</div>
         {/* 空值一律顯示 —:四格固定,眼睛掃同一位置就知道有沒有填 */}
         <MetaGrid className="mt-3.5" rows={[
-          ['日期', co.co_date || '—'],
+          ['提出日', co.co_date || '—'],
           ['狀態', co.status],
           ['明細', `${co.items.length} 筆`],
-          ['理由', co.reason || '—'],
+          ['淨額', signed(net)],
         ]} />
       </div>
 
@@ -152,8 +189,9 @@ export default function ChangeOrderDetail({ co, net, leaves, allItems, canReview
       <div className="px-4 pb-4">
         <div className="flex items-center gap-2 mb-2">
           <MSym name="list_alt" size={15} className="text-[var(--text-3)]" />
-          <span className="text-footnote font-medium text-[var(--text)]">追加／減帳明細</span>
+          <span className="text-footnote font-medium text-[var(--text)]">追加／減帳明細（相對原契約）</span>
         </div>
+        <p className="text-caption text-[var(--text-3)] mb-2">數量與金額為相對原契約的增減；帶項次者對應原契約工項，無項次者為新增工項。</p>
         {co.items.length > 0 ? (
           // lg:-mx-3:寬版內距後剩 606px,表格 min-w 620——不往卡邊外溢桌機就永遠帶一條橫向
           // 捲軸、刪除鈕被切掉半顆。lg:pr-2 吃掉列尾 ✕ 鈕 -m-2 往右的 8px 命中區,否則它會
@@ -262,6 +300,21 @@ export default function ChangeOrderDetail({ co, net, leaves, allItems, canReview
         <p className="px-4 pb-4 text-caption text-[var(--text-3)]">此變更已核准，明細凍結；如需調整請由機關撤銷核准後再修改（D-016：撤銷為機關專屬）。</p>
       )}
 
+      {/* 本系統未登錄:資料模型沒有工期影響、監造審查意見與附件欄位——固定三行如實說未提供,
+          機關核定前知道要另向監造／廠商取得,不由畫面或 AI 補成正式資料 */}
+      <div className="px-4 pb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <MSym name="info" size={15} className="text-[var(--text-3)]" />
+          <span className="text-footnote font-medium text-[var(--text)]">本系統未登錄</span>
+        </div>
+        <MetaGrid rows={[
+          ['工期影響', '未登錄'],
+          ['監造審查意見', '未提供'],
+          ['附件', '無'],
+        ]} />
+        <p className="mt-1.5 text-caption text-[var(--text-3)]">變更單目前只登錄事由、理由與追加減明細；工期、意見與附件請另向監造或廠商取得。</p>
+      </div>
+
       {/* 動作列:同一時間最多一顆實心主鈕(核准);其餘次級/第三級。
           灰轉紅的 ✕ 圖示刪除鈕不在三級語言內,改共用 Button 的第三級,ml-auto 靠右與核定動作拉開 */}
       {(canAccept || canReturn || canRule || canDelete || waiting) && (
@@ -269,8 +322,9 @@ export default function ChangeOrderDetail({ co, net, leaves, allItems, canReview
           {canAccept && <Button variant="secondary" onClick={() => onStatus('審核中')}>受理審查</Button>}
           {canReturn && <Button variant="secondary" onClick={() => onStatus('提出')}>退回</Button>}
           {canRule && (<>
-            <Button onClick={() => onStatus('核准')}>核准</Button>
-            <Button variant="danger" onClick={() => onStatus('駁回')}>駁回</Button>
+            <Button onClick={() => rule('核准')}>核准</Button>
+            <Button variant="danger" onClick={() => rule('駁回')}>駁回</Button>
+            <span className="text-caption text-[var(--text-3)]">兩者都會再確認；核准後明細凍結。</span>
           </>)}
           {waiting && <span className="text-footnote text-[var(--text-2)]">{waiting}</span>}
           {canDelete && <Button variant="ghost" size="sm" className="ml-auto" onClick={onDelete}>刪除變更單</Button>}

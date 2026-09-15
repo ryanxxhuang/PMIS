@@ -43,11 +43,19 @@ for (const role of Object.keys(ROLES)) {
           reached.push(item.to)
           continue
         }
-        // 工作群組:預設收合,展開鈕以群組名命名;展開後子頁才渲染
-        const toggle = nav.getByRole('button', { name: `展開${item.label}子頁` })
-        await expect(toggle).toBeVisible()
-        await toggle.click()
-        await expect(nav.getByRole('button', { name: `收合${item.label}子頁` })).toBeVisible()
+        // 工作群組(入口方案 B,2026-09-15):還沒進這一組時預設收合;點群組列進第一個子頁,
+        // 所屬群組自動展開、子頁在側欄列出,此時內容區不畫同組分頁列(D-015 不重複導覽)。
+        // 手動收合後子頁入口改由分頁列承接(入口不消失),再展開分頁列又收掉。
+        await expect(nav.getByRole('button', { name: `展開${item.label}子頁` })).toBeVisible()
+        const groupLink = nav.getByRole('link', { name: item.label, exact: true })
+        await groupLink.click()
+        await expect(page).toHaveURL(urlOf(item.to))
+        const collapseBtn = nav.getByRole('button', { name: `收合${item.label}子頁` })
+        await expect(collapseBtn).toBeVisible()
+        // 分頁列只在同組有兩個以上子頁時才存在;監造的「報表與結案」等單子頁組本來就沒有
+        const tabsBar = page.getByRole('main').getByRole('navigation', { name: `${item.label}分頁` })
+        const hasTabsBar = item.tabs.length >= 2
+        if (hasTabsBar) await expect(tabsBar).toHaveCount(0)
         for (const tab of item.tabs) {
           const link = nav.getByRole('link', { name: tab.label, exact: true })
           await link.click()
@@ -55,8 +63,20 @@ for (const role of Object.keys(ROLES)) {
           await expect(link).toHaveAttribute('aria-current', 'page')
           reached.push(tab.to)
         }
+        // 手動收合仍可用,而且收合後同組入口由分頁列接手;再展開又收掉——鍵盤走同一顆按鈕
+        await collapseBtn.click()
+        const expandBtn = nav.getByRole('button', { name: `展開${item.label}子頁` })
+        await expect(expandBtn).toBeVisible()
+        if (hasTabsBar) {
+          await expect(tabsBar).toBeVisible()
+          await expandBtn.focus()
+          await page.keyboard.press('Enter')
+          await expect(collapseBtn).toBeVisible()
+          await expect(tabsBar).toHaveCount(0)
+          await collapseBtn.click()
+        }
         // 走完收回:下一組展開時側欄不會越長越長(手機抽屜高度有限,桌機也一樣守)
-        await nav.getByRole('button', { name: `收合${item.label}子頁` }).click()
+        await expect(expandBtn).toBeVisible()
       }
     }
     // 走過的路由數印進報告(回報涵蓋數用),不寫死——navConfig 變動時數字跟著變

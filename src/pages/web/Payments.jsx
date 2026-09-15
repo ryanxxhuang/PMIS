@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
@@ -22,11 +22,49 @@ export default function Payments() {
   const [params, setParams] = useSearchParams()
   const { state } = useLocation()
   const requestedPeriod = params.get('period')
-  // 請款/收款欄位寫入失敗必須讓使用者看到(DB-first,失敗=UI 不變)
-  const onPay = async (id, patch) => {
+  // 逐欄保存狀態(UIUX 階段 5A U09):key=`${期別 id}:${欄位}` → { status: 'saving'|'saved'|'error'|'info', message }
+  // 沿用逐欄 onBlur 寫入;這裡只把每一次寫入的「儲存中／已儲存／未儲存」放回欄位旁,不改交易語意。
+  const [cell, setCell] = useState({})
+  const setCellState = (id, field, next) => setCell((c) => ({ ...c, [`${id}:${field}`]: next }))
+  // 未儲存時要能把輸入框拉回正式值:輸入框是 uncontrolled(避免打到一半就寫入),用 ref 記元素
+  const inputRefs = useRef({})
+  const bindInput = (id, field) => (el) => { inputRefs.current[`${id}:${field}`] = el }
+  const revert = (id, field, official) => {
+    const el = inputRefs.current[`${id}:${field}`]
+    if (el) el.value = official ?? ''
+    setCellState(id, field, null)
+  }
+  // 請款/收款欄位寫入失敗必須讓使用者看到(DB-first,失敗=UI 不變):
+  // 失敗時輸入框留著你打的值、旁邊寫「未儲存＋正式值」,可還原或修正後再離開欄位重試
+  const onPay = async (id, patch, field, official) => {
     setErrMsg('')
+    setCellState(id, field, { status: 'saving', message: '儲存中…' })
     const { error } = await updateValuationPayment(id, patch)
-    if (error) setErrMsg(friendlyError(error, '請款未寫入'))
+    if (error) {
+      const why = friendlyError(error, '寫入失敗')
+      setCellState(id, field, { status: 'error', message: `未儲存：${why}。正式值仍是 ${official == null || official === '' ? '空白' : official}`, official })
+      setErrMsg(friendlyError(error, '請款/收款紀錄未寫入，輸入值尚未生效'))
+      return
+    }
+    setCellState(id, field, { status: 'saved', message: '已儲存' })
+  }
+  // 驗證失敗(不打 API):輸入框留著你打的值,旁邊說原因與正式值,可還原
+  const rejectCell = (id, field, why, official) => {
+    setCellState(id, field, { status: 'error', message: `未儲存：${why}。正式值仍是 ${official == null || official === '' ? '空白' : official}`, official })
+  }
+  // 逐欄狀態列:就近顯示在該欄位下方;顏色＋文字並存
+  const cellStatus = (id, field) => {
+    const st = cell[`${id}:${field}`]
+    if (!st) return null
+    const cls = st.status === 'error' ? 'text-[var(--red-text)]' : st.status === 'saved' ? 'text-[var(--green-text)]' : 'text-[var(--text-3)]'
+    return (
+      <span role="status" className={`block mt-0.5 text-caption leading-snug ${cls}`}>
+        {st.message}
+        {st.status === 'error' && st.official !== undefined && (
+          <button type="button" onClick={() => revert(id, field, st.official)} className="ml-1 underline text-[var(--blue-text)]">還原</button>
+        )}
+      </span>
+    )
   }
 
   // 用「已核准變更套回後」的工項計價(B-02):否則核准追加減後與估驗頁金額分裂
@@ -56,7 +94,8 @@ export default function Payments() {
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
   // 使用者會被關在載入/空狀態畫面裡,換不到同工作面的其他頁。
-  const header = <PageHeader title="請款收款" tagline="現金流" subtitle="每期估驗 → 本期應領、保留款、收款追蹤" />
+  // keepSubtitle:角色提示之外,「此頁只登錄紀錄、不執行付款」是兩個角色都要看到的頁面脈絡
+  const header = <PageHeader title="請款收款" tagline="現金流" keepSubtitle subtitle="每期估驗 → 本期應領、保留款、收款追蹤；此頁只登錄請款與收款紀錄，系統不執行付款。" />
   // 載入中用骨架屏:Empty 自帶 inbox 圖示,擺在載入分支等於先跟使用者說「沒資料」
   if (!data) {
     return (
@@ -80,11 +119,13 @@ export default function Payments() {
       {header}
 
       {requestedPeriod && <div className="flex flex-wrap items-center gap-3 text-body text-[var(--text)]">
-        <span>{focused ? `正在處理第 ${focused.v.period_no} 期估驗的請款紀錄` : '找不到指定的估驗期，請查看現有期別。'}</span>
+        <span>{focused ? `正在處理第 ${focused.v.period_no} 期估驗的請款紀錄；下方統計為全案累計，不只本期。` : '找不到指定的估驗期，請查看現有期別。'}</span>
         <Button variant="outline" size="sm" onClick={() => setParams((p) => { const next = new URLSearchParams(p); next.delete('period'); return next }, { replace: true, state })}>顯示全部期別</Button>
       </div>}
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
+      {/* 指定期別進入時,當期工作(下表)與全案累計(統計卡)明確分區、各自標題 */}
+      {requestedPeriod && <h2 className="text-footnote font-medium text-[var(--text-2)] -mb-2">全案累計（已核定期別，共 {rows.filter((r) => isPayable(r.v.status)).length} 期）</h2>}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 四張卡一律只計已核定期別;未核定期數寫在第一張卡的小字,說明差額從哪來 */}
         <Stat label="已核定累計應領(扣保留款)" value={money(sum.net)} sub={draftNote ? `NT$・${draftNote}` : 'NT$'} color="text-[var(--text)]" />
@@ -96,7 +137,7 @@ export default function Payments() {
         <Stat label="累計保留款(待退)" value={money(sum.retention)} sub="完工後請領" color="text-[var(--text)]" />
       </div>
 
-      <Card title="逐期請款 / 收款" bodyClass="p-0" action={rows.length > 0 && (
+      <Card title={focused ? `第 ${focused.v.period_no} 期請款 / 收款登錄` : '逐期請款 / 收款'} bodyClass="p-0" action={rows.length > 0 && (
         // 第三級文字鈕:--blue-text+底線 hover,MSym 取代文字符號 ⬇(規範 1/7)
         <button onClick={() => exportCsv(`請款收款_${stamp()}`, rows, [
           { label: '期', get: (r) => `第${r.v.period_no}期` }, { label: '估驗日', get: (r) => r.v.valuation_date || '' },
@@ -104,7 +145,7 @@ export default function Payments() {
           { label: '本期保留款', get: (r) => Math.round(r.retention) }, { label: '本期應領', get: (r) => Math.round(r.net) },
           { label: '請款日', get: (r) => r.v.invoice_date || '' }, { label: '收款日', get: (r) => r.v.paid_date || '' },
           { label: '實收', get: (r) => r.v.paid_amount ?? '' }, { label: '狀態', get: (r) => paymentStatus(r.v).label },
-        ])} className="inline-flex items-center gap-1 text-sm font-medium text-[var(--blue-text)] hover:underline max-md:min-h-11"><MSym name="download" size={16} />匯出 CSV</button>
+        ])} className="inline-flex items-center gap-1 text-sm font-medium text-[var(--blue-text)] hover:underline max-md:min-h-11"><MSym name="download" size={16} />匯出 CSV（全案 {rows.length} 期）</button>
       )}>
         {rows.length === 0 ? (
           <Empty>尚無估驗期。請先到「估驗計價」建立估驗,這裡才會列出每期請款。</Empty>
@@ -112,6 +153,11 @@ export default function Payments() {
           <>
           {/* 斷點跟手機層對齊(BottomNav 是 md:hidden):min-w 820px 的表在 744px
               iPad mini 直式一樣讀不了,寫 max-sm 會讓 640–767 拿到手機版面卻是桌機表格 */}
+          {/* 明示保存語意:離開欄位即儲存該欄、每欄各自寫入,不是整列一次送出 */}
+          <p className="px-5 pt-3 text-caption text-[var(--text-3)] max-md:hidden">離開欄位後即儲存該欄；請款日、收款日、實收金額各自寫入，每次寫入的結果顯示在欄位下方。</p>
+          {requestedPeriod && !focused && (
+            <p className="px-5 py-4 text-footnote text-[var(--text-2)]">指定的期別不存在或已移除，請按「顯示全部期別」重新選擇；本頁未變更任何紀錄。</p>
+          )}
           <div className="overflow-x-auto max-md:hidden">
             <table className="w-full text-sm min-w-[820px]">
               <thead>
@@ -149,23 +195,27 @@ export default function Payments() {
                       <td className="px-2 text-right tabular-nums font-medium">{money(net)}</td>
                       <td className="px-2">
                         {/* onBlur 才寫入:避免打字打到一半就把半成品(或空值)存進 DB */}
-                        <input type="date" key={`inv-${v.id}-${v.invoice_date || ''}`} defaultValue={v.invoice_date || ''}
+                        <input type="date" key={`inv-${v.id}-${v.invoice_date || ''}`} defaultValue={v.invoice_date || ''} ref={bindInput(v.id, 'invoice_date')}
                           disabled={!approved} title={lockTip} aria-label={`第 ${v.period_no} 期請款日`} max={taipeiToday()}
-                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.invoice_date || null)) return; if (d && d > taipeiToday()) { setErrMsg(`請款日不可晚於今日（輸入了 ${d}）`); return } onPay(v.id, { invoice_date: d }) }}
+                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.invoice_date || null)) return; if (d && d > taipeiToday()) { rejectCell(v.id, 'invoice_date', `請款日不可晚於今日（輸入了 ${d}）`, v.invoice_date || ''); return } onPay(v.id, { invoice_date: d }, 'invoice_date', v.invoice_date || '') }}
                           className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
+                        {cellStatus(v.id, 'invoice_date')}
                       </td>
                       <td className="px-2">
-                        <input type="date" key={`paid-${v.id}-${v.paid_date || ''}`} defaultValue={v.paid_date || ''}
+                        <input type="date" key={`paid-${v.id}-${v.paid_date || ''}`} defaultValue={v.paid_date || ''} ref={bindInput(v.id, 'paid_date')}
                           disabled={!canPaidDate} title={approved ? (canPaidDate ? undefined : '請先填請款日') : lockTip}
                           aria-label={`第 ${v.period_no} 期收款日`} max={taipeiToday()} min={v.invoice_date || undefined}
-                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.paid_date || null)) return; if (d && d > taipeiToday()) { setErrMsg(`收款日不可晚於今日（輸入了 ${d}）`); return } if (d && v.invoice_date && d < v.invoice_date) { setErrMsg(`收款日不可早於請款日 ${v.invoice_date}`); return } onPay(v.id, { paid_date: d }) }}
+                          onBlur={(e) => { const d = e.target.value || null; if (d === (v.paid_date || null)) return; if (d && d > taipeiToday()) { rejectCell(v.id, 'paid_date', `收款日不可晚於今日（輸入了 ${d}）`, v.paid_date || ''); return } if (d && v.invoice_date && d < v.invoice_date) { rejectCell(v.id, 'paid_date', `收款日不可早於請款日 ${v.invoice_date}`, v.paid_date || ''); return } onPay(v.id, { paid_date: d }, 'paid_date', v.paid_date || '') }}
                           className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed" />
+                        {/* 前置條件就近說明:沒有請款日就登不了收款日 */}
+                        {approved && !canPaidDate && <span className="block mt-0.5 text-caption text-[var(--text-3)]">請先填請款日</span>}
+                        {cellStatus(v.id, 'paid_date')}
                       </td>
                       <td className="px-2 text-right">
                         {/* 平板(≥640px)也會用觸控填這欄:inputMode 讓數字鍵盤直接出來。
                             placeholder 不放本期應領金額(ISSUE-13):灰字數字看起來像已登錄,
                             承辦會以為填過了;應領金額改掛 title,滑鼠移上去才查得到。 */}
-                        <input type="number" min="0" step="any" inputMode="decimal" key={`amt-${v.id}-${v.paid_amount ?? ''}`} defaultValue={v.paid_amount ?? ''}
+                        <input type="number" min="0" step="any" inputMode="decimal" key={`amt-${v.id}-${v.paid_amount ?? ''}`} defaultValue={v.paid_amount ?? ''} ref={bindInput(v.id, 'paid_amount')}
                           placeholder="輸入實收金額" disabled={!canPaidAmount}
                           title={approved ? (canPaidAmount ? `本期應領 ${money(net)}` : '請先填收款日') : lockTip} aria-label={`第 ${v.period_no} 期實收金額`}
                           onBlur={async (e) => {
@@ -179,10 +229,17 @@ export default function Payments() {
                             if (val != null && val > Math.round(net) && !(await appConfirm({
                               title: `實收 ${money(val)} 超過本期應領 ${money(net)}`,
                               body: '確定登錄這個金額?(溢收/合併撥付請於備註說明)', danger: true, confirmLabel: '確認登錄',
-                            }))) { reset(); return }
-                            onPay(v.id, { paid_amount: val })
+                            }))) {
+                              // 取消溢收確認:輸入框拉回正式值,並明說沒有儲存(不能讓畫面假裝該值已登錄)
+                              reset()
+                              setCellState(v.id, 'paid_amount', { status: 'info', message: `已取消，未儲存；正式值仍是 ${v.paid_amount == null ? '空白' : money(v.paid_amount)}` })
+                              return
+                            }
+                            onPay(v.id, { paid_amount: val }, 'paid_amount', v.paid_amount ?? '')
                           }}
                           className="w-28 text-right border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs tabular-nums disabled:opacity-40 disabled:cursor-not-allowed" />
+                        {approved && !canPaidAmount && <span className="block mt-0.5 text-caption text-[var(--text-3)]">請先填收款日</span>}
+                        {cellStatus(v.id, 'paid_amount')}
                       </td>
                       <td className="px-2 pr-5">
                         <span className="inline-flex items-center gap-1.5">
@@ -194,10 +251,11 @@ export default function Payments() {
                           {approved && (v.invoice_date || v.paid_date || v.paid_amount != null) && (
                             <Button variant="ghost" size="sm" onClick={async () => {
                               if (!(await appConfirm({ title: `清空第 ${v.period_no} 期請款/收款資料？`, body: '退回核定前需先清空金流欄位;清空後可重新登錄。', danger: true, confirmLabel: '清空' }))) return
-                              onPay(v.id, { invoice_date: null, paid_date: null, paid_amount: null })
+                              onPay(v.id, { invoice_date: null, paid_date: null, paid_amount: null }, 'all', '')
                             }} aria-label={`清空第 ${v.period_no} 期金流`}>清空</Button>
                           )}
                         </span>
+                        {cellStatus(v.id, 'all')}
                       </td>
                     </tr>
                   )

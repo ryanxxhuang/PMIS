@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
@@ -16,6 +16,7 @@ import { fmtAmount as fmt } from '../../lib/format.js'
 import { billableLeaves } from '../../lib/boqCalc.js'
 import SiteLogReadOnly from '../../components/sitelog/SiteLogReadOnly.jsx'
 import SitePhotosCard from '../../components/sitelog/SitePhotosCard.jsx'
+import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
 
 
 // 照片 AI 逐張判讀的併發上限:三張同時打 edge function,多了只是排隊佔連線
@@ -35,7 +36,9 @@ export default function SiteLog() {
   const { project, workItems, adjustedItems, siteLogs, saveSiteLog, deleteSiteLog, isSupabaseConfigured, currentProject, workItemsSource, dbMode,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, readWhiteboard, classifySitePhoto, fetchWeather, updateProjectAnchors, can, aiEnabled } = useStore()
   const navigate = useNavigate()
-  const [date, setDate] = useState(taipeiToday())
+  // 日期進 URL(?d=,U11):待辦直達當日、重新整理與返回都停在同一天;只放日期這個識別,不放表單內容
+  const [params, setParams] = useSearchParams()
+  const [date, setDate] = useState(() => (/^\d{4}-\d{2}-\d{2}$/.test(params.get('d') || '') ? params.get('d') : taipeiToday()))
   // ISSUE-6a dirty 防護:表單有未存檔編輯時,載入 effect 不得用 store 覆寫表單。
   // 編輯一律走 useDirtyState 回傳的 setter 標記 dirty;raw setter 只給載入 effect 用(載入不是編輯)。
   // 「帶入天氣/AI 帶入/複製昨日」也算編輯——6a 的資料遺失正是帶入天氣後
@@ -49,12 +52,20 @@ export default function SiteLog() {
   const [lon, setLon] = useState(currentProject?.longitude ?? '')
   const [summary, setSummary, setSummaryRaw] = useDirtyState('', setDirty)
   const [items, setItems, setItemsRaw] = useDirtyState({}, setDirty) // item_key -> 當日數量
-  // 公定格式欄位（工程會公共工程施工日誌）——法定欄位,預設展開不降級(ISSUE-5a)
-  const [officialOpen, setOfficialOpen] = useState(true)
+  // 公定格式欄位（工程會公共工程施工日誌）——法定欄位不降級,但預設收合(UIUX 階段 3C U14):
+  // 本日施作數量與照片先出現,公定欄位由摘要列告知「已填幾列／尚未填哪幾節」再展開
+  const [officialOpen, setOfficialOpen] = useState(false)
+  // 本次工作階段最後一次存檔成功的時間(只給保存狀態章顯示;不是資料庫時間,換日期即清)
+  const [savedAt, setSavedAt] = useState(null)
+  // 照片上傳/刪除的結果與日誌存檔的結果分開表達:照片訊息只出現在照片區
+  const [photoMsg, setPhotoMsgRaw] = useState(null) // { text, tone } | null
+  const setPhotoMsg = (text, tone = 'error') => setPhotoMsgRaw(text ? { text, tone } : null)
   const [labor, setLabor, setLaborRaw] = useDirtyState([], setDirty)             // [{type,count}]
   const [equipment, setEquipment, setEquipmentRaw] = useDirtyState([], setDirty) // [{name,count}]
   const [materials, setMaterials, setMaterialsRaw] = useDirtyState([], setDirty) // [{name,unit,qty}]
   const [extras, setExtras, setExtrasRaw] = useDirtyState({}, setDirty)          // 四~八節
+  // 未存檔登記(切換專案先問、重新整理由瀏覽器提示);內容仍只在本頁 state
+  useUnsavedEdit('site-log', dirty ? `施工日誌 ${date}（未存檔）` : null)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   // ISSUE-6b 訊息分 tone:info(帶入/提示)/success(含 ✓)/error。
@@ -120,6 +131,15 @@ export default function SiteLog() {
     if (currentLog?.id) listSitePhotos(currentLog.id).then(setPhotos)
     else setPhotos([])
   }, [date, currentLog, listSitePhotos])
+
+  // 切日期:有未存檔輸入先問,取消就留在原日期(存檔寫的是畫面上的 date,不會存成另一日)
+  const changeDate = async (next) => {
+    if (!next || next === date) return
+    if (dirty && !(await appConfirm({ title: '切換日期將遺失未存檔內容', body: `${date} 的日誌尚未存檔，切到 ${next} 會遺失已填內容。`, danger: true, confirmLabel: '放棄並切換' }))) return
+    setSavedAt(null); setPhotoMsg(''); setSavedMsg('')
+    setDate(next)
+    setParams((p) => { const n = new URLSearchParams(p); n.set('d', next); return n }, { replace: true })
+  }
 
   // 零輸入:複製昨日 + 從歷史自學常用項目
   const prevLog = useMemo(() => previousLog(siteLogs, date), [siteLogs, date])
@@ -216,6 +236,7 @@ export default function SiteLog() {
     // 會讓載入 effect 在下次 siteLogs 變動時把表單洗回「無日誌」空白
     if (warning) { setSavedMsg(warning); return }
     setDirty(false) // 存檔成功=表單與 store 一致,載入 effect 可安全同步
+    setSavedAt(new Date())
     setSavedMsg('已存檔 ✓', 'success')
   }
 
@@ -223,19 +244,25 @@ export default function SiteLog() {
     const files = Array.from(e.target.files || [])
     e.target.value = '' // 允許重新選同一檔
     if (!files.length) return // 使用者取消選檔:不是錯誤
-    if (!currentLog?.id) { setSavedMsg('請先存檔本日日誌,才能上傳照片'); return } // P0 #11:靜默失敗變可見
-    setPhotoBusy(true)
+    if (!currentLog?.id) { setPhotoMsg('請先存檔本日日誌,才能上傳照片'); return } // P0 #11:靜默失敗變可見
+    setPhotoBusy(true); setPhotoMsg('')
+    let done = 0
+    let failed = null
     for (const f of files) {
       const { error } = await uploadSitePhoto(currentLog.id, f, { caption: summary || null })
-      if (error) { setSavedMsg(friendlyError(error, '照片上傳失敗')); break }
+      if (error) { failed = error; break }
+      done += 1
     }
     setPhotos(await listSitePhotos(currentLog.id))
     setPhotoBusy(false)
+    // 只講真的完成的部分:成功幾張、失敗在第幾張;日誌存檔狀態不受影響
+    if (failed) setPhotoMsg(`${done ? `照片 ${done} 張已上傳，` : ''}第 ${done + 1} 張${friendlyError(failed, '上傳失敗')}，可重新選擇再試`)
+    else setPhotoMsg(`照片 ${done} 張已上傳`, 'success')
   }
 
   const onDeletePhoto = async (p) => {
     const { error } = await deleteSitePhoto(p)
-    if (error) { setSavedMsg(friendlyError(error, '照片刪除未完成')); return }
+    if (error) { setPhotoMsg(friendlyError(error, '照片刪除未完成')); return }
     if (currentLog?.id) setPhotos(await listSitePhotos(currentLog.id))
   }
 
@@ -406,6 +433,32 @@ export default function SiteLog() {
             ) : (<>
             {/* 表單欄位一律 <Input>(FIELD_BASE):disabled/焦點/手機 44px 由元件統一;
                 固定寬用 ! 蓋掉 FIELD_BASE 的 w-full(Agent.jsx 同法) */}
+            {/* 卡頭:日期＋保存狀態章＋帶入動作(UIUX 階段 3C):今天填哪一天、存了沒,一眼可辨。
+                狀態章只反映本頁表單與 store 的關係:未存檔=有輸入還沒寫入;已存檔=表單與本日紀錄一致;
+                時間是本次存檔成功的時刻,不是資料庫時間 */}
+            {(() => {
+              const status = saving ? { text: '存檔中…', cls: 'bg-[var(--blue-tint)] text-[var(--blue-text)]' }
+                : dirty ? { text: '未存檔', cls: 'bg-[var(--amber-tint)] text-[var(--amber-text)]' }
+                  : currentLog ? { text: `已存檔${savedAt ? ` ${savedAt.toTimeString().slice(0, 5)}` : ''}`, cls: 'bg-[var(--green-tint)] text-[var(--green-text)]' }
+                    : { text: '本日尚無日誌', cls: 'bg-[var(--surface-2)] text-[var(--text-2)]' }
+              return (
+                <div className="flex items-end gap-3 flex-wrap mb-3">
+                  <div className="max-md:w-full"><Field label="日期"><Input type="date" value={date} onChange={(e) => changeDate(e.target.value)} /></Field></div>
+                  <span role="status" aria-label={`保存狀態：${status.text}`} className={`inline-flex items-center h-8 mb-0.5 px-2.5 rounded-lg text-footnote font-medium ${status.cls}`}>{status.text}</span>
+                  {can.edit && (
+                    <Button variant="secondary" onClick={pullWeather} disabled={weatherBusy} title="依工地座標向中央氣象局帶入今日天氣">
+                      <MSym name="partly_cloudy_day" size={14} />{weatherBusy ? '帶入中…' : '帶入天氣'}
+                    </Button>
+                  )}
+                  {/* 零輸入:一鍵帶入前一筆日誌的班組/機具/材料(僅新日期、且有前一筆時) */}
+                  {can.edit && !currentLog && prevLog && (
+                    <Button variant="secondary" onClick={copyYesterday} title={`帶入 ${prevLog.log_date} 的班組/機具/材料`}>
+                      <MSym name="library_add" size={14} />複製昨日
+                    </Button>
+                  )}
+                </div>
+              )
+            })()}
             <div className="flex items-end gap-3 flex-wrap mb-2">
               {/* 規範 §9.8 第三條:手機把日期/天氣排成兩欄格線,工作摘要獨佔一列。
                   稽核在 390 量到這四欄各自塌成一整列(日誌第一屏只剩四個輸入框)。
@@ -415,24 +468,12 @@ export default function SiteLog() {
                   寬度寫在外層 div、斷點一律 max-md/md(不用 sm):640-767 的 iPad mini 直式
                   已經是手機版面(BottomNav md:hidden),用 sm 會讓那一段拿到桌機排法。
                   桌機(≥768)三欄仍是原本的 flex 自然寬與 80px 天氣欄,視覺零變化。 */}
-              <div className="max-md:w-full"><Field label="日期"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field></div>
               <div className="max-md:w-[calc(50%-0.375rem)]"><Field label="天氣(上午)"><Input value={weather} disabled={!can.edit} onChange={(e) => setWeather(e.target.value)} className="md:!w-20" /></Field></div>
               <div className="max-md:w-[calc(50%-0.375rem)]"><Field label="天氣(下午)"><Input value={weatherPm} disabled={!can.edit} onChange={(e) => setWeatherPm(e.target.value)} placeholder="同上午" className="md:!w-20" /></Field></div>
               <div className="w-full md:w-auto"><Field label="工作摘要"><Input value={summary} disabled={!can.edit} onChange={(e) => setSummary(e.target.value)} placeholder="今日施工概況" className="md:!w-64" /></Field></div>
-              {can.edit && (
-                <Button variant="secondary" onClick={pullWeather} disabled={weatherBusy} title="依工地座標向中央氣象局帶入今日天氣">
-                  <MSym name="partly_cloudy_day" size={14} />{weatherBusy ? '帶入中…' : '帶入天氣'}
-                </Button>
-              )}
               {/* CWA 預報資料集只涵蓋未來約 3 天,過去日期打 API 必然帶不到——先講明,不讓使用者按了才看到失敗 */}
               {can.edit && date < taipeiToday() && (
                 <span className="text-caption text-[var(--text-3)] pb-2">僅支援近 3 天預報,過去日期請手動填寫</span>
-              )}
-              {/* 零輸入:一鍵帶入前一筆日誌的班組/機具/材料(僅新日期、且有前一筆時) */}
-              {can.edit && !currentLog && prevLog && (
-                <Button variant="secondary" onClick={copyYesterday} title={`帶入 ${prevLog.log_date} 的班組/機具/材料`}>
-                  <MSym name="library_add" size={14} />複製昨日
-                </Button>
               )}
             </div>
             {/* 工地座標設定(首次帶天氣時出現;存一次之後每天一鍵帶入) */}
@@ -472,6 +513,8 @@ export default function SiteLog() {
               <p className="mb-3 text-caption text-[var(--text-3)]">此 AI 功能未啟用（工程告示板辨識），請直接於下方手動填寫。</p>
             )}
 
+            {/* 本日施作數量:估驗帶入的來源,排在最前;下方接現場照片,公定欄位最後展開 */}
+            <h3 className="text-callout font-semibold text-[var(--text)] mb-2">本日施作數量</h3>
             <div className="relative mb-3">
               <Input value={search} disabled={!can.edit} onChange={(e) => setSearch(e.target.value)} placeholder={can.edit ? '搜尋工項加入今日回報…' : '唯讀檢視'} />
               {/* 浮層陰影走 token(--shadow-overlay),不用 Tailwind 原生 shadow-lg;
@@ -526,32 +569,58 @@ export default function SiteLog() {
               </div>
             )}
 
-            {/* 公定格式欄位（工程會「公共工程施工日誌」二~八節）*/}
+            {/* 現場照片:從獨立卡移進本日日誌(數量表下方),與存檔列同一個容器;
+                訊息(photoMsg)只講照片,日誌存檔結果在貼底列(UIUX 階段 3C) */}
+            <SitePhotosCard embedded currentLog={currentLog} can={can} aiEnabled={aiEnabled} leaves={leaves} byId={byId}
+              photos={photos} photosNeedingAI={photosNeedingAI} photoBusy={photoBusy} existingBusy={existingBusy} existingMsg={existingMsg} photoMsg={photoMsg}
+              staging={staging} batchBusy={batchBusy}
+              onBatchPhotos={onBatchPhotos} onClassifyExisting={onClassifyExisting} onAddPhotos={onAddPhotos} onDeletePhoto={onDeletePhoto}
+              patchStaging={patchStaging} removeStaging={removeStaging} cancelBatch={cancelBatch} confirmBatchUpload={confirmBatchUpload} />
+
+            {/* 公定格式欄位（工程會「公共工程施工日誌」二~八節）:預設收合,摘要列說已填幾列、
+                哪幾節還沒填;「填寫」直接展開並捲到該節。不叫「必填」——程式沒有法定必填規則,
+                只如實說「尚未填」 */}
+            {(() => {
+              const sections = [['出工人數', labor.length, 'official-labor'], ['機具使用', equipment.length, 'official-equipment'], ['材料使用', materials.length, 'official-materials']]
+              const filled = sections.reduce((n, [, c]) => n + c, 0)
+              const missing = sections.filter(([, c]) => !c)
+              const jumpTo = (id) => { setOfficialOpen(true); setTimeout(() => document.getElementById(id)?.scrollIntoView?.({ block: 'center' }), 0) }
+              return (
             <div className="mt-4 border border-[var(--border)] rounded-lg">
-              <button onClick={() => setOfficialOpen((o) => !o)}
-                className="w-full flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--text-2)] hover:bg-[var(--surface-2)] rounded-lg">
-                <MSym name="chevron_right" size={15} className={`transition-transform duration-[var(--dur-fast)] ${officialOpen ? 'rotate-90' : ''}`} />
-                公定格式欄位（出工人數・機具・材料・安衛…）
-                <span className="ml-auto text-caption text-[var(--text-3)] font-normal">
+              <div className="flex items-center gap-1.5 px-3 py-1 flex-wrap">
+                <button onClick={() => setOfficialOpen((o) => !o)} aria-expanded={officialOpen}
+                  className="flex items-center gap-1.5 py-1 min-h-11 text-sm font-medium text-[var(--text-2)] hover:text-[var(--text)] rounded-lg">
+                  <MSym name="chevron_right" size={15} className={`transition-transform duration-[var(--dur-fast)] ${officialOpen ? 'rotate-90' : ''}`} />
+                  公定格式欄位（出工人數・機具・材料・安衛…）
+                </button>
+                <span className="ml-auto text-caption text-[var(--text-3)] font-normal inline-flex items-center gap-2 flex-wrap">
                   {/* ISSUE-5a:這是工程會公定格式的法定欄位,副標不用「選填」降級,改中性說明 */}
-                  {labor.length + equipment.length + materials.length > 0 ? `已填 ${labor.length + equipment.length + materials.length} 列` : '公定格式日誌欄位，列印時輸出'}
+                  {filled > 0 ? `已填 ${filled} 列` : '公定格式日誌欄位，列印時輸出'}
+                  {can.edit && missing.length > 0 && (
+                    <span className="inline-flex items-center gap-1 flex-wrap">
+                      <span className="text-[var(--amber-text)]">尚未填：</span>
+                      {missing.map(([label, , id]) => (
+                        <button key={id} type="button" onClick={() => jumpTo(id)} className="text-[var(--blue-text)] hover:underline min-h-11 md:min-h-0">{label}</button>
+                      ))}
+                    </span>
+                  )}
                 </span>
-              </button>
+              </div>
               {officialOpen && (
                 <div className="px-3 pb-3 space-y-4">
-                  <div>
+                  <div id="official-labor">
                     {can.edit && <FreqChips items={freq.labor} label={(r) => r.type}
                       onAdd={(r) => setLabor((rows) => addUniqueRow(rows, r, (x) => x.type))} />}
                     <RowsEditor title="出工人數（工別）" rows={labor} onChange={setLabor} disabled={!can.edit}
                       fields={[{ key: 'type', ph: '工別（如 鋼筋工）', w: 'flex-1' }, { key: 'count', ph: '人數', w: '!w-20', num: true }]} />
                   </div>
-                  <div>
+                  <div id="official-equipment">
                     {can.edit && <FreqChips items={freq.equipment} label={(r) => r.name}
                       onAdd={(r) => setEquipment((rows) => addUniqueRow(rows, r, (x) => x.name))} />}
                     <RowsEditor title="機具使用" rows={equipment} onChange={setEquipment} disabled={!can.edit}
                       fields={[{ key: 'name', ph: '機具名稱', w: 'flex-1' }, { key: 'count', ph: '數量', w: '!w-20', num: true }]} />
                   </div>
-                  <div>
+                  <div id="official-materials">
                     {can.edit && <FreqChips items={freq.materials} label={(r) => `${r.name}${r.unit ? `（${r.unit}）` : ''}`}
                       onAdd={(r) => setMaterials((rows) => addUniqueRow(rows, r, (x) => x.name))} />}
                     <RowsEditor title="材料使用" rows={materials} onChange={setMaterials} disabled={!can.edit}
@@ -594,6 +663,8 @@ export default function SiteLog() {
                 </div>
               )}
             </div>
+              )
+            })()}
 
             {/* W8-0 §7:手機存檔列貼底固定——公定格式欄位展開後表單很長,捲到底才找得到存檔鈕
                 是現場回報的痛點;-mx-5 抵掉 Card 內距讓底條滿版。
@@ -602,7 +673,8 @@ export default function SiteLog() {
                 ⚠️ bottom 必須是 --bottom-nav-h 不能是 0:W9 的 BottomNav 是 fixed bottom-0 z-40,
                 而這一列是 sticky z-10——貼到 0 會被整個蓋住,存檔鈕在手機上完全點不到(實測命中的是
                 BottomNav 的 span)。斷點也必須是 max-md 與 BottomNav 的 md:hidden 對齊,不能用 max-sm。 */}
-            <div className={`flex items-center gap-3 mt-4${can.edit ? ' max-md:sticky max-md:bottom-[var(--bottom-nav-h)] max-md:z-10 max-md:bg-[var(--surface)] max-md:border-t max-md:border-[var(--border-2)] max-md:-mx-5 max-md:px-5 max-md:py-2.5 md:static md:border-0' : ''}`}>
+            {/* 桌機也貼底(UIUX 階段 3C):長表單捲到哪裡都找得到存檔;bottom-0 只給 md+,手機仍讓開 BottomNav */}
+            <div className={`flex items-center gap-3 mt-4 flex-wrap${can.edit ? ' sticky max-md:bottom-[var(--bottom-nav-h)] md:bottom-0 z-10 bg-[var(--surface)] border-t border-[var(--border-2)] -mx-5 px-5 py-2.5' : ''}`}>
               {/* busy prop:送出中禁用+旋轉圖示由 Button 統一,「存檔」文案不變(e2e 凍結字串) */}
               {can.edit ? <Button onClick={onSave} busy={saving}>存檔</Button> : <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>}
               {currentLog && (
@@ -616,11 +688,12 @@ export default function SiteLog() {
             </>)}
           </Card>
 
-          <SitePhotosCard currentLog={currentLog} can={can} aiEnabled={aiEnabled} leaves={leaves} byId={byId}
-            photos={photos} photosNeedingAI={photosNeedingAI} photoBusy={photoBusy} existingBusy={existingBusy} existingMsg={existingMsg}
+          {/* 唯讀視角(監造/機關)維持獨立的現場照片卡;可編視角已把照片區併進本日日誌 */}
+          {!can.edit && <SitePhotosCard currentLog={currentLog} can={can} aiEnabled={aiEnabled} leaves={leaves} byId={byId}
+            photos={photos} photosNeedingAI={photosNeedingAI} photoBusy={photoBusy} existingBusy={existingBusy} existingMsg={existingMsg} photoMsg={photoMsg}
             staging={staging} batchBusy={batchBusy}
             onBatchPhotos={onBatchPhotos} onClassifyExisting={onClassifyExisting} onAddPhotos={onAddPhotos} onDeletePhoto={onDeletePhoto}
-            patchStaging={patchStaging} removeStaging={removeStaging} cancelBatch={cancelBatch} confirmBatchUpload={confirmBatchUpload} />
+            patchStaging={patchStaging} removeStaging={removeStaging} cancelBatch={cancelBatch} confirmBatchUpload={confirmBatchUpload} />}
         </div>
 
         <Card title={`施工日誌（${siteLogs.length}）`} action={siteLogs.length > 0 && (
@@ -632,7 +705,7 @@ export default function SiteLog() {
                 <div key={l.id} className={`px-3 py-2 rounded-lg text-sm border transition-colors ${l.log_date === date ? 'bg-[var(--blue-tint)] border-[var(--blue)]' : 'border-[var(--border)] hover:bg-[var(--surface-2)]'}`}>
                   <div className="flex justify-between items-center gap-2">
                     {/* 日期切換是這一列的主觸控目標:手機補 44px(flex 列只會長高不會破版) */}
-                    <button onClick={() => setDate(l.log_date)} className="font-medium text-[var(--text)] num text-left flex-1 truncate max-md:min-h-11">{l.log_date}</button>
+                    <button onClick={() => changeDate(l.log_date)} className="font-medium text-[var(--text)] num text-left flex-1 truncate max-md:min-h-11">{l.log_date}</button>
                     <span className="text-xs text-[var(--text-3)]">{Object.keys(l.items).length} 工項</span>
                     {can.edit && <IconButton name="close" label={`刪除 ${l.log_date} 日誌`} onClick={async () => { if (await appConfirm({ title: `刪除 ${l.log_date} 的施工日誌？`, danger: true, confirmLabel: '刪除' })) { const { error } = await deleteSiteLog(l.id); if (error) setSavedMsg(friendlyError(error, '日誌刪除未完成')) } }} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />}
                   </div>

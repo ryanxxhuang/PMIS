@@ -1,8 +1,9 @@
 // 提醒中心與首頁共用 useTodayTasks；此處供跨責任方按期限查閱。
 // 期限不在這裡算:due/overdueDays 由 lib/todayTasks.js 給,本頁只做分類與呈現。
 // 版面走清單／詳情殼(規範 §0 疊合版):列只負責選取,詳情欄放來源單據摘要與「前往」。
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useUrlFilters } from '../../lib/useUrlFilters.js'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, BallChip, Button, Dot, Empty, PageHeader } from '../../components/ui.jsx'
@@ -32,7 +33,10 @@ export default function Alerts() {
   const location = useLocation()
   const { currentProject, isSupabaseConfigured, currentUser } = useStore()
   const tasks = useTodayTasks()
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  // 篩選保存在 URL(與首頁 TaskSection 同一做法,UIUX 階段 2 U11):「前往處理」帶的返回網址
+  // 是 pathname+search,篩選不進 URL 就會在返回時遺失、使用者又要重找。只放關鍵字與
+  // 期限類別這兩個可分享的識別,不放表單或敏感內容。
+  const [filters, setFilters] = useUrlFilters(DEFAULT_FILTERS)
   const searchRef = useRef(null)
   const org = currentUser?.org_type || 'contractor'
   const todayIso = taipeiISODate(new Date())
@@ -59,7 +63,7 @@ export default function Alerts() {
 
   // 選取/深連結(?alert=)/切案重置/初次自動選取:預設選第一筆(=最急的一筆:輪到我且最逾期)
   const pid = currentProject?.project_id
-  const { selectedId, detailOpen, select, closeDetail } = useListDetailPane({
+  const { selectedId, detailOpen, select, closeDetail, missingId } = useListDetailPane({
     param: 'alert', idPrefix: 'alert-',
     scope: `${pid}/${org}`,
     ready: rows.length > 0, rows,
@@ -165,10 +169,11 @@ export default function Alerts() {
       <PageHeader title="提醒中心" tagline="逾期與到期的完整清單"
         subtitle="將我方與等待對方的事項依逾期、即將到期及待處理分類。點選一筆可查看來源，並前往單據處理。" />
 
+      {missingId && <p role="status" className="rounded-lg px-3 py-2 text-footnote bg-[var(--amber-tint)] text-[var(--amber-text)]">找不到指定的提醒（{missingId}），可能已完成或不在本專案；已顯示清單第一筆，網址已改為不指向該筆。</p>}
       {rows.length === 0 ? (
         <Card title="提醒" bodyClass="p-0"><Empty>目前沒有逾期或待處理事項 — 都跟上了。</Empty></Card>
       ) : (
-        <ListDetailLayout
+      <ListDetailLayout
           detail={detailBody}
           detailLabel="提醒詳情"
           detailEmpty={<Empty>點左側清單查看提醒的來源與到期日。</Empty>}
