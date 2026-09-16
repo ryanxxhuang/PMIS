@@ -5,7 +5,7 @@
 
 ## 1. 產品與範圍
 
-GovAgent 讓政府承辦人使用懂業務的 AI Agent；PMIS 是目前公共工程垂直領域的 repo。現階段只做公共工程，不預建其他領域框架。App 在 `app.gov-agent.ai`；`gov-agent.ai` 是另一個 `PMIS.marketing` repo 的行銷站；線上 demo 站 `pmis-demo.ryanxhuang1212.workers.dev`（Supabase 留空建置，三角色選人登入、記憶體種子，需手動重佈）。
+GovAgent 讓政府承辦人使用懂業務的 AI Agent；PMIS 是目前公共工程垂直領域的 repo。現階段只做公共工程，不預建其他領域框架。App 在 `app.gov-agent.ai`；`gov-agent.ai` 是另一個 `PMIS.marketing` repo 的行銷站；線上 demo 站 `demo.gov-agent.ai`（備援 `pmis-demo.ryanxhuang1212.workers.dev`；Supabase 留空建置，三角色選人登入、記憶體種子，需手動重佈）。
 
 ## 2. 使用者與授權
 
@@ -68,7 +68,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 - **2026-09-16 補強包 C（Codex 實測 W07／W09）**：PR #92 已合併（merge commit `e54d39a`，分支 `fix/uiux-package-c`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（116 檔 1,228 項單元、45 項相關 Demo E2E）；內容為 W09 文案與 W07 口徑對照文件，不含進度公式、DB migration 或 Edge 部署；W07 標示文案待 C1 決策後另行實作。
 - **2026-09-16 補強包 C 第二批（進度口徑 D-024）**：PR #94 已合併（merge commit `11846ca`，分支 `fix/uiux-package-c2`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（118 檔 1,239 項單元、60 項相關 Demo E2E）；前端由 Cloudflare 自動建置，不含 DB migration 或 Edge 部署（`portfolio_summary` 未改）；正式站登入後流程與真人驗收未核對。
 - **2026-09-16 小包 D（Codex §5 版面與操作感受）**：PR #96 已合併（merge commit `0d9cce1`，分支 `fix/uiux-package-d`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（119 檔 1,241 項單元、59 項相關 Demo E2E）；純前端版面與文案，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
-- **2026-09-16 線上 demo 站**：新增 Cloudflare Worker `pmis-demo`（Free 方案靜態資產，使用者核准），網址 `https://pmis-demo.ryanxhuang1212.workers.dev`，以 main `1d15b42` 用 `VITE_SUPABASE_URL=`、`VITE_SUPABASE_ANON_KEY=`、`VITE_SENTRY_DSN=` 建置後 `wrangler deploy --name pmis-demo`（Version `1678943e`）。已核對：登入頁出現三角色鈕、監造登入落首頁、無 console 錯誤、bundle 不含 Supabase 網址。不隨 main 自動更新，重佈指令見 DEVELOPMENT；自訂網域 `demo.gov-agent.ai` 未綁。
+- **2026-09-16 線上 demo 站**：新增 Cloudflare Worker `pmis-demo`（Free 方案靜態資產，使用者核准），網址 `https://pmis-demo.ryanxhuang1212.workers.dev`，以 main `1d15b42` 用 `VITE_SUPABASE_URL=`、`VITE_SUPABASE_ANON_KEY=`、`VITE_SENTRY_DSN=` 建置後 `wrangler deploy --name pmis-demo`（Version `1678943e`）。已核對：登入頁出現三角色鈕、監造登入落首頁、無 console 錯誤、bundle 不含 Supabase 網址。不隨 main 自動更新，重佈指令見 DEVELOPMENT。同日綁自訂網域 `https://demo.gov-agent.ai`（`wrangler.demo.jsonc` 的 `routes[].custom_domain`，Version `e70fbfdc`），已核對 200、登入頁三角色鈕、無 console 錯誤；workers.dev 網址保留為備援。
 - **2026-09-15 UIUX 階段 1–6（桌機三角色流程）**：PR #85 已合併（merge commit `afdaefb`，分支 `ui/uiux-stages-1-6`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（114 檔 1,218 項單元、10 檔 70 項 Demo E2E、lint／build／check:docs）；前端由 Cloudflare 自動建置，建置版本以 Cloudflare 後台為準。前端變更，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
 - **2026-09-14 UIUX 工作包**：已隨 PR #83 合併（`7156aef`）。前端變更，不含 DB migration 或 Edge 部署。
 
