@@ -64,7 +64,9 @@ describe('監造審查順序', () => {
     expect(btnIn(d, '核准')).toBeUndefined()
     expect(btnIn(d, '駁回')).toBeUndefined()
     // AI 關閉時如實說,決定鈕仍可用(沒有 AI 也能審)
-    expect(d.textContent).toContain('AI 審查功能未啟用，請直接依文件審定')
+    // AI 助手預設收合;展開後才看到「未啟用」說明(Codex §5)
+    await act(async () => [...d.querySelectorAll('button')].find((x) => x.textContent.includes('AI 助手（可選')).click())
+    expect(detail().textContent).toContain('AI 審查功能未啟用，請直接依文件審定')
   })
 
   it('受理 → 審定段出現;退回補正空白原因不寫入;審定失敗狀態不變;核准後留結果與下一件', async () => {
@@ -130,8 +132,15 @@ describe('監造審查順序', () => {
   it('AI 開啟:兩項能力各有說明與資料範圍;沒上傳文件本體就說讀不了、只給審查助手', async () => {
     state.store = { ...state.store, aiEnabled: () => true }
     await render()
-    const d = detail()
-    expect(d.textContent).toContain('AI 助手（可選，結果只保留在本頁，離開後需重新執行）')
+    let d = detail()
+    // AI 助手預設收合(Codex §5:決定鈕先進首屏),標題列是可展開的按鈕;展開後才列兩項能力
+    const toggle = [...d.querySelectorAll('button')].find((x) => x.textContent.includes('AI 助手（可選'))
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(d.textContent).not.toContain('依契約規範與工項列審查要點')
+    expect(buttons('受理審核').length).toBe(1) // 收合時決定鈕照樣在
+    await act(async () => toggle.click())
+    d = detail()
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(d.textContent).toContain('依契約規範與工項列審查要點、草擬意見；不讀文件本體')
     expect(d.textContent).toContain('尚未上傳文件本體，無法執行')
     expect(btnIn(d, 'AI 審查助手')).toBeTruthy()
