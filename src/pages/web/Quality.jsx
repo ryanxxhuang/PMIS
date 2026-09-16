@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
@@ -40,6 +40,8 @@ export default function Quality() {
   // 分段是非當前不渲染的,切段時重新掛載,殼的初次自動選取會優先吃深連結,詳情欄直接
   // 落在那一筆(規範 §1 判準第 3 題:從發現到完成少一步;§9.7 收件匣直達那一筆)。
   const [params, setSearchParams] = useSearchParams()
+  // 切段/點佇列改寫 query 時保住 location.state:「返回今日待辦」的來源住在 state,丟掉就沒有返回入口(W05)
+  const { state: navState } = useLocation()
   // 預設分段固定「查驗」(三角色一致,監造判定動線不必先切段);例外是 URL 已帶某分段的
   // 單條參數(收件匣的 ?defect= / 佇列的 ?inspection= 等)——query 要落到那個殼身上才有意義。
   const [segment, setSegment] = useState(() => SEGMENT_OF_PARAM.find(([, k]) => params.has(k))?.[0] || SEG_OF_KEY[params.get('seg')] || '查驗')
@@ -52,7 +54,7 @@ export default function Quality() {
   // 單條參數只在自己的分段有意義:離開分段就拿掉,否則切回來時殼會把它當深連結、<lg 又彈一次抽屜
   const changeSegment = (s) => {
     const stale = SEGMENT_OF_PARAM.filter(([seg, k]) => seg !== s && params.has(k)).map(([, k]) => k)
-    setSearchParams((p) => { const n = new URLSearchParams(p); stale.forEach((k) => n.delete(k)); n.set('seg', SEG_KEY[s]); return n }, { replace: true })
+    setSearchParams((p) => { const n = new URLSearchParams(p); stale.forEach((k) => n.delete(k)); n.set('seg', SEG_KEY[s]); return n }, { replace: true, state: navState })
     setSegment(s)
   }
   // 佇列點一筆:寫入該段的單條參數並重掛該段的殼(初次自動選取才會讀深連結)。
@@ -65,7 +67,7 @@ export default function Quality() {
       if (param && q.id) n.set(param, q.id)
       n.set('seg', SEG_KEY[q.segment])
       return n
-    }, { replace: true })
+    }, { replace: true, state: navState })
     setSegment(q.segment); setQueueTick((t) => t + 1)
   }
   // 判定成功的原地回饋(沿用各區塊 savedMsg 模式,不進全域狀態):

@@ -60,14 +60,15 @@ export function FindWork({ collapsed = false, onNavigate, mobileReturnRef }) {
 }
 
 export function WorkContext() {
-  const { pathname, state } = useLocation()
+  const { pathname, search, state } = useLocation()
   const back = state?.taskReturn
   // 只接受站內的兩個收件匣來源；單据自己的 query 更新保留此 state。
   const canReturn = back && /^\/(dashboard|alerts)(\?|$)/.test(back.to) && !['/dashboard', '/alerts'].includes(pathname)
   if (!canReturn) return null
   return (
     <div className="mb-4 print:hidden space-y-2">
-      {canReturn && <Link to={back.to} state={{ returnedTask: back.key }} className="inline-flex items-center gap-1 min-h-11 text-body font-medium text-[var(--blue-text)]">
+      {/* returnedTo:剛才那一筆的頁面與選取(pathname+search);原項離開清單時首頁靠它給確定的回找入口(W06) */}
+      {canReturn && <Link to={back.to} state={{ returnedTask: back.key, returnedTo: `${pathname}${search}` }} className="inline-flex items-center gap-1 min-h-11 text-body font-medium text-[var(--blue-text)]">
         <MSym name="chevron_left" size={18} />返回{back.label}
       </Link>}
     </div>

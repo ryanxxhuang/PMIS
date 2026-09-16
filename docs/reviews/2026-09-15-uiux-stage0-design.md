@@ -361,6 +361,13 @@
 - **影響**：`unsavedEdits.js`（`guardInAppNavigation`／`useInAppLeaveGuard`／`clearUnsavedEdits`）、`Layout.jsx`、`SiteLog.jsx`（列印鈕確認）、`Submittals.jsx`（W02 標籤）、`qc.js`（`checklistCoverage`／`coverageText`）、`ChecklistSection.jsx`、`InspectionsSection.jsx`、`supervisorReport.js`、`site.js`、`ValuationPackage.jsx`（`photo_count`）；新增 `unsavedEdits.guard.test.jsx`、`qc.coverage.test.js`，擴充送審審查、監造報表、檢查表、品質旅程測試。
 - **驗收**：W01 保留／放棄／存檔後離開（jsdom＋Demo）；W02 受理前後標籤；W03 只填一項、全填、含不合格、未填的覆蓋文字；W04 報表意見無既成事實、零照片不說已附照片。未測分支：瀏覽器返回鍵、正式 Edge 生成的佐證包文案。
 
+## 5.16 補強包 B 工作紀錄（2026-09-16 實作，本機 diff；依 Codex 實測報告 W05／W06／W08／D01）
+
+- **逐條核對（main `566fa1c`）**：W05 仍成立（`Quality.jsx` 兩處 `setSearchParams` 與 `useUrlFilters`、`SiteLog.jsx` 改寫 query 未帶 `state`，`taskReturn` 被洗掉）；W06 仍成立（返回只帶 key，首頁提示指向「今天已完成」但該清單只列缺失與查驗）；W08 仍成立（建立後提示要求「請在附件說明註明」，詳情無對應動作）；D01 仍成立（`collab.js` 非真專案上傳回錯，頁面仍提示重選檔案再試）。
+- **不做**：不放寬已提送件的修改權限、不建全業務完成歷史、不改 Storage 或正式上傳、不做手機／平板。
+- **影響**：`useUrlFilters.js`、`Quality.jsx`、`SiteLog.jsx`（保留 state）；`WorkNavigation.jsx`（`returnedTo`）、`Dashboard.jsx`（回找連結）；`Submittals.jsx`（W08 文案與表單提示、D01 示範模式說明）；測試四支擴充。
+- **驗收**：首頁→查驗→切段／佇列→返回入口仍在；核准後返回可一鍵回到那一筆；建立後的每條提示都能在現行規則內執行；Demo 不叫人無效重試。
+
 ## 6. 證據標記與未驗項
 
 - 程式確認：§1 全部行號、§2 的動作名稱。

@@ -73,10 +73,14 @@ describe('無標單的真專案首頁', () => {
 
   it('從單據返回但原項已不在清單:明說可能已完成或交給對方(U11)', async () => {
     await act(async () => {
-      root.render(<MemoryRouter initialEntries={[{ pathname: '/dashboard', state: { returnedTask: 'gone-task' } }]}><Dashboard /></MemoryRouter>)
+      root.render(<MemoryRouter initialEntries={[{ pathname: '/dashboard', state: { returnedTask: 'gone-task', returnedTo: '/change-orders?co=C2' } }]}><Dashboard /></MemoryRouter>)
     })
     const status = [...container.querySelectorAll('[role="status"]')].map((n) => n.textContent).join(' ')
-    expect(status).toContain('剛才處理的事項已不在這份清單')
+    expect(status).toContain('剛才處理的事項已不在「現在輪到我」')
+    expect(status).not.toContain('今天已完成')
+    // W06:給確定的回找入口,指向剛才那一筆
+    const back = [...container.querySelectorAll('a')].find((a) => a.textContent.includes('回到剛才處理的那一筆'))
+    expect(back?.getAttribute('href')).toBe('/change-orders?co=C2')
   })
 
   it('等待對方/今天已完成不帶初始化卡,只列該桶清單', async () => {
