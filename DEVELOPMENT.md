@@ -34,7 +34,7 @@
 - 權限／狀態轉移必須有 pgTAP；確定性計算必須有單元測試。
 - 可能超過 1,000 列的查詢使用既有分頁工具，避免 PostgREST 靜默截斷。
 - 驗證：`npm run check:docs`、`npm run lint`、`npm test`、`npm run build`；Edge 改動跑 `npm run check:edge`；依範圍跑 Demo E2E、真後端 E2E／`npm run test:db`，操作見 [README](README.md) 與 [Supabase 設定](supabase/SETUP.md)。
-- 線上 demo 站（`pmis-demo.ryanxhuang1212.workers.dev`）不隨 main 自動部署，更新時手動重佈：`VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= VITE_SENTRY_DSN= npm run build && npx wrangler deploy --name pmis-demo`（Supabase 留空即 demo 模式；正式站 `pmis` 由 Workers Builds 自動建置，兩者用同一份 `wrangler.jsonc`，只差 `--name`）。
+- 線上 demo 站（`demo.gov-agent.ai`，備援 `pmis-demo.ryanxhuang1212.workers.dev`）不隨 main 自動部署，更新時手動重佈：`VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= VITE_SENTRY_DSN= npm run build && npx wrangler deploy --config wrangler.demo.jsonc`（Supabase 留空即 demo 模式；設定檔與正式站的 `wrangler.jsonc` 分開，正式 `pmis` 由 Workers Builds 自動建置，不會吃到 demo 的自訂網域）。
 - 本機 npm 若因全域 `os=linux` 缺 darwin binding，使用 `npm i --os=darwin --cpu=arm64`；Edge 部署在 colima 下需 `--use-api`。
 
 ## 6. 完成定義
