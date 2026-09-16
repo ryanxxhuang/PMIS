@@ -4,10 +4,13 @@
 // 分段);等於預設值就從 URL 刪掉,網址保持乾淨;replace 不炸掉瀏覽歷史。
 // defaults 必須是模組層常數(穩定 reference),否則 filters 每次 render 都是新物件。
 import { useCallback, useMemo, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 
 export function useUrlFilters(defaults) {
   const [params, setParams] = useSearchParams()
+  // 改寫 query 要保住 location.state:從待辦進來的 taskReturn 住在 state,setSearchParams 預設會把它丟掉,
+  // 一打字搜尋「返回今日待辦」就消失(W05 同類問題)
+  const { state } = useLocation()
   const filters = useMemo(
     () => Object.fromEntries(Object.keys(defaults).map((k) => [k, params.get(k) ?? defaults[k]])),
     [params, defaults],
@@ -25,7 +28,7 @@ export function useUrlFilters(defaults) {
         else next.delete(key)
       }
       return next
-    }, { replace: true })
-  }, [defaults, setParams])
+    }, { replace: true, state })
+  }, [defaults, setParams, state])
   return [filters, setFilters]
 }

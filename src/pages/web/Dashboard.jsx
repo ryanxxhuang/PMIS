@@ -375,7 +375,13 @@ function TaskSection({ title, items, empty, emptyTitle, emptyTo = null, hint = n
           <span role="status" className="text-footnote text-[var(--text-3)] sm:ml-auto">顯示 {shown.length} / {matched.length} 件</span>
         </div>
       </div>}
-      {returnedGone && <p role="status" className="px-4 pt-3 text-footnote text-[var(--text-2)]">剛才處理的事項已不在這份清單，可能已完成或已交給對方；可到「等待對方」或「今天已完成」查看。</p>}
+      {/* 不指向不一定找得到它的「今天已完成」(那裡只列有完成時間的缺失與查驗);給確定的回找入口(W06) */}
+      {returnedGone && (
+        <p role="status" className="px-4 pt-3 text-footnote text-[var(--text-2)] flex items-center gap-2 flex-wrap">
+          <span>剛才處理的事項已不在「{title}」，可能已完成或已交給對方。</span>
+          {state?.returnedTo && <Link to={state.returnedTo} className="inline-flex items-center gap-0.5 min-h-11 font-medium text-[var(--blue-text)] hover:underline">回到剛才處理的那一筆<MSym name="chevron_right" size={14} /></Link>}
+        </p>
+      )}
       {done && <p className="px-4 pt-3 text-footnote text-[var(--text-3)]">此處僅列有完成時間的缺失結案與查驗判定。其他操作請查閱<Link to="/activity" className="text-[var(--blue-text)] inline-flex items-center min-h-11">活動紀錄</Link>。</p>}
       {items.length === 0 ? (
         <Empty title={emptyTitle}>

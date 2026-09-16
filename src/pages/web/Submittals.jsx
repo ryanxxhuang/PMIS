@@ -58,7 +58,7 @@ const blankForm = () => ({ title: '', category: '施工計畫', submitted_date: 
 
 export default function Submittals() {
   const { submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal,
-    uploadSubmittalFile, readSubmittalDoc, isSupabaseConfigured, currentProject, currentUser, can, aiEnabled } = useStore()
+    uploadSubmittalFile, readSubmittalDoc, isSupabaseConfigured, isPersistedProject, currentProject, currentUser, can, aiEnabled } = useStore()
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 審定寫入失敗必須讓使用者看到(失敗=UI 不變)
@@ -280,7 +280,7 @@ export default function Submittals() {
           const text = notice.kind === 'created'
             ? `提送紀錄已建立（${s.submittal_no}，Rev.${s.revision || 0}，狀態：已提送）。${s.attachment_path
               ? '文件本體已附上。'
-              : '尚未上傳文件本體：請在下方「文件與提送方式」上傳；若以公文或雲端連結另送，請在附件說明註明。'}`
+              : `尚未上傳文件本體：請在下方「文件與提送方式」上傳。附件說明建立後不可修改${s.attachment_note ? '' : '（本件未填）'}；文件若以公文或雲端連結另送而未註明，補正再送時可寫在補正說明。`}`
             : notice.kind === 'uploaded'
               ? (s.status === '退回補正'
                 ? `文件「${notice.name}」已更換，監造已可查看；仍需「修正再送」本件才會回到待審。`
@@ -393,16 +393,21 @@ export default function Submittals() {
             {s.attachment_path
               ? <span className="text-footnote inline-flex items-center gap-1 text-[var(--blue-text)]"><MSym name="description" size={13} />已附文件：{s.attachment_name || '文件'}</span>
               : <span className="text-footnote text-[var(--text-3)]">尚未上傳文件本體</span>}
+            {/* 示範模式沒有 Storage:入口直接說明,不給一顆按了才失敗、還叫人重試的上傳鈕(D01) */}
+            {canUpload && !isPersistedProject && (
+              <span className="text-caption text-[var(--text-3)]">示範模式不支援上傳文件本體；正式專案才可上傳。</span>
+            )}
             {/* 不能用 <button> 的檔案上傳 label 也吃同一套按鈕皮(44px 觸控) */}
-            {canUpload && (
+            {canUpload && isPersistedProject && (
               <label className={`${buttonClass('outline', 'sm')} ${uploadBusy === s.id ? 'opacity-50' : 'cursor-pointer'}`}>
                 <input type="file" accept=".pdf,.doc,.docx,image/*" disabled={uploadBusy === s.id} onChange={(e) => onUpload(s, e)} className="hidden" />
                 <MSym name="upload" size={14} />{uploadBusy === s.id ? '上傳中…' : (s.attachment_path ? '更換文件' : '上傳文件')}
               </label>
             )}
           </div>
+          {/* 只給當下做得到的指示(W08):附件說明建立後不可修改,外部交件要在建立時或補正再送時註明 */}
           {canUpload && (
-            <p className="mt-2 text-caption leading-relaxed text-[var(--text-3)]">建立提送紀錄與上傳文件是兩個步驟；文件若以公文或雲端連結另送，請在附件說明註明，監造才知道去哪裡取件。</p>
+            <p className="mt-2 text-caption leading-relaxed text-[var(--text-3)]">建立提送紀錄與上傳文件是兩個步驟。附件說明只在建立時填寫，建立後不可修改；文件若以公文或雲端連結另送而未註明，補正再送時可寫在補正說明，監造才知道去哪裡取件。</p>
           )}
           {/* 監造:AI 助手是可選工具,放在文件旁邊——兩項能力的資料範圍不同,結果只留在本頁;
               沒有 AI 也能審(決定鈕在下方);文件本體沒上傳就如實說讀不了,不生出不存在的審查資料 */}
@@ -631,7 +636,7 @@ export default function Submittals() {
             <Field label="類別"><Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
             <Field label="提送日"><Input type="date" value={form.submitted_date} onChange={(e) => setForm({ ...form, submitted_date: e.target.value })} /></Field>
             <Field label="監造應審回期限"><Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></Field>
-            <div className="md:col-span-2"><Field label="附件說明"><Input value={form.attachment_note} onChange={(e) => setForm({ ...form, attachment_note: e.target.value })} placeholder="如 含出廠證明、CNS 試驗報告；文件若以公文或雲端連結另送，請在此註明" /></Field></div>
+            <div className="md:col-span-2"><Field label="附件說明" hint="建立後不可修改；文件若以公文或雲端連結另送，請在此註明取件方式。"><Input value={form.attachment_note} onChange={(e) => setForm({ ...form, attachment_note: e.target.value })} placeholder="如 含出廠證明、CNS 試驗報告；文件若以公文或雲端連結另送，請在此註明" /></Field></div>
           </div>
           <div className="mt-3 flex items-center gap-3 flex-wrap">
             <Button onClick={submit} disabled={busy || !form.title}>{busy ? '提送中…' : '提送'}</Button>

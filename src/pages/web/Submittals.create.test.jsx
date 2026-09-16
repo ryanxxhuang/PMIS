@@ -80,6 +80,11 @@ describe('新送審:失敗保留、成功定位', () => {
     // 進到該筆詳情後明示「紀錄已建立」與附件狀態,不把建立當成文件已送到(階段 3A U06)
     expect(detail.textContent).toContain('提送紀錄已建立（SUB-009，Rev.0，狀態：已提送）')
     expect(detail.textContent).toContain('尚未上傳文件本體：請在下方「文件與提送方式」上傳')
+    // W08:不再叫人做建立後做不到的事;D01:示範模式(非真專案)不給會失敗的上傳鈕
+    expect(detail.textContent).not.toContain('請在附件說明註明')
+    expect(detail.textContent).toContain('附件說明建立後不可修改')
+    expect(detail.textContent).toContain('示範模式不支援上傳文件本體')
+    expect(detail.querySelector('input[type="file"]')).toBeNull()
   })
 
   it('送出中連點兩次只建立一筆;store 丟非預期例外也會收尾 busy 並顯示錯誤', async () => {

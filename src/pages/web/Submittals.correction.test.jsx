@@ -28,7 +28,8 @@ beforeEach(() => {
   state.store = {
     submittals: [returned], createSubmittal: vi.fn(), decideSubmittal: vi.fn(), resubmitSubmittal: vi.fn(), deleteSubmittal: vi.fn(),
     reviewSubmittal: vi.fn(), uploadSubmittalFile: vi.fn(), readSubmittalDoc: vi.fn(),
-    isSupabaseConfigured: false, currentProject: { project_id: 'p1' }, currentUser: { org_type: 'contractor' },
+    // 真專案才有上傳鈕(D01):這支要測上傳失敗/成功,所以標成真專案
+    isSupabaseConfigured: false, isPersistedProject: true, currentProject: { project_id: 'p1' }, currentUser: { org_type: 'contractor' },
     can: { submit: true, approve: false }, aiEnabled: () => false, isPlatformAdmin: false,
   }
   container = document.createElement('div')

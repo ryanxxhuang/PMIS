@@ -5,6 +5,13 @@
 
 ## 1. 本輪驗證
 
+### 2026-09-16 補強包 B：工作交接與回找（W05／W06／W08／D01；本機 diff，未發布）
+
+- `npm test`：116 檔、1,228 項通過；擴充 `useUrlFilters.test.jsx`（改寫篩選保住 `location.state`）、`Quality.journey.test.jsx`（從待辦進來切分段後 `taskReturn` 仍在）、`Dashboard.setup.test.jsx`（原項離開清單時不指向今天已完成、給「回到剛才處理的那一筆」連結）、`Submittals.create.test.jsx`（不再要求建立後註明附件說明；示範模式無上傳鈕）；`Submittals.correction.test.jsx` 的 store 標為真專案以保留上傳測試。
+- `npm run test:e2e` 監造／廠商／送審／機關／workflow-ux／a11y 六檔：55 項通過。
+- `npm run lint`（零警告）、`npm run build`、`npm run check:docs` 通過。
+- Demo 預覽 1440 px：監造從首頁查驗待辦進 `/quality?inspection=INSP-DEMO-4`，切到「缺失」分段（URL `seg=defects`）後「返回今日待辦」仍在；機關核准 CO-002 後返回，首頁顯示「剛才處理的事項已不在「現在輪到我」」與「回到剛才處理的那一筆」（連到 `/change-orders?co=CO-DEMO-2`，點擊後詳情為已核准的 CO-002）；廠商在示範模式開送審詳情看到「示範模式不支援上傳文件本體」且無檔案輸入框，文件區提示改為「附件說明只在建立時填寫」。未測：真人驗收、正式上傳。
+
 ### 2026-09-16 補強包 A：輸入與資訊可信度（W01–W04；本機 diff，未發布）
 
 - `npm test`：116 檔、1,226 項通過；新增 `unsavedEdits.guard.test.jsx`（無登記不攔、有登記換路徑先問且取消不放行、確認後清登記並重觸發同一連結、同路徑／外部連結／修飾鍵不攔）、`qc.coverage.test.js`（只填一項 1／15 與 14 項未檢、全填、含不合格、未填、範本已刪除）；擴充 `Submittals.review.test.jsx`（受理後標「最新審查意見」不再標「上次退回原因」）、`supervisorReport.test.js`（無「按日到場／已促請／尚符合契約／均符合設計圖說／督導情形良好／追蹤改善」，含「請補充」）、`ChecklistSection.unsaved.test.jsx` 與 `Quality.journey.test.jsx`（編輯判定旁、存檔訊息、紀錄列、檢附選項的覆蓋程度）。

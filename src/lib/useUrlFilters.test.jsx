@@ -34,6 +34,17 @@ describe('useUrlFilters', () => {
     await act(async () => api.setFilters(DEFAULTS))
     expect(url().toString()).toBe('submittal=S1')
   })
+  it('改寫篩選時保住 location.state(從待辦帶來的 taskReturn 不能被洗掉,W05)', async () => {
+    let seen
+    function StateSpy() { seen = useLocation().state; return null }
+    await act(async () => {
+      root.render(<MemoryRouter initialEntries={[{ pathname: '/x', state: { taskReturn: { to: '/dashboard', key: 'k' } } }]}><Harness /><StateSpy /></MemoryRouter>)
+    })
+    await act(async () => api.setFilters({ q: '磚', ball: '' }))
+    expect(url().get('q')).toBe('磚')
+    expect(seen).toEqual({ taskReturn: { to: '/dashboard', key: 'k' } })
+  })
+
   it('由 URL 回填', async () => {
     await render('/x?q=%E7%A3%9A&ball=done')
     expect(api.filters).toEqual({ q: '磚', ball: 'done' })

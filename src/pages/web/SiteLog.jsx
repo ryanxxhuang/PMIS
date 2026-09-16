@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { matchLeaf } from '../../lib/photoMatch.js' // dry-run 修配對率 0%:評分修正+可測試
 import { useStore } from '../../store.jsx'
@@ -38,6 +38,7 @@ export default function SiteLog() {
   const navigate = useNavigate()
   // 日期進 URL(?d=,U11):待辦直達當日、重新整理與返回都停在同一天;只放日期這個識別,不放表單內容
   const [params, setParams] = useSearchParams()
+  const { state: navState } = useLocation() // 切日期改寫 ?d= 時保住 taskReturn(W05 同類)
   const [date, setDate] = useState(() => (/^\d{4}-\d{2}-\d{2}$/.test(params.get('d') || '') ? params.get('d') : taipeiToday()))
   // ISSUE-6a dirty 防護:表單有未存檔編輯時,載入 effect 不得用 store 覆寫表單。
   // 編輯一律走 useDirtyState 回傳的 setter 標記 dirty;raw setter 只給載入 effect 用(載入不是編輯)。
@@ -138,7 +139,7 @@ export default function SiteLog() {
     if (dirty && !(await appConfirm({ title: '切換日期將遺失未存檔內容', body: `${date} 的日誌尚未存檔，切到 ${next} 會遺失已填內容。`, danger: true, confirmLabel: '放棄並切換' }))) return
     setSavedAt(null); setPhotoMsg(''); setSavedMsg('')
     setDate(next)
-    setParams((p) => { const n = new URLSearchParams(p); n.set('d', next); return n }, { replace: true })
+    setParams((p) => { const n = new URLSearchParams(p); n.set('d', next); return n }, { replace: true, state: navState })
   }
 
   // 零輸入:複製昨日 + 從歷史自學常用項目
