@@ -432,7 +432,7 @@ export default function DefectTracker({ domain = 'quality', leaves = [] }) {
       {list.length === 0 ? <Empty>尚無{kind}</Empty> : <>{filterBar}{listRows}</>}
       <p className="px-5 py-3 border-t border-[var(--border-2)] text-caption text-[var(--text-3)] leading-relaxed">
         {isSafety
-          ? '工安缺失與品質缺失共用同一套改善狀態機：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'
+          ? '工安缺失與品質缺失走同一套改善順序：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'
           : '品質缺失由監造判查驗不合格、或自主檢查表／試體判定不合格時自動開立，廠商不自行開立。缺失改善鏈：開立 → 廠商改善 → 提送複查 → 監造複查結案。已結案不可刪除，撤銷結案須附原因並留存稽核。'}
       </p>
     </Card>

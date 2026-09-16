@@ -53,7 +53,7 @@ export default function SitePhotosCard({
             </>}
             {!currentLog ? (
               // 照片先行的引導:講清楚「確認上傳」會自動建檔+回填表單,人只要覆核數量再存檔
-              <span className="text-xs text-[var(--text-3)]">本日尚未存檔日誌:選照片辨識後按「全部上傳」,會自動建立草稿日誌,並把配到的工項與摘要草稿帶進表單</span>
+              <span className="text-xs text-[var(--text-3)]">本日尚未存檔日誌。只想直接放照片（不辨識）：先按下方「存檔」建立本日日誌，存檔後這裡會出現「上傳照片(不辨識)」。選照片 AI 辨識後按「全部上傳」則會自動建立草稿日誌，並把配到的工項與摘要草稿帶進表單。</span>
             ) : (
               <span className="text-xs text-[var(--text-3)]">{photos.length} 張{can.edit ? (aiEnabled('photo.classify') ? '　·　AI 辨識＝自動生說明並配對工項' : '　·　AI 批次辨識未啟用') : '（照片由施工廠商上傳）'}</span>
             )}

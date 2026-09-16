@@ -381,6 +381,13 @@
 - **影響**：`progressPlan.js`（內插語意）、新增 `progressAsOf.js`；`MonthlyReport.jsx`、`SupervisorReport.jsx`、`supervisorReport.js`、`Progress.jsx`、`Dashboard.jsx`、`Portfolio.jsx`、`assistantData.js`、`RiskAudit.jsx` 改共用取期；`demoSeed.js` 估驗比例與第 5 期日期。測試：`progressPlan.test.js` 重寫、新增 `progressAsOf.test.js`、`Reports.caliber.test.jsx`。
 - **不做**：不改 DB `portfolio_summary`、不排除間接費、不加估驗狀態篩選、不做 Codex §5 版面小包、不做手機／平板。
 
+## 5.19 小包 D：Codex §5 版面與操作感受（2026-09-16 實作，本機 diff）
+
+- **逐條核對（main `77bc3b1`，Demo 1440×900）**：§5-1 部分成立——變更詳情「核准」鈕頂端 y=844（首屏內，Codex 9/15 觀察為首屏下），但狀態／淨額／明細筆數在狀態列、決策摘要與四格各出現一次；送審 SUB-003 的「受理審核」鈕 y=941（首屏外），AI 助手區佔 150px 擋在文件區與決定區之間。§5-2 成立——`onDecide` 對話框標題「審核中：SUB-003」、按鈕「審核中」。§5-3 成立——`BOQ.jsx` 只有展開／收合與「只看發包工程費」。§5-4 成立——未存檔時只有「選照片 AI 辨識後上傳」與自動建檔說明，「上傳照片(不辨識)」要存檔後才出現。§5-5 成立——`DefectTracker.jsx`、`Safety.jsx` 底部說明含「狀態機」。
+- **改法**：§5-1 變更詳情四格改一行「提出日」；送審四格去類別／狀態，AI 助手改為可展開列（`aria-expanded`，有結果或執行中自動展開）。§5-2 `DECIDE_ACTION` 對照表：審核中→受理審核，標題／按鈕／錯誤訊息都用動作名。§5-3 `BOQ.jsx` 查找：`useUrlFilters({ q })`，符合列＋祖先可見、祖先強制展開、符合列 `aria-current` 與琥珀底、`role="status"` 報找到幾項或沒有符合；不動 `expanded`。§5-4 `SitePhotosCard.jsx` 說明句改寫。§5-5 兩處「狀態機」→「改善順序」。
+- **實測**：改後變更詳情「核准」y=754；送審「受理審核」收合時 y=770、展開 y=888；對話框「受理審核：SUB-003」、按鈕「取消／受理審核」；標單搜「鋼筋」找到 14 項、29 列（含祖先）、URL `#/boq?q=鋼筋`，清除回 37 列；日誌與工安／品質文案如預期。
+- **不做**：不提早顯示「上傳照片(不辨識)」（留待決）、不改任何判定／流程／權限、不做手機／平板。
+
 ## 6. 證據標記與未驗項
 
 - 程式確認：§1 全部行號、§2 的動作名稱。

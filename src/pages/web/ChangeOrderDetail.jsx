@@ -176,13 +176,8 @@ export default function ChangeOrderDetail({ co, net, leaves, allItems, canReview
       <div className="p-4">
         {co.co_no && <div className="num text-caption text-[var(--text-3)]">{co.co_no}</div>}
         <div className="mt-0.5 text-callout font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{co.title}</div>
-        {/* 空值一律顯示 —:四格固定,眼睛掃同一位置就知道有沒有填 */}
-        <MetaGrid className="mt-3.5" rows={[
-          ['提出日', co.co_date || '—'],
-          ['狀態', co.status],
-          ['明細', `${co.items.length} 筆`],
-          ['淨額', signed(net)],
-        ]} />
+        {/* 狀態、淨額、明細筆數已在狀態列與決策摘要各出現一次,這裡只補摘要沒有的提出日(Codex §5:減少重複) */}
+        <p className="mt-1.5 text-footnote text-[var(--text-3)] num">提出日 {co.co_date || '—'}</p>
       </div>
 
       {/* 追加/減帳明細:一次只顯示一筆變更,不再收合(改版前收合是因為多張卡疊在一起) */}

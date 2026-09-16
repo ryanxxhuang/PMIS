@@ -48,6 +48,8 @@ const DECISION_COLOR = { 核准: 'green', 核備: 'green', 退回補正: 'red', 
 const fixNl = (s) => String(s || '').replace(/\\n|\n/g, '；').replace(/；+/g, '；').replace(/^；|；$/g, '')
 // 「待審」= 已提送或審核中:審定、AI 助手、上傳、等待字樣都掛在這個條件上
 const isPending = (s) => s.status === '已提送' || s.status === '審核中'
+// 審定動作 → 對話框用語:狀態值「審核中」對使用者是結果,動作叫「受理審核」
+const DECIDE_ACTION = { 審核中: '受理審核', 核准: '核准', 核備: '核備', 退回補正: '退回補正', 駁回: '駁回' }
 const CSV_COLUMNS = [
   { key: 'submittal_no', label: '編號' }, { key: 'title', label: '名稱' }, { key: 'category', label: '類別' },
   { key: 'revision', label: '版次' }, { key: 'status', label: '狀態' },
@@ -65,6 +67,7 @@ export default function Submittals() {
   const [aiReview, setAiReview] = useState({}) // { [submittalId]: { result, opinion } } AI 審查助手結果
   const [reviewBusy, setReviewBusy] = useState(null) // 正在跑審查的 submittal id
   const [aiRead, setAiRead] = useState({})     // { [submittalId]: result } AI 讀文件審查結果
+  const [aiOpen, setAiOpen] = useState(false)  // AI 助手區預設收合(Codex §5:決定鈕先進首屏),有結果或執行中自動展開
   const [readBusy, setReadBusy] = useState(null)
   const [uploadBusy, setUploadBusy] = useState(null)
   // 篩選保存在 URL(U11):從單據返回、重新整理、分享網址都保留關鍵字與分段
@@ -155,20 +158,22 @@ export default function Submittals() {
   }
   const onDecide = async (s, status) => {
     const required = status === '退回補正' || status === '駁回'
+    // 對話框講「即將執行的動作」,不拿狀態值當標題與按鈕(Codex §5:「審核中」不像動作;結果才顯示審核中)
+    const action = DECIDE_ACTION[status] || status
     // AI 審查助手/讀文件審查已備妥意見 → 帶入為預設(監造仍可改);否則沿用原邏輯(退回/駁回不預填舊意見)
     const aiOpinion = aiReview[s.id]?.opinion || aiRead[s.id]?.summary_opinion
     const note = await appPrompt({
-      title: `${status}：${s.submittal_no}`, body: s.title,
-      label: required ? `${status}原因 / 審查意見（必填）` : '審查意見（可留空）',
-      defaultValue: aiOpinion || (required ? '' : (s.review_note || '')), required, danger: required, confirmLabel: status,
+      title: `${action}：${s.submittal_no}`, body: s.title,
+      label: required ? `${action}原因 / 審查意見（必填）` : '審查意見（可留空）',
+      defaultValue: aiOpinion || (required ? '' : (s.review_note || '')), required, danger: required, confirmLabel: action,
     })
     if (note === null) return
     // 退回/駁回原因必填:對話框已擋,這裡再擋一次(fallback 的 window.prompt 不會擋)
-    if (required && !note.trim()) { setErrMsg(`${status}未寫入：需填寫${status}原因，廠商才知道要補什麼`); return }
+    if (required && !note.trim()) { setErrMsg(`${action}未寫入：需填寫${action}原因，廠商才知道要補什麼`); return }
     setErrMsg(''); setBusy(true); setNotice(null)
     const { error } = await decideSubmittal(s.id, status, note || s.review_note)
     setBusy(false)
-    if (error) setErrMsg(friendlyError(error, `${status}未寫入`))
+    if (error) setErrMsg(friendlyError(error, `${action}未寫入`))
     else { // 審定後收起助手面板;留下結果與下一責任方(不自動換單,下一件由人點)
       setNotice({ id: s.id, kind: 'decided', status })
       setAiReview((m) => { const n = { ...m }; delete n[s.id]; return n })
@@ -355,11 +360,10 @@ export default function Submittals() {
         <div className="p-4">
           <div className="num text-caption text-[var(--text-3)]">{s.submittal_no}</div>
           <div className="mt-0.5 text-callout font-medium leading-normal text-[var(--text)] [text-wrap:pretty]">{s.title}</div>
-          {/* 空值一律顯示 —:六格固定,眼睛掃同一位置就知道有沒有填 */}
+          {/* 空值一律顯示 —:四格固定,眼睛掃同一位置就知道有沒有填。類別已在狀態列徽章、
+              狀態由球權章與上方摘要帶,不再重複列(Codex §5:減少重複,不減少真相) */}
           <MetaGrid className="mt-3.5" rows={[
-            ['類別', s.category || '—'],
             ['版次', `Rev.${s.revision || 0}`],
-            ['狀態', s.status || '—'],
             ['提送日', s.submitted_date || '—'],
             ['審查期限', s.due_date || '—'],
             ['審定日', s.decided_date || '—'],
@@ -411,10 +415,16 @@ export default function Submittals() {
           )}
           {/* 監造:AI 助手是可選工具,放在文件旁邊——兩項能力的資料範圍不同,結果只留在本頁;
               沒有 AI 也能審(決定鈕在下方);文件本體沒上傳就如實說讀不了,不生出不存在的審查資料 */}
-          {canDecide && (
+          {canDecide && (() => {
+            // 有結果或執行中就攤開,否則依使用者切換;預設收合讓「審查意見與決定」進 1440×900 首屏
+            const aiShown = aiOpen || reviewBusy === s.id || readBusy === s.id || !!aiReview[s.id] || !!aiRead[s.id]
+            return (
             <div className="mt-3 pt-3 border-t border-[var(--border-2)]">
-              <div className="text-caption font-medium text-[var(--text-2)] mb-1.5">AI 助手（可選，結果只保留在本頁，離開後需重新執行）</div>
-              {aiOff ? (
+              <button type="button" aria-expanded={aiShown} onClick={() => setAiOpen((v) => !v)}
+                className="flex items-center gap-1 text-caption font-medium text-[var(--text-2)] mb-1.5">
+                <MSym name="chevron_right" size={14} className={`transition-transform ${aiShown ? 'rotate-90' : ''}`} />AI 助手（可選，結果只保留在本頁，離開後需重新執行）
+              </button>
+              {!aiShown ? null : aiOff ? (
                 <p className="text-footnote text-[var(--text-3)]">AI 審查功能未啟用，請直接依文件審定。</p>
               ) : (
                 <ul className="space-y-1.5 text-footnote text-[var(--text-2)]">
@@ -441,7 +451,8 @@ export default function Submittals() {
                 </ul>
               )}
             </div>
-          )}
+            )
+          })()}
         </div>
           )
         })()}

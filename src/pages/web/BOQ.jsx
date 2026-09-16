@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Stat, Badge, Surface, Button, PageHeader, SkeletonList, ErrorBanner, FilterChip, MobileReadOnlyNote, TreeToggle, THEAD_CLS } from '../../components/ui.jsx'
+import { Card, Stat, Badge, Surface, Button, Input, PageHeader, SkeletonList, ErrorBanner, FilterChip, MobileReadOnlyNote, TreeToggle, THEAD_CLS } from '../../components/ui.jsx'
+import { useUrlFilters } from '../../lib/useUrlFilters.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { parsePccesXml } from '../../lib/parsePcces.js'
@@ -11,6 +12,8 @@ import { fmtAmount, fmtYi as yi } from '../../lib/format.js'
 // 分項(母項)列結構上就沒有數量與單價,那是「本來沒有」不是「資料缺漏」,
 // 整棵樹畫滿破折號反而讀不出哪裡真的缺值 → 這一頁明示留白。
 const fmt = (n) => fmtAmount(n, { empty: '' })
+// 工項查找關鍵字存 URL(可分享、返回不遺失);等於預設就不進網址
+const BOQ_FILTERS = { q: '' }
 
 // 標單工項（BOQ）— 工項樹來自 store：有真專案讀 Supabase work_items，否則範例 JSON。
 export default function BOQ() {
@@ -21,6 +24,7 @@ export default function BOQ() {
   const [importErr, setImportErr] = useState('')
   const [resetErr, setResetErr] = useState('')   // 清空重匯被證據 guard 擋下時顯示原因
   const [parsed, setParsed] = useState(null)   // 上傳 XML 解析結果 { meta, items }
+  const [{ q }, setFilters] = useUrlFilters(BOQ_FILTERS)
   const fileRef = useRef(null)
 
   useEffect(() => {
@@ -61,6 +65,24 @@ export default function BOQ() {
     }
     return map
   }, [data])
+
+  // 工項查找(Codex §5):3,262 項只靠逐層展開找不到已知編號。輸入項次或名稱關鍵字後,
+  // 只列符合的工項與其所屬各層(祖先全部展開,路徑靠縮排看得見);不動 expanded,
+  // 清掉關鍵字就回到原本的展開狀態。只是顯示過濾,不改任何金額或順序。
+  const keyword = q.trim().toLowerCase()
+  const search = useMemo(() => {
+    if (!data || !keyword) return null
+    const byKey = new Map(data.items.map((it) => [it.item_key, it]))
+    const matches = new Set(), visible = new Set()
+    for (const it of data.items) {
+      if (!`${it.item_no || ''} ${it.description || ''}`.toLowerCase().includes(keyword)) continue
+      matches.add(it.item_key)
+      let cur = it
+      while (cur && !visible.has(cur.item_key)) { visible.add(cur.item_key); cur = cur.parent_key ? byKey.get(cur.parent_key) : null }
+    }
+    return { matches, visible }
+  }, [data, keyword])
+  const shown = (it) => (!onlyBillable || it.is_billable) && (!search || search.visible.has(it.item_key))
 
   // 手機章節摘要用的「這一章底下共幾項」。只數項數——金額一律取 it.amount(匯入時就算好的
   // 複價),UI 不重算任何金額(§1 三條不可退讓)。跟著「只看發包工程費」一起變,
@@ -105,7 +127,7 @@ export default function BOQ() {
   }
 
   const { meta } = data
-  const roots = (childrenMap.get('__root__') || []).filter((it) => !onlyBillable || it.is_billable)
+  const roots = (childrenMap.get('__root__') || []).filter(shown)
 
   const toggle = (key) =>
     setExpanded((prev) => {
@@ -116,15 +138,17 @@ export default function BOQ() {
 
   const renderRows = (items, level = 0) =>
     items.flatMap((it) => {
-      const kids = (childrenMap.get(it.item_key) || []).filter((k) => !onlyBillable || k.is_billable)
+      const kids = (childrenMap.get(it.item_key) || []).filter(shown)
       const hasKids = kids.length > 0
-      const isOpen = expanded.has(it.item_key)
+      const isOpen = search ? hasKids : expanded.has(it.item_key) // 查找中:所屬各層一律展開
+      const hit = !!search?.matches.has(it.item_key)
       const row = (
         <tr
           key={it.item_key}
+          aria-current={hit ? 'true' : undefined}
           className={`border-b border-[var(--border-2)] hover:bg-[var(--surface-2)] ${
             hasKids ? 'bg-[var(--bg)] font-medium' : ''
-          } ${!it.is_billable ? 'text-[var(--text-3)]' : ''}`}
+          } ${!it.is_billable ? 'text-[var(--text-3)]' : ''} ${hit ? 'bg-[var(--amber-tint)]' : ''}`}
         >
           {/* table-fixed 下改用「固定寬佔位 span」縮排:padding 縮排會吃掉欄寬,
               深層工項一縮排整欄就被推歪;佔位法讓縮排永不推移其他欄位 */}
@@ -215,10 +239,21 @@ export default function BOQ() {
         title="工項階層"
         bodyClass="p-0"
         action={
-          // 表格篩選走 FilterChip(aria-pressed 切換),不再用裸 checkbox——手機命中區由 chip 自帶 44px
-          <FilterChip label="只看發包工程費" active={onlyBillable} onToggle={() => setOnlyBillable((v) => !v)} />
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 查找欄與篩選同在卡頭:輸入項次或名稱,結果列在下方表格(手機章節摘要不套用,§9.6 唯讀) */}
+            <Input value={q} onChange={(e) => setFilters({ q: e.target.value })} placeholder="搜尋項次或工項名稱" aria-label="搜尋工項" className="!w-56 max-md:hidden" />
+            {/* 表格篩選走 FilterChip(aria-pressed 切換),不再用裸 checkbox——手機命中區由 chip 自帶 44px */}
+            <FilterChip label="只看發包工程費" active={onlyBillable} onToggle={() => setOnlyBillable((v) => !v)} />
+          </div>
         }
       >
+        {search && (
+          <p role="status" className="px-5 py-2 text-footnote text-[var(--text-2)] border-b border-[var(--border-2)] max-md:hidden">
+            {search.matches.size
+              ? `找到 ${fmt(search.matches.size)} 項符合「${q.trim()}」，已展開所屬各層並標記符合列；清除關鍵字回到原本的展開。`
+              : `沒有符合「${q.trim()}」的項次或工項名稱。`}
+          </p>
+        )}
         {/* 斷點跟手機層對齊(BottomNav 是 md:hidden):640px 五欄樹在 390 要橫捲 1.6 個螢幕寬,
             而且標單樹的價值在「逐項對數字」——那是桌機的事。手機改列章節摘要(§9.6) */}
         <div className="overflow-x-auto max-md:hidden">
