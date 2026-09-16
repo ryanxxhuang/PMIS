@@ -40,12 +40,13 @@ export function buildSupervisorReport(data = {}, monthLabel, today = new Date())
   // 監造意見草稿:只寫資料能支持的數量與現況;「已到場、已促請、品質符合」等判斷由監造填(W04)。
   // 沒有對應紀錄的地方放「請補充…」,不預填肯定句——有免責提示也擋不住漏改後交付。
   const behind = progress && progress.plannedPct != null ? progress.plannedPct - progress.actualPct : null
+  const asOf = progress?.asOf ? `截至 ${progress.asOf} ` : '' // 進度數字截至何日(D-024),沒帶就不加字
   const opinion = [
     `本月施工日誌計 ${workDays} 日（含雨天 ${rainDays} 日）；監造到場查核日數與情形請依監造日誌補充。`,
     behind != null
       ? (behind > 5
-        ? `累計實際進度 ${progress.actualPct.toFixed(1)}%，較預定 ${progress.plannedPct.toFixed(1)}% 落後 ${behind.toFixed(1)}%；是否已通知廠商提報趕工計畫及其回覆，請補充。`
-        : `累計實際進度 ${progress.actualPct.toFixed(1)}%，與預定 ${progress.plannedPct.toFixed(1)}% 差距 ${Math.abs(behind).toFixed(1)}%。`)
+        ? `${asOf}累計實際進度 ${progress.actualPct.toFixed(1)}%，較預定 ${progress.plannedPct.toFixed(1)}% 落後 ${behind.toFixed(1)}%；是否已通知廠商提報趕工計畫及其回覆，請補充。`
+        : `${asOf}累計實際進度 ${progress.actualPct.toFixed(1)}%，與預定 ${progress.plannedPct.toFixed(1)}% 差距 ${Math.abs(behind).toFixed(1)}%。`)
       : '',
     insp.length
       ? `本月辦理查驗 ${insp.length} 件（合格 ${inspPass} 件${inspFail ? `、不合格 ${inspFail} 件，系統已開立缺失` : ''}${inspPending ? `；另有 ${inspPending} 件待查驗` : ''}）。`

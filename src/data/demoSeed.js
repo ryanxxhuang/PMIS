@@ -48,14 +48,15 @@ export function buildDemoData(workItems, project) {
   }))
   const progressPlan = { start: project.start_date, end: project.end_date, months }
 
-  // ── 估驗 5 期（開工次月起每月一期）：實際 ≈ 20%，落後預定 ~26% ──
-  // 落後 ~6% → Dashboard/S曲線亮「落後」警示（demo 要秀的就是異常管理）
-  const fractions = [0.07, 0.14, 0.22, 0.29, 0.36]
+  // ── 估驗 5 期（開工次月起每月一期）：實際 ≈ 13%，今日預定 19–26%（月底累計按日內插,D-024）──
+  // 全月都落後 >5% → Dashboard/S曲線亮「落後」警示（demo 要秀的就是異常管理）
+  const fractions = [0.05, 0.09, 0.14, 0.19, 0.24]
   const round1 = (x) => Math.round(x * 10) / 10
   const valuations = fractions.map((f, i) => {
     const items = {}
     for (const it of active) items[it.item_key] = round1((it.quantity || 0) * f)
-    const valDate = monthsFromNow(i - 4, 25) // 第5期=本月25（尚未到也無妨，狀態=審核中）
+    // 第 5 期估驗日=3 天前(狀態=監造審核):估驗日期不能在未來,否則截至今天的進度會少算這一期(D-024)
+    const valDate = i === 4 ? daysFromNow(-3) : monthsFromNow(i - 4, 25)
     const dF = f - (i ? fractions[i - 1] : 0)
     const periodAmt = Math.round(cover * dF)
     const net = Math.round(periodAmt * 0.95) // 扣 5% 保留款

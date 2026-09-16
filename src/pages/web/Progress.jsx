@@ -4,6 +4,7 @@ import { Card, Stat, Badge, Button, Field, Empty, PageHeader, ErrorBanner, Surfa
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow, progressMonthIndex } from '../../lib/progressPlan.js'
+import { latestValuationAt, valuationLabel } from '../../lib/progressAsOf.js'
 import { parseLocalDate, localISOMonth } from '../../lib/dates.js'
 import { fmtYi } from '../../lib/format.js'
 
@@ -60,12 +61,12 @@ export default function Progress() {
     tree.roots.forEach(calc); return map
   }, [data, tree])
 
-  // 最新一期估驗 → 各節點累計完成金額(滾算到母項)
+  // 截至今天的估驗期(估驗日期不在未來、狀態不論;D-024)→ 各節點累計完成金額(滾算到母項)
+  const latestVal = latestValuationAt(valuations, TODAY)
   const latestCumMap = useMemo(() => {
-    if (!data || !valuations.length) return new Map()
-    const latest = valuations.reduce((a, b) => (b.period_no > a.period_no ? b : a))
-    return buildCumMap(tree.roots, tree.childrenMap, latest.items || {})
-  }, [data, valuations, tree])
+    if (!data || !latestVal) return new Map()
+    return buildCumMap(tree.roots, tree.childrenMap, latestVal.items || {})
+  }, [data, latestVal, tree])
 
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
@@ -119,7 +120,8 @@ export default function Progress() {
   const actualPoints = months
     .map((m, i) => ({ i, pct: actualByMonth.get(m.label) }))
     .filter((p) => p.pct != null)
-  const actualNow = actualPoints.length ? actualPoints[actualPoints.length - 1].pct : 0
+  // 數字卡與首頁/月報同一期(截至今天);圖上的點仍按估驗日期歸月
+  const actualNow = latestVal && billableTotal ? (totalCumAmount(tree.roots, latestCumMap) / billableTotal) * 100 : 0
 
   // 今天落在第幾個月（小數）+ 內插預定進度
   const elapsed = progressMonthIndex(progressPlan.start, TODAY)
@@ -169,8 +171,8 @@ export default function Progress() {
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="依預定 S 曲線內插" color="text-[var(--text)]" />
-        <Stat label="實際進度" value={`${actualNow.toFixed(1)}%`} sub="累計估驗 ÷ 發包工程費" color="text-[var(--blue-text)]" />
+        <Stat label="預定進度（今天）" value={`${plannedNow.toFixed(1)}%`} sub="預定進度表（各月底累計）內插至今天" color="text-[var(--text)]" />
+        <Stat label="實際進度" value={`${actualNow.toFixed(1)}%`} sub={`${valuationLabel(latestVal)}累計估驗 ÷ 變更後契約金額`} color="text-[var(--blue-text)]" />
         <Stat label="進度差" value={`${behind >= 0 ? '−' : '+'}${Math.abs(behind).toFixed(1)}%`} sub={behind > 0 ? '落後' : '超前/持平'} color={behind > 5 ? 'text-[var(--red-text)]' : 'text-[var(--green-text)]'} />
         {/* 第四格不是 Stat(值是 Badge 不是數字),卡殼改吃共用 Surface 才不會和左邊三格走鐘 */}
         <Surface className="px-4 py-3.5 flex flex-col">
@@ -275,7 +277,7 @@ export default function Progress() {
             <thead>
               <tr className="border-b border-[var(--border)]">
                 <th className={`${THEAD_CLS} text-left py-2 pl-3`}>月份</th>
-                <th className={`${THEAD_CLS} text-right px-3`}>預定累計%</th>
+                <th className={`${THEAD_CLS} text-right px-3`}>月底預定累計%</th>
                 <th className={`${THEAD_CLS} text-right px-3 pr-4`}>實際累計%</th>
               </tr>
             </thead>

@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { useStore } from '../store.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from './boqCalc.js'
 import { plannedPctNow } from './progressPlan.js'
+import { latestValuationAt } from './progressAsOf.js'
 import { buildAssistantFacts } from './assistantFacts.js'
 import { myOpenItems } from './ballInCourt.js'
 
@@ -22,7 +23,7 @@ export function useAssistantData() {
     [workItems, adjustedItems],
   )
   const billableTotal = workItems ? revisedTotal : 0
-  const latestVal = valuations[valuations.length - 1]
+  const latestVal = latestValuationAt(valuations, TODAY) // 截至今天、狀態不論(D-024)
   const actualCum = useMemo(
     () => (latestVal ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) : 0),
     [roots, childrenMap, latestVal],

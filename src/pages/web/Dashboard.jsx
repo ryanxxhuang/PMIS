@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase.js'
 import { Badge, Button, Card, Empty, PageHeader, Segmented, Select } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow } from '../../lib/progressPlan.js'
+import { latestValuationAt } from '../../lib/progressAsOf.js'
 import { taipeiISODate } from '../../lib/dates.js'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
 import { BALL_SOURCES, resolveBallKey, ROLE_WORK } from '../../lib/navConfig.js'
@@ -153,7 +154,7 @@ export default function Dashboard() {
     [workItems, adjustedItems],
   )
   const billableTotal = workItems ? revisedTotal : 0
-  const latestVal = valuations[valuations.length - 1]
+  const latestVal = latestValuationAt(valuations, TODAY) // 截至今天、狀態不論(D-024)
   const actualCum = useMemo(
     () => (latestVal ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) : 0),
     [roots, childrenMap, latestVal],
