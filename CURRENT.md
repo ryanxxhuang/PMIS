@@ -67,6 +67,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 - **2026-09-16 補強包 B（Codex 實測 W05／W06／W08／D01）**：PR #90 已合併（merge commit `fe0e1bd`，分支 `fix/uiux-package-b`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（116 檔 1,228 項單元、55 項相關 Demo E2E）；前端由 Cloudflare 自動建置，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
 - **2026-09-16 補強包 C（Codex 實測 W07／W09）**：PR #92 已合併（merge commit `e54d39a`，分支 `fix/uiux-package-c`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（116 檔 1,228 項單元、45 項相關 Demo E2E）；內容為 W09 文案與 W07 口徑對照文件，不含進度公式、DB migration 或 Edge 部署；W07 標示文案待 C1 決策後另行實作。
 - **2026-09-16 補強包 C 第二批（進度口徑 D-024）**：PR #94 已合併（merge commit `11846ca`，分支 `fix/uiux-package-c2`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（118 檔 1,239 項單元、60 項相關 Demo E2E）；前端由 Cloudflare 自動建置，不含 DB migration 或 Edge 部署（`portfolio_summary` 未改）；正式站登入後流程與真人驗收未核對。
+- **2026-09-16 小包 D（Codex §5 版面與操作感受）**：PR #96 已合併（merge commit `0d9cce1`，分支 `fix/uiux-package-d`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（119 檔 1,241 項單元、59 項相關 Demo E2E）；純前端版面與文案，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
 - **2026-09-15 UIUX 階段 1–6（桌機三角色流程）**：PR #85 已合併（merge commit `afdaefb`，分支 `ui/uiux-stages-1-6`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（114 檔 1,218 項單元、10 檔 70 項 Demo E2E、lint／build／check:docs）；前端由 Cloudflare 自動建置，建置版本以 Cloudflare 後台為準。前端變更，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
 - **2026-09-14 UIUX 工作包**：已隨 PR #83 合併（`7156aef`）。前端變更，不含 DB migration 或 Edge 部署。
 
