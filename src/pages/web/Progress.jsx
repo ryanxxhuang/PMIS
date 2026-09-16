@@ -235,9 +235,9 @@ export default function Progress() {
         </div>
       </Card>
 
-      <Card title="落後工項（最拖累整體進度）">
+      <Card title="估驗完成率差距（依金額權重）">
         {laggards.length === 0 ? (
-          <Empty>目前沒有明顯落後的工項 — 各工項實際完成度都追上今日預定 {plannedNow.toFixed(0)}%。</Empty>
+          <Empty>各工項的估驗完成率都不低於整案今日預定 {plannedNow.toFixed(0)}%，沒有差距可列。</Empty>
         ) : (
           <div className="overflow-x-auto"><div className="min-w-[480px] space-y-1.5">
             {laggards.map(({ it, pct, share }) => (
@@ -251,7 +251,7 @@ export default function Progress() {
             ))}
           </div></div>
         )}
-        <p className="text-xs text-[var(--text-3)] mt-3">落後 = 實際完成% 低於今日預定 {plannedNow.toFixed(0)}%;依「權重 × 落後幅度」排序,越上面對整體進度拖累越大。</p>
+        <p className="text-xs text-[var(--text-3)] mt-3">本表不是工項排程落後判定：不讀各工項的預定開工／完工日或要徑，只拿各工項估驗完成率對整案今日預定 {plannedNow.toFixed(0)}%，差距再乘以金額權重排序；利潤、管理費、營業稅、保險費等間接費也會列入。</p>
       </Card>
 
       <Card title="工項進度（可展開鑽取）">
