@@ -102,3 +102,7 @@
 
 狀態：ACCEPTED（2026-09-16，依 Codex 實測 W07 對照後定案，見 `docs/reviews/2026-09-16-uiux-w07-progress-caliber.md`）。(1) 預定進度表每列＝該月「月底」累計 %，今日／任一日的預定值在上一列（開工月為 0）與本列之間按當月日數內插（`src/lib/progressPlan.js`）。(2) 報表統計截止日＝所選月份月底，本月尚未結束取今天；施工月報與監造報表同一報告月份用同一截止日、同一期估驗（`src/lib/progressAsOf.js`）。(3) 累計實際取估驗日期在截止日（含）以前、期數最大的一期，草稿／監造審核／已核定都計入，畫面必須標示所取期別與狀態；未填日期的期別一律納入。(4) 月報的累計已收款、已請款期數同樣截至截止日。前端八處進度數字（月報、監造報表、進度頁、首頁、跨案本案、AI 快照、風險稽核）共用同一支取期函式；DB `portfolio_summary` 仍取最新期，未同步。
 
+## D-025｜第三方腳本只能由 repo 明示引入，邊緣層不得自動注入
+
+狀態：ACCEPTED（2026-09-16）。起因：Cloudflare 對 `gov-agent.ai` zone 開著 Web Analytics 自動注入，app 與 demo 的 CSP（`script-src 'self'`，弱點掃描後補的硬約束）把它擋掉，三個站都收不到數據卻每頁留兩條 console 錯誤。決定：(1) 任何第三方腳本（分析、監控、字型以外的載入）都必須在 repo 的 HTML／layout 明示引入，Cloudflare 或其他邊緣層的自動注入一律關閉；Web Analytics 站設定固定為「Enable with JS Snippet installation」。(2) app（`app.gov-agent.ai`）與 demo 站不載任何分析腳本，`script-src 'self'` 不因分析需求放寬；使用者行為要量，在產品內用自己的後端事件。(3) 訪客分析只放行銷站（`PMIS.marketing` repo，GitHub Pages），由 `Base.astro` 手動載入 beacon，並以 `<meta http-equiv>` CSP 白名單 `static.cloudflareinsights.com`／`cloudflareinsights.com`；Astro 設定強制樣式與腳本輸出成檔案，不開 `unsafe-inline`。(4) 部署後以 `npm run check:prod` 核對 app／demo：200、CSP 標頭含 `script-src 'self'`、HTML 無 `cf-beacon`。
+
