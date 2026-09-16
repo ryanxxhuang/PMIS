@@ -16,8 +16,8 @@ import { defaultLandingPath } from '../lib/navConfig.js'
 // * 卡面實心,不做毛玻璃——規範 §4「毛玻璃只給 chrome,內容卡一律實心」;
 // * 合規三點沿用產品真的有做的事(工程會一覽表普級、三方隔離、稽核 6 個月),
 //   不抄設計稿的「個資境內存放」——沒有查證過的承諾不能上登入頁;
-// * 品牌字樣維持 PMIS(public/brand 的 lockup),.ai 走 --blue-text 而非 --blue
-//   (規範 §2:--blue 是填色不是文字色)。
+// * 品牌字樣是 GovAgent(public/brand 的 lockup),Agent 走 --blue-text 而非 --blue
+//   (規範 §2:--blue 是填色不是文字色);理由見下方 Brand() 的註解。
 // 流程、org_type 值域、Supabase 呼叫、錯誤訊息語意、demo 入口全部不動。
 //
 // 測試合約(e2e-real/helpers.js、auth-smoke、routes.spec):placeholder「Email」
@@ -66,7 +66,7 @@ export default function Login() {
     : mfaRequired
       ? '這個帳號已啟用兩步驟驗證，請輸入驗證器 App 顯示的 6 位數。'
     : !isSupabaseConfigured
-      ? '示範環境：選擇角色即可進入 prototype'
+      ? '示範環境：選擇角色即可進入，不需註冊或密碼'
       : mode === 'forgot'
         ? '我們會寄一封重設連結到你註冊的信箱'
         : '使用機關公務信箱或專案邀請信箱登入；專案內的身分依契約方授權而定。'
@@ -111,15 +111,25 @@ export default function Login() {
   )
 }
 
-// 品牌:三方三點標記(public/brand)+ PMIS 字樣。.ai 用 --blue-text,不用 lockup 的 --blue
-// (規範 §2:--blue 是填色,小字對 surface-2 不過 AA;22px 半粗雖算大字,仍統一走文字色)。
+// 品牌:三方三點標記(public/brand)+ GovAgent 字樣,與 Layout／legalShell／Security 同一組 lockup。
+//
+// 2026-09-16 修正:這支一直漏在 2026-08-25 的改名之外,還印著舊品牌「PMIS.ai」——
+// 站內側欄與 /security、/terms、/privacy 早就是 GovAgent,只有登入頁(全站第一個畫面,
+// 也是行銷站 gov-agent.ai 的「線上試用」落地頁)還是舊的。legalShell 與 Security 的註解
+// 都寫著「與 Layout／Login 同一組 lockup」,可見是漏改不是刻意保留。
+//
+// 與側欄 lockup 的唯一差異:「Agent」走 --blue-text 而非 --blue。
+// 這裡的字是 title2(22)/semibold,不到 WCAG 大字門檻(24px,或 18.66px 粗體),
+// 要 4.5:1;--blue #0071e3 對 --bg 只有 4.31,--blue-text #0058b0 是 6.38。
+// index.css:181 的規範也寫明「--blue 是填色…文字一律用 --blue-text」。
+// 標記與字樣包在同一個 <span>,不讓外層 flex 的 gap 把 Gov 與 Agent 拆開。
 function Brand() {
   const base = import.meta.env.BASE_URL
   return (
     <div className="flex items-center gap-2 mb-6">
       <img src={`${base}brand/pmis-mark.svg`} alt="" className="w-8 h-8 dark:hidden" />
       <img src={`${base}brand/pmis-mark-dark.svg`} alt="" className="w-8 h-8 hidden dark:block" />
-      <span className="text-title2 font-semibold tracking-tight text-[var(--text)]">PMIS<span className="text-[var(--blue-text)]">.ai</span></span>
+      <span className="text-title2 font-semibold tracking-tight text-[var(--text)]">Gov<span className="text-[var(--blue-text)]">Agent</span></span>
     </div>
   )
 }
@@ -491,7 +501,7 @@ function RolePicker({ setCurrentUser, navigate }) {
           </li>
         ))}
       </ul>
-      <p className="text-center text-footnote text-[var(--text-3)] mt-5">點任一角色即可進入 prototype</p>
+      <p className="text-center text-footnote text-[var(--text-3)] mt-5">畫面中的專案、金額與人名都是示範資料</p>
     </>
   )
 }
