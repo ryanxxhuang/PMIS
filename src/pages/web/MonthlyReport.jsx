@@ -4,7 +4,9 @@ import { useStore } from '../../store.jsx'
 import { Card, Empty, Button, PageHeader, Surface, Input, Textarea, Field, ErrorBanner, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { parseLocalDate, localISOMonth, taipeiToday } from '../../lib/dates.js'
+import { parseLocalDate, localISOMonth, localISODate, taipeiToday } from '../../lib/dates.js'
+import { plannedPctNow } from '../../lib/progressPlan.js'
+import { reportCutoff, isPartialMonth, latestValuationAt, valuationLabel, monthEnd } from '../../lib/progressAsOf.js'
 import { fmtAmount as money } from '../../lib/format.js'
 import { rainDayCount } from '../../lib/weatherMetrics.js'
 import { validateDraft } from '../../lib/factsValidator.js'
@@ -12,8 +14,6 @@ import { validateDraft } from '../../lib/factsValidator.js'
 const qtyFmt = (n) => (n == null || isNaN(n) ? '—' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }))
 const thisMonthStr = () => taipeiToday().slice(0, 7)
 const inMonth = (d, m) => (d || '').slice(0, 7) === m
-// 某月最後一天（用來算「截至月底」的累計）
-const monthEnd = (m) => { const [y, mo] = m.split('-').map(Number); return new Date(y, mo, 0) }
 const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return localISOMonth(d) }
 
 export default function MonthlyReport() {
@@ -31,25 +31,20 @@ export default function MonthlyReport() {
 
   const tree = useMemo(() => (workItems ? buildBillableTree(adjustedItems) : { roots: [], childrenMap: new Map() }), [workItems, adjustedItems])
 
-  // 截至某 cutoff 日的累計估驗金額（取 valuation_date 在 cutoff（含）以前、期數最大的一期）。
-  // useCallback 讓它能如實列進 data memo 的依賴:它讀的 valuations/tree 本來就在那份依賴裡。
-  const cumAt = useCallback((cutoff) => {
-    const eligible = valuations.filter((v) => !v.valuation_date || parseLocalDate(v.valuation_date) <= cutoff)
-    if (!eligible.length) return 0
-    const latest = eligible.reduce((a, b) => (b.period_no > a.period_no ? b : a))
-    return totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, latest.items))
-  }, [valuations, tree])
+  // 截至某日的估驗期與累計估驗金額:口徑（截止日、取期、狀態不論）統一走 progressAsOf（D-024）。
+  // useCallback 讓它能如實列進 data memo 的依賴:它讀的 tree 本來就在那份依賴裡。
+  const cumOf = useCallback((v) => (v ? totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, v.items)) : 0), [tree])
 
   const data = useMemo(() => {
+    // 統計截止日:所選月份月底;本月尚未結束時取今天(與監造報表、進度頁同一天、同一期)
+    const today = new Date()
+    const cutoff = reportCutoff(month, today), partial = isPartialMonth(month, today), cutoffISO = localISODate(cutoff)
     const mEnd = monthEnd(month), pEnd = monthEnd(prevMonth(month))
-    const cumThis = cumAt(mEnd), cumPrev = cumAt(pEnd)
+    const valThis = latestValuationAt(valuations, cutoff)
+    const cumThis = cumOf(valThis), cumPrev = cumOf(latestValuationAt(valuations, pEnd))
     const actualPct = billable ? (cumThis / billable) * 100 : 0
-    // 累計預定 %：progressPlan.months 的 plannedPct 為累計；取 <= 本月的最後一筆
-    let plannedPct = null
-    if (progressPlan?.months?.length) {
-      const upto = progressPlan.months.filter((x) => x.label <= month)
-      plannedPct = (upto.length ? upto[upto.length - 1] : progressPlan.months[0]).plannedPct
-    }
+    // 累計預定 %:預定進度表各列為月底累計,按日內插到截止日(過去月份 = 該列值)
+    const plannedPct = plannedPctNow(progressPlan, cutoff)
     const logs = siteLogs.filter((l) => inMonth(l.log_date, month)).sort((a, b) => a.log_date.localeCompare(b.log_date))
     // 本月 / 截至月底累計完成數量（彙整自施工日誌明細）
     const byKey = new Map((workItems?.items || []).map((it) => [it.item_key, it]))
@@ -79,12 +74,13 @@ export default function MonthlyReport() {
     const approvedNet = changeOrders.filter((c) => c.status === '核准')
       .reduce((s, c) => s + c.items.reduce((t, it) => t + (Number(it.amount_delta) || 0), 0), 0)
     return {
-      cumThis, thisMonthVal: cumThis - cumPrev, actualPct, plannedPct,
+      cumThis, thisMonthVal: cumThis - cumPrev, actualPct, plannedPct, valThis, cutoffISO, partial,
       logs, itemRows, rainDays, inspM, defOpened, defClosed, defOpen, safM, safDefM, coM, approvedNet,
-      paidCum: valuations.reduce((s, v) => s + (v.paid_amount || 0), 0),
-      invoicedCount: valuations.filter((v) => v.invoice_date).length,
+      // 收款與請款也截至截止日(C4):沒填收款日的金額仍計入,不能把已登錄的錢藏掉
+      paidCum: valuations.filter((v) => !v.paid_date || v.paid_date <= cutoffISO).reduce((s, v) => s + (v.paid_amount || 0), 0),
+      invoicedCount: valuations.filter((v) => v.invoice_date && v.invoice_date <= cutoffISO).length,
     }
-  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, billable, workItems, cumAt])
+  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, billable, workItems, cumOf])
 
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
@@ -153,13 +149,16 @@ export default function MonthlyReport() {
         {/* 進度 */}
         <Section title="二、施工進度">
           <div className="grid grid-cols-3 gap-4 text-center">
-            <Metric label="累計預定進度" value={data.plannedPct == null ? '—' : `${data.plannedPct.toFixed(1)}%`} />
-            <Metric label="累計實際進度" value={`${data.actualPct.toFixed(1)}%`} />
+            <Metric label="累計預定進度" value={data.plannedPct == null ? '—' : `${data.plannedPct.toFixed(1)}%`}
+              sub={data.plannedPct == null ? '尚未設定預定進度' : `預定進度表內插至 ${data.cutoffISO}`} />
+            <Metric label="累計實際進度" value={`${data.actualPct.toFixed(1)}%`} sub={valuationLabel(data.valThis)} />
             <Metric label="超前 / 落後"
               value={diff == null ? '—' : `${diff >= 0 ? '超前 ' : '落後 '}${Math.abs(diff).toFixed(1)}%`}
+              sub={`截至 ${data.cutoffISO}`}
               color={diff == null ? '' : diff >= 0 ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'} />
           </div>
-          <p className="text-xs text-[var(--text-3)] mt-3">實際進度依累計估驗金額 ÷ 契約金額計算。</p>
+          {/* W07:每個數字截至何日、取哪一期、含不含未核定,寫在報表上,不讓讀者猜 */}
+          <p className="text-xs text-[var(--text-3)] mt-3">統計截止日 {data.cutoffISO}{data.partial ? '（本月尚未結束，以今天為準）' : ''}。累計實際＝估驗日期在截止日（含）以前最新一期的累計估驗金額 ÷ 變更後契約金額，含尚未核定的期別；累計預定＝預定進度表（各月底累計）按日內插至截止日。</p>
         </Section>
 
         {/* 估驗請款 */}
@@ -167,8 +166,8 @@ export default function MonthlyReport() {
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1.5 text-sm">
             <Info k="累計估驗金額" v={`NT$ ${money(data.cumThis)}`} />
             <Info k="本月估驗金額" v={`NT$ ${money(data.thisMonthVal)}`} />
-            <Info k="累計已收款" v={`NT$ ${money(data.paidCum)}`} />
-            <Info k="已請款期數" v={`${data.invoicedCount} 期`} />
+            <Info k={`累計已收款（截至 ${data.cutoffISO}）`} v={`NT$ ${money(data.paidCum)}`} />
+            <Info k={`已請款期數（截至 ${data.cutoffISO}）`} v={`${data.invoicedCount} 期`} />
           </dl>
         </Section>
 
@@ -383,11 +382,12 @@ function Info({ k, v }) {
   return <div className="flex flex-wrap gap-x-2 text-sm"><dt className="text-[var(--text-3)]">{k}：</dt><dd className="font-medium min-w-0 text-[var(--text)]">{v || '—'}</dd></div>
 }
 // 數字格底色走 token(--surface-2);邊框保留,列印預設不印底色時仍看得出格線
-function Metric({ label, value, color = '' }) {
+function Metric({ label, value, sub = '', color = '' }) {
   return (
-    <div className="border border-[var(--border)] bg-[var(--surface-2)] rounded-lg py-3">
+    <div className="border border-[var(--border)] bg-[var(--surface-2)] rounded-lg py-3 px-2">
       <div className="text-caption text-[var(--text-2)]">{label}</div>
       <div className={`text-title3 font-normal mt-1 num ${color}`}>{value}</div>
+      {sub && <div className="text-caption text-[var(--text-3)] mt-1">{sub}</div>}
     </div>
   )
 }

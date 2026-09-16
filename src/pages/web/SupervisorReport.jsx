@@ -4,7 +4,8 @@ import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader, Button, Badge, Surface, Input, Textarea } from '../../components/ui.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow } from '../../lib/progressPlan.js'
-import { taipeiToday } from '../../lib/dates.js'
+import { taipeiToday, localISODate } from '../../lib/dates.js'
+import { reportCutoff, isPartialMonth, latestValuationAt, valuationLabel } from '../../lib/progressAsOf.js'
 import { buildSupervisorReport } from '../../lib/supervisorReport.js'
 
 // 每次呼叫取「今天」(B-11):模組層常數會讓長開分頁凍結在開頁那天
@@ -37,17 +38,20 @@ export default function SupervisorReport() {
     [workItems, adjustedItems],
   )
   const billableTotal = workItems ? revisedTotal : 0
-  const latestVal = valuations[valuations.length - 1]
+  // 進度隨報告月份回看(C2):截止日=所選月份月底,本月尚未結束取今天——與施工月報同一天、同一期(D-024)
+  const cutoff = reportCutoff(month, TODAY), partial = isPartialMonth(month, TODAY), cutoffISO = localISODate(cutoff)
+  const latestVal = latestValuationAt(valuations, cutoff)
   const actualPct = useMemo(() => {
     if (!latestVal || !billableTotal) return 0
     return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) / billableTotal) * 100
   }, [roots, childrenMap, latestVal, billableTotal])
-  const plannedNow = plannedPctNow(progressPlan, TODAY)
+  const plannedNow = plannedPctNow(progressPlan, cutoff)
+  const periodLabel = valuationLabel(latestVal)
 
   const r = useMemo(() => buildSupervisorReport({
     project, siteLogs, inspections, defects, submittals,
-    progress: { actualPct, plannedPct: plannedNow },
-  }, month), [project, siteLogs, inspections, defects, submittals, actualPct, plannedNow, month])
+    progress: { actualPct, plannedPct: plannedNow, asOf: cutoffISO, period: periodLabel },
+  }, month), [project, siteLogs, inspections, defects, submittals, actualPct, plannedNow, cutoffISO, periodLabel, month])
 
   if (!imported) {
     return (
@@ -94,6 +98,8 @@ export default function SupervisorReport() {
         </Section>
 
         <Section n="二" title="施工進度督導">
+          {/* W07:截止日、所取期別、含未核定與預定取法寫在報表上;本月與施工月報同一天同一期 */}
+          <p className="text-xs text-[var(--text-3)] mb-1">統計截止日 {cutoffISO}{partial ? '（本月尚未結束，以今天為準）' : ''}；累計實際取 {periodLabel}，含尚未核定的期別；累計預定為預定進度表（各月底累計）按日內插至截止日。</p>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
             <span>累計實際 <b className="num text-[var(--blue-text)]">{actualPct.toFixed(1)}%</b></span>
             {plannedNow != null && <span>累計預定 <b className="num">{plannedNow.toFixed(1)}%</b></span>}

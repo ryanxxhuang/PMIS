@@ -9,6 +9,7 @@ import { Card, Badge, PageHeader, Surface, ErrorBanner, SkeletonList, Prerequisi
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow } from '../../lib/progressPlan.js'
+import { latestValuationAt } from '../../lib/progressAsOf.js'
 import { fmtAmount as fmt } from '../../lib/format.js'
 import { acceptanceStageSummary } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
@@ -24,13 +25,14 @@ export default function Portfolio() {
   const TODAY = new Date() // 每次 render 取(B-11)
   const plannedNow = plannedPctNow(progressPlan, TODAY)
 
+  // 截至今天的估驗期(估驗日期不在未來、狀態不論;D-024)。DB 端 portfolio_summary 仍取最新期。
+  const latest = latestValuationAt(valuations, TODAY)
   // ── 本案(目前載入中的專案)即時計算——與 Dashboard 同一套數學 ──
   const current = useMemo(() => {
     if (!workItems) return null
     // 財務單一真相層(B-02):與 Dashboard/估驗頁同一套計算(含已核准變更)
     const { roots, childrenMap } = buildBillableTree(adjustedItems)
     const billable = revisedTotal
-    const latest = valuations[valuations.length - 1]
     const cum = latest ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latest.items)) : 0
     return {
       name: project.project_name, code: project.project_code, status: project.status || '施工中',
@@ -41,7 +43,7 @@ export default function Portfolio() {
       acceptance: acceptanceStageSummary(demoMode ? [] : acceptanceEvents), // demo 的驗收事件屬 B 區 storyline
       isCurrent: true,
     }
-  }, [workItems, adjustedItems, revisedTotal, valuations, plannedNow, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
+  }, [workItems, adjustedItems, revisedTotal, latest, plannedNow, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
 
   // ── 其他專案:真實模式走 RPC;demo 用靜態示範案 ──
   // others=null 代表「還不知道」(載入中或失敗),不是 0 案:失敗時 RPC 回空列,若當成

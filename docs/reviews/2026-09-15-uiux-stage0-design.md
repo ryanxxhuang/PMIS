@@ -375,6 +375,12 @@
 - **W09 已改（純文案）**：`Progress.jsx` 卡片標題、空狀態與說明句改為「估驗完成率差距（依金額權重）」並明寫不是工項排程落後判定、間接費也會列入；`laggards` 排序公式與資料來源不變。
 - **不做**：不改 `cumAt`／`plannedPctNow`／`latestVal`／`portfolio_summary`、不加估驗狀態篩選、不排除間接費、不做 Codex §5 版面小包、不做手機／平板。
 
+## 5.18 補強包 C 第二批：進度口徑 D-024（2026-09-16 實作，本機 diff）
+
+- **決策**：使用者對 W07 對照的 C1–C4 全數採建議：月份列＝月底累計、監造報表隨月份回看、未核定估驗計入並標示、月報收款按截止日；寫入 `docs/DECISIONS.md` D-024。
+- **影響**：`progressPlan.js`（內插語意）、新增 `progressAsOf.js`；`MonthlyReport.jsx`、`SupervisorReport.jsx`、`supervisorReport.js`、`Progress.jsx`、`Dashboard.jsx`、`Portfolio.jsx`、`assistantData.js`、`RiskAudit.jsx` 改共用取期；`demoSeed.js` 估驗比例與第 5 期日期。測試：`progressPlan.test.js` 重寫、新增 `progressAsOf.test.js`、`Reports.caliber.test.jsx`。
+- **不做**：不改 DB `portfolio_summary`、不排除間接費、不加估驗狀態篩選、不做 Codex §5 版面小包、不做手機／平板。
+
 ## 6. 證據標記與未驗項
 
 - 程式確認：§1 全部行號、§2 的動作名稱。

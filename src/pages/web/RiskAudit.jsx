@@ -8,6 +8,7 @@ import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPa
 import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow } from '../../lib/progressPlan.js'
+import { latestValuationAt } from '../../lib/progressAsOf.js'
 import { auditProject } from '../../lib/riskAudit.js'
 import { buildIntegrityFindings, isConcretePourItem } from '../../lib/integrityAudit.js'
 
@@ -79,11 +80,11 @@ export default function RiskAudit() {
     })
   }, [workItems, valuations, roots, childrenMap])
 
+  const latestVal = latestValuationAt(valuations, TODAY) // 截至今天、狀態不論(D-024)
   const actualPct = useMemo(() => {
-    const latest = valuations[valuations.length - 1]
-    if (!latest || !billableTotal) return 0
-    return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latest.items)) / billableTotal) * 100
-  }, [valuations, roots, childrenMap, billableTotal])
+    if (!latestVal || !billableTotal) return 0
+    return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) / billableTotal) * 100
+  }, [latestVal, roots, childrenMap, billableTotal])
   const plannedNow = plannedPctNow(progressPlan, TODAY)
 
   const anchors = { award_date: project?.award_date, notice_date: project?.notice_date, commencement_date: project?.commencement_date, end_date: project?.end_date }
