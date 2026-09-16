@@ -5,6 +5,14 @@
 
 ## 1. 本輪驗證
 
+### 2026-09-16 補強包 C：報表口徑與資訊層級（W07 對照／W09 更名；本機 diff，未發布）
+
+- `npm test`：116 檔、1,228 項通過（純文案與文件，無新測試）。
+- `npm run test:e2e` 監造／廠商／a11y／routes／reachability 五檔：45 項通過。
+- `npm run lint`（零警告）、`npm run build`、`npm run check:docs` 通過。
+- Demo 預覽 1440 px（監造，2026-09-16）：W07 逐條核對——施工月報 09 月預定 25.9%／實際 19.9%／落後 6.0%，08 月 18.9%／16.0%／2.9%；監造報表 09 月與 08 月同為預定 29.8%／實際 19.9%／落後 9.8%；進度頁今日預定 29.8%；月報累計已收款兩個月都是 NT$ 82,963,685、已請款 4 期。W09 改後 `/progress` 卡片標題為「估驗完成率差距（依金額權重）」、說明句明寫不是工項排程落後判定，排行內容與順序不變（前三列仍為利潤／管理費、營業稅、保險費）。
+- 未做：W07 標示文案與任何公式修正（待 `docs/reviews/2026-09-16-uiux-w07-progress-caliber.md` §5 決策）；真專案、真人驗收、手機／平板。
+
 ### 2026-09-16 補強包 B：工作交接與回找（W05／W06／W08／D01；本機 diff，未發布）
 
 - `npm test`：116 檔、1,228 項通過；擴充 `useUrlFilters.test.jsx`（改寫篩選保住 `location.state`）、`Quality.journey.test.jsx`（從待辦進來切分段後 `taskReturn` 仍在）、`Dashboard.setup.test.jsx`（原項離開清單時不指向今天已完成、給「回到剛才處理的那一筆」連結）、`Submittals.create.test.jsx`（不再要求建立後註明附件說明；示範模式無上傳鈕）；`Submittals.correction.test.jsx` 的 store 標為真專案以保留上傳測試。
