@@ -5,7 +5,7 @@
 
 ## 1. 本輪驗證
 
-### 2026-09-17 T0：本機 pgTAP 測試隔離（PR #105）
+### 2026-09-17 T0：本機 pgTAP 測試隔離（PR #107）
 
 - `npm run test:db`（新 runner：`supabase db start` 起一次性資料庫 `PMIS_pgtap_<pid>` 從零套 61 支 migration＋seed，跑完刪）：41 檔、1,131 通過、0 失敗，與 CI `pgtap`（main `d3b7d35`）的 41 檔 1,131 完全一致；一次性資料庫建置約 25 秒、整趟約 40 秒。共用開發資料庫 `supabase_db_PMIS` 在殘留列（1 專案、3 成員）仍在的情況下，執行前後 public／auth／storage／supabase_migrations 共 86 張表的列數快照 md5 相同；執行後無 `*_pgtap_*` 容器、volume、網路殘留。
 - 中斷與殘留：`db start` 進行中送 SIGINT，一次性資料庫仍被清掉；預先塞入 pid 已死的 `PMIS_pgtap_999998` 容器與 `..._999999` volume，下次執行自動清除。
