@@ -1,9 +1,15 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-14｜三方 UIUX 操作流程；保留 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-17 P4a：監造確認量與估驗上限的純計算層（PR #103）
+
+- `npm run test:db`（本機 colima Supabase，`supabase migration up --local` 套到 `20260917120000` 後，未 reset）：41 檔、1,125 通過；新增 `confirmed_quantity_calc.sql` 83/83——申報未通過→0、通過 60 已計價 20→40、同批多次查驗／複查／多階段不累加、不同位置分計、改善後只增 40、兩期占用超額為負、FIFO 分配、跨期增量、超契約量／錯單位／負值／NaN／無限大／截止日後／狀態不明／缺批次鍵一律拒絕、總價缺 basis→cap 0、14 支函式皆 IMMUTABLE 且 anon／authenticated 不可執行。`ai_platform.sql` 1 條與 `p0_02_project_party_role.sql` 4 條計數斷言因共用本機 DB 殘留列（1 專案、3 成員）失敗，與本支 migration 無關；CI `pgtap` 從零套用為準。
+- `npm run check:docs`：55 檔、355 連結、0 錯誤。
+- 未做：前端／Edge 無改動，未跑 Vitest／E2E；正式 `db push` 於合併後執行並記 CURRENT §6.3。
 
 ### 2026-09-16 小包 D：Codex §5 版面與操作感受（五項；本機 diff，未發布）
 
