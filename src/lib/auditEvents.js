@@ -50,13 +50,23 @@ export const AUDIT_EVENT_LABELS = Object.freeze({
   'acceptance.stage_recorded': '驗收階段登錄',
   'acceptance.stage_updated': '驗收階段更新',
   'acceptance.stage_removed': '驗收階段移除',
+  'field_document.created': '現場文書建立',
+  'field_document.version_saved': '現場文書版本保存',
+  'field_document.signed': '現場文書簽署',
+  'field_document.submitted': '現場文書提送',
+  'field_document.received': '現場文書收件',
+  'field_document.returned': '現場文書退回',
+  'field_document.amended': '現場文書簽後更正',
+  'field_document.discarded': '現場文書捨棄',
+  'field_document.superseded': '現場文書作廢取代',
+  'field_document.status_changed': '現場文書狀態變更',
 })
 
 export const AUDIT_ENTITY_LABELS = Object.freeze({
   valuation: '估驗', inspection: '查驗', defect: '缺失', submittal: '送審文件',
   rfi: '工程疑義', change_order: '變更設計', requirement: '契約重點',
   document: '文件', document_version: '文件版本', project_party: '專案參與方',
-  project_membership: '專案成員', acceptance_event: '驗收階段',
+  project_membership: '專案成員', acceptance_event: '驗收階段', field_document: '現場文書',
 })
 
 const PARTY_LABELS = Object.freeze({

@@ -20,7 +20,7 @@ SELECT 同時要求 project_members 存取資格與 `can_read_audit_entity`：�
 
 ## 事件範圍
 
-估驗／金流、查驗、缺失、送審、RFI、變更、Requirement、文件版本與分類、契約包、三方身分快照、驗收與 Agent 動作覆核都有各自語意 trigger；精確值域與中文標籤以 [auditEvents](../../src/lib/auditEvents.js) 及 migrations 為準。建立只需 after、刪除只需 before，轉移保留兩者；不為每個無害編輯發 generic updated。
+估驗／金流、查驗、缺失、送審、RFI、變更、Requirement、文件版本與分類、契約包、三方身分快照、驗收、Agent 動作覆核與現場文書（`field_document.*`：建立、版本保存、簽署、提送、收件、退回、簽後更正、捨棄、作廢取代、其餘狀態變更；由簽署列／提送列／文件列的 AFTER trigger 寫，所有路徑一致；簽署事件 metadata 帶 `method`／`aal`，after_data 不重複存 IP／UA）都有各自語意 trigger；精確值域與中文標籤以 [auditEvents](../../src/lib/auditEvents.js) 及 migrations 為準。建立只需 after、刪除只需 before，轉移保留兩者；不為每個無害編輯發 generic updated。
 
 correlation_id 已有欄位但沒有跨請求 context，現行 trigger 多傳 null。平台 AI 設定不屬單一專案，不寫此表；另由 updated_by／updated_at 與用量表記錄。稽核不是法律認證、加密簽章或 SIEM，也沒有應用層保留期／封存 API。
 

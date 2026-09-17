@@ -61,6 +61,8 @@
 
 唯一：`(inspection_id, work_item_id, stage_key)` where `inspection_id not null`（同一次查驗對同工項同階段只能一筆＝重播冪等）。grants：authenticated 只有 SELECT；寫入只走 `sign_field_document`（查驗表單）與 `issue_supervisor_certificate`；`revoke_inspection_confirmation` 改狀態。
 
+**與現場文書資料層的介面（P2a 已定案，P3c／P4b 依此接）**：`document_id` FK `field_documents(id)`，`(document_id, document_version_no)` 複合 FK `field_document_versions(document_id, version_no)`（版本列不可變，追溯永遠指向同一份內容）；`content_hash` 必須等於該版本 `field_document_versions.content_hash`（只由 DB 的 `fn_field_document_content_hash` 計算）並與簽署列 `field_document_signatures(document_id, version_no)` 的雜湊一致——P4b 的確認表 guard 以此檢查，確保「確認量」追得到一個被簽署過的版本。`confirmed_by`／`confirmed_at` 取簽署列的 `signer_id`／`signed_at`（伺服器時間），不另收客戶端值。寫入順序（同交易，見 [現場文書 §5](field-documents-lifecycle.md#5-簽署已確認-要求設計-機制)）：簽署列 → `field_documents.status='signed'` → 更新 `inspections`（判定、`document_id` 等）→ `inspection_confirmations`（AFTER INSERT 自動同步草稿期）。監造查驗表單的 `owner_org` 由 `doc_type='inspection_form'` 固定為 `supervisor`，簽署列的 `signer_org` 由伺服器取自簽署者 profile，因此「確認人是監造」在資料層已保證；`batch_key`／`stage_key`／`unit`／`qty_cum` 來自簽署版本的 `content`（P3c 的示範範本欄位），由 RPC 讀版本內容餵入 `fn_cq_*` 正規化，不信任客戶端另傳的數字。
+
 **`valuation_item_sources`（期別來源分配）**
 
 `id`, `valuation_id` FK cascade, `work_item_id`, `batch_key`, `stage_key`, `qty numeric(18,4) not null check (qty <> 0)`, `kind text check in ('confirmation','legacy','clawback','adjustment')`, `confirmation_id uuid`（建立分配時的最新確認，追溯用）, `adjustment_id uuid`, `created_at`, `created_by`。唯一 `(valuation_id, work_item_id, batch_key, kind)`。authenticated 只有 SELECT。
