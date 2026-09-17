@@ -72,7 +72,7 @@ export default function PageTabs() {
     <nav ref={navRef} data-fade={fade} aria-label={`${item.label}分頁`}
       className="tabs-scroll flex gap-2 overflow-x-auto mt-3.5 pb-0.5 print:hidden max-md:snap-x max-md:snap-proximity">
       {item.tabs.map((t) => (
-        <NavLink key={t.to} to={t.to}
+        <NavLink key={t.to} to={t.to} end
           className={({ isActive }) => `${CHIP_BASE} ${isActive ? CHIP_ON : CHIP_OFF}`}>
           {t.label}
         </NavLink>

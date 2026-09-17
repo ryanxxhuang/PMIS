@@ -31,20 +31,20 @@ const render = (sidebarTabsFor) => act(async () => {
     </MemoryRouter>,
   )
 })
-const tabsNav = () => container.querySelector('nav[aria-label="審查與協作分頁"]')
+const tabsNav = () => container.querySelector('nav[aria-label="文件往來分頁"]')
 
 describe('PageTabs 與側欄的分工', () => {
-  it('側欄正列出「審查與協作」子頁時不渲染分頁列', async () => {
+  it('側欄正列出「文件往來」子頁時不渲染分頁列', async () => {
     await render('/submittals')
     expect(tabsNav()).toBeNull()
   })
 
-  it('側欄沒有列子頁(null)時渲染分頁列,同組三個子頁都是連結', async () => {
+  it('側欄沒有列子頁(null)時渲染分頁列,同組子頁(監造含監造月報)都是連結', async () => {
     await render(null)
     const nav = tabsNav()
     expect(nav).toBeTruthy()
     const names = [...nav.querySelectorAll('a')].map((a) => a.textContent.trim())
-    expect(names).toEqual(['送審文件', '工程疑義', '變更設計'])
+    expect(names).toEqual(['送審文件', '工程疑義', '施工月報', '監造月報'])
     expect(nav.querySelector('a[aria-current="page"]').textContent.trim()).toBe('送審文件')
   })
 

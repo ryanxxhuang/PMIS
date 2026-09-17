@@ -1,22 +1,30 @@
 import { test, expect } from '@playwright/test'
-import { loginAs, gotoHash } from './helpers.js'
+import { loginAs, gotoHash, ROLES } from './helpers.js'
+import { roleWorkLinks } from '../src/lib/navConfig.js'
 
-const common = {
-  contractor: ['施工日誌', '品質查驗', '送審文件'],
-  supervisor: ['品質查驗', '送審文件', '監造報表'],
-  owner: ['變更設計', '請款收款', '驗收結算'],
-}
-
-for (const [role, names] of Object.entries(common)) {
-  test(`${role}:常用工作與手機捷徑對應角色，功能搜尋保持權限`, async ({ page }) => {
+// 常用入口與手機底欄=三個主入口群組(D-026 §4),期望值直接從 navConfig 算,不手抄角色清單
+for (const role of Object.keys(ROLES)) {
+  const links = roleWorkLinks(role, false, false)
+  const names = links.map((n) => n.label)
+  test(`${role}:常用工作與手機底欄=四主入口，任一子頁底欄群組仍亮，功能搜尋保持權限`, async ({ page }) => {
     await loginAs(page, role)
     const quick = page.getByRole('navigation', { name: '常用工作' })
     await expect(quick.getByRole('link')).toHaveText(names)
     await page.setViewportSize({ width: 375, height: 812 })
     const bottom = page.getByRole('navigation', { name: '快速導覽' })
+    // 五格=現在輪到我+三個主入口+更多
+    await expect(bottom.getByRole('link')).toHaveCount(4)
+    await expect(bottom.getByRole('link', { name: '現在輪到我', exact: true })).toHaveAttribute('aria-current', 'page')
     for (const name of names) await expect(bottom.getByRole('link', { name, exact: true })).toBeVisible()
     await bottom.getByRole('link', { name: names[0], exact: true }).click()
-    await expect(page.getByRole('heading', { name: names[0], level: 1 })).toBeVisible()
+    await expect(page).toHaveURL(/#\/site$/)
+    await expect(page.getByRole('heading', { name: '現場紀錄', level: 1 })).toBeVisible()
+    await expect(bottom.getByRole('link', { name: names[0], exact: true })).toHaveAttribute('aria-current', 'page')
+    // 進到群組的子頁(品質查驗)底欄仍亮「現場紀錄」,不會跳成「更多」
+    await gotoHash(page, '/quality')
+    await expect(page.getByRole('heading', { name: '品質查驗', level: 1 })).toBeVisible()
+    await expect(bottom.getByRole('link', { name: names[0], exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(bottom.getByRole('button', { name: '更多', exact: true })).toHaveAttribute('aria-expanded', 'false')
     await page.getByRole('button', { name: '更多', exact: true }).click()
     await page.getByRole('button', { name: '尋找功能', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '尋找功能' })
