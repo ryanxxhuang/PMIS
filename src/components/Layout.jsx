@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { NavLink, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
-import { visibleNavGroups, defaultLandingPath, BALL_SOURCES, resolveBallKey, roleWorkLinks } from '../lib/navConfig.js'
+import { visibleNavGroups, defaultLandingPath, BALL_SOURCES, BALL_SOURCES_TITLE, resolveBallKey, roleWorkLinks } from '../lib/navConfig.js'
 import { FindWork, WorkContext } from './WorkNavigation.jsx'
 import CopilotFab, { CopilotMark, useCopilotAvailable } from './CopilotFab.jsx'
-import BottomNav, { NAV_SHORT } from './BottomNav.jsx'
+import BottomNav from './BottomNav.jsx'
 import { MSym } from './icons.jsx'
 import { ErrorBanner } from './ui.jsx'
 import { friendlyError } from '../lib/errorMessage.js'
@@ -447,14 +447,14 @@ export function WebLayout({ children }) {
           </div>
           <FindWork collapsed={collapsed} onNavigate={() => setMenuOpen(false)} mobileReturnRef={moreBtnRef} />
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
-            {/* 球權來源(疊合版 IA §0):主畫面是收件匣,側欄先問「球在誰手上」。
-                三個入口共用 /dashboard 的登記與角色判斷,以 ?ball= 分流(為何不開新路由
-                見 navConfig BALL_SOURCES)。/dashboard 只有這一組入口——下方的工作/參考
+            {/* 球權來源(疊合版 IA §0;D-026 四主入口的「今日工作」):主畫面是收件匣,側欄先問
+                「球在誰手上」。三個入口共用 /dashboard 的登記與角色判斷,以 ?ball= 分流(為何不開
+                新路由見 navConfig BALL_SOURCES)。/dashboard 只有這一組入口——下方的工作/專案資料
                 分區沒有任何項目指向它,所以 aria-current 天然只落一處,不需要去重複。
                 件數與工作項 badge 同源(useTodayTasks),不另算一份。 */}
             <div className="mb-2">
               <div className={`px-4 pt-3 pb-1.5 ${collapsed ? 'md:hidden' : ''}`}>
-                <span className="text-caption font-medium text-[var(--text-2)]">球在誰手上</span>
+                <span className="text-caption font-medium text-[var(--text-2)]">{BALL_SOURCES_TITLE}</span>
               </div>
               {BALL_SOURCES.map((b) => {
                 const active = ballKey === b.key
@@ -492,7 +492,7 @@ export function WebLayout({ children }) {
                           aria-current={itemActive && (!n.tabs || !expanded) ? 'page' : false}
                           className={() => linkClass(collapsed)}>
                           {/* 未處理件數(README 導覽規格)=「現在輪到我」落在此群組的數 */}
-                          <NavRowContent icon={n.icon} label={n.label} short={NAV_SHORT[n.label] || n.label}
+                          <NavRowContent icon={n.icon} label={n.label} short={n.short || n.label}
                             active={itemActive} count={mineCount} alert collapsed={collapsed} />
                         </NavLink>
                         {n.tabs && (
@@ -507,7 +507,7 @@ export function WebLayout({ children }) {
                       {n.tabs && expanded && (
                         <div id={`nav-children-${n.to.slice(1)}`} className={`pb-1 ${collapsed ? 'md:hidden' : ''}`}>
                           {n.tabs.map((tab) => (
-                            <NavLink key={tab.to} to={tab.to} onClick={() => setMenuOpen(false)}
+                            <NavLink key={tab.to} to={tab.to} end onClick={() => setMenuOpen(false)}
                               className={({ isActive }) => `min-h-11 mx-2 pl-11 pr-3 rounded-lg flex items-center text-sm transition-colors ${
                                 isActive
                                   ? 'bg-[var(--blue-tint)] text-[var(--blue-text)] font-medium'

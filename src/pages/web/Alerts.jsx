@@ -10,6 +10,7 @@ import { Card, Badge, BallChip, Button, Dot, Empty, PageHeader } from '../../com
 import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../components/listDetail.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
+import { taskReturnState } from '../../lib/taskReturn.js'
 import { SOON_DAYS, daysBetween, taipeiISODate } from '../../lib/todayTasks.js'
 
 // 三類快篩:逾期(overdueDays 有值)/即將到期(有到期日且 ≤ SOON_DAYS)/待處理
@@ -110,7 +111,7 @@ export default function Alerts() {
         </div>
         {/* 前往=這一頁唯一的動作:提醒本身不能在這裡完成,要到來源單據所在的頁面 */}
         <div className="px-4 py-3 border-t border-[var(--border-2)] flex items-center gap-2 flex-wrap">
-          <Link to={r.to} state={{ taskReturn: { to: `${location.pathname}${location.search}`, label: '提醒中心', key: r.key } }} className="inline-flex rounded-lg">
+          <Link to={r.to} state={taskReturnState(location, r.key)} className="inline-flex rounded-lg">
             <Button tabIndex={-1}>前往處理<MSym name="chevron_right" size={14} /></Button>
           </Link>
         </div>

@@ -5,6 +5,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 import { Badge } from './ui.jsx'
+import { taskReturnState } from '../lib/taskReturn.js'
 
 // tag → 圖示+五語意色調(單一真相;buildTodayTasks 新增 tag 時只補這裡)。
 // 裁決:工安缺失=red(對齊缺失,原 Alerts 的 amber 是漂移);試驗=amber
@@ -52,11 +53,11 @@ function TaskMeta({ meta, overdue }) {
 }
 
 export default function TaskRow({ task }) {
-  const { pathname, search } = useLocation()
-  const label = pathname === '/dashboard' ? '今日待辦' : '提醒中心'
+  // 返回來源(頁名與可否返回)由 lib/taskReturn 一張表決定,這裡不猜
+  const location = useLocation()
   const m = TAG_META[task.tag] || { icon: 'visibility', tone: 'slate' }
   return (
-    <Link id={`task-${task.key}`} to={task.to} state={{ taskReturn: { to: `${pathname}${search}`, label, key: task.key } }}
+    <Link id={`task-${task.key}`} to={task.to} state={taskReturnState(location, task.key)}
       className="group flex items-start gap-3 px-4 py-4 hover:bg-[var(--surface-2)] transition-colors">
       <span className={`w-8 h-8 rounded-lg grid place-items-center shrink-0 ${TILE[m.tone]}`}>
         <MSym name={m.icon} size={16} />

@@ -52,7 +52,7 @@
 
 | 單元 | 相依 | 指定 | 實際 | 範圍 | 驗收 |
 |---|---|---|---|---|---|
-| P1a 導覽重組 | P0 | fable5.1 | — | `src/lib/navConfig.js`（四群組、`hidden`、`ROLE_WORK`、`WORK_GUIDANCE`）、`App.jsx` 新路由 `/site`（暫為文件清單殼）、`navConfig.test.js`、`e2e/routes.spec.js`、`reachability.spec.js` | 路由登記完整；hidden 項 `routeAllowed` 仍依角色；E2E 綠 |
+| P1a 導覽重組 | P0 | fable5.1 | Fable 5.1 | `src/lib/navConfig.js`（三主入口群組＋專案資料兩組、`hidden`、`MAIN_ENTRY_PATHS`／`ROLE_WORK`、`WORK_GUIDANCE`、`short`）、`App.jsx` 新路由 `/site`（現場紀錄總覽：依角色列既有入口＋件數＋現場待辦，非空殼）、`src/lib/taskReturn.js`（待辦返回來源單一定義）、`navConfig.test.js`、`e2e/routes.spec.js`、`reachability.spec.js`、`a11y.spec.js`（角色路由改由 navConfig 推導） | 路由登記完整；hidden 項 `routeAllowed` 仍依角色；E2E 綠 |
 | P1b 退場頁唯讀化 | P1a | fable5.1 | — | `Cost.jsx`（移除寫入控制）、`Portfolio.jsx`（選案清單）、`RiskAudit.jsx`（唯讀導向）、`store.jsx`／`ledger.js` 不再暴露成本寫入、`e2e/owner.spec.js`、`a11y.spec.js` | 三頁無寫入按鈕；RLS 不變；E2E 綠 |
 | P1c 首頁／底欄／提醒中心對齊四入口 | P1a | 純呈現（fable5.1 執行） | — | `Layout.jsx`、`BottomNav`、`Dashboard.jsx` 操作列、`Alerts.jsx` 入口文案 | 手機五格底欄＝四入口＋更多；無邏輯變更 |
 | P1d 文件同步 | P1a–c | 純呈現（fable5.1 執行） | — | `CURRENT.md` §6.1、`route-registry-governance.md`、`UIUX` 規範 §0 | `check:docs` |

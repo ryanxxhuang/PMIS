@@ -15,6 +15,7 @@ import { useEscape } from '../lib/useEscape.js'
 import { usePresence } from '../lib/usePresence.js'
 import { useScrollLock } from '../lib/useScrollLock.js'
 import { BELOW_MD_QUERY, BELOW_LG_QUERY } from '../lib/useMediaQuery.js'
+import { taskReturnOf } from '../lib/taskReturn.js'
 
 // 兩欄版面的欄寬與間距。骨架與正式版面必須共用這一份——兩邊不同寬的話
 // 載入完成會整片位移(規範:載入完成不位移)。Tailwind 掃的是字面值,所以
@@ -106,7 +107,8 @@ function useDismissable(open, onClose, returnFocusRef) {
 // 動量不得鏈到頁面——實測在面板上滾完立刻按返回,鏈上去的 19px 會讓還原後的位置偏掉。
 export function DetailDrawer({ open, onClose, label, children }) {
   const { state: locationState } = useLocation()
-  const back = locationState?.taskReturn
+  // 返回來源的可信與否由 lib/taskReturn 一張表決定(與 WorkContext 同一份)
+  const back = taskReturnOf(locationState)
   const ref = useDismissable(open, onClose)
   useScrollLock(open)
   const { mounted, state, onTransitionEnd } = usePresence(open, BELOW_LG_QUERY)
@@ -122,7 +124,7 @@ export function DetailDrawer({ open, onClose, label, children }) {
           <Button variant="ghost" size="md" className="min-h-11 pl-1.5" onClick={onClose}>
             <MSym name="chevron_left" size={20} /> 返回
           </Button>
-          {back && /^\/(dashboard|alerts)(\?|$)/.test(back.to) && <Link to={back.to} state={{ returnedTask: back.key }}
+          {back && <Link to={back.to} state={{ returnedTask: back.key }}
             className="ml-auto min-h-11 inline-flex items-center px-2 text-footnote font-medium text-[var(--blue-text)]">返回{back.label}</Link>}
         </div>
         {children}

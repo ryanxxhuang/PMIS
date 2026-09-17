@@ -78,9 +78,13 @@ function pageLevelReturns(source) {
 
 // 頁首可以直接寫 <PageHeader …/>,也可以先存成區域變數再共用(避免同一組
 // 標題字串在多個分支各抄一份而漂移)。兩種都算數,但變數必須真的綁到 PageHeader。
+// 區域變數可以是單行 `const header = <PageHeader`,也可以是括號包起來、前面有一兩層
+// 版面容器的多行 JSX(Requirements 把頁首與契約流程列包在同一個 space-y 裡)——
+// 只要 <PageHeader 出現在該變數 JSX 的最前三行內就算頁首變數。
 function headerRefs(source) {
   const names = new Set(['PageHeader'])
   for (const m of source.matchAll(/const (\w+) = <PageHeader\b/g)) names.add(m[1])
+  for (const m of source.matchAll(/const (\w+) = \(\n(?:[^\n]*\n){0,3}?\s*<PageHeader\b/g)) names.add(m[1])
   // Progress 用小元件 Header 包住 PageHeader,同樣算數
   for (const m of source.matchAll(/function (\w+)\([^)]*\)\s*\{[\s\S]{0,400}?<PageHeader\b/g)) names.add(m[1])
   return names

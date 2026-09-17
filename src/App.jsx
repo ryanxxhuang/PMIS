@@ -14,6 +14,7 @@ import ProjectSetup from './pages/web/ProjectSetup.jsx'
 // 登入頁也要先吞完估驗樹/圖表/報表。按路由切塊後,首載只拿 Login+骨架。
 const Dashboard = lazy(() => import('./pages/web/Dashboard.jsx'))
 const BOQ = lazy(() => import('./pages/web/BOQ.jsx'))
+const Site = lazy(() => import('./pages/web/Site.jsx'))
 const SiteLog = lazy(() => import('./pages/web/SiteLog.jsx'))
 const Submittals = lazy(() => import('./pages/web/Submittals.jsx'))
 const RFI = lazy(() => import('./pages/web/RFI.jsx'))
@@ -108,17 +109,16 @@ function Web({ children, bare = false, registryPath }) {
 }
 
 // 找不到的路徑(U-02):原本靜默導回登入/首頁,使用者不知道自己打錯網址或收藏的連結已失效。
+// 落地頁一律是收件匣(defaultLandingPath),連結文案跟著它走,不再分角色猜第二種落地頁。
 function NotFound() {
   const { pathname } = useLocation()
   const { currentUser } = useStore()
-  const home = defaultLandingPath(currentUser?.org_type)
-  const homeLabel = home === '/portfolio' ? '回到跨案總覽' : '回到今日待辦'
   return (
     <div className="text-center py-20 space-y-3">
       <div className="text-4xl">🧭</div>
       <div className="text-[var(--text)] font-medium">找不到這個頁面</div>
       <p className="text-sm text-[var(--text-3)]">網址 <code className="px-1 rounded bg-[var(--surface-2)]">{pathname}</code> 不存在——可能打錯了,或這個連結已失效。</p>
-      <Link to={home} className="inline-block text-sm font-medium text-[var(--blue-text)] hover:underline">← {homeLabel}</Link>
+      <Link to={defaultLandingPath(currentUser?.org_type)} className="inline-block text-sm font-medium text-[var(--blue-text)] hover:underline">← 回到今日待辦</Link>
     </div>
   )
 }
@@ -146,6 +146,8 @@ const appRoutes = [
   { path: '/acceptance', element: <Acceptance /> },
   { path: '/project/new', element: <ProjectSetup /> },
   { path: '/boq', element: <BOQ /> },
+  // 現場紀錄主入口(D-026 四主入口):依角色列出現場作業入口與件數;P2c 起承載照片上傳與文書清單
+  { path: '/site', element: <Site /> },
   { path: '/site-log', element: <SiteLog /> },
   { path: '/site-log/print', element: <SiteLogPrint /> },
   { path: '/valuation', element: <Valuation /> },

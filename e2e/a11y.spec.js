@@ -3,6 +3,7 @@
 // Esc 與焦點管理(F2)落地後必須全綠;它不重複既有 spec 的業務斷言,只守版面與鍵盤。
 import { test, expect } from '@playwright/test'
 import { loginAs, gotoHash } from './helpers.js'
+import { routeRegistry, routeAllowed } from '../src/lib/navConfig.js'
 
 const MOBILE = { width: 375, height: 812 }
 // 640-767 的縫:BottomNav 是 md:hidden(<768)所以這裡已是手機版面,
@@ -16,11 +17,13 @@ const TABLET_RAIL = { width: 1024, height: 768 }
 // 路由是 lazy chunk,只等 main 非空會量到上一頁殘影,等到專屬 h1 才保證新頁已掛載。
 const H1 = {
   '/dashboard': '今日待辦',
+  '/site': '現場紀錄',
   '/site-log': '施工日誌',
   '/quality': '品質查驗',
   '/itp': '檢驗停留點',
   '/safety': '工安管理',
   '/requirements': '契約重點',
+  '/requirements/review': '擷取審核',
   '/deadlines': '期限追蹤',
   '/submittals': '送審文件',
   '/rfi': '工程疑義',
@@ -40,26 +43,23 @@ const H1 = {
   '/members': '三方成員',
   '/alerts': '提醒中心',
   '/audit': '風險稽核',
+  '/account': '帳號安全',
+  '/project/new': '建立專案',
 }
 // /agent 的 h1 是角色化的 Agent 名稱(AGENT_LABEL),逐角色對照
 const AGENT_H1 = { contractor: '廠商 Agent', supervisor: '監造 Agent', owner: '機關 Agent' }
 
-// 各角色可達的主要路由(對齊 navConfig 的 roles 限制;print 路由不掃——bare layout 另有守衛測試)
-const CONTRACTOR_ROUTES = [
-  '/dashboard', '/site-log', '/quality', '/itp', '/safety',
-  '/requirements', '/deadlines', '/submittals', '/rfi', '/change-orders',
-  '/boq', '/valuation', '/payments', '/cost', '/progress', '/schedule',
-  '/contract', '/monthly-report', '/acceptance',
-  '/portfolio', '/activity', '/members', '/agent', '/alerts',
-]
-// 監造:不經手請款、看不到廠商成本/排程;多監造報表
-const SUPERVISOR_ROUTES = CONTRACTOR_ROUTES
-  .filter((p) => !['/payments', '/cost', '/schedule'].includes(p))
-  .concat('/supervisor-report')
-// 機關:看不到廠商成本/排程;多風險稽核(hidden 路由,深連結仍允許)
-const OWNER_ROUTES = CONTRACTOR_ROUTES
-  .filter((p) => !['/cost', '/schedule'].includes(p))
-  .concat('/audit')
+// 各角色可達的工作台路由,直接從 navConfig 的登記表與 routeAllowed 推導(demo 角色:無 override、
+// 非平台管理員),不在這裡手抄第二份角色清單——roles/hidden 改了這裡自動跟上,新路由沒補 H1 會紅。
+// 掃描範圍=登入後套工作台外框的頁:print 路由不掃(bare layout 另有守衛測試)、404/公開/導向不掃;
+// hidden 的退場頁(/cost、/audit)照樣掃——它們仍可依原角色深連結直達。
+const routesFor = (org) => Object.entries(routeRegistry)
+  .filter(([path, rule]) => rule.access === 'authenticated' && !rule.surface && path !== '*')
+  .filter(([path]) => routeAllowed(path, org, false, false))
+  .map(([path]) => path)
+const CONTRACTOR_ROUTES = routesFor('contractor')
+const SUPERVISOR_ROUTES = routesFor('supervisor')
+const OWNER_ROUTES = routesFor('owner')
 
 // 逐頁等 h1 → 量整份文件寬度。失敗訊息一定帶路由名與尺寸,掃描一長串才知道紅在哪一頁。
 // 尺寸清單走同一份路由、同一次登入:登入要整頁 reload(demo 資料重種),
@@ -71,6 +71,7 @@ async function scanNoOverflow(page, role, routes, viewports = [MOBILE]) {
     await page.setViewportSize(vp)
     for (const path of routes) {
       const h1 = path === '/agent' ? AGENT_H1[role] : H1[path]
+      expect(h1, `路由 ${path} 沒有登記頁面標題(H1 對照表要補)`).toBeTruthy()
       await gotoHash(page, path)
       await expect(
         page.getByRole('heading', { level: 1, name: h1 }),
@@ -115,9 +116,9 @@ test.describe('1024px icon rail(W9 平板版面)', () => {
     await page.setViewportSize(TABLET_RAIL)
     await loginAs(page, 'contractor')
     const nav = page.getByRole('navigation', { name: '主要功能' })
-    await expect(nav.getByText('契約', { exact: true })).toBeVisible()      // NAV_SHORT
-    await expect(nav.getByText('契約重點', { exact: true })).toBeHidden()   // 全名 span 收起
-    await expect(nav.getByRole('link', { name: '契約重點', exact: true })).toBeVisible()
+    await expect(nav.getByText('履約', { exact: true })).toBeVisible()      // navConfig item.short
+    await expect(nav.getByText('履約時程', { exact: true })).toBeHidden()   // 全名 span 收起
+    await expect(nav.getByRole('link', { name: '履約時程', exact: true })).toBeVisible()
     // 側欄寬 = md:w-20(80px);沒收合就會是 256px,rail 直接沒發生
     const box = await page.locator('aside').boundingBox()
     expect(box?.width, `1024px 側欄寬 ${box?.width}px——沒收成 icon rail(應為 80px)`).toBeLessThan(120)
@@ -130,10 +131,10 @@ test.describe('1024px icon rail(W9 平板版面)', () => {
   test('平板的強制收合不污染桌機側欄偏好', async ({ page }) => {
     await page.setViewportSize(TABLET_RAIL)
     await loginAs(page, 'contractor')
-    await expect(page.getByRole('navigation', { name: '主要功能' }).getByText('契約', { exact: true })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '主要功能' }).getByText('履約', { exact: true })).toBeVisible()
     await page.setViewportSize({ width: 1280, height: 800 })
     const nav = page.getByRole('navigation', { name: '主要功能' })
-    await expect(nav.getByText('契約重點', { exact: true })).toBeVisible()
+    await expect(nav.getByText('履約時程', { exact: true })).toBeVisible()
     // 側欄寬帶 300ms transition,量到的可能是動畫中間值 → poll 到落定
     await expect
       .poll(async () => (await page.locator('aside').boundingBox())?.width,
@@ -235,12 +236,12 @@ test.describe('鍵盤可達性', () => {
     await more.click()
     await expect(more).toHaveAttribute('aria-expanded', 'true')
     const nav = page.getByRole('navigation', { name: '主要功能' })
-    await expect(nav.getByRole('link', { name: '契約重點', exact: true })).toBeVisible()
+    await expect(nav.getByRole('link', { name: '履約時程', exact: true })).toBeVisible()
     // F2 合約:開啟時焦點移入抽屜(關閉鈕),鍵盤使用者不會被留在遮罩底下
     await expect(page.getByRole('button', { name: '關閉選單' })).toBeFocused()
     await page.keyboard.press('Escape')
     // 關閉=側欄項不可見(visibility/不掛載皆可,但不能只是移出畫面仍可聚焦)
-    await expect(nav.getByRole('link', { name: '契約重點', exact: true })).toBeHidden()
+    await expect(nav.getByRole('link', { name: '履約時程', exact: true })).toBeHidden()
     await expect(more).toBeFocused()
   })
 

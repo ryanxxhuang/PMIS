@@ -1,5 +1,6 @@
-// 手機 bottom navigation(<768,規範 §9.3):五格 = 主畫面槽 + 三個角色常用子頁 + 「更多」
-// (iOS tab bar 上限 5)。選取=56×30 藥丸+描邊加重圖示+caption/500 標籤。
+// 手機 bottom navigation(<768,規範 §9.3):五格 = 主畫面槽(今日工作) + 三個主入口群組
+// (現場紀錄/履約時程/估驗請款) + 「更多」(iOS tab bar 上限 5;D-026 §4 四主入口)。
+// 選取=56×30 藥丸+描邊加重圖示+caption/500 標籤。
 // 「更多」開既有的導覽抽屜——稽核點名手機有「兩層平行導覽」:頂欄漢堡與底欄各開一套,
 // 現在同一份抽屜只剩這一個入口,頂欄漢堡在 <md 退場。
 // 「更多」的 accessible name 就是可見文字「更多」(WCAG 2.5.3 label-in-name),不用 aria-label
@@ -10,10 +11,8 @@
 import { Link, useLocation } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 
-// 短標籤只是顯示層,不進 navConfig(那是路由/權限的單一真相,不放表現欄位)。
-// export 給 Layout 的 rail 共用——同一份 map,跨斷點標籤不分家。
-// 球權來源不在這份裡:它們的短標跟定義走(navConfig BALL_SOURCES.short)。
-export const NAV_SHORT = { 專案文件: '文件', 契約重點: '契約', 標單工項: '標單', 現場與品質: '現場', 審查與協作: '審查', 進度與金流: '金流', 報表與結案: '結案', 專案: '專案', 平台管理: '平台' }
+// 短標籤跟著 navConfig 的項目走(item.short / BALL_SOURCES.short):label 與 short 同住一處,
+// 改名不會漏掉另一份以 label 當鍵的對照表。這裡只渲染,不再持有任何名稱表。
 
 // 格子皮膚只有這一份:Link 格與「更多」鈕共用,兩者視覺不得分家
 const CELL = 'flex flex-col items-center gap-1 pt-2 pb-3 min-h-11'
@@ -25,9 +24,9 @@ const labelClass = (active) => `text-caption font-medium leading-none ${active ?
 // ?ball= 三個分段都在同一頁,任一段都算在主畫面
 const isActive = (n, pathname) => pathname === n.to || n.tabs?.some((t) => t.to === pathname)
 
-// home:主畫面槽(球權來源「現在輪到我」),固定第一格。來源模型後 /dashboard 不再是
-// 工作/參考項,不能再靠「把含落地頁的項目排到最前」保住主畫面——改成明確的槽,
-// 主畫面永遠在手機第一格,不受 items 的順序與角色過濾影響。
+// home:主畫面槽(球權來源「現在輪到我」=今日工作),固定第一格。來源模型後 /dashboard 不再是
+// 工作/次入口項,不能再靠「把含落地頁的項目排到最前」保住主畫面——改成明確的槽,
+// 主畫面永遠在手機第一格,不受 items 的順序與角色過濾影響。items=roleWorkLinks 的三個主入口群組。
 // menuOpen/onMore/moreRef:抽屜狀態在 Layout,這裡只是它的觸發鈕。
 export default function BottomNav({ items, home, menuOpen = false, onMore, moreRef }) {
   const { pathname } = useLocation()
@@ -45,8 +44,8 @@ export default function BottomNav({ items, home, menuOpen = false, onMore, moreR
             <span className={pillClass(active)}>
               <MSym name={n.icon} size={20} fill={active} className={iconClass(active)} />
             </span>
-            {/* 主畫面槽帶自己的 short(球權來源定義);工作/參考項查 NAV_SHORT */}
-            <span className={labelClass(active)}>{n.short || NAV_SHORT[n.label] || n.label}</span>
+            {/* 主畫面槽與主入口群組都帶自己的 short(navConfig 定義) */}
+            <span className={labelClass(active)}>{n.short || n.label}</span>
           </Link>
         )
       })}

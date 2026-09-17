@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLE_WORK, WORK_GUIDANCE, visibleNavGroups, roleWorkLinks } from '../lib/navConfig.js'
+import { taskReturnOf, isTaskReturnSource } from '../lib/taskReturn.js'
 import { MSym } from './icons.jsx'
 import { ModalShell, SearchField } from './listDetail.jsx'
 import { buttonClass } from './ui.jsx'
@@ -61,16 +62,16 @@ export function FindWork({ collapsed = false, onNavigate, mobileReturnRef }) {
 
 export function WorkContext() {
   const { pathname, search, state } = useLocation()
-  const back = state?.taskReturn
-  // 只接受站內的兩個收件匣來源；單据自己的 query 更新保留此 state。
-  const canReturn = back && /^\/(dashboard|alerts)(\?|$)/.test(back.to) && !['/dashboard', '/alerts'].includes(pathname)
-  if (!canReturn) return null
+  // 來源是否可信、叫什麼名字,都由 lib/taskReturn 決定;來源頁自己身上不畫「返回自己」。
+  // 單據自己的 query 更新保留此 state。
+  const back = taskReturnOf(state)
+  if (!back || isTaskReturnSource(pathname)) return null
   return (
     <div className="mb-4 print:hidden space-y-2">
       {/* returnedTo:剛才那一筆的頁面與選取(pathname+search);原項離開清單時首頁靠它給確定的回找入口(W06) */}
-      {canReturn && <Link to={back.to} state={{ returnedTask: back.key, returnedTo: `${pathname}${search}` }} className="inline-flex items-center gap-1 min-h-11 text-body font-medium text-[var(--blue-text)]">
+      <Link to={back.to} state={{ returnedTask: back.key, returnedTo: `${pathname}${search}` }} className="inline-flex items-center gap-1 min-h-11 text-body font-medium text-[var(--blue-text)]">
         <MSym name="chevron_left" size={18} />返回{back.label}
-      </Link>}
+      </Link>
     </div>
   )
 }

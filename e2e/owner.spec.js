@@ -8,15 +8,18 @@ import { loginAs, gotoHash } from './helpers.js'
 const REVISED_AFTER_CO2 = '724,388,067'
 
 test.describe('機關', () => {
-  test('登入落在今日待辦(收件匣);跨案總覽從側欄「專案」子頁可達,風險稽核只給機關', async ({ page }) => {
+  test('登入落在今日待辦(收件匣);跨案總覽從側欄「專案」子頁可達,風險稽核 hidden 但機關仍可直達', async ({ page }) => {
     await loginAs(page, 'owner')
     await expect(page.getByRole('heading', { name: '今日待辦' })).toBeVisible()
     // 落地不依角色分流(規範 §0 方向 A):多案角色要看跨案總覽,從「專案」群組一格就到
     const nav = page.getByRole('navigation', { name: '主要功能' })
     await nav.getByRole('button', { name: '展開專案子頁' }).click()
-    await expect(nav.getByRole('link', { name: '風險稽核', exact: true })).toBeVisible() // roles: owner
+    // D-026 退場:風險稽核不進側欄(hidden),roles: owner 不變——深連結仍限機關(廠商被擋見 routes.spec)
+    await expect(nav.getByRole('link', { name: '風險稽核', exact: true })).toHaveCount(0)
     await nav.getByRole('link', { name: '跨案總覽', exact: true }).click()
     await expect(page.getByRole('heading', { name: '跨案總覽' })).toBeVisible()
+    await gotoHash(page, '/audit')
+    await expect(page.getByRole('heading', { name: '風險稽核' })).toBeVisible()
     await page.goto('/')
     await expect(page).toHaveURL(/#\/dashboard/)
   })
