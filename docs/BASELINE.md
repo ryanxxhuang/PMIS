@@ -1,9 +1,15 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-17｜T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-17 P2a：現場文書家族資料層（migration `20260917201000_field_documents`）
+
+- `npm run test:db`（一次性資料庫從零套 62 支 migration＋seed）：42 檔、1,346 通過、0 失敗（＝T0 基準 1,131＋新增 `field_documents.sql` 215 條）。新增套件覆蓋：結構與索引；欄位級 grants（`field_documents` 只有 INSERT 六欄、無 UPDATE／DELETE；版本／簽署／提送表只讀；`photo_intakes` INSERT 三欄／UPDATE 三欄；`photos` 的 `uploader_org`／`ai_*`／`work_item_hint` 客戶端不可寫、既有欄不變；anon 全無）；`photo_intakes` 三角色＋非成員＋跨案、身分 stamp、狀態只能捨棄、候選只能切換 excluded、有照片不可刪；`photos` 上傳方由伺服器決定（冒名無效、特權路徑也不可改）、批次同案同方、登錄後不可改掛、舊資料依 profile 回填／推不出留 null；`field_documents` 三角色＋機關唯讀＋非成員、責任方由類型產生、同日唯一、範本同案、廠商批次不能起稿監造文件、監造日誌成員可讀；版本不可變（service 也不能 UPDATE／DELETE）、雜湊由 DB 算且客戶端值被覆蓋、版本號連續、human／ai 版本情境、有人工版本後 AI 不得寫、附件同案；狀態結構要件（無簽署列不能 signed、版本指標不可回退／必須指向最新版）；簽署（使用者不可直插、伺服器不可代簽、越權、非成員、舊版本、雜湊不符、aal1 冒 MFA、空白意願、紙本缺證據、伺服器取簽署者／IP／UA／時間、重複簽署冪等鍵、不可改刪）；提送／收件／退回（對象矩陣、未簽不可送、`client_request_id` 防重複、提送方不可自收、非對象不可收、`to_org` 伺服器帶入、退回必填原因、退回後原版不可再送、再送 diff 由 DB 算、歷次全部保留、不可改刪）；稽核事件十類；捨棄／取代終態；專案刪除 cascade 通過所有不可變 guard。
+- `npm run lint`、`npm test`（120 檔 1,259 項）、`npm run build`、`npm run check:docs` 見 PR。
+- 未做：Edge／前端無新功能（P2b／P2c）；簽署／提送 RPC（P2d）尚未建，pgTAP 以「有 JWT 的特權路徑」模擬 RPC；`supervisor_logs` 事實表（P3a）未建，綁定即拒絕；正式 `db push` 於合併後執行並記 CURRENT §6.3。
 
 ### 2026-09-17 T0：本機 pgTAP 測試隔離（PR #107）
 
