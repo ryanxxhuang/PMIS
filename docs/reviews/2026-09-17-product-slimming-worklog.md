@@ -92,7 +92,7 @@
 
 | 單元 | 相依 | 指定 | 實際 | 範圍 | 驗收 |
 |---|---|---|---|---|---|
-| P3a 監造日誌 | P2d | fable5.1 | — | migration `supervisor_logs`＋RLS＋guard＋pgTAP；起稿分支；`/supervisor-log` 頁；`sign_field_document` 分支 | 到場欄只能人填；廠商不可寫；每日唯一 |
+| P3a 監造日誌（後端；頁面待 P2c 共用審核／簽署元件合併後另接） | P2d | fable5.1 | Fable 5.1 | migration `20260917221000_supervisor_logs`（`supervisor_logs`＋RLS＋`supervisor_logs_guard`；示範範本 `fn_field_document_template('supervisor_log')`＝唯一定義，必填鍵／人填欄由它推導；到場只能人填：AI 版本不得帶入、人工 filled 回 `needs_confirmation`、簽署須 confirmed；事實表 guard 規則抽成 `fn_field_document_fact_guard` 供 daily_logs／daily_log_items／supervisor_logs 共用；`sign_field_document` 改共用前段＋依類型分派到內部函式；`fn_field_document_unmet_fields` 改三參數；`fn_project_ref_exists`；rollback 檔）＋pgTAP `supervisor_logs.sql`；Edge `fieldDocDraft.ts` 監造候選 ready＋`buildSupervisorLogDraft`、`fieldDocDraftRun.ts` 日誌類共用同一段寫入邏輯、`fieldDocRepo.ts` 當日查驗／缺失／施工日誌文件現況；球權待辦由 P5a `ballInCourtRules.ts` 涵蓋 | 到場欄只能人填（AI／service 帶入即拒）；廠商不可寫；每日唯一；廠商照片不能作監造證據；daily_log 分支回歸不變 |
 | P3b 自主檢查表 | P2d | fable5.1 | — | 起稿分支（沿用 `draftInspection` 規則）；簽署分支寫 `checklist_records`；查驗申請檢附已簽署版；`ChecklistSection` 改吃文件 | num 永遠待補；bool 建議附 basis；簽署後修訂＝Rev.N |
 | P3c 監造查驗表單（判定） | P3b | fable5.1 | — | migration：`checklist_templates.kind/stage_key/applies_to`、`inspections` 加欄、簽署分支更新 `inspections`（**不含**確認量寫入，留 P4b 接）；示範範本 | 簽署即判定；不合格開缺失同交易；廠商不能簽 |
 | P3d 提送／退回／回執 UI＋列印 | P2d | 純表單呈現／列印（fable5.1 執行） | — | 四類詳情的提送區、退回歷史列、回執；列印頁印版本與雜湊 | 歷次退回全列；列印雜湊＝DB |

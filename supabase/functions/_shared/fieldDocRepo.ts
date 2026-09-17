@@ -11,7 +11,8 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { maskDbError } from './publicError.ts'
 import { fetchAllRows } from './integrityAuditTool.ts'
 import type { DraftRepo, IntakePhotoRow, IntakeRow, DocRow, VersionRow, RepoError } from './fieldDocDraftRun.ts'
-import type { LeafWorkItem, LegacyDailyLog, OpenInspection } from './fieldDocDraft.ts'
+import type { DayDefect, DayInspection, FormalDailyLog, LeafWorkItem, LegacyDailyLog, OpenInspection } from './fieldDocDraft.ts'
+import { taipeiDayRange } from './fieldDocDraft.ts'
 
 const PHOTO_COLS = 'id, storage_path, content_sha256, ai_status, ai_result, work_item_id, caption, location, taken_at, created_at'
 const err = (scope: string, e: { message?: string; code?: string; details?: string; hint?: string } | null): RepoError =>
@@ -130,6 +131,54 @@ export function supabaseDraftRepo(db: SupabaseClient, service: SupabaseClient, p
         .eq('project_id', projectId).eq('status', '待查驗').order('created_at', { ascending: false }).limit(200)
       if (error) return err('inspections', error)
       return (data ?? []) as OpenInspection[]
+    },
+
+    // 監造日誌的內容來源(P3a):「當日」=台北日曆日;申請日為當日或判定時間落在當日的查驗
+    async listInspectionsOn(date) {
+      const { start, end } = taipeiDayRange(date)
+      const { data, error } = await db.from('inspections')
+        .select('id, title, status, work_item_id, location, inspection_type, requested_date, inspected_at, result_note')
+        .eq('project_id', projectId)
+        .or(`requested_date.eq.${date},and(inspected_at.gte.${start},inspected_at.lt.${end})`)
+        .order('inspected_at', { ascending: true, nullsFirst: false }).order('id').limit(500)
+      if (error) return err('inspections_day', error)
+      return (data ?? []) as DayInspection[]
+    },
+
+    // 當日開立的缺失(通知)∪ 未結案的缺失(追蹤)
+    async listDefectsForDay(date) {
+      const { start, end } = taipeiDayRange(date)
+      const { data, error } = await db.from('defects')
+        .select('id, title, status, severity, location, due_date, created_at, inspection_id')
+        .eq('project_id', projectId)
+        .or(`status.neq.已結案,and(created_at.gte.${start},created_at.lt.${end})`)
+        .order('created_at').order('id').limit(500)
+      if (error) return err('defects_day', error)
+      return (data ?? []) as DayDefect[]
+    },
+
+    // 同日施工日誌文件現況:狀態、目前版本內容、該版本的簽署／提送／收件／退回時間(收件情形)
+    async getDailyLogDocument(date) {
+      const { data: doc, error } = await db.from('field_documents').select('id, status, current_version_no')
+        .eq('project_id', projectId).eq('doc_type', 'daily_log').eq('doc_date', date)
+        .not('status', 'in', '("discarded","superseded")').maybeSingle()
+      if (error) return err('daily_log_doc', error)
+      if (!doc) return null
+      const ver = Number(doc.current_version_no) || 0
+      const base: FormalDailyLog = { document_id: doc.id, status: doc.status, version_no: ver, content: null, signed_at: null, submitted_at: null, received_at: null, returned_at: null }
+      if (ver < 1) return base
+      const [v, sigs, subs] = await Promise.all([
+        db.from('field_document_versions').select('content').eq('document_id', doc.id).eq('version_no', ver).maybeSingle(),
+        db.from('field_document_signatures').select('signed_at').eq('document_id', doc.id).eq('version_no', ver).order('signed_at', { ascending: false }).limit(1),
+        db.from('field_document_submissions').select('action, created_at').eq('document_id', doc.id).eq('version_no', ver).order('created_at', { ascending: false }).limit(50),
+      ])
+      if (v.error || sigs.error || subs.error) return err('daily_log_doc', v.error ?? sigs.error ?? subs.error)
+      const at = (action: string) => ((subs.data ?? []) as { action: string; created_at: string }[]).find((s) => s.action === action)?.created_at ?? null
+      return {
+        ...base, content: (v.data?.content as FormalDailyLog['content']) ?? null,
+        signed_at: ((sigs.data ?? []) as { signed_at: string }[])[0]?.signed_at ?? null,
+        submitted_at: at('submit'), received_at: at('receive'), returned_at: at('return'),
+      }
     },
 
     async findActiveDoc(docType, docDate) {

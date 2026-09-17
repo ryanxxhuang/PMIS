@@ -50,7 +50,7 @@ select has_function('public', 'receive_field_document', array['uuid','integer','
 select has_function('public', 'return_field_document', array['uuid','integer','text','text'], 'return_field_document 存在');
 select has_function('public', 'resolve_agent_action_internal', array['uuid','uuid','text'], 'resolve_agent_action_internal 存在');
 select has_function('public', 'fn_field_document_required_fields', array['text','jsonb','jsonb'], '必填鍵推導函式存在');
-select has_function('public', 'fn_field_document_unmet_fields', array['jsonb','jsonb'], '待補判定函式存在');
+select has_function('public', 'fn_field_document_unmet_fields', array['text','jsonb','jsonb'], '待補判定函式存在(P3a 起帶 doc_type)');
 select has_function('public', 'fn_field_document_attachment_issues', array['text','uuid','jsonb'], '附件角色隔離函式存在');
 select has_trigger('public', 'daily_logs', 'daily_logs_guard', 'daily_logs guard 掛上');
 select has_trigger('public', 'daily_log_items', 'daily_log_items_guard', 'daily_log_items guard 掛上');
@@ -82,12 +82,12 @@ select is(public.fn_field_document_required_fields('daily_log',
   'stored 裡的工項數量鍵一律忽略、由本版內容重算(已移除的工項不會永遠卡住簽署)');
 select is(public.fn_field_document_required_fields('self_check', '{"items":{"x":{}}}'::jsonb, '["a"]'::jsonb),
   '["a"]'::jsonb, '非施工日誌類型只回 stored(P3 各自補固定欄)');
-select is(public.fn_field_document_unmet_fields('["a","b","c","d","e","f","g"]'::jsonb,
+select is(public.fn_field_document_unmet_fields('daily_log', '["a","b","c","d","e","f","g"]'::jsonb,
     '{"a":{"status":"filled"},"b":{"status":"confirmed"},"c":{"status":"na","reason":"本日無"},
       "d":{"status":"na"},"e":{"status":"pending"},"g":{"status":"weird"}}'::jsonb),
   '[{"key":"d","status":"na_without_reason"},{"key":"e","status":"pending"},{"key":"f","status":"missing"},{"key":"g","status":"unknown_status"}]'::jsonb,
   '待補判定:filled／confirmed／na＋reason 可簽;na 無 reason、pending、缺鍵、未知狀態皆待補');
-select is(public.fn_field_document_unmet_fields('[]'::jsonb, null), '[]'::jsonb, '無必填鍵 → 無待補');
+select is(public.fn_field_document_unmet_fields('daily_log', '[]'::jsonb, null), '[]'::jsonb, '無必填鍵 → 無待補');
 
 -- ── 3. fixtures:A 案三方＋同方第二人;B 案外人;C 案非正式(admin_override 有效) ─────
 insert into auth.users (
@@ -225,6 +225,7 @@ select results_eq($$ select version_no, created_by, author_kind, change_note fro
 reset role;
 
 -- ── 5. sign_field_document:政策檢查(aal2、版本、雜湊、越權、意願、類型、待補、附件、工項) ──
+-- (P3a 起 sign 依 doc_type 分派到內部函式;daily_log 分支行為不變,以下全部為回歸)
 select pg_temp.become('d0000000-0000-0000-0000-000000000001', 'aal1');
 set local role authenticated;
 select throws_ok($$ select public.sign_field_document('d7000000-0000-0000-0000-000000000001', 3,
@@ -247,16 +248,16 @@ set local role authenticated;
 select throws_ok($$ select public.sign_field_document('d7000000-0000-0000-0000-000000000001', 3,
     pg_temp.hash_of('d7000000-0000-0000-0000-000000000001', 3), '本人確認內容無誤並簽署') $$,
   'PD006', null, '監造簽施工日誌(非責任方)→ PD006');
--- 監造日誌:存版可以(四類共用),簽署分支尚未支援
+-- 監造日誌:存版四類共用;固定欄(示範範本)與簽署分支自 P3a 起存在,完整情境見 supervisor_logs.sql
 select lives_ok($$ insert into public.field_documents (id, project_id, doc_type, doc_date)
   values ('d7000000-0000-0000-0000-000000000002', 'd1000000-0000-0000-0000-00000000000a', 'supervisor_log', '2026-09-17') $$,
   '監造建立監造日誌草稿 D2');
 select is((select public.save_field_document_version('d7000000-0000-0000-0000-000000000002', 0,
     '{"attendance":[{"name":"監造工程師","from":"08:00","to":"17:00"}]}'::jsonb, '{"attendance":{"status":"confirmed"}}'::jsonb) ->> 'status'),
-  'draft', '監造日誌可存版本(四類共用;固定欄留 P3a)');
+  'pending_input', '監造日誌可存版本(四類共用);示範範本的其餘必填欄缺來源 → pending_input');
 select throws_ok($$ select public.sign_field_document('d7000000-0000-0000-0000-000000000002', 1,
     pg_temp.hash_of('d7000000-0000-0000-0000-000000000002', 1), '本人確認內容無誤並簽署') $$,
-  'PD007', null, '監造日誌簽署尚未支援 → PD007(明確拒絕,不默默通過)');
+  'PD004', null, '監造日誌必填欄待補 → PD004(簽署分支已支援,以待補拒絕)');
 reset role;
 select pg_temp.become('d0000000-0000-0000-0000-000000000004', 'aal2');
 set local role authenticated;
