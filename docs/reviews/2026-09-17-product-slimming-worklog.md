@@ -86,7 +86,7 @@
 
 | 單元 | 相依 | 指定 | 實際 | 範圍 | 驗收 |
 |---|---|---|---|---|---|
-| P4a 純計算＋pgTAP | P0 | fable5.1 | — | migration（只函式與 view）：`fn_effective_confirmed`、`fn_effective_by_batch`、`fn_contract_qty`、`fn_cap`、`v_billable_backlog`；pgTAP `confirmed_quantity_calc.sql` 含 §3.1 全部案例 | 案例全綠；不依賴 P3 |
+| P4a 純計算＋pgTAP | P0 | fable5.1 | Fable 5.1 | migration `20260917120000`（只型別與純函式，不讀表）：`cq_confirmation`／`cq_allocation` 型別、`fn_effective_by_batch`、`fn_effective_confirmed`、`fn_contract_qty`、`fn_cap`、`fn_allocate_fifo`、`fn_batch_allocation_check`、`fn_period_increment`、`fn_valuation_amount`、`fn_pricing_basis_effective`、`fn_cq_*` 正規化／驗證共 14 支；`v_billable_backlog` 順延 P4b（需要 P4b 的表）；pgTAP `confirmed_quantity_calc.sql` 82 條含設計 §3.1 全部案例 | 案例全綠；不依賴 P3 |
 | P4b 表、guard、RPC、鎖 | P4a、P3c | fable5.1 | — | migration：`inspection_confirmations`、`valuation_item_sources`、`valuation_adjustments`、`work_item_pricing_basis`、`valuations.recheck_required`、`inspection_points.stage_key`；`valuations_guard` 擴充；RPC（`sync_`、`set_valuation_item_cum`、`transition_valuation`、`revoke_`、`issue_supervisor_certificate`、`admin_adjust_valuation_item`）；advisory lock；簽署分支寫確認量＋自動同步 trigger；legacy 來源回填；rollback；pgTAP 權限矩陣＋狀態情境 | 不變量 1–5；三角色＋非成員＋admin_override 正式／非正式矩陣；重播不重複 |
 | P4c 估驗頁 | P4b | fable5.1 | — | `Valuation.jsx`：可估驗清單、來源展開、缺件（勾稽移入）、差異比對；`billing.js` 移除 `fillValuationFromSiteLogs`、改 RPC；`valuationDiff.js` | 前端不算金額；帶入鈕消失；缺件在送審前可見 |
 | P4d 撤銷／減量／調整 | P4b | fable5.1 | — | 撤銷 UI（監造）、調整流程（機關 void）、核定／請款前檢查訊息 | 未核定阻擋、已核定走調整並留痕 |
@@ -136,21 +136,21 @@
 
 DB 單元（P2a、P2d、P3a、P3c、P3e、P4a、P4b、P4e、P5a–c、P6c）之間不平行；前端／Edge 單元可在介面定案後穿插。每個單元一個 PR、`codex/` 分支前綴、CI 綠後合併。
 
-## 6. 待使用者決定（答覆前照暫行做，不阻擋其他工作）
+## 6. 待使用者決定（2026-09-17 使用者已於主 session 逐題答覆；記入 D-026 第 7 點）
 
-| # | 問題 | 選項與影響 | 答覆前先做 |
+| # | 問題 | 選項與影響 | 使用者答覆／執行做法 |
 |---|---|---|---|
-| Q1 | 實案簽署方式 | (a) 平台帳號簽署（可要求 TOTP，`method=platform_account_mfa`）：最快，效力依機關認定；(b) 紙本列印簽回綁版本雜湊：符合多數機關現況，多一次掃描；(c) 外部憑證／工商憑證：需採購與整合，本輪不做 | 版本、雜湊、意願、回執基礎（P2a／P2d）；`method` enum 保留三值 |
-| Q2 | 金額精度 | 逐工項四捨五入到元後加總 vs 加總後取整；影響本期金額尾差 | 暫行逐工項到元；DB 函式集中一處可改 |
-| Q3 | 總價／間接費計價依據 | 利潤及管理費、營業稅、保險、假設工程各用 `supervisor_certificate`／`pro_rata`／`excluded`；影響這些工項能否進估驗 | 隔離不計價並在估驗頁標示；`work_item_pricing_basis` 表先建 |
-| Q4 | 監造日誌廠商可讀否 | 可讀：透明；不可讀：需 RLS 分角色 | 暫行專案成員可讀 |
-| Q5 | 監造查驗表單的廠商異議 | 加正式狀態 vs 以 RFI 提出 | 暫行 RFI |
-| Q6 | 多階段必要查驗來源 | ITP H 點 vs 實案品質計畫另列 | 暫行 H 點 |
-| Q7 | 期別截止日語意 | 計價截止日 vs 提送日 | 暫行計價截止日，送審必填 |
-| Q8 | 付費 OCR | 供應商、每頁成本、資料出境；不採用則掃描契約只揭露＋人工補登 | 只做揭露與補登路徑 |
-| Q9 | 抽取評測樣本 | 真契約或授權去識別；標註人 | 先建比對腳本與樣本格式 |
-| Q10 | 成本頁唯讀化時點 | P1b 立即 vs P6b 一併 | 暫行 P1b |
-| Q11 | 實案範本來源 | 監造日誌與監造查驗表單欄位需實案範本 | 依設計 §2.2 建示範範本並標「示範」 |
+| Q1 | 實案簽署方式 | (a) 平台帳號簽署（可要求 TOTP，`method=platform_account_mfa`）：最快，效力依機關認定；(b) 紙本列印簽回綁版本雜湊：符合多數機關現況，多一次掃描；(c) 外部憑證／工商憑證：需採購與整合，本輪不做 | **使用者 2026-09-17 決定：簽署先用平台帳號加 MFA**——採 (a)，簽署 RPC 要求 JWT `aal2`，`method=platform_account_mfa`；(b)(c) 未排除但本輪不做，`method` enum 保留三值 |
+| Q2 | 金額精度 | 逐工項四捨五入到元後加總 vs 加總後取整；影響本期金額尾差 | 使用者 2026-09-17 同意照暫行做法：逐工項到元；集中在 `fn_valuation_amount` 一處可改 |
+| Q3 | 總價／間接費計價依據 | 利潤及管理費、營業稅、保險、假設工程各用 `supervisor_certificate`／`pro_rata`／`excluded`；影響這些工項能否進估驗 | **使用者 2026-09-17 決定：總價／間接費暫時隔離**——不計價，缺 basis 一律 `cap=0` 並在估驗頁標示（P4a `fn_pricing_basis_effective`＋`fn_cap` 已實作）；這是暫時措施，各工項的計價依據仍待決；`work_item_pricing_basis` 表 P4b 先建 |
+| Q4 | 監造日誌廠商可讀否 | 可讀：透明；不可讀：需 RLS 分角色 | 使用者 2026-09-17 同意照暫行做法：專案成員可讀 |
+| Q5 | 監造查驗表單的廠商異議 | 加正式狀態 vs 以 RFI 提出 | 使用者 2026-09-17 同意照暫行做法：以 RFI 提出 |
+| Q6 | 多階段必要查驗來源 | ITP H 點 vs 實案品質計畫另列 | 使用者 2026-09-17 同意照暫行做法：H 點 |
+| Q7 | 期別截止日語意 | 計價截止日 vs 提送日 | 使用者 2026-09-17 同意照暫行做法：計價截止日，送審必填 |
+| Q8 | 付費 OCR | 供應商、每頁成本、資料出境；不採用則掃描契約只揭露＋人工補登 | **使用者 2026-09-17 決定：OCR 先不採用**——本輪不採用付費 OCR，掃描／無文字契約只做真實狀態揭露＋人工補登路徑 |
+| Q9 | 抽取評測樣本 | 真契約或授權去識別；標註人 | 使用者 2026-09-17 同意照暫行做法：先建比對腳本與樣本格式；樣本來源仍待提供 |
+| Q10 | 成本頁唯讀化時點 | P1b 立即 vs P6b 一併 | 使用者 2026-09-17 同意照暫行做法：P1b 即唯讀 |
+| Q11 | 實案範本來源 | 監造日誌與監造查驗表單欄位需實案範本 | **使用者 2026-09-17 決定：範本沒有，先用示範範本**——依設計 §2.2 建示範範本，介面與列印明確標「示範範本」，不得宣稱為機關公定格式 |
 
 ## 7. 進度
 

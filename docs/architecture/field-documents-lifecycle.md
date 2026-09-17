@@ -64,7 +64,7 @@ RLS：SELECT 專案成員；INSERT／UPDATE `can_write` 且 `uploader_org = my_o
 | `contractor_summary text` | 廠商施工情形摘要（引用同日已簽署施工日誌時標來源） |
 | `note`, `created_by`, `created_at` | — |
 
-RLS：SELECT 專案成員（【待決 Q4】廠商是否可讀）；INSERT／UPDATE 限 `my_org_type()='supervisor'` 且 `can_write`；guard：有已簽署 `field_documents` 指向本列時，內容欄不可就地修改（走 §6 修訂版）。
+RLS：SELECT 專案成員（Q4：使用者 2026-09-17 同意暫行「專案成員皆可讀」）；INSERT／UPDATE 限 `my_org_type()='supervisor'` 且 `can_write`；guard：有已簽署 `field_documents` 指向本列時，內容欄不可就地修改（走 §6 修訂版）。
 
 **`checklist_templates` 加欄**：`kind text not null default 'self_check' check (kind in ('self_check','inspection_form','supervisor_certificate'))`、`stage_key text`（多階段查驗用，對應 [確認量文件 §3.4](confirmed-quantity-valuation.md)）、`applies_to jsonb`（`{work_item_ids:[], keywords:[]}`，候選文書推斷用）、`version int not null default 1`。既有列全部 `self_check`。
 
@@ -175,7 +175,7 @@ RLS：SELECT 專案成員（【待決 Q4】廠商是否可讀）；INSERT／UPDA
 | → signed | 廠商成員 | 監造成員 | 廠商成員 | **監造成員；簽署即為判定**（合格／不合格／部分通過＋確認量） |
 | → submitted | 廠商→監造 | 監造→機關 | 廠商→監造（可隨查驗申請檢附） | 監造→廠商＋機關 |
 | → received | 監造 | 機關 | 監造 | 廠商／機關各自收件 |
-| → returned（附原因） | 監造 | 機關 | 監造 | 廠商可提「異議」但不是退回（【待決 Q5】） |
+| → returned（附原因） | 監造 | 機關 | 監造 | 廠商可以 RFI 提「異議」但不是退回（Q5：使用者 2026-09-17 同意暫行） |
 | 修訂（signed 後改內容→新版本，回 draft） | 廠商 | 監造 | 廠商（對應 `checklist_records` 修訂鏈 Rev.N） | 監造（重簽即重新判定；原確認量走撤銷／改量流程） |
 | discarded | 建立者（只限未簽署） | 同 | 同 | 同 |
 
@@ -188,11 +188,11 @@ RPC `sign_field_document(p_document_id, p_version_no, p_content_hash, p_intent, 
 1. `select ... for update` 鎖文件列；`current_version_no = p_version_no` 否則拒絕（「畫面是舊版」）；版本雜湊等於 `p_content_hash` 否則拒絕（內容完整性）。
 2. 角色：`my_org_type() = owner_org`（`admin_override` 例外，正式模式失效）；跨案取件由 RLS 與 `project_id` 雙重擋。
 3. 完整性：`required_fields` 全部 `filled`／`confirmed`／`na`（`na` 需 reason）；附件的 `photos` 列存在且 `sha256` 相符；角色隔離（§3.4）。
-4. 寫入 `field_document_signatures`（`signed_at=now()`、`aal` 取 JWT、`method` 依 aal 為 `platform_account`／`platform_account_mfa`）；`status='signed'`。
+4. 簽署方式（使用者 2026-09-17 決定：先用平台帳號加 MFA）：JWT `aal` 必須為 `aal2`，否則拒絕並提示先完成兩步驟驗證（`admin_override` 也不放行）；寫入 `field_document_signatures`（`signed_at=now()`、`aal` 取 JWT、`method='platform_account_mfa'`）；`status='signed'`。`method` enum 保留 `platform_account`／`paper_scan` 供日後方式，本輪不啟用。
 5. 同交易落事實表：`daily_log`→upsert `daily_logs`＋`daily_log_items`；`supervisor_log`→upsert `supervisor_logs`；`self_check`→insert `checklist_records`（`results/overall` 取版本內容；判定仍由前端 `judgeChecklist` 計算，DB 不重算，與 [雙引擎 #1](dual-engine-sync.md) 一致）；`inspection_form`→更新 `inspections`（判定、`results`、`template_id`、`batch_key`、`document_id`）＋寫確認量（[確認量文件 §2](confirmed-quantity-valuation.md)）。事實表 guard（`daily_logs_guard`、`supervisor_logs_guard`）在有已簽署文件指向該列時擋直接修改。
 6. `agent_actions` 對應列由內部函式 `resolve_agent_action_internal` 標 `accepted`（無人工版本）或 `edited`（有人工版本），`resolved_by` 為簽署者；`record_audit_event('field_document.signed')`。
 
-簽署後更正：`save_field_document_version` 對 `signed`／`submitted`／`returned` 文件建立版本 n+1（`amended_from_version`），`status` 回 `draft`，原簽署列與原版本不動、原提送列仍指向舊版；必須重簽重送。列印版印出 `文件短碼＋版本號＋雜湊前 12 碼`，紙本簽回以 `method='paper_scan'` 綁定同一版本雜湊（掃描檔 `sha256` 入 `evidence`）。本設計不宣稱符合任何機關的電子簽章規範（【待決 Q1】）。
+簽署後更正：`save_field_document_version` 對 `signed`／`submitted`／`returned` 文件建立版本 n+1（`amended_from_version`），`status` 回 `draft`，原簽署列與原版本不動、原提送列仍指向舊版；必須重簽重送。列印版印出 `文件短碼＋版本號＋雜湊前 12 碼`；紙本簽回（`method='paper_scan'`，綁定同一版本雜湊、掃描檔 `sha256` 入 `evidence`）是保留的日後方式，本輪不啟用。本設計不宣稱符合任何機關的電子簽章規範；簽署方式依使用者 2026-09-17 決定先採平台帳號＋MFA（§11 Q1）。
 
 ## 6. 提送、退回歷史、回執
 
@@ -231,9 +231,9 @@ RPC `submit_field_document(p_document_id, p_version_no, p_to_org, p_client_reque
 | 簽舊版、簽後改文／附件、越權簽署、跨案取件受阻；退回再送保留版本與理由 | pgTAP `sign_field_document` 六種拒絕；submissions append-only |
 | 手機可完成現場旅程；桌機審核；列印與簽署版本一致 | 手機形狀 E2E；列印頁顯示版本與雜湊 |
 
-## 11. 待決（答覆前的暫行）
+## 11. 待決題的使用者答覆（2026-09-17，記入 D-026 第 7 點）
 
-- **Q1 實案簽署方式**：平台帳號簽署（含可選 TOTP）／紙本簽回綁版本／外部憑證。暫行：只做與方式無關的版本、雜湊、意願、回執基礎；`method` 保留 enum。
-- **Q4 監造日誌可見範圍**：廠商是否可讀。暫行：專案成員皆可讀（與其他事實表一致），RLS 一行可改。
-- **Q5 監造查驗表單的廠商異議**：是否需要正式「異議」狀態。暫行：廠商只能收件並以工程疑義（RFI）提出，不加狀態。
-- **實案範本來源**：施工日誌沿用公定格式；自檢沿用既有範本；監造日誌與監造查驗表單欄位需實案提供範本（暫行：依本文件 §2.2 欄位與現有 03310 範本形狀建立示範範本，標「示範」）。
+- **Q1 實案簽署方式**：使用者決定**先用平台帳號加 MFA**——簽署 RPC 要求 `aal2`、`method='platform_account_mfa'`（§5 第 4 步）；紙本簽回與外部憑證未排除，本輪不做，`method` enum 保留三值。
+- **Q4 監造日誌可見範圍**：使用者同意照暫行做法：專案成員皆可讀（與其他事實表一致），RLS 一行可改。
+- **Q5 監造查驗表單的廠商異議**：使用者同意照暫行做法：廠商只能收件並以工程疑義（RFI）提出，不加狀態。
+- **Q11 實案範本來源**：使用者決定**範本沒有，先用示範範本**——施工日誌沿用公定格式；自檢沿用既有範本；監造日誌與監造查驗表單依本文件 §2.2 欄位與現有 03310 範本形狀建立示範範本，介面與列印必須明確標「示範範本」，不得宣稱為機關公定格式。

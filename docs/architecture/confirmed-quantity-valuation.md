@@ -1,6 +1,6 @@
 # 監造確認量與估驗聯動（後端強制）
 
-> 狀態：**PROPOSED（P0 設計）**｜2026-09-17｜依 [D-026](../DECISIONS.md)。技術設計，尚未建 migration；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
+> 狀態：**PROPOSED（P0 設計；P4a 純計算層已實作）**｜2026-09-17｜依 [D-026](../DECISIONS.md)。§3.2 的純計算函式已由 migration `20260917120000_confirmed_quantity_calc` 建立並有 pgTAP；其餘（表、guard、RPC、UI）尚未建；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
 > 標記同 [現場文書文件](field-documents-lifecycle.md)：【已確認】／【設計】／【待決】。
 
 ## 0. 現況核對與差距（基準 `ab4be5f`）
@@ -77,10 +77,10 @@
 
 ## 3. 有效確認量的計算（純函式，SQL）
 
-`fn_effective_confirmed(p_work_item, p_as_of timestamptz) returns numeric` 與 `fn_effective_by_batch(...)`：
+`fn_effective_by_batch(p_confirmations, p_required_stages, p_unit, p_as_of)` 與 `fn_effective_confirmed(…, p_contract_qty)`（P4a 已實作；函式不讀表，輸入由 P4b 從表查出後餵入，介面見 §3.2）：
 
-1. 取該工項必要階段集合 `S`＝`inspection_points where work_item_id=W and point_type='H' and required_for_billing and stage_key is not null` 的 `stage_key`；空集合→`S={null}`。
-2. 對每個 `batch_key`、每個 `s∈S`：取 `confirmed_at ≤ p_as_of and status='active'` 的最新一筆 `qty_cum`；缺→0。
+1. 必要階段集合 `S`＝`p_required_stages`（P4b 由 `inspection_points where work_item_id=W and point_type='H' and required_for_billing and stage_key is not null` 查出）；正規化、去空、去重；空集合→`S={null}`。
+2. 對每個 `batch_key`、每個 `s∈S`：取 `confirmed_at ≤ p_as_of and status='active'` 的最新一筆 `qty_cum`（同時刻並列取最小）；缺→0。階段不在 `S` 的紀錄（含多階段工項的無階段紀錄）不計。
 3. 批次量＝各階段最小值；工項量＝Σ批次；再與 `Qc(W)` 取 min。
 
 ### 3.1 需求案例對照【已確認 結果】
@@ -97,13 +97,36 @@
 
 累計語意的代價：監造在表單要填「本批累計通過量」而非「本次通過量」；UI 同時顯示「上次累計 60，本次新增 40，累計 100」，簽署前核對。寫入更小的累計＝減量，必填 `reason` 並走 §7。
 
+### 3.2 P4a 純計算介面【已實作 `20260917120000`；P4b 餵入約定】
+
+全部 `IMMUTABLE`、`security invoker`、`search_path = pg_catalog, public`、`revoke from public, anon, authenticated`（P4b 的 security definer RPC／view 以 owner 呼叫；要對外顯示再明示 grant）。fail-closed：壞資料 raise，不靜默略過。回復檔 `supabase/rollbacks/20260917120000_confirmed_quantity_calc.down.sql`。
+
+| 物件 | 用途 | P4b 餵入來源 |
+|---|---|---|
+| type `cq_confirmation(batch_key, stage_key, unit, qty_cum, confirmed_at, status)` | 一筆監造確認（累計語意） | `inspection_confirmations` 一列 |
+| type `cq_allocation(batch_key, qty)` | 一期對一批次的分配（可負＝clawback） | `valuation_item_sources` 一列 |
+| `fn_cq_normalize_text(text)`／`fn_cq_batch_key(text)`／`fn_cq_check_unit(actual, expected)` | 批次鍵／單位／階段鍵正規化（去空白含全形、全形→半形、²³→23、小寫）；空批次鍵 raise；單位不等 raise。沒有單位同義表 | 確認表 guard 在 insert 時用 |
+| `fn_cq_qty(numeric, label, allow_negative)` | 缺值／NaN／無限大／≥1e12／負值 raise；四捨五入到 4 位小數 | 所有數量入口 |
+| `fn_cq_as_of(period_end date)` | 截止日（台北日曆日）→ 該日 23:59:59.999999 的截止時點；null＝不設截止 | `valuations.period_end` |
+| `fn_contract_qty(base, approved_deltas[])` | `Qc = quantity + Σ核准變更 qty_delta`；base null→0；結果為負 raise | `work_items.quantity`、`change_order_items` where `change_orders.status='核准'` |
+| `fn_effective_by_batch(confirmations[], required_stages[], unit, as_of)` → `(batch_key, qty, first_confirmed_at)` | 各批次有效量（§3 規則），附最早確認時間供 FIFO | — |
+| `fn_effective_confirmed(…, contract_qty)` | `E(W,t) = min(Σ批次, Qc)` | — |
+| `fn_cap(effective, billed, reserved, basis default 'inspection')` | `max(0, E − B − O)`；`basis` null／`excluded` → 0；billed／reserved null 視為 0 | B＝已核定／已請款期分配和；O＝其他未結束期分配和 |
+| `fn_batch_allocation_check(confirmations[], stages[], unit, allocations[])` → `(batch_key, effective_qty, allocated_qty, available_qty)` | 不變量 2 逐批次檢核；`available_qty < 0` 即違反 | 所有期別的分配列 |
+| `fn_allocate_fifo(confirmations[], stages[], unit, as_of, allocated[], wanted)` → `(batch_key, qty)` | 扣除既有分配後依最早確認 FIFO 分配；不足只回部分，呼叫端比對總和後拒絕 | `sync_`／`set_valuation_item_cum` |
+| `fn_period_increment(cum, prev_cum, contract_qty)` | `Δ = cum − prev_cum`；`cum > Qc` raise；可為負（是否允許依 clawback 由呼叫端判斷） | 不變量 1／3 |
+| `fn_valuation_amount(cum_qty, unit_price)` | `round(cum × price)` 到元（Q2 使用者同意暫行；單一修改點） | `valuation_items.amount_cum` |
+| `fn_pricing_basis_effective(unit, quantity, basis)` | 明示 basis 原樣（不明值 raise）；缺 basis 時總價類（單位 ∈ {式,項,批,LS} 且量 ≤ 1）回 null＝待設定（→ `fn_cap` 0），其餘 `inspection` | `work_item_pricing_basis` 缺列時 |
+
+`v_billable_backlog` 是表驅動 view，順延到 P4b 與表一起建（本單元沒有它要讀的表）。
+
 ## 4. 期別來源分配
 
 - 截止日：`P.period_end`（台北日曆日）；送審前必填。分配只取 `confirmed_at::date（台北）≤ period_end` 的確認。
 - 分配順序：同工項各批次依最早 active 確認的 `confirmed_at` 升冪（FIFO），每批次可分配量＝`E(W,b,period_end) − 該批次已被其他期別分配量`。
 - RPC `sync_valuation_from_confirmations(p_valuation_id)`：只允許 `status='草稿'`；逐工項在 advisory lock 下重算分配到上限，upsert `valuation_items`（`cum_qty = prev_cum + Σ分配`，`backing='confirmed'`），回傳每工項 `{prev_cum, added, cap, sources[]}`；冪等（重跑結果相同）。
 - RPC `set_valuation_item_cum(p_valuation_id, p_work_item_id, p_cum_qty)`：廠商可在 `[prev_cum, prev_cum + cap]` 內調整；RPC 重算分配（FIFO）而不是信任客戶端送來的分配或金額。低於 `prev_cum` 一律拒絕（減量走 §7）。
-- 金額：`amount_cum = round(cum_qty × unit_price)`（元，四捨五入到整數，【待決 Q2 精度】）；`amount_period = amount_cum − prev_amount_cum`；由 DB 在 upsert 時計算，客戶端值忽略。
+- 金額：`amount_cum = fn_valuation_amount(cum_qty, unit_price)`＝`round(cum_qty × unit_price)`（元，逐工項四捨五入到整數；Q2 使用者同意暫行）；`amount_period = amount_cum − prev_amount_cum`；由 DB 在 upsert 時計算，客戶端值忽略。
 
 ## 5. 自動更新規則【已確認】
 
@@ -163,9 +186,9 @@ RPC `revoke_inspection_confirmation(p_id, p_reason)`（監造）與「重簽較�
 | 舊前端／舊 RPC | 部署順序 §12；封堵 migration 套用後舊前端的 upsert 會收到明確錯誤（`mutationOutcome` 已能顯示），不會靜默成功 |
 | 跨專案 | 所有 RPC 以 `p_valuation_id` 反查 `project_id`，工項與確認必須同案；RLS 縱深 |
 
-## 10. 總價／間接費等非實體工項【已確認 不可豁免，待決 依據】
+## 10. 總價／間接費等非實體工項【已確認 不可豁免；使用者 2026-09-17 決定 暫時隔離】
 
-推定：`unit` 正規化後 ∈ {式, 項, 批, LS} 且 `quantity ≤ 1` 的末端工項＝總價類；`work_item_pricing_basis` 缺列時視為 `basis='inspection'` 但總價類工項一律標「計價依據待設定」，`cap=0`、估驗頁明示。
+推定：`unit` 正規化後 ∈ {式, 項, 批, LS} 且 `quantity ≤ 1` 的末端工項＝總價類；`work_item_pricing_basis` 缺列時實體工項視為 `basis='inspection'`，總價類工項一律標「計價依據待設定」，`cap=0`、估驗頁明示（P4a `fn_pricing_basis_effective` 回 null、`fn_cap` 對 null／`excluded` 回 0，pgTAP 釘住）。
 
 | basis | 行為 |
 |---|---|
@@ -174,11 +197,11 @@ RPC `revoke_inspection_confirmation(p_id, p_reason)`（監造）與「重簽較�
 | `pro_rata` | 依規則（例如「直接工程費已核定金額 × 比例」）由 DB 在同步時計算本期量，仍需監造在該期核定時勾稽；`rule` 記公式與條款 |
 | `excluded` | 不由本系統計價 |
 
-【待決 Q3】實案的利潤及管理費、營業稅、保險費、假設工程等各用哪一種 basis；答覆前這些工項隔離不計價。
+Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（缺 basis 一律 `cap=0` 並在估驗頁標示）；這是暫時措施，利潤及管理費、營業稅、保險費、假設工程等各用哪一種 basis 仍待後續決定。
 
 ## 11. 精度與單位
 
-- 數量 `numeric(18,4)`；金額 `numeric(18,2)` 儲存但依【待決 Q2】四捨五入到元；比較全部在 DB，前端不做浮點比較。
+- 數量 `numeric(18,4)`（`fn_cq_qty` 四捨五入到 4 位）；金額 `numeric(18,2)` 儲存但依 Q2 暫行（使用者同意）由 `fn_valuation_amount` 四捨五入到元；比較全部在 DB，前端不做浮點比較。
 - 拒絕：負值、`NaN`、`≥1e12`、單位不一致（正規化比較）、缺 `batch_key`、缺 `work_item_id`、工項非末端／非計價、跨案。
 - 前端顯示沿用 `format.js`；輸入框只送字串數字，由 RPC 轉型。
 
@@ -186,8 +209,8 @@ RPC `revoke_inspection_confirmation(p_id, p_reason)`（監造）與「重簽較�
 
 | 單元 | 內容 |
 |---|---|
-| P4a | `fn_effective_confirmed`、`fn_effective_by_batch`、`fn_contract_qty`、`fn_cap`、`v_billable_backlog`；pgTAP 純計算（含 §3.1 全部案例） |
-| P4b | 三張新表＋加欄＋guards（`valuations_guard` 擴充、`valuation_items` 寫入 guard、確認表 guard）＋RPC（`sync_`、`set_valuation_item_cum`、`transition_valuation`、`revoke_`、`issue_supervisor_certificate`、`admin_adjust_valuation_item`）＋advisory lock；pgTAP 併發（兩個 session 用 `dblink` 或 pg_background 不可用時以序列化情境＋唯一鍵測試替代並明列限制） |
+| P4a（已實作 `20260917120000`） | §3.2 的 2 型別＋14 支純函式（`fn_effective_by_batch`、`fn_effective_confirmed`、`fn_contract_qty`、`fn_cap`、`fn_allocate_fifo`、`fn_batch_allocation_check`、`fn_period_increment`、`fn_valuation_amount`、`fn_pricing_basis_effective`、`fn_cq_*`）；pgTAP `confirmed_quantity_calc.sql` 82 條（含 §3.1 全部案例與 §11 拒絕矩陣）。`v_billable_backlog` 移到 P4b |
+| P4b | 三張新表＋加欄＋guards（`valuations_guard` 擴充、`valuation_items` 寫入 guard、確認表 guard）＋RPC（`sync_`、`set_valuation_item_cum`、`transition_valuation`、`revoke_`、`issue_supervisor_certificate`、`admin_adjust_valuation_item`）＋advisory lock＋`v_billable_backlog`；全部以 §3.2 純函式為核心，不重寫算法；pgTAP 併發（兩個 session 用 `dblink` 或 pg_background 不可用時以序列化情境＋唯一鍵測試替代並明列限制） |
 | P4c | 前端：可估驗清單、來源展開、缺件、差異比對、移除 `fillValuationFromSiteLogs` |
 | P4d | 撤銷／減量／調整 UI 與核定、請款整合 |
 | P4e | 封堵 migration（revoke）＋Edge 掃描測試＋舊客戶端相容驗證 |
@@ -216,9 +239,9 @@ RPC `revoke_inspection_confirmation(p_id, p_reason)`（監造）與「重簽較�
 | 舊日誌帶入、手動改量、直接 REST／RPC、舊客戶端、管理員、非成員 | pgTAP 權限矩陣（三角色＋非成員＋admin_override 正式／非正式） |
 | 總價／間接費缺規則不放行 | pgTAP `basis` |
 
-## 15. 待決
+## 15. 待決題的使用者答覆（2026-09-17，記入 D-026 第 7 點）
 
-- **Q2 金額精度**：逐工項四捨五入到元後加總，或加總後才取整。暫行：逐工項到元（與現行列印口徑相近）。
-- **Q3 總價／間接費 basis**：見 §10。暫行：隔離不計價。
-- **Q6 多階段來源**：以 ITP H 點為必要階段是否符合實案品質計畫。暫行：H 點；R／W 點不作必要。
-- **Q7 截止日語意**：`period_end` 是否等於估驗計價截止日（契約）或提送日。暫行：計價截止日，由廠商建期時填、送審前必填。
+- **Q2 金額精度**：使用者同意照暫行做法：逐工項四捨五入到元後加總（`fn_valuation_amount` 單一修改點）。
+- **Q3 總價／間接費 basis**：使用者決定**暫時隔離不計價**（§10）；各類工項的計價依據仍待後續決定。
+- **Q6 多階段來源**：使用者同意照暫行做法：ITP H 點為必要階段；R／W 點不作必要。
+- **Q7 截止日語意**：使用者同意照暫行做法：`period_end`＝計價截止日，由廠商建期時填、送審前必填。
