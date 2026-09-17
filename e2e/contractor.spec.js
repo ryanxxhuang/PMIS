@@ -6,7 +6,7 @@ test.describe('施工廠商', () => {
   // Apple 改版(疊合版 IA):主畫面是收件匣不是 dashboard。四張指標卡依判準
   // 「不會被點、不會改變決定的數字一律刪」移除,金額改到 /boq 與 /valuation 看;
   // 三段待辦不再同時列出,改成球權 Segmented 一次聚焦一段。
-  test('今日待辦:球權三段各自聚焦(現在輪到我/等待對方/今天已完成)', async ({ page }) => {
+  test('今日工作:球權三段各自聚焦(現在輪到我/等待對方/今天已完成)', async ({ page }) => {
     await loginAs(page, 'contractor')
     // 指標卡已退場:再出現代表有人把「多放一點資訊比較安全」加回來了
     await expect(page.getByText('累計實際進度')).toHaveCount(0)
@@ -44,18 +44,18 @@ test.describe('施工廠商', () => {
     await expect(page.getByRole('region', { name: '第 5 期估驗計價送審 詳情' })).toBeVisible()
   })
 
-  test('Agent 不再重複待辦清單,只留前往今日待辦的入口', async ({ page }) => {
+  test('Agent 不再重複待辦清單,只留前往今日工作的入口', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/agent')
     await expect(page.getByRole('heading', { name: 'AI 草稿收件匣' })).toBeVisible()
     await expect(page.getByText('今日待我處理')).toHaveCount(0)
-    const toTasks = page.getByRole('link', { name: /前往今日待辦/ })
+    const toTasks = page.getByRole('link', { name: /前往今日工作/ })
     await expect(toTasks).toBeVisible()
     await toTasks.click()
-    await expect(page.getByRole('heading', { name: '今日待辦' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '今日工作' })).toBeVisible()
   })
 
-  test('提醒中心與今日待辦同一份來源,溢位看得到完整清單', async ({ page }) => {
+  test('提醒中心與今日工作同一份來源,溢位看得到完整清單', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/alerts')
     await expect(page.getByRole('heading', { name: '提醒中心' })).toBeVisible()

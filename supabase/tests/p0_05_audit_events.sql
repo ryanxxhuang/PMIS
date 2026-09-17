@@ -275,13 +275,17 @@ select results_eq($$
 $$, $$ values (true, false) $$,
   'self-demotion preserves pre-action technical-admin actor snapshot');
 
--- Contractor-private cost updates produce no shared audit value event.
+-- Contractor-private cost values never reach the shared audit stream. Since
+-- 20260917210000 (D-026 P1b) cost_items is read-only for every signed-in user:
+-- the fixture row above was created as superuser (pre-retirement history) and a
+-- contractor update is now refused at the grant level, so after retirement
+-- nothing can add a cost event either.
 select public.pmis_p05_login('c5000000-0000-0000-0000-000000000002');
 set local role authenticated;
-select lives_ok($$
+select throws_ok($$
   update public.cost_items set actual_amount = 8100
   where id = 'c5700000-0000-0000-0000-000000000001'
-$$, 'contractor updates private cost');
+$$, '42501', null, 'contractor cannot update private cost after retirement (writes revoked)');
 select is((select count(*)::integer from public.audit_events
   where entity_type = 'cost_item'), 0,
   'shared audit stream has no contractor-private cost events');

@@ -1,4 +1,4 @@
-// Ledger slice:廠商帳務與契約——成本管理(預算vs實際/分包)、變更設計(表頭+追加減明細)、
+// Ledger slice:廠商帳務與契約——成本管理(退場,只讀歷史)、變更設計(表頭+追加減明細)、
 // 逐工項排程、核准期限的義務 runtime。
 import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase.js'
@@ -7,7 +7,10 @@ import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/
 import { mutationOutcome } from './billing.js'
 
 export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, currentUser, wiMaps }) {
-  // 成本項目（真 DB；預算 vs 實際、分包）
+  // 成本項目:D-026 P1b 退場,只剩歷史查閱——store 只保留載入後的快取(setCostItems 給
+  // db.js 載入與 demo 種子用),不再暴露任何寫入函式。寫入在資料庫層就被收回
+  // (migration 20260917210000 收回 INSERT/UPDATE/DELETE grant、policy 改 select-only),
+  // 這裡留 createCostItem 之類的函式只會是「一定失敗的死碼」。
   const [costItems, setCostItems] = useState([])
   // 變更設計 / 追加減帳（真 DB；每筆含 items 明細）
   const [changeOrders, setChangeOrders] = useState([])
@@ -17,48 +20,6 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
   const [obligations, setObligations] = useState([])
   // 驗收/結算事件（真 DB；一階段一筆,法定期限由 lib/acceptance.js 推算）
   const [acceptanceEvents, setAcceptanceEvents] = useState([])
-
-  // 成本管理：新增 / 更新 / 刪除成本項目（預算 vs 實際、分包；demo 只進記憶體）
-  const createCostItem = useCallback(async (input) => {
-    const row = {
-      category: input.category || '其他', title: input.title,
-      vendor: input.vendor || null,
-      budget_amount: Number(input.budget_amount) || 0,
-      actual_amount: Number(input.actual_amount) || 0,
-      status: input.status || '進行中', note: input.note || null,
-      sort_order: costItems.length,
-    }
-    if (!dbMode) {
-      setCostItems((cs) => [...cs, { ...row, id: `COST-${Date.now()}` }])
-      return { error: null }
-    }
-    const { data, error } = await supabase.from('cost_items')
-      .insert({ ...row, project_id: currentProject.project_id }).select().single()
-    if (error) return { error }
-    setCostItems((cs) => [...cs, data])
-    return { error: null }
-  }, [dbMode, currentProject, costItems])
-
-  // DB 成功才更新 UI(B-07:RLS 靜默 0 列時原本假成功,重整即還原)
-  const updateCostItem = useCallback(async (id, patch) => {
-    if (dbMode) {
-      const res = await supabase.from('cost_items').update(patch).eq('id', id).select('id')
-      const { error } = mutationOutcome(res, '未寫入:可能無權限或成本項目已被移除')
-      if (error) return { error }
-    }
-    setCostItems((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
-    return { error: null }
-  }, [dbMode])
-
-  const deleteCostItem = useCallback(async (id) => {
-    if (dbMode) {
-      const res = await supabase.from('cost_items').delete().eq('id', id).select('id')
-      const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或成本項目已被移除')
-      if (error) return { error }
-    }
-    setCostItems((cs) => cs.filter((c) => c.id !== id))
-    return { error: null }
-  }, [dbMode])
 
   // 逐工項排程:設定某工項的計畫起迄。
   // R4 P1-01(前兩次都沒真正修好):起訖是兩個獨立 date input,同一 tick 連發時
@@ -320,7 +281,6 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     costItems, setCostItems, changeOrders, setChangeOrders,
     itemSchedules, setItemSchedules, obligations, setObligations,
     acceptanceEvents, setAcceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent,
-    createCostItem, updateCostItem, deleteCostItem,
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,

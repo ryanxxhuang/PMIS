@@ -9,7 +9,7 @@ import { plannedPctNow } from '../../lib/progressPlan.js'
 import { latestValuationAt } from '../../lib/progressAsOf.js'
 import { taipeiISODate } from '../../lib/dates.js'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
-import { BALL_SOURCES, resolveBallKey, ROLE_WORK, navLabel } from '../../lib/navConfig.js'
+import { BALL_SOURCES, BALL_SOURCES_TITLE, resolveBallKey, ROLE_WORK, navLabel } from '../../lib/navConfig.js'
 import { KIND_LABEL } from '../../lib/agentRole.js'
 import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
 import { buildSetupSteps } from '../../lib/setupChecklist.js'
@@ -112,7 +112,7 @@ export default function Dashboard() {
     award_date: project?.award_date, notice_date: project?.notice_date,
     commencement_date: project?.commencement_date, end_date: project?.end_date,
   }
-  // 今日待辦的唯一來源(W8-2B):協作項＋期限型全部在 todayTasks 聚合。
+  // 今日工作的唯一來源(W8-2B):協作項＋期限型全部在 todayTasks 聚合。
   // 改吃 useTodayTasks 這支「唯一」hook(側欄 badge 與提醒中心同源)——
   // 首頁再自己組一次 buildTodayTasks,件數遲早跟側欄分岔。
   const tasks = useTodayTasks()
@@ -193,12 +193,13 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      {/* 頁首維持「今日待辦」:這個名字全站都在用(/agent 的「前往今日待辦」、
-          /alerts 的「回到今日待辦」),h1 改叫來源名會變成同一個地方兩個名字,
-          違反 wayfinding。三個球權桶改用 Segmented 露在頁首下方——側欄的來源
-          是落地點,頁內的分段控制讓人不必回側欄就能切,兩者選取態同一份 ?ball=。 */}
+      {/* 頁名=側欄分區名 BALL_SOURCES_TITLE(今日工作):同一頁只有一個名字,h1、側欄、
+          返回連結(taskReturn)、各頁指路文案都吃 navConfig 這一份——先前 h1 叫「今日工作」、
+          側欄叫「今日工作」,同一個地方兩個名字違反 wayfinding(P1c 移交、P1b 統一)。
+          三個球權桶改用 Segmented 露在頁首下方——側欄的來源是落地點,頁內的分段控制讓人
+          不必回側欄就能切,兩者選取態同一份 ?ball=。 */}
       <PageHeader
-        title="今日待辦"
+        title={BALL_SOURCES_TITLE}
         tagline={project.project_name}
         subtitle={`${ROLE_WORK[myOrg].label}工作清單 · ${ROLE_WORK[myOrg].summary}`}
         meta={[
@@ -266,7 +267,7 @@ export default function Dashboard() {
         <div className="mt-2"><Button variant="outline" size="sm" onClick={exportAll}><MSym name="download" size={16} />匯出整案資料</Button></div>
       </details>}
 
-      {/* 手機 CTA(README 手機今日待辦):滑到最底不知道下一步該做什麼時,一句話問 agent。
+      {/* 手機 CTA(README 手機今日工作):滑到最底不知道下一步該做什麼時,一句話問 agent。
           與 App bar 全域搜尋走同一條代問機制(router state 帶 q,Agent 頁消費即清),
           也吃同一個 aiEnabled 閘門——功能關閉就整顆不渲染,不擺一顆按了會失望的鈕。
           在內容流最底而非 fixed:不與 bottom nav / FAB 疊,也不遮住任何待辦列。

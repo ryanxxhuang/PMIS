@@ -1,4 +1,4 @@
-// 今日待辦的單一聚合(W8-2B)。三段:現在輪到我 / 等待對方 / 今天已完成。
+// 今日工作的單一聚合(W8-2B)。三段:現在輪到我 / 等待對方 / 今天已完成。
 // Dashboard 與提醒中心都吃這一份 —— W8-2A §2.5 盤到的兩套前端規則
 // (ballInCourt 的協作項、Alerts 內嵌的期限)在這裡合流,不再各寫一套。
 //
@@ -66,7 +66,7 @@ export function daysBetween(dueIso, todayIso) {
   return a == null || b == null ? null : Math.round((a - b) / 86400000)
 }
 
-// 到期句的單一真相:今日待辦與品質頁工作佇列共用同一支——TaskRow 的 OVERDUE_RE 與
+// 到期句的單一真相:今日工作與品質頁工作佇列共用同一支——TaskRow 的 OVERDUE_RE 與
 // e2e 都綁死「逾期 N 天（到期 YYYY-MM-DD）」這個句型,兩處各抄一份一漂移就斷。
 export const dueText = (days, dueIso) => (days < 0
   ? `逾期 ${-days} 天（到期 ${dueIso}）`

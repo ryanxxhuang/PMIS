@@ -1,5 +1,5 @@
-// 機關(李淑芬)動線:落地收件匣、從側欄「專案」到跨案總覽 → 核准變更設計 →
-// 變更後契約金額跨頁一致(B-02)→ 廠商成本頁被擋 → 404 頁。
+// 機關(李淑芬)動線:落地收件匣、從側欄「專案」到跨案總覽(選案清單)→ 核准變更設計 →
+// 變更後契約金額跨頁一致(B-02)→ 估驗頁的本期勾稽檢核 → 廠商成本頁被擋 → 404 頁。
 import { test, expect } from '@playwright/test'
 import { loginAs, gotoHash } from './helpers.js'
 
@@ -8,9 +8,9 @@ import { loginAs, gotoHash } from './helpers.js'
 const REVISED_AFTER_CO2 = '724,388,067'
 
 test.describe('機關', () => {
-  test('登入落在今日待辦(收件匣);跨案總覽從側欄「專案」子頁可達,風險稽核 hidden 但機關仍可直達', async ({ page }) => {
+  test('登入落在今日工作(收件匣);跨案總覽從側欄「專案」子頁可達,風險稽核 hidden 但機關仍可直達', async ({ page }) => {
     await loginAs(page, 'owner')
-    await expect(page.getByRole('heading', { name: '今日待辦' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '今日工作' })).toBeVisible()
     // 落地不依角色分流(規範 §0 方向 A):多案角色要看跨案總覽,從「專案」群組一格就到
     const nav = page.getByRole('navigation', { name: '主要功能' })
     await nav.getByRole('button', { name: '展開專案子頁' }).click()
@@ -18,8 +18,15 @@ test.describe('機關', () => {
     await expect(nav.getByRole('link', { name: '風險稽核', exact: true })).toHaveCount(0)
     await nav.getByRole('link', { name: '跨案總覽', exact: true }).click()
     await expect(page.getByRole('heading', { name: '跨案總覽' })).toBeVisible()
+    // 縮為選案清單(D-026 P1b):本案＋兩個示範姊妹案各一列,整列可點;統計/例外帶不再出現
+    const list = page.getByRole('list', { name: '專案清單' })
+    await expect(list.getByRole('listitem')).toHaveCount(3)
+    await expect(list.getByRole('listitem').first()).toContainText('目前專案')
+    await expect(list.getByRole('listitem').nth(1)).toContainText('B 區道路改善工程')
+    await expect(page.getByText(/各案均無未結例外|累計估驗/)).toHaveCount(0)
     await gotoHash(page, '/audit')
     await expect(page.getByRole('heading', { name: '風險稽核' })).toBeVisible()
+    await expect(page.getByRole('note')).toContainText('已退場')
     await page.goto('/')
     await expect(page).toHaveURL(/#\/dashboard/)
   })
@@ -57,14 +64,13 @@ test.describe('機關', () => {
     // 跨頁一致:估驗頁分母、Dashboard 發包工程費都是同一個數字
     await gotoHash(page, '/valuation')
     await expect(page.getByText(/變更後契約金額 7\.24 億/)).toBeVisible()
-    // Apple 改版後首頁不再放指標卡(判準:不會被點的數字一律刪),第三個面改用
-    // 跨案總覽——它與估驗頁同吃 store 的 revisedTotal(財務單一真相層 B-02),
-    // 那裡渲染成不帶 NT$ 的裸數字,所以比對數字本身。
-    await gotoHash(page, '/portfolio')
-    await expect(page.getByText(REVISED_AFTER_CO2, { exact: false }).first()).toBeVisible()
+    // Apple 改版後首頁不再放指標卡(判準:不會被點的數字一律刪),跨案總覽也縮為選案清單不再列金額,
+    // 第三個面改用施工月報——它同吃 store 的 revisedTotal(財務單一真相層 B-02)。
+    await gotoHash(page, '/monthly-report')
+    await expect(page.getByText(`NT$ ${REVISED_AFTER_CO2}`).first()).toBeVisible()
   })
 
-  test('今日待辦:機關拿得到驗收法定期限,拿不到廠商責任的事', async ({ page }) => {
+  test('今日工作:機關拿得到驗收法定期限,拿不到廠商責任的事', async ({ page }) => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/dashboard')
     // demoSeed:報竣 -28、竣工確認 -25 → 初驗法定 30 日內,期限將至
@@ -105,6 +111,22 @@ test.describe('機關', () => {
     await expect(chainRow.getByRole('button')).toHaveCount(0)
   })
 
+  test('估驗計價頁逐期顯示本期勾稽檢核(原風險稽核的文件勾稽);Agent 稽核提示連到估驗頁', async ({ page }) => {
+    await loginAs(page, 'owner')
+    await gotoHash(page, '/valuation')
+    await expect(page.getByRole('heading', { name: '估驗計價', exact: true })).toBeVisible()
+    // demo 劇本至少有一項勾稽發現(與 /audit 的「文件勾稽」同一引擎、同一組裝),列在本期檢核卡
+    const checks = page.getByRole('list', { name: '本期勾稽檢核' })
+    await expect(checks.getByRole('listitem').first()).toBeVisible()
+    await expect(page.getByText(/已勾稽 \d+ 項計價工項/)).toBeVisible()
+    // Agent 的稽核提示卡:連結改指估驗計價(不再指 hidden 的 /audit)
+    await gotoHash(page, '/agent')
+    const link = page.getByRole('link', { name: /前往估驗計價查看勾稽檢核/ })
+    await expect(link).toBeVisible()
+    await link.click()
+    await expect(page.getByRole('heading', { name: '估驗計價', exact: true })).toBeVisible()
+  })
+
   test('路由守衛:機關進不了廠商成本頁', async ({ page }) => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/cost')
@@ -115,7 +137,7 @@ test.describe('機關', () => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/no-such-page')
     await expect(page.getByText('找不到這個頁面')).toBeVisible()
-    await page.getByRole('link', { name: /回到今日待辦/ }).click()
+    await page.getByRole('link', { name: /回到今日工作/ }).click()
     await expect(page).toHaveURL(/#\/dashboard/)
   })
 })

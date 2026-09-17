@@ -20,6 +20,7 @@
 // 改名時不會漏掉另一份對照表(先前 BottomNav 的 NAV_SHORT 以 label 當鍵,label 一改就靜默退回全名)。
 // 「工作」分區名:側欄分區標題與桌機首頁的主入口列(CommonWork)同一份——同一組入口在兩處
 // 用兩個名字(先前首頁叫「廠商常用」)會讓人以為是兩套東西。
+// 同理,/dashboard 的頁名只有 BALL_SOURCES_TITLE 一份(側欄分區、h1、返回連結、指路文案都吃它)。
 export const WORK_TITLE = '工作'
 
 export const navGroups = [
@@ -152,12 +153,12 @@ const nonNavRouteRules = {
   '/assistant': { access: 'redirect' },
   // 帳號安全(兩步驟驗證啟用/停用):個人層,不限角色、不進導覽,入口在頁首「帳號」。
   '/account': { access: 'authenticated' },
-  // 收件匣(今日待辦):球權來源三個入口共用這條路由(?ball= 分流)。來源不是 navGroups
-  // 的項目,所以登記在這裡;不限角色——它同時是落地頁,人人都必須進得去。
+  // 收件匣(今日工作,BALL_SOURCES_TITLE):球權來源三個入口共用這條路由(?ball= 分流)。來源不是
+  // navGroups 的項目,所以登記在這裡;不限角色——它同時是落地頁,人人都必須進得去。
   '/dashboard': { access: 'authenticated' },
   '/agent': { access: 'authenticated' },
-  // 提醒信仍可深連結；入口已由「今日待辦」承接。
-  '/alerts': { access: 'authenticated' },
+  // 提醒信仍可深連結;入口已由「今日工作」承接。label 供 taskReturn 的返回連結取名。
+  '/alerts': { access: 'authenticated', label: '提醒中心' },
   '/project/new': { access: 'authenticated' },
   '/site-log/print': { access: 'authenticated', surface: 'print' },
   '/valuation/print': { access: 'authenticated', surface: 'print' },

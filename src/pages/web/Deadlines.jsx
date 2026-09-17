@@ -1,6 +1,6 @@
 // 期限追蹤:已確認契約期限的到期管理(自 /requirements 的期限追蹤區塊遷出)。
 // 契約重點頁改版後只留頂部摘要條,逐項到期清單、標為已提送/佐證掛接、罰款試算
-// 與基準日/契約總價編輯全數在本頁——今日待辦的契約期限項與摘要條的「開啟期限
+// 與基準日/契約總價編輯全數在本頁——今日工作的契約期限項與摘要條的「開啟期限
 // 追蹤」都導到這裡。資料與規則不變:到期日由 computeObligationDue 依基準日即時
 // 計算,狀態寫入走 updateObligationStatus(伺服器 RLS 把關)。
 //
@@ -127,7 +127,7 @@ export default function Deadlines() {
   }, [dueItems, filters])
   const anyFilter = filters.q.trim() !== '' || filters.phase !== ''
 
-  // 選取/深連結(?obligation=,與 /requirements 同名,日後今日待辦可直接帶入)/切案
+  // 選取/深連結(?obligation=,與 /requirements 同名,日後今日工作可直接帶入)/切案
   // 重置/初次自動選取:共用殼 hook。預設選第一條已逾期 → 即將到期 → 清單第一條
   // (開頁就落在最該處理的那一筆,與 /requirements 的 pickDefaultId 同一規則)。
   const pid = currentProject?.project_id

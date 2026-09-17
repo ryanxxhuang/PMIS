@@ -282,7 +282,7 @@ function TopBar({ scrolled, dueCount = 0, mode, onCycleTheme, copilotOpen, onCop
           className={({ isActive }) => `relative w-10 h-10 max-md:w-11 max-md:h-11 rounded-full flex items-center justify-center pressable ${isActive ? 'bg-[var(--blue-tint)] text-[var(--blue-text)]' : 'text-[var(--text-2)] hover:bg-[var(--surface-2)]'}`}>
           <MSym name="notifications" size={20} />
           {/* 紅點只在真的有「輪到我」時亮(靜態紅點=說謊);aria-hidden,
-              count 語意由側欄 badge 與今日待辦頁承擔 */}
+              count 語意由側欄 badge 與今日工作頁承擔 */}
           {dueCount > 0 && <span aria-hidden className="absolute top-2 right-2.5 w-[7px] h-[7px] rounded-full bg-[var(--danger)] border-[1.5px] border-[var(--surface)]" />}
         </NavLink>
         {/* 帳戶區(兩行):登入者本人,沒有角色切換——身分在註冊時決定。
@@ -373,7 +373,7 @@ export function WebLayout({ children }) {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
   const { currentUser, can, workItemsSource, workItemsError, retryWorkItems, domainLoadError, retryDomainLoad, isPlatformAdmin, project, demoMode } = useStore()
-  // 件數單一真相:與今日待辦頁同一支聚合(useTodayTasks),側欄 badge/通知紅點
+  // 件數單一真相:與今日工作頁同一支聚合(useTodayTasks),側欄 badge/通知紅點
   // 不另算一份——兩套實作的數字遲早對不上(W8-2A §2.1)
   const { mine: dueMine, waiting: dueWaiting, doneToday: dueDone } = useTodayTasks()
   const { pathname } = useLocation()

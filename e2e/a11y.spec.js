@@ -16,7 +16,7 @@ const TABLET_RAIL = { width: 1024, height: 768 }
 // 路由 → 該頁 PageHeader 的 h1 標題。掃描時等「該路由自己的 h1」出現才量寬度——
 // 路由是 lazy chunk,只等 main 非空會量到上一頁殘影,等到專屬 h1 才保證新頁已掛載。
 const H1 = {
-  '/dashboard': '今日待辦',
+  '/dashboard': '今日工作',
   '/site': '現場紀錄',
   '/site-log': '施工日誌',
   '/quality': '品質查驗',
@@ -170,14 +170,14 @@ test.describe('44px 觸控目標抽查(375px)', () => {
   })
 
   // 規格點名的「下一步」CTA 只在真專案的初始化清單出現(demo 專案不渲染 SetupChecklist),
-  // demo E2E 改釘同頁的主要觸控目標:今日待辦列(期限型待辦連結)。
-  test('今日待辦列(主要觸控目標)高度 ≥ 44px', async ({ page }) => {
+  // demo E2E 改釘同頁的主要觸控目標:今日工作列(期限型待辦連結)。
+  test('今日工作列(主要觸控目標)高度 ≥ 44px', async ({ page }) => {
     await page.setViewportSize(MOBILE)
     await loginAs(page, 'contractor')
     const task = page.getByRole('link').filter({ hasText: '第 5 期估驗計價送審' })
     await expect(task).toBeVisible()
     const box = await task.boundingBox()
-    expect(box?.height, `今日待辦列高度 ${box?.height}px 未達 44px`).toBeGreaterThanOrEqual(44)
+    expect(box?.height, `今日工作列高度 ${box?.height}px 未達 44px`).toBeGreaterThanOrEqual(44)
   })
 
   // 744px(iPad mini 直式)落在 640-767 這一段:BottomNav 已出現=手機版面,
@@ -274,7 +274,7 @@ test.describe('鍵盤可達性', () => {
     await expect(page.getByRole('navigation', { name: '主要功能' }).getByRole('link', { name: '履約時程', exact: true })).toBeVisible()
     await page.evaluate(() => window.scrollTo(0, 0))
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
-    await expect(page.getByRole('heading', { name: '今日待辦', level: 1 })).toBeInViewport()
+    await expect(page.getByRole('heading', { name: '今日工作', level: 1 })).toBeInViewport()
 
     await page.setViewportSize(MOBILE)
     // 開啟意圖已隨抽屜消失而清除:縮回手機寬度不會自己彈開、不鎖背景、「更多」不標展開

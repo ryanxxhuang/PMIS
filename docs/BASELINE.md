@@ -1,9 +1,17 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-17｜P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-17 P1b：退場頁唯讀化（PR #113，migration `20260917210000_cost_items_retire`）
+
+- `npm run test:db`（一次性資料庫從零套 64 支 migration＋seed，rebase 到含 P2d 的 main 後重跑）：44 檔、1,510 通過、0 失敗（＝P2d 基準 1,486＋新增 `cost_items_retired.sql` 24 條；rebase 前 43 檔 1,370）。新增套件覆蓋：`authenticated` 對 `cost_items` 只剩 SELECT、`anon` 無任何寫入；只剩一條 SELECT policy；廠商成員可讀歷史但 INSERT／UPDATE／DELETE 皆 42501；監造／機關讀 0 列且不可寫；非成員跨案讀 0 列、對 A 案與自己管理的 B 案都不可新增；監造組織的專案管理者可讀（`can_access_contractor_private` 原條件）但不可改刪；全部嘗試後歷史列數與數值無損。`p0_05_audit_events.sql` 的廠商更新改斷言 42501，稽核流無成本事件的斷言不變。
+- `npm test`：120 檔、1,261 項（新增 `valuationChecks.test.js` 5 條、`ledger.test.js` 改為「無成本寫入函式」、`Portfolio.error.test.jsx` 改為選案清單合約 4 條；刪 `portfolioExceptions.test.js`）；`npm run lint` 零警告；`npm run build`；`npm run check:docs` 55 檔、363 連結、0 錯誤。
+- `npx playwright test` owner／routes／contractor／workflow-ux／reachability 五檔 38 項＋a11y 18 項全綠：`/cost` 廠商直達後只有搜尋框、無 spinbutton／新增／刪除鈕、有 CSV 鈕與退場 `note`；`/portfolio`「專案清單」三列（本案標目前專案、B 區）、無「累計估驗／各案均無未結例外」；`/valuation`「本期勾稽檢核」清單至少一項、Agent 稽核提示卡連結「前往估驗計價查看勾稽檢核」可達估驗頁；`/audit` 機關可達且帶退場 `note`、廠商仍被守衛擋；B-02 跨頁一致第三面改施工月報 `NT$ 724,388,067`；h1 與返回連結皆為「今日工作」；a11y 三角色 375＋1024 全路由（含 hidden 的 `/cost`、`/audit`）無水平溢位。
+- 內建 Preview（示範模式）：監造 `/valuation` 本期勾稽檢核卡 2 項風險／1 項注意／已勾稽 50 項；`/portfolio` 三列清單；廠商 `/cost` 統計卡＋分類表＋唯讀明細（備註欄）＋CSV（8）；機關 `/audit` 退場說明＋「前往估驗計價」連結、清單 3 風險 3 注意。
+- 未做：正式 `db push`、demo 重佈與 `check:prod` 於合併後執行（結果記 CURRENT §6.3）；真後端（e2e:real）未跑——本單元無 RPC／Edge 變更，成本寫入拒絕由 pgTAP 證明；真人驗收。
 
 ### 2026-09-17 P2d：施工日誌存版／簽署／提送 RPC（migration `20260917205000_field_document_rpcs`）
 

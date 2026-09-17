@@ -1,7 +1,7 @@
 // /agent — 專屬 agent 主控台:使用者不再需要知道「該去哪一頁做事」,
 // 描述目的,由角色化 agent 去查、去擬。兩塊:對話(主角,接 agent-run 多輪查詢)、
 // AI 草稿收件匣(agent_actions pending,人接受/拒絕——AI 只擬草稿,決定權永遠在人)。
-// W8-2B:待辦清單已整個交還「今日待辦」頁。這裡只留一個沒有件數的連結——
+// W8-2B:待辦清單已整個交還「今日工作」頁。這裡只留一個沒有件數的連結——
 // 顯示件數就得再載一份聚合,兩頁的數字遲早對不起來(W8-2A §2.1、§5)。
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -9,6 +9,7 @@ import { MSym } from '../../components/icons.jsx'
 import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input, Surface, SkeletonList } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { useStore } from '../../store.jsx'
+import { BALL_SOURCES_TITLE } from '../../lib/navConfig.js'
 import { applyDraftQuantities, draftNeedsInputCount, checklistDraftCounts } from '../../store/slices/agent.js'
 import { useAssistantData } from '../../lib/assistantData.js'
 // KIND_LABEL/KIND_COLOR 移到 agentRole.js:Dashboard 的「AI 今日已代辦」卡共用同一份標籤
@@ -31,7 +32,7 @@ const INSET_ROWS = `${INSET_PANEL} divide-y divide-[var(--border-2)]`
 // 行內展開鈕(勾稽發現/為什麼這樣擬):第三級文字鈕的單一寫法,不再各寫一份灰字
 const EXPANDER_CLS = 'inline-flex items-center gap-0.5 text-caption max-md:min-h-11 px-1 -mx-1 text-[var(--blue-text)] hover:underline'
 
-// 待辦的唯一入口是「今日待辦」頁。這裡刻意不顯示件數:件數要正確就得在
+// 待辦的唯一入口是「今日工作」頁。這裡刻意不顯示件數:件數要正確就得在
 // 這頁再算一次同樣的聚合,一旦兩份實作分岔,使用者會看到兩個不同的數字。
 function TodayTasksLink() {
   // 卡殼吃共用 Surface;整張卡就是入口(手機上不必瞄準右邊那行小字)。
@@ -40,10 +41,10 @@ function TodayTasksLink() {
     <Surface as={Link} to="/dashboard"
       className="group px-4 py-3 min-h-11 flex items-center gap-3 hover:border-[var(--blue)]">
       <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] leading-snug">
-        輪到你處理的事項都在「今日待辦」。
+        輪到你處理的事項都在「{BALL_SOURCES_TITLE}」。
       </div>
       <span className="shrink-0 inline-flex items-center gap-0.5 text-xs font-medium text-[var(--blue-text)] group-hover:underline">
-        前往今日待辦 <MSym name="arrow_forward" size={12} />
+        前往{BALL_SOURCES_TITLE} <MSym name="arrow_forward" size={12} />
       </span>
     </Surface>
   )
@@ -58,7 +59,7 @@ const mmdd = (d) => {
 function DraftInboxCard() {
   // checklistTemplates:store 對外名(store.jsx 把 allChecklistTemplates 以此名輸出),
   // 已含內建 03310 範本——查驗草稿卡片用它把項次 no 對回項目文字
-  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft, checklistTemplates, currentUser } = useStore()
+  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft, checklistTemplates } = useStore()
   const [resolvingId, setResolvingId] = useState(null)
   const [errMsg, setErrMsg] = useState(null)
   const [doneMsg, setDoneMsg] = useState(null) // 接受成功後的提示 { text, to, cta }(帶去補填/查看連結)
@@ -284,13 +285,12 @@ function DraftInboxCard() {
                           : subPayload ? '採用意見' : '接受'}
                   </Button>
                   <Button size="sm" variant="outline" disabled={busy} onClick={() => resolve(a, 'rejected')}>拒絕</Button>
-                  {/* 稽核提示卡只是摘要,完整檢核表/勾稽鏈在風險稽核頁——
-                      沒有這條連結,機關看完摘要就斷頭(該頁曾全站零入口)。
-                      /audit 在 routeRegistry 是 owner-only,而監造(對量)也會收到 audit_note,
-                      對非機關角色渲染這條連結只會撞路由守衛,所以限 owner */}
-                  {a.kind === 'audit_note' && currentUser?.org_type === 'owner' && (
-                    <Link to="/audit" className="inline-flex items-center gap-0.5 text-caption max-md:min-h-11 text-[var(--blue-text)] hover:underline">
-                      前往風險稽核查看完整發現<MSym name="arrow_forward" size={12} />
+                  {/* 稽核提示卡只是摘要,完整的勾稽發現在估驗計價頁逐期顯示(D-026 P1b:檢核自
+                      風險稽核工作區移入估驗流程;/valuation 三角色都可進,監造(對量)與機關都能接上,
+                      不像先前的 /audit 只有機關能開)。沒有這條連結,看完摘要就斷頭。 */}
+                  {a.kind === 'audit_note' && (
+                    <Link to="/valuation" className="inline-flex items-center gap-0.5 text-caption max-md:min-h-11 text-[var(--blue-text)] hover:underline">
+                      前往估驗計價查看勾稽檢核<MSym name="arrow_forward" size={12} />
                     </Link>
                   )}
                   {/* 不擋接受:有些日子確實沒有可計量的工項,只誠實提醒略過的後果 */}
@@ -381,7 +381,7 @@ export default function Agent() {
           action={<span className="inline-flex items-center gap-1 text-caption text-[var(--text-3)]"><MSym name="smart_toy" size={12} />會自己查本案資料</span>}>
           {agentOn
             ? <CopilotChat data={data} onAsk={onAsk} minH={360} maxH={560} initialQuestion={initialQuestion} />
-            : <Empty>此 AI 功能未啟用（AI Agent 主控台）。今日待辦與草稿收件匣仍可使用；如需開通請聯絡系統管理者。</Empty>}
+            : <Empty>此 AI 功能未啟用（AI Agent 主控台）。{BALL_SOURCES_TITLE}與草稿收件匣仍可使用；如需開通請聯絡系統管理者。</Empty>}
         </Card>
         <div className="space-y-5 order-1 lg:order-2 min-w-0">
           <TodayTasksLink />

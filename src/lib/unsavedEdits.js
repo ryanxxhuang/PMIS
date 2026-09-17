@@ -40,7 +40,7 @@ export function guardInAppNavigation(event, confirmLeave) {
   Promise.resolve(confirmLeave(labels)).then((ok) => {
     if (!ok) return
     clearUnsavedEdits()
-    a.click() // 登記已清,這次點擊直接放行(保留 Link 的 state,例如返回今日待辦的來源)
+    a.click() // 登記已清,這次點擊直接放行(保留 Link 的 state,例如返回今日工作的來源)
   })
   return true
 }

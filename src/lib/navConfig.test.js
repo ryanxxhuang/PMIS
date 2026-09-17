@@ -123,7 +123,7 @@ describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
       expect(groups[1].items.map((i) => i.label)).toEqual(SECONDARY)
     }
   })
-  it('今日待辦不是側欄項:/dashboard 由球權來源獨佔,導覽定義裡沒有第二個入口指向它', () => {
+  it('今日工作不是側欄項:/dashboard 由球權來源獨佔,導覽定義裡沒有第二個入口指向它', () => {
     // 兩個入口指向同一頁正是先前 aria-current 要去重複的根因;這條釘住根因不回來。
     for (const n of allDefs()) expect(n.to).not.toBe('/dashboard')
     expect(BALL_SOURCES.map((b) => b.to.split('?')[0])).toEqual(['/dashboard', '/dashboard', '/dashboard'])
@@ -313,7 +313,9 @@ describe('roles 與 hidden 定義釘死(重劃分區不得鬆綁;退場只 hidde
     }
     // /schedule 承接(P5d)前保留可見:一旦有人先 hidden,這條會先紅,退場必須是有意識的決策
     expect(routeRegistry['/schedule'].hidden).toBeUndefined()
-    expect(routeRegistry['/alerts']).toEqual({ access: 'authenticated' })
+    // /alerts 帶 label:taskReturn 的返回連結名字取自登記表,不手抄「提醒中心」
+    expect(routeRegistry['/alerts']).toEqual({ access: 'authenticated', label: '提醒中心' })
+    expect(navLabel('/alerts')).toBe('提醒中心')
     expect(routeRegistry['/agent']).toEqual({ access: 'authenticated' })
   })
 })

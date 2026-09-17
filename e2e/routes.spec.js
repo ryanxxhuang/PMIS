@@ -26,9 +26,9 @@ test.describe('路由治理', () => {
   const WORK = ['現場紀錄', '履約時程', '估驗請款']
   const SECONDARY = ['文件往來', '專案']
 
-  test('桌面側欄常駐:三分區齊全、群組預設收合可展開再收合、今日待辦不重複;收合偏好照舊', async ({ page }) => {
+  test('桌面側欄常駐:三分區齊全、群組預設收合可展開再收合、今日工作不重複;收合偏好照舊', async ({ page }) => {
     await loginAs(page, 'contractor')
-    await expect(page.getByRole('heading', { name: '今日待辦' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '今日工作' })).toBeVisible()
     const nav = page.getByRole('navigation', { name: '主要功能' })
     for (const title of ['今日工作', '工作', '專案資料']) {
       await expect(nav.getByText(title, { exact: true })).toBeVisible()
@@ -36,8 +36,9 @@ test.describe('路由治理', () => {
     for (const label of [...BALL, ...WORK, ...SECONDARY]) {
       await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
-    // 今日待辦退場:側欄沒有第二個入口指向 /dashboard,aria-current 只落在「現在輪到我」
-    await expect(nav.getByRole('link', { name: '今日待辦', exact: true })).toHaveCount(0)
+    // 舊「今日待辦」導覽項已退場:側欄沒有第二個入口指向 /dashboard(今日工作是分區名不是連結),
+    // aria-current 只落在「現在輪到我」
+    await expect(nav.getByRole('link', { name: '今日工作', exact: true })).toHaveCount(0)
     await expect(nav.locator('[aria-current="page"]')).toHaveCount(1)
     await expect(nav.getByRole('link', { name: '現在輪到我', exact: true })).toHaveAttribute('aria-current', 'page')
     // 群組預設收合:子頁不渲染;展開後出現、收合後消失
@@ -142,10 +143,19 @@ test.describe('路由治理', () => {
 
   test('退場頁 hidden 仍可依原角色直達;現場紀錄總覽三角色可達且列出現場入口', async ({ page }) => {
     await loginAs(page, 'contractor')
-    // 成本管理:廠商可直達(歷史查閱),側欄沒有入口
+    // 成本管理:廠商可直達(歷史查閱),側欄沒有入口;頁面唯讀——沒有新增表單、沒有可編輯的金額格、
+    // 沒有刪除鈕,只剩搜尋/篩選與 CSV 匯出(D-026 P1b;資料庫另以 pgTAP 釘住寫入被拒)
     await gotoHash(page, '/cost')
     await expect(page.getByRole('heading', { level: 1, name: '成本管理' })).toBeVisible()
     await expect(page.getByRole('navigation', { name: '主要功能' }).getByRole('link', { name: '成本管理', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('note')).toContainText('已退出新作業')
+    const main = page.getByRole('main')
+    await expect(main.getByRole('table', { name: '成本明細' })).toBeVisible()
+    await expect(main.getByRole('button', { name: /^CSV/ })).toBeVisible()
+    await expect(main.getByRole('button', { name: /新增/ })).toHaveCount(0)
+    await expect(main.getByRole('button', { name: /刪除/ })).toHaveCount(0)
+    await expect(main.getByRole('spinbutton')).toHaveCount(0)
+    await expect(main.locator('input:not([type="search"])')).toHaveCount(0)
     // 風險稽核:廠商被守衛擋(roles 不因 hidden 鬆綁)
     await gotoHash(page, '/audit')
     await expect(page.getByText('你的角色沒有此頁的存取權限')).toBeVisible()

@@ -1,54 +1,40 @@
-// 跨案總覽:機關承辦/公司主管一頁比較手上所有專案——進度、未結事項、驗收階段。
-// 機關登入的預設落地頁。真實模式走 portfolio_summary RPC(一次撈全部,不逐案打);
-// demo 模式 = 本案(A 區)即時計算 + 兩個靜態示範姊妹案(驗收倒數/保固中)。
-import { useState, useEffect, useMemo } from 'react'
+// 跨案總覽:縮為「選案清單」(D-026 §4,P1b)。獨立的跨案分析儀表板已退場——原本的進度條、
+// 累計估驗金額、預定 vs 實際、驗收階段與例外彙總帶都不再計算;留下的是多案角色真正需要的:
+// 我被加入哪些案、各案還有幾件未結事項、最近一期估驗到哪,以及一格切換到該案。
+// 真實模式走 portfolio_summary RPC(一次撈全部,不逐案打;D-024 已知它取最新期,不再擴充);
+// demo 模式 = 本案(A 區,件數由 store 即時計算)+ 兩個靜態示範姊妹案。
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Badge, PageHeader, Surface, ErrorBanner, SkeletonList, PrerequisiteEmptyState } from '../../components/ui.jsx'
+import { Card, Badge, PageHeader, ErrorBanner, SkeletonList, PrerequisiteEmptyState } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
-import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
-import { plannedPctNow } from '../../lib/progressPlan.js'
-import { latestValuationAt } from '../../lib/progressAsOf.js'
-import { fmtAmount as fmt } from '../../lib/format.js'
-import { acceptanceStageSummary } from '../../lib/acceptance.js'
 import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
-import { portfolioExceptions } from '../../lib/portfolioExceptions.js'
+
+const STATUS_COLOR = { 施工中: 'blue', 驗收中: 'amber', 保固中: 'green', 已結案: 'slate' }
 
 export default function Portfolio() {
   const {
     demoMode, isSupabaseConfigured, projects, currentProject, switchProject, loadPortfolio,
-    project, workItems, valuations, progressPlan, defects, inspections, changeOrders, acceptanceEvents,
-    adjustedItems, revisedTotal,
+    project, defects, inspections, changeOrders, valuations,
   } = useStore()
   const navigate = useNavigate()
-  const TODAY = new Date() // 每次 render 取(B-11)
-  const plannedNow = plannedPctNow(progressPlan, TODAY)
 
-  // 截至今天的估驗期(估驗日期不在未來、狀態不論;D-024)。DB 端 portfolio_summary 仍取最新期。
-  const latest = latestValuationAt(valuations, TODAY)
-  // ── 本案(目前載入中的專案)即時計算——與 Dashboard 同一套數學 ──
-  const current = useMemo(() => {
-    if (!workItems) return null
-    // 財務單一真相層(B-02):與 Dashboard/估驗頁同一套計算(含已核准變更)
-    const { roots, childrenMap } = buildBillableTree(adjustedItems)
-    const billable = revisedTotal
-    const cum = latest ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latest.items)) : 0
-    return {
-      name: project.project_name, code: project.project_code, status: project.status || '施工中',
-      billable, cum, progressPct: billable ? (cum / billable) * 100 : 0, plannedPct: plannedNow,
-      openDefects: defects.filter((d) => d.status !== '已結案').length,
-      pendingInspections: inspections.filter((i) => i.status === '待查驗').length,
-      pendingCOs: changeOrders.filter((c) => c.status === '提出' || c.status === '審核中').length,
-      acceptance: acceptanceStageSummary(demoMode ? [] : acceptanceEvents), // demo 的驗收事件屬 B 區 storyline
-      isCurrent: true,
-    }
-  }, [workItems, adjustedItems, revisedTotal, latest, plannedNow, defects, inspections, changeOrders, acceptanceEvents, project, demoMode])
+  // ── 本案(目前載入中的專案):件數與最近期別直接來自 store,與各工作頁同一份資料 ──
+  const latestVal = [...valuations].sort((a, b) => a.period_no - b.period_no).slice(-1)[0]
+  const current = {
+    key: 'current', isCurrent: true,
+    name: project?.project_name, code: project?.project_code, status: project?.status || '施工中',
+    openDefects: defects.filter((d) => d.status !== '已結案').length,
+    pendingInspections: inspections.filter((i) => i.status === '待查驗').length,
+    pendingCOs: changeOrders.filter((c) => c.status === '提出' || c.status === '審核中').length,
+    latestPeriod: latestVal?.period_no ?? null, latestStatus: latestVal?.status ?? null,
+  }
 
   // ── 其他專案:真實模式走 RPC;demo 用靜態示範案 ──
   // others=null 代表「還不知道」(載入中或失敗),不是 0 案:失敗時 RPC 回空列,若當成
-  // 0 筆畫出來,例外帶會說「1 案 各案均無未結例外」——那是假的 0(規範 §6:查詢失敗
-  // 要說失敗並給重試)。attempt 只為了重跑同一個 effect,不改查詢語意。
+  // 0 筆畫出來會變成「你只有這一案」——那是假的(規範 §6:查詢失敗要說失敗並給重試)。
+  // attempt 只為了重跑同一個 effect,不改查詢語意。
   const [others, setOthers] = useState(null)
   const [loadErr, setLoadErr] = useState(null)
   const [attempt, setAttempt] = useState(0)
@@ -71,12 +57,8 @@ export default function Portfolio() {
           return {
             key: r.project_id, projectId: r.project_id,
             name: meta?.project_name || '—', code: meta?.project_code, status: meta?.status || '施工中',
-            billable: Number(r.billable_total) || 0, cum: Number(r.latest_cum) || 0,
-            progressPct: r.billable_total > 0 ? (Number(r.latest_cum) / Number(r.billable_total)) * 100 : 0,
-            plannedPct: null,
-            latestPeriod: r.latest_period, latestStatus: r.latest_status,
             openDefects: r.open_defects, pendingInspections: r.pending_inspections, pendingCOs: r.pending_change_orders,
-            acceptance: acceptanceStageSummary(r.acceptance_events || []),
+            latestPeriod: r.latest_period, latestStatus: r.latest_status,
           }
         }))
     }).catch((e) => { if (active) { setLoadErr(e); setOthers(null) } }) // 網路層例外也不能靜默成 0 案
@@ -86,7 +68,7 @@ export default function Portfolio() {
   // 載入中=真實模式、還沒拿到結果、也還沒失敗;demo 的 others 是同步設的,不會進這裡
   const loading = !demoMode && isSupabaseConfigured && others === null && !loadErr
 
-  const cards = [current, ...(others || [])].filter(Boolean)
+  const rows = [current, ...(others || [])].filter((c) => c && c.name)
 
   const open = (c) => {
     if (c.isCurrent) { navigate('/dashboard'); return }
@@ -98,145 +80,75 @@ export default function Portfolio() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="跨案總覽" tagline="Portfolio"
-        subtitle="手上所有專案的進度、待辦與驗收階段,一頁比較;點卡片切換到該案。"
+        title="跨案總覽" tagline="選案"
+        subtitle="你被加入的專案清單與各案尚未處理的件數；點一案切換到該案的今日工作。"
       />
-      {/* 彙總失敗:說失敗、給重試;下方仍列本案即時卡(它不經 RPC),但明講其他案沒列出 */}
+      {/* 彙總失敗:說失敗、給重試;下方仍列本案(它不經 RPC),但明講其他案沒列出 */}
       {loadErr && (
         <ErrorBanner onRetry={retry}
-          msg={`跨案彙總讀取失敗：${friendlyError(loadErr, '連線異常')}。下方只有目前專案的即時數字,其他專案未列出。`} />
+          msg={`跨案清單讀取失敗：${friendlyError(loadErr, '連線異常')}。下方只有目前專案,其他專案未列出。`} />
       )}
-      {loading && <p role="status" className="text-xs text-[var(--text-3)]">正在載入其他專案的彙總…</p>}
-      {/* 例外帶只在「全部都到齊」時畫:載入中/失敗時案數與例外數都是殘缺的,畫出來就是假的 0 */}
-      {cards.length > 0 && others !== null && <ExceptionBand ex={portfolioExceptions(cards)} />}
-      {cards.length === 0 ? (
+      {loading && <p role="status" className="text-xs text-[var(--text-3)]">正在載入其他專案…</p>}
+      {rows.length === 0 ? (
         loadErr ? null : loading ? (
-          <Card><SkeletonList rows={2} label="正在載入跨案彙總…" /></Card>
+          <Card><SkeletonList rows={2} label="正在載入專案清單…" /></Card>
         ) : (
           <Card bodyClass="p-0">
             <PrerequisiteEmptyState
               need="尚無任何專案。建立專案並上傳專案文件後,你被加入的每個專案都會列在這裡。"
-              unlocks="跨案比較進度、未結缺失／查驗／變更與驗收階段"
+              unlocks="在多案之間切換,並看到各案尚未處理的件數"
               to="/project/new" cta="建立專案" />
           </Card>
         )
       ) : (
-        <div className="grid md:grid-cols-2 gap-5">
-          {cards.map((c) => <ProjectCard key={c.key || 'current'} c={c} onOpen={() => open(c)} />)}
-        </div>
+        <Card title={`專案（${others === null && !demoMode ? '載入中' : rows.length}）`} bodyClass="p-0">
+          <ul role="list" aria-label="專案清單" className="divide-y divide-[var(--border-2)]">
+            {rows.map((c) => <ProjectRow key={c.key} c={c} onOpen={() => open(c)} />)}
+          </ul>
+        </Card>
       )}
       {demoMode && (
         <p className="text-xs text-[var(--text-3)]">
-          B 區 / C 區為示範資料——真實帳號會列出你被加入的所有專案(彙總數字由伺服器一次計算)。
+          B 區 / C 區為示範資料——真實帳號會列出你被加入的所有專案(件數由伺服器一次計算)。
         </p>
       )}
     </div>
   )
 }
 
-// 安靜的數字帶(刻意不做成 Card):它是卡片 grid 的索引,不該和專案卡搶視覺層級。
-// 值為 0 的項不渲染——0 是好消息,列出來只會稀釋真正要看的那幾個數字。
-function ExceptionBand({ ex }) {
-  const items = [
-    { key: 'defects', icon: 'warning', text: `未結缺失 ${ex.openDefects}`, v: ex.openDefects, warn: true },
-    { key: 'insp', icon: 'verified_user', text: `待查驗 ${ex.pendingInspections}`, v: ex.pendingInspections, warn: true },
-    { key: 'co', icon: 'build', text: `待核定變更 ${ex.pendingCOs}`, v: ex.pendingCOs, warn: true },
-    { key: 'acc', icon: 'verified', text: `驗收中 ${ex.acceptanceActive} 案`, v: ex.acceptanceActive },
-    { key: 'accOver', icon: 'verified', text: `驗收逾期 ${ex.acceptanceOverdue} 案`, v: ex.acceptanceOverdue, red: true },
-  ].filter((i) => i.v > 0)
-
-  return (
-    <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-[var(--text-2)]">
-      <span className="num text-[var(--text-3)]">{ex.projects} 案</span>
-      {items.length === 0 ? (
-        <span className="text-[var(--text-3)]">各案均無未結例外</span>
-      ) : items.map((i) => {
-        return (
-          <span key={i.key} className={`flex items-center gap-1.5 ${i.red ? 'text-[var(--red-text)] font-medium' : ''}`}>
-            {/* warn 語意一律 --amber-text:--accent(安全橘)是非語意品牌標記,拿來當警示會與逾期/落後打架 */}
-            <MSym name={i.icon} size={14} className={i.red ? 'text-[var(--red-text)]' : i.warn ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'} />
-            {i.text}
-          </span>
-        )
-      })}
-    </div>
-  )
-}
-
-const STATUS_COLOR = { 施工中: 'blue', 驗收中: 'amber', 保固中: 'green', 已結案: 'slate' }
-
-function ProjectCard({ c, onOpen }) {
-  const behind = c.plannedPct != null ? c.plannedPct - c.progressPct : null
+// 一列一案:案名＋代碼＋狀態 / 三個未結件數 / 最近估驗期。整列可點=切換到該案(選案就是這一頁
+// 唯一的動作);件數為 0 用中性色,有件數才用警示色,掃一眼就知道哪一案還有事。
+function ProjectRow({ c, onOpen }) {
   const clickable = c.isCurrent || c.projectId || c.to
-  // 卡殼吃共用 Surface(白卡/圓角/框線/陰影一份定義),這裡只留「可點卡片」自己的互動樣式;
-  // hover 陰影走 token:--shadow-* 沒註冊進 @theme,Tailwind 的 shadow-md 吃到的是它自己的黑影
+  const counts = [
+    { label: '缺失', title: '未結案缺失', v: c.openDefects },
+    { label: '待查驗', title: '待監造查驗', v: c.pendingInspections },
+    { label: '變更', title: '變更設計待核定', v: c.pendingCOs },
+  ]
   return (
-    <Surface as="button" onClick={onOpen} disabled={!clickable}
-      className={`text-left h-full flex flex-col p-5 pressable ${clickable ? 'hover:border-[var(--blue)] hover:[box-shadow:var(--shadow-md)] cursor-pointer' : 'cursor-default'}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-callout font-medium text-[var(--text)] truncate flex items-center gap-2">
-            {c.name}
+    <li>
+      <button type="button" onClick={onOpen} disabled={!clickable}
+        className={`w-full text-left px-5 py-3 min-h-11 flex flex-wrap items-center gap-x-4 gap-y-1.5 ${clickable ? 'hover:bg-[var(--surface-2)] cursor-pointer pressable' : 'cursor-default'}`}>
+        <span className="min-w-0 flex-1 basis-56">
+          <span className="text-body font-medium text-[var(--text)] flex items-center gap-2 flex-wrap">
+            <span className="truncate">{c.name}</span>
             {c.isCurrent && <Badge color="blue">目前專案</Badge>}
-          </div>
-          <div className="text-caption text-[var(--text-3)] num mt-0.5">{c.code || '—'}</div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Badge color={STATUS_COLOR[c.status] || 'slate'}>{c.status}</Badge>
-          {clickable && <MSym name="chevron_right" size={15} className="text-[var(--text-3)]" />}
-        </div>
-      </div>
-
-      {/* 進度:百分比一行 → 進度條 → 金額固定一行——每張卡同構,寬窄都不會亂跳行 */}
-      <div className="mt-4">
-        <div className="flex items-baseline gap-2">
-          <span className="num text-lg leading-none font-semibold text-[var(--text)]">{c.progressPct.toFixed(1)}%</span>
-          {/* 實際 vs 計畫吃五語意色票:落後=red(與進度管制頁同一個 5% 門檻)、超前/正常=green;
-              不再用只有這裡看得到的 accent 橘——跨頁看同一件事,顏色要是同一個意思 */}
-          {behind != null && (
-            <Badge color={behind > 5 ? 'red' : 'green'}>
-              {behind > 5 ? `落後 ${behind.toFixed(1)}%` : behind < -2 ? `超前 ${(-behind).toFixed(1)}%` : '進度正常'}
-            </Badge>
-          )}
-        </div>
-        <div className="relative h-2 rounded-full bg-[var(--surface-2)] mt-2 overflow-hidden">
-          <div className="absolute inset-y-0 left-0 rounded-full bg-[var(--blue)]" style={{ width: `${Math.min(100, c.progressPct)}%` }} />
-          {c.plannedPct != null && (
-            /* 標記線只有顏色與位置,沒有文字說明;比照 Dashboard 同一標記補 title/aria-label */
-            <div className="absolute inset-y-0 w-[2px] bg-[var(--text-2)]" style={{ left: `${Math.min(100, c.plannedPct)}%` }}
-              role="img" title={`今日預定 ${c.plannedPct.toFixed(1)}%`} aria-label={`今日預定 ${c.plannedPct.toFixed(1)}%`} />
-          )}
-        </div>
-        <div className="num text-caption text-[var(--text-3)] mt-1.5 text-right">
-          <span className="whitespace-nowrap">累計估驗 NT$ {fmt(c.cum)}</span> ／ <span className="whitespace-nowrap">{fmt(c.billable)}</span>
-        </div>
-      </div>
-
-      {/* 待辦計數(mt-auto 把底部區塊釘齊卡底,三張卡對齊) */}
-      <div className="mt-auto pt-4 grid grid-cols-3 gap-2 text-caption w-full">
-        {[
-          { icon: 'warning', label: '缺失', title: '未結案缺失', v: c.openDefects, warn: c.openDefects > 0 },
-          { icon: 'verified_user', label: '待查驗', title: '待監造查驗', v: c.pendingInspections, warn: c.pendingInspections > 0 },
-          { icon: 'build', label: '變更', title: '變更設計待核定', v: c.pendingCOs, warn: c.pendingCOs > 0 },
-        ].map((s) => {
-          return (
-            <div key={s.label} title={s.title} className="flex items-center gap-1.5 rounded-lg bg-[var(--surface-2)] px-2 py-1.5 min-w-0">
-              <MSym name={s.icon} size={13} className={`shrink-0 ${s.warn ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`} />
-              <span className="text-[var(--text-3)] truncate">{s.label}</span>
-              <span className={`num ml-auto font-semibold ${s.warn ? 'text-[var(--amber-text)]' : 'text-[var(--text-2)]'}`}>{s.v}</span>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* 驗收階段:永遠顯示同一列(沒進驗收就淡色),三張卡底部才會整齊 */}
-      <div className="mt-3 flex items-center gap-2 text-footnote w-full">
-        <MSym name="verified" size={14} className={!c.acceptance ? 'text-[var(--text-3)] opacity-60' : c.acceptance.overdue ? 'text-[var(--red-text)]' : c.acceptance.finished ? 'text-[var(--green-text)]' : 'text-[var(--blue-text)]'} />
-        <span className={c.acceptance ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}>
-          驗收：{c.acceptance ? c.acceptance.label : '尚未進入驗收程序'}
+            <Badge color={STATUS_COLOR[c.status] || 'slate'}>{c.status}</Badge>
+          </span>
+          <span className="block text-caption text-[var(--text-3)] num mt-0.5">
+            {c.code || '—'}
+            {c.latestPeriod != null && <> · 最近估驗 第 {c.latestPeriod} 期{c.latestStatus ? `（${c.latestStatus}）` : ''}</>}
+          </span>
         </span>
-        {c.acceptance && <span className="num text-[var(--text-3)] ml-auto">{c.acceptance.done}/{c.acceptance.total}</span>}
-      </div>
-    </Surface>
+        <span className="flex items-center gap-3 text-caption tabular-nums">
+          {counts.map((s) => (
+            <span key={s.label} title={s.title} className={`flex items-center gap-1 ${s.v > 0 ? 'text-[var(--amber-text)] font-medium' : 'text-[var(--text-3)]'}`}>
+              {s.label} <span className="num">{Number(s.v) || 0}</span>
+            </span>
+          ))}
+        </span>
+        {clickable && <MSym name="chevron_right" size={15} className="text-[var(--text-3)] shrink-0" />}
+      </button>
+    </li>
   )
 }
