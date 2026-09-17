@@ -1,9 +1,16 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-17｜P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-17 T0：本機 pgTAP 測試隔離（PR #107）
+
+- `npm run test:db`（新 runner：`supabase db start` 起一次性資料庫 `PMIS_pgtap_<pid>` 從零套 61 支 migration＋seed，跑完刪）：41 檔、1,131 通過、0 失敗，與 CI `pgtap`（main `d3b7d35`）的 41 檔 1,131 完全一致；一次性資料庫建置約 25 秒、整趟約 40 秒。共用開發資料庫 `supabase_db_PMIS` 在殘留列（1 專案、3 成員）仍在的情況下，執行前後 public／auth／storage／supabase_migrations 共 86 張表的列數快照 md5 相同；執行後無 `*_pgtap_*` 容器、volume、網路殘留。
+- 中斷與殘留：`db start` 進行中送 SIGINT，一次性資料庫仍被清掉；預先塞入 pid 已死的 `PMIS_pgtap_999998` 容器與 `..._999999` volume，下次執行自動清除。
+- `npx vitest run scripts/test-pgtap.test.js` 14 項；`npm run lint`、`npm test`、`npm run check:docs` 見 PR。
+- 未做：無正式環境變更、無 migration；`ai_platform.sql`／`p0_02_project_party_role.sql` 的全庫計數斷言未改——在從零建的資料庫上它們同時驗「沒有多出別的列」，語意正確。
 
 ### 2026-09-17 P4a：監造確認量與估驗上限的純計算層（PR #103）
 

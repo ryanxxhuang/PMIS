@@ -20,15 +20,11 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      # 與本機跑法同一套(docs/REAL_BACKEND_E2E.md 的 staging 章節、
-      # colima 最小服務組):起本機 stack → db reset 套全部 migrations →
-      # 容器內 psql 逐檔執行。排除的服務 pgTAP 用不到;未知服務名 CLI 只警告。
-      - name: 啟動本機 Supabase(最小服務組)
-        run: supabase start -x analytics,vector,edge-runtime,imgproxy,inbucket,realtime,storage,studio
-      - name: 從零套用全部 migrations
-        run: supabase db reset
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - name: 執行全套 pgTAP
+      # 與本機同一條路徑(scripts/test-pgtap.js):runner 自己用 `supabase db start`
+      # 起一個一次性資料庫(獨立 project_id),從零套全部 migrations 與 seed,
+      # 容器內 psql 逐檔執行,跑完即刪。不再另外 `supabase start`／`db reset`。
+      - name: 執行全套 pgTAP(一次性資料庫從零套用)
         run: npm run test:db

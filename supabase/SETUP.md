@@ -7,11 +7,10 @@
 安裝 Docker 相容 runtime 與 [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)。macOS 可用 Homebrew；不要用不支援的 `npm install -g supabase`。資料庫唯一真相是 [migrations](migrations/)；舊 schema.sql 已移除，歷史可由 Git 追溯。
 
 ```bash
-supabase start
 npm run test:db
 ```
 
-`test:db` 使用 [共用 pgTAP runner](../scripts/test-pgtap.js)，依 config.toml 的 project_id 找容器，不挑第一台 Supabase；可用 DB_CONTAINER 明確指定。檢查 SQL exit code、TAP 計畫與失敗列，不把半途失敗算通過。它不 reset DB；`supabase db reset` 只對可丟棄環境執行，CI 用它驗全部 migration 從零套用。
+`test:db` 使用 [共用 pgTAP runner](../scripts/test-pgtap.js)，本機與 CI 同一條路徑：每次在臨時工作目錄以獨立 project_id（`<project_id>_pgtap_<pid>`、隨機 DB 埠）執行 `supabase db start`，由 CLI 從零建一次性資料庫（含 auth／storage／realtime 服務 migration、全部 [migrations](migrations/) 與 [seed.sql](seed.sql)），容器內 psql 逐檔跑 [tests](tests/)，跑完 `supabase stop --no-backup` 連容器、volume、網路一起刪。它不連 `supabase start` 起的開發資料庫（`supabase_db_PMIS`），那套不必在跑、裡面的資料也不受影響；兩個 worktree 同時跑互不干擾；被中斷留下的一次性資料庫（pid 已不存在）下次執行自動清掉。只需 Docker 與 Supabase CLI。檢查 SQL exit code、TAP 計畫與失敗列，不把半途失敗算通過。`supabase db reset` 仍只對可丟棄環境執行。
 
 colima 需掛載 repo 所在磁碟，否則 Edge 容器看不到 functions；既有本機 service_role grants 由 seed.sql 對齊測試需要，不將 seed 當正式 migration。照片／契約私有 bucket 與政策由 migrations 建立。
 
