@@ -157,7 +157,8 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P4a、P4b、P4e、P5a–c、P6c）之�
 | 單元 | 分支／PR | commit | migration | 部署 | 已驗證 | 下一步 |
 |---|---|---|---|---|---|---|
 | P0 | `codex/slimming-p0-design`／PR #102 | `881702a`（merge commit 見 Git） | 無 | 無（純文件） | `npm run check:docs` 55 檔、355 連結、0 錯誤；CI 見 PR | P1a 與 P4a |
+| P1a | `codex/slimming-p1a-nav`／PR #104 | `5bb6a1d`（merge commit 見 Git） | 無 | 前端隨 main 由 Workers Builds 自動建置（合併後 `check:prod` 核對） | `npm test` 120 檔 1,255 項；lint／build／`check:docs` 55 檔 355 連結 0 錯；Demo E2E 10 支 71 項全綠（reachability 25/24/24 條、a11y 三角色 375＋1024 全路由）；內建 Preview 375px 底欄／抽屜／`/site` 核對 | P1b 退場頁唯讀化（/cost、/audit 已 hidden）；P1c 只剩文案（底欄已＝四入口＋更多）；P1d 同步 route-registry-governance／UIUX §0 |
 | P4a | `codex/slimming-p4a-calc`／PR #103 | `eea40b3`（merge commit 見 Git） | `20260917120000_confirmed_quantity_calc`（只型別與純函式；rollback 檔同名 `.down.sql`） | 正式 `supabase db push` 於合併後執行，結果記 `CURRENT.md` §6.3 | pgTAP `confirmed_quantity_calc.sql` 83/83（本機 `supabase migration up` 後）；本機全套 41 檔 1,125 通過，`ai_platform`／`p0_02` 的計數斷言因共用本機 DB 殘留列（1 專案、3 成員）假失敗、與本支無關，以 CI 從零套用為準；`check:docs` 55 檔 0 錯誤；CI 見 PR | P2a（DB 單元循序）；P4b 依設計 §3.2 介面把表資料餵入純函式，不重寫算法 |
-| P1a–P3、P4b–P7c | — | — | — | — | — | 依 §5 順序 |
+| P1b–P3、P4b–P7c | — | — | — | — | — | 依 §5 順序 |
 
 歷程規則：每單元合併後更新本表（PR 編號、merge commit、migration 版本、部署日期、驗證指令與結果）；正式環境狀態同時寫回 `CURRENT.md` §6.3。
