@@ -33,7 +33,7 @@
 
 ### 2.2 新增或加欄（最少必要）【設計；P2a 已實作者以 migration `20260917201000_field_documents` 為準】
 
-實作原則（P2a 定案，之後的 RPC／Edge 都建立在這上面）：**「使用者路徑」**＝`auth.uid()` 不為 null 的寫入，含 authenticated 直接寫入與 security definer RPC；**「service 路徑」**＝無 JWT（Edge service client、migration）。客戶端能寫哪些欄位由**欄位級 grant** 決定（PostgREST 只送出客戶端給的鍵，沒授權的欄位一律 `42501`），伺服器事實由 trigger 蓋寫或拒絕變更；結構不變量對所有寫入者一體適用。
+實作原則（P2a 定案，之後的 RPC／Edge 都建立在這上面）：**「使用者路徑」**＝`auth.uid()` 不為 null 的寫入，含 authenticated 直接寫入與 security definer RPC；**「service 路徑」**＝無 JWT（Edge service client、migration）。客戶端能寫哪些欄位由**欄位級 grant** 決定（PostgREST 只送出客戶端給的鍵，沒授權的欄位一律 `42501`），伺服器事實由 trigger 蓋寫或拒絕變更；結構不變量對所有寫入者一體適用。列級 guard 管不到 TRUNCATE（不觸發 row trigger、不受 RLS 約束），因此 H1（migration `20260917213900`）把 anon／authenticated／service_role 對所有 public 表的 TRUNCATE／REFERENCES／TRIGGER／MAINTAIN 收回並修正 default privileges——版本／簽署／提送列「不可變」才是對三個 API 角色都成立的保證，不只是對 DELETE。
 
 **`photo_intakes`（一次上傳＝一批）**
 

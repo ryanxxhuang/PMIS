@@ -6,7 +6,7 @@
 
 `audit_events` 保存專案、entity、語意 event_type、動作時間、before／after、metadata 與操作時的身分快照。業務 AFTER trigger 呼叫內部 `record_audit_event`；業務變更與事件同交易成功或回滾。前端不 INSERT 事件，已移除 Store 內無作用的 `log()` 相容層。
 
-authenticated 只有 SELECT，INSERT／UPDATE／DELETE grants 收回；immutable guard 也擋有 JWT 的特權寫入，沒有專案 admin 例外。`auth.uid() is null` 的 DBA 維護是獨立邊界。刪專案的 FK cascade 依父列已消失放行，不提供使用者刪改單筆歷史的 API。
+authenticated 只有 SELECT，INSERT／UPDATE／DELETE grants 收回；immutable guard 也擋有 JWT 的特權寫入，沒有專案 admin 例外。`auth.uid() is null` 的 DBA 維護是獨立邊界。刪專案的 FK cascade 依父列已消失放行，不提供使用者刪改單筆歷史的 API。TRUNCATE 不受 RLS 約束也不觸發列級 guard，是唯一能繞過上述保證的 DML 類操作：自 migration `20260917213900` 起 anon／authenticated／service_role 對所有 public 表都沒有 TRUNCATE／REFERENCES／TRIGGER／MAINTAIN，default privileges 一併修正，新表不會再自動帶；只有表 owner（`postgres`，即 migration）能做。
 
 專案 BEFORE DELETE trigger 將案名、操作人、時間、IP 與原事件數寫入獨立的 `project_deletion_records`；該表不掛專案 FK，只供平台管理員讀取，禁止 UPDATE／DELETE。它保留刪除證據，不保留原 audit_events 的內容。
 
