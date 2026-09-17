@@ -1,8 +1,8 @@
 # 目前系統現況
 
-> CURRENT｜2026-09-14｜三方操作流程優化；正式發布狀態見 §6.3。
-> 包含契約整理、Apple UI、D-022、工安清單／詳情殼，以及全案程式與文件整理；驗證見 [BASELINE](docs/BASELINE.md)。前端已由 main 自動部署；DB／Edge 尚未同步，版本與核對範圍見 §6.3。
-> 進行中工作（D-026 產品瘦身與四類文書、監造確認量估驗聯動）見 [續接清單](docs/reviews/2026-09-17-product-slimming-worklog.md)；本檔只記已上線現況，該包目前只有設計文件，程式與 DB 未變。
+> CURRENT｜2026-09-17｜三方操作流程優化＋D-026 P4a 純計算層；正式發布狀態見 §6.3。
+> 包含契約整理、Apple UI、D-022、工安清單／詳情殼，以及全案程式與文件整理；驗證見 [BASELINE](docs/BASELINE.md)。前端已由 main 自動部署；DB 已同步至 `20260917120000`、Edge 最後重佈 2026-09-11，版本與核對範圍見 §6.3。
+> 進行中工作（D-026 產品瘦身與四類文書、監造確認量估驗聯動）見 [續接清單](docs/reviews/2026-09-17-product-slimming-worklog.md)；本檔只記已上線現況：該包目前上線的只有 P4a 的純函式 migration（尚無呼叫端），其餘仍是設計文件。
 
 ## 1. 產品與範圍
 
@@ -60,10 +60,11 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 ### 6.2 驗證
 
-當前結果與指令只見 [BASELINE](docs/BASELINE.md)。單元、Demo E2E、本機真後端 E2E 固定資料模式、pgTAP、17 支 Edge 的 Deno 型別檢查均通過；本輪未動 migration。真模型抽取仍未驗，抽取準確率／召回率未用真契約量測；`completed` 不代表語意正確。真人手機輪與真案三角色實機驗收仍待完成。
+當前結果與指令只見 [BASELINE](docs/BASELINE.md)。單元、Demo E2E、本機真後端 E2E 固定資料模式、pgTAP、17 支 Edge 的 Deno 型別檢查均通過；2026-09-17 P4a 新增一支只含純函式的 migration `20260917120000`（已套正式，見 §6.3），其餘未動 migration。真模型抽取仍未驗，抽取準確率／召回率未用真契約量測；`completed` 不代表語意正確。真人手機輪與真案三角色實機驗收仍待完成。
 
 ### 6.3 正式環境最後核對（不是即時狀態）
 
+- **2026-09-17 P4a 監造確認量純計算層（D-026）**：PR #103 已合併（merge commit `591570c`，分支 `codex/slimming-p4a-calc`）。PR 檢查 CI／pgTAP 皆通過（pgTAP 從零套用 41 檔 1,131 通過，新增 `confirmed_quantity_calc.sql` 83 條）。同日 `supabase db push` 套用 `20260917120000_confirmed_quantity_calc`（只新增 2 型別＋14 支 IMMUTABLE／security invoker 純函式，不動任何表、trigger、policy 或資料列）；`migration list --linked` 核對本地與遠端 61 筆全部對齊；正式庫唯讀核對 14 支函式皆 IMMUTABLE、security invoker，anon／authenticated 均不可執行。不含 Edge 或前端變更；P4b 之前這些函式沒有任何呼叫端，對現有流程零行為影響。使用者同日對續接清單 §6 的答覆記入 D-026 第 7 點。
 - **2026-09-16 補強包 A（Codex 實測 W01–W04）**：PR #88 已合併（merge commit `2fb555a`，分支 `fix/uiux-package-a`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（116 檔 1,226 項單元、52 項相關 Demo E2E）；前端由 Cloudflare 自動建置，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。Codex 報告已隨 PR #87 入庫。
 - **2026-09-16 補強包 B（Codex 實測 W05／W06／W08／D01）**：PR #90 已合併（merge commit `fe0e1bd`，分支 `fix/uiux-package-b`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（116 檔 1,228 項單元、55 項相關 Demo E2E）；前端由 Cloudflare 自動建置，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
 - **2026-09-16 補強包 C（Codex 實測 W07／W09）**：PR #92 已合併（merge commit `e54d39a`，分支 `fix/uiux-package-c`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（116 檔 1,228 項單元、45 項相關 Demo E2E）；內容為 W09 文案與 W07 口徑對照文件，不含進度公式、DB migration 或 Edge 部署；W07 標示文案待 C1 決策後另行實作。
@@ -74,7 +75,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 - **2026-09-15 UIUX 階段 1–6（桌機三角色流程）**：PR #85 已合併（merge commit `afdaefb`，分支 `ui/uiux-stages-1-6`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（114 檔 1,218 項單元、10 檔 70 項 Demo E2E、lint／build／check:docs）；前端由 Cloudflare 自動建置，建置版本以 Cloudflare 後台為準。前端變更，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
 - **2026-09-14 UIUX 工作包**：已隨 PR #83 合併（`7156aef`）。前端變更，不含 DB migration 或 Edge 部署。
 
-- **DB**：2026-09-11 `supabase db push` 套用 `20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`；`migration list --linked` 核對本地與遠端 60 筆全部對齊，最新 `20260911110000`。
+- **DB**：2026-09-17 `supabase db push` 套用 `20260917120000_confirmed_quantity_calc`（P4a 純函式）；`migration list --linked` 核對本地與遠端 61 筆全部對齊，最新 `20260917120000`。前一次 2026-09-11 套用 `20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`。
 - **Edge**：2026-09-11 以 `--use-api` 從 main（含 `_shared/` 重構）重佈全部 17 支；`functions list` 核對每支版本均 +1（agent-run 14、extract-requirements 13、send-reminders 16、classify-document 3 等）。線上另有 `demo-request` 一支由行銷站 repo 部署，不在本 repo。
 - **前端**：main 每次合併由 Cloudflare Workers 自動建置。2026-09-11 PR #64（`8be082a`）建置版本 `fc99c933-32f5-47c6-b0e6-726e50b2956e`，首頁 HEAD 200、七項安全標頭齊全；同日 PR #67／#69／#70／#76／#78 及 2026-09-12 PR #79 陸續合併，各次建置版本未逐一記錄，以 Cloudflare 後台為準。這不代表登入後業務流程或正式後端已驗證。
 - **舊站**：2026-09-11 GitHub Pages API 仍回 built，來源為 `gh-pages`；此部署分支保留。`pmis.pages.dev` 最後核對為 2026-09-07，退場待另行處理。
