@@ -1,19 +1,22 @@
 import { useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLE_WORK, WORK_GUIDANCE, visibleNavGroups, roleWorkLinks } from '../lib/navConfig.js'
+import { WORK_TITLE, WORK_GUIDANCE, visibleNavGroups, roleWorkLinks } from '../lib/navConfig.js'
 import { taskReturnOf, isTaskReturnSource } from '../lib/taskReturn.js'
 import { MSym } from './icons.jsx'
 import { ModalShell, SearchField } from './listDetail.jsx'
 import { buttonClass } from './ui.jsx'
 import { BELOW_MD_QUERY } from '../lib/useMediaQuery.js'
 
+// 桌機首頁的主入口列(D-026 四主入口:今日工作就是這一頁,其餘三個主入口群組列在這裡)。
+// 名稱與側欄「工作」分區同一份(WORK_TITLE):三角色拿到的是同三個群組,不再依角色
+// 冠「廠商常用」——那是舊的「角色常用子頁」說法,入口早已不分角色。手機由底欄承接,不重複。
 export function CommonWork() {
   const { currentUser, can, isPlatformAdmin } = useStore()
   const org = currentUser?.org_type
   return (
-    <nav aria-label="常用工作" className="hidden md:flex flex-wrap items-center gap-2">
-      <span className="text-footnote text-[var(--text-3)] mr-1">{ROLE_WORK[org]?.label}常用</span>
+    <nav aria-label={WORK_TITLE} className="hidden md:flex flex-wrap items-center gap-2">
+      <span className="text-footnote text-[var(--text-3)] mr-1">{WORK_TITLE}</span>
       {roleWorkLinks(org, can?.override, isPlatformAdmin).map((n) => (
         <Link key={n.to} to={n.to} className={buttonClass('outline', 'sm')}><MSym name={n.icon} size={16} />{n.label}</Link>
       ))}

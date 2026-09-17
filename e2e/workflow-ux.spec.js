@@ -1,14 +1,15 @@
 import { test, expect } from '@playwright/test'
 import { loginAs, gotoHash, ROLES } from './helpers.js'
-import { roleWorkLinks } from '../src/lib/navConfig.js'
+import { roleWorkLinks, WORK_TITLE } from '../src/lib/navConfig.js'
 
-// 常用入口與手機底欄=三個主入口群組(D-026 §4),期望值直接從 navConfig 算,不手抄角色清單
+// 首頁主入口列與手機底欄=三個主入口群組(D-026 §4),期望值直接從 navConfig 算,不手抄角色清單;
+// 主入口列的名稱=側欄「工作」分區名(WORK_TITLE),不再是「常用工作」
 for (const role of Object.keys(ROLES)) {
   const links = roleWorkLinks(role, false, false)
   const names = links.map((n) => n.label)
-  test(`${role}:常用工作與手機底欄=四主入口，任一子頁底欄群組仍亮，功能搜尋保持權限`, async ({ page }) => {
+  test(`${role}:首頁主入口列與手機底欄=四主入口，任一子頁底欄群組仍亮，功能搜尋保持權限`, async ({ page }) => {
     await loginAs(page, role)
-    const quick = page.getByRole('navigation', { name: '常用工作' })
+    const quick = page.getByRole('navigation', { name: WORK_TITLE, exact: true })
     await expect(quick.getByRole('link')).toHaveText(names)
     await page.setViewportSize({ width: 375, height: 812 })
     const bottom = page.getByRole('navigation', { name: '快速導覽' })

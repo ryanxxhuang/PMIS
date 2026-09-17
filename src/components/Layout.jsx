@@ -302,14 +302,26 @@ function TopBar({ scrolled, dueCount = 0, mode, onCycleTheme, copilotOpen, onCop
 }
 
 export function WebLayout({ children }) {
+  // <md 側欄是抽屜,不是常駐導覽;≥md 同一個 aside 由 CSS 變成常駐側欄(md:translate-x-0),
+  // 抽屜這個東西就不存在了。isBelowMd 是「抽屜存不存在」的唯一事實,底下所有依賴
+  // 「抽屜開著」的行為都從它推導,也決定內容區的分頁列要不要照常出現(PageTabs)。
+  const isBelowMd = useMediaQuery(BELOW_MD_QUERY)
+  // menuOpen 是使用者「開抽屜」的意圖;drawerOpen=抽屜真的開著=抽屜存在且意圖為開。
+  // 鎖背景捲動、Esc、遮罩、焦點進出、aria-expanded、滑入 transform 一律讀 drawerOpen——
+  // 先前各自讀 menuOpen,抽屜開著把視窗拉寬到 ≥768 時抽屜被 CSS 收掉、鎖定卻還在,
+  // body 固定在 top:-scrollY 讓內容鎖在畫面外(空白),要按 Esc 才復原。
+  // 同一個事實推導後,斷點一變,鎖定與抽屜在同一次 render 一起消失,不需要在 resize 補特例。
   const [menuOpen, setMenuOpen] = useState(false)
+  const drawerOpen = isBelowMd && menuOpen
+  // 抽屜消失時把意圖一起清掉:否則縮回手機寬度會自己彈開一個沒人按的抽屜,焦點還被搶走。
+  useEffect(() => { if (!isBelowMd) setMenuOpen(false) }, [isBelowMd])
   // 抽屜的觸發鈕是 BottomNav 的「更多」(規範 §9.3;頂欄漢堡已退場),關閉時焦點還給它
   const moreBtnRef = useRef(null)
   const drawerCloseRef = useRef(null)
-  const prevMenuOpen = useRef(false)
-  useEscape(menuOpen, () => setMenuOpen(false))
+  const prevDrawerOpen = useRef(false)
+  useEscape(drawerOpen, () => setMenuOpen(false))
   // 抽屜開著鎖背景捲動;與 DetailDrawer / ModalShell 同一支 hook(引用計數,疊開不互相干擾)
-  useScrollLock(menuOpen)
+  useScrollLock(drawerOpen)
   // --vvh(可視視口高)全站只寫這一次;sheet / 抽屜 / 對話框的高度都讀它
   useVisualViewport()
   // 站內離頁保護(W01):有未存檔輸入(施工日誌、自主檢查表)時,點任何站內連結先問;取消留在原頁
@@ -324,15 +336,16 @@ export function WebLayout({ children }) {
     setThemeMode(next)
     setThemeModeState(next)
   }
-  // 抽屜焦點管理:開啟移到關閉鈕、關閉還給「更多」鈕。prevMenuOpen 擋初載誤搶焦點
-  // （桌機 menuOpen 恆為 false,不會進到還原分支）。
+  // 抽屜焦點管理:開啟移到關閉鈕、關閉還給「更多」鈕。prevDrawerOpen 擋初載誤搶焦點
+  // （桌機 drawerOpen 恆為 false,不會進到還原分支;抽屜因拉寬而消失時「更多」已是 display:none,
+  // focus() 靜默無效,不會把焦點丟到看不見的鈕上）。
   // 開啟聚焦不能同步做也不能只推遲一個 frame:visibility 在 transition 清單裡,
   // transition progress=0 時 computed 仍是 hidden,hidden 元素不可聚焦、focus()
   // 靜默失敗;progress 何時 >0 又依環境 frame 節奏而定(CI 慢機第二個 rAF 仍打不到)。
   // 改成有界重試:每 25ms 試一次直到焦點真的落上,500ms 內必然涵蓋 transition 起跑。
   useEffect(() => {
-    if (menuOpen) {
-      prevMenuOpen.current = true
+    if (drawerOpen) {
+      prevDrawerOpen.current = true
       let tries = 0
       let timer = null
       const attempt = () => {
@@ -343,16 +356,14 @@ export function WebLayout({ children }) {
       attempt()
       return () => clearTimeout(timer)
     }
-    if (prevMenuOpen.current && !document.querySelector('[aria-modal="true"]')) moreBtnRef.current?.focus()
-    prevMenuOpen.current = false
-  }, [menuOpen])
+    if (prevDrawerOpen.current && !document.querySelector('[aria-modal="true"]')) moreBtnRef.current?.focus()
+    prevDrawerOpen.current = false
+  }, [drawerOpen])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
   // 平板(768–1279)一律 icon rail:collapsed 是「衍生值」不回寫 localStorage,
   // 平板逛一圈不會污染桌機(≥1280)的收合偏好;Playwright 預設 1280×720 落在記憶分支。
   const isTablet = useMediaQuery(TABLET_QUERY)
   const collapsed = isTablet || sidebarCollapsed
-  // <md 側欄是抽屜,不是常駐導覽:內容區的分頁列必須照常出現(手機形狀不在本輪範圍,只保證不回歸)
-  const isBelowMd = useMediaQuery(BELOW_MD_QUERY)
   // scroll edge:內容捲到 chrome 底下才浮出界線(置頂時頂欄與背景齊平)
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
@@ -376,7 +387,7 @@ export function WebLayout({ children }) {
   // isPlatformAdmin 是獨立的「平台」維度(僅控制 /admin 入口可見;真正把關在 DB 的 admin RPC)。
   const org = currentUser?.org_type || 'contractor'
   const visibleGroups = visibleNavGroups(org, can?.override, isPlatformAdmin)
-  // 目前頁所屬的工作群組(參考項與 /dashboard 沒有群組 → null)
+  // 目前頁所屬的群組(/dashboard、/agent、/alerts 這類非群組路由 → null)
   const groupOf = (path) => visibleGroups.flatMap((g) => g.items).find((n) => n.tabs?.some((t) => t.to === path)) || null
   const activeGroup = groupOf(pathname)
   // 「工作」群組:進頁或切換路由時,目前頁所屬群組自動展開(入口方案 B,2026-09-15);
@@ -410,7 +421,7 @@ export function WebLayout({ children }) {
       <TopBar scrolled={scrolled} dueCount={dueMine.length} mode={themeMode} onCycleTheme={cycleTheme}
         copilotOpen={copilotOpen} onCopilotToggle={() => setCopilotOpen((o) => !o)} />
       {/* 手機:點背景關閉抽屜(蓋過頂欄,抽屜再蓋過遮罩);純滑鼠 scrim,對報讀器隱藏 */}
-      {menuOpen && <div aria-hidden="true" className="fixed inset-0 z-50 bg-[var(--scrim)] md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
+      {drawerOpen && <div aria-hidden="true" className="fixed inset-0 z-50 bg-[var(--scrim)] md:hidden enter-fade" onClick={() => setMenuOpen(false)} />}
       {/* 關閉時 max-md:invisible:visibility hidden = 不可聚焦＋離開 a11y 樹,擋掉
           「Tab 進看不見的抽屜」;visibility 進 transition 清單讓滑出動畫跑完才隱藏
           （hidden→visible 則是動畫起點就顯示,開啟不閃爍）。桌機 md 斷點不受影響。 */}
@@ -422,7 +433,7 @@ export function WebLayout({ children }) {
         className={`chrome-glass w-72 ${collapsed ? 'md:w-20' : 'md:w-64'} border-r border-[var(--border-card)] flex flex-col print:hidden
           fixed top-[var(--top-bar-h)] bottom-0 left-0 z-[55] md:z-30 transition-[width,transform,visibility] duration-300 [transition-timing-function:var(--ease-drawer)]
           md:translate-x-0
-          ${menuOpen ? 'translate-x-0' : '-translate-x-full max-md:invisible'}`}
+          ${drawerOpen ? 'translate-x-0' : '-translate-x-full max-md:invisible'}`}
       >
           <div className="md:hidden flex items-center justify-between border-b border-[var(--border-2)] px-4 py-3">
             <span className="text-sm font-semibold text-[var(--text)]">功能選單</span>
@@ -556,7 +567,7 @@ export function WebLayout({ children }) {
       {/* 主畫面槽=「現在輪到我」:它的 to 就是落地頁(/dashboard),等對方/已完成是同頁的分段,
           頁內 Segmented 就能切,不佔手機的格子 */}
       <BottomNav items={roleWorkLinks(org, can?.override, isPlatformAdmin)} home={BALL_SOURCES.find((b) => b.key === 'mine')}
-        menuOpen={menuOpen} onMore={() => setMenuOpen(true)} moreRef={moreBtnRef} />
+        menuOpen={drawerOpen} onMore={() => setMenuOpen(true)} moreRef={moreBtnRef} />
       <CopilotFab open={copilotOpen} onOpenChange={setCopilotOpen} />
     </div>
   )

@@ -1,7 +1,10 @@
 // 專案初始化五步清單的推導規則(原本住在 pages/web/Dashboard.jsx,重構波次 8
 // 搬來——測試要釘住「每一步何時算完成」,不該為此把整頁的 store/supabase/
 // 圖表 import 圖拉進來)。純函式:所有輸入由呼叫端注入,這裡不查 DB、不讀時鐘。
+// 指路文案裡的頁名取自 navConfig(navLabel):曾寫「專案成員」頁而頁面早已叫「三方成員」。
 //
+import { navLabel } from './navConfig.js'
+
 // 初始化五步清單(W2-2 建立、W8-3A 依 D-014 修訂、D-020 後補「設定開工日」):
 // 真專案在正式模式開啟前顯示。
 // 狀態全部由既有資料推導,不建 onboarding 資料表、不做逐步精靈;每步直達既有工作頁。
@@ -56,13 +59,13 @@ export function buildSetupSteps(snap, { imported, commencement, waitingOnCommenc
       to: '/requirements', label: '設定開工日', owner: '專案建立者',
       done: !!commencement,
       detail: commencement ? `開工日 ${commencement}・開工類期限已可推算到期日`
-        : waitingOnCommencement ? `${waitingOnCommencement} 條契約義務等待開工日才能排入時程;到「契約重點」的履約期程設定`
-          : '接獲開工通知後,到「契約重點」的履約期程設定實際開工日(非預定日)',
+        : waitingOnCommencement ? `${waitingOnCommencement} 條契約義務等待開工日才能排入時程;到「${navLabel('/requirements')}」的履約期程設定`
+          : `接獲開工通知後,到「${navLabel('/requirements')}」的履約期程設定實際開工日(非預定日)`,
     },
     {
       to: '/members', label: '開啟正式模式', owner: '專案建立者',
       done: false, // 開啟後整張清單就不再顯示,所以在清單存在期間固定未完成
-      detail: '由專案建立者在「專案成員」頁開啟；前面步驟未完成或三方未到齊也可以開啟，系統會再次確認',
+      detail: `由專案建立者在「${navLabel('/members')}」頁開啟；前面步驟未完成或三方未到齊也可以開啟，系統會再次確認`,
     },
   ]
 }

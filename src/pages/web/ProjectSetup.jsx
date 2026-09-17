@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Field, ErrorBanner, Input, PageHeader } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
+import { navLabel } from '../../lib/navConfig.js'
+
+// 基準日之後在 /requirements(契約重點)頁的履約期程設定;指路名稱取自 navConfig,側欄改名不漏
+const REQ_PAGE = navLabel('/requirements')
 
 // 正式站一律留空,用 placeholder 當範例提示;不預填任何真實案值,避免使用者只改名就
 // 建出錯的契約/機關/廠商(P1-04)。施工廠商也不自動帶登入者公司。
@@ -53,11 +57,11 @@ export default function ProjectSetup() {
           {/* 前兩欄寫 projects.start_date/end_date(契約預定值);期限引擎的開工基準是
               另一欄 commencement_date——預定與實際刻意分開,引擎照猜的日期跑會發錯提醒。
               第三欄(選填)服務「導入進行中案」:開工日早已知道,不該逼使用者建完案
-              再去找設定入口;還沒開工就留空,之後在「契約重點」的履約期程設定。 */}
+              再去找設定入口;還沒開工就留空,之後在契約重點頁的履約期程設定。 */}
           <div className="grid sm:grid-cols-3 gap-4">
             <Field label="預計開工日" hint="契約預定值,僅供參考;期限引擎不用它起算。"><Input type="date" value={form.start_date} onChange={set('start_date')} /></Field>
-            <Field label="預計竣工日" hint="完工類期限以此為到期基準;可日後在「契約重點」的履約期程修改。"><Input type="date" value={form.end_date} onChange={set('end_date')} /></Field>
-            <Field label="實際開工日(選填)" hint="已開工的案子才填,開工類期限以此起算;未開工請留空,接獲開工通知後再到「契約重點」的履約期程設定。"><Input type="date" value={form.commencement_date} onChange={set('commencement_date')} /></Field>
+            <Field label="預計竣工日" hint={`完工類期限以此為到期基準;可日後在「${REQ_PAGE}」的履約期程修改。`}><Input type="date" value={form.end_date} onChange={set('end_date')} /></Field>
+            <Field label="實際開工日(選填)" hint={`已開工的案子才填,開工類期限以此起算;未開工請留空,接獲開工通知後再到「${REQ_PAGE}」的履約期程設定。`}><Input type="date" value={form.commencement_date} onChange={set('commencement_date')} /></Field>
           </div>
           <ErrorBanner msg={err} />
           <Button type="submit" disabled={loading}>{loading ? '建立中…' : '建立專案'}</Button>

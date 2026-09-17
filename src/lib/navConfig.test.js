@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   navGroups, routeAllowed, routeRegistry, visibleNavGroups, defaultLandingPath, BALL_SOURCES, BALL_SOURCES_TITLE,
-  MAIN_ENTRY_PATHS, ROLE_WORK, roleWorkLinks, WORK_GUIDANCE,
+  MAIN_ENTRY_PATHS, ROLE_WORK, roleWorkLinks, WORK_GUIDANCE, WORK_TITLE, navLabel, navEntryFor,
 } from './navConfig.js'
 
 const flatNav = (groups) => groups.flatMap((g) => g.items)
@@ -221,6 +221,34 @@ describe('三方常用入口(roleWorkLinks)=三個主入口群組', () => {
   })
   it('每個主入口的總覽頁都有三方的操作提示(頁首與尋找功能共用)', () => {
     for (const path of MAIN_ENTRY_PATHS) for (const org of ORGS) expect(WORK_GUIDANCE[path]?.[org], `${path} ${org}`).toBeTruthy()
+  })
+})
+
+describe('頁面文案的名稱來源(P1c):WORK_TITLE / navLabel / navEntryFor', () => {
+  it('「工作」分區名只有一份:側欄第一分區的 title 就是首頁主入口列的名字', () => {
+    expect(WORK_TITLE).toBe('工作')
+    expect(navGroups[0].title).toBe(WORK_TITLE)
+  })
+  it('navLabel 回該路由自己的名字(子頁名);navEntryFor 回它所屬的主/次入口群組項', () => {
+    expect(navLabel('/members')).toBe('三方成員')      // 初始化清單曾寫「專案成員」
+    expect(navLabel('/contract')).toBe('專案文件')
+    expect(navLabel('/requirements')).toBe('契約重點')
+    expect(navEntryFor('/requirements')).toMatchObject({ to: '/requirements', label: '履約時程' })
+    expect(navEntryFor('/deadlines')).toMatchObject({ to: '/requirements', label: '履約時程' })
+    expect(navEntryFor('/payments')).toMatchObject({ to: '/valuation', label: '估驗請款' })
+    expect(navEntryFor('/rfi')).toMatchObject({ to: '/submittals', label: '文件往來' })
+    expect(navEntryFor('/admin')).toMatchObject({ to: '/admin', label: '平台管理' }) // 扁平項=自己
+  })
+  it('hidden 項照樣查得到名字(退場頁的深連結文案仍要叫得出名);非導覽/未登記路由回 null', () => {
+    expect(navLabel('/cost')).toBe('成本管理')
+    expect(navEntryFor('/audit')).toMatchObject({ to: '/contract', label: '專案' })
+    expect(navLabel('/dashboard')).toBeNull()
+    expect(navEntryFor('/dashboard')).toBeNull()
+    expect(navLabel('/not-registered')).toBeNull()
+    expect(navEntryFor('/not-registered')).toBeNull()
+  })
+  it('每個登記的導覽路由都有非空 label(否則指路文案會渲染成空字串)', () => {
+    for (const n of allDefs()) expect(navLabel(n.to), n.to).toMatch(/\S/)
   })
 })
 
