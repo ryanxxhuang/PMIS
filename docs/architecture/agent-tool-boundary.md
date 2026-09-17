@@ -30,7 +30,7 @@
 
 ## agent_actions
 
-actor_user 是收件人，SELECT 同時限本人與專案存取資格；只有 service role 建立，不開 authenticated 寫入 grant／policy。角色只有三方，舊 field／qc 由 trigger 正規化成 contractor。
+actor_user 是收件人，SELECT 同時限本人與專案存取資格；只有 service role 建立，不開 authenticated 寫入 grant／policy。角色只有三方，舊 field／qc 由 trigger 正規化成 contractor。除 Agent 對話工具外，2026-09-17 P2b 起 Edge `draft-field-documents` 也以 service 寫兩種 kind：`draft_field_document`（照片起稿建立或新增 `field_documents` AI 版本；evidence 只存 intake／文件／版本／雜湊指標）與 `suggest_field_update`（文件已有人工版本時不覆寫，evidence.suggestion 帶建議內容），`actor_user`＝觸發起稿的使用者、`agent_role`＝批次上傳方；接受路徑由 P2d 簽署 RPC 的內部函式標 accepted／edited（[現場文書 §7](field-documents-lifecycle.md)）。
 
 人按接受／編修／拒絕後，前端 [agent slice](../../src/store/slices/agent.js) 才叫 resolve_agent_action；只允許本人 pending → accepted／edited／rejected，伺服器蓋 resolved_by／at 並同交易留 audit。expired 尚無排程路徑。需要寫業務資料的接受動作仍走既有 store action／RLS／guard，收下 handoff／audit_note 僅標覆核，不創造業務資料。
 

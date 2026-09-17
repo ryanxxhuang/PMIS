@@ -30,10 +30,10 @@ function parseTsFeatures(src) {
 describe('aiFeatures 前後端註冊表同步', () => {
   const tsFeatures = parseTsFeatures(tsSource)
 
-  it('兩邊都是 17 個功能', () => {
-    expect(AI_FEATURES).toHaveLength(17)
-    expect(tsFeatures).toHaveLength(17)
-    expect(AI_FEATURE_KEYS).toHaveLength(17)
+  it('兩邊都是 18 個功能', () => {
+    expect(AI_FEATURES).toHaveLength(18)
+    expect(tsFeatures).toHaveLength(18)
+    expect(AI_FEATURE_KEYS).toHaveLength(18)
   })
 
   it('key 集合與順序完全一致', () => {
@@ -78,7 +78,14 @@ describe('aiFeatures 前後端註冊表同步', () => {
   })
 
   it('key 不重複、edgeFunction 不重複', () => {
-    expect(new Set(AI_FEATURE_KEYS).size).toBe(17)
-    expect(new Set(AI_FEATURES.map((f) => f.edgeFunction)).size).toBe(17)
+    expect(new Set(AI_FEATURE_KEYS).size).toBe(18)
+    expect(new Set(AI_FEATURES.map((f) => f.edgeFunction)).size).toBe(18)
+  })
+
+  it('field_docs.draft(P2b):draft 類、trial 起、LLM、預設開啟,對應 draft-field-documents', () => {
+    expect(featureByKey['field_docs.draft']).toEqual({
+      key: 'field_docs.draft', label: '現場文書起稿(照片)', category: 'draft', edgeFunction: 'draft-field-documents',
+      minPlan: 'trial', isLlm: true, defaultEnabled: true,
+    })
   })
 })

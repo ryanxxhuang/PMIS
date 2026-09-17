@@ -1,0 +1,435 @@
+// draft-field-documents 流程(P2b):以記憶體 repo 與 stub 視覺驗
+// 冪等(重跑不重複建件、內容相同不加版本、有人工版本只留建議)、部分失敗與逐張重試、
+// 角色隔離(呼叫者≠上傳方拒絕;監造／機關批次不起施工日誌)、未配對(未匯標單)、
+// 重複照片、時間預算切斷與續跑、run 認領衝突、逐功能閘門 fail-closed。
+// stub 只證明流程,不證明模型辨識正確(模型品質見 P7b)。
+import { describe, it, expect } from 'vitest'
+import { runDraftFieldDocuments, MAX_ATTEMPTS } from './fieldDocDraftRun.ts'
+import type { DraftRepo, DraftVision, IntakePhotoRow, IntakeRow, PhotoAiPatch, VisionResult } from './fieldDocDraftRun.ts'
+import type { LeafWorkItem } from './fieldDocDraft.ts'
+
+const LEAVES: LeafWorkItem[] = [
+  { id: 'wi-steel', item_key: 'K1', item_no: '壹.一.1', description: '鋼筋,SD420W,#4(D13),加工及組立', unit: 'T', sort_order: 1 },
+  { id: 'wi-form', item_key: 'K2', item_no: '壹.一.2', description: '模板,普通模板,樓版,含支撐', unit: 'M2', sort_order: 2 },
+]
+
+type Doc = { id: string; doc_type: string; doc_date: string; intake_id: string | null; target_key: string | null; status: string; current_version_no: number; required_fields: unknown; recheck: unknown }
+type Ver = { document_id: string; version_no: number; author_kind: 'ai' | 'human'; content: unknown; attachments: unknown; field_sources: unknown; content_hash: string }
+
+type World = {
+  callerOrg: string
+  intake: IntakeRow
+  photos: WorldPhoto[]
+  leaves: LeafWorkItem[]
+  docs: Doc[]
+  versions: Ver[]
+  actions: Record<string, unknown>[]
+  finishes: Record<string, unknown>[]
+  photoPatches: { id: string; patch: PhotoAiPatch }[]
+  failUpdatePhoto?: (id: string) => { error: string; code?: string } | null
+  failInsertVersion?: string
+  downloadFail?: Set<string>
+  seq: number
+}
+
+const intake = (over: Partial<IntakeRow> = {}): IntakeRow => ({
+  id: 'i1', project_id: 'prj', uploader_org: 'contractor', log_date: null, status: 'received', attempts: 0,
+  run_started_at: null, last_progress_at: null, candidates: [], ...over,
+})
+type WorldPhoto = IntakePhotoRow & { intake_id?: string }
+const photo = (id: string, over: Partial<WorldPhoto> = {}): WorldPhoto => ({
+  id, storage_path: `prj/intake/i1/${id}.jpg`, content_sha256: null, ai_status: 'pending', ai_result: null,
+  work_item_id: null, caption: null, location: null, taken_at: '2026-09-17T02:00:00Z', created_at: `2026-09-17T02:00:0${id.length}Z`, ...over,
+})
+
+function world(over: Partial<World> = {}): World {
+  return {
+    callerOrg: 'contractor', intake: intake(), photos: [], leaves: LEAVES, docs: [], versions: [], actions: [], finishes: [], photoPatches: [], seq: 0, ...over,
+  }
+}
+
+// 記憶體版 repo:模擬 DB 的三條不變量——同日活文件唯一(23505)、版本號連續、有人工版本後 AI 不得寫
+function memoryRepo(w: World): DraftRepo {
+  return {
+    callerOrg: async () => w.callerOrg,
+    getIntake: async (id) => (id === w.intake.id ? { ...w.intake } : null),
+    claimIntake: async ({ expectedAttempts, nextAttempts, staleBefore, now }) => {
+      const stale = w.intake.run_started_at && (w.intake.last_progress_at ?? '') < staleBefore
+      if (w.intake.attempts !== expectedAttempts || (w.intake.run_started_at && !stale)) return 'conflict'
+      w.intake = { ...w.intake, status: 'recognizing', attempts: nextAttempts, run_started_at: now, last_progress_at: now }
+      return 'claimed'
+    },
+    listIntakePhotos: async (id) => w.photos.filter((p) => (p.intake_id ?? 'i1') === id).map((p) => ({ ...p })),
+    listPhotosByIds: async (ids) => w.photos.filter((p) => ids.includes(p.id)).map((p) => ({ ...p })),
+    downloadPhoto: async (path) => (w.downloadFail?.has(path) ? { error: '資料存取失敗（代碼 db_error）' } : { base64: `b64:${path}`, mime: 'image/jpeg' }),
+    updatePhoto: async (id, patch) => {
+      const f = w.failUpdatePhoto?.(id)
+      if (f) return f
+      w.photoPatches.push({ id, patch })
+      const p = w.photos.find((x) => x.id === id)!
+      Object.assign(p, patch)
+      return {}
+    },
+    listLeafWorkItems: async () => w.leaves,
+    getDailyLog: async () => null,
+    fetchWeather: async () => null,
+    listOpenInspections: async () => [],
+    findActiveDoc: async (t, d) => {
+      const doc = w.docs.find((x) => x.doc_type === t && x.doc_date === d && !['discarded', 'superseded'].includes(x.status))
+      return doc ? { id: doc.id, status: doc.status, current_version_no: doc.current_version_no, intake_id: doc.intake_id } : null
+    },
+    insertDoc: async (row) => {
+      if (w.docs.some((x) => x.doc_type === row.doc_type && x.doc_date === row.doc_date && !['discarded', 'superseded'].includes(x.status))) return { conflict: true }
+      const doc: Doc = { id: `doc${++w.seq}`, ...row, current_version_no: 0 }
+      w.docs.push(doc)
+      return { id: doc.id, status: doc.status, current_version_no: 0, intake_id: doc.intake_id }
+    },
+    latestVersion: async (docId) => {
+      const v = w.versions.filter((x) => x.document_id === docId).sort((a, b) => b.version_no - a.version_no)[0]
+      return v ? { version_no: v.version_no, author_kind: v.author_kind, content: v.content, attachments: v.attachments, content_hash: v.content_hash } : null
+    },
+    hasHumanVersion: async (docId) => w.versions.some((x) => x.document_id === docId && x.author_kind === 'human'),
+    insertVersion: async (row) => {
+      if (w.failInsertVersion) return { error: w.failInsertVersion }
+      if (w.versions.some((x) => x.document_id === row.document_id && x.author_kind === 'human')) return { error: '文件已有人工版本,AI 不得再寫入版本(改以 suggest_field_update 建議)' }
+      const next = w.versions.filter((x) => x.document_id === row.document_id).length + 1
+      if (row.version_no !== next) return { error: `版本號必須為下一版(${next})` }
+      const v: Ver = { document_id: row.document_id, version_no: row.version_no, author_kind: 'ai', content: row.content, attachments: row.attachments, field_sources: row.field_sources, content_hash: `hash${row.document_id}v${row.version_no}` }
+      w.versions.push(v)
+      return { version_no: v.version_no, content_hash: v.content_hash }
+    },
+    updateDoc: async (docId, patch) => { Object.assign(w.docs.find((x) => x.id === docId)!, patch); return {} },
+    insertAgentAction: async (row) => { w.actions.push(row); return { id: `act${++w.seq}` } },
+    finishIntake: async (id, patch) => { w.finishes.push(patch); w.intake = { ...w.intake, ...patch, candidates: patch.candidates } as IntakeRow; return {} },
+  }
+}
+
+type Classify = { caption?: string; is_construction?: boolean; legible?: boolean; has_board?: boolean; work_item_hint?: string; location?: string | null }
+function stubVision(opts: {
+  classify?: (base64: string) => VisionResult<unknown>
+  board?: (base64: string) => VisionResult<unknown>
+  calls?: string[]
+} = {}): DraftVision {
+  const ok = (c: Classify): VisionResult<unknown> => ({ data: { caption: '鋼筋綁紮', category: '施工作業', is_construction: true, legible: true, has_board: false, work_item_hint: '鋼筋加工及組立', visible_progress: '', location: null, ...c } })
+  return {
+    classify: async (b) => { opts.calls?.push(`classify:${b}`); return opts.classify ? opts.classify(b) : ok({}) },
+    readBoard: async (b) => { opts.calls?.push(`board:${b}`); return opts.board ? opts.board(b) : { data: { log_date: '', weather: '', location: '', work_summary: '', items: [] } } },
+  }
+}
+
+const run = (w: World, vision = stubVision(), extra: Record<string, unknown> = {}) =>
+  runDraftFieldDocuments({ repo: memoryRepo(w), vision, intakeId: w.intake.id, userId: 'u1', ...extra })
+
+describe('角色隔離', () => {
+  it('呼叫者組織不是批次上傳方 → 403 org_mismatch,不動任何資料', async () => {
+    const w = world({ callerOrg: 'supervisor', photos: [photo('p1')] })
+    const r = await run(w)
+    expect(r.status).toBe(403)
+    expect(r.body.code).toBe('org_mismatch')
+    expect(w.photoPatches).toEqual([])
+    expect(w.finishes).toEqual([])
+  })
+  it('監造批次:照片照常辨識,但只列 unsupported 候選、不建施工日誌', async () => {
+    const w = world({ callerOrg: 'supervisor', intake: intake({ uploader_org: 'supervisor' }), photos: [photo('p1')] })
+    const r = await run(w)
+    expect(r.status).toBe(200)
+    expect(w.docs).toEqual([])
+    const cands = (r.body.intake as { candidates: { doc_type: string; state: string }[] }).candidates
+    expect(cands.map((c) => [c.doc_type, c.state])).toEqual([['supervisor_log', 'unsupported']])
+    expect(w.photos[0].ai_status).toBe('done')
+  })
+  it('機關(試用管理者)批次:辨識後無任何候選、無文件', async () => {
+    const w = world({ callerOrg: 'owner', intake: intake({ uploader_org: 'owner' }), photos: [photo('p1')] })
+    const r = await run(w)
+    expect(r.status).toBe(200)
+    expect((r.body.intake as { candidates: unknown[] }).candidates).toEqual([])
+    expect(w.docs).toEqual([])
+  })
+})
+
+describe('廠商批次起施工日誌', () => {
+  it('建立文件＋AI 版本 1＋agent_actions;照片補說明與工項;批次 ready 並推得 log_date', async () => {
+    const w = world({ photos: [photo('p1'), photo('p2', { caption: '人填的說明' })] })
+    const r = await run(w)
+    expect(r.status).toBe(200)
+    expect(w.docs).toHaveLength(1)
+    expect(w.docs[0]).toMatchObject({ doc_type: 'daily_log', doc_date: '2026-09-17', intake_id: 'i1', target_key: '2026-09-17', status: 'pending_input', current_version_no: 1 })
+    expect(w.versions).toHaveLength(1)
+    expect(w.versions[0]).toMatchObject({ author_kind: 'ai', version_no: 1 })
+    expect((w.versions[0].content as { items: Record<string, unknown> }).items['wi-steel']).toMatchObject({ qty_today: null })
+    expect(w.actions).toHaveLength(1)
+    expect(w.actions[0]).toMatchObject({ kind: 'draft_field_document', agent_role: 'contractor', target_table: 'field_documents', target_id: 'doc1', evidence: { intake_id: 'i1', version_no: 1, content_hash: 'hashdoc1v1' } })
+    expect(w.photos[0]).toMatchObject({ ai_status: 'done', caption: '鋼筋綁紮', work_item_id: 'wi-steel' })
+    expect(w.photos[1]).toMatchObject({ ai_status: 'done', caption: '人填的說明', work_item_id: 'wi-steel' })
+    const body = r.body as { intake: Record<string, unknown>; documents: Record<string, unknown>[]; remaining: number }
+    expect(body.intake).toMatchObject({ status: 'ready', photo_count: 2, recognized_count: 2, failed_count: 0, log_date: '2026-09-17' })
+    expect(body.documents[0]).toMatchObject({ action: 'created', document_id: 'doc1', version_no: 1, status: 'pending_input' })
+    expect(body.remaining).toBe(0)
+    expect(w.finishes.at(-1)).toMatchObject({ status: 'ready', log_date: '2026-09-17', run_started_at: null })
+  })
+
+  it('冪等:重跑已辨識的照片不再打模型、內容相同不加版本(unchanged);新增照片才加版本 2 並推 current_version_no', async () => {
+    const w = world({ photos: [photo('p1')] })
+    await run(w)
+    const calls: string[] = []
+    const r2 = await run(w, stubVision({ calls }))
+    expect(calls).toEqual([])
+    expect(w.versions).toHaveLength(1)
+    expect((r2.body.documents as { action: string }[])[0].action).toBe('unchanged')
+    expect(w.actions).toHaveLength(1)
+
+    w.photos.push(photo('p3'))
+    const r3 = await run(w, stubVision({ calls }))
+    expect(calls).toEqual(['classify:b64:prj/intake/i1/p3.jpg'])
+    expect(w.versions.map((v) => v.version_no)).toEqual([1, 2])
+    expect(w.docs[0].current_version_no).toBe(2)
+    expect((r3.body.documents as { action: string; version_no: number }[])[0]).toMatchObject({ action: 'version_added', version_no: 2 })
+    expect((w.versions[1].attachments as { photo_id: string }[]).map((a) => a.photo_id).sort()).toEqual(['p1', 'p3'])
+  })
+
+  it('已有人工版本:不新增 AI 版本、不覆寫,只留 suggest_field_update 建議', async () => {
+    const w = world({ photos: [photo('p1')] })
+    await run(w)
+    w.versions.push({ document_id: 'doc1', version_no: 2, author_kind: 'human', content: { log_date: '2026-09-17', work_summary: '人改過' }, attachments: [], field_sources: {}, content_hash: 'h2' })
+    w.docs[0].current_version_no = 2
+    w.photos.push(photo('p4'))
+    const r = await run(w)
+    expect(w.versions).toHaveLength(2)
+    expect(w.docs[0].current_version_no).toBe(2)
+    expect((r.body.documents as { action: string }[])[0].action).toBe('suggested')
+    const sug = w.actions.at(-1) as { kind: string; evidence: { suggestion: { content: unknown }; against_version_no: number } }
+    expect(sug.kind).toBe('suggest_field_update')
+    expect(sug.evidence.against_version_no).toBe(2)
+    expect(sug.evidence.suggestion.content).toBeTruthy()
+  })
+
+  it('該日文件已簽署:不動(locked),不寫版本也不留建議', async () => {
+    const w = world({ photos: [photo('p1')], docs: [{ id: 'docS', doc_type: 'daily_log', doc_date: '2026-09-17', intake_id: 'i0', target_key: '2026-09-17', status: 'signed', current_version_no: 1, required_fields: [], recheck: [] }] })
+    const r = await run(w)
+    expect(w.versions).toEqual([])
+    expect(w.actions).toEqual([])
+    expect((r.body.documents as { action: string; document_id: string }[])[0]).toMatchObject({ action: 'locked', document_id: 'docS' })
+    expect((r.body.intake as { candidates: { state: string }[] }).candidates[0].state).toBe('locked')
+  })
+
+  it('另一批同日已起稿(無人工版本):不重複建件,改在既有文件加版本並保留前一批的附件', async () => {
+    const w = world({ photos: [photo('p1')] })
+    await run(w)
+    // 第二批(i2)同一天:文件的 intake_id 仍是第一批,第一批的照片仍在 photos 表
+    w.intake = intake({ id: 'i2', log_date: '2026-09-17' })
+    w.photos.push(photo('p9', { intake_id: 'i2' }))
+    const r = await run(w)
+    expect(w.docs).toHaveLength(1)
+    expect(w.docs[0].intake_id).toBe('i1')
+    expect((r.body.documents as { action: string }[])[0].action).toBe('version_added')
+    expect((w.versions[1].attachments as { photo_id: string }[]).map((a) => a.photo_id).sort()).toEqual(['p1', 'p9'])
+  })
+
+  it('同日文件建立撞唯一索引(並發):改走既有文件,不報錯', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const repo = memoryRepo(w)
+    const origInsert = repo.insertDoc
+    repo.insertDoc = async (row) => {
+      // 模擬另一個請求搶先建了同日文件
+      await origInsert(row)
+      return { conflict: true }
+    }
+    const r = await runDraftFieldDocuments({ repo, vision: stubVision(), intakeId: 'i1', userId: 'u1' })
+    expect(r.status).toBe(200)
+    expect((r.body.documents as { action: string; document_id: string }[])[0]).toMatchObject({ action: 'created', document_id: 'doc1' })
+    expect(w.docs).toHaveLength(1)
+  })
+
+  it('使用者排除的候選不起稿', async () => {
+    const w = world({ photos: [photo('p1')], intake: intake({ candidates: [{ doc_type: 'daily_log', target_key: '2026-09-17', excluded: true }] }) })
+    const r = await run(w)
+    expect(w.docs).toEqual([])
+    expect((r.body.intake as { candidates: { state: string }[] }).candidates[0].state).toBe('excluded')
+  })
+})
+
+describe('照片狀態', () => {
+  it('非工地／不可辨／重複各有狀態:不配工項、不入附件;重複只計一次', async () => {
+    const sha = 'd'.repeat(64)
+    const w = world({ photos: [
+      photo('p1', { content_sha256: sha }),
+      photo('p2', { content_sha256: sha }),
+      photo('p3'), photo('p4'),
+    ] })
+    const vision = stubVision({ classify: (b) => b.includes('p3')
+      ? { data: { caption: '客廳', category: '其他', is_construction: false, legible: true, has_board: false, work_item_hint: '', visible_progress: '', location: null } }
+      : b.includes('p4') ? { data: { caption: '', category: '其他', is_construction: true, legible: false, has_board: false, work_item_hint: '鋼筋', visible_progress: '', location: null } }
+      : { data: { caption: '鋼筋', category: '施工作業', is_construction: true, legible: true, has_board: false, work_item_hint: '鋼筋', visible_progress: '', location: null } } })
+    const r = await run(w, vision)
+    const by = Object.fromEntries((r.body.photos as { id: string; ai_status: string; work_item_id: string | null }[]).map((p) => [p.id, p]))
+    expect(by.p1.ai_status).toBe('done')
+    expect(by.p2).toMatchObject({ ai_status: 'duplicate', work_item_id: null })
+    expect(by.p3).toMatchObject({ ai_status: 'not_site', work_item_id: null })
+    expect(by.p4).toMatchObject({ ai_status: 'unreadable', work_item_id: null })
+    expect(w.photos.find((p) => p.id === 'p3')!.caption).toContain('疑似非工地')
+    expect((w.versions[0].attachments as { photo_id: string }[]).map((a) => a.photo_id)).toEqual(['p1'])
+    expect((r.body.intake as Record<string, number>).recognized_count).toBe(4)
+    expect(r.body.notes).toEqual(expect.arrayContaining([expect.stringContaining('非工地'), expect.stringContaining('不可辨'), expect.stringContaining('重複')]))
+  })
+
+  it('有告示板才跑轉錄;板上日期分到別天→兩份日誌;板上數量帶入並附來源', async () => {
+    const w = world({ photos: [photo('p1'), photo('p2')] })
+    const vision = stubVision({
+      classify: (b) => ({ data: { caption: '鋼筋', category: '施工作業', is_construction: true, legible: true, has_board: b.includes('p2'), work_item_hint: '鋼筋', visible_progress: '', location: null } }),
+      board: () => ({ data: { log_date: '2026-09-16', weather: '晴', location: '', work_summary: '', items: [{ description: '鋼筋', quantity: 8, unit: 'T', note: '' }] } }),
+    })
+    const calls: string[] = []
+    const r = await run(w, { classify: vision.classify, readBoard: async (b, m) => { calls.push(b); return vision.readBoard(b, m) } })
+    expect(calls).toEqual(['b64:prj/intake/i1/p2.jpg'])
+    expect(w.docs.map((d) => d.doc_date).sort()).toEqual(['2026-09-16', '2026-09-17'])
+    const v16 = w.versions.find((v) => v.document_id === w.docs.find((d) => d.doc_date === '2026-09-16')!.id)!
+    expect((v16.content as { items: Record<string, { qty_today: number }> }).items['wi-steel'].qty_today).toBe(8)
+    expect((v16.field_sources as Record<string, { source: string }>)['items.wi-steel.qty_today'].source).toBe('whiteboard:p2')
+    expect((r.body.intake as { log_date: string | null }).log_date).toBeNull() // 跨日不推單一日期
+    expect(r.body.notes).toEqual(expect.arrayContaining([expect.stringContaining('告示板日期 2026-09-16')]))
+  })
+
+  it('未匯標單:照片保存、work_item_hint 留存待配對、不寫工項;匯入後重跑用存的 hint 再配不打模型', async () => {
+    const w = world({ leaves: [], photos: [photo('p1')] })
+    const r = await run(w)
+    expect(w.photos[0]).toMatchObject({ ai_status: 'done', work_item_id: null, work_item_hint: '鋼筋加工及組立' })
+    expect((w.versions[0].content as { items: unknown; unmatched_photo_ids: string[] })).toMatchObject({ items: {}, unmatched_photo_ids: ['p1'] })
+    expect((r.body.photos as { work_item_hint: string }[])[0].work_item_hint).toBe('鋼筋加工及組立')
+
+    w.leaves = LEAVES
+    const calls: string[] = []
+    const r2 = await run(w, stubVision({ calls }))
+    expect(calls).toEqual([])
+    expect(w.photos[0]).toMatchObject({ work_item_id: 'wi-steel', work_item_hint: null })
+    expect((r2.body.documents as { action: string }[])[0].action).toBe('version_added')
+    expect(Object.keys((w.versions[1].content as { items: Record<string, unknown> }).items)).toEqual(['wi-steel'])
+  })
+})
+
+describe('部分失敗、重試、預算、認領', () => {
+  it('模型失敗與下載失敗:該張 failed、批次 partial;重跑只處理失敗張,成功後補進既有文件', async () => {
+    const w = world({ photos: [photo('p1'), photo('p2'), photo('p3')], downloadFail: new Set(['prj/intake/i1/p3.jpg']) })
+    const r = await run(w, stubVision({ classify: (b) => b.includes('p2') ? { error: 'AI 服務暫時無法使用（代碼 http_529）', errorCode: 'http_529' } : { data: { caption: 'x', category: '施工作業', is_construction: true, legible: true, has_board: false, work_item_hint: '鋼筋', visible_progress: '', location: null } } }))
+    expect((r.body.intake as Record<string, unknown>)).toMatchObject({ status: 'partial', failed_count: 2, recognized_count: 1 })
+    expect(w.photos.map((p) => p.ai_status)).toEqual(['done', 'failed', 'failed'])
+    expect(w.versions).toHaveLength(1)
+    expect((r.body.intake as { error_summary: string }).error_summary).toContain('2 張辨識失敗')
+
+    w.downloadFail = undefined
+    const calls: string[] = []
+    const r2 = await run(w, stubVision({ calls }))
+    expect(calls.sort()).toEqual(['classify:b64:prj/intake/i1/p2.jpg', 'classify:b64:prj/intake/i1/p3.jpg'])
+    expect((r2.body.intake as Record<string, unknown>)).toMatchObject({ status: 'ready', failed_count: 0 })
+    expect(w.versions).toHaveLength(2)
+    expect((w.versions[1].attachments as { photo_id: string }[]).map((a) => a.photo_id)).toEqual(['p1', 'p2', 'p3'])
+    expect(w.intake.attempts).toBe(2) // 失敗後重啟計一次
+  })
+
+  it('模型輸出不完整:該張 failed(可重試),不建半份內容', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const r = await run(w, stubVision({ classify: () => ({ data: { caption: 'x' } }) }))
+    expect(w.photos[0].ai_status).toBe('failed')
+    expect(w.docs).toEqual([])
+    expect((r.body.intake as Record<string, unknown>).status).toBe('partial')
+  })
+
+  it('照片寫入被 DB 擋(佐證凍結 P0001):只寫辨識結果不改掛,照片仍算辨識完成並揭露', async () => {
+    let blockedOnce = false
+    const w = world({ photos: [photo('p1')], failUpdatePhoto: (id) => {
+      if (blockedOnce || id !== 'p1') return null
+      blockedOnce = true
+      return { error: '照片為第 1 期估驗(已核定)的佐證;不可改掛工項', code: 'P0001' }
+    } })
+    const r = await run(w)
+    expect(w.photos[0].ai_status).toBe('done')
+    expect(w.photos[0].work_item_id).toBeNull()
+    expect(r.body.notes).toEqual(expect.arrayContaining([expect.stringContaining('未改掛工項')]))
+  })
+
+  it('文件寫入失敗:該份 error、批次 partial、agent_actions 不留半筆;重跑可補上', async () => {
+    const w = world({ photos: [photo('p1')], failInsertVersion: '資料存取失敗（代碼 db_error）' })
+    const r = await run(w)
+    expect((r.body.documents as { action: string; reason: string }[])[0]).toMatchObject({ action: 'error', reason: '資料存取失敗（代碼 db_error）' })
+    expect(w.actions).toEqual([])
+    expect(w.docs[0].current_version_no).toBe(0)
+    expect((r.body.intake as Record<string, unknown>).status).toBe('partial')
+    w.failInsertVersion = undefined
+    const r2 = await run(w)
+    expect((r2.body.documents as { action: string }[])[0].action).toBe('created')
+    expect(w.docs).toHaveLength(1)
+    expect(w.docs[0].current_version_no).toBe(1)
+  })
+
+  it('時間預算用完:未處理的張回 remaining、批次留 recognizing 且釋放 run;續跑不計 attempts', async () => {
+    const w = world({ photos: [photo('p1'), photo('p2'), photo('p3')] })
+    let t = 0
+    const r = await run(w, stubVision(), { now: () => (t += 60_000), budgetMs: 100_000, concurrency: 1 })
+    const body = r.body as { remaining: number; intake: Record<string, unknown> }
+    expect(body.remaining).toBeGreaterThan(0)
+    expect(body.intake.status).toBe('recognizing')
+    expect(w.intake.run_started_at).toBeNull()
+    expect(w.intake.attempts).toBe(1)
+    const r2 = await run(w, stubVision())
+    expect((r2.body as { remaining: number }).remaining).toBe(0)
+    expect(w.intake.attempts).toBe(1)
+    expect(w.intake.status).toBe('ready')
+  })
+
+  it('run 認領:有人在跑 → 409;過期的 run 可接手;attempts 用盡 → 409 並標 failed;已捨棄 → 409', async () => {
+    const running = world({ photos: [photo('p1')], intake: intake({ status: 'recognizing', run_started_at: '2026-09-17T00:00:00Z', last_progress_at: '2026-09-17T00:00:00Z' }) })
+    const nowMs = Date.parse('2026-09-17T00:05:00Z')
+    expect((await run(running, stubVision(), { now: () => nowMs })).body.code).toBe('run_conflict')
+    const staleNow = Date.parse('2026-09-17T00:20:00Z')
+    const r = await run(running, stubVision(), { now: () => staleNow })
+    expect(r.status).toBe(200)
+    expect(running.intake.attempts).toBe(1)
+
+    const exhausted = world({ photos: [photo('p1')], intake: intake({ status: 'failed', attempts: MAX_ATTEMPTS }) })
+    const re = await run(exhausted)
+    expect(re.body.code).toBe('attempts_exhausted')
+    expect(exhausted.intake.status).toBe('failed')
+
+    const discarded = world({ intake: intake({ status: 'discarded' }) })
+    expect((await run(discarded)).body.code).toBe('intake_discarded')
+  })
+
+  it('沒有照片的批次:failed 並說明(上傳失敗的仍在本機)', async () => {
+    const w = world()
+    const r = await run(w)
+    expect(r.status).toBe(200)
+    expect((r.body.intake as Record<string, unknown>).status).toBe('failed')
+    expect((r.body.intake as { error_summary: string }).error_summary).toContain('仍在本機')
+  })
+})
+
+describe('逐功能閘門 fail-closed', () => {
+  it('photo.classify 關閉或閘門不可用:不辨識、批次 failed、回閘門的 HTTP 狀態與代碼', async () => {
+    for (const blocked of [
+      { allow: false as const, code: 'feature_disabled' as const, status: 403, message: '此 AI 功能未啟用(施工照片分類),請聯絡系統管理者' },
+      { allow: false as const, code: 'gate_unavailable' as const, status: 503, message: 'AI 功能開關暫時無法確認(施工照片分類),為安全起見先暫停服務,請稍後再試' },
+    ]) {
+      const w = world({ photos: [photo('p1'), photo('p2')] })
+      const r = await run(w, stubVision({ classify: () => ({ blocked }) }))
+      expect(r.status).toBe(blocked.status)
+      expect(r.body.code).toBe(blocked.code)
+      expect(w.photos.every((p) => p.ai_status === 'pending')).toBe(true)
+      expect(w.docs).toEqual([])
+      expect(w.intake.status).toBe('failed')
+      expect(w.intake.run_started_at).toBeNull()
+      expect((r.body.intake as { error_summary: string }).error_summary).toBe(blocked.message)
+    }
+  })
+  it('sitelog.whiteboard 關閉:照片仍辨識與起稿,只是不轉錄數量並揭露', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const r = await run(w, stubVision({
+      classify: () => ({ data: { caption: '鋼筋', category: '施工作業', is_construction: true, legible: true, has_board: true, work_item_hint: '鋼筋', visible_progress: '', location: null } }),
+      board: () => ({ blocked: { allow: false, code: 'feature_disabled', status: 403, message: '此 AI 功能未啟用(工程告示板辨識)' } }),
+    }))
+    expect(r.status).toBe(200)
+    expect(w.photos[0].ai_status).toBe('done')
+    expect((w.photos[0].ai_result as { whiteboard_skipped: string }).whiteboard_skipped).toBe('feature_disabled')
+    expect(w.versions).toHaveLength(1)
+    expect((w.versions[0].content as { items: Record<string, { qty_today: null }> }).items['wi-steel'].qty_today).toBeNull()
+    expect(r.body.notes).toEqual(expect.arrayContaining([expect.stringContaining('告示板辨識功能未啟用')]))
+  })
+})

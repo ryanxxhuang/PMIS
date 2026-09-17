@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { matchLeaf } from './photoMatch.js'
+import { matchLeaf as sharedMatchLeaf } from '../../supabase/functions/_shared/photoMatch.ts'
 
 // 描述取自真實 PCCES 標單的常見寫法——這組測試釘住 dry-run 抓到的「配對率 0%」bug:
 // 短關鍵詞被長度比評分判死,完美包含卻不及格。
@@ -11,6 +12,10 @@ const LEAVES = [
 ]
 
 describe('matchLeaf(照片 AI 關鍵詞 → 標單工項)', () => {
+  it('前端與 Edge 是同一支實作(P2b:src/lib 只 re-export _shared/photoMatch.ts,不留第二份)', () => {
+    expect(matchLeaf).toBe(sharedMatchLeaf)
+  })
+
   it('短關鍵詞「鋼筋」要配得上含鋼筋的工項(dry-run 0% 配對率的根因)', () => {
     expect(matchLeaf('鋼筋', LEAVES)?.item_key).toBe('A')
   })

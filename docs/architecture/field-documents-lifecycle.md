@@ -1,6 +1,6 @@
 # 現場文書：四類文書的資料模型、生命週期與簽署提送
 
-> 狀態：**PROPOSED（P0 設計；P2a 資料層、P2d 存版／簽署／提送 RPC 已實作）**｜2026-09-17｜依 [D-026](../DECISIONS.md)。§2.2 的 `photo_intakes`、`photos` 加欄與 `field_documents` 家族已由 migration `20260917201000_field_documents` 建立並有 pgTAP `field_documents.sql`；§5–§7 的 `save_field_document_version`、`sign_field_document`（只有 `daily_log` 分支）、`submit`／`receive`／`return_field_document`、`daily_logs_guard`／`daily_log_items_guard`、`resolve_agent_action_internal` 已由 migration `20260917205000_field_document_rpcs` 建立並有 pgTAP `field_document_sign.sql`（§8 表列以 migration 為準）；Edge 起稿（P2b）、前端（P2c）與 `supervisor_logs`（P3a）尚未動工，實作進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
+> 狀態：**PROPOSED（P0 設計；P2a 資料層、P2b Edge 起稿、P2d 存版／簽署／提送 RPC 已實作）**｜2026-09-17｜依 [D-026](../DECISIONS.md)。§2.2 的 `photo_intakes`、`photos` 加欄與 `field_documents` 家族已由 migration `20260917201000_field_documents` 建立並有 pgTAP `field_documents.sql`；§3 的 Edge `draft-field-documents`（P2b）已實作，只起施工日誌，其餘三類只列候選（§3.1 以程式為準：[`fieldDocDraft.ts`](../../supabase/functions/_shared/fieldDocDraft.ts) 純規則、[`fieldDocDraftRun.ts`](../../supabase/functions/_shared/fieldDocDraftRun.ts) 流程、[`fieldDocRepo.ts`](../../supabase/functions/_shared/fieldDocRepo.ts) 存取）；§5–§7 的 `save_field_document_version`、`sign_field_document`（只有 `daily_log` 分支）、`submit`／`receive`／`return_field_document`、`daily_logs_guard`／`daily_log_items_guard`、`resolve_agent_action_internal` 已由 migration `20260917205000_field_document_rpcs` 建立並有 pgTAP `field_document_sign.sql`（§8 表列以 migration 為準）；前端（P2c）與 `supervisor_logs`（P3a）尚未動工，實作進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
 > 標記：**【已確認】**＝使用者已確認的產品邊界（D-026，不需再問）；**【設計】**＝實作者選擇，實作時可調整但須回寫本文件；**【待決】**＝需使用者決定，答覆前依「暫行」做，不阻擋其他工作。
 
 ## 0. 現況核對（基準 `ab4be5f`）
@@ -83,7 +83,7 @@ RLS：SELECT 專案成員（Q4：使用者 2026-09-17 同意暫行「專案成�
 | `owner_org text` | **generated column** `fn_field_document_owner_org(doc_type)`：daily_log／self_check→contractor，supervisor_log／inspection_form→supervisor；任何人都寫不出不一致的值 |
 | `target_table text` | **generated column** `fn_field_document_target_table(doc_type)`：daily_logs／checklist_records／supervisor_logs／inspections |
 | `target_id uuid` | 事實列；草稿期為 null，簽署時由 RPC 建立或綁定；guard 檢查事實表存在（`supervisor_logs` 在 P3a 之前綁定即拒絕）、列存在且同專案 |
-| `target_key text` | 起稿冪等鍵（自檢＝工項＋位置、查驗表單＝查驗 id；日誌類 null）；只有 service／RPC 可寫 |
+| `target_key text` | 起稿冪等鍵（自檢＝工項＋位置、查驗表單＝查驗 id；**日誌類＝業務日期 `YYYY-MM-DD`**——P2b 修正：一批跨日要生成多份日誌，原設計的 null 會撞 `nulls not distinct` 的冪等索引）；只有 service／RPC 可寫 |
 | `intake_id uuid` | 由哪批照片起稿；手動建立為 null；批次必須同專案且 `uploader_org = owner_org`（廠商批次不能起稿監造文件）；登錄後不可變 |
 | `doc_date date not null` | 業務日期；有簽署紀錄後不可變 |
 | `status text` | `draft`／`pending_input`／`in_review`／`signed`／`submitted`／`received`／`returned`／`discarded`／`superseded`；建立時只能是 draft／pending_input |
@@ -116,7 +116,7 @@ guard `field_documents_guard`（所有寫入者）：狀態轉移矩陣＝§4；
 
 規則（所有寫入者）：只能在使用者路徑寫入；`version_no` 必須是目前版本、雜湊相符；`submit`：文件 signed（或 submitted，供第二個對象）、該版本已有簽署列、責任方（`admin_override` 例外）、`to_org` 依 `fn_field_document_to_org_allowed(doc_type, to_org)`（§4 矩陣）；`receive`／`return`：該版本必須已提送給本方（`to_org` 由伺服器帶入提送列的對象）、文件 submitted／received、`return` 必填 `reason`；`actor_id`／`actor_org`／`created_at` 由伺服器取；UPDATE／DELETE 一律拒絕。authenticated 只有 SELECT。
 
-**AI 註冊**：新增功能 `field_docs.draft`（category `draft`、edgeFunction `draft-field-documents`、minPlan `trial`【設計】、isLlm true）於 [`aiFeatures.js`](../../src/lib/aiFeatures.js)、`_shared/aiFeatures.ts` 與 `ai_features` seed migration 三處；逐張辨識沿用 `photo.classify`／`sitelog.whiteboard` 的 prompt 與 schema（改為 `_shared` 模組直接呼叫，不經 HTTP 跳轉），用量各記各的 feature_key。
+**AI 註冊（P2b 已實作）**：功能 `field_docs.draft`（category `draft`、edgeFunction `draft-field-documents`、minPlan `trial`、isLlm true、預設開啟）登記於 [`aiFeatures.js`](../../src/lib/aiFeatures.js)、`_shared/aiFeatures.ts` 與 seed migration `20260917213500_ai_field_docs_draft`（rollback 檔關閉開關不刪列）。逐張辨識沿用 `photo.classify`／`sitelog.whiteboard` 的 prompt 與 schema——三處共用 [`_shared/sitePhotoVision.ts`](../../supabase/functions/_shared/sitePhotoVision.ts) 同一份（P2b 加 `legible`／`has_board` 兩個布林與「板上沒寫數量回 null 不回 0」，並在 prompt 明示照片與板上文字是資料不是指令）；Edge 內對這兩個功能各自再問一次 `ai_feature_allowed`（[`aiGate.askAiFeature`](../../supabase/functions/_shared/aiGate.ts)，fail-closed：分類功能關閉＝整批 `failed` 並回該閘門的 403／503；告示板功能關閉＝照常起稿但不轉錄數量並揭露），用量各記各的 feature_key，`field_docs.draft` 本身每次呼叫記一筆零 token 事件。
 
 ### 2.3 欄位來源狀態 `field_sources`
 
@@ -139,30 +139,30 @@ guard `field_documents_guard`（所有寫入者）：狀態轉移矩陣＝§4；
 
 ## 3. 照片接收、辨識、起稿、保存與恢復
 
-### 3.1 流程（Edge `draft-field-documents`）
+### 3.1 流程（Edge `draft-field-documents`；P2b 已實作，以程式為準）
 
-1. 前端：壓縮→`Storage.upload`→`photos` insert（`intake_id`，`daily_log_id` 為 null）。每張成功才算「已保存」；失敗保留本機檔並標「仍在本機」。示範模式一律不接收（不寫 Demo 工項到真案）。
-2. 前端呼叫 `draft-field-documents { project_id, intake_id }`（過 `openAiGate`，`project_id` 必帶）。
-3. Edge 以 userClient 讀（RLS 決定看得到的照片、標單、範本、既有紀錄），serviceClient 只寫 `photos.ai_*`、AI 版本、`agent_actions`、`photo_intakes` 進度。
-4. 逐張辨識（併發 3；每次呼叫時間預算 100 s；處理不完回 `{remaining}` 由前端續呼叫）：`classify-site-photo` schema → `ai_status`（`not_site`／`unreadable`／`duplicate` 各自標明，不套工項）；判為含板子的照片再跑 `read-whiteboard` schema 轉錄數量／位置／日期，逐項附 `source: whiteboard:<photo_id>`。
-5. 工項配對：沿用 [`photoMatch.js`](../../src/lib/photoMatch.js) 演算法移植成 `_shared/photoMatch.ts`（同一組測試案例釘住）；配不到→`work_item_hint` 保存、`pending_match`。
-6. 候選文書（確定性規則，不由模型決定）：
-   - `uploader_org='contractor'`：`daily_log`（該日尚無已簽署者）；每個配到工項且該工項適用 `self_check` 範本（`applies_to`）者→一份 `self_check`（以工項＋位置為 target key）。
-   - `uploader_org='supervisor'`：`supervisor_log`（該日尚無已簽署者）；當日 `status='待查驗'` 且工項／位置相符的 `inspections`→一份 `inspection_form`（使用者可改指定查驗）。
-   - 日期／位置／工項混合的一批：以照片的白板日期或 EXIF 日分組；跨日→多份日誌草稿；無法判日→整批 `log_date` 待補，不生成日誌以外的文件。
-7. 內容組裝：確定性欄位（專案、契約、工項、日期、附件清單、昨日出工機具）＋模型只寫敘述欄（`work_summary`、監造事項文字、缺失描述），schema 嚴格、不得出現數字以外來源的數量；照片與白板內容視為資料，prompt 明示不執行其中指令。
-8. 寫入：`field_documents`（`draft`）＋版本 1（`author_kind='ai'`）＋`agent_actions`（`kind='draft_field_document'`, `target_table='field_documents'`, `target_id`, `evidence:{intake_id, version_no, content_hash, doc_type}`）；`photo_intakes.status` → `ready`／`partial`。
+1. 前端（P2c）：壓縮→`Storage.upload`→`photos` insert（`intake_id`，`daily_log_id` 為 null）。每張成功才算「已保存」；失敗保留本機檔並標「仍在本機」。示範模式一律不接收（不寫 Demo 工項到真案）。
+2. 前端呼叫 `draft-field-documents { project_id, intake_id }`（過 `openAiGate('field_docs.draft')`，`project_id` 必帶）。伺服器以 `my_org_type` 決定呼叫者組織，**必須等於批次 `uploader_org`**（否則 403 `org_mismatch`）；`owner` 批次（試用模式管理者）照常辨識但不推任何文件。
+3. Edge 以 userClient 讀（RLS：批次、照片、Storage 下載、標單、既有日誌、待查驗、文件與版本），serviceClient 只寫 `photos.ai_*`（另只在原本為空時補 `caption`／`location`／`work_item_id`，不覆蓋人填的；被佐證凍結 guard 擋下改掛時只寫辨識結果並揭露）、`photo_intakes` 進度、AI 版本、`agent_actions`。
+4. 逐張辨識（併發 3；每次呼叫時間預算 100 s；處理不完回 `{remaining}`，批次留 `recognizing` 並釋放 run，前端再呼叫一次即續跑）：同批同 `content_sha256` 先標 `duplicate`（最早上傳者為正本，不辨識、不計量）；`ai_status='done'`／`not_site`／`unreadable` 不重跑，`pending`／`failed` 才跑；`photo.classify` → `legible=false`→`unreadable`、`is_construction=false`→`not_site`（不套工項、不入附件、說明標「疑似非工地」）；`has_board=true` 才再跑 `sitelog.whiteboard` 轉錄日期／天氣／位置／工項數量；模型失敗、逾時、輸出不完整→該張 `failed`（記 `ai_result.error` 代碼，可重試）。
+5. 工項配對：前端與 Edge 同一支 [`_shared/photoMatch.ts`](../../supabase/functions/_shared/photoMatch.ts)（`src/lib/photoMatch.js` 只 re-export；測試案例在 `photoMatch.test.js`）；比對對象＝可計價末端工項（與 `boqCalc.billableLeaves` 同一把尺）；配不到或未匯標單→`work_item_hint` 保存、照片列「待配對」，匯標單後對同一批重跑只用存下的 hint 再配、不再打模型。
+6. 候選文書（[`inferCandidates`](../../supabase/functions/_shared/fieldDocDraft.ts)，確定性規則，不由模型決定；存進 `photo_intakes.candidates`，使用者先前的 `excluded` 沿用）：
+   - `contractor`：每個日期一份 `daily_log`（`target_key`＝日期；`state=ready`）；無法判日的照片→一份 `daily_log` `state=blocked`（`blocked_by:['log_date']`，補批次日期後重試）；每個配到的工項→一份 `self_check` `state=unsupported`（P3b；`applies_to` 待 P3c）。
+   - `supervisor`：每個日期一份 `supervisor_log` `unsupported`（P3a）；`status='待查驗'` 且日期或工項相符的 `inspections`→一份 `inspection_form` `unsupported`（P3c）。監造批次永遠推不出 `daily_log`／`self_check`，廠商批次永遠推不出監造文件（DB guard 另有一道）。
+   - 日期分組：照片日期＝告示板日期 > 使用者指定的批次 `log_date` > 拍攝時間的台北日曆日（`taken_at` 無 EXIF 時是上傳時刻，故排最後）；板日與拍攝日不同時仍依板日但列入 recheck；批次 `log_date` 為 null 且只推出一個日期時由伺服器回填。
+7. 內容組裝（[`buildDailyLogDraft`](../../supabase/functions/_shared/fieldDocDraft.ts)，全部確定性）：工項列＝照片配到的工項 ∪ 告示板列出的工項；數量只在告示板清楚寫出且各板一致時 `filled`（`whiteboard:<photo_id>`），否則 `pending`（不一致列 recheck）；位置唯一才帶入、多個要人分列；天氣＝告示板 > 當日既有 `daily_logs` > 中央氣象署（`fetch-weather`，過自己的閘門）> `pending`；出工／機具／材料＝當日既有日誌 > 昨日（`yesterday:<id>`，待核對）> `pending`；公定格式各節 `extras.*` 只帶當日既有日誌填過的，其餘 `pending`（不填「無」）；`work_summary`＝當日既有日誌 > 各張照片 AI 說明的確定性拼接（`ai:photo`）> 告示板摘要 > `pending`——**與原設計不同：不再另打一次模型寫敘述欄**，說明本身已是模型輸出，再餵第二個 prompt 只多一條把板上文字當指令的路。`required_fields`＝`log_date`、`weather_am`、`weather_pm`、`work_summary`、`labor`、`equipment`、`materials` 與每個工項的 `qty_today`（與 P2d `fn_field_document_required_fields` 的固定欄一致，簽署時會再算一次並聯集）；任一 `pending` 即 `pending_input`；本日確無機具／進料由人標 `na` 並填原因。
+8. 寫入：該日活文件不存在→`field_documents`（`intake_id`、`target_key`＝日期）＋版本 1（`author_kind='ai'`；同日撞唯一索引改走既有文件）；存在且為 `draft`／`pending_input`→附件取本批該日照片 ∪ 既有最新版本的附件（另一批同日上傳的證據不因重跑而掉），內容相同→`unchanged` 不加版本，否則新增 AI 版本並推 `current_version_no`；已有人工版本→不寫版本，只寫 `agent_actions(kind='suggest_field_update')`；`in_review`／`signed`／`submitted`／`received`／`returned`→`locked` 不動。每次建立／新增版本另寫 `agent_actions(kind='draft_field_document', evidence:{intake_id, document_id, doc_type, version_no, content_hash})`，`actor_user`＝觸發者、`agent_role`＝上傳方。`photo_intakes` 收尾：`remaining>0`→`recognizing`；有照片失敗或文件寫入失敗→`partial`（`error_summary` 說明，可重試）；否則 `ready`。
 
 ### 3.2 重試冪等【已確認 行為，設計 機制】
 
-- 逐張：`ai_status='done'` 不重跑；`failed` 可重跑；重複上傳同雜湊標 `duplicate` 不生第二份文件也不重複計量。
-- 文件：`(intake_id, doc_type, target_key)` 部分唯一索引；重跑只對**沒有任何 human 版本**的文件**新增一個 AI 版本**（版本列不可變，不重寫 version 1；`current_version_no` 由 Edge 推到新版）；已有人工版本→DB 拒絕 AI 版本（`field_document_versions_guard`），Edge 改在 `agent_actions` 新增 `kind='suggest_field_update'` 供人套用。這保證重試不覆蓋人工修正，且每次 AI 產出都留痕。
+- 逐張：`ai_status='done'`／`not_site`／`unreadable` 不重跑；`failed` 可重跑；重複上傳同雜湊標 `duplicate` 不生第二份文件也不重複計量。
+- 文件：`(intake_id, doc_type, target_key)` 部分唯一索引＋`(project_id, doc_type, doc_date)` 日誌唯一索引；重跑只對**沒有任何 human 版本**且仍為草稿的文件**在內容有變時新增一個 AI 版本**（內容與附件相同→`unchanged`，不加版本；版本列不可變，不重寫 version 1；`current_version_no` 由 Edge 推到新版）；已有人工版本→Edge 先查到就不送版本、DB guard 也會拒（`field_document_versions_guard`），改在 `agent_actions` 新增 `kind='suggest_field_update'`，**建議內容（content／field_sources／attachments）放在該列 `evidence.suggestion`**——建議沒有版本列可指，這是 §7「evidence 只存指標」的明示例外。這保證重試不覆蓋人工修正，且每次 AI 產出都留痕。
 - 送件：`client_request_id` 唯一；簽署以 `(document_id, version_no, signer_id)` 唯一；同一張照片可作多份文件附件，但數量只在確認量表計一次（見 [確認量文件](confirmed-quantity-valuation.md)）。
 - 模型輸出不完整／逾時／結果不明：該張 `failed` 並帶 `error_summary`，批次 `partial`；不建立半份文件。
 
 ### 3.3 保存與恢復
 
-進入「現場紀錄」時查 `photo_intakes where created_by = auth.uid() and status not in ('discarded')` 與 `field_documents where status in ('draft','pending_input','returned')`，列出「未完成的上傳」與「待處理文件」；離頁、重新登入、換裝置都從伺服器狀態恢復。前端 `unsavedEdits` 只保護尚未送出的編輯；版本保存走 `save_field_document_version`（§6）即為伺服器保存。`run_started_at`／`last_progress_at` 超過 10 分鐘視為過期，任何可寫成員可重試（`attempts` 上限 5 → `failed`）。
+進入「現場紀錄」時查 `photo_intakes where created_by = auth.uid() and status not in ('discarded')` 與 `field_documents where status in ('draft','pending_input','returned')`，列出「未完成的上傳」與「待處理文件」；離頁、重新登入、換裝置都從伺服器狀態恢復。前端 `unsavedEdits` 只保護尚未送出的編輯；版本保存走 `save_field_document_version`（§6）即為伺服器保存。Run 認領（P2b 實作）：`run_started_at` 不為 null＝有 run 在跑（同批第二個請求 409 `run_conflict`）；正常結束或預算用完暫停都把 `run_started_at` 清回 null；`last_progress_at` 超過 10 分鐘的 run 視為掛掉，可被接手；CAS 以 `attempts` 舊值為條件，**只有失敗／過期後重啟才計一次 `attempts`，預算暫停後的續跑不計**（否則大批次正常續跑三四次就撞上限）；`attempts` 達 5 再重啟→409 `attempts_exhausted` 並標 `failed`，請重新上傳成新批次。
 
 ### 3.4 角色隔離【已確認】
 
@@ -248,7 +248,7 @@ P2a 的 trigger 仍是所有路徑的最後防線（`P0001`）；RPC 先以上�
 
 ## 7. AI 草稿與 `agent_actions` 邊界
 
-- 照片起稿與 Agent 對話起稿都落 `agent_actions`（新 kind `draft_field_document`／`suggest_field_update`），`evidence` 只存指標（文件、版本、雜湊、intake），不重複存 payload。
+- 照片起稿與 Agent 對話起稿都落 `agent_actions`（新 kind `draft_field_document`／`suggest_field_update`；P2b 起由 Edge service 寫，`actor_user`＝觸發起稿的使用者、`agent_role`＝批次上傳方），`draft_field_document` 的 `evidence` 只存指標（文件、版本、雜湊、intake），不重複存 payload；`suggest_field_update` 沒有版本列可指，`evidence.suggestion` 帶建議內容（§3.2）。
 - `agent_actions` SELECT 仍限本人；文件本體對同方成員可見可編（`field_documents` RLS）。簽署者非草稿收件人時，由 RPC 內部函式標處理狀態並記 `resolved_by`——這是對 [Agent 邊界](agent-tool-boundary.md) 的明示延伸（P2d 已實作並更新該文件）：`resolve_agent_action_internal(p_document_id, p_project_id, p_status)` 只由 `sign_field_document` 呼叫（authenticated 不可執行），把同案、`target_table='field_documents'`、`target_id=文件`、`pending` 的草稿全部標 `accepted`（文件無人工版本）或 `edited`（有人工版本），`resolved_by=簽署者`，每筆留 `agent_action_resolved` 稽核（`metadata.resolved_via='sign_field_document'`）；舊 `draft_daily_log`（`target_table='daily_logs'`、`target_id` null）不受影響。
 - 既有 `draft_daily_log`／`draft_inspection` 工具改為產生 `field_documents` 草稿（保留工具名與回傳形狀），接受路徑統一走簽署 RPC；`acceptDraft` 的直接 `saveSiteLog` 路徑退場。
 
@@ -263,8 +263,8 @@ P2a 的 trigger 仍是所有路徑的最後防線（`P0001`）；RPC 先以上�
 | `supervisor_logs_guard`、`inspections` 新欄只允許 RPC 寫 | trigger | P3a／P3c |
 | 純 helper `fn_field_document_content_hash`、`fn_field_document_owner_org`／`fn_field_document_target_table`（generated column 用，authenticated 可執行）、`fn_field_document_to_org_allowed`、`fn_field_document_changed_keys`、`current_jwt_aal`、`current_request_user_agent`、`can_read_field_document` | 函式 | **P2a 已實作** |
 | `save_field_document_version`、`sign_field_document`（只有 `daily_log` 分支，其他類型 `PD007`）、`submit_/receive_/return_field_document`、內部 `resolve_agent_action_internal`／`field_document_respond_internal`；純 helper `fn_field_document_required_fields`／`fn_field_document_unmet_fields`／`fn_field_document_attachment_issues`／`fn_field_document_receipt`／`fn_daily_log_signed`／`fn_daily_log_sign_bypass` | security definer RPC，`revoke all from public, anon`、僅 `authenticated`；內部與 helper 連 authenticated 都不可執行；錯誤代碼與寫入順序見 §5 | **P2d 已實作** |
-| `sign_field_document` 的 `supervisor_log`／`self_check`／`inspection_form` 分支、`create_field_document_draft`（service）、`set_intake_shared_input`、`discard_field_document` | security definer RPC | P3a／P3b／P3c／P2b／P3e |
-| `field_docs.draft` 註冊三處＋seed migration | AI 閘門 | P2b |
+| `sign_field_document` 的 `supervisor_log`／`self_check`／`inspection_form` 分支、`create_field_document_draft`（service；P2b 起稿改由 Edge service 直接 INSERT，本 RPC 未建）、`set_intake_shared_input`、`discard_field_document` | security definer RPC | P3a／P3b／P3c／P3e |
+| `field_docs.draft` 註冊三處＋seed migration `20260917213500_ai_field_docs_draft`（rollback 檔關閉開關）；Edge `draft-field-documents`＋`_shared/{sitePhotoVision,photoMatch,fieldDocDraft,fieldDocDraftRun,fieldDocRepo}.ts`；`aiGate.askAiFeature` 供函式內再問別的功能開關 | AI 閘門／Edge | **P2b 已實作**（Vitest：`fieldDocDraft.test.ts` 15 條、`fieldDocDraftRun.test.ts` 22 條；pgTAP `ai_field_docs_draft.sql` 8 條） |
 | 稽核事件 `field_document.{created,version_saved,signed,submitted,received,returned,amended,discarded,superseded,status_changed}`（AFTER trigger；標籤在 [`auditEvents.js`](../../src/lib/auditEvents.js)） | `record_audit_event` | **P2a 已實作** |
 
 ## 9. 舊資料過渡與回復
@@ -281,7 +281,7 @@ P2a 的 trigger 仍是所有路徑的最後防線（`P0001`）；RPC 先以上�
 |---|---|
 | 四類各走照片→自動生成→補缺→簽署→提送；監造日誌確為每日 | 真後端 E2E 四條；pgTAP 唯一性 `(project, doc_type, doc_date)`（P2a `field_documents.sql` 已釘） |
 | 清晰量測照可轉錄、模糊照留缺、非現場照不捏造、廠商證據不冒充監造 | 模型樣本測試（有預期答案）；pgTAP 角色隔離拒絕（P2a：`uploader_org` 伺服器決定、廠商批次不能起稿監造文件、`ai_*` 客戶端不可寫） |
-| 切頁／重登入可恢復；部分失敗、重試、重複上傳、逾時不丟人工修正、不重複建件 | pgTAP 冪等鍵（P2a：起稿唯一索引、有人工版本後 AI 不得寫版本、送件 `client_request_id`）；Edge 單元測試（stub）；E2E 重整頁 |
+| 切頁／重登入可恢復；部分失敗、重試、重複上傳、逾時不丟人工修正、不重複建件 | pgTAP 冪等鍵（P2a：起稿唯一索引、有人工版本後 AI 不得寫版本、送件 `client_request_id`）；Edge 單元測試（P2b `fieldDocDraftRun.test.ts`，記憶體 repo＋stub 模型：重跑不重複建件、內容相同不加版本、有人工版本只留建議、已簽署不動、同日並發撞索引改走既有文件、逐張失敗可重試、預算切斷續跑、run 認領、逐功能閘門 fail-closed；stub 只證明流程不證明辨識正確）；E2E 重整頁（P2c） |
 | 簽舊版、簽後改文／附件、越權簽署、跨案取件受阻；退回再送保留版本與理由 | P2a `field_documents.sql`（215 條）：舊版本、雜湊不符、非責任方、非成員、伺服器代簽、aal 不符、簽後改日期／捨棄／刪除、退回無原因、原版再送、diff 由 DB 算、歷次紀錄不可改。P2d `field_document_sign.sql`（140 條，走真實 `authenticated`＋JWT 路徑）：存版樂觀併發與越權；aal1 簽 `PD003`（非正式案 admin_override 也不放行）；舊版 `PD001`、雜湊 `PD002`、三角色＋非成員矩陣 `PD006`、監造日誌簽署 `PD007`、待補 `PD004`、監造／未知照片冒充施工證據 `PD005`、外案工項／負數／缺值／日期不符／形狀錯 `PD010`；簽署成功落 `daily_logs`／`daily_log_items`、綁 `target_id`、草稿標 `edited`、簽署列由伺服器取資料、稽核；同人重試冪等；已簽署列的直接 UPDATE／DELETE／明細寫入／舊 upsert／service／偽造 GUC 全部被擋而未簽署列照舊；簽後更正另開版回草稿、事實列等重簽、舊簽署綁舊版；提送對象矩陣、`client_request_id` 冪等與衝突、自然鍵冪等、收件／退回只限提送對象、退回必填原因、退回後原版不可再送、再送 diff 由 DB 算、歷次全保留、已收件不可再存版；superseded 後新文件接手同一事實列；捨棄不可存版；專案刪除 cascade 通過 guard |
 | 手機可完成現場旅程；桌機審核；列印與簽署版本一致 | 手機形狀 E2E；列印頁顯示版本與雜湊 |
 

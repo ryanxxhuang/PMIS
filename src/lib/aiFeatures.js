@@ -39,6 +39,7 @@ export const AI_FEATURES = [
   { key: 'audit.summary', label: '機關稽核意見草稿', category: 'draft', edgeFunction: 'audit-summary', minPlan: 'pro', isLlm: true, defaultEnabled: true },
   { key: 'report.monthly', label: '施工月報草稿', category: 'draft', edgeFunction: 'draft-monthly-review', minPlan: 'standard', isLlm: true, defaultEnabled: true },
   { key: 'valuation.summary', label: '估驗施工說明草稿', category: 'draft', edgeFunction: 'draft-valuation-summary', minPlan: 'standard', isLlm: true, defaultEnabled: true },
+  { key: 'field_docs.draft', label: '現場文書起稿(照片)', category: 'draft', edgeFunction: 'draft-field-documents', minPlan: 'trial', isLlm: true, defaultEnabled: true }, // P2b(D-026):照片→施工日誌草稿;逐張辨識沿用 photo.classify／sitelog.whiteboard 各自的開關與用量;與上傳鏈同屬 trial;DB seed 見 20260917213500
   { key: 'sitelog.whiteboard', label: '工程告示板辨識', category: 'vision', edgeFunction: 'read-whiteboard', minPlan: 'trial', isLlm: true, defaultEnabled: true },
   { key: 'defect.describe', label: '缺失照片描述', category: 'vision', edgeFunction: 'describe-defect', minPlan: 'trial', isLlm: true, defaultEnabled: true },
   { key: 'photo.classify', label: '施工照片分類', category: 'vision', edgeFunction: 'classify-site-photo', minPlan: 'trial', isLlm: true, defaultEnabled: true },
