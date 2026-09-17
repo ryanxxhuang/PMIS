@@ -109,7 +109,7 @@
 
 | 資料 | 過渡 | 回復 |
 |---|---|---|
-| `cost_items` | 列與欄不動；P1b 以 migration 收回 authenticated／anon 寫入 grant、policy 改 select-only | `supabase/rollbacks/20260917210000_cost_items_retire.down.sql`（重授權＋回復 for all policy） |
+| `cost_items` | 列與欄不動；P1b 以 migration 收回 authenticated／anon 寫入 grant、policy 改 select-only；H1（`20260917213900`）再收回三個 API 角色對所有 public 表的 TRUNCATE／REFERENCES／TRIGGER／MAINTAIN 並修 default privileges，退場才不留 TRUNCATE 這條不受 RLS 的路 | `supabase/rollbacks/20260917210000_cost_items_retire.down.sql`（重授權＋回復 for all policy）；`supabase/rollbacks/20260917213900_api_roles_table_ddl_privileges.down.sql`（四種權限與 default 還原） |
 | `item_schedules`、`schedule_periods` | 不動；唯讀查閱 | 無 DB 變更 |
 | `ai_features.audit.summary` | `enabled=false` migration | rollback 檔改回 true |
 | `contract_obligations` 循環 7 筆 | 產生期次，不回填完成 | drop `obligation_periods` |

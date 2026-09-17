@@ -42,20 +42,25 @@ test('鏈 1:註冊→建案→邀請(含錯配拒絕)→三方到齊→正式模
 
   // ── 邀請:錯配必須被擋(D-009/W4-3)───────────────────────────────────────
   await gotoHash(page, '/members')
+  // 2026-09-11 清單／詳情殼之後,邀請表單由右上「邀請成員」展開,錯配失敗時表單留著、成功入案後收起
+  const openInvite = () => page.getByRole('button', { name: '邀請成員', exact: true }).click()
+  const submitInvite = () => page.getByRole('button', { name: '加入專案', exact: true }).click()
+  await openInvite()
   const emailBox = page.getByPlaceholder('supervisor@example.com')
   await emailBox.fill(supEmail)
   await page.locator('select').first().selectOption('owner') // 故意宣告錯:監造帳號宣告成機關
-  await page.getByRole('button', { name: '＋ 加入專案' }).click()
+  await submitInvite()
   await expect(page.getByText(/身分不符:該帳號的註冊身分是「監造單位」/)).toBeVisible()
 
   // ── 邀請:正確宣告 → 監造與機關入案 ──────────────────────────────────────
   await emailBox.fill(supEmail)
   await page.locator('select').first().selectOption('supervisor')
-  await page.getByRole('button', { name: '＋ 加入專案' }).click()
+  await submitInvite()
   await expect(page.getByText('已加入(監造單位)。')).toBeVisible()
+  await openInvite()
   await emailBox.fill(ownEmail)
   await page.locator('select').first().selectOption('owner')
-  await page.getByRole('button', { name: '＋ 加入專案' }).click()
+  await submitInvite()
   await expect(page.getByText('已加入(主辦機關)。')).toBeVisible()
 
   // ── 三方到齊檢查轉綠(W4-4)──────────────────────────────────────────────

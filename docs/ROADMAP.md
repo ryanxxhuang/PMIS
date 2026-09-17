@@ -37,7 +37,7 @@
 
 - `item_schedules` 缺 `guard_project_identity`，可能跨案引用 work_item；需 migration 與跨案 pgTAP。
 - `work_items(project_id,item_key)` 部分唯一索引；正式資料重查重複後再做。部分領域狀態欄無 CHECK（含 obligation）；processing run 無轉移 guard。
-- DB 顧問問題需重核：熱點／FK 索引、auth_rls_initplan、重複 permissive policy、search_path、security-definer grants、pg_net schema。public 表 anon 的 TRUNCATE default grant 不受 RLS 控制，PostgREST 不暴露該操作。
+- DB 顧問問題需重核：熱點／FK 索引、auth_rls_initplan、重複 permissive policy、search_path、security-definer grants、pg_net schema。API 角色的 TRUNCATE／REFERENCES／TRIGGER／MAINTAIN 已於 `20260917213900` 收回並修 default privileges；同類漂移仍待處理（正式庫 default ACL 給 anon 表級 DML 與序列 UPDATE、給三角色新函式 EXECUTE，本機 secure-by-default 都沒有），列在 [續接清單 §4 H2／H3](reviews/2026-09-17-product-slimming-worklog.md)。
 - 刪案串 Storage 清理；`project_deletion_records` 已留刪除行為與事件數，不保存原事件內容。DB 備份不含 Storage 物件：`scripts/backup-storage.mjs` 與 [備份 runbook](operations/backup.md) 已就位，但**未對正式 bucket 實跑、未做 restore/RTO 演練**。rollback 判準／缺口與 `repair_` 命名尚待整理。
 - `agent_actions`／`ai_usage_events` append-only、防個資送模型、唯讀軌跡留存、使用量記帳失敗留 audit；不得自行決定個資保存粒度。
 - CSV formula injection 的前置空白／tab、CR quote、科學記號判定邊界仍存在，測試只記錄現況。

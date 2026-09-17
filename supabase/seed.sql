@@ -7,8 +7,11 @@
 -- 這裡把本機 service_role 對齊到 hosted 的平台預設;產品的安全邊界仍在
 -- RLS/RPC/guard trigger(service_role 本來就是伺服器端信任邊界內的角色)。
 -- seed.sql 只在 `supabase start`/`supabase db reset` 執行,永遠不進正式部署。
+-- 表只給 DML(select/insert/update/delete):H1(20260917213900)已把 TRUNCATE/REFERENCES/
+-- TRIGGER/MAINTAIN 從三個 API 角色與 default privileges 收回,hosted 的 service_role 也只剩
+-- DML;seed 在 migration 之後執行,若這裡仍 `grant all` 會把四種權限加回來、本機與正式不一致。
 grant usage on schema public to service_role;
-grant all on all tables in schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
 grant all on all sequences in schema public to service_role;
-alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant select, insert, update, delete on tables to service_role;
 alter default privileges in schema public grant all on sequences to service_role;

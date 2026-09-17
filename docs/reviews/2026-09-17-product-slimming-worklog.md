@@ -65,6 +65,16 @@
 |---|---|---|---|---|---|
 | T0 本機 pgTAP 隔離 | P4a | fable5.1 | Fable 5.1 | `scripts/test-pgtap.js`／`.test.js`、`.github/workflows/pgtap.yml`、`supabase/SETUP.md`、`docs/operations/deploy.md`、`docs/BASELINE.md` | 本機＝CI 測項數；共用 DB 不變；單元測試 14 項；CI 綠 |
 
+### H 表級權限硬化（P1b 發現補列；P1b 成本退場與 P2a／P2d 不可變保證的根本前提）
+
+問題：P1b 正式庫核對發現 `anon`／`authenticated`（以及 `service_role`）對所有 public 表仍有 Supabase 平台預設的 TRUNCATE／REFERENCES／TRIGGER／MAINTAIN；RLS 不管 TRUNCATE、列級 guard 也不會在 TRUNCATE 觸發，`cost_items` 退場與 `field_document_versions`／簽署／提送列不可變的保證因此有一條沒關的路。來源是 `pg_default_acl` 中 `postgres` 對 `public` 的 `grant all` 預設，逐表 revoke 只能救既有表、每支新 migration 都得記得補，這是技術債。目標：一次收回所有既有表，並修正 default privileges 讓新表不再自動帶；pgTAP 全表迴圈釘住。不做：不動 SELECT／INSERT／UPDATE／DELETE（基線與各表自己的收窄照舊）、不動 policy／trigger／資料列、不碰 `anon` 的表級 DML 與序列／函式 default（另列 H2／H3）。影響：一支 migration（ACL only）、rollback 檔、pgTAP、`seed.sql`（本機 service_role 改只給 DML）、DEVELOPMENT／deploy／SETUP／架構文件。驗收：pgTAP 全表迴圈三角色零殘留且測試內新建表仍無；`authenticated`／`anon`／`service_role` TRUNCATE `cost_items`／`field_document_versions` 皆 42501；既有 pgTAP 全綠；正式庫套用後唯讀核對。
+
+| 單元 | 相依 | 指定 | 實際 | 範圍 | 驗收 |
+|---|---|---|---|---|---|
+| H1 收回 API 角色的 TRUNCATE／REFERENCES／TRIGGER／MAINTAIN＋修 default privileges | P1b、T0 | fable5.1 | Fable 5.1 | migration `20260917213900_api_roles_table_ddl_privileges`（`revoke … on all tables in schema public from public, anon, authenticated, service_role`＋`alter default privileges for role postgres in schema public revoke …`；rollback 檔同名 `.down.sql`）、pgTAP `api_roles_table_privileges.sql`（每表 × 三角色迴圈＋default ACL 斷言＋測試內新建表＋TRUNCATE 行為）、`supabase/seed.sql`（service_role 表級改 DML）、`DEVELOPMENT.md` §5、`deploy.md` §4、`supabase/SETUP.md`、`audit-events.md`、`field-documents-lifecycle.md` §1、`slimming-entrypoints-and-retirement.md` 過渡表、`ROADMAP.md` | 迴圈零殘留；新建表無四種權限但 DML default 照舊；TRUNCATE 42501；`test:db` 全綠；正式庫唯讀核對 |
+| H2（候選，未授權）`anon` 表級 DML 與序列 default 對齊本機 secure-by-default | H1 | fable5.1 | — | 正式庫 default ACL 仍給 `anon` SELECT／INSERT／UPDATE／DELETE（既有 39–49 表）與序列 UPDATE，本機 CLI 沒有；全部 56 表 RLS 已開且 policy 只給 `authenticated`，列級目前擋得住，但屬同類漂移（未來有人加 `to public` policy 或關 RLS 就露出）。需先盤點前端 anon key 在登入前有無任何表查詢路徑 | 待使用者決定是否排入 |
+| H3（候選，未授權）新函式 EXECUTE default 對齊 | H1 | fable5.1 | — | 正式庫 default ACL 給三角色新函式 EXECUTE（199 支中 anon 可執行 72、authenticated 123），本機 default 只有 `postgres`；既有 migration 靠逐支 `revoke all on function … from public, anon, authenticated`，同樣是「每支都要記得」的債。改 default 後新 RPC 必須明示 `grant execute`（fail-closed），既有函式另需逐支盤點 | 待使用者決定是否排入 |
+
 ### P2 照片接收與 AI 草稿基礎
 
 問題：辨識結果不持久、無角色隔離、未匯標單不能收照片。目標：上傳即保存、可恢復、可重試、欄位來源；以施工日誌走通第一條起稿→簽署路徑。不做：不建通用表單平台；不做離線同步。影響：`photos`、新表家族、新 Edge、現場紀錄頁。驗收：切頁／重登入恢復；重試不重複建件；未配對照片保存；廠商照片不能進監造文件；施工日誌可簽署且事實表落庫。
