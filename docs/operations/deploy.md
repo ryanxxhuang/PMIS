@@ -121,9 +121,9 @@ curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security
 
 - **全域 `~/.npmrc` 有 `os=linux`**：mac 本機 `npm install` 會缺 darwin native binding 導致 `vite build` 爆。救法 `npm i --os=darwin --cpu=arm64`。
 - **colima 要掛載 repo 所在磁碟**：repo 在外接 SSD 時 `colima start --mount "$HOME:w" --mount "/Volumes/GameSSD:w"`，否則 edge-runtime 容器看到的 functions 目錄是空的（`failed to determine entrypoint`）。
-- **本機 Supabase 最小服務組**：`supabase start -x analytics,vector,edge-runtime,imgproxy,inbucket,realtime,storage,studio`（pgTAP 用不到那些）；`supabase db reset` 只可在可丟棄 DB 從零套 migrations，會清掉本機資料。
+- **本機 Supabase 最小服務組**：`supabase start -x analytics,vector,edge-runtime,imgproxy,inbucket,realtime,storage,studio`（真後端 E2E 用；pgTAP 已不需要這套 stack）；`supabase db reset` 只可在可丟棄 DB 從零套 migrations，會清掉本機資料。
 - **新版 CLI 本機 stack 對 `service_role` 沒有表級 GRANT**（secure-by-default）：`supabase/seed.sql` 在 `start`／`db reset` 時把本機 service_role 對齊 hosted 預設，**永遠不進正式部署**；已在跑的 stack 可 `docker exec -i supabase_db_PMIS psql -U postgres < supabase/seed.sql` 補。
-- **本機 pgTAP**：`npm run test:db`；容器依 `supabase/config.toml` 的 project_id 決定，可指定 DB_CONTAINER。與 CI 共用 runner，不 reset DB。
+- **本機 pgTAP**：`npm run test:db`；runner 自己用 `supabase db start` 起一次性資料庫（`PMIS_pgtap_<pid>`）從零套 migrations＋seed，跑完刪掉，不碰 `supabase_db_PMIS` 的資料，與 CI 同一條路徑；跑法見 [Supabase 設定](../../supabase/SETUP.md)。
 - 真後端 E2E 的殭屍 ssh 佔埠、smoke 帳號重佈建、functions serve 需有效金鑰等坑，見 [`../REAL_BACKEND_E2E.md`](../REAL_BACKEND_E2E.md)。
 
 ## 9. 回滾

@@ -57,6 +57,14 @@
 | P1c 首頁／底欄／提醒中心對齊四入口 | P1a | 純呈現（fable5.1 執行） | — | `Layout.jsx`、`BottomNav`、`Dashboard.jsx` 操作列、`Alerts.jsx` 入口文案 | 手機五格底欄＝四入口＋更多；無邏輯變更 |
 | P1d 文件同步 | P1a–c | 純呈現（fable5.1 執行） | — | `CURRENT.md` §6.1、`route-registry-governance.md`、`UIUX` 規範 §0 | `check:docs` |
 
+### T0 本機 pgTAP 測試隔離（P2a 之前補列）
+
+問題：`npm run test:db` 跑在共用的本機開發資料庫上，其他工作殘留的列讓 `ai_platform`／`p0_02` 的計數斷言本機假失敗、CI 從零套用卻全綠；後續每個 DB 單元都要靠本機判斷 pgTAP 紅綠，這種不一致會讓人誤判或習慣忽略失敗。目標：本機結果與 CI 一致且可重現，不刪、不 reset 共用開發資料庫。不做：不改測試斷言遷就環境、不動 migration、不動正式環境。影響：`scripts/test-pgtap.js`（runner 自己用 `supabase db start` 起獨立 project_id 的一次性資料庫從零套 migrations＋seed，跑完 `supabase stop --no-backup` 刪）、`.github/workflows/pgtap.yml`（改走同一條路徑，不再 `supabase start`／`db reset`）、`supabase/SETUP.md`、`deploy.md`、`BASELINE.md`。驗收：殘留列仍在時本機 41 檔 1,131 通過與 CI 一致；共用資料庫前後列數快照相同；中斷與殘留自動清除；CI 綠。
+
+| 單元 | 相依 | 指定 | 實際 | 範圍 | 驗收 |
+|---|---|---|---|---|---|
+| T0 本機 pgTAP 隔離 | P4a | fable5.1 | Fable 5.1 | `scripts/test-pgtap.js`／`.test.js`、`.github/workflows/pgtap.yml`、`supabase/SETUP.md`、`docs/operations/deploy.md`、`docs/BASELINE.md` | 本機＝CI 測項數；共用 DB 不變；單元測試 14 項；CI 綠 |
+
 ### P2 照片接收與 AI 草稿基礎
 
 問題：辨識結果不持久、無角色隔離、未匯標單不能收照片。目標：上傳即保存、可恢復、可重試、欄位來源；以施工日誌走通第一條起稿→簽署路徑。不做：不建通用表單平台；不做離線同步。影響：`photos`、新表家族、新 Edge、現場紀錄頁。驗收：切頁／重登入恢復；重試不重複建件；未配對照片保存；廠商照片不能進監造文件；施工日誌可簽署且事實表落庫。
@@ -126,7 +134,7 @@
 ## 5. 建議執行順序（單套本機 Supabase，DB 單元循序）
 
 1. P1a → P1b → P1c → P1d（無 DB；可與 P4a 平行）。
-2. P4a（純函式 migration＋pgTAP，不依賴 P3）。
+2. P4a（純函式 migration＋pgTAP，不依賴 P3）→ T0（本機 pgTAP 隔離；之後每個 DB 單元以 `npm run test:db` 的一次性資料庫結果判紅綠）。
 3. P2a → P2b → P2c → P2d（第一條完整路徑）。
 4. P3a → P3b → P3c → P3d → P3e。
 5. P4b → P4c → P4d；觀察一個真案期別 → P4e。
@@ -159,6 +167,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P4a、P4b、P4e、P5a–c、P6c）之�
 | P0 | `codex/slimming-p0-design`／PR #102 | `881702a`（merge commit 見 Git） | 無 | 無（純文件） | `npm run check:docs` 55 檔、355 連結、0 錯誤；CI 見 PR | P1a 與 P4a |
 | P1a | `codex/slimming-p1a-nav`／PR #104 | `5bb6a1d`；merge `33d0f70` | 無 | 2026-09-17 前端隨 main 由 Workers Builds 自動建置；`check:prod` app／demo 皆 OK，正式 bundle 已含新導覽；demo 站未重佈 | `npm test` 120 檔 1,255 項；lint／build／`check:docs` 55 檔 355 連結 0 錯；Demo E2E 10 支 71 項全綠（reachability 25/24/24 條、a11y 三角色 375＋1024 全路由）；內建 Preview 375px 底欄／抽屜／`/site` 核對 | P1b 退場頁唯讀化（/cost、/audit 已 hidden）；P1c 只剩文案（底欄已＝四入口＋更多）；P1d 同步 route-registry-governance／UIUX §0 |
 | P4a | `codex/slimming-p4a-calc`／PR #103 | `eea40b3`＋`24c38cc`；merge commit `591570c` | `20260917120000_confirmed_quantity_calc`（只型別與純函式；rollback 檔同名 `.down.sql`） | 2026-09-17 `supabase db push` 已套正式；`migration list --linked` 61 筆對齊；正式庫唯讀核對 14 支函式 IMMUTABLE／security invoker、anon／authenticated 不可執行 | CI（`24c38cc`）：pgTAP 從零套用 41 檔 1,131 通過、`confirmed_quantity_calc.sql` 83/83；`check:docs` 55 檔 0 錯誤。本機全套 41 檔 1,125 通過，`ai_platform`／`p0_02` 的計數斷言因共用本機 DB 殘留列（1 專案、3 成員）假失敗、與本支無關 | P2a（DB 單元循序）；P4b 依設計 §3.2 介面把表資料餵入純函式，不重寫算法 |
+| T0 | `codex/slimming-t0-pgtap-isolation`／PR #T0_PR | （merge commit 見 Git） | 無 | 無（測試基礎與 CI；無正式環境變更） | 本機 `npm run test:db` 41 檔 1,131 通過＝CI（main `d3b7d35`）；殘留列仍在的共用 DB 執行前後 86 張表列數快照 md5 相同、無 `*_pgtap_*` 殘留；SIGINT 中斷與 pid 已死殘留皆自動清除；`scripts/test-pgtap.test.js` 14 項；lint／`npm test`／`check:docs` 綠；CI `pgtap` 改走同一條路徑後綠 | P2a 起 DB 單元以本機 `test:db` 判紅綠；記憶檔 `pmis-local-pgtap-setup.md` 的舊跑法已過時（由使用者更新） |
 | P1b–P3、P4b–P7c | — | — | — | — | — | 依 §5 順序 |
 
 歷程規則：每單元合併後更新本表（PR 編號、merge commit、migration 版本、部署日期、驗證指令與結果）；正式環境狀態同時寫回 `CURRENT.md` §6.3。
