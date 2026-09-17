@@ -10,7 +10,7 @@
 | 2 | 試體 28 天抗壓判定+自動開缺失 | `src/lib/qc.js` `deriveTestSampleUpdate`／`shouldCreateTestSampleDefect` + `quality.js` demo 分支 | `judge_test_sample`／`test_sample_defect` trigger(`20260712001600_evidence_guards.sql`) | W5-4 已用 Vitest＋整合回歸釘住「同步判定、保存 `test_sample_id`、不重複開」；0.85fc′／平均門檻仍人工同步 |
 | 3 | 檢查表修訂鏈 rev/root_id | `quality.js createChecklistRecord` demo 分支本地計算 | DB guard 依鏈計算(前端真專案不算,寫入後 reload 取回) | 無自動保證,**人工同步** |
 | 4 | 契約義務到期日計算 | `src/lib/contractDue.js` | `supabase/functions/_shared/contractDue.ts`(send-reminders 用) | ✅ `contractDue.test.ts` 與前端**同一組測試案例**對齊 |
-| 5 | 今日工作／提醒彙整規則 | `src/lib/todayTasks.js`(W8-2B 起;Dashboard 與 `Alerts.jsx` 共用同一支,前端只有這一份);單筆球權判定在 `src/lib/ballInCourt.js` | `_shared/ballInCourt.ts` 的 `collectOpenBallItems`(B4 commit `eddcf18` 自 `agentTools.ts` 拆出;`list_my_open_items` 工具與 `send-reminders` 早報共用) | 無自動保證,**人工同步**;前端規則有 `todayTasks.test.js` 釘住,兩側**已知差異**見下方 |
+| 5 | 今日工作／提醒彙整規則 | `src/lib/todayTasks.js`(W8-2B 起;Dashboard 與 `Alerts.jsx` 共用同一支,前端只有這一份);單筆球權判定 P5a 起直接 import `_shared/ballInCourtRules.ts` | `_shared/ballInCourt.ts` 的 `collectOpenBallItems`(`list_my_open_items` 工具與 `send-reminders` 早報共用),判定同樣 import `ballInCourtRules.ts` | ✅ **單一實作**＋共用案例 `tests/fixtures/ball-in-court.cases.json`(Vitest 前端路徑／Edge 路徑與 Deno 三側同讀);剩餘呼叫端差異只有 `obligationSoonDays`(首頁／早報 7、Agent 工具 0),見下方 |
 | 6 | 預定進度 smoothstep S 曲線 | `billing.js generateSchedule` | —(demoSeed.js 複製同公式產 demo 資料) | 無自動保證,**人工同步** |
 | 7 | 角色權限矩陣(can) | `store.jsx` 的 `can` useMemo | RLS 分角色 policy + guard triggers + `admin_override()`(formal_mode) | E2E 蓋部分(路由守衛/核定流);矩陣全表靠 pgTAP |
 | 8 | 金流三欄順序(請款→收款→實收) | `Payments.jsx` 欄位鎖定邏輯 | `valuations_payment_gate` trigger(`20260712001800_payment_flow.sql`) | pgTAP 蓋 trigger;UI 鎖僅體驗,權威在 DB |
@@ -24,19 +24,17 @@
 - 第 4 項(contractDue)的「共用測試案例」模式是理想型:改動另外幾對時,
   優先考慮把案例抽成兩邊共用的 fixture。
 
-## 已知待辦差異
+## 第 5 項的剩餘差異（2026-09-17 P5a 後）
 
-以下差異影響產品責任分工，不由機械重構擅自決定對齊方向：
+P5a 已消除的差異：單筆球權涵蓋類型（兩側同一支 `ballInCourtRules.ts`：疑義、送審、估驗、缺失、變更、查驗、觀察、現場文書）、`responsible` 無法辨識時的歸屬（兩側都是待補設定，DB `obligation_party()` 同步回 null）、義務「未結」的判定（兩側同用 `isObligationOpen`：已提送／已完成／不適用以外都算，第五種值兩側同樣列入）。以下是刻意保留、由呼叫端決定的差異：
 
 | 差異 | 前端 `todayTasks.js` | 伺服器 `collectOpenBallItems` |
 |---|---|---|
-| 涵蓋類型 | 疑義、送審、估驗、查驗、缺失、觀察、變更、契約義務、試體、驗收、ITP | 缺失、送審、疑義、估驗、契約義務（無查驗／觀察／變更／試體／驗收／ITP） |
-| `responsible` 無法辨識時 | 視為未指定，**不歸任何角色** | 預設歸廠商 |
-| 監造／機關責任的契約義務 | 2026-09-11 起三方責任的期限都列入該方（`OBLIGATION_ACTIONABLE_SIDES = ORG_SIDES`，對齊 DB policy 20260825120000）；責任不明仍不歸任何方 | 一律列入該方；是否顯示即將到期項依呼叫端 `obligationSoonDays` |
-| 單筆球權判定涵蓋的單據（2026-09-11 寫 `ball-in-court.md` 時核對） | `ballInCourt.js` 七支判定：疑義、送審、估驗、缺失、變更設計、查驗、觀察 | `ballInCourt.ts` 只有前四支（疑義、送審、估驗、缺失），**缺變更設計、查驗、觀察三類**——agent 回答「我現在該處理什麼」與早報看不到待查驗與待核定的變更（[球權與待辦](ball-in-court.md)） |
-| 契約義務「未結」的 `status` 判定（同上） | `store/db.js` 載入時 `neq('status','不適用')`，`todayTasks` 再跳過已提送／已完成 | `collectOpenBallItems` 直接 `eq('status','待辦')`。`contract_obligations.status` **沒有 CHECK 約束**（baseline 只有註解列出四值），兩側只在現行四值域（待辦／已提送／已完成／不適用）下等價；出現第五種值時前端會列、伺服器不會（已列 ROADMAP 資料與安全候選） |
+| 契約義務的到期窗口 | `SOON_DAYS=7`：逾期或 7 日內 | 呼叫端 `obligationSoonDays`：早報 7（同前端）、Agent 工具 0（只列逾期）——同一支 `obligationInWindow`，只差參數 |
+| 前端獨有的期限型項目 | 試體、驗收、ITP 停留點、今日日誌 | 早報另加試體齡期（`testSampleItems`）；驗收／ITP／日誌不進 Agent 與早報 |
+| 「等待對方」 | WAITING_SCOPE 白名單＋現場文書當事方 | 無此概念（早報 pending 是我方無期限項） |
 
-因此網頁的今日工作與每日提醒信目前不是同一份清單。改任一側前先回到這張表。
+首頁、Agent 工具與早報對同一測試資料產出相同核心事項、責任與期限（共用案例三側斷言）。改任一側前先改案例。
 
 2026-09-07 另確認：前端／Edge 的循環期限均以規則推算下次日期，尚未提供逐期實例；不能因兩邊算出相同下次日期，就宣稱逐期逾期與準時率已驗證。`obligationTimeline.js` 亦明示循環逐期準時率需等待後端期次資料。這是待定產品能力，不是本文件授權新增資料模型。
 

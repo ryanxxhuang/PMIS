@@ -63,19 +63,20 @@ describe('collectOpenBallItems(與 list_my_open_items 同一份實作)', () => {
     expect(byId['s1']).toMatchObject({ side: 'supervisor', kind: '送審' })
     expect(byId['r1']).toMatchObject({ side: 'contractor', kind: '疑義' })
     expect(byId['v1']).toMatchObject({ side: 'owner', kind: '估驗', meta: '待機關撥款' })
-    // 義務:responsible 未填 → 廠商;逾期 16 天
-    expect(byId['o1']).toMatchObject({ side: 'contractor', kind: '契約重點', overdue_days: 16 })
+    // 義務:responsible 未填 → 不歸任何一方,列待補設定(P5a;不再預設廠商、不算逾期)
+    expect(byId['o1']).toMatchObject({ side: 'unassigned', kind: '契約重點', setup: { kind: 'responsible' } })
+    expect(byId['o1'].overdue_days).toBeUndefined()
     expect(byId['o1'].meta).toContain('第9條')
     // soonDays=7 → 未逾期但 3 天內到期的監造義務也收
     expect(byId['o2']).toMatchObject({ side: 'supervisor', due_date: '2026-07-29' })
     expect(byId['o2'].overdue_days).toBeUndefined()
   })
 
-  it('預設(工具行為)只收逾期義務,不收即將到期', async () => {
+  it('預設(工具行為)只收逾期義務,不收即將到期;待補設定不受窗口影響', async () => {
     const r = await collectOpenBallItems(fakeDb(tables), 'p1', TODAY)
     if ('error' in r) throw new Error(r.error)
     const ids = r.items.map((i) => i.id)
-    expect(ids).toContain('o1')
+    expect(ids).toContain('o1') // 待補設定:不論窗口都列
     expect(ids).not.toContain('o2')
   })
 
@@ -121,6 +122,18 @@ describe('itemsForRecipient（三方陣營）', () => {
   })
   it('廠商成員收到所有廠商事項，不再依現場／品管分流', () => {
     expect(ids(itemsForRecipient(items, 'contractor'))).toEqual(['a', 'b', 'c'])
+  })
+  it('待補設定(責任不明／基準日缺口)三方都收到,進 setupPending 段、不觸發寄信', () => {
+    const setup = item({ id: 'u', kind: '契約重點', side: 'unassigned', due_date: '2026-07-10', meta: '責任方待補設定（依 第9條）', setup: { kind: 'responsible', label: '責任方待補設定' } })
+    for (const role of ['contractor', 'supervisor', 'owner'] as const) {
+      const sections = splitBrief(itemsForRecipient([...items, setup], role), TODAY)
+      expect(ids(sections.setupPending)).toEqual(['u'])
+      expect(ids(sections.overdue)).not.toContain('u') // 逾期日期不算在無人負責的事項上
+    }
+    expect(shouldSendBrief(splitBrief([setup], TODAY))).toBe(false)
+    const html = renderBriefEmail({ role: 'owner', projectName: 'A', todayUTC: TODAY, sections: splitBrief([setup], TODAY), pendingDrafts: 0, agentUrl: 'https://x.test/#/agent' })
+    expect(html).toContain('待補設定（1）')
+    expect(html).toContain('責任方待補設定')
   })
 })
 

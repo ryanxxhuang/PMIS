@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
       recipients.push({
         user_id: uid, email, role, agent: AGENT_NAME[role],
         overdue: sections.overdue.length, soon: sections.dueSoon.length,
-        pending: sections.pending.length, drafts_pending: pendingDrafts,
+        pending: sections.pending.length, setup: sections.setupPending.length, drafts_pending: pendingDrafts,
         should_send: shouldSend,
         ...(dry && shouldSend ? { sections } : {}),
       })

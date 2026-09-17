@@ -33,6 +33,8 @@ jobs:
         with:
           deno-version: v2.9.6
       - run: npm run check:edge
+      # 球權共用案例在 Deno 執行期再跑一次(Vitest 已對前端與 Edge 路徑各跑一次)
+      - run: npm run test:edge
       - run: npm run check:docs
       - run: npm run lint
       - run: npm test

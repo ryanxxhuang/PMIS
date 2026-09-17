@@ -14,6 +14,9 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   const [siteLogs, setSiteLogs] = useState([])
   // 工安紀錄（真 DB）
   const [safetyRecords, setSafetyRecords] = useState([])
+  // 現場文書(P2a field_documents,真 DB;{ documents, submissions }):今日工作的「現場文書」
+  // 球權讀這份。寫入端(起稿／存版／簽署／提送)在 P2b／P2c 接 RPC,這裡先只有載入後的快取。
+  const [fieldDocuments, setFieldDocuments] = useState({ documents: [], submissions: [] })
 
   // 施工日誌：存某日各工項當日完成數量（一天一筆，沿用 project_id+log_date 唯一）
   // 公定格式欄位:weather_am/pm、labor/equipment/materials(陣列)、extras(四~八節)
@@ -360,7 +363,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   }, [isPersistedProject])
 
   return {
-    siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
+    siteLogs, setSiteLogs, safetyRecords, setSafetyRecords, fieldDocuments, setFieldDocuments,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
     readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,

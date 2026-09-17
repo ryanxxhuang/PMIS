@@ -22,7 +22,7 @@ import {
   loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
   loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
-  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB,
+  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadFieldDocumentsFromDB,
 } from './store/db.js'
 import { useAuthSlice } from './store/slices/auth.js'
 import { useProjectsSlice } from './store/slices/projects.js'
@@ -116,7 +116,7 @@ export function StoreProvider({ children }) {
   // ── 各領域 slice ─────────────────────────────────────────────────────────
   const ctx = { dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup }
   const {
-    siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
+    siteLogs, setSiteLogs, safetyRecords, setSafetyRecords, fieldDocuments, setFieldDocuments,
     saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
     readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
@@ -199,6 +199,7 @@ export function StoreProvider({ children }) {
       setInspections([]); setDefects([]); setCostItems([]); setItemSchedules({})
       setChangeOrders([]); setInspectionPoints([]); setChecklistTemplates([]); setChecklistRecords([]); setTestSamples([])
       setSafetyRecords([]); setObligations([]); setAcceptanceEvents([]); setSubmittals([]); setRfis([]); setObservations([])
+      setFieldDocuments({ documents: [], submissions: [] })
     }
     prevProjectRef.current = currentProjectId
   }, [currentProjectId, demoMode]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -253,7 +254,7 @@ export function StoreProvider({ children }) {
     ;(async () => {
       try {
         // 並行載入(P-03);缺失(統一引擎)不依賴標單:匯標單前也要載(dbMode 載入會再帶工項資訊覆蓋)
-        const [acc, obs, safety, defs, subs, rfiRows, obsRows] = await Promise.all([
+        const [acc, obs, safety, defs, subs, rfiRows, obsRows, docs] = await Promise.all([
           loadAcceptanceFromDB(pid),
           loadObligationsFromDB(pid),
           loadSafetyFromDB(pid),
@@ -261,11 +262,12 @@ export function StoreProvider({ children }) {
           loadSubmittalsFromDB(pid),
           loadRfisFromDB(pid),
           loadObservationsFromDB(pid),
+          loadFieldDocumentsFromDB(pid), // 現場文書不依賴標單:今日工作的球權要看得到待簽／待收件
         ])
         if (!active) return
         setAcceptanceEvents(acc); setObligations(obs); setSafetyRecords(safety)
         if (defs) setDefects(defs)
-        setSubmittals(subs); setRfis(rfiRows); setObservations(obsRows)
+        setSubmittals(subs); setRfis(rfiRows); setObservations(obsRows); setFieldDocuments(docs)
       } catch (e) {
         if (active) setDomainLoadError(e?.message || '專案資料載入失敗')
       }
@@ -309,7 +311,7 @@ export function StoreProvider({ children }) {
     // AI 功能開關(批 B,UX 層——真正的閘門在伺服器端 openAiGate):關閉的功能把入口藏起來
     aiEnabled,
     adjustedItems, coNet, revisedTotal, domainLoadError, retryDomainLoad,
-    siteLogs, saveSiteLog, fillValuationFromSiteLogs,
+    siteLogs, saveSiteLog, fillValuationFromSiteLogs, fieldDocuments,
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, readWhiteboard, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, classifySitePhoto, fetchWeather,
     obligations, reloadObligations, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,

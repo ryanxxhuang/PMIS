@@ -76,11 +76,12 @@
 
 ### 4.1 核心類型與責任
 
-首頁（`todayTasks.js`）、Agent（`collectOpenBallItems`）、早報（`send-reminders`）對齊為同一份**核心類型**：送審、疑義、估驗、缺失、查驗、變更、契約義務、現場文書（待補／待簽／退回／待收件）。做法：
+首頁（`todayTasks.js`）、Agent（`collectOpenBallItems`）、早報（`send-reminders`）對齊為同一份**核心類型**：送審、疑義、估驗、缺失、查驗、變更、觀察、契約義務、現場文書（待簽／待補／待核對／待提送／待收件／被退回）。**P5a 已實作**（進度見續接清單 §7），做法比原設計更進一步：
 
-- 把 `ballInCourt.js` 七支判定與 `ballInCourt.ts` 四支對齊為同一組**共用 fixture**（`tests/fixtures/ball-in-court.cases.json`，Vitest 與 Deno 測試同讀），比照 `contractDue` 的模式；Edge 補查驗／變更／觀察三類與現場文書。
-- `responsible` 無法辨識：兩側都改為「不歸任何方、列入待補設定」（Edge 現行預設廠商需改，`obligation_party()` DB 函式的 fallback 同步改為 null 並更新 policy 與前端 `obligationParty`——這是 [雙引擎](dual-engine-sync.md) 列明的人工同步項）。
-- 首頁不新存任務狀態；`/requirements` 與 `/dashboard` 共用同一事項來源，只差時間範圍。
+- 不只共用 fixture，而是**單一實作**：判定規則收成零 import 的 `_shared/ballInCourtRules.ts`，前端 `ballInCourt.js` 與 Edge `ballInCourt.ts` 都 import 它（放 `_shared` 是因 Edge 部署只打包該目錄，Vite 則可 import 任何路徑）。共用案例 `tests/fixtures/ball-in-court.cases.json` 仍照原設計建立，由 Vitest 前端路徑、Vitest Edge 路徑與 Deno 執行期（`npm run test:edge`）三側同讀。
+- `responsible` 無法辨識：兩側都不歸任何方、列入「待補設定」（首頁一張卡、Agent 工具 `setup_pending`、早報一段，三方可見；責任方缺口導擷取審核廢止取代後補登，基準日缺口導期限追蹤）。`obligation_party()` 對三方以外回 null（migration `20260917213502`），既有 update policy 因此對三方都不放行；前端 `obligationParty` 回「待補設定」。
+- 基準日缺失同理明示待補（不再靜默略過）。
+- 首頁不新存任務狀態；`/requirements` 與 `/dashboard` 共用同一事項來源，只差時間範圍。現場文書由 store 於真專案載入（`loadFieldDocumentsFromDB`）。
 
 ### 4.2 循環期次
 

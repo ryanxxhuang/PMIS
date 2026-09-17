@@ -16,7 +16,7 @@ import { AGENT_ROLES } from './agentPersona.ts'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const read = (f: string) => fs.readFileSync(path.join(here, f), 'utf8')
 
-const READ_ONLY_MODULES = ['agentQueryTools.ts', 'ballInCourt.ts', 'agentToolCommon.ts', 'agentToolDefs.ts']
+const READ_ONLY_MODULES = ['agentQueryTools.ts', 'ballInCourt.ts', 'ballInCourtRules.ts', 'agentToolCommon.ts', 'agentToolDefs.ts']
 const DRAFT_MODULES = ['draftDailyLog.ts', 'draftInspection.ts', 'draftSubmittalReview.ts', 'raiseTo.ts', 'integrityAuditTool.ts']
 const ALL_MODULES = [...READ_ONLY_MODULES, ...DRAFT_MODULES, 'agentTools.ts']
 const WRITE_VERB = /\.(insert|update|upsert|delete)\(/g

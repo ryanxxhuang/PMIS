@@ -195,7 +195,7 @@ guard `field_documents_guard`（所有寫入者）：狀態轉移矩陣＝§4；
 | 修訂（signed 後改內容→新版本，回 draft） | 廠商 | 監造 | 廠商（對應 `checklist_records` 修訂鏈 Rev.N） | 監造（重簽即重新判定；原確認量走撤銷／改量流程） |
 | discarded | 建立者（只限未簽署） | 同 | 同 | 同 |
 
-不變量：`signed` 以後的版本不可改；每次簽署綁定一個版本；`submitted` 必須指向已簽署版本；`received`／`returned` 只能由 `to_org` 成員執行；`returned` 後只能以新版本再簽再送，歷次 `return` 列全部保留。「今日工作」把 `pending_input`（我方）、`returned`（我方）、`submitted`（對方待收）納入待辦，與 [球權](ball-in-court.md) 同一引擎。
+不變量：`signed` 以後的版本不可改；每次簽署綁定一個版本；`submitted` 必須指向已簽署版本；`received`／`returned` 只能由 `to_org` 成員執行；`returned` 後只能以新版本再簽再送，歷次 `return` 列全部保留。「今日工作」（P5a 已實作，首頁／Agent／早報同一引擎）把責任方的 `draft` 待簽署、`pending_input` 待補欄位、`in_review` 待同方核對、`signed` 待提送、`returned` 被退回待補正，以及提送對象的 `submitted`／`received` 待收件（目前版本已提送且該方尚未收件或退回；多對象各一筆）納入待辦，見 [球權](ball-in-court.md)。
 
 ## 5. 簽署【已確認 要求，設計 機制】
 

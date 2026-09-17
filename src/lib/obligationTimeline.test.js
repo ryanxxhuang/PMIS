@@ -4,7 +4,7 @@
 //   3. 執行卡是稽核數字:五狀態加總必須等於該方義務總數
 import { describe, it, expect } from 'vitest'
 import {
-  VISIBLE, PARTIES, ORG_TO_PARTY, obligationParty, canActOn,
+  VISIBLE, PARTIES, ORG_TO_PARTY, obligationParty, canActOn, UNASSIGNED_PARTY, isVisibleTo,
   deriveStatus, countdownLabel, phaseOf, phaseWindows,
   partyStat, phaseStat, pickDefaultId, buildTimelineItem, matchesFilters,
   anchorGaps,
@@ -24,11 +24,22 @@ describe('三方可見範圍(本頁唯一權限規則)', () => {
     expect(VISIBLE.監造).toEqual(['監造', '廠商'])
     expect(VISIBLE.機關).toEqual(['廠商', '監造', '機關'])
   })
-  it('org_type 對映三方;未知 responsible 落回廠商(不憑空造第四方)', () => {
+  it('org_type 對映三方;未知 responsible 是「待補設定」而不是第四方,也不再落回廠商(P5a,與 DB obligation_party 同步)', () => {
     expect(ORG_TO_PARTY).toEqual({ contractor: '廠商', supervisor: '監造', owner: '機關' })
     expect(obligationParty({ responsible: '監造' })).toBe('監造')
-    expect(obligationParty({ responsible: '設計單位' })).toBe('廠商')
-    expect(obligationParty({})).toBe('廠商')
+    expect(obligationParty({ responsible: ' 機關 ' })).toBe('機關')
+    expect(obligationParty({ responsible: '設計單位' })).toBe(UNASSIGNED_PARTY)
+    expect(obligationParty({ responsible: '其他' })).toBe(UNASSIGNED_PARTY)
+    expect(obligationParty({})).toBe(UNASSIGNED_PARTY)
+    expect(PARTIES.includes(UNASSIGNED_PARTY)).toBe(false)
+  })
+  it('待補設定對三方都可見,但三方都不能操作', () => {
+    const it = { who: UNASSIGNED_PARTY }
+    for (const p of PARTIES) {
+      expect(isVisibleTo(it, p)).toBe(true)
+      expect(canActOn(it, p)).toBe(false)
+    }
+    expect(isVisibleTo({ who: '監造' }, '廠商')).toBe(false)
   })
   it('可見過濾:監造看不到機關義務、廠商看不到監造義務', () => {
     const items = PARTIES.map((p) => ({ who: p }))

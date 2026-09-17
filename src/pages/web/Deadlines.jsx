@@ -22,7 +22,7 @@ import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../compo
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
-import { ORG_TO_PARTY, obligationParty } from '../../lib/obligationTimeline.js'
+import { ORG_TO_PARTY, obligationParty, UNASSIGNED_PARTY } from '../../lib/obligationTimeline.js'
 import AnchorDates from '../../components/AnchorDates.jsx'
 import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 import { parseLocalDate, localISODate, taipeiToday } from '../../lib/dates.js'
@@ -273,7 +273,15 @@ export default function Deadlines() {
               <span className="text-caption text-[var(--text-3)] leading-relaxed">按下即退回待辦,並解除已掛的佐證</span>
             </>)}
             {markable && !it.done && <Button busy={busy} onClick={() => startMark(it)}>標為已提送</Button>}
-            {!markable && (
+            {!markable && obligationParty(ob) === UNASSIGNED_PARTY && (
+              // 責任方推不出三方:DB obligation_party() 回 null,三方都不能標記——說清楚為什麼沒有按鈕、去哪裡補
+              <span className="text-caption text-[var(--text-3)] leading-relaxed">
+                責任方尚未設定,三方都無法標記。請到
+                <Link to={`/requirements/review?highlight=${encodeURIComponent(ob.id)}`} className="text-[var(--blue-text)] hover:underline mx-0.5">擷取審核</Link>
+                廢止取代後補登責任方。
+              </span>
+            )}
+            {!markable && obligationParty(ob) !== UNASSIGNED_PARTY && (
               <span className="text-caption text-[var(--text-3)] leading-relaxed">由{obligationParty(ob)}負責提送,本頁為唯讀檢視。</span>
             )}
           </div>

@@ -13,7 +13,7 @@ const {
   loadQualityFromDB, loadDefectsFromDB, loadItemSchedulesFromDB, loadChangeOrdersFromDB,
   loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB, loadItpFromDB,
   loadAcceptanceFromDB, loadScheduleFromDB,
-  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB,
+  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadFieldDocumentsFromDB,
 } = await import('./db.js')
 
 const PID = 'p1'
@@ -149,6 +149,20 @@ describe('db.js 分頁載入:超過 PostgREST 單次上限時要全部取回', (
     expect(await loadObservationsFromDB(PID)).toHaveLength(1050)
     const sched = await loadScheduleFromDB({ project_id: PID, start_date: 'a', end_date: 'b' })
     expect(sched.months).toHaveLength(1020)
+  })
+
+  it('現場文書:未終態文件分頁載入,提送列依文件 id 分批查(P5a 今日工作的球權來源)', async () => {
+    pg.setTable('field_documents', [
+      ...rows('fd', 1100, (i) => ({ doc_type: 'daily_log', status: 'submitted', current_version_no: 1, updated_at: `2026-07-${String((i % 28) + 1).padStart(2, '0')}` })),
+      ...rows('fd-done', 3, () => ({ doc_type: 'daily_log', status: 'discarded', current_version_no: 1, updated_at: '2026-07-01' })),
+    ])
+    pg.setTable('field_document_submissions', rows('fs', 1200, (i) => ({ document_id: uid('fd', i % 1100), version_no: 1, action: 'submit', actor_org: 'contractor', to_org: 'supervisor', created_at: 'x' })))
+    const got = await loadFieldDocumentsFromDB(PID)
+    expect(got.documents).toHaveLength(1100)
+    expect(got.documents.every((d) => d.status !== 'discarded')).toBe(true)
+    expect(got.submissions).toHaveLength(1200)
+    expect(pg.requestsFor('field_documents')).toHaveLength(2)
+    expect(pg.requestsFor('field_document_submissions').every((r) => r.inSize <= 200)).toBe(true) // 分批查,不塞爆 URL
   })
 
   it('已廢止期限的不適用 obligation 保留在 DB，但不再進入現行提醒資料', async () => {

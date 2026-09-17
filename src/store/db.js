@@ -3,6 +3,7 @@
 import { supabase } from '../lib/supabase.js'
 // 所有列表載入一律走分頁,避免 PostgREST max_rows 靜默截斷(見 pagedQuery.js 開頭)
 import { pageAll, pageAllIn } from '../lib/pagedQuery.js'
+import { FIELD_DOC_OPEN_STATUSES } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 // pdf.js worker 自帶(B-12):?url 只打包資產網址,worker 檔進自家 dist——
 // 機關內網/防火牆擋 CDN 時,契約 PDF 抽字不再直接壞掉。
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -174,6 +175,24 @@ export async function loadObligationsFromDB(projectId) {
     .select('*').eq('project_id', projectId).neq('status', '不適用')
     .order('sort_order').order('id').range(from, to), '契約重點')
   return data || []
+}
+
+// 從 DB 載入現場文書(P2a field_documents)未終態的文件與其提送／收件／退回列——
+// 今日工作的「現場文書」球權要知道目前版本已提送給誰、誰還沒收件(規則在
+// _shared/ballInCourtRules.ts fieldDocumentBalls)。received 仍要載:監造查驗表單提送兩方,
+// 一方收件後狀態即 received,另一方可能還沒收。提送表沒有 project_id,以本案文件 id 分批查。
+export async function loadFieldDocumentsFromDB(projectId) {
+  const documents = await pageAll((from, to) => supabase.from('field_documents')
+    .select('id, doc_type, doc_date, status, owner_org, current_version_no, target_id, updated_at')
+    .eq('project_id', projectId).in('status', FIELD_DOC_OPEN_STATUSES)
+    .order('updated_at', { ascending: false }).order('id').range(from, to), '現場文書')
+  const ids = (documents || []).map((d) => d.id)
+  const submissions = ids.length
+    ? await pageAllIn(ids, (chunk, from, to) => supabase.from('field_document_submissions')
+      .select('id, document_id, version_no, action, actor_org, to_org, created_at')
+      .in('document_id', chunk).order('created_at').order('id').range(from, to), '現場文書提送')
+    : []
+  return { documents: documents || [], submissions: submissions || [] }
 }
 
 // 從 DB 載入成本項目（預算 vs 實際、分包）
