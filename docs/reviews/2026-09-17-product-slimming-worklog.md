@@ -74,7 +74,7 @@
 | P2a 文件家族 migration | P0 | fable5.1 | Fable 5.1 | migration `20260917201000_field_documents`：`photo_intakes`、`photos` 加欄＋`photos_org_stamp`（`uploader_org`／`uploaded_by` 伺服器決定）、`field_documents`／`_versions`／`_signatures`／`_submissions`、RLS、欄位級 grants、六支 guard、稽核 AFTER trigger、rollback `.down.sql`；`auditEvents.js` 標籤；pgTAP `field_documents.sql` 215 條 | pgTAP：RLS 三角色＋非成員＋跨案；版本不可變；雜湊由 DB 算；簽署／提送列不可直接寫；狀態結構要件；grants |
 | P2b Edge 起稿 | P2a | fable5.1 | — | `supabase/functions/draft-field-documents/`、`_shared/photoMatch.ts`（同前端測試案例）、`_shared/fieldDocDraft.ts`（純函式）、AI 註冊三處＋seed migration、`check:edge` | 單元測試：候選推斷、`field_sources` 規則、冪等、部分失敗；閘門 fail-closed |
 | P2c 現場紀錄頁（上傳／恢復／文件清單） | P2a | fable5.1 | — | `src/pages/web/Site.jsx`（新）、`site.js` 新增 intake 上傳／恢復、`SiteLog.jsx` 改吃伺服器草稿、手機形狀 | E2E：上傳→重整→恢復；「仍在本機」與「已保存」區分 |
-| P2d 施工日誌簽署／提送 RPC | P2a | fable5.1 | — | migration：`save_field_document_version`、`sign_field_document`（daily_log 分支）、`submit/receive/return`、`daily_logs_guard`、`resolve_agent_action_internal`；pgTAP `field_document_sign.sql` | pgTAP：舊版簽署、雜湊不符、越權、跨案、待補欄、簽後改文另開版；提送重試防重複 |
+| P2d 施工日誌簽署／提送 RPC | P2a | fable5.1 | Fable 5.1 | migration `20260917205000_field_document_rpcs`：`save_field_document_version`（四類共用；必填鍵／待補由伺服器算並寫回）、`sign_field_document`（只有 daily_log 分支，其他類型 `PD007`；aal2、必填、附件角色、事實表落庫、`agent_actions`）、`submit/receive/return_field_document`（`client_request_id` 冪等）、`daily_logs_guard`／`daily_log_items_guard`（已簽署列只有簽署 RPC 可重寫）、`resolve_agent_action_internal`、`field_documents_target_uidx` 改只算活文件；錯誤代碼 `PD001–PD010`；rollback `.down.sql`；pgTAP `field_document_sign.sql` 140 條 | pgTAP：舊版簽署、雜湊不符、越權、跨案、aal1、待補欄、附件冒充、簽後改文另開版、事實列不可直接改寫、提送重試防重複、退回必填原因且歷次保留、收件方限定、diff 由 DB 算、三角色＋非成員矩陣 |
 
 ### P3 四類文書＋簽署提送
 
