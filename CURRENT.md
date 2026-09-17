@@ -1,8 +1,8 @@
 # 目前系統現況
 
-> CURRENT｜2026-09-17｜三方操作流程優化＋D-026 P4a 純計算層＋P2a 現場文書資料層；正式發布狀態見 §6.3。
-> 包含契約整理、Apple UI、D-022、工安清單／詳情殼，以及全案程式與文件整理；驗證見 [BASELINE](docs/BASELINE.md)。前端已由 main 自動部署；DB 已同步至 `20260917201000`、Edge 最後重佈 2026-09-11，版本與核對範圍見 §6.3。
-> 進行中工作（D-026 產品瘦身與四類文書、監造確認量估驗聯動）見 [續接清單](docs/reviews/2026-09-17-product-slimming-worklog.md)；本檔只記已上線現況：該包目前上線的是 P1a 導覽重組、P1c／P1d 文案對齊與抽屜斷點修正（前端）、P4a 純函式 migration（尚無呼叫端）與 P2a 現場文書資料層 migration（表、RLS、guard、稽核；尚無 Edge／前端／RPC 寫入端），其餘仍是設計文件。
+> CURRENT｜2026-09-17｜三方操作流程優化＋D-026 P4a 純計算層＋P2a 現場文書資料層＋P2d 施工日誌存版／簽署／提送 RPC；正式發布狀態見 §6.3。
+> 包含契約整理、Apple UI、D-022、工安清單／詳情殼，以及全案程式與文件整理；驗證見 [BASELINE](docs/BASELINE.md)。前端已由 main 自動部署；DB 已同步至 `20260917205000`、Edge 最後重佈 2026-09-11，版本與核對範圍見 §6.3。
+> 進行中工作（D-026 產品瘦身與四類文書、監造確認量估驗聯動）見 [續接清單](docs/reviews/2026-09-17-product-slimming-worklog.md)；本檔只記已上線現況：該包目前上線的是 P1a 導覽重組、P1c／P1d 文案對齊與抽屜斷點修正（前端）、P4a 純函式 migration（尚無呼叫端）、P2a 現場文書資料層 migration（表、RLS、guard、稽核）與 P2d 存版／簽署／提送 RPC 與 `daily_logs` guard migration（只有 `daily_log` 簽署分支；尚無 Edge／前端呼叫端），其餘仍是設計文件。
 
 ## 1. 產品與範圍
 
@@ -62,10 +62,11 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 ### 6.2 驗證
 
-當前結果與指令只見 [BASELINE](docs/BASELINE.md)。單元、Demo E2E、本機真後端 E2E 固定資料模式、pgTAP、17 支 Edge 的 Deno 型別檢查均通過；2026-09-17 P4a 新增一支只含純函式的 migration `20260917120000`（已套正式，見 §6.3），其餘未動 migration。真模型抽取仍未驗，抽取準確率／召回率未用真契約量測；`completed` 不代表語意正確。真人手機輪與真案三角色實機驗收仍待完成。
+當前結果與指令只見 [BASELINE](docs/BASELINE.md)。單元、Demo E2E、本機真後端 E2E 固定資料模式、pgTAP、17 支 Edge 的 Deno 型別檢查均通過；2026-09-17 P4a 新增一支只含純函式的 migration `20260917120000`、P2a 新增資料層 migration `20260917201000`、P2d 新增 RPC 與 guard migration `20260917205000`（皆已套正式，見 §6.3；pgTAP 從零套用 43 檔 1,486 通過）。真模型抽取仍未驗，抽取準確率／召回率未用真契約量測；`completed` 不代表語意正確。真人手機輪與真案三角色實機驗收仍待完成。
 
 ### 6.3 正式環境最後核對（不是即時狀態）
 
+- **2026-09-17 P2d 施工日誌存版／簽署／提送 RPC 與事實表 guard（D-026）**：PR #112 已合併（merge commit `2f9f68d`，分支 `codex/slimming-p2d-sign-submit`）。PR 檢查 CI／pgTAP 皆通過（pgTAP 從零套用 43 檔 1,486 通過，新增 `field_document_sign.sql` 140 條，全走真實 `authenticated`＋JWT 路徑；單元 120 檔 1,259 項）。同日 `supabase db push` 套用 `20260917205000_field_document_rpcs`：新增 `save_field_document_version`（四類共用；必填鍵／待補由伺服器算並寫回）、`sign_field_document`（只有 `daily_log` 分支，其他類型回 `PD007`；aal2 政策、必填完整性、附件角色隔離、落 `daily_logs`／`daily_log_items`、綁 `target_id`、`agent_actions` 內部處理）、`submit`／`receive`／`return_field_document`（`client_request_id` 冪等）、`daily_logs_guard`／`daily_log_items_guard`（已簽署列只有簽署 RPC 交易內可重寫，DELETE 一律擋；未簽署列照舊）、`field_documents_target_uidx` 改只算活文件；錯誤代碼 SQLSTATE `PD001–PD010`；`migration list --linked` 核對本地與遠端 63 筆全部對齊。正式庫唯讀核對：五支公開 RPC 皆 `security definer`、`search_path=public`、只有 `authenticated` 可執行（anon 不可）；`resolve_agent_action_internal`／`field_document_respond_internal`／兩支 guard／六支 helper `authenticated` 不可執行；兩支 guard trigger 已啟用；索引定義含 `status <> ALL (discarded, superseded)`；既有 12 筆 `daily_logs`（33 筆明細）無任何簽署文件指向、0 筆 `已簽署`，`field_documents`／簽署／提送皆 0 筆——對現有日誌作業零行為影響（舊 `saveSiteLog` 只在該日已有簽署文件時才會收到 P0001）。不含 Edge 或前端變更；P2b／P2c 之前這些 RPC 沒有任何呼叫端。
 - **2026-09-17 P2a 現場文書家族資料層（D-026）**：PR #109 已合併（merge commit `3f2a00a`，分支 `codex/slimming-p2a-field-docs`）。PR 檢查 CI／pgTAP 皆通過（pgTAP 從零套用 42 檔 1,346 通過，新增 `field_documents.sql` 215 條；單元 120 檔 1,259 項）。同日 `supabase db push` 套用 `20260917201000_field_documents`：新增 `photo_intakes`、`field_documents`／`_versions`／`_signatures`／`_submissions` 五表（RLS＋欄位級 grants＋六支 guard＋四支稽核 trigger）、`photos` 加七欄與 `photos_org_stamp`（上傳方由伺服器決定）、`photos` 的 insert／update 改欄位級 grant（既有欄全保留、AI 欄只有 service 可寫）；`migration list --linked` 核對本地與遠端 62 筆全部對齊。正式庫唯讀核對：5 表、10 支 trigger、9 條 policy 就位；authenticated 對 `field_documents` 無 UPDATE、只有 `doc_type` 等六欄的 INSERT、對版本／簽署／提送表無任何寫入；`photos` 的 `uploader_org`／`ai_status` 客戶端不可寫、`caption` 仍可改；anon 不可讀；既有 2 筆照片的 `uploader_org` 皆由上傳者 profile 回填、0 筆未知。不含 Edge 或前端功能（`auditEvents.js` 只加標籤）；P2b／P2c／P2d 之前這些表沒有任何寫入端，對現有流程零行為影響。
 - **2026-09-17 P4a 監造確認量純計算層（D-026）**：PR #103 已合併（merge commit `591570c`，分支 `codex/slimming-p4a-calc`）。PR 檢查 CI／pgTAP 皆通過（pgTAP 從零套用 41 檔 1,131 通過，新增 `confirmed_quantity_calc.sql` 83 條）。同日 `supabase db push` 套用 `20260917120000_confirmed_quantity_calc`（只新增 2 型別＋14 支 IMMUTABLE／security invoker 純函式，不動任何表、trigger、policy 或資料列）；`migration list --linked` 核對本地與遠端 61 筆全部對齊；正式庫唯讀核對 14 支函式皆 IMMUTABLE、security invoker，anon／authenticated 均不可執行。不含 Edge 或前端變更；P4b 之前這些函式沒有任何呼叫端，對現有流程零行為影響。使用者同日對續接清單 §6 的答覆記入 D-026 第 7 點。
 - **2026-09-17 瘦身 P1c＋P1d 文案對齊四主入口與手機抽屜斷點缺陷（D-026）**：PR #108 已合併（merge commit `f6ba60c`，分支 `codex/slimming-p1cd`）。PR 檢查與合併後 main 的 CI、pgTAP 皆通過（120 檔 1,263 項單元；Demo E2E 含新增抽屜斷點測試）；前端由 Workers Builds 自動建置，合併後 `npm run check:prod` app／demo 皆 200、CSP `script-src 'self'`、無注入腳本，正式主 chunk 已不含舊「常用工作」文案。純前端文案與 Layout 抽屜狀態推導＋文件，不含 DB migration 或 Edge 部署；demo 站未重佈（待 P1b 後一次重佈）；正式站登入後流程與真人驗收未核對。
@@ -80,7 +81,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 - **2026-09-15 UIUX 階段 1–6（桌機三角色流程）**：PR #85 已合併（merge commit `afdaefb`，分支 `ui/uiux-stages-1-6`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（114 檔 1,218 項單元、10 檔 70 項 Demo E2E、lint／build／check:docs）；前端由 Cloudflare 自動建置，建置版本以 Cloudflare 後台為準。前端變更，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
 - **2026-09-14 UIUX 工作包**：已隨 PR #83 合併（`7156aef`）。前端變更，不含 DB migration 或 Edge 部署。
 
-- **DB**：2026-09-17 `supabase db push` 先後套用 `20260917120000_confirmed_quantity_calc`（P4a 純函式）與 `20260917201000_field_documents`（P2a 現場文書資料層）；`migration list --linked` 核對本地與遠端 62 筆全部對齊，最新 `20260917201000`。前一次 2026-09-11 套用 `20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`。
+- **DB**：2026-09-17 `supabase db push` 先後套用 `20260917120000_confirmed_quantity_calc`（P4a 純函式）、`20260917201000_field_documents`（P2a 現場文書資料層）與 `20260917205000_field_document_rpcs`（P2d 存版／簽署／提送 RPC 與 `daily_logs` guard）；`migration list --linked` 核對本地與遠端 63 筆全部對齊，最新 `20260917205000`。前一次 2026-09-11 套用 `20260911100000_demo_requests_revoke_grants`、`20260911100100_contract_parse_retire`、`20260911110000_project_admin_single_source`。
 - **Edge**：2026-09-11 以 `--use-api` 從 main（含 `_shared/` 重構）重佈全部 17 支；`functions list` 核對每支版本均 +1（agent-run 14、extract-requirements 13、send-reminders 16、classify-document 3 等）。線上另有 `demo-request` 一支由行銷站 repo 部署，不在本 repo。
 - **前端**：main 每次合併由 Cloudflare Workers 自動建置。2026-09-11 PR #64（`8be082a`）建置版本 `fc99c933-32f5-47c6-b0e6-726e50b2956e`，首頁 HEAD 200、七項安全標頭齊全；同日 PR #67／#69／#70／#76／#78 及 2026-09-12 PR #79 陸續合併，各次建置版本未逐一記錄，以 Cloudflare 後台為準。這不代表登入後業務流程或正式後端已驗證。
 - **舊站**：2026-09-11 GitHub Pages API 仍回 built，來源為 `gh-pages`；此部署分支保留。`pmis.pages.dev` 最後核對為 2026-09-07，退場待另行處理。
