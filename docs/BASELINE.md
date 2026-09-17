@@ -1,9 +1,15 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-17｜瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-17 P2d：施工日誌存版／簽署／提送 RPC（migration `20260917205000_field_document_rpcs`）
+
+- `npm run test:db`（一次性資料庫從零套 63 支 migration＋seed）：43 檔、1,486 通過、0 失敗（＝P2a 基準 1,346＋新增 `field_document_sign.sql` 140 條）。新增套件全部以真實 `authenticated` 角色＋JWT claims 呼叫 RPC，覆蓋：五支 RPC 與兩支 guard 存在、`authenticated` 可執行五支公開 RPC 而內部函式／helper 不可、anon 全無、事實列綁定索引只算活文件；純函式（必填鍵＝固定六欄＋內容各工項數量、stored 聯集但工項鍵只由內容重算、非日誌類型只回 stored；待補判定 missing／pending／na 無 reason／未知狀態）；存版（樂觀併發 `PD001`、內容形狀 `PD010`、監造／機關／非成員 `PD006`、同方第二人可接手、待補自動 `pending_input`／齊備 `draft`、`required_fields`／`recheck` 寫回、雜湊由 DB 算、人工版本建立者＝登錄者）；簽署（aal1 `PD003`、舊版 `PD001`、雜湊 `PD002`、空白意願 `PD010`、監造／機關／非成員 `PD006`、監造日誌 `PD007`、待補 `PD004`、監造照片／未知上傳方冒充施工證據 `PD005`、外案工項／負數／缺值／日期不符／labor 非陣列 `PD010`；成功：簽署列由伺服器取簽署者／aal／IP／UA／意願、文件 signed＋`target_id`、`daily_logs` 以簽署內容落庫且 `status='已簽署'`、`daily_log_items` 只落有數量工項、指向文件的 AI 草稿標 edited 且 `resolved_by`＝簽署者、舊 `draft_daily_log` 不受影響、`agent_action_resolved`／`field_document.signed` 稽核；同人重試冪等不重複、他人再簽 `PD008`）；事實表 guard（已簽署日誌的直接 UPDATE／舊 upsert／DELETE／明細 INSERT／UPDATE／DELETE、service 路徑、偽造 GUC 指向別日文件全部被擋；未簽署日誌 UPDATE／明細 INSERT／DELETE 照舊）；簽後更正（新版本 `amended_from_version`、回 draft、事實列仍是舊簽署內容且受保護、舊簽署綁舊版、重簽後事實列更新、`field_document.amended`）；提送（對象矩陣 `PD010`、舊版 `PD001`、監造／非成員 `PD006`、首次無 diff、同 `client_request_id` 回同回執、同 id 換對象 `PD009`、同版本同對象自然鍵冪等、提送方不可自收）；收件／退回（舊版 `PD001`、非對象 `PD006`、收件冪等、退回無原因 `PD010`、退回回執與原因保留、退回重試冪等、退回後再退／收件 `PD008`、原版再送 `PD008`、新版本重簽再送 diff 由 DB 算、歷次 4 筆保留、已收件不可再存版 `PD008`）；superseded 後新文件簽署接手同一事實列；非正式案 admin_override 可代編輯但 aal1 仍 `PD003`、aal2 可簽且如實記簽署者組織；捨棄不可存版；專案刪除 cascade 通過 guard。
+- `npm run lint`、`npm test`（120 檔 1,259 項）、`npm run build`、`npm run check:docs` 見 PR。
+- 未做：Edge／前端無新功能（P2b／P2c 尚未接 RPC，前端仍走 `saveSiteLog` 直接寫未簽署日誌）；`sign_field_document` 只有 `daily_log` 分支（其他類型 `PD007`）；正式 `db push` 於合併後執行並記 CURRENT §6.3。
 
 ### 2026-09-17 P2a：現場文書家族資料層（migration `20260917201000_field_documents`）
 

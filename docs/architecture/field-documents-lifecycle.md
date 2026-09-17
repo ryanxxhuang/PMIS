@@ -1,6 +1,6 @@
 # 現場文書：四類文書的資料模型、生命週期與簽署提送
 
-> 狀態：**PROPOSED（P0 設計；P2a 資料層已實作）**｜2026-09-17｜依 [D-026](../DECISIONS.md)。§2.2 的 `photo_intakes`、`photos` 加欄與 `field_documents` 家族已由 migration `20260917201000_field_documents` 建立並有 pgTAP `field_documents.sql`（§8 表列 P2a 的物件以 migration 為準）；Edge 起稿（P2b）、前端（P2c）、簽署／提送 RPC（P2d）與 `supervisor_logs`（P3a）尚未動工，實作進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
+> 狀態：**PROPOSED（P0 設計；P2a 資料層、P2d 存版／簽署／提送 RPC 已實作）**｜2026-09-17｜依 [D-026](../DECISIONS.md)。§2.2 的 `photo_intakes`、`photos` 加欄與 `field_documents` 家族已由 migration `20260917201000_field_documents` 建立並有 pgTAP `field_documents.sql`；§5–§7 的 `save_field_document_version`、`sign_field_document`（只有 `daily_log` 分支）、`submit`／`receive`／`return_field_document`、`daily_logs_guard`／`daily_log_items_guard`、`resolve_agent_action_internal` 已由 migration `20260917205000_field_document_rpcs` 建立並有 pgTAP `field_document_sign.sql`（§8 表列以 migration 為準）；Edge 起稿（P2b）、前端（P2c）與 `supervisor_logs`（P3a）尚未動工，實作進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
 > 標記：**【已確認】**＝使用者已確認的產品邊界（D-026，不需再問）；**【設計】**＝實作者選擇，實作時可調整但須回寫本文件；**【待決】**＝需使用者決定，答覆前依「暫行」做，不阻擋其他工作。
 
 ## 0. 現況核對（基準 `ab4be5f`）
@@ -92,7 +92,7 @@ RLS：SELECT 專案成員（Q4：使用者 2026-09-17 同意暫行「專案成�
 | `required_fields jsonb` | 由範本或固定欄位推導的必填鍵（含必要附件）；只有 service／RPC 可寫（客戶端不能把必填清空來裝作可簽） |
 | `recheck jsonb` | 系統列出的未通過項（缺附件、待補、角色不符）；只有 service／RPC 可寫 |
 
-唯一性：`(project_id, doc_type, doc_date)` 部分唯一（日誌類且 `status not in ('discarded','superseded')`；`owner_org` 由 `doc_type` 決定，不需入鍵）；`(doc_type, target_id)` 部分唯一；`(intake_id, doc_type, target_key) nulls not distinct` 部分唯一（活文件；起稿冪等，§3.2）。索引：`(project_id, doc_type, doc_date desc)`、`(project_id, status, updated_at desc)`、`(created_by, updated_at desc) where status in ('draft','pending_input','returned')`（§3.3 待處理清單）。
+唯一性：`(project_id, doc_type, doc_date)` 部分唯一（日誌類且 `status not in ('discarded','superseded')`；`owner_org` 由 `doc_type` 決定，不需入鍵）；`(doc_type, target_id)` 部分唯一（P2d 改為只算活文件：對方收件後 superseded 另立的新文件簽署時要接手同一列事實列）；`(intake_id, doc_type, target_key) nulls not distinct` 部分唯一（活文件；起稿冪等，§3.2）。索引：`(project_id, doc_type, doc_date desc)`、`(project_id, status, updated_at desc)`、`(created_by, updated_at desc) where status in ('draft','pending_input','returned')`（§3.3 待處理清單）。
 
 grants／RLS：authenticated SELECT（專案成員；監造日誌依 Q4 亦成員可讀）；INSERT 只開 `id, project_id, doc_type, doc_date, intake_id, template_id`，policy `can_write` 且 `owner_org = my_org_type()`（`admin_override` 例外；generated column 在 BEFORE trigger 之後、WITH CHECK 之前算好）；**沒有 UPDATE／DELETE grant 與 policy**——狀態、版本指標、必填欄、待補清單、事實列綁定一律經 P2d RPC 或 service（原設計「INSERT／UPDATE `can_write`」收緊為只有 INSERT）。
 
@@ -199,27 +199,57 @@ guard `field_documents_guard`（所有寫入者）：狀態轉移矩陣＝§4；
 
 ## 5. 簽署【已確認 要求，設計 機制】
 
-RPC `sign_field_document(p_document_id, p_version_no, p_content_hash, p_intent, p_client_request_id)`：
+**P2d 已實作（migration `20260917205000_field_document_rpcs`；pgTAP `field_document_sign.sql` 140 條）**。所有 RPC 皆 `security definer`、`set search_path = public`、以 `auth.uid()` 取身分，不信任參數中的角色／組織／時間；`revoke all from public, anon`，只 `grant execute to authenticated`。錯誤以 SQLSTATE `PD0xx` 回（`message` 使用者可讀繁中、`detail` 機器可讀 JSON），P2c 依 `error.code` 分流：
 
-1. `select ... for update` 鎖文件列；`current_version_no = p_version_no` 否則拒絕（「畫面是舊版」）；版本雜湊等於 `p_content_hash` 否則拒絕（內容完整性）。
-2. 角色：`my_org_type() = owner_org`（`admin_override` 例外，正式模式失效）；跨案取件由 RLS 與 `project_id` 雙重擋。
-3. 完整性：`required_fields` 全部 `filled`／`confirmed`／`na`（`na` 需 reason）；附件的 `photos` 列存在且 `sha256` 相符；角色隔離（§3.4）。
-4. 簽署方式（使用者 2026-09-17 決定：先用平台帳號加 MFA）：JWT `aal` 必須為 `aal2`，否則拒絕並提示先完成兩步驟驗證（`admin_override` 也不放行）；寫入 `field_document_signatures`（`signed_at=now()`、`aal` 取 JWT、`method='platform_account_mfa'`）；`status='signed'`。`method` enum 保留 `platform_account`／`paper_scan` 供日後方式，本輪不啟用。
-5. 同交易落事實表：`daily_log`→upsert `daily_logs`＋`daily_log_items`；`supervisor_log`→upsert `supervisor_logs`；`self_check`→insert `checklist_records`（`results/overall` 取版本內容；判定仍由前端 `judgeChecklist` 計算，DB 不重算，與 [雙引擎 #1](dual-engine-sync.md) 一致）；`inspection_form`→更新 `inspections`（判定、`results`、`template_id`、`batch_key`、`document_id`）＋寫確認量（[確認量文件 §2](confirmed-quantity-valuation.md)）。事實表 guard（`daily_logs_guard`、`supervisor_logs_guard`）在有已簽署文件指向該列時擋直接修改。
-6. `agent_actions` 對應列由內部函式 `resolve_agent_action_internal` 標 `accepted`（無人工版本）或 `edited`（有人工版本），`resolved_by` 為簽署者。稽核 `field_document.signed` 由簽署列的 AFTER trigger 寫，RPC 不再另記。
+| 代碼 | 意義 | 前端處置 |
+|---|---|---|
+| `PD001` | 畫面是舊版（版本號／基準版本不是目前版本） | 重新載入文件 |
+| `PD002` | 內容雜湊與伺服器版本不符 | 重新載入 |
+| `PD003` | 需要兩步驟驗證（JWT `aal` 非 `aal2`；`admin_override` 也不放行） | 引導到「帳號」啟用／完成 TOTP 後重試 |
+| `PD004` | 必填欄位待補（`detail=[{key,status}]`，status＝`missing`／`pending`／`na_without_reason`／`unknown_status`） | 高亮待補欄；同一份清單也在 `field_documents.recheck` |
+| `PD005` | 附件不符角色隔離（`detail=[{key:'attachments.<photo_id>',status}]`，status＝`uploader_org:<org>`／`uploader_unknown`／`not_found`／`invalid`／`invalid_role`） | 改為 `role='reference'` 或移除 |
+| `PD006` | 無權（未登入／非成員／非責任方／非提送對象） | 顯示訊息 |
+| `PD007` | 此文件類型的簽署尚未支援（本輪只有 `daily_log`） | 顯示訊息 |
+| `PD008` | 目前狀態不允許此動作（含已收件不可再存版、退回後原版不可再送、同日事實列已綁其他活文件） | 顯示訊息並重新載入 |
+| `PD009` | `client_request_id` 已用於不同請求 | 換新的 request id |
+| `PD010` | 輸入不合法（內容形狀、工項不在本案、數量缺值／負值、`log_date` 與 `doc_date` 不符、對象不在矩陣、退回無原因、空白意願） | 顯示訊息 |
 
-**與資料層的寫入順序約定（P2a 定案，P2d／P3 的 RPC 必須照做）**：`field_documents_guard` 只在對應事實列已存在時才放行狀態，所以同一交易內順序固定為——簽署：`insert field_document_signatures` → `update field_documents set status='signed'` → 落事實表；提送：`insert field_document_submissions(action='submit')` → `status='submitted'`；收件／退回：`insert ...('receive'／'return')` → `status='received'／'returned'`；簽後更正：`insert field_document_versions`（human，`amended_from_version`）→ `update field_documents set current_version_no=n+1, status='draft'`。簽署列的 `version_no`、`content_hash`、角色、成員、`aal` 一致性、簽署者資料都由 trigger 決定或驗證，RPC 只負責：`aal2` 政策（本輪只允許 `method='platform_account_mfa'`）、`required_fields` 完整性、附件角色隔離（§3.4）、事實表落庫與 `agent_actions`。RPC 以 `select ... for update` 鎖文件列後再做以上寫入（版本 guard 也會鎖）。
+P2a 的 trigger 仍是所有路徑的最後防線（`P0001`）；RPC 先以上述代碼拒絕，trigger 是備援。
 
-簽署後更正：`save_field_document_version` 對 `signed`／`submitted`／`returned` 文件建立版本 n+1（`amended_from_version`），`status` 回 `draft`，原簽署列與原版本不動、原提送列仍指向舊版；必須重簽重送。列印版印出 `文件短碼＋版本號＋雜湊前 12 碼`；紙本簽回（`method='paper_scan'`，綁定同一版本雜湊、掃描檔 `sha256` 入 `evidence`）是保留的日後方式，本輪不啟用。本設計不宣稱符合任何機關的電子簽章規範；簽署方式依使用者 2026-09-17 決定先採平台帳號＋MFA（§11 Q1）。
+**`save_field_document_version(p_document_id uuid, p_base_version_no int, p_content jsonb, p_field_sources jsonb default '{}', p_attachments jsonb default null, p_change_note text default null) → jsonb`**（四類共用）：責任方成員（`can_write` 且 `my_org_type()=owner_org`，`admin_override` 例外）；`p_base_version_no` 必須等於 `current_version_no`（樂觀併發，否則 `PD001`）；`received`／`discarded`／`superseded` 拒絕（`PD008`）。建立 `human` 版本 n+1；原狀態為 `signed`／`submitted`／`returned` 時帶 `amended_from_version=n`。同交易重算並寫回 `required_fields`（見下）與 `recheck`（待補欄＋附件問題），狀態依 `recheck` 是否為空自動落 `draft`／`pending_input`。回 `{document_id, version_no, content_hash, status, required_fields, recheck, amended_from_version}`；`content_hash` 就是 DB 算的值，前端簽署時原樣送回，不重算。
+
+**必填鍵與待補（單一實作 `fn_field_document_required_fields`／`fn_field_document_unmet_fields`，存版與簽署共用）**：有效必填鍵＝`field_documents.required_fields`（service／Edge／範本推導）∪ 類型固定欄 ∪ 本版內容 `items.<work_item_id>.qty_today`。施工日誌固定欄：`weather_am`、`weather_pm`、`work_summary`、`labor`、`equipment`、`materials`（「本日無」用 `na`＋`reason`，不得留空）。工項數量鍵永遠只從本版內容推導（stored 裡的工項鍵忽略），已從內容移除的工項不會永遠卡住簽署。`field_sources[key].status` 為 `filled`／`confirmed`，或 `na` 且有 `reason` 才算齊備；缺鍵、`pending`、`na` 無 reason、未知狀態一律待補。客戶端不能寫 `required_fields`，把它清空也裝不出可簽。
+
+**`sign_field_document(p_document_id uuid, p_version_no int, p_content_hash text, p_intent text) → jsonb`**（本輪只有 `daily_log` 分支；其他類型 `PD007`）：
+
+1. `select ... for update` 鎖文件列；成員與責任方（`PD006`）；`current_version_no = p_version_no`（`PD001`）；版本雜湊等於 `p_content_hash`（`PD002`）。
+2. 冪等：同人同版本已簽（狀態 `signed`）→ 回原簽署（`idempotent:true`），不重複；他人已簽該版本 → `PD008`。以 `(document_id, version_no, signer_id)` 自然鍵冪等，不另設 `client_request_id`（原設計參數移除）。
+3. `aal2` 政策（使用者 2026-09-17 決定：平台帳號＋MFA）：JWT `aal` 必須為 `aal2`，否則 `PD003`（`admin_override` 也不放行）；`p_intent` 不可空白（`PD010`）。
+4. 完整性：有效必填鍵全部齊備（`PD004`）；附件角色隔離（§3.4，`PD005`）：`attachments[].role` 預設 `evidence`，施作證據的 `photos.uploader_org` 必須等於 `owner_org`（施工日誌＝`contractor`），監造照片只能以 `role='reference'`（「監造提供」註記）附上，上傳方未知的舊照片不能當證據。
+5. 內容形狀（`PD010`）：`labor`／`equipment`／`materials` 陣列、`extras` 物件、天氣與 `work_summary` 文字、`items` 物件；`items` 的鍵必須是本案 `work_items.id`；來源非 `na` 的工項 `qty_today` 必須是非負數字；內容若帶 `log_date` 必須等於 `doc_date`。
+6. 寫入順序（同交易）：`insert field_document_signatures`（trigger 驗版本／雜湊／角色／成員／aal，簽署者資料、時間、IP、UA 由伺服器取）→ 事實列（交易內 GUC `pmis.field_document_sign=<document_id>` 放行 `daily_logs_guard`／`daily_log_items_guard`）：`daily_logs` 依 `(project_id, log_date)` upsert（`status='已簽署'`，`created_by` 沿用既有列），`daily_log_items` 整組重寫（來源為 `na` 的工項不落列）→ `update field_documents set status='signed', target_id=<daily_logs.id>, recheck='[]'`（guard：簽署列已存在、事實列存在且同案；事實列必須先於綁定，P2a 交接時寫的「status→事實表」順序據此調整）→ `resolve_agent_action_internal`。
+7. 同日事實列已被另一份**活**文件綁定 → `PD008`；`superseded`／`discarded` 的舊文件仍保留 `target_id`，新文件接手同一列（`field_documents_target_uidx` 已改為只算活文件）。
+
+回 `{document_id, version_no, content_hash, signature_id, signed_at, signer_id, status:'signed', target_table:'daily_logs', target_id, agent_actions_resolved, idempotent}`。稽核 `field_document.signed` 由簽署列的 AFTER trigger 寫，RPC 不另記。
+
+**事實表 guard（`daily_logs_guard` BEFORE UPDATE／DELETE、`daily_log_items_guard` BEFORE INSERT／UPDATE／DELETE，所有寫入者含 service）**：「已簽署」＝有 `daily_log` 文件綁定該列且該文件有任何簽署列（簽後更正回草稿期間事實列仍是舊簽署內容，同樣受保護）。已簽署列只放行：專案刪除 cascade；或 GUC 指向「同案同日」的 `daily_log` 文件的 UPDATE（用專案＋日期而非 `target_id` 比對，因接手的新文件首次簽署時尚未綁定）。DELETE 一律不放行（含 `reset_project_boq`：與該 RPC「有簽核證據時整包 rollback」的既定行為一致；`work_items` 刪除 cascade 到已簽署列的明細也被擋）。未簽署的既有日誌（正式 12 筆）維持舊路徑可直接寫，這是 P2c 改接前的相容範圍；舊 `saveSiteLog` 對已簽署日期的 upsert 會收到 `P0001` 明確訊息，不會靜默改寫。
+
+簽署後更正：`save_field_document_version` 對 `signed`／`submitted`／`returned` 文件建立版本 n+1（`amended_from_version`），`status` 回 `draft`／`pending_input`，原簽署列與原版本不動、原提送列仍指向舊版、事實列等重簽才更新；必須重簽重送。列印版印出 `文件短碼＋版本號＋雜湊前 12 碼`；紙本簽回（`method='paper_scan'`，綁定同一版本雜湊、掃描檔 `sha256` 入 `evidence`）是保留的日後方式，本輪不啟用。本設計不宣稱符合任何機關的電子簽章規範；簽署方式依使用者 2026-09-17 決定先採平台帳號＋MFA（§11 Q1）。
 
 ## 6. 提送、退回歷史、回執
 
-RPC `submit_field_document(p_document_id, p_version_no, p_to_org, p_client_request_id)`：文件須 `signed`；寫 `submit` 列（伺服器時間＝送件回執）；`status='submitted'`；`to_org` 依 `doc_type` 規則檢查（§4）。`receive_field_document`：`to_org` 成員執行，`status='received'`＝對方已收件。`return_field_document(reason)`：`to_org` 成員，`reason` 必填，`status='returned'`；再送時 RPC 自動計算 `diff`（本版與被退回版本的變更鍵）。不會把 `submittals.review_note` 當歷史；送審文件的歷次退回原因另列 [瘦身文件 §4](slimming-entrypoints-and-retirement.md)。不對真實成員寄信；通知只進「今日工作」與既有早報路徑。
+**P2d 已實作（四類共用；對象矩陣、`to_org` 伺服器帶入、`diff` 由 P2a trigger 決定）**。三支都回同一形狀的回執 `{submission_id, document_id, version_no, content_hash, action, actor_id, actor_org, to_org, reason, diff, client_request_id, created_at, status, idempotent}`，`created_at` 為伺服器時間＝送件／收件／退回回執。
+
+- `submit_field_document(p_document_id uuid, p_version_no int, p_to_org text, p_client_request_id text default null)`：責任方成員（`PD006`）；版本＝目前版本（`PD001`）；狀態 `signed`（或 `submitted`，供第二個對象）否則 `PD008`；`to_org` 依 §4 矩陣（`PD010`）。冪等：同 `client_request_id` 且同版本／同對象／同人 → 回原回執（`idempotent:true`）；同 id 不同請求 → `PD009`；同版本已提送給同一對象（無 request id）→ 自然鍵冪等回原回執。首次提送 `diff` 為 null；退回後再送的 `diff={against_version_no, changed_keys[]}` 由 trigger 比對前次退回版本計算。
+- `receive_field_document(p_document_id uuid, p_version_no int, p_client_request_id text default null)`：只有該版本 `submit` 列的 `to_org` 成員（`PD006`；機關在正式模式雖唯讀，仍可收件監造日誌）；狀態 `submitted`／`received`（`PD008`）；本方已收過同版本 → 自然鍵冪等。
+- `return_field_document(p_document_id uuid, p_version_no int, p_reason text, p_client_request_id text default null)`：同上對象檢查；`reason` 必填（`PD010`）；狀態 `submitted`／`received`（`PD008`）；退回後 `status='returned'`，原版不可再送（`PD008`），只能 `save_field_document_version` 建新版本→重簽→再送；歷次 `return` 列（含原因）全部保留。
+
+不會把 `submittals.review_note` 當歷史；送審文件的歷次退回原因另列 [瘦身文件 §4](slimming-entrypoints-and-retirement.md)。不對真實成員寄信；通知只進「今日工作」與既有早報路徑。
 
 ## 7. AI 草稿與 `agent_actions` 邊界
 
 - 照片起稿與 Agent 對話起稿都落 `agent_actions`（新 kind `draft_field_document`／`suggest_field_update`），`evidence` 只存指標（文件、版本、雜湊、intake），不重複存 payload。
-- `agent_actions` SELECT 仍限本人；文件本體對同方成員可見可編（`field_documents` RLS）。簽署者非草稿收件人時，由 RPC 內部函式標處理狀態並記 `resolved_by`——這是對 [Agent 邊界](agent-tool-boundary.md) 的明示延伸，需同步更新該文件與 pgTAP。
+- `agent_actions` SELECT 仍限本人；文件本體對同方成員可見可編（`field_documents` RLS）。簽署者非草稿收件人時，由 RPC 內部函式標處理狀態並記 `resolved_by`——這是對 [Agent 邊界](agent-tool-boundary.md) 的明示延伸（P2d 已實作並更新該文件）：`resolve_agent_action_internal(p_document_id, p_project_id, p_status)` 只由 `sign_field_document` 呼叫（authenticated 不可執行），把同案、`target_table='field_documents'`、`target_id=文件`、`pending` 的草稿全部標 `accepted`（文件無人工版本）或 `edited`（有人工版本），`resolved_by=簽署者`，每筆留 `agent_action_resolved` 稽核（`metadata.resolved_via='sign_field_document'`）；舊 `draft_daily_log`（`target_table='daily_logs'`、`target_id` null）不受影響。
 - 既有 `draft_daily_log`／`draft_inspection` 工具改為產生 `field_documents` 草稿（保留工具名與回傳形狀），接受路徑統一走簽署 RPC；`acceptDraft` 的直接 `saveSiteLog` 路徑退場。
 
 ## 8. RLS／guard／RPC 清單（實作對照）
@@ -229,9 +259,11 @@ RPC `submit_field_document(p_document_id, p_version_no, p_to_org, p_client_reque
 | `photo_intakes`、`photos` 新欄、`field_documents`、`field_document_versions`、`field_document_signatures`、`field_document_submissions`：表＋RLS＋欄位級 grants（§2.2） | 表 | **P2a 已實作**（`20260917201000_field_documents`；rollback `supabase/rollbacks/20260917201000_field_documents.down.sql`） |
 | `supervisor_logs` | 表＋RLS＋收回 grants | P3a |
 | `photos_org_stamp`、`photo_intakes_guard`、`field_documents_guard`（狀態矩陣＋結構要件＋角色）、`field_document_versions_guard`（不可變、雜湊、版本號、作者情境、附件）、`field_document_signatures_guard`、`field_document_submissions_guard` | trigger | **P2a 已實作** |
-| `daily_logs_guard`、`supervisor_logs_guard`、`inspections` 新欄只允許 RPC 寫 | trigger | P2d／P3a／P3c |
+| `daily_logs_guard`、`daily_log_items_guard`（已簽署列只有簽署 RPC 的交易內 GUC 可重寫；DELETE 一律擋；未簽署列照舊） | trigger | **P2d 已實作**（`20260917205000_field_document_rpcs`；rollback `supabase/rollbacks/20260917205000_field_document_rpcs.down.sql`） |
+| `supervisor_logs_guard`、`inspections` 新欄只允許 RPC 寫 | trigger | P3a／P3c |
 | 純 helper `fn_field_document_content_hash`、`fn_field_document_owner_org`／`fn_field_document_target_table`（generated column 用，authenticated 可執行）、`fn_field_document_to_org_allowed`、`fn_field_document_changed_keys`、`current_jwt_aal`、`current_request_user_agent`、`can_read_field_document` | 函式 | **P2a 已實作** |
-| `create_field_document_draft`（service）、`save_field_document_version`、`set_intake_shared_input`、`sign_field_document`、`submit_/receive_/return_field_document`、`discard_field_document`、`resolve_agent_action_internal` | security definer RPC，`revoke all from public, anon`、僅 `authenticated` 或 service；寫入順序見 §5 | P2d／P3 |
+| `save_field_document_version`、`sign_field_document`（只有 `daily_log` 分支，其他類型 `PD007`）、`submit_/receive_/return_field_document`、內部 `resolve_agent_action_internal`／`field_document_respond_internal`；純 helper `fn_field_document_required_fields`／`fn_field_document_unmet_fields`／`fn_field_document_attachment_issues`／`fn_field_document_receipt`／`fn_daily_log_signed`／`fn_daily_log_sign_bypass` | security definer RPC，`revoke all from public, anon`、僅 `authenticated`；內部與 helper 連 authenticated 都不可執行；錯誤代碼與寫入順序見 §5 | **P2d 已實作** |
+| `sign_field_document` 的 `supervisor_log`／`self_check`／`inspection_form` 分支、`create_field_document_draft`（service）、`set_intake_shared_input`、`discard_field_document` | security definer RPC | P3a／P3b／P3c／P2b／P3e |
 | `field_docs.draft` 註冊三處＋seed migration | AI 閘門 | P2b |
 | 稽核事件 `field_document.{created,version_saved,signed,submitted,received,returned,amended,discarded,superseded,status_changed}`（AFTER trigger；標籤在 [`auditEvents.js`](../../src/lib/auditEvents.js)） | `record_audit_event` | **P2a 已實作** |
 
@@ -240,7 +272,7 @@ RPC `submit_field_document(p_document_id, p_version_no, p_to_org, p_client_reque
 - 既有 `daily_logs`（12）、`checklist_records`（5）、`inspections`（11）不自動包裝成已簽署文件；使用者開啟時可「建立文件草稿（沿用既有內容）」再走簽署，`field_sources` 全標 `filled/source: legacy`。
 - 既有 `daily_logs.status='已送出'` 不改值；新 guard 只看是否有已簽署文件指向該列。
 - 既有 `photos`（正式 2 筆）：P2a 只依 `uploaded_by` 的 profile 回填 `uploader_org`（`profiles.org_type` 自 20260728000200 起使用者不可自改，是最可靠的既有證據）；推不出的維持 null＝未知，不猜；`uploader_org` 為 null 的舊照片不能掛進上傳批次。`ai_status` 等新欄舊列一律 null。
-- 回復：P2a 整組（五表、`photos` 七欄、函式、trigger、`photos` 欄位級 grant 還原表級）由 `supabase/rollbacks/20260917201000_field_documents.down.sql` 移除；`inspections` 新欄可 drop；`daily_logs_guard`／`supervisor_logs_guard` 可 drop 恢復舊行為；已產生的簽署與提送資料隨表移除（rollback 前先匯出）。
+- 回復：P2d 整組（五支 RPC、內部函式與 helper、`daily_logs_guard`／`daily_log_items_guard`、`field_documents_target_uidx` 還原為 P2a 定義）由 `supabase/rollbacks/20260917205000_field_document_rpcs.down.sql` 移除，簽署落下的 `daily_logs` 列保留但失去保護；須先於 P2a 回復。P2a 整組（五表、`photos` 七欄、函式、trigger、`photos` 欄位級 grant 還原表級）由 `supabase/rollbacks/20260917201000_field_documents.down.sql` 移除；`inspections` 新欄可 drop；`supervisor_logs_guard` 可 drop 恢復舊行為；已產生的簽署與提送資料隨表移除（rollback 前先匯出）。
 - 相容順序：DB（加法）→ Edge（新函式；舊 `draft_daily_log` 工具仍可用）→ 前端 → 第二支 migration 才把 `acceptDraft` 舊路徑用到的直接寫入關閉。
 
 ## 10. 驗證對應（實作時逐項補）
@@ -250,7 +282,7 @@ RPC `submit_field_document(p_document_id, p_version_no, p_to_org, p_client_reque
 | 四類各走照片→自動生成→補缺→簽署→提送；監造日誌確為每日 | 真後端 E2E 四條；pgTAP 唯一性 `(project, doc_type, doc_date)`（P2a `field_documents.sql` 已釘） |
 | 清晰量測照可轉錄、模糊照留缺、非現場照不捏造、廠商證據不冒充監造 | 模型樣本測試（有預期答案）；pgTAP 角色隔離拒絕（P2a：`uploader_org` 伺服器決定、廠商批次不能起稿監造文件、`ai_*` 客戶端不可寫） |
 | 切頁／重登入可恢復；部分失敗、重試、重複上傳、逾時不丟人工修正、不重複建件 | pgTAP 冪等鍵（P2a：起稿唯一索引、有人工版本後 AI 不得寫版本、送件 `client_request_id`）；Edge 單元測試（stub）；E2E 重整頁 |
-| 簽舊版、簽後改文／附件、越權簽署、跨案取件受阻；退回再送保留版本與理由 | P2a `field_documents.sql`（215 條）：舊版本、雜湊不符、非責任方、非成員、伺服器代簽、aal 不符、簽後改日期／捨棄／刪除、退回無原因、原版再送、diff 由 DB 算、歷次紀錄不可改；P2d 再加 RPC 層的 `required_fields`／附件角色檢查 |
+| 簽舊版、簽後改文／附件、越權簽署、跨案取件受阻；退回再送保留版本與理由 | P2a `field_documents.sql`（215 條）：舊版本、雜湊不符、非責任方、非成員、伺服器代簽、aal 不符、簽後改日期／捨棄／刪除、退回無原因、原版再送、diff 由 DB 算、歷次紀錄不可改。P2d `field_document_sign.sql`（140 條，走真實 `authenticated`＋JWT 路徑）：存版樂觀併發與越權；aal1 簽 `PD003`（非正式案 admin_override 也不放行）；舊版 `PD001`、雜湊 `PD002`、三角色＋非成員矩陣 `PD006`、監造日誌簽署 `PD007`、待補 `PD004`、監造／未知照片冒充施工證據 `PD005`、外案工項／負數／缺值／日期不符／形狀錯 `PD010`；簽署成功落 `daily_logs`／`daily_log_items`、綁 `target_id`、草稿標 `edited`、簽署列由伺服器取資料、稽核；同人重試冪等；已簽署列的直接 UPDATE／DELETE／明細寫入／舊 upsert／service／偽造 GUC 全部被擋而未簽署列照舊；簽後更正另開版回草稿、事實列等重簽、舊簽署綁舊版；提送對象矩陣、`client_request_id` 冪等與衝突、自然鍵冪等、收件／退回只限提送對象、退回必填原因、退回後原版不可再送、再送 diff 由 DB 算、歷次全保留、已收件不可再存版；superseded 後新文件接手同一事實列；捨棄不可存版；專案刪除 cascade 通過 guard |
 | 手機可完成現場旅程；桌機審核；列印與簽署版本一致 | 手機形狀 E2E；列印頁顯示版本與雜湊 |
 
 ## 11. 待決題的使用者答覆（2026-09-17，記入 D-026 第 7 點）
