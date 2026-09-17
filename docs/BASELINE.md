@@ -1,9 +1,17 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-17｜P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-17 H1：收回 API 角色的表級 DDL／維護類權限（PR #118，migration `20260917213900_api_roles_table_ddl_privileges`）
+
+- `npm run test:db`（一次性資料庫從零套 66 支 migration＋seed，rebase 到含 P2b 的 main 後重跑）：46 檔、1,712 通過、0 失敗（＝P2b 基準 1,518＋新增 `api_roles_table_privileges.sql` 194 條；rebase 前 45 檔 1,704）。新增套件覆蓋：public 57 個關聯（含 view，排除一次性資料庫裡 pgtap 的 extension view）全部由 `postgres` 擁有；每個關聯 × `anon`／`authenticated`／`service_role` 一條斷言，任一角色殘留 TRUNCATE／REFERENCES／TRIGGER／MAINTAIN 就列出名稱；`postgres` 對 `public` 的 default ACL 對三角色與 PUBLIC 都沒有這四種；測試內以 `postgres` 新建一張表後三角色仍沒有四種權限、而 `authenticated`／`service_role` 的 SELECT／INSERT／UPDATE／DELETE default 照舊（基線與 seed 對齊未被動到）；既有表 DML 不變（`cost_items` authenticated SELECT、`daily_logs` INSERT／UPDATE、`field_document_versions`／`cost_items` service_role DML）；`authenticated`／`anon`／`service_role` 實際 TRUNCATE `cost_items`／`field_document_versions`／`audit_events` 皆 42501（表級權限擋，不是 RLS 或 guard），service_role SELECT 照常。
+- 查證（正式庫唯讀 SELECT，未輸出資料）：57 個 public 關聯全部 owner `postgres`；`anon`／`authenticated` 各在 50 個上有 TRUNCATE／REFERENCES／TRIGGER（例外只有既有 `revoke all` 的 7 表），`service_role` 57／57；`pg_default_acl` 的 `postgres`／`public`／tables 為 `anon=arwdDxtm,authenticated=arwdDxtm,service_role=arwdDxtm`；事件觸發器全屬 `supabase_admin`、`postgres` 非 superuser；三角色對 `public` schema 無 CREATE；56 表 RLS 全開、無 `anon`／`public` policy。本機從零建庫的 default ACL 為 `anon=Dxtm`、`authenticated=arwdDxtm`、`service_role=arwdDxtm`（CLI secure-by-default 只拿掉 anon 的 DML）。
+- 真後端 `npm run test:e2e:real`（本機 colima 棧；共用開發 DB 先 `supabase migration up --local` 補到 `20260917210000`，再以 psql 直接套 H1 SQL，核對三角色 57 關聯零殘留、default ACL 只剩 `authenticated=arwd,service_role=arwd`）：chain1「註冊→建案→邀請(含錯配拒絕)→三方到齊→正式模式→被邀方可見」與 chain2「廠商建期送審→監造核定→機關請款/收款登錄」2 測試通過。chain1 首次失敗是 spec 與 2026-09-11 成員頁清單／詳情殼脫節（邀請表單改由「邀請成員」展開、送出鈕改「加入專案」；PostgREST／DB 日誌無 42501），spec 對齊後綠；與本支無關。
+- `npm test`：122 檔、1,301 項；`npm run lint` 零警告；`npm run build`；`npm run check:docs` 55 檔、364 連結、0 錯誤。
+- 未做：正式 `db push` 與正式庫唯讀核對於合併後執行（結果記 CURRENT §6.3）；`anon` 表級 DML／序列與新函式 EXECUTE 的 default 漂移（H2／H3 候選）未動；rollback 檔未演練。
 
 ### 2026-09-17 P2b：Edge 起稿 `draft-field-documents`（`codex/slimming-p2b-draft-edge`）
 
