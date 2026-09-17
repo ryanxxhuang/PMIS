@@ -26,6 +26,7 @@ import { ORG_TO_PARTY, obligationParty } from '../../lib/obligationTimeline.js'
 import AnchorDates from '../../components/AnchorDates.jsx'
 import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 import { parseLocalDate, localISODate, taipeiToday } from '../../lib/dates.js'
+import { navLabel } from '../../lib/navConfig.js'
 
 const PHASES = ['開工前', '施工中', '完工', '保固', '其他']
 const phaseOf = (ob) => (PHASES.includes(ob.category) ? ob.category : '其他')
@@ -367,7 +368,7 @@ export default function Deadlines() {
       {/* 三個總數進頁首 meta 而不是另開一張卡:tagline 就寫「逾期有數」,這三個數字是
           本頁的承諾;它們不是篩選器(期程快篩才是),所以不做成 chip */}
       <PageHeader title="期限追蹤" tagline="到期不漏、逾期有數"
-        subtitle="已確認的契約期限依基準日推算到期日;提送後掛上佐證,逾期自動試算違約金。新期限請到「契約重點」確認。"
+        subtitle={`已確認的契約期限依基準日推算到期日;提送後掛上佐證,逾期自動試算違約金。新期限請到「${navLabel('/requirements')}」確認。`}
         meta={dueItems.length ? [
           { k: '已逾期', v: `${dueCounts.overdue} 項` },
           { k: '7 日內到期', v: `${dueCounts.soon} 項` },

@@ -9,7 +9,7 @@ import { plannedPctNow } from '../../lib/progressPlan.js'
 import { latestValuationAt } from '../../lib/progressAsOf.js'
 import { taipeiISODate } from '../../lib/dates.js'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
-import { BALL_SOURCES, resolveBallKey, ROLE_WORK } from '../../lib/navConfig.js'
+import { BALL_SOURCES, resolveBallKey, ROLE_WORK, navLabel } from '../../lib/navConfig.js'
 import { KIND_LABEL } from '../../lib/agentRole.js'
 import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
 import { buildSetupSteps } from '../../lib/setupChecklist.js'
@@ -237,7 +237,7 @@ export default function Dashboard() {
             isPersistedProject ? <SetupChecklist imported={false} /> : (
               <Card>
                 <Empty>
-                  此專案尚未匯入標單。請到「<Link to="/contract" className="text-[var(--blue-text)] hover:underline">專案文件</Link>」把標單 XML 與契約等文件一次上傳，
+                  此專案尚未匯入標單。請到「<Link to="/contract" className="text-[var(--blue-text)] hover:underline">{navLabel('/contract')}</Link>」把標單 XML 與契約等文件一次上傳，
                   之後估驗、進度、施工日誌、品質查驗才會有資料。
                 </Empty>
               </Card>

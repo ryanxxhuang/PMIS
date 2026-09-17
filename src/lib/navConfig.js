@@ -18,8 +18,12 @@
 // icon 是 Material Symbols 的 ligature 名(字串),由 Layout 的 <MSym> 渲染。
 // short 是群組/扁平項在 icon rail 與手機底欄的短標(≤2 字):與 label 同住一處,
 // 改名時不會漏掉另一份對照表(先前 BottomNav 的 NAV_SHORT 以 label 當鍵,label 一改就靜默退回全名)。
+// 「工作」分區名:側欄分區標題與桌機首頁的主入口列(CommonWork)同一份——同一組入口在兩處
+// 用兩個名字(先前首頁叫「廠商常用」)會讓人以為是兩套東西。
+export const WORK_TITLE = '工作'
+
 export const navGroups = [
-  { title: '工作', items: [
+  { title: WORK_TITLE, items: [
     // 群組入口=第一個該角色可見的子頁(visibleNavGroups 決定),整組子頁都不可見就不渲染該組。
     // 現場紀錄:/site 是總覽(依角色列出現場作業入口與件數;P2c 起承載照片上傳與文書清單),
     // 子頁是既有的日誌/品質/停留點/工安——業務規則與權限一條不動。
@@ -170,6 +174,15 @@ const navRouteRules = Object.fromEntries(
 
 // 所有前端路由的權限登記表。新增 App 路由卻忘記登記時，routeAllowed 會 fail-closed。
 export const routeRegistry = Object.freeze({ ...navRouteRules, ...nonNavRouteRules })
+
+// 頁面文案提到「到某一頁」時的名稱來源(P1c):navLabel 給該路由自己的名字(子頁名,例如
+// /members→三方成員),navEntryFor 給它所屬的主/次入口群組項(例如 /deadlines→履約時程)。
+// 名字只住在 navGroups 一處——先前初始化清單寫「專案成員」頁,而頁面早已叫「三方成員」;
+// 契約重點升成履約時程子頁後,各頁「到「契約重點」」的指路也沒有一份對照可查。
+// 這兩支只讀登記表,不做權限判斷(權限在 routeAllowed);未登記或非導覽路由回 null。
+const entryByPath = new Map(navGroups.flatMap((g) => g.items.flatMap((item) => (item.tabs || [item]).map((t) => [t.to, item]))))
+export const navLabel = (path) => routeRegistry[path]?.label ?? null
+export const navEntryFor = (path) => entryByPath.get(path) ?? null
 
 // platformAdminOnly 是獨立維度:專案角色/override 一律翻不過(平台後台不是專案工具)
 const tabAllowed = (n, org, override, platformAdmin) => {

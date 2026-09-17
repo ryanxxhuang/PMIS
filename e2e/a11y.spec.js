@@ -245,6 +245,50 @@ test.describe('鍵盤可達性', () => {
     await expect(more).toBeFocused()
   })
 
+  // 抽屜只存在於 <md。P1a 發現:抽屜開著把視窗拉寬到 ≥768,側欄變常駐、遮罩被 CSS 藏掉,
+  // 但「抽屜開著」的 state 與 useScrollLock 沒跟著解除,body 仍被固定在 top:-scrollY,
+  // 內容被鎖在畫面外(空白),要按 Esc 才復原。合約:鎖定與抽屜必須由同一個事實推導——
+  // 抽屜不存在(≥md)時鎖定同時解除、開啟意圖清除;縮回手機寬度時抽屜不會自己彈開。
+  test('375px 抽屜開著拉寬到 1024:鎖定隨抽屜消失而解除,縮回 375 抽屜不殘留', async ({ page }) => {
+    await page.setViewportSize(MOBILE)
+    await loginAs(page, 'contractor')
+    // 等待辦清單掛載(lazy chunk)頁面才夠高;先捲離頁首:scrollY=0 時 top:-0 剛好看不出缺陷,
+    // 要捲一段才會把內容鎖到畫面外
+    await expect(page.getByRole('list', { name: '現在輪到我清單' })).toBeVisible()
+    await page.evaluate(() => window.scrollTo(0, 300))
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+    const lockedY = await page.evaluate(() => window.scrollY)
+    const more = page.getByRole('navigation', { name: '快速導覽' }).getByRole('button', { name: '更多', exact: true })
+    await more.click()
+    await expect(page.getByRole('button', { name: '關閉選單' })).toBeFocused()
+    // 抽屜開著:背景已鎖(useScrollLock 把 body 固定在 -scrollY)
+    await expect.poll(() => page.evaluate(() => document.body.style.position)).toBe('fixed')
+    expect(await page.evaluate(() => document.body.style.top)).toBe(`-${lockedY}px`)
+
+    await page.setViewportSize(TABLET_RAIL)
+    // 抽屜不存在了:鎖定必須一起解除(不需要 Esc),捲動位置還原到鎖定前
+    await expect.poll(() => page.evaluate(() => document.body.style.position), { message: '拉寬後 body 仍是 position:fixed——抽屜消失了,鎖定沒跟著解除' }).toBe('')
+    expect(await page.evaluate(() => document.body.style.top)).toBe('')
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(lockedY)
+    // 常駐側欄與內容都在畫面內:h1 可見、頁面仍可捲動(不是被固定住的空白)
+    await expect(page.getByRole('navigation', { name: '主要功能' }).getByRole('link', { name: '履約時程', exact: true })).toBeVisible()
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    await expect(page.getByRole('heading', { name: '今日待辦', level: 1 })).toBeInViewport()
+
+    await page.setViewportSize(MOBILE)
+    // 開啟意圖已隨抽屜消失而清除:縮回手機寬度不會自己彈開、不鎖背景、「更多」不標展開
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByRole('navigation', { name: '主要功能' }).getByRole('link', { name: '履約時程', exact: true })).toBeHidden()
+    expect(await page.evaluate(() => document.body.style.position)).toBe('')
+    // 抽屜仍可正常再開再關(狀態沒壞掉)
+    await more.click()
+    await expect(page.getByRole('button', { name: '關閉選單' })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(more).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.position)).toBe('')
+  })
+
   test('appPrompt:Esc 取消判定,對話框消失且頁面狀態不變', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/quality')

@@ -12,6 +12,7 @@ import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPa
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
 import { taskReturnState } from '../../lib/taskReturn.js'
 import { SOON_DAYS, daysBetween, taipeiISODate } from '../../lib/todayTasks.js'
+import { BALL_SOURCES_TITLE, navEntryFor } from '../../lib/navConfig.js'
 
 // 三類快篩:逾期(overdueDays 有值)/即將到期(有到期日且 ≤ SOON_DAYS)/待處理
 // (沒有到期日,或到期日還遠的協作項)。門檻沿用聚合的 SOON_DAYS,不另訂一個數字。
@@ -167,8 +168,10 @@ export default function Alerts() {
 
   return (
     <div className="space-y-5">
+      {/* 入口說法對齊 D-026 主入口:這裡不是另一份待辦,是「今日工作」同一份事項換成依期限分類
+          (useTodayTasks 同源);頂欄鈴鐺與提醒信深連結進來的人要知道回哪裡處理 */}
       <PageHeader title="提醒中心" tagline="逾期與到期的完整清單"
-        subtitle="將我方與等待對方的事項依逾期、即將到期及待處理分類。點選一筆可查看來源，並前往單據處理。" />
+        subtitle={`與「${BALL_SOURCES_TITLE}」同一份事項，改依逾期、即將到期及待處理分類。點選一筆可查看來源，並前往單據處理。`} />
 
       {missingId && <p role="status" className="rounded-lg px-3 py-2 text-footnote bg-[var(--amber-tint)] text-[var(--amber-text)]">找不到指定的提醒（{missingId}），可能已完成或不在本專案；已顯示清單第一筆，網址已改為不指向該筆。</p>}
       {rows.length === 0 ? (
@@ -189,9 +192,10 @@ export default function Alerts() {
 
       {/* 期限「已提送」鈕在期限追蹤頁,且機關唯讀(鏡像 can_write),所以機關責任的
           期限不會出現在上面——不做誠實說明的話,那些期限會像憑空消失。 */}
+      {/* 指路用主入口名(履約時程),名字取自 navConfig,側欄改名這裡不會漏 */}
       <p className="text-xs text-[var(--text-3)]">
         契約期限的完整時程與責任方在「
-        <Link to="/requirements" className="text-[var(--blue-text)] hover:underline">契約重點</Link>
+        <Link to={navEntryFor('/requirements').to} className="text-[var(--blue-text)] hover:underline">{navEntryFor('/requirements').label}</Link>
         」；這裡只列你這方現在做得到的事，以及在等對方的事。
       </p>
     </div>

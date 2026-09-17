@@ -1,6 +1,6 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-17｜P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
@@ -17,6 +17,14 @@
 - 中斷與殘留：`db start` 進行中送 SIGINT，一次性資料庫仍被清掉；預先塞入 pid 已死的 `PMIS_pgtap_999998` 容器與 `..._999999` volume，下次執行自動清除。
 - `npx vitest run scripts/test-pgtap.test.js` 14 項；`npm run lint`、`npm test`、`npm run check:docs` 見 PR。
 - 未做：無正式環境變更、無 migration；`ai_platform.sql`／`p0_02_project_party_role.sql` 的全庫計數斷言未改——在從零建的資料庫上它們同時驗「沒有多出別的列」，語意正確。
+
+### 2026-09-17 瘦身 P1c＋P1d＋手機抽屜斷點缺陷（本機 diff，`codex/slimming-p1cd`）
+
+- `npm test`：120 檔、1,259 項通過；`navConfig.test.js` 新增 4 條（`WORK_TITLE` 與側欄第一分區同名、`navLabel`／`navEntryFor` 對子頁／群組／hidden／非導覽路由的回答、每條登記路由都有非空 label）。
+- `npx playwright test` workflow-ux／a11y／reachability／routes 四檔：35 項通過。新增 `a11y.spec.js`「375px 抽屜開著拉寬到 1024」：修正前紅（拉寬後 `body` 仍 `position:fixed`、內容鎖在畫面外），修正後綠（鎖定隨抽屜消失解除、`scrollY` 還原 300、縮回 375 「更多」`aria-expanded=false` 且不鎖）。`workflow-ux.spec.js` 首頁主入口列改以 `WORK_TITLE` 定位。
+- `npm run lint`（零警告）、`npm run build`、`npm run check:docs`（55 檔、357 連結、0 錯誤）通過。
+- 內建 Preview（示範模式、廠商）：1024 首頁操作列為「工作 · 現場紀錄／履約時程／估驗請款」；提醒中心副標「與「今日工作」同一份事項…」、頁尾指路「履約時程」；375 底欄＝輪到我／現場／履約／估驗／更多；抽屜開著（`body` 固定於 `-300px`）拉寬到 1024 後 `body` 樣式清空、`scrollY` 回 300、內容與 icon rail 可見，縮回 375 抽屜未彈開。
+- 未做：真專案的初始化清單文案（`navLabel('/members')`＝三方成員）只由單元測試覆蓋，未在真後端目視；真人驗收、iPhone 實機。
 
 ### 2026-09-17 P4a：監造確認量與估驗上限的純計算層（PR #103）
 
