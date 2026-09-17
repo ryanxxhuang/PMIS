@@ -2,7 +2,7 @@
 
 > CURRENT｜2026-09-17｜三方操作流程優化＋D-026 P4a 純計算層；正式發布狀態見 §6.3。
 > 包含契約整理、Apple UI、D-022、工安清單／詳情殼，以及全案程式與文件整理；驗證見 [BASELINE](docs/BASELINE.md)。前端已由 main 自動部署；DB 已同步至 `20260917120000`、Edge 最後重佈 2026-09-11，版本與核對範圍見 §6.3。
-> 進行中工作（D-026 產品瘦身與四類文書、監造確認量估驗聯動）見 [續接清單](docs/reviews/2026-09-17-product-slimming-worklog.md)；本檔只記已上線現況：該包目前上線的只有 P4a 的純函式 migration（尚無呼叫端），其餘仍是設計文件。
+> 進行中工作（D-026 產品瘦身與四類文書、監造確認量估驗聯動）見 [續接清單](docs/reviews/2026-09-17-product-slimming-worklog.md)；本檔只記已上線現況：該包目前上線的是 P1a 導覽重組（前端）與 P4a 純函式 migration（尚無呼叫端），其餘仍是設計文件。
 
 ## 1. 產品與範圍
 
@@ -65,6 +65,7 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 ### 6.3 正式環境最後核對（不是即時狀態）
 
 - **2026-09-17 P4a 監造確認量純計算層（D-026）**：PR #103 已合併（merge commit `591570c`，分支 `codex/slimming-p4a-calc`）。PR 檢查 CI／pgTAP 皆通過（pgTAP 從零套用 41 檔 1,131 通過，新增 `confirmed_quantity_calc.sql` 83 條）。同日 `supabase db push` 套用 `20260917120000_confirmed_quantity_calc`（只新增 2 型別＋14 支 IMMUTABLE／security invoker 純函式，不動任何表、trigger、policy 或資料列）；`migration list --linked` 核對本地與遠端 61 筆全部對齊；正式庫唯讀核對 14 支函式皆 IMMUTABLE、security invoker，anon／authenticated 均不可執行。不含 Edge 或前端變更；P4b 之前這些函式沒有任何呼叫端，對現有流程零行為影響。使用者同日對續接清單 §6 的答覆記入 D-026 第 7 點。
+- **2026-09-17 瘦身 P1a 導覽重組（D-026 四主入口）**：PR #104 已合併（merge commit `33d0f70`，分支 `codex/slimming-p1a-nav`）。PR 檢查與合併後 main 的 CI、pgTAP 皆通過（120 檔 1,255 項單元、10 支 71 項 Demo E2E）；前端由 Workers Builds 自動建置，合併後 `npm run check:prod` app／demo 皆 200、CSP `script-src 'self'`、無注入腳本，正式站 bundle 已含新導覽（現場總覽／文件往來）。純前端，不含 DB migration 或 Edge 部署；demo 站未重佈（仍為舊導覽）；正式站登入後流程與真人驗收未核對。
 - **2026-09-16 補強包 A（Codex 實測 W01–W04）**：PR #88 已合併（merge commit `2fb555a`，分支 `fix/uiux-package-a`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（116 檔 1,226 項單元、52 項相關 Demo E2E）；前端由 Cloudflare 自動建置，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。Codex 報告已隨 PR #87 入庫。
 - **2026-09-16 補強包 B（Codex 實測 W05／W06／W08／D01）**：PR #90 已合併（merge commit `fe0e1bd`，分支 `fix/uiux-package-b`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（116 檔 1,228 項單元、55 項相關 Demo E2E）；前端由 Cloudflare 自動建置，不含 DB migration 或 Edge 部署；正式站登入後流程與真人驗收未核對。
 - **2026-09-16 補強包 C（Codex 實測 W07／W09）**：PR #92 已合併（merge commit `e54d39a`，分支 `fix/uiux-package-c`）。PR 檢查 unit／e2e／pgtap／Workers Builds 與合併後 main 的 CI、pgTAP 皆通過（116 檔 1,228 項單元、45 項相關 Demo E2E）；內容為 W09 文案與 W07 口徑對照文件，不含進度公式、DB migration 或 Edge 部署；W07 標示文案待 C1 決策後另行實作。
