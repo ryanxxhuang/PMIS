@@ -178,18 +178,21 @@ export async function loadObligationsFromDB(projectId) {
 }
 
 // 從 DB 載入現場文書(P2a field_documents)未終態的文件與其提送／收件／退回列——
-// 今日工作的「現場文書」球權要知道目前版本已提送給誰、誰還沒收件(規則在
-// _shared/ballInCourtRules.ts fieldDocumentBalls)。received 仍要載:監造查驗表單提送兩方,
-// 一方收件後狀態即 received,另一方可能還沒收。提送表沒有 project_id,以本案文件 id 分批查。
+// 今日工作的「現場文書」球權(P5a,_shared/ballInCourtRules.ts fieldDocumentBalls)與現場紀錄／施工日誌頁
+// (P2c)共用這一份:文件列帶頁面要的完整欄(recheck／required_fields／intake_id…),提送列帶回執要的
+// 原因與 diff。received 仍要載:監造查驗表單提送兩方,一方收件後狀態即 received,另一方可能還沒收。
+// 提送表沒有 project_id,以本案文件 id 分批查。
+export const FIELD_DOCUMENT_COLUMNS = 'id, project_id, doc_type, owner_org, target_table, target_id, target_key, intake_id, doc_date, status, current_version_no, template_id, required_fields, recheck, created_by, created_at, updated_at'
+export const FIELD_DOCUMENT_SUBMISSION_COLUMNS = 'id, document_id, version_no, content_hash, action, actor_id, actor_org, to_org, reason, diff, client_request_id, created_at'
 export async function loadFieldDocumentsFromDB(projectId) {
   const documents = await pageAll((from, to) => supabase.from('field_documents')
-    .select('id, doc_type, doc_date, status, owner_org, current_version_no, target_id, updated_at')
+    .select(FIELD_DOCUMENT_COLUMNS)
     .eq('project_id', projectId).in('status', FIELD_DOC_OPEN_STATUSES)
     .order('updated_at', { ascending: false }).order('id').range(from, to), '現場文書')
   const ids = (documents || []).map((d) => d.id)
   const submissions = ids.length
     ? await pageAllIn(ids, (chunk, from, to) => supabase.from('field_document_submissions')
-      .select('id, document_id, version_no, action, actor_org, to_org, created_at')
+      .select(FIELD_DOCUMENT_SUBMISSION_COLUMNS)
       .in('document_id', chunk).order('created_at').order('id').range(from, to), '現場文書提送')
     : []
   return { documents: documents || [], submissions: submissions || [] }

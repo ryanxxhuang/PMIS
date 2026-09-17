@@ -75,16 +75,19 @@ function DraftInboxCard() {
 
   const resolve = async (a, status) => {
     setResolvingId(a.id); setErrMsg(null); setDoneMsg(null)
-    // 接受走 acceptDraft:日誌草稿會先真的建立日誌(saveSiteLog,含卡片上填的數量)才標已接受
+    // 接受走 acceptDraft:日誌草稿先存成文件人工版本(含卡片上填的數量)才標已接受(P2c)
     const res = status === 'accepted' ? await acceptDraft(a, qtyDraft[a.id]) : await resolveAgentAction(a.id, status)
     // RPC 在「非本人/已處理過/非法狀態」時 raise 中文訊息,原樣顯示
     if (res?.error) setErrMsg(friendlyError(res.error, '草稿處理未完成'))
     else if (res?.applied === 'daily_log') {
-      // 成功提示要看「合併人填數量後」還缺不缺:全填了就只導去查看,還有缺才提示去補
+      // P2c:接受=存成該日施工日誌文件的人工版本(不是正式紀錄);正式紀錄要到施工日誌頁
+      // 補齊待補、簽署後才落庫。提示要看「合併人填數量後」還缺不缺:還有缺就提示去補
       const merged = applyDraftQuantities(a.evidence?.payload, qtyDraft[a.id])
+      const pending = res?.result?.recheck?.length ?? draftNeedsInputCount(merged)
       setDoneMsg({
-        text: `已建立 ${mmdd(merged?.log_date)} 施工日誌`, to: '/site-log',
-        cta: draftNeedsInputCount(merged) > 0 ? '去填數量' : '查看日誌',
+        text: `已存成 ${mmdd(merged?.log_date)} 施工日誌草稿(版本 ${res?.result?.version_no ?? '—'})${pending > 0 ? `,尚有 ${pending} 項待補` : ''};請到施工日誌審核並簽署`,
+        to: `/site-log?d=${merged?.log_date || ''}`,
+        cta: pending > 0 ? '去補齊並簽署' : '去審核簽署',
       })
     } else if (res?.applied === 'checklist') {
       // 查驗草稿的實測值一律留白(AI 不猜數值),接受後人必須進品質管理補填

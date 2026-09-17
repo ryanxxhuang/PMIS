@@ -119,7 +119,8 @@ test.describe('監造', () => {
     // W8-4B:唯讀=摘要式,頁上唯一的 input 是切歷史用的日期——不再有 disabled 欄位假裝可編
     await expect(page.locator('input:not([type="date"])')).toHaveCount(0)
     await expect(page.getByRole('button', { name: '存檔', exact: true })).toHaveCount(0)
-    await expect(page.getByText('選照片 AI 辨識後上傳', { exact: true })).toHaveCount(0) // U-01:不給死按鈕(P0 #11 改名後同步)
+    await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0) // U-01:不給死按鈕——簽署與上傳都是廠商的事(P2c)
+    await expect(page.getByLabel('選擇照片上傳')).toHaveCount(0)
     // 切到 demo 種子最近一筆日誌(右欄清單第一筆=昨天),摘要直接顯示該日內容
     const list = page.getByRole('group', { name: /施工日誌（/ })
     await list.getByRole('button', { name: /^\d{4}-\d{2}-\d{2}$/ }).first().click()

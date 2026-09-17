@@ -162,3 +162,62 @@ export async function registerViaUI(page, { email, orgType, name = '建立者', 
   await page.getByPlaceholder('密碼（至少 8 碼，含大小寫英文與數字）').fill(PW)
   await page.getByRole('button', { name: '下一步：驗證信箱' }).click()
 }
+
+// ── 兩步驟驗證(P2c 簽署要 aal2)──────────────────────────────────────────────
+// 本機 GoTrue 的 TOTP:以使用者身分 enroll(拿 secret)→ 用 Node 算 6 位數 challengeAndVerify → 因子 verified。
+// 之後 UI 登入會停在「輸入驗證碼」,loginRealWithTotp 用同一把 secret 算碼進入 aal2。
+// 純標準 TOTP(RFC 6238,SHA-1、30 秒、6 位):只用 node:crypto,不引入第三方套件。
+import { createHmac } from 'node:crypto'
+function base32Decode(str) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  let bits = ''
+  for (const c of String(str).replace(/=+$/, '').toUpperCase()) {
+    const v = alphabet.indexOf(c)
+    if (v < 0) continue
+    bits += v.toString(2).padStart(5, '0')
+  }
+  const bytes = []
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2))
+  return Buffer.from(bytes)
+}
+export function totpCode(secret, time = Date.now(), step = 30, digits = 6) {
+  const counter = Math.floor(time / 1000 / step)
+  const buf = Buffer.alloc(8)
+  buf.writeBigUInt64BE(BigInt(counter))
+  const h = createHmac('sha1', base32Decode(secret)).update(buf).digest()
+  const off = h[h.length - 1] & 0xf
+  const code = (((h[off] & 0x7f) << 24) | ((h[off + 1] & 0xff) << 16) | ((h[off + 2] & 0xff) << 8) | (h[off + 3] & 0xff)) % 10 ** digits
+  return String(code).padStart(digits, '0')
+}
+export async function enrollTotp(email) {
+  const c = await signInClient(email)
+  const { data, error } = await c.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'e2e' })
+  if (error) throw new Error(`TOTP enroll 失敗(${email}):${error.message}(本機 supabase/config.toml 需 [auth.mfa.totp] enroll_enabled=true 並重啟 stack)`)
+  const secret = data.totp?.secret
+  if (!secret) throw new Error('TOTP enroll 沒有回 secret')
+  const { error: e2 } = await c.auth.mfa.challengeAndVerify({ factorId: data.id, code: totpCode(secret) })
+  if (e2) throw new Error(`TOTP verify 失敗(${email}):${e2.message}`)
+  await c.auth.signOut()
+  return secret
+}
+// UI 登入(帳號已啟用 TOTP):帳密 → 驗證碼畫面 → 6 位數 → 進工作區(aal2)
+export async function loginRealWithTotp(page, email, secret) {
+  await gotoHash(page, '/login')
+  await page.getByPlaceholder('Email').fill(email)
+  await page.getByPlaceholder('密碼（至少 8 碼，含大小寫英文與數字）').fill(PW)
+  await page.locator('button[type="submit"]').click()
+  const codeBox = page.getByPlaceholder('6 位數驗證碼')
+  await codeBox.waitFor()
+  await codeBox.fill(totpCode(secret))
+  await page.getByRole('button', { name: '驗證並登入', exact: true }).click()
+  // 落地=收件匣;不等「登出」鈕——手機(<md)的登出在抽屜裡,頂欄沒有
+  await page.waitForURL(/#\/(dashboard|portfolio)/)
+  await page.getByRole('heading', { level: 1 }).first().waitFor()
+}
+
+// 最小可解碼的 JPEG(1×1,134 bytes)——照片上傳的 fixture。seed 追加在 EOI 之後:內容雜湊不同、仍可解碼,
+// 用來模擬「不同照片」與「同一張重傳」。
+const TINY_JPEG_B64 = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA='
+export function tinyJpeg(seed = '') {
+  return Buffer.concat([Buffer.from(TINY_JPEG_B64, 'base64'), Buffer.from(String(seed), 'utf8')])
+}

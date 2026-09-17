@@ -15,3 +15,13 @@ grant select, insert, update, delete on all tables in schema public to service_r
 grant all on all sequences in schema public to service_role;
 alter default privileges in schema public grant select, insert, update, delete on tables to service_role;
 alter default privileges in schema public grant all on sequences to service_role;
+-- 函式也要對齊(P2c 實測):hosted 的 postgres 角色 default privileges 對 public 新函式一律
+-- `grant execute to anon, authenticated, service_role`,所以 migration 寫 `revoke ... from public, anon`
+-- 後 hosted 的 service_role 仍可執行(例如 P2a 的 fn_field_document_owner_org——field_documents 的
+-- generated column 用它,Edge service client INSERT 文件時會跑到);本機的 postgres default ACL 只有
+-- postgres 自己,revoke 掉 PUBLIC 後 service_role 就 42501(2026-09-17 本機 Edge 起稿實測)。
+-- 只補 service_role(Edge 服務端信任邊界內);anon／authenticated 的執行權由各 migration 明示
+-- grant／revoke 管,不在 seed 放寬。
+grant execute on all functions in schema public to service_role;
+alter default privileges in schema public grant execute on functions to service_role;
+

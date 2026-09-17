@@ -326,10 +326,10 @@ export function buildDemoData(workItems, project) {
   const agaAt = (h) => new Date(Date.now() - h * 3600e3).toISOString()
 
   // 日誌草稿的完整 payload(批3):形狀對齊後端 buildDailyLogDraft 的產出,讓 demo 的
-  // 旗艦流程「照片→草稿→收件匣填數量→接受→日誌」真的演得出來(接受會走 saveSiteLog 進記憶體)。
+  // 旗艦流程「照片→草稿→收件匣填數量→接受→日誌草稿」真的演得出來(接受會存成記憶體文件版本,P2c)。
   // 草稿日期用「今天」:demo 日誌只到昨天,接受後在 /site-log 置頂新增一筆,不覆蓋既有故事線。
   // 工項取 active 前 3 項(與近兩週日誌的工項一致);demo 工項沒有 uuid,items 鍵直接用
-  // item_key,靠 draftPayloadToSiteLog 的 item_key 備援對回 saveSiteLog。
+  // item_key,contentFromAgentDraft 直接以鍵當工項識別。
   // 數量誠實原則:qty_today 一律 null + needs_input(照片證明有做,不證明做多少)。
   const draftLogDate = iso(daysFromNow(0))
   const ylog = siteLogs.find((l) => l.log_date === iso(daysFromNow(-1))) // 出工/機具/材料的複製來源

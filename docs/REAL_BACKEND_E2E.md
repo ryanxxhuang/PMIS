@@ -12,7 +12,7 @@
 npm run test:e2e:real
 ```
 
-六條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+七條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5，見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -39,3 +39,16 @@ chain 3 會以 staging 的平台 admin bootstrap 設定測試案方案，既有 
 [helpers](../e2e-real/helpers.js) 與各 spec 的 afterAll 清本次 fixture：先分頁清 project Storage，再以測試建立者呼叫 delete_project（依 admin 列授權），最後用 admin API 刪帳號。只找測試帳號建立的案，不刪僅受邀的案；cleanup error 必須讓測試失敗。
 
 Storage 不隨 DB cascade 清除：contract-documents 以 projects/<id>/ 為前綴，photos 以 <id>/ 為前綴。帳號使用唯一 email；smoke 帳號由本次建立並清理，先前已存在的 bootstrap 帳號不隨意移除。舊成功紀錄從 Git 追溯，不當成目前版本已通過。
+
+## 現場文書鏈（chain 5，P2c）
+
+`e2e-real/chain5-field-docs.spec.js`：廠商上傳→伺服器起稿→補缺→MFA 簽署→提送→監造退回→廠商更正版本重簽再送→監造收件→機關查閱；另驗重新整理恢復、同一張照片重傳不重建、簽舊版本 `PD001`。前置兩項：
+
+1. **本機 TOTP**：`supabase/config.toml` 的 `[auth.mfa.totp]` 已開（簽署 RPC 要 aal2；`enrollTotp` 以使用者身分 enroll＋verify，登入畫面用 `loginRealWithTotp` 算碼）。改設定後要 `supabase stop && supabase start -x …`（資料保留）才生效。
+2. **本機 Edge stub 模型**：另一個 terminal `supabase functions serve --env-file e2e-real/stub.env`。`PMIS_VISION_STUB=1` 只在 `SUPABASE_URL` 為本機 http 位址時生效（`_shared/visionStub.ts stubAllowed`，正式 Edge 永遠 false；有單元測試釘住），輸出固定：每張都是可辨的工地照、無告示板、工項關鍵詞＝`PMIS_VISION_STUB_HINT`（chain 5 匯入的「結構工程」）。stub 仍過各功能開關並記用量（`model=stub:local`），起稿回應 `notes` 明示「模型輸出為本機 stub」。**stub 只證明流程，不證明辨識正確**；真模型品質見續接清單 P7b。
+
+```bash
+supabase functions serve --env-file e2e-real/stub.env   # terminal A
+npm run test:e2e:real -- e2e-real/chain5-field-docs.spec.js   # terminal B
+```
+

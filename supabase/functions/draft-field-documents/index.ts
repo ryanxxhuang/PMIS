@@ -18,7 +18,7 @@
 //
 // 部署(colima 下必須 --use-api):supabase functions deploy draft-field-documents --use-api
 
-import { cors, jsonResponse as json, exceptionResponse, claudeJson } from '../_shared/claude.ts'
+import { cors, jsonResponse as json, exceptionResponse, claudeJson, readEnv } from '../_shared/claude.ts'
 import type { AiJsonCall } from '../_shared/aiHandler.ts'
 import { openAiGate, closeAiGate, askAiFeature, recordAiUsage } from '../_shared/aiGate.ts'
 import type { AiGateOk } from '../_shared/aiGate.ts'
@@ -28,10 +28,16 @@ import { supabaseDraftRepo } from '../_shared/fieldDocRepo.ts'
 import { runDraftFieldDocuments } from '../_shared/fieldDocDraftRun.ts'
 import type { DraftVision, VisionResult } from '../_shared/fieldDocDraftRun.ts'
 import { sitePhotoCall, whiteboardCall } from '../_shared/sitePhotoVision.ts'
+import { stubAllowed, stubClassify, stubWhiteboard, STUB_NOTE, STUB_MODEL } from '../_shared/visionStub.ts'
 
 const FEATURE = 'field_docs.draft'
 // 單張視覺呼叫:逾時 45 s、只對 429/5xx 重試一次、逾時不重試(同尺寸再逾時只會燒光預算)
 const VISION_CALL = { timeoutMs: 45_000, retries: 1, retryTimeouts: false }
+
+// 本機確定性 stub(P2c 真後端 E2E):只在 PMIS_VISION_STUB=1 且 SUPABASE_URL 為本機 http 位址時生效
+//(visionStub.stubAllowed;正式 Edge 永遠 false)。stub 仍走各功能的開關與用量(model=stub:local、零 token),
+// 閘門 fail-closed 語意不變;回應 notes 明示「模型輸出為本機 stub」。
+const STUB = stubAllowed({ flag: readEnv('PMIS_VISION_STUB'), supabaseUrl: readEnv('SUPABASE_URL') })
 
 // 逐張辨識的模型呼叫器:每個 feature 只問一次開關(擋下記一筆 blocked),每次呼叫各記用量
 function makeVision(gate: AiGateOk): DraftVision {
@@ -50,9 +56,13 @@ function makeVision(gate: AiGateOk): DraftVision {
     }
     return verdicts.get(feature)!
   }
-  const call = async (feature: string, built: AiJsonCall): Promise<VisionResult<unknown>> => {
+  const call = async (feature: string, built: AiJsonCall, stubData: () => unknown): Promise<VisionResult<unknown>> => {
     const v = await verdictOf(feature)
     if (!v.allow) return { blocked: v }
+    if (STUB) {
+      await recordAiUsage(gate.serviceClient, { feature, projectId: gate.projectId, userId: gate.userId, actor: 'user', model: STUB_MODEL, status: 'ok' })
+      return { data: stubData() }
+    }
     const t0 = Date.now()
     const { data, error, errorCode, usage, model } = await claudeJson({ ...built, ...VISION_CALL })
     await recordAiUsage(gate.serviceClient, {
@@ -62,9 +72,10 @@ function makeVision(gate: AiGateOk): DraftVision {
     if (error) return { error, errorCode: errorCode ?? 'claude_error' }
     return { data }
   }
+  const hint = readEnv('PMIS_VISION_STUB_HINT')
   return {
-    classify: (base64, mime) => call('photo.classify', sitePhotoCall(base64, mime)),
-    readBoard: (base64, mime) => call('sitelog.whiteboard', whiteboardCall(base64, mime)),
+    classify: (base64, mime) => call('photo.classify', sitePhotoCall(base64, mime), () => stubClassify(hint)),
+    readBoard: (base64, mime) => call('sitelog.whiteboard', whiteboardCall(base64, mime), () => stubWhiteboard()),
   }
 }
 
@@ -89,6 +100,7 @@ Deno.serve(async (req) => {
       status: result.status >= 500 ? 'error' : 'ok',
       errorCode: result.status >= 400 ? String(result.body.code ?? result.status) : null,
     })
+    if (STUB && Array.isArray(result.body.notes)) result.body.notes = [STUB_NOTE, ...(result.body.notes as unknown[])]
     return json(result.body, result.status)
   } catch (e) {
     await closeAiGate(gate, { feature: FEATURE, status: 'error', errorCode: 'exception' })

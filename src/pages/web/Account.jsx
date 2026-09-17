@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Button, Badge, ErrorBanner, PageHeader, Input, Empty } from '../../components/ui.jsx'
 import { MSym } from '../../components/icons.jsx'
@@ -16,6 +17,11 @@ import { friendlyError } from '../../lib/errorMessage.js'
 // 沒驗完的 unverified 因子不算啟用;enrollMfa 會先清掉殘留再建新的。
 export default function Account() {
   const { currentUser, isSupabaseConfigured, listMfaFactors, enrollMfa, confirmMfaEnrollment, unenrollMfa } = useStore()
+  // ?return=<站內路徑>:從「簽署需要兩步驟驗證」引導過來(P2c 施工日誌),啟用完成後給一顆回去的連結;
+  // 只接受站內相對路徑(以 / 開頭且不是 //),不當開放式導向
+  const [params] = useSearchParams()
+  const rawReturn = params.get('return') || ''
+  const returnTo = /^\/(?!\/)/.test(rawReturn) ? rawReturn : null
   const [factors, setFactors] = useState(null) // null=載入中
   const [loadErr, setLoadErr] = useState('')
   const [pending, setPending] = useState(null) // { factorId, qrCode, secret }
@@ -91,6 +97,8 @@ export default function Account() {
           </p>
           <ErrorBanner msg={loadErr || err} />
           {done && <p role="status" className="flex items-center gap-1.5 text-[var(--success-text,var(--text))]"><MSym name="check_circle" size={16} />{done}</p>}
+          {done && returnTo && enabled && <Link to={returnTo} className="inline-flex items-center gap-1 min-h-11 text-body font-medium text-[var(--blue-text)] hover:underline">回到簽署 <MSym name="arrow_forward" size={14} /></Link>}
+          {!done && returnTo && !enabled && factors !== null && <p className="text-[var(--text-2)]">簽署需要兩步驟驗證：啟用完成後可直接回到簽署頁。</p>}
 
           {factors === null && !loadErr ? (
             <p className="text-[var(--text-3)]">讀取中…</p>
