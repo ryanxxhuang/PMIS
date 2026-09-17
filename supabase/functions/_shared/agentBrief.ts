@@ -59,31 +59,35 @@ export function testSampleItems(samples: TestSampleRow[], todayUTC: number): Ope
 
 // ── 收件者過濾：只依廠商／監造／機關三方陣營 ─────────────────────────────
 // 廠商內部的現場、品管分工不是系統角色；所有廠商成員都能看到廠商事項，
-// 由公司自行決定實際承辦人。
+// 由公司自行決定實際承辦人。待補設定(責任方／基準日缺口)不歸任何一方,
+// 三方都收到——與首頁、Agent 工具同一份規則(ballInCourtRules)。
 export function itemsForRecipient(items: OpenBallItem[], role: AgentRole): OpenBallItem[] {
   const side = SIDE_BY_AGENT_ROLE[role]
-  return items.filter((it) => it.side === side)
+  return items.filter((it) => (it.setup ? true : it.side === side))
 }
 
-// ── 分段:今天球在你手上(逾期+無期限未結)/ 7 日內到期 ─────────────────────
+// ── 分段:今天球在你手上(逾期+無期限未結)/ 7 日內到期 / 待補設定 ─────────────
 export interface BriefSections {
   overdue: OpenBallItem[] // 已逾期(排最前、標紅)
   pending: OpenBallItem[] // 球在你手上但無到期日 / 到期日在 7 日之外(不觸發寄信)
   dueSoon: OpenBallItem[] // 7 日內到期
+  setupPending: OpenBallItem[] // 責任方／基準日待補設定(三方都看得到;不觸發寄信)
 }
 
 export function splitBrief(items: OpenBallItem[], todayUTC: number, soonDays = SOON_DAYS): BriefSections {
   const overdue: OpenBallItem[] = []
   const dueSoon: OpenBallItem[] = []
   const pending: OpenBallItem[] = []
+  const setupPending: OpenBallItem[] = []
   for (const it of items) {
+    if (it.setup) { setupPending.push(it); continue }
     const due = parseDateUTC(it.due_date)
     if (due != null && due < todayUTC) overdue.push(it)
     else if (due != null && diffDays(due, todayUTC) <= soonDays) dueSoon.push(it)
     else pending.push(it)
   }
   // 逾期最久的排最前(輸入已按到期日昇冪 → 這裡不再排序,維持穩定)
-  return { overdue, pending, dueSoon }
+  return { overdue, pending, dueSoon, setupPending }
 }
 
 // 「沒有屬於這個角色的事就不寄」:與舊版一致,只有逾期或 7 日內到期才值得打擾;
@@ -148,7 +152,18 @@ export function renderBriefEmail(args: {
       `<table style="border-collapse:collapse;width:100%">${soonRows.join('')}</table>`
     : ''
 
-  // 第三段(有才出現):AI 草稿收件匣
+  // 第三段(有才出現):待補設定——責任方推不出三方、或基準日沒填,推不出球在誰手上;
+  // 三方都看得到,搭便車出現在信裡,不單獨觸發寄信(與 pending 同)。
+  const GREY = '#5f6368'
+  const setupRows = sections.setupPending.map((it) =>
+    row(GREY, it.kind, it.title, it.due_date ? `${it.meta} · 到期 ${it.due_date}` : it.meta))
+  const setup = setupRows.length
+    ? `<h3 style="margin:18px 0 6px;color:${GREY};font-size:15px">待補設定（${setupRows.length}）</h3>` +
+      `<p style="margin:0 0 6px;color:#666;font-size:12px">責任方或基準日尚未設定，系統無法判斷球在誰手上；請到契約重點或期限追蹤補齊。</p>` +
+      `<table style="border-collapse:collapse;width:100%">${setupRows.join('')}</table>`
+    : ''
+
+  // 第四段(有才出現):AI 草稿收件匣
   const drafts = pendingDrafts > 0
     ? `<p style="margin:18px 0 0;font-size:14px">你的 AI 草稿收件匣有 <a href="${agentUrl}" style="color:${BLUE}">${pendingDrafts} 筆待覆核</a>。</p>`
     : ''
@@ -157,7 +172,7 @@ export function renderBriefEmail(args: {
     `<div style="font-family:system-ui,-apple-system,'Microsoft JhengHei',sans-serif;max-width:560px;margin:0 auto;color:#202124">` +
     `<h2 style="font-size:17px;margin:0 0 4px">${esc(AGENT_NAME[role])} · ${esc(projectName)} · ${briefDateLabel(todayUTC)}</h2>` +
     `<p style="color:#666;font-size:13px;margin:0">你的 agent 早報 — 只列跟你有關的事</p>` +
-    court + soon + drafts +
+    court + soon + setup + drafts +
     `<p style="margin:24px 0 0"><a href="${agentUrl}" style="display:inline-block;background:${BLUE};color:#fff;text-decoration:none;font-size:14px;padding:9px 18px;border-radius:6px">打開你的 Agent</a></p>` +
     `</div>`
   )

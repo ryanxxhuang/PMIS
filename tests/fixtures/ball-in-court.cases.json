@@ -1,0 +1,142 @@
+{
+  "$comment": "P5a 球權共用案例:首頁今日工作(src/lib/ballInCourt.cases.test.js)、Edge 收集器與 Agent 工具／早報(supabase/functions/_shared/ballInCourt.cases.test.ts)、Deno 執行期(ballInCourtRules.deno.test.ts)對同一組資料斷言相同的事項、責任與期限。today=2026-07-26(週日);開工日刻意留空以產生「基準日待補」。key 一律 tag:id。",
+  "today": "2026-07-26",
+  "project_id": "p1",
+  "anchors": { "award_date": "2026-01-10", "notice_date": "2026-01-20", "commencement_date": null, "end_date": "2026-12-31" },
+  "tables": {
+    "rfis": [
+      { "id": "r1", "project_id": "p1", "rfi_no": "RFI-001", "title": "圖說矛盾", "status": "待回覆", "due_date": "2026-07-30" },
+      { "id": "r2", "project_id": "p1", "rfi_no": "RFI-002", "title": "版厚疑義", "status": "已回覆", "due_date": null },
+      { "id": "r3", "project_id": "p1", "rfi_no": "RFI-003", "title": "已結案的疑義", "status": "已結案", "due_date": null }
+    ],
+    "submittals": [
+      { "id": "s1", "project_id": "p1", "submittal_no": "SUB-001", "title": "鋼筋施工計畫", "status": "審核中", "due_date": "2026-07-20" },
+      { "id": "s2", "project_id": "p1", "submittal_no": "SUB-002", "title": "假設工程計畫", "status": "退回補正", "due_date": null },
+      { "id": "s3", "project_id": "p1", "submittal_no": "SUB-003", "title": "品質計畫", "status": "核准", "due_date": null }
+    ],
+    "valuations": [
+      { "id": "v1", "project_id": "p1", "period_no": 6, "status": "草稿", "invoice_date": null, "paid_date": null },
+      { "id": "v2", "project_id": "p1", "period_no": 5, "status": "監造審核", "invoice_date": null, "paid_date": null },
+      { "id": "v3", "project_id": "p1", "period_no": 4, "status": "已核定", "invoice_date": null, "paid_date": null },
+      { "id": "v4", "project_id": "p1", "period_no": 3, "status": "已核定", "invoice_date": "2026-07-01", "paid_date": null },
+      { "id": "v5", "project_id": "p1", "period_no": 2, "status": "已核定", "invoice_date": "2026-06-01", "paid_date": "2026-06-20" }
+    ],
+    "inspections": [
+      { "id": "i1", "project_id": "p1", "title": "4F 鋼筋查驗", "status": "待查驗" },
+      { "id": "i2", "project_id": "p1", "title": "3F 模板查驗", "status": "合格" }
+    ],
+    "defects": [
+      { "id": "d1", "project_id": "p1", "title": "裂縫修補", "severity": "一般", "status": "開立", "due_date": "2026-07-20", "domain": "quality" },
+      { "id": "d2", "project_id": "p1", "title": "焊道複查", "severity": "一般", "status": "待複查", "due_date": null, "domain": "quality" },
+      { "id": "d3", "project_id": "p1", "title": "開口未護欄", "severity": "重大", "status": "改善中", "due_date": null, "domain": "safety" },
+      { "id": "d4", "project_id": "p1", "title": "已結案缺失", "severity": "一般", "status": "已結案", "due_date": null, "domain": "quality" }
+    ],
+    "observations": [
+      { "id": "o1", "project_id": "p1", "title": "樓梯口動線", "status": "待處理", "assigned_to": "contractor" },
+      { "id": "o2", "project_id": "p1", "title": "料場堆置", "status": "待處理", "assigned_to": "supervisor" },
+      { "id": "o3", "project_id": "p1", "title": "不明責任", "status": "待處理", "assigned_to": "工地主任" },
+      { "id": "o4", "project_id": "p1", "title": "未指派", "status": "待處理", "assigned_to": null },
+      { "id": "o5", "project_id": "p1", "title": "已處理的觀察", "status": "已處理", "assigned_to": "contractor" }
+    ],
+    "change_orders": [
+      { "id": "c1", "project_id": "p1", "co_no": "CO-001", "title": "地坪材質變更", "status": "提出" },
+      { "id": "c2", "project_id": "p1", "co_no": "CO-002", "title": "增設排水溝", "status": "審核中" },
+      { "id": "c3", "project_id": "p1", "co_no": "CO-003", "title": "已核准變更", "status": "核准" }
+    ],
+    "contract_obligations": [
+      { "id": "ob1", "project_id": "p1", "title": "履約保險單", "responsible": null, "status": "待辦", "trigger_event": "fixed", "fixed_date": "2026-07-10", "source_clause": "第9條" },
+      { "id": "ob2", "project_id": "p1", "title": "監造月報", "responsible": "監造", "status": "待辦", "trigger_event": "fixed", "fixed_date": "2026-07-29", "source_clause": "第12條" },
+      { "id": "ob3", "project_id": "p1", "title": "提送施工計畫書", "responsible": "廠商", "status": "待辦", "trigger_event": "commencement", "offset_days": 15, "offset_dir": "after", "source_clause": "第8條" },
+      { "id": "ob4", "project_id": "p1", "title": "撥付估驗款", "responsible": "機關", "status": "已完成", "trigger_event": "fixed", "fixed_date": "2026-06-01" },
+      { "id": "ob5", "project_id": "p1", "title": "已廢止的義務", "responsible": "廠商", "status": "不適用", "trigger_event": "fixed", "fixed_date": "2026-07-01" },
+      { "id": "ob6", "project_id": "p1", "title": "其他單位事項", "responsible": "其他", "status": "待辦", "trigger_event": "fixed", "fixed_date": "2026-09-30" },
+      { "id": "ob7", "project_id": "p1", "title": "無時點義務", "responsible": "廠商", "status": "待辦", "trigger_event": "other" },
+      { "id": "ob8", "project_id": "p1", "title": "提送施工月報", "responsible": "廠商", "status": "待辦", "trigger_event": "fixed", "fixed_date": "2026-07-25", "source_clause": "第10條" },
+      { "id": "ob9", "project_id": "p1", "title": "竣工圖說", "responsible": "廠商", "status": "待辦", "trigger_event": "fixed", "fixed_date": "2026-09-01" },
+      { "id": "ob10", "project_id": "p1", "title": "監造計畫書", "responsible": "監造", "status": "已提送", "trigger_event": "fixed", "fixed_date": "2026-07-01" },
+      { "id": "ob11", "project_id": "p1", "title": "決標後保證金", "responsible": "機關", "status": "待辦", "trigger_event": "award", "offset_days": 10, "offset_dir": "after" }
+    ],
+    "field_documents": [
+      { "id": "f1", "project_id": "p1", "doc_type": "daily_log", "doc_date": "2026-07-25", "status": "draft", "owner_org": "contractor", "current_version_no": 1 },
+      { "id": "f2", "project_id": "p1", "doc_type": "daily_log", "doc_date": "2026-07-24", "status": "pending_input", "owner_org": "contractor", "current_version_no": 1 },
+      { "id": "f3", "project_id": "p1", "doc_type": "self_check", "doc_date": "2026-07-20", "status": "signed", "owner_org": "contractor", "current_version_no": 2 },
+      { "id": "f4", "project_id": "p1", "doc_type": "daily_log", "doc_date": "2026-07-23", "status": "submitted", "owner_org": "contractor", "current_version_no": 2 },
+      { "id": "f5", "project_id": "p1", "doc_type": "supervisor_log", "doc_date": "2026-07-22", "status": "returned", "owner_org": "supervisor", "current_version_no": 1 },
+      { "id": "f6", "project_id": "p1", "doc_type": "inspection_form", "doc_date": "2026-07-21", "status": "received", "owner_org": "supervisor", "current_version_no": 1 },
+      { "id": "f7", "project_id": "p1", "doc_type": "daily_log", "doc_date": "2026-07-19", "status": "received", "owner_org": "contractor", "current_version_no": 1 },
+      { "id": "f8", "project_id": "p1", "doc_type": "daily_log", "doc_date": "2026-07-18", "status": "discarded", "owner_org": "contractor", "current_version_no": 1 },
+      { "id": "f9", "project_id": "p1", "doc_type": "supervisor_log", "doc_date": "2026-07-17", "status": "in_review", "owner_org": "supervisor", "current_version_no": 1 },
+      { "id": "f10", "project_id": "p1", "doc_type": "daily_log", "doc_date": "2026-07-16", "status": "submitted", "owner_org": "contractor", "current_version_no": 3 }
+    ],
+    "field_document_submissions": [
+      { "document_id": "f4", "version_no": 2, "action": "submit", "actor_org": "contractor", "to_org": "supervisor" },
+      { "document_id": "f6", "version_no": 1, "action": "submit", "actor_org": "supervisor", "to_org": "contractor" },
+      { "document_id": "f6", "version_no": 1, "action": "submit", "actor_org": "supervisor", "to_org": "owner" },
+      { "document_id": "f6", "version_no": 1, "action": "receive", "actor_org": "contractor", "to_org": "contractor" },
+      { "document_id": "f7", "version_no": 1, "action": "submit", "actor_org": "contractor", "to_org": "supervisor" },
+      { "document_id": "f7", "version_no": 1, "action": "receive", "actor_org": "supervisor", "to_org": "supervisor" },
+      { "document_id": "f10", "version_no": 2, "action": "submit", "actor_org": "contractor", "to_org": "supervisor" },
+      { "document_id": "f10", "version_no": 2, "action": "return", "actor_org": "supervisor", "to_org": "supervisor" },
+      { "document_id": "f10", "version_no": 3, "action": "submit", "actor_org": "contractor", "to_org": "supervisor" }
+    ]
+  },
+  "expected": {
+    "core_items": [
+      { "id": "r1", "who": "supervisor", "tag": "疑義", "title": "RFI-001 圖說矛盾", "status": "待回覆", "meta": "待監造/設計回覆", "due": "2026-07-30" },
+      { "id": "r2", "who": "contractor", "tag": "疑義", "title": "RFI-002 版厚疑義", "status": "已回覆", "meta": "待廠商確認結案", "due": null },
+      { "id": "s1", "who": "supervisor", "tag": "送審", "title": "SUB-001 鋼筋施工計畫", "status": "審核中", "meta": "待監造審定", "due": "2026-07-20" },
+      { "id": "s2", "who": "contractor", "tag": "送審", "title": "SUB-002 假設工程計畫", "status": "退回補正", "meta": "待廠商補正", "due": null },
+      { "id": "v1", "who": "contractor", "tag": "估驗", "title": "第 6 期估驗", "status": "草稿", "meta": "待廠商送審", "due": null },
+      { "id": "v2", "who": "supervisor", "tag": "估驗", "title": "第 5 期估驗", "status": "監造審核", "meta": "待監造核定", "due": null },
+      { "id": "v3", "who": "contractor", "tag": "估驗", "title": "第 4 期估驗", "status": "已核定", "meta": "待廠商請款", "due": null },
+      { "id": "v4", "who": "owner", "tag": "估驗", "title": "第 3 期估驗", "status": "已核定", "meta": "待機關撥款", "due": null },
+      { "id": "i1", "who": "supervisor", "tag": "查驗", "title": "4F 鋼筋查驗", "status": "待查驗", "meta": "待監造查驗", "due": null },
+      { "id": "d1", "who": "contractor", "tag": "缺失", "title": "裂縫修補", "status": "開立", "meta": "待廠商改善", "due": "2026-07-20" },
+      { "id": "d2", "who": "supervisor", "tag": "缺失", "title": "焊道複查", "status": "待複查", "meta": "待監造複查", "due": null },
+      { "id": "d3", "who": "contractor", "tag": "工安缺失", "title": "開口未護欄", "status": "改善中", "meta": "廠商改善中", "due": null },
+      { "id": "o1", "who": "contractor", "tag": "觀察", "title": "樓梯口動線", "status": "待處理", "meta": "待處理", "due": null },
+      { "id": "o2", "who": "supervisor", "tag": "觀察", "title": "料場堆置", "status": "待處理", "meta": "待處理", "due": null },
+      { "id": "o3", "who": "unassigned", "tag": "觀察", "title": "不明責任", "status": "待處理", "meta": "待處理（指派「工地主任」不是三方）", "due": null },
+      { "id": "o4", "who": "contractor", "tag": "觀察", "title": "未指派", "status": "待處理", "meta": "待處理", "due": null },
+      { "id": "c1", "who": "supervisor", "tag": "變更", "title": "CO-001 地坪材質變更", "status": "提出", "meta": "待監造審查", "due": null },
+      { "id": "c2", "who": "owner", "tag": "變更", "title": "CO-002 增設排水溝", "status": "審核中", "meta": "待機關核定", "due": null },
+      { "id": "f1", "who": "contractor", "tag": "現場文書", "title": "施工日誌 2026-07-25", "status": "draft", "meta": "待簽署", "due": null },
+      { "id": "f2", "who": "contractor", "tag": "現場文書", "title": "施工日誌 2026-07-24", "status": "pending_input", "meta": "待補欄位", "due": null },
+      { "id": "f3", "who": "contractor", "tag": "現場文書", "title": "自主檢查表 2026-07-20", "status": "signed", "meta": "待提送", "due": null },
+      { "id": "f4", "who": "supervisor", "tag": "現場文書", "title": "施工日誌 2026-07-23", "status": "submitted", "meta": "待收件", "due": null },
+      { "id": "f5", "who": "supervisor", "tag": "現場文書", "title": "監造日誌 2026-07-22", "status": "returned", "meta": "被退回待補正", "due": null },
+      { "id": "f6", "who": "owner", "tag": "現場文書", "title": "監造查驗表單 2026-07-21", "status": "received", "meta": "待收件", "due": null },
+      { "id": "f9", "who": "supervisor", "tag": "現場文書", "title": "監造日誌 2026-07-17", "status": "in_review", "meta": "待同方核對", "due": null },
+      { "id": "f10", "who": "supervisor", "tag": "現場文書", "title": "施工日誌 2026-07-16", "status": "submitted", "meta": "待收件", "due": null }
+    ],
+    "obligations": [
+      { "id": "ob1", "who": "unassigned", "title": "履約保險單", "label": "責任方待補設定", "due": "2026-07-10", "setup": "responsible" },
+      { "id": "ob2", "who": "supervisor", "title": "監造月報", "label": "待辦", "due": "2026-07-29", "setup": null },
+      { "id": "ob3", "who": "contractor", "title": "提送施工計畫書", "label": "基準日待補（開工日）", "due": null, "setup": "anchor" },
+      { "id": "ob6", "who": "unassigned", "title": "其他單位事項", "label": "責任方待補設定", "due": "2026-09-30", "setup": "responsible" },
+      { "id": "ob7", "who": "contractor", "title": "無時點義務", "label": "待辦", "due": null, "setup": null },
+      { "id": "ob8", "who": "contractor", "title": "提送施工月報", "label": "待辦", "due": "2026-07-25", "setup": null },
+      { "id": "ob9", "who": "contractor", "title": "竣工圖說", "label": "待辦", "due": "2026-09-01", "setup": null },
+      { "id": "ob11", "who": "owner", "title": "決標後保證金", "label": "待辦", "due": "2026-01-20", "setup": null }
+    ],
+    "setup": ["觀察:o3", "契約重點:ob1", "契約重點:ob3", "契約重點:ob6"],
+    "mine": {
+      "soon7": {
+        "contractor": ["疑義:r2", "送審:s2", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "觀察:o1", "觀察:o4", "現場文書:f1", "現場文書:f2", "現場文書:f3", "契約重點:ob8"],
+        "supervisor": ["疑義:r1", "送審:s1", "估驗:v2", "查驗:i1", "缺失:d2", "觀察:o2", "變更:c1", "現場文書:f4", "現場文書:f5", "現場文書:f9", "現場文書:f10", "契約重點:ob2"],
+        "owner": ["估驗:v4", "變更:c2", "現場文書:f6", "契約重點:ob11"]
+      },
+      "soon0": {
+        "contractor": ["疑義:r2", "送審:s2", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "觀察:o1", "觀察:o4", "現場文書:f1", "現場文書:f2", "現場文書:f3", "契約重點:ob8"],
+        "supervisor": ["疑義:r1", "送審:s1", "估驗:v2", "查驗:i1", "缺失:d2", "觀察:o2", "變更:c1", "現場文書:f4", "現場文書:f5", "現場文書:f9", "現場文書:f10"],
+        "owner": ["估驗:v4", "變更:c2", "現場文書:f6", "契約重點:ob11"]
+      }
+    },
+    "overdue_days": { "送審:s1": 6, "缺失:d1": 6, "契約重點:ob8": 1, "契約重點:ob11": 187 },
+    "web_waiting_soon7": {
+      "contractor": ["疑義:r1", "送審:s1", "估驗:v2", "估驗:v4", "缺失:d2", "變更:c1", "變更:c2", "現場文書:f4", "現場文書:f6", "現場文書:f10"],
+      "supervisor": ["疑義:r2", "送審:s2", "缺失:d1", "工安缺失:d3", "變更:c2", "現場文書:f1", "現場文書:f2", "現場文書:f3", "現場文書:f6"],
+      "owner": ["送審:s1", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "現場文書:f5", "現場文書:f9"]
+    }
+  }
+}

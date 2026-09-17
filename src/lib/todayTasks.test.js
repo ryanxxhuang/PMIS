@@ -85,12 +85,15 @@ describe('觀察事項:assigned_to 落不進三方就不歸任何人', () => {
     { id: 'O2', title: '料場堆置', status: '待處理', assigned_to: 'supervisor' },
     { id: 'O3', title: '不明責任', status: '待處理', assigned_to: '工地主任' },
   ]
-  it('三方各自只看到指給自己的,自由文字值不進任何人的待辦', () => {
+  it('三方各自只看到指給自己的,自由文字值不進任何人的待辦;改列三方共見的待補設定', () => {
     expect(build({ org: 'contractor', observations }).mine.map((t) => t.title)).toEqual(['樓梯口動線'])
     expect(build({ org: 'supervisor', observations }).mine.map((t) => t.title)).toEqual(['料場堆置'])
     for (const org of ['contractor', 'supervisor', 'owner']) {
-      const { mine, waiting } = build({ org, observations })
+      const { mine, waiting, setup } = build({ org, observations })
       expect([...mine, ...waiting].some((t) => t.title === '不明責任')).toBe(false)
+      expect(setup.map((t) => t.title)).toEqual(['不明責任'])
+      expect(setup[0].meta).toBe('待處理（指派「工地主任」不是三方）')
+      expect(setup[0].to).toBe('/quality?observation=O3')
     }
   })
 })
@@ -116,6 +119,27 @@ describe('契約期限:精確責任白名單 + 目的頁真的能完成', () => 
     const o = build({ org: 'owner', obligations: rows, anchors })
     expect(o.mine.filter((t) => t.tag === '契約重點').map((t) => t.title)).toEqual(['機關:核定計畫'])
     expect(o.waiting.some((t) => t.tag === '契約重點')).toBe(false)
+  })
+  it('未指定/不明責任 → 三方共見的待補設定,導到擷取審核該筆;不預設丟給廠商(P5a)', () => {
+    for (const org of ['contractor', 'supervisor', 'owner']) {
+      const { setup } = build({ org, obligations: rows, anchors })
+      expect(setup.map((t) => t.title)).toEqual(['未指定責任', '不明責任方'])
+      expect(setup.every((t) => t.meta === '責任方待補設定' && t.ball === 'unassigned')).toBe(true)
+      expect(setup.map((t) => t.to)).toEqual(['/requirements/review?highlight=OB-N', '/requirements/review?highlight=OB-X'])
+    }
+  })
+  it('基準日沒填而推不出到期日 → 待補設定(基準日),導到期限追蹤;責任方仍是自己方', () => {
+    const noAnchor = [ob({ id: 'OB-A', title: '開工後 15 日提送', trigger_event: 'commencement', offset_days: 15, responsible: '廠商' })]
+    for (const org of ['contractor', 'supervisor', 'owner']) {
+      const { mine, setup } = build({ org, obligations: noAnchor, anchors: {} })
+      expect(mine.some((t) => t.tag === '契約重點')).toBe(false)
+      expect(setup).toHaveLength(1)
+      expect(setup[0]).toMatchObject({ title: '開工後 15 日提送', meta: '基準日待補（開工日）', ball: 'contractor', to: '/deadlines', due: null })
+    }
+    // 基準日補上後就是一般期限:回到廠商的待辦、不再是待補設定
+    const withAnchor = build({ org: 'contractor', obligations: noAnchor, anchors: { commencement_date: '2026-08-01' } })
+    expect(withAnchor.setup).toEqual([])
+    expect(withAnchor.mine.find((t) => t.tag === '契約重點').due).toBe('2026-08-16')
   })
   it('逾期天數與罰則寫進說明,並直達期限追蹤頁的那一筆(「標為已提送」在那裡)', () => {
     const t = build({ org: 'contractor', obligations: rows, anchors }).mine.find((x) => x.tag === '契約重點')
@@ -349,8 +373,8 @@ describe('今天已完成:只認可靠的操作時間戳', () => {
 })
 
 describe('資料形狀韌性', () => {
-  it('完全空輸入回三個空陣列', () => {
-    expect(build({ org: 'contractor' })).toEqual({ mine: [], waiting: [], doneToday: [] })
+  it('完全空輸入回四個空陣列', () => {
+    expect(build({ org: 'contractor' })).toEqual({ mine: [], waiting: [], doneToday: [], setup: [] })
   })
   it('demo 形狀(無 uuid、欄位殘缺)不丟例外且仍產生穩定的 key', () => {
     const { mine } = build({

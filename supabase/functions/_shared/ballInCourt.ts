@@ -1,49 +1,30 @@
-// 「球在誰手上」伺服器端唯一實作(B4 由 agentTools.ts 抽出)。
+// 「球在誰手上」伺服器端收集器(B4 由 agentTools.ts 抽出)。
 // ---------------------------------------------------------------------------
 // list_my_open_items(agentQueryTools,RLS userClient)與 send-reminders 每日
 // 早報(service role)共用這一份;send-reminders 原本就跨 function import 它,
-// 獨立成檔才名實相符。判定規則與 src/lib/ballInCourt.js 一致,改動要兩邊同步。
+// 獨立成檔才名實相符。
+// 判定規則不在這裡:P5a 起與前端 src/lib/ballInCourt.js 同 import
+// ./ballInCourtRules.ts(單一實作),本檔只負責「查哪些表、綁定本案、加逾期天數」。
+// 共用案例 tests/fixtures/ball-in-court.cases.json 由 ballInCourt.cases.test.ts 對本檔斷言。
 
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
-import type { BallSide } from './agentRole.ts'
+import type { BallSide, SetupGap } from './ballInCourtRules.ts'
+import {
+  coreOpenItems, obligationBall, obligationInWindow, isObligationOpen, FIELD_DOC_OPEN_STATUSES, UNTITLED,
+} from './ballInCourtRules.ts'
 export type { BallSide }
 import { computeObligationDueUTC, diffDays, formatDate, parseDateUTC } from './contractDue.ts'
 import { toolError } from './agentToolCommon.ts'
 
-// ── 球在誰手上(與 src/lib/ballInCourt.js 一致;改動要兩邊同步) ──────────────
-type Ball = { who: 'contractor' | 'supervisor' | 'owner' | 'done'; label: string }
-
-function rfiBall(r: { status?: string }): Ball {
-  if (r.status === '待回覆') return { who: 'supervisor', label: '待監造/設計回覆' }
-  if (r.status === '已回覆') return { who: 'contractor', label: '待廠商確認結案' }
-  return { who: 'done', label: '已結案' }
-}
-function submittalBall(s: { status?: string }): Ball {
-  if (s.status === '已提送' || s.status === '審核中') return { who: 'supervisor', label: '待監造審定' }
-  if (s.status === '退回補正') return { who: 'contractor', label: '待廠商補正' }
-  return { who: 'done', label: s.status || '' }
-}
-function valuationBall(v: { status?: string; invoice_date?: string | null; paid_date?: string | null }): Ball {
-  if (v.status === '草稿') return { who: 'contractor', label: '待廠商送審' }
-  if (v.status === '監造審核') return { who: 'supervisor', label: '待監造核定' }
-  if (!v.invoice_date) return { who: 'contractor', label: '待廠商請款' }
-  if (!v.paid_date) return { who: 'owner', label: '待機關撥款' }
-  return { who: 'done', label: '已撥款' }
-}
-function defectBall(d: { status?: string }): Ball {
-  if (d.status === '已結案') return { who: 'done', label: '已結案' }
-  if (d.status === '待複查') return { who: 'supervisor', label: '待監造複查' }
-  if (d.status === '改善中') return { who: 'contractor', label: '廠商改善中' }
-  return { who: 'contractor', label: '待廠商改善' }
-}
-
 // ── 球在誰手上:本案全陣營未結項彙整 ──────────────────────────────────────────
 // list_my_open_items(RLS userClient)與 send-reminders 每日早報(service role)
-// 共用同一份收集邏輯 —— 這是「球在誰手上」判斷的伺服器端唯一實作,別再抄一份。
+// 共用同一份收集邏輯 —— 這是「球在誰手上」判斷的伺服器端唯一收集器,別再抄一份。
 // 每個查詢都逐一 .eq('project_id') 綁定本案:userClient 下是縱深防禦,
 // service role 下(無 RLS)則是唯一的跨案隔離保證,絕不可拿掉。
+// field_document_submissions 沒有 project_id 欄:只以「本案文件的 id 清單」查,
+// 清單本身來自綁定本案的 field_documents 查詢,隔離由此遞延。
 export interface OpenBallItem {
-  side: BallSide
+  side: BallSide | 'unassigned'
   kind: string
   id: string
   title: string
@@ -51,6 +32,9 @@ export interface OpenBallItem {
   meta: string
   due_date: string | null
   overdue_days?: number
+  // 待補設定(責任方推不出三方／基準日沒填):不歸任何一方、三方都看得到;
+  // Agent 工具另列 setup_pending、早報另成一段,不觸發寄信。
+  setup?: SetupGap
 }
 
 // opts.obligationSoonDays:契約義務除「已逾期」外,額外納入 N 天內到期者
@@ -62,57 +46,67 @@ export async function collectOpenBallItems(
   opts: { obligationSoonDays?: number } = {},
 ): Promise<{ items: OpenBallItem[] } | { error: string }> {
   const soonDays = opts.obligationSoonDays ?? 0
+  const todayIso = formatDate(today)
   const items: OpenBallItem[] = []
-  const push = (ball: Ball, kind: string, id: string, title: string, status: string, dueDate: string | null) => {
-    if (ball.who === 'done') return
-    const dueMs = parseDateUTC(dueDate)
-    const overdue = dueMs != null && dueMs < today ? diffDays(today, dueMs) : undefined
-    items.push({ side: ball.who, kind, id, title: title || '(未命名)', status, meta: ball.label, due_date: dueDate, ...(overdue ? { overdue_days: overdue } : {}) })
-  }
 
-  const [defects, submittals, rfis, valuations, proj, obligations] = await Promise.all([
+  const [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, proj, obligations] = await Promise.all([
     db.from('defects').select('id, title, severity, status, due_date, domain').eq('project_id', projectId).neq('status', '已結案'),
     db.from('submittals').select('id, submittal_no, title, status, due_date').eq('project_id', projectId).in('status', ['已提送', '審核中', '退回補正']),
     db.from('rfis').select('id, rfi_no, title, status, due_date').eq('project_id', projectId).in('status', ['待回覆', '已回覆']),
     db.from('valuations').select('id, period_no, status, invoice_date, paid_date').eq('project_id', projectId),
+    db.from('inspections').select('id, title, status').eq('project_id', projectId).eq('status', '待查驗'),
+    db.from('change_orders').select('id, co_no, title, status').eq('project_id', projectId).in('status', ['提出', '審核中']),
+    db.from('observations').select('id, title, status, assigned_to').eq('project_id', projectId).eq('status', '待處理'),
+    db.from('field_documents').select('id, doc_type, doc_date, status, owner_org, current_version_no').eq('project_id', projectId).in('status', FIELD_DOC_OPEN_STATUSES),
     db.from('projects').select('award_date, notice_date, commencement_date, end_date').eq('id', projectId).maybeSingle(),
-    db.from('contract_obligations').select('id, title, responsible, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause').eq('project_id', projectId).eq('status', '待辦'),
+    // 未結的定義在共用規則(isObligationOpen);這裡只排除已廢止的不適用列,與前端載入同口徑
+    db.from('contract_obligations').select('id, title, responsible, status, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause').eq('project_id', projectId).neq('status', '不適用'),
   ])
-  const firstError = [defects, submittals, rfis, valuations, obligations].find((r) => r.error)
+  const firstError = [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, obligations].find((r) => r.error)
   if (firstError?.error) return toolError('collectOpenBallItems', firstError.error)
 
-  for (const d of defects.data ?? []) {
-    push(defectBall(d), d.domain === 'safety' ? '工安缺失' : '缺失', d.id, d.title, d.status, d.due_date)
+  const docIds = (fieldDocs.data ?? []).map((d) => d.id)
+  let submissions: Record<string, unknown>[] = []
+  if (docIds.length) {
+    const subs = await db.from('field_document_submissions')
+      .select('document_id, version_no, action, actor_org, to_org').in('document_id', docIds)
+    if (subs.error) return toolError('collectOpenBallItems', subs.error)
+    submissions = subs.data ?? []
   }
-  for (const s of submittals.data ?? []) {
-    push(submittalBall(s), '送審', s.id, `${s.submittal_no ? s.submittal_no + ' ' : ''}${s.title || ''}`.trim(), s.status, s.due_date)
-  }
-  for (const r of rfis.data ?? []) {
-    push(rfiBall(r), '疑義', r.id, `${r.rfi_no ? r.rfi_no + ' ' : ''}${r.title || ''}`.trim(), r.status, r.due_date)
-  }
-  for (const v of valuations.data ?? []) {
-    push(valuationBall(v), '估驗', v.id, `第 ${v.period_no} 期估驗`, v.status, null)
-  }
-  // 契約義務:到期日由 contractDue 依基準日確定性推算(不是 AI 算);
-  // responsible 未填的義務預設歸廠商(與資料慣例一致)。
-  const SIDE_BY_RESP: Record<string, BallSide> = { 廠商: 'contractor', 監造: 'supervisor', 機關: 'owner' }
-  for (const ob of obligations.data ?? []) {
-    const side = SIDE_BY_RESP[ob.responsible || '廠商'] ?? 'contractor'
-    const due = proj?.data ? computeObligationDueUTC(ob, proj.data, today) : null
-    if (due == null) continue
-    const overdue = due < today
-    if (!overdue && (soonDays <= 0 || diffDays(due, today) > soonDays)) continue
+
+  for (const it of coreOpenItems({
+    rfis: rfis.data ?? [], submittals: submittals.data ?? [], valuations: valuations.data ?? [], defects: defects.data ?? [],
+    inspections: inspections.data ?? [], observations: observations.data ?? [], changeOrders: changeOrders.data ?? [],
+    fieldDocuments: fieldDocs.data ?? [], fieldDocumentSubmissions: submissions,
+  })) {
+    const dueMs = parseDateUTC(it.due)
+    const overdue = dueMs != null && dueMs < today ? diffDays(today, dueMs) : undefined
     items.push({
-      side,
-      kind: '契約重點',
-      id: ob.id,
-      title: ob.title,
-      status: '待辦',
-      meta: overdue
-        ? `已逾期${ob.source_clause ? '(依 ' + ob.source_clause + ')' : ''}`
-        : `待辦${ob.source_clause ? '(依 ' + ob.source_clause + ')' : ''}`,
-      due_date: formatDate(due),
-      ...(overdue ? { overdue_days: diffDays(today, due) } : {}),
+      side: it.who, kind: it.tag, id: it.id ?? '', title: it.title, status: it.status, meta: it.meta, due_date: it.due,
+      ...(overdue ? { overdue_days: overdue } : {}),
+      ...(it.setup ? { setup: it.setup } : {}), // 責任推不出三方(觀察指派非三方):待補設定
+    })
+  }
+
+  // 契約義務:到期日由 contractDue 依基準日確定性推算(不是 AI 算);責任方／基準日缺口由
+  // 共用規則判定——責任不明不歸任何一方(不再預設廠商),列為待補設定。
+  const anchors = proj?.data ?? {}
+  for (const ob of obligations.data ?? []) {
+    if (!isObligationOpen(ob.status)) continue
+    const dueMs = computeObligationDueUTC(ob, anchors, today)
+    const dueIso = dueMs == null ? null : formatDate(dueMs)
+    const ball = obligationBall(ob, { dueIso, anchors })
+    if (ball.who === 'done') continue
+    const clause = ob.source_clause ? `（依 ${ob.source_clause}）` : ''
+    const base = { kind: '契約重點', id: ob.id, title: ob.title || UNTITLED, status: String(ob.status ?? ''), due_date: dueIso }
+    if (ball.setup) {
+      items.push({ side: ball.who, ...base, meta: `${ball.label}${clause}`, setup: ball.setup })
+      continue
+    }
+    if (dueMs == null || !obligationInWindow(dueIso, todayIso, soonDays)) continue
+    items.push({
+      side: ball.who, ...base, meta: `${ball.label}${clause}`,
+      ...(dueMs < today ? { overdue_days: diffDays(today, dueMs) } : {}),
     })
   }
 

@@ -148,21 +148,34 @@ export async function getRequirements(db: SupabaseClient, projectId: string, inp
   return { contract_obligations: obligationRows, approved_requirements: reqRows }
 }
 
-export async function listMyOpenItems(db: SupabaseClient, projectId: string, _input: Record<string, unknown>) {
+// today 可注入:共用案例測試(ballInCourt.cases.test.ts)要以固定日期斷言;分派器不傳,取台北今天。
+export async function listMyOpenItems(db: SupabaseClient, projectId: string, _input: Record<string, unknown>, today = taipeiTodayUTC()) {
   // 「我方」= 呼叫者的組織別(伺服器端 RPC,不信任 client 傳值)
   const { data: orgType } = await db.rpc('my_org_type')
   const side: BallSide =
     orgType === 'supervisor' ? 'supervisor' : orgType === 'owner' ? 'owner' : 'contractor'
-  const today = taipeiTodayUTC()
   const sideLabel = side === 'contractor' ? '廠商' : side === 'supervisor' ? '監造' : '機關'
 
   const collected = await collectOpenBallItems(db, projectId, today)
   if ('error' in collected) return { error: collected.error }
   const items = collected.items
-    .filter((i) => i.side === side)
+    .filter((i) => i.side === side && !i.setup)
     .map(({ side: _side, ...rest }) => rest) // 工具輸出維持原形(不含 side 欄)
-  if (!items.length) return { note: '目前沒有球在我方的待辦', side: sideLabel }
-  return { side: sideLabel, items: items.slice(0, 30) }
+  // 待補設定(責任方推不出三方／基準日沒填):不歸任何一方,三方的 Agent 都看得到——
+  // 與首頁「待補設定」同一份規則(ballInCourtRules),不預設丟給廠商。
+  const setupPending = collected.items
+    .filter((i) => i.setup)
+    .map(({ side: s, setup, ...rest }) => ({
+      ...rest, setup: setup!.kind, setup_label: setup!.label,
+      responsible: s === 'unassigned' ? '待補設定' : s === 'contractor' ? '廠商' : s === 'supervisor' ? '監造' : '機關',
+      fix_at: setup!.kind === 'responsible' ? '擷取審核(已確認內容不可改;廢止取代後補登責任方)' : '期限追蹤的基準日',
+    }))
+  if (!items.length && !setupPending.length) return { note: '目前沒有球在我方的待辦', side: sideLabel }
+  return {
+    side: sideLabel,
+    ...(items.length ? { items: items.slice(0, 30) } : { note: '目前沒有球在我方的待辦' }),
+    ...(setupPending.length ? { setup_pending: setupPending.slice(0, 30) } : {}),
+  }
 }
 
 export async function findEvidence(db: SupabaseClient, projectId: string, input: Record<string, unknown>) {

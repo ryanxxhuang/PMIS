@@ -25,6 +25,7 @@ const TAG_META = {
   驗收: { icon: 'verified', tone: 'green' },
   停留點: { icon: 'report', tone: 'red' },
   日誌: { icon: 'edit_note', tone: 'blue' },
+  現場文書: { icon: 'description', tone: 'blue' },
 }
 // class 對照表而非 inline style:深色模式與 token 調整才會自動跟上
 const TILE = {

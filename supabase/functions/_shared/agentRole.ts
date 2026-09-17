@@ -12,8 +12,9 @@ export function agentRoleOf(orgType?: string | null): AgentRole {
   return (orgType ? ROLE_BY_ORG_TYPE[orgType] : undefined) ?? 'contractor'
 }
 
-// Agent 身分與 ball-in-court 陣營現在是一對一。
-export type BallSide = 'contractor' | 'supervisor' | 'owner'
+// Agent 身分與 ball-in-court 陣營現在是一對一。型別以共用規則為準(前端同一份)。
+import type { BallSide } from './ballInCourtRules.ts'
+export type { BallSide }
 export const SIDE_BY_AGENT_ROLE: Record<AgentRole, BallSide> = {
   contractor: 'contractor',
   supervisor: 'supervisor',

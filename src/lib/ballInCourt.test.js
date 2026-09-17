@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { rfiBall, submittalBall, valuationBall, changeOrderBall, defectBall, inspectionBall, myOpenItems, collaborationItems, detailLink } from './ballInCourt.js'
+import { rfiBall, submittalBall, valuationBall, changeOrderBall, defectBall, inspectionBall, observationBall, myOpenItems, collaborationItems, detailLink } from './ballInCourt.js'
+import { fieldDocumentBalls } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 describe('ball-in-court per record', () => {
   it('RFI', () => {
@@ -34,6 +35,34 @@ describe('ball-in-court per record', () => {
     expect(defectBall({ status: '已結案' }).who).toBe('done')
     expect(inspectionBall({ status: '待查驗' }).who).toBe('supervisor')
     expect(inspectionBall({ status: '合格' }).who).toBe('done')
+  })
+  it('觀察:三方值歸該方、缺值歸廠商、其他文字不歸任何一方(待補設定)', () => {
+    expect(observationBall({ status: '待處理', assigned_to: 'supervisor' }).who).toBe('supervisor')
+    expect(observationBall({ status: '待處理', assigned_to: null }).who).toBe('contractor')
+    expect(observationBall({ status: '待處理', assigned_to: '工地主任' }).who).toBe('unassigned')
+    expect(observationBall({ status: '已處理', assigned_to: 'contractor' }).who).toBe('done')
+  })
+  it('現場文書:責任方各狀態、提送對象待收件(多對象各一顆)、都收件即完成', () => {
+    const doc = (over) => ({ id: 'F', doc_type: 'inspection_form', owner_org: 'supervisor', current_version_no: 1, ...over })
+    const who = (d, subs = []) => fieldDocumentBalls(d, subs).map((b) => `${b.who}:${b.label}`)
+    expect(who(doc({ status: 'draft' }))).toEqual(['supervisor:待簽署'])
+    expect(who(doc({ status: 'pending_input' }))).toEqual(['supervisor:待補欄位'])
+    expect(who(doc({ status: 'signed' }))).toEqual(['supervisor:待提送'])
+    expect(who(doc({ status: 'returned' }))).toEqual(['supervisor:被退回待補正'])
+    const subs = [
+      { document_id: 'F', version_no: 1, action: 'submit', actor_org: 'supervisor', to_org: 'contractor' },
+      { document_id: 'F', version_no: 1, action: 'submit', actor_org: 'supervisor', to_org: 'owner' },
+    ]
+    expect(who(doc({ status: 'submitted' }), subs)).toEqual(['contractor:待收件', 'owner:待收件'])
+    const oneReceived = [...subs, { document_id: 'F', version_no: 1, action: 'receive', actor_org: 'contractor', to_org: 'contractor' }]
+    expect(who(doc({ status: 'received' }), oneReceived)).toEqual(['owner:待收件'])
+    const returned = [...subs, { document_id: 'F', version_no: 1, action: 'return', actor_org: 'owner', to_org: 'owner' }]
+    expect(who(doc({ status: 'returned' }), returned)).toEqual(['supervisor:被退回待補正'])
+    const allDone = [...oneReceived, { document_id: 'F', version_no: 1, action: 'receive', actor_org: 'owner', to_org: 'owner' }]
+    expect(who(doc({ status: 'received' }), allDone)).toEqual(['done:已收件'])
+    // 舊版本的提送列不算:只看目前版本
+    expect(who(doc({ status: 'submitted', current_version_no: 2 }), subs)).toEqual(['done:已收件'])
+    expect(who(doc({ status: 'discarded' }))).toEqual(['done:discarded'])
   })
 })
 

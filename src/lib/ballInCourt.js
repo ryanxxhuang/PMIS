@@ -1,60 +1,22 @@
 // Ball-in-court:每個協作項目「現在等誰處理」。學自 Procore——全平台一致的
 // 責任語言,任何人打開都知道球在誰手上、該催誰。
-// who 通常為 contractor / supervisor / owner / done;觀察事項 assigned_to 可為自由文字,聚合時再過濾。
+//
+// 判定規則只有一份,住在 supabase/functions/_shared/ballInCourtRules.ts(P5a):首頁今日工作、
+// Agent 工具與每日早報都 import 同一支;這裡只負責前端獨有的部分——每個事項該導去哪一頁。
+// 共用案例:tests/fixtures/ball-in-court.cases.json(Vitest 前端路徑／Edge 路徑與 Deno 同讀)。
+// who 為 contractor / supervisor / owner / unassigned(責任推不出三方 → 待補設定)/ done。
+import { coreOpenItems } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
-export function rfiBall(r) {
-  if (r.status === '待回覆') return { who: 'supervisor', label: '待監造/設計回覆' }
-  if (r.status === '已回覆') return { who: 'contractor', label: '待廠商確認結案' }
-  return { who: 'done', label: '已結案' }
-}
-
-export function submittalBall(s) {
-  if (s.status === '已提送' || s.status === '審核中') return { who: 'supervisor', label: '待監造審定' }
-  if (s.status === '退回補正') return { who: 'contractor', label: '待廠商補正' }
-  return { who: 'done', label: s.status } // 核准 / 核備 / 駁回
-}
-
-export function valuationBall(v) {
-  if (v.status === '草稿') return { who: 'contractor', label: '待廠商送審' }
-  if (v.status === '監造審核') return { who: 'supervisor', label: '待監造核定' }
-  if (!v.invoice_date) return { who: 'contractor', label: '待廠商請款' }
-  if (!v.paid_date) return { who: 'owner', label: '待機關撥款' } // 已請款 → 球在機關撥款
-  return { who: 'done', label: '已撥款' }
-}
-
-export function changeOrderBall(co) {
-  if (co.status === '提出') return { who: 'supervisor', label: '待監造審查' }
-  if (co.status === '審核中') return { who: 'owner', label: '待機關核定' }
-  return { who: 'done', label: co.status } // 核准 / 駁回
-}
-
-export function defectBall(d) {
-  if (d.status === '已結案') return { who: 'done', label: '已結案' }
-  if (d.status === '待複查') return { who: 'supervisor', label: '待監造複查' }
-  // 開立/改善中分開標示:按「開始改善」後仍顯示「待廠商改善」會讓
-  // 畫面標籤與實際狀態對不上(第二輪 P2-01)
-  if (d.status === '改善中') return { who: 'contractor', label: '廠商改善中' }
-  return { who: 'contractor', label: '待廠商改善' } // 開立
-}
-
-export function inspectionBall(i) {
-  if (i.status === '待查驗') return { who: 'supervisor', label: '待監造查驗' }
-  return { who: 'done', label: i.status } // 合格 / 不合格
-}
-
-function observationBall(o) {
-  if (o.status === '待處理') return { who: o.assigned_to || 'contractor', label: '待處理' }
-  return { who: 'done', label: o.status } // 已處理 / 轉缺失
-}
-
+export {
+  rfiBall, submittalBall, valuationBall, changeOrderBall, defectBall, inspectionBall, observationBall,
+  BALL_SIDES, UNASSIGNED, coreOpenItems,
+} from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 // 估驗該去哪一頁完成:送審與核定在估驗頁,請款日與收款日都在請款收款頁。
 // 原本以「球在機關」判斷,結果廠商的「待廠商請款」被導到估驗頁——那頁沒有請款日欄位,
-// 使用者點進去找不到可做的事(W8-2A §1.4-1)。
+// 使用者點進去找不到可做的事(W8-2A §1.4-1)。事項的 meta 就是 valuationBall 的 label。
 const VALUATION_PAGE_LABELS = new Set(['待廠商送審', '待監造核定'])
-function valuationRoute(v) {
-  return VALUATION_PAGE_LABELS.has(valuationBall(v).label) ? '/valuation' : '/payments'
-}
+const valuationRoute = (label) => (VALUATION_PAGE_LABELS.has(label) ? '/valuation' : '/payments')
 
 // 有「清單＋詳情」殼的頁(useListDetailPane)吃單條 query 就直接選中那一筆(規範 §9.7):
 // 收件匣點進去要落在該筆的詳情,不是落在頁首再找一次。query 名以各頁
@@ -65,37 +27,29 @@ export function detailLink(page, param, id) {
   return id == null || id === '' ? page : `${page}?${param}=${encodeURIComponent(id)}`
 }
 
+// tag → 目的頁與單條 query 名。缺失追蹤已套殼(DefectTracker,規範 §9.8):?defect=<id> 在
+// /safety(工安)與 /quality(品質,頁面依這個 query 自動切到「缺失」分段)都直達該筆。
+// 現場文書:/site?doc=<id>(D-026 §1 登記的直達參數;P2c 接文件頁後即定位該份)。
+const ROUTE_BY_TAG = {
+  疑義: ['/rfi', 'rfi'], 送審: ['/submittals', 'submittal'], 查驗: ['/quality', 'inspection'],
+  缺失: ['/quality', 'defect'], 工安缺失: ['/safety', 'defect'], 觀察: ['/quality', 'observation'],
+  變更: ['/change-orders', 'co'], 現場文書: ['/site', 'doc'],
+}
+function routeOf(item) {
+  if (item.tag === '估驗') return detailLink(valuationRoute(item.meta), 'period', item.id)
+  const [page, param] = ROUTE_BY_TAG[item.tag] || ['/dashboard', 'id']
+  return detailLink(page, param, item.id)
+}
+
 // 全案未結協作項(不分角色):{ id, who, tag, title, meta(=ball.label), to, due }。
 // myOpenItems 與今日工作聚合(todayTasks.js)共用這一份組裝——「哪些協作項算未結、
-// 標題怎麼組、要導去哪一頁」只有一個答案,不會首頁一套、Agent 一套。
+// 標題怎麼組」由共用規則決定,「要導去哪一頁」只在這裡決定,不會首頁一套、Agent 一套。
 export function collaborationItems(data = {}) {
-  const { rfis = [], submittals = [], valuations = [], defects = [], inspections = [], observations = [], changeOrders = [] } = data
-  const out = []
-  const push = (ball, { id, tag, title, to, due = null }) => {
-    if (ball.who === 'done') return
-    out.push({ id: id ?? null, who: ball.who, tag, title: title || '（未命名）', meta: ball.label, to, due: due || null })
-  }
-  rfis.forEach((r) => push(rfiBall(r), {
-    id: r.id, tag: '疑義', title: `${r.rfi_no ? r.rfi_no + ' ' : ''}${r.title || ''}`.trim(), to: detailLink('/rfi', 'rfi', r.id), due: r.due_date,
+  return coreOpenItems(data).map((it) => ({
+    id: it.id, who: it.who, tag: it.tag, title: it.title, meta: it.meta, due: it.due, to: routeOf(it),
+    ...(it.doc_type ? { doc_type: it.doc_type } : {}),
+    ...(it.setup ? { setup: it.setup } : {}),
   }))
-  submittals.forEach((s) => push(submittalBall(s), {
-    id: s.id, tag: '送審', title: `${s.submittal_no ? s.submittal_no + ' ' : ''}${s.title || ''}`.trim(), to: detailLink('/submittals', 'submittal', s.id), due: s.due_date,
-  }))
-  valuations.forEach((v) => push(valuationBall(v), {
-    id: v.id, tag: '估驗', title: `第 ${v.period_no} 期估驗`, to: detailLink(valuationRoute(v), 'period', v.id),
-  }))
-  inspections.forEach((i) => push(inspectionBall(i), { id: i.id, tag: '查驗', title: i.title, to: detailLink('/quality', 'inspection', i.id) }))
-  // 缺失追蹤已套殼(DefectTracker,規範 §9.8):?defect=<id> 在 /safety(工安)與 /quality
-  // (品質,頁面依這個 query 自動切到「缺失」分段)都直達該筆
-  defects.forEach((d) => push(defectBall(d), {
-    id: d.id, tag: d.domain === 'safety' ? '工安缺失' : '缺失', title: d.title,
-    to: detailLink(d.domain === 'safety' ? '/safety' : '/quality', 'defect', d.id), due: d.due_date,
-  }))
-  observations.forEach((o) => push(observationBall(o), { id: o.id, tag: '觀察', title: o.title, to: detailLink('/quality', 'observation', o.id) }))
-  changeOrders.forEach((c) => push(changeOrderBall(c), {
-    id: c.id, tag: '變更', title: `${c.co_no ? c.co_no + ' ' : ''}${c.title || ''}`.trim(), to: detailLink('/change-orders', 'co', c.id),
-  }))
-  return out
 }
 
 // 「球在你手上」逐案清單:回傳指定角色(org_type)目前該處理的協作項。

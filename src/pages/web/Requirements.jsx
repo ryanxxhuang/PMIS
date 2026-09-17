@@ -43,7 +43,7 @@ import { extractionCoverageWarnings } from '../../lib/extractRequirements.js'
 import { useContractEnrichment } from '../../lib/useContractEnrichment.js'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import {
-  PARTY_META, VISIBLE, ORG_TO_PARTY, PARTY_BLURB, OB_STATUS, STATUS_KEYS, PHASES,
+  PARTY_META, VISIBLE, ORG_TO_PARTY, PARTY_BLURB, OB_STATUS, STATUS_KEYS, PHASES, UNASSIGNED_PARTY, isVisibleTo,
   buildTimelineItem, matchesFilters, partyStat, phaseStat, phaseWindows,
   pickDefaultId, canActOn, anchorGaps,
 } from '../../lib/obligationTimeline.js'
@@ -219,8 +219,9 @@ export default function Requirements() {
   // × 契約範圍(packageOf:列自己的歸包,沒有才由 run → 文件版本回推)。依賴就是它
   // 真正讀的三張 Map——改版前這裡靠 runsById 恰好與 enrich 同一次 setState 換
   // identity 才沒壞,現在寫對。
+  // 待補設定(責任方推不出三方)對三方都可見:沒人看得到就沒人會去補
   const pool = useMemo(
-    () => items.filter((it) => VISIBLE[viewerParty].includes(it.who)
+    () => items.filter((it) => isVisibleTo(it, viewerParty)
       && inPackage(it.ob.requirement_id ? reqById.get(it.ob.requirement_id) : null, packageId, { versionsById, runsById })),
     [items, viewerParty, packageId, reqById, versionsById, runsById],
   )
@@ -251,7 +252,12 @@ export default function Requirements() {
     [pool, viewerParty],
   )
   const typeOptions = useMemo(() => [...new Set(pool.map((it) => it.type).filter(Boolean))], [pool])
-  const multiParty = VISIBLE[viewerParty].length > 1
+  // 責任方篩選選項:三方可見範圍,有待補設定的義務才多一個「待補設定」
+  const whoOptions = useMemo(
+    () => (pool.some((it) => it.who === UNASSIGNED_PARTY) ? [...VISIBLE[viewerParty], UNASSIGNED_PARTY] : VISIBLE[viewerParty]),
+    [pool, viewerParty],
+  )
+  const multiParty = whoOptions.length > 1
   const anyFilter = filters.status !== 'all' || filters.phase !== 'all' || filters.type || filters.who || filters.q.trim()
 
   const milestoneMeta = useMemo(() => {
@@ -557,7 +563,15 @@ export default function Requirements() {
             {selected.penalty ? '罰則條款,非待辦事項;條件成立時自動轉為待處理。' : '相關基準日尚未設定,推不出到期日,暫非待辦事項。'}
           </span>
         )}
-        {!isMine && !actable && (
+        {!isMine && !actable && selected.who === UNASSIGNED_PARTY && (
+          // 責任方推不出三方:三方都不能標記(DB 同一條規則);已確認內容不可改,到擷取審核廢止取代後補登
+          <span className="flex-1 min-w-[180px] text-caption text-[var(--text-3)] leading-relaxed">
+            責任方尚未設定,三方都無法標記。請到
+            <Link to={`/requirements/review?highlight=${encodeURIComponent(selected.id)}`} className="text-[var(--blue-text)] hover:underline mx-0.5">擷取審核</Link>
+            廢止取代後補登責任方。
+          </span>
+        )}
+        {!isMine && !actable && selected.who !== UNASSIGNED_PARTY && (
           <span className="flex-1 min-w-[180px] text-caption text-[var(--text-3)] leading-relaxed">
             由{selected.who}負責執行,本頁為唯讀檢視。
           </span>
@@ -783,7 +797,7 @@ export default function Requirements() {
             onChange={(e) => setFilters((f) => ({ ...f, who: e.target.value }))}
             className="!w-auto max-md:!w-full !h-[30px] !py-0 !text-xs !rounded-lg">
             <option value="">全部責任方</option>
-            {VISIBLE[viewerParty].map((p) => <option key={p} value={p}>{p}</option>)}
+            {whoOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </Select>
         )}
         <Select value={filters.type} aria-label="類型"

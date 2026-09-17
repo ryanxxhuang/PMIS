@@ -9,9 +9,14 @@
 import { computeObligationDue, formatObligationRule } from './contractDue.js'
 import { parseLocalDate, localISODate, taipeiISODate } from './dates.js'
 import { REQUIREMENT_TYPE_LABELS, sourcePageLabel } from './requirementReview.js'
+import { obligationSide, ANCHOR_BY_TRIGGER, ANCHOR_LABELS as SHARED_ANCHOR_LABELS } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 export const PARTIES = ['廠商', '監造', '機關']
 export const ORG_TO_PARTY = { contractor: '廠商', supervisor: '監造', owner: '機關' }
+// 責任方推不出三方(null／空字串／「其他」／自由文字)的義務:不歸任何一方,以「待補設定」
+// 標示,三方都看得到、三方都不能標記(DB obligation_party() 回 null,policy 同步不放行);
+// 處理入口是契約重點該筆(廢止取代後補登責任方)。與今日工作／Agent／早報同一條規則。
+export const UNASSIGNED_PARTY = '待補設定'
 
 // 責任方標示(README 2.2):icon + 卡片左緣標示色。色值走全站 token——
 // 廠商=主色藍、監造=注意橘(--accent 即 #a05a00)、機關=綠(--success 即 #146c2e)。
@@ -19,10 +24,13 @@ export const PARTY_META = {
   廠商: { icon: 'engineering', mark: 'var(--primary)' },
   監造: { icon: 'checklist', mark: 'var(--accent)' },
   機關: { icon: 'account_balance', mark: 'var(--success)' },
+  [UNASSIGNED_PARTY]: { icon: 'help', mark: 'var(--text-3)' },
 }
 
 // 誰看得到誰的執行情形(README 1)。廠商只看自己;監造看自己+廠商;機關看全部。
 export const VISIBLE = { 廠商: ['廠商'], 監造: ['監造', '廠商'], 機關: ['廠商', '監造', '機關'] }
+// 可見=三方可見範圍,加上「待補設定」對三方都可見(不然沒人知道有義務等著補責任方)
+export const isVisibleTo = (item, viewerParty) => item.who === UNASSIGNED_PARTY || (VISIBLE[viewerParty] || []).includes(item.who)
 
 // 頁首副標(README 2.1,依角色換文案;標點照設計稿)
 export const PARTY_BLURB = {
@@ -66,7 +74,8 @@ const addDays = (d, n) => {
   return r
 }
 
-export const obligationParty = (ob) => (PARTIES.includes(ob?.responsible) ? ob.responsible : '廠商')
+// 歸屬走共用規則 obligationSide(精確白名單、去頭尾空白),再映回中文責任方
+export const obligationParty = (ob) => ORG_TO_PARTY[obligationSide(ob?.responsible)] || UNASSIGNED_PARTY
 
 // 狀態推導:已提送/已完成=done;推不出到期日(基準日未定/條件未觸發)=na;
 // 逾期<0、7 日內=due,其餘排程中——7 日門檻與 contractDue 的 soon 同一套帳。
@@ -176,14 +185,9 @@ export function pickDefaultId(items) {
 // 循環配置完整(從今天推)、無觸發點(本來就無時點)都不是被基準日卡住,不算。
 // 供履約時程頁的「設定基準日」提示與初始化清單引用:數字必須對得上使用者
 // 設完基準日後「多出幾條有日期」的實際變化,不可虛報。
-export const ANCHOR_LABELS = {
-  award_date: '決標日', notice_date: '接獲開工通知日',
-  commencement_date: '開工日', end_date: '竣工日',
-}
-const TRIGGER_ANCHOR = {
-  award: 'award_date', notice: 'notice_date',
-  commencement: 'commencement_date', completion: 'end_date',
-}
+// 觸發點→基準日欄位與標籤以共用規則為準(今日工作／Agent／早報的「基準日待補」同一份)
+export const ANCHOR_LABELS = SHARED_ANCHOR_LABELS
+const TRIGGER_ANCHOR = ANCHOR_BY_TRIGGER
 export function anchorGaps(items, anchors) {
   const counts = {}
   for (const it of items) {

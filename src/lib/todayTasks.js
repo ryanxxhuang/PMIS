@@ -1,4 +1,4 @@
-// 今日工作的單一聚合(W8-2B)。三段:現在輪到我 / 等待對方 / 今天已完成。
+// 今日工作的單一聚合(W8-2B)。四段:現在輪到我 / 等待對方 / 今天已完成 / 待補設定。
 // Dashboard 與提醒中心都吃這一份 —— W8-2A §2.5 盤到的兩套前端規則
 // (ballInCourt 的協作項、Alerts 內嵌的期限)在這裡合流,不再各寫一套。
 //
@@ -7,11 +7,17 @@
 //   2. AI 草稿(agent_actions)與未核定 Requirement 永遠不進來——本函式
 //      根本不收這兩種輸入,是結構上的保證,不是靠呼叫端自律。
 //   3. 只有「登入角色在目的頁真的能完成」的事才進 mine:期限「已提送」鈕
-//      在 /contract 由 can.edit 控制,所以只有廠商責任的義務算待辦;
-//      監造／機關責任的義務留在專案文件頁,不包裝成做不到的假待辦。
+//      在 /deadlines 由歸屬控制,三方責任的期限各進該方;責任不明的不歸任何方,
+//      改列「待補設定」(setup)讓三方都看到並導到能補的地方。
 //   4. 「今天已完成」只採可靠的操作時間戳(closed_at / inspected_at),
 //      不把可回填的業務日期(請款日/日誌日期/審定日)當成「今天按下完成」。
+//
+// 球權判定與 Agent／早報同一份實作(supabase/functions/_shared/ballInCourtRules.ts,P5a);
+// 共用案例 tests/fixtures/ball-in-court.cases.json 由 ballInCourt.cases.test.js 對本檔斷言。
 import { collaborationItems, detailLink } from './ballInCourt.js'
+import {
+  BALL_SIDES, OBLIGATION_SIDE, obligationBall, obligationInWindow, isObligationOpen, daysBetweenIso, FIELD_DOC_PARTIES,
+} from '../../supabase/functions/_shared/ballInCourtRules.ts'
 import { parseLocalDate, taipeiISODate, localISODate } from './dates.js'
 import { computeObligationDue } from './contractDue.js'
 import { sampleAlerts } from './qc.js'
@@ -19,33 +25,32 @@ import { acceptanceAlerts, deriveAcceptance, ACCEPTANCE_STAGE_ORGS } from './acc
 import { itpAlerts } from './itp.js'
 
 // 專案角色只有三方(D-002)。design 不是角色,設計釋疑由監造轉呈。
-const ORG_SIDES = Object.freeze(['contractor', 'supervisor', 'owner'])
+const ORG_SIDES = BALL_SIDES
 
-// 契約義務 responsible → 專案角色。精確白名單:null、空字串、其他與未知文字
-// 一律視為「未指定」,不歸給任何角色。伺服器 collectOpenBallItems 目前是
-// 「無法辨識就歸廠商」,那個預設不可複製到前端(會把不明義務塞進廠商待辦)。
-export const RESPONSIBLE_SIDE = Object.freeze({ 廠商: 'contractor', 監造: 'supervisor', 機關: 'owner' })
-
-// 期限「已提送」在期限追蹤頁完成。DB policy(migration 20260825120000)只看歸屬:
-// 三方都能對自己責任的期限標記/退回,機關自 2026-08-25 起也能標自己的
-// (估驗撥付/初驗/驗收),所以三方責任的期限都進 mine;責任不明的不歸任何方。
-const OBLIGATION_ACTIONABLE_SIDES = ORG_SIDES
+// 契約義務 responsible → 專案角色。精確白名單(共用規則 OBLIGATION_SIDE):null、空字串、
+// 「其他」與未知文字一律「未指定」,不歸給任何角色——伺服器 collectOpenBallItems 與
+// DB obligation_party() 自 P5a 起同一條規則,不再有「無法辨識就歸廠商」的預設。
+export const RESPONSIBLE_SIDE = OBLIGATION_SIDE
 
 // 「等待對方」只列與登入角色有直接對手關係的類型(W8-2A §3.2、§5-7)——
 // 首頁不是全案未結項的傾印場,列完所有別人的事只會讓頁面再變長。
+// 現場文書:責任方等對方收件、提送對象等責任方簽送——但只對該類文書的當事方成立
+// (FIELD_DOC_PARTIES;廠商不會等一份與他無關的監造日誌)。
 export const WAITING_SCOPE = Object.freeze({
   contractor: {
     送審: ['supervisor'], 估驗: ['supervisor', 'owner'], 疑義: ['supervisor'],
-    缺失: ['supervisor'], 工安缺失: ['supervisor'], 變更: ['supervisor', 'owner'],
+    缺失: ['supervisor'], 工安缺失: ['supervisor'], 變更: ['supervisor', 'owner'], 現場文書: ['supervisor', 'owner'],
   },
   supervisor: {
     缺失: ['contractor'], 工安缺失: ['contractor'], 送審: ['contractor'],
-    疑義: ['contractor'], 變更: ['owner'],
+    疑義: ['contractor'], 變更: ['owner'], 現場文書: ['contractor', 'owner'],
   },
   owner: {
-    估驗: ['contractor'], 缺失: ['contractor'], 工安缺失: ['contractor'], 送審: ['supervisor'],
+    估驗: ['contractor'], 缺失: ['contractor'], 工安缺失: ['contractor'], 送審: ['supervisor'], 現場文書: ['contractor', 'supervisor'],
   },
 })
+const waitsOn = (org, scope, it) => (scope[it.tag] || []).includes(it.who)
+  && (it.tag !== '現場文書' || (FIELD_DOC_PARTIES[it.doc_type] || []).includes(org))
 
 // 期限型項目只列「已逾期」與 N 日內到期,沿用提醒中心既有門檻。
 export const SOON_DAYS = 7
@@ -54,16 +59,13 @@ export const SOON_DAYS = 7
 // 維持既有 import 路徑(useTodayTasks / Dashboard / 測試)不動。
 export { taipeiISODate }
 
+// 兩個 'YYYY-MM-DD' 的日差(正=dueIso 在 todayIso 之後)。純字串運算,
+// 不受執行環境時區影響——測試才能用固定 today 斷言逾期天數。實作在共用規則。
+export const daysBetween = daysBetweenIso
+
 const isoToUTC = (iso) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''))
   return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null
-}
-
-// 兩個 'YYYY-MM-DD' 的日差(正=dueIso 在 todayIso 之後)。純字串運算,
-// 不受執行環境時區影響——測試才能用固定 today 斷言逾期天數。
-export function daysBetween(dueIso, todayIso) {
-  const a = isoToUTC(dueIso), b = isoToUTC(todayIso)
-  return a == null || b == null ? null : Math.round((a - b) / 86400000)
 }
 
 // 到期句的單一真相:今日工作與品質頁工作佇列共用同一支——TaskRow 的 OVERDUE_RE 與
@@ -81,12 +83,13 @@ const byDue = (a, b) => {
   return x - y
 }
 
-// 每筆待辦:{ key, tag, title, meta, ball, due, overdueDays, to }。
+// 每筆待辦:{ key, id, tag, title, meta, ball, due, overdueDays, to }。
 // meta 是給人看的唯一狀態句(球權標籤＋到期／罰則),UI 不再自己算日期。
-function task({ key, tag, title, meta, ball, to, due = null, todayIso = null }) {
+// id=原單據 id(可能為 null,demo 舊形狀);key 才是列的唯一鍵。
+function task({ key, id = null, tag, title, meta, ball, to, due = null, todayIso = null }) {
   const days = due && todayIso ? daysBetween(due, todayIso) : null
   return {
-    key, tag, title: title || '（未命名）', meta, ball, to,
+    key, id: id ?? null, tag, title: title || '（未命名）', meta, ball, to,
     due: due || null,
     overdueDays: days != null && days < 0 ? -days : null,
   }
@@ -98,6 +101,7 @@ export function buildTodayTasks(input = {}) {
     rfis = [], submittals = [], valuations = [], defects = [], inspections = [],
     observations = [], changeOrders = [], obligations = [], testSamples = [],
     acceptanceEvents = [], inspectionPoints = [], siteLogs = [],
+    fieldDocuments = [], fieldDocumentSubmissions = [],
   } = input
   const todayIso = taipeiISODate(today)
   // 期限引擎(sampleAlerts / acceptanceAlerts / computeObligationDue)都用 Date 相減再
@@ -107,41 +111,55 @@ export function buildTodayTasks(input = {}) {
   const todayLocal = parseLocalDate(todayIso) || new Date(today)
   const mine = []
   const waiting = []
+  // 待補設定:責任推不出三方(義務 responsible／觀察 assigned_to)或基準日沒填。
+  // 不歸任何一方、三方都看得到(不依 org 過濾),每筆導到能補的地方。
+  const setup = []
 
-  // ── ① 協作項(疑義／送審／估驗／查驗／缺失／觀察／變更)────────────────
+  // ── ① 協作項(疑義／送審／估驗／查驗／缺失／觀察／變更／現場文書)────────
   const waitingScope = WAITING_SCOPE[org] || {}
-  collaborationItems({ rfis, submittals, valuations, defects, inspections, observations, changeOrders })
+  collaborationItems({ rfis, submittals, valuations, defects, inspections, observations, changeOrders, fieldDocuments, fieldDocumentSubmissions })
     .forEach((it, i) => {
-      // observations.assigned_to 是自由文字欄:落不進三方就是「未指定」,
-      // 不硬塞給任何角色(硬塞＝製造別人做不到的待辦)。
-      if (!ORG_SIDES.includes(it.who)) return
       const days = it.due ? daysBetween(it.due, todayIso) : null
+      // key 沿用 tag:id(DOM id 與返回定位都吃它);現場文書一份可能同時等兩方收件,才加 who
       const t = task({
-        key: `${it.tag}:${it.id ?? `${it.title}#${i}`}`,
+        key: `${it.tag}:${it.id ?? `${it.title}#${i}`}${it.tag === '現場文書' ? `:${it.who}` : ''}`, id: it.id,
         tag: it.tag, title: it.title, ball: it.who, to: it.to, due: it.due, todayIso,
         meta: days != null && days <= SOON_DAYS ? `${it.meta}・${dueText(days, it.due)}` : it.meta,
       })
+      // 責任推不出平台上的一方(觀察 assigned_to 是自由文字;共用規則已標 setup):不硬塞給任何角色,列待補設定
+      if (it.setup) { setup.push(t); return }
+      if (!ORG_SIDES.includes(it.who)) return
       if (it.who === org) mine.push(t)
-      else if ((waitingScope[it.tag] || []).includes(it.who)) waiting.push(t)
+      else if (waitsOn(org, waitingScope, it)) waiting.push(t)
     })
 
   // ── ② 契約期限(自己責任、且自己在 /deadlines 真的能完成的才算待辦)──
-  if (OBLIGATION_ACTIONABLE_SIDES.includes(org)) {
-    for (const ob of obligations) {
-      if (ob.status === '已提送' || ob.status === '已完成') continue
-      if (RESPONSIBLE_SIDE[String(ob.responsible ?? '').trim()] !== org) continue
-      const dueIso = localISODate(computeObligationDue(ob, anchors, todayLocal))
-      if (!dueIso) continue
-      const days = daysBetween(dueIso, todayIso)
-      if (days == null || days > SOON_DAYS) continue
-      mine.push(task({
-        key: `契約:${ob.id ?? ob.title}`, tag: '契約重點', title: ob.title, ball: org,
-        // 「標為已提送」在期限追蹤頁(契約重點改版後遷出),待辦要導到能完成的地方;
-        // 帶 ?obligation=<id> 直達該筆(規範 §9.7)——/deadlines 的 rows 是 dueItems,id 就是 ob.id
-        to: detailLink('/deadlines', 'obligation', ob.id), due: dueIso, todayIso,
-        meta: `${dueText(days, dueIso)}${ob.penalty ? `・罰則：${ob.penalty}` : ''}`,
+  // 責任不明 → 待補設定(處理入口:擷取審核該筆——已確認的契約重點內容不可改,由審核者
+  // 「廢止取代」後補登責任方;義務 id 就是 requirement id,?highlight= 直達);
+  // 基準日沒填而推不出到期日 → 待補設定(處理入口:期限追蹤的基準日卡)。
+  for (const ob of obligations) {
+    if (!isObligationOpen(ob.status)) continue
+    const dueIso = localISODate(computeObligationDue(ob, anchors, todayLocal))
+    const ball = obligationBall(ob, { dueIso, anchors })
+    if (ball.who === 'done') continue
+    if (ball.setup) {
+      setup.push(task({
+        key: `契約:${ob.id ?? ob.title}:setup`, id: ob.id, tag: '契約重點', title: ob.title, ball: ball.who, due: dueIso, todayIso,
+        to: ball.setup.kind === 'responsible' ? detailLink('/requirements/review', 'highlight', ob.id) : '/deadlines',
+        meta: ball.setup.label,
       }))
+      continue
     }
+    if (ball.who !== org) continue
+    if (!dueIso || !obligationInWindow(dueIso, todayIso, SOON_DAYS)) continue
+    const days = daysBetween(dueIso, todayIso)
+    mine.push(task({
+      key: `契約:${ob.id ?? ob.title}`, id: ob.id, tag: '契約重點', title: ob.title, ball: org,
+      // 「標為已提送」在期限追蹤頁(契約重點改版後遷出),待辦要導到能完成的地方;
+      // 帶 ?obligation=<id> 直達該筆(規範 §9.7)——/deadlines 的 rows 是 dueItems,id 就是 ob.id
+      to: detailLink('/deadlines', 'obligation', ob.id), due: dueIso, todayIso,
+      meta: `${dueText(days, dueIso)}${ob.penalty ? `・罰則：${ob.penalty}` : ''}`,
+    }))
   }
 
   // ── ③ 試體齡期(廠商填試驗值)────────────────────────────────────────
@@ -208,6 +226,7 @@ export function buildTodayTasks(input = {}) {
     mine: mine.sort(byDue),
     waiting: waiting.sort(byDue),
     doneToday: buildDoneToday({ org, todayIso, defects, inspections }),
+    setup,
   }
 }
 

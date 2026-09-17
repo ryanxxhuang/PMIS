@@ -1,9 +1,17 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-17｜H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-17 P5a：球權單一實作、共用案例與待補設定（PR #120，migration `20260917220737_obligation_party_unassigned`）
+
+- 共用案例 `tests/fixtures/ball-in-court.cases.json`（today 2026-07-26；開工日留空以產生基準日缺口；26 筆協作項＋11 筆義務＋10 份現場文書含多對象提送）三側同讀：`src/lib/ballInCourt.cases.test.js` 12 條（collaborationItems 核心事項含順序；三方 mine／waiting／setup；每筆責任、期限、逾期天數；責任不明與基準日缺口的標籤與入口）、`_shared/ballInCourt.cases.test.ts` 10 條（collectOpenBallItems 核心事項、義務窗口、逾期天數、三方球；`list_my_open_items` 三角色 items＋`setup_pending`；早報 `itemsForRecipient`／`splitBrief` 三角色）、`npm run test:edge`（Deno 2.9.6）3 條（核心事項含順序、義務責任／基準日／期限、三方球與待補設定 soon 7／0）。
+- `npm test`：124 檔、1,331 項通過（rebase 到含 H1 的 main 後重跑）；`npm run check:edge` 18 支；`npm run lint` 零警告；`npm run build`；`npm run check:docs` 55 檔、378 連結、0 錯誤。
+- `npm run test:db`（一次性資料庫從零套 67 支 migration＋seed）：47 檔、1,728 通過、0 失敗（＝H1 基準 1,712＋新增 `obligation_party_unassigned.sql` 16 條：函式對三方原樣通過、去頭尾空白、null／空字串／其他／未知文字回 null；責任不明的義務三方都不能標記、自己方對照組仍可、非正式模式 admin override 可、正式模式下無人可動；`obligation_ownership_completed_at.sql` 三條「落回廠商」斷言改為新語意，仍 27 條）。
+- Demo E2E（`npx playwright test` contractor／owner／supervisor／workflow-ux／routes／reachability／a11y）：63 項通過。
+- 未做：真資料目視「待補設定」卡與履約時程責任方（demo 種子沒有責任不明的義務、也沒有現場文書）；`/site?doc=` 直達要等 P2c 文件頁；正式 `db push`、Edge 重佈與 `check:prod` 於合併後執行（結果記 CURRENT §6.3）；不寄真實早報。
 
 ### 2026-09-17 H1：收回 API 角色的表級 DDL／維護類權限（PR #118，migration `20260917213900_api_roles_table_ddl_privileges`）
 

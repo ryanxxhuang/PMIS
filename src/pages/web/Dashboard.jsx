@@ -190,6 +190,17 @@ export default function Dashboard() {
       hint={obligations.length === 0 ? '上傳契約後，AI 會整理期限並在此提醒。' : null}
       emptyTo={{ to: sourceTo('waiting'), label: withCount('看等對方', tasks.waiting.length) }} />
   )
+  // 待補設定(P5a):責任方推不出三方、或基準日沒填而推不出到期日的事項。系統無法判斷球在誰
+  // 手上,所以不進任何一方的「現在輪到我」,也不算件數;三方都看得到同一份,每筆導到能補的
+  // 地方(契約重點該筆／期限追蹤的基準日)。Agent 工具與早報列的是同一份規則的同一組事項。
+  const setupSection = ball === 'mine' && tasks.setup.length > 0 && (
+    <Card title="待補設定" action={<Badge color="slate" className="num">{tasks.setup.length}</Badge>} bodyClass="p-0">
+      <p className="px-4 pt-3 text-footnote text-[var(--text-3)]">責任方或基準日尚未設定，系統無法判斷球在誰手上；三方都看得到這份清單，補齊後事項會回到對應的人。</p>
+      <ul role="list" aria-label="待補設定清單" className="divide-y divide-[var(--border-2)]">
+        {tasks.setup.map((x) => <li key={x.key}><TaskRow task={x} /></li>)}
+      </ul>
+    </Card>
+  )
 
   return (
     <div className="space-y-5">
@@ -249,6 +260,7 @@ export default function Dashboard() {
           {/* 狀態全部由既有業務流程更新——在目的頁做完事就自動退出,
               不需要回這裡打勾;這裡也永遠不會出現 AI 自己產生的工作。 */}
           <div key={ball}>{focus}</div>
+          {setupSection}
 
           {/* 風險警示與 AI 代辦以標單/進度為素材,沒有標單就沒有可靠依據,不畫 */}
           {ball === 'mine' && imported && (
