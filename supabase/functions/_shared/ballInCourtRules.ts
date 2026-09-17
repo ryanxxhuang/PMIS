@@ -11,7 +11,7 @@
 //
 // 責任不明(responsible 推不出三方、觀察 assigned_to 不是三方)一律 who='unassigned':
 // 不歸任何一方、列入「待補設定」讓三方都看得到並有處理入口;絕不預設丟給廠商。
-// DB 同一條規則:obligation_party() 對三方以外回 null(migration 20260917213502),
+// DB 同一條規則:obligation_party() 對三方以外回 null(migration 20260917220737),
 // contract_obligations 的 update policy 因而對三方都不放行(admin override 例外)。
 //
 // 共用測試案例:tests/fixtures/ball-in-court.cases.json —— Vitest(前端路徑與 Edge 路徑)

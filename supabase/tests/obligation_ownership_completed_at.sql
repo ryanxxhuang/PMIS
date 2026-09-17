@@ -14,7 +14,7 @@ select has_trigger('public', 'contract_obligations', 'contract_obligations_stamp
 select has_function('public', 'my_party', '呼叫者契約方函式存在');
 select has_function('public', 'obligation_party', array['text'], '義務歸屬方函式存在');
 select is(public.obligation_party('機關'), '機關', '三方值原樣通過');
--- 20260917213502(P5a)起:三方以外不歸任何一方(與前端 obligationParty／共用規則同步;細節見 obligation_party_unassigned.sql)
+-- 20260917220737(P5a)起:三方以外不歸任何一方(與前端 obligationParty／共用規則同步;細節見 obligation_party_unassigned.sql)
 select is(public.obligation_party('設計單位'), null::text, '未知責任方不歸任何一方(不再落回廠商)');
 select is(public.obligation_party(null), null::text, 'null 責任方不歸任何一方');
 
@@ -107,7 +107,7 @@ select is((select status from public.contract_obligations where id = '21100000-0
 select is((select status from public.contract_obligations where id = '21100000-0000-0000-0000-00000000000e'),
   '已完成', '監造不可改機關方義務(RLS 0 列)');
 
--- 未標責任方 → 不歸任何一方(20260917213502):廠商、監造都不可改
+-- 未標責任方 → 不歸任何一方(20260917220737):廠商、監造都不可改
 select pg_temp.become('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1');
 set local role authenticated;
 update public.contract_obligations set status = '已提送' where id = '21100000-0000-0000-0000-00000000000f';

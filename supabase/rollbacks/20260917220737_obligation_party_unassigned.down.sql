@@ -1,4 +1,4 @@
--- Roll back 20260917213502 (責任不明的契約義務不歸任何一方).
+-- Roll back 20260917220737 (責任不明的契約義務不歸任何一方).
 -- Run through SQL Editor / psql as database owner in one transaction.
 -- Restores obligation_party() to the 20260825120000 shape: any value outside
 -- 廠商／監造／機關 (null, empty, 其他, free text) falls back to 廠商, so the

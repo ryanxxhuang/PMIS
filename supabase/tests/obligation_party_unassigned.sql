@@ -1,5 +1,5 @@
 -- P5a 責任不明的契約義務不歸任何一方(pgTAP)。
--- 對應 migration 20260917213502_obligation_party_unassigned.sql。
+-- 對應 migration 20260917220737_obligation_party_unassigned.sql。
 -- 釘兩件事:1) obligation_party() 對三方以外一律回 null(去頭尾空白後比對);
 -- 2) 責任不明的義務三方都不能標記(update policy 對 null 不成立),自己方的義務照常可標,
 --    admin override 仍可跨方、正式模式下失效——與前端「待補設定」同一條規則。

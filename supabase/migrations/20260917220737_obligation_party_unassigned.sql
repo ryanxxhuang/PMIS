@@ -15,7 +15,7 @@
 --
 -- 資料:不改任何列。既有 responsible 為 null／「其他」的義務自此在期限追蹤頁三方皆唯讀,
 -- 由審核者補正;其餘義務行為不變。
--- 回復:supabase/rollbacks/20260917213502_obligation_party_unassigned.down.sql(還原「落回廠商」)。
+-- 回復:supabase/rollbacks/20260917220737_obligation_party_unassigned.down.sql(還原「落回廠商」)。
 -- pgTAP:supabase/tests/obligation_party_unassigned.sql;既有 obligation_ownership_completed_at.sql 的
 -- 三條「落回廠商」斷言同步改為新語意。
 
@@ -25,4 +25,4 @@ returns text language sql immutable as $$
 $$;
 
 comment on function public.obligation_party(text) is
-  '義務歸屬方:三方值(去頭尾空白)原樣通過;其餘(null／空字串／其他／自由文字)回 null=不歸任何一方,update policy 因此對三方都不放行(P5a,20260917213502)。與前端 obligationParty、共用規則 ballInCourtRules.obligationSide 同一條規則。';
+  '義務歸屬方:三方值(去頭尾空白)原樣通過;其餘(null／空字串／其他／自由文字)回 null=不歸任何一方,update policy 因此對三方都不放行(P5a,20260917220737)。與前端 obligationParty、共用規則 ballInCourtRules.obligationSide 同一條規則。';
