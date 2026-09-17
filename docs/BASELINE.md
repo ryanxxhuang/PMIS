@@ -1,9 +1,15 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-17｜P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-17 P3a：監造日誌後端（PR #122，migration `20260917221000_supervisor_logs`）
+
+- `npm run test:db`（一次性資料庫從零套 68 支 migration＋seed，rebase 到含 P5a 的 main 後重跑）：48 檔、1,859 通過、0 失敗（＝P5a 基準 1,728＋新增 `supervisor_logs.sql` 128 條＋H1 `api_roles_table_privileges.sql` 全表迴圈因新表 `supervisor_logs` 自動多 3 條）。新增套件覆蓋：結構與通用 guard 函式存在、P2d 專用 `fn_daily_log_signed`／`fn_daily_log_sign_bypass` 與二參數 `fn_field_document_unmet_fields` 已移除、`authenticated` 可取範本但不可執行人填欄推導／簽署分支內部函式／通用 guard、anon 全無；示範範本 `is_demo`／`demo_label`／免責聲明／八節、施工日誌無範本、人填欄＝到場、監造日誌必填鍵由範本推導且施工日誌必填鍵不變、人填欄 filled→`needs_confirmation` 而 confirmed／na＋reason 齊備、施工日誌 filled 照舊；`fn_project_ref_exists` 本案／外案／未知類型；事實表直接寫入：監造可建（建立者由伺服器蓋）、同日第二列 23505、未簽署列可改、建立者不可改、跨案 42501、廠商／機關（正式模式）42501、廠商 UPDATE／DELETE 不生效、成員（廠商／機關）可讀、非成員讀 0 且不可寫、anon 42501、非正式案廠商 admin 可代建；版本 guard：AI 版本帶入到場內容／標 filled／confirmed／na 一律 P0001、留空＋pending 允許、施工日誌不受影響；存版與簽署：到場只被標 filled → recheck `needs_confirmation` 且簽署 PD004、廠商照片當監造證據 → recheck 且 PD005、未知上傳方 PD005、齊備 draft、aal1 PD003、廠商／機關／非成員簽署與廠商編輯 PD006、外案查驗／外案工項／廠商成員冒充到場／到場已確認但為空／到場 na 但有人員／外案缺失／追蹤狀態／範本鍵／收件情形引用非施工日誌／日期不符／到場非陣列各 PD010、舊版 PD001、雜湊 PD002；成功簽署回 `target_table='supervisor_logs'`、簽署列由伺服器取資料、事實列（天氣、到場、查驗 uuid[]、通知、追蹤、摘要、收件情形、示範範本鍵）落庫、`target_id` 綁定、草稿標 edited、`field_document.signed(supervisor_log, aal2)` 稽核、同人重試冪等、他人再簽 PD008；已簽署列直接 UPDATE／到場改寫／DELETE／upsert／service／GUC 指向同日施工日誌文件全部 P0001 而未簽署列照舊；簽後更正 v18 回 draft、事實列等重簽才更新、兩筆簽署列；提送給機關成功、提送給廠商 PD010、機關可收件；superseded 後 D2 接手同一事實列；專案刪除 cascade 通過 guard。`field_document_sign.sql` 改用三參數待補函式、D2 監造日誌期望由 PD007 改為 pending_input／PD004，其餘 140 條回歸不變。
+- `npm test`：124 檔、1,342 項通過（新增 `fieldDocDraft.test.ts` 8 條：台北時刻／日範圍、監造候選 ready／blocked＋查驗表單仍 unsupported、共同草稿形狀、到場永遠空且 pending／範本鍵／必填鍵鏡像／附件、監造事項來源與查驗清單、無來源不捏造、通知去重與追蹤、施工日誌只引用正式版本（草稿／退回不引用）與收件情形、天氣次序與未匯標單；`fieldDocDraftRun.test.ts` 3 條＋改 1 條：監造批次起監造日誌且查驗表單仍 unsupported、建立文件＋AI 版本＋agent_role=supervisor、冪等／建議／鎖定與施工日誌同一段、來源讀取失敗不建半份）；`npm run check:edge` 18 支；`npm run test:edge` 3 項；`npm run lint` 零警告；`npm run build`；`npm run check:docs` 55 檔、379 連結、0 錯誤。
+- 未做：正式 `db push` 與 Edge `draft-field-documents` 重佈於合併後執行（結果記 CURRENT §6.3）；真後端 E2E 未跑（本單元無前端呼叫端，監造日誌流程由 pgTAP 以真實 `authenticated`＋JWT 路徑證明）；模型品質仍未驗（本機無模型金鑰，Edge 全部 stub，列 P7b）；監造日誌頁面待 P2c 共用元件合併後另接。
 
 ### 2026-09-17 P5a：球權單一實作、共用案例與待補設定（PR #120，migration `20260917220737_obligation_party_unassigned`）
 

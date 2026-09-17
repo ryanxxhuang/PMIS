@@ -1,12 +1,12 @@
-// draft-field-documents 流程(P2b):以記憶體 repo 與 stub 視覺驗
+// draft-field-documents 流程(P2b／P3a):以記憶體 repo 與 stub 視覺驗
 // 冪等(重跑不重複建件、內容相同不加版本、有人工版本只留建議)、部分失敗與逐張重試、
-// 角色隔離(呼叫者≠上傳方拒絕;監造／機關批次不起施工日誌)、未配對(未匯標單)、
-// 重複照片、時間預算切斷與續跑、run 認領衝突、逐功能閘門 fail-closed。
-// stub 只證明流程,不證明模型辨識正確(模型品質見 P7b)。
+// 角色隔離(呼叫者≠上傳方拒絕;監造批次起監造日誌不起施工日誌、廠商批次反之;機關批次無文件)、
+// 未配對(未匯標單)、重複照片、時間預算切斷與續跑、run 認領衝突、逐功能閘門 fail-closed、
+// 監造日誌內容來源讀取失敗不建半份。stub 只證明流程,不證明模型辨識正確(模型品質見 P7b)。
 import { describe, it, expect } from 'vitest'
 import { runDraftFieldDocuments, MAX_ATTEMPTS } from './fieldDocDraftRun.ts'
 import type { DraftRepo, DraftVision, IntakePhotoRow, IntakeRow, PhotoAiPatch, VisionResult } from './fieldDocDraftRun.ts'
-import type { LeafWorkItem } from './fieldDocDraft.ts'
+import type { DayDefect, DayInspection, FormalDailyLog, LeafWorkItem } from './fieldDocDraft.ts'
 
 const LEAVES: LeafWorkItem[] = [
   { id: 'wi-steel', item_key: 'K1', item_no: '壹.一.1', description: '鋼筋,SD420W,#4(D13),加工及組立', unit: 'T', sort_order: 1 },
@@ -29,6 +29,11 @@ type World = {
   failUpdatePhoto?: (id: string) => { error: string; code?: string } | null
   failInsertVersion?: string
   downloadFail?: Set<string>
+  // 監造日誌的內容來源(P3a)
+  inspections?: DayInspection[]
+  defects?: DayDefect[]
+  dailyLogDoc?: FormalDailyLog | null
+  failInspections?: string
   seq: number
 }
 
@@ -74,6 +79,9 @@ function memoryRepo(w: World): DraftRepo {
     getDailyLog: async () => null,
     fetchWeather: async () => null,
     listOpenInspections: async () => [],
+    listInspectionsOn: async () => (w.failInspections ? { error: w.failInspections } : (w.inspections ?? [])),
+    listDefectsForDay: async () => w.defects ?? [],
+    getDailyLogDocument: async () => w.dailyLogDoc ?? null,
     findActiveDoc: async (t, d) => {
       const doc = w.docs.find((x) => x.doc_type === t && x.doc_date === d && !['discarded', 'superseded'].includes(x.status))
       return doc ? { id: doc.id, status: doc.status, current_version_no: doc.current_version_no, intake_id: doc.intake_id } : null
@@ -129,13 +137,15 @@ describe('角色隔離', () => {
     expect(w.photoPatches).toEqual([])
     expect(w.finishes).toEqual([])
   })
-  it('監造批次:照片照常辨識,但只列 unsupported 候選、不建施工日誌', async () => {
+  it('監造批次:起監造日誌(不起施工日誌);相符的待查驗表單仍列 unsupported', async () => {
     const w = world({ callerOrg: 'supervisor', intake: intake({ uploader_org: 'supervisor' }), photos: [photo('p1')] })
-    const r = await run(w)
+    const repo = memoryRepo(w)
+    repo.listOpenInspections = async () => [{ id: 'ins-1', title: '鋼筋查驗', work_item_id: 'wi-steel', requested_date: '2026-09-17' }]
+    const r = await runDraftFieldDocuments({ repo, vision: stubVision(), intakeId: 'i1', userId: 'u1' })
     expect(r.status).toBe(200)
-    expect(w.docs).toEqual([])
+    expect(w.docs.map((d) => d.doc_type)).toEqual(['supervisor_log'])
     const cands = (r.body.intake as { candidates: { doc_type: string; state: string }[] }).candidates
-    expect(cands.map((c) => [c.doc_type, c.state])).toEqual([['supervisor_log', 'unsupported']])
+    expect(cands.map((c) => [c.doc_type, c.state])).toEqual([['supervisor_log', 'drafted'], ['inspection_form', 'unsupported']])
     expect(w.photos[0].ai_status).toBe('done')
   })
   it('機關(試用管理者)批次:辨識後無任何候選、無文件', async () => {
@@ -245,6 +255,64 @@ describe('廠商批次起施工日誌', () => {
     const r = await run(w)
     expect(w.docs).toEqual([])
     expect((r.body.intake as { candidates: { state: string }[] }).candidates[0].state).toBe('excluded')
+  })
+})
+
+describe('監造批次起監造日誌(P3a;與施工日誌同一段寫入邏輯)', () => {
+  const supervisorWorld = (over: Partial<World> = {}) =>
+    world({ callerOrg: 'supervisor', intake: intake({ uploader_org: 'supervisor' }), photos: [photo('s1')], ...over })
+
+  it('建立文件＋AI 版本 1:到場留空 pending、監造事項附來源、查驗／缺失／施工日誌文件只帶系統紀錄;agent_role=supervisor', async () => {
+    const w = supervisorWorld({
+      inspections: [{ id: 'ins-1', title: '鋼筋查驗', status: '合格', work_item_id: 'wi-steel', location: '1F', inspection_type: null, requested_date: '2026-09-17', inspected_at: '2026-09-17T03:00:00Z', result_note: null }],
+      defects: [{ id: 'df-1', title: '箍筋間距', status: '開立', severity: '一般', location: null, due_date: null, created_at: '2026-09-17T05:00:00Z', inspection_id: null }],
+      dailyLogDoc: { document_id: 'dl1', status: 'submitted', version_no: 2, content: { work_summary: '鋼筋綁紮' }, signed_at: 't', submitted_at: 't', received_at: null, returned_at: null },
+    })
+    const r = await run(w)
+    expect(r.status).toBe(200)
+    expect(w.docs).toHaveLength(1)
+    expect(w.docs[0]).toMatchObject({ doc_type: 'supervisor_log', doc_date: '2026-09-17', intake_id: 'i1', target_key: '2026-09-17', status: 'pending_input', current_version_no: 1 })
+    const content = w.versions[0].content as Record<string, unknown>
+    expect(content.attendance).toEqual([])
+    expect((w.versions[0].field_sources as Record<string, { status: string }>).attendance.status).toBe('pending')
+    expect((content.supervision_items as { source: string }[]).map((i) => i.source)).toEqual(['ai:photo', 'inspection:ins-1'])
+    expect(content.inspection_ids).toEqual(['ins-1'])
+    expect((content.notices as { ref_id: string }[]).map((n) => n.ref_id)).toEqual(['df-1'])
+    expect(content.contractor_summary).toContain('鋼筋綁紮')
+    expect(content.daily_log_receipt).toMatchObject({ document_id: 'dl1', status: 'submitted' })
+    expect(w.actions[0]).toMatchObject({ kind: 'draft_field_document', agent_role: 'supervisor', evidence: { doc_type: 'supervisor_log', version_no: 1 } })
+    const body = r.body as { documents: Record<string, unknown>[]; intake: Record<string, unknown> }
+    expect(body.documents[0]).toMatchObject({ doc_type: 'supervisor_log', action: 'created', status: 'pending_input' })
+    expect((body.documents[0].pending_fields as string[])).toContain('attendance')
+    expect(body.intake.status).toBe('ready')
+  })
+
+  it('冪等:重跑內容相同 unchanged;已有人工版本只留建議;已簽署 locked——與施工日誌同一套', async () => {
+    const w = supervisorWorld()
+    await run(w)
+    const r2 = await run(w)
+    expect(w.versions).toHaveLength(1)
+    expect((r2.body.documents as { action: string }[])[0].action).toBe('unchanged')
+
+    w.versions.push({ document_id: 'doc1', version_no: 2, author_kind: 'human', content: { attendance: [{ name: '監造' }] }, attachments: [], field_sources: {}, content_hash: 'h2' })
+    w.docs[0].current_version_no = 2
+    w.photos.push(photo('s2'))
+    const r3 = await run(w)
+    expect((r3.body.documents as { action: string }[])[0].action).toBe('suggested')
+    expect((w.actions.at(-1) as { kind: string; summary: string }).summary).toContain('監造日誌')
+
+    const locked = supervisorWorld({ docs: [{ id: 'docS', doc_type: 'supervisor_log', doc_date: '2026-09-17', intake_id: 'i0', target_key: '2026-09-17', status: 'signed', current_version_no: 1, required_fields: [], recheck: [] }] })
+    const r4 = await run(locked)
+    expect((r4.body.documents as { action: string; reason: string }[])[0]).toMatchObject({ action: 'locked', reason: expect.stringContaining('監造日誌') })
+    expect(locked.versions).toEqual([])
+  })
+
+  it('內容來源讀取失敗(當日查驗):該份 error、不建半份文件、批次 partial——讀不到不能寫成「無紀錄」', async () => {
+    const w = supervisorWorld({ failInspections: '資料存取失敗（代碼 db_error）' })
+    const r = await run(w)
+    expect((r.body.documents as { action: string; reason: string }[])[0]).toMatchObject({ action: 'error', reason: '資料存取失敗（代碼 db_error）' })
+    expect(w.versions).toEqual([])
+    expect((r.body.intake as Record<string, unknown>).status).toBe('partial')
   })
 })
 

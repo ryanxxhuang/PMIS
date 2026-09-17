@@ -12,17 +12,19 @@
 //      fail-closed)→ 不可辨=unreadable、非工地=not_site、有板子再跑 sitelog.whiteboard
 //      → 配工項(與前端同一支 matchLeaf)→ 只由 service 寫 photos.ai_*;caption／location／
 //      work_item_id 只在原本為空時補,不覆蓋人填的。
-//   4. 依上傳方推候選文書(純規則);廠商的施工日誌逐日起稿:該日活文件不存在→建立＋AI 版本 1;
-//      存在且無人工版本→內容有變才新增 AI 版本;已有人工版本→只留 suggest_field_update;
-//      已簽署／提送→不動(locked)。同一張照片可掛多份文件附件,數量只在確認量表計一次(P4)。
+//   4. 依上傳方推候選文書(純規則);日誌類逐日起稿(廠商→施工日誌、監造→監造日誌,同一段寫入邏輯,
+//      只有「湊內容」依類型不同):該日活文件不存在→建立＋AI 版本 1;存在且無人工版本→內容有變才新增
+//      AI 版本;已有人工版本→只留 suggest_field_update;已簽署／提送→不動(locked)。
+//      同一張照片可掛多份文件附件,數量只在確認量表計一次(P4)。
 //   5. 批次狀態:remaining>0→recognizing(等續跑);有失敗→partial;否則 ready。
 
 import type {
-  Candidate, DailyLogDraft, DraftPhoto, LeafWorkItem, LegacyDailyLog, OpenInspection, PhotoAiStatus,
+  Candidate, DayDefect, DayInspection, DraftPhoto, FieldDocDraft, FormalDailyLog, LeafWorkItem, LegacyDailyLog,
+  OpenInspection, PhotoAiStatus,
 } from './fieldDocDraft.ts'
 import {
-  assignPhotoDate, buildDailyLogDraft, draftUnchanged, duplicateGroups, inferCandidates,
-  mergeCandidateExclusions, previousDate, validDate,
+  assignPhotoDate, buildDailyLogDraft, buildSupervisorLogDraft, draftUnchanged, duplicateGroups, inferCandidates,
+  mergeCandidateExclusions, previousDate, validDate, FIELD_DOC_TYPE_LABELS,
 } from './fieldDocDraft.ts'
 import { matchLeaf } from './photoMatch.ts'
 import { normalizeSitePhotoResult, normalizeWhiteboardResult } from './sitePhotoVision.ts'
@@ -89,6 +91,11 @@ export interface DraftRepo {
   getDailyLog(date: string): Promise<LegacyDailyLog | null | RepoError>
   fetchWeather(date: string): Promise<{ am?: string | null; pm?: string | null } | null>
   listOpenInspections(): Promise<OpenInspection[] | RepoError>
+  // 監造日誌的內容來源(P3a):當日查驗、當日開立∪未結案缺失、同日施工日誌文件現況——讀失敗要回錯誤,
+  // 不能當成「沒有紀錄」(那會把讀取失敗寫成事實)
+  listInspectionsOn(date: string): Promise<DayInspection[] | RepoError>
+  listDefectsForDay(date: string): Promise<DayDefect[] | RepoError>
+  getDailyLogDocument(date: string): Promise<FormalDailyLog | null | RepoError>
   findActiveDoc(docType: string, docDate: string): Promise<DocRow | null | RepoError>
   insertDoc(row: { doc_type: string; doc_date: string; intake_id: string; target_key: string; status: string; required_fields: unknown; recheck: unknown; created_by: string }): Promise<DocRow | { conflict: true } | RepoError>
   latestVersion(docId: string): Promise<VersionRow | null | RepoError>
@@ -377,7 +384,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     return fail(b.status, b.code, b.message, { intake: { id: intakeId, status: 'failed', ...c, error_summary: b.message }, photos: outcomeList() })
   }
 
-  // ── 4. 候選文書與施工日誌起稿 ────────────────────────────────────────────
+  // ── 4. 候選文書與日誌類起稿 ─────────────────────────────────────────────
   const sitePhotoRows = photos.filter((p) => outcomes.get(p.id)?.ai_status === 'done' && stored.has(p.id))
   const dated = sitePhotoRows.map((p) => {
     const s = stored.get(p.id)!
@@ -414,19 +421,44 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     classify: s?.classify ?? null, whiteboard: s?.whiteboard ?? null, whiteboardSkipped: s?.whiteboard_skipped ?? null,
   })
 
+  // 「湊內容」是唯一依類型不同的地方;寫入、冪等、建議、鎖定對每類都是同一段
+  const buildDraftFor = async (docType: 'daily_log' | 'supervisor_log', date: string, dateSource: { source: string; refs: string[] }, dayPhotos: DraftPhoto[]): Promise<FieldDocDraft> => {
+    const weather = await repo.fetchWeather(date)
+    if (docType === 'daily_log') {
+      const sameDayRes = await repo.getDailyLog(date)
+      const yesterdayRes = await repo.getDailyLog(previousDate(date))
+      return buildDailyLogDraft({
+        date, dateSource, photos: dayPhotos, workItems: leaves,
+        sameDayLog: isErr(sameDayRes) ? null : sameDayRes, yesterdayLog: isErr(yesterdayRes) ? null : yesterdayRes,
+        weather, hasBoq, notes: statusNotes(),
+      })
+    }
+    const [insRes, defRes, dlRes] = await Promise.all([repo.listInspectionsOn(date), repo.listDefectsForDay(date), repo.getDailyLogDocument(date)])
+    if (isErr(insRes)) throw new Error(insRes.error)
+    if (isErr(defRes)) throw new Error(defRes.error)
+    if (isErr(dlRes)) throw new Error(dlRes.error)
+    return buildSupervisorLogDraft({
+      date, dateSource, photos: dayPhotos, workItems: leaves, inspections: insRes, openInspections, defects: defRes,
+      dailyLog: dlRes, weather, hasBoq, notes: statusNotes(),
+    })
+  }
+
   for (const cand of candidates) {
-    if (cand.doc_type !== 'daily_log' || cand.state !== 'ready' || !cand.doc_date || !cand.target_key) continue
+    if (cand.state !== 'ready' || !cand.doc_date || !cand.target_key) continue
+    if (cand.doc_type !== 'daily_log' && cand.doc_type !== 'supervisor_log') continue
+    const docType = cand.doc_type
+    const typeLabel = FIELD_DOC_TYPE_LABELS[docType]
     const date = cand.doc_date
-    const out: DocumentOutcome = { doc_type: 'daily_log', doc_date: date, document_id: null, version_no: null, status: null, action: 'error', reason: null, pending_fields: [] }
+    const out: DocumentOutcome = { doc_type: docType, doc_date: date, document_id: null, version_no: null, status: null, action: 'error', reason: null, pending_fields: [] }
     documents.push(out)
     const setCand = (patch: Partial<Candidate>) => { candidates = candidates.map((c) => (c === cand ? { ...c, ...patch } : c)) }
     try {
-      const existingRes = await repo.findActiveDoc('daily_log', date)
+      const existingRes = await repo.findActiveDoc(docType, date)
       if (isErr(existingRes)) throw new Error(existingRes.error)
       let existing = existingRes
       if (existing && existing.status !== 'draft' && existing.status !== 'pending_input') {
         out.action = 'locked'; out.document_id = existing.id; out.status = existing.status; out.version_no = existing.current_version_no
-        out.reason = `該日施工日誌已${existing.status === 'signed' ? '簽署' : existing.status === 'in_review' ? '送內部核對' : '提送'},未變更;新照片請由人另開版本`
+        out.reason = `該日${typeLabel}已${existing.status === 'signed' ? '簽署' : existing.status === 'in_review' ? '送內部核對' : '提送'},未變更;新照片請由人另開版本`
         setCand({ state: 'locked', document_id: existing.id, reason: out.reason })
         continue
       }
@@ -457,26 +489,18 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         ? { source: `whiteboard:${dayPhotos.find((d) => d.source === 'whiteboard')!.ref}`, refs: dateRefs }
         : dayPhotos.some((d) => d.source === 'intake') ? { source: 'intake', refs: [] } : { source: `photo_time:${dateRefs[0] ?? ''}`, refs: dateRefs }
 
-      const sameDayRes = await repo.getDailyLog(date)
-      const yesterdayRes = await repo.getDailyLog(previousDate(date))
-      const sameDayLog = isErr(sameDayRes) ? null : sameDayRes
-      const yesterdayLog = isErr(yesterdayRes) ? null : yesterdayRes
-      const weather = await repo.fetchWeather(date)
-
-      const draft: DailyLogDraft = buildDailyLogDraft({
-        date, dateSource, photos: [...draftPhotos.values()], workItems: leaves, sameDayLog, yesterdayLog, weather, hasBoq, notes: statusNotes(),
-      })
+      const draft = await buildDraftFor(docType, date, dateSource, [...draftPhotos.values()])
       out.pending_fields = draft.required_fields.filter((k) => draft.field_sources[k]?.status === 'pending')
 
       if (!existing) {
         const ins = await repo.insertDoc({
-          doc_type: 'daily_log', doc_date: date, intake_id: intakeId, target_key: cand.target_key, status: draft.status,
+          doc_type: docType, doc_date: date, intake_id: intakeId, target_key: cand.target_key, status: draft.status,
           required_fields: draft.required_fields, recheck: draft.recheck, created_by: userId,
         })
         if (isErr(ins)) throw new Error(ins.error)
         if ('conflict' in ins) {
           // 兩個請求同時建同日文件:唯一索引收口,輸的一方改走既有文件
-          const again = await repo.findActiveDoc('daily_log', date)
+          const again = await repo.findActiveDoc(docType, date)
           if (isErr(again) || !again) throw new Error(isErr(again) ? again.error : '同日文件建立衝突後找不到既有文件,請重試')
           existing = again
           const latestRes = await repo.latestVersion(existing.id)
@@ -498,9 +522,9 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         // 人已改過:不覆寫、不新增 AI 版本(DB guard 也會拒),只留建議供人套用
         const act = await repo.insertAgentAction({
           actor_user: userId, agent_role: intake.uploader_org, kind: 'suggest_field_update', target_table: 'field_documents', target_id: existing.id,
-          summary: `新照片辨識結果可補入 ${date} 施工日誌(文件已有人工版本,未自動套用)`,
+          summary: `新照片辨識結果可補入 ${date} ${typeLabel}(文件已有人工版本,未自動套用)`,
           rationale: draft.rationale,
-          evidence: { intake_id: intakeId, document_id: existing.id, doc_type: 'daily_log', against_version_no: existing.current_version_no, suggestion: { content: draft.content, field_sources: draft.field_sources, attachments: draft.attachments } },
+          evidence: { intake_id: intakeId, document_id: existing.id, doc_type: docType, against_version_no: existing.current_version_no, suggestion: { content: draft.content, field_sources: draft.field_sources, attachments: draft.attachments } },
         })
         if (isErr(act)) throw new Error(act.error)
         out.action = 'suggested'; out.version_no = existing.current_version_no; out.status = existing.status
@@ -519,7 +543,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
       const act = await repo.insertAgentAction({
         actor_user: userId, agent_role: intake.uploader_org, kind: 'draft_field_document', target_table: 'field_documents', target_id: existing.id,
         summary: draft.summary, rationale: draft.rationale,
-        evidence: { intake_id: intakeId, document_id: existing.id, doc_type: 'daily_log', version_no: ver.version_no, content_hash: ver.content_hash },
+        evidence: { intake_id: intakeId, document_id: existing.id, doc_type: docType, version_no: ver.version_no, content_hash: ver.content_hash },
       })
       if (isErr(act)) throw new Error(act.error)
       out.action = nextNo === 1 ? 'created' : 'version_added'; out.version_no = ver.version_no; out.status = draft.status
