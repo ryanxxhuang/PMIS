@@ -1,0 +1,194 @@
+// draft-field-documents 的 Supabase 存取層(DraftRepo 的實作;流程在 fieldDocDraftRun.ts)。
+// ---------------------------------------------------------------------------
+// 讀一律走 userClient(RLS 決定看得到的批次、照片、標單、既有日誌、文件);寫只用 serviceClient,
+// 且只寫設計 §3.1 允許的四處:photos.ai_*（含補空的 caption／location／work_item_id)、
+// photo_intakes 進度、field_documents／_versions 的 AI 版本、agent_actions。
+// 業務規則不在這裡:DB 的 guard(有人工版本後 AI 不得寫版本、版本不可變、雜湊由 DB 算、
+// 批次上傳方=文件責任方)是安全邊界,這裡的錯誤只經 maskDbError 遮罩後回給流程層。
+// 只有 type import 來自 npm:,vitest 不會載到 runtime 依賴。
+
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
+import { maskDbError } from './publicError.ts'
+import { fetchAllRows } from './integrityAuditTool.ts'
+import type { DraftRepo, IntakePhotoRow, IntakeRow, DocRow, VersionRow, RepoError } from './fieldDocDraftRun.ts'
+import type { LeafWorkItem, LegacyDailyLog, OpenInspection } from './fieldDocDraft.ts'
+
+const PHOTO_COLS = 'id, storage_path, content_sha256, ai_status, ai_result, work_item_id, caption, location, taken_at, created_at'
+const err = (scope: string, e: { message?: string; code?: string; details?: string; hint?: string } | null): RepoError =>
+  ({ error: maskDbError(`draft-field-documents.${scope}`, e).message })
+
+// Blob → base64(分段 btoa;不引入 jsr:@std 以維持 deno.lock --frozen)
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let bin = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(bin)
+}
+
+// 可計價末端工項(與前端 boqCalc.billableLeaves 同一把尺:is_billable、非合計列、沒有子項)
+export function billableLeafRows<T extends { id: string; parent_id: string | null; is_billable: boolean | null; is_rollup: boolean | null }>(rows: T[]): T[] {
+  const hasChild = new Set(rows.map((r) => r.parent_id).filter((p): p is string => !!p))
+  return rows.filter((r) => r.is_billable && !r.is_rollup && !hasChild.has(r.id))
+}
+
+export function supabaseDraftRepo(db: SupabaseClient, service: SupabaseClient, projectId: string): DraftRepo {
+  let coords: { lat: number; lon: number } | null | undefined
+  return {
+    async callerOrg() {
+      const { data } = await db.rpc('my_org_type')
+      return typeof data === 'string' ? data : 'contractor'
+    },
+
+    async getIntake(intakeId) {
+      const { data, error } = await db.from('photo_intakes')
+        .select('id, project_id, uploader_org, log_date, status, attempts, run_started_at, last_progress_at, candidates')
+        .eq('id', intakeId).eq('project_id', projectId).maybeSingle()
+      if (error) return err('intake', error)
+      return (data as IntakeRow | null) ?? null
+    },
+
+    async claimIntake({ intakeId, expectedAttempts, nextAttempts, staleBefore, now }) {
+      const { data, error } = await service.from('photo_intakes')
+        .update({ status: 'recognizing', run_started_at: now, last_progress_at: now, attempts: nextAttempts })
+        .eq('id', intakeId).eq('project_id', projectId).eq('attempts', expectedAttempts)
+        .or(`run_started_at.is.null,last_progress_at.lt.${staleBefore}`)
+        .select('id')
+      if (error) return err('claim', error)
+      return data?.length ? 'claimed' : 'conflict'
+    },
+
+    async listIntakePhotos(intakeId) {
+      const res = await fetchAllRows<IntakePhotoRow>((f, t) =>
+        db.from('photos').select(PHOTO_COLS).eq('project_id', projectId).eq('intake_id', intakeId)
+          .order('created_at').order('id').range(f, t))
+      if (res.error) return { error: res.error }
+      return res.rows
+    },
+
+    async listPhotosByIds(ids) {
+      if (!ids.length) return []
+      const { data, error } = await db.from('photos').select(PHOTO_COLS).eq('project_id', projectId).in('id', ids.slice(0, 500))
+      if (error) return err('photos_by_id', error)
+      return (data ?? []) as IntakePhotoRow[]
+    },
+
+    async downloadPhoto(storagePath) {
+      // 以呼叫者身分下載(storage policy photos_objects_select 限專案成員)
+      const { data, error } = await db.storage.from('photos').download(storagePath)
+      if (error || !data) return err('download', error ? { message: error.message } : { message: 'empty' })
+      const ext = (storagePath.split('.').pop() || '').toLowerCase()
+      const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/jpeg'
+      return { base64: await blobToBase64(data), mime }
+    },
+
+    async updatePhoto(photoId, patch) {
+      const { error } = await service.from('photos').update(patch).eq('id', photoId).eq('project_id', projectId)
+      if (!error) return {}
+      const pub = maskDbError('draft-field-documents.photo_update', error)
+      return { error: pub.message, code: pub.code }
+    },
+
+    async listLeafWorkItems() {
+      type Row = LeafWorkItem & { parent_id: string | null; is_billable: boolean | null; is_rollup: boolean | null }
+      const res = await fetchAllRows<Row>((f, t) =>
+        db.from('work_items').select('id, item_key, item_no, description, unit, sort_order, parent_id, is_billable, is_rollup')
+          .eq('project_id', projectId).order('sort_order').order('id').range(f, t))
+      if (res.error) return { error: res.error }
+      return billableLeafRows(res.rows).map(({ id, item_key, item_no, description, unit, sort_order }) =>
+        ({ id, item_key, item_no, description, unit, sort_order }))
+    },
+
+    async getDailyLog(date) {
+      const { data, error } = await db.from('daily_logs')
+        .select('id, log_date, weather, weather_am, weather_pm, labor, equipment, materials, extras, work_summary, daily_log_items(work_item_id, qty_today)')
+        .eq('project_id', projectId).eq('log_date', date).maybeSingle()
+      if (error) return err('daily_log', error)
+      return (data as LegacyDailyLog | null) ?? null
+    },
+
+    async fetchWeather(date) {
+      // 既有 fetch-weather(過自己的閘門、記自己的用量);任何失敗都不阻擋起稿,天氣留 pending
+      try {
+        if (coords === undefined) {
+          const { data: proj } = await db.from('projects').select('latitude, longitude').eq('id', projectId).maybeSingle()
+          coords = proj?.latitude != null && proj?.longitude != null ? { lat: Number(proj.latitude), lon: Number(proj.longitude) } : null
+        }
+        if (!coords) return null
+        const { data: wx, error } = await db.functions.invoke('fetch-weather', { body: { lat: coords.lat, lon: coords.lon, date } })
+        if (error || !wx || wx.error || (!wx.am && !wx.pm)) return null
+        return { am: wx.am ?? null, pm: wx.pm ?? null }
+      } catch {
+        return null
+      }
+    },
+
+    async listOpenInspections() {
+      const { data, error } = await db.from('inspections').select('id, title, work_item_id, requested_date')
+        .eq('project_id', projectId).eq('status', '待查驗').order('created_at', { ascending: false }).limit(200)
+      if (error) return err('inspections', error)
+      return (data ?? []) as OpenInspection[]
+    },
+
+    async findActiveDoc(docType, docDate) {
+      const { data, error } = await db.from('field_documents').select('id, status, current_version_no, intake_id')
+        .eq('project_id', projectId).eq('doc_type', docType).eq('doc_date', docDate)
+        .not('status', 'in', '("discarded","superseded")').maybeSingle()
+      if (error) return err('find_doc', error)
+      return (data as DocRow | null) ?? null
+    },
+
+    async insertDoc(row) {
+      const { data, error } = await service.from('field_documents')
+        .insert({ project_id: projectId, ...row })
+        .select('id, status, current_version_no, intake_id').single()
+      if (error) {
+        if ((error as { code?: string }).code === '23505') return { conflict: true }
+        return err('doc_insert', error)
+      }
+      return data as DocRow
+    },
+
+    async latestVersion(docId) {
+      const { data, error } = await db.from('field_document_versions')
+        .select('version_no, author_kind, content, attachments, content_hash')
+        .eq('document_id', docId).order('version_no', { ascending: false }).limit(1).maybeSingle()
+      if (error) return err('latest_version', error)
+      return (data as VersionRow | null) ?? null
+    },
+
+    async hasHumanVersion(docId) {
+      const { data, error } = await db.from('field_document_versions').select('id')
+        .eq('document_id', docId).eq('author_kind', 'human').limit(1)
+      if (error) return err('human_version', error)
+      return !!data?.length
+    },
+
+    async insertVersion(row) {
+      const { data, error } = await service.from('field_document_versions')
+        .insert({ ...row, author_kind: 'ai' })
+        .select('version_no, content_hash').single()
+      if (error) return err('version_insert', error)
+      return data as { version_no: number; content_hash: string }
+    },
+
+    async updateDoc(docId, patch) {
+      const { error } = await service.from('field_documents').update(patch).eq('id', docId).eq('project_id', projectId)
+      return error ? err('doc_update', error) : {}
+    },
+
+    async insertAgentAction(row) {
+      const { data, error } = await service.from('agent_actions')
+        .insert({ project_id: projectId, ...row }).select('id').single()
+      if (error) return err('agent_action', error)
+      return data as { id: string }
+    },
+
+    async finishIntake(intakeId, patch) {
+      const { error } = await service.from('photo_intakes').update(patch).eq('id', intakeId).eq('project_id', projectId)
+      return error ? err('finish', error) : {}
+    },
+  }
+}

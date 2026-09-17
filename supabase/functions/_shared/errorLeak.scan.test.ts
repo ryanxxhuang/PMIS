@@ -66,6 +66,20 @@ describe('骨架接線:不得手抄回來', () => {
     }
   })
 
+  it('draft-field-documents(P2b)走 openAiGate 開主閘,逐張辨識只經 aiGate.askAiFeature 問各功能的開關', () => {
+    const src = read('draft-field-documents/index.ts')
+    expect(src).toContain("openAiGate(req, { feature: FEATURE")
+    expect(src).toContain("const FEATURE = 'field_docs.draft'")
+    expect(src).toContain('askAiFeature(')
+    expect(src).not.toContain("rpc('ai_feature_allowed'")
+    // 逐張辨識用的 schema／prompt 與兩支 HTTP 入口同一份(_shared/sitePhotoVision.ts)
+    for (const name of ['classify-site-photo', 'read-whiteboard', 'draft-field-documents']) {
+      expect(read(`${name}/index.ts`), `${name} 應從 sitePhotoVision 取 schema/prompt`).toContain("from '../_shared/sitePhotoVision.ts'")
+    }
+    expect(read('classify-site-photo/index.ts')).not.toContain('const SCHEMA')
+    expect(read('read-whiteboard/index.ts')).not.toContain('const SCHEMA')
+  })
+
   it('UUID_RE 只在 _shared/uuid.ts 定義一次', () => {
     const definers = sourceFiles.filter((rel) => /const UUID_RE\s*=/.test(read(rel)))
     expect(definers).toEqual(['_shared/uuid.ts'])

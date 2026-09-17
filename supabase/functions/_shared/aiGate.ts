@@ -18,6 +18,7 @@ import { jsonResponse as json, dbErrorResponse } from './claude.ts'
 import { UUID_RE } from './uuid.ts'
 import { featureByKey } from './aiFeatures.ts'
 import { gateVerdict } from './gatePolicy.ts'
+import type { GateVerdict } from './gatePolicy.ts'
 
 // Anthropic Messages API 的 usage 形狀(欄位可能缺,缺就當 0)
 export type AiUsage = {
@@ -82,6 +83,24 @@ export async function recordAiUsage(
   }
 }
 
+// ── 功能開關(單一判定點):ai_feature_allowed 只在這裡問 ─────────────────────────
+// openAiGate 用它開主閘;一支 Edge 函式內部再呼叫別的 AI 功能(P2b 起稿逐張沿用
+// photo.classify／sitelog.whiteboard)時也必須經這裡問同一個 RPC、用同一個 gateVerdict
+// ——「每個 AI 功能可獨立開關」的承諾不能因為呼叫路徑不是 HTTP 就失效。
+// 查詢失敗=fail-closed(檔頭紅線 2/D-010);_shared/errorLeak.scan.test.ts 釘住
+// rpc('ai_feature_allowed') 只出現在本檔與 send-reminders。
+export async function askAiFeature(
+  userClient: SupabaseClient, projectId: string | null, feature: string,
+): Promise<GateVerdict> {
+  const { data: allowed, error: allowError } = await userClient
+    .rpc('ai_feature_allowed', { p_project: projectId, p_feature: feature })
+  if (allowError) {
+    console.error(`ai_feature_allowed 查詢失敗(${feature},fail-closed 擋下):`, allowError.message)
+  }
+  const label = featureByKey[feature]?.label || feature
+  return gateVerdict(label, allowed as boolean | null, !!allowError)
+}
+
 // ── 開閘:身分 → 成員資格 → 功能開關 ────────────────────────────────────────
 export async function openAiGate(req: Request, opts: {
   feature: string
@@ -128,14 +147,8 @@ export async function openAiGate(req: Request, opts: {
   }
 
   // 功能開關:ai_feature_allowed 是 security definer,userClient 呼叫即可。
-  // 查詢失敗=fail-closed(檔頭紅線 2/D-010);判定集中在 gateVerdict。
-  const { data: allowed, error: allowError } = await userClient
-    .rpc('ai_feature_allowed', { p_project: projectId, p_feature: opts.feature })
-  if (allowError) {
-    console.error(`ai_feature_allowed 查詢失敗(${opts.feature},fail-closed 擋下):`, allowError.message)
-  }
-  const label = featureByKey[opts.feature]?.label || opts.feature
-  const verdict = gateVerdict(label, allowed as boolean | null, !!allowError)
+  // 查詢失敗=fail-closed(檔頭紅線 2/D-010);判定集中在 askAiFeature → gateVerdict。
+  const verdict = await askAiFeature(userClient, projectId, opts.feature)
   if (!verdict.allow) {
     await recordAiUsage(serviceClient, {
       feature: opts.feature, projectId, userId: user.id, actor: 'user',

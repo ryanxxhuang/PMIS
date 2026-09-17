@@ -4,7 +4,7 @@
 
 ## 註冊與方案
 
-`ai_features` 管 enabled／min_plan；前端 [aiFeatures.js](../../src/lib/aiFeatures.js) 與 Edge [aiFeatures.ts](../../supabase/functions/_shared/aiFeatures.ts) 是顯示／部署鏡像，七欄由測試比對。保留一列一筆格式供該測試解析。靜態預設不覆蓋後台調整值。
+`ai_features` 管 enabled／min_plan；前端 [aiFeatures.js](../../src/lib/aiFeatures.js) 與 Edge [aiFeatures.ts](../../supabase/functions/_shared/aiFeatures.ts) 是顯示／部署鏡像，七欄由測試比對，目前 18 個功能（2026-09-17 P2b 加 `field_docs.draft`，seed `20260917213500`）。保留一列一筆格式供該測試解析。靜態預設不覆蓋後台調整值。
 
 `ai_feature_allowed` 依序檢查：平台總開關 → 專案存在 → project_ai_overrides → trial／standard／pro 門檻。覆寫不能翻過總開關；未註冊回 false，無 project 只接受 trial 門檻。前端 aiEnabled 只做 UX，載入未知時可能顯示入口，不能當安全判斷。
 
@@ -12,7 +12,7 @@ assistant.chat／contract.parse 退場以關閉功能列處理，保留 Edge 與
 
 ## 伺服器流程
 
-[openAiGate](../../supabase/functions/_shared/aiGate.ts) 驗證 auth.getUser、project UUID、以 caller JWT 查專案，再詢問閘門。業務查詢用 userClient 套 RLS；serviceClient 只記帳／寫 system-managed 表，不能拿來繞過業務讀取權。
+[openAiGate](../../supabase/functions/_shared/aiGate.ts) 驗證 auth.getUser、project UUID、以 caller JWT 查專案，再詢問閘門。業務查詢用 userClient 套 RLS；serviceClient 只記帳／寫 system-managed 表，不能拿來繞過業務讀取權。一支函式在主閘之後還要用到別的 AI 功能（`draft-field-documents` 逐張沿用 `photo.classify`／`sitelog.whiteboard`）時，經同檔的 `askAiFeature` 再問一次 `ai_feature_allowed`（同一個 RPC、同一個 `gateVerdict`，擋下記一筆 blocked），每次模型呼叫用該功能的 key 記帳——功能獨立開關不因呼叫路徑不是 HTTP 而失效；`rpc('ai_feature_allowed')` 的呼叫點由 errorLeak 掃描釘在 aiGate 與 send-reminders 兩處。
 
 [gateVerdict](../../supabase/functions/_shared/gatePolicy.ts) 僅明確 true 放行：
 
@@ -38,4 +38,4 @@ recordAiUsage／closeAiGate 在成功、模型失敗、功能被擋的計量路�
 
 新增功能需兩份 registry、DB migration、帶 project_id 的前端呼叫、伺服器 gate／usage 與對應測試。新增表明確收回 default grants；新增 DB 規則附 pgTAP。退場列不刪，部署依 [runbook](../operations/deploy.md)。
 
-[registry 測試](../../src/lib/aiFeatures.test.js)、[閘門測試](../../supabase/functions/_shared/gatePolicy.test.ts)、[平台 pgTAP](../../supabase/tests/ai_platform.sql)、[退場 pgTAP](../../supabase/tests/ai_features_retired.sql)；17 支入口以 `npm run check:edge` 驗型別，依 deno.lock 固定相依套件。
+[registry 測試](../../src/lib/aiFeatures.test.js)、[閘門測試](../../supabase/functions/_shared/gatePolicy.test.ts)、[平台 pgTAP](../../supabase/tests/ai_platform.sql)、[退場 pgTAP](../../supabase/tests/ai_features_retired.sql)、[P2b seed pgTAP](../../supabase/tests/ai_field_docs_draft.sql)；18 支入口以 `npm run check:edge` 驗型別，依 deno.lock 固定相依套件。

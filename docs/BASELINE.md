@@ -1,10 +1,16 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-17｜瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-17｜P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
 
+### 2026-09-17 P2b：Edge 起稿 `draft-field-documents`（`codex/slimming-p2b-draft-edge`）
+
+- `npm test`：122 檔、1,301 項通過（rebase 到含 P1b／P2d 的 main 後重跑）。新增 `_shared/fieldDocDraft.test.ts` 15 條（日期回轉與台北日曆日；告示板日期 > 批次日期 > 照片時間與衝突標記；同雜湊最早者為正本；候選推斷——廠商每日一份施工日誌、無法判日 blocked、自檢表 unsupported、絕無監造文件，監造只列 unsupported 的監造日誌／相符待查驗表單，機關無候選，使用者排除沿用；欄位來源——沒來源的數量／天氣／出工全 pending 且不出現「無」「合格」，告示板清楚才 filled 並附來源照片、板上沒寫數量是 null 不是 0，多板不一致與多位置都 pending 並列 recheck，昨日沿用標 yesterday、當日既有日誌優先且人填摘要不被取代，未匯標單不寫任何工項；內容相同判定不受鍵序影響）與 `_shared/fieldDocDraftRun.test.ts` 22 條（記憶體 repo＋stub 模型：呼叫者≠上傳方 403 且零寫入、監造／機關批次不起施工日誌；建立文件＋AI 版本 1＋`agent_actions`＋照片補說明與工項＋批次 ready 並回填 `log_date`；重跑不再打模型、內容相同 unchanged、新增照片才加版本 2；有人工版本只留 `suggest_field_update`；已簽署 locked 零寫入；另一批同日在既有文件加版本並保留前批附件；同日並發撞唯一索引改走既有文件；使用者排除不起稿；非工地／不可辨／重複各有狀態且不入附件；有板子才轉錄、板上日期分兩天兩份日誌、數量附 `whiteboard:<id>`；未匯標單存 hint、匯入後重跑不打模型即配對；模型失敗與下載失敗逐張 failed／批次 partial、重跑只處理失敗張並補進既有文件、attempts 只在重啟時計；輸出不完整不建半份；佐證凍結 P0001 只寫辨識結果並揭露；文件寫入失敗不留半筆 agent_actions 且可重跑；預算用完回 remaining、批次留 recognizing 並釋放 run、續跑不計 attempts；run 認領衝突 409、過期可接手、attempts 用盡 409 並標 failed、已捨棄 409；空批次 failed 並說明；`photo.classify` 關閉／閘門不可用整批 failed 並回 403／503；`sitelog.whiteboard` 關閉照常起稿但不轉錄）。`aiFeatures.test.js` 改 18 個功能並釘 `field_docs.draft` 七欄；`photoMatch.test.js` 釘前端與 Edge 是同一支 `matchLeaf`；`errorLeak.scan.test.ts` 釘新函式走 `openAiGate`＋`askAiFeature`、三支入口共用 `sitePhotoVision.ts`。
+- `npm run check:edge`（Deno 2.9.6，本機安裝）：18 支入口通過。`npm run lint` 零警告；`npm run build` 通過；`npm run check:docs` 見 PR。
+- `npm run test:db`（一次性資料庫從零套 65 支 migration＋seed，rebase 後重跑）：45 檔、1,518 通過、0 失敗（＝P1b 基準 1,510＋新增 `ai_field_docs_draft.sql` 8 條：功能列七欄、trial 專案可用、平台總開關關閉後專案覆寫翻不過）；`ai_platform.sql` 計數改 18。seed migration 因與 P1b 的 `20260917210000` 同時間戳，改為 `20260917213500_ai_field_docs_draft`。
+- 未做：**模型品質未驗**——本單元全部以 stub 證明流程，未以真模型金鑰對測試照片實跑（本機無 `ANTHROPIC_API_KEY`），清晰／模糊／非現場／混合照片的辨識與轉錄正確率列 P7b；未在真後端對 `draft-field-documents` 發 HTTP 請求（P2c 接上前端後以 `e2e:real` 驗）；正式 Edge 部署與 seed migration 套用於合併後執行並記 CURRENT §6.3。
 ### 2026-09-17 P1b：退場頁唯讀化（PR #113，migration `20260917210000_cost_items_retire`）
 
 - `npm run test:db`（一次性資料庫從零套 64 支 migration＋seed，rebase 到含 P2d 的 main 後重跑）：44 檔、1,510 通過、0 失敗（＝P2d 基準 1,486＋新增 `cost_items_retired.sql` 24 條；rebase 前 43 檔 1,370）。新增套件覆蓋：`authenticated` 對 `cost_items` 只剩 SELECT、`anon` 無任何寫入；只剩一條 SELECT policy；廠商成員可讀歷史但 INSERT／UPDATE／DELETE 皆 42501；監造／機關讀 0 列且不可寫；非成員跨案讀 0 列、對 A 案與自己管理的 B 案都不可新增；監造組織的專案管理者可讀（`can_access_contractor_private` 原條件）但不可改刪；全部嘗試後歷史列數與數值無損。`p0_05_audit_events.sql` 的廠商更新改斷言 42501，稽核流無成本事件的斷言不變。
@@ -181,7 +187,7 @@
 | 文件檢查 | 47 份 Markdown 的本機檔案／標題連結通過 | `npm run check:docs`；不連網驗外部網址 |
 | pgTAP | 40 檔、1048 通過、0 失敗 | `npm run test:db`；既有本機 Supabase DB，未 reset、未改 migration。跑法見 [SETUP](../supabase/SETUP.md) |
 | 真後端 E2E | 6 測試通過；本機真 DB／Auth／Storage，固定契約資料模式 | `ANTHROPIC_API_KEY= npm run test:e2e:real`；測試自行建立／清理登入帳號。未呼叫真模型，見 [指南](REAL_BACKEND_E2E.md) |
-| Deno 型別檢查 | 17 支入口及其共用依賴通過 | Deno 2.9.6，`npm run check:edge`；依賴鎖定於 functions/deno.lock，已納 CI。未部署或驗證線上 Edge |
+| Deno 型別檢查 | 18 支入口及其共用依賴通過（2026-09-17 P2b 加 `draft-field-documents`） | Deno 2.9.6，`npm run check:edge`；依賴鎖定於 functions/deno.lock，已納 CI。未部署或驗證線上 Edge |
 | 腳本／設定語法 | 8 份 Python、7 份 JSON 通過 | AST／JSON parse；不代表外部素材匯入或簡報渲染已實跑 |
 | 依賴 audit | production 0、dev 2 moderate | `npm audit --json`；Vitest／@vitest/mocker 同一 advisory，修補需大版升級，列 ROADMAP 獨立處理 |
 
