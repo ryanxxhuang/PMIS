@@ -21,7 +21,7 @@ export const ACCEPTANCE_STAGES = [
 
 // 各階段可登錄的專案角色。伺服器 acceptance_events_guard 矩陣的鏡像
 // (真正強制在 DB trigger,見 migration 20260712000100_acceptance_events_rbac.sql)。
-// 驗收頁與今日待辦聚合共用這一份 —— 兩處各寫一份角色判斷就會漂移,
+// 驗收頁與今日工作聚合共用這一份 —— 兩處各寫一份角色判斷就會漂移,
 // 「誰能辦這一關」必須只有一個答案。竣工確認與複驗監造、機關皆可辦理。
 export const ACCEPTANCE_STAGE_ORGS = Object.freeze({
   report: ['contractor'], confirm: ['supervisor', 'owner'], initial: ['owner'],

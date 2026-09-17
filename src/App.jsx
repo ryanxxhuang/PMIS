@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { WebLayout } from './components/Layout.jsx'
-import { routeAllowed, routeRegistry, defaultLandingPath } from './lib/navConfig.js'
+import { routeAllowed, routeRegistry, defaultLandingPath, BALL_SOURCES_TITLE } from './lib/navConfig.js'
 import { ConfirmHost } from './components/confirm.jsx'
 import { Surface, Skeleton, SkeletonList, Empty, Button } from './components/ui.jsx'
 import { SnackbarHost } from './components/snackbar.jsx'
@@ -118,7 +118,7 @@ function NotFound() {
       <div className="text-4xl">🧭</div>
       <div className="text-[var(--text)] font-medium">找不到這個頁面</div>
       <p className="text-sm text-[var(--text-3)]">網址 <code className="px-1 rounded bg-[var(--surface-2)]">{pathname}</code> 不存在——可能打錯了,或這個連結已失效。</p>
-      <Link to={defaultLandingPath(currentUser?.org_type)} className="inline-block text-sm font-medium text-[var(--blue-text)] hover:underline">← 回到今日待辦</Link>
+      <Link to={defaultLandingPath(currentUser?.org_type)} className="inline-block text-sm font-medium text-[var(--blue-text)] hover:underline">← 回到{BALL_SOURCES_TITLE}</Link>
     </div>
   )
 }

@@ -203,7 +203,7 @@ export default function Requirements() {
   }, [analyzing, reloadEnrich, reloadObligations])
 
   // ── 檢視模型:義務列 + enrich → 狀態/期程/倒數/出處(純函式,見 obligationTimeline)
-  // 基準日吃 store 的 project(demo 落回種子專案;與今日待辦同一份錨點,數字才對得上)
+  // 基準日吃 store 的 project(demo 落回種子專案;與今日工作同一份錨點,數字才對得上)
   const anchors = useMemo(() => ({
     award_date: project?.award_date, notice_date: project?.notice_date,
     commencement_date: project?.commencement_date, end_date: project?.end_date,

@@ -54,7 +54,7 @@ describe('computeObligationDue — 每月重複義務', () => {
     expect(ymd(computeObligationDue({ recurring: 'monthly', recurring_day: 5 }, anchors))).toBe('2027-01-05')
   })
 
-  // 呼叫端（今日待辦聚合）以固定日期推導時，不可回頭讀系統時鐘 —— 否則同一份
+  // 呼叫端（今日工作聚合）以固定日期推導時，不可回頭讀系統時鐘 —— 否則同一份
   // 輸入在不同時刻算出不同待辦，測試與日期模擬都失去意義。
   it('傳入 today 時以它為準，完全不看系統時鐘', () => {
     vi.setSystemTime(new Date(2026, 6, 10)) // 系統是 2026-07-10，故意與傳入值不同

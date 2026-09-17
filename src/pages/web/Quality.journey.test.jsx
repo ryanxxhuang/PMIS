@@ -125,8 +125,8 @@ describe('廠商品質旅程', () => {
     expect(container.querySelector('[role="listitem"][aria-current]')?.textContent).toContain(TEMPLATE_03310.title)
   })
 
-  it('從待辦進來後切分段、點佇列:taskReturn 仍在(返回今日待辦不消失,W05)', async () => {
-    const taskReturn = { to: '/dashboard?q=x', label: '今日待辦', key: '查驗:I1' }
+  it('從待辦進來後切分段、點佇列:taskReturn 仍在(返回今日工作不消失,W05)', async () => {
+    const taskReturn = { to: '/dashboard?q=x', label: '今日工作', key: '查驗:I1' }
     await act(async () => {
       root.render(<MemoryRouter initialEntries={[{ pathname: '/quality', search: '?seg=checklist', state: { taskReturn } }]}><Quality /><LocationSpy /></MemoryRouter>)
     })

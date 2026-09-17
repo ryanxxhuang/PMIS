@@ -458,22 +458,21 @@ export function buildDemoData(workItems, project) {
   return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions }
 }
 
-// ── 跨案總覽的示範姊妹案(靜態摘要;A 區為主 storyline,由 store 即時計算) ──
-// 機關承辦同時管多案是常態:一案施工中(落後)、一案驗收倒數、一案保固中,
-// 三種狀態一頁看完就是跨案總覽的賣點。
+// ── 跨案總覽的示範姊妹案(靜態摘要;A 區為主 storyline,件數由 store 即時計算) ──
+// 機關承辦同時管多案是常態:一案施工中、一案驗收倒數、一案保固中,選案清單一頁看完。
+// 跨案總覽已縮為選案清單(D-026 P1b):只留案名/代碼/狀態/未結件數/最近估驗期,
+// 進度金額與驗收階段的示範數字隨獨立儀表板一起退場。
 export const DEMO_PORTFOLIO = [
   {
     key: 'B', name: 'B 區道路改善工程', code: 'TPE-B-2025', status: '驗收中',
-    billable: 128500000, cum: 126950000, progressPct: 98.8, plannedPct: 100,
     openDefects: 1, pendingInspections: 0, pendingCOs: 0,
-    acceptance: { label: '初驗（期限倒數 5 天）', done: 2, total: 6, overdue: false },
+    latestPeriod: 12, latestStatus: '已核定',
     to: '/acceptance', // demo 的驗收頁就是 B 區 storyline
   },
   {
     key: 'C', name: 'C 區公園景觀工程', code: 'TPE-C-2024', status: '保固中',
-    billable: 45200000, cum: 45200000, progressPct: 100, plannedPct: 100,
     openDefects: 0, pendingInspections: 0, pendingCOs: 0,
-    acceptance: { label: '結案（保固中）', done: 6, total: 6, finished: true },
+    latestPeriod: 8, latestStatus: '已核定',
     to: null,
   },
 ]

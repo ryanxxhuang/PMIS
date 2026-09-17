@@ -5,7 +5,7 @@
 //
 // 這裡只組合既有引擎(collaborationItems + sampleAlerts),不自創任何狀態規則。
 import { sampleAlerts } from './qc.js'
-import { dueText } from './todayTasks.js' // 到期句與今日待辦同一支(TaskRow OVERDUE_RE / e2e 綁死句型)
+import { dueText } from './todayTasks.js' // 到期句與今日工作同一支(TaskRow OVERDUE_RE / e2e 綁死句型)
 import { collaborationItems } from './ballInCourt.js'
 
 // 佇列超過上限只顯示前幾筆＋「還有 N 項」:佇列是入口不是清單,完整內容在各分段。

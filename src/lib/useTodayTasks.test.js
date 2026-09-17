@@ -1,4 +1,4 @@
-// 側欄/rail 的「現在輪到我」件數。這個數字與首頁今日待辦同源(useTodayTasks),
+// 側欄/rail 的「現在輪到我」件數。這個數字與首頁今日工作同源(useTodayTasks),
 // 一旦分組比對寫錯,使用者會看到側欄說 3 件、點進去只有 1 件——比沒有 badge 更糟。
 // 純函式,不需要 store;hook 本體的聚合由 todayTasks.test.js 把關。
 import { describe, it, expect, vi } from 'vitest'

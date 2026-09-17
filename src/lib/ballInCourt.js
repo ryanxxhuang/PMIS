@@ -66,7 +66,7 @@ export function detailLink(page, param, id) {
 }
 
 // 全案未結協作項(不分角色):{ id, who, tag, title, meta(=ball.label), to, due }。
-// myOpenItems 與今日待辦聚合(todayTasks.js)共用這一份組裝——「哪些協作項算未結、
+// myOpenItems 與今日工作聚合(todayTasks.js)共用這一份組裝——「哪些協作項算未結、
 // 標題怎麼組、要導去哪一頁」只有一個答案,不會首頁一套、Agent 一套。
 export function collaborationItems(data = {}) {
   const { rfis = [], submittals = [], valuations = [], defects = [], inspections = [], observations = [], changeOrders = [] } = data

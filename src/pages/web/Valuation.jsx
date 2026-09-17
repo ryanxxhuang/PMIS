@@ -9,6 +9,7 @@ import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { collectEvidence } from '../../lib/evidence.js'
 import { summarizeValuationDiff } from '../../lib/valuationDiff.js'
+import { buildValuationChecks } from '../../lib/valuationChecks.js'
 import { valuationBall } from '../../lib/ballInCourt.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { fmtAmount as fmt, fmtYi as yi } from '../../lib/format.js'
@@ -118,6 +119,16 @@ export default function Valuation() {
       .filter((it) => it && !(childrenMap.get(it.item_key)?.length))
     return summarizeValuationDiff(billedLeaves, items, getEvidence)
   }, [selected?.items, keyToItem, childrenMap, getEvidence])
+
+  // 本期勾稽檢核(D-026 P1b:估驗所需檢核自風險稽核工作區移入估驗流程)。全確定性引擎
+  // (lib/integrityAudit.js),組裝與稽核頁共用 lib/valuationChecks.js;檢核的是「本期」的累計量,
+  // 送審/核定前就看得到超計、無日誌佐證、查驗不合格仍計價、澆置無試體、接近完成未查驗。
+  // 上方決策列的「超計/無佐證」是逐列差異(可展開佐證欄),這裡是整期的勾稽發現(含品質面),
+  // 兩者口徑的合併與缺件控制留 P4c(確認量表上線後才有正式的「缺件」定義)。
+  const checks = useMemo(() => {
+    if (!data || !selected) return { findings: [], summary: { risk: 0, warn: 0, checked: 0 } }
+    return buildValuationChecks({ adjustedItems, childrenMap, siteLogs, billedItems: selected.items, inspections, testSamples })
+  }, [data, selected, adjustedItems, childrenMap, siteLogs, inspections, testSamples])
 
   // 列的 callback 一律釘住 identity(useCallback),否則 ValuationRow 的 memo 形同虛設。
   // toggle/toggleEv 只用 functional setState,沒有外部依賴。
@@ -354,6 +365,33 @@ export default function Valuation() {
             </div>
           </Surface>
 
+          {/* 本期勾稽檢核:原風險稽核頁的「文件勾稽」發現,逐期就地顯示。只提醒、不處置,
+              判定不經 AI;有來源單據的發現給前往鈕(品質面向到品質查驗,估驗面向就在本頁)。 */}
+          <Card title="本期勾稽檢核" bodyClass="p-0"
+            action={<span className="text-footnote text-[var(--text-2)] num">{checks.summary.risk} 項風險 · {checks.summary.warn} 項注意 · 已勾稽 {checks.summary.checked} 項計價工項</span>}>
+            {checks.findings.length === 0 ? (
+              <p className="px-5 py-4 text-footnote text-[var(--text-2)]">
+                <MSym name="check_circle" size={14} className="inline align-text-bottom mr-1 text-[var(--green-text)]" />
+                本期估驗、施工日誌、查驗與試體對得起來，沒有勾稽異常。
+              </p>
+            ) : (
+              <ul role="list" aria-label="本期勾稽檢核" className="divide-y divide-[var(--border-2)]">
+                {checks.findings.map((f) => (
+                  <li key={f.title} className="px-5 py-3 flex flex-wrap items-start gap-x-3 gap-y-1.5">
+                    <Badge color={f.status === 'risk' ? 'red' : 'amber'}>{f.status === 'risk' ? '風險' : '注意'}</Badge>
+                    <span className="min-w-0 flex-1 basis-64">
+                      <span className="block text-body text-[var(--text)] [text-wrap:pretty]">{f.title}</span>
+                      <span className="block mt-0.5 text-footnote text-[var(--text-2)] break-words">{f.detail}</span>
+                    </span>
+                    {f.route && f.route !== '/valuation' && (
+                      <Button variant="ghost" size="sm" onClick={() => navigate(f.route)}>前往品質查驗<MSym name="arrow_forward" size={13} /></Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
           <Card
             title={`第 ${selected.period_no} 期 估驗明細`}
             bodyClass="p-0"
@@ -468,6 +506,7 @@ export default function Valuation() {
             本期金額 = 本期累計 − 前期累計，父項金額自動加總。保留款依契約比例逐期扣留，竣工驗收後返還。
             完成數量可按「帶入日誌累計」由施工日誌的當日數量逐日加總自動帶入（確定性計算，非 AI 推估），帶入後仍須逐項覆核再送審。
             「佐證」欄自動彙整該工項對應的施工日誌/查驗/自主檢查/試體紀錄；估驗累計高於日誌累計逾 5% 會就地提示，讓超計在送審前就被發現。
+            「本期勾稽檢核」是同一套確定性規則對整期的跨文件對帳（原風險稽核頁的文件勾稽），只提醒不處置、判定不經 AI。
           </p>
         </>
       )}

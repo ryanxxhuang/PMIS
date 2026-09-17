@@ -40,7 +40,7 @@ export default function Quality() {
   // 分段是非當前不渲染的,切段時重新掛載,殼的初次自動選取會優先吃深連結,詳情欄直接
   // 落在那一筆(規範 §1 判準第 3 題:從發現到完成少一步;§9.7 收件匣直達那一筆)。
   const [params, setSearchParams] = useSearchParams()
-  // 切段/點佇列改寫 query 時保住 location.state:「返回今日待辦」的來源住在 state,丟掉就沒有返回入口(W05)
+  // 切段/點佇列改寫 query 時保住 location.state:「返回今日工作」的來源住在 state,丟掉就沒有返回入口(W05)
   const { state: navState } = useLocation()
   // 預設分段固定「查驗」(三角色一致,監造判定動線不必先切段);例外是 URL 已帶某分段的
   // 單條參數(收件匣的 ?defect= / 佇列的 ?inspection= 等)——query 要落到那個殼身上才有意義。

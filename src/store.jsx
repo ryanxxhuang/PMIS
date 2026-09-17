@@ -8,7 +8,7 @@
 //   src/store/slices/site.js     — 施工日誌/照片/AI 辨識/工安
 //   src/store/slices/quality.js  — 查驗/缺失/自主檢查表/取樣試驗
 //   src/store/slices/collab.js   — 送審/RFI/觀察事項/成員
-//   src/store/slices/ledger.js   — 成本/變更設計/逐工項排程/契約義務
+//   src/store/slices/ledger.js   — 成本(退場,只讀)/變更設計/逐工項排程/契約義務
 //   src/store/slices/agent.js    — AI agent 對話與草稿收件匣
 // 跨領域的部分留在這裡:demo 種子、DB 整批載入、登出清理、重匯標單、角色權限 can。
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
@@ -148,7 +148,6 @@ export function StoreProvider({ children }) {
     costItems, setCostItems, changeOrders, setChangeOrders,
     itemSchedules, setItemSchedules, obligations, setObligations,
     acceptanceEvents, setAcceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent,
-    createCostItem, updateCostItem, deleteCostItem,
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
@@ -314,7 +313,7 @@ export function StoreProvider({ children }) {
     listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, readWhiteboard, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, classifySitePhoto, fetchWeather,
     obligations, reloadObligations, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
-    costItems, createCostItem, updateCostItem, deleteCostItem,
+    costItems, // 成本退場(D-026 P1b):只讀歷史,無寫入函式
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
     itemSchedules, setItemSchedule, removeItemSchedule,
     changeOrders, createChangeOrder, updateChangeOrder, deleteChangeOrder,

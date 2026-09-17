@@ -10,8 +10,13 @@ import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCal
 import { plannedPctNow } from '../../lib/progressPlan.js'
 import { latestValuationAt } from '../../lib/progressAsOf.js'
 import { auditProject } from '../../lib/riskAudit.js'
-import { buildIntegrityFindings, isConcretePourItem } from '../../lib/integrityAudit.js'
+import { buildValuationChecks } from '../../lib/valuationChecks.js'
 
+// 退場(D-026 §4,P1b):獨立的風險稽核工作區不再是主入口(hidden、僅機關可深連結)。估驗所需的
+// 勾稽檢核已移入估驗計價頁逐期顯示(lib/valuationChecks.js 兩頁共用同一份組裝與引擎);契約/變更/
+// 進度三個面向的檢核表項目暫留這裡唯讀查閱,承接到履約時程後隨頁面一起移除(P5d/P6b)。
+// 這一頁本來就沒有任何業務寫入(只提醒、不處置);AI 稽核意見(audit.summary)的退場屬 P6c。
+//
 // 版面:改版前是「總覽色塊＋檢核表卡＋勾稽鏈卡＋AI 意見卡」四張直排——同一種東西
 // (稽核項目)被來源切成兩張卡,判定依據被塞在一行 text-xs 裡,AI 意見又是整案一段、
 // 對不回是哪一項發現。現在是一份清單(檢核表＋勾稽發現混排,嚴重度高的在前)＋詳情欄:
@@ -37,6 +42,8 @@ const SOURCE_LABEL = { check: '自動檢核', chain: '文件勾稽' }
 // 期限、判定都要能追到來源)。這只是連結對照,不是判定邏輯。
 const CHECK_ROUTE = { 估驗: '/valuation', 變更: '/change-orders', 品質: '/quality', 契約: '/deadlines', 進度: '/progress' }
 const ROUTE_LABEL = { '/valuation': '估驗計價', '/change-orders': '變更設計', '/quality': '品質查驗', '/deadlines': '期限追蹤', '/progress': '進度管制' }
+// 退場說明:進到這一頁的人多半循舊書籤或 Agent 提示連結而來,第一眼要知道「檢核已在估驗流程裡」。
+const RETIRED_NOTE = '獨立風險稽核工作區已退場（產品收斂 D-026）：估驗勾稽檢核已在「估驗計價」逐期顯示，這裡只保留唯讀查閱；契約、變更與進度面向由履約時程承接後一併移除。'
 const DEFAULT_FILTERS = { q: '', status: '' }
 
 // 兩個引擎的 detail 都是「依據說明:對應項目、對應項目 等 N 項。」的形狀(整段文字,
@@ -93,27 +100,12 @@ export default function RiskAudit() {
     progress: { actualPct, plannedPct: plannedNow },
   }, TODAY), [periodAmounts, changeOrders, defects, obligations, billableTotal, actualPct, plannedNow]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 文件勾稽鏈:逐工項跨文件對帳(全確定性)。以 item_key 為鍵串接估驗/日誌;查驗以 id→key。
-  // leaves 也要吃 adjustedItems(B-02 殘留破口):「接近完成未申請查驗」以 b/q≥0.8 判定,
-  // q 用原契約量的話,核准追加後會拿舊分母算出假發現——機關防弊頁自己產假發現最傷公信力。
-  // 變更只動 quantity/amount,id/item_key/樹形不變,idToKey 與混凝土鍵集合不受影響。
+  // 文件勾稽鏈:逐工項跨文件對帳(全確定性),檢核最新一期。組裝與估驗頁共用
+  // lib/valuationChecks.js(D-026 P1b:估驗所需檢核已移入估驗流程,估驗頁逐期顯示同一份發現)。
   const integrity = useMemo(() => {
-    if (!workItems) return { findings: [], summary: { risk: 0, warn: 0 } }
-    const idToKey = new Map(adjustedItems.filter((it) => it.id).map((it) => [it.id, it.item_key]))
-    // 刻意不換成 boqCalc.billableLeaves:那支的父子對照建在「全部 items」上,
-    // 這裡吃的是 buildBillableTree 的 childrenMap(只含可計價非合計列)。
-    // 子項全是合計列的分項在兩把尺下結果不同,要併必須先定案哪一個是規則。
-    const leaves = adjustedItems.filter((it) => it.is_billable && !it.is_rollup && !(childrenMap.get(it.item_key)?.length))
-    const loggedQty = new Map()
-    for (const lg of siteLogs) for (const [k, q] of Object.entries(lg.items || {})) loggedQty.set(k, (loggedQty.get(k) || 0) + (Number(q) || 0))
+    if (!workItems) return { findings: [], summary: { risk: 0, warn: 0, checked: 0 } }
     const latest = [...valuations].sort((a, b) => a.period_no - b.period_no).slice(-1)[0]
-    const billedQty = new Map(Object.entries(latest?.items || {}).map(([k, v]) => [k, Number(v) || 0]))
-    const inspStatusByItem = new Map() // inspections 已依 created_at desc → 第一個=最近
-    for (const ins of inspections) { const key = idToKey.get(ins.work_item_id); if (key && !inspStatusByItem.has(key)) inspStatusByItem.set(key, ins.status) }
-    const concreteKeys = new Set(leaves.filter((it) => isConcretePourItem(it.description)).map((it) => it.item_key))
-    const pourSet = new Set()
-    for (const lg of siteLogs) if (lg.log_date && Object.entries(lg.items || {}).some(([k, q]) => concreteKeys.has(k) && (Number(q) || 0) > 0)) pourSet.add(lg.log_date)
-    return buildIntegrityFindings({ leaves, loggedQty, billedQty, inspStatusByItem, pourDates: [...pourSet].map((date) => ({ date })), testSamples })
+    return buildValuationChecks({ adjustedItems, childrenMap, siteLogs, billedItems: latest?.items, inspections, testSamples })
   }, [workItems, adjustedItems, childrenMap, siteLogs, valuations, inspections, testSamples])
 
   // 一份清單:檢核表(每個面向恰一項,id 以面向命名)＋勾稽發現(每種對帳至多一項,
@@ -172,7 +164,8 @@ export default function RiskAudit() {
   if (!imported) {
     return (
       <div className="space-y-5">
-        <PageHeader title="風險稽核" tagline="AI 防弊" subtitle="系統化檢核估驗、變更、品質、契約與進度的異常樣態" />
+        <PageHeader title="風險稽核" tagline="唯讀查閱" subtitle="系統化檢核估驗、變更、品質、契約與進度的異常樣態" />
+        <p role="note" className="rounded-lg px-3 py-2 text-footnote bg-[var(--amber-tint)] text-[var(--amber-text)]">{RETIRED_NOTE}</p>
         <Card bodyClass="p-0"><Empty>此專案尚未匯入標單，無法稽核。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
       </div>
     )
@@ -332,8 +325,12 @@ export default function RiskAudit() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="風險稽核" tagline="AI 防弊"
+      <PageHeader title="風險稽核" tagline="唯讀查閱"
         subtitle="系統化檢核本案的估驗、變更、品質、契約與進度，標出值得複查的異常" />
+
+      <p role="note" className="rounded-lg px-3 py-2 text-footnote bg-[var(--amber-tint)] text-[var(--amber-text)]">
+        {RETIRED_NOTE} <Link to="/valuation" className="underline font-medium">前往估驗計價</Link>
+      </p>
 
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
@@ -354,7 +351,7 @@ export default function RiskAudit() {
 
       <p className="text-caption text-[var(--text-3)] leading-relaxed">
         <MSym name="verified_user" size={13} className="inline align-text-bottom mr-1" />
-        稽核結果為<b className="text-[var(--text-2)] font-medium">「值得複查的異常提示」，非違規認定</b>；供機關監督參考，實際處置請依契約與相關法令。多案時可於 <Link to="/dashboard" className="text-[var(--blue-text)] hover:underline">總覽</Link> 比較各案風險。
+        稽核結果為<b className="text-[var(--text-2)] font-medium">「值得複查的異常提示」，非違規認定</b>；供機關監督參考，實際處置請依契約與相關法令。
       </p>
     </div>
   )

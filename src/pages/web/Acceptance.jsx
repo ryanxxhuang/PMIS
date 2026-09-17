@@ -14,7 +14,7 @@ import { DEMO_PORTFOLIO } from '../../data/demoSeed.js'
 const RESULT_STAGES = new Set(['initial', 'reinspect', 'final']) // 這幾關要記合格/不合格
 
 // 階段角色白名單已移到 acceptance.js(僅 UX;真正強制在 DB trigger,
-// 見 migration 20260712000100_acceptance_events_rbac.sql)——今日待辦聚合要用同一份。
+// 見 migration 20260712000100_acceptance_events_rbac.sql)——今日工作聚合要用同一份。
 const STAGE_ORGS = ACCEPTANCE_STAGE_ORGS
 const ORG_LABEL = { contractor: '廠商', supervisor: '監造', owner: '機關' }
 

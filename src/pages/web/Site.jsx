@@ -11,7 +11,7 @@ import { Card, Badge, Empty, PageHeader } from '../../components/ui.jsx'
 import { MSym } from '../../components/icons.jsx'
 import TaskRow from '../../components/TaskRow.jsx'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
-import { visibleNavGroups, routeAllowed } from '../../lib/navConfig.js'
+import { visibleNavGroups, routeAllowed, BALL_SOURCES_TITLE } from '../../lib/navConfig.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { itpStatus } from '../../lib/itp.js'
 import { sampleAlerts } from '../../lib/qc.js'
@@ -43,7 +43,7 @@ export default function Site() {
   }, [org, can?.override, isPlatformAdmin])
   const siteTasks = useMemo(() => mine.filter((t) => sitePaths.has(pathOf(t.to))), [mine, sitePaths])
 
-  // 從單據返回:原項還在就聚焦它(TaskRow 的 id=task-<key>),與今日待辦同一個約定
+  // 從單據返回:原項還在就聚焦它(TaskRow 的 id=task-<key>),與今日工作同一個約定
   useEffect(() => {
     if (!state?.returnedTask) return
     const el = document.getElementById(`task-${state.returnedTask}`)
@@ -100,10 +100,10 @@ export default function Site() {
         subtitle="日誌、查驗、自主檢查、試驗、停留點與工安的入口；件數只計本案尚未處理的事項。"
         meta={[{ k: '日期', v: today }]} />
 
-      {/* 現場待辦:與今日待辦同一份聚合,只取目的頁在現場紀錄群組的;列的樣式與首頁同一份(TaskRow) */}
+      {/* 現場待辦:與今日工作同一份聚合,只取目的頁在現場紀錄群組的;列的樣式與首頁同一份(TaskRow) */}
       <Card title="現場待辦" action={<Badge color={siteTasks.length ? 'amber' : 'green'} className="num">{siteTasks.length}</Badge>} bodyClass="p-0">
         {siteTasks.length === 0 ? (
-          <Empty icon="task_alt">現場沒有等你處理的事項。其他待辦請看<Link to="/dashboard" className="text-[var(--blue-text)] hover:underline mx-1">今日待辦</Link>。</Empty>
+          <Empty icon="task_alt">現場沒有等你處理的事項。其他待辦請看<Link to="/dashboard" className="text-[var(--blue-text)] hover:underline mx-1">{BALL_SOURCES_TITLE}</Link>。</Empty>
         ) : (
           <ul aria-label="現場待辦清單" className="divide-y divide-[var(--border-2)]">
             {siteTasks.map((t) => <li key={t.key}><TaskRow task={t} /></li>)}

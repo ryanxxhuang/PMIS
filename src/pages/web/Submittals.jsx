@@ -299,7 +299,7 @@ export default function Submittals() {
                     退回補正: '已退回補正 · 交廠商補正後再送，再送會回到「待我處理」。',
                     駁回: '已駁回（終局）· 交廠商；本件不再受理再送。' }[notice.status] || `已${notice.status}。`)
                   : `Rev.${notice.rev} 已再送，狀態回到已提送，等待監造受理審核；補正說明已併入附件說明留存。`
-          // 完成後的接續(監造):回原篩選佇列由頁首「返回今日待辦」與左欄清單承擔;
+          // 完成後的接續(監造):回原篩選佇列由頁首「返回今日工作」與左欄清單承擔;
           // 「下一件待審」明確由人點,不在核准瞬間自動換單
           const nextMine = notice.kind === 'decided' && notice.status !== '審核中'
             ? ordered.filter((x) => x.id !== s.id && ballKey(x, org) === 'mine') : []

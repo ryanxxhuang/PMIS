@@ -148,9 +148,9 @@ describe('代表性早退狀態(具名釘死)', () => {
     expect(branch, '找不到 Payments 空狀態分支').toBeTruthy()
     expect(hasHeader(branch.text, headerRefs(src))).toBe(true)
   })
-  it('Cost 非真實專案:空狀態分支仍有頁首', () => {
+  it('Cost 非真實專案:空狀態分支仍有頁首(退場後唯讀查閱頁的文案)', () => {
     const src = read('pages/web/Cost.jsx')
-    const branch = pageLevelReturns(src).find((b) => b.text.includes('此功能需真實專案'))
+    const branch = pageLevelReturns(src).find((b) => b.text.includes('沒有可查閱的紀錄'))
     expect(branch, '找不到 Cost 空狀態分支').toBeTruthy()
     expect(hasHeader(branch.text, headerRefs(src))).toBe(true)
   })

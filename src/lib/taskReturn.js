@@ -3,10 +3,15 @@
 // DetailDrawer 各持一條 /dashboard|/alerts 正則):新增一個來源(現場紀錄)就得改四處,漏一處
 // 返回連結就叫錯名或直接不出現。現在只有這一張表;三個消費端都只認這裡的答案。
 // 只接受站內的收件匣類頁面:單據自己的 query 更新會保留 state,但不會把單據頁當來源。
+// 名字取自 navConfig(頁名唯一來源):/dashboard 就是「今日工作」主入口(BALL_SOURCES_TITLE),
+// /alerts、/site 取登記表的 label——先前 /dashboard 這裡寫「今日工作」、側欄寫「今日工作」,
+// 同一頁兩個名字(P1c 移交、P1b 統一)。
+import { BALL_SOURCES_TITLE, navLabel, navEntryFor } from './navConfig.js'
+
 export const TASK_RETURN_SOURCES = Object.freeze({
-  '/dashboard': '今日待辦',
-  '/alerts': '提醒中心',
-  '/site': '現場紀錄',
+  '/dashboard': BALL_SOURCES_TITLE,
+  '/alerts': navLabel('/alerts'),
+  '/site': navEntryFor('/site').label,
 })
 
 const pathOf = (to) => String(to || '').split('?')[0]

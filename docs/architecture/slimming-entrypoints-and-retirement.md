@@ -22,7 +22,7 @@
 
 深連結保證：所有既有 `?inspection=`／`?period=`／`?submittal=`／`?d=`／`?stage=`／`?obligation=` 參數不變；`hidden` 項仍受 `roles` 守衛；提醒信舊連結（`/alerts`、`/deadlines?obligation=`）維持。新增 `/site?intake=<id>`、`/site?doc=<id>` 直達文件。
 
-**P1a 落地結果（2026-09-17，與上表的差異）**：側欄分區為「今日工作（球權三來源）→ 工作（三主入口群組）→ 專案資料 → 平台」。次入口不做扁平的「更多」，而是兩個群組：「文件往來」（送審文件／工程疑義／施工月報／監造月報）與「專案」（專案文件／三方成員／活動紀錄／跨案總覽；風險稽核 hidden）——月報在導覽上放文件往來，同時在 `/site`「本月文件」給入口（§3 的落點仍成立）。`/site` 的第一個子頁標籤為「現場總覽」；P1a 的 `/site` 只列既有現場作業入口、件數、現場待辦與本月文件，照片上傳與文書清單留給 P2c。`/supervisor-log` 待 P3a 建頁後再登記（不預登記無頁面的路由）。`/cost`、`/audit` 已 hidden（唯讀化在 P1b）；`/schedule` 仍可見。手機底欄＝現在輪到我＋三主入口＋更多（`roleWorkLinks` 回傳群組項，子頁也算選取），P1c 只剩文案。
+**P1a 落地結果（2026-09-17，與上表的差異）**：側欄分區為「今日工作（球權三來源）→ 工作（三主入口群組）→ 專案資料 → 平台」。次入口不做扁平的「更多」，而是兩個群組：「文件往來」（送審文件／工程疑義／施工月報／監造月報）與「專案」（專案文件／三方成員／活動紀錄／跨案總覽；風險稽核 hidden）——月報在導覽上放文件往來，同時在 `/site`「本月文件」給入口（§3 的落點仍成立）。`/site` 的第一個子頁標籤為「現場總覽」；P1a 的 `/site` 只列既有現場作業入口、件數、現場待辦與本月文件，照片上傳與文書清單留給 P2c。`/supervisor-log` 待 P3a 建頁後再登記（不預登記無頁面的路由）。`/cost`、`/audit` 已 hidden（P1b 已唯讀化，見 §2 各節「P1b 落地結果」）；`/schedule` 仍可見。手機底欄＝現在輪到我＋三主入口＋更多（`roleWorkLinks` 回傳群組項，子頁也算選取），P1c 只剩文案。
 
 ## 2. 退場承接清單【已確認 範圍】
 
@@ -33,18 +33,21 @@
 - 使用端：`Cost.jsx`、`ledger.js`（`costItems` CRUD）、`db.js loadCostItemsFromDB`、`store.jsx`、`Dashboard.jsx exportAll`（整案匯出含 `cost_items`）、`demoSeed.js`、`e2e/owner.spec.js`（監造進不了 `/cost`）、`e2e/a11y.spec.js`、`ledger.test.js`；DB `cost_items`（RLS `can_access_contractor_private`，監造／機關不可讀）。正式資料 11 列／4 案。
 - 承接：頁面改為**唯讀查閱＋CSV 匯出**（移除新增／編輯／刪除控制，store 只保留 load），`hidden: true`、`roles: ['contractor']` 不變；`exportAll` 仍含成本（廠商自己的匯出）。
 - 清理順序：P1b 唯讀化→P6b 移除 CRUD、Demo 種子、寫入測試；表與 RLS 保留（歷史可查）。不動標單單價、保留款、估驗與付款。
+- **P1b 落地結果（2026-09-17）**：退場由資料庫強制，不只拿掉按鈕——migration `20260917210000_cost_items_retire` 收回 anon／authenticated 對 `cost_items` 的 INSERT／UPDATE／DELETE 表級 grant，並把原 `for all` policy 換成只有 SELECT 的 `cost_items_contractor_read`（讀取條件 `can_access_contractor_private` 一字不改；監造／機關仍讀不到廠商成本；service_role 仍可寫供修復）；rollback 檔 `supabase/rollbacks/20260917210000_cost_items_retire.down.sql`；pgTAP `cost_items_retired.sql` 24 條（grant／policy 形狀、三角色＋專案管理者＋非成員的讀寫矩陣、歷史列無損），`p0_05_audit_events.sql` 的廠商更新改為斷言 42501。前端 `Cost.jsx` 只剩統計、分類、搜尋／快篩與 CSV 匯出（新增欄「備註」），頁首標「歷史查閱」並以 `role=note` 說明退場；`ledger.js`／`store.jsx` 不再暴露 `createCostItem`／`updateCostItem`／`deleteCostItem`（`ledger.test.js` 釘住），CRUD 與其測試已在本單元移除，P6b 不再有成本寫入可刪。Demo 種子的成本歷史保留（唯讀示範）；`Dashboard.exportAll` 仍含成本。
 
 ### 2.2 跨案總覽 `/portfolio`
 
 - 使用端：`Portfolio.jsx`、`projects.js loadPortfolio`（RPC `portfolio_summary`）、`portfolioExceptions.js`、`DEMO_PORTFOLIO`、`e2e/owner.spec.js`／`a11y.spec.js`。
 - 承接：縮為「選案清單」（案名、角色、待我處理件數、最近活動），移除統計／例外分析卡；`portfolio_summary` RPC 保留供清單件數（D-024 已知它取最新期，不再擴充）。
 - 清理：P1b 縮頁→P6b 移除 `portfolioExceptions.js` 與測試、Demo 姊妹案靜態資料；RPC 不刪。
+- **P1b 落地結果（2026-09-17）**：`Portfolio.jsx` 改為選案清單（`role=list` 「專案清單」：案名／代碼／狀態／目前專案章、未結缺失／待查驗／待核定變更三個件數、最近估驗期與狀態；整列可點切換到該案的今日工作），進度條、累計估驗金額、預定 vs 實際、驗收階段與例外彙總帶全部移除；`portfolioExceptions.js` 與測試已於本單元刪除（不留無人使用的模組），`DEMO_PORTFOLIO` 只剩清單需要的欄位（`Acceptance.jsx` 仍讀 `[0].name`）。`portfolio_summary` RPC 未改（回傳欄位多於清單所需，D-024 已知取最新期，不擴充）；載入失敗仍顯示橫幅＋重試、卡頭不假稱總數（`Portfolio.error.test.jsx`）。E2E B-02 跨頁一致改以施工月報作第三面。
 
 ### 2.3 風險稽核 `/audit`＋`audit.summary`
 
 - 使用端：`RiskAudit.jsx`（`riskAudit.js` 檢核表＋`integrityAudit.js` 勾稽鏈＋`auditSummary` AI）、`Agent.jsx` 連結、`integrityAuditTool.ts`（Agent `run_integrity_audit`，監造／機關）、Edge `audit-summary`、`site.js auditSummary`、AI 註冊三處。正式 `audit.summary` 用量 0 筆。
 - 承接【已確認】：估驗所需檢核移入估驗流程——`integrityAudit.js` 的「估驗超前日誌」「澆置無試體」「查驗缺漏」在估驗頁逐工項就地顯示（P4c），送審前列「缺件」；`riskAudit.js` 的契約／變更面向由履約時程承接。Agent `run_integrity_audit` 保留（仍有用途）。
 - 退場：`audit.summary` 功能列以 migration 關閉（`enabled=false`，比照 `20260911100100_contract_parse_retire`），Edge 與用量歷史保留；`/audit` `hidden`，頁面改為唯讀提示並導向估驗頁對應項；P6c 後移除頁面與 `auditSummary` store 路徑。`audit_events` 完全不動。
+- **P1b 落地結果（2026-09-17）**：估驗所需檢核已接到估驗流程——新增 `src/lib/valuationChecks.js`（`buildValuationChecks`：把 store 的標單／日誌／查驗／試體與「指定期別」的累計量組成 `buildIntegrityFindings` 的六個輸入；單元測試釘組法），`Valuation.jsx` 逐期渲染「本期勾稽檢核」卡（`role=list`；估驗超前日誌、無日誌佐證、查驗不合格仍計價、澆置無試體、試體不合格、接近完成未查驗；品質面向給「前往品質查驗」），`RiskAudit.jsx` 改用同一支組裝檢核最新期（先前兩頁各組一份會分岔）。`/audit` 保持 hidden＋僅機關，頁首改「唯讀查閱」並以 `role=note` 說明退場與導向估驗計價；契約／變更／進度三個檢核表面向暫留該頁唯讀，承接到履約時程後隨頁面移除（P5d／P6b）；AI 稽核意見（`audit.summary`）維持到 P6c。`Agent.jsx` 稽核提示卡的連結改指 `/valuation`（三角色可進，不再限機關），`Members.jsx` 機關權限說明不再列「風險稽核」。決策列的「超計／無佐證」逐列差異（`valuationDiff.js`）與整期勾稽發現口徑尚未合併、也未做金額控制，留 P4c（確認量表上線後才有正式「缺件」定義）。
 
 ### 2.4 逐工項排程 `/schedule`
 
@@ -99,13 +102,15 @@
 
 - `hidden` 項保留 `roles`；`routeAllowed` 不變；`e2e/routes.spec.js`、`reachability.spec.js`、`a11y.spec.js` 同步更新（退場頁改為「hidden 仍可直達且唯讀」的斷言）。
 - 提醒信與 Agent 回答中的路徑：`/audit`→估驗頁對應工項、`/schedule`→`/requirements?item=<work_item>`、`/cost`→維持（唯讀）。
-- 退場頁不得重新啟用寫入：頁面移除寫入控制且 store 不再暴露寫入函式；RLS 不變（歷史查閱原權限）。
+- 退場頁不得重新啟用寫入：頁面移除寫入控制且 store 不再暴露寫入函式；成本表更由資料庫收回寫入（P1b migration，直接 REST 也被拒），讀取 RLS 條件不變（歷史查閱原權限）。
+- 頁名單一來源（P1b 統一 P1c 移交項）：`/dashboard` 的 h1、側欄分區、待辦返回連結（`taskReturn.js`）、各頁指路文案都取 `navConfig.BALL_SOURCES_TITLE`（今日工作），不再有「今日待辦」別名；`/alerts` 在登記表帶 `label`，返回連結名同樣取自登記表。
 
 ## 6. 舊資料過渡與回復（整體）
 
 | 資料 | 過渡 | 回復 |
 |---|---|---|
-| `cost_items`、`item_schedules`、`schedule_periods` | 不動；唯讀查閱 | 無 DB 變更 |
+| `cost_items` | 列與欄不動；P1b 以 migration 收回 authenticated／anon 寫入 grant、policy 改 select-only | `supabase/rollbacks/20260917210000_cost_items_retire.down.sql`（重授權＋回復 for all policy） |
+| `item_schedules`、`schedule_periods` | 不動；唯讀查閱 | 無 DB 變更 |
 | `ai_features.audit.summary` | `enabled=false` migration | rollback 檔改回 true |
 | `contract_obligations` 循環 7 筆 | 產生期次，不回填完成 | drop `obligation_periods` |
 | 基準日 | 建立 version 1（現值） | drop `project_anchor_versions`，`projects` 欄不變 |

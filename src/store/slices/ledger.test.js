@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// Ledger slice(成本、變更設計、逐工項排程、契約義務、驗收)整支在做同一件會咬人的事:
+// Ledger slice(成本歷史、變更設計、逐工項排程、契約義務、驗收)整支在做同一件會咬人的事:
 // 「DB 說了才算」。零測試的情況下,只要有人把 mutationOutcome 拿掉或把 setState 提前
 // 一行,畫面就會回到「假成功」——重新整理才發現沒寫進去。這裡釘住四類迴歸:
+//   0. 成本退場:slice 沒有任何成本寫入函式(DB 已收回寫入,留函式只會是死碼);
 //   1. B-07 假成功:RLS 靜默擋下(無 error 但 0 列)時快取不得被改;
 //   2. P0-02 樂觀更新:變更明細被 guard 拒絕後,不得先算出假的變更後契約金額;
 //   3. R4 P1-01 排程 race:起訖兩個 input 同 tick 連發,只能落一次完整的 {起,訖};
@@ -38,42 +39,17 @@ const mount = (c = ctx()) => renderHook(() => useLedgerSlice(c))
 
 beforeEach(() => { pg.reset(); runIngestion.mockClear() })
 
-describe('成本項目:寫入失敗不得動快取', () => {
-  it('demo:只進記憶體、不打 DB,欄位帶預設值與 sort_order', async () => {
-    const r = mount(demoCtx())
-    await act(async () => { await r.current.createCostItem({ title: '假設工程', budget_amount: '1000' }) })
-    expect(pg.calls).toHaveLength(0)
-    expect(r.current.costItems[0]).toMatchObject({ title: '假設工程', category: '其他', budget_amount: 1000, actual_amount: 0, sort_order: 0 })
-  })
-
-  it('DB insert 失敗 → 回 error、快取維持空白', async () => {
-    const c = ctx()
-    const r = mount(c)
-    pg.script('cost_items', 'insert', { data: null, error: { message: 'new row violates row-level security policy' } })
-    let res
-    await act(async () => { res = await r.current.createCostItem({ title: '假設工程' }) })
-    expect(res.error.message).toContain('row-level security')
-    expect(r.current.costItems).toHaveLength(0)
-  })
-
-  it('update 被 RLS 靜默擋下(0 列)→ 回失敗訊息,快取值不變(B-07)', async () => {
+describe('成本項目:退場後只讀歷史(D-026 P1b)', () => {
+  it('slice 不再暴露任何成本寫入函式;快取仍可由載入端/demo 種子設定', async () => {
+    // 資料庫層已收回 cost_items 的 INSERT/UPDATE/DELETE(migration 20260917210000),
+    // 前端若還留 createCostItem 之類的函式就是一定失敗的死碼——這條釘住「沒有寫入端」。
     const r = mount()
-    await act(async () => { r.current.setCostItems([{ id: 'c1', title: '假設工程', actual_amount: 0 }]) })
-    pg.script('cost_items', 'update', SILENT_ZERO_ROWS)
-    let res
-    await act(async () => { res = await r.current.updateCostItem('c1', { actual_amount: 999 }) })
-    expect(res.error.message).toContain('未寫入')
-    expect(r.current.costItems[0].actual_amount).toBe(0)
-  })
-
-  it('delete 被擋 → 項目仍在清單上(不可假消失)', async () => {
-    const r = mount()
-    await act(async () => { r.current.setCostItems([{ id: 'c1', title: '假設工程' }]) })
-    pg.script('cost_items', 'delete', SILENT_ZERO_ROWS)
-    let res
-    await act(async () => { res = await r.current.deleteCostItem('c1') })
-    expect(res.error.message).toContain('刪除被拒絕')
+    expect(r.current).not.toHaveProperty('createCostItem')
+    expect(r.current).not.toHaveProperty('updateCostItem')
+    expect(r.current).not.toHaveProperty('deleteCostItem')
+    await act(async () => { r.current.setCostItems([{ id: 'c1', title: '鋼筋工程（歷史）', actual_amount: 1 }]) })
     expect(r.current.costItems).toHaveLength(1)
+    expect(pg.calls).toHaveLength(0)
   })
 })
 
