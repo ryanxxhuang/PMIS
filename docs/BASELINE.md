@@ -11,7 +11,8 @@
 - `npm test`：124 檔、1,345 項（新增 `contractDue.test.js`／`contractDue.test.ts` 循環讀期次同一組案例、`todayTasks.test.js` 逐期＋三種缺口入口、`obligationTimeline.test.js` 逐期狀態／期次列／缺口、`ledger.test.js` RPC 成功／拒絕／demo 鏡像、`persistedWrites.test.js` RPC 不直寫表；共用案例 `ballInCourt.cases.test.js` 13 條／`.test.ts` 10 條對 fixture 新增 ob12（已完成期＋逾期舊期＋下期）、ob13（缺開工日）、ob14（規則不完整）、ob15（回填待核對）、ob16（已廢止）三側一致）；`npm run test:edge` 3 項（Deno 執行期同案例）；`npm run check:edge` 18 支；lint 零警告；build；`check:docs` 55 檔 383 連結 0 錯。
 - Demo E2E：contractor／owner／supervisor／contract-flow／routes／reachability／workflow-ux／a11y 8 支 69 項全綠（demo 種子的循環義務改帶「上一期已完成＋下一期待辦」，到期日與 P5b 前的「下次到期」同一天，劇本逾期分佈不變；期限追蹤標為已提送走 RPC 鏡像後 `已提送 ✓` 仍在該期）。
 - 正式庫唯讀盤點（套用前）：`contract_obligations` 109 筆，循環 7 筆皆 monthly／施工中／待辦、無 `completed_at`，其中 5 筆 `recurring_day` 為空、3 筆 `trigger_event` 為空、4 筆為 `monthly`；所屬專案皆有開工日；pg_cron 1.6.4 已啟用且有 `pmis-daily-reminders` 一支工作。
-- 未做／待驗：正式 `db push` 與 Edge 重佈於合併後執行並記 CURRENT §6.3；真資料目視（7 筆 monthly：5 筆循環規則待補、2 筆期次）；pg_cron 首次執行紀錄；停止產生期次的條件（竣工／保固期滿）未定義（P5c）；rollback 檔未演練。
+- rebase 到含 P2c 的 main（`f4e3f32`）後重跑：`npm run test:db` 從零套 70 支 50 檔 1,970 通過（＋P2c `service_role_function_grants.sql` 5 條）；`npm test` 125 檔 1,357 項；lint／build／`check:edge` 18／`test:edge` 3／`check:docs` 55 檔 388 連結 0 錯；Demo E2E 8 支 69 項仍全綠；PR CI／pgTAP 於 `3aad25e` 皆 success。正式 `db push`、Edge 四支重佈與正式庫唯讀計數見 CURRENT §6.3。
+- 未做／待驗：真資料目視（7 筆 monthly：5 筆循環規則待補、2 筆期次共 8 期）；pg_cron 首次執行紀錄；停止產生期次的條件（竣工／保固期滿）未定義（P5c）；rollback 檔未演練。
 
 ### 2026-09-17 P2c：現場紀錄頁（上傳／恢復／施工日誌草稿→審核→簽署→提送→收件／退回）（`codex/slimming-p2c-site-flow`）
 
