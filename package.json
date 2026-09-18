@@ -19,7 +19,7 @@
     "test:edge": "deno test --frozen --config supabase/functions/deno.json supabase/functions/_shared/*.deno.test.ts",
     "test:db": "node scripts/test-pgtap.js",
     "check:docs": "node scripts/check-docs.js",
-    "check:prod": "sh scripts/check-prod.sh"
+    "check:prod": "node scripts/check-prod.js"
   },
   "engines": {
     "node": ">=22.13.0"

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 2026-09-19 以瀏覽器 UA 抓 https://app.gov-agent.ai/ 的實際回應:Cloudflare Bot Fight Mode 的
+         JavaScript Detections 在 </body> 前塞了一段行內載入器(建 1×1 iframe 再載
+         /cdn-cgi/challenge-platform/scripts/jsd/main.js),被 CSP script-src 'self' 擋下,每頁一條 console 錯誤。
+         這段不在 repo 任何地方,是 D-025 要抓的注入樣本。 -->
+    <script src="./theme-boot.js"></script>
+    <title>GovAgent｜公共工程專案管理系統（PMIS）</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <script type="module" crossorigin src="./assets/index-n1P9w2eA.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CGCrsIOb.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3d2235e4cffb917',t:'MTc4OTc1MzI1MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
