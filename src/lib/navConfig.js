@@ -28,9 +28,12 @@ export const navGroups = [
     // 群組入口=第一個該角色可見的子頁(visibleNavGroups 決定),整組子頁都不可見就不渲染該組。
     // 現場紀錄:/site 是總覽(依角色列出現場作業入口與件數;P2c 起承載照片上傳與文書清單),
     // 子頁是既有的日誌/品質/停留點/工安——業務規則與權限一條不動。
+    // 監造日誌(P3a):每日一份的監造文件——監造填寫簽署、專案成員可讀(Q4 暫行)、提送機關;不限角色,
+    // 頁內依 org 決定可編／唯讀／收件(伺服器 RLS／RPC 才是邊界)。
     { to: '/site', icon: 'engineering', label: '現場紀錄', short: '現場', tabs: [
       { to: '/site', label: '現場總覽' },
       { to: '/site-log', label: '施工日誌' },
+      { to: '/supervisor-log', label: '監造日誌' },
       { to: '/quality', label: '品質查驗' },
       { to: '/itp', label: '檢驗停留點' },
       { to: '/safety', label: '工安管理' },
@@ -161,6 +164,8 @@ const nonNavRouteRules = {
   '/alerts': { access: 'authenticated', label: '提醒中心' },
   '/project/new': { access: 'authenticated' },
   '/site-log/print': { access: 'authenticated', surface: 'print' },
+  // 監造日誌列印(P3a):印「已簽署版本」的內容、版本號與雜湊,標示範範本;未簽署只印草稿並明寫
+  '/supervisor-log/print': { access: 'authenticated', surface: 'print' },
   '/valuation/print': { access: 'authenticated', surface: 'print' },
   '/valuation/package': { access: 'authenticated', surface: 'print' },
   '/quality/checklist-print': { access: 'authenticated', surface: 'print' },

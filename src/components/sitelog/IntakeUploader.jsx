@@ -179,7 +179,7 @@ export default function IntakeUploader({ fixedDate = null, onDrafted, compact = 
     <div className="space-y-3">
       {!compact && !fixedDate && (
         <p className="text-footnote text-[var(--text-2)]">
-          選好照片就會保存到伺服器並開始辨識；{org === 'contractor' ? '系統會依日期自動擬好施工日誌草稿，列出待補欄位。' : '監造照片會保存並辨識；監造日誌由系統擬稿（頁面尚未接上，先在現場文書清單看狀態），監造查驗表單起稿尚未支援，不會假裝完成。'}
+          選好照片就會保存到伺服器並開始辨識；{org === 'contractor' ? '系統會依日期自動擬好施工日誌草稿，列出待補欄位。' : '系統會依日期自動擬好監造日誌草稿（示範範本），到場人員需親自填寫確認；監造查驗表單起稿尚未支援，不會假裝完成。'}
           日期以告示板為準，沒有告示板時可在下方指定。
         </p>
       )}

@@ -1,14 +1,16 @@
-// 現場文書(P2c;D-026 第一條完整路徑)的純函式層:上傳批次狀態機、恢復、欄位來源狀態、
-// 施工日誌內容形狀、簽署／提送的錯誤碼分流、送件重試的 client_request_id。
+// 現場文書(P2c 施工日誌、P3a 監造日誌;D-026)的純函式層:上傳批次狀態機、恢復、欄位來源狀態、
+// 兩類日誌的內容形狀、簽署／提送的錯誤碼分流、送件重試的 client_request_id。
 // 全部確定性、無 IO、無 React——store slice 與頁面都吃這一份,vitest 直接測。
 //
-// 內容形狀與 Edge 起稿(supabase/functions/_shared/fieldDocDraft.ts buildDailyLogDraft)同一組鍵;
-// 必填鍵與待補判定鏡像 DB 的 fn_field_document_required_fields／fn_field_document_unmet_fields
-// (migration 20260917205000)——這裡只是「存檔前先讓人看到哪些還缺」的預覽,伺服器存版時會
-// 再算一次並寫回 field_documents.required_fields／recheck,以伺服器為準。
+// 內容形狀與 Edge 起稿(supabase/functions/_shared/fieldDocDraft.ts buildDailyLogDraft／buildSupervisorLogDraft)
+// 同一組鍵;必填鍵與待補判定鏡像 DB 的 fn_field_document_required_fields／fn_field_document_unmet_fields
+// (migration 20260917205000、20260917221000)——這裡只是「存檔前先讓人看到哪些還缺」的預覽,伺服器存版時會
+// 再算一次並寫回 field_documents.required_fields／recheck,以伺服器為準。監造日誌的必填鍵、人填欄與欄位名
+// 由伺服器範本 fn_field_document_template('supervisor_log') 推導(templateRequiredKeys 等),前端不另抄一份。
 //
-// 誠實原則(設計 §1.5):沒有來源的數量、天氣、出工一律 pending;人填了才 confirmed;
-// 「本日無」用 na＋reason,不得把空白填成「無」或 0。
+// 誠實原則(設計 §1.5):沒有來源的數量、天氣、出工、到場一律 pending;人填了才 confirmed;
+// 「本日無」用 na＋reason,不得把空白填成「無」或 0。人填欄(到場)人填了也只是 filled=待親自確認,
+// 明確按「確認」才 confirmed(鏡像 DB 的 needs_confirmation;任何照片都不是到場證明)。
 
 // ── 上傳批次:客戶端狀態機 ────────────────────────────────────────────────────
 // 每張照片在客戶端的狀態。「已保存」只有 saved 一種——照片列已寫進伺服器(photos);
@@ -160,6 +162,12 @@ export function sourceLabel(source) {
   if (s.startsWith('legacy:')) return '既有紀錄'
   if (s.startsWith('yesterday:')) return '沿用昨日'
   if (s.startsWith('shared:')) return '共用補值'
+  if (s.startsWith('inspection:')) return '查驗紀錄'
+  if (s.startsWith('field_document:')) return '同日施工日誌文件'
+  if (s === 'system:inspections') return '系統查驗紀錄'
+  if (s === 'system:defects') return '系統缺失紀錄'
+  if (s === 'system:defects,inspections') return '系統缺失／查驗紀錄'
+  if (s === 'system:field_documents') return '系統文件狀態'
   if (s === 'ai:photo') return '照片 AI 說明'
   if (s === 'ai:agent') return 'AI 草稿'
   if (s === 'cwa') return '氣象署'
@@ -171,30 +179,54 @@ export function sourceLabel(source) {
 // 施工日誌固定必填欄(與 DB fn_field_document_required_fields 同一組)
 export const DAILY_LOG_FIXED_REQUIRED = Object.freeze(['weather_am', 'weather_pm', 'work_summary', 'labor', 'equipment', 'materials'])
 export const DAILY_LOG_EXTRAS_KEYS = Object.freeze(['technicians', 'edu', 'insured', 'ppe', 'safety_other', 'sampling', 'notice', 'important'])
+// 欄位中文:施工日誌是公定格式(固定);監造日誌的欄位名以伺服器範本(fn_field_document_template)為準,
+// 這裡只放範本讀不到時(錯誤訊息、示範模式未載)的後備,fieldLabel 先查傳入的範本標籤再查這份。
 export const FIELD_LABEL = Object.freeze({
   log_date: '日期', weather_am: '天氣(上午)', weather_pm: '天氣(下午)', work_summary: '工作摘要',
   labor: '出工人數', equipment: '機具使用', materials: '材料使用',
   'extras.technicians': '應置技術士', 'extras.edu': '勤前教育', 'extras.insured': '新進勞工提報勞保', 'extras.ppe': '檢查個人防護具',
   'extras.safety_other': '其他安衛事項', 'extras.sampling': '施工取樣試驗紀錄', 'extras.notice': '通知協力廠商辦理事項', 'extras.important': '重要事項紀錄',
+  attendance: '到場人員與時段', supervision_items: '監造事項', inspection_ids: '當日查驗', contractor_summary: '施工情形摘要',
+  daily_log_receipt: '施工日誌收件情形', notices: '通知事項', followups: '追蹤事項', note: '備註', photos: '照片',
 })
 
-// 必填鍵=固定欄 ∪ 內容各工項的當日數量(鏡像 DB;stored 的工項鍵一律忽略、由內容重算)
-export function requiredKeysFor(content, stored = []) {
+// ── 範本(fn_field_document_template 的回傳;目前只有 supervisor_log 有範本)────────────────
+// 範本是伺服器單一定義:必填鍵、人填欄、欄位標籤與「示範範本」標記都從它推導,前端不另抄一份。
+export function templateFields(template) {
+  const out = []
+  for (const s of Array.isArray(template?.sections) ? template.sections : []) {
+    for (const f of Array.isArray(s?.fields) ? s.fields : []) if (f?.key) out.push({ ...f, section: s.key, sectionTitle: s.title })
+  }
+  return out
+}
+export const templateRequiredKeys = (template) => templateFields(template).filter((f) => f.required === true).map((f) => f.key).sort()
+export const templateHumanOnlyKeys = (template) => templateFields(template).filter((f) => f.human_only === true).map((f) => f.key).sort()
+export const templateFieldLabels = (template) => Object.fromEntries(templateFields(template).map((f) => [f.key, f.label]))
+
+// 必填鍵(鏡像 DB fn_field_document_required_fields):stored ∪ 類型固定欄 ∪ 施工日誌內容各工項的當日數量
+// (stored 的工項鍵一律忽略、由內容重算)。施工日誌固定六欄;其他類型取範本 required(沒範本只回 stored)。
+export function requiredKeysFor(content, stored = [], { docType = 'daily_log', template = null } = {}) {
   const keys = new Set()
   for (const k of Array.isArray(stored) ? stored : []) {
     if (typeof k === 'string' && k.trim() && !/^items\..+\.qty_today$/.test(k)) keys.add(k)
   }
-  for (const k of DAILY_LOG_FIXED_REQUIRED) keys.add(k)
-  for (const wid of Object.keys(content?.items || {})) keys.add(`items.${wid}.qty_today`)
+  if (docType === 'daily_log') {
+    for (const k of DAILY_LOG_FIXED_REQUIRED) keys.add(k)
+    for (const wid of Object.keys(content?.items || {})) keys.add(`items.${wid}.qty_today`)
+  } else {
+    for (const k of templateRequiredKeys(template)) keys.add(k)
+  }
   return [...keys].sort()
 }
 
-// 待補清單 [{key,status}](鏡像 DB fn_field_document_unmet_fields)
-export function unmetFields(required, sources) {
+// 待補清單 [{key,status}](鏡像 DB fn_field_document_unmet_fields):人填欄(範本 human_only,如監造日誌到場)
+// 只被標 filled 回 needs_confirmation——只有 confirmed 或 na＋reason 才算齊備。
+export function unmetFields(required, sources, humanOnlyKeys = []) {
   const out = []
   for (const k of required) {
     const src = sources?.[k]
     if (!src || typeof src !== 'object') { out.push({ key: k, status: 'missing' }); continue }
+    if (src.status === 'filled' && humanOnlyKeys.includes(k)) { out.push({ key: k, status: 'needs_confirmation' }); continue }
     if (src.status === 'filled' || src.status === 'confirmed') continue
     if (src.status === 'na') {
       if (String(src.reason || '').trim()) continue
@@ -206,7 +238,12 @@ export function unmetFields(required, sources) {
   return out
 }
 
-export function fieldLabel(key, content) {
+export const UNMET_STATUS_LABEL = Object.freeze({
+  missing: '待補', pending: '待補', na_without_reason: '不適用需填原因', needs_confirmation: '待親自確認', unknown_status: '狀態不明',
+})
+
+export function fieldLabel(key, content, labels = null) {
+  if (labels && labels[key]) return labels[key]
   if (FIELD_LABEL[key]) return FIELD_LABEL[key]
   const m = /^items\.([^.]+)\.(qty_today|location)$/.exec(key)
   if (m) {
@@ -322,6 +359,65 @@ export function contentToLogShape(content, { id = null, status = null } = {}) {
   }
 }
 
+// ── 監造日誌內容形狀(P3a;鍵與 Edge buildSupervisorLogDraft 同一組)────────────────────
+export const SUPERVISOR_LOG_LIST_KEYS = Object.freeze(['attendance', 'supervision_items', 'inspection_ids', 'notices', 'followups'])
+export const NOTICE_TO_OPTIONS = Object.freeze([{ value: 'contractor', label: '施工廠商' }, { value: 'owner', label: '機關' }])
+export const FOLLOWUP_STATUS_OPTIONS = Object.freeze([{ value: 'open', label: '追蹤中' }, { value: 'closed', label: '已結案' }])
+export function emptySupervisorLogContent(date, template = null) {
+  return {
+    log_date: date, weather_am: null, weather_pm: null,
+    attendance: [], supervision_items: [], inspection_ids: [], notices: [], followups: [],
+    contractor_summary: null, daily_log_receipt: null, note: null,
+    template: template?.key ? { key: template.key, version: template.version ?? 1 } : null,
+    photo_ids: [], unmatched_photo_ids: [],
+  }
+}
+// 新文件(沒有任何來源)的 field_sources:範本每個欄位都 pending,只有日期是人選的(confirmed)
+export function emptySupervisorLogSources(template) {
+  const sources = { log_date: { status: 'confirmed', source: 'human' } }
+  for (const f of templateFields(template)) if (f.key !== 'log_date') sources[f.key] = { status: 'pending', source: null }
+  return sources
+}
+// 到場列的合法性(鏡像 DB 簽署分支 PD010;只是 UX 預檢,伺服器仍會再驗):每筆須有姓名或成員 user_id,時段 HH:MM
+export function attendanceIssues(rows) {
+  const out = []
+  ;(Array.isArray(rows) ? rows : []).forEach((r, i) => {
+    if (!r || typeof r !== 'object') { out.push({ index: i, reason: '格式不正確' }); return }
+    if (!String(r.name || '').trim() && !r.user_id) out.push({ index: i, reason: '須有姓名' })
+    for (const k of ['from', 'to']) if (r[k] && !/^\d{2}:\d{2}$/.test(r[k])) out.push({ index: i, reason: `${k === 'from' ? '到場' : '離場'}時間須為 HH:MM` })
+  })
+  return out
+}
+// 同日施工日誌文件的現況(getFieldDocument 的回傳)→ Edge／共用組字模組吃的 FormalDailyLog 形狀
+export function formalDailyLogFromDetail(detail) {
+  if (!detail?.doc) return null
+  const ver = Number(detail.doc.current_version_no) || 0
+  const at = (action) => (detail.submissions || []).find((x) => x.action === action && Number(x.version_no) === ver)?.created_at ?? null
+  const sig = (detail.signatures || []).find((x) => Number(x.version_no) === ver)
+  return {
+    document_id: detail.doc.id, status: detail.doc.status, version_no: ver,
+    content: ver > 0 && detail.version?.version_no === ver ? (detail.version.content || null) : null,
+    signed_at: sig?.signed_at ?? null, submitted_at: at('submit'), received_at: at('receive'), returned_at: at('return'),
+  }
+}
+// 引用同日施工日誌(只在已簽署／提送／收件時):摘要標 filled/field_document:<id>:v<n>;收件情形一律更新快照
+export function applyFormalDailyLog(state, formal, wiById, { compose, isFormal, receipt, source }) {
+  let next = { content: { ...state.content, daily_log_receipt: receipt(formal) }, sources: { ...state.sources, daily_log_receipt: { status: 'filled', source: 'system:field_documents', ...(formal ? { refs: [formal.document_id] } : {}) } } }
+  if (!formal || !isFormal(formal)) return { state: next, applied: false }
+  const text = compose(formal, wiById)
+  if (!text) return { state: next, applied: false }
+  next = { content: { ...next.content, contractor_summary: text }, sources: { ...next.sources, contractor_summary: { status: 'filled', source: source(formal), reason: '引用同日已簽署施工日誌,待核對' } } }
+  return { state: next, applied: true }
+}
+// 通知／追蹤引用的單據名稱(顯示用;引用是否存在於本案由簽署 RPC 驗)
+export function refTitle(ref, lookups = {}) {
+  if (!ref?.ref_type || !ref?.ref_id) return null
+  const table = { inspection: lookups.inspections, defect: lookups.defects, rfi: lookups.rfis, submittal: lookups.submittals, field_document: lookups.documents, daily_log: lookups.siteLogs }[ref.ref_type]
+  const row = (table || []).find((r) => r.id === ref.ref_id)
+  const kind = { inspection: '查驗', defect: '缺失', rfi: '疑義', submittal: '送審', field_document: '文件', daily_log: '施工日誌' }[ref.ref_type] || ref.ref_type
+  return row ? `${kind}:${row.title || row.subject || row.log_date || row.id}` : `${kind}:${String(ref.ref_id).slice(0, 8)}`
+}
+
 // ── 人工編輯:每次改值同時改來源(值與來源永遠一起走,不會有「值變了、來源還說是 AI」)──
 const setPath = (obj, key, value) => {
   const m = /^items\.([^.]+)\.(qty_today|location|note)$/.exec(key)
@@ -349,13 +445,25 @@ export function confirmField({ content, sources }, key) {
   return { content, sources: { ...sources, [key]: { ...prev, status: 'confirmed' } } }
 }
 
-// 「本日無」:na＋reason(reason 空白不算,DB 判待補);清單型欄位同時清空值
+// 「本日無」:na＋reason(reason 空白不算,DB 判待補);清單型欄位同時清空、文字欄清成 null
+// (DB 簽署時到場 na 而陣列非空、廠商未施工卻留著摘要都是矛盾,值與來源必須一起走)
 export function setFieldNa({ content, sources }, key, reason) {
   const r = String(reason || '').trim()
-  const isList = ['labor', 'equipment', 'materials'].includes(key)
+  const cur = content?.[key]
+  const cleared = Array.isArray(cur) ? setPath(content, key, []) : typeof cur === 'string' ? setPath(content, key, null) : content
   return {
-    content: isList ? setPath(content, key, []) : content,
+    content: cleared,
     sources: { ...sources, [key]: { status: 'na', source: null, reason: r || undefined } },
+  }
+}
+
+// 人填欄(範本 human_only;監造日誌到場):人填了也只是 filled=待親自確認,不會像一般欄位改值即 confirmed;
+// 之後按「確認」(confirmField)才 confirmed;確認後再改,回到待確認。空清單=pending(不假裝有到場)。
+export function fillHumanField({ content, sources }, key, value) {
+  const empty = Array.isArray(value) ? value.length === 0 : value == null || value === ''
+  return {
+    content: setPath(content, key, value),
+    sources: { ...sources, [key]: empty ? { status: 'pending', source: null } : { status: 'filled', source: 'human' } },
   }
 }
 
@@ -394,8 +502,10 @@ export function applySuggestion(state, suggestion) {
     sources = { ...sources, [key]: { ...sug[key] } }
     applied.push(key)
   }
-  for (const k of ['weather_am', 'weather_pm', 'work_summary', 'labor', 'equipment', 'materials']) {
-    if (suggestion.content[k] != null) take(k, suggestion.content[k])
+  // 頂層欄位逐鍵(兩類日誌共用);日期／範本／照片清單不是欄位,items／extras 另處理
+  for (const [k, v] of Object.entries(suggestion.content)) {
+    if (['log_date', 'template', 'items', 'extras', 'photo_ids', 'unmatched_photo_ids'].includes(k)) continue
+    if (v != null) take(k, v)
   }
   for (const [k, v] of Object.entries(suggestion.content.extras || {})) take(`extras.${k}`, v)
   for (const [wid, it] of Object.entries(suggestion.content.items || {})) {
@@ -430,40 +540,48 @@ export function attachmentIssues(recheck = []) {
     if (!m) continue
     const st = String(r.status || '')
     const label = st.startsWith('uploader_org:')
-      ? `${st.slice('uploader_org:'.length) === 'supervisor' ? '監造' : '他方'}上傳的照片,只能以「參考」附上`
+      ? `${ORG_LABEL[st.slice('uploader_org:'.length)] || '他方'}上傳的照片,只能以「參考」附上`
       : (ATTACHMENT_ISSUE_LABEL[st] || st)
     out.set(m[1], label)
   }
   return out
 }
 
-// ── 文件狀態文案(依觀看者角色) ──────────────────────────────────────────────
+// ── 文件狀態文案(依觀看者角色與文書類型) ─────────────────────────────────────
 export const DOC_STATUS_LABEL = Object.freeze({
   draft: '草稿', pending_input: '待補件', in_review: '內部核對中', signed: '已簽署', submitted: '已提送',
   received: '對方已收件', returned: '已退回', discarded: '已捨棄', superseded: '已取代',
 })
+// 提送對象(P2d 對象矩陣,鏡像 DB fn_field_document_to_org_allowed):施工日誌／自檢→監造、監造日誌→機關、查驗表單→廠商
+export const TO_ORG_BY_DOC_TYPE = Object.freeze({ daily_log: 'supervisor', self_check: 'supervisor', supervisor_log: 'owner', inspection_form: 'contractor' })
+export const ORG_LABEL = Object.freeze({ contractor: '施工廠商', supervisor: '監造', owner: '機關' })
+export const docToOrg = (doc) => TO_ORG_BY_DOC_TYPE[doc?.doc_type] || null
+export const docToOrgLabel = (doc) => ORG_LABEL[docToOrg(doc)] || '對方'
+// 文件頁路由(接上頁面的類型才有;其餘在 /site 清單只列狀態並標尚未支援)
+export const DOC_PAGE_PATH = Object.freeze({ daily_log: '/site-log', supervisor_log: '/supervisor-log' })
+export const docPagePath = (docType) => DOC_PAGE_PATH[docType] || null
+export const docPageLink = (doc) => (docPagePath(doc?.doc_type) && doc?.id ? `${docPagePath(doc.doc_type)}?doc=${encodeURIComponent(doc.id)}` : null)
+
 export function docStatusMeta(doc, viewerOrg) {
   const s = doc?.status
   const owner = doc?.owner_org
   const mine = owner === viewerOrg
+  const to = docToOrg(doc)
+  const toLabel = docToOrgLabel(doc)
   const pendingCount = Array.isArray(doc?.recheck) ? doc.recheck.length : 0
   switch (s) {
     case 'pending_input': return { label: `待補 ${pendingCount || ''}`.trim(), tone: 'amber', action: mine ? '補齊後簽署' : null }
     case 'draft': return { label: '草稿・可簽署', tone: 'blue', action: mine ? '審核後簽署' : null }
     case 'in_review': return { label: '內部核對中', tone: 'blue', action: mine ? '核對後簽署' : null }
-    case 'signed': return { label: '已簽署・待提送', tone: 'green', action: mine ? '提送給監造' : null }
-    case 'submitted': return { label: '已提送・待收件', tone: 'blue', action: !mine && viewerOrg === 'supervisor' ? '收件或退回' : null }
-    case 'received': return { label: '監造已收件', tone: 'green', action: null }
+    case 'signed': return { label: '已簽署・待提送', tone: 'green', action: mine ? `提送給${toLabel}` : null }
+    case 'submitted': return { label: '已提送・待收件', tone: 'blue', action: !mine && viewerOrg === to ? '收件或退回' : null }
+    case 'received': return { label: `${toLabel}已收件`, tone: 'green', action: null }
     case 'returned': return { label: '已退回', tone: 'red', action: mine ? '補正後重新簽署' : null }
     case 'discarded': return { label: '已捨棄', tone: 'slate', action: null }
     case 'superseded': return { label: '已取代', tone: 'slate', action: null }
     default: return { label: s || '—', tone: 'slate', action: null }
   }
 }
-
-// 提送對象(P2d 對象矩陣):施工日誌只能送監造
-export const TO_ORG_BY_DOC_TYPE = Object.freeze({ daily_log: 'supervisor', self_check: 'supervisor', supervisor_log: 'owner', inspection_form: 'contractor' })
-export const ORG_LABEL = Object.freeze({ contractor: '施工廠商', supervisor: '監造', owner: '機關' })
 
 export const formatHash = (h) => (h ? String(h).slice(0, 12) : '—')
 
@@ -526,7 +644,7 @@ export async function sha256Hex(blob) {
 }
 
 // 版本之間頂層鍵的差異(退回再送的 diff 由 DB 算;這裡只給人看的預覽)
-export function changedKeysLabel(diff, content) {
+export function changedKeysLabel(diff, content, labels = null) {
   const keys = Array.isArray(diff?.changed_keys) ? diff.changed_keys : []
-  return keys.map((k) => fieldLabel(k, content))
+  return keys.map((k) => fieldLabel(k, content, labels))
 }

@@ -26,6 +26,7 @@ import { formatDate, parseDateUTC, taipeiTodayUTC } from './contractDue.ts'
 import { stableStringify } from './agent.ts'
 import { matchLeaf } from './photoMatch.ts'
 import { FIELD_DOC_TYPE_LABELS } from './ballInCourtRules.ts'
+import { FORMAL_DAILY_LOG_STATUSES, composeContractorSummary, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.ts'
 import type { SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
 
 export const DAY_MS = 86400000
@@ -554,7 +555,6 @@ export function buildDailyLogDraft(input: DailyLogDraftInput): DailyLogDraft {
 // 必填鍵鏡像該範本的 required(DB 存版與簽署時會重算並聯集,以 DB 為準),到場欄鏡像 human_only。
 export const SUPERVISOR_LOG_TEMPLATE = { key: 'supervisor_log_demo', version: 1 } as const
 export const SUPERVISOR_LOG_REQUIRED_KEYS = ['log_date', 'weather_am', 'weather_pm', 'attendance', 'supervision_items', 'contractor_summary'] as const
-const FORMAL_DAILY_LOG_STATUSES = new Set(['signed', 'submitted', 'received'])
 
 export type DayInspection = {
   id: string
@@ -645,8 +645,8 @@ export function buildSupervisorLogDraft(input: SupervisorLogDraftInput): Supervi
   sources.attendance = { status: 'pending', source: null, reason: '到場人員與時段只能由監造親自填寫並確認;系統不從任何照片推定到場' }
   recheck.push({ key: 'attendance', reason: '到場人員與時段請親自填寫確認(本日未到場請標不適用並填原因)' })
 
-  const formal = dailyLog && FORMAL_DAILY_LOG_STATUSES.has(dailyLog.status) ? dailyLog : null
-  const formalSource = formal ? `field_document:${formal.document_id}:v${formal.version_no}` : null
+  const formal = dailyLog && FORMAL_DAILY_LOG_STATUSES.includes(dailyLog.status) ? dailyLog : null
+  const formalSource = formal ? formalDailyLogSource(formal) : null
 
   // 天氣:同日已簽署／提送的施工日誌 > 中央氣象署 > pending
   const pickWeather = (key: 'weather_am' | 'weather_pm'): string | null => {
@@ -756,18 +756,9 @@ export function buildSupervisorLogDraft(input: SupervisorLogDraftInput): Supervi
   // 廠商施工情形:只引用同日已簽署／已提送的施工日誌文件;否則 pending(不猜)
   let contractorSummary: string | null = null
   if (formal) {
-    const summary = textOrNull(formal.content?.work_summary)
-    const itemsObj = formal.content?.items && typeof formal.content.items === 'object' ? formal.content.items as Record<string, { qty_today?: unknown; unit?: unknown; description?: unknown; item_no?: unknown }> : {}
-    const qtyParts = Object.entries(itemsObj)
-      .filter(([, v]) => v && typeof v === 'object' && typeof v.qty_today === 'number')
-      .map(([id, v]) => {
-        const wi = wiById.get(id)
-        const name = wi ? label(wi) : [textOrNull(v.item_no), textOrNull(v.description)].filter(Boolean).join(' ') || id
-        return `${name} ${v.qty_today}${textOrNull(v.unit) ?? wi?.unit ?? ''}`
-      })
-    const text = [summary, qtyParts.length ? `數量:${qtyParts.join('、')}` : null].filter(Boolean).join(';')
+    const text = composeContractorSummary(formal, wiById)
     if (text) {
-      contractorSummary = `${text}(依廠商施工日誌 v${formal.version_no})`
+      contractorSummary = text
       sources.contractor_summary = { status: 'filled', source: formalSource!, reason: '引用同日已簽署施工日誌,待核對' }
     } else {
       sources.contractor_summary = { status: 'pending', source: formalSource, reason: '同日施工日誌已簽署但無施工概況與數量' }
@@ -782,10 +773,7 @@ export function buildSupervisorLogDraft(input: SupervisorLogDraftInput): Supervi
     sources.contractor_summary = { status: 'pending', source: null, reason }
     recheck.push({ key: 'contractor_summary', reason })
   }
-  const receipt: Record<string, unknown> = dailyLog
-    ? { document_id: dailyLog.document_id, version_no: dailyLog.version_no, status: dailyLog.status,
-        signed_at: dailyLog.signed_at, submitted_at: dailyLog.submitted_at, received_at: dailyLog.received_at, returned_at: dailyLog.returned_at }
-    : { status: 'none' }
+  const receipt = dailyLogReceipt(dailyLog)
   sources.daily_log_receipt = { status: 'filled', source: 'system:field_documents', ...(dailyLog ? { refs: [dailyLog.document_id] } : {}) }
 
   const unmatchedIds = unmatched.map((p) => p.id)

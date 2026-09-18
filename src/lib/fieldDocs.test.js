@@ -8,7 +8,12 @@ import {
   emptyDailyLogContent, emptyDailyLogSources, contentFromLegacyLog, contentFromAgentDraft, contentToLogShape,
   setFieldValue, confirmField, setFieldNa, addItemRow, removeItemRow, applySuggestion, mergeAttachments, attachmentIssues,
   docStatusMeta, signIntentText, submissionRequestId, clearSubmissionRequestId, fieldDocErrorGuidance,
+  templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateFieldLabels, UNMET_STATUS_LABEL,
+  emptySupervisorLogContent, emptySupervisorLogSources, fillHumanField, attendanceIssues, formalDailyLogFromDetail, applyFormalDailyLog, refTitle,
+  docPagePath, docPageLink, docToOrg,
 } from './fieldDocs.js'
+import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
+import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.js'
 
 const files = [{ key: 'a', name: 'a.jpg', size: 10 }, { key: 'b', name: 'b.jpg', size: 20 }, { key: 'c', name: 'c.jpg', size: 30 }]
 const run = (actions) => actions.reduce(uploadReducer, initialUploadState())
@@ -213,12 +218,27 @@ describe('人工編輯:值與來源一起走', () => {
 })
 
 describe('文件狀態、簽署意願、送件冪等、錯誤碼', () => {
-  it('狀態文案依觀看者:廠商看自己的文件有動作,監造只在已提送時有收件動作', () => {
-    expect(docStatusMeta({ status: 'pending_input', owner_org: 'contractor', recheck: [{ key: 'labor' }] }, 'contractor')).toMatchObject({ label: '待補 1', action: '補齊後簽署' })
-    expect(docStatusMeta({ status: 'signed', owner_org: 'contractor' }, 'contractor').action).toBe('提送給監造')
-    expect(docStatusMeta({ status: 'submitted', owner_org: 'contractor' }, 'supervisor').action).toBe('收件或退回')
-    expect(docStatusMeta({ status: 'submitted', owner_org: 'contractor' }, 'contractor').action).toBeNull()
-    expect(docStatusMeta({ status: 'returned', owner_org: 'contractor' }, 'contractor')).toMatchObject({ tone: 'red', action: '補正後重新簽署' })
+  it('狀態文案依觀看者與文書類型:責任方有動作,提送對象只在已提送時有收件動作;施工日誌送監造、監造日誌送機關', () => {
+    const dl = (over) => ({ doc_type: 'daily_log', owner_org: 'contractor', ...over })
+    const sl = (over) => ({ doc_type: 'supervisor_log', owner_org: 'supervisor', ...over })
+    expect(docStatusMeta(dl({ status: 'pending_input', recheck: [{ key: 'labor' }] }), 'contractor')).toMatchObject({ label: '待補 1', action: '補齊後簽署' })
+    expect(docStatusMeta(dl({ status: 'signed' }), 'contractor').action).toBe('提送給監造')
+    expect(docStatusMeta(dl({ status: 'submitted' }), 'supervisor').action).toBe('收件或退回')
+    expect(docStatusMeta(dl({ status: 'submitted' }), 'contractor').action).toBeNull()
+    expect(docStatusMeta(dl({ status: 'received' }), 'contractor').label).toBe('監造已收件')
+    expect(docStatusMeta(dl({ status: 'returned' }), 'contractor')).toMatchObject({ tone: 'red', action: '補正後重新簽署' })
+    // 監造日誌:責任方監造、提送對象機關;廠商(可讀)沒有任何動作、機關在已提送時才有收件
+    expect(docStatusMeta(sl({ status: 'signed' }), 'supervisor').action).toBe('提送給機關')
+    expect(docStatusMeta(sl({ status: 'submitted' }), 'owner').action).toBe('收件或退回')
+    expect(docStatusMeta(sl({ status: 'submitted' }), 'supervisor').action).toBeNull()
+    expect(docStatusMeta(sl({ status: 'submitted' }), 'contractor').action).toBeNull()
+    expect(docStatusMeta(sl({ status: 'received' }), 'contractor').label).toBe('機關已收件')
+    expect(docToOrg(sl({}))).toBe('owner')
+    expect(docPagePath('daily_log')).toBe('/site-log')
+    expect(docPagePath('supervisor_log')).toBe('/supervisor-log')
+    expect(docPagePath('self_check')).toBeNull()
+    expect(docPageLink({ doc_type: 'supervisor_log', id: 'D 1' })).toBe('/supervisor-log?doc=D%201')
+    expect(docPageLink({ doc_type: 'inspection_form', id: 'X' })).toBeNull()
   })
   it('簽署意願文字含日期、版本與雜湊前 12 碼', () => {
     expect(signIntentText({ docDate: '2026-09-17', versionNo: 2, contentHash: 'abcdef0123456789ff' })).toBe(
@@ -247,5 +267,120 @@ describe('文件狀態、簽署意願、送件冪等、錯誤碼', () => {
     expect(fieldDocErrorGuidance({ code: 'PD009', message: 'id 衝突' }).kind).toBe('request_id')
     expect(fieldDocErrorGuidance({ code: 'PD008', message: '狀態' }).kind).toBe('state')
     expect(fieldDocErrorGuidance({ code: '42501', message: 'permission denied' }).kind).toBe('unknown')
+  })
+})
+
+// ── 監造日誌(P3a 前端):範本推導、到場確認閘門、引用施工日誌、來源 ────────────────────
+describe('監造日誌:範本推導與到場確認閘門(鏡像 DB 範本與 needs_confirmation)', () => {
+  const tpl = demoFieldDocumentTemplate('supervisor_log')
+  it('範本標記與推導:示範範本／免責聲明;必填鍵與人填欄由範本 required／human_only 推導;施工日誌沒有範本', () => {
+    expect(tpl).toMatchObject({ key: 'supervisor_log_demo', version: 1, is_demo: true, demo_label: '示範範本' })
+    expect(tpl.disclaimer).toContain('非任何機關公定或法定格式')
+    expect(templateRequiredKeys(tpl)).toEqual(['attendance', 'contractor_summary', 'log_date', 'supervision_items', 'weather_am', 'weather_pm'])
+    expect(templateHumanOnlyKeys(tpl)).toEqual(['attendance'])
+    expect(templateFieldLabels(tpl)).toMatchObject({ attendance: '到場人員與時段', notices: '通知事項' })
+    expect(templateFields(tpl).find((f) => f.key === 'note')).toMatchObject({ section: 'note', sectionTitle: '八、備註' })
+    expect(demoFieldDocumentTemplate('daily_log')).toBeNull()
+    expect(templateRequiredKeys(null)).toEqual([])
+    expect(fieldLabel('attendance', null, templateFieldLabels(tpl))).toBe('到場人員與時段')
+    expect(fieldLabel('attendance')).toBe('到場人員與時段') // 範本讀不到時的後備
+  })
+  it('必填鍵依類型:監造日誌=stored ∪ 範本必填(不帶施工日誌固定欄與工項數量);施工日誌不變', () => {
+    const content = { ...emptySupervisorLogContent('2026-09-17', tpl), items: { w1: {} } }
+    expect(requiredKeysFor(content, ['photos'], { docType: 'supervisor_log', template: tpl })).toEqual(['attendance', 'contractor_summary', 'log_date', 'photos', 'supervision_items', 'weather_am', 'weather_pm'])
+    expect(requiredKeysFor(content, [], { docType: 'supervisor_log', template: null })).toEqual([])
+    expect(requiredKeysFor({ items: { w1: {} } }, [])).toEqual(['equipment', 'items.w1.qty_today', 'labor', 'materials', 'weather_am', 'weather_pm', 'work_summary'])
+  })
+  it('新文件:範本鍵入內容、其餘全 pending,日期是人選的;到場人填了只是「待親自確認」,確認後才齊備,再改又回待確認;本日未到場=na＋原因且清空', () => {
+    const content = emptySupervisorLogContent('2026-09-17', tpl)
+    expect(content).toMatchObject({ log_date: '2026-09-17', template: { key: 'supervisor_log_demo', version: 1 }, attendance: [], supervision_items: [], contractor_summary: null })
+    const sources = emptySupervisorLogSources(tpl)
+    expect(sources.log_date).toEqual({ status: 'confirmed', source: 'human' })
+    expect(sources.attendance).toEqual({ status: 'pending', source: null })
+    const required = requiredKeysFor(content, [], { docType: 'supervisor_log', template: tpl })
+    const human = templateHumanOnlyKeys(tpl)
+    expect(unmetFields(required, sources, human).map((u) => u.key)).toEqual(['attendance', 'contractor_summary', 'supervision_items', 'weather_am', 'weather_pm'])
+    let s = fillHumanField({ content, sources }, 'attendance', [{ name: '王監造', from: '09:00', to: '12:00' }])
+    expect(s.sources.attendance).toEqual({ status: 'filled', source: 'human' })
+    expect(unmetFields(required, s.sources, human)).toContainEqual({ key: 'attendance', status: 'needs_confirmation' })
+    expect(UNMET_STATUS_LABEL.needs_confirmation).toBe('待親自確認')
+    s = confirmField(s, 'attendance')
+    expect(s.sources.attendance).toEqual({ status: 'confirmed', source: 'human' })
+    expect(unmetFields(required, s.sources, human).some((u) => u.key === 'attendance')).toBe(false)
+    s = fillHumanField(s, 'attendance', [...s.content.attendance, { name: '李監造' }])
+    expect(s.sources.attendance.status).toBe('filled') // 確認後再改=回到待確認
+    s = fillHumanField(s, 'attendance', [])
+    expect(s.sources.attendance).toEqual({ status: 'pending', source: null }) // 清空=沒有到場資料,不是「已填」
+    s = setFieldNa(s, 'attendance', '本日未到場,例假日')
+    expect(s.content.attendance).toEqual([])
+    expect(s.sources.attendance).toEqual({ status: 'na', source: null, reason: '本日未到場,例假日' })
+    expect(unmetFields(required, s.sources, human).some((u) => u.key === 'attendance')).toBe(false)
+    // 一般欄位(非人填欄)照舊:改值即 confirmed;文字欄標不適用會清成 null
+    s = setFieldValue(s, 'contractor_summary', '廠商今日澆置')
+    expect(s.sources.contractor_summary).toEqual({ status: 'confirmed', source: 'human' })
+    s = setFieldNa(s, 'contractor_summary', '廠商本日未施工')
+    expect(s.content.contractor_summary).toBeNull()
+    // 到場列預檢鏡像 DB PD010
+    expect(attendanceIssues([{ name: '王' }, { user_id: 'u1' }, { name: '', from: '9:00' }, 'x'])).toEqual([
+      { index: 2, reason: '須有姓名' }, { index: 2, reason: '到場時間須為 HH:MM' }, { index: 3, reason: '格式不正確' },
+    ])
+  })
+  it('引用同日施工日誌:只在已簽署／提送／收件時帶入摘要並標 field_document 來源;草稿只更新收件情形;組字與 Edge 同一支', () => {
+    const wi = new Map([['w1', { item_no: '壹.一.3', description: '結構用混凝土', unit: 'M3' }]])
+    const detail = {
+      doc: { id: 'dl1', status: 'signed', current_version_no: 3 },
+      version: { version_no: 3, content: { work_summary: '3F 版牆混凝土澆置', items: { w1: { qty_today: 12, unit: 'M3' }, w2: { qty_today: null } } } },
+      signatures: [{ version_no: 3, signed_at: '2026-09-17T09:00:00Z' }],
+      submissions: [{ action: 'submit', version_no: 3, created_at: '2026-09-17T09:30:00Z' }, { action: 'return', version_no: 2, created_at: '2026-09-16T09:30:00Z' }],
+    }
+    const formal = formalDailyLogFromDetail(detail)
+    expect(formal).toEqual({ document_id: 'dl1', status: 'signed', version_no: 3, content: detail.version.content, signed_at: '2026-09-17T09:00:00Z', submitted_at: '2026-09-17T09:30:00Z', received_at: null, returned_at: null })
+    expect(isFormalDailyLog(formal)).toBe(true)
+    expect(composeContractorSummary(formal, wi)).toBe('3F 版牆混凝土澆置;數量:壹.一.3 結構用混凝土 12M3(依廠商施工日誌 v3)')
+    expect(formalDailyLogSource(formal)).toBe('field_document:dl1:v3')
+    const base = { content: emptySupervisorLogContent('2026-09-17', tpl), sources: emptySupervisorLogSources(tpl) }
+    const helpers = { compose: composeContractorSummary, isFormal: isFormalDailyLog, receipt: dailyLogReceipt, source: formalDailyLogSource }
+    const r = applyFormalDailyLog(base, formal, wi, helpers)
+    expect(r.applied).toBe(true)
+    expect(r.state.content.contractor_summary).toContain('依廠商施工日誌 v3')
+    expect(r.state.sources.contractor_summary).toMatchObject({ status: 'filled', source: 'field_document:dl1:v3' })
+    expect(r.state.content.daily_log_receipt).toMatchObject({ document_id: 'dl1', version_no: 3, status: 'signed' })
+    expect(r.state.sources.daily_log_receipt).toMatchObject({ status: 'filled', source: 'system:field_documents', refs: ['dl1'] })
+    // 草稿中的施工日誌:不引用摘要(仍 pending),收件情形照實記錄現況
+    const draft = formalDailyLogFromDetail({ ...detail, doc: { ...detail.doc, status: 'pending_input' }, signatures: [] })
+    const r2 = applyFormalDailyLog(base, draft, wi, helpers)
+    expect(r2.applied).toBe(false)
+    expect(r2.state.sources.contractor_summary.status).toBe('pending')
+    expect(r2.state.content.daily_log_receipt).toMatchObject({ status: 'pending_input' })
+    // 沒有施工日誌:收件情形=none
+    expect(applyFormalDailyLog(base, null, wi, helpers).state.content.daily_log_receipt).toEqual({ status: 'none' })
+    expect(formalDailyLogFromDetail(null)).toBeNull()
+  })
+  it('來源短句與引用名稱:查驗／系統紀錄／同日施工日誌文件;引用找得到用標題,找不到只給短碼', () => {
+    expect(sourceLabel('inspection:i1')).toBe('查驗紀錄')
+    expect(sourceLabel('field_document:d1:v2')).toBe('同日施工日誌文件')
+    expect(sourceLabel('system:inspections')).toBe('系統查驗紀錄')
+    expect(sourceLabel('system:defects,inspections')).toBe('系統缺失／查驗紀錄')
+    expect(sourceLabel('system:field_documents')).toBe('系統文件狀態')
+    const lookups = { inspections: [{ id: 'i1', title: '4F 模板查驗' }], defects: [{ id: 'd1', title: '柱箍筋間距過大' }] }
+    expect(refTitle({ ref_type: 'inspection', ref_id: 'i1' }, lookups)).toBe('查驗:4F 模板查驗')
+    expect(refTitle({ ref_type: 'defect', ref_id: 'd1' }, lookups)).toBe('缺失:柱箍筋間距過大')
+    expect(refTitle({ ref_type: 'defect', ref_id: 'zzzzzzzz-0000' }, lookups)).toBe('缺失:zzzzzzzz')
+    expect(refTitle({ ref_type: null, ref_id: null }, lookups)).toBeNull()
+  })
+  it('AI 建議對監造日誌也只補 pending 欄:到場永遠不會被建議帶入(建議本身 pending);附件問題依上傳方標示', () => {
+    const base = { content: emptySupervisorLogContent('2026-09-17', tpl), sources: emptySupervisorLogSources(tpl) }
+    const suggestion = {
+      content: { weather_am: '晴', attendance: [{ name: 'AI 猜的' }], supervision_items: [{ item: '抽查', source: 'ai:photo', photo_ids: ['p1'] }], notices: [], photo_ids: ['p1'], template: { key: 'supervisor_log_demo', version: 1 } },
+      field_sources: { weather_am: { status: 'filled', source: 'cwa' }, attendance: { status: 'pending', source: null }, supervision_items: { status: 'filled', source: 'ai:photo' }, notices: { status: 'pending' } },
+    }
+    const { state, applied } = applySuggestion(base, suggestion)
+    expect(applied).toEqual(['weather_am', 'supervision_items'])
+    expect(state.content.attendance).toEqual([])
+    expect(state.sources.attendance).toEqual({ status: 'pending', source: null })
+    expect(state.content.supervision_items).toHaveLength(1)
+    expect(state.content.photo_ids).toEqual(['p1'])
+    const m = attachmentIssues([{ key: 'attachments.p1', status: 'uploader_org:contractor' }])
+    expect(m.get('p1')).toBe('施工廠商上傳的照片,只能以「參考」附上')
   })
 })
