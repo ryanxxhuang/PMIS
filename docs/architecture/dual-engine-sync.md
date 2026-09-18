@@ -9,7 +9,7 @@
 | 1 | 自主檢查表量化判定 | Demo 與真實前端都呼叫 `src/lib/qc.js` `judgeChecklist` | DB 保存前端送入的 `results/overall`；`checklist_records_guard` 只保護修訂鏈，不重算判定 | ✅ 前端共用同一純函式；伺服器沒有第二份判定實作 |
 | 2 | 試體 28 天抗壓判定+自動開缺失 | `src/lib/qc.js` `deriveTestSampleUpdate`／`shouldCreateTestSampleDefect` + `quality.js` demo 分支 | `judge_test_sample`／`test_sample_defect` trigger(`20260712001600_evidence_guards.sql`) | W5-4 已用 Vitest＋整合回歸釘住「同步判定、保存 `test_sample_id`、不重複開」；0.85fc′／平均門檻仍人工同步 |
 | 3 | 檢查表修訂鏈 rev/root_id | `quality.js createChecklistRecord` demo 分支本地計算 | DB guard 依鏈計算(前端真專案不算,寫入後 reload 取回) | 無自動保證,**人工同步** |
-| 4 | 契約義務到期日計算 | `src/lib/contractDue.js`(單次:基準日＋偏移;循環:讀 `ob.periods` 最早未結一期) | `supabase/functions/_shared/contractDue.ts`(同);循環期次本身由 DB `fn_obligation_period_schedule`＋materialize 確定性產生(P5b,`20260917233000`),兩側都不再從「今天」推算下一期 | ✅ `contractDue.test.ts` 與前端**同一組測試案例**對齊;期次規則(月末夾住／閏年／跨年／季／年／週／日)由 pgTAP `obligation_periods.sql` 釘住,前端／Edge 只讀 |
+| 4 | 契約義務到期日計算 | `src/lib/contractDue.js`(單次:基準日＋偏移;已完成單次:讀 DB 留的 `due_date_snapshot`;循環:讀 `ob.periods` 最早未結一期) | `supabase/functions/_shared/contractDue.ts`(同);DB 端 `fn_obligation_single_due` 同一條規則供完成時留快照(P5c,`20260919021500`);循環期次本身由 DB `fn_obligation_period_schedule`＋materialize 確定性產生(P5b,`20260917233000`),兩側都不再從「今天」推算下一期 | ✅ `contractDue.test.ts` 與前端**同一組測試案例**對齊;快照優先與期次依據句由共用案例三側釘住;期次規則(月末夾住／閏年／跨年／季／年／週／日)、單次到期規則與停止條件由 pgTAP `obligation_periods.sql`／`project_anchor_versions.sql` 釘住,前端／Edge 只讀 |
 | 5 | 今日工作／提醒彙整規則 | `src/lib/todayTasks.js`(W8-2B 起;Dashboard 與 `Alerts.jsx` 共用同一支,前端只有這一份);單筆球權判定 P5a 起直接 import `_shared/ballInCourtRules.ts` | `_shared/ballInCourt.ts` 的 `collectOpenBallItems`(`list_my_open_items` 工具與 `send-reminders` 早報共用),判定同樣 import `ballInCourtRules.ts` | ✅ **單一實作**＋共用案例 `tests/fixtures/ball-in-court.cases.json`(Vitest 前端路徑／Edge 路徑與 Deno 三側同讀);剩餘呼叫端差異只有 `obligationSoonDays`(首頁／早報 7、Agent 工具 0),見下方 |
 | 6 | 預定進度 smoothstep S 曲線 | `billing.js generateSchedule` | —(demoSeed.js 複製同公式產 demo 資料) | 無自動保證,**人工同步** |
 | 7 | 角色權限矩陣(can) | `store.jsx` 的 `can` useMemo | RLS 分角色 policy + guard triggers + `admin_override()`(formal_mode) | E2E 蓋部分(路由守衛/核定流);矩陣全表靠 pgTAP |
@@ -36,7 +36,9 @@ P5a 已消除的差異：單筆球權涵蓋類型（兩側同一支 `ballInCourt
 
 首頁、Agent 工具與早報對同一測試資料產出相同核心事項、責任與期限（共用案例三側斷言）。改任一側前先改案例。
 
-2026-09-17 P5b 起循環義務逐期：期次實例在 DB `obligation_periods`（依規則＋基準日確定性物化，冪等、只補不改；觸發＝義務插入／規則變更／廢止 trigger、`projects` 基準日變更 trigger、每日 pg_cron `pmis-obligation-periods`＋成員／service 可呼叫的冪等 RPC），前端與 Edge 以 embed 讀 `ob.periods`，共用規則 `obligationEntries` 對每個未結期次各出一顆球（舊逾期保留、完成本期不動下期），期次狀態只經 RPC `transition_obligation_period`（歸屬規則同義務；退回待辦解除證據）。義務本身自此不可再標已提送／已完成（guard），期次才是完成的單位；逐期準時率可由 `periodRows` 的每期 `onTime` 算（P5d 呈現）。基準日變更只補缺的期、不重算既有期，重算與差異紀錄是 P5c。
+2026-09-17 P5b 起循環義務逐期：期次實例在 DB `obligation_periods`（依規則＋基準日確定性物化，冪等、只補不改；觸發＝義務插入／規則變更／廢止 trigger、`projects` 基準日變更 trigger、每日 pg_cron `pmis-obligation-periods`＋成員／service 可呼叫的冪等 RPC），前端與 Edge 以 embed 讀 `ob.periods`，共用規則 `obligationEntries` 對每個未結期次各出一顆球（舊逾期保留、完成本期不動下期），期次狀態只經 RPC `transition_obligation_period`（歸屬規則同義務；退回待辦解除證據）。義務本身自此不可再標已提送／已完成（guard），期次才是完成的單位；逐期準時率可由 `periodRows` 的每期 `onTime` 算（P5d 呈現）。
+
+2026-09-19 P5c 起基準日版本：`projects` 基準日變更由 trigger 留版（`project_anchor_versions`，append-only）並在同交易重算受影響的循環義務——只動沒動過的待辦期（移除／新增／蓋新版號），已提送／已完成／掛證據的期保留原到期日與依據，差異寫進該版 `effects`；單次義務完成時留 `due_date_snapshot`，前端／Edge 的 `contractDue` 優先讀它。循環停止條件由 DB 決定產生到哪一期（實際竣工日 confirm／report 優先、否則契約竣工日；保固類不產生），前端／Edge 只以共用 `recurrenceStopGap`＋`completionDateOf`（`anchors.completion_date` 由驗收事件推得）把缺口說出來，不各自決定期次。前端改基準日只走 RPC `update_project_anchors`（附類別／依據／生效日）。
 
 ## 相關設計決策:切案清空與載入的 effect 順序(W-03)
 

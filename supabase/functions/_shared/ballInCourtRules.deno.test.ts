@@ -5,7 +5,7 @@
 // 執行:npm run test:edge。只用 node:assert 與 JSON import,不需要 lockfile 之外的依賴。
 import assert from 'node:assert/strict'
 import cases from '../../../tests/fixtures/ball-in-court.cases.json' with { type: 'json' }
-import { coreOpenItems, obligationEntries, obligationInWindow, periodTitle } from './ballInCourtRules.ts'
+import { coreOpenItems, obligationEntries, obligationInWindow, periodTitle, periodBasisLabel } from './ballInCourtRules.ts'
 import { computeObligationDueUTC, formatDate } from './contractDue.ts'
 
 const ORGS = ['contractor', 'supervisor', 'owner'] as const
@@ -23,14 +23,28 @@ const computeDueIso = (ob: Record<string, unknown>) => {
   const ms = computeObligationDueUTC(ob, cases.anchors)
   return ms == null ? null : formatDate(ms)
 }
-// 每條義務的球(單次一顆;循環每個未結期次一顆)
+// 每條義務的球(單次一顆;循環每個未結期次一顆;P5c 停止條件判不出再一顆 setup.stop)
 const obligations = t.contract_obligations.flatMap((ob) =>
-  obligationEntries(ob, { anchors: cases.anchors, computeDueIso }).map((e) => ({ ob, ...e })))
+  obligationEntries(ob, { anchors: cases.anchors, computeDueIso, todayIso: cases.today }).map((e) => ({ ob, ...e })))
 const keyOf = (x: { ob: { id: string }; period: { period_key?: unknown } | null }) =>
   `契約重點:${x.ob.id}${x.period ? `:${x.period.period_key}` : ''}`
 
 Deno.test('共用案例(Deno):協作項核心事項與案例完全一致(含順序)', () => {
   assert.deepEqual(items.map(core), cases.expected.core_items.map(core))
+})
+
+Deno.test('共用案例(Deno):基準日版本(P5c)——單次義務到期日(含完成快照)與期次依據句與案例一致', () => {
+  const singleDue = Object.fromEntries(t.contract_obligations.filter((ob) => !('recurring' in ob) || !ob.recurring).map((ob) => [ob.id, computeDueIso(ob)]))
+  assert.deepEqual(singleDue, cases.expected.single_due)
+  const want = cases.expected.period_basis as Record<string, string>
+  const got: Record<string, string> = {}
+  for (const ob of t.contract_obligations) {
+    for (const p of ('periods' in ob ? ob.periods : []) as Record<string, unknown>[]) {
+      const k = `${ob.id}:${p.period_key}`
+      if (want[k]) got[k] = periodBasisLabel(p)
+    }
+  }
+  assert.deepEqual(got, want)
 })
 
 Deno.test('共用案例(Deno):契約義務(含循環期次)的責任／缺口／標籤／期限與案例一致', () => {

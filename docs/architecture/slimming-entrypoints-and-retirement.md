@@ -94,12 +94,22 @@
 - 物化時機（不新增雲端資源）：義務插入／規則變更／廢止 trigger（廢止把仍待辦的期次一併標不適用；規則變更只重建沒動過的待辦期）、`projects` 四個基準日變更 trigger、pg_cron 每日 16:05 UTC（台北 00:05）`materialize_all_obligation_periods()`（正式庫 pg_cron 已啟用，現有 `pmis-daily-reminders` 亦走它）、成員／service 可呼叫的冪等 RPC `materialize_obligation_periods(project)`。Agent 工具層只讀。
 - 狀態轉移只經 RPC `transition_obligation_period`（歸屬規則＝義務 update policy：自己方或非正式模式 admin override；證據須同案；伺服器蓋完成時間；退回待辦解除證據）；`contract_obligations` 對循環義務加 guard，不可再標已提送／已完成（舊前端／直接 REST 明確失敗）。
 - 回填：既有 monthly 全部產生期次；義務層曾標完成者，有 `completed_at` 就對應含該台北日的期別（狀態、時間、人、送審佐證帶過去），推不出的義務原狀不動、已到期的待辦期次帶 `review_note`「待核對」，由三方在待補設定看到並到期限追蹤該期核對後標記。正式 7 筆皆待辦、無需對應。
-- `anchor_version_no` 預留 null；基準日變更只補缺的期，既有期不重算（P5c）。停止產生期次的條件（竣工／保固期滿）未定義，仍照現行「無限循環」語意，列 P5c 一併決定（需 `end_date` 語意與展延）。
+- `anchor_version_no` 與停止條件自 P5c（`20260919021500`）起落地，見 §4.3：期次蓋產生時的基準日版本、基準日變更重算沒動過的期並記差異；循環只產生到「實際竣工日（驗收 confirm／report）優先、否則契約竣工日 `end_date`」為止，保固類與竣工日缺／已過而未登錄竣工者停止自動產生並列「停止條件待補」。
 - 前端：`todayTasks`／Edge 收集器／Deno 共用案例都走 `obligationEntries`（每個未結期次一顆球，鍵 `契約重點:<id>:<期別>`，深連結 `/deadlines?obligation=<id>&period=<期別>`）；`contractDue.js`／`.ts` 對循環義務改讀 `ob.periods` 最早未結一期；期限追蹤頁的一列仍是一條義務，動作作用在「本期」（`?period=` 可指定），詳情列全部期次；履約時程詳情唯讀列期次並導期限追蹤逐期標記（完整 UI 在 P5d）。demo 種子為三筆 monthly 義務帶上月已完成／本月／下月三期。
 
 ### 4.3 期限版本
 
 新增 `project_anchor_versions`（`project_id`, `version_no`, `anchors jsonb`（決標／開工／停復工／展延／竣工）, `effective_from`, `reason`, `source_ref`（核准變更或函文）, `created_by/at`）；`projects.*_date` 保持為「現行值」，每次更改由 trigger 產生新版本。到期日計算引用產生期次時的 `anchor_version_no`；基準日更正後只重算尚未完成的期次並記錄差異，不改歷史。
+
+**P5c 已實作**（migration `20260919021500_project_anchor_versions`，進度見續接清單 §7），與上述設計的差異與補充：
+
+- 版本列欄位：`version_no`、`change_kind`（`initial` 初值／`edit` 直接修改／`suspension` 停工／`resumption` 復工／`extension` 展延／`change_order` 核准變更工期）、`anchors`（變更後四日期快照，null 保留）、`changed_keys`、`effective_from`、`reason`、`source_ref`、`source_change_order_id`（須本案）、`effects`（本版重算差異）、`created_by/at`。append-only：`authenticated` 只有 SELECT（可見性沿用專案成員），UPDATE／DELETE 一律被 guard 拒（含 service_role），只放行專案刪除 cascade。四日期仍是 `projects` 欄位的「現行值」；設計的「停復工」不另加欄位——停工／復工／展延／核准變更工期都是一版（附生效日與依據），改了竣工日就改，沒改也留版（工期依據的紀錄）。
+- 留版路徑：`projects` 四個基準日的 INSERT／UPDATE trigger 自動留版（直接 REST 改也留、類別 `edit`、無依據），前端只走 RPC `update_project_anchors(project, anchors jsonb, change_kind, reason, source_ref, source_change_order_id, effective_from)`（security definer，第一行以 D-022 的 `is_project_admin()` 把關＝`projects` update policy 同一個函式；以交易內 GUC 把依據帶進 trigger；回新版本列，直接修改且值沒變回 null）。契約價金總額等非基準日設定另走直寫（`updateProjectSettings`，拒絕基準日鍵）。
+- 重算只動未完成：留版時對受影響的循環義務（起算欄位或竣工日有變）逐期比對——沒動過的待辦期（無完成時間、無證據、無待核對註記）改期／移除／新增並蓋新版號，已提送／已完成／掛證據／待核對的期一律原樣保留（到期日、`basis`、原版號不變）並在 `effects` 記 `kept`；單次義務未完成的記 `rescheduled`（舊到期→新到期），已完成的記 `kept`。現行排程規則下期次到期日只看每月幾日、不看起算日，所以循環義務的差異實際是移除／新增／保留；`rescheduled` 分支保留給日後排程規則若改變時仍成立。
+- 單次義務的歷史：`contract_obligations` 加 `due_date_snapshot`／`anchor_version_no`，進入已提送／已完成時由 trigger 依當時基準日留快照（client 不能寫這兩欄——欄位級 UPDATE grant 只開放 `status`／`evidence_submittal_id`），退回待辦清空；前端 `contractDue.js`／Edge `contractDue.ts` 對已完成單次義務優先讀快照（`singleDueSnapshot`），沒快照的舊資料照現行基準日算並在畫面標「完成時未留版」。
+- 循環停止條件（P5b 未定義）：以現行資料可判定者為準——保固類（`category='保固'`）系統沒有保固期滿日欄位，不自動產生期次；其餘以實際竣工日（`acceptance_events` 的 `confirm`，沒有就 `report` 的 `event_date`，同階段取最後登錄）優先、否則契約竣工日 `end_date` 為界限日，只產生「期間起日 ≤ 界限日」的期；登錄／更正／清除竣工（`acceptance_events` trigger）會移除界限日之後沒動過的待辦期並補齊；竣工日缺、或竣工日已過而未登錄竣工／展延 → 停止自動產生並列「停止條件待補」（待補設定第五種 `stop`：首頁一張卡、Agent `setup_pending`、早報一段，導期限追蹤該筆／驗收頁）。界限日判不出時沒動過的待辦期同樣移除（證明不了它們該存在），界限日判得出後由冪等物化補回。DB `fn_obligation_recurrence_bound`／`fn_obligation_recurrence_stop_gap` 與共用規則 `recurrenceStopGap`／`completionDateOf` 同口徑（pgTAP 與共用案例各釘一側）。
+- 回填（不偽造歷史依據）：每個已填任一基準日的專案建 version 1（`initial`、reason 註明回填、`created_by`／`effective_from` 為 null）；既有期次只在 `basis` 的起算日等於 v1 快照時才蓋 `anchor_version_no=1`；已完成的單次義務（正式 0 筆）不補快照；套用停止條件（正式庫盤點：兩案已登錄竣工確認，8 期預計移除竣工後的 5 期，實際數字見 CURRENT §6.3）。
+- 前端純呈現：期限追蹤與履約時程的詳情加「依據」列（期次：第 N 版基準日＋起算欄位與日期；單次：完成時留版／未留版／現行第 N 版）、期次列逐期標依據；基準日卡加變更類別／依據函文／生效日三欄與 `AnchorVersions`（目前依據哪一版、本版變更與受影響事項、可展開版本紀錄）；`stop` 缺口在期次區說明去哪裡補。demo 種子帶兩版（初值、展延附函文）並在本地鏡像新版本（期次不重算、標示 demo）。
 
 ### 4.4 掃描／無文字契約
 
@@ -124,7 +134,7 @@
 | `item_schedules`、`schedule_periods` | 不動；唯讀查閱 | 無 DB 變更 |
 | `ai_features.audit.summary` | `enabled=false` migration | rollback 檔改回 true |
 | `contract_obligations` 循環 7 筆 | P5b（`20260917233000`）：義務列不動；產生期次（5 筆缺「每月幾日」不產生、列待補設定），不回填完成（正式皆待辦）；循環義務自此不可再標義務層完成（guard） | `supabase/rollbacks/20260917233000_obligation_periods.down.sql`（解除 cron、trigger、guard、RPC，drop `obligation_periods`；期次列隨表移除，回復前先匯出） |
-| 基準日 | 建立 version 1（現值） | drop `project_anchor_versions`，`projects` 欄不變 |
+| 基準日 | P5c（`20260919021500`）：每個已填基準日的專案建 version 1（現值，標回填）；既有期次對得上 v1 的蓋版號；已登錄竣工／竣工日已定的專案移除界限日之後沒動過的待辦期（正式庫預計 8 期移除 5 期）；`contract_obligations` 加兩欄皆 null | `supabase/rollbacks/20260919021500_project_anchor_versions.down.sql`（drop 表與兩欄、還原 P5b 的 materialize 與 projects trigger；版本列與快照隨之移除，回復前先匯出；被界限日移除的期由 P5b 物化補回） |
 | 文書與計價 | 見另兩份文件 | 同 |
 
 ## 7. DB／Edge／前端相容部署順序（整體）

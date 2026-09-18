@@ -13,7 +13,7 @@ const {
   loadQualityFromDB, loadDefectsFromDB, loadItemSchedulesFromDB, loadChangeOrdersFromDB,
   loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB, loadItpFromDB,
   loadAcceptanceFromDB, loadScheduleFromDB,
-  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadFieldDocumentsFromDB,
+  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadFieldDocumentsFromDB, loadAnchorVersionsFromDB,
 } = await import('./db.js')
 
 const PID = 'p1'
@@ -138,8 +138,10 @@ describe('db.js 分頁載入:超過 PostgREST 單次上限時要全部取回', (
     pg.setTable('submittals', rows('sb', 1200, () => ({ created_at: 'x' })))
     pg.setTable('rfis', rows('rf', 1100, () => ({ created_at: 'x' })))
     pg.setTable('observations', rows('ob2', 1050, () => ({ created_at: 'x' })))
+    pg.setTable('project_anchor_versions', rows('av', 1005, (i) => ({ version_no: i + 1, change_kind: 'edit', anchors: {}, effects: [] })))
 
     expect(await loadObligationsFromDB(PID)).toHaveLength(1200)
+    expect(await loadAnchorVersionsFromDB(PID)).toHaveLength(1005) // P5c 基準日版本(append-only,一版一列)
     expect(await loadCostItemsFromDB(PID)).toHaveLength(1400)
     expect(await loadSafetyFromDB(PID)).toHaveLength(1300)
     expect(await loadItpFromDB(PID, new Map(), new Map())).toHaveLength(1100)

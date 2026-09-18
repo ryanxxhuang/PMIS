@@ -10,7 +10,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { BallSide, SetupGap } from './ballInCourtRules.ts'
 import {
-  coreOpenItems, obligationEntries, obligationInWindow, periodTitle, FIELD_DOC_OPEN_STATUSES, UNTITLED,
+  coreOpenItems, obligationEntries, obligationInWindow, periodTitle, completionDateOf, FIELD_DOC_OPEN_STATUSES, UNTITLED,
 } from './ballInCourtRules.ts'
 export type { BallSide }
 import { computeObligationDueUTC, diffDays, formatDate, parseDateUTC } from './contractDue.ts'
@@ -34,7 +34,7 @@ export interface OpenBallItem {
   overdue_days?: number
   // 循環義務的期別鍵(P5b):同一條義務的每個未結期次各一筆,id 仍是義務 id,title 已含期別。
   period_key?: string
-  // 待補設定(責任方推不出三方／基準日沒填／循環規則不完整／回填待核對):不歸任何一方、
+  // 待補設定(責任方推不出三方／基準日沒填／循環規則不完整／回填待核對／循環停止條件判不出):不歸任何一方、
   // 三方都看得到;Agent 工具另列 setup_pending、早報另成一段,不觸發寄信。
   setup?: SetupGap
 }
@@ -51,7 +51,7 @@ export async function collectOpenBallItems(
   const todayIso = formatDate(today)
   const items: OpenBallItem[] = []
 
-  const [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, proj, obligations] = await Promise.all([
+  const [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, proj, obligations, acceptance] = await Promise.all([
     db.from('defects').select('id, title, severity, status, due_date, domain').eq('project_id', projectId).neq('status', '已結案'),
     db.from('submittals').select('id, submittal_no, title, status, due_date').eq('project_id', projectId).in('status', ['已提送', '審核中', '退回補正']),
     db.from('rfis').select('id, rfi_no, title, status, due_date').eq('project_id', projectId).in('status', ['待回覆', '已回覆']),
@@ -63,9 +63,12 @@ export async function collectOpenBallItems(
     db.from('projects').select('award_date, notice_date, commencement_date, end_date').eq('id', projectId).maybeSingle(),
     // 未結的定義在共用規則(isObligationStreamOpen／isObligationOpen);這裡只排除已廢止的不適用列,
     // 與前端載入同口徑。循環義務的期次(obligation_periods,P5b)以 embed 一起帶回:期次 RLS 沿用義務。
-    db.from('contract_obligations').select('id, title, responsible, status, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause, periods:obligation_periods(id, period_key, period_start, period_end, due_date, status, review_note)').eq('project_id', projectId).neq('status', '不適用'),
+    // P5c:category 判保固類、due_date_snapshot 讓已完成單次義務讀完成當下的到期日、期次帶版號
+    db.from('contract_obligations').select('id, title, category, responsible, status, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause, due_date_snapshot, anchor_version_no, periods:obligation_periods(id, period_key, period_start, period_end, due_date, status, review_note, anchor_version_no)').eq('project_id', projectId).neq('status', '不適用'),
+    // 竣工登錄(P5c 循環停止條件):竣工確認優先、否則報竣;共用規則 completionDateOf 取最後登錄的一筆
+    db.from('acceptance_events').select('stage_key, event_date, created_at').eq('project_id', projectId).in('stage_key', ['report', 'confirm']),
   ])
-  const firstError = [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, obligations].find((r) => r.error)
+  const firstError = [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, obligations, acceptance].find((r) => r.error)
   if (firstError?.error) return toolError('collectOpenBallItems', firstError.error)
 
   const docIds = (fieldDocs.data ?? []).map((d) => d.id)
@@ -94,14 +97,15 @@ export async function collectOpenBallItems(
   // 契約義務:單次義務到期日由 contractDue 依基準日確定性推算(不是 AI 算);循環義務每個未結期次
   // 一筆(共用規則 obligationEntries,期次由 DB 物化)。責任方／基準日／循環規則／待核對缺口由
   // 共用規則判定——責任不明不歸任何一方(不再預設廠商),列為待補設定。
-  const anchors = proj?.data ?? {}
+  // anchors 另帶實際竣工日(acceptance_events 推得),供共用規則判循環停止條件(P5c)
+  const anchors = { ...(proj?.data ?? {}), completion_date: completionDateOf(acceptance.data ?? []) }
   const computeDueIso = (ob: Record<string, unknown>) => {
     const dueMs = computeObligationDueUTC(ob, anchors)
     return dueMs == null ? null : formatDate(dueMs)
   }
   for (const ob of obligations.data ?? []) {
     const clause = ob.source_clause ? `（依 ${ob.source_clause}）` : ''
-    for (const { ball, dueIso, period } of obligationEntries(ob, { anchors, computeDueIso })) {
+    for (const { ball, dueIso, period } of obligationEntries(ob, { anchors, computeDueIso, todayIso })) {
       if (ball.who === 'done') continue
       const dueMs = parseDateUTC(dueIso)
       const base = {

@@ -28,9 +28,10 @@ import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../compo
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
-import { ORG_TO_PARTY, obligationParty, UNASSIGNED_PARTY, periodRows, recurrenceGap } from '../../lib/obligationTimeline.js'
-import { isRecurring, isObligationOpen, currentObligationPeriod } from '../../../supabase/functions/_shared/ballInCourtRules.ts'
+import { ORG_TO_PARTY, obligationParty, UNASSIGNED_PARTY, periodRows, recurrenceGap, singleDueBasis } from '../../lib/obligationTimeline.js'
+import { isRecurring, isObligationOpen, currentObligationPeriod, completionDateOf, periodBasisLabel } from '../../../supabase/functions/_shared/ballInCourtRules.ts'
 import AnchorDates from '../../components/AnchorDates.jsx'
+import AnchorVersions from '../../components/AnchorVersions.jsx'
 import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 import { parseLocalDate, localISODate, taipeiToday } from '../../lib/dates.js'
 import { navLabel } from '../../lib/navConfig.js'
@@ -54,8 +55,9 @@ const DEFAULT_FILTERS = { q: '', phase: '' }
 
 export default function Deadlines() {
   const {
-    currentProject, isPersistedProject, currentUser, workItems, can,
-    obligations, updateObligationStatus, transitionObligationPeriod, updateProjectAnchors, submittals,
+    currentProject, project, isPersistedProject, currentUser, workItems, can,
+    obligations, updateObligationStatus, transitionObligationPeriod, changeProjectAnchors, updateProjectSettings,
+    anchorVersions, acceptanceEvents, submittals,
   } = useStore()
   // ?period=<期別>:循環義務指定看哪一期(今日工作每期一筆帶進來);不指定=最早未結的一期
   const [searchParams, setSearchParams] = useSearchParams()
@@ -75,7 +77,20 @@ export default function Deadlines() {
   const manualContractTotal = Number(currentProject?.contract_total) || 0
   const contractTotal = manualContractTotal > 0 ? manualContractTotal : (workItems?.meta?.billable_total || 0)
 
-  const [anchors, setAnchors] = useState({ award_date: '', notice_date: '', commencement_date: '', end_date: '' })
+  // 基準日一律讀 store 的 project(真專案:RPC 留版後以伺服器回傳的版本快照更新;demo:種子專案＋本地覆寫),
+  // 另帶實際竣工日(驗收事件推得,P5c 循環停止條件)與目前版本號(顯示「依第幾版」)——與今日工作、履約時程同一份錨點。
+  const latestVersionNo = anchorVersions?.length ? anchorVersions[anchorVersions.length - 1].version_no : null
+  const anchors = useMemo(() => ({
+    award_date: project?.award_date || '',
+    notice_date: project?.notice_date || '',
+    commencement_date: project?.commencement_date || '',
+    end_date: project?.end_date || '',
+    completion_date: completionDateOf(acceptanceEvents),
+    version_no: latestVersionNo,
+  }), [project, acceptanceEvents, latestVersionNo])
+  // 下一次改基準日要記的依據(P5c):類別／函文或變更案號／生效日;改完保留,連續改同一份函文不用重填
+  const [anchorBasis, setAnchorBasis] = useState({ change_kind: 'edit', source_ref: '', effective_from: '' })
+  const [anchorMsg, setAnchorMsg] = useState('')
   const [totalDraft, setTotalDraft] = useState('')
   const [anchorErr, setAnchorErr] = useState('')
   const [obligationMsg, setObligationMsg] = useState('')
@@ -88,23 +103,32 @@ export default function Deadlines() {
   const searchRef = useRef(null)
 
   useEffect(() => {
-    setAnchors({
-      award_date: currentProject?.award_date || '',
-      notice_date: currentProject?.notice_date || '',
-      commencement_date: currentProject?.commencement_date || '',
-      end_date: currentProject?.end_date || '',
-    })
     setTotalDraft(currentProject?.contract_total != null ? String(currentProject.contract_total) : '')
   }, [currentProject])
 
-  // DB 成功才更新本地(B-04):非建立者被 RLS 靜默擋下時不可樂觀顯示新基準日
+  // 基準日:經 RPC 留版(P5c)——DB 同交易重算沒動過的期次與未完成單次義務的到期日並記差異,成功後 store
+  // 重載義務與版本,這裡只把「第 N 版、影響幾件」講出來;失敗(非管理者／值不合法)如實顯示、不樂觀更新。
+  // demo 只進記憶體(slice 回本地版本、期次不重算,版本列標示)。
   const setAnchor = async (key, val) => {
+    setAnchorErr(''); setAnchorMsg('')
+    const { error, version } = await changeProjectAnchors({ [key]: val || null }, {
+      change_kind: anchorBasis.change_kind, source_ref: anchorBasis.source_ref.trim() || null, effective_from: anchorBasis.effective_from || null,
+    })
+    if (error) { setAnchorErr(friendlyError(error, '基準日未儲存')); return }
+    if (!version) { setAnchorMsg('值沒有變更，未留新版本。'); return }
+    const effects = Array.isArray(version.effects) ? version.effects : []
+    const changed = effects.filter((e) => e.kind !== 'kept').length
+    const kept = effects.filter((e) => e.kind === 'kept').length
+    setAnchorMsg(version.demo
+      ? `示範模式：已記錄第 ${version.version_no} 版（期次不重算）。`
+      : `已留第 ${version.version_no} 版：${changed} 個事項改期／增減${kept ? `，${kept} 個已完成事項保留原依據` : ''}。`)
+  }
+  // 契約價金總額不是基準日,走一般專案設定(不留版);demo 只留在輸入框
+  const setContractTotal = async (v) => {
     setAnchorErr('')
-    if (isPersistedProject) {
-      const { error } = await updateProjectAnchors({ [key]: val || null })
-      if (error) { setAnchorErr(friendlyError(error, '基準日未儲存')); return }
-    }
-    setAnchors((a) => ({ ...a, [key]: val })) // demo:只進本地,供時間軸展示
+    if (!isPersistedProject) return
+    const { error } = await updateProjectSettings({ contract_total: v })
+    if (error) setAnchorErr(friendlyError(error, '契約價金總額未儲存'))
   }
 
   // 到期日、倒數、狀態、期程(單次:依基準日即時計算;循環:本期的期次)。id 提到最外層:殼 hook
@@ -120,9 +144,12 @@ export default function Deadlines() {
     let diff = null, state = 'nodate'
     if (done) state = 'done'
     else if (due) { diff = Math.round((due - today0()) / 86400000); state = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'scheduled' }
+    // gap:沒有期次的原因,或(P5c)停止條件判不出／已越界——有期次時也回,提示之後不會再產生
     return {
       id: ob.id, ob, due, diff, done, state, phase: phaseOf(ob), recurring, period,
-      periods: recurring ? periodRows(ob, today0()) : [], gap: recurring && !period ? recurrenceGap(ob, anchors) : null,
+      periods: recurring ? periodRows(ob, today0()) : [], gap: recurring ? recurrenceGap(ob, anchors, today0()) : null,
+      // 到期日依據(P5c):本期依哪一版基準日產生;單次義務完成時留版或依現行基準日
+      basis: recurring ? (period ? periodBasisLabel(period) : '') : (singleDueBasis(ob, anchors.version_no)?.label || ''),
     }
   }), [obligations, anchors, periodParam])
   const dueCounts = useMemo(() => {
@@ -232,6 +259,7 @@ export default function Deadlines() {
             ['規則', formatObligationRule(ob) || '—'],
             ...(it.recurring ? [['本期', it.period ? `${it.period.period_key} 期` : '—']] : []),
             ['到期日', it.due ? localISODate(it.due) : '—'],
+            ['依據', it.basis || '—'],
             ['責任方', ob.responsible || '—'],
             ['狀態', statusText],
           ]} />
@@ -257,14 +285,21 @@ export default function Deadlines() {
               <MSym name="event_repeat" size={15} className="text-[var(--text-3)]" />
               <span className="text-footnote font-medium text-[var(--text)]">期次（{it.periods.length}）</span>
             </div>
-            {it.periods.length === 0 ? (
-              <p className="text-footnote leading-relaxed text-[var(--text-3)]">
-                {it.gap ? it.gap.label : '尚未產生期次。'}
-                {it.gap?.kind === 'rule' && (<>
-                  請到<Link to={`/requirements/review?highlight=${encodeURIComponent(ob.id)}`} className="text-[var(--blue-text)] hover:underline mx-0.5">擷取審核</Link>廢止取代後補登循環規則。
+            {/* 沒有期次的原因、或(P5c)停止條件判不出／已越界:DB 已停止產生新期,舊期仍在;說清楚去哪裡補 */}
+            {it.gap && (
+              <p className="text-footnote leading-relaxed text-[var(--text-3)] mb-2">
+                {it.gap.label}
+                {it.gap.kind === 'rule' && (<>
+                  ，請到<Link to={`/requirements/review?highlight=${encodeURIComponent(ob.id)}`} className="text-[var(--blue-text)] hover:underline mx-0.5">擷取審核</Link>廢止取代後補登循環規則。
                 </>)}
-                {it.gap?.kind === 'anchor' && '請在下方「基準日與契約總價」補上基準日,期次會立即產生。'}
+                {it.gap.kind === 'anchor' && '，請在下方「基準日與契約總價」補上基準日，期次會立即產生。'}
+                {it.gap.kind === 'stop' && (ob.category === '保固'
+                  ? '，系統沒有保固期滿日可判定循環何時結束，暫不自動產生期次。'
+                  : <>，期次已停止自動產生：請在下方「基準日與契約總價」補上或展延竣工日，已竣工的請到<Link to="/acceptance" className="text-[var(--blue-text)] hover:underline mx-0.5">驗收</Link>登錄竣工，期次會依竣工日收尾。</>)}
               </p>
+            )}
+            {it.periods.length === 0 ? (
+              !it.gap && <p className="text-footnote leading-relaxed text-[var(--text-3)]">尚未產生期次。</p>
             ) : (
               <ul role="list" aria-label={`${ob.title} 期次`} className="divide-y divide-[var(--border-2)] border border-[var(--border-2)] rounded-lg">
                 {it.periods.map((p) => {
@@ -278,6 +313,8 @@ export default function Deadlines() {
                         <Badge color={STATE_BADGE[p.status === 'due' ? 'soon' : p.status === 'na' ? 'nodate' : p.status] || 'slate'} className="ml-auto">{p.rawStatus}</Badge>
                         {p.status === 'done' && p.onTime === false && <span className="text-caption text-[var(--amber-text)]">遲交</span>}
                         {p.reviewNote && <span className="text-caption text-[var(--amber-text)]">待核對</span>}
+                        {/* 這一期依哪一版基準日產生／改期(P5c):已完成的期保留原依據 */}
+                        <span className="w-full num text-caption text-[var(--text-3)]">{p.basisLabel}</span>
                       </button>
                     </li>
                   )
@@ -424,11 +461,13 @@ export default function Deadlines() {
     </div>
   )
 
-  // 基準日與契約總價:位置與內容都不動(在清單之下,設完基準日回頭看清單的到期日即時變)
+  // 基準日與契約總價:位置與內容都不動(在清單之下,設完基準日回頭看清單的到期日即時變)。
+  // P5c:改基準日一律留版(類別／依據／生效日就在日期欄下方一列),留版後這裡列出第 N 版影響了哪些事項;
+  // 版本紀錄可展開。已完成的期次與義務保留原依據,不因基準日更正改期。
   const anchorsCard = (
     <Card title="基準日與契約總價">
       <div className="flex flex-wrap gap-4">
-        <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!can.edit} />
+        <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!can.edit} basis={anchorBasis} onBasis={setAnchorBasis} />
         {/* 手填契約價金總額:百分比制逾期罰款的試算基準(W10);onBlur 才寫 DB */}
         <Field label="契約價金總額(元)">
           <Input type="number" min="0" step="1" value={totalDraft} placeholder="未填則採標單加總"
@@ -437,13 +476,17 @@ export default function Deadlines() {
               const v = totalDraft.trim() === '' ? null : Number(totalDraft)
               if (v != null && (!Number.isFinite(v) || v < 0)) { setAnchorErr('契約價金總額需為 0 以上的數字'); return }
               if ((currentProject?.contract_total ?? null) === v) return
-              setAnchor('contract_total', v)
+              setContractTotal(v)
             }}
             disabled={!can.edit} />
         </Field>
       </div>
       <ErrorBanner msg={anchorErr} className="mt-2" />
-      <p className="text-xs text-[var(--text-3)] mt-3">期限追蹤的到期日、倒數、逾期都依這些基準日即時計算;「開工日」請填實際開工日。契約價金總額用於逾期違約金試算,未填時以標單可計價金額代替。</p>
+      {anchorMsg && <p role="status" className="mt-2 text-footnote text-[var(--green-text)]">{anchorMsg}</p>}
+      <div className="mt-3 pt-3 border-t border-[var(--border-2)]">
+        <AnchorVersions versions={anchorVersions} />
+      </div>
+      <p className="text-xs text-[var(--text-3)] mt-3">未完成的期限依現行基準日即時計算;已提送／已完成的期次與義務保留完成當時的依據,不因基準日更正改期。每次變更都留一版,直接改日期也會留版(類別「直接修改」);展延、停復工、核准變更工期請選類別並填依據函文。「開工日」請填實際開工日。契約價金總額用於逾期違約金試算,未填時以標單可計價金額代替。</p>
     </Card>
   )
 

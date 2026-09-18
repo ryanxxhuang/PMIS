@@ -82,7 +82,7 @@ select is((select count(*)::int from h23_rels t join pg_class c on c.oid = t.oid
 select is((select count(*)::int from h23_seqs s join pg_class c on c.oid = s.oid, aclexplode(c.relacl) a
            where a.grantee = 0), 0, 'public 序列 ACL 沒有 PUBLIC 的任何權限');
 
--- ── 3. authenticated 允許清單精確相等（68 支；來源與理由見 migration 檔頭）─────────────
+-- ── 3. authenticated 允許清單精確相等（68 支＋P5c update_project_anchors；來源與理由見 migration 檔頭）─────────────
 select is(
   (select string_agg(proname, ',' order by proname collate "C") from h23_fns
     where has_function_privilege('authenticated', oid, 'EXECUTE')),
@@ -101,7 +101,7 @@ select is(
   'obligation_party,photo_storage_path_in_use,portfolio_summary,receive_field_document,remove_member,'
   'reset_project_boq,resolve_agent_action,return_field_document,review_requirement,'
   'save_field_document_version,shares_project_with,sign_field_document,storage_path_in_use,'
-  'submit_field_document,transition_obligation_period',
+  'submit_field_document,transition_obligation_period,update_project_anchors',
   'authenticated 可執行的函式＝允許清單（新 RPC 要在 migration 明示 grant 並加進這裡）');
 select is((select count(*)::int from h23_fns where is_trigger and has_function_privilege('authenticated', oid, 'EXECUTE')), 0,
   'trigger 函式一律不給 authenticated EXECUTE（觸發不需要，直接呼叫沒有用途）');

@@ -10,8 +10,9 @@ import { computeObligationDue, formatObligationRule } from './contractDue.js'
 import { parseLocalDate, localISODate, taipeiISODate } from './dates.js'
 import { REQUIREMENT_TYPE_LABELS, sourcePageLabel } from './requirementReview.js'
 import {
-  obligationSide, ANCHOR_BY_TRIGGER, ANCHOR_LABELS as SHARED_ANCHOR_LABELS,
+  obligationSide, ANCHOR_BY_TRIGGER, ANCHOR_LABELS as SHARED_ANCHOR_LABELS, ANCHOR_CHANGE_KIND_LABELS,
   isRecurring, isObligationOpen, currentObligationPeriod, recurrenceRuleGap, recurrenceAnchorKey,
+  recurrenceStopGap, periodBasisLabel, singleDueSnapshot,
 } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 export const PARTIES = ['廠商', '監造', '機關']
@@ -111,18 +112,55 @@ export function periodRows(ob, today) {
         rawStatus: p.status, completedAt: p.completed_at || null, reviewNote: p.review_note || '',
         countdown: p.status === '不適用' ? '不適用' : countdownLabel(status, diff),
         evidenceSubmittalId: p.evidence_submittal_id || null,
+        // P5c:這一期是依哪一版基準日產生／改期的(共用規則同一句;Agent 也讀同一份)
+        anchorVersionNo: p.anchor_version_no ?? null, basisLabel: periodBasisLabel(p),
       }
     })
 }
 
-// 循環義務為什麼沒有期次:基準日／循環規則待補(與今日工作、Agent 同一份規則),都不是就是尚未物化。
-export function recurrenceGap(ob, anchors) {
+// 循環義務為什麼沒有期次(或不再產生):基準日／循環規則待補、停止條件判不出(與今日工作、Agent 同一份規則),
+// 都不是就是尚未物化。stop 缺口在「有期次」時也會回(DB 已停止產生新期,舊期仍在),呼叫端據此提示。
+export function recurrenceGap(ob, anchors, today) {
   if (!isRecurring(ob)) return null
   const rule = recurrenceRuleGap(ob)
   if (rule) return { kind: 'rule', label: `循環規則待補（${rule}）` }
   const key = recurrenceAnchorKey(ob)
   if (key && !anchors?.[key]) return { kind: 'anchor', label: `基準日待補（${SHARED_ANCHOR_LABELS[key]}）`, anchor: key }
+  const stop = recurrenceStopGap(ob, anchors, taipeiISODate(today0(today)))
+  if (stop) return { kind: 'stop', label: `停止條件待補（${stop}）` }
   return null
+}
+
+// 單次義務的到期日依據(P5c):已完成且 DB 留了快照 → 「完成時留版」(第幾版、日期固定);已完成但沒快照
+// (P5c 前的舊資料)→ 明說「完成時未留版,依現行基準日」;未完成 → 依現行基準日(第幾版)。
+export function singleDueBasis(ob, currentVersionNo) {
+  if (isRecurring(ob)) return null
+  const snap = singleDueSnapshot(ob)
+  if (snap) return { kind: 'snapshot', versionNo: ob.anchor_version_no ?? null, label: `完成時留版${ob.anchor_version_no ? `（第 ${ob.anchor_version_no} 版基準日）` : ''}：到期 ${snap} 固定不隨基準日更正` }
+  const done = !isObligationOpen(ob.status)
+  if (done) return { kind: 'legacy', versionNo: null, label: '完成時未留版：到期日依現行基準日計算' }
+  if (ob.trigger_event === 'fixed') return { kind: 'fixed', versionNo: null, label: '依義務指定日期，不受基準日影響' }
+  if (!ANCHOR_BY_TRIGGER[ob.trigger_event]) return null
+  return { kind: 'live', versionNo: currentVersionNo ?? null, label: `依現行${SHARED_ANCHOR_LABELS[ANCHOR_BY_TRIGGER[ob.trigger_event]]}${currentVersionNo ? `（第 ${currentVersionNo} 版）` : ''}計算` }
+}
+
+// 基準日版本的呈現列(期限追蹤／履約時程共用):相對前一版改了哪些欄位(舊→新)、類別、依據、生效日與受影響事項。
+export function anchorVersionRows(versions) {
+  const sorted = [...(versions || [])].sort((a, b) => (a.version_no ?? 0) - (b.version_no ?? 0))
+  return sorted.map((v, i) => {
+    const prev = i > 0 ? sorted[i - 1].anchors || {} : {}
+    const changes = (v.changed_keys || []).map((key) => ({
+      key, label: SHARED_ANCHOR_LABELS[key] || key, from: prev[key] || null, to: (v.anchors || {})[key] || null,
+    }))
+    const effects = Array.isArray(v.effects) ? v.effects : []
+    return {
+      id: v.id, versionNo: v.version_no, kind: v.change_kind, kindLabel: ANCHOR_CHANGE_KIND_LABELS[v.change_kind] || v.change_kind,
+      changes, effectiveFrom: v.effective_from || null, reason: v.reason || '', sourceRef: v.source_ref || '',
+      sourceChangeOrderId: v.source_change_order_id || null, createdAt: v.created_at || null, createdBy: v.created_by || null,
+      effects, affected: effects.filter((e) => e.kind !== 'kept').length, kept: effects.filter((e) => e.kind === 'kept').length,
+      demo: !!v.demo, // 示範模式的本地鏡像版本:期次不重算,畫面要說清楚
+    }
+  }).reverse() // 最新在前
 }
 
 // 倒數文案(README 2.4)
@@ -282,11 +320,13 @@ export function buildTimelineItem(ob, { requirement, sources, versionsById, anch
     desc: requirement?.description || ob.note || '',
     type,
     kind: KIND_LABELS[ob.recurring] || '',
-    // 循環義務(P5b):目前該處理的期別、全部期次(唯讀呈現)、沒有期次的原因
+    // 循環義務(P5b):目前該處理的期別、全部期次(唯讀呈現)、沒有期次／不再產生的原因(含 P5c 停止條件)
     recurring: isRecurring(ob),
     currentPeriod: currentPeriod ? String(currentPeriod.period_key) : null,
     periods: periodRows(ob, today),
-    recurrenceGap: recurrenceGap(ob, anchors),
+    recurrenceGap: recurrenceGap(ob, anchors, today),
+    // P5c:本期的依據(第幾版基準日)／單次義務的到期日依據(完成時留版或現行基準日)
+    dueBasis: isRecurring(ob) ? (currentPeriod ? periodBasisLabel(currentPeriod) : '') : (singleDueBasis(ob, anchors?.version_no)?.label || ''),
     clause,
     page,
     doc: version ? `${version.documents?.title || '契約文件'}（${version.version_label || ''}）` : '',

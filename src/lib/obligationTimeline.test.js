@@ -7,7 +7,7 @@ import {
   VISIBLE, PARTIES, ORG_TO_PARTY, obligationParty, canActOn, UNASSIGNED_PARTY, isVisibleTo,
   deriveStatus, countdownLabel, phaseOf, phaseWindows,
   partyStat, phaseStat, pickDefaultId, buildTimelineItem, matchesFilters,
-  anchorGaps, periodRows, recurrenceGap,
+  anchorGaps, periodRows, recurrenceGap, singleDueBasis, anchorVersionRows,
 } from './obligationTimeline.js'
 
 const TODAY = new Date(2026, 7, 25) // 2026-08-25
@@ -264,6 +264,58 @@ describe('循環義務逐期(P5b)', () => {
     const na = buildTimelineItem(monthly({ periods: [] }), { anchors: {}, today: TODAY })
     expect(na.status).toBe('na')
     expect(na.recurrenceGap.kind).toBe('anchor')
+  })
+})
+
+describe('基準日版本與依據(P5c)', () => {
+  const period = (key, due, status = '待辦', extra = {}) => ({ id: `p-${key}`, period_key: key, due_date: due, status, completed_at: null, review_note: null, ...extra })
+  const monthly = (over = {}) => ob({ trigger_event: null, fixed_date: null, recurring: 'monthly', recurring_day: 5, periods: [period('2026-08', '2026-08-05')], ...over })
+  it('停止條件缺口:竣工日缺／已過／保固類 → stop;已登錄竣工或竣工日未到 → null;排在規則與基準日缺口之後', () => {
+    expect(recurrenceGap(monthly(), { commencement_date: '2026-03-01' }, TODAY)).toEqual({ kind: 'stop', label: '停止條件待補（缺竣工日，無法判定循環何時結束）' })
+    expect(recurrenceGap(monthly(), { commencement_date: '2026-03-01', end_date: '2026-07-31' }, TODAY)).toEqual({ kind: 'stop', label: '停止條件待補（竣工日 2026-07-31 已過，尚未登錄竣工或展延）' })
+    expect(recurrenceGap(monthly({ category: '保固', periods: [] }), anchors, TODAY)).toEqual({ kind: 'stop', label: '停止條件待補（保固期滿日無法判定，未登錄保固年限）' })
+    expect(recurrenceGap(monthly(), { commencement_date: '2026-03-01', completion_date: '2026-08-10' }, TODAY)).toBeNull()
+    expect(recurrenceGap(monthly(), anchors, TODAY)).toBeNull()
+    expect(recurrenceGap(monthly({ recurring_day: null }), { commencement_date: '2026-03-01' }, TODAY).kind).toBe('rule')
+    expect(recurrenceGap(monthly(), {}, TODAY).kind).toBe('anchor')
+    expect(buildTimelineItem(monthly(), { anchors: { commencement_date: '2026-03-01' }, today: TODAY }).recurrenceGap.kind).toBe('stop')
+  })
+  it('期次列帶依據句:第幾版基準日、起算欄位與日期;未留版明說', () => {
+    const rows = periodRows(monthly({ periods: [
+      period('2026-08', '2026-08-05', '待辦', { anchor_version_no: 2, basis: { anchor_key: 'commencement_date', anchor_date: '2026-03-01' } }),
+      period('2026-07', '2026-07-05', '已完成', { completed_at: '2026-07-03T02:00:00Z', anchor_version_no: 1, basis: { anchor_key: 'commencement_date', anchor_date: '2026-02-20' } }),
+      period('2026-06', '2026-06-05', '已完成', { completed_at: '2026-06-03T02:00:00Z' }),
+    ] }), TODAY)
+    expect(rows.map((r) => [r.key, r.anchorVersionNo, r.basisLabel])).toEqual([
+      ['2026-08', 2, '第 2 版基準日（開工日 2026-03-01）'],
+      ['2026-07', 1, '第 1 版基準日（開工日 2026-02-20）'], // 已完成的期保留產生時的依據
+      ['2026-06', null, '產生時未留版（起算日未記錄）'],
+    ])
+    const item = buildTimelineItem(monthly({ periods: [period('2026-08', '2026-08-05', '待辦', { anchor_version_no: 3, basis: { anchor_key: 'fixed_date', anchor_date: '2026-01-15' } })] }), { anchors, today: TODAY })
+    expect(item.dueBasis).toBe('第 3 版基準日（義務指定日期 2026-01-15）')
+  })
+  it('單次義務的到期日依據:完成時留版 → 快照固定;完成但沒快照 → 明說未留版;未完成 → 現行基準日(第 N 版);fixed 不受基準日影響', () => {
+    expect(singleDueBasis(ob({ trigger_event: 'commencement', fixed_date: null, offset_days: 15, status: '已完成', due_date_snapshot: '2026-03-16', anchor_version_no: 2 })).label)
+      .toBe('完成時留版（第 2 版基準日）：到期 2026-03-16 固定不隨基準日更正')
+    expect(singleDueBasis(ob({ trigger_event: 'commencement', fixed_date: null, offset_days: 15, status: '已完成' })).label).toBe('完成時未留版：到期日依現行基準日計算')
+    expect(singleDueBasis(ob({ trigger_event: 'commencement', fixed_date: null, offset_days: 15 }), 4).label).toBe('依現行開工日（第 4 版）計算')
+    expect(singleDueBasis(ob({ trigger_event: 'commencement', fixed_date: null, offset_days: 15 })).label).toBe('依現行開工日計算')
+    expect(singleDueBasis(ob()).label).toBe('依義務指定日期，不受基準日影響')
+    expect(singleDueBasis(ob({ trigger_event: 'other', fixed_date: null }))).toBeNull()
+    expect(singleDueBasis(monthly())).toBeNull()
+    expect(buildTimelineItem(ob({ trigger_event: 'commencement', fixed_date: null, offset_days: 15, status: '已完成', due_date_snapshot: '2026-03-16', anchor_version_no: 2 }), { anchors: { ...anchors, version_no: 5 }, today: TODAY }))
+      .toMatchObject({ dateLabel: '2026-03-16', status: 'done', dueBasis: '完成時留版（第 2 版基準日）：到期 2026-03-16 固定不隨基準日更正' })
+  })
+  it('版本列:最新在前,相對前一版列出改了哪些欄位(舊→新)、類別中文、受影響／保留件數', () => {
+    const rows = anchorVersionRows([
+      { id: 'v2', version_no: 2, change_kind: 'extension', anchors: { award_date: '2026-01-10', commencement_date: '2026-03-01', end_date: '2027-08-30' }, changed_keys: ['end_date'], effective_from: '2026-08-01', reason: '核准展延', source_ref: '府工字第 1 號',
+        effects: [{ kind: 'rescheduled', obligation_id: 'o1', title: '竣工圖說', period_key: null, old_due: '2027-06-29', new_due: '2027-09-29' }, { kind: 'kept', obligation_id: 'o2', title: '施工計畫', period_key: null, old_due: '2026-03-16', new_due: null, status: '已完成' }] },
+      { id: 'v1', version_no: 1, change_kind: 'initial', anchors: { award_date: '2026-01-10', commencement_date: '2026-03-01', end_date: '2027-05-30' }, changed_keys: ['award_date', 'commencement_date', 'end_date'], effects: [] },
+    ])
+    expect(rows.map((r) => [r.versionNo, r.kindLabel, r.affected, r.kept])).toEqual([[2, '展延', 1, 1], [1, '初值', 0, 0]])
+    expect(rows[0].changes).toEqual([{ key: 'end_date', label: '竣工日', from: '2027-05-30', to: '2027-08-30' }])
+    expect(rows[1].changes.map((c) => [c.label, c.from, c.to])).toEqual([['決標日', null, '2026-01-10'], ['開工日', null, '2026-03-01'], ['竣工日', null, '2027-05-30']])
+    expect(anchorVersionRows([])).toEqual([])
   })
 })
 

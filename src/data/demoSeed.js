@@ -156,6 +156,9 @@ export function buildDemoData(workItems, project) {
   // 上一期已完成(準時)＋下一期待辦(到期日=今天起最近的一次,與 P5b 前 demo 的「下次到期」同一天,
   // 劇本的逾期／即將到期分佈不變:OB-6 仍是第一條逾期)。demo 因此看得到「完成本期不清下期」,
   // 「舊逾期保留」由 pgTAP 與共用案例證明,不靠種子。日子 5／15／20 不會碰到月末夾住,不必抄夾住規則。
+  // P5c:每期帶「依哪一版基準日產生」(basis 的起算欄位／日期與版號;真專案由 DB materialize 寫入):
+  // 上一期在第 1 版(初值)產生、下一期在第 2 版(展延)之後產生——展示已完成的期保留原依據。
+  const demoAnchorDate = project?.commencement_date || iso(daysFromNow(-160))
   const monthlyPeriods = (obId, day) => {
     const nextOffset = new Date().getDate() <= day ? 0 : 1
     return [nextOffset - 1, nextOffset].map((offset) => {
@@ -168,9 +171,32 @@ export function buildDemoData(workItems, project) {
         period_start: iso(start), period_end: iso(end), due_date: iso(due), status: done ? '已完成' : '待辦',
         completed_at: done ? new Date(due.getFullYear(), due.getMonth(), due.getDate() - 1, 15).toISOString() : null,
         evidence_submittal_id: null, evidence_document_id: null, review_note: null,
+        anchor_version_no: done ? 1 : 2, basis: { anchor_key: 'commencement_date', anchor_date: demoAnchorDate, bound_date: project?.end_date || null },
       }
     })
   }
+  // 基準日版本(P5c project_anchor_versions 的形狀;真專案由 DB trigger／RPC 產生、append-only):
+  // 第 1 版=建案初值;第 2 版=機關核准展延竣工日 60 日(附函文),受影響的是竣工類單次義務(改期)——
+  // 已完成的開工類義務保留原依據(kept)。竣工日=種子的 end_date,展延前的舊竣工日往前推 60 天。
+  const demoEnd = project?.end_date || null
+  const demoEndBefore = demoEnd ? iso(new Date(new Date(`${demoEnd}T08:00:00`).getTime() - 60 * 86400e3)) : null
+  const anchorVersions = [
+    { id: 'ANCHOR-DEMO-1', project_id: project?.project_id || 'demo', version_no: 1, change_kind: 'initial',
+      anchors: { award_date: project?.award_date || null, notice_date: project?.notice_date || null, commencement_date: project?.commencement_date || null, end_date: demoEndBefore },
+      changed_keys: ['award_date', 'notice_date', 'commencement_date', 'end_date'].filter((k) => (k === 'end_date' ? demoEndBefore : project?.[k])),
+      effective_from: project?.award_date || null, reason: null, source_ref: null, source_change_order_id: null, effects: [],
+      created_by: null, created_at: afterCommencement(-40) },
+    { id: 'ANCHOR-DEMO-2', project_id: project?.project_id || 'demo', version_no: 2, change_kind: 'extension',
+      anchors: { award_date: project?.award_date || null, notice_date: project?.notice_date || null, commencement_date: project?.commencement_date || null, end_date: demoEnd },
+      changed_keys: demoEnd ? ['end_date'] : [], effective_from: iso(daysFromNow(-20)), reason: '機關核准展延工期 60 日曆天', source_ref: '府工字第 1130004567 號',
+      source_change_order_id: null,
+      effects: demoEnd ? [
+        { kind: 'rescheduled', obligation_id: 'OB-8', title: '提送竣工圖說', period_key: null, old_due: iso(new Date(new Date(`${demoEndBefore}T08:00:00`).getTime() + 30 * 86400e3)), new_due: iso(new Date(new Date(`${demoEnd}T08:00:00`).getTime() + 30 * 86400e3)), status: '待辦' },
+        { kind: 'rescheduled', obligation_id: 'OB-13', title: '竣工後 30 日內辦理初驗', period_key: null, old_due: iso(new Date(new Date(`${demoEndBefore}T08:00:00`).getTime() + 30 * 86400e3)), new_due: iso(new Date(new Date(`${demoEnd}T08:00:00`).getTime() + 30 * 86400e3)), status: '待辦' },
+        { kind: 'rescheduled', obligation_id: 'OB-14', title: '一般工項保固期滿(1 年)', period_key: null, old_due: iso(new Date(new Date(`${demoEndBefore}T08:00:00`).getTime() + 365 * 86400e3)), new_due: iso(new Date(new Date(`${demoEnd}T08:00:00`).getTime() + 365 * 86400e3)), status: '待辦' },
+      ] : [],
+      created_by: null, created_at: new Date(Date.now() - 20 * 86400e3).toISOString() },
+  ]
   const obligations = [
     { id: 'OB-1', title: '提送施工計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', completed_at: afterCommencement(12), sort_order: 0 },
     // W-01 佐證鏈 demo:品質計畫義務掛上核准的 SUB-001,展示「義務→送審」可勾稽
@@ -474,7 +500,7 @@ export function buildDemoData(workItems, project) {
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(8) },
   ]
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions }
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, anchorVersions, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions }
 }
 
 // ── 跨案總覽的示範姊妹案(靜態摘要;A 區為主 storyline,件數由 store 即時計算) ──

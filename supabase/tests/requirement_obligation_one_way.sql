@@ -54,9 +54,10 @@ insert into auth.users (
    '{"full_name":"W52 Contractor","org_type":"contractor"}', now(), now());
 
 alter table public.projects disable trigger on_project_created;
--- 開工日:P5b 起循環義務(下方 monthly 需求)的期次從開工日起算,沒有開工日就沒有期次可操作。
-insert into public.projects (id, name, commencement_date)
-values ('52100000-0000-0000-0000-000000000001', 'W5-2 One-way Project', '2026-02-01');
+-- 開工日:P5b 起循環義務(下方 monthly 需求)的期次從開工日起算,沒有開工日就沒有期次可操作;
+-- 竣工日:P5c 起是期次的界限日,沒有它(且未登錄竣工)不產生期次。
+insert into public.projects (id, name, commencement_date, end_date)
+values ('52100000-0000-0000-0000-000000000001', 'W5-2 One-way Project', '2026-02-01', '2028-12-31');
 alter table public.projects enable trigger on_project_created;
 
 insert into public.project_members (project_id, user_id, role) values

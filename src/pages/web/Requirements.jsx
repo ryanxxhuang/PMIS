@@ -47,7 +47,9 @@ import {
   buildTimelineItem, matchesFilters, partyStat, phaseStat, phaseWindows,
   pickDefaultId, canActOn, anchorGaps,
 } from '../../lib/obligationTimeline.js'
+import { completionDateOf } from '../../../supabase/functions/_shared/ballInCourtRules.ts'
 import AnchorDates from '../../components/AnchorDates.jsx'
+import AnchorVersions from '../../components/AnchorVersions.jsx'
 
 // 期程段軌道/摘要語意色 → 全站 token(五色語意:紅=逾期、綠=完成、藍=當前、灰=其他)
 const TRACK_BG = {
@@ -154,7 +156,8 @@ function SourcePassage({ text, range, cite }) {
 export default function Requirements() {
   const {
     currentProject, project, isPersistedProject, currentUser, obligations,
-    updateObligationStatus, submittals, createObservation, can, updateProjectAnchors, reloadObligations,
+    updateObligationStatus, submittals, createObservation, can, changeProjectAnchors, reloadObligations,
+    anchorVersions, acceptanceEvents,
   } = useStore()
   // 登入身分決定檢視方(README:產品端不渲染身分切換器,demo 換角色重登即可)
   const viewerParty = ORG_TO_PARTY[currentUser?.org_type] || '廠商'
@@ -203,11 +206,17 @@ export default function Requirements() {
   }, [analyzing, reloadEnrich, reloadObligations])
 
   // ── 檢視模型:義務列 + enrich → 狀態/期程/倒數/出處(純函式,見 obligationTimeline)
-  // 基準日吃 store 的 project(demo 落回種子專案;與今日工作同一份錨點,數字才對得上)
+  // 基準日吃 store 的 project(demo 落回種子專案;與今日工作同一份錨點,數字才對得上);
+  // 另帶實際竣工日(驗收事件推得,P5c 循環停止條件)與目前基準日版本號(依據標示)
+  const latestVersionNo = anchorVersions?.length ? anchorVersions[anchorVersions.length - 1].version_no : null
   const anchors = useMemo(() => ({
     award_date: project?.award_date, notice_date: project?.notice_date,
     commencement_date: project?.commencement_date, end_date: project?.end_date,
-  }), [project])
+    completion_date: completionDateOf(acceptanceEvents), version_no: latestVersionNo,
+  }), [project, acceptanceEvents, latestVersionNo])
+  // 下一次改基準日要記的依據(P5c):類別／函文或變更案號／生效日
+  const [anchorBasis, setAnchorBasis] = useState({ change_kind: 'edit', source_ref: '', effective_from: '' })
+  const [anchorMsg, setAnchorMsg] = useState('')
   const items = useMemo(() => obligations.map((ob) => buildTimelineItem(ob, {
     requirement: ob.requirement_id ? reqById.get(ob.requirement_id) : null,
     sources: ob.requirement_id ? sourcesByReq.get(ob.requirement_id) : null,
@@ -272,14 +281,21 @@ export default function Requirements() {
 
   // 基準日缺口與就地設定:開工類義務推不出到期日的主因就是開工日沒設,而設定
   // 入口原本只在隱藏的期限追蹤頁——把設定放在後果看得到的地方(履約期程卡)。
-  // 寫入 DB-first(同 B-04):updateProjectAnchors 成功才更新 store 的 project,
-  // anchors/items 隨之重算,使用者當場看到「未觸發」翻成有日期。demo 不出現
-  // (種子案基準日齊全,且 updateProjectAnchors 需真專案)。
+  // 寫入 DB-first(同 B-04):P5c 起經 RPC 留版(類別／依據／生效日),DB 同交易重算沒動過的期次與
+  // 未完成單次義務的到期日並記差異;store 成功後重載義務與版本,anchors/items 隨之重算,使用者當場看到
+  // 「未觸發」翻成有日期、並知道第 N 版影響了哪些事項。demo 不出現(種子案基準日齊全)。
   const gaps = useMemo(() => anchorGaps(pool, anchors), [pool, anchors])
   const setAnchor = async (key, val) => {
-    setAnchorErr('')
-    const { error } = await updateProjectAnchors({ [key]: val || null })
-    if (error) setAnchorErr(friendlyError(error, '基準日未儲存'))
+    setAnchorErr(''); setAnchorMsg('')
+    const { error, version } = await changeProjectAnchors({ [key]: val || null }, {
+      change_kind: anchorBasis.change_kind, source_ref: anchorBasis.source_ref.trim() || null, effective_from: anchorBasis.effective_from || null,
+    })
+    if (error) { setAnchorErr(friendlyError(error, '基準日未儲存')); return }
+    if (!version) { setAnchorMsg('值沒有變更，未留新版本。'); return }
+    const effects = Array.isArray(version.effects) ? version.effects : []
+    const changed = effects.filter((e) => e.kind !== 'kept').length
+    const kept = effects.filter((e) => e.kind === 'kept').length
+    setAnchorMsg(`已留第 ${version.version_no} 版：${changed} 個事項改期／增減${kept ? `，${kept} 個已完成事項保留原依據` : ''}。`)
   }
 
   // ── 選取/深連結(?obligation=)/切案重置/初次自動選取:共用殼 hook。
@@ -383,6 +399,8 @@ export default function Requirements() {
       ['責任方', selected.who],
       ['階段', PHASES.find((p) => p.key === selected.phase)?.name || '—'],
       ['到期日', selected.dateLabel === '—' ? (selected.recurrenceGap ? selected.recurrenceGap.label : '依條件觸發') : `${selected.dateLabel}（${selected.countdown}）`],
+      // P5c:到期日依哪一版基準日(期次:產生時的版本;單次:完成時留版或現行基準日)
+      ...(selected.dueBasis ? [['依據', selected.dueBasis]] : []),
       ['頻率', selected.kind || '單次'],
       // 循環義務(P5b):本期=最早未結的一期;逐期狀態在下方「期次」
       ...(selected.recurring ? [['本期', selected.currentPeriod ? `${selected.currentPeriod} 期` : '—']] : []),
@@ -552,12 +570,19 @@ export default function Requirements() {
             <MSym name="event_repeat" size={15} className="text-[var(--text-3)]" />
             <span className="text-footnote font-medium text-[var(--text)]">期次（{selected.periods.length}）</span>
           </div>
-          {selected.periods.length === 0 ? (
-            <p className="text-xs text-[var(--text-3)] leading-relaxed">
-              {selected.recurrenceGap ? selected.recurrenceGap.label : '尚未產生期次。'}
-              {selected.recurrenceGap?.kind === 'rule' && '——請到擷取審核廢止取代後補登循環規則。'}
-              {selected.recurrenceGap?.kind === 'anchor' && '——補上基準日後期次會立即產生。'}
+          {/* 沒有期次的原因、或(P5c)停止條件判不出／已越界(DB 已停止產生新期,舊期仍在) */}
+          {selected.recurrenceGap && (
+            <p className="text-xs text-[var(--text-3)] leading-relaxed mb-2">
+              {selected.recurrenceGap.label}
+              {selected.recurrenceGap.kind === 'rule' && '——請到擷取審核廢止取代後補登循環規則。'}
+              {selected.recurrenceGap.kind === 'anchor' && '——補上基準日後期次會立即產生。'}
+              {selected.recurrenceGap.kind === 'stop' && (selected.ob.category === '保固'
+                ? '——系統沒有保固期滿日可判定循環何時結束，暫不自動產生期次。'
+                : '——期次已停止自動產生：補上或展延竣工日，或到驗收頁登錄竣工，期次會依竣工日收尾。')}
             </p>
+          )}
+          {selected.periods.length === 0 ? (
+            !selected.recurrenceGap && <p className="text-xs text-[var(--text-3)] leading-relaxed">尚未產生期次。</p>
           ) : (
             <ul role="list" aria-label={`${selected.title} 期次`} className="divide-y divide-[var(--border-2)] border border-[var(--border-2)] rounded-lg">
               {selected.periods.map((p) => (
@@ -568,6 +593,8 @@ export default function Requirements() {
                   <Badge color={OB_STATUS[p.status].badge} className="ml-auto">{p.rawStatus}</Badge>
                   {p.status === 'done' && p.onTime === false && <span className="text-caption text-[var(--amber-text)]">遲交</span>}
                   {p.reviewNote && <span className="w-full text-caption text-[var(--amber-text)]">待核對:{p.reviewNote}</span>}
+                  {/* 這一期依哪一版基準日產生／改期(P5c);已完成的期保留原依據 */}
+                  <span className="w-full num text-caption text-[var(--text-3)]">{p.basisLabel}</span>
                 </li>
               ))}
             </ul>
@@ -782,11 +809,16 @@ export default function Requirements() {
       {isPersistedProject && anchorOpen && (
         <div className="mb-3 rounded-[10px] border border-[var(--border-card)] bg-[var(--bg)] px-3.5 pt-3 pb-3.5">
           <div className="flex flex-wrap gap-4">
-            <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!can.edit} />
+            <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!can.edit} basis={anchorBasis} onBasis={setAnchorBasis} />
           </div>
           <ErrorBanner msg={anchorErr} className="mt-2" />
+          {anchorMsg && <p role="status" className="mt-2 text-footnote text-[var(--green-text)]">{anchorMsg}</p>}
+          {/* P5c:目前依據哪一版、哪份文件;變更後受影響事項;版本紀錄可展開 */}
+          <div className="mt-3 pt-3 border-t border-[var(--border-2)]">
+            <AnchorVersions versions={anchorVersions} />
+          </div>
           <p className="text-xs text-[var(--text-3)] mt-2">
-            到期日、倒數與逾期都依基準日即時計算;「開工日」請填實際開工日(非預定日),填了系統就會照它發提醒。
+            未完成的到期日、倒數與逾期依現行基準日即時計算;已完成的期次與義務保留完成當時的依據。每次變更都留一版——展延、停復工、核准變更工期請選類別並填依據函文。「開工日」請填實際開工日(非預定日),填了系統就會照它發提醒。
           </p>
         </div>
       )}

@@ -15,7 +15,7 @@ select has_function('public', 'materialize_obligation_periods', array['uuid'], '
 select has_function('public', 'transition_obligation_period', array['uuid','text','uuid','uuid'], '期次狀態轉移 RPC 存在');
 select has_trigger('public', 'contract_obligations', 'contract_obligations_periods_sync', '義務插入／規則變更／廢止的同步 trigger 掛上');
 select has_trigger('public', 'contract_obligations', 'contract_obligations_recurring_guard', '循環義務不可標完成的 guard 掛上');
-select has_trigger('public', 'projects', 'projects_obligation_periods_sync', '基準日變更同步 trigger 掛上');
+select has_trigger('public', 'projects', 'projects_anchor_versions_sync', '基準日變更同步 trigger 掛上(P5c 起留版＋重算取代 P5b 的 projects_obligation_periods_sync)');
 select is(has_table_privilege('authenticated', 'public.obligation_periods', 'SELECT'), true, 'authenticated 可讀期次');
 select is(has_table_privilege('authenticated', 'public.obligation_periods', 'INSERT')
   or has_table_privilege('authenticated', 'public.obligation_periods', 'UPDATE')
@@ -109,12 +109,13 @@ alter table public.projects disable trigger on_project_created;
 insert into public.projects (id, name, owner_name, contractor_name, supervisor_name, created_by,
                              award_date, notice_date, commencement_date, end_date)
 values
+  -- 竣工日(完工期限)自 P5c 起是循環期次的界限日:沒有它(且未登錄竣工)不產生期次;這裡給遠期日期讓期次照 P5b 規則產生。
   ('c5b10000-0000-0000-0000-000000000001', '循環期次測試案', '機關', '廠商', '監造',
-   'c5b00000-0000-0000-0000-0000000000a5', '2026-01-10', '2026-01-20', '2026-02-20', null),
+   'c5b00000-0000-0000-0000-0000000000a5', '2026-01-10', '2026-01-20', '2026-02-20', '2028-12-31'),
   ('c5b10000-0000-0000-0000-000000000002', '別案', '機關', '廠商', '監造',
-   'c5b00000-0000-0000-0000-0000000000a4', '2026-01-10', '2026-01-20', '2026-02-20', null),
+   'c5b00000-0000-0000-0000-0000000000a4', '2026-01-10', '2026-01-20', '2026-02-20', '2028-12-31'),
   ('c5b10000-0000-0000-0000-000000000003', '基準日未設案', '機關', '廠商', '監造',
-   'c5b00000-0000-0000-0000-0000000000a5', null, null, null, null);
+   'c5b00000-0000-0000-0000-0000000000a5', null, null, null, '2028-12-31');
 alter table public.projects enable trigger on_project_created;
 
 insert into public.project_members (project_id, user_id, role) values

@@ -16,7 +16,7 @@
 // 共用案例 tests/fixtures/ball-in-court.cases.json 由 ballInCourt.cases.test.js 對本檔斷言。
 import { collaborationItems, detailLink } from './ballInCourt.js'
 import {
-  BALL_SIDES, OBLIGATION_SIDE, obligationEntries, obligationInWindow, periodTitle, daysBetweenIso, FIELD_DOC_PARTIES,
+  BALL_SIDES, OBLIGATION_SIDE, obligationEntries, obligationInWindow, periodTitle, daysBetweenIso, completionDateOf, FIELD_DOC_PARTIES,
 } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 import { parseLocalDate, taipeiISODate, localISODate } from './dates.js'
 import { computeObligationDue } from './contractDue.js'
@@ -99,10 +99,12 @@ function task({ key, id = null, tag, title, meta, ball, to, due = null, todayIso
 
 // 待補設定的處理入口:責任方／循環規則缺口在擷取審核該筆(已確認內容不可改,廢止取代後補登;
 // 義務 id 就是 requirement id,?highlight= 直達);基準日缺口在期限追蹤的基準日卡;
-// 回填待核對在期限追蹤的那一期。
+// 回填待核對在期限追蹤的那一期;循環停止條件缺口(P5c)在期限追蹤的該筆(基準日卡就在下方,補竣工日／展延;
+// 已竣工的到驗收頁登錄)。
 function setupLink(kind, ob, period) {
   if (kind === 'responsible' || kind === 'rule') return detailLink('/requirements/review', 'highlight', ob.id)
   if (kind === 'review') return periodLink(ob, period)
+  if (kind === 'stop') return detailLink('/deadlines', 'obligation', ob.id)
   return '/deadlines'
 }
 // 「標為已提送」在期限追蹤頁(契約重點改版後遷出),待辦要導到能完成的地方;帶 ?obligation=<id>
@@ -114,13 +116,16 @@ function periodLink(ob, period) {
 
 export function buildTodayTasks(input = {}) {
   const {
-    org, today = new Date(), anchors = {},
+    org, today = new Date(), anchors: anchorsIn = {},
     rfis = [], submittals = [], valuations = [], defects = [], inspections = [],
     observations = [], changeOrders = [], obligations = [], testSamples = [],
     acceptanceEvents = [], inspectionPoints = [], siteLogs = [],
     fieldDocuments = [], fieldDocumentSubmissions = [],
   } = input
   const todayIso = taipeiISODate(today)
+  // 實際竣工日(P5c 循環停止條件)由驗收事件推得(竣工確認優先、否則報竣),與 Edge 收集器同一支共用規則;
+  // 呼叫端已算好就沿用(共用案例直接給)
+  const anchors = { ...anchorsIn, completion_date: anchorsIn.completion_date ?? completionDateOf(acceptanceEvents) }
   // 期限引擎(sampleAlerts / acceptanceAlerts / computeObligationDue)都用 Date 相減再
   // Math.round 算日差,傳含時間的「現在」會把整整 8 個日曆日壓成 7 —— 台北晚上開頁時,
   // 還有 8 天的試驗會被列進「7 日內」,而畫面上的天數(由日期字串算)卻寫 8 天。
@@ -156,7 +161,7 @@ export function buildTodayTasks(input = {}) {
   // 責任不明／基準日沒填／循環規則不完整／回填待核對 → 待補設定(三方都看得到,各有處理入口)。
   const computeDueIso = (ob) => localISODate(computeObligationDue(ob, anchors))
   for (const ob of obligations) {
-    for (const { ball, dueIso, period } of obligationEntries(ob, { anchors, computeDueIso })) {
+    for (const { ball, dueIso, period } of obligationEntries(ob, { anchors, computeDueIso, todayIso })) {
       if (ball.who === 'done') continue
       const suffix = period ? `:${period.period_key}` : ''
       const title = periodTitle(ob.title, period)

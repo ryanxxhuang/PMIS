@@ -20,7 +20,7 @@ const { pg } = await vi.hoisted(async () => {
   return { pg: createScriptedSupabase() }
 })
 vi.mock('../../lib/supabase.js', () => configured(pg.client))
-vi.mock('../db.js', () => ({ loadObligationsFromDB: vi.fn(async () => []) }))
+vi.mock('../db.js', () => ({ loadObligationsFromDB: vi.fn(async () => []), loadAnchorVersionsFromDB: vi.fn(async () => []) }))
 vi.mock('../../lib/documentIngestion.js', () => ({ ingestRequirementDocument: vi.fn(async () => ({ error: null, run: { id: 'r1' } })) }))
 
 import { useLedgerSlice } from './ledger.js'
