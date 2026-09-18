@@ -12,7 +12,7 @@
 npm run test:e2e:real
 ```
 
-七條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5，見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+八條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）（後兩條見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -50,5 +50,13 @@ Storage 不隨 DB cascade 清除：contract-documents 以 projects/<id>/ 為前�
 ```bash
 supabase functions serve --env-file e2e-real/stub.env   # terminal A
 npm run test:e2e:real -- e2e-real/chain5-field-docs.spec.js   # terminal B
+```
+
+## 監造日誌鏈（chain 6，P3a 頁面）
+
+`e2e-real/chain6-supervisor-log.spec.js`（前置同 chain 5：本機 TOTP＋Edge stub）：監造上傳監造照片→伺服器起稿監造日誌（示範範本；到場永遠留空且 pending）→`/site` 現場文書清單直達 `/supervisor-log?doc=`→帶入本人為到場人員、補天氣、廠商施工情形標不適用→存檔→以 RPC 直打證明到場只 `filled` 簽署回 `PD004 needs_confirmation`、廠商照片當監造證據存版列附件問題且簽署 `PD005`→回頁面重新載入、廠商照片改為參考、確認到場人員→存檔→MFA 簽署（`supervisor_logs` 落庫，到場含 `user_id` 與時段，不適用的摘要為 null 不寫「無」）→列印頁印簽署版本（版本、雜湊前 12 碼、示範範本、簽署者）→提送機關→廠商可讀但唯讀→機關（1024）退回並填原因→監造（375）看到原因、補備註成新版本、重簽再送、無水平溢位→機關收件；最後核對提送列 `submit:4→return:4→submit:5→receive:5`、diff 由 DB 算、文件 `received` 綁同一 `supervisor_logs` 列。工具鏈限制同 chain 5：本機 `functions serve` 需暫移 `supabase/functions/deno.lock`（跑完還原，不提交）。
+
+```bash
+npm run test:e2e:real -- e2e-real/chain6-supervisor-log.spec.js
 ```
 

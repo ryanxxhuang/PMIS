@@ -131,6 +131,46 @@ test.describe('監造', () => {
     await expect(page.locator('input:not([type="date"])')).toHaveCount(0)
   })
 
+  // P3a 監造日誌頁(示範模式):監造可達、範本標「示範範本」、到場人員要親自確認(人填≠確認)、
+  // 存檔後草稿只在本次瀏覽;簽署回「示範模式無法簽署」不假裝已簽(沒有雜湊／簽署者／伺服器時間可核對)。
+  test('監造日誌:示範範本標示、到場人員親自確認後才可簽;示範模式不假裝可簽署', async ({ page }) => {
+    await loginAs(page, 'supervisor')
+    await gotoHash(page, '/supervisor-log')
+    await expect(page.getByRole('heading', { level: 1, name: '監造日誌' })).toBeVisible()
+    const card = page.getByRole('group', { name: '本日監造日誌', exact: true })
+    await expect(card.getByText('示範範本').first()).toBeVisible()
+    await expect(card.getByRole('note')).toContainText('非任何機關公定或法定格式')
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText('本日尚無監造日誌')
+    await expect(page.getByText(/待補 \d+ 項/).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0)
+    // 到場:帶入本人 → 「已填・待親自確認」仍在待補;確認後離開待補
+    await card.getByRole('button', { name: '帶入本人' }).click()
+    await expect(card.getByText('已填・待親自確認')).toBeVisible()
+    await expect(card.getByText(/到場人員與時段（待親自確認）/)).toBeVisible()
+    await card.getByRole('button', { name: '確認到場人員' }).click()
+    await expect(card.getByText(/到場人員與時段（待親自確認）/)).toHaveCount(0)
+    // 天氣、監造事項、廠商施工情形補齊 → 存檔成版本 1、可簽署
+    await page.getByRole('textbox', { name: '天氣(上午)' }).fill('晴')
+    await page.getByRole('textbox', { name: '天氣(下午)' }).fill('晴')
+    await card.getByRole('button', { name: '加一項監造事項' }).click()
+    await page.getByLabel('監造事項 1 內容').fill('抽查 4F 版牆鋼筋綁紮')
+    await page.getByRole('textbox', { name: '施工情形摘要' }).fill('4F 版牆混凝土澆置 120 M3')
+    await page.getByRole('button', { name: '存檔', exact: true }).click()
+    await expect(page.getByText(/已存檔 ✓ 版本 1，可簽署/)).toBeVisible()
+    await expect(page.getByText('示範模式：草稿只存在本次瀏覽')).toBeVisible()
+    // 示範模式簽署:按下去回明確訊息,不會出現「已由 … 簽署」
+    const lifecycle = page.getByRole('region', { name: '文件狀態與簽署' })
+    await expect(lifecycle.getByText(/本人確認 .* 監造日誌\(版本 1,內容雜湊/)).toBeVisible()
+    await lifecycle.getByRole('button', { name: '簽署此版本' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '簽署', exact: true }).click()
+    await expect(lifecycle.getByText(/示範模式無法簽署／提送/)).toBeVisible()
+    await expect(lifecycle.getByText(/已由 .* 簽署/)).toHaveCount(0)
+    // 375:整頁無水平溢位(到場列、監造事項列在窄版面自己折行)。從桌機縮到手機時側欄有 300ms 收合過場,
+    // 量到的可能是動畫中間值 → poll 到落定(與 a11y.spec 量側欄寬同一做法),不是放寬斷言。
+    await page.setViewportSize({ width: 375, height: 812 })
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), { timeout: 5_000 }).toBe(true)
+  })
+
   // 規範 §9.7 收件匣直達那一筆:待辦連結帶單條 query,落地就是該筆的詳情,不是頁首。
   // 選 SUB-002 與 RFI-002:兩筆是 demo 監造待辦裡到期最近的,穩定落在首頁 5 筆上限內。
   // SUB-002 不是 /submittals 的預設選取(預設是「待我處理」第一筆 SUB-003)——選中它

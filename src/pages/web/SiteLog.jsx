@@ -32,6 +32,7 @@ import DailyLogFields, { fieldAnchorId } from '../../components/sitelog/DailyLog
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'
 import IntakeUploader from '../../components/sitelog/IntakeUploader.jsx'
+import WeatherPull from '../../components/sitelog/WeatherPull.jsx'
 import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 
 const validDate = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(s || '') ? s : null)
@@ -39,10 +40,10 @@ const EDITABLE_STATUSES = ['draft', 'pending_input', 'in_review', 'returned']
 
 export default function SiteLog() {
   const {
-    project, workItems, adjustedItems, siteLogs, currentProject, can, currentUser, demoMode,
+    project, workItems, adjustedItems, siteLogs, can, currentUser, demoMode,
     fieldDocuments: fieldDocState, fieldDocsLoading, reloadFieldDocs, findActiveDailyLogDoc, createDailyLogDraft, getFieldDocument, saveFieldDocumentVersion,
     signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, listPhotosByIds, listSitePhotos,
-    agentActions, resolveAgentAction, listMfaFactors, verifyMfa, fetchWeather, updateProjectAnchors,
+    agentActions, resolveAgentAction, listMfaFactors, verifyMfa,
   } = useStore()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -94,10 +95,6 @@ export default function SiteLog() {
   const [pendingIntent, setPendingIntent] = useState(null)
   const [appliedSuggestions, setAppliedSuggestions] = useState([])
   const [officialView, setOfficialView] = useState(false)
-  const [weatherBusy, setWeatherBusy] = useState(false)
-  const [coordOpen, setCoordOpen] = useState(false)
-  const [lat, setLat] = useState(currentProject?.latitude ?? '')
-  const [lon, setLon] = useState(currentProject?.longitude ?? '')
   useUnsavedEdit('site-log', dirty ? `施工日誌 ${date}（未存檔）` : null)
 
   // 載入:切日期一律整包載;同日期下文件變動(存檔後、起稿後)只在 !dirty 時同步,dirty 時絕不覆寫輸入
@@ -181,35 +178,13 @@ export default function SiteLog() {
     onFormChange(next)
     setSavedMsg(`已帶入 ${c.from} 的班組/機具/材料與工項列表,數量請填今日實際值後存檔`, 'info')
   }
-  const hasCoords = currentProject?.latitude != null && currentProject?.longitude != null
+  // 帶入天氣(WeatherPull 共用元件):值與來源 cwa 一起寫進表單
   const applyWeather = (r) => {
     if (!form) return
     const src = { status: 'filled', source: 'cwa' }
     const content = { ...form.content, weather_am: r.am || form.content.weather_am, weather_pm: r.pm || form.content.weather_pm }
     const sources = { ...form.sources, ...(r.am ? { weather_am: src } : {}), ...(r.pm ? { weather_pm: src } : {}) }
     onFormChange({ content, sources })
-  }
-  const pullWeather = async () => {
-    if (!hasCoords) { setCoordOpen(true); return }
-    setWeatherBusy(true); setSavedMsg('')
-    const r = await fetchWeather(currentProject.latitude, currentProject.longitude, date)
-    setWeatherBusy(false)
-    if (r?.error) { setSavedMsg(`天氣未帶入:${r.error}`, 'info'); return }
-    applyWeather(r)
-    setSavedMsg(`天氣已帶入(資料來源:${r.source || '中央氣象局'}）`, 'info')
-  }
-  const saveCoords = async () => {
-    const la = parseFloat(lat), lo = parseFloat(lon)
-    if (isNaN(la) || isNaN(lo)) { setSavedMsg('請輸入有效的經緯度數字'); return }
-    setWeatherBusy(true)
-    const { error } = await updateProjectAnchors({ latitude: la, longitude: lo })
-    if (error) { setWeatherBusy(false); setSavedMsg(friendlyError(error, '座標未儲存')); return }
-    setCoordOpen(false)
-    const r = await fetchWeather(la, lo, date)
-    setWeatherBusy(false)
-    if (r?.error) { setSavedMsg(`座標已存,但天氣未帶入:${r.error}`, 'info'); return }
-    applyWeather(r)
-    setSavedMsg(`工地座標已儲存;天氣已帶入(${r.source || '中央氣象局'}）`, 'info')
   }
 
   // AI 建議(文件已有人工版本後,重新辨識只留建議):套用進表單(dirty)、存檔成功才標 accepted;拒絕即標 rejected
@@ -366,11 +341,7 @@ export default function SiteLog() {
               <div className="max-md:w-full"><Field label="日期"><Input type="date" value={date} onChange={(e) => changeDate(e.target.value)} /></Field></div>
               <span role="status" aria-label={`保存狀態：${saveStatus.text}`} className={`inline-flex items-center h-8 mb-0.5 px-2.5 rounded-lg text-footnote font-medium ${saveStatus.cls}`}>{saveStatus.text}</span>
               {doc && <Badge color={docStatusMeta(doc, org).tone}>{DOC_STATUS_LABEL[doc.status] || doc.status}</Badge>}
-              {formEditable && (
-                <Button variant="secondary" onClick={pullWeather} disabled={weatherBusy} title="依工地座標向中央氣象局帶入今日天氣">
-                  <MSym name="partly_cloudy_day" size={14} />{weatherBusy ? '帶入中…' : '帶入天氣'}
-                </Button>
-              )}
+              {formEditable && <WeatherPull date={date} onApply={applyWeather} onMessage={setSavedMsg} />}
               {formEditable && !legacyLog && prevLog && !(form.content.labor?.length) && (
                 <Button variant="secondary" onClick={copyYesterday} title={`帶入 ${prevLog.log_date} 的班組/機具/材料`}>
                   <MSym name="library_add" size={14} />複製昨日
@@ -380,15 +351,6 @@ export default function SiteLog() {
                 <Button variant="outline" onClick={() => setOfficialView((v) => !v)}>{officialView ? '欄位檢視' : '公定格式檢視'}</Button>
               )}
             </div>
-            {formEditable && coordOpen && (
-              <div className="mb-4 p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex flex-wrap items-end gap-3">
-                <div className="text-xs text-[var(--text-2)] w-full">設定工地經緯度(存一次,之後每天一鍵帶入中央氣象局天氣)。可在 Google 地圖長按工地位置複製座標。</div>
-                <Field label="緯度 Latitude"><Input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="24.9937" className="!w-28 num" /></Field>
-                <Field label="經度 Longitude"><Input value={lon} onChange={(e) => setLon(e.target.value)} placeholder="121.3009" className="!w-28 num" /></Field>
-                <Button onClick={saveCoords} busy={weatherBusy}>{weatherBusy ? '處理中…' : '儲存並帶入天氣'}</Button>
-                <Button variant="ghost" size="sm" onClick={() => setCoordOpen(false)}>取消</Button>
-              </div>
-            )}
 
             {/* 樂觀併發:伺服器版本已前進(別人或 AI 起稿加了版本)→ 明講、由人決定重新載入,不默默覆蓋 */}
             {conflict && (

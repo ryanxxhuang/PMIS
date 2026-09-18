@@ -4,8 +4,8 @@
 // 依角色只列「你在這裡能辦的事」(can 只是 UX,伺服器仍是安全邊界)。
 // P2c:主動作「拍照／上傳」(IntakeUploader:保存照片→伺服器辨識起稿)、「上傳批次」(離頁／重登入後
 // 從伺服器恢復,IntakeList)、「現場文書」清單(field_documents 未終態,與今日工作球權同一份資料;
-// 施工日誌開 /site-log?doc=,其餘三類 P3 前只列狀態、明寫尚未支援)。?doc=<id>(P5a 待辦的直達參數)
-// 落到這裡後轉到該文件的頁面;?intake=<id> 展開該批。
+// 施工日誌開 /site-log?doc=、監造日誌開 /supervisor-log?doc=(P3a),其餘兩類 P3b／P3c 前只列狀態、明寫尚未支援;
+// 頁面路由由 lib/fieldDocs.docPageLink 決定)。?doc=<id>(P5a 待辦的直達參數)落到這裡後轉到該文件的頁面;?intake=<id> 展開該批。
 import { useEffect, useMemo } from 'react'
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
@@ -19,13 +19,14 @@ import { visibleNavGroups, routeAllowed, BALL_SOURCES_TITLE } from '../../lib/na
 import { taipeiToday } from '../../lib/dates.js'
 import { itpStatus } from '../../lib/itp.js'
 import { sampleAlerts } from '../../lib/qc.js'
-import { docStatusMeta, DOC_TYPE_LABEL } from '../../lib/fieldDocs.js'
+import { docStatusMeta, DOC_TYPE_LABEL, docPageLink, docToOrgLabel } from '../../lib/fieldDocs.js'
 
 const pathOf = (to) => String(to || '').split('?')[0]
 
 // 依角色的一句話:只描述該角色在該頁真的做得到的動作(廠商填報/申請、監造判定/複查、機關查閱)
 const DESC = {
   '/site-log': { contractor: '審核系統擬好的日誌草稿、補齊待補欄位，簽署後提送監造。', supervisor: '查閱廠商每日日誌與照片；提送後在此收件或退回。', owner: '查閱每日施工紀錄與照片。' },
+  '/supervisor-log': { contractor: '查閱監造每日紀錄（到場、監造事項、查驗與通知）。', supervisor: '審核系統擬好的監造日誌草稿、親自確認到場人員，簽署後提送機關。', owner: '查閱監造每日紀錄；監造提送後在此收件或退回。' },
   '/quality': { contractor: '申請查驗、改善缺失後提送複查。', supervisor: '判定待查驗項目；不合格開立缺失，改善後複查結案。', owner: '查閱查驗結果與缺失改善情形。' },
   checklist: { contractor: '填寫自主檢查表，合格後可隨查驗申請檢附。', supervisor: '查閱廠商自主檢查紀錄與修訂版。', owner: '查閱廠商自主檢查紀錄。' },
   samples: { contractor: '登錄試體 7 天／28 天試驗值；不合格自動開缺失。', supervisor: '查閱試體試驗結果與逾期未填。', owner: '查閱試體試驗結果。' },
@@ -64,6 +65,7 @@ export default function Site() {
   const counts = useMemo(() => {
     const hasTodayLog = (siteLogs || []).some((l) => String(l?.log_date || '').slice(0, 10) === today)
     const todayDoc = documents.find((d) => d.doc_type === 'daily_log' && d.doc_date === today) || null
+    const todaySupDoc = documents.find((d) => d.doc_type === 'supervisor_log' && d.doc_date === today) || null
     const pendingInsp = (inspections || []).filter((i) => i.status === '待查驗').length
     const openQualityDefects = (defects || []).filter((d) => (d.domain || 'quality') !== 'safety' && d.status !== '已結案').length
     const openSafetyDefects = (defects || []).filter((d) => d.domain === 'safety' && d.status !== '已結案').length
@@ -75,7 +77,7 @@ export default function Site() {
       if (k === 'pending') itp.pending += 1
       else if (k === 'requested') itp.requested += 1
     }
-    return { hasTodayLog, todayDoc, pendingInsp, openQualityDefects, openSafetyDefects, pendingSamples, overdueSamples, itp, checklists: (checklistRecords || []).length }
+    return { hasTodayLog, todayDoc, todaySupDoc, pendingInsp, openQualityDefects, openSafetyDefects, pendingSamples, overdueSamples, itp, checklists: (checklistRecords || []).length }
   }, [siteLogs, documents, inspections, defects, testSamples, inspectionPoints, checklistRecords, today])
 
   // 今日施工日誌的一句話章:已簽署 > 文件狀態(待補／可簽署／已提送…)> 未填
@@ -85,9 +87,15 @@ export default function Site() {
       : counts.hasTodayLog ? { label: '今日有既有紀錄・未簽署', tone: 'amber' }
         : { label: can.edit ? '今日未填' : '今日尚無日誌', tone: can.edit ? 'amber' : 'slate' }
 
+  // 今日監造日誌的一句話章(P3a):文件狀態 > 未填(監造)／尚無(其他角色查閱)
+  const todaySupChip = counts.todaySupDoc
+    ? { label: `今日${docStatusMeta(counts.todaySupDoc, org).label}`, tone: docStatusMeta(counts.todaySupDoc, org).tone }
+    : { label: can.approve ? '今日未填' : '今日尚無監造日誌', tone: can.approve ? 'amber' : 'slate' }
+
   // 現場作業入口:to 是既有子頁的路由(含單條參數/分段),不是新流程。件數只列非零的,零件數不製造噪音。
   const entries = [
     { to: `/site-log?d=${today}`, icon: 'edit_note', label: '施工日誌', desc: DESC['/site-log'][org], chips: [todayLogChip] },
+    { to: `/supervisor-log?d=${today}`, icon: 'fact_check', label: '監造日誌', desc: DESC['/supervisor-log'][org], chips: [todaySupChip] },
     { to: '/quality?seg=inspections', icon: 'verified_user', label: '品質查驗', desc: DESC['/quality'][org],
       chips: [counts.pendingInsp > 0 && { label: `待查驗 ${counts.pendingInsp}`, tone: 'amber' },
         counts.openQualityDefects > 0 && { label: `未結案缺失 ${counts.openQualityDefects}`, tone: 'red' }] },
@@ -109,21 +117,21 @@ export default function Site() {
     { to: '/supervisor-report', label: '監造月報', desc: '自動彙整本月查驗、缺失、送審與進度的監造報表草稿。' },
   ].filter((m) => routeAllowed(m.to, org, can?.override, isPlatformAdmin))
 
-  // 現場文書清單:依觀看者排序——輪到我的在前(責任方的草稿／待補／退回／待提送;監造的待收件),再依更新時間
+  // 現場文書清單:依觀看者排序——輪到我的在前(責任方的草稿／待補／退回／待提送;提送對象的待收件,
+  // 由 docStatusMeta 依文書類型判),再依更新時間
   const docRows = useMemo(() => {
     const rows = documents.map((d) => {
       const meta = docStatusMeta(d, org)
-      const mineTurn = (d.owner_org === org && ['draft', 'pending_input', 'in_review', 'signed', 'returned'].includes(d.status))
-        || (org === 'supervisor' && d.status === 'submitted')
-      return { doc: d, meta, mineTurn }
+      return { doc: d, meta, mineTurn: !!meta.action, link: docPageLink(d) }
     })
     return rows.sort((a, b) => (Number(b.mineTurn) - Number(a.mineTurn)) || String(b.doc.updated_at || '').localeCompare(String(a.doc.updated_at || '')))
   }, [documents, org])
 
-  // ?doc=<id>:今日工作／Agent 的現場文書待辦帶的直達參數(P5a);施工日誌轉到它的頁面(保留返回來源 state)
+  // ?doc=<id>:今日工作／Agent 的現場文書待辦帶的直達參數(P5a);有頁面的類型轉到它的頁面(保留返回來源 state)
   const targetDoc = docParam ? documents.find((d) => d.id === docParam) : null
-  if (targetDoc && targetDoc.doc_type === 'daily_log') {
-    return <Navigate to={`/site-log?doc=${encodeURIComponent(targetDoc.id)}`} replace state={state} />
+  const targetLink = targetDoc ? docPageLink(targetDoc) : null
+  if (targetLink) {
+    return <Navigate to={targetLink} replace state={state} />
   }
 
   return (
@@ -136,8 +144,8 @@ export default function Site() {
         <p role="status" className="text-footnote text-[var(--text-2)]">找不到編號 {docParam} 的文書（可能已捨棄、不在本案，或連結已失效）；以下為本案現場文書清單。</p>
       )}
 
-      {/* 主動作:拍照／上傳(廠商優先;監造可上傳自己的現場證據,候選文書 P3 前標尚未支援;機關查閱) */}
-      <Card title="拍照／上傳" action={<Badge color={org === 'contractor' ? 'blue' : 'slate'}>{org === 'contractor' ? '施工日誌自動起稿' : org === 'supervisor' ? '監造證據' : '查閱'}</Badge>}>
+      {/* 主動作:拍照／上傳(廠商→施工日誌、監造→監造日誌自動起稿;查驗表單／自檢 P3b／P3c 前標尚未支援;機關查閱) */}
+      <Card title="拍照／上傳" action={<Badge color={org === 'owner' ? 'slate' : 'blue'}>{org === 'contractor' ? '施工日誌自動起稿' : org === 'supervisor' ? '監造日誌自動起稿' : '查閱'}</Badge>}>
         <IntakeUploader />
       </Card>
 
@@ -148,14 +156,14 @@ export default function Site() {
         </Card>
       )}
 
-      {/* 現場文書:未終態文件(與今日工作球權同一份資料);施工日誌開頁,其餘 P3 前只列狀態 */}
+      {/* 現場文書:未終態文件(與今日工作球權同一份資料);施工日誌／監造日誌開頁,其餘 P3b／P3c 前只列狀態 */}
       <Card title="現場文書" action={<Badge color={docRows.some((r) => r.mineTurn) ? 'amber' : 'green'} className="num">{docRows.length}</Badge>} bodyClass="p-0">
         {docRows.length === 0 ? (
-          <Empty icon="description">{demoMode ? '示範模式沒有現場文書；正式專案上傳照片後，擬好的施工日誌草稿會列在這裡。' : fieldDocsLoading ? '同步中…' : '尚無處理中的現場文書。上傳照片後，擬好的施工日誌草稿會列在這裡；已收件的文件不再列出。'}</Empty>
+          <Empty icon="description">{demoMode ? '示範模式沒有現場文書；正式專案上傳照片後，擬好的施工日誌／監造日誌草稿會列在這裡。' : fieldDocsLoading ? '同步中…' : '尚無處理中的現場文書。上傳照片後，擬好的施工日誌／監造日誌草稿會列在這裡；已收件的文件不再列出。'}</Empty>
         ) : (
           <ul aria-label="現場文書清單" className="divide-y divide-[var(--border-2)]">
-            {docRows.map(({ doc, meta, mineTurn }) => {
-              const openable = doc.doc_type === 'daily_log'
+            {docRows.map(({ doc, meta, mineTurn, link }) => {
+              const openable = !!link
               const inner = (
                 <>
                   <span className={`w-8 h-8 rounded-lg grid place-items-center shrink-0 ${mineTurn ? 'bg-[var(--amber-tint)] text-[var(--amber-text)]' : 'bg-[var(--slate-tint)] text-[var(--slate-text)]'}`}>
@@ -168,8 +176,8 @@ export default function Site() {
                       <span className="text-caption text-[var(--text-3)] num">版本 {doc.current_version_no}</span>
                     </span>
                     <span className="block mt-1 text-footnote text-[var(--text-2)] leading-snug">
-                      {meta.action ? `下一步：${meta.action}` : doc.status === 'submitted' ? '等待監造收件' : doc.status === 'received' ? '監造已收件' : '—'}
-                      {!openable && '・此類文書的頁面尚未支援（P3）'}
+                      {meta.action ? `下一步：${meta.action}` : doc.status === 'submitted' ? `等待${docToOrgLabel(doc)}收件` : doc.status === 'received' ? `${docToOrgLabel(doc)}已收件` : '—'}
+                      {!openable && '・此類文書的頁面尚未支援（P3b／P3c）'}
                     </span>
                   </span>
                   {openable && <MSym name="chevron_right" size={16} className="text-[var(--text-3)] shrink-0 mt-1" />}
@@ -178,7 +186,7 @@ export default function Site() {
               return (
                 <li key={doc.id}>
                   {openable
-                    ? <Link to={`/site-log?doc=${encodeURIComponent(doc.id)}`} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">{inner}</Link>
+                    ? <Link to={link} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">{inner}</Link>
                     : <div className="flex items-start gap-3 px-4 py-3">{inner}</div>}
                 </li>
               )

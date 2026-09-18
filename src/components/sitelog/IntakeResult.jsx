@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { Badge, Button, Input, Field } from '../ui.jsx'
 import { MSym } from '../icons.jsx'
 import {
-  DOC_TYPE_LABEL, CANDIDATE_STATE_LABEL, CANDIDATE_STATE_TONE, INTAKE_STATUS_LABEL,
+  DOC_TYPE_LABEL, CANDIDATE_STATE_LABEL, CANDIDATE_STATE_TONE, INTAKE_STATUS_LABEL, docPageLink,
 } from '../../lib/fieldDocs.js'
 
 const PHOTO_STATUS_LABEL = { pending: '待辨識', done: '已辨識', failed: '辨識失敗', not_site: '非工地照', unreadable: '模糊不可辨', duplicate: '重複照片' }
@@ -86,11 +86,12 @@ export default function IntakeResult({
                       <Badge color={CANDIDATE_STATE_TONE[state] || 'slate'}>{CANDIDATE_STATE_LABEL[state] || state}</Badge>
                     </div>
                     <div className="text-caption text-[var(--text-3)] mt-0.5">{c.reason}</div>
-                    {doc && (
-                      <Link to={`/site-log?doc=${doc.id}`} className="inline-flex items-center gap-1 mt-1 text-footnote font-medium text-[var(--blue-text)] hover:underline min-h-11 md:min-h-0">
+                    {doc && docPageLink({ doc_type: c.doc_type, id: doc.id }) && (
+                      <Link to={docPageLink({ doc_type: c.doc_type, id: doc.id })} className="inline-flex items-center gap-1 mt-1 text-footnote font-medium text-[var(--blue-text)] hover:underline min-h-11 md:min-h-0">
                         開啟文件(版本 {doc.versionNo}) <MSym name="arrow_forward" size={12} />
                       </Link>
                     )}
+                    {doc && !docPageLink({ doc_type: c.doc_type, id: doc.id }) && <span className="block mt-1 text-caption text-[var(--text-3)]">已起稿(版本 {doc.versionNo});此類文書的頁面尚未支援</span>}
                   </div>
                   {editable && onToggleExclude && c.state !== 'drafted' && c.state !== 'locked' && (
                     <Button variant="ghost" size="sm" onClick={() => onToggleExclude(i, !c.excluded)}>{c.excluded ? '取消排除' : '排除'}</Button>

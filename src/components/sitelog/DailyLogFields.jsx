@@ -11,6 +11,7 @@ import { fmtAmount as fmt } from '../../lib/format.js'
 import { addUniqueRow } from '../../lib/siteLogHelpers.js'
 import { setFieldValue, confirmField, setFieldNa, addItemRow, removeItemRow, FIELD_LABEL } from '../../lib/fieldDocs.js'
 import FieldSourceChip from './FieldSourceChip.jsx'
+import RowsEditor from './RowsEditor.jsx'
 
 export const fieldAnchorId = (key) => `field-${String(key).replace(/[^a-zA-Z0-9_-]/g, '-')}`
 
@@ -235,35 +236,6 @@ function FreqChips({ items, label, onAdd }) {
           <MSym name="add" size={14} />{label(r)}
         </button>
       ))}
-    </div>
-  )
-}
-
-// 小型列編輯器(出工/機具/材料共用):fields=[{key, ph, w, num}];唯讀=純文字列
-function RowsEditor({ rows, onChange, fields, disabled = false, naText = null }) {
-  const set = (i, key, val) => onChange(rows.map((r, j) => (j === i ? { ...r, [key]: val } : r)))
-  const add = () => onChange([...rows, Object.fromEntries(fields.map((f) => [f.key, '']))])
-  const del = (i) => onChange(rows.filter((_, j) => j !== i))
-  if (disabled) {
-    if (naText) return <p className="text-xs text-[var(--text-2)]">{naText}</p>
-    if (!rows.length) return <p className="text-xs text-[var(--text-3)]">（未填）</p>
-    return <ul className="text-sm space-y-0.5">{rows.map((r, i) => <li key={i}>{fields.map((f) => r[f.key]).filter((v) => v !== '' && v != null).join('・')}</li>)}</ul>
-  }
-  return (
-    <div>
-      {naText && <p className="text-xs text-[var(--text-2)] mb-1">{naText}</p>}
-      {rows.map((r, i) => (
-        <div key={i} className="flex items-center gap-2 mb-1.5">
-          {fields.map((f) => (
-            <Input key={f.key} value={r[f.key] ?? ''} placeholder={f.ph}
-              type={f.num ? 'number' : 'text'} min={f.num ? 0 : undefined} step={f.num ? 'any' : undefined} inputMode={f.num ? 'decimal' : undefined}
-              onChange={(e) => set(i, f.key, f.num ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
-              className={`${f.w} ${f.num ? 'text-right num' : ''}`} />
-          ))}
-          <IconButton name="close" label="刪除此列" onClick={() => del(i)} className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
-        </div>
-      ))}
-      <button type="button" onClick={add} className="inline-flex items-center gap-0.5 max-md:min-h-11 px-1 text-xs text-[var(--blue-text)] hover:underline"><MSym name="add" size={14} />加一列</button>
     </div>
   )
 }
