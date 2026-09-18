@@ -30,7 +30,7 @@
 
 ## 5. 資料與測試
 
-- `supabase/migrations/` 是 DB 唯一真相（舊 `schema.sql` 已移除，可由 Git 追溯）。已套用 migration 不回改，新增 migration 並附資料保留、相容與回復說明及 pgTAP；新表檢查 default grants：基線 default privileges 仍會自動給 `authenticated` SELECT／INSERT／UPDATE／DELETE，migration 內要明確收窄；TRUNCATE／REFERENCES／TRIGGER／MAINTAIN 自 `20260917213900` 起不再自動給任何 API 角色（含 `service_role`），由 pgTAP `api_roles_table_privileges.sql` 全表迴圈釘住，不必逐表 revoke。
+- `supabase/migrations/` 是 DB 唯一真相（舊 `schema.sql` 已移除，可由 Git 追溯）。已套用 migration 不回改，新增 migration 並附資料保留、相容與回復說明及 pgTAP；新表檢查 default grants：基線 default privileges 仍會自動給 `authenticated` SELECT／INSERT／UPDATE／DELETE，migration 內要明確收窄；TRUNCATE／REFERENCES／TRIGGER／MAINTAIN 自 `20260917213900` 起不再自動給任何 API 角色（含 `service_role`），由 pgTAP `api_roles_table_privileges.sql` 全表迴圈釘住，不必逐表 revoke。自 `20260919003000` 起 `anon` 對 public 的表／序列／函式一律沒有權限（新物件也不會自動帶），新函式對 `anon`／`authenticated`／PUBLIC 都**不可執行**：要給前端或 Edge user client 用就在 migration 明示 `grant execute … to authenticated` 並把名字加進 pgTAP `anon_and_function_privileges.sql` 的允許清單；trigger 函式與內部 helper 不 grant（trigger 觸發不檢查呼叫者 EXECUTE）。`service_role` 維持平台預設可執行（伺服器端信任邊界，本機由 `seed.sql` 對齊）；`extensions` schema 維持 PostgreSQL 內建預設。
 - 權限／狀態轉移必須有 pgTAP；確定性計算必須有單元測試。
 - 可能超過 1,000 列的查詢使用既有分頁工具，避免 PostgREST 靜默截斷。
 - 驗證：`npm run check:docs`、`npm run lint`、`npm test`、`npm run build`；Edge 改動跑 `npm run check:edge`；依範圍跑 Demo E2E、真後端 E2E／`npm run test:db`，操作見 [README](README.md) 與 [Supabase 設定](supabase/SETUP.md)。

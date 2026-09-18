@@ -133,10 +133,27 @@ async function main() {
     const container = `supabase_db_${id}`
     const psql = (sql) => sh('docker', ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', 'postgres',
       '-v', 'ON_ERROR_STOP=1', '-q', '-t', '-A', '-f', '-'], { input: sql })
-    must(psql('create extension if not exists pgtap with schema public;'), '安裝 pgtap')
+    // pgtap 裝在 extensions schema:H3(20260919003000)之後 postgres 建的新函式在 public 一律不給
+    // PUBLIC／anon／authenticated EXECUTE,extensions schema 才維持 PostgreSQL 內建預設(PUBLIC 可執行)。pgtap 的
+    // ok()/is()/throws_ok() 會在 `set local role authenticated/anon` 下被呼叫,所以要裝在 extensions;
+    // 每個 session 的 search_path 都含 extensions(下方 preamble)。
+    must(psql('create extension if not exists pgtap with schema extensions;'), '安裝 pgtap')
+    // 每個測試檔一個 psql session,session 開頭:
+    //   * search_path 含 extensions(pgtap、pgcrypto 那類);
+    //   * 測試的 helper 函式住在 pg_temp、由 postgres 建;H3 起 postgres 建的新函式(含 pg_temp)不再自動帶
+    //     PUBLIC EXECUTE,而測試會在 set local role authenticated/anon 下呼叫 helper。這裡只對**本 session**
+    //     的 temp namespace(pg_temp_N)補回 PUBLIC 的 EXECUTE default——不碰 public schema,H3 的
+    //     default privileges 斷言照常;一次性資料庫跑完即刪,這些 defacl 列不會留到任何地方。
+    const preamble = [
+      'set search_path = extensions, public;',
+      'create temp table if not exists _pgtap_session_probe ();',
+      "do $$ begin execute format('alter default privileges for role postgres in schema %I grant execute on routines to public',"
+        + ' (select nspname from pg_namespace where oid = pg_my_temp_schema())); end $$;',
+      '',
+    ].join('\n')
     let total = 0, failures = 0
     for (const file of files) {
-      const result = psql('set search_path = extensions, public;\n' + readFileSync(`supabase/tests/${file}`, 'utf8'))
+      const result = psql(preamble + readFileSync(`supabase/tests/${file}`, 'utf8'))
       const tap = tapResult(output(result), result.status)
       total += tap.passed
       if (!tap.ok) {

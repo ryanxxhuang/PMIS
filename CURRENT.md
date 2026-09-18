@@ -110,6 +110,8 @@ D-019 的契約轉錄例外：AI-origin 整理全部自動確認，即使有核�
 
 跨頁資料由 `store.jsx`／slices 管理；單頁有界資料可直接查 Supabase。目前直接查詢頁為 Contract、Requirements、RequirementsReview、Activity、Dashboard。契約共用查詢配方在 `useContractEnrichment`，不是共用狀態。重複計算／查詢放 lib；業務日期用 `dates.js`，金額格式用 `format.js`。
 
+API 角色權限（自 migration `20260919003000`，H2／H3）：`anon` 對 public 的表／view／序列／函式一律零權限——登入前只有 GoTrue（登入／註冊／密碼重設／MFA）與四條靜態公開路由，沒有任何 PostgREST 路徑；`authenticated` 只能執行明示允許清單的函式（前端／Edge user client 的 RPC、RLS 與 Storage policy 引用的 helper、欄位 default、既有明示 grant；trigger 函式與內部 helper 不可直接呼叫），清單由 pgTAP `anon_and_function_privileges.sql` 精確釘住；`service_role` 維持平台預設（伺服器端信任邊界，繞過 RLS）。default privileges：新表仍自動帶 `authenticated` DML（migration 內收窄），新函式對 `anon`／`authenticated`／PUBLIC 不可執行（fail-closed，要用就明示 grant）。全庫 security definer 函式 `search_path` 皆固定，authenticated 可呼叫者都以 `auth.uid()`／成員資格／`is_platform_admin` 檢查身分（`ai_feature_allowed` 只回開關布林，成員資格由 Edge 閘門另證）。
+
 ## 7. 仍存在的限制
 
 - 前端／Edge 的待辦涵蓋類型與期限條件有差異（機關責任期限已進首頁，Edge 早報仍缺變更／查驗／觀察）。循環履約沒有逐期資料。詳見 [雙引擎](docs/architecture/dual-engine-sync.md)。
