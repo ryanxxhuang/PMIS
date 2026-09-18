@@ -12,7 +12,7 @@
 - Demo E2E（`npx playwright test` contractor／a11y／routes／reachability／workflow-ux／owner／supervisor／contract-flow）：70 項通過（rebase 到含 P3a 前端的 main 後重跑，rebase 前 69；既有期限追蹤「標為已提送可掛送審佐證」在期次逐期依據句加入後不變）。
 - 內建 Preview（本 worktree 的 demo 模式 dev server；`.claude/launch.json` 的 `pmis-demo` 會從主目錄起服務，故改以 Bash 起 5190 再 attach）：期限追蹤詳情「依據：第 2 版基準日（開工日 2026-04-15）」、期次列「第 2 版／第 1 版基準日」、基準日卡類別／依據／生效日三欄、`AnchorVersions` 目前依據第 2 版（展延・生效・府工字第 1130004567 號）與本版變更三個事項改期；選展延＋填函文＋改竣工日 → 「示範模式：已記錄第 3 版（期次不重算）」、版本紀錄（3）、履約時程同步顯示新竣工日與同一份依據列。
 - 正式庫唯讀盤點（套用前，只取計數）：13 案（有竣工日 11、開工日 2、接獲開工通知 2、決標 1、無任何基準日 1、竣工日已過 0）；循環義務 7 筆皆施工中 monthly：6 筆所屬專案缺竣工日但已登錄報竣 2026-08-21＋竣工確認 2026-08-24（其中 1 筆已有 4 期 07–10 月、5 筆循環規則待補），1 筆所屬專案有竣工日且驗收鏈完整（竣工確認 2026-07-15）且已有 4 期 07–10 月；既有 8 期皆待辦、未動過、basis 起算日皆等於現值（回填可蓋 v1）；義務層完成 0 筆（無需補快照）；預計套用時移除竣工後的 5 期（實際數字見 CURRENT §6.3）。
-- 未做／待驗：正式 `db push`、正式庫唯讀核對、Edge 重佈與 `check:prod` 於合併後執行；保固類循環義務的保固期滿日沒有欄位可判定（列停止條件待補，需產品決定來源）；rollback 檔未演練；真後端 E2E 未跑（本單元無簽署／文件流程變更，義務期限走 pgTAP 與 Demo E2E）。
+- 合併後（PR #134，merge commit `ba8f7be`）：`db push` 套用 `20260919021500`、正式庫唯讀核對（12 版 v1、期次 8→3 皆版號 1、快照 0、trigger／grants 如設計）、四支 Edge 重佈與 `check:prod` 五頁 OK，詳 CURRENT §6.3。未做／待驗：保固類循環義務的保固期滿日沒有欄位可判定（列停止條件待補，需產品決定來源）；rollback 檔未演練；真後端 E2E 未跑（本單元無簽署／文件流程變更，義務期限走 pgTAP 與 Demo E2E）。
 
 ### 2026-09-19 D1：正式站 Cloudflare 邊緣注入與 `check:prod` 漏檢（`codex/slimming-d1-edge-injection`，PR #133）
 
