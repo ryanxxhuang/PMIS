@@ -10,6 +10,9 @@
 -- 表只給 DML(select/insert/update/delete):H1(20260917213900)已把 TRUNCATE/REFERENCES/
 -- TRIGGER/MAINTAIN 從三個 API 角色與 default privileges 收回,hosted 的 service_role 也只剩
 -- DML;seed 在 migration 之後執行,若這裡仍 `grant all` 會把四種權限加回來、本機與正式不一致。
+-- H2/H3(20260919003000)之後:anon 對表/序列/函式一律沒有權限、新函式對 anon/authenticated/PUBLIC
+-- 都不可執行(migration 明示 grant 才有),seed 不得放寬這三者;service_role 的函式 EXECUTE 維持
+-- hosted 平台預設,由下方對齊(理由見該段註解)。
 grant usage on schema public to service_role;
 grant select, insert, update, delete on all tables in schema public to service_role;
 grant all on all sequences in schema public to service_role;
