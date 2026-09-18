@@ -1,9 +1,18 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-19｜P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-19｜D1 正式站邊緣注入與 `check:prod` 漏檢（Vitest＋`wrangler dev`＋demo 重佈實測）、P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-19 D1：正式站 Cloudflare 邊緣注入與 `check:prod` 漏檢（`codex/slimming-d1-edge-injection`，PR #133）
+
+- 來源查證（唯讀 `curl`）：app `/`、`/login`、`/agent`、`/demo/` 與 demo `/`、`/login` 的 HTML 都在 `</body>` 前多一段行內載入器（建 1×1 iframe 載 `/cdn-cgi/challenge-platform/scripts/jsd/main.js`，帶當次 `cf-ray`），不分 UA；apex `gov-agent.ai` 回 `server: GitHub.com`、無 `cf-ray`（DNS-only），只有行銷站自己手動載的 beacon。對照 Cloudflare 文件：這是 Bot Fight Mode 自動開啟的 JavaScript Detections，Free 方案「automatically enabled and cannot be disabled」、不能依主機／路徑排除、不走 WAF 規則；文件同時明載回應帶 `Cache-Control: no-transform` 時不注入。
+- `npm test`：128 檔、1,385 項通過（新增 `scripts/check-prod.test.js` 13 條：允許清單由 `index.html` 推導、Vite 雜湊、正式站實抓 jsd 樣本、cf-beacon、Rocket Loader、email-decode、任意行內腳本、單／無引號 src、CSP `script-src` 精確比對三種放寬變形、缺 `no-transform`、資產規則、`/demo/` 相對路徑）；`npm run lint` 零警告；`npm run build`；`npm run check:docs` 55 檔、391 連結、0 錯誤。
+- `wrangler dev`（本機，`wrangler.demo.jsonc`＋新 `_headers`）：`/`、`/login`（SPA fallback）、`/theme-boot.js` 為 `public, max-age=0, must-revalidate, no-transform`；`/index.html` 307 到 `/`；`/assets/index-*.js` 為 `public, max-age=31536000, immutable`；`/.well-known/security.txt` 為 `public, max-age=86400`——證實「`! Cache-Control` 再設值」可拆掉 `/*` 的逗號合併。
+- 處置前 `node scripts/check-prod.js`（正式站現況）：app `/`、`/login`、`/demo/` 與 demo `/`、`/login` 五頁全 FAIL（缺 `no-transform`＋行內腳本；`/demo/` 入口 chunk 另缺 immutable），先紅成立。
+- demo 站以本分支重佈（demo 模式建置＋`wrangler deploy --config wrangler.demo.jsonc`）後：`node scripts/check-prod.js` demo `/`、`/login`、`pmis-demo.ryanxhuang1212.workers.dev/` 三頁 OK；原始 `curl`：HTML `cache-control: public, max-age=0, must-revalidate, no-transform`、1,618 bytes 無 `content-encoding`（預期）、`<script>` 只剩 `./theme-boot.js` 與 `./assets/index-HbO4ebwG.js`、`challenge-platform` 0 次；入口 chunk `public, max-age=31536000, immutable`＋`content-encoding: br`。
+- 未做：app 站要等 PR 合併、Workers Builds 建置後再跑 `npm run check:prod`（結果記 CURRENT §6.3）；未在瀏覽器 console 逐頁複核（`check:prod` 以 HTML 內容為準，注入不存在即無錯誤可報）。
 
 ### 2026-09-19 P3a 前端：監造日誌頁（`codex/slimming-p3a-supervisor-log-ui`）
 

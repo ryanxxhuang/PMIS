@@ -25,14 +25,14 @@
 
 **Cloudflare 後台的設定不在 repo 內**，本文件核對時無法從程式讀到現值，以下屬「應該在那裡、未查證現值」：
 
-- Build command：搬遷文件當時填 `npm run build && npm run build:demo`（後者把 Supabase 環境變數設空建 `/demo` 銷售簡報站到 `dist/demo`）。**目前 build command 是否仍含 `build:demo` 未查證**；`package.json` 仍保留 `build:demo` script。
+- Build command：搬遷文件當時填 `npm run build && npm run build:demo`（後者把 Supabase 環境變數設空建 `/demo` 銷售簡報站到 `dist/demo`）。2026-09-19 現查：`https://app.gov-agent.ai/demo/` 回 200 且入口 chunk（`index-CMvR_psV.js`）與根站不同，證明 build command 仍含 `build:demo`；`public/_headers` 因此有 `/demo/assets/*` 規則，`check:prod` 也把 `/demo/` 列入。
 - Build output：`dist`。
 - 建置環境變數（現查 `grep -rhoE "import\.meta\.env\.VITE_[A-Z_]+" src | sort -u`；2026-09-11 現查為 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`、`VITE_SENTRY_DSN`、`VITE_SENTRY_ENV`、`VITE_SECURITY_CONTACT`、`VITE_APP_VERSION`）。漏設不會報錯，會安靜建出連不上資料庫或沒有錯誤回報的站。`service_role` 金鑰絕不可出現在這裡。
 - Node 版本：`.nvmrc` 為 `22`，`package.json` `engines` 釘 `>=22.13.0`；CI 讀同一份 `.nvmrc`。
 
 **repo 內會影響部署產物的檔案**：
 
-- `public/_headers`：安全標頭（X-Frame-Options、nosniff、Referrer-Policy、Permissions-Policy、HSTS 不含 preload、CSP）。改 CSP 前看檔內註解的每一行為什麼。
+- `public/_headers`：安全標頭（X-Frame-Options、nosniff、Referrer-Policy、Permissions-Policy、HSTS 不含 preload、CSP）與 `Cache-Control`。改 CSP 前看檔內註解的每一行為什麼。自 2026-09-19（D1）起 `/*` 的 `Cache-Control` 帶 `no-transform`——這是叫 Cloudflare 不要改寫 HTML（不注入 Bot Fight Mode 的 JavaScript Detections、Web Analytics beacon）的機制（D-025），HTML 因此不壓縮（1.6 KB，無感）；雜湊資產 `/assets/*`、`/demo/assets/*` 與 `security.txt` 先 `! Cache-Control` 再設自己的值，因為 `_headers` 對同名標頭是逗號合併不是覆蓋，不拆就會把 `no-transform` 帶進 JS 而失去 brotli。`_headers` 依請求路徑比對，SPA fallback 的每條路由都吃 `/*`；`/index.html` 會被 Workers 307 到 `/`，對它寫規則沒有用。
 - `public/_redirects` **已刪除**：Workers 靜態資產會自動去掉網址中的 `/index` 與 `.html`，`/* /index.html 200` 會變成無限迴圈（Cloudflare error 100324 直接拒絕部署）；SPA fallback 改由 `wrangler.jsonc` 的 `not_found_handling` 承擔。
 - `public/theme-boot.js`：首繪前套主題（CSP `script-src 'self'` 不允 inline）。
 - `npm run deploy` 是已停用的舊 gh-pages 流程，執行會主動失敗（`exit 1`），勿再用。
@@ -103,6 +103,8 @@ curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security
 
 可加驗：線上 bundle 是否含本次新 chunk（例如 PR #58 以 `AnchorDates` chunk 名確認）。
 
+**邊緣注入與 CSP（D-025）**：`npm run check:prod`（`scripts/check-prod.js`）對五個 HTML 頁面（app `/`、`/login`、`/demo/`；demo `/`、`/login`）各驗 200、CSP `script-src` 恰好 `'self'`、`Cache-Control` 含 `no-transform`、HTML 內每個 `<script>` 都在 repo `index.html` 推導的允許清單內（`./theme-boot.js`、Vite 入口 `./assets/index-<hash>.js`；行內腳本一律紅），並 HEAD 入口 chunk 驗 immutable、有壓縮、無 `no-transform`。任一項紅先看 `public/_headers` 是否被改、Cloudflare 是否新開了會改寫 HTML 的功能（Rocket Loader、Email Obfuscation、Web Analytics 自動注入、Zaraz 等）；正解永遠是關掉那個功能或讓回應帶 `no-transform`，不是放寬 CSP。也可指定網址：`node scripts/check-prod.js https://…/`。本機有 `dist/` 時腳本會先自檢 `index.html` → build 產物的推導仍成立，Vite 命名慣例一改先在本機紅。
+
 **寫回文件（`DEVELOPMENT.md` §6 完成定義）**：正式庫套用 migration 或重佈 Edge Function 後，把**套用的 migration 版本號、重佈的函式名與日期**寫進 `CURRENT.md` §6；相關待部署事項同步更新 `docs/ROADMAP.md`。2026-08-19～09-01 有 36 個 PR 未同步文件造成續接點失真，是這條被加註的原因。
 
 ## 7. 不在 repo 內的外部設定（改網域、換信箱時要一起動）
@@ -116,6 +118,8 @@ curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security
 | Sentry DSN／環境 | Cloudflare 建置環境變數 | 未查證現值 |
 | Anthropic Console 每月支出上限 | console.anthropic.com | 產品內刻意不做成本硬上限（ROADMAP 未排入），這是最後保險；未查證現值 |
 | Cloudflare Email Routing（`security@`） | Cloudflare → Email | 未查證現值 |
+| Cloudflare **Bot Fight Mode**（自動開啟 JavaScript Detections，對全 zone HTML 注入 `/cdn-cgi/challenge-platform/scripts/jsd/main.js` 的行內載入器） | Cloudflare → `gov-agent.ai` zone → Security → Settings（Bot traffic） | 2026-09-19 由注入行為推知為開啟。Free 方案不能單獨關 JSD、不能依主機／路徑排除、不走 WAF 規則。repo 以 `public/_headers` 的 `no-transform` 讓它不注入（D-025 (5)），**後台不需要改任何設定**；日後若要真的啟用 JSD，先修訂 D-025，不得用 nonce／`unsafe-inline` 放寬 CSP 換。 |
+| Cloudflare **Web Analytics** 站設定 | Cloudflare → Web Analytics → 該站 Manage Site | 2026-09-16 改為「Enable with JS Snippet installation」（不自動注入 beacon；只有行銷站手動載）；`no-transform` 之後即使誤改回自動也不會注入 app／demo，但仍應維持該設定。 |
 
 ## 8. 本機環境地雷（部署前的驗證常卡在這裡）
 
