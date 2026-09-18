@@ -1,12 +1,11 @@
-// 文件生命週期卡(P2c 施工日誌、P3a 監造日誌共用;設計 §4–§6):狀態、版本與雜湊、簽署(平台帳號＋兩步驟驗證,
+// 文件生命週期卡(P2c 施工日誌、P3a 監造日誌共用;設計 §4–§6):狀態、版本與雜湊、簽署(登入的平台帳號,
 // 意願文字明示)、提送給對象方、對象方收件／退回(必填原因)、歷次退回原因與再送差異、回執與下一責任方。
 // 責任方與提送對象由 doc_type 決定(lib/fieldDocs 的 TO_ORG_BY_DOC_TYPE,鏡像 DB 對象矩陣):施工日誌 廠商→監造、
 // 監造日誌 監造→機關;第三方(施工日誌的機關、監造日誌的廠商)只是查閱視角。
 // 全部動作都是「人明確操作」;所有規則由 RPC 執行(PD001–PD010 分流見 lib/fieldDocs.fieldDocErrorGuidance),
 // 這裡不做任何業務判斷,只把伺服器回的版本／雜湊／時間如實顯示。
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Badge, Button, Input } from '../ui.jsx'
+import { Badge, Button } from '../ui.jsx'
 import { MSym } from '../icons.jsx'
 import { appConfirm, appPrompt } from '../confirm.jsx'
 import {
@@ -19,10 +18,9 @@ const fmtTs = (iso) => (iso ? String(iso).slice(0, 16).replace('T', ' ') : '—'
 
 export default function DocumentLifecycle({
   doc, version, signatures = [], submissions = [], viewerOrg, canAct = false, dirty = false, content = null,
-  busy = null, onSign, onSubmit, onReceive, onReturn, mfa = null, onMfaVerify, onGoAccount, message = null,
+  busy = null, onSign, onSubmit, onReceive, onReturn, message = null,
   labels = null, templateMeta = null,
 }) {
-  const [code, setCode] = useState('')
   if (!doc) return null
   const meta = docStatusMeta(doc, viewerOrg)
   const mine = doc.owner_org === viewerOrg
@@ -93,29 +91,8 @@ export default function DocumentLifecycle({
               <p className="text-body text-[var(--text)]">{intent}</p>
               <div className="flex items-center gap-2 flex-wrap">
                 <Button onClick={sign} busy={busy === 'sign'} disabled={!canSign}>簽署此版本</Button>
-                <span className="text-caption text-[var(--text-3)]">簽署需要兩步驟驗證（平台帳號＋驗證器 App）。</span>
+                <span className="text-caption text-[var(--text-3)]">以你登入的平台帳號簽署；伺服器記錄簽署者、時間與內容雜湊。</span>
               </div>
-            </div>
-          )}
-          {/* PD003:引導完成 MFA——已啟用因子就地輸入驗證碼升級;沒啟用先去帳號安全啟用再回來 */}
-          {mfa?.needed && (
-            <div role="alert" className="rounded-lg bg-[var(--amber-tint)] p-3 space-y-2 text-footnote">
-              <div className="font-medium text-[var(--amber-text)]">簽署需要兩步驟驗證</div>
-              {mfa.hasFactor ? (
-                <form className="flex items-end gap-2 flex-wrap" onSubmit={(e) => { e.preventDefault(); onMfaVerify?.(code); setCode('') }}>
-                  <label className="block">
-                    <span className="block text-caption text-[var(--text-2)] mb-1">輸入驗證器 App 的 6 位數後再簽署</span>
-                    <Input aria-label="驗證碼" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} className="!w-40" />
-                  </label>
-                  <Button type="submit" variant="secondary" busy={busy === 'mfa'} disabled={code.length !== 6}>驗證並簽署</Button>
-                </form>
-              ) : (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[var(--text-2)]">此帳號尚未啟用兩步驟驗證。到「帳號安全」用驗證器 App 啟用後，回到本頁即可簽署。</span>
-                  <Button variant="secondary" onClick={onGoAccount}>前往帳號安全啟用</Button>
-                </div>
-              )}
-              {mfa.error && <div className="text-[var(--red-text)]">{mfa.error}</div>}
             </div>
           )}
         </div>
@@ -125,7 +102,7 @@ export default function DocumentLifecycle({
       {currentSig && (
         <div className="rounded-lg bg-[var(--green-tint)] p-3 text-footnote space-y-0.5">
           <div className="font-medium text-[var(--green-text)]">版本 {currentSig.version_no} 已由 {currentSig.signer_name_snapshot || ORG_LABEL[currentSig.signer_org] || '簽署者'} 簽署</div>
-          <div className="text-[var(--text-2)] num">時間 {fmtTs(currentSig.signed_at)}・雜湊 {formatHash(currentSig.content_hash)}・方式 平台帳號＋兩步驟驗證{currentSig.aal ? `（${currentSig.aal}）` : ''}</div>
+          <div className="text-[var(--text-2)] num">時間 {fmtTs(currentSig.signed_at)}・雜湊 {formatHash(currentSig.content_hash)}・方式 平台帳號</div>
         </div>
       )}
       {/* 簽後更正提示:目前版本比最後簽署新 */}

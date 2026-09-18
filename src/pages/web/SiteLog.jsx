@@ -1,6 +1,6 @@
 // 施工日誌(P2c;D-026 第一條完整路徑):這一頁是「施工日誌文件」的審核／簽署／提送頁,也是施工日誌
 // **唯一**的寫入入口——存檔=save_field_document_version(伺服器保存版本、算雜湊、判待補),簽署=
-// sign_field_document(aal2;事實表 daily_logs／daily_log_items 在簽署交易內落庫),提送／收件／退回
+// sign_field_document(登入的平台帳號;事實表 daily_logs／daily_log_items 在簽署交易內落庫),提送／收件／退回
 // 各走 RPC。舊的直接 upsert daily_logs、逐張辨識回填表單、onWhiteboard 把板上未寫數量填 0 的
 // 路徑全部退場(store/slices/site.js)。
 //
@@ -43,7 +43,7 @@ export default function SiteLog() {
     project, workItems, adjustedItems, siteLogs, can, currentUser, demoMode,
     fieldDocuments: fieldDocState, fieldDocsLoading, reloadFieldDocs, findActiveDailyLogDoc, createDailyLogDraft, getFieldDocument, saveFieldDocumentVersion,
     signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, listPhotosByIds, listSitePhotos,
-    agentActions, resolveAgentAction, listMfaFactors, verifyMfa,
+    agentActions, resolveAgentAction,
   } = useStore()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -91,8 +91,6 @@ export default function SiteLog() {
   const [busy, setBusy] = useState(null)
   const [lifecycleMsg, setLifecycleMsgRaw] = useState(null)
   const setLifecycleMsg = (text, tone = 'error') => setLifecycleMsgRaw(text ? { text, tone } : null)
-  const [mfa, setMfa] = useState(null)
-  const [pendingIntent, setPendingIntent] = useState(null)
   const [appliedSuggestions, setAppliedSuggestions] = useState([])
   const [officialView, setOfficialView] = useState(false)
   useUnsavedEdit('site-log', dirty ? `施工日誌 ${date}（未存檔）` : null)
@@ -128,7 +126,7 @@ export default function SiteLog() {
       setDetail(nextDetail); setForm(nextForm); setAttachments(nextAttachments)
       setPhotosById(new Map(photoRows.map((p) => [p.id, p]))); setLegacyPhotos(legacyRows)
       setBaseVersion(doc?.current_version_no ?? 0)
-      setDirty(false); setAmendMode(false); setConflict(null); setMfa(null); setAppliedSuggestions([])
+      setDirty(false); setAmendMode(false); setConflict(null); setAppliedSuggestions([])
       setDetailLoading(false)
     })()
     return () => { active = false }
@@ -232,7 +230,7 @@ export default function SiteLog() {
   }
   const reloadFromServer = () => { setDirty(false); setConflict(null); prevKeyRef.current = null; reloadFieldDocs() }
 
-  // 簽署／MFA／提送／收件／退回
+  // 簽署／提送／收件／退回
   const handleLifecycleError = (error, fallback) => {
     const g = fieldDocErrorGuidance(error)
     if (g.kind === 'reload') { setConflict(g.message); return }
@@ -244,25 +242,8 @@ export default function SiteLog() {
     setBusy('sign'); setLifecycleMsg('')
     const r = await signFieldDocument({ documentId: doc.id, versionNo: doc.current_version_no, contentHash: detail?.version?.content_hash, intent })
     setBusy(null)
-    if (r.error) {
-      const g = fieldDocErrorGuidance(r.error)
-      if (g.kind === 'mfa') {
-        setPendingIntent(intent)
-        const { factors } = await listMfaFactors()
-        setMfa({ needed: true, hasFactor: (factors || []).some((f) => f.status === 'verified'), error: null })
-        return
-      }
-      handleLifecycleError(r.error, '簽署未完成'); return
-    }
-    setMfa(null); setPendingIntent(null)
+    if (r.error) { handleLifecycleError(r.error, '簽署未完成'); return }
     setLifecycleMsg(`已簽署版本 ${r.result.version_no}（雜湊 ${String(r.result.content_hash).slice(0, 12)}），施工日誌已正式落庫；可提送給監造。`, 'success')
-  }
-  const onMfaVerify = async (code) => {
-    setBusy('mfa')
-    const { error } = await verifyMfa(code)
-    if (error) { setBusy(null); setMfa((m) => ({ ...m, error: friendlyError(error, '驗證碼不正確') })); return }
-    setBusy(null); setMfa(null)
-    await onSign(pendingIntent)
   }
   const onSubmit = async () => {
     setBusy('submit'); setLifecycleMsg('')
@@ -426,7 +407,6 @@ export default function SiteLog() {
                 <DocumentLifecycle doc={doc} version={detail?.version} signatures={detail?.signatures || []} submissions={detail?.submissions || []}
                   viewerOrg={org} canAct={org === 'supervisor' ? !!can.approve : editable} dirty={dirty} content={form.content}
                   busy={busy} onSign={onSign} onSubmit={onSubmit} onReceive={onReceive} onReturn={onReturn}
-                  mfa={mfa} onMfaVerify={onMfaVerify} onGoAccount={() => navigate(`/account?return=${encodeURIComponent(`/site-log?d=${date}`)}`)}
                   message={lifecycleMsg} />
               </div>
             )}
@@ -477,7 +457,7 @@ export default function SiteLog() {
 
       {editable && (
         <p className="text-xs text-[var(--text-3)]">
-          一天一份文件：存檔＝伺服器保存版本並列出待補；簽署（平台帳號＋兩步驟驗證）後施工日誌才正式落庫並可提送監造；簽後更正另開版本重簽。估驗帶入的累計數量只計已落庫（已簽署或既有）的日誌。
+          一天一份文件：存檔＝伺服器保存版本並列出待補；簽署（登入的平台帳號）後施工日誌才正式落庫並可提送監造；簽後更正另開版本重簽。估驗帶入的累計數量只計已落庫（已簽署或既有）的日誌。
         </p>
       )}
       <ErrorBanner msg={null} />

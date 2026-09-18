@@ -1,9 +1,20 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-19｜P5c 基準日版本（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E＋內建 Preview）、D1 正式站邊緣注入與 `check:prod` 漏檢（Vitest＋`wrangler dev`＋demo 重佈實測）、P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-19｜R1 全面移除兩步驟驗證（pgTAP＋Vitest＋Demo E2E＋真後端 chain 1／5／6）、P5c 基準日版本（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E＋內建 Preview）、D1 正式站邊緣注入與 `check:prod` 漏檢（Vitest＋`wrangler dev`＋demo 重佈實測）、P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-19 R1：全面移除兩步驟驗證（MFA／TOTP）（PR #128，migration `20260919023220_remove_signing_mfa`；rebase 到含 P5c 的 main `e9d695e` 後重驗）
+
+- `npm run test:db`（一次性資料庫從零套 73 支 migration＋seed）：52 檔、2,434 通過、0 失敗（＝P5c 基準 52 檔 2,436 −2：`field_document_sign.sql` 140→139、`supervisor_logs.sql` 128→127，皆是拿掉「aal1 簽署 → PD003」；`field_documents.sql` 215 不變；H3 允許清單不變——`sign_field_document` 簽名未改、無新函式）。改寫後覆蓋：三檔全部以一般登入的 JWT（`aal1`）執行——簽署成功列 `method='platform_account'`、`aal='aal1'`（客戶端傳 `aal9` 作廢）、稽核 `field_document.signed` metadata 含 `method`／`aal`；`platform_account_mfa` 直插被 check 拒絕（23514，guard 其餘檢查通過、擋下的是方式本身）；RPC 寫入的簽署方式一律 `platform_account`；非正式案 admin_override 以一般登入即可代簽且如實記簽署者組織；其餘版本／雜湊／責任方／成員／待補／附件／狀態／冪等／事實表 guard 回歸不變。migration 的 method check 改寫可重跑（依定義找既有 check 全部拿掉再建）。
+- `npm test`：128 檔、1,398 項通過（P5c 基準 129 檔 1,403 −1 檔 −5 項：刪 `auth.mfa.test.js` 5 條；`SiteLog.document.test.jsx`／`SupervisorLog.document.test.jsx` 的 PD003 引導改為「一般登入直接簽署：畫面無兩步驟驗證／驗證碼字樣、簽署鈕送出 intent 含『同意以本人登入的平台帳號簽署本文件』、PD006 訊息顯示在文件卡、成功顯示『已簽署版本 n（雜湊 …）』」；`fieldDocs.test.js` 意願文字與錯誤碼分流去 PD003；`navConfig.test.js` 路由集合去 `/account`）。
+- lint（`--max-warnings 0`）、build 綠；`check:docs` 55 檔 392 連結 0 錯。
+- Demo E2E 全套 10 支 74 項全綠（contractor／supervisor／owner／contract-flow／routes／reachability／workflow-ux／a11y 等）（`/account` 自路由登記表移除後 a11y 掃描自動少一頁；頁首與手機抽屜底部沒有「帳號」連結；監造日誌 demo 情境不受影響）。
+- 真後端 E2E（本機 colima 棧＋Edge stub；共用開發 DB 以 `migration repair --local --status reverted 20260919010000` 拿掉改名前的版本後 `migration up --local` 套 `20260919023220`）：chain 1 註冊→建案→邀請→正式模式 3.3s、chain 5 上傳→起稿→補缺→簽署→提送→監造退回→更正再送→收件 8.3s、chain 6 監造上傳→起稿→到場親自確認→簽署→提送機關→機關退回→補正再送→機關收件 8.1s 皆通過（5189 被 P3a worktree 佔用，改以同內容臨時設定跑 5190）；三條登入與簽署都沒有驗證碼步驟，簽署後畫面「方式 平台帳號」且無「兩步驟驗證／驗證碼」字樣，`daily_logs.status=已簽署`、`supervisor_logs` 落庫、簽舊版 `PD001`／到場未確認 `PD004`／廠商照片 `PD005` 照舊。
+- 全庫 `grep -i "mfa|totp|aal2|兩步驟|驗證碼|platform_account_mfa|challengeAndVerify|enroll|PD003|/account"`（src／e2e／e2e-real／scripts／Edge／config／seed／tests）：只剩註解、負向斷言、`config.toml` 的關閉設定與新 migration／測試裡「已移除」的說明，沒有任何 MFA／TOTP／aal2 程式路徑；P3a 監造日誌頁、`SupervisorLogSheet` 列印與 chain 6 的 MFA 引導一併移除。
+- 正式庫唯讀核對（套用前，2026-09-19 01:xx）：`auth.mfa_factors` 0 列（verified 0）、`field_document_signatures` 0 列（`platform_account_mfa` 0）、`method` check 仍為三值——沒有任何帳號會被卡在驗證碼、沒有既有簽署紀錄要改語意。
+- 未做／待驗：正式 Supabase Auth 的 TOTP enroll／verify 開關**待使用者關閉**（Dashboard；步驟見 `deploy.md` §7）；合併與 `db push` 待使用者執行（auto mode 擋 merge）；本機共用 stack 的 `config.toml` TOTP 關閉要 `supabase stop && supabase start -x …` 才生效（本輪未重啟共用 stack，不影響任何測試）；rollback 檔未演練。
 
 ### 2026-09-19 P5c：基準日版本、重算只動未完成、單次義務完成快照、循環停止條件（`codex/slimming-p5c-anchor-versions`，PR #134，migration `20260919021500_project_anchor_versions`）
 

@@ -474,7 +474,7 @@ select is((select count(*)::int from public.field_document_versions), 0, '非成
 reset role;
 
 -- ── 9. 文件狀態:版本指標與簽署結構要件(RPC 情境) ──────────────────────────────
-select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal1');
 select throws_ok($$ update public.field_documents set current_version_no = 5
   where id = 'f7000000-0000-0000-0000-000000000001' $$,
   'P0001', null, '版本指標必須指向已存在的最新版本');
@@ -494,47 +494,46 @@ select throws_ok($$ update public.field_documents set doc_type = 'self_check'
   where id = 'f7000000-0000-0000-0000-000000000001' $$,
   'P0001', null, '文件類型不可變更');
 
--- ── 10. 簽署:只在有登入者的情境;目前版本;雜湊;責任方;伺服器取簽署者資料;aal 一致 ──
+-- ── 10. 簽署:只在有登入者的情境;目前版本;雜湊;責任方;伺服器取簽署者資料;方式只有 platform_account／paper_scan ──
 select pg_temp.become('f0000000-0000-0000-0000-000000000001');
 set local role authenticated;
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認內容無誤', 'platform_account_mfa'
+  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認內容無誤', 'platform_account'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
   '42501', null, '使用者不能直接寫簽署列(只走 sign_field_document RPC)');
 reset role;
 select pg_temp.become(null);
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認內容無誤', 'platform_account_mfa'
+  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認內容無誤', 'platform_account'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
   'P0001', null, '伺服器(無 JWT)不得代簽');
 -- 監造簽廠商文件
-select pg_temp.become('f0000000-0000-0000-0000-000000000003', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000003', 'aal1');
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000003', 'supervisor', '本人確認內容無誤', 'platform_account_mfa'
+  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000003', 'supervisor', '本人確認內容無誤', 'platform_account'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
   'P0001', null, '監造不能簽署施工日誌(責任方不符,越權簽署)');
 -- 非成員(外案)簽 A 案文件
-select pg_temp.become('f0000000-0000-0000-0000-000000000005', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000005', 'aal1');
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000005', 'contractor', '本人確認內容無誤', 'platform_account_mfa'
+  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000005', 'contractor', '本人確認內容無誤', 'platform_account'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
   'P0001', null, '非成員不能簽署(跨案取件受阻)');
--- 廠商:舊版本、雜湊不符、aal 不足、空白意願
+-- 廠商:舊版本、雜湊不符、已移除的簽署方式、空白意願
 select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal1');
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  select 'f7000000-0000-0000-0000-000000000001', 2, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認內容無誤', 'platform_account_mfa'
+  select 'f7000000-0000-0000-0000-000000000001', 2, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認內容無誤', 'platform_account'
   from public.field_document_versions v where v.document_id = 'f7000000-0000-0000-0000-000000000001' and v.version_no = 2 $$,
   'P0001', null, '簽舊版本(畫面是舊版)→ 拒絕');
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  values ('f7000000-0000-0000-0000-000000000001', 3, repeat('f', 64), 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認內容無誤', 'platform_account_mfa') $$,
+  values ('f7000000-0000-0000-0000-000000000001', 3, repeat('f', 64), 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認內容無誤', 'platform_account') $$,
   'P0001', null, '簽署雜湊與版本內容不符 → 拒絕');
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
   select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認內容無誤', 'platform_account_mfa'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
-  'P0001', null, '登記為 MFA 簽署但 JWT 只有 aal1 → 拒絕(登記不得說謊)');
-select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal2');
+  '23514', null, 'R1:platform_account_mfa 已不是合法簽署方式 → check 拒絕(guard 其餘檢查通過,擋下的是方式本身)');
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '   ', 'platform_account_mfa'
+  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '   ', 'platform_account'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
   '23514', null, '簽署意願聲明不可空白');
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
@@ -544,17 +543,17 @@ select throws_ok($$ insert into public.field_document_signatures (document_id, v
 select set_config('request.headers', '{"x-forwarded-for":"203.0.113.9","user-agent":"pgTAP/1.0"}', true);
 select lives_ok($$ insert into public.field_document_signatures (id, document_id, version_no, content_hash, signer_id, signer_org, signer_name_snapshot, signed_at, intent, method, aal)
   select 'f9000000-0000-0000-0000-000000000001', 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash,
-         'f0000000-0000-0000-0000-000000000002', 'supervisor', '冒名', '2000-01-01', '本人確認 2026-09-17 施工日誌內容無誤並簽署', 'platform_account_mfa', 'aal9'
+         'f0000000-0000-0000-0000-000000000002', 'supervisor', '冒名', '2000-01-01', '本人確認 2026-09-17 施工日誌內容無誤並簽署', 'platform_account', 'aal9'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
-  '廠商成員以 aal2 簽署目前版本成功');
+  '廠商成員以一般登入(aal1)簽署目前版本成功');
 select results_eq($$ select signer_id, signer_org, signer_name_snapshot, aal, host(request_ip), user_agent,
     (signed_at > now() - interval '1 minute') from public.field_document_signatures
   where id = 'f9000000-0000-0000-0000-000000000001' $$,
-  $$ values ('f0000000-0000-0000-0000-000000000001'::uuid, 'contractor'::text, '廠商工地主任'::text, 'aal2'::text,
+  $$ values ('f0000000-0000-0000-0000-000000000001'::uuid, 'contractor'::text, '廠商工地主任'::text, 'aal1'::text,
              '203.0.113.9'::text, 'pgTAP/1.0'::text, true) $$,
-  '簽署者／組織／姓名快照／aal／IP／UA／簽署時間全由伺服器取,客戶端傳值作廢');
+  '簽署者／組織／姓名快照／aal(如實 aal1,客戶端的 aal9 作廢)／IP／UA／簽署時間全由伺服器取');
 select throws_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '再簽', 'platform_account_mfa'
+  select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '再簽', 'platform_account'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
   '23505', null, '同人同版本不可重複簽署(冪等鍵)');
 select throws_ok($$ update public.field_document_signatures set intent = '改掉'
@@ -567,7 +566,7 @@ select lives_ok($$ update public.field_documents set status = 'signed'
   '有目前版本的簽署紀錄後可標 signed');
 select is((select count(*)::int from public.audit_events
   where event_type = 'field_document.signed' and entity_id = 'f7000000-0000-0000-0000-000000000001'
-    and metadata ->> 'aal' = 'aal2' and metadata ->> 'method' = 'platform_account_mfa'),
+    and metadata ->> 'aal' = 'aal1' and metadata ->> 'method' = 'platform_account'),
   1, '簽署留一筆 field_document.signed 稽核事件(含 aal／method)');
 select is((select count(*)::int from public.audit_events
   where event_type = 'field_document.signed' and (after_data ? 'request_ip' or after_data ? 'user_agent')),
@@ -588,7 +587,7 @@ select throws_ok($$ delete from public.field_documents where id = 'f7000000-0000
   'P0001', null, '已簽署的文件 service 也不可刪除');
 
 -- ── 11. 提送／收件／退回 ─────────────────────────────────────────────────────
-select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal1');
 select throws_ok($$ insert into public.field_document_submissions (document_id, version_no, content_hash, actor_id, actor_org, action, to_org)
   select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', 'submit', 'owner'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
@@ -618,13 +617,13 @@ select throws_ok($$ insert into public.field_document_submissions (document_id, 
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
   'P0001', null, '提送方自己不能收件(收件只能由提送對象)');
 -- 機關(非提送對象)收件
-select pg_temp.become('f0000000-0000-0000-0000-000000000004', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000004', 'aal1');
 select throws_ok($$ insert into public.field_document_submissions (document_id, version_no, content_hash, actor_id, actor_org, action, to_org)
   select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000004', 'owner', 'receive', 'owner'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
   'P0001', null, '非提送對象(機關)不能收件施工日誌');
 -- 監造收件、退回
-select pg_temp.become('f0000000-0000-0000-0000-000000000003', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000003', 'aal1');
 select lives_ok($$ insert into public.field_document_submissions (id, document_id, version_no, content_hash, actor_id, actor_org, action, to_org)
   select 'fa000000-0000-0000-0000-000000000002', 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash,
          'f0000000-0000-0000-0000-000000000003', 'supervisor', 'receive', 'contractor'
@@ -653,7 +652,7 @@ select throws_ok($$ update public.field_document_submissions set reason = '改�
 select throws_ok($$ delete from public.field_document_submissions where id = 'fa000000-0000-0000-0000-000000000001' $$,
   'P0001', null, '提送紀錄不可刪除');
 -- 退回後再送:新版本→重簽→再送,diff 由 DB 算
-select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal1');
 select throws_ok($$ insert into public.field_document_submissions (document_id, version_no, content_hash, actor_id, actor_org, action, to_org)
   select 'f7000000-0000-0000-0000-000000000001', 3, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', 'submit', 'supervisor'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000003' $$,
@@ -670,7 +669,7 @@ select is((select count(*)::int from public.audit_events
   where event_type = 'field_document.amended' and entity_id = 'f7000000-0000-0000-0000-000000000001'), 1,
   '簽後更正留一筆 field_document.amended');
 select lives_ok($$ insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  select 'f7000000-0000-0000-0000-000000000001', 4, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認更正後內容無誤並簽署', 'platform_account_mfa'
+  select 'f7000000-0000-0000-0000-000000000001', 4, v.content_hash, 'f0000000-0000-0000-0000-000000000001', 'contractor', '本人確認更正後內容無誤並簽署', 'platform_account'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000004' $$,
   '重簽版本 4');
 update public.field_documents set status = 'signed' where id = 'f7000000-0000-0000-0000-000000000001';
@@ -700,7 +699,7 @@ select is((select count(*)::int from public.audit_events
   '文件建立留一筆 field_document.created');
 
 -- 非成員(RPC 情境)不能提送 A 案文件
-select pg_temp.become('f0000000-0000-0000-0000-000000000005', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000005', 'aal1');
 select throws_ok($$ insert into public.field_document_submissions (document_id, version_no, content_hash, actor_id, actor_org, action, to_org)
   select 'f7000000-0000-0000-0000-000000000001', 4, v.content_hash, 'f0000000-0000-0000-0000-000000000005', 'contractor', 'submit', 'supervisor'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000004' $$,
@@ -719,7 +718,7 @@ select is((select count(*)::int from public.field_document_submissions), 0, '非
 reset role;
 
 -- ── 12. 捨棄／取代與監造查驗表單提送矩陣 ──────────────────────────────────────
-select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal1');
 select lives_ok($$ update public.field_documents set status = 'discarded'
   where id = 'f7000000-0000-0000-0000-000000000002' $$,
   '未簽署的草稿可捨棄');
@@ -732,14 +731,14 @@ select throws_ok($$ update public.field_documents set status = 'draft'
 select throws_ok($$ insert into public.field_document_versions (document_id, author_kind, content)
   values ('f7000000-0000-0000-0000-000000000002', 'human', '{}') $$,
   'P0001', null, '捨棄的文件不可再加版本');
--- 監造以 aal2 對監造日誌建版本、簽署、提送給機關
-select pg_temp.become('f0000000-0000-0000-0000-000000000003', 'aal2');
+-- 監造對監造日誌建版本、簽署、提送給機關
+select pg_temp.become('f0000000-0000-0000-0000-000000000003', 'aal1');
 insert into public.field_document_versions (id, document_id, author_kind, content)
   values ('f8000000-0000-0000-0000-000000000005', 'f7000000-0000-0000-0000-000000000003', 'human',
           '{"attendance":[{"name":"監造工程師","from":"08:00","to":"17:00"}]}');
 update public.field_documents set current_version_no = 1 where id = 'f7000000-0000-0000-0000-000000000003';
 insert into public.field_document_signatures (document_id, version_no, content_hash, signer_id, signer_org, intent, method)
-  select 'f7000000-0000-0000-0000-000000000003', 1, v.content_hash, 'f0000000-0000-0000-0000-000000000003', 'supervisor', '本人確認監造日誌內容無誤並簽署', 'platform_account_mfa'
+  select 'f7000000-0000-0000-0000-000000000003', 1, v.content_hash, 'f0000000-0000-0000-0000-000000000003', 'supervisor', '本人確認監造日誌內容無誤並簽署', 'platform_account'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000005';
 update public.field_documents set status = 'signed' where id = 'f7000000-0000-0000-0000-000000000003';
 select throws_ok($$ insert into public.field_document_submissions (document_id, version_no, content_hash, actor_id, actor_org, action, to_org)
@@ -751,7 +750,7 @@ select lives_ok($$ insert into public.field_document_submissions (document_id, v
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000005' $$,
   '監造日誌可提送給機關');
 update public.field_documents set status = 'submitted' where id = 'f7000000-0000-0000-0000-000000000003';
-select pg_temp.become('f0000000-0000-0000-0000-000000000004', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000004', 'aal1');
 select lives_ok($$ insert into public.field_document_submissions (document_id, version_no, content_hash, actor_id, actor_org, action, to_org)
   select 'f7000000-0000-0000-0000-000000000003', 1, v.content_hash, 'f0000000-0000-0000-0000-000000000004', 'owner', 'receive', 'owner'
   from public.field_document_versions v where v.id = 'f8000000-0000-0000-0000-000000000005' $$,
@@ -759,7 +758,7 @@ select lives_ok($$ insert into public.field_document_submissions (document_id, v
 select lives_ok($$ update public.field_documents set status = 'received'
   where id = 'f7000000-0000-0000-0000-000000000003' $$,
   '機關收件後標 received');
-select pg_temp.become('f0000000-0000-0000-0000-000000000003', 'aal2');
+select pg_temp.become('f0000000-0000-0000-0000-000000000003', 'aal1');
 select throws_ok($$ insert into public.field_document_versions (document_id, author_kind, content)
   values ('f7000000-0000-0000-0000-000000000003', 'human', '{}') $$,
   'P0001', null, '對方已收件的文件不可再加版本');

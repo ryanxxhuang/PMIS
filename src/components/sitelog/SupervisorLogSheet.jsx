@@ -50,7 +50,7 @@ export default function SupervisorLogSheet({ project, doc, version, signature = 
         <span>版本 {version.version_no}</span>
         <span>內容雜湊 {formatHash(version.content_hash)}</span>
         {signed
-          ? <span>簽署 {signature.signer_name_snapshot || '—'}・{fmtTs(signature.signed_at)}・平台帳號＋兩步驟驗證{signature.aal ? `（${signature.aal}）` : ''}</span>
+          ? <span>簽署 {signature.signer_name_snapshot || '—'}・{fmtTs(signature.signed_at)}・平台帳號</span>
           : <span className="font-bold text-[var(--red-text)]">草稿・未簽署（非正式紀錄）</span>}
         <span>文件狀態 {DOC_STATUS_LABEL[doc.status] || doc.status}</span>
       </div>

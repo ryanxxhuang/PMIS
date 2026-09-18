@@ -587,7 +587,7 @@ export const formatHash = (h) => (h ? String(h).slice(0, 12) : '—')
 
 // 簽署意願聲明:簽署當下畫面顯示的同一段,原樣送進 RPC(field_document_signatures.intent)
 export function signIntentText({ docLabel = '施工日誌', docDate, versionNo, contentHash }) {
-  return `本人確認 ${docDate} ${docLabel}(版本 ${versionNo},內容雜湊 ${formatHash(contentHash)})內容屬實,同意以平台帳號及兩步驟驗證簽署本文件。`
+  return `本人確認 ${docDate} ${docLabel}(版本 ${versionNo},內容雜湊 ${formatHash(contentHash)})內容屬實,同意以本人登入的平台帳號簽署本文件。`
 }
 
 // ── 送件重試的 client_request_id:同一件事重試用同一個 id(伺服器冪等回同一張回執)──
@@ -613,7 +613,7 @@ function randomUuid() {
 
 // ── 錯誤碼分流(P2d SQLSTATE PD001–PD010;設計 §5 表)──────────────────────────
 // 回 { kind, message, details }:kind 決定前端動作——reload(畫面是舊版,重新載入、不默默覆蓋)、
-// mfa(引導兩步驟驗證)、pending(待補欄高亮)、attachments(附件角色)、request_id(換新 id)…
+// pending(待補欄高亮)、attachments(附件角色)、request_id(換新 id)…PD003(兩步驟驗證)已於 R1 廢止,不再有分支。
 export function fieldDocErrorGuidance(error) {
   const code = String(error?.code || '')
   const message = error?.message || '操作未完成'
@@ -624,7 +624,6 @@ export function fieldDocErrorGuidance(error) {
   switch (code) {
     case 'PD001': return { kind: 'reload', message, details }
     case 'PD002': return { kind: 'reload', message, details }
-    case 'PD003': return { kind: 'mfa', message, details }
     case 'PD004': return { kind: 'pending', message, details: Array.isArray(details) ? details : [] }
     case 'PD005': return { kind: 'attachments', message, details: Array.isArray(details) ? details : [] }
     case 'PD006': return { kind: 'forbidden', message, details }

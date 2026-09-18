@@ -41,7 +41,7 @@
 - 刪案串 Storage 清理；`project_deletion_records` 已留刪除行為與事件數，不保存原事件內容。DB 備份不含 Storage 物件：`scripts/backup-storage.mjs` 與 [備份 runbook](operations/backup.md) 已就位，但**未對正式 bucket 實跑、未做 restore/RTO 演練**。rollback 判準／缺口與 `repair_` 命名尚待整理。
 - `agent_actions`／`ai_usage_events` append-only、防個資送模型、唯讀軌跡留存、使用量記帳失敗留 audit；不得自行決定個資保存粒度。
 - CSV formula injection 的前置空白／tab、CR quote、科學記號判定邊界仍存在，測試只記錄現況。
-- AI 成本原子預留／rate limit、帳號鎖定／停用、試用申請分頁／清理須依前節政策實作。兩步驟驗證（TOTP）已於 2026-09-12 以「每帳號自選」上線（`/account`、登入驗證碼閘門）；全站強制與 RLS 依 aal 分級待機關契約明訂後再做，且需在 Supabase Dashboard 確認 Auth → MFA → TOTP 為啟用。
+- AI 成本原子預留／rate limit、帳號鎖定／停用、試用申請分頁／清理須依前節政策實作。兩步驟驗證（TOTP）曾於 2026-09-12 以「每帳號自選」上線，**2026-09-19 依使用者決定整個移除**（R1，migration `20260919023220`）；正式 Supabase Auth 的 TOTP 待使用者在 Dashboard 關閉。若日後機關契約明訂多重認證，需重新設計並先在 Dashboard 開啟 Auth → MFA → TOTP，不是把舊碼加回來。
 
 ### 抽取與 Agent
 
