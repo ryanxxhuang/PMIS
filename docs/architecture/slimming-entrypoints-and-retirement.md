@@ -20,7 +20,7 @@
 
 次入口（側欄「更多／專案資料」）：`/contract` 專案文件、`/members` 三方成員、`/activity` 活動紀錄、`/submittals` 送審文件、`/rfi` 工程疑義、`/monthly-report` 施工月報、`/supervisor-report`（改名「監造月報」，與監造日誌分開）、`/portfolio`（縮為選案清單）、`/agent`、`/account`、`/admin`（平台）。`/alerts` 保留深連結，入口併入今日工作篩選。
 
-深連結保證：所有既有 `?inspection=`／`?period=`／`?submittal=`／`?d=`／`?stage=`／`?obligation=` 參數不變；`hidden` 項仍受 `roles` 守衛；提醒信舊連結（`/alerts`、`/deadlines?obligation=`）維持。新增 `/site?intake=<id>`、`/site?doc=<id>` 直達文件。
+深連結保證：所有既有 `?inspection=`／`?period=`／`?submittal=`／`?d=`／`?stage=`／`?obligation=` 參數不變；`hidden` 項仍受 `roles` 守衛；提醒信舊連結（`/alerts`、`/deadlines?obligation=`）維持。新增 `/site?intake=<id>`、`/site?doc=<id>` 直達文件。**P2c 落地**：`/site?intake=<id>` 展開該上傳批次；`/site?doc=<id>`（今日工作／Agent 的現場文書待辦帶這個）落到 `/site` 後，施工日誌轉到 `/site-log?doc=<id>`（保留 `state` 的返回來源），其餘三類 P3 前留在 `/site` 清單並標「頁面尚未支援」；`/site-log` 同時接受 `?d=`（日期）與 `?doc=`（文件）。
 
 **P1a 落地結果（2026-09-17，與上表的差異）**：側欄分區為「今日工作（球權三來源）→ 工作（三主入口群組）→ 專案資料 → 平台」。次入口不做扁平的「更多」，而是兩個群組：「文件往來」（送審文件／工程疑義／施工月報／監造月報）與「專案」（專案文件／三方成員／活動紀錄／跨案總覽；風險稽核 hidden）——月報在導覽上放文件往來，同時在 `/site`「本月文件」給入口（§3 的落點仍成立）。`/site` 的第一個子頁標籤為「現場總覽」；P1a 的 `/site` 只列既有現場作業入口、件數、現場待辦與本月文件，照片上傳與文書清單留給 P2c。`/supervisor-log` 待 P3a 建頁後再登記（不預登記無頁面的路由）。`/cost`、`/audit` 已 hidden（P1b 已唯讀化，見 §2 各節「P1b 落地結果」）；`/schedule` 仍可見。手機底欄＝現在輪到我＋三主入口＋更多（`roleWorkLinks` 回傳群組項，子頁也算選取），P1c 只剩文案。
 

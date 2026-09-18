@@ -10,6 +10,7 @@
 //   src/store/slices/collab.js   — 送審/RFI/觀察事項/成員
 //   src/store/slices/ledger.js   — 成本(退場,只讀)/變更設計/逐工項排程/契約義務
 //   src/store/slices/agent.js    — AI agent 對話與草稿收件匣
+//   src/store/slices/fieldDocs.js — 現場文書(上傳批次／起稿／版本／簽署／提送;施工日誌唯一寫入路徑)
 // 跨領域的部分留在這裡:demo 種子、DB 整批載入、登出清理、重匯標單、角色權限 can。
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { createTrackedContext } from './store/tracked.jsx'
@@ -22,7 +23,7 @@ import {
   loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
   loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
-  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadFieldDocumentsFromDB,
+  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB,
 } from './store/db.js'
 import { useAuthSlice } from './store/slices/auth.js'
 import { useProjectsSlice } from './store/slices/projects.js'
@@ -32,6 +33,7 @@ import { useQualitySlice } from './store/slices/quality.js'
 import { useCollabSlice } from './store/slices/collab.js'
 import { useLedgerSlice } from './store/slices/ledger.js'
 import { useAgentSlice } from './store/slices/agent.js'
+import { useFieldDocsSlice } from './store/slices/fieldDocs.js'
 import { useAdminSlice } from './store/slices/admin.js'
 
 // Key 追蹤 context(P-01):useStore() 介面不變(照常解構),但每個元件只訂閱
@@ -116,11 +118,13 @@ export function StoreProvider({ children }) {
   // ── 各領域 slice ─────────────────────────────────────────────────────────
   const ctx = { dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup }
   const {
-    siteLogs, setSiteLogs, safetyRecords, setSafetyRecords, fieldDocuments, setFieldDocuments,
-    saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
-    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
+    siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
+    listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
+    describeDefect, analyzeSafetyPhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   } = useSiteSlice(ctx)
+  // 現場文書(P2c):施工日誌唯一寫入路徑。簽署成功後由 slice 重載 siteLogs(事實表已由 RPC 落庫)
+  const fieldDocsSlice = useFieldDocsSlice(ctx, { setSiteLogs })
   const {
     valuations, setValuations, progressPlan, setProgressPlan,
     createValuation, updateValuationItem, setValuationStatus, updateValuationPayment,
@@ -155,7 +159,7 @@ export function StoreProvider({ children }) {
   } = useLedgerSlice(ctx)
   const {
     agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions, setAgentActions,
-  } = useAgentSlice(ctx, { saveSiteLog, createChecklistRecord, allChecklistTemplates, decideSubmittal }) // 接受日誌/查驗/審查意見草稿時走既有 saveSiteLog / createChecklistRecord / decideSubmittal(RLS/guard/確定性判定照常生效;審查意見一律只推進到「審核中」)
+  } = useAgentSlice(ctx, { applyDailyLogDraft: fieldDocsSlice.applyDailyLogDraft, createChecklistRecord, allChecklistTemplates, decideSubmittal }) // 接受日誌草稿=存成文件人工版本(P2c);查驗/審查意見草稿走既有 createChecklistRecord / decideSubmittal(RLS/guard/確定性判定照常生效;審查意見一律只推進到「審核中」)
   // 平台管理後台(批 C):isPlatformAdmin 只影響 /admin 的導覽與路由(UX)——
   // 真正的權限把關在 DB(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)
   const adminSlice = useAdminSlice({ currentUser })
@@ -199,7 +203,7 @@ export function StoreProvider({ children }) {
       setInspections([]); setDefects([]); setCostItems([]); setItemSchedules({})
       setChangeOrders([]); setInspectionPoints([]); setChecklistTemplates([]); setChecklistRecords([]); setTestSamples([])
       setSafetyRecords([]); setObligations([]); setAcceptanceEvents([]); setSubmittals([]); setRfis([]); setObservations([])
-      setFieldDocuments({ documents: [], submissions: [] })
+      fieldDocsSlice.clearFieldDocs() // 現場文書與上傳批次:切案先清,slice 自己依 project 重載
     }
     prevProjectRef.current = currentProjectId
   }, [currentProjectId, demoMode]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -254,7 +258,7 @@ export function StoreProvider({ children }) {
     ;(async () => {
       try {
         // 並行載入(P-03);缺失(統一引擎)不依賴標單:匯標單前也要載(dbMode 載入會再帶工項資訊覆蓋)
-        const [acc, obs, safety, defs, subs, rfiRows, obsRows, docs] = await Promise.all([
+        const [acc, obs, safety, defs, subs, rfiRows, obsRows] = await Promise.all([
           loadAcceptanceFromDB(pid),
           loadObligationsFromDB(pid),
           loadSafetyFromDB(pid),
@@ -262,12 +266,11 @@ export function StoreProvider({ children }) {
           loadSubmittalsFromDB(pid),
           loadRfisFromDB(pid),
           loadObservationsFromDB(pid),
-          loadFieldDocumentsFromDB(pid), // 現場文書不依賴標單:今日工作的球權要看得到待簽／待收件
         ])
         if (!active) return
         setAcceptanceEvents(acc); setObligations(obs); setSafetyRecords(safety)
         if (defs) setDefects(defs)
-        setSubmittals(subs); setRfis(rfiRows); setObservations(obsRows); setFieldDocuments(docs)
+        setSubmittals(subs); setRfis(rfiRows); setObservations(obsRows)
       } catch (e) {
         if (active) setDomainLoadError(e?.message || '專案資料載入失敗')
       }
@@ -281,7 +284,7 @@ export function StoreProvider({ children }) {
     demoLoadedRef.current = false // demo:換角色重新登入時重種完整 storyline(登出會清部分資料)
     await signOutBase()
     clearOnLogout()
-    setSiteLogs([]); setInspections([]); setDefects([])
+    setSiteLogs([]); setInspections([]); setDefects([]); fieldDocsSlice.clearFieldDocs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signOutBase, clearOnLogout])
 
@@ -311,8 +314,10 @@ export function StoreProvider({ children }) {
     // AI 功能開關(批 B,UX 層——真正的閘門在伺服器端 openAiGate):關閉的功能把入口藏起來
     aiEnabled,
     adjustedItems, coNet, revisedTotal, domainLoadError, retryDomainLoad,
-    siteLogs, saveSiteLog, fillValuationFromSiteLogs, fieldDocuments,
-    listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, readWhiteboard, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, classifySitePhoto, fetchWeather,
+    siteLogs, fillValuationFromSiteLogs,
+    listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, fetchWeather,
+    // 現場文書(P2c):上傳批次、起稿、文件版本、簽署、提送／收件／退回
+    ...fieldDocsSlice,
     obligations, reloadObligations, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, // 成本退場(D-026 P1b):只讀歷史,無寫入函式
@@ -329,7 +334,7 @@ export function StoreProvider({ children }) {
     rfis, createRfi, answerRfi, closeRfi, deleteRfi, draftRfiReply,
     agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions,
     listMembers, addMemberByEmail, removeMember, resolveMarkup, resendSignup,
-    deleteValuation, deleteSiteLog, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
+    deleteValuation, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,
     // actions
     createValuation, updateValuationItem, setValuationStatus, updateValuationPayment,

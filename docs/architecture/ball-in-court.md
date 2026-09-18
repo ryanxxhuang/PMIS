@@ -24,7 +24,7 @@
 | 現場文書 | draft 待簽署／pending_input 待補欄位／in_review 待同方核對／signed 待提送／returned 被退回待補正→責任方 `owner_org`；submitted／received→目前版本已提送且尚未收件或退回的 `to_org` 各一顆「待收件」；都收件或 discarded／superseded→done |
 | 契約義務 | responsible 精確白名單（去頭尾空白）→該方；null／空／其他／未知→待補設定（責任方）；責任明確但觸發點對應的基準日沒填→待補設定（基準日）；已提送／已完成／不適用→done |
 
-估驗球權還看 invoice_date／paid_date；廠商請款導 `/payments`。核心事項的形狀是兩側交集 `{ id, who, tag, title, status, meta, due }`（coreOpenItems）；前端 collaborationItems 再加 `to`，Edge 再加 `overdue_days`。現場文書直達 `/site?doc=<id>`（P2c 接文件頁後定位）。
+估驗球權還看 invoice_date／paid_date；廠商請款導 `/payments`。核心事項的形狀是兩側交集 `{ id, who, tag, title, status, meta, due }`（coreOpenItems）；前端 collaborationItems 再加 `to`，Edge 再加 `overdue_days`。現場文書直達 `/site?doc=<id>`（P2c：`/site` 收到後施工日誌轉 `/site-log?doc=<id>`；`fieldDocuments` 由 `src/store/slices/fieldDocs.js` 載入與寫入後重載，同一份 `{documents, submissions}`）。
 
 ## 待補設定
 

@@ -1,11 +1,9 @@
-// Site slice:施工日誌(含公定格式欄位)、日誌照片、AI 辨識(告示板/缺失照/月報草稿)、工安紀錄。
-// 施工日誌掛在標單工項上(數量回報)→ dbMode;工安紀錄不依賴標單 → isPersistedProject,
+// Site slice:施工日誌(唯讀:事實表由簽署 RPC 落庫,見 fieldDocs slice)、日誌照片查詢、
+// AI 辨識(缺失照/工安照/月報草稿)、工安紀錄。工安紀錄不依賴標單 → isPersistedProject,
 // 真專案匯標單前也要寫 DB(否則只進記憶體,重新整理就消失)。
 import { useState, useCallback } from 'react'
 import { supabase, isSupabaseConfigured, SIGNED_URL_TTL_S } from '../../lib/supabase.js'
-import { loadSiteLogsFromDB, imageToBase64 } from '../db.js'
-import { compressImage } from '../../lib/imageCompress.js'
-import { readPhotoExif } from '../../lib/exifRead.js'
+import { imageToBase64 } from '../db.js'
 import { pageAllInSafe, chunked } from '../../lib/pagedQuery.js'
 import { mutationOutcome } from './billing.js'
 
@@ -14,73 +12,11 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   const [siteLogs, setSiteLogs] = useState([])
   // 工安紀錄（真 DB）
   const [safetyRecords, setSafetyRecords] = useState([])
-  // 現場文書(P2a field_documents,真 DB;{ documents, submissions }):今日工作的「現場文書」
-  // 球權讀這份。寫入端(起稿／存版／簽署／提送)在 P2b／P2c 接 RPC,這裡先只有載入後的快取。
-  const [fieldDocuments, setFieldDocuments] = useState({ documents: [], submissions: [] })
 
-  // 施工日誌：存某日各工項當日完成數量（一天一筆，沿用 project_id+log_date 唯一）
-  // 公定格式欄位:weather_am/pm、labor/equipment/materials(陣列)、extras(四~八節)
-  const saveSiteLog = useCallback(async ({ log_date, weather, weather_am, weather_pm, labor, equipment, materials, extras, work_summary, items }) => {
-    const official = {
-      weather_am: weather_am || null, weather_pm: weather_pm || null,
-      labor: labor?.length ? labor : null, equipment: equipment?.length ? equipment : null,
-      materials: materials?.length ? materials : null,
-      extras: extras && Object.keys(extras).length ? extras : null,
-    }
-    if (!dbMode) {
-      // demo：本機 upsert（同日覆蓋），維持日期新→舊排序。
-      // 數量空值/0 的列不落庫——與 dbMode 同口徑(C-4「複製昨日」只種工項列骨架,不產生假數量)
-      const kept = Object.fromEntries(Object.entries(items || {}).filter(([, q]) => q))
-      // 回傳 id 給「照片先行」(W8-7):自動建檔後要立刻掛照片,呼叫端等不到 state 重載。
-      // demo 每次存檔本來就換新 id(同日整列覆蓋),照片也不落庫,id 不需跨存檔穩定。
-      const demoId = `LOG-${Date.now()}`
-      setSiteLogs((ls) => [
-        { id: demoId, log_date, weather: weather || null, ...official, work_summary: work_summary || null, status: '已送出', items: kept },
-        ...ls.filter((l) => l.log_date !== log_date),
-      ].sort((a, b) => b.log_date.localeCompare(a.log_date)))
-      return { error: null, id: demoId }
-    }
-    const { data: up, error: e1 } = await supabase.from('daily_logs').upsert(
-      { project_id: currentProject.project_id, log_date, weather: weather || null, ...official, work_summary: work_summary || null, status: '已送出', created_by: currentUser?.user_id },
-      { onConflict: 'project_id,log_date' },
-    ).select().single()
-    if (e1) return { error: e1 }
-    // 明細寫入(B-05 根治):daily_log_items 本就有 unique(daily_log_id, work_item_id)
-    // 約束(baseline 表定義),直接單批 upsert 撞約束合併(新增+更新一次落庫),
-    // 再清掉被移除的列。先寫後刪:刪除失敗只是殘留多餘列(下次存檔會再清),
-    // 不會像舊「先全刪再插」在中途失敗時把該日數量刪光。
-    const nextRows = Object.entries(items || {}).map(([key, q]) => {
-      const wi = wiMaps.byKey.get(key)
-      return (wi && q) ? { daily_log_id: up.id, work_item_id: wi.id, qty_today: q } : null
-    }).filter(Boolean)
-    if (nextRows.length) {
-      const { error: e2 } = await supabase.from('daily_log_items')
-        .upsert(nextRows, { onConflict: 'daily_log_id,work_item_id' })
-      if (e2) return { error: e2 }
-    }
-    const keep = nextRows.map((r) => `"${r.work_item_id}"`).join(',')
-    const delQuery = supabase.from('daily_log_items').delete().eq('daily_log_id', up.id)
-    const { error: e3 } = await (nextRows.length ? delQuery.not('work_item_id', 'in', `(${keep})`) : delQuery)
-    if (e3) return { error: e3 }
-    // 寫入已成功;重載失敗不可偽裝成存檔失敗(B-09 載入層會 throw),但也不能靜默吞掉——
-    // ISSUE-6b:UI 顯示「已存檔 ✓」但 siteLogs 沒這筆,切日期即空白。保留現況、回 warning 讓 UI 提示。
-    let warning = null
-    try { setSiteLogs(await loadSiteLogsFromDB(currentProject.project_id, wiMaps.idToKey)) }
-    catch { warning = '已存檔,但畫面同步失敗,請重新整理後再確認' }
-    // id 給「照片先行」自動建檔後立刻掛照片用(setSiteLogs 是非同步 state,呼叫端拿不到)
-    return { error: null, warning, id: up.id }
-  }, [dbMode, currentProject, currentUser, wiMaps])
-
-  // DB 刪成功才從 UI 移除(B-07:RLS 拒絕時原本假消失,重整即復活)
-  const deleteSiteLog = useCallback(async (logId) => {
-    if (dbMode) {
-      const res = await supabase.from('daily_logs').delete().eq('id', logId).select('id')
-      const { error } = mutationOutcome(res, '刪除被拒絕:可能無權限或日誌已被移除')
-      if (error) return { error }
-    }
-    setSiteLogs((ls) => ls.filter((l) => l.id !== logId))
-    return { error: null }
-  }, [dbMode])
+  // 施工日誌的寫入路徑只有一條(P2c,D-026):field_documents 草稿 → save_field_document_version →
+  // sign_field_document(簽署交易內落 daily_logs／daily_log_items)。舊 saveSiteLog／deleteSiteLog 的直接
+  // upsert／delete 已移除——事實表由簽署 RPC 與 daily_logs_guard 管;這裡只讀 siteLogs 供估驗／月報／列印。
+  // 既有未簽署日誌(正式 12 筆)開啟時以其內容建立文件草稿(來源標「既有紀錄、待核對」),見 lib/fieldDocs.js。
 
   // 施工日誌照片：檔案進 Storage（photos bucket）、metadata 進 photos 表。
   // 路徑慣例 <project_id>/<daily_log_id>/<photo_id>.<ext>（第一段=project_id，對應 Storage RLS）。
@@ -96,42 +32,8 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return data.map((p) => ({ ...p, url: urlByPath.get(p.storage_path) || null }))
   }, [dbMode])
 
-  const uploadSitePhoto = useCallback(async (dailyLogId, file, meta = {}) => {
-    // demo 與「缺 id」分開講:照片先行(W8-7)會自動建檔,demo 下失敗的原因是模式不落庫,
-    // 舊訊息「需先存檔日誌」會誤導使用者以為又要先存檔
-    if (!dbMode) return { error: { message: 'demo 模式不支援照片上傳(需真專案)' } }
-    if (!dailyLogId) return { error: { message: '需先存檔日誌' } }
-    const pid = currentProject.project_id
-    const id = crypto.randomUUID()
-    // 佐證保全:canvas 重取樣會剝掉 EXIF,而壓縮後原圖即棄置——拍攝時間/GPS 是
-    // 照片僅存的自證中繼資料,必須在壓縮「之前」讀出來回填 photos 列(見 exifRead.js)。
-    // 讀不到(PNG/HEIC/畸形檔)回 null,taken_at 才 fallback 上傳時刻。
-    const exif = await readPhotoExif(file)
-    // 上傳前重取樣(長邊 2000px/JPEG 0.82,取捨見 imageCompress.js):原圖 3–8MB
-    // 直傳後清單與估驗佐證包都抓同一份,egress 隨照片數爆炸。壓縮失敗回原檔照傳。
-    // 必須在取 ext 之前——壓成 JPEG 後 file.name 已改為 .jpg,路徑副檔名要一致。
-    file = await compressImage(file)
-    const ext = (file.name?.split('.').pop() || file.type?.split('/')[1] || 'jpg').toLowerCase()
-    const path = `${pid}/${dailyLogId}/${id}.${ext}`
-    const { error: upErr } = await supabase.storage.from('photos')
-      .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false })
-    if (upErr) return { error: upErr }
-    const wi = meta.work_item_key ? wiMaps.byKey.get(meta.work_item_key) : null
-    const { error: insErr } = await supabase.from('photos').insert({
-      id, project_id: pid, daily_log_id: dailyLogId, work_item_id: wi?.id || null,
-      storage_path: path, caption: meta.caption || null,
-      // 施作區域(W8-7):AI 自查驗黑板/白板抄錄、人已在覆核區確認或清除;辨識不到=null
-      location: meta.location || null,
-      // 呼叫端帶的值優先(未來行動端可能直接給定位);沒帶才用 EXIF 回填。
-      // GPS 在 exifRead 內保證成對(缺一半=兩者皆 null),這裡不必再配對檢查。
-      taken_at: meta.taken_at || exif.takenAt || new Date().toISOString(),
-      gps_lat: meta.gps_lat ?? exif.gpsLat,
-      gps_lng: meta.gps_lng ?? exif.gpsLng,
-      uploaded_by: currentUser?.user_id,
-    })
-    if (insErr) { await supabase.storage.from('photos').remove([path]); return { error: insErr } } // 回滾孤兒檔
-    return { error: null, id }
-  }, [dbMode, currentProject, currentUser, wiMaps])
+  // 照片上傳只走上傳批次(fieldDocs slice uploadIntakePhoto:photo_intakes＋photos.intake_id／content_sha256,
+  // 由 Edge draft-field-documents 辨識起稿);舊「直接掛 daily_log_id 上傳」路徑已移除。
 
   // 先刪 DB 列(有 RLS/guard 把關,失敗如實回報),成功後再清 Storage 檔
   // (Storage 清失敗=孤兒檔,遠比「檔沒了、列還在」安全)——B-07。
@@ -177,20 +79,9 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return data.map((p) => ({ ...p, url: urlByPath.get(p.storage_path) || null, work_item_key: wiMaps.idToKey.get(p.work_item_id) || null }))
   }, [dbMode, currentProject, wiMaps])
 
-  // AI 現場辨識:工程告示板/現場照片 → read-whiteboard Edge Function（Claude 視覺）→ 結構化日誌欄位。
-  // 金鑰在雲端函式,前端只送壓好的 base64;工項對應(item_key)由前端用標單模糊比對。
-  // 批 B:body 一律帶 project_id——伺服器閘門(openAiGate)驗成員資格與功能開關。
-  const readWhiteboard = useCallback(async (file) => {
-    if (!isSupabaseConfigured) return { error: { message: '需登入（Supabase 未設定）' } }
-    let image_base64
-    try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
-    const { data, error } = await supabase.functions.invoke('read-whiteboard', {
-      body: { image_base64, mime_type: 'image/jpeg', project_id: currentProject?.project_id },
-    })
-    if (error) return { error }
-    if (data?.error) return { error: { message: data.error } }
-    return { error: null, result: data }
-  }, [currentProject])
+  // 告示板／施工照片的逐張辨識已收進 Edge draft-field-documents(照片保存後由伺服器辨識、配工項、
+  // 起稿並持久化 photos.ai_*);前端不再逐張打 read-whiteboard／classify-site-photo(舊 onWhiteboard 把板上
+  // 未寫的數量填 0 的路徑一併退場)。describe-defect／analyze-safety-photo 仍是缺失／工安頁的單張入口。
 
   // AI 缺失描述:缺失照片 → describe-defect Edge Function → 缺失表單欄位。
   const describeDefect = useCallback(async (file) => {
@@ -212,20 +103,6 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     let image_base64
     try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
     const { data, error } = await supabase.functions.invoke('analyze-safety-photo', {
-      body: { image_base64, mime_type: 'image/jpeg', project_id: currentProject?.project_id },
-    })
-    if (error) return { error }
-    if (data?.error) return { error: { message: data.error } }
-    return { error: null, result: data }
-  }, [currentProject])
-
-  // AI 施工照片分類:單張現場照 → classify-site-photo Edge Function → 照片簿說明/類別/工項關鍵詞。
-  // 「批次辨識」由前端對多檔各呼叫一次;工項對應由前端 matchLeaf 模糊比對標單。
-  const classifySitePhoto = useCallback(async (file) => {
-    if (!isSupabaseConfigured) return { error: { message: '需登入（demo 模式不支援 AI 辨識）' } }
-    let image_base64
-    try { image_base64 = await imageToBase64(file) } catch { return { error: { message: '讀取照片失敗' } } }
-    const { data, error } = await supabase.functions.invoke('classify-site-photo', {
       body: { image_base64, mime_type: 'image/jpeg', project_id: currentProject?.project_id },
     })
     if (error) return { error }
@@ -363,9 +240,9 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   }, [isPersistedProject])
 
   return {
-    siteLogs, setSiteLogs, safetyRecords, setSafetyRecords, fieldDocuments, setFieldDocuments,
-    saveSiteLog, deleteSiteLog, listSitePhotos, uploadSitePhoto, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
-    readWhiteboard, describeDefect, analyzeSafetyPhoto, classifySitePhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
+    siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
+    listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
+    describeDefect, analyzeSafetyPhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   }
 }

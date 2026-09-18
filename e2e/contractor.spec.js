@@ -69,17 +69,29 @@ test.describe('施工廠商', () => {
     await expect(detail.getByRole('button', { name: '前往處理', exact: true })).toBeVisible()
   })
 
-  test('施工日誌:複製昨日 → 存檔 → 列印鈕/照片區解鎖', async ({ page }) => {
+  // P2c:施工日誌是「文件」——存檔=伺服器保存版本(demo 只進記憶體)、列出待補;簽署／提送需正式專案。
+  // 列印只輸出已落庫的紀錄(已簽署或既有),demo 今天沒有,切到昨天(demo 種子)才有。
+  test('施工日誌:複製昨日 → 存檔成版本並列待補 → 既有紀錄可列印;示範模式不假裝可簽署／上傳', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/site-log')
-    // 今天(新日期)有「複製昨日」;帶入班組/機具/材料
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText('本日尚無日誌')
+    // 今天(新日期)有「複製昨日」;帶入班組/機具/材料,來源標「沿用昨日」
     await page.getByRole('button', { name: /複製昨日/ }).click()
     await expect(page.getByText(/已帶入 .* 的班組/)).toBeVisible()
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText('未存檔')
     await page.getByRole('button', { name: '存檔', exact: true }).click()
     await expect(page.getByText('已存檔 ✓')).toBeVisible()
-    // 跨元件同步:列印鈕出現、照片區解鎖(P-01 tracked store 的回歸點)
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText(/已存檔.*版本 1/)
+    // 待補集中呈現(天氣／摘要／工項數量都還沒填),簽署要等補齊;示範模式沒有簽署與上傳
+    await expect(page.getByText(/待補 \d+ 項/).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0)
+    await expect(page.getByText('示範模式無法上傳照片').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /列印公定格式日誌/ })).toHaveCount(0) // 今天尚未落庫,沒有可印的正式紀錄
+    // 切到昨天(demo 種子的既有紀錄):可列印;既有紀錄以「待核對」帶入
+    const list = page.getByRole('group', { name: /施工日誌（/ })
+    await list.getByRole('button', { name: /^\d{4}-\d{2}-\d{2}$/ }).nth(1).click()
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText(/既有紀錄/)
     await expect(page.getByRole('button', { name: /列印公定格式日誌/ })).toBeVisible()
-    await expect(page.getByText('選照片 AI 辨識後上傳', { exact: true })).toBeVisible() // P0 #11 改名:區分「選檔辨識」與「辨識已上傳」兩條路
   })
 
   test('品質:缺失改善鏈——切到缺失分段 → 開始改善 → 提送複查(W8-4A)', async ({ page }) => {
