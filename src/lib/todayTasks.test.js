@@ -224,15 +224,46 @@ describe('期限型待辦:試體、驗收、停留點', () => {
     }
   })
 
-  it('每月重複義務吃傳入的 today,不讀系統時鐘', () => {
-    const monthly = [{ id: 'OB-M', title: '提送施工月報', status: '待辦', recurring: 'monthly', recurring_day: 15, responsible: '廠商' }]
-    // 刻意選一個遠離系統時鐘的日期:讀系統時鐘的話 due 會落在完全不同的月份
-    const near = buildTodayTasks({ org: 'contractor', today: new Date('2027-03-10T04:00:00Z'), obligations: monthly })
-      .mine.find((x) => x.tag === '契約重點')
-    expect(near.due).toBe('2027-03-15')
-    expect(near.meta).toContain('還有 5 天')
-    // 已過本月 15 日 → 順延下月,超過 7 日門檻不列
-    expect(buildTodayTasks({ org: 'contractor', today: new Date('2027-03-16T04:00:00Z'), obligations: monthly }).mine).toEqual([])
+  // 循環義務(P5b):不再從「今天」推算下一期;期次(obligation_periods)由 DB 依規則物化,
+  // 每個未結期次各一筆、各自套 7 日窗口,舊逾期不因下期出現而消失,完成本期不清下期。
+  it('循環義務逐期:每個未結期次各一筆,舊逾期保留、完成本期不動下期、窗口外的下期不列', () => {
+    const period = (key, due, status = '待辦', extra = {}) => ({ id: `OB-M-${key}`, period_key: key, due_date: due, status, review_note: null, ...extra })
+    const monthly = [{
+      id: 'OB-M', title: '提送施工月報', status: '待辦', recurring: 'monthly', recurring_day: 15, responsible: '廠商',
+      periods: [period('2027-01', '2027-01-15', '已完成'), period('2027-02', '2027-02-15'), period('2027-03', '2027-03-15'), period('2027-04', '2027-04-15')],
+    }]
+    const today = new Date('2027-03-10T04:00:00Z')
+    const mine = buildTodayTasks({ org: 'contractor', today, obligations: monthly }).mine.filter((x) => x.tag === '契約重點')
+    expect(mine.map((x) => [x.key, x.period, x.due, x.title, x.to])).toEqual([
+      ['契約:OB-M:2027-02', '2027-02', '2027-02-15', '提送施工月報（2027-02 期）', '/deadlines?obligation=OB-M&period=2027-02'],
+      ['契約:OB-M:2027-03', '2027-03', '2027-03-15', '提送施工月報（2027-03 期）', '/deadlines?obligation=OB-M&period=2027-03'],
+    ])
+    expect(mine[0].meta).toContain('逾期 23 天')
+    expect(mine[1].meta).toContain('還有 5 天')
+    // 完成 2 月期:3 月期仍在,4 月期(36 天後)仍在窗口外
+    const febDone = [{ ...monthly[0], periods: monthly[0].periods.map((p) => (p.period_key === '2027-02' ? { ...p, status: '已提送' } : p)) }]
+    expect(buildTodayTasks({ org: 'contractor', today, obligations: febDone }).mine.map((x) => x.key)).toEqual(['契約:OB-M:2027-03'])
+    // 義務層舊的已完成狀態不關閉循環義務;不適用才整條不列
+    const legacyDone = [{ ...monthly[0], status: '已完成' }]
+    expect(buildTodayTasks({ org: 'contractor', today, obligations: legacyDone }).mine).toHaveLength(2)
+    const retired = [{ ...monthly[0], status: '不適用' }]
+    expect(buildTodayTasks({ org: 'contractor', today, obligations: retired }).mine).toEqual([])
+  })
+
+  it('循環義務沒有期次:基準日缺 → 待補設定(基準日);規則不完整 → 待補設定(擷取審核);待核對期次 → 待補設定(那一期)', () => {
+    const base = { id: 'OB-R', title: '每月環境監測', status: '待辦', recurring: 'monthly', recurring_day: 5, responsible: '廠商', periods: [] }
+    const noAnchor = buildTodayTasks({ org: 'contractor', today: TODAY, anchors: {}, obligations: [base] })
+    expect(noAnchor.mine).toEqual([])
+    expect(noAnchor.setup.map((x) => [x.key, x.meta, x.to])).toEqual([['契約:OB-R:setup', '基準日待補（開工日）', '/deadlines']])
+    const noRule = buildTodayTasks({ org: 'contractor', today: TODAY, anchors: { commencement_date: '2026-01-01' }, obligations: [{ ...base, recurring_day: null }] })
+    expect(noRule.setup.map((x) => [x.meta, x.to])).toEqual([['循環規則待補（每月缺幾日）', '/requirements/review?highlight=OB-R']])
+    const review = buildTodayTasks({ org: 'owner', today: TODAY, anchors: { commencement_date: '2026-01-01' }, obligations: [{
+      ...base, responsible: '機關',
+      periods: [{ id: 'p1', period_key: '2026-07', due_date: '2026-07-05', status: '待辦', review_note: '原義務曾標為「已完成」但無法對應期別' }],
+    }] })
+    expect(review.mine).toEqual([])
+    expect(review.setup.map((x) => [x.key, x.period, x.ball, x.to])).toEqual([['契約:OB-R:2026-07:setup', '2026-07', 'owner', '/deadlines?obligation=OB-R&period=2026-07']])
+    expect(review.setup[0].meta).toContain('回填待核對')
   })
 
   it('期限型項目不會跑進「等待對方」', () => {

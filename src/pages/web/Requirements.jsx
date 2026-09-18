@@ -382,8 +382,10 @@ export default function Requirements() {
     const meta = [
       ['責任方', selected.who],
       ['階段', PHASES.find((p) => p.key === selected.phase)?.name || '—'],
-      ['到期日', selected.dateLabel === '—' ? '依條件觸發' : `${selected.dateLabel}（${selected.countdown}）`],
+      ['到期日', selected.dateLabel === '—' ? (selected.recurrenceGap ? selected.recurrenceGap.label : '依條件觸發') : `${selected.dateLabel}（${selected.countdown}）`],
       ['頻率', selected.kind || '單次'],
+      // 循環義務(P5b):本期=最早未結的一期;逐期狀態在下方「期次」
+      ...(selected.recurring ? [['本期', selected.currentPeriod ? `${selected.currentPeriod} 期` : '—']] : []),
       ['允收標準', selected.criteria || '—'],
       ['應留存', selected.evidenceReq || '—'],
       ...(selected.penalty ? [['罰則', selected.penalty]] : []),
@@ -542,9 +544,45 @@ export default function Requirements() {
         </div>
       </div>
 
-      {/* 6. 動作列:只看歸屬(isMine)與狀態;無權限不渲染假按鈕 */}
+      {/* 5b. 循環義務的期次(P5b,唯讀呈現;完整 UI 在 P5d):逐期追蹤,完成本期不清下期、舊逾期保留;
+          標記在期限追蹤逐期進行(義務本身自 20260917233000 起不再有單一完成狀態) */}
+      {selected.recurring && (
+        <div className="px-4 pb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <MSym name="event_repeat" size={15} className="text-[var(--text-3)]" />
+            <span className="text-footnote font-medium text-[var(--text)]">期次（{selected.periods.length}）</span>
+          </div>
+          {selected.periods.length === 0 ? (
+            <p className="text-xs text-[var(--text-3)] leading-relaxed">
+              {selected.recurrenceGap ? selected.recurrenceGap.label : '尚未產生期次。'}
+              {selected.recurrenceGap?.kind === 'rule' && '——請到擷取審核廢止取代後補登循環規則。'}
+              {selected.recurrenceGap?.kind === 'anchor' && '——補上基準日後期次會立即產生。'}
+            </p>
+          ) : (
+            <ul role="list" aria-label={`${selected.title} 期次`} className="divide-y divide-[var(--border-2)] border border-[var(--border-2)] rounded-lg">
+              {selected.periods.map((p) => (
+                <li key={p.id} className="px-3 py-2 flex items-center gap-2 flex-wrap text-footnote">
+                  <span className="num font-medium text-[var(--text)]">{p.key} 期</span>
+                  <span className="num text-[var(--text-3)]">到期 {p.dateLabel}</span>
+                  <span className={`num text-caption ${COUNTDOWN_CLS[p.status] || 'text-[var(--text-2)]'}`}>{p.countdown}</span>
+                  <Badge color={OB_STATUS[p.status].badge} className="ml-auto">{p.rawStatus}</Badge>
+                  {p.status === 'done' && p.onTime === false && <span className="text-caption text-[var(--amber-text)]">遲交</span>}
+                  {p.reviewNote && <span className="w-full text-caption text-[var(--amber-text)]">待核對:{p.reviewNote}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* 6. 動作列:只看歸屬(isMine)與狀態;無權限不渲染假按鈕。循環義務逐期標記在期限追蹤 */}
       <div className="px-4 py-3 border-t border-[var(--border)] flex items-center gap-2 flex-wrap">
-        {actable && activeStatus && (<>
+        {selected.recurring && actable && (
+          <Link to={`/deadlines?obligation=${encodeURIComponent(selected.id)}`} className="inline-flex rounded-lg">
+            <Button size="md" tabIndex={-1}><MSym name="event_repeat" size={17} /> 到期限追蹤逐期標記</Button>
+          </Link>
+        )}
+        {!selected.recurring && actable && activeStatus && (<>
           <Button size="md" busy={busy === 'done'} onClick={markDone}>
             <MSym name="task_alt" size={17} fill /> 標記完成
           </Button>
@@ -553,12 +591,12 @@ export default function Requirements() {
             <MSym name="upload_file" size={17} /> 掛佐證
           </Button>
         </>)}
-        {actable && selected.status === 'done' && (
+        {!selected.recurring && actable && selected.status === 'done' && (
           <Button variant="outline" size="md" busy={busy === 'undo'} onClick={undoDone}>
             <MSym name="undo" size={17} /> 取消完成
           </Button>
         )}
-        {actable && selected.status === 'na' && (
+        {!selected.recurring && actable && selected.status === 'na' && (
           <span className="flex-1 min-w-[180px] text-caption text-[var(--text-3)] leading-relaxed">
             {selected.penalty ? '罰則條款,非待辦事項;條件成立時自動轉為待處理。' : '相關基準日尚未設定,推不出到期日,暫非待辦事項。'}
           </span>
@@ -582,7 +620,7 @@ export default function Requirements() {
           </Button>
         )}
       </div>
-      {evidenceOpen && actable && (
+      {evidenceOpen && actable && !selected.recurring && (
         <div className="px-4 pb-4 flex items-center gap-2 flex-wrap">
           {submittals.length ? (<>
             <Select value={evidencePick} onChange={(e) => setEvidencePick(e.target.value)}

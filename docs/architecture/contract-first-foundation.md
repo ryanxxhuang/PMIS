@@ -27,6 +27,8 @@ requirements → requirement_sources
 
 D-012 移除了 obligation → Requirement 的同步／刪除 trigger。D-019 自動確認 AI 轉錄；D-020 將所有已確認類型冪等物化一列 obligation。更新契約欄位時保留 runtime 身分、執行狀態、佐證、罰則與歷史；廢止取代只讓仍待辦的 runtime 變成「不適用」。無時點項目沒有到期日，也不產生到期提醒。
 
+循環義務（`recurring` 非空）的執行狀態自 P5b（`20260917233000`）起在 `obligation_periods` 逐期記錄：義務列插入／規則變更時由 trigger 依規則＋基準日確定性物化期次，廢止取代把仍待辦的期次一併標不適用；義務列本身不可再標已提送／已完成。見 [球權與今日工作](ball-in-court.md)、[瘦身入口與退場](slimming-entrypoints-and-retirement.md) §4.2。
+
 `legacy_contract_obligation_id` 是歷史來源識別，刻意沒有反向 FK，避免循環依賴。現行期限頁、提醒、Agent 與 Demo 都還讀 obligation，因此不能刪表。`parse-contract` 沒有前端呼叫者，但退場功能列與 Edge 仍保留供歷史用量／回復；功能關閉 migration 的部署狀態見 CURRENT。
 
 ## 程式與驗證入口

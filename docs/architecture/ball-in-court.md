@@ -22,20 +22,25 @@
 | 查驗 | 待查驗→監造 |
 | 觀察 | 待處理→assigned_to 為三方值歸該方；缺值→廠商；其他文字→待補設定 |
 | 現場文書 | draft 待簽署／pending_input 待補欄位／in_review 待同方核對／signed 待提送／returned 被退回待補正→責任方 `owner_org`；submitted／received→目前版本已提送且尚未收件或退回的 `to_org` 各一顆「待收件」；都收件或 discarded／superseded→done |
-| 契約義務 | responsible 精確白名單（去頭尾空白）→該方；null／空／其他／未知→待補設定（責任方）；責任明確但觸發點對應的基準日沒填→待補設定（基準日）；已提送／已完成／不適用→done |
+| 契約義務 | responsible 精確白名單（去頭尾空白）→該方；null／空／其他／未知→待補設定（責任方）；責任明確但觸發點對應的基準日沒填→待補設定（基準日）；單次義務已提送／已完成／不適用→done |
+| 循環義務（P5b） | 整條只在不適用時 done；每個未結期次（`obligation_periods`）各一顆球，到期日＝該期 `due_date`，標題加「（期別 期）」；循環規則不完整（每月缺幾日等）→待補設定（循環規則）；起算的基準日沒填（觸發點對應日期，無觸發點看開工日）→待補設定（基準日）；期次帶 `review_note`→待補設定（回填待核對）；期次已提送／已完成／不適用→done |
 
 估驗球權還看 invoice_date／paid_date；廠商請款導 `/payments`。核心事項的形狀是兩側交集 `{ id, who, tag, title, status, meta, due }`（coreOpenItems）；前端 collaborationItems 再加 `to`，Edge 再加 `overdue_days`。現場文書直達 `/site?doc=<id>`（P2c：`/site` 收到後施工日誌轉 `/site-log?doc=<id>`；`fieldDocuments` 由 `src/store/slices/fieldDocs.js` 載入與寫入後重載，同一份 `{documents, submissions}`）。
+
+契約義務的球由共用規則 `obligationEntries(ob, { anchors, computeDueIso })` 列出（單次一顆、循環每個未結期次一顆），呼叫端只提供單次義務的到期日計算（前端 `contractDue.js`、Edge `contractDue.ts`，兩者對循環義務都改讀 `ob.periods` 最早未結一期）。期次由 PostgREST embed `periods:obligation_periods(...)` 隨義務列載入（前端 `loadObligationsFromDB`、Edge 收集器、Agent `get_requirements`），RLS 沿用義務。逐期鍵：前端 `契約:<id>:<期別>`、Edge `period_key`，深連結 `/deadlines?obligation=<id>&period=<期別>`。
 
 ## 待補設定
 
 責任推不出三方、或基準日缺失而推不出到期日的事項，不歸任何一方、不算任何人的件數，改列「待補設定」讓三方都看得到並有處理入口：首頁「現在輪到我」下方一張卡、Agent 工具回 `setup_pending`、早報另成一段（不觸發寄信）。責任方缺口導到擷取審核該筆（已確認內容不可改，廢止取代後補登；義務 id 就是 requirement id）；基準日缺口導到期限追蹤的基準日卡。DB 同一條規則：`obligation_party()` 對三方以外回 null（migration `20260917220737`），update policy 因此對三方都不放行，只剩非正式模式的 admin override；前端 `obligationParty` 回「待補設定」，履約時程對三方可見但不可操作。
+
+P5b 再加兩種缺口（`SetupGap.kind`）：`rule`＝循環規則不完整（DB `fn_obligation_recurrence_gap` 與共用 `recurrenceRuleGap` 同口徑，導擷取審核）；`review`＝回填待核對（migration 回填時義務層曾標完成但推不出對應期別的期次帶 `review_note`，導期限追蹤該期，人標記後解除）。正式 7 筆 monthly 中 5 筆缺「每月幾日」，套用後即以「循環規則待補」列出。
 
 ## 前端三桶
 
 [todayTasks](../../src/lib/todayTasks.js) 的 buildTodayTasks 回 mine／waiting／doneToday／setup：
 
 - 協作項依 who 歸 mine，waiting 只收 WAITING_SCOPE 白名單的對方事項；現場文書另限該類文書的當事方（FIELD_DOC_PARTIES）。
-- 契約義務收廠商／監造／機關，責任採共用規則的精確白名單；未結由 isObligationOpen 決定（已提送／完成／不適用以外都算），有到期日且 7 天內才進 mine；待補設定進 setup。
+- 契約義務收廠商／監造／機關，責任採共用規則的精確白名單；未結由 isObligationStreamOpen 決定（單次：已提送／完成／不適用以外都算；循環：只在不適用時關閉），循環義務每個未結期次各一筆（`obligationEntries`），有到期日且 7 天內才進 mine（逐期各自套窗口，舊逾期不因下期出現而消失）；待補設定進 setup。
 - 試體／ITP／施工已開始但未填的今日日誌屬廠商；驗收期限依 stage 的角色白名單。
 - doneToday 只收系統時間戳 closed_at／inspected_at，依完成方過濾，不使用可回填業務日期；現行廠商／機關因此沒有此類完成項。
 
@@ -49,7 +54,7 @@
 
 ## Edge／早報
 
-collectOpenBallItems 依專案查缺失、送審、RFI、估驗、查驗、變更、觀察、現場文書（＋目前版本提送列）、未廢止義務與基準日，全部交給共用規則判定。Agent 用 caller JWT，obligationSoonDays=0、依 my_org_type 篩選後最多 30 筆，另回 `setup_pending`；早報用 service role，obligationSoonDays=7，另加試體齡期並逐成員篩選，待補設定三方都收到但只有逾期／即將到期才寄。
+collectOpenBallItems 依專案查缺失、送審、RFI、估驗、查驗、變更、觀察、現場文書（＋目前版本提送列）、未廢止義務（embed 期次）與基準日，全部交給共用規則判定。Agent 用 caller JWT，obligationSoonDays=0、依 my_org_type 篩選後最多 30 筆，另回 `setup_pending`（`fix_at` 依四種缺口指路）；早報用 service role，obligationSoonDays=7，另加試體齡期並逐成員篩選，待補設定三方都收到但只有逾期／即將到期才寄。Agent 工具層只讀（工具白名單只允許 `my_org_type`／`list_project_members` 兩支 RPC），期次由 DB 側維護（義務插入／規則變更／基準日變更 trigger、每日 pg_cron `pmis-obligation-periods`），不在工具層物化。
 
 service role 沒有 RLS，每筆查詢的 project_id 是跨案隔離關鍵；提送表沒有 project_id，只以本案文件的 id 清單查。責任不明兩側都不歸任何方（P5a 前 Edge 預設廠商的差異已消除）；剩餘的呼叫端差異（soonDays）見 [雙引擎](dual-engine-sync.md)。早報 pending 是我方無期限項，不是首頁 waiting 的等對方。
 
@@ -61,4 +66,4 @@ navConfig 的 BALL_SOURCES 用 `/dashboard`、`?ball=waiting`、`?ball=done`；r
 
 ## 驗證
 
-共用案例三側（見「單一實作」）、[球權](../../src/lib/ballInCourt.test.js)、[待辦](../../src/lib/todayTasks.test.js)、[hook](../../src/lib/useTodayTasks.test.js)、[早報](../../supabase/functions/_shared/agentBrief.test.ts)、[履約時程規則](../../src/lib/obligationTimeline.test.js)、pgTAP [`obligation_party_unassigned.sql`](../../supabase/tests/obligation_party_unassigned.sql) 與三角色 E2E。
+共用案例三側（見「單一實作」）、[球權](../../src/lib/ballInCourt.test.js)、[待辦](../../src/lib/todayTasks.test.js)、[hook](../../src/lib/useTodayTasks.test.js)、[早報](../../supabase/functions/_shared/agentBrief.test.ts)、[履約時程規則](../../src/lib/obligationTimeline.test.js)、[到期日](../../src/lib/contractDue.test.js)、pgTAP [`obligation_party_unassigned.sql`](../../supabase/tests/obligation_party_unassigned.sql)、[`obligation_periods.sql`](../../supabase/tests/obligation_periods.sql)（期次排程純函式、materialize 冪等、狀態轉移權限矩陣、回填規則）與三角色 E2E。

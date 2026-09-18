@@ -116,6 +116,10 @@ describe('標單匯入前的真專案:工安/契約期限寫入必須進 DB', ()
     expect(wrote('contract_obligations', 'select')).toBe(true)
     expect(wrote('contract_obligations', 'update')).toBe(true)
     expect(h.calls.some((c) => c.table === 'function:parse-contract')).toBe(false)
+    // 循環義務逐期(P5b):走 RPC transition_obligation_period,不直接寫 obligation_periods
+    await act(async () => { await r.current.transitionObligationPeriod('ob-1', 'per-1', '已提送') })
+    expect(wrote('rpc:transition_obligation_period', 'rpc')).toBe(true)
+    expect(wrote('obligation_periods', 'update')).toBe(false)
   })
 
   // 統一缺失引擎:工安缺失(domain=safety)在匯標單前就要能寫 DB

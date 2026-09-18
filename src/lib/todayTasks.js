@@ -16,7 +16,7 @@
 // 共用案例 tests/fixtures/ball-in-court.cases.json 由 ballInCourt.cases.test.js 對本檔斷言。
 import { collaborationItems, detailLink } from './ballInCourt.js'
 import {
-  BALL_SIDES, OBLIGATION_SIDE, obligationBall, obligationInWindow, isObligationOpen, daysBetweenIso, FIELD_DOC_PARTIES,
+  BALL_SIDES, OBLIGATION_SIDE, obligationEntries, obligationInWindow, periodTitle, daysBetweenIso, FIELD_DOC_PARTIES,
 } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 import { parseLocalDate, taipeiISODate, localISODate } from './dates.js'
 import { computeObligationDue } from './contractDue.js'
@@ -83,16 +83,33 @@ const byDue = (a, b) => {
   return x - y
 }
 
-// 每筆待辦:{ key, id, tag, title, meta, ball, due, overdueDays, to }。
+// 每筆待辦:{ key, id, tag, title, meta, ball, due, overdueDays, to, period }。
 // meta 是給人看的唯一狀態句(球權標籤＋到期／罰則),UI 不再自己算日期。
-// id=原單據 id(可能為 null,demo 舊形狀);key 才是列的唯一鍵。
-function task({ key, id = null, tag, title, meta, ball, to, due = null, todayIso = null }) {
+// id=原單據 id(可能為 null,demo 舊形狀);key 才是列的唯一鍵;period=循環義務的期別鍵(P5b),
+// 同一條義務的每一期各是一筆。
+function task({ key, id = null, tag, title, meta, ball, to, due = null, todayIso = null, period = null }) {
   const days = due && todayIso ? daysBetween(due, todayIso) : null
   return {
     key, id: id ?? null, tag, title: title || '（未命名）', meta, ball, to,
     due: due || null,
     overdueDays: days != null && days < 0 ? -days : null,
+    period: period ?? null,
   }
+}
+
+// 待補設定的處理入口:責任方／循環規則缺口在擷取審核該筆(已確認內容不可改,廢止取代後補登;
+// 義務 id 就是 requirement id,?highlight= 直達);基準日缺口在期限追蹤的基準日卡;
+// 回填待核對在期限追蹤的那一期。
+function setupLink(kind, ob, period) {
+  if (kind === 'responsible' || kind === 'rule') return detailLink('/requirements/review', 'highlight', ob.id)
+  if (kind === 'review') return periodLink(ob, period)
+  return '/deadlines'
+}
+// 「標為已提送」在期限追蹤頁(契約重點改版後遷出),待辦要導到能完成的地方;帶 ?obligation=<id>
+// 直達該筆(規範 §9.7)——/deadlines 的 rows 是 dueItems,id 就是 ob.id;循環義務再帶 &period= 定位那一期。
+function periodLink(ob, period) {
+  const base = detailLink('/deadlines', 'obligation', ob.id)
+  return period && ob.id != null && ob.id !== '' ? `${base}&period=${encodeURIComponent(period.period_key)}` : base
 }
 
 export function buildTodayTasks(input = {}) {
@@ -134,32 +151,32 @@ export function buildTodayTasks(input = {}) {
     })
 
   // ── ② 契約期限(自己責任、且自己在 /deadlines 真的能完成的才算待辦)──
-  // 責任不明 → 待補設定(處理入口:擷取審核該筆——已確認的契約重點內容不可改,由審核者
-  // 「廢止取代」後補登責任方;義務 id 就是 requirement id,?highlight= 直達);
-  // 基準日沒填而推不出到期日 → 待補設定(處理入口:期限追蹤的基準日卡)。
+  // 單次義務一筆(到期日由 contractDue 依基準日算);循環義務每個未結期次一筆(共用規則
+  // obligationEntries:舊逾期各自保留、完成本期不動下期,期次由 DB 依規則物化)。
+  // 責任不明／基準日沒填／循環規則不完整／回填待核對 → 待補設定(三方都看得到,各有處理入口)。
+  const computeDueIso = (ob) => localISODate(computeObligationDue(ob, anchors))
   for (const ob of obligations) {
-    if (!isObligationOpen(ob.status)) continue
-    const dueIso = localISODate(computeObligationDue(ob, anchors, todayLocal))
-    const ball = obligationBall(ob, { dueIso, anchors })
-    if (ball.who === 'done') continue
-    if (ball.setup) {
-      setup.push(task({
-        key: `契約:${ob.id ?? ob.title}:setup`, id: ob.id, tag: '契約重點', title: ob.title, ball: ball.who, due: dueIso, todayIso,
-        to: ball.setup.kind === 'responsible' ? detailLink('/requirements/review', 'highlight', ob.id) : '/deadlines',
-        meta: ball.setup.label,
+    for (const { ball, dueIso, period } of obligationEntries(ob, { anchors, computeDueIso })) {
+      if (ball.who === 'done') continue
+      const suffix = period ? `:${period.period_key}` : ''
+      const title = periodTitle(ob.title, period)
+      if (ball.setup) {
+        setup.push(task({
+          key: `契約:${ob.id ?? ob.title}${suffix}:setup`, id: ob.id, tag: '契約重點', title, ball: ball.who, due: dueIso, todayIso, period: period?.period_key,
+          to: setupLink(ball.setup.kind, ob, period),
+          meta: ball.setup.label,
+        }))
+        continue
+      }
+      if (ball.who !== org) continue
+      if (!dueIso || !obligationInWindow(dueIso, todayIso, SOON_DAYS)) continue
+      const days = daysBetween(dueIso, todayIso)
+      mine.push(task({
+        key: `契約:${ob.id ?? ob.title}${suffix}`, id: ob.id, tag: '契約重點', title, ball: org, period: period?.period_key,
+        to: periodLink(ob, period), due: dueIso, todayIso,
+        meta: `${dueText(days, dueIso)}${ob.penalty ? `・罰則：${ob.penalty}` : ''}`,
       }))
-      continue
     }
-    if (ball.who !== org) continue
-    if (!dueIso || !obligationInWindow(dueIso, todayIso, SOON_DAYS)) continue
-    const days = daysBetween(dueIso, todayIso)
-    mine.push(task({
-      key: `契約:${ob.id ?? ob.title}`, id: ob.id, tag: '契約重點', title: ob.title, ball: org,
-      // 「標為已提送」在期限追蹤頁(契約重點改版後遷出),待辦要導到能完成的地方;
-      // 帶 ?obligation=<id> 直達該筆(規範 §9.7)——/deadlines 的 rows 是 dueItems,id 就是 ob.id
-      to: detailLink('/deadlines', 'obligation', ob.id), due: dueIso, todayIso,
-      meta: `${dueText(days, dueIso)}${ob.penalty ? `・罰則：${ob.penalty}` : ''}`,
-    }))
   }
 
   // ── ③ 試體齡期(廠商填試驗值)────────────────────────────────────────

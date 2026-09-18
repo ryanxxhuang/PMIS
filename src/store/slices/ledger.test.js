@@ -229,6 +229,50 @@ describe('契約義務:狀態以伺服器為準,demo 鏡像同一條 trigger 語
     expect(pg.calls).toHaveLength(0)
   })
 
+  // 循環義務逐期(P5b):唯一寫入路徑是 RPC transition_obligation_period,DB 回傳列才刷新該期;
+  // demo 鏡像伺服器語意(完成蓋時間戳、退回清空並解除證據、標記解除待核對註記)。
+  const recurring = {
+    id: 'ob2', title: '每月施工月報', status: '待辦', recurring: 'monthly', recurring_day: 5,
+    periods: [
+      { id: 'p-06', period_key: '2026-06', due_date: '2026-06-05', status: '待辦', completed_at: null, evidence_submittal_id: null, evidence_document_id: null, review_note: '原義務曾標為「已完成」但無法對應期別' },
+      { id: 'p-07', period_key: '2026-07', due_date: '2026-07-05', status: '待辦', completed_at: null, evidence_submittal_id: null, evidence_document_id: null, review_note: null },
+    ],
+  }
+  it('真專案:期次標記走 RPC,用伺服器回傳列刷新那一期;其他期不動', async () => {
+    const r = mount()
+    await act(async () => { r.current.setObligations([recurring]) })
+    pg.script('rpc:transition_obligation_period', 'rpc', { data: { id: 'p-07', status: '已提送', completed_at: '2026-07-04T00:00:00Z', evidence_submittal_id: 's1' }, error: null })
+    await act(async () => { await r.current.transitionObligationPeriod('ob2', 'p-07', '已提送', { evidence_submittal_id: 's1' }) })
+    expect(pg.argsOf('rpc:transition_obligation_period', 'rpc')[0][0]).toEqual({ p_period: 'p-07', p_status: '已提送', p_evidence_submittal_id: 's1', p_evidence_document_id: null })
+    expect(pg.hit('obligation_periods', 'update')).toBe(false) // 不直接寫表
+    const periods = r.current.obligations[0].periods
+    expect(periods.find((p) => p.id === 'p-07')).toMatchObject({ status: '已提送', completed_at: '2026-07-04T00:00:00Z', evidence_submittal_id: 's1' })
+    expect(periods.find((p) => p.id === 'p-06').status).toBe('待辦')
+  })
+  it('真專案:RPC 拒絕(非責任方／別案證據)→ 回錯誤,期次不變', async () => {
+    const r = mount()
+    await act(async () => { r.current.setObligations([recurring]) })
+    pg.script('rpc:transition_obligation_period', 'rpc', { data: null, error: { message: '只有責任方可標記此期次' } })
+    let res
+    await act(async () => { res = await r.current.transitionObligationPeriod('ob2', 'p-07', '已提送') })
+    expect(res.error.message).toContain('只有責任方')
+    expect(r.current.obligations[0].periods.find((p) => p.id === 'p-07').status).toBe('待辦')
+  })
+  it('demo:標記蓋時間戳並解除待核對註記,退回待辦清空時間戳與證據(鏡像 RPC 語意)', async () => {
+    const r = mount(demoCtx())
+    await act(async () => { r.current.setObligations([recurring]) })
+    await act(async () => { await r.current.transitionObligationPeriod('ob2', 'p-06', '已完成', { evidence_submittal_id: 's1' }) })
+    const done = r.current.obligations[0].periods.find((p) => p.id === 'p-06')
+    expect(done.status).toBe('已完成')
+    expect(done.completed_at).toBeTruthy()
+    expect(done.evidence_submittal_id).toBe('s1')
+    expect(done.review_note).toBeNull()
+    await act(async () => { await r.current.transitionObligationPeriod('ob2', 'p-06', '待辦') })
+    const back = r.current.obligations[0].periods.find((p) => p.id === 'p-06')
+    expect(back).toMatchObject({ status: '待辦', completed_at: null, evidence_submittal_id: null })
+    expect(pg.calls).toHaveLength(0)
+  })
+
   it('AI 需求擷取在 demo 模式被擋下,不呼叫上傳編排', async () => {
     const r = mount(demoCtx())
     let res

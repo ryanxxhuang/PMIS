@@ -98,13 +98,68 @@ export function obligationSide(responsible: unknown): BallSide | 'unassigned' {
 }
 
 // 「未結」的唯一定義:已提送／已完成／不適用以外都算未結(第五種值出現時兩側同樣列入,
-// 不再是前端列、伺服器不列)。
+// 不再是前端列、伺服器不列)。單次義務看義務 status;循環義務的每一期看期次 status。
 export const OBLIGATION_CLOSED_STATUSES: readonly string[] = ['已提送', '已完成', '不適用']
 export function isObligationOpen(status: unknown): boolean {
   return !OBLIGATION_CLOSED_STATUSES.includes(status == null ? '' : String(status))
 }
 
+// ── 循環義務(P5b):逐期追蹤,期次(obligation_periods)由 DB 依規則＋基準日確定性物化 ──────
+// 前端與 Edge 都以 PostgREST embed 讀進 ob.periods;這裡只定義「哪些期未結、目前該處理哪一期、
+// 規則缺什麼、從哪個基準日起算」,與 DB 的 fn_obligation_recurrence_gap／
+// fn_obligation_recurrence_anchor_key 同口徑(pgTAP 與共用案例各釘一側)。
+export const RECURRING_KINDS: readonly string[] = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly']
+export function isRecurring(ob: Rec): boolean {
+  return RECURRING_KINDS.includes(s(ob, 'recurring'))
+}
+// 循環義務整條只在「不適用」(廢止取代)時關閉;義務層的已提送／已完成是 P5b 前的舊語意,
+// 自 migration 20260917233000 起 DB guard 不再允許寫入,期次才是完成的單位。
+export function isObligationStreamOpen(ob: Rec): boolean {
+  return isRecurring(ob) ? s(ob, 'status') !== '不適用' : isObligationOpen(ob?.status)
+}
+// 循環規則缺什麼(缺就產生不了期次,DB 也不物化):完整回 null。
+export function recurrenceRuleGap(ob: Rec): string | null {
+  const kind = s(ob, 'recurring')
+  if (!RECURRING_KINDS.includes(kind)) return null
+  if (kind === 'weekly' && ob?.recurring_weekday == null) return '每週缺星期幾'
+  if (kind === 'monthly' && ob?.recurring_day == null) return '每月缺幾日'
+  if (kind === 'quarterly' && (ob?.recurring_day == null || ob?.recurring_month == null)) return '每季缺月份或日期'
+  if (kind === 'yearly' && (ob?.recurring_day == null || ob?.recurring_month == null)) return '每年缺月份或日期'
+  if (s(ob, 'trigger_event') === 'fixed' && !ob?.fixed_date) return '指定日期缺起算日'
+  return null
+}
+// 循環起算的基準日欄位:觸發點映得到就用它;fixed 用義務自己的日期(缺值算規則缺口,不是專案基準日);
+// 其餘(null／monthly／other)一律開工日——施工期間的循環義務從開工起算。
+export function recurrenceAnchorKey(ob: Rec): string | null {
+  const trigger = s(ob, 'trigger_event')
+  if (trigger === 'fixed') return null
+  return ANCHOR_BY_TRIGGER[trigger] || 'commencement_date'
+}
+export interface ObligationPeriod extends Rec {
+  id?: unknown
+  period_key?: unknown
+  due_date?: unknown
+  status?: unknown
+  review_note?: unknown
+}
+const periodDueIso = (p: ObligationPeriod): string => s(p, 'due_date').slice(0, 10)
+const byPeriodDue = (a: ObligationPeriod, b: ObligationPeriod) => (periodDueIso(a) < periodDueIso(b) ? -1 : periodDueIso(a) > periodDueIso(b) ? 1 : 0)
+// 未結期次,依到期日升冪:最舊的逾期排最前,不因下期出現而消失。
+export function openObligationPeriods(periods: readonly ObligationPeriod[] | null | undefined): ObligationPeriod[] {
+  return (periods || []).filter((p) => isObligationOpen(p?.status)).sort(byPeriodDue)
+}
+// 目前該處理的一期=最早未結的一期;只要一個到期日的呼叫端(列印、AI 快照、風險稽核、履約時程列)用它。
+export function currentObligationPeriod(periods: readonly ObligationPeriod[] | null | undefined): ObligationPeriod | null {
+  return openObligationPeriods(periods)[0] ?? null
+}
+// 期次的標題:義務標題＋期別,首頁／Agent／早報同一句。
+export function periodTitle(title: unknown, period: ObligationPeriod | null | undefined): string {
+  const t = title == null ? '' : String(title)
+  return period ? `${t}（${s(period, 'period_key')} 期）` : t
+}
+
 // 觸發點 → 基準日欄位;推不出到期日且對應基準日沒填,就是「基準日待補」(不是無期限)。
+// 循環義務改看 recurrenceAnchorKey(無觸發點也要開工日才起算)。
 export const ANCHOR_BY_TRIGGER: Readonly<Record<string, string>> = Object.freeze({
   award: 'award_date', notice: 'notice_date', commencement: 'commencement_date', completion: 'end_date',
 })
@@ -113,25 +168,43 @@ export const ANCHOR_LABELS: Readonly<Record<string, string>> = Object.freeze({
 })
 export interface AnchorGap { key: string; label: string }
 export function obligationAnchorGap(ob: Rec, anchors: Rec | null | undefined): AnchorGap | null {
-  const key = ANCHOR_BY_TRIGGER[s(ob, 'trigger_event')]
+  const key = isRecurring(ob) ? recurrenceAnchorKey(ob) : ANCHOR_BY_TRIGGER[s(ob, 'trigger_event')]
   if (!key || anchors?.[key]) return null
   return { key, label: ANCHOR_LABELS[key] }
 }
 
-export interface SetupGap { kind: 'responsible' | 'anchor'; label: string; anchor?: string }
+// 待補設定的四種缺口:責任方推不出三方／基準日沒填(P5a),循環規則不完整／回填待核對(P5b:舊義務
+// 曾標完成但對不上期別)。三方都看得到、不算任何人的件數,每種各有處理入口。
+export interface SetupGap { kind: 'responsible' | 'anchor' | 'rule' | 'review'; label: string; anchor?: string }
 export interface ObligationBall extends Ball { setup: SetupGap | null }
 
-// 義務的球:到期日由呼叫端用 contractDue(前端 .js／Edge .ts,已有共用案例)算好傳入,
-// 這裡只判「未結／責任方／基準日缺口」。
-//   * 未結且責任不明 → who='unassigned',setup.responsible(三方都看得到、處理入口在契約重點)
-//   * 未結、責任明確、推不出到期日且基準日沒填 → who=該方,setup.anchor(處理入口在期限追蹤的基準日)
-//   * 其餘未結 → who=該方,label '待辦';到期窗口(逾期／N 日內)由呼叫端決定
-export function obligationBall(ob: Rec, opts: { dueIso?: string | null; anchors?: Rec | null } = {}): ObligationBall {
-  if (!isObligationOpen(ob?.status)) return { who: 'done', label: s(ob, 'status') || '已完成', setup: null }
+// 義務(或它的一期)的球:到期日由呼叫端傳入(單次:contractDue 依基準日;循環:期次的 due_date),
+// 這裡只判「未結／責任方／循環規則缺口／待核對／基準日缺口」。
+//   * 整條已結(單次:已提送／已完成／不適用;循環:不適用)→ done
+//   * 責任不明 → who='unassigned',setup.responsible(處理入口在擷取審核)
+//   * 循環規則不完整 → who=該方,setup.rule(處理入口在擷取審核,廢止取代後補登)
+//   * 帶期次:期次帶 review_note → setup.review(處理入口在期限追蹤的那一期);期次已結 → done;否則 '待辦'
+//   * 責任明確、推不出到期日且基準日沒填 → who=該方,setup.anchor(處理入口在期限追蹤的基準日)
+//   * 其餘 → who=該方,label '待辦';到期窗口(逾期／N 日內)由呼叫端決定
+export function obligationBall(ob: Rec, opts: { dueIso?: string | null; anchors?: Rec | null; period?: ObligationPeriod | null } = {}): ObligationBall {
+  if (!isObligationStreamOpen(ob)) return { who: 'done', label: s(ob, 'status') || '已完成', setup: null }
   const side = obligationSide(ob?.responsible)
   if (side === 'unassigned') {
     const label = '責任方待補設定'
     return { who: 'unassigned', label, setup: { kind: 'responsible', label } }
+  }
+  const ruleGap = recurrenceRuleGap(ob)
+  if (ruleGap) {
+    const label = `循環規則待補（${ruleGap}）`
+    return { who: side, label, setup: { kind: 'rule', label } }
+  }
+  if (opts.period) {
+    if (opts.period.review_note) {
+      const label = '回填待核對（原義務曾標完成，本期是否已履行待確認）'
+      return { who: side, label, setup: { kind: 'review', label } }
+    }
+    if (!isObligationOpen(opts.period.status)) return { who: 'done', label: s(opts.period, 'status') || '已完成', setup: null }
+    return { who: side, label: '待辦', setup: null }
   }
   if (!opts.dueIso) {
     const gap = obligationAnchorGap(ob, opts.anchors)
@@ -141,6 +214,26 @@ export function obligationBall(ob: Rec, opts: { dueIso?: string | null; anchors?
     }
   }
   return { who: side, label: '待辦', setup: null }
+}
+
+// 一條義務要列幾顆球:單次一顆(到期日由呼叫端的 contractDue 算);循環義務每個未結期次一顆
+// (舊逾期各自保留、待核對的期次也列),一期都沒有時一顆沒有到期日的球(基準日／規則缺口由 obligationBall 判)。
+// 首頁 todayTasks、Edge collectOpenBallItems 與 Deno 共用案例都走這一支,不各自迭代期次。
+export interface ObligationEntry { ball: ObligationBall; dueIso: string | null; period: ObligationPeriod | null }
+export function obligationEntries(
+  ob: Rec,
+  opts: { anchors?: Rec | null; computeDueIso: (ob: Rec) => string | null },
+): ObligationEntry[] {
+  if (!isObligationStreamOpen(ob)) return []
+  if (!isRecurring(ob)) {
+    const dueIso = opts.computeDueIso(ob)
+    return [{ ball: obligationBall(ob, { dueIso, anchors: opts.anchors }), dueIso, period: null }]
+  }
+  const listed = ((ob?.periods as ObligationPeriod[] | undefined) || [])
+    .filter((p) => isObligationOpen(p?.status) || p?.review_note)
+    .sort(byPeriodDue)
+  if (!listed.length) return [{ ball: obligationBall(ob, { dueIso: null, anchors: opts.anchors }), dueIso: null, period: null }]
+  return listed.map((period) => ({ ball: obligationBall(ob, { dueIso: periodDueIso(period), anchors: opts.anchors, period }), dueIso: periodDueIso(period), period }))
 }
 
 // 'YYYY-MM-DD' 兩日之差(正=dueIso 在 todayIso 之後)。純字串運算,不受執行環境時區影響。

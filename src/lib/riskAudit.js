@@ -5,6 +5,7 @@
 // 不為了讓機關安心而給沒有證據的「通過」——沒有契約資料卻稱「無逾期義務」、
 // 只有一期估驗卻稱「金額變化平穩」,都是錯誤安全感。
 import { computeObligationDue } from './contractDue.js'
+import { isObligationStreamOpen } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 import { parseLocalDate, taipeiISODate } from './dates.js'
 import { fmtNtd as money } from './format.js'
 
@@ -63,7 +64,7 @@ export function auditProject(data = {}, today = new Date()) {
   } else {
     const overdueOb = []
     for (const ob of obligations) {
-      if (ob.status === '已完成' || ob.status === '已提送') continue
+      if (!isObligationStreamOpen(ob)) continue // 循環義務看期次(最早未結一期),義務層舊的已完成不算
       const due = computeObligationDue(ob, anchors)
       if (due && startOfDay(due) < t0) overdueOb.push(ob)
     }

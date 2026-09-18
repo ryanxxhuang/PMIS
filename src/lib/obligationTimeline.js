@@ -9,7 +9,10 @@
 import { computeObligationDue, formatObligationRule } from './contractDue.js'
 import { parseLocalDate, localISODate, taipeiISODate } from './dates.js'
 import { REQUIREMENT_TYPE_LABELS, sourcePageLabel } from './requirementReview.js'
-import { obligationSide, ANCHOR_BY_TRIGGER, ANCHOR_LABELS as SHARED_ANCHOR_LABELS } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+import {
+  obligationSide, ANCHOR_BY_TRIGGER, ANCHOR_LABELS as SHARED_ANCHOR_LABELS,
+  isRecurring, isObligationOpen, currentObligationPeriod, recurrenceRuleGap, recurrenceAnchorKey,
+} from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 export const PARTIES = ['廠商', '監造', '機關']
 export const ORG_TO_PARTY = { contractor: '廠商', supervisor: '監造', owner: '機關' }
@@ -79,13 +82,47 @@ export const obligationParty = (ob) => ORG_TO_PARTY[obligationSide(ob?.responsib
 
 // 狀態推導:已提送/已完成=done;推不出到期日(基準日未定/條件未觸發)=na;
 // 逾期<0、7 日內=due,其餘排程中——7 日門檻與 contractDue 的 soon 同一套帳。
+// 循環義務(P5b):整條不會 done(期次才是完成的單位;義務層舊的已提送／已完成不算),到期日是
+// 最早未結一期的到期日(舊逾期優先);沒有未結期次 → na(基準日／循環規則待補,或全部期已完成)。
 export function deriveStatus(ob, anchors, today) {
-  const done = ob.status === '已提送' || ob.status === '已完成'
-  const due = computeObligationDue(ob, anchors || {}, today)
+  const done = !isRecurring(ob) && (ob.status === '已提送' || ob.status === '已完成')
+  const due = computeObligationDue(ob, anchors || {})
   if (done) return { key: 'done', due, diff: null }
   if (!due) return { key: 'na', due: null, diff: null }
   const diff = Math.round((due - today0(today)) / 86400000)
   return { key: diff < 0 ? 'overdue' : diff <= 7 ? 'due' : 'scheduled', due, diff }
+}
+
+// 循環義務的期次列(履約時程詳情唯讀呈現;P5d 再做完整 UI):依到期日降冪(最新在前),
+// 每期帶狀態語意鍵(與 OB_STATUS 同色票)與準時判定;待核對註記原樣帶出。
+export function periodRows(ob, today) {
+  if (!isRecurring(ob)) return []
+  const t = today0(today)
+  return [...(ob.periods || [])]
+    .sort((a, b) => String(b.due_date).localeCompare(String(a.due_date)))
+    .map((p) => {
+      const due = parseLocalDate(p.due_date)
+      const open = isObligationOpen(p.status)
+      const diff = due ? Math.round((due - t) / 86400000) : null
+      const status = p.status === '不適用' ? 'na' : !open ? 'done' : diff < 0 ? 'overdue' : diff <= 7 ? 'due' : 'scheduled'
+      const onTime = status !== 'done' ? null : (!p.completed_at || !due) ? true : taipeiISODate(p.completed_at) <= localISODate(due)
+      return {
+        id: p.id, key: p.period_key, due, dateLabel: due ? localISODate(due) : '—', status, diff, onTime,
+        rawStatus: p.status, completedAt: p.completed_at || null, reviewNote: p.review_note || '',
+        countdown: p.status === '不適用' ? '不適用' : countdownLabel(status, diff),
+        evidenceSubmittalId: p.evidence_submittal_id || null,
+      }
+    })
+}
+
+// 循環義務為什麼沒有期次:基準日／循環規則待補(與今日工作、Agent 同一份規則),都不是就是尚未物化。
+export function recurrenceGap(ob, anchors) {
+  if (!isRecurring(ob)) return null
+  const rule = recurrenceRuleGap(ob)
+  if (rule) return { kind: 'rule', label: `循環規則待補（${rule}）` }
+  const key = recurrenceAnchorKey(ob)
+  if (key && !anchors?.[key]) return { kind: 'anchor', label: `基準日待補（${SHARED_ANCHOR_LABELS[key]}）`, anchor: key }
+  return null
 }
 
 // 倒數文案(README 2.4)
@@ -223,12 +260,12 @@ export function buildTimelineItem(ob, { requirement, sources, versionsById, anch
     ? (REQUIREMENT_TYPE_LABELS[requirement.requirement_type] || requirement.requirement_type)
     : (ob.penalty && !ob.trigger_event && !ob.recurring ? '罰則' : '期限')
   // 準時判定(應完成項準時率):完成時間(台北日)≤ 到期日才算準時。
-  // completed_at 缺值(migration 前完成的舊資料)不視為遲交——不臆造歷史;
-  // 循環義務完成後 computeObligationDue 回的是下一期到期日(必在今天之後),
-  // 等同從寬認定準時——循環項的逐期準時率要等後端有逐期實例才算得準。
+  // completed_at 缺值(migration 前完成的舊資料)不視為遲交——不臆造歷史。
+  // 循環義務整條不會 done(逐期準時在 periods 每一期各自判定,P5b),義務層不判。
   const onTime = status !== 'done' ? null
     : (!ob.completed_at || !due) ? true
       : taipeiISODate(ob.completed_at) <= localISODate(due)
+  const currentPeriod = isRecurring(ob) ? currentObligationPeriod(ob.periods) : null
   const item = {
     id: ob.id,
     ob,
@@ -245,6 +282,11 @@ export function buildTimelineItem(ob, { requirement, sources, versionsById, anch
     desc: requirement?.description || ob.note || '',
     type,
     kind: KIND_LABELS[ob.recurring] || '',
+    // 循環義務(P5b):目前該處理的期別、全部期次(唯讀呈現)、沒有期次的原因
+    recurring: isRecurring(ob),
+    currentPeriod: currentPeriod ? String(currentPeriod.period_key) : null,
+    periods: periodRows(ob, today),
+    recurrenceGap: recurrenceGap(ob, anchors),
     clause,
     page,
     doc: version ? `${version.documents?.title || '契約文件'}（${version.version_label || ''}）` : '',

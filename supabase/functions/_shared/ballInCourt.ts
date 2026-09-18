@@ -10,7 +10,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { BallSide, SetupGap } from './ballInCourtRules.ts'
 import {
-  coreOpenItems, obligationBall, obligationInWindow, isObligationOpen, FIELD_DOC_OPEN_STATUSES, UNTITLED,
+  coreOpenItems, obligationEntries, obligationInWindow, periodTitle, FIELD_DOC_OPEN_STATUSES, UNTITLED,
 } from './ballInCourtRules.ts'
 export type { BallSide }
 import { computeObligationDueUTC, diffDays, formatDate, parseDateUTC } from './contractDue.ts'
@@ -32,8 +32,10 @@ export interface OpenBallItem {
   meta: string
   due_date: string | null
   overdue_days?: number
-  // 待補設定(責任方推不出三方／基準日沒填):不歸任何一方、三方都看得到;
-  // Agent 工具另列 setup_pending、早報另成一段,不觸發寄信。
+  // 循環義務的期別鍵(P5b):同一條義務的每個未結期次各一筆,id 仍是義務 id,title 已含期別。
+  period_key?: string
+  // 待補設定(責任方推不出三方／基準日沒填／循環規則不完整／回填待核對):不歸任何一方、
+  // 三方都看得到;Agent 工具另列 setup_pending、早報另成一段,不觸發寄信。
   setup?: SetupGap
 }
 
@@ -59,8 +61,9 @@ export async function collectOpenBallItems(
     db.from('observations').select('id, title, status, assigned_to').eq('project_id', projectId).eq('status', '待處理'),
     db.from('field_documents').select('id, doc_type, doc_date, status, owner_org, current_version_no').eq('project_id', projectId).in('status', FIELD_DOC_OPEN_STATUSES),
     db.from('projects').select('award_date, notice_date, commencement_date, end_date').eq('id', projectId).maybeSingle(),
-    // 未結的定義在共用規則(isObligationOpen);這裡只排除已廢止的不適用列,與前端載入同口徑
-    db.from('contract_obligations').select('id, title, responsible, status, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause').eq('project_id', projectId).neq('status', '不適用'),
+    // 未結的定義在共用規則(isObligationStreamOpen／isObligationOpen);這裡只排除已廢止的不適用列,
+    // 與前端載入同口徑。循環義務的期次(obligation_periods,P5b)以 embed 一起帶回:期次 RLS 沿用義務。
+    db.from('contract_obligations').select('id, title, responsible, status, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause, periods:obligation_periods(id, period_key, period_start, period_end, due_date, status, review_note)').eq('project_id', projectId).neq('status', '不適用'),
   ])
   const firstError = [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, obligations].find((r) => r.error)
   if (firstError?.error) return toolError('collectOpenBallItems', firstError.error)
@@ -88,26 +91,33 @@ export async function collectOpenBallItems(
     })
   }
 
-  // 契約義務:到期日由 contractDue 依基準日確定性推算(不是 AI 算);責任方／基準日缺口由
+  // 契約義務:單次義務到期日由 contractDue 依基準日確定性推算(不是 AI 算);循環義務每個未結期次
+  // 一筆(共用規則 obligationEntries,期次由 DB 物化)。責任方／基準日／循環規則／待核對缺口由
   // 共用規則判定——責任不明不歸任何一方(不再預設廠商),列為待補設定。
   const anchors = proj?.data ?? {}
+  const computeDueIso = (ob: Record<string, unknown>) => {
+    const dueMs = computeObligationDueUTC(ob, anchors)
+    return dueMs == null ? null : formatDate(dueMs)
+  }
   for (const ob of obligations.data ?? []) {
-    if (!isObligationOpen(ob.status)) continue
-    const dueMs = computeObligationDueUTC(ob, anchors, today)
-    const dueIso = dueMs == null ? null : formatDate(dueMs)
-    const ball = obligationBall(ob, { dueIso, anchors })
-    if (ball.who === 'done') continue
     const clause = ob.source_clause ? `（依 ${ob.source_clause}）` : ''
-    const base = { kind: '契約重點', id: ob.id, title: ob.title || UNTITLED, status: String(ob.status ?? ''), due_date: dueIso }
-    if (ball.setup) {
-      items.push({ side: ball.who, ...base, meta: `${ball.label}${clause}`, setup: ball.setup })
-      continue
+    for (const { ball, dueIso, period } of obligationEntries(ob, { anchors, computeDueIso })) {
+      if (ball.who === 'done') continue
+      const dueMs = parseDateUTC(dueIso)
+      const base = {
+        kind: '契約重點', id: ob.id, title: periodTitle(ob.title || UNTITLED, period), status: String(ob.status ?? ''), due_date: dueIso,
+        ...(period ? { period_key: String(period.period_key) } : {}),
+      }
+      if (ball.setup) {
+        items.push({ side: ball.who, ...base, meta: `${ball.label}${clause}`, setup: ball.setup })
+        continue
+      }
+      if (dueMs == null || !obligationInWindow(dueIso, todayIso, soonDays)) continue
+      items.push({
+        side: ball.who, ...base, meta: `${ball.label}${clause}`,
+        ...(dueMs < today ? { overdue_days: diffDays(today, dueMs) } : {}),
+      })
     }
-    if (dueMs == null || !obligationInWindow(dueIso, todayIso, soonDays)) continue
-    items.push({
-      side: ball.who, ...base, meta: `${ball.label}${clause}`,
-      ...(dueMs < today ? { overdue_days: diffDays(today, dueMs) } : {}),
-    })
   }
 
   // 到期日近的排前面;沒有到期日的排最後(stable sort → 同日維持插入順序)

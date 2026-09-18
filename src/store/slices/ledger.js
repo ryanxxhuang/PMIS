@@ -232,6 +232,38 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     return { error: null }
   }, [isPersistedProject])
 
+  // 循環義務逐期標記(P5b):唯一寫入路徑是 RPC transition_obligation_period——歸屬規則、證據同案、
+  // 完成時間戳、退回待辦解除證據全在伺服器;真專案以回傳列刷新該期。demo 在本地鏡像同一條語意
+  // (slice 就是 demo 的「伺服器」)。evidence 可帶 { evidence_submittal_id, evidence_document_id }。
+  const transitionObligationPeriod = useCallback(async (obligationId, periodId, status, evidence = {}) => {
+    const applyRow = (row) => setObligations((os) => os.map((o) => (o.id !== obligationId ? o
+      : { ...o, periods: (o.periods || []).map((p) => (p.id === periodId ? { ...p, ...row } : p)) })))
+    if (isPersistedProject) {
+      const { data, error } = await supabase.rpc('transition_obligation_period', {
+        p_period: periodId, p_status: status,
+        p_evidence_submittal_id: evidence.evidence_submittal_id ?? null,
+        p_evidence_document_id: evidence.evidence_document_id ?? null,
+      })
+      if (error) return { error }
+      if (data) applyRow(data)
+      return { error: null }
+    }
+    const current = obligations.find((o) => o.id === obligationId)?.periods?.find((p) => p.id === periodId)
+    if (!current) return { error: { message: '找不到該期' } }
+    const doneOld = current.status === '已提送' || current.status === '已完成'
+    const doneNew = status === '已提送' || status === '已完成'
+    const stamp = doneNew && !doneOld ? { completed_at: new Date().toISOString() }
+      : doneOld && !doneNew ? { completed_at: null } : {}
+    const evidenceNext = status === '待辦'
+      ? { evidence_submittal_id: null, evidence_document_id: null }
+      : {
+        evidence_submittal_id: evidence.evidence_submittal_id ?? current.evidence_submittal_id ?? null,
+        evidence_document_id: evidence.evidence_document_id ?? current.evidence_document_id ?? null,
+      }
+    applyRow({ status, ...stamp, ...evidenceNext, review_note: status === '待辦' ? current.review_note : null })
+    return { error: null }
+  }, [isPersistedProject, obligations])
+
   // 驗收:登錄/更新某階段(同階段一筆,重複登錄=修正)。
   // 用 isPersistedProject 而非 dbMode:驗收不依賴標單,沒 BOQ 的真專案也必須寫 DB
   // (否則假成功,重新整理就消失)。
@@ -284,6 +316,6 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
-    reloadObligations, updateObligationStatus, ingestRequirementDocument,
+    reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument,
   }
 }

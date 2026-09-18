@@ -11,9 +11,19 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { BallSide } from './agentRole.ts'
 import { computeObligationDueUTC, diffDays, formatDate, parseDateUTC, taipeiTodayUTC } from './contractDue.ts'
+import { isRecurring, currentObligationPeriod, openObligationPeriods } from './ballInCourtRules.ts'
 import { isUuid } from './uuid.ts'
 import { likePattern, isDate, toolError, capList } from './agentToolCommon.ts'
 import { collectOpenBallItems } from './ballInCourt.ts'
+
+// 待補設定四種缺口的處理入口(與首頁 todayTasks setupLink 同一份對應):責任方／循環規則在擷取審核
+// (已確認內容不可改,廢止取代後補登),基準日在期限追蹤的基準日卡,回填待核對在期限追蹤的那一期。
+const SETUP_FIX_AT: Record<string, string> = {
+  responsible: '擷取審核(已確認內容不可改;廢止取代後補登責任方)',
+  rule: '擷取審核(循環規則不完整;廢止取代後補登每月幾日等)',
+  anchor: '期限追蹤的基準日',
+  review: '期限追蹤的該期(核對是否已履行後標記)',
+}
 
 // ── 各工具實作 ───────────────────────────────────────────────────────────────
 
@@ -111,7 +121,8 @@ export async function getRequirements(db: SupabaseClient, projectId: string, inp
 
   let obQ = db
     .from('contract_obligations')
-    .select('id, title, category, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, responsible, penalty, source_clause, source_page, status, note')
+    // 循環義務的期次(P5b)以 embed 帶回:到期日取最早未結的一期,舊逾期不被下一期蓋掉
+    .select('id, title, category, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, responsible, penalty, source_clause, source_page, status, note, periods:obligation_periods(period_key, due_date, status, review_note)')
     .eq('project_id', projectId)
     .neq('status', '不適用')
     .order('sort_order', { ascending: true })
@@ -121,11 +132,18 @@ export async function getRequirements(db: SupabaseClient, projectId: string, inp
   if (obError) return toolError('getRequirements', obError)
 
   const obligationRows = (obligations ?? []).map((ob) => {
-    const due = proj ? computeObligationDueUTC(ob, proj, today) : null
+    const due = proj ? computeObligationDueUTC(ob, proj) : null
+    const current = currentObligationPeriod(ob.periods)
+    const { periods: _periods, ...row } = ob
     return {
-      ...ob,
+      ...row,
       due_date: due != null ? formatDate(due) : null,
       days_left: due != null ? diffDays(due, today) : null, // 負數=已逾期(程式推算,非 AI 計算)
+      ...(isRecurring(ob) ? {
+        // 循環義務:目前該處理的期別與未結期數(逐期追蹤,完成本期不清下期);沒有期次=基準日／規則待補
+        current_period: current ? String(current.period_key) : null,
+        open_periods: openObligationPeriods(ob.periods).length,
+      } : {}),
     }
   })
 
@@ -168,7 +186,7 @@ export async function listMyOpenItems(db: SupabaseClient, projectId: string, _in
     .map(({ side: s, setup, ...rest }) => ({
       ...rest, setup: setup!.kind, setup_label: setup!.label,
       responsible: s === 'unassigned' ? '待補設定' : s === 'contractor' ? '廠商' : s === 'supervisor' ? '監造' : '機關',
-      fix_at: setup!.kind === 'responsible' ? '擷取審核(已確認內容不可改;廢止取代後補登責任方)' : '期限追蹤的基準日',
+      fix_at: SETUP_FIX_AT[setup!.kind],
     }))
   if (!items.length && !setupPending.length) return { note: '目前沒有球在我方的待辦', side: sideLabel }
   return {
