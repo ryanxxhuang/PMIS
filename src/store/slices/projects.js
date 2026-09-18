@@ -9,6 +9,9 @@ import {
   normalizeProject, fetchAllWorkItems, wiCacheGet, wiCachePut, wiCacheDel, dbToWorkItems,
 } from '../db.js'
 
+// 四個基準日欄位(P5c):變更一律經 RPC update_project_anchors 留版,其他專案設定走 updateProjectSettings。
+export const ANCHOR_KEYS = ['award_date', 'notice_date', 'commencement_date', 'end_date']
+
 // 標單載入分流（純函式，deps 注入以便單元測試）：
 //   demo/無專案 → 範例；真專案 0 筆 → 'empty'；查詢失敗 → 'error'；有資料 → 'db'。
 // 真實專案「絕不」以範例資料充當標單——寧可誠實顯示空狀態或錯誤（含重試）。
@@ -252,18 +255,41 @@ export function useProjectsSlice({ currentUser }) {
     return { error: null }
   }, [dbMode, currentProject, retryWorkItems])
 
-  // 基準日(決標/接獲通知/開工)→ 寫回 projects 欄位 + 本地。
-  // 契約時程/驗收領域不依賴標單 → isPersistedProject(匯標單前也要能設基準日)。
-  // DB-first + RLS 感知:RLS 只允許建立者更新 projects,非建立者 update 靜默 0 列(無 error)。
-  // 以 .select('id') 的回傳列數判定是否真生效,成功才更新本地——避免幽靈成功(座標/基準日看似存了、重整消失)。
-  const updateProjectAnchors = useCallback(async (patch) => {
+  // 專案設定(契約價金總額等非基準日欄位)→ 寫回 projects 欄位 + 本地。
+  // 契約時程/驗收領域不依賴標單 → isPersistedProject(匯標單前也要能設)。
+  // DB-first + RLS 感知:RLS 只允許專案管理者更新 projects,其他人 update 靜默 0 列(無 error)。
+  // 以 .select('id') 的回傳列數判定是否真生效,成功才更新本地——避免幽靈成功(座標看似存了、重整消失)。
+  // 四個基準日不走這裡:P5c 起一律經 RPC update_project_anchors 留版(見 updateProjectAnchors)。
+  const updateProjectSettings = useCallback(async (patch) => {
     if (!isPersistedProject) return { error: { message: '需真專案' } }
+    if (ANCHOR_KEYS.some((k) => k in patch)) return { error: { message: '基準日請經 updateProjectAnchors(留版)' } }
     const pid = currentProject.project_id
     const { data, error } = await supabase.from('projects').update(patch).eq('id', pid).select('id')
     if (error) return { error }
-    if (!data?.length) return { error: { message: '未生效:僅專案建立者可修改專案設定' } }
+    if (!data?.length) return { error: { message: '未生效:僅專案管理者可修改專案設定' } }
     setProjects((ps) => ps.map((p) => (p.project_id === pid ? { ...p, ...patch } : p)))
     return { error: null }
+  }, [isPersistedProject, currentProject])
+
+  // 基準日(決標/接獲開工通知/開工/竣工)→ RPC update_project_anchors(P5c):每次變更留一版(類別／理由／依據／
+  // 生效日),受影響的期次與單次義務到期日由 DB 重算並記差異;直接 REST 改也會留版,但沒有依據——
+  // 所以前端只走 RPC。回傳 { error, version }:version 是新版本列(值沒變的直接修改回 null);現行值以
+  // 版本快照更新本地。契約時程領域不依賴標單 → isPersistedProject。demo 的本地鏡像在 store.jsx(changeProjectAnchors)。
+  const updateProjectAnchors = useCallback(async (patch, basis = {}) => {
+    if (!isPersistedProject) return { error: { message: '需真專案' } }
+    const pid = currentProject.project_id
+    const anchors = Object.fromEntries(Object.entries(patch).filter(([k]) => ANCHOR_KEYS.includes(k)).map(([k, v]) => [k, v || null]))
+    if (!Object.keys(anchors).length && (basis.change_kind || 'edit') === 'edit') return { error: { message: '沒有要變更的基準日' } }
+    const { data, error } = await supabase.rpc('update_project_anchors', {
+      p_project: pid, p_anchors: anchors, p_change_kind: basis.change_kind || 'edit',
+      p_reason: basis.reason || null, p_source_ref: basis.source_ref || null,
+      p_source_change_order_id: basis.source_change_order_id || null, p_effective_from: basis.effective_from || null,
+    })
+    if (error) return { error }
+    const version = data || null
+    // 現行值以伺服器回傳的版本快照為準(沒有新版本=值沒變)
+    if (version?.anchors) setProjects((ps) => ps.map((p) => (p.project_id === pid ? { ...p, ...version.anchors } : p)))
+    return { error: null, version }
   }, [isPersistedProject, currentProject])
 
   // 正式模式:單向開啟(DB-first,成功才更新本地)——關閉建立者的跨角色簽核例外。
@@ -310,7 +336,7 @@ export function useProjectsSlice({ currentUser }) {
   return {
     projects, setProjects, currentProjectId, currentProject, myMemberRoles, projectLoading,
     workItems, setWorkItems, workItemsSource, setWorkItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership, aiEnabled,
-    switchProject, createProject, importWorkItems, resetProjectBoqDb, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
+    switchProject, createProject, importWorkItems, resetProjectBoqDb, updateProjectAnchors, updateProjectSettings, enableFormalMode, deleteProject, clearOnLogout,
     loadPortfolio,
   }
 }

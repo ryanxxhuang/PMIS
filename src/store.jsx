@@ -23,7 +23,7 @@ import {
   loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
   loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
-  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB,
+  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadAnchorVersionsFromDB,
 } from './store/db.js'
 import { useAuthSlice } from './store/slices/auth.js'
 import { useProjectsSlice } from './store/slices/projects.js'
@@ -52,7 +52,7 @@ export function StoreProvider({ children }) {
   const {
     projects, currentProjectId, currentProject, myMemberRoles, projectLoading,
     workItems, workItemsSource, workItemsError, retryWorkItems, wiMaps, dbMode, demoMode, isPersistedProject, currentProjectMembership, reloadMembership, aiEnabled,
-    switchProject, createProject, importWorkItems, resetProjectBoqDb, updateProjectAnchors, enableFormalMode, deleteProject, clearOnLogout,
+    switchProject, createProject, importWorkItems, resetProjectBoqDb, updateProjectAnchors, updateProjectSettings, enableFormalMode, deleteProject, clearOnLogout,
     loadPortfolio,
   } = useProjectsSlice({ currentUser })
 
@@ -151,6 +151,7 @@ export function StoreProvider({ children }) {
   const {
     costItems, setCostItems, changeOrders, setChangeOrders,
     itemSchedules, setItemSchedules, obligations, setObligations,
+    anchorVersions, setAnchorVersions, reloadAnchorVersions,
     acceptanceEvents, setAcceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent,
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
@@ -184,7 +185,7 @@ export function StoreProvider({ children }) {
     demoLoadedRef.current = true
     const d = buildDemoData(workItems, project)
     setValuations(d.valuations); setProgressPlan(d.progressPlan); setSiteLogs(d.siteLogs)
-    setInspections(d.inspections); setDefects(d.defects); setObligations(d.obligations)
+    setInspections(d.inspections); setDefects(d.defects); setObligations(d.obligations); setAnchorVersions(d.anchorVersions || [])
     setCostItems(d.costItems); setSafetyRecords(d.safetyRecords); setChangeOrders(d.changeOrders)
     setChecklistTemplates(d.checklistTemplates); setChecklistRecords(d.checklistRecords); setTestSamples(d.testSamples)
     setSubmittals(d.submittals); setRfis(d.rfis); setObservations(d.observations)
@@ -202,7 +203,7 @@ export function StoreProvider({ children }) {
       setValuations([]); setProgressPlan(null); setSiteLogs([])
       setInspections([]); setDefects([]); setCostItems([]); setItemSchedules({})
       setChangeOrders([]); setInspectionPoints([]); setChecklistTemplates([]); setChecklistRecords([]); setTestSamples([])
-      setSafetyRecords([]); setObligations([]); setAcceptanceEvents([]); setSubmittals([]); setRfis([]); setObservations([])
+      setSafetyRecords([]); setObligations([]); setAnchorVersions([]); setAcceptanceEvents([]); setSubmittals([]); setRfis([]); setObservations([])
       fieldDocsSlice.clearFieldDocs() // 現場文書與上傳批次:切案先清,slice 自己依 project 重載
     }
     prevProjectRef.current = currentProjectId
@@ -258,7 +259,7 @@ export function StoreProvider({ children }) {
     ;(async () => {
       try {
         // 並行載入(P-03);缺失(統一引擎)不依賴標單:匯標單前也要載(dbMode 載入會再帶工項資訊覆蓋)
-        const [acc, obs, safety, defs, subs, rfiRows, obsRows] = await Promise.all([
+        const [acc, obs, safety, defs, subs, rfiRows, obsRows, versions] = await Promise.all([
           loadAcceptanceFromDB(pid),
           loadObligationsFromDB(pid),
           loadSafetyFromDB(pid),
@@ -266,9 +267,10 @@ export function StoreProvider({ children }) {
           loadSubmittalsFromDB(pid),
           loadRfisFromDB(pid),
           loadObservationsFromDB(pid),
+          loadAnchorVersionsFromDB(pid), // 基準日版本(P5c):期限追蹤／履約時程顯示依據與受影響事項
         ])
         if (!active) return
-        setAcceptanceEvents(acc); setObligations(obs); setSafetyRecords(safety)
+        setAcceptanceEvents(acc); setObligations(obs); setSafetyRecords(safety); setAnchorVersions(versions)
         if (defs) setDefects(defs)
         setSubmittals(subs); setRfis(rfiRows); setObservations(obsRows)
       } catch (e) {
@@ -284,7 +286,7 @@ export function StoreProvider({ children }) {
     demoLoadedRef.current = false // demo:換角色重新登入時重種完整 storyline(登出會清部分資料)
     await signOutBase()
     clearOnLogout()
-    setSiteLogs([]); setInspections([]); setDefects([]); fieldDocsSlice.clearFieldDocs()
+    setSiteLogs([]); setInspections([]); setDefects([]); fieldDocsSlice.clearFieldDocs(); setDemoProjectPatch({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signOutBase, clearOnLogout])
 
@@ -303,9 +305,38 @@ export function StoreProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetProjectBoqDb, currentProject])
 
+  // 基準日變更(P5c):真專案由 projects slice 走 RPC 留版(附類別／理由／依據),DB 同交易重算受影響的期次與
+  // 單次義務到期日並把差異寫進版本列;這裡是跨 slice 的收尾——重載義務(期次已被重算)與版本清單。
+  // demo(未設 Supabase)只進記憶體:種子專案的基準日覆寫存在 demoProjectPatch(`project` 合併後對全站生效),
+  // 並鏡像一版進 anchorVersions(effects 空、標示 demo:期次不重算)。回傳 { error, version }。
+  const [demoProjectPatch, setDemoProjectPatch] = useState({})
+  const changeProjectAnchors = useCallback(async (patch, basis = {}) => {
+    if (!isSupabaseConfigured) {
+      const keys = ['award_date', 'notice_date', 'commencement_date', 'end_date']
+      const cur = { ...project, ...demoProjectPatch }
+      const before = Object.fromEntries(keys.map((k) => [k, cur[k] || null]))
+      const after = { ...before, ...Object.fromEntries(Object.entries(patch).filter(([k]) => keys.includes(k)).map(([k, v]) => [k, v || null])) }
+      const changed = keys.filter((k) => before[k] !== after[k])
+      if (!changed.length && (basis.change_kind || 'edit') === 'edit') return { error: null, version: null }
+      setDemoProjectPatch((p) => ({ ...p, ...after }))
+      const version = {
+        id: `demo-anchor-${Date.now()}`, project_id: project.project_id, version_no: anchorVersions.length + 1, change_kind: basis.change_kind || 'edit',
+        anchors: after, changed_keys: changed, effective_from: basis.effective_from || null, reason: basis.reason || null,
+        source_ref: basis.source_ref || null, source_change_order_id: basis.source_change_order_id || null,
+        effects: [], created_by: null, created_at: new Date().toISOString(), demo: true,
+      }
+      setAnchorVersions((vs) => [...vs, version])
+      return { error: null, version }
+    }
+    const res = await updateProjectAnchors(patch, basis)
+    if (res.error) return res
+    await Promise.all([reloadObligations(), reloadAnchorVersions()])
+    return res
+  }, [updateProjectAnchors, reloadObligations, reloadAnchorVersions, setAnchorVersions, demoProjectPatch, anchorVersions.length])
+
   const value = {
     // state
-    project: currentProject || project, currentUser, authReady, setCurrentUser,
+    project: currentProject || { ...project, ...demoProjectPatch }, currentUser, authReady, setCurrentUser,
     isSupabaseConfigured, signUp, signIn, logout,
     passwordRecovery, requestPasswordReset, updatePassword,
     mfaRequired, verifyMfa, listMfaFactors, enrollMfa, confirmMfaEnrollment, unenrollMfa,
@@ -318,7 +349,7 @@ export function StoreProvider({ children }) {
     listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, fetchWeather,
     // 現場文書(P2c):上傳批次、起稿、文件版本、簽署、提送／收件／退回
     ...fieldDocsSlice,
-    obligations, reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
+    obligations, reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument, changeProjectAnchors, updateProjectSettings, anchorVersions, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, // 成本退場(D-026 P1b):只讀歷史,無寫入函式
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,

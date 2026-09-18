@@ -257,13 +257,42 @@ describe('期限型待辦:試體、驗收、停留點', () => {
     expect(noAnchor.setup.map((x) => [x.key, x.meta, x.to])).toEqual([['契約:OB-R:setup', '基準日待補（開工日）', '/deadlines']])
     const noRule = buildTodayTasks({ org: 'contractor', today: TODAY, anchors: { commencement_date: '2026-01-01' }, obligations: [{ ...base, recurring_day: null }] })
     expect(noRule.setup.map((x) => [x.meta, x.to])).toEqual([['循環規則待補（每月缺幾日）', '/requirements/review?highlight=OB-R']])
-    const review = buildTodayTasks({ org: 'owner', today: TODAY, anchors: { commencement_date: '2026-01-01' }, obligations: [{
+    // 竣工日齊(P5c 停止條件判得出)才不會再多一顆「停止條件待補」
+    const review = buildTodayTasks({ org: 'owner', today: TODAY, anchors: { commencement_date: '2026-01-01', end_date: '2027-12-31' }, obligations: [{
       ...base, responsible: '機關',
       periods: [{ id: 'p1', period_key: '2026-07', due_date: '2026-07-05', status: '待辦', review_note: '原義務曾標為「已完成」但無法對應期別' }],
     }] })
     expect(review.mine).toEqual([])
     expect(review.setup.map((x) => [x.key, x.period, x.ball, x.to])).toEqual([['契約:OB-R:2026-07:setup', '2026-07', 'owner', '/deadlines?obligation=OB-R&period=2026-07']])
     expect(review.setup[0].meta).toContain('回填待核對')
+  })
+
+  it('循環停止條件(P5c):竣工日缺／已過／保固類 → 待補設定(stop)導期限追蹤該筆;已登錄竣工或竣工日未到 → 不列', () => {
+    // TODAY=2026-08-13
+    const base = { id: 'OB-S', title: '每月施工月報', status: '待辦', recurring: 'monthly', recurring_day: 5, responsible: '廠商',
+      periods: [{ id: 'p1', period_key: '2026-08', due_date: '2026-08-05', status: '待辦' }] }
+    const stopOf = (r) => r.setup.filter((x) => x.meta.startsWith('停止條件待補')).map((x) => [x.key, x.meta, x.to, x.ball])
+    // 缺竣工日:既有期次照列(逾期 8 天),另多一顆停止條件待補(DB 已不再產生新期)
+    const noEnd = buildTodayTasks({ org: 'contractor', today: TODAY, anchors: { commencement_date: '2026-01-01' }, obligations: [base] })
+    expect(noEnd.mine.filter((x) => x.tag === '契約重點').map((x) => x.key)).toEqual(['契約:OB-S:2026-08'])
+    expect(stopOf(noEnd)).toEqual([['契約:OB-S:setup', '停止條件待補（缺竣工日，無法判定循環何時結束）', '/deadlines?obligation=OB-S', 'contractor']])
+    // 竣工日已過、未登錄竣工
+    const pastEnd = buildTodayTasks({ org: 'contractor', today: TODAY, anchors: { commencement_date: '2026-01-01', end_date: '2026-07-31' }, obligations: [base] })
+    expect(stopOf(pastEnd)).toEqual([['契約:OB-S:setup', '停止條件待補（竣工日 2026-07-31 已過，尚未登錄竣工或展延）', '/deadlines?obligation=OB-S', 'contractor']])
+    // 已登錄竣工(驗收事件 confirm 優先於 report):竣工日缺也判得出 → 不列
+    const done = buildTodayTasks({ org: 'contractor', today: TODAY, anchors: { commencement_date: '2026-01-01' }, obligations: [base],
+      acceptanceEvents: [{ stage_key: 'report', event_date: '2026-08-01', created_at: '2026-08-01T00:00:00Z' }, { stage_key: 'confirm', event_date: '2026-08-03', created_at: '2026-08-03T00:00:00Z' }] })
+    expect(stopOf(done)).toEqual([])
+    // 竣工日未到 → 不列
+    const future = buildTodayTasks({ org: 'contractor', today: TODAY, anchors: { commencement_date: '2026-01-01', end_date: '2027-12-31' }, obligations: [base] })
+    expect(stopOf(future)).toEqual([])
+    // 保固類:沒有期次、保固期滿日無法判定 → 只有停止條件待補,三方都看得到
+    const warranty = { ...base, id: 'OB-W', title: '保固期每月巡檢', category: '保固', trigger_event: 'completion', periods: [] }
+    for (const org of ['contractor', 'supervisor', 'owner']) {
+      const r = buildTodayTasks({ org, today: TODAY, anchors: { commencement_date: '2026-01-01', end_date: '2027-12-31' }, obligations: [warranty] })
+      expect(r.mine.filter((x) => x.tag === '契約重點')).toEqual([])
+      expect(stopOf(r)).toEqual([['契約:OB-W:setup', '停止條件待補（保固期滿日無法判定，未登錄保固年限）', '/deadlines?obligation=OB-W', 'contractor']])
+    }
   })
 
   it('期限型項目不會跑進「等待對方」', () => {

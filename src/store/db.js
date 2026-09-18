@@ -173,10 +173,20 @@ export async function loadQualityFromDB(projectId, byId) {
 // 期次由 DB 依規則＋基準日物化(插入／基準日變更 trigger、每日 pg_cron),前端只讀;RLS 沿用義務。
 export async function loadObligationsFromDB(projectId) {
   const data = await pageAll((from, to) => supabase.from('contract_obligations')
-    .select('*, periods:obligation_periods(id, period_key, period_start, period_end, due_date, status, completed_at, completed_by, evidence_submittal_id, evidence_document_id, review_note)')
+    .select('*, periods:obligation_periods(id, period_key, period_start, period_end, due_date, status, completed_at, completed_by, evidence_submittal_id, evidence_document_id, review_note, anchor_version_no, basis)')
     .eq('project_id', projectId).neq('status', '不適用')
     .order('sort_order').order('id').range(from, to), '契約重點')
   return (data || []).map((row) => ({ ...row, periods: row.periods || [] }))
+}
+
+// 從 DB 載入基準日版本(P5c project_anchor_versions):每次基準日變更一版,由 DB trigger／RPC 產生、append-only;
+// 前端只讀,期限追蹤與履約時程顯示「依據哪一版、哪份文件、影響哪些事項」。RLS 沿用專案成員。
+export const ANCHOR_VERSION_COLUMNS = 'id, project_id, version_no, change_kind, anchors, changed_keys, effective_from, reason, source_ref, source_change_order_id, effects, created_by, created_at'
+export async function loadAnchorVersionsFromDB(projectId) {
+  const data = await pageAll((from, to) => supabase.from('project_anchor_versions')
+    .select(ANCHOR_VERSION_COLUMNS).eq('project_id', projectId)
+    .order('version_no').range(from, to), '基準日版本')
+  return data || []
 }
 
 // 從 DB 載入現場文書(P2a field_documents)未終態的文件與其提送／收件／退回列——

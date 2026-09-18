@@ -23,7 +23,8 @@
 | 觀察 | 待處理→assigned_to 為三方值歸該方；缺值→廠商；其他文字→待補設定 |
 | 現場文書 | draft 待簽署／pending_input 待補欄位／in_review 待同方核對／signed 待提送／returned 被退回待補正→責任方 `owner_org`；submitted／received→目前版本已提送且尚未收件或退回的 `to_org` 各一顆「待收件」；都收件或 discarded／superseded→done |
 | 契約義務 | responsible 精確白名單（去頭尾空白）→該方；null／空／其他／未知→待補設定（責任方）；責任明確但觸發點對應的基準日沒填→待補設定（基準日）；單次義務已提送／已完成／不適用→done |
-| 循環義務（P5b） | 整條只在不適用時 done；每個未結期次（`obligation_periods`）各一顆球，到期日＝該期 `due_date`，標題加「（期別 期）」；循環規則不完整（每月缺幾日等）→待補設定（循環規則）；起算的基準日沒填（觸發點對應日期，無觸發點看開工日）→待補設定（基準日）；期次帶 `review_note`→待補設定（回填待核對）；期次已提送／已完成／不適用→done |
+| 循環義務（P5b） | 整條只在不適用時 done；每個未結期次（`obligation_periods`）各一顆球，到期日＝該期 `due_date`，標題加「（期別 期）」；循環規則不完整（每月缺幾日等）→待補設定（循環規則）；起算的基準日沒填（觸發點對應日期，無觸發點看開工日）→待補設定（基準日）；期次帶 `review_note`→待補設定（回填待核對）；期次已提送／已完成／不適用→done；P5c：停止條件判不出或已越界（保固類無保固期滿日、竣工日缺、竣工日已過而未登錄竣工／展延）→ 再一顆待補設定（停止條件），有期次時舊期照列 |
+| 單次義務已完成（P5c） | done；到期日讀完成當下的 `due_date_snapshot`（DB trigger 蓋），基準日事後更正不改；沒快照的舊資料照現行基準日算 |
 
 估驗球權還看 invoice_date／paid_date；廠商請款導 `/payments`。核心事項的形狀是兩側交集 `{ id, who, tag, title, status, meta, due }`（coreOpenItems）；前端 collaborationItems 再加 `to`，Edge 再加 `overdue_days`。現場文書直達 `/site?doc=<id>`（P2c：`/site` 收到後施工日誌轉 `/site-log?doc=<id>`；`fieldDocuments` 由 `src/store/slices/fieldDocs.js` 載入與寫入後重載，同一份 `{documents, submissions}`）。
 
@@ -34,6 +35,8 @@
 責任推不出三方、或基準日缺失而推不出到期日的事項，不歸任何一方、不算任何人的件數，改列「待補設定」讓三方都看得到並有處理入口：首頁「現在輪到我」下方一張卡、Agent 工具回 `setup_pending`、早報另成一段（不觸發寄信）。責任方缺口導到擷取審核該筆（已確認內容不可改，廢止取代後補登；義務 id 就是 requirement id）；基準日缺口導到期限追蹤的基準日卡。DB 同一條規則：`obligation_party()` 對三方以外回 null（migration `20260917220737`），update policy 因此對三方都不放行，只剩非正式模式的 admin override；前端 `obligationParty` 回「待補設定」，履約時程對三方可見但不可操作。
 
 P5b 再加兩種缺口（`SetupGap.kind`）：`rule`＝循環規則不完整（DB `fn_obligation_recurrence_gap` 與共用 `recurrenceRuleGap` 同口徑，導擷取審核）；`review`＝回填待核對（migration 回填時義務層曾標完成但推不出對應期別的期次帶 `review_note`，導期限追蹤該期，人標記後解除）。正式 7 筆 monthly 中 5 筆缺「每月幾日」，套用後即以「循環規則待補」列出。
+
+P5c 第五種 `stop`＝循環停止條件判不出或已越界（DB `fn_obligation_recurrence_stop_gap` 與共用 `recurrenceStopGap` 同口徑；實際竣工日由 `acceptance_events` 的 confirm／report 推得，共用 `completionDateOf` 與 DB `fn_project_completion_date` 同口徑）：保固類沒有保固期滿日、竣工日缺、竣工日已過而未登錄竣工／展延，DB 已停止產生新期，導期限追蹤該筆（基準日卡補竣工日／展延）或驗收頁登錄竣工。前端 `buildTodayTasks` 與 Edge 收集器都把 `completion_date` 放進 anchors 再交給共用規則。
 
 ## 前端三桶
 
@@ -66,4 +69,4 @@ navConfig 的 BALL_SOURCES 用 `/dashboard`、`?ball=waiting`、`?ball=done`；r
 
 ## 驗證
 
-共用案例三側（見「單一實作」）、[球權](../../src/lib/ballInCourt.test.js)、[待辦](../../src/lib/todayTasks.test.js)、[hook](../../src/lib/useTodayTasks.test.js)、[早報](../../supabase/functions/_shared/agentBrief.test.ts)、[履約時程規則](../../src/lib/obligationTimeline.test.js)、[到期日](../../src/lib/contractDue.test.js)、pgTAP [`obligation_party_unassigned.sql`](../../supabase/tests/obligation_party_unassigned.sql)、[`obligation_periods.sql`](../../supabase/tests/obligation_periods.sql)（期次排程純函式、materialize 冪等、狀態轉移權限矩陣、回填規則）與三角色 E2E。
+共用案例三側（見「單一實作」）、[球權](../../src/lib/ballInCourt.test.js)、[待辦](../../src/lib/todayTasks.test.js)、[hook](../../src/lib/useTodayTasks.test.js)、[早報](../../supabase/functions/_shared/agentBrief.test.ts)、[履約時程規則](../../src/lib/obligationTimeline.test.js)、[到期日](../../src/lib/contractDue.test.js)、pgTAP [`obligation_party_unassigned.sql`](../../supabase/tests/obligation_party_unassigned.sql)、[`obligation_periods.sql`](../../supabase/tests/obligation_periods.sql)（期次排程純函式、materialize 冪等、狀態轉移權限矩陣、回填規則）、[`project_anchor_versions.sql`](../../supabase/tests/project_anchor_versions.sql)（P5c 版本不可竄改、重算只動未完成、單次快照、RPC 權限矩陣、停止條件、時區與月末）與三角色 E2E。

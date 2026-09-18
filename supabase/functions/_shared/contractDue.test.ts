@@ -47,6 +47,14 @@ describe('computeObligationDueUTC — 與前端 contractDue.js 同判斷', () =>
       expect(f(computeObligationDueUTC({ recurring, trigger_event: 'commencement', offset_days: 30, periods: [period('k', '2026-04-30')] }, anchors))).toBe('2026-04-30')
     }
   })
+  // P5c:已提送／已完成的單次義務優先讀完成當下的快照(基準日事後更正不改歷史);同前端案例
+  it('完成當下的到期日快照:已完成有快照讀快照;未完成或沒快照照現行基準日;循環不看義務層快照', () => {
+    expect(f(computeObligationDueUTC({ trigger_event: 'award', offset_days: 14, status: '已完成', due_date_snapshot: '2026-01-19' }, anchors))).toBe('2026-01-19')
+    expect(f(computeObligationDueUTC({ trigger_event: 'fixed', fixed_date: '2026-06-15', status: '已提送', due_date_snapshot: '2026-06-10' }, anchors))).toBe('2026-06-10')
+    expect(f(computeObligationDueUTC({ trigger_event: 'award', offset_days: 14, status: '待辦', due_date_snapshot: '2026-01-19' }, anchors))).toBe('2026-01-24')
+    expect(f(computeObligationDueUTC({ trigger_event: 'award', offset_days: 14, status: '已完成' }, anchors))).toBe('2026-01-24')
+    expect(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 5, status: '已完成', due_date_snapshot: '2026-01-19', periods: [] }, anchors)).toBeNull()
+  })
 })
 
 describe('日期工具', () => {

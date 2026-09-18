@@ -2,7 +2,7 @@
 // 逐工項排程、核准期限的義務 runtime。
 import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase.js'
-import { loadObligationsFromDB } from '../db.js'
+import { loadObligationsFromDB, loadAnchorVersionsFromDB } from '../db.js'
 import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/documentIngestion.js'
 import { mutationOutcome } from './billing.js'
 
@@ -18,6 +18,8 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
   const [itemSchedules, setItemSchedules] = useState({})
   // 契約義務清單（真 DB；核准 deadline Requirement 後由 DB 建立）
   const [obligations, setObligations] = useState([])
+  // 基準日版本(P5c project_anchor_versions;真 DB 由 trigger／RPC 產生、demo 由種子＋本地鏡像)
+  const [anchorVersions, setAnchorVersions] = useState([])
   // 驗收/結算事件（真 DB；一階段一筆,法定期限由 lib/acceptance.js 推算）
   const [acceptanceEvents, setAcceptanceEvents] = useState([])
 
@@ -192,6 +194,11 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
     // 寫入後重載:失敗保留現況,不把成功的解析偽裝成錯誤(B-09 載入層會 throw)
     try { setObligations(await loadObligationsFromDB(currentProject.project_id)) } catch { /* 保留現況 */ }
   }, [isPersistedProject, currentProject])
+  // 基準日版本(P5c):基準日變更後重載(版本列由 DB 產生,含受影響事項);demo 由本地鏡像追加
+  const reloadAnchorVersions = useCallback(async () => {
+    if (!isPersistedProject) return
+    try { setAnchorVersions(await loadAnchorVersionsFromDB(currentProject.project_id)) } catch { /* 保留現況 */ }
+  }, [isPersistedProject, currentProject])
 
   // P0-06:上傳契約/規範 → 正式文件版本+逐頁保存 → extract-requirements Edge Function
   // 產生「AI 履約需求建議」(draft_ai/needs_review,待人工審查)。核准的 deadline
@@ -312,6 +319,7 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
   return {
     costItems, setCostItems, changeOrders, setChangeOrders,
     itemSchedules, setItemSchedules, obligations, setObligations,
+    anchorVersions, setAnchorVersions, reloadAnchorVersions,
     acceptanceEvents, setAcceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent,
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,

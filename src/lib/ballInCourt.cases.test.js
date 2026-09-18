@@ -6,6 +6,9 @@ import { describe, it, expect } from 'vitest'
 import cases from '../../tests/fixtures/ball-in-court.cases.json'
 import { collaborationItems } from './ballInCourt.js'
 import { buildTodayTasks } from './todayTasks.js'
+import { computeObligationDue } from './contractDue.js'
+import { localISODate } from './dates.js'
+import { periodBasisLabel } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 const ORGS = ['contractor', 'supervisor', 'owner']
 const t = cases.tables
@@ -33,6 +36,18 @@ const expectedTitle = new Map(cases.expected.obligations.map((x) => [obKey(x), x
 describe('共用案例(前端):協作項核心事項', () => {
   it('collaborationItems 產出與案例完全相同的 id／責任／類型／標題／狀態句／期限(含順序)', () => {
     expect(collaborationItems(input).map(core)).toEqual(cases.expected.core_items.map(core))
+  })
+})
+
+describe('共用案例(前端):基準日版本(P5c)', () => {
+  it('單次義務到期日=案例 single_due:已完成的讀完成當下的快照,不隨基準日更正改', () => {
+    const got = Object.fromEntries(t.contract_obligations.filter((ob) => !ob.recurring).map((ob) => [ob.id, localISODate(computeObligationDue(ob, cases.anchors))]))
+    expect(got).toEqual(cases.expected.single_due)
+  })
+  it('期次的依據句=案例 period_basis(第幾版基準日、起算欄位與日期;未留版明說)', () => {
+    const got = {}
+    for (const ob of t.contract_obligations) for (const p of ob.periods || []) if (cases.expected.period_basis[`${ob.id}:${p.period_key}`]) got[`${ob.id}:${p.period_key}`] = periodBasisLabel(p)
+    expect(got).toEqual(cases.expected.period_basis)
   })
 })
 
@@ -91,5 +106,8 @@ describe('共用案例(前端):今日工作三桶＋待補設定', () => {
     expect(setup['契約重點:ob13']).toMatchObject({ meta: '基準日待補（開工日）', to: '/deadlines', ball: 'supervisor' })
     expect(setup['契約重點:ob14']).toMatchObject({ meta: '循環規則待補（每季缺月份或日期）', to: '/requirements/review?highlight=ob14', ball: 'contractor' })
     expect(setup['契約重點:ob15:2026-06']).toMatchObject({ meta: '回填待核對（原義務曾標完成，本期是否已履行待確認）', to: '/deadlines?obligation=ob15&period=2026-06', ball: 'owner', period: '2026-06' })
+    // P5c:循環停止條件判不出(保固類沒有保固期滿日)→ 待補設定,導期限追蹤該筆;已完成的單次義務 ob17 不列
+    expect(setup['契約重點:ob18']).toMatchObject({ meta: '停止條件待補（保固期滿日無法判定，未登錄保固年限）', to: '/deadlines?obligation=ob18', ball: 'contractor' })
+    for (const org of ORGS) expect([...built[org].mine, ...built[org].waiting, ...built[org].setup].some((t) => t.id === 'ob17')).toBe(false)
   })
 })

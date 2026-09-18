@@ -7,7 +7,8 @@ import { collectOpenBallItems } from './ballInCourt.ts'
 import type { OpenBallItem } from './ballInCourt.ts'
 import { listMyOpenItems } from './agentQueryTools.ts'
 import { itemsForRecipient, splitBrief } from './agentBrief.ts'
-import { parseDateUTC } from './contractDue.ts'
+import { parseDateUTC, computeObligationDueUTC, formatDate } from './contractDue.ts'
+import { periodBasisLabel } from './ballInCourtRules.ts'
 import type { AgentRole } from './agentPersona.ts'
 
 const ORGS: AgentRole[] = ['contractor', 'supervisor', 'owner']
@@ -46,6 +47,25 @@ async function collect(soonDays: number): Promise<OpenBallItem[]> {
   if ('error' in r) throw new Error(r.error)
   return r.items
 }
+
+describe('共用案例(Edge):基準日版本(P5c)', () => {
+  it('單次義務到期日=案例 single_due:已完成的讀完成當下的快照', () => {
+    const got = Object.fromEntries((tables.contract_obligations as Record<string, unknown>[]).filter((ob) => !ob.recurring)
+      .map((ob) => { const ms = computeObligationDueUTC(ob, cases.anchors); return [ob.id, ms == null ? null : formatDate(ms)] }))
+    expect(got).toEqual(cases.expected.single_due)
+  })
+  it('期次的依據句=案例 period_basis', () => {
+    const got: Record<string, string> = {}
+    const want = cases.expected.period_basis as Record<string, string>
+    for (const ob of tables.contract_obligations as Record<string, unknown>[]) {
+      for (const p of (ob.periods as Record<string, unknown>[] | undefined) ?? []) {
+        const k = `${ob.id}:${p.period_key}`
+        if (want[k]) got[k] = periodBasisLabel(p)
+      }
+    }
+    expect(got).toEqual(want)
+  })
+})
 
 describe('共用案例(Edge):collectOpenBallItems', () => {
   it('協作項核心事項與案例一致(id／責任／類型／標題／狀態／狀態句／期限)', async () => {
@@ -104,6 +124,9 @@ describe('共用案例(Edge):Agent 工具 list_my_open_items(只列逾期義務)
     expect(byId['ob14'].fix_at).toContain('擷取審核')
     expect(byId['ob15']).toMatchObject({ setup: 'review', responsible: '機關', period_key: '2026-06' })
     expect(byId['ob15'].fix_at).toContain('期限追蹤')
+    // P5c:循環停止條件判不出(保固類)→ 待補設定,處理入口指向基準日／驗收
+    expect(byId['ob18']).toMatchObject({ setup: 'stop', responsible: '廠商' })
+    expect(byId['ob18'].fix_at).toContain('竣工')
   })
 })
 

@@ -3,10 +3,11 @@
 // 「今天」以台北時間(UTC+8)為準。若改動判斷邏輯,兩邊要同步(contractDue.test.ts 與
 // src/lib/contractDue.test.js 是同一組案例)。
 
-import { isRecurring, currentObligationPeriod } from './ballInCourtRules.ts'
+import { isRecurring, currentObligationPeriod, singleDueSnapshot } from './ballInCourtRules.ts'
 import type { ObligationPeriod } from './ballInCourtRules.ts'
 
 export interface Obligation {
+  status?: string | null
   trigger_event?: string | null
   offset_days?: number | null
   offset_dir?: string | null
@@ -16,6 +17,8 @@ export interface Obligation {
   recurring_weekday?: number | null   // weekly:ISO 1=週一…7=週日
   recurring_month?: number | null     // quarterly:季內第幾個月 1..3;yearly:幾月 1..12
   periods?: ObligationPeriod[] | null // 循環義務的期次(obligation_periods embed;P5b)
+  due_date_snapshot?: string | null   // 已提送／已完成的單次義務完成當下的到期日快照(P5c;DB trigger 蓋)
+  anchor_version_no?: number | null   // 留快照時的基準日版本(P5c)
 }
 
 export interface Anchors {
@@ -51,6 +54,7 @@ export function formatDate(utcMs: number): string {
 }
 
 // 對應 computeObligationDue:單次義務 trigger + 偏移 + 基準日 → 到期日(UTC ms)或 null;
+// 已提送／已完成的單次義務優先讀完成當下的 due_date_snapshot(P5c:基準日事後更正不改歷史);
 // 循環義務(P5b)取期次(ob.periods)最早未結一期的 due_date,不再從「今天」推算下一期。
 // 沒有期次(基準日／循環規則待補、整條不適用)→ null,不臆測日期。
 export function computeObligationDueUTC(ob: Obligation, anchors: Anchors): number | null {
@@ -58,6 +62,7 @@ export function computeObligationDueUTC(ob: Obligation, anchors: Anchors): numbe
     const period = currentObligationPeriod(ob.periods)
     return period ? parseDateUTC(String(period.due_date ?? '')) : null
   }
+  if (singleDueSnapshot(ob as Record<string, unknown>)) return parseDateUTC(ob.due_date_snapshot)
   if (ob.trigger_event === 'fixed') return parseDateUTC(ob.fixed_date)
   const base = {
     award: anchors.award_date,

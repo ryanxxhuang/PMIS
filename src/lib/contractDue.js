@@ -1,9 +1,12 @@
 // 由觸發點 + 期限規則 + 基準日,算出契約義務的實際到期日(Date 或 null)。
 // 契約管制頁與提醒中心共用。anchors = { award_date, notice_date, commencement_date, end_date }。
 import { parseLocalDate } from './dates.js'
-import { isRecurring, currentObligationPeriod } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+import { isRecurring, currentObligationPeriod, singleDueSnapshot } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+export { singleDueSnapshot }
 
 // 單次義務:觸發點對應的基準日 ± 偏移天數;fixed 直接用指定日期;基準日沒填 → null(基準日待補,不臆測)。
+// 已提送／已完成的單次義務(P5c):DB trigger 在完成當下依「當時」基準日留了 due_date_snapshot,優先讀它——
+// 基準日事後更正不改歷史(準時判定不變);沒有快照的舊資料照舊以現行基準日算(畫面標「完成時未留版」)。
 // 循環義務(P5b):到期日不再由前端從「今天」推算下一期——期次(ob.periods,obligation_periods 以
 // PostgREST embed 載入)由 DB 依規則＋基準日確定性物化,這裡取「最早未結的一期」的到期日;
 // 舊逾期因此不會被下一期蓋掉、完成本期後下期自然接上。沒有期次(基準日或循環規則待補、
@@ -13,6 +16,7 @@ export function computeObligationDue(ob, anchors) {
     const period = currentObligationPeriod(ob.periods)
     return period ? parseLocalDate(period.due_date) : null
   }
+  if (singleDueSnapshot(ob)) return parseLocalDate(ob.due_date_snapshot)
   if (ob.trigger_event === 'fixed') return parseLocalDate(ob.fixed_date)
   const base = { award: anchors.award_date, notice: anchors.notice_date, commencement: anchors.commencement_date, completion: anchors.end_date }[ob.trigger_event]
   const d = parseLocalDate(base)

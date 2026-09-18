@@ -34,6 +34,23 @@ describe('computeObligationDue — 固定日期', () => {
   })
 })
 
+// P5c:已提送／已完成的單次義務優先讀 DB trigger 留的完成當下快照——基準日事後更正不改歷史。
+// 與 supabase/functions/_shared/contractDue.test.ts 同一組案例。
+describe('computeObligationDue — 完成當下的到期日快照(P5c)', () => {
+  it('已完成且有快照 → 讀快照,即使現行基準日算出來不同', () => {
+    expect(ymd(computeObligationDue({ trigger_event: 'award', offset_days: 14, status: '已完成', due_date_snapshot: '2026-01-19' }, anchors))).toBe('2026-01-19')
+    expect(ymd(computeObligationDue({ trigger_event: 'fixed', fixed_date: '2026-06-15', status: '已提送', due_date_snapshot: '2026-06-10' }, anchors))).toBe('2026-06-10')
+  })
+  it('未完成的義務即使帶快照(舊值殘留)也照現行基準日算;已完成但沒快照(舊資料)照現行基準日算', () => {
+    expect(ymd(computeObligationDue({ trigger_event: 'award', offset_days: 14, status: '待辦', due_date_snapshot: '2026-01-19' }, anchors))).toBe('2026-01-24')
+    expect(ymd(computeObligationDue({ trigger_event: 'award', offset_days: 14, status: '已完成' }, anchors))).toBe('2026-01-24')
+    expect(computeObligationDue({ trigger_event: 'award', offset_days: 14, status: '不適用', due_date_snapshot: '2026-01-19' }, anchors) && ymd(computeObligationDue({ trigger_event: 'award', offset_days: 14, status: '不適用', due_date_snapshot: '2026-01-19' }, anchors))).toBe('2026-01-24')
+  })
+  it('循環義務不看義務層快照(期次各自有依據)', () => {
+    expect(computeObligationDue({ recurring: 'monthly', recurring_day: 5, status: '已完成', due_date_snapshot: '2026-01-19', periods: [] }, anchors)).toBeNull()
+  })
+})
+
 // 循環義務(P5b):到期日不再由前端從「今天」推算——期次由 DB materialize 依規則＋基準日確定性產生
 // (pgTAP obligation_periods.sql 釘月末／閏年／跨年),前端只取「最早未結的一期」。
 // 與 supabase/functions/_shared/contractDue.test.ts 同一組案例。
