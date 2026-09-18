@@ -1,5 +1,5 @@
 {
-  "$comment": "P5a 球權共用案例:首頁今日工作(src/lib/ballInCourt.cases.test.js)、Edge 收集器與 Agent 工具／早報(supabase/functions/_shared/ballInCourt.cases.test.ts)、Deno 執行期(ballInCourtRules.deno.test.ts)對同一組資料斷言相同的事項、責任與期限。today=2026-07-26(週日);開工日刻意留空以產生「基準日待補」。key 一律 tag:id。",
+  "$comment": "P5a 球權共用案例:首頁今日工作(src/lib/ballInCourt.cases.test.js)、Edge 收集器與 Agent 工具／早報(supabase/functions/_shared/ballInCourt.cases.test.ts)、Deno 執行期(ballInCourtRules.deno.test.ts)對同一組資料斷言相同的事項、責任與期限。today=2026-07-26(週日);開工日刻意留空以產生「基準日待補」。key 一律 tag:id;P5b 循環義務逐期:key 為 契約重點:<id>:<期別>,期次(periods)照 PostgREST embed 形狀掛在義務列上(DB materialize 產生;ob12 有舊已完成期＋逾期舊期＋下期,ob13 缺開工日,ob14 循環規則不完整,ob15 義務層舊完成狀態對不上期別→2026-06 期待核對,ob16 已廢止)。",
   "today": "2026-07-26",
   "project_id": "p1",
   "anchors": { "award_date": "2026-01-10", "notice_date": "2026-01-20", "commencement_date": null, "end_date": "2026-12-31" },
@@ -54,7 +54,23 @@
       { "id": "ob8", "project_id": "p1", "title": "提送施工月報", "responsible": "廠商", "status": "待辦", "trigger_event": "fixed", "fixed_date": "2026-07-25", "source_clause": "第10條" },
       { "id": "ob9", "project_id": "p1", "title": "竣工圖說", "responsible": "廠商", "status": "待辦", "trigger_event": "fixed", "fixed_date": "2026-09-01" },
       { "id": "ob10", "project_id": "p1", "title": "監造計畫書", "responsible": "監造", "status": "已提送", "trigger_event": "fixed", "fixed_date": "2026-07-01" },
-      { "id": "ob11", "project_id": "p1", "title": "決標後保證金", "responsible": "機關", "status": "待辦", "trigger_event": "award", "offset_days": 10, "offset_dir": "after" }
+      { "id": "ob11", "project_id": "p1", "title": "決標後保證金", "responsible": "機關", "status": "待辦", "trigger_event": "award", "offset_days": 10, "offset_dir": "after" },
+      { "id": "ob12", "project_id": "p1", "title": "每月環境監測報告", "responsible": "廠商", "status": "待辦", "trigger_event": "notice", "recurring": "monthly", "recurring_day": 20, "source_clause": "第11條",
+        "periods": [
+          { "id": "ob12-2026-06", "period_key": "2026-06", "period_start": "2026-06-01", "period_end": "2026-06-30", "due_date": "2026-06-20", "status": "已完成", "completed_at": "2026-06-18T02:00:00Z", "review_note": null },
+          { "id": "ob12-2026-07", "period_key": "2026-07", "period_start": "2026-07-01", "period_end": "2026-07-31", "due_date": "2026-07-20", "status": "待辦", "completed_at": null, "review_note": null },
+          { "id": "ob12-2026-08", "period_key": "2026-08", "period_start": "2026-08-01", "period_end": "2026-08-31", "due_date": "2026-08-20", "status": "待辦", "completed_at": null, "review_note": null }
+        ] },
+      { "id": "ob13", "project_id": "p1", "title": "每月監造會議紀錄", "responsible": "監造", "status": "待辦", "trigger_event": null, "recurring": "monthly", "recurring_day": 10, "periods": [] },
+      { "id": "ob14", "project_id": "p1", "title": "每季安全衛生查核", "responsible": "廠商", "status": "待辦", "trigger_event": null, "recurring": "quarterly", "recurring_day": 15, "recurring_month": null, "periods": [] },
+      { "id": "ob15", "project_id": "p1", "title": "每月品管報告", "responsible": "機關", "status": "已完成", "trigger_event": "award", "recurring": "monthly", "recurring_day": 5,
+        "periods": [
+          { "id": "ob15-2026-06", "period_key": "2026-06", "period_start": "2026-06-01", "period_end": "2026-06-30", "due_date": "2026-06-05", "status": "待辦", "completed_at": null, "review_note": "原義務曾標為「已完成」但無法對應期別,請核對本期是否已履行" },
+          { "id": "ob15-2026-07", "period_key": "2026-07", "period_start": "2026-07-01", "period_end": "2026-07-31", "due_date": "2026-07-05", "status": "待辦", "completed_at": null, "review_note": null },
+          { "id": "ob15-2026-08", "period_key": "2026-08", "period_start": "2026-08-01", "period_end": "2026-08-31", "due_date": "2026-08-05", "status": "待辦", "completed_at": null, "review_note": null }
+        ] },
+      { "id": "ob16", "project_id": "p1", "title": "已廢止的循環義務", "responsible": "廠商", "status": "不適用", "trigger_event": "award", "recurring": "monthly", "recurring_day": 5,
+        "periods": [ { "id": "ob16-2026-07", "period_key": "2026-07", "period_start": "2026-07-01", "period_end": "2026-07-31", "due_date": "2026-07-05", "status": "不適用", "completed_at": null, "review_note": null } ] }
     ],
     "field_documents": [
       { "id": "f1", "project_id": "p1", "doc_type": "daily_log", "doc_date": "2026-07-25", "status": "draft", "owner_org": "contractor", "current_version_no": 1 },
@@ -110,29 +126,36 @@
       { "id": "f10", "who": "supervisor", "tag": "現場文書", "title": "施工日誌 2026-07-16", "status": "submitted", "meta": "待收件", "due": null }
     ],
     "obligations": [
-      { "id": "ob1", "who": "unassigned", "title": "履約保險單", "label": "責任方待補設定", "due": "2026-07-10", "setup": "responsible" },
-      { "id": "ob2", "who": "supervisor", "title": "監造月報", "label": "待辦", "due": "2026-07-29", "setup": null },
-      { "id": "ob3", "who": "contractor", "title": "提送施工計畫書", "label": "基準日待補（開工日）", "due": null, "setup": "anchor" },
-      { "id": "ob6", "who": "unassigned", "title": "其他單位事項", "label": "責任方待補設定", "due": "2026-09-30", "setup": "responsible" },
-      { "id": "ob7", "who": "contractor", "title": "無時點義務", "label": "待辦", "due": null, "setup": null },
-      { "id": "ob8", "who": "contractor", "title": "提送施工月報", "label": "待辦", "due": "2026-07-25", "setup": null },
-      { "id": "ob9", "who": "contractor", "title": "竣工圖說", "label": "待辦", "due": "2026-09-01", "setup": null },
-      { "id": "ob11", "who": "owner", "title": "決標後保證金", "label": "待辦", "due": "2026-01-20", "setup": null }
+      { "id": "ob1", "period": null, "who": "unassigned", "title": "履約保險單", "label": "責任方待補設定", "due": "2026-07-10", "setup": "responsible" },
+      { "id": "ob2", "period": null, "who": "supervisor", "title": "監造月報", "label": "待辦", "due": "2026-07-29", "setup": null },
+      { "id": "ob3", "period": null, "who": "contractor", "title": "提送施工計畫書", "label": "基準日待補（開工日）", "due": null, "setup": "anchor" },
+      { "id": "ob6", "period": null, "who": "unassigned", "title": "其他單位事項", "label": "責任方待補設定", "due": "2026-09-30", "setup": "responsible" },
+      { "id": "ob7", "period": null, "who": "contractor", "title": "無時點義務", "label": "待辦", "due": null, "setup": null },
+      { "id": "ob8", "period": null, "who": "contractor", "title": "提送施工月報", "label": "待辦", "due": "2026-07-25", "setup": null },
+      { "id": "ob9", "period": null, "who": "contractor", "title": "竣工圖說", "label": "待辦", "due": "2026-09-01", "setup": null },
+      { "id": "ob11", "period": null, "who": "owner", "title": "決標後保證金", "label": "待辦", "due": "2026-01-20", "setup": null },
+      { "id": "ob12", "period": "2026-07", "who": "contractor", "title": "每月環境監測報告（2026-07 期）", "label": "待辦", "due": "2026-07-20", "setup": null },
+      { "id": "ob12", "period": "2026-08", "who": "contractor", "title": "每月環境監測報告（2026-08 期）", "label": "待辦", "due": "2026-08-20", "setup": null },
+      { "id": "ob13", "period": null, "who": "supervisor", "title": "每月監造會議紀錄", "label": "基準日待補（開工日）", "due": null, "setup": "anchor" },
+      { "id": "ob14", "period": null, "who": "contractor", "title": "每季安全衛生查核", "label": "循環規則待補（每季缺月份或日期）", "due": null, "setup": "rule" },
+      { "id": "ob15", "period": "2026-06", "who": "owner", "title": "每月品管報告（2026-06 期）", "label": "回填待核對（原義務曾標完成，本期是否已履行待確認）", "due": "2026-06-05", "setup": "review" },
+      { "id": "ob15", "period": "2026-07", "who": "owner", "title": "每月品管報告（2026-07 期）", "label": "待辦", "due": "2026-07-05", "setup": null },
+      { "id": "ob15", "period": "2026-08", "who": "owner", "title": "每月品管報告（2026-08 期）", "label": "待辦", "due": "2026-08-05", "setup": null }
     ],
-    "setup": ["觀察:o3", "契約重點:ob1", "契約重點:ob3", "契約重點:ob6"],
+    "setup": ["觀察:o3", "契約重點:ob1", "契約重點:ob3", "契約重點:ob6", "契約重點:ob13", "契約重點:ob14", "契約重點:ob15:2026-06"],
     "mine": {
       "soon7": {
-        "contractor": ["疑義:r2", "送審:s2", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "觀察:o1", "觀察:o4", "現場文書:f1", "現場文書:f2", "現場文書:f3", "契約重點:ob8"],
+        "contractor": ["疑義:r2", "送審:s2", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "觀察:o1", "觀察:o4", "現場文書:f1", "現場文書:f2", "現場文書:f3", "契約重點:ob8", "契約重點:ob12:2026-07"],
         "supervisor": ["疑義:r1", "送審:s1", "估驗:v2", "查驗:i1", "缺失:d2", "觀察:o2", "變更:c1", "現場文書:f4", "現場文書:f5", "現場文書:f9", "現場文書:f10", "契約重點:ob2"],
-        "owner": ["估驗:v4", "變更:c2", "現場文書:f6", "契約重點:ob11"]
+        "owner": ["估驗:v4", "變更:c2", "現場文書:f6", "契約重點:ob11", "契約重點:ob15:2026-07"]
       },
       "soon0": {
-        "contractor": ["疑義:r2", "送審:s2", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "觀察:o1", "觀察:o4", "現場文書:f1", "現場文書:f2", "現場文書:f3", "契約重點:ob8"],
+        "contractor": ["疑義:r2", "送審:s2", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "觀察:o1", "觀察:o4", "現場文書:f1", "現場文書:f2", "現場文書:f3", "契約重點:ob8", "契約重點:ob12:2026-07"],
         "supervisor": ["疑義:r1", "送審:s1", "估驗:v2", "查驗:i1", "缺失:d2", "觀察:o2", "變更:c1", "現場文書:f4", "現場文書:f5", "現場文書:f9", "現場文書:f10"],
-        "owner": ["估驗:v4", "變更:c2", "現場文書:f6", "契約重點:ob11"]
+        "owner": ["估驗:v4", "變更:c2", "現場文書:f6", "契約重點:ob11", "契約重點:ob15:2026-07"]
       }
     },
-    "overdue_days": { "送審:s1": 6, "缺失:d1": 6, "契約重點:ob8": 1, "契約重點:ob11": 187 },
+    "overdue_days": { "送審:s1": 6, "缺失:d1": 6, "契約重點:ob8": 1, "契約重點:ob11": 187, "契約重點:ob12:2026-07": 6, "契約重點:ob15:2026-07": 21 },
     "web_waiting_soon7": {
       "contractor": ["疑義:r1", "送審:s1", "估驗:v2", "估驗:v4", "缺失:d2", "變更:c1", "變更:c2", "現場文書:f4", "現場文書:f6", "現場文書:f10"],
       "supervisor": ["疑義:r2", "送審:s2", "缺失:d1", "工安缺失:d3", "變更:c2", "現場文書:f1", "現場文書:f2", "現場文書:f3", "現場文書:f6"],

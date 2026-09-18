@@ -1,6 +1,10 @@
 // src/lib/contractDue.js 的伺服器端移植(Deno / Edge Function 用)。
 // 差異:全部以「UTC 純日期(ms)」運算 — 伺服器時區未知,不能用本地 Date;
-// 「今天」以台北時間(UTC+8)為準。若改動判斷邏輯,兩邊要同步。
+// 「今天」以台北時間(UTC+8)為準。若改動判斷邏輯,兩邊要同步(contractDue.test.ts 與
+// src/lib/contractDue.test.js 是同一組案例)。
+
+import { isRecurring, currentObligationPeriod } from './ballInCourtRules.ts'
+import type { ObligationPeriod } from './ballInCourtRules.ts'
 
 export interface Obligation {
   trigger_event?: string | null
@@ -11,6 +15,7 @@ export interface Obligation {
   recurring_day?: number | null
   recurring_weekday?: number | null   // weekly:ISO 1=週一…7=週日
   recurring_month?: number | null     // quarterly:季內第幾個月 1..3;yearly:幾月 1..12
+  periods?: ObligationPeriod[] | null // 循環義務的期次(obligation_periods embed;P5b)
 }
 
 export interface Anchors {
@@ -45,36 +50,15 @@ export function formatDate(utcMs: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
 }
 
-// 對應 computeObligationDue:trigger + 規則 + 基準日 → 到期日(UTC ms)或 null。
-// 循環欄位語意同前端版:缺必要欄位推不出下次到期日 → null(不臆測日期);
-// 日子超出當月天數沿用 Date.UTC 進位語意(monthly 既有行為)。
-export function computeObligationDueUTC(ob: Obligation, anchors: Anchors, todayUTC: number): number | null {
+// 對應 computeObligationDue:單次義務 trigger + 偏移 + 基準日 → 到期日(UTC ms)或 null;
+// 循環義務(P5b)取期次(ob.periods)最早未結一期的 due_date,不再從「今天」推算下一期。
+// 沒有期次(基準日／循環規則待補、整條不適用)→ null,不臆測日期。
+export function computeObligationDueUTC(ob: Obligation, anchors: Anchors): number | null {
+  if (isRecurring(ob as Record<string, unknown>)) {
+    const period = currentObligationPeriod(ob.periods)
+    return period ? parseDateUTC(String(period.due_date ?? '')) : null
+  }
   if (ob.trigger_event === 'fixed') return parseDateUTC(ob.fixed_date)
-  if (ob.recurring === 'daily') return todayUTC
-  if (ob.recurring === 'weekly' && ob.recurring_weekday) {
-    const day = new Date(todayUTC).getUTCDay()
-    const isoToday = day === 0 ? 7 : day
-    return todayUTC + ((ob.recurring_weekday - isoToday + 7) % 7) * DAY
-  }
-  if (ob.recurring === 'monthly' && ob.recurring_day) {
-    const t = new Date(todayUTC)
-    let d = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), ob.recurring_day)
-    if (d < todayUTC) d = Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, ob.recurring_day)
-    return d
-  }
-  if (ob.recurring === 'quarterly' && ob.recurring_day && ob.recurring_month) {
-    const t = new Date(todayUTC)
-    const quarterStartMonth = Math.floor(t.getUTCMonth() / 3) * 3
-    let d = Date.UTC(t.getUTCFullYear(), quarterStartMonth + ob.recurring_month - 1, ob.recurring_day)
-    if (d < todayUTC) d = Date.UTC(t.getUTCFullYear(), quarterStartMonth + 3 + ob.recurring_month - 1, ob.recurring_day)
-    return d
-  }
-  if (ob.recurring === 'yearly' && ob.recurring_day && ob.recurring_month) {
-    const t = new Date(todayUTC)
-    let d = Date.UTC(t.getUTCFullYear(), ob.recurring_month - 1, ob.recurring_day)
-    if (d < todayUTC) d = Date.UTC(t.getUTCFullYear() + 1, ob.recurring_month - 1, ob.recurring_day)
-    return d
-  }
   const base = {
     award: anchors.award_date,
     notice: anchors.notice_date,

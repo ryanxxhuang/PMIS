@@ -1,52 +1,19 @@
 // 由觸發點 + 期限規則 + 基準日,算出契約義務的實際到期日(Date 或 null)。
 // 契約管制頁與提醒中心共用。anchors = { award_date, notice_date, commencement_date, end_date }。
 import { parseLocalDate } from './dates.js'
+import { isRecurring, currentObligationPeriod } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
-const today0 = (base) => {
-  const d = base ? new Date(base) : new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-// today 可注入:重複義務的到期日取決於「今天」,不注入就只能讀系統時鐘——
-// 純函式測試與任何以固定日期推導的呼叫端(今日工作聚合)都會變得不可重現。
-// 不傳維持原行為(現有呼叫點不受影響)。
-//
-// 循環欄位:recurring_day=幾日(monthly/quarterly/yearly)、
-// recurring_weekday=星期幾(weekly,ISO 1=週一…7=週日)、
-// recurring_month=季內第幾個月(quarterly 1..3)或幾月(yearly 1..12)。
-// 缺必要欄位(如每季只寫頻率沒寫日子)推不出下次到期日 → 落到基準日分支
-// 算不出來回 null,對齊「無期限」的既有語意,不臆測日期。
-// 日子超出當月天數沿用 JS Date 進位語意(monthly 既有行為:4 月 31 → 5/1)。
-export function computeObligationDue(ob, anchors, today) {
+// 單次義務:觸發點對應的基準日 ± 偏移天數;fixed 直接用指定日期;基準日沒填 → null(基準日待補,不臆測)。
+// 循環義務(P5b):到期日不再由前端從「今天」推算下一期——期次(ob.periods,obligation_periods 以
+// PostgREST embed 載入)由 DB 依規則＋基準日確定性物化,這裡取「最早未結的一期」的到期日;
+// 舊逾期因此不會被下一期蓋掉、完成本期後下期自然接上。沒有期次(基準日或循環規則待補、
+// 整條已不適用)→ null。逐期列舉(首頁／Agent／早報)走共用規則 obligationEntries,不在這裡。
+export function computeObligationDue(ob, anchors) {
+  if (isRecurring(ob)) {
+    const period = currentObligationPeriod(ob.periods)
+    return period ? parseLocalDate(period.due_date) : null
+  }
   if (ob.trigger_event === 'fixed') return parseLocalDate(ob.fixed_date)
-  if (ob.recurring === 'daily') return today0(today)
-  if (ob.recurring === 'weekly' && ob.recurring_weekday) {
-    const t = today0(today)
-    const isoToday = t.getDay() === 0 ? 7 : t.getDay()
-    const d = new Date(t)
-    d.setDate(t.getDate() + ((ob.recurring_weekday - isoToday + 7) % 7))
-    return d
-  }
-  if (ob.recurring === 'monthly' && ob.recurring_day) {
-    const t = today0(today)
-    let d = new Date(t.getFullYear(), t.getMonth(), ob.recurring_day)
-    if (d < t) d = new Date(t.getFullYear(), t.getMonth() + 1, ob.recurring_day)
-    return d
-  }
-  if (ob.recurring === 'quarterly' && ob.recurring_day && ob.recurring_month) {
-    const t = today0(today)
-    const quarterStartMonth = Math.floor(t.getMonth() / 3) * 3
-    let d = new Date(t.getFullYear(), quarterStartMonth + ob.recurring_month - 1, ob.recurring_day)
-    if (d < t) d = new Date(t.getFullYear(), quarterStartMonth + 3 + ob.recurring_month - 1, ob.recurring_day)
-    return d
-  }
-  if (ob.recurring === 'yearly' && ob.recurring_day && ob.recurring_month) {
-    const t = today0(today)
-    let d = new Date(t.getFullYear(), ob.recurring_month - 1, ob.recurring_day)
-    if (d < t) d = new Date(t.getFullYear() + 1, ob.recurring_month - 1, ob.recurring_day)
-    return d
-  }
   const base = { award: anchors.award_date, notice: anchors.notice_date, commencement: anchors.commencement_date, completion: anchors.end_date }[ob.trigger_event]
   const d = parseLocalDate(base)
   if (!d) return null

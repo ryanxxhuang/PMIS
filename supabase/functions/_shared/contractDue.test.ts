@@ -8,52 +8,44 @@ const anchors = {
   commencement_date: '2026-02-01',
   end_date: '2026-12-31',
 }
-const T = parseDateUTC('2026-07-10')! // 假設今天(台北)是 2026-07-10
+const T = parseDateUTC('2026-07-10')! // 假設今天(台北)是 2026-07-10(日期工具用)
 
 const f = (ms: number | null) => (ms == null ? null : formatDate(ms))
 
 describe('computeObligationDueUTC — 與前端 contractDue.js 同判斷', () => {
   it('基準日 + 偏移(before/after)', () => {
-    expect(f(computeObligationDueUTC({ trigger_event: 'award', offset_days: 14 }, anchors, T))).toBe('2026-01-24')
-    expect(f(computeObligationDueUTC({ trigger_event: 'notice', offset_days: 0 }, anchors, T))).toBe('2026-01-20')
-    expect(f(computeObligationDueUTC({ trigger_event: 'commencement', offset_days: 30 }, anchors, T))).toBe('2026-03-03')
-    expect(f(computeObligationDueUTC({ trigger_event: 'completion', offset_days: 7, offset_dir: 'before' }, anchors, T))).toBe('2026-12-24')
+    expect(f(computeObligationDueUTC({ trigger_event: 'award', offset_days: 14 }, anchors))).toBe('2026-01-24')
+    expect(f(computeObligationDueUTC({ trigger_event: 'notice', offset_days: 0 }, anchors))).toBe('2026-01-20')
+    expect(f(computeObligationDueUTC({ trigger_event: 'commencement', offset_days: 30 }, anchors))).toBe('2026-03-03')
+    expect(f(computeObligationDueUTC({ trigger_event: 'completion', offset_days: 7, offset_dir: 'before' }, anchors))).toBe('2026-12-24')
   })
 
   it('基準日未填 / other → null;fixed 直接回傳', () => {
-    expect(computeObligationDueUTC({ trigger_event: 'commencement', offset_days: 10 }, { ...anchors, commencement_date: null }, T)).toBeNull()
-    expect(computeObligationDueUTC({ trigger_event: 'other' }, anchors, T)).toBeNull()
-    expect(f(computeObligationDueUTC({ trigger_event: 'fixed', fixed_date: '2026-06-15' }, anchors, T))).toBe('2026-06-15')
-    expect(computeObligationDueUTC({ trigger_event: 'fixed' }, anchors, T)).toBeNull()
+    expect(computeObligationDueUTC({ trigger_event: 'commencement', offset_days: 10 }, { ...anchors, commencement_date: null })).toBeNull()
+    expect(computeObligationDueUTC({ trigger_event: 'other' }, anchors)).toBeNull()
+    expect(f(computeObligationDueUTC({ trigger_event: 'fixed', fixed_date: '2026-06-15' }, anchors))).toBe('2026-06-15')
+    expect(computeObligationDueUTC({ trigger_event: 'fixed' }, anchors)).toBeNull()
   })
 
-  it('每月重複:未過→本月、已過→下月、今天→今天、12月→跨年', () => {
-    expect(f(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 25 }, anchors, T))).toBe('2026-07-25')
-    expect(f(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 5 }, anchors, T))).toBe('2026-08-05')
-    expect(f(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 10 }, anchors, T))).toBe('2026-07-10')
-    const dec = parseDateUTC('2026-12-20')!
-    expect(f(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 5 }, anchors, dec))).toBe('2027-01-05')
+  // 循環義務(P5b):到期日取期次(obligation_periods embed)最早未結的一期;期次由 DB 依規則＋基準日
+  // 確定性物化(pgTAP 釘月末／閏年／跨年),伺服器端不再從「今天」推算下一期。同前端案例。
+  const period = (key: string, due: string, status = '待辦') => ({ period_key: key, due_date: due, status })
+  it('循環義務:取最早未結的一期,舊逾期不被下一期蓋掉;完成本期後下期接上', () => {
+    const periods = [period('2026-06', '2026-06-05', '已完成'), period('2026-08', '2026-08-05'), period('2026-07', '2026-07-05')]
+    expect(f(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 5, periods }, anchors))).toBe('2026-07-05')
+    const julyDone = periods.map((p) => (p.period_key === '2026-07' ? { ...p, status: '已提送' } : p))
+    expect(f(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 5, periods: julyDone }, anchors))).toBe('2026-08-05')
   })
-
-  it('每日/每週循環:daily=今天;weekly 未到→本週、今天→今天、已過→下週', () => {
-    // T=2026-07-10 是週五(ISO weekday 5)
-    expect(f(computeObligationDueUTC({ recurring: 'daily' }, anchors, T))).toBe('2026-07-10')
-    expect(f(computeObligationDueUTC({ recurring: 'weekly', recurring_weekday: 5 }, anchors, T))).toBe('2026-07-10')
-    expect(f(computeObligationDueUTC({ recurring: 'weekly', recurring_weekday: 1 }, anchors, T))).toBe('2026-07-13')
-    expect(f(computeObligationDueUTC({ recurring: 'weekly', recurring_weekday: 4 }, anchors, T))).toBe('2026-07-16')
+  it('循環義務:期次全部已結／不適用或沒有期次 → null,不從今天臆測', () => {
+    expect(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 5, periods: [period('2026-07', '2026-07-05', '已完成'), period('2026-08', '2026-08-05', '不適用')] }, anchors)).toBeNull()
+    expect(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 5, periods: [] }, anchors)).toBeNull()
+    expect(computeObligationDueUTC({ recurring: 'monthly', recurring_day: 5 }, anchors)).toBeNull()
+    expect(computeObligationDueUTC({ recurring: 'weekly' }, anchors)).toBeNull()
   })
-
-  it('每季/每年循環:本期已過→下期(含跨年);缺必要欄位 → null', () => {
-    // T 在 Q3(7~9 月):季內第 1 個月 15 日未過 → 本季;5 日已過 → 下季
-    expect(f(computeObligationDueUTC({ recurring: 'quarterly', recurring_month: 1, recurring_day: 15 }, anchors, T))).toBe('2026-07-15')
-    expect(f(computeObligationDueUTC({ recurring: 'quarterly', recurring_month: 1, recurring_day: 5 }, anchors, T))).toBe('2026-10-05')
-    const dec = parseDateUTC('2026-12-20')!
-    expect(f(computeObligationDueUTC({ recurring: 'quarterly', recurring_month: 1, recurring_day: 5 }, anchors, dec))).toBe('2027-01-05')
-    expect(f(computeObligationDueUTC({ recurring: 'yearly', recurring_month: 12, recurring_day: 31 }, anchors, T))).toBe('2026-12-31')
-    expect(f(computeObligationDueUTC({ recurring: 'yearly', recurring_month: 3, recurring_day: 31 }, anchors, T))).toBe('2027-03-31')
-    expect(computeObligationDueUTC({ recurring: 'weekly' }, anchors, T)).toBeNull()
-    expect(computeObligationDueUTC({ recurring: 'quarterly', recurring_day: 10 }, anchors, T)).toBeNull()
-    expect(computeObligationDueUTC({ recurring: 'yearly', recurring_month: 3 }, anchors, T)).toBeNull()
+  it('五種循環都只看期次,不看觸發點／基準日', () => {
+    for (const recurring of ['daily', 'weekly', 'monthly', 'quarterly', 'yearly']) {
+      expect(f(computeObligationDueUTC({ recurring, trigger_event: 'commencement', offset_days: 30, periods: [period('k', '2026-04-30')] }, anchors))).toBe('2026-04-30')
+    }
   })
 })
 

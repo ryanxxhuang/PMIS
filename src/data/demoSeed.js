@@ -152,12 +152,31 @@ export function buildDemoData(workItems, project) {
     const base = project?.commencement_date ? new Date(`${project.commencement_date}T08:00:00`) : daysFromNow(-160)
     const d = new Date(base); d.setDate(d.getDate() + n); return d.toISOString()
   }
+  // 循環義務的期次(P5b obligation_periods 的 embed 形狀;真專案由 DB 依規則物化):兩期——
+  // 上一期已完成(準時)＋下一期待辦(到期日=今天起最近的一次,與 P5b 前 demo 的「下次到期」同一天,
+  // 劇本的逾期／即將到期分佈不變:OB-6 仍是第一條逾期)。demo 因此看得到「完成本期不清下期」,
+  // 「舊逾期保留」由 pgTAP 與共用案例證明,不靠種子。日子 5／15／20 不會碰到月末夾住,不必抄夾住規則。
+  const monthlyPeriods = (obId, day) => {
+    const nextOffset = new Date().getDate() <= day ? 0 : 1
+    return [nextOffset - 1, nextOffset].map((offset) => {
+      const start = monthsFromNow(offset, 1)
+      const end = monthsFromNow(offset + 1, 0)
+      const due = monthsFromNow(offset, day)
+      const done = offset < nextOffset
+      return {
+        id: `${obId}-${localISOMonth(start)}`, obligation_id: obId, period_key: localISOMonth(start),
+        period_start: iso(start), period_end: iso(end), due_date: iso(due), status: done ? '已完成' : '待辦',
+        completed_at: done ? new Date(due.getFullYear(), due.getMonth(), due.getDate() - 1, 15).toISOString() : null,
+        evidence_submittal_id: null, evidence_document_id: null, review_note: null,
+      }
+    })
+  }
   const obligations = [
     { id: 'OB-1', title: '提送施工計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', completed_at: afterCommencement(12), sort_order: 0 },
     // W-01 佐證鏈 demo:品質計畫義務掛上核准的 SUB-001,展示「義務→送審」可勾稽
     { id: 'OB-2', title: '提送品質計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', completed_at: afterCommencement(13), evidence_submittal_id: 'SUB-DEMO-1', sort_order: 1 },
     { id: 'OB-3', title: '投保營造綜合保險', category: '開工前', trigger_event: 'commencement', offset_days: 0, offset_dir: 'after', responsible: '廠商', penalty: '未投保者機關得代辦並自價金扣抵', source_clause: '第 13 條', source_page: 'p.18', status: '已完成', completed_at: afterCommencement(-2), sort_order: 2 },
-    { id: 'OB-4', title: '提送施工月報', category: '施工中', recurring: 'monthly', recurring_day: 5, responsible: '廠商', penalty: null, source_clause: '第 10 條', source_page: 'p.14', status: '待辦', sort_order: 3 },
+    { id: 'OB-4', title: '提送施工月報', category: '施工中', recurring: 'monthly', recurring_day: 5, responsible: '廠商', penalty: null, source_clause: '第 10 條', source_page: 'p.14', status: '待辦', sort_order: 3, periods: monthlyPeriods('OB-4', 5) },
     { id: 'OB-5', title: '職業安全衛生教育訓練（每季）', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(12)), responsible: '廠商', penalty: null, source_clause: '第 14 條', source_page: 'p.20', status: '待辦', sort_order: 4 },
     { id: 'OB-6', title: '第 5 期估驗計價送審', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(-3)), responsible: '廠商', penalty: null, source_clause: '第 5 條', source_page: 'p.8', status: '待辦', sort_order: 5 },
     { id: 'OB-7', title: '中間查核點：地上結構體完成 50%', category: '施工中', trigger_event: 'commencement', offset_days: 270, offset_dir: 'after', responsible: '廠商', penalty: '逾查核點未達進度按日計罰 1‰', source_clause: '第 7 條', source_page: 'p.10', status: '待辦', sort_order: 6 },
@@ -165,9 +184,9 @@ export function buildDemoData(workItems, project) {
     // 監造/機關義務:契約重點 · 履約時程頁的三方檢視 storyline(監造看自己+廠商、
     // 機關看全部)。責任方值域對齊 contract_obligations.responsible(廠商|監造|機關)。
     { id: 'OB-9', title: '提送監造計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 30, offset_dir: 'after', responsible: '監造', penalty: null, source_clause: '監造契約第 3 條', source_page: 'p.6', status: '已完成', completed_at: afterCommencement(25), sort_order: 8 },
-    { id: 'OB-10', title: '提送監造月報', category: '施工中', recurring: 'monthly', recurring_day: 15, responsible: '監造', penalty: null, source_clause: '監造契約第 4 條', source_page: 'p.8', status: '待辦', sort_order: 9 },
+    { id: 'OB-10', title: '提送監造月報', category: '施工中', recurring: 'monthly', recurring_day: 15, responsible: '監造', penalty: null, source_clause: '監造契約第 4 條', source_page: 'p.8', status: '待辦', sort_order: 9, periods: monthlyPeriods('OB-10', 15) },
     { id: 'OB-11', title: '送審文件審查(收件後 14 日內)', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(5)), responsible: '監造', penalty: '逾期未回覆者延誤責任由監造負擔', source_clause: '第 8 條', source_page: 'p.11', status: '待辦', sort_order: 10 },
-    { id: 'OB-12', title: '估驗計價審核完成後 30 日內撥付', category: '施工中', recurring: 'monthly', recurring_day: 20, responsible: '機關', penalty: null, source_clause: '第 5 條', source_page: 'p.9', status: '待辦', sort_order: 11 },
+    { id: 'OB-12', title: '估驗計價審核完成後 30 日內撥付', category: '施工中', recurring: 'monthly', recurring_day: 20, responsible: '機關', penalty: null, source_clause: '第 5 條', source_page: 'p.9', status: '待辦', sort_order: 11, periods: monthlyPeriods('OB-12', 20) },
     { id: 'OB-13', title: '竣工後 30 日內辦理初驗', category: '完工', trigger_event: 'completion', offset_days: 30, offset_dir: 'after', responsible: '機關', penalty: null, source_clause: '第 15 條', source_page: 'p.22', status: '待辦', sort_order: 12 },
     { id: 'OB-14', title: '一般工項保固期滿(1 年)', category: '保固', trigger_event: 'completion', offset_days: 365, offset_dir: 'after', responsible: '廠商', penalty: null, source_clause: '第 18 條', source_page: 'p.26', status: '待辦', sort_order: 13 },
   ]

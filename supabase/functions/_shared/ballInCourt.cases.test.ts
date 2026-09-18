@@ -34,9 +34,12 @@ function fakeDb(orgType: string | null = null) {
   } as never
 }
 
-const key = (x: { kind: string; id: string }) => `${x.kind}:${x.id}`
+// 鍵:kind:id;循環義務的期次(P5b)再加 :期別
+const key = (x: { kind: string; id: string; period_key?: string }) => `${x.kind}:${x.id}${x.period_key ? `:${x.period_key}` : ''}`
 const sorted = (xs: string[]) => [...xs].sort()
-const expectedObligations = new Map(cases.expected.obligations.map((o) => [o.id, o]))
+const obKey = (o: { id: string; period: string | null }) => `契約重點:${o.id}${o.period ? `:${o.period}` : ''}`
+const expectedObligations = new Map(cases.expected.obligations.map((o) => [obKey(o), o]))
+const expectedInWindow = new Set([...Object.values(cases.expected.mine.soon7).flat(), ...cases.expected.setup])
 
 async function collect(soonDays: number): Promise<OpenBallItem[]> {
   const r = await collectOpenBallItems(fakeDb(), cases.project_id, TODAY, { obligationSoonDays: soonDays })
@@ -51,19 +54,21 @@ describe('共用案例(Edge):collectOpenBallItems', () => {
     const want = Object.fromEntries(cases.expected.core_items.map((x) => [`${x.tag}:${x.id}`, x]))
     expect(got).toEqual(want)
   })
-  it('契約義務:責任／基準日缺口／標籤／期限與案例一致;窗口外的不列', async () => {
+  it('契約義務(含循環期次):責任／缺口／標籤／期限與案例一致;窗口外的不列', async () => {
     const items = (await collect(7)).filter((i) => i.kind === '契約重點')
-    const inWindow = cases.expected.obligations.filter((o) => o.setup || ['ob2', 'ob8', 'ob11'].includes(o.id))
-    expect(sorted(items.map((i) => i.id))).toEqual(sorted(inWindow.map((o) => o.id)))
+    const inWindow = cases.expected.obligations.filter((o) => expectedInWindow.has(obKey(o)))
+    expect(sorted(items.map(key))).toEqual(sorted(inWindow.map(obKey)))
     for (const i of items) {
-      const want = expectedObligations.get(i.id)!
-      expect(i.side, i.id).toBe(want.who)
-      expect(i.title, i.id).toBe(want.title)
-      expect(i.meta.startsWith(want.label), `${i.id} meta=${i.meta}`).toBe(true)
-      expect(i.due_date, i.id).toBe(want.due)
-      expect(i.setup?.kind ?? null, i.id).toBe(want.setup)
+      const want = expectedObligations.get(key(i))!
+      expect(i.side, key(i)).toBe(want.who)
+      expect(i.title, key(i)).toBe(want.title)
+      expect(i.meta.startsWith(want.label), `${key(i)} meta=${i.meta}`).toBe(true)
+      expect(i.due_date, key(i)).toBe(want.due)
+      expect(i.setup?.kind ?? null, key(i)).toBe(want.setup)
     }
     expect(items.find((i) => i.id === 'ob1')!.meta).toBe('責任方待補設定（依 第9條）')
+    expect(items.find((i) => key(i) === '契約重點:ob12:2026-07')!.meta).toBe('待辦（依 第11條）')
+    expect(items.some((i) => i.id === 'ob16')).toBe(false) // 不適用的循環義務整條不列
   })
   it('逾期天數與案例一致;待補設定不算逾期', async () => {
     const byKey = Object.fromEntries((await collect(7)).map((i) => [key(i), i]))
@@ -82,8 +87,8 @@ describe('共用案例(Edge):collectOpenBallItems', () => {
 describe('共用案例(Edge):Agent 工具 list_my_open_items(只列逾期義務)', () => {
   it.each(ORGS)('%s:items = 案例 mine.soon0;setup_pending 三方相同並附處理入口', async (org) => {
     const r = await listMyOpenItems(fakeDb(org), cases.project_id, {}, TODAY) as {
-      items?: { kind: string; id: string }[]
-      setup_pending?: { kind: string; id: string; setup: string; responsible: string; fix_at: string }[]
+      items?: { kind: string; id: string; period_key?: string }[]
+      setup_pending?: { kind: string; id: string; period_key?: string; setup: string; responsible: string; fix_at: string }[]
     }
     expect(sorted((r.items ?? []).map(key))).toEqual(sorted(cases.expected.mine.soon0[org]))
     expect(sorted((r.setup_pending ?? []).map(key))).toEqual(sorted(cases.expected.setup))
@@ -93,6 +98,12 @@ describe('共用案例(Edge):Agent 工具 list_my_open_items(只列逾期義務)
     expect(byId['ob3']).toMatchObject({ setup: 'anchor', responsible: '廠商' })
     expect(byId['ob3'].fix_at).toContain('基準日')
     expect(byId['o3']).toMatchObject({ setup: 'responsible', responsible: '待補設定' })
+    // P5b:循環義務的規則缺口／回填待核對各有處理入口
+    expect(byId['ob13']).toMatchObject({ setup: 'anchor', responsible: '監造' })
+    expect(byId['ob14']).toMatchObject({ setup: 'rule', responsible: '廠商' })
+    expect(byId['ob14'].fix_at).toContain('擷取審核')
+    expect(byId['ob15']).toMatchObject({ setup: 'review', responsible: '機關', period_key: '2026-06' })
+    expect(byId['ob15'].fix_at).toContain('期限追蹤')
   })
 })
 

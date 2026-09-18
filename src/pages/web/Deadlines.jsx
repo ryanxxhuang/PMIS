@@ -11,8 +11,14 @@
 // 個位置(規範 §0 疊合版),標為已提送與佐證挑選就地在詳情欄處理,不跳頁、不開
 // 對話框(判準第 3、4 條)。這是殼第一次承載會寫 DB 的表單,排版比照 /safety 的
 // 更正表單。殼在 components/listDetail.jsx、行為在 lib/useListDetailPane.js。
+//
+// 循環義務(P5b):逐期追蹤——期次(ob.periods,obligation_periods)由 DB 依規則＋基準日物化,
+// 這裡的一列仍是一條義務,但到期日／狀態／動作都是「本期」的:預設是最早未結的一期(舊逾期優先,
+// 完成本期後下期自然接上),?period=<期別> 可指定某一期(今日工作每期一筆、各自帶深連結)。
+// 標為已提送／退回走 RPC transition_obligation_period(歸屬規則同義務;退回解除證據);
+// 詳情欄另列全部期次,點某一期即切到該期(P5d 再做完整 UI)。
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import {
@@ -22,7 +28,8 @@ import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../compo
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
-import { ORG_TO_PARTY, obligationParty, UNASSIGNED_PARTY } from '../../lib/obligationTimeline.js'
+import { ORG_TO_PARTY, obligationParty, UNASSIGNED_PARTY, periodRows, recurrenceGap } from '../../lib/obligationTimeline.js'
+import { isRecurring, isObligationOpen, currentObligationPeriod } from '../../../supabase/functions/_shared/ballInCourtRules.ts'
 import AnchorDates from '../../components/AnchorDates.jsx'
 import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 import { parseLocalDate, localISODate, taipeiToday } from '../../lib/dates.js'
@@ -48,8 +55,16 @@ const DEFAULT_FILTERS = { q: '', phase: '' }
 export default function Deadlines() {
   const {
     currentProject, isPersistedProject, currentUser, workItems, can,
-    obligations, updateObligationStatus, updateProjectAnchors, submittals,
+    obligations, updateObligationStatus, transitionObligationPeriod, updateProjectAnchors, submittals,
   } = useStore()
+  // ?period=<期別>:循環義務指定看哪一期(今日工作每期一筆帶進來);不指定=最早未結的一期
+  const [searchParams, setSearchParams] = useSearchParams()
+  const periodParam = searchParams.get('period') || ''
+  const selectPeriod = (key) => setSearchParams((p) => {
+    const n = new URLSearchParams(p)
+    if (key) n.set('period', key); else n.delete('period')
+    return n
+  })
   // 標記權限鏡像 DB(migration 20260825120000_obligation_ownership_completed_at):
   // 只看歸屬——自己方的義務才能標/退,機關自此也能標自己的(估驗撥付/初驗/驗收);
   // admin override(非正式模式的專案管理者)照舊放行。跨方按鈕不渲染,
@@ -92,16 +107,24 @@ export default function Deadlines() {
     setAnchors((a) => ({ ...a, [key]: val })) // demo:只進本地,供時間軸展示
   }
 
-  // 到期日、倒數、狀態、期程(依基準日即時計算)。id 提到最外層:殼 hook 以 rows[].id
-  // 做深連結查找與鍵盤走訪。
+  // 到期日、倒數、狀態、期程(單次:依基準日即時計算;循環:本期的期次)。id 提到最外層:殼 hook
+  // 以 rows[].id 做深連結查找與鍵盤走訪。循環義務的 period=本期(?period= 指定或最早未結),
+  // done／狀態／證據都是本期的;沒有期次時 gap 說明為什麼(基準日／循環規則待補)。
   const dueItems = useMemo(() => obligations.map((ob) => {
-    const due = computeObligationDue(ob, anchors)
-    const done = ob.status === '已提送' || ob.status === '已完成'
+    const recurring = isRecurring(ob)
+    const period = recurring
+      ? ((ob.periods || []).find((p) => p.period_key === periodParam) || currentObligationPeriod(ob.periods))
+      : null
+    const due = recurring ? (period ? parseLocalDate(period.due_date) : null) : computeObligationDue(ob, anchors)
+    const done = recurring ? !!period && !isObligationOpen(period.status) : (ob.status === '已提送' || ob.status === '已完成')
     let diff = null, state = 'nodate'
     if (done) state = 'done'
     else if (due) { diff = Math.round((due - today0()) / 86400000); state = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'scheduled' }
-    return { id: ob.id, ob, due, diff, done, state, phase: phaseOf(ob) }
-  }), [obligations, anchors])
+    return {
+      id: ob.id, ob, due, diff, done, state, phase: phaseOf(ob), recurring, period,
+      periods: recurring ? periodRows(ob, today0()) : [], gap: recurring && !period ? recurrenceGap(ob, anchors) : null,
+    }
+  }), [obligations, anchors, periodParam])
   const dueCounts = useMemo(() => {
     let overdue = 0, soon = 0, done = 0
     for (const it of dueItems) { if (it.state === 'overdue') overdue++; else if (it.state === 'soon') soon++; if (it.done) done++ }
@@ -145,12 +168,17 @@ export default function Deadlines() {
   // 按 ↓ 會換選取、連帶收掉挑到一半的佐證。
   useListKeyboardNav({ ordered, selectedId, select, idPrefix: 'dl-', modalUp: evidenceOpen, searchRef })
 
-  // 狀態寫入:store 保證 DB 成功才更新 UI;失敗訊息放在詳情欄動作列旁(離控制項最近)
+  // 狀態寫入:store 保證 DB 成功才更新 UI;失敗訊息放在詳情欄動作列旁(離控制項最近)。
+  // 循環義務寫「本期」(RPC transition_obligation_period),寫完把 ?period= 釘在這一期——
+  // 否則「最早未結的一期」立刻換成下期,使用者看不到自己剛標的那一筆。
   const write = async (it, status, extra) => {
     setBusy(true); setObligationMsg('')
-    const { error } = await updateObligationStatus(it.ob.id, status, extra)
+    const { error } = it.recurring
+      ? await transitionObligationPeriod(it.ob.id, it.period.id, status, extra || {})
+      : await updateObligationStatus(it.ob.id, status, extra)
     setBusy(false)
     if (error) { setObligationMsg(friendlyError(error, '狀態未寫入')); return false }
+    if (it.recurring && periodParam !== it.period.period_key) selectPeriod(it.period.period_key)
     return true
   }
   // 退回待辦:一併解除佐證連結(W-01)——佐證是「那次提送」的證據,退回後留著會讓
@@ -178,9 +206,12 @@ export default function Deadlines() {
   if (selected) {
     const it = selected
     const ob = it.ob
-    const markable = canMark(ob)
+    // 循環義務沒有本期(基準日／循環規則待補)就沒有可標的東西;證據與狀態都是本期的
+    const markable = canMark(ob) && (!it.recurring || !!it.period)
     const countdown = countdownOf(it)
-    const ev = ob.evidence_submittal_id ? submittals.find((s) => s.id === ob.evidence_submittal_id) : null
+    const evidenceId = it.recurring ? it.period?.evidence_submittal_id : ob.evidence_submittal_id
+    const ev = evidenceId ? submittals.find((s) => s.id === evidenceId) : null
+    const statusText = it.recurring ? (it.period?.status || '—') : (ob.status || '待辦')
     // 逾期罰款金額試算(確定性 regex 抽罰率;抽不出就不顯示金額——寧缺勿錯)
     const est = it.state === 'overdue' && ob.penalty
       ? estimatePenalty({ penaltyText: ob.penalty, overdueDays: -it.diff, contractTotal }) : null
@@ -199,12 +230,17 @@ export default function Deadlines() {
               (台北日曆日),狀態是 DB 原值(待辦/已提送/已完成),不再翻譯一次 */}
           <MetaGrid className="mt-3.5" rows={[
             ['規則', formatObligationRule(ob) || '—'],
+            ...(it.recurring ? [['本期', it.period ? `${it.period.period_key} 期` : '—']] : []),
             ['到期日', it.due ? localISODate(it.due) : '—'],
             ['責任方', ob.responsible || '—'],
-            ['狀態', ob.status || '待辦'],
+            ['狀態', statusText],
           ]} />
+          {/* 回填待核對:原義務曾標為完成但對不上期別,由人核對本期是否已履行後標記(標記即解除) */}
+          {it.recurring && it.period?.review_note && (
+            <p className="mt-3 text-footnote leading-relaxed text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-lg px-3 py-2">待核對:{it.period.review_note}</p>
+          )}
           {/* 佐證連結:稽核可一路點到原始送審紀錄。Badge 文案與改版前逐字相同 */}
-          {ob.evidence_submittal_id && (
+          {evidenceId && (
             <Link to="/submittals" className="mt-3 inline-flex items-center max-w-full max-md:min-h-11 hover:underline">
               <Badge color="blue" className="max-w-full">
                 <MSym name="description" size={11} />
@@ -213,6 +249,43 @@ export default function Deadlines() {
             </Link>
           )}
         </div>
+
+        {/* 循環義務的期次:逐期追蹤(完成本期不清下期、舊逾期保留),點某一期切到該期;沒有期次就說明為什麼 */}
+        {it.recurring && (
+          <div className="px-4 pb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <MSym name="event_repeat" size={15} className="text-[var(--text-3)]" />
+              <span className="text-footnote font-medium text-[var(--text)]">期次（{it.periods.length}）</span>
+            </div>
+            {it.periods.length === 0 ? (
+              <p className="text-footnote leading-relaxed text-[var(--text-3)]">
+                {it.gap ? it.gap.label : '尚未產生期次。'}
+                {it.gap?.kind === 'rule' && (<>
+                  請到<Link to={`/requirements/review?highlight=${encodeURIComponent(ob.id)}`} className="text-[var(--blue-text)] hover:underline mx-0.5">擷取審核</Link>廢止取代後補登循環規則。
+                </>)}
+                {it.gap?.kind === 'anchor' && '請在下方「基準日與契約總價」補上基準日,期次會立即產生。'}
+              </p>
+            ) : (
+              <ul role="list" aria-label={`${ob.title} 期次`} className="divide-y divide-[var(--border-2)] border border-[var(--border-2)] rounded-lg">
+                {it.periods.map((p) => {
+                  const current = it.period?.id === p.id
+                  return (
+                    <li key={p.id}>
+                      <button type="button" aria-current={current || undefined} onClick={() => selectPeriod(p.key)}
+                        className={`w-full text-left px-3 py-2 max-md:min-h-11 flex items-center gap-2 flex-wrap text-footnote ${current ? 'bg-[var(--blue-tint)]' : 'hover:bg-[var(--surface-2)]'}`}>
+                        <span className="num font-medium text-[var(--text)]">{p.key} 期</span>
+                        <span className="num text-[var(--text-3)]">到期 {p.dateLabel}</span>
+                        <Badge color={STATE_BADGE[p.status === 'due' ? 'soon' : p.status === 'na' ? 'nodate' : p.status] || 'slate'} className="ml-auto">{p.rawStatus}</Badge>
+                        {p.status === 'done' && p.onTime === false && <span className="text-caption text-[var(--amber-text)]">遲交</span>}
+                        {p.reviewNote && <span className="text-caption text-[var(--amber-text)]">待核對</span>}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* 罰則與逾期違約金試算:金額由 penaltyCalc 算(確定性引擎),這裡只複述 */}
         {ob.penalty && (
@@ -273,6 +346,9 @@ export default function Deadlines() {
               <span className="text-caption text-[var(--text-3)] leading-relaxed">按下即退回待辦,並解除已掛的佐證</span>
             </>)}
             {markable && !it.done && <Button busy={busy} onClick={() => startMark(it)}>標為已提送</Button>}
+            {!markable && it.recurring && !it.period && obligationParty(ob) !== UNASSIGNED_PARTY && (
+              <span className="text-caption text-[var(--text-3)] leading-relaxed">沒有可標記的期次(見上方「期次」說明)。</span>
+            )}
             {!markable && obligationParty(ob) === UNASSIGNED_PARTY && (
               // 責任方推不出三方:DB obligation_party() 回 null,三方都不能標記——說清楚為什麼沒有按鈕、去哪裡補
               <span className="text-caption text-[var(--text-3)] leading-relaxed">
@@ -281,7 +357,7 @@ export default function Deadlines() {
                 廢止取代後補登責任方。
               </span>
             )}
-            {!markable && obligationParty(ob) !== UNASSIGNED_PARTY && (
+            {!markable && obligationParty(ob) !== UNASSIGNED_PARTY && !(it.recurring && !it.period) && (
               <span className="text-caption text-[var(--text-3)] leading-relaxed">由{obligationParty(ob)}負責提送,本頁為唯讀檢視。</span>
             )}
           </div>
@@ -339,7 +415,7 @@ export default function Deadlines() {
                 {countdown && <span className={`num text-caption ${COUNTDOWN_CLS[it.state]}`}>{countdown}</span>}
               </span>
               <span className="block mt-0.5 num text-caption text-[var(--text-3)] truncate">
-                {[it.phase, formatObligationRule(it.ob), it.due ? `到期 ${localISODate(it.due)}` : '', it.ob.responsible].filter(Boolean).join(' · ')}
+                {[it.phase, formatObligationRule(it.ob), it.period ? `${it.period.period_key} 期` : '', it.due ? `到期 ${localISODate(it.due)}` : '', it.ob.responsible].filter(Boolean).join(' · ')}
               </span>
             </span>
           </button>

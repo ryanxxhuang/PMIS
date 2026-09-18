@@ -87,6 +87,16 @@
 
 新增 `obligation_periods`（`obligation_id`, `period_key`（如 `2026-09`）, `due_date`, `anchor_version_no`, `status` 待辦／已提送／已完成／不適用, `completed_at/by`, `evidence_submittal_id`／`evidence_document_id`），由函式 `materialize_obligation_periods(project, upto)` 依 `recurring*` 規則與基準日**確定性**產生（含月末、29–31 日、跨年規則，pgTAP 釘住）；每期獨立追蹤，完成本期不清除下期，逾期舊期保留。正式資料 7 筆 monthly 義務可回填期次（不回填完成狀態）。
 
+**P5b 已實作**（migration `20260917233000_obligation_periods`，進度見續接清單 §7），與上述設計的差異與補充：
+
+- 期別鍵：daily `YYYY-MM-DD`、weekly ISO `IYYY-Www`、monthly `YYYY-MM`、quarterly `YYYY-Qn`、yearly `YYYY`；期間起訖與到期日由純函式（`fn_period_start/end/key/due`、`fn_obligation_period_schedule`）產生，月末夾住（每月 31 日在 4 月＝4/30、2 月＝28／29）、每季第 n 個月、每年 m 月 d 日、每週 ISO 星期幾。排程列到「今天＋31 日」為止，且永遠含今天之後的一期。
+- 起算基準日：觸發點映得到就用它（award／notice／commencement／completion→專案四日期；fixed→義務 `fixed_date`），其餘（null／monthly／other）一律開工日。基準日缺或循環規則不完整（每月缺幾日等）不產生期次，改列「待補設定」（基準日／循環規則）；正式 7 筆 monthly 有 5 筆缺日、皆待補。**沒有**設計中的 `upto` 參數：對外 RPC 不收日期，避免把前瞻窗口推到未來製造假期次。
+- 物化時機（不新增雲端資源）：義務插入／規則變更／廢止 trigger（廢止把仍待辦的期次一併標不適用；規則變更只重建沒動過的待辦期）、`projects` 四個基準日變更 trigger、pg_cron 每日 16:05 UTC（台北 00:05）`materialize_all_obligation_periods()`（正式庫 pg_cron 已啟用，現有 `pmis-daily-reminders` 亦走它）、成員／service 可呼叫的冪等 RPC `materialize_obligation_periods(project)`。Agent 工具層只讀。
+- 狀態轉移只經 RPC `transition_obligation_period`（歸屬規則＝義務 update policy：自己方或非正式模式 admin override；證據須同案；伺服器蓋完成時間；退回待辦解除證據）；`contract_obligations` 對循環義務加 guard，不可再標已提送／已完成（舊前端／直接 REST 明確失敗）。
+- 回填：既有 monthly 全部產生期次；義務層曾標完成者，有 `completed_at` 就對應含該台北日的期別（狀態、時間、人、送審佐證帶過去），推不出的義務原狀不動、已到期的待辦期次帶 `review_note`「待核對」，由三方在待補設定看到並到期限追蹤該期核對後標記。正式 7 筆皆待辦、無需對應。
+- `anchor_version_no` 預留 null；基準日變更只補缺的期，既有期不重算（P5c）。停止產生期次的條件（竣工／保固期滿）未定義，仍照現行「無限循環」語意，列 P5c 一併決定（需 `end_date` 語意與展延）。
+- 前端：`todayTasks`／Edge 收集器／Deno 共用案例都走 `obligationEntries`（每個未結期次一顆球，鍵 `契約重點:<id>:<期別>`，深連結 `/deadlines?obligation=<id>&period=<期別>`）；`contractDue.js`／`.ts` 對循環義務改讀 `ob.periods` 最早未結一期；期限追蹤頁的一列仍是一條義務，動作作用在「本期」（`?period=` 可指定），詳情列全部期次；履約時程詳情唯讀列期次並導期限追蹤逐期標記（完整 UI 在 P5d）。demo 種子為三筆 monthly 義務帶上月已完成／本月／下月三期。
+
 ### 4.3 期限版本
 
 新增 `project_anchor_versions`（`project_id`, `version_no`, `anchors jsonb`（決標／開工／停復工／展延／竣工）, `effective_from`, `reason`, `source_ref`（核准變更或函文）, `created_by/at`）；`projects.*_date` 保持為「現行值」，每次更改由 trigger 產生新版本。到期日計算引用產生期次時的 `anchor_version_no`；基準日更正後只重算尚未完成的期次並記錄差異，不改歷史。
@@ -113,7 +123,7 @@
 | `cost_items` | 列與欄不動；P1b 以 migration 收回 authenticated／anon 寫入 grant、policy 改 select-only；H1（`20260917213900`）再收回三個 API 角色對所有 public 表的 TRUNCATE／REFERENCES／TRIGGER／MAINTAIN 並修 default privileges，退場才不留 TRUNCATE 這條不受 RLS 的路 | `supabase/rollbacks/20260917210000_cost_items_retire.down.sql`（重授權＋回復 for all policy）；`supabase/rollbacks/20260917213900_api_roles_table_ddl_privileges.down.sql`（四種權限與 default 還原） |
 | `item_schedules`、`schedule_periods` | 不動；唯讀查閱 | 無 DB 變更 |
 | `ai_features.audit.summary` | `enabled=false` migration | rollback 檔改回 true |
-| `contract_obligations` 循環 7 筆 | 產生期次，不回填完成 | drop `obligation_periods` |
+| `contract_obligations` 循環 7 筆 | P5b（`20260917233000`）：義務列不動；產生期次（5 筆缺「每月幾日」不產生、列待補設定），不回填完成（正式皆待辦）；循環義務自此不可再標義務層完成（guard） | `supabase/rollbacks/20260917233000_obligation_periods.down.sql`（解除 cron、trigger、guard、RPC，drop `obligation_periods`；期次列隨表移除，回復前先匯出） |
 | 基準日 | 建立 version 1（現值） | drop `project_anchor_versions`，`projects` 欄不變 |
 | 文書與計價 | 見另兩份文件 | 同 |
 

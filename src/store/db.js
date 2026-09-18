@@ -169,12 +169,14 @@ export async function loadQualityFromDB(projectId, byId) {
   return { inspections: (insp || []).map(deco), defects: defs }
 }
 
-// 從 DB 載入契約義務清單
+// 從 DB 載入契約義務清單。循環義務的期次(P5b obligation_periods)以 embed 一起帶回 ob.periods:
+// 期次由 DB 依規則＋基準日物化(插入／基準日變更 trigger、每日 pg_cron),前端只讀;RLS 沿用義務。
 export async function loadObligationsFromDB(projectId) {
   const data = await pageAll((from, to) => supabase.from('contract_obligations')
-    .select('*').eq('project_id', projectId).neq('status', '不適用')
+    .select('*, periods:obligation_periods(id, period_key, period_start, period_end, due_date, status, completed_at, completed_by, evidence_submittal_id, evidence_document_id, review_note)')
+    .eq('project_id', projectId).neq('status', '不適用')
     .order('sort_order').order('id').range(from, to), '契約重點')
-  return data || []
+  return (data || []).map((row) => ({ ...row, periods: row.periods || [] }))
 }
 
 // 從 DB 載入現場文書(P2a field_documents)未終態的文件與其提送／收件／退回列——

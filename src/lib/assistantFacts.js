@@ -5,6 +5,7 @@
 //   ②只放摘要與關鍵值(不放原始大陣列),控 token、也逼 AI 從已算好的數字回答
 //     (不自己算 → 不幻覺)。③附 sourceRoutes,讓 AI 引用真實路由。
 import { computeObligationDue } from './contractDue.js'
+import { isObligationStreamOpen } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 import { pendingSamplesFromLogs } from './qc.js'
 import { localISODate, taipeiISODate } from './dates.js'
 
@@ -57,7 +58,7 @@ export function buildAssistantFacts(d = {}, today = new Date()) {
 
   // 契約期限(逾期/即將到期)
   const obl = obligations.map((o) => ({ o, due: computeObligationDue(o, anchors) }))
-  const overdueObl = obl.filter((x) => x.due && iso(x.due) < t0 && !['已完成', '已提送'].includes(x.o.status))
+  const overdueObl = obl.filter((x) => x.due && iso(x.due) < t0 && isObligationStreamOpen(x.o)) // 循環義務看期次,義務層舊的已完成不算
 
   // 驗收:目前進行到哪一關
   const lastAccept = [...acceptanceEvents].sort((a, b) => (a.event_date || '').localeCompare(b.event_date || '')).pop()

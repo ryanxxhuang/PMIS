@@ -15,17 +15,20 @@ const input = {
   fieldDocuments: t.field_documents, fieldDocumentSubmissions: t.field_document_submissions,
 }
 const TODAY = new Date(`${cases.today}T04:00:00Z`) // 台北正午,避開跨日邊界
-const key = (x) => `${x.tag}:${x.id}`
+// 鍵:tag:id;循環義務的期次(P5b)再加 :期別——同一條義務的每一期各是一筆
+const key = (x) => `${x.tag}:${x.id}${x.period ? `:${x.period}` : ''}`
+const obKey = (x) => `契約重點:${x.id}${x.period ? `:${x.period}` : ''}`
 const core = (x) => ({ id: x.id, who: x.who, tag: x.tag, title: x.title, meta: x.meta, due: x.due })
 const sorted = (xs) => [...xs].sort()
 const expectedDue = new Map([
   ...cases.expected.core_items.map((x) => [`${x.tag}:${x.id}`, x.due]),
-  ...cases.expected.obligations.map((x) => [`契約重點:${x.id}`, x.due]),
+  ...cases.expected.obligations.map((x) => [obKey(x), x.due]),
 ])
 const expectedWho = new Map([
   ...cases.expected.core_items.map((x) => [`${x.tag}:${x.id}`, x.who]),
-  ...cases.expected.obligations.map((x) => [`契約重點:${x.id}`, x.who]),
+  ...cases.expected.obligations.map((x) => [obKey(x), x.who]),
 ])
+const expectedTitle = new Map(cases.expected.obligations.map((x) => [obKey(x), x.title]))
 
 describe('共用案例(前端):協作項核心事項', () => {
   it('collaborationItems 產出與案例完全相同的 id／責任／類型／標題／狀態句／期限(含順序)', () => {
@@ -45,8 +48,18 @@ describe('共用案例(前端):今日工作三桶＋待補設定', () => {
   it.each(ORGS)('%s 都看得到同一份待補設定,且每筆有處理入口', (org) => {
     expect(sorted(built[org].setup.map(key))).toEqual(sorted(cases.expected.setup))
     for (const s of built[org].setup) {
-      expect(s.to).toMatch(/^\/(requirements\/review\?highlight=|deadlines$|quality\?observation=)/)
+      expect(s.to).toMatch(/^\/(requirements\/review\?highlight=|deadlines$|deadlines\?obligation=|quality\?observation=)/)
       expect(s.ball).toBe(expectedWho.get(key(s)))
+    }
+  })
+  it('循環義務逐期:每個未結期次各一筆、標題含期別、深連結帶 &period=;已完成的期與已廢止的義務不列', () => {
+    const mine = Object.fromEntries(built.contractor.mine.map((t) => [key(t), t]))
+    expect(mine['契約重點:ob12:2026-07']).toMatchObject({ id: 'ob12', period: '2026-07', title: '每月環境監測報告（2026-07 期）', due: '2026-07-20', overdueDays: 6, to: '/deadlines?obligation=ob12&period=2026-07' })
+    expect(mine['契約重點:ob12:2026-08']).toBeUndefined() // 25 天後到期,窗口外(逐期各自套窗口)
+    expect(mine['契約重點:ob12:2026-06']).toBeUndefined() // 已完成的期不列
+    for (const org of ORGS) {
+      expect([...built[org].mine, ...built[org].waiting, ...built[org].setup].some((t) => t.id === 'ob16')).toBe(false) // 不適用的循環義務整條不列
+      for (const t of [...built[org].mine, ...built[org].setup].filter((t) => t.tag === '契約重點')) expect(t.title, key(t)).toBe(expectedTitle.get(key(t)))
     }
   })
   it('待補設定不進任何一方的「現在輪到我」或「等待對方」', () => {
@@ -74,5 +87,9 @@ describe('共用案例(前端):今日工作三桶＋待補設定', () => {
     expect(setup['契約重點:ob6'].meta).toBe('責任方待補設定')
     expect(setup['觀察:o3'].meta).toBe('待處理（指派「工地主任」不是三方）')
     expect(built.contractor.mine.some((x) => ['契約重點:ob1', '契約重點:ob6', '觀察:o3'].includes(key(x)))).toBe(false)
+    // P5b:循環義務缺開工日／規則不完整／回填待核對,各有處理入口
+    expect(setup['契約重點:ob13']).toMatchObject({ meta: '基準日待補（開工日）', to: '/deadlines', ball: 'supervisor' })
+    expect(setup['契約重點:ob14']).toMatchObject({ meta: '循環規則待補（每季缺月份或日期）', to: '/requirements/review?highlight=ob14', ball: 'contractor' })
+    expect(setup['契約重點:ob15:2026-06']).toMatchObject({ meta: '回填待核對（原義務曾標完成，本期是否已履行待確認）', to: '/deadlines?obligation=ob15&period=2026-06', ball: 'owner', period: '2026-06' })
   })
 })

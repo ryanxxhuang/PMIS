@@ -7,7 +7,7 @@ import {
   VISIBLE, PARTIES, ORG_TO_PARTY, obligationParty, canActOn, UNASSIGNED_PARTY, isVisibleTo,
   deriveStatus, countdownLabel, phaseOf, phaseWindows,
   partyStat, phaseStat, pickDefaultId, buildTimelineItem, matchesFilters,
-  anchorGaps,
+  anchorGaps, periodRows, recurrenceGap,
 } from './obligationTimeline.js'
 
 const TODAY = new Date(2026, 7, 25) // 2026-08-25
@@ -212,6 +212,58 @@ describe('檢視模型組裝', () => {
     )
     expect(it3.kind).toBe('每月循環')
     expect(it3.calc).toContain('每月 5 日')
+  })
+})
+
+// 循環義務逐期(P5b):狀態／到期日取最早未結的一期,整條不會 done;期次列唯讀呈現;沒有期次要說明原因
+describe('循環義務逐期(P5b)', () => {
+  const period = (key, due, status = '待辦', extra = {}) => ({ id: `p-${key}`, period_key: key, due_date: due, status, completed_at: null, review_note: null, ...extra })
+  const monthly = (over = {}) => ob({
+    trigger_event: null, fixed_date: null, recurring: 'monthly', recurring_day: 5,
+    periods: [period('2026-06', '2026-06-05', '已完成', { completed_at: '2026-06-03T02:00:00Z' }), period('2026-07', '2026-07-05'), period('2026-08', '2026-08-05'), period('2026-09', '2026-09-05')],
+    ...over,
+  })
+  it('狀態＝最早未結一期:7 月已逾期 → overdue、到期日 7/5;完成 7、8 月後 → 9 月排程中', () => {
+    // TODAY=2026-08-25
+    const it1 = buildTimelineItem(monthly(), { anchors, today: TODAY })
+    expect(it1.recurring).toBe(true)
+    expect(it1.status).toBe('overdue')
+    expect(it1.dateLabel).toBe('2026-07-05')
+    expect(it1.currentPeriod).toBe('2026-07')
+    const done78 = monthly({ periods: monthly().periods.map((p) => (['2026-07', '2026-08'].includes(p.period_key) ? { ...p, status: '已提送' } : p)) })
+    const it2 = buildTimelineItem(done78, { anchors, today: TODAY })
+    expect(it2.status).toBe('scheduled')
+    expect(it2.dateLabel).toBe('2026-09-05')
+    expect(it2.currentPeriod).toBe('2026-09')
+  })
+  it('義務層舊的已完成不關閉循環義務(期次才是完成的單位)', () => {
+    expect(deriveStatus(monthly({ status: '已完成' }), anchors, TODAY).key).toBe('overdue')
+    expect(buildTimelineItem(monthly({ status: '已完成' }), { anchors, today: TODAY }).onTime).toBe(null)
+  })
+  it('期次列:依到期日降冪、每期狀態語意鍵與準時判定、待核對註記原樣帶出', () => {
+    const rows = periodRows(monthly({ periods: [
+      ...monthly().periods,
+      period('2026-05', '2026-05-05', '已完成', { completed_at: '2026-05-08T02:00:00Z' }),
+      period('2026-04', '2026-04-05', '待辦', { review_note: '原義務曾標為「已完成」但無法對應期別' }),
+      period('2026-03', '2026-03-05', '不適用'),
+    ] }), TODAY)
+    expect(rows.map((r) => r.key)).toEqual(['2026-09', '2026-08', '2026-07', '2026-06', '2026-05', '2026-04', '2026-03'])
+    expect(rows.map((r) => r.status)).toEqual(['scheduled', 'overdue', 'overdue', 'done', 'done', 'overdue', 'na'])
+    expect(rows.find((r) => r.key === '2026-06').onTime).toBe(true)
+    expect(rows.find((r) => r.key === '2026-05').onTime).toBe(false) // 5/8 完成 > 5/5 到期 → 遲交
+    expect(rows.find((r) => r.key === '2026-04').reviewNote).toContain('無法對應期別')
+    expect(rows.find((r) => r.key === '2026-03').countdown).toBe('不適用')
+    expect(periodRows(ob(), TODAY)).toEqual([]) // 單次義務沒有期次
+  })
+  it('沒有期次的原因:循環規則不完整 → rule;基準日缺 → anchor(無觸發點看開工日);都齊 → null', () => {
+    expect(recurrenceGap(monthly({ recurring_day: null, periods: [] }), anchors)).toEqual({ kind: 'rule', label: '循環規則待補（每月缺幾日）' })
+    expect(recurrenceGap(monthly({ periods: [] }), {})).toEqual({ kind: 'anchor', label: '基準日待補（開工日）', anchor: 'commencement_date' })
+    expect(recurrenceGap(monthly({ periods: [], trigger_event: 'award' }), { commencement_date: '2026-03-01' })).toEqual({ kind: 'anchor', label: '基準日待補（決標日）', anchor: 'award_date' })
+    expect(recurrenceGap(monthly({ periods: [] }), anchors)).toBeNull()
+    expect(recurrenceGap(ob(), {})).toBeNull()
+    const na = buildTimelineItem(monthly({ periods: [] }), { anchors: {}, today: TODAY })
+    expect(na.status).toBe('na')
+    expect(na.recurrenceGap.kind).toBe('anchor')
   })
 })
 

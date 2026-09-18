@@ -3,7 +3,7 @@
 -- runtime row (D-020 widened the adapter beyond requirement_type='deadline').
 begin;
 
-select plan(34);
+select plan(38);
 
 create or replace function public.pmis_w52_login(p_uid uuid)
 returns void language plpgsql as $$
@@ -54,8 +54,9 @@ insert into auth.users (
    '{"full_name":"W52 Contractor","org_type":"contractor"}', now(), now());
 
 alter table public.projects disable trigger on_project_created;
-insert into public.projects (id, name)
-values ('52100000-0000-0000-0000-000000000001', 'W5-2 One-way Project');
+-- 開工日:P5b 起循環義務(下方 monthly 需求)的期次從開工日起算,沒有開工日就沒有期次可操作。
+insert into public.projects (id, name, commencement_date)
+values ('52100000-0000-0000-0000-000000000001', 'W5-2 One-way Project', '2026-02-01');
 alter table public.projects enable trigger on_project_created;
 
 insert into public.project_members (project_id, user_id, role) values
@@ -140,11 +141,19 @@ select throws_ok($$
   update public.contract_obligations set title = '竄改契約內容'
   where requirement_id = '52300000-0000-0000-0000-000000000003'
 $$, '42501', null, 'contractor cannot edit contractual content on the runtime row');
-select lives_ok($$
+-- P5b(20260917233000):循環義務的執行狀態在期次(obligation_periods),義務列本身拒絕標完成;
+-- 廠商改標「目前這一期」並掛佐證(2026-02 期:每月 5 日、開工 2/1 起算的第一期)。
+select throws_ok($$
   update public.contract_obligations
   set status = '已提送', evidence_submittal_id = '52200000-0000-0000-0000-000000000001'
   where requirement_id = '52300000-0000-0000-0000-000000000003'
-$$, 'contractor can operate status and attach evidence');
+$$, 'P0001', null, 'recurring obligation: the runtime row itself refuses 已提送 (status lives per period, P5b guard)');
+select lives_ok($$
+  select public.transition_obligation_period(
+    (select id from public.obligation_periods
+     where obligation_id = '52300000-0000-0000-0000-000000000003' and period_key = '2026-02'),
+    '已提送', '52200000-0000-0000-0000-000000000001', null)
+$$, 'contractor can operate the current period status and attach evidence (P5b)');
 reset role;
 select public.pmis_w52_login(null);
 
@@ -170,12 +179,16 @@ select results_eq(
     where requirement_id = '52300000-0000-0000-0000-000000000003'
   $$,
   $$ values (
-    '品質計畫修正版'::text, 20, 'before'::text, '已提送'::text,
-    '52200000-0000-0000-0000-000000000001'::text,
+    '品質計畫修正版'::text, 20, 'before'::text, '待辦'::text,
+    null::text,
     '逾期每日千分之一'::text, '現場執行備註'::text
   ) $$,
-  'retry refreshes contractual fields and preserves runtime status, evidence, penalty, and note'
+  'retry refreshes contractual fields and preserves runtime penalty and note (recurring status/evidence live per period)'
 );
+select is((select status || '/' || evidence_submittal_id::text from public.obligation_periods
+  where obligation_id = '52300000-0000-0000-0000-000000000003' and period_key = '2026-02'),
+  '已提送/52200000-0000-0000-0000-000000000001',
+  'retry preserves the period runtime (status and evidence) untouched');
 
 update public.contract_obligations set status = '待辦'
 where requirement_id = '52300000-0000-0000-0000-000000000003';
@@ -196,14 +209,21 @@ select results_eq(
   $$,
   $$ values (
     'superseded'::text, '不適用'::text,
-    '52200000-0000-0000-0000-000000000001'::text,
+    null::text,
     '逾期每日千分之一'::text, '現場執行備註'::text
   ) $$,
-  'supersede marks only the runtime state not applicable and preserves evidence/history'
+  'supersede marks only the runtime state not applicable and preserves penalty/note history'
 );
 select is((select count(*)::integer from public.contract_obligations
   where requirement_id = '52300000-0000-0000-0000-000000000003'), 1,
   'supersede preserves the compatibility row for audit history');
+select is((select count(*)::integer from public.obligation_periods
+  where obligation_id = '52300000-0000-0000-0000-000000000003' and status = '待辦'), 0,
+  'supersede retires every still-open period of the recurring obligation (P5b cascade)');
+select is((select status || '/' || evidence_submittal_id::text from public.obligation_periods
+  where obligation_id = '52300000-0000-0000-0000-000000000003' and period_key = '2026-02'),
+  '已提送/52200000-0000-0000-0000-000000000001',
+  'supersede keeps the completed period and its evidence (history preserved)');
 
 -- D-020:取代非期限型時,其義務列同樣退場(不再分型別)。
 select public.pmis_w52_login('52000000-0000-0000-0000-000000000001');

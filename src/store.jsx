@@ -155,7 +155,7 @@ export function StoreProvider({ children }) {
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
-    reloadObligations, updateObligationStatus, ingestRequirementDocument,
+    reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument,
   } = useLedgerSlice(ctx)
   const {
     agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions, setAgentActions,
@@ -318,7 +318,7 @@ export function StoreProvider({ children }) {
     listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, fetchWeather,
     // 現場文書(P2c):上傳批次、起稿、文件版本、簽署、提送／收件／退回
     ...fieldDocsSlice,
-    obligations, reloadObligations, updateObligationStatus, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
+    obligations, reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument, updateProjectAnchors, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, // 成本退場(D-026 P1b):只讀歷史,無寫入函式
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,

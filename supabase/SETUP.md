@@ -38,6 +38,8 @@ send-reminders 需要 RESEND_API_KEY、CRON_SECRET 與已驗證寄件網域的 R
 
 [cron.sql](cron.sql) 提供台北每日 08:00 的排程模板，設定 project ref 與相同 cron secret 後才套用。`send-reminders?dry=1` 可檢查彙整而不寄信。提醒與網頁待辦範圍有差異，見 [雙引擎](../docs/architecture/dual-engine-sync.md)，不能宣稱兩份清單相同。
 
+另一支 pg_cron 工作 `pmis-obligation-periods`（每日 16:05 UTC＝台北 00:05，純 SQL `select public.materialize_all_obligation_periods()`，不呼叫 Edge、不需 secret）由 migration `20260917233000_obligation_periods` 直接排程，推進循環義務的期次前瞻窗口；執行紀錄 `select * from cron.job_run_details where jobid = (select jobid from cron.job where jobname = 'pmis-obligation-periods') order by start_time desc limit 10`。
+
 ## 權限與驗收
 
 只有 contractor／supervisor／owner 三方；專案 admin 只由 project_members.role 決定，正式模式關掉業務跨角色 override。變更核准／駁回由機關，監造受理／退回；估驗核定、查驗判定、缺失結案與送審審定由各自 guard 保護。不要將 service_role 的 RLS bypass 誤寫成所有 trigger 都無限制。

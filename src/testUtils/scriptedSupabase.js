@@ -52,8 +52,15 @@ export function createScriptedSupabase() {
     return api
   }
 
+  // RPC:記成 table=`rpc:<fn>`、op='rpc',可用 script('rpc:<fn>', 'rpc', result) 指定回傳;預設 data null
+  const rpc = (fn, args) => {
+    calls.push({ table: `rpc:${fn}`, op: 'rpc', args: [args] })
+    const hit = scripted.get(`rpc:${fn}.rpc`)
+    return Promise.resolve(hit === undefined ? { data: null, error: null } : typeof hit === 'function' ? hit(args) : hit)
+  }
+
   return {
-    client: { from },
+    client: { from, rpc },
     calls,
     // 指定某表某動作的回傳:script('defects', 'insert', { data: null, error: {...} })
     script(table, op, result) { scripted.set(`${table}.${op}`, result) },

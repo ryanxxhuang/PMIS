@@ -3,6 +3,7 @@
 // 每項：{ id, sev:'risk'|'watch'|'ok', roles:[...], tag, title, detail, to }
 import { pendingSamplesFromLogs, sampleAlerts } from './qc.js'
 import { computeObligationDue } from './contractDue.js'
+import { isObligationStreamOpen } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 import { parseLocalDate } from './dates.js'
 import { fmtNtd as money } from './format.js'
 
@@ -57,7 +58,8 @@ export function buildInsights(data = {}, today = new Date()) {
 
   // 5. 契約義務逾期／即將到期（綁罰則）
   for (const ob of obligations) {
-    if (ob.status === '已完成' || ob.status === '已提送') continue
+    // 未結由共用規則判(循環義務看期次;到期日取最早未結一期,舊逾期不被下期蓋掉)
+    if (!isObligationStreamOpen(ob)) continue
     const due = computeObligationDue(ob, anchors)
     if (!due) continue
     const dd = dayDiff(due, t0)

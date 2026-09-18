@@ -2,6 +2,7 @@
 // 學問只在「本案自己的資料＋契約」，答案一律附出處連結。刻意唯讀、不做動作。
 // 回傳 { answer, sources:[{label,to}] } 或 null（不會答 → UI 導引）。
 import { computeObligationDue } from './contractDue.js'
+import { isObligationStreamOpen } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 import { pendingSamplesFromLogs } from './qc.js'
 import { isRainyLog } from './weatherMetrics.js'
 import { localISODate } from './dates.js'
@@ -100,7 +101,8 @@ const INTENTS = [
     if (hit.length) return { answer: hit.slice(0, 3).map((o) => `${o.title}${o.source_clause ? `（${o.source_clause}）` : ''}${o.penalty ? `，罰則：${o.penalty}` : ''}`).join('；') + '。',
       sources: [{ label: '期限追蹤', to: '/deadlines' }] }
     // 沒關鍵字命中 → 列最近到期期限
-    const dated = obs.map((o) => ({ o, due: computeObligationDue(o, d.anchors || {}) })).filter((x) => x.due && x.o.status !== '已完成')
+    // 未結由共用規則判(循環義務看期次,義務層舊的已完成不算):到期日=單次依基準日、循環取最早未結一期
+    const dated = obs.map((o) => ({ o, due: computeObligationDue(o, d.anchors || {}) })).filter((x) => x.due && isObligationStreamOpen(x.o))
       .sort((a, b) => a.due - b.due)
     return { answer: dated.length
       // localISODate:due 是本地午夜 Date,toISOString 會轉 UTC 往前掉一天(台北)
