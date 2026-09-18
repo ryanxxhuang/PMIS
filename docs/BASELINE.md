@@ -21,7 +21,8 @@
 - `wrangler dev`（本機，`wrangler.demo.jsonc`＋新 `_headers`）：`/`、`/login`（SPA fallback）、`/theme-boot.js` 為 `public, max-age=0, must-revalidate, no-transform`；`/index.html` 307 到 `/`；`/assets/index-*.js` 為 `public, max-age=31536000, immutable`；`/.well-known/security.txt` 為 `public, max-age=86400`——證實「`! Cache-Control` 再設值」可拆掉 `/*` 的逗號合併。
 - 處置前 `node scripts/check-prod.js`（正式站現況）：app `/`、`/login`、`/demo/` 與 demo `/`、`/login` 五頁全 FAIL（缺 `no-transform`＋行內腳本；`/demo/` 入口 chunk 另缺 immutable），先紅成立。
 - demo 站以本分支重佈（demo 模式建置＋`wrangler deploy --config wrangler.demo.jsonc`）後：`node scripts/check-prod.js` demo `/`、`/login`、`pmis-demo.ryanxhuang1212.workers.dev/` 三頁 OK；原始 `curl`：HTML `cache-control: public, max-age=0, must-revalidate, no-transform`、1,618 bytes 無 `content-encoding`（預期）、`<script>` 只剩 `./theme-boot.js` 與 `./assets/index-HbO4ebwG.js`、`challenge-platform` 0 次；入口 chunk `public, max-age=31536000, immutable`＋`content-encoding: br`。
-- 未做：app 站要等 PR 合併、Workers Builds 建置後再跑 `npm run check:prod`（結果記 CURRENT §6.3）；未在瀏覽器 console 逐頁複核（`check:prod` 以 HTML 內容為準，注入不存在即無錯誤可報）。
+- 合併後（merge commit `5a4b955`；main 的 CI／pgTAP 皆 success）：Workers Builds 沒有對 `5a4b955` 建置（Cloudflare check-suite 停在 `queued`），`_headers` 隨 P5c merge `ba8f7be` 的建置上線（正式版本 `5378517c`，18:25Z）；部署後 `npm run check:prod` 五頁（app `/`、`/login`、`/demo/`；demo `/`、`/login`）全 OK；原始 `curl` app `/`：`cache-control: public, max-age=0, must-revalidate, no-transform`、1,618 bytes 無 `content-encoding`、`<script>` 只有 `./theme-boot.js` 與入口 `./assets/index-DMS7lRJl.js`、`challenge-platform` 0 次；入口 chunk 與 `/demo/assets/*` 皆 `public, max-age=31536000, immutable`＋`content-encoding: br`。
+- 未做：未在瀏覽器 console 逐頁複核（`check:prod` 以 HTML 內容為準，注入不存在即無錯誤可報）。
 
 ### 2026-09-19 P3a 前端：監造日誌頁（`codex/slimming-p3a-supervisor-log-ui`）
 

@@ -37,6 +37,8 @@
 - `public/theme-boot.js`：首繪前套主題（CSP `script-src 'self'` 不允 inline）。
 - `npm run deploy` 是已停用的舊 gh-pages 流程，執行會主動失敗（`exit 1`），勿再用。
 
+**建置有沒有真的跑**（2026-09-19 D1 合併後 Workers Builds 對 merge commit 的建置遲遲未開始，才補這段）：Workers Builds 會對 PR 分支做 preview 建置（版本帶 `workers/alias: <分支名>`，不上正式），對 `main` 的 push 做正式建置與部署。核對三處，不必開後台：(1) `gh api repos/ryanxxhuang/PMIS/commits/<merge sha>/check-suites --jq '.check_suites[] | select(.app.slug=="cloudflare-workers-and-pages") | "\(.status) \(.conclusion) \(.updated_at)"'`——`queued` 且 `latest_check_runs_count=0` 代表 Cloudflare 還沒開始；(2) `npx wrangler versions list --name pmis --json`——正式建置會多一個沒有 `workers/alias` 的版本；(3) `npx wrangler deployments list --name pmis`——最後一筆 `Created` 晚於 merge 時間才算已部署。Free 方案同時只跑 1 個建置（含其他分支的 preview），排隊可能拖長；超過合理時間仍是 `queued`，到 Cloudflare 後台該 Worker → Deployments → View Build History 看該 commit 有沒有建置紀錄，沒有就 **Retry build** 或以下一個 push 到 `main` 重新觸發。**不要**用本機 `wrangler deploy` 補正式站：本機沒有 Workers Builds 那組 `VITE_*` 環境變數，會把 demo 模式或缺 Sentry 的 bundle 推上正式網域。
+
 **部署後驗證**（§6）。
 
 ## 3. 部署前的門檻
@@ -149,5 +151,8 @@ ls -d supabase/functions/*/                         # Edge Function 清單
 supabase functions list                             # 線上 Edge Function 版本
 grep -l "_shared/aiGate.ts" supabase/functions/*/index.ts   # 改 _shared 後誰要重佈
 grep -rhoE "import\.meta\.env\.VITE_[A-Z_]+" src | sort -u  # 建置需要的環境變數
+npx wrangler versions list --name pmis --json               # 正式 Worker 的版本（無 alias 者＝main 建置）
+npx wrangler deployments list --name pmis                   # 正式 Worker 最後部署時間
+npm run check:prod                                          # 邊緣注入／CSP／no-transform／入口 chunk（D-025）
 cat .nvmrc; grep -A2 '"engines"' package.json       # Node 版本
 ```
