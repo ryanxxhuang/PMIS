@@ -25,8 +25,8 @@ import type {
   OpenInspection, PhotoAiStatus,
 } from './fieldDocDraft.ts'
 import {
-  assignPhotoDate, buildDailyLogDraft, buildSelfCheckDraft, buildSupervisorLogDraft, draftUnchanged, duplicateGroups, inferCandidates,
-  mergeCandidateExclusions, previousDate, validDate, FIELD_DOC_TYPE_LABELS,
+  assignPhotoDate, buildDailyLogDraft, buildInspectionFormDraft, buildSelfCheckDraft, buildSupervisorLogDraft, draftUnchanged, duplicateGroups,
+  inferCandidates, mergeCandidateExclusions, previousDate, validDate, FIELD_DOC_TYPE_LABELS,
 } from './fieldDocDraft.ts'
 import type { FieldDocTemplate } from './fieldDocTemplate.ts'
 import { matchLeaf } from './photoMatch.ts'
@@ -77,7 +77,8 @@ export type PhotoAiPatch = {
 
 export type DocRow = { id: string; status: string; current_version_no: number; intake_id: string | null }
 // 活文件的定位鍵:日誌類=該案該日一份;自檢表=同批次同工項同日一份(intake_id＋target_key 的起稿冪等索引)
-export type DocLocator = { docDate: string } | { intakeId: string; targetKey: string }
+// 活文件定位:日誌類=該日;自檢表=批次＋target_key;監造查驗表單=target_key(查驗 id,跨批次同一份)
+export type DocLocator = { docDate: string } | { intakeId: string; targetKey: string } | { targetKey: string }
 export type VersionRow = { version_no: number; author_kind: 'ai' | 'human'; content: unknown; attachments: unknown; content_hash: string }
 
 export type RepoError = { error: string }
@@ -103,8 +104,10 @@ export interface DraftRepo {
   getDailyLogDocument(date: string): Promise<FormalDailyLog | null | RepoError>
   // 範本單一定義在 DB(fn_field_document_template);null=該類型沒有範本。讀失敗要回錯誤,不能當成「沒有範本」。
   getFieldDocumentTemplate(docType: string): Promise<FieldDocTemplate | null | RepoError>
-  // 本案自主檢查表範本(P3b;RLS 讀)
+  // 本案檢查表範本(P3b 自檢表 kind=self_check、P3c 查驗表單 kind=inspection_form;RLS 讀)
   listChecklistTemplates(): Promise<ChecklistTemplateRow[] | RepoError>
+  // 工項的 ITP 必要階段(H 點、required_for_billing;P3c 查驗表單的階段鍵必填與可選值)
+  listRequiredStages(workItemId: string): Promise<string[] | RepoError>
   findActiveDoc(docType: string, locator: DocLocator): Promise<DocRow | null | RepoError>
   insertDoc(row: { doc_type: string; doc_date: string; intake_id: string; target_key: string; status: string; required_fields: unknown; recheck: unknown; created_by: string; template_id?: string | null }): Promise<DocRow | { conflict: true } | RepoError>
   latestVersion(docId: string): Promise<VersionRow | null | RepoError>
@@ -416,11 +419,12 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
 
   const inspectionsRes = intake.uploader_org === 'supervisor' ? await repo.listOpenInspections() : []
   const openInspections = isErr(inspectionsRes) ? [] : inspectionsRes
-  // 廠商批次:本案檢查表範本(自檢表候選由它確定性挑選);讀失敗=整批不推自檢表候選但要揭露,不能當成「沒有範本」
+  // 本案檢查表範本(廠商批次:自檢表候選由 kind=self_check 確定性挑選;監造批次:查驗表單的查驗項目取 kind=inspection_form);
+  // 讀失敗=整批不推自檢表候選、查驗表單不帶範本,但要揭露,不能當成「沒有範本」
   let checklistTemplates: ChecklistTemplateRow[] | null = []
-  if (intake.uploader_org === 'contractor') {
+  if (intake.uploader_org === 'contractor' || intake.uploader_org === 'supervisor') {
     const tplRes = await repo.listChecklistTemplates()
-    if (isErr(tplRes)) { notes.push(`檢查表範本讀取失敗,本次未推自主檢查表:${tplRes.error}`); checklistTemplates = null }
+    if (isErr(tplRes)) { notes.push(`檢查表範本讀取失敗,本次${intake.uploader_org === 'contractor' ? '未推自主檢查表' : '查驗表單未帶查驗項目範本'}:${tplRes.error}`); checklistTemplates = null }
     else checklistTemplates = tplRes
   }
   let candidates = mergeCandidateExclusions(intake.candidates, inferCandidates({
@@ -452,6 +456,18 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
 
   // 「湊內容」是唯一依類型不同的地方;寫入、冪等、建議、鎖定對每類都是同一段
   const buildDraftFor = async (cand: Candidate, date: string, dateSource: { source: string; refs: string[] }, dayPhotos: DraftPhoto[]): Promise<FieldDocDraft> => {
+    if (cand.doc_type === 'inspection_form') {
+      const inspection = openInspections.find((i) => i.id === cand.target_key)
+      const workItem = leaves.find((w) => w.id === cand.work_item_id)
+      if (!inspection || !workItem) throw new Error('查驗申請或其工項已不存在,請重試')
+      const stagesRes = await repo.listRequiredStages(workItem.id)
+      if (isErr(stagesRes)) throw new Error(stagesRes.error)
+      const template = cand.template_id ? (checklistTemplates ?? []).find((t) => t.id === cand.template_id) ?? null : null
+      return buildInspectionFormDraft({
+        date, dateSource, photos: dayPhotos, inspection, workItem, requiredStages: stagesRes, template,
+        templateReason: template ? cand.reason : null, frame: await templateFor('inspection_form'), hasBoq, notes: statusNotes(),
+      })
+    }
     if (cand.doc_type === 'self_check') {
       const template = (checklistTemplates ?? []).find((t) => t.id === cand.template_id)
       const workItem = leaves.find((w) => w.id === cand.work_item_id)
@@ -480,13 +496,16 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
       dailyLog: dlRes, weather, template: await templateFor('supervisor_log'), hasBoq, notes: statusNotes(),
     })
   }
-  // 活文件的定位鍵:日誌類每案每日一份;自檢表同批次同工項同日一份
+  // 活文件的定位鍵:日誌類每案每日一份;自檢表同批次同工項同日一份;查驗表單每份查驗一份(跨批次)
   const locatorOf = (cand: Candidate): DocLocator =>
-    cand.doc_type === 'self_check' ? { intakeId, targetKey: cand.target_key! } : { docDate: cand.doc_date! }
+    cand.doc_type === 'self_check' ? { intakeId, targetKey: cand.target_key! }
+      : cand.doc_type === 'inspection_form' ? { targetKey: cand.target_key! }
+        : { docDate: cand.doc_date! }
+  const SUPPORTED: readonly string[] = ['daily_log', 'supervisor_log', 'self_check', 'inspection_form']
 
   for (const cand of candidates) {
     if (cand.state !== 'ready' || !cand.doc_date || !cand.target_key) continue
-    if (cand.doc_type !== 'daily_log' && cand.doc_type !== 'supervisor_log' && cand.doc_type !== 'self_check') continue
+    if (!SUPPORTED.includes(cand.doc_type)) continue
     const docType = cand.doc_type
     const typeLabel = FIELD_DOC_TYPE_LABELS[docType]
     const date = cand.doc_date
@@ -499,13 +518,15 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
       let existing = existingRes
       if (existing && existing.status !== 'draft' && existing.status !== 'pending_input') {
         out.action = 'locked'; out.document_id = existing.id; out.status = existing.status; out.version_no = existing.current_version_no
-        out.reason = `該日${typeLabel}已${existing.status === 'signed' ? '簽署' : existing.status === 'in_review' ? '送內部核對' : '提送'},未變更;新照片請由人另開版本`
+        out.reason = `${docType === 'inspection_form' ? '此查驗的' : '該日'}${typeLabel}已${existing.status === 'signed' ? '簽署' : existing.status === 'in_review' ? '送內部核對' : '提送'},未變更;新照片請由人另開版本`
         setCand({ state: 'locked', document_id: existing.id, reason: out.reason })
         continue
       }
 
-      // 同日證據聯集:本批該日照片(自檢表只取該工項的)∪ 既有版本的附件照片(另一批同日上傳的證據不能因重跑而掉)
-      const dayPhotos = dated.filter((d) => d.date === date && (docType !== 'self_check' || d.photo.work_item_id === cand.work_item_id))
+      // 證據聯集:候選推斷配到的本批照片(日誌類=該日全部;自檢表=該日該工項;查驗表單=日期或工項相符)∪ 既有版本的附件照片
+      // (另一批上傳的證據不能因重跑而掉)
+      const candPhotoIds = new Set(cand.photo_ids)
+      const dayPhotos = dated.filter((d) => candPhotoIds.has(d.photo.id))
       const draftPhotos = new Map<string, DraftPhoto>(dayPhotos.map((d) => [d.photo.id, toDraftPhoto(d.photo, d.stored)]))
       let latest: VersionRow | null = null
       if (existing) {
@@ -537,7 +558,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         const ins = await repo.insertDoc({
           doc_type: docType, doc_date: date, intake_id: intakeId, target_key: cand.target_key, status: draft.status,
           required_fields: draft.required_fields, recheck: draft.recheck, created_by: userId,
-          ...(docType === 'self_check' ? { template_id: cand.template_id ?? null } : {}),
+          ...(docType === 'self_check' || docType === 'inspection_form' ? { template_id: cand.template_id ?? null } : {}),
         })
         if (isErr(ins)) throw new Error(ins.error)
         if ('conflict' in ins) {

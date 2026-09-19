@@ -2,7 +2,8 @@
 // Quality slice(三級品管:查驗/缺失、自主檢查表、取樣試驗)零測試,但它藏著整個
 // 產品最不能漏的連動——「不合格」必須變成一筆有人負責的缺失。這裡釘住的是:
 //   1. 不合格判定的法定後果不可靜默消失:自主檢查的缺失自 P3b 起由 DB trigger 同交易開(判定也由 DB 重算),
-//      前端只讀回並如實回報 created／linked;伺服器沒開要回 defectError,不能當沒事;
+//      前端只讀回並如實回報 created／linked;伺服器沒開要回 defectError,不能當沒事;查驗判定(快速判定與監造查驗表單
+//      簽署)的缺失自 P3c 起同樣由 DB trigger inspections_defect_sync 同交易開,前端不再有第二份 insert;
 //   2. 同一鏈上不重複開缺失(P1-07 修訂版次;DB 唯一索引兜底);
 //   3. B-07 假成功:已結案缺失/已判定查驗/已判定試體被 guard 擋下時不可假消失;
 //   4. demo 與真 DB 的雙引擎不漂移(inspected_at、completed 類欄位兩邊都要寫)。
@@ -54,31 +55,20 @@ beforeEach(() => {
 describe('監造查驗判定:不合格一定要留下一筆缺失', () => {
   const insp = { id: 'in1', title: '基礎鋼筋查驗', location: 'A 區', work_item_id: 'wi-1' }
 
-  it('不合格 → 同時寫查驗結果與缺失,缺失掛回該次查驗(勾稽鏈)', async () => {
+  it('不合格 → 只寫查驗結果;缺失由 DB trigger 同交易開立(P3c 起單一實作),前端不再 insert defects', async () => {
     const r = mount()
     let res
     await act(async () => { res = await r.current.recordInspectionResult(insp, false, '保護層不足') })
     expect(res.error).toBeNull()
-    expect(res.defectError).toBeNull()
+    expect(res.defectError).toBeUndefined()
     expect(pg.argsOf('inspections', 'update')[0][0]).toMatchObject({ status: '不合格', result_note: '保護層不足' })
-    expect(pg.argsOf('defects', 'insert')[0][0]).toMatchObject({
-      inspection_id: 'in1', work_item_id: 'wi-1', status: '開立', title: '查驗不合格：基礎鋼筋查驗',
-    })
+    expect(pg.hit('defects', 'insert')).toBe(false) // 缺失只由 DB trigger 開,前端沒有第二份實作(失敗即整筆判定回滾)
   })
 
   it('合格 → 不得開缺失', async () => {
     const r = mount()
     await act(async () => { await r.current.recordInspectionResult(insp, true, null) })
     expect(pg.hit('defects', 'insert')).toBe(false)
-  })
-
-  it('缺失寫入失敗 → 判定仍算成功,但要用 defectError 如實回報(不可靜默吞掉)', async () => {
-    const r = mount()
-    pg.script('defects', 'insert', { data: null, error: { message: 'permission denied for table defects' } })
-    let res
-    await act(async () => { res = await r.current.recordInspectionResult(insp, false, '保護層不足') })
-    expect(res.error).toBeNull()
-    expect(res.defectError.message).toContain('permission denied')
   })
 
   it('查驗結果寫入失敗 → 不得繼續開缺失(判定都沒落地)', async () => {

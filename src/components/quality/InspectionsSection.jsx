@@ -1,4 +1,5 @@
-// 查驗分段:清單＋狀態快篩＋搜尋,詳情欄承載判定(合格/不合格)、檢附的自主檢查表與刪除。
+// 查驗分段:清單＋狀態快篩＋搜尋,詳情欄承載判定(合格/不合格 快速判定;P3c 起也可開監造查驗表單判定並填確認數量)、
+// 檢附的自主檢查表、申報數量／階段與刪除。
 // 版面走共用殼 ListDetailLayout(規範 §8 IA 殼):詳情永遠在同一個位置,動作就地處理。
 // 狀態刻意留在頁面——「提出查驗申請」從檢查表分段預填 inspForm 再切段,分段是非當前
 // 不渲染(unmount)的,表單 state 住這裡會在切段瞬間消失;errMsg 也是頁層 ErrorBanner。
@@ -16,24 +17,29 @@ import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPa
 import { appConfirm } from '../confirm.jsx'
 import { taipeiToday } from '../../lib/dates.js'
 import { checklistCoverage, coverageText } from '../../lib/qc.js'
+import { requiredStagesFor } from '../../lib/fieldDocs.js'
 import { WorkItemPicker } from '../DefectTracker.jsx'
 
-const inspColor = { 待查驗: 'amber', 合格: 'green', 不合格: 'red' }
+const inspColor = { 待查驗: 'amber', 合格: 'green', 部分合格: 'amber', 不合格: 'red' }
 
 // 查驗清單的狀態篩選(S-4):判定後的紀錄本來就留在清單裡,但純時間序要回答
 // 「擋土牆到底合格了沒」只能逐列掃。'全部' 是唯一非狀態值,其餘直接對 inspections.status。
 // 快篩 chip 只列三個狀態(單選、再點取消=全部),'全部' 由「沒有任何 chip 亮」承載。
-export const INSP_FILTERS = ['全部', '待查驗', '合格', '不合格']
+export const INSP_FILTERS = ['全部', '待查驗', '合格', '部分合格', '不合格']
 const INSP_STATUSES = INSP_FILTERS.slice(1)
 
-export const EMPTY_INSP_FORM = () => ({ title: '', location: '', inspection_type: '施工查驗', requested_date: taipeiToday(), work_item_key: '', work_item_label: '', checklist_record_id: '' })
+export const EMPTY_INSP_FORM = () => ({ title: '', location: '', inspection_type: '施工查驗', requested_date: taipeiToday(), work_item_key: '', work_item_label: '', checklist_record_id: '', declared_qty: '', stage_key: '' })
 
 export default function InspectionsSection({
   inspections, inspCount, filter, onFilter,
   form, onFormChange, onSubmit, busy, resultMsg, notice = '', onCloseNotice = null, onShowDefects,
   leaves, attachableChecklists, templates, can, onResult, onDelete, scope = '', signedDocByRecord = new Map(),
+  inspectionPoints = [], formDocByInspection = new Map(),
 }) {
-  const navigate = useNavigate() // 詳情欄的「附自主檢查表」導向既有列印檢視
+  const navigate = useNavigate() // 詳情欄的「附自主檢查表」導向既有列印檢視;「監造查驗表單」導向文件頁
+  // 申請表單所選工項的 ITP 必要階段(P3c):有 H 點的工項申請時就選階段,監造表單才對得上
+  const formWi = form?.work_item_key ? leaves.find((l) => l.item_key === form.work_item_key) : null
+  const formStages = useMemo(() => requiredStagesFor(inspectionPoints, formWi ? [formWi.id, formWi.item_key] : []), [inspectionPoints, formWi])
   const [q, setQ] = useState('')
   const searchRef = useRef(null)
 
@@ -76,6 +82,8 @@ export default function InspectionsSection({
     const i = selected
     const judgeable = i.status === '待查驗' && can.approve
     const deletable = can.edit && i.status === '待查驗'
+    const formDoc = formDocByInspection.get(i.id) || null
+    const qtyText = i.declared_qty != null ? `${i.declared_qty} ${i.unit || ''}`.trim() : '—'
     detailBody = (
       <section aria-label={`${i.title} 詳情`}>
         <div className="px-4 py-[13px] border-b border-[var(--border)] flex items-center gap-2 flex-wrap">
@@ -90,7 +98,10 @@ export default function InspectionsSection({
             ['工項', i.work_item_no ? `${i.work_item_no} ${i.work_item_desc || ''}`.trim() : '—'],
             ['位置', i.location || '—'],
             ['申請日', i.requested_date || '—'],
+            ['申報數量', qtyText],
+            ['查驗階段', i.stage_key || '—'],
             ['判定日', i.inspected_at ? String(i.inspected_at).slice(0, 10) : '—'],
+            ['本次確認數量', i.confirmed_qty != null ? `${i.confirmed_qty} ${i.unit || ''}`.trim() : (i.status === '待查驗' ? '—' : '（快速判定，未填確認數量）')],
           ]} />
         </div>
 
@@ -131,13 +142,23 @@ export default function InspectionsSection({
           )}
         </div>
 
-        {/* 動作列:判定(監造)/ 待監造查驗(其他方)/ 刪除(廠商)。判定不合格的原因
-            由 appPrompt 收(判定=不可逆,規範 §1 第 5 題准許確認框;原因必填才開得了缺失) */}
+        {/* 監造查驗表單(P3c):判定＋本次確認數量的正式文件;已有活文件就直達,判定後也連得到 */}
+        {(formDoc || judgeable) && (
+          <div className="px-4 pb-4 flex items-center gap-2 flex-wrap">
+            <Button variant={judgeable ? 'primary' : 'secondary'} size="sm" onClick={() => navigate(formDoc ? `/inspection-form?doc=${encodeURIComponent(formDoc.id)}` : `/inspection-form?inspection=${encodeURIComponent(i.id)}`)}>
+              <MSym name="task_alt" size={15} />{formDoc ? `監造查驗表單（版本 ${formDoc.current_version_no}）` : '以監造查驗表單判定（填確認數量）'}
+            </Button>
+            {judgeable && <span className="text-caption text-[var(--text-3)]">簽署即判定，確認數量成為廠商可估驗的依據。</span>}
+          </div>
+        )}
+        {/* 動作列:快速判定(監造;不含確認數量)/ 待監造查驗(其他方)/ 刪除(廠商)。判定不合格的原因
+            由 appPrompt 收(判定=不可逆,規範 §1 第 5 題准許確認框;原因必填,缺失由 DB 同交易開立) */}
         {i.status === '待查驗' && (
           <div className="px-4 py-3 border-t border-[var(--border-2)] flex items-center gap-2 flex-wrap">
             {judgeable ? (<>
               <Button variant="success" onClick={() => onResult(i, true)} disabled={busy}>合格</Button>
               <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
+              <span className="text-caption text-[var(--text-3)]">快速判定不計確認數量。</span>
             </>) : (
               <span className="text-footnote text-[var(--text-3)]">待監造查驗</span>
             )}
@@ -227,8 +248,8 @@ export default function InspectionsSection({
     )}
     {form && (
       <div className="m-5 bg-[var(--surface-2)] rounded-lg p-4 space-y-3">
-        {/* 換工項連同清掉已選檢附:候選是「同工項」口徑,留著舊選擇會掛到不相干的表 */}
-        <WorkItemPicker leaves={leaves} value={form.work_item_key} label={form.work_item_label} onPick={(k, l) => onFormChange((f) => ({ ...f, work_item_key: k || '', work_item_label: l, checklist_record_id: '' }))} />
+        {/* 換工項連同清掉已選檢附與階段:候選是「同工項」口徑,留著舊選擇會掛到不相干的表 */}
+        <WorkItemPicker leaves={leaves} value={form.work_item_key} label={form.work_item_label} onPick={(k, l) => onFormChange((f) => ({ ...f, work_item_key: k || '', work_item_label: l, checklist_record_id: '', stage_key: '' }))} />
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="查驗項目"><Input value={form.title} onChange={(e) => onFormChange((f) => ({ ...f, title: e.target.value }))} placeholder="如 混凝土澆置前查驗" /></Field>
           <Field label="位置"><Input value={form.location} onChange={(e) => onFormChange((f) => ({ ...f, location: e.target.value }))} placeholder="如 A 區 1F" /></Field>
@@ -236,6 +257,19 @@ export default function InspectionsSection({
           {/* 預設今天:全站慣例是「事件已發生的記錄日預設今天」(檢查表/取樣皆同),
               申請查驗這件事就是按下去的當天發生,空白只會讓現場忘了填 */}
           <Field label="申請查驗日（必填）"><Input type="date" value={form.requested_date} onChange={(e) => onFormChange((f) => ({ ...f, requested_date: e.target.value }))} /></Field>
+          {/* 申報數量(P3c):本次申請查驗的施作量;監造查驗表單的確認數量以此為上限。單位取自工項 */}
+          <Field label={`申報數量${formWi?.unit ? `（${formWi.unit}）` : ''}`}>
+            <Input type="number" step="any" inputMode="decimal" min="0" value={form.declared_qty ?? ''} onChange={(e) => onFormChange((f) => ({ ...f, declared_qty: e.target.value }))} placeholder={formWi ? '本次申報的施作數量' : '先選工項'} disabled={!formWi} />
+          </Field>
+          {/* 查驗階段(P3c):工項在檢驗停留點設有 H 點必要階段時才出現;全部階段皆確認的量才可估驗 */}
+          {formStages.length > 0 && (
+            <Field label="查驗階段（此工項有必要階段）">
+              <Select value={form.stage_key || ''} onChange={(e) => onFormChange((f) => ({ ...f, stage_key: e.target.value }))} aria-label="查驗階段">
+                <option value="">請選擇階段…</option>
+                {formStages.map((s) => <option key={s} value={s}>{s}</option>)}
+              </Select>
+            </Field>
+          )}
           {/* 檢附自主檢查表(S-2):正式查驗單本來就要附第一級自主檢查證據——
               選填不擋送出,但監造一眼看得出第一級做了沒。只列已判定的現行版,
               「僅限已判定」是 UI 收斂(DB 只驗 FK 存在)。 */}

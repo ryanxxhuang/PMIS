@@ -72,7 +72,7 @@ test('鏈 6:監造上傳→起稿→到場親自確認→簽署→提送機關�
   await loginReal(page, supEmail)
   await gotoHash(page, '/site')
   await expect(page.getByRole('heading', { level: 1, name: '現場紀錄' })).toBeVisible()
-  await expect(page.getByRole('group', { name: '拍照／上傳' }).getByText('監造日誌自動起稿')).toBeVisible()
+  await expect(page.getByRole('group', { name: '拍照／上傳' }).getByText('監造日誌／查驗表單自動起稿')).toBeVisible()
   await page.getByLabel('選擇照片上傳').setInputFiles([
     { name: 'sup-a.jpg', mimeType: 'image/jpeg', buffer: tinyJpeg('sa') },
     { name: 'sup-b.jpg', mimeType: 'image/jpeg', buffer: tinyJpeg('sb') },

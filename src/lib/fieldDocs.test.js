@@ -11,7 +11,8 @@ import {
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateFieldLabels, templateConfirmRequiredKeys, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys, UNMET_STATUS_LABEL,
   emptySelfCheckContent, emptySelfCheckSources, selfCheckValues, setSelfCheckTemplate, checklistItemLabels,
   emptySupervisorLogContent, emptySupervisorLogSources, fillHumanField, attendanceIssues, formalDailyLogFromDetail, applyFormalDailyLog, refTitle,
-  docPagePath, docPageLink, docToOrg,
+  docPagePath, docPageLink, docToOrg, docToOrgs, docToOrgLabel, TO_ORGS_BY_DOC_TYPE,
+  INSPECTION_VERDICTS, requiredStagesFor, emptyInspectionFormContent, emptyInspectionFormSources, setInspectionFormTemplate, inspectionFormIssues, currentBatchCum,
   printSignature, submissionsChronological, submissionReceipts, returnHistory, nextResponsibleText,
 } from './fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
@@ -247,9 +248,10 @@ describe('文件狀態、簽署意願、送件冪等、錯誤碼', () => {
     expect(docPagePath('daily_log')).toBe('/site-log')
     expect(docPagePath('supervisor_log')).toBe('/supervisor-log')
     expect(docPagePath('self_check')).toBe('/self-check')
-    expect(docPagePath('inspection_form')).toBeNull()
+    expect(docPagePath('inspection_form')).toBe('/inspection-form')
     expect(docPageLink({ doc_type: 'supervisor_log', id: 'D 1' })).toBe('/supervisor-log?doc=D%201')
-    expect(docPageLink({ doc_type: 'inspection_form', id: 'X' })).toBeNull()
+    expect(docPageLink({ doc_type: 'inspection_form', id: 'X' })).toBe('/inspection-form?doc=X')
+    expect(docPageLink({ doc_type: 'other', id: 'X' })).toBeNull()
   })
   it('簽署意願文字含日期、版本與雜湊前 12 碼', () => {
     expect(signIntentText({ docDate: '2026-09-17', versionNo: 2, contentHash: 'abcdef0123456789ff' })).toBe(
@@ -505,5 +507,83 @@ describe('列印版本與提送回執', () => {
     expect(nextResponsibleText(doc('returned', 2), rows.slice(0, 2))).toBe('施工廠商（被退回待補正）')
     expect(nextResponsibleText(doc('received', 4), rows)).toBe('無（已收件）')
     expect(nextResponsibleText(doc('signed', 1), [])).toBe('施工廠商（待提送）')
+  })
+})
+
+describe('監造查驗表單(P3c):提送對象矩陣、內容形狀、判定與確認量規則', () => {
+  it('提送對象矩陣與 DB fn_field_document_to_org_allowed 逐字一致(解析 migration 原文)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const sql = readFileSync(`${process.cwd()}/supabase/migrations/20260917201000_field_documents.sql`, 'utf8')
+    const body = sql.slice(sql.indexOf('fn_field_document_to_org_allowed('))
+    const fromDb = {}
+    for (const m of body.matchAll(/when '([a-z_]+)'\s+then p_to_org (?:= '([a-z]+)'|in \(([^)]+)\))/g)) {
+      fromDb[m[1]] = m[2] ? [m[2]] : m[3].split(',').map((x) => x.trim().replace(/'/g, ''))
+    }
+    expect(fromDb).toEqual({ daily_log: ['supervisor'], self_check: ['supervisor'], supervisor_log: ['owner'], inspection_form: ['contractor', 'owner'] })
+    expect(Object.fromEntries(Object.entries(TO_ORGS_BY_DOC_TYPE).map(([k, v]) => [k, [...v]]))).toEqual(fromDb)
+    const doc = { doc_type: 'inspection_form', owner_org: 'supervisor', status: 'signed' }
+    expect(docToOrgs(doc)).toEqual(['contractor', 'owner'])
+    expect(docToOrg(doc)).toBe('contractor')
+    expect(docToOrgLabel(doc)).toBe('施工廠商／機關')
+    expect(docStatusMeta(doc, 'supervisor').action).toBe('提送給施工廠商／機關')
+    expect(docStatusMeta({ ...doc, status: 'submitted' }, 'owner').action).toBe('收件或退回')
+    expect(docStatusMeta({ ...doc, status: 'submitted' }, 'contractor').action).toBe('收件或退回')
+    expect(docStatusMeta({ ...doc, status: 'received' }, 'contractor').label).toBe('對方已收件')
+  })
+  it('必要階段:只算 H 點且 required_for_billing,uuid 或 item_key 都對得到,鍵正規化', () => {
+    const pts = [
+      { work_item_id: 'W1', point_type: 'H', stage_key: ' Rebar ' }, { work_item_id: 'W1', point_type: 'H', stage_key: 'pour', required_for_billing: false },
+      { work_item_key: 'K1', point_type: 'H', stage_key: 'Ｐour' }, { work_item_id: 'W1', point_type: 'W', stage_key: 'x' }, { work_item_id: 'W2', point_type: 'H', stage_key: 'z' },
+    ]
+    expect(requiredStagesFor(pts, ['W1', 'K1'])).toEqual(['pour', 'rebar'])
+    expect(requiredStagesFor(pts, 'W3')).toEqual([])
+    expect(requiredStagesFor(pts, null)).toEqual([])
+  })
+  it('空白表單:查驗申請資料帶入待核對、判定與確認量 pending;換範本項目重來', () => {
+    const insp = { id: 'I1', title: '3F 版牆查驗', location: '3F 版牆', stage_key: 'rebar', declared_qty: 100, checklist_record_id: 'R1' }
+    const wi = { id: 'W1', unit: 'M3' }
+    const frame = { key: 'inspection_form_demo', version: 1 }
+    const c = emptyInspectionFormContent('2026-09-19', frame, insp, wi)
+    expect(c).toMatchObject({ inspection_id: 'I1', work_item_id: 'W1', location: '3F 版牆', stage_key: 'rebar', unit: 'M3', declared_qty: 100, self_check_record_id: 'R1', verdict: null, confirmed_qty: null, template: frame, results: {} })
+    const s = emptyInspectionFormSources(c, { requiredStages: ['rebar', 'pour'] })
+    expect(s.declared_qty).toMatchObject({ status: 'filled', source: 'inspection:I1' })
+    expect(s.location).toMatchObject({ status: 'filled', source: 'inspection:I1' })
+    expect(s.stage_key).toMatchObject({ status: 'filled' })
+    expect(s.verdict.status).toBe('pending'); expect(s.confirmed_qty.status).toBe('pending')
+    expect(emptyInspectionFormSources({ ...c, stage_key: 'bogus' }, { requiredStages: ['rebar'] }).stage_key.status).toBe('pending')
+    expect(emptyInspectionFormSources(c, { requiredStages: [] }).stage_key).toBeUndefined()
+    const tpl = { id: 'T1', title: '查驗表', items: [{ no: 'B1', kind: 'bool' }] }
+    const next = setInspectionFormTemplate({ content: c, sources: s }, tpl)
+    expect(next.content.template_id).toBe('T1'); expect(next.content.results).toEqual({ B1: { value: null } })
+    expect(next.sources['results.B1'].status).toBe('pending')
+    expect(setInspectionFormTemplate(next, null).content.results).toEqual({})
+  })
+  it('判定與確認量一致性(鏡像 DB):超申報、合格須等於申報、部分合格 0<x<申報、不合格=0、說明必填、單位、階段、項目不合格', () => {
+    const wi = { unit: 'M3' }
+    const base = { unit: 'M3', declared_qty: 100, verdict: '部分合格', confirmed_qty: 60, result_note: '蜂窩', stage_key: null }
+    expect(inspectionFormIssues(base, { workItem: wi })).toEqual([])
+    expect(inspectionFormIssues({ ...base, confirmed_qty: 120 }, { workItem: wi }).map((i) => i.key)).toEqual(['confirmed_qty'])
+    expect(inspectionFormIssues({ ...base, verdict: '合格' }, { workItem: wi })[0].message).toContain('等於申報數量 100')
+    expect(inspectionFormIssues({ ...base, verdict: '合格', confirmed_qty: 100, result_note: null }, { workItem: wi })).toEqual([])
+    expect(inspectionFormIssues({ ...base, verdict: '部分合格', confirmed_qty: 100 }, { workItem: wi }).map((i) => i.key)).toEqual(['confirmed_qty'])
+    expect(inspectionFormIssues({ ...base, verdict: '不合格', confirmed_qty: 5 }, { workItem: wi }).map((i) => i.key)).toEqual(['confirmed_qty'])
+    expect(inspectionFormIssues({ ...base, verdict: '不合格', confirmed_qty: 0, result_note: '' }, { workItem: wi }).map((i) => i.key)).toEqual(['result_note'])
+    expect(inspectionFormIssues({ ...base, unit: 'M2' }, { workItem: wi }).map((i) => i.key)).toEqual(['unit'])
+    expect(inspectionFormIssues({ ...base, stage_key: 'x' }, { workItem: wi, requiredStages: ['rebar'] }).map((i) => i.key)).toEqual(['stage_key'])
+    expect(inspectionFormIssues({ ...base, stage_key: 'x' }, { workItem: wi })).toMatchObject([{ key: 'stage_key' }])
+    expect(inspectionFormIssues({ ...base, verdict: '合格', confirmed_qty: 100 }, { workItem: wi, judged: { overall: '不合格', failed: ['C2'] } })[0].message).toContain('C2')
+    expect(inspectionFormIssues({ ...base, verdict: null, confirmed_qty: null }, { workItem: wi })).toEqual([])
+    expect(INSPECTION_VERDICTS).toEqual(['合格', '部分合格', '不合格'])
+  })
+  it('此批次目前有效累計:取最新 active,批次鍵與階段鍵正規化;沒有位置回 null', () => {
+    const rows = [
+      { status: 'active', batch_key: '3f版牆', stage_key: null, qty_cum: 60, confirmed_at: '2026-09-19T01:00:00Z' },
+      { status: 'revoked', batch_key: '3f版牆', stage_key: null, qty_cum: 90, confirmed_at: '2026-09-19T02:00:00Z' },
+      { status: 'active', batch_key: '3f版牆', stage_key: 'rebar', qty_cum: 10, confirmed_at: '2026-09-19T03:00:00Z' },
+    ]
+    expect(currentBatchCum(rows, { location: '3F 版牆' })).toBe(60)
+    expect(currentBatchCum(rows, { location: '3F 版牆', stageKey: 'Rebar' })).toBe(10)
+    expect(currentBatchCum(rows, { location: 'B區' })).toBe(0)
+    expect(currentBatchCum(rows, { location: '' })).toBeNull()
   })
 })

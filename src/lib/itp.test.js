@@ -15,6 +15,7 @@ describe('itpStatus', () => {
     expect(itpStatus({ inspection_id: 'I1' }, insp('待查驗')).key).toBe('requested')
     expect(itpStatus({ inspection_id: 'I1' }, insp('合格')).key).toBe('passed')
     expect(itpStatus({ inspection_id: 'I1' }, insp('不合格')).key).toBe('failed')
+    expect(itpStatus({ inspection_id: 'I1' }, insp('部分合格'))).toEqual({ key: 'partial', label: '部分通過' })
   })
 })
 

@@ -14,7 +14,7 @@
 npm run test:e2e:real
 ```
 
-十條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）（後四條見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+十二條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）（後六條見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -75,4 +75,20 @@ npm run test:e2e:real -- chain7 chain2
 
 ```bash
 npm run test:e2e:real -- e2e-real/chain8-self-check.spec.js
+```
+
+## 未確認量不可請款鏈（chain 9，P4c）
+
+`e2e-real/chain9-unconfirmed-blocked.spec.js`（前置：本機 stack 已套用 `20260919140000`）：廠商建第 1 期→以 REST 直接寫累計 100（P4e 前仍可的舊路徑，DB 標 legacy）→新 UI 標「缺監造確認來源・申報,不計價」、本期可請款金額 0、缺件卡列出處理入口→「送監造審核」被 DB 檢查點擋下並列出原因、狀態仍草稿→「同步確認量」歸零、缺件消失→送審成功。
+
+```bash
+npm run test:e2e:real -- e2e-real/chain9-unconfirmed-blocked.spec.js
+```
+
+## 監造查驗表單鏈（chain 10，P3c）
+
+`e2e-real/chain10-inspection-form.spec.js`（前置同 chain 5：Edge stub；本機 stack 已套用 `20260919222000`）：廠商以 RPC 簽自主檢查表→提出查驗申請（申報 100 M3、位置 3F 版牆、檢附自檢；`inspections_guard` 由工項帶單位、由位置算批次鍵）→ 未簽署前 `list_billable_backlog` 為空 → 監造上傳一張監造照片→伺服器起監造日誌＋監造查驗表單草稿（`target_key`＝查驗 id、`pending_input`；查驗申請資料帶入標 `inspection:<id>`；`verdict`／`confirmed_qty` 為 null＋pending——不替監造判定、不填確認量）→ `/site` 現場文書清單直達 `/inspection-form?doc=`（示範範本章、免責聲明、確認數量區並列申報 100 M3／此批次已確認累計 0 M3）→ 逐項「確認」帶入資料、判部分合格、本次確認 60（簽署後累計 60）、判定說明→存檔「版本 2，可簽署」→ RPC 直打廠商簽署 `PD006` → 簽署（意願聲明下與確認框明示「可估驗的依據」；`inspections` 部分合格／確認 60／文件 v2／判定人；`inspection_confirmations` 累計 60、增量 60、批次 `3f版牆`、追溯文件版本；缺失「查驗部分合格：…」說明含差額 40；同人同版本重簽冪等、確認紀錄仍一筆）→ 列印頁「【示範範本】範本 inspection_form_demo v1」、雜湊、簽署者、「■ 部分合格」→ 提送給施工廠商、提送給機關（各一鈕、送完鈕消失）→ RPC 直打：更正版改確認 70 重簽 `PD008`（先撤銷）、`revoke_inspection_confirmation` 後重簽成功（撤銷列保留、新確認 70、`inspections.confirmed_qty` 70）、廠商 `list_billable_backlog` 可估驗 70 → 廠商估驗頁建期、「同步確認量」累計 70、來源展開列批次／查驗連結／文件版本 v3、`set_valuation_item_cum` 71 回 `VQ006`（其餘不可請）→ 廠商開表單頁唯讀並看到確認 70。工具鏈限制同 chain 5／6；5189 被其他 worktree 佔用時以臨時設定改埠（跑完即刪）。
+
+```bash
+npm run test:e2e:real -- e2e-real/chain10-inspection-form.spec.js
 ```

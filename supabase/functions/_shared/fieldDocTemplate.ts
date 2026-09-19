@@ -92,21 +92,35 @@ export function checklistItemKeys(
   return out.sort()
 }
 
+// 帶檢查項目的兩類文書(自檢表、監造查驗表單):項目鍵取內容 template_id 的本案範本(與 DB fn_field_document_item_keys 同一條規則)
+export const CHECKLIST_DOC_TYPES: readonly string[] = ['self_check', 'inspection_form']
+const hasChecklistItems = (docType: string) => CHECKLIST_DOC_TYPES.includes(docType)
+// 查驗表單:工項有 ITP 必要階段(H 點)時 stage_key 才必填(DB fn_field_document_stage_required 查 H 點;這裡由呼叫端帶旗標)
+export type DocKeyOptions = { stageRequired?: boolean }
+
 // 依文書類型推導(施工日誌固定欄不在這裡:公定格式六欄住在 DB fn_field_document_required_fields 與前端 DAILY_LOG_FIXED_REQUIRED)
-export function docRequiredKeys(docType: string, template: FieldDocTemplate | null | undefined, checklistItems: ChecklistItemLike[] | null = null): string[] {
+export function docRequiredKeys(docType: string, template: FieldDocTemplate | null | undefined, checklistItems: ChecklistItemLike[] | null = null, { stageRequired = false }: DocKeyOptions = {}): string[] {
   const keys = new Set(templateRequiredKeys(template))
-  if (docType === 'self_check') for (const k of checklistItemKeys(checklistItems, template, null)) keys.add(k)
+  if (hasChecklistItems(docType)) for (const k of checklistItemKeys(checklistItems, template, null)) keys.add(k)
+  if (docType === 'inspection_form' && stageRequired) keys.add('stage_key')
   return [...keys].sort()
 }
 export function docHumanOnlyKeys(docType: string, template: FieldDocTemplate | null | undefined, checklistItems: ChecklistItemLike[] | null = null): string[] {
   const keys = new Set(templateHumanOnlyKeys(template))
-  if (docType === 'self_check') for (const k of checklistItemKeys(checklistItems, template, 'human_only')) keys.add(k)
+  if (hasChecklistItems(docType)) for (const k of checklistItemKeys(checklistItems, template, 'human_only')) keys.add(k)
   return [...keys].sort()
 }
 export function docConfirmRequiredKeys(docType: string, template: FieldDocTemplate | null | undefined, checklistItems: ChecklistItemLike[] | null = null): string[] {
   const keys = new Set(templateConfirmRequiredKeys(template))
-  if (docType === 'self_check') for (const k of checklistItemKeys(checklistItems, template, 'confirm_required')) keys.add(k)
+  if (hasChecklistItems(docType)) for (const k of checklistItemKeys(checklistItems, template, 'confirm_required')) keys.add(k)
   return [...keys].sort()
+}
+
+// 階段鍵／批次鍵正規化(鏡像 DB fn_cq_normalize_text:去空白含全形空白、全形→半形、²³→23、小寫);只用來比對,DB 寫入時仍由 guard 正規化
+export function normalizeCqKey(s: unknown): string {
+  if (typeof s !== 'string') return ''
+  return s.replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/　/g, '').replace(/²/g, '2').replace(/³/g, '3').replace(/\s+/g, '').toLowerCase()
 }
 
 // 內容裡的範本鍵／版本(簽署時 DB 會驗 key 是否為目前範本)

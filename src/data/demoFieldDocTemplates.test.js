@@ -48,7 +48,18 @@ describe('示範模式文書範本 fixture', () => {
     expect(tpl.disclaimer).toContain('非任何機關公定或法定格式')
     expect(tpl.disclaimer).toContain('本案檢查表範本')
   })
-  it('其他類型沒有範本(施工日誌是公定格式;查驗表單待 P3c)', () => {
-    for (const t of ['daily_log', 'inspection_form', null]) expect(demoFieldDocumentTemplate(t)).toBeNull()
+  it('監造查驗表單:必填=日期／查驗／工項／位置／單位／申報量／判定／確認量;人填欄只有判定與確認量;項目規則同自檢表;標示範範本', () => {
+    const tpl = demoFieldDocumentTemplate('inspection_form')
+    expect(templateRequiredKeys(tpl)).toEqual(['confirmed_qty', 'declared_qty', 'inspection_date', 'inspection_id', 'location', 'unit', 'verdict', 'work_item_id'])
+    expect(templateHumanOnlyKeys(tpl)).toEqual(['confirmed_qty', 'verdict'])
+    expect(templateConfirmRequiredKeys(tpl)).toEqual(['confirmed_qty', 'declared_qty', 'location', 'stage_key', 'verdict'])
+    expect(checklistItemRules(tpl)).toEqual({ num: { human_only: true, confirm_required: true }, bool: { human_only: false, confirm_required: true } })
+    expect(tpl.is_demo).toBe(true)
+    expect(tpl.demo_label).toBe('示範範本')
+    expect(tpl.disclaimer).toContain('非任何機關公定或法定格式')
+    expect(tpl.sections).toHaveLength(5)
+  })
+  it('其他類型沒有範本(施工日誌是公定格式)', () => {
+    for (const t of ['daily_log', null]) expect(demoFieldDocumentTemplate(t)).toBeNull()
   })
 })

@@ -1,8 +1,9 @@
 // 文件生命週期卡(P2c 施工日誌、P3a 監造日誌、P3b 自主檢查表共用;設計 §4–§6):狀態、版本與雜湊、簽署(登入的平台帳號,
 // 意願文字明示)、提送給對象方、對象方收件／退回(必填原因)、提送回執(P3d:對象、送出時間、回執編號＝submission_id、
 // 收件狀態、下一責任方)、退回歷史(P3d:歷次退回原因、退回人、時間與補正再送的差異全部列出,不只最新一筆)。
-// 責任方與提送對象由 doc_type 決定(lib/fieldDocs 的 TO_ORG_BY_DOC_TYPE,鏡像 DB 對象矩陣):施工日誌 廠商→監造、
-// 監造日誌 監造→機關;第三方(施工日誌的機關、監造日誌的廠商)只是查閱視角。
+// 責任方與提送對象由 doc_type 決定(lib/fieldDocs 的 TO_ORGS_BY_DOC_TYPE,單一來源鏡像 DB 對象矩陣):施工日誌／自檢 廠商→監造、
+// 監造日誌 監造→機關、監造查驗表單 監造→廠商＋機關(每個對象一顆提送鈕、各自收件／退回;P3c);第三方只是查閱視角。
+// signNote:該類文書簽署的效果補充(查驗表單:簽署即判定、確認量成為可估驗依據),顯示在意願聲明下並進確認框。
 // 全部動作都是「人明確操作」;所有規則由 RPC 執行(PD001–PD010 分流見 lib/fieldDocs.fieldDocErrorGuidance),
 // 這裡不做任何業務判斷,只把伺服器回的版本／雜湊／時間／差異(diff 由 DB trigger 算)如實顯示;時間一律換成台北時間,
 // 下一責任方與今日工作球權同一支判定(lib/fieldDocs.nextResponsibleText → ballInCourtRules.fieldDocumentBalls)。
@@ -13,7 +14,7 @@ import { Badge, Button } from '../ui.jsx'
 import { MSym } from '../icons.jsx'
 import { appConfirm, appPrompt } from '../confirm.jsx'
 import {
-  docStatusMeta, formatHash, signIntentText, ORG_LABEL, DOC_TYPE_LABEL, changedKeysLabel, fieldLabel, docToOrg, docToOrgLabel, UNMET_STATUS_LABEL,
+  docStatusMeta, formatHash, signIntentText, ORG_LABEL, DOC_TYPE_LABEL, changedKeysLabel, fieldLabel, docToOrgs, docToOrgLabel, UNMET_STATUS_LABEL,
   submissionsChronological, submissionReceipts, returnHistory, nextResponsibleText, SIGN_METHOD_LABEL,
 } from '../../lib/fieldDocs.js'
 import { taipeiDateTime as fmtTs } from '../../lib/dates.js'
@@ -40,7 +41,7 @@ function useMemberNames(enabled) {
 export default function DocumentLifecycle({
   doc, version, signatures = [], submissions = [], viewerOrg, canAct = false, dirty = false, content = null,
   busy = null, onSign, onSubmit, onReceive, onReturn, message = null,
-  labels = null, templateMeta = null,
+  labels = null, templateMeta = null, signNote = null,
 }) {
   const members = useMemberNames(!!doc && submissions.some((s) => s?.actor_id))
   if (!doc) return null
@@ -52,9 +53,12 @@ export default function DocumentLifecycle({
   const mine = doc.owner_org === viewerOrg
   const docLabel = DOC_TYPE_LABEL[doc.doc_type] || '文件'
   const ownerLabel = ORG_LABEL[doc.owner_org] || '責任方'
-  const toOrg = docToOrg(doc)
+  const toOrgs = docToOrgs(doc)
   const toLabel = docToOrgLabel(doc)
-  const canRespond = !mine && viewerOrg === toOrg && canAct
+  const canRespond = !mine && toOrgs.includes(viewerOrg) && canAct
+  // 目前版本尚未提送的對象(多對象文件逐一提送;單對象文件提送後就沒有鈕)
+  const submittedTo = new Set(submissions.filter((s) => s?.action === 'submit' && Number(s.version_no) === Number(doc.current_version_no)).map((s) => s.to_org))
+  const pendingTargets = toOrgs.filter((o) => !submittedTo.has(o))
   const recheck = Array.isArray(doc.recheck) ? doc.recheck : []
   const pendingCount = recheck.filter((r) => !String(r.key || '').startsWith('attachments')).length
   const currentSig = signatures.find((s) => s.version_no === doc.current_version_no) || null
@@ -66,12 +70,13 @@ export default function DocumentLifecycle({
   const intent = version ? signIntentText({ docLabel, docDate: doc.doc_date, versionNo: doc.current_version_no, contentHash: version.content_hash }) : ''
 
   const sign = async () => {
-    if (!(await appConfirm({ title: `簽署 ${doc.doc_date} ${docLabel}（版本 ${doc.current_version_no}）？`, body: `${intent}\n\n簽署後內容雜湊、簽署者與伺服器時間會留存；之後更正必須另開版本重新簽署。`, confirmLabel: '簽署' }))) return
+    if (!(await appConfirm({ title: `簽署 ${doc.doc_date} ${docLabel}（版本 ${doc.current_version_no}）？`, body: `${intent}\n\n${signNote ? `${signNote}\n\n` : ''}簽署後內容雜湊、簽署者與伺服器時間會留存；之後更正必須另開版本重新簽署。`, confirmLabel: '簽署' }))) return
     onSign?.(intent)
   }
-  const submit = async () => {
-    if (!(await appConfirm({ title: `提送給${toLabel}？`, body: `將提送 ${doc.doc_date} ${docLabel}版本 ${doc.current_version_no}（雜湊 ${formatHash(version?.content_hash)}）給${toLabel}；重試會沿用同一筆送件，不會重複提送。`, confirmLabel: '提送' }))) return
-    onSubmit?.()
+  const submit = async (to) => {
+    const label = ORG_LABEL[to] || to
+    if (!(await appConfirm({ title: `提送給${label}？`, body: `將提送 ${doc.doc_date} ${docLabel}版本 ${doc.current_version_no}（雜湊 ${formatHash(version?.content_hash)}）給${label}；重試會沿用同一筆送件，不會重複提送。`, confirmLabel: '提送' }))) return
+    onSubmit?.(to)
   }
   const receive = async () => {
     if (!(await appConfirm({ title: '收件此版本？', body: `收件後${ownerLabel}不可再修改版本 ${doc.current_version_no}；如需更正只能另立新文件。`, confirmLabel: '收件' }))) return
@@ -116,6 +121,7 @@ export default function DocumentLifecycle({
             <div className="rounded-lg bg-[var(--surface-2)] p-3 space-y-2">
               <div className="text-footnote text-[var(--text-2)]">簽署意願聲明（簽署時原文留存）</div>
               <p className="text-body text-[var(--text)]">{intent}</p>
+              {signNote && <p role="note" className="text-footnote text-[var(--amber-text)]">{signNote}</p>}
               <div className="flex items-center gap-2 flex-wrap">
                 <Button onClick={sign} busy={busy === 'sign'} disabled={!canSign}>簽署此版本</Button>
                 <span className="text-caption text-[var(--text-3)]">以你登入的平台帳號簽署；伺服器記錄簽署者、時間與內容雜湊。</span>
@@ -137,10 +143,10 @@ export default function DocumentLifecycle({
         <p className="text-footnote text-[var(--text-2)]">版本 {signatures[0].version_no} 的簽署仍綁在該版本；目前版本 {doc.current_version_no} 是更正草稿，需重新簽署。</p>
       )}
 
-      {/* 提送(責任方,已簽署) */}
-      {mine && canAct && doc.status === 'signed' && (
+      {/* 提送(責任方,已簽署;多對象文件每個尚未提送的對象一顆鈕) */}
+      {mine && canAct && ['signed', 'submitted'].includes(doc.status) && pendingTargets.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={submit} busy={busy === 'submit'}>提送給{toLabel}</Button>
+          {pendingTargets.map((to) => <Button key={to} onClick={() => submit(to)} busy={busy === 'submit'}>提送給{ORG_LABEL[to] || to}</Button>)}
           <span className="text-caption text-[var(--text-3)]">提送的是已簽署的版本 {doc.current_version_no}；{toLabel}收件或退回會顯示在這裡。</span>
         </div>
       )}
@@ -224,7 +230,7 @@ export default function DocumentLifecycle({
       {recheck.length > 0 && (
         <div className="text-caption text-[var(--text-3)]">伺服器待補清單：{recheck.map((r) => `${fieldLabel(r.key, content, labels)}${r.status && r.status !== 'pending' && UNMET_STATUS_LABEL[r.status] ? `（${UNMET_STATUS_LABEL[r.status]}）` : ''}`).join('、')}</div>
       )}
-      {!mine && viewerOrg !== toOrg && <p className="text-caption text-[var(--text-3)]">{ORG_LABEL[viewerOrg] || '本方'}為查閱視角；提送對象是{toLabel}。</p>}
+      {!mine && !toOrgs.includes(viewerOrg) && <p className="text-caption text-[var(--text-3)]">{ORG_LABEL[viewerOrg] || '本方'}為查閱視角；提送對象是{toLabel}。</p>}
       {!canAct && mine && <p className="text-caption text-[var(--text-3)]">你目前沒有此文件的編輯權限。</p>}
       <Link to="/site" className="inline-flex items-center gap-1 text-caption text-[var(--blue-text)] hover:underline">回現場紀錄總覽 <MSym name="arrow_forward" size={11} /></Link>
     </section>

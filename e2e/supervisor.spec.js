@@ -171,6 +171,58 @@ test.describe('監造', () => {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), { timeout: 5_000 }).toBe(true)
   })
 
+  // P3c:監造查驗表單是「文件」——由待查驗申請建立、查驗申請資料帶入待核對、判定與本次確認數量親自填、存檔成版本;
+  // 示範範本標示與免責聲明來自 fixture(對 migration 釘住);示範模式不假裝可簽署。demo 種子 INSP-DEMO-4「4F 柱牆鋼筋查驗」待查驗。
+  test('監造查驗表單:由待查驗申請建立 → 核對申請資料、判部分合格、填確認數量 → 存檔成版本;示範範本標示、示範模式不假裝可簽署', async ({ page }) => {
+    await loginAs(page, 'supervisor')
+    await gotoHash(page, '/inspection-form')
+    await expect(page.getByRole('heading', { level: 1, name: '監造查驗表單' })).toBeVisible()
+    const newCard = page.getByRole('group', { name: '建立監造查驗表單', exact: true })
+    await expect(newCard.getByText('示範範本').first()).toBeVisible()
+    await expect(newCard.getByRole('note')).toContainText('非任何機關公定或法定格式')
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText('尚未選擇查驗申請')
+    await newCard.getByRole('combobox', { name: '待查驗的申請' }).selectOption({ label: '4F 柱牆鋼筋查驗（4F）' })
+    await newCard.getByRole('button', { name: '建立表單' }).click()
+    await expect(page).toHaveURL(/#\/inspection-form\?doc=/)
+    const card = page.getByRole('group', { name: '本份監造查驗表單', exact: true })
+    await expect(card.getByRole('link', { name: '4F 柱牆鋼筋查驗' })).toBeVisible()
+    // 查驗申請帶入的位置要核對確認;申報量示範種子沒有 → 待補;判定與確認量待補
+    await expect(page.getByText(/待補 \d+ 項/).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0)
+    while (await page.getByRole('button', { name: '確認', exact: true }).count()) await page.getByRole('button', { name: '確認', exact: true }).first().click()
+    await page.getByRole('spinbutton', { name: '申報數量' }).fill('10')
+    await page.getByRole('radio', { name: '部分合格' }).check()
+    await page.getByRole('spinbutton', { name: '本次確認數量' }).fill('6')
+    const qtyBox = page.getByRole('group', { name: '確認數量' })
+    await expect(qtyBox).toContainText('申報數量')
+    await expect(qtyBox).toContainText('本次確認')
+    await expect(page.getByRole('alert', { name: '判定與確認數量檢查' })).toContainText('必須填寫判定說明')
+    await page.getByRole('textbox', { name: '判定說明' }).fill('主筋間距超出容許值,局部拆除重綁')
+    await expect(page.getByRole('alert', { name: '判定與確認數量檢查' })).toHaveCount(0)
+    await page.getByRole('button', { name: '存檔', exact: true }).click()
+    await expect(page.getByText(/已存檔 ✓ 版本 1，可簽署/)).toBeVisible()
+    await expect(page.getByText('示範模式：草稿只存在本次瀏覽')).toBeVisible()
+    const lifecycle = page.getByRole('region', { name: '文件狀態與簽署' })
+    await expect(lifecycle.getByRole('note')).toContainText('可估驗的依據')
+    await lifecycle.getByRole('button', { name: '簽署此版本' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '簽署', exact: true }).click()
+    await expect(lifecycle.getByText(/示範模式無法簽署／提送/)).toBeVisible()
+    await expect(lifecycle.getByText(/已由 .* 簽署/)).toHaveCount(0)
+    // 右欄清單列出這份;/site 現場文書清單可直達;品質查驗詳情有「監造查驗表單」入口
+    await expect(page.getByRole('group', { name: /監造查驗表單（1）/ })).toBeVisible()
+    await gotoHash(page, '/site')
+    const docCard = page.getByRole('group', { name: '現場文書' })
+    await expect(docCard.getByRole('link', { name: /監造查驗表單/ })).toBeVisible()
+    await expect(docCard.getByText(/尚未支援/)).toHaveCount(0)
+    await gotoHash(page, '/quality')
+    // lazy 路由切換時舊頁(現場文書清單的 li)仍在 DOM,鎖到查驗紀錄清單內的列
+    await page.getByRole('list', { name: '查驗紀錄' }).getByRole('listitem').filter({ hasText: '4F 柱牆鋼筋查驗' }).click()
+    await expect(page.getByRole('region', { name: '4F 柱牆鋼筋查驗 詳情' }).getByRole('button', { name: /監造查驗表單（版本 1）/ })).toBeVisible()
+    await page.setViewportSize({ width: 375, height: 812 })
+    await gotoHash(page, '/inspection-form')
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), { timeout: 5_000 }).toBe(true)
+  })
+
   // 規範 §9.7 收件匣直達那一筆:待辦連結帶單條 query,落地就是該筆的詳情,不是頁首。
   // 選 SUB-002 與 RFI-002:兩筆是 demo 監造待辦裡到期最近的,穩定落在首頁 5 筆上限內。
   // SUB-002 不是 /submittals 的預設選取(預設是「待我處理」第一筆 SUB-003)——選中它

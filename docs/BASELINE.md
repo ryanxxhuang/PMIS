@@ -5,6 +5,15 @@
 
 ## 1. 本輪驗證
 
+### 2026-09-19 P3c：監造查驗表單——簽署即判定並寫入可估驗的確認量（`codex/slimming-p3c-inspection-form`，PR #146，migration `20260919222000_inspection_form_documents`；rebase 到含 P3d `9b06dc3`／P4c `8acb9b8` 的 main 後重驗）
+
+- `npm run test:db`（一次性資料庫從零套 77 支 migration＋seed）：56 檔、3,110 通過、0 失敗（新增 `inspection_form_documents.sql` 146 條：結構／權限、示範範本與規則推導（人填欄＝判定＋確認量、階段依 ITP 必填、項目鍵通用化、自檢表回歸）、`inspections_guard`（正規化、建立只能待查驗、簽署專屬欄、判定僅監造、部分合格只走簽署、已判定不可改申報、無確認量可撤銷判定、同查驗缺失不重開、四值 check）、`create_inspection_form_draft` 三角色＋非成員＋跨案＋唯一索引、AI 版本不得帶入判定／確認量、簽署分支（廠商／機關／非成員／正式模式 admin `PD006`、待確認 `PD004`、單位／超申報／合格≠申報／單階段帶階段／不合格無說明／查驗不一致 `PD010`、廠商照片 `PD005`、簽署即判定＋確認紀錄＋缺失、冪等、同量重簽不累加、改量 `PD008`、撤銷後重簽、backlog 60→70→100 累計、多階段缺階段 0／齊全 50、不合格不寫確認量、查驗項目不合格不得判合格、自檢表範本拒絕、提送對象矩陣、專案刪除 cascade）；H3 允許清單 79→80）。在共用開發 stack 以交易內套 migration 逐檔回歸 `self_check_documents`／`confirmed_quantity_enforcement`／`field_document_sign`／`supervisor_logs`／`field_documents`／`inspection_checklist_link`／`checklist_revisions`／`p0_05_audit_events`／`formal_mode`／`evidence_guards`／`anon_and_function_privileges` 全綠後才跑全套。
+- `npm test`：135 檔、1,491 項通過。新增／改動：`fieldDocs.test.js` +5（提送對象矩陣解析 `20260917201000` 的 `fn_field_document_to_org_allowed` 與 `FIELD_DOC_TO_ORGS` 逐字一致、必要階段、空白表單來源、判定與確認量一致性、批次累計）、`demoFieldDocTemplates.test.js`（三類逐字一致＋查驗表單必填／人填／須確認）、Edge `fieldDocDraft.test.ts` +4（監造候選 ready／blocked、自檢表只用 `kind=self_check`、`buildInspectionFormDraft` 三案例）、`fieldDocDraftRun.test.ts`（監造批次起查驗表單、判定留空、重跑冪等、另一批同查驗接同一份）、`itp.test.js` +1、`quality.test.js`（缺失改由 DB 開）、`navConfig.test.js`（路由與分頁）。
+- `npm run lint` 零警告；`npm run build`；`npm run check:edge` 18 支；`npm run test:edge` 4；`npm run check:docs`。
+- Demo E2E（受影響 5 支：supervisor／a11y／routes／reachability／contractor，`CI=1` 共用埠 5188）：51 項通過（`supervisor.spec` 新增「監造查驗表單：由待查驗申請建立→核對申請資料、判部分合格、填確認數量→存檔成版本；示範範本標示、示範模式不假裝可簽署；/site 直達、品質查驗詳情入口、375 無溢位」；a11y 全路由含 `/inspection-form`；第一次跑 lazy 路由切換時舊頁 li 仍在 DOM 造成 strict mode 雙重命中，改鎖查驗紀錄清單）。
+- 真後端 E2E（本機 colima 棧，Edge stub，5189 被另一 worktree 佔用改臨時設定埠 5190、跑完即刪；共用開發 DB 以 psql 套 `20260919222000` 並登記版本）：新 `e2e-real/chain10-inspection-form.spec.js` 9.3s 通過（廠商自檢簽署→查驗申請申報 100→監造上傳→起稿判定留空→核對、判部分合格、確認 60→簽署寫入 `inspections`／`inspection_confirmations`／缺失→列印→提送廠商與機關→RPC 冪等／廠商拒簽／改量 `PD008`／撤銷後重簽 70→廠商估驗頁同步 70、來源展開查驗與文件版本、設 71 回 `VQ006`→廠商唯讀）；chain 5／6／8 回歸通過（chain 6 改斷言新徽章文案）。第一次跑兩個真問題已修根因：現場紀錄的監造上傳說明文案仍寫「查驗表單起稿尚未支援」、第二個對象提送後文件狀態不變而提送列已變（頁面改以 tick 重讀文件脈絡）。
+- 合併後（正式 `db push`、Edge 重佈、`check:prod`）結果由單元回報記錄、下一單元同步。
+
 ### 2026-09-19 T2：Demo E2E 受測 dev server 隔離（`codex/slimming-t2-demo-e2e-isolation`，PR #149；只動測試設定與文件，基準 main `f7d247f`）
 
 - 修正前（原設定改臨時埠 5288，跑完即刪）：Demo E2E 全套邊跑邊每秒 touch `e2e/rfi.spec.js`：76 項中 20 項紅（1.8m；contractor／workflow-ux／a11y／routes 等頁面整頁重載後逾時）。另一目錄起 Vite 佔 5288 時，Playwright 記 `WebServer is already available` 直接對它跑測（contract-flow 登入鈕找不到而逾時）。

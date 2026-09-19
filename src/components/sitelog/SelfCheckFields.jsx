@@ -1,26 +1,17 @@
 // 自主檢查表文件的欄位(P3b):框架版面由伺服器範本 fn_field_document_template('self_check')(示範框架範本)的 sections 驅動,
 // 檢查項目取自本案 checklist_templates 的範本(內容 template_id)。每欄=值＋來源／狀態章(FieldSourceChip);可編視角改值即
 // confirmed/human、可「確認」系統帶入的值、可標「不適用」;唯讀視角(監造／機關)只有文字與章,不長出任何 input(唯讀 e2e 契約)。
-// 實測值(num)系統永遠不填:告示板讀數只以 hint 提示,人可一鍵「採用」——採用也是人填(confirmed/human)。合格判定只是預覽
-// (lib/qc.js judgeChecklist),簽署時 DB 以 fn_checklist_judge 同一條規則重算為準。state={content, sources} 由 lib/fieldDocs 的純函式改。
-import { Field, Input, Textarea, Badge, Empty, Select, THEAD_CLS } from '../ui.jsx'
+// 檢查項目表(實測值只能人填、告示板讀數只提示、判定預覽)與監造查驗表單共用 ChecklistItemsTable;簽署時 DB 以 fn_checklist_judge
+// 同一條規則重算為準。state={content, sources} 由 lib/fieldDocs 的純函式改。
+import { Field, Input, Textarea, Empty, Select } from '../ui.jsx'
 import { MSym } from '../icons.jsx'
 import { appPrompt, appConfirm } from '../confirm.jsx'
 import {
   setFieldValue, confirmField, setFieldNa, setSelfCheckTemplate, selfCheckValues, templateFields, sourceLabel,
 } from '../../lib/fieldDocs.js'
-import { judgeItem, judgeChecklist, checklistCoverage, coverageText } from '../../lib/qc.js'
 import FieldSourceChip from './FieldSourceChip.jsx'
+import ChecklistItemsTable from './ChecklistItemsTable.jsx'
 import { fieldAnchorId } from './DailyLogFields.jsx'
-
-const INPUT_CLS = 'border border-[var(--border)] rounded px-1.5 py-0.5 text-sm max-md:py-2 bg-[var(--surface)] text-[var(--text)] focus:border-[var(--blue)] focus:outline-none'
-
-// 判定章:○ 合格 / ✕ 不合格 / — 未檢(與 ChecklistSection 同一套符號)
-function PassMark({ pass }) {
-  if (pass === true) return <span className="text-[var(--green-text)] font-semibold">○</span>
-  if (pass === false) return <span className="text-[var(--red-text)] font-semibold">✕</span>
-  return <span className="text-[var(--text-3)]">—</span>
-}
 
 export default function SelfCheckFields({
   state, frame, checklistTemplates = [], checklistTemplate = null, labels = null, editable, leaves = [], byId = new Map(), onChange, issues = new Map(),
@@ -43,8 +34,6 @@ export default function SelfCheckFields({
   const fieldsByKey = Object.fromEntries(templateFields(frame).map((f) => [f.key, f]))
   const items = Array.isArray(checklistTemplate?.items) ? checklistTemplate.items : []
   const values = selfCheckValues(content)
-  const live = checklistTemplate ? judgeChecklist(checklistTemplate, values) : null
-  const cov = checklistTemplate ? checklistCoverage(checklistTemplate, live?.results) : null
 
   const changeTemplate = async (id) => {
     const t = checklistTemplates.find((x) => x.id === id)
@@ -102,81 +91,7 @@ export default function SelfCheckFields({
   const renderItems = () => {
     if (!checklistTemplate) return <Empty>請先選擇檢查表範本，項目由範本帶出。</Empty>
     if (!items.length) return <Empty>範本「{checklistTemplate.title}」沒有任何檢查項目，無法簽署；請換一張範本。</Empty>
-    let lastGroup = null
-    return (
-      <div>
-        <p className="text-caption text-[var(--text-3)] mb-2">{fieldsByKey.results?.note}</p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
-            <thead>
-              <tr className={`${THEAD_CLS} border-b border-[var(--border)]`}>
-                <th className="text-left py-1.5 w-14">項次</th>
-                <th className="text-left">檢查項目</th>
-                <th className="text-left px-2">檢查標準</th>
-                <th className="text-right px-2 w-32">實測值／勾選</th>
-                <th className="text-center w-12">判定</th>
-                <th className="text-left px-2">來源／狀態</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => {
-                const key = `results.${it.no}`
-                const v = values[it.no]
-                const src = sources?.[key]
-                const isNa = src?.status === 'na'
-                const groupRow = it.group !== lastGroup
-                lastGroup = it.group
-                const title = `${it.no} ${it.item}`
-                return [
-                  groupRow && it.group && (
-                    <tr key={`g-${it.group}`}><td colSpan={6} className="pt-2 pb-1 text-caption font-semibold tracking-[0.08em] text-[var(--text-3)]">{it.group}</td></tr>
-                  ),
-                  <tr key={it.no} id={fieldAnchorId(key)} className="border-b border-[var(--border-2)] align-top">
-                    <td className="py-1.5 text-xs text-[var(--text-3)] num">{it.no}</td>
-                    <td className="py-1.5 pr-2">{it.item}</td>
-                    <td className="py-1.5 px-2 text-xs text-[var(--text-2)]">{it.standard}{it.source ? <span className="text-[var(--text-3)]">（{it.source}）</span> : ''}</td>
-                    <td className="py-1.5 px-2 text-right">
-                      {isNa ? <span className="text-xs text-[var(--text-3)]">不適用</span> : editable ? (
-                        it.kind === 'bool' ? (
-                          <span className="inline-flex items-center gap-2 justify-end">
-                            <label className="inline-flex items-center gap-1 max-md:min-h-11"><input type="checkbox" className="w-5 h-5" aria-label={`${title} 合格`} checked={v === true} onChange={(e) => set(key, e.target.checked ? true : null)} />合格</label>
-                            <label className="inline-flex items-center gap-1 max-md:min-h-11"><input type="checkbox" className="w-5 h-5" aria-label={`${title} 不合格`} checked={v === false} onChange={(e) => set(key, e.target.checked ? false : null)} />不合格</label>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 justify-end">
-                            <input type="number" step="any" inputMode="decimal" value={v ?? ''} aria-label={`${title} 實測值`}
-                              onChange={(e) => set(key, e.target.value === '' ? null : Number(e.target.value))}
-                              className={`${INPUT_CLS} w-24 text-right tabular-nums`} />
-                            <span className="text-micro text-[var(--text-3)] w-10">{it.unit || ''}</span>
-                          </span>
-                        )
-                      ) : (
-                        <span className="num">{v === true ? '✓' : v === false ? '✗' : v ?? <span className="text-[var(--text-3)]">待補</span>}{typeof v === 'number' && it.unit ? ` ${it.unit}` : ''}</span>
-                      )}
-                      {editable && !isNa && src?.hint && v == null && (
-                        <div className="mt-1 text-caption text-[var(--amber-text)]">
-                          告示板讀數 {src.hint.value}{src.hint.unit || ''}（僅供參考）
-                          <button type="button" onClick={() => set(key, src.hint.value)} className="ml-1 font-medium text-[var(--blue-text)] hover:underline min-h-11 md:min-h-0">親自量測後採用此值</button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="text-center py-1.5"><PassMark pass={isNa ? null : judgeItem(it, v)} /></td>
-                    <td className="px-2 py-1.5">{chip(key, { naLabel: '不適用', onNa: () => na(key, title) })}</td>
-                  </tr>,
-                ]
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-2 flex items-center gap-3 flex-wrap text-footnote">
-          {live?.overall
-            ? <Badge color={live.overall === '合格' ? 'green' : 'red'}>判定預覽：{live.overall}{live.failed.length ? `（${live.failed.length} 項不合格）` : ''}</Badge>
-            : <Badge color="slate">判定預覽：尚無已檢項目</Badge>}
-          {cov && <span className={cov.unchecked ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}>{coverageText(cov)}{cov.unchecked ? '；判定僅依已檢項' : ''}</span>}
-          <span className="text-caption text-[var(--text-3)]">簽署時由伺服器依範本量化標準重算，畫面判定只是預覽。</span>
-        </div>
-      </div>
-    )
+    return <ChecklistItemsTable template={checklistTemplate} values={values} sources={sources} editable={editable} onSet={set} onNa={na} chip={chip} note={fieldsByKey.results?.note} measurer="廠商" />
   }
 
   const renderField = (f) => {

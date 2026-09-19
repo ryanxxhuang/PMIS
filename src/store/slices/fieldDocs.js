@@ -25,6 +25,7 @@ import {
   contentFromAgentDraft, TO_ORG_BY_DOC_TYPE, docConfirmRequiredKeys,
 } from '../../lib/fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../../data/demoFieldDocTemplates.js'
+import { taipeiToday } from '../../lib/dates.js'
 
 const DOC_COLS = FIELD_DOCUMENT_COLUMNS
 const INTAKE_COLS = 'id, project_id, created_by, uploader_org, log_date, status, photo_count, recognized_count, failed_count, candidates, run_started_at, last_progress_at, attempts, error_summary, created_at, updated_at'
@@ -56,7 +57,7 @@ async function withSignedUrls(rows) {
 const rpcError = (error) => ({ code: error?.code || null, message: error?.message || '操作未完成', details: error?.details || null, hint: error?.hint || null })
 
 // setChecklistRecords／setDefects／checklistTemplates(quality slice):自檢表簽署後重載檢查紀錄與缺失;示範模式存版時由範本項目算待補
-export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, currentProject, currentUser, wiMaps }, { setSiteLogs, setChecklistRecords, setDefects, checklistTemplates = [] } = {}) {
+export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, currentProject, currentUser, wiMaps }, { setSiteLogs, setChecklistRecords, setDefects, reloadQuality = null, checklistTemplates = [] } = {}) {
   // { documents, submissions }:與 P5a 今日工作球權(useTodayTasks)同一份;documents 只含未終態
   const [docState, setDocState] = useState({ documents: [], submissions: [] })
   const setFieldDocuments = useCallback((fn) => setDocState((st) => ({ ...st, documents: typeof fn === 'function' ? fn(st.documents) : fn })), [])
@@ -275,11 +276,11 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
   // 建草稿(客戶端 INSERT 六欄之內;intake_id 不填——起稿冪等鍵由 Edge 寫,客戶端寫不出 target_key;自檢表帶 template_id=本案檢查表範本)。
   // 責任方由 DB generated column 決定(監造建施工日誌、廠商建監造日誌會被 RLS 擋);
   // 同日活文件撞唯一索引(23505,日誌類)→ 重載後改用既有文件,不重複建件。
-  const createFieldDocDraft = useCallback(async (docType, date, { templateId = null } = {}) => {
+  const createFieldDocDraft = useCallback(async (docType, date, { templateId = null, targetKey = null } = {}) => {
     if (demoMode) {
       const id = `FD-DEMO-${Object.keys(demoDocsRef.current).length + 1}-${Date.now().toString(36)}`
       const meta = DOC_TYPE_META[docType] || DOC_TYPE_META.daily_log
-      const doc = { id, project_id: pid || 'demo', doc_type: docType, owner_org: meta.owner_org, target_table: meta.target_table, target_id: null, target_key: null, intake_id: null, doc_date: date, status: 'draft', current_version_no: 0, template_id: templateId, required_fields: [], recheck: [], created_by: uid || null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+      const doc = { id, project_id: pid || 'demo', doc_type: docType, owner_org: meta.owner_org, target_table: meta.target_table, target_id: null, target_key: targetKey, intake_id: null, doc_date: date, status: 'draft', current_version_no: 0, template_id: templateId, required_fields: [], recheck: [], created_by: uid || null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
       setDemoDocs((m) => ({ ...m, [id]: { doc, versions: [] } }))
       return { error: null, doc }
     }
@@ -298,6 +299,32 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     return { error: null, doc: data }
   }, [demoMode, setDemoDocs, isPersistedProject, pid, uid, reloadFieldDocs, setFieldDocuments])
   const createDailyLogDraft = useCallback((date) => createFieldDocDraft('daily_log', date), [createFieldDocDraft])
+
+  // 監造查驗表單草稿(P3c):由查驗申請建立或取回既有活文件(target_key=查驗 id;伺服器 RPC 檢查監造成員與同案,唯一索引兜底)
+  const createInspectionFormDraft = useCallback(async (inspectionId) => {
+    if (!inspectionId) return { error: { code: 'PD010', message: '缺少查驗申請' } }
+    if (demoMode) {
+      const existing = Object.values(demoDocsRef.current).map((d) => d.doc).find((d) => d.doc_type === 'inspection_form' && d.target_key === inspectionId && !['discarded', 'superseded'].includes(d.status))
+      if (existing) return { error: null, doc: existing, created: false }
+      const r = await createFieldDocDraft('inspection_form', taipeiToday(), { targetKey: inspectionId })
+      return r.error ? r : { ...r, created: true }
+    }
+    if (!isPersistedProject) return { error: DEMO_UPLOAD_ERROR }
+    const { data, error } = await supabase.rpc('create_inspection_form_draft', { p_inspection_id: inspectionId })
+    if (error) return { error: rpcError(error) }
+    const { created, ...doc } = data || {}
+    setFieldDocuments((docs) => (docs.some((d) => d.id === doc.id) ? docs.map((d) => (d.id === doc.id ? { ...d, ...doc } : d)) : [doc, ...docs]))
+    return { error: null, doc, created: !!created }
+  }, [demoMode, isPersistedProject, createFieldDocDraft, setFieldDocuments])
+
+  // 此工項的監造確認紀錄(P3c 表單顯示「已確認累計」;RLS 成員可讀,寫入只走簽署與 P4b RPC)
+  const listInspectionConfirmations = useCallback(async (workItemId) => {
+    if (demoMode || !isPersistedProject || !workItemId) return []
+    const { data } = await supabase.from('inspection_confirmations')
+      .select('id, work_item_id, batch_key, location_label, stage_key, unit, qty_cum, qty_delta, basis, inspection_id, document_id, document_version_no, status, confirmed_at, created_at')
+      .eq('project_id', pid).eq('work_item_id', workItemId).order('confirmed_at', { ascending: false }).limit(500)
+    return data || []
+  }, [demoMode, isPersistedProject, pid])
 
   // 指定版本(列印頁印「已簽署版本」用:簽署列指向的版本號,不一定是目前版本)
   const getFieldDocumentVersion = useCallback(async (docId, versionNo) => {
@@ -357,16 +384,21 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
         if (typeof setDefects === 'function') setDefects(await loadDefectsFromDB(pid, wiMaps.byId))
       } catch { /* 下次進頁會重載 */ }
     }
+    // 監造查驗表單簽署即判定(inspections 狀態／確認量)＋不合格由 DB trigger 開缺失 → 重載查驗與缺失
+    if (dbMode && data?.target_table === 'inspections' && typeof reloadQuality === 'function') {
+      try { await reloadQuality() } catch { /* 下次進頁會重載 */ }
+    }
     return { error: null, result: data }
-  }, [demoMode, dbMode, pid, wiMaps, setSiteLogs, setChecklistRecords, setDefects, setFieldDocuments])
+  }, [demoMode, dbMode, pid, wiMaps, setSiteLogs, setChecklistRecords, setDefects, reloadQuality, setFieldDocuments])
 
   // 提送／收件／退回:同一件事重試用同一個 client_request_id(伺服器冪等回同一張回執)
-  const submitFieldDocument = useCallback(async ({ documentId, versionNo, docType = 'daily_log' }) => {
+  // 提送:對象預設該類型第一順位(施工日誌／自檢→監造、監造日誌→機關、查驗表單→廠商);多對象文件由頁面逐一指定 toOrg
+  const submitFieldDocument = useCallback(async ({ documentId, versionNo, docType = 'daily_log', toOrg = null }) => {
     if (demoMode) return { error: DEMO_ERROR }
-    const toOrg = TO_ORG_BY_DOC_TYPE[docType]
-    const reqKey = { documentId, versionNo, action: 'submit' }
+    const to = toOrg || TO_ORG_BY_DOC_TYPE[docType]
+    const reqKey = { documentId, versionNo, action: 'submit', reason: to }
     const { data, error } = await supabase.rpc('submit_field_document', {
-      p_document_id: documentId, p_version_no: versionNo, p_to_org: toOrg, p_client_request_id: submissionRequestId(reqKey),
+      p_document_id: documentId, p_version_no: versionNo, p_to_org: to, p_client_request_id: submissionRequestId(reqKey),
     })
     if (error) {
       const e = rpcError(error)
@@ -436,7 +468,7 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
   return {
     fieldDocuments, intakes, fieldDocsLoading, reloadFieldDocs, clearFieldDocs,
     createIntake, findExistingPhotosBySha, uploadIntakePhoto, draftFromIntake, updateIntakeDate, setIntakeCandidates, discardIntake, listIntakePhotos, listPhotosByIds,
-    getFieldDocument, getFieldDocumentVersion, getFieldDocumentTemplate, findActiveFieldDoc, findActiveDailyLogDoc, createFieldDocDraft, createDailyLogDraft, saveFieldDocumentVersion,
+    getFieldDocument, getFieldDocumentVersion, getFieldDocumentTemplate, findActiveFieldDoc, findActiveDailyLogDoc, createFieldDocDraft, createDailyLogDraft, createInspectionFormDraft, listInspectionConfirmations, saveFieldDocumentVersion,
     signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, applyDailyLogDraft,
   }
 }

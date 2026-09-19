@@ -15,12 +15,12 @@
 // 須確認欄:系統帶入(既有紀錄／建議)的值要人逐項確認才能簽;實測值系統永遠不填。
 import {
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
-  checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys,
+  checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys, normalizeCqKey, CHECKLIST_DOC_TYPES,
 } from '../../supabase/functions/_shared/fieldDocTemplate.ts'
-import { fieldDocumentBalls } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+import { fieldDocumentBalls, FIELD_DOC_TO_ORGS } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 export {
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
-  checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys,
+  checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys, normalizeCqKey, CHECKLIST_DOC_TYPES,
 }
 
 // ── 上傳批次:客戶端狀態機 ────────────────────────────────────────────────────
@@ -212,16 +212,19 @@ export const checklistItemLabels = (items) => Object.fromEntries(
 
 // 必填鍵(鏡像 DB fn_field_document_required_fields):stored ∪ 類型固定欄 ∪ 施工日誌內容各工項的當日數量 ∪ 自檢表
 // 範本每個項目(stored 的工項鍵／項目鍵一律忽略、由內容重算)。施工日誌固定六欄;其他類型取範本 required(沒範本只回 stored)。
-export function requiredKeysFor(content, stored = [], { docType = 'daily_log', template = null, checklistItems = null } = {}) {
+export function requiredKeysFor(content, stored = [], { docType = 'daily_log', template = null, checklistItems = null, stageRequired = false } = {}) {
   const keys = new Set()
   for (const k of Array.isArray(stored) ? stored : []) {
-    if (typeof k === 'string' && k.trim() && !/^items\..+\.qty_today$/.test(k) && !(docType === 'self_check' && k.startsWith('results.'))) keys.add(k)
+    if (typeof k !== 'string' || !k.trim() || /^items\..+\.qty_today$/.test(k)) continue
+    if (CHECKLIST_DOC_TYPES.includes(docType) && k.startsWith('results.')) continue
+    if (docType === 'inspection_form' && k === 'stage_key') continue // 階段鍵永遠由工項的 ITP 必要階段重算
+    keys.add(k)
   }
   if (docType === 'daily_log') {
     for (const k of DAILY_LOG_FIXED_REQUIRED) keys.add(k)
     for (const wid of Object.keys(content?.items || {})) keys.add(`items.${wid}.qty_today`)
   } else {
-    for (const k of docRequiredKeys(docType, template, checklistItems)) keys.add(k)
+    for (const k of docRequiredKeys(docType, template, checklistItems, { stageRequired })) keys.add(k)
   }
   return [...keys].sort()
 }
@@ -461,6 +464,101 @@ export function setSelfCheckTemplate({ content, sources }, checklistTemplate) {
   return { content: next, sources: nextSources }
 }
 
+// ── 監造查驗表單內容形狀(P3c;鍵與 Edge buildInspectionFormDraft 同一組)────────────────────────
+// 查驗申請資料(工項、位置、階段、申報量、檢附自檢)帶入並標 inspection:<id> 待監造核對;單位取自標單工項;判定與本次確認數量
+// 永遠留空 pending,只能由監造親自填(簽署即判定並寫入監造確認紀錄)。
+export const INSPECTION_VERDICTS = Object.freeze(['合格', '部分合格', '不合格'])
+export const INSPECTION_VERDICT_TONE = Object.freeze({ 合格: 'green', 部分合格: 'amber', 不合格: 'red' })
+// 工項的 ITP 必要階段(鏡像 DB fn_cq_required_stages_internal:H 點且 required_for_billing;鍵正規化排序)。
+// refs 可同時給 uuid 與 item_key(真 DB 的 inspection_points 帶 work_item_id、示範種子帶 work_item_key)。
+export function requiredStagesFor(inspectionPoints = [], refs = []) {
+  const wanted = new Set((Array.isArray(refs) ? refs : [refs]).filter(Boolean))
+  if (!wanted.size) return []
+  const keys = new Set()
+  for (const p of inspectionPoints || []) {
+    if (!p || p.point_type !== 'H' || p.required_for_billing === false) continue
+    if (!(wanted.has(p.work_item_id) || wanted.has(p.work_item_key))) continue
+    const k = normalizeCqKey(p.stage_key)
+    if (k) keys.add(k)
+  }
+  return [...keys].sort()
+}
+export function emptyInspectionFormContent(date, frame, inspection, workItem, { template = null } = {}) {
+  const results = {}
+  for (const it of Array.isArray(template?.items) ? template.items : []) if (it?.no) results[it.no] = { value: null }
+  return {
+    inspection_date: date, inspection_id: inspection?.id || null, inspection_title: inspection?.title || null,
+    work_item_id: workItem?.id || null, location: inspection?.location || null, stage_key: inspection?.stage_key || null,
+    unit: workItem?.unit || '', declared_qty: inspection?.declared_qty ?? null, self_check_record_id: inspection?.checklist_record_id || null,
+    template_id: template?.id || null, template_title: template?.title || null, results,
+    verdict: null, confirmed_qty: null, result_note: null, note: null,
+    template: frame?.key ? { key: frame.key, version: frame.version ?? 1 } : null,
+    photo_ids: [], unmatched_photo_ids: [],
+  }
+}
+export function emptyInspectionFormSources(content, { requiredStages = [], template = null } = {}) {
+  const ins = content?.inspection_id ? `inspection:${content.inspection_id}` : null
+  const fromReq = (reason) => ({ status: 'filled', source: ins, reason })
+  const sources = { inspection_date: { status: 'confirmed', source: 'human' } }
+  if (ins) { sources.inspection_id = { status: 'filled', source: ins }; sources.work_item_id = { status: 'filled', source: ins } }
+  if (content?.unit) sources.unit = { status: 'filled', source: 'system:work_item' }
+  sources.location = content?.location ? fromReq('取自查驗申請,請核對後確認(確認數量以此位置累計)') : { status: 'pending', source: null }
+  if (requiredStages.length) {
+    const k = normalizeCqKey(content?.stage_key)
+    sources.stage_key = k && requiredStages.includes(k) ? fromReq('取自查驗申請,請核對後確認')
+      : { status: 'pending', source: null, reason: `此工項有必要查驗階段 ${requiredStages.join('、')},請選擇本次查驗的階段` }
+  }
+  sources.declared_qty = content?.declared_qty != null ? fromReq('取自查驗申請,請核對後確認') : { status: 'pending', source: null, reason: '查驗申請未載明申報數量,請依申請文件填入' }
+  if (content?.self_check_record_id) sources.self_check_record_id = { status: 'filled', source: ins }
+  if (template) sources.template_id = { status: 'confirmed', source: 'human' }
+  for (const it of Array.isArray(template?.items) ? template.items : []) if (it?.no) sources[`results.${it.no}`] = { status: 'pending', source: null }
+  sources.verdict = { status: 'pending', source: null, reason: '判定由監造親自勾選' }
+  sources.confirmed_qty = { status: 'pending', source: null, reason: '本次確認數量由監造親自填寫' }
+  return sources
+}
+// 換查驗表範本(kind=inspection_form):項目全部重來,其餘欄位保留
+export function setInspectionFormTemplate({ content, sources }, template) {
+  const next = { ...content, template_id: template?.id || null, template_title: template?.title || null, results: {} }
+  const nextSources = Object.fromEntries(Object.entries(sources || {}).filter(([k]) => !k.startsWith('results.') && k !== 'template_id'))
+  if (template) nextSources.template_id = { status: 'confirmed', source: 'human' }
+  for (const it of Array.isArray(template?.items) ? template.items : []) if (it?.no) { next.results[it.no] = { value: null }; nextSources[`results.${it.no}`] = { status: 'pending', source: null } }
+  return { content: next, sources: nextSources }
+}
+// 判定與確認數量的一致性(鏡像 DB 簽署分支 field_document_sign_inspection_form_internal;存檔前預覽,伺服器簽署時再驗一次為準)
+export function inspectionFormIssues(content, { workItem = null, requiredStages = [], judged = null } = {}) {
+  const out = []
+  const v = content?.verdict || null
+  const declared = content?.declared_qty == null ? null : Number(content.declared_qty)
+  const confirmed = content?.confirmed_qty == null ? null : Number(content.confirmed_qty)
+  if (workItem?.unit && normalizeCqKey(content?.unit) !== normalizeCqKey(workItem.unit)) out.push({ key: 'unit', message: `單位「${content?.unit || ''}」與標單工項單位「${workItem.unit}」不一致，不得簽署` })
+  const stage = normalizeCqKey(content?.stage_key)
+  if (requiredStages.length && stage && !requiredStages.includes(stage)) out.push({ key: 'stage_key', message: `階段「${content.stage_key}」不在必要查驗階段 ${requiredStages.join('、')} 之中` })
+  if (!requiredStages.length && stage) out.push({ key: 'stage_key', message: '此工項沒有必要查驗階段（檢驗停留點無 H 點），不可帶階段' })
+  if (v && !INSPECTION_VERDICTS.includes(v)) out.push({ key: 'verdict', message: '判定只能是 合格／部分合格／不合格' })
+  if (declared != null && !(Number.isFinite(declared) && declared >= 0)) out.push({ key: 'declared_qty', message: '申報數量須為非負數字' })
+  if (confirmed != null) {
+    if (!Number.isFinite(confirmed) || confirmed < 0) out.push({ key: 'confirmed_qty', message: '本次確認數量須為非負數字' })
+    else if (declared != null && Number.isFinite(declared)) {
+      if (confirmed > declared) out.push({ key: 'confirmed_qty', message: `本次確認數量 ${confirmed} 超過申報數量 ${declared}` })
+      else if (v === '合格' && confirmed !== declared) out.push({ key: 'confirmed_qty', message: `判定合格時本次確認數量須等於申報數量 ${declared}；未全數通過請判部分合格` })
+      else if (v === '部分合格' && !(confirmed > 0 && confirmed < declared)) out.push({ key: 'confirmed_qty', message: `判定部分合格時本次確認數量須大於 0 且小於申報數量 ${declared}` })
+      else if (v === '不合格' && confirmed !== 0) out.push({ key: 'confirmed_qty', message: '判定不合格時本次確認數量須為 0' })
+    }
+  }
+  if (v && v !== '合格' && !String(content?.result_note || '').trim()) out.push({ key: 'result_note', message: `判定${v}必須填寫判定說明（作為自動開立缺失的說明）` })
+  if (judged?.overall === '不合格' && v === '合格') out.push({ key: 'verdict', message: `查驗項目 ${(judged.failed || []).join('、')} 不合格，不得判定合格` })
+  return out
+}
+// 此工項此批次此階段目前的有效累計確認量(取最新一筆 active;與 DB 累計語意相同):確認紀錄由 store 讀(RLS 成員可讀)
+export function currentBatchCum(confirmations = [], { location, stageKey = null } = {}) {
+  const batch = normalizeCqKey(location)
+  const stage = normalizeCqKey(stageKey) || null
+  if (!batch) return null
+  const rows = (confirmations || []).filter((c) => c?.status === 'active' && c.batch_key === batch && (c.stage_key || null) === stage)
+    .sort((a, b) => String(b.confirmed_at).localeCompare(String(a.confirmed_at)) || String(b.created_at).localeCompare(String(a.created_at)))
+  return rows.length ? Number(rows[0].qty_cum) : 0
+}
+
 // ── 人工編輯:每次改值同時改來源(值與來源永遠一起走,不會有「值變了、來源還說是 AI」)──
 const setPath = (obj, key, value) => {
   const m = /^items\.([^.]+)\.(qty_today|location|note)$/.exec(key)
@@ -603,13 +701,16 @@ export const DOC_STATUS_LABEL = Object.freeze({
   draft: '草稿', pending_input: '待補件', in_review: '內部核對中', signed: '已簽署', submitted: '已提送',
   received: '對方已收件', returned: '已退回', discarded: '已捨棄', superseded: '已取代',
 })
-// 提送對象(P2d 對象矩陣,鏡像 DB fn_field_document_to_org_allowed):施工日誌／自檢→監造、監造日誌→機關、查驗表單→廠商
-export const TO_ORG_BY_DOC_TYPE = Object.freeze({ daily_log: 'supervisor', self_check: 'supervisor', supervisor_log: 'owner', inspection_form: 'contractor' })
+// 提送對象(P2d 對象矩陣;單一來源 ballInCourtRules.FIELD_DOC_TO_ORGS 鏡像 DB fn_field_document_to_org_allowed,Vitest 對 migration 釘住):
+// 施工日誌／自檢→監造、監造日誌→機關、監造查驗表單→廠商(第一順位,判定與缺失的相對人)＋機關(備查);多對象各自提送、各自收件
+export const TO_ORGS_BY_DOC_TYPE = FIELD_DOC_TO_ORGS
+export const TO_ORG_BY_DOC_TYPE = Object.freeze(Object.fromEntries(Object.entries(FIELD_DOC_TO_ORGS).map(([k, v]) => [k, v[0]])))
 export const ORG_LABEL = Object.freeze({ contractor: '施工廠商', supervisor: '監造', owner: '機關' })
-export const docToOrg = (doc) => TO_ORG_BY_DOC_TYPE[doc?.doc_type] || null
-export const docToOrgLabel = (doc) => ORG_LABEL[docToOrg(doc)] || '對方'
-// 文件頁路由(接上頁面的類型才有;其餘在 /site 清單只列狀態並標尚未支援)
-export const DOC_PAGE_PATH = Object.freeze({ daily_log: '/site-log', supervisor_log: '/supervisor-log', self_check: '/self-check' })
+export const docToOrgs = (doc) => TO_ORGS_BY_DOC_TYPE[doc?.doc_type] || []
+export const docToOrg = (doc) => docToOrgs(doc)[0] || null
+export const docToOrgLabel = (doc) => docToOrgs(doc).map((o) => ORG_LABEL[o]).join('／') || '對方'
+// 文件頁路由(四類皆有頁面;/site 清單與今日工作直達)
+export const DOC_PAGE_PATH = Object.freeze({ daily_log: '/site-log', supervisor_log: '/supervisor-log', self_check: '/self-check', inspection_form: '/inspection-form' })
 export const docPagePath = (docType) => DOC_PAGE_PATH[docType] || null
 export const docPageLink = (doc) => (docPagePath(doc?.doc_type) && doc?.id ? `${docPagePath(doc.doc_type)}?doc=${encodeURIComponent(doc.id)}` : null)
 
@@ -617,7 +718,7 @@ export function docStatusMeta(doc, viewerOrg) {
   const s = doc?.status
   const owner = doc?.owner_org
   const mine = owner === viewerOrg
-  const to = docToOrg(doc)
+  const tos = docToOrgs(doc)
   const toLabel = docToOrgLabel(doc)
   const pendingCount = Array.isArray(doc?.recheck) ? doc.recheck.length : 0
   switch (s) {
@@ -625,8 +726,8 @@ export function docStatusMeta(doc, viewerOrg) {
     case 'draft': return { label: '草稿・可簽署', tone: 'blue', action: mine ? '審核後簽署' : null }
     case 'in_review': return { label: '內部核對中', tone: 'blue', action: mine ? '核對後簽署' : null }
     case 'signed': return { label: '已簽署・待提送', tone: 'green', action: mine ? `提送給${toLabel}` : null }
-    case 'submitted': return { label: '已提送・待收件', tone: 'blue', action: !mine && viewerOrg === to ? '收件或退回' : null }
-    case 'received': return { label: `${toLabel}已收件`, tone: 'green', action: null }
+    case 'submitted': return { label: '已提送・待收件', tone: 'blue', action: !mine && tos.includes(viewerOrg) ? '收件或退回' : null }
+    case 'received': return { label: `${tos.length > 1 ? '對方' : toLabel}已收件`, tone: 'green', action: null }
     case 'returned': return { label: '已退回', tone: 'red', action: mine ? '補正後重新簽署' : null }
     case 'discarded': return { label: '已捨棄', tone: 'slate', action: null }
     case 'superseded': return { label: '已取代', tone: 'slate', action: null }

@@ -4,8 +4,8 @@
 // 依角色只列「你在這裡能辦的事」(can 只是 UX,伺服器仍是安全邊界)。
 // P2c:主動作「拍照／上傳」(IntakeUploader:保存照片→伺服器辨識起稿)、「上傳批次」(離頁／重登入後
 // 從伺服器恢復,IntakeList)、「現場文書」清單(field_documents 未終態,與今日工作球權同一份資料;
-// 施工日誌開 /site-log?doc=、監造日誌開 /supervisor-log?doc=(P3a)、自主檢查表開 /self-check?doc=(P3b),查驗表單 P3c 前只列狀態、明寫尚未支援;
-// 頁面路由由 lib/fieldDocs.docPageLink 決定)。?doc=<id>(P5a 待辦的直達參數)落到這裡後轉到該文件的頁面;?intake=<id> 展開該批。
+// 施工日誌開 /site-log?doc=、監造日誌開 /supervisor-log?doc=(P3a)、自主檢查表開 /self-check?doc=(P3b)、監造查驗表單開
+// /inspection-form?doc=(P3c);頁面路由由 lib/fieldDocs.docPageLink 決定)。?doc=<id>(P5a 待辦的直達參數)落到這裡後轉到該文件的頁面;?intake=<id> 展開該批。
 import { useEffect, useMemo } from 'react'
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
@@ -29,6 +29,7 @@ const DESC = {
   '/supervisor-log': { contractor: '查閱監造每日紀錄（到場、監造事項、查驗與通知）。', supervisor: '審核系統擬好的監造日誌草稿、親自確認到場人員，簽署後提送機關。', owner: '查閱監造每日紀錄；監造提送後在此收件或退回。' },
   '/quality': { contractor: '申請查驗、改善缺失後提送複查。', supervisor: '判定待查驗項目；不合格開立缺失，改善後複查結案。', owner: '查閱查驗結果與缺失改善情形。' },
   '/self-check': { contractor: '審核系統擬好的自主檢查表草稿、親自填實測值，簽署後可隨查驗申請檢附。', supervisor: '查閱廠商自主檢查表與修訂版；提送後在此收件或退回。', owner: '查閱廠商自主檢查紀錄。' },
+  '/inspection-form': { contractor: '查閱監造的查驗判定與確認數量；提送後在此收件。', supervisor: '由查驗申請建立表單、親自判定並填本次確認數量；簽署即判定，確認量成為廠商可估驗的依據。', owner: '查閱監造查驗判定與確認數量；提送後在此收件。' },
   samples: { contractor: '登錄試體 7 天／28 天試驗值；不合格自動開缺失。', supervisor: '查閱試體試驗結果與逾期未填。', owner: '查閱試體試驗結果。' },
   '/itp': { contractor: '施作到停留點前先申請查驗；H 點未查驗不得續作。', supervisor: '設定停留點並查驗；未申請的 H 點會提醒。', owner: '查閱停留點的查驗狀態。' },
   '/safety': { contractor: '登錄自主檢查、教育訓練與危害告知；處理工安缺失。', supervisor: '登錄監造觀察／查驗／複查；開立與複查工安缺失。', owner: '追蹤工安紀錄與尚未結案的工安缺失。' },
@@ -68,6 +69,7 @@ export default function Site() {
     const todayDoc = documents.find((d) => d.doc_type === 'daily_log' && d.doc_date === today) || null
     const todaySupDoc = documents.find((d) => d.doc_type === 'supervisor_log' && d.doc_date === today) || null
     const selfCheckDocs = documents.filter((d) => d.doc_type === 'self_check')
+    const inspectionFormDocs = documents.filter((d) => d.doc_type === 'inspection_form')
     const pendingInsp = (inspections || []).filter((i) => i.status === '待查驗').length
     const openQualityDefects = (defects || []).filter((d) => (d.domain || 'quality') !== 'safety' && d.status !== '已結案').length
     const openSafetyDefects = (defects || []).filter((d) => d.domain === 'safety' && d.status !== '已結案').length
@@ -79,7 +81,9 @@ export default function Site() {
       if (k === 'pending') itp.pending += 1
       else if (k === 'requested') itp.requested += 1
     }
-    return { hasTodayLog, todayDoc, todaySupDoc, selfCheckOpen: selfCheckDocs.filter((d) => ['draft', 'pending_input', 'returned'].includes(d.status)).length, selfCheckSubmitted: selfCheckDocs.filter((d) => d.status === 'submitted').length, pendingInsp, openQualityDefects, openSafetyDefects, pendingSamples, overdueSamples, itp, checklists: (checklistRecords || []).length }
+    return { hasTodayLog, todayDoc, todaySupDoc, selfCheckOpen: selfCheckDocs.filter((d) => ['draft', 'pending_input', 'returned'].includes(d.status)).length, selfCheckSubmitted: selfCheckDocs.filter((d) => d.status === 'submitted').length,
+      inspectionFormOpen: inspectionFormDocs.filter((d) => ['draft', 'pending_input', 'returned'].includes(d.status)).length, inspectionFormSubmitted: inspectionFormDocs.filter((d) => d.status === 'submitted').length,
+      pendingInsp, openQualityDefects, openSafetyDefects, pendingSamples, overdueSamples, itp, checklists: (checklistRecords || []).length }
   }, [siteLogs, documents, inspections, defects, testSamples, inspectionPoints, checklistRecords, today])
 
   // 今日施工日誌的一句話章:已簽署 > 文件狀態(待補／可簽署／已提送…)> 未填
@@ -106,6 +110,11 @@ export default function Site() {
       chips: [counts.selfCheckOpen > 0 && { label: `處理中 ${counts.selfCheckOpen}`, tone: 'amber' },
         counts.selfCheckSubmitted > 0 && { label: `待監造收件 ${counts.selfCheckSubmitted}`, tone: 'blue' },
         counts.checklists > 0 && { label: `紀錄 ${counts.checklists} 份`, tone: 'slate' }] },
+    // 監造查驗表單(P3c):由待查驗申請建立、簽署即判定並寫入確認量(廠商可估驗的依據)
+    { to: '/inspection-form', icon: 'task_alt', label: '監造查驗表單', desc: DESC['/inspection-form'][org],
+      chips: [counts.inspectionFormOpen > 0 && { label: `處理中 ${counts.inspectionFormOpen}`, tone: 'amber' },
+        counts.inspectionFormSubmitted > 0 && { label: `待收件 ${counts.inspectionFormSubmitted}`, tone: 'blue' },
+        counts.pendingInsp > 0 && can.approve && { label: `待判定 ${counts.pendingInsp}`, tone: 'amber' }] },
     { to: '/quality?seg=samples', icon: 'science', label: '試體試驗', desc: DESC.samples[org],
       chips: [counts.pendingSamples > 0 && { label: `待試驗 ${counts.pendingSamples}`, tone: 'slate' },
         counts.overdueSamples > 0 && { label: `逾期未填 ${counts.overdueSamples}`, tone: 'red' }] },
@@ -149,8 +158,8 @@ export default function Site() {
         <p role="status" className="text-footnote text-[var(--text-2)]">找不到編號 {docParam} 的文書（可能已捨棄、不在本案，或連結已失效）；以下為本案現場文書清單。</p>
       )}
 
-      {/* 主動作:拍照／上傳(廠商→施工日誌＋自主檢查表、監造→監造日誌自動起稿;查驗表單 P3c 前標尚未支援;機關查閱) */}
-      <Card title="拍照／上傳" action={<Badge color={org === 'owner' ? 'slate' : 'blue'}>{org === 'contractor' ? '施工日誌／自主檢查表自動起稿' : org === 'supervisor' ? '監造日誌自動起稿' : '查閱'}</Badge>}>
+      {/* 主動作:拍照／上傳(廠商→施工日誌＋自主檢查表、監造→監造日誌＋監造查驗表單自動起稿;機關查閱) */}
+      <Card title="拍照／上傳" action={<Badge color={org === 'owner' ? 'slate' : 'blue'}>{org === 'contractor' ? '施工日誌／自主檢查表自動起稿' : org === 'supervisor' ? '監造日誌／查驗表單自動起稿' : '查閱'}</Badge>}>
         <IntakeUploader />
       </Card>
 
@@ -161,14 +170,14 @@ export default function Site() {
         </Card>
       )}
 
-      {/* 現場文書:未終態文件(與今日工作球權同一份資料);施工日誌／監造日誌／自主檢查表開頁,查驗表單 P3c 前只列狀態 */}
+      {/* 現場文書:未終態文件(與今日工作球權同一份資料);四類文書皆開各自頁面 */}
       <Card title="現場文書" action={<Badge color={docRows.some((r) => r.mineTurn) ? 'amber' : 'green'} className="num">{docRows.length}</Badge>} bodyClass="p-0">
         {docRows.length === 0 ? (
-          <Empty icon="description">{demoMode ? '示範模式沒有現場文書；正式專案上傳照片後，擬好的施工日誌／監造日誌草稿會列在這裡。' : fieldDocsLoading ? '同步中…' : '尚無處理中的現場文書。上傳照片後，擬好的施工日誌／監造日誌草稿會列在這裡；已收件的文件不再列出。'}</Empty>
+          <Empty icon="description">{demoMode ? '示範模式沒有現場文書；正式專案上傳照片後，擬好的施工日誌／監造日誌／自主檢查表／監造查驗表單草稿會列在這裡。' : fieldDocsLoading ? '同步中…' : '尚無處理中的現場文書。上傳照片後，擬好的施工日誌／監造日誌／自主檢查表／監造查驗表單草稿會列在這裡；已收件的文件不再列出。'}</Empty>
         ) : (
           <ul aria-label="現場文書清單" className="divide-y divide-[var(--border-2)]">
             {docRows.map(({ doc, meta, mineTurn, link }) => {
-              const openable = !!link
+              const inspTitle = doc.doc_type === 'inspection_form' && doc.target_key ? (inspections || []).find((i) => i.id === doc.target_key)?.title : null
               const inner = (
                 <>
                   <span className={`w-8 h-8 rounded-lg grid place-items-center shrink-0 ${mineTurn ? 'bg-[var(--amber-tint)] text-[var(--amber-text)]' : 'bg-[var(--slate-tint)] text-[var(--slate-text)]'}`}>
@@ -176,23 +185,20 @@ export default function Site() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2 flex-wrap">
-                      <span className="text-body font-medium text-[var(--text)]">{DOC_TYPE_LABEL[doc.doc_type] || doc.doc_type} {doc.doc_date}{doc.doc_type === 'self_check' && doc.target_key ? ` · ${(adjustedById.get(doc.target_key.split(':')[1]) || {}).item_no || ''}`.trimEnd() : ''}</span>
+                      <span className="text-body font-medium text-[var(--text)]">{DOC_TYPE_LABEL[doc.doc_type] || doc.doc_type} {doc.doc_date}{doc.doc_type === 'self_check' && doc.target_key ? ` · ${(adjustedById.get(doc.target_key.split(':')[1]) || {}).item_no || ''}`.trimEnd() : ''}{inspTitle ? ` · ${inspTitle}` : ''}</span>
                       <Badge color={meta.tone}>{meta.label}</Badge>
                       <span className="text-caption text-[var(--text-3)] num">版本 {doc.current_version_no}</span>
                     </span>
                     <span className="block mt-1 text-footnote text-[var(--text-2)] leading-snug">
                       {meta.action ? `下一步：${meta.action}` : doc.status === 'submitted' ? `等待${docToOrgLabel(doc)}收件` : doc.status === 'received' ? `${docToOrgLabel(doc)}已收件` : '—'}
-                      {!openable && '・此類文書的頁面尚未支援（P3c）'}
                     </span>
                   </span>
-                  {openable && <MSym name="chevron_right" size={16} className="text-[var(--text-3)] shrink-0 mt-1" />}
+                  <MSym name="chevron_right" size={16} className="text-[var(--text-3)] shrink-0 mt-1" />
                 </>
               )
               return (
                 <li key={doc.id}>
-                  {openable
-                    ? <Link to={link} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">{inner}</Link>
-                    : <div className="flex items-start gap-3 px-4 py-3">{inner}</div>}
+                  <Link to={link} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">{inner}</Link>
                 </li>
               )
             })}

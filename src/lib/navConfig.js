@@ -37,6 +37,9 @@ export const navGroups = [
       { to: '/site-log', label: '施工日誌' },
       { to: '/supervisor-log', label: '監造日誌' },
       { to: '/self-check', label: '自主檢查表' },
+      // 監造查驗表單(P3c):監造的判定文件——由查驗申請直達、照片起稿、簽署即判定並寫入確認量(可估驗依據);不限角色,
+      // 頁內依 org 決定可編／唯讀／收件(廠商與機關各自收件)。
+      { to: '/inspection-form', label: '監造查驗表單' },
       { to: '/quality', label: '品質查驗' },
       { to: '/itp', label: '檢驗停留點' },
       { to: '/safety', label: '工安管理' },
@@ -122,6 +125,7 @@ export const WORK_GUIDANCE = {
   '/site-log': { contractor: '填寫日期、施作數量與照片，儲存後可供估驗帶入數量。', supervisor: '查閱廠商日誌與現場佐證，需要查驗時前往品質查驗。', owner: '查閱每日施工紀錄與照片，掌握現場執行情形。' },
   '/quality': { contractor: '完成自主檢查後申請查驗；收到缺失時改善，再提送監造複查。', supervisor: '選擇待查驗項目記錄判定；不合格開立缺失，改善後複查結案。', owner: '查閱查驗結果與缺失改善紀錄，追蹤尚未結案的事項。' },
   '/self-check': { contractor: '審核系統擬好的自主檢查表草稿、親自填實測值與勾選，簽署後可隨查驗申請檢附。', supervisor: '查閱廠商自主檢查表與修訂版；提送後在此收件或退回。', owner: '查閱廠商自主檢查紀錄。' },
+  '/inspection-form': { contractor: '查閱監造的查驗判定與確認數量；提送後在此收件。', supervisor: '由查驗申請建立表單，親自判定並填本次確認數量，簽署即判定並成為廠商可估驗的依據。', owner: '查閱監造查驗判定與確認數量；提送後在此收件。' },
   '/submittals': { contractor: '新增提送文件交監造審查；退回時依審查意見補正後重新提送。', supervisor: '選擇已提送文件，檢視附件後審定或退回補正。', owner: '查閱文件提送與監造審定結果，追蹤待辦進度。' },
   // 廠商在同一筆疑義上沒有「追問」動作(詳情只有確認結案;補充回覆是監造的),提示不描述不存在的動作
   '/rfi': { contractor: '提出工程疑義交監造回覆；確認答覆無誤後結案，仍有疑問請另提一筆疑義。', supervisor: '檢視疑義及相關資料，回覆後交廠商確認結案。', owner: '查閱工程疑義及往返答覆，掌握未解決問題。' },
@@ -172,6 +176,8 @@ const nonNavRouteRules = {
   '/supervisor-log/print': { access: 'authenticated', surface: 'print' },
   // 自主檢查表列印(P3b):同上,印簽署版本(項目判定由 DB 算)、示範框架範本標示
   '/self-check/print': { access: 'authenticated', surface: 'print' },
+  // 監造查驗表單列印(P3c):同上,印簽署版本(判定、確認數量、查驗項目結果)、示範範本標示
+  '/inspection-form/print': { access: 'authenticated', surface: 'print' },
   '/valuation/print': { access: 'authenticated', surface: 'print' },
   '/valuation/package': { access: 'authenticated', surface: 'print' },
   '/quality/checklist-print': { access: 'authenticated', surface: 'print' },
