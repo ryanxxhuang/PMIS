@@ -4,7 +4,7 @@
 
 ## 本機後端
 
-安裝 Docker 相容 runtime 與 [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)。macOS 可用 Homebrew；不要用不支援的 `npm install -g supabase`。資料庫唯一真相是 [migrations](migrations/)；舊 schema.sql 已移除，歷史可由 Git 追溯。
+安裝 Docker 相容 runtime 與 [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)。macOS 可用 Homebrew；不要用不支援的 `npm install -g supabase`。CI 的 `pgtap` job 釘死 CLI 版本（[pgtap.yml](../.github/workflows/pgtap.yml) 的 `supabase/setup-cli` `version`，目前 `2.113.0`），本機建議同版，`npm run test:db` 輸出第一行會印出實際版本；升級步驟見 [部署指南 §3](../docs/operations/deploy.md#3-部署前的門檻)。資料庫唯一真相是 [migrations](migrations/)；舊 schema.sql 已移除，歷史可由 Git 追溯。
 
 ```bash
 npm run test:db

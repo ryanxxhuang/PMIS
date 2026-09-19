@@ -107,7 +107,10 @@ async function main() {
   if (!projectId) throw new Error('supabase/config.toml 缺 project_id')
   const files = readdirSync('supabase/tests').filter((file) => file.endsWith('.sql')).sort()
   if (!files.length) throw new Error('沒有 pgTAP 測試')
-  must(sh('supabase', ['--version']), '需要 Supabase CLI;supabase --version')
+  // 版本印進輸出:CI 釘死 CLI 版本(.github/workflows/pgtap.yml),本機用 brew 的版本;
+  // 兩邊的結果要能對照,log 裡得看得到是哪一版在跑。
+  const cli = must(sh('supabase', ['--version']), '需要 Supabase CLI;supabase --version')
+  console.log(`Supabase CLI ${(cli.stdout || '').trim()}`)
   must(sh('docker', ['info']), '需要 Docker;docker info')
 
   for (const id of staleThrowaways(throwawayNames(), projectId, isAlive)) {
