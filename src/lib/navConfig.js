@@ -9,9 +9,9 @@
 // 「導覽隱藏」與「權限」永遠一致。
 // hidden: true=不渲染在側欄/分頁列/尋找功能,但仍參與 routeAllowed 的角色判斷——
 // 收斂是「不顯示」,不是「不設限」;刪掉定義會讓 roles 一起消失(權限靜默鬆綁)。
-// 退場模組(D-026 §4)只 hidden 不刪:/cost(廠商成本,歷史查閱)、/audit(機關風險稽核,
-// 檢核移入估驗流程後退場);深連結、提醒信與 Agent 產生的連結仍受原 roles 守衛。
-// /schedule(廠商逐工項排程)自 P5d 起 hidden:關鍵工項的計畫起迄承接到履約時程,舊頁唯讀歷史查閱。
+// 退場模組(D-026 §4):/cost(廠商成本)仍是頁面,只 hidden——歷史查閱與 CSV 匯出仍在這一頁。
+// /schedule(廠商逐工項排程)與 /audit(機關風險稽核)的頁面已於 P6b 移除(承接到履約時程／估驗計價),
+// 路由改登記在 nonNavRouteRules 的 access: 'retired'——原 roles 照樣守衛,放行後才導到承接位置。
 // platformAdminOnly: true=僅平台管理員(產品營運者)可見/可進——這是「平台」維度,
 // 與 roles(專案角色 org_type)互相獨立:can.override(專案管理者)也翻不過它。
 // 前端隱藏只是 UX;真正的把關在資料庫(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)。
@@ -53,9 +53,6 @@ export const navGroups = [
       { to: '/change-orders', label: '變更設計' },
       { to: '/progress', label: '進度 S 曲線' },
       { to: '/acceptance', label: '驗收結算' },
-      // 逐工項排程(D-026 §4 退場):關鍵工項的計畫起迄與落後判定自 P5d 起在履約時程(契約重點)呈現與維護,
-      // 本頁只剩唯讀歷史查閱;深連結仍依原 roles 可達
-      { to: '/schedule', label: '逐工項排程', roles: ['contractor'], hidden: true },
     ] },
     // 估驗請款:原「進度與金流」去掉排程、成本改 hidden;標單工項由參考項移入(逐項量價是估驗的依據)。
     { to: '/valuation', icon: 'payments', label: '估驗請款', short: '估驗', tabs: [
@@ -80,9 +77,6 @@ export const navGroups = [
       { to: '/members', label: '三方成員' },
       { to: '/activity', label: '活動紀錄' },
       { to: '/portfolio', label: '跨案總覽' },
-      // 機關防弊:roles 限機關。顯示與否不影響角色限制(曾因 hidden 收斂成全站死功能,
-      // 這次 hidden 是 D-026 的有意識退場:檢核移入估驗流程,頁面留給歷史查閱)。
-      { to: '/audit', label: '風險稽核', roles: ['owner'], hidden: true },
     ] },
   ] },
   { title: '平台', items: [
@@ -156,6 +150,10 @@ export function resolveBallKey(searchParams) {
 // 不出現在導覽的路由也必須明確登記。access 只描述路由表面；
 // authenticated 路由一律由 App 的共同 Web guard 驗證登入與專案狀態。
 // print 只代表不套 WebLayout，不代表公開。
+// retired=頁面已移除的退場路由(D-026;入口與退場設計 §5):與 authenticated 走同一個 Web guard、
+// roles 一字不改(只能由原角色或 override 通過),通過後導到 redirectTo(query 原樣帶過去)。
+// 不改成 access: 'redirect'——那是不經守衛的公開導向,會替原本進不來的角色開一條路;
+// 也不刪登記——舊書籤、提醒信與 Agent 回答裡的連結會變成「找不到頁面」。
 const nonNavRouteRules = {
   '/': { access: 'redirect' },
   '/login': { access: 'public' },
@@ -182,6 +180,11 @@ const nonNavRouteRules = {
   '/valuation/package': { access: 'authenticated', surface: 'print' },
   '/quality/checklist-print': { access: 'authenticated', surface: 'print' },
   '/contract/print': { access: 'authenticated', surface: 'print' },
+  // 逐工項排程(P6b 移除頁面):關鍵工項的計畫起迄與落後判定自 P5d 起在履約時程維護;
+  // ?item=<work_item_key> 由履約時程換成該項關鍵工項的直達
+  '/schedule': { access: 'retired', roles: ['contractor'], redirectTo: '/requirements' },
+  // 風險稽核(P6b 移除頁面):估驗所需的缺件與勾稽檢核在估驗計價逐期顯示(P1b／P4c);機關專屬不變
+  '/audit': { access: 'retired', roles: ['owner'], redirectTo: '/valuation' },
   '*': { access: 'authenticated', surface: 'not-found' },
 }
 

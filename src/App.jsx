@@ -32,7 +32,6 @@ const Valuation = lazy(() => import('./pages/web/Valuation.jsx'))
 const ValuationPrint = lazy(() => import('./pages/web/ValuationPrint.jsx'))
 const ValuationPackage = lazy(() => import('./pages/web/ValuationPackage.jsx'))
 const Progress = lazy(() => import('./pages/web/Progress.jsx'))
-const Schedule = lazy(() => import('./pages/web/Schedule.jsx'))
 const Quality = lazy(() => import('./pages/web/Quality.jsx'))
 const Contract = lazy(() => import('./pages/web/Contract.jsx'))
 const Safety = lazy(() => import('./pages/web/Safety.jsx'))
@@ -48,7 +47,6 @@ const MonthlyReport = lazy(() => import('./pages/web/MonthlyReport.jsx'))
 // /assistant 已導向 /agent(D-008/W3-1):頁面檔與 edge fn 留待 W3-3 退場
 const AgentConsole = lazy(() => import('./pages/web/Agent.jsx'))
 const SupervisorReport = lazy(() => import('./pages/web/SupervisorReport.jsx'))
-const RiskAudit = lazy(() => import('./pages/web/RiskAudit.jsx'))
 const Portfolio = lazy(() => import('./pages/web/Portfolio.jsx'))
 const Acceptance = lazy(() => import('./pages/web/Acceptance.jsx'))
 const ITP = lazy(() => import('./pages/web/ITP.jsx'))
@@ -128,6 +126,14 @@ function NotFound() {
   )
 }
 
+// 退場路由(navConfig access: 'retired'):頁面已移除,守衛(Web)照原 roles 放行後才到這裡,
+// 導到登記表的 redirectTo;query 與 location.state(taskReturn 返回來源)原樣帶過去——
+// /schedule?item=<key> 會由履約時程換成該項關鍵工項的直達。
+function RetiredRedirect({ path }) {
+  const { search, state } = useLocation()
+  return <Navigate to={{ pathname: routeRegistry[path].redirectTo, search }} state={state} replace />
+}
+
 function HomeRedirect() {
   const { currentUser, authReady } = useStore()
   if (!authReady) return <div className="min-h-screen grid place-items-center text-sm text-[var(--text-3)]">載入中…</div>
@@ -146,7 +152,7 @@ const appRoutes = [
   { path: '/assistant', element: <Navigate to="/agent" replace /> },
   { path: '/agent', element: <AgentConsole /> },
   { path: '/supervisor-report', element: <SupervisorReport /> },
-  { path: '/audit', element: <RiskAudit /> },
+  { path: '/audit', element: <RetiredRedirect path="/audit" /> },
   { path: '/portfolio', element: <Portfolio /> },
   { path: '/acceptance', element: <Acceptance /> },
   { path: '/project/new', element: <ProjectSetup /> },
@@ -170,7 +176,7 @@ const appRoutes = [
   { path: '/cost', element: <Cost /> },
   { path: '/change-orders', element: <ChangeOrders /> },
   { path: '/progress', element: <Progress /> },
-  { path: '/schedule', element: <Schedule /> },
+  { path: '/schedule', element: <RetiredRedirect path="/schedule" /> },
   { path: '/quality', element: <Quality /> },
   { path: '/itp', element: <ITP /> },
   { path: '/quality/checklist-print', element: <ChecklistPrint /> },
@@ -197,7 +203,8 @@ for (const { path } of appRoutes) {
 function guardedElement({ path, element }) {
   const rule = routeRegistry[path]
   if (rule.access === 'public' || rule.access === 'redirect') return element
-  return <Web bare={rule.surface === 'print'} registryPath={path}>{element}</Web>
+  // 退場路由只導向、不渲染內容:不套工作台外框(被擋時的無權限畫面仍由 Web 自己套外框)
+  return <Web bare={rule.surface === 'print' || rule.access === 'retired'} registryPath={path}>{element}</Web>
 }
 
 export default function App() {

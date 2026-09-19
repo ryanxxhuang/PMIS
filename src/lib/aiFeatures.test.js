@@ -69,9 +69,15 @@ describe('aiFeatures 前後端註冊表同步', () => {
     for (const f of AI_FEATURES) expect(f.defaultEnabled, f.key).toBe(!retired.has(f.key))
   })
 
-  it('每個 edgeFunction 目錄確實存在於 supabase/functions/', () => {
+  it('啟用中的功能:edgeFunction 目錄確實存在於 supabase/functions/;退場鍵:原始碼已移除(P6b),edgeFunction 只留原名對齊 DB 列與用量歷史', () => {
+    const retired = new Set(['assistant.chat', 'contract.parse', 'audit.summary'])
     for (const f of AI_FEATURES) {
       const dir = path.join(functionsDir, f.edgeFunction)
+      if (retired.has(f.key)) {
+        // 退場函式的原始碼不得回來:沒有呼叫端、閘門關閉,留著只會被誤部署或誤改(D-026;線上函式另行下架)
+        expect(fs.existsSync(dir), `退場函式原始碼不應存在: ${f.edgeFunction}`).toBe(false)
+        continue
+      }
       expect(fs.existsSync(dir), `缺少 edge function 目錄: ${f.edgeFunction}`).toBe(true)
       expect(fs.statSync(dir).isDirectory(), `${f.edgeFunction} 不是目錄`).toBe(true)
     }

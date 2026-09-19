@@ -23,9 +23,9 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
     expect(routeAllowed('/cost', 'contractor', false)).toBe(true)
     expect(routeAllowed('/cost', 'supervisor', true)).toBe(true) // override 一律放行
   })
-  it('風險稽核:導覽顯示與否不影響角色限制——僅機關可進', () => {
-    // 曾因 hidden 收斂變成全站死功能;D-026 再次 hidden 是有意識的退場,
-    // 這組斷言釘住 roles:入口顯示/隱藏都不得鬆綁機關防弊的角色限制。
+  it('風險稽核:頁面移除(P6b)後舊連結仍只有機關可進(退場導向不得鬆綁角色限制)', () => {
+    // 曾因 hidden 收斂變成全站死功能;D-026 退場、P6b 移除頁面改為導向估驗計價,
+    // 這組斷言釘住 roles:入口怎麼變都不得鬆綁機關防弊的角色限制。
     expect(routeAllowed('/audit', 'contractor', false)).toBe(false)
     expect(routeAllowed('/audit', 'supervisor', false)).toBe(false)
     expect(routeAllowed('/audit', 'owner', false)).toBe(true)
@@ -42,13 +42,13 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
       expect(routeAllowed('/alerts', org, false)).toBe(true)
     }
   })
-  it('監造月報:僅監造;逐工項排程:僅施工', () => {
+  it('監造月報:僅監造;逐工項排程(P6b 退場導向):僅施工', () => {
     expect(routeAllowed('/supervisor-report', 'owner', false)).toBe(false)
     expect(routeAllowed('/supervisor-report', 'supervisor', false)).toBe(true)
     expect(routeAllowed('/schedule', 'supervisor', false)).toBe(false)
     expect(routeAllowed('/schedule', 'contractor', false)).toBe(true)
   })
-  it('監造月報/逐工項排程:第三種角色也各驗一次(搬進新群組後結果不變)', () => {
+  it('監造月報/逐工項排程:第三種角色也各驗一次(搬進新群組、改為退場導向後結果不變)', () => {
     expect(routeAllowed('/supervisor-report', 'contractor', false)).toBe(false)
     expect(routeAllowed('/supervisor-report', 'owner', true)).toBe(true) // override 一律放行
     expect(routeAllowed('/schedule', 'owner', false)).toBe(false)
@@ -76,6 +76,20 @@ describe('routeAllowed(路由守衛與導覽同源)', () => {
     expect(routeRegistry['/']).toEqual({ access: 'redirect' })
     expect(routeRegistry['/assistant']).toEqual({ access: 'redirect' })
     expect(routeRegistry['*']).toEqual({ access: 'authenticated', surface: 'not-found' })
+  })
+  it('退場路由(P6b 移除頁面):access retired、原 roles、導向已登記且原角色進得去的承接頁;不在導覽定義裡', () => {
+    expect(routeRegistry['/schedule']).toEqual({ access: 'retired', roles: ['contractor'], redirectTo: '/requirements' })
+    expect(routeRegistry['/audit']).toEqual({ access: 'retired', roles: ['owner'], redirectTo: '/valuation' })
+    const retired = Object.entries(routeRegistry).filter(([, r]) => r.access === 'retired')
+    expect(retired.map(([p]) => p).sort()).toEqual(['/audit', '/schedule'])
+    for (const [path, rule] of retired) {
+      const target = routeRegistry[rule.redirectTo]
+      expect(target?.access, `${path} → ${rule.redirectTo}`).toBe('authenticated')
+      // 能通過退場路由守衛的角色,到了承接頁不能又被擋(否則舊連結變成無權限畫面)
+      for (const org of ORGS) if (routeAllowed(path, org, false)) expect(routeAllowed(rule.redirectTo, org, false), `${org} ${path}`).toBe(true)
+      expect(allDefs().some((n) => n.to === path)).toBe(false)
+      expect(navLabel(path)).toBeNull()
+    }
   })
   it('無 roles 的子頁:各角色仍全放行(含由非導覽改為子頁的期限追蹤/擷取審核)', () => {
     for (const to of ['/activity', '/monthly-report', '/progress', '/safety', '/itp', '/submittals', '/rfi', '/change-orders',
@@ -241,7 +255,7 @@ describe('頁面文案的名稱來源(P1c):WORK_TITLE / navLabel / navEntryFor',
   })
   it('hidden 項照樣查得到名字(退場頁的深連結文案仍要叫得出名);非導覽/未登記路由回 null', () => {
     expect(navLabel('/cost')).toBe('成本管理')
-    expect(navEntryFor('/audit')).toMatchObject({ to: '/contract', label: '專案' })
+    expect(navEntryFor('/cost')).toMatchObject({ to: '/valuation', label: '估驗請款' })
     expect(navLabel('/dashboard')).toBeNull()
     expect(navEntryFor('/dashboard')).toBeNull()
     expect(navLabel('/not-registered')).toBeNull()
@@ -288,11 +302,12 @@ describe('平台管理(/admin):platformAdminOnly 是獨立於專案角色的維�
   })
 })
 
-describe('roles 與 hidden 定義釘死(重劃分區不得鬆綁;退場只 hidden 不刪)', () => {
-  // 直接對 navGroups 定義做結構斷言:哪些路由帶 roles、帶哪些 roles,一字不差。
+describe('roles 與 hidden 定義釘死(重劃分區不得鬆綁;退場頁 hidden,移除頁面的改退場導向)', () => {
+  // 直接對登記表做結構斷言:哪些路由帶 roles、帶哪些 roles,一字不差(/schedule、/audit 自 P6b 起
+  // 住在非導覽表的退場路由,roles 跟著搬、不得在搬家時掉)。
   it('帶 roles 的路由清單與內容完全不變', () => {
     const rolesMap = {}
-    for (const n of allDefs()) if (n.roles) rolesMap[n.to] = n.roles
+    for (const [to, n] of Object.entries(routeRegistry)) if (n.roles) rolesMap[to] = n.roles
     expect(rolesMap).toEqual({
       '/supervisor-report': ['supervisor'],
       '/payments': ['contractor', 'owner'],
@@ -301,9 +316,9 @@ describe('roles 與 hidden 定義釘死(重劃分區不得鬆綁;退場只 hidde
       '/audit': ['owner'],
     })
   })
-  it('hidden 集合=D-026 退場的三條(/schedule、/cost、/audit):仍登記、仍依原 roles 可直達,只是不進側欄/分頁列', () => {
+  it('hidden 集合=仍是頁面的退場頁(/cost):仍登記、仍依原 roles 可直達,只是不進側欄/分頁列', () => {
     const hidden = allDefs().filter((n) => n.hidden).map((n) => n.to)
-    expect(hidden).toEqual(['/schedule', '/cost', '/audit'])
+    expect(hidden).toEqual(['/cost'])
     for (const to of hidden) {
       expect(routeRegistry[to]).toBeTruthy()
       for (const org of ORGS) {
@@ -311,8 +326,6 @@ describe('roles 與 hidden 定義釘死(重劃分區不得鬆綁;退場只 hidde
         expect(flatNav(visibleNavGroups(org, true)).flatMap((i) => i.tabs || [i]).find((t) => t.to === to)).toBeUndefined()
       }
     }
-    // /schedule 自 P5d 起 hidden(關鍵工項日期已承接到履約時程);roles 仍只有廠商,不因 hidden 鬆綁
-    expect(routeRegistry['/schedule']).toMatchObject({ hidden: true, roles: ['contractor'] })
     // /alerts 帶 label:taskReturn 的返回連結名字取自登記表,不手抄「提醒中心」
     expect(routeRegistry['/alerts']).toEqual({ access: 'authenticated', label: '提醒中心' })
     expect(navLabel('/alerts')).toBe('提醒中心')

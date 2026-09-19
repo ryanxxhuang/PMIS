@@ -7,7 +7,7 @@
 // agentTools 的 toolError;console.error 行整行放行(那正是原文該去的地方)。
 //
 // 另釘三件接線,防止骨架再被手抄回來:
-//   1. 13 支「純 schema + prompt」function 只能透過 aiJsonHandler 進閘門;
+//   1. 10 支「純 schema + prompt」function 只能透過 aiJsonHandler 進閘門;
 //   2. UUID_RE 只在 _shared/uuid.ts 定義一次;
 //   3. agent-run 不再內嵌第二份 ai_feature_allowed 判定(gatePolicy.test.ts 另釘)。
 import { describe, it, expect } from 'vitest'
@@ -29,11 +29,13 @@ const read = (rel: string) => fs.readFileSync(path.join(FUNCTIONS_DIR, rel), 'ut
 const LEAK = /(?:json\(\{|return \{[^}\n]*\berror:|throw new Error\(`|error:\s*`)[^\n]*\b(?:error|err|e|[A-Za-z]*Error|[A-Za-z]*Err)\??\.message\b/
 const SAFE = /console\.|toolError\(|maskDbError\(|maskException\(|maskClaudeError\(|dbErrorResponse\(|exceptionResponse\(/
 
-// 純 schema + prompt 的 13 支:骨架(OPTIONS / 閘門 / 記帳 / 遮罩)只在 aiHandler.ts 一份
+// 純 schema + prompt 的 10 支:骨架(OPTIONS / 閘門 / 記帳 / 遮罩)只在 aiHandler.ts 一份。
+// 原本 13 支,退場的 assistant-chat／parse-contract／audit-summary 原始碼已於 P6b 移除(D-026;
+// ai_features 列與用量歷史保留,見 src/lib/aiFeatures.test.js 的退場鍵斷言)。
 const AI_JSON_FUNCTIONS = [
-  'analyze-safety-photo', 'assistant-chat', 'audit-summary', 'classify-document',
+  'analyze-safety-photo', 'classify-document',
   'classify-site-photo', 'describe-defect', 'draft-monthly-review', 'draft-rfi-reply',
-  'draft-valuation-summary', 'parse-contract', 'read-submittal', 'read-whiteboard',
+  'draft-valuation-summary', 'read-submittal', 'read-whiteboard',
   'review-submittal',
 ]
 
@@ -56,7 +58,7 @@ describe('functions/ raw error.message 外洩凍結', () => {
 })
 
 describe('骨架接線:不得手抄回來', () => {
-  it('13 支純 schema + prompt function 都走 aiJsonHandler,不再各自呼叫 openAiGate / closeAiGate', () => {
+  it('10 支純 schema + prompt function 都走 aiJsonHandler,不再各自呼叫 openAiGate / closeAiGate', () => {
     for (const name of AI_JSON_FUNCTIONS) {
       const src = read(`${name}/index.ts`)
       expect(src, `${name} 應透過 aiJsonHandler 進閘門`).toContain('aiJsonHandler(')

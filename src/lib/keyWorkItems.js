@@ -1,8 +1,8 @@
 // 關鍵工項與停留點的檢視模型(P5d:逐工項排程頁退場,日期承接到履約時程)。
 // 資料不搬表:關鍵工項的計畫起迄仍是 item_schedules(store itemSchedules),停留點仍是
 // inspection_points;這裡只把「哪一項落後／進行中」「哪個停留點該叫驗」算成與契約義務同一條
-// 時間軸能讀的事項。/schedule(唯讀歷史查閱)與 /requirements 都吃這一份——以前落後判定
-// 只住在 Schedule.jsx 裡,承接時再抄一份就會分岔。
+// 時間軸能讀的事項。落後判定原本只住在逐工項排程頁(P6b 已移除頁面,/schedule 導向履約時程),
+// 抽到這裡才讓履約時程與當時的唯讀頁吃同一份,不必抄第二份。
 import { parseLocalDate, localISODate } from './dates.js'
 import { itpStatus, itpActivity, POINT_TYPES } from './itp.js'
 import { countdownLabel, phaseOf } from './obligationTimeline.js'

@@ -1,6 +1,6 @@
 // 「純 schema + prompt」edge function 的共用骨架(B1 / M-2)。
 // ---------------------------------------------------------------------------
-// 重構前 13 支 function 的 Deno.serve 本體逐字相同:OPTIONS → 解析 body →
+// 重構前 13 支 function(P6b 移除三支退場函式後剩 10 支)的 Deno.serve 本體逐字相同:OPTIONS → 解析 body →
 // openAiGate → claudeJson → 成功/失敗記帳 → 回應 → catch 記帳＋500;只有
 // feature 名、prompt 組法與結果整理不同。骨架抄 13 次的代價是錯誤遮罩(H-1)
 // 得改 13 處、漏一處就外洩——所以收到這裡,呼叫端只剩 build(組 prompt)與
@@ -9,12 +9,12 @@
 // 自管 run)、agent-run(多輪 tool-use)、fetch-weather(非 LLM)、send-reminders
 //(cron、無使用者 JWT)各自保留本體,只套同一套錯誤遮罩。
 //
-// build 回傳三種之一:
+// build 回傳兩種之一:
 //   * AiJsonCall            → 打 Claude,成功回 finish(data) 或 data 本身(200)
 //   * Response              → 直接回(輸入驗證 400 / 權限 403 等),不記帳——
 //                             與重構前「try 內早退不 closeAiGate」行為一致
-//   * { reply }             → 確定性結果、不打 LLM,記一筆 ok(token 0)計次
-//                            (audit-summary 無發現時的罐頭回覆;計次是既有行為)
+// (原本還有第三種 { reply }:確定性罐頭回覆、記一筆 ok 計次,唯一使用者是 audit-summary;
+//  該函式於 P6b 移除後這條分支不再有呼叫端,一併刪除,不留死碼。)
 
 import { claudeJson, cors, jsonResponse as json, exceptionResponse } from './claude.ts'
 import { openAiGate, closeAiGate } from './aiGate.ts'
@@ -27,7 +27,7 @@ export type LooseBody = Record<string, any>
 
 export type AiJsonCall = Parameters<typeof claudeJson>[0]
 export type AiJsonCtx = { body: LooseBody; gate: AiGateOk }
-export type BuildResult = AiJsonCall | Response | { reply: unknown }
+export type BuildResult = AiJsonCall | Response
 
 export function aiJsonHandler(opts: {
   feature: string
@@ -44,10 +44,6 @@ export function aiJsonHandler(opts: {
     try {
       const built = await opts.build(ctx)
       if (built instanceof Response) return built
-      if ('reply' in built) {
-        await closeAiGate(gate, { feature: opts.feature, status: 'ok' })
-        return json(built.reply, 200)
-      }
       // claudeJson 的 error 已是遮罩後的中文短語(原文只在它的 console.error),
       // 這裡可以直接回;errorCode 另附為 code 供前端/客服對照
       const { data, error, errorCode, usage, model } = await claudeJson(built)
