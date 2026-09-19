@@ -16,7 +16,7 @@ export function fmtAmount(n, { empty = '—' } = {}) {
   return (r === 0 ? 0 : r).toLocaleString('en-US')
 }
 
-// 「NT$ 1,234,567」——AI 摘要、稽核意見與監造報表句子裡的金額。
+// 「NT$ 1,234,567」——AI 摘要、稽核意見與監造月報句子裡的金額。
 // 缺值時整串回 '—' 而不是 'NT$ —':句子裡放一個沒有數字的幣別符號,
 // 讀起來像「金額是零」,那正是這一波要消掉的歧義。
 export function fmtNtd(n, { empty = '—' } = {}) {

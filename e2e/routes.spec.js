@@ -122,7 +122,7 @@ test.describe('路由治理', () => {
     const navBox = await nav.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }))
     expect(navBox.sw, `抽屜 nav 橫向溢位:scrollWidth ${navBox.sw} > clientWidth ${navBox.cw}`).toBeLessThanOrEqual(navBox.cw)
     await nav.getByRole('link', { name: '監造月報', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1, name: '監造報表' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: '監造月報' })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 
     // 子頁直達:點品質查驗 → 該頁;內容區不重複子頁導覽(無下拉、無 tablist)

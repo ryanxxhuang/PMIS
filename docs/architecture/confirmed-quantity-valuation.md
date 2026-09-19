@@ -371,3 +371,15 @@ pgTAP `confirmed_quantity_enforcement.sql` 294→299（`fn_cq_txt` 三值＋授�
 ### 19.4 驗證
 pgTAP `valuation_items_guard.sql` 11→50（三角色＋專案管理者＋非成員直接 INSERT／UPDATE／DELETE 皆 42501、service role 與 DBA 皆 `VQ010`、權限與 policy 結構、RPC 路徑照常且金額由 DB 算、重算路徑凍結、cascade、訊息無小數尾）；`confirmed_quantity_enforcement.sql` 299→307（舊前端路徑改斷言 42501、歷史資料走 DBA 邊界、五種違反與減量／批次／recheck／維護調整訊息無小數尾）；`boq_reset_import`／`photos_storage` fixture 改走 DBA 邊界。Vitest `_shared/valuationWrites.scan.test.ts` 4 條（合成片段證明會抓、不誤判；真實原始碼無估驗寫入且確實讀到估驗表）。真後端 chain 2／7／9／11。
 
+## 20. P6a 估驗佐證包改讀確認量來源與簽署版本（2026-09-20，PR #153；純前端、無 migration）
+
+`/valuation/package` 的本期證據不再是「同工項所有照片／日誌」，改為本期期別的確認量來源與它們指向的簽署文件版本；挑選與組裝在 `lib/valuationPackage.js`（純函式），數量、金額、缺件全是 DB 的值。
+
+- **本期來源**：`get_valuation_state.items[].sources`（`valuation_item_sources`）→ 確認紀錄（`inspection_confirmations`，前端讀取加帶 `content_hash`）→ 確認紀錄記的 `document_id`／`document_version_no`／`content_hash`（簽署當下的查驗表單版本，append-only）。每筆列批次／階段／累計、依據、查驗與判定、簽署者與時間；legacy 來源標「歷史遷移，非監造確認，需補證」、扣回與管理員調整照實列；逐工項 `violations` 翻成「缺件：…」（`describeViolation`，與估驗頁同一張對照表）。明細表「依據」欄＝監造確認量或缺件短標（取代原「佐證照片張數」）。
+- **照片**：只取來源查驗表單版本的附件中 `role` 為證據（預設 evidence）者；他方照片只能以 reference 附上，不列為佐證。版本雜湊涵蓋附件，所以照片跟著版本凍結。原「點 ✕ 排除誤配照片」移除（照片已不是 AI 自動歸位，而是監造簽署的證據）；`listPhotosByWorkItems` 退場。
+- **檢附自主檢查**：來源版本內容的 `self_check_record_id`（已簽署的 `checklist_records` 修訂列不可改）→ 列檢查日、Rev、判定；若該列就是某份自主檢查表文件目前綁定的列，另附該文件的簽署版本標示。
+- **施工日誌**：本期範圍＝前期計價截止日（不含；有本期起日則用起日含）至本期計價截止日（含），第 1 期自開工起；缺本期或前期截止日時回缺件、不退回列全部日誌。版本取**送審時點**（最近一次 `valuation.submitted` 稽核事件的 `occurred_at`）以前的最後一次簽署——已送審／核定的包保留當時使用的版本，之後的簽後更正只標「之後另有 vN，不影響本包」；草稿期取目前已簽署版本；已送審卻查無稽核事件（稽核上線前的歷史期）如實揭露。內容讀該版本（`contentToLogShape`＋版本 `field_sources`，數量標不適用者不算，與簽署分支寫 `daily_log_items` 同規則），只列含本期工項數量者；範圍內送審時尚未簽署（或至今未簽署）的日期與施工月報同一支 `unsignedDays` 列出、不列入。
+- **凍結依據**：非草稿期的來源分配由 DB 凍結（§16.1／§19），確認紀錄與文件版本不可變，日誌以送審時點釘住——前端不另存「包的快照」，每次開頁都能從 DB 重建同一份內容。
+- 任何一步讀取失敗就整包標「本期證據讀取失敗，不產生佐證內容」，不以半份資料冒充；示範模式沒有確認紀錄與簽署，明示未經後端核對。
+- 已知限制：列印頁只印文件目前的簽署版本，來源版本已被更正或文件已被取代時只給版本標示不給連結（見續接清單 §7「P6a 發現」）。
+

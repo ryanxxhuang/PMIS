@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 進度口徑(D-024,W07):施工月報與監造報表同一個報告月份要拿到同一天、同一期的數字;
+// 進度口徑(D-024,W07):施工月報與監造月報同一個報告月份要拿到同一天、同一期的數字;
 // 過去月份截至月底,本月截至今天;未來日期的估驗期不算;報表上寫明截止日與所取期別;
 // 月報的收款／請款期數也截至截止日(C4)。定位只走 aria-label 與文字。
 import { act } from 'react'
@@ -36,6 +36,11 @@ beforeEach(() => {
     valuations, progressPlan, siteLogs: [], inspections: [], defects: [], safetyRecords: [], changeOrders: [], submittals: [],
     draftMonthlyReview: vi.fn(), aiEnabled: () => false,
     currentUser: { org_type: 'supervisor' }, can: {}, isPlatformAdmin: false,
+    // P6a:月報改讀已簽署版本(示範模式無簽署,store 回空)——進度口徑(D-024)不受影響
+    fieldDocuments: { documents: [], submissions: [] },
+    listSignedVersions: vi.fn(async () => ({ rows: [], error: null })),
+    listSupervisorLogs: vi.fn(async () => ({ rows: [], error: null })),
+    fetchConfirmations: vi.fn(async () => ({ rows: [], error: null })),
   }
   container = document.createElement('div')
   document.body.append(container)
@@ -77,7 +82,7 @@ describe('施工月報', () => {
   })
 })
 
-describe('監造報表', () => {
+describe('監造月報', () => {
   it('同一報告月份與施工月報同一天、同一期;意見草稿寫明截至何日', async () => {
     await render(SupervisorReport)
     expect(text()).toContain('累計實際 60.0%')

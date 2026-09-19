@@ -15,7 +15,7 @@ import TaskRow from '../../components/TaskRow.jsx'
 import IntakeUploader from '../../components/sitelog/IntakeUploader.jsx'
 import IntakeList from '../../components/sitelog/IntakeList.jsx'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
-import { visibleNavGroups, routeAllowed, BALL_SOURCES_TITLE } from '../../lib/navConfig.js'
+import { visibleNavGroups, routeAllowed, navLabel, BALL_SOURCES_TITLE } from '../../lib/navConfig.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { itpStatus } from '../../lib/itp.js'
 import { sampleAlerts } from '../../lib/qc.js'
@@ -125,10 +125,11 @@ export default function Site() {
       chips: [counts.openSafetyDefects > 0 && { label: `未結案工安缺失 ${counts.openSafetyDefects}`, tone: 'red' }] },
   ].map((e) => ({ ...e, chips: e.chips.filter(Boolean) }))
 
-  // 本月文件:月報是現場紀錄的月彙整(設計 §3),入口放這裡;監造月報照 roles(不在這裡放寬)
+  // 本月文件:月報是現場紀錄的月彙整(設計 §3),入口放這裡;監造月報照 roles(不在這裡放寬)。
+  // 名稱只取 navConfig(單一來源);兩張月報都只彙整已簽署的文件(P6a)
   const monthly = [
-    { to: '/monthly-report', label: '施工月報', desc: '自動彙整本月進度、估驗、品質、工安與變更。' },
-    { to: '/supervisor-report', label: '監造月報', desc: '自動彙整本月查驗、缺失、送審與進度的監造報表草稿。' },
+    { to: '/monthly-report', label: navLabel('/monthly-report'), desc: '彙整本月已簽署施工日誌的數量、出工與天氣，以及進度、估驗、品質、工安與變更。' },
+    { to: '/supervisor-report', label: navLabel('/supervisor-report'), desc: '彙整本月已簽署監造日誌、查驗表單判定與監造確認量，產出監造月報草稿。' },
   ].filter((m) => routeAllowed(m.to, org, can?.override, isPlatformAdmin))
 
   // 現場文書清單:依觀看者排序——輪到我的在前(責任方的草稿／待補／退回／待提送;提送對象的待收件,

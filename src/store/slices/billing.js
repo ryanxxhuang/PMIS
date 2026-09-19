@@ -185,10 +185,21 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps })
   const fetchConfirmations = useCallback(async () => {
     if (!dbMode) return { rows: [], error: null }
     const { data, error } = await supabase.from('inspection_confirmations')
-      .select('id, work_item_id, batch_key, location_label, stage_key, unit, qty_cum, qty_delta, basis, inspection_id, document_id, document_version_no, confirmed_by, confirmed_at, status, revoked_at, reason, supersedes_id')
+      .select('id, work_item_id, batch_key, location_label, stage_key, unit, qty_cum, qty_delta, basis, inspection_id, document_id, document_version_no, content_hash, confirmed_by, confirmed_at, status, revoked_at, reason, supersedes_id')
       .eq('project_id', currentProject.project_id).order('confirmed_at')
     if (error) return { rows: [], error }
     return { rows: data || [], error: null }
+  }, [dbMode, currentProject])
+
+  // 佐證包的「送審時點」(P6a):最近一次 valuation.submitted 稽核事件(audit_valuation_event trigger 於 草稿→監造審核 寫入,
+  // 成員可讀)。已送審的期別以它釘住施工日誌版本——之後的簽後更正不改變已提送的佐證包。沒有事件(稽核上線前的歷史期)回 null。
+  const fetchValuationSubmittedAt = useCallback(async (valuationId) => {
+    if (!dbMode || !valuationId) return { at: null, error: null }
+    const { data, error } = await supabase.from('audit_events').select('occurred_at')
+      .eq('project_id', currentProject.project_id).eq('entity_type', 'valuation').eq('entity_id', valuationId)
+      .eq('event_type', 'valuation.submitted').order('occurred_at', { ascending: false }).limit(1)
+    if (error) return { at: null, error }
+    return { at: data?.[0]?.occurred_at || null, error: null }
   }, [dbMode, currentProject])
 
   // 總價／間接費的計價依據(Q3 暫時隔離:缺依據不計價):只有監造(或非正式模式管理者)可設,DB 強制。
@@ -328,7 +339,7 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps })
   return {
     valuations, setValuations, valuationAdjustments, setValuationAdjustments, progressPlan, setProgressPlan, reloadValuations,
     createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
-    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis,
+    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, fetchValuationSubmittedAt, setPricingBasis,
     revokeConfirmation, issueCertificate, voidAdjustment,
     generateSchedule, updatePlannedPct, deleteValuation,
   }
