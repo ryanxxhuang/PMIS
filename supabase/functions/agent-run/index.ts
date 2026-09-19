@@ -45,9 +45,9 @@ Deno.serve(async (req) => {
     return json({ error: `facts 快照過大(上限 ${FACTS_MAX_CHARS} 字元)`, code: 'facts_too_large' }, 400)
   }
 
-  // gate.serviceClient 只給 draft_daily_log 寫 agent_actions 用(該表 authenticated
-  // 無寫入權)。缺 SUPABASE_SERVICE_ROLE_KEY 不整支失敗 —— 查詢工具照常可用,
-  // 只有 draft_daily_log 會回「伺服器未設定,暫時無法建立草稿」。
+  // gate.serviceClient 只交給草稿工具:寫 agent_actions(該表 authenticated 無寫入權),以及日誌／自主檢查表草稿
+  // 的現場文書 AI 版本(P6b-2,與照片起稿同一段 writeDraftDocument;AI 版本只能由伺服器寫)。缺 SUPABASE_SERVICE_ROLE_KEY
+  // 不整支失敗 —— 查詢工具照常可用,草稿工具回「伺服器未設定,暫時無法建立草稿」。
   const gate = await openAiGate(req, { feature: 'agent.run', projectId: body?.project_id })
   if (!gate.ok) return gate.response
   const { userClient, serviceClient, userId, startedAt } = gate

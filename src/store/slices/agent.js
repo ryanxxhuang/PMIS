@@ -23,60 +23,25 @@ export async function extractInvokeError(error, data, fallbackMsg = 'AI agent �
   return data?.error ? String(data.error) : fallbackMsg
 }
 
-// 日誌草稿 payload(後端 draft_daily_log 產:items 形如 { [work_item_id]: { qty_today, needs_input, item_key… } })
-// 的接受路徑自 P2c 起改走現場文書(lib/fieldDocs.contentFromAgentDraft → 文件人工版本),
-// 舊的「翻成 saveSiteLog 形狀直接 upsert daily_logs」轉換已移除。
-// 草稿裡「數量待人填」的工項數(收件匣 Badge 與按鈕文案用)
-export function draftNeedsInputCount(payload) {
-  return Object.values(payload?.items || {})
-    .filter((v) => v?.needs_input && (v?.qty_today == null || v.qty_today === '')).length
+// Agent 對話起稿(P6b-2):draft_daily_log／draft_inspection 由 Edge 直接寫成現場文書草稿(該日施工日誌／一份自主檢查表的
+// AI 版本,與照片起稿同一支 builder),agent_actions 的 target_table='field_documents'、target_id=文件。收件匣只顯示
+// evidence 裡的摘要(工項、範本項目與 AI 建議),接受時才在那份文件上動作——不再由前端另湊一份內容或直接寫事實表。
+export const isDocumentDraft = (a) => a?.target_table === 'field_documents' && !!a?.target_id
+
+// 日誌草稿卡片:照片看不出、還沒人填數量的工項數(evidence.items:{ [work_item_id]: { qty_today… } };
+// quantities 是卡片上人填的輸入)
+export function draftNeedsInputCount(items, quantities = {}) {
+  return Object.entries(items || {})
+    .filter(([wid, v]) => !(Number(quantities?.[wid] ?? v?.qty_today) > 0)).length
 }
 
-// 查驗草稿 payload → createChecklistRecord 入參的形狀轉換(批4,純函式)。
-// payload.results 形如 { [項次no]: { value, needs_input?, ai_suggested? } }(後端 draft_inspection 產);
-// createChecklistRecord 要的是「完整 template 物件 + values({no: value})」,判定它自己跑
-// judgeChecklist(確定性)——所以這裡要用 template_id 從既有範本清單查回整個 template。
-// 實測值紅線:num 項後端一律 value:null(AI 不准猜),value 為 null 的項不進 values,
-// judgeChecklist 對未檢項回 pass:null 不列入判定,語意正確。
-// 範本查不到(已被刪除)回 null,由呼叫端給誠實錯誤——絕不能拿錯的範本硬存。
-export function draftPayloadToChecklist(payload, templates) {
-  const tpl = (templates || []).find((t) => t.id === payload?.template_id)
-    || (payload?.template_title ? (templates || []).find((t) => t.title === payload.template_title) : null)
-  if (!tpl) return null
-  const values = {}
-  for (const [no, v] of Object.entries(payload?.results || {})) {
-    if (v && v.value != null && v.value !== '') values[no] = v.value
-  }
+// 自主檢查表草稿卡片:實測值項數(一律待人量測)／AI 建議勾選項數(待逐項確認);evidence.items 形如 [{ no, kind, suggested? }]
+export function checklistDraftCounts(items) {
+  const list = Array.isArray(items) ? items : []
   return {
-    template: tpl, check_date: payload.check_date, location: payload.location || null, values, note: payload.note || null,
-    // 批4 payload 已帶 work_item_id(uuid),當時存檔路徑不收所以丟掉;
-    // 批5 createChecklistRecord 已補此入參 → 一併傳下去,佐證鏈才接得起來。
-    work_item_id: payload.work_item_id || null,
+    needsInput: list.filter((it) => it?.kind === 'num').length,
+    aiSuggested: list.filter((it) => typeof it?.suggested === 'boolean').length,
   }
-}
-
-// 查驗草稿統計(收件匣卡片顯示):實測值等待人填的項數 / AI 建議勾選的項數
-export function checklistDraftCounts(payload) {
-  const rs = Object.values(payload?.results || {})
-  return {
-    needsInput: rs.filter((v) => v?.needs_input && (v?.value == null || v.value === '')).length,
-    aiSuggested: rs.filter((v) => v?.ai_suggested && v?.value != null).length,
-  }
-}
-
-// 把收件匣卡片上人填的數量合併回草稿 payload(純函式,回傳全新物件)。
-// quantities 形如 { [work_item_id]: '12.5' },值來自 <input> 一律可能是字串;
-// 只有解析後 > 0 的才視為「已填」(0/空字串/非數字都維持原樣=未填,對齊
-// draftPayloadToSiteLog 的 qty > 0 過濾)。⚠️ 絕不可就地改傳入的 payload ——
-// 它是 store 裡 agent_actions 的 evidence,就地改會讓畫面與資料不一致。
-export function applyDraftQuantities(payload, quantities) {
-  if (!quantities) return payload
-  const items = {}
-  for (const [wiId, v] of Object.entries(payload?.items || {})) {
-    const q = Number(quantities[wiId])
-    items[wiId] = Number.isFinite(q) && q > 0 ? { ...v, qty_today: q, needs_input: false } : v
-  }
-  return { ...payload, items }
 }
 
 // 收件匣一次載入的草稿筆數上限。這是靜默截斷(超過的舊草稿不會有任何提示),
@@ -86,7 +51,7 @@ export function applyDraftQuantities(payload, quantities) {
 // 要做「歷史」時正確做法是分頁,不是把這個數字調大。
 const AGENT_INBOX_LIMIT = 50
 
-export function useAgentSlice({ demoMode, isPersistedProject, currentProject, currentUser }, { applyDailyLogDraft, createChecklistRecord, allChecklistTemplates, decideSubmittal } = {}) {
+export function useAgentSlice({ demoMode, isPersistedProject, currentProject, currentUser }, { fillAgentDraftQuantities, decideSubmittal } = {}) {
   // AI 草稿收件匣(pending 由 UI 篩;保留近 AGENT_INBOX_LIMIT 筆含已處理)
   const [agentActions, setAgentActions] = useState([])
   const [agentActionsLoading, setAgentActionsLoading] = useState(false)
@@ -146,42 +111,35 @@ export function useAgentSlice({ demoMode, isPersistedProject, currentProject, cu
     return { error: null }
   }, [isPersistedProject, currentUser])
 
-  // 接受草稿 → 真的產生業務資料(批3 先支援日誌;其他 kind 只改狀態,批4 再擴)。
-  // ⚠️ 順序紅線:先寫入業務資料成功、才 resolveAgentAction(id,'accepted')。
-  // 顛倒的話,寫入失敗會變成「草稿消失了、資料卻沒建立」,使用者的資料憑空蒸發;
-  // 反向的失敗(資料已建立、草稿標記失敗)是安全的:草稿留在收件匣,重按一次接受
-  // 只是對同一份文件再存一個版本(不重複建件)。
-  // 日誌草稿(P2c 起):接受=把 payload(含卡片上人填的數量)存成該日施工日誌**文件**的人工版本
-  // (applyDailyLogDraft:找／建草稿 → save_field_document_version),不再直接 upsert daily_logs——
-  // 事實表只由簽署 RPC 落庫,人要到施工日誌頁審核、簽署後才算正式紀錄。demo 模式文件只進記憶體。
-  // quantities:收件匣卡片上人填的各工項數量({ work_item_id: 值 },可不帶)——
-  // 草稿數量一律 needs_input(見 draftPayloadToSiteLog 註解),沒有這個入口的話
-  // 接受後的日誌會一個工項都沒有,agent 從照片認出工項的價值就蒸發了。
+  // 接受草稿。⚠️ 順序紅線:先把人的輸入寫進目標成功、才 resolveAgentAction(id,'accepted')——顛倒的話寫入失敗會變成
+  // 「草稿消失了、資料卻沒存」;反向失敗(已存、標記失敗)是安全的:草稿留在收件匣,重按只是再存一版相同內容。
+  // 日誌／自主檢查表草稿(P6b-2):文件已由 Edge 建好(target_id)。日誌=把卡片上人填的數量疊到文件目前版本存成人工版本
+  // (沒填就不加版本);自主檢查表=不在這裡動內容——AI 建議的勾選要人在文件頁逐項確認、實測值要人量測(confirm_required),
+  // 收件匣一鍵「接受」不能代替逐項確認,所以只標已接受並帶去文件頁。事實表(daily_logs／checklist_records)一律只由簽署寫。
+  // 舊格式(target 不是文件)的草稿沒有文件可接:回明確錯誤,請使用者拒絕後重擬(正式庫 2026-09-20 無此類草稿)。
   const acceptDraft = useCallback(async (action, quantities) => {
-    const payload = action?.evidence?.payload
-    // 查驗草稿(批4):先真的建立自主檢查表紀錄、才標 accepted(順序紅線同日誌)。
-    // 與日誌不同,checklist insert 不是冪等 upsert——反向失敗(紀錄已建立、草稿標記失敗)
-    // 時草稿留在收件匣,重按接受會多建一筆 Rev.0 紀錄;無資料遺失、可於品質管理刪除,
-    // 仍優於顛倒順序的「草稿消失、紀錄沒建立」。
-    // 判定不在這裡跑:createChecklistRecord 內部走 judgeChecklist(確定性),
-    // AI 建議的 bool 已由使用者按「接受」背書,num 實測值未填=未檢不列入判定。
-    if (action?.kind === 'draft_inspection' && payload?.template_id) {
-      if (typeof createChecklistRecord !== 'function') return { error: '自主檢查表寫入尚未就緒,請稍後再試' }
-      const input = draftPayloadToChecklist(payload, allChecklistTemplates)
-      if (!input) return { error: '找不到草稿對應的檢查表範本(可能已被刪除),請拒絕此草稿後至品質管理手動建立' }
-      const res = await createChecklistRecord(input)
-      if (res?.error) return { error: res.error?.message || res.error } // 紀錄沒建立 → 草稿維持 pending
-      const r2 = await resolveAgentAction(action.id, 'accepted')
-      if (r2?.error) return r2
-      return { error: null, applied: 'checklist' }
+    const kind = action?.kind
+    if (kind === 'draft_daily_log' || kind === 'draft_inspection') {
+      if (!isDocumentDraft(action)) return { error: '這是舊格式的草稿(未建立文件),無法接受;請拒絕後請 Agent 重新起稿' }
+      if (kind === 'draft_daily_log') {
+        if (typeof fillAgentDraftQuantities !== 'function') return { error: '施工日誌寫入尚未就緒,請稍後再試' }
+        const r = await fillAgentDraftQuantities({ documentId: action.target_id, quantities })
+        if (r?.error) return { error: r.error?.message || r.error } // 數量沒存成 → 草稿維持 pending,可重試或到文件頁填
+        const res = await resolveAgentAction(action.id, 'accepted')
+        if (res?.error) return res
+        return { error: null, applied: 'daily_log', documentId: action.target_id, result: r.result }
+      }
+      const res = await resolveAgentAction(action.id, 'accepted')
+      if (res?.error) return res
+      return { error: null, applied: 'self_check', documentId: action.target_id }
     }
     // 審查意見草稿(批6):採用=把 AI 擬的意見存進 review_note、把件推進到「審核中」。
     // ⚠️ 審定紅線:decideSubmittal 的狀態一律傳 '審核中'——傳其他值會寫 decided_date
     // 形同替監造審定(見 collab.js decideSubmittal:status !== '審核中' 才寫 decided_date)。
     // AI 只擬意見,核准/核備/退回補正必須由監造本人在 /submittals 操作。
-    // 順序紅線同上:先 decideSubmittal 成功、才標 accepted;反向失敗(意見已存、
-    // 草稿標記失敗)時重按採用只是對同一件重寫相同 review_note(冪等),無害。
-    if (action?.kind === 'draft_submittal_review' && payload?.submittal_id) {
+    // 反向失敗(意見已存、草稿標記失敗)時重按採用只是對同一件重寫相同 review_note(冪等),無害。
+    const payload = action?.evidence?.payload
+    if (kind === 'draft_submittal_review' && payload?.submittal_id) {
       if (typeof decideSubmittal !== 'function') return { error: '送審審查寫入尚未就緒,請稍後再試' }
       const res = await decideSubmittal(payload.submittal_id, '審核中', payload.opinion || null)
       if (res?.error) return { error: res.error?.message || res.error } // 意見沒存入 → 草稿維持 pending
@@ -190,19 +148,8 @@ export function useAgentSlice({ demoMode, isPersistedProject, currentProject, cu
       return { error: null, applied: 'submittal_review' }
     }
     // audit_note / handoff(批4):接受=「知道了/收下」,不產生任何業務資料,只標 accepted。
-    // 其他非日誌 kind、沒帶 payload 的舊草稿/demo 種子亦同(批 2 行為)——
-    // 不能因為草稿缺料就讓收件匣卡死,至少要能把它處理掉。
-    if (action?.kind !== 'draft_daily_log' || !payload?.log_date) {
-      return resolveAgentAction(action?.id, 'accepted')
-    }
-    if (typeof applyDailyLogDraft !== 'function') return { error: '施工日誌寫入尚未就緒,請稍後再試' }
-    const merged = applyDraftQuantities(payload, quantities) // 全新物件,store 裡的 evidence 不被動到
-    const { error, document, result } = await applyDailyLogDraft(merged)
-    if (error) return { error: error?.message || error } // 文件版本沒存成 → 草稿維持 pending,可重試或改手動填寫
-    const res = await resolveAgentAction(action.id, 'accepted')
-    if (res?.error) return res // 版本已存、只是草稿標記失敗;重按接受只是再存一版,無害
-    return { error: null, applied: 'daily_log', document, result }
-  }, [resolveAgentAction, applyDailyLogDraft, createChecklistRecord, allChecklistTemplates, decideSubmittal])
+    return resolveAgentAction(action?.id, 'accepted')
+  }, [resolveAgentAction, fillAgentDraftQuantities, decideSubmittal])
 
   return { agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions, setAgentActions }
 }

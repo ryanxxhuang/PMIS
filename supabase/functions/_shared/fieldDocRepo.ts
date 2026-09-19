@@ -78,6 +78,17 @@ export function supabaseDraftRepo(db: SupabaseClient, service: SupabaseClient, p
       return (data ?? []) as IntakePhotoRow[]
     },
 
+    async listPhotosTakenOn(date, workItemId = null) {
+      const { start, end } = taipeiDayRange(date)
+      const res = await fetchAllRows<IntakePhotoRow>((f, t) => {
+        let q = db.from('photos').select(PHOTO_COLS).eq('project_id', projectId).gte('taken_at', start).lt('taken_at', end)
+        if (workItemId) q = q.eq('work_item_id', workItemId)
+        return q.order('taken_at').order('id').range(f, t)
+      })
+      if (res.error) return { error: res.error }
+      return res.rows
+    },
+
     async downloadPhoto(storagePath) {
       // 以呼叫者身分下載(storage policy photos_objects_select 限專案成員)
       const { data, error } = await db.storage.from('photos').download(storagePath)

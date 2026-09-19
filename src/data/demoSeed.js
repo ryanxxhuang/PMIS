@@ -7,6 +7,8 @@
 // 對 B2B 銷售而言 demo 模式就是銷售簡報：每一頁都要看得到「用起來的樣子」。
 
 import { TEMPLATE_03310 } from './checklist03310.js'
+import { demoFieldDocumentTemplate } from './demoFieldDocTemplates.js'
+import { requiredKeysFor, unmetFields, docConfirmRequiredKeys } from '../lib/fieldDocs.js'
 import { judgeChecklist } from '../lib/qc.js'
 import { isConcretePourItem } from '../lib/integrityAudit.js'
 import { valuationItemAmount } from '../lib/boqCalc.js'
@@ -375,57 +377,84 @@ export function buildDemoData(workItems, project) {
   // 的產品承諾演出來。日期相對今天 → 收件匣永遠像剛擬好的。
   const agaAt = (h) => new Date(Date.now() - h * 3600e3).toISOString()
 
-  // 日誌草稿的完整 payload(批3):形狀對齊後端 buildDailyLogDraft 的產出,讓 demo 的
-  // 旗艦流程「照片→草稿→收件匣填數量→接受→日誌草稿」真的演得出來(接受會存成記憶體文件版本,P2c)。
-  // 草稿日期用「今天」:demo 日誌只到昨天,接受後在 /site-log 置頂新增一筆,不覆蓋既有故事線。
-  // 工項取 active 前 3 項(與近兩週日誌的工項一致);demo 工項沒有 uuid,items 鍵直接用
-  // item_key,contentFromAgentDraft 直接以鍵當工項識別。
-  // 數量誠實原則:qty_today 一律 null + needs_input(照片證明有做,不證明做多少)。
-  const draftLogDate = iso(daysFromNow(0))
-  const ylog = siteLogs.find((l) => l.log_date === iso(daysFromNow(-1))) // 出工/機具/材料的複製來源
+  // Agent 對話起稿的示範(P6b-2):真實模式由 Edge 把草稿寫成文件的 AI 版本(與照片起稿同一支 builder),agent_actions 指向
+  // 那份文件;demo 沒有 Edge,這裡直接種出同形狀的兩份文件(施工日誌、自主檢查表)與指向它們的草稿,收件匣「接受」就在
+  // 記憶體文件上動作(日誌=人填數量存成人工版本;自檢表=帶去文件頁逐項確認)。示範模式仍無法簽署(P2c 邊界)。
+  // 草稿日期用 3 天前:demo 既有日誌是 -13…-1 中的八天,3 天前正好漏寫(Agent 補擬);今天留給手動新建的故事線,
+  // 不覆蓋既有紀錄。demo 工項沒有 uuid,items 鍵直接用 item_key。數量誠實原則:qty_today 一律 null(照片證明有做,不證明做多少)。
+  const draftLogDate = iso(daysFromNow(-3))
+  const ylog = siteLogs.find((l) => l.log_date === iso(daysFromNow(-4))) || null // 前一日沒有日誌 → 出工/機具/材料待補(不硬抓別天)
   const draftPhotoCounts = [8, 6, 4] // 三工項的照片張數,加總=summary 的 18 張
   const draftWis = active.slice(0, 3)
-  const draftItems = {}
-  for (const it of draftWis) {
-    draftItems[it.item_key] = {
-      item_key: it.item_key, item_no: it.item_no || null, description: it.description,
-      unit: it.unit || null, qty_today: null, needs_input: true, source: null,
-    }
+  const logItems = {}
+  const logSources = {
+    log_date: { status: 'filled', source: 'agent:request' },
+    weather_am: { status: 'filled', source: 'cwa' }, weather_pm: { status: 'filled', source: 'cwa' },
+    work_summary: { status: 'filled', source: 'ai:photo', reason: 'AI 依照片說明拼接,待核對' },
   }
-  const draftPayload = {
-    log_date: draftLogDate,
-    weather_am: '晴', weather_pm: '午後短暫陣雨',
-    labor: ylog?.labor || [], equipment: ylog?.equipment || [], materials: ylog?.materials || [],
+  for (const k of ['labor', 'equipment', 'materials']) {
+    logSources[k] = ylog?.[k]?.length ? { status: 'filled', source: `yesterday:${ylog.id}`, reason: '沿用昨日,待核對' } : { status: 'pending', source: null }
+  }
+  for (const it of draftWis) {
+    logItems[it.item_key] = { item_key: it.item_key, item_no: it.item_no || null, description: it.description, unit: it.unit || null, qty_today: null, location: null, note: null }
+    logSources[`items.${it.item_key}.qty_today`] = { status: 'pending', source: null, reason: '照片可證明有施作,不能證明做了多少;數量待現場確認' }
+  }
+  const logContent = {
+    log_date: draftLogDate, weather_am: '晴', weather_pm: '午後短暫陣雨',
+    labor: ylog?.labor || [], equipment: ylog?.equipment || [], materials: ylog?.materials || [], extras: {},
     work_summary: `依現場照片,本日施作:${draftWis.map((it, i) =>
       `${[it.item_no, it.description].filter(Boolean).join(' ')}(照片 ${draftPhotoCounts[i]} 張)`).join('、')}。各工項數量待現場確認後填寫。`,
-    items: draftItems,
-    field_sources: { items: 'photos', quantities: 'needs_input', weather: 'cwa', labor: 'yesterday', equipment: 'yesterday', materials: 'yesterday' },
-    photo_ids: Array.from({ length: 18 }, (_, i) => `PHO-DEMO-${i + 1}`),
+    items: logItems, photo_ids: [], unmatched_photo_ids: [],
   }
 
-  // 查驗草稿的完整 payload(批4):形狀對齊後端 draft_inspection 的產出,接受會走
-  // createChecklistRecord 進記憶體(判定由 judgeChecklist 確定性跑)。
-  // 實測值紅線:kind:'num' 一律 { value:null, needs_input:true } 由人填(AI 不准猜數值);
-  // kind:'bool' 照片可合理判讀的給建議值並標 ai_suggested(UI 顯示「AI 建議」),
-  // 且每筆帶 ai_basis(憑什麼這樣建議)——後端 draft_inspection 強制附依據,demo 同形;
-  // B1(是否已於 24 小時前通知監造)照片看不出來——沒把握就不猜,一樣留白。
+  // 自主檢查表草稿(對話起稿):目視勾選項照片可合理判讀的給建議值並附依據(filled／ai:agent,仍要人逐項確認才能簽);
+  // B1(是否已於 24 小時前通知監造)照片看不出來——沒把握就不猜,留白;實測值(num)一律留空由人量測。
   const inspDraftBasis = {
     B2: '澆置前照片說明載明模板內已清理無積水、預埋管件已綁紮固定',
     B3: '照片說明提到施工縫面已打毛清潔並灑水潤濕',
     D1: '照片說明含試體取樣紀錄,載明已取樣 2 組共 12 個',
   }
-  const inspDraftResults = {}
+  const scFrame = demoFieldDocumentTemplate('self_check')
+  const scResults = {}
+  const scSources = {
+    check_date: { status: 'filled', source: 'agent:request' },
+    template_id: { status: 'filled', source: 'system:template_match', reason: '依今日澆置作業挑出 03310 範本' },
+    work_item_id: { status: 'pending', source: null, reason: '起稿時未指定工項(非必填);有對應工項請補上,估驗佐證才對得回' },
+    location: { status: 'filled', source: 'ai:photo' },
+  }
   for (const it of TEMPLATE_03310.items) {
-    inspDraftResults[it.no] = (it.kind === 'bool' && it.no !== 'B1')
-      ? { value: true, ai_suggested: true, ai_basis: inspDraftBasis[it.no] }
-      : { value: null, needs_input: true }
+    const basis = it.kind === 'bool' ? inspDraftBasis[it.no] : null
+    scResults[it.no] = { value: basis ? true : null }
+    scSources[`results.${it.no}`] = basis
+      ? { status: 'filled', source: 'ai:agent', reason: `AI 建議(依據:${basis}),請逐項確認` }
+      : { status: 'pending', source: null, reason: it.kind === 'num' ? '實測值由人親自量測填寫;系統不從照片推定' : '請依現場檢查勾選;系統沒有逐項依據,不代為勾選' }
   }
-  const inspDraftNeeds = Object.values(inspDraftResults).filter((v) => v.needs_input).length
-  const inspDraftPayload = {
-    template_id: 'CLT-DEMO-1', template_title: TEMPLATE_03310.title,
-    check_date: iso(daysFromNow(0)), location: '3F 版牆', work_item_id: null,
-    results: inspDraftResults, note: null,
+  const scContent = {
+    check_date: draftLogDate, template_id: 'CLT-DEMO-1', template_title: TEMPLATE_03310.title, template_source: TEMPLATE_03310.source ?? null,
+    work_item_id: null, location: '3F 版牆', results: scResults, note: null,
+    template: { key: scFrame?.key ?? null, version: scFrame?.version ?? null }, photo_ids: [], unmatched_photo_ids: [],
   }
+  const demoDoc = (id, docType, target, template, content, sources, created) => {
+    const checklistItems = docType === 'self_check' ? TEMPLATE_03310.items : null
+    const frame = demoFieldDocumentTemplate(docType)
+    const required = requiredKeysFor(content, [], { docType, template: frame, checklistItems })
+    const recheck = unmetFields(required, sources, docConfirmRequiredKeys(docType, frame, checklistItems))
+    return {
+      doc: {
+        id, project_id: project.project_id, doc_type: docType, owner_org: 'contractor', target_table: target, target_id: null,
+        target_key: null, intake_id: null, doc_date: draftLogDate, status: recheck.length ? 'pending_input' : 'draft', current_version_no: 1,
+        template_id: template, required_fields: required, recheck, created_by: null, created_at: created, updated_at: created,
+      },
+      versions: [{
+        id: `${id}-V1`, document_id: id, version_no: 1, author_kind: 'ai', created_by: null, content, field_sources: sources,
+        attachments: [], content_hash: `demo-${id}-v1`, change_note: 'Agent 對話起稿', amended_from_version: null, created_at: created,
+      }],
+    }
+  }
+  const fieldDocuments = [
+    demoDoc('FD-DEMO-AGENT-LOG', 'daily_log', 'daily_logs', null, logContent, logSources, agaAt(2)),
+    demoDoc('FD-DEMO-AGENT-SC', 'self_check', 'checklist_records', 'CLT-DEMO-1', scContent, scSources, agaAt(5)),
+  ]
 
   // 稽核提示的發現清單(批4):形狀對齊 lib/integrityAudit.js buildIntegrityFindings 的
   // findings(status/category/route/title/detail)——真實模式由 run_integrity_audit
@@ -443,21 +472,24 @@ export function buildDemoData(workItems, project) {
 
   const agentActions = [
     { id: 'AGA-DEMO-1', project_id: project.project_id, actor_user: null,
-      agent_role: 'contractor', kind: 'draft_daily_log', target_table: 'daily_logs', target_id: null,
+      agent_role: 'contractor', kind: 'draft_daily_log', target_table: 'field_documents', target_id: 'FD-DEMO-AGENT-LOG',
       summary: `已依 18 張現場照片擬好 ${draftLogDate} 施工日誌草稿(3 個工項,數量待你填)`,
       rationale: '工項清單:依當日已配對工項的現場照片自動帶出(確定性比對,非 AI 判讀)。\n'
         + '數量:一律留空待你親自填寫——照片能證明有施作,不能證明做了多少,系統不猜數量。\n'
-        + `出工/機具/材料:複製自昨日(${iso(daysFromNow(-1))})日誌,請核對後調整。\n`
-        + '天氣:依工地座標向中央氣象局預報自動帶入。',
-      evidence: { 來源: ['現場照片 18 張', `前日日誌 ${iso(daysFromNow(-1))}`, '進行中工項 3 項'], payload: draftPayload },
+        + (ylog ? `出工/機具/材料:沿用前一日(${ylog.log_date})日誌,請核對後調整。\n` : '出工/機具/材料:前一日沒有日誌可沿用,留空待填。\n')
+        + '天氣:依工地座標向中央氣象署帶入。',
+      evidence: { origin: 'agent', log_date: draftLogDate, document_id: 'FD-DEMO-AGENT-LOG', doc_type: 'daily_log', version_no: 1,
+        items: Object.fromEntries(Object.entries(logItems).map(([k, it]) => [k, { item_no: it.item_no, description: it.description, unit: it.unit, qty_today: null }])) },
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(2) },
     { id: 'AGA-DEMO-2', project_id: project.project_id, actor_user: null,
-      agent_role: 'contractor', kind: 'draft_inspection', target_table: 'checklist_records', target_id: null,
-      summary: `已依今日澆置照片擬好「${TEMPLATE_03310.title}」草稿(${inspDraftNeeds} 項待你填)`,
+      agent_role: 'contractor', kind: 'draft_inspection', target_table: 'field_documents', target_id: 'FD-DEMO-AGENT-SC',
+      summary: `已依今日澆置照片擬好「${TEMPLATE_03310.title}」自主檢查表草稿(實測值待你量測、AI 建議勾選待確認)`,
       rationale: '範本:依今日照片對應的混凝土澆置作業,挑出 03310 自主檢查表範本。\n'
-        + '目視項:照片可判讀的勾選項先給建議值並標「AI 建議」、逐項附依據,由你確認;是否已通知監造照片看不出來,留白不猜。\n'
-        + '實測值:坍度、溫度等數值一律留空由你親自填——AI 不猜實測值,合格判定由系統依量化標準自動跑。',
-      evidence: { 來源: ['今日澆置照片 6 張', '檢查表範本 03310'], payload: inspDraftPayload },
+        + '目視項:照片可判讀的勾選項先給建議值並標「AI 建議」、逐項附依據,須你在自主檢查表頁逐項確認;是否已通知監造照片看不出來,留白不猜。\n'
+        + '實測值:坍度、溫度等數值一律留空由你親自量測填寫——AI 不猜實測值,合格判定由系統在簽署時依量化標準算。',
+      evidence: { origin: 'agent', check_date: draftLogDate, document_id: 'FD-DEMO-AGENT-SC', doc_type: 'self_check', version_no: 1,
+        template_id: 'CLT-DEMO-1', template_title: TEMPLATE_03310.title, location: '3F 版牆', work_item_id: null,
+        items: TEMPLATE_03310.items.map((it) => ({ no: it.no, item: it.item, kind: it.kind, ...(it.kind === 'bool' && inspDraftBasis[it.no] ? { suggested: true, basis: inspDraftBasis[it.no] } : {}) })) },
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(5) },
     // 審查意見草稿(批6):payload 形狀對齊後端 draft_submittal_review 工具的產出
     // (submittal_id/no/title + checklist[{point,basis,status}] + opinion + suggested_decision + caution)。
@@ -505,7 +537,7 @@ export function buildDemoData(workItems, project) {
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(8) },
   ]
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, anchorVersions, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions }
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, anchorVersions, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions, fieldDocuments }
 }
 
 // ── 跨案總覽的示範姊妹案(靜態摘要;A 區為主 storyline,件數由 store 即時計算) ──

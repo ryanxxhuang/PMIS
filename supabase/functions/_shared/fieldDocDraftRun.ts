@@ -91,6 +91,8 @@ export interface DraftRepo {
   claimIntake(p: { intakeId: string; expectedAttempts: number; nextAttempts: number; staleBefore: string; now: string }): Promise<'claimed' | 'conflict' | RepoError>
   listIntakePhotos(intakeId: string): Promise<IntakePhotoRow[] | RepoError>
   listPhotosByIds(ids: string[]): Promise<IntakePhotoRow[] | RepoError>
+  // Agent 對話起稿(P6b-2):本案拍攝時間落在該台北日曆日的照片(可限工項);不分批次、RLS 讀
+  listPhotosTakenOn(date: string, workItemId?: string | null): Promise<IntakePhotoRow[] | RepoError>
   downloadPhoto(storagePath: string): Promise<{ base64: string; mime: string } | RepoError>
   updatePhoto(photoId: string, patch: PhotoAiPatch): Promise<{ error?: string; code?: string }>
   listLeafWorkItems(): Promise<LeafWorkItem[] | RepoError>
@@ -109,7 +111,8 @@ export interface DraftRepo {
   // 工項的 ITP 必要階段(H 點、required_for_billing;P3c 查驗表單的階段鍵必填與可選值)
   listRequiredStages(workItemId: string): Promise<string[] | RepoError>
   findActiveDoc(docType: string, locator: DocLocator): Promise<DocRow | null | RepoError>
-  insertDoc(row: { doc_type: string; doc_date: string; intake_id: string; target_key: string; status: string; required_fields: unknown; recheck: unknown; created_by: string; template_id?: string | null }): Promise<DocRow | { conflict: true } | RepoError>
+  // 照片起稿帶批次與冪等鍵;Agent 對話起稿沒有批次(intake_id=null;日誌類 target_key=null,自檢表 target_key=agent:…)
+  insertDoc(row: { doc_type: string; doc_date: string; intake_id: string | null; target_key: string | null; status: string; required_fields: unknown; recheck: unknown; created_by: string; template_id?: string | null }): Promise<DocRow | { conflict: true } | RepoError>
   latestVersion(docId: string): Promise<VersionRow | null | RepoError>
   hasHumanVersion(docId: string): Promise<boolean | RepoError>
   insertVersion(row: { document_id: string; version_no: number; content: unknown; field_sources: unknown; attachments: unknown; change_note: string }): Promise<{ version_no: number; content_hash: string } | RepoError>
@@ -173,7 +176,7 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T,
   return results
 }
 
-type StoredAiResult = {
+export type StoredAiResult = {
   classify: SitePhotoResult | null
   whiteboard: WhiteboardResult | null
   whiteboard_skipped: string | null
@@ -182,8 +185,8 @@ type StoredAiResult = {
   error?: string
 }
 
-// photos.ai_result 讀回:形狀由 normalize* 驗,不合就當沒有(重跑會重新辨識)
-function readStored(raw: unknown): StoredAiResult | null {
+// photos.ai_result 讀回:形狀由 normalize* 驗,不合就當沒有(重跑會重新辨識)。Agent 對話起稿(P6b-2)讀同一份辨識結果。
+export function readStored(raw: unknown): StoredAiResult | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   const classify = normalizeSitePhotoResult(r.classify)
@@ -198,6 +201,112 @@ function readStored(raw: unknown): StoredAiResult | null {
       hint: typeof match.hint === 'string' ? match.hint : null,
     },
   }
+}
+
+// 照片列＋已存辨識結果 → 起稿用照片(照片起稿與 Agent 對話起稿同一支)
+export const toDraftPhoto = (p: IntakePhotoRow, s: StoredAiResult | null): DraftPhoto => ({
+  id: p.id, storage_path: p.storage_path, content_sha256: p.content_sha256, work_item_id: p.work_item_id,
+  caption: p.caption, location: p.location, taken_at: p.taken_at, created_at: p.created_at,
+  classify: s?.classify ?? null, whiteboard: s?.whiteboard ?? null, whiteboardSkipped: s?.whiteboard_skipped ?? null,
+})
+
+// 證據聯集:既有版本附件裡、這次沒帶到的照片也要留著(另一批上傳或另一次起稿的證據不能因重跑而掉);
+// 非工地／不可辨／重複照片不併入。就地加進 draftPhotos。
+export async function unionPriorAttachments(repo: DraftRepo, latest: VersionRow | null, draftPhotos: Map<string, DraftPhoto>): Promise<void> {
+  const prevIds = Array.isArray(latest?.attachments)
+    ? (latest!.attachments as { photo_id?: unknown }[]).map((a) => a?.photo_id).filter((id): id is string => typeof id === 'string' && !draftPhotos.has(id))
+    : []
+  if (!prevIds.length) return
+  const prevRows = await repo.listPhotosByIds(prevIds)
+  if (isErr(prevRows)) return
+  for (const row of prevRows) {
+    if (row.ai_status === 'not_site' || row.ai_status === 'unreadable' || row.ai_status === 'duplicate') continue
+    draftPhotos.set(row.id, toDraftPhoto(row, readStored(row.ai_result)))
+  }
+}
+
+// ── 草稿寫入(照片起稿與 Agent 對話起稿共用同一段;設計 field-documents-lifecycle §3.1):
+// 活文件不存在→建立(撞唯一索引改走既有)＋AI 版本;內容與最新版本相同→不加版本;已有人工版本→只留
+// suggest_field_update(DB guard 也拒 AI 寫版本);否則新增 AI 版本並留一筆 agent_actions(target=該文件)。
+// 鎖定(已簽署／提送)由呼叫端在湊內容前判斷——鎖定的文件連內容都不必湊。失敗一律 throw(呼叫端決定怎麼揭露)。
+export type DraftWriteOrigin = {
+  agentRole: string
+  actionKind: string                       // 新版本時留的 agent_actions.kind(照片起稿 draft_field_document;對話起稿 draft_daily_log／draft_inspection)
+  evidence: Record<string, unknown>        // 併入 agent_actions.evidence(來源識別:intake_id 或對話起稿的顯示資料)
+  suggestSummary: string                   // 已有人工版本時建議的摘要
+  changeNote: (versionNo: number) => string
+}
+export type DraftWriteResult = {
+  action: 'created' | 'version_added' | 'unchanged' | 'suggested'
+  document_id: string
+  version_no: number
+  status: string
+  reason: string
+  agent_action_id: string | null
+}
+export async function writeDraftDocument(repo: DraftRepo, p: {
+  docType: string
+  locator: DocLocator
+  existing: DocRow | null
+  latest: VersionRow | null
+  insert: { doc_date: string; intake_id: string | null; target_key: string | null; template_id?: string | null }
+  draft: FieldDocDraft
+  userId: string
+  origin: DraftWriteOrigin
+}): Promise<DraftWriteResult> {
+  const { docType, draft, userId, origin } = p
+  let existing = p.existing
+  let latest = p.latest
+  if (!existing) {
+    const ins = await repo.insertDoc({
+      doc_type: docType, doc_date: p.insert.doc_date, intake_id: p.insert.intake_id, target_key: p.insert.target_key, status: draft.status,
+      required_fields: draft.required_fields, recheck: draft.recheck, created_by: userId,
+      ...(docType === 'self_check' || docType === 'inspection_form' ? { template_id: p.insert.template_id ?? null } : {}),
+    })
+    if (isErr(ins)) throw new Error(ins.error)
+    if ('conflict' in ins) {
+      // 兩個請求同時建同一份文件:唯一索引收口,輸的一方改走既有文件
+      const again = await repo.findActiveDoc(docType, p.locator)
+      if (isErr(again) || !again) throw new Error(isErr(again) ? again.error : '同日文件建立衝突後找不到既有文件,請重試')
+      existing = again
+      const latestRes = await repo.latestVersion(existing.id)
+      latest = isErr(latestRes) ? null : latestRes
+    } else {
+      existing = ins
+    }
+  }
+
+  if (latest && draftUnchanged({ content: latest.content, attachments: latest.attachments }, { content: draft.content, attachments: draft.attachments })) {
+    return { action: 'unchanged', document_id: existing.id, version_no: latest.version_no, status: existing.status, reason: '重跑內容相同,未新增版本', agent_action_id: null }
+  }
+  const human = await repo.hasHumanVersion(existing.id)
+  if (isErr(human)) throw new Error(human.error)
+  if (human) {
+    // 人已改過:不覆寫、不新增 AI 版本(DB guard 也會拒),只留建議供人套用
+    const act = await repo.insertAgentAction({
+      actor_user: userId, agent_role: origin.agentRole, kind: 'suggest_field_update', target_table: 'field_documents', target_id: existing.id,
+      summary: origin.suggestSummary,
+      rationale: draft.rationale,
+      evidence: { ...origin.evidence, document_id: existing.id, doc_type: docType, against_version_no: existing.current_version_no, suggestion: { content: draft.content, field_sources: draft.field_sources, attachments: draft.attachments } },
+    })
+    if (isErr(act)) throw new Error(act.error)
+    return { action: 'suggested', document_id: existing.id, version_no: existing.current_version_no, status: existing.status, reason: '文件已有人工版本,新內容只作建議,未覆寫', agent_action_id: act.id }
+  }
+  const nextNo = (latest?.version_no ?? existing.current_version_no) + 1
+  const ver = await repo.insertVersion({
+    document_id: existing.id, version_no: nextNo, content: draft.content, field_sources: draft.field_sources, attachments: draft.attachments,
+    change_note: origin.changeNote(nextNo),
+  })
+  if (isErr(ver)) throw new Error(ver.error)
+  const upd = await repo.updateDoc(existing.id, { current_version_no: ver.version_no, status: draft.status, required_fields: draft.required_fields, recheck: draft.recheck })
+  if (upd.error) throw new Error(upd.error)
+  const act = await repo.insertAgentAction({
+    actor_user: userId, agent_role: origin.agentRole, kind: origin.actionKind, target_table: 'field_documents', target_id: existing.id,
+    summary: draft.summary, rationale: draft.rationale,
+    evidence: { ...origin.evidence, document_id: existing.id, doc_type: docType, version_no: ver.version_no, content_hash: ver.content_hash },
+  })
+  if (isErr(act)) throw new Error(act.error)
+  return { action: nextNo === 1 ? 'created' : 'version_added', document_id: existing.id, version_no: ver.version_no, status: draft.status, reason: draft.summary, agent_action_id: act.id }
 }
 
 export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult> {
@@ -435,11 +544,6 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
 
   const documents: DocumentOutcome[] = []
   let docErrors = 0
-  const toDraftPhoto = (p: IntakePhotoRow, s: StoredAiResult | null): DraftPhoto => ({
-    id: p.id, storage_path: p.storage_path, content_sha256: p.content_sha256, work_item_id: p.work_item_id,
-    caption: p.caption, location: p.location, taken_at: p.taken_at, created_at: p.created_at,
-    classify: s?.classify ?? null, whiteboard: s?.whiteboard ?? null, whiteboardSkipped: s?.whiteboard_skipped ?? null,
-  })
 
   // 範本於執行期向 DB 取,每批只取一次;null=沒有範本(該類型不能起稿,回錯誤而不是硬湊)
   const templateCache = new Map<string, FieldDocTemplate | null>()
@@ -515,7 +619,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     try {
       const existingRes = await repo.findActiveDoc(docType, locatorOf(cand))
       if (isErr(existingRes)) throw new Error(existingRes.error)
-      let existing = existingRes
+      const existing = existingRes
       if (existing && existing.status !== 'draft' && existing.status !== 'pending_input') {
         out.action = 'locked'; out.document_id = existing.id; out.status = existing.status; out.version_no = existing.current_version_no
         out.reason = `${docType === 'inspection_form' ? '此查驗的' : '該日'}${typeLabel}已${existing.status === 'signed' ? '簽署' : existing.status === 'in_review' ? '送內部核對' : '提送'},未變更;新照片請由人另開版本`
@@ -533,18 +637,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         const latestRes = await repo.latestVersion(existing.id)
         if (isErr(latestRes)) throw new Error(latestRes.error)
         latest = latestRes
-        const prevIds = Array.isArray(latest?.attachments)
-          ? (latest!.attachments as { photo_id?: unknown }[]).map((a) => a?.photo_id).filter((id): id is string => typeof id === 'string' && !draftPhotos.has(id))
-          : []
-        if (prevIds.length) {
-          const prevRows = await repo.listPhotosByIds(prevIds)
-          if (!isErr(prevRows)) {
-            for (const row of prevRows) {
-              if (row.ai_status === 'not_site' || row.ai_status === 'unreadable' || row.ai_status === 'duplicate') continue
-              draftPhotos.set(row.id, toDraftPhoto(row, readStored(row.ai_result)))
-            }
-          }
-        }
+        await unionPriorAttachments(repo, latest, draftPhotos)
       }
       const dateRefs = dayPhotos.filter((d) => d.ref).map((d) => d.ref!)
       const dateSource = dayPhotos.some((d) => d.source === 'whiteboard')
@@ -554,64 +647,19 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
       const draft = await buildDraftFor(cand, date, dateSource, [...draftPhotos.values()])
       out.pending_fields = draft.required_fields.filter((k) => draft.field_sources[k]?.status === 'pending')
 
-      if (!existing) {
-        const ins = await repo.insertDoc({
-          doc_type: docType, doc_date: date, intake_id: intakeId, target_key: cand.target_key, status: draft.status,
-          required_fields: draft.required_fields, recheck: draft.recheck, created_by: userId,
-          ...(docType === 'self_check' || docType === 'inspection_form' ? { template_id: cand.template_id ?? null } : {}),
-        })
-        if (isErr(ins)) throw new Error(ins.error)
-        if ('conflict' in ins) {
-          // 兩個請求同時建同一份文件:唯一索引收口,輸的一方改走既有文件
-          const again = await repo.findActiveDoc(docType, locatorOf(cand))
-          if (isErr(again) || !again) throw new Error(isErr(again) ? again.error : '同日文件建立衝突後找不到既有文件,請重試')
-          existing = again
-          const latestRes = await repo.latestVersion(existing.id)
-          latest = isErr(latestRes) ? null : latestRes
-        } else {
-          existing = ins
-        }
-      }
-      out.document_id = existing.id
-
-      if (latest && draftUnchanged({ content: latest.content, attachments: latest.attachments }, { content: draft.content, attachments: draft.attachments })) {
-        out.action = 'unchanged'; out.version_no = latest.version_no; out.status = existing.status; out.reason = '重跑內容相同,未新增版本'
-        setCand({ state: 'unchanged', document_id: existing.id })
-        continue
-      }
-      const human = await repo.hasHumanVersion(existing.id)
-      if (isErr(human)) throw new Error(human.error)
-      if (human) {
-        // 人已改過:不覆寫、不新增 AI 版本(DB guard 也會拒),只留建議供人套用
-        const act = await repo.insertAgentAction({
-          actor_user: userId, agent_role: intake.uploader_org, kind: 'suggest_field_update', target_table: 'field_documents', target_id: existing.id,
-          summary: `新照片辨識結果可補入 ${date} ${typeLabel}(文件已有人工版本,未自動套用)`,
-          rationale: draft.rationale,
-          evidence: { intake_id: intakeId, document_id: existing.id, doc_type: docType, against_version_no: existing.current_version_no, suggestion: { content: draft.content, field_sources: draft.field_sources, attachments: draft.attachments } },
-        })
-        if (isErr(act)) throw new Error(act.error)
-        out.action = 'suggested'; out.version_no = existing.current_version_no; out.status = existing.status
-        out.reason = '文件已有人工版本,新辨識結果只作建議,未覆寫'
-        setCand({ state: 'suggested', document_id: existing.id })
-        continue
-      }
-      const nextNo = (latest?.version_no ?? existing.current_version_no) + 1
-      const ver = await repo.insertVersion({
-        document_id: existing.id, version_no: nextNo, content: draft.content, field_sources: draft.field_sources, attachments: draft.attachments,
-        change_note: nextNo === 1 ? '系統依照片起稿' : '重新辨識後更新草稿',
+      const res = await writeDraftDocument(repo, {
+        docType, locator: locatorOf(cand), existing, latest,
+        insert: { doc_date: date, intake_id: intakeId, target_key: cand.target_key, template_id: cand.template_id ?? null },
+        draft, userId,
+        origin: {
+          agentRole: intake.uploader_org, actionKind: 'draft_field_document', evidence: { intake_id: intakeId },
+          suggestSummary: `新照片辨識結果可補入 ${date} ${typeLabel}(文件已有人工版本,未自動套用)`,
+          changeNote: (n) => (n === 1 ? '系統依照片起稿' : '重新辨識後更新草稿'),
+        },
       })
-      if (isErr(ver)) throw new Error(ver.error)
-      const upd = await repo.updateDoc(existing.id, { current_version_no: ver.version_no, status: draft.status, required_fields: draft.required_fields, recheck: draft.recheck })
-      if (upd.error) throw new Error(upd.error)
-      const act = await repo.insertAgentAction({
-        actor_user: userId, agent_role: intake.uploader_org, kind: 'draft_field_document', target_table: 'field_documents', target_id: existing.id,
-        summary: draft.summary, rationale: draft.rationale,
-        evidence: { intake_id: intakeId, document_id: existing.id, doc_type: docType, version_no: ver.version_no, content_hash: ver.content_hash },
-      })
-      if (isErr(act)) throw new Error(act.error)
-      out.action = nextNo === 1 ? 'created' : 'version_added'; out.version_no = ver.version_no; out.status = draft.status
-      out.reason = draft.summary
-      setCand({ state: 'drafted', document_id: existing.id })
+      out.document_id = res.document_id; out.version_no = res.version_no; out.status = res.status; out.action = res.action
+      out.reason = res.action === 'suggested' ? '文件已有人工版本,新辨識結果只作建議,未覆寫' : res.reason
+      setCand({ state: res.action === 'unchanged' ? 'unchanged' : res.action === 'suggested' ? 'suggested' : 'drafted', document_id: res.document_id })
     } catch (e) {
       docErrors++
       out.action = 'error'
