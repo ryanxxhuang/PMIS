@@ -82,7 +82,7 @@ select is((select count(*)::int from h23_rels t join pg_class c on c.oid = t.oid
 select is((select count(*)::int from h23_seqs s join pg_class c on c.oid = s.oid, aclexplode(c.relacl) a
            where a.grantee = 0), 0, 'public 序列 ACL 沒有 PUBLIC 的任何權限');
 
--- ── 3. authenticated 允許清單精確相等（79 支：68 支來源與理由見 migration 檔頭＋P5c update_project_anchors＋P4b 20260919040000 十支估驗 RPC）─
+-- ── 3. authenticated 允許清單精確相等（79 支：68 支來源與理由見 migration 檔頭＋P5c update_project_anchors＋P4b 20260919140000 十支估驗 RPC）─
 select is(
   (select string_agg(proname, ',' order by proname collate "C") from h23_fns
     where has_function_privilege('authenticated', oid, 'EXECUTE')),

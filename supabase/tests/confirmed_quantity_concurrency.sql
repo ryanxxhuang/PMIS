@@ -1,5 +1,5 @@
 -- P4b 併發(pgTAP＋dblink 真併發):兩個期別／兩個使用者同時搶同一可用量不能都拿到量。
--- 對應 migration 20260919040000_confirmed_quantity_enforcement.sql §8(逐工項 advisory lock＋valuations for update)。
+-- 對應 migration 20260919140000_confirmed_quantity_enforcement.sql §8(逐工項 advisory lock＋valuations for update)。
 -- 這一檔「不」包在交易裡:dblink 開的是獨立 session,只看得到已提交的資料;fixture 先提交,
 -- 兩個 session 各自持鎖／阻塞,最後由本 session 刪專案與帳號清場(cascade),留 0 列。
 -- 執行方式:npm run test:db(一次性資料庫)。ON_ERROR_STOP 關閉:任何一步意外失敗都要跑到清場,

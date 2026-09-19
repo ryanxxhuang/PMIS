@@ -1,9 +1,9 @@
--- 回復 20260919040000_confirmed_quantity_enforcement(P4b):drop 新表／欄／函式／trigger,
+-- 回復 20260919140000_confirmed_quantity_enforcement(P4b):drop 新表／欄／函式／trigger,
 -- 還原 valuations_guard／valuation_items_guard 為 20260712001300_formal_mode 版本(trigger 定義回 baseline:
 -- valuations_guard 只在 UPDATE)。legacy 來源列隨 valuation_item_sources 一起移除;valuation_items 原值(cum_qty／
 -- amount_cum)本支沒有改寫既有列,不需還原。確認紀錄／調整是履約證據:回復前先匯出
 -- (select * from inspection_confirmations / valuation_adjustments),本檔會連同資料 drop。
--- 執行方式:supabase db query --linked -f supabase/rollbacks/20260919040000_confirmed_quantity_enforcement.down.sql
+-- 執行方式:supabase db query --linked -f supabase/rollbacks/20260919140000_confirmed_quantity_enforcement.down.sql
 begin;
 
 -- ── trigger ─────────────────────────────────────────────────────────────────

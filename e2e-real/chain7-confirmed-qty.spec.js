@@ -2,7 +2,7 @@
 // 廠商在估驗頁直接填 100(舊前端路徑,P4e 前仍可寫草稿)→ 送監造審核被 DB 檢查點擋下(VQ004,畫面原樣顯示原因)
 // → 直接 REST 與 RPC 也擋 → 監造以登入身分簽發監造確認單 60(R1 起不要求兩步驟驗證)→ 廠商同步後累計=60 → 送審 → 監造核定。
 // fixture 全走產品窄門 RPC;afterAll 走 delete_project RPC+admin API 清理,殘留 0。
-// 前置:本機 stack 已套用 20260919040000(supabase migration up --local)。
+// 前置:本機 stack 已套用 20260919140000(supabase migration up --local)。
 import { test, expect } from '@playwright/test'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,

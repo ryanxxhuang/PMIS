@@ -1,6 +1,6 @@
 # 監造確認量與估驗聯動（後端強制）
 
-> 狀態：**ACTIVE（後端已實作：P4a 純計算層 `20260917120000`、P4b 表／guard／RPC／鎖 `20260919040000`；前端 P4c、撤銷／調整 UI P4d、封堵 P4e 未做）**｜2026-09-19｜依 [D-026](../DECISIONS.md)。§1–§13 是 P0 設計；實作與設計的偏差集中在 §16（以 §16 為準）；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
+> 狀態：**ACTIVE（後端已實作：P4a 純計算層 `20260917120000`、P4b 表／guard／RPC／鎖 `20260919140000`；前端 P4c、撤銷／調整 UI P4d、封堵 P4e 未做）**｜2026-09-19｜依 [D-026](../DECISIONS.md)。§1–§13 是 P0 設計；實作與設計的偏差集中在 §16（以 §16 為準）；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
 > 標記同 [現場文書文件](field-documents-lifecycle.md)：【已確認】／【設計】／【待決】。
 
 ## 0. 現況核對與差距（基準 `ab4be5f`）
@@ -212,7 +212,7 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 | 單元 | 內容 |
 |---|---|
 | P4a（已實作 `20260917120000`） | §3.2 的 2 型別＋14 支純函式（`fn_effective_by_batch`、`fn_effective_confirmed`、`fn_contract_qty`、`fn_cap`、`fn_allocate_fifo`、`fn_batch_allocation_check`、`fn_period_increment`、`fn_valuation_amount`、`fn_pricing_basis_effective`、`fn_cq_*`）；pgTAP `confirmed_quantity_calc.sql` 82 條（含 §3.1 全部案例與 §11 拒絕矩陣）。`v_billable_backlog` 移到 P4b |
-| P4b（已實作 `20260919040000`） | 四張新表＋加欄＋guards＋十支 RPC＋advisory lock＋可估驗清單 RPC（取代 view，理由見 §16.3）；全部以 §3.2 純函式為核心；pgTAP `confirmed_quantity_enforcement.sql`（§8 全部情境、狀態機、權限矩陣、service role 無 bypass）＋`confirmed_quantity_concurrency.sql`（`dblink` 兩個 session 真併發） |
+| P4b（已實作 `20260919140000`） | 四張新表＋加欄＋guards＋十支 RPC＋advisory lock＋可估驗清單 RPC（取代 view，理由見 §16.3）；全部以 §3.2 純函式為核心；pgTAP `confirmed_quantity_enforcement.sql`（§8 全部情境、狀態機、權限矩陣、service role 無 bypass）＋`confirmed_quantity_concurrency.sql`（`dblink` 兩個 session 真併發） |
 | P4c | 前端：可估驗清單、來源展開、缺件、差異比對、移除 `fillValuationFromSiteLogs` |
 | P4d | 撤銷／減量／調整 UI 與核定、請款整合 |
 | P4e | 封堵 migration（revoke）＋Edge 掃描測試＋舊客戶端相容驗證 |
@@ -248,7 +248,7 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 - **Q6 多階段來源**：使用者同意照暫行做法：ITP H 點為必要階段；R／W 點不作必要。
 - **Q7 截止日語意**：使用者同意照暫行做法：`period_end`＝計價截止日，由廠商建期時填、送審前必填。
 
-## 16. P4b 實作結果與偏差（2026-09-19，migration `20260919040000_confirmed_quantity_enforcement`；回復檔同名 `.down.sql`）
+## 16. P4b 實作結果與偏差（2026-09-19，migration `20260919140000_confirmed_quantity_enforcement`；回復檔同名 `.down.sql`）
 
 以下是實作與 §1–§13 設計不同、或設計沒寫而實作必須決定的事；P4c／P4d 以本節與 migration 檔頭為準。
 

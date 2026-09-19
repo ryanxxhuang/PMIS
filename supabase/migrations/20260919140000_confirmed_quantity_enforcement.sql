@@ -47,7 +47,7 @@
 --   且無來源的數量在送審／核定被擋——舊前端與 fillValuationFromSiteLogs 都不能再產生未經確認的核定。
 --   valuations_guard 新增 BEFORE INSERT(登入者只能建草稿)與狀態機(草稿→監造審核限廠商、監造審核→草稿限監造、
 --   跨越已核定限監造;其他轉移 VQ002);period_end 在送審／核定必填;非草稿期不可改期別欄位(登入者)。
--- 回復:supabase/rollbacks/20260919040000_confirmed_quantity_enforcement.down.sql(drop 新表／欄／函式／trigger,
+-- 回復:supabase/rollbacks/20260919140000_confirmed_quantity_enforcement.down.sql(drop 新表／欄／函式／trigger,
 --   還原 valuations_guard／valuation_items_guard 為 20260712001300 版本;legacy 來源列隨表移除,valuation_items 原值不動)。
 -- pgTAP:supabase/tests/confirmed_quantity_enforcement.sql(結構、guard、§8 全部情境、狀態機、撤銷／調整、權限矩陣、
 --   service role 無 bypass)、confirmed_quantity_concurrency.sql(dblink 兩個 session 真併發)。

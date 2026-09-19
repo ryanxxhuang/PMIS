@@ -1,4 +1,4 @@
--- P4b 監造確認量的表、guard、RPC 與鎖(pgTAP):對應 migration 20260919040000_confirmed_quantity_enforcement.sql,
+-- P4b 監造確認量的表、guard、RPC 與鎖(pgTAP):對應 migration 20260919140000_confirmed_quantity_enforcement.sql,
 -- 逐條對應實作指令 §8「監造確認量與計價」與設計文件 §14。全部以真實 authenticated＋JWT 路徑呼叫 RPC 與直接寫表(R1 起簽發不要求 aal2,claims 的 aal 只是證據);
 -- 併發(兩個 session 同時搶同一可用量)在 confirmed_quantity_concurrency.sql 以 dblink 真併發驗證。
 -- 執行方式:npm run test:db(一次性資料庫),整份在交易內執行並 rollback。
