@@ -35,7 +35,6 @@ import { stableStringify } from './agent.ts'
 import { matchLeaf } from './photoMatch.ts'
 import { FIELD_DOC_TYPE_LABELS } from './ballInCourtRules.ts'
 import { FORMAL_DAILY_LOG_STATUSES, composeContractorSummary, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.ts'
-import { pickChecklistTemplate } from './draftInspection.ts'
 import { checklistItemKeys, docRequiredKeys, normalizeCqKey, templateRequiredKeys, templateStamp } from './fieldDocTemplate.ts'
 import type { ChecklistItemLike, FieldDocTemplate } from './fieldDocTemplate.ts'
 import type { SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
@@ -197,6 +196,33 @@ export type OpenInspection = {
 
 // 本案檢查表範本(checklist_templates 列;RLS 讀)。kind:self_check(自檢表;既有列)／inspection_form(監造查驗項目)
 export type ChecklistTemplateRow = { id: string; title: string; source: string | null; items: ChecklistItemLike[]; kind?: string | null }
+
+// 範本挑選(確定性關鍵字相符,非 AI;照片起稿的候選推斷與 Agent draft_inspection 同一支——P6b-2 自 draftInspection.ts 移來,
+// 免得純規則模組反向 import 會寫 DB 的工具模組):以工項描述的相鄰雙字組對範本標題計分,
+// 取最高分;同分取排序較前者(呼叫端已依 created_at 升冪,平手決策確定性)。
+// 僅一張範本時直接用;沒有描述或全部 0 分 → 回 null(誠實請使用者指定,不亂挑)。
+export function pickChecklistTemplate<T extends { title: string }>(
+  templates: T[],
+  workItemDesc: string | null | undefined,
+): { template: T; reason: string } | null {
+  if (!templates.length) return null
+  if (templates.length === 1) return { template: templates[0], reason: '本案僅有這一張範本' }
+  const desc = (workItemDesc || '').replace(/\s+/g, '')
+  if (!desc) return null
+  const grams = new Set<string>()
+  const chars = [...desc]
+  if (chars.length === 1) grams.add(desc)
+  for (let i = 0; i + 1 < chars.length; i++) grams.add(chars[i] + chars[i + 1])
+  let best: T | null = null
+  let bestScore = 0
+  for (const t of templates) {
+    let score = 0
+    for (const g of grams) if (t.title.includes(g)) score += 1
+    if (score > bestScore) { best = t; bestScore = score }
+  }
+  if (!best) return null
+  return { template: best, reason: `依工項「${workItemDesc}」與範本標題的相符度挑選,若不對請指定範本` }
+}
 
 export function inferCandidates(input: {
   uploaderOrg: string
@@ -909,6 +935,9 @@ export function draftUnchanged(
 // 框架=DB fn_field_document_template('self_check')(示範框架範本);檢查項目=本案 checklist_templates 的範本(由候選推斷
 // 確定性挑選,已隨候選帶入)。每個項目一律 pending:實測值只能人量測(DB 版本 guard 拒絕 AI 帶入),勾選項沒有逐項依據
 // 就不建議;告示板清楚寫出對應項目的讀數只放 hint 供人採用,不填值。
+// Agent 對話起稿(P6b-2,draft_inspection 工具)走同一支:照片起稿沒有逐項依據,所以不帶 boolSuggestions;對話起稿時模型
+// 可對勾選項給「值＋依據」(依據只能來自工具回傳內容,呼叫端已驗),帶入為 filled／ai:agent——勾選項的 item_rules 是
+// confirm_required,filled 不算齊備,仍要人逐項確認才能簽署;實測值不論哪條路都不帶值。工項可不指定(對話起稿時)。
 export type SelfCheckResultDraft = { value: number | boolean | null }
 export type SelfCheckContent = {
   check_date: string
@@ -928,12 +957,14 @@ export type SelfCheckDraftInput = {
   date: string
   dateSource: { source: string; refs: string[] }
   photos: DraftPhoto[]                 // 該工項該日的廠商照片(含既有版本附件的照片)
-  workItem: LeafWorkItem
+  workItem: LeafWorkItem | null        // 照片起稿一定有;Agent 對話起稿可不指定
   template: ChecklistTemplateRow       // 候選推斷挑到的本案檢查表範本
   templateReason: string
   frame: FieldDocTemplate              // DB fn_field_document_template('self_check')
   hasBoq: boolean
   notes: string[]
+  // Agent 對話起稿才有:勾選項的建議值與依據(鍵=項次;呼叫端 validateBoolSuggestions 已擋 num 項與缺依據)
+  boolSuggestions?: Map<string, { value: boolean; basis: string }>
 }
 
 const normText = (s: unknown) => (typeof s === 'string' ? s.replace(/[\s()（）:：,，、]/g, '') : '')
@@ -956,9 +987,12 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
   const photoIds = photos.map((p) => p.id)
   const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))]
 
+  const suggestions = input.boolSuggestions ?? new Map<string, { value: boolean; basis: string }>()
   sources.check_date = { status: 'filled', source: input.dateSource.source, refs: input.dateSource.refs }
   sources.template_id = { status: 'filled', source: 'system:template_match', reason: input.templateReason }
-  sources.work_item_id = { status: 'filled', source: 'ai:photo', refs: photoIds }
+  sources.work_item_id = workItem
+    ? { status: 'filled', source: 'ai:photo', refs: photoIds }
+    : { status: 'pending', source: null, reason: '起稿時未指定工項(非必填);有對應工項請補上,估驗佐證才對得回' }
 
   // 位置:照片說明／告示板的位置唯一才帶入;多個要人選;沒有→pending(不填「—」)
   const locs = uniq(photos.map((p) => textOrNull(p.location) ?? textOrNull(p.classify?.location) ?? textOrNull(p.whiteboard?.location)))
@@ -1004,6 +1038,11 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
         sources[key] = { status: 'pending', source: null, reason: '實測值由人親自量測填寫;系統不從照片推定' }
       }
       recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:實測值待親自量測填寫` })
+    } else if (suggestions.has(it.no)) {
+      const s = suggestions.get(it.no)!
+      results[it.no] = { value: s.value }
+      sources[key] = { status: 'filled', source: 'ai:agent', reason: `AI 建議(依據:${s.basis}),請逐項確認` }
+      recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:AI 建議${s.value ? '符合' : '不符'},待你逐項確認` })
     } else {
       sources[key] = { status: 'pending', source: null, reason: '請依現場檢查勾選;系統沒有逐項依據,不代為勾選' }
       recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:待現場勾選` })
@@ -1016,14 +1055,18 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
   const pendingRequired = required.filter((k) => sources[k]?.status === 'pending')
   const status: SelfCheckDraft['status'] = pendingRequired.length ? 'pending_input' : 'draft'
   const numCount = checklistItemKeys(items, frame, 'human_only').length
+  const suggested = [...suggestions.keys()].filter((no) => items.some((it) => it.no === no && it.kind !== 'num')).length
   const [, m, d] = date.split('-')
+  const wiLabel = workItem ? [workItem.item_no, workItem.description].filter(Boolean).join(' ') : '未指定'
   const summary =
     `已依 ${photos.length} 張現場照片擬好 ${Number(m)}/${Number(d)}「${template.title}」自主檢查表草稿(${frame.demo_label || '範本'})` +
-    `(工項 ${[workItem.item_no, workItem.description].filter(Boolean).join(' ')};${items.length} 項待你填,其中實測值 ${numCount} 項)`
+    `(工項 ${wiLabel};${items.length} 項待你填,其中實測值 ${numCount} 項${suggested ? `、AI 建議勾選 ${suggested} 項待確認` : ''})`
   const rationale = [
     `範本:${input.templateReason}。`,
-    `工項:依 ${photos.length} 張已配對工項的照片自動帶出(確定性比對,非模型判讀)。`,
-    `檢查項目(${items.length} 項):實測值 ${numCount} 項一律留空待你親自量測填寫——系統與 AI 都不猜實測值;勾選項沒有逐項依據,系統不代為勾選;本次未檢請標不適用並填原因。`,
+    workItem ? `工項:依 ${photos.length} 張已配對工項的照片自動帶出(確定性比對,非模型判讀)。` : '工項:起稿時未指定,未掛照片;有對應工項請補上。',
+    suggested
+      ? `檢查項目(${items.length} 項):實測值 ${numCount} 項一律留空待你親自量測填寫——系統與 AI 都不猜實測值;勾選項 ${suggested} 項為 AI 依對話中工具回傳內容給的建議(逐項附依據),須你逐項確認才能簽署,其餘待你勾選;本次未檢請標不適用並填原因。`
+      : `檢查項目(${items.length} 項):實測值 ${numCount} 項一律留空待你親自量測填寫——系統與 AI 都不猜實測值;勾選項沒有逐項依據,系統不代為勾選;本次未檢請標不適用並填原因。`,
     hints.size ? `告示板讀數:${[...hints.keys()].join('、')} 有板上讀數,只作參考提示,未填入。` : '',
     '合格與否由系統依範本量化標準計算,AI 不參與判定。',
     location ? `檢查位置:取自照片「${location}」,請確認。` : `檢查位置:${sources.location.reason}`,
@@ -1033,7 +1076,7 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
   return {
     content: {
       check_date: date, template_id: template.id, template_title: template.title, template_source: template.source ?? null,
-      work_item_id: workItem.id, location, results, note: null, template: templateStamp(frame),
+      work_item_id: workItem?.id ?? null, location, results, note: null, template: templateStamp(frame),
       photo_ids: photoIds, unmatched_photo_ids: [],
     },
     field_sources: sources,

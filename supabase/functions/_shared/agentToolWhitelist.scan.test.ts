@@ -3,6 +3,9 @@
 //   * 12 支工具 = 7 支唯讀 + 5 支草稿,三個角色的聯集不多不少、每個角色都以七支唯讀開頭。
 //   * 唯讀模組(agentQueryTools / ballInCourt / agentToolCommon / agentToolDefs)不得出現寫入動詞。
 //   * 草稿模組每一次 insert/update/upsert/delete 的前一個 .from() 都只能是 agent_actions。
+//   * 日誌／自主檢查表草稿(P6b-2)不直接寫表:只經 agentFieldDocDraft → writeDraftDocument 寫「現場文書草稿」
+//     (field_documents 草稿列、field_document_versions 的 AI 版本、agent_actions),與照片起稿同一段;
+//     不碰照片、批次或任何事實表(事實表只由使用者簽署落庫,DB 版本 guard 另擋 AI 帶入人填欄)。
 //   * 工具層能呼叫的 RPC 只有兩支唯讀(my_org_type / list_project_members);
 //     resolve_agent_action 這類狀態轉移 RPC 絕不在 agent 手上。
 //   * 分派器只把 service role client 交給草稿工具,查詢七支的 case 拿不到 service。
@@ -17,7 +20,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const read = (f: string) => fs.readFileSync(path.join(here, f), 'utf8')
 
 const READ_ONLY_MODULES = ['agentQueryTools.ts', 'ballInCourt.ts', 'ballInCourtRules.ts', 'agentToolCommon.ts', 'agentToolDefs.ts']
-const DRAFT_MODULES = ['draftDailyLog.ts', 'draftInspection.ts', 'draftSubmittalReview.ts', 'raiseTo.ts', 'integrityAuditTool.ts']
+const DRAFT_MODULES = ['draftDailyLog.ts', 'draftInspection.ts', 'draftSubmittalReview.ts', 'raiseTo.ts', 'integrityAuditTool.ts', 'agentFieldDocDraft.ts']
 const ALL_MODULES = [...READ_ONLY_MODULES, ...DRAFT_MODULES, 'agentTools.ts']
 const WRITE_VERB = /\.(insert|update|upsert|delete)\(/g
 
@@ -60,7 +63,34 @@ describe('草稿只寫 agent_actions、業務表零寫入(原始碼掃描)', () 
       }
     }
     expect(offenders, `以下寫入不是落在 agent_actions:\n${offenders.join('\n')}`).toEqual([])
-    expect(writes).toBeGreaterThanOrEqual(6) // 掃描器本身要有效:五支草稿工具至少各有一次寫入(raise_to 兩次)
+    // 掃描器本身要有效:送審意見、交接(兩次)、稽核提示直接寫 agent_actions;日誌／自檢草稿改經 writeDraftDocument(下一條)
+    expect(writes).toBeGreaterThanOrEqual(4)
+  })
+
+  it('日誌／自主檢查表草稿只經共用 writeDraftDocument 寫現場文書草稿;不碰照片、批次與事實表', () => {
+    // 工具模組只能把工作交給 agentFieldDocDraft,不自己呼叫 repo 的寫入
+    for (const f of ['draftDailyLog.ts', 'draftInspection.ts']) {
+      const repoCalls = [...read(f).matchAll(/repo\.(\w+)\(/g)].map((m) => m[1])
+      expect(repoCalls.filter((c) => /^(insert|update|finish|claim)/.test(c)), f).toEqual([])
+    }
+    // agentFieldDocDraft 可用的 repo 方法:讀＋交給 writeDraftDocument;不得出現照片／批次寫入
+    const AGENT_REPO_ALLOWED = new Set(['findActiveDoc', 'listPhotosTakenOn', 'listLeafWorkItems', 'latestVersion', 'getDailyLog', 'fetchWeather', 'getFieldDocumentTemplate'])
+    const used = new Set([...read('agentFieldDocDraft.ts').matchAll(/repo\.(\w+)\(/g)].map((m) => m[1]))
+    expect([...used].filter((c) => !AGENT_REPO_ALLOWED.has(c)), 'agentFieldDocDraft 用到不在允許清單的 repo 方法').toEqual([])
+    expect(read('agentFieldDocDraft.ts')).toContain('writeDraftDocument(')
+    // writeDraftDocument 本體只寫文件草稿、AI 版本與 agent_actions
+    const src = read('fieldDocDraftRun.ts')
+    const body = src.slice(src.indexOf('export async function writeDraftDocument('), src.indexOf('export async function runDraftFieldDocuments('))
+    const writes = new Set([...body.matchAll(/repo\.(\w+)\(/g)].map((m) => m[1]).filter((c) => /^(insert|update|finish|claim)/.test(c)))
+    expect([...writes].sort()).toEqual(['insertAgentAction', 'insertDoc', 'insertVersion', 'updateDoc'])
+    // 這四支在 supabase repo 的寫入目標:field_documents／field_document_versions／agent_actions
+    const repoSrc = read('fieldDocRepo.ts')
+    for (const [fn, table] of [['insertDoc', 'field_documents'], ['insertVersion', 'field_document_versions'], ['updateDoc', 'field_documents'], ['insertAgentAction', 'agent_actions']]) {
+      const fnBody = repoSrc.slice(repoSrc.indexOf(`async ${fn}(`)).split('\n    },')[0]
+      expect(fnBody, fn).toContain(`service.from('${table}')`)
+    }
+    // AI 版本一律標 author_kind='ai'(人工版本只由使用者經 save_field_document_version RPC 寫)
+    expect(repoSrc.slice(repoSrc.indexOf('async insertVersion(')).split('\n    },')[0]).toContain("author_kind: 'ai'")
   })
 
   it('工具層只呼叫兩支唯讀 RPC,沒有 resolve_agent_action 之類的狀態轉移', () => {

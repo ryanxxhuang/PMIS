@@ -258,6 +258,7 @@ export function sourceLabel(source) {
   if (s === 'ai:agent') return 'AI 草稿'
   if (s === 'cwa') return '氣象署'
   if (s === 'intake') return '批次指定'
+  if (s === 'agent:request') return '對話指定'
   if (s === 'human') return '人工填寫'
   return s
 }
@@ -395,37 +396,22 @@ export function contentFromLegacyLog(log, byKey = new Map()) {
   return { content, sources }
 }
 
-// Agent 對話起稿(draft_daily_log 工具)的 payload → 文件內容(acceptDraft 改走文件流程用)。
-// payload.items 形如 { [work_item_id]: { item_key, item_no, description, unit, qty_today, needs_input } };
-// 人填的數量 confirmed,沒填的 pending;其餘欄位有值標 filled(AI 草稿,待核對)。
-export function contentFromAgentDraft(payload) {
-  const content = emptyDailyLogContent(payload?.log_date)
-  content.weather_am = payload?.weather_am || null
-  content.weather_pm = payload?.weather_pm || null
-  content.labor = Array.isArray(payload?.labor) ? payload.labor : []
-  content.equipment = Array.isArray(payload?.equipment) ? payload.equipment : []
-  content.materials = Array.isArray(payload?.materials) ? payload.materials : []
-  content.extras = payload?.extras && typeof payload.extras === 'object' ? { ...payload.extras } : {}
-  content.work_summary = payload?.work_summary || null
-  const fs = payload?.field_sources || {}
-  const sources = { log_date: { status: 'filled', source: 'ai:agent' } }
-  const has = (v) => (Array.isArray(v) ? v.length > 0 : v != null && String(v).trim() !== '')
-  sources.weather_am = has(content.weather_am) ? { status: 'filled', source: fs.weather === 'cwa' ? 'cwa' : 'ai:agent' } : { status: 'pending', source: null }
-  sources.weather_pm = has(content.weather_pm) ? { status: 'filled', source: fs.weather === 'cwa' ? 'cwa' : 'ai:agent' } : { status: 'pending', source: null }
-  sources.work_summary = has(content.work_summary) ? { status: 'filled', source: 'ai:photo' } : { status: 'pending', source: null }
-  for (const k of ['labor', 'equipment', 'materials']) {
-    sources[k] = has(content[k]) ? { status: 'filled', source: fs[k] === 'yesterday' ? 'yesterday:agent' : 'ai:agent', reason: '沿用,待核對' } : { status: 'pending', source: null }
+// Agent 對話起稿的施工日誌(P6b-2):草稿已由 Edge 寫成文件的 AI 版本(與照片起稿同一支 builder);收件匣卡片上
+// 人填的數量在「接受」時疊到文件目前版本上存成人工版本——只改人填的那幾格(confirmed／human),其餘內容與來源原樣,
+// 不另外從 payload 重湊一份內容(以前 contentFromAgentDraft 是第二份轉換,與 Edge builder 會分岔)。
+// quantities 形如 { [work_item_id]: '12.5' }(輸入框字串);只有解析後 > 0 且文件有該工項的才算,回傳全新物件。
+export function applyInboxQuantities(content, sources, quantities) {
+  const nextContent = { ...(content || {}), items: { ...(content?.items || {}) } }
+  const nextSources = { ...(sources || {}) }
+  let applied = 0
+  for (const [wid, raw] of Object.entries(quantities || {})) {
+    const qty = Number(raw)
+    if (!Number.isFinite(qty) || qty <= 0 || !nextContent.items[wid]) continue
+    nextContent.items[wid] = { ...nextContent.items[wid], qty_today: qty }
+    nextSources[`items.${wid}.qty_today`] = { status: 'confirmed', source: 'human' }
+    applied += 1
   }
-  for (const [wid, v] of Object.entries(payload?.items || {})) {
-    const qty = Number(v?.qty_today)
-    const filled = Number.isFinite(qty) && qty > 0
-    content.items[wid] = {
-      item_key: v?.item_key ?? null, item_no: v?.item_no ?? null, description: v?.description ?? wid, unit: v?.unit ?? null,
-      qty_today: filled ? qty : null, location: v?.location ?? null, note: null,
-    }
-    sources[`items.${wid}.qty_today`] = filled ? { status: 'confirmed', source: 'human' } : { status: 'pending', source: null, reason: '照片證明有施作,數量待現場確認' }
-  }
-  return { content, sources }
+  return { content: nextContent, sources: nextSources, applied }
 }
 
 // 內容(items 以 work_items uuid 為鍵)→ 既有頁面／列印看的日誌形狀({ item_key: 數量 })。

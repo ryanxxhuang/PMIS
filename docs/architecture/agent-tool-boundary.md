@@ -16,7 +16,7 @@
 | 機關 | run_integrity_audit |
 | 全角色交接 | raise_to |
 
-唯讀工具拿不到 service client，業務查詢走 caller JWT／RLS，仍逐一限制 project_id；明細透過 parent join 限案。工具寫入只到 agent_actions；工具可叫的 RPC 僅 my_org_type／list_project_members。日期、UUID、範圍、表名白名單與 PostgREST 搜尋字元都由程式驗證；get_record 用 hasOwnProperty 防原型鏈名稱，embed 明細 cap 200。
+唯讀工具拿不到 service client，業務查詢走 caller JWT／RLS，仍逐一限制 project_id；明細透過 parent join 限案。工具寫入只到 agent_actions，以及日誌／自主檢查表草稿工具經照片起稿同一段 `writeDraftDocument` 寫的現場文書草稿（`field_documents` 草稿列、AI 版本；P6b-2，不碰照片、批次與事實表，白名單掃描釘住）；工具可叫的 RPC 僅 my_org_type／list_project_members。日期、UUID、範圍、表名白名單與 PostgREST 搜尋字元都由程式驗證；get_record 用 hasOwnProperty 防原型鏈名稱，embed 明細 cap 200。
 
 工具陣列維持固定順序與參考：唯讀在前、角色草稿居中、raise_to 最後。persona、stableStringify facts、tools 與最後一則訊息共四個快取斷點；改順序／注入時間戳會破壞快取前綴。
 
@@ -34,7 +34,7 @@ actor_user 是收件人，SELECT 同時限本人與專案存取資格；只有 s
 
 人按接受／編修／拒絕後，前端 [agent slice](../../src/store/slices/agent.js) 才叫 resolve_agent_action；只允許本人 pending → accepted／edited／rejected，伺服器蓋 resolved_by／at 並同交易留 audit。expired 尚無排程路徑。需要寫業務資料的接受動作仍走既有 store action／RLS／guard，收下 handoff／audit_note 僅標覆核，不創造業務資料。
 
-明示延伸（P2d，[現場文書 §7](field-documents-lifecycle.md)）：指向 `field_documents` 的草稿（`target_table='field_documents'`，P2b 的 `draft_field_document`）由 `sign_field_document` 內部呼叫 `resolve_agent_action_internal` 處理——同案、同文件、`pending` 的草稿一律標 accepted（文件沒有人工版本）或 edited（有人工版本），`resolved_by` 為簽署者（可能不是草稿收件人），同交易留同一種 `agent_action_resolved` 稽核並加 `metadata.resolved_via='sign_field_document'`。該內部函式不開給 authenticated；舊 `draft_daily_log`／`draft_inspection`（`target_table` 為事實表、`target_id` 為 null）不受影響，仍走本人 resolve_agent_action。pgTAP 見 [`field_document_sign.sql`](../../supabase/tests/field_document_sign.sql)。
+明示延伸（P2d，[現場文書 §7](field-documents-lifecycle.md)）：指向 `field_documents` 的草稿（`target_table='field_documents'`，P2b 的 `draft_field_document`）由 `sign_field_document` 內部呼叫 `resolve_agent_action_internal` 處理——同案、同文件、`pending` 的草稿一律標 accepted（文件沒有人工版本）或 edited（有人工版本），`resolved_by` 為簽署者（可能不是草稿收件人），同交易留同一種 `agent_action_resolved` 稽核並加 `metadata.resolved_via='sign_field_document'`。該內部函式不開給 authenticated。P6b-2 起 `draft_daily_log`／`draft_inspection` 也指向 `field_documents`（`target_id`＝文件），簽署時一併自動結案；收件匣的接受仍走本人 resolve_agent_action（日誌先把人填數量存成人工版本）。舊格式（`target_table` 為事實表、`target_id` 為 null）的草稿只能拒絕（前端明確擋接受）。pgTAP 見 [`field_document_sign.sql`](../../supabase/tests/field_document_sign.sql)。
 
 raise_to 依本案成員 org_type 找非本人收件人，同方多人取 RPC 第一位。寫兩筆：對方 handoff、發起人 handoff_sent，後者的 evidence.handoff_action_id 對應前者。第二筆失敗不撤掉第一筆，回應必須揭露發起方留痕失敗。target_table／id 成對，表名限 get_record 白名單加 checklist_records／test_samples。
 

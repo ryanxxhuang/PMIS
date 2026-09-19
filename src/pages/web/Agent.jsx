@@ -10,7 +10,7 @@ import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input, Surface, Sk
 import { friendlyError } from '../../lib/errorMessage.js'
 import { useStore } from '../../store.jsx'
 import { BALL_SOURCES_TITLE } from '../../lib/navConfig.js'
-import { applyDraftQuantities, draftNeedsInputCount, checklistDraftCounts } from '../../store/slices/agent.js'
+import { draftNeedsInputCount, checklistDraftCounts, isDocumentDraft } from '../../store/slices/agent.js'
 import { useAssistantData } from '../../lib/assistantData.js'
 // KIND_LABEL/KIND_COLOR 移到 agentRole.js:Dashboard 的「AI 今日已代辦」卡共用同一份標籤
 import { displayAgentRole, AGENT_LABEL, KIND_LABEL, KIND_COLOR } from '../../lib/agentRole.js'
@@ -57,9 +57,7 @@ const mmdd = (d) => {
 }
 
 function DraftInboxCard() {
-  // checklistTemplates:store 對外名(store.jsx 把 allChecklistTemplates 以此名輸出),
-  // 已含內建 03310 範本——查驗草稿卡片用它把項次 no 對回項目文字
-  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft, checklistTemplates } = useStore()
+  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft } = useStore()
   const [resolvingId, setResolvingId] = useState(null)
   const [errMsg, setErrMsg] = useState(null)
   const [doneMsg, setDoneMsg] = useState(null) // 接受成功後的提示 { text, to, cta }(帶去補填/查看連結)
@@ -75,23 +73,23 @@ function DraftInboxCard() {
 
   const resolve = async (a, status) => {
     setResolvingId(a.id); setErrMsg(null); setDoneMsg(null)
-    // 接受走 acceptDraft:日誌草稿先存成文件人工版本(含卡片上填的數量)才標已接受(P2c)
+    // 接受走 acceptDraft:日誌草稿=把卡片上填的數量存成那份文件的人工版本(P6b-2;文件由 Edge 起稿時已建好)
     const res = status === 'accepted' ? await acceptDraft(a, qtyDraft[a.id]) : await resolveAgentAction(a.id, status)
     // RPC 在「非本人/已處理過/非法狀態」時 raise 中文訊息,原樣顯示
     if (res?.error) setErrMsg(friendlyError(res.error, '草稿處理未完成'))
     else if (res?.applied === 'daily_log') {
-      // P2c:接受=存成該日施工日誌文件的人工版本(不是正式紀錄);正式紀錄要到施工日誌頁
-      // 補齊待補、簽署後才落庫。提示要看「合併人填數量後」還缺不缺:還有缺就提示去補
-      const merged = applyDraftQuantities(a.evidence?.payload, qtyDraft[a.id])
-      const pending = res?.result?.recheck?.length ?? draftNeedsInputCount(merged)
+      // 文件(不是正式紀錄)已在施工日誌頁;正式紀錄要補齊待補、簽署後才落庫。沒填數量就沒有新版本
+      const pending = res?.result?.recheck?.length ?? draftNeedsInputCount(a.evidence?.items, qtyDraft[a.id])
       setDoneMsg({
-        text: `已存成 ${mmdd(merged?.log_date)} 施工日誌草稿(版本 ${res?.result?.version_no ?? '—'})${pending > 0 ? `,尚有 ${pending} 項待補` : ''};請到施工日誌審核並簽署`,
-        to: `/site-log?d=${merged?.log_date || ''}`,
+        text: res?.result
+          ? `已把數量存進 ${mmdd(a.evidence?.log_date)} 施工日誌草稿(版本 ${res.result.version_no})${pending > 0 ? `,尚有 ${pending} 項待補` : ''};請到施工日誌頁審核並簽署`
+          : `${mmdd(a.evidence?.log_date)} 施工日誌草稿已在施工日誌頁(未填數量,沒有新增版本);請到施工日誌頁補齊並簽署`,
+        to: `/site-log?doc=${encodeURIComponent(res.documentId)}`,
         cta: pending > 0 ? '去補齊並簽署' : '去審核簽署',
       })
-    } else if (res?.applied === 'checklist') {
-      // 查驗草稿的實測值一律留白(AI 不猜數值),接受後人必須進品質管理補填
-      setDoneMsg({ text: '已建立自主檢查表(實測值待填)', to: '/quality', cta: '去填實測值' })
+    } else if (res?.applied === 'self_check') {
+      // AI 建議的勾選要逐項確認、實測值要親自量測(收件匣不能代替逐項確認),所以帶去文件頁
+      setDoneMsg({ text: '自主檢查表草稿已在自主檢查表頁:請逐項確認 AI 建議、量測填寫實測值後簽署', to: `/self-check?doc=${encodeURIComponent(res.documentId)}`, cta: '去逐項確認' })
     } else if (res?.applied === 'submittal_review') {
       // 採用只存意見+推進到審核中,審定(核准/退回)必須由監造本人到送審頁做
       setDoneMsg({ text: '已存下審查意見,送審推進到「審核中」——審定請到送審頁自行操作', to: '/submittals', cta: '去審定' })
@@ -128,8 +126,8 @@ function DraftInboxCard() {
             const opened = openRationale === a.id
             // 數量誠實原則:照片只能證明「做了哪些工項」,不能證明「做了多少」——
             // 數量一律待人填,輸入列就放在卡片裡(產品表面只能縮不能長:不開新頁/modal)
-            const draftItems = a.kind === 'draft_daily_log'
-              ? Object.entries(a.evidence?.payload?.items || {}) : []
+            const draftItems = a.kind === 'draft_daily_log' && isDocumentDraft(a)
+              ? Object.entries(a.evidence?.items || {}) : []
             const qtys = qtyDraft[a.id] || {}
             // 未填=輸入(或草稿預填值)解析後不 > 0;未填的接受時直接略過,不擋接受
             const unfilled = draftItems
@@ -138,17 +136,11 @@ function DraftInboxCard() {
             // 「知道了」只標 accepted,不產生任何業務資料(發現本身就是交付物)
             const findings = a.kind === 'audit_note' ? (a.evidence?.findings || []) : []
             const findingsOpened = openFindings === a.id
-            // 查驗草稿:顯示範本標題與待填項數;bool 的 AI 建議值必須標「AI 建議」——
-            // 使用者要一眼看得出哪些是 AI 從照片猜的,按「接受」才算人背書
-            const clPayload = a.kind === 'draft_inspection' ? a.evidence?.payload : null
-            const clTpl = clPayload
-              ? ((checklistTemplates || []).find((t) => t.id === clPayload.template_id)
-                || (checklistTemplates || []).find((t) => t.title === clPayload.template_title))
-              : null
-            const clCounts = clPayload ? checklistDraftCounts(clPayload) : null
-            const clItemByNo = new Map((clTpl?.items || []).map((it) => [it.no, it]))
-            const clSuggested = clPayload
-              ? Object.entries(clPayload.results || {}).filter(([, v]) => v?.ai_suggested && v?.value != null) : []
+            // 自主檢查表草稿:顯示範本標題與待填項數;bool 的 AI 建議值必須標「AI 建議」並附依據——
+            // 使用者要一眼看得出哪些是 AI 建議的;逐項確認在自主檢查表頁做(收件匣接受不算確認)
+            const clPayload = a.kind === 'draft_inspection' && isDocumentDraft(a) ? a.evidence : null
+            const clCounts = clPayload ? checklistDraftCounts(clPayload.items) : null
+            const clSuggested = clPayload ? (clPayload.items || []).filter((it) => typeof it?.suggested === 'boolean') : []
             // 審查意見草稿(批6):要點清單+意見草稿+「建議」判定。採用只存意見並推進到
             // 審核中(見 acceptDraft 審定紅線),核准/退回一律由監造本人在送審頁操作
             const subPayload = a.kind === 'draft_submittal_review' ? a.evidence?.payload : null
@@ -182,32 +174,31 @@ function DraftInboxCard() {
                 {clPayload && (
                   <div className={INSET_ROWS}>
                     <div className="px-2.5 py-1.5 text-xs text-[var(--text-2)]">
-                      <span className="font-medium text-[var(--text)]">{clTpl?.title || clPayload.template_title || '檢查表範本'}</span>
+                      <span className="font-medium text-[var(--text)]">{clPayload.template_title || '檢查表範本'}</span>
                       <span className="text-[var(--text-3)] ml-1.5">{[clPayload.check_date, clPayload.location].filter(Boolean).join('・')}</span>
                     </div>
-                    {clSuggested.map(([no, v]) => (
-                      <div key={no} className="px-2.5 py-1.5 space-y-0.5">
+                    {clSuggested.map((it) => (
+                      <div key={it.no} className="px-2.5 py-1.5 space-y-0.5">
                         <div className="flex items-center gap-2">
-                          <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate" title={`${no} ${clItemByNo.get(no)?.item || ''}`.trim()}>
-                            <span className="text-[var(--text-3)] mr-1">{no}</span>
-                            {clItemByNo.get(no)?.item || ''}
+                          <div className="min-w-0 flex-1 text-xs text-[var(--text-2)] truncate" title={`${it.no} ${it.item || ''}`.trim()}>
+                            <span className="text-[var(--text-3)] mr-1">{it.no}</span>
+                            {it.item || ''}
                           </div>
                           {/* 符合/不符的勾叉改圖示(BallChip 的 ✓/⏳ 才是既定例外) */}
-                          <span className={`shrink-0 inline-flex items-center gap-0.5 text-xs ${v.value === false ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>
-                            {v.value === true ? <><MSym name="check" size={14} />符合</>
-                              : v.value === false ? <><MSym name="close" size={14} />不符</> : String(v.value)}
+                          <span className={`shrink-0 inline-flex items-center gap-0.5 text-xs ${it.suggested === false ? 'text-[var(--red-text)]' : 'text-[var(--text-2)]'}`}>
+                            {it.suggested ? <><MSym name="check" size={14} />符合</> : <><MSym name="close" size={14} />不符</>}
                           </span>
                           <Badge color="purple" className="shrink-0">AI 建議</Badge>
                         </div>
                         {/* 依據:AI 憑什麼這樣勾 —— 沒有依據的建議後端已拒收,這裡把依據攤在人眼前 */}
-                        {v.ai_basis && (
-                          <div className="text-caption text-[var(--text-3)] leading-snug">依據:{v.ai_basis}</div>
+                        {it.basis && (
+                          <div className="text-caption text-[var(--text-3)] leading-snug">依據:{it.basis}</div>
                         )}
                       </div>
                     ))}
                     {clCounts?.needsInput > 0 && (
                       <div className="px-2.5 py-1.5 text-caption text-[var(--text-3)]">
-                        {clCounts.needsInput} 項實測值待你填——AI 不猜數值,接受後到品質管理補填,判定由系統依量化標準自動跑
+                        {clCounts.needsInput} 項實測值待你量測填寫——AI 不猜數值;AI 建議的勾選要在自主檢查表頁逐項確認,簽署時系統才依量化標準判定
                       </div>
                     )}
                   </div>
@@ -283,8 +274,8 @@ function DraftInboxCard() {
                 <div className="flex items-center gap-2 pt-0.5 flex-wrap">
                   <Button size="sm" disabled={busy} onClick={() => resolve(a, 'accepted')}>
                     {a.kind === 'audit_note' ? '知道了'
-                      : draftItems.length > 0 ? '接受並建立日誌'
-                        : clPayload ? '接受並建立檢查表'
+                      : draftItems.length > 0 ? '接受並存入數量'
+                        : clPayload ? '接受並去逐項確認'
                           : subPayload ? '採用意見' : '接受'}
                   </Button>
                   <Button size="sm" variant="outline" disabled={busy} onClick={() => resolve(a, 'rejected')}>拒絕</Button>
@@ -298,7 +289,14 @@ function DraftInboxCard() {
                   )}
                   {/* 不擋接受:有些日子確實沒有可計量的工項,只誠實提醒略過的後果 */}
                   {unfilled > 0 && (
-                    <span className="text-caption text-[var(--text-3)]">未填數量的工項不會寫入日誌</span>
+                    <span className="text-caption text-[var(--text-3)]">未填數量的工項在日誌裡仍列待補</span>
+                  )}
+                  {/* 日誌／自檢草稿本身已是文件(P6b-2):不必先接受也能直接到文件頁審核 */}
+                  {(draftItems.length > 0 || clPayload) && (
+                    <Link to={draftItems.length > 0 ? `/site-log?doc=${encodeURIComponent(a.target_id)}` : `/self-check?doc=${encodeURIComponent(a.target_id)}`}
+                      className="inline-flex items-center gap-0.5 text-caption max-md:min-h-11 text-[var(--blue-text)] hover:underline">
+                      開啟文件<MSym name="arrow_forward" size={12} />
+                    </Link>
                   )}
                   {/* 審定紅線的使用者話術:採用≠審定,決定權在人 */}
                   {subPayload && (
