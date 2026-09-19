@@ -1,4 +1,4 @@
-// P4c｜鏈 8:未經監造確認的量在頁面上不可請款、直接送審被擋並顯示原因(真 Supabase,正式模式)。
+// P4c｜鏈 9:未經監造確認的量在頁面上不可請款、直接送審被擋並顯示原因(真 Supabase,正式模式)。
 // P4e 收回 valuation_items 直接寫入之前,舊客戶端仍可 REST 寫入申報量(DB 標 backing=legacy、無來源)。
 // 這條鏈模擬那條舊路徑:廠商以 REST 寫 100 → 新 UI 顯示「缺監造確認來源・申報,不計價」、本期可請款金額 0、
 // 缺件卡列出處理入口 → 直接按「送監造審核」被 DB 檢查點(VQ004)擋下,畫面列出原因,狀態仍是草稿
@@ -10,8 +10,8 @@ import {
   signInClient, loginReal, gotoHash, runCleanup,
 } from './helpers.js'
 
-const PROJECT_NAME = `鏈8未確認量工程-${Date.now().toString(36)}`
-const conEmail = uniqueEmail('p4c8-con')
+const PROJECT_NAME = `鏈9未確認量工程-${Date.now().toString(36)}`
+const conEmail = uniqueEmail('p4c9-con')
 let conId, projectId, workItemId
 
 const BOQ_ITEMS = [
@@ -44,7 +44,7 @@ test.afterAll(async () => {
   )
 })
 
-test('鏈 8:舊路徑寫入的申報量不可請款;直接送審被擋並列出原因;同步後歸零可送審', async ({ page }) => {
+test('鏈 9:舊路徑寫入的申報量不可請款;直接送審被擋並列出原因;同步後歸零可送審', async ({ page }) => {
   await loginReal(page, conEmail)
   await gotoHash(page, '/valuation')
   await page.getByRole('button', { name: '＋ 新增估驗期' }).click()

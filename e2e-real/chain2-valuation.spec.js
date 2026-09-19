@@ -61,7 +61,7 @@ test('鏈 2:廠商建期送審 → 監造核定 → 機關請款/收款登錄', 
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
 
   // ── 廠商:建估驗期(P4c:對話框必填計價截止日,預填今天)→ 送監造審核;正式模式下沒有核定鈕 ──
-  // 這期沒有任何明細(增量 0),沒有數量要驗;有量而無監造確認的情境見 chain7／chain8。
+  // 這期沒有任何明細(增量 0),沒有數量要驗;有量而無監造確認的情境見 chain7／chain9。
   await loginReal(page, conEmail)
   await gotoHash(page, '/valuation')
   await page.getByRole('button', { name: '＋ 新增估驗期' }).click()

@@ -1,6 +1,6 @@
 # 監造確認量與估驗聯動（後端強制）
 
-> 狀態：**ACTIVE（後端已實作：P4a 純計算層 `20260917120000`、P4b 表／guard／RPC／鎖 `20260919140000`；前端 P4c、撤銷／調整 UI P4d、封堵 P4e 未做）**｜2026-09-19｜依 [D-026](../DECISIONS.md)。§1–§13 是 P0 設計；實作與設計的偏差集中在 §16（以 §16 為準）；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
+> 狀態：**ACTIVE（後端已實作：P4a 純計算層 `20260917120000`、P4b 表／guard／RPC／鎖 `20260919140000`；前端 P4c 估驗頁已接上（PR #144）；撤銷／調整 UI P4d、封堵 P4e 未做）**｜2026-09-19｜依 [D-026](../DECISIONS.md)。§1–§13 是 P0 設計；實作與設計的偏差集中在 §16（後端）與 §17（前端），以這兩節為準；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
 > 標記同 [現場文書文件](field-documents-lifecycle.md)：【已確認】／【設計】／【待決】。
 
 ## 0. 現況核對與差距（基準 `ab4be5f`）
@@ -293,3 +293,27 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 
 ### 16.6 P3c 接口
 簽署 `inspection_form` 時在同交易 INSERT `inspection_confirmations(project_id, work_item_id, batch_key, location_label, stage_key, unit, qty_cum, basis='inspection', inspection_id, document_id, document_version_no, content_hash, confirmed_by=簽署者, confirmed_at=signed_at)`；guard 會驗工項（末端、可計價、同案、單位）、階段（須在 ITP H 點集合內，單階段工項不可帶）、確認人（本案監造成員）、查驗（同案、已判定、工項一致）、文件（`inspection_form`、版本雜湊相等、該版本有確認人的簽署列）；`qty_delta`／`supersedes_id` 由 guard 導出，減量須填 `reason`。AFTER INSERT 自動收斂並同步到適用草稿期（截止日 ≥ 確認日的最早草稿）。部分通過（查驗 100、通過 60）的判定值如何對應 `inspections.status` 由 P3c 決定；guard 只要求「已判定」。
+
+## 17. P4c 估驗頁落地結果與偏差（2026-09-19，PR #144；純前端、無 migration）
+
+前端只顯示 DB 的結果、只經 §16.3 的 RPC 寫入；與 §9 表「`fillValuationFromSiteLogs` → `valuationDiff.js` 延伸」不同之處與設計沒寫而實作必須決定的事：
+
+### 17.1 讀寫路徑
+- 讀：`get_valuation_state(選中期別)`（逐工項 `cq_item_state`＋`sources[]`＋`backing`＋整期 `violations`）、`list_billable_backlog(專案)`（可估驗清單；未開期先累積）、`inspection_confirmations`（RLS 成員可讀；來源展開要的批次／位置／確認量／查驗與文件版本／確認人與時間）、`list_project_members`（確認人名字）。任何寫入成功後 store 整批重載期別（`loadValuationsFromDB`），畫面上的數量與金額永遠是 DB 的值，`valuations` 一變就重取上述唯讀狀態。
+- 寫：建期＝`insert valuations`（`period_end` 必填，建期對話框預填台北今天）→ `sync_valuation_from_confirmations`（失敗即刪掉剛建的期，不留半套）；改累計量＝`set_valuation_item_cum`（`VQ006` 的 `detail` 翻成「前期累計・本期起算值・本期最多可新增・可用確認量・你填的」，輸入框回到 DB 的值）；送審／退回／核定＝`transition_valuation(p_from=目前狀態)`（`applied:false` 視為未變更並重載；`VQ004.detail` 逐項翻成人話列在錯誤橫幅下）；同步＝`sync_valuation_from_confirmations`（全頁只有動作列一顆「同步確認量」）；計價依據＝`set_work_item_pricing_basis`（監造在明細列的下拉，選項 `supervisor_certificate`／`inspection`／`excluded`；`pro_rata` 需規則，待 Q3 定案後開放）；草稿期改截止日＝REST `update valuations.period_end`（guard 已限草稿）。請款日仍走 `/payments` 的 REST（第三個檢查點由 trigger 擋，錯誤含代碼與訊息原樣顯示）。
+- 移除：`fillValuationFromSiteLogs`、`valuationItemRow`、建期複製前期明細、`valuation_items` 的任何客戶端寫入；`billing.test.js` 釘住「slice 不暴露 fill、改數量／建期不碰 `valuation_items`」。P4e 收回直接寫入前，舊客戶端的 REST 寫入在頁面上呈現為「缺監造確認來源・申報,不計價」（真後端 chain 9）。
+
+### 17.2 金額與期別投影（設計未寫）
+- `buildCumMap(roots, childrenMap, period)` 改吃期別物件的 `amounts`（DB `valuation_items.amount_cum`，Q2 逐工項到元），前端不再用「金額 × 比例」或「單價 × 數量」換算；`Payments`／`Progress`／`Dashboard`／`MonthlyReport`／`SupervisorReport`／`ValuationPrint`／`ValuationPackage`／`RiskAudit`／`assistantData` 十個呼叫端一併改傳期別物件，全站金額口徑單一。demo 沒有 DB，種子與 demo 改數量用 `boqCalc.valuationItemAmount`（`fn_valuation_amount` 的鏡像；DB 模式不得使用）。
+- 一期沒有列的工項，累計量／金額往前帶（`lib/valuationPeriods.js`，與 `fn_cq_prev_cum_internal`「period_no 更早、最近一期有列者」同定義）；每期另留 `own`（本期自己的列含 `backing`）。P4b 的 `fn_cq_recompute_item_internal` 對 Σ來源＝0 且無既有列的工項不插列，所以投影是必要的，不是相容層。
+- 可請款投影：核定前的期別（草稿／監造審核），`get_valuation_state.items[].violations` 非空的工項本期增量屬「申報,未確認,不計價」——該工項回到前期累計（仍是 DB 的值），本期可請款金額、保留款、應付都不含它，Stat 副文字列「另 n 項申報未確認,不計價」；已核定／已請款是歷史帳，不動。
+
+### 17.3 缺件與檢核單一口徑（取代 §9 表的「`valuationDiff.js` 延伸」）
+- `lib/valuationChecks.js` 是唯一組裝：DB 檢查點違反代碼（§16.2 的十二種）→ `VIOLATION_TEXT` 對照表（短標、標題、人話、處理入口 `period_end`／`sync`／`basis`／`certificate`／`review`／`set`／`adjust`／`none`），同代碼一項缺件並列涉及工項；`integrityAudit.js` 六項勾稽發現照舊（每項附 `keys`，決策列「超前日誌申報／無日誌申報」計數與明細列的就地提示都用 `classifyLogDiff` 同一把尺；Edge `_shared/integrityAudit.ts` 鏡像同步）；逐工項標示 `itemFlags` 來自 `items[].violations`。`valuationDiff.js`（無日誌也算超計的第二套口徑）刪除。
+- 缺件排在勾稽發現之前；demo／state 未載入時只有勾稽發現並明講「未經後端核對」，不假裝通過。缺件的處理入口在列上或動作列（同步、填截止日、設定計價依據），撤銷／補證／調整只指路，介面在 P4d。
+
+### 17.4 未做與已知限制
+- 監造確認單簽發、撤銷、補證（`p_covers_valuation_id`）、機關作廢調整沒有 UI（P4d）；真後端 chain 7 以 RPC 簽發確認單。P3c 簽署 `inspection_form` 寫確認量未接（§16.6）。
+- 手機（<md）維持唯讀期別摘要（§9.6），另列各期截止日與選中期別的未確認申報件數；寫入一律桌機。
+- DB 的 `VQ006` 訊息把 numeric 印成 `60.0000`（P4b 的 `format('%s')`），頁面另有翻成人話的一行；要修在 migration（P4d 順帶）。
+
