@@ -6,7 +6,7 @@
 -- 模擬 P2d 的 security definer RPC;「service」= 無 JWT(auth.uid() null)。
 begin;
 
-select plan(215);
+select plan(216);
 
 create or replace function pg_temp.become(u uuid, aal text default null) returns void language plpgsql as $$
 begin
@@ -719,9 +719,12 @@ reset role;
 
 -- ── 12. 捨棄／取代與監造查驗表單提送矩陣 ──────────────────────────────────────
 select pg_temp.become('f0000000-0000-0000-0000-000000000001', 'aal1');
-select lives_ok($$ update public.field_documents set status = 'discarded'
+select throws_ok($$ update public.field_documents set status = 'discarded'
   where id = 'f7000000-0000-0000-0000-000000000002' $$,
-  '未簽署的草稿可捨棄');
+  'P0001', '捨棄文件必須填寫原因', '捨棄必須填寫原因(P3f:所有寫入者的不變量)');
+select lives_ok($$ update public.field_documents set status = 'discarded', discard_reason = '擬錯日期'
+  where id = 'f7000000-0000-0000-0000-000000000002' $$,
+  '未簽署的草稿可捨棄(帶原因)');
 select is((select count(*)::int from public.audit_events
   where event_type = 'field_document.discarded' and entity_id = 'f7000000-0000-0000-0000-000000000002'), 1,
   '捨棄留一筆 field_document.discarded');

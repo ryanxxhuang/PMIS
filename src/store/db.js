@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase.js'
 import { pageAll, pageAllIn } from '../lib/pagedQuery.js'
 import { projectValuationPeriods } from '../lib/valuationPeriods.js'
 import { FIELD_DOC_OPEN_STATUSES } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+import { FIELD_DOC_DISCARDABLE_STATUSES } from '../lib/fieldDocs.js'
 // pdf.js worker 自帶(B-12):?url 只打包資產網址,worker 檔進自家 dist——
 // 機關內網/防火牆擋 CDN 時,契約 PDF 抽字不再直接壞掉。
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -203,6 +204,8 @@ export async function loadAnchorVersionsFromDB(projectId) {
 // (P2c)共用這一份:文件列帶頁面要的完整欄(recheck／required_fields／intake_id…),提送列帶回執要的
 // 原因與 diff。received 仍要載:監造查驗表單提送兩方,一方收件後狀態即 received,另一方可能還沒收。
 // 提送表沒有 project_id,以本案文件 id 分批查。
+// signedDocumentIds(P3f):未簽署狀態的文件中「曾經簽署」者(簽後更正回到草稿)——/site 清單據此不顯示「捨棄草稿」
+// (伺服器只准捨棄從未簽署的文件);只查未簽署狀態的文件,已簽署以後的狀態本來就不可捨棄。
 export const FIELD_DOCUMENT_COLUMNS = 'id, project_id, doc_type, owner_org, target_table, target_id, target_key, intake_id, doc_date, status, current_version_no, template_id, required_fields, recheck, created_by, created_at, updated_at'
 export const FIELD_DOCUMENT_SUBMISSION_COLUMNS = 'id, document_id, version_no, content_hash, action, actor_id, actor_org, to_org, reason, diff, client_request_id, created_at'
 export async function loadFieldDocumentsFromDB(projectId) {
@@ -216,7 +219,13 @@ export async function loadFieldDocumentsFromDB(projectId) {
       .select(FIELD_DOCUMENT_SUBMISSION_COLUMNS)
       .in('document_id', chunk).order('created_at').order('id').range(from, to), '現場文書提送')
     : []
-  return { documents: documents || [], submissions: submissions || [] }
+  const preSignIds = (documents || []).filter((d) => FIELD_DOC_DISCARDABLE_STATUSES.includes(d.status)).map((d) => d.id)
+  const signatures = preSignIds.length
+    ? await pageAllIn(preSignIds, (chunk, from, to) => supabase.from('field_document_signatures')
+      .select('id, document_id')
+      .in('document_id', chunk).order('id').range(from, to), '現場文書簽署')
+    : []
+  return { documents: documents || [], submissions: submissions || [], signedDocumentIds: [...new Set((signatures || []).map((s) => s.document_id))] }
 }
 
 // 從 DB 載入成本項目（預算 vs 實際、分包）

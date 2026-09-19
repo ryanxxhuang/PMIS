@@ -812,6 +812,16 @@ export function docStatusMeta(doc, viewerOrg) {
   }
 }
 
+// ── 捨棄草稿(P3f;規則在 DB discard_field_document,這裡只決定要不要顯示入口)─────────────────────
+// 與伺服器同一組條件:責任方、未簽署的三個狀態、且從未簽署——簽後更正回到草稿的文件曾經簽署,伺服器回 PD008,
+// 所以不顯示入口。everSigned 由呼叫端依伺服器簽署列提供(文件頁:getFieldDocument 的 signatures;
+// /site 清單:loadFieldDocumentsFromDB 的 signedDocumentIds)。責任方判定與簽署入口同一口徑(owner_org＝觀看者組織)。
+export const FIELD_DOC_DISCARDABLE_STATUSES = Object.freeze(['draft', 'pending_input', 'in_review'])
+export function canDiscardFieldDocument(doc, viewerOrg, { everSigned = false } = {}) {
+  if (!doc?.id || everSigned || !viewerOrg) return false
+  return doc.owner_org === viewerOrg && FIELD_DOC_DISCARDABLE_STATUSES.includes(doc.status)
+}
+
 export const formatHash = (h) => (h ? String(h).slice(0, 12) : '—')
 
 // ── 列印版本與提送回執(P3d;四類共用。只挑選／排列伺服器列,不重算雜湊、差異或狀態)────────────

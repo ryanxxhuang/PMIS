@@ -14,7 +14,7 @@
 npm run test:e2e:real
 ```
 
-十五條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）（chain 5–10、12、13 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+十六條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14）（chain 5–10、12–14 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -118,3 +118,11 @@ npm run test:e2e:real -- e2e-real/chain12-shared-inputs.spec.js
 npm run test:e2e:real -- e2e-real/chain13-report-reuse.spec.js
 ```
 
+## 捨棄草稿後重新起稿鏈（chain 14，P3f）
+
+`e2e-real/chain14-discard-draft.spec.js`（前置同 chain 5：Edge stub；本機 stack 已套用 `20260920021000`）：廠商上傳一張照片→伺服器起施工日誌＋自主檢查表草稿（兩筆 AI 草稿待覆核）→ `/site` 現場文書清單在自主檢查表那一列按「捨棄」（確認鈕在填原因前不可按）→ 列消失、頁面說明已捨棄與原因 → 開施工日誌頁按「捨棄草稿」、填原因（前後空白由伺服器去掉）→ 回 `/site` 說明已捨棄並給「施工日誌頁」重新填寫的連結 → DB：兩份 `discarded`、原因／捨棄者／時間／請求編號由伺服器寫、版本仍 1 個、兩筆 AI 草稿 `rejected`（處理人＝廠商）、稽核 `field_document.discarded` 一筆且 metadata 帶原因 → RPC 直打：監造捨棄廠商文件 `PD006`、同一請求重送 `idempotent:true` → 重新上傳另一張照片 → 伺服器起一份新的同日施工日誌（不是捨棄的那份，捨棄的仍只有版本 1）、清單上新草稿有捨棄入口 → 補齊存版、簽署（`daily_logs` 落庫並綁定）→ 已簽署再捨棄 `PD008`、清單不再顯示捨棄入口。工具鏈限制同 chain 5／6（本機 `functions serve` 需暫移 `deno.lock`，跑完還原）。
+
+```bash
+supabase functions serve --env-file e2e-real/stub.env   # terminal A
+npm run test:e2e:real -- e2e-real/chain14-discard-draft.spec.js
+```
