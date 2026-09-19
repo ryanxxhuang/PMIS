@@ -11,6 +11,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { BallSide, SetupGap } from './ballInCourtRules.ts'
 import {
   coreOpenItems, obligationEntries, obligationInWindow, periodTitle, completionDateOf, FIELD_DOC_OPEN_STATUSES, UNTITLED,
+  legacyUncoveredByValuation,
 } from './ballInCourtRules.ts'
 export type { BallSide }
 import { computeObligationDueUTC, diffDays, formatDate, parseDateUTC } from './contractDue.ts'
@@ -51,7 +52,7 @@ export async function collectOpenBallItems(
   const todayIso = formatDate(today)
   const items: OpenBallItem[] = []
 
-  const [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, proj, obligations, acceptance] = await Promise.all([
+  const [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, proj, obligations, acceptance, adjustments, legacySources] = await Promise.all([
     db.from('defects').select('id, title, severity, status, due_date, domain').eq('project_id', projectId).neq('status', '已結案'),
     db.from('submittals').select('id, submittal_no, title, status, due_date').eq('project_id', projectId).in('status', ['已提送', '審核中', '退回補正']),
     db.from('rfis').select('id, rfi_no, title, status, due_date').eq('project_id', projectId).in('status', ['待回覆', '已回覆']),
@@ -67,8 +68,11 @@ export async function collectOpenBallItems(
     db.from('contract_obligations').select('id, title, category, responsible, status, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause, due_date_snapshot, anchor_version_no, periods:obligation_periods(id, period_key, period_start, period_end, due_date, status, review_note, anchor_version_no)').eq('project_id', projectId).neq('status', '不適用'),
     // 竣工登錄(P5c 循環停止條件):竣工確認優先、否則報竣;共用規則 completionDateOf 取最後登錄的一筆
     db.from('acceptance_events').select('stage_key, event_date, created_at').eq('project_id', projectId).in('stage_key', ['report', 'confirm']),
+    // P4d:待處理的估驗調整(扣回)→ 球在機關;已核定期尚未補證的歷史遷移來源 → 球在監造補證(共用規則 valuationBall)
+    db.from('valuation_adjustments').select('id, work_item_id, qty_delta, status, origin_valuation_id, reason').eq('project_id', projectId).eq('status', 'pending'),
+    db.from('valuation_item_sources').select('valuation_id, work_item_id, kind').eq('project_id', projectId).eq('kind', 'legacy'),
   ])
-  const firstError = [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, obligations, acceptance].find((r) => r.error)
+  const firstError = [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, obligations, acceptance, adjustments, legacySources].find((r) => r.error)
   if (firstError?.error) return toolError('collectOpenBallItems', firstError.error)
 
   const docIds = (fieldDocs.data ?? []).map((d) => d.id)
@@ -80,10 +84,14 @@ export async function collectOpenBallItems(
     submissions = subs.data ?? []
   }
 
+  const legacyCounts = legacyUncoveredByValuation(legacySources.data ?? [])
   for (const it of coreOpenItems({
-    rfis: rfis.data ?? [], submittals: submittals.data ?? [], valuations: valuations.data ?? [], defects: defects.data ?? [],
+    rfis: rfis.data ?? [], submittals: submittals.data ?? [],
+    valuations: (valuations.data ?? []).map((v) => ({ ...v, legacy_uncovered: legacyCounts[String(v.id)] ?? 0 })),
+    defects: defects.data ?? [],
     inspections: inspections.data ?? [], observations: observations.data ?? [], changeOrders: changeOrders.data ?? [],
     fieldDocuments: fieldDocs.data ?? [], fieldDocumentSubmissions: submissions,
+    valuationAdjustments: adjustments.data ?? [],
   })) {
     const dueMs = parseDateUTC(it.due)
     const overdue = dueMs != null && dueMs < today ? diffDays(today, dueMs) : undefined

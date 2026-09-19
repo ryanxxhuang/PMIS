@@ -39,11 +39,11 @@ export const RESPONSIBLE_SIDE = OBLIGATION_SIDE
 // (FIELD_DOC_PARTIES;廠商不會等一份與他無關的監造日誌)。
 export const WAITING_SCOPE = Object.freeze({
   contractor: {
-    送審: ['supervisor'], 估驗: ['supervisor', 'owner'], 疑義: ['supervisor'],
+    送審: ['supervisor'], 估驗: ['supervisor', 'owner'], 估驗調整: ['owner'], 疑義: ['supervisor'],
     缺失: ['supervisor'], 工安缺失: ['supervisor'], 變更: ['supervisor', 'owner'], 現場文書: ['supervisor', 'owner'],
   },
   supervisor: {
-    缺失: ['contractor'], 工安缺失: ['contractor'], 送審: ['contractor'],
+    缺失: ['contractor'], 工安缺失: ['contractor'], 送審: ['contractor'], 估驗調整: ['owner'],
     疑義: ['contractor'], 變更: ['owner'], 現場文書: ['contractor', 'owner'],
   },
   owner: {
@@ -106,7 +106,7 @@ export function buildTodayTasks(input = {}) {
     rfis = [], submittals = [], valuations = [], defects = [], inspections = [],
     observations = [], changeOrders = [], obligations = [], testSamples = [],
     acceptanceEvents = [], inspectionPoints = [], siteLogs = [],
-    fieldDocuments = [], fieldDocumentSubmissions = [],
+    fieldDocuments = [], fieldDocumentSubmissions = [], valuationAdjustments = [],
   } = input
   const todayIso = taipeiISODate(today)
   // 實際竣工日(P5c 循環停止條件)由驗收事件推得(竣工確認優先、否則報竣),與 Edge 收集器同一支共用規則;
@@ -125,7 +125,7 @@ export function buildTodayTasks(input = {}) {
 
   // ── ① 協作項(疑義／送審／估驗／查驗／缺失／觀察／變更／現場文書)────────
   const waitingScope = WAITING_SCOPE[org] || {}
-  collaborationItems({ rfis, submittals, valuations, defects, inspections, observations, changeOrders, fieldDocuments, fieldDocumentSubmissions })
+  collaborationItems({ rfis, submittals, valuations, defects, inspections, observations, changeOrders, fieldDocuments, fieldDocumentSubmissions, valuationAdjustments })
     .forEach((it, i) => {
       const days = it.due ? daysBetween(it.due, todayIso) : null
       // key 沿用 tag:id(DOM id 與返回定位都吃它);現場文書一份可能同時等兩方收件,才加 who

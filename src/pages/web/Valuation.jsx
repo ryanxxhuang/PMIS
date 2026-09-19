@@ -15,13 +15,25 @@ import { fmtAmount as fmt, fmtYi as yi } from '../../lib/format.js'
 import ValuationRow from '../../components/valuation/ValuationRow.jsx' // memo 列:數千列標單的效能槓桿
 import BacklogCard from '../../components/valuation/BacklogCard.jsx'
 import ChecksCard from '../../components/valuation/ChecksCard.jsx'
+import CertificateForm from '../../components/valuation/CertificateForm.jsx'
+import AdjustmentsCard from '../../components/valuation/AdjustmentsCard.jsx'
 
 // P4c:估驗頁只顯示 DB 的結果——數量、金額、上限、來源、缺件全部來自 P4b 的 RPC
 // (get_valuation_state／list_billable_backlog),寫入只走 RPC(store/slices/billing.js)。
 // 未經監造確認的申報量可以看(標「申報,未確認,不計價」),但不混入可請款金額;
 // 送審／核定／請款由 DB 檢查點強制,這裡在送審前就把缺件列出來並給處理入口。
+// P4d:撤銷／減量／補證／作廢也在這一頁——監造在來源展開列對「有效確認」撤銷或減量、簽發監造確認單、
+// 對已核定期的歷史遷移來源「補證此期」(issue_supervisor_certificate 帶 p_covers_valuation_id);
+// 機關在「估驗調整」卡作廢待處理扣回;廠商看得到補證狀態與扣回影響、知道下一步由誰處理。
 
 const statusColor = { 草稿: 'slate', 監造審核: 'amber', 已核定: 'green', 已請款: 'green' }
+
+// 撤銷確認後 DB 的收斂結果(revoke_inspection_confirmation 回傳 effects 的 event_type)→ 人話
+const EFFECT_TEXT = {
+  'valuation.allocation_reduced': '草稿期的分配已縮減',
+  'valuation.recheck_flagged': '送審中的期別已標記需重算(退回後同步)',
+  'valuation_adjustment.created': '已核定量轉成待處理扣回(由機關作廢或於草稿期同步時扣回)',
+}
 
 // 搜尋結果上限:真實 PCCES 標單有數千末端工項,一次渲染整包搜尋結果會卡住頁面(P1-3)
 const SEARCH_LIMIT = 120
@@ -51,8 +63,9 @@ function describeVqError(error, keyOf, itemOf, fallback) {
 }
 
 export default function Valuation() {
-  const { workItems: data, valuations, createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd,
+  const { workItems: data, valuations, valuationAdjustments, createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd,
     syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis, listMembers,
+    revokeConfirmation, issueCertificate, voidAdjustment, currentUser,
     isSupabaseConfigured, currentProject, workItemsSource, siteLogs, deleteValuation, dbMode,
     inspections, checklistRecords, checklistTemplates, testSamples,
     adjustedItems, coNet, revisedTotal, can } = useStore()
@@ -66,6 +79,8 @@ export default function Valuation() {
   const [backlog, setBacklog] = useState({ rows: [], loading: false })
   const [confirmations, setConfirmations] = useState([])
   const [members, setMembers] = useState([])
+  const [certTarget, setCertTarget] = useState(null) // P4d:監造確認單表單(簽發／減量／補證)的對象
+  const [certBusy, setCertBusy] = useState(false)
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(() => new Set())
   const [evOpen, setEvOpen] = useState(() => new Set()) // 現場紀錄欄展開的工項
@@ -143,6 +158,22 @@ export default function Valuation() {
   }, [dbMode, projectId, listMembers])
 
   const confirmationsById = useMemo(() => new Map(confirmations.map((c) => [c.id, c])), [confirmations])
+  // 本工項的 active 確認(item_key → 陣列;撤銷／減量的對象)。同一 reference 直到 confirmations 變動,列的 memo 才有效
+  const activeByKey = useMemo(() => {
+    const m = new Map()
+    for (const c of confirmations) {
+      if (c.status !== 'active') continue
+      const k = keyOf(c.work_item_id); if (k == null) continue
+      if (!m.has(k)) m.set(k, [])
+      m.get(k).push(c)
+    }
+    return m
+  }, [confirmations, keyOf])
+  const EMPTY_CONFS = useMemo(() => [], [])
+  const periodNoOf = useCallback((id) => (id ? (valuations.find((v) => v.id === id)?.period_no ?? null) : null), [valuations])
+  // 撤銷／簽發／補證是監造的動作(DB 以 my_org_type 強制;can.approve 只是 UX);作廢是機關的動作
+  const canManage = dbMode && can.approve
+  const canVoid = dbMode && currentUser?.org_type === 'owner'
   const inspectionsById = useMemo(() => new Map((inspections || []).filter((i) => i.id).map((i) => [i.id, i])), [inspections])
   const memberName = useMemo(() => {
     const m = new Map(members.map((r) => [r.user_id, r.full_name || r.company || r.user_id]))
@@ -265,6 +296,60 @@ export default function Valuation() {
     else setNotice(`已設定 ${it.item_no} 的計價依據;同步確認量後即可計價。`)
   }, [setPricingBasis, showError])
 
+  // ── P4d:撤銷／減量／簽發／補證／作廢。全部由 DB 決定結果,這裡只收意圖、顯示後果 ──
+  const onRevoke = useCallback(async (it, c) => {
+    const reason = await appPrompt({
+      title: `撤銷確認：${it.item_no} ${it.description}`, label: `批次 ${c.location_label || c.batch_key}、累計 ${fmt(c.qty_cum, { empty: '0' })} ${c.unit}。撤銷原因（必填，記入稽核）`,
+      required: true, danger: true, confirmLabel: '撤銷確認',
+    })
+    if (reason === null) return
+    clearError(); setNotice('')
+    const { result, error } = await revokeConfirmation(c.id, reason)
+    if (error) { showError(error, '撤銷未完成'); return }
+    const effects = [...new Set((result?.effects || []).map((e) => EFFECT_TEXT[e.event_type]).filter(Boolean))]
+    setNotice(`已撤銷 ${it.item_no} 批次 ${c.location_label || c.batch_key} 的確認${effects.length ? `:${effects.join(';')}` : ';沒有期別受影響'}。`)
+  }, [revokeConfirmation, showError])
+  const onReduce = useCallback((it, c) => {
+    clearError(); setNotice('')
+    setCertTarget({ it, mode: 'reduce', batchKey: c.batch_key, locationLabel: c.location_label, stageKey: c.stage_key, qtyCum: c.qty_cum, currentCum: c.qty_cum, requestId: crypto.randomUUID() })
+  }, [])
+  const onIssue = useCallback((it) => {
+    clearError(); setNotice('')
+    setCertTarget({ it, mode: 'issue', requestId: crypto.randomUUID() })
+  }, [])
+  // 表單以 ref 讀最新的 selected:onCover 的 identity 不隨期別變(列的 memo)
+  const selectedRef = useRef(null)
+  selectedRef.current = selected
+  const onCover = useCallback((it, legacyQty) => {
+    const v = selectedRef.current
+    if (!v) return
+    clearError(); setNotice('')
+    setCertTarget({ it, mode: 'cover', covers: { id: v.id, period_no: v.period_no, status: v.status, legacyQty }, qtyCum: legacyQty, requestId: crypto.randomUUID() })
+  }, [])
+  const onCertSubmit = async (form) => {
+    if (!certTarget) return
+    clearError(); setCertBusy(true)
+    const { result, error } = await issueCertificate({ ...form, clientRequestId: certTarget.requestId })
+    setCertBusy(false)
+    if (error) { showError(error, '監造確認單未簽發'); return }
+    const it = certTarget.it
+    const covers = certTarget.mode === 'cover' ? certTarget.covers : null
+    setCertTarget(null)
+    if (result?.applied === false) { setNotice(`同一張確認單已處理過(冪等),未重複入帳。`); return }
+    setNotice(`已簽發 ${it.item_no} 批次 ${result?.batch_key || form.batchKey} 的監造確認單:累計 ${fmt(result?.qty_cum ?? form.qtyCum, { empty: '0' })} ${it.unit || ''}、增量 ${fmt(result?.qty_delta, { empty: '0' })}${covers ? `;第 ${covers.period_no} 期此工項的歷史遷移量已改以本確認單為計價依據` : ';已同步到適用的草稿期'}。`)
+  }
+  const onVoid = useCallback(async (a, w) => {
+    const reason = await appPrompt({
+      title: `作廢扣回：${w.label}`, label: `扣回 ${fmt(a.qty_delta, { empty: '0' })} ${w.unit}。作廢＝機關接受該量已計價,不再擋核定、也不會產生新的可用量。作廢原因（必填，記入稽核）`,
+      required: true, danger: true, confirmLabel: '作廢(接受已計價)',
+    })
+    if (reason === null) return
+    clearError(); setNotice('')
+    const { error } = await voidAdjustment(a.id, reason)
+    if (error) { showError(error, '作廢未完成'); return }
+    setNotice(`已作廢 ${w.label} 的扣回 ${fmt(a.qty_delta, { empty: '0' })} ${w.unit}:該量視為已計價,下一期核定不再被它擋下。`)
+  }, [voidAdjustment, showError])
+
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
   // 使用者會被關在載入/前置條件畫面裡,換不到同工作面的其他頁。
@@ -365,6 +450,8 @@ export default function Valuation() {
       qtyInput={selected?.items?.[it.item_key]} editable={editable} selectedId={selected?.id} inputEpoch={inputEpoch}
       state={stateByKey.get(it.item_key)} flags={checks.itemFlags.get(it.item_key)} basisEditable={dbMode && can.approve}
       confirmationsById={confirmationsById} inspectionsById={inspectionsById} nameOf={memberName}
+      activeConfirmations={activeByKey.get(it.item_key) || EMPTY_CONFS} periodStatus={selected?.status} canManage={canManage}
+      onRevoke={onRevoke} onReduce={onReduce} onIssue={onIssue} onCover={onCover}
       getEvidence={getEvidence} onToggle={toggle} onToggleEv={toggleEv} onToggleSrc={toggleSrc} onQty={onQty} onSetBasis={onSetBasis} />
   )
   const renderTree = (items, level = 0) =>
@@ -513,6 +600,16 @@ export default function Valuation() {
             editable={editable && dbMode} canApprove={can.approve}
             onExpandKeys={expandKeys} onEditPeriodEnd={editable ? onEditPeriodEnd : null} navigate={navigate} />
 
+          {/* 估驗調整(P4d):全案的扣回,三方同一張卡;機關作廢、廠商同步扣回。沒有調整不渲染 */}
+          {dbMode && (
+            <AdjustmentsCard adjustments={valuationAdjustments} periodNoOf={periodNoOf} keyOf={keyOf} itemOf={itemOf} canVoid={canVoid} onVoid={onVoid} />
+          )}
+
+          {/* 監造確認單表單(P4d):簽發／減量／補證;就地面板,submit 走 issue_supervisor_certificate */}
+          {certTarget && (
+            <CertificateForm key={certTarget.requestId} target={certTarget} busy={certBusy} onSubmit={onCertSubmit} onCancel={() => setCertTarget(null)} />
+          )}
+
           <Card
             title={`第 ${selected.period_no} 期 估驗明細`}
             bodyClass="p-0"
@@ -613,6 +710,7 @@ export default function Valuation() {
             在末端工項填「累計完成數量」；本期可新增量不得超過截止日前經監造確認、扣除已計價與其他期占用後的量，上限與金額由資料庫計算（逐工項四捨五入到元），超出會被拒絕並顯示前期累計、上限與可用量。
             本期金額 = 本期累計 − 前期累計，父項金額自動加總。保留款依契約比例逐期扣留，竣工驗收後返還。
             「依據 / 來源」欄標示數量的依據（監造確認、歷史遷移需補證、申報未確認不計價）並可展開來源（批次、位置、確認量、查驗與文件版本、確認人與時間）；施工日誌的申報量只作差異比對，不是計價依據。
+            監造在來源展開列對「有效確認」撤銷或減量、簽發監造確認單，對已核定期的歷史遷移量「補證此期」；撤銷或減量後，草稿期自動縮減、送審中期別標記需重算、已核定量轉成扣回，由機關在「估驗調整」卡作廢（接受已計價）或於草稿期同步時扣回，舊帳不被靜默覆寫。
             「缺件與檢核」列出資料庫送審／核定／請款檢查點會擋下的項目（送審前即可處理）與跨文件勾稽發現，判定不經 AI。
           </p>
         </>

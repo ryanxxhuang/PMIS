@@ -20,7 +20,7 @@ import { supabase, isSupabaseConfigured, SIGNED_URL_TTL_S } from './lib/supabase
 import { applyApprovedChangeOrders, approvedNetAmount } from './lib/changeOrders.js'
 import { compressImage } from './lib/imageCompress.js'
 import {
-  loadValuationsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
+  loadValuationsFromDB, loadValuationAdjustmentsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
   loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
   loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadAnchorVersionsFromDB,
@@ -123,9 +123,10 @@ export function StoreProvider({ children }) {
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   } = useSiteSlice(ctx)
   const {
-    valuations, setValuations, progressPlan, setProgressPlan, reloadValuations,
+    valuations, setValuations, valuationAdjustments, setValuationAdjustments, progressPlan, setProgressPlan, reloadValuations,
     createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
     syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis,
+    revokeConfirmation, issueCertificate, voidAdjustment,
     generateSchedule, updatePlannedPct, deleteValuation,
   } = useBillingSlice(ctx)
   const {
@@ -201,7 +202,7 @@ export function StoreProvider({ children }) {
   const prevProjectRef = useRef(null)
   useEffect(() => {
     if (!demoMode && prevProjectRef.current && prevProjectRef.current !== currentProjectId) {
-      setValuations([]); setProgressPlan(null); setSiteLogs([])
+      setValuations([]); setValuationAdjustments([]); setProgressPlan(null); setSiteLogs([])
       setInspections([]); setDefects([]); setCostItems([]); setItemSchedules({})
       setChangeOrders([]); setInspectionPoints([]); setChecklistTemplates([]); setChecklistRecords([]); setTestSamples([])
       setSafetyRecords([]); setObligations([]); setAnchorVersions([]); setAcceptanceEvents([]); setSubmittals([]); setRfis([]); setObservations([])
@@ -225,7 +226,7 @@ export function StoreProvider({ children }) {
     ;(async () => {
       try {
         const pid = currentProject.project_id
-        const [vals, plan, logs, qual, costs, sched, cos, itp, qc] = await Promise.all([
+        const [vals, plan, logs, qual, costs, sched, cos, itp, qc, adjustments] = await Promise.all([
           loadValuationsFromDB(pid, wiMaps.idToKey),
           loadScheduleFromDB(currentProject),
           loadSiteLogsFromDB(pid, wiMaps.idToKey),
@@ -235,9 +236,10 @@ export function StoreProvider({ children }) {
           loadChangeOrdersFromDB(pid),
           loadItpFromDB(pid, wiMaps.byId, wiMaps.idToKey),
           loadQcFromDB(pid),
+          loadValuationAdjustmentsFromDB(pid), // P4d:估驗調整(今日工作的待處理扣回、估驗頁調整卡)
         ])
         if (!active) return
-        setValuations(vals); setProgressPlan(plan); setSiteLogs(logs)
+        setValuations(vals); setValuationAdjustments(adjustments); setProgressPlan(plan); setSiteLogs(logs)
         setInspections(qual.inspections); setDefects(qual.defects)
         setCostItems(costs); setItemSchedules(sched); setChangeOrders(cos)
         setInspectionPoints(itp)
@@ -300,7 +302,7 @@ export function StoreProvider({ children }) {
   const resetProjectBoq = useCallback(async () => {
     const { error } = await resetProjectBoqDb()
     if (error) return { error }
-    setValuations([]); setProgressPlan(null); setSiteLogs([]); setInspections([])
+    setValuations([]); setValuationAdjustments([]); setProgressPlan(null); setSiteLogs([]); setInspections([])
     try { setDefects(await loadDefectsFromDB(currentProject.project_id)) } catch { setDefects([]) } // 重載:工項連結已解除
     return { error: null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -366,10 +368,11 @@ export function StoreProvider({ children }) {
     agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions,
     listMembers, addMemberByEmail, removeMember, resolveMarkup, resendSignup,
     deleteValuation, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
-    valuations, progressPlan,
-    // actions(估驗寫入 P4c 起全走 P4b RPC;reload／state／backlog／confirmations 供估驗頁)
+    valuations, valuationAdjustments, progressPlan,
+    // actions(估驗寫入 P4c 起全走 P4b RPC;reload／state／backlog／confirmations 供估驗頁;P4d 撤銷／簽發／作廢)
     createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
     reloadValuations, syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis,
+    revokeConfirmation, issueCertificate, voidAdjustment,
     generateSchedule, updatePlannedPct,
     ...adminSlice, // 平台管理後台(isPlatformAdmin/platformAdminChecked + admin 載入/動作)
   }

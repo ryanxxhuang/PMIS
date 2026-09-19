@@ -20,7 +20,17 @@
       { "id": "v2", "project_id": "p1", "period_no": 5, "status": "監造審核", "invoice_date": null, "paid_date": null },
       { "id": "v3", "project_id": "p1", "period_no": 4, "status": "已核定", "invoice_date": null, "paid_date": null },
       { "id": "v4", "project_id": "p1", "period_no": 3, "status": "已核定", "invoice_date": "2026-07-01", "paid_date": null },
-      { "id": "v5", "project_id": "p1", "period_no": 2, "status": "已核定", "invoice_date": "2026-06-01", "paid_date": "2026-06-20" }
+      { "id": "v5", "project_id": "p1", "period_no": 2, "status": "已核定", "invoice_date": "2026-06-01", "paid_date": "2026-06-20" },
+      { "id": "v6", "project_id": "p1", "period_no": 1, "status": "已核定", "invoice_date": null, "paid_date": null, "legacy_uncovered": 2 }
+    ],
+    "valuation_item_sources": [
+      { "valuation_id": "v6", "work_item_id": "w1", "kind": "legacy" },
+      { "valuation_id": "v6", "work_item_id": "w1", "kind": "legacy" },
+      { "valuation_id": "v6", "work_item_id": "w2", "kind": "legacy" }
+    ],
+    "valuation_adjustments": [
+      { "id": "adj1", "project_id": "p1", "work_item_id": "w1", "qty_delta": -12, "status": "pending", "origin_valuation_id": "v5", "reason": "確認撤銷" },
+      { "id": "adj2", "project_id": "p1", "work_item_id": "w2", "qty_delta": -3, "status": "void", "origin_valuation_id": "v5", "reason": "確認撤銷" }
     ],
     "inspections": [
       { "id": "i1", "project_id": "p1", "title": "4F 鋼筋查驗", "status": "待查驗" },
@@ -109,6 +119,8 @@
       { "id": "v2", "who": "supervisor", "tag": "估驗", "title": "第 5 期估驗", "status": "監造審核", "meta": "待監造核定", "due": null },
       { "id": "v3", "who": "contractor", "tag": "估驗", "title": "第 4 期估驗", "status": "已核定", "meta": "待廠商請款", "due": null },
       { "id": "v4", "who": "owner", "tag": "估驗", "title": "第 3 期估驗", "status": "已核定", "meta": "待機關撥款", "due": null },
+      { "id": "v6", "who": "supervisor", "tag": "估驗", "title": "第 1 期估驗", "status": "已核定", "meta": "待監造補證", "due": null },
+      { "id": "adj1", "who": "owner", "tag": "估驗調整", "title": "第 2 期估驗扣回調整", "status": "pending", "meta": "待機關處理扣回", "due": null },
       { "id": "i1", "who": "supervisor", "tag": "查驗", "title": "4F 鋼筋查驗", "status": "待查驗", "meta": "待監造查驗", "due": null },
       { "id": "d1", "who": "contractor", "tag": "缺失", "title": "裂縫修補", "status": "開立", "meta": "待廠商改善", "due": "2026-07-20" },
       { "id": "d2", "who": "supervisor", "tag": "缺失", "title": "焊道複查", "status": "待複查", "meta": "待監造複查", "due": null },
@@ -152,19 +164,19 @@
     "mine": {
       "soon7": {
         "contractor": ["疑義:r2", "送審:s2", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "觀察:o1", "觀察:o4", "現場文書:f1", "現場文書:f2", "現場文書:f3", "契約重點:ob8", "契約重點:ob12:2026-07"],
-        "supervisor": ["疑義:r1", "送審:s1", "估驗:v2", "查驗:i1", "缺失:d2", "觀察:o2", "變更:c1", "現場文書:f4", "現場文書:f5", "現場文書:f9", "現場文書:f10", "契約重點:ob2"],
-        "owner": ["估驗:v4", "變更:c2", "現場文書:f6", "契約重點:ob11", "契約重點:ob15:2026-07"]
+        "supervisor": ["疑義:r1", "送審:s1", "估驗:v2", "估驗:v6", "查驗:i1", "缺失:d2", "觀察:o2", "變更:c1", "現場文書:f4", "現場文書:f5", "現場文書:f9", "現場文書:f10", "契約重點:ob2"],
+        "owner": ["估驗:v4", "估驗調整:adj1", "變更:c2", "現場文書:f6", "契約重點:ob11", "契約重點:ob15:2026-07"]
       },
       "soon0": {
         "contractor": ["疑義:r2", "送審:s2", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "觀察:o1", "觀察:o4", "現場文書:f1", "現場文書:f2", "現場文書:f3", "契約重點:ob8", "契約重點:ob12:2026-07"],
-        "supervisor": ["疑義:r1", "送審:s1", "估驗:v2", "查驗:i1", "缺失:d2", "觀察:o2", "變更:c1", "現場文書:f4", "現場文書:f5", "現場文書:f9", "現場文書:f10"],
-        "owner": ["估驗:v4", "變更:c2", "現場文書:f6", "契約重點:ob11", "契約重點:ob15:2026-07"]
+        "supervisor": ["疑義:r1", "送審:s1", "估驗:v2", "估驗:v6", "查驗:i1", "缺失:d2", "觀察:o2", "變更:c1", "現場文書:f4", "現場文書:f5", "現場文書:f9", "現場文書:f10"],
+        "owner": ["估驗:v4", "估驗調整:adj1", "變更:c2", "現場文書:f6", "契約重點:ob11", "契約重點:ob15:2026-07"]
       }
     },
     "overdue_days": { "送審:s1": 6, "缺失:d1": 6, "契約重點:ob8": 1, "契約重點:ob11": 187, "契約重點:ob12:2026-07": 6, "契約重點:ob15:2026-07": 21 },
     "web_waiting_soon7": {
-      "contractor": ["疑義:r1", "送審:s1", "估驗:v2", "估驗:v4", "缺失:d2", "變更:c1", "變更:c2", "現場文書:f4", "現場文書:f6", "現場文書:f10"],
-      "supervisor": ["疑義:r2", "送審:s2", "缺失:d1", "工安缺失:d3", "變更:c2", "現場文書:f1", "現場文書:f2", "現場文書:f3", "現場文書:f6"],
+      "contractor": ["疑義:r1", "送審:s1", "估驗:v2", "估驗:v4", "估驗:v6", "估驗調整:adj1", "缺失:d2", "變更:c1", "變更:c2", "現場文書:f4", "現場文書:f6", "現場文書:f10"],
+      "supervisor": ["疑義:r2", "送審:s2", "估驗調整:adj1", "缺失:d1", "工安缺失:d3", "變更:c2", "現場文書:f1", "現場文書:f2", "現場文書:f3", "現場文書:f6"],
       "owner": ["送審:s1", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "現場文書:f5", "現場文書:f9"]
     }
   }

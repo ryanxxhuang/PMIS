@@ -12,13 +12,13 @@ import { act } from 'react'
 import { renderHook } from '../../testUtils/renderHook.js'
 import { configured } from '../../testUtils/supabaseMock.js'
 
-const { pg, loadValuationsFromDB } = await vi.hoisted(async () => {
+const { pg, loadValuationsFromDB, loadValuationAdjustmentsFromDB } = await vi.hoisted(async () => {
   const { createScriptedSupabase } = await import('../../testUtils/scriptedSupabase.js')
   const { vi: v } = await import('vitest')
-  return { pg: createScriptedSupabase(), loadValuationsFromDB: v.fn(async () => []) }
+  return { pg: createScriptedSupabase(), loadValuationsFromDB: v.fn(async () => []), loadValuationAdjustmentsFromDB: v.fn(async () => []) }
 })
 vi.mock('../../lib/supabase.js', () => configured(pg.client))
-vi.mock('../db.js', () => ({ loadValuationsFromDB }))
+vi.mock('../db.js', () => ({ loadValuationsFromDB, loadValuationAdjustmentsFromDB }))
 
 import { useBillingSlice, mutationOutcome, parseValuationError } from './billing.js'
 
@@ -31,7 +31,11 @@ const ctx = (over = {}) => ({
 const mount = (c = ctx()) => renderHook(() => useBillingSlice(c))
 const draft = { id: 'v1', period_no: 1, status: '草稿', period_end: '2026-09-19', items: {}, amounts: {}, own: {} }
 
-beforeEach(() => { pg.reset(); loadValuationsFromDB.mockReset(); loadValuationsFromDB.mockResolvedValue([]) })
+beforeEach(() => {
+  pg.reset()
+  loadValuationsFromDB.mockReset(); loadValuationsFromDB.mockResolvedValue([])
+  loadValuationAdjustmentsFromDB.mockReset(); loadValuationAdjustmentsFromDB.mockResolvedValue([])
+})
 
 describe('0. 沒有客戶端數字寫入路徑', () => {
   it('slice 不暴露 fillValuationFromSiteLogs;改數量／建期都不對 valuation_items 寫入', async () => {
@@ -234,5 +238,85 @@ describe('5. 其他寫入與唯讀', () => {
     await act(async () => { st = await d.current.fetchValuationState('v1'); bl = await d.current.fetchBillableBacklog() })
     expect(st.state).toBeNull()
     expect(bl.rows).toEqual([])
+  })
+})
+
+// P4d:撤銷／簽發(含減量、補證)／作廢——前端只傳意圖與必填欄位,結果由 DB 決定,成功後整批重載(期別＋調整)。
+describe('6. P4d 撤銷／簽發／作廢', () => {
+  it('撤銷確認:原因必填(前端與 DB 都擋);RPC 帶 p_id／p_reason;effects 原樣回傳並重載;已撤銷(applied:false)視為未變更', async () => {
+    pg.script('rpc:revoke_inspection_confirmation', 'rpc', { data: { applied: true, status: 'revoked', effects: [{ event_type: 'valuation_adjustment.created' }] }, error: null })
+    const r = mount()
+    let res
+    await act(async () => { res = await r.current.revokeConfirmation('c1', '  ') })
+    expect(res.error.message).toContain('原因')
+    expect(pg.argsOf('rpc:revoke_inspection_confirmation', 'rpc')).toHaveLength(0)
+    await act(async () => { res = await r.current.revokeConfirmation('c1', ' 查驗結果修正 ') })
+    expect(res.error).toBeNull()
+    expect(res.result.effects[0].event_type).toBe('valuation_adjustment.created')
+    expect(pg.argsOf('rpc:revoke_inspection_confirmation', 'rpc')[0][0]).toEqual({ p_id: 'c1', p_reason: '查驗結果修正' })
+    expect(loadValuationsFromDB).toHaveBeenCalled()
+    expect(loadValuationAdjustmentsFromDB).toHaveBeenCalled()
+    pg.script('rpc:revoke_inspection_confirmation', 'rpc', { data: { applied: false, status: 'revoked', message: '此確認已撤銷' }, error: null })
+    await act(async () => { res = await r.current.revokeConfirmation('c1', '再撤一次') })
+    expect(res.error.message).toContain('已撤銷')
+    pg.script('rpc:revoke_inspection_confirmation', 'rpc', { data: null, error: { code: 'VQ001', message: '只有監造可撤銷確認' } })
+    await act(async () => { res = await r.current.revokeConfirmation('c1', '廠商試撤') })
+    expect(res.error.code).toBe('VQ001')
+  })
+
+  it('簽發監造確認單:工項 uuid／單位由 wiMaps 給,批次與依據必填,補證帶 p_covers_valuation_id;冪等 id 原樣送出', async () => {
+    pg.script('rpc:issue_supervisor_certificate', 'rpc', { data: { applied: true, confirmation_id: 'c9', qty_cum: 60, qty_delta: 60 }, error: null })
+    const r = mount()
+    let res
+    await act(async () => { res = await r.current.issueCertificate({ itemKey: 'A1', batchKey: '', qtyCum: 60, reason: 'x', clientRequestId: 'req-1' }) })
+    expect(res.error.message).toContain('批次')
+    await act(async () => { res = await r.current.issueCertificate({ itemKey: 'A1', batchKey: 'A區', qtyCum: -1, reason: 'x', clientRequestId: 'req-1' }) })
+    expect(res.error.message).toContain('0 以上')
+    await act(async () => { res = await r.current.issueCertificate({ itemKey: 'ZZ', batchKey: 'A區', qtyCum: 60, reason: 'x', clientRequestId: 'req-1' }) })
+    expect(res.error.message).toContain('找不到')
+    expect(pg.argsOf('rpc:issue_supervisor_certificate', 'rpc')).toHaveLength(0)
+    await act(async () => {
+      res = await r.current.issueCertificate({ itemKey: 'A1', batchKey: ' A區 ', qtyCum: '60', reason: ' 依查驗紀錄 ', clientRequestId: 'req-1', coversValuationId: 'v-old' })
+    })
+    expect(res.error).toBeNull()
+    expect(res.result.confirmation_id).toBe('c9')
+    expect(pg.argsOf('rpc:issue_supervisor_certificate', 'rpc')[0][0]).toEqual({
+      p_project_id: 'p1', p_work_item_id: 'wi-1', p_batch_key: 'A區', p_location_label: 'A區', p_stage_key: null, p_unit: 'm3',
+      p_qty_cum: 60, p_reason: '依查驗紀錄', p_client_request_id: 'req-1', p_covers_valuation_id: 'v-old',
+    })
+    expect(loadValuationsFromDB).toHaveBeenCalled()
+    pg.script('rpc:issue_supervisor_certificate', 'rpc', { data: null, error: { code: 'VQ005', message: '該期別此工項沒有歷史遷移來源需要補證' } })
+    await act(async () => { res = await r.current.issueCertificate({ itemKey: 'A1', batchKey: 'A區', qtyCum: 60, reason: 'x', clientRequestId: 'req-2', coversValuationId: 'v-old' }) })
+    expect(res.error.code).toBe('VQ005')
+    const d = mount(ctx({ dbMode: false }))
+    await act(async () => { res = await d.current.issueCertificate({ itemKey: 'A1', batchKey: 'A區', qtyCum: 60, reason: 'x' }) })
+    expect(res.error.message).toContain('示範模式')
+  })
+
+  it('作廢扣回:原因必填;RPC 帶 p_id／p_reason;非 pending(applied:false)視為未變更;VQ001 原樣交出', async () => {
+    pg.script('rpc:void_valuation_adjustment', 'rpc', { data: { applied: true, status: 'void' }, error: null })
+    const r = mount()
+    let res
+    await act(async () => { res = await r.current.voidAdjustment('a1', '') })
+    expect(res.error.message).toContain('原因')
+    await act(async () => { res = await r.current.voidAdjustment('a1', '機關接受已計價') })
+    expect(res.error).toBeNull()
+    expect(pg.argsOf('rpc:void_valuation_adjustment', 'rpc')[0][0]).toEqual({ p_id: 'a1', p_reason: '機關接受已計價' })
+    expect(loadValuationAdjustmentsFromDB).toHaveBeenCalled()
+    pg.script('rpc:void_valuation_adjustment', 'rpc', { data: { applied: false, status: 'applied', message: '調整已是 applied,不可作廢' }, error: null })
+    await act(async () => { res = await r.current.voidAdjustment('a1', '再作廢') })
+    expect(res.error.message).toContain('applied')
+    pg.script('rpc:void_valuation_adjustment', 'rpc', { data: null, error: { code: 'VQ001', message: '只有機關可作廢估驗調整' } })
+    await act(async () => { res = await r.current.voidAdjustment('a1', '監造試作廢') })
+    expect(res.error.code).toBe('VQ001')
+  })
+
+  it('reloadValuations 同時重載期別與估驗調整,兩者一起進 state', async () => {
+    loadValuationsFromDB.mockResolvedValue([draft])
+    loadValuationAdjustmentsFromDB.mockResolvedValue([{ id: 'a1', status: 'pending', qty_delta: -5 }])
+    const r = mount()
+    await act(async () => { await r.current.reloadValuations() })
+    expect(r.current.valuations).toEqual([draft])
+    expect(r.current.valuationAdjustments).toEqual([{ id: 'a1', status: 'pending', qty_delta: -5 }])
   })
 })

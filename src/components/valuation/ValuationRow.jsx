@@ -5,7 +5,8 @@
 // 逐列重畫。抽成元件後每列只收「自己的」純量與穩定 reference:
 //   - it / getEvidence / state / flags:資料不變就是同一個 reference(useMemo 快取)
 //   - isOpen / evIsOpen / srcIsOpen / cum / prevCum / qtyInput / editable / selectedId / inputEpoch:純量
-//   - onToggle / onToggleEv / onToggleSrc / onQty / onSetBasis:頁面以 useCallback 釘住 identity
+//   - onToggle / onToggleEv / onToggleSrc / onQty / onSetBasis / onRevoke / onReduce / onIssue / onCover:頁面以 useCallback 釘住 identity
+//   - activeConfirmations(P4d,本工項 active 確認的陣列):由頁面 useMemo 依 confirmations 分組,資料不變同一 reference
 // 於是展開一列、改一格數量,只有「那一列＋其祖先(累計金額變了)」重畫。
 // props 若有一個每次 render 換 identity 的物件/函式,memo 就整個失效——
 // ValuationRow.test.jsx 用 getEvidence 呼叫次數當探針釘住這件事。
@@ -31,6 +32,7 @@ const BASIS_OPTIONS = [
 
 function ValuationRow({ it, level, hasKids, isOpen, evIsOpen, srcIsOpen, cum, prevCum, qtyInput, editable, selectedId, inputEpoch = 0,
   state, flags, basisEditable = false, confirmationsById, inspectionsById, nameOf,
+  activeConfirmations, periodStatus, canManage = false, onRevoke, onReduce, onIssue, onCover,
   getEvidence, onToggle, onToggleEv, onToggleSrc, onQty, onSetBasis }) {
   const per = cum - prevCum
   const cumQty = qtyInput ?? 0
@@ -152,7 +154,9 @@ function ValuationRow({ it, level, hasKids, isOpen, evIsOpen, srcIsOpen, cum, pr
     <>
       {row}
       {!hasKids && srcIsOpen && state && (
-        <SourceRow it={it} level={level} state={state} confirmationsById={confirmationsById} inspectionsById={inspectionsById} nameOf={nameOf} />
+        <SourceRow it={it} level={level} state={state} confirmationsById={confirmationsById} inspectionsById={inspectionsById} nameOf={nameOf}
+          activeConfirmations={activeConfirmations} periodStatus={periodStatus} canManage={canManage}
+          onRevoke={onRevoke} onReduce={onReduce} onIssue={onIssue} onCover={onCover} />
       )}
       {!hasKids && evIsOpen && <EvidenceRow it={it} ev={ev} level={level} />}
     </>
