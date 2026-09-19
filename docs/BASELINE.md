@@ -1,9 +1,23 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-19｜P5d 履約時程 UI（Vitest＋Demo E2E＋內建 Preview 1024／375）、R1 全面移除兩步驟驗證（pgTAP＋Vitest＋Demo E2E＋真後端 chain 1／5／6）、P5c 基準日版本（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E＋內建 Preview）、D1 正式站邊緣注入與 `check:prod` 漏檢（Vitest＋`wrangler dev`＋demo 重佈實測）、P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-19｜P6c `audit.summary` 退場（pgTAP＋Vitest＋Deno＋Demo E2E）、CI1 釘住 pgTAP workflow 的 Supabase CLI 版本（本機 pgTAP＋PR CI 實跑）、P5d 履約時程 UI（Vitest＋Demo E2E＋內建 Preview 1024／375）、R1 全面移除兩步驟驗證（pgTAP＋Vitest＋Demo E2E＋真後端 chain 1／5／6）、P5c 基準日版本（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E＋內建 Preview）、D1 正式站邊緣注入與 `check:prod` 漏檢（Vitest＋`wrangler dev`＋demo 重佈實測）、P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-19 P6c：`audit.summary` 退場（`codex/slimming-p6c-retire-audit-summary`，migration `20260919130400_audit_summary_retire`；基於含 CI1 的 main `c221c67`）
+
+- `npm run test:db`（一次性資料庫從零套 74 支 migration＋seed，CLI 2.113.0）：52 檔、2,445 通過、0 失敗（＝R1 基準 2,434＋`ai_features_retired.sql` 6→17）。`ai_features_retired.sql` 覆蓋：三支退場功能從零套用後 `enabled=false` 且列保留；pro 專案對 `contract.parse`／`audit.summary` 的 `ai_feature_allowed` 皆 false、同為 pro 門檻的 `submittal.review` 仍 true（擋下的是總開關不是方案）；專案覆寫 `enabled=true` 翻不過；取代路徑 `requirements.extract` 仍開放；`record_ai_usage` 記下 `audit.summary` 的 ok 與 blocked 各一筆後，平台管理員的 `admin_ai_usage_by_feature` 仍以原 label「機關稽核意見草稿」列出（2 次呼叫、1 次 blocked）、登入者讀 `ai_features` 看到關閉；回復路徑：`admin_set_feature_enabled` 開回即放行。`ai_platform.sql` 69 條不變（功能列數 18 不變）。
+- `npm test`：128 檔、1,398 項（`aiFeatures.test.js` 的 defaultEnabled 斷言改為三支退場鍵；無測試移除）；`npm run check:edge` 18 支；`npm run test:edge` 4 項；`npm run lint` 零警告；`npm run build`（`RiskAudit` chunk 13.04 kB，原含 AI 區塊）；`npm run check:docs` 55 檔、394 連結、0 錯誤。
+- Demo E2E `owner.spec.js`＋`a11y.spec.js`：25 項通過（風險稽核測試改斷言詳情欄無任何「AI 稽核意見」按鈕／文字、仍有「前往…」來源鈕、頁尾「非違規認定」；a11y 全路由含 `/audit`）。
+- 全庫 grep：`src`／`e2e`／`scripts` 無 `auditSummary`／`aiEnabled('audit.summary')`；`audit-summary` 只剩 Edge 原始碼（依設計保留，閘門 403）、註冊表與註解。
+- 未做：正式 `db push` 於合併後執行並記 CURRENT §6.3；真後端 E2E 未跑（本單元無 RPC／Edge 行為變更，閘門拒絕由 pgTAP `ai_feature_allowed=false` 證明）；Edge 不重佈（只關 DB 開關）；demo 站未重佈；`assistant-chat`／`parse-contract`／`audit-summary` 三支退場函式原始碼與線上函式刪除列 P6b。
+
+### 2026-09-19 CI1：釘住 pgTAP workflow 的 Supabase CLI 版本（PR #139，merge commit `c221c67`）
+
+- 根因證據：PR #136 第一輪 pgTAP run 35380321039 的 `supabase/setup-cli@v1` 步驟 `Failed to resolve latest Supabase CLI release: rate limit exceeded`；setup-cli v1 原始碼（`src/utils.ts`）只有 `version: latest` 走 `api.github.com/repos/supabase/cli/releases/latest`，明確版本直接組 `releases/download/v<版本>/…`。
+- 本機 `npm run test:db`（`pgtap.yml` 釘 `2.113.0`＝本機 brew）：52 檔、2,434 通過、0 失敗；輸出第一行 `Supabase CLI 2.113.0`。`scripts/test-pgtap.test.js` 14 項；eslint 零警告；`check:docs` 55 檔、394 連結、0 錯誤。
+- PR `17f395b` 的 CI（run 35444633449）／pgTAP（run 35444633552）皆 success；合併後 main `c221c67` 的 CI（35444865565）／pgTAP（35444865602）皆 success。其餘依賴盤點：Deno `v2.9.6`＋frozen lock、Node `.nvmrc` 走 toolcache／授權 manifest、Playwright 版本來自 lockfile＋瀏覽器快取、`npm ci` 走 lockfile、actions major tag 無執行期解析——無同類匿名「latest」解析。
 
 ### 2026-09-19 P5d：履約時程承接關鍵工項與停留點、待補設定篩選、逐期就地標記；`/schedule` 退場唯讀（`codex/slimming-p5d-schedule`，PR #140，無 migration）
 

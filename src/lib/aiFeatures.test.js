@@ -63,9 +63,9 @@ describe('aiFeatures 前後端註冊表同步', () => {
       .toEqual(['weather.fetch', 'reminder.daily'])
   })
 
-  it('defaultEnabled:僅退場的 assistant.chat(W3-3/D-008)與 contract.parse(B5/D-012)為 false,其餘為 true', () => {
-    // 退場功能列保留供用量歷史對帳,只關開關;DB 側對應 20260812000300 / 20260911100100
-    const retired = new Set(['assistant.chat', 'contract.parse'])
+  it('defaultEnabled:僅退場的 assistant.chat(W3-3/D-008)、contract.parse(B5/D-012)與 audit.summary(P6c/D-026)為 false,其餘為 true', () => {
+    // 退場功能列保留供用量歷史對帳,只關開關;DB 側對應 20260812000300 / 20260911100100 / 20260919130400
+    const retired = new Set(['assistant.chat', 'contract.parse', 'audit.summary'])
     for (const f of AI_FEATURES) expect(f.defaultEnabled, f.key).toBe(!retired.has(f.key))
   })
 

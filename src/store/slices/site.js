@@ -161,25 +161,8 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
     return { error: null, result: data }
   }, [demoMode, currentProject])
 
-  // AI 稽核摘要:文件勾稽鏈的「確定性發現」(integrityAudit.js)→ 機關稽核意見+建議事項。
-  // demo/未設 → 由發現套模板生成(判定全在確定性引擎,AI 只寫文字,不臆造)。
-  const auditSummary = useCallback(async (payload) => {
-    const findings = payload.findings || []
-    if (demoMode || !isSupabaseConfigured) {
-      if (!findings.length) return { error: null, result: { opinion: '本案經文件勾稽鏈自動比對（估驗、施工日誌、查驗、試體），未發現明顯對不起來之處，證據鏈大致完整。仍請依契約與相關法令續行常態監督。', recommendations: [] } }
-      const risks = findings.filter((f) => f.status === 'risk')
-      const opinion = `本案經文件勾稽鏈自動比對（估驗、施工日誌、查驗、試體），發現風險 ${payload.summary?.risk || 0} 項、注意 ${payload.summary?.warn || 0} 項`
-        + `${risks.length ? `，其中「${risks.slice(0, 2).map((f) => f.title.split('：')[0].split(':')[0]).join('」「')}」等項目尤應優先複查` : ''}。`
-        + `上開為系統比對之異常提示，非違規認定，實際處置請依契約與相關法令查證。`
-      const recommendations = findings.slice(0, 6).map((f) => `就「${f.title.split('：')[0].split(':')[0]}」，請查核相關佐證並依契約與三級品管程序處置。`)
-      return { error: null, result: { opinion, recommendations } }
-    }
-    const { data, error } = await supabase.functions.invoke('audit-summary', {
-      body: { ...payload, project_id: currentProject?.project_id },
-    })
-    if (error || data?.error) return { error: { message: error?.message || data?.error || 'AI 稽核摘要暫時無法使用' } }
-    return { error: null, result: data }
-  }, [demoMode, currentProject])
+  // (P6c,D-026 §4)auditSummary/audit-summary 已退場:勾稽檢核由確定性引擎在估驗流程給結果,
+  // 不再把發現交給 AI 寫成機關稽核意見;DB 開關 20260919130400 關閉,伺服器閘門對舊呼叫回 403。
 
   // 工地座標 → 中央氣象局天氣(fetch-weather edge fn,授權碼在雲端 secret)。
   const fetchWeather = useCallback(async (lat, lon, date) => {
@@ -242,7 +225,7 @@ export function useSiteSlice({ dbMode, demoMode, isPersistedProject, currentProj
   return {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
-    describeDefect, analyzeSafetyPhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
+    describeDefect, analyzeSafetyPhoto, draftMonthlyReview, draftValuationSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   }
 }

@@ -48,6 +48,7 @@
 - 承接【已確認】：估驗所需檢核移入估驗流程——`integrityAudit.js` 的「估驗超前日誌」「澆置無試體」「查驗缺漏」在估驗頁逐工項就地顯示（P4c），送審前列「缺件」；`riskAudit.js` 的契約／變更面向由履約時程承接。Agent `run_integrity_audit` 保留（仍有用途）。
 - 退場：`audit.summary` 功能列以 migration 關閉（`enabled=false`，比照 `20260911100100_contract_parse_retire`），Edge 與用量歷史保留；`/audit` `hidden`，頁面改為唯讀提示並導向估驗頁對應項；P6c 後移除頁面與 `auditSummary` store 路徑。`audit_events` 完全不動。
 - **P1b 落地結果（2026-09-17）**：估驗所需檢核已接到估驗流程——新增 `src/lib/valuationChecks.js`（`buildValuationChecks`：把 store 的標單／日誌／查驗／試體與「指定期別」的累計量組成 `buildIntegrityFindings` 的六個輸入；單元測試釘組法），`Valuation.jsx` 逐期渲染「本期勾稽檢核」卡（`role=list`；估驗超前日誌、無日誌佐證、查驗不合格仍計價、澆置無試體、試體不合格、接近完成未查驗；品質面向給「前往品質查驗」），`RiskAudit.jsx` 改用同一支組裝檢核最新期（先前兩頁各組一份會分岔）。`/audit` 保持 hidden＋僅機關，頁首改「唯讀查閱」並以 `role=note` 說明退場與導向估驗計價；契約／變更／進度三個檢核表面向暫留該頁唯讀，承接到履約時程後隨頁面移除（P5d／P6b）；AI 稽核意見（`audit.summary`）維持到 P6c。`Agent.jsx` 稽核提示卡的連結改指 `/valuation`（三角色可進，不再限機關），`Members.jsx` 機關權限說明不再列「風險稽核」。決策列的「超計／無佐證」逐列差異（`valuationDiff.js`）與整期勾稽發現口徑尚未合併、也未做金額控制，留 P4c（確認量表上線後才有正式「缺件」定義）。
+- **P6c 落地結果（2026-09-19）**：`audit.summary` 以 migration `20260919130400_audit_summary_retire` 關閉平台總開關（只翻 `enabled`；列、用量歷史、專案覆寫不動；rollback 檔同名 `.down.sql`），pgTAP `ai_features_retired.sql` 擴為三支退場功能：關閉、pro 專案閘門拒絕、專案覆寫翻不過、`record_ai_usage` 記下的 `audit.summary` 用量（含 blocked）仍能被 `admin_ai_usage_by_feature` 以原 label 查到。前端／Edge 註冊表 `defaultEnabled=false`（`aiFeatures.test.js` 釘住三支退場鍵）；呼叫端全部移除——`site.js` 的 `auditSummary`（含 demo 模板分支）、store 匯出、`RiskAudit.jsx` 的 AI 稽核意見按鈕／區塊／狀態／錯誤橫幅（頁面其餘唯讀查閱不變，P6b 才刪頁）、`owner.spec.js` 改斷言詳情欄無任何 AI 稽核意見。**與本節原設計的差異**：Edge `audit-summary` 原始碼依原設計保留（閘門讀 DB 即時回 403、不需重佈），但它與 `assistant-chat`／`parse-contract` 三支已無呼叫端的函式原始碼移除、線上函式刪除（`supabase functions delete`，遠端資源操作由使用者執行）改列 P6b 一併處理，不留給日後零散清。`integrityAuditTool.ts`（Agent `run_integrity_audit`）不受影響。
 
 ### 2.4 逐工項排程 `/schedule`
 
@@ -141,7 +142,7 @@
 |---|---|---|
 | `cost_items` | 列與欄不動；P1b 以 migration 收回 authenticated／anon 寫入 grant、policy 改 select-only；H1（`20260917213900`）再收回三個 API 角色對所有 public 表的 TRUNCATE／REFERENCES／TRIGGER／MAINTAIN 並修 default privileges，退場才不留 TRUNCATE 這條不受 RLS 的路 | `supabase/rollbacks/20260917210000_cost_items_retire.down.sql`（重授權＋回復 for all policy）；`supabase/rollbacks/20260917213900_api_roles_table_ddl_privileges.down.sql`（四種權限與 default 還原） |
 | `item_schedules`、`schedule_periods` | 不動；唯讀查閱 | 無 DB 變更 |
-| `ai_features.audit.summary` | `enabled=false` migration | rollback 檔改回 true |
+| `ai_features.audit.summary` | P6c（`20260919130400`）：只翻 `enabled=false`；列、`ai_usage_events` 歷史（正式 0 筆）、`project_ai_overrides` 不動；`audit_events` 無關不動 | `supabase/rollbacks/20260919130400_audit_summary_retire.down.sql`（開關改回 true；前端呼叫端已移除，要重新提供功能須連前端一起還原） |
 | `contract_obligations` 循環 7 筆 | P5b（`20260917233000`）：義務列不動；產生期次（5 筆缺「每月幾日」不產生、列待補設定），不回填完成（正式皆待辦）；循環義務自此不可再標義務層完成（guard） | `supabase/rollbacks/20260917233000_obligation_periods.down.sql`（解除 cron、trigger、guard、RPC，drop `obligation_periods`；期次列隨表移除，回復前先匯出） |
 | 基準日 | P5c（`20260919021500`）：每個已填基準日的專案建 version 1（現值，標回填）；既有期次對得上 v1 的蓋版號；已登錄竣工／竣工日已定的專案移除界限日之後沒動過的待辦期（正式庫預計 8 期移除 5 期）；`contract_obligations` 加兩欄皆 null | `supabase/rollbacks/20260919021500_project_anchor_versions.down.sql`（drop 表與兩欄、還原 P5b 的 materialize 與 projects trigger；版本列與快照隨之移除，回復前先匯出；被界限日移除的期由 P5b 物化補回） |
 | 文書與計價 | 見另兩份文件 | 同 |
