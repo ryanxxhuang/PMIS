@@ -151,6 +151,7 @@
 | P7a 真後端旅程 | P1–P6 | fable5.1 | — | `e2e/real/*` 四類文書＋估驗聯動 | 三角色走完 |
 | P7b 模型品質樣本 | P2b、P5 | fable5.1 | — | 照片樣本（清晰／模糊／非現場／混合）與契約樣本，有預期答案 | 準確率報告，不以 HTTP 200 代替 |
 | P7c 過渡與回復演練＋文件 | P4e | fable5.1 | — | rollback 實跑（staging）、`CURRENT` §6.3、`BASELINE`、runbook | 部署版本與驗證寫回 |
+| O1 demo 站重佈＋合併結果同步＋使用者驗收清單（2026-09-19 補列；使用者：「驗收我來驗就好」） | P3c | Opus 5（簡單低風險） | Opus 5 | demo 站以 main 重佈；`CURRENT` §6.3、`BASELINE`、本檔 §7 補 P3c 合併結果；本檔 §8 使用者逐項驗收清單（不另開報告檔） | `check:docs`；`check:prod` 五頁 OK |
 
 ### R 使用者改決（2026-09-19 起補列）
 
@@ -223,7 +224,94 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P4a、P4b、P4e、P5a–c、P6c）之�
 | P4d | `codex/slimming-p4d-adjustments`／PR #147 | `a9bff38`＋`1c42258`；merge commit `f7d247f`（P3c 同步：正式 `db push` 已套 `20260919160000`，`migration list --linked` 76 筆對齊；`check:prod` 五頁 OK） | `20260919160000_vq_message_numeric_format`（新增純函式 `fn_cq_txt`＋`create or replace set_valuation_item_cum`，只改 VQ005／VQ006 訊息數字格式；回復檔 `supabase/rollbacks/` 同名 `.down.sql`；本機共用 stack 以 psql 直接套用驗證，因 CLI `migration up --local` 被 stack 上他人先套的 `20260919222000` 擋下） | 合併後 `supabase db push` 套 `20260919160000`（結果由下一單元或使用者回填）；無 Edge 部署需求（`_shared/ballInCourt.ts` 的兩個唯讀查詢隨下次 `send-reminders`／`agent` 部署生效——**待部署**，早報／Agent 在部署前仍照舊規則）；前端隨 main 由 Workers Builds 建置；demo 站不重佈 | `npm run test:db` 55 檔 2,964 通過（`confirmed_quantity_enforcement.sql` 294→299：`fn_cq_txt` 三值＋授權、`throws_like` VQ006 訊息不帶小數尾）；`npm test` 137 檔 1,493（新增 `CertificateForm.test.jsx` 3、`AdjustmentsCard.test.jsx` 3、`SourceRow.test.jsx` +2、`billing.test.js` +4、`db.test.js` legacy 計數、共用案例 fixture v6／adj1／adj2）；lint 零警告；build；`check:docs` 55 檔 403 連結 0 錯；`check:edge`；`test:edge` 4 通過；真後端 `e2e:real` 新 chain 11 兩條通過（11a 核定→UI 撤銷→請款被 `VQ004` 擋→UI 作廢→請款日登錄；11b 歷史遷移期別以 DBA 邊界建立→監造首頁「待監造補證」→缺件卡→「補證此期」→缺件清空→請款日登錄；本機 stack 5189，等 T1 跑完才跑）；Demo E2E contractor／supervisor／owner／workflow-ux 40 通過（5188 被 `-slimming-4` 佔用，臨時設定埠 5194、跑完即刪）；`check:prod` 五頁 OK（P4c 建置） | P4e：收回 `valuation_items` 直接寫入時，順帶把 `fn_cq_item_state_internal` 逐工項違反 `message`、確認紀錄 guard 減量訊息、批次 guard 訊息改經 `fn_cq_txt`（目前缺件卡括號裡仍會出現「數量 50.0000 來自歷史遷移」）；P3c：查驗確認量的減量走重簽查驗表單（估驗頁只撤銷）、撤銷後照片凍結事由；Edge 部署：`send-reminders`／`agent` 下次部署起早報與 Agent 才列「待監造補證」「待機關處理扣回」；正式庫 4 個歷史遷移期別的補證步驟見設計文件 §18.1（監造：估驗頁選該期→缺件卡「展開 1 列」→來源展開「補證此期」→填批次／依據→「簽發並補證第 N 期」；之後機關在 `/payments` 登錄請款日） |
 | T1 | `codex/slimming-t1-chain6-flaky`／PR #146 | `4390360`；merge commit `89fbd2c` | 無 | 無（只動測試設定、chain 6 一個選擇器與文件；無正式環境變更） | 修正前以「監造日誌版本 5 簽署落庫即 touch `e2e/contractor.spec.js`」穩定重現 chain 6 同一行（spec:229）同一簽名（trace：簽署後 0.3 秒 `GET /` 重載、之後無 `submit_field_document`）；修正後真後端 chain 5→6→7 連跑 3 輪全綠（全程每秒 touch spec）、chain 6 單跑綠；lint 零警告；`npm test` 134 檔 1,462；`check:docs` 55 檔 404 連結 0 錯 | T2（Demo E2E 同一機制＋沿用他人 server） |
 | T2 | `codex/slimming-t2-demo-e2e-isolation`／PR #149 | `4d4f94f`＋`ec8d6db`；merge commit `bba3c39`（P3c 同步） | 無 | 無（只動測試設定與文件；無正式環境變更） | 修正前 Demo E2E 全套邊跑邊每秒 touch `e2e/rfi.spec.js`：76 項紅 20 項（1.8m）；另一目錄的 Vite 佔埠時被直接沿用（`WebServer is already available`，對它跑測）。修正後同條件 76 項全綠（30.8s）；佔埠時立即 `is already used` 不跑測；以 `vite.e2e.config.js` 起被佔的埠 Vite 直接 `Port … is already in use` 退出；預設埠 5188 單支 6 項綠；真後端 auth-smoke 以共用設定 1 項綠；lint 零警告；`npm test` 137 檔 1,493；`check:docs` 55 檔 404 連結 0 錯 | 並行 worktree 跑 Demo E2E 撞埠時改設 `E2E_DEMO_PORT`（README「驗證」） |
-| P3c | `codex/slimming-p3c-inspection-form`／PR #148 | 見 PR（rebase 到含 P3d `9b06dc3`／P4c `8acb9b8` 的 main） | `20260919222000_inspection_form_documents`（`checklist_templates` 四欄；`inspections` 九欄＋四值狀態 check；`inspections_guard` 改 BEFORE INSERT OR UPDATE；`inspections_defect_sync`；稽核 decided＝非待查驗；`fn_field_document_template` 加 `inspection_form`；`fn_field_document_item_keys`／`fn_field_document_stage_required`／`fn_inspection_sign_bypass`；`field_documents_inspection_uidx`；`inspection_confirmations_inspection_stage_uidx` 改只算 active；`create_inspection_form_draft`（允許清單 79→80）；`save_field_document_version` 範本檢查含查驗表單；`field_document_sign_inspection_form_internal`＋`sign_field_document` case；rollback `supabase/rollbacks/20260919222000_inspection_form_documents.down.sql`） | 合併後 `supabase db push` 套正式、`draft-field-documents` 以 `--use-api` 重佈、`check:prod` 五頁（結果寫在單元回報，由下一單元同步）；demo 站不重佈 | 本機 `npm run test:db` 從零套 77 支：56 檔 3,116 通過、0 失敗（新增 `inspection_form_documents.sql` 146；H3 允許清單 79→80、全庫迴圈因新欄／新函式自動增加；`self_check_documents` 126、`confirmed_quantity_enforcement` 294、`field_document_sign` 139、`supervisor_logs` 129、`field_documents` 215 回歸不變）；`npm test` 137 檔 1,503（rebase 到含 P4d 的 main 後；本單元新增：`fieldDocs.test.js` +5（提送對象矩陣解析 migration、必要階段、空白表單、判定與確認量一致性、批次累計）、`demoFieldDocTemplates.test.js` 改為三類＋查驗表單斷言、Edge `fieldDocDraft.test.ts` +4、`fieldDocDraftRun.test.ts` 監造批次改為起查驗表單＋冪等＋跨批次同一份、`itp.test.js` +1、`quality.test.js` 改為缺失由 DB 開、`navConfig.test.js` 路由與分頁）；`check:edge` 18；`test:edge` 4；lint 零警告；build；`check:docs`；Demo E2E 受影響 5 支（supervisor 新增監造查驗表單 demo 流程／a11y／routes／reachability／contractor）51 項；真後端（本機 colima 棧、Edge stub、5189 被另一 worktree 佔用改臨時設定埠 5190 跑完即刪；共用開發 DB 以 psql 套 `20260919222000` 並登記版本）新 chain 10 9.3s 通過、chain 5／6／8 回歸通過（chain 6 改斷言新徽章文案「監造日誌／查驗表單自動起稿」） | P4d：撤銷／補證 UI 可直接接 `revoke_inspection_confirmation`（P3c 表單改量流程已依賴它）；P3e：`set_intake_shared_input` 對查驗表單的申報量／位置只能寫 `confirmed`；P6：`/quality` 的「合格／不合格」快速判定與 `ChecklistSection` 直接寫入路徑一併改為只吃文件；**待辦**：`checklist_templates.kind='inspection_form'` 的範本尚無建立介面（範本建立仍預設 `self_check`）、`applies_to` 未參與候選推斷、`photo_frozen_reason` 的確認量附件事由未加；本機 `functions serve` 仍需暫移 `deno.lock` |
+| P3c | `codex/slimming-p3c-inspection-form`／PR #148 | rebase 到含 P3d `9b06dc3`／P4c `8acb9b8`／P4d `f7d247f` 的 main；merge commit `5779d9f`（O1 同步） | `20260919222000_inspection_form_documents`（`checklist_templates` 四欄；`inspections` 九欄＋四值狀態 check；`inspections_guard` 改 BEFORE INSERT OR UPDATE；`inspections_defect_sync`；稽核 decided＝非待查驗；`fn_field_document_template` 加 `inspection_form`；`fn_field_document_item_keys`／`fn_field_document_stage_required`／`fn_inspection_sign_bypass`；`field_documents_inspection_uidx`；`inspection_confirmations_inspection_stage_uidx` 改只算 active；`create_inspection_form_draft`（允許清單 79→80）；`save_field_document_version` 範本檢查含查驗表單；`field_document_sign_inspection_form_internal`＋`sign_field_document` case；rollback `supabase/rollbacks/20260919222000_inspection_form_documents.down.sql`） | O1 同步：main `5779d9f` 的 unit／e2e／pgtap／Workers Builds success；正式 `supabase db push` 已套 `20260919222000`，`migration list --linked` 77 筆對齊；正式庫唯讀核對（新欄／trigger／索引就位、RPC authenticated 可而 anon 不可、既有 `inspections` 11 列 0 列違反四值 check、查驗表單文件與確認紀錄皆 0）；Edge 重佈模組圖含共用規則的四支 `draft-field-documents` v7、`agent-run` v19、`fetch-weather` v18、`send-reminders` v21（`verify_jwt=false`），P4d 的早報／Agent 新事項自此生效；`check:prod` 五頁 OK；demo 站由 O1 重佈 | 本機 `npm run test:db` 從零套 77 支：56 檔 3,116 通過、0 失敗（新增 `inspection_form_documents.sql` 146；H3 允許清單 79→80、全庫迴圈因新欄／新函式自動增加；`self_check_documents` 126、`confirmed_quantity_enforcement` 294、`field_document_sign` 139、`supervisor_logs` 129、`field_documents` 215 回歸不變）；`npm test` 137 檔 1,503（rebase 到含 P4d 的 main 後；本單元新增：`fieldDocs.test.js` +5（提送對象矩陣解析 migration、必要階段、空白表單、判定與確認量一致性、批次累計）、`demoFieldDocTemplates.test.js` 改為三類＋查驗表單斷言、Edge `fieldDocDraft.test.ts` +4、`fieldDocDraftRun.test.ts` 監造批次改為起查驗表單＋冪等＋跨批次同一份、`itp.test.js` +1、`quality.test.js` 改為缺失由 DB 開、`navConfig.test.js` 路由與分頁）；`check:edge` 18；`test:edge` 4；lint 零警告；build；`check:docs`；Demo E2E 受影響 5 支（supervisor 新增監造查驗表單 demo 流程／a11y／routes／reachability／contractor）51 項；真後端（本機 colima 棧、Edge stub、5189 被另一 worktree 佔用改臨時設定埠 5190 跑完即刪；共用開發 DB 以 psql 套 `20260919222000` 並登記版本）新 chain 10 9.3s 通過、chain 5／6／8 回歸通過（chain 6 改斷言新徽章文案「監造日誌／查驗表單自動起稿」） | P4d：撤銷／補證 UI 可直接接 `revoke_inspection_confirmation`（P3c 表單改量流程已依賴它）；P3e：`set_intake_shared_input` 對查驗表單的申報量／位置只能寫 `confirmed`；P6：`/quality` 的「合格／不合格」快速判定與 `ChecklistSection` 直接寫入路徑一併改為只吃文件；**待辦**：`checklist_templates.kind='inspection_form'` 的範本尚無建立介面（範本建立仍預設 `self_check`）、`applies_to` 未參與候選推斷、`photo_frozen_reason` 的確認量附件事由未加；本機 `functions serve` 仍需暫移 `deno.lock` |
+| O1 | `codex/slimming-o1-acceptance`／PR #150 | 見 PR（基準 main `5779d9f`；merge commit 由下一單元同步） | 無 | 2026-09-19 demo 站（`pmis-demo`）以 main `5779d9f` demo 模式建置後 `wrangler deploy --config wrangler.demo.jsonc`，Version `e181dc14-75ed-458f-8ac1-aa6db9c25c9a`（前一版 D1 `15c6fad4…`）；無 DB／Edge／正式前端變更 | `node scripts/check-prod.js` 五頁 OK（demo 入口 chunk `index-7YKCAnE1.js` 與建置一致、bundle 無 Supabase 網址）；正式唯讀核對 `migration list --linked` 77 筆對齊、`functions list` 四支版本如 P3c 列；`check:docs` 綠 | 使用者依 §8 逐項驗收；§8.7 未做項照 §5 排程 |
 | P3e、P4e–P7c | — | — | — | — | — | 依 §5 順序 |
 
 歷程規則：每單元合併後更新本表（PR 編號、merge commit、migration 版本、部署日期、驗證指令與結果）；正式環境狀態同時寫回 `CURRENT.md` §6.3。
+
+## 8. 使用者驗收清單
+
+> 2026-09-19 O1 整理；使用者表示「驗收我來驗」，依 [實作指令](2026-09-17-claude-product-slimming-prompt.md) §8 與各單元回報寫成可逐項操作的清單。每項格式：**誰 → 在哪裡 → 做什麼 → 預期看到什麼**；回報問題請給「編號＋截圖＋大約時間」，對應欄的單元／PR 用來追查。只驗已上線的部分；§8.7 是未做或待決，不是缺陷。自動化測試（pgTAP、單元測試、E2E）只證明程式流程，畫面與真實資料要靠這一輪。
+
+### 8.0 準備
+
+- 正式站 `https://app.gov-agent.ai/`，路由都是 `#/…`（例 `https://app.gov-agent.ai/#/site`）。demo 站 `https://demo.gov-agent.ai/` 免登入選角色、用示範資料，**不能上傳照片、不能簽署**，只適合看版面與退場頁。
+- 用一個**測試專案**（不要用客戶實案）：已匯入標單、至少一個有數量單位的工項（例 m²）、品質查驗頁已有自主檢查表範本；三個分屬廠商／監造／機關的測試帳號都加為成員。成員只放自己的帳號——早報每天台北 08:00 會寄給有逾期或 7 日內到期事項的成員。
+- 手機：iPhone 實機，或桌機瀏覽器開發者工具把寬度設 375。
+- 起稿出現「起稿服務暫時無法使用」時，先確認平台管理的 AI 功能「現場文書起稿(照片)」是開啟的。
+
+### 8.1 四類文書：上傳 → 自動起稿 → 補缺 → 簽署 → 提送 → 收件／退回 → 補正再送
+
+| 編號 | 誰 → 在哪裡 | 做什麼 | 預期看到 | 對應 |
+|---|---|---|---|---|
+| A1 | 廠商 → 現場紀錄 `#/site` | 按「拍照」或「選擇照片」上傳 2–3 張今日施工照（其中一張有告示板） | 每張照片標示已保存到伺服器（和「仍在本機」分開）；自動擬好當日施工日誌草稿，分成已帶入／待補，AI 帶入的欄位有來源標記；沒有來源的數量、天氣、到場人員不會被猜；配到工項的照片另擬自主檢查表草稿 | P2b #116、P2c #124 |
+| A2 | 廠商 → `#/site` | A1 上傳到一半時切到別頁、登出再登入，回到 `#/site`；再對同一批按重試 | 上傳批次與草稿還在；不會多出第二份同日日誌；已人工改過的欄位不被重試覆蓋 | P2c #124 |
+| A3 | 廠商 → 施工日誌 `#/site-log`（從現場文書清單點該份） | 補齊待補欄位並存檔 →「簽署此版本」→ 提送 | 缺必填時不能簽，並指出缺哪一欄；簽署後顯示版本號、雜湊前 12 碼、簽署者、伺服器時間；「提送與回執」顯示提送對象監造、待監造收件；全程不要求兩步驟驗證 | P2c #124、P2d #112、R1 #128 |
+| A4 | 監造 → 今日工作 `#/dashboard`「現在輪到我」或 `#/site-log` | 開 A3 那份 →「退回（填原因）」；接著廠商在同一份建更正版本補正 → 再簽署 → 再提送；監造再按「收件」 | 退回原因必填；「退回歷史」逐次列出退回人、時間、原因與補正版本；已簽署的舊版內容不變，補正是新版本；收件後雙方都看到回執 | P2c #124、P3d #145 |
+| A5 | 任一方 → 施工日誌「列印」（`#/site-log/print`） | 列印 A4 收件的那份 | 頁首版本號、雜湊前 12 碼、簽署者和 A3／A4 最後簽署的版本一致；未簽署的會標「草稿・未簽署」 | P3d #145 |
+| A6 | 廠商 → 自主檢查表 `#/self-check`；監造收件 | 開 A1 擬出的自主檢查表 → 親自填實測值 → 簽署 → 提送監造；監造退回一次、廠商補正再送、監造收件；再按列印（`#/self-check/print`） | 實測值不會由 AI 帶入；簽署時判定由伺服器依範本重算；不合格會自動開缺失（品質查驗頁看得到）；退回歷史與回執同 A4；列印標「示範框架範本」，與簽署版本一致 | P3b #143、P3d #145 |
+| A7 | 監造 → `#/site` 上傳今日巡查照 → 監造日誌 `#/supervisor-log` | 補缺 → 按「確認到場人員」→ 簽署 → 提送機關；機關退回一次、監造補正再送、機關收件；再列印（`#/supervisor-log/print`） | 一天一份；到場人員不能由 AI 帶入，沒親自確認就不能簽；同日施工日誌的收件情形列在內；廠商只能唯讀；列印標「示範範本」，與簽署版本一致 | P3a #122／#130、P3d #145 |
+| A8 | 廠商 → 品質查驗 `#/quality`；監造 → 監造查驗表單 `#/inspection-form` | 廠商填查驗申請（查驗項目、工項、位置、申請查驗日、申報數量 100）→ 送出查驗申請；監造在 `#/site` 上傳該工項的查驗照（或在品質查驗該筆詳情按「以監造查驗表單判定（填確認數量）」）→ 核對申請資料、判定、填確認數量 → 簽署 → 提送；廠商與機關各自收件（其中一方先退回一次，監造補正再送）；再列印（`#/inspection-form/print`） | 判定與確認數量一律空白、只能監造填；簽署即判定（查驗紀錄狀態更新，不合格／部分合格自動開缺失）；同時提送給廠商和機關，兩方各自收件或退回；列印標「示範範本」，與簽署版本一致 | P3c #148、P3d #145 |
+| A9 | 廠商、監造 → 手機 375 寬 | 在手機上重做 A1、A3（拍照 → 補缺 → 簽署 → 提送）與 A7 的上傳和到場確認 | 沒有左右捲動、按鈕點得到、底欄五格（四個主入口＋更多）；桌機的審核與估驗仍正常 | P1c #108、P2c #124 |
+| A10 | 廠商 → `#/supervisor-log`、`#/inspection-form`；機關 → `#/site` | 試著編輯或簽署別方的文件 | 廠商對監造日誌只能唯讀、對查驗表單只能收件或退回，都不能編輯或簽署；機關在 `#/site` 沒有上傳鈕，只能查閱 | P2c #124、P3a #130、P3c #148 |
+
+### 8.2 監造確認量與估驗
+
+| 編號 | 誰 → 在哪裡 | 做什麼 | 預期看到 | 對應 |
+|---|---|---|---|---|
+| B1 | 廠商 → 估驗請款 `#/valuation` | A8 已申報 100、監造還沒簽署時，按「＋ 新增估驗期」（計價截止日必填，填今天），看該工項 | 該工項可估驗 0；申報 100 只作差異比對，標「缺監造確認來源・申報,不計價」，不進可請款金額 | P4b #138、P4c #144 |
+| B2 | 監造 → `#/inspection-form`；廠商 → `#/valuation` | 監造把 A8 判「部分合格」、確認數量 60 並簽署；廠商按「同步確認量」 | 該工項本期可估驗 60，其餘 40 不能請；來源展開看得到批次、位置、確認量 60、查驗與文件版本、確認人與時間；不用另外抄數量 | P3c #148、P4c #144 |
+| B3 | 廠商 → `#/valuation` | 把該工項累計量改填 100 | 被拒絕，訊息列出前期累計、上限、可用量（數字沒有 `.0000` 尾巴），輸入框回到 60 | P4b #138、P4c #144、P4d #147 |
+| B4 | 監造 → `#/inspection-form`、`#/valuation` | 在已簽署的查驗表單建立更正版本，確認數量改 70 後簽署 → 預期被拒；改走撤銷：`#/valuation` 選該期 → 工項來源展開「撤銷確認」（原因必填）→ 回查驗表單重新簽署 70；廠商再按「同步確認量」 | 沒撤銷就改量會被伺服器拒簽；撤銷後重簽 70，廠商同步後可估驗 70；舊確認紀錄保留並標已撤銷 | P3c #148、P4d #147 |
+| B5 | 廠商 → `#/valuation`；監造 → `#/valuation`；機關 → 請款收款 `#/payments` | 廠商「送監造審核」→ 監造「核定估驗」→ 機關在該期填「請款日」 | 有缺件時送審前就在「缺件與檢核」卡列出原因與處理入口；核定前請款日欄位鎖住；核定後才可登錄；核定不等於已付款 | P4b #138、P4c #144 |
+| B6 | 監造 → `#/valuation`（已核定期）；機關 → `#/valuation`、`#/payments` | 監造在已核定期的來源展開「撤銷確認」；機關試著登錄請款日 → 在「估驗調整(扣回)」卡按「作廢(接受已計價)」→ 再登錄請款日 | 有待處理扣回時請款日被擋並說明原因；扣回卡三方都看得到、只有機關能作廢；作廢後可登錄（或改由廠商在下一期草稿「同步確認量」併入扣回）；今日工作與早報出現「待機關處理扣回」 | P4d #147 |
+| B7 | 監造 → 今日工作 `#/dashboard`「待監造補證」→ `#/valuation`；機關 → `#/payments` | **正式庫 4 個歷史遷移期別**（實案資料，請由實際監造判斷後操作）：選該期 → 缺件卡「展開 1 列」→ 來源展開「補證此期」→ 填批次／位置與依據（累計量預填遷移量）→「簽發並補證第 N 期」；機關再登錄請款日 | 補證前請款日被擋；補證後缺件清空，機關可登錄；早報與 Agent 的「待監造補證」隨之消失 | P4b #138、P4d #147 |
+| B8 | 監造 → `#/valuation` 明細 | 看總價／間接費類工項（利潤及管理費、營業稅等） | 缺計價依據時標「計價依據待設定」且不計價（Q3 暫時隔離） | P4b #138、P4c #144 |
+
+### 8.3 今日工作／履約時程／早報
+
+| 編號 | 誰 → 在哪裡 | 做什麼 | 預期看到 | 對應 |
+|---|---|---|---|---|
+| C1 | 三方各自 → 今日工作 `#/dashboard`、履約時程 `#/requirements`、Agent `#/agent`，隔天 08:00 後看早報信 | 挑一件逾期或 7 日內到期的事項，比對三處 | 工作內容、責任方、到期日與依據一致；早報只列逾期或 7 日內到期，連結落在 Agent | P5a #120、P5d #140 |
+| C2 | 任一方 → `#/requirements`「待補設定」下拉 | 依序選「責任方」「循環規則」，點每筆的處理入口（導到擷取審核 `#/requirements/review`），補上責任方或每月幾日 | 補之前：正式庫**責任不明 7 筆**（三方都不能標記，首頁一張「待補設定」卡）、**循環規則不完整 5 筆**（不產生期次）；補完後該筆離開待補清單、循環義務開始產生期次；責任不明不會被預設丟給廠商 | P5a #120、P5b #125、P5d #140 |
+| C3 | 責任方 → `#/requirements` 或期限追蹤 `#/deadlines` 的期次區 | 把循環義務本期標記完成（可掛佐證），再試一次「退回待辦」 | 只有本期變完成，下一期和未結的舊期仍在；舊逾期不因本期完成而消失；完成時間由伺服器記錄 | P5b #125、P5d #140 |
+| C4 | 有權者 → `#/requirements` 履約期程的基準日卡 | 改開工日或登錄展延（填類別、依據函文、生效日） | 留下新版本；已處理過的期次不被改寫、未動的待辦期依新基準重算；詳情「依據」列寫出第 N 版基準日 | P5c #134 |
+
+### 8.4 退場頁
+
+| 編號 | 誰 → 在哪裡 | 做什麼 | 預期看到 | 對應 |
+|---|---|---|---|---|
+| D1 | 廠商 → 直接開 `#/cost`（側欄已沒有入口）；監造、機關開同一網址 | 瀏覽、按匯出 CSV、找新增／修改鈕 | 唯讀，可匯出 CSV，沒有新增、修改、刪除；監造和機關被擋 | P1b #113 |
+| D2 | 任一方 → 專案 → 跨案總覽 `#/portfolio` | 瀏覽 | 只剩選案清單與必要待辦，沒有分析儀表板 | P1b #113 |
+| D3 | 機關 → 直接開 `#/audit` | 瀏覽 | 唯讀查閱並指向估驗頁；沒有 AI 稽核意見按鈕；本期勾稽檢核在估驗頁「缺件與檢核」卡 | P1b #113、P6c #141 |
+| D4 | 廠商 → 舊連結 `#/schedule` | 開啟舊書籤或舊信件裡的連結 | 頁面仍可開，唯讀歷史查閱與 CSV 匯出，並指向履約時程；關鍵工項的計畫起迄在履約時程時間軸 | P5d #140 |
+
+### 8.5 登入與權限
+
+| 編號 | 誰 → 在哪裡 | 做什麼 | 預期看到 | 對應 |
+|---|---|---|---|---|
+| E1 | 三方 → `#/login` | 登入，並簽署任一文件 | 全程不要求驗證碼、不要求綁定驗證器 | R1 #128 |
+| E2 | 未登入（無痕視窗）→ 直接開 `#/valuation`、`#/site` 等深連結 | 開啟 | 被導到登入頁，看不到任何專案資料（資料庫層訪客零權限由 pgTAP 驗證） | H2／H3 #129 |
+
+### 8.6 模型品質（需使用者提供樣本）
+
+| 編號 | 誰 | 做什麼 | 預期看到 | 對應 |
+|---|---|---|---|---|
+| F1 | 使用者提供 → 代理建預期答案後比對 | 提供真實現場照片：清晰（含告示板或量測）、模糊、非現場、混合日期／位置／工項各數張 | 清晰量測可轉錄；模糊看不見的量保留空白；非現場照不捏造施工；混合照分開或標待補。**目前只以固定回傳的 stub 驗流程，辨識準確度未驗** | P7b |
+| F2 | 使用者提供 → 代理標註後比對 | 提供真實或授權去識別的契約（含掃描頁） | 列出抽取遺漏與錯誤，不以「完成」代表正確；掃描／無文字頁如實揭露並可人工補登（Q8 不採付費 OCR） | P7b、Q9 |
+
+### 8.7 已知未做或待決（不是本輪驗收項目）
+
+| 編號 | 項目 | 現況 | 下一步 |
+|---|---|---|---|
+| G1 | P3e 共用補值 | **未做**：人補一次、多份文件共用尚未實作，目前各文件分別補 | 依 §5（fable5.1） |
+| G2 | P4e 封鎖估驗明細直接寫入 | **未做**：舊客戶端直接寫 `valuation_items` 仍進得去，但頁面標「申報未確認・不計價」、送審被擋 | P4c 上線觀察一期後做 |
+| G3 | P6a 施工月報重用 | **未做**：月報與佐證包尚未改讀已簽署版本與確認量 | 依 §5 |
+| G4 | P6b 退場清理 | **未做**：品質查驗頁「合格／不合格」快速判定舊路徑（只改狀態、不寫確認量，不能解鎖估驗）、Agent 日誌工具改接文件、退場頁程式移除；線上 `audit-summary` 函式（閘門已回 403）下架需**使用者授權刪除遠端資源** | 使用者授權後執行 |
+| G5 | 監造查驗範本建立介面 | **未做**：`kind='inspection_form'` 範本沒有建立介面，查驗表單一律用示範範本 | 待排 |
+| G6 | 保固類循環義務 | **待決**：保固期滿日沒有資料來源，保固類不產生期次、列「停止條件待補」 | 使用者決定保固年限在哪裡登錄 |
+| G7 | iPhone 實機 | **未驗**：只在瀏覽器 375 寬度驗過 | 使用者做 A9 時用實機 |
+| G8 | 關閉 TOTP 設定 | **待使用者**：Supabase Dashboard → Auth → Multi-Factor → TOTP 的 Enroll／Verify 關閉（正式 `auth.mfa_factors` 0 列，不影響任何帳號） | 使用者操作 |
+| G9 | 更換 `ANTHROPIC_API_KEY` | **建議**：本機 E2E 用的金鑰曾出現在代理工具輸出（未外傳） | 使用者換新金鑰，並更新所有用到同一把金鑰的位置 |
+| G10 | P7a 真後端三方完整旅程自動化、P7c staging 回復演練 | **未做** | 依 §5 |
