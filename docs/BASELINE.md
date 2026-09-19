@@ -1,9 +1,22 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-19｜P4c 估驗頁接上後端強制（Vitest＋Demo E2E＋真後端 chain 2／7／9＋內建 Preview 375／1024）、P3d 施工日誌列印與提送回執／退回歷史呈現（Vitest＋Demo E2E＋真後端 chain 5／6／8＋內建 Preview 375／1024）、P3b 自主檢查表、P4b 監造確認量後端強制（pgTAP＋dblink 真併發＋Vitest＋真後端 chain 2／7）、P6c `audit.summary` 退場（pgTAP＋Vitest＋Deno＋Demo E2E）、CI1 釘住 pgTAP workflow 的 Supabase CLI 版本（本機 pgTAP＋PR CI 實跑）、P5d 履約時程 UI（Vitest＋Demo E2E＋內建 Preview 1024／375）、R1 全面移除兩步驟驗證（pgTAP＋Vitest＋Demo E2E＋真後端 chain 1／5／6）、P5c 基準日版本（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E＋內建 Preview）、D1 正式站邊緣注入與 `check:prod` 漏檢（Vitest＋`wrangler dev`＋demo 重佈實測）、P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-19｜T2 Demo E2E 受測 dev server 隔離（修正前後對照＋Demo E2E 全套）、T1 真後端 E2E 受測 dev server 不監看檔案（chain 5→6→7 連跑 3 輪）、P4c 估驗頁接上後端強制（Vitest＋Demo E2E＋真後端 chain 2／7／9＋內建 Preview 375／1024）、P3d 施工日誌列印與提送回執／退回歷史呈現（Vitest＋Demo E2E＋真後端 chain 5／6／8＋內建 Preview 375／1024）、P3b 自主檢查表、P4b 監造確認量後端強制（pgTAP＋dblink 真併發＋Vitest＋真後端 chain 2／7）、P6c `audit.summary` 退場（pgTAP＋Vitest＋Deno＋Demo E2E）、CI1 釘住 pgTAP workflow 的 Supabase CLI 版本（本機 pgTAP＋PR CI 實跑）、P5d 履約時程 UI（Vitest＋Demo E2E＋內建 Preview 1024／375）、R1 全面移除兩步驟驗證（pgTAP＋Vitest＋Demo E2E＋真後端 chain 1／5／6）、P5c 基準日版本（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E＋內建 Preview）、D1 正式站邊緣注入與 `check:prod` 漏檢（Vitest＋`wrangler dev`＋demo 重佈實測）、P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-19 T2：Demo E2E 受測 dev server 隔離（`codex/slimming-t2-demo-e2e-isolation`，PR #149；只動測試設定與文件，基準 main `f7d247f`）
+
+- 修正前（原設定改臨時埠 5288，跑完即刪）：Demo E2E 全套邊跑邊每秒 touch `e2e/rfi.spec.js`：76 項中 20 項紅（1.8m；contractor／workflow-ux／a11y／routes 等頁面整頁重載後逾時）。另一目錄起 Vite 佔 5288 時，Playwright 記 `WebServer is already available` 直接對它跑測（contract-flow 登入鈕找不到而逾時）。
+- 修正後：同條件（`E2E_DEMO_PORT=5288`、每秒 touch）76 項全綠（30.8s）；另一目錄的 Vite 佔 5288 時立即報 `is already used`、不跑測；以 `vite.e2e.config.js` 起被佔的埠，Vite 以 `Port 5288 is already in use` 退出（`strictPort`）；預設埠 5188 contract-flow 6 項綠。
+- 真後端 `npm run test:e2e:real -- e2e-real/auth-smoke.spec.js`（共用 `vite.e2e.config.js`，埠 5189）：1 項綠。
+- `npm run lint` 零警告；`npm test` 137 檔 1,493 項；`npm run check:docs` 55 檔 404 連結 0 錯。
+
+### 2026-09-19 T1：真後端 E2E 受測 dev server 不監看檔案（`codex/slimming-t1-chain6-flaky`，PR #146，merge commit `89fbd2c`）
+
+- 修正前：以「監造日誌版本 5 簽署落庫即 touch `e2e/contractor.spec.js`」穩定重現 chain 6 同一行（spec:229）同一錯誤；trace 顯示簽署後約 0.3 秒 `GET /` 整頁重載，之後沒有 `submit_field_document`。
+- 修正後：真後端 chain 5→6→7 連跑 3 輪全綠（跑測全程每秒 touch 一次 spec）；chain 6 單跑綠。
+- `npm run lint` 零警告；`npm test` 134 檔 1,462 項；`npm run check:docs` 55 檔 404 連結 0 錯。
 
 ### 2026-09-19 P4c：估驗頁接上 P4b 後端強制（`codex/slimming-p4c-valuation-ui`，PR #144；純前端、無 migration；rebase 到含 P3b 的 main `066f247` 後重驗）
 
