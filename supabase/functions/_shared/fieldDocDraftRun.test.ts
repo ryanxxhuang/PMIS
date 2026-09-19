@@ -266,6 +266,18 @@ describe('廠商批次起施工日誌', () => {
     expect((r.body.intake as { candidates: { state: string }[] }).candidates[0].state).toBe('locked')
   })
 
+  it('該日文件已被捨棄(P3f 終態):重新上傳起一份新文件,不碰捨棄的那份(不加版本、不留建議)', async () => {
+    const discarded = { id: 'docX', doc_type: 'daily_log', doc_date: '2026-09-17', intake_id: 'i0', target_key: null, status: 'discarded', current_version_no: 1, required_fields: [], recheck: [] }
+    const w = world({ photos: [photo('p1')], docs: [discarded], versions: [{ document_id: 'docX', version_no: 1, author_kind: 'ai', content: {}, attachments: [], field_sources: {}, content_hash: 'hX' }] })
+    const r = await run(w)
+    const out = (r.body.documents as { doc_type: string; action: string; document_id: string }[]).find((d) => d.doc_type === 'daily_log')!
+    expect(out.action).toBe('created')
+    expect(out.document_id).not.toBe('docX')
+    expect(w.docs.find((d) => d.id === 'docX')).toMatchObject({ status: 'discarded', current_version_no: 1 })
+    expect(w.versions.filter((v) => v.document_id === 'docX')).toHaveLength(1)
+    expect(w.actions.every((a) => a.target_id !== 'docX')).toBe(true)
+  })
+
   it('另一批同日已起稿(無人工版本):不重複建件,改在既有文件加版本並保留前一批的附件', async () => {
     const w = world({ photos: [photo('p1')] })
     await run(w)

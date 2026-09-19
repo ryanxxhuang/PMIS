@@ -82,7 +82,7 @@ select is((select count(*)::int from h23_rels t join pg_class c on c.oid = t.oid
 select is((select count(*)::int from h23_seqs s join pg_class c on c.oid = s.oid, aclexplode(c.relacl) a
            where a.grantee = 0), 0, 'public 序列 ACL 沒有 PUBLIC 的任何權限');
 
--- ── 3. authenticated 允許清單精確相等（82 支：68 支來源與理由見 migration 檔頭＋P5c update_project_anchors＋P4b 20260919140000 十支估驗 RPC＋P3c create_inspection_form_draft＋P3e set_intake_shared_input／list_intake_shared_inputs）─
+-- ── 3. authenticated 允許清單精確相等（83 支：68 支來源與理由見 migration 檔頭＋P5c update_project_anchors＋P4b 20260919140000 十支估驗 RPC＋P3c create_inspection_form_draft＋P3e set_intake_shared_input／list_intake_shared_inputs＋P3f discard_field_document）─
 select is(
   (select string_agg(proname, ',' order by proname collate "C") from h23_fns
     where has_function_privilege('authenticated', oid, 'EXECUTE')),
@@ -93,7 +93,7 @@ select is(
   'can_read_audit_entity,can_read_contract_package,can_read_document_version,can_read_field_document,'
   'can_read_project_document,can_read_requirement_provenance,can_read_requirement_row,can_read_requirement_scope,'
   'can_review_requirement,can_upload_contract_package,can_write,can_write_document,can_write_document_version,'
-  'can_write_project_document,create_inspection_form_draft,create_project,delete_document,delete_project,ensure_project_identity,'
+  'can_write_project_document,create_inspection_form_draft,create_project,delete_document,delete_project,discard_field_document,ensure_project_identity,'
   'fn_field_document_owner_org,fn_field_document_target_table,fn_field_document_template,get_valuation_state,import_work_items,'
   'is_platform_admin,is_project_admin,is_project_admin_v2,is_project_member,is_project_member_v2,'
   'issue_supervisor_certificate,list_billable_backlog,list_intake_shared_inputs,list_project_members,log_document_access,materialize_obligation_periods,my_org_type,my_party,'

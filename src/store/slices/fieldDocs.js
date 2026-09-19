@@ -26,6 +26,7 @@ import {
   contentFromAgentDraft, TO_ORG_BY_DOC_TYPE, docConfirmRequiredKeys,
 } from '../../lib/fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../../data/demoFieldDocTemplates.js'
+import { FIELD_DOC_OPEN_STATUSES } from '../../../supabase/functions/_shared/ballInCourtRules.ts'
 import { taipeiToday } from '../../lib/dates.js'
 
 const DOC_COLS = FIELD_DOCUMENT_COLUMNS
@@ -60,7 +61,7 @@ const rpcError = (error) => ({ code: error?.code || null, message: error?.messag
 // setChecklistRecords／setDefects／checklistTemplates(quality slice):自檢表簽署後重載檢查紀錄與缺失;示範模式存版時由範本項目算待補
 export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, currentProject, currentUser, wiMaps }, { setSiteLogs, setChecklistRecords, setDefects, reloadQuality = null, checklistTemplates = [] } = {}) {
   // { documents, submissions }:與 P5a 今日工作球權(useTodayTasks)同一份;documents 只含未終態
-  const [docState, setDocState] = useState({ documents: [], submissions: [] })
+  const [docState, setDocState] = useState({ documents: [], submissions: [], signedDocumentIds: [] })
   const setFieldDocuments = useCallback((fn) => setDocState((st) => ({ ...st, documents: typeof fn === 'function' ? fn(st.documents) : fn })), [])
   const [intakes, setIntakes] = useState([])
   const [fieldDocsLoading, setFieldDocsLoading] = useState(false)
@@ -82,7 +83,7 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
 
   // 真專案:文件(全案)與我的上傳批次(未捨棄)一起載;不依賴標單(未匯標單也要能收照片,設計 §3.5)
   useEffect(() => {
-    if (!isPersistedProject || !pid || !uid) { setDocState({ documents: [], submissions: [] }); setIntakes([]); return }
+    if (!isPersistedProject || !pid || !uid) { setDocState({ documents: [], submissions: [], signedDocumentIds: [] }); setIntakes([]); return }
     let active = true
     setFieldDocsLoading(true)
     ;(async () => {
@@ -117,9 +118,10 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     return () => { active = false }
   }, [isPersistedProject, pid, uid, reloadKey])
 
-  const demoDocList = useMemo(() => Object.values(demoDocs).map((d) => d.doc), [demoDocs])
+  // 與真專案同口徑只列未終態(捨棄的示範草稿不再出現在清單;示範模式不能簽署,所以不會有曾簽署的文件)
+  const demoDocList = useMemo(() => Object.values(demoDocs).map((d) => d.doc).filter((d) => FIELD_DOC_OPEN_STATUSES.includes(d.status)), [demoDocs])
   const allDocuments = demoMode ? demoDocList : docState.documents
-  const fieldDocuments = useMemo(() => (demoMode ? { documents: demoDocList, submissions: [] } : docState), [demoMode, demoDocList, docState])
+  const fieldDocuments = useMemo(() => (demoMode ? { documents: demoDocList, submissions: [], signedDocumentIds: [] } : docState), [demoMode, demoDocList, docState])
 
   // ── 上傳批次 ──────────────────────────────────────────────────────────────
   const createIntake = useCallback(async ({ log_date = null } = {}) => {
@@ -511,6 +513,35 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     return { error: null, receipt: data }
   }, [demoMode, reloadFieldDocs, setFieldDocuments])
 
+  // 捨棄草稿(P3f):只有責任方、從未簽署／提送的文件,原因必填——規則全在 DB discard_field_document(PD006／PD008／PD010);
+  // 同一件事重試用同一個 client_request_id(伺服器冪等回原結果)。成功後文件是終態,從未終態清單移除;版本、照片都保留。
+  // 伺服器同交易把指向本文件的待覆核 AI 草稿標 rejected(回 agent_actions_resolved;收件匣由 store 重載)。
+  const discardFieldDocument = useCallback(async ({ documentId, versionNo = null, reason }) => {
+    const why = String(reason || '').trim()
+    if (demoMode) {
+      const d = demoDocsRef.current[documentId]
+      if (!d) return { error: { code: 'PD006', message: '找不到文件' } }
+      if (!why) return { error: { code: 'PD010', message: '捨棄必須填寫原因' } }
+      if (!['draft', 'pending_input', 'in_review'].includes(d.doc.status)) return { error: { code: 'PD008', message: `文件狀態為 ${d.doc.status},不可捨棄` } }
+      const doc = { ...d.doc, status: 'discarded', discard_reason: why, discarded_by: uid || null, discarded_at: new Date().toISOString() }
+      setDemoDocs((m) => ({ ...m, [documentId]: { ...d, doc } }))
+      return { error: null, result: { document_id: documentId, doc_type: doc.doc_type, doc_date: doc.doc_date, status: 'discarded', version_no: doc.current_version_no, discard_reason: why, agent_actions_resolved: 0, idempotent: false } }
+    }
+    if (!isPersistedProject) return { error: DEMO_UPLOAD_ERROR }
+    const reqKey = { documentId, versionNo: versionNo ?? '', action: 'discard', reason: why }
+    const { data, error } = await supabase.rpc('discard_field_document', {
+      p_document_id: documentId, p_reason: why, p_client_request_id: submissionRequestId(reqKey),
+    })
+    if (error) {
+      const e = rpcError(error)
+      if (e.code === 'PD009') clearSubmissionRequestId(reqKey)
+      return { error: e }
+    }
+    clearSubmissionRequestId(reqKey)
+    setDocState((st) => ({ ...st, documents: st.documents.filter((d) => d.id !== documentId), submissions: st.submissions.filter((x) => x.document_id !== documentId) }))
+    return { error: null, result: data }
+  }, [demoMode, setDemoDocs, uid, isPersistedProject])
+
   // Agent 對話起稿(draft_daily_log)的接受:改走文件流程——找／建該日草稿,以人填數量存成人工版本;
   // 不再直接寫 daily_logs。已簽署／提送的文件也照樣開新版本(RPC 會標 amended_from_version)。
   const applyDailyLogDraft = useCallback(async (payload) => {
@@ -529,7 +560,7 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
   }, [findActiveDailyLogDoc, createDailyLogDraft, saveFieldDocumentVersion])
 
   // 登出／切案清理由 store.jsx 呼叫
-  const clearFieldDocs = useCallback(() => { setDocState({ documents: [], submissions: [] }); setIntakes([]); setDemoDocs({}) }, [setDemoDocs])
+  const clearFieldDocs = useCallback(() => { setDocState({ documents: [], submissions: [], signedDocumentIds: [] }); setIntakes([]); setDemoDocs({}) }, [setDemoDocs])
 
   return {
     fieldDocuments, intakes, fieldDocsLoading, reloadFieldDocs, clearFieldDocs,
@@ -537,6 +568,6 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     listIntakeSharedInputs, setIntakeSharedInput,
     getFieldDocument, getFieldDocumentVersion, getFieldDocumentTemplate, findActiveFieldDoc, findActiveDailyLogDoc, createFieldDocDraft, createDailyLogDraft, createInspectionFormDraft, listInspectionConfirmations, saveFieldDocumentVersion,
     listSignedVersions, listSupervisorLogs, getFieldDocumentVersions,
-    signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, applyDailyLogDraft,
+    signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, discardFieldDocument, applyDailyLogDraft,
   }
 }

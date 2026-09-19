@@ -7,12 +7,14 @@
 // 全部動作都是「人明確操作」;所有規則由 RPC 執行(PD001–PD010 分流見 lib/fieldDocs.fieldDocErrorGuidance),
 // 這裡不做任何業務判斷,只把伺服器回的版本／雜湊／時間／差異(diff 由 DB trigger 算)如實顯示;時間一律換成台北時間,
 // 下一責任方與今日工作球權同一支判定(lib/fieldDocs.nextResponsibleText → ballInCourtRules.fieldDocumentBalls)。
+// 捨棄草稿(P3f):責任方、從未簽署的草稿顯示 DiscardDraftButton(原因必填),捨棄後回 /site 現場文書清單並說明可重新起稿。
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Badge, Button } from '../ui.jsx'
 import { MSym } from '../icons.jsx'
 import { appConfirm, appPrompt } from '../confirm.jsx'
+import DiscardDraftButton from './DiscardDraftButton.jsx'
 import {
   docStatusMeta, formatHash, signIntentText, ORG_LABEL, DOC_TYPE_LABEL, changedKeysLabel, fieldLabel, docToOrgs, docToOrgLabel, UNMET_STATUS_LABEL,
   submissionsChronological, submissionReceipts, returnHistory, nextResponsibleText, SIGN_METHOD_LABEL,
@@ -44,6 +46,7 @@ export default function DocumentLifecycle({
   labels = null, templateMeta = null, signNote = null,
 }) {
   const members = useMemberNames(!!doc && submissions.some((s) => s?.actor_id))
+  const navigate = useNavigate()
   if (!doc) return null
   const who = (row) => {
     const name = row?.actor_id ? members.names.get(row.actor_id) : null
@@ -128,6 +131,9 @@ export default function DocumentLifecycle({
               </div>
             </div>
           )}
+          {/* 捨棄草稿:只在從未簽署的草稿出現(簽後更正的草稿要改完重簽,不能捨棄) */}
+          <DiscardDraftButton doc={doc} viewerOrg={viewerOrg} everSigned={signatures.length > 0} canAct={canAct} dirty={dirty}
+            onDiscarded={(result) => navigate('/site', { state: { discardedDoc: { doc_type: doc.doc_type, doc_date: doc.doc_date, reason: result?.discard_reason || null } } })} />
         </div>
       )}
 
