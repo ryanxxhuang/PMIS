@@ -167,10 +167,12 @@ values ('e6000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-0000000
 insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
 values ('e6000000-0000-0000-0000-000000000001', 'e3000000-0000-0000-0000-000000000001', 40);
 reset role;
-select pg_temp.become('e0000000-0000-0000-0000-000000000002');
-set local role authenticated;
+-- P4b 起核定會驗「每一單位增量都有監造確認來源」(監造與 service role 皆無 bypass);
+-- 本檔只驗照片凍結,這期是「遷移前就已核定」的歷史期別,以 DBA 邊界(disable trigger)核定。
+select pg_temp.become(null);
+alter table public.valuations disable trigger valuations_checkpoint_guard;
 update public.valuations set status = '已核定' where id = 'e6000000-0000-0000-0000-000000000001';
-reset role;
+alter table public.valuations enable trigger valuations_checkpoint_guard;
 
 select pg_temp.become('e0000000-0000-0000-0000-000000000001');
 set local role authenticated;

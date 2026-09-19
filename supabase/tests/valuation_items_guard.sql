@@ -46,15 +46,19 @@ insert into public.work_items (id, project_id, description, unit, quantity, unit
   ('b5d30000-0000-0000-0000-000000000001', 'b5d20000-0000-0000-0000-00000000000a', '鋼筋', 'kg', 10000, 30, true),
   ('b5d30000-0000-0000-0000-000000000002', 'b5d20000-0000-0000-0000-00000000000a', '混凝土', 'm3', 500, 3000, true);
 
--- 第 1 期草稿(可編)、第 2 期已核定(凍結);明細由 superuser 直插(auth.uid() null → guard 放行)
-insert into public.valuations (id, project_id, period_no, status) values
-  ('b5d40000-0000-0000-0000-000000000001', 'b5d20000-0000-0000-0000-00000000000a', 1, '草稿'),
-  ('b5d40000-0000-0000-0000-000000000002', 'b5d20000-0000-0000-0000-00000000000a', 2, '已核定');
+-- 第 1 期草稿(可編)、第 2 期已核定(凍結)。P4b 起明細只能在草稿期寫入、核定檢查點對 service role 也生效,
+-- 「已核定但無確認來源」只能是遷移前的歷史資料:這裡以 DBA 邊界(disable trigger)把第 2 期核定,對應正式庫的歷史期別。
+insert into public.valuations (id, project_id, period_no, period_end, status) values
+  ('b5d40000-0000-0000-0000-000000000001', 'b5d20000-0000-0000-0000-00000000000a', 1, current_date, '草稿'),
+  ('b5d40000-0000-0000-0000-000000000002', 'b5d20000-0000-0000-0000-00000000000a', 2, current_date, '草稿');
 insert into public.valuation_items (id, valuation_id, work_item_id, cum_qty, amount_cum) values
   ('b5d50000-0000-0000-0000-000000000001', 'b5d40000-0000-0000-0000-000000000001',
    'b5d30000-0000-0000-0000-000000000001', 2000, 60000),
   ('b5d50000-0000-0000-0000-000000000002', 'b5d40000-0000-0000-0000-000000000002',
    'b5d30000-0000-0000-0000-000000000001', 5000, 150000);
+alter table public.valuations disable trigger valuations_checkpoint_guard;
+update public.valuations set status = '已核定' where id = 'b5d40000-0000-0000-0000-000000000002';
+alter table public.valuations enable trigger valuations_checkpoint_guard;
 
 create or replace function pg_temp.become(u uuid) returns void language plpgsql as $$
 begin

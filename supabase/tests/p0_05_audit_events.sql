@@ -90,8 +90,8 @@ insert into public.project_members (project_id, user_id, role) values
   ('c5100000-0000-0000-0000-00000000000a', 'c5000000-0000-0000-0000-000000000004', 'member'),
   ('c5100000-0000-0000-0000-00000000000b', 'c5000000-0000-0000-0000-000000000004', 'admin');
 
-insert into public.valuations (id, project_id, period_no, status) values
-  ('c5300000-0000-0000-0000-000000000001', 'c5100000-0000-0000-0000-00000000000a', 1, '草稿');
+insert into public.valuations (id, project_id, period_no, period_end, status) values
+  ('c5300000-0000-0000-0000-000000000001', 'c5100000-0000-0000-0000-00000000000a', 1, current_date, '草稿');
 insert into public.inspections (id, project_id, title, status) values
   ('c5400000-0000-0000-0000-000000000001', 'c5100000-0000-0000-0000-00000000000a', 'A案查驗', '待查驗'),
   ('c5400000-0000-0000-0000-000000000002', 'c5100000-0000-0000-0000-00000000000b', 'B案查驗', '待查驗');

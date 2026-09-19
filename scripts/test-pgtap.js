@@ -134,6 +134,10 @@ async function main() {
     console.log(`一次性資料庫就緒(${Math.round((Date.now() - started) / 1000)} 秒)`)
 
     const container = `supabase_db_${id}`
+    // 併發測試(confirmed_quantity_concurrency.sql)用 dblink 開第二個 session:本機 postgres 不是 superuser,
+    // dblink 要求連線「用了密碼」;loopback 在 pg_hba 是 trust(沒用密碼),要連容器在 docker 網路上的位址
+    // (scram)。位址由這裡查出、以 session GUC 交給測試檔;查不到就退回 loopback(該測試會如實紅)。
+    const dbHost = lines(sh('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', container]))[0]?.trim() || '127.0.0.1'
     const psql = (sql) => sh('docker', ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', 'postgres',
       '-v', 'ON_ERROR_STOP=1', '-q', '-t', '-A', '-f', '-'], { input: sql })
     // pgtap 裝在 extensions schema:H3(20260919003000)之後 postgres 建的新函式在 public 一律不給
@@ -152,6 +156,7 @@ async function main() {
       'create temp table if not exists _pgtap_session_probe ();',
       "do $$ begin execute format('alter default privileges for role postgres in schema %I grant execute on routines to public',"
         + ' (select nspname from pg_namespace where oid = pg_my_temp_schema())); end $$;',
+      `select set_config('pmis.pgtap_db_host', '${dbHost}', false);`,
       '',
     ].join('\n')
     let total = 0, failures = 0

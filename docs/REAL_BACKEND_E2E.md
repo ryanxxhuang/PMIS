@@ -12,7 +12,7 @@
 npm run test:e2e:real
 ```
 
-八條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）（後兩條見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+九條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）（後三條見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -59,3 +59,10 @@ npm run test:e2e:real -- e2e-real/chain5-field-docs.spec.js   # terminal B
 npm run test:e2e:real -- e2e-real/chain6-supervisor-log.spec.js
 ```
 
+## 監造確認量鏈（chain 7，P4b 後端）
+
+`e2e-real/chain7-confirmed-qty.spec.js`（前置：本機 stack 已套用 `20260919040000`，`supabase migration up --local`）：廠商建第 1 期→以廠商身分補計價截止日（截止日欄位由 P4c 進估驗頁）→在估驗頁直接填累計 100（舊前端路徑，P4e 前仍可寫草稿）→「送監造審核」被 DB 檢查點擋下、畫面原樣顯示「缺監造確認來源」、狀態仍是草稿→直接 REST 改狀態與 `transition_valuation` 都回 `VQ004`、`get_valuation_state` 顯示 cap 0→廠商簽確認單 `VQ001`→監造以登入身分 `issue_supervisor_certificate` A區 60（R1 起不要求兩步驟驗證），同 `client_request_id` 重播不重複入帳→廠商 `sync_valuation_from_confirmations` 後累計 60、設 61 回 `VQ006`、`violations` 空→重新載入頁面看到 60、送審成功→監造核定。chain 2 亦改為送審前補截止日（該期無明細，沒有數量要驗）。
+
+```bash
+npm run test:e2e:real -- chain7 chain2
+```
