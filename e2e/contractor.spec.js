@@ -55,6 +55,30 @@ test.describe('施工廠商', () => {
     await expect(page.getByRole('heading', { name: '今日工作' })).toBeVisible()
   })
 
+  // P6b-2:Agent 對話起稿的日誌／自主檢查表已是文件(agent_actions 指向 field_documents)。收件匣接受日誌草稿=把卡片上
+  // 填的數量存成那份文件的人工版本(不再另湊內容、不寫事實表);自主檢查表草稿的 AI 建議要在文件頁逐項確認,接受只帶過去。
+  test('Agent 收件匣:日誌草稿填數量接受 → 存成該文件的人工版本;自主檢查表草稿接受 → 帶去文件頁逐項確認', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/agent')
+    await expect(page.getByText(/施工日誌草稿\(3 個工項,數量待你填\)/)).toBeVisible()
+    await expect(page.getByRole('link', { name: /開啟文件/ }).first()).toHaveAttribute('href', /#\/site-log\?doc=FD-DEMO-AGENT-LOG/)
+    await page.getByRole('spinbutton', { name: /本日數量$/ }).first().fill('12')
+    await page.getByRole('button', { name: '接受並存入數量' }).click()
+    const done = page.getByText(/已把數量存進 .* 施工日誌草稿\(版本 2\)/)
+    await expect(done).toBeVisible()
+    await page.getByRole('link', { name: /去補齊並簽署|去審核簽署/ }).click()
+    await expect(page).toHaveURL(/#\/site-log\?doc=FD-DEMO-AGENT-LOG/)
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText(/版本 2/)
+    await expect(page.locator('input[type="number"][value="12"]').first()).toBeVisible() // 人填的數量在文件新版本裡
+    // 自主檢查表草稿:卡片列 AI 建議(附依據);接受=帶去文件頁,不在收件匣替人確認
+    await gotoHash(page, '/agent')
+    await expect(page.getByText('AI 建議').first()).toBeVisible()
+    await page.getByRole('button', { name: '接受並去逐項確認' }).click()
+    await page.getByRole('link', { name: '去逐項確認' }).click()
+    await expect(page).toHaveURL(/#\/self-check\?doc=FD-DEMO-AGENT-SC/)
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText(/版本 1/)
+  })
+
   test('提醒中心與今日工作同一份來源,溢位看得到完整清單', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/alerts')
@@ -124,11 +148,11 @@ test.describe('施工廠商', () => {
     await expect(page.getByText(/待補 \d+ 項/).first()).toBeVisible()
     await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0) // 待補未齊不給簽
     await expect(page.getByText('示範模式：草稿只存在本次瀏覽')).toBeVisible()
-    // 右欄清單列出這份;/site 現場文書清單也可直達(不再標尚未支援)
-    await expect(page.getByRole('group', { name: /自主檢查表（1）/ })).toBeVisible()
+    // 右欄清單列出這份(另一份是 demo 種子裡 Agent 對話起稿的草稿,P6b-2);/site 現場文書清單也可直達(不再標尚未支援)
+    await expect(page.getByRole('group', { name: /自主檢查表（2）/ })).toBeVisible()
     await gotoHash(page, '/site')
     const docCard = page.getByRole('group', { name: '現場文書' })
-    await expect(docCard.getByRole('link', { name: /自主檢查表/ })).toBeVisible()
+    await expect(docCard.getByRole('link', { name: /自主檢查表/ }).first()).toBeVisible()
     await expect(docCard.getByText(/尚未支援/)).toHaveCount(0)
   })
 

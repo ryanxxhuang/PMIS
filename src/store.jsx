@@ -162,7 +162,7 @@ export function StoreProvider({ children }) {
   } = useLedgerSlice(ctx)
   const {
     agentActions, agentActionsLoading, runAgent, resolveAgentAction, acceptDraft, reloadAgentActions, setAgentActions,
-  } = useAgentSlice(ctx, { applyDailyLogDraft: fieldDocsSlice.applyDailyLogDraft, createChecklistRecord, allChecklistTemplates, decideSubmittal }) // 接受日誌草稿=存成文件人工版本(P2c);查驗/審查意見草稿走既有 createChecklistRecord / decideSubmittal(RLS/guard/確定性判定照常生效;審查意見一律只推進到「審核中」)
+  } = useAgentSlice(ctx, { fillAgentDraftQuantities: fieldDocsSlice.fillAgentDraftQuantities, decideSubmittal }) // 日誌／自檢草稿是 Edge 建好的文件(P6b-2):接受日誌=人填數量存成人工版本;審查意見走 decideSubmittal(一律只推進到「審核中」)
   // 平台管理後台(批 C):isPlatformAdmin 只影響 /admin 的導覽與路由(UX)——
   // 真正的權限把關在 DB(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)
   const adminSlice = useAdminSlice({ currentUser })
@@ -193,6 +193,7 @@ export function StoreProvider({ children }) {
     setSubmittals(d.submittals); setRfis(d.rfis); setObservations(d.observations)
     setItemSchedules(d.itemSchedules); setAcceptanceEvents(d.acceptanceEvents || [])
     setInspectionPoints(d.inspectionPoints || []); setAgentActions(d.agentActions || [])
+    fieldDocsSlice.seedDemoDocs(d.fieldDocuments || []) // Agent 示範草稿所指的文件(P6b-2)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, workItems, workItemsSource, currentUser])
 

@@ -5,7 +5,7 @@ import {
   uploadReducer, initialUploadState, uploadSummary, firstIndexBySha, UPLOAD_STATUS,
   intakeNextAction, RUN_STALE_MS, toggleCandidateExcluded,
   requiredKeysFor, unmetFields, fieldLabel, sourceLabel,
-  emptyDailyLogContent, emptyDailyLogSources, contentFromLegacyLog, contentFromAgentDraft, contentToLogShape,
+  emptyDailyLogContent, emptyDailyLogSources, contentFromLegacyLog, applyInboxQuantities, contentToLogShape,
   setFieldValue, confirmField, setFieldNa, addItemRow, removeItemRow, applySuggestion, mergeAttachments, attachmentIssues,
   docStatusMeta, signIntentText, submissionRequestId, clearSubmissionRequestId, fieldDocErrorGuidance,
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateFieldLabels, templateConfirmRequiredKeys, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys, UNMET_STATUS_LABEL,
@@ -151,16 +151,21 @@ describe('施工日誌內容形狀', () => {
     expect(sources['items.w1.qty_today']).toMatchObject({ status: 'filled', source: 'legacy:L1' })
     expect(Object.values(sources).some((s) => s.status === 'confirmed')).toBe(false)
   })
-  it('Agent 草稿 payload→內容:人填數量 confirmed,沒填 pending;天氣依來源 cwa', () => {
-    const payload = { log_date: '2026-09-17', weather_am: '晴', weather_pm: '', labor: [{ type: '工', count: 1 }], items: { w1: { item_key: 'K1', description: '鋼筋', qty_today: 3 }, w2: { item_key: 'K2', description: '模板', qty_today: null } }, field_sources: { weather: 'cwa', labor: 'yesterday' }, work_summary: '摘要' }
-    const { content, sources } = contentFromAgentDraft(payload)
-    expect(content.items.w1.qty_today).toBe(3)
-    expect(content.items.w2.qty_today).toBeNull()
-    expect(sources['items.w1.qty_today']).toEqual({ status: 'confirmed', source: 'human' })
-    expect(sources['items.w2.qty_today'].status).toBe('pending')
-    expect(sources.weather_am).toEqual({ status: 'filled', source: 'cwa' })
-    expect(sources.weather_pm).toEqual({ status: 'pending', source: null })
-    expect(sources.labor.source).toBe('yesterday:agent')
+  it('Agent 起稿的收件匣數量(P6b-2):只把人填的正數疊到文件目前版本(confirmed/human),其餘內容與來源原樣、不動原物件', () => {
+    const content = { log_date: '2026-09-17', weather_am: '晴', items: { w1: { item_key: 'K1', description: '鋼筋', qty_today: null }, w2: { item_key: 'K2', description: '模板', qty_today: null } } }
+    const sources = { weather_am: { status: 'filled', source: 'cwa' }, 'items.w1.qty_today': { status: 'pending', source: null }, 'items.w2.qty_today': { status: 'pending', source: null } }
+    const out = applyInboxQuantities(content, sources, { w1: '3', w2: '0', w9: '5', bad: 'x' })
+    expect(out.applied).toBe(1)
+    expect(out.content.items.w1.qty_today).toBe(3)
+    expect(out.content.items.w2.qty_today).toBeNull()
+    expect(out.content.items.w9).toBeUndefined() // 文件沒有的工項不憑空加
+    expect(out.sources['items.w1.qty_today']).toEqual({ status: 'confirmed', source: 'human' })
+    expect(out.sources['items.w2.qty_today'].status).toBe('pending')
+    expect(out.sources.weather_am).toEqual({ status: 'filled', source: 'cwa' })
+    expect(content.items.w1.qty_today).toBeNull() // 原版本物件不被就地改
+    expect(sources['items.w1.qty_today'].status).toBe('pending')
+    expect(applyInboxQuantities(content, sources, undefined).applied).toBe(0)
+    expect(sourceLabel('agent:request')).toBe('對話指定')
   })
   it('內容→顯示用日誌形狀:只有有數量的工項、鍵回 item_key', () => {
     const content = { log_date: '2026-09-17', weather_am: '晴', items: { w1: { item_key: 'K1', qty_today: 2 }, w2: { item_key: 'K2', qty_today: null } }, labor: [] }

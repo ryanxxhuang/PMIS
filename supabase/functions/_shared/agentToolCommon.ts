@@ -7,6 +7,7 @@
 
 import { maskDbError } from './publicError.ts'
 import type { DbErrorLike } from './publicError.ts'
+import { formatDate, parseDateUTC, taipeiTodayUTC } from './contractDue.ts'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -18,6 +19,15 @@ export function likePattern(raw: string): string {
 }
 
 export const isDate = (v: unknown): v is string => typeof v === 'string' && DATE_RE.test(v)
+
+// 工具輸入的日期:格式＋回轉一致(擋 2026-13-40 這類會被 Date 進位吃掉的值);省略=今天(台北)
+export function toolDate(value: unknown, field: string): { date: string } | { error: string } {
+  if (value === undefined) return { date: formatDate(taipeiTodayUTC()) }
+  if (!isDate(value)) return { error: `${field} 必須是 YYYY-MM-DD` }
+  const ms = parseDateUTC(value)
+  if (ms == null || formatDate(ms) !== value) return { error: `${field} 不是有效日期` }
+  return { date: value }
+}
 
 // PostgREST 錯誤不得原樣進 tool_result:模型會把 policy / constraint 名稱複述給
 // 使用者(B1 / M-9)。統一走遮罩、原文進 log;P0001 業務規則照 maskDbError 規則放行。

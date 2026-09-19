@@ -23,7 +23,7 @@ import { readPhotoExif } from '../../lib/exifRead.js'
 import { extractInvokeError } from './agent.js'
 import {
   requiredKeysFor, unmetFields, sha256Hex, submissionRequestId, clearSubmissionRequestId,
-  contentFromAgentDraft, TO_ORG_BY_DOC_TYPE, docConfirmRequiredKeys,
+  applyInboxQuantities, TO_ORG_BY_DOC_TYPE, docConfirmRequiredKeys,
 } from '../../lib/fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../../data/demoFieldDocTemplates.js'
 import { taipeiToday } from '../../lib/dates.js'
@@ -511,22 +511,27 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     return { error: null, receipt: data }
   }, [demoMode, reloadFieldDocs, setFieldDocuments])
 
-  // Agent 對話起稿(draft_daily_log)的接受:改走文件流程——找／建該日草稿,以人填數量存成人工版本;
-  // 不再直接寫 daily_logs。已簽署／提送的文件也照樣開新版本(RPC 會標 amended_from_version)。
-  const applyDailyLogDraft = useCallback(async (payload) => {
-    const date = payload?.log_date
-    if (!date) return { error: { message: '草稿沒有日期,無法建立施工日誌' } }
-    let doc = findActiveDailyLogDoc(date)
-    if (!doc) {
-      const r = await createDailyLogDraft(date)
-      if (r.error) return { error: r.error }
-      doc = r.doc
-    }
-    const { content, sources } = contentFromAgentDraft(payload)
-    const r = await saveFieldDocumentVersion({ documentId: doc.id, baseVersionNo: doc.current_version_no, content, fieldSources: sources, attachments: null, changeNote: '接受 AI 對話草稿' })
+  // Agent 對話起稿(draft_daily_log;P6b-2)的接受:草稿文件已由 Edge 建好(agent_actions.target_id),這裡只把收件匣卡片上
+  // 人填的數量疊到該文件目前版本、存成人工版本(伺服器 save_field_document_version 算必填與待補);沒填任何數量就不新增版本。
+  // 已簽署／提送的文件照樣開新版本(RPC 標 amended_from_version),與文件頁同一條規則。
+  const fillAgentDraftQuantities = useCallback(async ({ documentId, quantities }) => {
+    const got = await getFieldDocument(documentId)
+    if (!got?.doc || !got.version) return { error: { message: '找不到這份草稿文件(可能已捨棄或無權限);請拒絕此草稿後請 Agent 重新起稿' } }
+    const { content, sources, applied } = applyInboxQuantities(got.version.content, got.version.field_sources, quantities)
+    if (!applied) return { error: null, document: got.doc, result: null }
+    const r = await saveFieldDocumentVersion({
+      documentId, baseVersionNo: got.doc.current_version_no, content, fieldSources: sources,
+      attachments: got.version.attachments ?? null, changeNote: '接受 AI 對話草稿(填入數量)',
+    })
     if (r.error) return { error: r.error }
-    return { error: null, document: doc, result: r.result }
-  }, [findActiveDailyLogDoc, createDailyLogDraft, saveFieldDocumentVersion])
+    return { error: null, document: got.doc, result: r.result }
+  }, [getFieldDocument, saveFieldDocumentVersion])
+
+  // 示範模式:Agent 收件匣的示範草稿所指的文件(demoSeed.fieldDocuments)一次種進記憶體文件庫
+  const seedDemoDocs = useCallback((entries = []) => {
+    if (!demoMode) return
+    setDemoDocs(Object.fromEntries(entries.map((e) => [e.doc.id, e])))
+  }, [demoMode, setDemoDocs])
 
   // 登出／切案清理由 store.jsx 呼叫
   const clearFieldDocs = useCallback(() => { setDocState({ documents: [], submissions: [] }); setIntakes([]); setDemoDocs({}) }, [setDemoDocs])
@@ -537,6 +542,6 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     listIntakeSharedInputs, setIntakeSharedInput,
     getFieldDocument, getFieldDocumentVersion, getFieldDocumentTemplate, findActiveFieldDoc, findActiveDailyLogDoc, createFieldDocDraft, createDailyLogDraft, createInspectionFormDraft, listInspectionConfirmations, saveFieldDocumentVersion,
     listSignedVersions, listSupervisorLogs, getFieldDocumentVersions,
-    signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, applyDailyLogDraft,
+    signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, fillAgentDraftQuantities, seedDemoDocs,
   }
 }

@@ -5,6 +5,8 @@
 // 監造日誌內容來源讀取失敗不建半份。stub 只證明流程,不證明模型辨識正確(模型品質見 P7b)。
 import { describe, it, expect } from 'vitest'
 import { runDraftFieldDocuments, MAX_ATTEMPTS } from './fieldDocDraftRun.ts'
+import { agentDraftDailyLog, agentDraftSelfCheck, agentSelfCheckKey } from './agentFieldDocDraft.ts'
+import { taipeiDateOf } from './fieldDocDraft.ts'
 import type { DraftRepo, DraftVision, IntakePhotoRow, IntakeRow, PhotoAiPatch, VisionResult } from './fieldDocDraftRun.ts'
 import type { ChecklistTemplateRow, DayDefect, DayInspection, FormalDailyLog, LeafWorkItem } from './fieldDocDraft.ts'
 import type { FieldDocTemplate } from './fieldDocTemplate.ts'
@@ -79,6 +81,7 @@ function memoryRepo(w: World): DraftRepo {
     },
     listIntakePhotos: async (id) => w.photos.filter((p) => (p.intake_id ?? 'i1') === id).map((p) => ({ ...p })),
     listPhotosByIds: async (ids) => w.photos.filter((p) => ids.includes(p.id)).map((p) => ({ ...p })),
+    listPhotosTakenOn: async (date, wid = null) => w.photos.filter((p) => taipeiDateOf(p.taken_at) === date && (!wid || p.work_item_id === wid)).map((p) => ({ ...p })),
     downloadPhoto: async (path) => (w.downloadFail?.has(path) ? { error: '資料存取失敗（代碼 db_error）' } : { base64: `b64:${path}`, mime: 'image/jpeg' }),
     updatePhoto: async (id, patch) => {
       const f = w.failUpdatePhoto?.(id)
@@ -610,5 +613,101 @@ describe('廠商批次起自主檢查表(P3b;與日誌類同一段寫入邏輯,�
     const r3 = await run(w3)
     expect((r3.body.documents as { action: string }[])[0].action).toBe('error')
     expect(w3.versions).toEqual([])
+  })
+})
+
+// ── Agent 對話起稿(P6b-2):draft_daily_log／draft_inspection 與照片起稿同一支 builder、同一段寫入 ─────────────
+describe('Agent 對話起稿 → 現場文書草稿(不寫事實表;agent_actions 指向文件)', () => {
+  const done = (id: string, over: Partial<WorldPhoto> = {}) => photo(id, {
+    ai_status: 'done', work_item_id: 'wi-steel', caption: '鋼筋綁紮',
+    ai_result: { classify: { caption: '鋼筋綁紮', category: '施工作業', is_construction: true, legible: true, has_board: false, work_item_hint: '鋼筋', visible_progress: '', location: 'A區' }, whiteboard: null, whiteboard_skipped: null, match: { work_item_id: 'wi-steel', hint: '鋼筋' } },
+    ...over,
+  })
+
+  it('施工日誌:建立該日文件(無批次)＋AI 版本 1＋draft_daily_log(target=文件);數量不帶值、非工地照片不納入', async () => {
+    const w = world({ photos: [done('p1'), done('p2', { ai_status: 'not_site', work_item_id: null }), photo('p3', { work_item_id: 'wi-form' })] })
+    const out = await agentDraftDailyLog({ repo: memoryRepo(w), userId: 'u1', date: '2026-09-17' })
+    if (!('written' in out)) throw new Error(JSON.stringify(out))
+    expect(out.written).toMatchObject({ action: 'created', document_id: 'doc1', version_no: 1 })
+    expect(w.docs).toEqual([expect.objectContaining({ doc_type: 'daily_log', doc_date: '2026-09-17', intake_id: null, target_key: null, current_version_no: 1 })])
+    const content = w.versions[0].content as { items: Record<string, { qty_today: unknown }> }
+    expect(Object.keys(content.items).sort()).toEqual(['wi-form', 'wi-steel'])
+    expect(content.items['wi-steel'].qty_today).toBeNull()
+    expect((w.versions[0].attachments as { photo_id: string }[]).map((a) => a.photo_id).sort()).toEqual(['p1', 'p3'])
+    expect((w.versions[0].field_sources as Record<string, { source: string }>).log_date.source).toBe('agent:request')
+    expect(w.actions).toEqual([expect.objectContaining({
+      kind: 'draft_daily_log', target_table: 'field_documents', target_id: 'doc1', agent_role: 'contractor',
+      evidence: expect.objectContaining({ origin: 'agent', log_date: '2026-09-17', document_id: 'doc1', version_no: 1, items: expect.objectContaining({ 'wi-steel': expect.objectContaining({ qty_today: null }) }) }),
+    })])
+    expect(w.photoPatches).toEqual([]) // 不改照片、不辨識(只讀已存的辨識結果)
+  })
+
+  it('施工日誌:與照片起稿同一份活文件——批次文件只有 AI 版本時加版本;內容相同不加;已有人工版本只留建議;已簽署不動', async () => {
+    const w = world({ photos: [done('p1')] })
+    const repo = memoryRepo(w)
+    const a = await agentDraftDailyLog({ repo, userId: 'u1', date: '2026-09-17' })
+    expect('written' in a && a.written.action).toBe('created')
+    const b = await agentDraftDailyLog({ repo, userId: 'u1', date: '2026-09-17' })
+    expect('written' in b && b.written.action).toBe('unchanged')
+    expect(w.actions).toHaveLength(1)
+    w.photos.push(done('p4', { work_item_id: 'wi-form' }))
+    const c = await agentDraftDailyLog({ repo, userId: 'u1', date: '2026-09-17' })
+    expect('written' in c && c.written).toMatchObject({ action: 'version_added', document_id: 'doc1', version_no: 2 })
+    w.versions.push({ document_id: 'doc1', version_no: 3, author_kind: 'human', content: {}, attachments: [], field_sources: {}, content_hash: 'h3' })
+    w.docs[0].current_version_no = 3
+    w.photos.push(done('p5'))
+    const d = await agentDraftDailyLog({ repo, userId: 'u1', date: '2026-09-17' })
+    expect('written' in d && d.written.action).toBe('suggested')
+    expect(w.actions.at(-1)).toMatchObject({ kind: 'suggest_field_update', target_id: 'doc1', evidence: expect.objectContaining({ against_version_no: 3 }) })
+    expect(w.versions.filter((v) => v.author_kind === 'ai')).toHaveLength(2)
+    w.docs[0].status = 'signed'
+    const e = await agentDraftDailyLog({ repo, userId: 'u1', date: '2026-09-17' })
+    expect(e).toMatchObject({ note: expect.stringContaining('已簽署'), document_id: 'doc1' })
+    expect(w.actions).toHaveLength(3)
+  })
+
+  it('施工日誌:該日沒有可用照片 → 只回說明,不建件', async () => {
+    const w = world({ photos: [done('p1', { ai_status: 'unreadable' }), photo('p2', { taken_at: '2026-09-16T02:00:00Z' })] })
+    const out = await agentDraftDailyLog({ repo: memoryRepo(w), userId: 'u1', date: '2026-09-17' })
+    expect(out).toMatchObject({ note: expect.stringContaining('沒有已上傳的現場照片') })
+    expect(w.docs).toEqual([])
+    expect(w.actions).toEqual([])
+  })
+
+  it('自主檢查表:建立 agent 冪等鍵的文件(帶範本)＋AI 版本;勾選建議 filled／ai:agent 待確認、實測值永遠不帶值;draft_inspection 指向文件', async () => {
+    const w = world({ photos: [done('p1')], checklistTemplates: [T_CONC] })
+    const leaf = LEAVES[0]
+    const sug = new Map([['B1', { value: true, basis: '對話中他說昨天已通知監造' }]])
+    const out = await agentDraftSelfCheck({ repo: memoryRepo(w), userId: 'u1', date: '2026-09-17', template: T_CONC, templateReason: '你指定的範本', workItem: leaf, boolSuggestions: sug })
+    if (!('written' in out)) throw new Error(JSON.stringify(out))
+    const key = agentSelfCheckKey('2026-09-17', 'wi-steel', 'tpl-conc')
+    expect(w.docs).toEqual([expect.objectContaining({ doc_type: 'self_check', intake_id: null, target_key: key, template_id: 'tpl-conc', status: 'pending_input' })])
+    const v = w.versions[0]
+    const results = (v.content as { results: Record<string, { value: unknown }> }).results
+    expect(results.B1.value).toBe(true)
+    expect(results.C2.value).toBeNull()
+    const fs = v.field_sources as Record<string, { status: string; source: string | null; reason?: string }>
+    expect(fs['results.B1']).toMatchObject({ status: 'filled', source: 'ai:agent', reason: expect.stringContaining('昨天已通知監造') })
+    expect(fs['results.C2'].status).toBe('pending')
+    expect((v.attachments as { photo_id: string }[]).map((a) => a.photo_id)).toEqual(['p1'])
+    expect(w.actions).toEqual([expect.objectContaining({
+      kind: 'draft_inspection', target_table: 'field_documents', target_id: 'doc1',
+      evidence: expect.objectContaining({ template_id: 'tpl-conc', check_date: '2026-09-17', items: [expect.objectContaining({ no: 'B1', suggested: true }), expect.objectContaining({ no: 'C2', kind: 'num' })] }),
+    })])
+    // 同鍵再擬、內容相同 → 不加版本;照片起稿的同工項批次文件不受影響(鍵不同)
+    const again = await agentDraftSelfCheck({ repo: memoryRepo(w), userId: 'u1', date: '2026-09-17', template: T_CONC, templateReason: '你指定的範本', workItem: leaf, boolSuggestions: sug })
+    expect('written' in again && again.written.action).toBe('unchanged')
+  })
+
+  it('自主檢查表:未指定工項 → 不掛照片、工項待補(非必填);建議 num 項的防線在 validateBoolSuggestions,builder 也不帶值', async () => {
+    const w = world({ photos: [done('p1')], checklistTemplates: [T_CONC] })
+    const out = await agentDraftSelfCheck({ repo: memoryRepo(w), userId: 'u1', date: '2026-09-17', template: T_CONC, templateReason: '本案僅有這一張範本', workItem: null, boolSuggestions: new Map([['C2', { value: true, basis: '不該被用上的建議' }]]) })
+    if (!('written' in out)) throw new Error(JSON.stringify(out))
+    const v = w.versions[0]
+    expect((v.content as { work_item_id: unknown }).work_item_id).toBeNull()
+    expect(v.attachments).toEqual([])
+    expect((v.field_sources as Record<string, { status: string }>).work_item_id.status).toBe('pending')
+    expect((v.content as { results: Record<string, { value: unknown }> }).results.C2.value).toBeNull()
+    expect(w.docs[0].target_key).toBe(agentSelfCheckKey('2026-09-17', null, 'tpl-conc'))
   })
 })
