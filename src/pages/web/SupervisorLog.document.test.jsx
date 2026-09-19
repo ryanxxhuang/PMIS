@@ -53,7 +53,7 @@ function makeStore(over = {}) {
     getFieldDocumentTemplate: vi.fn().mockResolvedValue({ error: null, template: tpl }),
     signFieldDocument: vi.fn(), submitFieldDocument: vi.fn(), receiveFieldDocument: vi.fn(), returnFieldDocument: vi.fn(),
     listPhotosByIds: vi.fn().mockResolvedValue(photos), listMembers: vi.fn().mockResolvedValue({ rows: [{ user_id: 'u2', full_name: '王建國', org_type: 'supervisor' }, { user_id: 'u3', full_name: '林監造', org_type: 'supervisor' }, { user_id: 'u1', full_name: '陳怡君', org_type: 'contractor' }], error: null }),
-    agentActions: [], resolveAgentAction: vi.fn(), listMfaFactors: vi.fn().mockResolvedValue({ factors: [] }), verifyMfa: vi.fn(),
+    agentActions: [], resolveAgentAction: vi.fn(),
     fetchWeather: vi.fn(), updateProjectAnchors: vi.fn(), aiEnabled: () => true,
     inspections: [{ id: 'i1', title: '4F 模板查驗', status: '合格', location: '4F', requested_date: today, inspected_at: null, result_note: null }], defects: [{ id: 'd1', title: '柱箍筋間距過大' }], rfis: [], submittals: [],
     createIntake: vi.fn(), findExistingPhotosBySha: vi.fn(), uploadIntakePhoto: vi.fn(), draftFromIntake: vi.fn(), setIntakeCandidates: vi.fn(), updateIntakeDate: vi.fn(),
@@ -132,25 +132,32 @@ describe('監造日誌文件頁', () => {
     expect(button('本日未到場')).toBeTruthy()
   })
 
-  it('可簽署的草稿:簽署遇 PD003 → 引導兩步驟驗證;已簽署要先「建立更正版本」且有「提送給機關」', async () => {
+  it('可簽署的草稿:一般登入直接簽署(無驗證碼步驟),被拒(PD006)顯示伺服器訊息、成功顯示版本與雜湊;已簽署要先「建立更正版本」且有「提送給機關」', async () => {
     window.confirm = vi.fn(() => true)
     const ready = baseDoc({ status: 'draft', recheck: [] })
     const readyVersion = version({ author_kind: 'human', version_no: 2, content: { ...aiContent(), attendance: [{ name: '王建國', from: '09:00', to: '12:00' }] }, field_sources: { ...aiSources(), attendance: { status: 'confirmed', source: 'human' } } })
     state.store = withDoc({ ...ready, current_version_no: 2 }, { getFieldDocument: vi.fn().mockResolvedValue({ doc: { ...ready, current_version_no: 2 }, version: readyVersion, versions: [], signatures: [], submissions: [] }) })
-    state.store.signFieldDocument.mockResolvedValue({ error: { code: 'PD003', message: '簽署需要完成兩步驟驗證(目前登入等級 aal1)' } })
+    state.store.signFieldDocument.mockResolvedValueOnce({ error: { code: 'PD006', message: '此文件屬監造方,只有該方成員可簽署' } })
     await render(); await flush(); await flush()
-    expect(container.textContent).toContain(`本人確認 ${today} 監造日誌(版本 2,內容雜湊 fedcba987654)`)
+    expect(container.textContent).toContain(`本人確認 ${today} 監造日誌(版本 2,內容雜湊 fedcba987654)內容屬實,同意以本人登入的平台帳號簽署本文件。`)
+    expect(container.textContent).not.toMatch(/兩步驟驗證|驗證碼/)
     const sign = button('簽署此版本')
     expect(sign.disabled).toBe(false)
     await act(async () => sign.click())
     await flush()
-    expect(state.store.signFieldDocument).toHaveBeenCalledWith(expect.objectContaining({ documentId: 'S1', versionNo: 2, contentHash: 'fedcba9876543210' }))
-    expect(container.querySelector('[role="alert"]').textContent).toContain('簽署需要兩步驟驗證')
+    expect(state.store.signFieldDocument).toHaveBeenCalledWith(expect.objectContaining({ documentId: 'S1', versionNo: 2, contentHash: 'fedcba9876543210', intent: expect.stringContaining('同意以本人登入的平台帳號簽署本文件') }))
+    expect(container.querySelector('[aria-label="文件狀態與簽署"] [role="status"]').textContent).toContain('只有該方成員可簽署')
+    expect(container.textContent).not.toMatch(/兩步驟驗證|驗證碼|帳號安全/)
+    state.store.signFieldDocument.mockResolvedValueOnce({ result: { version_no: 2, content_hash: 'fedcba9876543210' } })
+    await act(async () => button('簽署此版本').click())
+    await flush()
+    expect(state.store.signFieldDocument).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('已簽署版本 2（雜湊 fedcba987654）')
     await act(async () => root.unmount())
     root = createRoot(container)
 
     const signed = baseDoc({ status: 'signed', recheck: [], current_version_no: 2 })
-    state.store = withDoc(signed, { getFieldDocument: vi.fn().mockResolvedValue({ doc: signed, version: readyVersion, versions: [], signatures: [{ id: 'G1', version_no: 2, content_hash: 'fedcba9876543210', signer_org: 'supervisor', signer_name_snapshot: '王建國', signed_at: '2026-09-19T01:00:00Z', aal: 'aal2' }], submissions: [] }) })
+    state.store = withDoc(signed, { getFieldDocument: vi.fn().mockResolvedValue({ doc: signed, version: readyVersion, versions: [], signatures: [{ id: 'G1', version_no: 2, content_hash: 'fedcba9876543210', signer_org: 'supervisor', signer_name_snapshot: '王建國', signed_at: '2026-09-19T01:00:00Z', aal: 'aal1' }], submissions: [] }) })
     await render(); await flush(); await flush()
     expect(container.textContent).toContain('版本 2 已由 王建國 簽署')
     expect(button('建立更正版本')).toBeTruthy()

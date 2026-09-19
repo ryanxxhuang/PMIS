@@ -1,20 +1,19 @@
 // P3a｜鏈 6:監造日誌完整路徑(真 Supabase,正式模式,本機 Edge stub 模型)。
 //   監造上傳自己的照片 → 伺服器起稿監造日誌(示範範本;到場永遠留空)→ 監造親自填寫並確認到場、補天氣與廠商施工情形
-//   → 存檔 → MFA 簽署(aal2,事實表 supervisor_logs 落庫)→ 提送機關 → 機關退回(必填原因)→ 監造更正版本重簽再送
+//   → 存檔 → 簽署(登入的平台帳號;事實表 supervisor_logs 落庫)→ 提送機關 → 機關退回(必填原因)→ 監造更正版本重簽再送
 //   → 機關收件;另驗:廠商可讀但唯讀(Q4)、到場只被標 filled 時簽署被 PD004 needs_confirmation 擋、廠商照片不能作監造證據(PD005)。
-// 前置同 chain 5(docs/REAL_BACKEND_E2E.md):本機 TOTP 已開、另一個 terminal `supabase functions serve --env-file e2e-real/stub.env`。
+// 前置同 chain 5(docs/REAL_BACKEND_E2E.md):另一個 terminal `supabase functions serve --env-file e2e-real/stub.env`。
 // 帳號全部本次產生;afterAll 以建立者 delete_project＋admin API 清帳號,殘留 0。
 import { test, expect } from '@playwright/test'
 import {
-  uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, signInClient, loginReal, logoutReal, gotoHash, runCleanup,
-  enrollTotp, loginRealWithTotp, tinyJpeg,
+  uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, signInClient, loginReal, logoutReal, gotoHash, runCleanup, tinyJpeg,
 } from './helpers.js'
 
 const PROJECT_NAME = `鏈6監造日誌-${Date.now().toString(36)}`
 const conEmail = uniqueEmail('w6c6-con')
 const supEmail = uniqueEmail('w6c6-sup')
 const ownEmail = uniqueEmail('w6c6-own')
-let conId, supId, ownId, projectId, supTotpSecret
+let conId, supId, ownId, projectId
 const BOQ_ITEMS = [
   { item_key: '1', parent_key: null, item_no: '壹', description: '第一章', is_rollup: true, sort_order: 1, depth: 1 },
   { item_key: '1.1', parent_key: '1', item_no: '一', description: '假設工程', unit: '式', quantity: 1, unit_price: 1000, amount: 1000, is_leaf: true, is_billable: true, sort_order: 2, depth: 2 },
@@ -41,8 +40,6 @@ test.beforeAll(async () => {
   const { data: fm, error: fmError } = await c.from('projects').update({ formal_mode: true }).eq('id', projectId).select('id')
   if (fmError || !fm?.length) throw new Error(`開啟正式模式失敗:${fmError?.message || 'RLS 未生效'}`)
   await c.auth.signOut()
-  // 監造啟用 TOTP(簽署 RPC 要 aal2)
-  supTotpSecret = await enrollTotp(supEmail)
 })
 
 test.afterAll(async () => {
@@ -54,7 +51,7 @@ test.afterAll(async () => {
   )
 })
 
-test('鏈 6:監造上傳→起稿→到場親自確認→MFA 簽署→提送機關→機關退回→補正再送→機關收件;廠商唯讀、到場未確認與廠商照片被伺服器擋', async ({ page }) => {
+test('鏈 6:監造上傳→起稿→到場親自確認→簽署→提送機關→機關退回→補正再送→機關收件;廠商唯讀、到場未確認與廠商照片被伺服器擋', async ({ page }) => {
   test.setTimeout(420_000)
   const saveStatus = page.getByRole('status', { name: /保存狀態/ })
 
@@ -71,8 +68,8 @@ test('鏈 6:監造上傳→起稿→到場親自確認→MFA 簽署→提送機�
     if (insErr) throw new Error(`廠商照片列寫入失敗:${insErr.message}`)
   }
 
-  // ── 監造(aal2):現場紀錄上傳兩張監造照片 → 伺服器起稿監造日誌 ─────────────────────
-  await loginRealWithTotp(page, supEmail, supTotpSecret)
+  // ── 監造(一般登入,沒有驗證碼步驟):現場紀錄上傳兩張監造照片 → 伺服器起稿監造日誌 ──────────────
+  await loginReal(page, supEmail)
   await gotoHash(page, '/site')
   await expect(page.getByRole('heading', { level: 1, name: '現場紀錄' })).toBeVisible()
   await expect(page.getByRole('group', { name: '拍照／上傳' }).getByText('監造日誌自動起稿')).toBeVisible()
@@ -125,29 +122,22 @@ test('鏈 6:監造上傳→起稿→到場親自確認→MFA 簽署→提送機�
   const { data: v2 } = await sup.from('field_document_versions').select('content_hash').eq('document_id', docId).eq('version_no', 2).single()
   // 直接呼叫簽署 RPC(繞過前端):到場只被標 filled → PD004 needs_confirmation(這是伺服器規則,不是前端擋)
   await sup.auth.signOut()
-  const supAal2 = await signInClient(supEmail)
-  {
-    const { data: factors } = await supAal2.auth.mfa.listFactors()
-    const factor = factors?.totp?.[0]
-    const { totpCode } = await import('./helpers.js')
-    const { error: mfaErr } = await supAal2.auth.mfa.challengeAndVerify({ factorId: factor.id, code: totpCode(supTotpSecret) })
-    if (mfaErr) throw new Error(`fixture 升 aal2 失敗:${mfaErr.message}`)
-  }
-  const { error: unconfirmedErr } = await supAal2.rpc('sign_field_document', { p_document_id: docId, p_version_no: 2, p_content_hash: v2.content_hash, p_intent: '測試:到場未確認' })
+  const supApi = await signInClient(supEmail)
+  const { error: unconfirmedErr } = await supApi.rpc('sign_field_document', { p_document_id: docId, p_version_no: 2, p_content_hash: v2.content_hash, p_intent: '測試:到場未確認' })
   expect(unconfirmedErr?.code).toBe('PD004')
   expect(JSON.parse(unconfirmedErr.details)).toEqual(expect.arrayContaining([{ key: 'attendance', status: 'needs_confirmation' }]))
   // 廠商照片當監造證據 → 存版 recheck 列附件問題、簽署 PD005
-  const { data: v2full } = await supAal2.from('field_document_versions').select('content, field_sources, attachments').eq('document_id', docId).eq('version_no', 2).single()
+  const { data: v2full } = await supApi.from('field_document_versions').select('content, field_sources, attachments').eq('document_id', docId).eq('version_no', 2).single()
   const confirmedSources = { ...v2full.field_sources, attendance: { status: 'confirmed', source: 'human' } }
-  const { data: saved3, error: save3Err } = await supAal2.rpc('save_field_document_version', {
+  const { data: saved3, error: save3Err } = await supApi.rpc('save_field_document_version', {
     p_document_id: docId, p_base_version_no: 2, p_content: v2full.content, p_field_sources: confirmedSources,
     p_attachments: [...v2full.attachments, { photo_id: conPhotoId, role: 'evidence' }], p_change_note: '測試:廠商照片當證據',
   })
   if (save3Err) throw new Error(`存版 3 失敗:${save3Err.message}`)
   expect(saved3.recheck).toEqual(expect.arrayContaining([{ key: `attachments.${conPhotoId}`, status: 'uploader_org:contractor' }]))
-  const { error: pd005 } = await supAal2.rpc('sign_field_document', { p_document_id: docId, p_version_no: 3, p_content_hash: saved3.content_hash, p_intent: '測試:廠商照片' })
+  const { error: pd005 } = await supApi.rpc('sign_field_document', { p_document_id: docId, p_version_no: 3, p_content_hash: saved3.content_hash, p_intent: '測試:廠商照片' })
   expect(pd005?.code).toBe('PD005')
-  await supAal2.auth.signOut()
+  await supApi.auth.signOut()
 
   // ── 回頁面:伺服器版本已前進(版本 3)→ 重新載入;附件問題逐張標示 → 改為參考;確認到場 → 存檔 → 簽署 ──
   await page.reload()
@@ -169,7 +159,8 @@ test('鏈 6:監造上傳→起稿→到場親自確認→MFA 簽署→提送機�
   await lifecycle.getByRole('button', { name: '簽署此版本' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '簽署', exact: true }).click()
   await expect(lifecycle.getByText(/版本 4 已由 .* 簽署/)).toBeVisible({ timeout: 30_000 })
-  await expect(lifecycle.getByText('方式 平台帳號＋兩步驟驗證（aal2）')).toBeVisible()
+  await expect(lifecycle.getByText(/方式 平台帳號$/)).toBeVisible()
+  await expect(lifecycle.getByText(/兩步驟驗證|驗證碼/)).toHaveCount(0)
   const supRead = await signInClient(supEmail)
   const { data: logRow } = await supRead.from('supervisor_logs').select('id, attendance, weather_am, contractor_summary, template_key, template_version').eq('project_id', projectId).eq('log_date', today).maybeSingle()
   expect(logRow?.attendance?.[0]).toMatchObject({ user_id: supId, from: '09:00', to: '12:00' })
@@ -222,7 +213,7 @@ test('鏈 6:監造上傳→起稿→到場親自確認→MFA 簽署→提送機�
 
   // ── 監造(手機 375):看到退回原因 → 更正備註 → 存檔版本 5 → 重簽 → 再送(diff 由 DB 算);375 無溢位 ──
   await page.setViewportSize({ width: 375, height: 812 })
-  await loginRealWithTotp(page, supEmail, supTotpSecret)
+  await loginReal(page, supEmail)
   await gotoHash(page, `/supervisor-log?doc=${docId}`)
   const supLifecycle = page.getByRole('region', { name: '文件狀態與簽署' })
   await expect(supLifecycle.getByText('請補當日查驗情形說明', { exact: true })).toBeVisible({ timeout: 30_000 })

@@ -1,23 +1,21 @@
 // P2c｜鏈 5:現場文書第一條完整路徑(真 Supabase,正式模式,本機 Edge stub 模型)。
 //   廠商上傳照片 → 伺服器保存＋辨識起稿(draft-field-documents) → 施工日誌草稿列待補 → 補齊存檔
-//   → MFA 簽署(aal2,事實表 daily_logs 落庫)→ 提送監造 → 監造退回(必填原因)→ 廠商更正版本重簽再送
+//   → 簽署(登入的平台帳號;事實表 daily_logs 落庫)→ 提送監造 → 監造退回(必填原因)→ 廠商更正版本重簽再送
 //   → 監造收件;另驗:切頁／重新登入後從伺服器恢復批次與草稿、同一張照片重傳不重建、簽舊版本被拒(PD001)。
 // 前置(見 docs/REAL_BACKEND_E2E.md):
-//   * 本機 stack 的 TOTP 已啟用(supabase/config.toml [auth.mfa.totp]);
 //   * 另一個 terminal:`supabase functions serve --env-file e2e-real/stub.env`——stub 只在本機 http 位址生效,
 //     輸出固定(非真實辨識,只證明流程),起稿回應 notes 會明示「模型輸出為本機 stub」。
 // 帳號全部本次產生;afterAll 以建立者 delete_project＋admin API 清帳號,殘留 0。
 import { test, expect } from '@playwright/test'
 import {
-  uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, signInClient, loginReal, logoutReal, gotoHash, runCleanup,
-  enrollTotp, loginRealWithTotp, tinyJpeg,
+  uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, signInClient, loginReal, logoutReal, gotoHash, runCleanup, tinyJpeg,
 } from './helpers.js'
 
 const PROJECT_NAME = `鏈5文書工程-${Date.now().toString(36)}`
 const conEmail = uniqueEmail('w6c5-con')
 const supEmail = uniqueEmail('w6c5-sup')
 const ownEmail = uniqueEmail('w6c5-own')
-let conId, supId, ownId, projectId, conTotpSecret
+let conId, supId, ownId, projectId
 // 與 stub.env 的 PMIS_VISION_STUB_HINT 對得上的末端工項(照片配到它 → 草稿出現待補的當日數量)
 const BOQ_ITEMS = [
   { item_key: '1', parent_key: null, item_no: '壹', description: '第一章', is_rollup: true, sort_order: 1, depth: 1 },
@@ -45,8 +43,6 @@ test.beforeAll(async () => {
   const { data: fm, error: fmError } = await c.from('projects').update({ formal_mode: true }).eq('id', projectId).select('id')
   if (fmError || !fm?.length) throw new Error(`開啟正式模式失敗:${fmError?.message || 'RLS 未生效'}`)
   await c.auth.signOut()
-  // 廠商啟用 TOTP(簽署 RPC 要 aal2;登入時 UI 會停在驗證碼畫面)
-  conTotpSecret = await enrollTotp(conEmail)
 })
 
 test.afterAll(async () => {
@@ -58,12 +54,12 @@ test.afterAll(async () => {
   )
 })
 
-test('鏈 5:廠商上傳→起稿→補缺→MFA 簽署→提送→監造退回→廠商更正再送→監造收件;恢復、重傳不重建、簽舊版被拒', async ({ page }) => {
+test('鏈 5:廠商上傳→起稿→補缺→簽署→提送→監造退回→廠商更正再送→監造收件;恢復、重傳不重建、簽舊版被拒', async ({ page }) => {
   test.setTimeout(420_000)
   const saveStatus = page.getByRole('status', { name: /保存狀態/ })
 
-  // ── 廠商(aal2):現場紀錄拍照／上傳兩張 → 已保存到伺服器 → 伺服器起稿 ──────────────────
-  await loginRealWithTotp(page, conEmail, conTotpSecret)
+  // ── 廠商(一般登入,沒有驗證碼步驟):現場紀錄拍照／上傳兩張 → 已保存到伺服器 → 伺服器起稿 ──────────
+  await loginReal(page, conEmail)
   await gotoHash(page, '/site')
   await expect(page.getByRole('heading', { level: 1, name: '現場紀錄' })).toBeVisible()
   await page.getByLabel('選擇照片上傳').setInputFiles([
@@ -125,14 +121,15 @@ test('鏈 5:廠商上傳→起稿→補缺→MFA 簽署→提送→監造退回�
   await page.getByRole('button', { name: '存檔', exact: true }).click()
   await expect(page.getByText(/已存檔 ✓ 版本 2，可簽署/)).toBeVisible({ timeout: 30_000 })
 
-  // ── 簽署(aal2):顯示版本與雜湊、意願文字;成功後事實表落庫 ────────────────────────
+  // ── 簽署(登入的平台帳號):顯示版本與雜湊、意願文字;成功後事實表落庫 ─────────────────────
   const lifecycle = page.getByRole('region', { name: '文件狀態與簽署' })
   await expect(lifecycle.getByText(/版本 2・雜湊 [0-9a-f]{12}/)).toBeVisible()
   await expect(lifecycle.getByText(/本人確認 .* 施工日誌\(版本 2,內容雜湊 [0-9a-f]{12}\)/)).toBeVisible()
   await lifecycle.getByRole('button', { name: '簽署此版本' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '簽署', exact: true }).click()
   await expect(lifecycle.getByText(/版本 2 已由 .* 簽署/)).toBeVisible({ timeout: 30_000 })
-  await expect(lifecycle.getByText('方式 平台帳號＋兩步驟驗證（aal2）')).toBeVisible()
+  await expect(lifecycle.getByText(/方式 平台帳號$/)).toBeVisible()
+  await expect(lifecycle.getByText(/兩步驟驗證|驗證碼/)).toHaveCount(0)
   const { data: logRow } = await con.from('daily_logs').select('id, status, daily_log_items(qty_today)').eq('project_id', projectId).eq('log_date', today).maybeSingle()
   expect(logRow?.status).toBe('已簽署')
   expect(Number(logRow?.daily_log_items?.[0]?.qty_today)).toBe(12.5)
@@ -167,7 +164,7 @@ test('鏈 5:廠商上傳→起稿→補缺→MFA 簽署→提送→監造退回�
 
   // ── 廠商(手機 375):看到退回原因 → 更正 → 存檔成版本 3 → 重簽 → 再送(diff 由 DB 算) ──
   await page.setViewportSize({ width: 375, height: 812 })
-  await loginRealWithTotp(page, conEmail, conTotpSecret)
+  await loginReal(page, conEmail)
   await gotoHash(page, `/site-log?doc=${docId}`)
   const conLifecycle = page.getByRole('region', { name: '文件狀態與簽署' })
   // 退回原因在頂部橫幅(歷史清單裡另有一筆帶「原因：」前綴),精確比對橫幅那一筆

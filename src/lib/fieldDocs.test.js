@@ -242,7 +242,7 @@ describe('文件狀態、簽署意願、送件冪等、錯誤碼', () => {
   })
   it('簽署意願文字含日期、版本與雜湊前 12 碼', () => {
     expect(signIntentText({ docDate: '2026-09-17', versionNo: 2, contentHash: 'abcdef0123456789ff' })).toBe(
-      '本人確認 2026-09-17 施工日誌(版本 2,內容雜湊 abcdef012345)內容屬實,同意以平台帳號及兩步驟驗證簽署本文件。')
+      '本人確認 2026-09-17 施工日誌(版本 2,內容雜湊 abcdef012345)內容屬實,同意以本人登入的平台帳號簽署本文件。')
   })
   it('client_request_id:同文件同版本同動作重試拿到同一個 id;清掉後才換新;不同退回原因是不同請求', () => {
     const store = new Map()
@@ -258,10 +258,9 @@ describe('文件狀態、簽署意願、送件冪等、錯誤碼', () => {
     clearSubmissionRequestId(key, storage)
     expect(submissionRequestId(key, storage, uuid)).toBe('u4')
   })
-  it('PD 錯誤碼分流:舊版／雜湊→reload、aal→mfa、待補與附件帶 detail 清單、request id 衝突', () => {
+  it('PD 錯誤碼分流:舊版／雜湊→reload、待補與附件帶 detail 清單、request id 衝突;未登記的代碼一律 unknown', () => {
     expect(fieldDocErrorGuidance({ code: 'PD001', message: '舊版' })).toMatchObject({ kind: 'reload' })
     expect(fieldDocErrorGuidance({ code: 'PD002', message: '雜湊不符' })).toMatchObject({ kind: 'reload' })
-    expect(fieldDocErrorGuidance({ code: 'PD003', message: '需要兩步驟驗證' })).toMatchObject({ kind: 'mfa' })
     expect(fieldDocErrorGuidance({ code: 'PD004', message: '待補', details: '[{"key":"labor","status":"pending"}]' })).toEqual({ kind: 'pending', message: '待補', details: [{ key: 'labor', status: 'pending' }] })
     expect(fieldDocErrorGuidance({ code: 'PD005', message: '附件', details: 'not json' })).toEqual({ kind: 'attachments', message: '附件', details: [] })
     expect(fieldDocErrorGuidance({ code: 'PD009', message: 'id 衝突' }).kind).toBe('request_id')

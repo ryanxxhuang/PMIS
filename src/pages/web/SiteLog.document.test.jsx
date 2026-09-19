@@ -3,7 +3,7 @@
 // - 保存狀態章:本日尚無日誌 → 填了值變「未存檔」(登記到未存檔登記簿)→ 存檔=建草稿＋存版本;
 // - 樂觀併發:伺服器版本已前進(PD001)→ 明確提示重新載入、輸入留著,不默默覆蓋;
 // - 既有未簽署日誌:以其內容帶入、來源標「既有紀錄」,不偽造簽署;
-// - 待補集中呈現、未齊不給簽;簽署遇 PD003 → 引導兩步驟驗證(沒有因子 → 前往帳號安全);
+// - 待補集中呈現、未齊不給簽;簽署成功顯示版本與雜湊、遇 PD006 顯示伺服器訊息;
 // - 唯讀視角(監造):除日期外沒有 input、沒有存檔鈕;已提送時有收件／退回;
 // - 廠商對已簽署文件只能「建立更正版本」後才可編。
 import { act } from 'react'
@@ -33,7 +33,7 @@ function makeStore(over = {}) {
     createDailyLogDraft: vi.fn(), getFieldDocument: vi.fn().mockResolvedValue(null), saveFieldDocumentVersion: vi.fn(),
     signFieldDocument: vi.fn(), submitFieldDocument: vi.fn(), receiveFieldDocument: vi.fn(), returnFieldDocument: vi.fn(),
     listPhotosByIds: vi.fn().mockResolvedValue([]), listSitePhotos: vi.fn().mockResolvedValue([]),
-    agentActions: [], resolveAgentAction: vi.fn(), listMfaFactors: vi.fn().mockResolvedValue({ factors: [] }), verifyMfa: vi.fn(),
+    agentActions: [], resolveAgentAction: vi.fn(),
     fetchWeather: vi.fn(), updateProjectAnchors: vi.fn(), aiEnabled: () => true,
     createIntake: vi.fn(), findExistingPhotosBySha: vi.fn(), uploadIntakePhoto: vi.fn(), draftFromIntake: vi.fn(), setIntakeCandidates: vi.fn(), updateIntakeDate: vi.fn(),
     ...over,
@@ -118,26 +118,33 @@ describe('施工日誌文件頁', () => {
     expect(state.store.createDailyLogDraft).not.toHaveBeenCalled()
   })
 
-  it('可簽署的草稿:簽署遇 PD003 → 引導兩步驟驗證(無因子 → 前往帳號安全)', async () => {
+  it('可簽署的草稿:一般登入直接簽署(無驗證碼步驟);成功顯示版本與雜湊、被拒(PD006)顯示伺服器訊息', async () => {
     const doc = baseDoc()
     window.confirm = vi.fn(() => true)
     state.store = makeStore({ documents: [doc], getFieldDocument: vi.fn().mockResolvedValue({ doc, version: version(), versions: [], signatures: [], submissions: [] }) })
-    state.store.signFieldDocument.mockResolvedValue({ error: { code: 'PD003', message: '簽署需要完成兩步驟驗證(目前登入等級 aal1)' } })
+    state.store.signFieldDocument.mockResolvedValueOnce({ error: { code: 'PD006', message: '此文件屬施工廠商方,只有該方成員可簽署' } })
     await render(); await flush(); await flush()
     expect(container.textContent).toContain('版本 1・雜湊 abcdef012345')
-    expect(container.textContent).toContain(`本人確認 ${today} 施工日誌(版本 1,內容雜湊 abcdef012345)`)
+    expect(container.textContent).toContain(`本人確認 ${today} 施工日誌(版本 1,內容雜湊 abcdef012345)內容屬實,同意以本人登入的平台帳號簽署本文件。`)
+    expect(container.textContent).not.toMatch(/兩步驟驗證|驗證碼/)
     const sign = button('簽署此版本')
     expect(sign.disabled).toBe(false)
     await act(async () => sign.click())
     await flush()
-    expect(state.store.signFieldDocument).toHaveBeenCalledWith(expect.objectContaining({ documentId: 'D1', versionNo: 1, contentHash: 'abcdef0123456789' }))
-    expect(container.querySelector('[role="alert"]').textContent).toContain('簽署需要兩步驟驗證')
-    expect(button('前往帳號安全啟用')).toBeTruthy()
+    expect(state.store.signFieldDocument).toHaveBeenCalledWith(expect.objectContaining({ documentId: 'D1', versionNo: 1, contentHash: 'abcdef0123456789', intent: expect.stringContaining('同意以本人登入的平台帳號簽署本文件') }))
+    expect(container.querySelector('[aria-label="文件狀態與簽署"] [role="status"]').textContent).toContain('只有該方成員可簽署')
+    expect(container.textContent).not.toMatch(/兩步驟驗證|驗證碼|帳號安全/)
+
+    state.store.signFieldDocument.mockResolvedValueOnce({ result: { version_no: 1, content_hash: 'abcdef0123456789' } })
+    await act(async () => button('簽署此版本').click())
+    await flush()
+    expect(state.store.signFieldDocument).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('已簽署版本 1（雜湊 abcdef012345）')
   })
 
   it('已簽署文件:廠商要先「建立更正版本」才可編;唯讀視角(監造)除日期外無 input、已提送時有收件／退回', async () => {
     const signedDoc = baseDoc({ status: 'signed' })
-    state.store = makeStore({ documents: [signedDoc], getFieldDocument: vi.fn().mockResolvedValue({ doc: signedDoc, version: version(), versions: [], signatures: [{ id: 'S1', version_no: 1, content_hash: 'abcdef0123456789', signer_org: 'contractor', signer_name_snapshot: '陳怡君', signed_at: '2026-09-17T01:00:00Z', aal: 'aal2' }], submissions: [] }) })
+    state.store = makeStore({ documents: [signedDoc], getFieldDocument: vi.fn().mockResolvedValue({ doc: signedDoc, version: version(), versions: [], signatures: [{ id: 'S1', version_no: 1, content_hash: 'abcdef0123456789', signer_org: 'contractor', signer_name_snapshot: '陳怡君', signed_at: '2026-09-17T01:00:00Z', aal: 'aal1' }], submissions: [] }) })
     await render(); await flush(); await flush()
     expect(container.textContent).toContain('版本 1 已由 陳怡君 簽署')
     expect(button('建立更正版本')).toBeTruthy()

@@ -31,7 +31,7 @@ const PHOTO_COLS = 'id, project_id, daily_log_id, work_item_id, storage_path, ca
 const VERSION_COLS = 'id, document_id, version_no, author_kind, created_by, content, field_sources, attachments, content_hash, change_note, amended_from_version, created_at'
 // 續跑上限:Edge 每次 100 s 預算、每批最多幾百張,超過這個次數還沒完就是伺服器出狀況
 const MAX_DRAFT_ROUNDS = 12
-const DEMO_ERROR = { code: 'demo', message: '示範模式無法簽署／提送：正式專案需以平台帳號完成兩步驟驗證後簽署,才會有可核對的版本雜湊與簽署紀錄。' }
+const DEMO_ERROR = { code: 'demo', message: '示範模式無法簽署／提送：正式專案以登入的平台帳號簽署,才會有可核對的版本雜湊與簽署紀錄。' }
 const DEMO_UPLOAD_ERROR = { code: 'demo', message: '示範模式不支援照片上傳(需正式專案)' }
 // 文件類型 → 責任方／事實表(鏡像 DB generated column fn_field_document_owner_org／fn_field_document_target_table;
 // 只給示範模式的記憶體文件用,真專案由 DB 算)
@@ -335,7 +335,7 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     return { error: null, result: data }
   }, [demoMode, setDemoDocs, uid, setFieldDocuments])
 
-  // 簽署:aal2 由 RPC 檢查(PD003 → 頁面引導 MFA);成功後事實表 daily_logs 已由 RPC 落庫,重載日誌
+  // 簽署:身分／責任方／版本／雜湊由 RPC 檢查;成功後事實表 daily_logs 已由 RPC 落庫,重載日誌
   const signFieldDocument = useCallback(async ({ documentId, versionNo, contentHash, intent }) => {
     if (demoMode) return { error: DEMO_ERROR }
     const { data, error } = await supabase.rpc('sign_field_document', {

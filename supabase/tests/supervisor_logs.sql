@@ -1,11 +1,11 @@
 -- P3a 監造日誌後端 pgTAP:supervisor_logs 事實表(每日唯一、監造寫／廠商與機關不可寫／成員可讀／非成員與跨案不可)、
 -- 示範範本與人填欄規則(到場不可由 AI／service 帶入;人標 filled 仍待確認)、sign_field_document 的 supervisor_log 分支
--- (aal2、必填、附件角色隔離:廠商照片不能作證據、引用必須是本案的)、通用事實表 guard(簽後不可直接改刪)。
+-- (必填、附件角色隔離:廠商照片不能作證據、引用必須是本案的)、通用事實表 guard(簽後不可直接改刪)。
 -- 對應 migration 20260917221000_supervisor_logs.sql;設計 docs/architecture/field-documents-lifecycle.md §2.2、§3.4、§5。
 -- daily_log 分支與 daily_logs guard 的回歸在 field_document_sign.sql(同一套 RPC、同一支通用 guard)。
 begin;
 
-select plan(128);
+select plan(127);
 
 create or replace function pg_temp.become(u uuid, aal text default null) returns void language plpgsql as $$
 begin
@@ -275,8 +275,8 @@ insert into public.agent_actions (id, project_id, actor_user, agent_role, kind, 
    'draft_field_document', 'field_documents', 'e7000000-0000-0000-0000-000000000001', '監造日誌草稿 2026-09-17',
    '{"version_no":1,"doc_type":"supervisor_log"}');
 
--- ── 6. 存版與簽署:人填欄待確認、附件角色、aal2、越權、引用驗證 ─────────────────────────
-select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal2');
+-- ── 6. 存版與簽署:人填欄待確認、附件角色、越權、引用驗證(一般登入 aal1;R1 起沒有 aal2 政策) ───────
+select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal1');
 set local role authenticated;
 select is((select public.save_field_document_version('e7000000-0000-0000-0000-000000000001', 1,
     pg_temp.content_ok(), pg_temp.sources_ok() || '{"attendance":{"status":"filled","source":"ai:photo"}}'::jsonb, pg_temp.att_ok())
@@ -301,13 +301,7 @@ select is((select public.save_field_document_version('e7000000-0000-0000-0000-00
     pg_temp.content_ok(), pg_temp.sources_ok(), pg_temp.att_ok()) ->> 'status'),
   'draft', 'v5:到場 confirmed、監造照片證據、廠商照片 reference → draft(可簽)');
 reset role;
-select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal1');
-set local role authenticated;
-select throws_ok($$ select public.sign_field_document('e7000000-0000-0000-0000-000000000001', 5,
-    pg_temp.hash_of('e7000000-0000-0000-0000-000000000001', 5), '本人確認內容無誤並簽署') $$,
-  'PD003', null, 'aal1 簽署 → PD003');
-reset role;
-select pg_temp.become('e0000000-0000-0000-0000-000000000003', 'aal2');
+select pg_temp.become('e0000000-0000-0000-0000-000000000003', 'aal1');
 set local role authenticated;
 select throws_ok($$ select public.sign_field_document('e7000000-0000-0000-0000-000000000001', 5,
     pg_temp.hash_of('e7000000-0000-0000-0000-000000000001', 5), '本人確認內容無誤並簽署') $$,
@@ -315,13 +309,13 @@ select throws_ok($$ select public.sign_field_document('e7000000-0000-0000-0000-0
 select throws_ok($$ select public.save_field_document_version('e7000000-0000-0000-0000-000000000001', 5, '{}'::jsonb) $$,
   'PD006', null, '廠商不能編輯監造日誌 → PD006');
 reset role;
-select pg_temp.become('e0000000-0000-0000-0000-000000000004', 'aal2');
+select pg_temp.become('e0000000-0000-0000-0000-000000000004', 'aal1');
 set local role authenticated;
 select throws_ok($$ select public.sign_field_document('e7000000-0000-0000-0000-000000000001', 5,
     pg_temp.hash_of('e7000000-0000-0000-0000-000000000001', 5), '本人確認內容無誤並簽署') $$,
   'PD006', null, '機關簽監造日誌 → PD006');
 reset role;
-select pg_temp.become('e0000000-0000-0000-0000-000000000005', 'aal2');
+select pg_temp.become('e0000000-0000-0000-0000-000000000005', 'aal1');
 set local role authenticated;
 select throws_ok($$ select public.sign_field_document('e7000000-0000-0000-0000-000000000001', 5,
     pg_temp.hash_of('e7000000-0000-0000-0000-000000000001', 5), '本人確認內容無誤並簽署') $$,
@@ -329,7 +323,7 @@ select throws_ok($$ select public.sign_field_document('e7000000-0000-0000-0000-0
 reset role;
 
 -- 內容引用驗證(每次存新版本再簽 → PD010)
-select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal2');
+select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal1');
 set local role authenticated;
 select public.save_field_document_version('e7000000-0000-0000-0000-000000000001', 5,
   jsonb_set(pg_temp.content_ok(), '{inspection_ids}', '["e9000000-0000-0000-0000-000000000002"]'::jsonb), pg_temp.sources_ok(), pg_temp.att_ok());
@@ -394,7 +388,7 @@ select throws_ok($$ select public.sign_field_document('e7000000-0000-0000-0000-0
 reset role;
 
 -- ── 7. 簽署成功:事實列、綁定、簽署列、稽核、草稿處理、冪等 ───────────────────────────
-select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal2');
+select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal1');
 select set_config('request.headers', '{"x-forwarded-for":"203.0.113.10","user-agent":"pgTAP/P3a"}', true);
 set local role authenticated;
 select is((select public.save_field_document_version('e7000000-0000-0000-0000-000000000001', 16,
@@ -405,12 +399,12 @@ select is((select public.sign_field_document('e7000000-0000-0000-0000-0000000000
     - 'signature_id' - 'signed_at' - 'target_id' - 'content_hash'),
   '{"document_id":"e7000000-0000-0000-0000-000000000001","version_no":17,"signer_id":"e0000000-0000-0000-0000-000000000001",
     "status":"signed","target_table":"supervisor_logs","agent_actions_resolved":1,"idempotent":false}'::jsonb,
-  '監造以 aal2 簽署 v17 成功:狀態 signed、事實表 supervisor_logs、處理 1 筆草稿');
+  '監造以一般登入(aal1)簽署 v17 成功:狀態 signed、事實表 supervisor_logs、處理 1 筆草稿');
 select results_eq($$ select version_no, content_hash = pg_temp.hash_of('e7000000-0000-0000-0000-000000000001', 17), signer_org, signer_name_snapshot,
     method, aal, host(request_ip), user_agent from public.field_document_signatures
   where document_id = 'e7000000-0000-0000-0000-000000000001' $$,
-  $$ values (17, true, 'supervisor'::text, '監造工程師'::text, 'platform_account_mfa'::text, 'aal2'::text, '203.0.113.10'::text, 'pgTAP/P3a'::text) $$,
-  '簽署列:版本 17、雜湊=版本雜湊、簽署者資料／aal／IP／UA 由伺服器取');
+  $$ values (17, true, 'supervisor'::text, '監造工程師'::text, 'platform_account'::text, 'aal1'::text, '203.0.113.10'::text, 'pgTAP/P3a'::text) $$,
+  '簽署列:版本 17、雜湊=版本雜湊、方式 platform_account、簽署者資料／aal(如實 aal1)／IP／UA 由伺服器取');
 select results_eq($$ select d.status, d.recheck, (d.target_id = l.id)
   from public.field_documents d join public.supervisor_logs l on l.project_id = d.project_id and l.log_date = d.doc_date
   where d.id = 'e7000000-0000-0000-0000-000000000001' $$,
@@ -430,14 +424,14 @@ select results_eq($$ select status, resolved_by from public.agent_actions where 
   '指向本文件的 AI 草稿標 edited(有人工版本),resolved_by=簽署者');
 select is((select count(*)::int from public.audit_events
   where event_type = 'field_document.signed' and entity_id = 'e7000000-0000-0000-0000-000000000001'
-    and metadata ->> 'doc_type' = 'supervisor_log' and metadata ->> 'aal' = 'aal2'), 1, '簽署留一筆 field_document.signed(supervisor_log, aal2)');
+    and metadata ->> 'doc_type' = 'supervisor_log' and metadata ->> 'aal' = 'aal1' and metadata ->> 'method' = 'platform_account'), 1, '簽署留一筆 field_document.signed(supervisor_log, platform_account, aal1)');
 select is((select public.sign_field_document('e7000000-0000-0000-0000-000000000001', 17,
     pg_temp.hash_of('e7000000-0000-0000-0000-000000000001', 17), '再送一次') ->> 'idempotent'),
   'true', '同人同版本重試 → 冪等回原簽署');
 select is((select count(*)::int from public.field_document_signatures where document_id = 'e7000000-0000-0000-0000-000000000001'), 1,
   '重試不新增簽署列');
 reset role;
-select pg_temp.become('e0000000-0000-0000-0000-000000000002', 'aal2');
+select pg_temp.become('e0000000-0000-0000-0000-000000000002', 'aal1');
 set local role authenticated;
 select throws_ok($$ select public.sign_field_document('e7000000-0000-0000-0000-000000000001', 17,
     pg_temp.hash_of('e7000000-0000-0000-0000-000000000001', 17), '我也簽') $$,
@@ -476,7 +470,7 @@ select throws_ok($$ update public.supervisor_logs set note = 'GUC 指向施工�
 select set_config('pmis.field_document_sign', '', true);
 
 -- ── 9. 簽後更正:新版本回草稿、事實列等重簽才更新 ─────────────────────────────────────
-select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal2');
+select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal1');
 set local role authenticated;
 select is((select public.save_field_document_version('e7000000-0000-0000-0000-000000000001', 17,
     jsonb_set(pg_temp.content_ok(), '{weather_pm}', '"陣雨"'::jsonb), pg_temp.sources_ok(), pg_temp.att_ok(), '更正下午天氣')
@@ -501,7 +495,7 @@ select is((select public.submit_field_document('e7000000-0000-0000-0000-00000000
 select throws_ok($$ select public.submit_field_document('e7000000-0000-0000-0000-000000000001', 18, 'contractor', 'sl-req-2') $$,
   'PD010', null, '監造日誌不可提送給廠商(對象矩陣)');
 reset role;
-select pg_temp.become('e0000000-0000-0000-0000-000000000004', 'aal2');
+select pg_temp.become('e0000000-0000-0000-0000-000000000004', 'aal1');
 set local role authenticated;
 select is((select public.receive_field_document('e7000000-0000-0000-0000-000000000001', 18, 'sl-rr-1') ->> 'status'),
   'received', '機關(正式模式唯讀)仍可收件監造日誌');
@@ -510,7 +504,7 @@ reset role;
 -- ── 10. 收件後 superseded 另立新件:新文件簽署接手同一事實列 ───────────────────────────
 select pg_temp.become(null);
 update public.field_documents set status = 'superseded' where id = 'e7000000-0000-0000-0000-000000000001';
-select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal2');
+select pg_temp.become('e0000000-0000-0000-0000-000000000001', 'aal1');
 set local role authenticated;
 select lives_ok($$ insert into public.field_documents (id, project_id, doc_type, doc_date)
   values ('e7000000-0000-0000-0000-000000000002', 'e1000000-0000-0000-0000-00000000000a', 'supervisor_log', '2026-09-17') $$,

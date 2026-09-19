@@ -302,11 +302,10 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
-# P2c:簽署 RPC 要求 JWT aal2(平台帳號＋TOTP);本機要能走「帳號安全啟用→簽署」與真後端 E2E,
-# 對齊正式專案(hosted 已開放 TOTP;/account 頁的啟用流程即以此為前提)。
+# R1(2026-09-19):產品不提供兩步驟驗證——本機不開 TOTP,對齊正式專案應有的設定(Dashboard 亦應關閉)。
 [auth.mfa.totp]
-enroll_enabled = true
-verify_enabled = true
+enroll_enabled = false
+verify_enabled = false
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]

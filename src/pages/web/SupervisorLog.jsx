@@ -1,6 +1,6 @@
 // 監造日誌(P3a;D-026 四類文書之二):這一頁是「監造日誌文件」的審核／簽署／提送頁,也是監造日誌**唯一**的
 // 寫入入口——存檔=save_field_document_version(伺服器保存版本、算雜湊、判待補),簽署=sign_field_document
-// (aal2;事實表 supervisor_logs 在簽署交易內落庫),提送機關／機關收件／退回各走 RPC。
+// (登入的平台帳號;事實表 supervisor_logs 在簽署交易內落庫),提送機關／機關收件／退回各走 RPC。
 //
 // 與施工日誌頁(SiteLog)共用 DocumentLifecycle／DocumentPhotos／IntakeUploader／WeatherPull／FieldSourceChip／RowsEditor;
 // 欄位版面由伺服器範本 fn_field_document_template('supervisor_log')(示範範本,Q11)驅動,頁面與列印都標「示範範本」與免責聲明。
@@ -43,7 +43,7 @@ export default function SupervisorLog() {
     project, workItems, adjustedItems, can, currentUser, demoMode, isPersistedProject,
     fieldDocuments: fieldDocState, fieldDocsLoading, reloadFieldDocs, findActiveFieldDoc, createFieldDocDraft, getFieldDocument, getFieldDocumentTemplate,
     saveFieldDocumentVersion, signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, listPhotosByIds, listMembers,
-    agentActions, resolveAgentAction, listMfaFactors, verifyMfa, inspections, defects, rfis, submittals,
+    agentActions, resolveAgentAction, inspections, defects, rfis, submittals,
   } = useStore()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -110,8 +110,6 @@ export default function SupervisorLog() {
   const [busy, setBusy] = useState(null)
   const [lifecycleMsg, setLifecycleMsgRaw] = useState(null)
   const setLifecycleMsg = (text, tone = 'error') => setLifecycleMsgRaw(text ? { text, tone } : null)
-  const [mfa, setMfa] = useState(null)
-  const [pendingIntent, setPendingIntent] = useState(null)
   const [appliedSuggestions, setAppliedSuggestions] = useState([])
   useUnsavedEdit('supervisor-log', dirty ? `監造日誌 ${date}（未存檔）` : null)
 
@@ -142,7 +140,7 @@ export default function SupervisorLog() {
       setDetail(nextDetail); setForm(nextForm); setAttachments(nextAttachments); setDailyLogFormal(formal)
       setPhotosById(new Map(photoRows.map((p) => [p.id, p])))
       setBaseVersion(doc?.current_version_no ?? 0)
-      setDirty(false); setAmendMode(false); setConflict(null); setMfa(null); setAppliedSuggestions([])
+      setDirty(false); setAmendMode(false); setConflict(null); setAppliedSuggestions([])
       setDetailLoading(false)
     })()
     return () => { active = false }
@@ -243,25 +241,8 @@ export default function SupervisorLog() {
     setBusy('sign'); setLifecycleMsg('')
     const r = await signFieldDocument({ documentId: doc.id, versionNo: doc.current_version_no, contentHash: detail?.version?.content_hash, intent })
     setBusy(null)
-    if (r.error) {
-      const g = fieldDocErrorGuidance(r.error)
-      if (g.kind === 'mfa') {
-        setPendingIntent(intent)
-        const { factors } = await listMfaFactors()
-        setMfa({ needed: true, hasFactor: (factors || []).some((f) => f.status === 'verified'), error: null })
-        return
-      }
-      handleLifecycleError(r.error, '簽署未完成'); return
-    }
-    setMfa(null); setPendingIntent(null)
+    if (r.error) { handleLifecycleError(r.error, '簽署未完成'); return }
     setLifecycleMsg(`已簽署版本 ${r.result.version_no}（雜湊 ${String(r.result.content_hash).slice(0, 12)}），監造日誌已正式落庫；可提送給機關。`, 'success')
-  }
-  const onMfaVerify = async (code) => {
-    setBusy('mfa')
-    const { error } = await verifyMfa(code)
-    if (error) { setBusy(null); setMfa((m) => ({ ...m, error: friendlyError(error, '驗證碼不正確') })); return }
-    setBusy(null); setMfa(null)
-    await onSign(pendingIntent)
   }
   const onSubmit = async () => {
     setBusy('submit'); setLifecycleMsg('')
@@ -410,7 +391,6 @@ export default function SupervisorLog() {
                 <DocumentLifecycle doc={doc} version={detail?.version} signatures={detail?.signatures || []} submissions={detail?.submissions || []}
                   viewerOrg={org} canAct={org === 'owner' ? !!can.oversee : editable} dirty={dirty} content={form.content} labels={labels} templateMeta={template}
                   busy={busy} onSign={onSign} onSubmit={onSubmit} onReceive={onReceive} onReturn={onReturn}
-                  mfa={mfa} onMfaVerify={onMfaVerify} onGoAccount={() => navigate(`/account?return=${encodeURIComponent(`/supervisor-log?d=${date}`)}`)}
                   message={lifecycleMsg} />
               </div>
             )}
@@ -453,7 +433,7 @@ export default function SupervisorLog() {
 
       {editable && (
         <p className="text-xs text-[var(--text-3)]">
-          一天一份文件：存檔＝伺服器保存版本並列出待補；到場人員只能由你親自填寫並確認，任何照片都不是到場證明；簽署（平台帳號＋兩步驟驗證）後監造日誌才正式落庫並可提送機關；簽後更正另開版本重簽。廠商照片只能以「參考」附上。
+          一天一份文件：存檔＝伺服器保存版本並列出待補；到場人員只能由你親自填寫並確認，任何照片都不是到場證明；簽署（登入的平台帳號）後監造日誌才正式落庫並可提送機關；簽後更正另開版本重簽。廠商照片只能以「參考」附上。
         </p>
       )}
     </div>

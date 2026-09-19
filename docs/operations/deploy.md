@@ -114,7 +114,7 @@ curl -sI https://app.gov-agent.ai/ | grep -iE "strict-transport|content-security
 | 設定 | 在哪 | 現值核對狀態 |
 |---|---|---|
 | Supabase Auth **Site URL** 與 **Redirect URLs** | Supabase Dashboard → Authentication → URL Configuration | 應使用 App 網域 `https://app.gov-agent.ai` 與相應回跳白名單；正式 Dashboard 現值仍未查證。 |
-| Supabase Auth **MFA → TOTP** 啟用 | Supabase Dashboard → Authentication → Multi-Factor | `/account` 的兩步驟驗證與登入驗證碼閘門靠它；Supabase 預設開啟，正式 Dashboard 現值未查證，第一次啟用前先確認。 |
+| Supabase Auth **MFA → TOTP** 應為**關閉** | Supabase Dashboard → Authentication → Multi-Factor → TOTP（App Authenticator）的 **Enroll** 與 **Verify** 兩個開關；或 Management API `PATCH https://api.supabase.com/v1/projects/<ref>/config/auth` 帶 `{"mfa_totp_enroll_enabled":false,"mfa_totp_verify_enabled":false}` | 產品自 2026-09-19（R1）不提供兩步驟驗證，前端沒有任何 enroll／verify／challenge 呼叫；正式 Dashboard 現值 2026-08-11 查證為 enroll 開啟，**待使用者關閉**（`auth.mfa_factors` 2026-09-19 查為 0 列，關閉不影響任何帳號）。本機 `supabase/config.toml` 已設 `enroll_enabled=false`／`verify_enabled=false`。 |
 | 自訂 SMTP／Resend 寄件網域 | Resend Dashboard ＋ Supabase SMTP Settings | `REMINDER_FROM` 需已驗證網域；未驗證前 `onboarding@resend.dev` 只能寄到自己帳號 |
 | pg_cron 排程 | Supabase SQL Editor（`cron.sql`） | `select * from cron.job;` 現查 |
 | Sentry DSN／環境 | Cloudflare 建置環境變數 | 未查證現值 |

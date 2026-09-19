@@ -44,7 +44,6 @@ const H1 = {
   '/members': '三方成員',
   '/alerts': '提醒中心',
   '/audit': '風險稽核',
-  '/account': '帳號安全',
   '/project/new': '建立專案',
 }
 // /agent 的 h1 是角色化的 Agent 名稱(AGENT_LABEL),逐角色對照

@@ -18,7 +18,7 @@ colima 需掛載 repo 所在磁碟，否則 Edge 容器看不到 functions；本
 
 複製根目錄 `.env.example` 為 `.env`，填 Project URL 與 publishable／anon key；service_role、模型與寄信金鑰不得放在 VITE_* 或前端。未設定 Supabase 時使用 Demo。
 
-正式 App 網址為 `https://app.gov-agent.ai`。Auth Site URL／允許的 Redirect URLs 應指 App 網域；本機 localhost 另列。實際 Dashboard 值未在本輪核對。信箱驗證、SMTP、MFA／密碼政策依部署任務確認，不因開發文件自動關閉驗證。行銷站 `gov-agent.ai` 不承接 App 登入流程。
+正式 App 網址為 `https://app.gov-agent.ai`。Auth Site URL／允許的 Redirect URLs 應指 App 網域；本機 localhost 另列。實際 Dashboard 值未在本輪核對。信箱驗證、SMTP、密碼政策依部署任務確認，不因開發文件自動關閉驗證；MFA（TOTP）應關閉——產品自 2026-09-19（R1）不提供兩步驟驗證，本機 `config.toml` 的 `[auth.mfa.totp]` 亦為關閉。行銷站 `gov-agent.ai` 不承接 App 登入流程。
 
 ## Edge 型別與相依套件
 
