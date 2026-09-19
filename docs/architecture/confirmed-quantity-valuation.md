@@ -361,7 +361,7 @@ pgTAP `confirmed_quantity_enforcement.sql` 294→299（`fn_cq_txt` 三值＋授�
 
 ### 19.2 訊息數字（P4d §18.4 的收尾）
 `create or replace` 重建（簽章、ACL、H3 允許清單不變；本體除訊息參數外與 P4b 逐字相同）：`fn_cq_item_state_internal`（over_contract／source_mismatch／legacy_source／cutoff／batch_over_allocated）、`inspection_confirmations_guard`（減量）、`valuation_item_sources_guard`（批次、截止日）、`fn_cq_reconcile_internal`（`recheck_note` 超出量）、`admin_adjust_valuation_item`（超過契約量）、`valuation_items_guard`，數量一律經 `fn_cq_txt`。同一行另修：單階段工項的批次確認被撤銷後，`batch_over_allocated` 原本印「缺必要查驗階段 (單階段)」（缺階段清單的佔位字），改為只有多階段工項才說缺階段；`missing_stages` 欄位值不變。
-**未含**：P3c 的 `field_document_sign_inspection_form_internal`（6 處申報／確認量訊息）與 `inspections_defect_sync`（缺失說明「申報／確認／差額」）同樣以 `%s` 印 `numeric(18,4)`；P3e 並行重定義簽署路徑，為避免兩支 migration 互蓋，列續接清單緊接項（P3e 或其後第一個動到簽署路徑的 DB 單元）。
+**P3e 收尾**：P3c 的 `field_document_sign_inspection_form_internal`（6 處申報／確認量訊息）與 `inspections_defect_sync`（缺失說明「申報／確認／差額」）原本同樣以 `%s` 印 `numeric(18,4)`；P4e 交給並行改簽署路徑的 P3e，由 migration `20260920004000_intake_shared_inputs` 第 6 節 `create or replace` 改經 `fn_cq_txt`（本體除訊息參數外與 P3c 逐字相同；pgTAP `inspection_form_documents.sql` 以確切訊息與 `throws_like` 斷言無 `.0000`）。
 
 ### 19.3 相容與部署
 - 舊版前端（P4c 前、仍開著的分頁；HTML `must-revalidate`、無 service worker，重新整理即換新版）：`upsert`／`insert` 明細收到 42501，`friendlyError` 顯示「操作未完成…（代碼 42501）」，舊碼在失敗時還原該格、建期複製前期明細失敗會刪掉剛建的期別並回報，不白畫面、不靜默成功。真後端 chain 9 斷言 upsert／update／delete 皆 42501。

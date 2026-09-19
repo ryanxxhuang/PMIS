@@ -6,6 +6,10 @@
 -- shared_inputs keeps its values (the column belongs to P2a 20260917201000); without the RPC nothing writes it anymore.
 -- Edge draft-field-documents never reads shared inputs, so no Edge redeploy is needed. Revert the frontend (the batch
 -- page's shared-input panel calls these two RPCs) together with this rollback.
+-- Section 6 of the migration (P4e hand-off) only re-created field_document_sign_inspection_form_internal and
+-- inspections_defect_sync with quantities formatted through fn_cq_txt; to restore the exact P3c text, re-run sections 4
+-- (inspections_defect_sync) and 11 (field_document_sign_inspection_form_internal) of
+-- supabase/migrations/20260919222000_inspection_form_documents.sql (create or replace, idempotent). Leaving them is harmless.
 -- Also remove supabase/tests/intake_shared_inputs.sql and revert the P3e edits in
 -- supabase/tests/anon_and_function_privileges.sql (allow-list), otherwise pgTAP goes red. Run through SQL Editor / psql as owner.
 begin;
