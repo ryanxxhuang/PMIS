@@ -77,7 +77,7 @@ export default function ValuationPackage() {
   // ── 本期證據(DB 唯讀):期別狀態＋確認紀錄＋送審時點＋三類簽署列 → 查驗表單版本與釘住的日誌版本 → 附件照片 ──
   // 任何一步失敗就整包標「證據讀取失敗」,不拿半份資料印成佐證包。示範模式沒有確認紀錄與簽署,明示未經後端核對。
   const [ev, setEv] = useState({ ...EMPTY_EV, key: null })
-  const evKey = selected ? `${selected.id}|${selected.status}|${span.from}|${span.to}` : null
+  const evKey = selected ? `${selected.id}|${selected.status}|${span.from}|${span.to}|${span.gap}` : null
   useEffect(() => {
     if (!evKey) return
     let alive = true
