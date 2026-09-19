@@ -9,6 +9,7 @@
 import { TEMPLATE_03310 } from './checklist03310.js'
 import { judgeChecklist } from '../lib/qc.js'
 import { isConcretePourItem } from '../lib/integrityAudit.js'
+import { valuationItemAmount } from '../lib/boqCalc.js'
 import { localISODate as iso, localISOMonth } from '../lib/dates.js'
 
 // 「今天」刻意仍跟瀏覽器走（不是 taipeiToday）：demo 是銷售簡報素材，相對日期要貼著
@@ -53,8 +54,12 @@ export function buildDemoData(workItems, project) {
   const fractions = [0.05, 0.09, 0.14, 0.19, 0.24]
   const round1 = (x) => Math.round(x * 10) / 10
   const valuations = fractions.map((f, i) => {
-    const items = {}
-    for (const it of active) items[it.item_key] = round1((it.quantity || 0) * f)
+    const items = {}, amounts = {}
+    for (const it of active) {
+      items[it.item_key] = round1((it.quantity || 0) * f)
+      // 金額用 fn_valuation_amount 的鏡像(逐工項到元):demo 沒有 DB,種子自己算;正式專案一律讀 DB
+      amounts[it.item_key] = valuationItemAmount(items[it.item_key], it.unit_price)
+    }
     // 第 5 期估驗日=3 天前(狀態=監造審核):估驗日期不能在未來,否則截至今天的進度會少算這一期(D-024)
     const valDate = i === 4 ? daysFromNow(-3) : monthsFromNow(i - 4, 25)
     const dF = f - (i ? fractions[i - 1] : 0)
@@ -62,9 +67,9 @@ export function buildDemoData(workItems, project) {
     const net = Math.round(periodAmt * 0.95) // 扣 5% 保留款
     const v = {
       id: `VAL-DEMO-${i + 1}`, period_no: i + 1,
-      valuation_date: iso(valDate), retention_pct: 5,
+      valuation_date: iso(valDate), period_end: iso(valDate), retention_pct: 5,
       status: i < 4 ? '已核定' : '監造審核',
-      items,
+      items, amounts, own: {},
     }
     // 請款收款：前 3 期已收款、第 4 期已請款未收（→ 提醒中心有「未收款」）
     if (i < 3) {

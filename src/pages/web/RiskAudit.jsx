@@ -75,7 +75,7 @@ export default function RiskAudit() {
     if (!workItems) return []
     let prev = 0
     return [...valuations].sort((a, b) => a.period_no - b.period_no).map((v) => {
-      const cum = totalCumAmount(roots, buildCumMap(roots, childrenMap, v.items))
+      const cum = totalCumAmount(roots, buildCumMap(roots, childrenMap, v))
       const thisAmt = cum - prev; prev = cum
       return { period_no: v.period_no, thisAmt }
     })
@@ -84,7 +84,7 @@ export default function RiskAudit() {
   const latestVal = latestValuationAt(valuations, TODAY) // 截至今天、狀態不論(D-024)
   const actualPct = useMemo(() => {
     if (!latestVal || !billableTotal) return 0
-    return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) / billableTotal) * 100
+    return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal)) / billableTotal) * 100
   }, [latestVal, roots, childrenMap, billableTotal])
   const plannedNow = plannedPctNow(progressPlan, TODAY)
 

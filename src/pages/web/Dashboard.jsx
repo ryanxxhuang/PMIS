@@ -156,7 +156,7 @@ export default function Dashboard() {
   const billableTotal = workItems ? revisedTotal : 0
   const latestVal = latestValuationAt(valuations, TODAY) // 截至今天、狀態不論(D-024)
   const actualCum = useMemo(
-    () => (latestVal ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) : 0),
+    () => (latestVal ? totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal)) : 0),
     [roots, childrenMap, latestVal],
   )
   const completion = billableTotal ? (actualCum / billableTotal) * 100 : 0

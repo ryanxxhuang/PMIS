@@ -41,7 +41,7 @@ export default function Progress() {
     const map = new Map()
     if (!data) return map
     for (const v of valuations) {
-      const cum = totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, v.items))
+      const cum = totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, v))
       const pct = billableTotal ? (cum / billableTotal) * 100 : 0
       const lbl = monthLabel(v.valuation_date)
       if (lbl) map.set(lbl, pct) // 同月以最後一期為準
@@ -65,7 +65,7 @@ export default function Progress() {
   const latestVal = latestValuationAt(valuations, TODAY)
   const latestCumMap = useMemo(() => {
     if (!data || !latestVal) return new Map()
-    return buildCumMap(tree.roots, tree.childrenMap, latestVal.items || {})
+    return buildCumMap(tree.roots, tree.childrenMap, latestVal)
   }, [data, latestVal, tree])
 
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首

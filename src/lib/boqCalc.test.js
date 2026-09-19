@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildBillableTree, buildCumMap, totalCumAmount } from './boqCalc.js'
+import { buildBillableTree, buildCumMap, totalCumAmount, valuationItemAmount } from './boqCalc.js'
 
 // 最小標單樹：
 //   A(母項, 發包)
@@ -26,37 +26,44 @@ describe('buildBillableTree', () => {
   })
 })
 
-describe('buildCumMap', () => {
+describe('buildCumMap(P4c:葉 = 期別物件的 amounts[key],即 DB 的 amount_cum;父 = 子項加總)', () => {
   const { childrenMap, roots } = buildBillableTree(items)
 
-  it('葉 = 金額 × 完成比例；母項 = 子項加總', () => {
-    const cum = buildCumMap(roots, childrenMap, { A1: 5, A2: 1 })
-    expect(cum.get('A1')).toBe(500) // 1000 × 5/10
-    expect(cum.get('A2')).toBe(250) // 1000 × 1/4
+  it('葉讀 amounts,母項加總;items(數量)不參與金額', () => {
+    const cum = buildCumMap(roots, childrenMap, { items: { A1: 5, A2: 1 }, amounts: { A1: 500, A2: 250 } })
+    expect(cum.get('A1')).toBe(500)
+    expect(cum.get('A2')).toBe(250)
     expect(cum.get('A')).toBe(750)
   })
 
-  it('100% 完成時累計金額正好等於契約金額（無進位誤差）', () => {
-    const cum = buildCumMap(roots, childrenMap, { A1: 10, A2: 4, B: 3 })
-    expect(cum.get('A')).toBe(2000)
-    expect(cum.get('B')).toBe(333) // 111×3 若用單價×數量會有浮點誤差
+  it('前端不換算:只有數量沒有金額的期別,金額就是 0(不得用金額×比例或單價×數量補算)', () => {
+    const cum = buildCumMap(roots, childrenMap, { items: { A1: 10, A2: 4, B: 3 } })
+    expect(cum.get('A')).toBe(0)
+    expect(cum.get('B')).toBe(0)
   })
 
-  it('未填數量視為 0；契約數量為 0 或 null 的葉 = 0', () => {
-    const cum = buildCumMap(roots, childrenMap, {})
-    expect(cum.get('A1')).toBe(0)
+  it('沒有期別／空期別 → 全 0;合計列與非發包列不在樹上', () => {
+    expect(buildCumMap(roots, childrenMap, null).get('A')).toBe(0)
+    const cum = buildCumMap(roots, childrenMap, { items: {}, amounts: { A9: 999, Z: 999 } })
     expect(cum.get('A')).toBe(0)
-    const zeroQty = buildBillableTree([
-      { item_key: 'X', parent_key: null, quantity: 0, amount: 100, is_billable: true, is_rollup: false },
-    ])
-    expect(buildCumMap(zeroQty.roots, zeroQty.childrenMap, { X: 5 }).get('X')).toBe(0)
+    expect(cum.has('Z')).toBe(false)
+  })
+})
+
+describe('valuationItemAmount(fn_valuation_amount 鏡像:round(累計量 × 單價) 到元;只給 demo／fixture)', () => {
+  it('四捨五入到元;缺值視為 0', () => {
+    expect(valuationItemAmount(3, 111)).toBe(333)
+    expect(valuationItemAmount(12.3456, 1000)).toBe(12346)
+    expect(valuationItemAmount(2.5, 1)).toBe(3)
+    expect(valuationItemAmount(null, 100)).toBe(0)
+    expect(valuationItemAmount(5, null)).toBe(0)
   })
 })
 
 describe('totalCumAmount', () => {
   it('等於所有根節點累計金額之和', () => {
     const { childrenMap, roots } = buildBillableTree(items)
-    const cum = buildCumMap(roots, childrenMap, { A1: 10, A2: 4, B: 3 })
+    const cum = buildCumMap(roots, childrenMap, { items: { A1: 10, A2: 4, B: 3 }, amounts: { A1: 1000, A2: 1000, B: 333 } })
     expect(totalCumAmount(roots, cum)).toBe(2333)
   })
 })

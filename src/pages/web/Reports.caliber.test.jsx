@@ -15,10 +15,11 @@ import SupervisorReport from './SupervisorReport.jsx'
 let container, root
 const items = [{ item_key: 'A', parent_key: null, item_no: '1', description: '工項A', unit: 'm', quantity: 100, unit_price: 1000, amount: 100000, is_billable: true, is_leaf: true, is_rollup: false }]
 const valuations = [
-  { id: 'V1', period_no: 1, valuation_date: '2026-07-25', status: '已核定', items: { A: 30 }, invoice_date: '2026-08-05', paid_date: '2026-08-28', paid_amount: 28500 },
-  { id: 'V2', period_no: 2, valuation_date: '2026-08-25', status: '已核定', items: { A: 50 }, invoice_date: '2026-09-05', paid_date: '2026-09-28', paid_amount: 19000 },
-  { id: 'V3', period_no: 3, valuation_date: '2026-09-10', status: '監造審核', items: { A: 60 } },
-  { id: 'V4', period_no: 4, valuation_date: '2026-09-25', status: '草稿', items: { A: 70 } }, // 估驗日期在今天之後
+  // amounts = DB 的 amount_cum(P4c 起前端不換算金額):A 單價 1000
+  { id: 'V1', period_no: 1, valuation_date: '2026-07-25', status: '已核定', items: { A: 30 }, amounts: { A: 30000 }, invoice_date: '2026-08-05', paid_date: '2026-08-28', paid_amount: 28500 },
+  { id: 'V2', period_no: 2, valuation_date: '2026-08-25', status: '已核定', items: { A: 50 }, amounts: { A: 50000 }, invoice_date: '2026-09-05', paid_date: '2026-09-28', paid_amount: 19000 },
+  { id: 'V3', period_no: 3, valuation_date: '2026-09-10', status: '監造審核', items: { A: 60 }, amounts: { A: 60000 } },
+  { id: 'V4', period_no: 4, valuation_date: '2026-09-25', status: '草稿', items: { A: 70 }, amounts: { A: 70000 } }, // 估驗日期在今天之後
 ]
 // 各列=該月底累計:8 月底 20%、9 月底 30% → 9/16 內插 20 + 10 × 16/30 ≈ 25.3%
 const progressPlan = { start: '2026-04-15', end: '2026-12-31', months: [2, 5, 10, 15, 20, 30, 40, 60, 100].map((plannedPct, i) => ({ label: `2026-${String(i + 4).padStart(2, '0')}`, plannedPct })) }

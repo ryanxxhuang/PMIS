@@ -82,7 +82,7 @@ export function ConfirmHost() {
 
   if (!req) return null
   const { title, body, confirmLabel = '確定', cancelLabel = '取消', danger = false, requireText,
-    prompt: isPrompt, label, placeholder, required } = req
+    prompt: isPrompt, label, placeholder, required, inputType } = req
   const ready = isPrompt ? (!required || text.trim() !== '') : (!requireText || text === requireText)
   // confirm 模式 resolve boolean;prompt 模式 resolve 字串（確認）或 null（取消）
   const close = (ok) => {
@@ -121,8 +121,16 @@ export function ConfirmHost() {
                 {label && <div className="text-xs text-[var(--text-2)] mb-1">{label}</div>}
                 {/* 同一個對話框裡的兩個欄位都吃 ui.jsx 正本(下方 requireText 用 Input),
                     自寫 class 會漏掉 placeholder 色、disabled 與手機 44px */}
-                <Textarea autoFocus rows={3} value={text} placeholder={placeholder}
-                  onChange={(e) => setText(e.target.value)} />
+                {/* inputType='date':單一日期值(估驗計價截止日)用日期欄,不是多行意見欄;
+                    Enter 直接確認(單行欄沒有換行語意) */}
+                {inputType === 'date' ? (
+                  <Input autoFocus type="date" value={text} aria-label={label || title}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && ready) { e.preventDefault(); e.stopPropagation(); close(true) } }} />
+                ) : (
+                  <Textarea autoFocus rows={3} value={text} placeholder={placeholder}
+                    onChange={(e) => setText(e.target.value)} />
+                )}
                 {required && text.trim() === '' && <div className="text-caption text-[var(--text-3)] mt-1">此欄必填。</div>}
               </div>
             )}

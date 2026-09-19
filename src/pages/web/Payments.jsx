@@ -75,7 +75,7 @@ export default function Payments() {
     if (!data) return []
     let prev = 0
     return [...valuations].sort((a, b) => a.period_no - b.period_no).map((v) => {
-      const cum = totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, v.items))
+      const cum = totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, v))
       const thisAmt = cum - prev; prev = cum
       const retention = thisAmt * (v.retention_pct || 0) / 100
       return { v, cum, thisAmt, retention, net: thisAmt - retention }

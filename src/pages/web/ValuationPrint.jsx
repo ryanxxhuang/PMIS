@@ -23,8 +23,8 @@ export default function ValuationPrint() {
     () => (workItems ? buildBillableTree(adjItems) : { childrenMap: new Map(), roots: [] }),
     [workItems, adjItems],
   )
-  const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected?.items || {}), [roots, childrenMap, selected])
-  const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev?.items || {}), [roots, childrenMap, prev])
+  const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected), [roots, childrenMap, selected])
+  const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev), [roots, childrenMap, prev])
 
   if (!currentUser) return <Navigate to="/login" replace />
   // 標單尚未載入(workItems 為 null)≠ 這期沒有估驗資料:兩者混成同一畫面時,

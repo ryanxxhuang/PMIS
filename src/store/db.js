@@ -3,6 +3,7 @@
 import { supabase } from '../lib/supabase.js'
 // 所有列表載入一律走分頁,避免 PostgREST max_rows 靜默截斷(見 pagedQuery.js 開頭)
 import { pageAll, pageAllIn } from '../lib/pagedQuery.js'
+import { projectValuationPeriods } from '../lib/valuationPeriods.js'
 import { FIELD_DOC_OPEN_STATUSES } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 // pdf.js worker 自帶(B-12):?url 只打包資產網址,worker 檔進自家 dist——
 // 機關內網/防火牆擋 CDN 時,契約 PDF 抽字不再直接壞掉。
@@ -85,23 +86,15 @@ export function dbToWorkItems(rows, project) {
   }
 }
 
-// 從 DB 載入估驗（valuations + valuation_items），組回 { items: {item_key: 累計完成數量} } 形狀
+// 從 DB 載入估驗（valuations + valuation_items），投影成頁面用的期別物件
+// (累計量與 DB 算好的累計金額往前帶、本期自有列另留;規則見 lib/valuationPeriods.js)
 export async function loadValuationsFromDB(projectId, idToKey) {
   const vals = await pageAll((from, to) => supabase.from('valuations')
     .select('*').eq('project_id', projectId).order('period_no').order('id').range(from, to), '估驗')
   if (!vals?.length) return []
   const vItems = await pageAllIn(vals.map((v) => v.id), (chunk, from, to) => supabase.from('valuation_items')
-    .select('valuation_id, work_item_id, cum_qty').in('valuation_id', chunk).order('id').range(from, to), '估驗明細')
-  const byVal = new Map(vals.map((v) => [v.id, {}]))
-  for (const vi of vItems || []) {
-    const key = idToKey.get(vi.work_item_id)
-    if (key != null && vi.cum_qty != null) byVal.get(vi.valuation_id)[key] = Number(vi.cum_qty)
-  }
-  return vals.map((v) => ({
-    id: v.id, period_no: v.period_no, valuation_date: v.valuation_date,
-    retention_pct: Number(v.retention_pct), status: v.status, items: byVal.get(v.id) || {},
-    invoice_date: v.invoice_date, paid_date: v.paid_date, paid_amount: v.paid_amount == null ? null : Number(v.paid_amount),
-  }))
+    .select('valuation_id, work_item_id, cum_qty, amount_cum, backing').in('valuation_id', chunk).order('id').range(from, to), '估驗明細')
+  return projectValuationPeriods(vals, vItems, idToKey)
 }
 
 // 從 DB 載入預定進度（schedule_periods）→ progressPlan 形狀

@@ -33,7 +33,7 @@ export default function MonthlyReport() {
 
   // 截至某日的估驗期與累計估驗金額:口徑（截止日、取期、狀態不論）統一走 progressAsOf（D-024）。
   // useCallback 讓它能如實列進 data memo 的依賴:它讀的 tree 本來就在那份依賴裡。
-  const cumOf = useCallback((v) => (v ? totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, v.items)) : 0), [tree])
+  const cumOf = useCallback((v) => (v ? totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, v)) : 0), [tree])
 
   const data = useMemo(() => {
     // 統計截止日:所選月份月底;本月尚未結束時取今天(與監造報表、進度頁同一天、同一期)

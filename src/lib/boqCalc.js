@@ -51,25 +51,32 @@ export function billableLeaves(items) {
   return items.filter((it) => it.is_billable && !it.is_rollup && !(childMap.get(it.item_key)?.length))
 }
 
-// 由「{work_item_key: 累計完成數量}」算每個工項的累計估驗金額
-// 葉 = 契約金額 × (累計完成數量 / 契約數量)；父 = 子項加總。
-// （以金額×比例算，確保 100% 完成時累計金額正好等於契約金額，避免單價×數量的進位誤差）
-export function buildCumMap(roots, childrenMap, qtyMap) {
+// 估驗期別的累計金額樹:葉 = 該期該工項的累計金額(DB `valuation_items.amount_cum`,由
+// `fn_valuation_amount` 逐工項四捨五入到元,續接清單 §6 Q2);父 = 子項加總。
+// P4c 起前端不再由「數量 × 單價」或「金額 × 比例」自算金額——同一筆數量在 DB 與畫面算出
+// 不同的錢(進位口徑不同)就是估驗單與稽核對不起來的根因;這裡只做加總,不做換算。
+// period = 期別物件 { items: {item_key: 累計量}, amounts: {item_key: 累計金額} }
+//(DB 模式由 lib/valuationPeriods.js 投影;demo 由 demoSeed 以 valuationItemAmount 產生)。
+export function buildCumMap(roots, childrenMap, period) {
+  const amounts = period?.amounts || {}
   const map = new Map()
   const calc = (node) => {
     const kids = childrenMap.get(node.item_key) || []
-    let v
-    if (kids.length === 0) {
-      const q = node.quantity || 0
-      v = q > 0 ? (node.amount || 0) * ((qtyMap[node.item_key] || 0) / q) : 0
-    } else {
-      v = kids.reduce((s, k) => s + calc(k), 0)
-    }
+    const v = kids.length === 0
+      ? (Number(amounts[node.item_key]) || 0)
+      : kids.reduce((s, k) => s + calc(k), 0)
     map.set(node.item_key, v)
     return v
   }
   roots.forEach(calc)
   return map
+}
+
+// `fn_valuation_amount` 的鏡像:累計金額 = round(累計量 × 單價) 到元(Q2 暫行口徑;要改口徑
+// 兩邊一起改)。**只給沒有 DB 的 demo 模式與測試 fixture 用**——DB 模式的金額一律讀
+// `valuation_items.amount_cum`,前端不得用這支重算(DB 端由 pgTAP `confirmed_quantity_calc.sql` 釘住)。
+export function valuationItemAmount(cumQty, unitPrice) {
+  return Math.round((Number(cumQty) || 0) * (Number(unitPrice) || 0))
 }
 
 // 整個工程的累計估驗金額
