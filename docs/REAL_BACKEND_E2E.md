@@ -14,7 +14,7 @@
 npm run test:e2e:real
 ```
 
-十二條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）（後六條見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+十四條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）（chain 5–10、12 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -99,4 +99,13 @@ npm run test:e2e:real -- e2e-real/chain11-adjustments.spec.js
 
 ```bash
 npm run test:e2e:real -- e2e-real/chain10-inspection-form.spec.js
+```
+
+## 共用補值鏈（chain 12，P3e）
+
+`e2e-real/chain12-shared-inputs.spec.js`（前置同 chain 5：Edge stub；本機 stack 已套用 `20260920001500`）：廠商上傳一張照片→伺服器起施工日誌＋自主檢查表草稿（位置、數量待補）→上傳結果的「一次補齊」列出「施作位置・二 結構工程」影響施工日誌與自主檢查表（皆「將寫入」）→填一次位置按「套用」→「已更新 2 份（施工日誌 版本 2、自主檢查表 版本 2）」，兩個新版本都是人工版本（建立者＝廠商）、來源 `confirmed`／`shared:location:<日期>:<工項>`、雜湊由 DB 算、附件原樣、版本說明記錄是哪一個補值→補當日數量只更新施工日誌（版本 3）→以 RPC 填檢查項目並簽署自主檢查表→重新整理（375 寬）從「上傳批次」接續，自主檢查表標「已簽署，不受影響」→再補另一個位置→「已更新 1 份（施工日誌 版本 4）；1 份已簽署或提送，未變更」，已簽署自主檢查表的版本、內容、雜湊與 `checklist_records.location` 不變；無水平溢位、套用鈕高 ≥44→同值時按鈕不可按，RPC 直打同值 `updated=0`（冪等）→監造對廠商批次補值 `PD006`。工具鏈限制同 chain 5／6。
+
+```bash
+supabase functions serve --env-file e2e-real/stub.env   # terminal A
+npm run test:e2e:real -- e2e-real/chain12-shared-inputs.spec.js
 ```
