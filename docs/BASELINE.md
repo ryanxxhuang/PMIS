@@ -5,12 +5,12 @@
 
 ## 1. 本輪驗證
 
-### 2026-09-20 P6a：施工月報／監造月報／估驗佐證包只重用已簽署資料與確認量（`codex/slimming-p6a-report-reuse`，PR #153；純前端、無 migration；rebase 到含 P4e 的 main `4c45c57` 後重驗）
+### 2026-09-20 P6a：施工月報／監造月報／估驗佐證包只重用已簽署資料與確認量（`codex/slimming-p6a-report-reuse`，PR #153；純前端、無 migration；rebase 到含 P4e `4c45c57`／P3e `c92598e` 的 main 後重驗）
 
-- `npm test`：142 檔、1,541 項通過。新增 `lib/reportSources.test.js` 6（兩份已簽署＋一份未簽署只彙整兩份、空索引＝全部未簽署、未簽署日期含草稿與舊流程、查驗判定只算簽署表單與歸月、確認量歸月）、`lib/valuationPackage.test.js` 11（本期範圍與缺截止日、來源追到查驗表單版本雜湊／證據照片（reference 不算）／檢附自檢、DB 違反標缺件、送審後更正與首次簽署不改變已提送包、版本內容 na 不算、讀不到版本如實計數）、`pages/web/Reports.signed.test.jsx` 4、`pages/web/ValuationPackage.sources.test.jsx` 3；`fieldDocs.test.js` +6（已簽署索引、已取代文件、pinAt、版本標示與連結條件、確認紀錄→表單版本、`contentToLogShape` na）；`supervisorReport.test.js` 改為已簽署語意 12 條；D-024 `Reports.caliber.test.jsx` 四項斷言不變、全綠（mock store 只補新載入函式）。
-- `npm run lint` 零警告；`npm run build`；`npm run check:docs` 55 檔 411 連結 0 錯。
+- `npm test`：143 檔、1,551 項通過（rebase 到含 P3e 的 main 後重跑）。新增 `lib/reportSources.test.js` 6（兩份已簽署＋一份未簽署只彙整兩份、空索引＝全部未簽署、未簽署日期含草稿與舊流程、查驗判定只算簽署表單與歸月、確認量歸月）、`lib/valuationPackage.test.js` 11（本期範圍與缺截止日、來源追到查驗表單版本雜湊／證據照片（reference 不算）／檢附自檢、DB 違反標缺件、送審後更正與首次簽署不改變已提送包、版本內容 na 不算、讀不到版本如實計數）、`pages/web/Reports.signed.test.jsx` 4、`pages/web/ValuationPackage.sources.test.jsx` 3；`fieldDocs.test.js` +6（已簽署索引、已取代文件、pinAt、版本標示與連結條件、確認紀錄→表單版本、`contentToLogShape` na）；`supervisorReport.test.js` 改為已簽署語意 12 條；D-024 `Reports.caliber.test.jsx` 四項斷言不變、全綠（mock store 只補新載入函式）。
+- `npm run lint` 零警告；`npm run build`；`npm run check:docs` 55 檔 414 連結 0 錯。
 - Demo E2E（受影響 3 支，`E2E_DEMO_PORT=5388`、不設 `CI`）：a11y／routes／owner 30 項通過（監造月報頁 h1 改「監造月報」；B-02 跨頁一致仍以施工月報為第三面）。
-- 真後端 E2E（本機共用棧 `supabase_db_PMIS`、埠 5189）：新 `e2e-real/chain13-report-reuse.spec.js` 2.7s 通過（兩份簽署日誌＋一份未簽署 → 施工月報只彙整兩份＝35、監造月報列已簽署監造日誌與簽署表單判定／確認量、佐證包列本期確認來源版本並保留送審當時的日誌版本）。其他 chain 未跑：`contentToLogShape` 的 na 規則只影響「數量標不適用」的列，由 Vitest 釘住，chain 5 需 Edge stub 且無 na 情境。
+- 真後端 E2E（本機共用棧 `supabase_db_PMIS`、埠 5189；棧上已有 P3e `20260920004000`、無 P4e `20260920001500`，本鏈不寫估驗明細、不受影響）：新 `e2e-real/chain13-report-reuse.spec.js` 2.7s 通過（rebase 到含 P3e 後重跑 2.6s）（兩份簽署日誌＋一份未簽署 → 施工月報只彙整兩份＝35、監造月報列已簽署監造日誌與簽署表單判定／確認量、佐證包列本期確認來源版本並保留送審當時的日誌版本）。其他 chain 未跑：`contentToLogShape` 的 na 規則只影響「數量標不適用」的列，由 Vitest 釘住，chain 5 需 Edge stub 且無 na 情境。
 - 內建 Preview（本 worktree 以 `vite.e2e.config.js` 起 demo 模式，埠 5398，跑完即停）：1024 與 375 下 `/monthly-report`、`/supervisor-report`、`/valuation/package` 皆無頁面水平溢位（375 下施工月報只有分頁列本身橫捲）；demo 如實顯示未簽署、不列入與「未經後端核對」。
 
 ### 2026-09-20 P3e：共用補值——批次結果頁「一次補齊」（含 P4e 交接：查驗表單簽署訊息數量經 `fn_cq_txt`）（`codex/slimming-p3e-shared-input`，PR #152，migration `20260920004000_intake_shared_inputs`；基準 main `aa21d90`，rebase 到含 P4e 的 `4c45c57` 後 migration 由同號 `20260920001500` 改名並重驗；Opus 5 暫代 Fable 5.1）
