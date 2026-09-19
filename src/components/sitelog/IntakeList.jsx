@@ -53,7 +53,9 @@ export default function IntakeList({ focusId = null }) {
     <ul aria-label="上傳批次清單" className="divide-y divide-[var(--border-2)]">
       {intakes.map((intake) => {
         const next = intakeNextAction(intake)
-        const docs = (fieldDocuments?.documents || []).filter((d) => d.intake_id === intake.id)
+        // 本批的文件=本批建立的 ∪ 本批候選指向的(同日施工日誌全案一份,可能由前一批建立;與伺服器 fn_intake_documents 同口徑)
+        const candIds = new Set((Array.isArray(intake.candidates) ? intake.candidates : []).map((c) => c?.document_id).filter(Boolean))
+        const docs = (fieldDocuments?.documents || []).filter((d) => d.intake_id === intake.id || candIds.has(d.id))
         const isOpen = !!open[intake.id]
         const m = msg[intake.id]
         return (

@@ -160,6 +160,80 @@ export function toggleCandidateExcluded(candidates = [], index, excluded) {
   return candidates.map((c, i) => (i === index ? { ...c, excluded: !!excluded } : c))
 }
 
+// ── 共用補值(P3e;批次結果頁「一次補齊」)──────────────────────────────────────────
+// 欄位目錄(位置／當日數量／天氣,鍵帶日期)、每份文件的效果與寫入規則全在伺服器(list_／set_intake_shared_input);
+// 這裡只做呈現:分組、標題、效果文案、輸入轉型(數量送 JSON 數字;合不合法由伺服器判 PD010)與套用結果的一句話。
+export const SHARED_EFFECT_TONE = Object.freeze({ update: 'blue', applied: 'green', human_value: 'slate', locked: 'slate' })
+const SHARED_LOCKED_REASON = Object.freeze({
+  in_review: '內部核對中', signed: '已簽署', submitted: '已提送', received: '對方已收件', returned: '被退回待補正',
+  draft: '簽後更正中', pending_input: '簽後更正中',
+})
+
+export function sharedFieldTitle(field) {
+  const wi = field?.work_item
+  const wiLabel = wi ? [wi.item_no, wi.description].filter(Boolean).join(' ') : ''
+  return [field?.label || field?.field || '', wiLabel].filter(Boolean).join('・')
+}
+
+// 依業務日期分組(伺服器已排序:天氣在前、工項依標單順序)
+export function groupSharedFields(fields = []) {
+  const out = []
+  for (const f of Array.isArray(fields) ? fields : []) {
+    const last = out[out.length - 1]
+    if (last && last.date === f.date) last.fields.push(f)
+    else out.push({ date: f.date, fields: [f] })
+  }
+  return out
+}
+
+// 一份文件在這個欄位上的效果(伺服器判定)→ 文案
+export function sharedEffectLabel(doc, field) {
+  switch (doc?.effect) {
+    case 'applied': return '已套用'
+    case 'human_value':
+      if (doc.current_source?.status === 'na') return '已標不適用，不覆蓋'
+      return doc.current_value == null || doc.current_value === '' ? '已在文件中個別處理，不覆蓋' : `已個別填寫「${doc.current_value}」，不覆蓋`
+    case 'locked': return `${SHARED_LOCKED_REASON[doc.status] || '已鎖定'}，不受影響`
+    default: return field?.value != null ? '尚未套用' : '將寫入'
+  }
+}
+
+export const sharedPendingDocs = (field) => (Array.isArray(field?.documents) ? field.documents : []).filter((d) => d.effect === 'update')
+
+// 輸入轉型:數量欄送數字(非數字原樣送出,由伺服器回 PD010 說明);文字欄去頭尾空白
+export function sharedInputValue(field, raw) {
+  const s = String(raw ?? '').trim()
+  if (field?.value_kind === 'number') {
+    const n = Number(s)
+    return s !== '' && Number.isFinite(n) ? n : s
+  }
+  return s
+}
+
+// 上傳當下的結果(Edge 回應的 documents)在補值後版本號前進:以伺服器回傳的新版本號更新,連結文字不停在舊版
+export function documentsAfterShared(documents = [], result) {
+  const updated = new Map((Array.isArray(result?.documents) ? result.documents : [])
+    .filter((d) => d.result === 'updated').map((d) => [d.document_id, d]))
+  return (documents || []).map((d) => {
+    const u = updated.get(d.document_id || d.id)
+    return u ? { ...d, version_no: u.version_no, current_version_no: u.version_no, status: u.status } : d
+  })
+}
+
+// 套用結果(documents[].result = updated／unchanged／locked／human_value)的一句話
+export function sharedApplySummary(result) {
+  const docs = Array.isArray(result?.documents) ? result.documents : []
+  const by = (r) => docs.filter((d) => d.result === r)
+  const updated = by('updated')
+  const parts = [updated.length
+    ? `已更新 ${updated.length} 份（${updated.map((d) => `${DOC_TYPE_LABEL[d.doc_type] || d.doc_type} 版本 ${d.version_no}`).join('、')}）`
+    : '沒有文件需要更新']
+  if (by('unchanged').length) parts.push(`${by('unchanged').length} 份已是此值`)
+  if (by('locked').length) parts.push(`${by('locked').length} 份已簽署或提送，未變更`)
+  if (by('human_value').length) parts.push(`${by('human_value').length} 份已個別填寫，未覆蓋`)
+  return parts.join('；')
+}
+
 // ── 欄位來源狀態 ───────────────────────────────────────────────────────────
 export const FIELD_STATUS_LABEL = Object.freeze({ filled: '已帶入・待核對', pending: '待補', na: '不適用', confirmed: '已確認' })
 export const FIELD_STATUS_TONE = Object.freeze({ filled: 'blue', pending: 'amber', na: 'slate', confirmed: 'green' })

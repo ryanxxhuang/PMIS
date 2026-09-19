@@ -82,7 +82,7 @@ select is((select count(*)::int from h23_rels t join pg_class c on c.oid = t.oid
 select is((select count(*)::int from h23_seqs s join pg_class c on c.oid = s.oid, aclexplode(c.relacl) a
            where a.grantee = 0), 0, 'public 序列 ACL 沒有 PUBLIC 的任何權限');
 
--- ── 3. authenticated 允許清單精確相等（80 支：68 支來源與理由見 migration 檔頭＋P5c update_project_anchors＋P4b 20260919140000 十支估驗 RPC＋P3c create_inspection_form_draft）─
+-- ── 3. authenticated 允許清單精確相等（82 支：68 支來源與理由見 migration 檔頭＋P5c update_project_anchors＋P4b 20260919140000 十支估驗 RPC＋P3c create_inspection_form_draft＋P3e set_intake_shared_input／list_intake_shared_inputs）─
 select is(
   (select string_agg(proname, ',' order by proname collate "C") from h23_fns
     where has_function_privilege('authenticated', oid, 'EXECUTE')),
@@ -96,11 +96,11 @@ select is(
   'can_write_project_document,create_inspection_form_draft,create_project,delete_document,delete_project,ensure_project_identity,'
   'fn_field_document_owner_org,fn_field_document_target_table,fn_field_document_template,get_valuation_state,import_work_items,'
   'is_platform_admin,is_project_admin,is_project_admin_v2,is_project_member,is_project_member_v2,'
-  'issue_supervisor_certificate,list_billable_backlog,list_project_members,log_document_access,materialize_obligation_periods,my_org_type,my_party,'
+  'issue_supervisor_certificate,list_billable_backlog,list_intake_shared_inputs,list_project_members,log_document_access,materialize_obligation_periods,my_org_type,my_party,'
   'my_project_ids,my_project_ids_v2,my_project_membership,my_project_party_type,my_project_role,'
   'obligation_party,photo_storage_path_in_use,portfolio_summary,receive_field_document,remove_member,'
   'reset_project_boq,resolve_agent_action,return_field_document,review_requirement,revoke_inspection_confirmation,'
-  'save_field_document_version,set_valuation_item_cum,set_work_item_pricing_basis,shares_project_with,sign_field_document,storage_path_in_use,'
+  'save_field_document_version,set_intake_shared_input,set_valuation_item_cum,set_work_item_pricing_basis,shares_project_with,sign_field_document,storage_path_in_use,'
   'submit_field_document,sync_valuation_from_confirmations,transition_obligation_period,transition_valuation,update_project_anchors,void_valuation_adjustment',
   'authenticated 可執行的函式＝允許清單（新 RPC 要在 migration 明示 grant 並加進這裡）');
 select is((select count(*)::int from h23_fns where is_trigger and has_function_privilege('authenticated', oid, 'EXECUTE')), 0,

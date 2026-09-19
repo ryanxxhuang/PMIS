@@ -8,7 +8,8 @@
 // 寫入邊界(設計 field-documents-lifecycle §2.2):
 //   * 客戶端直接 INSERT 只有三處:photo_intakes(id/project_id/log_date)、photos(既有欄＋intake_id／
 //     content_sha256)、field_documents 草稿(id/project_id/doc_type/doc_date);UPDATE 只有 photo_intakes
-//     的 log_date／status=discarded／candidates.excluded。其餘一律 RPC,RLS／guard 是安全邊界。
+//     的 log_date／status=discarded／candidates.excluded。其餘一律 RPC(含 P3e 共用補值 set_intake_shared_input),
+//     RLS／guard 是安全邊界。
 //   * 「已保存」=伺服器有列;本機的檔案狀態只在頁面 reducer(lib/fieldDocs.js),不做離線同步。
 //   * 起稿由 Edge draft-field-documents 服務端執行(過 AI 閘門、記用量);remaining>0 就再呼叫續跑。
 // demo 模式(未設 Supabase):文件草稿只進記憶體、可存版本;簽署／提送／上傳一律明確回「示範模式
@@ -213,6 +214,23 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     setIntakes((rows) => rows.filter((i) => i.id !== intakeId))
     return { error: null }
   }, [isPersistedProject])
+
+  // ── 共用補值(P3e):批次結果頁「一次補齊」。欄位目錄、每份文件的效果(將寫入／已套用／已個別填寫／已簽署不受影響)
+  // 與寫入規則全在伺服器(list_／set_intake_shared_input);補值成功會替本批草稿各建人工版本,所以重載文件清單。
+  const listIntakeSharedInputs = useCallback(async (intakeId) => {
+    if (!isPersistedProject) return { error: DEMO_UPLOAD_ERROR, data: null }
+    const { data, error } = await supabase.rpc('list_intake_shared_inputs', { p_intake_id: intakeId })
+    if (error) return { error: rpcError(error), data: null }
+    return { error: null, data }
+  }, [isPersistedProject])
+
+  const setIntakeSharedInput = useCallback(async (intakeId, key, value) => {
+    if (!isPersistedProject) return { error: DEMO_UPLOAD_ERROR, result: null }
+    const { data, error } = await supabase.rpc('set_intake_shared_input', { p_intake_id: intakeId, p_key: key, p_value: value })
+    if (error) return { error: rpcError(error), result: null }
+    if (data?.updated) reloadFieldDocs()
+    return { error: null, result: data }
+  }, [isPersistedProject, reloadFieldDocs])
 
   const listIntakePhotos = useCallback(async (intakeId) => {
     if (!isPersistedProject || !intakeId) return []
@@ -468,6 +486,7 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
   return {
     fieldDocuments, intakes, fieldDocsLoading, reloadFieldDocs, clearFieldDocs,
     createIntake, findExistingPhotosBySha, uploadIntakePhoto, draftFromIntake, updateIntakeDate, setIntakeCandidates, discardIntake, listIntakePhotos, listPhotosByIds,
+    listIntakeSharedInputs, setIntakeSharedInput,
     getFieldDocument, getFieldDocumentVersion, getFieldDocumentTemplate, findActiveFieldDoc, findActiveDailyLogDoc, createFieldDocDraft, createDailyLogDraft, createInspectionFormDraft, listInspectionConfirmations, saveFieldDocumentVersion,
     signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, applyDailyLogDraft,
   }

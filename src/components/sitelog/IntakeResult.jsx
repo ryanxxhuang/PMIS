@@ -1,9 +1,11 @@
 // 上傳批次的伺服器結果(P2c):批次狀態、逐張辨識狀態、候選文書(已就緒／待補／已排除;四類文書皆有頁面)、
 // 已起稿的文件連結。上傳中與恢復(進頁重讀伺服器)都吃這一份,兩處長一樣。
-// 不含任何寫入邏輯:排除候選、補日期、重試由呼叫端(IntakeUploader／IntakeList)接 store。
+// 不含任何寫入邏輯:排除候選、補日期、重試由呼叫端(IntakeUploader／IntakeList)接 store;「一次補齊」(P3e 共用補值)
+// 是獨立元件 IntakeSharedInputs(欄位與效果由伺服器判定),補值後由 onSharedApplied 通知呼叫端更新版本號。
 import { Link } from 'react-router-dom'
 import { Badge, Button, Input, Field } from '../ui.jsx'
 import { MSym } from '../icons.jsx'
+import IntakeSharedInputs from './IntakeSharedInputs.jsx'
 import {
   DOC_TYPE_LABEL, CANDIDATE_STATE_LABEL, CANDIDATE_STATE_TONE, INTAKE_STATUS_LABEL, docPageLink,
 } from '../../lib/fieldDocs.js'
@@ -36,7 +38,7 @@ export function IntakeStatusLine({ intake, stub = false }) {
 
 export default function IntakeResult({
   intake, photos = null, documents = [], notes = [], stub = false, hideStatus = false,
-  editable = false, onToggleExclude, onFixDate, fixDateBusy = false, dateDraft, setDateDraft,
+  editable = false, onToggleExclude, onFixDate, fixDateBusy = false, dateDraft, setDateDraft, onSharedApplied,
 }) {
   if (!intake) return null
   const candidates = Array.isArray(intake.candidates) ? intake.candidates : []
@@ -100,6 +102,12 @@ export default function IntakeResult({
             })}
           </ul>
         </div>
+      )}
+
+      {/* 一次補齊:本批文件共用的位置／數量／天氣填一次(P3e;只有上傳方可補,欄位由伺服器列出) */}
+      {editable && intake.id && (
+        <IntakeSharedInputs intakeId={intake.id} onApplied={onSharedApplied}
+          refreshKey={`${intake.status}|${candidates.map((c) => `${c.document_id || ''}:${c.state || ''}`).join(',')}`} />
       )}
 
       {/* 無法判定日期的照片:補批次日期後重試(設計 §3.1 第 6 步 blocked_by log_date) */}

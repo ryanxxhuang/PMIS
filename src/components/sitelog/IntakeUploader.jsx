@@ -12,7 +12,7 @@ import { MSym } from '../icons.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { mapWithConcurrency } from '../../lib/packageUpload.js'
 import {
-  uploadReducer, initialUploadState, uploadSummary, firstIndexBySha, sha256Hex, UPLOAD_STATUS, toggleCandidateExcluded,
+  uploadReducer, initialUploadState, uploadSummary, firstIndexBySha, sha256Hex, UPLOAD_STATUS, toggleCandidateExcluded, documentsAfterShared,
 } from '../../lib/fieldDocs.js'
 import IntakeResult from './IntakeResult.jsx'
 
@@ -228,7 +228,8 @@ export default function IntakeUploader({ fixedDate = null, onDrafted, compact = 
           </div>
           {result?.intake && (
             <IntakeResult intake={result.intake} photos={result.photos} documents={result.documents} notes={result.notes} stub={stub}
-              editable onToggleExclude={toggleExclude} onFixDate={fixDate} fixDateBusy={fixDateBusy} dateDraft={dateDraft} setDateDraft={setDateDraft} />
+              editable onToggleExclude={toggleExclude} onFixDate={fixDate} fixDateBusy={fixDateBusy} dateDraft={dateDraft} setDateDraft={setDateDraft}
+              onSharedApplied={(res) => setResult((prev) => (prev ? { ...prev, documents: documentsAfterShared(prev.documents, res) } : prev))} />
           )}
         </div>
       )}

@@ -4,9 +4,10 @@
 -- 單位不符拒絕;部分合格開缺失;同批重複簽署不重複累加;簽後改量只能走撤銷;多階段以 ITP H 點;跨案;三角色＋非成員)、
 -- 與 P4b 聯動(簽署後 list_billable_backlog 出現可估驗量、未簽署為 0)、提送對象矩陣、專案刪除 cascade。
 -- 對應 migration 20260919222000_inspection_form_documents.sql;設計 field-documents-lifecycle.md §2.2／§4／§5、confirmed-quantity-valuation.md §16.6。
+-- P3e(20260920004000)交接 P4e:簽署分支 6 處數量訊息與缺失說明「申報／確認／差額」經 fn_cq_txt,斷言訊息無 .0000。
 begin;
 
-select plan(146);
+select plan(150);
 
 create or replace function pg_temp.become(u uuid) returns void language plpgsql as $$
 begin
@@ -286,9 +287,11 @@ select throws_ok($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-
 select is((select pg_temp.save(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 2, pg_temp.c('{"unit":"M2"}'), pg_temp.s()) ->> 'status'), 'draft', 'v3 單位 M2 可存版…');
 select throws_ok($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 3) $$, 'PD010', null, '…但單位與標單工項不一致 → 拒簽');
 select is((select pg_temp.save(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 3, pg_temp.c('{"confirmed_qty":120}'), pg_temp.s()) ->> 'status'), 'draft', 'v4 確認 120');
-select throws_ok($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 4) $$, 'PD010', null, '確認量超過申報量 → 拒簽');
+select throws_ok($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 4) $$, 'PD010',
+  '本次確認數量 120 超過申報數量 100', '確認量超過申報量 → 拒簽(訊息數量經 fn_cq_txt,無 .0000;P3e 交接)');
 select is((select pg_temp.save(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 4, pg_temp.c('{"verdict":"合格"}'), pg_temp.s()) ->> 'status'), 'draft', 'v5 判合格但確認 60');
-select throws_ok($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 5) $$, 'PD010', null, '合格須確認量=申報量 → 拒簽');
+select throws_ok($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 5) $$, 'PD010',
+  '判定合格時本次確認數量須等於申報數量 100(目前 60);未全數通過請判部分合格', '合格須確認量=申報量 → 拒簽(訊息無 .0000)');
 select is((select pg_temp.save(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 5, pg_temp.c('{"stage_key":"rebar"}'), pg_temp.s('{"stage_key":{"status":"confirmed","source":"human"}}')) ->> 'status'), 'draft', 'v6 單階段工項帶階段');
 select throws_ok($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 6) $$, 'PD010', null, '單階段工項不可帶階段 → 拒簽');
 select is((select pg_temp.save(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 6, pg_temp.c('{"verdict":"不合格","confirmed_qty":0,"result_note":null}'), pg_temp.s()) ->> 'status'), 'draft', 'v7 不合格無說明');
@@ -316,12 +319,27 @@ select results_eq($$ select qty_cum, qty_delta, basis, batch_key, stage_key, uni
   $$ values (60.0000::numeric, 60.0000::numeric, 'inspection'::text, '3f版牆'::text, null::text, 'M3'::text, 'e5000000-0000-0000-0000-000000000001'::uuid, 10,
              true, 'e0000000-0000-0000-0000-000000000002'::uuid, 'active'::text, true) $$,
   '同交易寫入監造確認量(基準=查驗、追溯文件版本與雜湊、確認時間=簽署時間)');
-select ok((select description from public.defects where inspection_id = 'e5000000-0000-0000-0000-000000000001') like '%差額 40%'
+select ok((select description from public.defects where inspection_id = 'e5000000-0000-0000-0000-000000000001') like '%申報 100 M3、確認 60 M3、差額 40 M3%'
+          and (select description from public.defects where inspection_id = 'e5000000-0000-0000-0000-000000000001') not like '%.0000%'
           and (select title from public.defects where inspection_id = 'e5000000-0000-0000-0000-000000000001') = '查驗部分合格：3F 版牆混凝土查驗',
-  '部分合格 → 同交易開缺失,說明含申報／確認／差額');
+  '部分合格 → 同交易開缺失,說明含申報／確認／差額(數量經 fn_cq_txt,無 .0000)');
 select is((select r ->> 'idempotent' from pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 10) r), 'true', '同人同版本重簽 → 冪等');
 select is((select count(*)::int from public.inspection_confirmations where inspection_id = 'e5000000-0000-0000-0000-000000000001'), 1, '…確認量不重複累加');
 reset role;
+-- 其餘三處數量訊息(P3e 交接 P4e:經 fn_cq_txt,無 .0000):以已簽的 v10 內容改一個值直呼簽署分支(驗證在任何寫入之前就拒絕)
+create or replace function pg_temp.sign_branch_with(over jsonb) returns uuid language sql as $$
+  select public.field_document_sign_inspection_form_internal(
+    (select d from public.field_documents d where d.id = pg_temp.doc_of('e5000000-0000-0000-0000-000000000001')),
+    (select jsonb_populate_record(v, jsonb_build_object('content', v.content || over)) from public.field_document_versions v
+      where v.document_id = pg_temp.doc_of('e5000000-0000-0000-0000-000000000001') and v.version_no = 10),
+    'e0000000-0000-0000-0000-000000000002');
+$$;
+select throws_ok($$ select pg_temp.sign_branch_with('{"declared_qty":90}') $$, 'PD010',
+  '表單申報數量 90 與查驗申請的申報數量 100 不符;申報量以查驗申請為準', '申報量與查驗申請不符 → 訊息無 .0000');
+select throws_ok($$ select pg_temp.sign_branch_with('{"confirmed_qty":100}') $$, 'PD010',
+  '判定部分合格時本次確認數量須大於 0 且小於申報數量 100(目前 100)', '部分合格確認量=申報 → 訊息無 .0000');
+select throws_ok($$ select pg_temp.sign_branch_with('{"verdict":"不合格","confirmed_qty":5}') $$, 'PD010',
+  '判定不合格時本次確認數量須為 0(目前 5)', '不合格確認量非 0 → 訊息無 .0000');
 select pg_temp.become('e0000000-0000-0000-0000-000000000001');
 set local role authenticated;
 select is((select (b -> 0 ->> 'effective')::numeric || '/' || (b -> 0 ->> 'available') || '/' || (b -> 0 ->> 'work_item_id')
@@ -338,6 +356,8 @@ select is((select count(*)::int from public.inspection_confirmations where inspe
 select is((select document_version_no from public.inspections where id = 'e5000000-0000-0000-0000-000000000001'), 11, '…判定改指向新版本');
 select is((select pg_temp.save(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 11, pg_temp.c('{"confirmed_qty":70,"result_note":"複核後東側 30 M3 待修補"}'), pg_temp.s(), null, '複核改量') ->> 'status'), 'draft', 'v12 改確認 70');
 select throws_ok($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 12) $$, 'PD008', null, '已有有效確認量,改量重簽 → 先撤銷');
+select throws_like($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 12) $$,
+  '此查驗已有有效的監造確認量 60(紀錄 %);更正判定或數量請先撤銷該確認紀錄再重新簽署', '…訊息的有效確認量無 .0000');
 select throws_ok($$ update public.inspections set declared_qty = 90 where id = 'e5000000-0000-0000-0000-000000000001' $$, 'P0001', null, '已判定不可改申報量(監造亦然)');
 select throws_ok($$ update public.inspections set status = '待查驗' where id = 'e5000000-0000-0000-0000-000000000001' $$, 'P0001', null, '有有效確認量不可撤銷判定回待查驗');
 select is((select r ->> 'applied' from public.revoke_inspection_confirmation(
