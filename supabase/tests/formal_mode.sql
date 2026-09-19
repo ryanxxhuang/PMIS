@@ -125,8 +125,10 @@ select throws_ok($$ insert into public.acceptance_events (project_id, stage_key)
 select pg_temp.become('dddddddd-dddd-dddd-dddd-ddddddddddd2');
 select lives_ok($$ update public.valuations set status = '已核定'
   where id = '33000000-0000-0000-0000-000000000002' $$, '正式模式:監造照常核定估驗');
-select lives_ok($$ update public.inspections set status = '合格'
-  where id = '33000000-0000-0000-0000-000000000011' $$, '正式模式:監造照常判定查驗');
+-- 查驗判定自 P6b-3 起只經監造查驗表單簽署(快速判定退場):監造也不能直接改 status,判定路徑見 inspection_form_documents.sql
+select throws_like($$ update public.inspections set status = '合格'
+  where id = '33000000-0000-0000-0000-000000000011' $$, '查驗判定只能經監造查驗表單簽署%',
+  '正式模式:監造的判定只經查驗表單簽署(直接改判定被擋)');
 select lives_ok($$ insert into public.safety_records (project_id, record_type, title, status)
   values ('23000000-0000-0000-0000-000000000001','監造觀察','高處作業提醒','已完成') $$,
   '正式模式:監造照常建立監造事件');

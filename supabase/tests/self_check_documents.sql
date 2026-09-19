@@ -5,7 +5,7 @@
 -- 既有自檢直接寫入路徑的回歸在 checklist_revisions.sql／inspection_checklist_link.sql(同一支 guard)。
 begin;
 
-select plan(126);
+select plan(127);
 
 create or replace function pg_temp.become(u uuid) returns void language plpgsql as $$
 begin
@@ -181,13 +181,23 @@ select is(public.fn_field_document_unmet_fields('supervisor_log', '["attendance"
     '{"attendance":{"status":"filled","source":"human"},"weather_am":{"status":"filled","source":"cwa"}}'::jsonb, null),
   '[{"key":"attendance","status":"needs_confirmation"}]'::jsonb, '監造日誌:到場 filled 待確認、天氣 filled 可簽(回歸)');
 
--- ── 6. 既有直接寫入路徑:伺服器重算判定、不合格自動開缺失;service 路徑不重算 ────────────────────
+-- ── 6. 使用者路徑(簽署交易內)伺服器重算判定、不合格自動開缺失;service 路徑不重算 ────────────────────
+-- P6b-3:直接登錄退場(authenticated 無 INSERT、guard 只放行自檢表簽署交易)。guard 的判定重算／開缺失以同案自檢表文件的
+-- 交易 GUC 模擬簽署路徑(superuser＋廠商 claims);簽署 RPC 端到端見 §9 起
 select pg_temp.become('f0000000-0000-0000-0000-000000000001');
 set local role authenticated;
+select throws_ok($$ insert into public.checklist_records (project_id, template_id, check_date, results)
+  values ('f1000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-000000000001', '2026-09-10', '{}') $$,
+  '42501', null, '廠商直接寫入(舊路徑)已退場:表級 INSERT 收回');
+reset role;
+insert into public.field_documents (id, project_id, doc_type, doc_date) values
+  ('f6f00000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-00000000000a', 'self_check', '2026-09-10');
+select set_config('pmis.field_document_sign', 'f6f00000-0000-0000-0000-000000000001', true);
 select lives_ok($$ insert into public.checklist_records (id, project_id, template_id, check_date, location, results, overall)
   values ('f5000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-000000000001',
           '2026-09-10', '2F 版牆', '{"C2":{"value":30,"pass":true},"B1":{"value":true,"pass":true}}', '合格') $$,
-  '廠商直接寫入(舊路徑)照常可存');
+  '簽署交易內寫入事實列(guard 放行)');
+select set_config('pmis.field_document_sign', '', true);
 select results_eq($$ select overall, results -> 'C2' -> 'pass', results -> 'C3' -> 'pass', results -> 'B1' -> 'value' from public.checklist_records where id = 'f5000000-0000-0000-0000-000000000001' $$,
   $$ values ('不合格'::text, 'false'::jsonb, 'null'::jsonb, 'true'::jsonb) $$,
   '判定由伺服器依範本重算:客戶端送的 pass／overall 作廢(30cm 超規)、未給的項目=未檢');
@@ -196,7 +206,6 @@ select results_eq($$ select title, status, location, source_checklist_record_id 
   '不合格 → 同交易自動開缺失(掛鏈根)');
 select ok((select description from public.defects where source_checklist_record_id = 'f5000000-0000-0000-0000-000000000001') like '不合格項目：C2 坍度（標準 18±2.5）%',
   '缺失說明列出不合格項目與標準');
-reset role;
 select pg_temp.become(null);
 select lives_ok($$ insert into public.checklist_records (id, project_id, template_id, check_date, results, overall)
   values ('f5000000-0000-0000-0000-000000000002', 'f1000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-000000000001',
@@ -406,14 +415,16 @@ select throws_ok($$ select public.sign_field_document('f7000000-0000-0000-0000-0
 reset role;
 
 -- ── 10. 已簽署的事實列:不可就地改、不可刪;綁定文件的未判定列也不可刪 ─────────────────────────
+-- P6b-3 起 authenticated 已無 UPDATE／DELETE(42501,見 quality_direct_writes_retired.sql);這裡以 superuser＋廠商 claims
+-- 驗 guard 本身的證據規則(縱深防禦,擋日後新增的 security definer 路徑)
 select pg_temp.become('f0000000-0000-0000-0000-000000000001');
-set local role authenticated;
 select throws_ok($$ update public.checklist_records set note = '改寫'
   where id = (select target_id from public.field_documents where id = 'f7000000-0000-0000-0000-000000000001') $$,
   'P0001', null, '已簽署自檢紀錄:直接 UPDATE 被擋(既有 guard)');
 select throws_ok($$ delete from public.checklist_records
   where id = (select target_id from public.field_documents where id = 'f7000000-0000-0000-0000-000000000001') $$,
   'P0001', null, '已簽署自檢紀錄:直接 DELETE 被擋');
+set local role authenticated;
 -- D3:全部項目不適用 → overall null(未判定)但簽署綁定 → 仍不可刪
 select lives_ok($$ insert into public.field_documents (id, project_id, doc_type, doc_date, template_id)
   values ('f7000000-0000-0000-0000-000000000003', 'f1000000-0000-0000-0000-00000000000a', 'self_check', '2026-09-17', 'f4000000-0000-0000-0000-000000000001') $$,
@@ -425,10 +436,10 @@ select is((select public.sign_field_document('f7000000-0000-0000-0000-0000000000
     pg_temp.hash_of('f7000000-0000-0000-0000-000000000003', 1), '簽') ->> 'status'), 'signed', 'D3 全部不適用仍可簽(誠實的未檢)');
 select is((select r.overall from public.checklist_records r join public.field_documents d on d.target_id = r.id where d.id = 'f7000000-0000-0000-0000-000000000003'),
   null, 'D3 事實列 overall=null(未判定,不寫「合格」)');
+reset role;
 select throws_ok($$ delete from public.checklist_records
   where id = (select target_id from public.field_documents where id = 'f7000000-0000-0000-0000-000000000003') $$,
-  'P0001', null, '未判定但已綁簽署文件的紀錄不可刪(P3b 新規則)');
-reset role;
+  'P0001', null, '未判定但已綁簽署文件的紀錄不可刪(P3b 新規則;guard 層)');
 
 -- ── 11. 簽後更正=修訂 Rev.N:更正原因取自版本變更說明;不合格自動開缺失 ────────────────────────
 select pg_temp.become('f0000000-0000-0000-0000-000000000001');

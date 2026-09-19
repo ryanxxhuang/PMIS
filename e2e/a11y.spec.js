@@ -290,23 +290,26 @@ test.describe('鍵盤可達性', () => {
     expect(await page.evaluate(() => document.body.style.position)).toBe('')
   })
 
-  test('appPrompt:Esc 取消判定,對話框消失且頁面狀態不變', async ({ page }) => {
-    await loginAs(page, 'supervisor')
+  test('appPrompt:Esc 取消,對話框消失且頁面狀態不變', async ({ page }) => {
+    await loginAs(page, 'contractor')
     await gotoHash(page, '/quality')
-    // 與 supervisor.spec 同一定位法(選中 listitem → 以項目命名的 region 裡按判定鈕),
-    // 但這裡走「取消」分支,不與其成功路徑重複
-    const row = page.getByRole('listitem').filter({ hasText: '4F 柱牆鋼筋查驗' })
+    // 與 contractor.spec 缺失改善鏈同一定位法(選中 listitem → 缺失詳情 region 裡按動作),
+    // 但這裡在「提送複查」的必填說明對話框走 Esc 取消分支,不與其成功路徑重複
+    // (P6b-3 前用查驗快速判定的原因對話框;快速判定退場後改用同一支 appPrompt 的另一個入口)
+    await page.getByRole('group', { name: '品質分段' }).getByRole('button', { name: /缺失/ }).click()
+    const row = page.getByRole('listitem').filter({ hasText: '3F 西側牆面蜂窩' })
     await row.click()
-    const detail = page.getByRole('region', { name: '4F 柱牆鋼筋查驗 詳情' })
-    await detail.getByRole('button', { name: '不合格', exact: true }).click()
+    const detail = page.getByRole('region', { name: '缺失詳情' })
+    await detail.getByRole('button', { name: '開始改善', exact: true }).click()
+    await detail.getByRole('button', { name: '提送複查', exact: true }).click()
     const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText(/判定不合格：/)).toBeVisible()
+    await expect(dialog.getByText(/提送複查：/)).toBeVisible()
     // F2 合約:Esc 掛在 window 層——即使焦點不在對話框內也要能取消
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).toHaveCount(0)
-    // 取消=什麼都沒發生:沒有成功提示、該筆查驗仍可判定
-    await expect(page.getByText('已判定不合格並開立缺失')).toHaveCount(0)
-    await expect(detail.getByRole('button', { name: '不合格', exact: true })).toBeVisible()
+    // 取消=什麼都沒發生:仍是改善中、提送複查鈕還在
+    await expect(row.getByText('廠商改善中')).toBeVisible()
+    await expect(detail.getByRole('button', { name: '提送複查', exact: true })).toBeVisible()
   })
 })
 

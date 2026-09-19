@@ -47,14 +47,15 @@ begin
          else json_build_object('sub', u::text, 'role', 'authenticated')::text end, true);
 end $$;
 
--- 廠商建立:一筆已判定(合格)、一筆未判定的自主檢查紀錄
-select pg_temp.become('44f00000-0000-0000-0000-0000000000f1');
+-- 既有紀錄:一筆已判定(合格)、一筆未判定的自主檢查紀錄(service 路徑建;P6b-3 起使用者路徑只經自主檢查表簽署寫入)
+select pg_temp.become(null);
 insert into public.checklist_records (id, project_id, template_id, check_date, location, results, overall) values
   ('44300000-0000-0000-0000-000000000001', '44100000-0000-0000-0000-000000000001',
    '44200000-0000-0000-0000-000000000001', current_date, '4F 版牆',
    '{"C2":{"value":18,"pass":true}}', '合格'),
   ('44300000-0000-0000-0000-000000000002', '44100000-0000-0000-0000-000000000001',
    '44200000-0000-0000-0000-000000000001', current_date, '4F 版牆', '{}', null);
+select pg_temp.become('44f00000-0000-0000-0000-0000000000f1');
 
 -- ── 廠商申請查驗可檢附自主檢查紀錄 ───────────────────────────────────────────
 select lives_ok($$ insert into public.inspections

@@ -75,7 +75,8 @@ select lives_ok($$ delete from public.inspections where id = '35000000-0000-0000
   '待查驗的查驗可刪除');
 insert into public.inspections (id, project_id, title, status) values
   ('35000000-0000-0000-0000-000000000022','25000000-0000-0000-0000-000000000001','模板查驗','待查驗');
-select pg_temp.become('ffffffff-ffff-ffff-ffff-fffffffffff2');
+-- 已判定的查驗以 service 路徑建(P6b-3 起使用者路徑的判定只經監造查驗表單簽署,見 quality_direct_writes_retired.sql)
+select pg_temp.become(null);
 update public.inspections set status = '不合格' where id = '35000000-0000-0000-0000-000000000022';
 select pg_temp.become('ffffffff-ffff-ffff-ffff-fffffffffff1');
 select throws_ok($$ delete from public.inspections where id = '35000000-0000-0000-0000-000000000022' $$,
