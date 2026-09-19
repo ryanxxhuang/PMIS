@@ -1,6 +1,6 @@
 # 監造確認量與估驗聯動（後端強制）
 
-> 狀態：**ACTIVE（後端已實作：P4a 純計算層 `20260917120000`、P4b 表／guard／RPC／鎖 `20260919140000`；前端 P4c 估驗頁已接上（PR #144）；P4d 撤銷／減量／補證／調整 UI 已接上（PR #145，`20260919160000` 只改訊息格式）；封堵 P4e 未做）**｜2026-09-19｜依 [D-026](../DECISIONS.md)。§1–§13 是 P0 設計；實作與設計的偏差集中在 §16（後端）與 §17（前端），以這兩節為準；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
+> 狀態：**ACTIVE（後端已實作：P4a 純計算層 `20260917120000`、P4b 表／guard／RPC／鎖 `20260919140000`；前端 P4c 估驗頁已接上（PR #144）；P4d 撤銷／減量／補證／調整 UI 已接上（PR #147，`20260919160000` 只改訊息格式）；封堵 P4e 未做）**｜2026-09-19｜依 [D-026](../DECISIONS.md)。§1–§13 是 P0 設計；實作與設計的偏差集中在 §16（後端）與 §17（前端），以這兩節為準；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
 > 標記同 [現場文書文件](field-documents-lifecycle.md)：【已確認】／【設計】／【待決】。
 
 ## 0. 現況核對與差距（基準 `ab4be5f`）
@@ -214,7 +214,7 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 | P4a（已實作 `20260917120000`） | §3.2 的 2 型別＋14 支純函式（`fn_effective_by_batch`、`fn_effective_confirmed`、`fn_contract_qty`、`fn_cap`、`fn_allocate_fifo`、`fn_batch_allocation_check`、`fn_period_increment`、`fn_valuation_amount`、`fn_pricing_basis_effective`、`fn_cq_*`）；pgTAP `confirmed_quantity_calc.sql` 82 條（含 §3.1 全部案例與 §11 拒絕矩陣）。`v_billable_backlog` 移到 P4b |
 | P4b（已實作 `20260919140000`） | 四張新表＋加欄＋guards＋十支 RPC＋advisory lock＋可估驗清單 RPC（取代 view，理由見 §16.3）；全部以 §3.2 純函式為核心；pgTAP `confirmed_quantity_enforcement.sql`（§8 全部情境、狀態機、權限矩陣、service role 無 bypass）＋`confirmed_quantity_concurrency.sql`（`dblink` 兩個 session 真併發） |
 | P4c | 前端：可估驗清單、來源展開、缺件、差異比對、移除 `fillValuationFromSiteLogs` |
-| P4d（已實作，PR #145；migration `20260919160000` 只改 VQ005／VQ006 訊息數字格式） | 撤銷／減量／補證／作廢 UI（§18）、今日工作／早報的「待監造補證」「待機關處理扣回」（共用規則） |
+| P4d（已實作，PR #147；migration `20260919160000` 只改 VQ005／VQ006 訊息數字格式） | 撤銷／減量／補證／作廢 UI（§18）、今日工作／早報的「待監造補證」「待機關處理扣回」（共用規則） |
 | P4e | 封堵 migration（revoke）＋Edge 掃描測試＋舊客戶端相容驗證 |
 
 部署順序：P4b（加法）→ 前端 P4c → **觀察一個完整期別** → P4e 封堵。P4b 之後、P4e 之前，舊前端的直接 upsert 仍可寫 `valuation_items`，但送審／核定已被 guard 擋下，不會產生未經確認的核定；這是刻意的相容窗。
@@ -317,7 +317,7 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 - 手機（<md）維持唯讀期別摘要（§9.6），另列各期截止日與選中期別的未確認申報件數；寫入一律桌機。
 - DB 的 `VQ006` 訊息把 numeric 印成 `60.0000`（P4b 的 `format('%s')`）：P4d 以 `20260919160000` 修掉 `set_valuation_item_cum` 的 VQ005／VQ006（§18.4）；逐工項違反 `message`（`fn_cq_item_state_internal`）等處仍帶小數尾，P4e 收回。
 
-## 18. P4d 撤銷／減量／補證／調整落地結果與偏差（2026-09-19，PR #145；migration `20260919160000_vq_message_numeric_format` 只改訊息文字）
+## 18. P4d 撤銷／減量／補證／調整落地結果與偏差（2026-09-19，PR #147；migration `20260919160000_vq_message_numeric_format` 只改訊息文字）
 
 前端只傳意圖（哪一筆、原因、累計量），結果全部由 §16.3 的 RPC 決定；成功後 store 整批重載期別＋估驗調整。
 
