@@ -11,7 +11,7 @@
 // 收斂是「不顯示」,不是「不設限」;刪掉定義會讓 roles 一起消失(權限靜默鬆綁)。
 // 退場模組(D-026 §4)只 hidden 不刪:/cost(廠商成本,歷史查閱)、/audit(機關風險稽核,
 // 檢核移入估驗流程後退場);深連結、提醒信與 Agent 產生的連結仍受原 roles 守衛。
-// /schedule 在關鍵工項日期承接到履約時程(P5d)前保留可見,承接完成才 hidden。
+// /schedule(廠商逐工項排程)自 P5d 起 hidden:關鍵工項的計畫起迄承接到履約時程,舊頁唯讀歷史查閱。
 // platformAdminOnly: true=僅平台管理員(產品營運者)可見/可進——這是「平台」維度,
 // 與 roles(專案角色 org_type)互相獨立:can.override(專案管理者)也翻不過它。
 // 前端隱藏只是 UX;真正的把關在資料庫(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)。
@@ -47,7 +47,9 @@ export const navGroups = [
       { to: '/change-orders', label: '變更設計' },
       { to: '/progress', label: '進度 S 曲線' },
       { to: '/acceptance', label: '驗收結算' },
-      { to: '/schedule', label: '逐工項排程', roles: ['contractor'] },        // 廠商內部規劃;P5d 承接後 hidden
+      // 逐工項排程(D-026 §4 退場):關鍵工項的計畫起迄與落後判定自 P5d 起在履約時程(契約重點)呈現與維護,
+      // 本頁只剩唯讀歷史查閱;深連結仍依原 roles 可達
+      { to: '/schedule', label: '逐工項排程', roles: ['contractor'], hidden: true },
     ] },
     // 估驗請款:原「進度與金流」去掉排程、成本改 hidden;標單工項由參考項移入(逐項量價是估驗的依據)。
     { to: '/valuation', icon: 'payments', label: '估驗請款', short: '估驗', tabs: [
@@ -125,7 +127,7 @@ export const WORK_GUIDANCE = {
   '/payments': { contractor: '核定後登錄請款日，再追蹤收款日與實收金額。', owner: '依核定估驗與廠商請款紀錄，登錄付款的收款日及實收金額；這裡只記錄，不執行付款。' },
   '/safety': { contractor: '登錄巡檢與工安紀錄，處理缺失並提送監造複查。', supervisor: '查閱工安紀錄，開立缺失並複查廠商改善結果。', owner: '追蹤工安紀錄與尚未結案的缺失。' },
   '/acceptance': { contractor: '準備竣工與驗收資料，依各階段要求完成改善。', supervisor: '確認竣工與改善情形，協助機關辦理驗收。', owner: '依竣工、初驗與驗收階段登錄結果，追蹤期限及改善。' },
-  '/requirements': { contractor: '查閱契約原文與履約時程；需登錄提送時，從事項詳情進入期限追蹤。', supervisor: '查閱契約原文與三方履約責任，追蹤提送期限。', owner: '查閱契約原文與三方履約責任，追蹤機關核定及付款期限。' },
+  '/requirements': { contractor: '查閱契約原文與履約時程；在事項詳情標記完成、掛佐證，並維護關鍵工項的計畫起迄。', supervisor: '查閱契約原文與三方履約責任，追蹤提送期限、關鍵工項與停留點。', owner: '查閱契約原文與三方履約責任，追蹤機關核定及付款期限。' },
 }
 
 // 三方常用入口(桌機首頁操作列與手機底欄)=主入口群組項(含 tabs):底欄與操作列在任一

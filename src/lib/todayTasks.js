@@ -15,6 +15,7 @@
 // 球權判定與 Agent／早報同一份實作(supabase/functions/_shared/ballInCourtRules.ts,P5a);
 // 共用案例 tests/fixtures/ball-in-court.cases.json 由 ballInCourt.cases.test.js 對本檔斷言。
 import { collaborationItems, detailLink } from './ballInCourt.js'
+import { setupLink, periodLink } from './obligationLinks.js'
 import {
   BALL_SIDES, OBLIGATION_SIDE, obligationEntries, obligationInWindow, periodTitle, daysBetweenIso, completionDateOf, FIELD_DOC_PARTIES,
 } from '../../supabase/functions/_shared/ballInCourtRules.ts'
@@ -97,22 +98,7 @@ function task({ key, id = null, tag, title, meta, ball, to, due = null, todayIso
   }
 }
 
-// 待補設定的處理入口:責任方／循環規則缺口在擷取審核該筆(已確認內容不可改,廢止取代後補登;
-// 義務 id 就是 requirement id,?highlight= 直達);基準日缺口在期限追蹤的基準日卡;
-// 回填待核對在期限追蹤的那一期;循環停止條件缺口(P5c)在期限追蹤的該筆(基準日卡就在下方,補竣工日／展延;
-// 已竣工的到驗收頁登錄)。
-function setupLink(kind, ob, period) {
-  if (kind === 'responsible' || kind === 'rule') return detailLink('/requirements/review', 'highlight', ob.id)
-  if (kind === 'review') return periodLink(ob, period)
-  if (kind === 'stop') return detailLink('/deadlines', 'obligation', ob.id)
-  return '/deadlines'
-}
-// 「標為已提送」在期限追蹤頁(契約重點改版後遷出),待辦要導到能完成的地方;帶 ?obligation=<id>
-// 直達該筆(規範 §9.7)——/deadlines 的 rows 是 dueItems,id 就是 ob.id;循環義務再帶 &period= 定位那一期。
-function periodLink(ob, period) {
-  const base = detailLink('/deadlines', 'obligation', ob.id)
-  return period && ob.id != null && ob.id !== '' ? `${base}&period=${encodeURIComponent(period.period_key)}` : base
-}
+// 待補設定的處理入口與期別深連結:與履約時程同一份對照(lib/obligationLinks.js)。
 
 export function buildTodayTasks(input = {}) {
   const {

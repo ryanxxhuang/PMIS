@@ -223,6 +223,59 @@ test.describe('施工廠商', () => {
     await expect(page.getByRole('button', { name: '標記完成' })).toBeVisible()
   })
 
+  test('履約時程承接關鍵工項與停留點(P5d):近期／全期、待補設定篩選、逐期就地標記;/schedule 退場唯讀', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/requirements')
+    const list = page.getByRole('list', { name: '履約義務時間軸' })
+    // 摘要卡:關鍵工項與停留點的件數(demo 種子 10 項排程、5 個停留點),廠商有加入關鍵工項的搜尋
+    const card = page.getByRole('group', { name: '關鍵工項與停留點' })
+    await expect(card).toContainText('關鍵工項 10 項')
+    await expect(card).toContainText('停留點 5 個')
+    await expect(card.getByRole('textbox', { name: '加入關鍵工項' })).toBeVisible()
+    // 近期視圖:落後的關鍵工項與該叫驗的 H 點與契約義務在同一條時間軸;預設選中仍是第一條逾期的義務
+    const late = list.getByRole('listitem').filter({ hasText: '關鍵工項' }).filter({ hasText: '落後' }).first()
+    await expect(late).toBeVisible()
+    await expect(list.getByRole('listitem').filter({ hasText: '模板組立查驗（每層）' })).toContainText('施作中未申請查驗')
+    await expect(list.getByRole('listitem').filter({ hasText: '第 5 期估驗計價送審' }).first()).toHaveAttribute('aria-current', 'true')
+    // 關鍵工項詳情:計畫起迄在詳情維護(廠商),改日期即寫入 store(demo 走記憶體),列上的計畫迄跟著變
+    await late.click()
+    const finish = page.getByLabel('計畫完成日')
+    await expect(finish).toBeVisible()
+    await finish.fill('2099-12-31')
+    // 該工項的列與掛在它上面的停留點(到期=工項計畫迄)都跟著變:兩列都看得到新日期
+    await expect(list.getByRole('listitem').filter({ hasText: '關鍵工項' }).filter({ hasText: '2099-12-31' })).toHaveCount(1)
+    await expect(list.getByRole('listitem').filter({ hasText: '停留點' }).filter({ hasText: '2099-12-31' })).toHaveCount(1)
+    await expect(page.getByRole('button', { name: '移除關鍵工項' })).toBeVisible()
+    // 待補設定篩選:demo 種子沒有缺口 → 任一待補設定 0 件、清單空
+    await page.getByRole('combobox', { name: '待補設定' }).selectOption('any')
+    await expect(list.getByRole('listitem')).toHaveCount(0)
+    await page.getByRole('button', { name: '清除篩選' }).click()
+    // 全期:依期程分段,一年後的保固義務也在
+    await page.getByRole('tab', { name: /全期/ }).click()
+    await expect(list.getByText('保固期', { exact: true }).first()).toBeVisible() // 分段標題(列的階段字也會命中)
+    await expect(list.getByRole('listitem').filter({ hasText: '一般工項保固期滿' })).toBeVisible()
+    // 循環義務逐期就地標記(不再導到期限追蹤):本期標記完成可掛佐證,期次列翻成已完成
+    await list.getByRole('listitem').filter({ hasText: '提送施工月報' }).first().click()
+    await expect(page.getByRole('button', { name: '到期限追蹤逐期標記' })).toHaveCount(0)
+    await page.getByRole('button', { name: /^標記 \d{4}-\d{2} 期完成$/ }).first().click()
+    await page.getByRole('combobox', { name: /期佐證送審文件$/ }).selectOption('SUB-DEMO-3')
+    await page.getByRole('button', { name: '掛佐證並標記完成', exact: true }).click()
+    await expect(page.getByRole('button', { name: /^退回 \d{4}-\d{2} 期待辦$/ }).first()).toBeVisible()
+    await expect(page.getByText(/逐期準時率 \d+%/)).toBeVisible()
+    // /schedule:hidden(側欄沒有入口),廠商深連結仍可達但唯讀——沒有輸入框、沒有加入／移除,只剩 CSV 與指路
+    await gotoHash(page, '/schedule')
+    await expect(page.getByRole('heading', { level: 1, name: '逐工項排程' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '主要功能' }).getByRole('link', { name: '逐工項排程', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('note')).toContainText('已退出新作業')
+    const main = page.getByRole('main')
+    await expect(main.getByRole('table', { name: '逐工項排程' })).toBeVisible()
+    await expect(main.getByRole('button', { name: /^CSV/ })).toBeVisible()
+    await expect(main.locator('input')).toHaveCount(0)
+    await expect(main.getByRole('button', { name: /移除/ })).toHaveCount(0)
+    // 剛改的計畫迄在退場頁同一份資料看得到(同一個 store、同一條推導)
+    await expect(main.getByRole('table', { name: '逐工項排程' })).toContainText('2099-12-31')
+  })
+
   test('期限追蹤:標為已提送可掛送審佐證(W-01)', async ({ page }) => {
     await loginAs(page, 'contractor')
     // 契約重點改版後,逐項期限管理(標為已提送/佐證)在獨立的期限追蹤頁

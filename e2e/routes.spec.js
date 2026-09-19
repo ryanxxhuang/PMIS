@@ -133,11 +133,13 @@ test.describe('路由治理', () => {
     await expect(page.getByRole('combobox', { name: '現場紀錄目前頁面' })).toHaveCount(0)
     await expect(page.getByRole('tablist', { name: '現場紀錄' })).toHaveCount(0)
 
-    // 群組列直達:點「履約時程」落在第一個子頁契約重點,頁內沒有任何 tablist
+    // 群組列直達:點「履約時程」落在第一個子頁契約重點,頁內沒有子頁導覽的 tablist
+    // (頁內「近期／全期」是顯示模式的 Segmented,tablist 名為「時程範圍」,不是導覽)
     await page.getByRole('button', { name: '更多', exact: true }).click()
     await nav.getByRole('link', { name: '履約時程', exact: true }).click()
     await expect(page.getByRole('heading', { name: '契約重點', exact: true })).toBeVisible()
-    await expect(page.getByRole('tablist')).toHaveCount(0)
+    await expect(page.getByRole('tablist', { name: '履約時程' })).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: '履約時程目前頁面' })).toHaveCount(0)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   })
 
@@ -159,6 +161,11 @@ test.describe('路由治理', () => {
     // 風險稽核:廠商被守衛擋(roles 不因 hidden 鬆綁)
     await gotoHash(page, '/audit')
     await expect(page.getByText('你的角色沒有此頁的存取權限')).toBeVisible()
+    // 逐工項排程(P5d 退場):廠商可直達、側欄無入口、唯讀(內容斷言在 contractor.spec)
+    await gotoHash(page, '/schedule')
+    await expect(page.getByRole('heading', { level: 1, name: '逐工項排程' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '主要功能' }).getByRole('link', { name: '逐工項排程', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('main').locator('input')).toHaveCount(0)
     // 現場紀錄總覽:底欄/側欄第一個主入口,列出現場作業入口;點「施工日誌」直達今天
     await gotoHash(page, '/site')
     await expect(page.getByRole('heading', { level: 1, name: '現場紀錄' })).toBeVisible()

@@ -1,9 +1,17 @@
 # 驗證與規模基線
 
-> ACTIVE｜2026-09-19｜R1 全面移除兩步驟驗證（pgTAP＋Vitest＋Demo E2E＋真後端 chain 1／5／6）、P5c 基準日版本（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E＋內建 Preview）、D1 正式站邊緣注入與 `check:prod` 漏檢（Vitest＋`wrangler dev`＋demo 重佈實測）、P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
+> ACTIVE｜2026-09-19｜P5d 履約時程 UI（Vitest＋Demo E2E＋內建 Preview 1024／375）、R1 全面移除兩步驟驗證（pgTAP＋Vitest＋Demo E2E＋真後端 chain 1／5／6）、P5c 基準日版本（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E＋內建 Preview）、D1 正式站邊緣注入與 `check:prod` 漏檢（Vitest＋`wrangler dev`＋demo 重佈實測）、P3a 監造日誌頁面（Vitest＋Demo E2E＋真後端 chain 6）、H2／H3 anon 與函式 EXECUTE 權限硬化（pgTAP 全庫迴圈＋真後端 E2E 四鏈）、P5b 循環義務逐期追蹤（pgTAP＋Vitest 前端／Edge 路徑＋Deno 執行期＋Demo E2E）、P3a 監造日誌後端（pgTAP＋Vitest＋Deno）、P5a 球權單一實作與共用案例（Vitest 前端／Edge 路徑＋Deno 執行期＋pgTAP）、H1 表級權限硬化（pgTAP 全表迴圈＋真後端 E2E）、P2b Edge 起稿（Vitest＋pgTAP＋Deno）、瘦身 P1b 退場頁唯讀化（成本寫入 DB 收回 pgTAP）、P2d 施工日誌存版／簽署／提送 RPC pgTAP、瘦身 P1c／P1d 文案對齊與手機抽屜斷點缺陷、P2a 現場文書資料層 pgTAP、T0 本機 pgTAP 隔離、P4a 純計算層 pgTAP；保留 2026-09-14 三方 UIUX 與 2026-09-12 的既有後端與全案驗證快照。
 > 手動實跑快照，不是 CI 自動產物。前一版驗證紀錄可從 Git 追溯；正式環境狀態只見 [CURRENT §6.3](../CURRENT.md#63-正式環境最後核對不是即時狀態)。
 
 ## 1. 本輪驗證
+
+### 2026-09-19 P5d：履約時程承接關鍵工項與停留點、待補設定篩選、逐期就地標記；`/schedule` 退場唯讀（`codex/slimming-p5d-schedule`，PR #140，無 migration）
+
+- `npm test`：131 檔、1,424 項通過（rebase 到含 R1／CI1 的 main `c221c67` 後；rebase 前 132 檔 1,429，差異為 R1 移除的 MFA 測試）。新增 `src/lib/keyWorkItems.test.js` 6 條（落後判定五態與「只有迄日」不算進行中；關鍵工項列依起日排序、完成% 封頂 100 與分母 0、查不到工項不炸、件數；停留點六態的色鍵／五色語意／該動的一方、R 不算叫驗、掛工項的計畫迄、件數；關鍵工項事項形狀含 `inProgress` 與倒數句；停留點事項形狀含無到期日與該叫驗的倒數欄）、`src/lib/obligationTimeline.test.js` 新增 9 條（五種缺口各自的種類／標籤／處理入口、同種缺口只列一次取最早一期、setup 篩選與搜尋文字、近期判定含 30 日界限／待補／進行中／最近 7 日完成／循環最近一期、先急後緩順序、`periodStat` 分母分子、執行卡以期計入且五狀態仍以條計、檢視模型帶 `periodStat`／本期 id／期次佐證文書欄）、`src/pages/web/Requirements.keyItems.test.jsx` 7 條（見續接清單 §7）、`src/pages/web/Schedule.readonly.test.jsx` 3 條（無輸入框、只剩 CSV、退場說明與 `?item=` 指路、無關鍵工項時指路、無標單早退仍有頁首）、`navConfig.test.js` hidden 集合改為 `/schedule`／`/cost`／`/audit` 且 `/schedule` roles 仍只有廠商。
+- `npm run lint` 零警告；`npm run build`；`npm run check:docs` 55 檔、394 連結、0 錯誤。
+- Demo E2E（本 worktree 自起 dev server 5188）：contractor／routes／reachability／contract-flow／supervisor／owner／workflow-ux／a11y 8 支 71 項全綠。contractor 新增一條：摘要卡「關鍵工項 10 項」「停留點 5 個」與加入關鍵工項搜尋；近期清單有落後的關鍵工項與「模板組立查驗（每層）」施作中未申請查驗、預設仍選中「第 5 期估驗計價送審」；詳情改計畫完成日為 2099-12-31 後關鍵工項列與掛它的停留點列各一列顯示新日期、有「移除關鍵工項」；待補設定篩「任一」為 0 件；全期顯示「保固期」分段與保固義務；循環義務詳情無「到期限追蹤逐期標記」、按「標記 YYYY-MM 期完成」→ 掛 SUB-003 → 出現「退回 YYYY-MM 期待辦」與「逐期準時率 N%」；`/schedule` h1 可達、側欄無入口、`role=note` 含「已退出新作業」、表格可見、CSV 在、無 input／無移除鈕、表格含剛改的 2099-12-31。routes：`/schedule` 廠商直達無 input；375 抽屜測試的 tablist 斷言改為 `{ name: '履約時程' }`（頁內「近期／全期」是名為「時程範圍」的 Segmented，不是子頁導覽）並加「履約時程目前頁面」下拉為 0。
+- 內建 Preview（demo 模式 dev server 5190）：1024——執行卡「80%／到期 5 項準時完成 4 項（含循環 1 期）」、關鍵工項與停留點卡「關鍵工項 10 項／落後 4／進行中 4／已完成 0；停留點 5 個／施作中未叫驗 2／待監造查驗 1」與加入搜尋、近期 15／全期 24、列上責任方＋種類 chip＋落後／施作中未申請查驗 Badge、關鍵工項詳情兩個日期欄（2026-04-22／2026-07-11）＋掛的 H 停留點（已申請，待監造查驗）＋估驗計價連結＋移除鈕，`scrollWidth = clientWidth = 1024`；375——無溢位、履約期程卡與 Segmented／快篩／下拉直排、點關鍵工項列開「事項詳情」抽屜含兩個日期欄、加入關鍵工項搜尋不渲染；`/schedule` 375 手機摘要落後／進行中無輸入框、退場說明在最上面。
+- 查證（正式庫未動）：本單元無 migration、無 Edge；`item_schedules` 正式 4 列／4 案、`schedule_periods` 72 列維持（P0 盤點值），退場頁改唯讀後寫入端只剩履約時程詳情（走原 `can_write` policy）。**待驗**：正式站真資料目視與真後端寫入實跑。
 
 ### 2026-09-19 R1：全面移除兩步驟驗證（MFA／TOTP）（PR #128，migration `20260919023220_remove_signing_mfa`；rebase 到含 P5c 的 main `e9d695e` 後重驗）
 
