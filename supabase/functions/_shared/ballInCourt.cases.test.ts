@@ -8,7 +8,7 @@ import type { OpenBallItem } from './ballInCourt.ts'
 import { listMyOpenItems } from './agentQueryTools.ts'
 import { itemsForRecipient, splitBrief } from './agentBrief.ts'
 import { parseDateUTC, computeObligationDueUTC, formatDate } from './contractDue.ts'
-import { periodBasisLabel } from './ballInCourtRules.ts'
+import { periodBasisLabel, obligationEntries, warrantyGap, warrantyNeeds } from './ballInCourtRules.ts'
 import type { AgentRole } from './agentPersona.ts'
 
 const ORGS: AgentRole[] = ['contractor', 'supervisor', 'owner']
@@ -16,8 +16,8 @@ const TODAY = parseDateUTC(cases.today)!
 const tables = cases.tables as unknown as Record<string, unknown[]>
 
 // 最小可用的 Supabase client 假件:from().select().eq()/.neq()/.in()(awaitable)、projects 的
-// .maybeSingle() 回基準日、rpc('my_org_type') 回指定角色。過濾條件不模擬——案例資料本來就
-// 只有本案,已結／不適用列由共用規則自己排除,這正是要驗的事。
+// .maybeSingle() 回基準日、rpc('my_org_type') 回指定角色、rpc('get_project_warranty') 回案例的保固事實(P5e)。
+// 過濾條件不模擬——案例資料本來就只有本案,已結／不適用列由共用規則自己排除,這正是要驗的事。
 function fakeDb(orgType: string | null = null) {
   return {
     from(table: string) {
@@ -31,7 +31,7 @@ function fakeDb(orgType: string | null = null) {
       })
       return builder
     },
-    rpc: () => Promise.resolve({ data: orgType, error: null }),
+    rpc: (fn: string) => Promise.resolve({ data: fn === 'get_project_warranty' ? cases.anchors.warranty : orgType, error: null }),
   } as never
 }
 
@@ -136,5 +136,24 @@ describe('共用案例(Edge):早報 itemsForRecipient／splitBrief', () => {
     const mine = [...sections.overdue, ...sections.dueSoon, ...sections.pending]
     expect(sorted(mine.map(key))).toEqual(sorted(cases.expected.mine.soon7[org]))
     expect(sorted(sections.setupPending.map(key))).toEqual(sorted(cases.expected.setup))
+  })
+})
+
+// P5e 保固類循環義務的停止條件(Edge 路徑;前端與 Deno 對同一組案例)
+describe('共用案例(Edge):保固類停止條件', () => {
+  const computeDueIso = (ob: Record<string, unknown>) => { const ms = computeObligationDueUTC(ob, cases.anchors); return ms == null ? null : formatDate(ms) }
+  it.each(cases.warranty.scenarios.map((sc) => [sc.name, sc] as const))('%s', (_name, sc) => {
+    expect(warrantyGap(sc.warranty)).toBe(sc.expected.gap)
+    expect(warrantyNeeds(sc.warranty)).toEqual(sc.expected.needs)
+    const ob = { ...cases.warranty.obligation, periods: sc.periods }
+    const got = obligationEntries(ob, { anchors: { ...cases.anchors, warranty: sc.warranty }, computeDueIso, todayIso: cases.today })
+      .filter((e) => e.ball.who !== 'done')
+      .map((e) => ({ period: e.period ? String(e.period.period_key) : null, label: e.ball.label, due: e.dueIso, setup: e.ball.setup?.kind ?? null, need: e.ball.setup?.need ?? null }))
+    expect(got).toEqual(sc.expected.entries)
+  })
+  it('收集器讀 RPC 的保固事實:ob18 列「缺正式驗收合格日」並帶缺哪一項', async () => {
+    const items = await collect(7)
+    const w = items.find((i) => i.kind === '契約重點' && i.id === 'ob18')
+    expect(w?.setup).toEqual({ kind: 'stop', label: '停止條件待補（缺正式驗收合格日，無法判定保固期滿日）', need: ['acceptance'] })
   })
 })

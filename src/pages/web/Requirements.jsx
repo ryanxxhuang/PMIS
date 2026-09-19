@@ -41,7 +41,7 @@ import { supabase } from '../../lib/supabase.js'
 import { locateQuotationInPage } from '../../../supabase/functions/_shared/sourceVerify.ts'
 import { isValidStorageKey } from '../../lib/packageUpload.js'
 import { RUN_POLL_MS } from '../../lib/packageRuns.js'
-import { localISODate } from '../../lib/dates.js'
+import { localISODate, parseLocalDate } from '../../lib/dates.js'
 import { fmtDateTime } from '../../lib/format.js'
 import { navLabel } from '../../lib/navConfig.js'
 import { billableLeaves } from '../../lib/boqCalc.js'
@@ -64,6 +64,7 @@ import {
 import { completionDateOf } from '../../../supabase/functions/_shared/ballInCourtRules.ts'
 import AnchorDates from '../../components/AnchorDates.jsx'
 import AnchorVersions from '../../components/AnchorVersions.jsx'
+import WarrantyBasis, { WarrantyTermEditor } from '../../components/WarrantyBasis.jsx'
 
 // 期程段軌道/摘要語意色 → 全站 token(五色語意:紅=逾期、綠=完成、藍=當前、灰=其他)
 const TRACK_BG = {
@@ -183,7 +184,7 @@ export default function Requirements() {
   const {
     currentProject, project, isPersistedProject, currentUser, obligations,
     updateObligationStatus, transitionObligationPeriod, submittals, createObservation, can, changeProjectAnchors, reloadObligations,
-    anchorVersions, acceptanceEvents,
+    anchorVersions, acceptanceEvents, projectWarranty,
     // P5d 關鍵工項與停留點:資料仍是 item_schedules／inspection_points,這裡只讀與少量維護
     workItems, adjustedItems = [], valuations = [], itemSchedules = {}, setItemSchedule, removeItemSchedule,
     inspectionPoints = [], inspections = [], siteLogs = [], dbMode, demoMode,
@@ -251,13 +252,14 @@ export default function Requirements() {
 
   // ── 檢視模型:義務列 + enrich → 狀態/期程/倒數/出處(純函式,見 obligationTimeline)
   // 基準日吃 store 的 project(demo 落回種子專案;與今日工作同一份錨點,數字才對得上);
-  // 另帶實際竣工日(驗收事件推得,P5c 循環停止條件)與目前基準日版本號(依據標示)
+  // 另帶實際竣工日(驗收事件推得,P5c 循環停止條件)、保固事實(P5e,DB 算好的合格日／保固期間／期滿日)
+  // 與目前基準日版本號(依據標示)
   const latestVersionNo = anchorVersions?.length ? anchorVersions[anchorVersions.length - 1].version_no : null
   const anchors = useMemo(() => ({
     award_date: project?.award_date, notice_date: project?.notice_date,
     commencement_date: project?.commencement_date, end_date: project?.end_date,
-    completion_date: completionDateOf(acceptanceEvents), version_no: latestVersionNo,
-  }), [project, acceptanceEvents, latestVersionNo])
+    completion_date: completionDateOf(acceptanceEvents), warranty: projectWarranty, version_no: latestVersionNo,
+  }), [project, acceptanceEvents, projectWarranty, latestVersionNo])
   // 下一次改基準日要記的依據(P5c):類別／函文或變更案號／生效日
   const [anchorBasis, setAnchorBasis] = useState({ change_kind: 'edit', source_ref: '', effective_from: '' })
   const [anchorMsg, setAnchorMsg] = useState('')
@@ -310,11 +312,24 @@ export default function Requirements() {
     [filtered, grouped, range],
   )
 
-  // 保固期滿:里程碑沒有這個欄位,取保固段義務的最遠到期日,推不出就不顯示
-  const warrantyEnd = useMemo(() => {
-    const ds = obligationPool.filter((it) => it.phase === 'warranty' && it.due).map((it) => it.due)
-    return ds.length ? new Date(Math.max(...ds.map((d) => d.getTime()))) : null
-  }, [obligationPool])
+  // 保固期滿(P5e):正式驗收合格日＋契約保固期間,兩項都有依據才由 DB 算出(get_project_warranty);
+  // 推不出就不顯示日期(不再拿保固段義務的最遠到期日推估)
+  const warrantyEnd = useMemo(() => parseLocalDate(projectWarranty?.expiry), [projectWarranty])
+  // 保固期間可引用的條文:本頁看得到的已確認契約重點(契約分級 RLS),保固相關的排前面;DB guard 仍會再驗一次
+  const warrantyCandidates = useMemo(() => {
+    const rows = [...reqById.values()].filter((r) => r.status === 'approved')
+    const warrantyish = (r) => r.lifecycle_phase === '保固' || /保固/.test(`${r.title || ''}${r.description || ''}`)
+    return rows
+      .sort((a, b) => Number(warrantyish(b)) - Number(warrantyish(a)) || String(a.title).localeCompare(String(b.title), 'zh-Hant'))
+      .map((r) => {
+        const clause = (sourcesByReq.get(r.id) || [])[0]?.clause || ''
+        return { id: r.id, label: `${clause ? `${clause} ` : ''}${r.title}` }
+      })
+  }, [reqById, sourcesByReq])
+  const warrantySource = useMemo(() => {
+    const r = projectWarranty?.source_requirement_id ? reqById.get(projectWarranty.source_requirement_id) : null
+    return r ? { title: r.title, clause: (sourcesByReq.get(r.id) || [])[0]?.clause || '' } : null
+  }, [projectWarranty, reqById, sourcesByReq])
   const phaseWin = useMemo(() => phaseWindows(anchors, warrantyEnd), [anchors, warrantyEnd])
 
   // 快篩件數走目前的範圍(近期／全期):chip 上的數字是「這個範圍有幾件」,否則近期視圖點「已完成 12」只看到 1 件
@@ -365,23 +380,35 @@ export default function Requirements() {
   // 未完成單次義務的到期日並記差異;store 成功後重載義務與版本,anchors/items 隨之重算,使用者當場看到
   // 「未觸發」翻成有日期、並知道第 N 版影響了哪些事項。demo 不出現(種子案基準日齊全)。
   const gaps = useMemo(() => anchorGaps(obligationPool, anchors), [obligationPool, anchors])
-  const setAnchor = async (key, val) => {
+  // 基準日與契約保固期間(P5e)同一支 RPC、同一套版本:DB 留版並只重算沒動過的待辦期,回報影響幾個事項
+  const saveAnchors = async (patch, fallback) => {
     setAnchorErr(''); setAnchorMsg('')
-    const { error, version } = await changeProjectAnchors({ [key]: val || null }, {
+    const { error, version } = await changeProjectAnchors(patch, {
       change_kind: anchorBasis.change_kind, source_ref: anchorBasis.source_ref.trim() || null, effective_from: anchorBasis.effective_from || null,
     })
-    if (error) { setAnchorErr(friendlyError(error, '基準日未儲存')); return }
-    if (!version) { setAnchorMsg('值沒有變更，未留新版本。'); return }
+    if (error) { setAnchorErr(friendlyError(error, fallback)); return { error } }
+    if (!version) { setAnchorMsg('值沒有變更，未留新版本。'); return { error: null } }
     const effects = Array.isArray(version.effects) ? version.effects : []
     const changed = effects.filter((e) => e.kind !== 'kept').length
     const kept = effects.filter((e) => e.kind === 'kept').length
     setAnchorMsg(`已留第 ${version.version_no} 版：${changed} 個事項改期／增減${kept ? `，${kept} 個已完成事項保留原依據` : ''}。`)
+    return { error: null }
   }
+  const setAnchor = (key, val) => saveAnchors({ [key]: val || null }, '基準日未儲存')
+  const saveWarrantyTerm = (patch) => saveAnchors(patch, '保固期間未儲存')
   // 待補設定的「設定基準日」入口:打開履約期程卡的編輯列並捲到它(處理入口離後果最近)
   const openAnchorEditor = () => {
     setAnchorOpen(true)
     anchorCardRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
   }
+  // 保固類缺「契約保固期間」的入口(P5e):同一張卡,再把焦點放到保固期間欄(編輯列打開後才掛上,等它渲染)
+  const [focusWarranty, setFocusWarranty] = useState(false)
+  const openWarrantyEditor = () => { openAnchorEditor(); setFocusWarranty(true) }
+  useEffect(() => {
+    if (!focusWarranty || !anchorOpen) return
+    document.getElementById('warranty-term-value')?.focus()
+    setFocusWarranty(false)
+  }, [focusWarranty, anchorOpen])
 
   // ── 選取/深連結(?obligation=)/切案重置/初次自動選取:共用殼 hook。
   // 預設選第一條已逾期 → 第一條即將到期 → 清單第一條(README 3);只在契約義務裡挑——
@@ -522,7 +549,16 @@ export default function Requirements() {
         {g.kind === 'stop' && <Link to="/acceptance" className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline">到驗收登錄竣工</Link>}
       </>)
     }
-    if (g.kind === 'stop' && ob.category === '保固') return <span className="text-[var(--text-3)]">保固期滿日尚無欄位可登錄,暫不自動產生期次。</span>
+    // 保固類(P5e):缺正式驗收合格日到驗收頁;缺契約保固期間在本頁履約期程卡登錄(demo 沒有編輯列,只說去哪裡)
+    if (g.kind === 'stop' && ob.category === '保固') {
+      const need = g.need || []
+      return (<>
+        {need.includes('acceptance') && <Link to="/acceptance?stage=final" className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline mr-2">到驗收登錄正式驗收合格</Link>}
+        {need.includes('term') && (isPersistedProject
+          ? <button type="button" onClick={openWarrantyEditor} className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline">登錄契約保固期間</button>
+          : <span className="text-[var(--text-3)]">在履約期程卡登錄契約保固期間(需真專案)。</span>)}
+      </>)
+    }
     if (g.kind === 'review') return <span className="text-[var(--text-3)]">到下方「期次」核對該期是否已履行後標記,標記即解除。</span>
     const label = g.kind === 'responsible' || g.kind === 'rule' ? '到擷取審核廢止取代後補登' : '到期限追蹤處理'
     return <Link to={g.to} className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline">{label}</Link>
@@ -763,6 +799,9 @@ export default function Requirements() {
             currentId={selected.currentPeriodId} renderActions={periodActions} showRate
             anchorAction={isPersistedProject && selected.ob.category !== '保固' ? (
               <button type="button" onClick={openAnchorEditor} className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline">設定基準日</button>
+            ) : null}
+            warrantyAction={isPersistedProject ? (
+              <>請<button type="button" onClick={openWarrantyEditor} className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline mx-0.5">在履約期程卡登錄契約保固期間</button>（引用契約條文）。</>
             ) : null} />
         </div>
       )}
@@ -1136,10 +1175,20 @@ export default function Requirements() {
           <span className="text-footnote font-medium text-[var(--amber-text)] shrink-0">設定</span>
         </button>
       )}
+      {/* 保固期滿日與依據(P5e):正式驗收合格日＋契約保固期間,兩項各自的來源與缺口入口 */}
+      {(isPersistedProject || projectWarranty) && (
+        <div className="mb-3">
+          <WarrantyBasis warranty={projectWarranty} source={warrantySource}
+            onEditTerm={isPersistedProject && can.admin ? openWarrantyEditor : null} />
+        </div>
+      )}
       {isPersistedProject && anchorOpen && (
         <div className="mb-3 rounded-[10px] border border-[var(--border-card)] bg-[var(--bg)] px-3.5 pt-3 pb-3.5">
           <div className="flex flex-wrap gap-4">
-            <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!can.edit} basis={anchorBasis} onBasis={setAnchorBasis} />
+            {/* 可編輯＝專案管理者(鏡像 update_project_anchors 的 is_project_admin();非管理者送出一定被拒,不給假可編輯) */}
+            <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!can.admin} basis={anchorBasis} onBasis={setAnchorBasis} />
+            <WarrantyTermEditor warranty={projectWarranty} candidates={warrantyCandidates} disabled={!can.admin}
+              onSave={saveWarrantyTerm} inputId="warranty-term-value" />
           </div>
           <ErrorBanner msg={anchorErr} className="mt-2" />
           {anchorMsg && <p role="status" className="mt-2 text-footnote text-[var(--green-text)]">{anchorMsg}</p>}

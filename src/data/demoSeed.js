@@ -202,6 +202,13 @@ export function buildDemoData(workItems, project) {
       ] : [],
       created_by: null, created_at: new Date(Date.now() - 20 * 86400e3).toISOString() },
   ]
+  // 保固事實(P5e get_project_warranty 的形狀;真專案由 DB 依正式驗收合格日＋契約保固期間計算):示範案施工中、
+  // 尚未正式驗收——已登錄契約保固期間 1 年(引用第 18 條),保固期滿日待正式驗收合格後才有(不臆測日期)。
+  const projectWarranty = {
+    acceptance_date: null, acceptance_event_id: null, term_value: 1, term_unit: 'year',
+    source_requirement_id: 'REQ-DEMO-WARRANTY', source_status: 'approved', source_ok: true,
+    expiry: null, needs: ['acceptance'], gap: '缺正式驗收合格日，無法判定保固期滿日',
+  }
   const obligations = [
     { id: 'OB-1', title: '提送施工計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 15, offset_dir: 'after', responsible: '廠商', penalty: '逾期每日按契約價金總額 0.5‰ 計罰', source_clause: '第 9 條', source_page: 'p.12', status: '已完成', completed_at: afterCommencement(12), sort_order: 0 },
     // W-01 佐證鏈 demo:品質計畫義務掛上核准的 SUB-001,展示「義務→送審」可勾稽
@@ -505,7 +512,7 @@ export function buildDemoData(workItems, project) {
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(8) },
   ]
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, anchorVersions, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions }
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, anchorVersions, projectWarranty, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions }
 }
 
 // ── 跨案總覽的示範姊妹案(靜態摘要;A 區為主 storyline,件數由 store 即時計算) ──

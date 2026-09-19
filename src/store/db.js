@@ -190,12 +190,22 @@ export async function loadObligationsFromDB(projectId) {
 
 // 從 DB 載入基準日版本(P5c project_anchor_versions):每次基準日變更一版,由 DB trigger／RPC 產生、append-only;
 // 前端只讀,期限追蹤與履約時程顯示「依據哪一版、哪份文件、影響哪些事項」。RLS 沿用專案成員。
-export const ANCHOR_VERSION_COLUMNS = 'id, project_id, version_no, change_kind, anchors, changed_keys, effective_from, reason, source_ref, source_change_order_id, effects, created_by, created_at'
+// warranty(P5e):本版之後的契約保固期間快照 {term_value, term_unit, source_requirement_id}
+export const ANCHOR_VERSION_COLUMNS = 'id, project_id, version_no, change_kind, anchors, changed_keys, effective_from, reason, source_ref, source_change_order_id, effects, created_by, created_at, warranty'
 export async function loadAnchorVersionsFromDB(projectId) {
   const data = await pageAll((from, to) => supabase.from('project_anchor_versions')
     .select(ANCHOR_VERSION_COLUMNS).eq('project_id', projectId)
     .order('version_no').range(from, to), '基準日版本')
   return data || []
+}
+
+// 保固事實(P5e RPC get_project_warranty):保固期滿日＝正式驗收合格日＋契約保固期間,兩項齊全才由 DB 單一日期規則
+// (fn_warranty_expiry)算出;缺哪一項(needs)、引用條文是否仍為已確認(source_ok)也由 DB 判定,三方同一份。
+// 前端不重算日期,只把它放進 anchors.warranty 給共用規則判「停止條件待補」。失敗照載入層慣例 throw。
+export async function loadProjectWarrantyFromDB(projectId) {
+  const { data, error } = await supabase.rpc('get_project_warranty', { p_project: projectId })
+  if (error) throw new Error(`保固期滿日載入失敗:${error.message}`)
+  return data || null
 }
 
 // 從 DB 載入現場文書(P2a field_documents)未終態的文件與其提送／收件／退回列——

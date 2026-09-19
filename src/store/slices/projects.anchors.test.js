@@ -96,6 +96,43 @@ describe('updateProjectAnchors(P5c):基準日只走 RPC 留版', () => {
   })
 })
 
+describe('updateProjectAnchors(P5e):契約保固期間走同一支 RPC、同一套版本', () => {
+  it('三個保固鍵一起送(數值、單位、引用條文);空字串視為 null(清除);不直寫 projects', async () => {
+    const r = await mountWithProject()
+    pg.script('rpc:update_project_anchors', 'rpc', { data: VERSION({ changed_keys: ['warranty_term'], warranty: { term_value: 2, term_unit: 'year', source_requirement_id: 'req-1' }, effects: [] }), error: null })
+    let res
+    await act(async () => {
+      res = await r.current.updateProjectAnchors({ warranty_term_value: 2, warranty_term_unit: 'year', warranty_source_requirement_id: 'req-1' }, { change_kind: 'edit', source_ref: '契約第 16 條' })
+    })
+    expect(res.error).toBeNull()
+    expect(res.version.changed_keys).toEqual(['warranty_term'])
+    expect(pg.argsOf('rpc:update_project_anchors', 'rpc')[0][0]).toMatchObject({
+      p_project: 'p1', p_anchors: { warranty_term_value: 2, warranty_term_unit: 'year', warranty_source_requirement_id: 'req-1' }, p_change_kind: 'edit', p_source_ref: '契約第 16 條',
+    })
+    expect(pg.hit('projects', 'update')).toBe(false)
+    pg.reset()
+    pg.script('rpc:update_project_anchors', 'rpc', { data: VERSION({ changed_keys: ['warranty_term'], warranty: null, effects: [] }), error: null })
+    await act(async () => { await r.current.updateProjectAnchors({ warranty_term_value: '', warranty_term_unit: null, warranty_source_requirement_id: '' }, {}) })
+    expect(pg.argsOf('rpc:update_project_anchors', 'rpc')[0][0].p_anchors).toEqual({ warranty_term_value: null, warranty_term_unit: null, warranty_source_requirement_id: null })
+  })
+
+  it('RPC 拒絕(引用未確認條文等,DB guard)→ 如實回錯誤', async () => {
+    const r = await mountWithProject()
+    pg.script('rpc:update_project_anchors', 'rpc', { data: null, error: { message: '只能引用已確認的契約條文(目前狀態:needs_review)' } })
+    let res
+    await act(async () => { res = await r.current.updateProjectAnchors({ warranty_term_value: 1, warranty_term_unit: 'year', warranty_source_requirement_id: 'req-2' }, {}) })
+    expect(res.error.message).toContain('只能引用已確認的契約條文')
+  })
+
+  it('updateProjectSettings 拒絕保固鍵(不能繞過留版與 guard 的依據檢查)', async () => {
+    const r = await mountWithProject()
+    let res
+    await act(async () => { res = await r.current.updateProjectSettings({ warranty_term_value: 5 }) })
+    expect(res.error.message).toContain('留版')
+    expect(pg.hit('projects', 'update')).toBe(false)
+  })
+})
+
 describe('updateProjectSettings:非基準日設定直寫,但拒絕基準日鍵', () => {
   it('契約價金總額直寫 projects;帶基準日鍵一律拒絕(不能繞過留版)', async () => {
     const r = await mountWithProject()

@@ -52,7 +52,7 @@ export async function collectOpenBallItems(
   const todayIso = formatDate(today)
   const items: OpenBallItem[] = []
 
-  const [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, proj, obligations, acceptance, adjustments, legacySources] = await Promise.all([
+  const [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, proj, obligations, acceptance, adjustments, legacySources, warranty] = await Promise.all([
     db.from('defects').select('id, title, severity, status, due_date, domain').eq('project_id', projectId).neq('status', '已結案'),
     db.from('submittals').select('id, submittal_no, title, status, due_date').eq('project_id', projectId).in('status', ['已提送', '審核中', '退回補正']),
     db.from('rfis').select('id, rfi_no, title, status, due_date').eq('project_id', projectId).in('status', ['待回覆', '已回覆']),
@@ -71,8 +71,11 @@ export async function collectOpenBallItems(
     // P4d:待處理的估驗調整(扣回)→ 球在機關;已核定期尚未補證的歷史遷移來源 → 球在監造補證(共用規則 valuationBall)
     db.from('valuation_adjustments').select('id, work_item_id, qty_delta, status, origin_valuation_id, reason').eq('project_id', projectId).eq('status', 'pending'),
     db.from('valuation_item_sources').select('valuation_id, work_item_id, kind').eq('project_id', projectId).eq('kind', 'legacy'),
+    // P5e 保固事實(正式驗收合格日＋契約保固期間 → 保固期滿日,DB 單一規則;成員或 service 可讀):
+    // 保固類循環義務的停止條件由共用規則依它判缺哪一項
+    db.rpc('get_project_warranty', { p_project: projectId }),
   ])
-  const firstError = [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, obligations, acceptance, adjustments, legacySources].find((r) => r.error)
+  const firstError = [defects, submittals, rfis, valuations, inspections, changeOrders, observations, fieldDocs, obligations, acceptance, adjustments, legacySources, warranty].find((r) => r.error)
   if (firstError?.error) return toolError('collectOpenBallItems', firstError.error)
 
   const docIds = (fieldDocs.data ?? []).map((d) => d.id)
@@ -105,8 +108,8 @@ export async function collectOpenBallItems(
   // 契約義務:單次義務到期日由 contractDue 依基準日確定性推算(不是 AI 算);循環義務每個未結期次
   // 一筆(共用規則 obligationEntries,期次由 DB 物化)。責任方／基準日／循環規則／待核對缺口由
   // 共用規則判定——責任不明不歸任何一方(不再預設廠商),列為待補設定。
-  // anchors 另帶實際竣工日(acceptance_events 推得),供共用規則判循環停止條件(P5c)
-  const anchors = { ...(proj?.data ?? {}), completion_date: completionDateOf(acceptance.data ?? []) }
+  // anchors 另帶實際竣工日(acceptance_events 推得)與保固事實(P5e),供共用規則判循環停止條件
+  const anchors = { ...(proj?.data ?? {}), completion_date: completionDateOf(acceptance.data ?? []), warranty: warranty.data ?? null }
   const computeDueIso = (ob: Record<string, unknown>) => {
     const dueMs = computeObligationDueUTC(ob, anchors)
     return dueMs == null ? null : formatDate(dueMs)

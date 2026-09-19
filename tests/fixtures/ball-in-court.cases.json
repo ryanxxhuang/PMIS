@@ -1,8 +1,61 @@
 {
-  "$comment": "P5a 球權共用案例:首頁今日工作(src/lib/ballInCourt.cases.test.js)、Edge 收集器與 Agent 工具／早報(supabase/functions/_shared/ballInCourt.cases.test.ts)、Deno 執行期(ballInCourtRules.deno.test.ts)對同一組資料斷言相同的事項、責任與期限。today=2026-07-26(週日);開工日刻意留空以產生「基準日待補」。key 一律 tag:id;P5b 循環義務逐期:key 為 契約重點:<id>:<期別>,期次(periods)照 PostgREST embed 形狀掛在義務列上(DB materialize 產生;ob12 有舊已完成期＋逾期舊期＋下期,ob13 缺開工日,ob14 循環規則不完整,ob15 義務層舊完成狀態對不上期別→2026-06 期待核對,ob16 已廢止)。P5c 基準日版本:anchors.completion_date=實際竣工日(acceptance_events 推得;這裡未登錄→null,Edge 收集器由 acceptance_events 表算),ob12 期次帶 anchor_version_no／basis(期次依據 expected.period_basis),ob17 已完成單次義務帶完成當下的 due_date_snapshot(決標日後來由 1/05 改成 1/10,快照 1/15 不隨改;expected.single_due 斷言所有單次義務的到期日),ob18 保固類循環義務→停止條件待補(stop)。",
+  "$comment": "P5a 球權共用案例:首頁今日工作(src/lib/ballInCourt.cases.test.js)、Edge 收集器與 Agent 工具／早報(supabase/functions/_shared/ballInCourt.cases.test.ts)、Deno 執行期(ballInCourtRules.deno.test.ts)對同一組資料斷言相同的事項、責任與期限。today=2026-07-26(週日);開工日刻意留空以產生「基準日待補」。key 一律 tag:id;P5b 循環義務逐期:key 為 契約重點:<id>:<期別>,期次(periods)照 PostgREST embed 形狀掛在義務列上(DB materialize 產生;ob12 有舊已完成期＋逾期舊期＋下期,ob13 缺開工日,ob14 循環規則不完整,ob15 義務層舊完成狀態對不上期別→2026-06 期待核對,ob16 已廢止)。P5c 基準日版本:anchors.completion_date=實際竣工日(acceptance_events 推得;這裡未登錄→null,Edge 收集器由 acceptance_events 表算),ob12 期次帶 anchor_version_no／basis(期次依據 expected.period_basis),ob17 已完成單次義務帶完成當下的 due_date_snapshot(決標日後來由 1/05 改成 1/10,快照 1/15 不隨改;expected.single_due 斷言所有單次義務的到期日),ob18 保固類循環義務→停止條件待補(stop)。P5e:anchors.warranty=RPC get_project_warranty 的保固事實(本案已登錄契約保固期間 2 年、尚未正式驗收合格→ob18 列「缺正式驗收合格日」;Edge 收集器由 rpc 取得),保固類的其他狀態見 warranty.scenarios。",
   "today": "2026-07-26",
   "project_id": "p1",
-  "anchors": { "award_date": "2026-01-10", "notice_date": "2026-01-20", "commencement_date": null, "end_date": "2026-12-31", "completion_date": null },
+  "anchors": { "award_date": "2026-01-10", "notice_date": "2026-01-20", "commencement_date": null, "end_date": "2026-12-31", "completion_date": null,
+    "warranty": { "acceptance_date": null, "acceptance_event_id": null, "term_value": 2, "term_unit": "year", "source_requirement_id": "req-w", "source_status": "approved", "source_ok": true, "expiry": null, "needs": ["acceptance"], "gap": "缺正式驗收合格日，無法判定保固期滿日" } },
+  "warranty": {
+    "$comment": "P5e 保固類循環義務的停止條件:保固期滿日＝正式驗收合格日＋契約保固期間(使用者 2026-09-20 決定)。expiry_cases 是保固期滿日的唯一日期規則(DB fn_warranty_expiry;民法 §120 II 始日不算入、§121 月底無相當日取月末)的案例表——前端與 Edge 不重算日期,這組案例由 pgTAP supabase/tests/warranty_stop_condition.sql 逐條斷言,Vitest(src/lib/ballInCourt.cases.test.js)核對兩邊是同一組。scenarios 是 RPC get_project_warranty 回傳的保固事實 × 一條保固類每月義務:三側(前端、Edge、Deno)對同一組斷言缺口說法、缺哪幾項(need)與期次;gap 與 pgTAP 的 fn_warranty_gap_text 同一句。",
+    "expiry_cases": [
+      { "accept": "2025-03-15", "value": 2, "unit": "year", "expiry": "2027-03-15" },
+      { "accept": "2025-04-30", "value": 1, "unit": "month", "expiry": "2025-05-31" },
+      { "accept": "2025-01-30", "value": 1, "unit": "month", "expiry": "2025-02-28" },
+      { "accept": "2024-01-28", "value": 1, "unit": "month", "expiry": "2024-02-28" },
+      { "accept": "2025-01-28", "value": 1, "unit": "month", "expiry": "2025-02-28" },
+      { "accept": "2023-02-28", "value": 1, "unit": "year", "expiry": "2024-02-29" },
+      { "accept": "2024-02-29", "value": 1, "unit": "year", "expiry": "2025-02-28" },
+      { "accept": "2025-12-31", "value": 2, "unit": "year", "expiry": "2027-12-31" },
+      { "accept": "2025-08-31", "value": 6, "unit": "month", "expiry": "2026-02-28" },
+      { "accept": "2025-03-15", "value": 180, "unit": "day", "expiry": "2025-09-11" }
+    ],
+    "obligation": { "id": "obw", "project_id": "p1", "title": "保固期間每月巡檢", "category": "保固", "responsible": "廠商", "status": "待辦", "trigger_event": "commencement", "recurring": "monthly", "recurring_day": 10 },
+    "scenarios": [
+      { "name": "兩項齊全:期次照常逐期列,不列停止條件",
+        "warranty": { "acceptance_date": "2025-03-15", "acceptance_event_id": "acc-final", "term_value": 2, "term_unit": "year", "source_requirement_id": "req-w", "source_status": "approved", "source_ok": true, "expiry": "2027-03-15", "needs": [], "gap": null },
+        "periods": [
+          { "id": "pw-2026-06", "obligation_id": "obw", "period_key": "2026-06", "period_start": "2026-06-01", "period_end": "2026-06-30", "due_date": "2026-06-10", "status": "已完成", "review_note": null, "anchor_version_no": 3, "basis": { "anchor_key": "acceptance_pass_date", "anchor_date": "2025-03-15", "bound_date": "2027-03-15", "bound_kind": "warranty_expiry" } },
+          { "id": "pw-2026-07", "obligation_id": "obw", "period_key": "2026-07", "period_start": "2026-07-01", "period_end": "2026-07-31", "due_date": "2026-07-10", "status": "待辦", "review_note": null, "anchor_version_no": 3, "basis": { "anchor_key": "acceptance_pass_date", "anchor_date": "2025-03-15", "bound_date": "2027-03-15", "bound_kind": "warranty_expiry" } }
+        ],
+        "expected": { "gap": null, "needs": [], "setup_label": null, "entries": [{ "period": "2026-07", "label": "待辦", "due": "2026-07-10", "setup": null, "need": null }],
+          "basis": { "2026-07": "第 3 版基準日（正式驗收合格日 2025-03-15 起、保固期滿 2027-03-15 止）" } } },
+      { "name": "缺正式驗收合格日:不產生期次、列停止條件待補(缺合格日)",
+        "warranty": { "acceptance_date": null, "acceptance_event_id": null, "term_value": 2, "term_unit": "year", "source_requirement_id": "req-w", "source_status": "approved", "source_ok": true, "expiry": null, "needs": ["acceptance"], "gap": "缺正式驗收合格日，無法判定保固期滿日" },
+        "periods": [],
+        "expected": { "gap": "缺正式驗收合格日，無法判定保固期滿日", "needs": ["acceptance"], "setup_label": "停止條件待補（缺正式驗收合格日，無法判定保固期滿日）",
+          "entries": [{ "period": null, "label": "停止條件待補（缺正式驗收合格日，無法判定保固期滿日）", "due": null, "setup": "stop", "need": ["acceptance"] }] } },
+      { "name": "缺契約保固期間:不產生期次、列停止條件待補(缺保固期間)",
+        "warranty": { "acceptance_date": "2025-03-15", "acceptance_event_id": "acc-final", "term_value": null, "term_unit": null, "source_requirement_id": null, "source_status": null, "source_ok": false, "expiry": null, "needs": ["term"], "gap": "缺契約保固期間，無法判定保固期滿日" },
+        "periods": [],
+        "expected": { "gap": "缺契約保固期間，無法判定保固期滿日", "needs": ["term"], "setup_label": "停止條件待補（缺契約保固期間，無法判定保固期滿日）",
+          "entries": [{ "period": null, "label": "停止條件待補（缺契約保固期間，無法判定保固期滿日）", "due": null, "setup": "stop", "need": ["term"] }] } },
+      { "name": "兩項皆未登錄(RPC 尚無資料):列兩項",
+        "warranty": null,
+        "periods": [],
+        "expected": { "gap": "缺正式驗收合格日、缺契約保固期間，無法判定保固期滿日", "needs": ["acceptance", "term"], "setup_label": "停止條件待補（缺正式驗收合格日、缺契約保固期間，無法判定保固期滿日）",
+          "entries": [{ "period": null, "label": "停止條件待補（缺正式驗收合格日、缺契約保固期間，無法判定保固期滿日）", "due": null, "setup": "stop", "need": ["acceptance", "term"] }] } },
+      { "name": "引用條文已被取代:保留既有未結期次,另列停止條件待補(保固期間失去依據)",
+        "warranty": { "acceptance_date": "2025-03-15", "acceptance_event_id": "acc-final", "term_value": 2, "term_unit": "year", "source_requirement_id": "req-w", "source_status": "superseded", "source_ok": false, "expiry": null, "needs": ["term"], "gap": "保固期間引用的契約條文已不是已確認狀態，無法判定保固期滿日" },
+        "periods": [
+          { "id": "pw-2026-05", "obligation_id": "obw", "period_key": "2026-05", "period_start": "2026-05-01", "period_end": "2026-05-31", "due_date": "2026-05-10", "status": "已提送", "review_note": null, "anchor_version_no": 3, "basis": { "anchor_key": "acceptance_pass_date", "anchor_date": "2025-03-15", "bound_date": "2027-03-15", "bound_kind": "warranty_expiry" } },
+          { "id": "pw-2026-04", "obligation_id": "obw", "period_key": "2026-04", "period_start": "2026-04-01", "period_end": "2026-04-30", "due_date": "2026-04-10", "status": "待辦", "review_note": null, "anchor_version_no": 3, "basis": { "anchor_key": "acceptance_pass_date", "anchor_date": "2025-03-15", "bound_date": "2027-03-15", "bound_kind": "warranty_expiry" } }
+        ],
+        "expected": { "gap": "保固期間引用的契約條文已不是已確認狀態，無法判定保固期滿日", "needs": ["term"], "setup_label": "停止條件待補（保固期間引用的契約條文已不是已確認狀態，無法判定保固期滿日）",
+          "entries": [
+            { "period": "2026-04", "label": "待辦", "due": "2026-04-10", "setup": null, "need": null },
+            { "period": null, "label": "停止條件待補（保固期間引用的契約條文已不是已確認狀態，無法判定保固期滿日）", "due": null, "setup": "stop", "need": ["term"] }
+          ] } }
+    ]
+  },
   "tables": {
     "acceptance_events": [],
     "rfis": [
@@ -156,7 +209,7 @@
       { "id": "ob15", "period": "2026-06", "who": "owner", "title": "每月品管報告（2026-06 期）", "label": "回填待核對（原義務曾標完成，本期是否已履行待確認）", "due": "2026-06-05", "setup": "review" },
       { "id": "ob15", "period": "2026-07", "who": "owner", "title": "每月品管報告（2026-07 期）", "label": "待辦", "due": "2026-07-05", "setup": null },
       { "id": "ob15", "period": "2026-08", "who": "owner", "title": "每月品管報告（2026-08 期）", "label": "待辦", "due": "2026-08-05", "setup": null },
-      { "id": "ob18", "period": null, "who": "contractor", "title": "保固期每月巡檢", "label": "停止條件待補（保固期滿日無法判定，未登錄保固年限）", "due": null, "setup": "stop" }
+      { "id": "ob18", "period": null, "who": "contractor", "title": "保固期每月巡檢", "label": "停止條件待補（缺正式驗收合格日，無法判定保固期滿日）", "due": null, "setup": "stop" }
     ],
     "single_due": { "ob1": "2026-07-10", "ob2": "2026-07-29", "ob3": null, "ob4": "2026-06-01", "ob5": "2026-07-01", "ob6": "2026-09-30", "ob7": null, "ob8": "2026-07-25", "ob9": "2026-09-01", "ob10": "2026-07-01", "ob11": "2026-01-20", "ob17": "2026-01-15" },
     "period_basis": { "ob12:2026-06": "第 1 版基準日（接獲開工通知日 2026-01-20）", "ob12:2026-07": "第 1 版基準日（接獲開工通知日 2026-01-20）", "ob12:2026-08": "第 2 版基準日（接獲開工通知日 2026-01-20）", "ob15:2026-06": "產生時未留版（起算日未記錄）" },

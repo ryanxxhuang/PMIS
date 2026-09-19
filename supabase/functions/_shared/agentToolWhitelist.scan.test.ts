@@ -3,8 +3,9 @@
 //   * 12 支工具 = 7 支唯讀 + 5 支草稿,三個角色的聯集不多不少、每個角色都以七支唯讀開頭。
 //   * 唯讀模組(agentQueryTools / ballInCourt / agentToolCommon / agentToolDefs)不得出現寫入動詞。
 //   * 草稿模組每一次 insert/update/upsert/delete 的前一個 .from() 都只能是 agent_actions。
-//   * 工具層能呼叫的 RPC 只有兩支唯讀(my_org_type / list_project_members);
-//     resolve_agent_action 這類狀態轉移 RPC 絕不在 agent 手上。
+//   * 工具層能呼叫的 RPC 只有三支唯讀(my_org_type / list_project_members / get_project_warranty);
+//     resolve_agent_action 這類狀態轉移 RPC 絕不在 agent 手上。get_project_warranty(P5e)是 stable 的
+//     唯讀事實查詢(保固期滿日由 DB 單一日期規則算、成員檢查),收集器靠它判保固類的停止條件,不在工具層重算日期。
 //   * 分派器只把 service role client 交給草稿工具,查詢七支的 case 拿不到 service。
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
@@ -63,12 +64,12 @@ describe('草稿只寫 agent_actions、業務表零寫入(原始碼掃描)', () 
     expect(writes).toBeGreaterThanOrEqual(6) // 掃描器本身要有效:五支草稿工具至少各有一次寫入(raise_to 兩次)
   })
 
-  it('工具層只呼叫兩支唯讀 RPC,沒有 resolve_agent_action 之類的狀態轉移', () => {
+  it('工具層只呼叫三支唯讀 RPC,沒有 resolve_agent_action 之類的狀態轉移', () => {
     const calls = new Set<string>()
     for (const f of ALL_MODULES) {
       for (const m of read(f).matchAll(/\.rpc\(\s*'([^']+)'/g)) calls.add(m[1])
     }
-    expect([...calls].sort()).toEqual(['list_project_members', 'my_org_type'])
+    expect([...calls].sort()).toEqual(['get_project_warranty', 'list_project_members', 'my_org_type'])
   })
 
   it('分派器只把 service role client 交給草稿工具;查詢七支的 case 沒有 service', () => {
