@@ -118,7 +118,9 @@ test('鏈 6:監造上傳→起稿→到場親自確認→簽署→提送機關�
   await naDialog.getByRole('button', { name: '確定', exact: true }).click()
   await page.getByRole('button', { name: '存檔', exact: true }).click()
   await expect(page.getByText(/已存檔 ✓ 版本 2，尚有 1 項待補或待確認/)).toBeVisible({ timeout: 30_000 })
-  await expect(card.getByText(/到場人員與時段（待親自確認）/)).toBeVisible()
+  // 指名頁面「待補」清單的那一項(按鈕):存檔後文件狀態卡重載完也會列「伺服器待補清單：到場人員與時段（待親自確認）」,
+  // 用 getByText 會在重載完成前後命中 1 或 2 個元素,快慢不同就假紅(T1 連跑實測 strict mode violation)
+  await expect(card.getByRole('button', { name: '到場人員與時段（待親自確認）', exact: true })).toBeVisible()
   const { data: v2 } = await sup.from('field_document_versions').select('content_hash').eq('document_id', docId).eq('version_no', 2).single()
   // 直接呼叫簽署 RPC(繞過前端):到場只被標 filled → PD004 needs_confirmation(這是伺服器規則,不是前端擋)
   await sup.auth.signOut()

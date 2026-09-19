@@ -8,6 +8,8 @@
 
 [playwright.real.config.js](../playwright.real.config.js) 在瀏覽器啟動前檢查缺值／URL，拒絕已知正式 Supabase host。這是已知 host 黑名單，不保證辨識未登記的新正式環境；執行者仍須確認目標是 staging。帳密／金鑰不可提交。
 
+受測的 dev server（埠 5189）用 [e2e-real/vite.no-watch.config.js](../e2e-real/vite.no-watch.config.js)：與 `vite.config.js` 相同，只關掉檔案監看。一般 dev server 下，同一 worktree 任何未 gitignore 的檔案被改（連 `touch` 一支 e2e spec 都算）都會讓頁面整頁重載、打斷開著的對話框；2026-09-19 chain 6 卡在「提送」對話框直到 420 秒逾時即此原因（T1）。所以跑測期間改檔不影響頁面，但改了程式碼要重跑才會生效。
+
 ```bash
 npm run test:e2e:real
 ```
@@ -65,6 +67,7 @@ npm run test:e2e:real -- e2e-real/chain6-supervisor-log.spec.js
 
 ```bash
 npm run test:e2e:real -- chain7 chain2
+```
 
 ## 自主檢查表鏈（chain 8，P3b）
 

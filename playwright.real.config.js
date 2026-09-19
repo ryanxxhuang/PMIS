@@ -43,7 +43,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run dev',
+    // 不監看檔案的 dev server:跑測期間同一 worktree 改檔(連改 spec 都算)不會把受測頁面整頁重載(T1,見該檔註解)
+    command: 'npm run dev -- --config e2e-real/vite.no-watch.config.js',
     port: PORT,
     reuseExistingServer: false,
     env: {
