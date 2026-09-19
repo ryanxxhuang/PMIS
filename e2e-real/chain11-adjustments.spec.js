@@ -4,12 +4,11 @@
 // 11b:歷史遷移期別(以 DBA 邊界建立:停用檢查點 trigger 核定 + fn_cq_backfill_legacy_internal,與正式庫 P4b 回填同一條路徑)
 //     → 監造首頁「待監造補證」→ 估驗頁缺件「歷史遷移需補證」→ 來源展開「補證此期」→ 簽發並補證 → 缺件清空 → 機關登錄請款日。
 // fixture 走產品窄門 RPC;歷史期別的 DBA 步驟走本機 stack 的 docker psql(正式庫的歷史期別是 migration 回填,不走這裡)。
-// 前置:本機 stack 已套用 20260919160000;容器 supabase_db_PMIS 在跑。
+// 前置:本機 stack 已套用 20260920001500(P4e);容器 supabase_db_PMIS 在跑。
 import { test, expect } from '@playwright/test'
-import { execFileSync } from 'node:child_process'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
-  signInClient, loginReal, logoutReal, gotoHash, runCleanup,
+  signInClient, loginReal, logoutReal, gotoHash, runCleanup, dbaSql,
 } from './helpers.js'
 
 const PROJECT_NAME = `鏈11調整工程-${Date.now().toString(36)}`
@@ -26,10 +25,6 @@ const BOQ_ITEMS = [
 ]
 const taipeiToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
 
-// DBA 邊界:本機 stack 的 postgres 超級使用者(與 pgTAP 的歷史期別 fixture 同一條路徑)
-function dbaSql(sql) {
-  return execFileSync('docker', ['exec', '-i', 'supabase_db_PMIS', 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-Atq'], { input: sql, encoding: 'utf8' }).trim()
-}
 
 test.beforeAll(async () => {
   conId = await createConfirmedUser(conEmail, 'contractor', '鏈十一廠商')
@@ -141,7 +136,9 @@ test('鏈 11b:歷史遷移期別 → 監造首頁待補證 → 補證此期 → 
     begin;
     insert into public.valuations (id, project_id, period_no, valuation_date, period_end, retention_pct, status)
       values ('${legacyId}', '${projectId}', 2, '${today}', '${today}', 5, '草稿');
-    insert into public.valuation_items (valuation_id, work_item_id, cum_qty) values ('${legacyId}', '${wiB}', 50);
+    set local pmis.cq_internal = '1';   -- P4e 起明細只由重算路徑寫入;遷移前的歷史明細以 DBA 邊界重現
+    insert into public.valuation_items (valuation_id, work_item_id, cum_qty, backing) values ('${legacyId}', '${wiB}', 50, 'legacy');
+    set local pmis.cq_internal = '';
     alter table public.valuations disable trigger valuations_checkpoint_guard;
     update public.valuations set status = '已核定' where id = '${legacyId}';
     alter table public.valuations enable trigger valuations_checkpoint_guard;

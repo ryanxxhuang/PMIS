@@ -1,10 +1,12 @@
 -- P4b 監造確認量的表、guard、RPC 與鎖(pgTAP):對應 migration 20260919140000_confirmed_quantity_enforcement.sql,
 -- 逐條對應實作指令 §8「監造確認量與計價」與設計文件 §14。全部以真實 authenticated＋JWT 路徑呼叫 RPC 與直接寫表(R1 起簽發不要求 aal2,claims 的 aal 只是證據);
+-- P4e(20260920001500)起 valuation_items 不再接受直接寫入(authenticated 42501、其他寫入者 VQ010;矩陣見 valuation_items_guard.sql),
+-- 本檔需要「P4e 之前舊前端寫進草稿的無依據數量」時以 DBA 邊界 pg_temp.legacy_item 重現;訊息數字經 fn_cq_txt(無 .0000)。
 -- 併發(兩個 session 同時搶同一可用量)在 confirmed_quantity_concurrency.sql 以 dblink 真併發驗證。
 -- 執行方式:npm run test:db(一次性資料庫),整份在交易內執行並 rollback。
 begin;
 
-select plan(299);
+select plan(307);
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 0. 結構與授權
@@ -132,6 +134,19 @@ create or replace function pg_temp.cum(v uuid, w uuid) returns numeric language 
   select cum_qty from public.valuation_items where valuation_id = v and work_item_id = w $$;
 create or replace function pg_temp.cert(p uuid, w uuid, b text, s text, u text, q numeric, r text, req text, cover uuid default null) returns jsonb language sql as $$
   select public.issue_supervisor_certificate(p, w, b, b, s, u, q, r, req, cover) $$;
+-- DBA 邊界:只在這一句開重算旗標(失敗時隨 throws_ok 的子交易一起回滾);須以 postgres 身分呼叫
+create or replace function pg_temp.internal(p_sql text) returns void language plpgsql as $$
+begin
+  perform set_config('pmis.cq_internal', '1', true);
+  execute p_sql;
+  perform set_config('pmis.cq_internal', '', true);
+end $$;
+-- P4e 之前舊前端直接寫入／歷史遷移留下的明細(backing='legacy'、無來源)
+create or replace function pg_temp.legacy_item(v uuid, w uuid, q numeric) returns void language sql as $$
+  select pg_temp.internal(format('insert into public.valuation_items (valuation_id, work_item_id, cum_qty, backing) values (%L, %L, %s, %L)', v, w, q, 'legacy'))
+$$;
+create or replace function pg_temp.msg(v uuid, cp text, code text) returns text language sql as $$
+  select e ->> 'message' from jsonb_array_elements(public.fn_cq_period_check_internal(v, cp)) e where e ->> 'code' = code limit 1 $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 2. 申報 100 未經監造通過 → 可新增 0;任何路徑都不能送審
@@ -144,28 +159,35 @@ select throws_ok($$ insert into public.valuations (project_id, period_no, status
   values ('c4b20000-0000-0000-0000-00000000000a', 99, '已核定') $$, 'VQ002', null, '登入者不可直接建立已核定期(繞過送審／核定)');
 select throws_ok($$ insert into public.valuations (project_id, period_no, status, recheck_required)
   values ('c4b20000-0000-0000-0000-00000000000a', 98, '草稿', true) $$, 'VQ010', null, 'recheck 欄位不可自行設定');
--- 舊前端路徑:直接 upsert 明細(P4e 前保留),金額由 DB 算、客戶端金額忽略
-select lives_ok($$ insert into public.valuation_items (valuation_id, work_item_id, cum_qty, amount_cum, cum_pct, source)
+-- 舊前端路徑(直接 REST 寫明細、日誌帶入):P4e 起 authenticated 沒有表級寫入權限 → 42501
+select throws_ok($$ insert into public.valuation_items (valuation_id, work_item_id, cum_qty, amount_cum, cum_pct, source)
   values ('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000001', 100, 999999, 99, 'daily_log') $$,
-  '舊前端／日誌帶入仍可寫草稿明細(P4e 才收回)');
+  '42501', null, '舊前端／日誌帶入直接寫草稿明細 → 42501(P4e 收回)');
+reset role;
+-- P4e 之前舊前端寫進草稿的申報 100 仍留在正式庫(無來源):以 DBA 邊界重現;guard 對重算路徑一樣由 DB 算金額／百分比
+select pg_temp.internal($$ insert into public.valuation_items (valuation_id, work_item_id, cum_qty, amount_cum, cum_pct, source, backing)
+  values ('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000001', 100, 999999, 99, 'daily_log', 'legacy') $$);
 select is((select amount_cum from public.valuation_items where valuation_id = 'c4b40000-0000-0000-0000-000000000001'
-  and work_item_id = 'c4b30000-0000-0000-0000-000000000001'), 10000::numeric, '金額由 DB 算 round(100×100)=10000,客戶端 999999 忽略');
+  and work_item_id = 'c4b30000-0000-0000-0000-000000000001'), 10000::numeric, '金額由 DB 算 round(100×100)=10000,寫入端的 999999 忽略');
 select is((select cum_pct from public.valuation_items where valuation_id = 'c4b40000-0000-0000-0000-000000000001'
   and work_item_id = 'c4b30000-0000-0000-0000-000000000001'), 10::numeric, '百分比由 DB 算');
 select is((select backing from public.valuation_items where valuation_id = 'c4b40000-0000-0000-0000-000000000001'
-  and work_item_id = 'c4b30000-0000-0000-0000-000000000001'), 'legacy', '非重算路徑寫入的數量標 legacy(無依據)');
-select throws_ok($$ insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
-  values ('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000005', 1) $$, 'VQ005', null,
+  and work_item_id = 'c4b30000-0000-0000-0000-000000000001'), 'legacy', 'P4e 之前舊前端寫入的數量標 legacy(無依據)');
+-- 重算路徑寫入同樣驗:非末端、跨案、超契約量、負值
+select throws_ok($$ select pg_temp.internal('insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
+  values (''c4b40000-0000-0000-0000-000000000001'', ''c4b30000-0000-0000-0000-000000000005'', 1)') $$, 'VQ005', null,
   '非末端／彙總列(契約量 0)不可計價');
-select throws_ok($$ insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
-  values ('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000011', 1) $$, 'VQ008', null,
+select throws_ok($$ select pg_temp.internal('insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
+  values (''c4b40000-0000-0000-0000-000000000001'', ''c4b30000-0000-0000-0000-000000000011'', 1)') $$, 'VQ008', null,
   '跨專案工項不可寫入明細');
-select throws_ok($$ update public.valuation_items set cum_qty = 2000
-  where valuation_id = 'c4b40000-0000-0000-0000-000000000001' and work_item_id = 'c4b30000-0000-0000-0000-000000000001' $$,
+select throws_ok($$ select pg_temp.internal('update public.valuation_items set cum_qty = 2000
+  where valuation_id = ''c4b40000-0000-0000-0000-000000000001'' and work_item_id = ''c4b30000-0000-0000-0000-000000000001''') $$,
   'VQ005', null, '超契約量寫入即拒絕');
-select throws_ok($$ update public.valuation_items set cum_qty = -1
-  where valuation_id = 'c4b40000-0000-0000-0000-000000000001' and work_item_id = 'c4b30000-0000-0000-0000-000000000001' $$,
+select throws_ok($$ select pg_temp.internal('update public.valuation_items set cum_qty = -1
+  where valuation_id = ''c4b40000-0000-0000-0000-000000000001'' and work_item_id = ''c4b30000-0000-0000-0000-000000000001''') $$,
   'P0001', null, '負值拒絕');
+select pg_temp.become('c4b10000-0000-0000-0000-000000000001');
+set local role authenticated;
 select throws_ok($$ select public.set_valuation_item_cum('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000001', 100) $$,
   'VQ006', null, '申報 100 未經監造通過:RPC 上限 0');
 select throws_ok($$ update public.valuations set status = '監造審核', period_end = pg_temp.today()
@@ -179,6 +201,8 @@ select is((pg_temp.st('c4b20000-0000-0000-0000-00000000000a', 'c4b30000-0000-000
   100::numeric, '本期增量 100');
 select ok(pg_temp.codes('c4b40000-0000-0000-0000-000000000001', 'review') @> array['source_mismatch', 'period_end_missing'],
   '送審檢查列出「缺來源」與「截止日未填」');
+select is(pg_temp.msg('c4b40000-0000-0000-0000-000000000001', 'review', 'source_mismatch'), '本期增量 100 與來源分配 0 不符(缺監造確認來源)',
+  'P4e:缺件訊息數字不帶 numeric 小數尾(100,不是 100.0000)');
 -- service role 無 bypass、admin_override 只放行角色
 set local role service_role;
 select throws_ok($$ update public.valuations set status = '監造審核', period_end = pg_temp.today()
@@ -268,10 +292,10 @@ select lives_ok($$ update public.valuations set status = '監造審核', period_
 select throws_ok($$ update public.valuations set status = '草稿' where id = 'c4b40000-0000-0000-0000-000000000001' $$, 'P0001', null, '廠商不可自行退回');
 select throws_ok($$ update public.valuations set status = '已核定' where id = 'c4b40000-0000-0000-0000-000000000001' $$, 'P0001', null, '廠商不可核定');
 select throws_ok($$ update public.valuations set period_end = pg_temp.today() + 1 where id = 'c4b40000-0000-0000-0000-000000000001' $$, 'VQ010', null, '送審後截止日不可改');
-select throws_ok($$ update public.valuation_items set cum_qty = 30 where valuation_id = 'c4b40000-0000-0000-0000-000000000001' $$, 'P0001', null, '送審中明細凍結(直接寫)');
-select throws_ok($$ delete from public.valuation_items where valuation_id = 'c4b40000-0000-0000-0000-000000000001' $$, 'P0001', null, '送審中明細不可刪');
+select throws_ok($$ update public.valuation_items set cum_qty = 30 where valuation_id = 'c4b40000-0000-0000-0000-000000000001' $$, '42501', null, '送審中明細:直接改寫 → 42501(P4e;重算路徑的凍結見 valuation_items_guard.sql)');
+select throws_ok($$ delete from public.valuation_items where valuation_id = 'c4b40000-0000-0000-0000-000000000001' $$, '42501', null, '送審中明細:直接刪除 → 42501');
 select throws_ok($$ insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
-  values ('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000002', 1) $$, 'P0001', null, '送審中不可追加明細');
+  values ('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000002', 1) $$, '42501', null, '送審中明細:直接追加 → 42501');
 select throws_ok($$ select public.sync_valuation_from_confirmations('c4b40000-0000-0000-0000-000000000001') $$, 'VQ010', null, '送審中不可同步');
 select throws_ok($$ select public.set_valuation_item_cum('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000001', 30) $$, 'VQ010', null, '送審中不可改量');
 reset role;
@@ -413,7 +437,12 @@ select set_config('pmis.cq_internal', '1', true);
 select throws_ok($$ insert into public.valuation_item_sources (project_id, valuation_id, work_item_id, batch_key, qty, kind)
   values ('c4b20000-0000-0000-0000-00000000000a', 'c4b40000-0000-0000-0000-000000000003', 'c4b30000-0000-0000-0000-000000000002', 'L1', 10, 'confirmation') $$,
   'VQ004', null, '列級 guard:超出截止日前有效量的分配拒絕(即使是內部重算路徑)');
+select throws_like($$ insert into public.valuation_item_sources (project_id, valuation_id, work_item_id, batch_key, qty, kind)
+  values ('c4b20000-0000-0000-0000-00000000000a', 'c4b40000-0000-0000-0000-000000000003', 'c4b30000-0000-0000-0000-000000000002', 'L1', 10, 'confirmation') $$,
+  '批次「l1」的有效確認量 200 少於全部期別分配 210(%', 'P4e:列級 guard 訊息數字無小數尾');
 select set_config('pmis.cq_internal', '', true);
+select is(pg_temp.msg('c4b40000-0000-0000-0000-000000000003', 'review', 'cutoff'),
+  format('批次「l1」截至 %s 的有效確認量 0 少於累計分配 200', pg_temp.today() - 1), 'P4e:截止日缺件訊息數字無小數尾');
 update public.valuations set period_end = pg_temp.today() where id = 'c4b40000-0000-0000-0000-000000000003';
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -451,6 +480,8 @@ set local role authenticated;
 select lives_ok($$ select pg_temp.cert('c4b20000-0000-0000-0000-00000000000a', 'c4b30000-0000-0000-0000-000000000002', 'L1', null, 'kg', 150, '複查減量', 'req-11') $$, 'L1 減量為 150(第 3 期送審中)');
 reset role;
 select is((select recheck_required from public.valuations where id = 'c4b40000-0000-0000-0000-000000000003'), true, '送審中期別標 recheck_required');
+select ok((select recheck_note from public.valuations where id = 'c4b40000-0000-0000-0000-000000000003') like '%批次「l1」超出有效確認量 50(複查減量)%',
+  'P4e:recheck 說明的超出量無小數尾(50,不是 50.0000)');
 select is(pg_temp.cum('c4b40000-0000-0000-0000-000000000003', 'c4b30000-0000-0000-0000-000000000002'), 200::numeric, '送審中的數字不被改寫');
 select pg_temp.become('c4b10000-0000-0000-0000-000000000002');
 set local role authenticated;
@@ -525,6 +556,8 @@ select lives_ok($$ select public.transition_valuation('c4b40000-0000-0000-0000-0
 select lives_ok($$ select public.revoke_inspection_confirmation((select id from public.inspection_confirmations where client_request_id = 'req-12'), '查驗不成立') $$, '撤銷 L3');
 reset role;
 select is((select count(*)::int from public.valuation_adjustments where origin_valuation_id = 'c4b40000-0000-0000-0000-000000000005' and status = 'pending'), 1, 'L3 產生 pending 調整');
+select is(pg_temp.msg('c4b40000-0000-0000-0000-000000000005', 'invoice', 'batch_over_allocated'), '批次「l3」有效確認量 0 少於分配 100(確認已撤銷或減量)',
+  'P4e:請款前缺件訊息數字無小數尾');
 select pg_temp.become('c4b10000-0000-0000-0000-000000000001');
 set local role authenticated;
 select throws_ok($$ select public.void_valuation_adjustment((select id from public.valuation_adjustments where origin_valuation_id = 'c4b40000-0000-0000-0000-000000000005'), '不扣') $$, 'VQ001', null, '廠商不可作廢調整');
@@ -591,8 +624,7 @@ reset role;
 select pg_temp.become(null);
 insert into public.valuations (id, project_id, period_no, period_end, status)
   values ('c4b40000-0000-0000-0000-000000000011', 'c4b20000-0000-0000-0000-00000000000b', 1, pg_temp.today(), '草稿');
-insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
-  values ('c4b40000-0000-0000-0000-000000000011', 'c4b30000-0000-0000-0000-000000000011', 50);
+select pg_temp.legacy_item('c4b40000-0000-0000-0000-000000000011', 'c4b30000-0000-0000-0000-000000000011', 50);
 alter table public.valuations disable trigger valuations_checkpoint_guard;   -- 遷移前的歷史核定
 update public.valuations set status = '已核定' where id = 'c4b40000-0000-0000-0000-000000000011';
 alter table public.valuations enable trigger valuations_checkpoint_guard;
@@ -606,6 +638,8 @@ set local role authenticated;
 select throws_ok($$ update public.valuations set invoice_date = pg_temp.today() where id = 'c4b40000-0000-0000-0000-000000000011' $$, 'VQ004', null, '歷史已核定期新請款:缺依據明示擋下');
 reset role;
 select ok(pg_temp.codes('c4b40000-0000-0000-0000-000000000011', 'invoice') @> array['legacy_source'], '請款檢查列出 legacy_source');
+select is(pg_temp.msg('c4b40000-0000-0000-0000-000000000011', 'invoice', 'legacy_source'), '數量 50 來自歷史遷移,不是監造確認;需人工補證(監造確認單)',
+  'P4e:歷史遷移缺件訊息數字無小數尾(50,不是 50.0000)');
 select pg_temp.become('c4b10000-0000-0000-0000-000000000007', 'aal2');
 set local role authenticated;
 select throws_ok($$ select pg_temp.cert('c4b20000-0000-0000-0000-00000000000b', 'c4b30000-0000-0000-0000-000000000011', '補證批次', null, 'm2', 40, '補證:既有紀錄', 'req-b1', 'c4b40000-0000-0000-0000-000000000011') $$,
@@ -626,8 +660,12 @@ select pg_temp.become('c4b10000-0000-0000-0000-000000000001');
 set local role authenticated;
 insert into public.valuations (id, project_id, period_no, period_end, status)
   values ('c4b40000-0000-0000-0000-000000000012', 'c4b20000-0000-0000-0000-00000000000b', 2, pg_temp.today(), '草稿');
-insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
-  values ('c4b40000-0000-0000-0000-000000000012', 'c4b30000-0000-0000-0000-000000000011', 80);
+select throws_ok($$ insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
+  values ('c4b40000-0000-0000-0000-000000000012', 'c4b30000-0000-0000-0000-000000000011', 80) $$, '42501', null, '舊前端直接寫 80 → 42501(P4e)');
+reset role;
+select pg_temp.legacy_item('c4b40000-0000-0000-0000-000000000012', 'c4b30000-0000-0000-0000-000000000011', 80);  -- P4e 之前就寫進草稿的 80
+select pg_temp.become('c4b10000-0000-0000-0000-000000000001');
+set local role authenticated;
 select throws_ok($$ select public.transition_valuation('c4b40000-0000-0000-0000-000000000012', '草稿', '監造審核') $$, 'VQ004', null, '舊前端寫的 80 無來源 → 送審擋');
 select lives_ok($$ select public.sync_valuation_from_confirmations('c4b40000-0000-0000-0000-000000000012') $$, '重算');
 select is(pg_temp.cum('c4b40000-0000-0000-0000-000000000012', 'c4b30000-0000-0000-0000-000000000011'), 50::numeric, '重算後累計=前期 50(確認 50 已全數計價)');
@@ -746,7 +784,7 @@ select throws_ok($$ insert into public.inspection_confirmations (project_id, wor
   '23505', null, '重播同一查驗同工項同階段 → 唯一鍵擋');
 select throws_ok($$ insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, confirmed_by)
   values ('c4b20000-0000-0000-0000-00000000000a', 'c4b30000-0000-0000-0000-000000000001', 'C區', 'm2', 5, 'supervisor_certificate', 'c4b10000-0000-0000-0000-000000000002') $$,
-  'VQ005', null, 'service:減量未填原因拒絕');
+  'VQ005', '累計確認量由 10 減為 5,減量必須填寫原因', 'service:減量未填原因拒絕(訊息數字無小數尾)');
 select throws_ok($$ insert into public.valuation_item_sources (project_id, valuation_id, work_item_id, batch_key, qty, kind)
   values ('c4b20000-0000-0000-0000-00000000000a', 'c4b40000-0000-0000-0000-000000000009', 'c4b30000-0000-0000-0000-000000000001', 'c區', 1, 'confirmation') $$,
   'VQ010', null, 'service:來源分配只能由重算寫入');
@@ -800,6 +838,8 @@ select pg_temp.become('c4b10000-0000-0000-0000-000000000006');
 set local role authenticated;
 select throws_ok($$ select public.admin_adjust_valuation_item('c4b40000-0000-0000-0000-000000000010', 'c4b30000-0000-0000-0000-000000000002', 5, ' ') $$, 'VQ005', null, '維護調整必填原因');
 select throws_ok($$ select public.admin_adjust_valuation_item('c4b40000-0000-0000-0000-000000000009', 'c4b30000-0000-0000-0000-000000000002', 5, '維護') $$, 'VQ010', null, '已核定期不可維護調整');
+select throws_ok($$ select public.admin_adjust_valuation_item('c4b40000-0000-0000-0000-000000000010', 'c4b30000-0000-0000-0000-000000000002', 600, '維護') $$,
+  'VQ005', '累計量 600 超過契約量 500', '維護調整也不可超過契約量(訊息數字無小數尾)');
 select lives_ok($$ select public.admin_adjust_valuation_item('c4b40000-0000-0000-0000-000000000010', 'c4b30000-0000-0000-0000-000000000002', 5, '資料修正') $$, '平台管理員調整草稿');
 reset role;
 select is(pg_temp.cum('c4b40000-0000-0000-0000-000000000010', 'c4b30000-0000-0000-0000-000000000002'), 5::numeric, '調整後累計 5');

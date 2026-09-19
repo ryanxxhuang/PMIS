@@ -72,7 +72,7 @@ test('鏈 7:填 100 被上限擋;確認 60 後自動同步、來源可展開、�
   await expect(qty).toHaveValue('')
   await qty.fill('100')
   await qty.blur()
-  await expect(page.getByText(/本期最多可新增 0(\.0+)?\(有效確認量 0/)).toBeVisible()   // VQ006:DB 訊息原樣(橫幅)
+  await expect(page.getByText(/本期最多可新增 0\(有效確認量 0 /)).toBeVisible()   // VQ006:DB 訊息原樣(橫幅;數量無小數尾)
   await expect(page.getByText(/前期累計 0・本期起算值 0・本期最多可新增 0・可用確認量 0・你填的 100/)).toBeVisible()
   await expect(page.getByLabel('一 累計完成數量')).toHaveValue('')     // 被拒的數字不留在框裡
   await expect(page.getByText('本期可請款金額').locator('..').getByText('0', { exact: true })).toBeVisible()
@@ -111,17 +111,19 @@ test('鏈 7:填 100 被上限擋;確認 60 後自動同步、來源可展開、�
   await expect(backlog.getByText('第 1 期草稿')).toBeVisible()          // occupied_by
   await expect(page.getByText('監造確認', { exact: true })).toBeVisible()    // backing=confirmed
   await page.getByRole('button', { name: '來源 1 筆' }).click()
-  const sources = page.getByRole('group', { name: '一 來源' })
+  // P4d 起來源展開分兩段:本期「來源清單」與全案此工項的「有效確認」(撤銷／減量入口),兩段都列得到 A區
+  const sources = page.getByRole('list', { name: '一 來源清單' })
   await expect(sources.getByText('批次 A區')).toBeVisible()
   await expect(sources.getByText('確認累計 60 m2')).toBeVisible()
   await expect(sources.getByText(/鏈七監造/)).toBeVisible()             // 確認人(成員名字)與時間
   await expect(sources.getByText('依據 監造確認單')).toBeVisible()
-  await expect(sources.getByText('歷史遷移')).toHaveCount(0)
+  await expect(page.getByRole('group', { name: '一 來源' }).getByText('歷史遷移')).toHaveCount(0)
+  await expect(page.getByRole('list', { name: '一 有效確認' }).getByText('批次 A區')).toBeVisible()
   await expect(page.getByText('本期可請款金額').locator('..').getByText('6,000', { exact: true })).toBeVisible() // 60 × 100,DB 算
   const qty2 = page.getByLabel('一 累計完成數量')
   await qty2.fill('61')
   await qty2.blur()
-  await expect(page.getByText(/本期最多可新增 60(\.0+)?\(有效確認量 60/)).toBeVisible() // VQ006(橫幅;DB 訊息的 numeric 帶小數位)
+  await expect(page.getByText(/本期最多可新增 60\(有效確認量 60 /)).toBeVisible() // VQ006 橫幅;P4d 起 DB 訊息的數量不帶 numeric 小數尾
   await expect(page.getByLabel('一 累計完成數量')).toHaveValue('60')
   await page.getByRole('button', { name: '同步確認量', exact: true }).click()
   await expect(page.getByText(/已依監造確認量同步/)).toBeVisible()

@@ -1,6 +1,6 @@
 # 監造確認量與估驗聯動（後端強制）
 
-> 狀態：**ACTIVE（後端已實作：P4a 純計算層 `20260917120000`、P4b 表／guard／RPC／鎖 `20260919140000`；前端 P4c 估驗頁已接上（PR #144）；P4d 撤銷／減量／補證／調整 UI 已接上（PR #147，`20260919160000` 只改訊息格式）；封堵 P4e 未做）**｜2026-09-19｜依 [D-026](../DECISIONS.md)。§1–§13 是 P0 設計；實作與設計的偏差集中在 §16（後端）與 §17（前端），以這兩節為準；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
+> 狀態：**ACTIVE（後端已實作：P4a 純計算層 `20260917120000`、P4b 表／guard／RPC／鎖 `20260919140000`；前端 P4c 估驗頁已接上（PR #144）；P4d 撤銷／減量／補證／調整 UI 已接上（PR #147，`20260919160000` 只改訊息格式）；P4e 封堵直接寫入已實作（PR #151，`20260920001500`））**｜2026-09-20｜依 [D-026](../DECISIONS.md)。§1–§13 是 P0 設計；實作與設計的偏差集中在 §16（後端）與 §17（前端），以這兩節為準（P4c／P4d／P4e 另見 §17–§19）；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
 > 標記同 [現場文書文件](field-documents-lifecycle.md)：【已確認】／【設計】／【待決】。
 
 ## 0. 現況核對與差距（基準 `ab4be5f`）
@@ -175,17 +175,17 @@ RPC `revoke_inspection_confirmation(p_id, p_reason)`（監造）與「重簽較�
 
 | 路徑 | 控制 |
 |---|---|
-| 直接 REST `valuation_items` INSERT／UPDATE／DELETE | 第二支 migration `revoke insert, update, delete from authenticated`；只留 SELECT；寫入只經 RPC |
+| 直接 REST `valuation_items` INSERT／UPDATE／DELETE | **P4e 已實作（§19）**：`20260920001500` 收回 PUBLIC／anon／authenticated 的寫入 grant（42501）、刪寫入 policy 只留 SELECT，且 guard 對非重算路徑一律 `VQ010`（所有寫入者）；寫入只經 RPC |
 | 直接 REST `valuations.status`／`period_end`／金流欄 | 保留可寫（相容），但 `valuations_guard` 擴充：送審必填 `period_end`；送審／核定／請款日三個轉移重算不變量；草稿→監造審核限廠商（admin_override 例外）、監造審核→草稿限監造 |
 | `inspection_confirmations`／`valuation_item_sources`／`valuation_adjustments` | authenticated 無寫入 grant；service role 也經 guard（不變量檢查**不看** `auth.uid() is null`） |
 | RPC | 全部 security definer、`revoke from public, anon`；輸入驗證（UUID、非負、有限、單位） |
-| Edge | 沒有 Edge 寫估驗表；新增掃描測試（比照 `agentToolWhitelist.scan.test.ts`）釘住 `supabase/functions` 內不出現 `from('valuation_items')` 的寫入 |
+| Edge | 沒有 Edge 寫估驗表；**P4e 已加** `_shared/valuationWrites.scan.test.ts` 掃描 `supabase/functions` 全部原始碼：估驗六表（含 `valuations`、確認紀錄、計價依據）不得出現在寫入鏈、估驗寫入 RPC 與 `sign_field_document` 不得呼叫、不得原始 REST |
 | `fillValuationFromSiteLogs` | 從 store 移除；估驗頁改為唯讀「日誌申報量 vs 確認量 vs 本期累計」差異比對（`valuationDiff.js` 延伸） |
 | 標單匯入／重設 `reset_project_boq` | `work_items` FK on delete restrict：有 active 確認的工項不可重匯；先撤銷（留痕）再重匯 |
 | 管理員例外 `admin_override`（非正式模式） | 只放行**角色**檢查（單人試用可兼簽），**不放行數量不變量** |
-| service role | 無 bypass；維護只能走 `admin_adjust_valuation_item(p_reason)`（平台管理員、必填原因、寫 audit、產生 `adjustment` 來源列） |
+| service role | 無 bypass（P4e 起連草稿明細的直接寫入也 `VQ010`）；維護只能走 `admin_adjust_valuation_item(p_reason)`（平台管理員、必填原因、寫 audit、產生 `adjustment` 來源列） |
 | 客戶端 `approved_qty`／`cum_qty`／金額 | RPC 只接受 `cum_qty` 目標值並重算；金額一律 DB 算 |
-| 舊前端／舊 RPC | 部署順序 §12；封堵 migration 套用後舊前端的 upsert 會收到明確錯誤（`mutationOutcome` 已能顯示），不會靜默成功 |
+| 舊前端／舊 RPC | 部署順序 §12；封堵 migration 套用後舊前端的 upsert 會收到明確錯誤（42501，`friendlyError` 顯示「操作未完成…（代碼 42501）」，舊碼還原該格），不會靜默成功（§19.3） |
 | 跨專案 | 所有 RPC 以 `p_valuation_id` 反查 `project_id`，工項與確認必須同案；RLS 縱深 |
 
 ## 10. 總價／間接費等非實體工項【已確認 不可豁免；使用者 2026-09-17 決定 暫時隔離】
@@ -215,9 +215,9 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 | P4b（已實作 `20260919140000`） | 四張新表＋加欄＋guards＋十支 RPC＋advisory lock＋可估驗清單 RPC（取代 view，理由見 §16.3）；全部以 §3.2 純函式為核心；pgTAP `confirmed_quantity_enforcement.sql`（§8 全部情境、狀態機、權限矩陣、service role 無 bypass）＋`confirmed_quantity_concurrency.sql`（`dblink` 兩個 session 真併發） |
 | P4c | 前端：可估驗清單、來源展開、缺件、差異比對、移除 `fillValuationFromSiteLogs` |
 | P4d（已實作，PR #147；migration `20260919160000` 只改 VQ005／VQ006 訊息數字格式） | 撤銷／減量／補證／作廢 UI（§18）、今日工作／早報的「待監造補證」「待機關處理扣回」（共用規則） |
-| P4e | 封堵 migration（revoke）＋Edge 掃描測試＋舊客戶端相容驗證 |
+| P4e（已實作，PR #151；`20260920001500`） | 封堵 migration（grant＋policy＋guard 三層）＋Edge 掃描測試＋舊客戶端相容驗證＋估驗鏈訊息數字（§19） |
 
-部署順序：P4b（加法）→ 前端 P4c → **觀察一個完整期別** → P4e 封堵。P4b 之後、P4e 之前，舊前端的直接 upsert 仍可寫 `valuation_items`，但送審／核定已被 guard 擋下，不會產生未經確認的核定；這是刻意的相容窗。
+部署順序：P4b（加法）→ 前端 P4c → **觀察一個完整期別** → P4e 封堵。P4b 之後、P4e 之前，舊前端的直接 upsert 仍可寫 `valuation_items`，但送審／核定已被 guard 擋下，不會產生未經確認的核定；這是刻意的相容窗。P4e（`20260920001500`）套用後相容窗關閉。
 
 ## 13. 舊資料過渡（依正式盤點）【已確認 原則】
 
@@ -284,7 +284,7 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 ### 16.4 舊資料過渡（正式庫 2026-09-19 唯讀盤點與處置）
 - 盤點：`valuations` 12（草稿 7、監造審核 1、已核定 4；截止日 1／1／1；請款日 2）；`valuation_items` 26（已核定 5 筆 Δ>0、其中 1 筆掛非計價列、1 筆工項無單位；草稿 21 筆 11 筆 Δ>0）；超契約量 0、負值 0；`inspection_points` H 3（2 有工項，皆無 `stage_key`）；核准變更連工項 3；總價類末端工項 4,914。
 - 處置：migration 內 `fn_cq_backfill_legacy_internal()` 為已核定期每筆 Δ≠0 明細寫 `kind='legacy'`／`batch_key='__legacy__'` 來源（歷史遷移，不是監造確認）；歷史金額不重算。之後：有 legacy 來源的期別送審／核定／新請款一律擋並列出；補證路徑＝監造確認單 `p_covers_valuation_id`。草稿期的既有數量保留（`backing='legacy'`），送審時 `source_mismatch` 擋下，廠商 `sync` 後以確認量為準（無確認即歸零）。監造審核那 1 期沒有明細，可直接核定或退回。
-- 直接 REST 寫 `valuation_items`（舊前端、`fillValuationFromSiteLogs`）本支保留（P4e 收回），但寫入時：金額／百分比由 DB 算、超契約量與跨案拒絕、非草稿期凍結（含 service role；只有備註可由監造改）、非重算路徑寫入一律標 `backing='legacy'`。
+- 直接 REST 寫 `valuation_items`（舊前端、`fillValuationFromSiteLogs`）本支保留（P4e 收回），但寫入時：金額／百分比由 DB 算、超契約量與跨案拒絕、非草稿期凍結（含 service role；只有備註可由監造改）、非重算路徑寫入一律標 `backing='legacy'`。（P4e `20260920001500` 已收回，見 §19。）
 
 ### 16.5 其他 guard
 - `work_items`：有 active 確認的工項不可刪除、不可改單位（`reset_project_boq`／標單重匯整包回滾；先撤銷）；專案刪除 cascade 放行。
@@ -308,7 +308,7 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 ### 17.1 讀寫路徑
 - 讀：`get_valuation_state(選中期別)`（逐工項 `cq_item_state`＋`sources[]`＋`backing`＋整期 `violations`）、`list_billable_backlog(專案)`（可估驗清單；未開期先累積）、`inspection_confirmations`（RLS 成員可讀；來源展開要的批次／位置／確認量／查驗與文件版本／確認人與時間）、`list_project_members`（確認人名字）。任何寫入成功後 store 整批重載期別（`loadValuationsFromDB`），畫面上的數量與金額永遠是 DB 的值，`valuations` 一變就重取上述唯讀狀態。
 - 寫：建期＝`insert valuations`（`period_end` 必填，建期對話框預填台北今天）→ `sync_valuation_from_confirmations`（失敗即刪掉剛建的期，不留半套）；改累計量＝`set_valuation_item_cum`（`VQ006` 的 `detail` 翻成「前期累計・本期起算值・本期最多可新增・可用確認量・你填的」，輸入框回到 DB 的值）；送審／退回／核定＝`transition_valuation(p_from=目前狀態)`（`applied:false` 視為未變更並重載；`VQ004.detail` 逐項翻成人話列在錯誤橫幅下）；同步＝`sync_valuation_from_confirmations`（全頁只有動作列一顆「同步確認量」）；計價依據＝`set_work_item_pricing_basis`（監造在明細列的下拉，選項 `supervisor_certificate`／`inspection`／`excluded`；`pro_rata` 需規則，待 Q3 定案後開放）；草稿期改截止日＝REST `update valuations.period_end`（guard 已限草稿）。請款日仍走 `/payments` 的 REST（第三個檢查點由 trigger 擋，錯誤含代碼與訊息原樣顯示）。
-- 移除：`fillValuationFromSiteLogs`、`valuationItemRow`、建期複製前期明細、`valuation_items` 的任何客戶端寫入；`billing.test.js` 釘住「slice 不暴露 fill、改數量／建期不碰 `valuation_items`」。P4e 收回直接寫入前，舊客戶端的 REST 寫入在頁面上呈現為「缺監造確認來源・申報,不計價」（真後端 chain 9）。
+- 移除：`fillValuationFromSiteLogs`、`valuationItemRow`、建期複製前期明細、`valuation_items` 的任何客戶端寫入；`billing.test.js` 釘住「slice 不暴露 fill、改數量／建期不碰 `valuation_items`」。P4e 收回直接寫入前，舊客戶端的 REST 寫入在頁面上呈現為「缺監造確認來源・申報,不計價」（真後端 chain 9）；P4e 後舊路徑一律 42501，正式庫遺留的 legacy 草稿明細仍如此呈現（§19）。
 
 ### 17.2 金額與期別投影（設計未寫）
 - `buildCumMap(roots, childrenMap, period)` 改吃期別物件的 `amounts`（DB `valuation_items.amount_cum`，Q2 逐工項到元），前端不再用「金額 × 比例」或「單價 × 數量」換算；`Payments`／`Progress`／`Dashboard`／`MonthlyReport`／`SupervisorReport`／`ValuationPrint`／`ValuationPackage`／`RiskAudit`／`assistantData` 十個呼叫端一併改傳期別物件，全站金額口徑單一。demo 沒有 DB，種子與 demo 改數量用 `boqCalc.valuationItemAmount`（`fn_valuation_amount` 的鏡像；DB 模式不得使用）。
@@ -322,7 +322,7 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 ### 17.4 未做與已知限制
 - 監造確認單簽發、撤銷、補證（`p_covers_valuation_id`）、機關作廢調整的 UI 在 P4d（§18）；真後端 chain 7 仍以 RPC 簽發確認單、chain 11 走 UI。P3c 簽署 `inspection_form` 寫確認量未接（§16.6）。
 - 手機（<md）維持唯讀期別摘要（§9.6），另列各期截止日與選中期別的未確認申報件數；寫入一律桌機。
-- DB 的 `VQ006` 訊息把 numeric 印成 `60.0000`（P4b 的 `format('%s')`）：P4d 以 `20260919160000` 修掉 `set_valuation_item_cum` 的 VQ005／VQ006（§18.4）；逐工項違反 `message`（`fn_cq_item_state_internal`）等處仍帶小數尾，P4e 收回。
+- DB 的 `VQ006` 訊息把 numeric 印成 `60.0000`（P4b 的 `format('%s')`）：P4d 以 `20260919160000` 修掉 `set_valuation_item_cum` 的 VQ005／VQ006（§18.4）；逐工項違反 `message`（`fn_cq_item_state_internal`）等處由 P4e 改經 `fn_cq_txt`（§19.2）。
 
 ## 18. P4d 撤銷／減量／補證／調整落地結果與偏差（2026-09-19，PR #147；migration `20260919160000_vq_message_numeric_format` 只改訊息文字）
 
@@ -344,7 +344,30 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 - 已核定期的確認被撤銷後，該期在扣回 `pending` 期間登錄請款日會被 `batch_over_allocated` 擋下（chain 11a 驗證），作廢或於草稿期扣回後才可登錄；設計 §7 沒寫這一點，實作以 P4b 的檢查點為準。
 
 ### 18.4 VQ005／VQ006 訊息數字（P4b 已知限制）
-`20260919160000` 新增純函式 `fn_cq_txt(numeric)=trim_scale(·)::text`（值不變、只去 `numeric(18,4)` 的尾零；不對 authenticated 開放），`create or replace` 重建 `set_valuation_item_cum`，五處訊息數字改經它（`60.0000`→`60`、`60.5000`→`60.5`）；回復檔 `supabase/rollbacks/20260919160000_vq_message_numeric_format.down.sql`。仍以 `%s` 印數量的其他訊息（`fn_cq_item_state_internal` 的逐工項違反 `message`，例如缺件卡括號裡的「數量 50.0000 來自歷史遷移」；確認紀錄 guard 的減量訊息；批次 guard）留 P4e 一併改經 `fn_cq_txt`——P4e 本來就要重建這些 guard。
+`20260919160000` 新增純函式 `fn_cq_txt(numeric)=trim_scale(·)::text`（值不變、只去 `numeric(18,4)` 的尾零；不對 authenticated 開放），`create or replace` 重建 `set_valuation_item_cum`，五處訊息數字改經它（`60.0000`→`60`、`60.5000`→`60.5`）；回復檔 `supabase/rollbacks/20260919160000_vq_message_numeric_format.down.sql`。仍以 `%s` 印數量的其他訊息（`fn_cq_item_state_internal` 的逐工項違反 `message`，例如缺件卡括號裡的「數量 50.0000 來自歷史遷移」；確認紀錄 guard 的減量訊息；批次 guard）留 P4e 一併改經 `fn_cq_txt`——P4e 本來就要重建這些 guard（已完成，§19.2）。
 
 ### 18.5 驗證
 pgTAP `confirmed_quantity_enforcement.sql` 294→299（`fn_cq_txt` 三值＋授權、`throws_like` VQ006 訊息不帶小數尾）；Vitest 新增 `CertificateForm.test.jsx`、`AdjustmentsCard.test.jsx`、`SourceRow.test.jsx` P4d 兩條、`billing.test.js` §6 四條、`db.test.js` legacy 計數；共用案例 fixture 新增 `v6`（待監造補證）、`adj1`（待機關處理扣回）、`adj2`（void 不列），前端／Edge／Deno 三路徑同讀。真後端 `e2e-real/chain11-adjustments.spec.js`：11a 核定→UI 撤銷→請款被擋→UI 作廢→請款日登錄；11b 歷史遷移期別（DBA 邊界 `docker exec psql` 停用檢查點 trigger 核定＋`fn_cq_backfill_legacy_internal`，與正式庫回填同一支）→監造首頁「待監造補證」→缺件卡→「補證此期」→缺件清空→請款日登錄。
+
+## 19. P4e 封堵直接寫入落地結果（2026-09-20，PR #151；migration `20260920001500_valuation_items_seal`，回復檔 `supabase/rollbacks/` 同名 `.down.sql`）
+
+### 19.1 三層封堵
+- **表級 GRANT**：收回 PUBLIC／anon／authenticated 對 `valuation_items` 的 INSERT／UPDATE／DELETE（SELECT 不動）；PostgREST 直接回 `42501`。比照 P1b 成本表。
+- **RLS**：刪 `valuation_items_write`（for all），只留 `valuation_items_select`；日後即使有人再下廣域 grant，RLS 仍不放行寫入。
+- **guard（與設計 §9「revoke authenticated」的差異）**：`valuation_items_guard` 對非重算路徑（未設 `pmis.cq_internal`）的 INSERT／UPDATE／DELETE 一律 `VQ010`，**所有寫入者一體適用**——service role 保有平台預設表級 DML、繞過 RLS，只收 grant 擋不住它；DBA 直連也擋。與 P4b 對 `valuation_item_sources`／`valuation_adjustments` 的做法一致。cascade 照舊放行：期別已不在（草稿期刪除、專案刪除、標單重設）或工項已不在（單一工項刪除）；已送審／核定／請款期的明細不可被 cascade 刪（`P0001`，既有證據 guard 行為）。重算路徑本身在非草稿期只可改 `backing`（補證 legacy→confirmed），數量、金額、備註一律凍結。
+- 隨之移除的相容分支：「非重算寫入標 `backing='legacy'`」（已沒有非重算寫入；`backing` 由重算路徑明示）、「已核定明細備註監造可改」（P4c 起前端沒有此入口；明細是投影，不保留任何直接改寫）。凍結訊息改「估驗目前為「狀態」」（舊寫法遇到已核定會印成「估驗已已核定」）。
+- **盤點**：前端 `src/` 只有 `store/db.js` 讀明細（P4c 起無寫入，`billing.test.js` 釘住）；Edge 只讀（`ballInCourt`、`integrityAuditTool`、`agentQueryTools`），新增掃描測試釘住；RPC／trigger 的寫入全部經 `fn_cq_set_internal(true)`（`fn_cq_recompute_item_internal`、`fn_cq_allocate_internal`、`sync_valuation_from_confirmations`、`issue_supervisor_certificate` 補證、`admin_adjust_valuation_item`）；Demo 無 DB、`seed.sql` 不寫；pgTAP 與真後端需要「產品已不允許產生、但正式庫仍存在」的歷史明細時走 DBA 邊界（交易內開重算旗標並明示 `backing='legacy'`，真後端 `e2e-real/helpers.js` 的 `dbaSql`）。
+- **`valuations` 的數量相關欄位（確認即可，未改）**：期別本身沒有數量欄；送審／核定／請款三個檢查點在 AFTER UPDATE trigger，對所有寫入者一體適用；service role 可建非草稿期別（`is_user` 才限草稿），但非草稿期不可追加明細、內部路徑也不會寫入，空期別不影響 B／O；service role 可改 `recheck_required`／`recheck_note`，但這兩欄是「送審中被減量」的提示旗標，同一超額必然同時觸發 `batch_over_allocated`／`cutoff`（兩者都在檢查點重算），不構成數量繞過。
+
+### 19.2 訊息數字（P4d §18.4 的收尾）
+`create or replace` 重建（簽章、ACL、H3 允許清單不變；本體除訊息參數外與 P4b 逐字相同）：`fn_cq_item_state_internal`（over_contract／source_mismatch／legacy_source／cutoff／batch_over_allocated）、`inspection_confirmations_guard`（減量）、`valuation_item_sources_guard`（批次、截止日）、`fn_cq_reconcile_internal`（`recheck_note` 超出量）、`admin_adjust_valuation_item`（超過契約量）、`valuation_items_guard`，數量一律經 `fn_cq_txt`。同一行另修：單階段工項的批次確認被撤銷後，`batch_over_allocated` 原本印「缺必要查驗階段 (單階段)」（缺階段清單的佔位字），改為只有多階段工項才說缺階段；`missing_stages` 欄位值不變。
+**未含**：P3c 的 `field_document_sign_inspection_form_internal`（6 處申報／確認量訊息）與 `inspections_defect_sync`（缺失說明「申報／確認／差額」）同樣以 `%s` 印 `numeric(18,4)`；P3e 並行重定義簽署路徑，為避免兩支 migration 互蓋，列續接清單緊接項（P3e 或其後第一個動到簽署路徑的 DB 單元）。
+
+### 19.3 相容與部署
+- 舊版前端（P4c 前、仍開著的分頁；HTML `must-revalidate`、無 service worker，重新整理即換新版）：`upsert`／`insert` 明細收到 42501，`friendlyError` 顯示「操作未完成…（代碼 42501）」，舊碼在失敗時還原該格、建期複製前期明細失敗會刪掉剛建的期別並回報，不白畫面、不靜默成功。真後端 chain 9 斷言 upsert／update／delete 皆 42501。
+- 正式庫既有資料不動：26 列明細（已核定 5、草稿 21）照舊可讀；草稿期 legacy 明細仍由檢查點擋，廠商「同步確認量」即以確認量為準；4 個歷史遷移期別的補證路徑不變（§18.1）。
+- 回復檔已在本機一次性棧實跑：套 `.down.sql` → P4b 版 `valuation_items_guard.sql` 11 條與 `confirmed_quantity_enforcement.sql` 299 條全綠 → 重套 migration → 新版全綠。
+
+### 19.4 驗證
+pgTAP `valuation_items_guard.sql` 11→50（三角色＋專案管理者＋非成員直接 INSERT／UPDATE／DELETE 皆 42501、service role 與 DBA 皆 `VQ010`、權限與 policy 結構、RPC 路徑照常且金額由 DB 算、重算路徑凍結、cascade、訊息無小數尾）；`confirmed_quantity_enforcement.sql` 299→307（舊前端路徑改斷言 42501、歷史資料走 DBA 邊界、五種違反與減量／批次／recheck／維護調整訊息無小數尾）；`boq_reset_import`／`photos_storage` fixture 改走 DBA 邊界。Vitest `_shared/valuationWrites.scan.test.ts` 4 條（合成片段證明會抓、不誤判；真實原始碼無估驗寫入且確實讀到估驗表）。真後端 chain 2／7／9／11。
+

@@ -1,13 +1,14 @@
-// P4c｜鏈 9:未經監造確認的量在頁面上不可請款、直接送審被擋並顯示原因(真 Supabase,正式模式)。
-// P4e 收回 valuation_items 直接寫入之前,舊客戶端仍可 REST 寫入申報量(DB 標 backing=legacy、無來源)。
-// 這條鏈模擬那條舊路徑:廠商以 REST 寫 100 → 新 UI 顯示「缺監造確認來源・申報,不計價」、本期可請款金額 0、
-// 缺件卡列出處理入口 → 直接按「送監造審核」被 DB 檢查點(VQ004)擋下,畫面列出原因,狀態仍是草稿
-// → 廠商按「同步確認量」(沒有確認即歸零)→ 缺件消失 → 送審成功。
-// fixture 全走產品窄門 RPC;afterAll 走 delete_project RPC+admin API 清理,殘留 0。
+// P4c／P4e｜鏈 9:未經監造確認的量在頁面上不可請款、直接送審被擋並顯示原因(真 Supabase,正式模式)。
+// P4e(20260920001500)起舊客戶端的直接寫入明確失敗:REST upsert／update／delete valuation_items 一律 42501。
+// 但 P4e 之前舊前端寫進草稿的申報量仍留在正式庫(backing=legacy、無來源),這條鏈以 DBA 邊界重現那筆 100
+// → 新 UI 顯示「缺監造確認來源・申報,不計價」、本期可請款金額 0、缺件卡列出處理入口 → 直接按「送監造審核」
+// 被 DB 檢查點(VQ004)擋下,畫面列出原因,狀態仍是草稿 → 廠商按「同步確認量」(沒有確認即歸零)→ 缺件消失 → 送審成功。
+// fixture 走產品窄門 RPC(歷史申報量除外,見上);afterAll 走 delete_project RPC+admin API 清理,殘留 0。
+// 前置:本機 stack 已套用 20260920001500;容器 supabase_db_PMIS 在跑。
 import { test, expect } from '@playwright/test'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
-  signInClient, loginReal, gotoHash, runCleanup,
+  signInClient, loginReal, gotoHash, runCleanup, dbaSql,
 } from './helpers.js'
 
 const PROJECT_NAME = `鏈9未確認量工程-${Date.now().toString(36)}`
@@ -44,7 +45,7 @@ test.afterAll(async () => {
   )
 })
 
-test('鏈 9:舊路徑寫入的申報量不可請款;直接送審被擋並列出原因;同步後歸零可送審', async ({ page }) => {
+test('鏈 9:舊路徑直接寫明細明確失敗;遺留的申報量不可請款、直接送審被擋並列出原因;同步後歸零可送審', async ({ page }) => {
   await loginReal(page, conEmail)
   await gotoHash(page, '/valuation')
   await page.getByRole('button', { name: '＋ 新增估驗期' }).click()
@@ -52,15 +53,26 @@ test('鏈 9:舊路徑寫入的申報量不可請款;直接送審被擋並列出�
   const tab1 = page.getByRole('button', { name: /第 1 期/ })
   await expect(tab1.getByText('草稿')).toBeVisible()
 
-  // 舊客戶端路徑:REST 直接寫 100(P4e 之前仍可;DB 標 legacy、算金額、但沒有來源)
+  // 舊客戶端路徑(P4c 前的快取分頁、直接 REST):寫明細明確失敗,不會靜默成功
   const con = await signInClient(conEmail)
   const { data: periods } = await con.from('valuations').select('id').eq('project_id', projectId)
   const valuationId = periods[0].id
-  const { error: restErr } = await con.from('valuation_items').upsert(
+  const upsert = await con.from('valuation_items').upsert(
     { valuation_id: valuationId, work_item_id: workItemId, cum_qty: 100, source: 'daily_log' },
     { onConflict: 'valuation_id,work_item_id' },
   )
-  if (restErr) throw new Error(`REST 寫入失敗:${restErr.message}`)
+  expect(upsert.error?.code).toBe('42501')
+  const update = await con.from('valuation_items').update({ cum_qty: 100 }).eq('valuation_id', valuationId)
+  expect(update.error?.code).toBe('42501')
+  const del = await con.from('valuation_items').delete().eq('valuation_id', valuationId)
+  expect(del.error?.code).toBe('42501')
+
+  // P4e 之前舊前端寫進草稿的申報 100(正式庫仍有這類 legacy 草稿明細):以 DBA 邊界重現
+  dbaSql(`begin;
+    set local pmis.cq_internal = '1';
+    insert into public.valuation_items (valuation_id, work_item_id, cum_qty, source, backing)
+      values ('${valuationId}', '${workItemId}', 100, 'daily_log', 'legacy');
+    commit;`)
 
   // 新 UI:申報 100 看得到,但標「申報,不計價」,本期可請款金額 0;缺件卡送審前就列出並給處理入口
   await page.reload()

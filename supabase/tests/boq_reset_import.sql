@@ -152,9 +152,12 @@ insert into public.schedule_periods (project_id, period_label, planned_pct)
   values ('bb100000-0000-0000-0000-000000000001', '2026-08', 10);
 insert into public.valuations (id, project_id, period_no, status)
   values ('bb400000-0000-0000-0000-000000000001', 'bb100000-0000-0000-0000-000000000001', 1, '草稿');
-insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
+-- 估驗明細:P4e(20260920001500)起只有重算路徑可寫;這筆代表遷移前的草稿資料,以 DBA 邊界(交易內開重算旗標)佈置
+select set_config('pmis.cq_internal', '1', true);
+insert into public.valuation_items (valuation_id, work_item_id, cum_qty, backing)
   values ('bb400000-0000-0000-0000-000000000001',
-    (select id from public.work_items where project_id = 'bb100000-0000-0000-0000-000000000001' and item_key = '1.1'), 0.5);
+    (select id from public.work_items where project_id = 'bb100000-0000-0000-0000-000000000001' and item_key = '1.1'), 0.5, 'legacy');
+select set_config('pmis.cq_internal', '', true);
 insert into public.inspections (project_id, title)
   values ('bb100000-0000-0000-0000-000000000001', '模板查驗');
 insert into public.defects (project_id, work_item_id, title)
@@ -214,9 +217,11 @@ select pg_temp.become(null);
 -- 對應正式庫遷移前的已核定期;P4b 起登入者與 service role 都無法再產生沒有確認來源的已核定量。
 insert into public.valuations (id, project_id, period_no, period_end, status)
   values ('bb400000-0000-0000-0000-000000000002', 'bb100000-0000-0000-0000-000000000002', 1, current_date, '草稿');
-insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
+select set_config('pmis.cq_internal', '1', true);
+insert into public.valuation_items (valuation_id, work_item_id, cum_qty, backing)
   values ('bb400000-0000-0000-0000-000000000002',
-    (select id from public.work_items where project_id = 'bb100000-0000-0000-0000-000000000002' and item_key = '1.1'), 1);
+    (select id from public.work_items where project_id = 'bb100000-0000-0000-0000-000000000002' and item_key = '1.1'), 1, 'legacy');
+select set_config('pmis.cq_internal', '', true);
 alter table public.valuations disable trigger valuations_checkpoint_guard;
 update public.valuations set status = '已核定' where id = 'bb400000-0000-0000-0000-000000000002';
 alter table public.valuations enable trigger valuations_checkpoint_guard;
