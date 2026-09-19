@@ -5,7 +5,7 @@
 
 ## 1. 本輪驗證
 
-### 2026-09-19 P3c：監造查驗表單——簽署即判定並寫入可估驗的確認量（`codex/slimming-p3c-inspection-form`，PR #146，migration `20260919222000_inspection_form_documents`；rebase 到含 P3d `9b06dc3`／P4c `8acb9b8` 的 main 後重驗）
+### 2026-09-19 P3c：監造查驗表單——簽署即判定並寫入可估驗的確認量（`codex/slimming-p3c-inspection-form`，PR #148，migration `20260919222000_inspection_form_documents`；rebase 到含 P3d `9b06dc3`／P4c `8acb9b8` 的 main 後重驗）
 
 - `npm run test:db`（一次性資料庫從零套 77 支 migration＋seed）：56 檔、3,110 通過、0 失敗（新增 `inspection_form_documents.sql` 146 條：結構／權限、示範範本與規則推導（人填欄＝判定＋確認量、階段依 ITP 必填、項目鍵通用化、自檢表回歸）、`inspections_guard`（正規化、建立只能待查驗、簽署專屬欄、判定僅監造、部分合格只走簽署、已判定不可改申報、無確認量可撤銷判定、同查驗缺失不重開、四值 check）、`create_inspection_form_draft` 三角色＋非成員＋跨案＋唯一索引、AI 版本不得帶入判定／確認量、簽署分支（廠商／機關／非成員／正式模式 admin `PD006`、待確認 `PD004`、單位／超申報／合格≠申報／單階段帶階段／不合格無說明／查驗不一致 `PD010`、廠商照片 `PD005`、簽署即判定＋確認紀錄＋缺失、冪等、同量重簽不累加、改量 `PD008`、撤銷後重簽、backlog 60→70→100 累計、多階段缺階段 0／齊全 50、不合格不寫確認量、查驗項目不合格不得判合格、自檢表範本拒絕、提送對象矩陣、專案刪除 cascade）；H3 允許清單 79→80）。在共用開發 stack 以交易內套 migration 逐檔回歸 `self_check_documents`／`confirmed_quantity_enforcement`／`field_document_sign`／`supervisor_logs`／`field_documents`／`inspection_checklist_link`／`checklist_revisions`／`p0_05_audit_events`／`formal_mode`／`evidence_guards`／`anon_and_function_privileges` 全綠後才跑全套。
 - `npm test`：135 檔、1,491 項通過。新增／改動：`fieldDocs.test.js` +5（提送對象矩陣解析 `20260917201000` 的 `fn_field_document_to_org_allowed` 與 `FIELD_DOC_TO_ORGS` 逐字一致、必要階段、空白表單來源、判定與確認量一致性、批次累計）、`demoFieldDocTemplates.test.js`（三類逐字一致＋查驗表單必填／人填／須確認）、Edge `fieldDocDraft.test.ts` +4（監造候選 ready／blocked、自檢表只用 `kind=self_check`、`buildInspectionFormDraft` 三案例）、`fieldDocDraftRun.test.ts`（監造批次起查驗表單、判定留空、重跑冪等、另一批同查驗接同一份）、`itp.test.js` +1、`quality.test.js`（缺失改由 DB 開）、`navConfig.test.js`（路由與分頁）。
