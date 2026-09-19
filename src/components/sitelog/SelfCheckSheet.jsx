@@ -2,11 +2,13 @@
 // 的內容(簽署列指向的版本,不是畫面上可能較新的草稿);逐項判定與整表結果優先取簽署落下的 checklist_records 列
 // (DB fn_checklist_judge 算的),沒有(草稿)才以前端 judgeChecklist 預覽並整張標「草稿・未簽署」。
 // 頁首標示範框架範本(fn_field_document_template('self_check') 的 demo_label 與免責聲明)、文件短碼、版本號、
-// 內容雜湊前 12 碼、簽署者與伺服器時間;修訂版次(Rev.N)與更正原因來自 checklist_records。純顯示、無 input;用色只走 .paper。
-import { formatHash, DOC_STATUS_LABEL, selfCheckValues, sourceLabel } from '../../lib/fieldDocs.js'
+// 內容雜湊前 12 碼、簽署者與伺服器時間(三張紙本共用 DocumentPrintStamp);修訂版次(Rev.N)與更正原因來自 checklist_records。
+// 純顯示、無 input;用色只走 .paper。
+import { selfCheckValues, sourceLabel } from '../../lib/fieldDocs.js'
 import { judgeChecklist } from '../../lib/qc.js'
+import { taipeiDateTime as fmtTs } from '../../lib/dates.js'
+import { DocumentPrintStamp } from './DocumentPrint.jsx'
 
-const fmtTs = (iso) => (iso ? String(iso).slice(0, 16).replace('T', ' ') : '—')
 const roc = (iso) => {
   if (!iso) return ''
   const [y, m, d] = String(iso).split('-').map(Number)
@@ -34,15 +36,7 @@ export default function SelfCheckSheet({ project, doc, version, signature = null
         {frame?.is_demo ? `【${frame.demo_label || '示範範本'}】` : ''}框架 {c.template?.key || frame?.key || '—'} v{c.template?.version ?? frame?.version ?? '—'}
       </div>
       {frame?.disclaimer && <p className="mt-1 text-caption paper-mute text-center">{frame.disclaimer}</p>}
-      <div className={`mt-3 border paper-rule-strong px-2 py-1.5 text-footnote flex flex-wrap gap-x-4 gap-y-0.5 ${signed ? '' : 'paper-fill'}`}>
-        <span>文件 {String(doc.id).slice(0, 8)}</span>
-        <span>版本 {version.version_no}</span>
-        <span>內容雜湊 {formatHash(version.content_hash)}</span>
-        {signed
-          ? <span>簽署 {signature.signer_name_snapshot || '—'}・{fmtTs(signature.signed_at)}・平台帳號</span>
-          : <span className="font-bold text-[var(--red-text)]">草稿・未簽署（非正式紀錄；判定為畫面預覽）</span>}
-        <span>文件狀態 {DOC_STATUS_LABEL[doc.status] || doc.status}</span>
-      </div>
+      <DocumentPrintStamp doc={doc} version={version} signature={signature} draftNote="非正式紀錄；判定為畫面預覽" className="mt-3" />
 
       <div className="mt-2 border paper-rule-strong text-body">
         <div className="grid grid-cols-2">

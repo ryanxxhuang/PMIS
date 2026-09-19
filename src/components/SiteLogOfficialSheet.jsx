@@ -3,6 +3,10 @@
 // 監造調閱的本來就是這張正式格式,不該只有摘要。工項清單以 itemList prop 傳入——
 // 列印頁維持原本 workItems.items 口徑、唯讀頁用套變更後的 adjustedItems,兩邊輸出口徑各自不變。
 // 純顯示、無任何 input（唯讀 /site-log 的 e2e 契約:除日期外不得出現 input）。
+// P3d:列印頁印的是施工日誌文件的「簽署版本」(lib/fieldDocs.contentToLogShape 轉成這個形狀),stamp 插槽放
+// 共用的 DocumentPrintStamp(版本、雜湊、簽署者／伺服器時間,或「草稿・未簽署」)。文件版本的工項項次／名稱／單位取
+// 版本內容的快照(log.item_meta),契約數量與排序才查工項表;天氣不做舊列的單欄回退(log.from_document)。
+// 累計＝「此日之前」已落庫的日誌列＋這張紙本本身——紙本印的是文件版本時,不會把同日另一份(舊流程或未簽)的列算進來。
 // 用色一律走 index.css 的 .paper / paper-* (紙面固定白底黑字,不吃主題;對比度數字在那裡),
 // 本檔不出現任何色碼或 Tailwind 調色盤 class。
 import { useMemo } from 'react'
@@ -27,13 +31,13 @@ const Th = ({ children, right }) => <th className={`border paper-rule px-1.5 py-
 const Td = ({ children, right }) => <td className={`border paper-rule px-1.5 py-0.5 text-footnote ${right ? 'text-right tabular-nums' : ''}`}>{children}</td>
 const Check = ({ on, label }) => <span className="mr-3">{on ? '■' : '□'} {label}</span>
 
-export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList, className = '' }) {
+export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList, stamp = null, className = '' }) {
   const byKey = useMemo(() => new Map((itemList || []).map((it) => [it.item_key, it])), [itemList])
 
-  // 累計（含本日）：工項數量、出工、機具、材料
+  // 累計（含本日）：此日之前的日誌列＋本張紙本的工項數量、出工、機具、材料
   const cum = useMemo(() => {
     if (!log) return { items: new Map(), labor: new Map(), equip: new Map(), mat: new Map() }
-    const upTo = (siteLogs || []).filter((l) => l.log_date <= log.log_date)
+    const upTo = [...(siteLogs || []).filter((l) => l.log_date < log.log_date), log]
     const items = new Map(), labor = new Map(), equip = new Map(), mat = new Map()
     const acc = (m, k, v) => m.set(k, (m.get(k) || 0) + (Number(v) || 0))
     for (const l of upTo) {
@@ -54,14 +58,23 @@ export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList,
   const calDay = dayAnchor && log.log_date
     ? Math.round((parseLocalDate(log.log_date) - parseLocalDate(dayAnchor)) / 86400000) + 1
     : null
+  const meta = log.item_meta || {}
   const rows = Object.entries(log.items || {})
-    .map(([k, q]) => ({ it: byKey.get(k) || { description: k }, q, c: cum.items.get(k) || 0 }))
+    .map(([k, q]) => {
+      const wi = byKey.get(k)
+      const snap = meta[k]
+      const it = snap ? { ...wi, item_no: snap.item_no ?? wi?.item_no, description: snap.description || wi?.description || k, unit: snap.unit ?? wi?.unit } : (wi || { description: k })
+      return { it, q, c: cum.items.get(k) || 0 }
+    })
     .sort((a, b) => (a.it.sort_order || 0) - (b.it.sort_order || 0))
+  const weatherAm = log.from_document ? log.weather_am : (log.weather_am || log.weather)
+  const weatherPm = log.from_document ? log.weather_pm : (log.weather_pm || log.weather_am || log.weather)
 
   return (
     <div className={`max-w-[210mm] mx-auto paper shadow print:shadow-none p-[12mm] print:p-0 ${className}`}>
       <h1 className="text-center text-lg font-bold tracking-widest">公共工程施工日誌</h1>
       <p className="text-center text-footnote paper-mute mt-0.5 mb-2">（承攬廠商每日填報）</p>
+      {stamp && <div className="mb-2">{stamp}</div>}
 
       {/* 表頭 */}
       <div className="border paper-rule-strong text-body">
@@ -71,8 +84,8 @@ export default function SiteLogOfficialSheet({ project, log, siteLogs, itemList,
         </div>
         <div className="grid grid-cols-3">
           <div className="px-2 py-1 border-r paper-rule"><span className="paper-mute">日期：</span>{roc(log.log_date)}{calDay ? `（開工後第 ${calDay} 日曆天）` : ''}</div>
-          <div className="px-2 py-1 border-r paper-rule"><span className="paper-mute">天氣（上午）：</span>{log.weather_am || log.weather || '—'}</div>
-          <div className="px-2 py-1"><span className="paper-mute">天氣（下午）：</span>{log.weather_pm || log.weather_am || log.weather || '—'}</div>
+          <div className="px-2 py-1 border-r paper-rule"><span className="paper-mute">天氣（上午）：</span>{weatherAm || '—'}</div>
+          <div className="px-2 py-1"><span className="paper-mute">天氣（下午）：</span>{weatherPm || '—'}</div>
         </div>
       </div>
 

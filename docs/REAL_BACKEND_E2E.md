@@ -42,7 +42,7 @@ Storage 不隨 DB cascade 清除：contract-documents 以 projects/<id>/ 為前�
 
 ## 現場文書鏈（chain 5，P2c）
 
-`e2e-real/chain5-field-docs.spec.js`：廠商上傳→伺服器起稿→補缺→簽署（登入的平台帳號，沒有驗證碼步驟；R1）→提送→監造退回→廠商更正版本重簽再送→監造收件→機關查閱；另驗重新整理恢復、同一張照片重傳不重建、簽舊版本 `PD001`。前置一項：
+`e2e-real/chain5-field-docs.spec.js`：廠商上傳→伺服器起稿→補缺→簽署（登入的平台帳號，沒有驗證碼步驟；R1）→提送→監造退回→廠商更正版本重簽再送→監造收件→機關查閱（P3d：退回歷史含退回人姓名、回執編號＝DB 送件列、`/site-log/print` 印簽署版本 3 且雜湊前 12 碼＝DB）；另驗重新整理恢復、同一張照片重傳不重建、簽舊版本 `PD001`。前置一項：
 
 1. **本機 Edge stub 模型**：另一個 terminal `supabase functions serve --env-file e2e-real/stub.env`。`PMIS_VISION_STUB=1` 只在 `SUPABASE_URL` 為本機 http 位址時生效（`_shared/visionStub.ts stubAllowed`，正式 Edge 永遠 false；有單元測試釘住），輸出固定：每張都是可辨的工地照、無告示板、工項關鍵詞＝`PMIS_VISION_STUB_HINT`（chain 5 匯入的「結構工程」）。stub 仍過各功能開關並記用量（`model=stub:local`），起稿回應 `notes` 明示「模型輸出為本機 stub」。**stub 只證明流程，不證明辨識正確**；真模型品質見續接清單 P7b。
 

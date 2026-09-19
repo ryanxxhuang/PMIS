@@ -1,35 +1,21 @@
 // 自主檢查表列印(P3b):不套 WebLayout,整頁即文件。印的是「已簽署版本」——簽署列指向的版本號與雜湊(與畫面上可能已開新版
 // 的草稿無關);逐項判定取簽署落下的 checklist_records 列(DB 算);沒有簽署列時印目前版本並整張標「草稿・未簽署」。
 // 框架範本標記(示範範本、免責聲明)向伺服器 fn_field_document_template('self_check') 取,與頁面同一份;檢查項目取本案範本。
-import { useEffect, useState } from 'react'
+// 版本挑選與載入／失敗狀態走三個列印頁共用的 usePrintedVersion＋PrintedVersionBody(P3d)。
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import PrintToolbar from '../../components/PrintToolbar.jsx'
 import SelfCheckSheet from '../../components/sitelog/SelfCheckSheet.jsx'
-import { SkeletonList } from '../../components/ui.jsx'
+import { PrintedVersionBody } from '../../components/sitelog/DocumentPrint.jsx'
+import usePrintedVersion from '../../lib/usePrintedVersion.js'
 
 export default function SelfCheckPrint() {
-  const { project, adjustedItems, currentUser, fieldDocuments, fieldDocsLoading, getFieldDocument, getFieldDocumentVersion, getFieldDocumentTemplate, checklistTemplates, checklistRecords } = useStore()
+  const { project, adjustedItems, currentUser, fieldDocuments, fieldDocsLoading, checklistTemplates, checklistRecords } = useStore()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
   const docParam = sp.get('doc')
   const doc = (fieldDocuments?.documents || []).find((x) => x.id === docParam) || null
-  const [state, setState] = useState({ loading: true, version: null, signature: null, frame: null, doc: null })
-
-  useEffect(() => {
-    if (!doc) { setState((st) => ({ ...st, loading: fieldDocsLoading, doc: null })); return }
-    let active = true
-    ;(async () => {
-      const [detail, { template }] = await Promise.all([getFieldDocument(doc.id), getFieldDocumentTemplate('self_check')])
-      const sig = (detail?.signatures || []).slice().sort((a, b) => String(b.signed_at).localeCompare(String(a.signed_at)))[0] || null
-      const version = sig
-        ? (detail?.version?.version_no === sig.version_no ? detail.version : await getFieldDocumentVersion(doc.id, sig.version_no))
-        : detail?.version || null
-      if (!active) return
-      setState({ loading: false, version, signature: sig, frame: template, doc: detail?.doc || doc })
-    })()
-    return () => { active = false }
-  }, [doc?.id, doc?.current_version_no, fieldDocsLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+  const state = usePrintedVersion(doc, { templateType: 'self_check', waiting: fieldDocsLoading })
 
   if (!currentUser) return <Navigate to="/login" replace />
   const backTo = doc ? `/self-check?doc=${encodeURIComponent(doc.id)}` : '/self-check'
@@ -48,10 +34,10 @@ export default function SelfCheckPrint() {
   return (
     <div className="min-h-screen paper-desk py-6 print:py-0">
       <PrintToolbar backTo={backTo} backLabel="返回自主檢查表" />
-      {state.loading || !state.version
-        ? <div className="max-w-[210mm] mx-auto" aria-busy="true"><SkeletonList rows={4} label="載入簽署版本…" /></div>
-        : <SelfCheckSheet project={project} doc={state.doc} version={state.version} signature={state.signature} frame={state.frame}
-          checklistTemplate={checklistTemplate} record={record} byId={byId} />}
+      <PrintedVersionBody printed={state}>
+        <SelfCheckSheet project={project} doc={state.doc} version={state.version} signature={state.signature} frame={state.template}
+          checklistTemplate={checklistTemplate} record={record} byId={byId} />
+      </PrintedVersionBody>
     </div>
   )
 }

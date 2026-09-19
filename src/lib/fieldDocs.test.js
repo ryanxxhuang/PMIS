@@ -12,6 +12,7 @@ import {
   emptySelfCheckContent, emptySelfCheckSources, selfCheckValues, setSelfCheckTemplate, checklistItemLabels,
   emptySupervisorLogContent, emptySupervisorLogSources, fillHumanField, attendanceIssues, formalDailyLogFromDetail, applyFormalDailyLog, refTitle,
   docPagePath, docPageLink, docToOrg,
+  printSignature, submissionsChronological, submissionReceipts, returnHistory, nextResponsibleText,
 } from './fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.js'
@@ -161,6 +162,14 @@ describe('施工日誌內容形狀', () => {
   it('內容→顯示用日誌形狀:只有有數量的工項、鍵回 item_key', () => {
     const content = { log_date: '2026-09-17', weather_am: '晴', items: { w1: { item_key: 'K1', qty_today: 2 }, w2: { item_key: 'K2', qty_today: null } }, labor: [] }
     expect(contentToLogShape(content, { id: 'D1', status: 'draft' })).toMatchObject({ id: 'D1', log_date: '2026-09-17', weather: '晴', items: { K1: 2 } })
+  })
+  it('列印用:工項項次／名稱／單位取版本內容的快照(item_meta),標 from_document;內容缺日期時以文件業務日期補', () => {
+    const content = { weather_am: '晴', weather_pm: null, items: { w1: { item_key: 'K1', item_no: '壹.1', description: '簽署當時名稱', unit: 'M3', qty_today: 2 } } }
+    const log = contentToLogShape(content, { id: 'D1', status: 'signed', logDate: '2026-09-18' })
+    expect(log.log_date).toBe('2026-09-18')
+    expect(log.item_meta).toEqual({ K1: { item_no: '壹.1', description: '簽署當時名稱', unit: 'M3' } })
+    expect(log.from_document).toBe(true)
+    expect(log.weather_pm).toBeNull() // 不把上午天氣回填成下午
   })
 })
 
@@ -427,5 +436,74 @@ describe('自主檢查表(P3b):範本推導、內容形狀、逐項確認', () =
     expect(applied).toEqual(['location'])
     expect(state.content.results.C2).toEqual({ value: null })
     expect(sourceLabel('system:template_match')).toBe('依工項挑選範本')
+  })
+})
+
+// P3d:列印選版本、提送回執、退回歷史、下一責任方(只挑選／排列伺服器列,不重算)
+describe('列印版本與提送回執', () => {
+  const sig = (version_no, signed_at, over = {}) => ({ id: `G${version_no}`, document_id: 'D1', version_no, content_hash: `h${version_no}`, signer_name_snapshot: '陳怡君', signed_at, ...over })
+  it('印簽署列指向的版本:取版本號最大的簽署(更正後重簽);同版本取伺服器時間較晚者;沒有簽署=null(草稿)', () => {
+    // getFieldDocument 回新→舊;這裡故意打亂順序
+    expect(printSignature([sig(2, '2026-09-19T02:00:00Z'), sig(3, '2026-09-19T05:00:00Z'), sig(1, '2026-09-18T01:00:00Z')]).version_no).toBe(3)
+    expect(printSignature([sig(2, '2026-09-19T02:00:00Z', { id: 'a' }), sig(2, '2026-09-19T03:00:00Z', { id: 'b' })]).id).toBe('b')
+    expect(printSignature([])).toBeNull()
+    expect(printSignature(null)).toBeNull()
+  })
+
+  // 施工日誌:v2 提送 → 監造退回 → v3 再送(diff 由 DB 算)→ 監造再退回 → v4 再送 → 監造收件
+  const rows = [
+    { id: 'S1', document_id: 'D1', action: 'submit', version_no: 2, content_hash: 'h2', actor_id: 'u1', actor_org: 'contractor', to_org: 'supervisor', reason: null, diff: null, created_at: '2026-09-19T01:00:00Z' },
+    { id: 'R1', document_id: 'D1', action: 'return', version_no: 2, content_hash: 'h2', actor_id: 'u2', actor_org: 'supervisor', to_org: 'supervisor', reason: '材料使用請補進料證明', diff: null, created_at: '2026-09-19T02:00:00Z' },
+    { id: 'S2', document_id: 'D1', action: 'submit', version_no: 3, content_hash: 'h3', actor_id: 'u1', actor_org: 'contractor', to_org: 'supervisor', reason: null, diff: { against_version_no: 2, changed_keys: ['materials'] }, created_at: '2026-09-19T03:00:00Z' },
+    { id: 'R2', document_id: 'D1', action: 'return', version_no: 3, content_hash: 'h3', actor_id: 'u3', actor_org: 'supervisor', to_org: 'supervisor', reason: '天氣下午欄漏填', diff: null, created_at: '2026-09-19T04:00:00Z' },
+    { id: 'S3', document_id: 'D1', action: 'submit', version_no: 4, content_hash: 'h4', actor_id: 'u1', actor_org: 'contractor', to_org: 'supervisor', reason: null, diff: { against_version_no: 3, changed_keys: ['weather_pm'] }, created_at: '2026-09-19T05:00:00Z' },
+    { id: 'C1', document_id: 'D1', action: 'receive', version_no: 4, content_hash: 'h4', actor_id: 'u2', actor_org: 'supervisor', to_org: 'supervisor', reason: null, diff: null, created_at: '2026-09-19T06:00:00Z' },
+  ]
+  const newestFirst = rows.slice().reverse() // 與 getFieldDocument 的排序一致
+
+  it('提送列一律由舊到新排列', () => {
+    expect(submissionsChronological(newestFirst).map((r) => r.id)).toEqual(['S1', 'R1', 'S2', 'R2', 'S3', 'C1'])
+  })
+
+  it('退回歷史:歷次退回全列(不只最新),各配上其後相對該退回版本的再送列與 DB 算的差異;尚未再送者為 null', () => {
+    const hist = returnHistory(newestFirst)
+    expect(hist.map((r) => [r.id, r.version_no, r.reason, r.actor_id])).toEqual([
+      ['R1', 2, '材料使用請補進料證明', 'u2'],
+      ['R2', 3, '天氣下午欄漏填', 'u3'],
+    ])
+    expect(hist[0].resubmit).toMatchObject({ id: 'S2', version_no: 3, diff: { against_version_no: 2, changed_keys: ['materials'] } })
+    expect(hist[1].resubmit).toMatchObject({ id: 'S3', version_no: 4, diff: { against_version_no: 3, changed_keys: ['weather_pm'] } })
+    // 第二次退回後尚未再送
+    expect(returnHistory(rows.slice(0, 4))[1].resubmit).toBeNull()
+    expect(returnHistory([])).toEqual([])
+  })
+
+  it('回執:最近一輪送件的 submit 列(submission_id、伺服器時間、對象)配上對象方的回應', () => {
+    const [r] = submissionReceipts(newestFirst)
+    expect(r.submit).toMatchObject({ id: 'S3', version_no: 4, to_org: 'supervisor', created_at: '2026-09-19T05:00:00Z' })
+    expect(r.response).toMatchObject({ id: 'C1', action: 'receive' })
+    // 退回後尚未再送:最近一輪是 v3,回應=退回
+    expect(submissionReceipts(rows.slice(0, 4))[0]).toMatchObject({ submit: { id: 'S2' }, response: { id: 'R2', action: 'return' } })
+    // 剛送出:待收件
+    expect(submissionReceipts(rows.slice(0, 1))[0].response).toBeNull()
+    expect(submissionReceipts([])).toEqual([])
+  })
+
+  it('回執:同版本送兩個對象(監造查驗表單)各一張回執,各自配對自己的回應', () => {
+    const two = [
+      { id: 'A', document_id: 'F1', action: 'submit', version_no: 1, actor_org: 'supervisor', to_org: 'contractor', created_at: '2026-09-19T01:00:00Z' },
+      { id: 'B', document_id: 'F1', action: 'submit', version_no: 1, actor_org: 'supervisor', to_org: 'owner', created_at: '2026-09-19T01:01:00Z' },
+      { id: 'C', document_id: 'F1', action: 'receive', version_no: 1, actor_org: 'owner', to_org: 'owner', created_at: '2026-09-19T02:00:00Z' },
+    ]
+    const receipts = submissionReceipts(two)
+    expect(receipts.map((r) => [r.submit.id, r.response?.id ?? null])).toEqual([['A', null], ['B', 'C']])
+  })
+
+  it('下一責任方與今日工作球權同一支判定', () => {
+    const doc = (status, current_version_no) => ({ id: 'D1', doc_type: 'daily_log', owner_org: 'contractor', status, current_version_no })
+    expect(nextResponsibleText(doc('submitted', 2), rows.slice(0, 1))).toBe('監造（待收件）')
+    expect(nextResponsibleText(doc('returned', 2), rows.slice(0, 2))).toBe('施工廠商（被退回待補正）')
+    expect(nextResponsibleText(doc('received', 4), rows)).toBe('無（已收件）')
+    expect(nextResponsibleText(doc('signed', 1), [])).toBe('施工廠商（待提送）')
   })
 })

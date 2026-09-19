@@ -24,6 +24,20 @@ export function taipeiISODate(value) {
   return TAIPEI_YMD.format(d)
 }
 
+// timestamptz → 台北時間 'YYYY-MM-DD HH:mm'(系統時戳給人看:簽署／提送／收件／退回的伺服器時間)。
+// PostgREST／RPC 回的是 UTC(`…+00:00`),直接 slice(0,16) 會把台灣早上 9 點印成 01:00——
+// 回執與列印上的「伺服器時間」一律經這裡換成台北時間。空值／無效值回 '—'。
+const TAIPEI_YMDHM = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+})
+export function taipeiDateTime(value) {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (isNaN(d)) return '—'
+  const p = Object.fromEntries(TAIPEI_YMDHM.formatToParts(d).map((x) => [x.type, x.value]))
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`
+}
+
 // 業務上的「今天」:一律以台北日曆日為準(政府工程的法定期限跟著台灣時區走),
 // 不跟瀏覽器時區——出差或時區設錯的機器填報,日期也不會亂跳。
 export const taipeiToday = () => taipeiISODate(new Date())

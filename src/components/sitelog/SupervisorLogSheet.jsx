@@ -1,10 +1,11 @@
 // 監造日誌 A4 紙本(P3a;列印頁用):印「已簽署版本」的內容(印的是簽署列指向的版本,不是畫面上可能較新的草稿),
-// 頁首標示範範本(fn_field_document_template 的 demo_label 與免責聲明,不宣稱為機關公定格式)、文件短碼、版本號、
-// 內容雜湊前 12 碼、簽署者與伺服器時間;未簽署的草稿也能印,但整張明寫「草稿・未簽署」,不誤導。
+// 頁首標示範範本(fn_field_document_template 的 demo_label 與免責聲明,不宣稱為機關公定格式);文件短碼、版本號、
+// 內容雜湊前 12 碼、簽署者與伺服器時間走三張紙本共用的 DocumentPrintStamp;未簽署的草稿也能印,但整張明寫「草稿・未簽署」。
 // 純顯示、無 input;用色只走 index.css 的 .paper／paper-*(紙面固定白底黑字)。
-import { formatHash, DOC_STATUS_LABEL, refTitle, sourceLabel, templateFields } from '../../lib/fieldDocs.js'
+import { DOC_STATUS_LABEL, refTitle, sourceLabel, templateFields } from '../../lib/fieldDocs.js'
+import { taipeiDateTime as fmtTs } from '../../lib/dates.js'
+import { DocumentPrintStamp } from './DocumentPrint.jsx'
 
-const fmtTs = (iso) => (iso ? String(iso).slice(0, 16).replace('T', ' ') : '—')
 const roc = (iso) => {
   if (!iso) return ''
   const [y, m, d] = String(iso).split('-').map(Number)
@@ -45,15 +46,7 @@ export default function SupervisorLogSheet({ project, doc, version, signature = 
         </div>
         {template?.disclaimer && <p className="mt-1 text-caption paper-mute">{template.disclaimer}</p>}
       </div>
-      <div className={`mt-3 border paper-rule-strong px-2 py-1.5 text-footnote flex flex-wrap gap-x-4 gap-y-0.5 ${signed ? '' : 'paper-fill'}`}>
-        <span>文件 {String(doc.id).slice(0, 8)}</span>
-        <span>版本 {version.version_no}</span>
-        <span>內容雜湊 {formatHash(version.content_hash)}</span>
-        {signed
-          ? <span>簽署 {signature.signer_name_snapshot || '—'}・{fmtTs(signature.signed_at)}・平台帳號</span>
-          : <span className="font-bold text-[var(--red-text)]">草稿・未簽署（非正式紀錄）</span>}
-        <span>文件狀態 {DOC_STATUS_LABEL[doc.status] || doc.status}</span>
-      </div>
+      <DocumentPrintStamp doc={doc} version={version} signature={signature} className="mt-3" />
 
       <div className="mt-3 border paper-rule-strong">
         <div className="px-2 py-1.5 flex flex-wrap gap-x-6 gap-y-1">

@@ -168,7 +168,7 @@ describe('監造日誌文件頁', () => {
 
   it('唯讀視角:廠商(可讀)除日期外無 input、無存檔、無收件;機關在已提送時有收件／退回', async () => {
     const submitted = baseDoc({ status: 'submitted', recheck: [], current_version_no: 2 })
-    const detail = { doc: submitted, version: version({ version_no: 2 }), versions: [], signatures: [], submissions: [{ id: 'X1', action: 'submit', version_no: 2, actor_org: 'supervisor', to_org: 'owner', created_at: '2026-09-19T02:00:00Z' }] }
+    const detail = { doc: submitted, version: version({ version_no: 2 }), versions: [], signatures: [], submissions: [{ id: 'X1', document_id: 'S1', action: 'submit', version_no: 2, content_hash: 'fedcba9876543210', actor_org: 'supervisor', to_org: 'owner', created_at: '2026-09-19T02:00:00Z' }] }
     state.store = makeStore({ documents: [submitted], currentUser: { org_type: 'contractor', user_id: 'u1' }, can: { edit: true, write: true, approve: false, oversee: false, override: false }, getFieldDocument: vi.fn().mockResolvedValue(detail) })
     await render(); await flush(); await flush()
     expect(container.textContent).toContain('此頁為唯讀')
@@ -185,7 +185,10 @@ describe('監造日誌文件頁', () => {
     expect(container.querySelectorAll('input:not([type="date"])')).toHaveLength(0)
     expect(button('收件')).toBeTruthy()
     expect(button('退回（填原因）')).toBeTruthy()
-    expect(container.textContent).toContain('等待機關收件')
+    // 提送回執(P3d):對象、送出時間(台北時間)、回執編號、收件狀態與下一責任方(與今日工作球權同一支判定)
+    expect(container.textContent).toContain('待機關收件')
+    expect(container.textContent).toContain('2026-09-19 10:00')
+    expect(container.textContent).toContain('下一責任方：機關（待收件）')
   })
 
   it('沒有文件:空白草稿全部待補、不填「無」;同日施工日誌已簽署時可「引用同日施工日誌」並標來源;示範模式簽署回明確訊息', async () => {

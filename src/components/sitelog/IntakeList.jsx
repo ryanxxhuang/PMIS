@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useStore } from '../../store.jsx'
 import { Button, Empty } from '../ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
+import { taipeiDateTime } from '../../lib/dates.js'
 import { appConfirm } from '../confirm.jsx'
 import { intakeNextAction, toggleCandidateExcluded } from '../../lib/fieldDocs.js'
 import IntakeResult, { IntakeStatusLine } from './IntakeResult.jsx'
@@ -61,7 +62,7 @@ export default function IntakeList({ focusId = null }) {
               <button type="button" onClick={() => setOpen((o) => ({ ...o, [intake.id]: !isOpen }))} aria-expanded={isOpen}
                 className="text-body font-medium text-[var(--text)] min-h-11 md:min-h-0 text-left">
                 {intake.log_date ? `${intake.log_date} 的照片` : '未指定日期的照片'}
-                <span className="text-caption text-[var(--text-3)] ml-2 num">{String(intake.created_at || '').slice(0, 16).replace('T', ' ')} 上傳</span>
+                <span className="text-caption text-[var(--text-3)] ml-2 num">{taipeiDateTime(intake.created_at)} 上傳</span>
               </button>
               <IntakeStatusLine intake={intake} />
               <span className="ml-auto flex items-center gap-1.5 flex-wrap">

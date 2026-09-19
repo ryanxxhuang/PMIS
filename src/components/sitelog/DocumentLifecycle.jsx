@@ -1,27 +1,53 @@
-// 文件生命週期卡(P2c 施工日誌、P3a 監造日誌共用;設計 §4–§6):狀態、版本與雜湊、簽署(登入的平台帳號,
-// 意願文字明示)、提送給對象方、對象方收件／退回(必填原因)、歷次退回原因與再送差異、回執與下一責任方。
+// 文件生命週期卡(P2c 施工日誌、P3a 監造日誌、P3b 自主檢查表共用;設計 §4–§6):狀態、版本與雜湊、簽署(登入的平台帳號,
+// 意願文字明示)、提送給對象方、對象方收件／退回(必填原因)、提送回執(P3d:對象、送出時間、回執編號＝submission_id、
+// 收件狀態、下一責任方)、退回歷史(P3d:歷次退回原因、退回人、時間與補正再送的差異全部列出,不只最新一筆)。
 // 責任方與提送對象由 doc_type 決定(lib/fieldDocs 的 TO_ORG_BY_DOC_TYPE,鏡像 DB 對象矩陣):施工日誌 廠商→監造、
 // 監造日誌 監造→機關;第三方(施工日誌的機關、監造日誌的廠商)只是查閱視角。
 // 全部動作都是「人明確操作」;所有規則由 RPC 執行(PD001–PD010 分流見 lib/fieldDocs.fieldDocErrorGuidance),
-// 這裡不做任何業務判斷,只把伺服器回的版本／雜湊／時間如實顯示。
+// 這裡不做任何業務判斷,只把伺服器回的版本／雜湊／時間／差異(diff 由 DB trigger 算)如實顯示;時間一律換成台北時間,
+// 下一責任方與今日工作球權同一支判定(lib/fieldDocs.nextResponsibleText → ballInCourtRules.fieldDocumentBalls)。
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useStore } from '../../store.jsx'
 import { Badge, Button } from '../ui.jsx'
 import { MSym } from '../icons.jsx'
 import { appConfirm, appPrompt } from '../confirm.jsx'
 import {
   docStatusMeta, formatHash, signIntentText, ORG_LABEL, DOC_TYPE_LABEL, changedKeysLabel, fieldLabel, docToOrg, docToOrgLabel, UNMET_STATUS_LABEL,
+  submissionsChronological, submissionReceipts, returnHistory, nextResponsibleText, SIGN_METHOD_LABEL,
 } from '../../lib/fieldDocs.js'
+import { taipeiDateTime as fmtTs } from '../../lib/dates.js'
 
 const ACTION_LABEL = { submit: '提送', receive: '收件', return: '退回' }
 const ACTION_TONE = { submit: 'blue', receive: 'green', return: 'red' }
-const fmtTs = (iso) => (iso ? String(iso).slice(0, 16).replace('T', ' ') : '—')
+
+// 提送／收件／退回列只存 actor_id(append-only,沒有姓名快照):以既有 list_project_members(本案成員可讀)對照姓名。
+// 已離開本案的成員對不到就只顯示單位,不猜;名單載入失敗如實標示。
+function useMemberNames(enabled) {
+  const { listMembers } = useStore()
+  const [state, setState] = useState({ names: new Map(), error: null })
+  useEffect(() => {
+    if (!enabled) return
+    let active = true
+    listMembers().then(({ rows, error }) => {
+      if (active) setState({ names: new Map((rows || []).map((m) => [m.user_id, m.full_name])), error: error || null })
+    })
+    return () => { active = false }
+  }, [enabled, listMembers])
+  return state
+}
 
 export default function DocumentLifecycle({
   doc, version, signatures = [], submissions = [], viewerOrg, canAct = false, dirty = false, content = null,
   busy = null, onSign, onSubmit, onReceive, onReturn, message = null,
   labels = null, templateMeta = null,
 }) {
+  const members = useMemberNames(!!doc && submissions.some((s) => s?.actor_id))
   if (!doc) return null
+  const who = (row) => {
+    const name = row?.actor_id ? members.names.get(row.actor_id) : null
+    return `${ORG_LABEL[row?.actor_org] || row?.actor_org || '—'}${name ? ` ${name}` : ''}`
+  }
   const meta = docStatusMeta(doc, viewerOrg)
   const mine = doc.owner_org === viewerOrg
   const docLabel = DOC_TYPE_LABEL[doc.doc_type] || '文件'
@@ -32,9 +58,10 @@ export default function DocumentLifecycle({
   const recheck = Array.isArray(doc.recheck) ? doc.recheck : []
   const pendingCount = recheck.filter((r) => !String(r.key || '').startsWith('attachments')).length
   const currentSig = signatures.find((s) => s.version_no === doc.current_version_no) || null
-  const lastReturn = submissions.find((s) => s.action === 'return') || null
-  const latestSubmit = submissions.find((s) => s.action === 'submit' && s.version_no === doc.current_version_no) || null
-  const receiveRow = submissions.find((s) => s.action === 'receive') || null
+  const log = submissionsChronological(submissions)
+  const returns = returnHistory(submissions)
+  const lastReturn = returns[returns.length - 1] || null
+  const receipts = submissionReceipts(submissions)
   const canSign = mine && canAct && ['draft', 'pending_input', 'in_review'].includes(doc.status) && doc.current_version_no > 0 && !dirty && pendingCount === 0 && recheck.length === 0
   const intent = version ? signIntentText({ docLabel, docDate: doc.doc_date, versionNo: doc.current_version_no, contentHash: version.content_hash }) : ''
 
@@ -102,7 +129,7 @@ export default function DocumentLifecycle({
       {currentSig && (
         <div className="rounded-lg bg-[var(--green-tint)] p-3 text-footnote space-y-0.5">
           <div className="font-medium text-[var(--green-text)]">版本 {currentSig.version_no} 已由 {currentSig.signer_name_snapshot || ORG_LABEL[currentSig.signer_org] || '簽署者'} 簽署</div>
-          <div className="text-[var(--text-2)] num">時間 {fmtTs(currentSig.signed_at)}・雜湊 {formatHash(currentSig.content_hash)}・方式 平台帳號</div>
+          <div className="text-[var(--text-2)] num">時間 {fmtTs(currentSig.signed_at)}・雜湊 {formatHash(currentSig.content_hash)}・方式 {SIGN_METHOD_LABEL[currentSig.method] || '平台帳號'}</div>
         </div>
       )}
       {/* 簽後更正提示:目前版本比最後簽署新 */}
@@ -117,9 +144,6 @@ export default function DocumentLifecycle({
           <span className="text-caption text-[var(--text-3)]">提送的是已簽署的版本 {doc.current_version_no}；{toLabel}收件或退回會顯示在這裡。</span>
         </div>
       )}
-      {doc.status === 'submitted' && latestSubmit && (
-        <p className="text-footnote text-[var(--text-2)]">已於 {fmtTs(latestSubmit.created_at)} 提送給{ORG_LABEL[latestSubmit.to_org] || latestSubmit.to_org}（版本 {latestSubmit.version_no}）；等待{ORG_LABEL[latestSubmit.to_org] || toLabel}收件。回執編號 {String(latestSubmit.id).slice(0, 8)}。</p>
-      )}
       {/* 提送對象:收件／退回(必填原因) */}
       {canRespond && ['submitted', 'received'].includes(doc.status) && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -128,24 +152,61 @@ export default function DocumentLifecycle({
           <span className="text-caption text-[var(--text-3)]">收件＝確認已收到此版本；退回會要求{ownerLabel}補正後重新簽署再送。</span>
         </div>
       )}
-      {doc.status === 'received' && receiveRow && (
-        <p className="text-footnote text-[var(--green-text)]">{ORG_LABEL[receiveRow.actor_org] || toLabel}已於 {fmtTs(receiveRow.created_at)} 收件（版本 {receiveRow.version_no}）；本文件不可再修改。</p>
+      {/* 提送與回執(最近一輪送件):對象、送出時間、送件版本與雜湊、回執編號(submission_id)、收件狀態、下一責任方 */}
+      {receipts.length > 0 && (
+        <div role="group" aria-label="提送與回執" className="rounded-lg border border-[var(--border)] p-3 text-footnote space-y-2">
+          <div className="font-medium text-[var(--text)] flex items-center gap-1"><MSym name="receipt_long" size={14} />提送與回執</div>
+          {receipts.map(({ submit, response }) => (
+            <dl key={submit.id} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+              <dt className="text-[var(--text-3)]">提送對象</dt><dd className="min-w-0 text-[var(--text)]">{ORG_LABEL[submit.to_org] || submit.to_org}</dd>
+              <dt className="text-[var(--text-3)]">送出</dt><dd className="min-w-0 text-[var(--text)] num">{fmtTs(submit.created_at)}・{who(submit)}</dd>
+              <dt className="text-[var(--text-3)]">送件版本</dt><dd className="min-w-0 text-[var(--text)] num">版本 {submit.version_no}・雜湊 {formatHash(submit.content_hash)}</dd>
+              <dt className="text-[var(--text-3)]">回執編號</dt><dd className="min-w-0 text-[var(--text)] num break-all">{submit.id}</dd>
+              <dt className="text-[var(--text-3)]">收件狀態</dt>
+              <dd className="min-w-0 num">
+                {!response ? <span className="text-[var(--blue-text)]">待{ORG_LABEL[submit.to_org] || '對方'}收件</span>
+                  : response.action === 'receive'
+                    ? <span className="text-[var(--green-text)]">{ORG_LABEL[response.actor_org] || toLabel}已於 {fmtTs(response.created_at)} 收件（版本 {response.version_no}）{doc.status === 'received' ? '；本文件不可再修改' : ''}</span>
+                    : <span className="text-[var(--red-text)]">已於 {fmtTs(response.created_at)} 退回（{who(response)}）</span>}
+              </dd>
+            </dl>
+          ))}
+          <div className="text-[var(--text-2)]">下一責任方：<span className="text-[var(--text)]">{nextResponsibleText(doc, submissions)}</span></div>
+        </div>
       )}
 
-      {/* 歷次提送／收件／退回(append-only;退回原因與再送差異全部保留) */}
-      {submissions.length > 0 && (
+      {/* 退回歷史:歷次退回原因、退回人、時間與補正再送的差異(DB 算的 diff)全部列出 */}
+      {returns.length > 0 && (
+        <div role="group" aria-label="退回歷史" className="rounded-lg border border-[var(--border)] p-3 text-footnote space-y-2">
+          <div className="font-medium text-[var(--text)] flex items-center gap-1"><MSym name="undo" size={14} />退回歷史（{returns.length}）</div>
+          <ol className="space-y-2">
+            {returns.map((r, i) => (
+              <li key={r.id} className="min-w-0 border-l-2 border-[var(--red-text)] pl-2 space-y-0.5">
+                <div className="text-[var(--text)] num">第 {i + 1} 次・版本 {r.version_no}・{fmtTs(r.created_at)}・退回人 {who(r)}</div>
+                <div className="text-[var(--red-text)] whitespace-pre-wrap break-words">原因：{r.reason || '（未記錄）'}</div>
+                {r.resubmit ? (
+                  <div className="text-[var(--text-2)] break-words">
+                    補正：版本 {r.resubmit.version_no} 於 {fmtTs(r.resubmit.created_at)} 再送。
+                    <span className="block">相對退回版本 {r.resubmit.diff.against_version_no} 的差異：{Array.isArray(r.resubmit.diff.changed_keys) && r.resubmit.diff.changed_keys.length ? changedKeysLabel(r.resubmit.diff, content, labels).join('、') : '無頂層欄位變更'}</span>
+                  </div>
+                ) : <div className="text-[var(--text-3)]">尚未補正再送</div>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {members.error && submissions.length > 0 && <p className="text-caption text-[var(--text-3)]">成員名單載入失敗，送件與退回人只顯示單位。</p>}
+
+      {/* 歷次提送／收件／退回(append-only 完整流水,由舊到新) */}
+      {log.length > 0 && (
         <details className="text-footnote">
-          <summary className="cursor-pointer text-[var(--text-2)] min-h-11 md:min-h-0 inline-flex items-center gap-1"><MSym name="history" size={14} />歷次提送紀錄（{submissions.length}）</summary>
+          <summary className="cursor-pointer text-[var(--text-2)] min-h-11 md:min-h-0 inline-flex items-center gap-1"><MSym name="history" size={14} />歷次提送紀錄（{log.length}）</summary>
           <ol className="mt-2 space-y-1.5">
-            {submissions.map((s) => (
+            {log.map((s) => (
               <li key={s.id} className="flex items-start gap-2">
                 <Badge color={ACTION_TONE[s.action]}>{ACTION_LABEL[s.action] || s.action}</Badge>
-                <div className="min-w-0">
-                  <div className="text-[var(--text)] num">版本 {s.version_no}・{ORG_LABEL[s.actor_org] || s.actor_org}・{fmtTs(s.created_at)}{s.action === 'submit' ? `・送${ORG_LABEL[s.to_org] || s.to_org}` : ''}</div>
-                  {s.reason && <div className="text-[var(--red-text)] whitespace-pre-wrap">原因：{s.reason}</div>}
-                  {s.diff && Array.isArray(s.diff.changed_keys) && (
-                    <div className="text-[var(--text-2)]">相對退回版本 {s.diff.against_version_no} 的差異：{s.diff.changed_keys.length ? changedKeysLabel(s.diff, content, labels).join('、') : '無頂層欄位變更'}</div>
-                  )}
+                <div className="min-w-0 text-[var(--text)] num break-words">
+                  版本 {s.version_no}・{who(s)}・{fmtTs(s.created_at)}{s.action === 'submit' ? `・送${ORG_LABEL[s.to_org] || s.to_org}・回執 ${String(s.id).slice(0, 8)}` : ''}
                 </div>
               </li>
             ))}

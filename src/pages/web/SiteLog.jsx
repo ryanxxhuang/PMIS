@@ -21,7 +21,7 @@ import { Card, Button, Field, Empty, PageHeader, SkeletonList, Input, Badge, Err
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm } from '../../components/confirm.jsx'
 import { previousLog, copyableFromLog, frequentItems } from '../../lib/siteLogHelpers.js'
-import { taipeiToday } from '../../lib/dates.js'
+import { taipeiToday, taipeiDateTime } from '../../lib/dates.js'
 import { billableLeaves } from '../../lib/boqCalc.js'
 import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
 import {
@@ -250,14 +250,14 @@ export default function SiteLog() {
     const r = await submitFieldDocument({ documentId: doc.id, versionNo: doc.current_version_no, docType: 'daily_log' })
     setBusy(null)
     if (r.error) { handleLifecycleError(r.error, '提送未完成'); return }
-    setLifecycleMsg(`${r.receipt.idempotent ? '這筆已提送過，沿用原回執：' : ''}已提送給監造（${String(r.receipt.created_at).slice(0, 16).replace('T', ' ')}，回執 ${String(r.receipt.submission_id).slice(0, 8)}）；等待監造收件。`, 'success')
+    setLifecycleMsg(`${r.receipt.idempotent ? '這筆已提送過，沿用原回執：' : ''}已提送給監造（${taipeiDateTime(r.receipt.created_at)}，回執 ${String(r.receipt.submission_id).slice(0, 8)}）；等待監造收件。`, 'success')
   }
   const onReceive = async () => {
     setBusy('receive'); setLifecycleMsg('')
     const r = await receiveFieldDocument({ documentId: doc.id, versionNo: doc.current_version_no })
     setBusy(null)
     if (r.error) { handleLifecycleError(r.error, '收件未完成'); return }
-    setLifecycleMsg(`已收件（${String(r.receipt.created_at).slice(0, 16).replace('T', ' ')}）。`, 'success')
+    setLifecycleMsg(`已收件（${taipeiDateTime(r.receipt.created_at)}）。`, 'success')
   }
   const onReturn = async (reason) => {
     setBusy('return'); setLifecycleMsg('')
@@ -422,10 +422,11 @@ export default function SiteLog() {
               ) : (
                 <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>
               )}
-              {legacyLog && (
+              {/* 列印:有文件印簽署版本(未簽署則最新存檔版本並標草稿・未簽署);只有既有紀錄時印該列並標未簽署 */}
+              {((doc && doc.current_version_no > 0) || legacyLog) && (
                 <Button variant="secondary" onClick={async () => {
-                  if (dirty && !(await appConfirm({ title: '離開將遺失未存檔內容', body: `${date} 的日誌尚未存檔，列印頁只會輸出已落庫（已簽署或既有）的內容。要放棄未存檔內容並前往列印嗎？`, danger: true, confirmLabel: '放棄並前往' }))) return
-                  navigate(`/site-log/print?d=${date}`)
+                  if (dirty && !(await appConfirm({ title: '離開將遺失未存檔內容', body: `${date} 的日誌尚未存檔；列印頁印的是已簽署版本（未簽署則為最新存檔版本並標示草稿）。要放棄未存檔內容並前往列印嗎？`, danger: true, confirmLabel: '放棄並前往' }))) return
+                  navigate(doc ? `/site-log/print?doc=${encodeURIComponent(doc.id)}` : `/site-log/print?d=${date}`)
                 }}>
                   <MSym name="print" size={15} />列印公定格式日誌
                 </Button>

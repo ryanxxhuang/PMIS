@@ -15,13 +15,13 @@ import { taipeiISODate } from '../../lib/dates.js'
 import FieldSourceChip from './FieldSourceChip.jsx'
 import RowsEditor from './RowsEditor.jsx'
 import { fieldAnchorId } from './DailyLogFields.jsx'
+import { taipeiDateTime as fmtTs } from '../../lib/dates.js'
 
 const NA_PROMPT = {
   attendance: '本日未到場的原因', supervision_items: '本日無監造事項的原因', contractor_summary: '廠商本日未施工的原因',
   notices: '本日無通知事項的原因', followups: '本日無追蹤事項的原因',
 }
 const NA_LABEL = { attendance: '本日未到場', contractor_summary: '廠商未施工' }
-const fmtTs = (iso) => (iso ? String(iso).slice(0, 16).replace('T', ' ') : '—')
 const INPUT_CLS = 'border border-[var(--border)] rounded px-1.5 py-0.5 text-sm max-md:py-2 max-md:min-h-11 bg-[var(--surface)] text-[var(--text)] focus:border-[var(--blue)] focus:outline-none'
 
 export default function SupervisorLogFields({
