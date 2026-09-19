@@ -1,6 +1,7 @@
 // W6 真後端 E2E 共用工具:用 service role 建立/清理臨時帳號與其專案。
 // 只在隔離 staging 執行(config 已擋正式 Supabase);測後一律清乾淨,不留常駐資料。
 import { createClient } from '@supabase/supabase-js'
+import { execFileSync } from 'node:child_process'
 
 const url = process.env.E2E_REAL_SUPABASE_URL?.trim().replace(/\/$/, '')
 const serviceKey = process.env.E2E_REAL_SERVICE_ROLE_KEY?.trim()
@@ -9,6 +10,14 @@ const serviceKey = process.env.E2E_REAL_SERVICE_ROLE_KEY?.trim()
 export function admin() {
   if (!serviceKey) throw new Error('W6 真後端 E2E 需要 E2E_REAL_SERVICE_ROLE_KEY(建立/清理臨時帳號)')
   return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+}
+
+// DBA 邊界:本機 stack 的 postgres(與 pgTAP 重現歷史資料的 fixture 同一條路徑)。只給需要「產品已不允許產生、
+// 但正式庫仍存在」的歷史資料用(遷移前的已核定期、P4e 之前舊前端寫進草稿的申報量),不得拿來繞過產品窄門建一般 fixture。
+// 容器預設是共用開發棧 supabase_db_PMIS;另起隔離棧(不同 project_id)時以 E2E_REAL_DB_CONTAINER 指定。
+const dbContainer = process.env.E2E_REAL_DB_CONTAINER?.trim() || 'supabase_db_PMIS'
+export function dbaSql(sql) {
+  return execFileSync('docker', ['exec', '-i', dbContainer, 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-Atq'], { input: sql, encoding: 'utf8' }).trim()
 }
 
 const PW = 'W6real123' // 符合登入規則:至少 8 碼、含大小寫與數字

@@ -4,7 +4,7 @@
 
 ## 環境
 
-依 [後端設定](../supabase/SETUP.md) 起本機 Supabase，或使用一次性 staging 並套完整 migrations。複製 `.env.e2e.real.example` 為未追蹤的 `.env.e2e.real`，填 E2E_REAL_SUPABASE_URL、E2E_REAL_SUPABASE_ANON_KEY、E2E_REAL_SERVICE_ROLE_KEY；所有測試自行建立／清理臨時帳號，不再依賴常駐 smoke 帳密。
+依 [後端設定](../supabase/SETUP.md) 起本機 Supabase，或使用一次性 staging 並套完整 migrations。複製 `.env.e2e.real.example` 為未追蹤的 `.env.e2e.real`，填 E2E_REAL_SUPABASE_URL、E2E_REAL_SUPABASE_ANON_KEY、E2E_REAL_SERVICE_ROLE_KEY；所有測試自行建立／清理臨時帳號，不再依賴常駐 smoke 帳密。需要 DBA 邊界重現歷史資料的鏈（9、11）以 `docker exec` 連本機 postgres，預設容器 `supabase_db_PMIS`；另起隔離棧（不同 `project_id`，例如共用開發棧不宜先套自己的 migration 時）以 `E2E_REAL_DB_CONTAINER` 指定容器，URL／金鑰以同名環境變數覆寫 `.env.e2e.real`（環境變數優先）。
 
 [playwright.real.config.js](../playwright.real.config.js) 在瀏覽器啟動前檢查缺值／URL，拒絕已知正式 Supabase host。這是已知 host 黑名單，不保證辨識未登記的新正式環境；執行者仍須確認目標是 staging。帳密／金鑰不可提交。
 
@@ -63,7 +63,7 @@ npm run test:e2e:real -- e2e-real/chain6-supervisor-log.spec.js
 
 ## 監造確認量鏈（chain 7，P4b 後端）
 
-`e2e-real/chain7-confirmed-qty.spec.js`（前置：本機 stack 已套用 `20260919140000`，`supabase migration up --local`）：廠商建第 1 期→以廠商身分補計價截止日（截止日欄位由 P4c 進估驗頁）→在估驗頁直接填累計 100（舊前端路徑，P4e 前仍可寫草稿）→「送監造審核」被 DB 檢查點擋下、畫面原樣顯示「缺監造確認來源」、狀態仍是草稿→直接 REST 改狀態與 `transition_valuation` 都回 `VQ004`、`get_valuation_state` 顯示 cap 0→廠商簽確認單 `VQ001`→監造以登入身分 `issue_supervisor_certificate` A區 60（R1 起不要求兩步驟驗證），同 `client_request_id` 重播不重複入帳→廠商 `sync_valuation_from_confirmations` 後累計 60、設 61 回 `VQ006`、`violations` 空→重新載入頁面看到 60、送審成功→監造核定。chain 2 亦改為送審前補截止日（該期無明細，沒有數量要驗）。
+`e2e-real/chain7-confirmed-qty.spec.js`（前置：本機 stack 已套用 `20260919140000`，`supabase migration up --local`）：廠商建第 1 期（計價截止日必填）→在估驗頁填累計 100，`set_valuation_item_cum` 回 `VQ006`（上限 0），畫面列出前期累計／本期起算值／本期最多可新增／可用確認量、輸入框回到 DB 的值（100 沒有寫進去）→廠商簽確認單 `VQ001`→監造以登入身分 `issue_supervisor_certificate` A區 60（R1 起不要求兩步驟驗證），同 `client_request_id` 重播不重複入帳→DB 自動同步到草稿期，重新整理看到 60、來源展開列出批次與確認人→填 61 再被擋→「同步確認量」冪等→送審→監造核定。chain 2 亦改為送審前補截止日（該期無明細，沒有數量要驗）。
 
 ```bash
 npm run test:e2e:real -- chain7 chain2
@@ -77,12 +77,20 @@ npm run test:e2e:real -- chain7 chain2
 npm run test:e2e:real -- e2e-real/chain8-self-check.spec.js
 ```
 
-## 未確認量不可請款鏈（chain 9，P4c）
+## 未確認量不可請款鏈（chain 9，P4c／P4e）
 
-`e2e-real/chain9-unconfirmed-blocked.spec.js`（前置：本機 stack 已套用 `20260919140000`）：廠商建第 1 期→以 REST 直接寫累計 100（P4e 前仍可的舊路徑，DB 標 legacy）→新 UI 標「缺監造確認來源・申報,不計價」、本期可請款金額 0、缺件卡列出處理入口→「送監造審核」被 DB 檢查點擋下並列出原因、狀態仍草稿→「同步確認量」歸零、缺件消失→送審成功。
+`e2e-real/chain9-unconfirmed-blocked.spec.js`（前置：本機 stack 已套用 `20260920001500`；容器 `supabase_db_PMIS` 在跑）：廠商建第 1 期→舊客戶端路徑以 REST 直接 upsert／update／delete `valuation_items` 全部明確失敗（`42501`，P4e）→以 DBA 邊界（`e2e-real/helpers.js` 的 `dbaSql`：本機 postgres、交易內 `set local pmis.cq_internal='1'`）重現 P4e 之前舊前端寫進草稿的申報 100（`backing='legacy'`、無來源；正式庫仍有這類草稿明細）→新 UI 標「缺監造確認來源・申報,不計價」、本期可請款金額 0、缺件卡列出處理入口→「送監造審核」被 DB 檢查點擋下並列出原因、狀態仍草稿→「同步確認量」歸零、缺件消失→送審成功。
 
 ```bash
 npm run test:e2e:real -- e2e-real/chain9-unconfirmed-blocked.spec.js
+```
+
+## 撤銷／補證／調整鏈（chain 11，P4d）
+
+`e2e-real/chain11-adjustments.spec.js`（前置：本機 stack 已套用 `20260920001500`；容器 `supabase_db_PMIS` 在跑）：11a 監造確認 60→廠商建期同步送審→監造核定→監造在估驗頁撤銷該筆確認→已核定量轉成待處理扣回→機關登錄請款日被擋→機關作廢（接受已計價）→請款日可登錄。11b 以 DBA 邊界（`dbaSql`：交易內開重算旗標寫 legacy 明細、停用檢查點 trigger 核定、`fn_cq_backfill_legacy_internal`，與正式庫 P4b 回填同一支）建立歷史遷移期別→監造首頁「待監造補證」→缺件卡→「補證此期」→缺件清空→請款日登錄。DBA 邊界只給「產品已不允許產生、但正式庫仍存在」的歷史資料用。
+
+```bash
+npm run test:e2e:real -- e2e-real/chain11-adjustments.spec.js
 ```
 
 ## 監造查驗表單鏈（chain 10，P3c）

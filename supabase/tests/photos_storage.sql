@@ -164,9 +164,12 @@ set local role authenticated;
 insert into public.valuations (id, project_id, period_no, period_start, period_end, status)
 values ('e6000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-00000000000a',
         1, '2026-08-01', '2026-08-10', '草稿');
-insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
-values ('e6000000-0000-0000-0000-000000000001', 'e3000000-0000-0000-0000-000000000001', 40);
 reset role;
+-- 明細:P4e(20260920001500)起沒有任何直接寫入路徑;這期代表遷移前的歷史資料,以 DBA 邊界(交易內開重算旗標)寫入
+select set_config('pmis.cq_internal', '1', true);
+insert into public.valuation_items (valuation_id, work_item_id, cum_qty, backing)
+values ('e6000000-0000-0000-0000-000000000001', 'e3000000-0000-0000-0000-000000000001', 40, 'legacy');
+select set_config('pmis.cq_internal', '', true);
 -- P4b 起核定會驗「每一單位增量都有監造確認來源」(監造與 service role 皆無 bypass);
 -- 本檔只驗照片凍結,這期是「遷移前就已核定」的歷史期別,以 DBA 邊界(disable trigger)核定。
 select pg_temp.become(null);
