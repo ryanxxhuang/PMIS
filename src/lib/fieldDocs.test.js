@@ -14,6 +14,7 @@ import {
   docPagePath, docPageLink, docToOrg, docToOrgs, docToOrgLabel, TO_ORGS_BY_DOC_TYPE,
   INSPECTION_VERDICTS, requiredStagesFor, emptyInspectionFormContent, emptyInspectionFormSources, setInspectionFormTemplate, inspectionFormIssues, currentBatchCum,
   printSignature, submissionsChronological, submissionReceipts, returnHistory, nextResponsibleText,
+  groupSharedFields, sharedFieldTitle, sharedEffectLabel, sharedPendingDocs, sharedInputValue, sharedApplySummary, documentsAfterShared,
 } from './fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.js'
@@ -585,5 +586,65 @@ describe('監造查驗表單(P3c):提送對象矩陣、內容形狀、判定與�
     expect(currentBatchCum(rows, { location: '3F 版牆', stageKey: 'Rebar' })).toBe(10)
     expect(currentBatchCum(rows, { location: 'B區' })).toBe(0)
     expect(currentBatchCum(rows, { location: '' })).toBeNull()
+  })
+})
+
+describe('共用補值(P3e):只呈現伺服器的欄位與效果', () => {
+  const W1 = 'a3e30000-0000-0000-0000-000000000001'
+  const loc = {
+    key: `location:2026-09-18:${W1}`, field: 'location', label: '施作位置', date: '2026-09-18', value_kind: 'text',
+    work_item: { id: W1, item_no: '壹.一.1', description: '結構混凝土', unit: 'M3' }, value: 'A區 3F',
+    documents: [
+      { document_id: 'D1', doc_type: 'daily_log', status: 'pending_input', effect: 'update' },
+      { document_id: 'S1', doc_type: 'self_check', status: 'signed', effect: 'locked' },
+      { document_id: 'S2', doc_type: 'self_check', status: 'pending_input', effect: 'human_value', current_value: 'B棟 2F', current_source: { status: 'confirmed', source: 'human' } },
+    ],
+  }
+  const qty = { ...loc, key: `qty:2026-09-18:${W1}`, field: 'qty', label: '當日完成數量', value_kind: 'number', value: null, documents: [{ document_id: 'D1', doc_type: 'daily_log', status: 'pending_input', effect: 'update' }] }
+  const wx = { key: 'weather_am:2026-09-19', field: 'weather_am', label: '天氣(上午)', date: '2026-09-19', value_kind: 'text', work_item: null, value: null, documents: [] }
+
+  it('標題=欄位＋工項;依日期分組(保留伺服器順序)', () => {
+    expect(sharedFieldTitle(loc)).toBe('施作位置・壹.一.1 結構混凝土')
+    expect(sharedFieldTitle(wx)).toBe('天氣(上午)')
+    expect(groupSharedFields([loc, qty, wx]).map((g) => [g.date, g.fields.map((f) => f.field)])).toEqual([
+      ['2026-09-18', ['location', 'qty']], ['2026-09-19', ['weather_am']],
+    ])
+  })
+
+  it('效果文案:已簽署／提送不受影響、人親自填的不覆蓋、有補值卻未套用標「尚未套用」', () => {
+    const [d1, s1, s2] = loc.documents
+    expect(sharedEffectLabel(d1, loc)).toBe('尚未套用')
+    expect(sharedEffectLabel(d1, qty)).toBe('將寫入')
+    expect(sharedEffectLabel(s1, loc)).toBe('已簽署，不受影響')
+    expect(sharedEffectLabel({ ...s1, status: 'pending_input' }, loc)).toBe('簽後更正中，不受影響')
+    expect(sharedEffectLabel(s2, loc)).toBe('已個別填寫「B棟 2F」，不覆蓋')
+    expect(sharedEffectLabel({ ...s2, current_value: null, current_source: { status: 'na', reason: '不分區' } }, loc)).toBe('已標不適用，不覆蓋')
+    expect(sharedEffectLabel({ effect: 'applied' }, loc)).toBe('已套用')
+    expect(sharedPendingDocs(loc).map((d) => d.document_id)).toEqual(['D1'])
+  })
+
+  it('輸入轉型:數量送數字、非數字原樣送(由伺服器回 PD010),文字去頭尾空白', () => {
+    expect(sharedInputValue(qty, ' 12.5 ')).toBe(12.5)
+    expect(sharedInputValue(qty, '0')).toBe(0)
+    expect(sharedInputValue(qty, 'abc')).toBe('abc')
+    expect(sharedInputValue(qty, '-3')).toBe(-3)
+    expect(sharedInputValue(loc, '  A區 3F ')).toBe('A區 3F')
+  })
+
+  it('套用結果一句話:更新的文件與新版本、未變更的原因', () => {
+    expect(sharedApplySummary({ documents: [
+      { document_id: 'D1', doc_type: 'daily_log', result: 'updated', version_no: 3 },
+      { document_id: 'S1', doc_type: 'self_check', result: 'locked', version_no: 3 },
+      { document_id: 'S2', doc_type: 'self_check', result: 'human_value', version_no: 3 },
+    ] })).toBe('已更新 1 份（施工日誌 版本 3）；1 份已簽署或提送，未變更；1 份已個別填寫，未覆蓋')
+    expect(sharedApplySummary({ documents: [{ document_id: 'D1', doc_type: 'daily_log', result: 'unchanged' }] }))
+      .toBe('沒有文件需要更新；1 份已是此值')
+  })
+
+  it('上傳當下的文件清單以伺服器回傳的新版本號更新(Edge 回應形狀 document_id／store 形狀 id 都認)', () => {
+    const res = { documents: [{ document_id: 'D1', result: 'updated', version_no: 2, status: 'pending_input' }, { document_id: 'S1', result: 'locked', version_no: 3 }] }
+    expect(documentsAfterShared([{ document_id: 'D1', version_no: 1 }, { id: 'S1', current_version_no: 3 }], res)).toEqual([
+      { document_id: 'D1', version_no: 2, current_version_no: 2, status: 'pending_input' }, { id: 'S1', current_version_no: 3 },
+    ])
   })
 })
