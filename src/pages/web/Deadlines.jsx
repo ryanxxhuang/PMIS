@@ -58,7 +58,7 @@ export default function Deadlines() {
   const {
     currentProject, project, isPersistedProject, currentUser, workItems, can,
     obligations, updateObligationStatus, transitionObligationPeriod, changeProjectAnchors, updateProjectSettings,
-    anchorVersions, acceptanceEvents, submittals,
+    anchorVersions, acceptanceEvents, submittals, projectWarranty,
   } = useStore()
   // ?period=<期別>:循環義務指定看哪一期(今日工作每期一筆帶進來);不指定=最早未結的一期
   const [searchParams, setSearchParams] = useSearchParams()
@@ -79,7 +79,8 @@ export default function Deadlines() {
   const contractTotal = manualContractTotal > 0 ? manualContractTotal : (workItems?.meta?.billable_total || 0)
 
   // 基準日一律讀 store 的 project(真專案:RPC 留版後以伺服器回傳的版本快照更新;demo:種子專案＋本地覆寫),
-  // 另帶實際竣工日(驗收事件推得,P5c 循環停止條件)與目前版本號(顯示「依第幾版」)——與今日工作、履約時程同一份錨點。
+  // 另帶實際竣工日(驗收事件推得,P5c 循環停止條件)、保固事實(P5e,DB 算好的合格日／保固期間／期滿日)與目前版本號
+  // (顯示「依第幾版」)——與今日工作、履約時程同一份錨點。
   const latestVersionNo = anchorVersions?.length ? anchorVersions[anchorVersions.length - 1].version_no : null
   const anchors = useMemo(() => ({
     award_date: project?.award_date || '',
@@ -87,8 +88,9 @@ export default function Deadlines() {
     commencement_date: project?.commencement_date || '',
     end_date: project?.end_date || '',
     completion_date: completionDateOf(acceptanceEvents),
+    warranty: projectWarranty,
     version_no: latestVersionNo,
-  }), [project, acceptanceEvents, latestVersionNo])
+  }), [project, acceptanceEvents, projectWarranty, latestVersionNo])
   // 下一次改基準日要記的依據(P5c):類別／函文或變更案號／生效日;改完保留,連續改同一份函文不用重填
   const [anchorBasis, setAnchorBasis] = useState({ change_kind: 'edit', source_ref: '', effective_from: '' })
   const [anchorMsg, setAnchorMsg] = useState('')

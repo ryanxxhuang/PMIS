@@ -5,7 +5,7 @@
 // 執行:npm run test:edge。只用 node:assert 與 JSON import,不需要 lockfile 之外的依賴。
 import assert from 'node:assert/strict'
 import cases from '../../../tests/fixtures/ball-in-court.cases.json' with { type: 'json' }
-import { coreOpenItems, obligationEntries, obligationInWindow, periodTitle, periodBasisLabel } from './ballInCourtRules.ts'
+import { coreOpenItems, obligationEntries, obligationInWindow, periodTitle, periodBasisLabel, warrantyGap, warrantyNeeds } from './ballInCourtRules.ts'
 import { computeObligationDueUTC, formatDate } from './contractDue.ts'
 
 const ORGS = ['contractor', 'supervisor', 'owner'] as const
@@ -73,6 +73,27 @@ Deno.test('共用案例(Deno):每方的球(soonDays=7 與 0)與待補設定與�
           .map(keyOf),
       ]
       assert.deepEqual(sorted(mine), sorted(cases.expected.mine[soon === 7 ? 'soon7' : 'soon0'][org]), `${org} soon=${soon}`)
+    }
+  }
+})
+
+// P5e 保固類循環義務的停止條件:同一條保固類每月義務 × RPC get_project_warranty 回傳的五種保固事實
+Deno.test('共用案例(Deno):保固類停止條件——缺口說法、缺哪幾項、期次與依據句與案例一致', () => {
+  for (const sc of cases.warranty.scenarios) {
+    assert.equal(warrantyGap(sc.warranty), sc.expected.gap, sc.name)
+    assert.deepEqual(warrantyNeeds(sc.warranty), sc.expected.needs, sc.name)
+    const ob = { ...cases.warranty.obligation, periods: sc.periods }
+    const anchors = { ...cases.anchors, warranty: sc.warranty }
+    const got = obligationEntries(ob, { anchors, computeDueIso, todayIso: cases.today })
+      .filter((e) => e.ball.who !== 'done')
+      .map((e) => ({
+        period: e.period ? String(e.period.period_key) : null, label: e.ball.label, due: e.dueIso,
+        setup: e.ball.setup?.kind ?? null, need: e.ball.setup?.need ?? null,
+      }))
+    assert.deepEqual(got, sc.expected.entries, sc.name)
+    const basis = (sc.expected as { basis?: Record<string, string> }).basis ?? {}
+    for (const [k, label] of Object.entries(basis)) {
+      assert.equal(periodBasisLabel(sc.periods.find((p) => p.period_key === k)), label, `${sc.name} ${k}`)
     }
   }
 })

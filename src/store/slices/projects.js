@@ -11,6 +11,8 @@ import {
 
 // 四個基準日欄位(P5c):變更一律經 RPC update_project_anchors 留版,其他專案設定走 updateProjectSettings。
 export const ANCHOR_KEYS = ['award_date', 'notice_date', 'commencement_date', 'end_date']
+// 契約保固期間(P5e):同一支 RPC 留版;DB guard 強制「有期間就必須引用本案已確認的契約重點」,不在前端判
+export const WARRANTY_KEYS = ['warranty_term_value', 'warranty_term_unit', 'warranty_source_requirement_id']
 
 // 標單載入分流（純函式，deps 注入以便單元測試）：
 //   demo/無專案 → 範例；真專案 0 筆 → 'empty'；查詢失敗 → 'error'；有資料 → 'db'。
@@ -262,7 +264,7 @@ export function useProjectsSlice({ currentUser }) {
   // 四個基準日不走這裡:P5c 起一律經 RPC update_project_anchors 留版(見 updateProjectAnchors)。
   const updateProjectSettings = useCallback(async (patch) => {
     if (!isPersistedProject) return { error: { message: '需真專案' } }
-    if (ANCHOR_KEYS.some((k) => k in patch)) return { error: { message: '基準日請經 updateProjectAnchors(留版)' } }
+    if ([...ANCHOR_KEYS, ...WARRANTY_KEYS].some((k) => k in patch)) return { error: { message: '基準日與保固期間請經 updateProjectAnchors(留版)' } }
     const pid = currentProject.project_id
     const { data, error } = await supabase.from('projects').update(patch).eq('id', pid).select('id')
     if (error) return { error }
@@ -275,10 +277,13 @@ export function useProjectsSlice({ currentUser }) {
   // 生效日),受影響的期次與單次義務到期日由 DB 重算並記差異;直接 REST 改也會留版,但沒有依據——
   // 所以前端只走 RPC。回傳 { error, version }:version 是新版本列(值沒變的直接修改回 null);現行值以
   // 版本快照更新本地。契約時程領域不依賴標單 → isPersistedProject。demo 的本地鏡像在 store.jsx(changeProjectAnchors)。
+  // P5e:契約保固期間(WARRANTY_KEYS,三鍵一起送)走同一支 RPC、同一套版本與「只重算未完成期次」。
   const updateProjectAnchors = useCallback(async (patch, basis = {}) => {
     if (!isPersistedProject) return { error: { message: '需真專案' } }
     const pid = currentProject.project_id
-    const anchors = Object.fromEntries(Object.entries(patch).filter(([k]) => ANCHOR_KEYS.includes(k)).map(([k, v]) => [k, v || null]))
+    const anchors = Object.fromEntries(Object.entries(patch)
+      .filter(([k]) => ANCHOR_KEYS.includes(k) || WARRANTY_KEYS.includes(k))
+      .map(([k, v]) => [k, v === '' || v == null ? null : v]))
     if (!Object.keys(anchors).length && (basis.change_kind || 'edit') === 'edit') return { error: { message: '沒有要變更的基準日' } }
     const { data, error } = await supabase.rpc('update_project_anchors', {
       p_project: pid, p_anchors: anchors, p_change_kind: basis.change_kind || 'edit',
@@ -287,7 +292,7 @@ export function useProjectsSlice({ currentUser }) {
     })
     if (error) return { error }
     const version = data || null
-    // 現行值以伺服器回傳的版本快照為準(沒有新版本=值沒變)
+    // 現行值以伺服器回傳的版本快照為準(沒有新版本=值沒變);保固期間的現行值由保固事實 RPC 重載(store 收尾)
     if (version?.anchors) setProjects((ps) => ps.map((p) => (p.project_id === pid ? { ...p, ...version.anchors } : p)))
     return { error: null, version }
   }, [isPersistedProject, currentProject])

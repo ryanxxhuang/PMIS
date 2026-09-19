@@ -5,7 +5,8 @@
 -- 3) 重算只動沒動過的待辦期,已提送／已完成／掛證據的期保留原到期日與依據並記 kept,差異寫進 effects;
 -- 4) 單次義務完成時留到期日快照與版號、退回清空、client 值作廢、基準日事後更正不改快照;5) RPC 權限矩陣
 -- (管理者可、成員／非成員／未登入不可、未知類別／欄位／日期／別案變更被拒)、RLS 可見性沿用專案;
--- 6) 循環停止條件:保固類不產生、竣工日缺不產生、竣工日已過停在竣工日、登錄竣工後之後的待辦期移除且清除後補回;
+-- 6) 循環停止條件:保固類不由竣工日界定(P5e 起改由保固期滿日,見 warranty_stop_condition.sql;本檔的保固案未登錄合格日與保固期間
+--    → 不產生)、竣工日缺不產生、竣工日已過停在竣工日、登錄竣工後之後的待辦期移除且清除後補回;
 -- 7) 時區與月末:生效日預設台北今天、月末基準日(31 日)之後的期照月末夾住規則對齊。
 begin;
 
@@ -43,10 +44,10 @@ select is(public.fn_obligation_single_due('other', 10, 'after', null, '2026-01-1
 select is(public.fn_obligation_recurrence_bound('施工中', '2026-12-31', '2026-08-24'), '2026-08-24'::date, '界限日:實際竣工日優先');
 select is(public.fn_obligation_recurrence_bound('施工中', '2026-12-31', null), '2026-12-31'::date, '界限日:未登錄竣工 → 契約竣工日');
 select is(public.fn_obligation_recurrence_bound(null, null, null), null, '界限日:竣工日缺且未登錄竣工 → 判不出');
-select is(public.fn_obligation_recurrence_bound('保固', '2026-12-31', '2026-08-24'), null, '界限日:保固類系統無法判定(未登錄保固年限)');
+select is(public.fn_obligation_recurrence_bound('保固', '2026-12-31', '2026-08-24'), null, '界限日:保固類不由竣工日界定(P5e 起由保固期滿日界定,呼叫端分流)');
 select is(public.fn_obligation_recurrence_stop_gap('施工中', '2026-12-31', null, '2026-09-19'), null, '停止條件:竣工日未到 → 無缺口');
 select is(public.fn_obligation_recurrence_stop_gap('施工中', null, '2026-08-24', '2026-09-19'), null, '停止條件:已登錄竣工 → 無缺口(即使竣工日缺)');
-select is(public.fn_obligation_recurrence_stop_gap('保固', '2026-12-31', null, '2026-09-19'), '保固期滿日無法判定，未登錄保固年限', '停止條件:保固類明示無法判定');
+select is(public.fn_obligation_recurrence_stop_gap('保固', '2026-12-31', null, '2026-09-19'), '缺正式驗收合格日、缺契約保固期間，無法判定保固期滿日', '停止條件:保固類未登錄合格日與保固期間 → 明示缺哪兩項(P5e)');
 select is(public.fn_obligation_recurrence_stop_gap('施工中', null, null, '2026-09-19'), '缺竣工日，無法判定循環何時結束', '停止條件:缺竣工日');
 select is(public.fn_obligation_recurrence_stop_gap('施工中', '2026-06-30', null, '2026-09-19'), '竣工日 2026-06-30 已過，尚未登錄竣工或展延', '停止條件:竣工日已過未登錄竣工');
 select is(public.fn_anchors_json(null, null, '2026-02-20', null), '{"award_date": null, "notice_date": null, "commencement_date": "2026-02-20", "end_date": null}'::jsonb, '基準日快照鍵永遠齊、null 保留');
@@ -148,7 +149,7 @@ select is((select count(*)::int from public.project_anchor_versions where projec
 select is((select due_date from public.obligation_periods where id = pg_temp.period_id('c5c30000-0000-0000-0000-000000000001', '2026-03')), '2026-03-05'::date, 'R1 插入即物化(2026-03 到期 3/5)');
 select is((select anchor_version_no from public.obligation_periods where id = pg_temp.period_id('c5c30000-0000-0000-0000-000000000001', '2026-03')), 1, '期次蓋產生當時的基準日版本 1');
 select is((select basis ->> 'bound_date' from public.obligation_periods where id = pg_temp.period_id('c5c30000-0000-0000-0000-000000000001', '2026-03')), '2026-12-31', 'basis 記界限日(契約竣工日)');
-select is((select count(*)::int from public.obligation_periods where obligation_id = 'c5c30000-0000-0000-0000-000000000005'), 0, '保固類循環義務:保固期滿日無法判定 → 不產生期次(停止條件待補)');
+select is((select count(*)::int from public.obligation_periods where obligation_id = 'c5c30000-0000-0000-0000-000000000005'), 0, '保固類循環義務:未登錄正式驗收合格日與保固期間 → 不產生期次(停止條件待補,P5e)');
 select is((select count(*)::int from public.obligation_periods where obligation_id = 'c5c30000-0000-0000-0000-000000000007'), 0, '基準日未設案:開工日缺 → 不產生');
 select is((select due_date from public.obligation_periods where id = pg_temp.period_id('c5c30000-0000-0000-0000-000000000006', '2026-02')), '2026-02-15'::date, 'R6 接獲開工通知 1/20 起算:2026-02 到期 2/15');
 

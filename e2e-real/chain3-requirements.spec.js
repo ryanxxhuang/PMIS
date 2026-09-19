@@ -208,8 +208,9 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
   await c.auth.signOut()
 
   // 審核與履約已分頁:從可見的「擷取審核」入口檢視人工／AI 整理來源。
+  // 側欄子頁也有同名入口(履約時程群組的子頁),這裡點的是頁首動作——限定在主內容區,否則 strict mode 撞兩個
   await gotoHash(page, '/requirements')
-  await page.getByRole('link', { name: '擷取審核', exact: true }).click()
+  await page.getByRole('main').getByRole('link', { name: '擷取審核', exact: true }).click()
   await page.getByRole('listitem').filter({ hasText: requirementTitle }).first().click()
   await expect(page.getByRole('button', { name: '確認無誤', exact: true })).toHaveCount(0)
   // quick filter「不採用」也是 button,只在詳情動作區驗沒有審查按鈕。
@@ -218,7 +219,7 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
 
   await loginReal(page, supEmail)
   await gotoHash(page, '/requirements')
-  await page.getByRole('link', { name: '擷取審核', exact: true }).click()
+  await page.getByRole('main').getByRole('link', { name: '擷取審核', exact: true }).click()
   await page.getByRole('listitem').filter({ hasText: requirementTitle }).first().click()
   const confirmBtn = page.getByRole('button', { name: '確認無誤', exact: true })
   if (!LIVE_EDGE) {

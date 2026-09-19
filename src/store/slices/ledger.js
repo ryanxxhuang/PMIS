@@ -2,7 +2,7 @@
 // 逐工項排程、核准期限的義務 runtime。
 import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase.js'
-import { loadObligationsFromDB, loadAnchorVersionsFromDB } from '../db.js'
+import { loadObligationsFromDB, loadAnchorVersionsFromDB, loadProjectWarrantyFromDB } from '../db.js'
 import { ingestRequirementDocument as runRequirementIngestion } from '../../lib/documentIngestion.js'
 import { mutationOutcome } from './billing.js'
 
@@ -22,6 +22,9 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
   const [anchorVersions, setAnchorVersions] = useState([])
   // 驗收/結算事件（真 DB；一階段一筆,法定期限由 lib/acceptance.js 推算）
   const [acceptanceEvents, setAcceptanceEvents] = useState([])
+  // 保固事實(P5e get_project_warranty;真 DB 由 DB 單一規則算、demo 由種子):正式驗收合格日、契約保固期間、
+  // 保固期滿日與缺口。保固類循環義務的停止條件讀它(anchors.warranty)。
+  const [projectWarranty, setProjectWarranty] = useState(null)
 
   // 逐工項排程:設定某工項的計畫起迄。
   // R4 P1-01(前兩次都沒真正修好):起訖是兩個獨立 date input,同一 tick 連發時
@@ -189,10 +192,15 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
   }, [dbMode])
 
   // 契約義務:重載 / 改狀態(契約領域不依賴標單 → isPersistedProject)──────────
+  // 保固事實(P5e)與期次同源(驗收事件、保固期間、引用條文狀態由 DB trigger 同步重算期次),一起重載。
   const reloadObligations = useCallback(async () => {
     if (!isPersistedProject) return
     // 寫入後重載:失敗保留現況,不把成功的解析偽裝成錯誤(B-09 載入層會 throw)
-    try { setObligations(await loadObligationsFromDB(currentProject.project_id)) } catch { /* 保留現況 */ }
+    const pid = currentProject.project_id
+    await Promise.all([
+      loadObligationsFromDB(pid).then(setObligations, () => { /* 保留現況 */ }),
+      loadProjectWarrantyFromDB(pid).then(setProjectWarranty, () => { /* 保留現況 */ }),
+    ])
   }, [isPersistedProject, currentProject])
   // 基準日版本(P5c):基準日變更後重載(版本列由 DB 產生,含受影響事項);demo 由本地鏡像追加
   const reloadAnchorVersions = useCallback(async () => {
@@ -282,9 +290,10 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
       else setAcceptanceEvents((es) => [...es, { id: `ACC-${Date.now()}`, stage_key, ...patch }])
       return { error: null }
     }
+    // 竣工(報竣／竣工確認)與正式驗收合格會由 DB trigger 重算循環期次的界限(P5c／P5e):寫入成功後重載期次與保固事實
     if (existing) {
       const { error } = await supabase.from('acceptance_events').update(patch).eq('id', existing.id)
-      if (!error) setAcceptanceEvents((es) => es.map((e) => (e.id === existing.id ? { ...e, ...patch } : e)))
+      if (!error) { setAcceptanceEvents((es) => es.map((e) => (e.id === existing.id ? { ...e, ...patch } : e))); await reloadObligations() }
       return { error }
     }
     const { data, error } = await supabase.from('acceptance_events')
@@ -292,8 +301,9 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
       .select().single()
     if (error) return { error }
     setAcceptanceEvents((es) => [...es, data])
+    await reloadObligations()
     return { error: null }
-  }, [isPersistedProject, acceptanceEvents, currentProject, currentUser])
+  }, [isPersistedProject, acceptanceEvents, currentProject, currentUser, reloadObligations])
 
   // 驗收:撤銷某階段的登錄(登錯日期重來)。
   // DB 刪成功才從 UI 移除;guard 拒絕(他方事件/角色不符)或 RLS 靜默 0-row 都如實回報。
@@ -313,13 +323,14 @@ export function useLedgerSlice({ dbMode, isPersistedProject, currentProject, cur
       }
     }
     setAcceptanceEvents((es) => es.filter((e) => e.stage_key !== stage_key))
+    if (isPersistedProject) await reloadObligations()
     return { error: null }
-  }, [isPersistedProject, acceptanceEvents])
+  }, [isPersistedProject, acceptanceEvents, reloadObligations])
 
   return {
     costItems, setCostItems, changeOrders, setChangeOrders,
     itemSchedules, setItemSchedules, obligations, setObligations,
-    anchorVersions, setAnchorVersions, reloadAnchorVersions,
+    anchorVersions, setAnchorVersions, reloadAnchorVersions, projectWarranty, setProjectWarranty,
     acceptanceEvents, setAcceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent,
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,

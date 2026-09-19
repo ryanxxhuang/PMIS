@@ -164,10 +164,16 @@ export function recurrenceRuleGap(ob: Rec): string | null {
 }
 // 循環起算的基準日欄位:觸發點映得到就用它;fixed 用義務自己的日期(缺值算規則缺口,不是專案基準日);
 // 其餘(null／monthly／other)一律開工日——施工期間的循環義務從開工起算。
+// 保固類(P5e)不從專案基準日起算:期次窗口＝保固期間(正式驗收合格日起、保固期滿日止),缺什麼由
+// recurrenceStopGap 說(停止條件待補),所以這裡回 null(不會被當成「基準日待補」)。
 export function recurrenceAnchorKey(ob: Rec): string | null {
+  if (isWarrantyObligation(ob)) return null
   const trigger = s(ob, 'trigger_event')
   if (trigger === 'fixed') return null
   return ANCHOR_BY_TRIGGER[trigger] || 'commencement_date'
+}
+export function isWarrantyObligation(ob: Rec): boolean {
+  return s(ob, 'category') === '保固'
 }
 export interface ObligationPeriod extends Rec {
   id?: unknown
@@ -192,13 +198,48 @@ export function completionDateOf(events: readonly AcceptanceEventLike[] | null |
   }
   return latest('confirm') ?? latest('report')
 }
+// ── 保固類循環義務的停止條件(P5e;與 DB fn_project_warranty／fn_warranty_gap_text 同口徑)──────────
+// 使用者 2026-09-20 決定:保固期滿日＝正式驗收合格日＋契約載明的保固期間,兩者都有依據才計算。
+// 保固期滿日的日期規則只在 DB(fn_warranty_expiry,民法 §120–121、月底無相當日取月末);前端與 Edge 讀
+// RPC get_project_warranty 的結果放進 anchors.warranty,這裡只判「缺什麼」與說法,不重算日期。
+//   acceptance_date 正式驗收合格日(final 最後一筆且合格;null=缺)
+//   term_value／term_unit 契約保固期間;source_ok=引用的契約重點目前仍是本案已確認(approved)
+//   expiry 保固期滿日(兩項齊全才有)
+export interface ProjectWarranty extends Rec {
+  acceptance_date?: unknown; acceptance_event_id?: unknown; term_value?: unknown; term_unit?: unknown
+  source_requirement_id?: unknown; source_status?: unknown; source_ok?: unknown; expiry?: unknown
+}
+export type WarrantyNeed = 'acceptance' | 'term'
+export const WARRANTY_TERM_UNIT_LABELS: Readonly<Record<string, string>> = Object.freeze({ year: '年', month: '個月', day: '日' })
+export const WARRANTY_NEED_LABELS: Readonly<Record<WarrantyNeed, string>> = Object.freeze({ acceptance: '正式驗收合格日', term: '契約保固期間' })
+// 保固期間的顯示(例:2 年、6 個月、180 日);不成對或單位未知回 null
+export function warrantyTermLabel(value: unknown, unit: unknown): string | null {
+  const n = Number(value)
+  const u = WARRANTY_TERM_UNIT_LABELS[unit == null ? '' : String(unit)]
+  return Number.isInteger(n) && n > 0 && u ? `${n} ${u}` : null
+}
+// 缺哪幾項(順序固定:合格日、保固期間);保固期間有值但引用條文已不是已確認 → 也算缺保固期間
+export function warrantyNeeds(w: ProjectWarranty | null | undefined): WarrantyNeed[] {
+  const needs: WarrantyNeed[] = []
+  if (!s((w || {}) as Rec, 'acceptance_date')) needs.push('acceptance')
+  if (w?.term_value == null || w?.source_ok !== true) needs.push('term')
+  return needs
+}
+export function warrantyGap(w: ProjectWarranty | null | undefined): string | null {
+  const parts: string[] = []
+  if (!s((w || {}) as Rec, 'acceptance_date')) parts.push('缺正式驗收合格日')
+  if (w?.term_value == null) parts.push('缺契約保固期間')
+  else if (w?.source_ok !== true) parts.push('保固期間引用的契約條文已不是已確認狀態')
+  return parts.length ? `${parts.join('、')}，無法判定保固期滿日` : null
+}
+
 // 循環期次的停止條件缺口:完整回 null;判不出或已越界回中文說明(前端／Agent／早報列「待補設定(stop)」)。
-//   保固類:保固期滿日系統沒有欄位可判定 → 不自動產生;
+//   保固類(P5e):正式驗收合格日＋契約保固期間齊全才有保固期滿日;缺哪項就說哪項(anchors.warranty);
 //   其餘:已登錄竣工 → 期次只到竣工為止(無缺口);缺竣工日 → 判不出;竣工日已過而未登錄竣工／展延 → 停在竣工日。
-// DB 端同一條規則決定「產生到哪一期」(fn_obligation_recurrence_bound),這裡只負責把缺口說出來。
+// DB 端同一條規則決定「產生到哪一期」(fn_obligation_recurrence_bound／fn_project_warranty),這裡只負責把缺口說出來。
 export function recurrenceStopGap(ob: Rec, anchors: Rec | null | undefined, todayIso: unknown): string | null {
   if (!isRecurring(ob)) return null
-  if (s(ob, 'category') === '保固') return '保固期滿日無法判定，未登錄保固年限'
+  if (isWarrantyObligation(ob)) return warrantyGap(anchors?.warranty as ProjectWarranty | null | undefined)
   if (anchors?.completion_date) return null
   const end = s((anchors || {}) as Rec, 'end_date').slice(0, 10)
   if (!end) return '缺竣工日，無法判定循環何時結束'
@@ -211,12 +252,16 @@ export function recurrenceStopGap(ob: Rec, anchors: Rec | null | undefined, toda
 export const ANCHOR_CHANGE_KIND_LABELS: Readonly<Record<string, string>> = Object.freeze({
   initial: '初值', edit: '直接修改', suspension: '停工', resumption: '復工', extension: '展延', change_order: '核准變更工期',
 })
+// 保固類的期(P5e)起算是正式驗收合格日、界限是保固期滿日,依據句把兩者都說出來。
 export function periodBasisLabel(period: ObligationPeriod | null | undefined): string {
   if (!period) return ''
   const basis = (period.basis && typeof period.basis === 'object' ? period.basis : {}) as Rec
   const key = s(basis, 'anchor_key')
   const date = s(basis, 'anchor_date').slice(0, 10)
-  const from = key === 'fixed_date' ? `義務指定日期 ${date}` : key ? `${ANCHOR_LABELS[key] || key} ${date}` : '起算日未記錄'
+  const warranty = s(basis, 'bound_kind') === 'warranty_expiry'
+  const from = key === 'fixed_date' ? `義務指定日期 ${date}`
+    : warranty ? `正式驗收合格日 ${date} 起、保固期滿 ${s(basis, 'bound_date').slice(0, 10)} 止`
+      : key ? `${ANCHOR_LABELS[key] || key} ${date}` : '起算日未記錄'
   const v = period.anchor_version_no == null ? null : Number(period.anchor_version_no)
   return v ? `第 ${v} 版基準日（${from}）` : `產生時未留版（${from}）`
 }
@@ -253,7 +298,15 @@ export function obligationAnchorGap(ob: Rec, anchors: Rec | null | undefined): A
 
 // 待補設定的五種缺口:責任方推不出三方／基準日沒填(P5a),循環規則不完整／回填待核對(P5b:舊義務
 // 曾標完成但對不上期別),循環停止條件判不出或已越界(P5c)。三方都看得到、不算任何人的件數,每種各有處理入口。
-export interface SetupGap { kind: 'responsible' | 'anchor' | 'rule' | 'review' | 'stop'; label: string; anchor?: string }
+// need:保固類停止條件缺口(P5e)缺哪幾項——處理入口不同(合格日在驗收頁、保固期間在履約時程的履約期程卡)。
+export interface SetupGap { kind: 'responsible' | 'anchor' | 'rule' | 'review' | 'stop'; label: string; anchor?: string; need?: WarrantyNeed[] }
+// 停止條件缺口(保固類另帶缺哪幾項)
+function stopGap(ob: Rec, anchors: Rec | null | undefined, stop: string): SetupGap {
+  const label = `停止條件待補（${stop}）`
+  return isWarrantyObligation(ob)
+    ? { kind: 'stop', label, need: warrantyNeeds(anchors?.warranty as ProjectWarranty | null | undefined) }
+    : { kind: 'stop', label }
+}
 export interface ObligationBall extends Ball { setup: SetupGap | null }
 
 // 義務(或它的一期)的球:到期日由呼叫端傳入(單次:contractDue 依基準日;循環:期次的 due_date),
@@ -293,8 +346,8 @@ export function obligationBall(ob: Rec, opts: { dueIso?: string | null; anchors?
     }
     const stop = recurrenceStopGap(ob, opts.anchors, opts.todayIso)
     if (stop) {
-      const label = `停止條件待補（${stop}）`
-      return { who: side, label, setup: { kind: 'stop', label } }
+      const setup = stopGap(ob, opts.anchors, stop)
+      return { who: side, label: setup.label, setup }
     }
   }
   return { who: side, label: '待辦', setup: null }
@@ -322,8 +375,8 @@ export function obligationEntries(
   const entries: ObligationEntry[] = listed.map((period) => ({ ball: obligationBall(ob, { dueIso: periodDueIso(period), anchors: opts.anchors, period }), dueIso: periodDueIso(period), period }))
   const stop = recurrenceStopGap(ob, opts.anchors, opts.todayIso)
   if (stop && obligationSide(ob?.responsible) !== 'unassigned' && !recurrenceRuleGap(ob)) {
-    const label = `停止條件待補（${stop}）`
-    entries.push({ ball: { who: obligationSide(ob?.responsible) as BallSide, label, setup: { kind: 'stop', label } }, dueIso: null, period: null })
+    const setup = stopGap(ob, opts.anchors, stop)
+    entries.push({ ball: { who: obligationSide(ob?.responsible) as BallSide, label: setup.label, setup }, dueIso: null, period: null })
   }
   return entries
 }

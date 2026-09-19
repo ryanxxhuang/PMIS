@@ -4,6 +4,7 @@
 //   onSelect      期限追蹤:點某一期切到該期(?period=),列是 button、aria-current 標本期
 //   renderActions 履約時程:每一期就地標記完成／取消／掛佐證,列是 li,動作由呼叫端渲染
 //   anchorAction  基準日／停止條件缺口的處理入口(期限追蹤:文字指向下方基準日卡;履約時程:按鈕開設定列)
+//   warrantyAction 保固類缺「契約保固期間」的處理入口(P5e;履約時程:按鈕開履約期程卡的保固期間;其餘頁預設連到履約時程)
 import { Link } from 'react-router-dom'
 import { MSym } from './icons.jsx'
 import { Badge } from './ui.jsx'
@@ -11,19 +12,27 @@ import { OB_STATUS, periodStat } from '../lib/obligationTimeline.js'
 
 const COUNTDOWN_CLS = { overdue: 'text-[var(--red-text)]', due: 'text-[var(--amber-text)]' }
 
-// 沒有期次的原因、或(P5c)停止條件判不出／已越界(DB 已停止產生新期,舊期仍在):說清楚去哪裡補
-export function RecurrenceGapNote({ gap, ob, anchorAction = null, className = '' }) {
+// 沒有期次的原因、或(P5c)停止條件判不出／已越界(DB 已停止產生新期,舊期仍在):說清楚去哪裡補。
+// 保固類(P5e):保固期滿日＝正式驗收合格日＋契約保固期間,缺哪項就給哪個入口(gap.need 由共用規則判)。
+export function RecurrenceGapNote({ gap, ob, anchorAction = null, warrantyAction = null, className = '' }) {
   if (!gap) return null
   const review = (
     <Link to={`/requirements/review?highlight=${encodeURIComponent(ob.id)}`} className="text-[var(--blue-text)] hover:underline mx-0.5">擷取審核</Link>
   )
+  const need = gap.need || []
+  const warrantyStop = (<>
+    ，期次不自動產生（保固期滿日＝正式驗收合格日＋契約保固期間）。
+    {need.includes('acceptance') && <>請到<Link to="/acceptance?stage=final" className="text-[var(--blue-text)] hover:underline mx-0.5">驗收</Link>登錄正式驗收合格。</>}
+    {need.includes('term') && (warrantyAction
+      || <>請到<Link to="/requirements" className="text-[var(--blue-text)] hover:underline mx-0.5">履約時程</Link>的履約期程卡登錄契約保固期間（引用契約條文）。</>)}
+  </>)
   return (
     <p className={`text-footnote leading-relaxed text-[var(--text-3)] ${className}`}>
       {gap.label}
       {gap.kind === 'rule' && <>，請到{review}廢止取代後補登循環規則。</>}
       {gap.kind === 'anchor' && <>，補上基準日後期次會立即產生。{anchorAction}</>}
       {gap.kind === 'stop' && (ob.category === '保固'
-        ? '，系統沒有保固期滿日可判定循環何時結束，暫不自動產生期次。'
+        ? warrantyStop
         : <>，期次已停止自動產生：補上或展延竣工日，已竣工的請到<Link to="/acceptance" className="text-[var(--blue-text)] hover:underline mx-0.5">驗收</Link>登錄竣工，期次會依竣工日收尾。{anchorAction}</>)}
     </p>
   )
@@ -40,7 +49,7 @@ export function PeriodRateLine({ periods }) {
   )
 }
 
-export default function ObligationPeriods({ ob, periods, gap, currentId = null, onSelect, renderActions, anchorAction, showRate = false }) {
+export default function ObligationPeriods({ ob, periods, gap, currentId = null, onSelect, renderActions, anchorAction, warrantyAction, showRate = false }) {
   const rowBody = (p) => (<>
     <span className="num font-medium text-[var(--text)]">{p.key} 期</span>
     <span className="num text-[var(--text-3)]">到期 {p.dateLabel}</span>
@@ -58,7 +67,7 @@ export default function ObligationPeriods({ ob, periods, gap, currentId = null, 
         <span className="text-footnote font-medium text-[var(--text)]">期次（{periods.length}）</span>
         {showRate && <PeriodRateLine periods={periods} />}
       </div>
-      <RecurrenceGapNote gap={gap} ob={ob} anchorAction={anchorAction} className="mb-2" />
+      <RecurrenceGapNote gap={gap} ob={ob} anchorAction={anchorAction} warrantyAction={warrantyAction} className="mb-2" />
       {periods.length === 0 ? (
         !gap && <p className="text-footnote leading-relaxed text-[var(--text-3)]">尚未產生期次。</p>
       ) : (

@@ -16,9 +16,10 @@ import {
 const TODAY = parseDateUTC('2026-07-26')!
 
 // 最小可用的 Supabase client 假件:collectOpenBallItems 只用
-// from().select().eq()/.neq()/.in()(awaitable)與 projects 的 .maybeSingle()
-function fakeDb(tables: Record<string, unknown[]>, project: Record<string, unknown> | null = {}) {
+// from().select().eq()/.neq()/.in()(awaitable)、projects 的 .maybeSingle() 與 rpc('get_project_warranty')(P5e 保固事實)
+function fakeDb(tables: Record<string, unknown[]>, project: Record<string, unknown> | null = {}, warranty: Record<string, unknown> | null = null) {
   return {
+    rpc: (fn: string) => Promise.resolve(fn === 'get_project_warranty' ? { data: warranty, error: null } : { data: null, error: { message: `unexpected rpc ${fn}` } }),
     from(table: string) {
       const builder: Record<string, unknown> = {}
       const chain = () => builder
