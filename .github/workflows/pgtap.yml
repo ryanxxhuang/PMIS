@@ -17,9 +17,17 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      # CLI 版本釘死(CI1,2026-09-19):`version: latest` 會讓 setup-cli 先匿名打
+      # api.github.com/repos/supabase/cli/releases/latest 解析版號,GitHub 對匿名請求以
+      # runner 共用 IP 計 rate limit,PR #136 第一輪就這樣假紅(「Failed to resolve latest
+      # Supabase CLI release: rate limit exceeded」)。給明確版本 setup-cli 直接抓
+      # github.com/supabase/cli/releases/download/v<版本>/…,完全不經 API;同時把
+      # `supabase db start` 拉的 Postgres／服務映像也釘在這個 CLI 版本對應的 tag,
+      # 一次性資料庫才真的可重現。版本＝本機 `supabase --version`(brew),本機
+      # `npm run test:db` 與 CI 同版;升級方式見 docs/operations/deploy.md §3。
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.113.0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc

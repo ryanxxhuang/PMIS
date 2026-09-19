@@ -44,6 +44,7 @@
 ## 3. 部署前的門檻
 
 - repo CI job 名為 `unit`、`e2e`、`pgtap`，需與 main ruleset 一致。unit 跑 Deno 型別、文件連結、lint、Vitest 與 build；e2e 跑 Demo；pgtap 從零套 migrations 後用共用 runner 驗 DB。改 job 名須同步確認 ruleset；本輪沒有重查 GitHub 後台。
+- **CI 工具鏈版本全部釘死、不在 runner 上「解析最新版」**（CI1，2026-09-19）：`pgtap.yml` 的 `supabase/setup-cli` 給明確版本（目前 `2.113.0`＝本機 brew 版本），`version: latest` 會匿名打 GitHub API 解析版號、撞 runner 共用 IP 的 rate limit 假紅（PR #136 第一輪）；明確版本直接抓 release asset，且 `supabase db start` 拉的映像 tag 也隨 CLI 版本固定。Deno 走 `denoland/setup-deno` 明確版本＋`deno.lock` frozen；Node 走 `.nvmrc`（major 由 runner 的 toolcache／授權 manifest 解析，不是匿名 API）；Playwright 版本來自 lockfile 並快取瀏覽器；`npm ci` 依 `package-lock.json`。**升級 CLI**：本機 `brew upgrade supabase` → `supabase --version` → 把同一版號改進 `pgtap.yml` → 本機 `npm run test:db`（輸出第一行印 `Supabase CLI <版本>`）與 PR 的 `pgtap` check 都綠才合併；CLI 升版可能連帶換 Postgres 映像，紅了先看 migration 是否踩到新版行為，不要回退成 `latest`。
 - 已知限制（2026-09-07 健檢）：RepositoryRole 5 可 bypass、未要求人工核准人數、未要求分支先更新到 base——**不能宣稱完全不可繞過**。
 - 本機至少跑 `npm run lint`、`npm test`、`npm run build`、`npm run check:docs`；動 DB 跑 pgTAP（§8）；動 `supabase/functions/` 跑 `npm run check:edge`；型別通過仍不等於真模型／Deno 執行驗收。
 - 真後端 E2E（`npm run test:e2e:real`）不進 CI、只在本機對一次性 staging 手動跑，見 [`../REAL_BACKEND_E2E.md`](../REAL_BACKEND_E2E.md)。
