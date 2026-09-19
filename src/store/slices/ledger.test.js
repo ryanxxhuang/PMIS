@@ -20,10 +20,15 @@ const { pg } = await vi.hoisted(async () => {
   return { pg: createScriptedSupabase() }
 })
 vi.mock('../../lib/supabase.js', () => configured(pg.client))
-vi.mock('../db.js', () => ({ loadObligationsFromDB: vi.fn(async () => []), loadAnchorVersionsFromDB: vi.fn(async () => []) }))
+const WARRANTY = { acceptance_date: '2026-09-05', term_value: 2, term_unit: 'year', source_ok: true, expiry: '2028-09-05', needs: [], gap: null }
+vi.mock('../db.js', () => ({
+  loadObligationsFromDB: vi.fn(async () => []), loadAnchorVersionsFromDB: vi.fn(async () => []),
+  loadProjectWarrantyFromDB: vi.fn(async () => WARRANTY),
+}))
 vi.mock('../../lib/documentIngestion.js', () => ({ ingestRequirementDocument: vi.fn(async () => ({ error: null, run: { id: 'r1' } })) }))
 
 import { useLedgerSlice } from './ledger.js'
+import { loadObligationsFromDB, loadProjectWarrantyFromDB } from '../db.js'
 import { ingestRequirementDocument as runIngestion } from '../../lib/documentIngestion.js'
 
 const WI = { id: 'wi-1', item_key: 'A1', item_no: '1', description: '假設工程', unit: '式' }
@@ -291,6 +296,17 @@ describe('驗收登錄:同階段一筆;撤銷多列時中途失敗要如實回�
     expect(pg.hit('acceptance_events', 'update')).toBe(true)
     expect(r.current.acceptanceEvents).toHaveLength(1)
     expect(r.current.acceptanceEvents[0].event_date).toBe('2026-09-05')
+  })
+
+  it('P5e:驗收登錄／撤銷成功後重載期次與保固事實(DB trigger 已依竣工／正式驗收合格重算界限)', async () => {
+    const r = mount()
+    loadObligationsFromDB.mockClear(); loadProjectWarrantyFromDB.mockClear()
+    await act(async () => { await r.current.recordAcceptanceEvent('final', { event_date: '2026-09-05', result: '合格' }) })
+    expect(loadObligationsFromDB).toHaveBeenCalledTimes(1)
+    expect(loadProjectWarrantyFromDB).toHaveBeenCalledTimes(1)
+    expect(r.current.projectWarranty).toEqual(WARRANTY)
+    await act(async () => { await r.current.clearAcceptanceEvent('final') })
+    expect(loadProjectWarrantyFromDB).toHaveBeenCalledTimes(2)
   })
 
   it('撤銷第二列被拒 → 已刪的第一列從 UI 移除,回報錯誤,未刪的保留', async () => {

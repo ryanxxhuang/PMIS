@@ -23,7 +23,7 @@ import {
   loadValuationsFromDB, loadValuationAdjustmentsFromDB, loadScheduleFromDB, loadSiteLogsFromDB,
   loadQualityFromDB, loadDefectsFromDB, loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB,
   loadItemSchedulesFromDB, loadChangeOrdersFromDB, loadQcFromDB, loadAcceptanceFromDB, loadItpFromDB,
-  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadAnchorVersionsFromDB,
+  loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadAnchorVersionsFromDB, loadProjectWarrantyFromDB,
 } from './store/db.js'
 import { useAuthSlice } from './store/slices/auth.js'
 import { useProjectsSlice } from './store/slices/projects.js'
@@ -153,7 +153,7 @@ export function StoreProvider({ children }) {
   const {
     costItems, setCostItems, changeOrders, setChangeOrders,
     itemSchedules, setItemSchedules, obligations, setObligations,
-    anchorVersions, setAnchorVersions, reloadAnchorVersions,
+    anchorVersions, setAnchorVersions, reloadAnchorVersions, projectWarranty, setProjectWarranty,
     acceptanceEvents, setAcceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent,
     setItemSchedule, removeItemSchedule,
     createChangeOrder, updateChangeOrder, deleteChangeOrder,
@@ -194,7 +194,7 @@ export function StoreProvider({ children }) {
     demoLoadedRef.current = true
     const d = buildDemoData(workItems, project)
     setValuations(d.valuations); setProgressPlan(d.progressPlan); setSiteLogs(d.siteLogs)
-    setInspections(d.inspections); setDefects(d.defects); setObligations(d.obligations); setAnchorVersions(d.anchorVersions || [])
+    setInspections(d.inspections); setDefects(d.defects); setObligations(d.obligations); setAnchorVersions(d.anchorVersions || []); setProjectWarranty(d.projectWarranty || null)
     setCostItems(d.costItems); setSafetyRecords(d.safetyRecords); setChangeOrders(d.changeOrders)
     setChecklistTemplates(d.checklistTemplates); setChecklistRecords(d.checklistRecords); setTestSamples(d.testSamples)
     setSubmittals(d.submittals); setRfis(d.rfis); setObservations(d.observations)
@@ -213,7 +213,7 @@ export function StoreProvider({ children }) {
       setValuations([]); setValuationAdjustments([]); setProgressPlan(null); setSiteLogs([])
       setInspections([]); setDefects([]); setCostItems([]); setItemSchedules({})
       setChangeOrders([]); setInspectionPoints([]); setChecklistTemplates([]); setChecklistRecords([]); setTestSamples([])
-      setSafetyRecords([]); setObligations([]); setAnchorVersions([]); setAcceptanceEvents([]); setSubmittals([]); setRfis([]); setObservations([])
+      setSafetyRecords([]); setObligations([]); setAnchorVersions([]); setProjectWarranty(null); setAcceptanceEvents([]); setSubmittals([]); setRfis([]); setObservations([])
       fieldDocsSlice.clearFieldDocs() // 現場文書與上傳批次:切案先清,slice 自己依 project 重載
     }
     prevProjectRef.current = currentProjectId
@@ -270,7 +270,7 @@ export function StoreProvider({ children }) {
     ;(async () => {
       try {
         // 並行載入(P-03);缺失(統一引擎)不依賴標單:匯標單前也要載(dbMode 載入會再帶工項資訊覆蓋)
-        const [acc, obs, safety, defs, subs, rfiRows, obsRows, versions] = await Promise.all([
+        const [acc, obs, safety, defs, subs, rfiRows, obsRows, versions, warranty] = await Promise.all([
           loadAcceptanceFromDB(pid),
           loadObligationsFromDB(pid),
           loadSafetyFromDB(pid),
@@ -279,9 +279,10 @@ export function StoreProvider({ children }) {
           loadRfisFromDB(pid),
           loadObservationsFromDB(pid),
           loadAnchorVersionsFromDB(pid), // 基準日版本(P5c):期限追蹤／履約時程顯示依據與受影響事項
+          loadProjectWarrantyFromDB(pid), // 保固事實(P5e):保固期滿日與缺口,保固類循環義務的停止條件
         ])
         if (!active) return
-        setAcceptanceEvents(acc); setObligations(obs); setSafetyRecords(safety); setAnchorVersions(versions)
+        setAcceptanceEvents(acc); setObligations(obs); setSafetyRecords(safety); setAnchorVersions(versions); setProjectWarranty(warranty)
         if (defs) setDefects(defs)
         setSubmittals(subs); setRfis(rfiRows); setObservations(obsRows)
       } catch (e) {
@@ -360,7 +361,7 @@ export function StoreProvider({ children }) {
     // 現場文書(P2c):上傳批次、起稿、文件版本、簽署、提送／收件／退回
     ...fieldDocsSlice,
     discardFieldDocument,
-    obligations, reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument, changeProjectAnchors, updateProjectSettings, anchorVersions, enableFormalMode, currentProjectMembership, reloadMembership,
+    obligations, reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument, changeProjectAnchors, updateProjectSettings, anchorVersions, projectWarranty, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, // 成本退場(D-026 P1b):只讀歷史,無寫入函式
     safetyRecords, createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,

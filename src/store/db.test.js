@@ -14,6 +14,7 @@ const {
   loadObligationsFromDB, loadCostItemsFromDB, loadSafetyFromDB, loadItpFromDB,
   loadAcceptanceFromDB, loadScheduleFromDB,
   loadSubmittalsFromDB, loadRfisFromDB, loadObservationsFromDB, loadFieldDocumentsFromDB, loadAnchorVersionsFromDB,
+  loadProjectWarrantyFromDB, ANCHOR_VERSION_COLUMNS,
 } = await import('./db.js')
 
 const PID = 'p1'
@@ -218,5 +219,21 @@ describe('db.js 分頁載入:超過 PostgREST 單次上限時要全部取回', (
   it('分頁途中查詢失敗仍往上拋(不會靜默回半份資料)', async () => {
     pg.setTable('defects', new Error('permission denied'))
     await expect(loadDefectsFromDB(PID)).rejects.toThrow(/缺失讀取失敗/)
+  })
+})
+
+describe('保固事實(P5e):RPC get_project_warranty,日期不在前端重算', () => {
+  it('帶 p_project 呼叫 RPC、原樣回 DB 算好的保固事實;錯誤照載入層慣例 throw', async () => {
+    const facts = { acceptance_date: '2026-03-15', term_value: 2, term_unit: 'year', source_ok: true, expiry: '2028-03-15', needs: [], gap: null }
+    // 分頁假件沒有 rpc:這支載入只打一次 RPC,直接掛一個假的
+    pg.supabase.rpc = vi.fn(async () => ({ data: facts, error: null }))
+    expect(await loadProjectWarrantyFromDB(PID)).toEqual(facts)
+    expect(pg.supabase.rpc).toHaveBeenCalledWith('get_project_warranty', { p_project: PID })
+    pg.supabase.rpc = vi.fn(async () => ({ data: null, error: { message: 'project not found or not a member' } }))
+    await expect(loadProjectWarrantyFromDB(PID)).rejects.toThrow('保固期滿日載入失敗')
+    delete pg.supabase.rpc
+  })
+  it('版本列載入帶保固期間快照欄(warranty)', () => {
+    expect(ANCHOR_VERSION_COLUMNS.split(', ')).toContain('warranty')
   })
 })
