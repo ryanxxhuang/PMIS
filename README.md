@@ -29,6 +29,8 @@ npm run build
 npm run test:e2e
 ```
 
+Demo E2E（`npm run test:e2e`）每次自己起一個不監看檔案的 dev server（預設埠 5188，設定見 `vite.e2e.config.js`），跑測期間改檔不會打斷測試，也不沿用埠上既有的 server。多個 worktree 並行時若 5188 已被佔用，Playwright 會報「is already used」；改用本次專用的埠，例如 `E2E_DEMO_PORT=5288 npm run test:e2e`。
+
 真後端測試：`npm run test:e2e:real`，依 [操作指南](docs/REAL_BACKEND_E2E.md) 準備一次性 staging；DB 測試用 `npm run test:db`，依 [Supabase 設定](supabase/SETUP.md) 跑 pgTAP。測試結果只維護在 [BASELINE](docs/BASELINE.md)。
 
 ## 程式入口
