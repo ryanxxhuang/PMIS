@@ -118,14 +118,14 @@ export function StoreProvider({ children }) {
   const ctx = { dbMode, demoMode, isPersistedProject, currentProject, currentUser, wiMaps, saveMarkup }
   const {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
-    listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
+    listSitePhotos, deleteSitePhoto, updateSitePhotoMeta,
     describeDefect, analyzeSafetyPhoto, draftMonthlyReview, draftValuationSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   } = useSiteSlice(ctx)
   const {
     valuations, setValuations, valuationAdjustments, setValuationAdjustments, progressPlan, setProgressPlan, reloadValuations,
     createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
-    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis,
+    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, fetchValuationSubmittedAt, setPricingBasis,
     revokeConfirmation, issueCertificate, voidAdjustment,
     generateSchedule, updatePlannedPct, deleteValuation,
   } = useBillingSlice(ctx)
@@ -169,7 +169,7 @@ export function StoreProvider({ children }) {
 
   // ── 財務單一真相層(B-02)──────────────────────────────────────────────────
   // 「已核准變更設計套回工項」與「變更後契約金額」只在這裡算一次,所有金額/進度
-  // 頁面(估驗/請款/進度/首頁/月報/稽核/監造報表/AI 快照)一律吃這份——
+  // 頁面(估驗/請款/進度/首頁/月報/稽核/監造月報/AI 快照)一律吃這份——
   // 之前各頁自算,有的套變更有的沒套,核准追加減後跨頁數字分裂。
   const adjustedItems = useMemo(
     () => (workItems ? applyApprovedChangeOrders(workItems.items, changeOrders) : []),
@@ -348,7 +348,7 @@ export function StoreProvider({ children }) {
     aiEnabled,
     adjustedItems, coNet, revisedTotal, domainLoadError, retryDomainLoad,
     siteLogs,
-    listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, draftMonthlyReview, draftValuationSummary, describeDefect, analyzeSafetyPhoto, fetchWeather,
+    listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, draftMonthlyReview, draftValuationSummary, describeDefect, analyzeSafetyPhoto, fetchWeather,
     // 現場文書(P2c):上傳批次、起稿、文件版本、簽署、提送／收件／退回
     ...fieldDocsSlice,
     obligations, reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument, changeProjectAnchors, updateProjectSettings, anchorVersions, enableFormalMode, currentProjectMembership, reloadMembership,
@@ -371,7 +371,7 @@ export function StoreProvider({ children }) {
     valuations, valuationAdjustments, progressPlan,
     // actions(估驗寫入 P4c 起全走 P4b RPC;reload／state／backlog／confirmations 供估驗頁;P4d 撤銷／簽發／作廢)
     createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
-    reloadValuations, syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis,
+    reloadValuations, syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, fetchValuationSubmittedAt, setPricingBasis,
     revokeConfirmation, issueCertificate, voidAdjustment,
     generateSchedule, updatePlannedPct,
     ...adminSlice, // 平台管理後台(isPlatformAdmin/platformAdminChecked + admin 載入/動作)

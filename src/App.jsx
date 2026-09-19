@@ -98,7 +98,7 @@ function Web({ children, bare = false, registryPath }) {
         {/* 文案逐字保留:supervisor/owner spec 以 getByText 斷言這句 */}
         <div className="py-12">
           <Empty icon="lock" title="你的角色沒有此頁的存取權限">
-            這個工作畫面僅開放給特定角色（如廠商內部成本、監造報表）。
+            這個工作畫面僅開放給特定角色（如廠商內部成本、監造月報）。
             <span className="block mt-4">
               <Link to={defaultLandingPath(currentUser?.org_type)} className="inline-flex rounded-full">
                 <Button variant="secondary" tabIndex={-1}>回工作首頁</Button>

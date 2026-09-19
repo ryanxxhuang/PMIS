@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, Button, PageHeader, Surface, Input, Textarea, Field, ErrorBanner, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
@@ -8,18 +9,24 @@ import { parseLocalDate, localISOMonth, localISODate, taipeiToday } from '../../
 import { plannedPctNow } from '../../lib/progressPlan.js'
 import { reportCutoff, isPartialMonth, latestValuationAt, valuationLabel, monthEnd } from '../../lib/progressAsOf.js'
 import { fmtAmount as money } from '../../lib/format.js'
-import { rainDayCount } from '../../lib/weatherMetrics.js'
 import { validateDraft } from '../../lib/factsValidator.js'
+import { signedVersionIndex, signedVersionText, signedVersionLink, DOC_STATUS_LABEL } from '../../lib/fieldDocs.js'
+import { splitBySignature, unsignedDays, aggregateDailyLogs, inspectionsOfMonth } from '../../lib/reportSources.js'
+import useSignedVersions from '../../lib/useSignedVersions.js'
+import { navLabel } from '../../lib/navConfig.js'
 
 const qtyFmt = (n) => (n == null || isNaN(n) ? '—' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }))
 const thisMonthStr = () => taipeiToday().slice(0, 7)
 const inMonth = (d, m) => (d || '').slice(0, 7) === m
+const TITLE = navLabel('/monthly-report') // 頁名單一來源(navConfig)
+const weatherOf = (l) => [l.weather_am, l.weather_pm].filter(Boolean).join('／') || l.weather || '—'
+const laborOf = (l) => (Array.isArray(l.labor) ? l.labor : []).reduce((s, r) => s + (Number(r?.count) || 0), 0)
 const prevMonth = (m) => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return localISOMonth(d) }
 
 export default function MonthlyReport() {
   const { project, workItems, dbMode, demoMode, valuations, progressPlan, siteLogs,
     inspections, defects, safetyRecords, changeOrders, draftMonthlyReview, aiEnabled,
-    adjustedItems, revisedTotal } = useStore()
+    adjustedItems, revisedTotal, fieldDocuments } = useStore()
   const [month, setMonth] = useState(thisMonthStr())
   const [review, setReview] = useState('')   // 工程檢討（列印用，不儲存）
   const [nextPlan, setNextPlan] = useState('') // 下月工作計畫
@@ -35,8 +42,17 @@ export default function MonthlyReport() {
   // useCallback 讓它能如實列進 data memo 的依賴:它讀的 tree 本來就在那份依賴裡。
   const cumOf = useCallback((v) => (v ? totalCumAmount(tree.roots, buildCumMap(tree.roots, tree.childrenMap, v)) : 0), [tree])
 
+  // P6a:日誌與查驗判定只彙整「已簽署」的版本(事實列＝指向它的文件最晚一次簽署的版本;lib/fieldDocs.signedVersionIndex)。
+  // 簽署狀態讀不到就不出日誌類數字(不把讀取失敗當成全部未簽署);進度／估驗／收款仍照 D-024 口徑。
+  const openDocs = fieldDocuments?.documents
+  const signedSrc = useSignedVersions(['daily_log', 'inspection_form'], openDocs)
+  const dailyIdx = useMemo(() => signedVersionIndex(signedSrc.rows.daily_log), [signedSrc.rows])
+  const formIdx = useMemo(() => signedVersionIndex(signedSrc.rows.inspection_form), [signedSrc.rows])
+  const openDocIds = useMemo(() => new Set((openDocs || []).map((d) => d.id)), [openDocs])
+  const logsReady = !signedSrc.loading && !signedSrc.error
+
   const data = useMemo(() => {
-    // 統計截止日:所選月份月底;本月尚未結束時取今天(與監造報表、進度頁同一天、同一期)
+    // 統計截止日:所選月份月底;本月尚未結束時取今天(與監造月報、進度頁同一天、同一期)
     const today = new Date()
     const cutoff = reportCutoff(month, today), partial = isPartialMonth(month, today), cutoffISO = localISODate(cutoff)
     const mEnd = monthEnd(month), pEnd = monthEnd(prevMonth(month))
@@ -45,23 +61,19 @@ export default function MonthlyReport() {
     const actualPct = billable ? (cumThis / billable) * 100 : 0
     // 累計預定 %:預定進度表各列為月底累計,按日內插到截止日(過去月份 = 該列值)
     const plannedPct = plannedPctNow(progressPlan, cutoff)
-    const logs = siteLogs.filter((l) => inMonth(l.log_date, month)).sort((a, b) => a.log_date.localeCompare(b.log_date))
-    // 本月 / 截至月底累計完成數量（彙整自施工日誌明細）
+    // 本月已簽署施工日誌(事實列＝簽署版本內容);本月／截至月底累計完成數量、出工、雨天都只算已簽署的
+    const { signed: logs, unsigned: unsignedRows } = splitBySignature(siteLogs, dailyIdx, { month })
+    const cumLogs = splitBySignature(siteLogs.filter((l) => l.log_date && parseLocalDate(l.log_date) <= mEnd), dailyIdx).signed
+    const agg = aggregateDailyLogs(logs, cumLogs)
+    const unsigned = unsignedDays({ unsignedRows, signedDates: new Set(logs.map((l) => l.log_date)), openDocs, docType: 'daily_log', inRange: (d) => inMonth(d, month) })
     const byKey = new Map((workItems?.items || []).map((it) => [it.item_key, it]))
-    const sumQty = (ls) => {
-      const m = new Map()
-      for (const l of ls) for (const [k, q] of Object.entries(l.items || {})) m.set(k, (m.get(k) || 0) + (Number(q) || 0))
-      return m
-    }
-    const qtyM = sumQty(logs)
-    const qtyCum = sumQty(siteLogs.filter((l) => l.log_date && parseLocalDate(l.log_date) <= mEnd))
-    const itemRows = [...qtyM.entries()].map(([k, q]) => {
+    const itemRows = [...agg.qtyMonth.entries()].map(([k, q]) => {
       const it = byKey.get(k) || {}
       return { key: k, item_no: it.item_no || '', description: it.description || k, unit: it.unit || '',
-        contractQty: it.quantity || 0, qty: q, cum: qtyCum.get(k) || 0, value: (it.unit_price || 0) * q }
+        contractQty: it.quantity || 0, qty: q, cum: agg.qtyCum.get(k) || 0, value: (it.unit_price || 0) * q }
     }).sort((a, b) => b.value - a.value)
-    const rainDays = rainDayCount(logs) // 與監造報表/AI 助理同源(任一時段含雨=雨天)
-    const inspM = inspections.filter((i) => inMonth(i.requested_date || i.created_at, month))
+    // 查驗:本月申請或判定(與監造月報同一條歸月規則);判定只列經已簽署監造查驗表單者
+    const insp = inspectionsOfMonth(inspections, month, formIdx)
     // 品質段只算 domain=quality;工安缺失在「七、工安管理」段(safDefM),不重複計
     const qDefects = defects.filter((d) => (d.domain || 'quality') === 'quality')
     const defOpened = qDefects.filter((d) => inMonth(d.created_at, month))
@@ -75,12 +87,13 @@ export default function MonthlyReport() {
       .reduce((s, c) => s + c.items.reduce((t, it) => t + (Number(it.amount_delta) || 0), 0), 0)
     return {
       cumThis, thisMonthVal: cumThis - cumPrev, actualPct, plannedPct, valThis, cutoffISO, partial,
-      logs, itemRows, rainDays, inspM, defOpened, defClosed, defOpen, safM, safDefM, coM, approvedNet,
+      logs, unsigned, itemRows, rainDays: agg.rainDays, labor: agg.labor, laborTotal: agg.laborTotal, insp,
+      defOpened, defClosed, defOpen, safM, safDefM, coM, approvedNet,
       // 收款與請款也截至截止日(C4):沒填收款日的金額仍計入,不能把已登錄的錢藏掉
       paidCum: valuations.filter((v) => !v.paid_date || v.paid_date <= cutoffISO).reduce((s, v) => s + (v.paid_amount || 0), 0),
       invoicedCount: valuations.filter((v) => v.invoice_date && v.invoice_date <= cutoffISO).length,
     }
-  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, billable, workItems, cumOf])
+  }, [month, valuations, progressPlan, siteLogs, inspections, defects, safetyRecords, changeOrders, billable, workItems, cumOf, dailyIdx, formIdx, openDocs])
 
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
@@ -89,8 +102,8 @@ export default function MonthlyReport() {
   if (!dbMode && !demoMode) {
     return (
       <div className="space-y-5">
-        <PageHeader title="施工月報" tagline="自動彙編" subtitle="選月份 → 自動彙整進度 / 估驗 / 品質 / 工安 / 變更 → 列印或存 PDF" />
-        <Card title="施工月報"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+        <PageHeader title={TITLE} tagline="自動彙編" subtitle="選月份 → 自動彙整進度 / 估驗 / 已簽署施工日誌 / 品質 / 工安 / 變更 → 列印或存 PDF" />
+        <Card title={TITLE}><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
       </div>
     )
   }
@@ -102,12 +115,12 @@ export default function MonthlyReport() {
     <div className="space-y-5">
       {/* 工具列（列印時隱藏）*/}
       <div className="print:hidden">
-        <PageHeader title="施工月報" tagline="自動彙編" subtitle="選月份 → 自動彙整進度 / 估驗 / 品質 / 工安 / 變更 → 列印或存 PDF"
+        <PageHeader title={TITLE} tagline="自動彙編" subtitle="選月份 → 自動彙整進度 / 估驗 / 已簽署施工日誌 / 品質 / 工安 / 變更 → 列印或存 PDF"
           action={
             <div className="flex items-end gap-3 flex-wrap">
               <label className="block">
                 <span className="block text-xs font-medium text-[var(--text-2)] mb-1">報告月份</span>
-                {/* 欄位吃共用 Input(FIELD_BASE):與監造報表的同一顆月份選擇器同高、同 focus、同手機 44px */}
+                {/* 欄位吃共用 Input(FIELD_BASE):與監造月報的同一顆月份選擇器同高、同 focus、同手機 44px */}
                 <Input type="month" value={month} aria-label="月報月份" onChange={(e) => setMonth(e.target.value)} className="!w-auto" />
               </label>
               <Button onClick={() => window.print()}><MSym name="print" size={15} />列印 / 存 PDF</Button>
@@ -171,10 +184,10 @@ export default function MonthlyReport() {
           </dl>
         </Section>
 
-        {/* 本月完成工項數量（彙整自施工日誌明細）*/}
+        {/* 本月完成工項數量(彙整自本月已簽署施工日誌;未簽署的不列入)*/}
         <Section title="四、本月完成主要工項數量">
-          {data.itemRows.length === 0 ? (
-            <p className="text-sm text-[var(--text-3)]">本月施工日誌無工項數量紀錄。</p>
+          {!logsReady ? <SourceNotice src={signedSrc} /> : data.itemRows.length === 0 ? (
+            <p className="text-sm text-[var(--text-3)]">本月已簽署施工日誌無工項數量紀錄。</p>
           ) : (
             <>
               {/* 窄螢幕表格自行橫捲,不撐破報告版面;列印時寬度足夠、不受影響。
@@ -231,36 +244,67 @@ export default function MonthlyReport() {
               {data.itemRows.length > 15 && (
                 <p className="text-xs text-[var(--text-3)] mt-2">依本月完成金額列前 15 項，其餘 {data.itemRows.length - 15} 項略（詳估驗計價明細）。</p>
               )}
+              <p className="text-xs text-[var(--text-3)] mt-2">本月完成與累計完成僅彙整已簽署施工日誌（累計截至月底）；申報數量非監造確認量，計價以估驗計價單為準。</p>
             </>
           )}
         </Section>
 
-        {/* 施工紀要 */}
+        {/* 施工紀要:逐日列已簽署施工日誌(天氣、出工、摘要、簽署版本可回溯);未簽署的明列不列入 */}
         <Section title="五、本月施工紀要">
-          <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-sm mb-3">
-            <Info k="施工天數" v={`${data.logs.length} 天`} />
-            <Info k="雨天" v={`${data.rainDays} 天`} />
-          </dl>
-          {data.logs.length === 0 ? (
-            <p className="text-sm text-[var(--text-3)]">本月無施工日誌紀錄。</p>
-          ) : (
-            <ul className="text-sm space-y-1">
-              {data.logs.filter((l) => l.work_summary).map((l) => (
-                <li key={l.id} className="flex gap-2"><span className="text-[var(--text-3)] num shrink-0">{l.log_date}</span><span>{l.work_summary}</span></li>
-              ))}
-              {data.logs.every((l) => !l.work_summary) && <li className="text-[var(--text-3)]">本月共 {data.logs.length} 筆日誌（無文字摘要）。</li>}
-            </ul>
+          {!logsReady ? <SourceNotice src={signedSrc} /> : (
+            <>
+              <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-sm mb-3">
+                <Info k="施工天數（已簽署日誌）" v={`${data.logs.length} 天`} />
+                <Info k="雨天" v={`${data.rainDays} 天`} />
+                <Info k="出工合計" v={`${qtyFmt(data.laborTotal)} 人・日`} />
+                {data.labor.length > 0 && (
+                  <div className="col-span-2 md:col-span-3">
+                    <Info k="出工工別" v={data.labor.slice(0, 8).map((r) => `${r.type} ${qtyFmt(r.count)}`).join('、') + (data.labor.length > 8 ? ` 等 ${data.labor.length} 類` : '')} />
+                  </div>
+                )}
+              </dl>
+              {data.logs.length === 0 ? (
+                <p className="text-sm text-[var(--text-3)]">本月無已簽署施工日誌。</p>
+              ) : (
+                <ul role="list" aria-label="已簽署施工日誌" className="text-sm space-y-1.5">
+                  {data.logs.map((l) => {
+                    const link = signedVersionLink(l.ref, openDocIds)
+                    const label = signedVersionText(l.ref)
+                    return (
+                      <li key={l.id} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        <span className="text-[var(--text-3)] num shrink-0">{l.log_date}</span>
+                        <span className="min-w-0">{l.work_summary || <span className="text-[var(--text-3)]">（無文字摘要）</span>}</span>
+                        <span className="text-xs text-[var(--text-3)]">天氣 {weatherOf(l)}・出工 {qtyFmt(laborOf(l))} 人</span>
+                        {link
+                          ? <Link to={link} className="text-xs text-[var(--blue-text)] hover:underline">{label}</Link>
+                          : <span className="text-xs text-[var(--text-3)]">{label}{l.ref.doc_status === 'superseded' ? '（文件已由新文件取代）' : ''}</span>}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              {data.unsigned.length > 0 && (
+                <div role="note" aria-label="未簽署、不列入" className="mt-2 text-xs text-[var(--amber-text)]">
+                  未簽署、不列入（{data.unsigned.length} 日）：{data.unsigned.map((u) => `${u.date}（${u.legacy ? '舊流程紀錄，無簽署版本' : DOC_STATUS_LABEL[u.doc.status] || u.doc.status}）`).join('、')}
+                </div>
+              )}
+            </>
           )}
         </Section>
 
-        {/* 品質 */}
+        {/* 品質:查驗判定只列經已簽署監造查驗表單者(與監造月報同一條);快速判定明列不列入 */}
         <Section title="六、品質管理">
-          <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1.5 text-sm">
-            <Info k="本月查驗次數" v={`${data.inspM.length} 次`} />
-            <Info k="合格 / 部分合格 / 不合格" v={`${cnt(data.inspM, (i) => i.status === '合格')} / ${cnt(data.inspM, (i) => i.status === '部分合格')} / ${cnt(data.inspM, (i) => i.status === '不合格')}`} />
-            <Info k="本月開立缺失" v={`${data.defOpened.length} 件`} />
-            <Info k="本月結案 / 未結案" v={`${data.defClosed.length} / ${data.defOpen} 件`} />
-          </dl>
+          {!logsReady ? <SourceNotice src={signedSrc} /> : (
+            <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1.5 text-sm">
+              <Info k="本月查驗（申請或判定）" v={`${data.insp.list.length} 件`} />
+              <Info k="簽署表單判定 合格 / 部分合格 / 不合格" v={`${data.insp.pass} / ${data.insp.partial} / ${data.insp.fail}`} />
+              <Info k="本月開立缺失" v={`${data.defOpened.length} 件`} />
+              <Info k="本月結案 / 未結案" v={`${data.defClosed.length} / ${data.defOpen} 件`} />
+              {data.insp.unsigned.length > 0 && (
+                <div className="col-span-2 md:col-span-4 text-xs text-[var(--amber-text)]">判定未經簽署查驗表單、不列入：{data.insp.unsigned.length} 件（{data.insp.unsigned.map((i) => i.title).join('、')}）</div>
+              )}
+            </dl>
+          )}
         </Section>
 
         {/* 工安 */}
@@ -298,7 +342,7 @@ export default function MonthlyReport() {
             <div className="print:hidden mb-2 text-caption text-[var(--text-3)]">此 AI 功能未啟用（施工月報草稿），請人工填寫。</div>
           )}
           {aiEnabled('report.monthly') && <div className="print:hidden mb-2 flex items-center gap-2 flex-wrap">
-            <Button variant="secondary" busy={aiBusy} onClick={async () => {
+            <Button variant="secondary" busy={aiBusy} disabled={!logsReady} onClick={async () => {
               setAiBusy(true); setAiErr('')
               // facts=程式算好的數據;AI 只改寫、不算數(P1-1)
               const payload = {
@@ -306,8 +350,8 @@ export default function MonthlyReport() {
                 stats: {
                   thisMonthVal: data.thisMonthVal, cumThis: data.cumThis,
                   actualPct: data.actualPct, plannedPct: data.plannedPct, diff,
-                  workDays: data.logs.length, rainDays: data.rainDays,
-                  inspections: data.inspM.length, failed: cnt(data.inspM, (i) => i.status === '不合格'),
+                  workDays: data.logs.length, rainDays: data.rainDays, laborTotal: data.laborTotal, unsignedLogDays: data.unsigned.length,
+                  inspections: data.insp.list.length, failed: data.insp.fail,
                   defectsOpened: data.defOpened.length, defectsClosed: data.defClosed.length, defectsOpen: data.defOpen,
                   changeOrders: data.coM.length, approvedNet: data.approvedNet,
                   logSummaries: data.logs.filter((l) => l.work_summary).map((l) => l.work_summary).slice(-10),
@@ -352,7 +396,7 @@ export default function MonthlyReport() {
         </Section>
         </div>
 
-        {/* 簽章區間距與底線色與監造報表對齊(pt-6/mt-8、--border);--text-3 是文字色 token,不當邊框用 */}
+        {/* 簽章區間距與底線色與監造月報對齊(pt-6/mt-8、--border);--text-3 是文字色 token,不當邊框用 */}
         <div className="grid grid-cols-3 gap-6 pt-6 text-center text-sm">
           {['承包廠商', '監造單位', '主辦機關'].map((r) => (
             <div key={r}><div className="border-t border-[var(--border)] pt-1.5 mt-8">{r}</div></div>
@@ -361,13 +405,13 @@ export default function MonthlyReport() {
       </Surface>
 
       <p className="text-xs text-[var(--text-3)] print:hidden">
-        本月報自動彙整自進度、估驗、施工日誌、品質查驗、工安與變更設計。檢討/下月計畫可臨時填寫後列印（不會儲存）。列印時側欄與工具列自動隱藏。
+        本月報自動彙整自進度、估驗、已簽署施工日誌與監造查驗表單、工安與變更設計；未簽署的日誌與判定明列不列入。檢討/下月計畫可臨時填寫後列印（不會儲存）。列印時側欄與工具列自動隱藏。
       </p>
     </div>
   )
 }
 
-// 章節標題=Workspace 卡頭風(15px/500),與監造報表的 Section 同一支長相。
+// 章節標題=Workspace 卡頭風(15px/500),與監造月報的 Section 同一支長相。
 // 拿掉藍色裝飾條:章節本來就靠「一、二、三」編號分節,再加一條主色短標會讓每一節
 // 都像重點,反而讀不出輕重——兩張報表頁必須說同一種語言。
 function Section({ title, children }) {
@@ -377,6 +421,11 @@ function Section({ title, children }) {
       {children}
     </section>
   )
+}
+// 簽署狀態還在讀／讀不到:日誌類段落不出數字(讀取失敗≠全部未簽署)
+function SourceNotice({ src }) {
+  if (src.error) return <p role="alert" className="text-sm text-[var(--red-text)]">無法確認施工日誌與查驗表單的簽署狀態，本段暫不彙整：{friendlyError(src.error, '簽署狀態讀取失敗')}（請重新整理）。</p>
+  return <p className="text-sm text-[var(--text-3)]" aria-busy="true">正在讀取已簽署版本…</p>
 }
 function Info({ k, v }) {
   return <div className="flex flex-wrap gap-x-2 text-sm"><dt className="text-[var(--text-3)]">{k}：</dt><dd className="font-medium min-w-0 text-[var(--text)]">{v || '—'}</dd></div>

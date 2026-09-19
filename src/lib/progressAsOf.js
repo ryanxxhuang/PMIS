@@ -1,5 +1,5 @@
 // 進度數字的共同口徑（D-024，2026-09-16）：截止日怎麼取、取哪一期估驗、估驗狀態一律計入。
-// 施工月報、監造報表、進度頁、首頁、跨案總覽、AI 快照都從這裡拿「同一天、同一期」，
+// 施工月報、監造月報、進度頁、首頁、跨案總覽、AI 快照都從這裡拿「同一天、同一期」，
 // 不再各自抓陣列最後一筆或各算一套截止日。
 import { parseLocalDate, localISODate } from './dates.js'
 
@@ -8,7 +8,7 @@ export const monthEnd = (m) => { const [y, mo] = m.split('-').map(Number); retur
 const dayOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 
 // 報表統計截止日：所選月份月底；本月（或未來月份）尚未結束時取今天——截止日不落在未來，
-// 所以同一天看施工月報、監造報表、進度頁，本月數字三處相同。
+// 所以同一天看施工月報、監造月報、進度頁，本月數字三處相同。
 export function reportCutoff(month, today = new Date()) {
   const end = monthEnd(month), t = dayOf(today)
   return end < t ? end : t

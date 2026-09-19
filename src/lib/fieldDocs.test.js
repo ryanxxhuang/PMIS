@@ -15,6 +15,7 @@ import {
   INSPECTION_VERDICTS, requiredStagesFor, emptyInspectionFormContent, emptyInspectionFormSources, setInspectionFormTemplate, inspectionFormIssues, currentBatchCum,
   printSignature, submissionsChronological, submissionReceipts, returnHistory, nextResponsibleText,
   groupSharedFields, sharedFieldTitle, sharedEffectLabel, sharedPendingDocs, sharedInputValue, sharedApplySummary, documentsAfterShared,
+  signedVersionIndex, signedVersionText, signedVersionLink, confirmationDocRef,
 } from './fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.js'
@@ -169,9 +170,62 @@ describe('施工日誌內容形狀', () => {
     const content = { weather_am: '晴', weather_pm: null, items: { w1: { item_key: 'K1', item_no: '壹.1', description: '簽署當時名稱', unit: 'M3', qty_today: 2 } } }
     const log = contentToLogShape(content, { id: 'D1', status: 'signed', logDate: '2026-09-18' })
     expect(log.log_date).toBe('2026-09-18')
-    expect(log.item_meta).toEqual({ K1: { item_no: '壹.1', description: '簽署當時名稱', unit: 'M3' } })
+    expect(log.item_meta).toEqual({ K1: { item_no: '壹.1', description: '簽署當時名稱', unit: 'M3', work_item_id: 'w1' } })
     expect(log.from_document).toBe(true)
     expect(log.weather_pm).toBeNull() // 不把上午天氣回填成下午
+  })
+  it('給版本的 field_sources:數量標不適用(na)的工項不是當日數量(與簽署分支寫 daily_log_items 同一條規則)', () => {
+    // setFieldNa 對數字欄只改來源、不清值:不給 sources 會把 na 列的舊數字印成當日數量
+    const content = { items: { w1: { item_key: 'K1', qty_today: 2 }, w2: { item_key: 'K2', qty_today: 7 } } }
+    const sources = { 'items.w2.qty_today': { status: 'na', reason: '本日未施作' } }
+    expect(contentToLogShape(content, { sources }).items).toEqual({ K1: 2 })
+    expect(contentToLogShape(content).items).toEqual({ K1: 2, K2: 7 })
+  })
+})
+
+describe('已簽署版本的重用(P6a:月報／監造月報／佐證包)', () => {
+  const row = (target, doc, v, at, extra = {}) => ({
+    document_id: doc, doc_type: 'daily_log', doc_date: '2026-09-05', doc_status: 'submitted', target_id: target,
+    version_no: v, content_hash: `${v}`.repeat(64), signer_name_snapshot: '廠商甲', signed_at: at, ...extra,
+  })
+  it('事實列的版本＝指向它的文件中最晚一次簽署;沒有簽署列的事實列不在索引裡', () => {
+    const idx = signedVersionIndex([
+      row('L1', 'dA', 1, '2026-09-05T02:00:00.123456+00:00'),
+      row('L1', 'dA', 2, '2026-09-06T02:00:00+00:00'),
+      row('L2', 'dB', 1, '2026-09-06T03:00:00+00:00'),
+    ])
+    expect(idx.get('L1')).toMatchObject({ document_id: 'dA', version_no: 2, latest_of_doc: true, newer: null, signer_name: '廠商甲' })
+    expect(idx.has('L3')).toBe(false)
+  })
+  it('對方收件後另立新文件:新文件簽署前,事實列仍是舊(已取代)文件的版本;簽署後改指新文件', () => {
+    const old = row('L1', 'dOld', 3, '2026-09-05T02:00:00Z', { doc_status: 'superseded' })
+    expect(signedVersionIndex([old]).get('L1')).toMatchObject({ document_id: 'dOld', doc_status: 'superseded' })
+    const idx = signedVersionIndex([old, row('L1', 'dNew', 1, '2026-09-08T02:00:00Z', { doc_status: 'signed' })])
+    expect(idx.get('L1')).toMatchObject({ document_id: 'dNew', version_no: 1 })
+  })
+  it('pinAt:只看該時點(含)以前的簽署,之後的記 newer;該時點以前沒簽署=不在索引', () => {
+    const rows = [row('L1', 'dA', 1, '2026-09-05T02:00:00Z'), row('L1', 'dA', 2, '2026-09-10T02:00:00Z'), row('L2', 'dB', 1, '2026-09-10T02:00:00Z')]
+    const idx = signedVersionIndex(rows, { pinAt: '2026-09-05T02:00:00Z' })
+    expect(idx.get('L1')).toMatchObject({ version_no: 1, latest_of_doc: false, newer: { document_id: 'dA', version_no: 2 } })
+    expect(idx.has('L2')).toBe(false)
+  })
+  it('版本標示與列印連結:只有該版本是文件目前列印版本、且文件在活文件清單才給連結', () => {
+    const ref = signedVersionIndex([row('L1', 'doc-12345678-x', 2, '2026-09-06T02:00:00Z')]).get('L1')
+    expect(signedVersionText(ref)).toBe(`文件 doc-1234 v2・雜湊 ${'2'.repeat(12)}`)
+    expect(signedVersionLink(ref, new Set(['doc-12345678-x']))).toBe('/site-log/print?doc=doc-12345678-x')
+    expect(signedVersionLink(ref, new Set())).toBeNull() // 已取代／已捨棄:列印頁找不到
+    expect(signedVersionLink({ ...ref, latest_of_doc: false }, new Set(['doc-12345678-x']))).toBeNull() // 連過去會印出別的版本
+    expect(signedVersionText(null)).toBe('')
+  })
+  it('監造確認紀錄 → 查驗表單版本:撤銷後重簽的舊確認指向舊版本,不給列印連結;監造確認單沒有文件', () => {
+    const formIdx = signedVersionIndex([
+      { document_id: 'f1', doc_type: 'inspection_form', doc_date: '2026-09-10', doc_status: 'signed', target_id: 'i1', version_no: 2, signed_at: '2026-09-10T02:00:00Z' },
+      { document_id: 'f1', doc_type: 'inspection_form', doc_date: '2026-09-10', doc_status: 'signed', target_id: 'i1', version_no: 3, signed_at: '2026-09-11T02:00:00Z' },
+    ])
+    const c = { inspection_id: 'i1', document_id: 'f1', document_version_no: 2, content_hash: 'a'.repeat(64) }
+    expect(confirmationDocRef(c, formIdx)).toEqual({ document_id: 'f1', doc_type: 'inspection_form', version_no: 2, content_hash: 'a'.repeat(64), latest_of_doc: false })
+    expect(confirmationDocRef({ ...c, document_version_no: 3 }, formIdx).latest_of_doc).toBe(true)
+    expect(confirmationDocRef({ basis: 'supervisor_certificate', document_id: null, document_version_no: null }, formIdx)).toBeNull()
   })
 })
 

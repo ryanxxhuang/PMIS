@@ -432,14 +432,17 @@ export function contentFromAgentDraft(payload) {
 // 只給顯示用(公定格式紙本、右欄清單);事實表 daily_logs 只由簽署 RPC 寫。
 // item_meta:版本內容裡的工項快照(項次／名稱／單位),列印以它為準——印的是簽署當下的內容,不是之後可能變動的工項表。
 // from_document:紙本據此不做舊列的天氣回退(舊流程只有單一 weather 欄;文件版本的上下午天氣各自是簽署內容)。
-export function contentToLogShape(content, { id = null, status = null, logDate = null } = {}) {
+// sources(版本的 field_sources):數量標「不適用」(na)的工項不是當日數量——與簽署分支 field_document_sign_daily_log_internal
+// 寫 daily_log_items 時略過 na 同一條規則(na 只改來源、不清數字,不給 sources 會把 na 列的舊數字印成當日數量,與事實列不一致)。
+export function contentToLogShape(content, { id = null, status = null, logDate = null, sources = null } = {}) {
   const items = {}
   const itemMeta = {}
   for (const [wid, it] of Object.entries(content?.items || {})) {
     if (it?.qty_today == null) continue
+    if (sources?.[`items.${wid}.qty_today`]?.status === 'na') continue
     const key = it.item_key || wid
     items[key] = Number(it.qty_today)
-    itemMeta[key] = { item_no: it.item_no ?? null, description: it.description ?? null, unit: it.unit ?? null }
+    itemMeta[key] = { item_no: it.item_no ?? null, description: it.description ?? null, unit: it.unit ?? null, work_item_id: wid }
   }
   return {
     id, log_date: content?.log_date || logDate, status,
@@ -824,6 +827,76 @@ export function printSignature(signatures = []) {
     if (!best || dv > 0 || (dv === 0 && String(s.signed_at) > String(best.signed_at))) best = s
   }
   return best
+}
+
+// ── 已簽署版本的重用(P6a:施工月報／監造月報／估驗佐證包只彙整已簽署資料)──────────────────────
+// 事實列(daily_logs／supervisor_logs／checklist_records／inspections)只由簽署 RPC 以被簽的版本內容寫入,簽署後的事實列只有
+// 簽署交易能改(fn_field_document_fact_guard)——所以一列事實「目前的內容」＝指向它(target_id)的文件中最晚一次簽署的那個版本;
+// 沒有任何簽署列指向的事實列＝未簽署(舊流程寫入或直接寫入),報表不列入。與 DB fn_field_document_target_signed 同一個定義。
+// rows:store listSignedVersions 回的簽署列,每列帶所屬文件的 doc_type／doc_date／doc_status／target_id(含已被新文件取代的
+// 舊文件——新文件簽署前,事實列仍是舊文件的版本)。
+// pinAt(ISO 時間,可選):只看該時點(含)以前的簽署——已送審的佐證包保留送審當時使用的版本;之後的簽署記在 newer。
+// 回傳 Map(target_id → { document_id, doc_type, doc_date, doc_status, target_id, version_no, content_hash, signed_at,
+//   signer_name, latest_of_doc(此版本是否為該文件目前列印的簽署版本), newer({document_id, version_no, signed_at}|null) })。
+const tsOf = (s) => {
+  if (s == null) return null
+  const t = Date.parse(String(s).replace(/(\.\d{3})\d+/, '$1')) // Postgres 微秒截到毫秒,Date.parse 才穩定
+  return Number.isFinite(t) ? t : null
+}
+export function signedVersionIndex(rows = [], { pinAt = null } = {}) {
+  const pin = pinAt == null ? null : tsOf(pinAt)
+  const latestByDoc = new Map()
+  const byTarget = new Map()
+  for (const r of rows || []) {
+    if (!r?.document_id || !r.target_id || tsOf(r.signed_at) == null) continue
+    const v = Number(r.version_no)
+    if (!(latestByDoc.get(r.document_id) >= v)) latestByDoc.set(r.document_id, v)
+    if (!byTarget.has(r.target_id)) byTarget.set(r.target_id, [])
+    byTarget.get(r.target_id).push(r)
+  }
+  const out = new Map()
+  for (const [target, list] of byTarget) {
+    const sorted = list.slice().sort((a, b) => (tsOf(a.signed_at) - tsOf(b.signed_at)) || (Number(a.version_no) - Number(b.version_no)))
+    let chosen = null, newer = null
+    for (const r of sorted) {
+      if (pin == null || tsOf(r.signed_at) <= pin) chosen = r
+      else if (!newer) newer = r
+    }
+    if (!chosen) continue // 該時點以前沒有任何簽署=當時未簽署
+    out.set(target, {
+      document_id: chosen.document_id, doc_type: chosen.doc_type, doc_date: chosen.doc_date, doc_status: chosen.doc_status,
+      target_id: target, version_no: Number(chosen.version_no), content_hash: chosen.content_hash || null,
+      signed_at: chosen.signed_at, signer_name: chosen.signer_name_snapshot || null,
+      latest_of_doc: latestByDoc.get(chosen.document_id) === Number(chosen.version_no),
+      newer: newer ? { document_id: newer.document_id, version_no: Number(newer.version_no), signed_at: newer.signed_at } : null,
+    })
+  }
+  return out
+}
+
+// 版本標示(報表／紙本都印得出來):文件短碼、版本、內容雜湊前 12 碼(DB 值)。
+export const signedVersionText = (ref) => (ref ? `文件 ${String(ref.document_id).slice(0, 8)} v${ref.version_no}・雜湊 ${formatHash(ref.content_hash)}` : '')
+
+// 監造確認紀錄(inspection_confirmations)指向的查驗表單版本 → 版本標示用的 ref。確認紀錄 append-only,記的是簽署當下的
+// document_id／document_version_no／content_hash;formIndex(inspection_form 的 signedVersionIndex,target=查驗 id)只用來判斷
+// 這個版本是否仍是該表單目前列印的簽署版本(撤銷後重簽的舊確認指向舊版本,不給會印出新版本的連結)。監造確認單沒有文件,回 null。
+export function confirmationDocRef(c, formIndex = new Map()) {
+  if (!c?.document_id || c.document_version_no == null) return null
+  const cur = c.inspection_id ? formIndex.get(c.inspection_id) : null
+  const v = Number(c.document_version_no)
+  return {
+    document_id: c.document_id, doc_type: 'inspection_form', version_no: v, content_hash: c.content_hash || null,
+    latest_of_doc: !!cur && cur.document_id === c.document_id && cur.version_no === v && cur.latest_of_doc,
+  }
+}
+
+// 各類文書的列印頁(印「該文件目前的簽署版本」,即 printSignature)
+export const DOC_PRINT_PATH = Object.freeze({ daily_log: '/site-log/print', supervisor_log: '/supervisor-log/print', self_check: '/self-check/print', inspection_form: '/inspection-form/print' })
+// 可直達的列印連結:只有「這個版本就是該文件目前列印的簽署版本」且文件仍在本案活文件清單(列印頁只找得到活文件)時才給;
+// 否則回 null,呼叫端只印版本標示——連到會印出別的版本的頁面,比沒有連結更糟。
+export function signedVersionLink(ref, openDocIds) {
+  if (!ref?.latest_of_doc || !DOC_PRINT_PATH[ref.doc_type] || !openDocIds?.has?.(ref.document_id)) return null
+  return `${DOC_PRINT_PATH[ref.doc_type]}?doc=${encodeURIComponent(ref.document_id)}`
 }
 
 // 提送列依伺服器時間由舊到新(同時間以 id 穩定排序);getFieldDocument 回的是新→舊

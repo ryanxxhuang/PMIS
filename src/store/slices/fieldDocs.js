@@ -17,7 +17,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { supabase, SIGNED_URL_TTL_S } from '../../lib/supabase.js'
 import { loadSiteLogsFromDB, loadFieldDocumentsFromDB, loadQcFromDB, loadDefectsFromDB, FIELD_DOCUMENT_COLUMNS, FIELD_DOCUMENT_SUBMISSION_COLUMNS } from '../db.js'
-import { pageAll, pageAllInSafe, chunked } from '../../lib/pagedQuery.js'
+import { pageAll, pageAllSafe, pageAllInSafe, chunked } from '../../lib/pagedQuery.js'
 import { compressImage } from '../../lib/imageCompress.js'
 import { readPhotoExif } from '../../lib/exifRead.js'
 import { extractInvokeError } from './agent.js'
@@ -352,6 +352,54 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     return data || null
   }, [demoMode])
 
+  // ── 已簽署資料的重用(P6a:施工月報／監造月報／估驗佐證包)──────────────────────────────────
+  // 只讀 RLS 成員可讀的 field_documents／field_document_signatures／field_document_versions／supervisor_logs,不開 RPC、不寫入。
+  // 失敗原樣回 error(頁面顯示載入失敗,不當成「沒有已簽署資料」)。示範模式無法簽署(DEMO_ERROR),一律回空——報表如實全列未簽署。
+
+  // 某類文書的全部簽署列,各帶所屬文件的類型／日期／狀態／事實列(lib/fieldDocs.signedVersionIndex 的輸入)。
+  // 只取已綁事實列的文件(target_id 由簽署落庫時綁定),含已被新文件取代(superseded)的舊文件:新文件簽署前事實列仍是舊文件的版本。
+  const listSignedVersions = useCallback(async (docType) => {
+    if (demoMode || !isPersistedProject || !docType) return { rows: [], error: null }
+    const { data: docs, error } = await pageAllSafe((from, to) => supabase.from('field_documents')
+      .select('id, doc_type, doc_date, status, target_id').eq('project_id', pid).eq('doc_type', docType)
+      .not('target_id', 'is', null).order('doc_date').order('id').range(from, to))
+    if (error) return { rows: [], error }
+    if (!docs.length) return { rows: [], error: null }
+    const { data: sigs, error: sigErr } = await pageAllInSafe(docs.map((d) => d.id), (chunk, from, to) => supabase.from('field_document_signatures')
+      .select('id, document_id, version_no, content_hash, signer_name_snapshot, signed_at').in('document_id', chunk)
+      .order('signed_at').order('id').range(from, to))
+    if (sigErr) return { rows: [], error: sigErr }
+    const docById = new Map(docs.map((d) => [d.id, d]))
+    return {
+      rows: sigs.map((s) => {
+        const d = docById.get(s.document_id)
+        return { ...s, doc_type: d.doc_type, doc_date: d.doc_date, doc_status: d.status, target_id: d.target_id }
+      }),
+      error: null,
+    }
+  }, [demoMode, isPersistedProject, pid])
+
+  // 監造日誌事實列(P3a supervisor_logs;RLS 成員可讀)。監造月報只彙整其中已簽署者(以 listSignedVersions 判定)。
+  const listSupervisorLogs = useCallback(async ({ from, to }) => {
+    if (demoMode || !isPersistedProject || !from || !to) return { rows: [], error: null }
+    const { data, error } = await pageAllSafe((f, t) => supabase.from('supervisor_logs')
+      .select('id, log_date, weather_am, weather_pm, attendance, supervision_items, inspection_ids, notices, followups, contractor_summary, note, template_key, template_version')
+      .eq('project_id', pid).gte('log_date', from).lte('log_date', to).order('log_date').order('id').range(f, t))
+    return { rows: data || [], error: error || null }
+  }, [demoMode, isPersistedProject, pid])
+
+  // 指定的文件版本(佐證包:確認紀錄指向的查驗表單版本、送審時點的施工日誌版本);回 Map(`文件:版本` → 版本列)
+  const getFieldDocumentVersions = useCallback(async (refs = []) => {
+    if (demoMode || !isPersistedProject || !refs.length) return { versions: new Map(), error: null }
+    const wanted = new Set(refs.map((r) => `${r.document_id}:${r.version_no}`))
+    const versionNos = [...new Set(refs.map((r) => Number(r.version_no)))]
+    const { data, error } = await pageAllInSafe([...new Set(refs.map((r) => r.document_id))], (chunk, from, to) => supabase.from('field_document_versions')
+      .select('document_id, version_no, content, field_sources, attachments, content_hash').in('document_id', chunk).in('version_no', versionNos)
+      .order('document_id').order('version_no').range(from, to))
+    if (error) return { versions: new Map(), error }
+    return { versions: new Map(data.filter((v) => wanted.has(`${v.document_id}:${v.version_no}`)).map((v) => [`${v.document_id}:${v.version_no}`, v])), error: null }
+  }, [demoMode, isPersistedProject])
+
   // 存版本=伺服器保存(設計 §3.3);base 是畫面載入時的 current_version_no(樂觀併發,PD001 由頁面提示重新載入)
   const saveFieldDocumentVersion = useCallback(async ({ documentId, baseVersionNo, content, fieldSources, attachments = null, changeNote = null }) => {
     if (demoMode) {
@@ -391,7 +439,7 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     })
     if (error) return { error: rpcError(error) }
     setFieldDocuments((docs) => docs.map((d) => (d.id === documentId ? { ...d, status: data.status, target_id: data.target_id, recheck: [] } : d)))
-    // 施工日誌簽署落 daily_logs → 重載 siteLogs(估驗帶入、列印吃它);監造日誌落 supervisor_logs,前端尚無讀端(P6a 月報);
+    // 施工日誌簽署落 daily_logs → 重載 siteLogs(施工月報、勾稽、列印吃它);監造日誌落 supervisor_logs,監造月報開頁時才讀(P6a,不常駐 store);
     // 自檢表落 checklist_records(品質查驗清單、查驗申請檢附候選)＋不合格由 DB trigger 開缺失 → 重載兩者。重載失敗不影響簽署結果。
     if (dbMode && data?.target_table === 'daily_logs' && typeof setSiteLogs === 'function') {
       try { setSiteLogs(await loadSiteLogsFromDB(pid, wiMaps.idToKey)) } catch { /* 下次進頁會重載 */ }
@@ -488,6 +536,7 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     createIntake, findExistingPhotosBySha, uploadIntakePhoto, draftFromIntake, updateIntakeDate, setIntakeCandidates, discardIntake, listIntakePhotos, listPhotosByIds,
     listIntakeSharedInputs, setIntakeSharedInput,
     getFieldDocument, getFieldDocumentVersion, getFieldDocumentTemplate, findActiveFieldDoc, findActiveDailyLogDoc, createFieldDocDraft, createDailyLogDraft, createInspectionFormDraft, listInspectionConfirmations, saveFieldDocumentVersion,
+    listSignedVersions, listSupervisorLogs, getFieldDocumentVersions,
     signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, applyDailyLogDraft,
   }
 }

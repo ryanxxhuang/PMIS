@@ -50,7 +50,7 @@ export default function SiteLogPrint() {
       ) : (
         <PrintedVersionBody printed={printed}>
           <SiteLogOfficialSheet project={project} siteLogs={siteLogs} itemList={itemList}
-            log={printed.version ? contentToLogShape(printed.version.content, { id: printed.doc?.id, status: printed.doc?.status, logDate: printed.doc?.doc_date }) : null}
+            log={printed.version ? contentToLogShape(printed.version.content, { id: printed.doc?.id, status: printed.doc?.status, logDate: printed.doc?.doc_date, sources: printed.version.field_sources }) : null}
             stamp={<DocumentPrintStamp doc={printed.doc} version={printed.version} signature={printed.signature} />} />
         </PrintedVersionBody>
       )}

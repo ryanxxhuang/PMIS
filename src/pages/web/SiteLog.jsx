@@ -301,7 +301,7 @@ export default function SiteLog() {
       : doc ? { text: `已存檔${savedAt ? ` ${savedAt.toTimeString().slice(0, 5)}` : ''}・版本 ${doc.current_version_no}`, cls: 'bg-[var(--green-tint)] text-[var(--green-text)]' }
         : legacyLog ? { text: '既有紀錄・未簽署、待核對', cls: 'bg-[var(--amber-tint)] text-[var(--amber-text)]' }
           : { text: '本日尚無日誌', cls: 'bg-[var(--surface-2)] text-[var(--text-2)]' }
-  const displayLog = legacyLog || (doc ? contentToLogShape(form.content, { id: doc.id, status: doc.status }) : null)
+  const displayLog = legacyLog || (doc ? contentToLogShape(form.content, { id: doc.id, status: doc.status, sources: form.sources }) : null)
   const readOnlyNote = !editable
 
   return (

@@ -39,7 +39,7 @@ const H1 = {
   '/schedule': '逐工項排程',
   '/contract': '專案文件',
   '/monthly-report': '施工月報',
-  '/supervisor-report': '監造報表',
+  '/supervisor-report': '監造月報',
   '/acceptance': '驗收結算',
   '/portfolio': '跨案總覽',
   '/activity': '專案活動紀錄',

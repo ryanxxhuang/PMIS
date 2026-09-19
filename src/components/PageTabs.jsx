@@ -67,7 +67,7 @@ export default function PageTabs() {
   // 分頁列是那些情況下唯一的同組入口,不能消失。
   if (sidebarTabsFor === item.to) return null
   return (
-    // print:hidden:監造報表等頁面直接 window.print,正式文件頁首不得帶導覽藥丸
+    // print:hidden:監造月報等頁面直接 window.print,正式文件頁首不得帶導覽藥丸
     // max-md:snap-x snap-proximity:手機捲停時靠近 chip 邊界就吸附,不強制(mandatory 會擋住細捲)
     <nav ref={navRef} data-fade={fade} aria-label={`${item.label}分頁`}
       className="tabs-scroll flex gap-2 overflow-x-auto mt-3.5 pb-0.5 print:hidden max-md:snap-x max-md:snap-proximity">
