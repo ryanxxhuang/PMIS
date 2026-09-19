@@ -1,7 +1,7 @@
 -- P3e 共用補值 pgTAP:set_intake_shared_input／list_intake_shared_inputs、共用鍵目錄、套用規則(人填=confirmed、人親自確認
 -- 的欄不覆蓋)、補一次多份草稿各建人工版本(雜湊由 DB 算、附件原樣)、冪等、已簽署／簽後更正不動、他方與他案文件不動、
 -- 三角色＋非成員、跨案工項、捨棄批次;角色隔離再確認:補值後的日誌仍因監造照片當證據被簽署擋下(PD005)。
--- 對應 migration 20260920001500_intake_shared_inputs.sql;設計 docs/architecture/field-documents-lifecycle.md §2.4、§3.4。
+-- 對應 migration 20260920004000_intake_shared_inputs.sql;設計 docs/architecture/field-documents-lifecycle.md §2.4、§3.4。
 begin;
 
 select plan(95);

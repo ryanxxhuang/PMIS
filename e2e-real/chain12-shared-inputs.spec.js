@@ -4,7 +4,7 @@
 //   「上傳批次」再補另一個位置 → 施工日誌更新、已簽署的自主檢查表不變(版本、內容、雜湊)並在畫面標「已簽署，不受影響」
 //   → 同值重送不產生版本(冪等) → 監造對廠商批次補值被伺服器擋(PD006)。
 // 前置同 chain 5(docs/REAL_BACKEND_E2E.md):另一個 terminal `supabase functions serve --env-file e2e-real/stub.env`;
-// 本機 stack 已套用 20260920001500。帳號全部本次產生;afterAll 以建立者 delete_project＋admin API 清帳號,殘留 0。
+// 本機 stack 已套用 20260920004000。帳號全部本次產生;afterAll 以建立者 delete_project＋admin API 清帳號,殘留 0。
 import { test, expect } from '@playwright/test'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, signInClient, loginReal, gotoHash, runCleanup, tinyJpeg,

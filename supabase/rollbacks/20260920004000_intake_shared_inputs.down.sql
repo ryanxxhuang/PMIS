@@ -1,4 +1,4 @@
--- Roll back 20260920001500 (P3e: batch shared inputs — set_intake_shared_input／list_intake_shared_inputs and the
+-- Roll back 20260920004000 (P3e: batch shared inputs — set_intake_shared_input／list_intake_shared_inputs and the
 -- shared-key catalog helpers).
 --
 -- Data policy: nothing is deleted. Human versions written through set_intake_shared_input stay (field_document_versions

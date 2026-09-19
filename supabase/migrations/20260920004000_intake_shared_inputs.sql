@@ -29,7 +29,7 @@
 --      每份文件的效果(update／applied／human_value／locked),前端只呈現,不自己判定。
 -- 不變:簽署前段與四類分支(簽署時附件來源檢查 PD005 已由 P2d／P3a–c 覆蓋)、存版 RPC、版本 guard。
 -- 權限(H3):authenticated 只多 set_intake_shared_input、list_intake_shared_inputs 兩支;其餘 helper(含套用函式)不開放。
--- 回復:supabase/rollbacks/20260920001500_intake_shared_inputs.down.sql(只 drop 本支函式;已寫入的人工版本與
+-- 回復:supabase/rollbacks/20260920004000_intake_shared_inputs.down.sql(只 drop 本支函式;已寫入的人工版本與
 --   shared_inputs 值保留——版本不可變,shared_inputs 是 P2a 欄位)。
 -- 錯誤代碼沿用 P2d:PD006 無權、PD008 狀態不允許、PD010 輸入不合法。
 
