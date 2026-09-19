@@ -31,12 +31,18 @@ export default function Quality() {
     checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
-    defects, currentUser, fieldDocuments,
+    defects, currentUser, fieldDocuments, inspectionPoints,
     isSupabaseConfigured, currentProject, workItemsSource, can, resolveMarkup } = useStore()
   // 自主檢查表文件(P3b)簽署落下的紀錄:record id → 文件(顯示「已簽署 v{n}」、下鑽到文件列印版)
   const signedDocByRecord = useMemo(() => {
     const m = new Map()
     for (const d of fieldDocuments?.documents || []) if (d.doc_type === 'self_check' && d.target_id && ['signed', 'submitted', 'received'].includes(d.status)) m.set(d.target_id, d)
+    return m
+  }, [fieldDocuments])
+  // 監造查驗表單文件(P3c):查驗 id → 活文件(詳情欄「監造查驗表單」直達;簽署即判定並寫入確認量)
+  const formDocByInspection = useMemo(() => {
+    const m = new Map()
+    for (const d of fieldDocuments?.documents || []) if (d.doc_type === 'inspection_form' && d.target_key && !['discarded', 'superseded'].includes(d.status)) m.set(d.target_key, d)
     return m
   }, [fieldDocuments])
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
@@ -190,22 +196,17 @@ export default function Quality() {
       if (note === null) return
     }
     setErrMsg(''); setBusy(true)
-    const { error, defectError } = await recordInspectionResult(insp, pass, note)
+    const { error } = await recordInspectionResult(insp, pass, note)
     setBusy(false)
     if (error) { setErrMsg(friendlyError(error, '查驗判定未寫入')); return }
-    // 判定已寫入但自動開缺失失敗:不能亮「已開立缺失」的綠訊息騙人——
-    // 走既有 ErrorBanner 如實提示手動補開(同檢查表 defectError 的處理慣例)
-    if (defectError) {
-      setErrMsg(`查驗判定已記錄，但缺失開立失敗：${friendlyError(defectError, '請稍後重試')}。請至「缺失」分段手動補開缺失。`)
-      return
-    }
+    // 不合格的缺失由 DB 同交易開立(P3c 起 trigger 單一實作):判定成功即代表缺失已開
     setResultMsg({ pass })
   }
   // 刪除鈕在查驗分段內(確認對話框也在那),頁層只負責錯誤呈現(errMsg 是頁層 ErrorBanner)
   const onDeleteInsp = async (id) => { setErrMsg(''); const { error } = await deleteInspection(id); if (error) setErrMsg(friendlyError(error, '查驗紀錄刪除未完成')) }
   // 逐狀態計數一次算完:卡片標題、篩選 chips 與分段徽章共用同一份口徑,
   // 免得「待查驗 N」在三處各自 filter 一遍還可能漂移
-  const inspCount = { 全部: inspections.length, 待查驗: 0, 合格: 0, 不合格: 0 }
+  const inspCount = { 全部: inspections.length, 待查驗: 0, 合格: 0, 部分合格: 0, 不合格: 0 }
   // hasOwn 而非 in:狀態值來自 DB,不該讓 'constructor' 這種原型鍵意外命中計數器
   for (const i of inspections) if (Object.hasOwn(inspCount, i.status)) inspCount[i.status] += 1
   const openInsp = inspCount['待查驗']
@@ -272,6 +273,7 @@ export default function Quality() {
         form={inspForm} onFormChange={setInspForm} onSubmit={submitInsp} busy={busy}
         resultMsg={resultMsg} notice={inspNotice} onCloseNotice={() => setInspNotice('')} onShowDefects={() => changeSegment('缺失')}
         leaves={leaves} attachableChecklists={attachableChecklists} templates={checklistTemplates} signedDocByRecord={signedDocByRecord}
+        inspectionPoints={inspectionPoints} formDocByInspection={formDocByInspection}
         can={can} onResult={onResult} onDelete={onDeleteInsp} scope={paneScope} />
       )}
 

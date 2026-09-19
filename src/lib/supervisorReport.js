@@ -24,6 +24,7 @@ export function buildSupervisorReport(data = {}, monthLabel, today = new Date())
   // 直接 slice 取到的是 UTC 日,月初 00:00–08:00 的判定/結案會被歸到上個月。
   const insp = inspections.filter((i) => inM(i.requested_date) || inM(taipeiISODate(i.inspected_at)))
   const inspPass = insp.filter((i) => i.status === '合格').length
+  const inspPartial = insp.filter((i) => i.status === '部分合格').length
   const inspFail = insp.filter((i) => i.status === '不合格').length
   const inspPending = inspections.filter((i) => i.status === '待查驗').length
 
@@ -49,7 +50,7 @@ export function buildSupervisorReport(data = {}, monthLabel, today = new Date())
         : `${asOf}累計實際進度 ${progress.actualPct.toFixed(1)}%，與預定 ${progress.plannedPct.toFixed(1)}% 差距 ${Math.abs(behind).toFixed(1)}%。`)
       : '',
     insp.length
-      ? `本月辦理查驗 ${insp.length} 件（合格 ${inspPass} 件${inspFail ? `、不合格 ${inspFail} 件，系統已開立缺失` : ''}${inspPending ? `；另有 ${inspPending} 件待查驗` : ''}）。`
+      ? `本月辦理查驗 ${insp.length} 件（合格 ${inspPass} 件${inspPartial ? `、部分合格 ${inspPartial} 件` : ''}${inspFail ? `、不合格 ${inspFail} 件` : ''}${inspPartial || inspFail ? '，系統已開立缺失' : ''}${inspPending ? `；另有 ${inspPending} 件待查驗` : ''}）。`
       : '本月無新辦理查驗。',
     defOpen.length
       // 最小證據原則(R3 P1-06):未設期限的缺失不得宣稱「期限內」——那是錯誤安全感
@@ -68,7 +69,7 @@ export function buildSupervisorReport(data = {}, monthLabel, today = new Date())
   return {
     monthLabel: M, project, progress,
     logs: { workDays, rainDays, summaries },
-    inspections: { list: insp, total: insp.length, pass: inspPass, fail: inspFail, pending: inspPending },
+    inspections: { list: insp, total: insp.length, pass: inspPass, partial: inspPartial, fail: inspFail, pending: inspPending },
     defects: { open: defOpen, openCount: defOpen.length, overdue: defOverdue.length, closedThisMonth: defClosedM.length },
     submittals: { decided: subDecidedM, decidedCount: subDecidedM.length, pending: subPending.length },
     opinion,

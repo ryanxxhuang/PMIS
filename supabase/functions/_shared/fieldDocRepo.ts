@@ -14,6 +14,7 @@ import type { DraftRepo, IntakePhotoRow, IntakeRow, DocRow, VersionRow, RepoErro
 import type { ChecklistTemplateRow, DayDefect, DayInspection, FormalDailyLog, LeafWorkItem, LegacyDailyLog, OpenInspection } from './fieldDocDraft.ts'
 import type { FieldDocTemplate } from './fieldDocTemplate.ts'
 import { taipeiDayRange } from './fieldDocDraft.ts'
+import { normalizeCqKey } from './fieldDocTemplate.ts'
 
 const PHOTO_COLS = 'id, storage_path, content_sha256, ai_status, ai_result, work_item_id, caption, location, taken_at, created_at'
 const err = (scope: string, e: { message?: string; code?: string; details?: string; hint?: string } | null): RepoError =>
@@ -128,7 +129,7 @@ export function supabaseDraftRepo(db: SupabaseClient, service: SupabaseClient, p
     },
 
     async listOpenInspections() {
-      const { data, error } = await db.from('inspections').select('id, title, work_item_id, requested_date')
+      const { data, error } = await db.from('inspections').select('id, title, work_item_id, requested_date, location, declared_qty, unit, stage_key, checklist_record_id')
         .eq('project_id', projectId).eq('status', '待查驗').order('created_at', { ascending: false }).limit(200)
       if (error) return err('inspections', error)
       return (data ?? []) as OpenInspection[]
@@ -189,19 +190,29 @@ export function supabaseDraftRepo(db: SupabaseClient, service: SupabaseClient, p
       return (data && typeof data === 'object' ? data as FieldDocTemplate : null)
     },
 
-    // 本案自主檢查表範本(P3b):候選推斷依工項描述確定性挑選;RLS 只看得到本案
+    // 本案檢查表範本(P3b 自檢表 kind=self_check、P3c 查驗表單 kind=inspection_form):候選推斷依工項描述確定性挑選;RLS 只看得到本案
     async listChecklistTemplates() {
       const res = await fetchAllRows<ChecklistTemplateRow>((f, t) =>
-        db.from('checklist_templates').select('id, title, source, items').eq('project_id', projectId)
+        db.from('checklist_templates').select('id, title, source, items, kind').eq('project_id', projectId)
           .order('created_at').order('id').range(f, t))
       if (res.error) return { error: res.error }
       return res.rows.map((r) => ({ ...r, items: Array.isArray(r.items) ? r.items : [] }))
     },
 
+    // 工項的 ITP 必要階段(P3c;與 DB fn_cq_required_stages_internal 同一口徑:H 點且 required_for_billing;鍵已正規化)
+    async listRequiredStages(workItemId) {
+      const { data, error } = await db.from('inspection_points').select('stage_key')
+        .eq('project_id', projectId).eq('work_item_id', workItemId).eq('point_type', 'H').eq('required_for_billing', true).limit(200)
+      if (error) return err('required_stages', error)
+      return [...new Set(((data ?? []) as { stage_key: string | null }[]).map((r) => normalizeCqKey(r.stage_key)).filter(Boolean))].sort()
+    },
+
     async findActiveDoc(docType, locator) {
       let q = db.from('field_documents').select('id, status, current_version_no, intake_id')
         .eq('project_id', projectId).eq('doc_type', docType)
-      q = 'docDate' in locator ? q.eq('doc_date', locator.docDate) : q.eq('intake_id', locator.intakeId).eq('target_key', locator.targetKey)
+      q = 'docDate' in locator ? q.eq('doc_date', locator.docDate)
+        : 'intakeId' in locator ? q.eq('intake_id', locator.intakeId).eq('target_key', locator.targetKey)
+          : q.eq('target_key', locator.targetKey)
       const { data, error } = await q.not('status', 'in', '("discarded","superseded")').maybeSingle()
       if (error) return err('find_doc', error)
       return (data as DocRow | null) ?? null

@@ -257,7 +257,7 @@ export default function MonthlyReport() {
         <Section title="六、品質管理">
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1.5 text-sm">
             <Info k="本月查驗次數" v={`${data.inspM.length} 次`} />
-            <Info k="合格 / 不合格" v={`${cnt(data.inspM, (i) => i.status === '合格')} / ${cnt(data.inspM, (i) => i.status === '不合格')}`} />
+            <Info k="合格 / 部分合格 / 不合格" v={`${cnt(data.inspM, (i) => i.status === '合格')} / ${cnt(data.inspM, (i) => i.status === '部分合格')} / ${cnt(data.inspM, (i) => i.status === '不合格')}`} />
             <Info k="本月開立缺失" v={`${data.defOpened.length} 件`} />
             <Info k="本月結案 / 未結案" v={`${data.defClosed.length} / ${data.defOpen} 件`} />
           </dl>

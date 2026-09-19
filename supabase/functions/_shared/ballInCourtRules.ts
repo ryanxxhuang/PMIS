@@ -100,7 +100,7 @@ export function defectBall(r: Rec): Ball {
 export function inspectionBall(r: Rec): Ball {
   const st = s(r, 'status')
   if (st === '待查驗') return { who: 'supervisor', label: '待監造查驗' }
-  return { who: 'done', label: st } // 合格 / 不合格
+  return { who: 'done', label: st } // 合格 / 部分合格 / 不合格(P3c 起判定經監造查驗表單簽署,部分合格帶確認量)
 }
 
 // 觀察事項 assigned_to 是自由文字:缺值=廠商(資料慣例);三方值歸該方;
@@ -358,6 +358,12 @@ export const FIELD_DOC_OPEN_STATUSES: readonly string[] = ['draft', 'pending_inp
 export const FIELD_DOC_PARTIES: Readonly<Record<string, readonly BallSide[]>> = Object.freeze({
   daily_log: ['contractor', 'supervisor'], self_check: ['contractor', 'supervisor'],
   supervisor_log: ['supervisor', 'owner'], inspection_form: ['supervisor', 'contractor', 'owner'],
+})
+// 每類文書的提送對象(鏡像 DB fn_field_document_to_org_allowed,migration 20260917201000;前端 lib/fieldDocs 由此推導、
+// Vitest 解析 migration 原文釘住):施工日誌／自檢 → 監造;監造日誌 → 機關;監造查驗表單 → 廠商(判定與缺失的相對人,第一順位)＋機關(備查)。
+// 多對象各自提送、各自收件(submit 列 per to_org;fieldDocumentBalls 每個待收件方一顆球)。
+export const FIELD_DOC_TO_ORGS: Readonly<Record<string, readonly BallSide[]>> = Object.freeze({
+  daily_log: ['supervisor'], self_check: ['supervisor'], supervisor_log: ['owner'], inspection_form: ['contractor', 'owner'],
 })
 
 export interface FieldDocSubmission { document_id?: unknown; version_no?: unknown; action?: unknown; actor_org?: unknown; to_org?: unknown }

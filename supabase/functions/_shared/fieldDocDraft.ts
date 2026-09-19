@@ -4,8 +4,8 @@
 //   1. 一批照片各屬哪一天(告示板日期 > 使用者指定的批次日期 > 拍攝時間的台北日曆日)、
 //      哪些是重複照片(同批同雜湊)。
 //   2. 依上傳方角色推斷「候選文書」:廠商→施工日誌(P2b)＋每個配到工項的自主檢查表(P3b;範本由本案
-//      checklist_templates 依工項描述確定性挑選,挑不到=blocked 待人指定);監造→監造日誌(P3a)＋監造查驗表單
-//      (P3c,列為尚未支援);機關→無。**廠商照片永遠推不出監造文件,反之亦然**(DB guard 另有一道)。
+//      checklist_templates 依工項描述確定性挑選,挑不到=blocked 待人指定);監造→監造日誌(P3a)＋每份日期或工項相符的
+//      待查驗一份監造查驗表單(P3c;查驗申請沒有工項=blocked);機關→無。**廠商照片永遠推不出監造文件,反之亦然**(DB guard 另有一道)。
 //   3. 草稿的內容與每欄來源(field_sources):
 //      * 沒有來源的數量、天氣、出工、到場一律 pending(待補);絕不填「無」「0」「合格」。
 //      * 告示板清楚可讀才把數量／位置／日期／天氣標 filled 並附 source: whiteboard:<photo_id>;
@@ -22,6 +22,9 @@
 //      * 自主檢查表(P3b):範本、工項、位置、佐證照片由照片與確定性比對帶入;**每個檢查項目一律 pending**——
 //        實測值(num)永遠由人親自量測填寫(告示板清楚寫出對應項目的讀數只放 hint,不填值);勾選項(bool)
 //        沒有逐項依據就不建議,絕不填「合格」。合格與否由 DB 依範本量化標準計算。
+//      * 監造查驗表單(P3c):查驗申請(工項、位置、階段、申報量、檢附自檢)由系統帶入並標來源待監造核對;查驗項目同自檢表
+//        一律 pending(讀數只放 hint);**判定與本次確認數量永遠留空 pending**——AI 與系統不替監造判定、不填確認量
+//        (DB 版本 guard 拒絕 AI 帶入;簽署即判定並寫入可估驗的確認量)。
 // 範本(監造日誌示範範本、自檢表示範框架)只有 DB fn_field_document_template 一份定義:流程層於執行期取回後
 // 傳進來,這裡只用 fieldDocTemplate.ts 的純規則推導必填鍵並帶範本鍵／版本進內容(DB 存版與簽署會再算一次)。
 // 版本雜湊由 DB 算(fn_field_document_content_hash);這裡只比對 content 是否相同,
@@ -33,7 +36,7 @@ import { matchLeaf } from './photoMatch.ts'
 import { FIELD_DOC_TYPE_LABELS } from './ballInCourtRules.ts'
 import { FORMAL_DAILY_LOG_STATUSES, composeContractorSummary, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.ts'
 import { pickChecklistTemplate } from './draftInspection.ts'
-import { checklistItemKeys, docRequiredKeys, templateRequiredKeys, templateStamp } from './fieldDocTemplate.ts'
+import { checklistItemKeys, docRequiredKeys, normalizeCqKey, templateRequiredKeys, templateStamp } from './fieldDocTemplate.ts'
 import type { ChecklistItemLike, FieldDocTemplate } from './fieldDocTemplate.ts'
 import type { SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
 
@@ -156,7 +159,7 @@ export function duplicateGroups(
 export type CandidateState =
   | 'ready'        // 可起稿(daily_log、supervisor_log)
   | 'blocked'      // 缺必要資料(blocked_by 列出),不建文件
-  | 'unsupported'  // 需要但本輪尚未支援(P3b／P3c)
+  | 'unsupported'  // 需要但尚未支援的文書類型(四類皆已支援;保留給日後新類型)
   | 'excluded'     // 使用者排除
   | 'drafted'      // 已建立文件／新增 AI 版本
   | 'unchanged'    // 重跑內容相同,未新增版本
@@ -184,17 +187,23 @@ export type OpenInspection = {
   title: string | null
   work_item_id: string | null
   requested_date: string | null
+  // 查驗申請資料(P3c 起 inspections 加欄;guard 已正規化 stage_key／unit)
+  location?: string | null
+  declared_qty?: number | null
+  unit?: string | null
+  stage_key?: string | null
+  checklist_record_id?: string | null
 }
 
-// 本案檢查表範本(checklist_templates 列;RLS 讀)
-export type ChecklistTemplateRow = { id: string; title: string; source: string | null; items: ChecklistItemLike[] }
+// 本案檢查表範本(checklist_templates 列;RLS 讀)。kind:self_check(自檢表;既有列)／inspection_form(監造查驗項目)
+export type ChecklistTemplateRow = { id: string; title: string; source: string | null; items: ChecklistItemLike[]; kind?: string | null }
 
 export function inferCandidates(input: {
   uploaderOrg: string
   sitePhotos: { id: string; date: string | null; work_item_id: string | null }[] // 已辨識為工地照且可辨的照片
   openInspections: OpenInspection[]
   workItems?: LeafWorkItem[]                 // 自檢表挑範本用(工項描述)
-  checklistTemplates?: ChecklistTemplateRow[] | null // 本案檢查表範本;空陣列=blocked(不假裝有範本);null=讀不到,不推自檢表(不能寫成「沒有範本」)
+  checklistTemplates?: ChecklistTemplateRow[] | null // 本案檢查表範本(自檢表取 kind=self_check、查驗表單取 kind=inspection_form);空陣列=blocked／無範本;null=讀不到,不推自檢表(不能寫成「沒有範本」)
 }): Candidate[] {
   const { uploaderOrg, sitePhotos, openInspections } = input
   if (uploaderOrg !== 'contractor' && uploaderOrg !== 'supervisor') return []
@@ -234,7 +243,7 @@ export function inferCandidates(input: {
     // 自主檢查表:每個「配到工項 × 日期」一份;範本由本案 checklist_templates 依工項描述確定性挑選
     // (pickChecklistTemplate 與 Agent draft_inspection 同一支);沒有範本／挑不出→blocked 由人指定,不猜;範本讀不到→不推。
     if (input.checklistTemplates === null) return out
-    const templates = input.checklistTemplates ?? []
+    const templates = (input.checklistTemplates ?? []).filter((t) => (t.kind ?? 'self_check') === 'self_check')
     const wiById = new Map((input.workItems ?? []).map((w) => [w.id, w]))
     for (const wid of [...wids].sort()) {
       const wi = wiById.get(wid)
@@ -269,19 +278,38 @@ export function inferCandidates(input: {
     return out
   }
 
-  // supervisor:監造查驗表單(P3c)本輪只列出,不起稿
+  // supervisor:監造查驗表單(P3c)——每份「申請日或工項相符」的待查驗一份(target_key=查驗 id;跨批次同一份活文件);
+  // 查驗申請沒有工項或工項不是標單末端可計價工項 → blocked(確認數量必須掛可計價工項),由人先補查驗申請,不猜;
+  // 查驗項目範本(kind=inspection_form)依工項描述確定性挑選,沒有也能起稿(判定欄仍可簽)。
   const dateSet = new Set(dates)
+  const insTemplates = (input.checklistTemplates ?? []).filter((t) => t.kind === 'inspection_form')
+  const wiById = new Map((input.workItems ?? []).map((w) => [w.id, w]))
   for (const ins of [...openInspections].sort((a, b) => (a.id < b.id ? -1 : 1))) {
     const byDateHit = !!ins.requested_date && dateSet.has(ins.requested_date)
     const byItemHit = !!ins.work_item_id && wids.has(ins.work_item_id)
     if (!byDateHit && !byItemHit) continue
+    const hits = sitePhotos.filter((p) => (ins.work_item_id && p.work_item_id === ins.work_item_id) || (ins.requested_date && p.date === ins.requested_date))
+    const ids = hits.map((p) => p.id)
+    const docDate = byDateHit ? ins.requested_date! : (hits.map((p) => p.date).filter((d): d is string => !!d).sort()[0] ?? null)
+    const label = ins.title ?? ins.id
+    const common = { doc_type: 'inspection_form' as DocType, target_key: ins.id, doc_date: docDate, support: 'supported' as const, excluded: false, photo_ids: ids, document_id: null, work_item_id: ins.work_item_id ?? null }
+    if (!docDate) {
+      out.push({ ...common, state: 'blocked', reason: `待查驗「${label}」的相符照片無法判定日期,請補批次日期後重試`, blocked_by: ['log_date'], template_id: null })
+      continue
+    }
+    if (!ins.work_item_id) {
+      out.push({ ...common, state: 'blocked', reason: `待查驗「${label}」的查驗申請未指定工項,確認數量無法掛帳;請先在品質查驗補上工項再重試`, blocked_by: ['work_item'], template_id: null })
+      continue
+    }
+    const wi = wiById.get(ins.work_item_id)
+    if (!wi) {
+      out.push({ ...common, state: 'blocked', reason: `待查驗「${label}」的工項不是標單末端可計價工項,無法簽確認數量;請先更正查驗申請`, blocked_by: ['work_item'], template_id: null })
+      continue
+    }
+    const picked = insTemplates.length ? pickChecklistTemplate(insTemplates, wi.description) : null
     out.push({
-      doc_type: 'inspection_form', target_key: ins.id, doc_date: ins.requested_date && dateSet.has(ins.requested_date) ? ins.requested_date : (dates[0] ?? null),
-      state: 'unsupported', support: 'unsupported',
-      reason: `監造查驗表單起稿尚未支援(P3c);待查驗:${ins.title ?? ins.id}`,
-      excluded: false,
-      photo_ids: sitePhotos.filter((p) => (ins.work_item_id && p.work_item_id === ins.work_item_id) || (ins.requested_date && p.date === ins.requested_date)).map((p) => p.id),
-      document_id: null,
+      ...common, state: 'ready', template_id: picked?.template.id ?? null,
+      reason: `待查驗「${label}」;${ids.length} 張監造照片` + (picked ? `;查驗表範本「${picked.template.title}」(${picked.reason})` : ';本案無監造查驗表範本,依判定欄簽署'),
     })
   }
   return out
@@ -1013,6 +1041,173 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
     required_fields: required,
     recheck,
     status,
+    summary,
+    rationale,
+  }
+}
+
+// ── 監造查驗表單草稿(P3c) ───────────────────────────────────────────────────────
+// 查驗申請資料(工項、位置、階段、申報量、檢附自檢)由系統帶入並標 inspection:<id> 待監造核對;單位取自標單工項;查驗項目
+// (本案 kind=inspection_form 範本)同自檢表一律 pending、實測值只放告示板 hint。**判定(verdict)與本次確認數量(confirmed_qty)
+// 永遠 null＋pending**:系統與 AI 不替監造判定、不填確認量(DB 版本 guard 拒絕 AI 帶入;簽署即判定並寫入可估驗的確認量)。
+export type InspectionFormContent = {
+  inspection_date: string
+  inspection_id: string
+  inspection_title: string | null
+  work_item_id: string
+  location: string | null
+  stage_key: string | null
+  unit: string
+  declared_qty: number | null
+  self_check_record_id: string | null
+  template_id: string | null
+  template_title: string | null
+  results: Record<string, SelfCheckResultDraft>
+  verdict: null
+  confirmed_qty: null
+  result_note: string | null
+  note: string | null
+  template: { key: string; version: number }
+  photo_ids: string[]
+  unmatched_photo_ids: string[]
+}
+export type InspectionFormDraft = FieldDocDraft<InspectionFormContent>
+export type InspectionFormDraftInput = {
+  date: string
+  dateSource: { source: string; refs: string[] }
+  photos: DraftPhoto[]                   // 相符的監造照片(含既有版本附件的照片)
+  inspection: OpenInspection             // 待查驗申請
+  workItem: LeafWorkItem                 // 查驗申請的工項(末端可計價)
+  requiredStages: string[]               // 工項的 ITP 必要階段(H 點;DB 正規化);空=單階段
+  template: ChecklistTemplateRow | null  // 候選推斷挑到的查驗表範本(kind=inspection_form),沒有=null
+  templateReason: string | null
+  frame: FieldDocTemplate                // DB fn_field_document_template('inspection_form')
+  hasBoq: boolean
+  notes: string[]
+}
+
+export function buildInspectionFormDraft(input: InspectionFormDraftInput): InspectionFormDraft {
+  const { date, photos, inspection, workItem, template, frame, requiredStages } = input
+  const items = (Array.isArray(template?.items) ? template!.items : []).filter((it) => typeof it?.no === 'string' && it.no.trim())
+  const sources: Record<string, FieldSource> = {}
+  const recheck: { key: string; reason: string }[] = []
+  const photoIds = photos.map((p) => p.id)
+  const insSrc = `inspection:${inspection.id}`
+  const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))]
+
+  sources.inspection_date = { status: 'filled', source: input.dateSource.source, refs: input.dateSource.refs }
+  sources.inspection_id = { status: 'filled', source: insSrc }
+  sources.work_item_id = { status: 'filled', source: insSrc }
+  sources.unit = { status: 'filled', source: 'system:work_item' }
+
+  // 位置=批次鍵:查驗申請 > 照片唯一位置 > pending(多個要人選)
+  let location: string | null = textOrNull(inspection.location)
+  if (location) {
+    sources.location = { status: 'filled', source: insSrc, reason: '取自查驗申請,請核對後確認(確認數量以此位置累計)' }
+  } else {
+    const locs = uniq(photos.map((p) => textOrNull(p.location) ?? textOrNull(p.classify?.location) ?? textOrNull(p.whiteboard?.location)))
+    if (locs.length === 1) {
+      location = locs[0]
+      sources.location = { status: 'filled', source: 'ai:photo', refs: photoIds, reason: '查驗申請未載明位置,取自照片,請核對後確認' }
+    } else {
+      sources.location = { status: 'pending', source: null, refs: photoIds, reason: locs.length > 1 ? `照片載明多個位置(${locs.join('、')}),請確認本次查驗的施作位置` : '查驗申請與照片未載明施作位置,請填寫(確認數量以此位置累計)' }
+      recheck.push({ key: 'location', reason: sources.location.reason! })
+    }
+  }
+
+  // 階段:工項有 ITP 必要階段才需要;查驗申請的階段在集合內就帶入待確認,否則 pending 列出可選階段
+  let stageKey: string | null = null
+  if (requiredStages.length) {
+    const fromReq = normalizeCqKey(inspection.stage_key)
+    if (fromReq && requiredStages.includes(fromReq)) {
+      stageKey = fromReq
+      sources.stage_key = { status: 'filled', source: insSrc, reason: '取自查驗申請,請核對後確認' }
+    } else {
+      sources.stage_key = { status: 'pending', source: null, reason: `此工項有必要查驗階段 ${requiredStages.join('、')},請選擇本次查驗的階段${fromReq ? `(查驗申請的「${inspection.stage_key}」不在集合內)` : ''}` }
+      recheck.push({ key: 'stage_key', reason: sources.stage_key.reason! })
+    }
+  }
+
+  // 申報量:查驗申請載明才帶入(待確認);沒有 → pending,不猜也不從照片推
+  const declared = typeof inspection.declared_qty === 'number' && Number.isFinite(inspection.declared_qty) ? inspection.declared_qty : null
+  if (declared != null) {
+    sources.declared_qty = { status: 'filled', source: insSrc, reason: '取自查驗申請,請核對後確認' }
+  } else {
+    sources.declared_qty = { status: 'pending', source: null, reason: '查驗申請未載明申報數量,請依申請文件填入(本次確認數量不得超過)' }
+    recheck.push({ key: 'declared_qty', reason: sources.declared_qty.reason! })
+  }
+  const selfCheck = textOrNull(inspection.checklist_record_id)
+  if (selfCheck) sources.self_check_record_id = { status: 'filled', source: insSrc }
+  if (template) sources.template_id = { status: 'filled', source: 'system:template_match', reason: input.templateReason ?? undefined }
+
+  // 查驗項目:同自檢表——實測值只能人量測(告示板讀數只當提示)、勾選項不代為勾選
+  const hints = new Map<string, { value: number; unit: string | null; photoId: string }[]>()
+  for (const p of photos) {
+    for (const it of p.whiteboard?.items ?? []) {
+      if (it.quantity == null) continue
+      const hit = matchChecklistItem(it.description, items)
+      if (!hit || hit.kind !== 'num') continue
+      if (!hints.has(hit.no)) hints.set(hit.no, [])
+      hints.get(hit.no)!.push({ value: it.quantity, unit: textOrNull(it.unit), photoId: p.id })
+    }
+  }
+  const results: InspectionFormContent['results'] = {}
+  for (const it of items) {
+    const key = `results.${it.no}`
+    results[it.no] = { value: null }
+    if (it.kind === 'num') {
+      const readings = hints.get(it.no) ?? []
+      const distinct = [...new Set(readings.map((r) => r.value))]
+      if (distinct.length === 1) {
+        sources[key] = { status: 'pending', source: null, refs: readings.map((r) => r.photoId), reason: `告示板寫 ${distinct[0]}${readings[0].unit ?? ''}(僅供參考),請親自量測後填寫`, hint: { value: distinct[0], unit: readings[0].unit, source: `whiteboard:${readings[0].photoId}` } }
+      } else if (distinct.length > 1) {
+        sources[key] = { status: 'pending', source: null, refs: readings.map((r) => r.photoId), reason: `多張告示板讀數不一致(${distinct.join('、')}),請親自量測後填寫` }
+      } else {
+        sources[key] = { status: 'pending', source: null, reason: '實測值由監造親自量測填寫;系統不從照片推定' }
+      }
+      recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:實測值待親自量測填寫` })
+    } else {
+      sources[key] = { status: 'pending', source: null, reason: '請依現場查驗勾選;系統沒有逐項依據,不代為勾選' }
+      recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:待現場勾選` })
+    }
+  }
+
+  // 判定與確認量:永遠留空 pending(只能由監造親自填;簽署即判定、確認量成為可估驗依據)
+  sources.verdict = { status: 'pending', source: null, reason: '判定由監造親自勾選;系統與 AI 不建議、不預填' }
+  sources.confirmed_qty = { status: 'pending', source: null, reason: '本次確認數量由監造親自填寫;簽署後成為廠商可估驗的依據(不得超過申報數量)' }
+  recheck.push({ key: 'verdict', reason: '判定請親自勾選(合格／部分合格／不合格)' })
+  recheck.push({ key: 'confirmed_qty', reason: '本次確認數量請親自填寫(不合格填 0)' })
+  for (const n of input.notes) recheck.push({ key: 'photos', reason: n })
+
+  const required = docRequiredKeys('inspection_form', frame, items, { stageRequired: requiredStages.length > 0 })
+  const [, m, d] = date.split('-')
+  const wiLabel = [workItem.item_no, workItem.description].filter(Boolean).join(' ')
+  const summary =
+    `已依 ${photos.length} 張監造照片整理 ${Number(m)}/${Number(d)}「${inspection.title ?? inspection.id}」監造查驗表單草稿(${frame.demo_label || '範本'})` +
+    `(工項 ${wiLabel};申報 ${declared != null ? `${declared} ${workItem.unit ?? ''}` : '待補'};判定與本次確認數量請親自填寫)`
+  const rationale = [
+    `查驗申請:工項、位置、申報數量${selfCheck ? '、檢附的自主檢查' : ''}自查驗申請帶入,標「取自查驗申請」待你核對確認。`,
+    `單位:取自標單工項「${wiLabel}」(${workItem.unit ?? '—'}),簽署時必須一致。`,
+    requiredStages.length ? `階段:此工項有必要查驗階段 ${requiredStages.join('、')},全部階段皆確認的量才可估驗。` : '階段:此工項為單階段(檢驗停留點無 H 點)。',
+    template ? `查驗項目:範本「${template.title}」(${input.templateReason ?? ''})共 ${items.length} 項,一律留待你親自填寫;實測值不由照片推定。` : '查驗項目:本案沒有監造查驗表範本,依判定欄簽署。',
+    hints.size ? `告示板讀數:${[...hints.keys()].join('、')} 有板上讀數,只作參考提示,未填入。` : '',
+    '判定與本次確認數量:系統與 AI 一律不填、不建議;簽署即判定,確認數量寫入監造確認紀錄成為可估驗依據。',
+    ...recheck.filter((r) => r.key === 'photos').map((r) => r.reason),
+  ].filter(Boolean).join('\n')
+
+  return {
+    content: {
+      inspection_date: date, inspection_id: inspection.id, inspection_title: inspection.title ?? null, work_item_id: workItem.id,
+      location, stage_key: stageKey, unit: workItem.unit ?? '', declared_qty: declared, self_check_record_id: selfCheck,
+      template_id: template?.id ?? null, template_title: template?.title ?? null, results,
+      verdict: null, confirmed_qty: null, result_note: null, note: null, template: templateStamp(frame),
+      photo_ids: photoIds, unmatched_photo_ids: [],
+    },
+    field_sources: sources,
+    attachments: photos.map((p) => ({ photo_id: p.id, storage_path: p.storage_path, ...(p.content_sha256 ? { sha256: p.content_sha256 } : {}) })),
+    required_fields: required,
+    recheck,
+    status: 'pending_input',
     summary,
     rationale,
   }

@@ -41,6 +41,8 @@ type World = {
   checklistTemplates?: ChecklistTemplateRow[]
   failChecklistTemplates?: string
   failTemplate?: string
+  // 查驗表單(P3c):工項的 ITP 必要階段
+  requiredStages?: Record<string, string[]>
   seq: number
 }
 const T_CONC: ChecklistTemplateRow = { id: 'tpl-conc', title: '場鑄結構用混凝土 自主檢查表', source: '03310', items: [
@@ -95,16 +97,19 @@ function memoryRepo(w: World): DraftRepo {
     getDailyLogDocument: async () => w.dailyLogDoc ?? null,
     getFieldDocumentTemplate: async (t) => (w.failTemplate ? { error: w.failTemplate } : (demoFieldDocumentTemplate(t) as FieldDocTemplate | null)),
     listChecklistTemplates: async () => (w.failChecklistTemplates ? { error: w.failChecklistTemplates } : (w.checklistTemplates ?? [])),
-    // 活文件定位:日誌類=該日;自檢表=批次＋target_key(模擬 DB 兩個部分唯一索引)
+    listRequiredStages: async (wid) => w.requiredStages?.[wid] ?? [],
+    // 活文件定位:日誌類=該日;自檢表=批次＋target_key;查驗表單=target_key(模擬 DB 三個部分唯一索引)
     findActiveDoc: async (t, loc) => {
       const doc = w.docs.find((x) => x.doc_type === t && !['discarded', 'superseded'].includes(x.status)
-        && ('docDate' in loc ? x.doc_date === loc.docDate : (x.intake_id === loc.intakeId && x.target_key === loc.targetKey)))
+        && ('docDate' in loc ? x.doc_date === loc.docDate : 'intakeId' in loc ? (x.intake_id === loc.intakeId && x.target_key === loc.targetKey) : x.target_key === loc.targetKey))
       return doc ? { id: doc.id, status: doc.status, current_version_no: doc.current_version_no, intake_id: doc.intake_id } : null
     },
     insertDoc: async (row) => {
       const dup = row.doc_type === 'self_check'
         ? w.docs.some((x) => x.doc_type === row.doc_type && x.intake_id === row.intake_id && x.target_key === row.target_key && !['discarded', 'superseded'].includes(x.status))
-        : w.docs.some((x) => x.doc_type === row.doc_type && x.doc_date === row.doc_date && !['discarded', 'superseded'].includes(x.status))
+        : row.doc_type === 'inspection_form'
+          ? w.docs.some((x) => x.doc_type === row.doc_type && x.target_key === row.target_key && !['discarded', 'superseded'].includes(x.status))
+          : w.docs.some((x) => x.doc_type === row.doc_type && x.doc_date === row.doc_date && !['discarded', 'superseded'].includes(x.status))
       if (dup) return { conflict: true }
       const doc: Doc = { id: `doc${++w.seq}`, ...row, current_version_no: 0 }
       w.docs.push(doc)
@@ -155,16 +160,36 @@ describe('角色隔離', () => {
     expect(w.photoPatches).toEqual([])
     expect(w.finishes).toEqual([])
   })
-  it('監造批次:起監造日誌(不起施工日誌);相符的待查驗表單仍列 unsupported', async () => {
-    const w = world({ callerOrg: 'supervisor', intake: intake({ uploader_org: 'supervisor' }), photos: [photo('p1')] })
+  it('監造批次:起監造日誌＋相符待查驗的監造查驗表單(不起施工日誌);判定與確認量留空;重跑冪等;另一批同查驗接同一份文件', async () => {
+    const w = world({ callerOrg: 'supervisor', intake: intake({ uploader_org: 'supervisor' }), photos: [photo('p1')], requiredStages: { 'wi-steel': ['rebar'] } })
     const repo = memoryRepo(w)
-    repo.listOpenInspections = async () => [{ id: 'ins-1', title: '鋼筋查驗', work_item_id: 'wi-steel', requested_date: '2026-09-17' }]
+    repo.listOpenInspections = async () => [
+      { id: 'ins-1', title: '鋼筋查驗', work_item_id: 'wi-steel', requested_date: '2026-09-17', location: 'A區', declared_qty: 3, unit: 'T', stage_key: 'rebar', checklist_record_id: null },
+      { id: 'ins-2', title: '沒工項', work_item_id: null, requested_date: '2026-09-17' },
+    ]
     const r = await runDraftFieldDocuments({ repo, vision: stubVision(), intakeId: 'i1', userId: 'u1' })
     expect(r.status).toBe(200)
-    expect(w.docs.map((d) => d.doc_type)).toEqual(['supervisor_log'])
-    const cands = (r.body.intake as { candidates: { doc_type: string; state: string }[] }).candidates
-    expect(cands.map((c) => [c.doc_type, c.state])).toEqual([['supervisor_log', 'drafted'], ['inspection_form', 'unsupported']])
+    expect(w.docs.map((d) => [d.doc_type, d.target_key, d.status])).toEqual([['supervisor_log', '2026-09-17', 'pending_input'], ['inspection_form', 'ins-1', 'pending_input']])
+    const cands = (r.body.intake as { candidates: { doc_type: string; state: string; blocked_by?: string[] }[] }).candidates
+    expect(cands.map((c) => [c.doc_type, c.state])).toEqual([['supervisor_log', 'drafted'], ['inspection_form', 'drafted'], ['inspection_form', 'blocked']])
+    expect(cands[2].blocked_by).toEqual(['work_item'])
+    const ver = w.versions.find((v) => v.document_id === w.docs[1].id)!
+    const content = ver.content as { verdict: unknown; confirmed_qty: unknown; declared_qty: unknown; stage_key: unknown; unit: unknown; work_item_id: unknown }
+    expect(content).toMatchObject({ verdict: null, confirmed_qty: null, declared_qty: 3, stage_key: 'rebar', unit: 'T', work_item_id: 'wi-steel' })
+    expect((ver.field_sources as Record<string, { status: string }>).verdict.status).toBe('pending')
+    expect((ver.field_sources as Record<string, { status: string }>).confirmed_qty.status).toBe('pending')
+    expect(w.docs[1].required_fields).toContain('stage_key')
     expect(w.photos[0].ai_status).toBe('done')
+    // 重跑:內容相同不新增版本
+    const r2 = await runDraftFieldDocuments({ repo, vision: stubVision(), intakeId: 'i1', userId: 'u1' })
+    expect((r2.body.documents as { doc_type: string; action: string }[]).map((d) => [d.doc_type, d.action])).toEqual([['supervisor_log', 'unchanged'], ['inspection_form', 'unchanged']])
+    // 另一批同一查驗的照片:接同一份查驗表單(不是每批一份),新增版本
+    w.intake = intake({ id: 'i2', uploader_org: 'supervisor' })
+    w.photos.push(photo('p2', { intake_id: 'i2' }))
+    const r3 = await runDraftFieldDocuments({ repo, vision: stubVision(), intakeId: 'i2', userId: 'u1' })
+    expect(r3.status).toBe(200)
+    expect(w.docs.filter((d) => d.doc_type === 'inspection_form')).toHaveLength(1)
+    expect((r3.body.documents as { doc_type: string; action: string; document_id: string }[]).find((d) => d.doc_type === 'inspection_form')).toMatchObject({ action: 'version_added', document_id: w.docs[1].id })
   })
   it('機關(試用管理者)批次:辨識後無任何候選、無文件', async () => {
     const w = world({ callerOrg: 'owner', intake: intake({ uploader_org: 'owner' }), photos: [photo('p1')] })

@@ -259,7 +259,7 @@ function buildDoneToday({ org, todayIso, defects, inspections }) {
     })
   }
   for (const i of inspections) {
-    if (i.status !== '合格' && i.status !== '不合格') continue
+    if (i.status === '待查驗') continue // 已判定=合格／部分合格／不合格
     if (taipeiISODate(i.inspected_at) !== todayIso) continue
     rows.push({
       ts: new Date(i.inspected_at).getTime(),

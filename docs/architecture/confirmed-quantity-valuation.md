@@ -294,6 +294,13 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 ### 16.6 P3c 接口
 簽署 `inspection_form` 時在同交易 INSERT `inspection_confirmations(project_id, work_item_id, batch_key, location_label, stage_key, unit, qty_cum, basis='inspection', inspection_id, document_id, document_version_no, content_hash, confirmed_by=簽署者, confirmed_at=signed_at)`；guard 會驗工項（末端、可計價、同案、單位）、階段（須在 ITP H 點集合內，單階段工項不可帶）、確認人（本案監造成員）、查驗（同案、已判定、工項一致）、文件（`inspection_form`、版本雜湊相等、該版本有確認人的簽署列）；`qty_delta`／`supersedes_id` 由 guard 導出，減量須填 `reason`。AFTER INSERT 自動收斂並同步到適用草稿期（截止日 ≥ 確認日的最早草稿）。部分通過（查驗 100、通過 60）的判定值如何對應 `inspections.status` 由 P3c 決定；guard 只要求「已判定」。
 
+**P3c 落地結果（2026-09-19，migration `20260919222000_inspection_form_documents`；與本節的偏差）**：
+- `inspections.status` 加 `'部分合格'`（check 釘住四值）：合格＝本次確認量等於申報量、部分合格＝0<確認<申報、不合格＝確認 0（不寫確認紀錄）；不合格／部分合格由 `inspections_defect_sync` 同交易開缺失（差額寫進說明）。
+- 累計語意：簽署寫入的 `qty_cum`＝此工項此批次此階段「目前最新 active 累計」＋本次確認（`inspections.confirmed_qty` 記本次、確認紀錄記累計）；同一查驗同工項同階段同量重簽＝冪等不重複累加，不同量或改判不合格→`PD008` 要求先 `revoke_inspection_confirmation` 再重簽。
+- **唯一索引改為只算 active**：`inspection_confirmations_inspection_stage_uidx` 加 `status='active'` 條件——原索引不論狀態，撤銷後同一查驗永遠寫不進新的確認（更正流程走不通）；已撤銷列仍保留 `inspection_id` 供追溯。
+- `inspections_guard` 保護 P4b 的依據：有 active 確認的查驗不可撤銷判定回待查驗；已判定不可改工項／位置／階段／申報量；`confirmed_qty／results／document_id／document_version_no／template_id` 只由簽署路徑（GUC `pmis.field_document_sign`）寫入。
+- `photo_frozen_reason` 的「照片為已核定確認量之附件」事由（§16.5）**未做**：確認紀錄已追溯文件版本（附件在版本內不可變），照片凍結另列待辦。
+
 ## 17. P4c 估驗頁落地結果與偏差（2026-09-19，PR #144；純前端、無 migration）
 
 前端只顯示 DB 的結果、只經 §16.3 的 RPC 寫入；與 §9 表「`fillValuationFromSiteLogs` → `valuationDiff.js` 延伸」不同之處與設計沒寫而實作必須決定的事：

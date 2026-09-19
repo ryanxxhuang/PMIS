@@ -13,6 +13,7 @@ export function itpStatus(point, inspections = []) {
   const insp = point.inspection_id ? inspections.find((i) => i.id === point.inspection_id) : null
   if (!insp) return { key: 'pending', label: '未申請查驗' }
   if (insp.status === '合格') return { key: 'passed', label: '通過' }
+  if (insp.status === '部分合格') return { key: 'partial', label: '部分通過' }
   if (insp.status === '不合格') return { key: 'failed', label: '不通過' }
   return { key: 'requested', label: '已申請，待監造查驗' }
 }

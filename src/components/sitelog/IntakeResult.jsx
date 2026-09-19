@@ -1,5 +1,5 @@
-// 上傳批次的伺服器結果(P2c):批次狀態、逐張辨識狀態、候選文書(已就緒／待補／尚未支援／
-// 已排除)、已起稿的文件連結。上傳中與恢復(進頁重讀伺服器)都吃這一份,兩處長一樣。
+// 上傳批次的伺服器結果(P2c):批次狀態、逐張辨識狀態、候選文書(已就緒／待補／已排除;四類文書皆有頁面)、
+// 已起稿的文件連結。上傳中與恢復(進頁重讀伺服器)都吃這一份,兩處長一樣。
 // 不含任何寫入邏輯:排除候選、補日期、重試由呼叫端(IntakeUploader／IntakeList)接 store。
 import { Link } from 'react-router-dom'
 import { Badge, Button, Input, Field } from '../ui.jsx'
@@ -70,7 +70,7 @@ export default function IntakeResult({
         </ul>
       )}
 
-      {/* 候選文書:已就緒／已起稿(連到文件)、待補(補日期)、尚未支援(P3)、已排除;使用者可排除不適用候選 */}
+      {/* 候選文書:已就緒／已起稿(連到文件)、待補(補日期／工項)、已排除;使用者可排除不適用候選(四類文書皆有頁面可直達) */}
       {candidates.length > 0 && (
         <div>
           <div className="text-footnote font-medium text-[var(--text-2)] mb-1">候選文書</div>
@@ -91,7 +91,6 @@ export default function IntakeResult({
                         開啟文件(版本 {doc.versionNo}) <MSym name="arrow_forward" size={12} />
                       </Link>
                     )}
-                    {doc && !docPageLink({ doc_type: c.doc_type, id: doc.id }) && <span className="block mt-1 text-caption text-[var(--text-3)]">已起稿(版本 {doc.versionNo});此類文書的頁面尚未支援</span>}
                   </div>
                   {editable && onToggleExclude && c.state !== 'drafted' && c.state !== 'locked' && (
                     <Button variant="ghost" size="sm" onClick={() => onToggleExclude(i, !c.excluded)}>{c.excluded ? '取消排除' : '排除'}</Button>

@@ -45,6 +45,9 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
         requested_date: input.requested_date || null, status: '待查驗', result_note: null,
         // 檢附自主檢查表(S-2):單向引用第一級證據,demo 與真 DB 同欄名才不會雙引擎漂移
         checklist_record_id: input.checklist_record_id || null,
+        // 申報數量／查驗階段(P3c):監造查驗表單的確認量以此為上限與階段(真 DB 由 guard 正規化單位／批次鍵)
+        declared_qty: input.declared_qty === '' || input.declared_qty == null ? null : Number(input.declared_qty),
+        stage_key: input.stage_key || null, unit: wi?.unit || null, work_item_key: wi?.item_key || null,
         work_item_no: wi?.item_no || '', work_item_desc: wi?.description || '',
       }, ...is])
       return { error: null, id }
@@ -56,6 +59,9 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       requested_date: input.requested_date || null,
       // 檢附自主檢查表(S-2):只在申請時掛上,查驗結果不回寫檢查紀錄(單向)
       checklist_record_id: input.checklist_record_id || null,
+      // 申報數量／查驗階段(P3c):guard 正規化並由工項帶單位;已判定後不可改
+      declared_qty: input.declared_qty === '' || input.declared_qty == null ? null : Number(input.declared_qty),
+      stage_key: input.stage_key || null,
       requested_by: currentUser?.user_id, status: '待查驗',
     }).select('id').single()
     if (error) return { error }
@@ -80,26 +86,16 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       }
       return { error: null }
     }
+    // 快速判定(不含確認量):缺失是不合格判定的法定後果,P3c 起由 DB AFTER trigger inspections_defect_sync 在同一交易開立
+    // (與監造查驗表單簽署同一份實作;失敗即整筆判定回滾,不會出現「判定寫入、缺失消失」);重載查驗與缺失即看到。
     const { error } = await supabase.from('inspections').update({
       status: pass ? '合格' : '不合格', result_note: note || null,
       inspected_by: currentUser?.user_id, inspected_at: new Date().toISOString(),
     }).eq('id', insp.id)
     if (error) return { error }
-    // 缺失是不合格判定的法定後果:insert 失敗不可靜默吞掉——判定已寫入、缺失卻消失,
-    // 廠商收不到改善待辦,機關「查驗↔缺失」勾稽也對不上。判定成功仍回 error: null,
-    // 另以 defectError 帶回呼叫端如實提示補開(同 createChecklistRecord 的 defectError 慣例)。
-    let defectError = null
-    if (!pass) {
-      const { error: de } = await supabase.from('defects').insert({
-        project_id: currentProject.project_id, inspection_id: insp.id, work_item_id: insp.work_item_id || null,
-        title: `查驗不合格：${insp.title}`, description: note || null, location: insp.location || null,
-        status: '開立', created_by: currentUser?.user_id,
-      })
-      defectError = de || null
-    }
     await reloadQuality()
-    return { error: null, defectError }
-  }, [dbMode, currentProject, currentUser, reloadQuality])
+    return { error: null }
+  }, [dbMode, currentUser, reloadQuality])
 
   // 開立缺失(統一引擎):domain 分品質/工安;工安缺失可在匯標單前寫入(isPersistedProject)
   const createDefect = useCallback(async (input) => {

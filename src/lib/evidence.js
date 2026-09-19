@@ -71,7 +71,7 @@ export function evSummary(c) {
 
 // 佐證狀態 → Badge 五語意色(顏色+文字並存,色盲可讀);查驗/檢查表/試體三種紀錄的
 // 判定值同一套字面(合格/不合格),其餘(待查驗/未判定/待試驗)一律中性 slate。
-export const evStatusColor = (s) => (s === '合格' ? 'green' : s === '不合格' ? 'red' : 'slate')
+export const evStatusColor = (s) => (s === '合格' ? 'green' : s === '不合格' ? 'red' : s === '部分合格' ? 'amber' : 'slate')
 
 // 佐證照片的說明行:機關看紙本佐證時第一個問的是「這張拍在哪」,
 // 所以 classify-site-photo 抄下來的施作區域(photos.location,如「A區1F」)要走在說明前面——
