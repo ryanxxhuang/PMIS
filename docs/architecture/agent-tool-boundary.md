@@ -16,7 +16,7 @@
 | 機關 | run_integrity_audit |
 | 全角色交接 | raise_to |
 
-唯讀工具拿不到 service client，業務查詢走 caller JWT／RLS，仍逐一限制 project_id；明細透過 parent join 限案。工具寫入只到 agent_actions；工具可叫的 RPC 僅 my_org_type／list_project_members。日期、UUID、範圍、表名白名單與 PostgREST 搜尋字元都由程式驗證；get_record 用 hasOwnProperty 防原型鏈名稱，embed 明細 cap 200。
+唯讀工具拿不到 service client，業務查詢走 caller JWT／RLS，仍逐一限制 project_id；明細透過 parent join 限案。工具寫入只到 agent_actions；工具可叫的 RPC 僅 my_org_type／list_project_members／get_project_warranty（P5e，唯讀 stable 的保固事實，保固期滿日由 DB 單一日期規則算）。日期、UUID、範圍、表名白名單與 PostgREST 搜尋字元都由程式驗證；get_record 用 hasOwnProperty 防原型鏈名稱，embed 明細 cap 200。
 
 工具陣列維持固定順序與參考：唯讀在前、角色草稿居中、raise_to 最後。persona、stableStringify facts、tools 與最後一則訊息共四個快取斷點；改順序／注入時間戳會破壞快取前綴。
 

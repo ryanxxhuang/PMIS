@@ -36,7 +36,7 @@
 
 P5b 再加兩種缺口（`SetupGap.kind`）：`rule`＝循環規則不完整（DB `fn_obligation_recurrence_gap` 與共用 `recurrenceRuleGap` 同口徑，導擷取審核）；`review`＝回填待核對（migration 回填時義務層曾標完成但推不出對應期別的期次帶 `review_note`，導期限追蹤該期，人標記後解除）。正式 7 筆 monthly 中 5 筆缺「每月幾日」，套用後即以「循環規則待補」列出。
 
-P5c 第五種 `stop`＝循環停止條件判不出或已越界（DB `fn_obligation_recurrence_stop_gap` 與共用 `recurrenceStopGap` 同口徑；實際竣工日由 `acceptance_events` 的 confirm／report 推得，共用 `completionDateOf` 與 DB `fn_project_completion_date` 同口徑）：保固類沒有保固期滿日、竣工日缺、竣工日已過而未登錄竣工／展延，DB 已停止產生新期，導期限追蹤該筆（基準日卡補竣工日／展延）或驗收頁登錄竣工。前端 `buildTodayTasks` 與 Edge 收集器都把 `completion_date` 放進 anchors 再交給共用規則。
+P5c 第五種 `stop`＝循環停止條件判不出或已越界（DB `fn_obligation_recurrence_stop_gap` 與共用 `recurrenceStopGap` 同口徑；實際竣工日由 `acceptance_events` 的 confirm／report 推得，共用 `completionDateOf` 與 DB `fn_project_completion_date` 同口徑）：竣工日缺、竣工日已過而未登錄竣工／展延，DB 已停止產生新期，導期限追蹤該筆（基準日卡補竣工日／展延）或驗收頁登錄竣工。保固類（P5e）改看保固事實：保固期滿日＝正式驗收合格日＋契約保固期間（DB `fn_project_warranty`，RPC `get_project_warranty`），缺哪一項就說哪一項（`warrantyGap`，`setup.need`），導履約時程該筆（驗收頁登錄正式驗收合格、履約期程卡登錄保固期間）。前端 `buildTodayTasks` 與 Edge 收集器都把 `completion_date` 與 `warranty` 放進 anchors 再交給共用規則。
 
 ## 前端三桶
 
@@ -57,7 +57,7 @@ P5c 第五種 `stop`＝循環停止條件判不出或已越界（DB `fn_obligati
 
 ## Edge／早報
 
-collectOpenBallItems 依專案查缺失、送審、RFI、估驗、查驗、變更、觀察、現場文書（＋目前版本提送列）、未廢止義務（embed 期次）與基準日，全部交給共用規則判定。Agent 用 caller JWT，obligationSoonDays=0、依 my_org_type 篩選後最多 30 筆，另回 `setup_pending`（`fix_at` 依四種缺口指路）；早報用 service role，obligationSoonDays=7，另加試體齡期並逐成員篩選，待補設定三方都收到但只有逾期／即將到期才寄。Agent 工具層只讀（工具白名單只允許 `my_org_type`／`list_project_members` 兩支 RPC），期次由 DB 側維護（義務插入／規則變更／基準日變更 trigger、每日 pg_cron `pmis-obligation-periods`），不在工具層物化。
+collectOpenBallItems 依專案查缺失、送審、RFI、估驗、查驗、變更、觀察、現場文書（＋目前版本提送列）、未廢止義務（embed 期次）與基準日，全部交給共用規則判定。Agent 用 caller JWT，obligationSoonDays=0、依 my_org_type 篩選後最多 30 筆，另回 `setup_pending`（`fix_at` 依四種缺口指路）；早報用 service role，obligationSoonDays=7，另加試體齡期並逐成員篩選，待補設定三方都收到但只有逾期／即將到期才寄。Agent 工具層只讀（工具白名單只允許 `my_org_type`／`list_project_members`／`get_project_warranty` 三支唯讀 RPC；最後一支自 P5e 起供收集器讀保固事實），期次由 DB 側維護（義務插入／規則變更／基準日變更 trigger、每日 pg_cron `pmis-obligation-periods`），不在工具層物化。
 
 service role 沒有 RLS，每筆查詢的 project_id 是跨案隔離關鍵；提送表沒有 project_id，只以本案文件的 id 清單查。責任不明兩側都不歸任何方（P5a 前 Edge 預設廠商的差異已消除）；剩餘的呼叫端差異（soonDays）見 [雙引擎](dual-engine-sync.md)。早報 pending 是我方無期限項，不是首頁 waiting 的等對方。
 
