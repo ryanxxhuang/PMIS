@@ -89,7 +89,8 @@ export default function ChecklistSection({ templates, records, canEdit, leaves =
             const signedDoc = signedDocByRecord.get(r.id)
             return (
               <li key={rootId} className="border-b border-[var(--border-2)] pb-1.5">
-                <div className="flex items-center justify-between gap-3 text-sm">
+                {/* <md 改上下排:右側判定＋動作是 shrink-0,並排時會把左側標題擠成一字寬的直欄 */}
+                <div className="flex items-center justify-between gap-3 text-sm max-md:flex-col max-md:items-start max-md:gap-1">
                   <div className="min-w-0">
                     <span className="num text-[var(--text-3)] text-xs mr-2">{r.check_date}</span>
                     <span className="text-[var(--text)]">{tpl?.title || '（範本已刪除）'}</span>
@@ -101,7 +102,7 @@ export default function ChecklistSection({ templates, records, canEdit, leaves =
                     {r.location && <span className="text-xs text-[var(--text-3)] ml-2">{r.location}</span>}
                     {wiOf(r) && <span className="text-xs text-[var(--text-3)] ml-2" title={wiOf(r).description}>工項 {wiOf(r).item_no}</span>}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     <Badge color={r.overall === '合格' ? 'green' : r.overall === '不合格' ? 'red' : 'slate'}>{r.overall || '未判定'}</Badge>
                     {(() => { const cov = checklistCoverage(tpl, r.results); return <span className={`text-caption whitespace-nowrap ${cov.unchecked ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}`}>{coverageText(cov)}</span> })()}
                     {attachedInsp && (
