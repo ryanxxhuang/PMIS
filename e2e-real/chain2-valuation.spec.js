@@ -9,12 +9,13 @@ import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
   signInClient, loginReal, logoutReal, gotoHash, runCleanup,
 } from './helpers.js'
+// P4c:估驗頁的建期／送審／核定全走 P4b RPC(transition_valuation 等);這條鏈驗三方簽核在新 UI 上的真路徑。
 
 const PROJECT_NAME = `鏈2估驗工程-${Date.now().toString(36)}`
 const conEmail = uniqueEmail('w6c2-con')
 const supEmail = uniqueEmail('w6c2-sup')
 const ownEmail = uniqueEmail('w6c2-own')
-let conId, supId, ownId, projectId
+let conId, supId, ownId
 
 // 最小標單(與 import_work_items 的 p_items 同形狀):一章兩葉
 const BOQ_ITEMS = [
@@ -34,7 +35,6 @@ test.beforeAll(async () => {
     p_supervisor: '監造', p_location: null, p_start: null, p_end: null,
   })
   if (createError) throw new Error(`建案失敗:${createError.message}`)
-  projectId = project.id
   const { error: boqError } = await c.rpc('import_work_items', { p_project_id: project.id, p_items: BOQ_ITEMS })
   if (boqError) throw new Error(`匯標單失敗:${boqError.message}`)
   for (const [email, org] of [[supEmail, 'supervisor'], [ownEmail, 'owner']]) {
@@ -57,22 +57,21 @@ test.afterAll(async () => {
 })
 
 test('鏈 2:廠商建期送審 → 監造核定 → 機關請款/收款登錄', async ({ page }) => {
-  const today = new Date().toISOString().slice(0, 10)
+  // 台北日曆日(全站業務日期口徑;建期對話框預填的截止日與請款日都用它)
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
 
-  // ── 廠商:建估驗期 → 送監造審核;正式模式下沒有核定鈕 ────────────────────
+  // ── 廠商:建估驗期(P4c:對話框必填計價截止日,預填今天)→ 送監造審核;正式模式下沒有核定鈕 ──
+  // 這期沒有任何明細(增量 0),沒有數量要驗;有量而無監造確認的情境見 chain7／chain9。
   await loginReal(page, conEmail)
   await gotoHash(page, '/valuation')
   await page.getByRole('button', { name: '＋ 新增估驗期' }).click()
+  const dialog = page.getByRole('dialog', { name: /建立第 1 期估驗/ })
+  await expect(dialog.getByLabel(/計價截止日/)).toHaveValue(today)
+  await dialog.getByRole('button', { name: '建立估驗期' }).click()
   const tab1 = page.getByRole('button', { name: /第 1 期/ })
   await expect(tab1.getByText('草稿')).toBeVisible()
-  // P4b 起送審必填計價截止日(Q7);截止日欄位由 P4c 進估驗頁,這裡先以廠商身分補(走 RLS 與 guard 的真路徑)。
-  // 這期沒有任何明細(增量 0),沒有數量要驗;有量而無監造確認的情境見 chain7。
-  const con = await signInClient(conEmail)
-  const { error: endErr } = await con.from('valuations').update({
-    period_end: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date()),
-  }).eq('project_id', projectId).select('id')
-  if (endErr) throw new Error(`補截止日失敗:${endErr.message}`)
-  await con.auth.signOut()
+  await expect(page.getByText(`計價截止日 ${today}`)).toBeVisible()
+  await expect(page.getByText('無缺件,與日誌相符')).toBeVisible() // get_valuation_state 的缺件清單為空
   await page.getByRole('button', { name: '送監造審核' }).click()
   await expect(tab1.getByText('監造審核')).toBeVisible()
   await expect(page.getByText('待監造核定')).toBeVisible()

@@ -1,17 +1,18 @@
 // Billing slice:估驗計價(掛在 work_items 標單脊椎上)、請款收款、預定進度 S 曲線。
+//
+// P4c 起估驗的寫入全部走 P4b 的 RPC(設計 docs/architecture/confirmed-quantity-valuation.md §16.3):
+//   建期 → insert valuations(必填計價截止日)＋ sync_valuation_from_confirmations
+//   改累計量 → set_valuation_item_cum(上限、來源分配、金額全由 DB 算;VQ006 帶 prev_cum／floor／limit／cap)
+//   送審／退回／核定 → transition_valuation(p_from 冪等;檢查點在 trigger,VQ004 帶違反清單)
+//   同步確認量 → sync_valuation_from_confirmations
+// 前端不再組任何 valuation_items 列(舊 valuationItemRow／fillValuationFromSiteLogs 是客戶端數字
+// 直接寫進請款底稿的路徑,已移除);每次寫入成功後從 DB 重載期別(投影規則見 lib/valuationPeriods.js),
+// 畫面上的數量與金額永遠是 DB 的值。
 import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase.js'
 import { parseLocalDate, taipeiToday, localISOMonth } from '../../lib/dates.js'
-
-// 估驗明細列(寫 DB 用):同一套「數量→百分比/金額」換算,建立期/改數量/帶入日誌三處共用。
-export function valuationItemRow(wi, valuationId, cumQty, source) {
-  const q = wi.quantity || 0
-  return {
-    valuation_id: valuationId, work_item_id: wi.id, cum_qty: cumQty,
-    cum_pct: q > 0 ? (cumQty / q) * 100 : null,
-    amount_cum: q > 0 ? (wi.amount || 0) * cumQty / q : 0, source,
-  }
-}
+import { loadValuationsFromDB } from '../db.js'
+import { valuationItemAmount } from '../../lib/boqCalc.js'
 
 // 把 supabase update/delete 的回傳統一成 {error}:PostgREST 被 RLS 擋下時
 // 「不回錯誤、只回空 rows」——那也是失敗,必須回報給使用者,不得偽裝成功。
@@ -22,98 +23,177 @@ export function mutationOutcome({ data, error }, deniedMessage) {
   return { error: null }
 }
 
-export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps }, siteLogs) {
-  // 估驗計價：每期一個物件，items 為 { [work_item_key]: 累計完成數量 }
+// P4b 的 RPC／guard 以自訂 errcode(VQ001–VQ010)raise,detail 是 JSON 字串(PostgREST 放在 details)。
+// 統一解成 { code, message, detail } 讓頁面能依代碼分流、把 VQ004 的違反清單與 VQ006 的上限數字轉成人話;
+// 非 VQ 錯誤原樣回傳(message 仍交給 friendlyError)。
+export function parseValuationError(error) {
+  if (!error) return null
+  const code = typeof error.code === 'string' && /^VQ\d{3}$/.test(error.code) ? error.code : null
+  let detail = error.detail ?? null
+  if (detail == null && typeof error.details === 'string' && error.details.trim()) {
+    try { detail = JSON.parse(error.details) } catch { detail = null }
+  }
+  return { ...error, code: code || error.code, message: error.message || '', detail }
+}
+
+export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps }) {
+  // 估驗計價:每期一個物件 { id, period_no, status, period_end, items: {item_key: 累計量},
+  // amounts: {item_key: 累計金額(DB 算)}, own: {item_key: {cum_qty, amount_cum, backing}} }
   const [valuations, setValuations] = useState([])
   // 預定進度 S 曲線：{ start, end, months: [{ label, plannedPct }] }
   const [progressPlan, setProgressPlan] = useState(null)
 
-  // 新增一期：期數 +1，並把前一期的累計完成% 帶過來當起點（累計往前滾）。
-  // DB 全部寫成功才更新 UI;帶入前期明細失敗時把剛建的期刪掉,不留半套資料。
-  const createValuation = useCallback(async (retentionPct = 5) => {
-    const periodNo = valuations.length ? Math.max(...valuations.map((v) => v.period_no)) + 1 : 1
-    const prev = valuations.find((v) => v.period_no === periodNo - 1)
-    const id = dbMode ? crypto.randomUUID() : `VAL-${Date.now()}`
-    // 估驗日是業務日期:取台北日曆日(UTC 在台灣 00:00–08:00 會落成前一天,
-    // 施工月報以 valuation_date 歸期就會錯月)。UI 副本與 DB 同一格式——
-    // 原本 UI 用 toLocaleDateString('2026/8/22')、DB 用 ISO,重新整理前後長相不一致。
-    const vDate = taipeiToday()
-    const v = {
-      id, period_no: periodNo,
-      valuation_date: vDate,
-      retention_pct: retentionPct, status: '草稿',
-      items: prev ? { ...prev.items } : {},
-    }
-    if (dbMode) {
-      const { error } = await supabase.from('valuations').insert({
-        id, project_id: currentProject.project_id, period_no: periodNo,
-        valuation_date: vDate,
-        retention_pct: retentionPct, status: '草稿', created_by: currentUser?.user_id,
-      })
-      if (error) return { v: null, error }
-      // 把前期累計完成數量帶過來寫入 valuation_items
-      const rows = Object.entries(v.items)
-        .map(([key, qty]) => {
-          const wi = wiMaps.byKey.get(key)
-          return wi ? valuationItemRow(wi, id, qty, 'manual') : null
-        }).filter(Boolean)
-      if (rows.length) {
-        const { error: itemsError } = await supabase.from('valuation_items').insert(rows)
-        if (itemsError) {
-          await supabase.from('valuations').delete().eq('id', id)
-          return { v: null, error: itemsError }
-        }
-      }
-    }
-    setValuations((vs) => [...vs, v])
-    return { v, error: null }
-  }, [valuations, dbMode, currentProject, currentUser, wiMaps])
-
-  // 更新某期某工項的「累計完成數量」。
-  // 打字需要即時回饋 → 先更新 UI,DB 失敗再還原「這一格」並回傳 error。
-  const updateValuationItem = useCallback(async (periodId, itemKey, cumQty) => {
-    const prevItems = valuations.find((v) => v.id === periodId)?.items || {}
-    const hadKey = Object.prototype.hasOwnProperty.call(prevItems, itemKey)
-    const prevQty = prevItems[itemKey]
-    setValuations((vs) => vs.map((v) => (v.id === periodId
-      ? { ...v, items: { ...v.items, [itemKey]: cumQty } }
-      : v)))
+  // DB 模式的唯一更新來源:任何估驗寫入成功後整批重載(期別數十、明細數千,一次分頁查詢;
+  // 往前帶的投影跨期別,局部更新反而容易與 DB 不一致)。載入失敗回傳 error,不留舊畫面假裝成功。
+  const reloadValuations = useCallback(async () => {
     if (!dbMode) return { error: null }
-    const wi = wiMaps.byKey.get(itemKey)
-    if (!wi) return { error: null } // 非 DB 工項鍵(理論上不會發生);不寫 DB 也不謊報失敗
-    const { error } = await supabase.from('valuation_items').upsert(
-      valuationItemRow(wi, periodId, cumQty, 'manual'),
-      { onConflict: 'valuation_id,work_item_id' },
-    )
-    if (error) {
-      setValuations((vs) => vs.map((v) => {
-        if (v.id !== periodId) return v
-        const items = { ...v.items }
-        if (hadKey) items[itemKey] = prevQty
-        else delete items[itemKey]
-        return { ...v, items }
-      }))
+    try {
+      const vals = await loadValuationsFromDB(currentProject.project_id, wiMaps.idToKey)
+      setValuations(vals)
+      return { error: null }
+    } catch (error) {
       return { error }
     }
-    return { error: null }
-  }, [dbMode, wiMaps, valuations])
+  }, [dbMode, currentProject, wiMaps])
 
-  // 狀態轉移(送審/退回/核定):DB 成功才更新 UI。extra 可帶附加欄位
-  // (退回原因寫入 note——退回不留原因會削弱審查證據,第二輪 P1-01)。
-  // 「已核定」相關轉移由 DB 的 valuations_guard trigger 強制(僅監造/管理者),錯誤原样回傳。
-  const setValuationStatus = useCallback(async (periodId, status, extra = {}) => {
-    const patch = { status, ...extra }
-    if (dbMode) {
-      const res = await supabase.from('valuations').update(patch).eq('id', periodId).select('id')
-      const { error } = mutationOutcome(res, '狀態未更新:可能無權限或這一期已被移除')
-      if (error) return { error }
+  // 新增一期:期數 +1;計價截止日必填(續接清單 §6 Q7:送審／核定前 DB 必填,建期就收)。
+  // DB:建期後立即以 sync_valuation_from_confirmations 帶入可估驗的監造確認量——前期累計由
+  // DB 定義(fn_cq_prev_cum_internal),不再由前端複製前期明細寫回 DB。同步失敗就把剛建的期刪掉,不留半套。
+  // demo:本機物件,累計量與金額往前帶(demo 沒有確認量,示範資料不假裝經過後端核對)。
+  const createValuation = useCallback(async ({ periodEnd, retentionPct = 5 } = {}) => {
+    if (!periodEnd) return { v: null, error: { message: '請填計價截止日(本期計價截至哪一天)' } }
+    const periodNo = valuations.length ? Math.max(...valuations.map((v) => v.period_no)) + 1 : 1
+    const prev = valuations.find((v) => v.period_no === periodNo - 1)
+    // 估驗日是業務日期:取台北日曆日(UTC 在台灣 00:00–08:00 會落成前一天,
+    // 施工月報以 valuation_date 歸期就會錯月)。UI 副本與 DB 同一格式。
+    const vDate = taipeiToday()
+    if (!dbMode) {
+      const v = {
+        id: `VAL-${Date.now()}`, period_no: periodNo, valuation_date: vDate, period_end: periodEnd,
+        retention_pct: retentionPct, status: '草稿', note: null,
+        items: prev ? { ...prev.items } : {}, amounts: prev ? { ...prev.amounts } : {}, own: {},
+      }
+      setValuations((vs) => [...vs, v])
+      return { v, error: null }
     }
-    setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, ...patch } : v)))
+    const id = crypto.randomUUID()
+    const { error } = await supabase.from('valuations').insert({
+      id, project_id: currentProject.project_id, period_no: periodNo,
+      valuation_date: vDate, period_end: periodEnd,
+      retention_pct: retentionPct, status: '草稿', created_by: currentUser?.user_id,
+    })
+    if (error) return { v: null, error: parseValuationError(error) }
+    const { error: syncError } = await supabase.rpc('sync_valuation_from_confirmations', { p_valuation_id: id })
+    if (syncError) {
+      await supabase.from('valuations').delete().eq('id', id)
+      return { v: null, error: parseValuationError(syncError) }
+    }
+    const { error: loadError } = await reloadValuations()
+    if (loadError) return { v: null, error: loadError }
+    return { v: { id, period_no: periodNo }, error: null }
+  }, [valuations, dbMode, currentProject, currentUser, reloadValuations])
+
+  // 設定草稿期某工項的「累計完成數量」:DB 走 set_valuation_item_cum(目標累計量;在
+  // [前期累計＋本期扣回, 上限] 內由 DB 重算來源分配與金額,超出回 VQ006 帶數字),成功後重載。
+  // demo:本機更新,金額用 fn_valuation_amount 鏡像。
+  const updateValuationItem = useCallback(async (periodId, itemKey, cumQty) => {
+    const wi = wiMaps.byKey.get(itemKey)
+    if (!wi) return { error: { message: '找不到這個工項,請重新整理後再試' } }
+    if (!dbMode) {
+      setValuations((vs) => vs.map((v) => (v.id === periodId
+        ? { ...v, items: { ...v.items, [itemKey]: cumQty }, amounts: { ...v.amounts, [itemKey]: valuationItemAmount(cumQty, wi.unit_price) } }
+        : v)))
+      return { error: null }
+    }
+    const { error } = await supabase.rpc('set_valuation_item_cum', {
+      p_valuation_id: periodId, p_work_item_id: wi.id, p_cum_qty: cumQty,
+    })
+    if (error) return { error: parseValuationError(error) }
+    return reloadValuations()
+  }, [dbMode, wiMaps, reloadValuations])
+
+  // 狀態轉移(送審/退回/核定):DB 走 transition_valuation(帶目前狀態 p_from,別人先動過就回
+  // applied:false 不重複套用;角色與三個檢查點由 valuations_guard／valuations_checkpoint_guard 強制,
+  // VQ004 的 detail 是逐工項違反清單,交給頁面翻成人話)。extra.note 是退回原因(記入本期備註)。
+  const setValuationStatus = useCallback(async (periodId, status, extra = {}) => {
+    const current = valuations.find((v) => v.id === periodId)
+    if (!current) return { error: { message: '找不到這一期,可能已被移除' } }
+    if (!dbMode) {
+      setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, status, ...extra } : v)))
+      return { error: null }
+    }
+    const { data, error } = await supabase.rpc('transition_valuation', {
+      p_valuation_id: periodId, p_from: current.status, p_to: status, p_note: extra.note ?? null,
+    })
+    if (error) return { error: parseValuationError(error) }
+    const { error: loadError } = await reloadValuations()
+    if (loadError) return { error: loadError }
+    if (data && data.applied === false) return { error: { message: data.message || '狀態未變更,已重新載入' } }
     return { error: null }
+  }, [dbMode, valuations, reloadValuations])
+
+  // 計價截止日(Q7):只有草稿期可改(登入者在非草稿期不可改期別欄位,由 valuations_guard 強制)。
+  const setValuationPeriodEnd = useCallback(async (periodId, periodEnd) => {
+    if (!periodEnd) return { error: { message: '計價截止日不可空白' } }
+    if (dbMode) {
+      const res = await supabase.from('valuations').update({ period_end: periodEnd }).eq('id', periodId).select('id')
+      const { error } = mutationOutcome(res, '截止日未更新:可能無權限或這一期已被移除')
+      if (error) return { error: parseValuationError(error) }
+      return reloadValuations()
+    }
+    setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, period_end: periodEnd } : v)))
+    return { error: null }
+  }, [dbMode, reloadValuations])
+
+  // 同步可估驗的監造確認量到草稿期(冪等):逐工項 FIFO 分配到上限、併入待處理扣回、重算累計與金額。
+  const syncValuation = useCallback(async (periodId) => {
+    if (!dbMode) return { result: null, error: { message: '示範模式沒有監造確認資料可同步' } }
+    const { data, error } = await supabase.rpc('sync_valuation_from_confirmations', { p_valuation_id: periodId })
+    if (error) return { result: null, error: parseValuationError(error) }
+    const { error: loadError } = await reloadValuations()
+    return { result: data, error: loadError }
+  }, [dbMode, reloadValuations])
+
+  // 期別狀態(唯讀):每工項的上限／前期累計／增量／來源分配／違反代碼,以及整期檢查點的違反清單。
+  // demo 沒有後端核對,回 null 讓頁面明示「示範資料未經後端核對」。
+  const fetchValuationState = useCallback(async (periodId) => {
+    if (!dbMode) return { state: null, error: null }
+    const { data, error } = await supabase.rpc('get_valuation_state', { p_valuation_id: periodId })
+    if (error) return { state: null, error: parseValuationError(error) }
+    return { state: data, error: null }
   }, [dbMode])
 
+  // 可估驗清單(唯讀):有 active 確認的工項的有效量／已計價／占用／可用與批次;未開期先累積。
+  const fetchBillableBacklog = useCallback(async () => {
+    if (!dbMode) return { rows: [], error: null }
+    const { data, error } = await supabase.rpc('list_billable_backlog', { p_project_id: currentProject.project_id })
+    if (error) return { rows: [], error: parseValuationError(error) }
+    return { rows: Array.isArray(data) ? data : [], error: null }
+  }, [dbMode, currentProject])
+
+  // 監造確認紀錄(唯讀,RLS 限成員):來源展開要顯示批次、位置、確認量、查驗與文件版本、確認人與時間。
+  const fetchConfirmations = useCallback(async () => {
+    if (!dbMode) return { rows: [], error: null }
+    const { data, error } = await supabase.from('inspection_confirmations')
+      .select('id, work_item_id, batch_key, location_label, stage_key, unit, qty_cum, qty_delta, basis, inspection_id, document_id, document_version_no, confirmed_by, confirmed_at, status, revoked_at, reason, supersedes_id')
+      .eq('project_id', currentProject.project_id).order('confirmed_at')
+    if (error) return { rows: [], error }
+    return { rows: data || [], error: null }
+  }, [dbMode, currentProject])
+
+  // 總價／間接費的計價依據(Q3 暫時隔離:缺依據不計價):只有監造(或非正式模式管理者)可設,DB 強制。
+  const setPricingBasis = useCallback(async (itemKey, basis) => {
+    const wi = wiMaps.byKey.get(itemKey)
+    if (!wi?.id) return { error: { message: '找不到這個工項' } }
+    if (!dbMode) return { error: { message: '示範模式不支援設定計價依據' } }
+    const { error } = await supabase.rpc('set_work_item_pricing_basis', { p_work_item_id: wi.id, p_basis: basis, p_rule: null })
+    if (error) return { error: parseValuationError(error) }
+    return reloadValuations()
+  }, [dbMode, wiMaps, reloadValuations])
+
   // 請款/收款:更新某期的請款日 / 收款日 / 實收金額（demo 模式只更新本機）。
-  // DB 成功才更新 UI,避免撥款欄位顯示假成功。
+  // DB 成功才更新 UI,避免撥款欄位顯示假成功。登錄請款日是 P4b 的第三個檢查點(invoice),
+  // 有歷史遷移來源未補證等情形會被 DB 擋下(VQ004),錯誤含代碼與清單交給頁面顯示。
   const updateValuationPayment = useCallback(async (id, patch) => {
     // 金流完整性(P1-07):實收不得為負(序列/核定規則由 DB payment_flow trigger 強制)
     if (patch.paid_amount != null && Number(patch.paid_amount) < 0) {
@@ -122,43 +202,11 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps },
     if (dbMode) {
       const res = await supabase.from('valuations').update(patch).eq('id', id).select('id')
       const { error } = mutationOutcome(res, '未寫入:可能無權限或這一期已被移除')
-      if (error) return { error }
+      if (error) return { error: parseValuationError(error) }
     }
     setValuations((vs) => vs.map((v) => (v.id === id ? { ...v, ...patch } : v)))
     return { error: null }
   }, [dbMode])
-
-  // 把施工日誌各日數量加總，帶入某估驗期的「累計完成數量」（標 source=daily_log）
-  const fillValuationFromSiteLogs = useCallback(async (periodId) => {
-    const accum = {}
-    for (const lg of siteLogs)
-      for (const [key, q] of Object.entries(lg.items || {}))
-        accum[key] = (accum[key] || 0) + (Number(q) || 0)
-    // 累計不倒退：本期草擬值不得低於前期已帶入的累計（該期建立時已滾入前期值），且不超過契約數量
-    const floor = valuations.find((v) => v.id === periodId)?.items || {}
-    for (const key of Object.keys(accum)) {
-      const wi = wiMaps.byKey.get(key)
-      let val = Math.max(accum[key], Number(floor[key]) || 0)
-      if (wi?.quantity) val = Math.min(val, wi.quantity)
-      accum[key] = val
-    }
-    if (!dbMode) {
-      setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, items: { ...v.items, ...accum } } : v)))
-      return { error: null, count: Object.keys(accum).length }
-    }
-    // DB 全部寫成功才更新 UI
-    const rows = Object.entries(accum)
-      .map(([key, qty]) => {
-        const wi = wiMaps.byKey.get(key)
-        return wi ? valuationItemRow(wi, periodId, qty, 'daily_log') : null
-      }).filter(Boolean)
-    if (rows.length) {
-      const { error } = await supabase.from('valuation_items').upsert(rows, { onConflict: 'valuation_id,work_item_id' })
-      if (error) return { error, count: 0 }
-    }
-    setValuations((vs) => vs.map((v) => (v.id === periodId ? { ...v, items: { ...v.items, ...accum } } : v)))
-    return { error: null, count: rows.length }
-  }, [dbMode, siteLogs, valuations, wiMaps])
 
   // 預定進度 S 曲線。依開工/竣工切出月份桶，預設用 smoothstep 產生標準 S 曲線。
   // DB 寫入改為 upsert+await(B-08):原本 fire-and-forget 先刪後插,失敗時 UI 上
@@ -205,21 +253,23 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps },
     return { error: null }
   }, [dbMode, currentProject, progressPlan])
 
-  // 刪除估驗期:DB 刪成功才從 UI 移除。已核定的期會被 valuation_items_guard
-  // (cascade 刪明細時觸發)或 RLS 擋下——擋下時如實回報,不得從畫面上消失。
+  // 刪除估驗期:DB 刪成功才重載(後面草稿期往前帶的累計可能因此改變)。已核定的期會被
+  // valuation_items_guard(cascade 刪明細時觸發)或 RLS 擋下——擋下時如實回報,不得從畫面上消失。
   const deleteValuation = useCallback(async (periodId) => {
     if (dbMode) {
       const res = await supabase.from('valuations').delete().eq('id', periodId).select('id')
       const { error } = mutationOutcome(res, '刪除被拒絕:可能已核定或無權限')
-      if (error) return { error }
+      if (error) return { error: parseValuationError(error) }
+      return reloadValuations()
     }
     setValuations((vs) => vs.filter((v) => v.id !== periodId))
     return { error: null }
-  }, [dbMode])
+  }, [dbMode, reloadValuations])
 
   return {
-    valuations, setValuations, progressPlan, setProgressPlan,
-    createValuation, updateValuationItem, setValuationStatus, updateValuationPayment,
-    fillValuationFromSiteLogs, generateSchedule, updatePlannedPct, deleteValuation,
+    valuations, setValuations, progressPlan, setProgressPlan, reloadValuations,
+    createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
+    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis,
+    generateSchedule, updatePlannedPct, deleteValuation,
   }
 }

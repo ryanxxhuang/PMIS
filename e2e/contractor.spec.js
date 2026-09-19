@@ -342,10 +342,19 @@ test.describe('施工廠商', () => {
     await gotoHash(page, '/valuation')
     await expect(page.getByRole('button', { name: /第 5 期/ })).toBeVisible()
     await page.getByRole('button', { name: '＋ 新增估驗期' }).click()
+    // P4c:建期必填計價截止日(Q7),對話框預填今天;確認後才建期
+    const dialog = page.getByRole('dialog', { name: /建立第 6 期估驗/ })
+    await expect(dialog.getByLabel(/計價截止日/)).toHaveValue(/\d{4}-\d{2}-\d{2}/)
+    await dialog.getByRole('button', { name: '建立估驗期' }).click()
     // 新一期建立、成為選中頁籤、狀態草稿
     const tab6 = page.getByRole('button', { name: /第 6 期/ })
     await expect(tab6).toBeVisible()
     await expect(tab6.getByText('草稿')).toBeVisible()
+    await expect(page.getByText('計價截止日', { exact: false }).first()).toBeVisible()
+    // demo 沒有監造確認資料:可估驗清單與缺件卡都明講,不假裝後端核對通過;沒有「帶入日誌累計」這條舊路徑
+    await expect(page.getByText('示範模式沒有監造確認資料', { exact: false })).toBeVisible()
+    await expect(page.getByText(/示範資料:估驗數量未經後端監造確認量核對/)).toBeVisible()
+    await expect(page.getByRole('button', { name: /帶入日誌累計/ })).toHaveCount(0)
     await page.getByRole('button', { name: '送監造審核' }).click()
     await expect(tab6.getByText('監造審核')).toBeVisible()
     // 施工角色送審後只能等監造(不出現核定鈕)

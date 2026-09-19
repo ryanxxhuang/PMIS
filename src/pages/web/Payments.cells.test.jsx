@@ -16,8 +16,9 @@ import Payments from './Payments.jsx'
 
 let container, root
 const leaf = { id: 'w1', item_key: 'K1', item_no: '1', description: '混凝土', unit: 'M3', quantity: 100, unit_price: 1000, amount: 100000, is_billable: true }
-const v1 = { id: 'V1', period_no: 1, status: '已核定', valuation_date: '2026-08-01', retention_pct: 10, items: { K1: 50 }, invoice_date: null, paid_date: null, paid_amount: null }
-const v2 = { id: 'V2', period_no: 2, status: '監造審核', valuation_date: '2026-09-01', retention_pct: 10, items: { K1: 80 }, invoice_date: null, paid_date: null, paid_amount: null }
+// amounts = DB 的 amount_cum(P4c 起前端不換算金額)
+const v1 = { id: 'V1', period_no: 1, status: '已核定', valuation_date: '2026-08-01', retention_pct: 10, items: { K1: 50 }, amounts: { K1: 50000 }, invoice_date: null, paid_date: null, paid_amount: null }
+const v2 = { id: 'V2', period_no: 2, status: '監造審核', valuation_date: '2026-09-01', retention_pct: 10, items: { K1: 80 }, amounts: { K1: 80000 }, invoice_date: null, paid_date: null, paid_amount: null }
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true

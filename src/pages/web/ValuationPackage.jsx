@@ -31,8 +31,8 @@ export default function ValuationPackage() {
     () => (workItems ? buildBillableTree(adjItems) : { childrenMap: new Map(), roots: [] }),
     [workItems, adjItems],
   )
-  const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected?.items || {}), [roots, childrenMap, selected])
-  const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev?.items || {}), [roots, childrenMap, prev])
+  const cumThis = useMemo(() => buildCumMap(roots, childrenMap, selected), [roots, childrenMap, selected])
+  const cumPrev = useMemo(() => buildCumMap(roots, childrenMap, prev), [roots, childrenMap, prev])
   // buildCumMap 回的是「金額」;本期「數量」必須取估驗 items 的累計數量相減,不可拿金額當數量(P0-01)。
   const periodQty = (key) => (Number(selected?.items?.[key]) || 0) - (Number(prev?.items?.[key]) || 0)
   const periodAmtOf = (key) => (cumThis.get(key) || 0) - (cumPrev.get(key) || 0) // 本期金額 = buildCumMap 金額差

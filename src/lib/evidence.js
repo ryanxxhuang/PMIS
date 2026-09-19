@@ -3,7 +3,7 @@
 // 純函式:不碰 store、不打網路,估驗頁與列印佐證包共用。
 //
 // join 規則(與 lib/integrityAudit.js 的勾稽語意一致):
-// - 日誌:log.items[itemKey] > 0(與 fillValuationFromSiteLogs 的累加來源相同)
+// - 日誌:log.items[itemKey] > 0(施工日誌的申報量;只作差異比對,不是計價依據,P4c)
 // - 查驗/檢查表:work_item_id 精確對應 item_key(uuid 經 wiMaps.idToKey 換 key;
 //   demo 資料無 uuid 時允許 work_item_id 直接就是 item_key)。對不到=空陣列,
 //   不做標題模糊比對——硬湊出來的佐證比沒有佐證更糟。

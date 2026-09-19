@@ -123,10 +123,11 @@ export function StoreProvider({ children }) {
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   } = useSiteSlice(ctx)
   const {
-    valuations, setValuations, progressPlan, setProgressPlan,
-    createValuation, updateValuationItem, setValuationStatus, updateValuationPayment,
-    fillValuationFromSiteLogs, generateSchedule, updatePlannedPct, deleteValuation,
-  } = useBillingSlice(ctx, siteLogs)
+    valuations, setValuations, progressPlan, setProgressPlan, reloadValuations,
+    createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
+    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis,
+    generateSchedule, updatePlannedPct, deleteValuation,
+  } = useBillingSlice(ctx)
   const {
     inspections, setInspections, defects, setDefects,
     inspectionPoints, setInspectionPoints,
@@ -344,7 +345,7 @@ export function StoreProvider({ children }) {
     // AI 功能開關(批 B,UX 層——真正的閘門在伺服器端 openAiGate):關閉的功能把入口藏起來
     aiEnabled,
     adjustedItems, coNet, revisedTotal, domainLoadError, retryDomainLoad,
-    siteLogs, fillValuationFromSiteLogs,
+    siteLogs,
     listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, draftMonthlyReview, draftValuationSummary, describeDefect, analyzeSafetyPhoto, fetchWeather,
     // 現場文書(P2c):上傳批次、起稿、文件版本、簽署、提送／收件／退回
     ...fieldDocsSlice,
@@ -366,8 +367,9 @@ export function StoreProvider({ children }) {
     listMembers, addMemberByEmail, removeMember, resolveMarkup, resendSignup,
     deleteValuation, deleteInspection, deleteDefect, resetProjectBoq, deleteProject,
     valuations, progressPlan,
-    // actions
-    createValuation, updateValuationItem, setValuationStatus, updateValuationPayment,
+    // actions(估驗寫入 P4c 起全走 P4b RPC;reload／state／backlog／confirmations 供估驗頁)
+    createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
+    reloadValuations, syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis,
     generateSchedule, updatePlannedPct,
     ...adminSlice, // 平台管理後台(isPlatformAdmin/platformAdminChecked + admin 載入/動作)
   }

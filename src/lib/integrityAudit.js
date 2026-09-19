@@ -1,6 +1,6 @@
 // 文件勾稽鏈稽核:逐工項跨文件對帳(估驗 ↔ 施工日誌 ↔ 查驗 ↔ 試體),標出「對不起來」之處。
 // ── 全確定性 ──：錢與稽核的發現不能靠 AI 幻覺或漏抓,一律以精確數字/邏輯比對得出;
-// 發現直接呈現給人(估驗頁「本期勾稽檢核」、/audit 唯讀查閱),不經 AI 改寫——把發現寫成
+// 發現直接呈現給人(估驗頁「缺件與檢核」、/audit 唯讀查閱),不經 AI 改寫——把發現寫成
 // 機關稽核意見的 audit.summary 已於 P6c(D-026 §4)退場。
 //
 // join key = item_key(估驗/日誌皆以此為鍵);查驗以 work_item_id→item_key 對應;
@@ -35,6 +35,19 @@ export function isConcretePourItem(description) {
 // export:估驗頁佐證欄的差異警示(lib/evidence.js)共用同一容忍值,兩邊判定不可分裂。
 export const OVER_TOL = 1.05
 
+// 估驗累計量 vs 施工日誌申報量的差異分類(估驗頁明細列的就地提示與下方發現 1／2 同一把尺;
+// P4c 把原本 valuationDiff.js 另一份「無日誌也算超計」的口徑併進來——日誌申報量只作差異比對,
+// 不是計價依據,分成「超前日誌」與「無日誌申報」兩種各自說清楚):
+//   'over'   估驗 > 日誌 × OVER_TOL(日誌有量)
+//   'no_log' 有計價但日誌無申報
+//   'ok'     其餘(含未計價)
+export function classifyLogDiff(billed, logged) {
+  const b = Number(billed) || 0, l = Number(logged) || 0
+  if (!(b > 0)) return 'ok'
+  if (l === 0) return 'no_log'
+  return b > l * OVER_TOL ? 'over' : 'ok'
+}
+
 const nameOf = (it) => `${it.item_no || ''} ${it.description || ''}`.trim()
 const few = (arr, f, n = 3) => arr.slice(0, n).map(f).join('、') + (arr.length > n ? ` 等 ${arr.length} 項` : '')
 
@@ -50,21 +63,21 @@ export function buildIntegrityFindings({
   const findings = []
   const billed = leaves.filter((it) => (bd.get(it.item_key) || 0) > 0)
 
+  // 每項發現附 keys(涉及的 item_key):估驗頁決策列用它一鍵展開對應列,不另立第二份判定
   // 1. 估驗超前施工日誌(可能超計)
-  const over = billed
-    .map((it) => ({ it, b: bd.get(it.item_key) || 0, l: lg.get(it.item_key) || 0 }))
-    .filter((o) => o.l > 0 && o.b > o.l * OVER_TOL)
+  const diff = billed.map((it) => ({ it, b: bd.get(it.item_key) || 0, l: lg.get(it.item_key) || 0 }))
+  const over = diff.filter((o) => classifyLogDiff(o.b, o.l) === 'over')
   if (over.length) findings.push({
-    status: 'risk', category: '估驗勾稽', route: '/valuation',
+    status: 'risk', category: '估驗勾稽', route: '/valuation', keys: over.map((o) => o.it.item_key),
     title: `估驗超前施工日誌:${over.length} 項工項`,
     detail: `下列工項累計估驗量高於施工日誌累計完成量逾 5%,可能超計,建議查核完成佐證後再計價:`
       + few(over, (o) => `${nameOf(o.it)}(估驗 ${fmtQ(o.b)} > 日誌 ${fmtQ(o.l)})`) + '。',
   })
 
   // 2. 估驗無施工日誌數量佐證
-  const noLog = billed.filter((it) => (lg.get(it.item_key) || 0) === 0)
+  const noLog = diff.filter((o) => classifyLogDiff(o.b, o.l) === 'no_log').map((o) => o.it)
   if (noLog.length) findings.push({
-    status: 'warn', category: '估驗勾稽', route: '/valuation',
+    status: 'warn', category: '估驗勾稽', route: '/valuation', keys: noLog.map((it) => it.item_key),
     title: `估驗無施工日誌佐證:${noLog.length} 項工項`,
     detail: `下列工項已列入估驗,但施工日誌無對應完成數量,建議補登日誌或確認計價依據:`
       + few(noLog, nameOf) + '。',
@@ -73,7 +86,7 @@ export function buildIntegrityFindings({
   // 3. 查驗不合格仍計價
   const failBilled = billed.filter((it) => insp.get(it.item_key) === '不合格')
   if (failBilled.length) findings.push({
-    status: 'risk', category: '品質勾稽', route: '/quality',
+    status: 'risk', category: '品質勾稽', route: '/quality', keys: failBilled.map((it) => it.item_key),
     title: `查驗不合格工項仍計價:${failBilled.length} 項`,
     detail: `下列工項最近一次查驗為不合格卻已列入估驗,應先完成改善複查合格再計價:`
       + few(failBilled, nameOf) + '。',
@@ -104,7 +117,7 @@ export function buildIntegrityFindings({
     return q > 0 && b / q >= 0.8 && !insp.has(it.item_key)
   })
   if (nearDone.length) findings.push({
-    status: 'warn', category: '該查未查', route: '/quality',
+    status: 'warn', category: '該查未查', route: '/quality', keys: nearDone.map((it) => it.item_key),
     title: `接近完成未申請查驗:${nearDone.length} 項工項`,
     detail: `下列工項累計完成已達 8 成以上,但尚無任何查驗申請紀錄,建議監造要求申請查驗:`
       + few(nearDone, nameOf) + '。',

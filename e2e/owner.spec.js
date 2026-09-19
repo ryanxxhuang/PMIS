@@ -1,5 +1,5 @@
 // 機關(李淑芬)動線:落地收件匣、從側欄「專案」到跨案總覽(選案清單)→ 核准變更設計 →
-// 變更後契約金額跨頁一致(B-02)→ 估驗頁的本期勾稽檢核 → 廠商成本頁被擋 → 404 頁。
+// 變更後契約金額跨頁一致(B-02)→ 估驗頁的缺件與檢核 → 廠商成本頁被擋 → 404 頁。
 import { test, expect } from '@playwright/test'
 import { loginAs, gotoHash } from './helpers.js'
 
@@ -113,14 +113,16 @@ test.describe('機關', () => {
     await expect(chainRow.getByRole('button')).toHaveCount(0)
   })
 
-  test('估驗計價頁逐期顯示本期勾稽檢核(原風險稽核的文件勾稽);Agent 稽核提示連到估驗頁', async ({ page }) => {
+  test('估驗計價頁逐期顯示缺件與檢核(原風險稽核的文件勾稽,P4c 併入 DB 缺件同一張卡);Agent 稽核提示連到估驗頁', async ({ page }) => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/valuation')
     await expect(page.getByRole('heading', { name: '估驗計價', exact: true })).toBeVisible()
-    // demo 劇本至少有一項勾稽發現(與 /audit 的「文件勾稽」同一引擎、同一組裝),列在本期檢核卡
-    const checks = page.getByRole('list', { name: '本期勾稽檢核' })
+    // demo 劇本至少有一項勾稽發現(與 /audit 的「文件勾稽」同一引擎、同一組裝),列在缺件與檢核卡;
+    // demo 沒有後端核對,卡上明講「未經後端監造確認量核對」,不假裝通過
+    const checks = page.getByRole('list', { name: '缺件與檢核' })
     await expect(checks.getByRole('listitem').first()).toBeVisible()
-    await expect(page.getByText(/已勾稽 \d+ 項計價工項/)).toBeVisible()
+    await expect(page.getByText(/0 項缺件 · \d+ 項風險 · \d+ 項注意 · 已勾稽 \d+ 項計價工項/)).toBeVisible()
+    await expect(page.getByText(/示範資料:估驗數量未經後端監造確認量核對/)).toBeVisible()
     // Agent 的稽核提示卡:連結改指估驗計價(不再指 hidden 的 /audit)
     await gotoHash(page, '/agent')
     const link = page.getByRole('link', { name: /前往估驗計價查看勾稽檢核/ })

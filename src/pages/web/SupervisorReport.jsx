@@ -43,7 +43,7 @@ export default function SupervisorReport() {
   const latestVal = latestValuationAt(valuations, cutoff)
   const actualPct = useMemo(() => {
     if (!latestVal || !billableTotal) return 0
-    return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal.items)) / billableTotal) * 100
+    return (totalCumAmount(roots, buildCumMap(roots, childrenMap, latestVal)) / billableTotal) * 100
   }, [roots, childrenMap, latestVal, billableTotal])
   const plannedNow = plannedPctNow(progressPlan, cutoff)
   const periodLabel = valuationLabel(latestVal)

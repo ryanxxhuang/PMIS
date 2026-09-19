@@ -58,11 +58,11 @@ describe('db.js 分頁載入:超過 PostgREST 單次上限時要全部取回', (
 
   it('loadValuationsFromDB 的估驗明細跨期別分批 + 分頁,累計數量不漏', async () => {
     // 3 期 × 1,200 工項 = 3,600 筆明細,遠超單次上限
-    pg.setTable('valuations', rows('v', 3, (i) => ({ period_no: i + 1, retention_pct: 5, status: 'approved' })))
+    pg.setTable('valuations', rows('v', 3, (i) => ({ period_no: i + 1, retention_pct: 5, status: 'approved', period_end: `2026-0${i + 7}-31` })))
     const vItems = []
     for (let v = 0; v < 3; v++) {
       for (let i = 0; i < 1200; i++) {
-        vItems.push({ id: uid(`vi${v}`, i), valuation_id: uid('v', v), work_item_id: uid('wi', i), cum_qty: i + v })
+        vItems.push({ id: uid(`vi${v}`, i), valuation_id: uid('v', v), work_item_id: uid('wi', i), cum_qty: i + v, amount_cum: (i + v) * 10, backing: 'confirmed' })
       }
     }
     pg.setTable('valuation_items', vItems)
@@ -72,6 +72,9 @@ describe('db.js 分頁載入:超過 PostgREST 單次上限時要全部取回', (
     for (let v = 0; v < 3; v++) {
       expect(Object.keys(vals[v].items)).toHaveLength(1200)
       expect(vals[v].items.k1199).toBe(1199 + v) // 最後一筆也在
+      expect(vals[v].amounts.k1199).toBe((1199 + v) * 10) // 金額是 DB 的 amount_cum
+      expect(vals[v].own.k1199).toEqual({ cum_qty: 1199 + v, amount_cum: (1199 + v) * 10, backing: 'confirmed' })
+      expect(vals[v].period_end).toBe(`2026-0${v + 7}-31`)
     }
   })
 
