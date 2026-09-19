@@ -57,7 +57,7 @@ test('機關:篩選待辦直接進入指定付款期，返回保留查詢與焦�
   await expect(list.getByRole('link')).toHaveCount(4)
 })
 
-test('監造:手機從待辦直達查驗，判定後可直接返回原清單', async ({ page }) => {
+test('監造:手機從待辦直達查驗，詳情只給監造查驗表單入口，可直接返回原清單(篩選保留)', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
   await loginAs(page, 'supervisor')
   await page.getByRole('button', { name: '篩選待辦', exact: true }).click()
@@ -69,17 +69,13 @@ test('監造:手機從待辦直達查驗，判定後可直接返回原清單', a
   await expect(page).toHaveURL(/#\/quality\?inspection=/)
   const drawer = page.getByRole('dialog')
   await expect(drawer).toContainText(taskTitle.split('\n')[0])
-  await drawer.getByRole('button', { name: '不合格', exact: true }).click()
-  const prompt = page.getByRole('dialog', { name: /^判定不合格：/ })
-  await prompt.getByRole('textbox').fill('檢查鍵盤操作，取消此判定')
-  await prompt.getByRole('textbox').press('Tab')
-  await expect(prompt.getByRole('button', { name: '取消', exact: true })).toBeFocused()
-  await prompt.getByRole('button', { name: '取消', exact: true }).click()
-  await drawer.getByRole('button', { name: '合格', exact: true }).click()
-  await expect(drawer).toContainText('合格')
+  // P6b-3:判定只經監造查驗表單(快速判定退場);手機抽屜裡同樣只有這一個判定入口
+  await expect(drawer.getByRole('button', { name: '合格', exact: true })).toHaveCount(0)
+  await expect(drawer.getByRole('button', { name: '不合格', exact: true })).toHaveCount(0)
+  await expect(drawer.getByRole('button', { name: /以監造查驗表單判定/ })).toBeVisible()
   await drawer.getByRole('link', { name: '返回今日工作', exact: true }).click()
   await expect(page.getByRole('combobox', { name: '待辦類型' })).toHaveValue('查驗')
-  await expect(page.getByRole('group', { name: '現在輪到我', exact: true })).not.toContainText(taskTitle.split('\n')[0])
+  await expect(page.getByRole('group', { name: '現在輪到我', exact: true })).toContainText(taskTitle.split('\n')[0])
 })
 
 test('廠商:首頁顯示五筆以後的工作，可直接進入試體分段', async ({ page }) => {

@@ -7,7 +7,7 @@
 -- P3e(20260920004000)交接 P4e:簽署分支 6 處數量訊息與缺失說明「申報／確認／差額」經 fn_cq_txt,斷言訊息無 .0000。
 begin;
 
-select plan(150);
+select plan(152);
 
 create or replace function pg_temp.become(u uuid) returns void language plpgsql as $$
 begin
@@ -178,31 +178,39 @@ select lives_ok($$ insert into public.inspections (id, project_id, work_item_id,
   values ('e5000000-0000-0000-0000-000000000003', 'e1000000-0000-0000-0000-00000000000a', 'e3000000-0000-0000-0000-000000000001', '舊式查驗(無申報量)', '2F', pg_temp.today()) $$,
   '廠商提 I3(未載明申報量)');
 select throws_ok($$ update public.inspections set status = '合格' where id = 'e5000000-0000-0000-0000-000000000001' $$,
-  'P0001', null, '廠商不能判定(既有規則)');
+  '42501', null, '廠商不能直接判定(P6b-3:表級 UPDATE 已收回)');
 reset role;
 select pg_temp.become('e0000000-0000-0000-0000-000000000002');
 set local role authenticated;
+select throws_ok($$ update public.inspections set status = '不合格', result_note = '鋼筋間距超出容許值' where id = 'e5000000-0000-0000-0000-000000000003' $$,
+  '42501', null, '監造也不能快速判定(P6b-3 快速判定退場;判定只經監造查驗表單簽署)');
+select throws_ok($$ update public.inspections set confirmed_qty = 10 where id = 'e5000000-0000-0000-0000-000000000001' $$,
+  '42501', null, '監造也不能直接寫確認量');
+reset role;
+-- 判定的 DB 後果(缺失、稽核)在簽署交易內:以 I3 的表單草稿＋交易 GUC 模擬簽署路徑(superuser＋監造 claims;端到端簽署見 §6 起)
+insert into public.field_documents (id, project_id, doc_type, doc_date, target_key) values
+  ('e6f00000-0000-0000-0000-000000000003', 'e1000000-0000-0000-0000-00000000000a', 'inspection_form', pg_temp.today(), 'e5000000-0000-0000-0000-000000000003');
+select throws_like($$ update public.inspections set status = '部分合格' where id = 'e5000000-0000-0000-0000-000000000001' $$,
+  '查驗判定只能經監造查驗表單簽署%', 'guard:非簽署路徑改判定一律拒(含部分合格)');
+select set_config('pmis.field_document_sign', 'e6f00000-0000-0000-0000-000000000003', true);
 select lives_ok($$ update public.inspections set status = '不合格', result_note = '鋼筋間距超出容許值', inspected_by = 'e0000000-0000-0000-0000-000000000002', inspected_at = now()
-  where id = 'e5000000-0000-0000-0000-000000000003' $$, '監造直接判 I3 不合格(既有快速路徑照常)');
+  where id = 'e5000000-0000-0000-0000-000000000003' $$, '簽署路徑判 I3 不合格');
 select results_eq($$ select title, status, created_by from public.defects where inspection_id = 'e5000000-0000-0000-0000-000000000003' $$,
   $$ values ('查驗不合格：舊式查驗(無申報量)'::text, '開立'::text, 'e0000000-0000-0000-0000-000000000002'::uuid) $$,
   '不合格 → DB trigger 同交易開缺失(前端 insert 退場)');
 select cmp_ok((select count(*)::int from public.audit_events where entity_id = 'e5000000-0000-0000-0000-000000000003' and event_type = 'inspection.decided'), '>=', 1, '稽核 inspection.decided');
-select throws_ok($$ update public.inspections set status = '部分合格' where id = 'e5000000-0000-0000-0000-000000000001' $$,
-  'P0001', null, '部分合格不能直接改狀態(須經表單簽署填確認量)');
-select throws_ok($$ update public.inspections set confirmed_qty = 10 where id = 'e5000000-0000-0000-0000-000000000001' $$,
-  'P0001', null, '監造也不能直接寫確認量');
-select throws_ok($$ update public.inspections set declared_qty = 5 where id = 'e5000000-0000-0000-0000-000000000003' $$,
-  'P0001', null, '已判定的查驗不可改申報量');
-select lives_ok($$ update public.inspections set status = '待查驗' where id = 'e5000000-0000-0000-0000-000000000003' $$,
-  '無確認量的查驗可撤銷判定回待查驗');
+select lives_ok($$ update public.inspections set status = '合格' where id = 'e5000000-0000-0000-0000-000000000003' $$, '簽署路徑更正判定…');
 select lives_ok($$ update public.inspections set status = '不合格' where id = 'e5000000-0000-0000-0000-000000000003' $$, '再判不合格…');
 select is((select count(*)::int from public.defects where inspection_id = 'e5000000-0000-0000-0000-000000000003'), 1, '…同查驗已有未結案缺失不重開');
-reset role;
+select set_config('pmis.field_document_sign', '', true);
+select throws_like($$ update public.inspections set declared_qty = 5 where id = 'e5000000-0000-0000-0000-000000000003' $$,
+  '已判定的查驗不可變更%', 'guard:已判定的查驗不可改申報量');
+select throws_like($$ update public.inspections set status = '待查驗' where id = 'e5000000-0000-0000-0000-000000000003' $$,
+  '查驗判定只能經監造查驗表單簽署%', 'guard:撤銷判定回待查驗也只經簽署路徑');
 select pg_temp.become('e0000000-0000-0000-0000-000000000001');
 set local role authenticated;
 select throws_ok($$ update public.inspections set declared_qty = 5 where id = 'e5000000-0000-0000-0000-000000000003' $$,
-  'P0001', null, '廠商也不能改已判定查驗的申報量');
+  '42501', null, '廠商也不能改已判定查驗的申報量');
 reset role;
 select pg_temp.become(null);
 select throws_ok($$ insert into public.inspections (project_id, work_item_id, title, status)
@@ -358,8 +366,8 @@ select is((select pg_temp.save(pg_temp.doc_of('e5000000-0000-0000-0000-000000000
 select throws_ok($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 12) $$, 'PD008', null, '已有有效確認量,改量重簽 → 先撤銷');
 select throws_like($$ select pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 12) $$,
   '此查驗已有有效的監造確認量 60(紀錄 %);更正判定或數量請先撤銷該確認紀錄再重新簽署', '…訊息的有效確認量無 .0000');
-select throws_ok($$ update public.inspections set declared_qty = 90 where id = 'e5000000-0000-0000-0000-000000000001' $$, 'P0001', null, '已判定不可改申報量(監造亦然)');
-select throws_ok($$ update public.inspections set status = '待查驗' where id = 'e5000000-0000-0000-0000-000000000001' $$, 'P0001', null, '有有效確認量不可撤銷判定回待查驗');
+select throws_ok($$ update public.inspections set declared_qty = 90 where id = 'e5000000-0000-0000-0000-000000000001' $$, '42501', null, '已判定不可改申報量(監造亦然;P6b-3 起表級 UPDATE 已收回)');
+select throws_ok($$ update public.inspections set status = '待查驗' where id = 'e5000000-0000-0000-0000-000000000001' $$, '42501', null, '監造不可直接撤銷判定(有確認量時更正走撤銷確認再重簽)');
 select is((select r ->> 'applied' from public.revoke_inspection_confirmation(
     (select id from public.inspection_confirmations where inspection_id = 'e5000000-0000-0000-0000-000000000001' and status = 'active'), '複核改量') r), 'true', '監造撤銷確認(P4b RPC)');
 select is((select r ->> 'status' from pg_temp.sign(pg_temp.doc_of('e5000000-0000-0000-0000-000000000001'), 12) r), 'signed', '撤銷後重簽 v12 → 可簽');

@@ -95,6 +95,11 @@ insert into public.valuations (id, project_id, period_no, period_end, status) va
 insert into public.inspections (id, project_id, title, status) values
   ('c5400000-0000-0000-0000-000000000001', 'c5100000-0000-0000-0000-00000000000a', 'A案查驗', '待查驗'),
   ('c5400000-0000-0000-0000-000000000002', 'c5100000-0000-0000-0000-00000000000b', 'B案查驗', '待查驗');
+-- 查驗判定自 P6b-3 起只經監造查驗表單簽署:兩份表單草稿(target_key=查驗),判定時以簽署交易的 GUC 模擬簽署路徑
+-- (superuser＋登入者 claims;簽署 RPC 端到端見 inspection_form_documents.sql)
+insert into public.field_documents (id, project_id, doc_type, doc_date, target_key) values
+  ('c5900000-0000-0000-0000-000000000001', 'c5100000-0000-0000-0000-00000000000a', 'inspection_form', current_date, 'c5400000-0000-0000-0000-000000000001'),
+  ('c5900000-0000-0000-0000-000000000002', 'c5100000-0000-0000-0000-00000000000b', 'inspection_form', current_date, 'c5400000-0000-0000-0000-000000000002');
 insert into public.requirements (id, project_id, title, requirement_type, status, origin) values
   ('c5500000-0000-0000-0000-000000000001', 'c5100000-0000-0000-0000-00000000000a', '材料送審需求', 'submittal', 'needs_review', 'manual');
 insert into public.change_orders (id, project_id, title, status) values
@@ -148,12 +153,14 @@ select lives_ok($$
   update public.valuations set status = '已核定'
   where id = 'c5300000-0000-0000-0000-000000000001'
 $$, 'supervisor approves valuation');
+reset role;
+select set_config('pmis.field_document_sign', 'c5900000-0000-0000-0000-000000000001', true);
 select lives_ok($$
   update public.inspections
   set status = '合格', result_note = '符合規範', inspected_at = now()
   where id = 'c5400000-0000-0000-0000-000000000001'
-$$, 'supervisor decides inspection');
-reset role;
+$$, 'supervisor decides inspection (inspection form signing path)');
+select set_config('pmis.field_document_sign', '', true);
 select public.pmis_p05_login(null);
 select results_eq($$
   select event_type, actor_party_type, actor_project_role
@@ -218,12 +225,12 @@ select is((select count(*)::integer from public.audit_events
 
 -- Same user, different project identity.
 select public.pmis_p05_login('c5000000-0000-0000-0000-000000000004');
-set local role authenticated;
+select set_config('pmis.field_document_sign', 'c5900000-0000-0000-0000-000000000002', true);
 select lives_ok($$
   update public.inspections set status = '合格', inspected_at = now()
   where id = 'c5400000-0000-0000-0000-000000000002'
-$$, 'Ryan decides Project B inspection as supervisor');
-reset role;
+$$, 'Ryan decides Project B inspection as supervisor (signing path)');
+select set_config('pmis.field_document_sign', '', true);
 select public.pmis_p05_login(null);
 select results_eq($$
   select project_id, actor_party_type, actor_project_role

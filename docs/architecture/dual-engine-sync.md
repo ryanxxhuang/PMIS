@@ -1,14 +1,14 @@
 # 雙引擎同步清單(demo 本地判定 ↔ 伺服器權威判定)
 
-> ACTIVE｜2026-09-11。改任一側前查本表，Demo 不等於伺服器驗收。
+> ACTIVE｜2026-09-20（P6b-3 更新 #1／#3）。改任一側前查本表，Demo 不等於伺服器驗收。
 
 ## 成對清單
 
 | # | 判定 | demo/前端引擎 | 伺服器權威 | 同步保證 |
 |---|------|--------------|-----------|---------|
-| 1 | 自主檢查表量化判定 | Demo 與真實前端都呼叫 `src/lib/qc.js` `judgeChecklist` | DB 保存前端送入的 `results/overall`；`checklist_records_guard` 只保護修訂鏈，不重算判定 | ✅ 前端共用同一純函式；伺服器沒有第二份判定實作 |
+| 1 | 自主檢查表量化判定 | 前端 `src/lib/qc.js` `judgeChecklist` 只作文件頁的判定預覽 | P3b 起 `checklist_records_guard` 以 `fn_checklist_judge` 重算並以伺服器為準；P6b-3 起紀錄只由自主檢查表簽署寫入 | pgTAP `self_check_documents.sql` §3 以與前端 `judgeChecklist` 相同的案例釘住 |
 | 2 | 試體 28 天抗壓判定+自動開缺失 | `src/lib/qc.js` `deriveTestSampleUpdate`／`shouldCreateTestSampleDefect` + `quality.js` demo 分支 | `judge_test_sample`／`test_sample_defect` trigger(`20260712001600_evidence_guards.sql`) | W5-4 已用 Vitest＋整合回歸釘住「同步判定、保存 `test_sample_id`、不重複開」；0.85fc′／平均門檻仍人工同步 |
-| 3 | 檢查表修訂鏈 rev/root_id | `quality.js createChecklistRecord` demo 分支本地計算 | DB guard 依鏈計算(前端真專案不算,寫入後 reload 取回) | 無自動保證,**人工同步** |
+| 3 | 檢查表修訂鏈 rev/root_id | 無(P6b-3 起前端不再建檢查紀錄;demo 種子為靜態資料) | DB guard 依鏈計算,只經自主檢查表簽署寫入 | 已消除雙引擎 |
 | 4 | 契約義務到期日計算 | `src/lib/contractDue.js`(單次:基準日＋偏移;已完成單次:讀 DB 留的 `due_date_snapshot`;循環:讀 `ob.periods` 最早未結一期) | `supabase/functions/_shared/contractDue.ts`(同);DB 端 `fn_obligation_single_due` 同一條規則供完成時留快照(P5c,`20260919021500`);循環期次本身由 DB `fn_obligation_period_schedule`＋materialize 確定性產生(P5b,`20260917233000`),兩側都不再從「今天」推算下一期 | ✅ `contractDue.test.ts` 與前端**同一組測試案例**對齊;快照優先與期次依據句由共用案例三側釘住;期次規則(月末夾住／閏年／跨年／季／年／週／日)、單次到期規則與停止條件由 pgTAP `obligation_periods.sql`／`project_anchor_versions.sql` 釘住,前端／Edge 只讀 |
 | 5 | 今日工作／提醒彙整規則 | `src/lib/todayTasks.js`(W8-2B 起;Dashboard 與 `Alerts.jsx` 共用同一支,前端只有這一份);單筆球權判定 P5a 起直接 import `_shared/ballInCourtRules.ts` | `_shared/ballInCourt.ts` 的 `collectOpenBallItems`(`list_my_open_items` 工具與 `send-reminders` 早報共用),判定同樣 import `ballInCourtRules.ts` | ✅ **單一實作**＋共用案例 `tests/fixtures/ball-in-court.cases.json`(Vitest 前端路徑／Edge 路徑與 Deno 三側同讀);剩餘呼叫端差異只有 `obligationSoonDays`(首頁／早報 7、Agent 工具 0),見下方 |
 | 6 | 預定進度 smoothstep S 曲線 | `billing.js generateSchedule` | —(demoSeed.js 複製同公式產 demo 資料) | 無自動保證,**人工同步** |

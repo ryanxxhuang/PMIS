@@ -14,37 +14,26 @@ test.describe('監造', () => {
     await expect(page.getByText('本期狀態為「已核定」')).toBeVisible()
   })
 
-  test('查驗:判不合格(必填原因)→ 自動開立缺失', async ({ page }) => {
+  // P6b-3:「合格／不合格」快速判定退場——判定只經監造查驗表單(判定＋本次確認數量,簽署即判定並寫入可估驗的確認量;
+  // 不合格由 DB 在簽署交易內開缺失,真後端 chain 10 走完)。示範模式不能簽署,這裡只釘住「沒有第二條判定路」與入口。
+  test('查驗:詳情只有「以監造查驗表單判定」,沒有快速判定;入口直達該查驗的表單草稿', async ({ page }) => {
     await loginAs(page, 'supervisor')
     await gotoHash(page, '/quality')
-    // 清單＋詳情殼:列只負責選取,判定鈕在詳情欄。先選中「4F 柱牆鋼筋查驗」那一列
-    // (頁上有多筆待查驗;查驗列是 listitem),再在以項目命名的 region 按不合格
+    // 清單＋詳情殼:列只負責選取,動作在詳情欄。先選中「4F 柱牆鋼筋查驗」那一列(查驗列是 listitem)
     const row = page.getByRole('listitem').filter({ hasText: '4F 柱牆鋼筋查驗' })
     await row.click()
     const detail = page.getByRole('region', { name: '4F 柱牆鋼筋查驗 詳情' })
-    await expect(detail.getByRole('button', { name: '合格', exact: true })).toBeVisible()
-    await detail.getByRole('button', { name: '不合格', exact: true }).click()
-    // appPrompt 對話框:原因必填,空白時確認鈕鎖住
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText(/判定不合格：/)).toBeVisible()
-    const confirmBtn = dialog.getByRole('button', { name: '判定不合格並開立缺失' })
-    await expect(confirmBtn).toBeDisabled()
-    await dialog.locator('textarea').fill('主筋間距超出容許值,需拆除重綁')
-    await confirmBtn.click()
-    // W8-4A:判定成功後查驗分段原地留結果列(可發現性)——連動缺失開在「缺失」分段,
-    // 由「查看缺失」入口切段,才看得到那筆缺失
-    await expect(page.getByText('已判定不合格並開立缺失')).toBeVisible()
-    await page.getByRole('button', { name: '查看缺失' }).click()
-    // 查驗變不合格 + 缺失清單多一筆連動缺失(新開立的在最前、也是殼的預設選取,
-    // 標題同時出現在列與詳情欄,所以鎖列而不是鎖文字)
-    await expect(page.getByRole('listitem').filter({ hasText: '查驗不合格：4F 柱牆鋼筋查驗' })).toBeVisible()
-    // 剛判定的查驗當天就進「今天已完成」(demo 與真後端同樣寫 inspected_at)。
-    // Apple 改版後三段不同時列出,要帶 ?ball=done 才聚焦到已完成那一段。
-    await gotoHash(page, '/dashboard?ball=done')
-    // Card 有 title 就是 role="group" 並以標題命名,「標題為 X 的那張卡」直接用名稱定位
-    const done = page.getByRole('group', { name: '今天已完成', exact: true })
-    await expect(done.getByText('4F 柱牆鋼筋查驗')).toBeVisible()
-    await expect(done.getByText('監造判定不合格')).toBeVisible()
+    await expect(detail.getByRole('button', { name: '合格', exact: true })).toHaveCount(0)
+    await expect(detail.getByRole('button', { name: '不合格', exact: true })).toHaveCount(0)
+    await expect(detail.getByText('快速判定不計確認數量')).toHaveCount(0)
+    await detail.getByRole('button', { name: /以監造查驗表單判定/ }).click()
+    await expect(page).toHaveURL(/#\/inspection-form\?/)
+    await expect(page.getByRole('heading', { level: 1, name: '監造查驗表單' })).toBeVisible()
+    // 舊流程快速判定的查驗照常列在清單(判定不變),詳情標「舊流程快速判定,未填確認數量」
+    await gotoHash(page, '/quality')
+    const legacy = page.getByRole('listitem').filter({ hasText: '3F 柱牆鋼筋查驗' })
+    await legacy.click()
+    await expect(page.getByRole('region', { name: '3F 柱牆鋼筋查驗 詳情' })).toContainText('舊流程快速判定，未填確認數量')
   })
 
   // ── 缺失複查閉環的後半段(前半段=contractor.spec 的「開始改善 → 提送複查」)──

@@ -54,6 +54,13 @@ insert into public.checklist_templates (id, project_id, title, source, items) va
   ('43000000-0000-0000-0000-000000000002', '42000000-0000-0000-0000-000000000001',
    '另一張範本', '03310', '[]');
 
+-- P6b-3 起使用者路徑的檢查紀錄只在自主檢查表簽署交易內寫入(guard 讀交易 GUC pmis.field_document_sign):
+-- 本檔測的是修訂鏈／判定重算／缺失連動的 guard 規則,以同案自檢表文件的 GUC 模擬簽署路徑(簽署 RPC 端到端見 self_check_documents.sql)
+insert into public.field_documents (id, project_id, doc_type, doc_date) values
+  ('44000000-0000-0000-0000-000000000001', '42000000-0000-0000-0000-000000000001', 'self_check', current_date),
+  ('44000000-0000-0000-0000-000000000002', '42000000-0000-0000-0000-000000000002', 'self_check', current_date);
+select set_config('pmis.field_document_sign', '44000000-0000-0000-0000-000000000001', true);
+
 create or replace function pg_temp.become(u uuid) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claim.sub', coalesce(u::text, ''), true);
@@ -140,11 +147,13 @@ select throws_ok($$ insert into public.checklist_records
   values ('42000000-0000-0000-0000-000000000001','43000000-0000-0000-0000-000000000002',
           current_date, '{}', '52000000-0000-0000-0000-000000000003', '換範本') $$, 'P0001', null,
   '修訂不可換檢查表範本');
-select throws_ok($$ insert into public.checklist_records
+select set_config('pmis.field_document_sign', '44000000-0000-0000-0000-000000000002', true); -- 他案的簽署交易
+select throws_like($$ insert into public.checklist_records
   (project_id, template_id, check_date, results, supersedes_id, revision_reason)
   values ('42000000-0000-0000-0000-000000000002','43000000-0000-0000-0000-000000000001',
-          current_date, '{}', '52000000-0000-0000-0000-000000000003', '跨案修訂') $$, 'P0001', null,
+          current_date, '{}', '52000000-0000-0000-0000-000000000003', '跨案修訂') $$, '修訂版必須與原檢查紀錄同一專案%',
   '修訂不可跨專案');
+select set_config('pmis.field_document_sign', '44000000-0000-0000-0000-000000000001', true);
 
 -- ── 刪除門檻:未判定可刪;被修訂引用不可刪 ────────────────────────────────────
 insert into public.checklist_records

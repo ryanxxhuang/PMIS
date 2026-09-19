@@ -135,9 +135,9 @@ export function StoreProvider({ children }) {
     createInspectionPoint, deleteInspectionPoint, requestInspectionForPoint,
     setChecklistTemplates, allChecklistTemplates,
     checklistRecords, setChecklistRecords, testSamples, setTestSamples,
-    createInspection, recordInspectionResult, createDefect, updateDefectStatus,
+    createInspection, createDefect, updateDefectStatus,
     deleteInspection, deleteDefect, reloadQuality,
-    createChecklistRecord, deleteChecklistRecord, ensureChecklistTemplate,
+    ensureChecklistTemplate,
     createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
   } = useQualitySlice(ctx, siteLogs)
   // 現場文書(P2c／P3b):施工日誌與自檢表文件的唯一寫入路徑。簽署成功後由 slice 重載 siteLogs／checklistRecords／defects
@@ -359,9 +359,9 @@ export function StoreProvider({ children }) {
     itemSchedules, setItemSchedule, removeItemSchedule,
     changeOrders, createChangeOrder, updateChangeOrder, deleteChangeOrder,
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
-    inspections, defects, createInspection, recordInspectionResult, createDefect, updateDefectStatus,
+    inspections, defects, createInspection, createDefect, updateDefectStatus,
     inspectionPoints, createInspectionPoint, deleteInspectionPoint, requestInspectionForPoint,
-    checklistTemplates: allChecklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord, ensureChecklistTemplate,
+    checklistTemplates: allChecklistTemplates, checklistRecords, ensureChecklistTemplate,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal, uploadSubmittalFile, readSubmittalDoc,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,

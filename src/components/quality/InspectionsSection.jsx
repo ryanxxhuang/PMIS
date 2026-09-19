@@ -1,13 +1,14 @@
-// 查驗分段:清單＋狀態快篩＋搜尋,詳情欄承載判定(合格/不合格 快速判定;P3c 起也可開監造查驗表單判定並填確認數量)、
-// 檢附的自主檢查表、申報數量／階段與刪除。
+// 查驗分段:清單＋狀態快篩＋搜尋,詳情欄承載判定入口(監造查驗表單:判定＋本次確認數量,簽署即判定;P6b-3 起
+// 「合格／不合格」快速判定退場——判定一律有簽署的文件版本,資料庫也收回了直接改判定欄)、檢附的自主檢查表、
+// 申報數量／階段與刪除。舊流程快速判定的紀錄照常列出(確認數量欄標「舊流程快速判定」)。
 // 版面走共用殼 ListDetailLayout(規範 §8 IA 殼):詳情永遠在同一個位置,動作就地處理。
 // 狀態刻意留在頁面——「提出查驗申請」從檢查表分段預填 inspForm 再切段,分段是非當前
 // 不渲染(unmount)的,表單 state 住這裡會在切段瞬間消失;errMsg 也是頁層 ErrorBanner。
-// 所以本元件只收 props,判定/刪除/送出的邏輯全在頁面;搜尋字串是分段自己的,切段歸零可接受。
+// 所以本元件只收 props,刪除/送出的邏輯全在頁面;搜尋字串是分段自己的,切段歸零可接受。
 //
 // 清單列是 role=listitem 的 button:supervisor/a11y spec 用 getByRole('listitem')
 // .filter({ hasText }) 選中那一列,再到 getByRole('region', { name: '<標題> 詳情' })
-// 按判定鈕——「現在要處理」佇列刻意維持 button 不當 listitem,否則會雙重命中(規範 §7)。
+// 開監造查驗表單——「現在要處理」佇列刻意維持 button 不當 listitem,否則會雙重命中(規範 §7)。
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MSym } from '../icons.jsx'
@@ -32,8 +33,8 @@ export const EMPTY_INSP_FORM = () => ({ title: '', location: '', inspection_type
 
 export default function InspectionsSection({
   inspections, inspCount, filter, onFilter,
-  form, onFormChange, onSubmit, busy, resultMsg, notice = '', onCloseNotice = null, onShowDefects,
-  leaves, attachableChecklists, templates, can, onResult, onDelete, scope = '', signedDocByRecord = new Map(),
+  form, onFormChange, onSubmit, busy, notice = '', onCloseNotice = null,
+  leaves, attachableChecklists, templates, can, onDelete, scope = '', signedDocByRecord = new Map(),
   inspectionPoints = [], formDocByInspection = new Map(),
 }) {
   const navigate = useNavigate() // 詳情欄的「附自主檢查表」導向既有列印檢視;「監造查驗表單」導向文件頁
@@ -75,8 +76,8 @@ export default function InspectionsSection({
 
   // ── 詳情欄:狀態列 / 標題 / key-value / 檢附的自主檢查表 / 動作列。
   // region 以查驗項目命名:報讀器走地標直接聽到「4F 柱牆鋼筋查驗 詳情」,e2e 也用
-  // 同一個名字確認詳情欄正在顯示哪一筆。動作條件與改版前列內版完全相同,一條都沒放寬:
-  // 判定=can.approve 且待查驗;刪除=can.edit 且待查驗(已判定查驗=品質證據,DB 另有 guard)。
+  // 同一個名字確認詳情欄正在顯示哪一筆。動作條件:判定入口(監造查驗表單)=can.approve 且待查驗;
+  // 刪除=can.edit 且待查驗(已判定查驗=品質證據,DB 另有 guard)。
   let detailBody = null
   if (selected) {
     const i = selected
@@ -101,7 +102,7 @@ export default function InspectionsSection({
             ['申報數量', qtyText],
             ['查驗階段', i.stage_key || '—'],
             ['判定日', i.inspected_at ? String(i.inspected_at).slice(0, 10) : '—'],
-            ['本次確認數量', i.confirmed_qty != null ? `${i.confirmed_qty} ${i.unit || ''}`.trim() : (i.status === '待查驗' ? '—' : '（快速判定，未填確認數量）')],
+            ['本次確認數量', i.confirmed_qty != null ? `${i.confirmed_qty} ${i.unit || ''}`.trim() : (i.status === '待查驗' ? '—' : i.document_id ? '（未確認數量）' : '（舊流程快速判定，未填確認數量）')],
           ]} />
         </div>
 
@@ -151,17 +152,11 @@ export default function InspectionsSection({
             {judgeable && <span className="text-caption text-[var(--text-3)]">簽署即判定，確認數量成為廠商可估驗的依據。</span>}
           </div>
         )}
-        {/* 動作列:快速判定(監造;不含確認數量)/ 待監造查驗(其他方)/ 刪除(廠商)。判定不合格的原因
-            由 appPrompt 收(判定=不可逆,規範 §1 第 5 題准許確認框;原因必填,缺失由 DB 同交易開立) */}
-        {i.status === '待查驗' && (
+        {/* 動作列:待監造查驗(非監造)/ 刪除(廠商)。監造的判定只有上方「以監造查驗表單判定」一條路
+            (P6b-3:快速判定退場;不合格的缺失由 DB 在簽署交易內開立) */}
+        {i.status === '待查驗' && (!judgeable || deletable) && (
           <div className="px-4 py-3 border-t border-[var(--border-2)] flex items-center gap-2 flex-wrap">
-            {judgeable ? (<>
-              <Button variant="success" onClick={() => onResult(i, true)} disabled={busy}>合格</Button>
-              <Button variant="danger" onClick={() => onResult(i, false)} disabled={busy}>不合格</Button>
-              <span className="text-caption text-[var(--text-3)]">快速判定不計確認數量。</span>
-            </>) : (
-              <span className="text-footnote text-[var(--text-3)]">待監造查驗</span>
-            )}
+            {!judgeable && <span className="text-footnote text-[var(--text-3)]">待監造查驗</span>}
             {deletable && (
               // p-2 -m-2 只擴命中區、視覺與列高不變;ml-auto 靠右與主動作拉開
               <IconButton name="close" label={`刪除查驗 ${i.title}`} onClick={() => onDeleteClick(i)} className="ml-auto -m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
@@ -228,22 +223,13 @@ export default function InspectionsSection({
     </Button>
   )
 
-  // 判定成功的原地回饋與申請表單住在清單卡頂端:所有視口都看得到(詳情欄在 <lg 是抽屜,
-  // 判定後抽屜可能已關),「查看缺失」入口才不會跟著消失
+  // 申請送出的回饋與申請表單住在清單卡頂端:所有視口都看得到(詳情欄在 <lg 是抽屜,可能已關)
   const cardTop = (<>
     {/* 查驗申請送出成功(廠商):已送出＋檢附了什麼＋等待監造;失敗走頁層 ErrorBanner、表單留著 */}
     {notice && (
       <div role="status" className="mx-5 mt-4 flex items-center gap-3 flex-wrap rounded-lg bg-[var(--green-tint)] text-[var(--green-text)] text-sm px-3 py-2">
         <span className="min-w-0">{notice}</span>
         {onCloseNotice && <button onClick={onCloseNotice} className="ml-auto font-medium underline hover:opacity-80 max-md:min-h-11">關閉</button>}
-      </div>
-    )}
-    {resultMsg && (
-      <div className="mx-5 mt-4 flex items-center gap-3 flex-wrap rounded-lg bg-[var(--green-tint)] text-[var(--green-text)] text-sm px-3 py-2">
-        <span>{resultMsg.pass ? '已判定合格' : '已判定不合格並開立缺失'}</span>
-        {!resultMsg.pass && (
-          <button onClick={onShowDefects} className="font-medium underline hover:opacity-80 max-md:min-h-11">查看缺失</button>
-        )}
       </div>
     )}
     {form && (
@@ -301,7 +287,7 @@ export default function InspectionsSection({
     return (
       <Card title={cardTitle} bodyClass="p-0" action={cardAction}>
         {cardTop}
-        <Empty>尚無查驗紀錄。廠商自主檢查合格後提出查驗申請,監造現場判定;不合格會自動開立缺失。</Empty>
+        <Empty>尚無查驗紀錄。廠商自主檢查合格後提出查驗申請,監造以查驗表單判定並簽署;不合格會自動開立缺失。</Empty>
       </Card>
     )
   }

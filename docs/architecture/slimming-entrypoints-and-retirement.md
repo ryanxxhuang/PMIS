@@ -75,7 +75,7 @@
 
 | 模組 | 落點 | 保留 |
 |---|---|---|
-| 品質（查驗／自檢／試體／缺失）、工安 | 現場紀錄 | 全部業務規則、缺失引擎、試體 trigger；文件化部分改由 [現場文書](field-documents-lifecycle.md) 承載 |
+| 品質（查驗／自檢／試體／缺失）、工安 | 現場紀錄 | 全部業務規則、缺失引擎、試體 trigger；文件化部分改由 [現場文書](field-documents-lifecycle.md) 承載（P6b-3：查驗「合格／不合格」快速判定與檢查表直接登錄退場，判定與自檢紀錄只由文件簽署寫入，DB 收回直接寫入；舊紀錄照常查閱） |
 | ITP 停留點 | 履約時程提示＋現場紀錄一鍵申請 | 既有狀態推導；新增 `stage_key` 供多階段計價 |
 | 送審文件 | 次入口＋今日工作 | 既有狀態機；**歷次退回原因**改由 `audit_events` 的 `submittal.returned` before／after 在詳情列出（不新增表、不改 `review_note` 語意）【設計】 |
 | 工程疑義 | 次入口＋文件／查驗詳情「提出疑義」 | 不變 |
@@ -171,7 +171,7 @@
 2. **Edge**：新函式（`draft-field-documents`）、`_shared` 更新（ballInCourt、photoMatch、agentTools 改起稿路徑）；`--use-api` 全部重佈受影響函式；`check:edge`。
 3. **前端**：四主入口、現場紀錄、估驗聯動 UI；push `main` 自動部署；`check:prod`。
 4. **觀察期**：至少一個真案期別走完簽署→確認→同步→送審→核定。
-5. **DB 封堵 migration**：收回 `valuation_items` 直接寫入、關閉 `audit.summary`、`daily_logs` 舊路徑 guard 生效。
+5. **DB 封堵 migration**：收回 `valuation_items` 直接寫入、關閉 `audit.summary`、`daily_logs` 舊路徑 guard 生效；收回 `checklist_records` 直接寫入與 `inspections` 直接判定（P6b-3 `20260920030000`，收緊型先前端後 DB）。
 6. **清理 PR**：hidden→移除頁面／store／Demo 種子／測試（P6b）。P6b-1 已移除 `/schedule`、`/audit` 頁面與退場 Edge 原始碼（純前端＋Edge 刪檔，無 migration；`_shared/aiHandler.ts` 變更後重佈其模組圖內的函式）。
 
 每步套用後寫回 `CURRENT.md` §6.3；任何一步失敗以對應 rollback 檔回復，前端可回退到前一建置。

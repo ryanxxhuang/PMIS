@@ -8,7 +8,7 @@
 import { test, expect } from '@playwright/test'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
-  signInClient, loginReal, gotoHash, runCleanup,
+  signInClient, loginReal, gotoHash, runCleanup, admin,
 } from './helpers.js'
 
 const PROJECT_NAME = `鏈4回滾工程-${Date.now().toString(36)}`
@@ -71,7 +71,9 @@ test('鏈 4:匯入全敗如未匯→重試成功→重設被 guard 擋(UI 顯錯
   })
   if (logErr) throw new Error(`建日誌失敗:${logErr.message}`)
   const { data: wi } = await c.from('work_items').select('id').eq('project_id', projectId).eq('item_key', '1.1').single()
-  const { data: cl, error: clErr } = await c.from('checklist_records').insert({
+  // 連著工項的品質證據以 service 建(P6b-3 起使用者直接登錄檢查紀錄已退場,只由自主檢查表簽署寫入;
+  // 這裡要的是「舊流程留下的證據擋住清空」,來源不影響 guard 行為)
+  const { data: cl, error: clErr } = await admin().from('checklist_records').insert({
     project_id: projectId, check_date: '2026-08-13', work_item_id: wi.id,
   }).select('id').single()
   if (clErr) throw new Error(`建檢查紀錄失敗:${clErr.message}`)
@@ -87,8 +89,8 @@ test('鏈 4:匯入全敗如未匯→重試成功→重設被 guard 擋(UI 顯錯
   expect(await countOf('work_items')).toBe(4)
   expect(await countOf('daily_logs')).toBe(1) // 舊版災難點:日誌被靜默刪光;現在原封不動
 
-  // ── 移除品質證據(草稿檢查紀錄本人可刪)→ 重試清空成功 → 回 onboarding ────
-  const { error: delErr } = await c.from('checklist_records').delete().eq('id', cl.id)
+  // ── 移除品質證據(未判定的紀錄;以 service 移除,使用者已無直接刪除權)→ 重試清空成功 → 回 onboarding ────
+  const { error: delErr } = await admin().from('checklist_records').delete().eq('id', cl.id)
   if (delErr) throw new Error(`刪檢查紀錄失敗:${delErr.message}`)
   await page.getByRole('button', { name: /重新匯入標單/ }).click()
   await page.getByRole('dialog').getByRole('button', { name: '清空重匯' }).click()
