@@ -144,11 +144,11 @@ describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
     }
     for (const b of BALL_SOURCES) expect(b.short).toMatch(/^.{1,3}$/)
   })
-  it('施工廠商:看得到請款/排程,看不到監造月報;成本與風險稽核 hidden', () => {
+  it('施工廠商:看得到請款,看不到監造月報;排程、成本與風險稽核 hidden', () => {
     expect(outline(visibleNavGroups('contractor', false))).toEqual([
       ['工作', [
         ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '品質查驗', '檢驗停留點', '工安管理']],
-        ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '進度 S 曲線', '驗收結算', '逐工項排程']],
+        ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '進度 S 曲線', '驗收結算']],
         ['估驗請款', ['估驗計價', '請款收款', '標單工項']],
       ]],
       ['專案資料', [
@@ -190,7 +190,7 @@ describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
     const money = visibleNavGroups('supervisor', true)[0].items.find((i) => i.label === '估驗請款')
     expect(money.tabs.map((t) => t.label)).toEqual(['估驗計價', '請款收款', '標單工項']) // 成本 hidden,override 也不露
     const contract = visibleNavGroups('supervisor', true)[0].items.find((i) => i.label === '履約時程')
-    expect(contract.tabs.map((t) => t.label)).toContain('逐工項排程')
+    expect(contract.tabs.map((t) => t.label)).not.toContain('逐工項排程') // 排程 hidden(P5d 退場),override 也不露
     expect(flatNav(visibleNavGroups('supervisor', true))).toHaveLength(5)
   })
 })
@@ -301,9 +301,9 @@ describe('roles 與 hidden 定義釘死(重劃分區不得鬆綁;退場只 hidde
       '/audit': ['owner'],
     })
   })
-  it('hidden 集合=D-026 退場的兩條(/cost、/audit):仍登記、仍依原 roles 可直達,只是不進側欄/分頁列', () => {
+  it('hidden 集合=D-026 退場的三條(/schedule、/cost、/audit):仍登記、仍依原 roles 可直達,只是不進側欄/分頁列', () => {
     const hidden = allDefs().filter((n) => n.hidden).map((n) => n.to)
-    expect(hidden).toEqual(['/cost', '/audit'])
+    expect(hidden).toEqual(['/schedule', '/cost', '/audit'])
     for (const to of hidden) {
       expect(routeRegistry[to]).toBeTruthy()
       for (const org of ORGS) {
@@ -311,8 +311,8 @@ describe('roles 與 hidden 定義釘死(重劃分區不得鬆綁;退場只 hidde
         expect(flatNav(visibleNavGroups(org, true)).flatMap((i) => i.tabs || [i]).find((t) => t.to === to)).toBeUndefined()
       }
     }
-    // /schedule 承接(P5d)前保留可見:一旦有人先 hidden,這條會先紅,退場必須是有意識的決策
-    expect(routeRegistry['/schedule'].hidden).toBeUndefined()
+    // /schedule 自 P5d 起 hidden(關鍵工項日期已承接到履約時程);roles 仍只有廠商,不因 hidden 鬆綁
+    expect(routeRegistry['/schedule']).toMatchObject({ hidden: true, roles: ['contractor'] })
     // /alerts 帶 label:taskReturn 的返回連結名字取自登記表,不手抄「提醒中心」
     expect(routeRegistry['/alerts']).toEqual({ access: 'authenticated', label: '提醒中心' })
     expect(navLabel('/alerts')).toBe('提醒中心')

@@ -22,7 +22,7 @@
 
 深連結保證：所有既有 `?inspection=`／`?period=`／`?submittal=`／`?d=`／`?stage=`／`?obligation=` 參數不變；`hidden` 項仍受 `roles` 守衛；提醒信舊連結（`/alerts`、`/deadlines?obligation=`）維持。新增 `/site?intake=<id>`、`/site?doc=<id>` 直達文件。**P2c 落地**：`/site?intake=<id>` 展開該上傳批次；`/site?doc=<id>`（今日工作／Agent 的現場文書待辦帶這個）落到 `/site` 後，施工日誌轉到 `/site-log?doc=<id>`、監造日誌轉到 `/supervisor-log?doc=<id>`（P3a；保留 `state` 的返回來源；頁面路由只登記在 `lib/fieldDocs.docPagePath`），自檢表／查驗表單 P3b／P3c 前留在 `/site` 清單並標「頁面尚未支援」；`/site-log` 與 `/supervisor-log` 都接受 `?d=`（日期）與 `?doc=`（文件），`/supervisor-log/print` 為列印路由（`surface: print`）。
 
-**P1a 落地結果（2026-09-17，與上表的差異）**：側欄分區為「今日工作（球權三來源）→ 工作（三主入口群組）→ 專案資料 → 平台」。次入口不做扁平的「更多」，而是兩個群組：「文件往來」（送審文件／工程疑義／施工月報／監造月報）與「專案」（專案文件／三方成員／活動紀錄／跨案總覽；風險稽核 hidden）——月報在導覽上放文件往來，同時在 `/site`「本月文件」給入口（§3 的落點仍成立）。`/site` 的第一個子頁標籤為「現場總覽」；P1a 的 `/site` 只列既有現場作業入口、件數、現場待辦與本月文件，照片上傳與文書清單留給 P2c。`/supervisor-log` 已於 P3a 頁面建好時登記為「現場紀錄」群組子頁（不限角色：監造可寫、專案成員唯讀，伺服器 RLS／RPC 是邊界）。`/cost`、`/audit` 已 hidden（P1b 已唯讀化，見 §2 各節「P1b 落地結果」）；`/schedule` 仍可見。手機底欄＝現在輪到我＋三主入口＋更多（`roleWorkLinks` 回傳群組項，子頁也算選取），P1c 只剩文案。
+**P1a 落地結果（2026-09-17，與上表的差異）**：側欄分區為「今日工作（球權三來源）→ 工作（三主入口群組）→ 專案資料 → 平台」。次入口不做扁平的「更多」，而是兩個群組：「文件往來」（送審文件／工程疑義／施工月報／監造月報）與「專案」（專案文件／三方成員／活動紀錄／跨案總覽；風險稽核 hidden）——月報在導覽上放文件往來，同時在 `/site`「本月文件」給入口（§3 的落點仍成立）。`/site` 的第一個子頁標籤為「現場總覽」；P1a 的 `/site` 只列既有現場作業入口、件數、現場待辦與本月文件，照片上傳與文書清單留給 P2c。`/supervisor-log` 已於 P3a 頁面建好時登記為「現場紀錄」群組子頁（不限角色：監造可寫、專案成員唯讀，伺服器 RLS／RPC 是邊界）。`/cost`、`/audit` 已 hidden（P1b 已唯讀化，見 §2 各節「P1b 落地結果」）；`/schedule` 自 P5d 起 hidden（關鍵工項承接到履約時程後唯讀，見 §2.4「P5d 落地結果」）。手機底欄＝現在輪到我＋三主入口＋更多（`roleWorkLinks` 回傳群組項，子頁也算選取），P1c 只剩文案。
 
 ## 2. 退場承接清單【已確認 範圍】
 
@@ -54,6 +54,7 @@
 - 使用端：`Schedule.jsx`、`ledger.js setItemSchedule/removeItemSchedule`、`db.js loadItemSchedulesFromDB`、`Dashboard.jsx exportAll`、`demoSeed.js`、`draftDailyLog.ts`（註解說明無排程量欄位）、`e2e/a11y.spec.js`；DB `item_schedules`（正式 4 列／4 案）。
 - 承接【已確認 順序】：關鍵工項日期進履約時程——`item_schedules` 既有 `planned_start/planned_finish` 直接在 `/requirements` 顯示為「關鍵工項」時間軸列（唯讀＋少量維護），資料不搬表；`schedule_periods`（S 曲線）不屬退場，`/progress` 保留。
 - 清理：P5d 承接完成且 E2E 通過後 `hidden`→P6b 移除頁面、store 寫入、Demo 種子；表保留。
+- **P5d 落地結果（2026-09-19）**：承接＝關鍵工項與停留點進履約時程的**同一條時間軸**，不是另開一段：`src/lib/keyWorkItems.js`（落後判定 `deriveWorkItemState` 自 `Schedule.jsx` 抽出、完成% 仍取最新一期估驗累計 ÷ 契約數量；停留點狀態沿用 `lib/itp.js`，「施作中未叫驗」H 紅／W 黃與 `/itp` 同一條規則）把 `item_schedules` 的每一項與 `inspection_points` 的每一點各變成一個事項（id `wi:<item_key>`／`itp:<id>`，五色語意鍵與契約義務同一套、Badge 文字仍是各自的領域字：落後／進行中／未申請查驗…），`/requirements` 的清單、狀態快篩、類型下拉、搜尋與詳情都吃同一份。關鍵工項的**少量維護**在事項詳情（廠商或非正式模式管理者：計畫起迄兩個日期欄、移除；摘要卡有「加入關鍵工項」搜尋，桌機），寫入仍走 store 的 `setItemSchedule`／`removeItemSchedule`（ref 累積＋debounce 合併同工項起訖），資料不搬表、不加欄、沒有 migration；監造／機關唯讀。停留點詳情列允收標準／頻率／出處／掛的工項與其計畫起迄／施作事實／查驗，處理入口導 `/itp?point=`（廠商申請查驗）或 `/quality?inspection=`（監造判定）。`/schedule` 改為唯讀歷史查閱（無輸入框、無加入／移除，CSV 仍在，每列「到履約時程」帶 `?item=<key>` 直達該項）並在 `navConfig` `hidden: true`（`roles` 仍只有廠商）；`/requirements?item=<work_item_key>` 由頁面換成殼的 `?obligation=wi:<key>`。指定契約範圍（`?package=`）時只列該契約的義務，不列整案的關鍵工項與停留點。P6b 才移除 `Schedule.jsx`；`item_schedules` 表與 store 寫入保留（履約時程在用）。
 
 ### 2.5 已停用 AI 路徑
 
@@ -95,7 +96,7 @@
 - 狀態轉移只經 RPC `transition_obligation_period`（歸屬規則＝義務 update policy：自己方或非正式模式 admin override；證據須同案；伺服器蓋完成時間；退回待辦解除證據）；`contract_obligations` 對循環義務加 guard，不可再標已提送／已完成（舊前端／直接 REST 明確失敗）。
 - 回填：既有 monthly 全部產生期次；義務層曾標完成者，有 `completed_at` 就對應含該台北日的期別（狀態、時間、人、送審佐證帶過去），推不出的義務原狀不動、已到期的待辦期次帶 `review_note`「待核對」，由三方在待補設定看到並到期限追蹤該期核對後標記。正式 7 筆皆待辦、無需對應。
 - `anchor_version_no` 與停止條件自 P5c（`20260919021500`）起落地，見 §4.3：期次蓋產生時的基準日版本、基準日變更重算沒動過的期並記差異；循環只產生到「實際竣工日（驗收 confirm／report）優先、否則契約竣工日 `end_date`」為止，保固類與竣工日缺／已過而未登錄竣工者停止自動產生並列「停止條件待補」。
-- 前端：`todayTasks`／Edge 收集器／Deno 共用案例都走 `obligationEntries`（每個未結期次一顆球，鍵 `契約重點:<id>:<期別>`，深連結 `/deadlines?obligation=<id>&period=<期別>`）；`contractDue.js`／`.ts` 對循環義務改讀 `ob.periods` 最早未結一期；期限追蹤頁的一列仍是一條義務，動作作用在「本期」（`?period=` 可指定），詳情列全部期次；履約時程詳情唯讀列期次並導期限追蹤逐期標記（完整 UI 在 P5d）。demo 種子為三筆 monthly 義務帶上月已完成／本月／下月三期。
+- 前端：`todayTasks`／Edge 收集器／Deno 共用案例都走 `obligationEntries`（每個未結期次一顆球，鍵 `契約重點:<id>:<期別>`，深連結 `/deadlines?obligation=<id>&period=<期別>`）；`contractDue.js`／`.ts` 對循環義務改讀 `ob.periods` 最早未結一期；期限追蹤頁的一列仍是一條義務，動作作用在「本期」（`?period=` 可指定），詳情列全部期次；履約時程詳情唯讀列期次並導期限追蹤逐期標記（完整 UI 在 P5d，見 §4.6）。demo 種子為三筆 monthly 義務帶上月已完成／本月／下月三期。
 
 ### 4.3 期限版本
 
@@ -110,6 +111,14 @@
 - 循環停止條件（P5b 未定義）：以現行資料可判定者為準——保固類（`category='保固'`）系統沒有保固期滿日欄位，不自動產生期次；其餘以實際竣工日（`acceptance_events` 的 `confirm`，沒有就 `report` 的 `event_date`，同階段取最後登錄）優先、否則契約竣工日 `end_date` 為界限日，只產生「期間起日 ≤ 界限日」的期；登錄／更正／清除竣工（`acceptance_events` trigger）會移除界限日之後沒動過的待辦期並補齊；竣工日缺、或竣工日已過而未登錄竣工／展延 → 停止自動產生並列「停止條件待補」（待補設定第五種 `stop`：首頁一張卡、Agent `setup_pending`、早報一段，導期限追蹤該筆／驗收頁）。界限日判不出時沒動過的待辦期同樣移除（證明不了它們該存在），界限日判得出後由冪等物化補回。DB `fn_obligation_recurrence_bound`／`fn_obligation_recurrence_stop_gap` 與共用規則 `recurrenceStopGap`／`completionDateOf` 同口徑（pgTAP 與共用案例各釘一側）。
 - 回填（不偽造歷史依據）：每個已填任一基準日的專案建 version 1（`initial`、reason 註明回填、`created_by`／`effective_from` 為 null）；既有期次只在 `basis` 的起算日等於 v1 快照時才蓋 `anchor_version_no=1`；已完成的單次義務（正式 0 筆）不補快照；套用停止條件（正式庫盤點：兩案已登錄竣工確認，8 期預計移除竣工後的 5 期，實際數字見 CURRENT §6.3）。
 - 前端純呈現：期限追蹤與履約時程的詳情加「依據」列（期次：第 N 版基準日＋起算欄位與日期；單次：完成時留版／未留版／現行第 N 版）、期次列逐期標依據；基準日卡加變更類別／依據函文／生效日三欄與 `AnchorVersions`（目前依據哪一版、本版變更與受影響事項、可展開版本紀錄）；`stop` 缺口在期次區說明去哪裡補。demo 種子帶兩版（初值、展延附函文）並在本地鏡像新版本（期次不重算、標示 demo）。
+
+### 4.6 履約時程頁完整化（P5d 已實作）
+
+- **每則事項**（契約義務、關鍵工項、停留點）在同一條時間軸：列上有責任方、種類（頻率／關鍵工項／H 停留點）、待補設定標示、期限與倒數、狀態；詳情有工作內容、責任方、期限與依據（P5c 的第 N 版基準日、P5b 的本期）、原文來源（引述＋條文高亮）、相關單據（佐證送審直達 `/submittals?submittal=`、期次各自的佐證、期限追蹤該筆）與立即處理入口（單次：標記完成／掛佐證；循環：**逐期就地標記完成／退回待辦**，掛佐證隨完成一起走 `transition_obligation_period`；關鍵工項：計畫起迄；停留點：申請查驗／判定）。
+- **近期／全期**：預設「近期」一份清單先急後緩（逾期最久在前 → 7 日內 → 待補設定／無到期 → 30 日內排程 → 最近 7 日完成），每列標期程；「全期」依五段期程分組。近期沒有東西時自動退回全期（不給一張空清單）；點期程條即切到全期。共用規則 `isRecent`／`byUrgency` 在 `obligationTimeline.js`。
+- **待補設定可篩選**：下拉列五種缺口（責任方／基準日／循環規則／停止條件／回填待核對）各自件數，判定來源是共用規則 `obligationEntries`（`setupGapsOf`，與今日工作／Agent／早報同一份），處理入口與 `todayTasks` 同一張對照 `lib/obligationLinks.js`；基準日與停止條件在本頁就能補（打開履約期程卡的基準日編輯列），責任方／循環規則導擷取審核，回填待核對在期次區標記即解除。
+- **逐期準時率**：`periodStat`（分母＝已完成＋已逾期的期、分子＝準時完成的期）；執行卡的準時率對循環義務以「期」計入（`partyStat.periodsSettled`），五狀態件數仍以「條」計。期次區與說明（缺口原因、去哪裡補）是 `components/ObligationPeriods.jsx`，期限追蹤與履約時程同一個元件（期限追蹤只多「點列切期」）。
+- 保固類循環義務的停止條件：系統仍無保固期滿日欄位，介面列「停止條件待補」並說明不自動產生；來源待產品決定（不在本單元）。
 
 ### 4.4 掃描／無文字契約
 

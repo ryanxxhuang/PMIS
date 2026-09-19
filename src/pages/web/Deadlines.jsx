@@ -32,6 +32,7 @@ import { ORG_TO_PARTY, obligationParty, UNASSIGNED_PARTY, periodRows, recurrence
 import { isRecurring, isObligationOpen, currentObligationPeriod, completionDateOf, periodBasisLabel } from '../../../supabase/functions/_shared/ballInCourtRules.ts'
 import AnchorDates from '../../components/AnchorDates.jsx'
 import AnchorVersions from '../../components/AnchorVersions.jsx'
+import ObligationPeriods from '../../components/ObligationPeriods.jsx'
 import { estimatePenalty, parsePenaltyRate } from '../../lib/penaltyCalc.js'
 import { parseLocalDate, localISODate, taipeiToday } from '../../lib/dates.js'
 import { navLabel } from '../../lib/navConfig.js'
@@ -278,49 +279,13 @@ export default function Deadlines() {
           )}
         </div>
 
-        {/* 循環義務的期次:逐期追蹤(完成本期不清下期、舊逾期保留),點某一期切到該期;沒有期次就說明為什麼 */}
+        {/* 循環義務的期次:逐期追蹤(完成本期不清下期、舊逾期保留),點某一期切到該期;沒有期次就說明為什麼。
+            列與說明和履約時程同一個元件(components/ObligationPeriods.jsx),這裡只多「點列切期」 */}
         {it.recurring && (
           <div className="px-4 pb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <MSym name="event_repeat" size={15} className="text-[var(--text-3)]" />
-              <span className="text-footnote font-medium text-[var(--text)]">期次（{it.periods.length}）</span>
-            </div>
-            {/* 沒有期次的原因、或(P5c)停止條件判不出／已越界:DB 已停止產生新期,舊期仍在;說清楚去哪裡補 */}
-            {it.gap && (
-              <p className="text-footnote leading-relaxed text-[var(--text-3)] mb-2">
-                {it.gap.label}
-                {it.gap.kind === 'rule' && (<>
-                  ，請到<Link to={`/requirements/review?highlight=${encodeURIComponent(ob.id)}`} className="text-[var(--blue-text)] hover:underline mx-0.5">擷取審核</Link>廢止取代後補登循環規則。
-                </>)}
-                {it.gap.kind === 'anchor' && '，請在下方「基準日與契約總價」補上基準日，期次會立即產生。'}
-                {it.gap.kind === 'stop' && (ob.category === '保固'
-                  ? '，系統沒有保固期滿日可判定循環何時結束，暫不自動產生期次。'
-                  : <>，期次已停止自動產生：請在下方「基準日與契約總價」補上或展延竣工日，已竣工的請到<Link to="/acceptance" className="text-[var(--blue-text)] hover:underline mx-0.5">驗收</Link>登錄竣工，期次會依竣工日收尾。</>)}
-              </p>
-            )}
-            {it.periods.length === 0 ? (
-              !it.gap && <p className="text-footnote leading-relaxed text-[var(--text-3)]">尚未產生期次。</p>
-            ) : (
-              <ul role="list" aria-label={`${ob.title} 期次`} className="divide-y divide-[var(--border-2)] border border-[var(--border-2)] rounded-lg">
-                {it.periods.map((p) => {
-                  const current = it.period?.id === p.id
-                  return (
-                    <li key={p.id}>
-                      <button type="button" aria-current={current || undefined} onClick={() => selectPeriod(p.key)}
-                        className={`w-full text-left px-3 py-2 max-md:min-h-11 flex items-center gap-2 flex-wrap text-footnote ${current ? 'bg-[var(--blue-tint)]' : 'hover:bg-[var(--surface-2)]'}`}>
-                        <span className="num font-medium text-[var(--text)]">{p.key} 期</span>
-                        <span className="num text-[var(--text-3)]">到期 {p.dateLabel}</span>
-                        <Badge color={STATE_BADGE[p.status === 'due' ? 'soon' : p.status === 'na' ? 'nodate' : p.status] || 'slate'} className="ml-auto">{p.rawStatus}</Badge>
-                        {p.status === 'done' && p.onTime === false && <span className="text-caption text-[var(--amber-text)]">遲交</span>}
-                        {p.reviewNote && <span className="text-caption text-[var(--amber-text)]">待核對</span>}
-                        {/* 這一期依哪一版基準日產生／改期(P5c):已完成的期保留原依據 */}
-                        <span className="w-full num text-caption text-[var(--text-3)]">{p.basisLabel}</span>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
+            <ObligationPeriods ob={ob} periods={it.periods} gap={it.gap} currentId={it.period?.id ?? null}
+              onSelect={(p) => selectPeriod(p.key)}
+              anchorAction={<span>（在下方「基準日與契約總價」）</span>} />
           </div>
         )}
 

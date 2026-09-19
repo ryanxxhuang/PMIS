@@ -25,8 +25,9 @@ import MarkupEditor, { MarkupThumb } from './MarkupEditor.jsx'
 // 欄位一律用 ui.jsx 的 Input/Select/Textarea:本檔曾抄過一份 FIELD_BASE,
 // 後來改抄字串別名 input——別名同樣會漏掉 Select 的箭頭留白與 Textarea 的 resize-y
 
-// 小工項挑選器（搜尋 → 選一個;品質缺失/查驗共用）
-export function WorkItemPicker({ leaves, value, label, onPick }) {
+// 小工項挑選器（搜尋 → 選一個;品質缺失/查驗/停留點/履約時程的關鍵工項共用）。
+// placeholder 由呼叫端決定(缺失是「可不填」,加入關鍵工項則不是)。
+export function WorkItemPicker({ leaves, value, label, onPick, placeholder = '搜尋並選擇工項（可不填）…', inputProps = {} }) {
   const [q, setQ] = useState('')
   const results = q.trim() ? leaves.filter((it) => it.description.includes(q.trim()) || (it.item_no || '').includes(q.trim())).slice(0, 12) : []
   if (value) {
@@ -41,7 +42,7 @@ export function WorkItemPicker({ leaves, value, label, onPick }) {
   }
   return (
     <div className="relative">
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋並選擇工項（可不填）…" />
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} {...inputProps} />
       {results.length > 0 && (
         // 浮層陰影走 token(Tailwind 原生 shadow-lg 是黑色硬陰影,不吃深色模式)
         <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg [box-shadow:var(--shadow-overlay)] max-h-56 overflow-auto enter-menu">

@@ -8,6 +8,7 @@ import {
   deriveStatus, countdownLabel, phaseOf, phaseWindows,
   partyStat, phaseStat, pickDefaultId, buildTimelineItem, matchesFilters,
   anchorGaps, periodRows, recurrenceGap, singleDueBasis, anchorVersionRows,
+  setupGapsOf, isRecent, byUrgency, periodStat, SETUP_KINDS,
 } from './obligationTimeline.js'
 
 const TODAY = new Date(2026, 7, 25) // 2026-08-25
@@ -369,5 +370,110 @@ describe('基準日缺口(anchorGaps):數字必須等於「設完基準日會多
       total: 1,
       gaps: [{ key: 'commencement_date', label: '開工日', count: 1 }],
     })
+  })
+})
+
+// ── P5d:待補設定缺口、近期視圖、逐期準時率 ──────────────────────────────────
+describe('待補設定缺口(setupGapsOf:與今日工作／Agent 同一份判定,附處理入口)', () => {
+  const period = (over) => ({ id: 'p', period_key: '2026-08', due_date: '2026-08-05', status: '待辦', ...over })
+  it('五種缺口各自的種類、中文標籤與導向', () => {
+    expect(SETUP_KINDS.map((k) => k.key)).toEqual(['responsible', 'anchor', 'rule', 'stop', 'review'])
+    expect(setupGapsOf(ob({ responsible: '設計單位' }), anchors, TODAY)).toEqual([
+      expect.objectContaining({ kind: 'responsible', kindLabel: '責任方待補', to: '/requirements/review?highlight=OB-X' }),
+    ])
+    expect(setupGapsOf(ob({ trigger_event: 'commencement', offset_days: 15 }), {}, TODAY)).toEqual([
+      expect.objectContaining({ kind: 'anchor', anchor: 'commencement_date', label: '基準日待補（開工日）', to: '/deadlines' }),
+    ])
+    expect(setupGapsOf(ob({ trigger_event: null, recurring: 'monthly' }), anchors, TODAY)).toEqual([
+      expect.objectContaining({ kind: 'rule', label: '循環規則待補（每月缺幾日）', to: '/requirements/review?highlight=OB-X' }),
+    ])
+    expect(setupGapsOf(ob({ trigger_event: null, recurring: 'monthly', recurring_day: 5, periods: [] }), { commencement_date: '2026-03-01' }, TODAY)).toEqual([
+      expect.objectContaining({ kind: 'stop', label: '停止條件待補（缺竣工日，無法判定循環何時結束）', to: '/deadlines?obligation=OB-X' }),
+    ])
+    expect(setupGapsOf(ob({ trigger_event: null, recurring: 'monthly', recurring_day: 5, periods: [period({ review_note: '回填' })] }), anchors, TODAY)).toEqual([
+      expect.objectContaining({ kind: 'review', periodKey: '2026-08', to: '/deadlines?obligation=OB-X&period=2026-08' }),
+    ])
+  })
+  it('沒有缺口回空陣列;同一種缺口只列一次(多期待核對取最早一期)', () => {
+    expect(setupGapsOf(ob(), anchors, TODAY)).toEqual([])
+    const gaps = setupGapsOf(ob({ trigger_event: null, recurring: 'monthly', recurring_day: 5, periods: [
+      period({ id: 'p2', period_key: '2026-08', due_date: '2026-08-05', review_note: 'x' }),
+      period({ id: 'p1', period_key: '2026-07', due_date: '2026-07-05', review_note: 'x' }),
+    ] }), anchors, TODAY)
+    expect(gaps).toHaveLength(1)
+    expect(gaps[0].periodKey).toBe('2026-07')
+  })
+  it('檢視模型帶 setup,搜尋文字含缺口標籤;篩選 setup=any／種類', () => {
+    const item = buildTimelineItem(ob({ responsible: '' }), { anchors, today: TODAY })
+    expect(item.setup.map((g) => g.kind)).toEqual(['responsible'])
+    const f = { q: '', status: 'all', phase: 'all', who: '', type: '', setup: '', range: 'all' }
+    expect(matchesFilters(item, { ...f, setup: 'any' }, TODAY)).toBe(true)
+    expect(matchesFilters(item, { ...f, setup: 'responsible' }, TODAY)).toBe(true)
+    expect(matchesFilters(item, { ...f, setup: 'anchor' }, TODAY)).toBe(false)
+    expect(matchesFilters(item, { ...f, q: '責任方待補' }, TODAY)).toBe(true)
+    expect(matchesFilters(buildTimelineItem(ob(), { anchors, today: TODAY }), { ...f, setup: 'any' }, TODAY)).toBe(false)
+  })
+})
+
+describe('近期視圖(isRecent)與順序(byUrgency)', () => {
+  it('逾期／7 日內／30 日內排程／待補設定／進行中算近期;31 日後排程、無到期、久遠完成不算', () => {
+    expect(isRecent({ status: 'overdue', diff: -3, setup: [] }, TODAY)).toBe(true)
+    expect(isRecent({ status: 'due', diff: 5, setup: [] }, TODAY)).toBe(true)
+    expect(isRecent({ status: 'scheduled', diff: 30, setup: [] }, TODAY)).toBe(true)
+    expect(isRecent({ status: 'scheduled', diff: 31, setup: [] }, TODAY)).toBe(false)
+    expect(isRecent({ status: 'na', diff: null, setup: [{ kind: 'anchor' }] }, TODAY)).toBe(true)
+    expect(isRecent({ status: 'na', diff: null, setup: [] }, TODAY)).toBe(false)
+    expect(isRecent({ status: 'scheduled', diff: 90, setup: [], inProgress: true }, TODAY)).toBe(true)
+  })
+  it('最近 7 日完成的仍列出(剛標完成不能從畫面消失);更早的不列;沒有完成時間的不列', () => {
+    expect(isRecent({ status: 'done', setup: [], completedAt: '2026-08-24T02:00:00Z' }, TODAY)).toBe(true)
+    expect(isRecent({ status: 'done', setup: [], completedAt: '2026-08-18T02:00:00Z' }, TODAY)).toBe(true)
+    expect(isRecent({ status: 'done', setup: [], completedAt: '2026-08-17T02:00:00Z' }, TODAY)).toBe(false)
+    expect(isRecent({ status: 'done', setup: [], completedAt: null }, TODAY)).toBe(false)
+  })
+  it('循環義務以最近一期完成時間判近期;range=recent 進 matchesFilters', () => {
+    const item = buildTimelineItem(ob({ trigger_event: null, recurring: 'monthly', recurring_day: 5, periods: [
+      { id: 'a', period_key: '2026-07', due_date: '2026-07-05', status: '已完成', completed_at: '2026-08-23T01:00:00Z' },
+    ] }), { anchors, today: TODAY })
+    expect(item.completedAt).toBe('2026-08-23T01:00:00Z')
+    const f = { q: '', status: 'all', phase: 'all', who: '', type: '', setup: '', range: 'recent' }
+    expect(matchesFilters(item, f, TODAY)).toBe(true)
+    expect(matchesFilters(buildTimelineItem(ob({ fixed_date: '2027-06-30' }), { anchors, today: TODAY }), f, TODAY)).toBe(false)
+  })
+  it('先急後緩:逾期(最久在前)→ 7 日內 → 待補／無到期 → 排程中(近的在前)→ 已完成', () => {
+    const rows = [
+      { id: 'done', status: 'done', diff: null }, { id: 'sched-far', status: 'scheduled', diff: 20 }, { id: 'na', status: 'na', diff: null },
+      { id: 'due', status: 'due', diff: 3 }, { id: 'over-1', status: 'overdue', diff: -1 }, { id: 'sched-near', status: 'scheduled', diff: 9 }, { id: 'over-9', status: 'overdue', diff: -9 },
+    ]
+    expect([...rows].sort(byUrgency).map((r) => r.id)).toEqual(['over-9', 'over-1', 'due', 'na', 'sched-near', 'sched-far', 'done'])
+  })
+})
+
+describe('逐期準時率(periodStat)與執行卡逐期計入(partyStat)', () => {
+  const periods = [
+    { status: 'done', onTime: true }, { status: 'done', onTime: false }, { status: 'overdue' }, { status: 'scheduled' }, { status: 'na' },
+  ]
+  it('分母=已完成＋已逾期的期、分子=準時完成;未到期與不適用不計;沒有到期的期 → null', () => {
+    expect(periodStat(periods)).toMatchObject({ total: 5, settled: 3, onTime: 1, rate: 33, n: { done: 2, overdue: 1, open: 1, na: 1 } })
+    expect(periodStat([{ status: 'scheduled' }]).rate).toBe(null)
+    expect(periodStat([]).total).toBe(0)
+  })
+  it('執行卡:循環義務以期計入準時率,五狀態計數仍以條計;單次義務照舊', () => {
+    const s = partyStat([
+      { status: 'overdue', recurring: true, periods },            // 一條循環:3 期應完成、1 期準時
+      { status: 'done', onTime: true }, { status: 'overdue' },   // 兩條單次:2 項應完成、1 項準時
+    ])
+    expect(s.n).toEqual({ overdue: 2, due: 0, scheduled: 0, done: 1, na: 0 })
+    expect(s).toMatchObject({ total: 3, settled: 5, onTime: 2, rate: 40, periodsSettled: 3 })
+  })
+  it('檢視模型帶 periodStat 與本期 id;單次義務為 null', () => {
+    const item = buildTimelineItem(ob({ trigger_event: null, recurring: 'monthly', recurring_day: 5, periods: [
+      { id: 'a', period_key: '2026-07', due_date: '2026-07-05', status: '已完成', completed_at: '2026-07-04T01:00:00Z' },
+      { id: 'b', period_key: '2026-08', due_date: '2026-08-05', status: '待辦' },
+    ] }), { anchors, today: TODAY })
+    expect(item.periodStat).toMatchObject({ settled: 2, onTime: 1, rate: 50 })
+    expect(item.currentPeriodId).toBe('b')
+    expect(item.periods[1].evidenceDocumentId).toBeNull()
+    expect(buildTimelineItem(ob(), { anchors, today: TODAY }).periodStat).toBeNull()
   })
 })

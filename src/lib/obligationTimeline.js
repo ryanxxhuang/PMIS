@@ -9,10 +9,11 @@
 import { computeObligationDue, formatObligationRule } from './contractDue.js'
 import { parseLocalDate, localISODate, taipeiISODate } from './dates.js'
 import { REQUIREMENT_TYPE_LABELS, sourcePageLabel } from './requirementReview.js'
+import { setupLink } from './obligationLinks.js'
 import {
   obligationSide, ANCHOR_BY_TRIGGER, ANCHOR_LABELS as SHARED_ANCHOR_LABELS, ANCHOR_CHANGE_KIND_LABELS,
   isRecurring, isObligationOpen, currentObligationPeriod, recurrenceRuleGap, recurrenceAnchorKey,
-  recurrenceStopGap, periodBasisLabel, singleDueSnapshot,
+  recurrenceStopGap, periodBasisLabel, singleDueSnapshot, obligationEntries, daysBetweenIso,
 } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 export const PARTIES = ['廠商', '監造', '機關']
@@ -111,11 +112,77 @@ export function periodRows(ob, today) {
         id: p.id, key: p.period_key, due, dateLabel: due ? localISODate(due) : '—', status, diff, onTime,
         rawStatus: p.status, completedAt: p.completed_at || null, reviewNote: p.review_note || '',
         countdown: p.status === '不適用' ? '不適用' : countdownLabel(status, diff),
-        evidenceSubmittalId: p.evidence_submittal_id || null,
+        evidenceSubmittalId: p.evidence_submittal_id || null, evidenceDocumentId: p.evidence_document_id || null,
         // P5c:這一期是依哪一版基準日產生／改期的(共用規則同一句;Agent 也讀同一份)
         anchorVersionNo: p.anchor_version_no ?? null, basisLabel: periodBasisLabel(p),
       }
     })
+}
+
+// 逐期統計(P5d):循環義務的準時率以「期」為單位——分母=已完成＋已逾期的期,分子=準時完成的期
+// (partyStat 對單次義務的同一條定義);未到期與不適用不計。回填待核對的期仍是待辦,不進分母。
+export function periodStat(periods) {
+  const n = { done: 0, overdue: 0, open: 0, na: 0 }
+  let onTime = 0
+  for (const p of periods || []) {
+    if (p.status === 'done') { n.done++; if (p.onTime !== false) onTime++ } else if (p.status === 'overdue') n.overdue++
+    else if (p.status === 'na') n.na++
+    else n.open++
+  }
+  const settled = n.done + n.overdue
+  return { total: (periods || []).length, n, settled, onTime, rate: settled ? Math.round((onTime / settled) * 100) : null }
+}
+
+// 待補設定的五種缺口(P5a responsible／anchor、P5b rule／review、P5c stop):與今日工作、Agent、早報
+// 同一份判定(共用規則 obligationEntries),履約時程只是把它列成可篩選的事項並附處理入口——
+// 若這裡自己再判一次,四處對同一條義務講的缺口就會不同。同一種缺口一條義務只列一次
+// (回填待核對可能多期,取最早的一期當入口)。
+export const SETUP_KINDS = Object.freeze([
+  { key: 'responsible', label: '責任方待補' },
+  { key: 'anchor', label: '基準日待補' },
+  { key: 'rule', label: '循環規則待補' },
+  { key: 'stop', label: '停止條件待補' },
+  { key: 'review', label: '回填待核對' },
+])
+export const SETUP_KIND_LABELS = Object.freeze(Object.fromEntries(SETUP_KINDS.map((k) => [k.key, k.label])))
+export function setupGapsOf(ob, anchors, today) {
+  const a = anchors || {}
+  const todayIso = taipeiISODate(today0(today))
+  const computeDueIso = (o) => localISODate(computeObligationDue(o, a))
+  const seen = new Map()
+  for (const { ball, period } of obligationEntries(ob, { anchors: a, computeDueIso, todayIso })) {
+    const gap = ball.setup
+    if (!gap || seen.has(gap.kind)) continue
+    seen.set(gap.kind, {
+      kind: gap.kind, label: gap.label, kindLabel: SETUP_KIND_LABELS[gap.kind] || gap.kind,
+      anchor: gap.anchor || null, periodKey: period?.period_key ?? null, to: setupLink(gap.kind, ob, period),
+    })
+  }
+  return [...seen.values()]
+}
+
+// 「近期」(P5d 預設視圖):逾期、7 日內到期、30 日內排程、待補設定、進行中的關鍵工項／停留點,
+// 以及最近 7 日完成的(剛標完成的事項不能立刻從畫面消失,否則使用者看不到自己做了什麼)。
+// 全期視圖才列開工前的舊完成項與一年後的保固義務。
+export const RECENT_DAYS = 30
+export const RECENT_DONE_DAYS = 7
+export function isRecent(item, today) {
+  if (item.setup?.length || item.inProgress) return true
+  if (item.status === 'overdue' || item.status === 'due') return true
+  if (item.status === 'scheduled' && item.diff != null && item.diff <= RECENT_DAYS) return true
+  // 最近 7 日有完成(單次義務的完成、循環義務最近一期的完成):不論目前狀態都列——剛做完的事要看得到
+  const days = daysBetweenIso(taipeiISODate(item.completedAt), taipeiISODate(today0(today)))
+  return days != null && -days <= RECENT_DONE_DAYS
+}
+
+// 近期視圖的順序:先急後緩——逾期(最久的在前)→ 7 日內 → 待補設定／無到期 → 排程中(近的在前)→ 已完成。
+const URGENCY_RANK = { overdue: 0, due: 1, na: 2, scheduled: 3, done: 4 }
+export function byUrgency(a, b) {
+  const ra = URGENCY_RANK[a.status] ?? 9, rb = URGENCY_RANK[b.status] ?? 9
+  if (ra !== rb) return ra - rb
+  const da = a.diff ?? Infinity, db = b.diff ?? Infinity
+  if (da !== db) return da - db
+  return (a.ob?.sort_order ?? 0) - (b.ob?.sort_order ?? 0)
 }
 
 // 循環義務為什麼沒有期次(或不再產生):基準日／循環規則待補、停止條件判不出(與今日工作、Agent 同一份規則),
@@ -218,16 +285,23 @@ export function phaseWindows(anchors, warrantyEnd, today) {
 //   分母 settled = 已完成 + 已逾期(未到期與無需處理不計)
 //   分子 onTime  = 準時完成(完成時間 ≤ 到期日;見 buildTimelineItem 的 onTime)
 // 遲交補完成的項目永遠留在分母、不進分子——補完成不再灌高比率。
+// 循環義務(P5b／P5d)以「期」計:每一期已完成／已逾期各算一個應完成項(periodStat 同一條定義),
+// 義務層本身不算——否則一條每月義務完成了十一期、逾期一期,準時率會被算成 0%。
+// 五狀態計數 n 仍以「條」為單位(卡上的「N 條義務」對得上清單列數)。
 export function partyStat(items) {
   const n = { overdue: 0, due: 0, scheduled: 0, done: 0, na: 0 }
-  let onTime = 0
+  let settled = 0, onTime = 0, periodsSettled = 0
   for (const it of items) {
     n[it.status]++
-    if (it.status === 'done' && it.onTime !== false) onTime++
+    if (it.recurring) {
+      const ps = periodStat(it.periods)
+      settled += ps.settled; onTime += ps.onTime; periodsSettled += ps.settled
+      continue
+    }
+    if (it.status === 'done') { settled++; if (it.onTime !== false) onTime++ } else if (it.status === 'overdue') settled++
   }
-  const settled = n.done + n.overdue
   const rate = settled ? Math.round((onTime / settled) * 100) : null
-  return { total: items.length, n, settled, onTime, rate }
+  return { total: items.length, n, settled, onTime, rate, periodsSettled }
 }
 
 // 期程段摘要(README 2.3):文案優先序 逾期 → 即將到期 → 全部完成 → 排程中。
@@ -304,27 +378,36 @@ export function buildTimelineItem(ob, { requirement, sources, versionsById, anch
     : (!ob.completed_at || !due) ? true
       : taipeiISODate(ob.completed_at) <= localISODate(due)
   const currentPeriod = isRecurring(ob) ? currentObligationPeriod(ob.periods) : null
+  const periods = periodRows(ob, today)
+  // 循環義務的完成時間=最近一期完成的時間(近期視圖用它判「最近 7 日完成」;義務層沒有單一完成狀態)
+  const latestPeriodDone = periods.filter((p) => p.completedAt).map((p) => p.completedAt).sort().at(-1) || null
   const item = {
     id: ob.id,
     ob,
+    entryKind: 'obligation',
     who,
     status,
     due,
     diff,
     phase,
     onTime,
-    completedAt: ob.completed_at || null,
+    completedAt: ob.completed_at || latestPeriodDone,
     dateLabel: due ? localISODate(due) : '—',
     countdown: countdownLabel(status, diff),
     title: ob.title,
     desc: requirement?.description || ob.note || '',
     type,
     kind: KIND_LABELS[ob.recurring] || '',
-    // 循環義務(P5b):目前該處理的期別、全部期次(唯讀呈現)、沒有期次／不再產生的原因(含 P5c 停止條件)
+    // 循環義務(P5b):目前該處理的期別、全部期次、逐期準時率、沒有期次／不再產生的原因(含 P5c 停止條件)
     recurring: isRecurring(ob),
     currentPeriod: currentPeriod ? String(currentPeriod.period_key) : null,
-    periods: periodRows(ob, today),
+    currentPeriodId: currentPeriod?.id ?? null,
+    periods,
+    periodStat: isRecurring(ob) ? periodStat(periods) : null,
     recurrenceGap: recurrenceGap(ob, anchors, today),
+    // P5d:待補設定缺口(與今日工作／Agent／早報同一份判定)與各自的處理入口
+    setup: setupGapsOf(ob, anchors, today),
+    inProgress: false,
     // P5c:本期的依據(第幾版基準日)／單次義務的到期日依據(完成時留版或現行基準日)
     dueBasis: isRecurring(ob) ? (currentPeriod ? periodBasisLabel(currentPeriod) : '') : (singleDueBasis(ob, anchors?.version_no)?.label || ''),
     clause,
@@ -340,20 +423,27 @@ export function buildTimelineItem(ob, { requirement, sources, versionsById, anch
     evidenceReq: requirement?.evidence_requirement || '',
     penalty: ob.penalty || '',
   }
-  // 搜尋範圍(README 2.4):標題、說明、條款、頁碼、原文、類型、責任方、頻率、推算方式
+  // 搜尋範圍(README 2.4):標題、說明、條款、頁碼、原文、類型、責任方、頻率、推算方式、待補設定
   item.searchText = [
     item.title, item.desc, item.clause, item.page, item.quote,
     item.type, item.who, item.kind, item.calc, item.penalty,
+    ...item.setup.map((g) => g.label),
   ].filter(Boolean).join(' ').toLowerCase()
   return item
 }
 
-// 三種條件 AND、即時生效(README 2.4);status/phase 'all'、who/type 空字串=不過濾
-export function matchesFilters(item, filters) {
+// 條件 AND、即時生效(README 2.4);status/phase 'all'、who/type/setup 空字串=不過濾。
+// setup:'any'=任一待補設定,其餘=該種缺口(SETUP_KINDS);range:'recent'=近期(isRecent),'all'=全期。
+export function matchesFilters(item, filters, today) {
+  if (filters.range === 'recent' && !isRecent(item, today)) return false
   if (filters.status !== 'all' && item.status !== filters.status) return false
   if (filters.phase !== 'all' && item.phase !== filters.phase) return false
   if (filters.who && item.who !== filters.who) return false
   if (filters.type && item.type !== filters.type) return false
+  if (filters.setup) {
+    const gaps = item.setup || []
+    if (filters.setup === 'any' ? !gaps.length : !gaps.some((g) => g.kind === filters.setup)) return false
+  }
   const q = filters.q.trim().toLowerCase()
   if (!q) return true
   return item.searchText.includes(q)

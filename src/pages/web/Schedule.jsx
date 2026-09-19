@@ -1,59 +1,22 @@
-import { useState, useMemo } from 'react'
+// 逐工項排程(D-026 §4 退場,P5d):只剩唯讀歷史查閱與 CSV 匯出。
+// 關鍵工項的計畫起迄、落後判定與維護(加入／起迄／移除)自 P5d 起在履約時程(契約重點)的同一條時間軸,
+// 落後判定與這裡讀同一份 lib/keyWorkItems.js;資料仍是 item_schedules(不搬表、不刪列)。
+// 本頁 hidden(navConfig),舊書籤與深連結依原 roles(廠商)仍可直達;沒有任何寫入控制項——
+// 退場頁不得重新啟用寫入(入口與退場設計 §5),頁面移除寫入 UI,store 的寫入函式只由履約時程呼叫。
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { MSym } from '../../components/icons.jsx'
-import { Card, Stat, Empty, Badge, IconButton, Input, PageHeader, ErrorBanner, MobileReadOnlyNote, THEAD_CLS } from '../../components/ui.jsx'
-import { friendlyError } from '../../lib/errorMessage.js'
+import { Card, Stat, Empty, Badge, PageHeader, MobileReadOnlyNote, THEAD_CLS, buttonClass } from '../../components/ui.jsx'
 import { exportCsv, stamp } from '../../lib/exportCsv.js'
-import { parseLocalDate } from '../../lib/dates.js'
-import { billableLeaves } from '../../lib/boqCalc.js'
-
-const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
-
-// 依計畫起迄 + 完成% 推導狀態。tone 回 Badge 的 color key(語意),
-// 不回原始色字串——顏色的唯一真相在 Badge 的五語意色票,頁面不 inline style 上色
-function deriveState(sch, pct) {
-  if (pct >= 99.99) return { key: 'done', label: '已完成', tone: 'green' }
-  const t = today0(), end = parseLocalDate(sch.planned_finish), start = parseLocalDate(sch.planned_start)
-  if (end && t > end) return { key: 'late', label: '落後', tone: 'red' }
-  if (start && t >= start) return { key: 'doing', label: '進行中', tone: 'blue' }
-  if (start && t < start) return { key: 'pending', label: '未開始', tone: 'slate' }
-  return { key: 'noplan', label: '未排定', tone: 'slate' }
-}
+import { navLabel } from '../../lib/navConfig.js'
+import { buildKeyWorkItems, keyWorkItemCounts } from '../../lib/keyWorkItems.js'
 
 export default function Schedule() {
-  const { workItems, adjustedItems, dbMode, demoMode, valuations, itemSchedules, setItemSchedule, removeItemSchedule } = useStore()
-  const [search, setSearch] = useState('')
-  const [errMsg, setErrMsg] = useState('') // 排程寫入失敗必須讓使用者看到(失敗=UI 不變)
-  const onSet = async (key, patch) => {
-    setErrMsg('')
-    const { error } = await setItemSchedule(key, patch)
-    if (error) setErrMsg(friendlyError(error, '排程未寫入'))
-  }
+  const { workItems, adjustedItems = [], dbMode, demoMode, valuations = [], itemSchedules = {} } = useStore()
 
-  // 發包末端工項 + 查表。吃 adjustedItems 而非原始 workItems(財務單一真相層 B-02):
-  // 完成% 的分母是契約數量,核准追加減後不用變更後數量,追加的工項會被誤判「已完成」、
-  // 追減的永遠到不了 100%,落後判斷跟估驗頁分裂。變更只動 quantity/amount 不動樹形,
-  // leaf 集合與 item_key 不受影響。
-  const { leaves, byKey } = useMemo(() => {
-    if (!workItems) return { leaves: [], byKey: new Map() }
-    const m = new Map(adjustedItems.map((it) => [it.item_key, it]))
-    const lv = billableLeaves(adjustedItems)
-    return { leaves: lv, byKey: m }
-  }, [workItems, adjustedItems])
-
-  // 最新一期估驗的累計完成數量（{ item_key: cum_qty }）
-  const cumQty = useMemo(() => {
-    const last = valuations[valuations.length - 1]
-    return last?.items || {}
-  }, [valuations])
-
-  const rows = useMemo(() => Object.keys(itemSchedules).map((key) => {
-    const it = byKey.get(key) || {}
-    const q = it.quantity || 0
-    const pct = q > 0 ? Math.min(100, ((cumQty[key] || 0) / q) * 100) : 0
-    const sch = itemSchedules[key]
-    return { key, it, sch, pct, state: deriveState(sch, pct) }
-  }).sort((a, b) => (a.sch.planned_start || '').localeCompare(b.sch.planned_start || '')), [itemSchedules, byKey, cumQty])
+  // 關鍵工項列(計畫起迄＋最新估驗完成%＋狀態):與履約時程同一份推導
+  const rows = useMemo(() => (workItems ? buildKeyWorkItems({ itemSchedules, adjustedItems, valuations }) : []), [workItems, itemSchedules, adjustedItems, valuations])
 
   // 手機摘要只列「還要處理的」:落後 + 進行中(已完成/未開始不進手機清單,見下方註解)。
   // 排序沿用 rows(計畫起日),落後排在進行中之前才是「先看最急的」。
@@ -62,15 +25,17 @@ export default function Schedule() {
       .sort((a, b) => (a.state.key === b.state.key ? 0 : a.state.key === 'late' ? -1 : 1)),
     [rows],
   )
+  const counts = useMemo(() => keyWorkItemCounts(rows), [rows])
+  const timelineLabel = navLabel('/requirements')
 
-  const counts = useMemo(() => {
-    let late = 0, doing = 0, done = 0
-    for (const r of rows) { if (r.state.key === 'late') late++; else if (r.state.key === 'doing') doing++; else if (r.state.key === 'done') done++ }
-    return { total: rows.length, late, doing, done }
-  }, [rows])
-
-  const q = search.trim()
-  const results = q ? leaves.filter((it) => !itemSchedules[it.item_key] && (it.description.includes(q) || (it.item_no || '').includes(q))).slice(0, 15) : []
+  // 退場說明放在最上面:進到這一頁的人多半是循舊書籤或深連結來的,第一眼就要知道
+  // 「這裡不能再改」與「去哪裡改」。不用 ErrorBanner(這不是錯誤)。
+  const note = (
+    <p role="note" className="rounded-lg px-3 py-2 text-footnote bg-[var(--amber-tint)] text-[var(--amber-text)]">
+      逐工項排程已退出新作業（產品收斂 D-026）。關鍵工項的計畫起迄與落後追蹤改在
+      「<Link to="/requirements" className="underline">{timelineLabel}</Link>」的履約時程維護；本頁只作歷史查閱與 CSV 匯出。
+    </p>
+  )
 
   // 早退也保留 PageHeader:工作面分頁列(PageTabs)長在 PageHeader 裡,早退不帶頁首
   // 等於整條分頁列消失;平板(768–1279)與收合側欄的 icon rail 又不列子頁,
@@ -78,17 +43,18 @@ export default function Schedule() {
   if (!dbMode && !demoMode) {
     return (
       <div className="space-y-5">
-        <PageHeader title="逐工項排程" tagline="每項計畫起迄・落後追蹤" subtitle="對關鍵工項設定計畫起迄，依最新估驗完成數量自動判斷落後" />
-        <Card title="逐工項排程"><Empty>此功能需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
+        <PageHeader title="逐工項排程" tagline="歷史查閱" subtitle="關鍵工項計畫起迄的歷史查閱；維護改在履約時程" />
+        {note}
+        <Card title="逐工項排程"><Empty>此頁需真實專案（已匯入標單）。請先到「專案文件」一次上傳標單 XML。</Empty></Card>
       </div>
     )
   }
 
   return (
     <div className="space-y-5">
-      <PageHeader title="逐工項排程" tagline="每項計畫起迄・落後追蹤" subtitle="對關鍵工項設定計畫起迄，依最新估驗完成數量自動判斷落後" />
+      <PageHeader title="逐工項排程" tagline="歷史查閱" subtitle="關鍵工項計畫起迄的歷史查閱；維護改在履約時程" />
 
-      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
+      {note}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="已排程工項" value={counts.total} sub="項" color="text-[var(--text)]" />
@@ -96,26 +62,6 @@ export default function Schedule() {
         <Stat label="進行中" value={counts.doing} sub="項" color="text-[var(--blue-text)]" />
         <Stat label="已完成" value={counts.done} sub="項" color="text-[var(--green-text)]" />
       </div>
-
-      {/* 加入工項排程=寫入(建一列排程):手機整張卡不渲染。規範 §9.6 的決策是這五頁
-          在手機只給唯讀摘要,排程的計畫起迄是辦公室作業,留在桌機。 */}
-      <Card title="加入工項排程" className="max-md:hidden">
-        <div className="relative">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋工項加入排程…" />
-          {results.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg [box-shadow:var(--shadow-overlay)] max-h-64 overflow-auto enter-menu">
-              {results.map((it) => (
-                <button key={it.item_key} onClick={() => { onSet(it.item_key, { planned_start: null, planned_finish: null }); setSearch('') }}
-                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-[var(--surface-2)] flex items-center justify-between gap-2 max-md:min-h-11">
-                  <span className="truncate"><span className="text-[var(--text-3)] text-xs mr-2">{it.item_no}</span>{it.description}</span>
-                  <span className="text-[var(--text-3)] text-xs shrink-0">{it.unit}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-[var(--text-3)] mt-2">建議只排關鍵 / 大宗工項。狀態：今天超過「計畫迄」且未完成 → 落後。完成%取自最新一期估驗。</p>
-      </Card>
 
       <Card title={`排程清單（${rows.length}）`} bodyClass="p-0" action={rows.length > 0 && (
         <button onClick={() => exportCsv(`逐工項排程_${stamp()}`, rows, [
@@ -126,14 +72,12 @@ export default function Schedule() {
         ])} className="inline-flex items-center gap-1 text-sm font-medium text-[var(--blue-text)] hover:underline max-md:min-h-11"><MSym name="download" size={16} />CSV</button>
       )}>
         {rows.length === 0 ? (
-          <Empty>尚未排程任何工項。用上方搜尋把關鍵工項加進來，設定計畫起迄。</Empty>
+          <Empty>尚未設定任何關鍵工項。到「{timelineLabel}」的履約時程加入關鍵工項並設定計畫起迄。</Empty>
         ) : (
           <>
-          {/* 斷點跟手機層對齊(BottomNav 是 md:hidden):720px 六欄表在 390 要橫捲近兩個
-              螢幕寬,兩欄又是就地編輯的日期格(表格內輸入在手機明文豁免 44px,§9.2)——
-              稽核在這一頁量到 22 個 <44 目標,是全站最多的一頁。手機改渲染唯讀摘要。 */}
+          {/* 720px 六欄表在 390 要橫捲近兩個螢幕寬,手機改渲染唯讀摘要(規範 §9.6) */}
           <div className="overflow-x-auto max-md:hidden">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm min-w-[720px]" aria-label="逐工項排程">
               <thead>
                 {/* 表頭字型層走共用 THEAD_CLS(對齊/內距各表自決) */}
                 <tr className="border-b border-[var(--border)]">
@@ -142,31 +86,20 @@ export default function Schedule() {
                   <th className={`${THEAD_CLS} text-left px-2`}>計畫迄</th>
                   <th className={`${THEAD_CLS} text-right px-2`}>完成%</th>
                   <th className={`${THEAD_CLS} text-left px-2`}>狀態</th>
-                  <th className="px-2 pr-5"></th>
+                  <th className={`${THEAD_CLS} text-right px-2 pr-5`}>維護</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.key} className="border-b border-[var(--border-2)] hover:bg-[var(--surface-2)]">
-                    <td className="py-1.5 pl-5 min-w-[200px]"><span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{r.it.item_no}</span>{r.it.description || r.key}</td>
-                    <td className="px-2">
-                      {/* 只送變動的單欄;合併(起+訖)由 setItemSchedule 以 ref 累積+debounce
-                          處理,同 tick 連發也會合併成單次正確寫入(R4 P1-01) */}
-                      {/* W8-5:表格內輸入只提到 ~38px(max-md:py-2,斷點與手機層一致),不加 min-h——加了整張表列高會翻倍 */}
-                      <input type="date" value={r.sch.planned_start || ''} onChange={(e) => onSet(r.key, { planned_start: e.target.value || null })}
-                        aria-label={`${r.it.description || r.key} 計畫開始日`}
-                        className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs" />
-                    </td>
-                    <td className="px-2">
-                      <input type="date" value={r.sch.planned_finish || ''} onChange={(e) => onSet(r.key, { planned_finish: e.target.value || null })}
-                        aria-label={`${r.it.description || r.key} 計畫完成日`}
-                        className="border border-[var(--border)] rounded-md px-1.5 py-0.5 max-md:py-2 text-xs" />
-                    </td>
+                    <td className="py-2 pl-5 min-w-[200px]"><span className="text-[var(--text-3)] text-xs mr-2 tabular-nums">{r.it.item_no}</span>{r.it.description || r.key}</td>
+                    <td className="px-2 tabular-nums">{r.sch.planned_start || '未定'}</td>
+                    <td className="px-2 tabular-nums">{r.sch.planned_finish || '未定'}</td>
                     <td className="px-2 text-right tabular-nums">{r.pct.toFixed(1)}%</td>
                     <td className="px-2"><Badge color={r.state.tone}>{r.state.label}</Badge></td>
                     <td className="px-2 pr-5 text-right">
-                      <IconButton name="close" label={`移除 ${r.it.item_no || r.key} 的排程`} onClick={() => removeItemSchedule(r.key)}
-                        className="-m-2 max-md:-m-3.5 hover:text-[var(--red-text)]" />
+                      {/* 維護改在履約時程該項關鍵工項的詳情(?item= 直達) */}
+                      <Link to={`/requirements?item=${encodeURIComponent(r.key)}`} className={buttonClass('ghost', 'sm')}>到履約時程</Link>
                     </td>
                   </tr>
                 ))}
@@ -205,7 +138,7 @@ export default function Schedule() {
       </Card>
 
       <p className="text-xs text-[var(--text-3)]">
-        完成% = 最新一期估驗的累計完成數量 ÷ 契約數量。今天超過計畫迄且未完成 → 落後；今天在計畫起迄之間 → 進行中。比整體 S 曲線更細，能指出「哪一項」落後。
+        完成% = 最新一期估驗的累計完成數量 ÷ 契約數量。今天超過計畫迄且未完成 → 落後；今天在計畫起迄之間 → 進行中。與履約時程的關鍵工項同一條規則。
       </p>
     </div>
   )
