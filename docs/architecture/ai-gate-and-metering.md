@@ -22,7 +22,7 @@ assistant.chat／contract.parse 退場以關閉功能列處理，保留 Edge 與
 | false 且查詢成功 | 403 feature_disabled |
 | 查詢錯誤、null、undefined | 503 gate_unavailable |
 
-[aiJsonHandler](../../supabase/functions/_shared/aiHandler.ts) 供 13 支 schema／prompt 類函式共用 OPTIONS → body → gate → build → Claude → usage → reply。build 回驗證 Response 時不記帳；確定性 reply 記 ok、零 token。agent-run／extract-requirements／fetch-weather 自管流程仍用 openAiGate；send-reminders 用排程身分逐案呼叫同一 gateVerdict。
+[aiJsonHandler](../../supabase/functions/_shared/aiHandler.ts) 供 10 支 schema／prompt 類函式共用 OPTIONS → body → gate → build → Claude → usage → reply（原 13 支，P6b 移除退場的 assistant-chat／parse-contract／audit-summary 原始碼）。build 回驗證 Response 時不記帳；原「確定性 reply 記 ok、零 token」分支只有 audit-summary 使用，已隨之刪除。agent-run／extract-requirements／fetch-weather 自管流程仍用 openAiGate；send-reminders 用排程身分逐案呼叫同一 gateVerdict。
 
 ## 記帳與後台
 

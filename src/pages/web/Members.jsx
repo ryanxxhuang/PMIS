@@ -92,7 +92,7 @@ export default function Members() {
   useListKeyboardNav({ ordered, selectedId, select, idPrefix: 'mem-', modalUp: !!invite, searchRef })
 
   if (isSupabaseConfigured && !currentProject) {
-    // 早退分支也給 PageHeader＋space-y-5:未選專案時頁面標題不該憑空消失(與 Activity/RiskAudit 一致)
+    // 早退分支也給 PageHeader＋space-y-5:未選專案時頁面標題不該憑空消失(與 Activity 一致)
     return (
       <div className="space-y-5">
         <PageHeader title="三方成員" tagline="專案協作" subtitle="邀請監造 / 機關 / 協力廠商加入本專案" />

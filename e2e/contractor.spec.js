@@ -261,7 +261,7 @@ test.describe('施工廠商', () => {
     await expect(page.getByRole('button', { name: '標記完成' })).toBeVisible()
   })
 
-  test('履約時程承接關鍵工項與停留點(P5d):近期／全期、待補設定篩選、逐期就地標記;/schedule 退場唯讀', async ({ page }) => {
+  test('履約時程承接關鍵工項與停留點(P5d):近期／全期、待補設定篩選、逐期就地標記;/schedule 舊連結導向該項(P6b)', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/requirements')
     const list = page.getByRole('list', { name: '履約義務時間軸' })
@@ -277,6 +277,9 @@ test.describe('施工廠商', () => {
     await expect(list.getByRole('listitem').filter({ hasText: '第 5 期估驗計價送審' }).first()).toHaveAttribute('aria-current', 'true')
     // 關鍵工項詳情:計畫起迄在詳情維護(廠商),改日期即寫入 store(demo 走記憶體),列上的計畫迄跟著變
     await late.click()
+    // 殼的深連結 ?obligation=wi:<work_item_key>:記下這一項的 key,最後用舊的 /schedule?item= 連回來
+    await expect(page).toHaveURL(/obligation=wi(%3A|:)/)
+    const itemKey = decodeURIComponent(page.url().match(/obligation=wi(?:%3A|:)([^&]+)/)[1])
     const finish = page.getByLabel('計畫完成日')
     await expect(finish).toBeVisible()
     await finish.fill('2099-12-31')
@@ -300,18 +303,14 @@ test.describe('施工廠商', () => {
     await page.getByRole('button', { name: '掛佐證並標記完成', exact: true }).click()
     await expect(page.getByRole('button', { name: /^退回 \d{4}-\d{2} 期待辦$/ }).first()).toBeVisible()
     await expect(page.getByText(/逐期準時率 \d+%/)).toBeVisible()
-    // /schedule:hidden(側欄沒有入口),廠商深連結仍可達但唯讀——沒有輸入框、沒有加入／移除,只剩 CSV 與指路
-    await gotoHash(page, '/schedule')
-    await expect(page.getByRole('heading', { level: 1, name: '逐工項排程' })).toBeVisible()
+    // /schedule(P6b 移除頁面):廠商的舊連結導到履約時程;帶 ?item= 的落在那一項關鍵工項的詳情,
+    // 看得到剛改的計畫迄(同一個 store、同一條推導)。側欄沒有入口。
+    await gotoHash(page, `/schedule?item=${encodeURIComponent(itemKey)}`)
+    await expect(page).toHaveURL(/#\/requirements\?obligation=wi(%3A|:)/)
+    expect(decodeURIComponent(page.url().match(/obligation=wi(?:%3A|:)([^&]+)/)[1])).toBe(itemKey)
+    await expect(page.getByRole('heading', { level: 1, name: '契約重點' })).toBeVisible()
+    await expect(page.getByLabel('計畫完成日')).toHaveValue('2099-12-31')
     await expect(page.getByRole('navigation', { name: '主要功能' }).getByRole('link', { name: '逐工項排程', exact: true })).toHaveCount(0)
-    await expect(page.getByRole('note')).toContainText('已退出新作業')
-    const main = page.getByRole('main')
-    await expect(main.getByRole('table', { name: '逐工項排程' })).toBeVisible()
-    await expect(main.getByRole('button', { name: /^CSV/ })).toBeVisible()
-    await expect(main.locator('input')).toHaveCount(0)
-    await expect(main.getByRole('button', { name: /移除/ })).toHaveCount(0)
-    // 剛改的計畫迄在退場頁同一份資料看得到(同一個 store、同一條推導)
-    await expect(main.getByRole('table', { name: '逐工項排程' })).toContainText('2099-12-31')
   })
 
   test('期限追蹤:標為已提送可掛送審佐證(W-01)', async ({ page }) => {

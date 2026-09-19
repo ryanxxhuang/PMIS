@@ -36,7 +36,6 @@ const H1 = {
   '/payments': '請款收款',
   '/cost': '成本管理',
   '/progress': '進度管制',
-  '/schedule': '逐工項排程',
   '/contract': '專案文件',
   '/monthly-report': '施工月報',
   '/supervisor-report': '監造月報',
@@ -45,7 +44,6 @@ const H1 = {
   '/activity': '專案活動紀錄',
   '/members': '三方成員',
   '/alerts': '提醒中心',
-  '/audit': '風險稽核',
   '/project/new': '建立專案',
 }
 // /agent 的 h1 是角色化的 Agent 名稱(AGENT_LABEL),逐角色對照
@@ -54,7 +52,8 @@ const AGENT_H1 = { contractor: '廠商 Agent', supervisor: '監造 Agent', owner
 // 各角色可達的工作台路由,直接從 navConfig 的登記表與 routeAllowed 推導(demo 角色:無 override、
 // 非平台管理員),不在這裡手抄第二份角色清單——roles/hidden 改了這裡自動跟上,新路由沒補 H1 會紅。
 // 掃描範圍=登入後套工作台外框的頁:print 路由不掃(bare layout 另有守衛測試)、404/公開/導向不掃;
-// hidden 的退場頁(/cost、/audit)照樣掃——它們仍可依原角色深連結直達。
+// hidden 的退場頁(/cost)照樣掃——它仍可依原角色深連結直達;已移除頁面的退場路由(access retired,
+// /schedule、/audit)只導向、沒有自己的頁面,不在掃描範圍(導向斷言在 routes／owner／contractor spec)。
 const routesFor = (org) => Object.entries(routeRegistry)
   .filter(([path, rule]) => rule.access === 'authenticated' && !rule.surface && path !== '*')
   .filter(([path]) => routeAllowed(path, org, false, false))

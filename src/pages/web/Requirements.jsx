@@ -14,9 +14,9 @@
 // 寫入走 updateObligationStatus／transitionObligationPeriod(DB 成功才更新 UI,B-07——刻意不樂觀更新);
 // 「擷取有誤」落到觀察事項(observations)由監造/機關複查,不憑空造新資料域。
 // P5d(D-026 §4「必要關鍵工項日期承接到履約時程後,再退場逐工項排程頁」):同一條時間軸多了兩種事項——
-// 關鍵工項(item_schedules 的計畫起迄＋最新估驗完成%,落後判定與退場的 /schedule 同一份 lib/keyWorkItems)
+// 關鍵工項(item_schedules 的計畫起迄＋最新估驗完成%,落後判定在 lib/keyWorkItems)
 // 與停留點(inspection_points 由查驗推導的狀態,該叫驗的紅黃與 /itp 同一條規則);關鍵工項的計畫起迄
-// 在事項詳情維護(廠商),/schedule 只剩唯讀歷史查閱。資料不搬表、不加欄。
+// 在事項詳情維護(廠商)。逐工項排程頁已於 P6b 移除,/schedule 舊連結導到這裡。資料不搬表、不加欄。
 // 「清單＋詳情」殼(選取/深連結/鍵盤/抽屜/Modal/搜尋/快篩)與擷取審核頁共用:
 // 行為在 lib/useListDetailPane.js、外殼在 components/listDetail.jsx。
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -241,7 +241,7 @@ export default function Requirements() {
     return () => clearInterval(timer)
   }, [analyzing, reloadEnrich, reloadObligations])
 
-  // /requirements?item=<work_item_key>(退場的 /schedule 的替代深連結,入口與退場設計 §5):
+  // /requirements?item=<work_item_key>(退場的 /schedule 的替代深連結,入口與退場設計 §5;/schedule?item= 也導到這裡):
   // 換成殼的單條連結 ?obligation=wi:<key>,殼的初次選取就會落在那一項關鍵工項
   useEffect(() => {
     const key = searchParams.get('item')
@@ -268,7 +268,7 @@ export default function Requirements() {
     anchors,
   })), [obligations, reqById, sourcesByReq, versionsById, anchors])
 
-  // 關鍵工項與停留點(P5d):與退場的 /schedule、/itp 同一份推導;每一筆變成時程上的一個事項
+  // 關鍵工項與停留點(P5d):與 /itp 同一份推導;每一筆變成時程上的一個事項
   const keyRows = useMemo(() => buildKeyWorkItems({ itemSchedules, adjustedItems, valuations }), [itemSchedules, adjustedItems, valuations])
   const holdRows = useMemo(() => buildHoldPoints({ inspectionPoints, inspections, siteLogs, itemSchedules }), [inspectionPoints, inspections, siteLogs, itemSchedules])
   const extraEntries = useMemo(() => [
@@ -828,7 +828,7 @@ export default function Requirements() {
     </>)
   }
 
-  // 關鍵工項(P5d):計畫起迄與完成%;廠商在這裡維護(承接自退場的 /schedule),其他角色唯讀
+  // 關鍵工項(P5d):計畫起迄與完成%;廠商在這裡維護(承接自已移除的逐工項排程頁),其他角色唯讀
   const workItemDetail = () => {
     const r = selected.row
     const linked = holdRows.filter((h) => h.point.work_item_key === r.key)
@@ -1079,7 +1079,7 @@ export default function Requirements() {
     </div>
   )
 
-  // 關鍵工項與停留點摘要(P5d,承接自 /schedule 的統計列):件數＋廠商加入關鍵工項的入口(桌機;
+  // 關鍵工項與停留點摘要(P5d,承接自已移除的逐工項排程頁統計列):件數＋廠商加入關鍵工項的入口(桌機;
   // 計畫起迄是辦公室作業,規範 §9.6 的決策沿用)。沒有標單也沒有停留點時不渲染——沒有可講的數字。
   const showKeyCard = (!!workItems && (dbMode || demoMode)) || holdRows.length > 0
   const keyCard = showKeyCard && (

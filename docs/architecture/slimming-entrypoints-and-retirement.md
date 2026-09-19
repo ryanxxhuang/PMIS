@@ -52,6 +52,12 @@
 
 - **P4c 落地結果（2026-09-19，PR #144）**：估驗頁的檢核改為單一口徑——`lib/valuationChecks.js` 同時組裝 DB 檢查點缺件（P4b `get_valuation_state.violations`，每代碼一項、列涉及工項與處理入口，送審前可見）、`integrityAudit.js` 六項勾稽發現（附 `keys`，決策列「超前日誌申報／無日誌申報」與明細列就地提示共用 `classifyLogDiff`）與逐工項標示；原決策列另一套「超計／無佐證」口徑 `valuationDiff.js` 刪除。`RiskAudit.jsx` 仍呼叫同一支（不帶 state，只有勾稽發現）。估驗頁卡片名由「本期勾稽檢核」改為「缺件與檢核」（`role=list` 同名）。
 
+- **P6b 落地結果（2026-09-20，PR 見續接清單 §7 P6b-1）**：頁面、檢核表引擎與退場 Edge 原始碼移除，歷史與權限不動。
+  - 移除：`RiskAudit.jsx`、`lib/riskAudit.js`（＋測試；只有這一頁用）；Edge `audit-summary`／`assistant-chat`／`parse-contract` 三支原始碼（全庫無呼叫端、閘門已關）與 `_shared/aiHandler.ts` 只為 `audit-summary` 存在的 `{ reply }` 罐頭回覆分支；`errorLeak.scan.test.ts` 的 aiJsonHandler 函式清單 13→10 支。註冊表兩份的三個退場鍵**保留**（`edgeFunction` 留原名，對齊 DB `ai_features` 列與 `ai_usage_events` 歷史的標籤），`aiFeatures.test.js` 改為「啟用中的功能目錄必須存在、退場鍵的原始碼必須不存在」。
+  - 舊連結：`/audit` 改登記在 `navConfig` 非導覽表 `access: 'retired'`（`roles: ['owner']` 不變、`redirectTo: '/valuation'`）——守衛照原權限：機關導到估驗計價（「缺件與檢核」卡）、其他角色維持無權限畫面、不被導走；query 原樣帶過去。
+  - 原五個檢核面向的去處（判定規則與資料都不動）：估驗→估驗計價「缺件與檢核」（P4b DB 檢查點＋`integrityAudit.js` 六項勾稽）；品質（逾期未結缺失）→品質查驗缺失分段＋今日工作 AI 觀察（`aiInsights`「N 件缺失逾期未結案」）；契約（逾期義務）→履約時程／期限追蹤＋今日工作；變更（待核定佔比）→變更設計待核定清單＋今日工作「N 件變更設計待核定」（機關／監造）；進度（落後 >5%）→進度 S 曲線＋今日工作「進度落後」。**未承接**：`riskAudit.js` 的「單期估驗金額超過前期平均 2.2 倍」趨勢提示——P4b 起每期數量由監造簽署確認量在 DB 強制，這個事後啟發式提示已被前置控制取代，不另搬；若機關仍要趨勢提示，另開單元加在估驗頁，不復活獨立稽核頁。
+  - 歷史：`audit_events`、`ai_features.audit.summary` 列、用量歷史、`project_ai_overrides` 全部不動；線上 `audit-summary` 函式由使用者 2026-09-20 授權下架（`supabase functions delete audit-summary`），`assistant-chat`／`parse-contract` 線上函式尚待使用者授權。
+
 ### 2.4 逐工項排程 `/schedule`
 
 - 使用端：`Schedule.jsx`、`ledger.js setItemSchedule/removeItemSchedule`、`db.js loadItemSchedulesFromDB`、`Dashboard.jsx exportAll`、`demoSeed.js`、`draftDailyLog.ts`（註解說明無排程量欄位）、`e2e/a11y.spec.js`；DB `item_schedules`（正式 4 列／4 案）。
@@ -59,9 +65,11 @@
 - 清理：P5d 承接完成且 E2E 通過後 `hidden`→P6b 移除頁面、store 寫入、Demo 種子；表保留。
 - **P5d 落地結果（2026-09-19）**：承接＝關鍵工項與停留點進履約時程的**同一條時間軸**，不是另開一段：`src/lib/keyWorkItems.js`（落後判定 `deriveWorkItemState` 自 `Schedule.jsx` 抽出、完成% 仍取最新一期估驗累計 ÷ 契約數量；停留點狀態沿用 `lib/itp.js`，「施作中未叫驗」H 紅／W 黃與 `/itp` 同一條規則）把 `item_schedules` 的每一項與 `inspection_points` 的每一點各變成一個事項（id `wi:<item_key>`／`itp:<id>`，五色語意鍵與契約義務同一套、Badge 文字仍是各自的領域字：落後／進行中／未申請查驗…），`/requirements` 的清單、狀態快篩、類型下拉、搜尋與詳情都吃同一份。關鍵工項的**少量維護**在事項詳情（廠商或非正式模式管理者：計畫起迄兩個日期欄、移除；摘要卡有「加入關鍵工項」搜尋，桌機），寫入仍走 store 的 `setItemSchedule`／`removeItemSchedule`（ref 累積＋debounce 合併同工項起訖），資料不搬表、不加欄、沒有 migration；監造／機關唯讀。停留點詳情列允收標準／頻率／出處／掛的工項與其計畫起迄／施作事實／查驗，處理入口導 `/itp?point=`（廠商申請查驗）或 `/quality?inspection=`（監造判定）。`/schedule` 改為唯讀歷史查閱（無輸入框、無加入／移除，CSV 仍在，每列「到履約時程」帶 `?item=<key>` 直達該項）並在 `navConfig` `hidden: true`（`roles` 仍只有廠商）；`/requirements?item=<work_item_key>` 由頁面換成殼的 `?obligation=wi:<key>`。指定契約範圍（`?package=`）時只列該契約的義務，不列整案的關鍵工項與停留點。P6b 才移除 `Schedule.jsx`；`item_schedules` 表與 store 寫入保留（履約時程在用）。
 
+- **P6b 落地結果（2026-09-20，PR 見續接清單 §7 P6b-1）**：`Schedule.jsx` 與其唯讀測試移除；`/schedule` 改登記在 `navConfig` 非導覽表 `access: 'retired'`（`roles: ['contractor']` 不變、`redirectTo: '/requirements'`）——廠商導到履約時程，`/schedule?item=<work_item_key>` 由履約時程換成該項關鍵工項的直達（`?obligation=wi:<key>`），監造／機關維持無權限畫面。歷史查閱：`item_schedules` 全部列在履約時程（全期）的關鍵工項事項與摘要卡，CSV 由首頁「整案匯出」（`Dashboard.exportAll` 的 `item_schedules`）取得；`item_schedules`／`schedule_periods` 表、store 的 `setItemSchedule`／`removeItemSchedule`（履約時程在用）與 Demo 種子 `itemSchedules`（履約時程的示範資料）保留。
+
 ### 2.5 已停用 AI 路徑
 
-`assistant.chat`、`contract.parse` 維持停用；不在本輪新增動作。
+`assistant.chat`、`contract.parse` 維持停用；不在本輪新增動作。P6b 起兩支的 Edge 原始碼與 `audit-summary` 一併移除（見 §2.3 P6b 落地結果），註冊鍵與 DB 列保留供用量歷史對帳。
 
 ## 3. 融入核心流程的模組（保留能力、取消常駐入口）
 
@@ -142,7 +150,7 @@
 ## 5. 舊深連結與 fail-closed
 
 - `hidden` 項保留 `roles`；`routeAllowed` 不變；`e2e/routes.spec.js`、`reachability.spec.js`、`a11y.spec.js` 同步更新（退場頁改為「hidden 仍可直達且唯讀」的斷言）。
-- 提醒信與 Agent 回答中的路徑：`/audit`→估驗頁對應工項、`/schedule`→`/requirements?item=<work_item>`、`/cost`→維持（唯讀）。
+- 提醒信與 Agent 回答中的路徑：`/audit`→估驗頁對應工項、`/schedule`→`/requirements?item=<work_item>`、`/cost`→維持（唯讀）。**P6b 落地**：頁面已移除的 `/schedule`、`/audit` 登記為 `access: 'retired'`（保留原 `roles`，Web 守衛照常擋；通過後 `RetiredRedirect` 導到 `redirectTo` 並帶原 query 與返回來源）——不改成不經守衛的 `redirect`，也不刪登記（舊連結會變 404）；`/cost` 仍是 hidden 頁面。
 - 退場頁不得重新啟用寫入：頁面移除寫入控制且 store 不再暴露寫入函式；成本表更由資料庫收回寫入（P1b migration，直接 REST 也被拒），讀取 RLS 條件不變（歷史查閱原權限）。
 - 頁名單一來源（P1b 統一 P1c 移交項）：`/dashboard` 的 h1、側欄分區、待辦返回連結（`taskReturn.js`）、各頁指路文案都取 `navConfig.BALL_SOURCES_TITLE`（今日工作），不再有「今日待辦」別名；`/alerts` 在登記表帶 `label`，返回連結名同樣取自登記表。
 
@@ -164,7 +172,7 @@
 3. **前端**：四主入口、現場紀錄、估驗聯動 UI；push `main` 自動部署；`check:prod`。
 4. **觀察期**：至少一個真案期別走完簽署→確認→同步→送審→核定。
 5. **DB 封堵 migration**：收回 `valuation_items` 直接寫入、關閉 `audit.summary`、`daily_logs` 舊路徑 guard 生效。
-6. **清理 PR**：hidden→移除頁面／store／Demo 種子／測試（P6b）。
+6. **清理 PR**：hidden→移除頁面／store／Demo 種子／測試（P6b）。P6b-1 已移除 `/schedule`、`/audit` 頁面與退場 Edge 原始碼（純前端＋Edge 刪檔，無 migration；`_shared/aiHandler.ts` 變更後重佈其模組圖內的函式）。
 
 每步套用後寫回 `CURRENT.md` §6.3；任何一步失敗以對應 rollback 檔回復，前端可回退到前一建置。
 

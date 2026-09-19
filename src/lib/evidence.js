@@ -11,7 +11,7 @@
 //   以「取樣日=澆置日」對應——模板/打鑿等含「混凝土」字樣的非澆置工項不掛試體。
 import { OVER_TOL, isConcretePourItem } from './integrityAudit.js'
 
-export { OVER_TOL } // 差異警示容忍值與稽核頁同一份,兩邊判定不可分裂
+export { OVER_TOL } // 差異警示容忍值與勾稽引擎(integrityAudit,估驗頁缺件與檢核)同一份,兩邊判定不可分裂
 
 export function collectEvidence(itemKey, {
   siteLogs = [], inspections = [], checklistRecords = [], testSamples = [],

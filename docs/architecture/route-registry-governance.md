@@ -1,6 +1,6 @@
 # 路由與導覽治理
 
-> CURRENT｜2026-09-17（D-026 四主入口，瘦身 P1a／P1c）。D-013 預設拒絕；前端守衛只管體驗，資料安全由 RLS／RPC／trigger 保護。
+> CURRENT｜2026-09-20（D-026 四主入口，瘦身 P1a／P1c；P6b 退場路由）。D-013 預設拒絕；前端守衛只管體驗，資料安全由 RLS／RPC／trigger 保護。
 
 [navConfig](../../src/lib/navConfig.js) 是入口：`navGroups` 展開成 navRouteRules，加上 nonNavRouteRules 組成 routeRegistry。[App](../../src/App.jsx) 每條 Route 必須有登記，缺登記即 throw；[Layout](../../src/components/Layout.jsx) 用同一份定義產生側欄。
 
@@ -10,12 +10,13 @@
 |---|---|
 | 未登記 | false，任何 override 都不能繞過 |
 | public／redirect | true |
+| retired（頁面已移除的退場路由） | 同 authenticated：保留原 roles，通過後導到 `redirectTo` |
 | platformAdminOnly | 只看平台 admin，不看專案 override |
 | 其他 authenticated | 無 roles，或角色命中，或非正式模式的 can.override |
 
 `hidden` 只隱藏入口，仍保留登記、角色守衛與深連結；不能以刪掉定義代替隱藏。`roles` 僅三方，platformAdminOnly 不同時帶 roles。`surface: print` 只去掉工作台外框，仍經登入與專案守衛。公開頁為 login／security，redirect 為根路徑／assistant；精確路由清單由程式與測試維護。
 
-`visibleNavGroups` 過濾角色與 hidden tabs，入口指向第一個可見 tab，無可見項則藏整組。defaultLandingPath 現行全部到 `/dashboard`。側欄分區依 D-026 四主入口（2026-09-17）：「今日工作」（`BALL_SOURCES` 三個球權來源，持有 `/dashboard`，不是 `navGroups` 項目）→「工作」（`WORK_TITLE`；三個主入口群組現場紀錄 `/site`／履約時程 `/requirements`／估驗請款 `/valuation`，各含子頁）→「專案資料」（文件往來 `/submittals`、專案 `/contract` 兩組）→「平台」（僅 platformAdminOnly）。群組對三角色都可見，子頁依角色過濾；`/cost`、`/audit` 為 hidden 退場頁（仍登記、仍受原 roles 守衛；P1b 起兩頁皆唯讀——成本寫入由資料庫收回，稽核檢核已移入估驗頁），`/schedule` 待 P5d 承接後才 hidden。
+`visibleNavGroups` 過濾角色與 hidden tabs，入口指向第一個可見 tab，無可見項則藏整組。defaultLandingPath 現行全部到 `/dashboard`。側欄分區依 D-026 四主入口（2026-09-17）：「今日工作」（`BALL_SOURCES` 三個球權來源，持有 `/dashboard`，不是 `navGroups` 項目）→「工作」（`WORK_TITLE`；三個主入口群組現場紀錄 `/site`／履約時程 `/requirements`／估驗請款 `/valuation`，各含子頁）→「專案資料」（文件往來 `/submittals`、專案 `/contract` 兩組）→「平台」（僅 platformAdminOnly）。群組對三角色都可見，子頁依角色過濾；`/cost` 為 hidden 退場頁（仍登記、仍受原 roles 守衛；P1b 起唯讀——成本寫入由資料庫收回）。`/schedule`、`/audit` 的頁面已於 P6b 移除，改登記在 nonNavRouteRules 的 `access: 'retired'`（`roles` 與原本一字不差、`redirectTo` 為承接頁：`/requirements`、`/valuation`）：App 以同一個 Web 守衛擋下原角色以外的人，通過後 `RetiredRedirect` 帶原 query 與 router state 導過去；不改成不經守衛的 `redirect`、不刪登記。
 
 球權來源使用 `?ball=`，不新增路由；resolveBallKey 未知值回 mine。query 不改權限，側欄與頁面讀同一個參數；選取態不要只比 pathname，否則三個來源會一起亮。
 
@@ -29,4 +30,4 @@
 
 ## 維護與驗證
 
-新增頁面同時改 App 與登記表；新增列印、公開或平台管理頁須明示 access／surface。改角色先核伺服器護欄；藏／露只改 hidden。驗證 [navConfig 單元測試](../../src/lib/navConfig.test.js)、[路由 E2E](../../e2e/routes.spec.js) 與三角色 E2E。
+新增頁面同時改 App 與登記表；新增列印、公開或平台管理頁須明示 access／surface；移除頁面時把登記改為 `retired`＋`redirectTo`（承接頁必須對原角色可進，`navConfig.test.js` 釘住）。改角色先核伺服器護欄；藏／露只改 hidden。驗證 [navConfig 單元測試](../../src/lib/navConfig.test.js)、[路由 E2E](../../e2e/routes.spec.js) 與三角色 E2E。

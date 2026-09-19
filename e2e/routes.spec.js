@@ -49,7 +49,7 @@ test.describe('路由治理', () => {
     await expect(nav.getByRole('link', { name: '品質查驗', exact: true })).toBeVisible()
     await nav.getByRole('button', { name: '收合現場紀錄子頁' }).click()
     await expect(nav.getByRole('link', { name: '施工日誌', exact: true })).toBeHidden()
-    // 退場的 hidden 項不在側欄:廠商的成本管理、機關專屬的風險稽核都不出現;其餘子頁照常
+    // 退場項不在側欄:廠商的成本管理(hidden)、機關專屬的風險稽核(P6b 已移除頁面)都不出現;其餘子頁照常
     await nav.getByRole('button', { name: '展開估驗請款子頁' }).click()
     await expect(nav.getByRole('link', { name: '請款收款', exact: true })).toBeVisible()
     await expect(nav.getByRole('link', { name: '成本管理', exact: true })).toHaveCount(0)
@@ -143,7 +143,7 @@ test.describe('路由治理', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
   })
 
-  test('退場頁 hidden 仍可依原角色直達;現場紀錄總覽三角色可達且列出現場入口', async ({ page }) => {
+  test('退場頁 hidden 仍可依原角色直達、已移除的頁依原角色導向承接位置;現場紀錄總覽三角色可達且列出現場入口', async ({ page }) => {
     await loginAs(page, 'contractor')
     // 成本管理:廠商可直達(歷史查閱),側欄沒有入口;頁面唯讀——沒有新增表單、沒有可編輯的金額格、
     // 沒有刪除鈕,只剩搜尋/篩選與 CSV 匯出(D-026 P1b;資料庫另以 pgTAP 釘住寫入被拒)
@@ -158,14 +158,15 @@ test.describe('路由治理', () => {
     await expect(main.getByRole('button', { name: /刪除/ })).toHaveCount(0)
     await expect(main.getByRole('spinbutton')).toHaveCount(0)
     await expect(main.locator('input:not([type="search"])')).toHaveCount(0)
-    // 風險稽核:廠商被守衛擋(roles 不因 hidden 鬆綁)
+    // 風險稽核(P6b 移除頁面,機關的舊連結導向估驗計價,見 owner.spec):廠商被守衛擋,不會被導走(roles 不因退場鬆綁)
     await gotoHash(page, '/audit')
     await expect(page.getByText('你的角色沒有此頁的存取權限')).toBeVisible()
-    // 逐工項排程(P5d 退場):廠商可直達、側欄無入口、唯讀(內容斷言在 contractor.spec)
+    await expect(page).toHaveURL(/#\/audit$/)
+    // 逐工項排程(P6b 移除頁面):廠商的舊連結導到履約時程(帶 ?item= 落在該項,見 contractor.spec);側欄無入口
     await gotoHash(page, '/schedule')
-    await expect(page.getByRole('heading', { level: 1, name: '逐工項排程' })).toBeVisible()
+    await expect(page).toHaveURL(/#\/requirements/)
+    await expect(page.getByRole('heading', { level: 1, name: '契約重點' })).toBeVisible()
     await expect(page.getByRole('navigation', { name: '主要功能' }).getByRole('link', { name: '逐工項排程', exact: true })).toHaveCount(0)
-    await expect(page.getByRole('main').locator('input')).toHaveCount(0)
     // 現場紀錄總覽:底欄/側欄第一個主入口,列出現場作業入口;點「施工日誌」直達今天
     await gotoHash(page, '/site')
     await expect(page.getByRole('heading', { level: 1, name: '現場紀錄' })).toBeVisible()

@@ -31,7 +31,7 @@ D-012 移除了 obligation → Requirement 的同步／刪除 trigger。D-019 �
 
 專案四個基準日（決標／接獲開工通知／開工／竣工）自 P5c（`20260919021500`）起每次變更留一版 `project_anchor_versions`（append-only；類別、依據函文／變更案、生效日、受影響事項），期次蓋產生時的版本、單次義務完成時留到期日快照——基準日更正只重算未完成的，不改歷史；循環期次只產生到實際竣工日（驗收事件）或契約竣工日為止。見同一份 §4.3。
 
-`legacy_contract_obligation_id` 是歷史來源識別，刻意沒有反向 FK，避免循環依賴。現行期限頁、提醒、Agent 與 Demo 都還讀 obligation，因此不能刪表。`parse-contract` 沒有前端呼叫者，但退場功能列與 Edge 仍保留供歷史用量／回復；功能關閉 migration 的部署狀態見 CURRENT。
+`legacy_contract_obligation_id` 是歷史來源識別，刻意沒有反向 FK，避免循環依賴。現行期限頁、提醒、Agent 與 Demo 都還讀 obligation，因此不能刪表。`parse-contract` 沒有前端呼叫者；退場功能列保留供歷史用量對帳，Edge 原始碼已於 P6b 移除（要回復須連原始碼一起還原）；功能關閉 migration 與線上函式狀態見 CURRENT。
 
 ## 程式與驗證入口
 

@@ -18,7 +18,8 @@
 //   label         中文顯示名(台灣用語)
 //   category      分類:agent(對話)/document(讀文件)/draft(產草稿)/
 //                 vision(看照片)/integration(外部介接)/automation(排程)
-//   edgeFunction  對應的 supabase/functions/<目錄> 名稱
+//   edgeFunction  對應的 supabase/functions/<目錄> 名稱(退場鍵 assistant.chat／contract.parse／audit.summary
+//                 保留原名對齊 DB 列與用量歷史;原始碼已於 P6b 移除、線上函式另行下架)
 //   minPlan       最低方案:trial < standard < pro(階序見 PLAN_RANK)
 //   isLlm         是否呼叫 LLM。false=不打 LLM、不算 token/成本(如中央氣象署
 //                 API、確定性早報寄信),但仍是可獨立開關、需要計次的模組——

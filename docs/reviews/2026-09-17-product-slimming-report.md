@@ -125,7 +125,7 @@ flowchart LR
 | 逐工項排程 `/schedule` 的獨立編輯器 | **停止擴充，替代完成後退場** | 另一套手工起迄日期增加維護；它也不是完整的工程依賴排程系統 | 必要的工項起迄與工程里程碑搬入履約時程；有待辦與資料承接後才移除 |
 | 已停用的 `assistant.chat`、`contract.parse` 舊路徑 | **維持停用，列入技術清理** | 已有唯一 Agent 入口與 requirements 契約來源 | 保留歷史用量、識別碼與必要舊連結；不是本輪新減少的使用者功能 |
 
-成本與排程不只是兩個頁面，還有 store、載入、Demo 種子與初始化資料檢查等使用端。風險稽核的確定性工具也被估驗佐證使用，不能整份刪除。依據：[成本](../../src/pages/web/Cost.jsx)、[排程](../../src/pages/web/Schedule.jsx)、[store ledger](../../src/store/slices/ledger.js)、[初始化](../../src/pages/web/Dashboard.jsx)、[佐證推導](../../src/lib/evidence.js)、[AI 註冊](../../src/lib/aiFeatures.js)。
+成本與排程不只是兩個頁面，還有 store、載入、Demo 種子與初始化資料檢查等使用端。風險稽核的確定性工具也被估驗佐證使用，不能整份刪除。依據：[成本](../../src/pages/web/Cost.jsx)、[排程](https://github.com/ryanxxhuang/PMIS/blob/ab4be5f/src/pages/web/Schedule.jsx)、[store ledger](../../src/store/slices/ledger.js)、[初始化](../../src/pages/web/Dashboard.jsx)、[佐證推導](../../src/lib/evidence.js)、[AI 註冊](../../src/lib/aiFeatures.js)。
 
 ### 4.2 能力保留，入口與流程合併
 
