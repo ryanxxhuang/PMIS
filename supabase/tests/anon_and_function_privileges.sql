@@ -82,11 +82,11 @@ select is((select count(*)::int from h23_rels t join pg_class c on c.oid = t.oid
 select is((select count(*)::int from h23_seqs s join pg_class c on c.oid = s.oid, aclexplode(c.relacl) a
            where a.grantee = 0), 0, 'public 序列 ACL 沒有 PUBLIC 的任何權限');
 
--- ── 3. authenticated 允許清單精確相等（68 支＋P5c update_project_anchors；來源與理由見 migration 檔頭）─────────────
+-- ── 3. authenticated 允許清單精確相等（79 支：68 支來源與理由見 migration 檔頭＋P5c update_project_anchors＋P4b 20260919140000 十支估驗 RPC）─
 select is(
   (select string_agg(proname, ',' order by proname collate "C") from h23_fns
     where has_function_privilege('authenticated', oid, 'EXECUTE')),
-  'add_member_by_email,admin_ai_usage_by_feature,admin_ai_usage_by_project,admin_ai_usage_by_user,'
+  'add_member_by_email,admin_adjust_valuation_item,admin_ai_usage_by_feature,admin_ai_usage_by_project,admin_ai_usage_by_user,'
   'admin_ai_usage_daily,admin_ai_usage_overview,admin_list_projects_for_ai,admin_override,'
   'admin_set_feature_enabled,admin_set_feature_min_plan,admin_set_project_override,admin_set_project_plan,'
   'ai_feature_allowed,can_access_contract_package,can_access_contractor_private,can_manage_documents,'
@@ -94,14 +94,14 @@ select is(
   'can_read_project_document,can_read_requirement_provenance,can_read_requirement_row,can_read_requirement_scope,'
   'can_review_requirement,can_upload_contract_package,can_write,can_write_document,can_write_document_version,'
   'can_write_project_document,create_project,delete_document,delete_project,ensure_project_identity,'
-  'fn_field_document_owner_org,fn_field_document_target_table,fn_field_document_template,import_work_items,'
+  'fn_field_document_owner_org,fn_field_document_target_table,fn_field_document_template,get_valuation_state,import_work_items,'
   'is_platform_admin,is_project_admin,is_project_admin_v2,is_project_member,is_project_member_v2,'
-  'list_project_members,log_document_access,materialize_obligation_periods,my_org_type,my_party,'
+  'issue_supervisor_certificate,list_billable_backlog,list_project_members,log_document_access,materialize_obligation_periods,my_org_type,my_party,'
   'my_project_ids,my_project_ids_v2,my_project_membership,my_project_party_type,my_project_role,'
   'obligation_party,photo_storage_path_in_use,portfolio_summary,receive_field_document,remove_member,'
-  'reset_project_boq,resolve_agent_action,return_field_document,review_requirement,'
-  'save_field_document_version,shares_project_with,sign_field_document,storage_path_in_use,'
-  'submit_field_document,transition_obligation_period,update_project_anchors',
+  'reset_project_boq,resolve_agent_action,return_field_document,review_requirement,revoke_inspection_confirmation,'
+  'save_field_document_version,set_valuation_item_cum,set_work_item_pricing_basis,shares_project_with,sign_field_document,storage_path_in_use,'
+  'submit_field_document,sync_valuation_from_confirmations,transition_obligation_period,transition_valuation,update_project_anchors,void_valuation_adjustment',
   'authenticated 可執行的函式＝允許清單（新 RPC 要在 migration 明示 grant 並加進這裡）');
 select is((select count(*)::int from h23_fns where is_trigger and has_function_privilege('authenticated', oid, 'EXECUTE')), 0,
   'trigger 函式一律不給 authenticated EXECUTE（觸發不需要，直接呼叫沒有用途）');

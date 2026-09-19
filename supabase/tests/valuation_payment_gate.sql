@@ -3,7 +3,7 @@
 -- 對應 migration 20260712001100_valuation_payment_gate.sql。
 begin;
 
-select plan(16);
+select plan(17);
 
 -- ── 結構 ─────────────────────────────────────────────────────────────────────
 select has_function('public', 'valuations_payment_gate', '閘門函式存在');
@@ -69,6 +69,10 @@ select throws_ok($$ update public.valuations set paid_amount = 999
   '專案管理者同樣不可在未核定期登錄金流');
 
 -- ── 核定後:可登錄金流 ───────────────────────────────────────────────────────
+-- P4b 狀態機:草稿→監造審核(廠商;截止日必填)→已核定(監造);無明細所以核定檢查點沒有數量要驗
+select pg_temp.become('cccccccc-cccc-cccc-cccc-ccccccccccc1');
+select lives_ok($$ update public.valuations set status = '監造審核', period_end = current_date
+  where id = '32000000-0000-0000-0000-000000000001' $$, '廠商送監造審核(同一更新補截止日)');
 select pg_temp.become('cccccccc-cccc-cccc-cccc-ccccccccccc2');
 select lives_ok($$ update public.valuations set status = '已核定'
   where id = '32000000-0000-0000-0000-000000000001' $$, '監造可核定估驗');

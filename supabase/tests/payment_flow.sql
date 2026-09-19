@@ -36,10 +36,10 @@ begin
          else json_build_object('sub', u::text, 'role', 'authenticated')::text end, true);
 end $$;
 
--- 已核定估驗(直接建;valuations_guard 只管 UPDATE 轉移,INSERT 已核定不受限)
-select pg_temp.become('a4a4a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4c1');
-insert into public.valuations (id, project_id, period_no, status) values
-  ('36000000-0000-0000-0000-000000000001','26000000-0000-0000-0000-000000000001', 1, '已核定');
+-- 已核定估驗(歷史期別由 superuser 直接建;P4b 起登入者 INSERT 只能是草稿——直接建已核定曾是繞過送審／核定的洞)
+select pg_temp.become(null);
+insert into public.valuations (id, project_id, period_no, period_end, status) values
+  ('36000000-0000-0000-0000-000000000001','26000000-0000-0000-0000-000000000001', 1, current_date, '已核定');
 
 -- 機關登錄金流
 select pg_temp.become('a4a4a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4c3');

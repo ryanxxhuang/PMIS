@@ -210,11 +210,16 @@ select is((select count(*)::int from public.daily_logs where project_id = 'bb100
 
 -- ── 重設:原子性——已核定估驗擋一般成員;管理者(非正式模式)可整案重設 ───────────
 select pg_temp.become(null);
-insert into public.valuations (id, project_id, period_no, status)
-  values ('bb400000-0000-0000-0000-000000000002', 'bb100000-0000-0000-0000-000000000002', 1, '已核定');
+-- 已核定的歷史期別(P4b 之前就存在的資料):明細在草稿時寫入,核定檢查點以 DBA 邊界(disable trigger)略過,
+-- 對應正式庫遷移前的已核定期;P4b 起登入者與 service role 都無法再產生沒有確認來源的已核定量。
+insert into public.valuations (id, project_id, period_no, period_end, status)
+  values ('bb400000-0000-0000-0000-000000000002', 'bb100000-0000-0000-0000-000000000002', 1, current_date, '草稿');
 insert into public.valuation_items (valuation_id, work_item_id, cum_qty)
   values ('bb400000-0000-0000-0000-000000000002',
     (select id from public.work_items where project_id = 'bb100000-0000-0000-0000-000000000002' and item_key = '1.1'), 1);
+alter table public.valuations disable trigger valuations_checkpoint_guard;
+update public.valuations set status = '已核定' where id = 'bb400000-0000-0000-0000-000000000002';
+alter table public.valuations enable trigger valuations_checkpoint_guard;
 
 select pg_temp.become('bb000000-0000-0000-0000-000000000001');
 select throws_ok($$ select public.reset_project_boq('bb100000-0000-0000-0000-000000000002') $$,

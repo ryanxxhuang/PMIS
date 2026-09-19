@@ -48,11 +48,13 @@ begin
          else json_build_object('sub', u::text, 'role', 'authenticated')::text end, true);
 end $$;
 
--- 待簽核素材(由廠商建立)
+-- 待簽核素材:估驗期以「已送審」狀態直接建立(P4b 起登入者只能建草稿、送審／核定必填截止日,
+-- 這裡由 superuser 建歷史狀態;無明細,核定檢查點沒有數量要驗),其餘由廠商建立
+select pg_temp.become(null);
+insert into public.valuations (id, project_id, period_no, period_end, status) values
+  ('33000000-0000-0000-0000-000000000001','23000000-0000-0000-0000-000000000001', 1, current_date, '監造審核'),
+  ('33000000-0000-0000-0000-000000000002','23000000-0000-0000-0000-000000000001', 2, current_date, '監造審核');
 select pg_temp.become('dddddddd-dddd-dddd-dddd-ddddddddddd1');
-insert into public.valuations (id, project_id, period_no, status) values
-  ('33000000-0000-0000-0000-000000000001','23000000-0000-0000-0000-000000000001', 1, '監造審核'),
-  ('33000000-0000-0000-0000-000000000002','23000000-0000-0000-0000-000000000001', 2, '監造審核');
 insert into public.inspections (id, project_id, title, status) values
   ('33000000-0000-0000-0000-000000000011','23000000-0000-0000-0000-000000000001', '鋼筋查驗A', '待查驗'),
   ('33000000-0000-0000-0000-000000000012','23000000-0000-0000-0000-000000000001', '鋼筋查驗B', '待查驗');

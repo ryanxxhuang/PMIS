@@ -1,6 +1,6 @@
 # 監造確認量與估驗聯動（後端強制）
 
-> 狀態：**PROPOSED（P0 設計；P4a 純計算層已實作）**｜2026-09-17｜依 [D-026](../DECISIONS.md)。§3.2 的純計算函式已由 migration `20260917120000_confirmed_quantity_calc` 建立並有 pgTAP；其餘（表、guard、RPC、UI）尚未建；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
+> 狀態：**ACTIVE（後端已實作：P4a 純計算層 `20260917120000`、P4b 表／guard／RPC／鎖 `20260919140000`；前端 P4c、撤銷／調整 UI P4d、封堵 P4e 未做）**｜2026-09-19｜依 [D-026](../DECISIONS.md)。§1–§13 是 P0 設計；實作與設計的偏差集中在 §16（以 §16 為準）；進度只看 [續接清單](../reviews/2026-09-17-product-slimming-worklog.md)。
 > 標記同 [現場文書文件](field-documents-lifecycle.md)：【已確認】／【設計】／【待決】。
 
 ## 0. 現況核對與差距（基準 `ab4be5f`）
@@ -212,7 +212,7 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 | 單元 | 內容 |
 |---|---|
 | P4a（已實作 `20260917120000`） | §3.2 的 2 型別＋14 支純函式（`fn_effective_by_batch`、`fn_effective_confirmed`、`fn_contract_qty`、`fn_cap`、`fn_allocate_fifo`、`fn_batch_allocation_check`、`fn_period_increment`、`fn_valuation_amount`、`fn_pricing_basis_effective`、`fn_cq_*`）；pgTAP `confirmed_quantity_calc.sql` 82 條（含 §3.1 全部案例與 §11 拒絕矩陣）。`v_billable_backlog` 移到 P4b |
-| P4b | 三張新表＋加欄＋guards（`valuations_guard` 擴充、`valuation_items` 寫入 guard、確認表 guard）＋RPC（`sync_`、`set_valuation_item_cum`、`transition_valuation`、`revoke_`、`issue_supervisor_certificate`、`admin_adjust_valuation_item`）＋advisory lock＋`v_billable_backlog`；全部以 §3.2 純函式為核心，不重寫算法；pgTAP 併發（兩個 session 用 `dblink` 或 pg_background 不可用時以序列化情境＋唯一鍵測試替代並明列限制） |
+| P4b（已實作 `20260919140000`） | 四張新表＋加欄＋guards＋十支 RPC＋advisory lock＋可估驗清單 RPC（取代 view，理由見 §16.3）；全部以 §3.2 純函式為核心；pgTAP `confirmed_quantity_enforcement.sql`（§8 全部情境、狀態機、權限矩陣、service role 無 bypass）＋`confirmed_quantity_concurrency.sql`（`dblink` 兩個 session 真併發） |
 | P4c | 前端：可估驗清單、來源展開、缺件、差異比對、移除 `fillValuationFromSiteLogs` |
 | P4d | 撤銷／減量／調整 UI 與核定、請款整合 |
 | P4e | 封堵 migration（revoke）＋Edge 掃描測試＋舊客戶端相容驗證 |
@@ -247,3 +247,49 @@ Q3：使用者 2026-09-17 決定**總價／間接費暫時隔離不計價**（�
 - **Q3 總價／間接費 basis**：使用者決定**暫時隔離不計價**（§10）；各類工項的計價依據仍待後續決定。
 - **Q6 多階段來源**：使用者同意照暫行做法：ITP H 點為必要階段；R／W 點不作必要。
 - **Q7 截止日語意**：使用者同意照暫行做法：`period_end`＝計價截止日，由廠商建期時填、送審前必填。
+
+## 16. P4b 實作結果與偏差（2026-09-19，migration `20260919140000_confirmed_quantity_enforcement`；回復檔同名 `.down.sql`）
+
+以下是實作與 §1–§13 設計不同、或設計沒寫而實作必須決定的事；P4c／P4d 以本節與 migration 檔頭為準。
+
+### 16.1 資料模型
+- 四張新表：`inspection_confirmations`、`valuation_item_sources`（多一欄 `project_id` 給 RLS／索引；**沒有 `stage_key`**——分配是批次層級，批次量已是各階段取最小）、`valuation_adjustments`、`work_item_pricing_basis`；加欄 `valuations.recheck_required／recheck_note`、`valuation_items.backing`（`legacy`／`confirmed`／`adjusted`）、`inspection_points.stage_key／required_for_billing`。`authenticated` 對四張新表只有 SELECT（RLS 限成員）；寫入只走 RPC／簽署路徑／內部重算。
+- `confirmed_at`／`created_at` 預設 `clock_timestamp()`（不是 `now()`）：累計語意靠先後順序，同一交易寫兩筆不可並列（P4a「同時刻取最小」只剩理論保護）。P3c 的簽署路徑寫 `confirmed_at = 簽署列 signed_at` 即可。
+- `inspection_confirmations` 唯一鍵 `(inspection_id, work_item_id, coalesce(stage_key,''))`、`(project_id, client_request_id)`；`valuation_item_sources` 唯一 `(valuation_id, work_item_id, batch_key, kind)` 並以複合 FK 指向 `valuation_items(valuation_id, work_item_id)`（每筆來源必有明細；草稿明細刪除即釋放）。
+- `valuation_adjustments.applied_valuation_id` 是 `on delete set null`：刪草稿期時，RI set-null 與來源列的 AFTER DELETE trigger 誰先都可，trigger 把 `applied` 調整改回 `pending`（check 只要求 `applied` 必有 `applied_at`）。RI set-null（查驗、文件版本、被取代列、來源確認、被更正期別、併入的草稿期被 cascade 刪）在三個 append-only guard 內明示放行，其餘欄位仍不可改。
+
+### 16.2 檢查點與狀態機
+- 檢查點在 **AFTER UPDATE** trigger `valuations_checkpoint_guard`（設計寫在 `valuations_guard`）：BEFORE 讀不到同一敘述送進來的新 `period_end`，AFTER 讀已更新的列；raise 即整個敘述回滾（同敘述的稽核列一起消失）。角色、狀態機、欄位規則仍在 BEFORE 的 `valuations_guard`（新增 BEFORE INSERT：登入者只能建 `草稿`——直接 INSERT `已核定` 曾是繞過送審／核定的洞）。
+- 狀態機（登入者；`admin_override` 只放行角色）：`草稿→監造審核` 廠商、`監造審核→草稿` 監造、跨越 `已核定`／`已請款` 監造；其他轉移 `VQ002`。三個檢查點：進 `監造審核`（review）、進 `已核定`（approve）、進 `已請款` 或 `invoice_date` 由空變有（invoice）；service role、admin 都沒有數量 bypass。
+- `period_end` 在 review／approve 必填，invoice 不要求（歷史已核定期 3／4 沒有截止日，機關登錄請款不能被卡死）；截止日不變量只在 `草稿`／`監造審核` 期別檢查（已核定期的補證確認單必然晚於歷史截止日）。登入者在非草稿期不可改 `period_no／period_start／period_end`（superuser 支援路徑可）。
+- 工項狀態單一計算入口 `fn_cq_item_state_internal(project, work_item, valuation|null)`：`cap = fn_cap(max(0, E−B−O))`（B／O 是淨額，扣回為負，先相減再交給 P4a 的依據閘門）；另有 `headroom`＝本期還能再分配的確認量 `= 依據閘門(max(0, min(E−B−O−本期已分配, 契約量−前期累計−本期已分配)))`，自動同步與 `sync` 用它，`set_valuation_item_cum` 的上限＝`依據閘門(E−B−O−本期扣回／調整)`。
+- 違反代碼（`VQ004` 的 `detail` 陣列，每筆帶 `work_item_id`）：`period_end_missing`、`recheck_required`、`pending_adjustment`（approve）、`over_contract`、`not_billable`、`basis_missing`、`basis_excluded`、`negative_delta`（Δ<0 且無扣回）、`source_mismatch`（Δ≠Σ來源）、`legacy_source`、`cutoff`（批次 ≤本期分配 > 截止日前有效量）、`batch_over_allocated`（附 `missing_stages`）。
+
+### 16.3 RPC 與唯讀查詢（十支，全部 `grant execute to authenticated`，pgTAP 允許清單同步）
+| RPC | 誰 | 行為 |
+|---|---|---|
+| `sync_valuation_from_confirmations(p_valuation_id)` | `can_write`（廠商；非正式模式 admin；監造依既有 can_write 語意亦可協助填報）；只有 `草稿` | 逐工項取鎖 → 刪本期 legacy 來源 → 收斂（監造審核期退回後在這裡縮減） → 最早草稿期併入 `pending` 扣回 → 分配到 `headroom`（FIFO） → 累計＝前期累計＋Σ本期來源；清 `recheck_required`；冪等 |
+| `set_valuation_item_cum(p_valuation_id, p_work_item_id, p_cum_qty)` | 同上 | 目標累計必須在 `[前期累計＋本期扣回／調整, 上限]`；重算本期確認來源（FIFO），不信任客戶端分配與金額；`VQ006` 帶 `prev_cum／floor／limit／cap／wanted` |
+| `transition_valuation(p_valuation_id, p_from, p_to, p_note)` | 成員；角色由 guard 判 | `p_from` 不符回 `{applied:false, status}`（冪等），檢查在 trigger |
+| `issue_supervisor_certificate(p_project_id, p_work_item_id, p_batch_key, p_location_label, p_stage_key, p_unit, p_qty_cum, p_reason, p_client_request_id, p_covers_valuation_id)` | 監造或非正式模式 admin；**不要求 aal2**（R1 已移除兩步驟驗證，`aal` 只記入稽核） | 寫 `basis='supervisor_certificate'` 的累計確認（單位由呼叫端傳、guard 比對工項單位）；同 `client_request_id` 重播回原筆、內容不同 `VQ009`；`p_covers_valuation_id`＝補證歷史已核定期：該期該工項的 legacy 來源改掛到本確認單批次（數量不變、`backing='confirmed'`、稽核 `valuation.legacy_covered`），確認量不足以涵蓋整筆拒絕 |
+| `revoke_inspection_confirmation(p_id, p_reason)` | 監造或非正式模式 admin | `active→revoked`；收斂由 trigger：草稿縮減（最晚分配先減）、監造審核標 `recheck_required`、已核定／已請款建 `pending` 調整；回傳 `effects` |
+| `void_valuation_adjustment(p_id, p_reason)` | 機關或非正式模式 admin | `pending→void`。語意＝機關接受該量已計價：檢查點不再把它當超額（否則該工項永遠卡住），但**永不產生新的可用量**（FIFO 與列級 guard 仍用真實分配；已計價量仍計入 B） |
+| `admin_adjust_valuation_item(p_valuation_id, p_work_item_id, p_cum_qty, p_reason)` | 平台管理員；只有 `草稿` | 產生 `applied` 調整＋`kind='adjustment'` 來源列（合併歸零即移除）、`backing='adjusted'`；已核定期不可（走撤銷→扣回） |
+| `set_work_item_pricing_basis(p_work_item_id, p_basis, p_rule)` | 監造或非正式模式 admin | upsert 計價依據（總價／間接費解除隔離的唯一路徑） |
+| `get_valuation_state(p_valuation_id)` | 成員 | `{valuation, checkpoint, violations, pending_adjustments, items[]}`；items＝本期明細 ∪ 有 active 確認的工項 ∪ 有 pending 調整的工項，每項含 `cq_item_state` 全部欄位＋`sources[]`＋`backing`＋`amount_cum` |
+| `list_billable_backlog(p_project_id)` | 成員 | 取代設計的 `v_billable_backlog` view：security definer view 會繞過 RLS、security invoker view 又呼叫不了已收回 EXECUTE 的純函式，RPC 才能同時做成員檢查與呼叫純函式。每工項 `effective／billed／reserved／available／batches[]（含 missing_stages）／occupied_by[]` |
+
+錯誤代碼 `VQ001`–`VQ010` 見 migration 檔頭（`VQ003` 保留不用）。訊息一律繁中、冒號後仍含中文，`friendlyError` 會原樣顯示。
+
+### 16.4 舊資料過渡（正式庫 2026-09-19 唯讀盤點與處置）
+- 盤點：`valuations` 12（草稿 7、監造審核 1、已核定 4；截止日 1／1／1；請款日 2）；`valuation_items` 26（已核定 5 筆 Δ>0、其中 1 筆掛非計價列、1 筆工項無單位；草稿 21 筆 11 筆 Δ>0）；超契約量 0、負值 0；`inspection_points` H 3（2 有工項，皆無 `stage_key`）；核准變更連工項 3；總價類末端工項 4,914。
+- 處置：migration 內 `fn_cq_backfill_legacy_internal()` 為已核定期每筆 Δ≠0 明細寫 `kind='legacy'`／`batch_key='__legacy__'` 來源（歷史遷移，不是監造確認）；歷史金額不重算。之後：有 legacy 來源的期別送審／核定／新請款一律擋並列出；補證路徑＝監造確認單 `p_covers_valuation_id`。草稿期的既有數量保留（`backing='legacy'`），送審時 `source_mismatch` 擋下，廠商 `sync` 後以確認量為準（無確認即歸零）。監造審核那 1 期沒有明細，可直接核定或退回。
+- 直接 REST 寫 `valuation_items`（舊前端、`fillValuationFromSiteLogs`）本支保留（P4e 收回），但寫入時：金額／百分比由 DB 算、超契約量與跨案拒絕、非草稿期凍結（含 service role；只有備註可由監造改）、非重算路徑寫入一律標 `backing='legacy'`。
+
+### 16.5 其他 guard
+- `work_items`：有 active 確認的工項不可刪除、不可改單位（`reset_project_boq`／標單重匯整包回滾；先撤銷）；專案刪除 cascade 放行。
+- `inspection_points`：有 active 確認的工項不可變更必要階段集合（H 點、`required_for_billing`、`stage_key`）；先撤銷再調 ITP。
+- `photo_frozen_reason` 未加「照片為已核定確認量之附件」：確認紀錄與照片的關聯要等 P3c 的簽署版本附件，P3c 一併補。
+
+### 16.6 P3c 接口
+簽署 `inspection_form` 時在同交易 INSERT `inspection_confirmations(project_id, work_item_id, batch_key, location_label, stage_key, unit, qty_cum, basis='inspection', inspection_id, document_id, document_version_no, content_hash, confirmed_by=簽署者, confirmed_at=signed_at)`；guard 會驗工項（末端、可計價、同案、單位）、階段（須在 ITP H 點集合內，單階段工項不可帶）、確認人（本案監造成員）、查驗（同案、已判定、工項一致）、文件（`inspection_form`、版本雜湊相等、該版本有確認人的簽署列）；`qty_delta`／`supersedes_id` 由 guard 導出，減量須填 `reason`。AFTER INSERT 自動收斂並同步到適用草稿期（截止日 ≥ 確認日的最早草稿）。部分通過（查驗 100、通過 60）的判定值如何對應 `inspections.status` 由 P3c 決定；guard 只要求「已判定」。
