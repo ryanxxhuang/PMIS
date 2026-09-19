@@ -14,7 +14,7 @@
 npm run test:e2e:real
 ```
 
-十四條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）（chain 5–10、12 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+十五條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）（chain 5–10、12、13 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -109,3 +109,12 @@ npm run test:e2e:real -- e2e-real/chain10-inspection-form.spec.js
 supabase functions serve --env-file e2e-real/stub.env   # terminal A
 npm run test:e2e:real -- e2e-real/chain12-shared-inputs.spec.js
 ```
+
+## 月報與佐證包重用已簽署資料鏈（chain 13，P6a）
+
+`e2e-real/chain13-report-reuse.spec.js`（不需 Edge stub；本機 stack 需已套用 `20260919222000`）：佈置全走產品 RPC／RLS 窄門（簽署 UI 已由 chain 5／6／8／10 走過）——廠商施工日誌 d1（10 M3）、d2（20 M3）簽署、d3（999 M3）只存版不簽→自主檢查表簽署→查驗申請（申報 100、檢附自檢）→監造上傳一張照片、監造查驗表單判部分合格確認 60（照片以證據附上）簽署、d2 監造日誌（到場已確認）簽署、d3 直接寫一列未經文件的監造日誌事實列→廠商建第 1 期（截止日＝月底）、同步確認量 60、送監造審核→送審後更正 d1 為 15 M3 重簽 v2。驗：廠商 `/monthly-report` 只彙整 d1（v2）＋d2＝35、施工天數 2、雨天 1、出工 12、每份附版本與雜湊、d3 列「未簽署、不列入（草稿）」、判定只列簽署表單；監造 `/supervisor-report`（標題「監造月報」）列已簽署監造日誌（到場、版本）、d3 未經文件簽署不列入、簽署表單判定「申報 100／確認 60 M3」與版本、本月確認「+60 M3（累計 60）」、「另 1 日未簽署、不列入」與施工月報一致；`/valuation/package` 本期確認來源列查驗表單版本雜湊、簽署者、檢附自檢 Rev.0、證據照片 1 張，施工日誌取送審時點的 d1 v1（10 M3，標「之後另有 v2」）與 d2，d3 標送審時尚未簽署不列入。帳號與專案本次產生、`afterAll` 清除。
+
+```bash
+npm run test:e2e:real -- e2e-real/chain13-report-reuse.spec.js
+```
+
