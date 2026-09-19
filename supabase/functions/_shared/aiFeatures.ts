@@ -48,7 +48,7 @@ export const AI_FEATURES: AiFeature[] = [
   { key: 'submittal.read', label: '送審文件讀取', category: 'document', edgeFunction: 'read-submittal', minPlan: 'pro', isLlm: true, defaultEnabled: true },
   { key: 'submittal.review', label: '監造送審審查意見', category: 'draft', edgeFunction: 'review-submittal', minPlan: 'pro', isLlm: true, defaultEnabled: true },
   { key: 'rfi.draft_reply', label: 'RFI 回覆草稿', category: 'draft', edgeFunction: 'draft-rfi-reply', minPlan: 'pro', isLlm: true, defaultEnabled: true },
-  { key: 'audit.summary', label: '機關稽核意見草稿', category: 'draft', edgeFunction: 'audit-summary', minPlan: 'pro', isLlm: true, defaultEnabled: true },
+  { key: 'audit.summary', label: '機關稽核意見草稿', category: 'draft', edgeFunction: 'audit-summary', minPlan: 'pro', isLlm: true, defaultEnabled: false }, // P6c 退場(D-026 §4):獨立風險稽核工作區退出新作業,勾稽檢核改在估驗流程由確定性引擎給;無前端呼叫端;DB 開關見 20260919130400;列保留供用量歷史對帳
   { key: 'report.monthly', label: '施工月報草稿', category: 'draft', edgeFunction: 'draft-monthly-review', minPlan: 'standard', isLlm: true, defaultEnabled: true },
   { key: 'valuation.summary', label: '估驗施工說明草稿', category: 'draft', edgeFunction: 'draft-valuation-summary', minPlan: 'standard', isLlm: true, defaultEnabled: true },
   { key: 'field_docs.draft', label: '現場文書起稿(照片)', category: 'draft', edgeFunction: 'draft-field-documents', minPlan: 'trial', isLlm: true, defaultEnabled: true }, // P2b(D-026):照片→施工日誌草稿;逐張辨識沿用 photo.classify／sitelog.whiteboard 各自的開關與用量;與上傳鏈同屬 trial;DB seed 見 20260917213500

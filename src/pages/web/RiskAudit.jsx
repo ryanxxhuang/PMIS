@@ -2,10 +2,9 @@ import { useMemo, useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Empty, PageHeader, Button, Badge, Dot, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Empty, PageHeader, Button, Badge, Dot } from '../../components/ui.jsx'
 import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../components/listDetail.jsx'
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
-import { friendlyError } from '../../lib/errorMessage.js'
 import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
 import { plannedPctNow } from '../../lib/progressPlan.js'
 import { latestValuationAt } from '../../lib/progressAsOf.js'
@@ -15,15 +14,14 @@ import { buildValuationChecks } from '../../lib/valuationChecks.js'
 // 退場(D-026 §4,P1b):獨立的風險稽核工作區不再是主入口(hidden、僅機關可深連結)。估驗所需的
 // 勾稽檢核已移入估驗計價頁逐期顯示(lib/valuationChecks.js 兩頁共用同一份組裝與引擎);契約/變更/
 // 進度三個面向的檢核表項目暫留這裡唯讀查閱,承接到履約時程後隨頁面一起移除(P5d/P6b)。
-// 這一頁本來就沒有任何業務寫入(只提醒、不處置);AI 稽核意見(audit.summary)的退場屬 P6c。
+// 這一頁本來就沒有任何業務寫入(只提醒、不處置);AI 稽核意見(audit.summary)已於 P6c 退場——
+// 這裡不再呼叫任何 AI,發現原樣呈現給人(DB 開關 20260919130400,閘門對舊呼叫回 403)。
 //
-// 版面:改版前是「總覽色塊＋檢核表卡＋勾稽鏈卡＋AI 意見卡」四張直排——同一種東西
-// (稽核項目)被來源切成兩張卡,判定依據被塞在一行 text-xs 裡,AI 意見又是整案一段、
-// 對不回是哪一項發現。現在是一份清單(檢核表＋勾稽發現混排,嚴重度高的在前)＋詳情欄:
-// 判定依據、對應工項、來源單據與 AI 稽核意見都貼在該項底下(規範 §0 疊合版、判準第 6 條
-// 「這個數字來自哪裡?點得進去嗎?」)。判定仍全由確定性引擎(riskAudit.js/integrityAudit.js)
-// 給,這一頁只排版與呈現;AI 只對「文件勾稽鏈」發現寫文字(edge fn audit-summary 的
-// system prompt 就是這樣寫的),不參與判定,也不對檢核表項目開口。
+// 版面:改版前是「總覽色塊＋檢核表卡＋勾稽鏈卡」直排——同一種東西(稽核項目)被來源切成
+// 兩張卡,判定依據被塞在一行 text-xs 裡。現在是一份清單(檢核表＋勾稽發現混排,嚴重度高的
+// 在前)＋詳情欄:判定依據、對應工項、來源單據都貼在該項底下(規範 §0 疊合版、判準第 6 條
+// 「這個數字來自哪裡?點得進去嗎?」)。判定全由確定性引擎(riskAudit.js/integrityAudit.js)
+// 給,這一頁只排版與呈現。
 //
 // 色票走 Badge/Dot 的 color key,不再是 inline style 的 var() 字串:狀態顏色的單一真相
 // 是 ui.jsx 的五語意色票。na=資料不足未評估,不算通過(riskAudit.js 最小證據原則)。
@@ -57,17 +55,13 @@ const splitDetail = (detail = '') => {
 
 export default function RiskAudit() {
   const { project, workItems, valuations, progressPlan, changeOrders, defects, obligations,
-    siteLogs, inspections, testSamples, auditSummary, demoMode, workItemsSource,
-    adjustedItems, revisedTotal, aiEnabled, currentProject } = useStore()
+    siteLogs, inspections, testSamples, demoMode, workItemsSource,
+    adjustedItems, revisedTotal, currentProject } = useStore()
   const imported = workItemsSource === 'db' || demoMode
   const navigate = useNavigate()
   const TODAY = new Date() // 每次 render 取(B-11):長開分頁的「今天」不可凍結在開頁那天
-  const [aiById, setAiById] = useState({}) // { [rowId]: { opinion, recommendations } } 逐項 AI 稽核意見
-  const [aiBusy, setAiBusy] = useState(null) // 產生中的 rowId
-  const [errMsg, setErrMsg] = useState('')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const searchRef = useRef(null)
-  const aiOn = aiEnabled('audit.summary')
 
   // 財務單一真相層(B-02):稽核分母與估驗/進度頁一致(含已核准變更)
   const { roots, childrenMap } = useMemo(
@@ -139,26 +133,11 @@ export default function RiskAudit() {
     scope: `${pid}`,
     ready: imported && rows.length > 0, rows,
     pickDefault: () => ordered[0]?.id,
-    onSelect: () => setErrMsg(''),
-    onReset: () => { setFilters(DEFAULT_FILTERS); setAiById({}) },
+    onReset: () => setFilters(DEFAULT_FILTERS),
   })
   // 篩選後選中項被篩掉:右欄內容保留(與 /safety 同),清單中只是沒有高亮列
   const selected = rows.find((r) => r.id === selectedId) || null
   useListKeyboardNav({ ordered, selectedId, select, idPrefix: 'aud-', searchRef })
-
-  // AI 稽核意見:只對「這一項」勾稽發現寫文字;統計數字照該項給(風險 1/注意 1),
-  // 已勾稽工項數沿用整案,讓 AI 知道母體大小。判定不經 AI(integrityAudit.js 已定)。
-  const genAudit = async (r) => {
-    setAiBusy(r.id); setErrMsg('')
-    const { error, result } = await auditSummary({
-      project_name: project?.project_name,
-      findings: [r],
-      summary: { risk: r.status === 'risk' ? 1 : 0, warn: r.status === 'warn' ? 1 : 0, checked: integrity.summary.checked },
-    })
-    setAiBusy(null)
-    if (error) { setErrMsg(friendlyError(error, 'AI 稽核意見產生失敗')); return }
-    if (result) setAiById((m) => ({ ...m, [r.id]: result }))
-  }
 
   // 早退也保留 PageHeader:頁首與工作面分頁不該因為「還沒匯入標單」整組消失
   if (!imported) {
@@ -177,7 +156,7 @@ export default function RiskAudit() {
     : totWarn ? `${totWarn} 項需注意`
     : summary.na ? `未發現異常（${summary.na} 項資料不足未評估）` : '本案未發現明顯異常'
 
-  // ── 詳情欄:狀態列 / 標題與 meta / 判定依據 / 對應工項 / AI 意見 / 動作列。
+  // ── 詳情欄:狀態列 / 標題與 meta / 判定依據 / 對應工項 / 動作列。
   // region 以標題命名:報讀器走地標時直接聽到「估驗超前施工日誌:3 項工項 詳情」,
   // e2e 也用同一個名字確認詳情欄正在顯示哪一項。
   let detailBody = null
@@ -185,10 +164,6 @@ export default function RiskAudit() {
     const r = selected
     const s = ST[r.status]
     const { basis, items } = splitDetail(r.detail)
-    const ai = aiById[r.id]
-    // AI 只對勾稽發現開口(edge fn 的 system prompt 就是「文件勾稽鏈稽核」);通過/未評估
-    // 沒有可寫的異常,不給按鈕
-    const aiEligible = r.source === 'chain' && (r.status === 'risk' || r.status === 'warn')
     detailBody = (
       <section aria-label={`${r.title} 詳情`}>
         {/* 狀態列:嚴重度＋面向＋來源;顏色＋文字並存 */}
@@ -229,45 +204,15 @@ export default function RiskAudit() {
           </div>
         )}
 
-        {/* AI 稽核意見:--ai 紫色身分(規範 §1 三條不可退讓「AI 草稿須可辨識」),
-            內容只根據上面那項確定性發現撰寫,不臆造未列出的問題 */}
-        {ai && (
-          <div className="px-4 pb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <MSym name="auto_awesome" size={15} className="text-[var(--ai)]" />
-              <span className="text-footnote font-medium text-[var(--ai-text)]">AI 稽核意見</span>
-              <Badge color="purple">草稿</Badge>
-            </div>
-            <div className="bg-[var(--ai-tint)] rounded-lg px-3 py-2 space-y-2">
-              <p className="text-body leading-relaxed text-[var(--text)] whitespace-pre-line break-words">{ai.opinion}</p>
-              {ai.recommendations?.length > 0 && (
-                <div>
-                  <div className="text-caption font-medium text-[var(--ai-text)] mb-1">建議事項</div>
-                  <ul className="list-decimal list-inside space-y-1 text-body text-[var(--text-2)]">
-                    {ai.recommendations.map((t, i) => <li key={i}>{t}</li>)}
-                  </ul>
-                </div>
-              )}
-            </div>
-            <p className="text-caption text-[var(--text-3)] mt-1">AI 只根據系統確定性發現撰寫,判定不經 AI;供人工撰寫稽核意見參考,非正式文件。</p>
-          </div>
-        )}
-
-        {/* 動作列:前往來源單據 / 產生 AI 稽核意見。都是次級鈕,這個情境沒有主動作
-            (稽核只提醒、不做任何處置)。AI 功能關閉時藏按鈕、留簡短說明(真正的閘門在伺服器端) */}
-        <div className="px-4 py-3 border-t border-[var(--border-2)] flex items-center gap-2 flex-wrap">
-          {r.route && (
+        {/* 動作列:只有「前往來源單據」,次級鈕——這個情境沒有主動作(稽核只提醒、不做任何處置)。
+            沒有 route 的項目(如檢核表未對到工作面)就沒有動作列,不放空區塊 */}
+        {r.route && (
+          <div className="px-4 py-3 border-t border-[var(--border-2)] flex items-center gap-2 flex-wrap">
             <Button variant="secondary" onClick={() => navigate(r.route)}>
               前往{ROUTE_LABEL[r.route] || '查核'}<MSym name="arrow_forward" size={14} />
             </Button>
-          )}
-          {aiEligible && aiOn && (
-            <Button variant="secondary" disabled={aiBusy === r.id} onClick={() => genAudit(r)}>
-              <MSym name="auto_awesome" size={13} className="text-[var(--ai)]" />{aiBusy === r.id ? ' AI 產生中…' : ai ? ' 重新產生 AI 稽核意見' : ' 產生 AI 稽核意見'}
-            </Button>
-          )}
-          {aiEligible && !aiOn && <span className="text-footnote text-[var(--text-2)]">AI 稽核意見未啟用</span>}
-        </div>
+          </div>
+        )}
       </section>
     )
   }
@@ -331,8 +276,6 @@ export default function RiskAudit() {
       <p role="note" className="rounded-lg px-3 py-2 text-footnote bg-[var(--amber-tint)] text-[var(--amber-text)]">
         {RETIRED_NOTE} <Link to="/valuation" className="underline font-medium">前往估驗計價</Link>
       </p>
-
-      <ErrorBanner msg={errMsg} onClose={() => setErrMsg('')} />
 
       <ListDetailLayout
         detail={detailBody}

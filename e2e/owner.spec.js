@@ -86,7 +86,7 @@ test.describe('機關', () => {
     await expect(page.getByRole('list', { name: '提醒清單' }).getByRole('listitem').filter({ hasText: '初驗期限將至' })).toHaveCount(1)
   })
 
-  test('風險稽核:清單＋詳情殼——嚴重度快篩、詳情欄判定依據、AI 稽核意見貼在該項底下', async ({ page }) => {
+  test('風險稽核:清單＋詳情殼——嚴重度快篩、詳情欄判定依據與對應工項;AI 稽核意見已退場(P6c)', async ({ page }) => {
     await loginAs(page, 'owner')
     await gotoHash(page, '/audit')
     await expect(page.getByRole('heading', { name: '風險稽核' })).toBeVisible()
@@ -103,11 +103,13 @@ test.describe('機關', () => {
     await chainRow.click()
     await expect(chainRow).toHaveAttribute('aria-current', 'true')
     await expect(detail.getByText('對應工項／項目')).toBeVisible()
-    // 按鈕名一律 exact:快篩 chip「風險 2」會被子字串比對吃成按鈕名
-    await detail.getByRole('button', { name: '產生 AI 稽核意見', exact: true }).click()
-    await expect(detail.getByText('AI 稽核意見', { exact: true })).toBeVisible()
-    await expect(detail.getByText(/非違規認定/)).toBeVisible()
-    // 清單列只負責選取:AI 鈕不在列裡
+    // P6c(D-026 §4):audit.summary 退場——詳情欄只剩「前往來源單據」,沒有任何 AI 稽核意見按鈕或說明;
+    // 發現本身仍是確定性引擎的結果,頁尾維持「非違規認定」的定位
+    await expect(detail.getByRole('button', { name: /AI 稽核意見/ })).toHaveCount(0)
+    await expect(detail.getByText(/AI 稽核意見/)).toHaveCount(0)
+    await expect(detail.getByRole('button', { name: /^前往/ })).toBeVisible()
+    await expect(page.getByText(/非違規認定/)).toBeVisible()
+    // 清單列只負責選取:動作鈕不在列裡
     await expect(chainRow.getByRole('button')).toHaveCount(0)
   })
 

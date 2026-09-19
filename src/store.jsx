@@ -119,7 +119,7 @@ export function StoreProvider({ children }) {
   const {
     siteLogs, setSiteLogs, safetyRecords, setSafetyRecords,
     listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems,
-    describeDefect, analyzeSafetyPhoto, draftMonthlyReview, draftValuationSummary, auditSummary, fetchWeather,
+    describeDefect, analyzeSafetyPhoto, draftMonthlyReview, draftValuationSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   } = useSiteSlice(ctx)
   // 現場文書(P2c):施工日誌唯一寫入路徑。簽署成功後由 slice 重載 siteLogs(事實表已由 RPC 落庫)
@@ -344,7 +344,7 @@ export function StoreProvider({ children }) {
     aiEnabled,
     adjustedItems, coNet, revisedTotal, domainLoadError, retryDomainLoad,
     siteLogs, fillValuationFromSiteLogs,
-    listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, draftMonthlyReview, draftValuationSummary, auditSummary, describeDefect, analyzeSafetyPhoto, fetchWeather,
+    listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, listPhotosByWorkItems, draftMonthlyReview, draftValuationSummary, describeDefect, analyzeSafetyPhoto, fetchWeather,
     // 現場文書(P2c):上傳批次、起稿、文件版本、簽署、提送／收件／退回
     ...fieldDocsSlice,
     obligations, reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument, changeProjectAnchors, updateProjectSettings, anchorVersions, enableFormalMode, currentProjectMembership, reloadMembership,
