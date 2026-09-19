@@ -16,6 +16,7 @@ import {
   printSignature, submissionsChronological, submissionReceipts, returnHistory, nextResponsibleText,
   groupSharedFields, sharedFieldTitle, sharedEffectLabel, sharedPendingDocs, sharedInputValue, sharedApplySummary, documentsAfterShared,
   signedVersionIndex, signedVersionText, signedVersionLink, confirmationDocRef,
+  canDiscardFieldDocument, FIELD_DOC_DISCARDABLE_STATUSES,
 } from './fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.js'
@@ -705,5 +706,29 @@ describe('共用補值(P3e):只呈現伺服器的欄位與效果', () => {
     expect(documentsAfterShared([{ document_id: 'D1', version_no: 1 }, { id: 'S1', current_version_no: 3 }], res)).toEqual([
       { document_id: 'D1', version_no: 2, current_version_no: 2, status: 'pending_input' }, { id: 'S1', current_version_no: 3 },
     ])
+  })
+})
+
+describe('捨棄草稿入口(P3f):與伺服器 discard_field_document 同一組條件', () => {
+  const doc = (over = {}) => ({ id: 'D1', doc_type: 'daily_log', owner_org: 'contractor', status: 'pending_input', current_version_no: 1, ...over })
+  it('責任方、未簽署的三個狀態、從未簽署 → 顯示', () => {
+    expect(FIELD_DOC_DISCARDABLE_STATUSES).toEqual(['draft', 'pending_input', 'in_review'])
+    for (const status of FIELD_DOC_DISCARDABLE_STATUSES) expect(canDiscardFieldDocument(doc({ status }), 'contractor')).toBe(true)
+    expect(canDiscardFieldDocument(doc({ doc_type: 'inspection_form', owner_org: 'supervisor', status: 'draft' }), 'supervisor')).toBe(true)
+  })
+  it('簽署以後的狀態、終態 → 不顯示(已簽署文件更正走新版本,不走捨棄)', () => {
+    for (const status of ['signed', 'submitted', 'received', 'returned', 'discarded', 'superseded']) {
+      expect(canDiscardFieldDocument(doc({ status }), 'contractor')).toBe(false)
+    }
+  })
+  it('簽後更正回到草稿(曾經簽署)→ 不顯示;他方、未知角色、沒有文件 → 不顯示', () => {
+    expect(canDiscardFieldDocument(doc({ status: 'draft' }), 'contractor', { everSigned: true })).toBe(false)
+    expect(canDiscardFieldDocument(doc(), 'supervisor')).toBe(false)
+    expect(canDiscardFieldDocument(doc(), 'owner')).toBe(false)
+    expect(canDiscardFieldDocument(doc(), null)).toBe(false)
+    expect(canDiscardFieldDocument(null, 'contractor')).toBe(false)
+  })
+  it('捨棄後的文件在今日工作球權是終態(P5a;與清單只載未終態同一口徑)', () => {
+    expect(docStatusMeta(doc({ status: 'discarded' }), 'contractor')).toEqual({ label: '已捨棄', tone: 'slate', action: null })
   })
 })

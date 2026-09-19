@@ -6,7 +6,9 @@
 // 從伺服器恢復,IntakeList)、「現場文書」清單(field_documents 未終態,與今日工作球權同一份資料;
 // 施工日誌開 /site-log?doc=、監造日誌開 /supervisor-log?doc=(P3a)、自主檢查表開 /self-check?doc=(P3b)、監造查驗表單開
 // /inspection-form?doc=(P3c);頁面路由由 lib/fieldDocs.docPageLink 決定)。?doc=<id>(P5a 待辦的直達參數)落到這裡後轉到該文件的頁面;?intake=<id> 展開該批。
-import { useEffect, useMemo } from 'react'
+// P3f:責任方從未簽署的草稿在清單列上可「捨棄」(DiscardDraftButton,原因必填;規則在伺服器);文件頁捨棄後也回到這裡,
+// 以導覽 state.discardedDoc 說明已捨棄與如何重新起稿。
+import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader } from '../../components/ui.jsx'
@@ -14,12 +16,13 @@ import { MSym } from '../../components/icons.jsx'
 import TaskRow from '../../components/TaskRow.jsx'
 import IntakeUploader from '../../components/sitelog/IntakeUploader.jsx'
 import IntakeList from '../../components/sitelog/IntakeList.jsx'
+import DiscardDraftButton from '../../components/sitelog/DiscardDraftButton.jsx'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
 import { visibleNavGroups, routeAllowed, navLabel, BALL_SOURCES_TITLE } from '../../lib/navConfig.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { itpStatus } from '../../lib/itp.js'
 import { sampleAlerts } from '../../lib/qc.js'
-import { docStatusMeta, DOC_TYPE_LABEL, docPageLink, docToOrgLabel } from '../../lib/fieldDocs.js'
+import { docStatusMeta, DOC_TYPE_LABEL, docPageLink, docPagePath, docToOrgLabel } from '../../lib/fieldDocs.js'
 
 const pathOf = (to) => String(to || '').split('?')[0]
 
@@ -45,6 +48,9 @@ export default function Site() {
   const org = currentUser?.org_type || 'contractor'
   const today = taipeiToday()
   const documents = useMemo(() => fieldDocuments?.documents || [], [fieldDocuments])
+  const signedDocIds = useMemo(() => new Set(fieldDocuments?.signedDocumentIds || []), [fieldDocuments])
+  // 剛捨棄的草稿(清單列上捨棄,或文件頁捨棄後導回):說明結果與重新起稿的入口
+  const [discarded, setDiscarded] = useState(() => state?.discardedDoc || null)
   const docParam = params.get('doc')
   const intakeParam = params.get('intake')
 
@@ -155,6 +161,13 @@ export default function Site() {
         subtitle="拍照上傳後由系統擬稿，審核、簽署、提送都在這裡；日誌、查驗、自主檢查、試驗、停留點與工安的入口；件數只計本案尚未處理的事項。"
         meta={[{ k: '日期', v: today }]} />
 
+      {discarded && (
+        <p role="status" className="text-footnote text-[var(--text-2)] rounded-lg bg-[var(--surface-2)] px-3 py-2">
+          已捨棄 {discarded.doc_date} {DOC_TYPE_LABEL[discarded.doc_type] || '文件'}草稿{discarded.reason ? `（原因：${discarded.reason}）` : ''}；版本與照片都保留，原因已留在稽核紀錄。
+          要重新起稿，可在下方重新拍照上傳，或到{docPagePath(discarded.doc_type) ? <Link to={`${docPagePath(discarded.doc_type)}${['daily_log', 'supervisor_log'].includes(discarded.doc_type) ? `?d=${discarded.doc_date}` : ''}`} className="text-[var(--blue-text)] hover:underline mx-1">{DOC_TYPE_LABEL[discarded.doc_type]}頁</Link> : '文件頁'}重新填寫。
+        </p>
+      )}
+
       {docParam && !targetDoc && !fieldDocsLoading && (
         <p role="status" className="text-footnote text-[var(--text-2)]">找不到編號 {docParam} 的文書（可能已捨棄、不在本案，或連結已失效）；以下為本案現場文書清單。</p>
       )}
@@ -198,8 +211,12 @@ export default function Site() {
                 </>
               )
               return (
-                <li key={doc.id}>
-                  <Link to={link} className="group flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">{inner}</Link>
+                <li key={doc.id} className="flex items-start">
+                  <Link to={link} className="group flex-1 min-w-0 flex items-start gap-3 px-4 py-3 hover:bg-[var(--surface-2)] transition-colors">{inner}</Link>
+                  {/* 捨棄草稿:在連結之外(不巢狀互動元件);只有責任方、從未簽署的草稿才出現 */}
+                  <DiscardDraftButton doc={doc} viewerOrg={org} everSigned={signedDocIds.has(doc.id)} canAct={!!can.write}
+                    variant="ghost" label="捨棄" className="shrink-0 max-w-[45%] justify-end pr-3 py-2.5"
+                    onDiscarded={(result) => setDiscarded({ doc_type: doc.doc_type, doc_date: doc.doc_date, reason: result?.discard_reason || null })} />
                 </li>
               )
             })}
