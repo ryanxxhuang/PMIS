@@ -14,7 +14,7 @@
 - 真後端 E2E（本機 colima 棧＋Edge stub；共用開發 DB 以 `migration repair --local --status reverted 20260919010000` 拿掉改名前的版本後 `migration up --local` 套 `20260919023220`）：chain 1 註冊→建案→邀請→正式模式 3.3s、chain 5 上傳→起稿→補缺→簽署→提送→監造退回→更正再送→收件 8.3s、chain 6 監造上傳→起稿→到場親自確認→簽署→提送機關→機關退回→補正再送→機關收件 8.1s 皆通過（5189 被 P3a worktree 佔用，改以同內容臨時設定跑 5190）；三條登入與簽署都沒有驗證碼步驟，簽署後畫面「方式 平台帳號」且無「兩步驟驗證／驗證碼」字樣，`daily_logs.status=已簽署`、`supervisor_logs` 落庫、簽舊版 `PD001`／到場未確認 `PD004`／廠商照片 `PD005` 照舊。
 - 全庫 `grep -i "mfa|totp|aal2|兩步驟|驗證碼|platform_account_mfa|challengeAndVerify|enroll|PD003|/account"`（src／e2e／e2e-real／scripts／Edge／config／seed／tests）：只剩註解、負向斷言、`config.toml` 的關閉設定與新 migration／測試裡「已移除」的說明，沒有任何 MFA／TOTP／aal2 程式路徑；P3a 監造日誌頁、`SupervisorLogSheet` 列印與 chain 6 的 MFA 引導一併移除。
 - 正式庫唯讀核對（套用前，2026-09-19 01:xx）：`auth.mfa_factors` 0 列（verified 0）、`field_document_signatures` 0 列（`platform_account_mfa` 0）、`method` check 仍為三值——沒有任何帳號會被卡在驗證碼、沒有既有簽署紀錄要改語意。
-- 未做／待驗：正式 Supabase Auth 的 TOTP enroll／verify 開關**待使用者關閉**（Dashboard；步驟見 `deploy.md` §7）；合併與 `db push` 待使用者執行（auto mode 擋 merge）；本機共用 stack 的 `config.toml` TOTP 關閉要 `supabase stop && supabase start -x …` 才生效（本輪未重啟共用 stack，不影響任何測試）；rollback 檔未演練。
+- 未做／待驗：正式 Supabase Auth 的 TOTP enroll／verify 開關**待使用者關閉**（Dashboard；步驟見 `deploy.md` §7）；合併（merge commit `ad8066e`）與 `db push`（`20260919023220`）已由使用者親自執行，正式庫唯讀核對與 `check:prod` 五頁 OK 見 CURRENT §6.3；本機共用 stack 的 `config.toml` TOTP 關閉要 `supabase stop && supabase start -x …` 才生效（本輪未重啟共用 stack，不影響任何測試）；rollback 檔未演練。
 
 ### 2026-09-19 P5c：基準日版本、重算只動未完成、單次義務完成快照、循環停止條件（`codex/slimming-p5c-anchor-versions`，PR #134，migration `20260919021500_project_anchor_versions`）
 
