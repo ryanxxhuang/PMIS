@@ -159,7 +159,7 @@ describe('自主檢查表文件頁', () => {
 
   it('唯讀視角:監造除日期外無 input、已提送時有收件／退回;機關唯讀且無收件', async () => {
     const submitted = baseDoc({ status: 'submitted', recheck: [], current_version_no: 2, target_id: 'REC1' })
-    const detail = { doc: submitted, version: version({ version_no: 2 }), versions: [], signatures: [], submissions: [{ id: 'X1', action: 'submit', version_no: 2, actor_org: 'contractor', to_org: 'supervisor', created_at: '2026-09-19T02:00:00Z' }] }
+    const detail = { doc: submitted, version: version({ version_no: 2 }), versions: [], signatures: [], submissions: [{ id: 'X1', document_id: submitted.id, action: 'submit', version_no: 2, actor_org: 'contractor', to_org: 'supervisor', created_at: '2026-09-19T02:00:00Z' }] }
     state.store = makeStore({ documents: [submitted], currentUser: { org_type: 'supervisor', user_id: 'u2' }, can: { edit: false, write: true, submit: false, approve: true, oversee: false, override: false }, getFieldDocument: vi.fn().mockResolvedValue(detail) })
     await render('/self-check?doc=SC1'); await flush(); await flush()
     expect(container.textContent).toContain('此頁為唯讀')

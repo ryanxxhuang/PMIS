@@ -70,8 +70,8 @@ test.describe('施工廠商', () => {
   })
 
   // P2c:施工日誌是「文件」——存檔=伺服器保存版本(demo 只進記憶體)、列出待補;簽署／提送需正式專案。
-  // 列印只輸出已落庫的紀錄(已簽署或既有),demo 今天沒有,切到昨天(demo 種子)才有。
-  test('施工日誌:複製昨日 → 存檔成版本並列待補 → 既有紀錄可列印;示範模式不假裝可簽署／上傳', async ({ page }) => {
+  // P3d 列印:有文件印簽署版本,未簽署印最新存檔版本並整張標「草稿・未簽署」;只有既有紀錄(demo 種子的昨天)印該列並標既有紀錄。
+  test('施工日誌:複製昨日 → 存檔成版本並列待補 → 草稿與既有紀錄列印都標未簽署;示範模式不假裝可簽署／上傳', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/site-log')
     await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText('本日尚無日誌')
@@ -86,12 +86,19 @@ test.describe('施工廠商', () => {
     await expect(page.getByText(/待補 \d+ 項/).first()).toBeVisible()
     await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0)
     await expect(page.getByText('示範模式無法上傳照片').first()).toBeVisible()
-    await expect(page.getByRole('button', { name: /列印公定格式日誌/ })).toHaveCount(0) // 今天尚未落庫,沒有可印的正式紀錄
-    // 切到昨天(demo 種子的既有紀錄):可列印;既有紀錄以「待核對」帶入
+    // 已存版本的草稿也能印:印最新存檔版本(版本 1)並整張標「草稿・未簽署」,不假裝是正式紀錄
+    await page.getByRole('button', { name: /列印公定格式日誌/ }).click()
+    const stamp = page.getByRole('group', { name: '文件版本與簽署' })
+    await expect(stamp).toContainText('版本 1')
+    await expect(stamp).toContainText('草稿・未簽署')
+    await page.getByRole('button', { name: /返回施工日誌/ }).click()
+    // 切到昨天(demo 種子的既有紀錄):可列印;既有紀錄以「待核對」帶入,列印標既有紀錄・未簽署(無版本與雜湊)
     const list = page.getByRole('group', { name: /施工日誌（/ })
     await list.getByRole('button', { name: /^\d{4}-\d{2}-\d{2}$/ }).nth(1).click()
     await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText(/既有紀錄/)
-    await expect(page.getByRole('button', { name: /列印公定格式日誌/ })).toBeVisible()
+    await page.getByRole('button', { name: /列印公定格式日誌/ }).click()
+    await expect(stamp).toContainText('既有紀錄（舊流程寫入，無文件版本與內容雜湊）')
+    await expect(stamp).toContainText('草稿・未簽署')
   })
 
   // P3b:自主檢查表是「文件」——新建(選本案範本)→ 填實測值即時判定預覽 → 存檔成版本並列待補;示範模式不假裝可簽署。

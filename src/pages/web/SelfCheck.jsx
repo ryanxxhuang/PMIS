@@ -18,7 +18,7 @@ import { useStore } from '../../store.jsx'
 import { Card, Button, Empty, PageHeader, SkeletonList, Badge, ErrorBanner } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
-import { taipeiToday } from '../../lib/dates.js'
+import { taipeiToday, taipeiDateTime } from '../../lib/dates.js'
 import { billableLeaves } from '../../lib/boqCalc.js'
 import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
 import {
@@ -234,14 +234,14 @@ export default function SelfCheck() {
     const r = await submitFieldDocument({ documentId: doc.id, versionNo: doc.current_version_no, docType: DOC_TYPE })
     setBusy(null)
     if (r.error) { handleLifecycleError(r.error, '提送未完成'); return }
-    setLifecycleMsg(`${r.receipt.idempotent ? '這筆已提送過，沿用原回執：' : ''}已提送給監造（${String(r.receipt.created_at).slice(0, 16).replace('T', ' ')}，回執 ${String(r.receipt.submission_id).slice(0, 8)}）；等待監造收件。`, 'success')
+    setLifecycleMsg(`${r.receipt.idempotent ? '這筆已提送過，沿用原回執：' : ''}已提送給監造（${taipeiDateTime(r.receipt.created_at)}，回執 ${String(r.receipt.submission_id).slice(0, 8)}）；等待監造收件。`, 'success')
   }
   const onReceive = async () => {
     setBusy('receive'); setLifecycleMsg('')
     const r = await receiveFieldDocument({ documentId: doc.id, versionNo: doc.current_version_no })
     setBusy(null)
     if (r.error) { handleLifecycleError(r.error, '收件未完成'); return }
-    setLifecycleMsg(`已收件（${String(r.receipt.created_at).slice(0, 16).replace('T', ' ')}）。`, 'success')
+    setLifecycleMsg(`已收件（${taipeiDateTime(r.receipt.created_at)}）。`, 'success')
   }
   const onReturn = async (reason) => {
     setBusy('return'); setLifecycleMsg('')

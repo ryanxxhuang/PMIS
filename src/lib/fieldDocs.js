@@ -17,6 +17,7 @@ import {
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
   checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys,
 } from '../../supabase/functions/_shared/fieldDocTemplate.ts'
+import { fieldDocumentBalls } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 export {
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
   checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys,
@@ -352,17 +353,22 @@ export function contentFromAgentDraft(payload) {
 
 // 內容(items 以 work_items uuid 為鍵)→ 既有頁面／列印看的日誌形狀({ item_key: 數量 })。
 // 只給顯示用(公定格式紙本、右欄清單);事實表 daily_logs 只由簽署 RPC 寫。
-export function contentToLogShape(content, { id = null, status = null } = {}) {
+// item_meta:版本內容裡的工項快照(項次／名稱／單位),列印以它為準——印的是簽署當下的內容,不是之後可能變動的工項表。
+// from_document:紙本據此不做舊列的天氣回退(舊流程只有單一 weather 欄;文件版本的上下午天氣各自是簽署內容)。
+export function contentToLogShape(content, { id = null, status = null, logDate = null } = {}) {
   const items = {}
+  const itemMeta = {}
   for (const [wid, it] of Object.entries(content?.items || {})) {
     if (it?.qty_today == null) continue
-    items[it.item_key || wid] = Number(it.qty_today)
+    const key = it.item_key || wid
+    items[key] = Number(it.qty_today)
+    itemMeta[key] = { item_no: it.item_no ?? null, description: it.description ?? null, unit: it.unit ?? null }
   }
   return {
-    id, log_date: content?.log_date, status,
+    id, log_date: content?.log_date || logDate, status,
     weather: content?.weather_am || null, weather_am: content?.weather_am || null, weather_pm: content?.weather_pm || null,
     labor: content?.labor || [], equipment: content?.equipment || [], materials: content?.materials || [],
-    extras: content?.extras || {}, work_summary: content?.work_summary || null, items,
+    extras: content?.extras || {}, work_summary: content?.work_summary || null, items, item_meta: itemMeta, from_document: true,
   }
 }
 
@@ -629,6 +635,58 @@ export function docStatusMeta(doc, viewerOrg) {
 }
 
 export const formatHash = (h) => (h ? String(h).slice(0, 12) : '—')
+
+// ── 列印版本與提送回執(P3d;四類共用。只挑選／排列伺服器列,不重算雜湊、差異或狀態)────────────
+export const SIGN_METHOD_LABEL = Object.freeze({ platform_account: '平台帳號', paper_scan: '紙本簽回掃描' })
+
+// 列印印「簽署列指向的版本」:簽署列 append-only,一個版本只會有一位簽署者(他人再簽＝PD008),簽後更正在較新版本上
+// 再簽——取版本號最大的一筆(同版本取伺服器時間較晚者)。沒有簽署列回 null＝草稿(印最新存檔版本並整張標草稿・未簽署)。
+export function printSignature(signatures = []) {
+  let best = null
+  for (const s of signatures || []) {
+    if (!s) continue
+    const dv = Number(s.version_no) - Number(best?.version_no)
+    if (!best || dv > 0 || (dv === 0 && String(s.signed_at) > String(best.signed_at))) best = s
+  }
+  return best
+}
+
+// 提送列依伺服器時間由舊到新(同時間以 id 穩定排序);getFieldDocument 回的是新→舊
+const bySubmittedAt = (a, b) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id))
+export const submissionsChronological = (submissions = []) => (submissions || []).filter(Boolean).slice().sort(bySubmittedAt)
+
+// 提送回執:最近一輪送件(最新一筆 submit 列的版本)的每一筆 submit 列(監造查驗表單同版本可送兩個對象),
+// 各配上該對象方對同版本最後一次回應(receive／return;收件後仍可退回,取最後一筆)。沒送過回 []。
+export function submissionReceipts(submissions = []) {
+  const rows = submissionsChronological(submissions)
+  const newestFirst = rows.slice().reverse()
+  const last = newestFirst.find((r) => r.action === 'submit')
+  if (!last) return []
+  return rows.filter((r) => r.action === 'submit' && Number(r.version_no) === Number(last.version_no)).map((submit) => ({
+    submit,
+    response: newestFirst.find((r) => (r.action === 'receive' || r.action === 'return') && Number(r.version_no) === Number(submit.version_no)
+      && r.actor_org === submit.to_org && bySubmittedAt(r, submit) > 0) || null,
+  }))
+}
+
+// 退回歷史:每一筆 return 列依時間由舊到新全部列出(不只最新一筆),配上其後第一筆「相對此退回版本」的再送列——
+// 再送列的 diff({against_version_no, changed_keys})由 DB trigger 比對退回版本與再送版本算好,這裡只配對不重算。
+// 尚未補正再送者 resubmit=null。
+export function returnHistory(submissions = []) {
+  const rows = submissionsChronological(submissions)
+  return rows.filter((r) => r.action === 'return').map((ret) => ({
+    ...ret,
+    resubmit: rows.find((r) => r.action === 'submit' && r.diff && Number(r.diff.against_version_no) === Number(ret.version_no) && bySubmittedAt(r, ret) > 0) || null,
+  }))
+}
+
+// 下一責任方:與今日工作球權同一支判定(ballInCourtRules.fieldDocumentBalls),不在呈現層另寫狀態規則。
+export function nextResponsibleText(doc, submissions = []) {
+  const balls = fieldDocumentBalls(doc, submissions)
+  const open = balls.filter((b) => b.who !== 'done')
+  if (!open.length) return `無（${DOC_STATUS_LABEL[balls[0]?.label] || balls[0]?.label || '流程已結束'}）`
+  return open.map((b) => `${ORG_LABEL[b.who] || '待補設定'}（${b.label}）`).join('、')
+}
 
 // 簽署意願聲明:簽署當下畫面顯示的同一段,原樣送進 RPC(field_document_signatures.intent)
 export function signIntentText({ docLabel = '施工日誌', docDate, versionNo, contentHash }) {

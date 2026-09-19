@@ -157,7 +157,7 @@ describe('施工日誌文件頁', () => {
     const submitted = baseDoc({ status: 'submitted' })
     state.store = makeStore({
       documents: [submitted], currentUser: { org_type: 'supervisor', user_id: 'u2' }, can: { edit: false, write: true, approve: true, oversee: false, override: false },
-      getFieldDocument: vi.fn().mockResolvedValue({ doc: submitted, version: version(), versions: [], signatures: [], submissions: [{ id: 'X1', action: 'submit', version_no: 1, actor_org: 'contractor', to_org: 'supervisor', created_at: '2026-09-17T02:00:00Z' }] }),
+      getFieldDocument: vi.fn().mockResolvedValue({ doc: submitted, version: version(), versions: [], signatures: [], submissions: [{ id: 'X1', document_id: submitted.id, action: 'submit', version_no: 1, actor_org: 'contractor', to_org: 'supervisor', created_at: '2026-09-17T02:00:00Z' }] }),
     })
     await render(); await flush(); await flush()
     expect(container.textContent).toContain('此頁為唯讀')

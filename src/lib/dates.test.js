@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseLocalDate, taipeiISODate, taipeiToday, localISODate } from './dates.js'
+import { parseLocalDate, taipeiISODate, taipeiDateTime, taipeiToday, localISODate } from './dates.js'
 
 describe('parseLocalDate — 一律解析成本地午夜', () => {
   it("'YYYY-MM-DD' → 本地午夜（任何時區下年月日都不變）", () => {
@@ -35,6 +35,19 @@ describe('taipeiISODate — 業務日期一律取台北日曆日', () => {
   it('空值 / 無效輸入 → null', () => {
     expect(taipeiISODate(null)).toBeNull()
     expect(taipeiISODate('not-a-date')).toBeNull()
+  })
+})
+
+describe('taipeiDateTime — 伺服器時戳(UTC)給人看一律換成台北時間', () => {
+  it('RPC／PostgREST 回的 UTC 時戳換成台北 HH:mm(不是 slice 出 UTC 時間)', () => {
+    expect(taipeiDateTime('2026-09-19T01:23:45.123456+00:00')).toBe('2026-09-19 09:23')
+    expect(taipeiDateTime('2026-09-18T16:05:00Z')).toBe('2026-09-19 00:05') // 跨日
+    expect(taipeiDateTime(new Date('2026-09-19T15:59:00Z'))).toBe('2026-09-19 23:59')
+  })
+  it('空值／無效值 → —', () => {
+    expect(taipeiDateTime(null)).toBe('—')
+    expect(taipeiDateTime('')).toBe('—')
+    expect(taipeiDateTime('not-a-date')).toBe('—')
   })
 })
 

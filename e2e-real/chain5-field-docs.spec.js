@@ -209,6 +209,27 @@ test('鏈 5:廠商上傳→起稿→補缺→簽署→提送→監造退回→�
   await expect(page.getByText(/此頁為唯讀/).first()).toBeVisible()
   await expect(page.locator('input:not([type="date"])')).toHaveCount(0)
   await expect(page.getByRole('region', { name: '文件狀態與簽署' }).getByText(/監造已於 .* 收件/)).toBeVisible()
+  // P3d:退回歷史(退回人姓名由成員名單對照)與回執(完整 submission_id＝DB 送件列)、下一責任方
+  const ownLifecycle = page.getByRole('region', { name: '文件狀態與簽署' })
+  const history = ownLifecycle.getByRole('group', { name: '退回歷史' })
+  await expect(history).toContainText('退回歷史（1）')
+  await expect(history).toContainText('退回人 監造 鏈五監造')
+  await expect(history).toContainText('原因：材料使用請補進料證明')
+  const { data: lastSubmit } = await con.from('field_document_submissions').select('id').eq('document_id', docId).eq('action', 'submit').eq('version_no', 3).single()
+  const receipt = ownLifecycle.getByRole('group', { name: '提送與回執' })
+  await expect(receipt).toContainText(`回執編號${lastSubmit.id}`)
+  await expect(receipt).toContainText('下一責任方：無（已收件）')
+  // 列印:印簽署版本 3,頁首雜湊前 12 碼＝DB content_hash、簽署者;內容是版本 3 的更正摘要
+  await gotoHash(page, `/site-log/print?doc=${docId}`)
+  const { data: v3 } = await con.from('field_document_versions').select('content_hash').eq('document_id', docId).eq('version_no', 3).single()
+  const stamp = page.getByRole('group', { name: '文件版本與簽署' })
+  await expect(stamp).toContainText(`內容雜湊 ${v3.content_hash.slice(0, 12)}`, { timeout: 30_000 })
+  await expect(stamp).toContainText('版本 3')
+  await expect(stamp).toContainText('簽署 鏈五廠商・')
+  await expect(page.getByText('草稿・未簽署')).toHaveCount(0)
+  await expect(page.getByText('結構工程混凝土澆置 12.5 M3；材料進料證明已補')).toBeVisible()
+  await page.getByRole('button', { name: '← 返回施工日誌' }).click() // 列印頁沒有工作台外框(無登出鈕)
+  await expect(page).toHaveURL(/#\/site-log\?doc=/)
   await logoutReal(page)
 
   // 伺服器事實:提送列 submit→return→submit→receive 四筆保留;文件 received;事實列為簽署版本內容
