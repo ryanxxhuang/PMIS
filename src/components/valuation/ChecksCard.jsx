@@ -20,9 +20,9 @@ export default function ChecksCard({ checks, demo, stateLoading, hasState, edita
       if (f.action === 'sync') return <span className="text-footnote text-[var(--text-3)]">{editable ? '按動作列的「同步確認量」以確認量為準' : '待廠商同步確認量'}</span>
       if (f.action === 'period_end' && editable && onEditPeriodEnd) return <Button variant="ghost" size="sm" onClick={onEditPeriodEnd}>填計價截止日</Button>
       if (f.action === 'basis') return <span className="text-footnote text-[var(--text-3)]">{canApprove ? '在明細列的「計價依據」下拉設定' : '由監造設定計價依據'}</span>
-      if (f.action === 'certificate') return <span className="text-footnote text-[var(--text-3)]">由監造簽發監造確認單補證(撤銷／補證介面 P4d)</span>
+      if (f.action === 'certificate') return <span className="text-footnote text-[var(--text-3)]">{canApprove ? '展開該列來源,按「補證此期」簽發監造確認單' : '待監造簽發監造確認單補證;補證後才可登錄請款日'}</span>
       if (f.action === 'review') return <span className="text-footnote text-[var(--text-3)]">{canApprove ? '退回後由廠商同步重算' : '待監造退回'}</span>
-      if (f.action === 'adjust') return <span className="text-footnote text-[var(--text-3)]">走撤銷確認→扣回流程(P4d)</span>
+      if (f.action === 'adjust') return <span className="text-footnote text-[var(--text-3)]">{canApprove ? '展開該列來源,撤銷或減量該筆確認(已核定量會轉成扣回)' : '待監造撤銷／減量確認;已核定量轉成扣回由機關處理'}</span>
       return null
     }
     if (f.route && f.route !== '/valuation') return <Button variant="ghost" size="sm" onClick={() => navigate(f.route)}>前往品質查驗<MSym name="arrow_forward" size={13} /></Button>

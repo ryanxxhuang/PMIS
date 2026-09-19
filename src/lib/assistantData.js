@@ -11,7 +11,7 @@ import { myOpenItems } from './ballInCourt.js'
 export function useAssistantData() {
   const TODAY = new Date() // 每次 render 取(B-11):長開分頁的「今天」不可凍結在開頁那天
   const store = useStore()
-  const { project, currentUser, workItems, valuations, progressPlan, siteLogs, inspections, defects,
+  const { project, currentUser, workItems, valuations, valuationAdjustments, progressPlan, siteLogs, inspections, defects,
     testSamples, obligations, changeOrders, submittals, rfis, observations, safetyRecords, acceptanceEvents,
     demoMode, workItemsSource, adjustedItems, revisedTotal } = store
   const org = currentUser?.org_type || 'contractor'
@@ -36,8 +36,8 @@ export function useAssistantData() {
     commencement_date: project?.commencement_date, end_date: project?.end_date,
   }
   const myItems = useMemo(
-    () => myOpenItems(org, { rfis, submittals, valuations, defects, inspections, observations, changeOrders }),
-    [org, rfis, submittals, valuations, defects, inspections, observations, changeOrders],
+    () => myOpenItems(org, { rfis, submittals, valuations, defects, inspections, observations, changeOrders, valuationAdjustments }),
+    [org, rfis, submittals, valuations, defects, inspections, observations, changeOrders, valuationAdjustments],
   )
 
   const data = {

@@ -4,12 +4,17 @@
 -- 執行方式:npm run test:db(一次性資料庫),整份在交易內執行並 rollback。
 begin;
 
-select plan(294);
+select plan(299);
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 0. 結構與授權
 -- ═══════════════════════════════════════════════════════════════════════════
 select has_table('public', 'inspection_confirmations', '確認表存在');
+-- P4d(20260919160000):訊息用的數量文字去尾零;純函式不對 authenticated 開放
+select is(public.fn_cq_txt(60.0000), '60', 'fn_cq_txt:60.0000 → 60');
+select is(public.fn_cq_txt(60.5000), '60.5', 'fn_cq_txt:60.5000 → 60.5');
+select is(public.fn_cq_txt(0.0000), '0', 'fn_cq_txt:0.0000 → 0');
+select is(has_function_privilege('authenticated', 'public.fn_cq_txt(numeric)', 'execute'), false, 'fn_cq_txt 不對 authenticated 開放');
 select has_table('public', 'valuation_item_sources', '來源分配表存在');
 select has_table('public', 'valuation_adjustments', '調整表存在');
 select has_table('public', 'work_item_pricing_basis', '計價依據表存在');
@@ -244,6 +249,8 @@ select is(pg_temp.cum('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-000
 select is((select count(*)::int from public.valuation_item_sources where valuation_id = 'c4b40000-0000-0000-0000-000000000001'), 1, '來源列不增加');
 select throws_ok($$ select public.set_valuation_item_cum('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000001', 61) $$,
   'VQ006', null, '通過 60:本期最多 60,61 拒絕');
+select throws_like($$ select public.set_valuation_item_cum('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000001', 61) $$,
+  '%本期最多可新增 60(有效確認量 60 −%要求新增 61%', 'P4d:VQ006 訊息的數量不帶 numeric 小數尾(60,不是 60.0000)');
 select lives_ok($$ select public.set_valuation_item_cum('c4b40000-0000-0000-0000-000000000001', 'c4b30000-0000-0000-0000-000000000001', 20) $$,
   '廠商在上限內調整為 20');
 select is((pg_temp.item(public.get_valuation_state('c4b40000-0000-0000-0000-000000000001'), 'c4b30000-0000-0000-0000-000000000001') ->> 'cap')::numeric, 60::numeric, 'get_valuation_state:cap 60');

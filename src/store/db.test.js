@@ -66,9 +66,16 @@ describe('db.js 分頁載入:超過 PostgREST 單次上限時要全部取回', (
       }
     }
     pg.setTable('valuation_items', vItems)
+    // P4d:第 1 期兩個工項仍是歷史遷移來源(同工項兩列只算一個工項)→ legacy_uncovered=2;其他期 0
+    pg.setTable('valuation_item_sources', [
+      { id: 's1', valuation_id: uid('v', 0), work_item_id: uid('wi', 0), kind: 'legacy' },
+      { id: 's2', valuation_id: uid('v', 0), work_item_id: uid('wi', 0), kind: 'legacy' },
+      { id: 's3', valuation_id: uid('v', 0), work_item_id: uid('wi', 1), kind: 'legacy' },
+    ])
     const idToKey = new Map(Array.from({ length: 1200 }, (_, i) => [uid('wi', i), `k${i}`]))
     const vals = await loadValuationsFromDB(PID, idToKey)
     expect(vals).toHaveLength(3)
+    expect(vals.map((v) => v.legacy_uncovered)).toEqual([2, 0, 0])
     for (let v = 0; v < 3; v++) {
       expect(Object.keys(vals[v].items)).toHaveLength(1200)
       expect(vals[v].items.k1199).toBe(1199 + v) // 最後一筆也在

@@ -50,9 +50,35 @@ export function valuationBall(r: Rec): Ball {
   const st = s(r, 'status')
   if (st === '草稿') return { who: 'contractor', label: '待廠商送審' }
   if (st === '監造審核') return { who: 'supervisor', label: '待監造核定' }
-  if (!r?.invoice_date) return { who: 'contractor', label: '待廠商請款' }
+  // P4d:已核定期若仍有歷史遷移來源(legacy_uncovered=尚未補證的工項數),登錄請款日會被 DB 第三檢查點
+  // (invoice)擋下——球在監造補開監造確認單,不是廠商;補證完成(count 歸零)才輪到廠商請款。
+  if (!r?.invoice_date) {
+    if (Number(r?.legacy_uncovered) > 0) return { who: 'supervisor', label: '待監造補證' }
+    return { who: 'contractor', label: '待廠商請款' }
+  }
   if (!r?.paid_date) return { who: 'owner', label: '待機關撥款' } // 已請款 → 球在機關撥款
   return { who: 'done', label: '已撥款' }
+}
+
+// P4d:已核定／已請款期的確認被撤銷／減量後產生的估驗調整(扣回)。pending 時下一期核定會被擋
+// (pending_adjustment):由機關作廢(接受該量已計價)或在草稿期同步時併入扣回;球在機關決定。
+export function valuationAdjustmentBall(r: Rec): Ball {
+  const st = s(r, 'status')
+  if (st === 'pending') return { who: 'owner', label: '待機關處理扣回' }
+  return { who: 'done', label: st === 'void' ? '已作廢' : '已扣回' }
+}
+
+// 期別的「尚未補證的歷史遷移工項數」:valuation_item_sources(kind='legacy')逐期別計 distinct 工項。
+// 首頁載入(store/db.js)與早報／Agent 收集器(ballInCourt.ts)都用這一支,不各自數。
+export function legacyUncoveredByValuation(sources: Rec[] = []): Record<string, number> {
+  const seen = new Map<string, Set<string>>()
+  for (const src of sources) {
+    if (src?.kind != null && s(src, 'kind') !== 'legacy') continue
+    const vid = s(src, 'valuation_id'); if (!vid) continue
+    if (!seen.has(vid)) seen.set(vid, new Set())
+    seen.get(vid)!.add(s(src, 'work_item_id'))
+  }
+  return Object.fromEntries([...seen].map(([vid, set]) => [vid, set.size]))
 }
 
 export function changeOrderBall(r: Rec): Ball {
@@ -377,11 +403,13 @@ export interface CoreItem {
   due: string | null
   doc_type?: string // 只有現場文書帶:呼叫端判「等待對方」時查 FIELD_DOC_PARTIES
   setup?: SetupGap  // 責任推不出三方(who='unassigned')時帶:兩側都據此列入「待補設定」
+  origin_valuation_id?: string // 只有估驗調整帶:被更正的已核定期(前端據此導到估驗頁該期)
 }
 export interface CoreInput {
   rfis?: Rec[]; submittals?: Rec[]; valuations?: Rec[]; defects?: Rec[]
   inspections?: Rec[]; observations?: Rec[]; changeOrders?: Rec[]
   fieldDocuments?: Rec[]; fieldDocumentSubmissions?: FieldDocSubmission[]
+  valuationAdjustments?: Rec[] // P4d:valuation_adjustments 列(至少 id/status/origin_valuation_id)
 }
 
 const idOf = (r: Rec): string | null => (r?.id == null || r.id === '' ? null : String(r.id))
@@ -392,7 +420,7 @@ export const UNTITLED = '（未命名）'
 export function coreOpenItems(data: CoreInput = {}): CoreItem[] {
   const {
     rfis = [], submittals = [], valuations = [], defects = [], inspections = [], observations = [], changeOrders = [],
-    fieldDocuments = [], fieldDocumentSubmissions = [],
+    fieldDocuments = [], fieldDocumentSubmissions = [], valuationAdjustments = [],
   } = data
   const out: CoreItem[] = []
   const push = (ball: Ball, r: Rec, tag: string, title: string, due: string | null = null, extra: Partial<CoreItem> = {}) => {
@@ -403,6 +431,11 @@ export function coreOpenItems(data: CoreInput = {}): CoreItem[] {
   for (const r of rfis) push(rfiBall(r), r, '疑義', numbered(r.rfi_no, r.title), dueOf(r))
   for (const r of submittals) push(submittalBall(r), r, '送審', numbered(r.submittal_no, r.title), dueOf(r))
   for (const r of valuations) push(valuationBall(r), r, '估驗', `第 ${s(r, 'period_no')} 期估驗`)
+  for (const a of valuationAdjustments) {
+    const origin = valuations.find((v) => idOf(v) != null && idOf(v) === s(a, 'origin_valuation_id'))
+    const title = origin ? `第 ${s(origin, 'period_no')} 期估驗扣回調整` : '估驗扣回調整'
+    push(valuationAdjustmentBall(a), a, '估驗調整', title, null, s(a, 'origin_valuation_id') ? { origin_valuation_id: s(a, 'origin_valuation_id') } : {})
+  }
   for (const r of inspections) push(inspectionBall(r), r, '查驗', s(r, 'title'))
   for (const r of defects) push(defectBall(r), r, r.domain === 'safety' ? '工安缺失' : '缺失', s(r, 'title'), dueOf(r))
   for (const r of observations) push(observationBall(r), r, '觀察', s(r, 'title'))

@@ -18,6 +18,7 @@ const items = coreOpenItems({
   rfis: t.rfis, submittals: t.submittals, valuations: t.valuations, defects: t.defects, inspections: t.inspections,
   observations: t.observations, changeOrders: t.change_orders,
   fieldDocuments: t.field_documents, fieldDocumentSubmissions: t.field_document_submissions,
+  valuationAdjustments: t.valuation_adjustments,
 })
 const computeDueIso = (ob: Record<string, unknown>) => {
   const ms = computeObligationDueUTC(ob, cases.anchors)

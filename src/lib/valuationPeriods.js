@@ -11,7 +11,12 @@
 //   items   {item_key: 累計量}    (含往前帶)
 //   amounts {item_key: 累計金額}  (含往前帶;DB `amount_cum`,前端不換算)
 //   own     {item_key: {cum_qty, amount_cum, backing}} 本期自己有列的工項(依據標示、來源展開用)
-export function projectValuationPeriods(vals, itemRows, idToKey) {
+//   legacy_uncovered 尚未補證的歷史遷移工項數(P4d;今日工作據此把已核定期的球放到監造補證)
+import { legacyUncoveredByValuation } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+
+export function projectValuationPeriods(vals, itemRows, idToKey, legacySources = []) {
+  // 尚未補證的歷史遷移工項數(P4d):與早報收集器同一支共用計數
+  const legacyCounts = legacyUncoveredByValuation(legacySources)
   const ownByVal = new Map((vals || []).map((v) => [v.id, {}]))
   for (const vi of itemRows || []) {
     const key = idToKey.get(vi.work_item_id)
@@ -34,6 +39,7 @@ export function projectValuationPeriods(vals, itemRows, idToKey) {
       period_start: v.period_start ?? null, period_end: v.period_end ?? null,
       retention_pct: Number(v.retention_pct), status: v.status, note: v.note ?? null,
       recheck_required: !!v.recheck_required, recheck_note: v.recheck_note ?? null,
+      legacy_uncovered: legacyCounts[String(v.id)] ?? 0,
       items, amounts, own,
       invoice_date: v.invoice_date ?? null, paid_date: v.paid_date ?? null,
       paid_amount: v.paid_amount == null ? null : Number(v.paid_amount),

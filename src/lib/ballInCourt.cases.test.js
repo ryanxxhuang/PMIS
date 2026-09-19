@@ -16,6 +16,7 @@ const input = {
   rfis: t.rfis, submittals: t.submittals, valuations: t.valuations, defects: t.defects, inspections: t.inspections,
   observations: t.observations, changeOrders: t.change_orders, obligations: t.contract_obligations,
   fieldDocuments: t.field_documents, fieldDocumentSubmissions: t.field_document_submissions,
+  valuationAdjustments: t.valuation_adjustments,
 }
 const TODAY = new Date(`${cases.today}T04:00:00Z`) // 台北正午,避開跨日邊界
 // 鍵:tag:id;循環義務的期次(P5b)再加 :期別——同一條義務的每一期各是一筆

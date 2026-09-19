@@ -12,7 +12,7 @@ import { useStore } from '../store.jsx'
 import { buildTodayTasks, taipeiISODate } from './todayTasks.js'
 
 export function useTodayTasks() {
-  const { currentUser, project, rfis, submittals, valuations, defects, inspections, observations,
+  const { currentUser, project, rfis, submittals, valuations, valuationAdjustments, defects, inspections, observations,
     changeOrders, obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs, fieldDocuments } = useStore()
   const org = currentUser?.org_type || 'contractor'
   const todayIso = taipeiISODate(new Date())
@@ -26,7 +26,8 @@ export function useTodayTasks() {
     obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs,
     // 現場文書(P2a field_documents;真專案由 store 載入,demo 尚無種子 → 空)
     fieldDocuments: fieldDocuments?.documents || [], fieldDocumentSubmissions: fieldDocuments?.submissions || [],
-  }), [org, todayIso, project, rfis, submittals, valuations, defects, inspections, observations,
+    valuationAdjustments, // P4d:待處理扣回 → 球在機關(共用規則)
+  }), [org, todayIso, project, rfis, submittals, valuations, valuationAdjustments, defects, inspections, observations,
     changeOrders, obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs, fieldDocuments])
 }
 

@@ -76,7 +76,9 @@ describe('來源展開列', () => {
       sources: [{ id: 's1', kind: 'legacy', qty: 100, batch_key: '__legacy__' }] }
     await render({ qtyInput: 100, state, flags: [describeViolation({ code: 'legacy_source' })], srcIsOpen: true, confirmationsById: new Map(), inspectionsById: new Map(), nameOf: () => '—' })
     expect(text()).toContain('歷史遷移,非監造確認,需補證')
-    expect(text()).toContain('由監造簽發監造確認單補證後才可請款')
+    expect(text()).toContain('待監造簽發監造確認單補證後才可登錄請款日') // 非監造:只知道下一步由誰處理
+    expect(text()).toContain('有效確認 0 筆')
+    expect(container.querySelector('button[aria-label^="補證此期"]')).toBeNull() // 廠商沒有補證入口
     expect(text()).toContain('前期累計 0')
   })
 
@@ -97,5 +99,36 @@ describe('來源展開列', () => {
     expect(container.querySelector('a[href="/quality?inspection=i1"]')).not.toBeNull()
     expect(container.querySelector('a[href="/site?doc=d1"]')).not.toBeNull()
     expect(t).not.toContain('歷史遷移')
+  })
+})
+
+// P4d:撤銷／減量／簽發／補證的入口只給監造(canManage);對象是全案 active 確認(activeConfirmations),不是本期分配
+describe('P4d 有效確認與監造動作', () => {
+  const state = { work_item_id: 'w1', delta: 100, cum_qty: 100, prev_cum: 0, headroom: 0, basis: 'inspection', backing: 'legacy', sources: [{ id: 's1', kind: 'legacy', qty: 100, batch_key: '__legacy__' }] }
+  const confs = [
+    { id: 'c1', work_item_id: 'w1', batch_key: 'a區', location_label: 'A區', stage_key: null, unit: 'm3', qty_cum: 60, basis: 'supervisor_certificate', confirmed_by: 'u-sup', confirmed_at: '2026-09-19T01:00:00Z', status: 'active' },
+    { id: 'c2', work_item_id: 'w1', batch_key: 'b區', location_label: 'B區', stage_key: null, unit: 'm3', qty_cum: 40, basis: 'inspection', confirmed_by: 'u-sup', confirmed_at: '2026-09-19T02:00:00Z', status: 'active' },
+  ]
+  it('監造在已核定期:有效確認逐筆有「撤銷」,監造確認單有「減量」、查驗確認只能撤銷;有 legacy 來源時有「補證此期」帶遷移量', async () => {
+    const calls = []
+    await render({ qtyInput: 100, state, srcIsOpen: true, editable: false, periodStatus: '已核定', canManage: true, activeConfirmations: confs,
+      nameOf: () => '王監造', onRevoke: (it, c) => calls.push(['revoke', c.id]), onReduce: (it, c) => calls.push(['reduce', c.id]),
+      onIssue: (it) => calls.push(['issue', it.item_key]), onCover: (it, q) => calls.push(['cover', q]) })
+    expect(text()).toContain('有效確認 2 筆')
+    expect(text()).toContain('王監造')
+    expect(text()).toContain('減量請重簽查驗表單')
+    const click = (label) => act(async () => container.querySelector(`button[aria-label="${label}"]`).click())
+    await click('撤銷確認 A區'); await click('減量確認 A區'); await click('撤銷確認 B區'); await click('簽發監造確認單 1.1'); await click('補證此期 1.1')
+    expect(container.querySelector('button[aria-label="減量確認 B區"]')).toBeNull()
+    expect(calls).toEqual([['revoke', 'c1'], ['reduce', 'c1'], ['revoke', 'c2'], ['issue', 'L1'], ['cover', 100]])
+    expect(text()).toContain('按「補證此期」由你簽發監造確認單補證')
+  })
+  it('草稿期沒有「補證此期」(只有已核定／已請款期需要補證);非監造完全沒有動作鈕', async () => {
+    await render({ qtyInput: 100, state, srcIsOpen: true, periodStatus: '草稿', canManage: true, activeConfirmations: confs })
+    expect(container.querySelector('button[aria-label^="補證此期"]')).toBeNull()
+    expect(container.querySelector('button[aria-label^="撤銷確認"]')).not.toBeNull()
+    await render({ qtyInput: 100, state, srcIsOpen: true, periodStatus: '已核定', canManage: false, activeConfirmations: confs })
+    expect(container.querySelectorAll('button[aria-label^="撤銷確認"], button[aria-label^="減量確認"], button[aria-label^="簽發監造確認單"], button[aria-label^="補證此期"]')).toHaveLength(0)
+    expect(text()).toContain('有效確認 2 筆')
   })
 })

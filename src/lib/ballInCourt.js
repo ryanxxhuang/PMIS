@@ -8,8 +8,8 @@
 import { coreOpenItems } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 export {
-  rfiBall, submittalBall, valuationBall, changeOrderBall, defectBall, inspectionBall, observationBall,
-  BALL_SIDES, UNASSIGNED, coreOpenItems,
+  rfiBall, submittalBall, valuationBall, valuationAdjustmentBall, changeOrderBall, defectBall, inspectionBall, observationBall,
+  BALL_SIDES, UNASSIGNED, coreOpenItems, legacyUncoveredByValuation,
 } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 // 估驗該去哪一頁完成:送審與核定在估驗頁,請款日與收款日都在請款收款頁。
@@ -37,6 +37,8 @@ const ROUTE_BY_TAG = {
 }
 function routeOf(item) {
   if (item.tag === '估驗') return detailLink(valuationRoute(item.meta), 'period', item.id)
+  // 估驗調整(P4d):處理入口在估驗頁的「待處理估驗調整」卡;帶被更正的已核定期定位
+  if (item.tag === '估驗調整') return detailLink('/valuation', 'period', item.origin_valuation_id)
   const [page, param] = ROUTE_BY_TAG[item.tag] || ['/dashboard', 'id']
   return detailLink(page, param, item.id)
 }
@@ -49,6 +51,7 @@ export function collaborationItems(data = {}) {
     id: it.id, who: it.who, tag: it.tag, title: it.title, meta: it.meta, due: it.due, to: routeOf(it),
     ...(it.doc_type ? { doc_type: it.doc_type } : {}),
     ...(it.setup ? { setup: it.setup } : {}),
+    ...(it.origin_valuation_id ? { origin_valuation_id: it.origin_valuation_id } : {}),
   }))
 }
 

@@ -92,9 +92,25 @@ export async function loadValuationsFromDB(projectId, idToKey) {
   const vals = await pageAll((from, to) => supabase.from('valuations')
     .select('*').eq('project_id', projectId).order('period_no').order('id').range(from, to), '估驗')
   if (!vals?.length) return []
-  const vItems = await pageAllIn(vals.map((v) => v.id), (chunk, from, to) => supabase.from('valuation_items')
-    .select('valuation_id, work_item_id, cum_qty, amount_cum, backing').in('valuation_id', chunk).order('id').range(from, to), '估驗明細')
-  return projectValuationPeriods(vals, vItems, idToKey)
+  const ids = vals.map((v) => v.id)
+  const [vItems, legacy] = await Promise.all([
+    pageAllIn(ids, (chunk, from, to) => supabase.from('valuation_items')
+      .select('valuation_id, work_item_id, cum_qty, amount_cum, backing').in('valuation_id', chunk).order('id').range(from, to), '估驗明細'),
+    // P4d:歷史遷移來源(P4b 回填,kind='legacy')尚未補證的工項數 → 期別 legacy_uncovered;
+    // 今日工作以此把已核定期的球放到監造補證(共用規則 valuationBall),與早報收集器同一支計數
+    pageAllIn(ids, (chunk, from, to) => supabase.from('valuation_item_sources')
+      .select('valuation_id, work_item_id, kind').eq('kind', 'legacy').in('valuation_id', chunk).order('id').range(from, to), '歷史遷移來源'),
+  ])
+  return projectValuationPeriods(vals, vItems, idToKey, legacy)
+}
+
+// P4d:估驗調整(撤銷／減量已核定確認後的扣回;pending→applied／void)。RLS 限成員可讀;
+// 待處理者列入今日工作(球在機關),估驗頁的「待處理估驗調整」卡列全部並給機關作廢入口。
+export async function loadValuationAdjustmentsFromDB(projectId) {
+  const rows = await pageAll((from, to) => supabase.from('valuation_adjustments')
+    .select('id, work_item_id, batch_key, qty_delta, reason, status, source_confirmation_id, origin_valuation_id, applied_valuation_id, created_by, created_at, applied_at, voided_at, voided_by, void_reason')
+    .eq('project_id', projectId).order('created_at', { ascending: false }).order('id').range(from, to), '估驗調整')
+  return rows || []
 }
 
 // 從 DB 載入預定進度（schedule_periods）→ progressPlan 形狀

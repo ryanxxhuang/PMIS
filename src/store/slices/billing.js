@@ -5,13 +5,17 @@
 //   改累計量 → set_valuation_item_cum(上限、來源分配、金額全由 DB 算;VQ006 帶 prev_cum／floor／limit／cap)
 //   送審／退回／核定 → transition_valuation(p_from 冪等;檢查點在 trigger,VQ004 帶違反清單)
 //   同步確認量 → sync_valuation_from_confirmations
+// P4d(撤銷／減量／補證／調整,同一份 §16.3):
+//   監造撤銷確認 → revoke_inspection_confirmation(原因必填;收斂由 trigger:草稿縮減、審核中標需重算、已核定建 pending 扣回)
+//   監造簽發／減量／補證 → issue_supervisor_certificate(累計語意;同批次較小累計＝減量;p_covers_valuation_id＝補證歷史已核定期)
+//   機關作廢扣回 → void_valuation_adjustment(語意=接受該量已計價,永不產生新可用量)
 // 前端不再組任何 valuation_items 列(舊 valuationItemRow／fillValuationFromSiteLogs 是客戶端數字
 // 直接寫進請款底稿的路徑,已移除);每次寫入成功後從 DB 重載期別(投影規則見 lib/valuationPeriods.js),
 // 畫面上的數量與金額永遠是 DB 的值。
 import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase.js'
 import { parseLocalDate, taipeiToday, localISOMonth } from '../../lib/dates.js'
-import { loadValuationsFromDB } from '../db.js'
+import { loadValuationsFromDB, loadValuationAdjustmentsFromDB } from '../db.js'
 import { valuationItemAmount } from '../../lib/boqCalc.js'
 
 // 把 supabase update/delete 的回傳統一成 {error}:PostgREST 被 RLS 擋下時
@@ -40,16 +44,22 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps })
   // 估驗計價:每期一個物件 { id, period_no, status, period_end, items: {item_key: 累計量},
   // amounts: {item_key: 累計金額(DB 算)}, own: {item_key: {cum_qty, amount_cum, backing}} }
   const [valuations, setValuations] = useState([])
+  // 估驗調整(P4d):valuation_adjustments 全部列(pending／applied／void);今日工作只取 pending
+  const [valuationAdjustments, setValuationAdjustments] = useState([])
   // 預定進度 S 曲線：{ start, end, months: [{ label, plannedPct }] }
   const [progressPlan, setProgressPlan] = useState(null)
 
   // DB 模式的唯一更新來源:任何估驗寫入成功後整批重載(期別數十、明細數千,一次分頁查詢;
   // 往前帶的投影跨期別,局部更新反而容易與 DB 不一致)。載入失敗回傳 error,不留舊畫面假裝成功。
+  // 估驗調整與期別一起重載:撤銷／作廢／同步都會同時改兩邊,分開載會有一瞬對不上。
   const reloadValuations = useCallback(async () => {
     if (!dbMode) return { error: null }
     try {
-      const vals = await loadValuationsFromDB(currentProject.project_id, wiMaps.idToKey)
-      setValuations(vals)
+      const [vals, adjustments] = await Promise.all([
+        loadValuationsFromDB(currentProject.project_id, wiMaps.idToKey),
+        loadValuationAdjustmentsFromDB(currentProject.project_id),
+      ])
+      setValuations(vals); setValuationAdjustments(adjustments)
       return { error: null }
     } catch (error) {
       return { error }
@@ -191,6 +201,55 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps })
     return reloadValuations()
   }, [dbMode, wiMaps, reloadValuations])
 
+  // ── P4d:撤銷／減量／補證／調整。全部是 DB 決定結果,前端只傳意圖;成功後整批重載 ──
+
+  // 監造撤銷一筆確認(原因必填,DB 亦強制)。回傳 DB 的 effects(草稿縮減／審核中標需重算／已核定建扣回)
+  // 給頁面說明後果;applied:false(已撤銷)視為未變更並重載。
+  const revokeConfirmation = useCallback(async (confirmationId, reason) => {
+    if (!dbMode) return { result: null, error: { message: '示範模式沒有監造確認紀錄可撤銷' } }
+    if (!reason || !reason.trim()) return { result: null, error: { message: '撤銷確認必須填寫原因' } }
+    const { data, error } = await supabase.rpc('revoke_inspection_confirmation', { p_id: confirmationId, p_reason: reason.trim() })
+    if (error) return { result: null, error: parseValuationError(error) }
+    const { error: loadError } = await reloadValuations()
+    if (loadError) return { result: null, error: loadError }
+    if (data && data.applied === false) return { result: data, error: { message: data.message || '此確認已撤銷,未再變更' } }
+    return { result: data, error: null }
+  }, [dbMode, reloadValuations])
+
+  // 監造簽發監造確認單(累計語意):同工項同批次再簽較小累計＝減量(guard 要求原因);
+  // coversValuationId＝補證歷史已核定期(該期該工項的 legacy 來源改掛到這張確認單,數量不變、留痕)。
+  // clientRequestId 由呼叫端每次開表單產生一次:重送同一張回原筆(applied:false),不重複入帳。
+  const issueCertificate = useCallback(async ({ itemKey, batchKey, locationLabel, stageKey = null, qtyCum, reason, clientRequestId, coversValuationId = null }) => {
+    if (!dbMode) return { result: null, error: { message: '示範模式不支援簽發監造確認單' } }
+    const wi = wiMaps.byKey.get(itemKey)
+    if (!wi?.id) return { result: null, error: { message: '找不到這個工項,請重新整理後再試' } }
+    if (!batchKey || !batchKey.trim()) return { result: null, error: { message: '批次／位置必填(同一批次的確認是累計語意)' } }
+    if (!reason || !reason.trim()) return { result: null, error: { message: '確認單必須填寫依據／說明' } }
+    const qty = Number(qtyCum)
+    if (!Number.isFinite(qty) || qty < 0) return { result: null, error: { message: '累計確認量必須是 0 以上的數字' } }
+    const { data, error } = await supabase.rpc('issue_supervisor_certificate', {
+      p_project_id: currentProject.project_id, p_work_item_id: wi.id, p_batch_key: batchKey.trim(),
+      p_location_label: (locationLabel || batchKey).trim(), p_stage_key: stageKey || null, p_unit: wi.unit ?? null,
+      p_qty_cum: qty, p_reason: reason.trim(), p_client_request_id: clientRequestId || null, p_covers_valuation_id: coversValuationId,
+    })
+    if (error) return { result: null, error: parseValuationError(error) }
+    const { error: loadError } = await reloadValuations()
+    if (loadError) return { result: null, error: loadError }
+    return { result: data, error: null }
+  }, [dbMode, wiMaps, currentProject, reloadValuations])
+
+  // 機關作廢一筆待處理扣回(原因必填):語意是「接受該量已計價」,DB 之後不再把它當超額,但不產生新可用量。
+  const voidAdjustment = useCallback(async (adjustmentId, reason) => {
+    if (!dbMode) return { result: null, error: { message: '示範模式沒有估驗調整可作廢' } }
+    if (!reason || !reason.trim()) return { result: null, error: { message: '作廢必須填寫原因' } }
+    const { data, error } = await supabase.rpc('void_valuation_adjustment', { p_id: adjustmentId, p_reason: reason.trim() })
+    if (error) return { result: null, error: parseValuationError(error) }
+    const { error: loadError } = await reloadValuations()
+    if (loadError) return { result: null, error: loadError }
+    if (data && data.applied === false) return { result: data, error: { message: data.message || '調整狀態已變更,未作廢' } }
+    return { result: data, error: null }
+  }, [dbMode, reloadValuations])
+
   // 請款/收款:更新某期的請款日 / 收款日 / 實收金額（demo 模式只更新本機）。
   // DB 成功才更新 UI,避免撥款欄位顯示假成功。登錄請款日是 P4b 的第三個檢查點(invoice),
   // 有歷史遷移來源未補證等情形會被 DB 擋下(VQ004),錯誤含代碼與清單交給頁面顯示。
@@ -267,9 +326,10 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps })
   }, [dbMode, reloadValuations])
 
   return {
-    valuations, setValuations, progressPlan, setProgressPlan, reloadValuations,
+    valuations, setValuations, valuationAdjustments, setValuationAdjustments, progressPlan, setProgressPlan, reloadValuations,
     createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
     syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, setPricingBasis,
+    revokeConfirmation, issueCertificate, voidAdjustment,
     generateSchedule, updatePlannedPct, deleteValuation,
   }
 }
