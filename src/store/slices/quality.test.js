@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // Quality slice(三級品管:查驗/缺失、自主檢查表、取樣試驗)零測試,但它藏著整個
 // 產品最不能漏的連動——「不合格」必須變成一筆有人負責的缺失。這裡釘住的是:
-//   1. 不合格判定的法定後果不可靜默消失:缺失 insert 失敗要回 defectError,
-//      不能因為判定寫成功就當沒事(機關的「查驗↔缺失」勾稽會對不上);
-//   2. 同一鏈上不重複開缺失(P1-07 修訂版次 + 唯一索引 23505 的兩條路徑);
+//   1. 不合格判定的法定後果不可靜默消失:自主檢查的缺失自 P3b 起由 DB trigger 同交易開(判定也由 DB 重算),
+//      前端只讀回並如實回報 created／linked;伺服器沒開要回 defectError,不能當沒事;
+//   2. 同一鏈上不重複開缺失(P1-07 修訂版次;DB 唯一索引兜底);
 //   3. B-07 假成功:已結案缺失/已判定查驗/已判定試體被 guard 擋下時不可假消失;
 //   4. demo 與真 DB 的雙引擎不漂移(inspected_at、completed 類欄位兩邊都要寫)。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -104,51 +104,56 @@ describe('自主檢查表:不合格連動缺失,同一鏈不得重複開', () =>
   const fail = { '1': 12, '2': true }   // 模板垂直度 12mm > 5mm → 不合格
   const pass = { '1': 3, '2': true }
 
-  it('不合格 → 開一筆缺失並掛在鏈根上,回 defectAction=created', async () => {
+  it('不合格 → 伺服器重算判定並同交易開缺失(掛鏈根);前端不寫缺失,只讀回並回 defectAction=created', async () => {
     const r = mount()
-    pg.script('checklist_records', 'insert', { data: { id: 'rec-1', root_id: 'rec-1', rev: 0 }, error: null })
+    pg.script('checklist_records', 'insert', { data: { id: 'rec-1', root_id: 'rec-1', rev: 0, overall: '不合格' }, error: null })
+    pg.script('defects', 'select', { data: [{ id: 'def-1', status: '開立' }], error: null }) // 寫入後查鏈根:trigger 已開
     let res
     await act(async () => {
       res = await r.current.createChecklistRecord({ template: TEMPLATE, check_date: '2026-09-11', location: 'A 區', values: fail })
     })
     expect(res.overall).toBe('不合格')
     expect(res.defectAction).toBe('created')
-    expect(pg.argsOf('defects', 'insert')[0][0]).toMatchObject({ source_checklist_record_id: 'rec-1' })
-    expect(pg.argsOf('defects', 'insert')[0][0].description).toContain('模板垂直度')
+    expect(res.openDefectRemains).toBe(false)
+    expect(pg.hit('defects', 'insert')).toBe(false) // 缺失只由 DB trigger 開,前端沒有第二份實作
+    expect(loadDefectsFromDB).toHaveBeenCalled()
   })
 
-  it('鏈上已有未結案缺失 → 不再開新的,回 linked', async () => {
+  it('修訂版次:鏈上已有未結案缺失 → 伺服器不再開新的,回 linked', async () => {
     const r = mount()
-    pg.script('checklist_records', 'insert', { data: { id: 'rec-2', root_id: 'rec-1', rev: 1 }, error: null })
-    pg.script('defects', 'select', { data: [{ id: 'def-1', status: '開立' }], error: null })
+    pg.script('defects', 'select', { data: [{ id: 'def-1', status: '開立' }], error: null }) // 寫入前:鏈根已有
+    pg.script('checklist_records', 'insert', { data: { id: 'rec-2', root_id: 'rec-1', rev: 1, overall: '不合格' }, error: null })
+    pg.script('defects', 'select', { data: [{ id: 'def-1', status: '開立' }], error: null }) // 寫入後:仍是同一筆
     let res
     await act(async () => {
-      res = await r.current.createChecklistRecord({ template: TEMPLATE, check_date: '2026-09-11', values: fail })
+      res = await r.current.createChecklistRecord({ template: TEMPLATE, check_date: '2026-09-11', values: fail, revises: { id: 'rec-1', rev: 0, root_id: 'rec-1' }, revision_reason: '複核' })
     })
     expect(res.defectAction).toBe('linked')
     expect(res.openDefectRemains).toBe(true)
     expect(pg.hit('defects', 'insert')).toBe(false)
   })
 
-  it('並發下撞到唯一索引(23505)→ 視為已關聯,不當成錯誤丟給使用者', async () => {
+  it('判不合格但伺服器沒開缺失 → 回 defectError 如實提示,不能當沒事', async () => {
     const r = mount()
-    pg.script('checklist_records', 'insert', { data: { id: 'rec-3', root_id: 'rec-3', rev: 0 }, error: null })
-    pg.script('defects', 'insert', { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } })
+    pg.script('checklist_records', 'insert', { data: { id: 'rec-3', root_id: 'rec-3', rev: 0, overall: '不合格' }, error: null })
+    pg.script('defects', 'select', { data: [], error: null })
     let res
     await act(async () => {
       res = await r.current.createChecklistRecord({ template: TEMPLATE, check_date: '2026-09-11', values: fail })
     })
     expect(res.error).toBeNull()
-    expect(res.defectAction).toBe('linked')
+    expect(res.defectAction).toBeNull()
+    expect(res.defectError?.message).toContain('缺失未由伺服器建立')
   })
 
-  it('更正為合格 → 不動原缺失(結案是監造的權限),但要回報仍在追蹤', async () => {
+  it('更正為合格 → 不動原缺失(結案是監造的權限),但要回報仍在追蹤;判定以伺服器回的列為準', async () => {
     const r = mount()
-    pg.script('checklist_records', 'insert', { data: { id: 'rec-4', root_id: 'rec-1', rev: 1 }, error: null })
+    pg.script('defects', 'select', { data: [{ id: 'def-1', status: '改善中' }], error: null })
+    pg.script('checklist_records', 'insert', { data: { id: 'rec-4', root_id: 'rec-1', rev: 1, overall: '合格' }, error: null })
     pg.script('defects', 'select', { data: [{ id: 'def-1', status: '改善中' }], error: null })
     let res
     await act(async () => {
-      res = await r.current.createChecklistRecord({ template: TEMPLATE, check_date: '2026-09-12', values: pass, revises: { id: 'rec-1', rev: 0 }, revision_reason: '重新丈量' })
+      res = await r.current.createChecklistRecord({ template: TEMPLATE, check_date: '2026-09-12', values: pass, revises: { id: 'rec-1', rev: 0, root_id: 'rec-1' }, revision_reason: '重新丈量' })
     })
     expect(res.overall).toBe('合格')
     expect(res.defectAction).toBeNull()
@@ -159,7 +164,8 @@ describe('自主檢查表:不合格連動缺失,同一鏈不得重複開', () =>
   it('內建範本首次使用 → 先把範本落 DB,紀錄才掛得到 template_id', async () => {
     const r = mount()
     pg.script('checklist_templates', 'insert', { data: { id: 'tpl-db', title: TEMPLATE.title, source: '03310' }, error: null })
-    pg.script('checklist_records', 'insert', { data: { id: 'rec-5', root_id: 'rec-5', rev: 0 }, error: null })
+    pg.script('checklist_records', 'insert', { data: { id: 'rec-5', root_id: 'rec-5', rev: 0, overall: '合格' }, error: null })
+    pg.script('defects', 'select', { data: [], error: null })
     await act(async () => {
       await r.current.createChecklistRecord({ template: { ...TEMPLATE, builtin: true }, check_date: '2026-09-11', values: pass })
     })
@@ -180,7 +186,8 @@ describe('自主檢查表:不合格連動缺失,同一鏈不得重複開', () =>
 
   it('工項關聯:UI 傳 work_item_key → 換成 uuid 寫入(demo 另存 key 才顯示得出來)', async () => {
     const r = mount()
-    pg.script('checklist_records', 'insert', { data: { id: 'rec-6', root_id: 'rec-6', rev: 0 }, error: null })
+    pg.script('checklist_records', 'insert', { data: { id: 'rec-6', root_id: 'rec-6', rev: 0, overall: '合格' }, error: null })
+    pg.script('defects', 'select', { data: [], error: null })
     await act(async () => {
       await r.current.createChecklistRecord({ template: TEMPLATE, check_date: '2026-09-11', values: pass, work_item_key: 'A1' })
     })

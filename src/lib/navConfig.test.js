@@ -94,7 +94,7 @@ describe('routeRegistry(登記表的集合)', () => {
       '/change-orders', '/contract', '/contract/print', '/cost', '/dashboard', '/deadlines', '/itp', '/login',
       '/members', '/monthly-report', '/payments', '/portfolio', '/privacy', '/progress', '/project/new', '/quality',
       '/quality/checklist-print', '/requirements', '/requirements/review', '/rfi', '/safety', '/schedule',
-      '/security', '/site', '/site-log', '/site-log/print', '/submittals', '/supervisor-log', '/supervisor-log/print', '/supervisor-report', '/terms', '/valuation',
+      '/security', '/self-check', '/self-check/print', '/site', '/site-log', '/site-log/print', '/submittals', '/supervisor-log', '/supervisor-log/print', '/supervisor-report', '/terms', '/valuation',
       '/valuation/package', '/valuation/print',
     ])
   })
@@ -147,7 +147,7 @@ describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
   it('施工廠商:看得到請款,看不到監造月報;排程、成本與風險稽核 hidden', () => {
     expect(outline(visibleNavGroups('contractor', false))).toEqual([
       ['工作', [
-        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '品質查驗', '檢驗停留點', '工安管理']],
+        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '自主檢查表', '品質查驗', '檢驗停留點', '工安管理']],
         ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '進度 S 曲線', '驗收結算']],
         ['估驗請款', ['估驗計價', '請款收款', '標單工項']],
       ]],
@@ -160,7 +160,7 @@ describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
   it('監造:不經手請款、看不到廠商排程;多監造月報', () => {
     expect(outline(visibleNavGroups('supervisor', false))).toEqual([
       ['工作', [
-        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '品質查驗', '檢驗停留點', '工安管理']],
+        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '自主檢查表', '品質查驗', '檢驗停留點', '工安管理']],
         ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '進度 S 曲線', '驗收結算']],
         ['估驗請款', ['估驗計價', '標單工項']],
       ]],
@@ -173,7 +173,7 @@ describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
   it('機關:看不到廠商排程;風險稽核 hidden(深連結仍限機關)', () => {
     expect(outline(visibleNavGroups('owner', false))).toEqual([
       ['工作', [
-        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '品質查驗', '檢驗停留點', '工安管理']],
+        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '自主檢查表', '品質查驗', '檢驗停留點', '工安管理']],
         ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '進度 S 曲線', '驗收結算']],
         ['估驗請款', ['估驗計價', '請款收款', '標單工項']],
       ]],

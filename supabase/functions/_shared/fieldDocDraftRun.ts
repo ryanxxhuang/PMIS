@@ -1,4 +1,4 @@
-// draft-field-documents 的執行流程(P2b;設計 field-documents-lifecycle.md §3.1–§3.5)。
+// draft-field-documents 的執行流程(P2b／P3a／P3b;設計 field-documents-lifecycle.md §3.1–§3.5)。
 // ---------------------------------------------------------------------------
 // 這裡沒有任何 npm: 執行期 import——DB 與模型都經 DraftRepo／DraftVision 兩個介面注入,
 // index.ts 才把 supabase client 與 claudeJson 接上(fieldDocRepo.ts);vitest 用記憶體版
@@ -12,20 +12,23 @@
 //      fail-closed)→ 不可辨=unreadable、非工地=not_site、有板子再跑 sitelog.whiteboard
 //      → 配工項(與前端同一支 matchLeaf)→ 只由 service 寫 photos.ai_*;caption／location／
 //      work_item_id 只在原本為空時補,不覆蓋人填的。
-//   4. 依上傳方推候選文書(純規則);日誌類逐日起稿(廠商→施工日誌、監造→監造日誌,同一段寫入邏輯,
-//      只有「湊內容」依類型不同):該日活文件不存在→建立＋AI 版本 1;存在且無人工版本→內容有變才新增
-//      AI 版本;已有人工版本→只留 suggest_field_update;已簽署／提送→不動(locked)。
+//   4. 依上傳方推候選文書(純規則);逐份起稿(廠商→施工日誌＋每個配到工項的自主檢查表、監造→監造日誌,
+//      同一段寫入邏輯,只有「找活文件」的鍵(日誌類=日期;自檢表=批次＋工項＋日期)與「湊內容」依類型不同):
+//      活文件不存在→建立＋AI 版本 1;存在且無人工版本→內容有變才新增 AI 版本;已有人工版本→只留
+//      suggest_field_update;已簽署／提送→不動(locked)。範本(監造日誌示範範本、自檢表示範框架)於執行期向
+//      DB fn_field_document_template 取(repo.getFieldDocumentTemplate),Edge 不再維護鏡像常數。
 //      同一張照片可掛多份文件附件,數量只在確認量表計一次(P4)。
 //   5. 批次狀態:remaining>0→recognizing(等續跑);有失敗→partial;否則 ready。
 
 import type {
-  Candidate, DayDefect, DayInspection, DraftPhoto, FieldDocDraft, FormalDailyLog, LeafWorkItem, LegacyDailyLog,
+  Candidate, ChecklistTemplateRow, DayDefect, DayInspection, DraftPhoto, FieldDocDraft, FormalDailyLog, LeafWorkItem, LegacyDailyLog,
   OpenInspection, PhotoAiStatus,
 } from './fieldDocDraft.ts'
 import {
-  assignPhotoDate, buildDailyLogDraft, buildSupervisorLogDraft, draftUnchanged, duplicateGroups, inferCandidates,
+  assignPhotoDate, buildDailyLogDraft, buildSelfCheckDraft, buildSupervisorLogDraft, draftUnchanged, duplicateGroups, inferCandidates,
   mergeCandidateExclusions, previousDate, validDate, FIELD_DOC_TYPE_LABELS,
 } from './fieldDocDraft.ts'
+import type { FieldDocTemplate } from './fieldDocTemplate.ts'
 import { matchLeaf } from './photoMatch.ts'
 import { normalizeSitePhotoResult, normalizeWhiteboardResult } from './sitePhotoVision.ts'
 import type { SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
@@ -73,6 +76,8 @@ export type PhotoAiPatch = {
 }
 
 export type DocRow = { id: string; status: string; current_version_no: number; intake_id: string | null }
+// 活文件的定位鍵:日誌類=該案該日一份;自檢表=同批次同工項同日一份(intake_id＋target_key 的起稿冪等索引)
+export type DocLocator = { docDate: string } | { intakeId: string; targetKey: string }
 export type VersionRow = { version_no: number; author_kind: 'ai' | 'human'; content: unknown; attachments: unknown; content_hash: string }
 
 export type RepoError = { error: string }
@@ -96,8 +101,12 @@ export interface DraftRepo {
   listInspectionsOn(date: string): Promise<DayInspection[] | RepoError>
   listDefectsForDay(date: string): Promise<DayDefect[] | RepoError>
   getDailyLogDocument(date: string): Promise<FormalDailyLog | null | RepoError>
-  findActiveDoc(docType: string, docDate: string): Promise<DocRow | null | RepoError>
-  insertDoc(row: { doc_type: string; doc_date: string; intake_id: string; target_key: string; status: string; required_fields: unknown; recheck: unknown; created_by: string }): Promise<DocRow | { conflict: true } | RepoError>
+  // 範本單一定義在 DB(fn_field_document_template);null=該類型沒有範本。讀失敗要回錯誤,不能當成「沒有範本」。
+  getFieldDocumentTemplate(docType: string): Promise<FieldDocTemplate | null | RepoError>
+  // 本案自主檢查表範本(P3b;RLS 讀)
+  listChecklistTemplates(): Promise<ChecklistTemplateRow[] | RepoError>
+  findActiveDoc(docType: string, locator: DocLocator): Promise<DocRow | null | RepoError>
+  insertDoc(row: { doc_type: string; doc_date: string; intake_id: string; target_key: string; status: string; required_fields: unknown; recheck: unknown; created_by: string; template_id?: string | null }): Promise<DocRow | { conflict: true } | RepoError>
   latestVersion(docId: string): Promise<VersionRow | null | RepoError>
   hasHumanVersion(docId: string): Promise<boolean | RepoError>
   insertVersion(row: { document_id: string; version_no: number; content: unknown; field_sources: unknown; attachments: unknown; change_note: string }): Promise<{ version_no: number; content_hash: string } | RepoError>
@@ -407,10 +416,17 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
 
   const inspectionsRes = intake.uploader_org === 'supervisor' ? await repo.listOpenInspections() : []
   const openInspections = isErr(inspectionsRes) ? [] : inspectionsRes
+  // 廠商批次:本案檢查表範本(自檢表候選由它確定性挑選);讀失敗=整批不推自檢表候選但要揭露,不能當成「沒有範本」
+  let checklistTemplates: ChecklistTemplateRow[] | null = []
+  if (intake.uploader_org === 'contractor') {
+    const tplRes = await repo.listChecklistTemplates()
+    if (isErr(tplRes)) { notes.push(`檢查表範本讀取失敗,本次未推自主檢查表:${tplRes.error}`); checklistTemplates = null }
+    else checklistTemplates = tplRes
+  }
   let candidates = mergeCandidateExclusions(intake.candidates, inferCandidates({
     uploaderOrg: intake.uploader_org,
     sitePhotos: dated.map((d) => ({ id: d.photo.id, date: d.date, work_item_id: d.photo.work_item_id })),
-    openInspections,
+    openInspections, workItems: leaves, checklistTemplates,
   }))
 
   const documents: DocumentOutcome[] = []
@@ -421,10 +437,32 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     classify: s?.classify ?? null, whiteboard: s?.whiteboard ?? null, whiteboardSkipped: s?.whiteboard_skipped ?? null,
   })
 
+  // 範本於執行期向 DB 取,每批只取一次;null=沒有範本(該類型不能起稿,回錯誤而不是硬湊)
+  const templateCache = new Map<string, FieldDocTemplate | null>()
+  const templateFor = async (docType: string): Promise<FieldDocTemplate> => {
+    if (!templateCache.has(docType)) {
+      const t = await repo.getFieldDocumentTemplate(docType)
+      if (isErr(t)) throw new Error(t.error)
+      templateCache.set(docType, t)
+    }
+    const t = templateCache.get(docType)
+    if (!t) throw new Error(`伺服器沒有${FIELD_DOC_TYPE_LABELS[docType as keyof typeof FIELD_DOC_TYPE_LABELS] ?? docType}範本,無法起稿`)
+    return t
+  }
+
   // 「湊內容」是唯一依類型不同的地方;寫入、冪等、建議、鎖定對每類都是同一段
-  const buildDraftFor = async (docType: 'daily_log' | 'supervisor_log', date: string, dateSource: { source: string; refs: string[] }, dayPhotos: DraftPhoto[]): Promise<FieldDocDraft> => {
+  const buildDraftFor = async (cand: Candidate, date: string, dateSource: { source: string; refs: string[] }, dayPhotos: DraftPhoto[]): Promise<FieldDocDraft> => {
+    if (cand.doc_type === 'self_check') {
+      const template = (checklistTemplates ?? []).find((t) => t.id === cand.template_id)
+      const workItem = leaves.find((w) => w.id === cand.work_item_id)
+      if (!template || !workItem) throw new Error('自主檢查表的範本或工項已不存在,請重試')
+      return buildSelfCheckDraft({
+        date, dateSource, photos: dayPhotos, workItem, template, templateReason: cand.reason, frame: await templateFor('self_check'),
+        hasBoq, notes: statusNotes(),
+      })
+    }
     const weather = await repo.fetchWeather(date)
-    if (docType === 'daily_log') {
+    if (cand.doc_type === 'daily_log') {
       const sameDayRes = await repo.getDailyLog(date)
       const yesterdayRes = await repo.getDailyLog(previousDate(date))
       return buildDailyLogDraft({
@@ -439,13 +477,16 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     if (isErr(dlRes)) throw new Error(dlRes.error)
     return buildSupervisorLogDraft({
       date, dateSource, photos: dayPhotos, workItems: leaves, inspections: insRes, openInspections, defects: defRes,
-      dailyLog: dlRes, weather, hasBoq, notes: statusNotes(),
+      dailyLog: dlRes, weather, template: await templateFor('supervisor_log'), hasBoq, notes: statusNotes(),
     })
   }
+  // 活文件的定位鍵:日誌類每案每日一份;自檢表同批次同工項同日一份
+  const locatorOf = (cand: Candidate): DocLocator =>
+    cand.doc_type === 'self_check' ? { intakeId, targetKey: cand.target_key! } : { docDate: cand.doc_date! }
 
   for (const cand of candidates) {
     if (cand.state !== 'ready' || !cand.doc_date || !cand.target_key) continue
-    if (cand.doc_type !== 'daily_log' && cand.doc_type !== 'supervisor_log') continue
+    if (cand.doc_type !== 'daily_log' && cand.doc_type !== 'supervisor_log' && cand.doc_type !== 'self_check') continue
     const docType = cand.doc_type
     const typeLabel = FIELD_DOC_TYPE_LABELS[docType]
     const date = cand.doc_date
@@ -453,7 +494,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     documents.push(out)
     const setCand = (patch: Partial<Candidate>) => { candidates = candidates.map((c) => (c === cand ? { ...c, ...patch } : c)) }
     try {
-      const existingRes = await repo.findActiveDoc(docType, date)
+      const existingRes = await repo.findActiveDoc(docType, locatorOf(cand))
       if (isErr(existingRes)) throw new Error(existingRes.error)
       let existing = existingRes
       if (existing && existing.status !== 'draft' && existing.status !== 'pending_input') {
@@ -463,8 +504,8 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         continue
       }
 
-      // 同日證據聯集:本批該日照片 ∪ 既有版本的附件照片(另一批同日上傳的證據不能因重跑而掉)
-      const dayPhotos = dated.filter((d) => d.date === date)
+      // 同日證據聯集:本批該日照片(自檢表只取該工項的)∪ 既有版本的附件照片(另一批同日上傳的證據不能因重跑而掉)
+      const dayPhotos = dated.filter((d) => d.date === date && (docType !== 'self_check' || d.photo.work_item_id === cand.work_item_id))
       const draftPhotos = new Map<string, DraftPhoto>(dayPhotos.map((d) => [d.photo.id, toDraftPhoto(d.photo, d.stored)]))
       let latest: VersionRow | null = null
       if (existing) {
@@ -489,18 +530,19 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         ? { source: `whiteboard:${dayPhotos.find((d) => d.source === 'whiteboard')!.ref}`, refs: dateRefs }
         : dayPhotos.some((d) => d.source === 'intake') ? { source: 'intake', refs: [] } : { source: `photo_time:${dateRefs[0] ?? ''}`, refs: dateRefs }
 
-      const draft = await buildDraftFor(docType, date, dateSource, [...draftPhotos.values()])
+      const draft = await buildDraftFor(cand, date, dateSource, [...draftPhotos.values()])
       out.pending_fields = draft.required_fields.filter((k) => draft.field_sources[k]?.status === 'pending')
 
       if (!existing) {
         const ins = await repo.insertDoc({
           doc_type: docType, doc_date: date, intake_id: intakeId, target_key: cand.target_key, status: draft.status,
           required_fields: draft.required_fields, recheck: draft.recheck, created_by: userId,
+          ...(docType === 'self_check' ? { template_id: cand.template_id ?? null } : {}),
         })
         if (isErr(ins)) throw new Error(ins.error)
         if ('conflict' in ins) {
-          // 兩個請求同時建同日文件:唯一索引收口,輸的一方改走既有文件
-          const again = await repo.findActiveDoc(docType, date)
+          // 兩個請求同時建同一份文件:唯一索引收口,輸的一方改走既有文件
+          const again = await repo.findActiveDoc(docType, locatorOf(cand))
           if (isErr(again) || !again) throw new Error(isErr(again) ? again.error : '同日文件建立衝突後找不到既有文件,請重試')
           existing = again
           const latestRes = await repo.latestVersion(existing.id)

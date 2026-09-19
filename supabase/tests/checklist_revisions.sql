@@ -6,7 +6,7 @@
 -- 部分唯一索引保證同鏈最多一筆未結案缺失(不重複開)。
 begin;
 
-select plan(35);
+select plan(38);
 
 -- ── 結構 ─────────────────────────────────────────────────────────────────────
 select has_column('public', 'checklist_records', 'rev', '版次欄位存在');
@@ -164,12 +164,12 @@ select lives_ok($$ delete from public.checklist_records
 select lives_ok($$ delete from public.checklist_records
   where id = '52000000-0000-0000-0000-000000000010' $$, '鏈尾刪除後,未判定的原紀錄可刪除');
 
--- ── 缺失關聯:同鏈最多一筆未結案缺失(不重複開);結案後可再開 ──────────────────
-select lives_ok($$ insert into public.defects
-  (id, project_id, title, status, source_checklist_record_id)
-  values ('53000000-0000-0000-0000-000000000001','42000000-0000-0000-0000-000000000001',
-          '自主檢查不合格:坍度超規', '開立', '52000000-0000-0000-0000-000000000001') $$,
-  '不合格自動開缺失並關聯鏈根');
+-- ── 缺失關聯:不合格自動開缺失(P3b 下沉 DB trigger,使用者路徑);同鏈最多一筆未結案(不重複開);結案後可再開 ──
+select results_eq($$ select title, description, status, work_item_id, created_by from public.defects
+    where source_checklist_record_id = '52000000-0000-0000-0000-000000000001' $$,
+  $$ values ('自主檢查不合格：混凝土自主檢查表'::text, '不合格項目：C2 坍度（標準 18±2.5）（Rev.1 更正後判定）'::text, '開立'::text,
+             null::uuid, 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1'::uuid) $$,
+  'Rev.1 判不合格時已自動開一筆缺失並關聯鏈根(標題／不合格項目／Rev 註記／建立者=登錄者);Rev.2 改判合格與未判定列都不再開');
 select throws_ok($$ insert into public.defects
   (project_id, title, status, source_checklist_record_id)
   values ('42000000-0000-0000-0000-000000000001','重複開立','開立',
@@ -177,13 +177,22 @@ select throws_ok($$ insert into public.defects
   '同一張檢查表(鏈)已有未結案缺失 → 不可重複開');
 select pg_temp.become('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee2');
 select lives_ok($$ update public.defects set status = '已結案', closed_at = now()
-  where id = '53000000-0000-0000-0000-000000000001' $$, '監造可結案原缺失');
+  where source_checklist_record_id = '52000000-0000-0000-0000-000000000001' $$, '監造可結案原缺失');
 select pg_temp.become('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1');
-select lives_ok($$ insert into public.defects
-  (project_id, title, status, source_checklist_record_id)
-  values ('42000000-0000-0000-0000-000000000001','結案後複發','開立',
-          '52000000-0000-0000-0000-000000000001') $$,
-  '原缺失結案後,同鏈再判不合格可開新缺失');
+select lives_ok($$ insert into public.checklist_records
+  (id, project_id, template_id, check_date, results, overall, supersedes_id, revision_reason)
+  values ('52000000-0000-0000-0000-000000000004','42000000-0000-0000-0000-000000000001',
+          '43000000-0000-0000-0000-000000000001', current_date,
+          '{"C2":{"value":9,"pass":true}}', '合格',
+          '52000000-0000-0000-0000-000000000003', '複驗坍度 9cm') $$,
+  '原缺失結案後,同鏈再判不合格(Rev.3)…');
+select results_eq($$ select overall, results -> 'C2' ->> 'pass' from public.checklist_records where id = '52000000-0000-0000-0000-000000000004' $$,
+  $$ values ('不合格'::text, 'false'::text) $$,
+  '…判定由伺服器依範本重算(客戶端送的「合格」作廢:9cm 低於 15.5)');
+select is((select count(*)::int from public.defects where source_checklist_record_id = '52000000-0000-0000-0000-000000000001' and status <> '已結案'), 1,
+  '…可開新缺失(未結案恰一筆)');
+select is((select count(*)::int from public.defects where source_checklist_record_id = '52000000-0000-0000-0000-000000000001'), 2,
+  '缺失總數 2(已結案一筆保留)');
 
 -- ── 回歸:guard 不得害專案刪不掉(cascade 放行) ────────────────────────────────
 select pg_temp.become('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee5');

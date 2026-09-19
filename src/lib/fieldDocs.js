@@ -1,16 +1,26 @@
-// 現場文書(P2c 施工日誌、P3a 監造日誌;D-026)的純函式層:上傳批次狀態機、恢復、欄位來源狀態、
-// 兩類日誌的內容形狀、簽署／提送的錯誤碼分流、送件重試的 client_request_id。
+// 現場文書(P2c 施工日誌、P3a 監造日誌、P3b 自主檢查表;D-026)的純函式層:上傳批次狀態機、恢復、欄位來源狀態、
+// 三類文書的內容形狀、簽署／提送的錯誤碼分流、送件重試的 client_request_id。
 // 全部確定性、無 IO、無 React——store slice 與頁面都吃這一份,vitest 直接測。
 //
-// 內容形狀與 Edge 起稿(supabase/functions/_shared/fieldDocDraft.ts buildDailyLogDraft／buildSupervisorLogDraft)
-// 同一組鍵;必填鍵與待補判定鏡像 DB 的 fn_field_document_required_fields／fn_field_document_unmet_fields
-// (migration 20260917205000、20260917221000)——這裡只是「存檔前先讓人看到哪些還缺」的預覽,伺服器存版時會
-// 再算一次並寫回 field_documents.required_fields／recheck,以伺服器為準。監造日誌的必填鍵、人填欄與欄位名
-// 由伺服器範本 fn_field_document_template('supervisor_log') 推導(templateRequiredKeys 等),前端不另抄一份。
+// 內容形狀與 Edge 起稿(supabase/functions/_shared/fieldDocDraft.ts buildDailyLogDraft／buildSupervisorLogDraft／
+// buildSelfCheckDraft)同一組鍵;必填鍵與待補判定鏡像 DB 的 fn_field_document_required_fields／fn_field_document_unmet_fields
+// (migration 20260917205000、20260917221000、20260919141500)——這裡只是「存檔前先讓人看到哪些還缺」的預覽,伺服器存版時會
+// 再算一次並寫回 field_documents.required_fields／recheck,以伺服器為準。範本(監造日誌示範範本、自檢表示範框架)只有 DB
+// fn_field_document_template 一份定義;從範本推導必填鍵、人填欄、須確認欄的規則與 Edge 同一支
+// (supabase/functions/_shared/fieldDocTemplate.ts,這裡 re-export),前端不另抄一份。
 //
-// 誠實原則(設計 §1.5):沒有來源的數量、天氣、出工、到場一律 pending;人填了才 confirmed;
+// 誠實原則(設計 §1.5):沒有來源的數量、天氣、出工、到場、實測值一律 pending;人填了才 confirmed;
 // 「本日無」用 na＋reason,不得把空白填成「無」或 0。人填欄(到場)人填了也只是 filled=待親自確認,
-// 明確按「確認」才 confirmed(鏡像 DB 的 needs_confirmation;任何照片都不是到場證明)。
+// 明確按「確認」才 confirmed(鏡像 DB 的 needs_confirmation;任何照片都不是到場證明)。自檢表每個檢查項目都是
+// 須確認欄:系統帶入(既有紀錄／建議)的值要人逐項確認才能簽;實測值系統永遠不填。
+import {
+  templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
+  checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys,
+} from '../../supabase/functions/_shared/fieldDocTemplate.ts'
+export {
+  templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
+  checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys,
+}
 
 // ── 上傳批次:客戶端狀態機 ────────────────────────────────────────────────────
 // 每張照片在客戶端的狀態。「已保存」只有 saved 一種——照片列已寫進伺服器(photos);
@@ -168,6 +178,7 @@ export function sourceLabel(source) {
   if (s === 'system:defects') return '系統缺失紀錄'
   if (s === 'system:defects,inspections') return '系統缺失／查驗紀錄'
   if (s === 'system:field_documents') return '系統文件狀態'
+  if (s === 'system:template_match') return '依工項挑選範本'
   if (s === 'ai:photo') return '照片 AI 說明'
   if (s === 'ai:agent') return 'AI 草稿'
   if (s === 'cwa') return '氣象署'
@@ -188,45 +199,41 @@ export const FIELD_LABEL = Object.freeze({
   'extras.safety_other': '其他安衛事項', 'extras.sampling': '施工取樣試驗紀錄', 'extras.notice': '通知協力廠商辦理事項', 'extras.important': '重要事項紀錄',
   attendance: '到場人員與時段', supervision_items: '監造事項', inspection_ids: '當日查驗', contractor_summary: '施工情形摘要',
   daily_log_receipt: '施工日誌收件情形', notices: '通知事項', followups: '追蹤事項', note: '備註', photos: '照片',
+  check_date: '檢查日期', template_id: '檢查表範本', work_item_id: '對應工項', location: '檢查位置', results: '檢查項目',
 })
 
-// ── 範本(fn_field_document_template 的回傳;目前只有 supervisor_log 有範本)────────────────
-// 範本是伺服器單一定義:必填鍵、人填欄、欄位標籤與「示範範本」標記都從它推導,前端不另抄一份。
-export function templateFields(template) {
-  const out = []
-  for (const s of Array.isArray(template?.sections) ? template.sections : []) {
-    for (const f of Array.isArray(s?.fields) ? s.fields : []) if (f?.key) out.push({ ...f, section: s.key, sectionTitle: s.title })
-  }
-  return out
-}
-export const templateRequiredKeys = (template) => templateFields(template).filter((f) => f.required === true).map((f) => f.key).sort()
-export const templateHumanOnlyKeys = (template) => templateFields(template).filter((f) => f.human_only === true).map((f) => f.key).sort()
-export const templateFieldLabels = (template) => Object.fromEntries(templateFields(template).map((f) => [f.key, f.label]))
+// ── 範本(fn_field_document_template 的回傳:supervisor_log 示範範本、self_check 示範框架)────────────────
+// 範本是伺服器單一定義:必填鍵、人填欄、須確認欄、欄位標籤與「示範範本」標記都從它推導(規則實作在
+// fieldDocTemplate.ts,與 Edge 同一支;本檔開頭 re-export)。自檢表的檢查項目取自本案 checklist_templates.items,
+// 項目鍵 results.<no> 的標籤由 checklistItemLabels 給 fieldLabel 用。
+export const checklistItemLabels = (items) => Object.fromEntries(
+  (Array.isArray(items) ? items : []).filter((it) => it?.no).map((it) => [`results.${it.no}`, `${it.no} ${it.item || ''}`.trim()]))
 
-// 必填鍵(鏡像 DB fn_field_document_required_fields):stored ∪ 類型固定欄 ∪ 施工日誌內容各工項的當日數量
-// (stored 的工項鍵一律忽略、由內容重算)。施工日誌固定六欄;其他類型取範本 required(沒範本只回 stored)。
-export function requiredKeysFor(content, stored = [], { docType = 'daily_log', template = null } = {}) {
+// 必填鍵(鏡像 DB fn_field_document_required_fields):stored ∪ 類型固定欄 ∪ 施工日誌內容各工項的當日數量 ∪ 自檢表
+// 範本每個項目(stored 的工項鍵／項目鍵一律忽略、由內容重算)。施工日誌固定六欄;其他類型取範本 required(沒範本只回 stored)。
+export function requiredKeysFor(content, stored = [], { docType = 'daily_log', template = null, checklistItems = null } = {}) {
   const keys = new Set()
   for (const k of Array.isArray(stored) ? stored : []) {
-    if (typeof k === 'string' && k.trim() && !/^items\..+\.qty_today$/.test(k)) keys.add(k)
+    if (typeof k === 'string' && k.trim() && !/^items\..+\.qty_today$/.test(k) && !(docType === 'self_check' && k.startsWith('results.'))) keys.add(k)
   }
   if (docType === 'daily_log') {
     for (const k of DAILY_LOG_FIXED_REQUIRED) keys.add(k)
     for (const wid of Object.keys(content?.items || {})) keys.add(`items.${wid}.qty_today`)
   } else {
-    for (const k of templateRequiredKeys(template)) keys.add(k)
+    for (const k of docRequiredKeys(docType, template, checklistItems)) keys.add(k)
   }
   return [...keys].sort()
 }
 
-// 待補清單 [{key,status}](鏡像 DB fn_field_document_unmet_fields):人填欄(範本 human_only,如監造日誌到場)
-// 只被標 filled 回 needs_confirmation——只有 confirmed 或 na＋reason 才算齊備。
-export function unmetFields(required, sources, humanOnlyKeys = []) {
+// 待補清單 [{key,status}](鏡像 DB fn_field_document_unmet_fields):須確認欄(confirmRequiredKeys=範本 human_only／
+// confirm_required 欄 ∪ 自檢表每個項目;由 docConfirmRequiredKeys 推導)只被標 filled 回 needs_confirmation——
+// 只有 confirmed 或 na＋reason 才算齊備。
+export function unmetFields(required, sources, confirmRequiredKeys = []) {
   const out = []
   for (const k of required) {
     const src = sources?.[k]
     if (!src || typeof src !== 'object') { out.push({ key: k, status: 'missing' }); continue }
-    if (src.status === 'filled' && humanOnlyKeys.includes(k)) { out.push({ key: k, status: 'needs_confirmation' }); continue }
+    if (src.status === 'filled' && confirmRequiredKeys.includes(k)) { out.push({ key: k, status: 'needs_confirmation' }); continue }
     if (src.status === 'filled' || src.status === 'confirmed') continue
     if (src.status === 'na') {
       if (String(src.reason || '').trim()) continue
@@ -418,6 +425,36 @@ export function refTitle(ref, lookups = {}) {
   return row ? `${kind}:${row.title || row.subject || row.log_date || row.id}` : `${kind}:${String(ref.ref_id).slice(0, 8)}`
 }
 
+// ── 自主檢查表內容形狀(P3b;鍵與 Edge buildSelfCheckDraft 同一組)────────────────────────
+// 新文件:框架欄位由人選(日期／範本／工項=confirmed/human,位置沒填=pending),範本每個項目 pending;不填「合格」。
+export function emptySelfCheckContent(date, frame, checklistTemplate, { workItemId = null, location = null } = {}) {
+  const results = {}
+  for (const it of Array.isArray(checklistTemplate?.items) ? checklistTemplate.items : []) if (it?.no) results[it.no] = { value: null }
+  return {
+    check_date: date, template_id: checklistTemplate?.id || null, template_title: checklistTemplate?.title || null, template_source: checklistTemplate?.source || null,
+    work_item_id: workItemId, location, results, note: null,
+    template: frame?.key ? { key: frame.key, version: frame.version ?? 1 } : null,
+    photo_ids: [], unmatched_photo_ids: [],
+  }
+}
+export function emptySelfCheckSources(content, checklistTemplate) {
+  const sources = { check_date: { status: 'confirmed', source: 'human' }, template_id: { status: 'confirmed', source: 'human' } }
+  if (content?.work_item_id) sources.work_item_id = { status: 'confirmed', source: 'human' }
+  sources.location = content?.location ? { status: 'confirmed', source: 'human' } : { status: 'pending', source: null }
+  for (const it of Array.isArray(checklistTemplate?.items) ? checklistTemplate.items : []) if (it?.no) sources[`results.${it.no}`] = { status: 'pending', source: null }
+  return sources
+}
+// 檢查結果 {no:{value}} → judgeChecklist 要的 {no: value}(前端判定只是預覽,伺服器簽署時以 fn_checklist_judge 為準)
+export const selfCheckValues = (content) => Object.fromEntries(Object.entries(content?.results || {}).map(([no, r]) => [no, r?.value ?? null]))
+// 換範本:項目全部重來(值與來源一起走),框架欄位保留
+export function setSelfCheckTemplate({ content, sources }, checklistTemplate) {
+  const next = { ...content, template_id: checklistTemplate?.id || null, template_title: checklistTemplate?.title || null, template_source: checklistTemplate?.source || null, results: {} }
+  const nextSources = Object.fromEntries(Object.entries(sources || {}).filter(([k]) => !k.startsWith('results.')))
+  nextSources.template_id = { status: 'confirmed', source: 'human' }
+  for (const it of Array.isArray(checklistTemplate?.items) ? checklistTemplate.items : []) if (it?.no) { next.results[it.no] = { value: null }; nextSources[`results.${it.no}`] = { status: 'pending', source: null } }
+  return { content: next, sources: nextSources }
+}
+
 // ── 人工編輯:每次改值同時改來源(值與來源永遠一起走,不會有「值變了、來源還說是 AI」)──
 const setPath = (obj, key, value) => {
   const m = /^items\.([^.]+)\.(qty_today|location|note)$/.exec(key)
@@ -428,7 +465,15 @@ const setPath = (obj, key, value) => {
   }
   const ex = /^extras\.(.+)$/.exec(key)
   if (ex) return { ...obj, extras: { ...(obj.extras || {}), [ex[1]]: value } }
+  // 自檢表檢查項目 results.<no>:值住在 results[no].value(與 Edge／DB 同形狀)
+  const r = /^results\.(.+)$/.exec(key)
+  if (r) return { ...obj, results: { ...(obj.results || {}), [r[1]]: { ...((obj.results || {})[r[1]] || {}), value } } }
   return { ...obj, [key]: value }
+}
+const getPath = (obj, key) => {
+  const r = /^results\.(.+)$/.exec(key)
+  if (r) return obj?.results?.[r[1]]?.value
+  return obj?.[key]
 }
 
 export function setFieldValue({ content, sources }, key, value) {
@@ -449,8 +494,8 @@ export function confirmField({ content, sources }, key) {
 // (DB 簽署時到場 na 而陣列非空、廠商未施工卻留著摘要都是矛盾,值與來源必須一起走)
 export function setFieldNa({ content, sources }, key, reason) {
   const r = String(reason || '').trim()
-  const cur = content?.[key]
-  const cleared = Array.isArray(cur) ? setPath(content, key, []) : typeof cur === 'string' ? setPath(content, key, null) : content
+  const cur = getPath(content, key)
+  const cleared = Array.isArray(cur) ? setPath(content, key, []) : (typeof cur === 'string' || key.startsWith('results.')) ? setPath(content, key, null) : content
   return {
     content: cleared,
     sources: { ...sources, [key]: { status: 'na', source: null, reason: r || undefined } },
@@ -502,9 +547,9 @@ export function applySuggestion(state, suggestion) {
     sources = { ...sources, [key]: { ...sug[key] } }
     applied.push(key)
   }
-  // 頂層欄位逐鍵(兩類日誌共用);日期／範本／照片清單不是欄位,items／extras 另處理
+  // 頂層欄位逐鍵(三類共用);日期／範本／照片清單不是欄位,items／extras 另處理;自檢表 results 永遠不由建議帶入(實測值只能人填)
   for (const [k, v] of Object.entries(suggestion.content)) {
-    if (['log_date', 'template', 'items', 'extras', 'photo_ids', 'unmatched_photo_ids'].includes(k)) continue
+    if (['log_date', 'check_date', 'template', 'template_id', 'template_title', 'template_source', 'items', 'extras', 'results', 'photo_ids', 'unmatched_photo_ids'].includes(k)) continue
     if (v != null) take(k, v)
   }
   for (const [k, v] of Object.entries(suggestion.content.extras || {})) take(`extras.${k}`, v)
@@ -558,7 +603,7 @@ export const ORG_LABEL = Object.freeze({ contractor: '施工廠商', supervisor:
 export const docToOrg = (doc) => TO_ORG_BY_DOC_TYPE[doc?.doc_type] || null
 export const docToOrgLabel = (doc) => ORG_LABEL[docToOrg(doc)] || '對方'
 // 文件頁路由(接上頁面的類型才有;其餘在 /site 清單只列狀態並標尚未支援)
-export const DOC_PAGE_PATH = Object.freeze({ daily_log: '/site-log', supervisor_log: '/supervisor-log' })
+export const DOC_PAGE_PATH = Object.freeze({ daily_log: '/site-log', supervisor_log: '/supervisor-log', self_check: '/self-check' })
 export const docPagePath = (docType) => DOC_PAGE_PATH[docType] || null
 export const docPageLink = (doc) => (docPagePath(doc?.doc_type) && doc?.id ? `${docPagePath(doc.doc_type)}?doc=${encodeURIComponent(doc.id)}` : null)
 

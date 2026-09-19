@@ -50,7 +50,7 @@ select has_function('public', 'receive_field_document', array['uuid','integer','
 select has_function('public', 'return_field_document', array['uuid','integer','text','text'], 'return_field_document 存在');
 select has_function('public', 'resolve_agent_action_internal', array['uuid','uuid','text'], 'resolve_agent_action_internal 存在');
 select has_function('public', 'fn_field_document_required_fields', array['text','jsonb','jsonb'], '必填鍵推導函式存在');
-select has_function('public', 'fn_field_document_unmet_fields', array['text','jsonb','jsonb'], '待補判定函式存在(P3a 起帶 doc_type)');
+select has_function('public', 'fn_field_document_unmet_fields', array['text','jsonb','jsonb','jsonb'], '待補判定函式存在(P3a 帶 doc_type、P3b 帶 content)');
 select has_function('public', 'fn_field_document_attachment_issues', array['text','uuid','jsonb'], '附件角色隔離函式存在');
 select has_trigger('public', 'daily_logs', 'daily_logs_guard', 'daily_logs guard 掛上');
 select has_trigger('public', 'daily_log_items', 'daily_log_items_guard', 'daily_log_items guard 掛上');
@@ -81,13 +81,13 @@ select is(public.fn_field_document_required_fields('daily_log',
   '["equipment","items.d3000000-0000-0000-0000-000000000001.qty_today","labor","materials","weather_am","weather_pm","work_summary"]'::jsonb,
   'stored 裡的工項數量鍵一律忽略、由本版內容重算(已移除的工項不會永遠卡住簽署)');
 select is(public.fn_field_document_required_fields('self_check', '{"items":{"x":{}}}'::jsonb, '["a"]'::jsonb),
-  '["a"]'::jsonb, '非施工日誌類型只回 stored(P3 各自補固定欄)');
+  '["a","check_date","template_id"]'::jsonb, '自檢表:stored ∪ 框架範本 required;沒有範本項目時不推導 results 鍵(P3b)');
 select is(public.fn_field_document_unmet_fields('daily_log', '["a","b","c","d","e","f","g"]'::jsonb,
     '{"a":{"status":"filled"},"b":{"status":"confirmed"},"c":{"status":"na","reason":"本日無"},
-      "d":{"status":"na"},"e":{"status":"pending"},"g":{"status":"weird"}}'::jsonb),
+      "d":{"status":"na"},"e":{"status":"pending"},"g":{"status":"weird"}}'::jsonb, null),
   '[{"key":"d","status":"na_without_reason"},{"key":"e","status":"pending"},{"key":"f","status":"missing"},{"key":"g","status":"unknown_status"}]'::jsonb,
   '待補判定:filled／confirmed／na＋reason 可簽;na 無 reason、pending、缺鍵、未知狀態皆待補');
-select is(public.fn_field_document_unmet_fields('daily_log', '[]'::jsonb, null), '[]'::jsonb, '無必填鍵 → 無待補');
+select is(public.fn_field_document_unmet_fields('daily_log', '[]'::jsonb, null, null), '[]'::jsonb, '無必填鍵 → 無待補');
 
 -- ── 3. fixtures:A 案三方＋同方第二人;B 案外人;C 案非正式(admin_override 有效) ─────
 insert into auth.users (

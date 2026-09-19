@@ -4,12 +4,26 @@
 // 監造日誌的到場永遠留空待人填、通知／追蹤／廠商施工情形只引用系統既有紀錄並標來源。
 import { describe, it, expect } from 'vitest'
 import {
-  assignPhotoDate, buildDailyLogDraft, buildSupervisorLogDraft, draftUnchanged, duplicateGroups, inferCandidates,
-  mergeCandidateExclusions, taipeiDateOf, taipeiDayRange, taipeiTimeOf, validDate, DAILY_LOG_EXTRAS_KEYS,
-  SUPERVISOR_LOG_REQUIRED_KEYS, SUPERVISOR_LOG_TEMPLATE,
+  assignPhotoDate, buildDailyLogDraft, buildSelfCheckDraft, buildSupervisorLogDraft, draftUnchanged, duplicateGroups, inferCandidates,
+  matchChecklistItem, mergeCandidateExclusions, taipeiDateOf, taipeiDayRange, taipeiTimeOf, validDate, DAILY_LOG_EXTRAS_KEYS,
 } from './fieldDocDraft.ts'
-import type { DayDefect, DayInspection, DraftPhoto, FormalDailyLog, LeafWorkItem } from './fieldDocDraft.ts'
+import type { ChecklistTemplateRow, DayDefect, DayInspection, DraftPhoto, FormalDailyLog, LeafWorkItem } from './fieldDocDraft.ts'
+import { templateRequiredKeys } from './fieldDocTemplate.ts'
+import type { FieldDocTemplate } from './fieldDocTemplate.ts'
 import type { WhiteboardResult } from './sitePhotoVision.ts'
+// 範本單一定義在 DB;測試用示範模式 fixture(demoFieldDocTemplates.test.js 對 migration 原文釘住)代替執行期取回
+import { demoFieldDocumentTemplate } from '../../../src/data/demoFieldDocTemplates.js'
+const SUP_TPL = demoFieldDocumentTemplate('supervisor_log') as FieldDocTemplate
+const SC_FRAME = demoFieldDocumentTemplate('self_check') as FieldDocTemplate
+// 本案檢查表範本(checklist_templates 列)
+const T_CONC: ChecklistTemplateRow = { id: 'tpl-conc', title: '場鑄結構用混凝土 自主檢查表', source: '03310', items: [
+  { no: 'B1', group: '澆置前', item: '澆置 24 小時前已通知監造', kind: 'bool', standard: '≥24 小時前通知' },
+  { no: 'C2', group: '澆置中', item: '坍度', kind: 'num', min: 15.5, max: 20.5, unit: 'cm', standard: '18±2.5' },
+  { no: 'C3', group: '澆置中', item: '上下層澆置間隔', kind: 'num', max: 45, unit: '分', standard: '≤45 分鐘' },
+] }
+const T_STEEL: ChecklistTemplateRow = { id: 'tpl-steel', title: '鋼筋 自主檢查表', source: '03210', items: [
+  { no: 'S1', item: '鋼筋間距', kind: 'num', max: 30, unit: 'cm', standard: '≤30' },
+] }
 
 const LEAVES: LeafWorkItem[] = [
   { id: 'wi-steel', item_key: 'K1', item_no: '壹.一.1', description: '鋼筋,SD420W,#4(D13),加工及組立', unit: 'T', sort_order: 1 },
@@ -77,13 +91,31 @@ describe('inferCandidates(確定性、依上傳方)', () => {
     { id: 'p3', date: '2026-09-18', work_item_id: 'wi-form' },
     { id: 'p4', date: null, work_item_id: null },
   ]
-  it('廠商:每個日期一份施工日誌(ready)、無法判日的一份 blocked、自檢表列為 unsupported;絕無監造文件', () => {
-    const c = inferCandidates({ uploaderOrg: 'contractor', sitePhotos, openInspections: [{ id: 'ins1', title: '鋼筋查驗', work_item_id: 'wi-steel', requested_date: '2026-09-17' }] })
+  it('廠商:每個日期一份施工日誌(ready)、無法判日的一份 blocked;沒有檢查表範本時自檢表 blocked(不假裝有範本);絕無監造文件', () => {
+    const c = inferCandidates({ uploaderOrg: 'contractor', sitePhotos, openInspections: [{ id: 'ins1', title: '鋼筋查驗', work_item_id: 'wi-steel', requested_date: '2026-09-17' }], workItems: LEAVES, checklistTemplates: [] })
     expect(c.filter((x) => x.doc_type === 'daily_log' && x.state === 'ready').map((x) => x.doc_date)).toEqual(['2026-09-17', '2026-09-18'])
     expect(c.find((x) => x.doc_type === 'daily_log' && x.target_key === '2026-09-17')?.photo_ids).toEqual(['p1', 'p2'])
-    expect(c.find((x) => x.state === 'blocked')).toMatchObject({ doc_type: 'daily_log', target_key: null, blocked_by: ['log_date'], photo_ids: ['p4'] })
-    expect(c.filter((x) => x.doc_type === 'self_check').map((x) => [x.target_key, x.state, x.support])).toEqual([['wi-form', 'unsupported', 'unsupported'], ['wi-steel', 'unsupported', 'unsupported']])
+    expect(c.find((x) => x.doc_type === 'daily_log' && x.state === 'blocked')).toMatchObject({ target_key: null, blocked_by: ['log_date'], photo_ids: ['p4'] })
+    expect(c.filter((x) => x.doc_type === 'self_check').map((x) => [x.target_key, x.state, x.blocked_by, x.template_id])).toEqual([
+      ['2026-09-18:wi-form', 'blocked', ['checklist_template'], null], ['2026-09-17:wi-steel', 'blocked', ['checklist_template'], null],
+    ])
+    expect(c.find((x) => x.doc_type === 'self_check')?.reason).toContain('尚未建立自主檢查表範本')
     expect(c.some((x) => x.doc_type === 'supervisor_log' || x.doc_type === 'inspection_form')).toBe(false)
+  })
+  it('廠商:有檢查表範本時每個「配到工項 × 日期」一份自檢表(ready),範本依工項描述確定性挑選並附理由;挑不出→blocked 待人指定', () => {
+    const c = inferCandidates({ uploaderOrg: 'contractor', sitePhotos, openInspections: [], workItems: LEAVES, checklistTemplates: [T_CONC, T_STEEL] })
+    const sc = c.filter((x) => x.doc_type === 'self_check')
+    expect(sc.map((x) => [x.target_key, x.doc_date, x.state, x.work_item_id, x.template_id, x.photo_ids])).toEqual([
+      ['2026-09-18:wi-form', '2026-09-18', 'blocked', 'wi-form', null, ['p3']],       // 模板工項對兩張範本標題都 0 分 → 不猜
+      ['2026-09-17:wi-steel', '2026-09-17', 'ready', 'wi-steel', 'tpl-steel', ['p1']], // 鋼筋 → 鋼筋範本
+    ])
+    expect(sc[0].reason).toContain('無法判斷該用哪張檢查表範本')
+    expect(sc[1].reason).toContain('鋼筋 自主檢查表')
+    // 只有一張範本:直接用
+    const one = inferCandidates({ uploaderOrg: 'contractor', sitePhotos, openInspections: [], workItems: LEAVES, checklistTemplates: [T_CONC] })
+    expect(one.filter((x) => x.doc_type === 'self_check').map((x) => [x.state, x.template_id])).toEqual([['ready', 'tpl-conc'], ['ready', 'tpl-conc']])
+    // 未配對／無法判日的照片不產生自檢表
+    expect(sc.some((x) => x.photo_ids.includes('p2') || x.photo_ids.includes('p4'))).toBe(false)
   })
   it('監造:每個日期一份監造日誌(ready)、無法判日的一份 blocked;相符的待查驗表單列出但 unsupported;絕無施工日誌／自檢表', () => {
     const c = inferCandidates({
@@ -216,7 +248,7 @@ describe('buildSupervisorLogDraft:監造日誌內容來源(P3a)', () => {
   const sBase = () => ({
     date: '2026-09-17', dateSource: { source: 'intake', refs: [] as string[] }, workItems: LEAVES,
     inspections: [] as DayInspection[], openInspections: [], defects: [] as DayDefect[], dailyLog: null as FormalDailyLog | null,
-    weather: null, hasBoq: true, notes: [] as string[],
+    weather: null, template: SUP_TPL, hasBoq: true, notes: [] as string[],
   })
   const sPhoto = (id: string, over: Partial<DraftPhoto> = {}): DraftPhoto => photo({
     id, taken_at: '2026-09-17T01:10:00Z',
@@ -229,14 +261,15 @@ describe('buildSupervisorLogDraft:監造日誌內容來源(P3a)', () => {
     signed_at: '2026-09-17T09:00:00Z', submitted_at: '2026-09-17T09:30:00Z', received_at: null, returned_at: null, ...over,
   })
 
-  it('到場永遠留空且 pending(任何照片都不是到場證明);狀態 pending_input;範本鍵=示範範本;必填鍵鏡像 DB 範本', () => {
+  it('到場永遠留空且 pending(任何照片都不是到場證明);狀態 pending_input;範本鍵／必填鍵取自傳入的 DB 範本', () => {
     const d = buildSupervisorLogDraft({ ...sBase(), photos: [sPhoto('s1', { work_item_id: 'wi-steel' })], dailyLog: formalLog(), weather: { am: '多雲', pm: '多雲' } })
     expect(d.content.attendance).toEqual([])
     expect(d.field_sources.attendance).toMatchObject({ status: 'pending', source: null })
     expect(d.recheck.some((r) => r.key === 'attendance')).toBe(true)
     expect(d.status).toBe('pending_input')
-    expect(d.content.template).toEqual(SUPERVISOR_LOG_TEMPLATE)
-    expect(d.required_fields).toEqual([...SUPERVISOR_LOG_REQUIRED_KEYS])
+    expect(d.content.template).toEqual({ key: 'supervisor_log_demo', version: 1 })
+    expect(d.required_fields).toEqual(templateRequiredKeys(SUP_TPL))
+    expect(d.summary).toContain('示範範本')
     expect(d.attachments).toEqual([{ photo_id: 's1', storage_path: 'p/intake/i1/s1.jpg' }])
     expect(JSON.stringify(d.content)).not.toMatch(/"無"|"合格"|"已到場"/)
   })
@@ -324,5 +357,65 @@ describe('buildSupervisorLogDraft:監造日誌內容來源(P3a)', () => {
     expect(d2.content.supervision_items).toHaveLength(1)
     expect(d2.content.supervision_items[0].work_item_id).toBeNull()
     expect(d2.recheck.some((r) => r.reason.includes('尚未匯入標單'))).toBe(true)
+  })
+})
+
+describe('buildSelfCheckDraft:自主檢查表內容來源(P3b)', () => {
+  const steel = LEAVES[0]
+  const cPhoto = (id: string, over: Partial<DraftPhoto> = {}): DraftPhoto => photo({
+    id, work_item_id: 'wi-steel',
+    classify: { caption: '鋼筋綁紮', category: '施工作業', is_construction: true, legible: true, has_board: false, work_item_hint: '鋼筋', visible_progress: '', location: 'A區1F' },
+    ...over,
+  })
+  const cBase = () => ({ date: '2026-09-17', dateSource: { source: 'intake', refs: [] as string[] }, workItem: steel, template: T_CONC, templateReason: '本案僅有這一張範本', frame: SC_FRAME, hasBoq: true, notes: [] as string[] })
+
+  it('每個項目一律 pending:實測值待人量測、勾選項不代為勾選;範本／工項／位置／佐證由照片帶入並標來源;必填=框架＋每項;絕不出現「合格」', () => {
+    const d = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('c1'), cPhoto('c2')] })
+    expect(d.content).toMatchObject({ check_date: '2026-09-17', template_id: 'tpl-conc', template_title: T_CONC.title, work_item_id: 'wi-steel', location: 'A區1F', note: null, template: { key: 'self_check_demo', version: 1 }, photo_ids: ['c1', 'c2'] })
+    expect(d.content.results).toEqual({ B1: { value: null }, C2: { value: null }, C3: { value: null } })
+    expect(d.field_sources.template_id).toMatchObject({ status: 'filled', source: 'system:template_match', reason: '本案僅有這一張範本' })
+    expect(d.field_sources.work_item_id).toMatchObject({ status: 'filled', source: 'ai:photo', refs: ['c1', 'c2'] })
+    expect(d.field_sources.location).toMatchObject({ status: 'filled', source: 'ai:photo' })
+    expect(d.field_sources['results.B1']).toMatchObject({ status: 'pending', source: null })
+    expect(d.field_sources['results.C2']).toMatchObject({ status: 'pending', source: null })
+    expect(d.field_sources['results.C2'].hint).toBeUndefined()
+    expect(d.required_fields).toEqual(['check_date', 'results.B1', 'results.C2', 'results.C3', 'template_id'])
+    expect(d.recheck.map((r) => r.key)).toEqual(['results.B1', 'results.C2', 'results.C3'])
+    expect(d.status).toBe('pending_input')
+    expect(d.attachments).toEqual([{ photo_id: 'c1', storage_path: 'p/intake/i1/c1.jpg' }, { photo_id: 'c2', storage_path: 'p/intake/i1/c2.jpg' }])
+    expect(JSON.stringify(d.content)).not.toMatch(/"合格"|"pass"|true/)
+    expect(d.summary).toContain('實測值 2 項')
+    expect(d.summary).toContain('示範範本')
+  })
+
+  it('告示板寫出對應項目的讀數:只放 hint 不填值(值仍 null、仍 pending);多板不一致不給 hint;對不到的項目不猜', () => {
+    const wb = (items: WhiteboardResult['items']) => board({ items })
+    const d = buildSelfCheckDraft({ ...cBase(), photos: [
+      cPhoto('b1', { whiteboard: wb([{ description: '坍度 18cm', quantity: 18, unit: 'cm', note: '' }, { description: '澆置溫度', quantity: 28, unit: '℃', note: '' }]) }),
+      cPhoto('b2', { whiteboard: wb([{ description: '坍度', quantity: 18, unit: 'cm', note: '' }, { description: '上下層澆置間隔', quantity: 30, unit: '分', note: '' }]) }),
+      cPhoto('b3', { whiteboard: wb([{ description: '上下層澆置間隔', quantity: 40, unit: '分', note: '' }]) }),
+    ] })
+    expect(d.content.results.C2).toEqual({ value: null })
+    expect(d.field_sources['results.C2']).toMatchObject({ status: 'pending', refs: ['b1', 'b2'], hint: { value: 18, unit: 'cm', source: 'whiteboard:b1' } })
+    expect(d.field_sources['results.C2'].reason).toContain('僅供參考')
+    expect(d.field_sources['results.C3']).toMatchObject({ status: 'pending' })
+    expect(d.field_sources['results.C3'].hint).toBeUndefined()
+    expect(d.field_sources['results.C3'].reason).toContain('不一致(30、40)')
+    expect(d.status).toBe('pending_input')
+    expect(matchChecklistItem('坍度 18cm', T_CONC.items)?.no).toBe('C2')
+    expect(matchChecklistItem('澆置溫度', T_CONC.items)).toBeNull()
+    expect(matchChecklistItem('度', T_CONC.items)).toBeNull()
+  })
+
+  it('位置:多個位置要人選、沒有位置 pending;沒有項目的範本列 recheck 提醒換範本', () => {
+    const d = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('c1'), cPhoto('c2', { classify: { ...cPhoto('c2').classify!, location: 'B區2F' } })] })
+    expect(d.content.location).toBeNull()
+    expect(d.field_sources.location).toMatchObject({ status: 'pending' })
+    expect(d.field_sources.location.reason).toContain('A區1F、B區2F')
+    const none = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('c1', { classify: { ...cPhoto('c1').classify!, location: null } })] })
+    expect(none.field_sources.location).toMatchObject({ status: 'pending' })
+    const empty = buildSelfCheckDraft({ ...cBase(), template: { ...T_CONC, items: [] }, photos: [cPhoto('c1')] })
+    expect(empty.required_fields).toEqual(['check_date', 'template_id'])
+    expect(empty.recheck.some((r) => r.key === 'template_id' && r.reason.includes('沒有任何檢查項目'))).toBe(true)
   })
 })

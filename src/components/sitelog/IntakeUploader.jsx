@@ -168,7 +168,7 @@ export default function IntakeUploader({ fixedDate = null, onDrafted, compact = 
   }
 
   if (demoMode || !isPersistedProject) {
-    return <p className="text-footnote text-[var(--text-3)]">示範模式無法上傳照片（需正式專案）。正式專案在此拍照或選擇照片後，系統會保存照片、辨識並自動擬好施工日誌草稿。</p>
+    return <p className="text-footnote text-[var(--text-3)]">示範模式無法上傳照片（需正式專案）。正式專案在此拍照或選擇照片後，系統會保存照片、辨識並自動擬好施工日誌與自主檢查表草稿。</p>
   }
   if (!can.write) {
     return <p className="text-footnote text-[var(--text-3)]">照片由施工廠商或監造在其合法作業中上傳；機關可查閱已保存的照片與文書。</p>
@@ -179,7 +179,7 @@ export default function IntakeUploader({ fixedDate = null, onDrafted, compact = 
     <div className="space-y-3">
       {!compact && !fixedDate && (
         <p className="text-footnote text-[var(--text-2)]">
-          選好照片就會保存到伺服器並開始辨識；{org === 'contractor' ? '系統會依日期自動擬好施工日誌草稿，列出待補欄位。' : '系統會依日期自動擬好監造日誌草稿（示範範本），到場人員需親自填寫確認；監造查驗表單起稿尚未支援，不會假裝完成。'}
+          選好照片就會保存到伺服器並開始辨識；{org === 'contractor' ? '系統會依日期自動擬好施工日誌草稿，並為每個配到工項的照片擬自主檢查表草稿（依本案檢查表範本；實測值一律由你親自量測填寫），列出待補欄位。' : '系統會依日期自動擬好監造日誌草稿（示範範本），到場人員需親自填寫確認；監造查驗表單起稿尚未支援，不會假裝完成。'}
           日期以告示板為準，沒有告示板時可在下方指定。
         </p>
       )}

@@ -1,11 +1,11 @@
-// 現場文書起稿的純規則(P2b／P3a;設計 docs/architecture/field-documents-lifecycle.md §2.3、§3)。
+// 現場文書起稿的純規則(P2b／P3a／P3b;設計 docs/architecture/field-documents-lifecycle.md §2.3、§3)。
 // ---------------------------------------------------------------------------
 // 全部確定性、無 IO、無 npm 依賴——vitest 直接測。這裡決定三件事:
 //   1. 一批照片各屬哪一天(告示板日期 > 使用者指定的批次日期 > 拍攝時間的台北日曆日)、
 //      哪些是重複照片(同批同雜湊)。
-//   2. 依上傳方角色推斷「候選文書」:廠商→施工日誌(P2b)＋自主檢查表(P3b,列為尚未支援);
-//      監造→監造日誌(P3a)＋監造查驗表單(P3c,列為尚未支援);機關→無。**廠商照片永遠推不出
-//      監造文件,反之亦然**(DB guard 另有一道)。
+//   2. 依上傳方角色推斷「候選文書」:廠商→施工日誌(P2b)＋每個配到工項的自主檢查表(P3b;範本由本案
+//      checklist_templates 依工項描述確定性挑選,挑不到=blocked 待人指定);監造→監造日誌(P3a)＋監造查驗表單
+//      (P3c,列為尚未支援);機關→無。**廠商照片永遠推不出監造文件,反之亦然**(DB guard 另有一道)。
 //   3. 草稿的內容與每欄來源(field_sources):
 //      * 沒有來源的數量、天氣、出工、到場一律 pending(待補);絕不填「無」「0」「合格」。
 //      * 告示板清楚可讀才把數量／位置／日期／天氣標 filled 並附 source: whiteboard:<photo_id>;
@@ -19,6 +19,11 @@
 //        既有紀錄帶入並逐項標來源;廠商施工情形只引用同日已簽署／已提送的施工日誌文件。
 //        **到場人員永遠 pending、內容留空**——任何照片(含監造自己的)都不能證明到場,只能人填
 //        (DB 版本 guard 同樣拒絕 AI 版本帶入;簽署時須 confirmed)。
+//      * 自主檢查表(P3b):範本、工項、位置、佐證照片由照片與確定性比對帶入;**每個檢查項目一律 pending**——
+//        實測值(num)永遠由人親自量測填寫(告示板清楚寫出對應項目的讀數只放 hint,不填值);勾選項(bool)
+//        沒有逐項依據就不建議,絕不填「合格」。合格與否由 DB 依範本量化標準計算。
+// 範本(監造日誌示範範本、自檢表示範框架)只有 DB fn_field_document_template 一份定義:流程層於執行期取回後
+// 傳進來,這裡只用 fieldDocTemplate.ts 的純規則推導必填鍵並帶範本鍵／版本進內容(DB 存版與簽署會再算一次)。
 // 版本雜湊由 DB 算(fn_field_document_content_hash);這裡只比對 content 是否相同,
 // 用的是 stableStringify(與 agent.ts 同一支),不重算雜湊、不做第二個引擎。
 
@@ -27,6 +32,9 @@ import { stableStringify } from './agent.ts'
 import { matchLeaf } from './photoMatch.ts'
 import { FIELD_DOC_TYPE_LABELS } from './ballInCourtRules.ts'
 import { FORMAL_DAILY_LOG_STATUSES, composeContractorSummary, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.ts'
+import { pickChecklistTemplate } from './draftInspection.ts'
+import { checklistItemKeys, docRequiredKeys, templateRequiredKeys, templateStamp } from './fieldDocTemplate.ts'
+import type { ChecklistItemLike, FieldDocTemplate } from './fieldDocTemplate.ts'
 import type { SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
 
 export const DAY_MS = 86400000
@@ -63,9 +71,10 @@ export type DraftPhoto = {
 export type FieldSourceStatus = 'filled' | 'pending' | 'na' | 'confirmed'
 export type FieldSource = {
   status: FieldSourceStatus
-  source: string | null // 'whiteboard:<photo_id>' | 'photo_time:<photo_id>' | 'intake' | 'cwa' | 'legacy:<daily_log_id>' | 'yesterday:<daily_log_id>' | 'ai:photo'
+  source: string | null // 'whiteboard:<photo_id>' | 'photo_time:<photo_id>' | 'intake' | 'cwa' | 'legacy:<daily_log_id>' | 'yesterday:<daily_log_id>' | 'ai:photo' | 'system:template_match'
   refs?: string[]
   reason?: string
+  hint?: { value: number; unit: string | null; source: string } // 自檢表實測值:告示板讀數只作提示,不填值(P3b)
 }
 
 // ── 日期 ─────────────────────────────────────────────────────────────────────
@@ -166,6 +175,8 @@ export type Candidate = {
   photo_ids: string[]
   document_id: string | null
   blocked_by?: string[]
+  work_item_id?: string | null   // 自檢表:對應工項
+  template_id?: string | null    // 自檢表:確定性挑到的本案檢查表範本
 }
 
 export type OpenInspection = {
@@ -175,10 +186,15 @@ export type OpenInspection = {
   requested_date: string | null
 }
 
+// 本案檢查表範本(checklist_templates 列;RLS 讀)
+export type ChecklistTemplateRow = { id: string; title: string; source: string | null; items: ChecklistItemLike[] }
+
 export function inferCandidates(input: {
   uploaderOrg: string
   sitePhotos: { id: string; date: string | null; work_item_id: string | null }[] // 已辨識為工地照且可辨的照片
   openInspections: OpenInspection[]
+  workItems?: LeafWorkItem[]                 // 自檢表挑範本用(工項描述)
+  checklistTemplates?: ChecklistTemplateRow[] | null // 本案檢查表範本;空陣列=blocked(不假裝有範本);null=讀不到,不推自檢表(不能寫成「沒有範本」)
 }): Candidate[] {
   const { uploaderOrg, sitePhotos, openInspections } = input
   if (uploaderOrg !== 'contractor' && uploaderOrg !== 'supervisor') return []
@@ -215,12 +231,40 @@ export function inferCandidates(input: {
   }
 
   if (uploaderOrg === 'contractor') {
+    // 自主檢查表:每個「配到工項 × 日期」一份;範本由本案 checklist_templates 依工項描述確定性挑選
+    // (pickChecklistTemplate 與 Agent draft_inspection 同一支);沒有範本／挑不出→blocked 由人指定,不猜;範本讀不到→不推。
+    if (input.checklistTemplates === null) return out
+    const templates = input.checklistTemplates ?? []
+    const wiById = new Map((input.workItems ?? []).map((w) => [w.id, w]))
     for (const wid of [...wids].sort()) {
-      out.push({
-        doc_type: 'self_check', target_key: wid, doc_date: dates[0] ?? null, state: 'unsupported', support: 'unsupported',
-        reason: '自主檢查表起稿尚未支援(P3b;適用範本規則 applies_to 待 P3c)',
-        excluded: false, photo_ids: sitePhotos.filter((p) => p.work_item_id === wid).map((p) => p.id), document_id: null,
-      })
+      const wi = wiById.get(wid)
+      const wiLabel = wi ? [wi.item_no, wi.description].filter(Boolean).join(' ') : wid
+      const picked = templates.length ? pickChecklistTemplate(templates, wi?.description ?? null) : null
+      for (const d of dates) {
+        const ids = sitePhotos.filter((p) => p.work_item_id === wid && p.date === d).map((p) => p.id)
+        if (!ids.length) continue
+        if (!templates.length) {
+          out.push({
+            doc_type: 'self_check', target_key: `${d}:${wid}`, doc_date: d, state: 'blocked', support: 'supported',
+            reason: `工項「${wiLabel}」${ids.length} 張照片;本案尚未建立自主檢查表範本,請先到品質查驗建立範本再重試,或在自主檢查表頁手動建立`,
+            excluded: false, photo_ids: ids, document_id: null, blocked_by: ['checklist_template'], work_item_id: wid, template_id: null,
+          })
+          continue
+        }
+        if (!picked) {
+          out.push({
+            doc_type: 'self_check', target_key: `${d}:${wid}`, doc_date: d, state: 'blocked', support: 'supported',
+            reason: `工項「${wiLabel}」${ids.length} 張照片;無法判斷該用哪張檢查表範本(${templates.map((t) => t.title).join('、')}),請在自主檢查表頁指定範本後手動建立`,
+            excluded: false, photo_ids: ids, document_id: null, blocked_by: ['checklist_template'], work_item_id: wid, template_id: null,
+          })
+          continue
+        }
+        out.push({
+          doc_type: 'self_check', target_key: `${d}:${wid}`, doc_date: d, state: 'ready', support: 'supported',
+          reason: `工項「${wiLabel}」${ids.length} 張照片;範本「${picked.template.title}」(${picked.reason})`,
+          excluded: false, photo_ids: ids, document_id: null, work_item_id: wid, template_id: picked.template.id,
+        })
+      }
     }
     return out
   }
@@ -551,10 +595,8 @@ export function buildDailyLogDraft(input: DailyLogDraftInput): DailyLogDraft {
 }
 
 // ── 監造日誌草稿(P3a) ───────────────────────────────────────────────────────
-// 範本=DB fn_field_document_template('supervisor_log') 的示範範本(is_demo);這裡只帶範本鍵與版本進內容,
-// 必填鍵鏡像該範本的 required(DB 存版與簽署時會重算並聯集,以 DB 為準),到場欄鏡像 human_only。
-export const SUPERVISOR_LOG_TEMPLATE = { key: 'supervisor_log_demo', version: 1 } as const
-export const SUPERVISOR_LOG_REQUIRED_KEYS = ['log_date', 'weather_am', 'weather_pm', 'attendance', 'supervision_items', 'contractor_summary'] as const
+// 範本=DB fn_field_document_template('supervisor_log') 的示範範本(is_demo),由流程層執行期取回傳入;這裡只帶範本鍵與
+// 版本進內容,必填鍵由範本 required 推導(DB 存版與簽署時會重算並聯集,以 DB 為準),到場欄由範本 human_only 決定。
 
 export type DayInspection = {
   id: string
@@ -626,12 +668,13 @@ export type SupervisorLogDraftInput = {
   defects: DayDefect[]               // 當日開立 ∪ 未結案的缺失
   dailyLog: FormalDailyLog | null    // 同日施工日誌文件(任何狀態)
   weather: { am?: string | null; pm?: string | null } | null
+  template: FieldDocTemplate         // DB fn_field_document_template('supervisor_log')(執行期取回)
   hasBoq: boolean
   notes: string[]
 }
 
 export function buildSupervisorLogDraft(input: SupervisorLogDraftInput): SupervisorLogDraft {
-  const { date, photos, inspections, defects, dailyLog, weather } = input
+  const { date, photos, inspections, defects, dailyLog, weather, template } = input
   const wiById = new Map(input.workItems.map((w) => [w.id, w]))
   const sources: Record<string, FieldSource> = {}
   const recheck: { key: string; reason: string }[] = []
@@ -787,13 +830,13 @@ export function buildSupervisorLogDraft(input: SupervisorLogDraftInput): Supervi
   }
   for (const n of input.notes) recheck.push({ key: 'photos', reason: n })
 
-  const required = [...SUPERVISOR_LOG_REQUIRED_KEYS]
+  const required = templateRequiredKeys(template)
   const pendingRequired = required.filter((k) => sources[k]?.status === 'pending')
   const status: SupervisorLogDraft['status'] = pendingRequired.length ? 'pending_input' : 'draft'
 
   const [, m, d] = date.split('-')
   const summary =
-    `已依 ${photos.length} 張監造照片與 ${inspections.length} 筆當日查驗擬好 ${Number(m)}/${Number(d)} 監造日誌草稿(示範範本)` +
+    `已依 ${photos.length} 張監造照片與 ${inspections.length} 筆當日查驗擬好 ${Number(m)}/${Number(d)} 監造日誌草稿(${template.demo_label || template.title || '範本'})` +
     `(${items.length} 項監造事項,${pendingRequired.length} 項待補;到場人員請親自填寫)`
   const rationale = [
     `日期:${input.dateSource.source === 'intake' ? '依批次指定日期' : input.dateSource.source.startsWith('whiteboard') ? '依告示板日期' : '依照片時間的台北日曆日'}。`,
@@ -811,7 +854,7 @@ export function buildSupervisorLogDraft(input: SupervisorLogDraftInput): Supervi
       log_date: date, weather_am: weatherAm, weather_pm: weatherPm,
       attendance: [], supervision_items: items, inspection_ids: inspectionIds, notices, followups,
       contractor_summary: contractorSummary, daily_log_receipt: receipt, note: null,
-      template: { ...SUPERVISOR_LOG_TEMPLATE },
+      template: templateStamp(template),
       photo_ids: photoIds, unmatched_photo_ids: unmatchedIds,
     },
     field_sources: sources,
@@ -832,4 +875,145 @@ export function draftUnchanged(
   if (!previous) return false
   return stableStringify(previous.content) === stableStringify(next.content)
     && stableStringify(previous.attachments ?? null) === stableStringify(next.attachments ?? null)
+}
+
+// ── 自主檢查表草稿(P3b) ─────────────────────────────────────────────────────
+// 框架=DB fn_field_document_template('self_check')(示範框架範本);檢查項目=本案 checklist_templates 的範本(由候選推斷
+// 確定性挑選,已隨候選帶入)。每個項目一律 pending:實測值只能人量測(DB 版本 guard 拒絕 AI 帶入),勾選項沒有逐項依據
+// 就不建議;告示板清楚寫出對應項目的讀數只放 hint 供人採用,不填值。
+export type SelfCheckResultDraft = { value: number | boolean | null }
+export type SelfCheckContent = {
+  check_date: string
+  template_id: string
+  template_title: string
+  template_source: string | null
+  work_item_id: string | null
+  location: string | null
+  results: Record<string, SelfCheckResultDraft>
+  note: string | null
+  template: { key: string; version: number }
+  photo_ids: string[]
+  unmatched_photo_ids: string[]
+}
+export type SelfCheckDraft = FieldDocDraft<SelfCheckContent>
+export type SelfCheckDraftInput = {
+  date: string
+  dateSource: { source: string; refs: string[] }
+  photos: DraftPhoto[]                 // 該工項該日的廠商照片(含既有版本附件的照片)
+  workItem: LeafWorkItem
+  template: ChecklistTemplateRow       // 候選推斷挑到的本案檢查表範本
+  templateReason: string
+  frame: FieldDocTemplate              // DB fn_field_document_template('self_check')
+  hasBoq: boolean
+  notes: string[]
+}
+
+const normText = (s: unknown) => (typeof s === 'string' ? s.replace(/[\s()（）:：,，、]/g, '') : '')
+// 告示板列出的項目 ↔ 範本檢查項目:名稱互含(去空白與標點)才算對到;對不到就不猜
+export function matchChecklistItem(description: string, items: ChecklistItemLike[]): ChecklistItemLike | null {
+  const d = normText(description)
+  if (d.length < 2) return null
+  for (const it of items) {
+    const name = normText(it.item)
+    if (name.length >= 2 && (d.includes(name) || name.includes(d))) return it
+  }
+  return null
+}
+
+export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft {
+  const { date, photos, workItem, template, frame } = input
+  const items = (Array.isArray(template.items) ? template.items : []).filter((it) => typeof it?.no === 'string' && it.no.trim())
+  const sources: Record<string, FieldSource> = {}
+  const recheck: { key: string; reason: string }[] = []
+  const photoIds = photos.map((p) => p.id)
+  const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))]
+
+  sources.check_date = { status: 'filled', source: input.dateSource.source, refs: input.dateSource.refs }
+  sources.template_id = { status: 'filled', source: 'system:template_match', reason: input.templateReason }
+  sources.work_item_id = { status: 'filled', source: 'ai:photo', refs: photoIds }
+
+  // 位置:照片說明／告示板的位置唯一才帶入;多個要人選;沒有→pending(不填「—」)
+  const locs = uniq(photos.map((p) => textOrNull(p.location) ?? textOrNull(p.classify?.location) ?? textOrNull(p.whiteboard?.location)))
+  let location: string | null = null
+  if (locs.length === 1) {
+    location = locs[0]
+    sources.location = { status: 'filled', source: 'ai:photo', refs: photoIds }
+  } else if (locs.length > 1) {
+    sources.location = { status: 'pending', source: null, refs: photoIds, reason: `照片載明多個位置(${locs.join('、')}),請確認本表的檢查位置` }
+    recheck.push({ key: 'location', reason: `多個檢查位置(${locs.join('、')}),請確認` })
+  } else {
+    sources.location = { status: 'pending', source: null, reason: '照片與告示板未載明檢查位置' }
+  }
+
+  // 告示板讀數:對到範本實測值項目的只當提示(不填值);多板不一致就不給提示
+  const hints = new Map<string, { value: number; unit: string | null; photoId: string }[]>()
+  for (const p of photos) {
+    for (const it of p.whiteboard?.items ?? []) {
+      if (it.quantity == null) continue
+      const hit = matchChecklistItem(it.description, items)
+      if (!hit || hit.kind !== 'num') continue
+      if (!hints.has(hit.no)) hints.set(hit.no, [])
+      hints.get(hit.no)!.push({ value: it.quantity, unit: textOrNull(it.unit), photoId: p.id })
+    }
+  }
+
+  const results: SelfCheckContent['results'] = {}
+  for (const it of items) {
+    const key = `results.${it.no}`
+    results[it.no] = { value: null }
+    if (it.kind === 'num') {
+      const readings = hints.get(it.no) ?? []
+      const distinct = [...new Set(readings.map((r) => r.value))]
+      if (distinct.length === 1) {
+        sources[key] = {
+          status: 'pending', source: null, refs: readings.map((r) => r.photoId),
+          reason: `告示板寫 ${distinct[0]}${readings[0].unit ?? ''}(僅供參考),請親自量測後填寫`,
+          hint: { value: distinct[0], unit: readings[0].unit, source: `whiteboard:${readings[0].photoId}` },
+        }
+      } else if (distinct.length > 1) {
+        sources[key] = { status: 'pending', source: null, refs: readings.map((r) => r.photoId), reason: `多張告示板讀數不一致(${distinct.join('、')}),請親自量測後填寫` }
+      } else {
+        sources[key] = { status: 'pending', source: null, reason: '實測值由人親自量測填寫;系統不從照片推定' }
+      }
+      recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:實測值待親自量測填寫` })
+    } else {
+      sources[key] = { status: 'pending', source: null, reason: '請依現場檢查勾選;系統沒有逐項依據,不代為勾選' }
+      recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:待現場勾選` })
+    }
+  }
+  if (!items.length) recheck.push({ key: 'template_id', reason: `範本「${template.title}」沒有任何檢查項目,無法簽署;請換範本` })
+  for (const n of input.notes) recheck.push({ key: 'photos', reason: n })
+
+  const required = docRequiredKeys('self_check', frame, items)
+  const pendingRequired = required.filter((k) => sources[k]?.status === 'pending')
+  const status: SelfCheckDraft['status'] = pendingRequired.length ? 'pending_input' : 'draft'
+  const numCount = checklistItemKeys(items, frame, 'human_only').length
+  const [, m, d] = date.split('-')
+  const summary =
+    `已依 ${photos.length} 張現場照片擬好 ${Number(m)}/${Number(d)}「${template.title}」自主檢查表草稿(${frame.demo_label || '範本'})` +
+    `(工項 ${[workItem.item_no, workItem.description].filter(Boolean).join(' ')};${items.length} 項待你填,其中實測值 ${numCount} 項)`
+  const rationale = [
+    `範本:${input.templateReason}。`,
+    `工項:依 ${photos.length} 張已配對工項的照片自動帶出(確定性比對,非模型判讀)。`,
+    `檢查項目(${items.length} 項):實測值 ${numCount} 項一律留空待你親自量測填寫——系統與 AI 都不猜實測值;勾選項沒有逐項依據,系統不代為勾選;本次未檢請標不適用並填原因。`,
+    hints.size ? `告示板讀數:${[...hints.keys()].join('、')} 有板上讀數,只作參考提示,未填入。` : '',
+    '合格與否由系統依範本量化標準計算,AI 不參與判定。',
+    location ? `檢查位置:取自照片「${location}」,請確認。` : `檢查位置:${sources.location.reason}`,
+    ...recheck.filter((r) => r.key === 'photos').map((r) => r.reason),
+  ].filter(Boolean).join('\n')
+
+  return {
+    content: {
+      check_date: date, template_id: template.id, template_title: template.title, template_source: template.source ?? null,
+      work_item_id: workItem.id, location, results, note: null, template: templateStamp(frame),
+      photo_ids: photoIds, unmatched_photo_ids: [],
+    },
+    field_sources: sources,
+    attachments: photos.map((p) => ({ photo_id: p.id, storage_path: p.storage_path, ...(p.content_sha256 ? { sha256: p.content_sha256 } : {}) })),
+    required_fields: required,
+    recheck,
+    status,
+    summary,
+    rationale,
+  }
 }

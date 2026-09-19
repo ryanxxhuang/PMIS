@@ -22,7 +22,7 @@ import { billableLeaves } from '../../lib/boqCalc.js'
 import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
 import {
   emptySupervisorLogContent, emptySupervisorLogSources, requiredKeysFor, unmetFields, fieldLabel, UNMET_STATUS_LABEL,
-  templateHumanOnlyKeys, templateFieldLabels, applySuggestion, mergeAttachments, attachmentIssues, fieldDocErrorGuidance, docStatusMeta, DOC_STATUS_LABEL,
+  templateConfirmRequiredKeys, templateFieldLabels, applySuggestion, mergeAttachments, attachmentIssues, fieldDocErrorGuidance, docStatusMeta, DOC_STATUS_LABEL,
   formalDailyLogFromDetail, applyFormalDailyLog, ORG_LABEL,
 } from '../../lib/fieldDocs.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from '../../lib/fieldDocText.js'
@@ -81,7 +81,7 @@ export default function SupervisorLog() {
     return () => { active = false }
   }, [getFieldDocumentTemplate])
   const labels = useMemo(() => templateFieldLabels(template), [template])
-  const humanOnly = useMemo(() => templateHumanOnlyKeys(template), [template])
+  const humanOnly = useMemo(() => templateConfirmRequiredKeys(template), [template]) // 須確認欄(到場;human_only 蘊含)
 
   // 本案監造方成員(到場人員可帶 user_id;RPC 只給本案成員,簽署時 DB 再驗)
   const [members, setMembers] = useState([])

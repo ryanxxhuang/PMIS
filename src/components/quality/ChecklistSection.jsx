@@ -29,7 +29,7 @@ const fmtVal = (v) => (v === true ? '✓' : v === false ? '✗' : v ?? '—')
 // ── 自主檢查表:選範本 → 填實測值 → 依量化標準自動判定 → 不合格自動開缺失。
 // 存檔後為證據不可就地修改:更正一律建立修訂版次 Rev.N(必附原因),重新判定
 // 並連動缺失(同鏈不重複開);僅未判定的紀錄可刪除。
-export default function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, leaves = [], inspections = [], onRequestInspection = null, onDirtyChange = null }) {
+export default function ChecklistSection({ templates, records, onCreate, onDelete, canEdit, leaves = [], inspections = [], onRequestInspection = null, onDirtyChange = null, signedDocByRecord = new Map() }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [revising, setRevising] = useState(null) // 修訂模式:被修訂的紀錄(現行版)
@@ -271,6 +271,8 @@ export default function ChecklistSection({ templates, records, onCreate, onDelet
                     <span className="num text-[var(--text-3)] text-xs mr-2">{r.check_date}</span>
                     <span className="text-[var(--text)]">{tpl?.title || '（範本已刪除）'}</span>
                     {(r.rev || 0) > 0 && <Badge color="blue">Rev.{r.rev}</Badge>}
+                    {/* P3b:簽署文件落下的紀錄——版本、雜湊與簽署者在文件頁;直接登錄的紀錄沒有簽署列 */}
+                    {signedDocByRecord.has(r.id) && <button onClick={() => navigate(`/self-check?doc=${encodeURIComponent(signedDocByRecord.get(r.id).id)}`)} className="ml-2 inline-flex items-center max-md:min-h-11" title="開啟已簽署的自主檢查表文件"><Badge color="green">已簽署文件 v{signedDocByRecord.get(r.id).current_version_no}</Badge></button>}
                     {r.location && <span className="text-xs text-[var(--text-3)] ml-2">{r.location}</span>}
                     {wiOf(r) && <span className="text-xs text-[var(--text-3)] ml-2" title={wiOf(r).description}>工項 {wiOf(r).item_no}</span>}
                   </div>

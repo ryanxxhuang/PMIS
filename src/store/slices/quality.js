@@ -183,8 +183,25 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     return [{ id: TEMPLATE_03310.key, ...TEMPLATE_03310, builtin: true }, ...checklistTemplates]
   }, [checklistTemplates])
 
+  // 內建範本(builtin 03310)首次使用才落 DB:檢查表紀錄與自檢表文件(P3b)都掛本案 checklist_templates 的 id,
+  // 同一條規則只在這裡。demo 模式／已在 DB 的範本原樣回傳。
+  const ensureChecklistTemplate = useCallback(async (template) => {
+    if (!template) return { error: { message: '請先選擇檢查表範本' } }
+    if (!dbMode || !template.builtin) return { error: null, template }
+    const { data: t, error } = await supabase.from('checklist_templates').insert({
+      project_id: currentProject.project_id, title: template.title, source: template.source,
+      items: template.items, created_by: currentUser?.user_id,
+    }).select().single()
+    if (error) return { error }
+    setChecklistTemplates((ts) => [...ts, t])
+    return { error: null, template: t }
+  }, [dbMode, currentProject, currentUser])
+
   // 存檔自主檢查(P1-07 修訂版次):revises=被修訂的紀錄 → 新增 Rev.N(舊證據不覆寫,
   // rev/root_id 由 DB guard 依鏈計算);缺失掛鏈根,同鏈最多一筆未結案缺失(不重複開)。
+  // P3b 起真專案的判定與不合格開缺失都在 DB(checklist_records_guard 重算 results／overall、
+  // checklist_records_defect_sync 同交易開缺失):這裡的 judgeChecklist 只是預覽,寫入後以伺服器回的列為準,
+  // 缺失只查不開(前端不再有第二份「不合格→開缺失」實作);demo 模式仍在記憶體套同一條規則。
   const createChecklistRecord = useCallback(async ({ template, check_date, location, values, note, revises, revision_reason, work_item_id, work_item_key }) => {
     const { results, overall, failed } = judgeChecklist(template, values)
     // 佐證鏈(批5)補工項關聯:UI 傳 work_item_key(同 createInspection 慣例,由 wiMaps 換 uuid)、
@@ -235,16 +252,14 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
       const link = await syncDefect(rootId, rev)
       return { error: null, overall, rev, ...link }
     }
-    let templateId = template.id
-    if (template.builtin) {
-      const { data: t, error: te } = await supabase.from('checklist_templates').insert({
-        project_id: currentProject.project_id, title: template.title, source: template.source,
-        items: template.items, created_by: currentUser?.user_id,
-      }).select().single()
-      if (te) return { error: te }
-      setChecklistTemplates((ts) => [...ts, t])
-      templateId = t.id
-    }
+    const ensured = await ensureChecklistTemplate(template)
+    if (ensured.error) return { error: ensured.error }
+    const templateId = ensured.template.id
+    // 先看鏈上有沒有未結案缺失(修訂版次才有鏈根;新鏈沒有),寫入後才分得出「這次開的」與「本來就在追蹤的」
+    const rootBefore = revises ? (revises.root_id || revises.id) : null
+    const openBefore = rootBefore
+      ? (await supabase.from('defects').select('id,status').eq('source_checklist_record_id', rootBefore).neq('status', '已結案').limit(1)).data?.[0] || null
+      : null
     const { data: rec, error } = await supabase.from('checklist_records').insert({
       project_id: currentProject.project_id, template_id: templateId, check_date,
       location: location || null, results, overall, note: note || null, created_by: currentUser?.user_id,
@@ -253,9 +268,17 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     }).select().single()
     if (error) return { error }
     setChecklistRecords((rs) => [rec, ...rs])
-    const link = await syncDefect(rec.root_id, rec.rev)
-    return { error: null, overall, rev: rec.rev, ...link }
-  }, [dbMode, currentProject, currentUser, wiMaps, defects, createDefect])
+    // 判定與缺失都以伺服器為準:rec.overall 是 DB 重算的;缺失由 trigger 在同一交易開,這裡只讀回並重載
+    const { data: openAfter } = await supabase.from('defects').select('id,status').eq('source_checklist_record_id', rec.root_id).neq('status', '已結案').limit(1)
+    const openNow = openAfter?.[0] || null
+    await reloadDefects()
+    const link = rec.overall !== '不合格'
+      ? { defectAction: null, openDefectRemains: !!openNow }
+      : openBefore ? { defectAction: 'linked', openDefectRemains: true }
+        : openNow ? { defectAction: 'created', openDefectRemains: false }
+          : { defectAction: null, openDefectRemains: false, defectError: { message: '判定不合格但缺失未由伺服器建立,請至「缺失」分段確認' } }
+    return { error: null, overall: rec.overall, rev: rec.rev, ...link }
+  }, [dbMode, currentProject, currentUser, wiMaps, defects, createDefect, reloadDefects, ensureChecklistTemplate])
 
   // 刪除檢查紀錄:DB 先行(已判定/被修訂引用由 guard 擋下,不可假消失)
   const deleteChecklistRecord = useCallback(async (id) => {
@@ -408,7 +431,7 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     checklistRecords, setChecklistRecords, testSamples, setTestSamples,
     reloadQuality, createInspection, recordInspectionResult, createDefect, updateDefectStatus,
     deleteInspection, deleteDefect,
-    createChecklistRecord, deleteChecklistRecord,
+    createChecklistRecord, deleteChecklistRecord, ensureChecklistTemplate,
     createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
   }
 }

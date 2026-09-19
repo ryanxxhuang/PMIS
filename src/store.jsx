@@ -122,8 +122,6 @@ export function StoreProvider({ children }) {
     describeDefect, analyzeSafetyPhoto, draftMonthlyReview, draftValuationSummary, fetchWeather,
     createSafetyRecord, updateSafetyRecord, deleteSafetyRecord,
   } = useSiteSlice(ctx)
-  // 現場文書(P2c):施工日誌唯一寫入路徑。簽署成功後由 slice 重載 siteLogs(事實表已由 RPC 落庫)
-  const fieldDocsSlice = useFieldDocsSlice(ctx, { setSiteLogs })
   const {
     valuations, setValuations, progressPlan, setProgressPlan,
     createValuation, updateValuationItem, setValuationStatus, updateValuationPayment,
@@ -137,9 +135,12 @@ export function StoreProvider({ children }) {
     checklistRecords, setChecklistRecords, testSamples, setTestSamples,
     createInspection, recordInspectionResult, createDefect, updateDefectStatus,
     deleteInspection, deleteDefect,
-    createChecklistRecord, deleteChecklistRecord,
+    createChecklistRecord, deleteChecklistRecord, ensureChecklistTemplate,
     createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
   } = useQualitySlice(ctx, siteLogs)
+  // 現場文書(P2c／P3b):施工日誌與自檢表文件的唯一寫入路徑。簽署成功後由 slice 重載 siteLogs／checklistRecords／defects
+  // (事實表已由 RPC 落庫;不合格缺失由 DB trigger 開);示範模式存版時自檢表待補由本案範本項目算
+  const fieldDocsSlice = useFieldDocsSlice(ctx, { setSiteLogs, setChecklistRecords, setDefects, checklistTemplates: allChecklistTemplates })
   const {
     submittals, setSubmittals, rfis, setRfis, observations, setObservations,
     createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal, uploadSubmittalFile, readSubmittalDoc,
@@ -356,7 +357,7 @@ export function StoreProvider({ children }) {
     addChangeOrderItem, addChangeOrderItems, updateChangeOrderItem, deleteChangeOrderItem,
     inspections, defects, createInspection, recordInspectionResult, createDefect, updateDefectStatus,
     inspectionPoints, createInspectionPoint, deleteInspectionPoint, requestInspectionForPoint,
-    checklistTemplates: allChecklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
+    checklistTemplates: allChecklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord, ensureChecklistTemplate,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     submittals, createSubmittal, decideSubmittal, resubmitSubmittal, deleteSubmittal, reviewSubmittal, uploadSubmittalFile, readSubmittalDoc,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,

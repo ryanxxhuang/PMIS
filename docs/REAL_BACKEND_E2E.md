@@ -12,7 +12,7 @@
 npm run test:e2e:real
 ```
 
-九條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）（後三條見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+十條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）（後四條見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -65,4 +65,11 @@ npm run test:e2e:real -- e2e-real/chain6-supervisor-log.spec.js
 
 ```bash
 npm run test:e2e:real -- chain7 chain2
+
+## 自主檢查表鏈（chain 8，P3b）
+
+`e2e-real/chain8-self-check.spec.js`（前置同 chain 5：Edge stub）：廠商以 API 建本案檢查表範本（B1 勾選、C2 坍度 15.5–20.5）→ 上傳一張照片→伺服器起施工日誌＋自主檢查表草稿（範本只有一張直接用；`target_key`＝日期:工項；每個項目 `pending`、實測值不帶值、內容帶 `template:{self_check_demo v1}`）→`/site` 現場文書清單直達 `/self-check?doc=`（示範範本章、免責聲明、「依工項挑選範本」與「照片 AI 說明」來源、無簽署鈕）→ 只勾 B1 存檔「版本 2，尚有 1 項待補」→ 以 RPC 直打：實測值未填簽署回 `PD004`（detail 含 `results.C2 pending`）、監造簽署回 `PD006`→ 親自填坍度 18（判定預覽合格）→ 存檔「版本 3，可簽署」→ 簽署（`checklist_records` 落庫 Rev.0：`results` 逐項 `pass` 與 `overall` 由 DB 算、`work_item_id`＝stub 配到的工項、`created_by`＝簽署者）→ 列印頁「【示範範本】框架 self_check_demo v1」、雜湊前 12 碼、簽署者、無「草稿・未簽署」→「提出查驗申請（檢附此表）」預填既有查驗申請（下拉選中該紀錄並標「已簽署文件 v3」）→ 送出（`inspections.checklist_record_id` 掛上）→ 文件頁顯示「已檢附於查驗」→ 提送監造→ 監造（1024）`/site` 待收件、開頁唯讀、收件、查驗詳情「附自主檢查表（已簽署 v3）」→ RPC 直打第二份文件：簽署 Rev.0 → 更正存版（`amended_from_version`）無原因簽署 `PD010` → 填原因重簽落 Rev.1（`supersedes_id`／`root_id`／`revision_reason`、改判不合格）且 DB trigger 同交易開一筆缺失掛鏈根。工具鏈限制同 chain 5／6。
+
+```bash
+npm run test:e2e:real -- e2e-real/chain8-self-check.spec.js
 ```

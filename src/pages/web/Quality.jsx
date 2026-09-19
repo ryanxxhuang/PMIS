@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
@@ -31,8 +31,14 @@ export default function Quality() {
     checklistTemplates, checklistRecords, createChecklistRecord, deleteChecklistRecord,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
-    defects, currentUser,
+    defects, currentUser, fieldDocuments,
     isSupabaseConfigured, currentProject, workItemsSource, can, resolveMarkup } = useStore()
+  // 自主檢查表文件(P3b)簽署落下的紀錄:record id → 文件(顯示「已簽署 v{n}」、下鑽到文件列印版)
+  const signedDocByRecord = useMemo(() => {
+    const m = new Map()
+    for (const d of fieldDocuments?.documents || []) if (d.doc_type === 'self_check' && d.target_id && ['signed', 'submitted', 'received'].includes(d.status)) m.set(d.target_id, d)
+    return m
+  }, [fieldDocuments])
   const [inspForm, setInspForm] = useState(null) // null=收起；物件=展開
   const [busy, setBusy] = useState(false)
   const [errMsg, setErrMsg] = useState('') // 判定寫入失敗必須讓使用者看到(失敗=UI 不變)
@@ -70,6 +76,23 @@ export default function Quality() {
     }, { replace: true, state: navState })
     setSegment(q.segment); setQueueTick((t) => t + 1)
   }
+  // 自主檢查表文件頁「提出查驗申請（檢附此表）」:?attach=<record_id> 預填檢附(候選規則同下拉:現行版＋已判定),讀一次即拿掉
+  useEffect(() => {
+    const attachId = params.get('attach')
+    if (!attachId || !can.submit) return
+    const r = checklistRecords.find((x) => x.id === attachId)
+    if (r) {
+      const wi = leaves.find((l) => l.id === r.work_item_id || l.item_key === r.work_item_key)
+      setInspForm({
+        title: checklistTemplates.find((t) => t.id === r.template_id)?.title || '', location: r.location || '',
+        inspection_type: '施工查驗', requested_date: taipeiToday(),
+        work_item_key: wi?.item_key || '', work_item_label: wi ? `${wi.item_no} ${wi.description}` : '',
+        checklist_record_id: r.id,
+      })
+      setSegment('查驗')
+    }
+    setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('attach'); n.set('seg', SEG_KEY['查驗']); return n }, { replace: true, state: navState })
+  }, [params, checklistRecords]) // eslint-disable-line react-hooks/exhaustive-deps
   // 判定成功的原地回饋(沿用各區塊 savedMsg 模式,不進全域狀態):
   // 判不合格開的缺失在「缺失」分段,不給入口使用者會以為判定沒發生
   const [resultMsg, setResultMsg] = useState(null) // null | { pass: boolean }
@@ -248,7 +271,7 @@ export default function Quality() {
       <InspectionsSection key={queueTick} inspections={inspections} inspCount={inspCount} filter={inspFilter} onFilter={setInspFilter}
         form={inspForm} onFormChange={setInspForm} onSubmit={submitInsp} busy={busy}
         resultMsg={resultMsg} notice={inspNotice} onCloseNotice={() => setInspNotice('')} onShowDefects={() => changeSegment('缺失')}
-        leaves={leaves} attachableChecklists={attachableChecklists} templates={checklistTemplates}
+        leaves={leaves} attachableChecklists={attachableChecklists} templates={checklistTemplates} signedDocByRecord={signedDocByRecord}
         can={can} onResult={onResult} onDelete={onDeleteInsp} scope={paneScope} />
       )}
 
@@ -269,7 +292,7 @@ export default function Quality() {
           換案必須重置,不同專案不能沿用同一份未存檔資料(換案前由 Layout 的專案切換先問)。
           不套 queueTick:檢查表不在佇列裡,重掛只會破壞正在編輯的內容。 */}
       <div hidden={segment !== '檢查表'}>
-        <ChecklistSection key={paneScope} templates={checklistTemplates} records={checklistRecords} canEdit={can.edit} leaves={leaves}
+        <ChecklistSection key={paneScope} templates={checklistTemplates} records={checklistRecords} canEdit={can.edit} leaves={leaves} signedDocByRecord={signedDocByRecord}
           onCreate={createChecklistRecord} onDelete={deleteChecklistRecord} onDirtyChange={setChecklistDirty}
           inspections={inspections} onRequestInspection={can.submit ? requestInspectionFromChecklist : null} />
       </div>

@@ -8,7 +8,8 @@ import {
   emptyDailyLogContent, emptyDailyLogSources, contentFromLegacyLog, contentFromAgentDraft, contentToLogShape,
   setFieldValue, confirmField, setFieldNa, addItemRow, removeItemRow, applySuggestion, mergeAttachments, attachmentIssues,
   docStatusMeta, signIntentText, submissionRequestId, clearSubmissionRequestId, fieldDocErrorGuidance,
-  templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateFieldLabels, UNMET_STATUS_LABEL,
+  templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateFieldLabels, templateConfirmRequiredKeys, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys, UNMET_STATUS_LABEL,
+  emptySelfCheckContent, emptySelfCheckSources, selfCheckValues, setSelfCheckTemplate, checklistItemLabels,
   emptySupervisorLogContent, emptySupervisorLogSources, fillHumanField, attendanceIssues, formalDailyLogFromDetail, applyFormalDailyLog, refTitle,
   docPagePath, docPageLink, docToOrg,
 } from './fieldDocs.js'
@@ -236,7 +237,8 @@ describe('文件狀態、簽署意願、送件冪等、錯誤碼', () => {
     expect(docToOrg(sl({}))).toBe('owner')
     expect(docPagePath('daily_log')).toBe('/site-log')
     expect(docPagePath('supervisor_log')).toBe('/supervisor-log')
-    expect(docPagePath('self_check')).toBeNull()
+    expect(docPagePath('self_check')).toBe('/self-check')
+    expect(docPagePath('inspection_form')).toBeNull()
     expect(docPageLink({ doc_type: 'supervisor_log', id: 'D 1' })).toBe('/supervisor-log?doc=D%201')
     expect(docPageLink({ doc_type: 'inspection_form', id: 'X' })).toBeNull()
   })
@@ -381,5 +383,49 @@ describe('監造日誌:範本推導與到場確認閘門(鏡像 DB 範本與 nee
     expect(state.content.photo_ids).toEqual(['p1'])
     const m = attachmentIssues([{ key: 'attachments.p1', status: 'uploader_org:contractor' }])
     expect(m.get('p1')).toBe('施工廠商上傳的照片,只能以「參考」附上')
+  })
+})
+
+describe('自主檢查表(P3b):範本推導、內容形狀、逐項確認', () => {
+  const frame = demoFieldDocumentTemplate('self_check')
+  const tpl = { id: 'T1', title: '混凝土自主檢查表', source: '03310', items: [
+    { no: 'B1', item: '已通知監造', kind: 'bool', standard: '≥24 小時' },
+    { no: 'C2', item: '坍度', kind: 'num', min: 15.5, max: 20.5, unit: 'cm', standard: '18±2.5' },
+  ] }
+  it('必填=框架(檢查日期、範本)＋每個範本項目;人填欄=實測值;須確認=全部項目;項目鍵標籤', () => {
+    expect(docRequiredKeys('self_check', frame, tpl.items)).toEqual(['check_date', 'results.B1', 'results.C2', 'template_id'])
+    expect(docHumanOnlyKeys('self_check', frame, tpl.items)).toEqual(['results.C2'])
+    expect(docConfirmRequiredKeys('self_check', frame, tpl.items)).toEqual(['results.B1', 'results.C2'])
+    expect(checklistItemKeys(tpl.items, frame, 'human_only')).toEqual(['results.C2'])
+    expect(templateConfirmRequiredKeys(demoFieldDocumentTemplate('supervisor_log'))).toEqual(['attendance'])
+    expect(checklistItemLabels(tpl.items)).toEqual({ 'results.B1': 'B1 已通知監造', 'results.C2': 'C2 坍度' })
+    const c = emptySelfCheckContent('2026-09-17', frame, tpl, { workItemId: 'w1' })
+    expect(requiredKeysFor(c, ['results.Z9', 'note'], { docType: 'self_check', template: frame, checklistItems: tpl.items })).toEqual(['check_date', 'note', 'results.B1', 'results.C2', 'template_id'])
+    expect(fieldLabel('results.C2', c, checklistItemLabels(tpl.items))).toBe('C2 坍度')
+  })
+  it('新文件:框架欄人選=confirmed、位置沒填 pending、每項 pending;值改在 results[no].value;不適用清值;換範本重來', () => {
+    const c = emptySelfCheckContent('2026-09-17', frame, tpl, { workItemId: 'w1' })
+    expect(c).toMatchObject({ check_date: '2026-09-17', template_id: 'T1', template_title: tpl.title, work_item_id: 'w1', location: null, results: { B1: { value: null }, C2: { value: null } }, template: { key: 'self_check_demo', version: 1 } })
+    const s = emptySelfCheckSources(c, tpl)
+    expect(s).toMatchObject({ check_date: { status: 'confirmed' }, template_id: { status: 'confirmed' }, work_item_id: { status: 'confirmed' }, location: { status: 'pending' }, 'results.B1': { status: 'pending' }, 'results.C2': { status: 'pending' } })
+    let st = setFieldValue({ content: c, sources: s }, 'results.C2', 18)
+    expect(st.content.results.C2).toEqual({ value: 18 })
+    expect(st.sources['results.C2']).toEqual({ status: 'confirmed', source: 'human' })
+    expect(selfCheckValues(st.content)).toEqual({ B1: null, C2: 18 })
+    st = setFieldNa(st, 'results.C2', '本次未量測')
+    expect(st.content.results.C2).toEqual({ value: null })
+    expect(st.sources['results.C2']).toEqual({ status: 'na', source: null, reason: '本次未量測' })
+    const unmet = unmetFields(docRequiredKeys('self_check', frame, tpl.items), { ...st.sources, 'results.B1': { status: 'filled', source: 'legacy:x' } }, docConfirmRequiredKeys('self_check', frame, tpl.items))
+    expect(unmet).toEqual([{ key: 'results.B1', status: 'needs_confirmation' }])
+    const swapped = setSelfCheckTemplate(st, { id: 'T2', title: '另一張', source: null, items: [{ no: 'S1', item: '間距', kind: 'num' }] })
+    expect(swapped.content).toMatchObject({ template_id: 'T2', results: { S1: { value: null } } })
+    expect(Object.keys(swapped.sources).filter((k) => k.startsWith('results.'))).toEqual(['results.S1'])
+  })
+  it('AI 建議永不帶入檢查結果;來源短句', () => {
+    const c = emptySelfCheckContent('2026-09-17', frame, tpl)
+    const { state, applied } = applySuggestion({ content: c, sources: emptySelfCheckSources(c, tpl) }, { content: { location: 'A區1F', results: { C2: { value: 18 } } }, field_sources: { location: { status: 'filled', source: 'ai:photo' }, 'results.C2': { status: 'filled', source: 'ai:photo' } } })
+    expect(applied).toEqual(['location'])
+    expect(state.content.results.C2).toEqual({ value: null })
+    expect(sourceLabel('system:template_match')).toBe('依工項挑選範本')
   })
 })
