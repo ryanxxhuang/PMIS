@@ -94,6 +94,37 @@ test.describe('施工廠商', () => {
     await expect(page.getByRole('button', { name: /列印公定格式日誌/ })).toBeVisible()
   })
 
+  // P3b:自主檢查表是「文件」——新建(選本案範本)→ 填實測值即時判定預覽 → 存檔成版本並列待補;示範模式不假裝可簽署。
+  // 示範框架範本標示與免責聲明來自 fixture(對 migration 釘住);demo 種子的檢查表範本是 03310。
+  test('自主檢查表:新建 → 填實測值(判定預覽)→ 存檔成版本並列待補;示範框架範本標示、示範模式不假裝可簽署', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/self-check')
+    await expect(page.getByRole('heading', { level: 1, name: '自主檢查表' })).toBeVisible()
+    const card = page.getByRole('group', { name: '新自主檢查表', exact: true })
+    await expect(card.getByText('示範範本').first()).toBeVisible()
+    await expect(card.getByRole('note')).toContainText('非任何機關公定或法定格式')
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText('尚未建立（新自主檢查表）')
+    // demo 種子範本(03310)預設帶入,項目由範本帶出;填坍度 30 → 判定預覽不合格(超規);未填的項目仍待補
+    await expect(card.getByRole('combobox', { name: '檢查表範本' })).toHaveValue(/./)
+    await expect(card.getByRole('cell', { name: '坍度' })).toBeVisible()
+    await card.getByRole('spinbutton', { name: 'C2 坍度 實測值' }).fill('30')
+    await expect(card.getByText('判定預覽：不合格')).toBeVisible()
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText('未存檔')
+    await page.getByRole('button', { name: '存檔', exact: true }).click()
+    await expect(page.getByText(/已存檔 ✓ 版本 1，尚有 \d+ 項待補或待確認/)).toBeVisible()
+    await expect(page).toHaveURL(/#\/self-check\?doc=/)
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText(/已存檔.*版本 1/)
+    await expect(page.getByText(/待補 \d+ 項/).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0) // 待補未齊不給簽
+    await expect(page.getByText('示範模式：草稿只存在本次瀏覽')).toBeVisible()
+    // 右欄清單列出這份;/site 現場文書清單也可直達(不再標尚未支援)
+    await expect(page.getByRole('group', { name: /自主檢查表（1）/ })).toBeVisible()
+    await gotoHash(page, '/site')
+    const docCard = page.getByRole('group', { name: '現場文書' })
+    await expect(docCard.getByRole('link', { name: /自主檢查表/ })).toBeVisible()
+    await expect(docCard.getByText(/尚未支援/)).toHaveCount(0)
+  })
+
   test('品質:缺失改善鏈——切到缺失分段 → 開始改善 → 提送複查(W8-4A)', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/quality')

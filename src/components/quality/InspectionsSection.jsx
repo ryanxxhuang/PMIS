@@ -31,7 +31,7 @@ export const EMPTY_INSP_FORM = () => ({ title: '', location: '', inspection_type
 export default function InspectionsSection({
   inspections, inspCount, filter, onFilter,
   form, onFormChange, onSubmit, busy, resultMsg, notice = '', onCloseNotice = null, onShowDefects,
-  leaves, attachableChecklists, templates, can, onResult, onDelete, scope = '',
+  leaves, attachableChecklists, templates, can, onResult, onDelete, scope = '', signedDocByRecord = new Map(),
 }) {
   const navigate = useNavigate() // 詳情欄的「附自主檢查表」導向既有列印檢視
   const [q, setQ] = useState('')
@@ -114,13 +114,15 @@ export default function InspectionsSection({
             <span className="text-footnote font-medium text-[var(--text)]">第一級自主檢查</span>
           </div>
           {i.checklist_record_id ? (() => {
-            // 監造看到的摘要也要有覆蓋程度(W03):現行版紀錄在 attachableChecklists 找得到;舊版就只給連結
+            // 監造看到的摘要也要有覆蓋程度(W03):現行版紀錄在 attachableChecklists 找得到;舊版就只給連結。
+            // 簽署文件(P3b)落下的紀錄下鑽到文件列印版(印簽署版本、雜湊與簽署者),直接登錄的走既有列印檢視
             const rec = attachableChecklists.find((r) => r.id === i.checklist_record_id)
             const cov = rec ? checklistCoverage(templates.find((t) => t.id === rec.template_id), rec.results) : null
+            const signedDoc = signedDocByRecord.get(i.checklist_record_id)
             return (
               <div className="flex items-center gap-2 flex-wrap">
-                <Button variant="secondary" size="sm" onClick={() => navigate(`/quality/checklist-print?id=${i.checklist_record_id}`)}
-                  title="檢視檢附的自主檢查表">附自主檢查表</Button>
+                <Button variant="secondary" size="sm" onClick={() => navigate(signedDoc ? `/self-check/print?doc=${encodeURIComponent(signedDoc.id)}` : `/quality/checklist-print?id=${i.checklist_record_id}`)}
+                  title="檢視檢附的自主檢查表">附自主檢查表{signedDoc ? `（已簽署 v${signedDoc.current_version_no}）` : ''}</Button>
                 {rec && <span className={`text-footnote ${cov.unchecked ? 'text-[var(--amber-text)]' : 'text-[var(--text-2)]'}`}>{rec.overall || '未判定'}（{coverageText(cov)}）</span>}
               </div>
             )
@@ -246,7 +248,7 @@ export default function InspectionsSection({
                 <option value="">不檢附</option>
                 {attachableChecklists.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.check_date} {templates.find((t) => t.id === r.template_id)?.title || '自主檢查表'}{r.rev ? ` Rev.${r.rev}` : ''}{r.location ? `（${r.location}）` : ''} — {r.overall}（{coverageText(checklistCoverage(templates.find((t) => t.id === r.template_id), r.results))}）
+                    {r.check_date} {templates.find((t) => t.id === r.template_id)?.title || '自主檢查表'}{r.rev ? ` Rev.${r.rev}` : ''}{r.location ? `（${r.location}）` : ''} — {r.overall}（{coverageText(checklistCoverage(templates.find((t) => t.id === r.template_id), r.results))}）{signedDocByRecord.has(r.id) ? `・已簽署文件 v${signedDocByRecord.get(r.id).current_version_no}` : ''}
                   </option>
                 ))}
               </>)}

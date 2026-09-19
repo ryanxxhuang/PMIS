@@ -6,14 +6,17 @@
 import { describe, it, expect } from 'vitest'
 import { runDraftFieldDocuments, MAX_ATTEMPTS } from './fieldDocDraftRun.ts'
 import type { DraftRepo, DraftVision, IntakePhotoRow, IntakeRow, PhotoAiPatch, VisionResult } from './fieldDocDraftRun.ts'
-import type { DayDefect, DayInspection, FormalDailyLog, LeafWorkItem } from './fieldDocDraft.ts'
+import type { ChecklistTemplateRow, DayDefect, DayInspection, FormalDailyLog, LeafWorkItem } from './fieldDocDraft.ts'
+import type { FieldDocTemplate } from './fieldDocTemplate.ts'
+// 範本單一定義在 DB;記憶體 repo 以示範模式 fixture(對 migration 原文釘住)代替執行期取回
+import { demoFieldDocumentTemplate } from '../../../src/data/demoFieldDocTemplates.js'
 
 const LEAVES: LeafWorkItem[] = [
   { id: 'wi-steel', item_key: 'K1', item_no: '壹.一.1', description: '鋼筋,SD420W,#4(D13),加工及組立', unit: 'T', sort_order: 1 },
   { id: 'wi-form', item_key: 'K2', item_no: '壹.一.2', description: '模板,普通模板,樓版,含支撐', unit: 'M2', sort_order: 2 },
 ]
 
-type Doc = { id: string; doc_type: string; doc_date: string; intake_id: string | null; target_key: string | null; status: string; current_version_no: number; required_fields: unknown; recheck: unknown }
+type Doc = { id: string; doc_type: string; doc_date: string; intake_id: string | null; target_key: string | null; status: string; current_version_no: number; required_fields: unknown; recheck: unknown; template_id?: string | null }
 type Ver = { document_id: string; version_no: number; author_kind: 'ai' | 'human'; content: unknown; attachments: unknown; field_sources: unknown; content_hash: string }
 
 type World = {
@@ -34,8 +37,16 @@ type World = {
   defects?: DayDefect[]
   dailyLogDoc?: FormalDailyLog | null
   failInspections?: string
+  // 自檢表(P3b):本案檢查表範本;範本讀取失敗模擬
+  checklistTemplates?: ChecklistTemplateRow[]
+  failChecklistTemplates?: string
+  failTemplate?: string
   seq: number
 }
+const T_CONC: ChecklistTemplateRow = { id: 'tpl-conc', title: '場鑄結構用混凝土 自主檢查表', source: '03310', items: [
+  { no: 'B1', item: '澆置 24 小時前已通知監造', kind: 'bool' },
+  { no: 'C2', item: '坍度', kind: 'num', min: 15.5, max: 20.5, unit: 'cm' },
+] }
 
 const intake = (over: Partial<IntakeRow> = {}): IntakeRow => ({
   id: 'i1', project_id: 'prj', uploader_org: 'contractor', log_date: null, status: 'received', attempts: 0,
@@ -82,12 +93,19 @@ function memoryRepo(w: World): DraftRepo {
     listInspectionsOn: async () => (w.failInspections ? { error: w.failInspections } : (w.inspections ?? [])),
     listDefectsForDay: async () => w.defects ?? [],
     getDailyLogDocument: async () => w.dailyLogDoc ?? null,
-    findActiveDoc: async (t, d) => {
-      const doc = w.docs.find((x) => x.doc_type === t && x.doc_date === d && !['discarded', 'superseded'].includes(x.status))
+    getFieldDocumentTemplate: async (t) => (w.failTemplate ? { error: w.failTemplate } : (demoFieldDocumentTemplate(t) as FieldDocTemplate | null)),
+    listChecklistTemplates: async () => (w.failChecklistTemplates ? { error: w.failChecklistTemplates } : (w.checklistTemplates ?? [])),
+    // 活文件定位:日誌類=該日;自檢表=批次＋target_key(模擬 DB 兩個部分唯一索引)
+    findActiveDoc: async (t, loc) => {
+      const doc = w.docs.find((x) => x.doc_type === t && !['discarded', 'superseded'].includes(x.status)
+        && ('docDate' in loc ? x.doc_date === loc.docDate : (x.intake_id === loc.intakeId && x.target_key === loc.targetKey)))
       return doc ? { id: doc.id, status: doc.status, current_version_no: doc.current_version_no, intake_id: doc.intake_id } : null
     },
     insertDoc: async (row) => {
-      if (w.docs.some((x) => x.doc_type === row.doc_type && x.doc_date === row.doc_date && !['discarded', 'superseded'].includes(x.status))) return { conflict: true }
+      const dup = row.doc_type === 'self_check'
+        ? w.docs.some((x) => x.doc_type === row.doc_type && x.intake_id === row.intake_id && x.target_key === row.target_key && !['discarded', 'superseded'].includes(x.status))
+        : w.docs.some((x) => x.doc_type === row.doc_type && x.doc_date === row.doc_date && !['discarded', 'superseded'].includes(x.status))
+      if (dup) return { conflict: true }
       const doc: Doc = { id: `doc${++w.seq}`, ...row, current_version_no: 0 }
       w.docs.push(doc)
       return { id: doc.id, status: doc.status, current_version_no: 0, intake_id: doc.intake_id }
@@ -158,11 +176,12 @@ describe('角色隔離', () => {
 })
 
 describe('廠商批次起施工日誌', () => {
-  it('建立文件＋AI 版本 1＋agent_actions;照片補說明與工項;批次 ready 並推得 log_date', async () => {
+  it('建立文件＋AI 版本 1＋agent_actions;照片補說明與工項;批次 ready 並推得 log_date;沒有檢查表範本時自檢表候選 blocked 不建件', async () => {
     const w = world({ photos: [photo('p1'), photo('p2', { caption: '人填的說明' })] })
     const r = await run(w)
     expect(r.status).toBe(200)
     expect(w.docs).toHaveLength(1)
+    expect((r.body.intake as { candidates: { doc_type: string; state: string; blocked_by?: string[] }[] }).candidates.find((c) => c.doc_type === 'self_check')).toMatchObject({ state: 'blocked', blocked_by: ['checklist_template'] })
     expect(w.docs[0]).toMatchObject({ doc_type: 'daily_log', doc_date: '2026-09-17', intake_id: 'i1', target_key: '2026-09-17', status: 'pending_input', current_version_no: 1 })
     expect(w.versions).toHaveLength(1)
     expect(w.versions[0]).toMatchObject({ author_kind: 'ai', version_no: 1 })
@@ -499,5 +518,72 @@ describe('逐功能閘門 fail-closed', () => {
     expect(w.versions).toHaveLength(1)
     expect((w.versions[0].content as { items: Record<string, { qty_today: null }> }).items['wi-steel'].qty_today).toBeNull()
     expect(r.body.notes).toEqual(expect.arrayContaining([expect.stringContaining('告示板辨識功能未啟用')]))
+  })
+})
+
+describe('廠商批次起自主檢查表(P3b;與日誌類同一段寫入邏輯,定位鍵=批次＋工項＋日期)', () => {
+  const scWorld = (over: Partial<World> = {}) => world({ photos: [photo('p1'), photo('p2')], checklistTemplates: [T_CONC], ...over })
+
+  it('每個配到工項×日期一份:建立文件(帶範本)＋AI 版本 1 全部項目 pending、實測值不帶值;施工日誌照常;範本取自 DB 而非鏡像', async () => {
+    const w = scWorld()
+    const r = await run(w)
+    expect(r.status).toBe(200)
+    expect(w.docs.map((d) => [d.doc_type, d.target_key, d.template_id ?? null])).toEqual([['daily_log', '2026-09-17', null], ['self_check', '2026-09-17:wi-steel', 'tpl-conc']])
+    const scDoc = w.docs.find((d) => d.doc_type === 'self_check')!
+    const sc = w.versions.find((v) => v.document_id === scDoc.id)!
+    const content = sc.content as Record<string, unknown>
+    expect(content).toMatchObject({ template_id: 'tpl-conc', work_item_id: 'wi-steel', check_date: '2026-09-17', template: { key: 'self_check_demo', version: 1 } })
+    expect(content.results).toEqual({ B1: { value: null }, C2: { value: null } })
+    const fs = sc.field_sources as Record<string, { status: string }>
+    expect(fs['results.B1'].status).toBe('pending')
+    expect(fs['results.C2'].status).toBe('pending')
+    expect((sc.attachments as { photo_id: string }[]).map((a) => a.photo_id)).toEqual(['p1', 'p2'])
+    expect(scDoc).toMatchObject({ status: 'pending_input', required_fields: ['check_date', 'results.B1', 'results.C2', 'template_id'] })
+    expect(w.actions.filter((a) => a.target_id === scDoc.id)[0]).toMatchObject({ kind: 'draft_field_document', agent_role: 'contractor', evidence: { doc_type: 'self_check', version_no: 1 } })
+    const body = r.body as { documents: Record<string, unknown>[]; intake: { candidates: { doc_type: string; state: string; document_id: string | null }[] } }
+    expect(body.documents.map((d) => [d.doc_type, d.action])).toEqual([['daily_log', 'created'], ['self_check', 'created']])
+    expect(body.intake.candidates.find((c) => c.doc_type === 'self_check')).toMatchObject({ state: 'drafted', document_id: scDoc.id })
+    // 監造日誌／施工日誌的範本鍵同樣來自 DB fixture(不再有 Edge 鏡像常數)
+    expect((w.versions[0].content as { template?: unknown }).template).toBeUndefined() // 施工日誌是公定格式,沒有範本
+  })
+
+  it('冪等:重跑內容相同 unchanged(以批次＋工項＋日期定位,不會誤認同日的施工日誌);已有人工版本只留建議;已簽署 locked', async () => {
+    const w = scWorld()
+    await run(w)
+    const r2 = await run(w)
+    expect(w.versions).toHaveLength(2)
+    expect((r2.body.documents as { doc_type: string; action: string }[]).map((d) => [d.doc_type, d.action])).toEqual([['daily_log', 'unchanged'], ['self_check', 'unchanged']])
+
+    const scDoc = w.docs.find((d) => d.doc_type === 'self_check')!
+    w.versions.push({ document_id: scDoc.id, version_no: 2, author_kind: 'human', content: { results: { C2: { value: 18 } } }, attachments: [], field_sources: {}, content_hash: 'h2' })
+    scDoc.current_version_no = 2
+    w.photos.push(photo('p3'))
+    const r3 = await run(w)
+    expect((r3.body.documents as { doc_type: string; action: string }[]).find((d) => d.doc_type === 'self_check')?.action).toBe('suggested')
+    expect((w.actions.at(-1) as { kind: string; summary: string }).summary).toContain('自主檢查表')
+
+    const locked = scWorld({ docs: [{ id: 'docL', doc_type: 'self_check', doc_date: '2026-09-17', intake_id: 'i1', target_key: '2026-09-17:wi-steel', status: 'signed', current_version_no: 1, required_fields: [], recheck: [] }] })
+    const r4 = await run(locked)
+    expect((r4.body.documents as { doc_type: string; action: string; reason: string }[]).find((d) => d.doc_type === 'self_check')).toMatchObject({ action: 'locked', reason: expect.stringContaining('自主檢查表') })
+    expect(locked.versions.filter((v) => v.document_id === 'docL')).toEqual([])
+  })
+
+  it('範本讀取失敗:DB 範本讀不到 → 該份 error、不建半份文件(監造日誌同一條路);檢查表範本讀不到 → 不推自檢表並揭露', async () => {
+    const w = scWorld({ failTemplate: '資料存取失敗（代碼 db_error）' })
+    const r = await run(w)
+    expect((r.body.documents as { doc_type: string; action: string; reason: string }[]).find((d) => d.doc_type === 'self_check')).toMatchObject({ action: 'error', reason: '資料存取失敗（代碼 db_error）' })
+    expect(w.docs.map((d) => d.doc_type)).toEqual(['daily_log'])
+    expect((r.body.intake as Record<string, unknown>).status).toBe('partial')
+
+    const w2 = scWorld({ failChecklistTemplates: '資料存取失敗（代碼 db_error）' })
+    const r2 = await run(w2)
+    expect(w2.docs.map((d) => d.doc_type)).toEqual(['daily_log'])
+    expect((r2.body.intake as { candidates: { doc_type: string }[] }).candidates.some((c) => c.doc_type === 'self_check')).toBe(false)
+    expect((r2.body.notes as string[]).some((n) => n.includes('檢查表範本讀取失敗'))).toBe(true)
+
+    const w3 = world({ callerOrg: 'supervisor', intake: intake({ uploader_org: 'supervisor' }), photos: [photo('s1')], failTemplate: '資料存取失敗（代碼 db_error）' })
+    const r3 = await run(w3)
+    expect((r3.body.documents as { action: string }[])[0].action).toBe('error')
+    expect(w3.versions).toEqual([])
   })
 })

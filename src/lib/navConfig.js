@@ -30,10 +30,13 @@ export const navGroups = [
     // 子頁是既有的日誌/品質/停留點/工安——業務規則與權限一條不動。
     // 監造日誌(P3a):每日一份的監造文件——監造填寫簽署、專案成員可讀(Q4 暫行)、提送機關;不限角色,
     // 頁內依 org 決定可編／唯讀／收件(伺服器 RLS／RPC 才是邊界)。
+    // 自主檢查表(P3b):廠商的自檢文件——照片起稿、實測值人填、簽署即寫 checklist_records、提送監造;不限角色,
+    // 頁內依 org 決定可編／唯讀／收件;既有 /quality 檢查表分段仍列直接寫入的紀錄與簽署落下的紀錄。
     { to: '/site', icon: 'engineering', label: '現場紀錄', short: '現場', tabs: [
       { to: '/site', label: '現場總覽' },
       { to: '/site-log', label: '施工日誌' },
       { to: '/supervisor-log', label: '監造日誌' },
+      { to: '/self-check', label: '自主檢查表' },
       { to: '/quality', label: '品質查驗' },
       { to: '/itp', label: '檢驗停留點' },
       { to: '/safety', label: '工安管理' },
@@ -118,6 +121,7 @@ export const WORK_GUIDANCE = {
   '/site': { contractor: '從這裡進入日誌、自主檢查、查驗申請與工安紀錄；件數只計本案尚未處理的事項。', supervisor: '從這裡進入待判定查驗、缺失複查與監造紀錄；件數只計本案尚未處理的事項。', owner: '查閱本案現場紀錄、查驗結果與缺失改善情形；件數只計本案尚未結案的事項。' },
   '/site-log': { contractor: '填寫日期、施作數量與照片，儲存後可供估驗帶入數量。', supervisor: '查閱廠商日誌與現場佐證，需要查驗時前往品質查驗。', owner: '查閱每日施工紀錄與照片，掌握現場執行情形。' },
   '/quality': { contractor: '完成自主檢查後申請查驗；收到缺失時改善，再提送監造複查。', supervisor: '選擇待查驗項目記錄判定；不合格開立缺失，改善後複查結案。', owner: '查閱查驗結果與缺失改善紀錄，追蹤尚未結案的事項。' },
+  '/self-check': { contractor: '審核系統擬好的自主檢查表草稿、親自填實測值與勾選，簽署後可隨查驗申請檢附。', supervisor: '查閱廠商自主檢查表與修訂版；提送後在此收件或退回。', owner: '查閱廠商自主檢查紀錄。' },
   '/submittals': { contractor: '新增提送文件交監造審查；退回時依審查意見補正後重新提送。', supervisor: '選擇已提送文件，檢視附件後審定或退回補正。', owner: '查閱文件提送與監造審定結果，追蹤待辦進度。' },
   // 廠商在同一筆疑義上沒有「追問」動作(詳情只有確認結案;補充回覆是監造的),提示不描述不存在的動作
   '/rfi': { contractor: '提出工程疑義交監造回覆；確認答覆無誤後結案，仍有疑問請另提一筆疑義。', supervisor: '檢視疑義及相關資料，回覆後交廠商確認結案。', owner: '查閱工程疑義及往返答覆，掌握未解決問題。' },
@@ -166,6 +170,8 @@ const nonNavRouteRules = {
   '/site-log/print': { access: 'authenticated', surface: 'print' },
   // 監造日誌列印(P3a):印「已簽署版本」的內容、版本號與雜湊,標示範範本;未簽署只印草稿並明寫
   '/supervisor-log/print': { access: 'authenticated', surface: 'print' },
+  // 自主檢查表列印(P3b):同上,印簽署版本(項目判定由 DB 算)、示範框架範本標示
+  '/self-check/print': { access: 'authenticated', surface: 'print' },
   '/valuation/print': { access: 'authenticated', surface: 'print' },
   '/valuation/package': { access: 'authenticated', surface: 'print' },
   '/quality/checklist-print': { access: 'authenticated', surface: 'print' },

@@ -22,6 +22,8 @@ const Members = lazy(() => import('./pages/web/Members.jsx'))
 const SiteLogPrint = lazy(() => import('./pages/web/SiteLogPrint.jsx'))
 const SupervisorLog = lazy(() => import('./pages/web/SupervisorLog.jsx'))
 const SupervisorLogPrint = lazy(() => import('./pages/web/SupervisorLogPrint.jsx'))
+const SelfCheck = lazy(() => import('./pages/web/SelfCheck.jsx'))
+const SelfCheckPrint = lazy(() => import('./pages/web/SelfCheckPrint.jsx'))
 const ChecklistPrint = lazy(() => import('./pages/web/ChecklistPrint.jsx'))
 const ObligationsPrint = lazy(() => import('./pages/web/ObligationsPrint.jsx'))
 const Valuation = lazy(() => import('./pages/web/Valuation.jsx'))
@@ -154,6 +156,9 @@ const appRoutes = [
   // 監造日誌(P3a;D-026 四類文書之二):每日一份文件,監造審核／簽署／提送機關;機關收件／退回
   { path: '/supervisor-log', element: <SupervisorLog /> },
   { path: '/supervisor-log/print', element: <SupervisorLogPrint /> },
+  // 自主檢查表(P3b;D-026 四類文書之三):廠商審核／填實測值／簽署(寫 checklist_records)／提送監造;監造收件／退回
+  { path: '/self-check', element: <SelfCheck /> },
+  { path: '/self-check/print', element: <SelfCheckPrint /> },
   { path: '/valuation', element: <Valuation /> },
   { path: '/valuation/print', element: <ValuationPrint /> },
   { path: '/valuation/package', element: <ValuationPackage /> },

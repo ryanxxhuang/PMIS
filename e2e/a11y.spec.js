@@ -20,6 +20,7 @@ const H1 = {
   '/site': '現場紀錄',
   '/site-log': '施工日誌',
   '/supervisor-log': '監造日誌',
+  '/self-check': '自主檢查表',
   '/quality': '品質查驗',
   '/itp': '檢驗停留點',
   '/safety': '工安管理',

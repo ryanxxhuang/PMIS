@@ -5,7 +5,7 @@
 -- daily_log 分支與 daily_logs guard 的回歸在 field_document_sign.sql(同一套 RPC、同一支通用 guard)。
 begin;
 
-select plan(127);
+select plan(129);
 
 create or replace function pg_temp.become(u uuid, aal text default null) returns void language plpgsql as $$
 begin
@@ -58,8 +58,10 @@ select has_trigger('public', 'supervisor_logs', 'supervisor_logs_guard', 'superv
 select has_trigger('public', 'daily_logs', 'daily_logs_guard', 'daily_logs guard 仍掛著(改呼叫通用實作)');
 select has_trigger('public', 'daily_log_items', 'daily_log_items_guard', 'daily_log_items guard 仍掛著');
 select has_function('public', 'fn_field_document_template', array['text'], '範本函式存在');
-select has_function('public', 'fn_field_document_human_only_keys', array['text'], '人填欄推導函式存在');
-select has_function('public', 'fn_field_document_unmet_fields', array['text','jsonb','jsonb'], '待補判定改為帶 doc_type');
+select has_function('public', 'fn_field_document_human_only_keys', array['text','jsonb'], '人填欄推導函式存在(P3b 起帶 content)');
+select hasnt_function('public', 'fn_field_document_human_only_keys', array['text'], 'P3a 單參數人填欄推導已移除(只有一份實作)');
+select has_function('public', 'fn_field_document_unmet_fields', array['text','jsonb','jsonb','jsonb'], '待補判定帶 doc_type 與 content(P3b)');
+select hasnt_function('public', 'fn_field_document_unmet_fields', array['text','jsonb','jsonb'], 'P3a 三參數待補判定已移除(只有一份實作)');
 select hasnt_function('public', 'fn_field_document_unmet_fields', array['jsonb','jsonb'], '舊二參數待補判定已移除(只有一份實作)');
 select has_function('public', 'fn_field_document_fact_guard', array['text','text','uuid','uuid','date','uuid','uuid','date'], '通用事實表 guard 規則存在');
 select has_function('public', 'fn_field_document_target_signed', array['text','uuid'], '通用「已簽署」判定存在');
@@ -76,7 +78,7 @@ select is(has_table_privilege('authenticated', 'public.supervisor_logs', 'DELETE
 select is(has_table_privilege('anon', 'public.supervisor_logs', 'SELECT'), false, 'anon 不可讀');
 select is(has_function_privilege('authenticated', 'public.fn_field_document_template(text)', 'execute'), true, 'authenticated 可取範本(介面／列印標示示範範本)');
 select is(has_function_privilege('anon', 'public.fn_field_document_template(text)', 'execute'), false, 'anon 不可取範本');
-select is(has_function_privilege('authenticated', 'public.fn_field_document_human_only_keys(text)', 'execute'), false, '人填欄推導不開給 authenticated');
+select is(has_function_privilege('authenticated', 'public.fn_field_document_human_only_keys(text,jsonb)', 'execute'), false, '人填欄推導不開給 authenticated');
 select is(has_function_privilege('authenticated', 'public.field_document_sign_supervisor_log_internal(field_documents,field_document_versions,uuid)', 'execute'), false, '簽署分支內部函式不開給 authenticated');
 select is(has_function_privilege('authenticated', 'public.field_document_sign_daily_log_internal(field_documents,field_document_versions,uuid)', 'execute'), false, 'daily_log 分支內部函式不開給 authenticated');
 select is(has_function_privilege('authenticated', 'public.fn_field_document_fact_guard(text,text,uuid,uuid,date,uuid,uuid,date)', 'execute'), false, '通用 guard 規則不開給 authenticated');
@@ -89,8 +91,8 @@ select ok((select t ->> 'disclaimer' from public.fn_field_document_template('sup
   '範本附免責聲明:非機關公定或法定格式');
 select is((select jsonb_array_length(t -> 'sections') from public.fn_field_document_template('supervisor_log') t), 8, '範本八節');
 select is(public.fn_field_document_template('daily_log'), null, '施工日誌無範本(公定格式,固定欄在必填函式)');
-select is(public.fn_field_document_human_only_keys('supervisor_log'), array['attendance'], '監造日誌人填欄=到場人員');
-select is(public.fn_field_document_human_only_keys('daily_log'), '{}'::text[], '施工日誌無人填欄');
+select is(public.fn_field_document_human_only_keys('supervisor_log', null), array['attendance'], '監造日誌人填欄=到場人員');
+select is(public.fn_field_document_human_only_keys('daily_log', null), '{}'::text[], '施工日誌無人填欄');
 select is(public.fn_field_document_required_fields('supervisor_log', '{}'::jsonb, '[]'::jsonb),
   '["attendance","contractor_summary","log_date","supervision_items","weather_am","weather_pm"]'::jsonb,
   '監造日誌必填鍵由範本 required 推導(排序)');
@@ -101,14 +103,14 @@ select is(public.fn_field_document_required_fields('daily_log', '{"items":{"e300
   '["equipment","items.e3000000-0000-0000-0000-000000000001.qty_today","labor","materials","weather_am","weather_pm","work_summary"]'::jsonb,
   '施工日誌必填鍵不變(回歸)');
 select is(public.fn_field_document_unmet_fields('supervisor_log', '["attendance","weather_am"]'::jsonb,
-    '{"attendance":{"status":"filled","source":"ai:photo"},"weather_am":{"status":"filled","source":"cwa"}}'::jsonb),
+    '{"attendance":{"status":"filled","source":"ai:photo"},"weather_am":{"status":"filled","source":"cwa"}}'::jsonb, null),
   '[{"key":"attendance","status":"needs_confirmation"}]'::jsonb,
   '人填欄標 filled 仍待確認(needs_confirmation);一般欄 filled 可簽');
-select is(public.fn_field_document_unmet_fields('supervisor_log', '["attendance"]'::jsonb, '{"attendance":{"status":"confirmed"}}'::jsonb),
+select is(public.fn_field_document_unmet_fields('supervisor_log', '["attendance"]'::jsonb, '{"attendance":{"status":"confirmed"}}'::jsonb, null),
   '[]'::jsonb, '人填欄 confirmed 齊備');
-select is(public.fn_field_document_unmet_fields('supervisor_log', '["attendance"]'::jsonb, '{"attendance":{"status":"na","reason":"本日未到場"}}'::jsonb),
+select is(public.fn_field_document_unmet_fields('supervisor_log', '["attendance"]'::jsonb, '{"attendance":{"status":"na","reason":"本日未到場"}}'::jsonb, null),
   '[]'::jsonb, '人填欄 na＋reason 齊備(人宣告的不適用)');
-select is(public.fn_field_document_unmet_fields('daily_log', '["attendance"]'::jsonb, '{"attendance":{"status":"filled"}}'::jsonb),
+select is(public.fn_field_document_unmet_fields('daily_log', '["attendance"]'::jsonb, '{"attendance":{"status":"filled"}}'::jsonb, null),
   '[]'::jsonb, '施工日誌沒有人填欄:filled 照舊可簽(回歸)');
 
 -- ── 3. fixtures:A 案三方(監造兩人)＋B 案外人＋C 案非正式(廠商 admin) ─────────────────

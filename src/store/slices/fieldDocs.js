@@ -1,8 +1,9 @@
-// Field-docs slice(P2c 施工日誌、P3a 監造日誌;D-026):上傳批次(photo_intakes／photos)、起稿 Edge、
+// Field-docs slice(P2c 施工日誌、P3a 監造日誌、P3b 自主檢查表;D-026):上傳批次(photo_intakes／photos)、起稿 Edge、
 // 現場文書(field_documents 家族)的載入與五支 RPC。這是施工日誌與監造日誌**唯一**的寫入路徑——
 // 事實表 daily_logs／daily_log_items／supervisor_logs 只由 sign_field_document 在簽署交易內落庫,前端不再直接
-// upsert(舊 saveSiteLog 已移除;既有未簽署日誌開啟時以其內容建立文件草稿,見 lib/fieldDocs.js)。
-// 文書範本(監造日誌的示範範本)由 fn_field_document_template 取,示範模式讀 src/data 的 fixture。
+// upsert(舊 saveSiteLog 已移除;既有未簽署日誌開啟時以其內容建立文件草稿,見 lib/fieldDocs.js)。自主檢查表文件簽署即寫
+// checklist_records(首簽 Rev.0、再簽修訂 Rev.N,判定由 DB 算),簽署後重載檢查紀錄與缺失(不合格由 DB trigger 自動開)。
+// 文書範本(監造日誌示範範本、自檢表示範框架)由 fn_field_document_template 取,示範模式讀 src/data 的 fixture。
 //
 // 寫入邊界(設計 field-documents-lifecycle §2.2):
 //   * 客戶端直接 INSERT 只有三處:photo_intakes(id/project_id/log_date)、photos(既有欄＋intake_id／
@@ -14,14 +15,14 @@
 // 無法…」,不假裝已簽署(不會有雜湊、簽署者與伺服器時間可核對)。
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { supabase, SIGNED_URL_TTL_S } from '../../lib/supabase.js'
-import { loadSiteLogsFromDB, loadFieldDocumentsFromDB, FIELD_DOCUMENT_COLUMNS, FIELD_DOCUMENT_SUBMISSION_COLUMNS } from '../db.js'
+import { loadSiteLogsFromDB, loadFieldDocumentsFromDB, loadQcFromDB, loadDefectsFromDB, FIELD_DOCUMENT_COLUMNS, FIELD_DOCUMENT_SUBMISSION_COLUMNS } from '../db.js'
 import { pageAll, pageAllInSafe, chunked } from '../../lib/pagedQuery.js'
 import { compressImage } from '../../lib/imageCompress.js'
 import { readPhotoExif } from '../../lib/exifRead.js'
 import { extractInvokeError } from './agent.js'
 import {
   requiredKeysFor, unmetFields, sha256Hex, submissionRequestId, clearSubmissionRequestId,
-  contentFromAgentDraft, TO_ORG_BY_DOC_TYPE, templateHumanOnlyKeys,
+  contentFromAgentDraft, TO_ORG_BY_DOC_TYPE, docConfirmRequiredKeys,
 } from '../../lib/fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../../data/demoFieldDocTemplates.js'
 
@@ -54,7 +55,8 @@ async function withSignedUrls(rows) {
 // RPC 錯誤原樣帶 code／details／hint 回呼叫端(lib/fieldDocs.fieldDocErrorGuidance 分流)
 const rpcError = (error) => ({ code: error?.code || null, message: error?.message || '操作未完成', details: error?.details || null, hint: error?.hint || null })
 
-export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, currentProject, currentUser, wiMaps }, { setSiteLogs } = {}) {
+// setChecklistRecords／setDefects／checklistTemplates(quality slice):自檢表簽署後重載檢查紀錄與缺失;示範模式存版時由範本項目算待補
+export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, currentProject, currentUser, wiMaps }, { setSiteLogs, setChecklistRecords, setDefects, checklistTemplates = [] } = {}) {
   // { documents, submissions }:與 P5a 今日工作球權(useTodayTasks)同一份;documents 只含未終態
   const [docState, setDocState] = useState({ documents: [], submissions: [] })
   const setFieldDocuments = useCallback((fn) => setDocState((st) => ({ ...st, documents: typeof fn === 'function' ? fn(st.documents) : fn })), [])
@@ -270,22 +272,22 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
   [allDocuments])
   const findActiveDailyLogDoc = useCallback((date) => findActiveFieldDoc('daily_log', date), [findActiveFieldDoc])
 
-  // 建草稿(客戶端 INSERT 六欄之內;intake_id 不填——起稿冪等鍵由 Edge 寫,客戶端寫不出 target_key)。
+  // 建草稿(客戶端 INSERT 六欄之內;intake_id 不填——起稿冪等鍵由 Edge 寫,客戶端寫不出 target_key;自檢表帶 template_id=本案檢查表範本)。
   // 責任方由 DB generated column 決定(監造建施工日誌、廠商建監造日誌會被 RLS 擋);
-  // 同日活文件撞唯一索引(23505)→ 重載後改用既有文件,不重複建件。
-  const createFieldDocDraft = useCallback(async (docType, date) => {
+  // 同日活文件撞唯一索引(23505,日誌類)→ 重載後改用既有文件,不重複建件。
+  const createFieldDocDraft = useCallback(async (docType, date, { templateId = null } = {}) => {
     if (demoMode) {
       const id = `FD-DEMO-${Object.keys(demoDocsRef.current).length + 1}-${Date.now().toString(36)}`
       const meta = DOC_TYPE_META[docType] || DOC_TYPE_META.daily_log
-      const doc = { id, project_id: pid || 'demo', doc_type: docType, owner_org: meta.owner_org, target_table: meta.target_table, target_id: null, target_key: null, intake_id: null, doc_date: date, status: 'draft', current_version_no: 0, required_fields: [], recheck: [], created_by: uid || null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+      const doc = { id, project_id: pid || 'demo', doc_type: docType, owner_org: meta.owner_org, target_table: meta.target_table, target_id: null, target_key: null, intake_id: null, doc_date: date, status: 'draft', current_version_no: 0, template_id: templateId, required_fields: [], recheck: [], created_by: uid || null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
       setDemoDocs((m) => ({ ...m, [id]: { doc, versions: [] } }))
       return { error: null, doc }
     }
     if (!isPersistedProject) return { error: DEMO_UPLOAD_ERROR }
     const id = crypto.randomUUID()
-    const { data, error } = await supabase.from('field_documents').insert({ id, project_id: pid, doc_type: docType, doc_date: date }).select(DOC_COLS).single()
+    const { data, error } = await supabase.from('field_documents').insert({ id, project_id: pid, doc_type: docType, doc_date: date, ...(templateId ? { template_id: templateId } : {}) }).select(DOC_COLS).single()
     if (error) {
-      if (error.code === '23505') {
+      if (error.code === '23505' && docType !== 'self_check') {
         const { data: existing } = await supabase.from('field_documents').select(DOC_COLS).eq('project_id', pid).eq('doc_type', docType).eq('doc_date', date)
           .not('status', 'in', '("discarded","superseded")').maybeSingle()
         if (existing) { reloadFieldDocs(); return { error: null, doc: existing } }
@@ -313,14 +315,15 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
       if (baseVersionNo !== d.doc.current_version_no) return { error: { code: 'PD001', message: `畫面載入的是版本 ${baseVersionNo},目前版本已是 ${d.doc.current_version_no},請重新載入後再編輯` } }
       if (['received', 'discarded', 'superseded'].includes(d.doc.status)) return { error: { code: 'PD008', message: `文件狀態為 ${d.doc.status},不可再新增版本` } }
       const versionNo = d.doc.current_version_no + 1
-      // 必填鍵與待補鏡像 DB:依類型取範本(示範模式讀 fixture),人填欄只被標 filled 算待確認
+      // 必填鍵與待補鏡像 DB:依類型取範本(示範模式讀 fixture;自檢表另取內容指定的本案檢查表範本項目),須確認欄只被標 filled 算待確認
       const template = demoFieldDocumentTemplate(d.doc.doc_type)
-      const required = requiredKeysFor(content, d.doc.required_fields, { docType: d.doc.doc_type, template })
-      const recheck = unmetFields(required, fieldSources, templateHumanOnlyKeys(template))
+      const checklistItems = d.doc.doc_type === 'self_check' ? ((checklistTemplates || []).find((t) => t.id === content?.template_id)?.items || []) : null
+      const required = requiredKeysFor(content, d.doc.required_fields, { docType: d.doc.doc_type, template, checklistItems })
+      const recheck = unmetFields(required, fieldSources, docConfirmRequiredKeys(d.doc.doc_type, template, checklistItems))
       const content_hash = await sha256Hex(new Blob([JSON.stringify(content) + '\n' + JSON.stringify(attachments ?? null)]))
       const status = recheck.length ? 'pending_input' : 'draft'
       const version = { id: `FDV-DEMO-${documentId}-${versionNo}`, document_id: documentId, version_no: versionNo, author_kind: 'human', created_by: uid || null, content, field_sources: fieldSources, attachments, content_hash, change_note: changeNote, amended_from_version: null, created_at: new Date().toISOString() }
-      const doc = { ...d.doc, current_version_no: versionNo, status, required_fields: required, recheck, updated_at: version.created_at }
+      const doc = { ...d.doc, current_version_no: versionNo, status, required_fields: required, recheck, updated_at: version.created_at, ...(d.doc.doc_type === 'self_check' && content?.template_id ? { template_id: content.template_id } : {}) }
       setDemoDocs((m) => ({ ...m, [documentId]: { doc, versions: [...d.versions, version] } }))
       return { error: null, result: { document_id: documentId, version_no: versionNo, content_hash, status, required_fields: required, recheck, amended_from_version: null } }
     }
@@ -333,9 +336,9 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
       ? { ...d, current_version_no: data.version_no, status: data.status, required_fields: data.required_fields, recheck: data.recheck, updated_at: new Date().toISOString() }
       : d)))
     return { error: null, result: data }
-  }, [demoMode, setDemoDocs, uid, setFieldDocuments])
+  }, [demoMode, setDemoDocs, uid, setFieldDocuments, checklistTemplates])
 
-  // 簽署:身分／責任方／版本／雜湊由 RPC 檢查;成功後事實表 daily_logs 已由 RPC 落庫,重載日誌
+  // 簽署:身分／責任方／版本／雜湊由 RPC 檢查;成功後事實表已由 RPC 落庫,重載對應讀端
   const signFieldDocument = useCallback(async ({ documentId, versionNo, contentHash, intent }) => {
     if (demoMode) return { error: DEMO_ERROR }
     const { data, error } = await supabase.rpc('sign_field_document', {
@@ -343,12 +346,19 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     })
     if (error) return { error: rpcError(error) }
     setFieldDocuments((docs) => docs.map((d) => (d.id === documentId ? { ...d, status: data.status, target_id: data.target_id, recheck: [] } : d)))
-    // 施工日誌簽署落 daily_logs → 重載 siteLogs(估驗帶入、列印吃它);監造日誌落 supervisor_logs,前端尚無讀端(P6a 月報)
+    // 施工日誌簽署落 daily_logs → 重載 siteLogs(估驗帶入、列印吃它);監造日誌落 supervisor_logs,前端尚無讀端(P6a 月報);
+    // 自檢表落 checklist_records(品質查驗清單、查驗申請檢附候選)＋不合格由 DB trigger 開缺失 → 重載兩者。重載失敗不影響簽署結果。
     if (dbMode && data?.target_table === 'daily_logs' && typeof setSiteLogs === 'function') {
-      try { setSiteLogs(await loadSiteLogsFromDB(pid, wiMaps.idToKey)) } catch { /* 日誌重載失敗不影響簽署結果;下次進頁會重載 */ }
+      try { setSiteLogs(await loadSiteLogsFromDB(pid, wiMaps.idToKey)) } catch { /* 下次進頁會重載 */ }
+    }
+    if (dbMode && data?.target_table === 'checklist_records') {
+      try {
+        if (typeof setChecklistRecords === 'function') setChecklistRecords((await loadQcFromDB(pid)).records)
+        if (typeof setDefects === 'function') setDefects(await loadDefectsFromDB(pid, wiMaps.byId))
+      } catch { /* 下次進頁會重載 */ }
     }
     return { error: null, result: data }
-  }, [demoMode, dbMode, pid, wiMaps, setSiteLogs, setFieldDocuments])
+  }, [demoMode, dbMode, pid, wiMaps, setSiteLogs, setChecklistRecords, setDefects, setFieldDocuments])
 
   // 提送／收件／退回:同一件事重試用同一個 client_request_id(伺服器冪等回同一張回執)
   const submitFieldDocument = useCallback(async ({ documentId, versionNo, docType = 'daily_log' }) => {

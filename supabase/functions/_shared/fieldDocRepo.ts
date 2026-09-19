@@ -11,7 +11,8 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { maskDbError } from './publicError.ts'
 import { fetchAllRows } from './integrityAuditTool.ts'
 import type { DraftRepo, IntakePhotoRow, IntakeRow, DocRow, VersionRow, RepoError } from './fieldDocDraftRun.ts'
-import type { DayDefect, DayInspection, FormalDailyLog, LeafWorkItem, LegacyDailyLog, OpenInspection } from './fieldDocDraft.ts'
+import type { ChecklistTemplateRow, DayDefect, DayInspection, FormalDailyLog, LeafWorkItem, LegacyDailyLog, OpenInspection } from './fieldDocDraft.ts'
+import type { FieldDocTemplate } from './fieldDocTemplate.ts'
 import { taipeiDayRange } from './fieldDocDraft.ts'
 
 const PHOTO_COLS = 'id, storage_path, content_sha256, ai_status, ai_result, work_item_id, caption, location, taken_at, created_at'
@@ -181,10 +182,27 @@ export function supabaseDraftRepo(db: SupabaseClient, service: SupabaseClient, p
       }
     },
 
-    async findActiveDoc(docType, docDate) {
-      const { data, error } = await db.from('field_documents').select('id, status, current_version_no, intake_id')
-        .eq('project_id', projectId).eq('doc_type', docType).eq('doc_date', docDate)
-        .not('status', 'in', '("discarded","superseded")').maybeSingle()
+    // 範本單一定義在 DB:service client 直呼 fn_field_document_template(純映射;每批只取一次,呼叫端有快取)
+    async getFieldDocumentTemplate(docType) {
+      const { data, error } = await service.rpc('fn_field_document_template', { p_doc_type: docType })
+      if (error) return err('template', error)
+      return (data && typeof data === 'object' ? data as FieldDocTemplate : null)
+    },
+
+    // 本案自主檢查表範本(P3b):候選推斷依工項描述確定性挑選;RLS 只看得到本案
+    async listChecklistTemplates() {
+      const res = await fetchAllRows<ChecklistTemplateRow>((f, t) =>
+        db.from('checklist_templates').select('id, title, source, items').eq('project_id', projectId)
+          .order('created_at').order('id').range(f, t))
+      if (res.error) return { error: res.error }
+      return res.rows.map((r) => ({ ...r, items: Array.isArray(r.items) ? r.items : [] }))
+    },
+
+    async findActiveDoc(docType, locator) {
+      let q = db.from('field_documents').select('id, status, current_version_no, intake_id')
+        .eq('project_id', projectId).eq('doc_type', docType)
+      q = 'docDate' in locator ? q.eq('doc_date', locator.docDate) : q.eq('intake_id', locator.intakeId).eq('target_key', locator.targetKey)
+      const { data, error } = await q.not('status', 'in', '("discarded","superseded")').maybeSingle()
       if (error) return err('find_doc', error)
       return (data as DocRow | null) ?? null
     },
