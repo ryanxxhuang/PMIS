@@ -371,7 +371,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | 包 | 範圍 | 指定 | 實際 |
 |---|---|---|---|
 | A | 廠商角色與三個主入口（本節已完成，PR #163） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`；本節已完成，PR #164） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`；本節已完成，PR #164、merge `a575bbc`、migration `20260920120000` 已套正式、四支 Edge 已重佈） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | C | 真實表單 mapping、直接在紙本版面編輯 | fable5.1 | 待填 |
 | D | PDF 交付（真正的下載，不是 `window.print()`） | fable5.1 | 待填 |
 | E | 三項核心的整條流程驗收（真後端） | fable5.1 | 待填 |
@@ -453,3 +453,13 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 - 「單位衝突」負例以確定性單元測試涵蓋（`measureUnits.deno.test.ts`），不是模型負例——無法在不造假的前提下拍出一張單位衝突的真實照片。
 - 五張 JPG 依約定**不進版控**；回歸腳本只以本機路徑讀取，缺檔即 skip 並印出缺哪幾張。
 - 未驗：完整網頁上傳→起稿→存檔→簽署→提送的真後端鏈（屬 E 包）；本輪只驗共用呼叫函式與純規則。
+
+**發布結果（2026-09-20）**
+
+PR #164、merge commit `a575bbc`（rebase 到含 A 包的 main `e3e4f65`；CI 與 pgTAP 兩個 run 皆 success 後才合併）。migration `20260920120000_measured_from_record` 以 `supabase db push` 套正式，`migration list --linked` 84 筆對齊、最新即本支、無待套；正式庫唯讀核對兩類框架範本的 `item_rules.num.human_only` 已為 false，而 `fn_field_document_human_only_keys` 對監造日誌仍回 `attendance`、對監造查驗表單仍回 `confirmed_qty`／`verdict`（安全網未被放寬）。Edge 以 `deno info` 查到模組圖含改動 `_shared` 的四支並以 `--use-api` 從 `a575bbc` 重佈：`agent-run` v23、`classify-site-photo` v13、`draft-field-documents` v12、`read-whiteboard` v17（`send-reminders` 未動、`verify_jwt=false` 維持）。前端隨 main 由 Workers Builds 自動建置，`check:prod` 五頁 OK；demo 站未重佈。
+
+**對後續包的影響**
+
+- C 包（紙本版面編輯）可直接用 `field_sources[key].evidence`（原文、編號、單位、來源照片）做「點欄位回看證據」，不需另建一套來源結構；`hint.raw_text` 是「帶不進來但紙上寫了什麼」的顯示來源。
+- E 包（真後端整條鏈）要涵蓋：AI 抄錄的實測值只標 `filled` 時簽署必須被 `PD004 needs_confirmation` 擋下；以及 `rerecognize_photo_ids` 重辨識不得覆寫人工值或動到已簽版本（單元層已有測試，真後端未驗）。
+- 若日後要提高手寫抄錄率，方向是紙表區域裁切後再辨識（Edge 目前沒有影像處理能力）或換更強的模型——後者是紅線，需使用者另行決定。
