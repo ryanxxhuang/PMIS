@@ -7,7 +7,7 @@
 -- P3e(20260920004000)交接 P4e:簽署分支 6 處數量訊息與缺失說明「申報／確認／差額」經 fn_cq_txt,斷言訊息無 .0000。
 begin;
 
-select plan(152);
+select plan(153);
 
 create or replace function pg_temp.become(u uuid) returns void language plpgsql as $$
 begin
@@ -147,8 +147,12 @@ select is(public.fn_field_document_required_fields('inspection_form', pg_temp.c(
 select is(public.fn_field_document_required_fields('inspection_form', pg_temp.c('{"template_id":"e4000000-0000-0000-0000-000000000001"}'), '[]'::jsonb),
   '["confirmed_qty","declared_qty","inspection_date","inspection_id","location","results.B1","results.C2","unit","verdict","work_item_id"]'::jsonb,
   '有查驗表範本 → 每個項目 results.<no> 必填');
+-- 2026-09-20 B:實測值(num)不再是 human_only(紙本實測欄可由系統抄錄);判定與確認量仍只能監造親自填
 select is(public.fn_field_document_human_only_keys('inspection_form', pg_temp.c('{"template_id":"e4000000-0000-0000-0000-000000000001"}')),
-  array['confirmed_qty','results.C2','verdict'], '人填欄含實測值項目(num)');
+  array['confirmed_qty','verdict'], '人填欄=判定與確認數量;實測值項目不在內(紙本實測欄可抄錄)');
+select is(public.fn_field_document_confirm_required_keys('inspection_form', pg_temp.c('{"template_id":"e4000000-0000-0000-0000-000000000001"}')),
+  array['confirmed_qty','declared_qty','location','results.B1','results.C2','stage_key','verdict'],
+  '須確認欄仍含每個查驗項目:抄錄值只標 filled 簽不下去');
 select is(public.fn_field_document_required_fields('self_check', '{"template_id":"e4000000-0000-0000-0000-000000000002"}'::jsonb, '[]'::jsonb),
   '["check_date","results.B1","results.C2","template_id"]'::jsonb, '自檢表必填鍵不變(回歸;wrapper 同一條規則)');
 select is(public.fn_field_document_unmet_fields('inspection_form', '["declared_qty","verdict"]'::jsonb,

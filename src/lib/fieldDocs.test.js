@@ -126,7 +126,8 @@ describe('欄位來源狀態與必填(鏡像 DB)', () => {
     expect(fieldLabel('items.w1.qty_today', content)).toBe('壹.一.1 鋼筋 當日數量')
     expect(fieldLabel('items.w1.location', content)).toBe('壹.一.1 鋼筋 施作位置')
     expect(fieldLabel('extras.sampling')).toBe('施工取樣試驗紀錄')
-    expect(sourceLabel('whiteboard:p1')).toBe('告示板轉錄')
+    expect(sourceLabel('whiteboard:p1')).toBe('現場紀錄轉錄')
+    expect(sourceLabel('record:p1')).toBe('紙本實測欄抄錄')
     expect(sourceLabel('yesterday:L1')).toBe('沿用昨日')
     expect(sourceLabel('legacy:L1')).toBe('既有紀錄')
     expect(sourceLabel(null)).toBeNull()
@@ -509,11 +510,13 @@ describe('自主檢查表(P3b):範本推導、內容形狀、逐項確認', () =
     { no: 'B1', item: '已通知監造', kind: 'bool', standard: '≥24 小時' },
     { no: 'C2', item: '坍度', kind: 'num', min: 15.5, max: 20.5, unit: 'cm', standard: '18±2.5' },
   ] }
-  it('必填=框架(檢查日期、範本)＋每個範本項目;人填欄=實測值;須確認=全部項目;項目鍵標籤', () => {
+  it('必填=框架(檢查日期、範本)＋每個範本項目;人填欄不含實測值(紙本紀錄可抄錄);須確認=全部項目;項目鍵標籤', () => {
     expect(docRequiredKeys('self_check', frame, tpl.items)).toEqual(['check_date', 'results.B1', 'results.C2', 'template_id'])
-    expect(docHumanOnlyKeys('self_check', frame, tpl.items)).toEqual(['results.C2'])
+    // 2026-09-20 B:實測值(num)不再是 human_only——紙本實測欄已寫好的數字可由系統抄錄並標 filled;
+    // 但 confirm_required 仍涵蓋每一項,只標 filled 仍是 needs_confirmation,簽不下去。
+    expect(docHumanOnlyKeys('self_check', frame, tpl.items)).toEqual([])
     expect(docConfirmRequiredKeys('self_check', frame, tpl.items)).toEqual(['results.B1', 'results.C2'])
-    expect(checklistItemKeys(tpl.items, frame, 'human_only')).toEqual(['results.C2'])
+    expect(checklistItemKeys(tpl.items, frame, 'human_only')).toEqual([])
     expect(templateConfirmRequiredKeys(demoFieldDocumentTemplate('supervisor_log'))).toEqual(['attendance'])
     expect(checklistItemLabels(tpl.items)).toEqual({ 'results.B1': 'B1 已通知監造', 'results.C2': 'C2 坍度' })
     const c = emptySelfCheckContent('2026-09-17', frame, tpl, { workItemId: 'w1' })

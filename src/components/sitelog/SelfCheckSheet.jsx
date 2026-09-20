@@ -97,7 +97,7 @@ export default function SelfCheckSheet({ project, doc, version, signature = null
       </div>
       <p className="text-caption paper-mute mt-4">
         ○＝合格&#x3000;✕＝不合格&#x3000;／＝本次未檢查或不適用。判定由系統依範本量化標準自動產生{record ? '（簽署時伺服器計算）' : '（草稿為畫面預覽）'}。
-        來源標「{sourceLabel('ai:photo')}」的欄位由系統依照片帶入；實測值一律由廠商親自量測填寫。附件照片 {Array.isArray(version.attachments) ? version.attachments.length : 0} 張。
+        來源標「{sourceLabel('ai:photo')}」的欄位由系統依照片帶入；標「{sourceLabel('record:x')}」的實測值由系統照紙本實測欄原文抄錄，其餘由廠商親自量測填寫，簽署前每一項都須逐項確認。附件照片 {Array.isArray(version.attachments) ? version.attachments.length : 0} 張。
       </p>
     </div>
   )

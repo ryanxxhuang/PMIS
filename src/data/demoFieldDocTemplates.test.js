@@ -38,11 +38,12 @@ describe('示範模式文書範本 fixture', () => {
     expect(tpl.demo_label).toBe('示範範本')
     expect(tpl.sections).toHaveLength(8)
   })
-  it('自主檢查表框架:必填=檢查日期＋範本;項目規則 num 只能人填、bool 須人確認;標示範範本並說明項目取自本案範本', () => {
+  it('自主檢查表框架:必填=檢查日期＋範本;項目規則 num／bool 都可由系統帶入但都須人逐項確認;標示範範本並說明項目取自本案範本', () => {
     const tpl = demoFieldDocumentTemplate('self_check')
     expect(templateRequiredKeys(tpl)).toEqual(['check_date', 'template_id'])
     expect(templateHumanOnlyKeys(tpl)).toEqual([])
-    expect(checklistItemRules(tpl)).toEqual({ num: { human_only: true, confirm_required: true }, bool: { human_only: false, confirm_required: true } })
+    // 2026-09-20 B:紙本實測欄已寫好的數字可由系統抄錄(human_only=false),但每一項簽署前仍須人逐項確認
+    expect(checklistItemRules(tpl)).toEqual({ num: { human_only: false, confirm_required: true }, bool: { human_only: false, confirm_required: true } })
     expect(tpl.is_demo).toBe(true)
     expect(tpl.demo_label).toBe('示範範本')
     expect(tpl.disclaimer).toContain('非任何機關公定或法定格式')
@@ -53,7 +54,7 @@ describe('示範模式文書範本 fixture', () => {
     expect(templateRequiredKeys(tpl)).toEqual(['confirmed_qty', 'declared_qty', 'inspection_date', 'inspection_id', 'location', 'unit', 'verdict', 'work_item_id'])
     expect(templateHumanOnlyKeys(tpl)).toEqual(['confirmed_qty', 'verdict'])
     expect(templateConfirmRequiredKeys(tpl)).toEqual(['confirmed_qty', 'declared_qty', 'location', 'stage_key', 'verdict'])
-    expect(checklistItemRules(tpl)).toEqual({ num: { human_only: true, confirm_required: true }, bool: { human_only: false, confirm_required: true } })
+    expect(checklistItemRules(tpl)).toEqual({ num: { human_only: false, confirm_required: true }, bool: { human_only: false, confirm_required: true } })
     expect(tpl.is_demo).toBe(true)
     expect(tpl.demo_label).toBe('示範範本')
     expect(tpl.disclaimer).toContain('非任何機關公定或法定格式')

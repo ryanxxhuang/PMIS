@@ -28,11 +28,15 @@ export function stubAllowed(env: { flag?: string | null; supabaseUrl?: string | 
 
 export function stubClassify(hint?: string | null): SitePhotoResult {
   return {
-    caption: '本機 stub:現場照片(非真實辨識)', category: '施工作業', is_construction: true, legible: true, has_board: false,
-    work_item_hint: (hint ?? '').trim(), visible_progress: '', location: null,
+    caption: '本機 stub:現場照片(非真實辨識)', category: '施工作業', is_construction: true, legible: true,
+    text_legible: false, has_board: false, record_medium: 'none',
+    work_item_hint: (hint ?? '').trim(), visible_progress: '', location: null, location_text: '', dropped: [],
   }
 }
 
 export function stubWhiteboard(): WhiteboardResult {
-  return { log_date: '', weather: '', location: '', work_summary: '', items: [] }
+  return {
+    record_medium: 'other', log_date: '', log_date_text: '', log_date_conflict: null, weather: '',
+    location: '', location_text: '', work_item_text: '', work_summary: '', observations: [], items: [], dropped: [],
+  }
 }

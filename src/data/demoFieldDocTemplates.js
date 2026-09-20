@@ -230,7 +230,7 @@ const SELF_CHECK_DEMO = Object.freeze({
           "item_key": "results.<no>",
           "item_rules": {
             "num": {
-              "human_only": true,
+              "human_only": false,
               "confirm_required": true
             },
             "bool": {
@@ -238,7 +238,7 @@ const SELF_CHECK_DEMO = Object.freeze({
               "confirm_required": true
             }
           },
-          "note": "每個項目由範本推導為必填:實測值(num)只能由人親自量測填寫,系統不從任何照片推定;勾選項(bool)若由系統建議須附依據並由人逐項確認;本次未檢請標不適用並填原因。合格與否由系統依範本量化標準計算。"
+          "note": "每個項目由範本推導為必填:實測值(num)若紙本查驗表／告示板的實測欄已經寫好,系統會照原文抄錄進來並標待確認(附原文與來源照片);系統只抄錄既有紀錄,不代為量測、不從畫面推定讀數,設計值／規範要求、空欄與單位對不上的紀錄一律不帶入,其餘留空由人親自量測填寫。勾選項(bool)若由系統建議須附依據。**每個項目(含已抄錄的)簽署前都必須由人逐項確認**;本次未檢請標不適用並填原因。合格與否由系統依範本量化標準計算。"
         }
       ]
     },
@@ -371,7 +371,7 @@ const INSPECTION_FORM_DEMO = Object.freeze({
           "item_key": "results.<no>",
           "item_rules": {
             "num": {
-              "human_only": true,
+              "human_only": false,
               "confirm_required": true
             },
             "bool": {
@@ -379,7 +379,7 @@ const INSPECTION_FORM_DEMO = Object.freeze({
               "confirm_required": true
             }
           },
-          "note": "有範本時每個項目必填:實測值(num)只能由監造親自量測填寫,照片與告示板讀數只作提示;勾選項(bool)由監造逐項確認;本次未檢請標不適用並填原因。任一項不合格時不得判定合格。"
+          "note": "有範本時每個項目必填:實測值(num)若紙本查驗表／告示板的實測欄已經寫好,系統會照原文抄錄進來並標待確認(附原文與來源照片);系統只抄錄既有紀錄,不代為量測、不猜讀數,設計值、空欄與單位對不上的紀錄一律不帶入,其餘留空由監造親自量測填寫。勾選項(bool)由監造逐項確認。**每個項目(含已抄錄的)簽署前都必須由監造逐項確認**;本次未檢請標不適用並填原因。任一項不合格時不得判定合格。判定與本次確認數量仍只能由監造親自填寫。"
         }
       ]
     },

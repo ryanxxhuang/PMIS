@@ -30,7 +30,10 @@ describe('visionStub 輸出', () => {
   it('分類結果固定為可辨的工地照、無告示板;hint 由環境指定;板讀回空(不轉錄任何數量)', () => {
     expect(stubClassify(' 結構工程 ')).toMatchObject({ is_construction: true, legible: true, has_board: false, work_item_hint: '結構工程', location: null })
     expect(stubClassify(undefined).work_item_hint).toBe('')
-    expect(stubWhiteboard()).toEqual({ log_date: '', weather: '', location: '', work_summary: '', items: [] })
+    expect(stubWhiteboard()).toEqual({
+      record_medium: 'other', log_date: '', log_date_text: '', log_date_conflict: null, weather: '',
+      location: '', location_text: '', work_item_text: '', work_summary: '', observations: [], items: [], dropped: [],
+    })
     expect(STUB_NOTE).toContain('stub')
   })
 })

@@ -1,0 +1,1934 @@
+{
+  "tested_at_utc": "2026-09-20T06:24:10.882Z",
+  "scope": "Edge 共用 sitePhotoCall + 條件式 whiteboardCall(2026-09-20 B 新 schema);未走網頁上傳、標單配對、文件持久化、簽署或計價。",
+  "mode": "both",
+  "negatives": true,
+  "prompt_sha256": {
+    "site_photo": "545d99ea7964784bc53cfbd5e4f36c9f8a846cbd33f3daefb99d910f2e8bbd72",
+    "record": "36eac705f62a431f44db4dcffa4eb9a3d02f0d7050d3c413f2a94e722b795dbf"
+  },
+  "missing_files": [],
+  "calls": 27,
+  "usage_total": {
+    "input_tokens": 198115,
+    "output_tokens": 21334
+  },
+  "results": [
+    {
+      "case": "LI2995~1_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "bb5a3284da8db54d9badfabea885c653821ef79c4a284c52e1806561afcac207",
+      "bytes": 504469,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3054,
+      "record_ms": 13685,
+      "record_passes": 2,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 271,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1008,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1480,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 6,
+          "items": 0
+        },
+        {
+          "observations": 10,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋，有查驗紀錄表",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋",
+        "visible_progress": "以遊標卡尺量測鋼筋直徑",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "鋼筋綁紮",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [],
+        "items": [],
+        "dropped": [
+          "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用",
+          "observations「搭接長度(3)」:原文「(3)搭接長度：≥ CM」沒有可用數值,未採用",
+          "observations「搭接長度(4)」:原文「(4)搭接長度：≥ CM」沒有可用數值,未採用",
+          "位置:兩次辨識不一致(「鋼筋綁紮」vs「56CR<g表1」),未採用",
+          "表上工項:兩次辨識不一致(「鋼筋綁紮施工自主檢查表」vs「鋼筋」),未採用",
+          "工作摘要:兩次辨識不一致(「鋼筋綁紮檢查」vs「(空)」),未採用",
+          "實測／設計紀錄「線徑 11 * 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 11 * 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 ≧27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 ≧27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑(1) 線徑(1)：線径11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑(1) 線徑(1)：線径11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目(1) 網目(1)：×15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目(1) 網目(1)：線径11 MM 15 × 15 CM D6 DD@20cm」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑(4) 線徑(4)：線径11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑(4) 線徑(4)：線径11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目(4) 網目(4)：× 15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目(4) 網目(4)：15 × 15 CM D6 DD@20cm」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「搭接長度(1) (1)搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「搭接長度(2) (2)搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度(3)」:原文「(3)搭接長度：≥ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度(4)」:原文「(4)搭接長度：≥ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「鋼筋綁紮」vs「56CR<g表1」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「鋼筋綁紮施工自主檢查表」vs「鋼筋」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "工作摘要:兩次辨識不一致(「鋼筋綁紮檢查」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11 * 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11 * 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑(1) 線徑(1)：線径11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑(1) 線徑(1)：線径11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目(1) 網目(1)：×15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目(1) 網目(1)：線径11 MM 15 × 15 CM D6 DD@20cm」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑(4) 線徑(4)：線径11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑(4) 線徑(4)：線径11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目(4) 網目(4)：× 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目(4) 網目(4)：15 × 15 CM D6 DD@20cm」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度(1) (1)搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度(2) (2)搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "LI2995~1_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LI2995~1_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "26ef45e0543cdd88ae2b5de687a503b036355ef143de924d196a5366d5ca93a8",
+      "bytes": 891467,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3388,
+      "record_ms": 13628,
+      "record_passes": 2,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 293,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1236,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1019,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 8,
+          "items": 0
+        },
+        {
+          "observations": 6,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "以游標卡尺量測鋼筋尺寸，並有查驗紀錄表",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "",
+        "location": null,
+        "location_text": "",
+        "dropped": [
+          "visible_progress:含無法由照片判定的斷言「驗收」,已清空"
+        ]
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "S6CR~S7段",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "1",
+            "raw_text": "搭接長度(1)≥27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "2",
+            "raw_text": "搭接長度(2)≥27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": ""
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「搭接長度」:原文「搭接長度(3)≥ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「搭接長度(4)≥ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "位置:兩次辨識不一致(「S6CR~S7段」vs「豐店自16」),未採用",
+          "表上工項:兩次辨識不一致(「連續壁」vs「鋼筋混凝土柱工程；鋼筋配置」),未採用",
+          "實測／設計紀錄「線徑 線徑(1)：11 × 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑(1)：11 × 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 網目(1)：15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 網目(1)：15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑(4)：11 × 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 網目(4)：15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「編號(1)：線徑 11 × 11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「編號(1)：網目 15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「編號(4)：線徑 11 × 11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「編號(4)：網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "visible_progress:含無法由照片判定的斷言「驗收」,已清空"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「搭接長度(3)≥ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「搭接長度(4)≥ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「S6CR~S7段」vs「豐店自16」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「連續壁」vs「鋼筋混凝土柱工程；鋼筋配置」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑(1)：11 × 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑(1)：11 × 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目(1)：15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目(1)：15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑(4)：11 × 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目(4)：15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(1)：線徑 11 × 11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(1)：網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(4)：線徑 11 × 11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(4)：網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "LI89DE~1_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "c5565b501ade3b1a35ae30e610dd2425c6ee5dc828da98ed7fd51ed883c19625",
+      "bytes": 328702,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2551,
+      "record_ms": null,
+      "record_passes": 0,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 267,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": []
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以游標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "使用游標卡尺量測鋼筋尺寸",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "LI89DE~1_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LI89DE~1_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "5afcc83c7f5b648bfd6e82bd5a5cb73f693824e93d15a4aa9f2fbe8b203adfce",
+      "bytes": 582276,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3543,
+      "record_ms": null,
+      "record_passes": 0,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 277,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": []
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋及鋼架構件厚度",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋及鋼架構件",
+        "visible_progress": "用遊標卡尺量測鋼筋尺寸",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "LIEE66~1_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "e0988ed723022011e18809f24428284d688bda83629d996c51cca24d1bda55e7",
+      "bytes": 393665,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2873,
+      "record_ms": null,
+      "record_passes": 0,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 254,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": []
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋",
+        "visible_progress": "量測鋼筋直徑",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "LIEE66~1_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LIEE66~1_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "b7bfbc5f60a9372280d0c3b636c521eb4667bd37b7c5027e4015687d4337f7ad",
+      "bytes": 702266,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2937,
+      "record_ms": null,
+      "record_passes": 0,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 254,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": []
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋",
+        "visible_progress": "量測鋼筋直徑",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "LIFA1C~1_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "01854cb30ab349f83d224f117406e0aa2b61a928f5b2d907859b2738d3ee7a79",
+      "bytes": 476327,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3071,
+      "record_ms": 15521,
+      "record_passes": 2,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 298,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1149,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1454,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 7,
+          "items": 0
+        },
+        {
+          "observations": 8,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "查驗會勘照片(AI 說明含無法由照片判定的狀態,已移除;請人工補述)",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "以遊標卡尺量測鋼筋直徑，現場有查驗紀錄表",
+        "location": null,
+        "location_text": "",
+        "dropped": [
+          "caption:含無法由照片判定的斷言「完成」,已改為中性說明"
+        ]
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "查驗位置：B區-EI區H-29~261",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "線徑 13 + 11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "網目 15 + 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "網目 15 + 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "measured",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "網目 15 + 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "1",
+            "raw_text": "≧ 27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "2",
+            "raw_text": "≧ 27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": ""
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「網目」:原文「⊗ ⊗ D1820 ⊗」沒有可用數值,未採用",
+          "observations「線徑」:原文「線徑 * MM」沒有可用數值,未採用",
+          "observations「線徑」:原文「線徑 × MM」沒有可用數值,未採用",
+          "observations「網目」:原文「網目 × CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「搭接長度：≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「搭接長度：≧ CM」沒有可用數值,未採用",
+          "location:「M1樓」與原文「基礎/平台 工程鋼筋及保溫房工公共構造工施」不符,未採用",
+          "位置:兩次辨識不一致(「B區-EI區H-29~261」vs「(空)」),未採用",
+          "表上工項:兩次辨識不一致(「鋼筋工程」vs「鋼筋混凝土工程」),未採用",
+          "工作摘要:兩次辨識不一致(「鋼筋配置與搭接長度查驗」vs「鋼筋查驗紀錄」),未採用",
+          "實測／設計紀錄「線徑 Ø13 Ø16 ⊗ ⊗ D1820 ⊗」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑（）：線徑 11 ＋ 11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑 線徑 11 ＋ 11 MM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "caption:含無法由照片判定的斷言「完成」,已改為中性說明"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「網目」:原文「⊗ ⊗ D1820 ⊗」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「線徑 * MM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「線徑 × MM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「網目」:原文「網目 × CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「搭接長度：≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「搭接長度：≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "location:「M1樓」與原文「基礎/平台 工程鋼筋及保溫房工公共構造工施」不符,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「B區-EI區H-29~261」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「鋼筋工程」vs「鋼筋混凝土工程」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "工作摘要:兩次辨識不一致(「鋼筋配置與搭接長度查驗」vs「鋼筋查驗紀錄」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 Ø13 Ø16 ⊗ ⊗ D1820 ⊗」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑（）：線徑 11 ＋ 11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑 11 ＋ 11 MM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "LIFA1C~1_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LIFA1C~1_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "89a0ec4e4088f4fb18f96ed87ebf724743644bc8e51b27b0293c54c6a20d81c8",
+      "bytes": 841271,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3302,
+      "record_ms": 16630,
+      "record_passes": 2,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 293,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1783,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1006,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 8,
+          "items": 0
+        },
+        {
+          "observations": 8,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "以游標卡尺量測鋼筋直徑，背景為鋼筋籠框架",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "游標卡尺量測鋼筋尺寸，紙本查驗記錄表填記",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "基礎序位：B段-F1樓(SGB-29-26)",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "網目（1）：線徑＿＿15×15＿CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "鋼筋編號尺寸",
+            "note": ""
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「搭接長度」:原文「(1)搭接長度：＿＿CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「(2)搭接長度：＿＿CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「(3)搭接長度：＿＿CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「(4)搭接長度：＿＿CM」沒有可用數值,未採用",
+          "天氣:兩次辨識不一致(「晴」vs「(空)」),未採用",
+          "位置:兩次辨識不一致(「B段-F1樓(SGB-29-26)」vs「未能清晰辨識」),未採用",
+          "表上工項:兩次辨識不一致(「鋼筋工程自主檢查」vs「鋼筋工程」),未採用",
+          "工作摘要:兩次辨識不一致(「鋼筋位置尺寸、網目間距、搭接長度查驗」vs「(空)」),未採用",
+          "實測／設計紀錄「線徑 線徑（1）：線徑＿＿13 + 11＿MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑（1）：線徑＿＿Ø13+11＿MM　Ø(1)Ø13+11=24」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 網目（1）：線徑＿＿Ø13×11＿MM　Ø(1)Ø13×11=20cm」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑（4）：線徑＿＿15×15＿CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑（4）：線徑＿＿11×11＿MM　Ø(4)線徑＿＿11+11＿CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 (1)搭接長度：《≧27＿CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 (2)搭接長度：《≧27＿CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「鋼筋線徑 13 + 11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「鋼筋線徑 13 + 11 MM PHD20↓」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 15 × 15 CM PHD20↓」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「鋼線搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「鋼線搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(1)搭接長度：＿＿CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(2)搭接長度：＿＿CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(3)搭接長度：＿＿CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(4)搭接長度：＿＿CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "天氣:兩次辨識不一致(「晴」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「B段-F1樓(SGB-29-26)」vs「未能清晰辨識」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「鋼筋工程自主檢查」vs「鋼筋工程」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "工作摘要:兩次辨識不一致(「鋼筋位置尺寸、網目間距、搭接長度查驗」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑（1）：線徑＿＿13 + 11＿MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑（1）：線徑＿＿Ø13+11＿MM　Ø(1)Ø13+11=24」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目（1）：線徑＿＿Ø13×11＿MM　Ø(1)Ø13×11=20cm」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑（4）：線徑＿＿15×15＿CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑（4）：線徑＿＿11×11＿MM　Ø(4)線徑＿＿11+11＿CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 (1)搭接長度：《≧27＿CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 (2)搭接長度：《≧27＿CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「鋼筋線徑 13 + 11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「鋼筋線徑 13 + 11 MM PHD20↓」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15 CM PHD20↓」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「鋼線搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「鋼線搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "LINE_A~4_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "5e637af8aba7ee002f075b8cef07b17507d4b0b378e4c94af0690a13631c164b",
+      "bytes": 525110,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2977,
+      "record_ms": 14658,
+      "record_passes": 2,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 287,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1400,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1070,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 8,
+          "items": 0
+        },
+        {
+          "observations": 6,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "查驗會勘照片(AI 說明含無法由照片判定的狀態,已移除;請人工補述)",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋綁紮加工及組立",
+        "visible_progress": "",
+        "location": null,
+        "location_text": "",
+        "dropped": [
+          "caption:含無法由照片判定的斷言「驗收」,已改為中性說明",
+          "visible_progress:含無法由照片判定的斷言「驗收」,已清空"
+        ]
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "查驗項目及位置：4-B 25m",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "13+11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11+11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "1",
+            "raw_text": "≧27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "2",
+            "raw_text": "≧27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": ""
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「線徑」:原文「φ9 φ10 2@cm」沒有可用數值,未採用",
+          "observations「線徑」:原文「φ9 φ10 2@cm」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「（3）搭接長度：≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「（4）搭接長度：≧ CM」沒有可用數值,未採用",
+          "location:「第二、三樓層保護系統工程」與原文「基地項目及位置：」不符,未採用",
+          "位置:兩次辨識不一致(「4-B 25m」vs「(空)」),未採用",
+          "表上工項:兩次辨識不一致(「鋼筋混凝土地版樓工程中鋼筋焊接份存合分次驗收(左幅)」vs「鋼筋籠四方保護系統工程」),未採用",
+          "工作摘要:兩次辨識不一致(「進行鋼筋焊接接合部分的檢驗」vs「(空)」),未採用",
+          "實測／設計紀錄「網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 11+11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "caption:含無法由照片判定的斷言「驗收」,已改為中性說明"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "visible_progress:含無法由照片判定的斷言「驗收」,已清空"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「φ9 φ10 2@cm」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「φ9 φ10 2@cm」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「（3）搭接長度：≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「（4）搭接長度：≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "location:「第二、三樓層保護系統工程」與原文「基地項目及位置：」不符,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「4-B 25m」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「鋼筋混凝土地版樓工程中鋼筋焊接份存合分次驗收(左幅)」vs「鋼筋籠四方保護系統工程」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "工作摘要:兩次辨識不一致(「進行鋼筋焊接接合部分的檢驗」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11+11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "LINE_A~4_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LINE_A~4_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "5c9df37350b4f7f24d747877ce42cd996b75140a4c7c13da2d646cfba8a7b211",
+      "bytes": 926688,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3167,
+      "record_ms": 15273,
+      "record_passes": 2,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 283,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1719,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1166,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 10,
+          "items": 0
+        },
+        {
+          "observations": 8,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "查驗會勘照片(AI 說明含無法由照片判定的狀態,已移除;請人工補述)",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "鋼筋網格铺设、查驗紀錄表填寫",
+        "location": null,
+        "location_text": "",
+        "dropped": [
+          "caption:含無法由照片判定的斷言「完成」,已改為中性說明"
+        ]
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "查驗項目位置位置：4-E 25m",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "13 + 11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "15 + 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11 + 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 + 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "1",
+            "raw_text": "≧ 27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "2",
+            "raw_text": "≧ 27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": ""
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「= CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「= CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「= CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「= CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≥ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≥ CM」沒有可用數值,未採用",
+          "位置:兩次辨識不一致(「4-E 25m」vs「基樁」),未採用",
+          "表上工項:兩次辨識不一致(「鋼構鋼筋鋪設」vs「鋼筋工程」),未採用",
+          "實測／設計紀錄「線徑 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 15 + 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 15 + 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 ∅9 D10@20cm」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑 11 + 11 MM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "caption:含無法由照片判定的斷言「完成」,已改為中性說明"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「= CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「= CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「= CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「= CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≥ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≥ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「4-E 25m」vs「基樁」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「鋼構鋼筋鋪設」vs「鋼筋工程」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 + 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 + 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 ∅9 D10@20cm」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11 + 11 MM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "neg-design-column-only",
+      "condition": "negative",
+      "derived_from": "LINE_A~4_0.JPG",
+      "why": "只保留紙表「設計值」左欄:實測欄根本不在畫面內,模型不得生出任何 kind=measured 的觀察",
+      "sha256": "84afc697279e25cf2a4c26cae70a3690f111f39e933d3a6ba793442b0409c946",
+      "bytes": 78725,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2805,
+      "record_ms": 12297,
+      "record_passes": 2,
+      "usage": {
+        "classify": {
+          "input_tokens": 6375,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 278,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 6195,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1058,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 6195,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1199,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 5,
+          "items": 0
+        },
+        {
+          "observations": 7,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "有鋼筋查驗紀錄表",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "鋼筋規格尺寸及搭接長度量測",
+        "location": null,
+        "location_text": "4-4-25M",
+        "dropped": [
+          "location:「4-4-25m」沒有原文出處(與 location_text 不符),未採用"
+        ]
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "",
+        "log_date_text": "",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "H4-25m",
+        "location_text": "查驗項目及位置：H4-25m",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "13×11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "15×15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15×15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": ""
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「線徑」:原文「B阿U-16」沒有可用數值,未採用",
+          "observations「線徑」:原文「[]×[] MM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用",
+          "observations「線徑」:原文「線徑 □ × □ MM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「搭接長度：    ≧     CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「搭接長度：    ≧     CM」沒有可用數值,未採用",
+          "表上工項:兩次辨識不一致(「安品紀錄表-鋼結構及工程」vs「鋼筋」),未採用",
+          "實測／設計紀錄「搭接長度 ≧27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 ≧27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 Ø11-16」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 Ø9 DH20×20cm」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「搭接長度 搭接長度：11 ≧ 27 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「搭接長度 搭接長度：11 ≧ 27 CM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": "H4-25m",
+        "source": "record",
+        "reason": null
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "location:「4-4-25m」沒有原文出處(與 location_text 不符),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「B阿U-16」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「[]×[] MM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧   CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「線徑 □ × □ MM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「搭接長度：    ≧     CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「搭接長度：    ≧     CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「安品紀錄表-鋼結構及工程」vs「鋼筋」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 Ø11-16」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 Ø9 DH20×20cm」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 搭接長度：11 ≧ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 搭接長度：11 ≧ 27 CM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "neg-illegible-caliper",
+      "condition": "negative",
+      "derived_from": "LI89DE~1_0.JPG",
+      "why": "把卡尺特寫縮到刻度完全讀不出來:場景仍可辨(legible)但 text_legible 必須為 false,且不得生出讀數",
+      "sha256": "4952828927401898f72f830dda7020a7a18020c44b42a3ca446e0966434c99c3",
+      "bytes": 191275,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2738,
+      "record_ms": null,
+      "record_passes": 0,
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 265,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": []
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋驗收",
+        "visible_progress": "遊標卡尺量測鋼筋尺寸",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "neg-formwork-no-record",
+      "condition": "negative",
+      "derived_from": "LI2995~1_0.JPG",
+      "why": "只保留背景模板區、畫面內沒有任何紙表:不得有書面紀錄、不得有位置、工項不得沿用鋼筋查驗的內容",
+      "sha256": "bc460ea504daed66914190db3b3baa12996e4269719e2c8b750e65d621406e3a",
+      "bytes": 69464,
+      "model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2294,
+      "record_ms": null,
+      "record_passes": 0,
+      "usage": {
+        "classify": {
+          "input_tokens": 6319,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 267,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": []
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "鋼筋綁紮與模板組立施作中",
+        "category": "施工作業",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋綁紮及組立",
+        "visible_progress": "鋼筋正在綁紮，模板架設進行中",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    }
+  ]
+}

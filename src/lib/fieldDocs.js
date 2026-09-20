@@ -257,7 +257,9 @@ export const FIELD_STATUS_TONE = Object.freeze({ filled: 'blue', pending: 'amber
 export function sourceLabel(source) {
   if (!source) return null
   const s = String(source)
-  if (s.startsWith('whiteboard:')) return '告示板轉錄'
+  if (s.startsWith('whiteboard:')) return '現場紀錄轉錄'
+  // 2026-09-20 B:紙本查驗表／告示板「實測欄已經寫好」的數字,由系統照原文抄錄(附原文與來源照片)
+  if (s.startsWith('record:')) return '紙本實測欄抄錄'
   if (s.startsWith('photo_time:')) return '照片時間'
   if (s.startsWith('legacy:')) return '既有紀錄'
   if (s.startsWith('yesterday:')) return '沿用昨日'
