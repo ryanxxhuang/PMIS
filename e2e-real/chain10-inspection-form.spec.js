@@ -161,7 +161,7 @@ test('鏈 10:廠商自檢→申請查驗(申報 100)→監造上傳→起稿(判
 
   // ── 列印:印簽署版本(示範範本、雜湊、部分合格、確認 60) ──────────────────────────────────
   await gotoHash(page, `/inspection-form/print?doc=${docId}`)
-  await expect(page.getByText('【示範範本】範本 inspection_form_demo v1')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('框架【示範範本】inspection_form_demo v1')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText(`內容雜湊 ${v2.content_hash.slice(0, 12)}`)).toBeVisible()
   await expect(page.getByText(/簽署 鏈十監造・/)).toBeVisible()
   await expect(page.getByText('■ 部分合格')).toBeVisible()

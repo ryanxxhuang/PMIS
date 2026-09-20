@@ -3,8 +3,10 @@
 // (登入的平台帳號;簽署即判定:inspections 狀態＋確認量與 inspection_confirmations 在簽署交易內落庫,不合格由 DB 開缺失),
 // 提送廠商／機關各一鈕、各自收件／退回。
 //
-// 與其他三類文書共用 DocumentLifecycle／DocumentPhotos／FieldSourceChip;版面由伺服器範本 fn_field_document_template('inspection_form')
-// (示範範本,Q11)驅動。一份查驗申請一份表單(?inspection=<id> 由查驗申請直達:建立或取回草稿後改為 ?doc=;?doc=<id> 直達文件)。
+// 與其他三類文書共用 DocumentLifecycle／DocumentPhotos;2026-09-20 C2:這一頁的表單就是**臺北市「施工抽查紀錄表」的那張紙**
+// (InspectionFormSheet)——格內可編、畫面與列印／PDF 同一個元件同一份 mapping(lib/officialForms);格內編輯不放寬任何
+// 伺服器驗證。框架必填欄仍由伺服器範本 fn_field_document_template('inspection_form')(示範範本,Q11)推導。
+// 一份查驗申請一份表單(?inspection=<id> 由查驗申請直達:建立或取回草稿後改為 ?doc=;?doc=<id> 直達文件)。
 // 查驗申請資料由系統帶入待核對;判定與本次確認數量只能監造親自填,畫面即時列出與 DB 簽署規則相同的一致性問題(伺服器為準)。
 // 簽署前明示「這會成為可估驗依據」;簽後更正=另開版本,改量須先撤銷確認紀錄(P4b revoke)再重簽,伺服器 PD008 會擋。
 // 視角:監造(can.approve)可編、簽、送;廠商與機關(提送對象)各自收件／退回、其餘唯讀——唯讀沒有 input。
@@ -22,9 +24,11 @@ import {
   emptyInspectionFormContent, emptyInspectionFormSources, requiredKeysFor, unmetFields, fieldLabel, UNMET_STATUS_LABEL,
   docConfirmRequiredKeys, templateFieldLabels, checklistItemLabels, applySuggestion, mergeAttachments, attachmentIssues, fieldDocErrorGuidance,
   docStatusMeta, DOC_STATUS_LABEL, ORG_LABEL, requiredStagesFor, currentBatchCum, INSPECTION_VERDICT_TONE, fieldAnchorId,
+  setInspectionFormTemplate,
 } from '../../lib/fieldDocs.js'
+import { stampFormTemplate } from '../../lib/officialForms.js'
 
-import InspectionFormFields from '../../components/sitelog/InspectionFormFields.jsx'
+import InspectionFormSheet from '../../components/sitelog/InspectionFormSheet.jsx'
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'
 
@@ -176,6 +180,14 @@ export default function InspectionForm() {
   const status = doc?.status || null
   const formEditable = editable && form && !!frame && (EDITABLE_STATUSES.includes(status) || amendMode) && status !== 'received'
   const onFormChange = useCallback((next) => { setForm(next); setDirty(true) }, [])
+  // 換查驗表範本:抽查項目與標準的唯一來源是本案範本,換了就要清掉已填的抽查結果(項目不同不能沿用)
+  const onTemplateChange = async (id) => {
+    if (!form) return
+    const t = id ? inspectionTemplates.find((x) => x.id === id) || null : null
+    const filled = Object.values(form.content.results || {}).some((r) => r?.value != null && r.value !== '')
+    if (filled && !(await appConfirm({ title: '換查驗表範本？', body: '換範本會清掉已填的抽查結果（項目不同，值不能沿用）。', danger: true, confirmLabel: '換範本' }))) return
+    onFormChange(setInspectionFormTemplate(form, t))
+  }
   const startAmend = async () => {
     const reason = await appPrompt({ title: '建立更正版本？', label: `版本 ${doc.current_version_no} 的簽署${status === 'submitted' ? '與提送' : ''}會保留並綁在該版本；更正存檔後成為新版本草稿，重新簽署時重新判定。改確認數量須先撤銷原確認紀錄，否則伺服器會拒簽。更正原因（必填）`, required: true, confirmLabel: '建立更正版本' })
     if (reason === null) return
@@ -215,7 +227,9 @@ export default function InspectionForm() {
       if (reason === null) { setSaving(false); return }
       changeNote = reason; setAmendReason(reason)
     }
-    const r = await saveFieldDocumentVersion({ documentId: doc.id, baseVersionNo: baseVersion, content: form.content, fieldSources: form.sources, attachments, changeNote })
+    // 存檔時把「當時用的表單範本」寫進內容:簽署版本自己記得版面語意(C 包)
+    const content = stampFormTemplate(form.content, 'inspection_form')
+    const r = await saveFieldDocumentVersion({ documentId: doc.id, baseVersionNo: baseVersion, content, fieldSources: form.sources, attachments, changeNote })
     setSaving(false)
     if (r.error) {
       const g = fieldDocErrorGuidance(r.error)
@@ -408,9 +422,13 @@ export default function InspectionForm() {
                 </div>
               )}
 
-              <InspectionFormFields state={form} frame={frame} inspection={inspection} workItem={workItem} requiredStages={requiredStages}
-                checklistTemplates={inspectionTemplates} checklistTemplate={checklistTemplate} labels={labels}
-                editable={!!formEditable} onChange={onFormChange} issues={issueMap} batchCum={batchCum} selfCheckDoc={selfCheckDoc} />
+              <div className="overflow-x-auto -mx-2 px-2">
+                <InspectionFormSheet project={project} doc={doc} version={detail?.version} content={form.content} sources={form.sources}
+                  signature={null} frame={frame} inspection={inspection} checklistTemplates={inspectionTemplates} checklistTemplate={checklistTemplate}
+                  byId={byId} workItem={workItem} requiredStages={requiredStages} batchCum={batchCum} selfCheckDoc={selfCheckDoc}
+                  stamp={null} titleAs="h2" className="min-w-[680px] !p-4"
+                  edit={{ org, editable: !!formEditable, onChange: onFormChange, state: form, issues: issueMap, photosById, onTemplateChange }} />
+              </div>
 
               <DocumentPhotos attachments={attachments} photosById={photosById} editable={!!formEditable} byId={byId} ownerOrg="supervisor"
                 issues={attachmentIssueMap} onToggleRole={toggleRole} onRemove={removeAttachment}

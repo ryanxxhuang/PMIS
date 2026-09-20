@@ -3,7 +3,7 @@
 // 事實表 checklist_records 在簽署交易內落庫:首簽 Rev.0、簽後更正再簽=修訂 Rev.N,合格判定由 DB 依範本量化標準計算,
 // 不合格由 DB 同交易開缺失),提送監造／監造收件／退回各走 RPC。
 //
-// 與施工日誌／監造日誌頁共用 DocumentLifecycle／DocumentPhotos／FieldSourceChip;框架版面由伺服器範本
+// 與施工日誌／監造日誌頁共用 DocumentLifecycle／DocumentPhotos;框架版面由伺服器範本
 // fn_field_document_template('self_check')(示範框架範本,Q11)驅動,檢查項目取自本案檢查表範本(品質查驗建立;內建 03310 首次
 // 使用才落 DB)。一份文件=一次自檢(?doc=<id> 直達;沒有 ?doc= 是「新建」:選日期／範本／工項後第一次存檔才建文件)。
 // 實測值只能人填:AI 草稿永遠留空(告示板讀數只是提示),每個項目系統帶入的值都要人逐項「確認」才能簽(伺服器 PD004

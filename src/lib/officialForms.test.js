@@ -8,10 +8,11 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
-  DAILY_LOG_MAPPING, SELF_CHECK_MAPPING, FORM_TEMPLATES, mappingFor, mappedKeys, isEditableBy, unmappedRows,
-  templateCaption, stampFormTemplate, formTemplateOf, dailyLogHeaderFacts, rocDateText,
+  DAILY_LOG_MAPPING, SELF_CHECK_MAPPING, INSPECTION_FORM_MAPPING, SUPERVISOR_LOG_MAPPING,
+  FORM_TEMPLATES, mappingFor, mappedKeys, isEditableBy, unmappedRows, canEditForm,
+  templateCaption, stampFormTemplate, formTemplateOf, dailyLogHeaderFacts, supervisorReportHeaderFacts, rocDateText,
 } from './officialForms.js'
-import { emptyDailyLogContent, emptySelfCheckContent } from './fieldDocs.js'
+import { emptyDailyLogContent, emptySelfCheckContent, emptySupervisorLogContent, emptyInspectionFormContent } from './fieldDocs.js'
 
 const DOC = readFileSync(new URL('../../docs/architecture/official-form-mapping.md', import.meta.url), 'utf8')
 
@@ -26,7 +27,12 @@ function docRows(heading) {
 }
 
 describe('mapping 清單:程式與文件是同一份', () => {
-  for (const [heading, rows] of [['1. 施工日誌（工程會附表四）', DAILY_LOG_MAPPING], ['2. 自主檢查表（臺北市格式參考範例）', SELF_CHECK_MAPPING]]) {
+  for (const [heading, rows] of [
+    ['1. 施工日誌（工程會附表四）', DAILY_LOG_MAPPING],
+    ['2. 自主檢查表（臺北市格式參考範例）', SELF_CHECK_MAPPING],
+    ['3. 監造查驗紀錄表（臺北市「施工抽查紀錄表」格式參考範例）', INSPECTION_FORM_MAPPING],
+    ['4. 監造報表（工程會附表五）', SUPERVISOR_LOG_MAPPING],
+  ]) {
     it(`${heading}:逐列的原表欄名與儲存欄位一致`, () => {
       const inDoc = docRows(heading)
       expect(inDoc.map((r) => [r.label, r.key])).toEqual(rows.map((r) => [r.label, r.key || null]))
@@ -34,7 +40,7 @@ describe('mapping 清單:程式與文件是同一份', () => {
   }
 
   it('沒有重複的儲存欄位(同一格不會有兩個定義)', () => {
-    for (const docType of ['daily_log', 'self_check']) {
+    for (const docType of ['daily_log', 'self_check', 'inspection_form', 'supervisor_log']) {
       const keys = mappedKeys(docType)
       expect(new Set(keys).size).toBe(keys.length)
     }
@@ -46,6 +52,13 @@ describe('mapping 清單:程式與文件是同一份', () => {
     expect(unmappedRows('daily_log').map((r) => r.label)).toContain('累計工期(天)')
     expect(unmappedRows('self_check').map((r) => r.label)).toContain('檢查結果(○／╳／／)')
     expect(unmappedRows('self_check').map((r) => r.label)).toContain('檢查項目') // 項目來自本案範本,不是文件自己的欄位
+    // 監造查驗:判定符號欄是系統算的、監造主管簽名本輪未實作 → 都要留在清單上
+    expect(unmappedRows('inspection_form').map((r) => r.label)).toContain('抽查結果(○／╳／／)')
+    expect(unmappedRows('inspection_form').map((r) => r.label)).toContain('監造主管簽名')
+    // 附表五:契約工期／變更次數／進度是系統算的,不是人填的
+    for (const l of ['契約工期(天)', '契約變更次數(次)', '預定進度(%)', '實際進度(%)']) {
+      expect(unmappedRows('supervisor_log').map((r) => r.label)).toContain(l)
+    }
   })
 })
 
@@ -83,6 +96,46 @@ describe('mapping 的儲存欄位對得上實際內容形狀', () => {
     expect(isEditableBy('self_check', 'results.<no>', 'contractor')).toBe(true)
     expect(mappingFor('self_check').find((r) => r.label.startsWith('檢查結果')).editableBy).toEqual([])
   })
+
+  it('監造查驗紀錄表:頂層鍵都在內容形狀或是 C2 新增的原表欄位', () => {
+    const content = emptyInspectionFormContent('2026-09-20', null, null, null)
+    const extra = ['doc_no', 'subproject_name', 'check_timing', 'recheck_result', 'recheck_date', 'recheck_role']
+    for (const k of topLevel(mappedKeys('inspection_form'))) {
+      expect(Object.keys(content).includes(k) || extra.includes(k)).toBe(true)
+    }
+  })
+
+  it('監造報表(附表五):頂層鍵都在內容形狀或是 C2 新增的原表欄位', () => {
+    const content = emptySupervisorLogContent('2026-09-20', null)
+    const extra = ['doc_no', 'actual_completion_date', 'extended_days', 'contract_amount_original', 'contract_amount_revised', 'material_quality', 'safety_precheck', 'safety_other']
+    for (const k of topLevel(mappedKeys('supervisor_log'))) {
+      expect(Object.keys(content).includes(k) || extra.includes(k)).toBe(true)
+    }
+  })
+
+  it('監造兩份的可編角色是監造:廠商與機關在這兩張紙上都不可編(fail-closed)', () => {
+    for (const [docType, key] of [['inspection_form', 'confirmed_qty'], ['inspection_form', 'results.<no>'], ['supervisor_log', 'attendance'], ['supervisor_log', 'contractor_summary']]) {
+      expect(isEditableBy(docType, key, 'supervisor')).toBe(true)
+      expect(isEditableBy(docType, key, 'contractor')).toBe(false)
+      expect(isEditableBy(docType, key, 'owner')).toBe(false)
+    }
+    expect(canEditForm('inspection_form', 'supervisor')).toBe(true)
+    expect(canEditForm('inspection_form', 'contractor')).toBe(false)
+    expect(canEditForm('supervisor_log', 'contractor')).toBe(false)
+    // 反過來:廠商的兩份,監造不可編
+    expect(canEditForm('daily_log', 'supervisor')).toBe(false)
+    expect(canEditForm('self_check', 'supervisor')).toBe(false)
+  })
+
+  it('監造查驗紀錄表:系統算的格誰都不能編;不在 mapping 的鍵一律不可編', () => {
+    // 判定符號、查驗日期、工項、單位:唯讀(伺服器算／帶入)
+    for (const k of ['inspection_date', 'work_item_id', 'unit', 'inspection_id', 'self_check_record_id']) {
+      expect(isEditableBy('inspection_form', k, 'supervisor')).toBe(false)
+    }
+    expect(isEditableBy('inspection_form', 'inspection_title', 'supervisor')).toBe(false)
+    expect(isEditableBy('supervisor_log', 'log_date', 'supervisor')).toBe(false)
+    expect(isEditableBy('supervisor_log', 'daily_log_receipt', 'supervisor')).toBe(false)
+  })
 })
 
 describe('範本來源誠實', () => {
@@ -96,10 +149,19 @@ describe('範本來源誠實', () => {
   })
 
   it('畫面與紙本印的標示含「參考」與「未經機關核定」,不出現核定字樣', () => {
-    const caption = templateCaption('daily_log')
-    expect(caption).toContain('參考工程會格式')
-    expect(caption).toContain('未經機關核定')
-    expect(caption).not.toMatch(/機關核定版|正式表單/)
+    for (const docType of ['daily_log', 'self_check', 'inspection_form', 'supervisor_log']) {
+      const caption = templateCaption(docType)
+      expect(caption).toMatch(/參考(工程會|臺北市)格式/)
+      expect(caption).toContain('未經機關核定')
+      expect(caption).not.toMatch(/機關核定版|正式表單/)
+    }
+  })
+
+  it('附表五是日報不是監造月報:標示與免責聲明都不得出現「月報」', () => {
+    expect(FORM_TEMPLATES.supervisor_log.title).toBe('公共工程監造報表')
+    expect(FORM_TEMPLATES.supervisor_log.disclaimer).toContain('不是監造月報')
+    expect(templateCaption('supervisor_log')).not.toContain('月報')
+    expect(FORM_TEMPLATES.supervisor_log.revision).toContain('附表五')
   })
 })
 
@@ -148,5 +210,46 @@ describe('表頭的工期與進度是確定性計算,算不出來就待補', () 
   it('民國年月日與星期', () => {
     expect(rocDateText('2026-09-18', { weekday: true })).toBe('115 年 9 月 18 日(星期五)')
     expect(rocDateText(null)).toBe('')
+  })
+})
+
+describe('監造報表(附表五)表頭:契約變更次數算得出來,契約金額不自己編', () => {
+  const project = { commencement_date: '2026-03-01', end_date: '2026-12-31', project_name: 'A 案' }
+  const co = (status, date) => ({ status, co_date: date, items: [{ amount_delta: 1000 }] })
+
+  it('契約變更次數=截至本日已核准件數;未核准與本日之後的不算;0 件就是 0,不是待補', () => {
+    const f = supervisorReportHeaderFacts({
+      project, logDate: '2026-09-18',
+      changeOrders: [co('核准', '2026-05-01'), co('核准', '2026-09-18'), co('核准', '2026-10-01'), co('審核中', '2026-04-01'), co('駁回', '2026-04-01')],
+    })
+    expect(f.approved_change_count.value).toBe(2)
+    expect(f.approved_change_count.pending).toBe(false)
+    expect(supervisorReportHeaderFacts({ project, logDate: '2026-09-18', changeOrders: [] }).approved_change_count)
+      .toEqual({ value: 0, source: '已核准變更設計件數(截至本日)', pending: false })
+  })
+
+  it('已核准但沒有變更日期的仍計入,且在來源說清楚(不猜日期也不漏計)', () => {
+    const f = supervisorReportHeaderFacts({ project, logDate: '2026-09-18', changeOrders: [co('核准', null), co('核准', '2026-05-01')] })
+    expect(f.approved_change_count.value).toBe(2)
+    expect(f.approved_change_count.source).toContain('未載變更日期')
+  })
+
+  it('變更設計尚未載入(null):標待補,不印 0', () => {
+    expect(supervisorReportHeaderFacts({ project, logDate: '2026-09-18' }).approved_change_count)
+      .toEqual({ value: null, source: null, pending: true })
+  })
+
+  it('預定完工日期取契約竣工日;缺值待補。契約金額不是事實、不由這裡產生', () => {
+    expect(supervisorReportHeaderFacts({ project, logDate: '2026-09-18' }).planned_completion_date.value).toBe('2026-12-31')
+    expect(supervisorReportHeaderFacts({ project: { project_name: 'A 案' }, logDate: '2026-09-18' }).planned_completion_date.pending).toBe(true)
+    const keys = Object.keys(supervisorReportHeaderFacts({ project, logDate: '2026-09-18' }))
+    expect(keys.some((k) => k.includes('contract_amount'))).toBe(false)
+  })
+
+  it('工期與進度沿用施工日誌同一支算式(不另寫一份)', () => {
+    const plan = { start: '2026-03-01', months: [{ plannedPct: 0 }, { plannedPct: 10 }, { plannedPct: 20 }, { plannedPct: 30 }, { plannedPct: 40 }, { plannedPct: 50 }, { plannedPct: 60 }, { plannedPct: 70 }, { plannedPct: 80 }, { plannedPct: 100 }] }
+    const a = dailyLogHeaderFacts({ project, progressPlan: plan, logDate: '2026-09-18', actualPct: 42.34 })
+    const b = supervisorReportHeaderFacts({ project, progressPlan: plan, logDate: '2026-09-18', actualPct: 42.34, changeOrders: [] })
+    for (const k of Object.keys(a)) expect(b[k]).toEqual(a[k])
   })
 })

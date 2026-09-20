@@ -8,7 +8,7 @@
 //   * 該日有既有未簽署日誌(舊路徑寫的,正式 12 筆)→ 以其內容為草稿,來源全標「既有紀錄、待核對」,
 //     第一次存檔才建立文件(設計 §9;不偽造簽署)。
 //   * 都沒有 → 空白草稿(全部待補)。
-// 欄位逐欄顯示值、來源與狀態(FieldSourceChip),待補集中在頂部;AI 建議(有人工版本後的
+// 欄位逐欄顯示值、來源與狀態(紙上的輕量狀態章 PaperCell.FieldMark),待補集中在頂部;AI 建議(有人工版本後的
 // suggest_field_update)以套用／拒絕呈現並留 agent_actions 紀錄。
 // 樂觀併發:base 版本≠目前版本(PD001／PD002)→ 明確提示重新載入,不默默覆蓋。
 // 簽後更正=人明確按「建立更正版本」→ 存檔開新版回草稿,舊簽署綁舊版(卡上明示)。
@@ -29,7 +29,7 @@ import {
   addItemRow, applySuggestion, mergeAttachments, attachmentIssues, fieldDocErrorGuidance, docStatusMeta, DOC_STATUS_LABEL,
 } from '../../lib/fieldDocs.js'
 import { stampFormTemplate } from '../../lib/officialForms.js'
-import useDailyLogFacts from '../../lib/useDailyLogFacts.js'
+import { useDailyLogFacts } from '../../lib/useFormHeaderFacts.js'
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'
 import IntakeUploader from '../../components/sitelog/IntakeUploader.jsx'

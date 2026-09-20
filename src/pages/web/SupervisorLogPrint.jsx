@@ -10,6 +10,7 @@ import PrintToolbar from '../../components/PrintToolbar.jsx'
 import SupervisorLogSheet from '../../components/sitelog/SupervisorLogSheet.jsx'
 import { PrintedVersionBody } from '../../components/sitelog/DocumentPrint.jsx'
 import usePrintedVersion from '../../lib/usePrintedVersion.js'
+import { useSupervisorReportFacts } from '../../lib/useFormHeaderFacts.js'
 import { fieldDocFileName } from '../../lib/pdf/docFileName.js'
 
 export default function SupervisorLogPrint() {
@@ -22,6 +23,8 @@ export default function SupervisorLogPrint() {
   const docs = fieldDocuments?.documents || []
   const doc = (docParam ? docs.find((x) => x.id === docParam) : null) || (dateParam ? findActiveFieldDoc('supervisor_log', dateParam) : null) || null
   const printed = usePrintedVersion(doc, { templateType: 'supervisor_log', waiting: fieldDocsLoading })
+  // 表頭的工期／進度／變更次數與編輯畫面同一支算式(印的是這一版的業務日期,不是今天)
+  const facts = useSupervisorReportFacts(printed.doc?.doc_date || doc?.doc_date || dateParam || null)
 
   if (!currentUser) return <Navigate to="/login" replace />
   const backTo = doc ? `/supervisor-log?doc=${encodeURIComponent(doc.id)}` : '/supervisor-log'
@@ -44,7 +47,7 @@ export default function SupervisorLogPrint() {
       <PrintToolbar backTo={backTo} backLabel="返回監造日誌" pdf={pdf} />
       <PrintedVersionBody printed={printed}>
         <SupervisorLogSheet project={project} doc={printed.doc} version={printed.version} signature={printed.signature} template={printed.template}
-          lookups={{ inspections, defects, rfis, submittals }} byId={byId} />
+          facts={facts} lookups={{ inspections, defects, rfis, submittals }} byId={byId} />
       </PrintedVersionBody>
     </div>
   )

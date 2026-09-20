@@ -33,9 +33,10 @@ export function usePaperField(key) {
     set: (v) => ctx?.onChange?.(setFieldValue(ctx.state, key, v)),
     fill: (v) => ctx?.onChange?.(fillHumanField(ctx.state, key, v)),
     confirm: () => ctx?.onChange?.(confirmField(ctx.state, key)),
-    // 「本日無」與「不適用」是同一條規則(na＋原因;不得留空、不得填「無」),只是日報用語不同
+    // 「本日無」與「不適用」是同一條規則(na＋原因;不得留空、不得填「無」),只是日報用語不同:
+    // 日報型的欄位(本日無／本日未到場／廠商未施工)問的是「本日不適用」,一次性表單問的是「不適用」。
     na: async (title, naLabel = '不適用') => {
-      const word = naLabel === '本日無' ? '本日不適用' : '不適用'
+      const word = naLabel === '不適用' ? '不適用' : '本日不適用'
       const reason = await appPrompt({ title: `${title}：${word}`, label: `${word}的原因（必填，如 本日未出工、本項不在本次施作範圍）`, required: true })
       if (reason === null) return
       ctx?.onChange?.(setFieldNa(ctx.state, key, reason))
@@ -55,23 +56,28 @@ export function mappingKeyOf(key) {
 
 // ── 狀態章(輕量;列印不印)──────────────────────────────────────────────────
 // 值本身已經在格子裡,這枚章只講「這個值從哪來、要不要人確認」,以及提供回看證據的入口。
-export function FieldMark({ fieldKey, title, naLabel = '不適用', allowNa = false, className = '' }) {
+export function FieldMark({ fieldKey, title, naLabel = '不適用', allowNa = false, confirmLabel = '確認', humanOnly = false, className = '' }) {
   const { ctx, source, editable, issue, confirm, na } = usePaperField(fieldKey)
   const [openEvidence, setOpenEvidence] = useState(false)
   const panelId = useId()
   if (!ctx || ctx.showMarks === false) return null // 純紙(列印／PDF):不掛來源章
-  const status = source?.status || 'pending'
+  // 「沒有來源列」≠「待補」:待補清單(issues)說它待補、或來源自己說 pending,才掛待補章。
+  // 原表有、但本系統列為非必填的格(表報編號、展延天數、契約金額…)沒有來源列,不該長出誤導的「待補」。
+  const status = source?.status || (issue ? 'pending' : null)
+  if (!status) return null
   const evidence = Array.isArray(source?.evidence) ? source.evidence : []
   const hint = source?.hint || null
   const hasEvidence = evidence.length > 0 || !!hint || !!source?.reason
-  // 已確認且沒有證據可回看 → 不佔版面
-  if (status === 'confirmed' && !hasEvidence && !issue) return null
+  // 已確認且沒有證據可回看 → 不佔版面(人填欄例外:確認本身就是本人的具結,要看得到)
+  if (status === 'confirmed' && !hasEvidence && !issue && !humanOnly) return null
   const tone = issue ? 'text-[var(--amber-text)]' : status === 'pending' ? 'text-[var(--amber-text)]' : status === 'na' ? 'paper-mute' : status === 'confirmed' ? 'paper-mute' : 'text-[var(--blue-text)]'
-  const from = status === 'pending' || status === 'confirmed' ? null : sourceLabel(source?.source)
+  // 人填欄(範本 human_only;監造到場)的 filled 不是「AI 帶入待核對」,是「已填・待親自確認」(鏡像 DB needs_confirmation)
+  const needsOwn = humanOnly && status === 'filled'
+  const from = status === 'pending' || status === 'confirmed' || needsOwn ? null : sourceLabel(source?.source)
   return (
     <span className={`print:hidden inline-flex items-center gap-1 flex-wrap text-micro leading-tight ${className}`}>
-      <span className={tone}>
-        {issue === 'needs_confirmation' ? '待親自確認' : FIELD_STATUS_LABEL[status] || status}
+      <span className={needsOwn ? 'text-[var(--amber-text)]' : tone}>
+        {issue === 'needs_confirmation' || needsOwn ? '已填・待親自確認' : FIELD_STATUS_LABEL[status] || status}
         {from ? `・${from}` : ''}
         {status === 'na' && source?.reason ? `・${source.reason}` : ''}
       </span>
@@ -83,7 +89,7 @@ export function FieldMark({ fieldKey, title, naLabel = '不適用', allowNa = fa
         </button>
       )}
       {editable && status === 'filled' && (
-        <button type="button" onClick={confirm} className="font-medium text-[var(--blue-text)] hover:underline">確認</button>
+        <button type="button" onClick={confirm} className="font-medium text-[var(--blue-text)] hover:underline">{confirmLabel}</button>
       )}
       {editable && allowNa && (status === 'pending' || status === 'filled') && (
         <button type="button" onClick={() => na(title || fieldKey, naLabel)} className="font-medium paper-mute hover:underline">{naLabel}</button>
@@ -135,7 +141,7 @@ function EvidencePanel({ id, source, photosById = new Map() }) {
 // label 是原表欄名(aria-label 用,螢幕閱讀器與 e2e 都靠它定位);可編才長 input,否則純文字。
 export function PaperInput({
   fieldKey, label, type = 'text', value, onValue, placeholder = '', align = 'left', className = '',
-  options = null, human = false, readOnlyText = null, min = null, step = 'any', rows = 0,
+  options = null, human = false, readOnlyText = null, min = null, max = null, step = 'any', rows = 0,
 }) {
   const f = usePaperField(fieldKey)
   const v = value !== undefined ? value : valueAt(f.ctx?.state?.content, fieldKey)
@@ -166,7 +172,7 @@ export function PaperInput({
   }
   if (type === 'number') {
     return (
-      <input {...common} type="number" inputMode="decimal" step={step} {...(min != null ? { min } : {})}
+      <input {...common} type="number" inputMode="decimal" step={step} {...(min != null ? { min } : {})} {...(max != null ? { max } : {})}
         value={v ?? ''} onChange={(e) => commit(e.target.value === '' ? null : Number(e.target.value))} />
     )
   }
