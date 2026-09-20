@@ -158,42 +158,44 @@ describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
     }
     for (const b of BALL_SOURCES) expect(b.short).toMatch(/^.{1,3}$/)
   })
-  it('施工廠商:看得到請款,看不到監造月報;排程、成本與風險稽核 hidden', () => {
+  // 2026-09-20 廠商驗收 A 包:廠商的導覽只剩自己的現場作業(監造日誌與監造查驗表單 hiddenFor);
+  // 停留點／工安／S 曲線／月報／跨案總覽 hidden(嵌回主流程或先收起入口)。roles 與路由一字不動。
+  it('施工廠商:現場只剩自己的作業(沒有監造日誌／監造查驗表單);停留點、工安、S 曲線、月報、跨案總覽的入口都收起', () => {
     expect(outline(visibleNavGroups('contractor', false))).toEqual([
       ['工作', [
-        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '自主檢查表', '監造查驗表單', '品質查驗', '檢驗停留點', '工安管理']],
-        ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '進度 S 曲線', '驗收結算']],
+        ['現場紀錄', ['現場總覽', '施工日誌', '自主檢查表', '品質查驗']],
+        ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '驗收結算']],
         ['估驗請款', ['估驗計價', '請款收款', '標單工項']],
       ]],
       ['專案資料', [
-        ['文件往來', ['送審文件', '工程疑義', '施工月報']],
-        ['專案', ['專案文件', '三方成員', '活動紀錄', '跨案總覽']],
+        ['文件往來', ['送審文件', '工程疑義']],
+        ['專案', ['專案文件', '三方成員', '活動紀錄']],
       ]],
     ])
   })
-  it('監造:不經手請款、看不到廠商排程;多監造月報', () => {
+  it('監造:監造日誌與監造查驗表單照舊在現場紀錄(監造端能力不縮);不經手請款', () => {
     expect(outline(visibleNavGroups('supervisor', false))).toEqual([
       ['工作', [
-        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '自主檢查表', '監造查驗表單', '品質查驗', '檢驗停留點', '工安管理']],
-        ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '進度 S 曲線', '驗收結算']],
+        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '自主檢查表', '監造查驗表單', '品質查驗']],
+        ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '驗收結算']],
         ['估驗請款', ['估驗計價', '標單工項']],
       ]],
       ['專案資料', [
-        ['文件往來', ['送審文件', '工程疑義', '施工月報', '監造月報']],
-        ['專案', ['專案文件', '三方成員', '活動紀錄', '跨案總覽']],
+        ['文件往來', ['送審文件', '工程疑義']],
+        ['專案', ['專案文件', '三方成員', '活動紀錄']],
       ]],
     ])
   })
-  it('機關:看不到廠商排程;風險稽核 hidden(深連結仍限機關)', () => {
+  it('機關:監造文件的收件入口保留;風險稽核 hidden(深連結仍限機關)', () => {
     expect(outline(visibleNavGroups('owner', false))).toEqual([
       ['工作', [
-        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '自主檢查表', '監造查驗表單', '品質查驗', '檢驗停留點', '工安管理']],
-        ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '進度 S 曲線', '驗收結算']],
+        ['現場紀錄', ['現場總覽', '施工日誌', '監造日誌', '自主檢查表', '監造查驗表單', '品質查驗']],
+        ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '驗收結算']],
         ['估驗請款', ['估驗計價', '請款收款', '標單工項']],
       ]],
       ['專案資料', [
-        ['文件往來', ['送審文件', '工程疑義', '施工月報']],
-        ['專案', ['專案文件', '三方成員', '活動紀錄', '跨案總覽']],
+        ['文件往來', ['送審文件', '工程疑義']],
+        ['專案', ['專案文件', '三方成員', '活動紀錄']],
       ]],
     ])
   })
@@ -316,13 +318,17 @@ describe('roles 與 hidden 定義釘死(重劃分區不得鬆綁;退場頁 hidde
       '/audit': ['owner'],
     })
   })
-  it('hidden 集合=仍是頁面的退場頁(/cost):仍登記、仍依原 roles 可直達,只是不進側欄/分頁列', () => {
+  it('hidden 集合釘死:仍登記、仍依原 roles 可直達,只是不進側欄/分頁列(override 也不露)', () => {
     const hidden = allDefs().filter((n) => n.hidden).map((n) => n.to)
-    expect(hidden).toEqual(['/cost'])
+    // /cost 是 D-026 的退場頁;其餘六條是 2026-09-20 廠商驗收 A 包先收起的入口
+    // (停留點嵌回品質查驗;工安、S 曲線、兩張月報、跨案總覽先收起)——頁面、資料與提醒都還在。
+    expect(hidden).toEqual(['/itp', '/safety', '/progress', '/cost', '/monthly-report', '/supervisor-report', '/portfolio'])
     for (const to of hidden) {
-      expect(routeRegistry[to]).toBeTruthy()
+      const rule = routeRegistry[to]
+      expect(rule).toBeTruthy()
       for (const org of ORGS) {
-        expect(routeAllowed(to, org, false)).toBe(routeRegistry[to].roles.includes(org))
+        // hidden 只收入口,不收權限:沒有 roles 的照樣三角色可直達,有 roles 的照原 roles
+        expect(routeAllowed(to, org, false), `${to} ${org}`).toBe(!rule.roles || rule.roles.includes(org))
         expect(flatNav(visibleNavGroups(org, true)).flatMap((i) => i.tabs || [i]).find((t) => t.to === to)).toBeUndefined()
       }
     }
@@ -330,6 +336,42 @@ describe('roles 與 hidden 定義釘死(重劃分區不得鬆綁;退場頁 hidde
     expect(routeRegistry['/alerts']).toEqual({ access: 'authenticated', label: '提醒中心' })
     expect(navLabel('/alerts')).toBe('提醒中心')
     expect(routeRegistry['/agent']).toEqual({ access: 'authenticated' })
+  })
+})
+
+// 2026-09-20 廠商驗收 A 包:「導覽」與「授權」是兩個維度。hiddenFor 只收該角色的入口,
+// routeAllowed 一字不動——廠商仍要能唯讀開啟監造的查驗判定與確認數量(可估驗依據)。
+describe('hiddenFor(導覽收斂,不是權限):廠商的選單沒有監造作業,但深連結照原權限唯讀可達', () => {
+  const tabsOf = (org, override = false) =>
+    flatNav(visibleNavGroups(org, override)).flatMap((i) => i.tabs || [i]).map((t) => t.to)
+
+  it('hiddenFor 集合釘死:只有監造日誌與監造查驗表單,且只對廠商收起', () => {
+    const flagged = allDefs().filter((n) => n.hiddenFor)
+    expect(flagged.map((n) => n.to)).toEqual(['/supervisor-log', '/inspection-form'])
+    for (const n of flagged) {
+      expect(n.hiddenFor).toEqual(['contractor'])
+      expect(n.roles, `${n.to} 不得用 roles 收斂(會連唯讀查閱一起關掉)`).toBeUndefined()
+      expect(n.hidden).toBeUndefined()
+    }
+  })
+  it('廠商:側欄/分頁列沒有監造日誌與監造查驗表單;專案管理者(override)與平台管理員也一樣看不到', () => {
+    for (const to of ['/supervisor-log', '/inspection-form']) {
+      expect(tabsOf('contractor')).not.toContain(to)
+      expect(tabsOf('contractor', true)).not.toContain(to)   // override 對 roles 放行,對 hiddenFor 不放行
+      expect(flatNav(visibleNavGroups('contractor', true, true)).flatMap((i) => i.tabs || [i]).map((t) => t.to)).not.toContain(to)
+    }
+    // 廠商自己的現場作業一項不少(施工日誌、自主檢查表、品質查驗)
+    for (const to of ['/site', '/site-log', '/self-check', '/quality']) expect(tabsOf('contractor')).toContain(to)
+  })
+  it('監造與機關照舊看得到(監造端能力不縮,機關仍收得到件)', () => {
+    for (const org of ['supervisor', 'owner']) {
+      for (const to of ['/supervisor-log', '/inspection-form']) expect(tabsOf(org), `${org} ${to}`).toContain(to)
+    }
+  })
+  it('routeAllowed 不受 hiddenFor 影響:廠商仍可由既有深連結唯讀開啟監造文件(查驗結果與計價依據)', () => {
+    for (const to of ['/supervisor-log', '/inspection-form', '/inspection-form/print', '/supervisor-log/print']) {
+      for (const org of ORGS) expect(routeAllowed(to, org, false), `${to} ${org}`).toBe(true)
+    }
   })
 })
 

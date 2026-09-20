@@ -9,6 +9,12 @@
 // 「導覽隱藏」與「權限」永遠一致。
 // hidden: true=不渲染在側欄/分頁列/尋找功能,但仍參與 routeAllowed 的角色判斷——
 // 收斂是「不顯示」,不是「不設限」;刪掉定義會讓 roles 一起消失(權限靜默鬆綁)。
+// hiddenFor: ['contractor']=只對這些 org_type 不渲染,roles 一字不動(2026-09-20 廠商驗收 A 包)。
+// 這是「導覽」維度,與 roles(授權)分開:廠商的主選單/分頁/現場作業卡不該列監造的作業,
+// 但監造提送給廠商的文件、既有深連結與收件動作必須照原權限唯讀進得去——用 roles 收會連
+// 唯讀查閱一起關掉(誤刪廠商應收的查驗結果與計價依據),那是驗收明文禁止的。
+// 與 roles 的另一個差別:override(非正式模式的專案管理者)翻不過 hiddenFor——
+// 驗收要求「一般廠商帳號含專案 admin 情境」都看不到監造作業入口,而 override 對 roles 一律放行。
 // 退場模組(D-026 §4):/cost(廠商成本)仍是頁面,只 hidden——歷史查閱與 CSV 匯出仍在這一頁。
 // /schedule(廠商逐工項排程)與 /audit(機關風險稽核)的頁面已於 P6b 移除(承接到履約時程／估驗計價),
 // 路由改登記在 nonNavRouteRules 的 access: 'retired'——原 roles 照樣守衛,放行後才導到承接位置。
@@ -35,14 +41,17 @@ export const navGroups = [
     { to: '/site', icon: 'engineering', label: '現場紀錄', short: '現場', tabs: [
       { to: '/site', label: '現場總覽' },
       { to: '/site-log', label: '施工日誌' },
-      { to: '/supervisor-log', label: '監造日誌' },
+      // 監造日誌／監造查驗表單是監造的作業,不是廠商的(2026-09-20 廠商驗收 A 包):
+      // 導覽對廠商收起(hiddenFor),roles 不動——廠商仍可由品質查驗詳情、今日工作待辦與舊連結
+      // 唯讀開啟查驗判定與確認數量(可估驗依據),監造提送後照原流程收件或退回。
+      { to: '/supervisor-log', label: '監造日誌', hiddenFor: ['contractor'] },
       { to: '/self-check', label: '自主檢查表' },
-      // 監造查驗表單(P3c):監造的判定文件——由查驗申請直達、照片起稿、簽署即判定並寫入確認量(可估驗依據);不限角色,
-      // 頁內依 org 決定可編／唯讀／收件(廠商與機關各自收件)。
-      { to: '/inspection-form', label: '監造查驗表單' },
+      { to: '/inspection-form', label: '監造查驗表單', hiddenFor: ['contractor'] },
       { to: '/quality', label: '品質查驗' },
-      { to: '/itp', label: '檢驗停留點' },
-      { to: '/safety', label: '工安管理' },
+      // 檢驗停留點:入口嵌回品質查驗(查驗分段就地申請),不再與查驗並列;深連結與提醒不變
+      { to: '/itp', label: '檢驗停留點', hidden: true },
+      // 工安工作區:本輪先收起獨立入口(工安缺失仍走同一套缺失引擎,提醒與歷史不動)
+      { to: '/safety', label: '工安管理', hidden: true },
     ] },
     // 履約時程:原「契約重點」參考項升為主入口;期限追蹤與擷取審核由非導覽路由改為子頁
     // (仍不限角色),變更設計自「審查與協作」移入、驗收與進度自「報表/金流」移入。
@@ -51,7 +60,8 @@ export const navGroups = [
       { to: '/deadlines', label: '期限追蹤' },
       { to: '/requirements/review', label: '擷取審核' },
       { to: '/change-orders', label: '變更設計' },
-      { to: '/progress', label: '進度 S 曲線' },
+      // 進度 S 曲線:本輪先收起獨立入口(履約時程與估驗已帶進度口徑);頁面與資料不動
+      { to: '/progress', label: '進度 S 曲線', hidden: true },
       { to: '/acceptance', label: '驗收結算' },
     ] },
     // 估驗請款:原「進度與金流」去掉排程、成本改 hidden;標單工項由參考項移入(逐項量價是估驗的依據)。
@@ -68,15 +78,18 @@ export const navGroups = [
     { to: '/submittals', icon: 'rate_review', label: '文件往來', short: '文件', tabs: [
       { to: '/submittals', label: '送審文件' },
       { to: '/rfi', label: '工程疑義' },
-      { to: '/monthly-report', label: '施工月報' },
-      { to: '/supervisor-report', label: '監造月報', roles: ['supervisor'] },
+      // 月報:本輪先收起獨立入口(P6a 起兩張月報都只彙整已簽署文件,是衍生視圖不是新作業);
+      // roles 不動,提醒信與舊連結照原角色可達
+      { to: '/monthly-report', label: '施工月報', hidden: true },
+      { to: '/supervisor-report', label: '監造月報', roles: ['supervisor'], hidden: true },
     ] },
     // 專案:文件來源(專案文件=整案文件的唯一上傳/歸檔窗口)、成員、歷史查閱與選案。
     { to: '/contract', icon: 'folder', label: '專案', short: '專案', tabs: [
       { to: '/contract', label: '專案文件' },
       { to: '/members', label: '三方成員' },
       { to: '/activity', label: '活動紀錄' },
-      { to: '/portfolio', label: '跨案總覽' },
+      // 跨案總覽:本輪先收起獨立入口(選案改由頁首的專案切換器,一格就到);頁面與 RPC 不動
+      { to: '/portfolio', label: '跨案總覽', hidden: true },
     ] },
   ] },
   { title: '平台', items: [
@@ -227,17 +240,23 @@ export function defaultLandingPath(_orgType) {
   return '/dashboard'
 }
 
+// 導覽可見性(只管「渲染不渲染」,與授權無關):hidden 對所有角色收起,hiddenFor 只對列名的
+// org_type 收起。刻意不吃 override——override 是「非正式模式的專案管理者對 roles 一律放行」,
+// 用來補授權,不是用來把別的角色的作業塞回你的選單(驗收要求專案 admin 情境的廠商也看不到)。
+const navVisible = (n, org) => !n.hidden && !(n.hiddenFor || []).includes(org)
+
 // 側欄可見項:群組入口=第一個可見子頁;整組子頁都不可見則隱藏該組(角色過濾只在這裡做,
-// Layout/PageTabs/BottomNav 都吃輸出)。hidden 項一律不渲染(權限判斷仍在 routeAllowed 生效)。
+// Layout/PageTabs/BottomNav/Site 現場作業卡都吃輸出)。
+// hidden／hiddenFor 項一律不渲染(權限判斷仍在 routeAllowed 生效)。
 export function visibleNavGroups(org, override, platformAdmin = false) {
   return navGroups
     .map((g) => ({
       ...g,
       items: g.items
         .map((item) => {
-          if (item.hidden) return null
+          if (!navVisible(item, org)) return null
           if (!item.tabs) return tabAllowed(item, org, override, platformAdmin) ? item : null
-          const tabs = item.tabs.filter((t) => !t.hidden && tabAllowed(t, org, override, platformAdmin))
+          const tabs = item.tabs.filter((t) => navVisible(t, org) && tabAllowed(t, org, override, platformAdmin))
           return tabs.length ? { ...item, to: tabs[0].to, tabs } : null
         })
         .filter(Boolean),

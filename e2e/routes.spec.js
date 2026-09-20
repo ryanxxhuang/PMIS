@@ -55,7 +55,9 @@ test.describe('路由治理', () => {
     await expect(nav.getByRole('link', { name: '成本管理', exact: true })).toHaveCount(0)
     await nav.getByRole('button', { name: '收合估驗請款子頁' }).click()
     await nav.getByRole('button', { name: '展開專案子頁' }).click()
-    await expect(nav.getByRole('link', { name: '跨案總覽', exact: true })).toBeVisible()
+    await expect(nav.getByRole('link', { name: '活動紀錄', exact: true })).toBeVisible()
+    // 2026-09-20 A 包:跨案總覽入口先收起(選案走頁首的專案切換器),風險稽核早已移除頁面
+    await expect(nav.getByRole('link', { name: '跨案總覽', exact: true })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: '風險稽核', exact: true })).toHaveCount(0)
     await nav.getByRole('button', { name: '收合專案子頁' }).click()
     await expect(page.getByRole('link', { name: '問 GovAgent' })).toBeVisible()
@@ -107,7 +109,9 @@ test.describe('路由治理', () => {
     for (const label of [...BALL, ...WORK, ...SECONDARY]) {
       await expect(nav.getByRole('link', { name: label, exact: true })).toBeVisible()
     }
-    // 監造:請款不是他的(roles)、成本 hidden,估驗請款只剩估驗與標單;文件往來多監造月報
+    // 監造:請款不是他的(roles)、成本 hidden,估驗請款只剩估驗與標單。
+    // 2026-09-20 A 包:監造日誌與監造查驗表單照舊在現場紀錄(只對廠商收起),
+    // 兩張月報與 S 曲線改 hidden(入口收起,頁面與深連結不動)
     await nav.getByRole('button', { name: '展開估驗請款子頁' }).click()
     await expect(nav.getByRole('link', { name: '估驗計價', exact: true })).toBeVisible()
     await expect(nav.getByRole('link', { name: '標單工項', exact: true })).toBeVisible()
@@ -115,14 +119,20 @@ test.describe('路由治理', () => {
       await expect(nav.getByRole('link', { name: label, exact: true })).toHaveCount(0)
     }
     await nav.getByRole('button', { name: '展開履約時程子頁' }).click()
-    await expect(nav.getByRole('link', { name: '逐工項排程', exact: true })).toHaveCount(0)
+    for (const label of ['逐工項排程', '進度 S 曲線']) {
+      await expect(nav.getByRole('link', { name: label, exact: true })).toHaveCount(0)
+    }
     await nav.getByRole('button', { name: '展開文件往來子頁' }).click()
-    await expect(nav.getByRole('link', { name: '監造月報', exact: true })).toBeVisible()
-    // 抽屜比 812px 高:nav 自己捲(不得橫向溢位),最底的監造月報點得到=可捲
+    for (const label of ['施工月報', '監造月報']) {
+      await expect(nav.getByRole('link', { name: label, exact: true })).toHaveCount(0)
+    }
+    // 監造日誌與監造查驗表單對監造照舊(A 包只對廠商收起)——這裡留在收合狀態下驗登記表即可,
+    // 展開會讓下一段的「展開現場紀錄子頁」變成「收合」;可見性由 reachability/navConfig 測釘住。
+    // 抽屜(三分區＋展開兩組)仍可能比 812px 高:nav 自己捲,不得橫向溢位;最底的子頁點得到=可捲
     const navBox = await nav.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }))
     expect(navBox.sw, `抽屜 nav 橫向溢位:scrollWidth ${navBox.sw} > clientWidth ${navBox.cw}`).toBeLessThanOrEqual(navBox.cw)
-    await nav.getByRole('link', { name: '監造月報', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1, name: '監造月報' })).toBeVisible()
+    await nav.getByRole('link', { name: '工程疑義', exact: true }).click()
+    await expect(page.getByRole('heading', { level: 1, name: '工程疑義' })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 
     // 子頁直達:點品質查驗 → 該頁;內容區不重複子頁導覽(無下拉、無 tablist)
@@ -167,13 +177,20 @@ test.describe('路由治理', () => {
     await expect(page).toHaveURL(/#\/requirements/)
     await expect(page.getByRole('heading', { level: 1, name: '契約重點' })).toBeVisible()
     await expect(page.getByRole('navigation', { name: '主要功能' }).getByRole('link', { name: '逐工項排程', exact: true })).toHaveCount(0)
-    // 現場紀錄總覽:底欄/側欄第一個主入口,列出現場作業入口;點「施工日誌」直達今天
+    // 現場紀錄總覽:底欄/側欄第一個主入口,列出現場作業入口;點「施工日誌」直達今天。
+    // 2026-09-20 A 包:卡片與側欄同一份(visibleNavGroups)——廠商只剩自己的三項作業,
+    // 監造日誌／監造查驗表單不是廠商的工作,試體／停留點／工安的獨立卡也收起(併回品質查驗)
     await gotoHash(page, '/site')
     await expect(page.getByRole('heading', { level: 1, name: '現場紀錄' })).toBeVisible()
     const entries = page.getByRole('list', { name: '現場作業入口' })
-    for (const name of ['施工日誌', '品質查驗', '自主檢查表', '試體試驗', '檢驗停留點', '工安管理']) {
+    for (const name of ['施工日誌', '自主檢查表', '品質查驗']) {
       await expect(entries.getByRole('link', { name: new RegExp(`^${name}`) })).toBeVisible()
     }
+    for (const name of ['監造日誌', '監造查驗表單', '試體試驗', '檢驗停留點', '工安管理']) {
+      await expect(entries.getByRole('link', { name: new RegExp(`^${name}`) })).toHaveCount(0)
+    }
+    // 月報入口也一起收起:現場紀錄不再有「本月文件」卡
+    await expect(page.getByRole('list', { name: '本月文件' })).toHaveCount(0)
     await entries.getByRole('link', { name: /^施工日誌/ }).click()
     await expect(page).toHaveURL(/#\/site-log\?d=\d{4}-\d{2}-\d{2}$/)
     await expect(page.getByRole('heading', { level: 1, name: '施工日誌' })).toBeVisible()

@@ -426,4 +426,53 @@ test.describe('施工廠商', () => {
     // 施工角色送審後只能等監造(不出現核定鈕)
     await expect(page.getByText('待監造核定')).toBeVisible()
   })
+
+  // 2026-09-20 廠商上線前驗收 A 包:廠商的工作面不得出現監造的作業(監造日誌／監造查驗表單),
+  // 不是只藏一處也不是改名;同時不得誤刪廠商應收的查驗結果與計價依據。
+  // 「不能簽署監造文件」由既有 pgTAP 釘住(field_document_sign / supervisor_logs / inspection_form_documents
+  // 的 PD006,含「正式模式的廠商 admin 也不能簽」),這裡只驗使用者看得到什麼。
+  test('廠商工作面沒有監造作業入口:側欄、分頁列、現場作業卡、尋找功能、現場文書清單都不列', async ({ page }) => {
+    await loginAs(page, 'contractor')
+    const nav = page.getByRole('navigation', { name: '主要功能' })
+    await nav.getByRole('button', { name: '展開現場紀錄子頁' }).click()
+    for (const name of ['施工日誌', '自主檢查表', '品質查驗']) {
+      await expect(nav.getByRole('link', { name, exact: true })).toBeVisible()
+    }
+    for (const name of ['監造日誌', '監造查驗表單', '檢驗停留點', '工安管理']) {
+      await expect(nav.getByRole('link', { name, exact: true })).toHaveCount(0)
+    }
+    // 尋找功能(權限與導覽同一份):搜「監造」找不到監造日誌／監造查驗表單
+    await page.getByRole('button', { name: '尋找功能', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '尋找功能' })
+    await dialog.getByRole('searchbox').fill('監造')
+    await expect(dialog.getByRole('navigation')).not.toContainText('監造日誌')
+    await expect(dialog.getByRole('navigation')).not.toContainText('監造查驗表單')
+    await page.keyboard.press('Escape')
+
+    // 現場紀錄:現場作業卡與「拍照／上傳」都只講廠商自己的文書;現場文書清單沒有監造起稿中的文件
+    await gotoHash(page, '/site')
+    const entries = page.getByRole('list', { name: '現場作業入口' })
+    await expect(entries.getByRole('link')).toHaveCount(3)
+    for (const name of ['監造日誌', '監造查驗表單']) {
+      await expect(entries.getByRole('link', { name: new RegExp(`^${name}`) })).toHaveCount(0)
+    }
+    await expect(page.getByRole('group', { name: '拍照／上傳' })).toContainText('施工日誌／自主檢查表自動起稿')
+    const docCard = page.getByRole('group', { name: '現場文書' })
+    await expect(docCard.getByRole('link', { name: /監造日誌/ })).toHaveCount(0)
+
+    // 沒有誤刪:查驗申請照舊、判定結果與可估驗依據仍可唯讀查閱
+    await gotoHash(page, '/quality')
+    await page.getByRole('button', { name: '查驗申請', exact: true }).click()
+    await expect(page.getByRole('button', { name: '送出查驗申請' })).toBeVisible()
+    // 既有深連結仍依原權限可達,但是唯讀:沒有建立、沒有簽署、沒有可編輯欄位
+    await gotoHash(page, '/inspection-form')
+    await expect(page.getByRole('heading', { level: 1, name: '監造查驗表單' })).toBeVisible()
+    await expect(page.getByText('施工廠商檢視', { exact: false })).toBeVisible()
+    await expect(page.getByRole('button', { name: /簽署此版本/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /建立監造查驗表單/ })).toHaveCount(0)
+    await gotoHash(page, '/supervisor-log')
+    await expect(page.getByRole('heading', { level: 1, name: '監造日誌' })).toBeVisible()
+    await expect(page.getByText('廠商檢視', { exact: false }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /簽署此版本/ })).toHaveCount(0)
+  })
 })

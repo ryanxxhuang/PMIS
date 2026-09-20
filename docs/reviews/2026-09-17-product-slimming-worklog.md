@@ -240,6 +240,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | P3g | `codex/slimming-p3g-template-ui`／PR #161 | 見 PR（實作＋文件同步；rebase 到含 O2 `07d5415` 的 main，與 O2 在 §8.7 G3／G4／G5 的衝突解成「G3 用 O2 的、G4 併入 P3g 兩個留尾、G5 改已做」） | `20260920050000_checklist_template_authoring`（`fn_checklist_applies_to`／`fn_checklist_items_normalize`／`checklist_templates_guard`／`checklist_templates_del_guard`；三支新函式都不授權 authenticated，H3 允許清單不變；rollback 同名 `.down.sql`） | **收緊型，先前端後 DB**：merge commit `36ed0f3`；Workers Builds success，正式入口 chunk `index-B7Dju1uW.js`（Cloudflare 的 `npm ci` 與本機 `node_modules` 解析不同，chunk 雜湊與本機 build 不同，改以內容核對）——`Quality-CltsOpnS.js` 含「檢查表範本」與「以查驗表單更正判定」、`Agent-DDSbLJ80.js` 含「AI 草稿遭拒絕」；`check:prod` 五頁 OK。前端上線後 `supabase db push` 套 `20260920050000`（「Finished supabase db push.」），`migration list --linked` 83 筆全部對齊、最新 `20260920050000`、無待套。Edge：`deno info` 查到模組圖含 `fieldDocDraft.ts`／`fieldDocRepo.ts`／`draftInspection.ts` 的只有 2 支，以 `--use-api` 重佈 `agent-run` v22、`draft-field-documents` v11（`send-reminders` 未受影響、維持 v23／`verify_jwt=false`）；demo 站不重佈 | `npm run test:db` 61 檔 3,585 通過（新增 `checklist_template_authoring.sql` 60）；`npm test` 151 檔 1,645；lint 零警告；build；`check:edge` 15；`test:edge` 5；`check:docs` 0 錯；Demo E2E supervisor／contractor／a11y／workflow-ux 55 項；真後端新 chain 16 通過（本機共用棧已套本支＋Edge stub），回歸 chain 8／10／14 通過 | §8.1 A13／A14、§8.2 B9 使用者驗收；正式 `db push` 與 Edge 重佈 |
 | P5e | `codex/slimming-p5e-warranty-stop`／PR #156 | 見 PR（rebase 到含 P6b-2／P6b-3／P3f 的 main `1ee8f96`；migration 時間戳由 `20260920021500` 改為 `20260920040000`，排在 P6b-3 `20260920030000` 之後） | `20260920040000_warranty_stop_condition`（rollback 同名 `.down.sql`，已在一次性 DB 內以暫時探針實跑 6/6：恢復 P5c 停止條件、移除欄位／RPC／trigger） | 2026-09-20 使用者親自在本分支 `supabase db push`，依序套 P6b-3 `20260920030000` 與本支 `20260920040000`（Finished supabase db push.），`migration list --linked` 本地與遠端到 `20260920040000` 全部對齊；merge commit `4d6d77b`，Workers Builds 建置 success、正式入口 chunk `index-But1e0G2.js` 含 `get_project_warranty`；`deno info` 核對後以 `--use-api` 重佈四支——`agent-run` v21、`send-reminders` v23（`verify_jwt=false` 維持）、`fetch-weather` v19、`draft-field-documents` v10；`check:prod` 五頁 OK；正式庫唯讀核對：RPC `authenticated` 可執行／`anon` 不可、三欄與版本表 `warranty` 欄與兩支 trigger 就位、`fn_warranty_expiry('2025-04-30',1,'month')`＝2025-05-31、保固類期次 0 列（套用前後不變）、13 案未登錄保固期間（11 案兩項皆缺、2 案只缺保固期間）。正式庫唯讀盤點（2026-09-20，只取計數）：保固類義務 0 筆（循環 0）、保固類期次 0、正式驗收合格 2 案、approved 契約重點 `lifecycle_phase=保固` 0 筆、文字提及保固 1 筆（approved）、`trigger_config` 只有 offset／fixed 鍵——套用後預期 0 移除 0 新增 | `npm run test:db` 60 檔 3,521 通過 0 失敗（新增 `warranty_stop_condition.sql` 105；`project_anchor_versions.sql` 124、`anon_and_function_privileges.sql` 419；rollback 檔另以暫時探針在一次性 DB 內實跑 6/6）；`npm test` 143 檔 1,560；`npm run test:edge` 5；`check:edge`；lint 零警告；build；`check:docs` 55 檔 422 連結 0 錯；Demo E2E contractor／owner／supervisor／contract-flow／a11y／workflow-ux 66 項；`e2e:real` chain 3、chain 15 通過（共用開發 DB 以 psql 套本支並登記版本）；內建 Preview（demo）1024／375 期程卡無溢位；CI 見 PR | P3d／P6a 若印期限可帶保固期滿日依據；多工種保固年限（結構／一般／植栽）如需分別界定另開單元；履約時程以外的基準日編輯（期限追蹤頁、契約價金總額）仍以 `can.edit` 顯示可編、伺服器以管理者為準，屬既有 UX 鏡像落差，建議併入下一個觸及期限追蹤頁的單元 |
 | O2 | `codex/slimming-o2-gaps`／PR #160 | 見 PR（基準 main `47958ce`，含 P5e）；merge commit 由下一單元同步 | 無（純前端／示範資料；不動 DB、RPC、RLS、路由登記與簽署規則） | 前端隨 main 由 Workers Builds 自動建置；`check:prod` 與 demo 站重佈版本寫在單元回報、由下一單元同步 | `npm test` 147 檔 1,589 項（新增 `demoSeed.signed.test.js` 12、`ValuationPackage.summary.test.jsx` 3、`Deadlines.anchors.test.jsx` 3、`IntakeResult.candidates.test.jsx` 4；`fieldDocs.test.js` +5、`agentRole.test.js` +2）；lint 零警告；build；`check:docs` 55 檔 423 連結 0 錯；Demo E2E 全 78 項（`contractor`／`supervisor` 兩處文件件數斷言隨示範已簽署文件更新）；內建 Preview（demo）1024／375：施工月報、監造月報、估驗佐證包皆有內容且無水平溢位 | 見本列下方「O2 發現」 |
+| 廠商驗收 A（§9） | `codex/contractor-a-nav`／PR #PR_A | 需求來源進版控＋導覽與清單收斂（純前端；無 migration、無 Edge） | 無 | 合併後前端隨 main 由 Workers Builds 自動建置；demo 站是否重佈見單元回報 | `npm test` 151 檔 1,654 項（新增 navConfig `hiddenFor` 4 項、`fieldDocInWorkList` 5 項）；lint 零警告；build；`check:docs` 57 檔 433 連結 0 錯；Demo E2E 全套 80 項（新增廠商工作面無監造入口一條；routes／owner／PageTabs 斷言隨入口收斂更新）；真後端 chain 10（廠商申請查驗→監造判定簽署→廠商看到確認量與收件）見單元回報 | B–E 包；§9「A 待辦」 |
 | P7a–P7c | — | — | — | — | — | 依 §5 順序 |
 
 **P6a 發現（2026-09-20）**：
@@ -358,3 +359,40 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | G8 | 關閉 TOTP 設定 | **已查證、結案**：主 session 2026-09-20 在正式 Supabase Dashboard 查證 Auth 的 TOTP 本來就是 Disabled，未做任何變更（正式 `auth.mfa_factors` 0 列） | 無 |
 | G9 | 更換 `ANTHROPIC_API_KEY` | **建議**：本機 E2E 用的金鑰曾出現在代理工具輸出（未外傳） | 使用者換新金鑰，並更新所有用到同一把金鑰的位置 |
 | G10 | P7a 真後端三方完整旅程自動化、P7c staging 回復演練 | **未做** | 依 §5 |
+
+## 9. 廠商驗收修正（2026-09-20）
+
+依據（本輪由 A 包進版控，內容未改）：[驗收報告](2026-09-20-contractor-acceptance-report.md)、[實作指令](2026-09-20-claude-contractor-fixes-prompt.md)、[公開範本與真實辨識基準](assets/2026-09-20-contractor-acceptance/)。受驗基準 `f99bfee`。五張現場回歸照片（`LI*.JPG`）刻意不進版控（真實現場照、含可識別資訊），回歸測試讀本機路徑、缺檔時 skip。
+
+模型：Fable 5.1 週額度用盡（9/26 台北 00:00 重置），使用者 2026-09-20 授權高風險單元暫由 Opus 5 執行，驗證標準不降。
+
+### 工作包
+
+| 包 | 範圍 | 指定 | 實際 |
+|---|---|---|---|
+| A | 廠商角色與三個主入口（本節已完成） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`） | fable5.1 | 待填 |
+| C | 真實表單 mapping、直接在紙本版面編輯 | fable5.1 | 待填 |
+| D | PDF 交付（真正的下載，不是 `window.print()`） | fable5.1 | 待填 |
+| E | 三項核心的整條流程驗收（真後端） | fable5.1 | 待填 |
+
+### A 廠商角色與三個主入口
+
+問題：`navConfig.js` 把監造日誌與監造查驗表單列成不限角色的現場紀錄子頁、`Site.jsx` 手抄一份現場作業入口並把三方文書混在同一張「現場文書」清單，`navConfig.test.js` 的廠商斷言還把這兩項當預期功能——廠商看不出哪些是自己要填的；同時工安、試體、停留點、S 曲線、月報、跨案總覽與三個主入口並列。目標：廠商的側欄、分頁列、現場作業卡、尋找功能與現場文書清單都只剩廠商自己的作業；監造端能力一項不縮；查驗結果與可估驗依據仍可唯讀查閱。不做：不動 `roles`、RLS、RPC 與任何 migration；不刪頁面、資料表、提醒與歷史；不改名充數。影響：純前端導覽與清單呈現；`routeAllowed` 與伺服器邊界一字不變。驗收：一般廠商帳號（含專案 admin／`can.override` 情境）的首頁／側欄／分頁／新增選單沒有監造作業入口；仍能提出查驗申請、收到判定結果、開啟計價證據；不能簽署監造文件（既有 pgTAP 已釘住）。
+
+做法（根本解：把「導覽可見性」與「授權」分成兩個維度，不用 `roles` 收、也不在頁面寫第二份清單）：
+
+- `navConfig.js` 新增 `hiddenFor: ['contractor']`（只對列名的 `org_type` 不渲染；`routeAllowed` 完全不讀它）。`/supervisor-log`、`/inspection-form` 用它收起廠商的入口——用 `roles` 收會連廠商該有的唯讀查閱一起關掉，正是驗收明文禁止的「誤刪查驗結果與計價依據」。`hiddenFor` 刻意不吃 `override`：驗收要求專案 admin 情境的廠商也看不到，而 `override` 對 `roles` 一律放行。
+- 先收起獨立入口（沿用 `/cost` 的退場做法 `hidden: true`，頁面、資料、提醒與深連結都不動）：`/itp` 檢驗停留點（入口嵌回品質查驗的查驗分段，列本案停留點數與未申請／待查驗件數）、`/safety` 工安管理、`/progress` 進度 S 曲線、`/monthly-report`＋`/supervisor-report` 兩張月報、`/portfolio` 跨案總覽（選案改走頁首既有的專案切換器）。缺失補正與試體本來就在品質查驗的分段內，只是移除與查驗並列的卡片。
+- `Site.jsx` 的「現場作業」卡改由 `visibleNavGroups` 的現場紀錄子頁產生（連結、圖示與件數章留在頁面，入口清單不再手抄第二份）；「現場待辦」刻意仍用群組定義＋`routeAllowed` 過濾，入口收起不等於提醒消失。「本月文件」卡隨月報入口一起收起。
+- 「現場文書」清單新增純函式 `fieldDocs.fieldDocInWorkList(doc, viewerOrg)`：責任方（`owner_org`）的文件一律列；他方的文件只有 `submitted`／`received` 且自己是 `docToOrgs` 收件方才列。廠商因此看不到監造起稿中的監造日誌與查驗表單，監造一提送查驗表單廠商立刻看得到（查驗結果與可估驗依據不受影響）。
+
+廠商實際看得到的入口（demo `contractor`，已由 e2e 釘住）：今日工作（現在輪到我／等待對方／今天已完成）→ 現場紀錄（現場總覽、施工日誌、自主檢查表、品質查驗）、履約時程（契約重點、期限追蹤、擷取審核、變更設計、驗收結算）、估驗請款（估驗計價、請款收款、標單工項）→ 文件往來（送審文件、工程疑義）、專案（專案文件、三方成員、活動紀錄）。監造維持：現場總覽、施工日誌、**監造日誌**、自主檢查表、**監造查驗表單**、品質查驗，加履約時程與估驗（不經手請款）；機關同監造再加請款收款。
+
+「不能簽署監造文件」不新增 DB 變更，由既有 pgTAP 證明：`supabase/tests/inspection_form_documents.sql`（廠商不能建監造查驗表單 → PD006；廠商簽 → PD006；**正式模式的廠商 admin 也不能簽**）、`supabase/tests/supervisor_logs.sql`（廠商簽／編輯監造日誌 → PD006）。
+
+### A 待辦與對後續包的影響
+
+- 導覽群組名維持「現場紀錄／履約時程／估驗請款」，與實作指令說的「AI 文件／契約期程／估驗請款」三件事 1:1 對應；本輪不改名（名稱在 `navConfig` 單一來源，改名會牽動大量測試與文件，且報告的落差是「並列模組太多」不是群組名）。若使用者要改名，另開單元。
+- 收起的入口都只是 `hidden`，資料表、RPC、提醒與深連結全部保留；要恢復只需拿掉一個旗標。
+- B 包動 Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`，與本包無重疊檔案。

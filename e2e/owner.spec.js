@@ -8,14 +8,17 @@ import { loginAs, gotoHash } from './helpers.js'
 const REVISED_AFTER_CO2 = '724,388,067'
 
 test.describe('機關', () => {
-  test('登入落在今日工作(收件匣);跨案總覽從側欄「專案」子頁可達,風險稽核舊連結(P6b 移除頁面)導向估驗計價', async ({ page }) => {
+  test('登入落在今日工作(收件匣);跨案總覽入口已收起、深連結仍可達,風險稽核舊連結(P6b 移除頁面)導向估驗計價', async ({ page }) => {
     await loginAs(page, 'owner')
     await expect(page.getByRole('heading', { name: '今日工作' })).toBeVisible()
-    // 落地不依角色分流(規範 §0 方向 A):多案角色要看跨案總覽,從「專案」群組一格就到
+    // 落地不依角色分流(規範 §0 方向 A)。2026-09-20 廠商驗收 A 包:跨案總覽的側欄入口先收起
+    // (選案改走頁首的專案切換器),頁面、RPC 與舊連結都不動——這裡釘住「入口沒了、能力還在」。
     const nav = page.getByRole('navigation', { name: '主要功能' })
     await nav.getByRole('button', { name: '展開專案子頁' }).click()
+    await expect(nav.getByRole('link', { name: '活動紀錄', exact: true })).toBeVisible()
+    await expect(nav.getByRole('link', { name: '跨案總覽', exact: true })).toHaveCount(0)
     // D-026 退場、P6b 移除頁面:風險稽核不在側欄;舊連結仍限機關(廠商被擋見 routes.spec)
-    await nav.getByRole('link', { name: '跨案總覽', exact: true }).click()
+    await gotoHash(page, '/portfolio')
     await expect(page.getByRole('heading', { name: '跨案總覽' })).toBeVisible()
     // 縮為選案清單(D-026 P1b):本案＋兩個示範姊妹案各一列,整列可點;統計/例外帶不再出現
     const list = page.getByRole('list', { name: '專案清單' })
