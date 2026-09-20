@@ -32,7 +32,7 @@ import type { DraftVision, VisionResult } from '../_shared/fieldDocDraftRun.ts'
 import { sitePhotoCall, whiteboardCall } from '../_shared/sitePhotoVision.ts'
 import { paperCellCall } from '../_shared/paperFormCells.ts'
 import { preparePaperFormTiles } from '../_shared/paperFormImaging.ts'
-import { stubAllowed, stubClassify, stubPaperCells, stubWhiteboard, STUB_NOTE, STUB_MODEL } from '../_shared/visionStub.ts'
+import { stubAllowed, stubClassify, stubPaperCells, stubSceneOf, stubWhiteboard, STUB_NOTE, STUB_MODEL } from '../_shared/visionStub.ts'
 
 const FEATURE = 'field_docs.draft'
 // 單張視覺呼叫:逾時 45 s、只對 429/5xx 重試一次、逾時不重試(同尺寸再逾時只會燒光預算)
@@ -78,8 +78,9 @@ function makeVision(gate: AiGateOk): DraftVision {
   }
   const hint = readEnv('PMIS_VISION_STUB_HINT')
   return {
-    classify: (base64, mime) => call('photo.classify', sitePhotoCall(base64, mime), () => stubClassify(hint)),
-    readBoard: (base64, mime) => call('sitelog.whiteboard', whiteboardCall(base64, mime), () => stubWhiteboard()),
+    // stub 情境由照片尾巴的標記決定(visionStub.stubSceneOf;正式 Edge 不會走到,STUB 為 false)
+    classify: (base64, mime) => call('photo.classify', sitePhotoCall(base64, mime), () => stubClassify(hint, stubSceneOf(base64))),
+    readBoard: (base64, mime) => call('sitelog.whiteboard', whiteboardCall(base64, mime), () => stubWhiteboard(stubSceneOf(base64))),
     // B2 紙表逐格辨識:獨立 feature key → 可單獨關閉、單獨計量;關閉時 run 退回整張圖讀兩次
     readCells: (base64, mime, columnHint) =>
       call('paperform.cells', paperCellCall(base64, mime, columnHint), () => stubPaperCells()),

@@ -272,7 +272,8 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | C2 | `codex/contractor-c2-supervisor-forms`／PR #170 | `d161545` | 無 | 純前端，隨 main 自動建置 |
 | E | `codex/contractor-e-acceptance`／PR #171 | `388daa4` | `20260920170000_inspection_sign_confirmation_lock` **已套正式** | 無 Edge 變更；正式站登入後 UI／PDF 仍未測 |
 | O3 | `codex/contractor-o3-demo-docs`／PR #172 | `abddf53` | 無 | demo 站 Version `664312c5-d39a-48b6-b221-c246e6620e0f`（前一版 O2 `beb53b7c-ee55-456c-92af-e608fb1dd555`）；`check:prod` 五頁 OK |
-| F1 | `codex/contractor-f1-setup-gaps`／PR #173 | 由下一單元同步 | `20260920214557_obligation_timing_gap`（只新增一支 IMMUTABLE 純函式；rollback 檔 drop）— 正式套用結果見單元回報 | Edge `_shared` 改動：合併後重佈 `agent-run`／`send-reminders`／`draft-field-documents`／`fetch-weather`（`deno info` 引用圖）；前端隨 main 自動建置；demo 站未重佈 |
+| F1 | `codex/contractor-f1-setup-gaps`／PR #173 | `52f53ef` | `20260920214557_obligation_timing_gap`（只新增一支 IMMUTABLE 純函式；rollback 檔 drop）— 正式套用結果見單元回報 | Edge `_shared` 改動：合併後重佈 `agent-run`／`send-reminders`／`draft-field-documents`／`fetch-weather`（`deno info` 引用圖）；前端隨 main 自動建置；demo 站未重佈 |
+| F2 | `codex/contractor-f2-coverage`／PR #<F2> | 合併後補 | `20260920230000_edge_credential_writer_seal`（七支函式換定義、計價依據 trigger 加 DELETE；不動任何一列；rollback 檔同名 `.down.sql`）— 正式套用結果見 CURRENT §6.3 | Edge `_shared` 改動：`send-reminders`（流程本體拆到 `sendRemindersRun.ts`／`sendRemindersDeps.ts`）、`draft-field-documents`（`visionStub.ts` 情境）合併後須重佈；前端無改動 |
 
 O3 對正式環境只做唯讀核對、未做任何變更：遠端 migration **86 筆**＝repo 86 支、最新 `20260920170000`、無待套；Edge 版本如上表且皆 ACTIVE（`send-reminders` 維持 v23／`verify_jwt=false`，已退場的 `audit-summary` 不在線上清單內）。
 
@@ -415,6 +416,7 @@ B2 原列驗證數字（保留）：`npm test` 159 檔 1,775 項；`test:edge` 1
 | E | 三項核心的整條流程驗收（真後端；本節已完成，PR #171、merge `388daa4`、migration `20260920170000` 已套正式） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | O3 | Demo 站重佈＋文件同步＋驗收清單更新（本節已完成，見 §9 O3） | opus5 | Opus 5 |
 | F1 | 「完全缺頻率／完全缺觸發點不列待補」（§8.7 G12）＋「照片日期不得改變契約期限」的防回歸掃描（§8.7 G15 的靜態掃描半邊）；本節已完成，PR #173、migration `20260920214557` | fable5.1 | Fable 5.1 |
+| F2 | 補完 E 包列為「未測」的真後端與 Edge 驗證：逾期／改期／取消／已完成端到端、`send-reminders` 零測試、Edge 憑證 runtime 封堵、標單重匯 vs active 確認、紙本抄錄→草稿、chain 3 紅燈判讀；查出並封住服務憑證可憑空寫確認量／改期別狀態／寫計價依據的三個守衛缺口（migration `20260920230000`）；本節見 §9 F2 | fable5.1 | Fable 5.1 |
 | F2 | Edge 執行期寫入封堵的 runtime 測試（§8.7 G15）；worktree `-slimming-3` | — | 進行中 |
 
 ### A 廠商角色與三個主入口
@@ -808,3 +810,25 @@ PR #164、merge commit `a575bbc`（rebase 到含 A 包的 main `e3e4f65`；CI �
 **驗證**：`npm test` 162 檔 1,830 項（新增 `anchorWrites.scan.test.ts` 3、`obligationTimeline.test.js` ＋1 並改寫 2、共用案例前端 ＋12／Edge ＋12 條）；`test:edge` 17 項（新 1）；`check:edge` 18 支；`lint` 零警告；`build`；`check:docs` 58 檔 480 連結 0 錯；`test:db` 63 檔 3,626 項（新 `obligation_timing_gap.sql` 21）；真後端本機隔離棧：新 `e2e-real/chain19-timing-gap.spec.js` 通過（廠商今日工作待補設定卡列「時點待補（觸發點為每月，循環規則未設定）」並連到擷取審核該筆、不進「現在輪到我」；履約時程「時點待補（1）」可篩到、詳情到期日欄與待補設定區同一句、入口同一個；期限追蹤詳情同一句；廠商在擷取審核沒有廢止按鈕；監造從入口進去廢止取代、手動新增每月 10 日、確認 → DB 物化循環義務並依開工日產生期次；舊義務不適用、時點待補 0 件、待補設定卡不再列它），受影響的 chain3／chain15 重跑通過（`ANTHROPIC_API_KEY=` deterministic）。
 
 **未做／待驗（如實）**：正式 `db push` 與四支 Edge 重佈在合併後執行，結果見單元回報；正式站登入後目視同 G18 一批；`get_requirements` Agent 工具回的 `due_date:null` 仍不附原因（Agent 由 `list_my_open_items` 的 `setup_pending` 得知缺口，未在這支工具再算一次）；G15 的「Edge 以 service role 實際寫入被 DB 拒絕」runtime 測試屬 F2；觸發點 `other` 的義務事件發生後仍要走廢止取代補指定日期，沒有「登錄觸發事件日期」的輕量入口（產品面待決，不是本單元範圍）。
+
+### F2 補完 E 包列為「未測」的真後端與 Edge 驗證；查出並封住服務憑證的三個守衛缺口
+
+問題（動工前逐條以 `388daa4`／`52f53ef` 的 main 重驗）：E 包「未通過與未測」列了五項缺口：(a) 逾期／改期／取消／已完成只有 pgTAP 與 demo，真後端沒有端到端；(b) `send-reminders` 190 行含角色分流零測試；(c) Edge 只有原始碼靜態掃描，沒有「以 Edge 憑證實際寫入被 DB 拒絕」的執行期證明；(d) 標單重匯 vs active 確認只有一條 pgTAP、chain 4 無案例；(e) 真後端鏈的視覺是 stub，「紙本抄錄值 → 草稿」整段沒走過；另加 chain 3 live 抽取非決定性造成的紅燈難分辨。**做 (c) 時以本機隔離棧用 `set local role service_role`（`auth.uid()` 為 null，即 Edge service client 的實際條件）探針，查出三個真缺口**（不是已發生的事故——Edge 目前沒有任何一支寫這些表，靜態掃描釘著；但 D-026／設計 §9 的前提是 DB 才是安全邊界）：
+
+1. `inspection_confirmations_guard` 的 INSERT 只驗內容（工項可計價、單位、確認人是本案監造成員、查驗已判定、文件已簽…），**不驗是誰在寫**：服務憑證湊一筆內容合法的列（`confirmed_by` 填任一位監造）就能憑空落一筆 active 確認量——實測 INSERT 成功、`qty_delta=60`，監造本人從頭到尾沒簽任何東西；active→revoked 也只驗有沒有填原因，服務憑證能替監造撤銷。
+2. `valuations_guard` 的角色與狀態機檢查全掛在 `is_user` 之下：非登入者不受狀態機約束——實測可直接 insert 一筆 `status='已核定'` 再 update 成 `已請款`；`valuations_checkpoint_guard` 只驗數量不變量（AFTER UPDATE；INSERT 不驗），所以沒有明細的期別可被服務憑證直接核定、請款，有明細的期別在廠商備妥時可被服務憑證代替監造核定。
+3. `work_item_pricing_basis_guard` 只驗工項屬本案：服務憑證可直接把工項標 `excluded` 或改 `pro_rata` 規則，而計價依據決定可估驗上限的算法。
+
+**根本解（migration `20260920230000_edge_credential_writer_seal`，比照 P4e 的做法：所有寫入者一體適用、只認交易內 GUC `pmis.cq_internal`）**：確認量 guard 的 INSERT 一進來就要 `fn_cq_internal()`（放在所有內容檢查之前——不是簽發路徑就一律拒絕，不看內容是否「看起來合法」）、active→revoked 也要；三個合法寫入者（`issue_supervisor_certificate`、`revoke_inspection_confirmation`、`field_document_sign_inspection_form_internal`）各自只在「那一句 insert／update」前後開關旗標（與它們後半段同步草稿期的做法相同，異常時隨子交易回滾不外洩）；`valuations_guard` 對非登入者且無旗標：INSERT 不得帶非草稿狀態，UPDATE 不得改 `status`／`invoice_date`／`paid_date`／`paid_amount`，非草稿期不得改期別欄位；`work_item_pricing_basis_guard` INSERT／UPDATE／DELETE 都要旗標（DELETE 只放行工項／專案 cascade）、`set_work_item_pricing_basis` 在 upsert 前後開關旗標。登入者的既有規則逐字不變；歷史遷移與 pgTAP fixture 以 DBA 邊界（交易內 `set local pmis.cq_internal='1'`）重現——`confirmed_quantity_enforcement`／`confirmed_quantity_concurrency` 的直寫 fixture、七個直接建非草稿期別的 fixture、e2e-real chain 11b 的 DBA 區塊同步改在旗標內；`payment_flow` 原本「service role 放行清理矛盾資料」改為「不開旗標 `VQ010`、旗標內放行」，`confirmed_quantity_enforcement` 的「superuser 可補歷史期截止日」同樣改成旗標內才可。服務憑證拿不到旗標：`fn_cq_set_internal` 雖可被 service_role 執行，但 PostgREST 每個 request 一個交易、`set_config(…, true)` 只活在該交易，chain 20 以真 PostgREST 釘住「先開旗標再另一請求寫入仍 `VQ010`」。**設計文件差異**：`confirmed-quantity-valuation.md` §9 原寫 `valuations.status` 直接 REST「保留可寫（相容）」與確認量「service role 也經 guard（不變量檢查不看 `auth.uid()`）」——後者對「誰在寫」沒有檢查，前者對非登入者沒有狀態機；§9 兩列與新 §21 已改寫。
+
+**測試補完（逐條對應 E 包缺口）**
+- (a) chain 22（新）：逾期（列「逾期 3 日」、首頁「現在輪到我」）、改期（改開工日留第 2 版、`effects` 記 `rescheduled` 舊→新到期、時程列新到期日；監造改基準日被 RPC 拒）、已完成（完成時間與到期日快照、取消完成清空）、廢止（`superseded` → 義務不適用、所有待辦期次不適用、時程不列）。
+- (b) `send-reminders` 流程本體純搬移到 `_shared/sendRemindersRun.ts`（全部外部效應以 `SendRemindersDeps` 注入；閘門判定仍與 RPC 呼叫同在真實 deps `_shared/sendRemindersDeps.ts`，`gatePolicy.test.ts`／`errorLeak.scan` 的釘子跟著搬）；Deno 單元測試 10 條：角色分流、跨案隔離（同一位廠商在 A、B 兩案各收各的）、dry 不寄不記、非 dry 只寄給有事的人且 payload（from／to／主旨／HTML）逐字、沒金鑰不寄、Resend 失敗不計入、閘門 false／查詢失敗／null 三種擋法與記帳、收集失敗只影響該案、`listProjects` 失敗回 500 遮罩碼、試體齡期、`x-cron-secret`、`sendViaResend` 的 HTTP 形狀。真後端 chain 22 以 `?dry=1` 對隔離棧驗三方角色分流與完成／廢止後消失。**送信本身未在真後端驗**：`send-reminders` 走 Resend HTTP API 不走 SMTP，本機 inbucket 收不到；真寄需要真金鑰與真收件人（禁止），dry-run 與單元測試已涵蓋除「Resend 實際收到」以外的每一步。
+- (c) chain 20（新）＋pgTAP `edge_credential_writes.sql` 50 條：service_role／superuser 直寫矩陣（明細、來源、調整、確認量 insert／revoke／delete、期別狀態 insert／update、請款／撥款、計價依據）、十四支寫入 RPC 以服務憑證呼叫、旗標跨請求無效、合法路徑照常且旗標用完即還原、旗標不放寬內容檢查。另補 `edgeWriteAllowlist.scan.test.ts`：Edge 寫得到的表與可呼叫的 RPC 改成**允許清單**（草稿／辨識結果／批次進度／建議／run 記錄九張表、八支查詢與記帳類 RPC），判定、簽署、提送、事實表這些沒被任何禁單列到的表一律越界；掃描器與 P4e／F1 共用 `tests/lib/edgeWriteScan.ts`（新增 `listWriteTargets`）。
+- (d) chain 4 第二段：有效確認量擋「清空重匯」（橫幅指明工項與「請先撤銷確認」、RPC 直打 `VQ010`、資料原封不動）→ 監造撤銷後才可清空（撤銷後不再擋、隨工項 cascade，稽核三筆留痕）。
+- (e) chain 21（新）：本機 stub 多一個情境，回傳值逐字取自真實模型對 `LINE_A~4_0.JPG` 的實際輸出（`visionStub.test.ts` 與 `vision-after-b2.json` 逐字比對釘住；只挑這張的理由見 `visionStub.ts` 檔頭），以 `tinyJpeg` 尾巴標記選情境。驗到的是產品在真實資料下的正確行為：紙上日期進文件日期、分類猜的位置沒有原文佐證不落地、兩向尺寸＋兩個編號 → `pending`＋兩筆證據＋不給提示值、`PD004`、頁面證據面板、人填後簽署落庫且 `check_date` 是紙上日期。**stub 與真實模型分開報**：stub 只證明流程接得起來；真實抄錄率仍是 B2 那張表。
+- chain 3：失敗訊息第一行寫判定（`classifyExtractionFailure` 讀 `metadata.error_code`／`failed_batch.code`），runbook 新增「chain 3 紅燈判讀」表；不重試、不放寬斷言。
+
+**驗證**：`npm test` 163 檔 1,837 項（新增 `sendRemindersRun`／`visionStub` 情境／`edgeWriteAllowlist` 掃描；`gatePolicy`／`errorLeak` 釘子改對應新檔）；`test:edge` 27 項（新 10）；`check:edge` 18 支；`lint`／`build`／`check:docs`（58 檔 484 連結 0 錯）綠。`test:db` 本機最後一次全綠 **63 檔 3,657 項**（rebase 到含 F1 的 main 之前；新增 `edge_credential_writes.sql` 50、`confirmed_quantity_enforcement` 307→309、`payment_flow` 11→12），rebase 後由 PR CI 重跑。真後端（本機隔離棧，rebase 前）：chain 20 通過、chain 4 兩段通過；chain 21／22 首跑各紅一處（fixture：`requirements.frequency_config` NOT NULL；stub 情境精簡前的第二張）已修正、**尚未重跑**——本機 colima 資料目錄在主機重開後消失（`~/.colima → /Volumes/GameSSD/MacStorage/ryanxhuang/.colima`，該目錄不存在、容器無法啟動），重建 VM 屬使用者環境決定，留待環境恢復後重跑 chain 21／22／11／3 與全套。
+
+**未做／待驗（如實）**：正式 `db push` 與 Edge 重佈在合併後執行；`send-reminders` 的 Resend 實際投遞未驗（上述）；chain 21 只涵蓋 `pending`＋證據路徑，`filled`／hint 路徑只有單元與 pgTAP；「多個符合截止日的草稿期取 `period_no` 最小」與「兩個監造同時簽發／trigger 自動分配 vs 手動 sync 併發」仍無測試（E 包列，本包未做）。

@@ -22,9 +22,11 @@ supabase functions serve --env-file .env.e2e.real   # terminal A（涵蓋 stub �
 npm run test:e2e:real                               # terminal B
 ```
 
+同一個 `.env.e2e.real` 還要有 `CRON_SECRET`（F2 起，值見 `.env.e2e.real.example`；本機專用的固定測試值，不是正式密鑰）：`functions serve` 把它注入 `send-reminders`，chain 22 以同一個值當 `x-cron-secret` 打本機函式的 `?dry=1`。不要在這個檔設 `RESEND_API_KEY`——本機一律不寄信給任何真實成員；dry-run 從不呼叫 Resend、也不記帳。
+
 5189 被別的 worktree 佔用時，Playwright 直接報「is already used」、不沿用（T2）。等對方跑完，或用 `E2E_REAL_PORT` 換一個本次專用的埠（與 Demo 端的 `E2E_DEMO_PORT` 同一個做法），例如 `E2E_REAL_PORT=5289 npm run test:e2e:real`。
 
-二十條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14，P3f）、保固期滿日與保固類循環義務（chain 15，P5e）、查驗表單範本與舊判定更正（chain 16，P3g）、真實表單格子編輯（chain 17，C 包）、監造兩份紙本表單（chain 18，C2）（chain 5–10、12–16 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+二十四條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾（chain 4；F2 起含「有效確認量擋重匯」）、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14，P3f）、保固期滿日與保固類循環義務（chain 15，P5e）、查驗表單範本與舊判定更正（chain 16，P3g）、真實表單格子編輯（chain 17，C 包）、監造兩份紙本表單（chain 18，C2）、契約義務時點待補（chain 19，F1）、服務憑證寫入被 DB 拒絕（chain 20，F2）、紙表觀察→草稿→待確認→簽署（chain 21，F2）、義務四種轉移＋早報角色分流（chain 22，F2）（chain 5–10、12–16、20–22 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 PDF 交付的兩項真後端驗收由 E 包補進既有鏈（D 包在 Demo 驗不到）：chain 5 在列印頁**實際下載檔案並解析**，證明拿到的是簽署列指向的已簽版本（檔名 `v3_已簽署`、紙面沒有「草稿・未簽署」）；chain 13 下載估驗佐證包的 PDF，證明**真 Supabase Storage 簽名網址**的照片抓得回來（CORS 沒擋）且各自內嵌成影像。
 
@@ -45,6 +47,19 @@ npm run test:e2e:real -- e2e-real/chain3-requirements.spec.js
 ```
 
 Live 會使用模型額度；Edge 未起、金鑰失效或未抽出契約期限應失敗，不能偷偷改成 fixture 後宣稱 Live 通過。D-019 的 AI 項可已自動確認，不再要求每筆都由監造人工批准。fixture 則仍驗人工確認。
+
+### chain 3 紅燈判讀（F2）
+
+live 抽取是非決定性的（E 包實測：同一份契約三次有一次回不完整清單）。同一條紅燈以前分不出「模型這次沒抽完整」與「程式壞了」；F2 起 spec 在失敗訊息第一行就寫出判定，依 `document_ingestion_runs.metadata.error_code`（`failRun` 寫入）或 `metadata.failed_batch.code`（有成功批次時）分類，實作在 `chain3-requirements.spec.js` 的 `classifyExtractionFailure`：
+
+| `error_code` | 判定 | 處置 |
+|---|---|---|
+| `no_requirements`、`no_tool_use`、`max_tokens`、`batch_failed` | **模型輸出不完整**（非程式錯誤） | 重跑一次 chain 3 再驗；spec 刻意不自動重試、不放寬斷言（重試只會把不穩定藏起來） |
+| `timeout`、`network`、`config`、`http_429`／`http_5xx` | 模型服務或本機環境（金鑰、網路、額度、逾時） | 先查 `functions serve` 是否吃到 `.env.e2e.real`、金鑰是否有效 |
+| 其他（`db_error`、`exception`、無代碼） | 程式或資料錯誤 | 看 `error_message` 與 `metadata`，修程式 |
+| run `completed` 但沒有 `2026-10-31` 的固定期限 | 模型輸出不完整；若 `metadata.rejected_items` 含該日期，則是引文／日期核對把它拒絕 | 訊息附 `raw_item_count`／`rejected_item_count`／`coverage_incomplete` 與全部落庫建議，先看內容再決定重跑或修 |
+
+判定只用來讀紅燈，不改變任何斷言：模型輸出不完整仍是紅燈。
 
 chain 3 會以 staging 的平台 admin bootstrap 設定測試案方案，既有 bootstrap 帳號可能被沿用；只能用專用隔離環境。colima 要掛載 repo 磁碟；本機 service_role 權限依 seed.sql 準備。不要把帳號已存在當作禁止正式執行的可靠保護。
 
@@ -146,6 +161,33 @@ npm run test:e2e:real -- e2e-real/chain14-discard-draft.spec.js
 ```bash
 npm run test:e2e:real -- e2e-real/chain15-warranty.spec.js
 ```
+
+## 服務憑證寫入被 DB 拒絕鏈（chain 20，F2）
+
+`e2e-real/chain20-edge-credential-writes.spec.js`（不需 Edge stub；本機 stack 已套用 `20260920230000`）：以 **Edge 實際持有的憑證打 Edge 實際走的通道**——`.env.e2e.real` 的 service role key 就是 `functions serve` 注入每支函式的 `SUPABASE_SERVICE_ROLE_KEY`（spec 先解 JWT 驗 `role=service_role`），經 kong → PostgREST 以 service_role 執行，DB 看到的與 Edge 的 service client 完全相同。佈置全走產品窄門（廠商建案、匯標單、建草稿期；監造 `issue_supervisor_certificate` 簽 60；廠商同步確認量），然後以服務憑證直寫：估驗明細 insert／update／delete、來源分配 insert、調整 insert（P4e `VQ010`）；確認量 insert（內容合法、確認人是本案監造）／active→revoked（填了原因）／delete（F2 `VQ010`）；期別直接建已核定、草稿→監造審核／已核定、登請款日、登撥款（F2 `VQ010`）；計價依據 insert（F2 `VQ010`）；十四支寫入 RPC（`issue_supervisor_certificate`、`set_valuation_item_cum`、`transition_valuation`、`sync_valuation_from_confirmations`、`revoke_inspection_confirmation`、`set_work_item_pricing_basis`、`admin_adjust_valuation_item`、`void_valuation_adjustment` → `VQ001`；`sign_field_document` → `PD006`；`update_project_anchors`、`transition_obligation_period`、`review_requirement`、`reset_project_boq`、`import_work_items` → `not authenticated`）；先 `rpc('fn_cq_set_internal', true)` 再另一請求寫入仍 `VQ010`（旗標只活在那一個 PostgREST 交易）。每一條都要有明確的 DB 錯誤碼（「沒錯誤但沒寫進去」不算）；最後核對六張表一列未變，並由監造以**同一批 payload** 經 RPC 寫入成功——證明被拒的是憑證不是內容。
+
+```bash
+E2E_REAL_PORT=5389 npm run test:e2e:real -- e2e-real/chain20-edge-credential-writes.spec.js
+```
+
+## 紙表觀察→草稿→待確認→簽署鏈（chain 21，F2）
+
+`e2e-real/chain21-paper-form-stub.spec.js`（前置同 chain 5：Edge stub）：本機 stub 除了預設的一般工地照，多一個 `paper_form_line_a` 情境——回傳值**逐字取自真實模型對 `LINE_A~4_0.JPG` 的實際輸出**（`vision-after-b2.json` 的 original 條件，模型 `claude-haiku-4-5-20251001`；`visionStub.test.ts` 與該檔比對釘住不漂移），e2e 以 `helpers.tinyJpeg('pmis-stub-scene=paper_form_line_a;…')` 的尾巴標記選情境（`visionStub.stubSceneOf`）。**這仍是 stub**：不看影像、不呼叫模型、只證明流程；真實模型的抄錄率看續接清單 §9 B2，兩者分開報。只挑 LINE_A 的原因：它的分類 `text_legible=true`，真實流程是整張轉錄兩次＋逐格切塊，stub 的 `readBoard` 就是整張那條路；另兩張紙表 `text_legible=false`，實測值只來自逐格切塊，1×1 的 e2e 小圖偵測不到紙張走不到那條路，硬塞會變成重建而非逐字。驗：廠商上傳一張 → 施工日誌與自主檢查表的文件日期都是**紙上日期** `2026-08-04`（來源 `whiteboard`，不是上傳日）；照片 `ai_result` 是真實輸出的形狀（8 筆觀察、實測欄帶 `paper_cells` 來源矩形、`paper_cells_skipped` 記「偵測不到紙張」退回整張路徑）；分類猜的位置 `B5-4-4-25m` 沒有原文佐證 → `photos.location` 不落地、草稿位置待補；線徑／網目各 `pending`、原因「紙上編號 1、4 各有實測紀錄，未合併」、證據帶兩筆原文與編號、**不給提示值**（不替人挑一個）、值全空；`sign_field_document` 回 `PD004` 並列出待確認鍵；頁面沒有簽署鈕、點「原文」看得到證據面板（原因、兩筆原文、紙上實測欄）；人親自填 11／15、勾 B1 → 存檔「版本 2，可簽署」（來源 `confirmed／human`）→ 簽署 → `checklist_records` 落庫、`check_date` 是紙上日期、判定由 DB 算。真實資料裡沒有一筆單向、單一編號的讀數，所以「抄錄成 filled 但仍 needs_confirmation 不能簽」與「單一編號兩向尺寸 → 帶 hint 的 pending」只由 pgTAP `measured_from_record` 與 `fieldDocDraft.test.ts` 釘住，e2e 走不到。
+
+```bash
+supabase functions serve --env-file .env.e2e.real   # terminal A
+E2E_REAL_PORT=5389 npm run test:e2e:real -- e2e-real/chain21-paper-form-stub.spec.js
+```
+
+## 義務四種轉移＋早報角色分流鏈（chain 22，F2）
+
+`e2e-real/chain22-obligation-lifecycle.spec.js`（前置：`functions serve --env-file .env.e2e.real` 且該檔含 `CRON_SECRET`；本機 stack 已套用 `20260920214557`＋`20260920230000`；`reminder.daily` 門檻 standard，測試案由平台管理員 bootstrap 帳號設為 standard，同 chain 3）：廠商（管理者）設基準日（開工 9/1、竣工 12/31）、補登五條契約重點（3 天前固定期限、開工後 30 日、3 天後固定期限、每月 10 日循環、監造 2 天後）→ 監造 `review_requirement` 確認 → DB 物化。驗：**逾期**——時程列「逾期 3 日」且預設選中、首頁「現在輪到我」列出、廠商看不到監造的事；**早報 dry-run**（POST `?dry=1`、驗 `x-cron-secret`；不寄、不記帳）——廠商 `overdue` 是逾期義務＋本月循環期、`dueSoon` 是 3 天後那條、信裡沒有監造的事；監造只有自己的 2 天後那條；機關 `should_send=false`、不查 email、不附 sections；`emails_sent=0`；**改期**——「設定基準日」改開工日 9/15（類別展延、填依據函文）→ 留第 2 版、`effects` 記 `rescheduled 2026-10-01 → 2026-10-15`、全期視圖列出新到期日；監造改基準日被 RPC 拒（`僅專案管理者可修改基準日`）；**已完成**——「標記完成」→ 列翻已完成、DB 蓋 `completed_at`、`due_date_snapshot`、`anchor_version_no=2`；「取消完成」回待辦、快照清空；**廢止**——監造在擷取審核「廢止取代」每月循環 → `requirements.superseded`、義務 `不適用`、所有待辦期次 `不適用`、時程不再列；再跑一次早報：已完成與廢止的都消失、逾期的還在、監造不受影響。
+
+```bash
+E2E_REAL_PORT=5389 npm run test:e2e:real -- e2e-real/chain22-obligation-lifecycle.spec.js
+```
+
+chain 4 的第二段（F2）：工項有**有效的**監造確認量時，「清空重匯」被 `work_items_confirmation_guard`（P4b §4.7）擋下——同一條紅色橫幅列出工項與「請先撤銷確認」、RPC 直打同樣 `VQ010`、標單與確認紀錄原封不動；監造撤銷（留原因）後才可清空，撤銷後的紀錄不再擋、隨工項 cascade（既有規則，歷史由 `audit_events` 的 `confirmation.issued`／`confirmation.revoked`／`boq.reset` 保存）。
 
 ## 查驗表單範本與舊判定更正鏈（chain 16，P3g）
 

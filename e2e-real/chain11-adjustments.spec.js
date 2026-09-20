@@ -138,10 +138,10 @@ test('鏈 11b:歷史遷移期別 → 監造首頁待補證 → 補證此期 → 
       values ('${legacyId}', '${projectId}', 2, '${today}', '${today}', 5, '草稿');
     set local pmis.cq_internal = '1';   -- P4e 起明細只由重算路徑寫入;遷移前的歷史明細以 DBA 邊界重現
     insert into public.valuation_items (valuation_id, work_item_id, cum_qty, backing) values ('${legacyId}', '${wiB}', 50, 'legacy');
-    set local pmis.cq_internal = '';
     alter table public.valuations disable trigger valuations_checkpoint_guard;
-    update public.valuations set status = '已核定' where id = '${legacyId}';
+    update public.valuations set status = '已核定' where id = '${legacyId}';   -- F2 起非登入者改狀態也只認旗標:仍在 DBA 邊界內
     alter table public.valuations enable trigger valuations_checkpoint_guard;
+    set local pmis.cq_internal = '';
     select public.fn_cq_backfill_legacy_internal('${projectId}');
     commit;`)
   expect(backfilled.split('\n').pop()).toBe('1')                                   // 回填 1 筆 legacy 來源

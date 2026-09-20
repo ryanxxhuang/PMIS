@@ -87,8 +87,12 @@ describe('骨架接線:不得手抄回來', () => {
     expect(definers).toEqual(['_shared/uuid.ts'])
   })
 
-  it('ai_feature_allowed 只在 aiGate(使用者請求)與 send-reminders(cron)兩處判定', () => {
+  it('ai_feature_allowed 只在 aiGate(使用者請求)與 send-reminders 的真實 deps(cron)兩處判定', () => {
+    // F2 起 send-reminders 的流程本體搬到 _shared/sendRemindersRun.ts(閘門判定仍走 gateVerdict),
+    // RPC 呼叫只留在真實 deps(_shared/sendRemindersDeps.ts);入口 index.ts 不再直接問閘門
     const callers = sourceFiles.filter((rel) => read(rel).includes("rpc('ai_feature_allowed'")).sort()
-    expect(callers).toEqual(['_shared/aiGate.ts', 'send-reminders/index.ts'])
+    expect(callers).toEqual(['_shared/aiGate.ts', '_shared/sendRemindersDeps.ts'])
+    expect(read('_shared/sendRemindersDeps.ts')).toContain('gateVerdict(REMINDER_FEATURE')
+    expect(read('_shared/sendRemindersRun.ts')).not.toContain('gateVerdict(') // 流程本體只消費判定,不另設第二個判定點
   })
 })

@@ -12,7 +12,7 @@ assistant.chat／contract.parse 退場以關閉功能列處理，保留 Edge 與
 
 ## 伺服器流程
 
-[openAiGate](../../supabase/functions/_shared/aiGate.ts) 驗證 auth.getUser、project UUID、以 caller JWT 查專案，再詢問閘門。業務查詢用 userClient 套 RLS；serviceClient 只記帳／寫 system-managed 表，不能拿來繞過業務讀取權。一支函式在主閘之後還要用到別的 AI 功能（`draft-field-documents` 逐張沿用 `photo.classify`／`sitelog.whiteboard`）時，經同檔的 `askAiFeature` 再問一次 `ai_feature_allowed`（同一個 RPC、同一個 `gateVerdict`，擋下記一筆 blocked），每次模型呼叫用該功能的 key 記帳——功能獨立開關不因呼叫路徑不是 HTTP 而失效；`rpc('ai_feature_allowed')` 的呼叫點由 errorLeak 掃描釘在 aiGate 與 send-reminders 兩處。
+[openAiGate](../../supabase/functions/_shared/aiGate.ts) 驗證 auth.getUser、project UUID、以 caller JWT 查專案，再詢問閘門。業務查詢用 userClient 套 RLS；serviceClient 只記帳／寫 system-managed 表，不能拿來繞過業務讀取權。一支函式在主閘之後還要用到別的 AI 功能（`draft-field-documents` 逐張沿用 `photo.classify`／`sitelog.whiteboard`）時，經同檔的 `askAiFeature` 再問一次 `ai_feature_allowed`（同一個 RPC、同一個 `gateVerdict`，擋下記一筆 blocked），每次模型呼叫用該功能的 key 記帳——功能獨立開關不因呼叫路徑不是 HTTP 而失效；`rpc('ai_feature_allowed')` 的呼叫點由 errorLeak 掃描釘在 aiGate 與 send-reminders 的真實 deps（`_shared/sendRemindersDeps.ts`，F2 起流程本體在 `_shared/sendRemindersRun.ts` 只消費判定）兩處；`gatePolicy.test.ts` 另釘每個呼叫檔都在同一處經 `gateVerdict` 判定。
 
 [gateVerdict](../../supabase/functions/_shared/gatePolicy.ts) 僅明確 true 放行：
 

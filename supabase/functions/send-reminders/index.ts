@@ -7,6 +7,8 @@
 //     (_shared/ballInCourt.ts collectOpenBallItems),外加試體齡期(廠商事項)。
 //   * 沒有屬於這個角色的事(逾期或 7 日內到期)就不寄信給他。
 //   * 內容一律確定性產生,絕不呼叫 LLM(成本不合理、寄錯無法收回)。
+//   * 流程本體在 _shared/sendRemindersRun.ts(F2 起,Deno 單元測試以假件釘住角色分流／閘門／dry／寄信 payload);
+//     真實 deps(Supabase、Resend、記帳)在 _shared/sendRemindersDeps.ts。這裡只剩 HTTP 入口。
 //
 // 部署:supabase functions deploy send-reminders --no-verify-jwt
 // 秘密:supabase secrets set RESEND_API_KEY=re_...  CRON_SECRET=<自訂長亂數>
@@ -16,28 +18,16 @@
 //       本函式用 service role 讀庫(繞過 RLS),金鑰只存在伺服器端。
 //       跨案隔離不靠 RLS —— 靠每個查詢逐一 .eq('project_id', …) 綁定本案
 //       (collectOpenBallItems 內亦同),A 案的事絕不會進 B 案成員的信。
-// 測試:POST ?dry=1 → 只回 JSON 彙整結果(每人角色/分段件數)、不寄信
-//       (沒設 RESEND_API_KEY 也能跑)。
+// 測試:POST ?dry=1 → 只回 JSON 彙整結果(每人角色/分段件數)、不寄信、不記帳
+//       (沒設 RESEND_API_KEY 也能跑)。本機:真後端 e2e chain 22 以 dry=1 對隔離棧驗角色分流。
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-// 批 B:reminder.daily 逐專案過 ai_feature_allowed;用量走低階 recordAiUsage
-// (本函式無使用者 JWT、以 service role 掃全部專案,不適用 openAiGate)
-import { recordAiUsage } from '../_shared/aiGate.ts'
-import { gateVerdict } from '../_shared/gatePolicy.ts'
-import { maskDbError } from '../_shared/publicError.ts'
-import { taipeiTodayUTC, formatDate } from '../_shared/contractDue.ts'
-import { agentRoleOf, AGENT_NAME } from '../_shared/agentRole.ts'
-import type { AgentRole } from '../_shared/agentPersona.ts'
-import { collectOpenBallItems } from '../_shared/ballInCourt.ts'
-import type { OpenBallItem } from '../_shared/ballInCourt.ts'
-import {
-  SOON_DAYS, testSampleItems, itemsForRecipient, splitBrief, shouldSendBrief,
-  briefSubject, renderBriefEmail,
-} from '../_shared/agentBrief.ts'
+import { taipeiTodayUTC } from '../_shared/contractDue.ts'
+import { authorizeCron, runSendReminders } from '../_shared/sendRemindersRun.ts'
+import { supabaseReminderDeps } from '../_shared/sendRemindersDeps.ts'
 
 Deno.serve(async (req) => {
-  const secret = Deno.env.get('CRON_SECRET')
-  if (!secret || req.headers.get('x-cron-secret') !== secret) {
+  if (!authorizeCron(req, Deno.env.get('CRON_SECRET'))) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
   }
   const dry = new URL(req.url).searchParams.get('dry') === '1'
@@ -49,142 +39,12 @@ Deno.serve(async (req) => {
   const resendKey = Deno.env.get('RESEND_API_KEY')
   const from = Deno.env.get('REMINDER_FROM') || 'GovAgent 提醒 <onboarding@resend.dev>'
   const appUrl = Deno.env.get('APP_URL') || 'https://app.gov-agent.ai/'
-  const agentUrl = appUrl + '#/agent' // 早報的落點是「你的 Agent」,不是提醒中心
-  const todayUTC = taipeiTodayUTC()
 
-  const { data: projects, error: pErr } = await supabase.from('projects')
-    .select('id, name, end_date, award_date, notice_date, commencement_date')
-  if (pErr) {
-    // 回應只有 pg_cron / 營運人員看得到,但仍不放 PostgREST 原文(原文進 log)
-    const pub = maskDbError('send-reminders.projects', pErr)
-    return new Response(JSON.stringify({ error: pub.message, code: pub.code }), { status: 500 })
-  }
-
-  // 跨專案快取:email 與 org_type 都是「使用者層」資料,查一次就好
-  const emailCache = new Map<string, string | null>()
-  const orgTypeCache = new Map<string, string | null>()
-  const results: unknown[] = []
-
-  for (const p of projects || []) {
-    // ── 0) 批 B:reminder.daily 功能閘門(逐專案)──────────────────────────────
-    // 查詢失敗 fail-closed 跳過本專案(W3-4/D-010,判定同 gateVerdict);
-    // 回 false → 跳過不寄信。兩者都記 blocked(actor=system、user null);
-    // dry=1 模式一律不記帳,避免測試污染用量資料。
-    const { data: allowed, error: allowError } = await supabase
-      .rpc('ai_feature_allowed', { p_project: p.id, p_feature: 'reminder.daily' })
-    if (allowError) {
-      console.error(`ai_feature_allowed 查詢失敗(reminder.daily,專案 ${p.id},fail-closed 跳過):`, allowError.message)
-    }
-    const verdict = gateVerdict('reminder.daily', allowed as boolean | null, !!allowError)
-    if (!verdict.allow) {
-      if (!dry) {
-        await recordAiUsage(supabase, {
-          feature: 'reminder.daily', projectId: p.id, userId: null, actor: 'system',
-          status: 'blocked', errorCode: verdict.code,
-        })
-      }
-      results.push({
-        project: p.name,
-        skipped: verdict.code === 'gate_unavailable' ? 'reminder.daily 開關暫時無法確認(fail-closed 跳過)' : 'reminder.daily 未啟用',
-      })
-      continue
-    }
-
-    // ── 1) 本案「球在誰手上」全清單(與 list_my_open_items 同一份實作) ────────
-    const collected = await collectOpenBallItems(supabase, p.id, todayUTC, { obligationSoonDays: SOON_DAYS })
-    if ('error' in collected) {
-      results.push({ project: p.name, error: collected.error })
-      continue
-    }
-    // 試體齡期(7/28 天)→ 廠商陣營(工安缺失已併入 defects 引擎
-    // domain='safety',collectOpenBallItems 會帶出來;舊版另查 safety_records
-    // 的路徑在統一缺失引擎後已是死碼,不再保留)
-    const { data: samples } = await supabase.from('test_samples')
-      .select('id, sample_no, test_item, status, d7_due, d28_due, d7_value, d28_values')
-      .eq('project_id', p.id)
-    const allItems: OpenBallItem[] = [...collected.items, ...testSampleItems(samples || [], todayUTC)]
-
-    // ── 2) AUTHORIZATION：project_members 管存取，profiles.org_type 管角色；
-    // project_memberships/project_role 是身分快照，不得用來分流提醒 ─────────
-    const { data: legacyMembers } = await supabase
-      .from('project_members').select('user_id').eq('project_id', p.id)
-    const memberIds = (legacyMembers || []).map((m) => m.user_id)
-
-    const missing = memberIds.filter((id) => !orgTypeCache.has(id))
-    if (missing.length) {
-      const { data: profs } = await supabase.from('profiles').select('id, org_type').in('id', missing)
-      for (const pr of profs || []) orgTypeCache.set(pr.id, pr.org_type || null)
-      for (const id of missing) if (!orgTypeCache.has(id)) orgTypeCache.set(id, null)
-    }
-
-    const agentRoleByUser = new Map<string, AgentRole>()
-    for (const uid of memberIds) {
-      agentRoleByUser.set(uid, agentRoleOf(orgTypeCache.get(uid)))
-    }
-
-    // ── 3) AI 草稿收件匣:本案各成員 pending 筆數(一次查完) ──────────────────
-    const { data: drafts } = await supabase.from('agent_actions')
-      .select('actor_user').eq('project_id', p.id).eq('status', 'pending')
-    const draftCount = new Map<string, number>()
-    for (const d of drafts || []) draftCount.set(d.actor_user, (draftCount.get(d.actor_user) || 0) + 1)
-
-    // ── 4) 逐成員組信、寄信(沒有屬於他的事就不寄) ──────────────────────────
-    const recipients: unknown[] = []
-    let sent = 0
-    for (const [uid, role] of agentRoleByUser) {
-      const mine = itemsForRecipient(allItems, role)
-      const sections = splitBrief(mine, todayUTC)
-      const pendingDrafts = draftCount.get(uid) || 0
-      const shouldSend = shouldSendBrief(sections)
-
-      let email: string | null = null
-      if (shouldSend) {
-        if (!emailCache.has(uid)) {
-          const { data } = await supabase.auth.admin.getUserById(uid)
-          emailCache.set(uid, data?.user?.email || null)
-        }
-        email = emailCache.get(uid) || null
-        if (!dry && email && resendKey) {
-          const res = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from, to: [email],
-              subject: briefSubject(role, p.name, sections),
-              html: renderBriefEmail({ role, projectName: p.name, todayUTC, sections, pendingDrafts, agentUrl }),
-            }),
-          })
-          if (res.ok) sent += 1
-          else console.error(`Resend failed for project ${p.id} user ${uid}:`, res.status, await res.text())
-        }
-      }
-
-      recipients.push({
-        user_id: uid, email, role, agent: AGENT_NAME[role],
-        overdue: sections.overdue.length, soon: sections.dueSoon.length,
-        pending: sections.pending.length, setup: sections.setupPending.length, drafts_pending: pendingDrafts,
-        should_send: shouldSend,
-        ...(dry && shouldSend ? { sections } : {}),
-      })
-    }
-
-    // 批 B:有實際寄出信件才記一筆 ok(actor=system、token/cost 全 0——確定性早報
-    // 不打 LLM);dry 不記帳。recordAiUsage 吞掉一切錯誤,不影響早報流程。
-    if (!dry && sent > 0) {
-      await recordAiUsage(supabase, {
-        feature: 'reminder.daily', projectId: p.id, userId: null, actor: 'system', status: 'ok',
-      })
-    }
-
-    results.push({
-      project: p.name,
-      items_total: allItems.length,
-      emails_sent: sent,
-      recipients,
-    })
-  }
-
-  return new Response(JSON.stringify({ dry, date: formatDate(todayUTC), projects: results }, null, 2), {
-    headers: { 'Content-Type': 'application/json' },
+  const result = await runSendReminders(supabaseReminderDeps(supabase, { resendKey }), {
+    dry, todayUTC: taipeiTodayUTC(), resendConfigured: !!resendKey, from,
+    agentUrl: appUrl + '#/agent', // 早報的落點是「你的 Agent」,不是提醒中心
+  })
+  return new Response(JSON.stringify(result.body, null, 2), {
+    status: result.status, headers: { 'Content-Type': 'application/json' },
   })
 })

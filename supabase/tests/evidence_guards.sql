@@ -84,13 +84,17 @@ select throws_ok($$ delete from public.inspections where id = '35000000-0000-000
 
 -- 送審中的期別由 superuser 直接建(P4b 起登入者只能建草稿);退回也由 superuser(監造審核→草稿限監造)
 select pg_temp.become(null);
+set local pmis.cq_internal = '1';   -- F2(20260920230000)起非登入者建非草稿期別只認內部旗標:歷史狀態以 DBA 邊界重現
 insert into public.valuations (id, project_id, period_no, period_end, status) values
   ('35000000-0000-0000-0000-000000000031','25000000-0000-0000-0000-000000000001', 1, current_date, '監造審核');
+set local pmis.cq_internal = '';
 select pg_temp.become('ffffffff-ffff-ffff-ffff-fffffffffff1');
 select throws_ok($$ delete from public.valuations where id = '35000000-0000-0000-0000-000000000031' $$,
   'P0001', null, '送審中的估驗不可刪除');
 select pg_temp.become(null);
+set local pmis.cq_internal = '1';   -- F2:同上,退回也是非登入者改狀態
 update public.valuations set status = '草稿' where id = '35000000-0000-0000-0000-000000000031';
+set local pmis.cq_internal = '';
 select pg_temp.become('ffffffff-ffff-ffff-ffff-fffffffffff1');
 select lives_ok($$ delete from public.valuations where id = '35000000-0000-0000-0000-000000000031' $$,
   '草稿估驗可刪除');

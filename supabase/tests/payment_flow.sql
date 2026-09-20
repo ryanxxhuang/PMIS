@@ -3,7 +3,7 @@
 -- 對應 migration 20260712001800_payment_flow.sql。
 begin;
 
-select plan(11);
+select plan(12);
 
 select has_function('public', 'valuations_payment_gate', '金流閘門函式存在');
 
@@ -38,8 +38,10 @@ end $$;
 
 -- 已核定估驗(歷史期別由 superuser 直接建;P4b 起登入者 INSERT 只能是草稿——直接建已核定曾是繞過送審／核定的洞)
 select pg_temp.become(null);
+set local pmis.cq_internal = '1';   -- F2(20260920230000)起非登入者建非草稿期別只認內部旗標:歷史狀態以 DBA 邊界重現
 insert into public.valuations (id, project_id, period_no, period_end, status) values
   ('36000000-0000-0000-0000-000000000001','26000000-0000-0000-0000-000000000001', 1, current_date, '已核定');
+set local pmis.cq_internal = '';
 
 -- 機關登錄金流
 select pg_temp.become('a4a4a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4c3');
@@ -87,11 +89,17 @@ select throws_ok($$ update public.valuations set invoice_date = '2026-07-10'
   where id = '36000000-0000-0000-0000-000000000002' $$, 'P0001', null,
   '未核定期仍不得登錄請款日(001100 回歸)');
 
--- service role 放行(支援端清理既有矛盾)
+-- 支援端清理既有矛盾:F2(20260920230000)起非登入者改請款／撥款欄位只認內部旗標——
+-- 服務憑證(Edge)不開旗標一律 VQ010;DBA 在交易內開旗標(DBA 邊界)才放行,金流閘門對旗標內的修正不另設限
 select pg_temp.become(null);
+select throws_ok($$ update public.valuations set paid_amount = 5000, paid_date = null, invoice_date = null
+  where id = '36000000-0000-0000-0000-000000000001' $$, 'VQ010', null,
+  'F2:非登入者不開旗標不可改請款／撥款欄位(服務憑證同一條規則)');
+set local pmis.cq_internal = '1';
 select lives_ok($$ update public.valuations set paid_amount = 5000, paid_date = null, invoice_date = null
   where id = '36000000-0000-0000-0000-000000000001' $$,
-  'service role 放行(可清理/修正既有矛盾資料)');
+  'DBA 邊界(旗標內)放行:可清理/修正既有矛盾資料');
+set local pmis.cq_internal = '';
 
 select * from finish();
 rollback;

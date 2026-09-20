@@ -176,14 +176,14 @@ RPC `revoke_inspection_confirmation(p_id, p_reason)`（監造）與「重簽較�
 | 路徑 | 控制 |
 |---|---|
 | 直接 REST `valuation_items` INSERT／UPDATE／DELETE | **P4e 已實作（§19）**：`20260920001500` 收回 PUBLIC／anon／authenticated 的寫入 grant（42501）、刪寫入 policy 只留 SELECT，且 guard 對非重算路徑一律 `VQ010`（所有寫入者）；寫入只經 RPC |
-| 直接 REST `valuations.status`／`period_end`／金流欄 | 保留可寫（相容），但 `valuations_guard` 擴充：送審必填 `period_end`；送審／核定／請款日三個轉移重算不變量；草稿→監造審核限廠商（admin_override 例外）、監造審核→草稿限監造 |
-| `inspection_confirmations`／`valuation_item_sources`／`valuation_adjustments` | authenticated 無寫入 grant；service role 也經 guard（不變量檢查**不看** `auth.uid() is null`） |
+| 直接 REST `valuations.status`／`period_end`／金流欄 | 保留可寫（相容），但 `valuations_guard` 擴充：送審必填 `period_end`；送審／核定／請款日三個轉移重算不變量；草稿→監造審核限廠商（admin_override 例外）、監造審核→草稿限監造 | **F2（§21）**：非登入者（服務憑證／DBA 直連）且無內部旗標時，INSERT 不得帶非草稿狀態，UPDATE 不得改 `status`／`invoice_date`／`paid_date`／`paid_amount`、非草稿期不得改期別欄位（`VQ010`）——狀態機不再只對登入者成立 |
+| `inspection_confirmations`／`valuation_item_sources`／`valuation_adjustments` | authenticated 無寫入 grant；service role 也經 guard（不變量檢查**不看** `auth.uid() is null`） | **F2（§21）**：`inspection_confirmations` 的 INSERT 與 active→revoked 一進 guard 就要 `fn_cq_internal()`（不看內容是否合法）；只有 `issue_supervisor_certificate`／`revoke_inspection_confirmation`／查驗表單簽署分支在那一句寫入前後開旗標。`work_item_pricing_basis` 同：INSERT／UPDATE／DELETE 都要旗標，只有 `set_work_item_pricing_basis` 開 |
 | RPC | 全部 security definer、`revoke from public, anon`；輸入驗證（UUID、非負、有限、單位） |
 | Edge | 沒有 Edge 寫估驗表；**P4e 已加** `_shared/valuationWrites.scan.test.ts` 掃描 `supabase/functions` 全部原始碼：估驗六表（含 `valuations`、確認紀錄、計價依據）不得出現在寫入鏈、估驗寫入 RPC 與 `sign_field_document` 不得呼叫、不得原始 REST |
 | `fillValuationFromSiteLogs` | 從 store 移除；估驗頁改為唯讀「日誌申報量 vs 確認量 vs 本期累計」差異比對（`valuationDiff.js` 延伸） |
 | 標單匯入／重設 `reset_project_boq` | `work_items` FK on delete restrict：有 active 確認的工項不可重匯；先撤銷（留痕）再重匯 |
 | 管理員例外 `admin_override`（非正式模式） | 只放行**角色**檢查（單人試用可兼簽），**不放行數量不變量** |
-| service role | 無 bypass（P4e 起連草稿明細的直接寫入也 `VQ010`）；維護只能走 `admin_adjust_valuation_item(p_reason)`（平台管理員、必填原因、寫 audit、產生 `adjustment` 來源列） |
+| service role | 無 bypass（P4e 起連草稿明細的直接寫入也 `VQ010`）；維護只能走 `admin_adjust_valuation_item(p_reason)`（平台管理員、必填原因、寫 audit、產生 `adjustment` 來源列） | **F2（§21）**：確認量、期別狀態／金流欄、計價依據也一律 `VQ010`；`fn_cq_set_internal` 雖可被 service_role 執行，旗標只活在該 PostgREST 交易，跨請求無效（chain 20 釘住） |
 | 客戶端 `approved_qty`／`cum_qty`／金額 | RPC 只接受 `cum_qty` 目標值並重算；金額一律 DB 算 |
 | 舊前端／舊 RPC | 部署順序 §12；封堵 migration 套用後舊前端的 upsert 會收到明確錯誤（42501，`friendlyError` 顯示「操作未完成…（代碼 42501）」，舊碼還原該格），不會靜默成功（§19.3） |
 | 跨專案 | 所有 RPC 以 `p_valuation_id` 反查 `project_id`，工項與確認必須同案；RLS 縱深 |
@@ -383,3 +383,23 @@ pgTAP `valuation_items_guard.sql` 11→50（三角色＋專案管理者＋非成
 - 任何一步讀取失敗就整包標「本期證據讀取失敗，不產生佐證內容」，不以半份資料冒充；示範模式沒有確認紀錄與簽署，明示未經後端核對。
 - 已知限制：列印頁只印文件目前的簽署版本，來源版本已被更正或文件已被取代時只給版本標示不給連結（見續接清單 §7「P6a 發現」）。
 
+
+## 21. F2 服務憑證寫入封堵落地結果（2026-09-21，PR #<F2>；migration `20260920230000_edge_credential_writer_seal`，回復檔 `supabase/rollbacks/` 同名 `.down.sql`）
+
+### 21.1 查出的缺口（本機隔離棧 `set local role service_role`、`auth.uid()` 為 null 實測，`388daa4` 起的 main 仍成立）
+- `inspection_confirmations_guard` INSERT 只驗內容不驗來源：內容合法的列（`confirmed_by` 填任一位監造成員）被接受，`qty_delta=60`；active→revoked 只驗原因。
+- `valuations_guard` 的角色與狀態機全掛 `is_user`：非登入者可 INSERT `已核定`、UPDATE 成 `已請款`；檢查點只在 AFTER UPDATE 驗數量，空期別或廠商備妥的期別都可被服務憑證代替監造核定。§19「service role 可建…」那一句對此沒有防線。
+- `work_item_pricing_basis_guard` 只驗工項屬本案：服務憑證可直接標 `excluded`／改 `pro_rata`。
+
+### 21.2 做法（與 P4e §19 同一原則：所有寫入者一體適用，只認交易內 `pmis.cq_internal`）
+- 確認量 guard：INSERT 第一行、active→revoked 第一行都 `if not fn_cq_internal() then VQ010`；RI set-null 放行、DELETE 只放行 cascade、內容檢查逐字不變。
+- 三個合法寫入者只在那一句 insert／update 前後 `fn_cq_set_internal(true)`／`fn_cq_restore_internal`（`issue_supervisor_certificate`、`revoke_inspection_confirmation`、`field_document_sign_inspection_form_internal`；其餘本體逐字沿用前一版）。異常時 GUC 隨子交易回滾。
+- `valuations_guard`：非登入者且無旗標 → INSERT 非草稿 `VQ010`；UPDATE `status`／`invoice_date`／`paid_date`／`paid_amount`、非草稿期的 `period_no`／`period_start`／`period_end` `VQ010`。登入者規則、內部重算路徑不變。
+- `work_item_pricing_basis_guard`：INSERT／UPDATE／DELETE 都要旗標（DELETE 只放行工項／專案 cascade），trigger 加 `or delete`；`set_work_item_pricing_basis` 在 upsert 前後開關旗標。
+- 服務憑證拿不到旗標：`fn_cq_set_internal` 可被 service_role 執行，但 PostgREST 一個 request 一個交易，`set_config(…, true)` 只活在該交易。
+
+### 21.3 相容與 fixture
+前端只經 RPC 寫這些表、Edge 本來就不寫（`valuationWrites.scan`＋F2 `edgeWriteAllowlist.scan` 釘住），行為不變；不動任何一列。歷史遷移與 pgTAP fixture 以 DBA 邊界（交易內 `set local pmis.cq_internal='1'`）重現：`confirmed_quantity_enforcement`／`confirmed_quantity_concurrency` 的直寫確認 fixture、七個直接建非草稿期別的 fixture、e2e-real chain 11b 的 DBA 區塊；`payment_flow` 的「service role 放行清理矛盾資料」改為旗標內才放行。
+
+### 21.4 驗證
+pgTAP `edge_credential_writes.sql` 50 條（service_role／superuser 直寫矩陣、十四支 RPC、旗標還原與不放寬內容檢查、登入者狀態機照常）；真後端 chain 20 以真 PostgREST 與 Edge 同一把 service role key 打同一條通道（十三種直寫、十四支 RPC、旗標跨請求、狀態一列未變、同一 payload 由監造經 RPC 寫得進）；chain 4 第二段驗有效確認量擋重匯。

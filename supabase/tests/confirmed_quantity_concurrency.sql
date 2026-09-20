@@ -27,9 +27,13 @@ insert into public.project_members (project_id, user_id, role) values
 insert into public.work_items (id, project_id, item_no, description, unit, quantity, unit_price, is_leaf, is_billable, is_rollup) values
   ('c4c30000-0000-0000-0000-000000000001', 'c4c20000-0000-0000-0000-00000000000a', '1.1', '混凝土', 'm2', 1000, 1, true, true, false),
   ('c4c30000-0000-0000-0000-000000000002', 'c4c20000-0000-0000-0000-00000000000a', '1.2', '鋼筋', 'kg', 1000, 1, true, true, false);
--- 監造確認(直接寫,等同簽署路徑落庫):W1 100;此時沒有草稿期,不自動分配
+-- 監造確認(直接寫,等同簽署路徑落庫):W1 100;此時沒有草稿期,不自動分配。
+-- F2(20260920230000)起 guard 只認交易內的內部旗標(簽署路徑自己開),fixture 直寫改以 DBA 邊界在交易內開旗標
+begin;
+set local pmis.cq_internal = '1';
 insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, confirmed_by, reason) values
   ('c4c20000-0000-0000-0000-00000000000a', 'c4c30000-0000-0000-0000-000000000001', 'A', 'm2', 100, 'supervisor_certificate', 'c4c10000-0000-0000-0000-000000000002', '併發測試');
+commit;
 insert into public.valuations (id, project_id, period_no, period_end, status) values
   ('c4c40000-0000-0000-0000-000000000001', 'c4c20000-0000-0000-0000-00000000000a', 1, pg_temp.today(), '草稿'),
   ('c4c40000-0000-0000-0000-000000000002', 'c4c20000-0000-0000-0000-00000000000a', 2, pg_temp.today(), '草稿');
@@ -91,8 +95,11 @@ select is((select sum(qty) from public.valuation_item_sources where work_item_id
 -- ── 情境 2:兩個期別同時「設定累計」搶同一可用量(W2 50):後到者看到前者已拿走,增量 0 ───
 -- W2 的確認在有草稿期之後才寫入,以 defer 旗標避免自動分配,讓「可用量」只由 session A 的交易拿走
 select set_config('pmis.cq_defer_allocate', '1', false);
+begin;   -- F2:直寫 fixture 以 DBA 邊界在交易內開內部旗標
+set local pmis.cq_internal = '1';
 insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, confirmed_by, reason) values
   ('c4c20000-0000-0000-0000-00000000000a', 'c4c30000-0000-0000-0000-000000000002', 'L', 'kg', 50, 'supervisor_certificate', 'c4c10000-0000-0000-0000-000000000002', '併發測試');
+commit;
 select set_config('pmis.cq_defer_allocate', '', false);
 select is((select count(*)::int from public.valuation_item_sources where work_item_id = 'c4c30000-0000-0000-0000-000000000002'), 0, 'W2 尚未分配');
 select dblink_exec('a', 'begin');
@@ -168,11 +175,14 @@ select dblink_exec('a', 'begin');
 select lives_ok($o$ select * from dblink('a', $q$
     select public.fn_cq_lock_internal('c4c20000-0000-0000-0000-00000000000a', 'c4c30000-0000-0000-0000-000000000003')::text $q$) as t(x text) $o$,
   'session A:持有 W3 的逐工項鎖(模擬另一個確認寫入者)');
+-- F2:session A 模擬「另一個確認寫入者」的直寫,在它自己的交易內開內部旗標(DBA 邊界),與簽署路徑同一條件
+select dblink_exec('a', $q$ set local pmis.cq_internal = '1' $q$);
 select lives_ok($o$ select dblink_exec('a', $q$
     insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, confirmed_by, reason)
     values ('c4c20000-0000-0000-0000-00000000000a', 'c4c30000-0000-0000-0000-000000000003', '3f版牆', 'M3', 30,
             'supervisor_certificate', 'c4c10000-0000-0000-0000-000000000002', '併發測試') $q$) $o$,
   'session A:同批次先確認累計 30(未提交)');
+select dblink_exec('a', $q$ set local pmis.cq_internal = '' $q$);
 select dblink_send_query('b', $q$
   select public.sign_field_document(
     (select id from public.field_documents where doc_type = 'inspection_form'

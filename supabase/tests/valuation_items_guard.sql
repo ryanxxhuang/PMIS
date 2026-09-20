@@ -85,7 +85,9 @@ insert into public.valuations (id, project_id, period_no, period_end, status) va
 select pg_temp.legacy_item('b5d40000-0000-0000-0000-000000000001', 'b5d30000-0000-0000-0000-000000000001', 2000);
 select pg_temp.legacy_item('b5d40000-0000-0000-0000-000000000001', 'b5d30000-0000-0000-0000-000000000002', 100);
 alter table public.valuations disable trigger valuations_checkpoint_guard;
+set local pmis.cq_internal = '1';   -- F2(20260920230000)起非登入者改狀態只認內部旗標:歷史核定以 DBA 邊界重現
 update public.valuations set status = '已核定' where id = 'b5d40000-0000-0000-0000-000000000001';
+set local pmis.cq_internal = '';
 alter table public.valuations enable trigger valuations_checkpoint_guard;
 select public.fn_cq_backfill_legacy_internal('b5d20000-0000-0000-0000-00000000000a');
 -- 第 2 期草稿:鋼筋由監造確認單(A區累計 3000)自動同步 → 前期 2000＋1000;模板一筆 P4e 前留下的 legacy 草稿明細
