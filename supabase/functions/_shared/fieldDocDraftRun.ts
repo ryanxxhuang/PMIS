@@ -9,7 +9,8 @@
 //      掛掉的 run 超過 staleMs 可被接手;失敗／過期重啟才計 attempts,正常續跑不計)。
 //   2. 同批同雜湊標 duplicate(不辨識、不計量、不建文件)。
 //   3. 逐張(有界併發、時間預算):下載 → photo.classify(各記各的用量;功能關閉=整批停、
-//      fail-closed)→ 不可辨=unreadable、非工地=not_site、有板子再跑 sitelog.whiteboard
+//      fail-closed)→ 不可辨=unreadable、非工地=not_site、有可讀的書面紀錄再跑 sitelog.whiteboard
+//      (紙本表單再跑第二次並只留兩次一致的格子——手寫誤讀不穩定,不一致就留空待人填)
 //      → 配工項(與前端同一支 matchLeaf)→ 只由 service 寫 photos.ai_*;caption／location／
 //      work_item_id 只在原本為空時補,不覆蓋人填的。
 //   4. 依上傳方推候選文書(純規則);逐份起稿(廠商→施工日誌＋每個配到工項的自主檢查表、監造→監造日誌,
@@ -30,7 +31,7 @@ import {
 } from './fieldDocDraft.ts'
 import type { FieldDocTemplate } from './fieldDocTemplate.ts'
 import { matchLeaf } from './photoMatch.ts'
-import { normalizeSitePhotoResult, normalizeWhiteboardResult } from './sitePhotoVision.ts'
+import { agreeRecords, groundedLocation, hasWrittenRecord, needsSecondPass, normalizeSitePhotoResult, normalizeWhiteboardResult } from './sitePhotoVision.ts'
 import type { SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
 import type { GateVerdict } from './gatePolicy.ts'
 
@@ -136,6 +137,11 @@ export type RunInput = {
   budgetMs?: number
   concurrency?: number
   staleMs?: number
+  // 明確要求重新辨識的照片(使用者在批次頁按「重新辨識」;伺服器只認這一批內的 id)。
+  // 2026-09-20 B:辨識規則改版後,已辨識過的照片不會自動重跑(會重複計費),但要有一條
+  // 明確的路可以更新,不能永遠卡在舊快取。重跑只改 photos.ai_*;人填過的說明／位置不覆寫,
+  // 已有人工版本或已簽署的文件仍走 suggested／locked,不會被覆寫。
+  rerecognizePhotoIds?: string[]
 }
 
 export type PhotoOutcome = {
@@ -390,8 +396,11 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
   }
 
   // ── 3. 逐張辨識(有界併發、時間預算;功能關閉=整批停) ─────────────────────
-  const work = photos.filter((p) => !dups.has(p.id) && (p.ai_status == null || p.ai_status === 'pending' || p.ai_status === 'failed'))
-  const terminal = photos.filter((p) => !dups.has(p.id) && (p.ai_status === 'done' || p.ai_status === 'not_site' || p.ai_status === 'unreadable'))
+  // 使用者明確要求重辨識的照片視同未辨識(重複照片仍不重跑:正本重辨識即可)
+  const redo = new Set((input.rerecognizePhotoIds ?? []).filter((id) => photos.some((p) => p.id === id) && !dups.has(id)))
+  if (redo.size) notes.push(`${redo.size} 張照片依你的要求重新辨識(會重新計費);人工填過的說明與位置不會被覆寫`)
+  const work = photos.filter((p) => !dups.has(p.id) && (redo.has(p.id) || p.ai_status == null || p.ai_status === 'pending' || p.ai_status === 'failed'))
+  const terminal = photos.filter((p) => !dups.has(p.id) && !redo.has(p.id) && (p.ai_status === 'done' || p.ai_status === 'not_site' || p.ai_status === 'unreadable'))
   for (const p of terminal) {
     const s = readStored(p.ai_result)
     if (s) stored.set(p.id, s)
@@ -441,7 +450,9 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
 
     let whiteboard: WhiteboardResult | null = null
     let whiteboardSkipped: string | null = null
-    if (status === 'done' && classify.has_board) {
+    // 第二階段轉錄:紙本查驗表與黑白板同一支(2026-09-20 起 has_board 語意含紙本表單);
+    // 場景看得清但字跡／刻度讀不出來(text_legible=false)就不轉錄——看得到鋼筋不等於讀得出卡尺。
+    if (status === 'done' && hasWrittenRecord(classify)) {
       if (boardBlocked) whiteboardSkipped = 'feature_disabled'
       else {
         const wb = await vision.readBoard(dl.base64, dl.mime)
@@ -450,6 +461,18 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         else {
           whiteboard = normalizeWhiteboardResult(wb.data)
           if (!whiteboard) whiteboardSkipped = 'failed:invalid_output'
+          // 第二階段(只對紙本表單):同一張再讀一次,只留兩次一致的格子。
+          // 手寫誤讀時模型連 raw_text 一起錯,自證的證據擋不住;不穩定的讀數就讓它落空。
+          else if (needsSecondPass(classify)) {
+            const wb2 = await vision.readBoard(dl.base64, dl.mime)
+            if ('blocked' in wb2) { boardBlocked = true; whiteboardSkipped = 'second_pass:feature_disabled' }
+            else if ('error' in wb2) whiteboardSkipped = `second_pass_failed:${wb2.errorCode}`
+            else {
+              const second = normalizeWhiteboardResult(wb2.data)
+              if (second) whiteboard = agreeRecords(whiteboard, second)
+              else whiteboardSkipped = 'second_pass_failed:invalid_output'
+            }
+          }
         }
       }
     }
@@ -466,7 +489,8 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     // 只補空欄,不覆蓋人填的;非工地／不可辨的照片不套說明、不配工項
     if (status === 'done') {
       if (!p.caption && classify.caption) patch.caption = classify.caption
-      const loc = classify.location ?? (whiteboard?.location || null)
+      // 位置只寫有原文佐證的:轉錄讀到的位置優先,分類推測且與轉錄矛盾的一律不落地
+      const loc = groundedLocation(classify, whiteboard).value
       if (!p.location && loc) patch.location = loc
       if (!p.work_item_id && wi) patch.work_item_id = wi.id
     } else if (status === 'not_site' && !p.caption) {

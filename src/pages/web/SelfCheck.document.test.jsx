@@ -33,7 +33,8 @@ const aiSources = () => ({
   check_date: { status: 'filled', source: 'intake' }, template_id: { status: 'filled', source: 'system:template_match', reason: '本案僅有這一張範本' },
   work_item_id: { status: 'filled', source: 'ai:photo', refs: ['p1'] }, location: { status: 'filled', source: 'ai:photo', refs: ['p1'] },
   'results.B1': { status: 'pending', source: null, reason: '請依現場檢查勾選' },
-  'results.C2': { status: 'pending', source: null, reason: '告示板寫 18cm(僅供參考),請親自量測後填寫', hint: { value: 18, unit: 'cm', source: 'whiteboard:p1' } },
+  // 2026-09-20 B:兩向尺寸／單位對不上等「帶不進來」的紙上紀錄只留原文提示,不填值
+  'results.C2': { status: 'pending', source: null, reason: '紙上為兩向尺寸「15 * 15 CM」,單一欄位無法完整承載,未自動帶入;請確認要記錄哪一向或分列', hint: { value: 15, unit: 'CM', source: 'record:p1', raw_text: '15 * 15 CM' } },
 })
 const version = (over = {}) => ({ id: 'V1', document_id: 'SC1', version_no: 1, author_kind: 'ai', content_hash: 'abcdef0123456789', content: aiContent(), field_sources: aiSources(), attachments: [{ photo_id: 'p1', storage_path: 'x', role: 'evidence' }], ...over })
 const photos = [{ id: 'p1', uploader_org: 'contractor', url: 'blob:1', caption: '澆置照', work_item_id: 'w1' }]
@@ -73,7 +74,7 @@ const button = (name) => [...container.querySelectorAll('button')].find((b) => b
 const withDoc = (doc, over = {}) => makeStore({ documents: [doc], getFieldDocument: vi.fn().mockResolvedValue({ doc, version: version(), versions: [], signatures: [], submissions: [] }), ...over })
 
 describe('自主檢查表文件頁', () => {
-  it('AI 草稿:示範框架範本與免責聲明;範本／工項／位置有來源;每項待補、實測值不帶值只提示;不給簽', async () => {
+  it('AI 草稿:示範框架範本與免責聲明;範本／工項／位置有來源;帶不進來的紙上紀錄只留原文提示、不填值;不給簽', async () => {
     state.store = withDoc(baseDoc())
     await render('/self-check?doc=SC1'); await flush(); await flush()
     expect(container.textContent).toContain('示範範本')
@@ -84,8 +85,29 @@ describe('自主檢查表文件頁', () => {
     expect(container.textContent).toContain('已帶入・待核對・依工項挑選範本')
     expect(container.textContent).toContain('已帶入・待核對・照片 AI 說明')
     expect(container.querySelector('input[aria-label="C2 坍度 實測值"]').value).toBe('')
-    expect(container.textContent).toContain('告示板讀數 18cm（僅供參考）')
+    expect(container.textContent).toContain('紙上寫「15 * 15 CM」（未自動帶入）')
     expect(container.textContent).toContain('判定預覽：尚無已檢項目')
+    expect(button('簽署此版本')).toBeUndefined()
+  })
+
+  it('紙本實測欄已寫好的值:抄錄進格子、顯示紙上原文與來源章,仍要人逐項確認才能簽', async () => {
+    const doc = baseDoc({ recheck: [{ key: 'results.B1', status: 'pending' }, { key: 'results.C2', status: 'needs_confirmation' }] })
+    const copied = version({
+      content: { ...aiContent(), results: { B1: { value: null }, C2: { value: 18 } } },
+      field_sources: {
+        ...aiSources(),
+        'results.C2': {
+          status: 'filled', source: 'record:p1', refs: ['p1'],
+          reason: '抄錄自紙本／告示板實測欄「18 cm」;系統只抄錄,未代為量測,請核對後逐項確認',
+          evidence: [{ photo_id: 'p1', raw_text: '18 cm', label: '坍度', entry_no: 'C2', unit: 'cm', kind: 'measured' }],
+        },
+      },
+    })
+    state.store = withDoc(doc, { getFieldDocument: vi.fn().mockResolvedValue({ doc, version: copied, versions: [], signatures: [], submissions: [] }) })
+    await render('/self-check?doc=SC1'); await flush(); await flush()
+    expect(container.querySelector('input[aria-label="C2 坍度 實測值"]').value).toBe('18')
+    expect(container.textContent).toContain('紙上原文：18 cm')
+    expect(container.textContent).toContain('紙本實測欄抄錄')
     expect(button('簽署此版本')).toBeUndefined()
   })
 

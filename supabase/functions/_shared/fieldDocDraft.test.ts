@@ -10,7 +10,7 @@ import {
 import type { ChecklistTemplateRow, DayDefect, DayInspection, DraftPhoto, FormalDailyLog, LeafWorkItem } from './fieldDocDraft.ts'
 import { templateRequiredKeys } from './fieldDocTemplate.ts'
 import type { FieldDocTemplate } from './fieldDocTemplate.ts'
-import type { WhiteboardResult } from './sitePhotoVision.ts'
+import type { RecordObservation, SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
 // 範本單一定義在 DB;測試用示範模式 fixture(demoFieldDocTemplates.test.js 對 migration 原文釘住)代替執行期取回
 import { demoFieldDocumentTemplate } from '../../../src/data/demoFieldDocTemplates.js'
 const SUP_TPL = demoFieldDocumentTemplate('supervisor_log') as FieldDocTemplate
@@ -37,8 +37,19 @@ const photo = (over: Partial<DraftPhoto> & { id: string }): DraftPhoto => ({
   taken_at: '2026-09-17T02:00:00Z', created_at: '2026-09-17T02:00:00Z', classify: null, whiteboard: null, whiteboardSkipped: null,
   ...over,
 })
-const board = (over: Partial<WhiteboardResult> = {}): WhiteboardResult =>
-  ({ log_date: '', weather: '', location: '', work_summary: '', items: [], ...over })
+const board = (over: Partial<WhiteboardResult> = {}): WhiteboardResult => ({
+  record_medium: 'board', log_date: '', log_date_text: '', log_date_conflict: null, weather: '',
+  location: '', location_text: '', work_item_text: '', work_summary: '', observations: [], items: [], dropped: [], ...over,
+})
+// 紙本／板上「已經寫好的」一筆紀錄(設計欄或實測欄);raw_text 是唯一證據
+const obs = (over: Partial<RecordObservation> & { label: string; raw_text: string }): RecordObservation =>
+  ({ kind: 'measured', entry_no: '', value: null, value2: null, unit: '', comparator: '', location: '', note: '', ...over })
+// 分類結果:2026-09-20 起 location 必須附原文出處(location_text),否則 normalize／起稿都不採用
+const cls = (over: Partial<SitePhotoResult> = {}): SitePhotoResult => ({
+  caption: '鋼筋綁紮', category: '施工作業', is_construction: true, legible: true, text_legible: false,
+  has_board: false, record_medium: 'none', work_item_hint: '鋼筋', visible_progress: '', location: null,
+  location_text: '', dropped: [], ...over,
+})
 
 const base = () => ({
   date: '2026-09-17', dateSource: { source: 'intake', refs: [] }, workItems: LEAVES,
@@ -229,7 +240,7 @@ describe('buildDailyLogDraft:欄位來源', () => {
     const wb = board({ weather: '晴', location: 'A區1F', items: [{ description: '鋼筋加工及組立', quantity: 12.5, unit: 'T', note: '' }, { description: '混凝土澆置', quantity: null, unit: 'M3', note: '' }] })
     const d = buildDailyLogDraft({ ...base(), photos: [photo({ id: 'pb', work_item_id: 'wi-steel', content_sha256: 'c'.repeat(64), whiteboard: wb })] })
     expect(d.content.items['wi-steel']).toMatchObject({ qty_today: 12.5, location: 'A區1F' })
-    expect(d.field_sources['items.wi-steel.qty_today']).toEqual({ status: 'filled', source: 'whiteboard:pb', refs: ['pb'] })
+    expect(d.field_sources['items.wi-steel.qty_today']).toMatchObject({ status: 'filled', source: 'whiteboard:pb', refs: ['pb'] })
     expect(d.field_sources['items.wi-steel.location']).toMatchObject({ status: 'filled', source: 'whiteboard:pb' })
     // 板上有列但沒寫數量:加列、數量仍 pending(null 不是 0)
     expect(d.content.items['wi-conc']).toMatchObject({ qty_today: null })
@@ -427,12 +438,12 @@ describe('buildSelfCheckDraft:自主檢查表內容來源(P3b)', () => {
   const steel = LEAVES[0]
   const cPhoto = (id: string, over: Partial<DraftPhoto> = {}): DraftPhoto => photo({
     id, work_item_id: 'wi-steel',
-    classify: { caption: '鋼筋綁紮', category: '施工作業', is_construction: true, legible: true, has_board: false, work_item_hint: '鋼筋', visible_progress: '', location: 'A區1F' },
+    classify: cls({ has_board: true, text_legible: true, record_medium: 'board', location: 'A區1F', location_text: '施工位置:A區1F' }),
     ...over,
   })
   const cBase = () => ({ date: '2026-09-17', dateSource: { source: 'intake', refs: [] as string[] }, workItem: steel, template: T_CONC, templateReason: '本案僅有這一張範本', frame: SC_FRAME, hasBoq: true, notes: [] as string[] })
 
-  it('每個項目一律 pending:實測值待人量測、勾選項不代為勾選;範本／工項／位置／佐證由照片帶入並標來源;必填=框架＋每項;絕不出現「合格」', () => {
+  it('沒有紙上實測紀錄時每個項目仍 pending:不猜實測值、不代為勾選;範本／工項／位置／佐證由照片帶入並標來源;必填=框架＋每項;絕不出現「合格」', () => {
     const d = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('c1'), cPhoto('c2')] })
     expect(d.content).toMatchObject({ check_date: '2026-09-17', template_id: 'tpl-conc', template_title: T_CONC.title, work_item_id: 'wi-steel', location: 'A區1F', note: null, template: { key: 'self_check_demo', version: 1 }, photo_ids: ['c1', 'c2'] })
     expect(d.content.results).toEqual({ B1: { value: null }, C2: { value: null }, C3: { value: null } })
@@ -442,6 +453,7 @@ describe('buildSelfCheckDraft:自主檢查表內容來源(P3b)', () => {
     expect(d.field_sources['results.B1']).toMatchObject({ status: 'pending', source: null })
     expect(d.field_sources['results.C2']).toMatchObject({ status: 'pending', source: null })
     expect(d.field_sources['results.C2'].hint).toBeUndefined()
+    expect(d.field_sources['results.C2'].reason).toContain('沒有這一項的實測紀錄')
     expect(d.required_fields).toEqual(['check_date', 'results.B1', 'results.C2', 'results.C3', 'template_id'])
     expect(d.recheck.map((r) => r.key)).toEqual(['results.B1', 'results.C2', 'results.C3'])
     expect(d.status).toBe('pending_input')
@@ -451,31 +463,86 @@ describe('buildSelfCheckDraft:自主檢查表內容來源(P3b)', () => {
     expect(d.summary).toContain('示範範本')
   })
 
-  it('告示板寫出對應項目的讀數:只放 hint 不填值(值仍 null、仍 pending);多板不一致不給 hint;對不到的項目不猜', () => {
-    const wb = (items: WhiteboardResult['items']) => board({ items })
+  it('紙上實測欄已寫好的讀數抄錄進欄位(標 filled 待確認、附原文與來源照片);多張不一致列衝突不挑一個;對不到的項目不猜', () => {
     const d = buildSelfCheckDraft({ ...cBase(), photos: [
-      cPhoto('b1', { whiteboard: wb([{ description: '坍度 18cm', quantity: 18, unit: 'cm', note: '' }, { description: '澆置溫度', quantity: 28, unit: '℃', note: '' }]) }),
-      cPhoto('b2', { whiteboard: wb([{ description: '坍度', quantity: 18, unit: 'cm', note: '' }, { description: '上下層澆置間隔', quantity: 30, unit: '分', note: '' }]) }),
-      cPhoto('b3', { whiteboard: wb([{ description: '上下層澆置間隔', quantity: 40, unit: '分', note: '' }]) }),
+      cPhoto('b1', { whiteboard: board({ observations: [
+        obs({ label: '坍度 18cm', raw_text: '18 cm', value: 18, unit: 'cm' }),
+        obs({ label: '澆置溫度', raw_text: '28 ℃', value: 28, unit: '℃' }),
+      ] }) }),
+      cPhoto('b2', { whiteboard: board({ observations: [
+        obs({ label: '坍度', raw_text: '18 cm', value: 18, unit: 'cm' }),
+        obs({ label: '上下層澆置間隔', raw_text: '30 分', value: 30, unit: '分' }),
+      ] }) }),
+      cPhoto('b3', { whiteboard: board({ observations: [obs({ label: '上下層澆置間隔', raw_text: '40 分', value: 40, unit: '分' })] }) }),
     ] })
-    expect(d.content.results.C2).toEqual({ value: null })
-    expect(d.field_sources['results.C2']).toMatchObject({ status: 'pending', refs: ['b1', 'b2'], hint: { value: 18, unit: 'cm', source: 'whiteboard:b1' } })
-    expect(d.field_sources['results.C2'].reason).toContain('僅供參考')
-    expect(d.field_sources['results.C3']).toMatchObject({ status: 'pending' })
-    expect(d.field_sources['results.C3'].hint).toBeUndefined()
-    expect(d.field_sources['results.C3'].reason).toContain('不一致(30、40)')
-    expect(d.status).toBe('pending_input')
+    // 兩張照片同一個讀數 → 只抄一次(不累加),來源兩張都留
+    expect(d.content.results.C2).toEqual({ value: 18 })
+    expect(d.field_sources['results.C2']).toMatchObject({ status: 'filled', source: 'record:b1', refs: ['b1', 'b2'] })
+    expect(d.field_sources['results.C2'].reason).toContain('18 cm')
+    expect(d.field_sources['results.C2'].reason).toContain('未代為量測')
+    expect(d.field_sources['results.C2'].evidence).toEqual([
+      { photo_id: 'b1', raw_text: '18 cm', label: '坍度 18cm', entry_no: '', unit: 'cm', kind: 'measured' },
+      { photo_id: 'b2', raw_text: '18 cm', label: '坍度', entry_no: '', unit: 'cm', kind: 'measured' },
+    ])
+    // 不一致 → 不挑一個,列衝突並保留各自來源
+    expect(d.content.results.C3).toEqual({ value: null })
+    expect(d.field_sources['results.C3']).toMatchObject({ status: 'pending', refs: ['b2', 'b3'] })
+    expect(d.field_sources['results.C3'].reason).toContain('不一致')
+    expect(d.field_sources['results.C3'].reason).toContain('30')
+    expect(d.field_sources['results.C3'].reason).toContain('40')
+    // 已抄錄的項目仍列 recheck(待確認),狀態不會因此變成可簽
+    expect(d.recheck.some((r) => r.key === 'results.C2' && r.reason.includes('待你核對確認'))).toBe(true)
     expect(matchChecklistItem('坍度 18cm', T_CONC.items)?.no).toBe('C2')
     expect(matchChecklistItem('澆置溫度', T_CONC.items)).toBeNull()
     expect(matchChecklistItem('度', T_CONC.items)).toBeNull()
   })
 
+  it('設計值／規範要求、空欄、兩向尺寸、單位不相容都不落地;編號分歧不合併', () => {
+    // 設計欄(≥ 容許範圍)永遠不進 results
+    const design = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('d1', { whiteboard: board({ observations: [
+      obs({ kind: 'design', label: '坍度', raw_text: '18 ± 2.5 cm', value: 18, unit: 'cm' }),
+    ] }) })] })
+    expect(design.content.results.C2).toEqual({ value: null })
+    expect(design.field_sources['results.C2'].status).toBe('pending')
+    expect(design.rationale).toContain('設計值對照')
+
+    // 兩向尺寸:不截半、不填,原文放提示
+    const twoWay = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('t1', { whiteboard: board({ observations: [
+      obs({ label: '鋼筋間距', raw_text: '15 * 15 CM', value: 15, value2: 15, unit: 'CM' }),
+    ] }) })] })
+    expect(twoWay.content.results.S1).toEqual({ value: null })
+    expect(twoWay.field_sources['results.S1']).toMatchObject({ status: 'pending', hint: { raw_text: '15 * 15 CM' } })
+    expect(twoWay.field_sources['results.S1'].reason).toContain('兩向尺寸')
+
+    // 單位不相容:不換算、不採用,列出原因
+    const badUnit = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('u1', { whiteboard: board({ observations: [
+      obs({ label: '鋼筋間距', raw_text: '15 T', value: 15, unit: 'T' }),
+    ] }) })] })
+    expect(badUnit.content.results.S1).toEqual({ value: null })
+    expect(badUnit.field_sources['results.S1'].reason).toContain('不相容')
+
+    // 單位可換算(mm → cm):確定性換算後帶入,說明寫出換算過程
+    const conv = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('m1', { whiteboard: board({ observations: [
+      obs({ label: '鋼筋間距', raw_text: '150 MM', value: 150, unit: 'MM' }),
+    ] }) })] })
+    expect(conv.content.results.S1).toEqual({ value: 15 })
+    expect(conv.field_sources['results.S1'].reason).toContain('換算')
+
+    // 編號分歧:不同編號是不同量測對象,不合併
+    const entries = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('e1', { whiteboard: board({ observations: [
+      obs({ label: '鋼筋間距', entry_no: '1', raw_text: '13 CM', value: 13, unit: 'CM' }),
+      obs({ label: '鋼筋間距', entry_no: '4', raw_text: '11 CM', value: 11, unit: 'CM' }),
+    ] }) })] })
+    expect(entries.content.results.S1).toEqual({ value: null })
+    expect(entries.field_sources['results.S1'].reason).toContain('編號 1、4')
+  })
+
   it('位置:多個位置要人選、沒有位置 pending;沒有項目的範本列 recheck 提醒換範本', () => {
-    const d = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('c1'), cPhoto('c2', { classify: { ...cPhoto('c2').classify!, location: 'B區2F' } })] })
+    const d = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('c1'), cPhoto('c2', { classify: cls({ has_board: true, text_legible: true, record_medium: 'board', location: 'B區2F', location_text: '施工位置:B區2F' }) })] })
     expect(d.content.location).toBeNull()
     expect(d.field_sources.location).toMatchObject({ status: 'pending' })
     expect(d.field_sources.location.reason).toContain('A區1F、B區2F')
-    const none = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('c1', { classify: { ...cPhoto('c1').classify!, location: null } })] })
+    const none = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('c1', { classify: cls({ location: null }) })] })
     expect(none.field_sources.location).toMatchObject({ status: 'pending' })
     const empty = buildSelfCheckDraft({ ...cBase(), template: { ...T_CONC, items: [] }, photos: [cPhoto('c1')] })
     expect(empty.required_fields).toEqual(['check_date', 'template_id'])
@@ -494,16 +561,18 @@ describe('buildInspectionFormDraft:監造查驗表單內容來源(P3c)', () => {
     requiredStages: [] as string[], template: T_INS as ChecklistTemplateRow | null, templateReason: '依工項描述挑選', frame: IF_FRAME, hasBoq: true, notes: [] as string[],
   })
   it('查驗申請資料帶入待核對、單位取自工項;判定與確認量永遠留空 pending;項目 pending;附件與必填鍵', () => {
-    const d = buildInspectionFormDraft({ ...iBase(), photos: [photo({ id: 's1', whiteboard: board({ items: [{ description: '鋼筋間距', quantity: 25, unit: 'cm' }] }) })] })
+    const d = buildInspectionFormDraft({ ...iBase(), photos: [photo({ id: 's1', whiteboard: board({ observations: [obs({ label: '鋼筋間距', raw_text: '25 cm', value: 25, unit: 'cm' })] }) })] })
     expect(d.content).toMatchObject({ inspection_date: '2026-09-17', inspection_id: 'ins-a', inspection_title: '鋼筋查驗', work_item_id: 'wi-steel', location: 'A區1F', stage_key: null, unit: 'T', declared_qty: 12.5, self_check_record_id: 'rec-1', template_id: 'tpl-ins', verdict: null, confirmed_qty: null, template: { key: 'inspection_form_demo', version: 1 }, photo_ids: ['s1'] })
-    expect(d.content.results).toEqual({ S1: { value: null }, S2: { value: null } })
+    // 紙本實測欄已寫好的讀數抄錄進來(待監造確認);勾選項仍 pending
+    expect(d.content.results).toEqual({ S1: { value: 25 }, S2: { value: null } })
     expect(d.field_sources.location).toMatchObject({ status: 'filled', source: 'inspection:ins-a' })
     expect(d.field_sources.declared_qty).toMatchObject({ status: 'filled', source: 'inspection:ins-a' })
     expect(d.field_sources.unit).toMatchObject({ status: 'filled', source: 'system:work_item' })
     expect(d.field_sources.verdict).toMatchObject({ status: 'pending', source: null })
     expect(d.field_sources.confirmed_qty).toMatchObject({ status: 'pending', source: null })
     expect(d.field_sources.stage_key).toBeUndefined()
-    expect(d.field_sources['results.S1']).toMatchObject({ status: 'pending', hint: { value: 25, unit: 'cm', source: 'whiteboard:s1' } })
+    expect(d.field_sources['results.S1']).toMatchObject({ status: 'filled', source: 'record:s1', refs: ['s1'] })
+    expect(d.field_sources['results.S1'].evidence).toEqual([{ photo_id: 's1', raw_text: '25 cm', label: '鋼筋間距', entry_no: '', unit: 'cm', kind: 'measured' }])
     expect(d.field_sources['results.S2']).toMatchObject({ status: 'pending' })
     expect(d.required_fields).toEqual(['confirmed_qty', 'declared_qty', 'inspection_date', 'inspection_id', 'location', 'results.S1', 'results.S2', 'unit', 'verdict', 'work_item_id'])
     expect(d.status).toBe('pending_input')

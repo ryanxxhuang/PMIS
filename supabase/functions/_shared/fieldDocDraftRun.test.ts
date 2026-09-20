@@ -260,6 +260,42 @@ describe('廠商批次起施工日誌', () => {
     expect(sug.evidence.suggestion.content).toBeTruthy()
   })
 
+  it('明確要求重新辨識:已 done 的照片重跑辨識並更新草稿;人填過的說明／位置不覆寫', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    await run(w, stubVision({ calls }))
+    expect(calls.filter((c) => c.startsWith('classify:'))).toHaveLength(1)
+    // 人工把說明改掉;照片已是 done,一般重跑不會再打模型
+    w.photos[0].caption = '人改過的說明'
+    w.photos[0].location = '人填的位置'
+    const again: string[] = []
+    await run(w, stubVision({ calls: again }))
+    expect(again.filter((c) => c.startsWith('classify:'))).toHaveLength(0)
+    // 明確要求重辨識 → 重新打模型,但人填過的欄位不覆寫
+    const redo: string[] = []
+    const r = await run(w, stubVision({ calls: redo, classify: () => ({ data: { caption: '模型新說明', category: '施工作業', is_construction: true, legible: true, text_legible: false, has_board: false, record_medium: 'none', work_item_hint: '鋼筋加工及組立', visible_progress: '', location: 'A區9F', location_text: '施工位置:A區9F', dropped: [] } }) }), { rerecognizePhotoIds: ['p1'] })
+    expect(redo.filter((c) => c.startsWith('classify:'))).toHaveLength(1)
+    expect(r.status).toBe(200)
+    const patch = w.photoPatches.at(-1) as { patch: { caption?: string; location?: string } }
+    expect(patch.patch.caption).toBeUndefined()
+    expect(patch.patch.location).toBeUndefined()
+    expect((r.body.notes as string[]).some((n) => n.includes('重新辨識'))).toBe(true)
+  })
+
+  it('重新辨識不能繞過守衛:已有人工版本仍只留建議、已簽署仍 locked', async () => {
+    const w = world({ photos: [photo('p1')] })
+    await run(w)
+    w.versions.push({ document_id: 'doc1', version_no: 2, author_kind: 'human', content: { log_date: '2026-09-17', work_summary: '人改過' }, attachments: [], field_sources: {}, content_hash: 'h2' })
+    w.docs[0].current_version_no = 2
+    const r = await run(w, stubVision(), { rerecognizePhotoIds: ['p1'] })
+    expect(w.versions).toHaveLength(2)
+    expect((r.body.documents as { action: string }[])[0].action).toBe('suggested')
+    const signed = world({ photos: [photo('p1')], docs: [{ id: 'docS', doc_type: 'daily_log', doc_date: '2026-09-17', intake_id: 'i0', target_key: '2026-09-17', status: 'signed', current_version_no: 1, required_fields: [], recheck: [] }] })
+    const r2 = await run(signed, stubVision(), { rerecognizePhotoIds: ['p1'] })
+    expect(signed.versions).toEqual([])
+    expect((r2.body.documents as { action: string }[])[0].action).toBe('locked')
+  })
+
   it('該日文件已簽署:不動(locked),不寫版本也不留建議', async () => {
     const w = world({ photos: [photo('p1')], docs: [{ id: 'docS', doc_type: 'daily_log', doc_date: '2026-09-17', intake_id: 'i0', target_key: '2026-09-17', status: 'signed', current_version_no: 1, required_fields: [], recheck: [] }] })
     const r = await run(w)

@@ -37,7 +37,9 @@ import { FIELD_DOC_TYPE_LABELS } from './ballInCourtRules.ts'
 import { FORMAL_DAILY_LOG_STATUSES, composeContractorSummary, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.ts'
 import { checklistItemKeys, docRequiredKeys, normalizeCqKey, templateRequiredKeys, templateStamp } from './fieldDocTemplate.ts'
 import type { ChecklistItemLike, FieldDocTemplate } from './fieldDocTemplate.ts'
-import type { SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
+import { groundedLocation } from './sitePhotoVision.ts'
+import type { RecordObservation, SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
+import { convertQuantity } from './measureUnits.ts'
 
 export const DAY_MS = 86400000
 export { FIELD_DOC_TYPE_LABELS }
@@ -71,12 +73,22 @@ export type DraftPhoto = {
 }
 
 export type FieldSourceStatus = 'filled' | 'pending' | 'na' | 'confirmed'
+// 一筆「紙上／板上寫了什麼」的原文證據:點欄位就能回看抄的是哪一格、哪一張照片(2026-09-20 驗收要求)
+export type FieldEvidence = {
+  photo_id: string
+  raw_text: string
+  label?: string
+  entry_no?: string
+  unit?: string
+  kind?: 'design' | 'measured' | 'quantity'
+}
 export type FieldSource = {
   status: FieldSourceStatus
   source: string | null // 'whiteboard:<photo_id>' | 'photo_time:<photo_id>' | 'intake' | 'cwa' | 'legacy:<daily_log_id>' | 'yesterday:<daily_log_id>' | 'ai:photo' | 'system:template_match'
   refs?: string[]
   reason?: string
-  hint?: { value: number; unit: string | null; source: string } // 自檢表實測值:告示板讀數只作提示,不填值(P3b)
+  hint?: { value: number; unit: string | null; source: string; raw_text?: string } // 帶不進欄位的讀數只作提示(兩向尺寸、單位不合、編號分歧)
+  evidence?: FieldEvidence[]
 }
 
 // ── 日期 ─────────────────────────────────────────────────────────────────────
@@ -505,9 +517,12 @@ export function buildDailyLogDraft(input: DailyLogDraftInput): DailyLogDraft {
   // 日期
   sources.log_date = { status: 'filled', source: input.dateSource.source, refs: input.dateSource.refs }
 
-  // 告示板轉錄(逐板、逐項附來源照片)
-  type Reading = { qty: number; photoId: string }
+  // 現場書面紀錄轉錄(逐張、逐項附來源照片)
+  // 2026-09-20 驗收必修:數量帶入前必須比對單位——板上「15 CM」不得變成標單 M2 的 15。
+  // 單位相同或同量綱可換算(確定性係數)才帶入;沒寫單位、單位不相容一律 pending 並列 recheck,不忽略、不硬填。
+  type Reading = { qty: number; photoId: string; raw: string; unit: string; note: string | null }
   const qtyByItem = new Map<string, Reading[]>()
+  const qtyRejected = new Map<string, { photoId: string; reason: string; raw: string }[]>()
   const boardLocByItem = new Map<string, Map<string, string[]>>() // wid → location → photo ids
   const boardWeather: { text: string; photoId: string }[] = []
   const boardSummary: { text: string; photoId: string }[] = []
@@ -520,8 +535,14 @@ export function buildDailyLogDraft(input: DailyLogDraftInput): DailyLogDraft {
       const wi = input.hasBoq ? matchLeaf(it.description, input.workItems) : null
       if (!wi) continue
       if (it.quantity != null) {
-        if (!qtyByItem.has(wi.id)) qtyByItem.set(wi.id, [])
-        qtyByItem.get(wi.id)!.push({ qty: it.quantity, photoId: p.id })
+        const conv = convertQuantity(it.quantity, it.unit, wi.unit)
+        if (conv.ok) {
+          if (!qtyByItem.has(wi.id)) qtyByItem.set(wi.id, [])
+          qtyByItem.get(wi.id)!.push({ qty: conv.value, photoId: p.id, raw: it.raw_text || `${it.quantity}${it.unit}`, unit: it.unit, note: conv.note })
+        } else {
+          if (!qtyRejected.has(wi.id)) qtyRejected.set(wi.id, [])
+          qtyRejected.get(wi.id)!.push({ photoId: p.id, reason: conv.reason, raw: it.raw_text || `${it.quantity}${it.unit}` })
+        }
       }
       const loc = textOrNull(wb.location)
       if (loc) {
@@ -544,6 +565,7 @@ export function buildDailyLogDraft(input: DailyLogDraftInput): DailyLogDraft {
     }
   }
   for (const wid of qtyByItem.keys()) itemIds.add(wid)
+  for (const wid of qtyRejected.keys()) itemIds.add(wid)
   for (const wid of boardLocByItem.keys()) itemIds.add(wid)
   const orderedItems = [...itemIds].map((id) => wiById.get(id)!).filter(Boolean)
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || (a.id < b.id ? -1 : 1))
@@ -556,16 +578,34 @@ export function buildDailyLogDraft(input: DailyLogDraftInput): DailyLogDraft {
     const itemPhotos = photosByItem.get(wi.id) ?? []
     // 數量:板上寫了且各板一致才帶入;不一致→pending 並列 recheck;沒寫→pending
     const readings = qtyByItem.get(wi.id) ?? []
+    const rejected = qtyRejected.get(wi.id) ?? []
     const distinctQty = [...new Set(readings.map((r) => r.qty))]
     let qty: number | null = null
     const qtyKey = `items.${wi.id}.qty_today`
+    const evidenceOf = (rs: Reading[]): FieldEvidence[] =>
+      rs.map((r) => ({ photo_id: r.photoId, raw_text: r.raw, unit: r.unit, kind: 'quantity' as const }))
     required.push(qtyKey)
-    if (distinctQty.length === 1) {
+    if (rejected.length) {
+      // 單位對不上就是對不上:不換算、不採用、不悄悄忽略
+      const why = [...new Set(rejected.map((r) => r.reason))].join(';')
+      sources[qtyKey] = {
+        status: 'pending', source: null, refs: [...new Set(rejected.map((r) => r.photoId))], reason: `${why};請確認後自行填寫`,
+        evidence: rejected.map((r) => ({ photo_id: r.photoId, raw_text: r.raw, kind: 'quantity' as const })),
+      }
+      recheck.push({ key: qtyKey, reason: `${label(wi)}:${why}` })
+    } else if (distinctQty.length === 1) {
       qty = distinctQty[0]
-      sources[qtyKey] = { status: 'filled', source: `whiteboard:${readings[0].photoId}`, refs: readings.map((r) => r.photoId) }
+      const note = readings.find((r) => r.note)?.note
+      sources[qtyKey] = {
+        status: 'filled', source: `whiteboard:${readings[0].photoId}`, refs: [...new Set(readings.map((r) => r.photoId))],
+        evidence: evidenceOf(readings), ...(note ? { reason: `${note},請核對後確認` } : {}),
+      }
     } else if (distinctQty.length > 1) {
-      sources[qtyKey] = { status: 'pending', source: null, refs: readings.map((r) => r.photoId), reason: `多張告示板數量不一致(${distinctQty.join('、')}),請現場確認` }
-      recheck.push({ key: qtyKey, reason: `${label(wi)}:多張告示板數量不一致(${distinctQty.join('、')})` })
+      sources[qtyKey] = {
+        status: 'pending', source: null, refs: [...new Set(readings.map((r) => r.photoId))],
+        reason: `多張現場紀錄數量不一致(${distinctQty.join('、')}),請現場確認`, evidence: evidenceOf(readings),
+      }
+      recheck.push({ key: qtyKey, reason: `${label(wi)}:多張現場紀錄數量不一致(${distinctQty.join('、')})` })
     } else {
       sources[qtyKey] = { status: 'pending', source: null, refs: itemPhotos.map((p) => p.id), reason: '照片可證明有施作,不能證明做了多少;數量待現場確認' }
       recheck.push({ key: qtyKey, reason: `${label(wi)}:數量待現場確認` })
@@ -573,7 +613,8 @@ export function buildDailyLogDraft(input: DailyLogDraftInput): DailyLogDraft {
     // 位置:照片的板上區域 ∪ 告示板轉錄的位置;唯一才帶入,多個要人分列
     const locRefs = new Map<string, string[]>()
     for (const p of itemPhotos) {
-      const loc = textOrNull(p.location) ?? textOrNull(p.classify?.location)
+      // 分類推測的位置沒有原文佐證就不進表單(驗收必修:「11×11 mm」被讀成 11F)
+      const loc = textOrNull(p.location) ?? groundedLocation(p.classify, p.whiteboard).value
       if (!loc) continue
       if (!locRefs.has(loc)) locRefs.set(loc, [])
       locRefs.get(loc)!.push(p.id)
@@ -852,7 +893,7 @@ export function buildSupervisorLogDraft(input: SupervisorLogDraftInput): Supervi
   const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))]
   for (const wi of orderedItems) {
     const ps = photosByItem.get(wi.id)!
-    const locs = uniq(ps.map((p) => textOrNull(p.location) ?? textOrNull(p.classify?.location)))
+    const locs = uniq(ps.map((p) => textOrNull(p.location) ?? groundedLocation(p.classify, p.whiteboard).value))
     const notes = uniq(ps.map((p) => textOrNull(p.caption) ?? textOrNull(p.classify?.caption)))
     const times = uniq(ps.map((p) => taipeiTimeOf(p.taken_at))).sort()
     items.push({
@@ -864,7 +905,7 @@ export function buildSupervisorLogDraft(input: SupervisorLogDraftInput): Supervi
   for (const p of unmatched) {
     items.push({
       time: taipeiTimeOf(p.taken_at), item: textOrNull(p.caption) ?? textOrNull(p.classify?.caption) ?? '現場巡查(照片)',
-      location: textOrNull(p.location) ?? textOrNull(p.classify?.location), work_item_id: null,
+      location: textOrNull(p.location) ?? groundedLocation(p.classify, p.whiteboard).value, work_item_id: null,
       note: textOrNull(p.classify?.visible_progress), source: 'ai:photo', photo_ids: [p.id],
     })
   }
@@ -1052,6 +1093,112 @@ export function matchChecklistItem(description: string, items: ChecklistItemLike
   return null
 }
 
+// ── 紙上已記錄實測值 → 檢查項目(P3b／2026-09-20 驗收 B) ──────────────────────────
+// 舊設計:實測值一律清空、只給提示,人再鍵一次。驗收指出這讓「照片自動填表」名不副實——
+// 紙本查驗表右欄已經寫好的實測紀錄是**抄錄**,不是 AI 代為量測。新規則(設計文件 §3.6 同步):
+//   * 只抄 kind='measured' 且有原文(raw_text)的觀察;設計值(≥27 cm)、空欄永遠不抄。
+//   * 工項、欄位意義、單位三者都唯一對應才填:label 對得到範本項目、單位相同或同量綱可換算。
+//   * 兩向尺寸(11×11 mm)單一欄位承不住 → 不截半、不填,原文放 hint 待人決定。
+//   * 不同編號(編號 1／編號 4)是不同量測對象 → 不合併,pending 請人選。
+//   * 同一份紀錄被拍很多張 → 依(編號,原文,值)去重,只留一筆讀數與全部來源照片;**不累加**。
+//   * 值不一致 → 列衝突、各自保留來源,不挑一個。
+//   * 填進去的一律是 filled(待確認);範本 item_rules 仍是 confirm_required,簽署前人要逐項確認。
+export type MeasuredReading = { photoId: string; obs: RecordObservation }
+
+export function collectMeasuredReadings(
+  photos: DraftPhoto[],
+  items: ChecklistItemLike[],
+): Map<string, MeasuredReading[]> {
+  const byItem = new Map<string, MeasuredReading[]>()
+  for (const p of photos) {
+    for (const obs of p.whiteboard?.observations ?? []) {
+      if (obs.kind !== 'measured') continue
+      const hit = matchChecklistItem(obs.label, items)
+      if (!hit || hit.kind !== 'num') continue
+      if (!byItem.has(hit.no)) byItem.set(hit.no, [])
+      byItem.get(hit.no)!.push({ photoId: p.id, obs })
+    }
+  }
+  return byItem
+}
+
+export type MeasuredResolution = {
+  value: number | null
+  source: FieldSource
+  recheck: string | null // null=已帶入,只需確認(recheck 由呼叫端統一加「待確認」)
+}
+
+export function resolveMeasuredItem(
+  item: ChecklistItemLike,
+  readings: MeasuredReading[],
+  actor: string, // '親自量測填寫' 的主體描述(廠商／監造)
+): MeasuredResolution {
+  const none = (reason: string): MeasuredResolution =>
+    ({ value: null, source: { status: 'pending', source: null, reason }, recheck: reason })
+  if (!readings.length) return none(`實測值由${actor}親自量測填寫;紙本／告示板沒有這一項的實測紀錄,系統不從照片推定`)
+
+  const refs = [...new Set(readings.map((r) => r.photoId))]
+  const evidence: FieldEvidence[] = readings.map((r) => ({
+    photo_id: r.photoId, raw_text: r.obs.raw_text, label: r.obs.label, entry_no: r.obs.entry_no, unit: r.obs.unit, kind: 'measured' as const,
+  }))
+  const withPending = (reason: string, hint?: FieldSource['hint']): MeasuredResolution => ({
+    value: null, source: { status: 'pending', source: null, refs, reason, evidence, ...(hint ? { hint } : {}) }, recheck: reason,
+  })
+
+  // 1. 編號分歧:不同編號是不同量測對象,不合併
+  const entryNos = [...new Set(readings.map((r) => r.obs.entry_no).filter(Boolean))]
+  if (entryNos.length > 1) {
+    return withPending(`紙上編號 ${entryNos.join('、')} 各有實測紀錄,未合併;請確認本表對應哪一個編號後填寫`)
+  }
+
+  // 2. 兩向尺寸:單一欄位承不住,原文放提示,不截半
+  const twoWay = readings.find((r) => r.obs.value2 != null)
+  if (twoWay) {
+    return withPending(
+      `紙上為兩向尺寸「${twoWay.obs.raw_text}」,單一欄位無法完整承載,未自動帶入;請確認要記錄哪一向或分列`,
+      { value: twoWay.obs.value ?? 0, unit: twoWay.obs.unit || null, source: `record:${twoWay.photoId}`, raw_text: twoWay.obs.raw_text },
+    )
+  }
+
+  // 3. 單位:相同或同量綱可換算才帶入
+  const converted: { value: number; reading: MeasuredReading; note: string | null }[] = []
+  const unitErrors: string[] = []
+  for (const r of readings) {
+    if (r.obs.value == null) continue
+    const conv = convertQuantity(r.obs.value, r.obs.unit, item.unit)
+    if (conv.ok) converted.push({ value: conv.value, reading: r, note: conv.note })
+    else unitErrors.push(conv.reason)
+  }
+  if (!converted.length) {
+    const why = [...new Set(unitErrors)].join(';') || '紙上這一項沒有可用的實測數值'
+    const first = readings[0]
+    return withPending(`${why};未自動帶入,請確認後填寫`, {
+      value: first.obs.value ?? 0, unit: first.obs.unit || null, source: `record:${first.photoId}`, raw_text: first.obs.raw_text,
+    })
+  }
+  if (unitErrors.length) {
+    const why = [...new Set(unitErrors)].join(';')
+    return withPending(`同一項有單位不一致的紀錄(${why}),未自動帶入,請確認後填寫`)
+  }
+
+  // 4. 值一致才帶入;不一致列衝突並保留各自來源
+  const distinct = [...new Set(converted.map((c) => c.value))]
+  if (distinct.length > 1) {
+    const detail = converted.map((c) => `${c.value}(照片 ${c.reading.photoId.slice(0, 8)}「${c.reading.obs.raw_text}」)`).join('、')
+    return withPending(`多張照片的實測紀錄不一致:${detail};請核對現場紀錄後填寫`)
+  }
+  const note = converted.find((c) => c.note)?.note
+  const raws = [...new Set(converted.map((c) => c.reading.obs.raw_text))]
+  return {
+    value: distinct[0],
+    source: {
+      status: 'filled', source: `record:${converted[0].reading.photoId}`, refs, evidence,
+      reason: `抄錄自紙本／告示板實測欄「${raws.join('、')}」${note ? `(${note})` : ''}${refs.length > 1 ? `,${refs.length} 張照片一致` : ''};系統只抄錄,未代為量測,請核對後逐項確認`,
+    },
+    recheck: null,
+  }
+}
+
 export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft {
   const { date, photos, workItem, template, frame } = input
   const items = (Array.isArray(template.items) ? template.items : []).filter((it) => typeof it?.no === 'string' && it.no.trim())
@@ -1067,8 +1214,9 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
     ? { status: 'filled', source: 'ai:photo', refs: photoIds }
     : { status: 'pending', source: null, reason: '起稿時未指定工項(非必填);有對應工項請補上,估驗佐證才對得回' }
 
-  // 位置:照片說明／告示板的位置唯一才帶入;多個要人選;沒有→pending(不填「—」)
-  const locs = uniq(photos.map((p) => textOrNull(p.location) ?? textOrNull(p.classify?.location) ?? textOrNull(p.whiteboard?.location)))
+  // 位置:照片說明／現場紀錄的位置唯一才帶入;多個要人選;沒有→pending(不填「—」)
+  // 分類推測的位置沒有原文佐證、或與轉錄結果矛盾時不採用(2026-09-20 驗收必修)
+  const locs = uniq(photos.map((p) => textOrNull(p.location) ?? groundedLocation(p.classify, p.whiteboard).value))
   let location: string | null = null
   if (locs.length === 1) {
     location = locs[0]
@@ -1080,37 +1228,35 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
     sources.location = { status: 'pending', source: null, reason: '照片與告示板未載明檢查位置' }
   }
 
-  // 告示板讀數:對到範本實測值項目的只當提示(不填值);多板不一致就不給提示
-  const hints = new Map<string, { value: number; unit: string | null; photoId: string }[]>()
+  // 紙本／告示板已記錄的實測值:唯一對應才抄進欄位(待確認);對不上的留原文提示
+  const measured = collectMeasuredReadings(photos, items)
+  // 設計值只作為對照說明,永遠不進 results(規範要求不是量測結果)
+  const designRefs = new Map<string, string[]>()
   for (const p of photos) {
-    for (const it of p.whiteboard?.items ?? []) {
-      if (it.quantity == null) continue
-      const hit = matchChecklistItem(it.description, items)
-      if (!hit || hit.kind !== 'num') continue
-      if (!hints.has(hit.no)) hints.set(hit.no, [])
-      hints.get(hit.no)!.push({ value: it.quantity, unit: textOrNull(it.unit), photoId: p.id })
+    for (const obs of p.whiteboard?.observations ?? []) {
+      if (obs.kind !== 'design') continue
+      const hit = matchChecklistItem(obs.label, items)
+      if (!hit) continue
+      if (!designRefs.has(hit.no)) designRefs.set(hit.no, [])
+      designRefs.get(hit.no)!.push(`${obs.label}${obs.entry_no ? `(編號 ${obs.entry_no})` : ''} ${obs.raw_text}`)
     }
   }
 
   const results: SelfCheckContent['results'] = {}
+  let filledFromRecord = 0
   for (const it of items) {
     const key = `results.${it.no}`
     results[it.no] = { value: null }
     if (it.kind === 'num') {
-      const readings = hints.get(it.no) ?? []
-      const distinct = [...new Set(readings.map((r) => r.value))]
-      if (distinct.length === 1) {
-        sources[key] = {
-          status: 'pending', source: null, refs: readings.map((r) => r.photoId),
-          reason: `告示板寫 ${distinct[0]}${readings[0].unit ?? ''}(僅供參考),請親自量測後填寫`,
-          hint: { value: distinct[0], unit: readings[0].unit, source: `whiteboard:${readings[0].photoId}` },
-        }
-      } else if (distinct.length > 1) {
-        sources[key] = { status: 'pending', source: null, refs: readings.map((r) => r.photoId), reason: `多張告示板讀數不一致(${distinct.join('、')}),請親自量測後填寫` }
+      const r = resolveMeasuredItem(it, measured.get(it.no) ?? [], '你')
+      sources[key] = r.source
+      if (r.value != null) {
+        results[it.no] = { value: r.value }
+        filledFromRecord++
+        recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:已抄錄紙本實測值 ${r.value}${it.unit ?? ''},待你核對確認` })
       } else {
-        sources[key] = { status: 'pending', source: null, reason: '實測值由人親自量測填寫;系統不從照片推定' }
+        recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:${r.recheck}` })
       }
-      recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:實測值待親自量測填寫` })
     } else if (suggestions.has(it.no)) {
       const s = suggestions.get(it.no)!
       results[it.no] = { value: s.value }
@@ -1127,20 +1273,23 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
   const required = docRequiredKeys('self_check', frame, items)
   const pendingRequired = required.filter((k) => sources[k]?.status === 'pending')
   const status: SelfCheckDraft['status'] = pendingRequired.length ? 'pending_input' : 'draft'
-  const numCount = checklistItemKeys(items, frame, 'human_only').length
+  const numCount = items.filter((it) => it.kind === 'num').length
   const suggested = [...suggestions.keys()].filter((no) => items.some((it) => it.no === no && it.kind !== 'num')).length
   const [, m, d] = date.split('-')
   const wiLabel = workItem ? [workItem.item_no, workItem.description].filter(Boolean).join(' ') : '未指定'
   const summary =
     `已依 ${photos.length} 張現場照片擬好 ${Number(m)}/${Number(d)}「${template.title}」自主檢查表草稿(${frame.demo_label || '範本'})` +
-    `(工項 ${wiLabel};${items.length} 項待你填,其中實測值 ${numCount} 項${suggested ? `、AI 建議勾選 ${suggested} 項待確認` : ''})`
+    `(工項 ${wiLabel};實測值 ${numCount} 項,已抄錄紙本紀錄 ${filledFromRecord} 項待確認、${numCount - filledFromRecord} 項待你量測填寫` +
+    `${suggested ? `;AI 建議勾選 ${suggested} 項待確認` : ''})`
   const rationale = [
     `範本:${input.templateReason}。`,
     workItem ? `工項:依 ${photos.length} 張已配對工項的照片自動帶出(確定性比對,非模型判讀)。` : '工項:起稿時未指定,未掛照片;有對應工項請補上。',
-    suggested
-      ? `檢查項目(${items.length} 項):實測值 ${numCount} 項一律留空待你親自量測填寫——系統與 AI 都不猜實測值;勾選項 ${suggested} 項為 AI 依對話中工具回傳內容給的建議(逐項附依據),須你逐項確認才能簽署,其餘待你勾選;本次未檢請標不適用並填原因。`
-      : `檢查項目(${items.length} 項):實測值 ${numCount} 項一律留空待你親自量測填寫——系統與 AI 都不猜實測值;勾選項沒有逐項依據,系統不代為勾選;本次未檢請標不適用並填原因。`,
-    hints.size ? `告示板讀數:${[...hints.keys()].join('、')} 有板上讀數,只作參考提示,未填入。` : '',
+    `檢查項目(${items.length} 項):實測值 ${numCount} 項——其中 ${filledFromRecord} 項是**從紙本／告示板實測欄抄錄**的既有紀錄(附原文與來源照片,標待確認),` +
+    `其餘留空待你親自量測填寫。系統只抄錄紙上已經寫好的數字,不代為量測、不從畫面推定讀數;` +
+    `設計值／規範要求、空欄、兩向尺寸與單位對不上的紀錄一律不帶入。` +
+    (suggested ? `勾選項 ${suggested} 項為 AI 依對話中工具回傳內容給的建議(逐項附依據),其餘待你勾選;` : '勾選項沒有逐項依據,系統不代為勾選;') +
+    '**所有項目(含已抄錄的)簽署前都必須由你逐項確認**;本次未檢請標不適用並填原因。',
+    designRefs.size ? `設計值對照(只供核對,未填入任何欄位):${[...designRefs.entries()].map(([no, xs]) => `${no} ${[...new Set(xs)].join('、')}`).join(';')}。` : '',
     '合格與否由系統依範本量化標準計算,AI 不參與判定。',
     location ? `檢查位置:取自照片「${location}」,請確認。` : `檢查位置:${sources.location.reason}`,
     ...recheck.filter((r) => r.key === 'photos').map((r) => r.reason),
@@ -1221,7 +1370,7 @@ export function buildInspectionFormDraft(input: InspectionFormDraftInput): Inspe
   if (location) {
     sources.location = { status: 'filled', source: insSrc, reason: '取自查驗申請,請核對後確認(確認數量以此位置累計)' }
   } else {
-    const locs = uniq(photos.map((p) => textOrNull(p.location) ?? textOrNull(p.classify?.location) ?? textOrNull(p.whiteboard?.location)))
+    const locs = uniq(photos.map((p) => textOrNull(p.location) ?? groundedLocation(p.classify, p.whiteboard).value))
     if (locs.length === 1) {
       location = locs[0]
       sources.location = { status: 'filled', source: 'ai:photo', refs: photoIds, reason: '查驗申請未載明位置,取自照片,請核對後確認' }
@@ -1256,32 +1405,23 @@ export function buildInspectionFormDraft(input: InspectionFormDraftInput): Inspe
   if (selfCheck) sources.self_check_record_id = { status: 'filled', source: insSrc }
   if (template) sources.template_id = { status: 'filled', source: 'system:template_match', reason: input.templateReason ?? undefined }
 
-  // 查驗項目:同自檢表——實測值只能人量測(告示板讀數只當提示)、勾選項不代為勾選
-  const hints = new Map<string, { value: number; unit: string | null; photoId: string }[]>()
-  for (const p of photos) {
-    for (const it of p.whiteboard?.items ?? []) {
-      if (it.quantity == null) continue
-      const hit = matchChecklistItem(it.description, items)
-      if (!hit || hit.kind !== 'num') continue
-      if (!hints.has(hit.no)) hints.set(hit.no, [])
-      hints.get(hit.no)!.push({ value: it.quantity, unit: textOrNull(it.unit), photoId: p.id })
-    }
-  }
+  // 查驗項目:同自檢表——紙本實測欄已寫的抄錄進來(待監造確認),其餘留空;勾選項不代為勾選
+  const measured = collectMeasuredReadings(photos, items)
   const results: InspectionFormContent['results'] = {}
+  let filledFromRecord = 0
   for (const it of items) {
     const key = `results.${it.no}`
     results[it.no] = { value: null }
     if (it.kind === 'num') {
-      const readings = hints.get(it.no) ?? []
-      const distinct = [...new Set(readings.map((r) => r.value))]
-      if (distinct.length === 1) {
-        sources[key] = { status: 'pending', source: null, refs: readings.map((r) => r.photoId), reason: `告示板寫 ${distinct[0]}${readings[0].unit ?? ''}(僅供參考),請親自量測後填寫`, hint: { value: distinct[0], unit: readings[0].unit, source: `whiteboard:${readings[0].photoId}` } }
-      } else if (distinct.length > 1) {
-        sources[key] = { status: 'pending', source: null, refs: readings.map((r) => r.photoId), reason: `多張告示板讀數不一致(${distinct.join('、')}),請親自量測後填寫` }
+      const r = resolveMeasuredItem(it, measured.get(it.no) ?? [], '監造')
+      sources[key] = r.source
+      if (r.value != null) {
+        results[it.no] = { value: r.value }
+        filledFromRecord++
+        recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:已抄錄紙本實測值 ${r.value}${it.unit ?? ''},待監造核對確認` })
       } else {
-        sources[key] = { status: 'pending', source: null, reason: '實測值由監造親自量測填寫;系統不從照片推定' }
+        recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:${r.recheck}` })
       }
-      recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:實測值待親自量測填寫` })
     } else {
       sources[key] = { status: 'pending', source: null, reason: '請依現場查驗勾選;系統沒有逐項依據,不代為勾選' }
       recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:待現場勾選` })
@@ -1305,8 +1445,9 @@ export function buildInspectionFormDraft(input: InspectionFormDraftInput): Inspe
     `查驗申請:工項、位置、申報數量${selfCheck ? '、檢附的自主檢查' : ''}自查驗申請帶入,標「取自查驗申請」待你核對確認。`,
     `單位:取自標單工項「${wiLabel}」(${workItem.unit ?? '—'}),簽署時必須一致。`,
     requiredStages.length ? `階段:此工項有必要查驗階段 ${requiredStages.join('、')},全部階段皆確認的量才可估驗。` : '階段:此工項為單階段(檢驗停留點無 H 點)。',
-    template ? `查驗項目:範本「${template.title}」(${input.templateReason ?? ''})共 ${items.length} 項,一律留待你親自填寫;實測值不由照片推定。` : '查驗項目:本案沒有監造查驗表範本,依判定欄簽署。',
-    hints.size ? `告示板讀數:${[...hints.keys()].join('、')} 有板上讀數,只作參考提示,未填入。` : '',
+    template
+      ? `查驗項目:範本「${template.title}」(${input.templateReason ?? ''})共 ${items.length} 項;其中 ${filledFromRecord} 項已從紙本／告示板的實測欄抄錄(附原文與來源照片,標待確認),其餘留待你親自量測填寫。系統只抄錄紙上寫好的數字,不代為量測、不猜讀數;設計值、空欄、兩向尺寸與單位對不上的紀錄一律不帶入。簽署前每一項都必須由你逐項確認。`
+      : '查驗項目:本案沒有監造查驗表範本,依判定欄簽署。',
     '判定與本次確認數量:系統與 AI 一律不填、不建議;簽署即判定,確認數量寫入監造確認紀錄成為可估驗依據。',
     ...recheck.filter((r) => r.key === 'photos').map((r) => r.reason),
   ].filter(Boolean).join('\n')

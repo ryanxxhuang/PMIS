@@ -371,7 +371,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | 包 | 範圍 | 指定 | 實際 |
 |---|---|---|---|
 | A | 廠商角色與三個主入口（本節已完成，PR #163） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`） | fable5.1 | 待填 |
+| B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`；本節已完成，PR #164） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | C | 真實表單 mapping、直接在紙本版面編輯 | fable5.1 | 待填 |
 | D | PDF 交付（真正的下載，不是 `window.print()`） | fable5.1 | 待填 |
 | E | 三項核心的整條流程驗收（真後端） | fable5.1 | 待填 |
@@ -396,3 +396,60 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 - 導覽群組名維持「現場紀錄／履約時程／估驗請款」，與實作指令說的「AI 文件／契約期程／估驗請款」三件事 1:1 對應；本輪不改名（名稱在 `navConfig` 單一來源，改名會牽動大量測試與文件，且報告的落差是「並列模組太多」不是群組名）。若使用者要改名，另開單元。
 - 收起的入口都只是 `hidden`，資料表、RPC、提醒與深連結全部保留；要恢復只需拿掉一個旗標。
 - B 包動 Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`，與本包無重疊檔案。
+
+### B 真正的照片辨識與 AI 填表
+
+| 項目 | 內容 |
+|---|---|
+| 問題 | `_shared/sitePhotoVision.ts` 的轉錄只認黑白板、schema 只有「當日完成數量」，承不住設計值／實測值／兩向尺寸；`fieldDocDraft.ts:1083–1113` 把自檢實測值一律清空、只給提示；`fieldDocDraft.ts:519–524,557–565` 數量帶入工項時**完全沒有比對單位**；`fieldDocDraftRun.ts:444` 以 `has_board` 決定要不要轉錄。四條 2026-09-20 以 `f99bfee` 逐一驗證仍成立。真實模型基準另指出三張紙表都出現錯讀（`location="11F"` 由線徑 11 猜出、憑空的公司名、「綁紮完成」這種照片無法判定的斷言）。 |
+| 目標 | 分層辨識（場景可辨識 vs 文字／讀數可辨識）；轉錄支援紙本查驗表與黑白板；**設計／規範要求、已記錄實測值、當日施工數量分成不同欄位**，兩向尺寸與單位原樣保留；紙上看得清的日期與實測紀錄直接填進草稿並標待確認；單位檢核走確定性規則；沒有原文證據的結果不得落地。 |
+| 不做 | 不換產品呼叫的模型（維持 `claude-haiku-4-5-20251001`）；不加付費 OCR；不做紙本版面編輯（C 包）與 PDF 下載（D 包）；不放寬「判定、確認數量、監造到場只能人填」。 |
+| 影響 | Edge `_shared`（`sitePhotoVision`／`fieldDocDraft`／`fieldDocDraftRun`／新 `measureUnits`）、`draft-field-documents`／`read-whiteboard`／`classify-site-photo` 三支函式、migration `20260920120000_measured_from_record`（只改框架範本 `item_rules.num.human_only`）、前端檢查項目表與來源章文案。 |
+| 驗收 | 見下方「驗證與真實模型回歸」。紅線由測試釘住：設計值不得變實測、空欄不得變 0、尺寸不得變完成量、單位不相容不得帶入、無原文證據不得落地、重跑不得覆寫人工值或已簽版本。 |
+
+**實際做了什麼（行為層面）**
+
+1. **分類分兩層**：`legible`（場景）與新 `text_legible`（文字／量具讀數可逐字抄錄）分開；看得到鋼筋不等於讀得出卡尺。`text_legible=false` 就不做第二階段轉錄。新增 `record_medium`（紙本表單／黑白板／無），`has_board` 語意擴大為「有可讀的書面紀錄」。
+2. **轉錄結構化分離**：新增 `observations[]`（`kind=design|measured`、`entry_no`、`raw_text` 原文、`value`／`value2` 兩向尺寸、`unit`、`comparator`、`location`），`items[]` 仍只放當日完成數量。兩個陣列互不相通，**尺寸永遠變不成完成量**。caption 不再負責抄板上數據（那正是逼模型亂猜的來源）。
+3. **確定性後檢**（不是再加一句 prompt 禁令）：帶 `≥`／`≤` 的觀察一律改列設計值；空欄佔位（`*`、`—`）與數值沒出現在 `raw_text` 的整筆丟掉；`caption`／`visible_progress` 出現「完成／合格／就位」等照片無法判定的斷言就清掉並記 `dropped`；`location` 沒有原文出處（`location_text`）或與原文不符就不採用。
+4. **第二階段來源核對**：紙本表單再轉錄一次，只留兩次一致的格子（`agreeRecords`），不一致就留空。手寫誤讀時模型連 `raw_text` 一起錯，自證的證據擋不住系統性誤讀——但誤讀不穩定。代價是紙表照片轉錄 token 加倍（黑白板與一般施工照不做）。
+5. **實測值可抄錄（改舊設計）**：紙上實測欄已寫好的數字，在**工項、欄位意義、單位三者都唯一對應**時抄進 `results.<no>` 並標 `filled`＋`source:'record:<photo_id>'`＋逐欄 `evidence`（原文、編號、單位、來源照片）。帶不進來的一律 `pending`＋原文提示：兩向尺寸（不截半）、不同編號（不合併）、單位不相容或沒寫單位、多張照片值不一致（列衝突、各自保留來源）。同一份紀錄被拍多張依（編號, 原文, 值）去重，**不累加**。
+6. **單位檢核**（新 `measureUnits.ts`）：施工日誌把告示板數量帶進工項前，先與標單單位比對——相同或同量綱（長度／面積／體積／質量／時間）依固定係數換算並把換算過程寫進來源說明；沒寫單位、不相容、認不得的單位一律 `pending`＋列 recheck，**不忽略也不直接採用**。
+7. **日期**：民國年由系統確定性換算（`parseRecordDate`，`115.8.4` → `2026-08-04`），不交給模型；模型自己換算的結果不一致時以原文換算為準並記衝突。紙上日期 > 批次指定 > 照片時間的優先序與衝突揭露沿用。
+8. **重辨識路徑**：`draft-field-documents` 收 `rerecognize_photo_ids`，使用者明確要求時已辨識的照片才重跑（不自動重跑＝不重複計費），且人填過的說明／位置不覆寫、已有人工版本仍只留建議、已簽署仍 locked。
+9. **規則變更配套**（migration `20260920120000_measured_from_record`）：框架範本 `item_rules.num.human_only` true→false，`confirm_required` 維持 true——**只標 `filled` 仍是 `needs_confirmation`，人沒逐項確認就簽不下去**；判定、本次確認數量、監造到場維持只能人填。設計文件 `field-documents-lifecycle.md` §2.2／§2.3／§3.1 已同步。
+
+**驗證與真實模型回歸**
+
+| 驗證 | 結果 |
+|---|---|
+| `npm test` | 152 檔 1,677 項（rebase 到含 A 包的 main 後重跑；新增 `sitePhotoVision.test.ts` 19 項、`fieldDocDraftRun.test.ts` 重辨識 2 項；`fieldDocDraft`／`fieldDocDraftRun`／`fieldDocs`／`SelfCheck.document` 依新規則改寫斷言） |
+| `npm run test:edge` | 9 項（新增 `measureUnits.deno.test.ts` 4 項） |
+| `npm run check:edge` | 18 支 |
+| `npm run lint`／`npm run build`／`npm run check:docs` | 皆綠；`check:docs` 57 檔 441 連結 0 錯 |
+| `npm run test:db` | 從零套用：61 檔 3,586 通過、0 失敗（`self_check_documents` 127、`inspection_form_documents` 153） |
+| 真實模型回歸（原圖／前端壓縮兩條件＋三個負例） | 27 次 API 全數成功，模型 `claude-haiku-4-5-20251001`，input 198,115／output 21,334 tokens；分類 2.3–3.5 s、紙表轉錄（兩次）12.3–16.6 s。結果見 [vision-after-b.json](assets/2026-09-20-contractor-acceptance/vision-after-b.json) |
+| stub | `visionStub` 只證流程、不證辨識；與上列真實模型結果**分開記**，不可混為一談 |
+
+**真實模型逐張前後對照（同一組五張原圖；基準＝[`vision-baseline.json`](assets/2026-09-20-contractor-acceptance/vision-baseline.json)）**
+
+| 照片 | 修改前（基準） | 修改後 | 判定 |
+|---|---|---|---|
+| `LI2995~1_0.JPG` | caption 誤讀「#5、#4」「梯號U-36」「D20@20cm」；`visible_progress` 寫「鋼筋綁紮完成」；轉錄只有日期 | caption「以遊標卡尺量測鋼筋直徑，有查驗紀錄表」；無完成斷言；`record_medium=paper_form`、日期 2026-08-04；兩次一致的觀察 0 筆（不一致的 9 筆全部留空） | 錯讀與完成斷言已消除；**實測值未抄到**（留空待人填） |
+| `LIFA1C~1_0.JPG` | caption 混讀「D13、D16、D29」「間距13、15 CM」；轉錄只有日期 | 無混讀；日期 2026-08-04；設計觀察 5 筆；**實測 1 筆＝編號 4 網目 15×15 CM（與人工標註相符）** | 唯一抄到正確實測值的一張 |
+| `LINE_A~4_0.JPG` | caption 生出「訊光建設」「樓層11F」「2層密集配置」「綁紮完成」；**結構化 `location="11F"`** | 無公司名與樓層；分類仍讀出 `location='4-8-25m'`（誤讀）但**因轉錄讀不到位置欄而未採用**；設計觀察 4 筆（線徑 13×11／11×11 MM、網目 15×15 CM、搭接 ≥27 CM 皆正確歸設計值） | **P0「錯誤位置進入結構化欄位」已修**；實測值未抄到 |
+| `LI89DE~1_0.JPG` | 正確辨識卡尺量測、未猜讀值；工項只回「鋼筋」 | 同樣未猜讀值，且 `text_legible=false` 明確標示讀數不可信、不進第二階段 | 維持正確並多一層明示 |
+| `LIEE66~1_0.JPG` | 額外聲稱「木樁樁頂面可見」（畫面是木模板） | caption「以遊標卡尺量測鋼筋直徑」，無此描述 | 已修 |
+| 負例 `neg-design-column-only`（由 `LINE_A` 裁切出設計值左欄） | — | 實測觀察 0 筆（兩次不一致全砍）；分類猜的 `location='4-4-25m'` 未採用 | 通過（第一版沒有第二階段時此例失敗，是加第二階段的直接原因） |
+| 負例 `neg-illegible-caliper`（`LI89DE` 縮到刻度不可讀） | — | `legible=true`／`text_legible=false`，無讀數 | 通過 |
+| 負例 `neg-formwork-no-record`（`LI2995` 裁切背景模板區） | — | 無書面紀錄、無位置、未沿用查驗內容 | 通過 |
+
+**仍待人工補的欄位／限制（不得寫成已完成）**
+
+- **紙本手寫實測值的抄錄率仍很低**：三張紙表、人工標註共約 8 個實測值，本輪只穩定抄到 1 個。其餘因兩次辨識不一致而留空。現在的行為是**「錯了會留空，不會填錯」**，不是「AI 幫你填好表」。要提高抄錄率需要更強的模型或紙表區域裁切後再辨識（本輪未做：Edge 沒有影像處理，且紅線是不換模型）。
+- 設計值的抄錄本身也不穩定（同一張照片兩次辨識的設計觀察筆數 0–6 不等），只是不再污染實測欄。
+- **位置欄仍可能抄錯**：轉錄讀到的位置（如把 `4-4-25M` 讀成 `H4-25m`）兩次一致時就會帶入草稿並標待確認。它有原文、有來源照片、要人確認，但**不是正確值**；簽署前人必須核對。
+- 前端壓縮條件與原圖的差異落在單次執行變異之內（同一張在兩次執行中互有高低），**本輪樣本不足以判定壓縮是否影響辨識**；回歸用 `sips` 近似 canvas 的 JPEG 0.82，與瀏覽器實際輸出不完全相同，要下結論須以真實前端壓縮圖再驗。
+- 「單位衝突」負例以確定性單元測試涵蓋（`measureUnits.deno.test.ts`），不是模型負例——無法在不造假的前提下拍出一張單位衝突的真實照片。
+- 五張 JPG 依約定**不進版控**；回歸腳本只以本機路徑讀取，缺檔即 skip 並印出缺哪幾張。
+- 未驗：完整網頁上傳→起稿→存檔→簽署→提送的真後端鏈（屬 E 包）；本輪只驗共用呼叫函式與純規則。

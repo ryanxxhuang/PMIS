@@ -1,6 +1,8 @@
 // 檢查／查驗項目表(P3b 自主檢查表、P3c 監造查驗表單共用;從 SelfCheckFields 抽出,版面與規則不變):
-// 每項=範本項目(kind num／bool)＋值＋判定預覽章＋來源／狀態章。實測值(num)系統永遠不填:告示板讀數只以 hint 提示,人可一鍵
-// 「採用」——採用也是人填(confirmed/human);勾選項由人勾。合格判定只是預覽(lib/qc.js judgeChecklist),簽署時 DB 以
+// 每項=範本項目(kind num／bool)＋值＋判定預覽章＋來源／狀態章。
+// 2026-09-20 B:紙本查驗表／告示板**實測欄已經寫好**的數字由系統照原文抄錄進來(來源 record:<photo_id>,附原文),
+// 標 filled 待人逐項確認;帶不進來的(兩向尺寸、單位不相容、編號分歧)只留原文 hint 不填值;系統永遠不代為量測、
+// 不猜讀數,設計值與空欄一律不帶入。勾選項由人勾。合格判定只是預覽(lib/qc.js judgeChecklist),簽署時 DB 以
 // fn_checklist_judge 同一條規則重算為準。唯讀視角只有文字與章,不長出任何 input(唯讀 e2e 契約)。
 import { Badge, THEAD_CLS } from '../ui.jsx'
 import { judgeItem, judgeChecklist, checklistCoverage, coverageText } from '../../lib/qc.js'
@@ -72,10 +74,18 @@ export default function ChecklistItemsTable({ template, values = {}, sources = {
                     ) : (
                       <span className="num">{v === true ? '✓' : v === false ? '✗' : v ?? <span className="text-[var(--text-3)]">待補</span>}{typeof v === 'number' && it.unit ? ` ${it.unit}` : ''}</span>
                     )}
+                    {!isNa && Array.isArray(src?.evidence) && src.evidence.length > 0 && (
+                      <div className="mt-1 text-caption text-[var(--text-3)] text-right">
+                        紙上原文：{[...new Set(src.evidence.map((e) => e.raw_text))].join('、')}
+                        {src.evidence[0]?.entry_no ? `（編號 ${src.evidence[0].entry_no}）` : ''}
+                      </div>
+                    )}
                     {editable && !isNa && src?.hint && v == null && (
                       <div className="mt-1 text-caption text-[var(--amber-text)]">
-                        告示板讀數 {src.hint.value}{src.hint.unit || ''}（僅供參考）
-                        <button type="button" onClick={() => onSet(key, src.hint.value)} className="ml-1 font-medium text-[var(--blue-text)] hover:underline min-h-11 md:min-h-0">親自量測後採用此值</button>
+                        紙上寫「{src.hint.raw_text || `${src.hint.value}${src.hint.unit || ''}`}」（未自動帶入）
+                        {src.hint.raw_text ? null : (
+                          <button type="button" onClick={() => onSet(key, src.hint.value)} className="ml-1 font-medium text-[var(--blue-text)] hover:underline min-h-11 md:min-h-0">確認後採用此值</button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -92,7 +102,7 @@ export default function ChecklistItemsTable({ template, values = {}, sources = {
           ? <Badge color={live.overall === '合格' ? 'green' : 'red'}>{label}：{live.overall}{live.failed.length ? `（${live.failed.length} 項不合格）` : ''}</Badge>
           : <Badge color="slate">{label}：尚無已檢項目</Badge>}
         {cov && <span className={cov.unchecked ? 'text-[var(--amber-text)]' : 'text-[var(--text-3)]'}>{coverageText(cov)}{cov.unchecked ? '；判定僅依已檢項' : ''}</span>}
-        <span className="text-caption text-[var(--text-3)]">簽署時由伺服器依範本量化標準重算，畫面判定只是預覽；實測值一律由{measurer}親自量測填寫。</span>
+        <span className="text-caption text-[var(--text-3)]">簽署時由伺服器依範本量化標準重算，畫面判定只是預覽；紙本／告示板實測欄已寫好的值由系統照原文抄錄並標待確認，其餘由{measurer}親自量測填寫，每一項都要逐項確認才能簽署。</span>
       </div>
     </div>
   )

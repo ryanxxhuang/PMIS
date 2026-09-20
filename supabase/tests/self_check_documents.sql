@@ -74,8 +74,8 @@ select ok((select t ->> 'disclaimer' from public.fn_field_document_template('sel
 select is((select jsonb_array_length(t -> 'sections') from public.fn_field_document_template('self_check') t), 3, '框架範本三節');
 select is((select f -> 'item_rules' from public.fn_field_document_template('self_check') t,
              jsonb_array_elements(t -> 'sections') s, jsonb_array_elements(s -> 'fields') f where f ->> 'key' = 'results'),
-  '{"num":{"human_only":true,"confirm_required":true},"bool":{"human_only":false,"confirm_required":true}}'::jsonb,
-  '項目規則:實測值只能人填且須確認;勾選項可由系統建議但須人確認');
+  '{"num":{"human_only":false,"confirm_required":true},"bool":{"human_only":false,"confirm_required":true}}'::jsonb,
+  '項目規則(2026-09-20 B):實測值可由系統抄錄紙本實測欄,但與勾選項一樣都要人逐項確認');
 select is((select t ->> 'key' from public.fn_field_document_template('supervisor_log') t), 'supervisor_log_demo', '監造日誌範本不變(回歸)');
 select is(public.fn_field_document_template('daily_log'), null, '施工日誌仍無範本');
 select is(public.fn_field_document_template_required_keys('self_check'), array['check_date','template_id'], '框架必填=檢查日期、範本');
@@ -160,8 +160,8 @@ insert into public.photos (id, project_id, storage_path, uploaded_by) values
 select is(public.fn_field_document_required_fields('self_check', pg_temp.content_ok(), '["results.Z9","note"]'::jsonb),
   '["check_date","note","results.B1","results.C2","results.C3","template_id"]'::jsonb,
   '必填鍵=stored(範本項目鍵一律由內容重算,Z9 丟掉)∪ 框架 required ∪ 範本每項 results.<no>');
-select is(public.fn_field_document_human_only_keys('self_check', pg_temp.content_ok()), array['results.C2','results.C3'],
-  '人填欄=實測值項目(num);勾選項不在內');
+select is(public.fn_field_document_human_only_keys('self_check', pg_temp.content_ok()), '{}'::text[],
+  '人填欄:自檢表框架沒有 human_only 欄,實測值也不再是(紙本實測欄可由系統抄錄)');
 select is(public.fn_field_document_confirm_required_keys('self_check', pg_temp.content_ok()), array['results.B1','results.C2','results.C3'],
   '須確認欄=全部項目(勾選項的系統建議也要人逐項確認)');
 select is(public.fn_field_document_confirm_required_keys('supervisor_log', null), array['attendance'], '監造日誌須確認欄=到場(human_only 蘊含)');
@@ -230,21 +230,22 @@ select throws_ok($$ insert into public.field_documents (project_id, doc_type, do
   '42501', null, '監造不能建立自檢表文件(責任方=廠商)');
 reset role;
 select pg_temp.become(null);
-select throws_ok($$ insert into public.field_document_versions (document_id, author_kind, content, field_sources)
-  values ('f7000000-0000-0000-0000-000000000001', 'ai',
-          jsonb_set(pg_temp.content_ok(), '{results}', '{"C2":{"value":18}}'::jsonb), '{"results.C2":{"status":"pending"}}') $$,
-  'P0001', null, 'AI 版本帶入實測值 → 拒絕(實測值只能人量測)');
-select throws_ok($$ insert into public.field_document_versions (document_id, author_kind, content, field_sources)
-  values ('f7000000-0000-0000-0000-000000000001', 'ai',
-          jsonb_set(pg_temp.content_ok(), '{results}', '{"C2":{"value":null}}'::jsonb), '{"results.C2":{"status":"filled","source":"whiteboard:x"}}') $$,
-  'P0001', null, 'AI 版本把實測值標 filled → 拒絕(告示板讀數只能當提示)');
+-- 2026-09-20 B:紙本查驗表右欄已寫好的實測值可由 AI 版本抄錄進來(附原文與來源照片),標 filled 待人確認;
+-- 守住的紅線:只標 filled 仍是 needs_confirmation,簽不下去(下方 §8 的 PD004 與這裡的純函式各驗一次)。
+select is(public.fn_field_document_unmet_fields('self_check', '["results.C2"]'::jsonb,
+    '{"results.C2":{"status":"filled","source":"record:p1"}}'::jsonb, pg_temp.content_ok()),
+  '[{"key":"results.C2","status":"needs_confirmation"}]'::jsonb,
+  '抄錄的實測值只標 filled → 仍是 needs_confirmation,人沒逐項確認就簽不下去');
+select is(public.fn_field_document_unmet_fields('self_check', '["results.C2"]'::jsonb,
+    '{"results.C2":{"status":"confirmed","source":"human"}}'::jsonb, pg_temp.content_ok()),
+  '[]'::jsonb, '人逐項確認後才齊備');
 select lives_ok($$ insert into public.field_document_versions (document_id, author_kind, content, field_sources)
   values ('f7000000-0000-0000-0000-000000000001', 'ai',
-          jsonb_set(pg_temp.content_ok(), '{results}', '{"B1":{"value":true},"C2":{"value":null},"C3":{"value":null}}'::jsonb),
+          jsonb_set(pg_temp.content_ok(), '{results}', '{"B1":{"value":true},"C2":{"value":18},"C3":{"value":null}}'::jsonb),
           '{"results.B1":{"status":"filled","source":"ai:photo","reason":"照片可見通知單"},
-            "results.C2":{"status":"pending","reason":"實測值由人親自量測填寫","hint":{"value":18,"source":"whiteboard:p1"}},
-            "results.C3":{"status":"pending"}}') $$,
-  'AI 版本:勾選項附依據建議、實測值留空 pending(讀數放 hint)→ 允許(v1)');
+            "results.C2":{"status":"filled","source":"record:p1","reason":"抄錄自紙本實測欄「18 cm」","evidence":[{"photo_id":"p1","raw_text":"18 cm","kind":"measured"}]},
+            "results.C3":{"status":"pending","reason":"紙本沒有這一項的實測紀錄"}}') $$,
+  'AI 版本(v1):勾選項附依據建議、紙本已寫的實測值抄錄為 filled、紙上沒有的實測值留 pending → 允許');
 update public.field_documents set current_version_no = 1, status = 'pending_input' where id = 'f7000000-0000-0000-0000-000000000001';
 insert into public.agent_actions (id, project_id, actor_user, agent_role, kind, target_table, target_id, summary, evidence) values
   ('f8000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-00000000000a', 'f0000000-0000-0000-0000-000000000001', 'contractor',

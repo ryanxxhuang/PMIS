@@ -1,6 +1,6 @@
 // Supabase Edge Function: draft-field-documents(P2b;D-026 照片→AI 文書的起稿入口)
 // ---------------------------------------------------------------------------
-// 輸入 { project_id, intake_id }:對一批已保存的照片逐張辨識、配工項、推斷候選文書,
+// 輸入 { project_id, intake_id, rerecognize_photo_ids? }:對一批已保存的照片逐張辨識、配工項、推斷候選文書,
 // 並為廠商批次起施工日誌草稿(field_documents 的 AI 版本)。本單元只真的產生施工日誌;
 // 監造日誌／自主檢查表／監造查驗表單只列為「需要／尚未支援」的候選(P3a–c)。
 //
@@ -87,13 +87,19 @@ Deno.serve(async (req) => {
   const intakeId = body?.intake_id
   // 輸入驗證早退不記帳(與 aiJsonHandler 的 build 回 Response 同一慣例)
   if (!isUuid(intakeId)) return json({ error: '缺少有效的 intake_id', code: 'invalid_input' }, 400)
+  // 明確要求重新辨識的照片(使用者按「重新辨識」;只認 uuid,是否屬於本批由 run 再過濾一次)
+  const rerecognizeRaw = body?.rerecognize_photo_ids
+  if (rerecognizeRaw !== undefined && (!Array.isArray(rerecognizeRaw) || rerecognizeRaw.some((x: unknown) => !isUuid(x)))) {
+    return json({ error: 'rerecognize_photo_ids 必須是照片 id 陣列', code: 'invalid_input' }, 400)
+  }
+  const rerecognizePhotoIds: string[] | undefined = Array.isArray(rerecognizeRaw) ? [...new Set(rerecognizeRaw as string[])] : undefined
   if (!gate.serviceClient) {
     return json({ error: '伺服器未設定,暫時無法起稿', code: 'server_not_configured' }, 500)
   }
   try {
     const repo = supabaseDraftRepo(gate.userClient, gate.serviceClient, gate.projectId as string)
     const result = await runDraftFieldDocuments({
-      repo, vision: makeVision(gate), intakeId, userId: gate.userId,
+      repo, vision: makeVision(gate), intakeId, userId: gate.userId, rerecognizePhotoIds,
     })
     await closeAiGate(gate, {
       feature: FEATURE,
