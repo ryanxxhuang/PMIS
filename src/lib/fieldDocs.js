@@ -561,6 +561,17 @@ export function requiredStagesFor(inspectionPoints = [], refs = []) {
   }
   return [...keys].sort()
 }
+// 本案所有必要查驗階段(同一條 H 點規則,不分工項)。查驗表單範本(P3g)要綁階段時從這裡選,
+// 才不會出現本案根本沒有的階段鍵——階段鍵的語意單一來源仍是檢驗停留點。
+export function projectStageKeys(inspectionPoints = []) {
+  const keys = new Set()
+  for (const p of inspectionPoints || []) {
+    if (!p || p.point_type !== 'H' || p.required_for_billing === false) continue
+    const k = normalizeCqKey(p.stage_key)
+    if (k) keys.add(k)
+  }
+  return [...keys].sort()
+}
 export function emptyInspectionFormContent(date, frame, inspection, workItem, { template = null } = {}) {
   const results = {}
   for (const it of Array.isArray(template?.items) ? template.items : []) if (it?.no) results[it.no] = { value: null }

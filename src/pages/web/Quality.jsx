@@ -7,11 +7,13 @@ import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { sampleAlerts } from '../../lib/qc.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { billableLeaves } from '../../lib/boqCalc.js'
+import { projectStageKeys } from '../../lib/fieldDocs.js'
 import { buildQualityQueue, QUALITY_QUEUE_LIMIT } from '../../lib/qualityQueue.js'
 import DefectTracker from '../../components/DefectTracker.jsx'
 // 五個分段各住一檔(重構波次 7);分段之間只透過本頁的 state 與 store 動作往來
 import InspectionsSection from '../../components/quality/InspectionsSection.jsx'
 import ChecklistSection from '../../components/quality/ChecklistSection.jsx'
+import ChecklistTemplatesCard from '../../components/quality/ChecklistTemplatesCard.jsx'
 import SamplesSection from '../../components/quality/SamplesSection.jsx'
 import ObservationsSection from '../../components/quality/ObservationsSection.jsx'
 
@@ -27,7 +29,7 @@ const SEG_OF_KEY = Object.fromEntries(Object.entries(SEG_KEY).map(([seg, k]) => 
 
 export default function Quality() {
   const { workItems, inspections, createInspection, deleteInspection,
-    checklistTemplates, checklistRecords,
+    checklistTemplates, checklistRecords, saveChecklistTemplate,
     testSamples, createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
     observations, createObservation, updateObservation, escalateObservation, deleteObservation,
     defects, currentUser, fieldDocuments, inspectionPoints,
@@ -102,6 +104,8 @@ export default function Quality() {
     if (!workItems) return []
     return billableLeaves(workItems.items)
   }, [workItems])
+  // 本案的必要查驗階段(H 點):查驗表單範本綁階段時只能從這裡選,階段鍵的語意單一來源是檢驗停留點
+  const stageKeys = useMemo(() => projectStageKeys(inspectionPoints), [inspectionPoints])
 
   // 檢附自主檢查表(S-2)候選:已判定(合格/不合格皆可)的「現行版」檢查紀錄。
   // 工項對應沿用 ChecklistSection 的雙鍵慣例(demo 存 work_item_key、真 DB 存 uuid);
@@ -265,11 +269,14 @@ export default function Quality() {
         onDelete={deleteObservation} resolveMarkup={resolveMarkup} scope={paneScope} />
       )}
 
-      {/* 自主檢查表:只剩查閱(P6b-3)——新增與更正在自主檢查表文件頁起稿、確認、簽署;這裡列紀錄、檢附查驗與列印 */}
-      {segment === '檢查表' && (
+      {/* 自主檢查表:只剩查閱(P6b-3)——新增與更正在自主檢查表文件頁起稿、確認、簽署;這裡列紀錄、檢附查驗與列印。
+          範本(P3g)住同一段:自主檢查表與監造查驗表單的項目都由範本決定,兩種用途在同一張卡維護。 */}
+      {segment === '檢查表' && (<>
+        <ChecklistTemplatesCard key={`tpl-${paneScope}`} templates={checklistTemplates} records={checklistRecords}
+          inspections={inspections} leaves={leaves} stageKeys={stageKeys} can={can} onSave={saveChecklistTemplate} />
         <ChecklistSection key={paneScope} templates={checklistTemplates} records={checklistRecords} canEdit={can.edit} leaves={leaves} signedDocByRecord={signedDocByRecord}
           inspections={inspections} onRequestInspection={can.submit ? requestInspectionFromChecklist : null} />
-      )}
+      </>)}
 
       {/* 取樣試驗:試體齡期追蹤 + fc′ 自動判定 */}
       {segment === '試驗' && (

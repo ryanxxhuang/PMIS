@@ -109,6 +109,7 @@
 | P3d 提送／退回／回執 UI＋列印 | P2d | 純表單呈現／列印（fable5.1 執行；使用者 2026-09-19 授權簡單低風險改用 Opus 5） | Opus 5 | 四類詳情的提送區、退回歷史列、回執；列印頁印版本與雜湊。**已做（PR #145，純前端）**：`/site-log/print`（沿用已登記路由，`?doc=`／`?d=`）印簽署列指向的版本（`lib/fieldDocs.printSignature`＝版本號最大的簽署），頁首短碼／版本／DB 雜湊前 12 碼／簽署者／伺服器時間，未簽署標「草稿・未簽署」、舊流程既有列標「既有紀錄、無版本與雜湊」、簽署版本讀不到明說失敗不代印；工項名稱取版本快照、累計＝此日之前日誌列＋本張；三個列印頁共用 `lib/usePrintedVersion.js`＋`components/sitelog/DocumentPrint.jsx`（抽掉三份複製）；`DocumentLifecycle` 加「提送與回執」（對象、送出時間與送件人、版本與雜湊、完整 submission_id、收件狀態、下一責任方＝`fieldDocumentBalls`）與「退回歷史」（歷次原因、退回人＝既有 `list_project_members` 對照、時間、補正再送與 DB diff）；伺服器時間一律 `lib/dates.taipeiDateTime`（原 UTC 切字串差 8 小時，現場文書 11 處） | 歷次退回全列；列印雜湊＝DB |
 | P3e 共用補值＋角色隔離 | P3a–c | fable5.1 | Opus 5（暫代 Fable 5.1，使用者 2026-09-20 授權） | migration `20260920004000_intake_shared_inputs`：共用鍵目錄 `fn_field_document_shared_keys`（`location:<日期>:<工項>`→施工日誌工項列位置＋自檢表位置、`qty:<日期>:<工項>`→施工日誌當日數量、`weather_am／pm:<日期>`→施工日誌／監造日誌天氣；鍵帶日期因一批可跨日；監造查驗表單位置是確認量批次鍵不共用；出工等清單欄不共用）；`fn_field_document_apply_shared_inputs`（人補一律 `confirmed`／`shared:<鍵>`；人在文件頁親自確認或標不適用的欄不覆蓋）；`set_intake_shared_input`（上傳方成員；對象＝本批建立∪本批候選指向、同專案同一方、活文件；`draft`／`pending_input` 且從未簽署才經 `save_field_document_version` 存人工版本，附件原樣；已簽署／提送／簽後更正 `locked`；同值冪等）；`list_intake_shared_inputs`（每份文件效果 update／applied／human_value／locked 由伺服器判定）；H3 允許清單 80→82；rollback `.down.sql`；pgTAP `intake_shared_inputs.sql` 95 條；前端 `IntakeSharedInputs`（`IntakeResult` 內，上傳當下與上傳批次恢復清單同一份）、store `listIntakeSharedInputs`／`setIntakeSharedInput`、`lib/fieldDocs` 呈現純函式；`IntakeList` 本批文件含候選指向的文件；**Edge 不讀共用補值**（確認只存在人工版本；補值後才起稿的新文件標「尚未套用」由人以同一支 RPC 套上）；簽署附件來源檢查沿用四類 `PD005`，並以補值後仍 `PD005` 釘住；**P4e 交接**（同一條簽署路徑、避免兩支 migration 互蓋）：同支 migration `create or replace` 監造查驗表單簽署分支 6 處數量訊息與 `inspections_defect_sync` 的「申報／確認／差額」改經 `fn_cq_txt`（pgTAP `inspection_form_documents.sql` 146→150 斷言訊息無 `.0000`）；chain 12 | 補一次多文件生效；已簽署不變；他方照片拒絕 |
 | P3f 文件草稿捨棄（原列 P3e 的 `discard_field_document`，2026-09-20 P3e 拆出） | P2d | fable5.1 | Opus 5（暫代 Fable 5.1，使用者 2026-09-20 授權） | migration `20260920021000_field_document_discard`：`field_documents` 加 `discard_reason`／`discarded_by`／`discarded_at`／`discard_request_id`＋新 trigger `field_documents_discard_guard`（所有寫入者含 service：轉為 discarded 時原因必填、捨棄者與時間由伺服器蓋、其餘寫入四欄不可變）；`discard_field_document(document_id, reason, client_request_id)`——責任方**成員**（修正原設計「建立者」：AI 起稿的文件沒有人類建立者）、只限未簽署三狀態且沒有任何簽署／提送列（簽後更正的草稿 `PD008`）、原因必填（`PD010`）、冪等（同人同原因回原結果；同請求編號換原因或他人 `PD009`；他人或換原因 `PD008`）、版本與照片保留、指向本文件的待覆核 AI 草稿同交易標 `rejected`（`resolve_agent_action_internal` 加 rejected）、稽核 `field_document.discarded` metadata 帶原因；H3 允許清單 82→83；rollback `.down.sql`；捨棄後同一目標可重新起稿（三個部分唯一索引本來只算活文件，pgTAP 釘住）；P3e 共用補值／P2b 起稿／P5a 球權／`/site` 清單原本已把 discarded 當終態，只補測試；前端共用 `DiscardDraftButton`（確認對話框、原因必填）接 `DocumentLifecycle`（四類文書頁）與 `/site` 清單列，捨棄後回 `/site` 說明原因與重新起稿入口；`loadFieldDocumentsFromDB` 回 `signedDocumentIds`（曾簽署的草稿不給入口）；捨棄處理掉 AI 草稿時重載收件匣 | 未簽署可捨棄、已簽署拒絕、三角色＋非成員、捨棄後可重新起稿 |
+| P3g 監造查驗範本建立介面＋兩個流程缺口（2026-09-20 補列：P3c 的 G5、P6b 的兩項留尾） | P3c、P3f、P6b | fable5.1 | Opus 5（暫代 Fable 5.1，使用者 2026-09-20 授權） | migration `20260920050000_checklist_template_authoring`：`fn_checklist_applies_to`（適用條件形狀：只接受 `{work_item_ids,keywords}`、去空白去重排序、全空回 null）、`fn_checklist_items_normalize`（項目形狀：項次必填不重複、檢查內容必填、`kind∈num|bool`、num 至少一個上下限且 min≤max、只留 baseline 九鍵）、`checklist_templates_guard`（BEFORE INSERT/UPDATE：正規化；`stage_key` 只給 `inspection_form`；適用工項限本案；`kind=inspection_form` 的寫入比照 `create_inspection_form_draft` 要監造或 `admin_override`（`CT006`，不新增角色）；`version` 由伺服器編號（同案同用途同標題 +1）；已被 `checklist_records`／`inspections` 引用的範本標題／依據／項目／用途不可改（`CT008`））、`checklist_templates_del_guard`（被引用不可刪——`checklist_records.template_id` 是 `on delete cascade`，刪範本等於刪掉已簽署的檢查紀錄；沿用 `evidence_delete_bypass`）；rollback `.down.sql`；允許清單不變（三支新函式都不授權 authenticated）。Edge：`pickChecklistTemplate` 改為「階段硬篩 → 指名工項（硬條件）→ 關鍵字命中 → 標題相似度」的階梯，作者明示信號分不出來就回 null（不亂猜）；`fieldDocRepo.listChecklistTemplates` 多取 `stage_key, applies_to`；`draftInspection` 同步帶 `workItemId`。前端：`lib/checklistTemplates.js`（表單純函式，鏡像 DB 規則）＋`components/quality/ChecklistTemplatesCard.jsx`（品質頁「檢查表」分段：用途、適用工項／關鍵字、查驗階段（選自 `projectStageKeys` 的 H 點）、檢查項目、已引用時改推「另存為新版本」）＋`store/slices/quality.saveChecklistTemplate`；`InspectionsSection` 對「已判定但沒有簽署文件」的舊快速判定查驗補「以查驗表單更正判定（補確認數量）」入口（沿用 `create_inspection_form_draft`）；`Agent` 收件匣拒絕 AI 起稿草稿時以 P3f `discard_field_document` 一併捨棄該文件（原因「AI 草稿遭拒絕」、確認框、已簽署／已提送則保留並說明；決策純函式 `planDraftRejection`） | 範本 kind／stage／applies_to 的權限與結構約束、三角色＋非成員；候選推斷用到 applies_to；舊快速判定可建更正表單；拒絕草稿的連動 |
 
 ### P4 查驗通過量與估驗聯動
 
@@ -169,13 +170,13 @@
 1. P1a → P1b → P1c → P1d（無 DB；可與 P4a 平行）。
 2. P4a（純函式 migration＋pgTAP，不依賴 P3）→ T0（本機 pgTAP 隔離；之後每個 DB 單元以 `npm run test:db` 的一次性資料庫結果判紅綠）。
 3. P2a → P2b → P2c → P2d（第一條完整路徑）。
-4. P3a → P3b → P3c → P3d → P3e → P3f。
+4. P3a → P3b → P3c → P3d → P3e → P3f → P3g（P3g 補 P3c 的範本建立介面與 P6b 留下的兩個流程缺口，依賴 P3f 的捨棄 RPC）。
 5. P4b → P4c → P4d；觀察一個真案期別 → P4e。
 6. P5a → P5b → P5c → P5d（P5a 可在 P2 之後任何時候穿插，無 DB 衝突時）。
 7. P6a → P6b → P6c。
 8. P7a → P7b → P7c。
 
-DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P4a、P4b、P4e、P5a–c、P6c）之間不平行；前端／Edge 單元可在介面定案後穿插。每個單元一個 PR、`codex/` 分支前綴、CI 綠後合併。
+DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c、P6c）之間不平行；前端／Edge 單元可在介面定案後穿插。每個單元一個 PR、`codex/` 分支前綴、CI 綠後合併。
 
 ## 6. 待使用者決定（2026-09-17 使用者已於主 session 逐題答覆；記入 D-026 第 7 點）
 
@@ -281,6 +282,8 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P4a、P4b、P4e、P5a–c、P6c�
 | A10 | 廠商 → `#/supervisor-log`、`#/inspection-form`；機關 → `#/site` | 試著編輯或簽署別方的文件 | 廠商對監造日誌只能唯讀、對查驗表單只能收件或退回，都不能編輯或簽署；機關在 `#/site` 沒有上傳鈕，只能查閱 | P2c #124、P3a #130、P3c #148 |
 | A11 | 廠商 → 現場紀錄 `#/site` | 上傳今日照片、擬出施工日誌＋自主檢查表後，在上傳結果（或「上傳批次」展開該批）的「一次補齊」填一次某工項的施作位置按「套用」，再填當日完成數量；接著把自主檢查表簽署，回來把位置改成另一個值再套用 | 位置一次寫進兩份文件（各多一個版本，欄位標「共用補值・已確認」）、數量只寫施工日誌；已簽署的自主檢查表標「已簽署，不受影響」且內容不變；你在文件頁親自改過的欄位標「已個別填寫，不覆蓋」；同一個值不會重複產生版本 | P3e #152 |
 | A12 | 廠商 → 現場紀錄 `#/site`；監造同樣試自己的監造日誌 | 上傳照片擬出草稿後：在「現場文書」清單某份自主檢查表那一列按「捨棄」並填原因；再開同日施工日誌按「捨棄草稿」填原因；回 `#/site` 重新上傳照片；最後對已簽署的日誌再試一次 | 沒填原因不能按確認；捨棄後回到現場紀錄並顯示「已捨棄…（原因：…）」與重新填寫的連結；清單、今日工作與 AI 草稿收件匣都不再列該份；重新上傳會擬出一份新的同日施工日誌、可補齊並簽署；已簽署或簽後更正中的文件沒有捨棄入口；監造看不到廠商文件的捨棄入口（反之亦然） | P3f #155 |
+| A13 | 監造 → 品質查驗 `#/quality`「檢查表」分段 → 現場紀錄 `#/site` | 在「檢查表範本」卡按「新增範本」：用途選「監造查驗表單」、填標題與依據、在「適用工項」加入本案某個末端工項（或填關鍵字）、加一個實測值項目但先不填上下限按「建立範本」→ 補上下限再建立；接著上傳一張該工項的監造照片 | 沒填上下限時當場說「至少要有下限或上限才判定得了」且不會送出；建立後清單列出「監造查驗表單・第 1 版」與「指名工項：…」；起稿的查驗表單用到這張範本（理由寫「範本指名此工項」），查驗項目出現在表單裡；判定與本次確認數量仍然空白待監造親自填；廠商去同一張卡看不到「監造查驗表單」這個用途（只能建自主檢查表）；這張範本被查驗用過之後再編輯，畫面說明標題與項目不可改、只給「另存為新版本」 | P3g #PRNUM |
+| A14 | 廠商（或監造）→ 現場紀錄 `#/site` 上傳照片擬出草稿 → AI 主控台 `#/agent` | 在「AI 草稿收件匣」對那筆草稿按「拒絕」；另外把一份草稿先簽署，再回收件匣拒絕它那筆草稿 | 未簽署的那份：先出現確認框說明會一併捨棄哪一份草稿，確認後草稿消失、現場文書清單也不再列該份，畫面說明「已拒絕草稿，並捨棄 … 草稿（原因：AI 草稿遭拒絕）。版本與照片保留，可重新起稿」；已簽署那份：只標草稿已拒絕，文件保留並說明原因；按取消則兩邊都不變 | P3g #PRNUM |
 
 ### 8.2 監造確認量與估驗
 
@@ -294,6 +297,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P4a、P4b、P4e、P5a–c、P6c�
 | B6 | 監造 → `#/valuation`（已核定期）；機關 → `#/valuation`、`#/payments` | 監造在已核定期的來源展開「撤銷確認」；機關試著登錄請款日 → 在「估驗調整(扣回)」卡按「作廢(接受已計價)」→ 再登錄請款日 | 有待處理扣回時請款日被擋並說明原因；扣回卡三方都看得到、只有機關能作廢；作廢後可登錄（或改由廠商在下一期草稿「同步確認量」併入扣回）；今日工作與早報出現「待機關處理扣回」 | P4d #147 |
 | B7 | 監造 → 今日工作 `#/dashboard`「待監造補證」→ `#/valuation`；機關 → `#/payments` | **正式庫 4 個歷史遷移期別**（實案資料，請由實際監造判斷後操作）：選該期 → 缺件卡「展開 1 列」→ 來源展開「補證此期」→ 填批次／位置與依據（累計量預填遷移量）→「簽發並補證第 N 期」；機關再登錄請款日 | 補證前請款日被擋；補證後缺件清空，機關可登錄；早報與 Agent 的「待監造補證」隨之消失 | P4b #138、P4d #147 |
 | B8 | 監造 → `#/valuation` 明細 | 看總價／間接費類工項（利潤及管理費、營業稅等） | 缺計價依據時標「計價依據待設定」且不計價（Q3 暫時隔離） | P4b #138、P4c #144 |
+| B9 | 監造 → 品質查驗 `#/quality`「查驗」分段；廠商 → `#/valuation` | 找一筆舊流程「快速判定」留下的查驗（本次確認數量欄標「舊流程快速判定，未填確認數量」），按「以查驗表單更正判定（補確認數量）」→ 在表單填申報量、判定與本次確認數量 → 簽署；廠商回估驗頁按「同步確認量」 | 舊查驗補上正式判定與確認量、指向這份簽署文件，舊紀錄本身仍在清單查得到；廠商這才拿得到那一筆的可估驗量；已經有查驗表單的查驗不會出現這個入口（改在該文件建新版本），廠商也看不到這個入口 | P3g #PRNUM |
 
 ### 8.2.1 月報與估驗佐證包（P6a）
 
@@ -345,8 +349,8 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P4a、P4b、P4e、P5a–c、P6c�
 | G1 | 文件草稿捨棄（P3f） | **已做（PR #155，`20260920021000`，2026-09-20 使用者已套正式）**：四類文書頁與 `/site` 清單可捨棄從未簽署／未提送的草稿（原因必填、版本保留、AI 草稿退回、稽核帶原因），捨棄後同一目標可重新起稿 | 驗收 A12 |
 | G2 | P4e 封鎖估驗明細直接寫入 | **已做（PR #151，`20260920001500`；正式套用見 CURRENT §6.3）**：舊客戶端直接寫 `valuation_items` 一律被拒（42501）；正式庫遺留的 legacy 草稿明細仍標「申報未確認・不計價」、送審被擋，按「同步確認量」即以確認量為準 | 若仍開著 P4c 之前的舊分頁，寫估驗會看到「操作未完成…（代碼 42501）」，重新整理即可 |
 | G3 | P6a 施工月報重用 | **已做（PR #153）**：月報與佐證包只彙整已簽署版本與監造確認量；Demo 站另由 O2 補示範用的已簽署版本與確認量，三張報表在 demo 也看得到內容（全標「【示範資料】」） | 驗收 M1–M5 |
-| G4 | P6b 退場清理 | **已做（P6b-1 #154、P6b-2 #157、P6b-3 #158）**：退場頁 `/schedule`、`/audit` 移除並依原權限導向；三支退場 Edge 原始碼移除、線上 `audit-summary` 已下架；Agent 日誌／自檢草稿改產生現場文書草稿；品質查驗快速判定與檢查表直接登錄退場、DB 收回直接寫入（`20260920030000`，正式套用待使用者 `db push`） | `assistant-chat`／`parse-contract` 線上函式下架待使用者授權 |
-| G5 | 監造查驗範本建立介面 | **未做**：`kind='inspection_form'` 範本沒有建立介面，查驗表單一律用示範範本 | 待排 |
+| G4 | P6b 退場清理 | **已做（P6b-1 #154、P6b-2 #157、P6b-3 #158；兩個留尾由 P3g #PRNUM 補完：舊快速判定查驗的更正入口、拒絕 AI 草稿時一併捨棄草稿文件）**：退場頁 `/schedule`、`/audit` 移除並依原權限導向；三支退場 Edge 原始碼移除、線上 `audit-summary` 已下架；Agent 日誌／自檢草稿改產生現場文書草稿；品質查驗快速判定與檢查表直接登錄退場、DB 收回直接寫入（`20260920030000`，正式套用待使用者 `db push`） | `assistant-chat`／`parse-contract` 線上函式下架待使用者授權 |
+| G5 | 監造查驗範本建立介面 | **已做（P3g #PRNUM，`20260920050000`）**：品質查驗「檢查表」分段可建立／編輯兩種用途的範本（用途、適用工項／關鍵字、查驗階段、檢查項目），伺服器編版本並擋下已被引用範本的內容變更；適用條件真的參與照片起稿與 Agent 起稿的候選推斷（指名工項是硬條件，分不出來仍標待人指定） | 驗收 A13 |
 | G11 | 示範模式的簽署 | **不變（刻意）**：示範模式沒有伺服器，使用者按簽署仍一律回「示範模式無法簽署／提送」。O2 補的是種子帶進來的示範已簽署版本（全部標「【示範資料】」），只為讓月報／佐證包在 Demo 站演得出內容 | 無 |
 | G6 | 保固類循環義務 | **待決**：保固期滿日沒有資料來源，保固類不產生期次、列「停止條件待補」 | 使用者決定保固年限在哪裡登錄 |
 | G7 | iPhone 實機 | **未驗**：只在瀏覽器 375 寬度驗過 | 使用者做 A9 時用實機 |

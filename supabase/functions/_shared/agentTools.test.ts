@@ -136,6 +136,38 @@ describe('pickChecklistTemplate(確定性關鍵字相符,非 AI)', () => {
     expect(pickChecklistTemplate(templates, null)).toBeNull()
     expect(pickChecklistTemplate(templates, '交通維持設施')).toBeNull()
   })
+
+  // P3g:範本作者自己登錄的適用條件(applies_to)比標題相似度可靠,排在標題之前
+  describe('適用條件 applies_to 與查驗階段 stage_key(P3g)', () => {
+    const named = { id: 't3', title: '甲表', applies_to: { work_item_ids: ['wi-1'] } }
+    const kw = { id: 't4', title: '乙表', applies_to: { keywords: ['交通維持', '標誌'] } }
+
+    it('指名工項優先於標題相似度', () => {
+      const out = pickChecklistTemplate([templates[1], named], '場鑄結構混凝土', { workItemId: 'wi-1' })
+      expect(out?.template.id).toBe('t3')
+      expect(out?.reason).toContain('範本指名此工項')
+    })
+    it('範本指名了工項,對沒被指名的工項就不適用(不是加分,是硬條件)', () => {
+      expect(pickChecklistTemplate([named], '交通維持設施', { workItemId: 'wi-9' })).toBeNull()
+    })
+    it('關鍵字比對工項描述(去空白),標題 0 分也挑得到', () => {
+      const out = pickChecklistTemplate([templates[0], kw], '交通維持 設施 及標誌', { workItemId: 'wi-9' })
+      expect(out?.template.id).toBe('t4')
+      expect(out?.reason).toContain('交通維持')
+    })
+    it('兩張範本都指名同一個工項而分不出來 → 回 null(作者說了都適用,只有人能選)', () => {
+      const a = { id: 'ta', title: '同名表', applies_to: { work_item_ids: ['wi-1'] } }
+      const b = { id: 'tb', title: '同名表', applies_to: { work_item_ids: ['wi-1'] } }
+      expect(pickChecklistTemplate([a, b], '鋼筋組立', { workItemId: 'wi-1' })).toBeNull()
+    })
+    it('查驗階段:該階段有專屬範本就用它;沒有階段的查驗不吃階段專屬範本', () => {
+      const any = { id: 'tx', title: '鋼筋 查驗表' }
+      const stage = { id: 'ty', title: '鋼筋 查驗表', stage_key: '綁紮後' }
+      expect(pickChecklistTemplate([any, stage], '鋼筋組立', { stageKey: '綁紮後' })?.template.id).toBe('ty')
+      expect(pickChecklistTemplate([any, stage], '鋼筋組立', { stageKey: '澆置前' })?.template.id).toBe('tx')
+      expect(pickChecklistTemplate([stage], '鋼筋組立', {})).toBeNull()
+    })
+  })
 })
 
 // ── 批4:draft_inspection / raise_to 的 makeToolExec 防護 ───────────────────

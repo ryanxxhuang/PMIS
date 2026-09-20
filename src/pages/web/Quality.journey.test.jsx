@@ -134,4 +134,40 @@ describe('廠商品質旅程', () => {
     expect(button('不合格')).toBeUndefined()
     expect([...container.querySelectorAll('button')].some((b) => b.textContent.includes('以監造查驗表單判定'))).toBe(true)
   })
+
+  // P3g:P6b-3 移除快速判定後,舊流程判定過的查驗沒有任何入口改走查驗表單更正——這裡補上
+  it('舊快速判定的查驗:監造有「以查驗表單更正判定」入口,說明清楚且導向該查驗的表單', async () => {
+    const legacy = { id: 'I9', title: '2F 版牆查驗', status: '合格', requested_date: '2026-08-01', inspection_type: '施工查驗', document_id: null, confirmed_qty: null }
+    state.store = {
+      ...state.store, currentUser: { org_type: 'supervisor' }, can: { edit: false, submit: false, approve: true },
+      inspections: [legacy], fieldDocuments: { documents: [] },
+    }
+    await render('/quality?seg=inspections&inspection=I9')
+    expect(container.textContent).toContain('（舊流程快速判定，未填確認數量）')
+    const fix = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('以查驗表單更正判定'))
+    expect(fix).toBeTruthy()
+    expect(container.textContent).toContain('舊紀錄保留可查')
+    await act(async () => fix.click())
+    expect(container.querySelector('[data-testid="path"]').textContent).toBe('/inspection-form')
+    expect(search().get('inspection')).toBe('I9')
+  })
+
+  it('已由查驗表單判定的查驗不再出現更正入口(改走該文件的新版本);廠商也看不到這個入口', async () => {
+    const withDoc = { id: 'I8', title: '3F 查驗', status: '合格', requested_date: '2026-08-01', document_id: 'D1', confirmed_qty: 60, unit: 'M3' }
+    state.store = {
+      ...state.store, currentUser: { org_type: 'supervisor' }, can: { edit: false, submit: false, approve: true },
+      inspections: [withDoc], fieldDocuments: { documents: [{ id: 'D1', doc_type: 'inspection_form', target_key: 'I8', status: 'signed', current_version_no: 1 }] },
+    }
+    await render('/quality?seg=inspections&inspection=I8')
+    expect([...container.querySelectorAll('button')].some((b) => b.textContent.includes('以查驗表單更正判定'))).toBe(false)
+    expect([...container.querySelectorAll('button')].some((b) => b.textContent.includes('監造查驗表單（版本 1）'))).toBe(true)
+
+    const legacy = { id: 'I9', title: '2F 版牆查驗', status: '合格', requested_date: '2026-08-01', document_id: null }
+    state.store = {
+      ...state.store, currentUser: { org_type: 'contractor' }, can: { edit: true, submit: true, approve: false },
+      inspections: [legacy], fieldDocuments: { documents: [] },
+    }
+    await render('/quality?seg=inspections&inspection=I9')
+    expect([...container.querySelectorAll('button')].some((b) => b.textContent.includes('以查驗表單更正判定'))).toBe(false)
+  })
 })

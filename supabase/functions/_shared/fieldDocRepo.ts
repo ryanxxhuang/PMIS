@@ -201,10 +201,11 @@ export function supabaseDraftRepo(db: SupabaseClient, service: SupabaseClient, p
       return (data && typeof data === 'object' ? data as FieldDocTemplate : null)
     },
 
-    // 本案檢查表範本(P3b 自檢表 kind=self_check、P3c 查驗表單 kind=inspection_form):候選推斷依工項描述確定性挑選;RLS 只看得到本案
+    // 本案檢查表範本(P3b 自檢表 kind=self_check、P3c 查驗表單 kind=inspection_form):候選推斷先看範本作者宣告的
+    // 適用範圍(P3g applies_to 指名工項／關鍵字、stage_key 查驗階段),分不出來才退回工項描述與標題的相似度;RLS 只看得到本案
     async listChecklistTemplates() {
       const res = await fetchAllRows<ChecklistTemplateRow>((f, t) =>
-        db.from('checklist_templates').select('id, title, source, items, kind').eq('project_id', projectId)
+        db.from('checklist_templates').select('id, title, source, items, kind, stage_key, applies_to').eq('project_id', projectId)
           .order('created_at').order('id').range(f, t))
       if (res.error) return { error: res.error }
       return res.rows.map((r) => ({ ...r, items: Array.isArray(r.items) ? r.items : [] }))

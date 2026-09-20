@@ -33,7 +33,40 @@ test.describe('監造', () => {
     await gotoHash(page, '/quality')
     const legacy = page.getByRole('listitem').filter({ hasText: '3F 柱牆鋼筋查驗' })
     await legacy.click()
-    await expect(page.getByRole('region', { name: '3F 柱牆鋼筋查驗 詳情' })).toContainText('舊流程快速判定，未填確認數量')
+    const legacyDetail = page.getByRole('region', { name: '3F 柱牆鋼筋查驗 詳情' })
+    await expect(legacyDetail).toContainText('舊流程快速判定，未填確認數量')
+    // P3g:這類舊紀錄原本沒有任何更正入口(P6b-3 留下的缺口)——補上「以查驗表單更正判定」,直達該查驗的表單
+    await expect(legacyDetail).toContainText('舊紀錄保留可查')
+    await legacyDetail.getByRole('button', { name: /以查驗表單更正判定/ }).click()
+    await expect(page).toHaveURL(/#\/inspection-form\?inspection=/)
+  })
+
+  // P3g:監造查驗表單範本原本只能用 API 建立(P3c 留下的 G5 缺口)。品質查驗「檢查表」分段補上範本維護:
+  // 用途、適用工項／關鍵字(候選推斷的依據)、查驗階段、檢查項目都在這裡登錄。
+  test('檢查表範本:監造可建立監造查驗表單範本(用途、適用條件、檢查項目);送出前擋下判定不出來的項目', async ({ page }) => {
+    await loginAs(page, 'supervisor')
+    await gotoHash(page, '/quality?seg=checklist')
+    const card = page.getByRole('group', { name: /檢查表範本/ })
+    await expect(card).toBeVisible()
+    await card.getByRole('button', { name: '新增範本' }).click()
+    const form = page.getByRole('group', { name: '範本編輯' })
+    await form.getByRole('combobox', { name: '範本用途' }).selectOption('inspection_form')
+    await form.getByRole('textbox', { name: '標題（必填）' }).fill('版模 監造查驗表')
+    await form.getByRole('textbox', { name: '關鍵字（選填）' }).fill('模板、支撐')
+    // 適用條件的預覽要如實說出會配到哪些工項(沒有就說沒有,不讓人以為系統會自己配對)
+    await expect(form).toContainText('目前會配到')
+    await form.getByRole('textbox', { name: '第 1 項項次' }).fill('A1')
+    await form.getByRole('textbox', { name: '第 1 項檢查內容' }).fill('支撐系統穩固')
+    // 實測值項目沒有上下限 → 送出前就擋下,不打伺服器
+    await form.getByRole('combobox', { name: '第 1 項檢查方式' }).selectOption('num')
+    await form.getByRole('button', { name: '建立範本' }).click()
+    await expect(form.getByRole('alert')).toContainText('至少要有下限或上限')
+    await form.getByRole('spinbutton', { name: '第 1 項下限' }).fill('1')
+    await form.getByRole('button', { name: '建立範本' }).click()
+    // 建立後回到清單:用途、版本與適用條件都看得到
+    const row = page.getByRole('listitem').filter({ hasText: '版模 監造查驗表' })
+    await expect(row).toContainText('監造查驗表單')
+    await expect(row).toContainText('關鍵字：支撐、模板')
   })
 
   // ── 缺失複查閉環的後半段(前半段=contractor.spec 的「開始改善 → 提送複查」)──

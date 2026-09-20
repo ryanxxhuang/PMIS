@@ -144,6 +144,51 @@ describe('inferCandidates(確定性、依上傳方)', () => {
     expect(c.some((x) => x.doc_type === 'daily_log' || x.doc_type === 'self_check')).toBe(false)
     expect(c.some((x) => x.state === 'unsupported')).toBe(false)
   })
+  it('P3g:範本登錄的適用條件(applies_to)參與候選推斷——標題猜不出來的工項,指名或關鍵字就挑得到', () => {
+    // 模板工項對兩張範本標題都 0 分(見上一個案例);加一張「指名 wi-form」的範本後就挑得到
+    const T_FORM: ChecklistTemplateRow = {
+      id: 'tpl-form', title: '版模安裝 查核表', source: null, items: [{ no: 'F1', item: '支撐穩固', kind: 'bool' }],
+      applies_to: { work_item_ids: ['wi-form'] },
+    }
+    const c = inferCandidates({ uploaderOrg: 'contractor', sitePhotos, openInspections: [], workItems: LEAVES, checklistTemplates: [T_CONC, T_STEEL, T_FORM] })
+    const sc = c.filter((x) => x.doc_type === 'self_check')
+    expect(sc.map((x) => [x.target_key, x.state, x.template_id])).toEqual([
+      ['2026-09-18:wi-form', 'ready', 'tpl-form'],
+      ['2026-09-17:wi-steel', 'ready', 'tpl-steel'],
+    ])
+    expect(sc[0].reason).toContain('範本指名此工項')
+    // 指名了工項的範本對「沒被指名」的工項不適用:只剩它一張時,鋼筋工項挑不到 → blocked,不亂套
+    const onlyNamed = inferCandidates({ uploaderOrg: 'contractor', sitePhotos, openInspections: [], workItems: LEAVES, checklistTemplates: [T_FORM] })
+    expect(onlyNamed.filter((x) => x.doc_type === 'self_check').map((x) => [x.target_key, x.state, x.template_id])).toEqual([
+      ['2026-09-18:wi-form', 'ready', 'tpl-form'],
+      ['2026-09-17:wi-steel', 'blocked', null],
+    ])
+    // 關鍵字:比對工項描述(去空白),命中數高者勝
+    const T_KW: ChecklistTemplateRow = {
+      id: 'tpl-kw', title: '甲表', source: null, items: [{ no: 'K1', item: '目視', kind: 'bool' }],
+      applies_to: { keywords: ['模板', '支撐'] },
+    }
+    const kw = inferCandidates({ uploaderOrg: 'contractor', sitePhotos, openInspections: [], workItems: LEAVES, checklistTemplates: [T_CONC, T_STEEL, T_KW] })
+    const kwForm = kw.find((x) => x.doc_type === 'self_check' && x.target_key === '2026-09-18:wi-form')
+    expect([kwForm?.state, kwForm?.template_id]).toEqual(['ready', 'tpl-kw'])
+    expect(kwForm?.reason).toContain('關鍵字')
+  })
+  it('P3g:查驗表單範本的查驗階段參與候選推斷——有階段的查驗優先用該階段的專屬範本,沒階段的查驗不吃階段專屬範本', () => {
+    const T_ANY: ChecklistTemplateRow = { id: 'tpl-any', title: '鋼筋 監造查驗表', source: null, kind: 'inspection_form', items: [{ no: 'S1', item: '間距', kind: 'bool' }] }
+    const T_STAGE: ChecklistTemplateRow = { id: 'tpl-stage', title: '鋼筋 監造查驗表', source: null, kind: 'inspection_form', stage_key: '綁紮後', items: [{ no: 'S1', item: '間距', kind: 'bool' }] }
+    const withStage = inferCandidates({
+      uploaderOrg: 'supervisor', sitePhotos, workItems: LEAVES, checklistTemplates: [T_ANY, T_STAGE],
+      openInspections: [{ id: 'ins-a', title: '鋼筋查驗', work_item_id: 'wi-steel', requested_date: '2026-09-17', stage_key: '綁紮後' }],
+    })
+    expect(withStage.find((x) => x.doc_type === 'inspection_form')).toMatchObject({ state: 'ready', template_id: 'tpl-stage' })
+    const noStage = inferCandidates({
+      uploaderOrg: 'supervisor', sitePhotos, workItems: LEAVES, checklistTemplates: [T_STAGE],
+      openInspections: [{ id: 'ins-a', title: '鋼筋查驗', work_item_id: 'wi-steel', requested_date: '2026-09-17', stage_key: null }],
+    })
+    // 階段專屬範本不套到沒有階段的查驗:照舊 ready(判定欄仍可簽),只是不帶範本
+    expect(noStage.find((x) => x.doc_type === 'inspection_form')).toMatchObject({ state: 'ready', template_id: null })
+    expect(noStage.find((x) => x.doc_type === 'inspection_form')?.reason).toContain('本案無監造查驗表範本')
+  })
   it('廠商:自檢表候選只用 kind=self_check 的範本(監造查驗表範本不算「本案有自檢表範本」)', () => {
     const onlyIns = inferCandidates({ uploaderOrg: 'contractor', sitePhotos, openInspections: [], workItems: LEAVES,
       checklistTemplates: [{ id: 'tpl-ins', title: '混凝土 監造查驗表', source: null, kind: 'inspection_form', items: [] }] })
