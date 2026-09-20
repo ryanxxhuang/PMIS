@@ -131,7 +131,7 @@
 - 回填（不偽造歷史依據）：每個已填任一基準日的專案建 version 1（`initial`、reason 註明回填、`created_by`／`effective_from` 為 null）；既有期次只在 `basis` 的起算日等於 v1 快照時才蓋 `anchor_version_no=1`；已完成的單次義務（正式 0 筆）不補快照；套用停止條件（正式庫盤點：兩案已登錄竣工確認，8 期預計移除竣工後的 5 期，實際數字見 CURRENT §6.3）。
 - 前端純呈現：期限追蹤與履約時程的詳情加「依據」列（期次：第 N 版基準日＋起算欄位與日期；單次：完成時留版／未留版／現行第 N 版）、期次列逐期標依據；基準日卡加變更類別／依據函文／生效日三欄與 `AnchorVersions`（目前依據哪一版、本版變更與受影響事項、可展開版本紀錄）；`stop` 缺口在期次區說明去哪裡補。demo 種子帶兩版（初值、展延附函文）並在本地鏡像新版本（期次不重算、標示 demo）。
 
-**P5e 保固類循環義務的停止條件已實作**（migration `20260920021500_warranty_stop_condition`，PR #156；使用者 2026-09-20 決定：保固期滿日＝正式驗收合格日＋契約載明的保固期間，兩者都有依據才計算並記錄來源，缺任一項列「待補設定」）。取代上面 P5c「保固類不自動產生」的暫行語意：
+**P5e 保固類循環義務的停止條件已實作**（migration `20260920040000_warranty_stop_condition`，PR #156；使用者 2026-09-20 決定：保固期滿日＝正式驗收合格日＋契約載明的保固期間，兩者都有依據才計算並記錄來源，缺任一項列「待補設定」）。取代上面 P5c「保固類不自動產生」的暫行語意：
 
 - 正式驗收合格日：`acceptance_events` 的 `final`（正式驗收）最後登錄一筆（`created_at` 最大，與竣工日同取法）且結果「合格」的 `event_date`；最後一筆不合格或沒登錄＝缺。「保固起算」（`warranty`）階段不參與計算。
 - 契約保固期間的來源：正式庫唯讀盤點（2026-09-20）`requirements` 沒有可辨識的保固期間欄位（approved 中 `lifecycle_phase='保固'` 0 筆、`trigger_config` 只有 `offset_days／offset_dir／fixed_date`、保固類義務 0 筆），抽取層也只有文字——不得由 AI 推測數值，故新增最少必要的 `projects.warranty_term_value／warranty_term_unit（year／month／day）／warranty_source_requirement_id`。由專案管理者（`is_project_admin`，與基準日同一支 RPC `update_project_anchors`）在履約時程的履約期程卡登錄；guard `projects_warranty_term_guard` 強制「有期間就必須引用本案已確認（approved）且登錄者看得到（契約分級）的契約重點」，直接 REST 同樣受限——契約要求的權威仍是 requirement（D-012），數值由人讀條文填寫。

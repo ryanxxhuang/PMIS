@@ -29,7 +29,7 @@
 --
 -- 資料:projects 三欄皆 null(正式庫沒有保固期間可回填,不臆測);project_anchor_versions 既有列的 warranty 為 null
 -- (欄位新增不觸發 append-only guard);obligation_periods 對保固類義務套用新窗口(正式庫 0 列,實際不變)。
--- 回復:supabase/rollbacks/20260920021500_warranty_stop_condition.down.sql。
+-- 回復:supabase/rollbacks/20260920040000_warranty_stop_condition.down.sql。
 -- pgTAP:supabase/tests/warranty_stop_condition.sql;允許清單 anon_and_function_privileges.sql 加 get_project_warranty;
 -- project_anchor_versions.sql 的保固類斷言改為新語意(使用者決定取代「保固類不產生」)。
 

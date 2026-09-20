@@ -5,10 +5,10 @@
 
 ## 1. 本輪驗證
 
-### 2026-09-20 P5e：保固類循環義務的停止條件——保固期滿日＝正式驗收合格日＋契約保固期間（`codex/slimming-p5e-warranty-stop`，PR #156，migration `20260920021500_warranty_stop_condition`；基準 main `8001f3a`；Opus 5 暫代 Fable 5.1）
+### 2026-09-20 P5e：保固類循環義務的停止條件——保固期滿日＝正式驗收合格日＋契約保固期間（`codex/slimming-p5e-warranty-stop`，PR #156，migration `20260920040000_warranty_stop_condition`；基準 main `8001f3a`；Opus 5 暫代 Fable 5.1）
 
 - `npm run test:db`（一次性資料庫從零套 80 支 migration＋seed）：58 檔、3,386 通過、0 失敗。新增 `warranty_stop_condition.sql` 105 條：結構與授權（RPC 成員／service 可、anon 不可、內部函式不開放）；保固期滿日日期規則 10 例（與共用 fixture `warranty.expiry_cases` 同一組：2025-04-30＋1 個月＝05-31、2023-02-28＋1 年＝2024-02-29、2025-01-30＋1 個月＝02-28、閏年／平年 1-28、跨年月底、以日計）與兩個非台北 session 時區結果不變；缺口文字四種；兩項皆缺／只缺期間 → 不產生；guard（非管理者、待確認條文、別案條文、有期間無條文、有條文無期間、未知單位、非整數、0、直接 REST 引用待確認條文皆拒）；登錄 1 年 → 留版（`changed_keys` warranty_term、`warranty` 快照、四日期快照形狀不變）、期次只在保固期間（起於合格日後第一個到期日、止於期滿日所在期、不看開工觸發點）、basis 記合格日／期滿日／期間／引用條文、非保固類不受影響、每日推進不越界；動過兩期後更正為 6 個月 → 只移除沒動過的期並記 removed／kept；合格日更正延後 → 早於新合格日的待辦期移除、期滿延後補回、已完成期保留原依據；改不合格 → 只留動過的期、改回合格冪等補回；引用條文被取代 → 停止計算並移除未動過的期、改引用新條文（直接 REST，也留版）→ 恢復；類別保固↔非保固 → 重建未動過的期；引用條文刪除（FK set null）→ 期間保留、停止計算、留版；有保固期間的專案可整案刪除。`project_anchor_versions.sql` 124（三條保固斷言改新語意）、`anon_and_function_privileges.sql` 418（允許清單 83 支）。
-- rollback：以暫時探針（不提交）在一次性 DB 的交易內套 `supabase/rollbacks/20260920021500_warranty_stop_condition.down.sql` 6/6（P5c 停止條件恢復、欄位／RPC／requirements trigger 移除、留版 trigger 仍在），59 檔 3,392 全綠後刪除探針。
+- rollback：以暫時探針（不提交）在一次性 DB 的交易內套 `supabase/rollbacks/20260920040000_warranty_stop_condition.down.sql` 6/6（P5c 停止條件恢復、欄位／RPC／requirements trigger 移除、留版 trigger 仍在），59 檔 3,392 全綠後刪除探針。
 - `npm test`：142 檔、1,566 項（rebase 到含 P6b 的 main 後）。新增 `components/WarrantyBasis.test.jsx` 5、共用案例前端路徑＋3（pgTAP 覆蓋同一組日期案例與缺口文字、五種保固事實的待補設定與入口）、Edge 路徑＋6（五種保固事實、收集器讀 RPC 帶 `need`）、`obligationTimeline.test.js`＋3（期程段保固期、版本紀錄保固期間變更、基準日缺口不含保固類）、`projects.anchors.test.js`＋3、`db.test.js`＋2、`ledger.test.js`＋1（驗收登錄／撤銷後重載期次與保固事實）；`todayTasks`／`obligationTimeline` 保固斷言改新語意；Agent 唯讀 RPC 白名單掃描改三支。
 - `npm run test:edge` 5（Deno 執行期同一組保固案例）；`npm run check:edge`；`npm run lint` 零警告；`npm run build`。
 - Demo E2E（自起 5188、不設 `CI`）：contractor／owner／supervisor／contract-flow／a11y／workflow-ux 6 支 65 項通過。

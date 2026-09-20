@@ -1,4 +1,4 @@
--- Roll back 20260920021500 (P5e: 保固類循環義務的停止條件＝正式驗收合格日＋契約保固期間).
+-- Roll back 20260920040000 (P5e: 保固類循環義務的停止條件＝正式驗收合格日＋契約保固期間).
 -- Run through SQL Editor / psql as database owner in one transaction.
 -- Restores the P5c (20260919021500) versions of the stop-gap / materialize / bound / recompute / record /
 -- projects trigger / update_project_anchors / acceptance trigger functions and the P5b (20260917233000)

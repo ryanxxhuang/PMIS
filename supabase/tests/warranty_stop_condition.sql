@@ -1,4 +1,4 @@
--- P5e 保固類循環義務的停止條件(pgTAP)。對應 migration 20260920021500_warranty_stop_condition.sql。
+-- P5e 保固類循環義務的停止條件(pgTAP)。對應 migration 20260920040000_warranty_stop_condition.sql。
 -- 釘七件事:1) 保固期滿日的唯一日期規則(始日不算入、月底無相當日取月末、閏年、跨年、以日計;不受 session 時區影響)
 -- ——案例與共用 fixture tests/fixtures/ball-in-court.cases.json 的 warranty.expiry_cases 同一組(Vitest 釘住兩邊一致);
 -- 2) 兩項齊全(正式驗收合格日＋引用本案已確認條文的保固期間)才計算,缺任一項不產生期次、列缺哪一項(文字與共用規則同口徑);
