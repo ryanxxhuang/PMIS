@@ -257,7 +257,25 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 - 批次候選的「已捨棄」狀態是以**文件現況**推得（`candidateState`）：slice 只為「候選指向、但不在活文件清單裡」的文件補查一次 `id, status`；查不到就維持原狀態，不把未載入誤判成已捨棄。
 
 歷程規則：每單元合併後更新本表（PR 編號、merge commit、migration 版本、部署日期、驗證指令與結果）；正式環境狀態同時寫回 `CURRENT.md` §6.3。
-| B2（廠商驗收） | `codex/contractor-b2-paper-cells`／PR #169 | `fdaec05`（rebase 到含 C 包 #168 的 main `bdbf4ae`；merge commit 由下一單元同步） | `20260920160000_ai_paperform_cells`（純新增 `ai_features` 一列 `paperform.cells`；rollback `supabase/rollbacks/20260920160000_ai_paperform_cells.down.sql` 關開關不刪列） | 待合併後套正式並重佈引用 `_shared` 的 Edge（`deno info` 查模組圖） | `npm test` 159 檔 1,775 項；`test:edge` 16 項（新 `imageRaster.deno.test.ts` 7 項）；`check:edge` 18 支（`deno.lock` 新增 `npm:jpeg-js@0.4.4`，`--frozen` 通過）；lint／build 綠；`check:docs` 58 檔 464 連結 0 錯；`test:db` 從零套用 62 檔 3,595 通過 0 失敗（新 `ai_paperform_cells.sql` 9 項）；真實模型回歸四輪見 §9 B2 | E 包真後端整條鏈；表頭（日期／位置）也切塊來讀，並蒐集更多真實紙表驗證界線偏移的通則性 |
+
+### 7.1 廠商驗收修正（2026-09-20）各包合併與部署結果
+
+由 O3 一次補齊（各包細節見 §9）。所有 merge commit 均已在 `origin/main` 上核對存在。
+
+| 包 | 分支／PR | merge commit | migration | 正式部署狀態 |
+|---|---|---|---|---|
+| A | `codex/contractor-a-nav`／PR #163 | `e3e4f65` | 無 | 前端隨 main 自動建置；`check:prod` 五頁 OK |
+| B | `codex/contractor-b-vision`／PR #164（文件 PR #165） | `a575bbc`（文件 `cf3b92c`） | `20260920120000_measured_from_record` **已套正式** | Edge 四支已重佈；後由 B2 再推進一版 |
+| C | `codex/contractor-c-forms`／PR #168 | `bdbf4ae` | 無 | 純前端，隨 main 自動建置 |
+| D | `codex/contractor-d-pdf`／PR #166（手機字級 PR #167） | `2350f16`（＋`ae3b8d6`） | 無 | 純前端，隨 main 自動建置；demo 站下載 PDF 已由 O3 實測 |
+| B2 | `codex/contractor-b2-paper-cells`／PR #169 | `ba7a97b` | `20260920160000_ai_paperform_cells` **已套正式** | Edge `draft-field-documents` v13／`agent-run` v24／`classify-site-photo` v14／`read-whiteboard` v18 |
+| C2 | `codex/contractor-c2-supervisor-forms`／PR #170 | `d161545` | 無 | 純前端，隨 main 自動建置 |
+| E | `codex/contractor-e-acceptance`／PR #171 | `388daa4` | `20260920170000_inspection_sign_confirmation_lock` **已套正式** | 無 Edge 變更；正式站登入後 UI／PDF 仍未測 |
+| O3 | `codex/contractor-o3-demo-docs` | 見 PR | 無 | demo 站 Version `664312c5-d39a-48b6-b221-c246e6620e0f`（前一版 O2 `beb53b7c-ee55-456c-92af-e608fb1dd555`）；`check:prod` 五頁 OK |
+
+O3 對正式環境只做唯讀核對、未做任何變更：遠端 migration **86 筆**＝repo 86 支、最新 `20260920170000`、無待套；Edge 版本如上表且皆 ACTIVE（`send-reminders` 維持 v23／`verify_jwt=false`，已退場的 `audit-summary` 不在線上清單內）。
+
+B2 原列驗證數字（保留）：`npm test` 159 檔 1,775 項；`test:edge` 16 項（新 `imageRaster.deno.test.ts` 7 項）；`check:edge` 18 支（`deno.lock` 新增 `npm:jpeg-js@0.4.4`，`--frozen` 通過）；lint／build 綠；`check:docs` 58 檔 464 連結 0 錯；`test:db` 從零套用 62 檔 3,595 通過 0 失敗（新 `ai_paperform_cells.sql` 9 項）；真實模型回歸四輪見 §9 B2。
 
 ## 8. 使用者驗收清單
 
@@ -265,7 +283,8 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 
 ### 8.0 準備
 
-- 正式站 `https://app.gov-agent.ai/`，路由都是 `#/…`（例 `https://app.gov-agent.ai/#/site`）。demo 站 `https://demo.gov-agent.ai/` 免登入選角色、用示範資料，**不能上傳照片、不能簽署**，只適合看版面與退場頁。
+- 正式站 `https://app.gov-agent.ai/`，路由都是 `#/…`（例 `https://app.gov-agent.ai/#/site`）。demo 站 `https://demo.gov-agent.ai/` 免登入選角色、用示範資料，**不能上傳照片、不能簽署**（按下簽署一律回「示範模式無法簽署／提送」），適合看版面、導覽收斂、四份紙本表單版面與「下載 PDF」。
+- demo 站最後重佈：2026-09-20，含 A–E／B2／C2 全部前端（O3，Version `664312c5-d39a-48b6-b221-c246e6620e0f`）。demo 不隨 main 自動更新，看到的版面若與正式站不同請先確認重佈日期。
 - 用一個**測試專案**（不要用客戶實案）：已匯入標單、至少一個有數量單位的工項（例 m²）、品質查驗頁已有自主檢查表範本；三個分屬廠商／監造／機關的測試帳號都加為成員。成員只放自己的帳號——早報每天台北 08:00 會寄給有逾期或 7 日內到期事項的成員。
 - 手機：iPhone 實機，或桌機瀏覽器開發者工具把寬度設 375。
 - 起稿出現「起稿服務暫時無法使用」時，先確認平台管理的 AI 功能「現場文書起稿(照片)」是開啟的。
@@ -290,6 +309,9 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | A14 | 廠商（或監造）→ 現場紀錄 `#/site` 上傳照片擬出草稿 → AI 主控台 `#/agent` | 在「AI 草稿收件匣」對那筆草稿按「拒絕」；另外把一份草稿先簽署，再回收件匣拒絕它那筆草稿 | 未簽署的那份：先出現確認框說明會一併捨棄哪一份草稿，確認後草稿消失、現場文書清單也不再列該份，畫面說明「已拒絕草稿，並捨棄 … 草稿（原因：AI 草稿遭拒絕）。版本與照片保留，可重新起稿」；已簽署那份：只標草稿已拒絕，文件保留並說明原因；按取消則兩邊都不變 | P3g #161 |
 
 | A15 | 廠商 → 現場紀錄 `#/site` | 上傳一張**把紙本查驗／自主檢查表拍清楚**的照片（整張表在畫面裡、不要只拍半邊），擬出草稿後開對應的自主檢查表 | 紙上「實測值」欄已寫好的數字會出現在格子裡並標「待確認」，點欄位看得到原文與來源照片；紙上「設計值」欄的數字**不會**跑進實測欄；空白格、看不清楚的格子一律留空並標待補；卡尺特寫、黑白板、一般施工照不會觸發這段（也不會因此多花錢）。若平台管理把 AI 功能「紙本查驗表逐格辨識」關掉，起稿照常完成，只是紙上實測值多半留空 | B2 包 |
+| A16 | 廠商 → 任一頁（側欄、底欄、頁內「尋找功能」、`#/site` 現場作業卡） | 把整個側欄與分頁列看過一遍，再從 `#/site` 的現場文書清單找監造的文件；最後把 `#/supervisor-log` 與 `#/inspection-form` 直接貼進網址列 | **廠商看不到監造日誌與監造查驗表單入口**，側欄只剩今日工作＋現場紀錄（現場總覽／施工日誌／自主檢查表／品質查驗）／履約時程／估驗請款＋文件往來／專案；工安、S 曲線、月報、跨案總覽都不再與三個主入口並列（停留點併回品質查驗）；現場文書清單只列自己的文件與已提送給自己的；直接貼網址仍按原權限**唯讀**打得開（查驗結果與可估驗依據沒有被關掉），但一格都不能編、也簽不下去。監造與機關的入口一項不少 | A 包 #163 |
+| A17 | 廠商 → `#/site-log`、`#/self-check`；監造 → `#/inspection-form`、`#/supervisor-log` | 四頁各開一份自己的草稿，直接在紙上的格子裡打字、存檔；再用另一方的帳號開同一份 | 看到的就是原表本身、可直接在格子裡編輯：施工日誌＝工程會**附表四「公共工程施工日誌」**、自主檢查表＝臺北市新工處「施工自主檢查表」、監造查驗表單＝臺北市**「施工抽查紀錄表」**、監造日誌＝工程會**附表五「公共工程監造報表」（日報，不是監造月報）**；四張都標「示範範本／參考格式・未經機關核定」；不是自己負責的那張紙**一格都不能編**（廠商在監造兩張紙上全唯讀，反之亦然）；判定、本次確認數量、監造到場人員仍只有監造能填 | C 包 #168、C2 包 #170 |
+| A18 | 任一方 → 八支列印頁（`#/site-log/print`、`#/self-check/print`、`#/inspection-form/print`、`#/supervisor-log/print`、`#/valuation/print`、`#/valuation/package`、`#/quality/checklist-print`、`#/contract/print`） | 各開一頁按「下載 PDF」；挑一份多頁的長表；再拿一份**已簽署**與一份**草稿**各下載一次；最後用手機 375 寬重做一次 | 按一下直接拿到 PDF 檔（不是開瀏覽器列印視窗）；檔名帶文件名、日期、版次與「已簽署」／「未簽署」；PDF 內文字可選取、不是截圖；多頁自動換頁、表格跨頁重印表頭、每頁印「第 n 頁／共 m 頁」；已簽署的印簽署列指向的那一版與簽署資訊，草稿整張標「草稿・未簽署」；**手機下載到的版面與桌機同一份**（欄名不折行）；字型或附件照片抓不到時會明白說失敗、不會給你一份缺東西的 PDF。「列印」鈕仍在、但不再自稱下載 | D 包 #166／#167 |
 
 ### 8.2 監造確認量與估驗
 
@@ -363,6 +385,13 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | G8 | 關閉 TOTP 設定 | **已查證、結案**：主 session 2026-09-20 在正式 Supabase Dashboard 查證 Auth 的 TOTP 本來就是 Disabled，未做任何變更（正式 `auth.mfa_factors` 0 列） | 無 |
 | G9 | 更換 `ANTHROPIC_API_KEY` | **建議**：本機 E2E 用的金鑰曾出現在代理工具輸出（未外傳） | 使用者換新金鑰，並更新所有用到同一把金鑰的位置 |
 | G10 | P7a 真後端三方完整旅程自動化、P7c staging 回復演練 | **未做** | 依 §5 |
+| G12 | 「完全沒有頻率／完全沒有觸發點」不列待補 | **未通過**（E 包查證）：這兩種只顯示「無到期日」，使用者不知道要補什麼（`ballInCourtRules.ts:293-297`、`contractDue.js:21-23`，且被 `obligationTimeline.test.js:352` 當成正確行為釘住）。實作指令 E-4 要求「缺基準日／頻率顯示待補」，**缺基準日**已有五類待補設定涵蓋，這兩種沒有 | **F1（worktree `-slimming`）正在處理**；要前端、Edge、DB 三處同口徑判定 |
+| G13 | 改期／取消／逾期的真後端端到端 | **未測**（功能已完成，只是沒有 e2e）：真後端沒有「改基準日 → rescheduled 文案與新到期日」「廢止取代 → 義務與期次變不適用」「逾期」三條；`transition_obligation_period` 的拒絕路徑與保固「引用條文失效／合格日撤銷 → 回到待補並收回期次」只有 pgTAP；監造「到期前看到契約重點待辦」無 e2e | 未指派，排 P7a |
+| G14 | `send-reminders` 零測試 | **未做**：190 行、含角色分流，完全沒有測試（真後端也不跑，因為會寄信） | 未指派；要測須先有不寄信的注入點 |
+| G15 | Edge 執行期寫入封堵只有靜態掃描 | **未做**：只有原始碼掃描 `valuationWrites.scan.test.ts`，沒有「Edge 以 service role 實際寫入被 DB 拒絕」的 runtime 測試；「照片日期不得改變契約期限」結構上成立但沒有負向測試或靜態掃描釘住 | **F2（worktree `-slimming-3`）正在處理** |
+| G16 | 標單重匯 vs active 確認、併發情境的測試案例 | **未做**：標單重匯與 active 確認的互斥在 `boq_reset_import.sql` 與 chain 4 都沒有案例（只有 `confirmed_quantity_enforcement.sql` 一條）；兩個監造同時 `issue_supervisor_certificate`、「trigger 自動分配 vs 廠商手動 sync」同時發生、多個草稿期並存取 `period_no` 最小者（`fn_cq_target_draft_internal`）都沒有情境 | F2 可能一併涵蓋一部分（以 F2 回報為準），其餘未指派 |
+| G17 | 紙本抄錄的端到端未測 | **未測**：B2 只驗共用呼叫函式、切塊與純規則＋真實模型逐張回歸；「上傳紙表照片 → 起稿 → 存檔 → 逐項確認 → 簽署 → 提送」整條真後端鏈本輪沒跑（B2 自己列為屬 E 包，E 包也沒做）。另外抄錄率 7–8/8 不是 100% 穩定、分欄界線偏移值只量自三張真實紙表 | 未指派；使用者可用 A15＋A6 手動驗一次 |
+| G18 | 正式站（登入後）的 UI 與下載 PDF | **未測**：A–E／B2／C2 的前端都已隨 main 上線、`check:prod` 五頁 OK，但**登入後的實際畫面與 PDF 只在 demo 站與本機驗過**（O3 在 demo 站實測四份紙本表單、廠商導覽與下載 PDF）。正式 migration 與 Edge 已套用並由 O3 核對 | 使用者依 A16／A17／A18 在正式站逐項驗 |
 
 ## 9. 廠商驗收修正（2026-09-20）
 
@@ -374,13 +403,16 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 
 | 包 | 範圍 | 指定 | 實際 |
 |---|---|---|---|
-| A | 廠商角色與三個主入口（本節已完成，PR #163） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| A | 廠商角色與三個主入口（本節已完成，PR #163、merge `e3e4f65`） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`；本節已完成，PR #164、merge `a575bbc`、migration `20260920120000` 已套正式、四支 Edge 已重佈） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| B2 | 紙本查驗表逐格辨識（B 的續作：紙表區域偵測＋逐欄裁切＋逐格兩次辨識；新 AI 功能 `paperform.cells`；本節已完成，PR #169） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| C | 真實表單 mapping、直接在紙本版面編輯（施工日誌＋自主檢查表，PR #168） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| C2 | 同上的後半：監造查驗紀錄表＋監造報表（附表五）的 mapping 與可編輯版面（本節已完成，PR #170） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| D | PDF 交付（真正的下載，不是 `window.print()`；本節已完成，PR #166） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| E | 三項核心的整條流程驗收（真後端；本節已完成，PR #171） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| B2 | 紙本查驗表逐格辨識（B 的續作：紙表區域偵測＋逐欄裁切＋逐格兩次辨識；新 AI 功能 `paperform.cells`；本節已完成，PR #169、merge `ba7a97b`、migration `20260920160000` 已套正式、四支 Edge 已重佈） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| C | 真實表單 mapping、直接在紙本版面編輯（施工日誌＋自主檢查表，PR #168、merge `bdbf4ae`） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| C2 | 同上的後半：監造查驗紀錄表＋監造報表（附表五）的 mapping 與可編輯版面（本節已完成，PR #170、merge `d161545`） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| D | PDF 交付（真正的下載，不是 `window.print()`；本節已完成，PR #166、merge `2350f16`；手機字級修正 PR #167、merge `ae3b8d6`） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| E | 三項核心的整條流程驗收（真後端；本節已完成，PR #171、merge `388daa4`、migration `20260920170000` 已套正式） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| O3 | Demo 站重佈＋文件同步＋驗收清單更新（本節已完成，見 §9 O3） | opus5 | Opus 5 |
+| F1 | 「完全缺頻率／完全缺觸發點不列待補」（§8.7 G12）；worktree `-slimming` | — | 進行中 |
+| F2 | Edge 執行期寫入封堵的 runtime 測試（§8.7 G15）；worktree `-slimming-3` | — | 進行中 |
 
 ### A 廠商角色與三個主入口
 
@@ -715,3 +747,34 @@ PR #164、merge commit `a575bbc`（rebase 到含 A 包的 main `e3e4f65`；CI �
 - **E3 仍缺的封堵測試**：標單重匯與 active 確認的互斥在 `boq_reset_import.sql` 與 chain 4 都沒有案例（只有 `confirmed_quantity_enforcement.sql` 一條）；Edge 只有原始碼靜態掃描（`valuationWrites.scan.test.ts`），沒有「Edge 以 service role 實際寫入被 DB 拒絕」的 runtime 測試；兩個監造同時 `issue_supervisor_certificate`、以及「trigger 自動分配 vs 廠商手動 sync」同時發生，都還沒有測試。
 - **多個符合截止日的草稿期並存時取 `period_no` 最小者**（`fn_cq_target_draft_internal`）沒有測試情境。
 - **既有限制維持不變**：總價／間接費缺依據仍 `cap=0`（試用專案若要請這類款，這就是該案完整請款的阻擋項）；掃描／無文字契約仍不採付費 OCR，只能顯示抽不出來並人工補登；未重新加入 MFA。舊資料、簽章、確認量與計價稽核一列未刪。
+
+### O3 Demo 站重佈、文件同步與驗收清單更新
+
+**不改任何產品程式**（本節只動 `CURRENT.md` 與本檔）。分支 `codex/contractor-o3-demo-docs`，基準 main `388daa4`（含 A、B、B2、C、C2、D、E 全部）。
+
+**Demo 站重佈**（依 DEVELOPMENT §「線上 demo 站」）：`VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= VITE_SENTRY_DSN= npm run build` → `npx wrangler deploy --config wrangler.demo.jsonc`。
+
+| 項目 | 結果 |
+|---|---|
+| Version ID | `664312c5-d39a-48b6-b221-c246e6620e0f`（前一版 O2 `beb53b7c-ee55-456c-92af-e608fb1dd555`） |
+| 入口 chunk | 本機建置 `assets/index-BEIURVua.js`＝線上 `demo.gov-agent.ai` 引用的同一支 |
+| demo 模式 | `dist/` 內 **0 處**正式 Supabase 專案網址（只有 `_headers` 的 CSP 萬用字元 `https://*.supabase.co`，與歷次基準相同） |
+| `node scripts/check-prod.js` | 五頁全 OK（app `/`、`/login`、`/demo/`；demo `/`、`/login`） |
+| `npm run check:docs` | 0 錯 |
+
+**內建 Preview 逐項覆核**（桌面 1280×900；逐條文字證據見回報所附 scratchpad 檔）：
+
+| 驗的是什麼 | 實際看到 | 判定 |
+|---|---|---|
+| 廠商導覽收斂（A） | 「陳怡君（施工廠商）」側欄只剩今日工作＋現場紀錄（現場總覽／施工日誌／自主檢查表／品質查驗）／履約時程／估驗請款＋文件往來／專案；**沒有監造日誌與監造查驗表單**。「王建國（監造）」六個現場紀錄子頁一項不少 | 通過 |
+| 四份紙本表單格內可編輯（C／C2） | `#/site-log` 附表四「公共工程施工日誌」、`#/self-check`「施工自主檢查表」、`#/inspection-form`「施工抽查紀錄表」、`#/supervisor-log` 附表五「公共工程監造報表」，四張都直接在格子裡編輯、都標【示範範本】與原表出處 | 通過 |
+| 紙表抄錄值帶入並標待確認（B2／C／E） | 由查驗申請建立表單後出現「待補 4 項（補齊並存檔後才能簽署）」與「施作位置／批次（待親自確認）」，每個帶入欄位旁有「原文」與「確認」；未逐項確認前沒有簽署鈕 | 通過 |
+| 下載 PDF（D） | `#/site-log/print` 工具列有「列印」與「下載 PDF」；按下後實際產出 `application/pdf` **95,738 bytes**、檔名 `施工日誌_2026-09-19_既有紀錄未簽署.pdf`（草稿如實標未簽署）。`#/supervisor-log/print` 同樣有該鈕、附表五紙面渲染正常。量測用 `URL.createObjectURL` 攔截，**未實際落檔** | 通過 |
+| **紅線：示範模式仍不得能簽署** | 監造查驗表單補齊待補並存檔到「版本 1・雜湊 `55c1242f8b6d`・草稿・可簽署」後按「簽署此版本」→ 確認 →「示範模式無法簽署／提送：正式專案以登入的平台帳號簽署,才會有可核對的版本雜湊與簽署紀錄。」，狀態維持未簽署、無任何簽署列 | 通過 |
+| Console | 產品端零錯誤；只有 4 筆由本次量測腳本自己觸發的 CSP `connect-src` 錯誤（`fetch(blob:…)`），真正的下載路徑走 `<a download>` 導覽、不受影響 | 通過 |
+
+**正式環境唯讀核對**（未做任何變更）：遠端 migration **86 筆**＝repo 86 支、最新 `20260920170000`、無待套（E 的 `20260920170000` 與 B2 的 `20260920160000` 都已在正式）；Edge `draft-field-documents` v13／`agent-run` v24／`classify-site-photo` v14／`read-whiteboard` v18 皆 ACTIVE 且 `verify_jwt=true`，`send-reminders` 維持 v23／`verify_jwt=false`，已退場的 `audit-summary` 不在線上清單內。
+
+**文件同步清單**：`CURRENT.md` 頁首與 §6.3 補 E merge `388daa4`＋`20260920170000` 已套正式、C2 merge `d161545`、C merge `bdbf4ae`、D merge `2350f16`＋`ae3b8d6`，並新增 O3 一列；本檔新增 §7.1（A–E／B2／C2／O3 的 merge commit、migration 與部署狀態一覽）、§8.0 補 demo 重佈日期與能力、§8.1 新增 A16（廠商導覽收斂）／A17（四份紙本表單與原表對照）／A18（下載 PDF）、§8.7 新增 G12–G18（E 包未通過與未測逐條，標明 F1／F2 處理範圍）、§9 工作包表補 merge commit 與 F1／F2 列。
+
+**未做（如實）**：正式站登入後的 UI 與 PDF 本節沒有測（只在 demo 站驗），列為 §8.7 G18；demo 站不隨 main 自動部署，之後若再有前端變更要再重佈一次。內建 Preview 的截圖只能回到對話裡、工具沒有存檔參數，故本節以逐項文字證據留存而非 PNG。
