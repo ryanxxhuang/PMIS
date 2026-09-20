@@ -56,7 +56,7 @@ const DEFAULT_FILTERS = { q: '', phase: '' }
 
 export default function Deadlines() {
   const {
-    currentProject, project, isPersistedProject, currentUser, workItems, can,
+    currentProject, project, isPersistedProject, demoMode, currentUser, workItems, can,
     obligations, updateObligationStatus, transitionObligationPeriod, changeProjectAnchors, updateProjectSettings,
     anchorVersions, acceptanceEvents, submittals, projectWarranty,
   } = useStore()
@@ -74,6 +74,12 @@ export default function Deadlines() {
   // 否則按下去只會吃 RLS 靜默 0 列的錯誤。
   const viewerParty = ORG_TO_PARTY[currentUser?.org_type] || '廠商'
   const canMark = (ob) => can.override || obligationParty(ob) === viewerParty
+  // 基準日與契約價金總額的可編輯性鏡像伺服器(與 /requirements 同一條):基準日走 RPC update_project_anchors
+  // (授權＝projects 的 update policy is_project_admin),契約價金總額直接 update projects——兩者非專案管理者
+  // 一定被拒。原本吃 can.edit(廠商角色)會渲染出送出必被擋的假可編輯欄位。
+  // 示範模式沒有伺服器:基準日只進記憶體(changeProjectAnchors 的 demo 分支)仍可改;契約價金總額沒有可寫的地方,唯讀。
+  const canEditAnchors = demoMode || can.admin
+  const canEditContractTotal = isPersistedProject && can.admin
   // 罰款試算基準:手填契約價金總額優先,沒填退回標單加總(W10)
   const manualContractTotal = Number(currentProject?.contract_total) || 0
   const contractTotal = manualContractTotal > 0 ? manualContractTotal : (workItems?.meta?.billable_total || 0)
@@ -434,7 +440,7 @@ export default function Deadlines() {
   const anchorsCard = (
     <Card title="基準日與契約總價">
       <div className="flex flex-wrap gap-4">
-        <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!can.edit} basis={anchorBasis} onBasis={setAnchorBasis} />
+        <AnchorDates anchors={anchors} onSet={setAnchor} disabled={!canEditAnchors} basis={anchorBasis} onBasis={setAnchorBasis} />
         {/* 手填契約價金總額:百分比制逾期罰款的試算基準(W10);onBlur 才寫 DB */}
         <Field label="契約價金總額(元)">
           <Input type="number" min="0" step="1" value={totalDraft} placeholder="未填則採標單加總"
@@ -445,9 +451,12 @@ export default function Deadlines() {
               if ((currentProject?.contract_total ?? null) === v) return
               setContractTotal(v)
             }}
-            disabled={!can.edit} />
+            disabled={!canEditContractTotal} />
         </Field>
       </div>
+      {!canEditAnchors && (
+        <p className="mt-2 text-footnote text-[var(--text-3)]">唯讀：基準日與契約價金總額只有專案管理者可以修改。</p>
+      )}
       <ErrorBanner msg={anchorErr} className="mt-2" />
       {anchorMsg && <p role="status" className="mt-2 text-footnote text-[var(--green-text)]">{anchorMsg}</p>}
       <div className="mt-3 pt-3 border-t border-[var(--border-2)]">

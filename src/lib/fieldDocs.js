@@ -149,11 +149,26 @@ export const DOC_TYPE_LABEL = Object.freeze({
 export const CANDIDATE_STATE_LABEL = Object.freeze({
   ready: '已就緒', blocked: '待補', unsupported: '尚未支援', excluded: '已排除', drafted: '已起稿',
   unchanged: '內容未變', suggested: '已留建議', locked: '已簽署,未變更', error: '起稿失敗',
+  // 候選本身沒有這兩個狀態:它們由「起稿出來的文件後來進了終態」推得(見 candidateState)
+  discarded: '已捨棄,可重新起稿', superseded: '已由新文件取代',
 })
 export const CANDIDATE_STATE_TONE = Object.freeze({
   ready: 'blue', blocked: 'amber', unsupported: 'slate', excluded: 'slate', drafted: 'green',
   unchanged: 'green', suggested: 'purple', locked: 'green', error: 'red',
+  discarded: 'slate', superseded: 'slate',
 })
+// 候選文書要顯示的狀態。候選列(photo_intakes.candidates)是起稿當下的快照,之後文件被捨棄或被新文件取代都不會回寫
+// (DB guard 只准使用者改 excluded),所以「已起稿」會一直掛著、連結卻早已失效。這裡以文件現況覆寫:
+// docStatusById 是那些不在活文件清單裡的候選文件的現況(store 只為這種情形補查一次);查不到就維持原狀態,
+// 不把「還沒載到」誤判成已捨棄。
+export function candidateState(candidate, docStatusById = null) {
+  if (candidate?.excluded) return 'excluded'
+  if (candidate?.state === 'drafted' && candidate?.document_id) {
+    const st = docStatusById?.get?.(candidate.document_id)
+    if (st === 'discarded' || st === 'superseded') return st
+  }
+  return candidate?.state
+}
 
 // 使用者只能切換 excluded(DB guard 逐項比對其餘欄位);回傳整份新清單供 UPDATE
 export function toggleCandidateExcluded(candidates = [], index, excluded) {
@@ -863,6 +878,7 @@ export function signedVersionIndex(rows = [], { pinAt = null } = {}) {
       document_id: chosen.document_id, doc_type: chosen.doc_type, doc_date: chosen.doc_date, doc_status: chosen.doc_status,
       target_id: target, version_no: Number(chosen.version_no), content_hash: chosen.content_hash || null,
       signed_at: chosen.signed_at, signer_name: chosen.signer_name_snapshot || null,
+      is_demo: !!chosen.is_demo, // 示範模式的示範簽署列(O2):版本標示要印【示範資料】,不得看起來像真簽署
       latest_of_doc: latestByDoc.get(chosen.document_id) === Number(chosen.version_no),
       newer: newer ? { document_id: newer.document_id, version_no: Number(newer.version_no), signed_at: newer.signed_at } : null,
     })
@@ -871,7 +887,10 @@ export function signedVersionIndex(rows = [], { pinAt = null } = {}) {
 }
 
 // 版本標示(報表／紙本都印得出來):文件短碼、版本、內容雜湊前 12 碼(DB 值)。
-export const signedVersionText = (ref) => (ref ? `文件 ${String(ref.document_id).slice(0, 8)} v${ref.version_no}・雜湊 ${formatHash(ref.content_hash)}` : '')
+// 示範資料(示範模式的示範已簽署版本)一律冠【示範資料】:紙本也印得出來,不會被誤認為真實簽署。
+export const signedVersionText = (ref) => (ref
+  ? `${ref.is_demo ? '【示範資料】' : ''}文件 ${String(ref.document_id).slice(0, 8)} v${ref.version_no}・雜湊 ${formatHash(ref.content_hash)}`
+  : '')
 
 // 監造確認紀錄(inspection_confirmations)指向的查驗表單版本 → 版本標示用的 ref。確認紀錄 append-only,記的是簽署當下的
 // document_id／document_version_no／content_hash;formIndex(inspection_form 的 signedVersionIndex,target=查驗 id)只用來判斷
@@ -883,6 +902,7 @@ export function confirmationDocRef(c, formIndex = new Map()) {
   return {
     document_id: c.document_id, doc_type: 'inspection_form', version_no: v, content_hash: c.content_hash || null,
     latest_of_doc: !!cur && cur.document_id === c.document_id && cur.version_no === v && cur.latest_of_doc,
+    is_demo: !!cur?.is_demo, // 指向的是示範已簽署版本 → 版本標示一樣要印【示範資料】
   }
 }
 

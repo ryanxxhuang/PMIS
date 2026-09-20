@@ -154,6 +154,7 @@
 | P7b 模型品質樣本 | P2b、P5 | fable5.1 | — | 照片樣本（清晰／模糊／非現場／混合）與契約樣本，有預期答案 | 準確率報告，不以 HTTP 200 代替 |
 | P7c 過渡與回復演練＋文件 | P4e | fable5.1 | — | rollback 實跑（staging）、`CURRENT` §6.3、`BASELINE`、runbook | 部署版本與驗證寫回 |
 | O1 demo 站重佈＋合併結果同步＋使用者驗收清單（2026-09-19 補列；使用者：「驗收我來驗就好」） | P3c | Opus 5（簡單低風險） | Opus 5 | demo 站以 main 重佈；`CURRENT` §6.3、`BASELINE`、本檔 §7 補 P3c 合併結果；本檔 §8 使用者逐項驗收清單（不另開報告檔） | `check:docs`；`check:prod` 五頁 OK |
+| O2 低風險缺口清理＋Demo 示範資料（2026-09-20 補列） | P6a、P6b-2、P3f、P5e | Opus 5（簡單低風險） | Opus 5 | 皆為呈現層：(a) `demoSeed` 補示範用的已簽署文件版本（四類各一份以上，含簽署者／時間／版本／雜湊，全標 is_demo）＋示範監造日誌事實列、監造確認量與期別狀態，讓月報／佐證包在 demo 演得出內容；(b) 佐證包 AI 施工說明失敗改顯示錯誤與重試入口；(c) 收件匣 `draft_field_document`／`suggest_field_update` 補中文標籤（單一 `KIND_LABEL`）；(d) 批次候選的已捨棄草稿改標「已捨棄,可重新起稿」；(e) 期限追蹤頁基準日／契約價金總額改鏡像伺服器（專案管理者）。不動 DB、RPC、RLS、簽署規則 | Vitest 釘住五項；`npm test`／lint／build／`check:docs`；Demo E2E 全套；`check:prod`；demo 站重佈 |
 
 ### R 使用者改決（2026-09-19 起補列）
 
@@ -236,12 +237,20 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P4a、P4b、P4e、P5a–c、P6c�
 | P6b-3 | `codex/slimming-p6b3-quality-doc-only`／PR #158 | 見 PR；merge commit `b061d13`（P5e 同步） | `20260920030000_quality_direct_writes_retire`（收回 `checklist_records` INSERT／UPDATE／DELETE 與 `inspections` UPDATE、刪對應 policy；`checklist_records_guard` 只放行同案自檢表簽署交易（新 `fn_checklist_sign_bypass`）；`inspections_guard` 非簽署路徑改判定欄一律拒；rollback 同名 `.down.sql`，本機共用棧實跑回復再重套） | 收緊型：合併後前端隨 main 部署；**正式 `supabase db push` 由使用者執行**——2026-09-20 使用者已套同批的 P4e `20260920001500`、P3e `20260920004000` 與 P3f `20260920021000`，**本支 `20260920030000` 仍待套**（P3f 以 `migration list --linked` 核對） | `npm run test:db` 58 檔 3,325 通過 0 失敗（新增 `quality_direct_writes_retired.sql` 50；7 支既有測試改走簽署路徑模擬或斷言新邊界）；`npm test` 141 檔 1,522；lint；build；`check:docs` 0 錯；Demo E2E supervisor／workflow-ux／a11y／contractor 53 項；本機共用棧套本支後真後端 chain 4／8／10／13 通過（Edge stub） | 舊快速判定的查驗要更正＝由該查驗建立監造查驗表單並簽署（品質頁詳情目前只對待查驗或已有表單者顯示入口，舊判定沒有入口——若要開放另列）；`Alerts.jsx` 未動（`setup` 桶照舊只在首頁） |
 | P3f | `codex/slimming-p3f-discard-draft`／PR #155 | 見 PR（實作＋文件同步；rebase 到含 P6b-1 `8001f3a`／P6b-2 `cf06e2c`／P6b-3 `b061d13` 的 main，與 P6b-2 的 `store/slices/fieldDocs.js` 衝突解成兩個函式並存）；merge commit `1ee8f96`（P5e 同步：Workers Builds success、CI 三項 success、`check:prod` 五頁 OK） | `20260920021000_field_document_discard`（加四欄＋`field_documents_discard_guard`＋`discard_field_document`＋`field_documents_audit`／`resolve_agent_action_internal` 兩支 `create or replace`；rollback 檔同名 `.down.sql`，捨棄紀錄欄保留） | **2026-09-20 使用者親自 `supabase db push`**，依序套 `20260920001500`（P4e）→`20260920004000`（P3e）→`20260920021000`（P3f）到正式庫並回報「Finished supabase db push.」；本單元以 `migration list --linked` 核對：遠端最後三支即此三支、只剩 P6b-3 `20260920030000` 待套（由使用者另行執行）。合併後前端隨 main 由 Workers Builds 建置；無 Edge 變更；demo 站不重佈 | 本機 `npm run test:db` 從零套 81 支：59 檔 3,406 通過、0 失敗（新增 `field_document_discard.sql` 78；`field_documents.sql` 215→216、`field_document_sign.sql` 139 的直接捨棄改帶原因；H3 允許清單 +1）；`npm test` 142 檔 1,534（rebase 到含 P6b-3 後）；lint 零警告；build；`check:edge` 15；`check:docs` 0 錯；Demo E2E contractor／supervisor／a11y／routes 49 項（新增文件頁捨棄→回現場紀錄→同日重新起稿、清單列捨棄且 375 寬按鈕 ≥44 無溢位）；真後端新 chain 14 通過（rebase 後重跑 7.3s），rebase 前並跑過 chain 5／6／8／10／12 回歸 | §8.1 A12 使用者驗收；P7a–P7c 依 §5 |
 | P5e | `codex/slimming-p5e-warranty-stop`／PR #156 | 見 PR（rebase 到含 P6b-2／P6b-3／P3f 的 main `1ee8f96`；migration 時間戳由 `20260920021500` 改為 `20260920040000`，排在 P6b-3 `20260920030000` 之後） | `20260920040000_warranty_stop_condition`（rollback 同名 `.down.sql`，已在一次性 DB 內以暫時探針實跑 6/6：恢復 P5c 停止條件、移除欄位／RPC／trigger） | 2026-09-20 使用者親自在本分支 `supabase db push`，依序套 P6b-3 `20260920030000` 與本支 `20260920040000`（Finished supabase db push.），`migration list --linked` 本地與遠端到 `20260920040000` 全部對齊；merge commit `4d6d77b`，Workers Builds 建置 success、正式入口 chunk `index-But1e0G2.js` 含 `get_project_warranty`；`deno info` 核對後以 `--use-api` 重佈四支——`agent-run` v21、`send-reminders` v23（`verify_jwt=false` 維持）、`fetch-weather` v19、`draft-field-documents` v10；`check:prod` 五頁 OK；正式庫唯讀核對：RPC `authenticated` 可執行／`anon` 不可、三欄與版本表 `warranty` 欄與兩支 trigger 就位、`fn_warranty_expiry('2025-04-30',1,'month')`＝2025-05-31、保固類期次 0 列（套用前後不變）、13 案未登錄保固期間（11 案兩項皆缺、2 案只缺保固期間）。正式庫唯讀盤點（2026-09-20，只取計數）：保固類義務 0 筆（循環 0）、保固類期次 0、正式驗收合格 2 案、approved 契約重點 `lifecycle_phase=保固` 0 筆、文字提及保固 1 筆（approved）、`trigger_config` 只有 offset／fixed 鍵——套用後預期 0 移除 0 新增 | `npm run test:db` 60 檔 3,521 通過 0 失敗（新增 `warranty_stop_condition.sql` 105；`project_anchor_versions.sql` 124、`anon_and_function_privileges.sql` 419；rollback 檔另以暫時探針在一次性 DB 內實跑 6/6）；`npm test` 143 檔 1,560；`npm run test:edge` 5；`check:edge`；lint 零警告；build；`check:docs` 55 檔 422 連結 0 錯；Demo E2E contractor／owner／supervisor／contract-flow／a11y／workflow-ux 66 項；`e2e:real` chain 3、chain 15 通過（共用開發 DB 以 psql 套本支並登記版本）；內建 Preview（demo）1024／375 期程卡無溢位；CI 見 PR | P3d／P6a 若印期限可帶保固期滿日依據；多工種保固年限（結構／一般／植栽）如需分別界定另開單元；履約時程以外的基準日編輯（期限追蹤頁、契約價金總額）仍以 `can.edit` 顯示可編、伺服器以管理者為準，屬既有 UX 鏡像落差，建議併入下一個觸及期限追蹤頁的單元 |
+| O2 | `codex/slimming-o2-gaps`／PR #PRNUM | 見 PR（基準 main `47958ce`，含 P5e）；merge commit 由下一單元同步 | 無（純前端／示範資料；不動 DB、RPC、RLS、路由登記與簽署規則） | 前端隨 main 由 Workers Builds 自動建置；`check:prod` 與 demo 站重佈版本寫在單元回報、由下一單元同步 | `npm test` 147 檔 1,589 項（新增 `demoSeed.signed.test.js` 12、`ValuationPackage.summary.test.jsx` 3、`Deadlines.anchors.test.jsx` 3、`IntakeResult.candidates.test.jsx` 4；`fieldDocs.test.js` +5、`agentRole.test.js` +2）；lint 零警告；build；`check:docs` 55 檔 423 連結 0 錯；Demo E2E 全 78 項（`contractor`／`supervisor` 兩處文件件數斷言隨示範已簽署文件更新）；內建 Preview（demo）1024／375：施工月報、監造月報、估驗佐證包皆有內容且無水平溢位 | 見本列下方「O2 發現」 |
 | P7a–P7c | — | — | — | — | — | 依 §5 順序 |
 
 **P6a 發現（2026-09-20）**：
 - 示範模式無法簽署（P2c 起的既定邊界），P6a 後兩張月報在 demo 如實把日誌全列「未簽署、不列入」、佐證包標「未經後端核對」；正式庫 12 筆舊流程日誌同樣標「舊流程紀錄，無簽署版本」不列入。
 - 列印頁只找得到本案活文件、且只印該文件目前的簽署版本：來源版本已被更正（撤銷後重簽、送審後重簽）或文件已被取代時，月報／佐證包只印版本標示（文件短碼、版本、雜湊 12 碼）不給連結。若要「連到任一已簽署版本的紙本」，需另開列印頁 `?v=` 單元（四頁的事實列取法也要跟著改，不是只加參數）。
 - 快速判定（未經監造查驗表單）的查驗不再計入兩張月報的判定統計，明列「未經簽署查驗表單、不列入」；兩張月報的查驗歸月規則統一為「本月申請或本月判定」（原施工月報只看申請日）。
+
+**O2 發現（2026-09-20）**：
+- 示範模式仍然**不能簽署**（使用者按簽署一律回「示範模式無法簽署／提送」，這條邊界沒動）。新增的是種子帶進來的「示範用已簽署版本」：每一列 `is_demo`，版本標示一律印 `【示範資料】`，簽署者是 demo 帳號本人加註「（示範資料）」，佐證包另有一行明示「已簽署文件版本、簽署者、內容雜湊與監造確認量皆為示範值」。
+- 示範標單（`workItems.compact.json`）不帶工項 `id`，示範監造確認量只能以 `item_key` 當工項參照；原本估驗佐證包與監造月報各自建 `id → 工項` 的 Map，兩頁都查不到。收斂成 `lib/boqCalc.workItemRefIndex`（先 id 後 item_key）一份，真專案的 uuid 路徑不變。
+- `ValuationPackage` 原本在 `!dbMode` 直接早退（整頁標示範、不載任何證據）。改為示範模式一樣跑同一輪載入，`demo` 旗標只用來標示——判定與組裝規則只有一套，示範與正式不再分岔。
+- 期限追蹤頁的基準日改吃 `can.admin`（鏡像 `projects` 的 `is_project_admin` update policy），契約價金總額改 `isPersistedProject && can.admin`（示範模式沒有可寫的地方，唯讀）；示範模式的基準日仍可改（只進記憶體）。`/requirements` 本來就是 `can.admin`，兩頁規則自此一致。
+- 批次候選的「已捨棄」狀態是以**文件現況**推得（`candidateState`）：slice 只為「候選指向、但不在活文件清單裡」的文件補查一次 `id, status`；查不到就維持原狀態，不把未載入誤判成已捨棄。
 
 歷程規則：每單元合併後更新本表（PR 編號、merge commit、migration 版本、部署日期、驗證指令與結果）；正式環境狀態同時寫回 `CURRENT.md` §6.3。
 
@@ -293,6 +302,8 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P4a、P4b、P4e、P5a–c、P6c�
 | M1 | 廠商 → 文件往來 → 施工月報 `#/monthly-report`（或 `#/site`「本月文件」） | A3 簽署兩天的日誌後，另存一天不簽署；選本月 | 「本月完成主要工項數量」、施工天數、雨天、出工只算已簽署兩天；每天一列並附「文件 xxxxxxxx vN・雜湊 12 碼」（目前列印版本可點到列印頁）；未簽署那天列在「未簽署、不列入」；進度／估驗／收款三段數字與改版前相同（D-024） | P6a #153 |
 | M2 | 監造 → 文件往來 → 監造月報 `#/supervisor-report` | A7 簽署監造日誌、A8／B2 簽署查驗表單後，選本月 | 頁名「監造月報」；列已簽署監造日誌（到場人員、版本）、經簽署查驗表單的判定與「申報／確認」量、本月監造確認紀錄（+60，附表單版本）；未簽署的監造日誌與未經表單的快速判定明列不列入；施工天數與施工月報同月一致；意見草稿只寫已簽署文件的數字 | P6a #153 |
 | M3 | 廠商 → `#/valuation` 選 B2 那期 → 「組請款佐證包」 | 看「本期確認來源與簽署文件版本」與照片、施工日誌附件；送監造審核後，再把其中一天日誌更正重簽，重開佐證包 | 每筆數量追到批次、查驗表單版本與雜湊、簽署者與時間、檢附自主檢查；照片只有查驗表單附上的證據照；有缺件的工項標「缺件：…」；送審後的更正不改變佐證包（仍是送審當時的版本，旁註「之後另有 vN」） | P6a #153 |
+| M4 | 任何人 → Demo 站 `demo.gov-agent.ai` → 施工月報／監造月報／`#/valuation` 第 5 期「組請款佐證包」 | 不必登入正式專案，直接看三張報表（監造月報要用監造帳號「王建國」） | 三張都有內容：施工月報 7 天已簽署日誌（最新一天列「未簽署、不列入」）、判定 1 合格 1 不合格＋1 件「未經簽署查驗表單、不列入」；監造月報有 3 份已簽署監造日誌與監造確認量；佐證包「依據」欄逐項「監造確認 N」、一筆走查驗表單（附版本、雜湊、簽署者、檢附自主檢查），並夾附本期已簽署施工日誌。**每一個版本標示都冠「【示範資料】」、簽署者標「（示範資料）」、佐證包頁首另有示範資料說明** | O2 |
+| M5 | 廠商 → Demo 站 `#/valuation/package?p=…` → 工具列「重新產生施工說明」（若 AI 呼叫失敗） | 觀察失敗時的呈現 | 顯示可理解的錯誤訊息與「可按上方『重新產生施工說明』重試，或直接在下方說明欄自行撰寫」，不再靜默留白 | O2 |
 
 ### 8.3 今日工作／履約時程／早報
 
@@ -333,9 +344,10 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P4a、P4b、P4e、P5a–c、P6c�
 |---|---|---|---|
 | G1 | 文件草稿捨棄（P3f） | **已做（PR #155，`20260920021000`，2026-09-20 使用者已套正式）**：四類文書頁與 `/site` 清單可捨棄從未簽署／未提送的草稿（原因必填、版本保留、AI 草稿退回、稽核帶原因），捨棄後同一目標可重新起稿 | 驗收 A12 |
 | G2 | P4e 封鎖估驗明細直接寫入 | **已做（PR #151，`20260920001500`；正式套用見 CURRENT §6.3）**：舊客戶端直接寫 `valuation_items` 一律被拒（42501）；正式庫遺留的 legacy 草稿明細仍標「申報未確認・不計價」、送審被擋，按「同步確認量」即以確認量為準 | 若仍開著 P4c 之前的舊分頁，寫估驗會看到「操作未完成…（代碼 42501）」，重新整理即可 |
-| G3 | P6a 施工月報重用 | **未做**：月報與佐證包尚未改讀已簽署版本與確認量 | 依 §5 |
+| G3 | P6a 施工月報重用 | **已做（PR #153）**：月報與佐證包只彙整已簽署版本與監造確認量；Demo 站另由 O2 補示範用的已簽署版本與確認量，三張報表在 demo 也看得到內容（全標「【示範資料】」） | 驗收 M1–M5 |
 | G4 | P6b 退場清理 | **已做（P6b-1 #154、P6b-2 #157、P6b-3 #158）**：退場頁 `/schedule`、`/audit` 移除並依原權限導向；三支退場 Edge 原始碼移除、線上 `audit-summary` 已下架；Agent 日誌／自檢草稿改產生現場文書草稿；品質查驗快速判定與檢查表直接登錄退場、DB 收回直接寫入（`20260920030000`，正式套用待使用者 `db push`） | `assistant-chat`／`parse-contract` 線上函式下架待使用者授權 |
 | G5 | 監造查驗範本建立介面 | **未做**：`kind='inspection_form'` 範本沒有建立介面，查驗表單一律用示範範本 | 待排 |
+| G11 | 示範模式的簽署 | **不變（刻意）**：示範模式沒有伺服器，使用者按簽署仍一律回「示範模式無法簽署／提送」。O2 補的是種子帶進來的示範已簽署版本（全部標「【示範資料】」），只為讓月報／佐證包在 Demo 站演得出內容 | 無 |
 | G6 | 保固類循環義務 | **待決**：保固期滿日沒有資料來源，保固類不產生期次、列「停止條件待補」 | 使用者決定保固年限在哪裡登錄 |
 | G7 | iPhone 實機 | **未驗**：只在瀏覽器 375 寬度驗過 | 使用者做 A9 時用實機 |
 | G8 | 關閉 TOTP 設定 | **已查證、結案**：主 session 2026-09-20 在正式 Supabase Dashboard 查證 Auth 的 TOTP 本來就是 Disabled，未做任何變更（正式 `auth.mfa_factors` 0 列） | 無 |

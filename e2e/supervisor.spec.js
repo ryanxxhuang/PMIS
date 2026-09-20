@@ -197,11 +197,11 @@ test.describe('監造', () => {
     await page.getByRole('dialog').getByRole('button', { name: '簽署', exact: true }).click()
     await expect(lifecycle.getByText(/示範模式無法簽署／提送/)).toBeVisible()
     await expect(lifecycle.getByText(/已由 .* 簽署/)).toHaveCount(0)
-    // 右欄清單列出這份;/site 現場文書清單可直達;品質查驗詳情有「監造查驗表單」入口
-    await expect(page.getByRole('group', { name: /監造查驗表單（1）/ })).toBeVisible()
+    // 右欄清單列出這份(另兩份是 demo 種子的示範已簽署表單,O2);/site 現場文書清單可直達;品質查驗詳情有「監造查驗表單」入口
+    await expect(page.getByRole('group', { name: /監造查驗表單（3）/ })).toBeVisible()
     await gotoHash(page, '/site')
     const docCard = page.getByRole('group', { name: '現場文書' })
-    await expect(docCard.getByRole('link', { name: /監造查驗表單/ })).toBeVisible()
+    await expect(docCard.getByRole('link', { name: /監造查驗表單/ }).first()).toBeVisible()
     await expect(docCard.getByText(/尚未支援/)).toHaveCount(0)
     await gotoHash(page, '/quality')
     // lazy 路由切換時舊頁(現場文書清單的 li)仍在 DOM,鎖到查驗紀錄清單內的列

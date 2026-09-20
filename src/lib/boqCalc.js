@@ -83,3 +83,18 @@ export function valuationItemAmount(cumQty, unitPrice) {
 export function totalCumAmount(roots, cumMap) {
   return roots.reduce((s, r) => s + (cumMap.get(r.item_key) || 0), 0)
 }
+
+// 工項參照解析(單一來源):伺服器的 work_item_id 是 work_items 的 uuid;示範模式的範例標單(src/data 的 JSON)
+// 不帶 id,示範資料一律以 item_key 當工項參照。兩頁(估驗佐證包、監造月報)原本各自建 id→工項的 Map,
+// 示範資料在那兩頁都查不到工項;規則收斂到這裡,只有一份。真專案不受影響:uuid 先由 byId 命中,
+// item_key 與 uuid 不會相撞。
+export function workItemRefIndex(items = []) {
+  const byKey = new Map(), byId = new Map()
+  for (const it of items || []) {
+    if (!it) continue
+    byKey.set(it.item_key, it)
+    if (it.id) byId.set(it.id, it)
+  }
+  const resolve = (ref) => (ref == null ? null : byId.get(ref) || byKey.get(ref) || null)
+  return { byKey, byId, resolve }
+}
