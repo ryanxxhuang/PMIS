@@ -80,8 +80,10 @@ describe('施工日誌列印', () => {
     expect(text()).toContain('簽署當時名稱') // 工項名稱取版本快照,不取之後的工項表
     // 累計＝前一日 5 ＋本張 7(不把同日列重算)
     const row = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('簽署當時名稱'))
-    expect([...row.querySelectorAll('td')].map((td) => td.textContent)).toEqual(['壹.1', '簽署當時名稱', 'M3', '500', '7', '12'])
-    expect(text()).toContain('天氣（下午）：陰')
+    // C 包:欄序改成原表(附表四)本身——第一欄就是「施工項目」(項次併在名稱前,原表沒有獨立項次欄),
+    // 末欄是原表本來就有的「備註」(items.<id>.note)。
+    expect([...row.querySelectorAll('td')].map((td) => td.textContent)).toEqual(['壹.1 簽署當時名稱', 'M3', '500', '7', '12', ''])
+    expect(text()).toContain('本日天氣：上午晴下午陰') // 表頭天氣照原表上下午兩格
 
     // 下載 PDF 走的是同一份簽署版本:檔名要說得出版次與已簽署,才不會在系統外被當成草稿
     state.pdfCalls.length = 0

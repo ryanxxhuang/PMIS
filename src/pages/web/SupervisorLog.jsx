@@ -23,10 +23,10 @@ import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
 import {
   emptySupervisorLogContent, emptySupervisorLogSources, requiredKeysFor, unmetFields, fieldLabel, UNMET_STATUS_LABEL,
   templateConfirmRequiredKeys, templateFieldLabels, applySuggestion, mergeAttachments, attachmentIssues, fieldDocErrorGuidance, docStatusMeta, DOC_STATUS_LABEL,
-  formalDailyLogFromDetail, applyFormalDailyLog, ORG_LABEL,
+  formalDailyLogFromDetail, applyFormalDailyLog, ORG_LABEL, fieldAnchorId,
 } from '../../lib/fieldDocs.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from '../../lib/fieldDocText.js'
-import { fieldAnchorId } from '../../components/sitelog/DailyLogFields.jsx'
+
 import SupervisorLogFields from '../../components/sitelog/SupervisorLogFields.jsx'
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'

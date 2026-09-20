@@ -54,7 +54,7 @@ test.describe('列印頁下載 PDF', () => {
   test('一般案例(施工日誌):下載到 .pdf、中文可還原、印的是哪一版寫進檔名', async ({ page }) => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/site-log/print')
-    await expect(page.getByRole('heading', { name: '公共工程施工日誌' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '公共工程施工日誌', exact: true })).toBeVisible()
 
     // 列印入口仍在,但不再自稱是下載(驗收報告 P1:不得把開列印視窗宣稱為匯出完成)
     await expect(page.getByRole('button', { name: '列印', exact: true })).toBeVisible()
@@ -160,7 +160,7 @@ test.describe('列印頁下載 PDF', () => {
     const out = []
     for (const [i, id] of [logs[0], logs[1]].entries()) {
       await gotoHash(page, `/site-log/print?doc=${encodeURIComponent(id)}`)
-      await expect(page.getByRole('heading', { name: '公共工程施工日誌' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: '公共工程施工日誌', exact: true })).toBeVisible()
       const r = await downloadPdf(page, `改版${i === 0 ? '前' : '後'}`)
       expectSoundPdf(r)
       out.push(r)
@@ -178,7 +178,7 @@ test.describe('列印頁下載 PDF', () => {
     test('手機下載到的 PDF 與桌面同一份(頁數與內容一致)', async ({ page }) => {
       await loginAs(page, 'contractor')
       await gotoHash(page, '/site-log/print')
-      await expect(page.getByRole('heading', { name: '公共工程施工日誌' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: '公共工程施工日誌', exact: true })).toBeVisible()
       const r = await downloadPdf(page, '手機')
       expectSoundPdf(r)
       expect(r.pdf.pageCount).toBe(2)

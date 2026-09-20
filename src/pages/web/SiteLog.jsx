@@ -25,10 +25,11 @@ import { taipeiToday, taipeiDateTime } from '../../lib/dates.js'
 import { billableLeaves } from '../../lib/boqCalc.js'
 import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
 import {
-  emptyDailyLogContent, emptyDailyLogSources, contentFromLegacyLog, contentToLogShape, requiredKeysFor, unmetFields, fieldLabel,
+  emptyDailyLogContent, emptyDailyLogSources, contentFromLegacyLog, requiredKeysFor, unmetFields, fieldLabel, fieldAnchorId,
   addItemRow, applySuggestion, mergeAttachments, attachmentIssues, fieldDocErrorGuidance, docStatusMeta, DOC_STATUS_LABEL,
 } from '../../lib/fieldDocs.js'
-import DailyLogFields, { fieldAnchorId } from '../../components/sitelog/DailyLogFields.jsx'
+import { stampFormTemplate } from '../../lib/officialForms.js'
+import useDailyLogFacts from '../../lib/useDailyLogFacts.js'
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'
 import IntakeUploader from '../../components/sitelog/IntakeUploader.jsx'
@@ -92,8 +93,9 @@ export default function SiteLog() {
   const [lifecycleMsg, setLifecycleMsgRaw] = useState(null)
   const setLifecycleMsg = (text, tone = 'error') => setLifecycleMsgRaw(text ? { text, tone } : null)
   const [appliedSuggestions, setAppliedSuggestions] = useState([])
-  const [officialView, setOfficialView] = useState(false)
   useUnsavedEdit('site-log', dirty ? `施工日誌 ${date}（未存檔）` : null)
+  // 表頭的確定性事實(工期／進度):與列印／PDF 同一支,算不出來紙上標待補(C 包)
+  const facts = useDailyLogFacts(date)
 
   // 載入:切日期一律整包載;同日期下文件變動(存檔後、起稿後)只在 !dirty 時同步,dirty 時絕不覆寫輸入
   const prevKeyRef = useRef(null)
@@ -212,7 +214,9 @@ export default function SiteLog() {
       d = r.doc; base = d.current_version_no
     }
     const note = amendMode ? '簽後更正' : legacyLog && base === 0 ? '由既有紀錄建立草稿' : null
-    const r = await saveFieldDocumentVersion({ documentId: d.id, baseVersionNo: base, content: form.content, fieldSources: form.sources, attachments, changeNote: note })
+    // 存檔時把「當時用的表單範本」寫進內容:簽署版本自己記得版面語意,日後改範本不動舊文件(C 包)
+    const content = stampFormTemplate(form.content, 'daily_log')
+    const r = await saveFieldDocumentVersion({ documentId: d.id, baseVersionNo: base, content, fieldSources: form.sources, attachments, changeNote: note })
     setSaving(false)
     if (r.error) {
       const g = fieldDocErrorGuidance(r.error)
@@ -301,16 +305,21 @@ export default function SiteLog() {
       : doc ? { text: `已存檔${savedAt ? ` ${savedAt.toTimeString().slice(0, 5)}` : ''}・版本 ${doc.current_version_no}`, cls: 'bg-[var(--green-tint)] text-[var(--green-text)]' }
         : legacyLog ? { text: '既有紀錄・未簽署、待核對', cls: 'bg-[var(--amber-tint)] text-[var(--amber-text)]' }
           : { text: '本日尚無日誌', cls: 'bg-[var(--surface-2)] text-[var(--text-2)]' }
-  const displayLog = legacyLog || (doc ? contentToLogShape(form.content, { id: doc.id, status: doc.status, sources: form.sources }) : null)
   const readOnlyNote = !editable
+  // C 包:畫面上的表單就是紙本本身。可編視角在原表格子裡直接編(哪一格可編由 lib/officialForms 的 mapping 決定),
+  // 唯讀視角(監造／機關)同一張紙、同一份來源章,只是不長 input。
+  const sheetEdit = {
+    org, editable: !!formEditable, onChange: onFormChange, state: form, issues: issueMap,
+    photosById, leaves, byId, freq: formEditable ? freq : null,
+  }
 
   return (
     <div className="space-y-5">
       <div>{header}</div>
       {/* 兩欄都 min-w-0:grid item 預設 min-width:auto,工項表(min-w 520)的橫向捲動容器才會在 375 內自己捲,
           不會把整頁撐出水平溢位(舊頁在 demo 沒有工項列所以沒踩到;真後端有工項時撐出 375) */}
-      <div className="grid lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 space-y-5 min-w-0">
+      <div className="grid xl:grid-cols-3 gap-5">
+        <div className="xl:col-span-2 space-y-5 min-w-0">
           <Card title="本日日誌">
             {readOnlyNote && (
               <div className="mb-3 text-xs text-[var(--text-2)] bg-[var(--surface-2)] rounded-lg px-3 py-2">
@@ -327,9 +336,6 @@ export default function SiteLog() {
                 <Button variant="secondary" onClick={copyYesterday} title={`帶入 ${prevLog.log_date} 的班組/機具/材料`}>
                   <MSym name="library_add" size={14} />複製昨日
                 </Button>
-              )}
-              {readOnlyNote && displayLog && (
-                <Button variant="outline" onClick={() => setOfficialView((v) => !v)}>{officialView ? '欄位檢視' : '公定格式檢視'}</Button>
               )}
             </div>
 
@@ -356,49 +362,13 @@ export default function SiteLog() {
             {doc && status === 'received' && <p className="mb-3 text-footnote text-[var(--text-2)]">監造已收件，本文件不可再修改。</p>}
             {!leaves.length && editable && <p className="mb-3 text-footnote text-[var(--text-3)]">本案尚未匯入標單：工項數量無法在此回報，照片會保存並列「待配對」，匯入標單後可重新辨識配對。</p>}
 
-            {/* 待補集中呈現(伺服器 recheck 為準;未存檔時同規則預覽),點一項捲到該欄 */}
-            {pendingKeys.length > 0 && (formEditable || !editable) && (
-              <div className="mb-3 rounded-lg bg-[var(--amber-tint)] p-3 text-footnote">
-                <div className="font-medium text-[var(--amber-text)]">待補 {pendingKeys.length} 項{formEditable ? '（補齊並存檔後才能簽署）' : ''}</div>
-                <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                  {pendingKeys.map((k) => (
-                    <li key={k}><button type="button" onClick={() => document.getElementById(fieldAnchorId(k))?.scrollIntoView?.({ block: 'center' })} className="text-[var(--blue-text)] hover:underline min-h-11 md:min-h-0">{fieldLabel(k, form.content)}</button></li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {suggestions.length > 0 && formEditable && (
-              <div className="mb-3 rounded-2xl bg-[var(--ai-tint)] p-3 space-y-2">
-                <div className="flex items-center gap-1 text-caption font-medium text-[var(--ai-text)]"><MSym name="auto_awesome" size={14} className="text-[var(--ai)]" />AI 建議（文件已有人工版本，新辨識結果不自動套用）</div>
-                {suggestions.map((a) => (
-                  <div key={a.id} className="flex items-start gap-2 flex-wrap text-footnote">
-                    <span className="min-w-0 flex-1 text-[var(--text)]">{a.summary}</span>
-                    <Button size="sm" variant="secondary" onClick={() => applyOneSuggestion(a)} disabled={appliedSuggestions.includes(a.id)}>{appliedSuggestions.includes(a.id) ? '已套用' : '套用建議'}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => rejectSuggestion(a)}>拒絕</Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {readOnlyNote && officialView && displayLog ? (
-              <div>
-                <div className="overflow-x-auto rounded-xl border border-[var(--border-card)] p-3">
-                  <SiteLogOfficialSheet project={project} log={displayLog} siteLogs={siteLogs} itemList={adjustedItems} className="min-w-[640px]" />
-                </div>
-                <p className="mt-1.5 text-caption text-[var(--text-3)]">公定格式(固定白底){doc && !legacyLog ? '・目前為文件草稿內容，尚未簽署' : ''}</p>
-              </div>
-            ) : (!doc && !legacyLog && readOnlyNote) ? (
+            {(!doc && !legacyLog && readOnlyNote) ? (
               <Empty>此日期尚無日誌。施工日誌由施工廠商填報。</Empty>
             ) : (
-              <DailyLogFields state={form} editable={!!formEditable} leaves={leaves} byId={byId} onChange={onFormChange} issues={issueMap} freq={formEditable ? freq : null} />
-            )}
-
-            {(doc || legacyLog || editable) && !(readOnlyNote && officialView) && (
-              <DocumentPhotos attachments={attachments} photosById={photosById} legacyPhotos={legacyPhotos} editable={!!formEditable} byId={byId}
-                issues={attachmentIssueMap} onToggleRole={toggleRole} onRemove={removeAttachment} onAddLegacy={addLegacy}
-                uploader={formEditable ? (dirty
-                  ? <p className="text-footnote text-[var(--text-3)]">先存檔目前的修改，再上傳照片（辨識結果會以新版本或建議帶入）。</p>
-                  : <IntakeUploader fixedDate={date} compact onDrafted={() => { reloadFieldDocs(); prevKeyRef.current = null }} />) : null} />
+              <div className="overflow-x-auto -mx-2 px-2">
+                <SiteLogOfficialSheet project={project} content={form.content} sources={form.sources} docDate={date}
+                  siteLogs={siteLogs} itemList={adjustedItems} facts={facts} edit={sheetEdit} titleAs="h2" className="min-w-[680px] !p-4 !shadow-none" />
+              </div>
             )}
 
             {/* 文件狀態、簽署、提送、收件／退回與歷史 */}
@@ -436,6 +406,49 @@ export default function SiteLog() {
           </Card>
         </div>
 
+        {/* 右欄:照片與待補提示(C 包:桌面左側以表單為主,提示與照片靠右,不在表單上鋪滿工具卡) */}
+        <div className="space-y-5 min-w-0">
+          {/* 待補集中呈現(伺服器 recheck 為準;未存檔時同規則預覽),點一項捲到紙上那一格 */}
+          {pendingKeys.length > 0 && (formEditable || !editable) && (
+            <Card title={`待補 ${pendingKeys.length} 項`}>
+              <p className="text-footnote text-[var(--amber-text)]">{formEditable ? '補齊並存檔後才能簽署；點一項會捲到表單上那一格。' : '這份文件尚有待補欄位。'}</p>
+              <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-footnote">
+                {pendingKeys.map((k) => (
+                  <li key={k}><button type="button" onClick={() => {
+                    const el = document.getElementById(fieldAnchorId(k))
+                    el?.scrollIntoView?.({ block: 'center' })
+                    el?.querySelector?.('input, select, textarea')?.focus?.()
+                  }} className="text-[var(--blue-text)] hover:underline min-h-11 md:min-h-0">{fieldLabel(k, form.content)}</button></li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {suggestions.length > 0 && formEditable && (
+            <Card title="AI 建議">
+              <div className="space-y-2">
+                <div className="flex items-center gap-1 text-caption font-medium text-[var(--ai-text)]"><MSym name="auto_awesome" size={14} className="text-[var(--ai)]" />文件已有人工版本，新辨識結果不自動套用</div>
+                {suggestions.map((a) => (
+                  <div key={a.id} className="flex items-start gap-2 flex-wrap text-footnote">
+                    <span className="min-w-0 flex-1 text-[var(--text)]">{a.summary}</span>
+                    <Button size="sm" variant="secondary" onClick={() => applyOneSuggestion(a)} disabled={appliedSuggestions.includes(a.id)}>{appliedSuggestions.includes(a.id) ? '已套用' : '套用建議'}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => rejectSuggestion(a)}>拒絕</Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {(doc || legacyLog || editable) && (
+            <Card title="現場照片">
+              <DocumentPhotos attachments={attachments} photosById={photosById} legacyPhotos={legacyPhotos} editable={!!formEditable} byId={byId}
+                issues={attachmentIssueMap} onToggleRole={toggleRole} onRemove={removeAttachment} onAddLegacy={addLegacy}
+                uploader={formEditable ? (dirty
+                  ? <p className="text-footnote text-[var(--text-3)]">先存檔目前的修改，再上傳照片（辨識結果會以新版本或建議帶入）。</p>
+                  : <IntakeUploader fixedDate={date} compact onDrafted={() => { reloadFieldDocs(); prevKeyRef.current = null }} />) : null} />
+            </Card>
+          )}
+
         <Card title={`施工日誌（${dateRows.length}）`} className="min-w-0" action={fieldDocsLoading ? <span className="text-caption text-[var(--text-3)]">同步中…</span> : null}>
           {dateRows.length === 0 ? <Empty>尚無日誌</Empty> : (
             <div className="space-y-1.5">
@@ -454,6 +467,7 @@ export default function SiteLog() {
             </div>
           )}
         </Card>
+        </div>
       </div>
 
       {editable && (

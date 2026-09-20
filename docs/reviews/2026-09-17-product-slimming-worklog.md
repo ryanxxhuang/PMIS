@@ -373,7 +373,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 |---|---|---|---|
 | A | 廠商角色與三個主入口（本節已完成，PR #163） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`；本節已完成，PR #164、merge `a575bbc`、migration `20260920120000` 已套正式、四支 Edge 已重佈） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| C | 真實表單 mapping、直接在紙本版面編輯 | fable5.1 | 待填 |
+| C | 真實表單 mapping、直接在紙本版面編輯（施工日誌＋自主檢查表已完成，PR #168；監造查驗與監造日誌**未做**） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | D | PDF 交付（真正的下載，不是 `window.print()`；本節已完成，PR #166） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | E | 三項核心的整條流程驗收（真後端） | fable5.1 | 待填 |
 
@@ -464,6 +464,44 @@ PR #164、merge commit `a575bbc`（rebase 到含 A 包的 main `e3e4f65`；CI �
 - C 包（紙本版面編輯）可直接用 `field_sources[key].evidence`（原文、編號、單位、來源照片）做「點欄位回看證據」，不需另建一套來源結構；`hint.raw_text` 是「帶不進來但紙上寫了什麼」的顯示來源。
 - E 包（真後端整條鏈）要涵蓋：AI 抄錄的實測值只標 `filled` 時簽署必須被 `PD004 needs_confirmation` 擋下；以及 `rerecognize_photo_ids` 重辨識不得覆寫人工值或動到已簽版本（單元層已有測試，真後端未驗）。
 - 若日後要提高手寫抄錄率，方向是紙表區域裁切後再辨識（Edge 目前沒有影像處理能力）或換更強的模型——後者是紅線，需使用者另行決定。
+
+### C 真實表單 mapping、直接在紙本版面編輯
+
+| 項目 | 內容 |
+|---|---|
+| 問題 | 2026-09-20 以 `f99bfee` 逐條驗證仍成立：`SiteLog.jsx:383–393` 把紙本 `SiteLogOfficialSheet` 只當唯讀／列印用，廠商編輯的是另一份精簡表 `DailyLogFields`，要按「公定格式檢視」才看得到真表；`SelfCheckFields.jsx` 與 `SelfCheckSheet.jsx` 同樣是兩份各自定義欄位的元件。兩份定義各走各的，紙上有而畫面沒有的欄位（表報編號、工期、進度、備註、契約數量、技術士簽章表）就永遠填不到。 |
+| 目標 | 廠商**預設就看到可編輯的真實表單**；畫面與列印／PDF 共用同一份欄位 mapping、同一份資料來源與同一個版面；AI 帶入的值直接在格子裡，來源與待確認輕量呈現、點欄位回看原文與原照片；專案資料自動帶入、工期與進度沿用既有確定性規則；範本來源誠實；簽署版本保存當時的欄位／範本語意。 |
+| 不做 | 不做泛用表單設計器（版面仍逐格照原表寫）；不動 schema、RLS、RPC、簽署規則與計價（**本包零 migration**）；不改 AI 模型與 prompt（B 包的事）；不做 PDF 下載（D 包）；**本輪未做監造查驗紀錄表與監造報表（原指令第 3、4 份）**。 |
+| 影響 | 新 `src/lib/officialForms.js`（mapping 單一定義）、`src/lib/useDailyLogFacts.js`（工期／進度確定性事實）、`src/components/sitelog/PaperCell.jsx`（格內可編輯原語）；`SiteLogOfficialSheet.jsx`／`SelfCheckSheet.jsx` 改成「同一張紙、給 edit context 就可編」；`DailyLogFields.jsx`／`SelfCheckFields.jsx` **刪除**；`SiteLog.jsx`／`SelfCheck.jsx`／兩支列印頁改接新介面；`fieldAnchorId` 移到 `lib/fieldDocs.js`（原本住在被刪的元件裡）。 |
+| 驗收 | 見下方「驗證」。紅線由測試釘住：唯讀／列印視角不得長出任何 input、監造在廠商表上不得可編、判定與累計量不得變成可填欄位、範本標示不得出現「機關核定」、簽署版本印它自己當時的範本版本。 |
+
+**實際做了什麼（行為層面）**
+
+1. **一份 mapping**：`src/lib/officialForms.js` 收「原表欄名 → 儲存欄位 → 來源／計算 → 可編角色 → 必填／不適用條件 → 紙本位置」；人可讀版本在 [official-form-mapping](../architecture/official-form-mapping.md)，由 `officialForms.test.js` 逐列釘住（程式與文件不一致就紅）。哪一格在誰的視角可編**只由 mapping 決定**（fail-closed：不在 mapping 的鍵一律不可編）；伺服器 RLS／RPC 仍是安全邊界。
+2. **一張紙**：紙本元件同時是編輯畫面——給 `edit` context 就在原表的格子裡長出輸入框，沒給就是純文字。列印頁、唯讀視角（監造／機關）與廠商編輯視角因此是同一個元件、同一份資料，不會再分岔。「公定格式檢視」切換鈕拿掉（已經就是公定格式）。
+3. **補齊原表**：施工日誌補上表報編號、本日天氣上下午、填表日期（民國年＋星期）、核定／累計／剩餘工期、工期展延天數、開工／完工日期、預定／實際進度、§一 備註欄與營造業專業工程特定施工項目 A／B、§二 材料契約數量與備註、§四 技術士簽章表（原表 p.3 附表，勾「有」才展開）、簽章欄改回原表的【工地主任】（註 3）。自主檢查表補上編號、分項工程名稱、協力廠商、檢查時機、檢查結果符號說明、備註欄、缺失複查結果／日期／複查人員職稱，欄名改用臺北市格式原文（實際檢查情形（載明檢查數值及單位）、檢查結果）。**全部是內容 JSONB 的新鍵，不需要 migration**。
+4. **確定性數字不由 AI 產生**：`useDailyLogFacts` 算核定工期（契約竣工日−開工基準日+1）、累計工期、剩餘工期、預定進度（`progressPlan` 月底累計內插，D-024）、實際進度（截至該日最近一期估驗累計金額÷契約總額）；算不出來紙上印「待補」，不補 0、不猜。累計完成數量沿用原本「本日以前已落庫日誌＋本張」的規則。
+5. **來源與證據**：AI／紙本抄錄的值本來就在格子裡，旁邊一枚輕量狀態章（待補／已帶入・待核對／已確認／不適用＋來源短句），抄錄值旁直接顯示「紙上原文：…」，點「原文」展開原文明細與**原照片縮圖**（用 B 包已寫進 `field_sources[].evidence` 的那一份，不另建一套）。列印時這些標記一律不印（`print:hidden`）。
+6. **範本來源誠實**：畫面與紙本都印「參考工程會格式／參考臺北市格式・(範本 `<key>` v`<n>`・未經機關核定)」與免責聲明；臺北市 ODT 的示例數值（保護層 4cm／4.5cm）、良好與不良填寫示例、假公司名與示例判定**一律不入產品**，檢查項目與檢查標準只取本案核定的檢查表範本，沒有範本就待補、不可簽署。
+7. **簽署版本記得自己的範本**：存檔時把 `content.form_template = { key, version }` 寫進內容；版本內容與雜湊本來就不可變，加上戳記後舊文件印的是它當時的範本版本，日後改範本不會改變舊簽署版本的內容或判定。
+8. **版面**：桌面 ≥1280 左表單、右「待補／AI 建議／現場照片／日誌清單」；1024 讓 A4 表單佔滿寬度、提示與照片落到下方（A4 擠在 2/3 欄會橫向捲動）。手機表單在卡片內橫向捲動，上傳、檢視、審核與待補跳格都可用。待補清單點一項會捲到紙上那一格並對焦。
+
+**驗證**
+
+| 項目 | 結果 |
+|---|---|
+| `npm test` | 155 檔 1,703 項通過（新增 `officialForms.test.js` 16 項、`SiteLogOfficialSheet.test.jsx` 6 項、`SelfCheckSheet.test.jsx` 4 項） |
+| `npm run lint`／`npm run build`／`npm run check:docs` | 通過（build 仍有既有 bundle 大小警告；check:docs 58 檔 451 連結 0 錯誤） |
+| Demo E2E | `E2E_DEMO_PORT=5297 npx playwright test e2e/ --workers=3` 80 項全通過（`contractor.spec.js`、`routes.spec.js` 的欄名斷言改成原表欄名） |
+| 真後端 E2E（本機棧） | 新增 `e2e-real/chain17-paper-form.spec.js`（廠商在原表格子逐欄輸入 → 存檔 → 版本內容逐欄核對 → 簽署落 `daily_logs` → 提送 → 監造同一張紙唯讀、收件）通過；受影響的 `chain5`／`chain8`／`chain14` 一併重跑通過 |
+| pgTAP | **未跑：本包零 migration、零 DB 變更** |
+| 內建 Preview 目視 | 桌面 1024 與手機 375 各兩頁（施工日誌、自主檢查表），截圖見回報 |
+
+**C 待辦與對後續包的影響**
+
+- **第 3、4 份未做**：監造查驗紀錄表（臺北市施工抽查紀錄表）與監造日誌（工程會附表五）仍是 `InspectionFormFields`＋`InspectionFormSheet`／`SupervisorLogFields`＋`SupervisorLogSheet` 兩份呈現，沒有 mapping 清單、沒有格內可編輯。接手時的注意事項寫在 [official-form-mapping §3～4](../architecture/official-form-mapping.md)：查驗的「抽查結果」「本次確認數量」是監造親自填且會進計價，格內編輯不得放寬既有的伺服器驗證；附表五是**日報**不是監造月報，表頭多了契約金額與契約變更次數兩格，本系統沒有對應欄位。
+- 施工日誌原表 p.4 的「工地職業安全衛生施工前檢查紀錄表」是獨立一張表，本輪未實作，畫面與紙本都明寫需要時以紙本另附。
+- D 包（PDF 下載）與本包無檔案衝突：D 動 `PrintToolbar` 與列印路徑，本包動欄位定義與 Sheet；但 D 的下載要取的就是這兩張 Sheet 的輸出，合併後請以本包的新 props（`content`／`sources`／`facts`／`titleAs`）取用。
 
 ### D PDF 交付
 

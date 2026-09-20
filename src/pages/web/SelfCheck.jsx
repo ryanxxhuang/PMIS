@@ -15,7 +15,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
-import { Card, Button, Empty, PageHeader, SkeletonList, Badge, ErrorBanner } from '../../components/ui.jsx'
+import { Card, Button, Empty, PageHeader, SkeletonList, Badge, ErrorBanner, Field, Input } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { appConfirm, appPrompt } from '../../components/confirm.jsx'
 import { taipeiToday, taipeiDateTime } from '../../lib/dates.js'
@@ -24,10 +24,11 @@ import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
 import {
   emptySelfCheckContent, emptySelfCheckSources, requiredKeysFor, unmetFields, fieldLabel, UNMET_STATUS_LABEL,
   docConfirmRequiredKeys, templateFieldLabels, checklistItemLabels, applySuggestion, mergeAttachments, attachmentIssues, fieldDocErrorGuidance,
-  docStatusMeta, DOC_STATUS_LABEL, ORG_LABEL,
+  docStatusMeta, DOC_STATUS_LABEL, ORG_LABEL, fieldAnchorId, setSelfCheckTemplate,
 } from '../../lib/fieldDocs.js'
-import { fieldAnchorId } from '../../components/sitelog/DailyLogFields.jsx'
-import SelfCheckFields from '../../components/sitelog/SelfCheckFields.jsx'
+
+import SelfCheckSheet from '../../components/sitelog/SelfCheckSheet.jsx'
+import { stampFormTemplate } from '../../lib/officialForms.js'
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'
 
@@ -138,6 +139,14 @@ export default function SelfCheck() {
   const status = doc?.status || null
   const formEditable = editable && form && !!frame && (!doc || EDITABLE_STATUSES.includes(status) || amendMode) && status !== 'received'
   const onFormChange = useCallback((next) => { setForm(next); setDirty(true) }, [])
+  // 換檢查表範本:項目與標準的唯一來源是本案範本,換了就要清掉已填結果(項目不同不能沿用)
+  const onTemplateChange = async (id) => {
+    const t = (checklistTemplates || []).find((x) => x.id === id)
+    if (!t || !form) return
+    const filled = Object.values(form.content.results || {}).some((r) => r?.value != null && r.value !== '')
+    if (filled && !(await appConfirm({ title: '換檢查表範本？', body: '換範本會清掉已填的檢查結果（項目不同，值不能沿用）。', danger: true, confirmLabel: '換範本' }))) return
+    onFormChange(setSelfCheckTemplate(form, t))
+  }
   const onDateChange = (next) => { if (!validDate(next)) return; setDate(next); onFormChange({ ...form, content: { ...form.content, check_date: next } }) }
   const startAmend = async () => {
     const reason = await appPrompt({ title: '建立更正版本？', label: `版本 ${doc.current_version_no} 的簽署${status === 'submitted' ? '與提送' : ''}會保留並綁在該版本；更正存檔後成為新版本草稿，重新簽署時以修訂版次（Rev.N）落庫。更正原因（必填，簽署時寫進修訂紀錄）`, required: true, confirmLabel: '建立更正版本' })
@@ -175,7 +184,8 @@ export default function SelfCheck() {
     setSaving(true); setSavedMsg(''); setConflict(null)
     let d = doc
     let base = baseVersion
-    let content = form.content
+    // 存檔時把「當時用的表單範本」寫進內容:簽署版本自己記得版面語意(C 包)
+    let content = stampFormTemplate(form.content, 'self_check')
     if (!d) {
       // 內建範本(尚未落 DB)先落庫,文件才掛得到本案範本 id(與品質查驗的檢查表同一條規則)
       const chosen = (checklistTemplates || []).find((t) => t.id === form.content.template_id)
@@ -299,8 +309,8 @@ export default function SelfCheck() {
   return (
     <div className="space-y-5">
       <div>{header}</div>
-      <div className="grid lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 space-y-5 min-w-0">
+      <div className="grid xl:grid-cols-3 gap-5">
+        <div className="xl:col-span-2 space-y-5 min-w-0">
           <Card title={doc ? '本份自主檢查表' : '新自主檢查表'} action={frame?.is_demo ? <Badge color="amber">{frame.demo_label || '示範範本'}</Badge> : null}>
             {frame?.is_demo && (
               <p role="note" className="mb-3 text-caption text-[var(--text-2)] bg-[var(--amber-tint)] rounded-lg px-3 py-2">{frame.disclaimer}</p>
@@ -312,6 +322,10 @@ export default function SelfCheck() {
               </div>
             )}
             <div className="flex items-end gap-3 flex-wrap mb-3">
+              {/* 新建時才選檢查日期(建檔後文件日期固定);唯讀視角除日期外沒有 input */}
+              {isNew && editable && (
+                <div className="max-md:w-full"><Field label="檢查日期"><Input type="date" value={form.content.check_date || date} onChange={(e) => onDateChange(e.target.value)} /></Field></div>
+              )}
               <span role="status" aria-label={`保存狀態：${saveStatus.text}`} className={`inline-flex items-center h-8 mb-0.5 px-2.5 rounded-lg text-footnote font-medium ${saveStatus.cls}`}>{saveStatus.text}</span>
               {doc && <Badge color={docStatusMeta(doc, org).tone}>{DOC_STATUS_LABEL[doc.status] || doc.status}</Badge>}
               {doc && (
@@ -368,9 +382,12 @@ export default function SelfCheck() {
             {!doc && readOnlyNote ? (
               <Empty>自主檢查表由施工廠商填報；從右側清單或現場紀錄開啟已有的文件查閱。</Empty>
             ) : (
-              <SelfCheckFields state={form} frame={frame} checklistTemplates={checklistTemplates || []} checklistTemplate={checklistTemplate} labels={labels}
-                editable={!!formEditable} leaves={leaves} byId={byId} onChange={onFormChange} issues={issueMap}
-                isNew={isNew} date={form.content.check_date || date} onDateChange={onDateChange} />
+              <div className="overflow-x-auto -mx-2 px-2">
+                <SelfCheckSheet project={project} doc={doc} version={detail?.version} content={form.content} sources={form.sources}
+                  frame={frame} checklistTemplates={checklistTemplates || []} checklistTemplate={checklistTemplate}
+                  byId={byId} leaves={leaves} stamp={null} titleAs="h2" className="min-w-[680px] !p-4"
+                  edit={{ org, editable: !!formEditable, onChange: onFormChange, state: form, issues: issueMap, photosById, onTemplateChange }} />
+              </div>
             )}
 
             {doc && (

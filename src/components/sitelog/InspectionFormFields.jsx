@@ -15,7 +15,7 @@ import {
 import { judgeChecklist } from '../../lib/qc.js'
 import FieldSourceChip from './FieldSourceChip.jsx'
 import ChecklistItemsTable from './ChecklistItemsTable.jsx'
-import { fieldAnchorId } from './DailyLogFields.jsx'
+import { fieldAnchorId } from '../../lib/fieldDocs.js'
 
 const fmtQty = (v, unit) => (v == null || v === '' || Number.isNaN(Number(v)) ? '—' : `${Number(v)} ${unit || ''}`.trim())
 

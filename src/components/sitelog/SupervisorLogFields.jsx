@@ -14,7 +14,7 @@ import {
 import { taipeiISODate } from '../../lib/dates.js'
 import FieldSourceChip from './FieldSourceChip.jsx'
 import RowsEditor from './RowsEditor.jsx'
-import { fieldAnchorId } from './DailyLogFields.jsx'
+import { fieldAnchorId } from '../../lib/fieldDocs.js'
 import { taipeiDateTime as fmtTs } from '../../lib/dates.js'
 
 const NA_PROMPT = {

@@ -84,9 +84,9 @@ describe('自主檢查表文件頁', () => {
     expect(container.textContent).toContain('B1 澆置 24 小時前已通知監造')
     expect(container.textContent).toContain('已帶入・待核對・依工項挑選範本')
     expect(container.textContent).toContain('已帶入・待核對・照片 AI 說明')
-    expect(container.querySelector('input[aria-label="C2 坍度 實測值"]').value).toBe('')
+    expect(container.querySelector('input[aria-label="C2 坍度 實際檢查情形"]').value).toBe('')
     expect(container.textContent).toContain('紙上寫「15 * 15 CM」（未自動帶入）')
-    expect(container.textContent).toContain('判定預覽：尚無已檢項目')
+    expect(container.textContent).toContain('（尚無已檢項目／全部不適用）')
     expect(button('簽署此版本')).toBeUndefined()
   })
 
@@ -105,7 +105,7 @@ describe('自主檢查表文件頁', () => {
     })
     state.store = withDoc(doc, { getFieldDocument: vi.fn().mockResolvedValue({ doc, version: copied, versions: [], signatures: [], submissions: [] }) })
     await render('/self-check?doc=SC1'); await flush(); await flush()
-    expect(container.querySelector('input[aria-label="C2 坍度 實測值"]').value).toBe('18')
+    expect(container.querySelector('input[aria-label="C2 坍度 實際檢查情形"]').value).toBe('18')
     expect(container.textContent).toContain('紙上原文：18 cm')
     expect(container.textContent).toContain('紙本實測欄抄錄')
     expect(button('簽署此版本')).toBeUndefined()
@@ -117,12 +117,12 @@ describe('自主檢查表文件頁', () => {
     state.store.saveFieldDocumentVersion.mockResolvedValueOnce({ error: { code: 'PD001', message: '畫面載入的是版本 1,目前版本已是 2,請重新載入後再編輯' } })
     await render('/self-check?doc=SC1'); await flush(); await flush()
     expect(container.textContent).toContain('B1 澆置 24 小時前已通知監造（待親自確認）')
-    const c2 = container.querySelector('input[aria-label="C2 坍度 實測值"]')
+    const c2 = container.querySelector('input[aria-label="C2 坍度 實際檢查情形"]')
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
       setter.call(c2, '30'); c2.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    expect(container.textContent).toContain('判定預覽：不合格')
+    expect(container.textContent).toContain('■ 有缺失')
     expect(status()).toBe('未存檔')
     expect(container.textContent).toContain('待補 1 項') // B1 仍待確認
     const confirmB1 = [...container.querySelectorAll('#field-results-B1 button')].find((b) => b.textContent.trim() === '確認')
@@ -131,7 +131,7 @@ describe('自主檢查表文件頁', () => {
     await act(async () => button('存檔').click())
     expect(state.store.saveFieldDocumentVersion).toHaveBeenCalledWith(expect.objectContaining({ documentId: 'SC1', baseVersionNo: 1, content: expect.objectContaining({ results: { B1: { value: true }, C2: { value: 30 } } }), fieldSources: expect.objectContaining({ 'results.C2': { status: 'confirmed', source: 'human' }, 'results.B1': expect.objectContaining({ status: 'confirmed' }) }) }))
     expect(container.querySelector('[role="alert"]').textContent).toContain('重新載入')
-    expect(container.querySelector('input[aria-label="C2 坍度 實測值"]').value).toBe('30')
+    expect(container.querySelector('input[aria-label="C2 坍度 實際檢查情形"]').value).toBe('30')
   })
 
   it('新建:預設第一張範本、日期可改;第一次存檔先確保範本落 DB、建文件(帶 template_id)再存版本', async () => {
@@ -160,7 +160,7 @@ describe('自主檢查表文件頁', () => {
     state.store.signFieldDocument.mockResolvedValueOnce({ result: { version_no: 2, content_hash: 'abcdef0123456789' } })
     await render('/self-check?doc=SC1'); await flush(); await flush()
     expect(container.textContent).toContain(`本人確認 ${today} 自主檢查表(版本 2,內容雜湊 abcdef012345)內容屬實,同意以本人登入的平台帳號簽署本文件。`)
-    expect(container.textContent).toContain('判定預覽：合格')
+    expect(container.textContent).toContain('■ 全部合格')
     await act(async () => button('簽署此版本').click())
     await flush()
     expect(state.store.signFieldDocument).toHaveBeenCalledWith(expect.objectContaining({ documentId: 'SC1', versionNo: 2, contentHash: 'abcdef0123456789' }))

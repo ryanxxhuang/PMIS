@@ -103,12 +103,13 @@ test('鏈 5:廠商上傳→起稿→補缺→簽署→提送→監造退回→�
   await expect(page.getByText(/待補 \d+ 項/).first()).toBeVisible()
   await expect(page.getByText('已帶入・待核對・照片 AI 說明').first()).toBeVisible() // 摘要來自照片說明(stub)
   await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0) // 待補未齊不給簽
-  await page.getByLabel('結構工程 當日完成數量').fill('12.5') // stub hint 配到的工項,數量只有人填才不是待補
-  await page.getByRole('textbox', { name: '天氣(上午)' }).fill('晴')
-  await page.getByRole('textbox', { name: '天氣(下午)' }).fill('晴')
-  await page.getByRole('button', { name: '加一列' }).first().click() // 出工人數
-  await page.getByPlaceholder('工別（如 鋼筋工）').fill('模板工')
-  await page.getByPlaceholder('人數').fill('4')
+  await page.getByLabel('二 結構工程 本日完成數量').fill('12.5') // stub hint 配到的工項,數量只有人填才不是待補
+  await page.getByRole('textbox', { name: '本日天氣上午' }).fill('晴')
+  await page.getByRole('textbox', { name: '本日天氣下午' }).fill('晴')
+  // C 包:出工／機具／材料就在原表第三、二節的表格裡逐列填(欄名照原表)
+  await page.getByRole('button', { name: '新增工別列' }).click()
+  await page.getByRole('textbox', { name: '工別 1' }).fill('模板工')
+  await page.getByRole('spinbutton', { name: '工別 1 本日人數' }).fill('4')
   // 機具／材料本日無:na＋原因(不得留空、不得填「無」);原因輸入是站內 appPrompt 對話框
   for (const reason of ['本日無機具', '本日無進料']) {
     await page.getByRole('button', { name: '本日無', exact: true }).nth(0).click()
@@ -170,7 +171,7 @@ test('鏈 5:廠商上傳→起稿→補缺→簽署→提送→監造退回→�
   // 退回原因在頂部橫幅(歷史清單裡另有一筆帶「原因：」前綴),精確比對橫幅那一筆
   await expect(conLifecycle.getByText('材料使用請補進料證明', { exact: true })).toBeVisible({ timeout: 30_000 })
   await expect(conLifecycle.getByText(/監造退回（版本 2/)).toBeVisible()
-  await page.getByRole('textbox', { name: '工作摘要' }).fill('結構工程混凝土澆置 12.5 M3；材料進料證明已補')
+  await page.getByRole('textbox', { name: '施工概況摘要' }).fill('結構工程混凝土澆置 12.5 M3；材料進料證明已補')
   await page.getByRole('button', { name: '存檔', exact: true }).click()
   await expect(page.getByText(/已存檔 ✓ 版本 3，可簽署/)).toBeVisible({ timeout: 30_000 })
   await expect(conLifecycle.getByText(/版本 2 的簽署仍綁在該版本/)).toBeVisible()

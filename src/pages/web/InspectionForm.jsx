@@ -21,9 +21,9 @@ import { useUnsavedEdit } from '../../lib/unsavedEdits.js'
 import {
   emptyInspectionFormContent, emptyInspectionFormSources, requiredKeysFor, unmetFields, fieldLabel, UNMET_STATUS_LABEL,
   docConfirmRequiredKeys, templateFieldLabels, checklistItemLabels, applySuggestion, mergeAttachments, attachmentIssues, fieldDocErrorGuidance,
-  docStatusMeta, DOC_STATUS_LABEL, ORG_LABEL, requiredStagesFor, currentBatchCum, INSPECTION_VERDICT_TONE,
+  docStatusMeta, DOC_STATUS_LABEL, ORG_LABEL, requiredStagesFor, currentBatchCum, INSPECTION_VERDICT_TONE, fieldAnchorId,
 } from '../../lib/fieldDocs.js'
-import { fieldAnchorId } from '../../components/sitelog/DailyLogFields.jsx'
+
 import InspectionFormFields from '../../components/sitelog/InspectionFormFields.jsx'
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'

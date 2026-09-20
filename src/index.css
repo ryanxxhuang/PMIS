@@ -659,6 +659,30 @@ html.theme-switching, html.theme-switching *, html.theme-switching *::before, ht
   --text-title1: 28px;   --text-title1--line-height: 34px;   --text-title1--letter-spacing: -0.021em;
 }
 
+/* 紙上可編輯的格(2026-09-20 C 包:廠商直接在真實表單的格子裡編輯)。
+   格線由外層 <td>/<div> 的 paper-rule 畫,輸入框自己不再畫一層框——否則一格兩框,
+   印出來是雙線。焦點才長出可見外框(鍵盤操作看得到自己在哪一格);列印時控件一律
+   退成純文字外觀(無框無底),紙上不該出現輸入框的樣子。 */
+@utility paper-input {
+  width: 100%;
+  background-color: transparent;
+  border: 0;
+  border-radius: 2px;
+  padding: 1px 2px;
+  color: #1d1d1f;
+  font: inherit;
+  line-height: inherit;
+}
+.paper :where(.paper-input):focus {
+  outline: 2px solid var(--blue);
+  outline-offset: -1px;
+  background-color: #f5f9ff;
+}
+.paper :where(.paper-input):focus-visible { outline: 2px solid var(--blue); }
+@media print {
+  .paper .paper-input { outline: none !important; background: transparent !important; }
+}
+
 /* 列印:表單控件的顏色來自本檔上面那條 unlayered 規則(var(--text)/var(--surface)),
    深色模式下就是「淺字深底」;瀏覽器預設不印背景色,於是白紙上只剩淺灰字。
    /valuation/package 的「本期施工說明」textarea 是唯一坐在列印版面裡的控件,
