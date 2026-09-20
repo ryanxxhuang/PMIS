@@ -20,7 +20,7 @@ import {
   Image as ImageIcon, Images, Inbox, Info, Landmark, LayoutGrid, Link as LinkIcon, List, ListChecks, LoaderCircle,
   ListFilter, Lock, Mail, MailCheck, MapPin, Maximize2, Menu, MessageSquareWarning, Moon, NotebookPen, PanelLeftClose,
   PanelLeftOpen, Paperclip, Pencil, PenTool, Plus, Printer, Receipt, RefreshCw, Scale, Search,
-  Send, Shield, ShieldAlert, ShieldCheck, ShieldUser, Sigma, SlidersHorizontal, Sparkles,
+  ReceiptText, ScanSearch, Send, Shield, ShieldAlert, ShieldCheck, ShieldUser, Sigma, SlidersHorizontal, Sparkles,
   Square, SquareCheck, Sun, SunMoon, Trash2, TriangleAlert, Type, Undo2, Upload, Wrench, X, Zap,
 } from 'lucide-react'
 
@@ -82,6 +82,7 @@ const ICONS = {
   help: CircleHelp,
   history: History,
   image: ImageIcon,
+  image_search: ScanSearch,
   hourglass_top: Hourglass,
   inbox: Inbox,
   info: Info,
@@ -107,6 +108,7 @@ const ICONS = {
   progress_activity: LoaderCircle,
   radio_button_unchecked: Circle,
   rate_review: FileCheck,
+  receipt_long: ReceiptText,
   refresh: RefreshCw,
   report: TriangleAlert,
   schedule: Clock,

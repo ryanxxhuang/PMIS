@@ -172,8 +172,8 @@ test.describe('監造', () => {
     await card.getByRole('button', { name: '確認到場人員' }).click()
     await expect(card.getByText(/到場人員與時段（待親自確認）/)).toHaveCount(0)
     // 天氣、監造事項、廠商施工情形補齊 → 存檔成版本 1、可簽署
-    await page.getByRole('textbox', { name: '天氣(上午)' }).fill('晴')
-    await page.getByRole('textbox', { name: '天氣(下午)' }).fill('晴')
+    await page.getByRole('textbox', { name: '本日天氣上午' }).fill('晴')
+    await page.getByRole('textbox', { name: '本日天氣下午' }).fill('晴')
     await card.getByRole('button', { name: '加一項監造事項' }).click()
     await page.getByLabel('監造事項 1 內容').fill('抽查 4F 版牆鋼筋綁紮')
     await page.getByRole('textbox', { name: '施工情形摘要' }).fill('4F 版牆混凝土澆置 120 M3')

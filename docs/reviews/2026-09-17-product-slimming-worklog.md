@@ -377,7 +377,8 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | A | 廠商角色與三個主入口（本節已完成，PR #163） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`；本節已完成，PR #164、merge `a575bbc`、migration `20260920120000` 已套正式、四支 Edge 已重佈） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | B2 | 紙本查驗表逐格辨識（B 的續作：紙表區域偵測＋逐欄裁切＋逐格兩次辨識；新 AI 功能 `paperform.cells`；本節已完成，PR #169） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| C | 真實表單 mapping、直接在紙本版面編輯（施工日誌＋自主檢查表已完成，PR #168；監造查驗與監造日誌**未做**） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| C | 真實表單 mapping、直接在紙本版面編輯（施工日誌＋自主檢查表，PR #168） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| C2 | 同上的後半：監造查驗紀錄表＋監造報表（附表五）的 mapping 與可編輯版面（本節已完成，PR #170） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | D | PDF 交付（真正的下載，不是 `window.print()`；本節已完成，PR #166） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | E | 三項核心的整條流程驗收（真後端） | fable5.1 | 待填 |
 
@@ -582,9 +583,72 @@ PR #164、merge commit `a575bbc`（rebase 到含 A 包的 main `e3e4f65`；CI �
 
 **C 待辦與對後續包的影響**
 
-- **第 3、4 份未做**：監造查驗紀錄表（臺北市施工抽查紀錄表）與監造日誌（工程會附表五）仍是 `InspectionFormFields`＋`InspectionFormSheet`／`SupervisorLogFields`＋`SupervisorLogSheet` 兩份呈現，沒有 mapping 清單、沒有格內可編輯。接手時的注意事項寫在 [official-form-mapping §3～4](../architecture/official-form-mapping.md)：查驗的「抽查結果」「本次確認數量」是監造親自填且會進計價，格內編輯不得放寬既有的伺服器驗證；附表五是**日報**不是監造月報，表頭多了契約金額與契約變更次數兩格，本系統沒有對應欄位。
+- ~~**第 3、4 份未做**~~：**已由 C2 包（PR #170）補齊**，四份表單的 mapping 與格內可編輯都到齊，見下方「C2」一節與 [official-form-mapping §3～5](../architecture/official-form-mapping.md)。
 - 施工日誌原表 p.4 的「工地職業安全衛生施工前檢查紀錄表」是獨立一張表，本輪未實作，畫面與紙本都明寫需要時以紙本另附。
 - D 包（PDF 下載）與本包無檔案衝突：D 動 `PrintToolbar` 與列印路徑，本包動欄位定義與 Sheet；但 D 的下載要取的就是這兩張 Sheet 的輸出，合併後請以本包的新 props（`content`／`sources`／`facts`／`titleAs`）取用。
+
+### C2 監造查驗紀錄表與監造報表（附表五）
+
+問題（動工前已用當時的 main 證明仍成立）：C 包只完成四份裡的前兩份。監造查驗表單與監造日誌仍是
+`InspectionFormFields`＋`InspectionFormSheet`／`SupervisorLogFields`＋`SupervisorLogSheet` 兩份各自定義欄位——
+監造在精簡表裡填、紙本另外排一次；監造日誌的紙本也還不是工程會附表五。目標：兩份都完成 mapping 並讓監造
+**直接在真實表單的格子裡**編輯。不做：不放寬任何伺服器驗證、不新增 migration、不由 AI 產生確定性數字、
+不把臺北市範例檔的示例內容帶進產品、不把附表五當成監造月報。影響：純前端，零 DB 變更。
+
+1. **mapping 補到四份**：`src/lib/officialForms.js` 新增 `INSPECTION_FORM_MAPPING` 與 `SUPERVISOR_LOG_MAPPING`，
+   人可讀版本在 [official-form-mapping §3～5](../architecture/official-form-mapping.md)，由 `officialForms.test.js`
+   逐列釘住。這兩份的可編角色是**監造**不是廠商（`isEditableBy` fail-closed：廠商與機關在這兩張紙上一格都不可編，
+   反過來監造也不能編廠商的兩份）。原表沒有、本系統為了接回標單與計價而加的格（查驗申請、工項、單位、階段、
+   申報量、判定、本次確認數量；附表五的到場人員）一律在 mapping 與紙上標「本系統欄位」，不冒充原表內容。
+2. **一張紙**：`InspectionFormSheet`／`SupervisorLogSheet` 改成「紙本同時是編輯畫面」，`InspectionFormFields`／
+   `SupervisorLogFields` 刪除；只服務那兩份精簡表的 `ChecklistItemsTable`／`FieldSourceChip`／`RowsEditor` 一併退場
+   （同一份欄位定義不再有第二處實作）。列印頁、唯讀視角與監造編輯視角是同一個元件、同一份資料。
+3. **格內編輯不放寬伺服器規則**：判定與本次確認數量仍只有監造能填；簽署時
+   `field_document_sign_inspection_form_internal` 照舊驗單位一致、階段在該工項 ITP 必要階段內、申報量與查驗申請相同、
+   確認量不超申報、判定與數量一致、同查驗已有有效確認量須先撤銷（`PD008`）；紙本實測欄抄錄進來的值只標 `filled`、
+   沒有人親自確認就簽署一樣被 `PD004` 擋。畫面上的 `inspectionFormIssues` 只是同一條規則的即時預覽。
+4. **附表五是日報不是監造月報**（原表註 2）：紙上、標示與測試都釘住，提到「月報」只能是否定句。五節（工程進行情況／
+   監督按圖施工含檢驗停留點與施工抽查／查核材料規格及品質／督導工地職業安全衛生／其他約定監造事項）與監造單位簽章
+   都照原表；原表註 1 的「參詳施工日誌」依據＝同日施工日誌收件情形，印在第一節。
+5. **表頭的確定性數字**：`useDailyLogFacts.js` 改名 `useFormHeaderFacts.js`，多一個 `useSupervisorReportFacts`——
+   契約工期、預定／實際進度與施工日誌**同一支算式**，不另寫一份；契約變更次數改為確定性計算（截至本日已核准的
+   變更設計件數，沒有變更日期的已核准件仍計入並在來源註明），資料未載入時印「待補」不印 0。
+6. **契約金額兩格不自動帶入**：本系統的標單合計是「發包末端工項合計」口徑（不含稅與總價項目，且總價／間接費
+   目前 `cap=0` 隔離不計價），**不等於契約金額**——帶進去就是印錯的官方表。所以由監造依契約自行填，未填印「待補」，
+   畫面另說明為什麼不帶標單合計。
+7. **到場人員**：附表五沒有這一格，但原表註 3 明寫各機關得依契約約定自行增訂，所以保留並在紙上標「本系統欄位」；
+   規則不變——只能監造親自填寫並按「確認到場人員」才算數，任何照片都不是到場證明。
+8. **順手解掉的相鄰根因**：`PaperCell` 的 `image_search` 與 `DocumentLifecycle` 的 `receipt_long` 沒有 lucide 對映
+   （C 包與更早留下，圖示不顯示只印 console 警告）；「沒有來源列」不再一律當成「待補」——待補章只在待補清單說它待補、
+   或來源自己是 `pending` 時才出現，原表有但本系統列為非必填的格（表報編號、展延天數、契約金額…）不再長出誤導的待補章。
+9. **零 migration**：新增的原表欄位全部是內容 JSONB 的新鍵（查驗：`doc_no`／`subproject_name`／`check_timing`／
+   `recheck_*`；附表五：`doc_no`／`actual_completion_date`／`extended_days`／`contract_amount_original`／
+   `contract_amount_revised`／`material_quality`／`safety_precheck`／`safety_other`）。事實表是衍生的報表列，
+   權威內容永遠是被簽署的那個版本。
+
+**驗證**
+
+| 項目 | 結果 |
+|---|---|
+| `npm test` | 161 檔 1,802 項通過（新增 `InspectionFormSheet.test.jsx` 8 項、`SupervisorLogSheet.test.jsx` 7 項、`officialForms.test.js` 16 → 28 項） |
+| `npm run lint`／`npm run build`／`npm run check:docs` | 通過（build 仍有既有 bundle 大小警告；check:docs 58 檔 469 連結 0 錯誤） |
+| Demo E2E | `E2E_DEMO_PORT=5388 npx playwright test` 86 項全通過（`supervisor.spec.js` 天氣欄名、`pdf-download.spec.js` 兩份紙本標題改成原表名稱） |
+| 真後端 E2E（本機棧） | 新增 `e2e-real/chain18-supervisor-paper-forms.spec.js`（監造在抽查紀錄表格子輸入本次確認數量 → 存檔 → 抄錄值未確認簽署被 `PD004` 擋 → 人按「確認」→ 簽署 → `inspections` 合格 80／`inspection_confirmations` 80 落庫 → 列印印簽署版本 → 廠商 backlog 80、估驗頁同步 80、設 81 被 `VQ006` 擋）通過；`chain6`／`chain10`／`chain16` 一併重跑通過 |
+| pgTAP | **未跑：本包零 migration、零 DB 變更** |
+| 內建 Preview 目視 | 桌面 1024 與手機 375 各兩頁（監造報表、監造查驗紀錄表），375 頁面無水平溢位（紙本在卡片內自己橫向捲動，與 C 包相同） |
+
+### C2 待辦與對後續包的影響
+
+- **監造主管簽名（臺北市抽查紀錄表）本輪未實作第二簽署人**：平台簽署只涵蓋「監造單位派駐現場人員」，監造主管維持紙本手簽欄；
+  要做需要一份文件兩個簽署角色，屬簽署模型的變更，不在本包範圍。
+- **附表五 §三 不自動引用試體／檢（試）驗紀錄**：`material_quality` 由監造自行敘述；品質模組的試體與試驗紀錄要帶進這一節，
+  需要決定引用口徑（哪些紀錄算「本日」），留待後續。
+- **契約金額沒有系統欄位**：目前由監造每份報表自己填。若要免去重複輸入，得在專案或契約層新增「契約金額（原／變更後）」欄位
+  並決定與標單合計的關係（含稅、總價項目、Q3 `cap=0` 的隔離），那是 schema 變更，本包刻意不做。
+- **`note` 的欄名在兩處不同**：框架範本（伺服器）標「備註」，附表五紙上標「重要事項紀錄」（原表第五節的欄名）。
+  `note` 非必填，不會出現在待補清單，所以目前沒有使用者看得到的落差；之後若把 `note` 改成必填，要一併把範本標籤改成原表欄名。
+- **E 包（整條流程驗收）**：監造兩份的 UI 入口與欄位定位子（aria-label）已改成原表欄名，寫新的真後端鏈時請以
+  `chain18` 的選擇器為準，不要沿用舊的精簡表欄名。
 
 ### D PDF 交付
 

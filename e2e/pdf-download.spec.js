@@ -196,8 +196,9 @@ test.describe('列印頁下載 PDF', () => {
     const cases = [
       ['site-log', /公\s*共\s*工\s*程\s*施\s*工\s*日\s*誌/, '施工日誌'],
       ['self-check', /自\s*主\s*檢\s*查\s*表/, '自主檢查表'],
-      ['inspection-form', /監\s*造\s*查\s*驗/, '監造查驗表單'],
-      ['supervisor-log', /監\s*造\s*日\s*誌/, '監造日誌'],
+      // C2:監造兩份的紙本改用原表名稱(臺北市施工抽查紀錄表、工程會附表五公共工程監造報表)
+      ['inspection-form', /施\s*工\s*抽\s*查\s*紀\s*錄\s*表/, '監造查驗表單'],
+      ['supervisor-log', /公\s*共\s*工\s*程\s*監\s*造\s*報\s*表/, '監造日誌'],
     ]
     for (const [route, marker, label] of cases) {
       const id = idOf(hrefs, route)

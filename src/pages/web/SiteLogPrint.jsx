@@ -7,7 +7,7 @@ import { DocumentPrintStamp, PrintedVersionBody } from '../../components/sitelog
 import { contentFromLegacyLog } from '../../lib/fieldDocs.js'
 import usePrintedVersion from '../../lib/usePrintedVersion.js'
 import { fieldDocFileName } from '../../lib/pdf/docFileName.js'
-import useDailyLogFacts from '../../lib/useDailyLogFacts.js'
+import { useDailyLogFacts } from '../../lib/useFormHeaderFacts.js'
 
 // 公共工程施工日誌（工程會 101.10.17 修正公定格式）— 不套 WebLayout，整頁即文件。
 // 工具列(chrome,吃主題 token)與紙面(.paper,固定白底黑字)分開處理,理由見 PrintToolbar 與 index.css。

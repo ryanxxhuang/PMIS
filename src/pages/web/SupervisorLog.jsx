@@ -2,8 +2,11 @@
 // 寫入入口——存檔=save_field_document_version(伺服器保存版本、算雜湊、判待補),簽署=sign_field_document
 // (登入的平台帳號;事實表 supervisor_logs 在簽署交易內落庫),提送機關／機關收件／退回各走 RPC。
 //
-// 與施工日誌頁(SiteLog)共用 DocumentLifecycle／DocumentPhotos／IntakeUploader／WeatherPull／FieldSourceChip／RowsEditor;
-// 欄位版面由伺服器範本 fn_field_document_template('supervisor_log')(示範範本,Q11)驅動,頁面與列印都標「示範範本」與免責聲明。
+// 與施工日誌頁(SiteLog)共用 DocumentLifecycle／DocumentPhotos／IntakeUploader／WeatherPull;
+// 2026-09-20 C2:這一頁的表單就是**工程會附表五「公共工程監造報表」的那張紙**(SupervisorLogSheet)——
+// 格內可編、畫面與列印／PDF 同一個元件同一份 mapping(lib/officialForms);框架必填欄仍由伺服器範本
+// fn_field_document_template('supervisor_log')(示範範本,Q11)推導,頁面與列印都標「示範範本」與免責聲明。
+// 附表五是**日報**不是監造月報(原表註 2),頁面與檔名都不得出現「月報」。
 // 一天一份活文件(?d=);?doc=<id> 直達文件。沒有文件時是空白草稿:全部待補、收件情形與廠商施工情形只在同日
 // 施工日誌已簽署／提送時才引用(來源 field_document:<id>:v<n>),否則留待補、不填「無」。
 // 到場人員只能人填:AI 草稿永遠留空,人填了也只是「待親自確認」,按「確認到場人員」才 confirmed(伺服器 PD004
@@ -26,8 +29,10 @@ import {
   formalDailyLogFromDetail, applyFormalDailyLog, ORG_LABEL, fieldAnchorId,
 } from '../../lib/fieldDocs.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from '../../lib/fieldDocText.js'
+import { stampFormTemplate } from '../../lib/officialForms.js'
+import { useSupervisorReportFacts } from '../../lib/useFormHeaderFacts.js'
 
-import SupervisorLogFields from '../../components/sitelog/SupervisorLogFields.jsx'
+import SupervisorLogSheet from '../../components/sitelog/SupervisorLogSheet.jsx'
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'
 import IntakeUploader from '../../components/sitelog/IntakeUploader.jsx'
@@ -81,6 +86,8 @@ export default function SupervisorLog() {
     return () => { active = false }
   }, [getFieldDocumentTemplate])
   const labels = useMemo(() => templateFieldLabels(template), [template])
+  // 表頭的確定性事實(契約工期、預定／實際進度、已核准變更次數):與施工日誌同一支算式,AI 不得產生這些數字
+  const facts = useSupervisorReportFacts(date)
   const humanOnly = useMemo(() => templateConfirmRequiredKeys(template), [template]) // 須確認欄(到場;human_only 蘊含)
 
   // 本案監造方成員(到場人員可帶 user_id;RPC 只給本案成員,簽署時 DB 再驗)
@@ -212,7 +219,9 @@ export default function SupervisorLog() {
       if (r.error) { setSaving(false); setSavedMsg(friendlyError(r.error, '無法建立監造日誌草稿')); return }
       d = r.doc; base = d.current_version_no
     }
-    const r = await saveFieldDocumentVersion({ documentId: d.id, baseVersionNo: base, content: form.content, fieldSources: form.sources, attachments, changeNote: amendMode ? '簽後更正' : null })
+    // 存檔時把「當時用的表單範本」寫進內容:簽署版本自己記得版面語意(C 包)
+    const content = stampFormTemplate(form.content, 'supervisor_log')
+    const r = await saveFieldDocumentVersion({ documentId: d.id, baseVersionNo: base, content, fieldSources: form.sources, attachments, changeNote: amendMode ? '簽後更正' : null })
     setSaving(false)
     if (r.error) {
       const g = fieldDocErrorGuidance(r.error)
@@ -366,16 +375,20 @@ export default function SupervisorLog() {
             {!doc && readOnlyNote ? (
               <Empty>此日期尚無監造日誌。監造日誌由監造填報。</Empty>
             ) : (
-              <SupervisorLogFields state={form} template={template} labels={labels} editable={!!formEditable} leaves={leaves} byId={byId} onChange={onFormChange} issues={issueMap}
-                lookups={lookups} currentUser={currentUser} members={members}
-                contractorTools={canImportDailyLog ? (
-                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                    <Button variant="secondary" size="sm" onClick={importDailyLog}>引用同日施工日誌 v{dailyLogFormal.version_no}</Button>
-                    <span className="text-caption text-[var(--text-3)]">施工日誌已{DOC_STATUS_LABEL[dailyLogFormal.status] || dailyLogFormal.status}；引用會標來源並待你核對。</span>
-                  </div>
-                ) : (formEditable && dailyLogFormal && !isFormalDailyLog(dailyLogFormal) ? (
-                  <p className="mt-1.5 text-caption text-[var(--text-3)]">同日施工日誌尚未簽署／提送（目前{DOC_STATUS_LABEL[dailyLogFormal.status] || dailyLogFormal.status}），不引用未定版內容；待廠商完成後再引用或自行填寫。</p>
-                ) : null)} />
+              <div className="overflow-x-auto -mx-2 px-2">
+                <SupervisorLogSheet project={project} doc={doc} version={detail?.version} content={form.content} sources={form.sources}
+                  signature={null} template={template} facts={facts} lookups={lookups} byId={byId} leaves={leaves}
+                  members={members} currentUser={currentUser} stamp={null} titleAs="h2" className="min-w-[680px] !p-4"
+                  edit={{ org, editable: !!formEditable, onChange: onFormChange, state: form, issues: issueMap, photosById }}
+                  contractorTools={canImportDailyLog ? (
+                    <div className="print:hidden mt-1.5 flex items-center gap-2 flex-wrap">
+                      <Button variant="secondary" size="sm" onClick={importDailyLog}>引用同日施工日誌 v{dailyLogFormal.version_no}</Button>
+                      <span className="text-caption text-[var(--text-3)]">施工日誌已{DOC_STATUS_LABEL[dailyLogFormal.status] || dailyLogFormal.status}；引用會標來源並待你核對。</span>
+                    </div>
+                  ) : (formEditable && dailyLogFormal && !isFormalDailyLog(dailyLogFormal) ? (
+                    <p className="print:hidden mt-1.5 text-caption text-[var(--text-3)]">同日施工日誌尚未簽署／提送（目前{DOC_STATUS_LABEL[dailyLogFormal.status] || dailyLogFormal.status}），不引用未定版內容；待廠商完成後再引用或自行填寫。</p>
+                  ) : null)} />
+              </div>
             )}
 
             {(doc || editable) && (
