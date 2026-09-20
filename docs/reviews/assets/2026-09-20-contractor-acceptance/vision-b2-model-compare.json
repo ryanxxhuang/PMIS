@@ -1,0 +1,460 @@
+{
+  "generated_at_utc": "2026-09-20T08:15:02.555511+00:00",
+  "what": "2026-09-20 B2 紙表逐格辨識的「模型／開關」對照。手寫實測值以人工標註為準:LINE_A 編號1 線徑13×11mm、網目15×15cm 與編號4 線徑11×11mm、網目15×15cm;LI2995 與 LIFA1C 各為編號4 線徑11×11mm、網目15×15cm;合計 8 個。",
+  "pricing_source": "Anthropic 官方定價表(claude-api skill「Current Models」,cached 2026-06-24)",
+  "runs": [
+    {
+      "key": "b-baseline-pr164",
+      "note": "B 包(PR #164)已進版控的基準 vision-after-b.json;mode=original",
+      "tested_at_utc": "2026-09-20T06:24:10.882Z",
+      "cells_enabled": false,
+      "cells_model": null,
+      "measured_total_of_8": 1,
+      "cost_usd_per_paper_photo": null,
+      "calls_total": 27,
+      "usage_total": {
+        "input_tokens": 198115,
+        "output_tokens": 21334
+      },
+      "per_photo": [
+        {
+          "case": "LI2995~1_0.JPG",
+          "measured": 0,
+          "log_date": "2026-08-04"
+        },
+        {
+          "case": "LIFA1C~1_0.JPG",
+          "measured": 1,
+          "log_date": "2026-08-04"
+        },
+        {
+          "case": "LINE_A~4_0.JPG",
+          "measured": 0,
+          "log_date": "2026-08-04"
+        }
+      ]
+    },
+    {
+      "key": "b2-haiku-run1",
+      "note": "B2 正式設定(逐格=claude-haiku-4-5-20251001);mode=both＋負例,即進版控的那份",
+      "tested_at_utc": "2026-09-20T08:09:08.487Z",
+      "cells_enabled": true,
+      "cells_model": "claude-haiku-4-5-20251001",
+      "measured_total_of_8": 7,
+      "cost_usd_per_paper_photo": 0.054546,
+      "calls_total": 51,
+      "usage_total": {
+        "input_tokens": 290827,
+        "output_tokens": 28632
+      },
+      "per_photo": [
+        {
+          "case": "LI2995~1_0.JPG",
+          "measured": 2,
+          "design": 4,
+          "log_date": "",
+          "cells_used": true,
+          "cells_skipped": null,
+          "cells_retried": true,
+          "calls": 7,
+          "latency_ms": 18753,
+          "tokens": {
+            "classify": [
+              7617,
+              274
+            ],
+            "record": [
+              0,
+              0
+            ],
+            "cells": [
+              26936,
+              1547
+            ]
+          },
+          "cost_usd": 0.043658,
+          "measured_values": [
+            "編號4 線徑 11 * 11 MM",
+            "編號4 網目 15 * 15 CM"
+          ]
+        },
+        {
+          "case": "LIFA1C~1_0.JPG",
+          "measured": 1,
+          "design": 6,
+          "log_date": "2026-08-04",
+          "cells_used": true,
+          "cells_skipped": null,
+          "cells_retried": false,
+          "calls": 7,
+          "latency_ms": 27283,
+          "tokens": {
+            "classify": [
+              7617,
+              279
+            ],
+            "record": [
+              14874,
+              2147
+            ],
+            "cells": [
+              17992,
+              1301
+            ]
+          },
+          "cost_usd": 0.059118,
+          "measured_values": [
+            "編號4 網目 15 * 15"
+          ]
+        },
+        {
+          "case": "LINE_A~4_0.JPG",
+          "measured": 4,
+          "design": 4,
+          "log_date": "2026-08-04",
+          "cells_used": true,
+          "cells_skipped": null,
+          "cells_retried": false,
+          "calls": 7,
+          "latency_ms": 36147,
+          "tokens": {
+            "classify": [
+              7617,
+              297
+            ],
+            "record": [
+              14874,
+              2928
+            ],
+            "cells": [
+              18076,
+              2087
+            ]
+          },
+          "cost_usd": 0.067127,
+          "measured_values": [
+            "編號1 線徑 13 * 11 MM",
+            "編號1 網目 15 * 15 CM",
+            "編號4 線徑 11 * 11 MM",
+            "編號4 網目 15 * 15 CM"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "b2-haiku-run2",
+      "note": "B2 正式設定,同一份程式再跑一次(量批次間變異);mode=original",
+      "tested_at_utc": "2026-09-20T08:11:18.052Z",
+      "cells_enabled": true,
+      "cells_model": "claude-haiku-4-5-20251001",
+      "measured_total_of_8": 8,
+      "cost_usd_per_paper_photo": 0.066822,
+      "calls_total": 25,
+      "usage_total": {
+        "input_tokens": 145711,
+        "output_tokens": 14517
+      },
+      "per_photo": [
+        {
+          "case": "LI2995~1_0.JPG",
+          "measured": 2,
+          "design": 4,
+          "log_date": "2026-08-04",
+          "cells_used": true,
+          "cells_skipped": null,
+          "cells_retried": true,
+          "calls": 9,
+          "latency_ms": 35550,
+          "tokens": {
+            "classify": [
+              7617,
+              278
+            ],
+            "record": [
+              14874,
+              3128
+            ],
+            "cells": [
+              26936,
+              1671
+            ]
+          },
+          "cost_usd": 0.074812,
+          "measured_values": [
+            "編號4 線徑 11 * 11 MM",
+            "編號4 網目 15 * 15 CM"
+          ]
+        },
+        {
+          "case": "LIFA1C~1_0.JPG",
+          "measured": 2,
+          "design": 4,
+          "log_date": "",
+          "cells_used": true,
+          "cells_skipped": null,
+          "cells_retried": false,
+          "calls": 7,
+          "latency_ms": 30237,
+          "tokens": {
+            "classify": [
+              7617,
+              289
+            ],
+            "record": [
+              14874,
+              2544
+            ],
+            "cells": [
+              17992,
+              1425
+            ]
+          },
+          "cost_usd": 0.061773,
+          "measured_values": [
+            "編號4 線徑 11 * 11 MM",
+            "編號4 網目 15 * 15 CM"
+          ]
+        },
+        {
+          "case": "LINE_A~4_0.JPG",
+          "measured": 4,
+          "design": 6,
+          "log_date": "2026-08-04",
+          "cells_used": true,
+          "cells_skipped": null,
+          "cells_retried": false,
+          "calls": 7,
+          "latency_ms": 32526,
+          "tokens": {
+            "classify": [
+              7617,
+              290
+            ],
+            "record": [
+              14874,
+              2799
+            ],
+            "cells": [
+              18076,
+              1574
+            ]
+          },
+          "cost_usd": 0.063882,
+          "measured_values": [
+            "編號1 線徑 13 * 11 MM",
+            "編號1 網目 15 * 15 CM",
+            "編號4 線徑 11 * 11 MM",
+            "編號4 網目 15 * 15 CM"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "b-no-cells",
+      "note": "對照組:--no-cells 關掉逐格辨識 = B 包行為(整張圖讀兩次);mode=original",
+      "tested_at_utc": "2026-09-20T08:12:14.822Z",
+      "cells_enabled": false,
+      "cells_model": null,
+      "measured_total_of_8": 3,
+      "cost_usd_per_paper_photo": 0.036338,
+      "calls_total": 11,
+      "usage_total": {
+        "input_tokens": 82707,
+        "output_tokens": 8831
+      },
+      "per_photo": [
+        {
+          "case": "LI2995~1_0.JPG",
+          "measured": 0,
+          "design": 0,
+          "log_date": "2026-08-04",
+          "cells_used": false,
+          "cells_skipped": "disabled_by_flag",
+          "cells_retried": false,
+          "calls": 3,
+          "latency_ms": 15813,
+          "tokens": {
+            "classify": [
+              7617,
+              279
+            ],
+            "record": [
+              14874,
+              2209
+            ],
+            "cells": [
+              0,
+              0
+            ]
+          },
+          "cost_usd": 0.034931,
+          "measured_values": []
+        },
+        {
+          "case": "LIFA1C~1_0.JPG",
+          "measured": 1,
+          "design": 2,
+          "log_date": "2026-08-04",
+          "cells_used": false,
+          "cells_skipped": "disabled_by_flag",
+          "cells_retried": false,
+          "calls": 3,
+          "latency_ms": 17229,
+          "tokens": {
+            "classify": [
+              7617,
+              283
+            ],
+            "record": [
+              14874,
+              2471
+            ],
+            "cells": [
+              0,
+              0
+            ]
+          },
+          "cost_usd": 0.036261,
+          "measured_values": [
+            "編號4 網目 網目：15 * 15 CM"
+          ]
+        },
+        {
+          "case": "LINE_A~4_0.JPG",
+          "measured": 2,
+          "design": 4,
+          "log_date": "2026-08-04",
+          "cells_used": false,
+          "cells_skipped": "disabled_by_flag",
+          "cells_retried": false,
+          "calls": 3,
+          "latency_ms": 18486,
+          "tokens": {
+            "classify": [
+              7617,
+              278
+            ],
+            "record": [
+              14874,
+              2788
+            ],
+            "cells": [
+              0,
+              0
+            ]
+          },
+          "cost_usd": 0.037821,
+          "measured_values": [
+            "編號1 網目 15 ‧15 CM",
+            "編號4 網目 15 ‧15 CM"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "b2-sonnet-5",
+      "note": "對照組:逐格辨識改用 claude-sonnet-5(其餘相同);mode=original",
+      "tested_at_utc": "2026-09-20T08:14:07.069Z",
+      "cells_enabled": true,
+      "cells_model": "claude-sonnet-5",
+      "measured_total_of_8": 6,
+      "cost_usd_per_paper_photo": 0.084612,
+      "calls_total": 25,
+      "usage_total": {
+        "input_tokens": 130491,
+        "output_tokens": 14105
+      },
+      "per_photo": [
+        {
+          "case": "LI2995~1_0.JPG",
+          "measured": 0,
+          "design": 2,
+          "log_date": "2026-08-04",
+          "cells_used": false,
+          "cells_skipped": "not_grounded",
+          "cells_retried": false,
+          "calls": 7,
+          "latency_ms": 34156,
+          "tokens": {
+            "classify": [
+              7617,
+              312
+            ],
+            "record": [
+              14874,
+              3208
+            ],
+            "cells": [
+              13564,
+              1154
+            ]
+          },
+          "cost_usd": 0.078759,
+          "measured_values": []
+        },
+        {
+          "case": "LIFA1C~1_0.JPG",
+          "measured": 2,
+          "design": 6,
+          "log_date": "2026-08-04",
+          "cells_used": true,
+          "cells_skipped": null,
+          "cells_retried": true,
+          "calls": 9,
+          "latency_ms": 39015,
+          "tokens": {
+            "classify": [
+              7617,
+              275
+            ],
+            "record": [
+              14874,
+              2284
+            ],
+            "cells": [
+              20332,
+              1990
+            ]
+          },
+          "cost_usd": 0.09585,
+          "measured_values": [
+            "編號4 線徑 線徑 11 * 11 MM",
+            "編號4 網目 網目 15 *15 CM"
+          ]
+        },
+        {
+          "case": "LINE_A~4_0.JPG",
+          "measured": 4,
+          "design": 5,
+          "log_date": "2026-08-04",
+          "cells_used": true,
+          "cells_skipped": null,
+          "cells_retried": false,
+          "calls": 7,
+          "latency_ms": 33686,
+          "tokens": {
+            "classify": [
+              7617,
+              273
+            ],
+            "record": [
+              14874,
+              2655
+            ],
+            "cells": [
+              13888,
+              1432
+            ]
+          },
+          "cost_usd": 0.079227,
+          "measured_values": [
+            "編號1 線徑 13 * 11 MM",
+            "編號1 網目 15 * 15 CM",
+            "編號4 線徑 11 * 11 MM",
+            "編號4 網目 15 * 15 CM"
+          ]
+        }
+      ]
+    }
+  ]
+}

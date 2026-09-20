@@ -40,3 +40,12 @@ export function stubWhiteboard(): WhiteboardResult {
     location: '', location_text: '', work_item_text: '', work_summary: '', observations: [], items: [], dropped: [],
   }
 }
+
+/**
+ * 紙表逐格辨識的 stub(B2)。stub 的分類結果 record_medium='none',正常流程根本走不到這裡;
+ * 留一份是為了讓注入介面完整,而且**萬一走到也不會憑空生出實測值**——空的 column_seen 會讓
+ * normalizePaperCellRead 整塊丟掉,逐格結果不成立,退回整張圖的 stub 結果。
+ */
+export function stubPaperCells(): { column_seen: string; rows: [] } {
+  return { column_seen: '', rows: [] }
+}

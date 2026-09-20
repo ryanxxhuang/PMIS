@@ -142,12 +142,14 @@ type Classify = { caption?: string; is_construction?: boolean; legible?: boolean
 function stubVision(opts: {
   classify?: (base64: string) => VisionResult<unknown>
   board?: (base64: string) => VisionResult<unknown>
+  cells?: (base64: string, columnHint: string) => VisionResult<unknown>
   calls?: string[]
 } = {}): DraftVision {
   const ok = (c: Classify): VisionResult<unknown> => ({ data: { caption: '鋼筋綁紮', category: '施工作業', is_construction: true, legible: true, has_board: false, work_item_hint: '鋼筋加工及組立', visible_progress: '', location: null, ...c } })
   return {
     classify: async (b) => { opts.calls?.push(`classify:${b}`); return opts.classify ? opts.classify(b) : ok({}) },
     readBoard: async (b) => { opts.calls?.push(`board:${b}`); return opts.board ? opts.board(b) : { data: { log_date: '', weather: '', location: '', work_summary: '', items: [] } } },
+    ...(opts.cells ? { readCells: async (b: string, _m: string, hint: string) => { opts.calls?.push(`cells:${hint}`); return opts.cells!(b, hint) } } : {}),
   }
 }
 
@@ -757,5 +759,179 @@ describe('Agent 對話起稿 → 現場文書草稿(不寫事實表;agent_action
     expect((v.field_sources as Record<string, { status: string }>).work_item_id.status).toBe('pending')
     expect((v.content as { results: Record<string, { value: unknown }> }).results.C2.value).toBeNull()
     expect(w.docs[0].target_key).toBe(agentSelfCheckKey('2026-09-17', null, 'tpl-conc'))
+  })
+})
+
+describe('紙表逐格辨識(B2;獨立 AI 功能 paperform.cells)', () => {
+  // 紙本表單的分類結果:record_medium=paper_form 才會走逐格路徑
+  const paperClassify = (): VisionResult<unknown> => ({
+    data: {
+      caption: '鋼筋查驗紀錄表', category: '查驗會勘', is_construction: true, legible: true, text_legible: true,
+      has_board: true, record_medium: 'paper_form', work_item_hint: '鋼筋加工及組立', visible_progress: '',
+      location: null, location_text: '',
+    },
+  })
+  // 整張圖那一支:讀得到表頭,observations 卻把實測值誤標成設計值(B 包實測到的症狀)
+  const wholeBoard = (): VisionResult<unknown> => ({
+    data: {
+      record_medium: 'paper_form', log_date_text: '115.8.4', log_date: '2026-08-04', weather: '', location: '',
+      location_text: '', work_item_text: '鋼筋', work_summary: '', items: [],
+      observations: [{ kind: 'design', label: '線徑', entry_no: '1', raw_text: '13 * 11 MM', value: 13, value2: 11, unit: 'MM', comparator: '', location: '', note: '' }],
+    },
+  })
+  const tile = (index: number, column: 'left' | 'right') =>
+    ({ index, column, band: 1, bands: 1, rect: { x: 100 * (index + 1), y: 50, w: 300, h: 400 }, scale: 2, base64: `tile${index}`, mime: 'image/jpeg' as const })
+  const imaging = (over: Partial<{ tiles: ReturnType<typeof tile>[]; reason: string | null }> = {}) => ({
+    paperFormTiles: () => ({ tiles: [tile(0, 'left'), tile(1, 'right')], reason: null, region: { x: 90, y: 40, w: 700, h: 420 }, notes: [], ...over }),
+  })
+  // 重切:界線左移後右塊往左長(rect.x 變小),只回被要求的那一側
+  const retryImaging = () => ({
+    paperFormTiles: (_b: string, _m: string, o?: { boundaryShift?: number; columns?: ('left' | 'right' | 'whole')[] }) => {
+      const all = o?.boundaryShift
+        ? [{ ...tile(0, 'left'), rect: { x: 100, y: 50, w: 240, h: 400 } }, { ...tile(1, 'right'), rect: { x: 160, y: 50, w: 340, h: 400 }, base64: 'tile1-retry' }]
+        : [tile(0, 'left'), tile(1, 'right')]
+      const tiles = o?.columns?.length ? all.filter((t) => o.columns!.includes(t.column)) : all
+      return { tiles, reason: null, region: { x: 90, y: 40, w: 700, h: 420 }, notes: [] }
+    },
+  })
+  const cellRows = (hint: string) => hint === '左半邊'
+    ? { column_seen: '設計值', rows: [{ entry_no: '(1)', label: '線徑', raw_text: '13 * 11 MM', value: 13, value2: 11, unit: 'MM' }] }
+    : { column_seen: '實測值', rows: [{ entry_no: '(4)', label: '線徑', raw_text: '11 * 11 MM', value: 11, value2: 11, unit: 'MM' }] }
+  const obsOf = (w: World) => (w.photos[0].ai_result as { whiteboard: { observations: { kind: string; value: number; value2: number | null; source: { column: string; rect: { x: number } } | null }[]; log_date: string } }).whiteboard
+
+  it('逐格成功:實測值由逐格結果落地(帶原圖座標),表頭仍來自整張圖,且整張圖只讀一次', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    const r = await run(w, stubVision({ calls, classify: paperClassify, board: wholeBoard, cells: (_b, hint) => ({ data: cellRows(hint) }) }), { imaging: imaging() })
+    expect(r.status).toBe(200)
+    const wb = obsOf(w)
+    expect(wb.log_date).toBe('2026-08-04')
+    expect(wb.observations.map((o) => [o.kind, o.value, o.value2])).toEqual([['design', 13, 11], ['measured', 11, 11]])
+    expect(wb.observations[1].source).toMatchObject({ column: 'right', rect: { x: 200 } })
+    // 每塊各讀兩次(2 塊 × 2 次);整張圖仍讀兩次——逐格接手 observations,但表頭的手寫民國年日期
+    // 仍由整張那一支負責,兩次一致才採用不能省(省過一次就出現 115 被讀成 114 的日期)
+    expect(calls.filter((c) => c.startsWith('cells:'))).toHaveLength(4)
+    expect(calls.filter((c) => c.startsWith('board:'))).toHaveLength(2)
+    expect((w.photos[0].ai_result as { paper_cells_skipped: string | null }).paper_cells_skipped).toBeNull()
+  })
+
+  it('兩塊讀到同一個欄位標題(切歪)→ 不採用逐格,保留整張圖結果並寫明原因', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const r = await run(w, stubVision({ classify: paperClassify, board: wholeBoard, cells: () => ({ data: cellRows('右半邊') }) }), { imaging: imaging() })
+    expect(r.status).toBe(200)
+    const wb = obsOf(w) as unknown as { observations: { kind: string }[]; dropped: string[] }
+    expect(wb.observations.map((o) => o.kind)).toEqual(['design'])
+    expect(wb.dropped.join(' ')).toContain('重複的欄位標題')
+    expect((w.photos[0].ai_result as { paper_cells_skipped: string }).paper_cells_skipped).toBe('not_grounded')
+  })
+
+  it('功能關閉(閘門擋下)→ 退回整張圖讀兩次,照常起稿並揭露,不整批失敗', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    const blocked = { allow: false as const, code: 'feature_disabled', status: 403, message: '此 AI 功能未啟用(紙本查驗表逐格辨識)' }
+    const r = await run(w, stubVision({ calls, classify: paperClassify, board: wholeBoard, cells: () => ({ blocked }) }), { imaging: imaging() })
+    expect(r.status).toBe(200)
+    expect(w.photos[0].ai_status).toBe('done')
+    expect((w.photos[0].ai_result as { paper_cells_skipped: string }).paper_cells_skipped).toBe('feature_disabled')
+    expect(calls.filter((c) => c.startsWith('board:'))).toHaveLength(2) // 退回 B 的兩次
+    expect(r.body.notes).toEqual(expect.arrayContaining([expect.stringContaining('紙表逐格辨識功能未啟用')]))
+  })
+
+  it('偵測不到紙張 → 帶原因跳過,整張圖照 B 讀兩次', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    await run(w, stubVision({ calls, classify: paperClassify, board: wholeBoard, cells: () => ({ data: cellRows('右半邊') }) }),
+      { imaging: imaging({ tiles: [], reason: '畫面中找不到夠大的紙張區域,未做逐格辨識' }) })
+    expect((w.photos[0].ai_result as { paper_cells_skipped: string }).paper_cells_skipped).toContain('找不到夠大的紙張區域')
+    expect(calls.filter((c) => c.startsWith('cells:'))).toHaveLength(0)
+    expect(calls.filter((c) => c.startsWith('board:'))).toHaveLength(2)
+  })
+
+  it('沒有注入切塊能力 → unavailable,整張圖照 B 讀兩次(行為完全退回 B 包)', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    await run(w, stubVision({ calls, classify: paperClassify, board: wholeBoard }))
+    expect((w.photos[0].ai_result as { paper_cells_skipped: string }).paper_cells_skipped).toBe('unavailable')
+    expect(calls.filter((c) => c.startsWith('board:'))).toHaveLength(2)
+  })
+
+  it('逐格呼叫失敗 → 記下錯誤代碼,整張圖照 B 讀兩次,不讓整張照片失敗', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    await run(w, stubVision({ calls, classify: paperClassify, board: wholeBoard, cells: () => ({ error: '模型忙碌', errorCode: 'http_529' }) }), { imaging: imaging() })
+    expect(w.photos[0].ai_status).toBe('done')
+    expect((w.photos[0].ai_result as { paper_cells_skipped: string }).paper_cells_skipped).toBe('failed:http_529')
+    expect(calls.filter((c) => c.startsWith('board:'))).toHaveLength(2)
+  })
+
+  it('整張看起來字太小(text_legible=false)仍會走逐格:切成單欄放大後常常讀得清楚', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    await run(w, stubVision({
+      calls, board: wholeBoard, cells: (_b, hint) => ({ data: cellRows(hint) }),
+      classify: () => ({ data: { caption: '鋼筋查驗紀錄表', category: '查驗會勘', is_construction: true, legible: true, text_legible: false, has_board: true, record_medium: 'paper_form', work_item_hint: '鋼筋', visible_progress: '', location: null, location_text: '' } }),
+    }), { imaging: imaging() })
+    expect(calls.filter((c) => c.startsWith('cells:'))).toHaveLength(4)
+    expect(calls.filter((c) => c.startsWith('board:'))).toHaveLength(0) // 整張轉錄仍不跑
+    const wb = obsOf(w)
+    expect(wb.observations.map((o) => o.kind)).toEqual(['design', 'measured'])
+  })
+
+  it('紙表但連字都讀不出來(has_board=false)→ 不走逐格,不為此花錢', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    await run(w, stubVision({
+      calls, board: wholeBoard, cells: (_b, hint) => ({ data: cellRows(hint) }),
+      classify: () => ({ data: { caption: '紙張', category: '查驗會勘', is_construction: true, legible: true, text_legible: false, has_board: false, record_medium: 'paper_form', work_item_hint: '', visible_progress: '', location: null, location_text: '' } }),
+    }), { imaging: imaging() })
+    expect(calls.filter((c) => c.startsWith('cells:'))).toHaveLength(0)
+  })
+
+  it('黑白板(非紙本表單)不走逐格路徑,不為此多花錢', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    await run(w, stubVision({
+      calls, board: wholeBoard, cells: () => ({ data: cellRows('右半邊') }),
+      classify: () => ({ data: { caption: '告示板', category: '工地環境', is_construction: true, legible: true, text_legible: true, has_board: true, record_medium: 'board', work_item_hint: '', visible_progress: '', location: null, location_text: '' } }),
+    }), { imaging: imaging() })
+    expect(calls.filter((c) => c.startsWith('cells:'))).toHaveLength(0)
+    expect(calls.filter((c) => c.startsWith('board:'))).toHaveLength(1) // 黑白板本來就只讀一次
+  })
+
+  it('一側讀不到欄位標題 → 把分欄界線左移、只重讀那一側一次,讀到就採用', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    const r = await run(w, stubVision({
+      calls, classify: paperClassify, board: wholeBoard,
+      // 第一次切的右塊(tile1)欄名被切掉;重切後的右塊(tile1-retry)才讀得到「實測值」
+      cells: (b, hint) => ({ data: b === 'tile1' ? { column_seen: '', rows: cellRows('右半邊').rows } : cellRows(hint) }),
+    }), { imaging: retryImaging() })
+    expect(r.status).toBe(200)
+    const wb = obsOf(w)
+    expect(wb.observations.map((o) => o.kind)).toEqual(['design', 'measured'])
+    expect(wb.observations[1].source).toMatchObject({ rect: { x: 160 } }) // 用的是重切後的座標
+    expect((wb as unknown as { dropped: string[] }).dropped.join(' ')).toContain('分欄界線左移重切')
+    // 2 塊 ×2 次 + 重讀右側 ×2 次 = 6 次;重試只做一次,不會無上限往左試
+    expect(calls.filter((c) => c.startsWith('cells:'))).toHaveLength(6)
+  })
+
+  it('重切後仍讀不到欄位標題 → 留空待人填,不再試第三次', async () => {
+    const w = world({ photos: [photo('p1')] })
+    const calls: string[] = []
+    await run(w, stubVision({
+      calls, classify: paperClassify, board: wholeBoard,
+      cells: (b, hint) => ({ data: b.startsWith('tile1') ? { column_seen: '', rows: [] } : cellRows(hint) }),
+    }), { imaging: retryImaging() })
+    const wb = obsOf(w)
+    expect(wb.observations.every((o) => o.kind === 'design')).toBe(true)
+    expect(calls.filter((c) => c.startsWith('cells:'))).toHaveLength(6)
+  })
+
+  it('整張圖那一支失敗但逐格成功 → 逐格讀到的實測值不會被丟掉', async () => {
+    const w = world({ photos: [photo('p1')] })
+    await run(w, stubVision({ classify: paperClassify, board: () => ({ error: '模型忙碌', errorCode: 'http_529' }), cells: (_b, hint) => ({ data: cellRows(hint) }) }), { imaging: imaging() })
+    const wb = obsOf(w)
+    expect(wb.observations.map((o) => [o.kind, o.value])).toEqual([['design', 13], ['measured', 11]])
+    expect((w.photos[0].ai_result as { whiteboard_skipped: string }).whiteboard_skipped).toBe('failed:http_529')
   })
 })

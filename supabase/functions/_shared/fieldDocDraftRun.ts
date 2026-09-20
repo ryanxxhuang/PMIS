@@ -31,8 +31,13 @@ import {
 } from './fieldDocDraft.ts'
 import type { FieldDocTemplate } from './fieldDocTemplate.ts'
 import { matchLeaf } from './photoMatch.ts'
-import { agreeRecords, groundedLocation, hasWrittenRecord, needsSecondPass, normalizeSitePhotoResult, normalizeWhiteboardResult } from './sitePhotoVision.ts'
+import { agreeRecords, groundedLocation, hasWrittenRecord, needsPaperCells, needsSecondPass, normalizeSitePhotoResult, normalizeWhiteboardResult } from './sitePhotoVision.ts'
 import type { SitePhotoResult, WhiteboardResult } from './sitePhotoVision.ts'
+import { hasCellObservations, runPaperFormCells } from './paperFormCells.ts'
+import type { PaperCellsResult } from './paperFormCells.ts'
+import { COLUMN_BOUNDARY_RETRY_SHIFT_RATIO } from './paperFormLayout.ts'
+import type { TileColumn } from './paperFormLayout.ts'
+import type { PreparedTiles } from './paperFormImaging.ts'
 import type { GateVerdict } from './gatePolicy.ts'
 
 export const MAX_ATTEMPTS = 5
@@ -126,11 +131,19 @@ export type VisionResult<T> = { data: T } | { error: string; errorCode: string }
 export interface DraftVision {
   classify(base64: string, mime: string): Promise<VisionResult<unknown>>
   readBoard(base64: string, mime: string): Promise<VisionResult<unknown>>
+  // 2026-09-20 B2:紙表逐格辨識(獨立 AI 功能 paperform.cells,獨立閘門與用量)。
+  // 沒有注入時整條逐格路徑不啟用,退回 B 的「整張圖讀兩次」。
+  readCells?(base64: string, mime: string, columnHint: string): Promise<VisionResult<unknown>>
+}
+/** 影像切塊(唯一需要真正解碼 JPEG 的注入點;測試用假物件即可,執行流程不 import npm)。 */
+export interface DraftImaging {
+  paperFormTiles(base64: string, mime: string, opts?: { boundaryShift?: number; columns?: TileColumn[] }): PreparedTiles
 }
 
 export type RunInput = {
   repo: DraftRepo
   vision: DraftVision
+  imaging?: DraftImaging
   intakeId: string
   userId: string
   now?: () => number
@@ -186,6 +199,8 @@ export type StoredAiResult = {
   classify: SitePhotoResult | null
   whiteboard: WhiteboardResult | null
   whiteboard_skipped: string | null
+  // B2:紙表逐格辨識沒跑或沒採用的原因(揭露用;null=沒有這一步或已採用)
+  paper_cells_skipped?: string | null
   match: { work_item_id: string | null; hint: string | null }
   duplicate_of?: string
   error?: string
@@ -202,10 +217,36 @@ export function readStored(raw: unknown): StoredAiResult | null {
     classify,
     whiteboard: normalizeWhiteboardResult(r.whiteboard),
     whiteboard_skipped: typeof r.whiteboard_skipped === 'string' ? r.whiteboard_skipped : null,
+    paper_cells_skipped: typeof r.paper_cells_skipped === 'string' ? r.paper_cells_skipped : null,
     match: {
       work_item_id: typeof match.work_item_id === 'string' ? match.work_item_id : null,
       hint: typeof match.hint === 'string' ? match.hint : null,
     },
+  }
+}
+
+/**
+ * 逐格辨識結果併回整張圖的轉錄結果(B2)。
+ * * 逐格有讀到東西 → **observations 整批換成逐格的**(每一筆都帶原圖座標);整張圖那一份
+ *   observations 是同一件事的較差版本,留著只會出現兩套說法。表頭欄位(日期／位置／表上工項)
+ *   仍來自整張圖那一支——那些欄位本來就讀得準,而且不在任何一欄裡面。
+ * * 逐格沒讀到(或不成立) → 保留整張圖的結果,只把原因附進 dropped 讓人看得到。
+ * * 整張圖那一支失敗但逐格成功 → 用逐格結果補一份最小紀錄,不要把讀到的實測值丟掉。
+ */
+export function applyPaperCells(whiteboard: WhiteboardResult | null, cells: PaperCellsResult): WhiteboardResult | null {
+  const used = hasCellObservations(cells)
+  if (!whiteboard) {
+    if (!used) return null
+    return {
+      record_medium: 'paper_form', log_date: '', log_date_text: '', log_date_conflict: null,
+      weather: '', location: '', location_text: '', work_item_text: '', work_summary: '',
+      observations: cells.observations, items: [], dropped: [...cells.dropped],
+    }
+  }
+  return {
+    ...whiteboard,
+    observations: used ? cells.observations : whiteboard.observations,
+    dropped: [...whiteboard.dropped, ...cells.dropped],
   }
 }
 
@@ -422,7 +463,27 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
   // 用物件承載跨閉包的旗標:TS 的流程分析不追閉包內的賦值,裸 let 會在迴圈後被窄成初始值
   const stop = { verdict: null as (GateVerdict & { allow: false }) | null }
   let boardBlocked = false
+  let cellsBlocked = false
   let remaining = 0
+
+  // ── B2 紙表逐格辨識:切塊 → 每塊讀兩次 → 兩次一致才採用 → 併塊 ────────────
+  // 任何一步不成立都回 skipped 原因,呼叫端退回整張圖一次讀的 B 路徑;不硬切、不猜。
+  const readPaperCells = async (base64: string, mime: string): Promise<{ cells: PaperCellsResult | null; skipped: string | null }> => {
+    if (cellsBlocked) return { cells: null, skipped: 'feature_disabled' }
+    const imaging = input.imaging
+    const readCells = vision.readCells
+    if (!imaging || !readCells) return { cells: null, skipped: 'unavailable' }
+    const r = await runPaperFormCells({
+      tiles: (o) => imaging.paperFormTiles(base64, mime, o),
+      read: async (t, hint) => {
+        const res = await readCells(t.base64, t.mime, hint)
+        if ('blocked' in res) { cellsBlocked = true; return { blocked: true } }
+        return res
+      },
+      retryShift: COLUMN_BOUNDARY_RETRY_SHIFT_RATIO,
+    })
+    return { cells: r.cells, skipped: r.skipped }
+  }
   await mapWithConcurrency(work, concurrency, async (p) => {
     if (stop.verdict || now() - startedAt > budgetMs) { remaining++; return }
     const dl = await repo.downloadPhoto(p.storage_path)
@@ -450,7 +511,18 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
 
     let whiteboard: WhiteboardResult | null = null
     let whiteboardSkipped: string | null = null
-    // 第二階段轉錄:紙本查驗表與黑白板同一支(2026-09-20 起 has_board 語意含紙本表單);
+    let cells: PaperCellsResult | null = null
+    let cellsSkipped: string | null = null
+    // B2 逐格辨識(只對紙本表單):先切塊、逐欄各讀兩次;成功就由它提供 observations,
+    // 整張圖那一支退回只讀一次(負責表頭:日期、位置、表上工項)。
+    // 這一步的條件比整張轉錄寬:整張看起來字太小(text_legible=false)的紙表,切成單欄放大後
+    // 常常讀得清楚(見 needsPaperCells 註解),不能拿整張圖的可辨識度否決切塊後的結果。
+    if (status === 'done' && needsPaperCells(classify)) {
+      const r = await readPaperCells(dl.base64, dl.mime)
+      cells = r.cells
+      cellsSkipped = r.skipped
+    }
+    // 整張轉錄:紙本查驗表與黑白板同一支(2026-09-20 起 has_board 語意含紙本表單);
     // 場景看得清但字跡／刻度讀不出來(text_legible=false)就不轉錄——看得到鋼筋不等於讀得出卡尺。
     if (status === 'done' && hasWrittenRecord(classify)) {
       if (boardBlocked) whiteboardSkipped = 'feature_disabled'
@@ -461,8 +533,8 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         else {
           whiteboard = normalizeWhiteboardResult(wb.data)
           if (!whiteboard) whiteboardSkipped = 'failed:invalid_output'
-          // 第二階段(只對紙本表單):同一張再讀一次,只留兩次一致的格子。
-          // 手寫誤讀時模型連 raw_text 一起錯,自證的證據擋不住;不穩定的讀數就讓它落空。
+          // 紙本表單一律再讀一次整張,只留兩次一致的內容:逐格接手了 observations,
+          // 但表頭(手寫的民國年日期)仍由這一支負責,單讀一次曾把 115 讀成 114。
           else if (needsSecondPass(classify)) {
             const wb2 = await vision.readBoard(dl.base64, dl.mime)
             if ('blocked' in wb2) { boardBlocked = true; whiteboardSkipped = 'second_pass:feature_disabled' }
@@ -476,10 +548,12 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         }
       }
     }
+    // 逐格結果併回(整張轉錄沒跑或失敗時,逐格讀到的實測值也不能掉)
+    if (cells) whiteboard = applyPaperCells(whiteboard, cells)
     const hint = status === 'done' ? classify.work_item_hint : ''
     const wi = status === 'done' && hint && hasBoq ? matchLeaf(hint, leaves) : null
     const result: StoredAiResult = {
-      classify, whiteboard, whiteboard_skipped: whiteboardSkipped,
+      classify, whiteboard, whiteboard_skipped: whiteboardSkipped, paper_cells_skipped: cellsSkipped,
       match: { work_item_id: p.work_item_id ?? wi?.id ?? null, hint: hint || null },
     }
     const patch: PhotoAiPatch = {
@@ -547,6 +621,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     if (n('failed')) out.push(`${n('failed')} 張辨識失敗,可重試`)
     if (remaining) out.push(`${remaining} 張尚未處理,將於下次呼叫繼續`)
     if (boardBlocked) out.push('告示板辨識功能未啟用,數量與日期未轉錄')
+    if (cellsBlocked) out.push('紙表逐格辨識功能未啟用,紙上實測值改由整張辨識判讀,讀不穩的格子會留空待人填')
     return out
   }
 
