@@ -703,7 +703,7 @@ PR #164、merge commit `a575bbc`（rebase 到含 A 包的 main `e3e4f65`；CI �
 - **已簽版本的 PDF**（Demo 驗不到）：chain 5 在列印頁**實際下載檔案並解析**——檔名 `施工日誌_<日期>_v3_已簽署.pdf`、文字層是版本 3 的更正摘要與 `content_hash` 前 12 碼、整份沒有「草稿・未簽署」、中文字型有內嵌。
 - **真 Storage 簽名網址的照片抓取／CORS**：chain 13 下載估驗佐證包的 PDF。那張照片是本鏈真的上傳到 `photos` bucket 的，`<img src>` 是真簽名網址；`renderPaperPdf` 的 `embedImages` 抓不回照片時會**中止下載並丟錯**，所以「檔案下載成功且含 1 個 `/Subtype /Image`」就是簽名網址 fetch 成功、CORS 沒擋的證據。
 
-**驗證**：`npm run test:db` 62 檔 3,604 項通過（新增併發情境 4 共 9 條）；`npm run test:e2e:real` **20 項一次全綠**（含 chain 3 live 真模型抽取）；`npm test` 159 檔 1,775 項、`lint`／`build`／`check:docs`（58 檔 469 連結 0 錯）皆綠。沒有 Edge 原始碼改動，故不跑 `check:edge`／`test:edge`。
+**驗證**：`npm run test:db` 62 檔 3,604 項通過（新增併發情境 4 共 9 條）；`npm run test:e2e:real` **21 項一次全綠**（含 chain 3 live 真模型抽取）；`npm test` 159 檔 1,775 項、`lint`／`build`／`check:docs`（58 檔 469 連結 0 錯）皆綠。沒有 Edge 原始碼改動，故不跑 `check:edge`／`test:edge`。
 
 ### E 未通過與未測（如實）
 
