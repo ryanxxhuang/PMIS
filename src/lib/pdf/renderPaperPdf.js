@@ -5,10 +5,10 @@
 //   所以 A4、頁邊、欄寬一次到位,不必為每份文件各調一次。第二頁起同樣留這個頁邊,
 //   跨頁的表格在頁首重印表頭,頁尾印「第 n 頁／共 m 頁」。
 //
-// 文字:同一列的字併成一個 run 一次畫完;若量到的寬度和內嵌字型的 advance 對不上
-//   (letter-spacing、字型後備、極端縮放),就退回逐字定位——寧可多幾個繪圖指令,
-//   也不要讓欄位裡的字跑出格子。
-import { PDFDocument, rgb, setTextRenderingMode, TextRenderingMode, setLineWidth, setStrokingColor, setCharacterSpacing, pushGraphicsState, popGraphicsState, moveTo, lineTo, closePath, clip, endPath } from 'pdf-lib'
+// 文字:同一列的字併成一個 run;量到的寬度若與內嵌字型的 advance 對得上就直接畫,
+//   對不上(letter-spacing、字型後備、平台之間的捨入差異)則用 TJ 逐字給位移——
+//   位置以畫面量到的為準,但仍是一段連續字串,複製貼上與全文檢索還原得回原文。
+import { PDFDocument, PDFArray, PDFNumber, PDFOperator, PDFOperatorNames, rgb, setTextRenderingMode, TextRenderingMode, setLineWidth, setStrokingColor, setFillingColor, setFontAndSize, beginText, endText, setTextMatrix, pushGraphicsState, popGraphicsState, moveTo, lineTo, closePath, clip, endPath } from 'pdf-lib'
 import { create as createFont } from 'fontkit'
 import { planPages } from './paginate.js'
 import { loadPdfFont, assertCharsCovered, PDF_FONT_PS_NAME } from './font.js'
@@ -57,6 +57,13 @@ function fontkitAdapter() {
       })
     },
   }
+}
+
+// TJ 的引數是一個陣列:字串與位移量交錯
+function tjArray(context, items) {
+  const array = PDFArray.withContext(context)
+  for (const item of items) array.push(item)
+  return array
 }
 
 function toColor(c, fallback) {
@@ -157,40 +164,42 @@ export async function renderPaperPdf(snapshot, meta = {}) {
     const measured = op.right - op.x
     let natural = 0
     try { natural = font.widthOfTextAtSize(op.text, op.size) } catch { natural = measured }
-    const drift = measured - natural
 
-    // ① 完全對得上:一次畫完
-    if (Math.abs(drift) <= DRIFT_TOLERANCE) {
+    // ① 量到的寬度和內嵌字型的 advance 完全對得上:一次畫完,最省。
+    if (Math.abs(measured - natural) <= DRIFT_TOLERANCE && chars.length === op.xs.length) {
       page.drawText(op.text, { x: marginL + op.x * scale, y, size: op.size * scale, font, color })
       if (bold) page.pushOperators(popGraphicsState())
       return
     }
 
-    // ② 等距偏移(全站字級階梯都有 letter-spacing,text-lg 標題還有 tracking-widest):
-    //    用 PDF 自己的字元間距 Tc 表示,仍然是一段連續文字——這樣複製貼上、全文檢索
-    //    才不會變成一個字一個字散開。
-    const tc = chars.length > 1 ? drift / (chars.length - 1) : 0
-    const uniform = chars.length > 1 && op.xs.length === chars.length && (() => {
-      let x = op.xs[0]
-      for (let i = 1; i < chars.length; i++) {
-        x += (font.widthOfTextAtSize(chars[i - 1], op.size) || 0) + tc
-        if (Math.abs(x - op.xs[i]) > DRIFT_TOLERANCE) return false
-      }
-      return true
-    })()
-    if (uniform) {
-      page.pushOperators(pushGraphicsState(), setCharacterSpacing(tc * scale))
-      page.drawText(op.text, { x: marginL + op.x * scale, y, size: op.size * scale, font, color })
-      page.pushOperators(popGraphicsState())
-      if (bold) page.pushOperators(popGraphicsState())
-      return
+    // ② 對不上就用 TJ:一個文字物件、一段連續字串,字與字之間放位移量。
+    //    全站字級階梯本來就帶 letter-spacing、標題還有 tracking-widest,瀏覽器在不同平台
+    //    對這些偏移的捨入也不同(CI 的 Linux 與本機 macOS 實測就不一樣),所以位置一律以
+    //    畫面量到的為準、逐字給位移;但**不能拆成一個字一個 Tj**——那樣複製貼上與全文檢索
+    //    會變成「公 共 工 程」。TJ 同時滿足「位置精確」與「仍是一段文字」。
+    page.setFont(font)
+    const [, fontKey] = page.getFont()
+    const items = []
+    for (let i = 0; i < chars.length; i++) {
+      items.push(font.encodeText(chars[i]))
+      const next = op.xs[i + 1]
+      if (next == null) break
+      const advance = font.widthOfTextAtSize(chars[i], op.size) || 0
+      const gap = next - op.xs[i]
+      // TJ 的數字是「往左移」,所以要往右多走就給負值;單位是 1/1000 em
+      const adjust = ((advance - gap) * 1000) / op.size
+      if (Math.abs(adjust) > 0.5) items.push(PDFNumber.of(Math.round(adjust * 100) / 100))
     }
-
-    // ③ 其他(混排、字型後備、對齊造成的不規則位移):逐字定位,位置一律以畫面量到的為準
-    for (let i = 0; i < chars.length && i < op.xs.length; i++) {
-      if (chars[i] === ' ') continue
-      page.drawText(chars[i], { x: marginL + op.xs[i] * scale, y, size: op.size * scale, font, color })
-    }
+    page.pushOperators(
+      pushGraphicsState(),
+      setFillingColor(color),
+      setFontAndSize(fontKey, op.size * scale),
+      beginText(),
+      setTextMatrix(1, 0, 0, 1, marginL + op.x * scale, y),
+      PDFOperator.of(PDFOperatorNames.ShowTextAdjusted, [tjArray(pdfDoc.context, items)]),
+      endText(),
+      popGraphicsState(),
+    )
     if (bold) page.pushOperators(popGraphicsState())
   }
 

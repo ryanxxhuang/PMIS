@@ -175,19 +175,22 @@ test.describe('列印頁下載 PDF', () => {
   test('四類文書的列印頁都給得出 PDF,且印的是簽署列指向的版本', async ({ page }) => {
     await loginAs(page, 'supervisor')
     const hrefs = await docLinks(page)
+    // 紙本標題本來就有字距(自 主 檢 查 表),比對一律容許字間空白
     const cases = [
-      ['site-log', '公共工程施工日誌', '施工日誌'],
-      ['self-check', '自主檢查', '自主檢查表'],
-      ['inspection-form', '查驗', '監造查驗表單'],
-      ['supervisor-log', '監造', '監造日誌'],
+      ['site-log', /公\s*共\s*工\s*程\s*施\s*工\s*日\s*誌/, '施工日誌'],
+      ['self-check', /自\s*主\s*檢\s*查\s*表/, '自主檢查表'],
+      ['inspection-form', /監\s*造\s*查\s*驗/, '監造查驗表單'],
+      ['supervisor-log', /監\s*造\s*日\s*誌/, '監造日誌'],
     ]
     for (const [route, marker, label] of cases) {
       const id = idOf(hrefs, route)
       expect(id, `/site 的文件清單要有 ${label}`).toBeTruthy()
       await gotoHash(page, `/${route}/print?doc=${encodeURIComponent(id)}`)
+      // 等這一份紙真的換上來再下載,否則會重複下載上一份
+      await expect(page.locator('.paper')).toContainText(marker, { timeout: 20_000 })
       const r = await downloadPdf(page, label)
       expectSoundPdf(r)
-      expect(r.pdf.text).toContain(marker)
+      expect(r.pdf.text).toMatch(marker)
       // 檔名與紙面都要說得出「這是哪一版、簽了沒」
       expect(r.suggestedFilename).toMatch(/(已簽署|草稿未簽署|既有紀錄未簽署)\.pdf$/)
       if (/已簽署/.test(r.suggestedFilename)) {

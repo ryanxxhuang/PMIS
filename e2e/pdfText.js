@@ -99,12 +99,27 @@ export function readPdf(bytes) {
     }
   }
 
+  const hexToText = (hex) => {
+    const up = hex.toUpperCase()
+    let out = ''
+    for (let i = 0; i + 4 <= up.length; i += 4) out += toUnicode.get(up.slice(i, i + 4)) ?? '�'
+    return out
+  }
+
+  // `<hex> Tj` 與 `[ <hex> 位移 <hex> … ] TJ` 都要吃。TJ 的位移是 1/1000 em 的「往左移」,
+  // 負得夠多才代表字與字之間有實際間隙——像 PDF 閱讀器一樣只在那裡還原成一個空白,
+  // 而不是每個字之間都塞空白(否則整段中文會被拆成「公 共 工 程」)。
+  const GAP = -200
   const decodeContent = (txt) => {
     let out = ''
-    // 逐個 `<hex> Tj` 與 `[ <hex> n <hex> ] TJ`
-    for (const m of txt.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
-      const hex = m[1].toUpperCase()
-      for (let i = 0; i + 4 <= hex.length; i += 4) out += toUnicode.get(hex.slice(i, i + 4)) ?? '�'
+    const re = /\[((?:\s*(?:<[0-9A-Fa-f]*>|-?[\d.]+))*)\s*\]\s*TJ|<([0-9A-Fa-f]+)>\s*Tj/g
+    let m
+    while ((m = re.exec(txt))) {
+      if (m[2] != null) { out += `${hexToText(m[2])} `; continue }
+      for (const part of m[1].matchAll(/<([0-9A-Fa-f]*)>|(-?[\d.]+)/g)) {
+        if (part[1] != null) out += hexToText(part[1])
+        else if (Number(part[2]) <= GAP) out += ' '
+      }
       out += ' '
     }
     return out
