@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import PrintToolbar from '../../components/PrintToolbar.jsx'
@@ -23,6 +23,7 @@ const TD = 'border paper-rule-strong px-2 py-1 align-top'
 export default function ObligationsPrint() {
   const { currentProject, obligations, currentUser, submittals } = useStore()
   const navigate = useNavigate()
+  const paperRef = useRef(null)
 
   const anchors = useMemo(() => ({
     award_date: currentProject?.award_date || '',
@@ -58,8 +59,9 @@ export default function ObligationsPrint() {
   }
 
   return (
-    <div className="min-h-screen paper-desk py-6 print:py-0">
-      <PrintToolbar backTo="/deadlines" backLabel="返回期限追蹤" />
+    <div ref={paperRef} className="min-h-screen paper-desk py-6 print:py-0">
+      <PrintToolbar backTo="/deadlines" backLabel="返回期限追蹤"
+        pdf={{ paperRef, title: '契約期限對照表', fileName: `契約期限對照表_${iso(today)}` }} />
 
       {/* A4 文件本體:紙面永遠白底黑字,不吃主題 token(.paper) */}
       <div className="max-w-[210mm] mx-auto paper shadow print:shadow-none px-[14mm] py-[12mm] text-footnote leading-relaxed">

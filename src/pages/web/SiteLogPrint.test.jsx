@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 施工日誌列印(P3d):
+// 施工日誌列印(P3d;廠商驗收 D 補「下載 PDF」的接線):
 // - 有簽署列 → 印簽署列指向的版本(即使之後已開更正草稿):內容取該版本、頁首印版本／雜湊前 12 碼(DB 值)／簽署者／台北時間;
 // - 沒有簽署列 → 印最新存檔版本並整張標「草稿・未簽署」;
 // - 有簽署列卻讀不到該版本 → 明說讀取失敗,不以最新版本代印;
@@ -10,8 +10,13 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ store: null }))
+const state = vi.hoisted(() => ({ store: null, pdfCalls: [] }))
 vi.mock('../../store.jsx', () => ({ useStore: () => state.store }))
+// 下載 PDF 的實作(pdf-lib／fontkit／中文字型)在 jsdom 跑不起來也不該跑:
+// 這裡只驗「按下去時交給它的是哪一份文件」,產檔本身由 e2e/pdf-download.spec.js 實際下載核對。
+vi.mock('../../lib/pdf/downloadPaperPdf.js', () => ({
+  downloadPaperPdf: (el, opts) => { state.pdfCalls.push(opts); return Promise.resolve({ pageCount: 1 }) },
+}))
 import SiteLogPrint from './SiteLogPrint.jsx'
 
 let container, root
@@ -50,6 +55,7 @@ afterEach(async () => {
 const render = (entry) => act(async () => { root.render(<MemoryRouter initialEntries={[entry]}><SiteLogPrint /></MemoryRouter>) })
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 const stamp = () => container.querySelector('[role="group"][aria-label="文件版本與簽署"]')?.textContent || ''
+const button = (name) => [...container.querySelectorAll('button')].find((b) => b.textContent.trim() === name)
 const text = () => container.textContent
 
 describe('施工日誌列印', () => {
@@ -76,6 +82,16 @@ describe('施工日誌列印', () => {
     const row = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('簽署當時名稱'))
     expect([...row.querySelectorAll('td')].map((td) => td.textContent)).toEqual(['壹.1', '簽署當時名稱', 'M3', '500', '7', '12'])
     expect(text()).toContain('天氣（下午）：陰')
+
+    // 下載 PDF 走的是同一份簽署版本:檔名要說得出版次與已簽署,才不會在系統外被當成草稿
+    state.pdfCalls.length = 0
+    await act(async () => button('下載 PDF').click())
+    await flush()
+    expect(state.pdfCalls).toHaveLength(1)
+    expect(state.pdfCalls[0].fileName).toBe('施工日誌_2026-09-18_v2_已簽署')
+    // 列印入口保留,但不再自稱是下載(驗收報告 P1)
+    expect(button('列印')).toBeTruthy()
+    expect(text()).not.toContain('存 PDF')
   })
 
   it('沒有簽署列:印最新存檔版本並整張標草稿・未簽署', async () => {
@@ -87,6 +103,12 @@ describe('施工日誌列印', () => {
     expect(stamp()).toContain('草稿・未簽署')
     expect(stamp()).toContain('文件狀態 待補件')
     expect(text()).toContain('草稿摘要')
+
+    // 沒簽署的版本下載下來也要看得出沒簽:紙面標草稿,檔名也要標
+    state.pdfCalls.length = 0
+    await act(async () => button('下載 PDF').click())
+    await flush()
+    expect(state.pdfCalls[0].fileName).toBe('施工日誌_2026-09-18_v1_草稿未簽署')
   })
 
   it('有簽署列卻讀不到簽署版本:明說讀取失敗,不以最新版本代印', async () => {

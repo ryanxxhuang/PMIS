@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import PrintToolbar from '../../components/PrintToolbar.jsx'
@@ -15,6 +16,7 @@ export default function ChecklistPrint() {
   const { project, checklistTemplates, checklistRecords, currentUser } = useStore()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
+  const paperRef = useRef(null)
 
   const rec = checklistRecords.find((r) => r.id === sp.get('id')) || checklistRecords[0]
   const tpl = rec && checklistTemplates.find((t) => t.id === rec.template_id)
@@ -35,8 +37,9 @@ export default function ChecklistPrint() {
 
   let lastGroup = null
   return (
-    <div className="min-h-screen paper-desk py-6 print:py-0">
-      <PrintToolbar backTo="/quality" backLabel="返回品質查驗" />
+    <div ref={paperRef} className="min-h-screen paper-desk py-6 print:py-0">
+      <PrintToolbar backTo="/quality" backLabel="返回品質查驗"
+        pdf={{ paperRef, title: '自主檢查表', fileName: `自主檢查表_${rec.check_date || ''}${(rec.rev || 0) > 0 ? `_Rev${rec.rev}` : ''}` }} />
 
       <div className="max-w-[210mm] mx-auto paper shadow print:shadow-none p-[12mm] print:p-0">
         <h1 className="text-center text-lg font-bold tracking-widest">自 主 檢 查 表</h1>

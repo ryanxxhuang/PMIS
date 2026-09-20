@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
@@ -5,6 +6,7 @@ import PrintToolbar from '../../components/PrintToolbar.jsx'
 import { DocumentPrintStamp, PrintedVersionBody } from '../../components/sitelog/DocumentPrint.jsx'
 import { contentToLogShape } from '../../lib/fieldDocs.js'
 import usePrintedVersion from '../../lib/usePrintedVersion.js'
+import { fieldDocFileName } from '../../lib/pdf/docFileName.js'
 
 // 公共工程施工日誌（工程會 101.10.17 修正公定格式）— 不套 WebLayout，整頁即文件。
 // 工具列(chrome,吃主題 token)與紙面(.paper,固定白底黑字)分開處理,理由見 PrintToolbar 與 index.css。
@@ -19,6 +21,7 @@ export default function SiteLogPrint() {
   const { project, workItems, siteLogs, currentUser, fieldDocuments, fieldDocsLoading, findActiveDailyLogDoc } = useStore()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
+  const paperRef = useRef(null)
 
   const docParam = sp.get('doc')
   const date = docParam ? null : (sp.get('d') || siteLogs[0]?.log_date || null)
@@ -38,10 +41,18 @@ export default function SiteLogPrint() {
     )
   }
   const itemList = workItems?.items || []
+  // 檔名跟著「實際印的是哪一版」走(已簽版本／草稿／舊流程既有紀錄),不是跟著畫面草稿
+  const pdf = {
+    paperRef,
+    title: '公共工程施工日誌',
+    fileName: legacyLog
+      ? fieldDocFileName({ label: '施工日誌', date: legacyLog.log_date, note: '既有紀錄未簽署' })
+      : fieldDocFileName({ label: '施工日誌', date: printed.doc?.doc_date || date, versionNo: printed.version?.version_no, signed: !!printed.signature }),
+  }
 
   return (
-    <div className="min-h-screen paper-desk py-6 print:py-0">
-      <PrintToolbar backTo={backTo} backLabel="返回施工日誌" />
+    <div ref={paperRef} className="min-h-screen paper-desk py-6 print:py-0">
+      <PrintToolbar backTo={backTo} backLabel="返回施工日誌" pdf={pdf} />
 
       {/* A4 文件 */}
       {legacyLog ? (

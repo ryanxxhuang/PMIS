@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState, useCallback } from 'react'
+import { useMemo, useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams, useNavigate, Navigate, Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
@@ -33,6 +33,7 @@ export default function ValuationPackage() {
     draftValuationSummary, aiEnabled } = useStore()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
+  const paperRef = useRef(null)
 
   const periodId = sp.get('p')
   const selected = valuations.find((v) => v.id === periodId) || valuations[valuations.length - 1]
@@ -209,8 +210,9 @@ export default function ValuationPackage() {
       : `${span.from ? `${span.from}${span.fromInclusive ? '（含）' : '（不含）'}` : '開工'} 至 ${span.to}（含）`
 
   return (
-    <div className="min-h-screen paper-desk">
-      <PrintToolbar sticky backTo="/valuation" backLabel="返回估驗計價" printLabel="列印 / 另存 PDF">
+    <div ref={paperRef} className="min-h-screen paper-desk">
+      <PrintToolbar sticky backTo="/valuation" backLabel="返回估驗計價"
+        pdf={{ paperRef, title: '估驗請款佐證包', fileName: `估驗請款佐證包_第${selected.period_no}期` }}>
         {/* 批 B UX:估驗施工說明草稿功能關閉時藏按鈕、留簡短說明(說明欄仍可人工填)。
             AI 鈕是工具列 chrome,跟其他鈕一樣吃 ui.jsx 的 secondary 皮;busy 走 primitive 的旋轉+禁用。 */}
         {aiEnabled('valuation.summary') ? (
