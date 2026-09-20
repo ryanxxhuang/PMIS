@@ -100,7 +100,7 @@ export async function draftInspection(
     template = found
     templateReason = '你指定的範本'
   } else {
-    const picked = pickChecklistTemplate(templates, workItem?.description ?? null)
+    const picked = pickChecklistTemplate(templates, workItem?.description ?? null, { workItemId: workItem?.id ?? null })
     if (!picked) {
       return {
         note: '無法判斷該用哪張檢查表範本,請指定 template_id 後重試。',

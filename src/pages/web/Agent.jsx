@@ -10,7 +10,9 @@ import { Card, PageHeader, Badge, Button, Empty, ErrorBanner, Input, Surface, Sk
 import { friendlyError } from '../../lib/errorMessage.js'
 import { useStore } from '../../store.jsx'
 import { BALL_SOURCES_TITLE } from '../../lib/navConfig.js'
-import { draftNeedsInputCount, checklistDraftCounts, isDocumentDraft } from '../../store/slices/agent.js'
+import { draftNeedsInputCount, checklistDraftCounts, isDocumentDraft, planDraftRejection } from '../../store/slices/agent.js'
+import { DOC_TYPE_LABEL } from '../../lib/fieldDocs.js'
+import { appConfirm } from '../../components/confirm.jsx'
 import { useAssistantData } from '../../lib/assistantData.js'
 // KIND_LABEL/KIND_COLOR 移到 agentRole.js:Dashboard 的「AI 今日已代辦」卡共用同一份標籤
 import { displayAgentRole, AGENT_LABEL, KIND_LABEL, KIND_COLOR } from '../../lib/agentRole.js'
@@ -57,10 +59,12 @@ const mmdd = (d) => {
 }
 
 function DraftInboxCard() {
-  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft } = useStore()
+  const { agentActions, agentActionsLoading, resolveAgentAction, acceptDraft,
+    fieldDocuments, discardFieldDocument, currentUser } = useStore()
   const [resolvingId, setResolvingId] = useState(null)
   const [errMsg, setErrMsg] = useState(null)
   const [doneMsg, setDoneMsg] = useState(null) // 接受成功後的提示 { text, to, cta }(帶去補填/查看連結)
+  const [infoMsg, setInfoMsg] = useState(null) // 拒絕後要講清楚的事(捨棄了哪份草稿／為什麼沒捨棄)
   const [openRationale, setOpenRationale] = useState(null) // 展開理由的那一筆 id
   const [openFindings, setOpenFindings] = useState(null) // 展開稽核發現清單的那一筆 id
   // 日誌草稿卡片上人填的工項數量:{ [action.id]: { [work_item_id]: 輸入字串 } }。
@@ -71,10 +75,46 @@ function DraftInboxCard() {
 
   const pending = (agentActions || []).filter((a) => a.status === 'pending')
 
+  // 拒絕 AI 起稿的現場文書草稿(P3g):連同那份文件一起捨棄,不留殭屍草稿。
+  // 規則與伺服器 discard_field_document 同一組(planDraftRejection → canDiscardFieldDocument):
+  // 從未簽署／提送且屬於自己單位才捨棄;已簽署或已提送就只標草稿已拒絕,並在畫面說明為什麼文件留著。
+  // 捨棄由伺服器在同一交易把這筆 pending 草稿標成 rejected(agent_actions_resolved),
+  // 示範模式沒有那個交易 → 回來後再標一次(冪等)。
+  const rejectDraft = async (a) => {
+    const doc = (fieldDocuments?.documents || []).find((d) => d.id === a.target_id) || null
+    const plan = planDraftRejection(a, {
+      doc,
+      everSigned: (fieldDocuments?.signedDocumentIds || []).includes(a.target_id),
+      viewerOrg: currentUser?.org_type || null,
+    })
+    if (plan.mode !== 'discard') {
+      const res = await resolveAgentAction(a.id, 'rejected')
+      if (!res?.error && plan.note) setInfoMsg(plan.note)
+      return res
+    }
+    const label = `${plan.doc.doc_date} ${DOC_TYPE_LABEL[plan.doc.doc_type] || '現場文書'}`
+    const ok = await appConfirm({
+      title: `拒絕並捨棄 ${label}草稿？`,
+      body: `這份草稿是 AI 為這筆建議建立的。捨棄後它不再出現在現場紀錄與待辦，也不能再編輯或簽署；已存的 ${plan.doc.current_version_no} 個版本與照片都會保留，捨棄原因會留在稽核紀錄。之後可重新上傳照片起稿。`,
+      confirmLabel: '拒絕並捨棄',
+      danger: true,
+    })
+    if (!ok) return null
+    const r = await discardFieldDocument({ documentId: plan.doc.id, versionNo: plan.doc.current_version_no, reason: 'AI 草稿遭拒絕' })
+    if (r?.error) return { error: r.error }
+    if (!(r.result?.agent_actions_resolved > 0)) {
+      const res = await resolveAgentAction(a.id, 'rejected')
+      if (res?.error) return res
+    }
+    setInfoMsg(`已拒絕草稿，並捨棄 ${label}草稿（原因：AI 草稿遭拒絕）。版本與照片保留，可重新起稿。`)
+    return { error: null }
+  }
+
   const resolve = async (a, status) => {
-    setResolvingId(a.id); setErrMsg(null); setDoneMsg(null)
+    setResolvingId(a.id); setErrMsg(null); setDoneMsg(null); setInfoMsg(null)
     // 接受走 acceptDraft:日誌草稿=把卡片上填的數量存成那份文件的人工版本(P6b-2;文件由 Edge 起稿時已建好)
-    const res = status === 'accepted' ? await acceptDraft(a, qtyDraft[a.id]) : await resolveAgentAction(a.id, status)
+    const res = status === 'accepted' ? await acceptDraft(a, qtyDraft[a.id]) : await rejectDraft(a)
+    if (res === null) { setResolvingId(null); return } // 使用者在確認框按取消:什麼都沒做
     // RPC 在「非本人/已處理過/非法狀態」時 raise 中文訊息,原樣顯示
     if (res?.error) setErrMsg(friendlyError(res.error, '草稿處理未完成'))
     else if (res?.applied === 'daily_log') {
@@ -101,6 +141,13 @@ function DraftInboxCard() {
     <Card title="AI 草稿收件匣"
       action={pending.length > 0 && <Badge color="blue" className="tabular-nums">{pending.length} 筆待覆核</Badge>}>
       <ErrorBanner msg={errMsg} onClose={() => setErrMsg(null)} className="mb-3" />
+      {/* 拒絕後的實情:捨棄了哪份草稿文件,或為什麼那份文件留著(P3g;不是錯誤,也不是成功,所以走中性色) */}
+      {infoMsg && (
+        <div role="status" className="mb-3 flex items-start justify-between gap-2.5 text-xs rounded-lg px-3.5 py-2.5 bg-[var(--surface-2)] text-[var(--text-2)] enter-row">
+          <span className="flex items-start gap-2.5 min-w-0 leading-relaxed"><MSym name="info" size={18} className="shrink-0" />{infoMsg}</span>
+          <button onClick={() => setInfoMsg(null)} className="shrink-0 font-medium underline hover:opacity-80 max-md:min-h-11">關閉</button>
+        </div>
+      )}
       {/* 成功橫幅與 ErrorBanner 同一種語言:tint 底＋語意圖示＋同一組內距 */}
       {doneMsg && (
         <div className="mb-3 flex items-center justify-between gap-2.5 text-xs rounded-lg px-3.5 py-2.5 bg-[var(--green-tint)] text-[var(--green-text)] enter-row">

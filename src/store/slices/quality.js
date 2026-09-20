@@ -169,6 +169,34 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     return { error: null, template: t }
   }, [dbMode, currentProject, currentUser])
 
+  // 建立／編輯檢查表範本(P3g;自主檢查表與監造查驗表單共用一張表,差別在 kind)。
+  // 規則全在 DB checklist_templates_guard(migration 20260920050000):用途與角色、查驗階段只能給查驗表單、
+  // 適用工項限本案、項目形狀、版本由伺服器編號、已被紀錄／查驗引用的範本不可改內容——這裡只送欄位、
+  // 把伺服器訊息原樣回給 UI。payload 由 lib/checklistTemplates.templateRowPayload 產生(單一形狀來源)。
+  const saveChecklistTemplate = useCallback(async ({ id = null, ...fields }) => {
+    if (!dbMode) {
+      // demo:只改記憶體(demo 不打 Supabase);版本以同案同用途同標題的張數推導,與伺服器同義
+      const row = { ...fields, project_id: currentProject?.project_id ?? 'demo', created_by: currentUser?.user_id ?? null }
+      if (id) {
+        let next = null
+        setChecklistTemplates((ts) => ts.map((t) => (t.id === id ? (next = { ...t, ...row, version: t.version ?? 1 }) : t)))
+        return { error: null, template: next }
+      }
+      const version = checklistTemplates.filter((t) => t.title === row.title && (t.kind || 'self_check') === row.kind).length + 1
+      const created = { id: `CT-${Date.now()}`, version, ...row }
+      setChecklistTemplates((ts) => [...ts, created])
+      return { error: null, template: created }
+    }
+    const q = id
+      ? supabase.from('checklist_templates').update(fields).eq('id', id).select().single()
+      : supabase.from('checklist_templates')
+        .insert({ ...fields, project_id: currentProject.project_id, created_by: currentUser?.user_id }).select().single()
+    const { data, error } = await q
+    if (error) return { error }
+    setChecklistTemplates((ts) => (id ? ts.map((t) => (t.id === id ? data : t)) : [...ts, data]))
+    return { error: null, template: data }
+  }, [dbMode, currentProject, currentUser, checklistTemplates])
+
   // 自主檢查紀錄(checklist_records)只由自主檢查表文件簽署寫入(P3b;首簽 Rev.0、簽後更正 Rev.N,判定由 DB 依範本
   // 量化標準重算、不合格由 DB trigger 同交易開缺失)。P6b-3 起品質頁的「直接登錄／修訂／刪除未判定」與 Agent 查驗草稿
   // 的直接存檔都已退場,DB 收回了 authenticated 對 checklist_records 的 INSERT／UPDATE／DELETE(migration 20260920030000)。
@@ -313,7 +341,7 @@ export function useQualitySlice({ dbMode, isPersistedProject, currentProject, cu
     checklistRecords, setChecklistRecords, testSamples, setTestSamples,
     reloadQuality, createInspection, createDefect, updateDefectStatus,
     deleteInspection, deleteDefect,
-    ensureChecklistTemplate,
+    ensureChecklistTemplate, saveChecklistTemplate,
     createTestSamples, generateSamplesFromLogs, updateTestSample, deleteTestSample,
   }
 }

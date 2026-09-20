@@ -84,6 +84,10 @@ export default function InspectionsSection({
     const judgeable = i.status === '待查驗' && can.approve
     const deletable = can.edit && i.status === '待查驗'
     const formDoc = formDocByInspection.get(i.id) || null
+    // 舊流程快速判定(P6b-3 退場前)留下的紀錄:有判定卻沒有簽署文件、也沒有確認數量,
+    // 因此估驗拿不到可請款的量。監造可就地建立監造查驗表單補判定與確認數量(P3g;
+    // 與待查驗走同一支 create_inspection_form_draft,簽署後即為正式判定,舊紀錄照樣留著可查)。
+    const legacyFixable = can.approve && i.status !== '待查驗' && !i.document_id && !formDoc
     const qtyText = i.declared_qty != null ? `${i.declared_qty} ${i.unit || ''}`.trim() : '—'
     detailBody = (
       <section aria-label={`${i.title} 詳情`}>
@@ -143,13 +147,19 @@ export default function InspectionsSection({
           )}
         </div>
 
-        {/* 監造查驗表單(P3c):判定＋本次確認數量的正式文件;已有活文件就直達,判定後也連得到 */}
-        {(formDoc || judgeable) && (
+        {/* 監造查驗表單(P3c):判定＋本次確認數量的正式文件;已有活文件就直達,判定後也連得到。
+            P3g 起,舊流程快速判定的紀錄也有入口:監造可補建表單更正判定並填確認數量 */}
+        {(formDoc || judgeable || legacyFixable) && (
           <div className="px-4 pb-4 flex items-center gap-2 flex-wrap">
             <Button variant={judgeable ? 'primary' : 'secondary'} size="sm" onClick={() => navigate(formDoc ? `/inspection-form?doc=${encodeURIComponent(formDoc.id)}` : `/inspection-form?inspection=${encodeURIComponent(i.id)}`)}>
-              <MSym name="task_alt" size={15} />{formDoc ? `監造查驗表單（版本 ${formDoc.current_version_no}）` : '以監造查驗表單判定（填確認數量）'}
+              <MSym name="task_alt" size={15} />{formDoc ? `監造查驗表單（版本 ${formDoc.current_version_no}）` : legacyFixable ? '以查驗表單更正判定（補確認數量）' : '以監造查驗表單判定（填確認數量）'}
             </Button>
             {judgeable && <span className="text-caption text-[var(--text-3)]">簽署即判定，確認數量成為廠商可估驗的依據。</span>}
+            {legacyFixable && (
+              <span className="text-caption text-[var(--text-3)] leading-relaxed">
+                這筆是舊流程快速判定、沒有簽署文件也沒有確認數量，廠商因此估不到量。建立表單、判定並簽署後即為正式判定；舊紀錄保留可查。
+              </span>
+            )}
           </div>
         )}
         {/* 動作列:待監造查驗(非監造)/ 刪除(廠商)。監造的判定只有上方「以監造查驗表單判定」一條路

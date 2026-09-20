@@ -14,7 +14,7 @@
 npm run test:e2e:real
 ```
 
-十七條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14，P3f）、保固期滿日與保固類循環義務（chain 15，P5e）（chain 5–10、12–15 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+十八條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14，P3f）、保固期滿日與保固類循環義務（chain 15，P5e）、查驗表單範本與舊判定更正（chain 16，P3g）（chain 5–10、12–16 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -133,4 +133,13 @@ npm run test:e2e:real -- e2e-real/chain14-discard-draft.spec.js
 
 ```bash
 npm run test:e2e:real -- e2e-real/chain15-warranty.spec.js
+```
+
+## 查驗表單範本與舊判定更正鏈（chain 16，P3g）
+
+`e2e-real/chain16-inspection-template.spec.js`（前置同 chain 5／10：Edge stub；本機 stack 已套用 `20260920050000`）：監造在品質查驗「檢查表」分段建立 `kind='inspection_form'` 的查驗表單範本（用途、指名適用工項、檢查項目；實測值項目沒有上下限時送出前就被擋下），DB 落 `applies_to`、`version` 由伺服器編號 → 廠商建立／編輯同類範本 `CT006`（自主檢查表範本照舊可建）→ 廠商提出查驗申請（結構工程，申報 100 M3）→ 監造上傳照片起稿：兩張查驗表範本中，標題較相近但「指名了別的工項」的那張被排除，挑到的是指名本工項的那張（`content.template_id`＋理由「範本指名此工項」），判定與確認量仍留空 → 以 `sign_field_document` 簽署，`inspections` 落判定、確認量與 `results`（`fn_checklist_judge` 重算）→ 範本被引用後改項目 `CT008`、刪除被擋，適用條件仍可調 → service 直寫一筆舊流程快速判定的查驗（沒有簽署文件也沒有確認量）→ 品質查驗詳情出現「以查驗表單更正判定」，點下去建立該查驗的表單草稿 → 簽署後舊查驗補上正式判定與確認量、舊紀錄仍在清單（查驗仍是 2 筆）、廠商的可估驗量才變成 130。表單頁的逐項核對與 UI 簽署由 chain 10 覆蓋，本鏈簽署走同一支 RPC。
+
+```bash
+supabase functions serve --env-file e2e-real/stub.env   # terminal A
+npm run test:e2e:real -- e2e-real/chain16-inspection-template.spec.js
 ```

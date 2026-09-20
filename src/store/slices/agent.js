@@ -8,6 +8,7 @@
 // 會擬什麼),不是 bug;真實資料的可見性由 RLS(本人限定)決定。
 import { useState, useCallback, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js'
+import { canDiscardFieldDocument } from '../../lib/fieldDocs.js'
 
 // functions.invoke 對非 2xx 只回通用訊息(FunctionsHttpError),伺服器的中文錯誤
 // (403 功能停用/503 閘門 fail-closed)在 error.context(Response)body 裡——
@@ -27,6 +28,29 @@ export async function extractInvokeError(error, data, fallbackMsg = 'AI agent �
 // AI 版本,與照片起稿同一支 builder),agent_actions 的 target_table='field_documents'、target_id=文件。收件匣只顯示
 // evidence 裡的摘要(工項、範本項目與 AI 建議),接受時才在那份文件上動作——不再由前端另湊一份內容或直接寫事實表。
 export const isDocumentDraft = (a) => a?.target_table === 'field_documents' && !!a?.target_id
+
+// 起稿類草稿(P3g):AI 為了這筆草稿「新建了一份現場文書」的那幾種 kind。
+// suggest_field_update 刻意不在內:那是對「人已經在編的文件」提建議,拒絕建議不該動到文件本身。
+export const DOC_DRAFT_KINDS = Object.freeze(['draft_daily_log', 'draft_inspection', 'draft_field_document'])
+export const isDraftedDocumentAction = (a) => DOC_DRAFT_KINDS.includes(a?.kind) && isDocumentDraft(a)
+
+// 拒絕一筆 AI 草稿要做什麼(純決策,呼叫端執行;P3g 補 P6b-2 留下的缺口)。
+// 為什麼要連動:草稿文件是 Edge 真的建出來的一份 field_documents,只標 agent_actions.rejected 的話
+// 那份文件會留在現場紀錄清單裡當殭屍草稿,同一天／同一目標也起不了新稿(活文件唯一索引)。
+// 捨棄的條件與伺服器 discard_field_document 完全同一組(canDiscardFieldDocument):責任方、未簽署、未提送;
+// 已簽署／已提送的文件是證據,一律不動,只標草稿已拒絕並在畫面說明。
+// 回傳 { mode: 'discard' | 'reject', doc, note }——note 是要讓使用者看到的說明(沒有就 null)。
+export function planDraftRejection(action, { doc = null, everSigned = false, viewerOrg = null } = {}) {
+  if (!isDraftedDocumentAction(action)) return { mode: 'reject', doc: null, note: null }
+  if (!doc) {
+    return { mode: 'reject', doc: null, note: '這份草稿文件已不在清單中（可能已被捨棄或取代），只標記草稿已拒絕。' }
+  }
+  if (canDiscardFieldDocument(doc, viewerOrg, { everSigned })) return { mode: 'discard', doc, note: null }
+  const why = everSigned || ['signed', 'submitted', 'received', 'returned'].includes(doc.status)
+    ? '這份文件已經簽署或提送，是不可撤回的紀錄'
+    : '這份文件不屬於你所在的單位'
+  return { mode: 'reject', doc, note: `${why}，因此只標記草稿已拒絕、文件保留；要更正請在該文件建立新版本。` }
+}
 
 // 日誌草稿卡片:照片看不出、還沒人填數量的工項數(evidence.items:{ [work_item_id]: { qty_today… } };
 // quantities 是卡片上人填的輸入)

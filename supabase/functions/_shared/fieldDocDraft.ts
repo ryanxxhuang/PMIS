@@ -195,33 +195,106 @@ export type OpenInspection = {
 }
 
 // 本案檢查表範本(checklist_templates 列;RLS 讀)。kind:self_check(自檢表;既有列)／inspection_form(監造查驗項目)
-export type ChecklistTemplateRow = { id: string; title: string; source: string | null; items: ChecklistItemLike[]; kind?: string | null }
+// applies_to／stage_key 由範本建立介面(P3g)登錄,是「範本作者親自宣告的適用範圍」,比標題相似度可靠。
+export type ChecklistAppliesTo = { work_item_ids?: string[] | null; keywords?: string[] | null }
+export type ChecklistTemplateRow = {
+  id: string; title: string; source: string | null; items: ChecklistItemLike[]
+  kind?: string | null; stage_key?: string | null; applies_to?: ChecklistAppliesTo | null
+}
+export type PickTemplateContext = { workItemId?: string | null; stageKey?: string | null }
+type PickableTemplate = { title: string; stage_key?: string | null; applies_to?: ChecklistAppliesTo | null }
 
-// 範本挑選(確定性關鍵字相符,非 AI;照片起稿的候選推斷與 Agent draft_inspection 同一支——P6b-2 自 draftInspection.ts 移來,
-// 免得純規則模組反向 import 會寫 DB 的工具模組):以工項描述的相鄰雙字組對範本標題計分,
-// 取最高分;同分取排序較前者(呼叫端已依 created_at 升冪,平手決策確定性)。
-// 僅一張範本時直接用;沒有描述或全部 0 分 → 回 null(誠實請使用者指定,不亂挑)。
-export function pickChecklistTemplate<T extends { title: string }>(
-  templates: T[],
-  workItemDesc: string | null | undefined,
-): { template: T; reason: string } | null {
-  if (!templates.length) return null
-  if (templates.length === 1) return { template: templates[0], reason: '本案僅有這一張範本' }
-  const desc = (workItemDesc || '').replace(/\s+/g, '')
-  if (!desc) return null
+const normKey = (s: unknown) => String(s ?? '').replace(/\s+/g, '')
+const appliesWorkItems = (t: PickableTemplate) =>
+  (Array.isArray(t.applies_to?.work_item_ids) ? t.applies_to!.work_item_ids! : []).filter(Boolean)
+const appliesKeywords = (t: PickableTemplate) =>
+  (Array.isArray(t.applies_to?.keywords) ? t.applies_to!.keywords! : []).map(normKey).filter(Boolean)
+
+// 標題相似度:工項描述的相鄰雙字組對範本標題計分(確定性,非 AI)
+function titleScore(title: string, desc: string): number {
+  if (!desc) return 0
   const grams = new Set<string>()
   const chars = [...desc]
   if (chars.length === 1) grams.add(desc)
   for (let i = 0; i + 1 < chars.length; i++) grams.add(chars[i] + chars[i + 1])
+  let score = 0
+  for (const g of grams) if (title.includes(g)) score += 1
+  return score
+}
+
+// 範本挑選(確定性,非 AI;照片起稿的候選推斷與 Agent draft_inspection 同一支——P6b-2 自 draftInspection.ts 移來,
+// 免得純規則模組反向 import 會寫 DB 的工具模組)。順序:
+//   1. 硬篩:查驗階段(有階段就只留同階段或不限階段的;該階段有專屬範本時只留專屬的)、
+//      範本已指名適用工項卻不含本工項的直接排除(作者已宣告它不適用)。
+//   2. 指名本工項的範本優先;其次關鍵字命中數最高者;最後才是標題相似度。
+//   3. 作者明示的信號(指名工項／關鍵字)同分而分不出來 → 回 null(請人指定,不亂猜);
+//      只有標題相似度同分時沿用既有行為(取排序較前者;呼叫端已依 created_at 升冪,決策確定性)。
+// 剩一張候選就直接用;沒有描述且沒有任何明示信號、或全部 0 分 → 回 null(誠實請使用者指定,不亂挑)。
+export function pickChecklistTemplate<T extends PickableTemplate>(
+  templates: T[],
+  workItemDesc: string | null | undefined,
+  ctx: PickTemplateContext = {},
+): { template: T; reason: string } | null {
+  if (!templates.length) return null
+  const stage = normKey(ctx.stageKey) || null
+  const wid = ctx.workItemId || null
+
+  // 1a. 階段:查驗有階段→該階段專屬範本優先,沒有專屬的才用不限階段的;查驗沒有階段→排除階段專屬範本
+  let pool = templates.filter((t) => {
+    const ts = normKey(t.stage_key) || null
+    return stage ? (ts === null || ts === stage) : ts === null
+  })
+  const stageOwn = stage ? pool.filter((t) => (normKey(t.stage_key) || null) === stage) : []
+  let stageNote = ''
+  if (stageOwn.length) { pool = stageOwn; stageNote = `查驗階段「${ctx.stageKey}」` }
+  if (!pool.length) return null
+
+  // 1b. 範本指名了適用工項卻不含本工項 → 排除
+  const scoped = pool.filter((t) => {
+    const ids = appliesWorkItems(t)
+    return ids.length === 0 || (wid !== null && ids.includes(wid))
+  })
+  if (!scoped.length) return null
+
+  // 2a. 指名本工項(作者最明確的宣告)
+  const named = wid ? scoped.filter((t) => appliesWorkItems(t).includes(wid)) : []
+  let cands = named.length ? named : scoped
+  const explicit = named.length > 0
+  let signal = named.length ? '範本指名此工項' : ''
+
+  // 2b. 關鍵字命中數(對工項描述做包含比對;去空白後比,避免半形空格影響)
+  const desc = normKey(workItemDesc)
+  let kwExplicit = false
+  if (cands.length > 1 && desc) {
+    let bestHits = 0
+    const hitsOf = (t: T) => appliesKeywords(t).filter((k) => desc.includes(k)).length
+    for (const t of cands) bestHits = Math.max(bestHits, hitsOf(t))
+    if (bestHits > 0) {
+      const hit = cands.filter((t) => hitsOf(t) === bestHits)
+      const matched = appliesKeywords(hit[0]).filter((k) => desc.includes(k))
+      cands = hit
+      kwExplicit = true
+      signal = signal ? `${signal}、關鍵字「${matched.join('、')}」` : `範本關鍵字「${matched.join('、')}」`
+    }
+  }
+
+  const prefix = [stageNote, signal].filter(Boolean).join('＋')
+  if (cands.length === 1) {
+    if (prefix) return { template: cands[0], reason: `${prefix}相符` }
+    return { template: cands[0], reason: pool.length === templates.length && templates.length === 1 ? '本案僅有這一張範本' : '本案僅這一張範本適用' }
+  }
+
+  // 3. 標題相似度(最弱的信號);作者明示信號分不出來就不猜
+  if (!desc) return null
   let best: T | null = null
   let bestScore = 0
-  for (const t of templates) {
-    let score = 0
-    for (const g of grams) if (t.title.includes(g)) score += 1
+  for (const t of cands) {
+    const score = titleScore(t.title, desc)
     if (score > bestScore) { best = t; bestScore = score }
   }
   if (!best) return null
-  return { template: best, reason: `依工項「${workItemDesc}」與範本標題的相符度挑選,若不對請指定範本` }
+  if ((explicit || kwExplicit) && cands.filter((t) => titleScore(t.title, desc) === bestScore).length > 1) return null
+  return { template: best, reason: `${prefix ? `${prefix};` : ''}依工項「${workItemDesc}」與範本標題的相符度挑選,若不對請指定範本` }
 }
 
 export function inferCandidates(input: {
@@ -274,7 +347,7 @@ export function inferCandidates(input: {
     for (const wid of [...wids].sort()) {
       const wi = wiById.get(wid)
       const wiLabel = wi ? [wi.item_no, wi.description].filter(Boolean).join(' ') : wid
-      const picked = templates.length ? pickChecklistTemplate(templates, wi?.description ?? null) : null
+      const picked = templates.length ? pickChecklistTemplate(templates, wi?.description ?? null, { workItemId: wid }) : null
       for (const d of dates) {
         const ids = sitePhotos.filter((p) => p.work_item_id === wid && p.date === d).map((p) => p.id)
         if (!ids.length) continue
@@ -332,7 +405,7 @@ export function inferCandidates(input: {
       out.push({ ...common, state: 'blocked', reason: `待查驗「${label}」的工項不是標單末端可計價工項,無法簽確認數量;請先更正查驗申請`, blocked_by: ['work_item'], template_id: null })
       continue
     }
-    const picked = insTemplates.length ? pickChecklistTemplate(insTemplates, wi.description) : null
+    const picked = insTemplates.length ? pickChecklistTemplate(insTemplates, wi.description, { workItemId: wi.id, stageKey: ins.stage_key ?? null }) : null
     out.push({
       ...common, state: 'ready', template_id: picked?.template.id ?? null,
       reason: `待查驗「${label}」;${ids.length} 張監造照片` + (picked ? `;查驗表範本「${picked.template.title}」(${picked.reason})` : ';本案無監造查驗表範本,依判定欄簽署'),
