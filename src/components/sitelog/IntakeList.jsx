@@ -15,7 +15,7 @@ const ACTION_LABEL = {
 }
 
 export default function IntakeList({ focusId = null }) {
-  const { intakes, fieldDocuments, draftFromIntake, updateIntakeDate, setIntakeCandidates, discardIntake, reloadFieldDocs, fieldDocsLoading, can } = useStore()
+  const { intakes, fieldDocuments, candidateDocStatus, draftFromIntake, updateIntakeDate, setIntakeCandidates, discardIntake, reloadFieldDocs, fieldDocsLoading, can } = useStore()
   const [busyId, setBusyId] = useState(null)
   const [msg, setMsg] = useState({}) // intakeId → { text, tone }
   const [open, setOpen] = useState(() => (focusId ? { [focusId]: true } : {}))
@@ -80,7 +80,7 @@ export default function IntakeList({ focusId = null }) {
             </div>
             {m && <p role="status" className={`text-footnote ${m.tone === 'success' ? 'text-[var(--green-text)]' : 'text-[var(--red-text)]'}`}>{m.text}</p>}
             {isOpen && (
-              <IntakeResult intake={intake} documents={docs} editable={can.write} hideStatus
+              <IntakeResult intake={intake} documents={docs} docStatus={candidateDocStatus} editable={can.write} hideStatus
                 onToggleExclude={(i, ex) => toggleExclude(intake, i, ex)}
                 onFixDate={(d) => fixDate(intake, d)} fixDateBusy={busyId === intake.id}
                 dateDraft={dateDraft[intake.id] ?? ''} setDateDraft={(v) => setDateDraft((d) => ({ ...d, [intake.id]: v }))} />

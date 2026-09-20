@@ -48,6 +48,12 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps })
   const [valuationAdjustments, setValuationAdjustments] = useState([])
   // 預定進度 S 曲線：{ start, end, months: [{ label, plannedPct }] }
   const [progressPlan, setProgressPlan] = useState(null)
+  // 示範模式的監造確認量／期別狀態／送審時點(O2;種子 demoSeed)。真實模式恆為空,一律走 DB;
+  // 這三份只是把「確認量→佐證包依據」這條鏈在 Demo 站演出來,數字一律來自種子,不在前端算計價。
+  const [demoBilling, setDemoBilling] = useState({ confirmations: [], states: {}, submittedAt: {} })
+  const seedDemoBilling = useCallback((seed = {}) => setDemoBilling({
+    confirmations: seed.confirmations || [], states: seed.valuationStates || {}, submittedAt: seed.valuationSubmittedAt || {},
+  }), [])
 
   // DB 模式的唯一更新來源:任何估驗寫入成功後整批重載(期別數十、明細數千,一次分頁查詢;
   // 往前帶的投影跨期別,局部更新反而容易與 DB 不一致)。載入失敗回傳 error,不留舊畫面假裝成功。
@@ -167,11 +173,11 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps })
   // 期別狀態(唯讀):每工項的上限／前期累計／增量／來源分配／違反代碼,以及整期檢查點的違反清單。
   // demo 沒有後端核對,回 null 讓頁面明示「示範資料未經後端核對」。
   const fetchValuationState = useCallback(async (periodId) => {
-    if (!dbMode) return { state: null, error: null }
+    if (!dbMode) return { state: demoBilling.states[periodId] || null, error: null }
     const { data, error } = await supabase.rpc('get_valuation_state', { p_valuation_id: periodId })
     if (error) return { state: null, error: parseValuationError(error) }
     return { state: data, error: null }
-  }, [dbMode])
+  }, [dbMode, demoBilling])
 
   // 可估驗清單(唯讀):有 active 確認的工項的有效量／已計價／占用／可用與批次;未開期先累積。
   const fetchBillableBacklog = useCallback(async () => {
@@ -183,24 +189,25 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps })
 
   // 監造確認紀錄(唯讀,RLS 限成員):來源展開要顯示批次、位置、確認量、查驗與文件版本、確認人與時間。
   const fetchConfirmations = useCallback(async () => {
-    if (!dbMode) return { rows: [], error: null }
+    if (!dbMode) return { rows: demoBilling.confirmations, error: null }
     const { data, error } = await supabase.from('inspection_confirmations')
       .select('id, work_item_id, batch_key, location_label, stage_key, unit, qty_cum, qty_delta, basis, inspection_id, document_id, document_version_no, content_hash, confirmed_by, confirmed_at, status, revoked_at, reason, supersedes_id')
       .eq('project_id', currentProject.project_id).order('confirmed_at')
     if (error) return { rows: [], error }
     return { rows: data || [], error: null }
-  }, [dbMode, currentProject])
+  }, [dbMode, currentProject, demoBilling])
 
   // 佐證包的「送審時點」(P6a):最近一次 valuation.submitted 稽核事件(audit_valuation_event trigger 於 草稿→監造審核 寫入,
   // 成員可讀)。已送審的期別以它釘住施工日誌版本——之後的簽後更正不改變已提送的佐證包。沒有事件(稽核上線前的歷史期)回 null。
   const fetchValuationSubmittedAt = useCallback(async (valuationId) => {
-    if (!dbMode || !valuationId) return { at: null, error: null }
+    if (!valuationId) return { at: null, error: null }
+    if (!dbMode) return { at: demoBilling.submittedAt[valuationId] || null, error: null }
     const { data, error } = await supabase.from('audit_events').select('occurred_at')
       .eq('project_id', currentProject.project_id).eq('entity_type', 'valuation').eq('entity_id', valuationId)
       .eq('event_type', 'valuation.submitted').order('occurred_at', { ascending: false }).limit(1)
     if (error) return { at: null, error }
     return { at: data?.[0]?.occurred_at || null, error: null }
-  }, [dbMode, currentProject])
+  }, [dbMode, currentProject, demoBilling])
 
   // 總價／間接費的計價依據(Q3 暫時隔離:缺依據不計價):只有監造(或非正式模式管理者)可設,DB 強制。
   const setPricingBasis = useCallback(async (itemKey, basis) => {
@@ -339,7 +346,7 @@ export function useBillingSlice({ dbMode, currentProject, currentUser, wiMaps })
   return {
     valuations, setValuations, valuationAdjustments, setValuationAdjustments, progressPlan, setProgressPlan, reloadValuations,
     createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
-    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, fetchValuationSubmittedAt, setPricingBasis,
+    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, fetchValuationSubmittedAt, setPricingBasis, seedDemoBilling,
     revokeConfirmation, issueCertificate, voidAdjustment,
     generateSchedule, updatePlannedPct, deleteValuation,
   }

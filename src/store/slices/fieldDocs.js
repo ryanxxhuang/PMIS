@@ -13,10 +13,12 @@
 //   * 「已保存」=伺服器有列;本機的檔案狀態只在頁面 reducer(lib/fieldDocs.js),不做離線同步。
 //   * 起稿由 Edge draft-field-documents 服務端執行(過 AI 閘門、記用量);remaining>0 就再呼叫續跑。
 // demo 模式(未設 Supabase):文件草稿只進記憶體、可存版本;簽署／提送／上傳一律明確回「示範模式
-// 無法…」,不假裝已簽署(不會有雜湊、簽署者與伺服器時間可核對)。
+// 無法…」,不假裝已簽署(不會有雜湊、簽署者與伺服器時間可核對)。種子另帶一組**示範用的已簽署版本**
+// (O2;demoSeed.signedDocs)讓月報／佐證包演得出內容:每列帶 is_demo,版本標示印【示範資料】,
+// 與使用者在示範模式按下簽署是兩回事——後者仍然被擋。
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { supabase, SIGNED_URL_TTL_S } from '../../lib/supabase.js'
-import { loadSiteLogsFromDB, loadFieldDocumentsFromDB, loadQcFromDB, loadDefectsFromDB, FIELD_DOCUMENT_COLUMNS, FIELD_DOCUMENT_SUBMISSION_COLUMNS } from '../db.js'
+import { loadSiteLogsFromDB, loadFieldDocumentsFromDB, loadFieldDocumentStatuses, loadQcFromDB, loadDefectsFromDB, FIELD_DOCUMENT_COLUMNS, FIELD_DOCUMENT_SUBMISSION_COLUMNS } from '../db.js'
 import { pageAll, pageAllSafe, pageAllInSafe, chunked } from '../../lib/pagedQuery.js'
 import { compressImage } from '../../lib/imageCompress.js'
 import { readPhotoExif } from '../../lib/exifRead.js'
@@ -64,12 +66,19 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
   const [docState, setDocState] = useState({ documents: [], submissions: [], signedDocumentIds: [] })
   const setFieldDocuments = useCallback((fn) => setDocState((st) => ({ ...st, documents: typeof fn === 'function' ? fn(st.documents) : fn })), [])
   const [intakes, setIntakes] = useState([])
+  // 批次候選指向、但已不在活文件清單裡的文件的現況(Map id→status):候選列是起稿當下的快照,文件捨棄後不會回寫,
+  // 批次結果頁靠它把「已起稿」改成「已捨棄,可重新起稿」。示範模式恆為空(示範草稿捨棄後本來就只留在記憶體)。
+  const [candidateDocStatus, setCandidateDocStatus] = useState(new Map())
   const [fieldDocsLoading, setFieldDocsLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   // demo:記憶體文件庫 { [id]: { doc, versions: [] } }。ref 與 state 同步寫:建草稿後緊接著存版本時,
   // 呼叫端拿到的仍是舊 closure 的 state,讀 ref 才看得到剛建的文件(否則回「找不到文件」)。
   const [demoDocs, setDemoDocsState] = useState({})
   const demoDocsRef = useRef(demoDocs)
+  // demo:示範用的已簽署列與監造日誌事實列(O2;種子 demoSeed.signedDocs／supervisorLogs)。示範模式不能真的簽署,
+  // 這是「示範資料」——每列帶 is_demo,版本標示印【示範資料】;真實模式這兩份恆為空,一律走伺服器。
+  const [demoSignatures, setDemoSignatures] = useState([])
+  const [demoSupervisorLogs, setDemoSupervisorLogs] = useState([])
   const templateCache = useRef(new Map()) // docType → template(fn_field_document_template 是純映射,取一次即可)
   const setDemoDocs = useCallback((fn) => {
     const next = typeof fn === 'function' ? fn(demoDocsRef.current) : fn
@@ -83,7 +92,7 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
 
   // 真專案:文件(全案)與我的上傳批次(未捨棄)一起載;不依賴標單(未匯標單也要能收照片,設計 §3.5)
   useEffect(() => {
-    if (!isPersistedProject || !pid || !uid) { setDocState({ documents: [], submissions: [], signedDocumentIds: [] }); setIntakes([]); return }
+    if (!isPersistedProject || !pid || !uid) { setDocState({ documents: [], submissions: [], signedDocumentIds: [] }); setIntakes([]); setCandidateDocStatus(new Map()); return }
     let active = true
     setFieldDocsLoading(true)
     ;(async () => {
@@ -106,8 +115,14 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
             stats.set(p.intake_id, s)
           }
         }
+        // 批次候選指向、但已不在活文件清單裡的文件(被捨棄或取代):補查一次現況,批次結果頁才不會一直標「已起稿」
+        const openIds = new Set((docs.documents || []).map((d) => d.id))
+        const missing = (intakeRows || []).flatMap((i) => (Array.isArray(i.candidates) ? i.candidates : []).map((c) => c?.document_id))
+          .filter((id) => id && !openIds.has(id))
+        const statuses = await loadFieldDocumentStatuses(pid, missing)
         if (!active) return
         setDocState(docs)
+        setCandidateDocStatus(statuses)
         setIntakes((intakeRows || []).map((i) => ({ ...i, photoStats: stats.get(i.id) || { total: 0 } })))
       } catch (e) {
         if (active) console.warn('現場文書載入失敗:', e?.message)
@@ -118,10 +133,12 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     return () => { active = false }
   }, [isPersistedProject, pid, uid, reloadKey])
 
-  // 與真專案同口徑只列未終態(捨棄的示範草稿不再出現在清單;示範模式不能簽署,所以不會有曾簽署的文件)
+  // 與真專案同口徑只列未終態(捨棄的示範草稿不再出現在清單)。示範模式使用者仍然不能簽署(簽署一律回 DEMO_ERROR);
+  // signedDocumentIds 列的是種子帶進來的「示範已簽署文件」,/site 據此不對它們顯示「捨棄草稿」——與真專案同一條規則。
   const demoDocList = useMemo(() => Object.values(demoDocs).map((d) => d.doc).filter((d) => FIELD_DOC_OPEN_STATUSES.includes(d.status)), [demoDocs])
+  const demoSignedDocIds = useMemo(() => [...new Set(demoSignatures.map((s) => s.document_id))], [demoSignatures])
   const allDocuments = demoMode ? demoDocList : docState.documents
-  const fieldDocuments = useMemo(() => (demoMode ? { documents: demoDocList, submissions: [], signedDocumentIds: [] } : docState), [demoMode, demoDocList, docState])
+  const fieldDocuments = useMemo(() => (demoMode ? { documents: demoDocList, submissions: [], signedDocumentIds: demoSignedDocIds } : docState), [demoMode, demoDocList, demoSignedDocIds, docState])
 
   // ── 上傳批次 ──────────────────────────────────────────────────────────────
   const createIntake = useCallback(async ({ log_date = null } = {}) => {
@@ -361,7 +378,18 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
   // 某類文書的全部簽署列,各帶所屬文件的類型／日期／狀態／事實列(lib/fieldDocs.signedVersionIndex 的輸入)。
   // 只取已綁事實列的文件(target_id 由簽署落庫時綁定),含已被新文件取代(superseded)的舊文件:新文件簽署前事實列仍是舊文件的版本。
   const listSignedVersions = useCallback(async (docType) => {
-    if (demoMode || !isPersistedProject || !docType) return { rows: [], error: null }
+    // 示範模式:回種子的示範簽署列(每列 is_demo,版本標示印【示範資料】)。形狀與真專案一致——
+    // 簽署列 + 所屬文件的類型／日期／狀態／事實列,判定仍由 signedVersionIndex 做。
+    if (demoMode) {
+      const rows = []
+      for (const s of demoSignatures) {
+        const d = demoDocs[s.document_id]?.doc
+        if (!d || d.doc_type !== docType || !d.target_id) continue
+        rows.push({ ...s, doc_type: d.doc_type, doc_date: d.doc_date, doc_status: d.status, target_id: d.target_id })
+      }
+      return { rows, error: null }
+    }
+    if (!isPersistedProject || !docType) return { rows: [], error: null }
     const { data: docs, error } = await pageAllSafe((from, to) => supabase.from('field_documents')
       .select('id, doc_type, doc_date, status, target_id').eq('project_id', pid).eq('doc_type', docType)
       .not('target_id', 'is', null).order('doc_date').order('id').range(from, to))
@@ -379,20 +407,32 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
       }),
       error: null,
     }
-  }, [demoMode, isPersistedProject, pid])
+  }, [demoMode, demoDocs, demoSignatures, isPersistedProject, pid])
 
   // 監造日誌事實列(P3a supervisor_logs;RLS 成員可讀)。監造月報只彙整其中已簽署者(以 listSignedVersions 判定)。
   const listSupervisorLogs = useCallback(async ({ from, to }) => {
-    if (demoMode || !isPersistedProject || !from || !to) return { rows: [], error: null }
+    // 示範模式:回種子的示範監造日誌事實列(同一組日期區間規則)
+    if (demoMode) return { rows: demoSupervisorLogs.filter((r) => (!from || r.log_date >= from) && (!to || r.log_date <= to)), error: null }
+    if (!isPersistedProject || !from || !to) return { rows: [], error: null }
     const { data, error } = await pageAllSafe((f, t) => supabase.from('supervisor_logs')
       .select('id, log_date, weather_am, weather_pm, attendance, supervision_items, inspection_ids, notices, followups, contractor_summary, note, template_key, template_version')
       .eq('project_id', pid).gte('log_date', from).lte('log_date', to).order('log_date').order('id').range(f, t))
     return { rows: data || [], error: error || null }
-  }, [demoMode, isPersistedProject, pid])
+  }, [demoMode, demoSupervisorLogs, isPersistedProject, pid])
 
   // 指定的文件版本(佐證包:確認紀錄指向的查驗表單版本、送審時點的施工日誌版本);回 Map(`文件:版本` → 版本列)
   const getFieldDocumentVersions = useCallback(async (refs = []) => {
-    if (demoMode || !isPersistedProject || !refs.length) return { versions: new Map(), error: null }
+    if (!refs.length) return { versions: new Map(), error: null }
+    // 示範模式:版本從記憶體文件庫取(示範已簽署版本與示範草稿都在裡面)
+    if (demoMode) {
+      const versions = new Map()
+      for (const r of refs) {
+        const v = demoDocsRef.current[r.document_id]?.versions?.find((x) => Number(x.version_no) === Number(r.version_no))
+        if (v) versions.set(`${r.document_id}:${r.version_no}`, v)
+      }
+      return { versions, error: null }
+    }
+    if (!isPersistedProject) return { versions: new Map(), error: null }
     const wanted = new Set(refs.map((r) => `${r.document_id}:${r.version_no}`))
     const versionNos = [...new Set(refs.map((r) => Number(r.version_no)))]
     const { data, error } = await pageAllInSafe([...new Set(refs.map((r) => r.document_id))], (chunk, from, to) => supabase.from('field_document_versions')
@@ -559,16 +599,23 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
   }, [getFieldDocument, saveFieldDocumentVersion])
 
   // 示範模式:Agent 收件匣的示範草稿所指的文件(demoSeed.fieldDocuments)一次種進記憶體文件庫
-  const seedDemoDocs = useCallback((entries = []) => {
+  // entries=示範草稿;signed=示範已簽署文件(含 signatures);supervisorLogs=示範監造日誌事實列。
+  // 兩者都進同一個記憶體文件庫,頁面與報表不必分辨「草稿或已簽署」——差別只在有沒有簽署列。
+  const seedDemoDocs = useCallback((entries = [], { signed = [], supervisorLogs = [] } = {}) => {
     if (!demoMode) return
-    setDemoDocs(Object.fromEntries(entries.map((e) => [e.doc.id, e])))
+    setDemoDocs(Object.fromEntries([...entries, ...signed].map((e) => [e.doc.id, e])))
+    setDemoSignatures(signed.flatMap((e) => e.signatures || []))
+    setDemoSupervisorLogs(supervisorLogs)
   }, [demoMode, setDemoDocs])
 
   // 登出／切案清理由 store.jsx 呼叫
-  const clearFieldDocs = useCallback(() => { setDocState({ documents: [], submissions: [], signedDocumentIds: [] }); setIntakes([]); setDemoDocs({}) }, [setDemoDocs])
+  const clearFieldDocs = useCallback(() => {
+    setDocState({ documents: [], submissions: [], signedDocumentIds: [] }); setIntakes([]); setCandidateDocStatus(new Map())
+    setDemoDocs({}); setDemoSignatures([]); setDemoSupervisorLogs([])
+  }, [setDemoDocs])
 
   return {
-    fieldDocuments, intakes, fieldDocsLoading, reloadFieldDocs, clearFieldDocs,
+    fieldDocuments, intakes, candidateDocStatus, fieldDocsLoading, reloadFieldDocs, clearFieldDocs,
     createIntake, findExistingPhotosBySha, uploadIntakePhoto, draftFromIntake, updateIntakeDate, setIntakeCandidates, discardIntake, listIntakePhotos, listPhotosByIds,
     listIntakeSharedInputs, setIntakeSharedInput,
     getFieldDocument, getFieldDocumentVersion, getFieldDocumentTemplate, findActiveFieldDoc, findActiveDailyLogDoc, createFieldDocDraft, createDailyLogDraft, createInspectionFormDraft, listInspectionConfirmations, saveFieldDocumentVersion,

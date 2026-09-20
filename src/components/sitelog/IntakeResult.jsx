@@ -7,7 +7,7 @@ import { Badge, Button, Input, Field } from '../ui.jsx'
 import { MSym } from '../icons.jsx'
 import IntakeSharedInputs from './IntakeSharedInputs.jsx'
 import {
-  DOC_TYPE_LABEL, CANDIDATE_STATE_LABEL, CANDIDATE_STATE_TONE, INTAKE_STATUS_LABEL, docPageLink,
+  DOC_TYPE_LABEL, CANDIDATE_STATE_LABEL, CANDIDATE_STATE_TONE, INTAKE_STATUS_LABEL, docPageLink, candidateState,
 } from '../../lib/fieldDocs.js'
 
 const PHOTO_STATUS_LABEL = { pending: '待辨識', done: '已辨識', failed: '辨識失敗', not_site: '非工地照', unreadable: '模糊不可辨', duplicate: '重複照片' }
@@ -37,7 +37,7 @@ export function IntakeStatusLine({ intake, stub = false }) {
 }
 
 export default function IntakeResult({
-  intake, photos = null, documents = [], notes = [], stub = false, hideStatus = false,
+  intake, photos = null, documents = [], notes = [], stub = false, hideStatus = false, docStatus = null,
   editable = false, onToggleExclude, onFixDate, fixDateBusy = false, dateDraft, setDateDraft, onSharedApplied,
 }) {
   if (!intake) return null
@@ -72,14 +72,15 @@ export default function IntakeResult({
         </ul>
       )}
 
-      {/* 候選文書:已就緒／已起稿(連到文件)、待補(補日期／工項)、已排除;使用者可排除不適用候選(四類文書皆有頁面可直達) */}
+      {/* 候選文書:已就緒／已起稿(連到文件)、待補(補日期／工項)、已排除、已捨棄;使用者可排除不適用候選(四類文書皆有頁面可直達) */}
       {candidates.length > 0 && (
         <div>
           <div className="text-footnote font-medium text-[var(--text-2)] mb-1">候選文書</div>
           <ul aria-label="候選文書清單" className="divide-y divide-[var(--border-2)] border border-[var(--border-2)] rounded-lg">
             {candidates.map((c, i) => {
               const doc = (c.document_id && docs.find((d) => d.id === c.document_id)) || docByKey.get(`${c.doc_type}:${c.doc_date}`) || null
-              const state = c.excluded ? 'excluded' : c.state
+              // 起稿出來的文件可能已被捨棄／取代:候選列不會回寫,狀態以文件現況為準(lib/fieldDocs.candidateState)
+              const state = candidateState(c, docStatus)
               return (
                 <li key={`${c.doc_type}:${c.target_key ?? i}`} className="flex items-start gap-2 px-3 py-2">
                   <div className="min-w-0 flex-1">

@@ -148,8 +148,8 @@ test.describe('施工廠商', () => {
     await expect(page.getByText(/待補 \d+ 項/).first()).toBeVisible()
     await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0) // 待補未齊不給簽
     await expect(page.getByText('示範模式：草稿只存在本次瀏覽')).toBeVisible()
-    // 右欄清單列出這份(另一份是 demo 種子裡 Agent 對話起稿的草稿,P6b-2);/site 現場文書清單也可直達(不再標尚未支援)
-    await expect(page.getByRole('group', { name: /自主檢查表（2）/ })).toBeVisible()
+    // 右欄清單列出這份(另兩份是 demo 種子:Agent 對話起稿的草稿 P6b-2、示範已簽署版本 O2);/site 現場文書清單也可直達(不再標尚未支援)
+    await expect(page.getByRole('group', { name: /自主檢查表（3）/ })).toBeVisible()
     await gotoHash(page, '/site')
     const docCard = page.getByRole('group', { name: '現場文書' })
     await expect(docCard.getByRole('link', { name: /自主檢查表/ }).first()).toBeVisible()

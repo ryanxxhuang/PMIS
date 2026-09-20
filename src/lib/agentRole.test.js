@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AGENT_ROLES, AGENT_LABEL, agentRoleOf, displayAgentRole } from './agentRole.js'
+import { AGENT_ROLES, AGENT_LABEL, KIND_LABEL, KIND_COLOR, agentRoleOf, displayAgentRole } from './agentRole.js'
 
 describe('agentRoleOf（三方角色 → Agent 身分）', () => {
   it('只接受廠商、監造、機關三方角色', () => {
@@ -39,5 +39,15 @@ describe('AGENT_LABEL（顯示用稱謂）', () => {
       expect(AGENT_LABEL[role].name).toBeTruthy()
       expect(AGENT_LABEL[role].desc).toBeTruthy()
     }
+  })
+})
+
+describe('KIND_LABEL（收件匣的草稿種類）', () => {
+  it('照片流程的兩種留痕有中文說明，收件匣不再出現內部代號', () => {
+    expect(KIND_LABEL.draft_field_document).toBe('照片起稿文書')
+    expect(KIND_LABEL.suggest_field_update).toBe('欄位修改建議')
+  })
+  it('每個有標籤的種類都有對應顏色（顏色缺漏會讓同一列在兩處長得不一樣）', () => {
+    for (const kind of Object.keys(KIND_LABEL)) expect(KIND_COLOR[kind]).toBeTruthy()
   })
 })

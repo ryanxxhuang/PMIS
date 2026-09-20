@@ -6,6 +6,7 @@
 //
 // 對 B2B 銷售而言 demo 模式就是銷售簡報：每一頁都要看得到「用起來的樣子」。
 
+import { users as demoUsers } from './seed.js'
 import { TEMPLATE_03310 } from './checklist03310.js'
 import { demoFieldDocumentTemplate } from './demoFieldDocTemplates.js'
 import { requiredKeysFor, unmetFields, docConfirmRequiredKeys } from '../lib/fieldDocs.js'
@@ -463,6 +464,207 @@ export function buildDemoData(workItems, project) {
     demoDoc('FD-DEMO-AGENT-SC', 'self_check', 'checklist_records', 'CLT-DEMO-1', scContent, scSources, agaAt(5)),
   ]
 
+  // ── 已簽署的示範文書版本(O2)────────────────────────────────────────────────────
+  // 示範模式沒有伺服器,不能真的簽署(fieldDocs slice 一律回「示範模式無法簽署」);但施工月報／監造月報與估驗
+  // 佐證包依 P6a 只彙整「已簽署版本」,示範專案因此整份報表只剩「未簽署、不列入」、佐證包整欄「未經後端核對」,
+  // Demo 站看不出產品做了什麼。這裡補一組**示範用的已簽署版本**:簽署者、簽署時間、版本號與內容雜湊都是示範值,
+  // 每一列帶 is_demo:true —— 版本標示因此印「【示範資料】」,沿用「示範範本」同一套標示做法,不偽裝成真實簽署。
+  // 判定規則(signedVersionIndex／splitBySignature／inspectionsOfMonth)一行未改;真實模式讀不到這份資料
+  // (store 的 listSignedVersions／listSupervisorLogs／getFieldDocumentVersions 只在 demoMode 回它)。
+  // 簽署者用 demo 帳號本人(seed.users)加註（示範資料）:報表上的名字與示範專案的人員一致,又一眼看得出是示範值
+  const demoUserOf = (org) => demoUsers.find((u) => u.org_type === org) || null
+  const DEMO_SIGNER = {
+    contractor: `${demoUserOf('contractor')?.name || '施工廠商'}（示範資料）`,
+    supervisor: `${demoUserOf('supervisor')?.name || '監造'}（示範資料）`,
+  }
+  const demoSupervisorId = demoUserOf('supervisor')?.user_id || null
+  const DOC_OWNER_ORG = { daily_log: 'contractor', self_check: 'contractor', supervisor_log: 'supervisor', inspection_form: 'supervisor' }
+  const DOC_TARGET_TABLE = { daily_log: 'daily_logs', self_check: 'checklist_records', supervisor_log: 'supervisor_logs', inspection_form: 'inspections' }
+  const atHour = (date, h, m = 0) => new Date(new Date(`${date}T00:00:00`).setHours(h, m, 0, 0)).toISOString()
+  // 示範文件 id 與內容雜湊由種子鍵算出穩定的 16 進位字串:真專案是 uuid ＋ sha256,版本標示印的是「短碼前 8 碼・
+  // 雜湊前 12 碼」——示範資料若用 FD-DEMO-… 當 id,每份文件印出來的短碼與雜湊會一模一樣,看不出「版本可核對」這件事。
+  // 形狀像真的,但每一份都冠【示範資料】(signedVersionText),不會被誤認為真簽署。
+  const demoHex = (seed, len) => {
+    const str = String(seed)
+    let h = 0x811c9dc5, out = ''
+    while (out.length < len) {
+      for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619) >>> 0
+      h = Math.imul(h ^ out.length, 2654435761) >>> 0
+      out += h.toString(16).padStart(8, '0')
+    }
+    return out.slice(0, len)
+  }
+  const demoUuid = (seed) => {
+    const h = demoHex(seed, 32)
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+  }
+  const signedDocs = []
+  // status 預設 received(對方已收件):示範文件走完「簽署 → 提送 → 對方收件」,/site 與今日工作不會憑空多出十幾件待辦;
+  // 只留最新一份日誌類停在 submitted,讓「等待對方收件」這一步也演得到。兩者都仍在活文件清單裡。
+  const signedDoc = ({ key, docType, docDate, targetId, content, sources = {}, attachments = [], templateId = null, signedAt, status = 'received' }) => {
+    const org = DOC_OWNER_ORG[docType]
+    const id = demoUuid(key)
+    const hash = demoHex(`hash:${key}:v1`, 64)
+    signedDocs.push({
+      doc: {
+        id, project_id: project.project_id, doc_type: docType, owner_org: org, target_table: DOC_TARGET_TABLE[docType],
+        target_id: targetId, target_key: null, intake_id: null, doc_date: docDate, status, current_version_no: 1,
+        template_id: templateId, required_fields: [], recheck: [], created_by: null, created_at: signedAt, updated_at: signedAt,
+      },
+      versions: [{
+        id: `${id}-V1`, document_id: id, version_no: 1, author_kind: 'human', created_by: null, content, field_sources: sources,
+        attachments, content_hash: hash, change_note: null, amended_from_version: null, created_at: signedAt,
+      }],
+      signatures: [{
+        id: `${id}-SIG1`, document_id: id, version_no: 1, content_hash: hash,
+        signer_name_snapshot: DEMO_SIGNER[org], signed_at: signedAt, is_demo: true,
+      }],
+    })
+    return id
+  }
+
+  // 施工日誌:最新一天(昨天)刻意不簽 → 月報同時看得到「已簽署彙整」與「未簽署、不列入」兩種列。
+  const wiByKey = new Map((workItems.items || []).map((it) => [it.item_key, it]))
+  const logConfirmed = { status: 'confirmed', source: 'human' }
+  siteLogs.slice(1).forEach((l, i) => {
+    signedDoc({
+      key: `FD-DEMO-SIGNED-LOG-${l.id}`, docType: 'daily_log', docDate: l.log_date, targetId: l.id, signedAt: atHour(l.log_date, 18, 30),
+      status: i === 0 ? 'submitted' : 'received', // 最新一份已提送待監造收件
+      content: {
+        log_date: l.log_date, weather_am: l.weather_am, weather_pm: l.weather_pm,
+        labor: l.labor, equipment: l.equipment, materials: l.materials, extras: l.extras, work_summary: l.work_summary,
+        items: Object.fromEntries(Object.entries(l.items).map(([k, q]) => {
+          const it = wiByKey.get(k) || {}
+          return [k, { item_key: k, item_no: it.item_no || null, description: it.description || k, unit: it.unit || null, qty_today: q, location: null, note: null }]
+        })),
+        photo_ids: [], unmatched_photo_ids: [],
+      },
+      sources: {
+        log_date: logConfirmed, weather_am: logConfirmed, weather_pm: logConfirmed, work_summary: logConfirmed,
+        labor: logConfirmed, equipment: logConfirmed, materials: logConfirmed,
+        ...Object.fromEntries(Object.keys(l.items).map((k) => [`items.${k}.qty_today`, logConfirmed])),
+      },
+    })
+  })
+
+  // 監造日誌事實列(P3a supervisor_logs;真專案由簽署交易落庫)。最新一天不簽,同樣留一列「未簽署、不列入」。
+  const supervisorLogs = [-12, -9, -5, -2].map((off, i) => {
+    const d = iso(daysFromNow(off))
+    return {
+      id: `SUPLOG-DEMO-${i + 1}`, log_date: d,
+      weather_am: '晴', weather_pm: off === -2 ? '陰' : '晴時多雲',
+      attendance: [{ user_id: demoSupervisorId, name: DEMO_SIGNER.supervisor, from: '08:00', to: '17:00' }],
+      supervision_items: [
+        { time: '09:30', item: '鋼筋續接器抽查（抽查 3 處，續接長度符合）', location: '4F', work_item_id: null, note: null, source: '人填', photo_ids: [] },
+        { time: '14:00', item: '模板支撐系統督導', location: '4F', work_item_id: null, note: null, source: '人填', photo_ids: [] },
+      ],
+      inspection_ids: i === 0 ? ['INSP-DEMO-1'] : i === 2 ? ['INSP-DEMO-3'] : [],
+      notices: i === 2 ? [{ to: 'contractor', content: '外牆打樣區磚縫寬度不均，請重新打樣', ref_type: 'inspection', ref_id: 'INSP-DEMO-3' }] : [],
+      followups: i === 2 ? [{ ref_type: 'defect', ref_id: 'DEF-DEMO-1', content: '重新打樣後安排複查', status: 'open' }] : [],
+      contractor_summary: '廠商依施工計畫施作，出工與機具與當日施工日誌相符。',
+      note: null, template_key: 'supervisor_log_demo', template_version: 1,
+    }
+  })
+  supervisorLogs.slice(0, 3).forEach((s, i) => {
+    signedDoc({
+      key: `FD-DEMO-SIGNED-SUPLOG-${s.id}`, docType: 'supervisor_log', docDate: s.log_date, targetId: s.id, signedAt: atHour(s.log_date, 17, 45),
+      status: i === 2 ? 'submitted' : 'received', // 最新一份已提送待機關收件
+      content: {
+        log_date: s.log_date, weather_am: s.weather_am, weather_pm: s.weather_pm,
+        attendance: s.attendance, supervision_items: s.supervision_items, inspection_ids: s.inspection_ids,
+        notices: s.notices, followups: s.followups, contractor_summary: s.contractor_summary, daily_log_receipt: null, note: null,
+        template: { key: 'supervisor_log_demo', version: 1 }, photo_ids: [], unmatched_photo_ids: [],
+      },
+    })
+  })
+
+  // 自主檢查表:3F 版牆那張已簽署(CLR-DEMO-1);2F 版牆的修訂鏈留著不簽,示範「未簽署不列入」。
+  const scSignedSources = {
+    ...Object.fromEntries(Object.keys(scSources).map((k) => [k, logConfirmed])),
+    ...Object.fromEntries(TEMPLATE_03310.items.map((it) => [`results.${it.no}`, logConfirmed])),
+  }
+  const clRec1 = checklistRecords.find((r) => r.id === 'CLR-DEMO-1')
+  signedDoc({
+    key: 'FD-DEMO-SIGNED-SC-1', docType: 'self_check', docDate: clRec1.check_date, targetId: clRec1.id, templateId: 'CLT-DEMO-1',
+    signedAt: atHour(clRec1.check_date, 16, 20),
+    content: {
+      check_date: clRec1.check_date, template_id: 'CLT-DEMO-1', template_title: TEMPLATE_03310.title, template_source: TEMPLATE_03310.source ?? null,
+      work_item_id: null, location: clRec1.location, note: null,
+      results: Object.fromEntries(Object.entries(clValues).map(([no, v]) => [no, { value: v }])),
+      template: { key: scFrame?.key ?? null, version: scFrame?.version ?? 1 }, photo_ids: [], unmatched_photo_ids: [],
+    },
+    sources: scSignedSources,
+  })
+
+  // 監造查驗表單:合格與不合格各一份(INSP-DEMO-1 維持舊流程快速判定、沒有表單 → 月報列「未經簽署查驗表單、不列入」)。
+  // 表單內容的確認數量=該工項第 5 期本期增量,與下面的示範監造確認量同一個數字。
+  const lastVal = valuations[valuations.length - 1]
+  const prevVal = valuations[valuations.length - 2] || null
+  const periodDelta = (key) => round1((lastVal?.items?.[key] || 0) - (prevVal?.items?.[key] || 0))
+  const formFor = (insp, { pass, qtyKey, selfCheckId = null }) => {
+    const it = wiByKey.get(qtyKey) || {}
+    const declared = periodDelta(qtyKey) || round1((it.quantity || 0) * 0.02)
+    const confirmed = pass ? declared : 0
+    return signedDoc({
+      key: `FD-DEMO-SIGNED-IF-${insp.id}`, docType: 'inspection_form', docDate: insp.requested_date, targetId: insp.id,
+      signedAt: atHour(insp.requested_date, 15, 10),
+      content: {
+        inspection_date: insp.requested_date, inspection_id: insp.id, work_item_id: qtyKey, location: insp.location,
+        stage_key: null, unit: it.unit || null, declared_qty: declared, self_check_record_id: selfCheckId,
+        template_id: null, results: {}, verdict: pass ? '合格' : '不合格', confirmed_qty: confirmed,
+        result_note: insp.result_note, note: null,
+        template: { key: 'inspection_form_demo', version: 1 }, photo_ids: [], unmatched_photo_ids: [],
+      },
+    })
+  }
+  const inspPass = inspections.find((i) => i.id === 'INSP-DEMO-2')
+  const inspFail = inspections.find((i) => i.id === 'INSP-DEMO-3')
+  const passKey = (active[3] || active[0]).item_key // 與該查驗申請的工項一致(deco(3))
+  const formPass = formFor(inspPass, { pass: true, qtyKey: passKey, selfCheckId: 'CLR-DEMO-1' })
+  const formFail = formFor(inspFail, { pass: false, qtyKey: (active[1] || active[0]).item_key })
+  // 事實列回指已簽署表單:inspections.document_id 在真專案只由簽署路徑寫入,月報據此分「已簽署判定／未經表單的快速判定」
+  inspPass.document_id = formPass
+  inspFail.document_id = formFail
+
+  // 示範監造確認量(P4b inspection_confirmations 的形狀;真專案由簽署查驗表單在同一交易落庫)與期別狀態
+  // (get_valuation_state 的 items[].sources)。佐證包的「依據」欄靠它才顯示得出監造確認來源;示範資料一律
+  // 指向上面那份已簽署的監造查驗表單,金額不參與——確認的是**數量**,估驗金額仍由估驗單自己算。
+  // 有已簽署查驗表單的那個工項走「查驗表單」(佐證包因此列得出表單版本、雜湊與檢附的自主檢查);
+  // 其餘走「監造確認單」(P4d issue_supervisor_certificate 的來源,本來就沒有查驗表單文件)——兩種依據各演一種。
+  // 批次與確認日期刻意分散:同一天、同一個批次名連出 30 幾列,看起來像系統灌的,不像監造逐批確認的紀錄。
+  const demoBatches = ['3F 版牆（示範）', '4F 柱牆（示範）', '4F 版牆（示範）', '屋頂層（示範）', '1F 打樣區（示範）', '地下室 B1（示範）']
+  const demoConfirmDays = [-12, -11, -9, -7, -5, -4]
+  const confirmedAt = atHour(inspPass.requested_date, 15, 12)
+  const confirmations = active.map((it, i) => {
+    const delta = periodDelta(it.item_key)
+    if (!(delta > 0)) return null
+    const viaForm = it.item_key === passKey
+    const batch = demoBatches[i % demoBatches.length]
+    return {
+      id: `CONF-DEMO-${it.item_key}`, work_item_id: it.item_key, batch_key: `${it.item_key}|${batch}`,
+      location_label: batch, stage_key: null, unit: it.unit || null,
+      qty_cum: round1(lastVal?.items?.[it.item_key] || 0), qty_delta: delta,
+      basis: viaForm ? 'inspection' : 'supervisor_certificate',
+      inspection_id: viaForm ? inspPass.id : null,
+      document_id: viaForm ? formPass : null, document_version_no: viaForm ? 1 : null,
+      content_hash: viaForm ? demoHex(`hash:FD-DEMO-SIGNED-IF-${inspPass.id}:v1`, 64) : null,
+      confirmed_by: demoSupervisorId, confirmed_at: viaForm ? confirmedAt : atHour(iso(daysFromNow(demoConfirmDays[i % demoConfirmDays.length])), 16, 40),
+      status: 'active', revoked_at: null, reason: null, supersedes_id: null,
+    }
+  }).filter(Boolean)
+  const valuationStates = {
+    [lastVal.id]: {
+      valuation_id: lastVal.id, violations: [],
+      items: confirmations.map((c) => ({
+        work_item_id: c.work_item_id, cap: c.qty_delta, prev_cum: round1((prevVal?.items?.[c.work_item_id]) || 0),
+        delta: c.qty_delta, violations: [],
+        sources: [{ id: `${c.id}-SRC`, kind: 'confirmation', qty: c.qty_delta, batch_key: c.batch_key, confirmation_id: c.id }],
+      })),
+    },
+  }
+  // 佐證包用「送審時點」釘住施工日誌版本;示範資料給第 5 期一個送審時間,佐證包才不會標「查無送審稽核紀錄」
+  const valuationSubmittedAt = { [lastVal.id]: atHour(lastVal.valuation_date, 9, 30) }
+
   // 稽核提示的發現清單(批4):形狀對齊 lib/integrityAudit.js buildIntegrityFindings 的
   // findings(status/category/route/title/detail)——真實模式由 run_integrity_audit
   // 用同一個確定性引擎產出,demo 用同形狀靜態資料把卡片演出來。
@@ -544,7 +746,7 @@ export function buildDemoData(workItems, project) {
       status: 'pending', resolved_by: null, resolved_at: null, created_at: agaAt(8) },
   ]
 
-  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, anchorVersions, projectWarranty, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions, fieldDocuments }
+  return { progressPlan, valuations, siteLogs, inspections, defects, obligations, anchorVersions, projectWarranty, costItems, safetyRecords, changeOrders, itemSchedules, checklistTemplates, checklistRecords, testSamples, submittals, rfis, observations, acceptanceEvents, inspectionPoints, agentActions, fieldDocuments, signedDocs, supervisorLogs, confirmations, valuationStates, valuationSubmittedAt }
 }
 
 // ── 跨案總覽的示範姊妹案(靜態摘要;A 區為主 storyline,件數由 store 即時計算) ──

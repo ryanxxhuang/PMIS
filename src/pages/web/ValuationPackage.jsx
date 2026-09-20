@@ -3,8 +3,8 @@ import { useSearchParams, useNavigate, Navigate, Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import PrintToolbar from '../../components/PrintToolbar.jsx'
-import { Button } from '../../components/ui.jsx'
-import { buildBillableTree, buildCumMap } from '../../lib/boqCalc.js'
+import { Button, ErrorBanner } from '../../components/ui.jsx'
+import { buildBillableTree, buildCumMap, workItemRefIndex } from '../../lib/boqCalc.js'
 import { photoEvidenceLine } from '../../lib/evidence.js'
 import { fmtAmount as fmt } from '../../lib/format.js'
 import { taipeiDateTime } from '../../lib/dates.js'
@@ -68,22 +68,24 @@ export default function ValuationPackage() {
   const completion = billableTotal ? (totalCum / billableTotal) * 100 : 0
   const retPct = selected?.retention_pct ?? 5
 
-  const idToKey = useMemo(() => new Map((workItems?.items || []).filter((it) => it.id).map((it) => [it.id, it.item_key])), [workItems])
-  const keyOf = useCallback((id) => idToKey.get(id) ?? null, [idToKey])
+  // 工項參照:真專案是 work_items uuid,示範模式的範例標單沒有 id、示範確認量以 item_key 參照(lib/boqCalc 單一來源)
+  const wiRefs = useMemo(() => workItemRefIndex(workItems?.items || []), [workItems])
+  const keyOf = useCallback((ref) => wiRefs.resolve(ref)?.item_key ?? null, [wiRefs])
   const span = useMemo(() => periodWindow(selected, prev), [selected, prev])
   const openDocs = fieldDocuments?.documents
   const openDocIds = useMemo(() => new Set((openDocs || []).map((d) => d.id)), [openDocs])
 
   // ── 本期證據(DB 唯讀):期別狀態＋確認紀錄＋送審時點＋三類簽署列 → 查驗表單版本與釘住的日誌版本 → 附件照片 ──
-  // 任何一步失敗就整包標「證據讀取失敗」,不拿半份資料印成佐證包。示範模式沒有確認紀錄與簽署,明示未經後端核對。
+  // 任何一步失敗就整包標「證據讀取失敗」,不拿半份資料印成佐證包。示範模式讀的是種子的示範資料(O2),整包標示範。
   const [ev, setEv] = useState({ ...EMPTY_EV, key: null })
   const evKey = selected ? `${selected.id}|${selected.status}|${span.from}|${span.to}|${span.gap}` : null
   useEffect(() => {
     if (!evKey) return
     let alive = true
-    const done = (patch) => { if (alive) setEv({ ...EMPTY_EV, key: evKey, loading: false, ...patch }) }
+    const done = (patch) => { if (alive) setEv({ ...EMPTY_EV, key: evKey, loading: false, demo: !dbMode, ...patch }) }
     ;(async () => {
-      if (!dbMode) { done({ demo: true }); return }
+      // 示範模式一樣跑這一輪:store 的每一支在 demoMode 都回種子的示範資料(示範已簽署版本、示範監造確認量),
+      // 佐證包因此演得出內容;demo 旗標只用來在頁面與紙本標示「示範資料」,判定與組裝規則完全同一套。
       const draftPeriod = selected.status === '草稿'
       const [st, cf, sub, dl, sc, fm, mem] = await Promise.all([
         fetchValuationState(selected.id), fetchConfirmations(),
@@ -113,7 +115,7 @@ export default function ValuationPackage() {
   const loaded = evReady && !ev.error
 
   const evidence = useMemo(() => packageItemEvidence({
-    leaves, state: ev.demo ? null : ev.state, keyOf, confirmations: ev.confirmations, formVersions: ev.versions,
+    leaves, state: ev.state, keyOf, confirmations: ev.confirmations, formVersions: ev.versions,
     formIndex: ev.formIdx, inspections, checklistRecords, selfCheckIndex: ev.selfCheckIdx,
   }), [leaves, ev, keyOf, inspections, checklistRecords])
   const evByKey = useMemo(() => new Map(evidence.map((e) => [e.item.item_key, e])), [evidence])
@@ -121,7 +123,7 @@ export default function ValuationPackage() {
   const photoCount = ev.photos?.length || 0
   // 施工日誌附件:本期範圍內、釘住時點以前已簽署的版本;範圍內未簽署(或送審時尚未簽署)的日期與施工月報同一條規則列出
   const logAttachment = useMemo(() => {
-    if (ev.demo || !loaded) return { rows: [], unsigned: [], missing: 0 }
+    if (!loaded) return { rows: [], unsigned: [], missing: 0 }
     const refs = pinnedDailyLogRefs(ev.dailyIdx, span)
     const out = packageDailyLogs({ refs, versions: ev.versions, leaves })
     const unsigned = unsignedDays({
@@ -138,9 +140,11 @@ export default function ValuationPackage() {
   // AI 本期施工說明:依本期工項、本包照片(簽署查驗表單附件)與本包施工日誌(已簽署版本)草擬
   const [summary, setSummary] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
+  const [aiErr, setAiErr] = useState('')
   const genSummary = async () => {
     if (!selected) return
     setAiBusy(true)
+    setAiErr('')
     const payload = {
       period_no: selected.period_no, period_amount: periodAmt, completion_pct: Number(completion.toFixed(1)),
       items: leaves.slice(0, 30).map((it) => ({
@@ -154,7 +158,11 @@ export default function ValuationPackage() {
     }
     const { error, result } = await draftValuationSummary(payload)
     setAiBusy(false)
-    if (!error && result?.summary) setSummary(result.summary)
+    // 失敗要說出來:原本靜默丟掉錯誤,使用者只看到說明欄一直空白、按鈕按了沒反應。
+    // 與施工月報同一套呈現(ErrorBanner＋friendlyError),重試入口就是工具列那顆「重新產生施工說明」。
+    if (error) { setAiErr(friendlyError(error, 'AI 施工說明產生失敗')); return }
+    if (!result?.summary) { setAiErr('AI 沒有回傳施工說明內容，請重新產生或直接編輯下方說明欄。'); return }
+    setSummary(result.summary)
   }
 
   // 證據載入後自動產生一次 AI 說明(尚未產生時)。
@@ -224,6 +232,12 @@ export default function ValuationPackage() {
           <div className="mt-2 inline-block text-footnote paper-warn border paper-warn-rule rounded px-3 py-1.5">
             本包為佐證彙整，正式估驗金額以「估驗計價單」為準。
           </div>
+          {/* 示範模式:本包的已簽署版本與監造確認量都是示範資料(紙本同印,不得被誤認為真實簽署) */}
+          {ev.demo && (
+            <div className="mt-2 block text-footnote paper-warn border paper-warn-rule rounded px-3 py-1.5">
+              示範資料：本包的已簽署文件版本、簽署者、內容雜湊與監造確認量皆為示範值，非真實簽署紀錄。
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-x-8 gap-y-1 mb-5 border-y paper-rule py-3">
@@ -242,6 +256,12 @@ export default function ValuationPackage() {
             <MSym name="auto_awesome" size={13} className="text-[var(--blue)] print:hidden" />本期施工說明
             <span className="text-xs paper-mute font-normal print:hidden">（AI 依本期工項、確認查驗之照片與已簽署施工日誌草擬，可直接修改）</span>
           </div>
+          <ErrorBanner msg={aiErr} onClose={() => setAiErr('')} className="print:hidden mb-2" />
+          {aiErr && aiEnabled('valuation.summary') && (
+            <p className="text-xs text-[var(--text-2)] mb-2 print:hidden">
+              可按上方「重新產生施工說明」重試，或直接在下方說明欄自行撰寫。
+            </p>
+          )}
           <textarea
             value={aiBusy && !summary ? 'AI 產生中…' : summary}
             onChange={(e) => setSummary(e.target.value)}
@@ -305,8 +325,6 @@ export default function ValuationPackage() {
           <div className="paper-mute text-footnote py-2 mb-6" aria-busy="true">正在讀取本期確認來源與簽署版本…</div>
         ) : ev.error ? (
           <div role="alert" className="paper-warn text-footnote py-2 mb-6">本期證據讀取失敗，不產生佐證內容：{friendlyError(ev.error, '證據讀取失敗')}（請重新整理）。</div>
-        ) : ev.demo ? (
-          <div className="paper-mute text-footnote py-2 mb-6 border border-dashed paper-rule-2 rounded px-3">示範模式沒有監造確認紀錄與簽署版本可核對；正式專案的本包只列監造確認量與其簽署文件版本（未經後端核對）。</div>
         ) : (
           <ul role="list" aria-label="本期確認來源" className="space-y-3 mb-6">
             {evidence.map((e) => (
@@ -357,7 +375,9 @@ export default function ValuationPackage() {
           <div className="paper-mute text-footnote py-4">{ev.error ? '證據讀取失敗，未列照片。' : '照片載入中…'}</div>
         ) : photoCount === 0 ? (
           <div className="paper-mute text-footnote py-4 border border-dashed paper-rule-2 rounded px-3 print:border-0">
-            {ev.demo ? '示範模式沒有簽署的查驗表單，不列照片。' : '本期確認所依據的查驗表單沒有附證據照片；照片需由監造在查驗表單附上並隨版本簽署，才會列入本包。'}
+            {ev.demo
+              ? '示範資料的查驗表單沒有附照片（示範模式不支援照片上傳）；正式專案由監造在查驗表單附上照片並隨版本簽署後列入本包。'
+              : '本期確認所依據的查驗表單沒有附證據照片；照片需由監造在查驗表單附上並隨版本簽署，才會列入本包。'}
           </div>
         ) : (
           <div className="space-y-4">
@@ -402,7 +422,7 @@ export default function ValuationPackage() {
           <input type="checkbox" className="w-5 h-5" checked={attachLogs} onChange={(e) => setAttachLogs(e.target.checked)} />
           夾附施工日誌（列印時附上本期範圍內、含本期工項數量的已簽署施工日誌）
         </label>
-        {attachLogs && loaded && !ev.demo && (
+        {attachLogs && loaded && (
           <div className="mt-4 print:break-before-page">
             <div className="paper-mute font-medium mb-1 flex items-center gap-1.5">
               <MSym name="description" size={14} className="text-[var(--blue)] print:hidden" />附件：施工日誌（已簽署版本）

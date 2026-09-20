@@ -125,7 +125,7 @@ export function StoreProvider({ children }) {
   const {
     valuations, setValuations, valuationAdjustments, setValuationAdjustments, progressPlan, setProgressPlan, reloadValuations,
     createValuation, updateValuationItem, setValuationStatus, setValuationPeriodEnd, updateValuationPayment,
-    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, fetchValuationSubmittedAt, setPricingBasis,
+    syncValuation, fetchValuationState, fetchBillableBacklog, fetchConfirmations, fetchValuationSubmittedAt, setPricingBasis, seedDemoBilling,
     revokeConfirmation, issueCertificate, voidAdjustment,
     generateSchedule, updatePlannedPct, deleteValuation,
   } = useBillingSlice(ctx)
@@ -200,7 +200,9 @@ export function StoreProvider({ children }) {
     setSubmittals(d.submittals); setRfis(d.rfis); setObservations(d.observations)
     setItemSchedules(d.itemSchedules); setAcceptanceEvents(d.acceptanceEvents || [])
     setInspectionPoints(d.inspectionPoints || []); setAgentActions(d.agentActions || [])
-    fieldDocsSlice.seedDemoDocs(d.fieldDocuments || []) // Agent 示範草稿所指的文件(P6b-2)
+    // Agent 示範草稿所指的文件(P6b-2)＋示範用的已簽署文件與監造日誌事實列(O2:月報／佐證包才演得出內容)
+    fieldDocsSlice.seedDemoDocs(d.fieldDocuments || [], { signed: d.signedDocs || [], supervisorLogs: d.supervisorLogs || [] })
+    seedDemoBilling(d) // 示範監造確認量／期別狀態／送審時點(佐證包的「依據」欄)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, workItems, workItemsSource, currentUser])
 

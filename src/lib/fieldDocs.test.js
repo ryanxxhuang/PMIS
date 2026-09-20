@@ -16,7 +16,7 @@ import {
   printSignature, submissionsChronological, submissionReceipts, returnHistory, nextResponsibleText,
   groupSharedFields, sharedFieldTitle, sharedEffectLabel, sharedPendingDocs, sharedInputValue, sharedApplySummary, documentsAfterShared,
   signedVersionIndex, signedVersionText, signedVersionLink, confirmationDocRef,
-  canDiscardFieldDocument, FIELD_DOC_DISCARDABLE_STATUSES,
+  canDiscardFieldDocument, FIELD_DOC_DISCARDABLE_STATUSES, candidateState, CANDIDATE_STATE_LABEL,
 } from './fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.js'
@@ -223,15 +223,25 @@ describe('已簽署版本的重用(P6a:月報／監造月報／佐證包)', () =
     expect(signedVersionLink({ ...ref, latest_of_doc: false }, new Set(['doc-12345678-x']))).toBeNull() // 連過去會印出別的版本
     expect(signedVersionText(null)).toBe('')
   })
+  it('示範模式的示範簽署列:版本標示冠【示範資料】,紙本也印得出來', () => {
+    const ref = signedVersionIndex([row('L1', 'doc-12345678-x', 1, '2026-09-06T02:00:00Z', { is_demo: true })]).get('L1')
+    expect(ref.is_demo).toBe(true)
+    expect(signedVersionText(ref).startsWith('【示範資料】')).toBe(true)
+    // 真簽署不得出現這個字樣
+    expect(signedVersionText(signedVersionIndex([row('L2', 'doc-2', 1, '2026-09-06T02:00:00Z')]).get('L2'))).not.toContain('示範資料')
+  })
   it('監造確認紀錄 → 查驗表單版本:撤銷後重簽的舊確認指向舊版本,不給列印連結;監造確認單沒有文件', () => {
     const formIdx = signedVersionIndex([
       { document_id: 'f1', doc_type: 'inspection_form', doc_date: '2026-09-10', doc_status: 'signed', target_id: 'i1', version_no: 2, signed_at: '2026-09-10T02:00:00Z' },
       { document_id: 'f1', doc_type: 'inspection_form', doc_date: '2026-09-10', doc_status: 'signed', target_id: 'i1', version_no: 3, signed_at: '2026-09-11T02:00:00Z' },
     ])
     const c = { inspection_id: 'i1', document_id: 'f1', document_version_no: 2, content_hash: 'a'.repeat(64) }
-    expect(confirmationDocRef(c, formIdx)).toEqual({ document_id: 'f1', doc_type: 'inspection_form', version_no: 2, content_hash: 'a'.repeat(64), latest_of_doc: false })
+    expect(confirmationDocRef(c, formIdx)).toEqual({ document_id: 'f1', doc_type: 'inspection_form', version_no: 2, content_hash: 'a'.repeat(64), latest_of_doc: false, is_demo: false })
     expect(confirmationDocRef({ ...c, document_version_no: 3 }, formIdx).latest_of_doc).toBe(true)
     expect(confirmationDocRef({ basis: 'supervisor_certificate', document_id: null, document_version_no: null }, formIdx)).toBeNull()
+    // 指向示範已簽署版本 → 版本標示也要印【示範資料】
+    const demoIdx = signedVersionIndex([{ document_id: 'f9', doc_type: 'inspection_form', doc_date: '2026-09-10', doc_status: 'submitted', target_id: 'i9', version_no: 1, signed_at: '2026-09-10T02:00:00Z', is_demo: true }])
+    expect(signedVersionText(confirmationDocRef({ inspection_id: 'i9', document_id: 'f9', document_version_no: 1, content_hash: 'b'.repeat(64) }, demoIdx))).toContain('【示範資料】')
   })
 })
 
@@ -730,5 +740,25 @@ describe('捨棄草稿入口(P3f):與伺服器 discard_field_document 同一組�
   })
   it('捨棄後的文件在今日工作球權是終態(P5a;與清單只載未終態同一口徑)', () => {
     expect(docStatusMeta(doc({ status: 'discarded' }), 'contractor')).toEqual({ label: '已捨棄', tone: 'slate', action: null })
+  })
+})
+
+describe('candidateState（批次候選的實際狀態）', () => {
+  const drafted = { doc_type: 'daily_log', state: 'drafted', document_id: 'd1' }
+  it('起稿出來的文件已捨棄 → 不再標「已起稿」,改標可重新起稿', () => {
+    expect(candidateState(drafted, new Map([['d1', 'discarded']]))).toBe('discarded')
+    expect(CANDIDATE_STATE_LABEL.discarded).toBe('已捨棄,可重新起稿')
+  })
+  it('文件已被新文件取代 → 標已取代', () => {
+    expect(candidateState(drafted, new Map([['d1', 'superseded']]))).toBe('superseded')
+  })
+  it('文件仍是活的、或狀態還沒讀到 → 維持原狀態(不把未載入誤判成已捨棄)', () => {
+    expect(candidateState(drafted, new Map([['d1', 'submitted']]))).toBe('drafted')
+    expect(candidateState(drafted, new Map())).toBe('drafted')
+    expect(candidateState(drafted, null)).toBe('drafted')
+  })
+  it('使用者排除優先;沒起稿過的候選不受文件狀態影響', () => {
+    expect(candidateState({ ...drafted, excluded: true }, new Map([['d1', 'discarded']]))).toBe('excluded')
+    expect(candidateState({ state: 'ready' }, new Map([['d1', 'discarded']]))).toBe('ready')
   })
 })

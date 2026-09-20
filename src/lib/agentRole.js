@@ -29,6 +29,10 @@ export const AGENT_LABEL = {
 export const KIND_LABEL = {
   draft_daily_log: '日誌草稿',
   draft_inspection: '查驗草稿',
+  // 照片上傳起稿(Edge draft-field-documents)的兩種留痕:新版本＝文書草稿;已有人工版本時不覆寫、只留欄位建議。
+  // 沒有這兩個對映,收件匣會直接顯示內部代號 draft_field_document／suggest_field_update。
+  draft_field_document: '照片起稿文書',
+  suggest_field_update: '欄位修改建議',
   draft_submittal_review: '審查意見',
   audit_note: '稽核提示',
   handoff: '交接事項',
@@ -39,6 +43,8 @@ export const KIND_LABEL = {
 export const KIND_COLOR = {
   draft_daily_log: 'blue',
   draft_inspection: 'green',
+  draft_field_document: 'blue', // 與對話起稿的日誌草稿同色:都是「AI 擬好一份文書等你覆核」
+  suggest_field_update: 'amber', // 不是新文書,是對既有人工版本的建議,視覺上要與草稿分得開
   draft_submittal_review: 'amber',
   audit_note: 'purple',
   handoff: 'red', // 球轉到你手上,視覺上要跳出來

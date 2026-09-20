@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
 import { useStore } from '../../store.jsx'
 import { Card, Empty, PageHeader, Button, Badge, Surface, Input, Textarea } from '../../components/ui.jsx'
-import { buildBillableTree, buildCumMap, totalCumAmount } from '../../lib/boqCalc.js'
+import { buildBillableTree, buildCumMap, totalCumAmount, workItemRefIndex } from '../../lib/boqCalc.js'
 import { plannedPctNow } from '../../lib/progressPlan.js'
 import { taipeiToday, localISODate, taipeiISODate, taipeiDateTime } from '../../lib/dates.js'
 import { reportCutoff, isPartialMonth, latestValuationAt, valuationLabel, monthEnd } from '../../lib/progressAsOf.js'
@@ -97,7 +97,8 @@ export default function SupervisorReport() {
   }, [fetchConfirmations, valuations])
   const ready = !signedSrc.loading && !signedSrc.error && supLogs.month === month && !supLogs.error && confs.loaded && !confs.error
   const loadError = signedSrc.error || supLogs.error || confs.error
-  const byId = useMemo(() => new Map((adjustedItems || []).filter((it) => it.id).map((it) => [it.id, it])), [adjustedItems])
+  // 工項參照:真專案是 work_items uuid;示範標單沒有 id,示範確認量以 item_key 參照(lib/boqCalc 單一來源)
+  const wiRefs = useMemo(() => workItemRefIndex(adjustedItems || []), [adjustedItems])
 
   const r = useMemo(() => buildSupervisorReport({
     project, siteLogs, dailyLogIndex: idx.daily, supervisorLogs: supLogs.rows, supervisorLogIndex: idx.supervisor,
@@ -215,7 +216,7 @@ export default function SupervisorReport() {
           ) : (
             <ul role="list" aria-label="本月監造確認紀錄" className="text-sm text-[var(--text-2)] space-y-1">
               {confirmRows.map((c) => {
-                const wi = byId.get(c.work_item_id)
+                const wi = wiRefs.resolve(c.work_item_id)
                 return (
                   <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className="num text-[var(--text-3)] text-xs w-24 shrink-0">{taipeiISODate(c.confirmed_at)}</span>

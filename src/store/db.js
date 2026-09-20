@@ -238,6 +238,17 @@ export async function loadFieldDocumentsFromDB(projectId) {
   return { documents: documents || [], submissions: submissions || [], signedDocumentIds: [...new Set((signatures || []).map((s) => s.document_id))] }
 }
 
+// 批次候選指向、但已不在活文件清單裡的文件的現況(P3f 捨棄／取代都是終態,活文件查詢不會回它們)。
+// 只取 id＋status:候選列是起稿當下的快照,不會因文件捨棄而回寫,批次結果頁要靠這個才不會一直標「已起稿」。
+// 沒有要查的 id 就不發查詢;失敗照載入層慣例 throw(呼叫端會退回「維持原狀態」)。
+export async function loadFieldDocumentStatuses(projectId, ids = []) {
+  const want = [...new Set((ids || []).filter(Boolean))]
+  if (!want.length) return new Map()
+  const rows = await pageAllIn(want, (chunk, from, to) => supabase.from('field_documents')
+    .select('id, status').eq('project_id', projectId).in('id', chunk).order('id').range(from, to), '現場文書狀態')
+  return new Map((rows || []).map((d) => [d.id, d.status]))
+}
+
 // 從 DB 載入成本項目（預算 vs 實際、分包）
 export async function loadCostItemsFromDB(projectId) {
   const data = await pageAll((from, to) => supabase.from('cost_items')
