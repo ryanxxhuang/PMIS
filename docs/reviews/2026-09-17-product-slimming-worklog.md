@@ -373,7 +373,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 |---|---|---|---|
 | A | 廠商角色與三個主入口（本節已完成，PR #163） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`；本節已完成，PR #164、merge `a575bbc`、migration `20260920120000` 已套正式、四支 Edge 已重佈） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| C | 真實表單 mapping、直接在紙本版面編輯（施工日誌＋自主檢查表已完成，PR #PLACEHOLDER；監造查驗與監造日誌**未做**） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| C | 真實表單 mapping、直接在紙本版面編輯（施工日誌＋自主檢查表已完成，PR #168；監造查驗與監造日誌**未做**） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | D | PDF 交付（真正的下載，不是 `window.print()`；本節已完成，PR #166） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | E | 三項核心的整條流程驗收（真後端） | fable5.1 | 待填 |
 
