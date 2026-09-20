@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import PrintToolbar from '../../components/PrintToolbar.jsx'
@@ -13,6 +13,7 @@ export default function ValuationPrint() {
   const { project, workItems, valuations, currentUser, adjustedItems: adjItems, coNet, revisedTotal } = useStore()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
+  const paperRef = useRef(null)
 
   const periodId = sp.get('p')
   const selected = valuations.find((v) => v.id === periodId) || valuations[valuations.length - 1]
@@ -64,8 +65,9 @@ export default function ValuationPrint() {
   )
 
   return (
-    <div className="min-h-screen paper-desk">
-      <PrintToolbar sticky backTo="/valuation" backLabel="返回估驗計價" printLabel="列印 / 另存 PDF" />
+    <div ref={paperRef} className="min-h-screen paper-desk">
+      <PrintToolbar sticky backTo="/valuation" backLabel="返回估驗計價"
+        pdf={{ paperRef, title: '估驗計價單', fileName: `估驗計價單_第${selected.period_no}期` }} />
 
       {/* 文件本體 A4 */}
       <div className="max-w-[820px] mx-auto paper my-6 print:my-0 p-10 print:p-0 shadow-sm print:shadow-none text-body">

@@ -623,6 +623,26 @@ html.theme-switching, html.theme-switching *, html.theme-switching *::before, ht
 @utility paper-danger { color: var(--red-text); }     /*  7.18 —— 自主檢查表「已被修訂版取代」 */
 @utility paper-danger-rule { border-color: var(--danger); } /* 5.38 */
 
+/* ── PDF 匯出用的離畫面複本(.pdf-export)───────────────────────────────────
+   「下載 PDF」會把整張紙複製到畫面外量一次(src/lib/pdf/paperSnapshot.js),量到的
+   位置直接變成 PDF 座標。複本要做兩件螢幕上不會做的事:
+   ① 字型固定成 PDF 內嵌的那一支("PMIS PDF Han" = vendor 過的 Noto Sans TC 靜態子集),
+      並關掉 kerning／連字／等寬數字。畫面上的紙在 macOS 走 PingFang,字寬與 Noto 不同,
+      不釘住的話量到的 x 配上 Noto 的 advance 會逐字累積誤差、字擠出格線外;
+      GSUB/GPOS 在 vendor 時已丟掉,所以瀏覽器這一側也要關掉對應特性,兩邊才都是純 advance。
+   ② 把 print: 變體「列印時要藏起來」的 chrome(工具圖示、僅螢幕用的提示)也藏起來。
+      螢幕上不吃 @media print,不處理的話那些圖示會印進正式文件。
+   紙面顏色照舊由上面的 .paper / paper-* 決定,這裡不碰用色。 */
+.pdf-export, .pdf-export * {
+  font-family: "PMIS PDF Han", sans-serif !important;
+  font-kerning: none !important;
+  font-variant-ligatures: none !important;
+  font-variant-numeric: normal !important;
+  font-feature-settings: normal !important;
+  box-shadow: none !important;
+}
+.pdf-export [class~="print:hidden"] { display: none !important; }
+
 /* 列印:表單控件的顏色來自本檔上面那條 unlayered 規則(var(--text)/var(--surface)),
    深色模式下就是「淺字深底」;瀏覽器預設不印背景色,於是白紙上只剩淺灰字。
    /valuation/package 的「本期施工說明」textarea 是唯一坐在列印版面裡的控件,
