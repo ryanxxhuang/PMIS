@@ -6,8 +6,9 @@
 //   * 日誌／自主檢查表草稿(P6b-2)不直接寫表:只經 agentFieldDocDraft → writeDraftDocument 寫「現場文書草稿」
 //     (field_documents 草稿列、field_document_versions 的 AI 版本、agent_actions),與照片起稿同一段;
 //     不碰照片、批次或任何事實表(事實表只由使用者簽署落庫,DB 版本 guard 另擋 AI 帶入人填欄)。
-//   * 工具層能呼叫的 RPC 只有兩支唯讀(my_org_type / list_project_members);
-//     resolve_agent_action 這類狀態轉移 RPC 絕不在 agent 手上。
+//   * 工具層能呼叫的 RPC 只有三支唯讀(my_org_type / list_project_members / get_project_warranty);
+//     resolve_agent_action 這類狀態轉移 RPC 絕不在 agent 手上。get_project_warranty(P5e)是 stable 的
+//     唯讀事實查詢(保固期滿日由 DB 單一日期規則算、成員檢查),收集器靠它判保固類的停止條件,不在工具層重算日期。
 //   * 分派器只把 service role client 交給草稿工具,查詢七支的 case 拿不到 service。
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
@@ -93,12 +94,12 @@ describe('草稿只寫 agent_actions、業務表零寫入(原始碼掃描)', () 
     expect(repoSrc.slice(repoSrc.indexOf('async insertVersion(')).split('\n    },')[0]).toContain("author_kind: 'ai'")
   })
 
-  it('工具層只呼叫兩支唯讀 RPC,沒有 resolve_agent_action 之類的狀態轉移', () => {
+  it('工具層只呼叫三支唯讀 RPC,沒有 resolve_agent_action 之類的狀態轉移', () => {
     const calls = new Set<string>()
     for (const f of ALL_MODULES) {
       for (const m of read(f).matchAll(/\.rpc\(\s*'([^']+)'/g)) calls.add(m[1])
     }
-    expect([...calls].sort()).toEqual(['list_project_members', 'my_org_type'])
+    expect([...calls].sort()).toEqual(['get_project_warranty', 'list_project_members', 'my_org_type'])
   })
 
   it('分派器只把 service role client 交給草稿工具;查詢七支的 case 沒有 service', () => {

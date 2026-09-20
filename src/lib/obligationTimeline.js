@@ -14,6 +14,7 @@ import {
   obligationSide, ANCHOR_BY_TRIGGER, ANCHOR_LABELS as SHARED_ANCHOR_LABELS, ANCHOR_CHANGE_KIND_LABELS,
   isRecurring, isObligationOpen, currentObligationPeriod, recurrenceRuleGap, recurrenceAnchorKey,
   recurrenceStopGap, periodBasisLabel, singleDueSnapshot, obligationEntries, daysBetweenIso,
+  isWarrantyObligation, warrantyNeeds, warrantyTermLabel,
 } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 export const PARTIES = ['廠商', '監造', '機關']
@@ -155,7 +156,7 @@ export function setupGapsOf(ob, anchors, today) {
     if (!gap || seen.has(gap.kind)) continue
     seen.set(gap.kind, {
       kind: gap.kind, label: gap.label, kindLabel: SETUP_KIND_LABELS[gap.kind] || gap.kind,
-      anchor: gap.anchor || null, periodKey: period?.period_key ?? null, to: setupLink(gap.kind, ob, period),
+      anchor: gap.anchor || null, need: gap.need || null, periodKey: period?.period_key ?? null, to: setupLink(gap.kind, ob, period),
     })
   }
   return [...seen.values()]
@@ -194,7 +195,12 @@ export function recurrenceGap(ob, anchors, today) {
   const key = recurrenceAnchorKey(ob)
   if (key && !anchors?.[key]) return { kind: 'anchor', label: `基準日待補（${SHARED_ANCHOR_LABELS[key]}）`, anchor: key }
   const stop = recurrenceStopGap(ob, anchors, taipeiISODate(today0(today)))
-  if (stop) return { kind: 'stop', label: `停止條件待補（${stop}）` }
+  if (stop) {
+    // 保固類(P5e)另帶缺哪幾項:合格日在驗收頁補、契約保固期間在履約期程卡登錄
+    return isWarrantyObligation(ob)
+      ? { kind: 'stop', label: `停止條件待補（${stop}）`, need: warrantyNeeds(anchors?.warranty) }
+      : { kind: 'stop', label: `停止條件待補（${stop}）` }
+  }
   return null
 }
 
@@ -212,13 +218,16 @@ export function singleDueBasis(ob, currentVersionNo) {
 }
 
 // 基準日版本的呈現列(期限追蹤／履約時程共用):相對前一版改了哪些欄位(舊→新)、類別、依據、生效日與受影響事項。
+// P5e:保固期間變更記在 changed_keys 'warranty_term',新舊值取版本列的 warranty 快照(期間＋單位)。
+const warrantySnapshotLabel = (w) => (w ? warrantyTermLabel(w.term_value, w.term_unit) : null)
 export function anchorVersionRows(versions) {
   const sorted = [...(versions || [])].sort((a, b) => (a.version_no ?? 0) - (b.version_no ?? 0))
   return sorted.map((v, i) => {
-    const prev = i > 0 ? sorted[i - 1].anchors || {} : {}
-    const changes = (v.changed_keys || []).map((key) => ({
-      key, label: SHARED_ANCHOR_LABELS[key] || key, from: prev[key] || null, to: (v.anchors || {})[key] || null,
-    }))
+    const prevVersion = i > 0 ? sorted[i - 1] : null
+    const prev = prevVersion?.anchors || {}
+    const changes = (v.changed_keys || []).map((key) => (key === 'warranty_term'
+      ? { key, label: '保固期間', from: warrantySnapshotLabel(prevVersion?.warranty), to: warrantySnapshotLabel(v.warranty) }
+      : { key, label: SHARED_ANCHOR_LABELS[key] || key, from: prev[key] || null, to: (v.anchors || {})[key] || null }))
     const effects = Array.isArray(v.effects) ? v.effects : []
     return {
       id: v.id, versionNo: v.version_no, kind: v.change_kind, kindLabel: ANCHOR_CHANGE_KIND_LABELS[v.change_kind] || v.change_kind,
@@ -254,10 +263,13 @@ export function phaseOf(ob, due, anchors) {
 }
 
 // 期程段的日期範圍與「今天」落點。里程碑缺哪段就顯示 —,不臆測日期。
+// 保固期(P5e):起點＝正式驗收合格日(anchors.warranty.acceptance_date)、終點＝保固期滿日(呼叫端傳 DB 算好的
+// warrantyEnd);合格日有登錄就以它判「今天」是否已進保固,沒有才沿用竣工後 90 日的舊推估。
 export function phaseWindows(anchors, warrantyEnd, today) {
   const start = parseLocalDate(anchors?.commencement_date)
   const award = parseLocalDate(anchors?.award_date)
   const end = parseLocalDate(anchors?.end_date)
+  const warrantyStart = parseLocalDate(anchors?.warranty?.acceptance_date)
   const d30 = start ? addDays(start, 30) : null
   const iso = localISODate
   const ranges = {
@@ -265,7 +277,8 @@ export function phaseWindows(anchors, warrantyEnd, today) {
     start: start ? `${iso(start)} – ${iso(d30)}` : '—',
     build: start ? `${iso(addDays(d30, 1))}${end ? ` – ${iso(end)}` : ' 起'}` : '—',
     finish: end ? `${iso(end)} 起` : '—',
-    warranty: warrantyEnd ? `– ${iso(warrantyEnd)}` : end ? `${iso(end)} 後` : '—',
+    warranty: warrantyEnd ? `${warrantyStart ? `${iso(warrantyStart)} ` : ''}– ${iso(warrantyEnd)}`
+      : warrantyStart ? `${iso(warrantyStart)} 起` : end ? `${iso(end)} 後` : '—',
   }
   const t = today0(today)
   let nowPhase = null
@@ -274,7 +287,7 @@ export function phaseWindows(anchors, warrantyEnd, today) {
     else if (t <= d30) nowPhase = 'start'
     else if (!end || t <= end) nowPhase = 'build'
     else if (warrantyEnd && t > warrantyEnd) nowPhase = null
-    else if (t <= addDays(end, 90)) nowPhase = 'finish'
+    else if (warrantyStart ? t < warrantyStart : t <= addDays(end, 90)) nowPhase = 'finish'
     else nowPhase = 'warranty'
   }
   return { ranges, nowPhase, milestones: { start, completion: end, warrantyEnd: warrantyEnd || null } }
@@ -341,6 +354,8 @@ export function anchorGaps(items, anchors) {
   const counts = {}
   for (const it of items) {
     if (it.status !== 'na') continue
+    // 保固類循環義務(P5e)不從專案基準日起算,等的是正式驗收合格日與契約保固期間(停止條件待補),不算基準日缺口
+    if (isRecurring(it.ob || {}) && isWarrantyObligation(it.ob)) continue
     const key = TRIGGER_ANCHOR[it.ob?.trigger_event]
     if (!key || anchors?.[key]) continue
     counts[key] = (counts[key] || 0) + 1

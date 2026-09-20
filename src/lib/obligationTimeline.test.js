@@ -274,7 +274,11 @@ describe('基準日版本與依據(P5c)', () => {
   it('停止條件缺口:竣工日缺／已過／保固類 → stop;已登錄竣工或竣工日未到 → null;排在規則與基準日缺口之後', () => {
     expect(recurrenceGap(monthly(), { commencement_date: '2026-03-01' }, TODAY)).toEqual({ kind: 'stop', label: '停止條件待補（缺竣工日，無法判定循環何時結束）' })
     expect(recurrenceGap(monthly(), { commencement_date: '2026-03-01', end_date: '2026-07-31' }, TODAY)).toEqual({ kind: 'stop', label: '停止條件待補（竣工日 2026-07-31 已過，尚未登錄竣工或展延）' })
-    expect(recurrenceGap(monthly({ category: '保固', periods: [] }), anchors, TODAY)).toEqual({ kind: 'stop', label: '停止條件待補（保固期滿日無法判定，未登錄保固年限）' })
+    // P5e:保固類不看竣工日,看保固事實(anchors.warranty);沒有保固事實=兩項皆缺,帶缺哪幾項
+    expect(recurrenceGap(monthly({ category: '保固', periods: [] }), anchors, TODAY)).toEqual({ kind: 'stop', label: '停止條件待補（缺正式驗收合格日、缺契約保固期間，無法判定保固期滿日）', need: ['acceptance', 'term'] })
+    expect(recurrenceGap(monthly({ category: '保固', periods: [] }), { ...anchors, warranty: { acceptance_date: '2026-03-15', term_value: 1, term_unit: 'year', source_ok: true, expiry: '2027-03-15' } }, TODAY)).toBeNull()
+    expect(recurrenceGap(monthly({ category: '保固', periods: [], trigger_event: 'completion' }), { warranty: { acceptance_date: null, term_value: 1, term_unit: 'year', source_ok: true } }, TODAY))
+      .toEqual({ kind: 'stop', label: '停止條件待補（缺正式驗收合格日，無法判定保固期滿日）', need: ['acceptance'] }) // 竣工日缺也不是「基準日待補」
     expect(recurrenceGap(monthly(), { commencement_date: '2026-03-01', completion_date: '2026-08-10' }, TODAY)).toBeNull()
     expect(recurrenceGap(monthly(), anchors, TODAY)).toBeNull()
     expect(recurrenceGap(monthly({ recurring_day: null }), { commencement_date: '2026-03-01' }, TODAY).kind).toBe('rule')
@@ -475,5 +479,33 @@ describe('逐期準時率(periodStat)與執行卡逐期計入(partyStat)', () =>
     expect(item.currentPeriodId).toBe('b')
     expect(item.periods[1].evidenceDocumentId).toBeNull()
     expect(buildTimelineItem(ob(), { anchors, today: TODAY }).periodStat).toBeNull()
+  })
+})
+
+describe('保固期滿日(P5e):期程卡與版本紀錄的呈現', () => {
+  it('期程段:保固期以正式驗收合格日起、DB 算好的期滿日止;合格日已登錄就以它判是否已進保固', () => {
+    const a = { commencement_date: '2025-01-10', end_date: '2025-12-31', warranty: { acceptance_date: '2026-03-15', expiry: '2027-03-15' } }
+    const w = phaseWindows(a, new Date(2027, 2, 15), new Date(2026, 3, 1))
+    expect(w.ranges.warranty).toBe('2026-03-15 – 2027-03-15')
+    expect(w.nowPhase).toBe('warranty')
+    expect(phaseWindows(a, new Date(2027, 2, 15), new Date(2026, 2, 14)).nowPhase).toBe('finish') // 合格日前一天仍在完工驗收段
+    expect(phaseWindows({ ...a, warranty: { acceptance_date: '2026-03-15' } }, null, new Date(2026, 3, 1)).ranges.warranty).toBe('2026-03-15 起')
+    expect(phaseWindows({ ...a, warranty: null }, null, new Date(2026, 3, 1)).ranges.warranty).toBe('2025-12-31 後')
+  })
+  it('版本紀錄:保固期間變更列「保固期間 舊 → 新」(取版本列的 warranty 快照)', () => {
+    const rows = anchorVersionRows([
+      { id: 'v1', version_no: 1, change_kind: 'initial', anchors: { end_date: '2025-12-31' }, changed_keys: ['end_date'], effects: [], warranty: null },
+      { id: 'v2', version_no: 2, change_kind: 'edit', anchors: { end_date: '2025-12-31' }, changed_keys: ['warranty_term'], effects: [], warranty: { term_value: 2, term_unit: 'year', source_requirement_id: 'r1' } },
+      { id: 'v3', version_no: 3, change_kind: 'edit', anchors: { end_date: '2025-12-31' }, changed_keys: ['warranty_term'], effects: [], warranty: { term_value: 18, term_unit: 'month', source_requirement_id: 'r2' } },
+    ])
+    expect(rows[0].changes).toEqual([{ key: 'warranty_term', label: '保固期間', from: '2 年', to: '18 個月' }])
+    expect(rows[1].changes).toEqual([{ key: 'warranty_term', label: '保固期間', from: null, to: '2 年' }])
+  })
+  it('基準日缺口提示不把保固類循環義務算成「等待竣工日」(它等的是合格日與保固期間)', () => {
+    const items = [
+      { status: 'na', ob: { trigger_event: 'completion', category: '保固', recurring: 'monthly', recurring_day: 10 } },
+      { status: 'na', ob: { trigger_event: 'completion', category: '完工' } },
+    ]
+    expect(anchorGaps(items, {})).toEqual({ total: 1, gaps: [{ key: 'end_date', label: '竣工日', count: 1 }] })
   })
 })

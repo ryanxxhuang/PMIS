@@ -9,6 +9,10 @@ import { buildTodayTasks } from './todayTasks.js'
 import { computeObligationDue } from './contractDue.js'
 import { localISODate } from './dates.js'
 import { periodBasisLabel } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+import { recurrenceGap, setupGapsOf } from './obligationTimeline.js'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const ORGS = ['contractor', 'supervisor', 'owner']
 const t = cases.tables
@@ -64,7 +68,7 @@ describe('共用案例(前端):今日工作三桶＋待補設定', () => {
   it.each(ORGS)('%s 都看得到同一份待補設定,且每筆有處理入口', (org) => {
     expect(sorted(built[org].setup.map(key))).toEqual(sorted(cases.expected.setup))
     for (const s of built[org].setup) {
-      expect(s.to).toMatch(/^\/(requirements\/review\?highlight=|deadlines$|deadlines\?obligation=|quality\?observation=)/)
+      expect(s.to).toMatch(/^\/(requirements\/review\?highlight=|requirements\?obligation=|deadlines$|deadlines\?obligation=|quality\?observation=)/)
       expect(s.ball).toBe(expectedWho.get(key(s)))
     }
   })
@@ -107,8 +111,36 @@ describe('共用案例(前端):今日工作三桶＋待補設定', () => {
     expect(setup['契約重點:ob13']).toMatchObject({ meta: '基準日待補（開工日）', to: '/deadlines', ball: 'supervisor' })
     expect(setup['契約重點:ob14']).toMatchObject({ meta: '循環規則待補（每季缺月份或日期）', to: '/requirements/review?highlight=ob14', ball: 'contractor' })
     expect(setup['契約重點:ob15:2026-06']).toMatchObject({ meta: '回填待核對（原義務曾標完成，本期是否已履行待確認）', to: '/deadlines?obligation=ob15&period=2026-06', ball: 'owner', period: '2026-06' })
-    // P5c:循環停止條件判不出(保固類沒有保固期滿日)→ 待補設定,導期限追蹤該筆;已完成的單次義務 ob17 不列
-    expect(setup['契約重點:ob18']).toMatchObject({ meta: '停止條件待補（保固期滿日無法判定，未登錄保固年限）', to: '/deadlines?obligation=ob18', ball: 'contractor' })
+    // P5e:保固類停止條件＝正式驗收合格日＋契約保固期間;本案已登錄保固期間、尚未正式驗收合格 → 待補設定說缺合格日,
+    // 導履約時程該筆(驗收頁與履約期程卡兩個入口都在那裡);已完成的單次義務 ob17 不列
+    expect(setup['契約重點:ob18']).toMatchObject({ meta: '停止條件待補（缺正式驗收合格日，無法判定保固期滿日）', to: '/requirements?obligation=ob18', ball: 'contractor' })
     for (const org of ORGS) expect([...built[org].mine, ...built[org].waiting, ...built[org].setup].some((t) => t.id === 'ob17')).toBe(false)
+  })
+})
+
+// P5e 保固類循環義務的停止條件(前端路徑;Edge 與 Deno 對同一組案例)
+describe('共用案例(前端):保固類停止條件', () => {
+  const here = path.dirname(fileURLToPath(import.meta.url))
+  const pgtap = fs.readFileSync(path.resolve(here, '../../supabase/tests/warranty_stop_condition.sql'), 'utf8')
+  it('保固期滿日的日期規則只在 DB:案例表的每一條都由 pgTAP 逐條斷言(同一組案例,改一邊另一邊紅)', () => {
+    for (const c of cases.warranty.expiry_cases) {
+      expect(pgtap, `${c.accept}+${c.value}${c.unit}`).toContain(`fn_warranty_expiry('${c.accept}', ${c.value}, '${c.unit}'), '${c.expiry}'::date`)
+    }
+    for (const sc of cases.warranty.scenarios) if (sc.expected.gap) expect(pgtap, sc.name).toContain(`'${sc.expected.gap}'`)
+  })
+  it.each(cases.warranty.scenarios.map((sc) => [sc.name, sc]))('%s:今日工作的待補設定與履約時程的缺口說同一句、給同一個入口', (_name, sc) => {
+    const ob = { ...cases.warranty.obligation, periods: sc.periods }
+    const anchors = { ...cases.anchors, warranty: sc.warranty }
+    const built = buildTodayTasks({ org: 'contractor', today: TODAY, anchors, obligations: [ob] })
+    const stops = built.setup.filter((x) => x.id === 'obw')
+    const gap = recurrenceGap(ob, anchors, TODAY)
+    if (!sc.expected.setup_label) {
+      expect(stops).toEqual([])
+      expect(gap).toBe(null)
+      return
+    }
+    expect(stops.map((x) => ({ meta: x.meta, to: x.to, ball: x.ball }))).toEqual([{ meta: sc.expected.setup_label, to: '/requirements?obligation=obw', ball: 'contractor' }])
+    expect(gap).toEqual({ kind: 'stop', label: sc.expected.setup_label, need: sc.expected.needs })
+    expect(setupGapsOf(ob, anchors, TODAY).map((g) => [g.kind, g.need, g.to])).toEqual([['stop', sc.expected.needs, '/requirements?obligation=obw']])
   })
 })

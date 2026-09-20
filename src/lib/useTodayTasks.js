@@ -13,7 +13,7 @@ import { buildTodayTasks, taipeiISODate } from './todayTasks.js'
 
 export function useTodayTasks() {
   const { currentUser, project, rfis, submittals, valuations, valuationAdjustments, defects, inspections, observations,
-    changeOrders, obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs, fieldDocuments } = useStore()
+    changeOrders, obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs, fieldDocuments, projectWarranty } = useStore()
   const org = currentUser?.org_type || 'contractor'
   const todayIso = taipeiISODate(new Date())
   return useMemo(() => buildTodayTasks({
@@ -21,13 +21,14 @@ export function useTodayTasks() {
     anchors: {
       award_date: project?.award_date, notice_date: project?.notice_date,
       commencement_date: project?.commencement_date, end_date: project?.end_date,
+      warranty: projectWarranty, // P5e 保固事實(DB 算好的合格日／保固期間／期滿日):保固類循環義務的停止條件
     },
     rfis, submittals, valuations, defects, inspections, observations, changeOrders,
     obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs,
     // 現場文書(P2a field_documents;真專案由 store 載入,demo 尚無種子 → 空)
     fieldDocuments: fieldDocuments?.documents || [], fieldDocumentSubmissions: fieldDocuments?.submissions || [],
     valuationAdjustments, // P4d:待處理扣回 → 球在機關(共用規則)
-  }), [org, todayIso, project, rfis, submittals, valuations, valuationAdjustments, defects, inspections, observations,
+  }), [org, todayIso, project, projectWarranty, rfis, submittals, valuations, valuationAdjustments, defects, inspections, observations,
     changeOrders, obligations, testSamples, acceptanceEvents, inspectionPoints, siteLogs, fieldDocuments])
 }
 
