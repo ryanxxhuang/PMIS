@@ -172,6 +172,23 @@ test.describe('列印頁下載 PDF', () => {
     expect(out[1].suggestedFilename).not.toBe(out[0].suggestedFilename)
   })
 
+  // 紙是固定印刷品:手機按下載拿到的必須是同一份文件,不能因為手機字級階梯而變成另一份。
+  test.describe('手機視窗', () => {
+    test.use({ viewport: { width: 375, height: 812 } })
+    test('手機下載到的 PDF 與桌面同一份(頁數與內容一致)', async ({ page }) => {
+      await loginAs(page, 'contractor')
+      await gotoHash(page, '/site-log/print')
+      await expect(page.getByRole('heading', { name: '公共工程施工日誌' })).toBeVisible()
+      const r = await downloadPdf(page, '手機')
+      expectSoundPdf(r)
+      expect(r.pdf.pageCount).toBe(2)
+      // 表頭欄名不因手機字級被撐到折行
+      expect(r.pdf.pages[0]).toContain('單位')
+      expect(r.pdf.pages[0]).toContain('契約數量')
+      expect(r.pdf.text).toContain('公共工程施工日誌')
+    })
+  })
+
   test('四類文書的列印頁都給得出 PDF,且印的是簽署列指向的版本', async ({ page }) => {
     await loginAs(page, 'supervisor')
     const hrefs = await docLinks(page)

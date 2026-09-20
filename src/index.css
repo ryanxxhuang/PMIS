@@ -643,6 +643,22 @@ html.theme-switching, html.theme-switching *, html.theme-switching *::before, ht
 }
 .pdf-export [class~="print:hidden"] { display: none !important; }
 
+/* 字級階梯在複本裡釘回桌機值。手機層(max-width: 767.98px)把 --text-body 從 13 推到 17，
+   那是給工地太陽下戴手套的人看螢幕用的;但 PDF 是固定印刷品,不該因為「在哪台裝置按下載」
+   而變成另一份文件——同一份施工日誌在手機下載會欄名折行、頁數變多,交到機關手上對不起來。
+   值刻意複製而非 var() 引用,理由與 .paper 釘回亮色 token 相同:紙不跟裝置、不跟主題。
+   text-xs/sm/base/lg 是 var(--text-footnote) 等別名,跟著這裡走,不必重列。 */
+.pdf-export {
+  --text-micro: 10px;    --text-micro--line-height: 13px;    --text-micro--letter-spacing: 0.006em;
+  --text-caption: 11px;  --text-caption--line-height: 15px;  --text-caption--letter-spacing: 0.004em;
+  --text-footnote: 12px; --text-footnote--line-height: 17px; --text-footnote--letter-spacing: 0.002em;
+  --text-body: 13px;     --text-body--line-height: 19px;     --text-body--letter-spacing: 0em;
+  --text-callout: 15px;  --text-callout--line-height: 20px;  --text-callout--letter-spacing: -0.008em;
+  --text-title3: 17px;   --text-title3--line-height: 22px;   --text-title3--letter-spacing: -0.012em;
+  --text-title2: 22px;   --text-title2--line-height: 28px;   --text-title2--letter-spacing: -0.017em;
+  --text-title1: 28px;   --text-title1--line-height: 34px;   --text-title1--letter-spacing: -0.021em;
+}
+
 /* 列印:表單控件的顏色來自本檔上面那條 unlayered 規則(var(--text)/var(--surface)),
    深色模式下就是「淺字深底」;瀏覽器預設不印背景色,於是白紙上只剩淺灰字。
    /valuation/package 的「本期施工說明」textarea 是唯一坐在列印版面裡的控件,
