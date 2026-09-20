@@ -313,6 +313,8 @@ B2 原列驗證數字（保留）：`npm test` 159 檔 1,775 項；`test:edge` 1
 | A17 | 廠商 → `#/site-log`、`#/self-check`；監造 → `#/inspection-form`、`#/supervisor-log` | 四頁各開一份自己的草稿，直接在紙上的格子裡打字、存檔；再用另一方的帳號開同一份 | 看到的就是原表本身、可直接在格子裡編輯：施工日誌＝工程會**附表四「公共工程施工日誌」**、自主檢查表＝臺北市新工處「施工自主檢查表」、監造查驗表單＝臺北市**「施工抽查紀錄表」**、監造日誌＝工程會**附表五「公共工程監造報表」（日報，不是監造月報）**；四張都標「示範範本／參考格式・未經機關核定」；不是自己負責的那張紙**一格都不能編**（廠商在監造兩張紙上全唯讀，反之亦然）；判定、本次確認數量、監造到場人員仍只有監造能填 | C 包 #168、C2 包 #170 |
 | A18 | 任一方 → 八支列印頁（`#/site-log/print`、`#/self-check/print`、`#/inspection-form/print`、`#/supervisor-log/print`、`#/valuation/print`、`#/valuation/package`、`#/quality/checklist-print`、`#/contract/print`） | 各開一頁按「下載 PDF」；挑一份多頁的長表；再拿一份**已簽署**與一份**草稿**各下載一次；最後用手機 375 寬重做一次 | 按一下直接拿到 PDF 檔（不是開瀏覽器列印視窗）；檔名帶文件名、日期、版次與「已簽署」／「未簽署」；PDF 內文字可選取、不是截圖；多頁自動換頁、表格跨頁重印表頭、每頁印「第 n 頁／共 m 頁」；已簽署的印簽署列指向的那一版與簽署資訊，草稿整張標「草稿・未簽署」；**手機下載到的版面與桌機同一份**（欄名不折行）；字型或附件照片抓不到時會明白說失敗、不會給你一份缺東西的 PDF。「列印」鈕仍在、但不再自稱下載 | D 包 #166／#167 |
 
+**A17 的四份原表要對照時看哪裡**：逐格對照表在 [official-form-mapping](../architecture/official-form-mapping.md)（§1 施工日誌／§2 自主檢查表／§3 監造查驗紀錄表／§4 監造報表／§5 四份共同規則）；原始表單檔在 [assets/2026-09-20-contractor-acceptance](assets/2026-09-20-contractor-acceptance/)——工程會附表四 `pcc-daily-log-1080430.pdf`、附表五 `pcc-supervisor-log-1080430.pdf`、臺北市自主檢查表 `taipei-rebar-self-check-example.odt`、臺北市施工抽查紀錄表 `taipei-rebar-inspection-example.odt`。四張都標「參考格式・未經機關核定」，實案範本提供前一律是示範範本（§6 Q11）。
+
 ### 8.2 監造確認量與估驗
 
 | 編號 | 誰 → 在哪裡 | 做什麼 | 預期看到 | 對應 |
