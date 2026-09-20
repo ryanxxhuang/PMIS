@@ -610,7 +610,7 @@ select lives_ok($$ insert into public.field_documents (id, project_id, doc_type,
   '建立 D6');
 reset role;
 select pg_temp.become(null);
-update public.field_documents set status = 'discarded' where id = 'd7000000-0000-0000-0000-000000000006';
+update public.field_documents set status = 'discarded', discard_reason = '測試捨棄' where id = 'd7000000-0000-0000-0000-000000000006';
 select pg_temp.become('d0000000-0000-0000-0000-000000000001', 'aal1');
 set local role authenticated;
 select throws_ok($$ select public.save_field_document_version('d7000000-0000-0000-0000-000000000006', 0, '{}'::jsonb) $$,

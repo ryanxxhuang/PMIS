@@ -166,6 +166,13 @@ export function StoreProvider({ children }) {
   // 平台管理後台(批 C):isPlatformAdmin 只影響 /admin 的導覽與路由(UX)——
   // 真正的權限把關在 DB(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)
   const adminSlice = useAdminSlice({ currentUser })
+  // 捨棄草稿(P3f):伺服器同交易把指向該文件的待覆核 AI 草稿標 rejected → 收件匣重載(兩個 slice 的接點只在這裡)
+  const discardFieldDocumentInSlice = fieldDocsSlice.discardFieldDocument
+  const discardFieldDocument = useCallback(async (args) => {
+    const r = await discardFieldDocumentInSlice(args)
+    if (!r.error && r.result?.agent_actions_resolved > 0) reloadAgentActions()
+    return r
+  }, [discardFieldDocumentInSlice, reloadAgentActions])
 
   // ── 財務單一真相層(B-02)──────────────────────────────────────────────────
   // 「已核准變更設計套回工項」與「變更後契約金額」只在這裡算一次,所有金額/進度
@@ -352,6 +359,7 @@ export function StoreProvider({ children }) {
     listSitePhotos, deleteSitePhoto, updateSitePhotoMeta, draftMonthlyReview, draftValuationSummary, describeDefect, analyzeSafetyPhoto, fetchWeather,
     // 現場文書(P2c):上傳批次、起稿、文件版本、簽署、提送／收件／退回
     ...fieldDocsSlice,
+    discardFieldDocument,
     obligations, reloadObligations, updateObligationStatus, transitionObligationPeriod, ingestRequirementDocument, changeProjectAnchors, updateProjectSettings, anchorVersions, enableFormalMode, currentProjectMembership, reloadMembership,
     acceptanceEvents, recordAcceptanceEvent, clearAcceptanceEvent, loadPortfolio,
     costItems, // 成本退場(D-026 P1b):只讀歷史,無寫入函式

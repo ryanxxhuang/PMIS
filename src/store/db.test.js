@@ -177,6 +177,24 @@ describe('db.js 分頁載入:超過 PostgREST 單次上限時要全部取回', (
     expect(pg.requestsFor('field_document_submissions').every((r) => r.inSize <= 200)).toBe(true) // 分批查,不塞爆 URL
   })
 
+  it('現場文書(P3f):只替未簽署狀態的文件查簽署列,回「曾經簽署」的文件 id(簽後更正的草稿不可捨棄)', async () => {
+    pg.setTable('field_documents', [
+      ...rows('fd-draft', 1200, () => ({ doc_type: 'daily_log', status: 'draft', current_version_no: 1, updated_at: '2026-07-02' })),
+      ...rows('fd-signed', 2, () => ({ doc_type: 'daily_log', status: 'signed', current_version_no: 1, updated_at: '2026-07-01' })),
+    ])
+    pg.setTable('field_document_submissions', [])
+    pg.setTable('field_document_signatures', [
+      ...rows('sig-amend', 2, (i) => ({ document_id: uid('fd-draft', i * 1100), version_no: 1 })), // 兩份簽後更正回草稿
+      ...rows('sig-signed', 2, (i) => ({ document_id: uid('fd-signed', i), version_no: 1 })),
+    ])
+    const got = await loadFieldDocumentsFromDB(PID)
+    expect(got.documents).toHaveLength(1202)
+    expect(got.signedDocumentIds.sort()).toEqual([uid('fd-draft', 0), uid('fd-draft', 1100)].sort())
+    const sigReqs = pg.requestsFor('field_document_signatures')
+    expect(sigReqs.every((r) => r.inSize <= 200)).toBe(true) // 分批查
+    expect(sigReqs.reduce((n, r) => n + r.inSize, 0)).toBe(1200) // 只查未簽署狀態的 1,200 份
+  })
+
   it('已廢止期限的不適用 obligation 保留在 DB，但不再進入現行提醒資料', async () => {
     pg.setTable('contract_obligations', [
       ...rows('active-ob', 2, (i) => ({ status: '待辦', sort_order: i })),

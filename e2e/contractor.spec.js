@@ -154,6 +154,49 @@ test.describe('施工廠商', () => {
     const docCard = page.getByRole('group', { name: '現場文書' })
     await expect(docCard.getByRole('link', { name: /自主檢查表/ }).first()).toBeVisible()
     await expect(docCard.getByText(/尚未支援/)).toHaveCount(0)
+    // P3f:清單列上捨棄(原因必填;確認鈕在填原因前不可按)→ 該列消失(種子那份是別的日期,不受影響)、說明可重新起稿。
+    // 手機寬:列不溢位、按鈕 ≥44
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' })
+    await page.setViewportSize({ width: 375, height: 812 })
+    const discardBtn = docCard.getByRole('button', { name: `捨棄草稿：${today} 自主檢查表` })
+    expect((await discardBtn.boundingBox()).height).toBeGreaterThanOrEqual(44)
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0)
+    await discardBtn.click()
+    const dialog = page.getByRole('dialog', { name: /捨棄 .*自主檢查表草稿？/ })
+    await expect(dialog.getByRole('button', { name: '捨棄草稿' })).toBeDisabled()
+    await dialog.getByRole('textbox').fill('範本選錯')
+    await dialog.getByRole('button', { name: '捨棄草稿' }).click()
+    await expect(docCard.getByRole('link', { name: new RegExp(`自主檢查表 ${today}`) })).toHaveCount(0)
+    await expect(docCard.getByRole('button', { name: `捨棄草稿：${today} 自主檢查表` })).toHaveCount(0)
+    await expect(page.getByRole('status').filter({ hasText: /已捨棄 .*自主檢查表草稿（原因：範本選錯）/ })).toBeVisible()
+  })
+
+  // P3f:文件頁捨棄草稿 → 回現場紀錄(說明已捨棄與重新起稿入口)→ 同日可重新填寫成新草稿
+  test('施工日誌:捨棄擬錯的草稿(原因必填)→ 回現場紀錄 → 同日重新起稿', async ({ page }) => {
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' })
+    await loginAs(page, 'contractor')
+    await gotoHash(page, '/site-log')
+    await page.getByRole('button', { name: /複製昨日/ }).click()
+    await page.getByRole('button', { name: '存檔', exact: true }).click()
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText(/已存檔.*版本 1/)
+    await page.getByRole('button', { name: /^捨棄草稿：.*施工日誌$/ }).click()
+    const dialog = page.getByRole('dialog', { name: /捨棄 .*施工日誌草稿？/ })
+    await expect(dialog).toContainText('1 個版本與照片都會保留')
+    await dialog.getByRole('button', { name: '取消' }).click()
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText(/已存檔.*版本 1/) // 取消=什麼都沒發生
+    await page.getByRole('button', { name: /^捨棄草稿：.*施工日誌$/ }).click()
+    await dialog.getByRole('textbox').fill('照片日期判錯')
+    await dialog.getByRole('button', { name: '捨棄草稿' }).click()
+    await expect(page).toHaveURL(/#\/site$/)
+    const notice = page.getByRole('status').filter({ hasText: /已捨棄 .*施工日誌草稿（原因：照片日期判錯）/ })
+    await expect(notice).toBeVisible()
+    // 本日那份不再列出(種子裡 Agent 起稿的別日草稿不受影響,P6b-2)
+    await expect(page.getByRole('group', { name: '現場文書' }).getByRole('link', { name: new RegExp(`施工日誌 ${today}`) })).toHaveCount(0)
+    await notice.getByRole('link', { name: '施工日誌頁' }).click()
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText('本日尚無日誌')
+    await page.getByRole('button', { name: /複製昨日/ }).click()
+    await page.getByRole('button', { name: '存檔', exact: true }).click()
+    await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText(/已存檔.*版本 1/) // 新草稿從版本 1 開始
   })
 
   test('品質:缺失改善鏈——切到缺失分段 → 開始改善 → 提送複查(W8-4A)', async ({ page }) => {
