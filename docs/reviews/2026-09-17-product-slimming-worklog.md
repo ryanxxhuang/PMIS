@@ -380,7 +380,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | C | 真實表單 mapping、直接在紙本版面編輯（施工日誌＋自主檢查表，PR #168） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | C2 | 同上的後半：監造查驗紀錄表＋監造報表（附表五）的 mapping 與可編輯版面（本節已完成，PR #170） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | D | PDF 交付（真正的下載，不是 `window.print()`；本節已完成，PR #166） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| E | 三項核心的整條流程驗收（真後端） | fable5.1 | 待填 |
+| E | 三項核心的整條流程驗收（真後端；本節已完成，PR #171） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 
 ### A 廠商角色與三個主入口
 
@@ -681,3 +681,37 @@ PR #164、merge commit `a575bbc`（rebase 到含 A 包的 main `e3e4f65`；CI �
 - **下載入口目前在列印頁**：文件頁（`/self-check`、`/inspection-form`、`/supervisor-log`）的「列印」鈕會帶到列印頁，下載鈕在那裡。實作指令 C 節要求文件編輯畫面的常用動作直接包含「下載 PDF」，屬 C 包範圍；本單元沒有動那些頁面的動作列。
 - **C 包把格子改成 `<input>` 之後**：`paperSnapshot` 已經會把 `input`／`textarea`／`select` 在離畫面複本裡換成等效 div 再量，所以值會照樣進 PDF；但 C 包若改用 `contenteditable` 或自訂編輯器，要回來確認這條路徑仍量得到文字。
 - **`restructure` 的 `overrides` 是上游 semver 破壞的止血**：fontkit 發出相容版本後應該拿掉並重跑 `e2e/pdf-download.spec.js`（子集壞掉的症狀是「某些字整個不見」，不會丟例外，只能靠算圖或這支測試抓）。
+
+### E 三項核心的整條流程驗收（真後端）
+
+問題（動工前逐條以 `ba7a97b` 的 main 重驗）：整套真後端鏈在**單一指令下從來沒有全綠過**——`supabase functions serve` 只吃一個 `--env-file`，視覺 stub 在 `e2e-real/stub.env`、模型金鑰在 `.env.e2e.real`，兩者互斥，所以 chain 3 的 live 抽取一定回「AI 服務尚未完成設定（代碼 config）」。另外查出一個**產品併發漏洞**：查驗表單簽署分支寫確認量時是「讀此 (工項, 批次, 階段) 最新 active 的 `qty_cum`，再插入 `prev_cum + 本次確認`」，但這段 read-then-insert **沒有取** `fn_cq_lock_internal`——同樣寫確認量的 `issue_supervisor_certificate` 有。目標：把三項核心的整條流程在**隔離真後端**跑到全綠，缺口補到通過，並補驗 D 包留下的兩項。不做：不重做確認量分配引擎、不重新加入 MFA、不解 `cap=0`、不新增付費 OCR、不放寬任何守衛。影響：一支新 migration（只換函式定義）、pgTAP 併發情境、兩條既有鏈補 PDF 斷言、真後端 harness 與 runbook。
+
+**產品修正（根本解）——查驗表單簽署的確認量併發**
+
+`20260920170000_inspection_sign_confirmation_lock.sql`：在工項與位置都驗過之後、任何一次讀 `inspection_confirmations` 之前，補上 `lock_timeout 5s` 與 `fn_cq_lock_internal(project, work_item)`（與 `issue_supervisor_certificate` 同一把鎖、同樣的取鎖順序）。函式其餘部分逐字沿用 `20260920004000`。
+
+為什麼是 root cause 而不是前端擋：`inspection_confirmations_guard` 自己也是「讀最新 active 再算 `qty_delta`」，兩段都在同一個 READ COMMITTED 快照之外，**鎖只能由呼叫端取，guard 救不了自己**。沒有鎖時的實際後果（`confirmed_quantity_concurrency.sql` 情境 4 逐項印出來）：A 先確認累計 30 還沒提交、B 同時簽一張確認 60 的查驗表單 → B 讀到的 `prev_cum` 是 0，落庫成 `qty_cum = 60`（**應為 90**），而且兩筆的 `supersedes_id` 都是 null ——本來該是線性的累計鏈**分岔成兩個鏈頭**，此後「有效量＝Σ `qty_delta`」與「最新一筆的 `qty_cum`」永遠對不起來。AFTER trigger 仍會擋在鎖上，所以**只看「有沒有被鎖住」分辨不出有沒有修**，測試斷言的是最後落庫的數字與鏈頭數。移除該兩行重跑，情境 4 的兩條斷言如預期轉紅（`have: (60.0000,60.0000)` / 鏈頭 2）；補回即綠。
+
+**真後端 harness（讓整套鏈能一次跑完）**
+
+- 模型金鑰與視覺 stub 併到同一個 `.env.e2e.real`（`.env.e2e.real.example` 與 runbook 同步說明為什麼），一次 `functions serve` 就涵蓋 stub 鏈與 live 鏈。stub 仍只在本機 http 位址生效，正式 Edge 不受影響。
+- `playwright.real.config.js` 加 `E2E_REAL_PORT`（與 Demo 端 `E2E_DEMO_PORT` 同一個做法）：5189 被別的 worktree 佔用時不必乾等，也**不放寬** `reuseExistingServer: false`。
+- `chain3-requirements.spec.js` 的最後一段改成明確切到「全期」再斷言。這不是放寬期望值：到期日 `2026-10-31` 離執行當天超過 30 日，履約時程的「近期」視圖本來就不該列它；以前會過是因為近期在「一件都沒有」時會退回全期（`Requirements.jsx:297`），而 live 模式的 AI 另外抽到 9/30 的品質計畫，退回機制就不觸發。改完之後執行日期不再影響結果。
+
+**補驗 D 包留下的兩項（都在既有鏈裡，沒有另開鏈）**
+
+- **已簽版本的 PDF**（Demo 驗不到）：chain 5 在列印頁**實際下載檔案並解析**——檔名 `施工日誌_<日期>_v3_已簽署.pdf`、文字層是版本 3 的更正摘要與 `content_hash` 前 12 碼、整份沒有「草稿・未簽署」、中文字型有內嵌。
+- **真 Storage 簽名網址的照片抓取／CORS**：chain 13 下載估驗佐證包的 PDF。那張照片是本鏈真的上傳到 `photos` bucket 的，`<img src>` 是真簽名網址；`renderPaperPdf` 的 `embedImages` 抓不回照片時會**中止下載並丟錯**，所以「檔案下載成功且含 1 個 `/Subtype /Image`」就是簽名網址 fetch 成功、CORS 沒擋的證據。
+
+**驗證**：`npm run test:db` 62 檔 3,604 項通過（新增併發情境 4 共 9 條）；`npm run test:e2e:real` **20 項一次全綠**（含 chain 3 live 真模型抽取）；`npm test` 159 檔 1,775 項、`lint`／`build`／`check:docs`（58 檔 469 連結 0 錯）皆綠。沒有 Edge 原始碼改動，故不跑 `check:edge`／`test:edge`。
+
+### E 未通過與未測（如實）
+
+- **正式部署未測**：本節只在**本機隔離棧**驗證。正式 `db push`、正式 Edge、正式站的 UI 與 PDF 下載**本輪未跑**，不引用舊報告宣稱通過。
+- **live 契約抽取是非決定性的**：同一份契約三次 live 執行中有一次回「AI 回傳缺少契約重點清單」而整條失敗（模型輸出不完整，不是程式錯）。chain 3 目前沒有重試或降級，偶發紅燈要看 `document_ingestion_runs.metadata` 分辨是抽取品質還是斷言過嚴。
+- **E4 仍缺的測試**（查證後列出，本節未做）：真後端沒有「改期（改基準日 → rescheduled 文案與新到期日）」「取消（廢止取代 → 義務與期次變不適用）」「逾期」三條端到端；`transition_obligation_period` 的拒絕路徑只有 pgTAP；保固的「引用條文失效／合格日撤銷 → 回到待補並收回期次」只有 pgTAP；`send-reminders`（190 行，含角色分流）**零測試**；監造角色「到期前看到契約重點待辦」無 e2e。
+- **「完全沒有頻率／完全沒有觸發點」不列待補**：只顯示「無到期日」，使用者不知道要補什麼（`ballInCourtRules.ts:293-297`、`contractDue.js:21-23`，且被 `obligationTimeline.test.js:352` 當成正確行為釘住）。實作指令 E-4 要求「缺基準日／頻率顯示待補」——**缺基準日**已有五類待補設定涵蓋，**完全缺頻率／缺觸發點**這兩種沒有。要改要同步改前端、Edge 與 DB 三處同口徑判定，不在本節範圍。
+- **「照片日期不得改變契約期限」結構上成立但無測試釘住**：照片日期只落現場文書草稿；期限只能來自 `update_project_anchors`（`is_project_admin`）、`acceptance_events` 與義務規則欄位，Edge 對 `projects`／`acceptance_events` 全是唯讀、`obligation_periods` 對 `authenticated` 已 revoke。但**沒有負向測試或靜態掃描**，未來新增一支寫 `projects.commencement_date` 的 Edge 不會被 CI 擋下。
+- **E3 仍缺的封堵測試**：標單重匯與 active 確認的互斥在 `boq_reset_import.sql` 與 chain 4 都沒有案例（只有 `confirmed_quantity_enforcement.sql` 一條）；Edge 只有原始碼靜態掃描（`valuationWrites.scan.test.ts`），沒有「Edge 以 service role 實際寫入被 DB 拒絕」的 runtime 測試；兩個監造同時 `issue_supervisor_certificate`、以及「trigger 自動分配 vs 廠商手動 sync」同時發生，都還沒有測試。
+- **多個符合截止日的草稿期並存時取 `period_no` 最小者**（`fn_cq_target_draft_internal`）沒有測試情境。
+- **既有限制維持不變**：總價／間接費缺依據仍 `cap=0`（試用專案若要請這類款，這就是該案完整請款的阻擋項）；掃描／無文字契約仍不採付費 OCR，只能顯示抽不出來並人工補登；未重新加入 MFA。舊資料、簽章、確認量與計價稽核一列未刪。

@@ -9,10 +9,15 @@
 //   施工日誌取送審時點的版本(d1 v1＝10、標「之後另有 v2」)、d3 送審時未簽署不列入。
 //   帳號全部本次產生;afterAll 以建立者 delete_project＋admin API 清帳號,殘留 0。
 import { test, expect } from '@playwright/test'
+import { mkdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, signInClient, loginReal, logoutReal, gotoHash, runCleanup, tinyJpeg,
 } from './helpers.js'
+// PDF 解析與 Demo 端的下載測試共用同一支(依 ToUnicode CMap 還原文字層),不另寫一套
+import { readPdf } from '../e2e/pdfText.js'
 
+const PDF_OUT = process.env.PDF_OUT_DIR || 'test-results/pdf'
 const PROJECT_NAME = `鏈13月報重用-${Date.now().toString(36)}`
 const conEmail = uniqueEmail('p6a13-con')
 const supEmail = uniqueEmail('p6a13-sup')
@@ -204,4 +209,27 @@ test('鏈 13:兩份簽署日誌＋一份未簽署 → 月報只彙整兩份;監�
   await expect(logTable.getByRole('row', { name: new RegExp(d2) })).toContainText('20 M3')
   await expect(page.getByText(`本期範圍內另有 1 日的施工日誌送審時尚未簽署，不列入（${d3}）。`)).toBeVisible()
   await expect(page.getByText('999')).toHaveCount(0)
+
+  // D 包留給 E 包的第二項:佐證包的 PDF 會把紙上的 <img> 各自內嵌成影像,而這裡的 src 是**真 Supabase Storage
+  // 的簽名網址**。D 包只驗到往紙上注入的合成 JPEG(示範模式沒有照片上傳),真簽名網址的 fetch 與 CORS 未驗。
+  // 這張就是本鏈 beforeAll 真的上傳到 photos bucket 的照片,所以一併證明:簽名網址取得成功、跨來源讀得回
+  // 位元組(CORS 沒擋)、而且是各自內嵌而不是把整頁截圖。renderPaperPdf 的 embedImages 在照片抓不回來時
+  // 會中止下載並丟錯,所以「檔案下載成功」本身就是 fetch 成功的證據。
+  const [pkgDownload] = await Promise.all([
+    page.waitForEvent('download', { timeout: 90_000 }),
+    page.getByRole('button', { name: '下載 PDF' }).click(),
+  ])
+  mkdirSync(PDF_OUT, { recursive: true })
+  const pkgPath = join(PDF_OUT, `chain13-${pkgDownload.suggestedFilename()}`)
+  await pkgDownload.saveAs(pkgPath)
+  const pkgBytes = readFileSync(pkgPath)
+  const pkgPdf = readPdf(pkgBytes)
+  expect(pkgPdf.pageCount).toBeGreaterThan(0)
+  expect(pkgPdf.hasFontFile, '中文字型必須內嵌').toBe(true)
+  // 文字層的空白由字距(Tc/分段)決定,不是畫面上的那一個空格,所以用寬鬆比對
+  expect(pkgPdf.text).toContain('本期確認來源與簽署文件版本')
+  expect(pkgPdf.text).toMatch(/監造確認\s+60/)
+  expect(pkgPdf.text).toMatch(/1\s+張照片/)
+  expect((pkgBytes.toString('latin1').match(/\/Subtype\s*\/Image/g) || []).length,
+    '真 Storage 簽名網址的照片要各自內嵌成影像(抓不回來時 embedImages 會中止下載)').toBeGreaterThanOrEqual(1)
 })

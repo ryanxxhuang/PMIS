@@ -2,7 +2,13 @@
 // 只由 `npm run test:e2e:real` 手動執行，不進預設 CI。
 import { defineConfig } from '@playwright/test'
 
-const PORT = 5189
+// 5189 已被另一個 worktree 的真後端 E2E 佔用時，Playwright 會直接報「is already used」而不沿用
+// （reuseExistingServer: false，理由見 vite.e2e.config.js）。這時用 E2E_REAL_PORT 換一個本次專用的埠，
+// 例如 `E2E_REAL_PORT=5289 npm run test:e2e:real`；與 Demo 端的 E2E_DEMO_PORT 同一個做法。
+const PORT = Number(process.env.E2E_REAL_PORT || 5189)
+if (!Number.isInteger(PORT) || PORT < 1024 || PORT > 65535) {
+  throw new Error(`E2E_REAL_PORT 不是有效埠號：${process.env.E2E_REAL_PORT}`)
+}
 const PRODUCTION_HOST = 'buylyonwoyvqdbvkkkbx.supabase.co'
 const required = [
   'E2E_REAL_SUPABASE_URL',

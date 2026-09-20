@@ -7,7 +7,7 @@
 \set ON_ERROR_STOP off
 create extension if not exists dblink with schema extensions;
 
-select plan(22);
+select plan(31);
 create or replace function pg_temp.today() returns date language sql stable as $f$ select (now() at time zone 'Asia/Taipei')::date $f$;
 
 -- ── fixture(提交) ─────────────────────────────────────────────────────────────
@@ -120,6 +120,86 @@ select is((select cum_qty from public.valuation_items where valuation_id = 'c4c4
   50::numeric, '終值為最後一個序列化操作的 50');
 select is((select sum(qty) from public.valuation_item_sources where work_item_id = 'c4c30000-0000-0000-0000-000000000002'), 50::numeric,
   '分配合計仍不超過 50');
+
+-- ── 情境 4(E 包 20260920170000):查驗表單簽署寫確認量,必須在同一把逐工項鎖內 ───────────
+-- 為什麼要這條:簽署分支是「讀此 (工項, 批次, 階段) 最新 active 的 qty_cum,再插入 prev_cum + 本次確認」。
+-- 這段 read-then-insert 以前沒取 fn_cq_lock_internal(issue_supervisor_certificate 有),所以另一個
+-- 確認寫入者只要還沒提交,簽署就會讀到舊的 prev_cum,把累計鏈寫叉:Σqty_delta 與最新一筆的 qty_cum 不再一致。
+-- 這條用「A 持鎖並寫入 30、B 同時簽署確認 60」把它逼出來:修好=B 等到 A 提交才讀 → 90;
+-- 沒修好=B 在 A 提交前就讀到 0 → 寫成 60(AFTER trigger 仍會擋在鎖上,所以只看「有沒有被鎖住」分辨不出來,
+-- 要看最後落庫的 qty_cum)。
+insert into public.work_items (id, project_id, item_no, description, unit, quantity, unit_price, is_leaf, is_billable, is_rollup) values
+  ('c4c30000-0000-0000-0000-000000000003', 'c4c20000-0000-0000-0000-00000000000a', '1.3', '版牆混凝土', 'M3', 1000, 1, true, true, false);
+insert into public.inspections (id, project_id, work_item_id, title, location, requested_date, declared_qty, requested_by) values
+  ('c4c50000-0000-0000-0000-000000000001', 'c4c20000-0000-0000-0000-00000000000a', 'c4c30000-0000-0000-0000-000000000003',
+   '3F 版牆混凝土查驗', '3F 版牆', pg_temp.today(), 100, 'c4c10000-0000-0000-0000-000000000001');
+-- 表單草稿與可簽版本都走產品 RPC,以監造身分建立(session 級 claims,用完還原)
+select set_config('request.jwt.claims',
+  json_build_object('sub', 'c4c10000-0000-0000-0000-000000000002', 'role', 'authenticated')::text, false);
+select set_config('request.jwt.claim.sub', 'c4c10000-0000-0000-0000-000000000002', false);
+set role authenticated;
+create or replace function pg_temp.insp_doc() returns uuid language sql as $f$
+  select id from public.field_documents where doc_type = 'inspection_form'
+    and target_key = 'c4c50000-0000-0000-0000-000000000001' and status not in ('discarded', 'superseded')
+  order by created_at limit 1 $f$;
+select ok((select (public.create_inspection_form_draft('c4c50000-0000-0000-0000-000000000001') ->> 'id')) is not null,
+  'fixture:監造建立查驗表單草稿');
+select is((select public.save_field_document_version(pg_temp.insp_doc(),
+    (select coalesce(max(version_no), 0) from public.field_document_versions where document_id = pg_temp.insp_doc()),
+    jsonb_build_object(
+      'inspection_date', pg_temp.today()::text, 'inspection_id', 'c4c50000-0000-0000-0000-000000000001',
+      'inspection_title', '3F 版牆混凝土查驗', 'work_item_id', 'c4c30000-0000-0000-0000-000000000003',
+      'location', '3F 版牆', 'stage_key', null, 'unit', 'M3', 'declared_qty', 100, 'self_check_record_id', null,
+      'template_id', null, 'template_title', null, 'results', '{}'::jsonb,
+      'verdict', '部分合格', 'confirmed_qty', 60, 'result_note', '版牆東側 40 M3 蜂窩待修補', 'note', null,
+      'template', '{"key":"inspection_form_demo","version":1}'::jsonb, 'photo_ids', '[]'::jsonb, 'unmatched_photo_ids', '[]'::jsonb),
+    '{"inspection_date":{"status":"confirmed","source":"human"},"inspection_id":{"status":"confirmed","source":"human"},
+      "work_item_id":{"status":"confirmed","source":"human"},"location":{"status":"confirmed","source":"human"},
+      "unit":{"status":"confirmed","source":"human"},"declared_qty":{"status":"confirmed","source":"human"},
+      "verdict":{"status":"confirmed","source":"human"},"confirmed_qty":{"status":"confirmed","source":"human"}}'::jsonb)
+    ->> 'status'), 'draft', 'fixture:存出可簽版本(確認 60)');
+reset role;
+select set_config('request.jwt.claims', '', false);
+select set_config('request.jwt.claim.sub', '', false);
+-- session B 改用監造身分(只有監造能簽);session A 回到 postgres 才寫得進確認表
+select * from dblink('b', pg_temp.claims('c4c10000-0000-0000-0000-000000000002')) as t(x text, y text);
+select dblink_exec('a', 'reset role');
+select dblink_exec('a', 'begin');
+select lives_ok($o$ select * from dblink('a', $q$
+    select public.fn_cq_lock_internal('c4c20000-0000-0000-0000-00000000000a', 'c4c30000-0000-0000-0000-000000000003')::text $q$) as t(x text) $o$,
+  'session A:持有 W3 的逐工項鎖(模擬另一個確認寫入者)');
+select lives_ok($o$ select dblink_exec('a', $q$
+    insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, confirmed_by, reason)
+    values ('c4c20000-0000-0000-0000-00000000000a', 'c4c30000-0000-0000-0000-000000000003', '3f版牆', 'M3', 30,
+            'supervisor_certificate', 'c4c10000-0000-0000-0000-000000000002', '併發測試') $q$) $o$,
+  'session A:同批次先確認累計 30(未提交)');
+select dblink_send_query('b', $q$
+  select public.sign_field_document(
+    (select id from public.field_documents where doc_type = 'inspection_form'
+       and target_key = 'c4c50000-0000-0000-0000-000000000001' and status not in ('discarded', 'superseded')
+     order by created_at limit 1),
+    (select max(version_no) from public.field_document_versions
+      where document_id = (select id from public.field_documents where doc_type = 'inspection_form'
+        and target_key = 'c4c50000-0000-0000-0000-000000000001' and status not in ('discarded', 'superseded')
+        order by created_at limit 1)),
+    (select content_hash from public.field_document_versions
+      where document_id = (select id from public.field_documents where doc_type = 'inspection_form'
+        and target_key = 'c4c50000-0000-0000-0000-000000000001' and status not in ('discarded', 'superseded')
+        order by created_at limit 1)
+      order by version_no desc limit 1),
+    '本人確認判定與確認數量')$q$);
+select ok(pg_temp.wait_blocked('cq_sess_b'), 'session B:查驗表單簽署在同一把鎖上等待');
+select dblink_exec('a', 'commit');
+select lives_ok($o$ select * from dblink_get_result('b') as t(x text) $o$, 'session B:A 釋放後完成簽署');
+select is(pg_temp.drain('b'), 0, 'session B:非同步結果已清空(4)');
+select results_eq($$ select qty_cum, qty_delta from public.inspection_confirmations
+                      where work_item_id = 'c4c30000-0000-0000-0000-000000000003' and basis = 'inspection' $$,
+  $$ values (90.0000::numeric, 60.0000::numeric) $$,
+  '簽署讀到的是 A 提交後的累計 30,落庫 90(=30+60);沒有鎖會讀到 0 而寫成 60,累計鏈就分岔');
+select is((select count(*)::int from public.inspection_confirmations
+             where work_item_id = 'c4c30000-0000-0000-0000-000000000003' and status = 'active'
+               and supersedes_id is null), 1,
+  '累計鏈仍是單一條(只有最初那筆沒有前手),沒有兩筆並列的鏈頭');
 
 -- ── 清場(cascade;確認紀錄 guard 對專案刪除放行) ────────────────────────────────────
 select dblink_disconnect('a');

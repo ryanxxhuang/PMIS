@@ -11,10 +11,22 @@
 受測的 dev server（埠 5189）用與 Demo E2E 共用的 [vite.e2e.config.js](../vite.e2e.config.js)：與 `vite.config.js` 相同，只關掉檔案監看、埠被佔用就失敗。一般 dev server 下，同一 worktree 任何未 gitignore 的檔案被改（連 `touch` 一支 e2e spec 都算）都會讓頁面整頁重載、打斷開著的對話框；2026-09-19 chain 6 卡在「提送」對話框直到 420 秒逾時即此原因（T1）。所以跑測期間改檔不影響頁面，但改了程式碼要重跑才會生效。5189 已被別的 worktree 佔用時，Playwright 直接報「is already used」、不沿用那個 server（T2），等對方跑完再跑。
 
 ```bash
+# 先在另一個 terminal 起本機 Edge（見下一段），再跑整套
 npm run test:e2e:real
 ```
 
-十八條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14，P3f）、保固期滿日與保固類循環義務（chain 15，P5e）、查驗表單範本與舊判定更正（chain 16，P3g）（chain 5–10、12–16 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+`supabase functions serve` 只吃一個 `--env-file`，所以 **模型金鑰與視覺 stub 要寫在同一個檔**（`.env.e2e.real`，見 `.env.e2e.real.example`）：只給 `e2e-real/stub.env` 的話 chain 3 的 live 抽取會回「AI 服務尚未完成設定（代碼 config）」；只給金鑰的話 chain 5／6／8／12／14 起不了稿。兩組併在 `.env.e2e.real` 之後，一次 serve 就能讓整套鏈在單一指令下全綠（E 包 2026-09-20 實測 20 項全過）。
+
+```bash
+supabase functions serve --env-file .env.e2e.real   # terminal A（涵蓋 stub 與 live 兩種鏈）
+npm run test:e2e:real                               # terminal B
+```
+
+5189 被別的 worktree 佔用時，Playwright 直接報「is already used」、不沿用（T2）。等對方跑完，或用 `E2E_REAL_PORT` 換一個本次專用的埠（與 Demo 端的 `E2E_DEMO_PORT` 同一個做法），例如 `E2E_REAL_PORT=5289 npm run test:e2e:real`。
+
+十八條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14，P3f）、保固期滿日與保固類循環義務（chain 15，P5e）、查驗表單範本與舊判定更正（chain 16，P3g）、真實表單格子編輯（chain 17，C 包）（chain 5–10、12–16 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+
+PDF 交付的兩項真後端驗收由 E 包補進既有鏈（D 包在 Demo 驗不到）：chain 5 在列印頁**實際下載檔案並解析**，證明拿到的是簽署列指向的已簽版本（檔名 `v3_已簽署`、紙面沒有「草稿・未簽署」）；chain 13 下載估驗佐證包的 PDF，證明**真 Supabase Storage 簽名網址**的照片抓得回來（CORS 沒擋）且各自內嵌成影像。
 
 ## 契約測試的兩種模式
 
