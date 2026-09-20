@@ -271,7 +271,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | B2 | `codex/contractor-b2-paper-cells`／PR #169 | `ba7a97b` | `20260920160000_ai_paperform_cells` **已套正式** | Edge `draft-field-documents` v13／`agent-run` v24／`classify-site-photo` v14／`read-whiteboard` v18 |
 | C2 | `codex/contractor-c2-supervisor-forms`／PR #170 | `d161545` | 無 | 純前端，隨 main 自動建置 |
 | E | `codex/contractor-e-acceptance`／PR #171 | `388daa4` | `20260920170000_inspection_sign_confirmation_lock` **已套正式** | 無 Edge 變更；正式站登入後 UI／PDF 仍未測 |
-| O3 | `codex/contractor-o3-demo-docs` | 見 PR | 無 | demo 站 Version `664312c5-d39a-48b6-b221-c246e6620e0f`（前一版 O2 `beb53b7c-ee55-456c-92af-e608fb1dd555`）；`check:prod` 五頁 OK |
+| O3 | `codex/contractor-o3-demo-docs`／PR #172 | 見 PR | 無 | demo 站 Version `664312c5-d39a-48b6-b221-c246e6620e0f`（前一版 O2 `beb53b7c-ee55-456c-92af-e608fb1dd555`）；`check:prod` 五頁 OK |
 
 O3 對正式環境只做唯讀核對、未做任何變更：遠端 migration **86 筆**＝repo 86 支、最新 `20260920170000`、無待套；Edge 版本如上表且皆 ACTIVE（`send-reminders` 維持 v23／`verify_jwt=false`，已退場的 `audit-summary` 不在線上清單內）。
 
@@ -750,7 +750,7 @@ PR #164、merge commit `a575bbc`（rebase 到含 A 包的 main `e3e4f65`；CI �
 
 ### O3 Demo 站重佈、文件同步與驗收清單更新
 
-**不改任何產品程式**（本節只動 `CURRENT.md` 與本檔）。分支 `codex/contractor-o3-demo-docs`，基準 main `388daa4`（含 A、B、B2、C、C2、D、E 全部）。
+**不改任何產品程式**（本節只動 `CURRENT.md` 與本檔）。PR #172，分支 `codex/contractor-o3-demo-docs`，基準 main `388daa4`（含 A、B、B2、C、C2、D、E 全部）。
 
 **Demo 站重佈**（依 DEVELOPMENT §「線上 demo 站」）：`VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= VITE_SENTRY_DSN= npm run build` → `npx wrangler deploy --config wrangler.demo.jsonc`。
 
