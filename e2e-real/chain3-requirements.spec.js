@@ -233,7 +233,12 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
   }
   await expect(page.getByRole('button', { name: '廢止取代', exact: true })).toBeVisible()
   // ── 重整後仍為已生效,時點顯示固定到期日(D-012 相容 runtime 已物化) ───────
+  // 到期日是寫死的 2026-10-31:離執行當天超過 30 日時,履約時程預設的「近期」視圖(逾期／7 日內／
+  // 30 日內排程／待補設定／進行中)本來就不該列它——那是正確行為,不是資料掉了。以前這行會過,是因為
+  // 近期視圖在「一件都沒有」時會退回全期(Requirements.jsx:297);live 模式的 AI 另外抽到 9/30 的品質計畫,
+  // 近期不再是空的,退回機制就不觸發。所以這裡明講要看的是哪個範圍,不靠退回機制,執行日期也不再影響結果。
   await gotoHash(page, '/requirements')
+  await page.getByRole('tab', { name: /^全期/ }).click()
   await expect(page.getByText(requirementTitle).first()).toBeVisible()
   await expect(page.getByText(DEADLINE_DATE).first()).toBeVisible()
 })

@@ -7,9 +7,15 @@
 //     輸出固定(非真實辨識,只證明流程),起稿回應 notes 會明示「模型輸出為本機 stub」。
 // 帳號全部本次產生;afterAll 以建立者 delete_project＋admin API 清帳號,殘留 0。
 import { test, expect } from '@playwright/test'
+import { mkdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, signInClient, loginReal, logoutReal, gotoHash, runCleanup, tinyJpeg,
 } from './helpers.js'
+// PDF 解析與 Demo 端的下載測試共用同一支(依 ToUnicode CMap 還原文字層),不另寫一套
+import { readPdf } from '../e2e/pdfText.js'
+
+const PDF_OUT = process.env.PDF_OUT_DIR || 'test-results/pdf'
 
 const PROJECT_NAME = `鏈5文書工程-${Date.now().toString(36)}`
 const conEmail = uniqueEmail('w6c5-con')
@@ -229,6 +235,23 @@ test('鏈 5:廠商上傳→起稿→補缺→簽署→提送→監造退回→�
   await expect(stamp).toContainText('簽署 鏈五廠商・')
   await expect(page.getByText('草稿・未簽署')).toHaveCount(0)
   await expect(page.getByText('結構工程混凝土澆置 12.5 M3；材料進料證明已補')).toBeVisible()
+  // D 包留給 E 包的第一項:「正式文件取不可變的已簽版本」在 Demo 驗不到(示範模式的 getFieldDocument
+  // 固定回 signatures: [],列印頁永遠走草稿分支)。這裡是真後端的已簽分支——實際把檔案下載下來解析,
+  // 證明拿到的是簽署列指向的版本 3(檔名標 v3_已簽署、紙面沒有「草稿・未簽署」、內容是 v3 的更正摘要)。
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 90_000 }),
+    page.getByRole('button', { name: '下載 PDF' }).click(),
+  ])
+  const pdfPath = join(PDF_OUT, `chain5-${download.suggestedFilename()}`)
+  mkdirSync(PDF_OUT, { recursive: true })
+  await download.saveAs(pdfPath)
+  expect(download.suggestedFilename(), '檔名要標版次與已簽署,離開系統也分得出簽了沒').toMatch(/v3_已簽署\.pdf$/)
+  const signedPdf = readPdf(readFileSync(pdfPath))
+  expect(signedPdf.pageCount).toBeGreaterThan(0)
+  expect(signedPdf.hasFontFile, '中文字型必須內嵌').toBe(true)
+  expect(signedPdf.text).toContain('結構工程混凝土澆置 12.5 M3；材料進料證明已補')
+  expect(signedPdf.text).toContain(v3.content_hash.slice(0, 12))
+  expect(signedPdf.text, '已簽版本不得出現草稿標示').not.toContain('草稿・未簽署')
   await page.getByRole('button', { name: '← 返回施工日誌' }).click() // 列印頁沒有工作台外框(無登出鈕)
   await expect(page).toHaveURL(/#\/site-log\?doc=/)
   await logoutReal(page)
