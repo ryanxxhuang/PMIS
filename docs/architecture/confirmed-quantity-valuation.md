@@ -384,7 +384,7 @@ pgTAP `valuation_items_guard.sql` 11→50（三角色＋專案管理者＋非成
 - 已知限制：列印頁只印文件目前的簽署版本，來源版本已被更正或文件已被取代時只給版本標示不給連結（見續接清單 §7「P6a 發現」）。
 
 
-## 21. F2 服務憑證寫入封堵落地結果（2026-09-21，PR #<F2>；migration `20260920230000_edge_credential_writer_seal`，回復檔 `supabase/rollbacks/` 同名 `.down.sql`）
+## 21. F2 服務憑證寫入封堵落地結果（2026-09-21，PR #174；migration `20260920230000_edge_credential_writer_seal`，回復檔 `supabase/rollbacks/` 同名 `.down.sql`）
 
 ### 21.1 查出的缺口（本機隔離棧 `set local role service_role`、`auth.uid()` 為 null 實測，`388daa4` 起的 main 仍成立）
 - `inspection_confirmations_guard` INSERT 只驗內容不驗來源：內容合法的列（`confirmed_by` 填任一位監造成員）被接受，`qty_delta=60`；active→revoked 只驗原因。

@@ -273,7 +273,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | E | `codex/contractor-e-acceptance`／PR #171 | `388daa4` | `20260920170000_inspection_sign_confirmation_lock` **已套正式** | 無 Edge 變更；正式站登入後 UI／PDF 仍未測 |
 | O3 | `codex/contractor-o3-demo-docs`／PR #172 | `abddf53` | 無 | demo 站 Version `664312c5-d39a-48b6-b221-c246e6620e0f`（前一版 O2 `beb53b7c-ee55-456c-92af-e608fb1dd555`）；`check:prod` 五頁 OK |
 | F1 | `codex/contractor-f1-setup-gaps`／PR #173 | `52f53ef` | `20260920214557_obligation_timing_gap`（只新增一支 IMMUTABLE 純函式；rollback 檔 drop）— 正式套用結果見單元回報 | Edge `_shared` 改動：合併後重佈 `agent-run`／`send-reminders`／`draft-field-documents`／`fetch-weather`（`deno info` 引用圖）；前端隨 main 自動建置；demo 站未重佈 |
-| F2 | `codex/contractor-f2-coverage`／PR #<F2> | 合併後補 | `20260920230000_edge_credential_writer_seal`（七支函式換定義、計價依據 trigger 加 DELETE；不動任何一列；rollback 檔同名 `.down.sql`）— 正式套用結果見 CURRENT §6.3 | Edge `_shared` 改動：`send-reminders`（流程本體拆到 `sendRemindersRun.ts`／`sendRemindersDeps.ts`）、`draft-field-documents`（`visionStub.ts` 情境）合併後須重佈；前端無改動 |
+| F2 | `codex/contractor-f2-coverage`／PR #174 | 合併後補 | `20260920230000_edge_credential_writer_seal`（七支函式換定義、計價依據 trigger 加 DELETE；不動任何一列；rollback 檔同名 `.down.sql`）— 正式套用結果見 CURRENT §6.3 | Edge `_shared` 改動：`send-reminders`（流程本體拆到 `sendRemindersRun.ts`／`sendRemindersDeps.ts`）、`draft-field-documents`（`visionStub.ts` 情境）合併後須重佈；前端無改動 |
 
 O3 對正式環境只做唯讀核對、未做任何變更：遠端 migration **86 筆**＝repo 86 支、最新 `20260920170000`、無待套；Edge 版本如上表且皆 ACTIVE（`send-reminders` 維持 v23／`verify_jwt=false`，已退場的 `audit-summary` 不在線上清單內）。
 
