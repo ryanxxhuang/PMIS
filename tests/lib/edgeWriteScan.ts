@@ -80,6 +80,40 @@ export function scanWrites(src: string, rules: WriteScanRules): { offenders: Fin
   return { offenders, reads }
 }
 
+// F2:列出原始碼裡「所有」寫入目標與 RPC 呼叫(允許清單掃描用:清單外的一律越界)。
+//   tables:.from(X) 後方法鏈有 insert／update／upsert／delete 的 X(常值);dynamic:目標不是字串常值的寫入;
+//   rpcs:.rpc(N) 的 N(常值);dynamicRpcs:名稱不是常值;rest:原始 REST 路徑。與 scanWrites 共用同一個鏈解析。
+export function listWriteTargets(src: string): {
+  tables: Array<{ table: string; line: number; writes: string[] }>
+  dynamic: Finding[]
+  rpcs: Array<{ name: string; line: number }>
+  dynamicRpcs: Finding[]
+  rest: Finding[]
+} {
+  const lineOf = (idx: number) => src.slice(0, idx).split('\n').length
+  const tables: Array<{ table: string; line: number; writes: string[] }> = []
+  const dynamic: Finding[] = []
+  for (const m of src.matchAll(/\.from\(/g)) {
+    const open = m.index! + '.from'.length
+    const end = skipBalanced(src, open)
+    const arg = src.slice(open + 1, end - 1).trim()
+    const literal = /^(['"`])([\w.]+)\1$/.exec(arg)?.[2]
+    const writes = chainMethods(src, end).filter((n) => WRITE_METHODS.has(n))
+    if (!writes.length) continue
+    if (literal) tables.push({ table: literal, line: lineOf(m.index!), writes })
+    else dynamic.push({ line: lineOf(m.index!), text: `.from(${arg}) → ${writes.join(',')}` })
+  }
+  const rpcs: Array<{ name: string; line: number }> = []
+  const dynamicRpcs: Finding[] = []
+  for (const m of src.matchAll(/\.rpc\(\s*([^,)\s]+)/g)) {
+    const name = /^(['"`])(\w+)\1$/.exec(m[1])?.[2]
+    if (name) rpcs.push({ name, line: lineOf(m.index!) })
+    else dynamicRpcs.push({ line: lineOf(m.index!), text: `.rpc(${m[1]})` })
+  }
+  const rest: Finding[] = [...src.matchAll(/\/rest\/v1\//g)].map((m) => ({ line: lineOf(m.index!), text: '原始 REST 路徑' }))
+  return { tables, dynamic, rpcs, dynamicRpcs, rest }
+}
+
 // supabase/functions 之下所有會部署的 .ts(排除測試檔),連同 _shared;回 [相對路徑, 原始碼]
 export function listEdgeSources(functionsDir: string): Array<{ rel: string; src: string }> {
   return fs.readdirSync(functionsDir, { recursive: true })

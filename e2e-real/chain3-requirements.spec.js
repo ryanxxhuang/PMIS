@@ -35,6 +35,19 @@ const normalizeSource = (text) => String(text ?? '')
 // Bootstrap 帳號可能已存在,只清理本次建立者。這不能證明環境隔離,
 // 執行前仍須依 REAL_BACKEND_E2E.md 確認目標是可拋棄的本機或 staging。
 const BOOTSTRAP_ADMIN_EMAIL = 'ryanxhuang1212@gmail.com'
+// F2:live 抽取失敗時先分類再報——同一條紅燈以前分不出「模型這次沒抽完整」與「程式壞了」,只能看 metadata 猜。
+// 代碼來源:extract-requirements(no_requirements／batch_failed)、_shared/claude.ts(max_tokens／no_tool_use／timeout／
+// network／http_<status>／config)、_shared/publicError.ts(db_error／exception 等)。runbook docs/REAL_BACKEND_E2E.md「chain 3 紅燈判讀」同一張表。
+const MODEL_INCOMPLETE_CODES = new Set(['no_requirements', 'no_tool_use', 'max_tokens', 'batch_failed'])
+const MODEL_SERVICE_CODES = new Set(['timeout', 'network', 'config'])
+export function classifyExtractionFailure(run) {
+  const meta = run?.metadata || {}
+  const code = meta.error_code || meta.failed_batch?.code || null
+  if (!code) return { verdict: '程式或資料錯誤', code: null }
+  if (MODEL_INCOMPLETE_CODES.has(code)) return { verdict: '模型輸出不完整(非程式錯誤;重跑一次 chain 3 即可再驗,不可自動重試掩蓋)', code }
+  if (MODEL_SERVICE_CODES.has(code) || /^http_(429|5\d\d)$/.test(code)) return { verdict: '模型服務或本機環境問題(金鑰／網路／額度／逾時)', code }
+  return { verdict: '程式或資料錯誤', code }
+}
 const conEmail = uniqueEmail('w6c3-con')
 const supEmail = uniqueEmail('w6c3-sup')
 let conId, supId, adminId, adminCreatedHere, projectId
@@ -117,18 +130,20 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
     if (processingRun.status !== 'completed'
       || processingRun.metadata?.requirement_extraction !== 'completed') {
       // 客戶端只存 supabase-js 的泛化訊息;真正的失敗原因在伺服器端 ingestion run
-      // 的 error_message(函式在 AI/schema 失敗時寫入)——一併撈出來,失敗才可診斷
+      // 的 error_message 與 metadata.error_code／failed_batch(函式在 AI/schema 失敗時寫入)——
+      // 一併撈出來並先分類(F2):紅燈第一行就說是「模型輸出不完整」還是「程式或資料錯誤」
       const { data: failedRun } = await c.from('document_ingestion_runs')
-        .select('status,error_message')
+        .select('status,error_message,metadata')
         .eq('document_version_id', version.id)
         .order('started_at', { ascending: false })
         .limit(1)
         .maybeSingle()
+      const verdict = failedRun ? classifyExtractionFailure(failedRun) : { verdict: '程式或環境錯誤(run 不存在:可能在建 run 之前就失敗,如閘門 403)', code: null }
       throw new Error(
-        `文件沒有完成 live Requirement 抽取:status=${processingRun.status},`
+        `[判定:${verdict.verdict}][error_code=${verdict.code || 'none'}] 文件沒有完成 live Requirement 抽取:status=${processingRun.status},`
         + `stage=${processingRun.stage},extraction=${processingRun.metadata?.requirement_extraction || 'missing'},`
         + `client_error=${processingRun.error_message || processingRun.metadata?.requirement_extraction_message || 'none'},`
-        + `ingestion_run=${failedRun ? `${failedRun.status}:${failedRun.error_message || 'no message'}` : '不存在(可能在建 run 之前就失敗,如閘門 403)'}`,
+        + `ingestion_run=${failedRun ? `${failedRun.status}:${failedRun.error_message || 'no message'};metadata=${JSON.stringify(failedRun.metadata || {})}` : '不存在'}`,
       )
     }
 
@@ -137,13 +152,16 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
     let run = null
     await expect.poll(async () => {
       const { data, error } = await c.from('document_ingestion_runs')
-        .select('id,status,error_message')
+        .select('id,status,error_message,metadata')
         .eq('document_version_id', version.id)
         .order('started_at', { ascending: false })
         .limit(1)
         .maybeSingle()
       if (error) throw new Error(`讀取 ingestion run 失敗:${error.message}`)
-      if (data?.status === 'failed') throw new Error(`live Edge 抽取失敗:${data.error_message}`)
+      if (data?.status === 'failed') {
+        const v = classifyExtractionFailure(data)
+        throw new Error(`[判定:${v.verdict}][error_code=${v.code || 'none'}] live Edge 抽取失敗:${data.error_message};metadata=${JSON.stringify(data.metadata || {})}`)
+      }
       run = data
       return data?.status || null
     }, { timeout: 90_000 }).toBe('completed')
@@ -165,10 +183,16 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
         `[${r.requirement_type}/${r.trigger_type || 'no-trigger'}] ${r.title} ${JSON.stringify(r.trigger_config || {})}`).join('；')
       const { data: runRow } = await c.from('document_ingestion_runs')
         .select('extracted_requirement_count,metadata').eq('id', run.id).maybeSingle()
+      // run completed 但沒抽到契約明載的期限:這是模型輸出不完整(抽取品質),不是程式錯——除非 rejected_items
+      // 顯示確定性驗證把它砍了(那是引文／日期核對問題,列在 metadata 裡一起攤開)
+      const meta = runRow?.metadata || {}
+      const rejectedHit = Array.isArray(meta.rejected_items) && meta.rejected_items.some((r) => JSON.stringify(r).includes(DEADLINE_DATE) || JSON.stringify(r).includes('10月31日'))
       throw new Error(
-        `live AI 沒有產生契約明載的 ${DEADLINE_DATE} 固定期限 Requirement。`
+        `[判定:${rejectedHit ? '模型抽到但被確定性驗證拒絕(引文／日期核對,看 rejected_items)' : '模型輸出不完整(非程式錯誤;重跑一次 chain 3 即可再驗,不可自動重試掩蓋)'}]`
+        + `[raw_item_count=${meta.raw_item_count ?? 'n/a'},rejected=${meta.rejected_item_count ?? 'n/a'},coverage_incomplete=${meta.coverage_incomplete ?? 'n/a'}] `
+        + `live AI 沒有產生契約明載的 ${DEADLINE_DATE} 固定期限 Requirement。`
         + `落庫 ${suggestions?.length || 0} 筆:${dump || '(空)'};`
-        + `run metadata=${JSON.stringify(runRow?.metadata || {})}`,
+        + `run metadata=${JSON.stringify(meta)}`,
       )
     }
     // D-017 分流:引文已核對且日期與引文一致的期限會被確定性引擎自動確認

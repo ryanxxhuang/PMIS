@@ -6,7 +6,7 @@
 -- 執行方式:npm run test:db(一次性資料庫),整份在交易內執行並 rollback。
 begin;
 
-select plan(307);
+select plan(309);
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 0. 結構與授權
@@ -626,7 +626,9 @@ insert into public.valuations (id, project_id, period_no, period_end, status)
   values ('c4b40000-0000-0000-0000-000000000011', 'c4b20000-0000-0000-0000-00000000000b', 1, pg_temp.today(), '草稿');
 select pg_temp.legacy_item('c4b40000-0000-0000-0000-000000000011', 'c4b30000-0000-0000-0000-000000000011', 50);
 alter table public.valuations disable trigger valuations_checkpoint_guard;   -- 遷移前的歷史核定
+set local pmis.cq_internal = '1';   -- F2(20260920230000)起非登入者改狀態只認內部旗標:歷史核定以 DBA 邊界重現
 update public.valuations set status = '已核定' where id = 'c4b40000-0000-0000-0000-000000000011';
+set local pmis.cq_internal = '';
 alter table public.valuations enable trigger valuations_checkpoint_guard;
 select is(public.fn_cq_backfill_legacy_internal('c4b20000-0000-0000-0000-00000000000b'), 1, '回填 1 筆 legacy 來源');
 select is(public.fn_cq_backfill_legacy_internal('c4b20000-0000-0000-0000-00000000000b'), 0, '回填冪等');
@@ -760,6 +762,12 @@ select pg_temp.become(null);
 insert into public.inspections (id, project_id, work_item_id, title, status) values
   ('c4b60000-0000-0000-0000-000000000001', 'c4b20000-0000-0000-0000-00000000000a', 'c4b30000-0000-0000-0000-000000000001', 'C區查驗', '待查驗');
 set local role service_role;
+-- F2(20260920230000):service role 沒開內部旗標的直寫一律 VQ010(在內容檢查之前);以下各條模擬「簽署路徑」
+-- (sign_field_document／issue_supervisor_certificate 會在那一句 insert 前開旗標),所以先開旗標再驗內容檢查
+select throws_ok($$ insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, confirmed_by)
+  values ('c4b20000-0000-0000-0000-00000000000a', 'c4b30000-0000-0000-0000-000000000001', 'C區', 'm2', 10, 'inspection', 'c4b10000-0000-0000-0000-000000000002') $$,
+  'VQ010', null, 'F2:service role 未開內部旗標的確認 insert 一律 VQ010(不看內容)');
+set local pmis.cq_internal = '1';
 select throws_ok($$ insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, confirmed_by)
   values ('c4b20000-0000-0000-0000-00000000000a', 'c4b30000-0000-0000-0000-000000000001', 'C區', 'm2', 10, 'inspection', 'c4b10000-0000-0000-0000-000000000002') $$,
   'VQ005', null, 'service:查驗依據必須連結查驗');
@@ -770,6 +778,7 @@ reset role;
 select pg_temp.become(null);
 update public.inspections set status = '合格' where id = 'c4b60000-0000-0000-0000-000000000001';
 set local role service_role;
+set local pmis.cq_internal = '1';   -- F2:同上,模擬簽署路徑
 select throws_ok($$ insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, inspection_id, confirmed_by)
   values ('c4b20000-0000-0000-0000-00000000000a', 'c4b30000-0000-0000-0000-000000000001', 'C區', 'm2', 10, 'inspection', 'c4b60000-0000-0000-0000-000000000001', 'c4b10000-0000-0000-0000-000000000001') $$,
   'VQ001', null, 'service:確認人非監造成員拒絕');
@@ -785,6 +794,7 @@ select throws_ok($$ insert into public.inspection_confirmations (project_id, wor
 select throws_ok($$ insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, confirmed_by)
   values ('c4b20000-0000-0000-0000-00000000000a', 'c4b30000-0000-0000-0000-000000000001', 'C區', 'm2', 5, 'supervisor_certificate', 'c4b10000-0000-0000-0000-000000000002') $$,
   'VQ005', '累計確認量由 10 減為 5,減量必須填寫原因', 'service:減量未填原因拒絕(訊息數字無小數尾)');
+set local pmis.cq_internal = '';   -- F2:來源分配的直寫不在「模擬簽署路徑」範圍,關旗標再驗
 select throws_ok($$ insert into public.valuation_item_sources (project_id, valuation_id, work_item_id, batch_key, qty, kind)
   values ('c4b20000-0000-0000-0000-00000000000a', 'c4b40000-0000-0000-0000-000000000009', 'c4b30000-0000-0000-0000-000000000001', 'c區', 1, 'confirmation') $$,
   'VQ010', null, 'service:來源分配只能由重算寫入');
@@ -796,9 +806,11 @@ select throws_ok($$ update public.inspection_confirmations set qty_cum = 1 where
 select throws_ok($$ update public.inspection_confirmations set status = 'active', revoked_at = null, reason = null where client_request_id = 'req-10' $$, 'VQ010', null, '已撤銷不可回復');
 insert into public.field_documents (id, project_id, doc_type, doc_date) values
   ('c4b80000-0000-0000-0000-000000000001', 'c4b20000-0000-0000-0000-00000000000a', 'daily_log', pg_temp.today());
+set local pmis.cq_internal = '1';   -- F2:這一句仍模擬簽署路徑(驗的是文件型別檢查)
 select throws_ok($$ insert into public.inspection_confirmations (project_id, work_item_id, batch_key, unit, qty_cum, basis, confirmed_by, document_id, document_version_no, content_hash)
   values ('c4b20000-0000-0000-0000-00000000000a', 'c4b30000-0000-0000-0000-000000000001', 'D區', 'm2', 1, 'supervisor_certificate', 'c4b10000-0000-0000-0000-000000000002',
           'c4b80000-0000-0000-0000-000000000001', 1, repeat('a', 64)) $$, 'VQ005', null, '追溯的文件必須是監造查驗表單(施工日誌拒絕;版本／雜湊／簽署列另由 guard 與 FK 驗)');
+set local pmis.cq_internal = '';   -- F2:模擬簽署路徑結束,關旗標
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 11. 正式模式:管理者失去監造能力;監造照常
@@ -852,7 +864,10 @@ reset role;
 select is(pg_temp.src_qty('c4b40000-0000-0000-0000-000000000010', 'c4b30000-0000-0000-0000-000000000002', '__adjustment__', 'adjustment'), null, '合併歸零後調整來源移除');
 select is((select count(*)::int from public.valuation_adjustments where applied_valuation_id = 'c4b40000-0000-0000-0000-000000000010'), 2, '調整紀錄 append-only 兩筆');
 select pg_temp.become(null);
-select lives_ok($$ update public.valuations set period_end = pg_temp.today() + 1 where id = 'c4b40000-0000-0000-0000-000000000009' $$, 'superuser(支援)可補歷史期截止日');
+select throws_ok($$ update public.valuations set period_end = pg_temp.today() + 1 where id = 'c4b40000-0000-0000-0000-000000000009' $$,
+  'VQ010', null, 'F2:superuser 不開旗標也不可改非草稿期的截止日(服務憑證同一條規則)');
+select lives_ok($$ select pg_temp.internal('update public.valuations set period_end = pg_temp.today() + 1 where id = ''c4b40000-0000-0000-0000-000000000009''') $$,
+  'superuser(支援)在 DBA 邊界(旗標內)可補歷史期截止日');
 select pg_temp.become('c4b10000-0000-0000-0000-000000000001');
 set local role authenticated;
 select lives_ok($$ delete from public.valuations where id = 'c4b40000-0000-0000-0000-000000000010' $$, '廠商可刪第 10 期草稿');

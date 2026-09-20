@@ -223,7 +223,9 @@ insert into public.valuation_items (valuation_id, work_item_id, cum_qty, backing
     (select id from public.work_items where project_id = 'bb100000-0000-0000-0000-000000000002' and item_key = '1.1'), 1, 'legacy');
 select set_config('pmis.cq_internal', '', true);
 alter table public.valuations disable trigger valuations_checkpoint_guard;
+set local pmis.cq_internal = '1';   -- F2(20260920230000)起非登入者改狀態只認內部旗標:歷史核定以 DBA 邊界重現
 update public.valuations set status = '已核定' where id = 'bb400000-0000-0000-0000-000000000002';
+set local pmis.cq_internal = '';
 alter table public.valuations enable trigger valuations_checkpoint_guard;
 
 select pg_temp.become('bb000000-0000-0000-0000-000000000001');

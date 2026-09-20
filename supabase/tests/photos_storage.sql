@@ -174,7 +174,9 @@ select set_config('pmis.cq_internal', '', true);
 -- 本檔只驗照片凍結,這期是「遷移前就已核定」的歷史期別,以 DBA 邊界(disable trigger)核定。
 select pg_temp.become(null);
 alter table public.valuations disable trigger valuations_checkpoint_guard;
+set local pmis.cq_internal = '1';   -- F2(20260920230000)起非登入者改狀態只認內部旗標:歷史核定以 DBA 邊界重現
 update public.valuations set status = '已核定' where id = 'e6000000-0000-0000-0000-000000000001';
+set local pmis.cq_internal = '';
 alter table public.valuations enable trigger valuations_checkpoint_guard;
 
 select pg_temp.become('e0000000-0000-0000-0000-000000000001');
