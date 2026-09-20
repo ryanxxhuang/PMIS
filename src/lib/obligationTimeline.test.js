@@ -8,7 +8,7 @@ import {
   deriveStatus, countdownLabel, phaseOf, phaseWindows,
   partyStat, phaseStat, pickDefaultId, buildTimelineItem, matchesFilters,
   anchorGaps, periodRows, recurrenceGap, singleDueBasis, anchorVersionRows,
-  setupGapsOf, isRecent, byUrgency, periodStat, SETUP_KINDS,
+  setupGapsOf, isRecent, byUrgency, periodStat, SETUP_KINDS, noDueReason,
 } from './obligationTimeline.js'
 
 const TODAY = new Date(2026, 7, 25) // 2026-08-25
@@ -349,13 +349,17 @@ describe('基準日缺口(anchorGaps):數字必須等於「設完基準日會多
     ]
     expect(anchorGaps(items, anc).total).toBe(0)
   })
-  it('不是被基準日卡住的 na 不算:fixed 缺日期、無觸發點', () => {
+  it('不是被基準日卡住的 na 不算基準日缺口,但也不是靜默的「無到期日」:fixed 缺日期、無觸發點都是時點待補(F1)', () => {
+    // 以前這條只釘「anchorGaps 不算」,把「顯示無到期日、不列待補」當成正確行為(廠商驗收 E 未通過項);
+    // 設基準日確實補不了它們(所以仍不進 anchorGaps 的數字),但缺什麼、由誰補要說出來:時點缺口導擷取審核。
     const none = {}
-    const items = [
-      item({ trigger_event: 'fixed', fixed_date: null }, none),
-      item({ trigger_event: null, fixed_date: null }, none),
-    ]
-    expect(anchorGaps(items, none).total).toBe(0)
+    const fixedNoDate = item({ trigger_event: 'fixed', fixed_date: null }, none)
+    const noTrigger = item({ trigger_event: null, fixed_date: null, offset_days: 14 }, none)
+    expect(anchorGaps([fixedNoDate, noTrigger], none).total).toBe(0)
+    expect(fixedNoDate.setup).toEqual([expect.objectContaining({ kind: 'timing', kindLabel: '時點待補', label: '時點待補（指定日期未填）', to: '/requirements/review?highlight=OB-X' })])
+    expect(noTrigger.setup).toEqual([expect.objectContaining({ kind: 'timing', label: '時點待補（有 14 日期限，起算事件未設定）', to: '/requirements/review?highlight=OB-X' })])
+    expect(fixedNoDate.status).toBe('na')
+    expect(noDueReason(fixedNoDate)).toBe('時點待補（指定日期未填）')
   })
   it('已完成的不算(status=done,不是 na);循環配置完整的有到期日也不算', () => {
     const none = {}
@@ -380,11 +384,21 @@ describe('基準日缺口(anchorGaps):數字必須等於「設完基準日會多
 // ── P5d:待補設定缺口、近期視圖、逐期準時率 ──────────────────────────────────
 describe('待補設定缺口(setupGapsOf:與今日工作／Agent 同一份判定,附處理入口)', () => {
   const period = (over) => ({ id: 'p', period_key: '2026-08', due_date: '2026-08-05', status: '待辦', ...over })
-  it('五種缺口各自的種類、中文標籤與導向', () => {
-    expect(SETUP_KINDS.map((k) => k.key)).toEqual(['responsible', 'anchor', 'rule', 'stop', 'review'])
+  it('六種缺口各自的種類、中文標籤與導向', () => {
+    expect(SETUP_KINDS.map((k) => k.key)).toEqual(['responsible', 'timing', 'anchor', 'rule', 'stop', 'review'])
     expect(setupGapsOf(ob({ responsible: '設計單位' }), anchors, TODAY)).toEqual([
       expect.objectContaining({ kind: 'responsible', kindLabel: '責任方待補', to: '/requirements/review?highlight=OB-X' }),
     ])
+    // F1 時點待補(單次義務):四種缺法各說缺什麼;非期限型無時點、觸發點「其他」不是缺口
+    expect(setupGapsOf(ob({ trigger_event: 'monthly', fixed_date: null }), anchors, TODAY)).toEqual([
+      expect.objectContaining({ kind: 'timing', kindLabel: '時點待補', label: '時點待補（觸發點為每月，循環規則未設定）', to: '/requirements/review?highlight=OB-X' }),
+    ])
+    expect(setupGapsOf(ob({ trigger_event: null, fixed_date: null, requirement: { requirement_type: 'deadline' } }), anchors, TODAY)).toEqual([
+      expect.objectContaining({ kind: 'timing', label: '時點待補（期限型契約重點未設定觸發點或頻率）' }),
+    ])
+    expect(setupGapsOf(ob({ trigger_event: null, fixed_date: null, requirement: { requirement_type: 'checklist' } }), anchors, TODAY)).toEqual([])
+    expect(setupGapsOf(ob({ trigger_event: 'other', fixed_date: null, requirement: { requirement_type: 'deadline' } }), anchors, TODAY)).toEqual([])
+    expect(setupGapsOf(ob({ trigger_event: 'monthly', fixed_date: null, status: '已完成' }), anchors, TODAY)).toEqual([]) // 已結不列
     expect(setupGapsOf(ob({ trigger_event: 'commencement', offset_days: 15 }), {}, TODAY)).toEqual([
       expect.objectContaining({ kind: 'anchor', anchor: 'commencement_date', label: '基準日待補（開工日）', to: '/deadlines' }),
     ])
@@ -397,6 +411,17 @@ describe('待補設定缺口(setupGapsOf:與今日工作／Agent 同一份判定
     expect(setupGapsOf(ob({ trigger_event: null, recurring: 'monthly', recurring_day: 5, periods: [period({ review_note: '回填' })] }), anchors, TODAY)).toEqual([
       expect.objectContaining({ kind: 'review', periodKey: '2026-08', to: '/deadlines?obligation=OB-X&period=2026-08' }),
     ])
+  })
+  it('「沒有到期日」的原因與清單的待補設定同一句;不是缺口才說依條件／依事件觸發(F1)', () => {
+    const build = (over, anc = anchors) => buildTimelineItem(ob(over), { anchors: anc, today: TODAY })
+    expect(noDueReason(build({ trigger_event: 'monthly', fixed_date: null }))).toBe('時點待補（觸發點為每月，循環規則未設定）')
+    expect(noDueReason(build({ trigger_event: 'commencement', fixed_date: null, offset_days: 15 }, {}))).toBe('基準日待補（開工日）')
+    expect(noDueReason(build({ trigger_event: null, fixed_date: null, requirement: { requirement_type: 'deadline' } }))).toBe('時點待補（期限型契約重點未設定觸發點或頻率）')
+    expect(noDueReason(build({ trigger_event: null, fixed_date: null, requirement: { requirement_type: 'checklist' } }))).toBe('無明確時點（非期限型契約重點，依條件觸發，不倒數）')
+    expect(noDueReason(build({ trigger_event: null, fixed_date: null }))).toBe('無明確時點（依條件觸發，不倒數）')
+    expect(noDueReason(build({ trigger_event: 'other', fixed_date: null }))).toContain('依事件觸發（觸發點「其他」')
+    expect(noDueReason(build({ trigger_event: null, fixed_date: null, recurring: 'monthly' }))).toBe('循環規則待補（每月缺幾日）')
+    expect(noDueReason(build({}))).toBe('') // 有到期日就沒有原因
   })
   it('沒有缺口回空陣列;同一種缺口只列一次(多期待核對取最早一期)', () => {
     expect(setupGapsOf(ob(), anchors, TODAY)).toEqual([])

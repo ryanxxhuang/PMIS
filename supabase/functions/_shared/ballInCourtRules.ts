@@ -296,10 +296,39 @@ export function obligationAnchorGap(ob: Rec, anchors: Rec | null | undefined): A
   return { key, label: ANCHOR_LABELS[key] }
 }
 
-// 待補設定的五種缺口:責任方推不出三方／基準日沒填(P5a),循環規則不完整／回填待核對(P5b:舊義務
-// 曾標完成但對不上期別),循環停止條件判不出或已越界(P5c)。三方都看得到、不算任何人的件數,每種各有處理入口。
+// ── 單次義務的時點缺口(F1;與 DB fn_obligation_timing_gap 同口徑,pgTAP supabase/tests/obligation_timing_gap.sql)──
+// 「推不出到期日」以前只有一個結果:無到期日。但推不出的原因分兩類,只有一類是系統無法追蹤:
+//   缺口(時點待補):指定日期沒填;觸發點是「每月」卻沒有循環規則(缺頻率);有 N 日期限卻沒有起算事件;
+//     期限型契約重點(requirement_type=deadline)既無觸發點也無頻率——期限型沒有時點就物化不出到期日,
+//     人工補登表單本來就擋(lib/manualRequirement.js),AI 抽取與舊資料沒有這道關,這裡把它列成待補設定。
+//   不是缺口(無明確時點):非期限型的契約重點沒有時點是正常的(檢查表／佐證等依條件觸發);觸發點「其他」
+//     是抽取時明確標的「事件發生才起算」——事件系統不追蹤,到期日等事件發生後補登指定日期,不是設定沒填。
+// 處理入口與責任方／循環規則同一個:擷取審核(已確認內容不可改,廢止取代後補登時點)。
+// 契約重點類型由呼叫端隨義務列 embed(requirement:requirements(requirement_type));沒有(demo／舊資料)視為未知,
+// 只判前三種與資料本身有關的缺口。
+export function obligationRequirementType(ob: Rec): string | null {
+  const req = ob?.requirement
+  const t = req && typeof req === 'object' ? s(req as Rec, 'requirement_type') : ''
+  return t || null
+}
+export function timingGap(ob: Rec): string | null {
+  if (isRecurring(ob)) return null
+  const trigger = s(ob, 'trigger_event')
+  if (ANCHOR_BY_TRIGGER[trigger]) return null
+  if (trigger === 'fixed') return ob?.fixed_date ? null : '指定日期未填'
+  if (trigger === 'monthly') return '觸發點為每月，循環規則未設定'
+  if (trigger === 'other') return null
+  const offset = Number(ob?.offset_days)
+  if (Number.isFinite(offset) && offset > 0) return `有 ${offset} 日期限，起算事件未設定`
+  if (obligationRequirementType(ob) === 'deadline') return '期限型契約重點未設定觸發點或頻率'
+  return null
+}
+
+// 待補設定的六種缺口:責任方推不出三方／基準日沒填(P5a),循環規則不完整／回填待核對(P5b:舊義務
+// 曾標完成但對不上期別),循環停止條件判不出或已越界(P5c),單次義務時點沒設(F1 timing)。
+// 三方都看得到、不算任何人的件數,每種各有處理入口。
 // need:保固類停止條件缺口(P5e)缺哪幾項——處理入口不同(合格日在驗收頁、保固期間在履約時程的履約期程卡)。
-export interface SetupGap { kind: 'responsible' | 'anchor' | 'rule' | 'review' | 'stop'; label: string; anchor?: string; need?: WarrantyNeed[] }
+export interface SetupGap { kind: 'responsible' | 'anchor' | 'rule' | 'review' | 'stop' | 'timing'; label: string; anchor?: string; need?: WarrantyNeed[] }
 // 停止條件缺口(保固類另帶缺哪幾項)
 function stopGap(ob: Rec, anchors: Rec | null | undefined, stop: string): SetupGap {
   const label = `停止條件待補（${stop}）`
@@ -316,8 +345,10 @@ export interface ObligationBall extends Ball { setup: SetupGap | null }
 //   * 循環規則不完整 → who=該方,setup.rule(處理入口在擷取審核,廢止取代後補登)
 //   * 帶期次:期次帶 review_note → setup.review(處理入口在期限追蹤的那一期);期次已結 → done;否則 '待辦'
 //   * 責任明確、推不出到期日且基準日沒填 → who=該方,setup.anchor(處理入口在期限追蹤的基準日)
+//   * 單次、推不出到期日且時點沒設(指定日期未填／觸發點每月缺頻率／有期限缺起算事件／期限型無時點)
+//     → who=該方,setup.timing(處理入口在擷取審核,廢止取代後補登時點)
 //   * 循環、沒有期次且停止條件判不出／已越界 → who=該方,setup.stop(處理入口在期限追蹤的基準日或驗收頁)
-//   * 其餘 → who=該方,label '待辦';到期窗口(逾期／N 日內)由呼叫端決定
+//   * 其餘 → who=該方,label '待辦'(單次:非期限型的無明確時點、觸發點「其他」依條件觸發);到期窗口由呼叫端決定
 export function obligationBall(ob: Rec, opts: { dueIso?: string | null; anchors?: Rec | null; period?: ObligationPeriod | null; todayIso?: unknown } = {}): ObligationBall {
   if (!isObligationStreamOpen(ob)) return { who: 'done', label: s(ob, 'status') || '已完成', setup: null }
   const side = obligationSide(ob?.responsible)
@@ -343,6 +374,11 @@ export function obligationBall(ob: Rec, opts: { dueIso?: string | null; anchors?
     if (gap) {
       const label = `基準日待補（${gap.label}）`
       return { who: side, label, setup: { kind: 'anchor', label, anchor: gap.key } }
+    }
+    const timing = timingGap(ob)
+    if (timing) {
+      const label = `時點待補（${timing}）`
+      return { who: side, label, setup: { kind: 'timing', label } }
     }
     const stop = recurrenceStopGap(ob, opts.anchors, opts.todayIso)
     if (stop) {

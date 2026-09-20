@@ -271,7 +271,8 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 | B2 | `codex/contractor-b2-paper-cells`／PR #169 | `ba7a97b` | `20260920160000_ai_paperform_cells` **已套正式** | Edge `draft-field-documents` v13／`agent-run` v24／`classify-site-photo` v14／`read-whiteboard` v18 |
 | C2 | `codex/contractor-c2-supervisor-forms`／PR #170 | `d161545` | 無 | 純前端，隨 main 自動建置 |
 | E | `codex/contractor-e-acceptance`／PR #171 | `388daa4` | `20260920170000_inspection_sign_confirmation_lock` **已套正式** | 無 Edge 變更；正式站登入後 UI／PDF 仍未測 |
-| O3 | `codex/contractor-o3-demo-docs`／PR #172 | 見 PR | 無 | demo 站 Version `664312c5-d39a-48b6-b221-c246e6620e0f`（前一版 O2 `beb53b7c-ee55-456c-92af-e608fb1dd555`）；`check:prod` 五頁 OK |
+| O3 | `codex/contractor-o3-demo-docs`／PR #172 | `abddf53` | 無 | demo 站 Version `664312c5-d39a-48b6-b221-c246e6620e0f`（前一版 O2 `beb53b7c-ee55-456c-92af-e608fb1dd555`）；`check:prod` 五頁 OK |
+| F1 | `codex/contractor-f1-setup-gaps`／PR #173 | 由下一單元同步 | `20260920214557_obligation_timing_gap`（只新增一支 IMMUTABLE 純函式；rollback 檔 drop）— 正式套用結果見單元回報 | Edge `_shared` 改動：合併後重佈 `agent-run`／`send-reminders`／`draft-field-documents`／`fetch-weather`（`deno info` 引用圖）；前端隨 main 自動建置；demo 站未重佈 |
 
 O3 對正式環境只做唯讀核對、未做任何變更：遠端 migration **86 筆**＝repo 86 支、最新 `20260920170000`、無待套；Edge 版本如上表且皆 ACTIVE（`send-reminders` 維持 v23／`verify_jwt=false`，已退場的 `audit-summary` 不在線上清單內）。
 
@@ -387,7 +388,7 @@ B2 原列驗證數字（保留）：`npm test` 159 檔 1,775 項；`test:edge` 1
 | G8 | 關閉 TOTP 設定 | **已查證、結案**：主 session 2026-09-20 在正式 Supabase Dashboard 查證 Auth 的 TOTP 本來就是 Disabled，未做任何變更（正式 `auth.mfa_factors` 0 列） | 無 |
 | G9 | 更換 `ANTHROPIC_API_KEY` | **建議**：本機 E2E 用的金鑰曾出現在代理工具輸出（未外傳） | 使用者換新金鑰，並更新所有用到同一把金鑰的位置 |
 | G10 | P7a 真後端三方完整旅程自動化、P7c staging 回復演練 | **未做** | 依 §5 |
-| G12 | 「完全沒有頻率／完全沒有觸發點」不列待補 | **未通過**（E 包查證）：這兩種只顯示「無到期日」，使用者不知道要補什麼（`ballInCourtRules.ts:293-297`、`contractDue.js:21-23`，且被 `obligationTimeline.test.js:352` 當成正確行為釘住）。實作指令 E-4 要求「缺基準日／頻率顯示待補」，**缺基準日**已有五類待補設定涵蓋，這兩種沒有 | **F1（worktree `-slimming`）正在處理**；要前端、Edge、DB 三處同口徑判定 |
+| G12 | 「完全沒有頻率／完全沒有觸發點」不列待補 | **已做（F1 #173，`20260920214557`）**：第六種待補設定 `timing`（時點待補）——指定日期未填／觸發點每月缺頻率／有期限缺起算事件／期限型無時點四種缺法各說缺什麼，導擷取審核廢止取代後補登；共用規則 `timingGap` 與 DB `fn_obligation_timing_gap` 同口徑（pgTAP 對共用案例逐條同句、Vitest 核對兩邊同一組），今日工作／履約時程／期限追蹤／Agent／早報同一句；非期限型無時點與觸發點「其他」不是缺口，詳情改說「依條件／依事件觸發」。`obligationTimeline.test.js:352` 改釘新行為。真後端 chain19 驗到「補齊後恢復逐期追蹤」 | 正式站登入後目視（§8.7 G18 同批） |
 | G13 | 改期／取消／逾期的真後端端到端 | **未測**（功能已完成，只是沒有 e2e）：真後端沒有「改基準日 → rescheduled 文案與新到期日」「廢止取代 → 義務與期次變不適用」「逾期」三條；`transition_obligation_period` 的拒絕路徑與保固「引用條文失效／合格日撤銷 → 回到待補並收回期次」只有 pgTAP；監造「到期前看到契約重點待辦」無 e2e | 未指派，排 P7a |
 | G14 | `send-reminders` 零測試 | **未做**：190 行、含角色分流，完全沒有測試（真後端也不跑，因為會寄信） | 未指派；要測須先有不寄信的注入點 |
 | G15 | Edge 執行期寫入封堵只有靜態掃描 | **未做**：只有原始碼掃描 `valuationWrites.scan.test.ts`，沒有「Edge 以 service role 實際寫入被 DB 拒絕」的 runtime 測試；「照片日期不得改變契約期限」結構上成立但沒有負向測試或靜態掃描釘住 | **F2（worktree `-slimming-3`）正在處理** |
@@ -413,7 +414,7 @@ B2 原列驗證數字（保留）：`npm test` 159 檔 1,775 項；`test:edge` 1
 | D | PDF 交付（真正的下載，不是 `window.print()`；本節已完成，PR #166、merge `2350f16`；手機字級修正 PR #167、merge `ae3b8d6`） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | E | 三項核心的整條流程驗收（真後端；本節已完成，PR #171、merge `388daa4`、migration `20260920170000` 已套正式） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | O3 | Demo 站重佈＋文件同步＋驗收清單更新（本節已完成，見 §9 O3） | opus5 | Opus 5 |
-| F1 | 「完全缺頻率／完全缺觸發點不列待補」（§8.7 G12）；worktree `-slimming` | — | 進行中 |
+| F1 | 「完全缺頻率／完全缺觸發點不列待補」（§8.7 G12）＋「照片日期不得改變契約期限」的防回歸掃描（§8.7 G15 的靜態掃描半邊）；本節已完成，PR #173、migration `20260920214557` | fable5.1 | Fable 5.1 |
 | F2 | Edge 執行期寫入封堵的 runtime 測試（§8.7 G15）；worktree `-slimming-3` | — | 進行中 |
 
 ### A 廠商角色與三個主入口
@@ -780,3 +781,30 @@ PR #164、merge commit `a575bbc`（rebase 到含 A 包的 main `e3e4f65`；CI �
 **文件同步清單**：`CURRENT.md` 頁首與 §6.3 補 E merge `388daa4`＋`20260920170000` 已套正式、C2 merge `d161545`、C merge `bdbf4ae`、D merge `2350f16`＋`ae3b8d6`，並新增 O3 一列；本檔新增 §7.1（A–E／B2／C2／O3 的 merge commit、migration 與部署狀態一覽）、§8.0 補 demo 重佈日期與能力、§8.1 新增 A16（廠商導覽收斂）／A17（四份紙本表單與原表對照）／A18（下載 PDF）、§8.7 新增 G12–G18（E 包未通過與未測逐條，標明 F1／F2 處理範圍）、§9 工作包表補 merge commit 與 F1／F2 列。
 
 **未做（如實）**：正式站登入後的 UI 與 PDF 本節沒有測（只在 demo 站驗），列為 §8.7 G18；demo 站不隨 main 自動部署，之後若再有前端變更要再重佈一次。內建 Preview 的截圖只能回到對話裡、工具沒有存檔參數，故本節以逐項文字證據留存而非 PNG。
+
+### F1 契約義務「時點待補」：缺頻率／缺觸發點三處同口徑列為待補設定＋契約期限防回歸掃描
+
+問題（動工前以 `388daa4` 的 main 重驗，仍成立）：單次契約義務推不出到期日時，共用規則 `obligationBall` 回 `label:'待辦'、setup:null`，前端／Edge／DB 都只知道「到期日 null」，畫面只寫「無到期日」（履約時程詳情寫「依條件觸發」、期限追蹤寫「無期限」），五種情況全部一樣：觸發點 null、觸發點 null 但有天數、觸發點 `other`、觸發點 `monthly` 卻沒有循環規則（抽取器仍會給的舊值）、`fixed` 沒有日期——使用者分不出「本來沒有時點」與「設定沒填」，也沒有處理入口。`obligationTimeline.test.js:352` 把「fixed 缺日期、無觸發點 → 不列待補」當正確行為釘住。另一項：Edge／AI 不得改變契約期限只是「目前沒人寫」，沒有測試擋回歸。目標：缺口判定與文案由單一來源推導，三處同口徑；每種缺口說缺什麼、由誰補、點得到入口；補上靜態掃描。不做：不改 D-019 自動確認、不在 DB 擋人工補登（pgTAP fixture 大量依賴無時點的 deadline 需求列，且產品立場是揭露＋人工補登，不是擋在入口）、不新增 RPC／頁面、不動 RLS 與任何資料列。
+
+**根本解（單一來源）**：共用規則 `_shared/ballInCourtRules.ts` 新增 `timingGap(ob)`（只看義務列自己的欄位＋隨列 embed 的契約重點類型），`obligationBall` 在基準日缺口之後、停止條件之前多判一次，第六種 `SetupGap.kind='timing'`：
+
+| 缺法 | 句子（前端／Agent／早報／DB 同一句） | 為什麼是缺口 |
+|---|---|---|
+| `fixed` 沒有 `fixed_date` | 指定日期未填 | 規則說有指定日期卻沒有日期 |
+| 觸發點 `monthly` 且 `recurring` 空 | 觸發點為每月，循環規則未設定 | 觸發點自己說是每月（缺頻率） |
+| 觸發點空但 `offset_days>0` | 有 N 日期限，起算事件未設定 | 有期限長度沒有起點 |
+| 觸發點空、`requirement_type='deadline'` | 期限型契約重點未設定觸發點或頻率 | 期限型沒有時點物化不出到期日；人工補登表單本來就擋（`lib/manualRequirement.js`），AI 抽取與舊資料沒這道關 |
+
+不是缺口（維持無到期日，但詳情要說得出原因）：非期限型沒有時點＝依條件觸發（檢查表／佐證等）；觸發點 `other`＝事件發生才起算，系統不追蹤該事件，事件發生後到擷取審核廢止取代並補登指定日期。`obligationTimeline.js` 新增 `singleNoDueReason`／`noDueReason`：履約時程詳情的到期日欄與 na 說明、期限追蹤詳情多的一行，都從同一份缺口推導，不再有「清單標待補設定、詳情寫依條件觸發」的兩張嘴。
+
+- 契約重點類型隨義務列 embed：前端 `loadObligationsFromDB` 與 Edge 收集器的 select 都加 `requirement:requirements(requirement_type)`，共用規則從 `ob.requirement.requirement_type` 讀；demo／舊資料沒有就只判前三種。Agent `SETUP_FIX_AT.timing`、`list_my_open_items` 說明、首頁待補設定卡文案一併更正（不再只寫「責任方或基準日」）。
+- 處理入口與責任方／循環規則同一個：`lib/obligationLinks.js` 的 `timing` → `/requirements/review?highlight=<id>`；履約時程詳情「到擷取審核廢止取代後補登」。
+- DB 同口徑：migration `20260920214557_obligation_timing_gap` 只新增 `fn_obligation_timing_gap(requirement_type, trigger_event, offset_days, fixed_date, recurring)`（IMMUTABLE、不對 authenticated／anon 開放；rollback 檔 `drop function`；匿名 preflight 只記四種缺法的筆數）。pgTAP `obligation_timing_gap.sql` 21 條：對共用案例 `expected.timing_gaps.cases` 逐條同句；用觸發點值域 × 三種類型 × 有無日期／天數的矩陣釘「單次義務 `fn_obligation_single_due` 回 null 時，一定落在時點缺口／基準日缺口／依條件觸發三者之一，沒有靜默的第四種」；時點缺口與基準日缺口互斥、有缺口的組合一定推不出日期；循環 `fixed` 缺起算日仍由 `fn_obligation_recurrence_gap` 接住不重疊。`ballInCourt.cases.test.js` 核對 pgTAP 檔含案例表每一條呼叫與期望值（改一邊另一邊紅，與 P5e 保固期滿日案例同一做法）。
+- 共用案例 `tests/fixtures/ball-in-court.cases.json` 加 ob19（期限型無觸發點）、ob20（觸發點每月缺頻率、責任監造）、ob21（fixed 缺日期）→ 待補設定 `timing`；ob22（非期限型無時點）與既有 ob7（觸發點其他）不是缺口；`expected.timing_gaps` 純函式案例表 11 條。Vitest（前端路徑、Edge 路徑）與 Deno 對同一組斷言。
+- **修錯的測試**：`obligationTimeline.test.js:352` 改成「不算基準日缺口（設基準日補不了它們，數字不虛報），但 `setup` 帶 `timing` 缺口與入口」。這不是放寬期望值——原斷言只釘「anchorGaps 為 0」，把「不列任何待補」當成正確行為，正是驗收未通過的那個行為。
+- **防回歸「照片日期不得改變契約期限」**：`anchorWrites.scan.test.ts` 靜態掃描全部 Edge 原始碼（含 `_shared`），`projects`／`acceptance_events`／`project_anchor_versions`／`contract_obligations`／`obligation_periods` 不得出現 insert／update／upsert／delete 或原始 REST，`update_project_anchors`／`transition_obligation_period`／`materialize_*`／`review_requirement`／`materialize_requirement_obligation`／留版與重算內部函式不得被呼叫；`.from()`／`.rpc()` 的目標必須是字串常值。掃描器與 P4e 估驗掃描抽成同一份 `tests/lib/edgeWriteScan.ts`（放 `tests/lib`：Edge 打包碰不到、兩支掃描也不會把它當受掃原始碼），`valuationWrites.scan.test.ts` 改 import 它、合成片段測試原樣保留。允許的 AI → 契約重點路徑只有 `requirements` 三張表的 persist upsert 與 D-019 `apply_transcription_triage`，刻意不在禁單。
+- 與設計文件的差異：`docs/architecture/ball-in-court.md` 待補設定一節與「契約義務」列補第六種；`slimming-entrypoints-and-retirement.md` §待補設定可篩選改「六種」。沒有設計上的矛盾，只是原設計只列到五種。
+
+**驗證**：`npm test` 162 檔 1,830 項（新增 `anchorWrites.scan.test.ts` 3、`obligationTimeline.test.js` ＋1 並改寫 2、共用案例前端 ＋12／Edge ＋12 條）；`test:edge` 17 項（新 1）；`check:edge` 18 支；`lint` 零警告；`build`；`check:docs` 58 檔 480 連結 0 錯；`test:db` 63 檔 3,626 項（新 `obligation_timing_gap.sql` 21）；真後端本機隔離棧：新 `e2e-real/chain19-timing-gap.spec.js` 通過（廠商今日工作待補設定卡列「時點待補（觸發點為每月，循環規則未設定）」並連到擷取審核該筆、不進「現在輪到我」；履約時程「時點待補（1）」可篩到、詳情到期日欄與待補設定區同一句、入口同一個；期限追蹤詳情同一句；廠商在擷取審核沒有廢止按鈕；監造從入口進去廢止取代、手動新增每月 10 日、確認 → DB 物化循環義務並依開工日產生期次；舊義務不適用、時點待補 0 件、待補設定卡不再列它），受影響的 chain3／chain15 重跑通過（`ANTHROPIC_API_KEY=` deterministic）。
+
+**未做／待驗（如實）**：正式 `db push` 與四支 Edge 重佈在合併後執行，結果見單元回報；正式站登入後目視同 G18 一批；`get_requirements` Agent 工具回的 `due_date:null` 仍不附原因（Agent 由 `list_my_open_items` 的 `setup_pending` 得知缺口，未在這支工具再算一次）；G15 的「Edge 以 service role 實際寫入被 DB 拒絕」runtime 測試屬 F2；觸發點 `other` 的義務事件發生後仍要走廢止取代補指定日期，沒有「登錄觸發事件日期」的輕量入口（產品面待決，不是本單元範圍）。

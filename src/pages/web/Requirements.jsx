@@ -55,7 +55,7 @@ import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPa
 import {
   PARTY_META, VISIBLE, ORG_TO_PARTY, PARTY_BLURB, OB_STATUS, STATUS_KEYS, PHASES, UNASSIGNED_PARTY, isVisibleTo,
   buildTimelineItem, matchesFilters, partyStat, phaseStat, phaseWindows,
-  pickDefaultId, canActOn, anchorGaps, SETUP_KINDS, isRecent, byUrgency,
+  pickDefaultId, canActOn, anchorGaps, SETUP_KINDS, isRecent, byUrgency, noDueReason,
 } from '../../lib/obligationTimeline.js'
 import {
   buildKeyWorkItems, buildHoldPoints, keyWorkItemCounts, holdPointCounts,
@@ -560,7 +560,8 @@ export default function Requirements() {
       </>)
     }
     if (g.kind === 'review') return <span className="text-[var(--text-3)]">到下方「期次」核對該期是否已履行後標記,標記即解除。</span>
-    const label = g.kind === 'responsible' || g.kind === 'rule' ? '到擷取審核廢止取代後補登' : '到期限追蹤處理'
+    // 責任方／循環規則／時點(F1)都是已確認內容的一部分:擷取審核廢止取代後補登
+    const label = g.kind === 'responsible' || g.kind === 'rule' || g.kind === 'timing' ? '到擷取審核廢止取代後補登' : '到期限追蹤處理'
     return <Link to={g.to} className="inline-flex min-h-11 items-center text-[var(--blue-text)] hover:underline">{label}</Link>
   }
 
@@ -574,7 +575,8 @@ export default function Requirements() {
     const meta = [
       ['責任方', selected.who],
       ['階段', phaseName(selected.phase)],
-      ['到期日', selected.dateLabel === '—' ? (selected.recurrenceGap ? selected.recurrenceGap.label : '依條件觸發') : `${selected.dateLabel}（${selected.countdown}）`],
+      // 沒有到期日就說原因(F1:時點／基準日缺口與清單的「待補設定」同一句;不是缺口才是依條件觸發)
+      ['到期日', selected.dateLabel === '—' ? noDueReason(selected) : `${selected.dateLabel}（${selected.countdown}）`],
       // P5c:到期日依哪一版基準日(期次:產生時的版本;單次:完成時留版或現行基準日)
       ...(selected.dueBasis ? [['依據', selected.dueBasis]] : []),
       ['頻率', selected.kind || '單次'],
@@ -826,8 +828,9 @@ export default function Requirements() {
           </Button>
         )}
         {!selected.recurring && actable && selected.status === 'na' && (
+          // 推不出到期日的原因與上方「待補設定」同一份判定(F1):缺時點／基準日就說缺什麼,不再一律講成基準日
           <span className="flex-1 min-w-[180px] text-caption text-[var(--text-3)] leading-relaxed">
-            {selected.penalty ? '罰則條款,非待辦事項;條件成立時自動轉為待處理。' : '相關基準日尚未設定,推不出到期日,暫非待辦事項。'}
+            {selected.type === '罰則' ? '罰則條款,非待辦事項;條件成立時自動轉為待處理。' : `${noDueReason(selected)},暫非待辦事項。`}
           </span>
         )}
         {!isMine && !actable && selected.who === UNASSIGNED_PARTY && (

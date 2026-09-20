@@ -5,7 +5,7 @@
 // 執行:npm run test:edge。只用 node:assert 與 JSON import,不需要 lockfile 之外的依賴。
 import assert from 'node:assert/strict'
 import cases from '../../../tests/fixtures/ball-in-court.cases.json' with { type: 'json' }
-import { coreOpenItems, obligationEntries, obligationInWindow, periodTitle, periodBasisLabel, warrantyGap, warrantyNeeds } from './ballInCourtRules.ts'
+import { coreOpenItems, obligationEntries, obligationInWindow, periodTitle, periodBasisLabel, warrantyGap, warrantyNeeds, timingGap } from './ballInCourtRules.ts'
 import { computeObligationDueUTC, formatDate } from './contractDue.ts'
 
 const ORGS = ['contractor', 'supervisor', 'owner'] as const
@@ -74,6 +74,14 @@ Deno.test('共用案例(Deno):每方的球(soonDays=7 與 0)與待補設定與�
       ]
       assert.deepEqual(sorted(mine), sorted(cases.expected.mine[soon === 7 ? 'soon7' : 'soon0'][org]), `${org} soon=${soon}`)
     }
+  }
+})
+
+// F1 單次義務的時點缺口:純函式案例表(DB fn_obligation_timing_gap 由 pgTAP 對同一組斷言)
+Deno.test('共用案例(Deno):時點待補——timingGap 對案例表說同一句', () => {
+  for (const c of cases.expected.timing_gaps.cases) {
+    const ob = { trigger_event: c.trigger_event, offset_days: c.offset_days, fixed_date: c.fixed_date, recurring: c.recurring, requirement: { requirement_type: c.requirement_type } }
+    assert.equal(timingGap(ob), c.gap, c.name)
   }
 })
 

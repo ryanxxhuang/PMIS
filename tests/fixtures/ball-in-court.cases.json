@@ -1,5 +1,5 @@
 {
-  "$comment": "P5a 球權共用案例:首頁今日工作(src/lib/ballInCourt.cases.test.js)、Edge 收集器與 Agent 工具／早報(supabase/functions/_shared/ballInCourt.cases.test.ts)、Deno 執行期(ballInCourtRules.deno.test.ts)對同一組資料斷言相同的事項、責任與期限。today=2026-07-26(週日);開工日刻意留空以產生「基準日待補」。key 一律 tag:id;P5b 循環義務逐期:key 為 契約重點:<id>:<期別>,期次(periods)照 PostgREST embed 形狀掛在義務列上(DB materialize 產生;ob12 有舊已完成期＋逾期舊期＋下期,ob13 缺開工日,ob14 循環規則不完整,ob15 義務層舊完成狀態對不上期別→2026-06 期待核對,ob16 已廢止)。P5c 基準日版本:anchors.completion_date=實際竣工日(acceptance_events 推得;這裡未登錄→null,Edge 收集器由 acceptance_events 表算),ob12 期次帶 anchor_version_no／basis(期次依據 expected.period_basis),ob17 已完成單次義務帶完成當下的 due_date_snapshot(決標日後來由 1/05 改成 1/10,快照 1/15 不隨改;expected.single_due 斷言所有單次義務的到期日),ob18 保固類循環義務→停止條件待補(stop)。P5e:anchors.warranty=RPC get_project_warranty 的保固事實(本案已登錄契約保固期間 2 年、尚未正式驗收合格→ob18 列「缺正式驗收合格日」;Edge 收集器由 rpc 取得),保固類的其他狀態見 warranty.scenarios。",
+  "$comment": "P5a 球權共用案例:首頁今日工作(src/lib/ballInCourt.cases.test.js)、Edge 收集器與 Agent 工具／早報(supabase/functions/_shared/ballInCourt.cases.test.ts)、Deno 執行期(ballInCourtRules.deno.test.ts)對同一組資料斷言相同的事項、責任與期限。today=2026-07-26(週日);開工日刻意留空以產生「基準日待補」。key 一律 tag:id;P5b 循環義務逐期:key 為 契約重點:<id>:<期別>,期次(periods)照 PostgREST embed 形狀掛在義務列上(DB materialize 產生;ob12 有舊已完成期＋逾期舊期＋下期,ob13 缺開工日,ob14 循環規則不完整,ob15 義務層舊完成狀態對不上期別→2026-06 期待核對,ob16 已廢止)。P5c 基準日版本:anchors.completion_date=實際竣工日(acceptance_events 推得;這裡未登錄→null,Edge 收集器由 acceptance_events 表算),ob12 期次帶 anchor_version_no／basis(期次依據 expected.period_basis),ob17 已完成單次義務帶完成當下的 due_date_snapshot(決標日後來由 1/05 改成 1/10,快照 1/15 不隨改;expected.single_due 斷言所有單次義務的到期日),ob18 保固類循環義務→停止條件待補(stop)。P5e:anchors.warranty=RPC get_project_warranty 的保固事實(本案已登錄契約保固期間 2 年、尚未正式驗收合格→ob18 列「缺正式驗收合格日」;Edge 收集器由 rpc 取得),保固類的其他狀態見 warranty.scenarios。F1 時點待補(單次義務推不出到期日且時點沒設,契約重點類型隨義務列 embed 成 requirement.requirement_type):ob19 期限型無觸發點無頻率、ob20 觸發點每月缺頻率、ob21 指定日期未填 → 待補設定(timing,導擷取審核);ob22 非期限型無時點與 ob7 觸發點「其他」不是缺口(待辦、無到期日);純函式案例表見 expected.timing_gaps(DB 同口徑)。",
   "today": "2026-07-26",
   "project_id": "p1",
   "anchors": { "award_date": "2026-01-10", "notice_date": "2026-01-20", "commencement_date": null, "end_date": "2026-12-31", "completion_date": null,
@@ -136,7 +136,11 @@
       { "id": "ob16", "project_id": "p1", "title": "已廢止的循環義務", "responsible": "廠商", "status": "不適用", "trigger_event": "award", "recurring": "monthly", "recurring_day": 5,
         "periods": [ { "id": "ob16-2026-07", "period_key": "2026-07", "period_start": "2026-07-01", "period_end": "2026-07-31", "due_date": "2026-07-05", "status": "不適用", "completed_at": null, "review_note": null } ] },
       { "id": "ob17", "project_id": "p1", "title": "決標後 10 日繳納履約保證金", "responsible": "廠商", "status": "已完成", "trigger_event": "award", "offset_days": 10, "offset_dir": "after", "completed_at": "2026-01-14T06:00:00Z", "due_date_snapshot": "2026-01-15", "anchor_version_no": 1 },
-      { "id": "ob18", "project_id": "p1", "title": "保固期每月巡檢", "category": "保固", "responsible": "廠商", "status": "待辦", "trigger_event": "completion", "recurring": "monthly", "recurring_day": 10, "periods": [] }
+      { "id": "ob18", "project_id": "p1", "title": "保固期每月巡檢", "category": "保固", "responsible": "廠商", "status": "待辦", "trigger_event": "completion", "recurring": "monthly", "recurring_day": 10, "periods": [] },
+      { "id": "ob19", "project_id": "p1", "title": "提送履約進度報告", "responsible": "廠商", "status": "待辦", "trigger_event": null, "recurring": null, "source_clause": "第13條", "requirement": { "requirement_type": "deadline" } },
+      { "id": "ob20", "project_id": "p1", "title": "每月工安會議紀錄", "responsible": "監造", "status": "待辦", "trigger_event": "monthly", "recurring": null, "requirement": { "requirement_type": "report" } },
+      { "id": "ob21", "project_id": "p1", "title": "指定日期辦理的教育訓練", "responsible": "廠商", "status": "待辦", "trigger_event": "fixed", "fixed_date": null, "requirement": { "requirement_type": "deadline" } },
+      { "id": "ob22", "project_id": "p1", "title": "施工期間維持圍籬與告示", "responsible": "廠商", "status": "待辦", "trigger_event": null, "recurring": null, "requirement": { "requirement_type": "checklist" } }
     ],
     "field_documents": [
       { "id": "f1", "project_id": "p1", "doc_type": "daily_log", "doc_date": "2026-07-25", "status": "draft", "owner_org": "contractor", "current_version_no": 1 },
@@ -209,11 +213,31 @@
       { "id": "ob15", "period": "2026-06", "who": "owner", "title": "每月品管報告（2026-06 期）", "label": "回填待核對（原義務曾標完成，本期是否已履行待確認）", "due": "2026-06-05", "setup": "review" },
       { "id": "ob15", "period": "2026-07", "who": "owner", "title": "每月品管報告（2026-07 期）", "label": "待辦", "due": "2026-07-05", "setup": null },
       { "id": "ob15", "period": "2026-08", "who": "owner", "title": "每月品管報告（2026-08 期）", "label": "待辦", "due": "2026-08-05", "setup": null },
-      { "id": "ob18", "period": null, "who": "contractor", "title": "保固期每月巡檢", "label": "停止條件待補（缺正式驗收合格日，無法判定保固期滿日）", "due": null, "setup": "stop" }
+      { "id": "ob18", "period": null, "who": "contractor", "title": "保固期每月巡檢", "label": "停止條件待補（缺正式驗收合格日，無法判定保固期滿日）", "due": null, "setup": "stop" },
+      { "id": "ob19", "period": null, "who": "contractor", "title": "提送履約進度報告", "label": "時點待補（期限型契約重點未設定觸發點或頻率）", "due": null, "setup": "timing" },
+      { "id": "ob20", "period": null, "who": "supervisor", "title": "每月工安會議紀錄", "label": "時點待補（觸發點為每月，循環規則未設定）", "due": null, "setup": "timing" },
+      { "id": "ob21", "period": null, "who": "contractor", "title": "指定日期辦理的教育訓練", "label": "時點待補（指定日期未填）", "due": null, "setup": "timing" },
+      { "id": "ob22", "period": null, "who": "contractor", "title": "施工期間維持圍籬與告示", "label": "待辦", "due": null, "setup": null }
     ],
-    "single_due": { "ob1": "2026-07-10", "ob2": "2026-07-29", "ob3": null, "ob4": "2026-06-01", "ob5": "2026-07-01", "ob6": "2026-09-30", "ob7": null, "ob8": "2026-07-25", "ob9": "2026-09-01", "ob10": "2026-07-01", "ob11": "2026-01-20", "ob17": "2026-01-15" },
+    "timing_gaps": {
+      "$comment": "F1 單次義務的時點缺口:共用規則 timingGap 與 DB fn_obligation_timing_gap 同一組輸入 → 同一句(pgTAP supabase/tests/obligation_timing_gap.sql 逐條斷言,Vitest 核對兩邊是同一組)。null=不是缺口(非期限型無時點、觸發點「其他」、有觸發點或循環由其他缺口判)。",
+      "cases": [
+        { "name": "指定日期未填", "requirement_type": "deadline", "trigger_event": "fixed", "offset_days": null, "fixed_date": null, "recurring": null, "gap": "指定日期未填" },
+        { "name": "指定日期有填", "requirement_type": "deadline", "trigger_event": "fixed", "offset_days": null, "fixed_date": "2026-06-15", "recurring": null, "gap": null },
+        { "name": "觸發點每月缺頻率", "requirement_type": "report", "trigger_event": "monthly", "offset_days": null, "fixed_date": null, "recurring": null, "gap": "觸發點為每月，循環規則未設定" },
+        { "name": "觸發點每月且有循環規則", "requirement_type": "report", "trigger_event": "monthly", "offset_days": null, "fixed_date": null, "recurring": "monthly", "gap": null },
+        { "name": "有期限缺起算事件", "requirement_type": "checklist", "trigger_event": null, "offset_days": 14, "fixed_date": null, "recurring": null, "gap": "有 14 日期限，起算事件未設定" },
+        { "name": "期限型無觸發點無頻率", "requirement_type": "deadline", "trigger_event": null, "offset_days": null, "fixed_date": null, "recurring": null, "gap": "期限型契約重點未設定觸發點或頻率" },
+        { "name": "非期限型無明確時點", "requirement_type": "checklist", "trigger_event": null, "offset_days": null, "fixed_date": null, "recurring": null, "gap": null },
+        { "name": "類型未知無時點", "requirement_type": null, "trigger_event": null, "offset_days": null, "fixed_date": null, "recurring": null, "gap": null },
+        { "name": "觸發點其他依事件觸發", "requirement_type": "deadline", "trigger_event": "other", "offset_days": 7, "fixed_date": null, "recurring": null, "gap": null },
+        { "name": "有基準日觸發點由基準日缺口判", "requirement_type": "deadline", "trigger_event": "commencement", "offset_days": 15, "fixed_date": null, "recurring": null, "gap": null },
+        { "name": "循環義務由循環規則缺口判", "requirement_type": "deadline", "trigger_event": null, "offset_days": null, "fixed_date": null, "recurring": "weekly", "gap": null }
+      ]
+    },
+    "single_due": { "ob1": "2026-07-10", "ob2": "2026-07-29", "ob3": null, "ob4": "2026-06-01", "ob5": "2026-07-01", "ob6": "2026-09-30", "ob7": null, "ob8": "2026-07-25", "ob9": "2026-09-01", "ob10": "2026-07-01", "ob11": "2026-01-20", "ob17": "2026-01-15", "ob19": null, "ob20": null, "ob21": null, "ob22": null },
     "period_basis": { "ob12:2026-06": "第 1 版基準日（接獲開工通知日 2026-01-20）", "ob12:2026-07": "第 1 版基準日（接獲開工通知日 2026-01-20）", "ob12:2026-08": "第 2 版基準日（接獲開工通知日 2026-01-20）", "ob15:2026-06": "產生時未留版（起算日未記錄）" },
-    "setup": ["觀察:o3", "契約重點:ob1", "契約重點:ob3", "契約重點:ob6", "契約重點:ob13", "契約重點:ob14", "契約重點:ob15:2026-06", "契約重點:ob18"],
+    "setup": ["觀察:o3", "契約重點:ob1", "契約重點:ob3", "契約重點:ob6", "契約重點:ob13", "契約重點:ob14", "契約重點:ob15:2026-06", "契約重點:ob18", "契約重點:ob19", "契約重點:ob20", "契約重點:ob21"],
     "mine": {
       "soon7": {
         "contractor": ["疑義:r2", "送審:s2", "估驗:v1", "估驗:v3", "缺失:d1", "工安缺失:d3", "觀察:o1", "觀察:o4", "現場文書:f1", "現場文書:f2", "現場文書:f3", "契約重點:ob8", "契約重點:ob12:2026-07"],

@@ -35,8 +35,8 @@ export interface OpenBallItem {
   overdue_days?: number
   // 循環義務的期別鍵(P5b):同一條義務的每個未結期次各一筆,id 仍是義務 id,title 已含期別。
   period_key?: string
-  // 待補設定(責任方推不出三方／基準日沒填／循環規則不完整／回填待核對／循環停止條件判不出):不歸任何一方、
-  // 三方都看得到;Agent 工具另列 setup_pending、早報另成一段,不觸發寄信。
+  // 待補設定(責任方推不出三方／基準日沒填／循環規則不完整／回填待核對／循環停止條件判不出／單次時點沒設):
+  // 不歸任何一方、三方都看得到;Agent 工具另列 setup_pending、早報另成一段,不觸發寄信。
   setup?: SetupGap
 }
 
@@ -65,7 +65,8 @@ export async function collectOpenBallItems(
     // 未結的定義在共用規則(isObligationStreamOpen／isObligationOpen);這裡只排除已廢止的不適用列,
     // 與前端載入同口徑。循環義務的期次(obligation_periods,P5b)以 embed 一起帶回:期次 RLS 沿用義務。
     // P5c:category 判保固類、due_date_snapshot 讓已完成單次義務讀完成當下的到期日、期次帶版號
-    db.from('contract_obligations').select('id, title, category, responsible, status, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause, due_date_snapshot, anchor_version_no, periods:obligation_periods(id, period_key, period_start, period_end, due_date, status, review_note, anchor_version_no)').eq('project_id', projectId).neq('status', '不適用'),
+    // F1:契約重點類型隨義務 embed(requirement),共用規則 timingGap 據此判「期限型沒有時點」(與前端載入同口徑)
+    db.from('contract_obligations').select('id, title, category, responsible, status, trigger_event, offset_days, offset_dir, fixed_date, recurring, recurring_day, recurring_weekday, recurring_month, source_clause, due_date_snapshot, anchor_version_no, requirement:requirements(requirement_type), periods:obligation_periods(id, period_key, period_start, period_end, due_date, status, review_note, anchor_version_no)').eq('project_id', projectId).neq('status', '不適用'),
     // 竣工登錄(P5c 循環停止條件):竣工確認優先、否則報竣;共用規則 completionDateOf 取最後登錄的一筆
     db.from('acceptance_events').select('stage_key, event_date, created_at').eq('project_id', projectId).in('stage_key', ['report', 'confirm']),
     // P4d:待處理的估驗調整(扣回)→ 球在機關;已核定期尚未補證的歷史遷移來源 → 球在監造補證(共用規則 valuationBall)
