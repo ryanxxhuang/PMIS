@@ -257,6 +257,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 - 批次候選的「已捨棄」狀態是以**文件現況**推得（`candidateState`）：slice 只為「候選指向、但不在活文件清單裡」的文件補查一次 `id, status`；查不到就維持原狀態，不把未載入誤判成已捨棄。
 
 歷程規則：每單元合併後更新本表（PR 編號、merge commit、migration 版本、部署日期、驗證指令與結果）；正式環境狀態同時寫回 `CURRENT.md` §6.3。
+| B2（廠商驗收） | `codex/contractor-b2-paper-cells`／PR #169 | `fdaec05`（rebase 到含 C 包 #168 的 main `bdbf4ae`；merge commit 由下一單元同步） | `20260920160000_ai_paperform_cells`（純新增 `ai_features` 一列 `paperform.cells`；rollback `supabase/rollbacks/20260920160000_ai_paperform_cells.down.sql` 關開關不刪列） | 待合併後套正式並重佈引用 `_shared` 的 Edge（`deno info` 查模組圖） | `npm test` 159 檔 1,775 項；`test:edge` 16 項（新 `imageRaster.deno.test.ts` 7 項）；`check:edge` 18 支（`deno.lock` 新增 `npm:jpeg-js@0.4.4`，`--frozen` 通過）；lint／build 綠；`check:docs` 58 檔 464 連結 0 錯；`test:db` 從零套用 62 檔 3,595 通過 0 失敗（新 `ai_paperform_cells.sql` 9 項）；真實模型回歸四輪見 §9 B2 | E 包真後端整條鏈；表頭（日期／位置）也切塊來讀，並蒐集更多真實紙表驗證界線偏移的通則性 |
 
 ## 8. 使用者驗收清單
 
@@ -375,7 +376,7 @@ DB 單元（P2a、P2d、P3a、P3c、P3e、P3f、P3g、P4a、P4b、P4e、P5a–c�
 |---|---|---|---|
 | A | 廠商角色與三個主入口（本節已完成，PR #163） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | B | 照片辨識與 AI 填表（Edge `_shared/sitePhotoVision.ts`／`fieldDocDraft.ts`；本節已完成，PR #164、merge `a575bbc`、migration `20260920120000` 已套正式、四支 Edge 已重佈） | fable5.1 | Opus 5（暫代 Fable 5.1） |
-| B2 | 紙本查驗表逐格辨識（B 的續作：紙表區域偵測＋逐欄裁切＋逐格兩次辨識；新 AI 功能 `paperform.cells`；本節已完成，PR 待填） | fable5.1 | Opus 5（暫代 Fable 5.1） |
+| B2 | 紙本查驗表逐格辨識（B 的續作：紙表區域偵測＋逐欄裁切＋逐格兩次辨識；新 AI 功能 `paperform.cells`；本節已完成，PR #169） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | C | 真實表單 mapping、直接在紙本版面編輯（施工日誌＋自主檢查表已完成，PR #168；監造查驗與監造日誌**未做**） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | D | PDF 交付（真正的下載，不是 `window.print()`；本節已完成，PR #166） | fable5.1 | Opus 5（暫代 Fable 5.1） |
 | E | 三項核心的整條流程驗收（真後端） | fable5.1 | 待填 |
