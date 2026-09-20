@@ -190,6 +190,19 @@ export type SitePhotoResult = {
 }
 
 export type ObservationKind = 'design' | 'measured'
+/**
+ * 一筆觀察的來源(2026-09-20 B2 新增,純加法):紙表逐格辨識會把原圖裡實際被送出的那一塊
+ * 座標記下來,人在表單上點某一格就能回看「這個數字是從照片哪個位置讀來的」。
+ * 整張圖一次讀的舊路徑沒有分塊,source 為 null。
+ */
+export type ObservationSource = {
+  method: 'paper_cells'
+  column: 'left' | 'right' | 'whole'
+  column_title: string           // 該塊上印刷的欄位標題原文(kind 的依據)
+  rect: { x: number; y: number; w: number; h: number } // 原圖畫素
+  scale: number
+  passes: number
+}
 export type RecordObservation = {
   kind: ObservationKind
   label: string
@@ -201,6 +214,7 @@ export type RecordObservation = {
   comparator: '' | '>=' | '<='
   location: string
   note: string
+  source?: ObservationSource | null
 }
 export type WhiteboardItem = { description: string; quantity: number | null; unit: string; raw_text: string; note: string }
 export type WhiteboardResult = {
@@ -224,7 +238,7 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
 
 // 比對「原文有沒有這個數字」用:去掉所有非數字字元以外的雜訊(空白、全形、逗號)
 const digitsOf = (s: string) => s.replace(/[\s,，]/g, '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
-function rawContainsNumber(raw: string, n: number): boolean {
+export function rawContainsNumber(raw: string, n: number): boolean {
   const hay = digitsOf(raw)
   // 整數 11 要能對上 "11"、"11.0";小數 0.6 要能對上 "0.6"、".6"
   const cands = new Set<string>([String(n)])
@@ -235,7 +249,36 @@ function rawContainsNumber(raw: string, n: number): boolean {
 }
 
 // 只有「空格佔位」的原文:*、-、—、＿、/、N/A
-const PLACEHOLDER = /^[\s*\-—–_＿/／.、,，]*$|^(n\/?a|na|nil|none)$/i
+export const PLACEHOLDER = /^[\s*\-—–_＿/／.、,，]*$|^(n\/?a|na|nil|none)$/i
+
+/**
+ * 原文帶容許範圍符號 → 一定是設計／規範要求,不是實測值(驗收必修:≥27 cm 不得進實測欄)。
+ * 單一實作,normalizeWhiteboardResult 與紙表逐格辨識(paperFormCells.ts)共用,
+ * 不各寫一份——同一條規則兩份實作就是下一個「兩邊講不同話」的來源。
+ */
+export function comparatorFromRaw(raw: string): '' | '>=' | '<=' {
+  if (/[≥≧⩾]|以上|不小於|不得小於/.test(raw)) return '>='
+  if (/[≤≦⩽]|以下|不大於|不得大於/.test(raw)) return '<='
+  return ''
+}
+
+/** 讀回 photos.ai_result 時把來源座標驗一次形狀;形狀不合當作沒有來源(不猜)。 */
+export function normalizeObservationSource(v: unknown): ObservationSource | null {
+  if (!v || typeof v !== 'object') return null
+  const s = v as Record<string, unknown>
+  if (s.method !== 'paper_cells') return null
+  const r = s.rect && typeof s.rect === 'object' ? s.rect as Record<string, unknown> : null
+  const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null)
+  if (!r) return null
+  const x = n(r.x), y = n(r.y), w = n(r.w), h = n(r.h)
+  if (x == null || y == null || w == null || h == null) return null
+  const col = s.column === 'left' || s.column === 'right' || s.column === 'whole' ? s.column : null
+  if (!col) return null
+  return {
+    method: 'paper_cells', column: col, column_title: str(s.column_title),
+    rect: { x, y, w, h }, scale: n(s.scale) ?? 1, passes: n(s.passes) ?? 1,
+  }
+}
 
 /** 民國年／西元的日期原文 → YYYY-MM-DD。認不得回 null(不猜今天)。 */
 export function parseRecordDate(raw: unknown): string | null {
@@ -371,8 +414,7 @@ export function normalizeWhiteboardResult(data: unknown): WhiteboardResult | nul
     }
     let comparator: '' | '>=' | '<=' = o.comparator === '>=' || o.comparator === '<=' ? o.comparator : ''
     // 原文帶容許範圍符號 → 一定是設計／規範要求,不是實測值(驗收必修:≥27 cm 不得進實測欄)
-    if (/[≥≧⩾]|以上|不小於|不得小於/.test(rawText)) comparator = '>='
-    else if (/[≤≦⩽]|以下|不大於|不得大於/.test(rawText)) comparator = '<='
+    comparator = comparatorFromRaw(rawText) || comparator
     let kind: ObservationKind = o.kind === 'measured' ? 'measured' : 'design'
     if (comparator && kind === 'measured') {
       dropped.push(`observations「${label}」:原文「${rawText}」是容許範圍(${comparator}),已改列設計值,不作為實測值`)
@@ -381,6 +423,7 @@ export function normalizeWhiteboardResult(data: unknown): WhiteboardResult | nul
     observations.push({
       kind, label, entry_no: str(o.entry_no), raw_text: rawText, value, value2,
       unit: str(o.unit), comparator, location: str(o.location), note: str(o.note),
+      source: normalizeObservationSource(o.source),
     })
   }
 
@@ -424,9 +467,9 @@ export function normalizeWhiteboardResult(data: unknown): WhiteboardResult | nul
 // 但誤讀通常不穩定:同一格連讀兩次,讀得準的會一致,猜的會漂。所以對**紙本表單**(最難、
 // 也最值錢的那一類)多跑一次轉錄,只採用兩次都相同的格子;不一致的丟掉並記原因,由人補。
 // 代價:紙表照片的轉錄 token 加倍(一般施工照、黑白板不做);換到的是「不確定就留空」。
-const normLabel = (s: string) => s.replace(/[\s()（）:：,，、．.*＊×x]/gi, '')
-const entryDigits = (s: string) => s.replace(/\D/g, '')
-const obsKey = (o: RecordObservation) =>
+export const normLabel = (s: string) => s.replace(/[\s()（）:：,，、．.*＊×x]/gi, '')
+export const entryDigits = (s: string) => s.replace(/\D/g, '')
+export const obsKey = (o: RecordObservation) =>
   [o.kind, normLabel(o.label), entryDigits(o.entry_no), o.value ?? '', o.value2 ?? '', o.unit.toLowerCase()].join('|')
 const itemKey = (i: WhiteboardItem) => [normLabel(i.description), i.quantity ?? '', i.unit.toLowerCase()].join('|')
 
@@ -469,7 +512,26 @@ export function agreeRecords(first: WhiteboardResult, second: WhiteboardResult):
   }
 }
 
-/** 難度高、值錢、且誤讀代價大的類別才做第二階段轉錄(紙本查驗表／自主檢查表)。 */
+/**
+ * 紙本表單才做**逐格辨識**(paperFormCells.ts):難度高、值錢、誤讀代價大的就這一類。
+ * 黑白板欄位少、字大,整張讀就夠,不必付切塊的成本;一般施工照、量具特寫更不會走這條路。
+ *
+ * 刻意**不**要求 text_legible:那是對「整張照片」的判斷,而整張看起來字太小讀不動的紙表,
+ * 切成單欄放大後往往讀得很清楚——2026-09-20 回歸就有一張 text_legible=false 卻逐格全對的。
+ * 拿整張圖的可辨識度去否決切塊後的可辨識度,等於用被 B2 推翻的那個前提做決定。
+ * 代價是偶爾會對真的看不清的紙表白跑幾次(上限 6 次呼叫),而且讀不到欄名就整塊作廢,不會誤填。
+ */
+export const needsPaperCells = (c: SitePhotoResult): boolean => c.record_medium === 'paper_form' && c.has_board
+
+/**
+ * 整張圖要不要再讀第二次(紙本表單一律要)。
+ *
+ * B2 曾試著「逐格成功就整張只讀一次」來省一次呼叫,實測(2026-09-20)打回票:整張那一支
+ * 在逐格接手 observations 之後仍然負責**表頭**,而表頭的日期是手寫的民國年(「115.8.4」),
+ * 單讀一次就出現過把 115 讀成 114、日期落成 2025-08-04 的情形。兩次一致才採用本來就是為了
+ * 擋手寫誤讀,省那一次等於把最容易錯、又最難事後察覺的欄位(文件日期)裸露出來。
+ * 結論:逐格不取代整張的兩次核對,兩者各守各的欄位。
+ */
 export const needsSecondPass = (c: SitePhotoResult): boolean => c.record_medium === 'paper_form'
 
 /**

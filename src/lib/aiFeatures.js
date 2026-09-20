@@ -43,6 +43,7 @@ export const AI_FEATURES = [
   { key: 'field_docs.draft', label: '現場文書起稿(照片)', category: 'draft', edgeFunction: 'draft-field-documents', minPlan: 'trial', isLlm: true, defaultEnabled: true }, // P2b(D-026):照片→施工日誌草稿;逐張辨識沿用 photo.classify／sitelog.whiteboard 各自的開關與用量;與上傳鏈同屬 trial;DB seed 見 20260917213500
   { key: 'sitelog.whiteboard', label: '工程告示板辨識', category: 'vision', edgeFunction: 'read-whiteboard', minPlan: 'trial', isLlm: true, defaultEnabled: true },
   { key: 'defect.describe', label: '缺失照片描述', category: 'vision', edgeFunction: 'describe-defect', minPlan: 'trial', isLlm: true, defaultEnabled: true },
+  { key: 'paperform.cells', label: '紙本查驗表逐格辨識', category: 'vision', edgeFunction: 'draft-field-documents', minPlan: 'trial', isLlm: true, defaultEnabled: true }, // B2(2026-09-20 廠商驗收):紙表切成設計值欄／實測值欄逐塊各讀兩次,kind 由該塊印刷的欄位標題決定;只在照片有紙本表單時觸發,關閉即退回整張圖讀兩次;DB seed 見 20260920160000
   { key: 'photo.classify', label: '施工照片分類', category: 'vision', edgeFunction: 'classify-site-photo', minPlan: 'trial', isLlm: true, defaultEnabled: true },
   { key: 'safety.photo', label: '工安照片判讀', category: 'vision', edgeFunction: 'analyze-safety-photo', minPlan: 'standard', isLlm: true, defaultEnabled: true },
   { key: 'weather.fetch', label: '天氣帶入(中央氣象署)', category: 'integration', edgeFunction: 'fetch-weather', minPlan: 'trial', isLlm: false, defaultEnabled: true },

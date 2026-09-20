@@ -30,10 +30,10 @@ function parseTsFeatures(src) {
 describe('aiFeatures 前後端註冊表同步', () => {
   const tsFeatures = parseTsFeatures(tsSource)
 
-  it('兩邊都是 18 個功能', () => {
-    expect(AI_FEATURES).toHaveLength(18)
-    expect(tsFeatures).toHaveLength(18)
-    expect(AI_FEATURE_KEYS).toHaveLength(18)
+  it('兩邊都是 19 個功能', () => {
+    expect(AI_FEATURES).toHaveLength(19)
+    expect(tsFeatures).toHaveLength(19)
+    expect(AI_FEATURE_KEYS).toHaveLength(19)
   })
 
   it('key 集合與順序完全一致', () => {
@@ -83,9 +83,23 @@ describe('aiFeatures 前後端註冊表同步', () => {
     }
   })
 
-  it('key 不重複、edgeFunction 不重複', () => {
-    expect(new Set(AI_FEATURE_KEYS).size).toBe(18)
-    expect(new Set(AI_FEATURES.map((f) => f.edgeFunction)).size).toBe(18)
+  it('key 不重複;edgeFunction 可共用,且只有 draft-field-documents 被共用', () => {
+    // key 是「可獨立開關／計量的能力」,edgeFunction 是「它跑在哪一支函式裡」——兩者不是 1:1。
+    // B2 的 paperform.cells(紙表逐格辨識)沒有自己的 HTTP 入口:它只在 draft-field-documents
+    // 的起稿流程裡被呼叫,所以與 field_docs.draft 共用同一個 edgeFunction。硬開一支沒有呼叫端的
+    // 函式只為了維持 1:1,就是為了測試而造死碼。這裡改成釘住「哪些可以共用」,漂移一樣會紅。
+    expect(new Set(AI_FEATURE_KEYS).size).toBe(19)
+    const byFn = new Map()
+    for (const f of AI_FEATURES) byFn.set(f.edgeFunction, [...(byFn.get(f.edgeFunction) ?? []), f.key])
+    const shared = [...byFn.entries()].filter(([, keys]) => keys.length > 1)
+    expect(shared).toEqual([['draft-field-documents', ['field_docs.draft', 'paperform.cells']]])
+  })
+
+  it('paperform.cells(B2):vision 類、trial 起、LLM、預設開啟,跑在 draft-field-documents 裡', () => {
+    expect(featureByKey['paperform.cells']).toEqual({
+      key: 'paperform.cells', label: '紙本查驗表逐格辨識', category: 'vision', edgeFunction: 'draft-field-documents',
+      minPlan: 'trial', isLlm: true, defaultEnabled: true,
+    })
   })
 
   it('field_docs.draft(P2b):draft 類、trial 起、LLM、預設開啟,對應 draft-field-documents', () => {

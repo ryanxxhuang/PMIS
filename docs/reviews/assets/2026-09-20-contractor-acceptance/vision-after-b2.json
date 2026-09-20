@@ -1,0 +1,3782 @@
+{
+  "tested_at_utc": "2026-09-20T08:09:08.487Z",
+  "scope": "Edge 共用 sitePhotoCall + 條件式 whiteboardCall + B2 紙表逐格辨識(paperFormImaging／paperFormCells);未走網頁上傳、標單配對、文件持久化、簽署或計價。",
+  "mode": "both",
+  "negatives": true,
+  "cells_enabled": true,
+  "cells_model": "claude-haiku-4-5-20251001",
+  "prompt_sha256": {
+    "site_photo": "545d99ea7964784bc53cfbd5e4f36c9f8a846cbd33f3daefb99d910f2e8bbd72",
+    "record": "36eac705f62a431f44db4dcffa4eb9a3d02f0d7050d3c413f2a94e722b795dbf",
+    "paper_cells": "ed6f1f1e023d25d3003cc848b9c8121aafb6316c56d5b8a26541f5afd62fa5d2"
+  },
+  "missing_files": [],
+  "calls": 51,
+  "usage_total": {
+    "input_tokens": 290827,
+    "output_tokens": 28632
+  },
+  "cost_usd_total": 0.433987,
+  "paper_form_photos": 7,
+  "cost_usd_per_paper_photo": 0.054546,
+  "pricing_source": "Anthropic 官方定價表(claude-api skill「Current Models」,cached 2026-06-24)",
+  "pricing_used": {
+    "claude-haiku-4-5": {
+      "input": 1,
+      "output": 5
+    },
+    "claude-sonnet-5": {
+      "input": 2,
+      "output": 10
+    },
+    "claude-opus-5": {
+      "input": 5,
+      "output": 25
+    },
+    "claude-fable-5-1": {
+      "input": 10,
+      "output": 50
+    }
+  },
+  "results": [
+    {
+      "case": "LI2995~1_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "bb5a3284da8db54d9badfabea885c653821ef79c4a284c52e1806561afcac207",
+      "bytes": 504469,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3254,
+      "record_ms": null,
+      "record_passes": 0,
+      "cells_ms": 15499,
+      "cells_calls": 6,
+      "cells_skipped": null,
+      "cells_retried": true,
+      "cells_used": true,
+      "cell_tiles": [
+        {
+          "index": 0,
+          "column": "left",
+          "rect": {
+            "x": 306,
+            "y": 450,
+            "w": 425,
+            "h": 658
+          },
+          "scale": 2,
+          "title": "設計值：",
+          "kind": "design",
+          "kept": 4
+        },
+        {
+          "index": 1,
+          "column": "right",
+          "rect": {
+            "x": 755,
+            "y": 450,
+            "w": 481,
+            "h": 658
+          },
+          "scale": 2,
+          "title": "",
+          "kind": null,
+          "kept": 0
+        },
+        {
+          "index": 1,
+          "column": "right",
+          "rect": {
+            "x": 718,
+            "y": 450,
+            "w": 518,
+            "h": 658
+          },
+          "scale": 2,
+          "title": "實測值：",
+          "kind": "measured",
+          "kept": 2
+        }
+      ],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 274,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [],
+        "cells": [
+          {
+            "input_tokens": 4426,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 333,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4426,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 464,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4533,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 185,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4533,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 185,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4509,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 190,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4509,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 190,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          274
+        ],
+        "record": [
+          0,
+          0
+        ],
+        "cells": [
+          26936,
+          1547
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.008987,
+        "record": 0,
+        "cells": 0.034671,
+        "total": 0.043658
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以游標卡尺量測鋼筋直徑，並有查驗紀錄表",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋",
+        "visible_progress": "以游標卡尺量測鋼筋尺寸",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "",
+        "log_date_text": "",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "13 * 11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 306,
+                "y": 450,
+                "w": 425,
+                "h": 658
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 306,
+                "y": 450,
+                "w": 425,
+                "h": 658
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "1",
+            "raw_text": "11 ≥ 27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": "原文另有數字 11,非設計門檻,未採用為數值",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 306,
+                "y": 450,
+                "w": 425,
+                "h": 658
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "2",
+            "raw_text": "11 ≥ 27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": "原文另有數字 11,非設計門檻,未採用為數值",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 306,
+                "y": 450,
+                "w": 425,
+                "h": 658
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 718,
+                "y": 450,
+                "w": 518,
+                "h": 658
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 718,
+                "y": 450,
+                "w": 518,
+                "h": 658
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "右半邊第一次切割讀不到欄位標題,已把分欄界線左移重切一次",
+          "設計「網目 15 * 15 CM」:兩次辨識不一致,未採用",
+          "設計「網目 15 * 15 CM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "右半邊第一次切割讀不到欄位標題,已把分欄界線左移重切一次"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「網目 15 * 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「網目 15 * 15 CM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "LI2995~1_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LI2995~1_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "26ef45e0543cdd88ae2b5de687a503b036355ef143de924d196a5366d5ca93a8",
+      "bytes": 891467,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 5898,
+      "record_ms": 15493,
+      "record_passes": 2,
+      "cells_ms": 9474,
+      "cells_calls": 4,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": true,
+      "cell_tiles": [
+        {
+          "index": 0,
+          "column": "left",
+          "rect": {
+            "x": 416,
+            "y": 608,
+            "w": 574,
+            "h": 892
+          },
+          "scale": 1,
+          "title": "設計值",
+          "kind": "design",
+          "kept": 6
+        },
+        {
+          "index": 1,
+          "column": "right",
+          "rect": {
+            "x": 1022,
+            "y": 608,
+            "w": 650,
+            "h": 892
+          },
+          "scale": 1,
+          "title": "實測值：",
+          "kind": "measured",
+          "kept": 2
+        }
+      ],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 280,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1028,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1599,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ],
+        "cells": [
+          {
+            "input_tokens": 3641,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 464,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 3641,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 464,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 3737,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 190,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 3737,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 189,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          280
+        ],
+        "record": [
+          14874,
+          2627
+        ],
+        "cells": [
+          14756,
+          1307
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.009017,
+        "record": 0.028009,
+        "cells": 0.021291,
+        "total": 0.058317
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 7,
+          "items": 0
+        },
+        {
+          "observations": 12,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋，並有查驗紀錄表",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "使用卡尺量測鋼筋直徑及尺寸",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "SECR-自應梁",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "3",
+            "raw_text": "13 + 11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 416,
+                "y": 608,
+                "w": 574,
+                "h": 892
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "3",
+            "raw_text": "15 + 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 416,
+                "y": 608,
+                "w": 574,
+                "h": 892
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 416,
+                "y": 608,
+                "w": 574,
+                "h": 892
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 416,
+                "y": 608,
+                "w": 574,
+                "h": 892
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "1",
+            "raw_text": "11 ≧ 29 CM",
+            "value": 29,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": "原文另有數字 11,非設計門檻,未採用為數值",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 416,
+                "y": 608,
+                "w": 574,
+                "h": 892
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "2",
+            "raw_text": "11 ≧ 29 CM",
+            "value": 29,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": "原文另有數字 11,非設計門檻,未採用為數值",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 416,
+                "y": 608,
+                "w": 574,
+                "h": 892
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 1022,
+                "y": 608,
+                "w": 650,
+                "h": 892
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 1022,
+                "y": 608,
+                "w": 650,
+                "h": 892
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「編號(1)搭接長度」:原文「搭接(1):搭接 ≧ 27 CM」是容許範圍(>=),已改列設計值,不作為實測值",
+          "observations「編號(2)搭接長度」:原文「搭接(2):搭接 ≧ 27 CM」是容許範圍(>=),已改列設計值,不作為實測值",
+          "observations「線徑」:原文「◎」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧」沒有可用數值,未採用",
+          "location:「鋼筋籠」與原文「查驗編號：E2-7-46-8-4U-3-L(含20-2.61)」不符,未採用",
+          "位置:兩次辨識不一致(「SECR-自應梁」vs「(空)」),未採用",
+          "表上工項:兩次辨識不一致(「鋼筋自主檢查記錄表」vs「深樁工程自主檢查表」),未採用",
+          "工作摘要:兩次辨識不一致(「鋼結構梁鋼筋配置檢驗」vs「(空)」),未採用",
+          "實測／設計紀錄「編號(1)線徑 線徑(1):線徑 11 * 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「編號(1)網目 網目(1):網目 15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「編號(3)搭接長度 搭接(3):搭接 ≥ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「編號(4)線徑 線徑(4):線徑 11 * 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「編號(4)網目 網目(4):網目 15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「編號(1)搭接長度 搭接(1):搭接 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「編號(2)搭接長度 搭接(2):搭接 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「搭接長度 ≧27」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「搭接長度 ≧27」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「編號(1)搭接長度」:原文「搭接(1):搭接 ≧ 27 CM」是容許範圍(>=),已改列設計值,不作為實測值"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「編號(2)搭接長度」:原文「搭接(2):搭接 ≧ 27 CM」是容許範圍(>=),已改列設計值,不作為實測值"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「◎」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "location:「鋼筋籠」與原文「查驗編號：E2-7-46-8-4U-3-L(含20-2.61)」不符,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「SECR-自應梁」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「鋼筋自主檢查記錄表」vs「深樁工程自主檢查表」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "工作摘要:兩次辨識不一致(「鋼結構梁鋼筋配置檢驗」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(1)線徑 線徑(1):線徑 11 * 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(1)網目 網目(1):網目 15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(3)搭接長度 搭接(3):搭接 ≥ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(4)線徑 線徑(4):線徑 11 * 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(4)網目 網目(4):網目 15 × 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(1)搭接長度 搭接(1):搭接 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「編號(2)搭接長度 搭接(2):搭接 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧27」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧27」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 11」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "LI89DE~1_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "c5565b501ade3b1a35ae30e610dd2425c6ee5dc828da98ed7fd51ed883c19625",
+      "bytes": 328702,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2648,
+      "record_ms": null,
+      "record_passes": 0,
+      "cells_ms": null,
+      "cells_calls": 0,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": false,
+      "cell_tiles": [],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 257,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [],
+        "cells": []
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          257
+        ],
+        "record": [
+          0,
+          0
+        ],
+        "cells": [
+          0,
+          0
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.008902,
+        "record": 0,
+        "cells": 0,
+        "total": 0.008902
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以游標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋",
+        "visible_progress": "卡尺量測鋼筋直徑",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "LI89DE~1_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LI89DE~1_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "5afcc83c7f5b648bfd6e82bd5a5cb73f693824e93d15a4aa9f2fbe8b203adfce",
+      "bytes": 582276,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 5538,
+      "record_ms": null,
+      "record_passes": 0,
+      "cells_ms": null,
+      "cells_calls": 0,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": false,
+      "cell_tiles": [],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 255,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [],
+        "cells": []
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          255
+        ],
+        "record": [
+          0,
+          0
+        ],
+        "cells": [
+          0,
+          0
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.008892,
+        "record": 0,
+        "cells": 0,
+        "total": 0.008892
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋",
+        "visible_progress": "鋼筋直徑量測中",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "LIEE66~1_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "e0988ed723022011e18809f24428284d688bda83629d996c51cca24d1bda55e7",
+      "bytes": 393665,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3078,
+      "record_ms": null,
+      "record_passes": 0,
+      "cells_ms": null,
+      "cells_calls": 0,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": false,
+      "cell_tiles": [],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 262,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [],
+        "cells": []
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          262
+        ],
+        "record": [
+          0,
+          0
+        ],
+        "cells": [
+          0,
+          0
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.008927,
+        "record": 0,
+        "cells": 0,
+        "total": 0.008927
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋",
+        "visible_progress": "以遊標卡尺量測鋼筋直徑",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "LIEE66~1_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LIEE66~1_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "b7bfbc5f60a9372280d0c3b636c521eb4667bd37b7c5027e4015687d4337f7ad",
+      "bytes": 702266,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 4820,
+      "record_ms": null,
+      "record_passes": 0,
+      "cells_ms": null,
+      "cells_calls": 0,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": false,
+      "cell_tiles": [],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 268,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [],
+        "cells": []
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          268
+        ],
+        "record": [
+          0,
+          0
+        ],
+        "cells": [
+          0,
+          0
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.008957,
+        "record": 0,
+        "cells": 0,
+        "total": 0.008957
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以游標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "正在使用游標卡尺量測鋼筋直徑",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "LIFA1C~1_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "01854cb30ab349f83d224f117406e0aa2b61a928f5b2d907859b2738d3ee7a79",
+      "bytes": 476327,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2828,
+      "record_ms": 13105,
+      "record_passes": 2,
+      "cells_ms": 11350,
+      "cells_calls": 4,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": true,
+      "cell_tiles": [
+        {
+          "index": 0,
+          "column": "left",
+          "rect": {
+            "x": 132,
+            "y": 468,
+            "w": 459,
+            "h": 640
+          },
+          "scale": 2,
+          "title": "設計值",
+          "kind": "design",
+          "kept": 6
+        },
+        {
+          "index": 1,
+          "column": "right",
+          "rect": {
+            "x": 615,
+            "y": 468,
+            "w": 519,
+            "h": 640
+          },
+          "scale": 2,
+          "title": "實測值：",
+          "kind": "measured",
+          "kept": 1
+        }
+      ],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 279,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 939,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1208,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ],
+        "cells": [
+          {
+            "input_tokens": 4487,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 466,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4487,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 464,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4509,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 181,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4509,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 190,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          279
+        ],
+        "record": [
+          14874,
+          2147
+        ],
+        "cells": [
+          17992,
+          1301
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.009012,
+        "record": 0.025609,
+        "cells": 0.024497,
+        "total": 0.059118
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 6,
+          "items": 0
+        },
+        {
+          "observations": 8,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋，旁有查驗紀錄表。",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "用遊標卡尺量測鋼筋直徑",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "工地位置：日安住宅",
+        "work_item_text": "鋼筋工程",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "13 * 11  MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 132,
+                "y": 468,
+                "w": 459,
+                "h": 640
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "15 * 15  CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 132,
+                "y": 468,
+                "w": 459,
+                "h": 640
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11  * 11  MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 132,
+                "y": 468,
+                "w": 459,
+                "h": 640
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 132,
+                "y": 468,
+                "w": 459,
+                "h": 640
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "1",
+            "raw_text": "11  ≧ 27  CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": "原文另有數字 11,非設計門檻,未採用為數值",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 132,
+                "y": 468,
+                "w": 459,
+                "h": 640
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "2",
+            "raw_text": "11  ≧ 27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": "原文另有數字 11,非設計門檻,未採用為數值",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值",
+              "rect": {
+                "x": 132,
+                "y": 468,
+                "w": 459,
+                "h": 640
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 * 15",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 615,
+                "y": 468,
+                "w": 519,
+                "h": 640
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「線徑」:原文「線徑 × MM」沒有可用數值,未採用",
+          "location:「中衛地下停車工程」與原文「工地位置：日安住宅」不符,未採用",
+          "observations「線徑」:原文「線徑 * MM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「(3)搭接長度：≥ CM」沒有可用數值,未採用",
+          "天氣:兩次辨識不一致(「(空)」vs「晴」),未採用",
+          "位置:兩次辨識不一致(「(空)」vs「C區」),未採用",
+          "工作摘要:兩次辨識不一致(「(空)」vs「鋼筋綁紮施工查驗」),未採用",
+          "實測／設計紀錄「線徑 線徑 11 + 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 Ø13 Ø16」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 D圖①20公」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 D圖②20公」:兩次辨識不一致,未採用",
+          "實測「線徑 11」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測「線徑 11 * 11 MM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「線徑 × MM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "location:「中衛地下停車工程」與原文「工地位置：日安住宅」不符,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「線徑 * MM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(3)搭接長度：≥ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "天氣:兩次辨識不一致(「(空)」vs「晴」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「(空)」vs「C區」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "工作摘要:兩次辨識不一致(「(空)」vs「鋼筋綁紮施工查驗」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑 11 + 11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 Ø13 Ø16」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 D圖①20公」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 D圖②20公」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測「線徑 11」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測「線徑 11 * 11 MM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "LIFA1C~1_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LIFA1C~1_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "89a0ec4e4088f4fb18f96ed87ebf724743644bc8e51b27b0293c54c6a20d81c8",
+      "bytes": 841271,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3008,
+      "record_ms": 13461,
+      "record_passes": 2,
+      "cells_ms": 11875,
+      "cells_calls": 4,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": true,
+      "cell_tiles": [
+        {
+          "index": 0,
+          "column": "left",
+          "rect": {
+            "x": 184,
+            "y": 632,
+            "w": 619,
+            "h": 868
+          },
+          "scale": 1,
+          "title": "設計值：",
+          "kind": "design",
+          "kept": 5
+        },
+        {
+          "index": 1,
+          "column": "right",
+          "rect": {
+            "x": 835,
+            "y": 632,
+            "w": 701,
+            "h": 868
+          },
+          "scale": 1,
+          "title": "實測值：",
+          "kind": "measured",
+          "kept": 2
+        }
+      ],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 289,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 938,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1133,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ],
+        "cells": [
+          {
+            "input_tokens": 3682,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 465,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 3682,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 465,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 3775,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 436,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 3775,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 436,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          289
+        ],
+        "record": [
+          14874,
+          2071
+        ],
+        "cells": [
+          14914,
+          1802
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.009062,
+        "record": 0.025229,
+        "cells": 0.023924,
+        "total": 0.058215
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 7,
+          "items": 0
+        },
+        {
+          "observations": 8,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "鋼筋加工及組立查驗紀錄表配合遊標卡尺量測鋼筋尺寸",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "以遊標卡尺量測鋼筋直徑",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "查驗位置：FB-16（B05-D-A11-M4-9972）",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "13 * 11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 184,
+                "y": 632,
+                "w": 619,
+                "h": 868
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 184,
+                "y": 632,
+                "w": 619,
+                "h": 868
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 184,
+                "y": 632,
+                "w": 619,
+                "h": 868
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 184,
+                "y": 632,
+                "w": 619,
+                "h": 868
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "1",
+            "raw_text": "11 ≧ 27 CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": "原文另有數字 11,非設計門檻,未採用為數值",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 184,
+                "y": 632,
+                "w": 619,
+                "h": 868
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 835,
+                "y": 632,
+                "w": 701,
+                "h": 868
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 835,
+                "y": 632,
+                "w": 701,
+                "h": 868
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「線徑」:原文「Φ(Φ) Φ(Φ) DH920cm」沒有可用數值,未採用",
+          "location:「地點欄位內容」與原文「主要工地位置（表上標示）」不符,未採用",
+          "天氣:兩次辨識不一致(「晴」vs「(空)」),未採用",
+          "位置:兩次辨識不一致(「FB-16（B05-D-A11-M4-9972）」vs「(空)」),未採用",
+          "表上工項:兩次辨識不一致(「鋼筋綁紮」vs「鋼筋工程」),未採用",
+          "工作摘要:兩次辨識不一致(「鋼筋綁紮施工」vs「(空)」),未採用",
+          "實測／設計紀錄「線徑 PHI20 2O0M」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 PHI20 2O0M」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 15 + 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑 11 + 11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑 線徑 11 + 11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「搭接長度 搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「搭接長度 搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用",
+          "設計「搭接長度 11 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "設計「搭接長度 11 ≧ 29 CM」:兩次辨識不一致,未採用",
+          "「搭接長度」:原文「二」沒有可用數值,未採用",
+          "實測欄「搭接長度」:原文「≧」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用",
+          "「搭接長度」:原文「二」沒有可用數值,未採用",
+          "實測欄「搭接長度」:原文「≧」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用",
+          "「搭接長度」:原文「=」沒有可用數值,未採用",
+          "「搭接長度」:原文「≈」沒有可用數值,未採用",
+          "「搭接長度」:原文「=」沒有可用數值,未採用",
+          "實測欄「搭接長度」:原文「≧」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「Φ(Φ) Φ(Φ) DH920cm」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "location:「地點欄位內容」與原文「主要工地位置（表上標示）」不符,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "天氣:兩次辨識不一致(「晴」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「FB-16（B05-D-A11-M4-9972）」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「鋼筋綁紮」vs「鋼筋工程」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "工作摘要:兩次辨識不一致(「鋼筋綁紮施工」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 PHI20 2O0M」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 PHI20 2O0M」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 15 + 15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑 11 + 11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑 11 + 11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「搭接長度 11 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「搭接長度 11 ≧ 29 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「二」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測欄「搭接長度」:原文「≧」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「二」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測欄「搭接長度」:原文「≧」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「=」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「≈」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「=」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測欄「搭接長度」:原文「≧」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用"
+        }
+      ]
+    },
+    {
+      "case": "LINE_A~4_0.JPG",
+      "condition": "original",
+      "derived_from": null,
+      "why": null,
+      "sha256": "5e637af8aba7ee002f075b8cef07b17507d4b0b378e4c94af0690a13631c164b",
+      "bytes": 525110,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 6578,
+      "record_ms": 15684,
+      "record_passes": 2,
+      "cells_ms": 13885,
+      "cells_calls": 4,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": true,
+      "cell_tiles": [
+        {
+          "index": 0,
+          "column": "left",
+          "rect": {
+            "x": 522,
+            "y": 444,
+            "w": 437,
+            "h": 664
+          },
+          "scale": 2,
+          "title": "設計值：",
+          "kind": "design",
+          "kept": 4
+        },
+        {
+          "index": 1,
+          "column": "right",
+          "rect": {
+            "x": 983,
+            "y": 444,
+            "w": 494,
+            "h": 664
+          },
+          "scale": 2,
+          "title": "實測值：",
+          "kind": "measured",
+          "kept": 4
+        }
+      ],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 297,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1388,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1540,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ],
+        "cells": [
+          {
+            "input_tokens": 4505,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 465,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4505,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 465,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4533,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 579,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 4533,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 578,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          297
+        ],
+        "record": [
+          14874,
+          2928
+        ],
+        "cells": [
+          18076,
+          2087
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.009102,
+        "record": 0.029514,
+        "cells": 0.028511,
+        "total": 0.067127
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 10,
+          "items": 0
+        },
+        {
+          "observations": 10,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "鋼筋籠與查驗紀錄表",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋籠組立",
+        "visible_progress": "組裝鋼筋籠，掛設查驗紀錄表",
+        "location": "B5-4-4-25m",
+        "location_text": "基礎樁號位置:B5-4-4-25m",
+        "dropped": []
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "4-H-25m",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "13 * 11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 522,
+                "y": 444,
+                "w": 437,
+                "h": 664
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 522,
+                "y": 444,
+                "w": 437,
+                "h": 664
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 522,
+                "y": 444,
+                "w": 437,
+                "h": 664
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值：",
+              "rect": {
+                "x": 522,
+                "y": 444,
+                "w": 437,
+                "h": 664
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "13 * 11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 983,
+                "y": 444,
+                "w": 494,
+                "h": 664
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 983,
+                "y": 444,
+                "w": 494,
+                "h": 664
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 983,
+                "y": 444,
+                "w": 494,
+                "h": 664
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值：",
+              "rect": {
+                "x": 983,
+                "y": 444,
+                "w": 494,
+                "h": 664
+              },
+              "scale": 2,
+              "passes": 2
+            }
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「(3)搭接長度: ≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「(4)搭接長度: ≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「(1)搭接長度: = CM」沒有可用數值,未採用",
+          "位置:兩次辨識不一致(「4-H-25m」vs「4-E-25m」),未採用",
+          "表上工項:兩次辨識不一致(「鋼筋網鋪設」vs「鋼筋綁紮檢查」),未採用",
+          "實測／設計紀錄「線徑 Φ9 DⅡΦ20CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 Φ9 DⅡΦ20CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 Φ9 DⅡΦ20CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 Φ9 DⅡΦ20CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 (1)搭接長度: 11 ≧ 27 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「搭接長度 (2)搭接長度: 11 ≧ 27 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑 線徑( )：線徑 11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「線徑 線徑( )：線徑 11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用",
+          "設計「搭接長度 11 ≥ 29 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "設計「搭接長度 11 ≥ 29 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "設計「搭接長度 11 ≥ 27 CM」:兩次辨識不一致,未採用",
+          "設計「搭接長度 11 ≥ 27 CM」:兩次辨識不一致,未採用",
+          "「搭接長度」:數值 2 未出現在原文「二  CM」,未採用",
+          "「搭接長度」:原文「亲  CM」沒有可用數值,未採用",
+          "「搭接長度」:數值 2 未出現在原文「二  CM」,未採用",
+          "實測欄「搭接長度」:原文「≧  CM」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用",
+          "「搭接長度」:數值 2 未出現在原文「二 CM」,未採用",
+          "「搭接長度」:原文「等 CM」沒有可用數值,未採用",
+          "「搭接長度」:數值 2 未出現在原文「二 CM」,未採用",
+          "實測欄「搭接長度」:原文「≧ CM」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板轉錄沒有讀到位置欄,分類推測的「B5-4-4-25m」無原文佐證,未採用"
+      },
+      "findings": [
+        {
+          "rule": "location-not-grounded",
+          "detail": "紙本／告示板轉錄沒有讀到位置欄,分類推測的「B5-4-4-25m」無原文佐證,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(3)搭接長度: ≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(4)搭接長度: ≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(1)搭接長度: = CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「4-H-25m」vs「4-E-25m」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「鋼筋網鋪設」vs「鋼筋綁紮檢查」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 Φ9 DⅡΦ20CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 Φ9 DⅡΦ20CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 Φ9 DⅡΦ20CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 Φ9 DⅡΦ20CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 (1)搭接長度: 11 ≧ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 (2)搭接長度: 11 ≧ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑( )：線徑 11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑( )：線徑 11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「搭接長度 11 ≥ 29 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「搭接長度 11 ≥ 29 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「搭接長度 11 ≥ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「搭接長度 11 ≥ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:數值 2 未出現在原文「二  CM」,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「亲  CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:數值 2 未出現在原文「二  CM」,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測欄「搭接長度」:原文「≧  CM」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:數值 2 未出現在原文「二 CM」,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「等 CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:數值 2 未出現在原文「二 CM」,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測欄「搭接長度」:原文「≧ CM」帶容許範圍符號(>=),可能讀到設計欄,整筆未採用"
+        }
+      ]
+    },
+    {
+      "case": "LINE_A~4_0.JPG",
+      "condition": "upload-compressed",
+      "derived_from": "LINE_A~4_0.JPG",
+      "why": "以 sips 近似前端壓縮(長邊 2000、JPEG 82)",
+      "sha256": "5c9df37350b4f7f24d747877ce42cd996b75140a4c7c13da2d646cfba8a7b211",
+      "bytes": 926688,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 3302,
+      "record_ms": 17081,
+      "record_passes": 2,
+      "cells_ms": 12014,
+      "cells_calls": 4,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": true,
+      "cell_tiles": [
+        {
+          "index": 0,
+          "column": "left",
+          "rect": {
+            "x": 704,
+            "y": 600,
+            "w": 593,
+            "h": 900
+          },
+          "scale": 1,
+          "title": "設計值:",
+          "kind": "design",
+          "kept": 4
+        },
+        {
+          "index": 1,
+          "column": "right",
+          "rect": {
+            "x": 1329,
+            "y": 600,
+            "w": 671,
+            "h": 900
+          },
+          "scale": 1,
+          "title": "實測值:",
+          "kind": "measured",
+          "kept": 4
+        }
+      ],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 277,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1444,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 7437,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1718,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ],
+        "cells": [
+          {
+            "input_tokens": 3695,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 492,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 3695,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 459,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 3761,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 336,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 3761,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 570,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ]
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          277
+        ],
+        "record": [
+          14874,
+          3162
+        ],
+        "cells": [
+          14912,
+          1857
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.009002,
+        "record": 0.030684,
+        "cells": 0.024197,
+        "total": 0.063883
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 10,
+          "items": 0
+        },
+        {
+          "observations": 8,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "工人手持查驗紀錄表於鋼筋綁紮施工現場",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋綁紮",
+        "visible_progress": "展示鋼筋綁紮查驗紀錄表",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "2026-08-04",
+        "log_date_text": "2026年8月4日",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "查驗位置：16F樓版",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "線徑 13 * 11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值:",
+              "rect": {
+                "x": 704,
+                "y": 600,
+                "w": 593,
+                "h": 900
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "網目 15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值:",
+              "rect": {
+                "x": 704,
+                "y": 600,
+                "w": 593,
+                "h": 900
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "線徑 11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值:",
+              "rect": {
+                "x": 704,
+                "y": 600,
+                "w": 593,
+                "h": 900
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "design",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "網目 15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "left",
+              "column_title": "設計值:",
+              "rect": {
+                "x": 704,
+                "y": 600,
+                "w": 593,
+                "h": 900
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "線徑 13 * 11 MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值:",
+              "rect": {
+                "x": 1329,
+                "y": 600,
+                "w": 671,
+                "h": 900
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "網目",
+            "entry_no": "1",
+            "raw_text": "網目 15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值:",
+              "rect": {
+                "x": 1329,
+                "y": 600,
+                "w": 671,
+                "h": 900
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "線徑",
+            "entry_no": "4",
+            "raw_text": "線徑 11 * 11 MM",
+            "value": 11,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值:",
+              "rect": {
+                "x": 1329,
+                "y": 600,
+                "w": 671,
+                "h": 900
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          },
+          {
+            "kind": "measured",
+            "label": "網目",
+            "entry_no": "4",
+            "raw_text": "網目 15 * 15 CM",
+            "value": 15,
+            "value2": 15,
+            "unit": "CM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": {
+              "method": "paper_cells",
+              "column": "right",
+              "column_title": "實測值:",
+              "rect": {
+                "x": 1329,
+                "y": 600,
+                "w": 671,
+                "h": 900
+              },
+              "scale": 1,
+              "passes": 2
+            }
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「搭接長度」:原文「(3)搭接長度：≥     CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「(4)搭接長度：≥     CM」沒有可用數值,未採用",
+          "observations「線徑」:原文「線徑（ ）：線徑 * MM 網目 * CM」沒有可用數值,未採用",
+          "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "位置:兩次辨識不一致(「16F樓版」vs「樓板筏式基礎梁柱」),未採用",
+          "表上工項:兩次辨識不一致(「鋼筋砂漿檢驗紀錄表」vs「鋼筋網配筋」),未採用",
+          "工作摘要:兩次辨識不一致(「鋼筋砂漿檢驗」vs「(空)」),未採用",
+          "實測／設計紀錄「搭接長度 (1)搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「搭接長度 (2)搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑 11＋11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑 11＋11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 線徑 13、11 MM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 網目 15×15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「鋼筋網搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「鋼筋網搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用",
+          "設計「搭接長度 (1)搭接長度: 11 ≧ 29 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "設計「搭接長度 11  ≧  27  CM」:兩次辨識不一致,未採用",
+          "設計「搭接長度 11  ≧  27  CM」:兩次辨識不一致,未採用",
+          "「搭接長度」:原文「= CM」沒有可用數值,未採用",
+          "「搭接長度」:原文「CM」沒有可用數值,未採用",
+          "「搭接長度」:原文「= CM」沒有可用數值,未採用",
+          "「搭接長度」:原文「= CM」沒有可用數值,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板未載明位置"
+      },
+      "findings": [
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(3)搭接長度：≥     CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「(4)搭接長度：≥     CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「線徑（ ）：線徑 * MM 網目 * CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「鋼筋網搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「16F樓版」vs「樓板筏式基礎梁柱」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「鋼筋砂漿檢驗紀錄表」vs「鋼筋網配筋」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "工作摘要:兩次辨識不一致(「鋼筋砂漿檢驗」vs「(空)」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 (1)搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「搭接長度 (2)搭接長度：11 ≥ 27 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑 11＋11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑 11＋11 MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目 15×15 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 線徑 13、11 MM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 網目 15×15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「鋼筋網搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「鋼筋網搭接長度 ≧ 27 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「搭接長度 (1)搭接長度: 11 ≧ 29 CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「搭接長度 11  ≧  27  CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "設計「搭接長度 11  ≧  27  CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「= CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「= CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "「搭接長度」:原文「= CM」沒有可用數值,未採用"
+        }
+      ]
+    },
+    {
+      "case": "neg-design-column-only",
+      "condition": "negative",
+      "derived_from": "LINE_A~4_0.JPG",
+      "why": "只保留紙表「設計值」左欄:實測欄根本不在畫面內,模型不得生出任何 kind=measured 的觀察",
+      "sha256": "84afc697279e25cf2a4c26cae70a3690f111f39e933d3a6ba793442b0409c946",
+      "bytes": 78725,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2754,
+      "record_ms": 12221,
+      "record_passes": 2,
+      "cells_ms": 59,
+      "cells_calls": 0,
+      "cells_skipped": "畫面中找不到夠大的紙張區域,未做逐格辨識",
+      "cells_retried": false,
+      "cells_used": false,
+      "cell_tiles": [],
+      "usage": {
+        "classify": {
+          "input_tokens": 6375,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 308,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [
+          {
+            "input_tokens": 6195,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1263,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          {
+            "input_tokens": 6195,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 977,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          }
+        ],
+        "cells": []
+      },
+      "tokens": {
+        "classify": [
+          6375,
+          308
+        ],
+        "record": [
+          12390,
+          2240
+        ],
+        "cells": [
+          0,
+          0
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.007915,
+        "record": 0.02359,
+        "cells": 0,
+        "total": 0.031505
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        {
+          "observations": 7,
+          "items": 0
+        },
+        {
+          "observations": 5,
+          "items": 0
+        }
+      ],
+      "classify": {
+        "caption": "拍攝鋼筋混凝土澆置及鋼筋加工查驗紀錄表",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": true,
+        "has_board": true,
+        "record_medium": "paper_form",
+        "work_item_hint": "鋼筋加工及組立",
+        "visible_progress": "鋼筋尺寸及彎曲加工尺度檢查紀錄",
+        "location": "44-25m",
+        "location_text": "查驗項目及位置:44-25m",
+        "dropped": []
+      },
+      "record": {
+        "record_medium": "paper_form",
+        "log_date": "",
+        "log_date_text": "",
+        "log_date_conflict": null,
+        "weather": "",
+        "location": "",
+        "location_text": "查驗項目及位置：44-25m",
+        "work_item_text": "",
+        "work_summary": "",
+        "observations": [
+          {
+            "kind": "design",
+            "label": "線徑",
+            "entry_no": "1",
+            "raw_text": "13 * 11  MM",
+            "value": 13,
+            "value2": 11,
+            "unit": "MM",
+            "comparator": "",
+            "location": "",
+            "note": "",
+            "source": null
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "1",
+            "raw_text": "≧  27  CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": "",
+            "source": null
+          },
+          {
+            "kind": "design",
+            "label": "搭接長度",
+            "entry_no": "2",
+            "raw_text": "≧  27  CM",
+            "value": 27,
+            "value2": null,
+            "unit": "CM",
+            "comparator": ">=",
+            "location": "",
+            "note": "",
+            "source": null
+          }
+        ],
+        "items": [],
+        "dropped": [
+          "observations「網目」:原文「⊕⊕ D13⊕20cm」沒有可用數值,未採用",
+          "observations「網目」:原文「⊕⊕ D13⊕20cm」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧       CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧       CM」沒有可用數值,未採用",
+          "location:「44-25m B」與原文「查驗項目及位置：44-25m」不符,未採用",
+          "observations「線徑」:原文「[] × [] MM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用",
+          "位置:兩次辨識不一致(「(空)」vs「4-4-25m」),未採用",
+          "表上工項:兩次辨識不一致(「安全鋼筋籠與反收工程」vs「安全網及防墜檢查工程」),未採用",
+          "實測／設計紀錄「網目 15 * 15  CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 13 11-16」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「線徑 13 * 11  MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 15 * 15  CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)",
+          "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用",
+          "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        ]
+      },
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": "紙本／告示板轉錄沒有讀到位置欄,分類推測的「44-25m」無原文佐證,未採用"
+      },
+      "findings": [
+        {
+          "rule": "location-not-grounded",
+          "detail": "紙本／告示板轉錄沒有讀到位置欄,分類推測的「44-25m」無原文佐證,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「網目」:原文「⊕⊕ D13⊕20cm」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「網目」:原文「⊕⊕ D13⊕20cm」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧       CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧       CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "location:「44-25m B」與原文「查驗項目及位置：44-25m」不符,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「線徑」:原文「[] × [] MM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "observations「搭接長度」:原文「≧ CM」沒有可用數值,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "位置:兩次辨識不一致(「(空)」vs「4-4-25m」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "表上工項:兩次辨識不一致(「安全鋼筋籠與反收工程」vs「安全網及防墜檢查工程」),未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 * 15  CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 13 11-16」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「線徑 13 * 11  MM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 * 15  CM」:兩次辨識不一致,未採用(不確定的讀數一律留空待人填)"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        },
+        {
+          "rule": "post-check-dropped",
+          "detail": "實測／設計紀錄「網目 15 × 15 CM」:兩次辨識不一致,未採用"
+        }
+      ]
+    },
+    {
+      "case": "neg-illegible-caliper",
+      "condition": "negative",
+      "derived_from": "LI89DE~1_0.JPG",
+      "why": "把卡尺特寫縮到刻度完全讀不出來:場景仍可辨(legible)但 text_legible 必須為 false,且不得生出讀數",
+      "sha256": "4952828927401898f72f830dda7020a7a18020c44b42a3ca446e0966434c99c3",
+      "bytes": 191275,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2611,
+      "record_ms": null,
+      "record_passes": 0,
+      "cells_ms": null,
+      "cells_calls": 0,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": false,
+      "cell_tiles": [],
+      "usage": {
+        "classify": {
+          "input_tokens": 7617,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 254,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [],
+        "cells": []
+      },
+      "tokens": {
+        "classify": [
+          7617,
+          254
+        ],
+        "record": [
+          0,
+          0
+        ],
+        "cells": [
+          0,
+          0
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.008887,
+        "record": 0,
+        "cells": 0,
+        "total": 0.008887
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以游標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋",
+        "visible_progress": "卡尺量測鋼筋",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    },
+    {
+      "case": "neg-formwork-no-record",
+      "condition": "negative",
+      "derived_from": "LI2995~1_0.JPG",
+      "why": "只保留背景模板區、畫面內沒有任何紙表:不得有書面紀錄、不得有位置、工項不得沿用鋼筋查驗的內容",
+      "sha256": "bc460ea504daed66914190db3b3baa12996e4269719e2c8b750e65d621406e3a",
+      "bytes": 69464,
+      "model": "claude-haiku-4-5-20251001",
+      "cells_model": "claude-haiku-4-5-20251001",
+      "classify_ms": 2115,
+      "record_ms": null,
+      "record_passes": 0,
+      "cells_ms": null,
+      "cells_calls": 0,
+      "cells_skipped": null,
+      "cells_retried": false,
+      "cells_used": false,
+      "cell_tiles": [],
+      "usage": {
+        "classify": {
+          "input_tokens": 6319,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 256,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "record": [],
+        "cells": []
+      },
+      "tokens": {
+        "classify": [
+          6319,
+          256
+        ],
+        "record": [
+          0,
+          0
+        ],
+        "cells": [
+          0,
+          0
+        ]
+      },
+      "cost_usd": {
+        "classify": 0.007599,
+        "record": 0,
+        "cells": 0,
+        "total": 0.007599
+      },
+      "classify_error": null,
+      "record_pass_counts": [
+        null,
+        null
+      ],
+      "classify": {
+        "caption": "以遊標卡尺量測鋼筋直徑",
+        "category": "查驗會勘",
+        "is_construction": true,
+        "legible": true,
+        "text_legible": false,
+        "has_board": false,
+        "record_medium": "none",
+        "work_item_hint": "鋼筋",
+        "visible_progress": "用卡尺測量鋼筋",
+        "location": null,
+        "location_text": "",
+        "dropped": []
+      },
+      "record": null,
+      "grounded_location": {
+        "value": null,
+        "source": null,
+        "reason": null
+      },
+      "findings": []
+    }
+  ]
+}

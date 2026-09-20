@@ -6,8 +6,10 @@
 //
 // 安全邊界:
 //   * openAiGate('field_docs.draft'):登入、成員資格(RLS 讀 projects)、功能開關(fail-closed)。
-//   * 逐張辨識沿用 photo.classify／sitelog.whiteboard 的 schema、prompt 與**各自的開關**——
-//     經 aiGate.askAiFeature 問同一個 RPC,關了就停(整批 failed,不偷跑);用量各記各的 key。
+//   * 逐張辨識沿用 photo.classify／sitelog.whiteboard／paperform.cells 的 schema、prompt 與
+//     **各自的開關**——經 aiGate.askAiFeature 問同一個 RPC,關了就停(整批 failed,不偷跑);
+//     用量各記各的 key。paperform.cells(2026-09-20 B2)只在照片裡有紙本表單時才會被呼叫,
+//     關閉時整條逐格路徑不啟用、退回整張圖讀兩次,不影響其他照片。
 //   * 呼叫者組織必須等於批次上傳方(伺服器以 my_org_type 決定,不信任前端);廠商批次永遠
 //     推不出監造文件(候選規則＋DB guard 兩道)。
 //   * 讀走 userClient(RLS);寫只用 serviceClient 且只寫 photos.ai_*、批次進度、AI 版本、agent_actions。
@@ -28,7 +30,9 @@ import { supabaseDraftRepo } from '../_shared/fieldDocRepo.ts'
 import { runDraftFieldDocuments } from '../_shared/fieldDocDraftRun.ts'
 import type { DraftVision, VisionResult } from '../_shared/fieldDocDraftRun.ts'
 import { sitePhotoCall, whiteboardCall } from '../_shared/sitePhotoVision.ts'
-import { stubAllowed, stubClassify, stubWhiteboard, STUB_NOTE, STUB_MODEL } from '../_shared/visionStub.ts'
+import { paperCellCall } from '../_shared/paperFormCells.ts'
+import { preparePaperFormTiles } from '../_shared/paperFormImaging.ts'
+import { stubAllowed, stubClassify, stubPaperCells, stubWhiteboard, STUB_NOTE, STUB_MODEL } from '../_shared/visionStub.ts'
 
 const FEATURE = 'field_docs.draft'
 // 單張視覺呼叫:逾時 45 s、只對 429/5xx 重試一次、逾時不重試(同尺寸再逾時只會燒光預算)
@@ -76,6 +80,9 @@ function makeVision(gate: AiGateOk): DraftVision {
   return {
     classify: (base64, mime) => call('photo.classify', sitePhotoCall(base64, mime), () => stubClassify(hint)),
     readBoard: (base64, mime) => call('sitelog.whiteboard', whiteboardCall(base64, mime), () => stubWhiteboard()),
+    // B2 紙表逐格辨識:獨立 feature key → 可單獨關閉、單獨計量;關閉時 run 退回整張圖讀兩次
+    readCells: (base64, mime, columnHint) =>
+      call('paperform.cells', paperCellCall(base64, mime, columnHint), () => stubPaperCells()),
   }
 }
 
@@ -99,7 +106,8 @@ Deno.serve(async (req) => {
   try {
     const repo = supabaseDraftRepo(gate.userClient, gate.serviceClient, gate.projectId as string)
     const result = await runDraftFieldDocuments({
-      repo, vision: makeVision(gate), intakeId, userId: gate.userId, rerecognizePhotoIds,
+      repo, vision: makeVision(gate), imaging: { paperFormTiles: preparePaperFormTiles },
+      intakeId, userId: gate.userId, rerecognizePhotoIds,
     })
     await closeAiGate(gate, {
       feature: FEATURE,
