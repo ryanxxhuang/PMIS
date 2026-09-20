@@ -1,4 +1,4 @@
-// P5e｜鏈 14:保固類循環義務的停止條件(真 Supabase;不需 Edge)。使用者 2026-09-20 決定:
+// P5e｜鏈 15:保固類循環義務的停止條件(真 Supabase;不需 Edge)。使用者 2026-09-20 決定:
 //   保固期滿日＝正式驗收合格日＋契約載明的保固期間,兩者都有依據才計算並記來源;缺任一項列「停止條件待補」。
 //   佈置走產品窄門:廠商(建案者＝專案管理者)補登兩條契約重點(保固期間 2 年、保固期間每月巡檢)→ 監造確認(review_requirement)
 //   → 義務由 DB 物化。驗:
@@ -12,18 +12,18 @@ import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, signInClient, loginReal, logoutReal, gotoHash, runCleanup, admin,
 } from './helpers.js'
 
-const PROJECT_NAME = `鏈14保固-${Date.now().toString(36)}`
+const PROJECT_NAME = `鏈15保固-${Date.now().toString(36)}`
 const TERM_TITLE = `保固期間自驗收合格日起 2 年-${Date.now().toString(36)}`
 const INSPECT_TITLE = `保固期間每月巡檢-${Date.now().toString(36)}`
-const conEmail = uniqueEmail('p5e14-con')
-const supEmail = uniqueEmail('p5e14-sup')
-const ownEmail = uniqueEmail('p5e14-own')
+const conEmail = uniqueEmail('p5e15-con')
+const supEmail = uniqueEmail('p5e15-sup')
+const ownEmail = uniqueEmail('p5e15-own')
 let conId, supId, ownId, projectId, termReqId, inspectReqId
 
 test.beforeAll(async () => {
-  conId = await createConfirmedUser(conEmail, 'contractor', '鏈十四廠商')
-  supId = await createConfirmedUser(supEmail, 'supervisor', '鏈十四監造')
-  ownId = await createConfirmedUser(ownEmail, 'owner', '鏈十四機關')
+  conId = await createConfirmedUser(conEmail, 'contractor', '鏈十五廠商')
+  supId = await createConfirmedUser(supEmail, 'supervisor', '鏈十五監造')
+  ownId = await createConfirmedUser(ownEmail, 'owner', '鏈十五機關')
   const c = await signInClient(conEmail)
   const { data: project, error: createError } = await c.rpc('create_project', {
     p_name: PROJECT_NAME, p_code: null, p_owner: '機關', p_contractor: '廠商',
@@ -72,7 +72,7 @@ const periodCount = async () => {
   return data
 }
 
-test('鏈 14:保固期滿日＝正式驗收合格日＋契約保固期間;缺一不產生、齊全後只到期滿日', async ({ page }) => {
+test('鏈 15:保固期滿日＝正式驗收合格日＋契約保固期間;缺一不產生、齊全後只到期滿日', async ({ page }) => {
   const basis = page.getByLabel('保固期滿日與依據')
 
   // ── 1. 兩項皆缺:期程卡說缺什麼;保固類每月巡檢沒有期次、詳情給入口 ─────────────────────────────
