@@ -6,7 +6,7 @@
 // fn_checklist_judge 同一條規則重算為準。唯讀視角只有文字與章,不長出任何 input(唯讀 e2e 契約)。
 import { Badge, THEAD_CLS } from '../ui.jsx'
 import { judgeItem, judgeChecklist, checklistCoverage, coverageText } from '../../lib/qc.js'
-import { fieldAnchorId } from './DailyLogFields.jsx'
+import { fieldAnchorId } from '../../lib/fieldDocs.js'
 
 const INPUT_CLS = 'border border-[var(--border)] rounded px-1.5 py-0.5 text-sm max-md:py-2 bg-[var(--surface)] text-[var(--text)] focus:border-[var(--blue)] focus:outline-none'
 

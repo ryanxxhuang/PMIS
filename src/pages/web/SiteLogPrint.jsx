@@ -4,9 +4,10 @@ import { useStore } from '../../store.jsx'
 import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 import PrintToolbar from '../../components/PrintToolbar.jsx'
 import { DocumentPrintStamp, PrintedVersionBody } from '../../components/sitelog/DocumentPrint.jsx'
-import { contentToLogShape } from '../../lib/fieldDocs.js'
+import { contentFromLegacyLog } from '../../lib/fieldDocs.js'
 import usePrintedVersion from '../../lib/usePrintedVersion.js'
 import { fieldDocFileName } from '../../lib/pdf/docFileName.js'
+import useDailyLogFacts from '../../lib/useDailyLogFacts.js'
 
 // 公共工程施工日誌（工程會 101.10.17 修正公定格式）— 不套 WebLayout，整頁即文件。
 // 工具列(chrome,吃主題 token)與紙面(.paper,固定白底黑字)分開處理,理由見 PrintToolbar 與 index.css。
@@ -30,6 +31,8 @@ export default function SiteLogPrint() {
     : (date ? findActiveDailyLogDoc(date) : null)
   const legacyLog = !docParam && !doc && !fieldDocsLoading ? siteLogs.find((l) => l.log_date === date) || null : null
   const printed = usePrintedVersion(doc, { waiting: fieldDocsLoading })
+  // 表頭的工期／進度與畫面同一支(確定性計算;算不出來印待補)
+  const facts = useDailyLogFacts(doc?.doc_date || legacyLog?.log_date || date)
 
   if (!currentUser) return <Navigate to="/login" replace />
   const backTo = doc ? `/site-log?doc=${encodeURIComponent(doc.id)}` : date ? `/site-log?d=${date}` : '/site-log'
@@ -56,12 +59,13 @@ export default function SiteLogPrint() {
 
       {/* A4 文件 */}
       {legacyLog ? (
-        <SiteLogOfficialSheet project={project} log={legacyLog} siteLogs={siteLogs} itemList={itemList}
+        <SiteLogOfficialSheet project={project} {...contentFromLegacyLog(legacyLog, new Map(itemList.map((it) => [it.item_key, it])))}
+          docDate={legacyLog.log_date} siteLogs={siteLogs} itemList={itemList} facts={facts}
           stamp={<DocumentPrintStamp draftNote="舊流程寫入的既有紀錄，非正式簽署紀錄" />} />
       ) : (
         <PrintedVersionBody printed={printed}>
-          <SiteLogOfficialSheet project={project} siteLogs={siteLogs} itemList={itemList}
-            log={printed.version ? contentToLogShape(printed.version.content, { id: printed.doc?.id, status: printed.doc?.status, logDate: printed.doc?.doc_date, sources: printed.version.field_sources }) : null}
+          <SiteLogOfficialSheet project={project} siteLogs={siteLogs} itemList={itemList} facts={facts}
+            content={printed.version?.content || null} sources={printed.version?.field_sources || null} docDate={printed.doc?.doc_date}
             stamp={<DocumentPrintStamp doc={printed.doc} version={printed.version} signature={printed.signature} />} />
         </PrintedVersionBody>
       )}

@@ -250,6 +250,10 @@ export function sharedApplySummary(result) {
 }
 
 // ── 欄位來源狀態 ───────────────────────────────────────────────────────────
+// 欄位錨點 id(待補清單點一項捲到該欄、錯誤定位):三類文書頁與紙本欄位共用同一個算法,
+// 不可有第二份(原本住在 DailyLogFields.jsx,C 包把可編輯表單換成紙本後移來這裡)。
+export const fieldAnchorId = (key) => `field-${String(key).replace(/[^a-zA-Z0-9_-]/g, '-')}`
+
 export const FIELD_STATUS_LABEL = Object.freeze({ filled: '已帶入・待核對', pending: '待補', na: '不適用', confirmed: '已確認' })
 export const FIELD_STATUS_TONE = Object.freeze({ filled: 'blue', pending: 'amber', na: 'slate', confirmed: 'green' })
 
@@ -660,12 +664,18 @@ const setPath = (obj, key, value) => {
   }
   const ex = /^extras\.(.+)$/.exec(key)
   if (ex) return { ...obj, extras: { ...(obj.extras || {}), [ex[1]]: value } }
-  // 自檢表檢查項目 results.<no>:值住在 results[no].value(與 Edge／DB 同形狀)
+  // 自檢表／查驗表檢查項目 results.<no>:值住在 results[no].value(與 Edge／DB 同形狀);
+  // results.<no>.note 是原表本來就有的「備註」欄(C 包紙本化),住在同一個項目物件的 note
+  // (項次可能含小數點如 1.1,所以備註用貪婪比對取到最後一個 .note)
+  const rn = /^results\.(.+)\.note$/.exec(key)
+  if (rn) return { ...obj, results: { ...(obj.results || {}), [rn[1]]: { ...((obj.results || {})[rn[1]] || {}), note: value } } }
   const r = /^results\.(.+)$/.exec(key)
   if (r) return { ...obj, results: { ...(obj.results || {}), [r[1]]: { ...((obj.results || {})[r[1]] || {}), value } } }
   return { ...obj, [key]: value }
 }
 const getPath = (obj, key) => {
+  const rn = /^results\.(.+)\.note$/.exec(key)
+  if (rn) return obj?.results?.[rn[1]]?.note
   const r = /^results\.(.+)$/.exec(key)
   if (r) return obj?.results?.[r[1]]?.value
   return obj?.[key]

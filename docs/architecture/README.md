@@ -21,5 +21,6 @@
 | 四類現場文書、照片起稿、簽署提送（PROPOSED，D-026） | [field-documents-lifecycle](field-documents-lifecycle.md) |
 | 監造確認量、估驗來源分配與後端強制（PROPOSED，D-026） | [confirmed-quantity-valuation](confirmed-quantity-valuation.md) |
 | 四主入口、退場承接、提醒對齊、過渡部署（PROPOSED，D-026） | [slimming-entrypoints-and-retirement](slimming-entrypoints-and-retirement.md) |
+| 公定／參考格式表單欄位 mapping、格內可編輯紙本 | [official-form-mapping](official-form-mapping.md) |
 
 `CURRENT` 標記不是正確性的保證；與程式不符就修正。未核准設計只放 ROADMAP。

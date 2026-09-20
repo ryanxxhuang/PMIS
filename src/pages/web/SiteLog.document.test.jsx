@@ -60,10 +60,13 @@ const setInput = (el, value, ev = 'input') => act(async () => {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, value)
   el.dispatchEvent(new Event(ev, { bubbles: true }))
 })
+// C 包:表單就是紙本本身,表頭也有數字欄(工期展延天數),所以工項數量一律以原表欄名(aria-label)定位,
+// 不再用「頁上第一個 number input」。
+const qtyInput = () => [...container.querySelectorAll('input[type="number"]')].find((el) => /本日完成數量$/.test(el.getAttribute('aria-label') || ''))
 const addItemAndType = async (qty) => {
   await setInput(container.querySelector('input[placeholder="搜尋工項加入今日回報…"]'), '版牆')
   await act(async () => [...container.querySelectorAll('button')].find((b) => b.textContent.includes('4F 版牆混凝土澆置')).click())
-  await setInput(container.querySelector('input[type="number"]'), qty)
+  await setInput(qtyInput(), qty)
 }
 
 describe('施工日誌文件頁', () => {
@@ -96,7 +99,7 @@ describe('施工日誌文件頁', () => {
     await act(async () => button('存檔').click())
     expect(state.store.createDailyLogDraft).toHaveBeenCalledWith(today)
     expect(container.querySelector('[role="alert"]').textContent).toContain('重新載入')
-    expect(container.querySelector('input[type="number"]').value).toBe('120') // 不默默覆蓋
+    expect(qtyInput().value).toBe('120') // 不默默覆蓋
     expect(button('重新載入最新版本')).toBeTruthy()
     await act(async () => button('存檔').click())
     await render(); await flush()
@@ -113,7 +116,7 @@ describe('施工日誌文件頁', () => {
     expect(status()).toBe('既有紀錄・未簽署、待核對')
     expect(container.textContent).toContain('既有紀錄、待核對')
     expect(container.textContent).toContain('已帶入・待核對・既有紀錄')
-    expect(container.querySelector('input[type="number"]').value).toBe('2.5')
+    expect(qtyInput().value).toBe('2.5')
     expect(button('列印公定格式日誌')).toBeTruthy()
     expect(state.store.createDailyLogDraft).not.toHaveBeenCalled()
   })

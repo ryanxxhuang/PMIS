@@ -15,7 +15,7 @@ test.describe('路由治理', () => {
     await loginAs(page, 'contractor')
     await gotoHash(page, '/site-log/print')
 
-    await expect(page.getByRole('heading', { name: '公共工程施工日誌' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '公共工程施工日誌', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: /列印/ })).toBeVisible()
     await expect(page.getByText('AI Agent', { exact: true })).toHaveCount(0)
   })

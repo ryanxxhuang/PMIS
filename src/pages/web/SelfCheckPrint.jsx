@@ -44,7 +44,8 @@ export default function SelfCheckPrint() {
     <div ref={paperRef} className="min-h-screen paper-desk py-6 print:py-0">
       <PrintToolbar backTo={backTo} backLabel="返回自主檢查表" pdf={pdf} />
       <PrintedVersionBody printed={state}>
-        <SelfCheckSheet project={project} doc={state.doc} version={state.version} signature={state.signature} frame={state.template}
+        <SelfCheckSheet project={project} doc={state.doc} version={state.version} content={state.version?.content || null}
+          sources={state.version?.field_sources || null} signature={state.signature} frame={state.template}
           checklistTemplate={checklistTemplate} record={record} byId={byId} />
       </PrintedVersionBody>
     </div>

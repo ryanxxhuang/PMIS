@@ -138,8 +138,9 @@ test.describe('施工廠商', () => {
     // demo 種子範本(03310)預設帶入,項目由範本帶出;填坍度 30 → 判定預覽不合格(超規);未填的項目仍待補
     await expect(card.getByRole('combobox', { name: '檢查表範本' })).toHaveValue(/./)
     await expect(card.getByRole('cell', { name: '坍度' })).toBeVisible()
-    await card.getByRole('spinbutton', { name: 'C2 坍度 實測值' }).fill('30')
-    await expect(card.getByText('判定預覽：不合格')).toBeVisible()
+    // C 包:表單就是原表本身,欄名照臺北市格式(實際檢查情形／檢查結果),不再是自創的「實測值／判定預覽」
+    await card.getByRole('spinbutton', { name: 'C2 坍度 實際檢查情形' }).fill('30')
+    await expect(card.getByText('■ 有缺失')).toBeVisible()
     await expect(page.getByRole('status', { name: /保存狀態/ })).toHaveText('未存檔')
     await page.getByRole('button', { name: '存檔', exact: true }).click()
     await expect(page.getByText(/已存檔 ✓ 版本 1，尚有 \d+ 項待補或待確認/)).toBeVisible()

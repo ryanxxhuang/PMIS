@@ -108,8 +108,8 @@ test('鏈 8:廠商上傳→起自檢表草稿→補實測值→簽署(checklist_
   expect(pd006?.code).toBe('PD006')
 
   // ── 補實測值(親自填)→ 存檔 → 簽署 ─────────────────────────────────────────────
-  await page.getByRole('spinbutton', { name: 'C2 坍度 實測值' }).fill('18')
-  await expect(card.getByText('判定預覽：合格')).toBeVisible()
+  await page.getByRole('spinbutton', { name: 'C2 坍度 實際檢查情形' }).fill('18')
+  await expect(card.getByText('■ 全部合格')).toBeVisible()
   await page.getByRole('button', { name: '存檔', exact: true }).click()
   await expect(page.getByText(/已存檔 ✓ 版本 3，可簽署/)).toBeVisible({ timeout: 30_000 })
   const lifecycle = page.getByRole('region', { name: '文件狀態與簽署' })
@@ -128,7 +128,7 @@ test('鏈 8:廠商上傳→起自檢表草稿→補實測值→簽署(checklist_
   expect(rec.work_item_id).toBeTruthy() // stub 配到的「結構工程」
   // 列印:印簽署版本(版本 3、雜湊、示範框架、簽署者、DB 判定)
   await gotoHash(page, `/self-check/print?doc=${docId}`)
-  await expect(page.getByText('【示範範本】框架 self_check_demo v1')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('框架【示範範本】self_check_demo v1')).toBeVisible({ timeout: 30_000 })
   const { data: v3 } = await con.from('field_document_versions').select('content_hash').eq('document_id', docId).eq('version_no', 3).single()
   await expect(page.getByText(`內容雜湊 ${v3.content_hash.slice(0, 12)}`)).toBeVisible()
   await expect(page.getByText(/簽署 鏈八廠商・/)).toBeVisible()
