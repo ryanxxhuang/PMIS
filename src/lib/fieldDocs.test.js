@@ -17,6 +17,7 @@ import {
   groupSharedFields, sharedFieldTitle, sharedEffectLabel, sharedPendingDocs, sharedInputValue, sharedApplySummary, documentsAfterShared,
   signedVersionIndex, signedVersionText, signedVersionLink, confirmationDocRef,
   canDiscardFieldDocument, FIELD_DOC_DISCARDABLE_STATUSES, candidateState, CANDIDATE_STATE_LABEL,
+  fieldDocInWorkList,
 } from './fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.js'
@@ -296,6 +297,40 @@ describe('人工編輯:值與來源一起走', () => {
     expect(m.get('p1')).toContain('監造')
     expect(m.get('p2')).toContain('上傳方不明')
     expect(m.size).toBe(2)
+  })
+})
+
+// 2026-09-20 廠商驗收 A 包:/site 的「現場文書」是工作清單,不是全案文件櫃。
+describe('現場文書清單的可見性(fieldDocInWorkList)', () => {
+  const doc = (type, owner, status) => ({ doc_type: type, owner_org: owner, status })
+  it('責任方的文件一律列(草稿到被退回都是他要動的)', () => {
+    for (const st of ['draft', 'pending_input', 'in_review', 'signed', 'submitted', 'received', 'returned']) {
+      expect(fieldDocInWorkList(doc('daily_log', 'contractor', st), 'contractor'), st).toBe(true)
+      expect(fieldDocInWorkList(doc('supervisor_log', 'supervisor', st), 'supervisor'), st).toBe(true)
+    }
+  })
+  it('廠商看不到監造起稿中的監造日誌與監造查驗表單(那是監造的工作清單)', () => {
+    for (const st of ['draft', 'pending_input', 'in_review', 'signed', 'returned']) {
+      expect(fieldDocInWorkList(doc('supervisor_log', 'supervisor', st), 'contractor'), st).toBe(false)
+      expect(fieldDocInWorkList(doc('inspection_form', 'supervisor', st), 'contractor'), st).toBe(false)
+    }
+  })
+  it('監造查驗表單一提送,廠商就看得到(查驗結果與可估驗依據不得誤刪)', () => {
+    expect(fieldDocInWorkList(doc('inspection_form', 'supervisor', 'submitted'), 'contractor')).toBe(true)
+    expect(fieldDocInWorkList(doc('inspection_form', 'supervisor', 'received'), 'contractor')).toBe(true)
+    // 機關也是收件方(FIELD_DOC_TO_ORGS:inspection_form → 廠商＋機關)
+    expect(fieldDocInWorkList(doc('inspection_form', 'supervisor', 'submitted'), 'owner')).toBe(true)
+  })
+  it('不是收件方就不列:監造日誌送機關,廠商即使已提送也不在工作清單(頁面深連結仍可唯讀查閱)', () => {
+    expect(fieldDocInWorkList(doc('supervisor_log', 'supervisor', 'submitted'), 'contractor')).toBe(false)
+    expect(fieldDocInWorkList(doc('supervisor_log', 'supervisor', 'submitted'), 'owner')).toBe(true)
+    expect(fieldDocInWorkList(doc('daily_log', 'contractor', 'submitted'), 'supervisor')).toBe(true)
+    expect(fieldDocInWorkList(doc('daily_log', 'contractor', 'submitted'), 'owner')).toBe(false)
+  })
+  it('缺文件或缺角色一律 false(fail-closed,不把來路不明的列塞進清單)', () => {
+    expect(fieldDocInWorkList(null, 'contractor')).toBe(false)
+    expect(fieldDocInWorkList(doc('daily_log', 'contractor', 'draft'), '')).toBe(false)
+    expect(fieldDocInWorkList({ doc_type: 'other', owner_org: 'supervisor', status: 'submitted' }, 'contractor')).toBe(false)
   })
 })
 

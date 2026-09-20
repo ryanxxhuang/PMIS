@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import { Card, Badge, Empty, PageHeader, ErrorBanner, SkeletonList } from '../../components/ui.jsx'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { CHIP_BASE, CHIP_ON, CHIP_OFF } from '../../components/PageTabs.jsx'
 import { sampleAlerts } from '../../lib/qc.js'
+import { itpStatus } from '../../lib/itp.js'
 import { taipeiToday } from '../../lib/dates.js'
 import { billableLeaves } from '../../lib/boqCalc.js'
 import { projectStageKeys } from '../../lib/fieldDocs.js'
@@ -202,6 +203,14 @@ export default function Quality() {
   const openDefects = defects.filter((d) => (d.domain || 'quality') === 'quality' && d.status !== '已結案').length
   const openObs = observations.filter((o) => o.status === '待處理').length
   const segCount = { 查驗: openInsp, 缺失: openDefects, 觀察: openObs, 檢查表: null, 試驗: sampleAlerts(testSamples, today).length }
+  // 停留點未處理件數(入口嵌回查驗分段用):未申請查驗／已申請待監造查驗,與 /itp 同一支推導。
+  // 與上面幾個計數一樣每次 render 直接算(本頁在此之前已有提前 return,不能再多掛 hook)
+  const itpOpen = { total: (inspectionPoints || []).length, pending: 0, requested: 0 }
+  for (const p of inspectionPoints || []) {
+    const k = itpStatus(p, inspections).key
+    if (k === 'pending') itpOpen.pending += 1
+    else if (k === 'requested') itpOpen.requested += 1
+  }
   // 三個轉殼分段的切案重置範圍(殼 hook 的 scope):換專案或身分就清掉選取與 URL 參數
   const paneScope = `${currentProject?.project_id || 'demo'}/${myOrg}`
 
@@ -256,6 +265,17 @@ export default function Quality() {
         leaves={leaves} attachableChecklists={attachableChecklists} templates={checklistTemplates} signedDocByRecord={signedDocByRecord}
         inspectionPoints={inspectionPoints} formDocByInspection={formDocByInspection}
         can={can} onDelete={onDeleteInsp} scope={paneScope} />
+      )}
+
+      {/* 檢驗停留點:入口嵌回查驗流程(2026-09-20 廠商驗收 A 包;側欄不再與品質查驗並列一項)。
+          停留點決定「施作到哪裡要先叫驗」,是同一條查驗流程的前一步,不是另一個模組。
+          件數與 /itp 同一支推導(lib/itp.itpStatus),不在這裡另造判斷。 */}
+      {segment === '查驗' && itpOpen.total > 0 && (
+        <p className="text-footnote text-[var(--text-2)]">
+          本案有 {itpOpen.total} 個檢驗停留點{itpOpen.pending > 0 ? `，其中 ${itpOpen.pending} 個尚未申請查驗` : ''}{itpOpen.requested > 0 ? `，${itpOpen.requested} 個待監造查驗` : ''}。
+          <Link to="/itp" className="text-[var(--blue-text)] hover:underline mx-1">檢驗停留點</Link>
+          可查看允收標準與逐點狀態；H 點未查驗不得續作。
+        </p>
       )}
 
       {/* 缺失:統一缺失引擎(與工安缺失同狀態機),此處只列品質 domain。清單＋詳情殼住在元件裡,

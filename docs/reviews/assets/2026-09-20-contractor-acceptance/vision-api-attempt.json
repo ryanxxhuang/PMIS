@@ -1,0 +1,11 @@
+[
+  {
+    "file": "LI2995~1_0.JPG",
+    "classify": {
+      "error": "AI 請求無法處理，請聯絡系統管理者（代碼 http_401）",
+      "errorCode": "http_401",
+      "model": "claude-haiku-4-5-20251001"
+    },
+    "board": null
+  }
+]

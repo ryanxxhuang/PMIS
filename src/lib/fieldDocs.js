@@ -824,6 +824,22 @@ export function docStatusMeta(doc, viewerOrg) {
   }
 }
 
+// ── 現場文書清單的「這是不是我的工作」(2026-09-20 廠商驗收 A 包)────────────────────────────
+// /site 的清單是工作清單,不是全案文件櫃:
+//   - 我是責任方(owner_org)→ 一律列(草稿／待補／內部核對／待提送／被退回都是我要動的)
+//   - 別人的文件 → 只有「已提送且我是收件方」(submitted／received 且 docToOrgs 含我)才列,
+//     此時球在我手上(收件或退回),或我剛收完要查閱結果
+// 他方尚未提送的草稿是他方的工作;列出來會讓人以為自己要填——驗收退回的原因正是廠商的清單裡
+// 混著監造起稿中的監造日誌與監造查驗表單。
+// 這只影響清單呈現;路由、RLS 與既有深連結都不動——查驗結果與計價依據仍可依原權限唯讀開啟
+// (品質查驗詳情的「監造查驗表單」入口、今日工作待辦、舊書籤)。
+const IN_WORK_LIST_FOR_RECIPIENT = Object.freeze(['submitted', 'received'])
+export function fieldDocInWorkList(doc, viewerOrg) {
+  if (!doc || !viewerOrg) return false
+  if (doc.owner_org === viewerOrg) return true
+  return IN_WORK_LIST_FOR_RECIPIENT.includes(doc.status) && docToOrgs(doc).includes(viewerOrg)
+}
+
 // ── 捨棄草稿(P3f;規則在 DB discard_field_document,這裡只決定要不要顯示入口)─────────────────────
 // 與伺服器同一組條件:責任方、未簽署的三個狀態、且從未簽署——簽後更正回到草稿的文件曾經簽署,伺服器回 PD008,
 // 所以不顯示入口。everSigned 由呼叫端依伺服器簽署列提供(文件頁:getFieldDocument 的 signatures;

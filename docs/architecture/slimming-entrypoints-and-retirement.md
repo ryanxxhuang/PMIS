@@ -9,7 +9,7 @@
 
 ## 1. 四主入口與路由對照【已確認 入口，設計 對照】
 
-`navConfig.js` 仍是唯一登記表（D-013 fail-closed）；瘦身改 `navGroups` 分組與 `hidden`，**不刪路由定義、不改 `roles`**。
+`navConfig.js` 仍是唯一登記表（D-013 fail-closed）；瘦身改 `navGroups` 分組與 `hidden`／`hiddenFor`（後者＝只對特定 `org_type` 不渲染，2026-09-20 廠商驗收 A 包加入），**不刪路由定義、不改 `roles`**。
 
 | 主入口 | 群組入口路由 | 子頁（依角色過濾） | 現況來源 |
 |---|---|---|---|
@@ -92,6 +92,15 @@
 - **連結**：只有「該版本就是文件目前列印的簽署版本、且文件仍在本案活文件清單」才給列印連結（列印頁只找得到活文件、只印 `printSignature`）；其餘只印版本標示，不連到會印出別的版本的頁面。
 - 示範模式無法簽署（P2c 起的邊界），demo 的兩張月報如實全列未簽署。
 
+**廠商驗收 A 包落地結果（2026-09-20，與上表的差異）**：驗收報告指出廠商的導覽與現場總覽仍列監造日誌／監造查驗表單，而且工安、停留點、試體、月報、S 曲線與三個主入口並列（[驗收報告](../reviews/2026-09-20-contractor-acceptance-report.md)、[實作指令](../reviews/2026-09-20-claude-contractor-fixes-prompt.md) A 節）。處理方式：
+
+- **導覽可見性與授權分成兩個維度**。`navConfig` 新增 `hiddenFor: [<org_type>]`：只影響渲染，`routeAllowed` 完全不讀它，`override`（非正式模式的專案管理者）也翻不過（驗收要求專案 admin 情境的廠商同樣看不到）。`/supervisor-log`、`/inspection-form` 以 `hiddenFor: ['contractor']` 收起廠商的入口——**不能改用 `roles`**，那會把廠商應有的唯讀查閱（查驗判定、本次確認數量＝可估驗依據）一起關掉，正是驗收明文禁止的誤刪。監造與機關的入口不動。
+- **先收起、不刪除的獨立入口**（沿用 §2 的 `hidden: true` 做法，頁面、資料表、RPC、提醒與深連結全部保留）：`/itp`（入口嵌回品質查驗的查驗分段，顯示本案停留點數與未申請／待監造查驗件數）、`/safety`、`/progress`、`/monthly-report`、`/supervisor-report`、`/portfolio`（選案改走頁首既有的專案切換器）。缺失補正與試體原本就是品質查驗的分段，只移除與查驗並列的卡片。§3 的「取消常駐入口、保留能力」自此對這些模組真正落地；上表「施工月報／監造月報 → 現場紀錄『本月文件』」的落點隨月報入口一起收起（`Site.jsx` 的本月文件卡移除）。
+- **現場作業入口不再手抄第二份**：`Site.jsx` 的「現場作業」卡改由 `visibleNavGroups` 的現場紀錄子頁產生；「現場待辦」刻意仍以群組定義＋`routeAllowed` 過濾——入口收起不等於提醒消失（停留點未叫驗、工安缺失仍是現場的事）。
+- **「現場文書」是工作清單，不是全案文件櫃**：新增純函式 `lib/fieldDocs.fieldDocInWorkList(doc, viewerOrg)`——責任方（`owner_org`）的文件一律列；他方的文件只有 `submitted`／`received` 且自己是 `FIELD_DOC_TO_ORGS` 的收件方才列。廠商因此看不到監造起稿中的監造日誌與查驗表單，而監造一提送查驗表單廠商立刻看得到（查驗結果與可估驗依據不受影響）。
+- **沒有動的**：`roles`、RLS、RPC、任何 migration、Edge。「廠商不能簽署監造文件」由既有 pgTAP 釘住（`inspection_form_documents.sql` 的廠商建立／簽署 PD006 與「正式模式的廠商 admin 也不能簽」、`supervisor_logs.sql` 的廠商簽署／編輯 PD006）。
+- **導覽群組名**維持「現場紀錄／履約時程／估驗請款」，與實作指令的「AI 文件／契約期程／估驗請款」三件事 1:1 對應；報告的落差是並列模組太多而不是群組名，本輪不改名（名稱在 `navConfig` 單一來源）。
+
 ## 4. 契約時程與提醒對齊【已確認 目標，設計 機制】
 
 ### 4.1 核心類型與責任
@@ -159,7 +168,7 @@
 
 ## 5. 舊深連結與 fail-closed
 
-- `hidden` 項保留 `roles`；`routeAllowed` 不變；`e2e/routes.spec.js`、`reachability.spec.js`、`a11y.spec.js` 同步更新（退場頁改為「hidden 仍可直達且唯讀」的斷言）。
+- `hidden`／`hiddenFor` 項保留 `roles`；`routeAllowed` 不讀這兩個旗標（`hiddenFor` 連 `override` 都不放行，因為它管的是「這是誰的工作」而不是「誰有權限」）；`e2e/routes.spec.js`、`reachability.spec.js`、`a11y.spec.js` 同步更新（退場頁改為「hidden 仍可直達且唯讀」的斷言）。
 - 提醒信與 Agent 回答中的路徑：`/audit`→估驗頁對應工項、`/schedule`→`/requirements?item=<work_item>`、`/cost`→維持（唯讀）。**P6b 落地**：頁面已移除的 `/schedule`、`/audit` 登記為 `access: 'retired'`（保留原 `roles`，Web 守衛照常擋；通過後 `RetiredRedirect` 導到 `redirectTo` 並帶原 query 與返回來源）——不改成不經守衛的 `redirect`，也不刪登記（舊連結會變 404）；`/cost` 仍是 hidden 頁面。
 - 退場頁不得重新啟用寫入：頁面移除寫入控制且 store 不再暴露寫入函式；成本表更由資料庫收回寫入（P1b migration，直接 REST 也被拒），讀取 RLS 條件不變（歷史查閱原權限）。
 - 頁名單一來源（P1b 統一 P1c 移交項）：`/dashboard` 的 h1、側欄分區、待辦返回連結（`taskReturn.js`）、各頁指路文案都取 `navConfig.BALL_SOURCES_TITLE`（今日工作），不再有「今日待辦」別名；`/alerts` 在登記表帶 `label`，返回連結名同樣取自登記表。
