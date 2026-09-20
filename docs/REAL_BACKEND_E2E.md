@@ -14,7 +14,7 @@
 npm run test:e2e:real
 ```
 
-十六條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14）（chain 5–10、12–14 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+十七條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14，P3f）、保固期滿日與保固類循環義務（chain 15，P5e）（chain 5–10、12–15 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 ## 契約測試的兩種模式
 
@@ -125,4 +125,12 @@ npm run test:e2e:real -- e2e-real/chain13-report-reuse.spec.js
 ```bash
 supabase functions serve --env-file e2e-real/stub.env   # terminal A
 npm run test:e2e:real -- e2e-real/chain14-discard-draft.spec.js
+```
+
+## 保固期滿日與保固類循環義務（chain 15，P5e）
+
+`e2e-real/chain15-warranty.spec.js`（不需 Edge stub；本機 stack 已套用 `20260920040000`）：廠商（建案者＝專案管理者）補登兩條保固契約重點（「保固期間自驗收合格日起 2 年」與「保固期間每月巡檢」，附條款出處）→ 監造以 `review_requirement` 確認兩條 → 履約時程的履約期程卡顯示「保固期滿日待補（缺正式驗收合格日、缺契約保固期間）」、保固類每月巡檢沒有期次且詳情列出兩個入口 → 管理者在期程卡登錄保固期間 2 年並引用那條已確認的條文 → 留一版、卡上寫「2 年，依 第 16 條 …」，但仍缺合格日 → 仍不產生期次 → 機關以 RLS＋驗收 guard 登錄正式驗收合格 2025-03-15 → `get_project_warranty` 回期滿日 2027-03-15、`needs` 空 → DB 期次起於 2025-04（2025-03-10 早於合格日不列）、全部 `period_start ≤ 2027-03-15`、`basis` 記合格日與期滿日 → 監造（非管理者）看到同一份期滿日與兩項依據、沒有登錄／更正按鈕、期次依據句寫「正式驗收合格日 2025-03-15 起、保固期滿 2027-03-15 止」、不再有停止條件待補。
+
+```bash
+npm run test:e2e:real -- e2e-real/chain15-warranty.spec.js
 ```
