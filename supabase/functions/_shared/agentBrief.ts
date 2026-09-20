@@ -59,7 +59,7 @@ export function testSampleItems(samples: TestSampleRow[], todayUTC: number): Ope
 
 // ── 收件者過濾：只依廠商／監造／機關三方陣營 ─────────────────────────────
 // 廠商內部的現場、品管分工不是系統角色；所有廠商成員都能看到廠商事項，
-// 由公司自行決定實際承辦人。待補設定(責任方／基準日缺口)不歸任何一方,
+// 由公司自行決定實際承辦人。待補設定(責任方／時點／基準日／循環規則／停止條件缺口與回填待核對)不歸任何一方,
 // 三方都收到——與首頁、Agent 工具同一份規則(ballInCourtRules)。
 export function itemsForRecipient(items: OpenBallItem[], role: AgentRole): OpenBallItem[] {
   const side = SIDE_BY_AGENT_ROLE[role]
@@ -152,7 +152,7 @@ export function renderBriefEmail(args: {
       `<table style="border-collapse:collapse;width:100%">${soonRows.join('')}</table>`
     : ''
 
-  // 第三段(有才出現):待補設定——責任方推不出三方、或基準日沒填,推不出球在誰手上;
+  // 第三段(有才出現):待補設定——責任方推不出三方、時點／基準日／循環規則／停止條件沒設,推不出球在誰手上或何時到期;
   // 三方都看得到,搭便車出現在信裡,不單獨觸發寄信(與 pending 同)。
   const GREY = '#5f6368'
   const setupRows = sections.setupPending.map((it) =>

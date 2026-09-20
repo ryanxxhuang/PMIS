@@ -8,7 +8,7 @@ import type { OpenBallItem } from './ballInCourt.ts'
 import { listMyOpenItems } from './agentQueryTools.ts'
 import { itemsForRecipient, splitBrief } from './agentBrief.ts'
 import { parseDateUTC, computeObligationDueUTC, formatDate } from './contractDue.ts'
-import { periodBasisLabel, obligationEntries, warrantyGap, warrantyNeeds } from './ballInCourtRules.ts'
+import { periodBasisLabel, obligationEntries, warrantyGap, warrantyNeeds, timingGap } from './ballInCourtRules.ts'
 import type { AgentRole } from './agentPersona.ts'
 
 const ORGS: AgentRole[] = ['contractor', 'supervisor', 'owner']
@@ -127,6 +127,27 @@ describe('共用案例(Edge):Agent 工具 list_my_open_items(只列逾期義務)
     // P5c:循環停止條件判不出(保固類)→ 待補設定,處理入口指向基準日／驗收
     expect(byId['ob18']).toMatchObject({ setup: 'stop', responsible: '廠商' })
     expect(byId['ob18'].fix_at).toContain('竣工')
+    // F1:單次義務時點沒設 → 待補設定(timing),處理入口是擷取審核;非期限型無時點(ob22)不列
+    expect(byId['ob19']).toMatchObject({ setup: 'timing', setup_label: '時點待補（期限型契約重點未設定觸發點或頻率）', responsible: '廠商' })
+    expect(byId['ob20']).toMatchObject({ setup: 'timing', setup_label: '時點待補（觸發點為每月，循環規則未設定）', responsible: '監造' })
+    expect(byId['ob21']).toMatchObject({ setup: 'timing', setup_label: '時點待補（指定日期未填）' })
+    for (const id of ['ob19', 'ob20', 'ob21']) expect(byId[id].fix_at).toContain('擷取審核')
+    expect(byId['ob22']).toBeUndefined()
+  })
+})
+
+// F1 單次義務的時點缺口(Edge 路徑):共用規則對案例表說同一句;收集器讀 embed 的契約重點類型
+describe('共用案例(Edge):時點待補(F1)', () => {
+  it.each(cases.expected.timing_gaps.cases.map((c) => [c.name, c] as const))('%s', (_name, c) => {
+    expect(timingGap({ trigger_event: c.trigger_event, offset_days: c.offset_days, fixed_date: c.fixed_date, recurring: c.recurring, requirement: { requirement_type: c.requirement_type } })).toBe(c.gap)
+  })
+  it('收集器:ob19／ob20／ob21 列 timing 缺口並附條款;ob22 不列', async () => {
+    const items = await collect(7)
+    const byId = Object.fromEntries(items.filter((i) => i.kind === '契約重點').map((i) => [i.id, i]))
+    expect(byId['ob19']).toMatchObject({ side: 'contractor', meta: '時點待補（期限型契約重點未設定觸發點或頻率）（依 第13條）', setup: { kind: 'timing', label: '時點待補（期限型契約重點未設定觸發點或頻率）' } })
+    expect(byId['ob20']?.setup).toEqual({ kind: 'timing', label: '時點待補（觸發點為每月，循環規則未設定）' })
+    expect(byId['ob21']?.setup).toEqual({ kind: 'timing', label: '時點待補（指定日期未填）' })
+    expect(byId['ob22']).toBeUndefined()
   })
 })
 

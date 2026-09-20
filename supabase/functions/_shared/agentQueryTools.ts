@@ -16,12 +16,13 @@ import { isUuid } from './uuid.ts'
 import { likePattern, isDate, toolError, capList } from './agentToolCommon.ts'
 import { collectOpenBallItems } from './ballInCourt.ts'
 
-// 待補設定五種缺口的處理入口(與首頁 todayTasks setupLink 同一份對應):責任方／循環規則在擷取審核
+// 待補設定六種缺口的處理入口(與首頁 todayTasks setupLink 同一份對應):責任方／循環規則／時點在擷取審核
 // (已確認內容不可改,廢止取代後補登),基準日在期限追蹤的基準日卡,回填待核對在期限追蹤的那一期,
 // 循環停止條件(P5c)在期限追蹤的基準日卡(補竣工日／展延)或驗收頁(登錄竣工)。
 const SETUP_FIX_AT: Record<string, string> = {
   responsible: '擷取審核(已確認內容不可改;廢止取代後補登責任方)',
   rule: '擷取審核(循環規則不完整;廢止取代後補登每月幾日等)',
+  timing: '擷取審核(單次義務的時點沒設:指定日期未填、觸發點每月缺頻率、有期限缺起算事件、期限型無時點;廢止取代後補登觸發點或頻率)',
   anchor: '期限追蹤的基準日',
   review: '期限追蹤的該期(核對是否已履行後標記)',
   stop: '期限追蹤的基準日(補竣工日或展延)或驗收頁(登錄竣工);保固類:驗收頁登錄正式驗收合格、履約時程的履約期程卡登錄契約保固期間(引用已確認的契約條文)',

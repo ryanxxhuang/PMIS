@@ -14,7 +14,7 @@ import {
   obligationSide, ANCHOR_BY_TRIGGER, ANCHOR_LABELS as SHARED_ANCHOR_LABELS, ANCHOR_CHANGE_KIND_LABELS,
   isRecurring, isObligationOpen, currentObligationPeriod, recurrenceRuleGap, recurrenceAnchorKey,
   recurrenceStopGap, periodBasisLabel, singleDueSnapshot, obligationEntries, daysBetweenIso,
-  isWarrantyObligation, warrantyNeeds, warrantyTermLabel,
+  isWarrantyObligation, warrantyNeeds, warrantyTermLabel, obligationRequirementType,
 } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 
 export const PARTIES = ['廠商', '監造', '機關']
@@ -134,12 +134,13 @@ export function periodStat(periods) {
   return { total: (periods || []).length, n, settled, onTime, rate: settled ? Math.round((onTime / settled) * 100) : null }
 }
 
-// 待補設定的五種缺口(P5a responsible／anchor、P5b rule／review、P5c stop):與今日工作、Agent、早報
-// 同一份判定(共用規則 obligationEntries),履約時程只是把它列成可篩選的事項並附處理入口——
+// 待補設定的六種缺口(P5a responsible／anchor、P5b rule／review、P5c stop、F1 timing):與今日工作、Agent、
+// 早報同一份判定(共用規則 obligationEntries),履約時程只是把它列成可篩選的事項並附處理入口——
 // 若這裡自己再判一次,四處對同一條義務講的缺口就會不同。同一種缺口一條義務只列一次
 // (回填待核對可能多期,取最早的一期當入口)。
 export const SETUP_KINDS = Object.freeze([
   { key: 'responsible', label: '責任方待補' },
+  { key: 'timing', label: '時點待補' },
   { key: 'anchor', label: '基準日待補' },
   { key: 'rule', label: '循環規則待補' },
   { key: 'stop', label: '停止條件待補' },
@@ -202,6 +203,23 @@ export function recurrenceGap(ob, anchors, today) {
       : { kind: 'stop', label: `停止條件待補（${stop}）` }
   }
   return null
+}
+
+// 「沒有到期日」的原因(履約時程詳情的到期日欄與 na 狀態的說明共用;今日工作不需要——它只列缺口):
+// 循環義務 → recurrenceGap 的說法;單次義務 → 待補設定裡的時點／基準日缺口說法;都不是缺口就是設計上沒有到期日:
+// 觸發點「其他」=事件發生才起算(系統不追蹤該事件)、非期限型沒有時點=依條件觸發;罰則條款另說。
+// 說法從共用規則的缺口推導,不在這裡另判一次——否則同一條義務在清單標「待補設定」、詳情卻寫「依條件觸發」。
+export function singleNoDueReason(ob, setup) {
+  const gap = (setup || []).find((g) => g.kind === 'timing' || g.kind === 'anchor')
+  if (gap) return gap.label
+  if (ob?.trigger_event === 'other') return '依事件觸發（觸發點「其他」，事件發生後到擷取審核廢止取代並補登指定日期）'
+  const type = obligationRequirementType(ob || {})
+  return `無明確時點（${type && type !== 'deadline' ? '非期限型契約重點，' : ''}依條件觸發，不倒數）`
+}
+export function noDueReason(item) {
+  if (item.status !== 'na' && item.dateLabel !== '—') return ''
+  if (item.recurring) return item.recurrenceGap?.label || '尚未產生期次'
+  return singleNoDueReason(item.ob, item.setup)
 }
 
 // 單次義務的到期日依據(P5c):已完成且 DB 留了快照 → 「完成時留版」(第幾版、日期固定);已完成但沒快照

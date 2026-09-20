@@ -22,7 +22,7 @@
 | 查驗 | 待查驗→監造 |
 | 觀察 | 待處理→assigned_to 為三方值歸該方；缺值→廠商；其他文字→待補設定 |
 | 現場文書 | draft 待簽署／pending_input 待補欄位／in_review 待同方核對／signed 待提送／returned 被退回待補正→責任方 `owner_org`；submitted／received→目前版本已提送且尚未收件或退回的 `to_org` 各一顆「待收件」；都收件或 discarded／superseded→done |
-| 契約義務 | responsible 精確白名單（去頭尾空白）→該方；null／空／其他／未知→待補設定（責任方）；責任明確但觸發點對應的基準日沒填→待補設定（基準日）；單次義務已提送／已完成／不適用→done |
+| 契約義務 | responsible 精確白名單（去頭尾空白）→該方；null／空／其他／未知→待補設定（責任方）；責任明確但觸發點對應的基準日沒填→待補設定（基準日）；F1：單次義務推不出到期日且時點沒設（指定日期未填、觸發點 `monthly` 卻沒有循環規則、有 N 日期限卻沒有起算事件、期限型契約重點既無觸發點也無頻率）→待補設定（時點）；非期限型沒有時點與觸發點「其他」不是缺口（依條件／依事件觸發、無到期日）；單次義務已提送／已完成／不適用→done |
 | 循環義務（P5b） | 整條只在不適用時 done；每個未結期次（`obligation_periods`）各一顆球，到期日＝該期 `due_date`，標題加「（期別 期）」；循環規則不完整（每月缺幾日等）→待補設定（循環規則）；起算的基準日沒填（觸發點對應日期，無觸發點看開工日）→待補設定（基準日）；期次帶 `review_note`→待補設定（回填待核對）；期次已提送／已完成／不適用→done；P5c：停止條件判不出或已越界（保固類無保固期滿日、竣工日缺、竣工日已過而未登錄竣工／展延）→ 再一顆待補設定（停止條件），有期次時舊期照列 |
 | 單次義務已完成（P5c） | done；到期日讀完成當下的 `due_date_snapshot`（DB trigger 蓋），基準日事後更正不改；沒快照的舊資料照現行基準日算 |
 
@@ -35,6 +35,8 @@
 責任推不出三方、或基準日缺失而推不出到期日的事項，不歸任何一方、不算任何人的件數，改列「待補設定」讓三方都看得到並有處理入口：首頁「現在輪到我」下方一張卡、Agent 工具回 `setup_pending`、早報另成一段（不觸發寄信）。責任方缺口導到擷取審核該筆（已確認內容不可改，廢止取代後補登；義務 id 就是 requirement id）；基準日缺口導到期限追蹤的基準日卡。DB 同一條規則：`obligation_party()` 對三方以外回 null（migration `20260917220737`），update policy 因此對三方都不放行，只剩非正式模式的 admin override；前端 `obligationParty` 回「待補設定」，履約時程對三方可見但不可操作。
 
 P5b 再加兩種缺口（`SetupGap.kind`）：`rule`＝循環規則不完整（DB `fn_obligation_recurrence_gap` 與共用 `recurrenceRuleGap` 同口徑，導擷取審核）；`review`＝回填待核對（migration 回填時義務層曾標完成但推不出對應期別的期次帶 `review_note`，導期限追蹤該期，人標記後解除）。正式 7 筆 monthly 中 5 筆缺「每月幾日」，套用後即以「循環規則待補」列出。
+
+F1（2026-09-20 廠商驗收修正）第六種 `timing`＝單次義務的時點沒設（DB `fn_obligation_timing_gap` 與共用 `timingGap` 同口徑，migration `20260920214557`；pgTAP `obligation_timing_gap.sql` 對共用案例 `expected.timing_gaps` 逐條斷言，Vitest 核對兩邊是同一組）：以前推不出到期日只有一個結果「無到期日」，現在分兩類——缺口（指定日期未填；觸發點 `monthly` 卻沒有 `recurring`＝缺頻率；有 `offset_days` 卻沒有觸發點；`requirement_type='deadline'` 既無觸發點也無頻率）列「時點待補（缺什麼）」導擷取審核廢止取代後補登；不是缺口（非期限型沒有時點＝依條件觸發、觸發點 `other`＝事件發生才起算）維持無到期日，履約時程詳情以 `noDueReason` 說明原因（與清單的待補設定同一句）。契約重點類型隨義務列 embed `requirement:requirements(requirement_type)`（前端 `loadObligationsFromDB`、Edge 收集器），共用規則從 `ob.requirement.requirement_type` 讀；demo／舊資料沒有就只判前三種。「期限型需要時點」原本只在人工補登表單擋（`lib/manualRequirement.js`），AI 抽取與舊資料沒這道關，這一種就是它的後手。
 
 P5c 第五種 `stop`＝循環停止條件判不出或已越界（DB `fn_obligation_recurrence_stop_gap` 與共用 `recurrenceStopGap` 同口徑；實際竣工日由 `acceptance_events` 的 confirm／report 推得，共用 `completionDateOf` 與 DB `fn_project_completion_date` 同口徑）：竣工日缺、竣工日已過而未登錄竣工／展延，DB 已停止產生新期，導期限追蹤該筆（基準日卡補竣工日／展延）或驗收頁登錄竣工。保固類（P5e）改看保固事實：保固期滿日＝正式驗收合格日＋契約保固期間（DB `fn_project_warranty`，RPC `get_project_warranty`），缺哪一項就說哪一項（`warrantyGap`，`setup.need`），導履約時程該筆（驗收頁登錄正式驗收合格、履約期程卡登錄保固期間）。前端 `buildTodayTasks` 與 Edge 收集器都把 `completion_date` 與 `warranty` 放進 anchors 再交給共用規則。
 
@@ -57,7 +59,7 @@ P5c 第五種 `stop`＝循環停止條件判不出或已越界（DB `fn_obligati
 
 ## Edge／早報
 
-collectOpenBallItems 依專案查缺失、送審、RFI、估驗、查驗、變更、觀察、現場文書（＋目前版本提送列）、未廢止義務（embed 期次）與基準日，全部交給共用規則判定。Agent 用 caller JWT，obligationSoonDays=0、依 my_org_type 篩選後最多 30 筆，另回 `setup_pending`（`fix_at` 依四種缺口指路）；早報用 service role，obligationSoonDays=7，另加試體齡期並逐成員篩選，待補設定三方都收到但只有逾期／即將到期才寄。Agent 工具層只讀（工具白名單只允許 `my_org_type`／`list_project_members`／`get_project_warranty` 三支唯讀 RPC；最後一支自 P5e 起供收集器讀保固事實），期次由 DB 側維護（義務插入／規則變更／基準日變更 trigger、每日 pg_cron `pmis-obligation-periods`），不在工具層物化。
+collectOpenBallItems 依專案查缺失、送審、RFI、估驗、查驗、變更、觀察、現場文書（＋目前版本提送列）、未廢止義務（embed 期次）與基準日，全部交給共用規則判定。Agent 用 caller JWT，obligationSoonDays=0、依 my_org_type 篩選後最多 30 筆，另回 `setup_pending`（`fix_at` 依六種缺口指路）；早報用 service role，obligationSoonDays=7，另加試體齡期並逐成員篩選，待補設定三方都收到但只有逾期／即將到期才寄。Agent 工具層只讀（工具白名單只允許 `my_org_type`／`list_project_members`／`get_project_warranty` 三支唯讀 RPC；最後一支自 P5e 起供收集器讀保固事實），期次由 DB 側維護（義務插入／規則變更／基準日變更 trigger、每日 pg_cron `pmis-obligation-periods`），不在工具層物化。
 
 service role 沒有 RLS，每筆查詢的 project_id 是跨案隔離關鍵；提送表沒有 project_id，只以本案文件的 id 清單查。責任不明兩側都不歸任何方（P5a 前 Edge 預設廠商的差異已消除）；剩餘的呼叫端差異（soonDays）見 [雙引擎](dual-engine-sync.md)。早報 pending 是我方無期限項，不是首頁 waiting 的等對方。
 
@@ -69,4 +71,6 @@ navConfig 的 BALL_SOURCES 用 `/dashboard`、`?ball=waiting`、`?ball=done`；r
 
 ## 驗證
 
-共用案例三側（見「單一實作」）、[球權](../../src/lib/ballInCourt.test.js)、[待辦](../../src/lib/todayTasks.test.js)、[hook](../../src/lib/useTodayTasks.test.js)、[早報](../../supabase/functions/_shared/agentBrief.test.ts)、[履約時程規則](../../src/lib/obligationTimeline.test.js)、[到期日](../../src/lib/contractDue.test.js)、pgTAP [`obligation_party_unassigned.sql`](../../supabase/tests/obligation_party_unassigned.sql)、[`obligation_periods.sql`](../../supabase/tests/obligation_periods.sql)（期次排程純函式、materialize 冪等、狀態轉移權限矩陣、回填規則）、[`project_anchor_versions.sql`](../../supabase/tests/project_anchor_versions.sql)（P5c 版本不可竄改、重算只動未完成、單次快照、RPC 權限矩陣、停止條件、時區與月末）與三角色 E2E。
+共用案例三側（見「單一實作」）、[球權](../../src/lib/ballInCourt.test.js)、[待辦](../../src/lib/todayTasks.test.js)、[hook](../../src/lib/useTodayTasks.test.js)、[早報](../../supabase/functions/_shared/agentBrief.test.ts)、[履約時程規則](../../src/lib/obligationTimeline.test.js)、[到期日](../../src/lib/contractDue.test.js)、pgTAP [`obligation_party_unassigned.sql`](../../supabase/tests/obligation_party_unassigned.sql)、[`obligation_periods.sql`](../../supabase/tests/obligation_periods.sql)（期次排程純函式、materialize 冪等、狀態轉移權限矩陣、回填規則）、[`project_anchor_versions.sql`](../../supabase/tests/project_anchor_versions.sql)（P5c 版本不可竄改、重算只動未完成、單次快照、RPC 權限矩陣、停止條件、時區與月末）、[`obligation_timing_gap.sql`](../../supabase/tests/obligation_timing_gap.sql)（F1 時點缺口與共用案例逐條同句；單次義務推不出到期日時不存在「靜默的第四種」）與三角色 E2E；真後端 [`chain19-timing-gap.spec.js`](../../e2e-real/chain19-timing-gap.spec.js)（缺頻率的義務在今日工作與履約時程列為時點待補、入口通到擷取審核、監造廢止取代後補登每月幾日即恢復逐期追蹤）。
+
+契約期限不得被 Edge／AI 改變（F1 防回歸，廠商驗收「照片日期不得改變契約期限」）：[`anchorWrites.scan.test.ts`](../../supabase/functions/_shared/anchorWrites.scan.test.ts) 靜態掃描全部 Edge 原始碼，`projects`／`acceptance_events`／`project_anchor_versions`／`contract_obligations`／`obligation_periods` 不得出現 insert／update／upsert／delete 或原始 REST，`update_project_anchors`／`transition_obligation_period`／`materialize_*`／`review_requirement` 等 RPC 不得被呼叫；掃描器與 P4e 的估驗掃描共用同一份 [`tests/lib/edgeWriteScan.ts`](../../tests/lib/edgeWriteScan.ts)。

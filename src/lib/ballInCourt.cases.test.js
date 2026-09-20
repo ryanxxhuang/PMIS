@@ -8,7 +8,7 @@ import { collaborationItems } from './ballInCourt.js'
 import { buildTodayTasks } from './todayTasks.js'
 import { computeObligationDue } from './contractDue.js'
 import { localISODate } from './dates.js'
-import { periodBasisLabel } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+import { periodBasisLabel, timingGap } from '../../supabase/functions/_shared/ballInCourtRules.ts'
 import { recurrenceGap, setupGapsOf } from './obligationTimeline.js'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -115,6 +115,33 @@ describe('共用案例(前端):今日工作三桶＋待補設定', () => {
     // 導履約時程該筆(驗收頁與履約期程卡兩個入口都在那裡);已完成的單次義務 ob17 不列
     expect(setup['契約重點:ob18']).toMatchObject({ meta: '停止條件待補（缺正式驗收合格日，無法判定保固期滿日）', to: '/requirements?obligation=ob18', ball: 'contractor' })
     for (const org of ORGS) expect([...built[org].mine, ...built[org].waiting, ...built[org].setup].some((t) => t.id === 'ob17')).toBe(false)
+    // F1:單次義務時點沒設(期限型無觸發點／觸發點每月缺頻率／指定日期未填)→ 待補設定說缺什麼、導擷取審核;
+    // 非期限型無時點(ob22)與觸發點「其他」(ob7)不是缺口,也不進任何桶(沒有到期日就不會到期)
+    expect(setup['契約重點:ob19']).toMatchObject({ meta: '時點待補（期限型契約重點未設定觸發點或頻率）', to: '/requirements/review?highlight=ob19', ball: 'contractor' })
+    expect(setup['契約重點:ob20']).toMatchObject({ meta: '時點待補（觸發點為每月，循環規則未設定）', to: '/requirements/review?highlight=ob20', ball: 'supervisor' })
+    expect(setup['契約重點:ob21']).toMatchObject({ meta: '時點待補（指定日期未填）', to: '/requirements/review?highlight=ob21', ball: 'contractor' })
+    for (const org of ORGS) expect([...built[org].mine, ...built[org].waiting, ...built[org].setup].some((t) => ['ob22', 'ob7'].includes(t.id))).toBe(false)
+  })
+})
+
+// F1 單次義務的時點缺口:共用規則 timingGap 與 DB fn_obligation_timing_gap 對同一組案例說同一句
+describe('共用案例(前端):時點待補(F1)', () => {
+  const here = path.dirname(fileURLToPath(import.meta.url))
+  const pgtap = fs.readFileSync(path.resolve(here, '../../supabase/tests/obligation_timing_gap.sql'), 'utf8')
+  it.each(cases.expected.timing_gaps.cases.map((c) => [c.name, c]))('%s:共用規則的說法與案例一致', (_name, c) => {
+    const ob = { trigger_event: c.trigger_event, offset_days: c.offset_days, fixed_date: c.fixed_date, recurring: c.recurring, requirement: { requirement_type: c.requirement_type } }
+    expect(timingGap(ob)).toBe(c.gap)
+  })
+  it('DB 同口徑:案例表的每一條都由 pgTAP 逐條斷言(同一組案例,改一邊另一邊紅)', () => {
+    const sql = (v) => (v == null ? 'null' : typeof v === 'number' ? String(v) : `'${v}'`)
+    for (const c of cases.expected.timing_gaps.cases) {
+      const call = `fn_obligation_timing_gap(${sql(c.requirement_type)}, ${sql(c.trigger_event)}, ${sql(c.offset_days)}, ${sql(c.fixed_date)}, ${sql(c.recurring)})`
+      expect(pgtap, c.name).toContain(`${call}, ${c.gap == null ? 'null' : `'${c.gap}'`}`)
+    }
+    // 履約時程列的三條 timing 標籤也要出現在 pgTAP(標籤＝「時點待補（缺口句）」)
+    for (const o of cases.expected.obligations.filter((o) => o.setup === 'timing')) {
+      expect(pgtap, o.id).toContain(`'${o.label.replace(/^時點待補（|）$/g, '')}'`)
+    }
   })
 })
 

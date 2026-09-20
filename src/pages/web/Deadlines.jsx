@@ -28,7 +28,7 @@ import { ListDetailLayout, SearchField, StatusChip, MetaGrid } from '../../compo
 import { useListDetailPane, useListKeyboardNav } from '../../lib/useListDetailPane.js'
 import { friendlyError } from '../../lib/errorMessage.js'
 import { computeObligationDue, formatObligationRule } from '../../lib/contractDue.js'
-import { ORG_TO_PARTY, obligationParty, UNASSIGNED_PARTY, periodRows, recurrenceGap, singleDueBasis } from '../../lib/obligationTimeline.js'
+import { ORG_TO_PARTY, obligationParty, UNASSIGNED_PARTY, periodRows, recurrenceGap, singleDueBasis, setupGapsOf, singleNoDueReason } from '../../lib/obligationTimeline.js'
 import { isRecurring, isObligationOpen, currentObligationPeriod, completionDateOf, periodBasisLabel } from '../../../supabase/functions/_shared/ballInCourtRules.ts'
 import AnchorDates from '../../components/AnchorDates.jsx'
 import AnchorVersions from '../../components/AnchorVersions.jsx'
@@ -154,9 +154,11 @@ export default function Deadlines() {
     if (done) state = 'done'
     else if (due) { diff = Math.round((due - today0()) / 86400000); state = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'scheduled' }
     // gap:沒有期次的原因,或(P5c)停止條件判不出／已越界——有期次時也回,提示之後不會再產生
+    // noDue(F1):單次義務推不出到期日的原因——時點／基準日缺口與履約時程、今日工作同一句(共用規則);不是缺口才說依條件觸發
     return {
       id: ob.id, ob, due, diff, done, state, phase: phaseOf(ob), recurring, period,
       periods: recurring ? periodRows(ob, today0()) : [], gap: recurring ? recurrenceGap(ob, anchors, today0()) : null,
+      noDue: !recurring && !done && !due ? singleNoDueReason(ob, setupGapsOf(ob, anchors, today0())) : '',
       // 到期日依據(P5c):本期依哪一版基準日產生;單次義務完成時留版或依現行基準日
       basis: recurring ? (period ? periodBasisLabel(period) : '') : (singleDueBasis(ob, anchors.version_no)?.label || ''),
     }
@@ -272,6 +274,10 @@ export default function Deadlines() {
             ['責任方', ob.responsible || '—'],
             ['狀態', statusText],
           ]} />
+          {/* 單次義務沒有到期日的原因(F1):缺時點／基準日就說缺什麼、去擷取審核或下方基準日卡補;不是缺口就說依條件觸發 */}
+          {it.noDue && (
+            <p className="mt-3 text-footnote leading-relaxed text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-lg px-3 py-2">{it.noDue}</p>
+          )}
           {/* 回填待核對:原義務曾標為完成但對不上期別,由人核對本期是否已履行後標記(標記即解除) */}
           {it.recurring && it.period?.review_note && (
             <p className="mt-3 text-footnote leading-relaxed text-[var(--amber-text)] bg-[var(--amber-tint)] rounded-lg px-3 py-2">待核對:{it.period.review_note}</p>
