@@ -84,7 +84,7 @@ export type FieldEvidence = {
 }
 export type FieldSource = {
   status: FieldSourceStatus
-  source: string | null // 'whiteboard:<photo_id>' | 'photo_time:<photo_id>' | 'intake' | 'cwa' | 'legacy:<daily_log_id>' | 'yesterday:<daily_log_id>' | 'ai:photo' | 'system:template_match'
+  source: string | null // 'whiteboard:<photo_id>' | 'photo_time:<photo_id>' | 'upload_time:<photo_id>' | 'intake' | 'cwa' | 'legacy:<daily_log_id>' | 'yesterday:<daily_log_id>' | 'ai:photo' | 'system:template_match'
   refs?: string[]
   reason?: string
   hint?: { value: number; unit: string | null; source: string; raw_text?: string } // 帶不進欄位的讀數只作提示(兩向尺寸、單位不合、編號分歧)
@@ -125,15 +125,16 @@ export function taipeiDayRange(date: string): { start: string; end: string } {
 
 export type PhotoDate = {
   date: string | null
-  source: 'whiteboard' | 'intake' | 'photo_time' | null
-  ref: string | null // 來源照片 id(whiteboard／photo_time)
-  conflict: string | null // 告示板日期與拍攝日不同時的說明(仍以告示板為準,但要列入 recheck)
+  source: 'whiteboard' | 'intake' | 'photo_time' | 'upload_time' | null
+  ref: string | null // 來源照片 id(whiteboard／photo_time／upload_time)
+  conflict: string | null // 要讓人核對的日期說明(告示板日期與拍攝日不同、或只能暫用上傳日);列入批次說明
 }
 
-// 優先序:告示板日期(現場自己寫的)> 使用者指定的批次日期 > 拍攝時間的台北日。
-// taken_at 沒 EXIF 時是上傳時刻(site.js uploadSitePhoto),所以排在使用者指定之後。
+// 優先序:告示板日期(現場自己寫的)> 使用者指定的批次日期 > 拍攝時間(EXIF)的台北日 > 上傳日。
+// 2026-09-21 G 包:上傳端不再把上傳時刻寫進 taken_at(沒有 EXIF 就是 null),所以「上傳日」是獨立的最後一順位,
+// 來源明寫 upload_time 並附說明——紙上日期讀不到時不默默套今天(驗收指令 B.6)。
 export function assignPhotoDate(
-  photo: { id: string; taken_at: string | null },
+  photo: { id: string; taken_at: string | null; created_at?: string | null },
   board: WhiteboardResult | null,
   intakeLogDate: string | null,
 ): PhotoDate {
@@ -147,6 +148,13 @@ export function assignPhotoDate(
   }
   if (intakeLogDate) return { date: intakeLogDate, source: 'intake', ref: null, conflict: null }
   if (takenDate) return { date: takenDate, source: 'photo_time', ref: photo.id, conflict: null }
+  const uploadDate = taipeiDateOf(photo.created_at)
+  if (uploadDate) {
+    return {
+      date: uploadDate, source: 'upload_time', ref: photo.id,
+      conflict: `照片沒有拍攝時間,也沒有讀到紙上日期,暫以上傳日 ${uploadDate} 起稿;日期不對請捨棄後指定日期重新上傳`,
+    }
+  }
   return { date: null, source: null, ref: null, conflict: null }
 }
 
@@ -1047,12 +1055,16 @@ export function draftUnchanged(
 
 // ── 自主檢查表草稿(P3b) ─────────────────────────────────────────────────────
 // 框架=DB fn_field_document_template('self_check')(示範框架範本);檢查項目=本案 checklist_templates 的範本(由候選推斷
-// 確定性挑選,已隨候選帶入)。每個項目一律 pending:實測值只能人量測(DB 版本 guard 拒絕 AI 帶入),勾選項沒有逐項依據
-// 就不建議;告示板清楚寫出對應項目的讀數只放 hint 供人採用,不填值。
+// 確定性挑選,已隨候選帶入)。實測值:紙本／告示板實測欄已寫好的讀數照原文抄錄並標待確認(B 包起;兩向尺寸與多編號
+// 分列見 resolveMeasuredItem),其餘 pending 待人量測;勾選項沒有逐項依據就不建議。
 // Agent 對話起稿(P6b-2,draft_inspection 工具)走同一支:照片起稿沒有逐項依據,所以不帶 boolSuggestions;對話起稿時模型
 // 可對勾選項給「值＋依據」(依據只能來自工具回傳內容,呼叫端已驗),帶入為 filled／ai:agent——勾選項的 item_rules 是
 // confirm_required,filled 不算齊備,仍要人逐項確認才能簽署;實測值不論哪條路都不帶值。工項可不指定(對話起稿時)。
-export type SelfCheckResultDraft = { value: number | boolean | null }
+// 一筆紙上實測讀數(2026-09-21 G 包):兩向尺寸(13×11 mm)與不同編號(編號 1／編號 4)分列保存,不截半、不合併。
+// 數值一律已換算成範本項目的單位(與 value 相同口徑);raw_text 是紙上原文,只供核對。
+// 形狀與 DB fn_checklist_result_check／fn_checklist_judge 同一組:readings 非空時 value 必為 null。
+export type ResultReading = { entry_no: string | null; value: number; value2: number | null; raw_text: string | null }
+export type SelfCheckResultDraft = { value: number | boolean | null; readings?: ResultReading[] }
 export type SelfCheckContent = {
   check_date: string
   template_id: string
@@ -1098,10 +1110,11 @@ export function matchChecklistItem(description: string, items: ChecklistItemLike
 // 紙本查驗表右欄已經寫好的實測紀錄是**抄錄**,不是 AI 代為量測。新規則(設計文件 §3.6 同步):
 //   * 只抄 kind='measured' 且有原文(raw_text)的觀察;設計值(≥27 cm)、空欄永遠不抄。
 //   * 工項、欄位意義、單位三者都唯一對應才填:label 對得到範本項目、單位相同或同量綱可換算。
-//   * 兩向尺寸(11×11 mm)單一欄位承不住 → 不截半、不填,原文放 hint 待人決定。
-//   * 不同編號(編號 1／編號 4)是不同量測對象 → 不合併,pending 請人選。
-//   * 同一份紀錄被拍很多張 → 依(編號,原文,值)去重,只留一筆讀數與全部來源照片;**不累加**。
-//   * 值不一致 → 列衝突、各自保留來源,不挑一個。
+//   * 兩向尺寸(11×11 mm)與不同編號(編號 1／編號 4)→ 分列成 readings 抄進同一項(2026-09-21 G 包;
+//     舊規則把它們一律留空,結果三張真實紙表的 8 個實測值一格都進不了表)。不截半、不合併、不挑一個。
+//   * 部分紀錄有編號、部分沒有 → 分不出是不是同一個量測對象,pending 請人確認。
+//   * 同一份紀錄被拍很多張 → 依(編號,換算後的值)去重,只留一筆讀數與全部來源照片;**不累加**。
+//   * 同一編號的值不一致 → 列衝突、各自保留來源,不挑一個。
 //   * 填進去的一律是 filled(待確認);範本 item_rules 仍是 confirm_required,簽署前人要逐項確認。
 export type MeasuredReading = { photoId: string; obs: RecordObservation }
 
@@ -1124,6 +1137,7 @@ export function collectMeasuredReadings(
 
 export type MeasuredResolution = {
   value: number | null
+  readings: ResultReading[] | null // 兩向尺寸或多個編號時才有;此時 value 為 null
   source: FieldSource
   recheck: string | null // null=已帶入,只需確認(recheck 由呼叫端統一加「待確認」)
 }
@@ -1134,7 +1148,7 @@ export function resolveMeasuredItem(
   actor: string, // '親自量測填寫' 的主體描述(廠商／監造)
 ): MeasuredResolution {
   const none = (reason: string): MeasuredResolution =>
-    ({ value: null, source: { status: 'pending', source: null, reason }, recheck: reason })
+    ({ value: null, readings: null, source: { status: 'pending', source: null, reason }, recheck: reason })
   if (!readings.length) return none(`實測值由${actor}親自量測填寫;紙本／告示板沒有這一項的實測紀錄,系統不從照片推定`)
 
   const refs = [...new Set(readings.map((r) => r.photoId))]
@@ -1142,32 +1156,25 @@ export function resolveMeasuredItem(
     photo_id: r.photoId, raw_text: r.obs.raw_text, label: r.obs.label, entry_no: r.obs.entry_no, unit: r.obs.unit, kind: 'measured' as const,
   }))
   const withPending = (reason: string, hint?: FieldSource['hint']): MeasuredResolution => ({
-    value: null, source: { status: 'pending', source: null, refs, reason, evidence, ...(hint ? { hint } : {}) }, recheck: reason,
+    value: null, readings: null, source: { status: 'pending', source: null, refs, reason, evidence, ...(hint ? { hint } : {}) }, recheck: reason,
   })
 
-  // 1. 編號分歧:不同編號是不同量測對象,不合併
-  const entryNos = [...new Set(readings.map((r) => r.obs.entry_no).filter(Boolean))]
-  if (entryNos.length > 1) {
-    return withPending(`紙上編號 ${entryNos.join('、')} 各有實測紀錄,未合併;請確認本表對應哪一個編號後填寫`)
-  }
-
-  // 2. 兩向尺寸:單一欄位承不住,原文放提示,不截半
-  const twoWay = readings.find((r) => r.obs.value2 != null)
-  if (twoWay) {
-    return withPending(
-      `紙上為兩向尺寸「${twoWay.obs.raw_text}」,單一欄位無法完整承載,未自動帶入;請確認要記錄哪一向或分列`,
-      { value: twoWay.obs.value ?? 0, unit: twoWay.obs.unit || null, source: `record:${twoWay.photoId}`, raw_text: twoWay.obs.raw_text },
-    )
-  }
-
-  // 3. 單位:相同或同量綱可換算才帶入
-  const converted: { value: number; reading: MeasuredReading; note: string | null }[] = []
+  // 1. 單位:兩向都要能換成範本單位(相同或同量綱);任何一筆不行就整項不帶入
+  type Conv = { entry: string | null; value: number; value2: number | null; reading: MeasuredReading; note: string | null }
+  const converted: Conv[] = []
   const unitErrors: string[] = []
   for (const r of readings) {
     if (r.obs.value == null) continue
-    const conv = convertQuantity(r.obs.value, r.obs.unit, item.unit)
-    if (conv.ok) converted.push({ value: conv.value, reading: r, note: conv.note })
-    else unitErrors.push(conv.reason)
+    const c1 = convertQuantity(r.obs.value, r.obs.unit, item.unit)
+    if (!c1.ok) { unitErrors.push(c1.reason); continue }
+    let value2: number | null = null
+    if (r.obs.value2 != null) {
+      const c2 = convertQuantity(r.obs.value2, r.obs.unit, item.unit)
+      if (!c2.ok) { unitErrors.push(c2.reason); continue }
+      value2 = c2.value
+    }
+    const entry = textOrNull(r.obs.entry_no)
+    converted.push({ entry, value: c1.value, value2, reading: r, note: c1.note })
   }
   if (!converted.length) {
     const why = [...new Set(unitErrors)].join(';') || '紙上這一項沒有可用的實測數值'
@@ -1181,22 +1188,72 @@ export function resolveMeasuredItem(
     return withPending(`同一項有單位不一致的紀錄(${why}),未自動帶入,請確認後填寫`)
   }
 
-  // 4. 值一致才帶入;不一致列衝突並保留各自來源
-  const distinct = [...new Set(converted.map((c) => c.value))]
-  if (distinct.length > 1) {
-    const detail = converted.map((c) => `${c.value}(照片 ${c.reading.photoId.slice(0, 8)}「${c.reading.obs.raw_text}」)`).join('、')
-    return withPending(`多張照片的實測紀錄不一致:${detail};請核對現場紀錄後填寫`)
+  // 2. 編號:有的有、有的沒有 → 分不出是否同一量測對象,不猜
+  const named = converted.filter((c) => c.entry != null)
+  if (named.length && named.length < converted.length) {
+    return withPending(`紙上部分實測紀錄有編號(${[...new Set(named.map((c) => c.entry))].join('、')})、部分沒有,無法確認對應關係;請核對後填寫`)
+  }
+
+  // 3. 同一編號(或都沒有編號)的值一致才帶入;不一致列衝突並保留各自來源
+  const dims = (c: { value: number; value2: number | null }) => (c.value2 == null ? `${c.value}` : `${c.value}×${c.value2}`)
+  const groups = new Map<string, Conv[]>()
+  for (const c of converted) {
+    const k = c.entry ?? ''
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k)!.push(c)
+  }
+  for (const [entry, list] of groups) {
+    const distinct = [...new Set(list.map(dims))]
+    if (distinct.length > 1) {
+      const detail = list.map((c) => `${dims(c)}(照片 ${c.reading.photoId.slice(0, 8)}「${c.reading.obs.raw_text}」)`).join('、')
+      return withPending(`${entry ? `編號 ${entry} ` : ''}多張照片的實測紀錄不一致:${detail};請核對現場紀錄後填寫`)
+    }
   }
   const note = converted.find((c) => c.note)?.note
-  const raws = [...new Set(converted.map((c) => c.reading.obs.raw_text))]
+  const agree = refs.length > 1 ? `,${refs.length} 張照片一致` : ''
+
+  // 4. 只有一筆一維讀數 → 單一值(舊路徑,編號留在證據裡)
+  const entries = [...groups.entries()].sort(([a], [b]) => compareEntryNo(a, b))
+  if (entries.length === 1 && entries[0][1][0].value2 == null) {
+    const raws = [...new Set(converted.map((c) => c.reading.obs.raw_text))]
+    return {
+      value: entries[0][1][0].value,
+      readings: null,
+      source: {
+        status: 'filled', source: `record:${converted[0].reading.photoId}`, refs, evidence,
+        reason: `抄錄自紙本／告示板實測欄「${raws.join('、')}」${note ? `(${note})` : ''}${agree};系統只抄錄,未代為量測,請核對後逐項確認`,
+      },
+      recheck: null,
+    }
+  }
+
+  // 5. 兩向尺寸或多個編號 → 分列讀數(不截半、不合併、不挑一個)
+  const out: ResultReading[] = entries.map(([entry, list]) => ({
+    entry_no: entry || null, value: list[0].value, value2: list[0].value2, raw_text: list[0].reading.obs.raw_text || null,
+  }))
   return {
-    value: distinct[0],
+    value: null,
+    readings: out,
     source: {
       status: 'filled', source: `record:${converted[0].reading.photoId}`, refs, evidence,
-      reason: `抄錄自紙本／告示板實測欄「${raws.join('、')}」${note ? `(${note})` : ''}${refs.length > 1 ? `,${refs.length} 張照片一致` : ''};系統只抄錄,未代為量測,請核對後逐項確認`,
+      reason: `抄錄自紙本／告示板實測欄:${formatReadings(out, item.unit)}${note ? `(${note})` : ''}${agree};` +
+        '兩向尺寸與不同編號分列記錄、不合併;系統只抄錄,未代為量測,請核對後逐項確認',
     },
     recheck: null,
   }
+}
+
+// 編號排序:都是數字就照數值,否則照字串(編號 2 在 編號 10 前)
+export function compareEntryNo(a: string, b: string): number {
+  const na = Number(a), nb = Number(b)
+  if (a !== '' && b !== '' && Number.isFinite(na) && Number.isFinite(nb)) return na - nb
+  return a.localeCompare(b, 'zh-Hant')
+}
+
+// 分列讀數的人讀文字(草稿說明、待補清單用;與前端 lib/qc.formatResult 同一格式)
+export function formatReadings(readings: ResultReading[], unit: string | null | undefined): string {
+  const u = unit ? ` ${unit}` : ''
+  return readings.map((r) => `${r.entry_no ? `編號 ${r.entry_no} ` : ''}${r.value2 == null ? r.value : `${r.value}×${r.value2}`}${u}`).join('、')
 }
 
 export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft {
@@ -1250,7 +1307,11 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
     if (it.kind === 'num') {
       const r = resolveMeasuredItem(it, measured.get(it.no) ?? [], '你')
       sources[key] = r.source
-      if (r.value != null) {
+      if (r.readings) {
+        results[it.no] = { value: null, readings: r.readings }
+        filledFromRecord++
+        recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:已抄錄紙本實測值 ${formatReadings(r.readings, it.unit)},待你核對確認` })
+      } else if (r.value != null) {
         results[it.no] = { value: r.value }
         filledFromRecord++
         recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:已抄錄紙本實測值 ${r.value}${it.unit ?? ''},待你核對確認` })
@@ -1286,7 +1347,7 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
     workItem ? `工項:依 ${photos.length} 張已配對工項的照片自動帶出(確定性比對,非模型判讀)。` : '工項:起稿時未指定,未掛照片;有對應工項請補上。',
     `檢查項目(${items.length} 項):實測值 ${numCount} 項——其中 ${filledFromRecord} 項是**從紙本／告示板實測欄抄錄**的既有紀錄(附原文與來源照片,標待確認),` +
     `其餘留空待你親自量測填寫。系統只抄錄紙上已經寫好的數字,不代為量測、不從畫面推定讀數;` +
-    `設計值／規範要求、空欄、兩向尺寸與單位對不上的紀錄一律不帶入。` +
+    `設計值／規範要求、空欄與單位對不上的紀錄一律不帶入;兩向尺寸與不同編號分列記錄、不截半也不合併。` +
     (suggested ? `勾選項 ${suggested} 項為 AI 依對話中工具回傳內容給的建議(逐項附依據),其餘待你勾選;` : '勾選項沒有逐項依據,系統不代為勾選;') +
     '**所有項目(含已抄錄的)簽署前都必須由你逐項確認**;本次未檢請標不適用並填原因。',
     designRefs.size ? `設計值對照(只供核對,未填入任何欄位):${[...designRefs.entries()].map(([no, xs]) => `${no} ${[...new Set(xs)].join('、')}`).join(';')}。` : '',
@@ -1313,7 +1374,7 @@ export function buildSelfCheckDraft(input: SelfCheckDraftInput): SelfCheckDraft 
 
 // ── 監造查驗表單草稿(P3c) ───────────────────────────────────────────────────────
 // 查驗申請資料(工項、位置、階段、申報量、檢附自檢)由系統帶入並標 inspection:<id> 待監造核對;單位取自標單工項;查驗項目
-// (本案 kind=inspection_form 範本)同自檢表一律 pending、實測值只放告示板 hint。**判定(verdict)與本次確認數量(confirmed_qty)
+// (本案 kind=inspection_form 範本)同自檢表:紙上實測欄已寫的讀數抄錄待確認,其餘 pending。**判定(verdict)與本次確認數量(confirmed_qty)
 // 永遠 null＋pending**:系統與 AI 不替監造判定、不填確認量(DB 版本 guard 拒絕 AI 帶入;簽署即判定並寫入可估驗的確認量)。
 export type InspectionFormContent = {
   inspection_date: string
@@ -1415,7 +1476,11 @@ export function buildInspectionFormDraft(input: InspectionFormDraftInput): Inspe
     if (it.kind === 'num') {
       const r = resolveMeasuredItem(it, measured.get(it.no) ?? [], '監造')
       sources[key] = r.source
-      if (r.value != null) {
+      if (r.readings) {
+        results[it.no] = { value: null, readings: r.readings }
+        filledFromRecord++
+        recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:已抄錄紙本實測值 ${formatReadings(r.readings, it.unit)},待監造核對確認` })
+      } else if (r.value != null) {
         results[it.no] = { value: r.value }
         filledFromRecord++
         recheck.push({ key, reason: `${it.no} ${it.item ?? ''}:已抄錄紙本實測值 ${r.value}${it.unit ?? ''},待監造核對確認` })
@@ -1446,7 +1511,7 @@ export function buildInspectionFormDraft(input: InspectionFormDraftInput): Inspe
     `單位:取自標單工項「${wiLabel}」(${workItem.unit ?? '—'}),簽署時必須一致。`,
     requiredStages.length ? `階段:此工項有必要查驗階段 ${requiredStages.join('、')},全部階段皆確認的量才可估驗。` : '階段:此工項為單階段(檢驗停留點無 H 點)。',
     template
-      ? `查驗項目:範本「${template.title}」(${input.templateReason ?? ''})共 ${items.length} 項;其中 ${filledFromRecord} 項已從紙本／告示板的實測欄抄錄(附原文與來源照片,標待確認),其餘留待你親自量測填寫。系統只抄錄紙上寫好的數字,不代為量測、不猜讀數;設計值、空欄、兩向尺寸與單位對不上的紀錄一律不帶入。簽署前每一項都必須由你逐項確認。`
+      ? `查驗項目:範本「${template.title}」(${input.templateReason ?? ''})共 ${items.length} 項;其中 ${filledFromRecord} 項已從紙本／告示板的實測欄抄錄(附原文與來源照片,標待確認),其餘留待你親自量測填寫。系統只抄錄紙上寫好的數字,不代為量測、不猜讀數;設計值、空欄與單位對不上的紀錄一律不帶入,兩向尺寸與不同編號分列記錄。簽署前每一項都必須由你逐項確認。`
       : '查驗項目:本案沒有監造查驗表範本,依判定欄簽署。',
     '判定與本次確認數量:系統與 AI 一律不填、不建議;簽署即判定,確認數量寫入監造確認紀錄成為可估驗依據。',
     ...recheck.filter((r) => r.key === 'photos').map((r) => r.reason),

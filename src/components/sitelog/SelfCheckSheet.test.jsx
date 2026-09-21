@@ -88,3 +88,51 @@ describe('自主檢查表紙本:廠商直接在原表格子裡編輯', () => {
     expect(text()).toContain('本文件建立時使用 taipei-self-check-ref v0')
   })
 })
+
+// G 包:兩向尺寸／多編號分列在「實際檢查情形」格裡;唯讀／列印印文字(PDF 由這張紙抄)
+describe('自主檢查表紙本:分列讀數', () => {
+  const tplW = {
+    id: 'TW', title: '鋼線網自主檢查表', source: '圖說',
+    items: [{ no: 'W1', item: '鋼線網線徑', standard: '依圖說', kind: 'num', unit: 'mm', min: 10, max: 14 }],
+  }
+  const rd = [{ entry_no: '1', value: 13, value2: 11, raw_text: '13 * 11 MM' }, { entry_no: '4', value: 11, value2: 11, raw_text: '11 * 11 MM' }]
+  const st = (results) => ({
+    content: { check_date: '2026-08-04', template_id: 'TW', template_title: '鋼線網自主檢查表', work_item_id: null, location: '4-4-25M', results, note: null },
+    sources: { 'results.W1': { status: 'filled', source: 'record:P1', refs: ['P1'], evidence: [
+      { photo_id: 'P1', raw_text: '13 * 11 MM', entry_no: '1', unit: 'MM', kind: 'measured' },
+      { photo_id: 'P1', raw_text: '11 * 11 MM', entry_no: '4', unit: 'MM', kind: 'measured' },
+    ] } },
+  })
+
+  it('唯讀:逐筆印出編號與兩向尺寸,不長 input;判定 ○', async () => {
+    const s = st({ W1: { value: null, readings: rd } })
+    await render({ content: s.content, sources: s.sources, checklistTemplate: tplW })
+    expect(inputs()).toHaveLength(0)
+    expect(text()).toContain('編號 1　13×11 mm')
+    expect(text()).toContain('編號 4　11×11 mm')
+    expect(text()).toContain('○')
+  })
+
+  it('廠商編輯:每筆一列(編號／讀數／第二向)可改可刪可加;紙上原文逐筆標編號', async () => {
+    let changed = null
+    const s = st({ W1: { value: null, readings: rd } })
+    await render({ content: s.content, sources: s.sources, checklistTemplate: tplW, edit: { org: 'contractor', editable: true, onChange: (n) => { changed = n }, photosById: new Map() } })
+    expect(byLabel('W1 鋼線網線徑 第 1 筆 編號').value).toBe('1')
+    expect(byLabel('W1 鋼線網線徑 第 2 筆 讀數').value).toBe('11')
+    expect(byLabel('W1 鋼線網線徑 第 2 筆 第二向').value).toBe('11')
+    expect(text()).toContain('紙上原文：13 * 11 MM（編號 1）、11 * 11 MM（編號 4）')
+    const del = container.querySelector('[aria-label="刪除 W1 鋼線網線徑 第 1 筆"]')
+    await act(async () => { del.click() })
+    expect(changed.content.results.W1).toEqual({ value: null, readings: [rd[1]] })
+    expect(changed.sources['results.W1']).toEqual({ status: 'confirmed', source: 'human' })
+  })
+
+  it('單一值模式可按「分列」轉成讀數列,原值帶進第一筆', async () => {
+    let changed = null
+    const s = st({ W1: { value: 12 } })
+    await render({ content: s.content, sources: {}, checklistTemplate: tplW, edit: { org: 'contractor', editable: true, onChange: (n) => { changed = n }, photosById: new Map() } })
+    const btn = [...container.querySelectorAll('button')].find((b) => b.textContent === '分列')
+    await act(async () => { btn.click() })
+    expect(changed.content.results.W1).toEqual({ value: null, readings: [{ entry_no: null, value: 12, value2: null, raw_text: null }] })
+  })
+})

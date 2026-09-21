@@ -250,6 +250,9 @@ export function applyPaperCells(whiteboard: WhiteboardResult | null, cells: Pape
   }
 }
 
+// 各類文書的業務日期欄(待確認清單用)
+const DOC_DATE_KEY: Record<string, string> = { daily_log: 'log_date', supervisor_log: 'log_date', self_check: 'check_date', inspection_form: 'inspection_date' }
+
 // 照片列＋已存辨識結果 → 起稿用照片(照片起稿與 Agent 對話起稿同一支)
 export const toDraftPhoto = (p: IntakePhotoRow, s: StoredAiResult | null): DraftPhoto => ({
   id: p.id, storage_path: p.storage_path, content_sha256: p.content_sha256, work_item_id: p.work_item_id,
@@ -535,14 +538,16 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
           if (!whiteboard) whiteboardSkipped = 'failed:invalid_output'
           // 紙本表單一律再讀一次整張,只留兩次一致的內容:逐格接手了 observations,
           // 但表頭(手寫的民國年日期)仍由這一支負責,單讀一次曾把 115 讀成 114。
+          // 第二次沒讀成(停用／錯誤／輸出不完整)=沒有比對過:第一次的表頭日期、位置與整張觀察**一律不採用**,
+          // 不能冒充已核對的內容(2026-09-21 核對 G 包);逐格那一支自己有兩次一致,下面照常併回。
           else if (needsSecondPass(classify)) {
             const wb2 = await vision.readBoard(dl.base64, dl.mime)
-            if ('blocked' in wb2) { boardBlocked = true; whiteboardSkipped = 'second_pass:feature_disabled' }
-            else if ('error' in wb2) whiteboardSkipped = `second_pass_failed:${wb2.errorCode}`
+            if ('blocked' in wb2) { boardBlocked = true; whiteboard = null; whiteboardSkipped = 'second_pass:feature_disabled' }
+            else if ('error' in wb2) { whiteboard = null; whiteboardSkipped = `second_pass_failed:${wb2.errorCode}` }
             else {
               const second = normalizeWhiteboardResult(wb2.data)
               if (second) whiteboard = agreeRecords(whiteboard, second)
-              else whiteboardSkipped = 'second_pass_failed:invalid_output'
+              else { whiteboard = null; whiteboardSkipped = 'second_pass_failed:invalid_output' }
             }
           }
         }
@@ -608,9 +613,16 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
   const dated = sitePhotoRows.map((p) => {
     const s = stored.get(p.id)!
     const d = assignPhotoDate(p, s.whiteboard, validDate(intake.log_date))
-    if (d.conflict) notes.push(`照片 ${p.id.slice(0, 8)}:${d.conflict}`)
+    if (d.conflict && d.source !== 'upload_time') notes.push(`照片 ${p.id.slice(0, 8)}:${d.conflict}`)
+    if (s.whiteboard_skipped?.startsWith('second_pass')) {
+      notes.push(`照片 ${p.id.slice(0, 8)}:紙表第二次比對辨識未完成,表頭日期、位置與整張轉錄內容未採用(逐格讀到且兩次一致的實測值仍保留);可對這張照片重新辨識`)
+    }
     return { photo: p, stored: s, ...d }
   })
+  const byUpload = dated.filter((d) => d.source === 'upload_time')
+  if (byUpload.length) {
+    notes.push(`${byUpload.length} 張照片沒有拍攝時間、也沒有讀到紙上日期,暫以上傳日 ${[...new Set(byUpload.map((d) => d.date))].join('、')} 起稿;日期不對請捨棄後指定日期重新上傳`)
+  }
   const statusNotes = () => {
     const list = outcomeList()
     const n = (s: PhotoAiStatus) => list.filter((o) => o.ai_status === s).length
@@ -741,9 +753,16 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
       const dateRefs = dayPhotos.filter((d) => d.ref).map((d) => d.ref!)
       const dateSource = dayPhotos.some((d) => d.source === 'whiteboard')
         ? { source: `whiteboard:${dayPhotos.find((d) => d.source === 'whiteboard')!.ref}`, refs: dateRefs }
-        : dayPhotos.some((d) => d.source === 'intake') ? { source: 'intake', refs: [] } : { source: `photo_time:${dateRefs[0] ?? ''}`, refs: dateRefs }
+        : dayPhotos.some((d) => d.source === 'intake') ? { source: 'intake', refs: [] }
+        : dayPhotos.some((d) => d.source === 'photo_time')
+          ? { source: `photo_time:${dayPhotos.find((d) => d.source === 'photo_time')!.ref}`, refs: dateRefs }
+          : { source: `upload_time:${dateRefs[0] ?? ''}`, refs: dateRefs }
 
       const draft = await buildDraftFor(cand, date, dateSource, [...draftPhotos.values()])
+      // 文件日期只有上傳日可依:在文件的待確認清單明寫(批次說明之外,打開文件也看得到)
+      if (dateSource.source.startsWith('upload_time:')) {
+        draft.recheck.push({ key: DOC_DATE_KEY[docType], reason: `這份文件的日期 ${date} 是照片上傳日(照片沒有拍攝時間、紙上也沒讀到日期),請確認;日期不對請捨棄後指定日期重新上傳` })
+      }
       out.pending_fields = draft.required_fields.filter((k) => draft.field_sources[k]?.status === 'pending')
 
       const res = await writeDraftDocument(repo, {

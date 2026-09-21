@@ -82,6 +82,16 @@ describe('日期', () => {
     expect(assignPhotoDate(p, null, null)).toMatchObject({ date: '2026-09-17', source: 'photo_time', ref: 'p1' })
     expect(assignPhotoDate({ id: 'p2', taken_at: null }, null, null)).toMatchObject({ date: null, source: null })
   })
+  it('assignPhotoDate:沒有拍攝時間(無 EXIF)時才用上傳日,來源明寫 upload_time 並附說明——不冒充照片時間(G 包)', () => {
+    const noExif = { id: 'p3', taken_at: null, created_at: '2026-09-21T03:00:00Z' }
+    const d = assignPhotoDate(noExif, null, null)
+    expect(d).toMatchObject({ date: '2026-09-21', source: 'upload_time', ref: 'p3' })
+    expect(d.conflict).toContain('暫以上傳日 2026-09-21')
+    // 紙上日期、批次指定、拍攝時間都優先於上傳日
+    expect(assignPhotoDate(noExif, board({ log_date: '2026-08-04' }), null)).toMatchObject({ date: '2026-08-04', source: 'whiteboard', conflict: null })
+    expect(assignPhotoDate(noExif, null, '2026-09-20')).toMatchObject({ date: '2026-09-20', source: 'intake' })
+    expect(assignPhotoDate({ ...noExif, taken_at: '2026-09-19T02:00:00Z' }, null, null)).toMatchObject({ date: '2026-09-19', source: 'photo_time', conflict: null })
+  })
 })
 
 describe('重複照片', () => {
@@ -497,7 +507,7 @@ describe('buildSelfCheckDraft:自主檢查表內容來源(P3b)', () => {
     expect(matchChecklistItem('度', T_CONC.items)).toBeNull()
   })
 
-  it('設計值／規範要求、空欄、兩向尺寸、單位不相容都不落地;編號分歧不合併', () => {
+  it('設計值／規範要求、空欄、單位不相容都不落地;可換算的單位確定性換算', () => {
     // 設計欄(≥ 容許範圍)永遠不進 results
     const design = buildSelfCheckDraft({ ...cBase(), photos: [cPhoto('d1', { whiteboard: board({ observations: [
       obs({ kind: 'design', label: '坍度', raw_text: '18 ± 2.5 cm', value: 18, unit: 'cm' }),
@@ -506,20 +516,17 @@ describe('buildSelfCheckDraft:自主檢查表內容來源(P3b)', () => {
     expect(design.field_sources['results.C2'].status).toBe('pending')
     expect(design.rationale).toContain('設計值對照')
 
-    // 兩向尺寸:不截半、不填,原文放提示
-    const twoWay = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('t1', { whiteboard: board({ observations: [
-      obs({ label: '鋼筋間距', raw_text: '15 * 15 CM', value: 15, value2: 15, unit: 'CM' }),
-    ] }) })] })
-    expect(twoWay.content.results.S1).toEqual({ value: null })
-    expect(twoWay.field_sources['results.S1']).toMatchObject({ status: 'pending', hint: { raw_text: '15 * 15 CM' } })
-    expect(twoWay.field_sources['results.S1'].reason).toContain('兩向尺寸')
-
-    // 單位不相容:不換算、不採用,列出原因
+    // 單位不相容:不換算、不採用,列出原因(兩向尺寸也一樣)
     const badUnit = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('u1', { whiteboard: board({ observations: [
       obs({ label: '鋼筋間距', raw_text: '15 T', value: 15, unit: 'T' }),
     ] }) })] })
     expect(badUnit.content.results.S1).toEqual({ value: null })
     expect(badUnit.field_sources['results.S1'].reason).toContain('不相容')
+    const badTwoWay = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('u2', { whiteboard: board({ observations: [
+      obs({ label: '鋼筋間距', raw_text: '15 * 15 T', value: 15, value2: 15, unit: 'T' }),
+    ] }) })] })
+    expect(badTwoWay.content.results.S1).toEqual({ value: null })
+    expect(badTwoWay.field_sources['results.S1'].status).toBe('pending')
 
     // 單位可換算(mm → cm):確定性換算後帶入,說明寫出換算過程
     const conv = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('m1', { whiteboard: board({ observations: [
@@ -527,14 +534,103 @@ describe('buildSelfCheckDraft:自主檢查表內容來源(P3b)', () => {
     ] }) })] })
     expect(conv.content.results.S1).toEqual({ value: 15 })
     expect(conv.field_sources['results.S1'].reason).toContain('換算')
+  })
 
-    // 編號分歧:不同編號是不同量測對象,不合併
-    const entries = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('e1', { whiteboard: board({ observations: [
-      obs({ label: '鋼筋間距', entry_no: '1', raw_text: '13 CM', value: 13, unit: 'CM' }),
-      obs({ label: '鋼筋間距', entry_no: '4', raw_text: '11 CM', value: 11, unit: 'CM' }),
+  it('兩向尺寸與不同編號分列抄錄成 readings(不截半、不合併);同編號同值去重、不累加;兩向都換算', () => {
+    // 兩向尺寸:兩個數字都保留,不截成 15
+    const twoWay = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('t1', { whiteboard: board({ observations: [
+      obs({ label: '鋼筋間距', raw_text: '15 * 15 CM', value: 15, value2: 15, unit: 'CM' }),
     ] }) })] })
-    expect(entries.content.results.S1).toEqual({ value: null })
-    expect(entries.field_sources['results.S1'].reason).toContain('編號 1、4')
+    expect(twoWay.content.results.S1).toEqual({ value: null, readings: [{ entry_no: null, value: 15, value2: 15, raw_text: '15 * 15 CM' }] })
+    expect(twoWay.field_sources['results.S1']).toMatchObject({ status: 'filled', source: 'record:t1', refs: ['t1'] })
+    expect(twoWay.field_sources['results.S1'].reason).toContain('15×15 cm')
+    expect(twoWay.field_sources['results.S1'].reason).toContain('未代為量測')
+    expect(twoWay.recheck.some((r) => r.key === 'results.S1' && r.reason.includes('15×15 cm') && r.reason.includes('待你核對確認'))).toBe(true)
+
+    // 不同編號:分列、依編號排序;兩向都依範本單位換算(mm → cm)
+    const entries = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('e1', { whiteboard: board({ observations: [
+      obs({ label: '鋼筋間距', entry_no: '4', raw_text: '110 * 110 MM', value: 110, value2: 110, unit: 'MM' }),
+      obs({ label: '鋼筋間距', entry_no: '1', raw_text: '13 CM', value: 13, unit: 'CM' }),
+    ] }) })] })
+    expect(entries.content.results.S1).toEqual({ value: null, readings: [
+      { entry_no: '1', value: 13, value2: null, raw_text: '13 CM' },
+      { entry_no: '4', value: 11, value2: 11, raw_text: '110 * 110 MM' },
+    ] })
+    expect(entries.field_sources['results.S1'].reason).toContain('編號 1 13 cm、編號 4 11×11 cm')
+
+    // 同一份紙表拍兩張:同編號同值只留一筆,兩張照片都是來源;不累加
+    const dup = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [
+      cPhoto('p1', { whiteboard: board({ observations: [obs({ label: '鋼筋間距', entry_no: '4', raw_text: '15 * 15 CM', value: 15, value2: 15, unit: 'CM' })] }) }),
+      cPhoto('p2', { whiteboard: board({ observations: [obs({ label: '鋼筋間距', entry_no: '4', raw_text: '15*15', value: 15, value2: 15, unit: 'CM' })] }) }),
+    ] })
+    expect(dup.content.results.S1).toEqual({ value: null, readings: [{ entry_no: '4', value: 15, value2: 15, raw_text: '15 * 15 CM' }] })
+    expect(dup.field_sources['results.S1']).toMatchObject({ status: 'filled', refs: ['p1', 'p2'] })
+    expect(dup.field_sources['results.S1'].reason).toContain('2 張照片一致')
+  })
+
+  it('同編號值不一致、部分有編號部分沒有:不挑一個,pending 並保留各自來源', () => {
+    const conflict = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [
+      cPhoto('c1', { whiteboard: board({ observations: [obs({ label: '鋼筋間距', entry_no: '1', raw_text: '13 * 11 CM', value: 13, value2: 11, unit: 'CM' })] }) }),
+      cPhoto('c2', { whiteboard: board({ observations: [obs({ label: '鋼筋間距', entry_no: '1', raw_text: '11 * 11 CM', value: 11, value2: 11, unit: 'CM' })] }) }),
+    ] })
+    expect(conflict.content.results.S1).toEqual({ value: null })
+    expect(conflict.field_sources['results.S1']).toMatchObject({ status: 'pending', refs: ['c1', 'c2'] })
+    expect(conflict.field_sources['results.S1'].reason).toContain('編號 1 多張照片的實測紀錄不一致')
+    expect(conflict.field_sources['results.S1'].reason).toContain('13×11')
+    expect(conflict.field_sources['results.S1'].reason).toContain('11×11')
+
+    const mixed = buildSelfCheckDraft({ ...cBase(), template: T_STEEL, photos: [cPhoto('x1', { whiteboard: board({ observations: [
+      obs({ label: '鋼筋間距', entry_no: '4', raw_text: '15 CM', value: 15, unit: 'CM' }),
+      obs({ label: '鋼筋間距', raw_text: '15 CM', value: 15, unit: 'CM' }),
+    ] }) })] })
+    expect(mixed.content.results.S1).toEqual({ value: null })
+    expect(mixed.field_sources['results.S1'].status).toBe('pending')
+    expect(mixed.field_sources['results.S1'].reason).toContain('部分沒有')
+  })
+
+  it('回歸形狀(三張真實鋼線網紙表的 B2 逐格結果):8 個實測值全部進表,設計值一個都不進', () => {
+    // 觀察值照 docs/reviews/assets/2026-09-20-contractor-acceptance/vision-after-b2.json(原圖條件)逐筆抄;
+    // 範本項目是本案自訂的鋼線網自主檢查項目(單位與紙上欄位一致),不是檔名對應答案
+    const T_MESH: ChecklistTemplateRow = { id: 'tpl-mesh', title: '鋼線網 自主檢查表', source: '圖說', items: [
+      { no: '1', item: '鋼線網線徑', kind: 'num', unit: 'mm', standard: '依圖說' },
+      { no: '2', item: '鋼線網網目', kind: 'num', unit: 'cm', standard: '依圖說' },
+      { no: '3', item: '搭接長度', kind: 'num', min: 27, unit: 'cm', standard: '≥27 cm' },
+    ] }
+    const d = (entry: string, label: string, raw: string, v: number, v2: number | null, unit: string, kind: 'design' | 'measured' = 'measured') =>
+      obs({ kind, label, entry_no: entry, raw_text: raw, value: v, value2: v2, unit, ...(kind === 'design' && v2 == null ? { comparator: '>=' as const } : {}) })
+    const photos = [
+      cPhoto('li2995', { whiteboard: board({ record_medium: 'paper_form', observations: [
+        d('1', '線徑', '13 * 11 MM', 13, 11, 'MM', 'design'), d('4', '線徑', '11 * 11 MM', 11, 11, 'MM', 'design'),
+        d('1', '搭接長度', '11 ≥ 27 CM', 27, null, 'CM', 'design'),
+        d('4', '線徑', '11 * 11 MM', 11, 11, 'MM'), d('4', '網目', '15 * 15 CM', 15, 15, 'CM'),
+      ] }) }),
+      cPhoto('lifa1c', { whiteboard: board({ record_medium: 'paper_form', observations: [
+        d('1', '網目', '15 * 15  CM', 15, 15, 'CM', 'design'),
+        d('4', '網目', '15 * 15', 15, 15, 'CM'),
+      ] }) }),
+      cPhoto('linea4', { whiteboard: board({ record_medium: 'paper_form', observations: [
+        d('1', '線徑', '13 * 11 MM', 13, 11, 'MM'), d('1', '網目', '15 * 15 CM', 15, 15, 'CM'),
+        d('4', '線徑', '11 * 11 MM', 11, 11, 'MM'), d('4', '網目', '15 * 15 CM', 15, 15, 'CM'),
+      ] }) }),
+    ]
+    const r = buildSelfCheckDraft({ ...cBase(), template: T_MESH, photos })
+    expect(r.content.results['1']).toEqual({ value: null, readings: [
+      { entry_no: '1', value: 13, value2: 11, raw_text: '13 * 11 MM' },
+      { entry_no: '4', value: 11, value2: 11, raw_text: '11 * 11 MM' },
+    ] })
+    expect(r.content.results['2']).toEqual({ value: null, readings: [
+      { entry_no: '1', value: 15, value2: 15, raw_text: '15 * 15 CM' },
+      { entry_no: '4', value: 15, value2: 15, raw_text: '15 * 15 CM' },
+    ] })
+    expect(r.field_sources['results.1'].refs).toEqual(['li2995', 'linea4'])
+    expect(r.field_sources['results.2'].refs).toEqual(['li2995', 'lifa1c', 'linea4'])
+    // 設計欄的搭接 ≥27 cm 不得填進右側空白的實測欄
+    expect(r.content.results['3']).toEqual({ value: null })
+    expect(r.field_sources['results.3'].status).toBe('pending')
+    // 仍是待確認:filled 不是 confirmed,簽署前要人逐項確認;絕不出現「合格」
+    expect(['results.1', 'results.2'].map((k) => r.field_sources[k].status)).toEqual(['filled', 'filled'])
+    expect(JSON.stringify(r.content)).not.toContain('合格')
+    expect(r.summary).toContain('已抄錄紙本紀錄 2 項')
   })
 
   it('位置:多個位置要人選、沒有位置 pending;沒有項目的範本列 recheck 提醒換範本', () => {

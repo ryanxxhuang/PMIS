@@ -12,12 +12,13 @@
 // 誠實原則(設計 §1.5):沒有來源的數量、天氣、出工、到場、實測值一律 pending;人填了才 confirmed;
 // 「本日無」用 na＋reason,不得把空白填成「無」或 0。人填欄(到場)人填了也只是 filled=待親自確認,
 // 明確按「確認」才 confirmed(鏡像 DB 的 needs_confirmation;任何照片都不是到場證明)。自檢表每個檢查項目都是
-// 須確認欄:系統帶入(既有紀錄／建議)的值要人逐項確認才能簽;實測值系統永遠不填。
+// 須確認欄:系統帶入(既有紀錄／建議／紙本實測欄抄錄)的值要人逐項確認才能簽;系統不代為量測。
 import {
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
   checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys, normalizeCqKey, CHECKLIST_DOC_TYPES,
 } from '../../supabase/functions/_shared/fieldDocTemplate.ts'
 import { fieldDocumentBalls, FIELD_DOC_TO_ORGS } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+import { judgeInput } from './qc.js'
 export {
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
   checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys, normalizeCqKey, CHECKLIST_DOC_TYPES,
@@ -264,7 +265,8 @@ export function sourceLabel(source) {
   if (s.startsWith('whiteboard:')) return '現場紀錄轉錄'
   // 2026-09-20 B:紙本查驗表／告示板「實測欄已經寫好」的數字,由系統照原文抄錄(附原文與來源照片)
   if (s.startsWith('record:')) return '紙本實測欄抄錄'
-  if (s.startsWith('photo_time:')) return '照片時間'
+  if (s.startsWith('photo_time:')) return '照片拍攝時間'
+  if (s.startsWith('upload_time:')) return '上傳日（照片無拍攝時間，請確認）'
   if (s.startsWith('legacy:')) return '既有紀錄'
   if (s.startsWith('yesterday:')) return '沿用昨日'
   if (s.startsWith('shared:')) return '共用補值'
@@ -537,8 +539,9 @@ export function emptySelfCheckSources(content, checklistTemplate) {
   for (const it of Array.isArray(checklistTemplate?.items) ? checklistTemplate.items : []) if (it?.no) sources[`results.${it.no}`] = { status: 'pending', source: null }
   return sources
 }
-// 檢查結果 {no:{value}} → judgeChecklist 要的 {no: value}(前端判定只是預覽,伺服器簽署時以 fn_checklist_judge 為準)
-export const selfCheckValues = (content) => Object.fromEntries(Object.entries(content?.results || {}).map(([no, r]) => [no, r?.value ?? null]))
+// 檢查結果 {no:{value[,readings]}} → judgeChecklist 要的 {no: value 或 {value, readings}}
+// (前端判定只是預覽,伺服器簽署時以 fn_checklist_judge 為準;分列讀數見 lib/qc.judgeInput)
+export const selfCheckValues = (content) => Object.fromEntries(Object.entries(content?.results || {}).map(([no, r]) => [no, judgeInput(r)]))
 // 換範本:項目全部重來(值與來源一起走),框架欄位保留
 export function setSelfCheckTemplate({ content, sources }, checklistTemplate) {
   const next = { ...content, template_id: checklistTemplate?.id || null, template_title: checklistTemplate?.title || null, template_source: checklistTemplate?.source || null, results: {} }
@@ -670,8 +673,13 @@ const setPath = (obj, key, value) => {
   const rn = /^results\.(.+)\.note$/.exec(key)
   if (rn) return { ...obj, results: { ...(obj.results || {}), [rn[1]]: { ...((obj.results || {})[rn[1]] || {}), note: value } } }
   const r = /^results\.(.+)$/.exec(key)
-  if (r) return { ...obj, results: { ...(obj.results || {}), [r[1]]: { ...((obj.results || {})[r[1]] || {}), value } } }
+  if (r) return { ...obj, results: { ...(obj.results || {}), [r[1]]: { ...withoutReadings((obj.results || {})[r[1]]), value } } }
   return { ...obj, [key]: value }
+}
+// 單一值與分列讀數擇一(DB fn_checklist_result_check):寫單一值／清空／標不適用時一併拿掉讀數
+const withoutReadings = (res) => {
+  const { readings: _readings, ...rest } = res || {}
+  return rest
 }
 const getPath = (obj, key) => {
   const rn = /^results\.(.+)\.note$/.exec(key)
@@ -679,6 +687,18 @@ const getPath = (obj, key) => {
   const r = /^results\.(.+)$/.exec(key)
   if (r) return obj?.results?.[r[1]]?.value
   return obj?.[key]
+}
+
+// 檢查項目的分列讀數(兩向尺寸／多編號;G 包):人改讀數與改單一值同一條規則——值與來源一起走、改了就是人確認。
+// 讀數清空 → 回到單一值模式(value 留空)。未填完的列(值還是空)照存,簽署時由伺服器擋下並指出第幾筆。
+export function setResultReadings({ content, sources }, no, readings) {
+  const list = Array.isArray(readings) ? readings : []
+  const prev = withoutReadings(content?.results?.[no])
+  const next = list.length ? { ...prev, value: null, readings: list } : { ...prev, value: null }
+  return {
+    content: { ...content, results: { ...(content?.results || {}), [no]: next } },
+    sources: { ...sources, [`results.${no}`]: { status: 'confirmed', source: 'human' } },
+  }
 }
 
 export function setFieldValue({ content, sources }, key, value) {

@@ -227,6 +227,17 @@ describe('廠商批次起施工日誌', () => {
     expect(w.finishes.at(-1)).toMatchObject({ status: 'ready', log_date: '2026-09-17', run_started_at: null })
   })
 
+  it('照片沒有拍攝時間(無 EXIF)、也沒讀到紙上日期:暫以上傳日起稿,來源寫 upload_time、文件待確認清單與批次說明都明寫(G 包)', async () => {
+    const w = world({ photos: [photo('p1', { taken_at: null, created_at: '2026-09-21T03:00:00Z' }), photo('p2', { taken_at: null, created_at: '2026-09-21T03:00:01Z' })] })
+    const r = await run(w)
+    expect(r.status).toBe(200)
+    expect(w.docs[0]).toMatchObject({ doc_type: 'daily_log', doc_date: '2026-09-21' })
+    expect((w.versions[0].field_sources as Record<string, { source: string }>).log_date.source).toBe('upload_time:p1')
+    expect(w.docs[0].recheck).toEqual(expect.arrayContaining([{ key: 'log_date', reason: expect.stringContaining('是照片上傳日') }]))
+    const notes = (r.body as { notes: string[] }).notes
+    expect(notes.filter((n) => n.includes('沒有拍攝時間'))).toEqual(['2 張照片沒有拍攝時間、也沒有讀到紙上日期,暫以上傳日 2026-09-21 起稿;日期不對請捨棄後指定日期重新上傳'])
+  })
+
   it('冪等:重跑已辨識的照片不再打模型、內容相同不加版本(unchanged);新增照片才加版本 2 並推 current_version_no', async () => {
     const w = world({ photos: [photo('p1')] })
     await run(w)
@@ -933,5 +944,28 @@ describe('紙表逐格辨識(B2;獨立 AI 功能 paperform.cells)', () => {
     const wb = obsOf(w)
     expect(wb.observations.map((o) => [o.kind, o.value])).toEqual([['design', 13], ['measured', 11]])
     expect((w.photos[0].ai_result as { whiteboard_skipped: string }).whiteboard_skipped).toBe('failed:http_529')
+  })
+
+  it('整張圖第二次沒讀成 → 第一次的表頭日期／觀察不採用(沒比對過不冒充已核對);逐格結果照留並揭露', async () => {
+    const w = world({ photos: [photo('p1')] })
+    let n = 0
+    const r = await run(w, stubVision({
+      classify: paperClassify,
+      board: () => (++n === 1 ? wholeBoard() : { error: '模型忙碌', errorCode: 'http_529' }),
+      cells: (_b, hint) => ({ data: cellRows(hint) }),
+    }), { imaging: imaging() })
+    expect(r.status).toBe(200)
+    const wb = obsOf(w)
+    expect(wb.log_date).toBe('') // 只讀一次的「115.8.4」不落地
+    expect(wb.observations.map((o) => [o.kind, o.value])).toEqual([['design', 13], ['measured', 11]]) // 逐格兩次一致的照留
+    expect((w.photos[0].ai_result as { whiteboard_skipped: string }).whiteboard_skipped).toBe('second_pass_failed:http_529')
+    expect(r.body.notes).toEqual(expect.arrayContaining([expect.stringContaining('紙表第二次比對辨識未完成')]))
+
+    // 沒有逐格結果時:整張只讀一次的內容整筆不採用
+    const w2 = world({ photos: [photo('p1')] })
+    let m = 0
+    await run(w2, stubVision({ classify: paperClassify, board: () => (++m === 1 ? wholeBoard() : { data: { nope: true } }) }))
+    expect((w2.photos[0].ai_result as { whiteboard: unknown; whiteboard_skipped: string }).whiteboard).toBeNull()
+    expect((w2.photos[0].ai_result as { whiteboard_skipped: string }).whiteboard_skipped).toBe('second_pass_failed:invalid_output')
   })
 })

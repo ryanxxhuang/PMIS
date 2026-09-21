@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { useStore } from '../../store.jsx'
 import PrintToolbar from '../../components/PrintToolbar.jsx'
+import { hasReadings, formatReadings } from '../../lib/qc.js'
 
 // 民國年月日
 const roc = (iso) => {
@@ -85,7 +86,7 @@ export default function ChecklistPrint() {
                   <Td center>{it.no}</Td>
                   <Td>{it.item}</Td>
                   <Td>{it.standard}{it.source ? <span className="paper-mute">（{it.source}）</span> : ''}</Td>
-                  <Td right>{r.value === true ? '✓' : r.value === false ? '✗' : r.value ?? ''}{typeof r.value === 'number' && it.unit ? ` ${it.unit}` : ''}</Td>
+                  <Td right>{hasReadings(r) ? formatReadings(r.readings, it.unit) : <>{r.value === true ? '✓' : r.value === false ? '✗' : r.value ?? ''}{typeof r.value === 'number' && it.unit ? ` ${it.unit}` : ''}</>}</Td>
                   <Td center>{r.pass === true ? '○' : r.pass === false ? '✕' : '／'}</Td>
                 </tr>,
               ]

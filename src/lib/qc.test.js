@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { judgeItem, judgeChecklist, judgeConcrete, deriveTestSampleUpdate, shouldCreateTestSampleDefect, diffChecklistResults, sampleDues, pendingSamplesFromLogs, sampleAlerts } from './qc.js'
+import { judgeItem, judgeChecklist, judgeConcrete, deriveTestSampleUpdate, shouldCreateTestSampleDefect, diffChecklistResults, sampleDues, pendingSamplesFromLogs, sampleAlerts, judgeInput, hasReadings, formatReadings, formatResult } from './qc.js'
 
 const numItem = { no: 'C1', item: '澆置溫度', kind: 'num', min: 13, max: 32 }
 const minOnly = { no: 'C5', item: '振動頻率', kind: 'num', min: 7000 }
@@ -130,5 +130,46 @@ describe('sampleAlerts', () => {
   })
   it('已判定的試體不提醒', () => {
     expect(sampleAlerts([{ ...s, status: '合格' }], '2026-07-03')).toHaveLength(0)
+  })
+})
+
+// G 包:分列讀數(兩向尺寸／多編號)。案例與 supabase/tests/checklist_result_readings.sql §2 同一組(前後端同一條規則)
+describe('分列讀數:判定與呈現', () => {
+  const W1 = { no: 'W1', item: '鋼線網線徑', kind: 'num', min: 10, max: 14, unit: 'mm' }
+  const W2 = { no: 'W2', item: '鋼線網網目', kind: 'num', min: 14, max: 16, unit: 'cm' }
+  const B1 = { no: 'B1', item: '搭接位置錯開', kind: 'bool' }
+  const tpl = { items: [W1, W2, B1] }
+  const rd = [{ entry_no: '1', value: 13, value2: 11, raw_text: '13 * 11 MM' }, { entry_no: '4', value: 11, value2: 11, raw_text: '11 * 11 MM' }]
+  const judge = (results) => judgeChecklist(tpl, Object.fromEntries(Object.entries(results).map(([k, r]) => [k, judgeInput(r)])))
+
+  it('兩個編號、兩向都在範圍內 → 合格,結果帶回完整讀數', () => {
+    expect(judge({ W1: { value: null, readings: rd } }).results.W1).toEqual({ value: null, pass: true, readings: rd })
+  })
+  it('任一向、任一編號超規 → 不合格', () => {
+    const a = judge({ W1: { value: null, readings: [{ entry_no: '1', value: 15, value2: 11 }] } })
+    expect(a.overall).toBe('不合格')
+    expect(a.failed.map((f) => f.no)).toEqual(['W1'])
+    expect(judge({ W1: { value: null, readings: [{ entry_no: '1', value: 13, value2: 9 }] } }).results.W1.pass).toBe(false)
+    expect(judge({ W1: { value: null, readings: [{ entry_no: '1', value: 13, value2: 11 }, { entry_no: '4', value: 9.5, value2: null }] } }).results.W1.pass).toBe(false)
+  })
+  it('無上下限有數值即合格;空讀數照單一值;非數字讀數不列入;字串數字照數值判', () => {
+    expect(judgeItem({ no: 'X1', kind: 'num', unit: 'cm' }, judgeInput({ value: null, readings: [{ entry_no: '1', value: 15, value2: 15 }] }))).toBe(true)
+    expect(judge({ W1: { value: 12, readings: [] } }).results.W1).toEqual({ value: 12, pass: true })
+    expect(judge({ W1: { value: null, readings: [{ value: 'x' }, { value: null }] } }).results.W1.pass).toBe(null)
+    expect(judge({ W1: { value: null, readings: [{ entry_no: '1', value: '13', value2: '11' }] } }).results.W1.pass).toBe(true)
+  })
+  it('勾選項不吃讀數;只有單一值時輸出形狀不變;混用照常判定', () => {
+    expect(judge({ B1: { value: true, readings: [{ value: 999 }] } }).results.B1).toEqual({ value: true, pass: true })
+    expect(judge({ W1: { value: 12 } }).results.W1).toEqual({ value: 12, pass: true })
+    expect(judge({ W1: { value: null, readings: [{ entry_no: '1', value: 13, value2: 11 }] }, W2: { value: 15 }, B1: { value: true } }).overall).toBe('合格')
+  })
+  it('人讀文字:編號＋兩向＋單位;修訂差異以讀數文字比對', () => {
+    expect(formatReadings(rd, 'mm')).toBe('編號 1 13×11 mm、編號 4 11×11 mm')
+    expect(formatResult(W1, { value: null, readings: [{ entry_no: null, value: 12, value2: null }] })).toBe('12 mm')
+    expect(formatResult(W1, { value: 12.5 })).toBe('12.5 mm')
+    expect(formatResult(B1, { value: false })).toBe('不合格')
+    expect(hasReadings({ value: 1, readings: [] })).toBe(false)
+    const d = diffChecklistResults(tpl, { W1: { value: null, readings: rd, pass: true } }, { W1: { value: null, readings: [rd[0]], pass: true } })
+    expect(d).toEqual([{ no: 'W1', item: '鋼線網線徑', from: '編號 1 13×11 mm、編號 4 11×11 mm', to: '編號 1 13×11 mm', passFrom: true, passTo: true }])
   })
 })

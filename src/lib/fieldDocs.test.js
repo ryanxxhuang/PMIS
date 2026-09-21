@@ -17,7 +17,7 @@ import {
   groupSharedFields, sharedFieldTitle, sharedEffectLabel, sharedPendingDocs, sharedInputValue, sharedApplySummary, documentsAfterShared,
   signedVersionIndex, signedVersionText, signedVersionLink, confirmationDocRef,
   canDiscardFieldDocument, FIELD_DOC_DISCARDABLE_STATUSES, candidateState, CANDIDATE_STATE_LABEL,
-  fieldDocInWorkList,
+  fieldDocInWorkList, setResultReadings,
 } from './fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.js'
@@ -798,5 +798,31 @@ describe('candidateState（批次候選的實際狀態）', () => {
   it('使用者排除優先;沒起稿過的候選不受文件狀態影響', () => {
     expect(candidateState({ ...drafted, excluded: true }, new Map([['d1', 'discarded']]))).toBe('excluded')
     expect(candidateState({ state: 'ready' }, new Map([['d1', 'discarded']]))).toBe('ready')
+  })
+})
+
+// G 包:檢查項目的分列讀數(兩向尺寸／多編號)——值與來源一起走,單一值與讀數擇一
+describe('分列讀數的人工編輯', () => {
+  const rd = [{ entry_no: '1', value: 13, value2: 11, raw_text: '13 * 11 MM' }, { entry_no: '4', value: 11, value2: 11, raw_text: '11 * 11 MM' }]
+  const base = () => ({
+    content: { results: { W1: { value: null, readings: rd, note: '東側' }, W2: { value: 15 } } },
+    sources: { 'results.W1': { status: 'filled', source: 'record:p1', evidence: [{ photo_id: 'p1', raw_text: '13 * 11 MM' }] }, 'results.W2': { status: 'pending' } },
+  })
+
+  it('改讀數:值與來源一起走(人改即確認),備註保留;清空讀數回到單一值模式', () => {
+    const next = setResultReadings(base(), 'W1', [rd[0]])
+    expect(next.content.results.W1).toEqual({ value: null, readings: [rd[0]], note: '東側' })
+    expect(next.sources['results.W1']).toEqual({ status: 'confirmed', source: 'human' })
+    const cleared = setResultReadings(base(), 'W1', [])
+    expect(cleared.content.results.W1).toEqual({ value: null, note: '東側' })
+  })
+  it('寫單一值／標不適用會一併拿掉讀數(擇一,與 DB fn_checklist_result_check 相同)', () => {
+    expect(setFieldValue(base(), 'results.W1', 12).content.results.W1).toEqual({ value: 12, note: '東側' })
+    const na = setFieldNa(base(), 'results.W1', '本次未檢')
+    expect(na.content.results.W1).toEqual({ value: null, note: '東側' })
+    expect(na.sources['results.W1']).toEqual({ status: 'na', source: null, reason: '本次未檢' })
+  })
+  it('判定輸入:有讀數給 {value, readings},否則給單一值', () => {
+    expect(selfCheckValues(base().content)).toEqual({ W1: { value: null, readings: rd }, W2: 15 })
   })
 })

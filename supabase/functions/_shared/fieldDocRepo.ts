@@ -79,14 +79,22 @@ export function supabaseDraftRepo(db: SupabaseClient, service: SupabaseClient, p
     },
 
     async listPhotosTakenOn(date, workItemId = null) {
+      // 拍攝時間落在該日者,加上沒有拍攝時間(無 EXIF,taken_at 為 null)而上傳時間落在該日者——
+      // 與照片起稿的日期順位同一條(assignPhotoDate:拍攝時間 > 上傳日),兩段各自分頁後合併
       const { start, end } = taipeiDayRange(date)
-      const res = await fetchAllRows<IntakePhotoRow>((f, t) => {
+      const byTaken = await fetchAllRows<IntakePhotoRow>((f, t) => {
         let q = db.from('photos').select(PHOTO_COLS).eq('project_id', projectId).gte('taken_at', start).lt('taken_at', end)
         if (workItemId) q = q.eq('work_item_id', workItemId)
         return q.order('taken_at').order('id').range(f, t)
       })
-      if (res.error) return { error: res.error }
-      return res.rows
+      if (byTaken.error) return { error: byTaken.error }
+      const byUpload = await fetchAllRows<IntakePhotoRow>((f, t) => {
+        let q = db.from('photos').select(PHOTO_COLS).eq('project_id', projectId).is('taken_at', null).gte('created_at', start).lt('created_at', end)
+        if (workItemId) q = q.eq('work_item_id', workItemId)
+        return q.order('created_at').order('id').range(f, t)
+      })
+      if (byUpload.error) return { error: byUpload.error }
+      return [...byTaken.rows, ...byUpload.rows]
     },
 
     async downloadPhoto(storagePath) {

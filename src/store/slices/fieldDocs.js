@@ -173,7 +173,9 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
     const { error: insErr } = await supabase.from('photos').insert({
       id, project_id: pid, daily_log_id: null, work_item_id: null, storage_path: path, caption: null, location: null,
       intake_id: intakeId, content_sha256: sha256,
-      taken_at: exif.takenAt || new Date().toISOString(), gps_lat: exif.gpsLat, gps_lng: exif.gpsLng,
+      // taken_at 只放 EXIF 拍攝時間(baseline 欄位定義「≠ uploaded」);沒有 EXIF(LINE 轉存、截圖)就留空,
+      // 起稿端改以 created_at 為「上傳日」並明寫來源、列待確認——不把上傳時刻冒充成拍攝時間(2026-09-21 G 包)
+      taken_at: exif.takenAt || null, gps_lat: exif.gpsLat, gps_lng: exif.gpsLng,
       uploaded_by: uid,
     })
     if (insErr) { await supabase.storage.from('photos').remove([path]); return { error: insErr } }
