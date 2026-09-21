@@ -19,6 +19,10 @@ import { localISODate as iso, localISOMonth } from '../lib/dates.js'
 // 看簡報的人螢幕上的今天；種子資料沒有法定期限語意，不屬於「業務日期」那條規則。
 const daysFromNow = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d }
 const monthsFromNow = (n, day) => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + n, day) }
+// 機關「撥付」循環義務(OB-12)的每月幾號:由今天推 3 天、落在 1–28 之間。demo 的今日工作要每天都看得到
+// 機關這一條「7 日內到期」(與 OB-5／OB-6／OB-11 用 daysFromNow 同一個道理);固定寫 20 的話只有每月 13–20 日
+// 落在 7 日窗內,其他日子機關的「現在輪到我」少一條,demo e2e 逢月底／月初就假紅(2026-09-21 實測)。
+const OWNER_PAY_DAY = ((new Date().getDate() + 3 - 1) % 28) + 1
 
 // 與 store.generateSchedule 相同的 smoothstep S 形累計
 const smoothstep = (t) => t * t * (3 - 2 * t)
@@ -227,7 +231,7 @@ export function buildDemoData(workItems, project) {
     { id: 'OB-9', title: '提送監造計畫書', category: '開工前', trigger_event: 'commencement', offset_days: 30, offset_dir: 'after', responsible: '監造', penalty: null, source_clause: '監造契約第 3 條', source_page: 'p.6', status: '已完成', completed_at: afterCommencement(25), sort_order: 8 },
     { id: 'OB-10', title: '提送監造月報', category: '施工中', recurring: 'monthly', recurring_day: 15, responsible: '監造', penalty: null, source_clause: '監造契約第 4 條', source_page: 'p.8', status: '待辦', sort_order: 9, periods: monthlyPeriods('OB-10', 15) },
     { id: 'OB-11', title: '送審文件審查(收件後 14 日內)', category: '施工中', trigger_event: 'fixed', fixed_date: iso(daysFromNow(5)), responsible: '監造', penalty: '逾期未回覆者延誤責任由監造負擔', source_clause: '第 8 條', source_page: 'p.11', status: '待辦', sort_order: 10 },
-    { id: 'OB-12', title: '估驗計價審核完成後 30 日內撥付', category: '施工中', recurring: 'monthly', recurring_day: 20, responsible: '機關', penalty: null, source_clause: '第 5 條', source_page: 'p.9', status: '待辦', sort_order: 11, periods: monthlyPeriods('OB-12', 20) },
+    { id: 'OB-12', title: '估驗計價審核完成後 30 日內撥付', category: '施工中', recurring: 'monthly', recurring_day: OWNER_PAY_DAY, responsible: '機關', penalty: null, source_clause: '第 5 條', source_page: 'p.9', status: '待辦', sort_order: 11, periods: monthlyPeriods('OB-12', OWNER_PAY_DAY) },
     { id: 'OB-13', title: '竣工後 30 日內辦理初驗', category: '完工', trigger_event: 'completion', offset_days: 30, offset_dir: 'after', responsible: '機關', penalty: null, source_clause: '第 15 條', source_page: 'p.22', status: '待辦', sort_order: 12 },
     { id: 'OB-14', title: '一般工項保固期滿(1 年)', category: '保固', trigger_event: 'completion', offset_days: 365, offset_dir: 'after', responsible: '廠商', penalty: null, source_clause: '第 18 條', source_page: 'p.26', status: '待辦', sort_order: 13 },
   ]
