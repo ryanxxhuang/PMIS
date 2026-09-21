@@ -8,7 +8,7 @@
 // NavLink,不鎖範圍會 strict 衝突。
 import { test, expect } from '@playwright/test'
 import { loginAs, ROLES } from './helpers.js'
-import { visibleNavGroups, BALL_SOURCES } from '../src/lib/navConfig.js'
+import { visibleNavGroups, BALL_SOURCES, coreOnlyNav } from '../src/lib/navConfig.js'
 
 // demo 角色:無 override、非平台管理員(與 routes.spec 的可見性斷言同一前提)
 const expectedFor = (org) => visibleNavGroups(org, false, false)
@@ -22,8 +22,15 @@ for (const role of Object.keys(ROLES)) {
     const nav = page.getByRole('navigation', { name: '主要功能' })
     const reached = []
 
+    // 廠商三核心(2026-09-21):側欄沒有今日工作來源;落地頁(施工日誌)所在群組已自動展開,先收回再逐組走
+    if (coreOnlyNav(role)) {
+      for (const b of BALL_SOURCES) await expect(nav.getByRole('link', { name: b.label, exact: true })).toHaveCount(0)
+      // 先離開群組頁(今日工作仍可深連結),否則再點同一頁的群組列不會觸發自動展開
+      await page.evaluate(() => { window.location.hash = '/dashboard' })
+      await nav.getByRole('button', { name: `收合${expectedFor(role)[0].items[0].label}子頁` }).click()
+    }
     // 球在誰手上:三個來源共用 /dashboard,以 ?ball= 分流;aria-current 只落在點到的那個
-    for (const b of BALL_SOURCES) {
+    for (const b of coreOnlyNav(role) ? [] : BALL_SOURCES) {
       const link = nav.getByRole('link', { name: b.label, exact: true })
       await link.click()
       await expect(page).toHaveURL(urlOf(b.to))

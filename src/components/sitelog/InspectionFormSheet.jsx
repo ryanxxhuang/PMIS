@@ -27,7 +27,7 @@ import {
   INSPECTION_TIMINGS, SELF_CHECK_RECHECK_RESULTS,
 } from '../../lib/officialForms.js'
 import { DocumentPrintStamp } from './DocumentPrint.jsx'
-import { PaperFormProvider, PaperInput, FieldMark, usePaperForm } from './PaperCell.jsx'
+import { PaperFormProvider, PaperInput, FieldMark, MeasuredCell, usePaperForm } from './PaperCell.jsx'
 
 const Th = ({ children, right, w }) => <th className={`border paper-rule px-1.5 py-1 font-medium text-footnote ${right ? 'text-right' : 'text-left'} ${w || ''}`}>{children}</th>
 const Td = ({ children, right, center, colSpan, className = '' }) => <td colSpan={colSpan} className={`border paper-rule px-1.5 py-1 text-footnote align-top ${right ? 'text-right tabular-nums' : center ? 'text-center' : ''} ${className}`}>{children}</td>
@@ -138,7 +138,8 @@ export default function InspectionFormSheet({
             const src = sources?.[key]
             const isNa = src?.status === 'na'
             const r = judged.results?.[it.no] || {}
-            const v = r.value === undefined ? values[it.no] : r.value
+            // 簽署後以查驗列(DB 算、含分列讀數)為準;草稿以內容為準
+            const res = fromRecord && inspection.results ? r : content.results?.[it.no]
             const pass = fromRecord && inspection.results ? r.pass : judgeItem(it, values[it.no])
             const groupRow = it.group !== lastGroup
             lastGroup = it.group
@@ -152,7 +153,7 @@ export default function InspectionFormSheet({
                 <Td>{it.item}</Td>
                 <Td>{it.standard}{it.source ? <span className="paper-mute">（{it.source}）</span> : ''}</Td>
                 <Td right>
-                  {isNa ? <span className="paper-mute">不適用</span> : <ResultCell it={it} value={v} title={title} canEdit={canEdit} />}
+                  {isNa ? <span className="paper-mute">不適用</span> : <ResultCell it={it} result={res} title={title} canEdit={canEdit} />}
                   <FieldMark fieldKey={key} title={title} allowNa naLabel="不適用" className="justify-end" />
                 </Td>
                 <Td center>{isNa ? '／' : pass === true ? '○' : pass === false ? '╳' : '／'}</Td>
@@ -226,8 +227,9 @@ export default function InspectionFormSheet({
 }
 
 // 實際抽查情形:數值項給數字框＋單位,勾選項給合格／不合格;系統永遠不代為量測
-function ResultCell({ it, value, title, canEdit }) {
+function ResultCell({ it, result, title, canEdit }) {
   const ctx = usePaperForm()
+  const value = result?.value ?? null
   if (it.kind === 'bool') {
     const set = (v) => ctx?.onChange?.(setFieldValue(ctx.state, `results.${it.no}`, v))
     if (!canEdit) return <span>{value === true ? '合格' : value === false ? '不合格' : ''}</span>
@@ -238,13 +240,7 @@ function ResultCell({ it, value, title, canEdit }) {
       </span>
     )
   }
-  return (
-    <span className="inline-flex items-baseline gap-1 justify-end">
-      <PaperInput fieldKey={`results.${it.no}`} label={`${title} 實際抽查情形`} type="number" align="right"
-        readOnlyText={value == null ? '' : String(value)} />
-      <span className="paper-mute">{it.unit || ''}</span>
-    </span>
-  )
+  return <MeasuredCell it={it} result={result} title={title} canEdit={canEdit} label="實際抽查情形" />
 }
 
 // 判定與本次確認數量(原表沒有這兩格:本系統為了把監造確認量接到計價而加,紙上明寫)。

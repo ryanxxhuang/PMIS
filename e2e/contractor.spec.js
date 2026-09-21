@@ -8,6 +8,7 @@ test.describe('施工廠商', () => {
   // 三段待辦不再同時列出,改成球權 Segmented 一次聚焦一段。
   test('今日工作:球權三段各自聚焦(現在輪到我/等待對方/今天已完成)', async ({ page }) => {
     await loginAs(page, 'contractor')
+    await gotoHash(page, '/dashboard') // 2026-09-21 起廠商導覽沒有今日工作入口(三核心),收件匣仍可深連結
     // 指標卡已退場:再出現代表有人把「多放一點資訊比較安全」加回來了
     await expect(page.getByText('累計實際進度')).toHaveCount(0)
     await expect(page.getByText('發包工程費')).toHaveCount(0)
@@ -435,7 +436,18 @@ test.describe('施工廠商', () => {
   test('廠商工作面沒有監造作業入口:側欄、分頁列、現場作業卡、尋找功能、現場文書清單都不列', async ({ page }) => {
     await loginAs(page, 'contractor')
     const nav = page.getByRole('navigation', { name: '主要功能' })
-    await nav.getByRole('button', { name: '展開現場紀錄子頁' }).click()
+    // 2026-09-21 demo 急件:廠商只剩三核心——施工文件／契約與提醒／估驗請款;落地頁施工日誌所屬群組已自動展開。
+    // 沒有今日工作收件匣、現場總覽、專案資料分區,也沒有問 GovAgent／Copilot 入口(契約上傳／送審／疑義收進契約與提醒)
+    for (const name of ['施工文件', '契約與提醒', '估驗請款']) await expect(nav.getByRole('link', { name, exact: true })).toBeVisible()
+    for (const name of ['現場紀錄', '履約時程', '文件往來', '專案', '現在輪到我', '現場總覽', '問 GovAgent']) {
+      await expect(nav.getByRole('link', { name, exact: true })).toHaveCount(0)
+    }
+    await expect(page.getByRole('button', { name: /AI 助理|問 GovAgent/ })).toHaveCount(0)
+    await nav.getByRole('button', { name: '展開契約與提醒子頁' }).click()
+    for (const name of ['契約重點', '期限追蹤', '契約上傳', '送審文件', '工程疑義']) {
+      await expect(nav.getByRole('link', { name, exact: true })).toBeVisible()
+    }
+    await nav.getByRole('button', { name: '收合契約與提醒子頁' }).click()
     for (const name of ['施工日誌', '自主檢查表', '品質查驗']) {
       await expect(nav.getByRole('link', { name, exact: true })).toBeVisible()
     }

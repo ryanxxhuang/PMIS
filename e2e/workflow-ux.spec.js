@@ -4,7 +4,8 @@ import { roleWorkLinks, WORK_TITLE } from '../src/lib/navConfig.js'
 
 // 首頁主入口列與手機底欄=三個主入口群組(D-026 §4),期望值直接從 navConfig 算,不手抄角色清單;
 // 主入口列的名稱=側欄「工作」分區名(WORK_TITLE),不再是「常用工作」
-for (const role of Object.keys(ROLES)) {
+// 廠商自 2026-09-21 起只剩三核心(沒有今日工作主畫面槽),另測於下方
+for (const role of Object.keys(ROLES).filter((r) => r !== 'contractor')) {
   const links = roleWorkLinks(role, false, false)
   const names = links.map((n) => n.label)
   test(`${role}:首頁主入口列與手機底欄=四主入口，任一子頁底欄群組仍亮，功能搜尋保持權限`, async ({ page }) => {
@@ -78,8 +79,31 @@ test('監造:手機從待辦直達查驗，詳情只給監造查驗表單入口�
   await expect(page.getByRole('group', { name: '現在輪到我', exact: true })).toContainText(taskTitle.split('\n')[0])
 })
 
+// 廠商三核心(2026-09-21 demo 急件):手機底欄=三個主入口+更多(沒有「現在輪到我」槽);施工文件直達施工日誌,
+// 群組子頁底欄仍亮;沒有問 GovAgent／Copilot 入口
+test('contractor(三核心):手機底欄只有三個主入口,施工文件直達施工日誌,子頁底欄群組仍亮,沒有 AI 問答入口', async ({ page }) => {
+  await loginAs(page, 'contractor')
+  const names = roleWorkLinks('contractor', false, false).map((n) => n.label)
+  expect(names).toEqual(['施工文件', '契約與提醒', '估驗請款'])
+  await expect(page.getByRole('link', { name: '問 GovAgent' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '問 GovAgent' })).toHaveCount(0)
+  await page.setViewportSize({ width: 375, height: 812 })
+  const bottom = page.getByRole('navigation', { name: '快速導覽' })
+  await expect(bottom.getByRole('link')).toHaveCount(3)
+  for (const name of names) await expect(bottom.getByRole('link', { name, exact: true })).toBeVisible()
+  await expect(bottom.getByRole('link', { name: '施工文件', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('button', { name: /AI 助理/ })).toHaveCount(0)
+  await gotoHash(page, '/quality')
+  await expect(page.getByRole('heading', { name: '品質查驗', level: 1 })).toBeVisible()
+  await expect(bottom.getByRole('link', { name: '施工文件', exact: true })).toHaveAttribute('aria-current', 'page')
+  await bottom.getByRole('link', { name: '契約與提醒', exact: true }).click()
+  await expect(page).toHaveURL(/#\/requirements$/)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+})
+
 test('廠商:首頁顯示五筆以後的工作，可直接進入試體分段', async ({ page }) => {
   await loginAs(page, 'contractor')
+  await gotoHash(page, '/dashboard') // 廠商三核心落在施工日誌;今日工作仍可深連結
   const list = page.getByRole('list', { name: '現在輪到我清單' })
   await expect.poll(() => list.getByRole('link').count()).toBeGreaterThan(5)
   await page.getByRole('combobox', { name: '待辦類型' }).selectOption('試驗')

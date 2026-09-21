@@ -234,20 +234,32 @@ export async function findEvidence(db: SupabaseClient, projectId: string, input:
   if (from) chkQ = chkQ.gte('check_date', from)
   if (to) chkQ = chkQ.lte('check_date', to)
 
+  const photoCols = 'id, storage_path, caption, taken_at, created_at, daily_log_id'
   let photoQ = db
     .from('photos')
-    .select('id, storage_path, caption, taken_at, daily_log_id')
+    .select(photoCols)
     .eq('project_id', projectId)
     .eq('work_item_id', wi)
-  if (from) photoQ = photoQ.gte('taken_at', `${from}T00:00:00+08:00`)
-  if (to) photoQ = photoQ.lte('taken_at', `${to}T23:59:59+08:00`)
+  // 有日期區間時:拍攝時間落在區間內者,加上沒有拍攝時間(無 EXIF,taken_at 為 null)而上傳時間落在區間內者
+  // (與照片起稿的日期順位同一條:拍攝時間 > 上傳日;2026-09-21 G 包起上傳端不再把上傳時刻寫進 taken_at)
+  let noExifQ = db
+    .from('photos')
+    .select(photoCols)
+    .eq('project_id', projectId)
+    .eq('work_item_id', wi)
+    .is('taken_at', null)
+  if (from) { photoQ = photoQ.gte('taken_at', `${from}T00:00:00+08:00`); noExifQ = noExifQ.gte('created_at', `${from}T00:00:00+08:00`) }
+  if (to) { photoQ = photoQ.lte('taken_at', `${to}T23:59:59+08:00`); noExifQ = noExifQ.lte('created_at', `${to}T23:59:59+08:00`) }
+  const ranged = !!(from || to)
 
-  const [logs, inspections, checklists, photos] = await Promise.all([logQ, inspQ, chkQ, photoQ])
-  const firstError = [logs, inspections, checklists, photos].find((r) => r.error)
+  const [logs, inspections, checklists, photos, photosNoExif] = await Promise.all([
+    logQ, inspQ, chkQ, photoQ, ranged ? noExifQ : Promise.resolve({ data: [], error: null }),
+  ])
+  const firstError = [logs, inspections, checklists, photos, photosNoExif].find((r) => r.error)
   if (firstError?.error) return toolError('findEvidence', firstError.error)
 
   const logCap = capList(logs.data)
-  const photoCap = capList(photos.data)
+  const photoCap = capList([...(photos.data ?? []), ...(photosNoExif.data ?? [])])
   return {
     daily_log_quantities: logCap.rows,
     inspections: inspections.data ?? [],

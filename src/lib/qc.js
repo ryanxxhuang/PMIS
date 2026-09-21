@@ -4,19 +4,62 @@
 
 import { parseLocalDate, localISODate } from './dates.js'
 
-// 單項判定:回 true(合格)/false(不合格)/null(未檢,不列入)
-export function judgeItem(item, value) {
-  if (item.kind === 'bool') return value === true ? true : value === false ? false : null
-  if (value == null || value === '') return null
-  const n = Number(value)
-  if (isNaN(n)) return null
-  if (item.min != null && n < item.min) return false
-  if (item.max != null && n > item.max) return false
-  return true
+// ── 分列讀數(2026-09-21 G 包)────────────────────────────────────────────────
+// 實測項目的結果 results[no] = { value, readings? }:紙上寫「編號 1 13×11 mm、編號 4 11×11 mm」這種
+// 兩向尺寸／多編號時,readings 逐筆保存 {entry_no, value, value2, raw_text}(數值已是範本單位),value 為 null;
+// 一般單一讀數仍只用 value。兩種寫法擇一(DB fn_checklist_result_check 於簽署時強制)。
+export const hasReadings = (r) => !!r && typeof r === 'object' && Array.isArray(r.readings) && r.readings.length > 0
+// 結果物件 → 判定輸入:有讀數給 {value, readings},否則給單一值(與 DB fn_checklist_judge 同一條規則)
+export const judgeInput = (r) => (hasReadings(r) ? { value: r.value ?? null, readings: r.readings } : r && typeof r === 'object' ? r.value ?? null : r ?? null)
+const isReadingsInput = (v) => !!v && typeof v === 'object' && Array.isArray(v.readings)
+// 數字轉換:與 DB fn_checklist_num 同一條(空白／null／物件=沒有數字)
+const toNum = (v) => {
+  if (v == null || v === '' || typeof v === 'object') return null
+  const n = Number(v)
+  return isNaN(n) ? null : n
+}
+// 讀數的人讀文字(列印、清單、差異;與 Edge fieldDocDraft.formatReadings 同一格式)
+export function formatReadings(readings, unit) {
+  const u = unit ? ` ${unit}` : ''
+  return (Array.isArray(readings) ? readings : [])
+    .filter((x) => x && typeof x === 'object')
+    .map((x) => `${x.entry_no ? `編號 ${x.entry_no} ` : ''}${x.value2 == null ? x.value ?? '' : `${x.value ?? ''}×${x.value2}`}${u}`)
+    .join('、')
+}
+// 一項結果的人讀文字:讀數 → 分列;勾選 → 合格／不合格;數字 → 值＋單位
+export function formatResult(item, r) {
+  if (hasReadings(r)) return formatReadings(r.readings, item?.unit)
+  const v = r && typeof r === 'object' ? r.value : r
+  if (v === true) return '合格'
+  if (v === false) return '不合格'
+  if (v == null || v === '') return ''
+  return `${v}${typeof v === 'number' && item?.unit ? ` ${item.unit}` : ''}`
 }
 
-// 整表判定:values = {no: value}。
-// 回 { results: {no: {value, pass}}, overall: '合格'|'不合格'|null, failed: [item…] }
+// 單項判定:回 true(合格)/false(不合格)/null(未檢,不列入)。
+// value 可為單一值,或 judgeInput 給的 {value, readings}:有讀數時每一筆的兩向都要在 min／max 內才合格。
+export function judgeItem(item, value) {
+  const rd = isReadingsInput(value) ? value : null
+  if (item.kind === 'bool') {
+    const v = rd ? rd.value : value
+    return v === true ? true : v === false ? false : null
+  }
+  const nums = []
+  if (rd && rd.readings.length) {
+    for (const x of rd.readings) {
+      if (!x || typeof x !== 'object') continue
+      for (const n of [toNum(x.value), toNum(x.value2)]) if (n != null) nums.push(n)
+    }
+  } else {
+    const n = toNum(rd ? rd.value : value)
+    if (n != null) nums.push(n)
+  }
+  if (!nums.length) return null
+  return nums.every((n) => !(item.min != null && n < item.min) && !(item.max != null && n > item.max))
+}
+
+// 整表判定:values = {no: value 或 {value, readings}}(見 judgeInput)。
+// 回 { results: {no: {value, pass[, readings]}}, overall: '合格'|'不合格'|null, failed: [item…] }
 // overall=null 表示尚無任何已檢項目。
 export function judgeChecklist(template, values) {
   const results = {}
@@ -25,7 +68,9 @@ export function judgeChecklist(template, values) {
   for (const it of template.items || []) {
     const v = values?.[it.no]
     const pass = judgeItem(it, v)
-    results[it.no] = { value: v ?? null, pass }
+    const rd = isReadingsInput(v) ? v : null
+    results[it.no] = { value: (rd ? rd.value : v) ?? null, pass }
+    if (rd && rd.readings.length && it.kind !== 'bool') results[it.no].readings = rd.readings
     if (pass === null) continue
     checked += 1
     if (!pass) { ok = false; failed.push(it) }
@@ -52,7 +97,9 @@ export function diffChecklistResults(template, prevResults, nextResults) {
   for (const it of template?.items || []) {
     const a = prevResults?.[it.no] || {}
     const b = nextResults?.[it.no] || {}
-    const from = a.value ?? null, to = b.value ?? null
+    // 分列讀數以人讀文字比對與呈現(編號、兩向都算)
+    const from = hasReadings(a) ? formatReadings(a.readings, it.unit) : a.value ?? null
+    const to = hasReadings(b) ? formatReadings(b.readings, it.unit) : b.value ?? null
     const passFrom = a.pass ?? null, passTo = b.pass ?? null
     if (from !== to || passFrom !== passTo) out.push({ no: it.no, item: it.item, from, to, passFrom, passTo })
   }

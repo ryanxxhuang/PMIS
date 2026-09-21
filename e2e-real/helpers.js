@@ -139,14 +139,18 @@ export async function signInClient(email) {
 }
 
 // UI 登入(既有帳號):帳密一步,沒有驗證碼畫面(產品不提供兩步驟驗證,R1)。
-// 落地=收件匣;不等「登出」鈕——手機(<md)的登出在抽屜裡,頂欄沒有,所以等落地 URL＋該頁 h1,任何視窗寬都適用。
+// 落地=收件匣(監造／機關)或施工日誌(廠商三核心,2026-09-21 demo 急件;navConfig.defaultLandingPath);不等「登出」鈕——
+// 手機(<md)的登出在抽屜裡,頂欄沒有,所以等落地 URL＋該頁 h1,任何視窗寬都適用。
 export async function loginReal(page, email) {
   await gotoHash(page, '/login')
   await page.getByPlaceholder('Email').fill(email)
   await page.getByPlaceholder('密碼（至少 8 碼，含大小寫英文與數字）').fill(PW)
   await page.locator('button[type="submit"]').click()
-  await page.waitForURL(/#\/(dashboard|portfolio)/)
+  await page.waitForURL(/#\/(dashboard|portfolio|site-log)/)
   await page.getByRole('heading', { level: 1 }).first().waitFor()
+  // 廠商落地頁(施工日誌)的 h1 在專案資料載完前就先畫出來:等請求靜下來再交給測試,
+  // 否則緊接著切頁選檔會落在資料載入中的那一輪 render(上傳元件重掛、選檔被吃掉)
+  await page.waitForLoadState('networkidle')
 }
 
 // UI 登出(回登入頁)

@@ -27,7 +27,8 @@ test.describe('路由治理', () => {
   const SECONDARY = ['文件往來', '專案']
 
   test('桌面側欄常駐:三分區齊全、群組預設收合可展開再收合、今日工作不重複;收合偏好照舊', async ({ page }) => {
-    await loginAs(page, 'contractor')
+    // 廠商自 2026-09-21 起只剩三核心(另測於 contractor.spec);三分區的側欄合約改用機關(有請款收款與專案分區)
+    await loginAs(page, 'owner')
     await expect(page.getByRole('heading', { name: '今日工作' })).toBeVisible()
     const nav = page.getByRole('navigation', { name: '主要功能' })
     for (const title of ['今日工作', '工作', '專案資料']) {

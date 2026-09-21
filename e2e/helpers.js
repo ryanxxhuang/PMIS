@@ -11,8 +11,8 @@ export const ROLES = {
 export async function loginAs(page, role) {
   await page.goto('/')
   await page.getByRole('button', { name: ROLES[role] }).click()
-  // 落地頁對齊 navConfig 的 defaultLandingPath:所有角色一律 → 收件匣(今日工作),不依角色分流
-  await expect(page).toHaveURL(/#\/dashboard/)
+  // 落地頁對齊 navConfig 的 defaultLandingPath:監造／機關 → 收件匣(今日工作);廠商三核心(2026-09-21 demo 急件)→ 施工日誌
+  await expect(page).toHaveURL(role === 'contractor' ? /#\/site-log/ : /#\/dashboard/)
 }
 
 // HashRouter 頁內導航(不整頁 reload,保留記憶體 demo 資料的當次變更)

@@ -21,6 +21,10 @@
 // platformAdminOnly: true=僅平台管理員(產品營運者)可見/可進——這是「平台」維度,
 // 與 roles(專案角色 org_type)互相獨立:can.override(專案管理者)也翻不過它。
 // 前端隱藏只是 UX;真正的把關在資料庫(每支 admin RPC 第一行檢查 is_platform_admin() 並 raise)。
+// 廠商三核心(2026-09-21 demo 急件):廠商的導覽只剩「施工文件／契約與提醒／估驗請款」三個入口——
+// labelFor/shortFor 只換該角色看到的群組名;onlyFor: [<org_type>] 是 hiddenFor 的反面(只對列名角色渲染),
+// 用來把廠商核心流程必要的送審／疑義／契約上傳收進「契約與提醒」,同一路由在原群組對廠商 hiddenFor。
+// 三者都只影響渲染,routeAllowed 一律不讀——深連結、提醒信與舊書籤照原 roles 進得去。
 // icon 是 Material Symbols 的 ligature 名(字串),由 Layout 的 <MSym> 渲染。
 // short 是群組/扁平項在 icon rail 與手機底欄的短標(≤2 字):與 label 同住一處,
 // 改名時不會漏掉另一份對照表(先前 BottomNav 的 NAV_SHORT 以 label 當鍵,label 一改就靜默退回全名)。
@@ -38,8 +42,9 @@ export const navGroups = [
     // 頁內依 org 決定可編／唯讀／收件(伺服器 RLS／RPC 才是邊界)。
     // 自主檢查表(P3b):廠商的自檢文件——照片起稿、實測值人填、簽署即寫 checklist_records、提送監造;不限角色,
     // 頁內依 org 決定可編／唯讀／收件;既有 /quality 檢查表分段仍列直接寫入的紀錄與簽署落下的紀錄。
-    { to: '/site', icon: 'engineering', label: '現場紀錄', short: '現場', tabs: [
-      { to: '/site', label: '現場總覽' },
+    // 廠商看到的名字是「施工文件」,入口直接是施工日誌(現場總覽的上傳批次／候選文書對廠商收起:照片改在表單內上傳填表)
+    { to: '/site', icon: 'engineering', label: '現場紀錄', short: '現場', labelFor: { contractor: '施工文件' }, shortFor: { contractor: '文件' }, tabs: [
+      { to: '/site', label: '現場總覽', hiddenFor: ['contractor'] },
       { to: '/site-log', label: '施工日誌' },
       // 監造日誌／監造查驗表單是監造的作業,不是廠商的(2026-09-20 廠商驗收 A 包):
       // 導覽對廠商收起(hiddenFor),roles 不動——廠商仍可由品質查驗詳情、今日工作待辦與舊連結
@@ -55,10 +60,14 @@ export const navGroups = [
     ] },
     // 履約時程:原「契約重點」參考項升為主入口;期限追蹤與擷取審核由非導覽路由改為子頁
     // (仍不限角色),變更設計自「審查與協作」移入、驗收與進度自「報表/金流」移入。
-    { to: '/requirements', icon: 'balance', label: '履約時程', short: '履約', tabs: [
+    // 廠商看到的名字是「契約與提醒」:契約上傳(專案文件)、送審與疑義收進這一組(onlyFor),原群組對廠商收起
+    { to: '/requirements', icon: 'balance', label: '履約時程', short: '履約', labelFor: { contractor: '契約與提醒' }, shortFor: { contractor: '契約' }, tabs: [
       { to: '/requirements', label: '契約重點' },
       { to: '/deadlines', label: '期限追蹤' },
+      { to: '/contract', label: '契約上傳', onlyFor: ['contractor'] },
       { to: '/requirements/review', label: '擷取審核' },
+      { to: '/submittals', label: '送審文件', onlyFor: ['contractor'] },
+      { to: '/rfi', label: '工程疑義', onlyFor: ['contractor'] },
       { to: '/change-orders', label: '變更設計' },
       // 進度 S 曲線:本輪先收起獨立入口(履約時程與估驗已帶進度口徑);頁面與資料不動
       { to: '/progress', label: '進度 S 曲線', hidden: true },
@@ -75,7 +84,7 @@ export const navGroups = [
   { title: '專案資料', items: [
     // 次入口:三方往來的文件(送審/疑義)與月報。送審與疑義的待辦仍走今日工作;
     // 月報改名「監造月報」是為了與 P3a 的每日「監造日誌」區分(D-026 §2)。
-    { to: '/submittals', icon: 'rate_review', label: '文件往來', short: '文件', tabs: [
+    { to: '/submittals', icon: 'rate_review', label: '文件往來', short: '文件', hiddenFor: ['contractor'], tabs: [
       { to: '/submittals', label: '送審文件' },
       { to: '/rfi', label: '工程疑義' },
       // 月報:本輪先收起獨立入口(P6a 起兩張月報都只彙整已簽署文件,是衍生視圖不是新作業);
@@ -84,7 +93,7 @@ export const navGroups = [
       { to: '/supervisor-report', label: '監造月報', roles: ['supervisor'], hidden: true },
     ] },
     // 專案:文件來源(專案文件=整案文件的唯一上傳/歸檔窗口)、成員、歷史查閱與選案。
-    { to: '/contract', icon: 'folder', label: '專案', short: '專案', tabs: [
+    { to: '/contract', icon: 'folder', label: '專案', short: '專案', hiddenFor: ['contractor'], tabs: [
       { to: '/contract', label: '專案文件' },
       { to: '/members', label: '三方成員' },
       { to: '/activity', label: '活動紀錄' },
@@ -150,7 +159,7 @@ export const WORK_GUIDANCE = {
 // 群組整組對該角色不可見時就不出現(現行三組都不限角色,這是守衛而非預期)。
 export function roleWorkLinks(org, override = false, platformAdmin = false) {
   const items = visibleNavGroups(org, override, platformAdmin).flatMap((g) => g.items)
-  return MAIN_ENTRY_PATHS.map((path) => items.find((n) => n.to === path)).filter(Boolean)
+  return MAIN_ENTRY_PATHS.map((path) => items.find((n) => n.entry === path)).filter(Boolean)
 }
 
 // 解析 ?ball=:缺省或未知值一律落回 mine(fail-safe:亂打參數看到的是「待我處理」,
@@ -201,8 +210,10 @@ const nonNavRouteRules = {
   '*': { access: 'authenticated', surface: 'not-found' },
 }
 
+// onlyFor 分身(廠商核心群組裡的送審／疑義／契約上傳)不進登記表:權限與頁名以原群組的定義為準
 const navRouteRules = Object.fromEntries(
   navGroups.flatMap((group) => group.items.flatMap((item) => item.tabs || [item]))
+    .filter((route) => !route.onlyFor)
     .map((route) => [route.to, { ...route, access: 'authenticated' }]),
 )
 
@@ -214,7 +225,7 @@ export const routeRegistry = Object.freeze({ ...navRouteRules, ...nonNavRouteRul
 // 名字只住在 navGroups 一處——先前初始化清單寫「專案成員」頁,而頁面早已叫「三方成員」;
 // 契約重點升成履約時程子頁後,各頁「到「契約重點」」的指路也沒有一份對照可查。
 // 這兩支只讀登記表,不做權限判斷(權限在 routeAllowed);未登記或非導覽路由回 null。
-const entryByPath = new Map(navGroups.flatMap((g) => g.items.flatMap((item) => (item.tabs || [item]).map((t) => [t.to, item]))))
+const entryByPath = new Map(navGroups.flatMap((g) => g.items.flatMap((item) => (item.tabs || [item]).filter((t) => !t.onlyFor).map((t) => [t.to, item]))))
 export const navLabel = (path) => routeRegistry[path]?.label ?? null
 export const navEntryFor = (path) => entryByPath.get(path) ?? null
 
@@ -236,14 +247,20 @@ export function routeAllowed(pathname, org, override, platformAdmin = false) {
 // 預設落地頁(規範 §0 方向 A):所有角色一律落在收件匣「現在輪到我」,不依角色分流——
 // 跨案總覽是「專案」群組的子頁,多案角色一格就到,不必用落地頁替他選案。
 // 參數保留:呼叫端(App/Layout)都傳 org_type,簽章不動。
-export function defaultLandingPath(_orgType) {
-  return '/dashboard'
+// 例外:廠商三核心(demo 急件)沒有今日工作收件匣,落在施工日誌(「施工文件預設直接打開今日施工日誌」)。
+export function defaultLandingPath(orgType) {
+  return coreOnlyNav(orgType) ? '/site-log' : '/dashboard'
 }
+export const landingLabel = (orgType) => (coreOnlyNav(orgType) ? '施工日誌' : BALL_SOURCES_TITLE)
+
+// 廠商只看三核心:今日工作收件匣、問 GovAgent／Copilot 與全域問答對廠商不渲染(入口收起,路由與權限不動;
+// 問答只在使用者送出時才打 agent-run,收起入口即不會有背景 Agent 請求)。照片填表與契約整理的 AI 照舊。
+export const coreOnlyNav = (orgType) => orgType === 'contractor'
 
 // 導覽可見性(只管「渲染不渲染」,與授權無關):hidden 對所有角色收起,hiddenFor 只對列名的
 // org_type 收起。刻意不吃 override——override 是「非正式模式的專案管理者對 roles 一律放行」,
 // 用來補授權,不是用來把別的角色的作業塞回你的選單(驗收要求專案 admin 情境的廠商也看不到)。
-const navVisible = (n, org) => !n.hidden && !(n.hiddenFor || []).includes(org)
+const navVisible = (n, org) => !n.hidden && !(n.hiddenFor || []).includes(org) && (!n.onlyFor || n.onlyFor.includes(org))
 
 // 側欄可見項:群組入口=第一個可見子頁;整組子頁都不可見則隱藏該組(角色過濾只在這裡做,
 // Layout/PageTabs/BottomNav/Site 現場作業卡都吃輸出)。
@@ -255,9 +272,11 @@ export function visibleNavGroups(org, override, platformAdmin = false) {
       items: g.items
         .map((item) => {
           if (!navVisible(item, org)) return null
-          if (!item.tabs) return tabAllowed(item, org, override, platformAdmin) ? item : null
+          // entry=群組原本的路徑(MAIN_ENTRY_PATHS／現場作業卡以它認群組;to 會換成第一個可見子頁)
+          const named = { ...item, entry: item.to, label: item.labelFor?.[org] || item.label, short: item.shortFor?.[org] || item.short }
+          if (!item.tabs) return tabAllowed(item, org, override, platformAdmin) ? named : null
           const tabs = item.tabs.filter((t) => navVisible(t, org) && tabAllowed(t, org, override, platformAdmin))
-          return tabs.length ? { ...item, to: tabs[0].to, tabs } : null
+          return tabs.length ? { ...named, to: tabs[0].to, tabs } : null
         })
         .filter(Boolean),
     }))

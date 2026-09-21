@@ -121,6 +121,98 @@ describe('施工日誌文件頁', () => {
     expect(state.store.createDailyLogDraft).not.toHaveBeenCalled()
   })
 
+  // 表內上傳(2026-09-21):選檔即透過表單卡頂部的檔案 input;上傳／起稿走 store mock
+  const fillInput = () => container.querySelector('input[type="file"][aria-label="上傳照片，AI 填表"]')
+  const pickPhoto = () => act(async () => {
+    Object.defineProperty(fillInput(), 'files', { value: [new File([new Uint8Array([1, 2, 3])], 'a.jpg', { type: 'image/jpeg' })], configurable: true })
+    fillInput().dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  const flushAll = () => act(async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0)) })
+  const targetOf = (over = {}) => ({
+    document_id: 'D1', agent_action_id: 'A1', pending_fields: [], notes: [],
+    suggestion: {
+      content: { log_date: today, weather_am: 'AI 晴', work_summary: 'AI 摘要', items: { w1: { item_key: 'K1', item_no: '壹.一.1', description: '4F 版牆混凝土澆置', unit: 'M3', qty_today: null } }, photo_ids: ['P1'] },
+      field_sources: { weather_am: { status: 'filled', source: 'whiteboard:P1' }, work_summary: { status: 'filled', source: 'ai:photo', refs: ['P1'] }, 'items.w1.qty_today': { status: 'pending', source: null } },
+      attachments: [{ photo_id: 'P1', storage_path: 'p/P1.jpg', role: 'evidence' }],
+    },
+    ...over,
+  })
+  // 上傳／起稿的 store mock:建文件會把文件推進清單(頁面才找得到)、存版把內容記下來給 getFieldDocument 回
+  const uploadStore = (over = {}) => {
+    const docs = []
+    const saved = { content: null, sources: null, attachments: null }
+    return makeStore({
+      documents: docs,
+      createDailyLogDraft: vi.fn(async (d) => { const doc = baseDoc({ doc_date: d, current_version_no: 0 }); docs.push(doc); return { error: null, doc } }),
+      saveFieldDocumentVersion: vi.fn(async ({ content, fieldSources, attachments }) => { Object.assign(saved, { content, sources: fieldSources, attachments }); docs[0].current_version_no = 1; return { error: null, result: { version_no: 1, recheck: [{ key: 'work_summary' }] } } }),
+      getFieldDocument: vi.fn(async () => ({ doc: docs[0], version: { version_no: 1, author_kind: 'human', content: saved.content, field_sources: saved.sources, attachments: saved.attachments || [] }, versions: [], signatures: [], submissions: [] })),
+      createIntake: vi.fn(async () => ({ error: null, intake: { id: 'I1' } })),
+      uploadIntakePhoto: vi.fn(async () => ({ error: null, id: 'P1', storage_path: 'p/P1.jpg' })),
+      draftFromIntake: vi.fn(async () => ({ error: null, result: { target: targetOf(), intake: { status: 'ready' }, documents: [], notes: [] } })),
+      listPhotosByIds: vi.fn(async (ids) => ids.map((id) => ({ id, storage_path: 'p/P1.jpg', url: 'blob:1', uploader_org: 'contractor' }))),
+      reloadAgentActions: vi.fn(),
+      ...over,
+    })
+  }
+
+  it('表內上傳:新日誌先存一版(建文件)再上傳;AI 回來用最新表單合併——只補空白欄、已填的不覆蓋、附件併入、變未存檔;存檔把建議標 accepted', async () => {
+    state.store = uploadStore()
+    await render(); await flush()
+    await setInput(container.querySelector('input[aria-label="本日天氣上午"]'), '陰') // 人先填了上午天氣
+    expect(status()).toBe('未存檔')
+    await pickPhoto()
+    await flushAll()
+    // 文件由頁面既有存檔流程建立,存的是按下時的內容(含人填的「陰」)
+    expect(state.store.createDailyLogDraft).toHaveBeenCalledWith(today)
+    expect(state.store.saveFieldDocumentVersion).toHaveBeenCalledTimes(1)
+    expect(state.store.saveFieldDocumentVersion.mock.calls[0][0].content.weather_am).toBe('陰')
+    expect(state.store.createIntake).toHaveBeenCalledWith({ log_date: today })
+    expect(state.store.draftFromIntake).toHaveBeenCalledWith('I1', expect.objectContaining({ targetDocumentId: 'D1' }))
+    // 合併:人填的上午天氣不覆蓋、空白的摘要補入、工項列加入(數量待補)、附件併入
+    expect(container.querySelector('input[aria-label="本日天氣上午"]').value).toBe('陰')
+    expect(container.querySelector('input[aria-label="施工概況摘要"]').value).toBe('AI 摘要')
+    expect(qtyInput()).toBeTruthy()
+    expect(qtyInput().value).toBe('')
+    expect(container.textContent).toContain('AI 已填入')
+    expect(container.textContent).toContain('你已填的欄位未覆蓋')
+    expect(status()).toBe('未存檔')
+    expect(container.querySelector('img[src="blob:1"]')).toBeTruthy()
+    // 存檔:第二版帶合併後內容與附件,建議標 accepted
+    await act(async () => button('存檔').click())
+    await flushAll()
+    expect(state.store.saveFieldDocumentVersion).toHaveBeenCalledTimes(2)
+    const second = state.store.saveFieldDocumentVersion.mock.calls[1][0]
+    expect(second.content).toMatchObject({ weather_am: '陰', work_summary: 'AI 摘要' })
+    expect(second.fieldSources.weather_am).toMatchObject({ status: 'confirmed', source: 'human' })
+    expect(second.fieldSources.work_summary).toMatchObject({ status: 'filled', source: 'ai:photo' })
+    expect(second.attachments.map((a) => a.photo_id)).toEqual(['P1'])
+    expect(state.store.resolveAgentAction).toHaveBeenCalledWith('A1', 'accepted')
+  })
+
+  it('表內上傳:AI 回來前使用者已切到別的日期 → 不填進目前這份、提示建議留在原文件、重載建議清單', async () => {
+    let resolveDraft
+    const doc = baseDoc()
+    state.store = uploadStore({
+      documents: [doc], getFieldDocument: vi.fn(async () => ({ doc, version: version({ content: { ...version().content, work_summary: '' }, field_sources: { ...version().field_sources, work_summary: { status: 'pending', source: null } } }), versions: [], signatures: [], submissions: [] })),
+      draftFromIntake: vi.fn(() => new Promise((r) => { resolveDraft = r })),
+    })
+    await render(); await flush(); await flush()
+    expect(status()).toMatch(/已存檔.*版本 1/)
+    await pickPhoto()
+    await flushAll()
+    expect(state.store.saveFieldDocumentVersion).not.toHaveBeenCalled() // 文件已存在:不強制存檔
+    expect(state.store.draftFromIntake).toHaveBeenCalledWith('I1', expect.objectContaining({ targetDocumentId: 'D1' }))
+    await setInput(container.querySelector('input[type="date"]'), '2026-09-01', 'change')
+    await flushAll()
+    await act(async () => resolveDraft({ error: null, result: { target: targetOf(), intake: { status: 'ready' }, documents: [], notes: [] } }))
+    await flushAll()
+    expect(container.querySelector('input[type="date"]').value).toBe('2026-09-01')
+    expect(container.querySelector('input[aria-label="施工概況摘要"]').value).toBe('') // 沒填進目前這份
+    expect(container.textContent).toContain('你已切換到別的日期')
+    expect(state.store.reloadAgentActions).toHaveBeenCalled()
+    expect(status()).not.toBe('未存檔')
+  })
+
   it('可簽署的草稿:一般登入直接簽署(無驗證碼步驟);成功顯示版本與雜湊、被拒(PD006)顯示伺服器訊息', async () => {
     const doc = baseDoc()
     window.confirm = vi.fn(() => true)

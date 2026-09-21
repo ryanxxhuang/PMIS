@@ -12,12 +12,13 @@
 // 誠實原則(設計 §1.5):沒有來源的數量、天氣、出工、到場、實測值一律 pending;人填了才 confirmed;
 // 「本日無」用 na＋reason,不得把空白填成「無」或 0。人填欄(到場)人填了也只是 filled=待親自確認,
 // 明確按「確認」才 confirmed(鏡像 DB 的 needs_confirmation;任何照片都不是到場證明)。自檢表每個檢查項目都是
-// 須確認欄:系統帶入(既有紀錄／建議)的值要人逐項確認才能簽;實測值系統永遠不填。
+// 須確認欄:系統帶入(既有紀錄／建議／紙本實測欄抄錄)的值要人逐項確認才能簽;系統不代為量測。
 import {
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
   checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys, normalizeCqKey, CHECKLIST_DOC_TYPES,
 } from '../../supabase/functions/_shared/fieldDocTemplate.ts'
 import { fieldDocumentBalls, FIELD_DOC_TO_ORGS } from '../../supabase/functions/_shared/ballInCourtRules.ts'
+import { judgeInput } from './qc.js'
 export {
   templateFields, templateRequiredKeys, templateHumanOnlyKeys, templateConfirmRequiredKeys, templateFieldLabels,
   checklistItemRules, checklistItemKeys, docRequiredKeys, docHumanOnlyKeys, docConfirmRequiredKeys, normalizeCqKey, CHECKLIST_DOC_TYPES,
@@ -264,7 +265,8 @@ export function sourceLabel(source) {
   if (s.startsWith('whiteboard:')) return '現場紀錄轉錄'
   // 2026-09-20 B:紙本查驗表／告示板「實測欄已經寫好」的數字,由系統照原文抄錄(附原文與來源照片)
   if (s.startsWith('record:')) return '紙本實測欄抄錄'
-  if (s.startsWith('photo_time:')) return '照片時間'
+  if (s.startsWith('photo_time:')) return '照片拍攝時間'
+  if (s.startsWith('upload_time:')) return '上傳日（照片無拍攝時間，請確認）'
   if (s.startsWith('legacy:')) return '既有紀錄'
   if (s.startsWith('yesterday:')) return '沿用昨日'
   if (s.startsWith('shared:')) return '共用補值'
@@ -357,6 +359,12 @@ export function fieldLabel(key, content, labels = null) {
     const it = content?.items?.[m[1]]
     const name = it ? [it.item_no, it.description].filter(Boolean).join(' ') : m[1]
     return `${name}${m[2] === 'qty_today' ? ' 當日數量' : ' 施作位置'}`
+  }
+  // 整列帶入的工項(applySuggestion 回 items.<id>):顯示工項名,不露內部 id
+  const row = /^items\.([^.]+)$/.exec(key)
+  if (row) {
+    const it = content?.items?.[row[1]]
+    return it ? `工項 ${[it.item_no, it.description].filter(Boolean).join(' ')}` : '工項列'
   }
   return key
 }
@@ -537,8 +545,9 @@ export function emptySelfCheckSources(content, checklistTemplate) {
   for (const it of Array.isArray(checklistTemplate?.items) ? checklistTemplate.items : []) if (it?.no) sources[`results.${it.no}`] = { status: 'pending', source: null }
   return sources
 }
-// 檢查結果 {no:{value}} → judgeChecklist 要的 {no: value}(前端判定只是預覽,伺服器簽署時以 fn_checklist_judge 為準)
-export const selfCheckValues = (content) => Object.fromEntries(Object.entries(content?.results || {}).map(([no, r]) => [no, r?.value ?? null]))
+// 檢查結果 {no:{value[,readings]}} → judgeChecklist 要的 {no: value 或 {value, readings}}
+// (前端判定只是預覽,伺服器簽署時以 fn_checklist_judge 為準;分列讀數見 lib/qc.judgeInput)
+export const selfCheckValues = (content) => Object.fromEntries(Object.entries(content?.results || {}).map(([no, r]) => [no, judgeInput(r)]))
 // 換範本:項目全部重來(值與來源一起走),框架欄位保留
 export function setSelfCheckTemplate({ content, sources }, checklistTemplate) {
   const next = { ...content, template_id: checklistTemplate?.id || null, template_title: checklistTemplate?.title || null, template_source: checklistTemplate?.source || null, results: {} }
@@ -670,8 +679,13 @@ const setPath = (obj, key, value) => {
   const rn = /^results\.(.+)\.note$/.exec(key)
   if (rn) return { ...obj, results: { ...(obj.results || {}), [rn[1]]: { ...((obj.results || {})[rn[1]] || {}), note: value } } }
   const r = /^results\.(.+)$/.exec(key)
-  if (r) return { ...obj, results: { ...(obj.results || {}), [r[1]]: { ...((obj.results || {})[r[1]] || {}), value } } }
+  if (r) return { ...obj, results: { ...(obj.results || {}), [r[1]]: { ...withoutReadings((obj.results || {})[r[1]]), value } } }
   return { ...obj, [key]: value }
+}
+// 單一值與分列讀數擇一(DB fn_checklist_result_check):寫單一值／清空／標不適用時一併拿掉讀數
+const withoutReadings = (res) => {
+  const { readings: _readings, ...rest } = res || {}
+  return rest
 }
 const getPath = (obj, key) => {
   const rn = /^results\.(.+)\.note$/.exec(key)
@@ -679,6 +693,18 @@ const getPath = (obj, key) => {
   const r = /^results\.(.+)$/.exec(key)
   if (r) return obj?.results?.[r[1]]?.value
   return obj?.[key]
+}
+
+// 檢查項目的分列讀數(兩向尺寸／多編號;G 包):人改讀數與改單一值同一條規則——值與來源一起走、改了就是人確認。
+// 讀數清空 → 回到單一值模式(value 留空)。未填完的列(值還是空)照存,簽署時由伺服器擋下並指出第幾筆。
+export function setResultReadings({ content, sources }, no, readings) {
+  const list = Array.isArray(readings) ? readings : []
+  const prev = withoutReadings(content?.results?.[no])
+  const next = list.length ? { ...prev, value: null, readings: list } : { ...prev, value: null }
+  return {
+    content: { ...content, results: { ...(content?.results || {}), [no]: next } },
+    sources: { ...sources, [`results.${no}`]: { status: 'confirmed', source: 'human' } },
+  }
 }
 
 export function setFieldValue({ content, sources }, key, value) {
@@ -739,6 +765,9 @@ export function removeItemRow({ content, sources }, id) {
 // AI 建議(agent_actions kind=suggest_field_update 的 evidence.suggestion)套進目前草稿:
 // 只補「目前仍 pending／缺鍵」且建議 filled 的欄位,絕不覆蓋人填(confirmed)或人已標不適用的;
 // 工項列只加不減;附件以 photo_id 聯集。回傳套用了哪些鍵供人看。
+// 自檢表 results(2026-09-21 起):AI 只會抄錄紙上**已經寫好**的讀數(G 包,含分列 readings),不代為量測——所以建議裡
+// filled 的項目可以補進目前**沒有值**的項目,連同其 field_sources 一起帶(狀態仍是 filled=待確認,人要逐項按「確認」才能簽;
+// 這不是放寬確認,只是讓表內上傳把紙上的字填進格子)。已有值(單一值或 readings)或人已確認／標不適用的項目一律不動。
 export function applySuggestion(state, suggestion) {
   if (!suggestion?.content) return { state, applied: [] }
   let { content, sources } = state
@@ -752,12 +781,27 @@ export function applySuggestion(state, suggestion) {
     sources = { ...sources, [key]: { ...sug[key] } }
     applied.push(key)
   }
-  // 頂層欄位逐鍵(三類共用);日期／範本／照片清單不是欄位,items／extras 另處理;自檢表 results 永遠不由建議帶入(實測值只能人填)
+  // 頂層欄位逐鍵(三類共用);日期／範本／照片清單不是欄位,items／extras／results 另處理
   for (const [k, v] of Object.entries(suggestion.content)) {
     if (['log_date', 'check_date', 'template', 'template_id', 'template_title', 'template_source', 'items', 'extras', 'results', 'photo_ids', 'unmatched_photo_ids'].includes(k)) continue
     if (v != null) take(k, v)
   }
   for (const [k, v] of Object.entries(suggestion.content.extras || {})) take(`extras.${k}`, v)
+  // 檢查項目:只補目前表上存在(同範本)且沒有值的項目;值與 readings 擇一(與 DB fn_checklist_result_check 同形狀),備註保留
+  for (const [no, r] of Object.entries(suggestion.content.results || {})) {
+    const key = `results.${no}`
+    const cur = content.results?.[no]
+    if (!cur) continue
+    const hasValue = cur.value != null || (Array.isArray(cur.readings) && cur.readings.length > 0)
+    const curSrc = sources?.[key]
+    if (hasValue || (curSrc && curSrc.status !== 'pending') || sug[key]?.status !== 'filled') continue
+    const readings = Array.isArray(r?.readings) && r.readings.length ? r.readings : null
+    if (r?.value == null && !readings) continue
+    const next = readings ? { ...withoutReadings(cur), value: null, readings } : { ...withoutReadings(cur), value: r.value }
+    content = { ...content, results: { ...content.results, [no]: next } }
+    sources = { ...sources, [key]: { ...sug[key] } }
+    applied.push(key)
+  }
   for (const [wid, it] of Object.entries(suggestion.content.items || {})) {
     if (!content.items?.[wid]) {
       content = { ...content, items: { ...(content.items || {}), [wid]: { ...it, qty_today: null, location: it.location ?? null } } }

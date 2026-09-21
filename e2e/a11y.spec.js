@@ -115,7 +115,8 @@ test.describe('1024px icon rail(W9 平板版面)', () => {
   // 報讀器與所有 getByRole('link', { name: 全名 }) 的既有合約會一起斷。
   test('側欄收成短標 rail,連結的 accessible name 仍是全名', async ({ page }) => {
     await page.setViewportSize(TABLET_RAIL)
-    await loginAs(page, 'contractor')
+    // 廠商自 2026-09-21 起只剩三核心(群組改名),版面合約改用導覽未變的監造
+    await loginAs(page, 'supervisor')
     const nav = page.getByRole('navigation', { name: '主要功能' })
     await expect(nav.getByText('履約', { exact: true })).toBeVisible()      // navConfig item.short
     await expect(nav.getByText('履約時程', { exact: true })).toBeHidden()   // 全名 span 收起
@@ -131,7 +132,7 @@ test.describe('1024px icon rail(W9 平板版面)', () => {
   // 側欄必須自己展開回全寬。W9 若把 isTablet 併進 sidebarCollapsed 就會回退成這條紅。
   test('平板的強制收合不污染桌機側欄偏好', async ({ page }) => {
     await page.setViewportSize(TABLET_RAIL)
-    await loginAs(page, 'contractor')
+    await loginAs(page, 'supervisor')
     await expect(page.getByRole('navigation', { name: '主要功能' }).getByText('履約', { exact: true })).toBeVisible()
     await page.setViewportSize({ width: 1280, height: 800 })
     const nav = page.getByRole('navigation', { name: '主要功能' })
@@ -175,6 +176,7 @@ test.describe('44px 觸控目標抽查(375px)', () => {
   test('今日工作列(主要觸控目標)高度 ≥ 44px', async ({ page }) => {
     await page.setViewportSize(MOBILE)
     await loginAs(page, 'contractor')
+    await gotoHash(page, '/dashboard') // 廠商三核心落在施工日誌;今日工作仍可深連結
     const task = page.getByRole('link').filter({ hasText: '第 5 期估驗計價送審' })
     await expect(task).toBeVisible()
     const box = await task.boundingBox()
@@ -231,7 +233,7 @@ test.describe('鍵盤可達性', () => {
   // 開啟聚焦關閉鈕、Esc 關閉、焦點還給觸發它的那顆鈕。
   test('375px 抽屜:Esc 關閉並把焦點還給觸發鈕(更多)', async ({ page }) => {
     await page.setViewportSize(MOBILE)
-    await loginAs(page, 'contractor')
+    await loginAs(page, 'supervisor')
     const more = page.getByRole('navigation', { name: '快速導覽' }).getByRole('button', { name: '更多', exact: true })
     await expect(more).toHaveAttribute('aria-expanded', 'false')
     await more.click()
@@ -252,7 +254,8 @@ test.describe('鍵盤可達性', () => {
   // 抽屜不存在(≥md)時鎖定同時解除、開啟意圖清除;縮回手機寬度時抽屜不會自己彈開。
   test('375px 抽屜開著拉寬到 1024:鎖定隨抽屜消失而解除,縮回 375 抽屜不殘留', async ({ page }) => {
     await page.setViewportSize(MOBILE)
-    await loginAs(page, 'contractor')
+    // 廠商自 2026-09-21 起只剩三核心(群組改名、無今日工作),版面合約改用導覽未變的監造
+    await loginAs(page, 'supervisor')
     // 等待辦清單掛載(lazy chunk)頁面才夠高;先捲離頁首:scrollY=0 時 top:-0 剛好看不出缺陷,
     // 要捲一段才會把內容鎖到畫面外
     await expect(page.getByRole('list', { name: '現在輪到我清單' })).toBeVisible()

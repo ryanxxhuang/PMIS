@@ -101,6 +101,13 @@
 - **沒有動的**：`roles`、RLS、RPC、任何 migration、Edge。「廠商不能簽署監造文件」由既有 pgTAP 釘住（`inspection_form_documents.sql` 的廠商建立／簽署 PD006 與「正式模式的廠商 admin 也不能簽」、`supervisor_logs.sql` 的廠商簽署／編輯 PD006）。
 - **導覽群組名**維持「現場紀錄／履約時程／估驗請款」，與實作指令的「AI 文件／契約期程／估驗請款」三件事 1:1 對應；報告的落差是並列模組太多而不是群組名，本輪不改名（名稱在 `navConfig` 單一來源）。
 
+**Demo 急件：廠商只留三核心（2026-09-21，[急件指令](../reviews/2026-09-21-claude-demo-priority-prompt.md) 第二優先）**。只改可見入口與落地頁，`roles`、`routeAllowed`、RLS、RPC、Edge 一律不動：
+
+- 廠商側欄只剩「施工文件／契約與提醒／估驗請款」。`navConfig` 新增三個只影響渲染的旗標：`labelFor`／`shortFor`（該角色看到的群組名：現場紀錄→施工文件、履約時程→契約與提醒）與 `onlyFor`（`hiddenFor` 的反面）。廠商的「契約與提醒」多列契約上傳（`/contract`）、送審文件、工程疑義三個 `onlyFor` 分身，原「文件往來」「專案」兩組對廠商 `hiddenFor`；分身不進登記表，權限與頁名（`navLabel`／`navEntryFor`）以原群組定義為準。現場總覽 `/site` 對廠商 `hiddenFor`（照片改在表單內上傳），三方成員／活動紀錄對廠商沒有入口、仍可深連結。
+- `visibleNavGroups` 輸出的群組項多帶 `entry`（原群組路徑）；`to` 仍是第一個可見子頁。`roleWorkLinks` 與現場總覽的現場作業卡以 `entry` 認群組（廠商的施工文件 `to` 是 `/site-log`）。
+- `coreOnlyNav(org)`（目前只有廠商）：側欄的今日工作分區、「問 GovAgent」列、頂欄問答入口、Copilot（頂欄鈕與 FAB）不渲染，手機底欄沒有主畫面槽；落地頁 `defaultLandingPath('contractor')`＝`/site-log`（「施工文件預設直接打開今日施工日誌」），找不到頁面的返回文案取 `landingLabel`。`/dashboard`、`/agent`、`/alerts` 仍登記、廠商仍可深連結；Agent 對話只在使用者送出時才呼叫 `agent-run`，入口收起後沒有背景 Agent 請求。照片填表與契約整理的 AI 照舊。
+- 測試：`navConfig.test.js` 改釘三核心大綱、`entry`、`onlyFor` 不進登記表與落地頁；Demo E2E 的版面／抽屜合約改用導覽未變的監造或機關，廠商的收件匣測試改以深連結進今日工作，新增廠商三核心的底欄／無問答入口斷言。
+
 ## 4. 契約時程與提醒對齊【已確認 目標，設計 機制】
 
 ### 4.1 核心類型與責任

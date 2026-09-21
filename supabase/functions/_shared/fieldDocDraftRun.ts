@@ -20,9 +20,15 @@
 //      DB fn_field_document_template 取(repo.getFieldDocumentTemplate),Edge 不再維護鏡像常數。
 //      同一張照片可掛多份文件附件,數量只在確認量表計一次(P4)。
 //   5. 批次狀態:remaining>0→recognizing(等續跑);有失敗→partial;否則 ready。
+//
+// 表內上傳(2026-09-21;輸入多帶 target_document_id):使用者在施工日誌／自主檢查表**表單內**按「上傳照片,AI 填表」。
+//   第 1–3 步照舊(閘門、角色、認領、逐張辨識),但第 4 步**不推候選、不建其他文件、不寫版本**——只為那一份目標文件
+//   湊一份草稿並留一筆 suggest_field_update(evidence.suggestion 與既有建議同形狀),回應多帶 target 由前端合併進畫面上
+//   的表單(只補空白欄,人填的不覆蓋;存檔後才成為版本)。目標必須是本案、daily_log／self_check、責任方＝上傳方、
+//   狀態仍可編(已簽署／提送 409,請人先建立更正版本)。同內容(同 sha)照片本案已辨識過的直接沿用結果、不再呼叫模型。
 
 import type {
-  Candidate, ChecklistTemplateRow, DayDefect, DayInspection, DraftPhoto, FieldDocDraft, FormalDailyLog, LeafWorkItem, LegacyDailyLog,
+  Candidate, ChecklistTemplateRow, DayDefect, DayInspection, DocType, DraftPhoto, FieldDocDraft, FormalDailyLog, LeafWorkItem, LegacyDailyLog,
   OpenInspection, PhotoAiStatus,
 } from './fieldDocDraft.ts'
 import {
@@ -82,6 +88,10 @@ export type PhotoAiPatch = {
 }
 
 export type DocRow = { id: string; status: string; current_version_no: number; intake_id: string | null }
+// 表內上傳的目標文件:多帶類型、日期、責任方(DB generated column,不信任前端)與自檢表範本
+export type TargetDocRow = DocRow & { doc_type: string; doc_date: string; owner_org: string; target_key: string | null; template_id: string | null }
+// 表內上傳可填的文件狀態(與前端頁面的 EDITABLE_STATUSES 同一份口徑;已簽署／提送／收件要人先建立更正版本)
+export const TARGET_OPEN_STATUSES: readonly string[] = ['draft', 'pending_input', 'in_review', 'returned']
 // 活文件的定位鍵:日誌類=該案該日一份;自檢表=同批次同工項同日一份(intake_id＋target_key 的起稿冪等索引)
 // 活文件定位:日誌類=該日;自檢表=批次＋target_key;監造查驗表單=target_key(查驗 id,跨批次同一份)
 export type DocLocator = { docDate: string } | { intakeId: string; targetKey: string } | { targetKey: string }
@@ -99,6 +109,10 @@ export interface DraftRepo {
   listPhotosByIds(ids: string[]): Promise<IntakePhotoRow[] | RepoError>
   // Agent 對話起稿(P6b-2):本案拍攝時間落在該台北日曆日的照片(可限工項);不分批次、RLS 讀
   listPhotosTakenOn(date: string, workItemId?: string | null): Promise<IntakePhotoRow[] | RepoError>
+  // 本案已辨識(done／not_site／unreadable)且同內容雜湊的照片(表內上傳沿用辨識結果,不再打模型;呼叫端自行排除本批的列)
+  listRecognizedPhotosBySha(shas: string[]): Promise<IntakePhotoRow[] | RepoError>
+  // 表內上傳的目標文件(RLS 讀;不在本案或無權限=null)
+  getDocumentById(docId: string): Promise<TargetDocRow | null | RepoError>
   downloadPhoto(storagePath: string): Promise<{ base64: string; mime: string } | RepoError>
   updatePhoto(photoId: string, patch: PhotoAiPatch): Promise<{ error?: string; code?: string }>
   listLeafWorkItems(): Promise<LeafWorkItem[] | RepoError>
@@ -155,6 +169,8 @@ export type RunInput = {
   // 明確的路可以更新,不能永遠卡在舊快取。重跑只改 photos.ai_*;人填過的說明／位置不覆寫,
   // 已有人工版本或已簽署的文件仍走 suggested／locked,不會被覆寫。
   rerecognizePhotoIds?: string[]
+  // 表內上傳:只為這一份文件湊草稿並留建議(不推候選、不建其他文件、不寫版本);見檔頭
+  targetDocumentId?: string
 }
 
 export type PhotoOutcome = {
@@ -248,6 +264,22 @@ export function applyPaperCells(whiteboard: WhiteboardResult | null, cells: Pape
     observations: used ? cells.observations : whiteboard.observations,
     dropped: [...whiteboard.dropped, ...cells.dropped],
   }
+}
+
+// 各類文書的業務日期欄(待確認清單用)
+const DOC_DATE_KEY: Record<string, string> = { daily_log: 'log_date', supervisor_log: 'log_date', self_check: 'check_date', inspection_form: 'inspection_date' }
+
+// 表內上傳的自檢表沒指定工項時,用本批照片配到的工項多數決;平手或沒有 → null(留空待人選,不猜)
+export function majorityWorkItem(ids: (string | null | undefined)[]): string | null {
+  const count = new Map<string, number>()
+  for (const id of ids) if (id) count.set(id, (count.get(id) ?? 0) + 1)
+  let best: string | null = null
+  let bestN = 0
+  let tie = false
+  for (const [id, n] of count) {
+    if (n > bestN) { best = id; bestN = n; tie = false } else if (n === bestN) tie = true
+  }
+  return tie ? null : best
 }
 
 // 照片列＋已存辨識結果 → 起稿用照片(照片起稿與 Agent 對話起稿同一支)
@@ -378,6 +410,22 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     return fail(403, 'org_mismatch', '只有上傳方所屬的同一方成員可對此批次起稿')
   }
 
+  // ── 1b. 表內上傳的目標文件:認領前先驗(驗不過就不動批次,前端可修正後重送)──────────
+  // 責任方讀 DB generated column(owner_org 由 doc_type 決定),與上傳方比對——監造文件永遠不會從廠商批次冒出來。
+  let target: TargetDocRow | null = null
+  if (input.targetDocumentId) {
+    const t = await repo.getDocumentById(input.targetDocumentId)
+    if (isErr(t)) return fail(500, 'db_error', t.error)
+    if (!t) return fail(404, 'target_not_found', '找不到要填入的文件(可能不在本案、已捨棄或無權限)')
+    if (t.doc_type !== 'daily_log' && t.doc_type !== 'self_check') return fail(400, 'target_unsupported', '表內上傳只支援施工日誌與自主檢查表')
+    if (t.owner_org !== intake.uploader_org) return fail(403, 'target_org_mismatch', '這份文件的責任方與上傳方不同,不能由這批照片填入')
+    if (!TARGET_OPEN_STATUSES.includes(t.status)) {
+      const word = t.status === 'signed' ? '簽署' : t.status === 'received' ? '被收件' : '提送'
+      return fail(409, 'target_locked', `這份${FIELD_DOC_TYPE_LABELS[t.doc_type as keyof typeof FIELD_DOC_TYPE_LABELS]}已${word},內容已鎖定;請先建立更正版本再上傳照片`)
+    }
+    target = t
+  }
+
   const lastProgress = intake.last_progress_at ? Date.parse(intake.last_progress_at) : 0
   const running = !!intake.run_started_at
   const stale = running && startedAt - lastProgress > staleMs
@@ -466,6 +514,74 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
   let cellsBlocked = false
   let remaining = 0
 
+  // 辨識結果落地(新辨識與沿用快取同一段):狀態由分類結果決定;工項用**目前**標單重配;說明／位置／工項只補空欄、
+  // 不覆蓋人填的;非工地／不可辨的照片不套說明、不配工項;被佐證凍結 guard 擋下改掛時只寫辨識結果並揭露。
+  type Recognition = { classify: SitePhotoResult; whiteboard: WhiteboardResult | null; whiteboardSkipped: string | null; cellsSkipped: string | null }
+  const persistRecognition = async (p: IntakePhotoRow, rec: Recognition): Promise<void> => {
+    const { classify, whiteboard } = rec
+    let status: PhotoAiStatus = 'done'
+    if (!classify.legible) status = 'unreadable'
+    else if (!classify.is_construction) status = 'not_site'
+    const hint = status === 'done' ? classify.work_item_hint : ''
+    const wi = status === 'done' && hint && hasBoq ? matchLeaf(hint, leaves) : null
+    const result: StoredAiResult = {
+      classify, whiteboard, whiteboard_skipped: rec.whiteboardSkipped, paper_cells_skipped: rec.cellsSkipped,
+      match: { work_item_id: p.work_item_id ?? wi?.id ?? null, hint: hint || null },
+    }
+    const patch: PhotoAiPatch = {
+      ai_status: status, ai_result: result, ai_run_at: iso(now()),
+      work_item_hint: status === 'done' && !p.work_item_id && !wi && hint ? hint : null,
+    }
+    if (status === 'done') {
+      if (!p.caption && classify.caption) patch.caption = classify.caption
+      // 位置只寫有原文佐證的:轉錄讀到的位置優先,分類推測且與轉錄矛盾的一律不落地
+      const loc = groundedLocation(classify, whiteboard).value
+      if (!p.location && loc) patch.location = loc
+      if (!p.work_item_id && wi) patch.work_item_id = wi.id
+    } else if (status === 'not_site' && !p.caption) {
+      patch.caption = '(AI 判讀:疑似非工地照片,請人工確認)'
+    }
+    let r = await repo.updatePhoto(p.id, patch)
+    if (r.error && r.code === 'P0001') {
+      notes.push(`照片 ${p.id.slice(0, 8)} 已為估驗佐證,未改掛工項:${r.error}`)
+      r = await repo.updatePhoto(p.id, { ai_status: status, ai_result: result, ai_run_at: patch.ai_run_at, work_item_hint: patch.work_item_hint })
+    }
+    if (r.error) { setOutcome(p, 'failed', { error: r.error }); return }
+    stored.set(p.id, result)
+    if (patch.work_item_id) p.work_item_id = patch.work_item_id
+    if (patch.caption) p.caption = patch.caption
+    if (patch.location) p.location = patch.location
+    setOutcome(p, status, { work_item_id: p.work_item_id, work_item_hint: patch.work_item_hint ?? null, caption: p.caption, location: p.location })
+  }
+
+  // ── 同內容照片沿用辨識結果(2026-09-21 表內上傳:已上傳過的照片也能引用填表)────────────
+  // 本案別批已辨識過的同雜湊照片:直接沿用其分類與轉錄結果寫進這張照片的 ai_*,不呼叫模型、不記用量
+  // (用量只在 index.ts 的呼叫器記,這裡根本不呼叫);工項配對用目前標單重算。使用者明確要求重新辨識的不沿用。
+  let reused = 0
+  const cacheable = work.filter((p) => !redo.has(p.id) && p.content_sha256)
+  if (cacheable.length) {
+    const priorRes = await repo.listRecognizedPhotosBySha([...new Set(cacheable.map((p) => p.content_sha256!))])
+    if (isErr(priorRes)) notes.push(`查詢同內容照片的既有辨識結果失敗,改為重新辨識:${priorRes.error}`)
+    else {
+      const own = new Set(photos.map((p) => p.id))
+      const bySha = new Map<string, StoredAiResult>()
+      for (const row of priorRes) {
+        if (own.has(row.id) || !row.content_sha256 || bySha.has(row.content_sha256)) continue
+        if (row.ai_status !== 'done' && row.ai_status !== 'not_site' && row.ai_status !== 'unreadable') continue
+        const s = readStored(row.ai_result)
+        if (s) bySha.set(row.content_sha256, s)
+      }
+      for (const p of cacheable) {
+        const s = bySha.get(p.content_sha256!)
+        if (!s?.classify) continue
+        await persistRecognition(p, { classify: s.classify, whiteboard: s.whiteboard, whiteboardSkipped: s.whiteboard_skipped, cellsSkipped: s.paper_cells_skipped ?? null })
+        reused++
+      }
+      if (reused) notes.push(`${reused} 張沿用先前同內容照片的辨識結果(未重新呼叫模型)`)
+    }
+  }
+  const toRecognize = work.filter((p) => !outcomes.has(p.id))
+
   // ── B2 紙表逐格辨識:切塊 → 每塊讀兩次 → 兩次一致才採用 → 併塊 ────────────
   // 任何一步不成立都回 skipped 原因,呼叫端退回整張圖一次讀的 B 路徑;不硬切、不猜。
   const readPaperCells = async (base64: string, mime: string): Promise<{ cells: PaperCellsResult | null; skipped: string | null }> => {
@@ -484,7 +600,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     })
     return { cells: r.cells, skipped: r.skipped }
   }
-  await mapWithConcurrency(work, concurrency, async (p) => {
+  await mapWithConcurrency(toRecognize, concurrency, async (p) => {
     if (stop.verdict || now() - startedAt > budgetMs) { remaining++; return }
     const dl = await repo.downloadPhoto(p.storage_path)
     if (isErr(dl)) {
@@ -535,14 +651,16 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
           if (!whiteboard) whiteboardSkipped = 'failed:invalid_output'
           // 紙本表單一律再讀一次整張,只留兩次一致的內容:逐格接手了 observations,
           // 但表頭(手寫的民國年日期)仍由這一支負責,單讀一次曾把 115 讀成 114。
+          // 第二次沒讀成(停用／錯誤／輸出不完整)=沒有比對過:第一次的表頭日期、位置與整張觀察**一律不採用**,
+          // 不能冒充已核對的內容(2026-09-21 核對 G 包);逐格那一支自己有兩次一致,下面照常併回。
           else if (needsSecondPass(classify)) {
             const wb2 = await vision.readBoard(dl.base64, dl.mime)
-            if ('blocked' in wb2) { boardBlocked = true; whiteboardSkipped = 'second_pass:feature_disabled' }
-            else if ('error' in wb2) whiteboardSkipped = `second_pass_failed:${wb2.errorCode}`
+            if ('blocked' in wb2) { boardBlocked = true; whiteboard = null; whiteboardSkipped = 'second_pass:feature_disabled' }
+            else if ('error' in wb2) { whiteboard = null; whiteboardSkipped = `second_pass_failed:${wb2.errorCode}` }
             else {
               const second = normalizeWhiteboardResult(wb2.data)
               if (second) whiteboard = agreeRecords(whiteboard, second)
-              else whiteboardSkipped = 'second_pass_failed:invalid_output'
+              else { whiteboard = null; whiteboardSkipped = 'second_pass_failed:invalid_output' }
             }
           }
         }
@@ -550,38 +668,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     }
     // 逐格結果併回(整張轉錄沒跑或失敗時,逐格讀到的實測值也不能掉)
     if (cells) whiteboard = applyPaperCells(whiteboard, cells)
-    const hint = status === 'done' ? classify.work_item_hint : ''
-    const wi = status === 'done' && hint && hasBoq ? matchLeaf(hint, leaves) : null
-    const result: StoredAiResult = {
-      classify, whiteboard, whiteboard_skipped: whiteboardSkipped, paper_cells_skipped: cellsSkipped,
-      match: { work_item_id: p.work_item_id ?? wi?.id ?? null, hint: hint || null },
-    }
-    const patch: PhotoAiPatch = {
-      ai_status: status, ai_result: result, ai_run_at: iso(now()),
-      work_item_hint: status === 'done' && !p.work_item_id && !wi && hint ? hint : null,
-    }
-    // 只補空欄,不覆蓋人填的;非工地／不可辨的照片不套說明、不配工項
-    if (status === 'done') {
-      if (!p.caption && classify.caption) patch.caption = classify.caption
-      // 位置只寫有原文佐證的:轉錄讀到的位置優先,分類推測且與轉錄矛盾的一律不落地
-      const loc = groundedLocation(classify, whiteboard).value
-      if (!p.location && loc) patch.location = loc
-      if (!p.work_item_id && wi) patch.work_item_id = wi.id
-    } else if (status === 'not_site' && !p.caption) {
-      patch.caption = '(AI 判讀:疑似非工地照片,請人工確認)'
-    }
-    let r = await repo.updatePhoto(p.id, patch)
-    if (r.error && r.code === 'P0001') {
-      // 佐證凍結 guard 擋下改掛(照片已屬已核定估驗):只寫辨識結果,不改連結欄
-      notes.push(`照片 ${p.id.slice(0, 8)} 已為估驗佐證,未改掛工項:${r.error}`)
-      r = await repo.updatePhoto(p.id, { ai_status: status, ai_result: result, ai_run_at: patch.ai_run_at, work_item_hint: patch.work_item_hint })
-    }
-    if (r.error) { setOutcome(p, 'failed', { error: r.error }); return }
-    stored.set(p.id, result)
-    if (patch.work_item_id) p.work_item_id = patch.work_item_id
-    if (patch.caption) p.caption = patch.caption
-    if (patch.location) p.location = patch.location
-    setOutcome(p, status, { work_item_id: p.work_item_id, work_item_hint: patch.work_item_hint ?? null, caption: p.caption, location: p.location })
+    await persistRecognition(p, { classify, whiteboard, whiteboardSkipped, cellsSkipped })
   })
 
   const outcomeList = () => photos.map((p) => outcomes.get(p.id) ?? ({ id: p.id, ai_status: (p.ai_status ?? 'pending') as PhotoAiStatus, work_item_id: p.work_item_id, work_item_hint: null, caption: p.caption, location: p.location, error: null }))
@@ -608,9 +695,16 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
   const dated = sitePhotoRows.map((p) => {
     const s = stored.get(p.id)!
     const d = assignPhotoDate(p, s.whiteboard, validDate(intake.log_date))
-    if (d.conflict) notes.push(`照片 ${p.id.slice(0, 8)}:${d.conflict}`)
+    if (d.conflict && d.source !== 'upload_time') notes.push(`照片 ${p.id.slice(0, 8)}:${d.conflict}`)
+    if (s.whiteboard_skipped?.startsWith('second_pass')) {
+      notes.push(`照片 ${p.id.slice(0, 8)}:紙表第二次比對辨識未完成,表頭日期、位置與整張轉錄內容未採用(逐格讀到且兩次一致的實測值仍保留);可對這張照片重新辨識`)
+    }
     return { photo: p, stored: s, ...d }
   })
+  const byUpload = dated.filter((d) => d.source === 'upload_time')
+  if (byUpload.length) {
+    notes.push(`${byUpload.length} 張照片沒有拍攝時間、也沒有讀到紙上日期,暫以上傳日 ${[...new Set(byUpload.map((d) => d.date))].join('、')} 起稿;日期不對請捨棄後指定日期重新上傳`)
+  }
   const statusNotes = () => {
     const list = outcomeList()
     const n = (s: PhotoAiStatus) => list.filter((o) => o.ai_status === s).length
@@ -635,7 +729,8 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
     if (isErr(tplRes)) { notes.push(`檢查表範本讀取失敗,本次${intake.uploader_org === 'contractor' ? '未推自主檢查表' : '查驗表單未帶查驗項目範本'}:${tplRes.error}`); checklistTemplates = null }
     else checklistTemplates = tplRes
   }
-  let candidates = mergeCandidateExclusions(intake.candidates, inferCandidates({
+  // 表內上傳不推候選(只填指定文件);一般批次照舊由確定性規則推
+  let candidates: Candidate[] = target ? [] : mergeCandidateExclusions(intake.candidates, inferCandidates({
     uploaderOrg: intake.uploader_org,
     sitePhotos: dated.map((d) => ({ id: d.photo.id, date: d.date, work_item_id: d.photo.work_item_id })),
     openInspections, workItems: leaves, checklistTemplates,
@@ -643,6 +738,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
 
   const documents: DocumentOutcome[] = []
   let docErrors = 0
+  let targetBody: Record<string, unknown> | null = null
 
   // 範本於執行期向 DB 取,每批只取一次;null=沒有範本(該類型不能起稿,回錯誤而不是硬湊)
   const templateCache = new Map<string, FieldDocTemplate | null>()
@@ -706,7 +802,82 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
         : { docDate: cand.doc_date! }
   const SUPPORTED: readonly string[] = ['daily_log', 'supervisor_log', 'self_check', 'inspection_form']
 
+  // ── 4b. 表內上傳:只為目標文件湊草稿、只留建議(不寫版本;前端合併進表單,存檔後才是版本)────────
+  // 全部辨識完才湊(remaining>0 先回續跑,免得每輪各留一筆建議)。批次 candidates 記一筆代表這份目標,
+  // /site 的「上傳批次」才看得懂這批照片去了哪裡。
+  if (target) {
+    const docType = target.doc_type as DocType
+    const typeLabel = FIELD_DOC_TYPE_LABELS[docType]
+    const date = target.doc_date
+    const cand: Candidate = {
+      doc_type: docType, target_key: `document:${target.id}`, doc_date: date, state: 'ready', support: 'supported',
+      reason: `表內上傳:填入指定的${typeLabel}(${date})`, excluded: false, photo_ids: dated.map((d) => d.photo.id), document_id: target.id,
+      ...(docType === 'self_check' ? { template_id: target.template_id ?? null } : {}),
+    }
+    if (remaining === 0) {
+      const out: DocumentOutcome = { doc_type: docType, doc_date: date, document_id: target.id, version_no: target.current_version_no, status: target.status, action: 'error', reason: null, pending_fields: [] }
+      documents.push(out)
+      try {
+        // 日誌:目標文件的日期為準,本批所有已辨識的工地照片都納入;照片推得的日期不同的仍納入,但明寫並列待確認,不默默丟掉
+        const mismatched = dated.filter((d) => d.date && d.date !== date)
+        const mismatchNote = mismatched.length
+          ? `${mismatched.length} 張照片推得的日期(${[...new Set(mismatched.map((d) => d.date))].join('、')})與文件日期 ${date} 不同,仍已納入本份文件;請確認文件日期是否正確`
+          : null
+        if (mismatchNote) notes.push(mismatchNote)
+        const latestRes = await repo.latestVersion(target.id)
+        if (isErr(latestRes)) throw new Error(latestRes.error)
+        const latest = latestRes
+        const draftPhotos = new Map<string, DraftPhoto>(dated.map((d) => [d.photo.id, toDraftPhoto(d.photo, d.stored)]))
+        await unionPriorAttachments(repo, latest, draftPhotos)
+        // 文件日期是人在表上定的,不由照片推;來源標明取自這份文件
+        const dateSource = { source: `document:${target.id}`, refs: [] as string[] }
+        let draft: FieldDocDraft
+        if (docType === 'self_check') {
+          const template = (checklistTemplates ?? []).find((t) => t.id === target!.template_id) ?? null
+          if (!template) throw new Error('這份自主檢查表的檢查表範本已不存在或讀不到,請在表上重選範本並存檔後再試')
+          // 工項:目標文件已填的優先;沒有就用本批照片配到的工項多數決(平手或沒有→留空待人選)
+          const latestWid = (latest?.content as { work_item_id?: unknown } | null)?.work_item_id
+          const wid = typeof latestWid === 'string' && latestWid ? latestWid : majorityWorkItem(dated.map((d) => d.photo.work_item_id))
+          const workItem = wid ? leaves.find((w) => w.id === wid) ?? null : null
+          draft = buildSelfCheckDraft({
+            date, dateSource, photos: [...draftPhotos.values()], workItem, template, templateReason: '這份文件指定的範本',
+            frame: await templateFor('self_check'), hasBoq, notes: statusNotes(),
+          })
+        } else {
+          const [weather, sameDayRes, yesterdayRes] = await Promise.all([repo.fetchWeather(date), repo.getDailyLog(date), repo.getDailyLog(previousDate(date))])
+          draft = buildDailyLogDraft({
+            date, dateSource, photos: [...draftPhotos.values()], workItems: leaves,
+            sameDayLog: isErr(sameDayRes) ? null : sameDayRes, yesterdayLog: isErr(yesterdayRes) ? null : yesterdayRes,
+            weather, hasBoq, notes: statusNotes(),
+          })
+        }
+        if (mismatchNote) draft.recheck.push({ key: DOC_DATE_KEY[docType], reason: mismatchNote })
+        out.pending_fields = draft.required_fields.filter((k) => draft.field_sources[k]?.status === 'pending')
+        const suggestion = { content: draft.content, field_sources: draft.field_sources, attachments: draft.attachments }
+        const act = await repo.insertAgentAction({
+          actor_user: userId, agent_role: intake.uploader_org, kind: 'suggest_field_update', target_table: 'field_documents', target_id: target.id,
+          summary: `照片辨識結果可填入 ${date} ${typeLabel}(表內上傳;只補空白欄,由你核對後存檔)`,
+          rationale: draft.rationale,
+          evidence: { intake_id: intakeId, origin: 'in_form', document_id: target.id, doc_type: docType, against_version_no: target.current_version_no, suggestion },
+        })
+        if (isErr(act)) throw new Error(act.error)
+        out.action = 'suggested'
+        out.reason = '辨識結果已作為建議合併進表單(只補空白欄);存檔後才成為版本'
+        cand.state = 'suggested'
+        targetBody = { document_id: target.id, agent_action_id: act.id, suggestion, pending_fields: out.pending_fields, recheck: draft.recheck, notes: mismatchNote ? [mismatchNote] : [] }
+      } catch (e) {
+        docErrors++
+        out.action = 'error'
+        out.reason = (e as Error)?.message || '起稿寫入失敗,可重試'
+        cand.state = 'error'
+        cand.reason = out.reason
+      }
+    }
+    candidates = [cand]
+  }
+
   for (const cand of candidates) {
+    if (target) break
     if (cand.state !== 'ready' || !cand.doc_date || !cand.target_key) continue
     if (!SUPPORTED.includes(cand.doc_type)) continue
     const docType = cand.doc_type
@@ -741,9 +912,16 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
       const dateRefs = dayPhotos.filter((d) => d.ref).map((d) => d.ref!)
       const dateSource = dayPhotos.some((d) => d.source === 'whiteboard')
         ? { source: `whiteboard:${dayPhotos.find((d) => d.source === 'whiteboard')!.ref}`, refs: dateRefs }
-        : dayPhotos.some((d) => d.source === 'intake') ? { source: 'intake', refs: [] } : { source: `photo_time:${dateRefs[0] ?? ''}`, refs: dateRefs }
+        : dayPhotos.some((d) => d.source === 'intake') ? { source: 'intake', refs: [] }
+        : dayPhotos.some((d) => d.source === 'photo_time')
+          ? { source: `photo_time:${dayPhotos.find((d) => d.source === 'photo_time')!.ref}`, refs: dateRefs }
+          : { source: `upload_time:${dateRefs[0] ?? ''}`, refs: dateRefs }
 
       const draft = await buildDraftFor(cand, date, dateSource, [...draftPhotos.values()])
+      // 文件日期只有上傳日可依:在文件的待確認清單明寫(批次說明之外,打開文件也看得到)
+      if (dateSource.source.startsWith('upload_time:')) {
+        draft.recheck.push({ key: DOC_DATE_KEY[docType], reason: `這份文件的日期 ${date} 是照片上傳日(照片沒有拍攝時間、紙上也沒讀到日期),請確認;日期不對請捨棄後指定日期重新上傳` })
+      }
       out.pending_fields = draft.required_fields.filter((k) => draft.field_sources[k]?.status === 'pending')
 
       const res = await writeDraftDocument(repo, {
@@ -792,6 +970,7 @@ export async function runDraftFieldDocuments(input: RunInput): Promise<RunResult
       documents,
       remaining,
       notes: [...notes, ...statusNotes()],
+      ...(targetBody ? { target: targetBody } : {}),
     },
   }
 }

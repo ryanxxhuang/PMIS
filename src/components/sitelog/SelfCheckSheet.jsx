@@ -16,7 +16,7 @@ import { judgeChecklist, judgeItem, checklistCoverage, coverageText } from '../.
 import { taipeiDateTime as fmtTs } from '../../lib/dates.js'
 import { templateCaption, formTemplateOf, rocDateText, templateOf, canEditForm, SELF_CHECK_TIMINGS, SELF_CHECK_RECHECK_RESULTS } from '../../lib/officialForms.js'
 import { DocumentPrintStamp } from './DocumentPrint.jsx'
-import { PaperFormProvider, PaperInput, FieldMark, usePaperForm } from './PaperCell.jsx'
+import { PaperFormProvider, PaperInput, FieldMark, MeasuredCell, usePaperForm } from './PaperCell.jsx'
 
 const Th = ({ children, right, w }) => <th className={`border paper-rule px-1.5 py-1 font-medium text-footnote ${right ? 'text-right' : 'text-left'} ${w || ''}`}>{children}</th>
 const Td = ({ children, right, center, className = '' }) => <td className={`border paper-rule px-1.5 py-1 text-footnote align-top ${right ? 'text-right tabular-nums' : center ? 'text-center' : ''} ${className}`}>{children}</td>
@@ -149,7 +149,7 @@ export default function SelfCheckSheet({
                 <Td>{it.standard}{it.source ? <span className="paper-mute">（{it.source}）</span> : ''}</Td>
                 <Td right>
                   {isNa ? <span className="paper-mute">不適用</span> : (
-                    <ResultCell it={it} value={v} title={title} canEdit={canEdit} />
+                    <ResultCell it={it} result={content.results?.[it.no]} title={title} canEdit={canEdit} />
                   )}
                   <FieldMark fieldKey={key} title={title} allowNa naLabel="不適用" className="justify-end" />
                 </Td>
@@ -226,9 +226,11 @@ export default function SelfCheckSheet({
   )
 }
 
-// 實際檢查情形:數值項給數字框＋單位,勾選項給合格／不合格(原表以符號呈現);系統永遠不代為量測
-function ResultCell({ it, value, title, canEdit }) {
+// 實際檢查情形:數值項給數字框＋單位(兩向尺寸／多編號分列,見 PaperCell.MeasuredCell),勾選項給合格／不合格
+// (原表以符號呈現);系統永遠不代為量測
+function ResultCell({ it, result, title, canEdit }) {
   const ctx = usePaperForm()
+  const value = result?.value ?? null
   if (it.kind === 'bool') {
     // 值與來源一起走(lib/fieldDocs 的純函式);這裡只是把它接到原表的勾選格
     const set = (v) => ctx?.onChange?.(setFieldValue(ctx.state, `results.${it.no}`, v))
@@ -240,13 +242,7 @@ function ResultCell({ it, value, title, canEdit }) {
       </span>
     )
   }
-  return (
-    <span className="inline-flex items-baseline gap-1 justify-end">
-      <PaperInput fieldKey={`results.${it.no}`} label={`${title} 實際檢查情形`} type="number" align="right"
-        readOnlyText={value == null ? '' : String(value)} />
-      <span className="paper-mute">{it.unit || ''}</span>
-    </span>
-  )
+  return <MeasuredCell it={it} result={result} title={title} canEdit={canEdit} label="實際檢查情形" />
 }
 // 檢查表範本(依據):項目與標準的唯一來源;換範本會清掉已填結果,所以由頁面確認後才換
 function TemplateCell({ content, checklistTemplates, checklistTemplate, edit, canEdit }) {

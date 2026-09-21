@@ -17,7 +17,7 @@ import {
   groupSharedFields, sharedFieldTitle, sharedEffectLabel, sharedPendingDocs, sharedInputValue, sharedApplySummary, documentsAfterShared,
   signedVersionIndex, signedVersionText, signedVersionLink, confirmationDocRef,
   canDiscardFieldDocument, FIELD_DOC_DISCARDABLE_STATUSES, candidateState, CANDIDATE_STATE_LABEL,
-  fieldDocInWorkList,
+  fieldDocInWorkList, setResultReadings,
 } from './fieldDocs.js'
 import { demoFieldDocumentTemplate } from '../data/demoFieldDocTemplates.js'
 import { composeContractorSummary, isFormalDailyLog, dailyLogReceipt, formalDailyLogSource } from './fieldDocText.js'
@@ -125,6 +125,8 @@ describe('欄位來源狀態與必填(鏡像 DB)', () => {
     const content = { items: { w1: { item_no: '壹.一.1', description: '鋼筋' } } }
     expect(fieldLabel('items.w1.qty_today', content)).toBe('壹.一.1 鋼筋 當日數量')
     expect(fieldLabel('items.w1.location', content)).toBe('壹.一.1 鋼筋 施作位置')
+    expect(fieldLabel('items.w1', content)).toBe('工項 壹.一.1 鋼筋') // 整列帶入(表內上傳的填入訊息)不露內部 id
+    expect(fieldLabel('items.w9', content)).toBe('工項列')
     expect(fieldLabel('extras.sampling')).toBe('施工取樣試驗紀錄')
     expect(sourceLabel('whiteboard:p1')).toBe('現場紀錄轉錄')
     expect(sourceLabel('record:p1')).toBe('紙本實測欄抄錄')
@@ -541,11 +543,30 @@ describe('自主檢查表(P3b):範本推導、內容形狀、逐項確認', () =
     expect(swapped.content).toMatchObject({ template_id: 'T2', results: { S1: { value: null } } })
     expect(Object.keys(swapped.sources).filter((k) => k.startsWith('results.'))).toEqual(['results.S1'])
   })
-  it('AI 建議永不帶入檢查結果;來源短句', () => {
+  it('AI 建議可把抄錄的檢查結果(含分列讀數)補進沒有值的項目並帶來源(仍是 filled 待確認);已有值／人確認／不適用／建議 pending 的項目不動;來源短句', () => {
     const c = emptySelfCheckContent('2026-09-17', frame, tpl)
-    const { state, applied } = applySuggestion({ content: c, sources: emptySelfCheckSources(c, tpl) }, { content: { location: 'A區1F', results: { C2: { value: 18 } } }, field_sources: { location: { status: 'filled', source: 'ai:photo' }, 'results.C2': { status: 'filled', source: 'ai:photo' } } })
-    expect(applied).toEqual(['location'])
-    expect(state.content.results.C2).toEqual({ value: null })
+    const recordSrc = { status: 'filled', source: 'record:p1', refs: ['p1'], reason: '已抄錄紙本實測值 編號 1 18 cm、編號 2 19 cm,待你核對確認' }
+    const readings = [{ entry_no: '1', value: 18, value2: null, raw_text: '18 CM' }, { entry_no: '2', value: 19, value2: null, raw_text: '19 CM' }]
+    const suggestion = { content: { location: 'A區1F', work_item_id: 'w1', results: { C2: { value: null, readings }, B1: { value: true }, Z9: { value: 1 } } }, field_sources: { location: { status: 'filled', source: 'ai:photo' }, work_item_id: { status: 'filled', source: 'ai:photo', refs: ['p1'] }, 'results.C2': recordSrc, 'results.B1': { status: 'pending', source: null }, 'results.Z9': { status: 'filled', source: 'record:p1' } } }
+    const { state, applied } = applySuggestion({ content: c, sources: emptySelfCheckSources(c, tpl) }, suggestion)
+    expect(applied).toEqual(['location', 'work_item_id', 'results.C2'])
+    expect(state.content.results.C2).toEqual({ value: null, readings })
+    expect(state.sources['results.C2']).toEqual(recordSrc) // 狀態維持 filled:簽署前仍要人逐項確認(needs_confirmation)
+    expect(state.content.results.B1).toEqual({ value: null }) // 建議本身 pending 不套
+    expect(state.content.results.Z9).toBeUndefined() // 不在本範本的項目不冒出來
+    expect(state.content.work_item_id).toBe('w1')
+    expect(unmetFields(docRequiredKeys('self_check', frame, tpl.items), state.sources, docConfirmRequiredKeys('self_check', frame, tpl.items))).toEqual([{ key: 'results.B1', status: 'pending' }, { key: 'results.C2', status: 'needs_confirmation' }])
+    // 人已填／已確認／標不適用的項目與工項一律不覆蓋;已有讀數的也不動
+    let s = setFieldValue({ content: c, sources: emptySelfCheckSources(c, tpl) }, 'results.C2', 17)
+    s = setFieldValue(s, 'work_item_id', 'w2')
+    s = setFieldNa(s, 'results.B1', '本次未檢')
+    const again = applySuggestion(s, { ...suggestion, field_sources: { ...suggestion.field_sources, 'results.B1': { status: 'filled', source: 'ai:agent' } } })
+    expect(again.applied).toEqual(['location'])
+    expect(again.state.content.results.C2).toEqual({ value: 17 })
+    expect(again.state.content.results.B1).toEqual({ value: null })
+    expect(again.state.content.work_item_id).toBe('w2')
+    const withReadings = setResultReadings({ content: c, sources: emptySelfCheckSources(c, tpl) }, 'C2', [{ entry_no: '1', value: 16, value2: null, raw_text: null }])
+    expect(applySuggestion(withReadings, suggestion).state.content.results.C2.readings[0].value).toBe(16)
     expect(sourceLabel('system:template_match')).toBe('依工項挑選範本')
   })
 })
@@ -798,5 +819,31 @@ describe('candidateState（批次候選的實際狀態）', () => {
   it('使用者排除優先;沒起稿過的候選不受文件狀態影響', () => {
     expect(candidateState({ ...drafted, excluded: true }, new Map([['d1', 'discarded']]))).toBe('excluded')
     expect(candidateState({ state: 'ready' }, new Map([['d1', 'discarded']]))).toBe('ready')
+  })
+})
+
+// G 包:檢查項目的分列讀數(兩向尺寸／多編號)——值與來源一起走,單一值與讀數擇一
+describe('分列讀數的人工編輯', () => {
+  const rd = [{ entry_no: '1', value: 13, value2: 11, raw_text: '13 * 11 MM' }, { entry_no: '4', value: 11, value2: 11, raw_text: '11 * 11 MM' }]
+  const base = () => ({
+    content: { results: { W1: { value: null, readings: rd, note: '東側' }, W2: { value: 15 } } },
+    sources: { 'results.W1': { status: 'filled', source: 'record:p1', evidence: [{ photo_id: 'p1', raw_text: '13 * 11 MM' }] }, 'results.W2': { status: 'pending' } },
+  })
+
+  it('改讀數:值與來源一起走(人改即確認),備註保留;清空讀數回到單一值模式', () => {
+    const next = setResultReadings(base(), 'W1', [rd[0]])
+    expect(next.content.results.W1).toEqual({ value: null, readings: [rd[0]], note: '東側' })
+    expect(next.sources['results.W1']).toEqual({ status: 'confirmed', source: 'human' })
+    const cleared = setResultReadings(base(), 'W1', [])
+    expect(cleared.content.results.W1).toEqual({ value: null, note: '東側' })
+  })
+  it('寫單一值／標不適用會一併拿掉讀數(擇一,與 DB fn_checklist_result_check 相同)', () => {
+    expect(setFieldValue(base(), 'results.W1', 12).content.results.W1).toEqual({ value: 12, note: '東側' })
+    const na = setFieldNa(base(), 'results.W1', '本次未檢')
+    expect(na.content.results.W1).toEqual({ value: null, note: '東側' })
+    expect(na.sources['results.W1']).toEqual({ status: 'na', source: null, reason: '本次未檢' })
+  })
+  it('判定輸入:有讀數給 {value, readings},否則給單一值', () => {
+    expect(selfCheckValues(base().content)).toEqual({ W1: { value: null, readings: rd }, W2: 15 })
   })
 })

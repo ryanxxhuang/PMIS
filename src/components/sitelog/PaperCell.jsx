@@ -8,7 +8,8 @@
 import { createContext, useContext, useId, useState } from 'react'
 import { MSym } from '../icons.jsx'
 import { appPrompt } from '../confirm.jsx'
-import { setFieldValue, confirmField, setFieldNa, fillHumanField, sourceLabel, fieldAnchorId, FIELD_STATUS_LABEL } from '../../lib/fieldDocs.js'
+import { setFieldValue, setResultReadings, confirmField, setFieldNa, fillHumanField, sourceLabel, fieldAnchorId, FIELD_STATUS_LABEL } from '../../lib/fieldDocs.js'
+import { hasReadings } from '../../lib/qc.js'
 import { isEditableBy } from '../../lib/officialForms.js'
 
 const PaperFormCtx = createContext(null)
@@ -96,7 +97,7 @@ export function FieldMark({ fieldKey, title, naLabel = '不適用', allowNa = fa
       )}
       {/* 抄錄進來的值旁邊直接看得到紙上原文(一行);帶不進來的讀數也在這裡說清楚,不必先點開 */}
       {status !== 'na' && evidence.length > 0 && status === 'filled' && (
-        <span className="block w-full paper-mute">紙上原文：{[...new Set(evidence.map((e) => e.raw_text))].join('、')}{evidence[0]?.entry_no ? `（編號 ${evidence[0].entry_no}）` : ''}</span>
+        <span className="block w-full paper-mute">紙上原文：{[...new Set(evidence.map((e) => (e.entry_no ? `${e.raw_text}（編號 ${e.entry_no}）` : e.raw_text)))].join('、')}</span>
       )}
       {status !== 'na' && hint && (
         <span className="block w-full paper-warn">紙上寫「{hint.raw_text || `${hint.value}${hint.unit || ''}`}」（未自動帶入）</span>
@@ -190,6 +191,70 @@ export function PaperCheck({ fieldKey, label, checked, onToggle }) {
         onChange={(e) => (onToggle ? onToggle(e.target.checked) : f.set(e.target.checked))} />
       {label}
     </label>
+  )
+}
+
+// 實測項目的「實際檢查情形」格(自檢表與查驗表單共用;G 包):
+//   * 單一讀數:數字框＋範本單位(舊行為);
+//   * 兩向尺寸／多個編號:逐筆一列「編號｜讀數 × 第二向｜單位」,可增刪;紙上怎麼寫就怎麼記,不截半、不合併。
+// 系統不代為量測:抄錄進來的讀數與單一值一樣標待確認,人改任何一格即成為人填(值與來源一起走)。
+// 唯讀(列印／PDF／他方視角)只印文字,不長 input。
+export function MeasuredCell({ it, result, title, canEdit, label = '實際檢查情形' }) {
+  const ctx = usePaperForm()
+  const key = `results.${it.no}`
+  const unit = it.unit || ''
+  const readings = hasReadings(result) ? result.readings : null
+  const editable = !!canEdit && !!ctx?.editable && isEditableBy(ctx.docType, mappingKeyOf(key), ctx.org)
+  const commit = (next) => ctx?.onChange?.(setResultReadings(ctx.state, it.no, next))
+  const numOrNull = (raw) => (raw === '' ? null : Number(raw))
+  if (!readings) {
+    const v = result?.value
+    return (
+      <span className="inline-flex items-baseline gap-1 justify-end flex-wrap">
+        <PaperInput fieldKey={key} label={`${title} ${label}`} type="number" align="right" readOnlyText={v == null ? '' : String(v)} />
+        <span className="paper-mute">{unit}</span>
+        {editable && (
+          <button type="button" className="print:hidden text-micro font-medium text-[var(--blue-text)] hover:underline"
+            title="紙上是兩向尺寸（如 13×11）或有多個編號時，分列記錄"
+            onClick={() => commit([{ entry_no: null, value: typeof v === 'number' ? v : null, value2: null, raw_text: null }])}>分列</button>
+        )}
+      </span>
+    )
+  }
+  if (!editable) {
+    return (
+      <span className="inline-block text-right">
+        {readings.map((r, i) => (
+          <span key={i} className="block tabular-nums">
+            {r?.entry_no ? <span className="paper-mute">編號 {r.entry_no}&#x3000;</span> : null}
+            {r?.value2 == null ? r?.value ?? '' : `${r?.value ?? ''}×${r.value2}`}{unit ? ` ${unit}` : ''}
+          </span>
+        ))}
+      </span>
+    )
+  }
+  const patch = (i, p) => commit(readings.map((r, j) => (j === i ? { ...r, ...p } : r)))
+  return (
+    <span className="inline-block text-right space-y-0.5">
+      {readings.map((r, i) => (
+        <span key={i} className="flex items-baseline gap-1 justify-end">
+          <input className="paper-input !w-10 text-center" aria-label={`${title} 第 ${i + 1} 筆 編號`} placeholder="編號"
+            value={r?.entry_no ?? ''} onChange={(e) => patch(i, { entry_no: e.target.value.trim() ? e.target.value : null })} />
+          <input className="paper-input !w-14 text-right tabular-nums" type="number" inputMode="decimal" step="any"
+            aria-label={`${title} 第 ${i + 1} 筆 讀數`} value={r?.value ?? ''} onChange={(e) => patch(i, { value: numOrNull(e.target.value) })} />
+          <span className="paper-mute">×</span>
+          <input className="paper-input !w-14 text-right tabular-nums" type="number" inputMode="decimal" step="any" placeholder="—"
+            aria-label={`${title} 第 ${i + 1} 筆 第二向`} value={r?.value2 ?? ''} onChange={(e) => patch(i, { value2: numOrNull(e.target.value) })} />
+          <span className="paper-mute">{unit}</span>
+          <button type="button" className="print:hidden paper-mute hover:text-[var(--red-text)] px-0.5" aria-label={`刪除 ${title} 第 ${i + 1} 筆`}
+            onClick={() => commit(readings.filter((_, j) => j !== i))}>
+            <MSym name="close" size={12} />
+          </button>
+        </span>
+      ))}
+      <button type="button" className="print:hidden text-micro font-medium text-[var(--blue-text)] hover:underline"
+        onClick={() => commit([...readings, { entry_no: null, value: null, value2: null, raw_text: null }])}>＋ 一筆</button>
+    </span>
   )
 }
 

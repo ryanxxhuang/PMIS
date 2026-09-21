@@ -4,17 +4,21 @@
 //   vitest 釘住不漂移),以 helpers.tinyJpeg 的尾巴標記選情境。**這仍是 stub**:不看影像、不呼叫模型,只證明流程;
 //   真實模型的抄錄率與品質看續接清單 §9 B2,兩者分開報。只挑 LINE_A 的理由見 visionStub.ts 檔頭(另兩張的實測值只來自逐格切塊,
 //   1×1 的 e2e 小圖走不到那條路)。
-//   這張紙表的真實結果都是「兩向尺寸」(13×11 mm、15×15 cm)且有編號 1 與 4 兩個量測對象,依 B 包規則系統
-//   **不得**截半或挑一個填入單一欄位——所以這條鏈驗的是產品在真實資料下的正確行為:
+//   這張紙表的真實結果都是「兩向尺寸」(13×11 mm、15×15 cm)且有編號 1 與 4 兩個量測對象。2026-09-21 G 包起
+//   (migration 20260921030000)系統把它們**分列抄錄**進格子(readings:編號＋兩向,不截半、不合併、不挑一個),
+//   標 filled 待人逐項確認——所以這條鏈驗的是「紙上寫什麼、表上就是什麼,但仍要人確認才能簽」:
 //     * 紙上日期 115.8.4 → 文件日期 2026-08-04、來源 whiteboard(施工日誌同日同來源);
-//     * 線徑／網目各 pending、原因寫明「編號 1、4 各有實測紀錄」、證據帶兩筆原文與編號、不給提示值(不替人挑一個);
+//     * 線徑 = 編號 1 13×11 mm、編號 4 11×11 mm;網目 = 編號 1、4 各 15×15 cm;filled、證據帶兩筆原文與編號;
+//       設計欄的搭接 ≥27 cm 不進任何格子;
 //     * 分類猜的位置 B5-4-4-25m 沒有原文佐證 → 不落地(位置待補);逐格切塊對 1×1 的小圖偵測不到紙張 → 記原因退回整張路徑;
-//     * 格子旁點「原文」看得到證據面板(原因、兩筆原文與編號、紙上實測欄);
-//     * 簽署 RPC 對 pending 項目回 PD004(伺服器規則);人親自填值、存檔 → 簽署 → checklist_records 落庫、check_date=紙上日期。
-//   「只標 filled 仍不能簽(needs_confirmation)」與「兩向尺寸單一編號 → 帶 hint 的 pending」由 pgTAP measured_from_record 與
-//   fieldDocDraft 單元測試釘住;真實資料裡沒有一筆單向、單一編號的讀數可在 e2e 走到 filled。
+//     * 格子裡看得到逐筆讀數(編號／讀數／第二向),點「原文」看得到證據面板;
+//     * 只抄錄未確認 → 簽署 RPC 回 PD004(needs_confirmation);人逐項按「確認」、勾 B1、存檔 → 重新整理仍在 → 簽署 →
+//       checklist_records 每項保存完整讀數、判定由 DB 算、check_date=紙上日期 → 列印頁與下載的 PDF 印出逐筆讀數。
 //   前置同 chain 5:`supabase functions serve --env-file .env.e2e.real`(含 PMIS_VISION_STUB=1)。
 import { test, expect } from '@playwright/test'
+import { mkdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { readPdf } from '../e2e/pdfText.js'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects, signInClient, loginReal, gotoHash, runCleanup, tinyJpeg,
 } from './helpers.js'
@@ -24,6 +28,16 @@ const conEmail = uniqueEmail('f2c21-con')
 const supEmail = uniqueEmail('f2c21-sup')
 let conId, supId, projectId, templateId, wiId
 const PAPER_DATE = '2026-08-04' // LINE_A 紙上手寫 115.8.4
+const PDF_OUT = process.env.PDF_OUT_DIR || 'test-results/pdf'
+// LINE_A 紙上實測欄(真實模型輸出,見檔頭):編號 1 與 4,兩向尺寸;數值已換成範本單位(線徑 mm、網目 cm)
+const A1_READINGS = [
+  { entry_no: '1', value: 13, value2: 11, raw_text: '13 * 11 MM' },
+  { entry_no: '4', value: 11, value2: 11, raw_text: '11 * 11 MM' },
+]
+const A2_READINGS = [
+  { entry_no: '1', value: 15, value2: 15, raw_text: '15 * 15 CM' },
+  { entry_no: '4', value: 15, value2: 15, raw_text: '15 * 15 CM' },
+]
 const BOQ_ITEMS = [
   { item_key: '1', parent_key: null, item_no: '壹', description: '第一章', is_rollup: true, sort_order: 1, depth: 1 },
   { item_key: '1.1', parent_key: '1', item_no: '一', description: '鋼筋籠組立', unit: 'T', quantity: 20, unit_price: 30000, amount: 600000, is_leaf: true, is_billable: true, sort_order: 2, depth: 2 },
@@ -66,7 +80,7 @@ test.afterAll(async () => {
   )
 })
 
-test('鏈 21:紙表觀察→草稿欄位(證據／待確認)→簽署被擋(PD004)→人填→簽署落庫(check_date=紙上日期);分類猜的位置不落地', async ({ page }) => {
+test('鏈 21:紙表觀察→草稿格子(分列讀數／證據／待確認)→簽署被擋(PD004)→人確認→重整仍在→簽署落庫→列印與 PDF 印讀數', async ({ page }) => {
   test.setTimeout(420_000)
   const saveStatus = page.getByRole('status', { name: /保存狀態/ })
 
@@ -103,20 +117,21 @@ test('鏈 21:紙表觀察→草稿欄位(證據／待確認)→簽署被擋(PD00
   expect(pA.ai_result.whiteboard.observations.filter((o) => o.kind === 'measured').every((o) => o.source?.method === 'paper_cells')).toBe(true)
   expect(typeof pA.ai_result.paper_cells_skipped).toBe('string') // 1×1 小圖偵測不到紙張 → 記原因、退回整張路徑
 
-  // ── LINE_A 草稿:日期來自紙上;線徑／網目 pending、原因「編號 1、4」、證據兩筆原文;位置待補;值全空 ───────
+  // ── LINE_A 草稿:日期來自紙上;線徑／網目分列抄錄(filled 待確認)、證據兩筆原文;位置待補 ──────────────
   const { data: vA } = await con.from('field_document_versions').select('content, field_sources, content_hash').eq('document_id', lineA.id).eq('version_no', 1).single()
-  expect(vA.content.results).toEqual({ A1: { value: null }, A2: { value: null }, B1: { value: null } })
+  expect(vA.content.results).toEqual({ A1: { value: null, readings: A1_READINGS }, A2: { value: null, readings: A2_READINGS }, B1: { value: null } })
   expect(vA.content.check_date).toBe(PAPER_DATE)
   expect(vA.field_sources.check_date).toMatchObject({ status: 'filled', source: `whiteboard:${pA.id}` }) // 日期綁到讀出它的那張照片
   const a1 = vA.field_sources['results.A1']
-  expect(a1.status).toBe('pending')
-  expect(a1.reason).toContain('紙上編號 1、4 各有實測紀錄')
-  expect(a1.refs).toEqual([pA.id])
+  expect(a1).toMatchObject({ status: 'filled', source: `record:${pA.id}`, refs: [pA.id] })
+  expect(a1.reason).toContain('編號 1 13×11 mm、編號 4 11×11 mm')
+  expect(a1.reason).toContain('未代為量測')
   expect(a1.evidence.map((e) => `${e.entry_no}:${e.raw_text}:${e.kind}:${e.unit}`).sort()).toEqual(['1:13 * 11 MM:measured:MM', '4:11 * 11 MM:measured:MM'])
-  expect(a1.hint).toBeUndefined() // 編號分歧不給提示值:不替人挑一個
+  expect(a1.hint).toBeUndefined()
   const a2 = vA.field_sources['results.A2']
-  expect(a2.status).toBe('pending')
+  expect(a2.status).toBe('filled')
   expect(a2.evidence.map((e) => `${e.entry_no}:${e.raw_text}`).sort()).toEqual(['1:15 * 15 CM', '4:15 * 15 CM'])
+  expect(JSON.stringify(vA.content.results)).not.toContain('27') // 設計欄的搭接 ≥27 cm 不得進任何格子
   expect(vA.field_sources['results.B1'].status).toBe('pending')
   expect(vA.field_sources.location).toMatchObject({ status: 'pending' })
   expect(vA.field_sources.location.reason).toContain('未載明檢查位置')
@@ -125,12 +140,12 @@ test('鏈 21:紙表觀察→草稿欄位(證據／待確認)→簽署被擋(PD00
   const { data: dlA } = await con.from('field_document_versions').select('field_sources').eq('document_id', dailyLogs.find((d) => d.doc_date === PAPER_DATE).id).eq('version_no', 1).single()
   expect(dlA.field_sources.log_date).toMatchObject({ status: 'filled', source: `whiteboard:${pA.id}` })
 
-  // ── 簽署 RPC:pending 項目未確認 → PD004(伺服器規則) ───────────────────────────────────────
+  // ── 簽署 RPC:抄錄值只標 filled、人沒確認 → PD004 needs_confirmation(伺服器規則) ─────────────────────
   const { error: pd004 } = await con.rpc('sign_field_document', { p_document_id: lineA.id, p_version_no: 1, p_content_hash: vA.content_hash, p_intent: '測試:未確認即簽' })
   expect(pd004?.code).toBe('PD004')
-  expect(JSON.parse(pd004.details)).toEqual(expect.arrayContaining([{ key: 'results.A1', status: 'pending' }, { key: 'results.A2', status: 'pending' }]))
+  expect(JSON.parse(pd004.details)).toEqual(expect.arrayContaining([{ key: 'results.A1', status: 'needs_confirmation' }, { key: 'results.A2', status: 'needs_confirmation' }]))
 
-  // ── UI:證據面板列出編號 1 與 4 兩筆原文與原因;沒有簽署鈕;人親自填值、存檔、簽署 → checklist_records、check_date=紙上日期 ──
+  // ── UI:格子裡逐筆讀數;證據面板;沒有簽署鈕;人逐項確認、存檔、重整仍在、簽署 → checklist_records 保存讀數 ──
   await gotoHash(page, `/self-check?doc=${lineA.id}`)
   const card = page.getByRole('group', { name: '本份自主檢查表', exact: true })
   await expect(saveStatus).toHaveText(/已存檔.*版本 1/)
@@ -141,17 +156,30 @@ test('鏈 21:紙表觀察→草稿欄位(證據／待確認)→簽署被擋(PD00
   const rowA1 = card.getByRole('row').filter({ hasText: '線徑' }).first()
   await rowA1.getByRole('button', { name: '原文' }).click()
   const evidenceA = rowA1.getByRole('group', { name: '欄位證據' })
-  await expect(evidenceA).toContainText('紙上編號 1、4 各有實測紀錄')
+  await expect(evidenceA).toContainText('編號 1 13×11 mm、編號 4 11×11 mm')
   await expect(evidenceA).toContainText('線徑：「13 * 11 MM」（編號 1）（單位 MM）（紙上實測欄）')
   await expect(evidenceA).toContainText('線徑：「11 * 11 MM」（編號 4）（單位 MM）（紙上實測欄）')
-  await page.getByRole('spinbutton', { name: 'A1 線徑 實際檢查情形' }).fill('11')
-  await page.getByRole('spinbutton', { name: 'A2 網目 實際檢查情形' }).fill('15')
+  // 格子裡就是紙上的逐筆讀數(編號／讀數／第二向),不是空格
+  await expect(card.getByRole('textbox', { name: 'A1 線徑 第 1 筆 編號' })).toHaveValue('1')
+  await expect(card.getByRole('spinbutton', { name: 'A1 線徑 第 1 筆 讀數' })).toHaveValue('13')
+  await expect(card.getByRole('spinbutton', { name: 'A1 線徑 第 1 筆 第二向' })).toHaveValue('11')
+  await expect(card.getByRole('textbox', { name: 'A1 線徑 第 2 筆 編號' })).toHaveValue('4')
+  await expect(card.getByRole('spinbutton', { name: 'A1 線徑 第 2 筆 讀數' })).toHaveValue('11')
+  await expect(card.getByRole('spinbutton', { name: 'A2 網目 第 2 筆 第二向' })).toHaveValue('15')
+  // 人逐項核對後按「確認」(值不動、來源保留 record:,稽核看得出是抄錄後人確認)
+  await rowA1.getByRole('button', { name: '確認', exact: true }).click()
+  await card.getByRole('row').filter({ hasText: '網目' }).first().getByRole('button', { name: '確認', exact: true }).click()
   await card.getByRole('checkbox', { name: 'B1 鋼筋表面清潔無鏽蝕 合格' }).check()
   await expect(card.getByText('■ 全部合格')).toBeVisible()
   await page.getByRole('button', { name: '存檔', exact: true }).click()
   await expect(page.getByText(/已存檔 ✓ 版本 2，可簽署/)).toBeVisible({ timeout: 30_000 })
-  const { data: v2 } = await con.from('field_document_versions').select('field_sources').eq('document_id', lineA.id).eq('version_no', 2).single()
-  expect(v2.field_sources['results.A1']).toMatchObject({ status: 'confirmed', source: 'human' })
+  const { data: v2 } = await con.from('field_document_versions').select('content, field_sources').eq('document_id', lineA.id).eq('version_no', 2).single()
+  expect(v2.field_sources['results.A1']).toMatchObject({ status: 'confirmed', source: `record:${pA.id}` })
+  expect(v2.content.results.A1).toEqual({ value: null, readings: A1_READINGS })
+  // 重新整理:存下來的讀數還在格子裡
+  await page.reload()
+  await expect(saveStatus).toHaveText(/已存檔.*版本 2/, { timeout: 30_000 })
+  await expect(card.getByRole('spinbutton', { name: 'A1 線徑 第 2 筆 讀數' })).toHaveValue('11')
   const lifecycle = page.getByRole('region', { name: '文件狀態與簽署' })
   await lifecycle.getByRole('button', { name: '簽署此版本' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '簽署', exact: true }).click()
@@ -160,6 +188,27 @@ test('鏈 21:紙表觀察→草稿欄位(證據／待確認)→簽署被擋(PD00
   expect(signed).toMatchObject({ status: 'signed', target_table: 'checklist_records' })
   const { data: rec } = await con.from('checklist_records').select('template_id, check_date, results, overall, work_item_id, created_by').eq('id', signed.target_id).single()
   expect(rec).toMatchObject({ template_id: templateId, check_date: PAPER_DATE, overall: '合格', work_item_id: wiId, created_by: conId })
-  expect(rec.results).toEqual({ A1: { value: 11, pass: true }, A2: { value: 15, pass: true }, B1: { value: true, pass: true } })
+  expect(rec.results).toEqual({
+    A1: { value: null, pass: true, readings: A1_READINGS }, A2: { value: null, pass: true, readings: A2_READINGS }, B1: { value: true, pass: true },
+  })
+
+  // ── 列印頁與下載的 PDF:同一張紙、印逐筆讀數(已簽版本) ───────────────────────────────────────
+  await gotoHash(page, `/self-check/print?doc=${lineA.id}`)
+  await expect(page.getByText(/編號 1\s13×11 mm/)).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(/編號 4\s11×11 mm/)).toBeVisible()
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 90_000 }),
+    page.getByRole('button', { name: '下載 PDF' }).click(),
+  ])
+  const pdfPath = join(PDF_OUT, `chain21-${download.suggestedFilename()}`)
+  mkdirSync(PDF_OUT, { recursive: true })
+  await download.saveAs(pdfPath)
+  expect(download.suggestedFilename()).toMatch(/v2_已簽署\.pdf$/)
+  const pdf = readPdf(readFileSync(pdfPath))
+  expect(pdf.hasFontFile, '中文字型必須內嵌').toBe(true)
+  expect(pdf.text.replace(/\s+/g, '')).toContain('編號113×11mm')
+  expect(pdf.text.replace(/\s+/g, '')).toContain('編號411×11mm')
+  expect(pdf.text.replace(/\s+/g, '')).toContain('編號415×15cm')
+  expect(pdf.text, '已簽版本不得出現草稿標示').not.toContain('草稿・未簽署')
   await con.auth.signOut()
 })

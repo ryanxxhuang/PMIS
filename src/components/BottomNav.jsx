@@ -30,7 +30,7 @@ const isActive = (n, pathname) => pathname === n.to || n.tabs?.some((t) => t.to 
 // menuOpen/onMore/moreRef:抽屜狀態在 Layout,這裡只是它的觸發鈕。
 export default function BottomNav({ items, home, menuOpen = false, onMore, moreRef }) {
   const { pathname } = useLocation()
-  const shown = [home, ...items.slice(0, 3)]
+  const shown = [home, ...items.slice(0, 3)].filter(Boolean) // 廠商三核心沒有主畫面槽(home=null)
   // 不在常用捷徑中的頁面讓「更多」亮起，維持位置感。
   const moreActive = menuOpen || !shown.some((n) => isActive(n, pathname))
   return (

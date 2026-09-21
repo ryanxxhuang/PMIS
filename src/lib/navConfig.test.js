@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   navGroups, routeAllowed, routeRegistry, visibleNavGroups, defaultLandingPath, BALL_SOURCES, BALL_SOURCES_TITLE,
-  MAIN_ENTRY_PATHS, ROLE_WORK, roleWorkLinks, WORK_GUIDANCE, WORK_TITLE, navLabel, navEntryFor,
+  MAIN_ENTRY_PATHS, ROLE_WORK, roleWorkLinks, WORK_GUIDANCE, WORK_TITLE, navLabel, navEntryFor, coreOnlyNav, landingLabel,
 } from './navConfig.js'
 
 const flatNav = (groups) => groups.flatMap((g) => g.items)
@@ -129,12 +129,18 @@ describe('routeRegistry(登記表的集合)', () => {
 describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
   const WORK = ['現場紀錄', '履約時程', '估驗請款']
   const SECONDARY = ['文件往來', '專案']
-  it('分區固定為「工作」「專案資料」(平台另測);工作三組=三個主入口、專案資料兩組,順序釘死,三角色皆同', () => {
-    for (const org of ORGS) {
+  it('分區固定為「工作」「專案資料」(平台另測);工作三組=三個主入口、專案資料兩組,順序釘死;廠商只剩三核心', () => {
+    for (const org of ['supervisor', 'owner']) {
       const groups = visibleNavGroups(org, false)
       expect(groups.map((g) => g.title)).toEqual(['工作', '專案資料'])
       expect(groups[0].items.map((i) => i.label)).toEqual(WORK)
       expect(groups[1].items.map((i) => i.label)).toEqual(SECONDARY)
+    }
+    // 2026-09-21 demo 急件:廠商只看到「施工文件／契約與提醒／估驗請款」(專案資料的送審／疑義／契約上傳收進契約與提醒)
+    for (const override of [false, true]) {
+      const groups = visibleNavGroups('contractor', override)
+      expect(groups.map((g) => g.title)).toEqual(['工作'])
+      expect(groups[0].items.map((i) => i.label)).toEqual(['施工文件', '契約與提醒', '估驗請款'])
     }
   })
   it('今日工作不是側欄項:/dashboard 由球權來源獨佔,導覽定義裡沒有第二個入口指向它', () => {
@@ -143,7 +149,7 @@ describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
     expect(BALL_SOURCES.map((b) => b.to.split('?')[0])).toEqual(['/dashboard', '/dashboard', '/dashboard'])
   })
   it('五組都是群組+子頁(≥2);群組入口=第一個子頁,而且第一個子頁不限角色(入口不會因角色漂到別頁)', () => {
-    const groups = visibleNavGroups('contractor', true)
+    const groups = visibleNavGroups('supervisor', true)
     for (const item of [...groups[0].items, ...groups[1].items]) expect(item.tabs.length).toBeGreaterThanOrEqual(2)
     for (const g of navGroups.filter((g) => g.title !== '平台')) for (const item of g.items) {
       expect(item.tabs[0].to).toBe(item.to)
@@ -160,18 +166,16 @@ describe('visibleNavGroups(側欄)——D-026 四主入口', () => {
   })
   // 2026-09-20 廠商驗收 A 包:廠商的導覽只剩自己的現場作業(監造日誌與監造查驗表單 hiddenFor);
   // 停留點／工安／S 曲線／月報／跨案總覽 hidden(嵌回主流程或先收起入口)。roles 與路由一字不動。
-  it('施工廠商:現場只剩自己的作業(沒有監造日誌／監造查驗表單);停留點、工安、S 曲線、月報、跨案總覽的入口都收起', () => {
+  // 2026-09-21 demo 急件:廠商三核心——施工文件直接進施工日誌(現場總覽收起)、契約上傳／送審／疑義收進契約與提醒
+  it('施工廠商:只剩三核心(沒有監造日誌／監造查驗表單、現場總覽、專案資料分區);停留點、工安、S 曲線、月報、跨案總覽的入口都收起', () => {
     expect(outline(visibleNavGroups('contractor', false))).toEqual([
       ['工作', [
-        ['現場紀錄', ['現場總覽', '施工日誌', '自主檢查表', '品質查驗']],
-        ['履約時程', ['契約重點', '期限追蹤', '擷取審核', '變更設計', '驗收結算']],
+        ['施工文件', ['施工日誌', '自主檢查表', '品質查驗']],
+        ['契約與提醒', ['契約重點', '期限追蹤', '契約上傳', '擷取審核', '送審文件', '工程疑義', '變更設計', '驗收結算']],
         ['估驗請款', ['估驗計價', '請款收款', '標單工項']],
       ]],
-      ['專案資料', [
-        ['文件往來', ['送審文件', '工程疑義']],
-        ['專案', ['專案文件', '三方成員', '活動紀錄']],
-      ]],
     ])
+    expect(visibleNavGroups('contractor', false)[0].items[0].to).toBe('/site-log')
   })
   it('監造:監造日誌與監造查驗表單照舊在現場紀錄(監造端能力不縮);不經手請款', () => {
     expect(outline(visibleNavGroups('supervisor', false))).toEqual([
@@ -224,8 +228,9 @@ describe('三方常用入口(roleWorkLinks)=三個主入口群組', () => {
   it('三角色都拿到同三個群組項(含 tabs 與 short),子頁依角色過濾', () => {
     for (const org of ORGS) {
       const links = roleWorkLinks(org, false, false)
-      expect(links.map((n) => n.label)).toEqual(['現場紀錄', '履約時程', '估驗請款'])
-      expect(links.map((n) => n.to)).toEqual(MAIN_ENTRY_PATHS)
+      expect(links.map((n) => n.label)).toEqual(org === 'contractor' ? ['施工文件', '契約與提醒', '估驗請款'] : ['現場紀錄', '履約時程', '估驗請款'])
+      expect(links.map((n) => n.entry)).toEqual(MAIN_ENTRY_PATHS)
+      expect(links.map((n) => n.to)).toEqual(org === 'contractor' ? ['/site-log', '/requirements', '/valuation'] : MAIN_ENTRY_PATHS)
       for (const n of links) {
         expect(n.short).toBeTruthy()
         expect(n.icon).toBeTruthy()
@@ -287,7 +292,7 @@ describe('平台管理(/admin):platformAdminOnly 是獨立於專案角色的維�
     for (const org of ORGS) {
       const groups = visibleNavGroups(org, false)
       expect(groups.find((g) => g.title === '平台')).toBeUndefined()
-      expect(flatNav(groups)).toHaveLength(5)
+      expect(flatNav(groups)).toHaveLength(org === 'contractor' ? 3 : 5)
     }
     expect(flatNav(visibleNavGroups('contractor', true)).find((i) => i.to === '/admin')).toBeUndefined()
   })
@@ -345,9 +350,10 @@ describe('hiddenFor(導覽收斂,不是權限):廠商的選單沒有監造作業
   const tabsOf = (org, override = false) =>
     flatNav(visibleNavGroups(org, override)).flatMap((i) => i.tabs || [i]).map((t) => t.to)
 
-  it('hiddenFor 集合釘死:只有監造日誌與監造查驗表單,且只對廠商收起', () => {
+  it('hiddenFor 集合釘死:監造日誌、監造查驗表單與現場總覽(demo 急件)三個子頁＋文件往來／專案兩個群組,且只對廠商收起', () => {
     const flagged = allDefs().filter((n) => n.hiddenFor)
-    expect(flagged.map((n) => n.to)).toEqual(['/supervisor-log', '/inspection-form'])
+    expect(flagged.map((n) => n.to)).toEqual(['/site', '/supervisor-log', '/inspection-form'])
+    expect(navGroups.flatMap((g) => g.items).filter((i) => i.hiddenFor).map((i) => [i.to, i.hiddenFor])).toEqual([['/submittals', ['contractor']], ['/contract', ['contractor']]])
     for (const n of flagged) {
       expect(n.hiddenFor).toEqual(['contractor'])
       expect(n.roles, `${n.to} 不得用 roles 收斂(會連唯讀查閱一起關掉)`).toBeUndefined()
@@ -360,8 +366,9 @@ describe('hiddenFor(導覽收斂,不是權限):廠商的選單沒有監造作業
       expect(tabsOf('contractor', true)).not.toContain(to)   // override 對 roles 放行,對 hiddenFor 不放行
       expect(flatNav(visibleNavGroups('contractor', true, true)).flatMap((i) => i.tabs || [i]).map((t) => t.to)).not.toContain(to)
     }
-    // 廠商自己的現場作業一項不少(施工日誌、自主檢查表、品質查驗)
-    for (const to of ['/site', '/site-log', '/self-check', '/quality']) expect(tabsOf('contractor')).toContain(to)
+    // 廠商自己的現場作業一項不少(施工日誌、自主檢查表、品質查驗);現場總覽自 demo 急件起收起(照片改在表單內上傳)
+    for (const to of ['/site-log', '/self-check', '/quality']) expect(tabsOf('contractor')).toContain(to)
+    expect(tabsOf('contractor')).not.toContain('/site')
   })
   it('監造與機關照舊看得到(監造端能力不縮,機關仍收得到件)', () => {
     for (const org of ['supervisor', 'owner']) {
@@ -376,12 +383,28 @@ describe('hiddenFor(導覽收斂,不是權限):廠商的選單沒有監造作業
 })
 
 describe('defaultLandingPath(角色預設落地頁)', () => {
-  it('所有角色一律落在收件匣(規範 §0 方向 A),與球權來源「現在輪到我」同一條路由', () => {
+  it('監造與機關落在收件匣(規範 §0 方向 A),與球權來源「現在輪到我」同一條路由;廠商三核心落在施工日誌', () => {
     expect(defaultLandingPath('owner')).toBe('/dashboard')
     expect(defaultLandingPath('supervisor')).toBe('/dashboard')
-    expect(defaultLandingPath('contractor')).toBe('/dashboard')
     // BottomNav 的主畫面槽就是這個來源:落地頁與手機第一格必須是同一頁
-    expect(BALL_SOURCES.find((b) => b.key === 'mine').to).toBe(defaultLandingPath('contractor'))
+    expect(BALL_SOURCES.find((b) => b.key === 'mine').to).toBe(defaultLandingPath('supervisor'))
+    // 2026-09-21 demo 急件:廠商沒有今日工作收件匣,「施工文件預設直接打開今日施工日誌」
+    expect(defaultLandingPath('contractor')).toBe('/site-log')
+    expect(landingLabel('contractor')).toBe('施工日誌')
+    expect(landingLabel('owner')).toBe(BALL_SOURCES_TITLE)
+  })
+  it('coreOnlyNav 只對廠商成立(問 GovAgent／Copilot／今日工作入口只對廠商收起)', () => {
+    expect(ORGS.filter(coreOnlyNav)).toEqual(['contractor'])
+    expect(coreOnlyNav(undefined)).toBe(false)
+  })
+  it('onlyFor 分身不進登記表:送審／疑義／契約上傳的權限與頁名以原群組為準', () => {
+    const dup = allDefs().filter((n) => n.onlyFor)
+    expect(dup.map((n) => [n.to, n.onlyFor])).toEqual([['/contract', ['contractor']], ['/submittals', ['contractor']], ['/rfi', ['contractor']]])
+    for (const n of dup) {
+      expect(routeRegistry[n.to].onlyFor).toBeUndefined()
+      expect(navEntryFor(n.to).label).not.toBe('履約時程')
+    }
+    expect(navLabel('/contract')).toBe('專案文件')
   })
   it('org_type 未知時退回 /dashboard(對齊 store 的 contractor 預設)', () => {
     expect(defaultLandingPath(undefined)).toBe('/dashboard')

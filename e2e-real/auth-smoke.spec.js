@@ -15,7 +15,8 @@ test('真實 Supabase 帳號可登入、重整還原 session、再登出', async
   await page.getByPlaceholder('密碼（至少 8 碼，含大小寫英文與數字）').fill(password)
   await page.locator('button[type="submit"]').click()
 
-  await expect(page).toHaveURL(/#\/(dashboard|portfolio)$/)
+  // 落地頁:監造／機關為今日工作;廠商三核心(2026-09-21 demo 急件)為施工日誌
+  await expect(page).toHaveURL(/#\/(dashboard|portfolio|site-log)$/)
   await expect(page.getByRole('button', { name: '登出', exact: true })).toBeVisible()
 
   await page.reload()
