@@ -6,8 +6,10 @@
 // 與施工日誌／監造日誌頁共用 DocumentLifecycle／DocumentPhotos;框架版面由伺服器範本
 // fn_field_document_template('self_check')(示範框架範本,Q11)驅動,檢查項目取自本案檢查表範本(品質查驗建立;內建 03310 首次
 // 使用才落 DB)。一份文件=一次自檢(?doc=<id> 直達;沒有 ?doc= 是「新建」:選日期／範本／工項後第一次存檔才建文件)。
-// 實測值只能人填:AI 草稿永遠留空(告示板讀數只是提示),每個項目系統帶入的值都要人逐項「確認」才能簽(伺服器 PD004
-// needs_confirmation 同一條規則);簽署後可「提出查驗申請」檢附此表(沿用既有查驗申請流程)。
+// 實測值只能人量:AI 只抄錄紙上**已經寫好**的讀數(G 包,含分列 readings)並標待確認,不代為量測;每個項目系統帶入的值都要人
+// 逐項「確認」才能簽(伺服器 PD004 needs_confirmation 同一條規則);簽署後可「提出查驗申請」檢附此表(沿用既有查驗申請流程)。
+// 表內上傳(2026-09-21):卡頭「上傳照片,AI 填表」(FormPhotoFill)只填這一份文件——新自檢表先走同一支存檔流程建立,
+// Edge 回來用最新表單狀態合併(只補空白項目,人填的不覆蓋),切到別份文件就不填、建議留在原文件。
 // 樂觀併發:base 版本≠目前版本(PD001／PD002)→ 明確提示重新載入,不默默覆蓋。簽後更正=人明確按「建立更正版本」並填更正原因
 // (成為修訂版次的 revision_reason;伺服器沒有原因即拒簽)。
 // 視角:廠商(can.edit)可編、簽、送;監造(提送對象)可收件／退回;機關可讀——唯讀除日期外沒有 input。
@@ -31,6 +33,7 @@ import SelfCheckSheet from '../../components/sitelog/SelfCheckSheet.jsx'
 import { stampFormTemplate } from '../../lib/officialForms.js'
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'
+import FormPhotoFill from '../../components/sitelog/FormPhotoFill.jsx'
 
 const DOC_TYPE = 'self_check'
 const validDate = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(s || '') ? s : null)
@@ -41,7 +44,7 @@ export default function SelfCheck() {
     project, workItems, adjustedItems, can, currentUser, demoMode,
     fieldDocuments: fieldDocState, fieldDocsLoading, reloadFieldDocs, createFieldDocDraft, getFieldDocument, getFieldDocumentTemplate,
     saveFieldDocumentVersion, signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, listPhotosByIds,
-    agentActions, resolveAgentAction, checklistTemplates, ensureChecklistTemplate, inspections,
+    agentActions, resolveAgentAction, reloadAgentActions, checklistTemplates, ensureChecklistTemplate, inspections,
   } = useStore()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -91,6 +94,13 @@ export default function SelfCheck() {
   const setLifecycleMsg = (text, tone = 'error') => setLifecycleMsgRaw(text ? { text, tone } : null)
   const [appliedSuggestions, setAppliedSuggestions] = useState([])
   useUnsavedEdit('self-check', dirty ? `自主檢查表 ${form?.content?.check_date || date}（未存檔）` : null)
+  // 表內上傳的回呼在好幾秒後才回來:文件、表單、dirty 都經 ref 取當下值,不用按下當時的舊 closure
+  const docRef = useRef(doc)
+  const formRef = useRef(form)
+  const dirtyRef = useRef(dirty)
+  useEffect(() => { docRef.current = doc }, [doc])
+  useEffect(() => { formRef.current = form }, [form])
+  useEffect(() => { dirtyRef.current = dirty }, [dirty])
 
   const checklistTemplate = useMemo(() => (checklistTemplates || []).find((t) => t.id === form?.content?.template_id) || null, [checklistTemplates, form?.content?.template_id])
   const checklistItems = checklistTemplate?.items || null
@@ -126,6 +136,8 @@ export default function SelfCheck() {
       }
       const photoRows = await listPhotosByIds(nextAttachments.map((a) => a.photo_id))
       if (!active) return
+      // 讀取途中表單已被填(表內上傳的結果剛合併進來):同一份文件下不覆寫,與上面的 dirty 規則同一條
+      if (!docChanged && dirtyRef.current) { setDetailLoading(false); return }
       setDetail(nextDetail); setForm(nextForm); setAttachments(nextAttachments)
       setPhotosById(new Map(photoRows.map((p) => [p.id, p])))
       setBaseVersion(doc?.current_version_no ?? 0)
@@ -171,16 +183,18 @@ export default function SelfCheck() {
     if (a.evidence?.suggestion?.attachments) setAttachments((cur) => mergeAttachments(cur, a.evidence.suggestion.attachments))
     onFormChange(state)
     setAppliedSuggestions((ids) => [...ids, a.id])
-    setSavedMsg(applied.length ? `已套用建議 ${applied.length} 項(${applied.slice(0, 4).map((k) => fieldLabel(k, state.content, labels)).join('、')}),存檔後生效` : '建議沒有可補入的欄位(現有值不覆蓋;檢查結果永遠不由系統帶入)', 'info')
+    setSavedMsg(applied.length ? `已套用建議 ${applied.length} 項(${applied.slice(0, 4).map((k) => fieldLabel(k, state.content, labels)).join('、')}),存檔後生效;抄錄的讀數仍要逐項確認` : '建議沒有可補入的欄位(現有值不覆蓋;已有值的項目不動)', 'info')
   }
   const rejectSuggestion = async (a) => {
     const r = await resolveAgentAction(a.id, 'rejected')
     if (r?.error) setSavedMsg(friendlyError(r.error, '建議未標記'))
   }
 
-  const onSave = async () => {
-    if (!form) return
-    if (!form.content.template_id) { setSavedMsg('請先選擇檢查表範本'); return }
+  // 存檔=伺服器保存版本(新建時先建文件)。回 { documentId, versionNo } 或 { error }:
+  // 存檔鈕、表內上傳(新自檢表先建文件)、「儲存後下載」三處共用同一支
+  const saveVersion = async () => {
+    if (!form) return { error: { message: '表單尚未載入' } }
+    if (!form.content.template_id) { setSavedMsg('請先選擇檢查表範本'); return { error: { message: '請先選擇檢查表範本' } } }
     setSaving(true); setSavedMsg(''); setConflict(null)
     let d = doc
     let base = baseVersion
@@ -190,17 +204,17 @@ export default function SelfCheck() {
       // 內建範本(尚未落 DB)先落庫,文件才掛得到本案範本 id(與品質查驗的檢查表同一條規則)
       const chosen = (checklistTemplates || []).find((t) => t.id === form.content.template_id)
       const ensured = await ensureChecklistTemplate(chosen)
-      if (ensured.error) { setSaving(false); setSavedMsg(friendlyError(ensured.error, '檢查表範本落庫失敗')); return }
+      if (ensured.error) { setSaving(false); setSavedMsg(friendlyError(ensured.error, '檢查表範本落庫失敗')); return { error: ensured.error } }
       if (ensured.template.id !== content.template_id) content = { ...content, template_id: ensured.template.id }
       const r = await createFieldDocDraft(DOC_TYPE, content.check_date, { templateId: ensured.template.id })
-      if (r.error) { setSaving(false); setSavedMsg(friendlyError(r.error, '無法建立自主檢查表草稿')); return }
+      if (r.error) { setSaving(false); setSavedMsg(friendlyError(r.error, '無法建立自主檢查表草稿')); return { error: r.error } }
       d = r.doc; base = d.current_version_no
     }
     // 有簽署紀錄的文件再存版=更正:更正原因必填(簽署時成為修訂版次的 revision_reason)
     let changeNote = amendMode ? amendReason : null
     if (!changeNote && (detail?.signatures?.length || 0) > 0) {
       const reason = await appPrompt({ title: '更正原因', label: '本文件已簽署過；存檔會建立更正版本，重新簽署時以修訂版次落庫。更正原因（必填）', required: true })
-      if (reason === null) { setSaving(false); return }
+      if (reason === null) { setSaving(false); return { error: { message: '未填更正原因' } } }
       changeNote = reason; setAmendReason(reason)
     }
     const r = await saveFieldDocumentVersion({ documentId: d.id, baseVersionNo: base, content, fieldSources: form.sources, attachments, changeNote })
@@ -208,7 +222,7 @@ export default function SelfCheck() {
     if (r.error) {
       const g = fieldDocErrorGuidance(r.error)
       if (g.kind === 'reload') { setConflict(g.message); setSavedMsg('') } else setSavedMsg(friendlyError(r.error, '自主檢查表存檔失敗'))
-      return
+      return { error: r.error }
     }
     for (const id of appliedSuggestions) await resolveAgentAction(id, 'accepted')
     setAppliedSuggestions([])
@@ -222,8 +236,49 @@ export default function SelfCheck() {
       setParams((p) => { const n = new URLSearchParams(p); n.set('doc', d.id); n.delete('d'); return n }, { replace: true, state: navState })
       reloadFieldDocs()
     }
+    return { documentId: d.id, versionNo: r.result.version_no }
   }
+  const onSave = () => saveVersion()
   const reloadFromServer = () => { setDirty(false); setConflict(null); prevKeyRef.current = null; reloadFieldDocs() }
+
+  // 表內上傳:文件已存在就直接用(不強制存檔);新自檢表先存一版目前內容(日期／範本／工項與已填項目)建立文件
+  const ensureDocumentForPhotos = async () => {
+    if (docRef.current) return { documentId: docRef.current.id }
+    const r = await saveVersion()
+    return r.error ? { error: r.error } : { documentId: r.documentId }
+  }
+  // Edge 回來:用最新表單狀態合併——只補空白項目(含紙上抄錄的分列讀數,狀態仍是待確認)與空的工項／位置,人填的不覆蓋;
+  // 附件併入並補照片列;agent_action 記進 appliedSuggestions(存檔成功才標 accepted)。使用者已切到別份文件→不填進目前這份。
+  const onPhotoFilled = async ({ documentId, target }) => {
+    const sug = target?.suggestion
+    if (!sug) return
+    if (!docRef.current || docRef.current.id !== documentId) {
+      reloadAgentActions()
+      setSavedMsg('AI 已辨識完成，但你已切換到別份文件；結果沒有填進目前這份，建議保留在原本那份自主檢查表，回到該文件後可在「AI 建議」套用', 'info')
+      return
+    }
+    const { applied, state } = applySuggestion(formRef.current, sug)
+    setForm((cur) => applySuggestion(cur, sug).state)
+    setDirty(true)
+    if (sug.attachments?.length) {
+      setAttachments((cur) => mergeAttachments(cur, sug.attachments))
+      const rows = await listPhotosByIds(sug.attachments.map((a) => a.photo_id))
+      setPhotosById((m) => { const n = new Map(m); for (const p of rows) n.set(p.id, p); return n })
+    }
+    if (target.agent_action_id) setAppliedSuggestions((ids) => [...ids, target.agent_action_id])
+    const extra = target.notes?.length ? `；${target.notes.join('；')}` : ''
+    setSavedMsg(applied.length
+      ? `AI 已填入 ${applied.length} 欄（${applied.slice(0, 4).map((k) => fieldLabel(k, state.content, labels)).join('、')}${applied.length > 4 ? '…' : ''}；你已填的欄位未覆蓋），抄錄的讀數請逐項確認後存檔${extra}`
+      : `AI 辨識完成，沒有可補的空白欄位（你已填的欄位未覆蓋）；照片已附上，核對後存檔${extra}`, 'info')
+  }
+  // 列印／PDF 印的是已存檔版本:未存檔先提示並提供「儲存後下載」(存檔成功才前往),不默默印舊值
+  const goPrint = async () => {
+    if (!dirty) { navigate(`/self-check/print?doc=${encodeURIComponent(doc.id)}`); return }
+    if (!(await appConfirm({ title: '先存檔再下載', body: '這份自主檢查表有未存檔的修改；列印頁與 PDF 印的是已存檔版本。要先存檔再前往列印／下載嗎？', confirmLabel: '儲存後下載' }))) return
+    const r = await saveVersion()
+    if (r.error) return // 錯誤已顯示在存檔列
+    navigate(`/self-check/print?doc=${encodeURIComponent(r.documentId)}`)
+  }
 
   const handleLifecycleError = (error, fallback) => {
     const g = fieldDocErrorGuidance(error)
@@ -328,11 +383,10 @@ export default function SelfCheck() {
               )}
               <span role="status" aria-label={`保存狀態：${saveStatus.text}`} className={`inline-flex items-center h-8 mb-0.5 px-2.5 rounded-lg text-footnote font-medium ${saveStatus.cls}`}>{saveStatus.text}</span>
               {doc && <Badge color={docStatusMeta(doc, org).tone}>{DOC_STATUS_LABEL[doc.status] || doc.status}</Badge>}
+              {/* 表內上傳:主動作(新建時先要選好範本,存檔建文件後才上傳);鎖定的文件不長任何 input,與唯讀契約同一條 */}
+              {formEditable && <FormPhotoFill docDate={form.content.check_date || date} ensureDocument={ensureDocumentForPhotos} onFilled={onPhotoFilled} />}
               {doc && (
-                <Button variant="outline" onClick={async () => {
-                  if (dirty && !(await appConfirm({ title: '離開將遺失未存檔內容', body: '列印頁印的是已簽署版本（未簽署則標示草稿）。要放棄未存檔內容並前往列印嗎？', danger: true, confirmLabel: '放棄並前往' }))) return
-                  navigate(`/self-check/print?doc=${encodeURIComponent(doc.id)}`)
-                }}><MSym name="print" size={15} />列印</Button>
+                <Button variant="outline" onClick={goPrint} disabled={saving} title="列印頁可下載 PDF"><MSym name="print" size={15} />列印</Button>
               )}
             </div>
 
@@ -344,7 +398,7 @@ export default function SelfCheck() {
               </div>
             )}
             {!doc && editable && (
-              <p className="mb-3 text-footnote text-[var(--text-2)]">選檢查日期、本案檢查表範本與對應工項後存檔即建立文件。上傳現場照片會自動擬稿（每個配到工項的照片一份，實測值一律留待你親自量測）。{(checklistTemplates || []).length === 0 ? '本案尚無檢查表範本，請先到品質查驗建立。' : ''}</p>
+              <p className="mb-3 text-footnote text-[var(--text-2)]">選檢查日期、本案檢查表範本與對應工項後存檔即建立文件；或直接按上方「上傳照片，AI 填表」，系統會先建立文件，再把紙上已寫的讀數抄進這張表（標待確認，實測值不代為量測）。{(checklistTemplates || []).length === 0 ? '本案尚無檢查表範本，請先到品質查驗建立。' : ''}</p>
             )}
             {editable && doc && ['signed', 'submitted'].includes(status) && !amendMode && (
               <div className="mb-3 flex items-center gap-2 flex-wrap text-footnote text-[var(--text-2)]">
@@ -368,7 +422,7 @@ export default function SelfCheck() {
             )}
             {suggestions.length > 0 && formEditable && (
               <div className="mb-3 rounded-2xl bg-[var(--ai-tint)] p-3 space-y-2">
-                <div className="flex items-center gap-1 text-caption font-medium text-[var(--ai-text)]"><MSym name="auto_awesome" size={14} className="text-[var(--ai)]" />AI 建議（文件已有人工版本，新辨識結果不自動套用；檢查結果永遠不由系統帶入）</div>
+                <div className="flex items-center gap-1 text-caption font-medium text-[var(--ai-text)]"><MSym name="auto_awesome" size={14} className="text-[var(--ai)]" />AI 建議（文件已有人工版本，新辨識結果不自動套用；只補空白項目，抄錄的讀數仍要逐項確認）</div>
                 {suggestions.map((a) => (
                   <div key={a.id} className="flex items-start gap-2 flex-wrap text-footnote">
                     <span className="min-w-0 flex-1 text-[var(--text)]">{a.summary}</span>
@@ -393,7 +447,7 @@ export default function SelfCheck() {
             {doc && (
               <DocumentPhotos attachments={attachments} photosById={photosById} editable={!!formEditable} byId={byId} ownerOrg="contractor"
                 issues={attachmentIssueMap} onToggleRole={toggleRole} onRemove={removeAttachment}
-                uploader={formEditable ? <p className="text-footnote text-[var(--text-3)]">要補更多照片請到<Link to="/site" className="text-[var(--blue-text)] hover:underline mx-1">現場紀錄</Link>上傳；辨識結果會以新版本或建議帶入。</p> : null} />
+                uploader={formEditable ? <p className="text-footnote text-[var(--text-3)]">要補照片請按上方「上傳照片，AI 填表」，辨識結果會直接填進這張表（只補空白項目）；也可到<Link to="/site" className="text-[var(--blue-text)] hover:underline mx-1">現場紀錄</Link>整批上傳。</p> : null} />
             )}
 
             {doc && !detailLoading && (

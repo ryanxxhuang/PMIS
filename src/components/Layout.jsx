@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { NavLink, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { appConfirm } from './confirm.jsx'
-import { visibleNavGroups, defaultLandingPath, BALL_SOURCES, BALL_SOURCES_TITLE, resolveBallKey, roleWorkLinks } from '../lib/navConfig.js'
+import { visibleNavGroups, defaultLandingPath, BALL_SOURCES, BALL_SOURCES_TITLE, resolveBallKey, roleWorkLinks, coreOnlyNav } from '../lib/navConfig.js'
 import { FindWork, WorkContext } from './WorkNavigation.jsx'
 import CopilotFab, { CopilotMark, useCopilotAvailable } from './CopilotFab.jsx'
 import BottomNav from './BottomNav.jsx'
@@ -162,7 +162,7 @@ const THEME_META = {
 // TopBar 也是頁面的一部分;送出即導 /agent 代問(問 GovAgent 是全域問答入口,不另建搜尋資料流)。
 function GlobalSearch() {
   const navigate = useNavigate()
-  const { aiEnabled } = useStore()
+  const { aiEnabled, currentUser } = useStore()
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const inputRef = useRef(null)
@@ -179,7 +179,8 @@ function GlobalSearch() {
   }
   // agent.run 關閉的專案:搜尋送出會落到 /agent 的「未啟用」空頁、問題被吞——
   // 功能關閉時整顆入口不渲染(與批 B「功能關閉時藏對話入口」同一條 UX 規則)
-  if (!aiEnabled('agent.run')) return <div className="flex-1 hidden md:block" />
+  // 廠商三核心(demo 急件):廠商不給全域問答入口(navConfig coreOnlyNav)
+  if (!aiEnabled('agent.run') || coreOnlyNav(currentUser?.org_type)) return <div className="flex-1 hidden md:block" />
   return (
     <div className="relative flex-1 max-w-[560px] min-w-0 hidden md:block">
       {/* ≥1280 全寬藥丸;768–1279 收成圖示鈕(README 平板規格),兩者共用同一浮層 */}
@@ -242,7 +243,7 @@ function LogoutButton({ className = '' }) {
 
 function TopBar({ scrolled, dueCount = 0, mode, onCycleTheme, copilotOpen, onCopilotToggle }) {
   const { currentUser } = useStore()
-  const copilotAvailable = useCopilotAvailable()
+  const copilotAvailable = useCopilotAvailable() && !coreOnlyNav(currentUser?.org_type)
   const base = import.meta.env.BASE_URL
   return (
     <header data-scrolled={scrolled} className="chrome-bar chrome-edge fixed top-0 inset-x-0 z-40 h-[var(--top-bar-h)] flex items-center gap-3 md:gap-5 px-3 md:px-4 print:hidden">
@@ -376,6 +377,8 @@ export function WebLayout({ children }) {
   // admin(專案建立者)看得到全部;正式模式後回歸自己的角色視角。
   // isPlatformAdmin 是獨立的「平台」維度(僅控制 /admin 入口可見;真正把關在 DB 的 admin RPC)。
   const org = currentUser?.org_type || 'contractor'
+  // 廠商三核心(demo 急件):今日工作收件匣、問 GovAgent、Copilot 都不渲染(入口收起;路由與權限不動)
+  const coreOnly = coreOnlyNav(org)
   const visibleGroups = visibleNavGroups(org, can?.override, isPlatformAdmin)
   // 目前頁所屬的群組(/dashboard、/agent、/alerts 這類非群組路由 → null)
   const groupOf = (path) => visibleGroups.flatMap((g) => g.items).find((n) => n.tabs?.some((t) => t.to === path)) || null
@@ -440,12 +443,12 @@ export function WebLayout({ children }) {
           {/* 問 GovAgent:/agent 的導覽入口(D-008 完整 AI 入口)。原本是白底浮起大按鈕,與頂欄
               輸入框、Copilot 三個同權重入口並列(U12);降成一般導覽列,「問問題」的主要入口留給
               頂欄輸入框,側欄只負責「到那一頁」。aria-label 恆掛,收合成純圖示時 accessible name 不變。 */}
-          <div className={`mt-2 md:mt-0 ${rowClass({ selected: pathname === '/agent' }, collapsed)}`}>
+          {!coreOnly && <div className={`mt-2 md:mt-0 ${rowClass({ selected: pathname === '/agent' }, collapsed)}`}>
             <NavLink to="/agent" onClick={() => setMenuOpen(false)} aria-label="問 GovAgent" title="問 GovAgent"
               aria-current={pathname === '/agent' ? 'page' : undefined} className={() => linkClass(collapsed)}>
               <NavRowContent icon="auto_awesome" label="問 GovAgent" short="問答" active={pathname === '/agent'} collapsed={collapsed} />
             </NavLink>
-          </div>
+          </div>}
           <FindWork collapsed={collapsed} onNavigate={() => setMenuOpen(false)} mobileReturnRef={moreBtnRef} />
           <nav aria-label="主要功能" className="flex-1 pb-4 overflow-auto">
             {/* 球權來源(疊合版 IA §0;D-026 四主入口的「今日工作」):主畫面是收件匣,側欄先問
@@ -453,7 +456,7 @@ export function WebLayout({ children }) {
                 新路由見 navConfig BALL_SOURCES)。/dashboard 只有這一組入口——下方的工作/專案資料
                 分區沒有任何項目指向它,所以 aria-current 天然只落一處,不需要去重複。
                 件數與工作項 badge 同源(useTodayTasks),不另算一份。 */}
-            <div className="mb-2">
+            {!coreOnly && <div className="mb-2">
               <div className={`px-4 pt-3 pb-1.5 ${collapsed ? 'md:hidden' : ''}`}>
                 <span className="text-caption font-medium text-[var(--text-2)]">{BALL_SOURCES_TITLE}</span>
               </div>
@@ -472,7 +475,7 @@ export function WebLayout({ children }) {
                   </div>
                 )
               })}
-            </div>
+            </div>}
             {visibleGroups.map((g) => (
               <div key={g.title} className="mb-2">
                 <div className={`px-4 pt-3 pb-1.5 ${collapsed ? 'md:hidden' : ''}`}>
@@ -555,9 +558,9 @@ export function WebLayout({ children }) {
       </main>
       {/* 主畫面槽=「現在輪到我」:它的 to 就是落地頁(/dashboard),等對方/已完成是同頁的分段,
           頁內 Segmented 就能切,不佔手機的格子 */}
-      <BottomNav items={roleWorkLinks(org, can?.override, isPlatformAdmin)} home={BALL_SOURCES.find((b) => b.key === 'mine')}
+      <BottomNav items={roleWorkLinks(org, can?.override, isPlatformAdmin)} home={coreOnly ? null : BALL_SOURCES.find((b) => b.key === 'mine')}
         menuOpen={drawerOpen} onMore={() => setMenuOpen(true)} moreRef={moreBtnRef} />
-      <CopilotFab open={copilotOpen} onOpenChange={setCopilotOpen} />
+      {!coreOnly && <CopilotFab open={copilotOpen} onOpenChange={setCopilotOpen} />}
     </div>
   )
 }

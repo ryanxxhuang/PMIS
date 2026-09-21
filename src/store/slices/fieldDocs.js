@@ -184,11 +184,18 @@ export function useFieldDocsSlice({ demoMode, dbMode, isPersistedProject, curren
 
   // 起稿:呼叫 Edge 直到 remaining=0。409 run_conflict=別的請求在跑(回給頁面改成輪詢);
   // 其他錯誤回 { error, code } 由頁面如實顯示。每輪的結果透過 onProgress 給頁面。
-  const draftFromIntake = useCallback(async (intakeId, { onProgress } = {}) => {
+  // targetDocumentId(表內上傳):只填那一份文件,Edge 不推候選、不寫版本,只留建議並在 result.target 帶回;
+  // rerecognizePhotoIds:明確要求重新辨識(不沿用同內容照片的既有結果)。
+  const draftFromIntake = useCallback(async (intakeId, { onProgress, targetDocumentId = null, rerecognizePhotoIds = null } = {}) => {
     if (!isPersistedProject) return { error: DEMO_UPLOAD_ERROR }
     let last = null
+    const body = {
+      project_id: pid, intake_id: intakeId,
+      ...(targetDocumentId ? { target_document_id: targetDocumentId } : {}),
+      ...(rerecognizePhotoIds?.length ? { rerecognize_photo_ids: rerecognizePhotoIds } : {}),
+    }
     for (let round = 0; round < MAX_DRAFT_ROUNDS; round++) {
-      const { data, error } = await supabase.functions.invoke('draft-field-documents', { body: { project_id: pid, intake_id: intakeId } })
+      const { data, error } = await supabase.functions.invoke('draft-field-documents', { body })
       if (error || !data || data.error) {
         let code = data?.code || null
         let body = data

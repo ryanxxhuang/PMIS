@@ -13,6 +13,8 @@
 // 樂觀併發:base 版本≠目前版本(PD001／PD002)→ 明確提示重新載入,不默默覆蓋。
 // 簽後更正=人明確按「建立更正版本」→ 存檔開新版回草稿,舊簽署綁舊版(卡上明示)。
 // 唯讀視角(監造／機關):同一份欄位與來源、只有文字沒有 input(e2e 契約),監造在已提送時可收件／退回。
+// 表內上傳(2026-09-21):卡頭「上傳照片,AI 填表」(FormPhotoFill)只填這一份文件——沒有文件先走同一支存檔流程建立,
+// Edge 回來用最新表單狀態合併(只補空白欄,人填的不覆蓋),切到別的日期就不填、建議留在原文件。
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { MSym } from '../../components/icons.jsx'
@@ -33,6 +35,7 @@ import { useDailyLogFacts } from '../../lib/useFormHeaderFacts.js'
 import DocumentPhotos from '../../components/sitelog/DocumentPhotos.jsx'
 import DocumentLifecycle from '../../components/sitelog/DocumentLifecycle.jsx'
 import IntakeUploader from '../../components/sitelog/IntakeUploader.jsx'
+import FormPhotoFill from '../../components/sitelog/FormPhotoFill.jsx'
 import WeatherPull from '../../components/sitelog/WeatherPull.jsx'
 import SiteLogOfficialSheet from '../../components/SiteLogOfficialSheet.jsx'
 
@@ -44,7 +47,7 @@ export default function SiteLog() {
     project, workItems, adjustedItems, siteLogs, can, currentUser, demoMode,
     fieldDocuments: fieldDocState, fieldDocsLoading, reloadFieldDocs, findActiveDailyLogDoc, createDailyLogDraft, getFieldDocument, saveFieldDocumentVersion,
     signFieldDocument, submitFieldDocument, receiveFieldDocument, returnFieldDocument, listPhotosByIds, listSitePhotos,
-    agentActions, resolveAgentAction,
+    agentActions, resolveAgentAction, reloadAgentActions,
   } = useStore()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -96,6 +99,13 @@ export default function SiteLog() {
   useUnsavedEdit('site-log', dirty ? `施工日誌 ${date}（未存檔）` : null)
   // 表頭的確定性事實(工期／進度):與列印／PDF 同一支,算不出來紙上標待補(C 包)
   const facts = useDailyLogFacts(date)
+  // 表內上傳的回呼在好幾秒後才回來:文件、表單、dirty 都經 ref 取當下值,不用按下當時的舊 closure
+  const docRef = useRef(doc)
+  const formRef = useRef(form)
+  const dirtyRef = useRef(dirty)
+  useEffect(() => { docRef.current = doc }, [doc])
+  useEffect(() => { formRef.current = form }, [form])
+  useEffect(() => { dirtyRef.current = dirty }, [dirty])
 
   // 載入:切日期一律整包載;同日期下文件變動(存檔後、起稿後)只在 !dirty 時同步,dirty 時絕不覆寫輸入
   const prevKeyRef = useRef(null)
@@ -125,6 +135,8 @@ export default function SiteLog() {
         legacyLog?.id ? listSitePhotos(legacyLog.id) : Promise.resolve([]),
       ])
       if (!active) return
+      // 讀取途中表單已被填(表內上傳的結果剛合併進來):同日期下不覆寫,與上面的 dirty 規則同一條
+      if (!dateChanged && dirtyRef.current) { setDetailLoading(false); return }
       setDetail(nextDetail); setForm(nextForm); setAttachments(nextAttachments)
       setPhotosById(new Map(photoRows.map((p) => [p.id, p]))); setLegacyPhotos(legacyRows)
       setBaseVersion(doc?.current_version_no ?? 0)
@@ -202,15 +214,16 @@ export default function SiteLog() {
     if (r?.error) setSavedMsg(friendlyError(r.error, '建議未標記'))
   }
 
-  // 存檔=伺服器保存版本(沒有文件先建草稿;既有未簽署日誌也在此時第一次變成文件)
-  const onSave = async () => {
-    if (!form) return
+  // 存檔=伺服器保存版本(沒有文件先建草稿;既有未簽署日誌也在此時第一次變成文件)。
+  // 回 { documentId, versionNo } 或 { error }:存檔鈕、表內上傳(新日誌先建文件)、「儲存後下載」三處共用同一支
+  const saveVersion = async () => {
+    if (!form) return { error: { message: '表單尚未載入' } }
     setSaving(true); setSavedMsg(''); setConflict(null)
     let d = doc
     let base = baseVersion
     if (!d) {
       const r = await createDailyLogDraft(date)
-      if (r.error) { setSaving(false); setSavedMsg(friendlyError(r.error, '無法建立日誌草稿')); return }
+      if (r.error) { setSaving(false); setSavedMsg(friendlyError(r.error, '無法建立日誌草稿')); return { error: r.error } }
       d = r.doc; base = d.current_version_no
     }
     const note = amendMode ? '簽後更正' : legacyLog && base === 0 ? '由既有紀錄建立草稿' : null
@@ -221,7 +234,7 @@ export default function SiteLog() {
     if (r.error) {
       const g = fieldDocErrorGuidance(r.error)
       if (g.kind === 'reload') { setConflict(g.message); setSavedMsg('') } else setSavedMsg(friendlyError(r.error, '日誌存檔失敗'))
-      return
+      return { error: r.error }
     }
     for (const id of appliedSuggestions) await resolveAgentAction(id, 'accepted')
     setAppliedSuggestions([])
@@ -231,8 +244,51 @@ export default function SiteLog() {
     const pending = (r.result.recheck || []).length
     setSavedMsg(pending ? `已存檔 ✓ 版本 ${r.result.version_no}，尚有 ${pending} 項待補` : `已存檔 ✓ 版本 ${r.result.version_no}，可簽署`, 'success')
     if (!doc) reloadFieldDocs()
+    return { documentId: d.id, versionNo: r.result.version_no }
   }
+  const onSave = () => saveVersion()
   const reloadFromServer = () => { setDirty(false); setConflict(null); prevKeyRef.current = null; reloadFieldDocs() }
+
+  // 表內上傳:文件已存在就直接用(不強制存檔,編輯中的輸入不丟);新日誌先存一版目前內容(含既有紀錄帶入值)建立文件
+  const ensureDocumentForPhotos = async () => {
+    if (docRef.current) return { documentId: docRef.current.id }
+    const r = await saveVersion()
+    return r.error ? { error: r.error } : { documentId: r.documentId }
+  }
+  // Edge 回來:用最新表單狀態合併(functional update),只補空白／待補欄,工程師改過的值不覆蓋;附件併入並補照片列;
+  // agent_action 記進 appliedSuggestions(存檔成功才標 accepted,沿用既有邏輯)。使用者已切到別的日期→不填進目前這份,
+  // 建議留在原文件(agent_action 仍 pending,回到該日在「AI 建議」卡可套用)。
+  const onPhotoFilled = async ({ documentId, target }) => {
+    const sug = target?.suggestion
+    if (!sug) return
+    if (!docRef.current || docRef.current.id !== documentId) {
+      reloadAgentActions()
+      setSavedMsg('AI 已辨識完成，但你已切換到別的日期；結果沒有填進目前這份，建議保留在原本那一天的日誌，回到該日後可在「AI 建議」套用', 'info')
+      return
+    }
+    const { applied, state } = applySuggestion(formRef.current, sug)
+    setForm((cur) => applySuggestion(cur, sug).state)
+    setDirty(true)
+    if (sug.attachments?.length) {
+      setAttachments((cur) => mergeAttachments(cur, sug.attachments))
+      const rows = await listPhotosByIds(sug.attachments.map((a) => a.photo_id))
+      setPhotosById((m) => { const n = new Map(m); for (const p of rows) n.set(p.id, p); return n })
+    }
+    if (target.agent_action_id) setAppliedSuggestions((ids) => [...ids, target.agent_action_id])
+    const extra = target.notes?.length ? `；${target.notes.join('；')}` : ''
+    setSavedMsg(applied.length
+      ? `AI 已填入 ${applied.length} 欄（${applied.slice(0, 4).map((k) => fieldLabel(k, state.content)).join('、')}${applied.length > 4 ? '…' : ''}；你已填的欄位未覆蓋），核對後存檔${extra}`
+      : `AI 辨識完成，沒有可補的空白欄位（你已填的欄位未覆蓋）；照片已附上，核對後存檔${extra}`, 'info')
+  }
+  // 列印／PDF 印的是已存檔版本:未存檔先提示並提供「儲存後下載」(存檔成功才前往),不默默印舊值
+  const goPrint = async () => {
+    const to = (id) => (id ? `/site-log/print?doc=${encodeURIComponent(id)}` : `/site-log/print?d=${date}`)
+    if (!dirty) { navigate(to(doc?.id)); return }
+    if (!(await appConfirm({ title: '先存檔再下載', body: `${date} 的日誌有未存檔的修改；列印頁與 PDF 印的是已存檔版本。要先存檔再前往列印／下載嗎？`, confirmLabel: '儲存後下載' }))) return
+    const r = await saveVersion()
+    if (r.error) return // 錯誤已顯示在存檔列
+    navigate(to(r.documentId))
+  }
 
   // 簽署／提送／收件／退回
   const handleLifecycleError = (error, fallback) => {
@@ -331,6 +387,8 @@ export default function SiteLog() {
               <div className="max-md:w-full"><Field label="日期"><Input type="date" value={date} onChange={(e) => changeDate(e.target.value)} /></Field></div>
               <span role="status" aria-label={`保存狀態：${saveStatus.text}`} className={`inline-flex items-center h-8 mb-0.5 px-2.5 rounded-lg text-footnote font-medium ${saveStatus.cls}`}>{saveStatus.text}</span>
               {doc && <Badge color={docStatusMeta(doc, org).tone}>{DOC_STATUS_LABEL[doc.status] || doc.status}</Badge>}
+              {/* 表內上傳:主動作。鎖定的文件(已簽署未建更正版本)不長任何 input,與唯讀契約同一條;伺服器也會回 target_locked */}
+              {formEditable && <FormPhotoFill docDate={date} ensureDocument={ensureDocumentForPhotos} onFilled={onPhotoFilled} />}
               {formEditable && <WeatherPull date={date} onApply={applyWeather} onMessage={setSavedMsg} />}
               {formEditable && !legacyLog && prevLog && !(form.content.labor?.length) && (
                 <Button variant="secondary" onClick={copyYesterday} title={`帶入 ${prevLog.log_date} 的班組/機具/材料`}>
@@ -348,7 +406,7 @@ export default function SiteLog() {
               </div>
             )}
             {!legacyLog && !doc && !dirty && editable && (
-              <p className="mb-3 text-footnote text-[var(--text-2)]">本日尚無日誌。上傳現場照片會自動擬稿；也可直接填寫後存檔。</p>
+              <p className="mb-3 text-footnote text-[var(--text-2)]">本日尚無日誌。按上方「上傳照片，AI 填表」由現場照片擬好這張表；也可直接填寫後存檔。</p>
             )}
             {legacyLog && !doc && (
               <p className="mb-3 text-footnote text-[var(--amber-text)]">此日有既有紀錄（舊流程寫入、未簽署）；以下欄位已帶入該紀錄，來源標「既有紀錄、待核對」。核對後存檔會建立文件草稿，簽署後才是正式紀錄。</p>
@@ -392,12 +450,9 @@ export default function SiteLog() {
               ) : (
                 <span className="text-xs text-[var(--text-3)]">{can.oversee ? '機關監督檢視' : '監造檢視'}：施工日誌由施工廠商填報，此頁為唯讀。</span>
               )}
-              {/* 列印:有文件印簽署版本(未簽署則最新存檔版本並標草稿・未簽署);只有既有紀錄時印該列並標未簽署 */}
+              {/* 列印／下載 PDF:有文件印簽署版本(未簽署則最新存檔版本並標草稿・未簽署);只有既有紀錄時印該列並標未簽署;未存檔先存 */}
               {((doc && doc.current_version_no > 0) || legacyLog) && (
-                <Button variant="secondary" onClick={async () => {
-                  if (dirty && !(await appConfirm({ title: '離開將遺失未存檔內容', body: `${date} 的日誌尚未存檔；列印頁印的是已簽署版本（未簽署則為最新存檔版本並標示草稿）。要放棄未存檔內容並前往列印嗎？`, danger: true, confirmLabel: '放棄並前往' }))) return
-                  navigate(doc ? `/site-log/print?doc=${encodeURIComponent(doc.id)}` : `/site-log/print?d=${date}`)
-                }}>
+                <Button variant="secondary" onClick={goPrint} disabled={saving} title="列印頁可下載 PDF">
                   <MSym name="print" size={15} />列印公定格式日誌
                 </Button>
               )}

@@ -1,8 +1,8 @@
 // Supabase Edge Function: draft-field-documents(P2b;D-026 照片→AI 文書的起稿入口)
 // ---------------------------------------------------------------------------
-// 輸入 { project_id, intake_id, rerecognize_photo_ids? }:對一批已保存的照片逐張辨識、配工項、推斷候選文書,
-// 並為廠商批次起施工日誌草稿(field_documents 的 AI 版本)。本單元只真的產生施工日誌;
-// 監造日誌／自主檢查表／監造查驗表單只列為「需要／尚未支援」的候選(P3a–c)。
+// 輸入 { project_id, intake_id, rerecognize_photo_ids?, target_document_id? }:對一批已保存的照片逐張辨識、配工項、
+// 推斷候選文書並起稿(四類文書,P2b／P3a–c)。帶 target_document_id(表內上傳,2026-09-21)時不推候選、不寫版本,
+// 只為那一份文件留 suggest_field_update 建議並在回應 target 帶回,由前端合併進表單(fieldDocDraftRun.ts 檔頭)。
 //
 // 安全邊界:
 //   * openAiGate('field_docs.draft'):登入、成員資格(RLS 讀 projects)、功能開關(fail-closed)。
@@ -101,6 +101,10 @@ Deno.serve(async (req) => {
     return json({ error: 'rerecognize_photo_ids 必須是照片 id 陣列', code: 'invalid_input' }, 400)
   }
   const rerecognizePhotoIds: string[] | undefined = Array.isArray(rerecognizeRaw) ? [...new Set(rerecognizeRaw as string[])] : undefined
+  // 表內上傳的目標文件:只認 uuid;是否屬本案、責任方與狀態由 run 以 RLS 讀回再驗
+  const targetRaw = body?.target_document_id
+  if (targetRaw != null && !isUuid(targetRaw)) return json({ error: 'target_document_id 必須是文件 id', code: 'invalid_input' }, 400)
+  const targetDocumentId: string | undefined = isUuid(targetRaw) ? targetRaw as string : undefined
   if (!gate.serviceClient) {
     return json({ error: '伺服器未設定,暫時無法起稿', code: 'server_not_configured' }, 500)
   }
@@ -108,7 +112,7 @@ Deno.serve(async (req) => {
     const repo = supabaseDraftRepo(gate.userClient, gate.serviceClient, gate.projectId as string)
     const result = await runDraftFieldDocuments({
       repo, vision: makeVision(gate), imaging: { paperFormTiles: preparePaperFormTiles },
-      intakeId, userId: gate.userId, rerecognizePhotoIds,
+      intakeId, userId: gate.userId, rerecognizePhotoIds, targetDocumentId,
     })
     await closeAiGate(gate, {
       feature: FEATURE,

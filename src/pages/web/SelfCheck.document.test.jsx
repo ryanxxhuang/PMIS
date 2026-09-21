@@ -51,6 +51,8 @@ function makeStore(over = {}) {
     signFieldDocument: vi.fn(), submitFieldDocument: vi.fn(), receiveFieldDocument: vi.fn(), returnFieldDocument: vi.fn(),
     listPhotosByIds: vi.fn().mockResolvedValue(photos), agentActions: [], resolveAgentAction: vi.fn(),
     checklistTemplates: [TPL], ensureChecklistTemplate: vi.fn(async (t) => ({ error: null, template: t })), inspections: [],
+    // 表內上傳(FormPhotoFill)用到的:AI 功能開關與上傳／起稿
+    aiEnabled: () => true, createIntake: vi.fn(), uploadIntakePhoto: vi.fn(), draftFromIntake: vi.fn(), reloadAgentActions: vi.fn(),
     ...over,
   }
 }
@@ -109,6 +111,63 @@ describe('自主檢查表文件頁', () => {
     expect(container.textContent).toContain('紙上原文：18 cm')
     expect(container.textContent).toContain('紙本實測欄抄錄')
     expect(button('簽署此版本')).toBeUndefined()
+  })
+
+  it('表內上傳:文件已存在不強制存檔;AI 抄錄的分列讀數補進空的項目(待確認)、人已填的實測值與已有的位置不覆蓋、附件併入、變未存檔', async () => {
+    const doc = baseDoc()
+    // 目前版本:C2 空、位置已有值;人先把 C2 填 17(人填=confirmed)
+    state.store = withDoc(doc, {
+      createIntake: vi.fn(async () => ({ error: null, intake: { id: 'I1' } })),
+      uploadIntakePhoto: vi.fn(async () => ({ error: null, id: 'p2', storage_path: 'p/p2.jpg' })),
+      draftFromIntake: vi.fn(async () => ({ error: null, result: { intake: { status: 'ready' }, documents: [], notes: [], target: {
+        document_id: 'SC1', agent_action_id: 'A9', pending_fields: [], notes: [],
+        suggestion: {
+          content: { ...aiContent(), location: 'AI 猜的位置', results: { B1: { value: null }, C2: { value: null, readings: [{ entry_no: '1', value: 18, value2: null, raw_text: '18 CM' }, { entry_no: '2', value: 19, value2: null, raw_text: '19 CM' }] } }, photo_ids: ['p1', 'p2'] },
+          field_sources: { ...aiSources(), location: { status: 'filled', source: 'ai:photo' }, 'results.C2': { status: 'filled', source: 'record:p2', refs: ['p2'], reason: '已抄錄紙本實測值 編號 1 18 cm、編號 2 19 cm,待你核對確認', evidence: [] } },
+          attachments: [{ photo_id: 'p1', storage_path: 'x', role: 'evidence' }, { photo_id: 'p2', storage_path: 'p/p2.jpg', role: 'evidence' }],
+        },
+      } } })),
+      listPhotosByIds: vi.fn(async (ids) => ids.map((id) => ({ id, uploader_org: 'contractor', url: `blob:${id}`, caption: '', work_item_id: 'w1' }))),
+      saveFieldDocumentVersion: vi.fn(async () => ({ error: null, result: { version_no: 2, recheck: [] } })),
+    })
+    await render('/self-check?doc=SC1'); await flush(); await flush()
+    const typeC2 = (v) => act(async () => {
+      const c2 = container.querySelector('input[aria-label="C2 坍度 實際檢查情形"]')
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(c2, v); c2.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const pick = () => act(async () => {
+      const input = container.querySelector('input[type="file"][aria-label="上傳照片，AI 填表"]')
+      Object.defineProperty(input, 'files', { value: [new File([new Uint8Array([7])], 'b.jpg', { type: 'image/jpeg' })], configurable: true })
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const flushAll = () => act(async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0)) })
+
+    // 第一次:C2 空 → 讀數分列填進格子、狀態待確認;位置本來就有值(AI 版本帶入的)不覆蓋
+    await pick(); await flushAll()
+    expect(state.store.saveFieldDocumentVersion).not.toHaveBeenCalled() // 文件已存在:不強制存檔,直接上傳
+    expect(state.store.createIntake).toHaveBeenCalledWith({ log_date: today })
+    expect(state.store.draftFromIntake).toHaveBeenCalledWith('I1', expect.objectContaining({ targetDocumentId: 'SC1' }))
+    expect(container.querySelector('input[aria-label="C2 坍度 第 1 筆 編號"]').value).toBe('1')
+    expect(container.querySelector('input[aria-label="C2 坍度 第 1 筆 讀數"]').value).toBe('18')
+    expect(container.querySelector('input[aria-label="C2 坍度 第 2 筆 讀數"]').value).toBe('19')
+    expect(container.querySelector('input[aria-label="檢查位置"]').value).toBe('A區1F')
+    expect(container.textContent).toContain('C2 坍度（待親自確認）') // 抄錄仍是待確認,簽署前要人逐項確認
+    expect(container.textContent).toContain('AI 已填入')
+    expect(container.textContent).toContain('抄錄的讀數請逐項確認後存檔')
+    expect(status()).toBe('未存檔')
+    expect(container.querySelector('img[src="blob:p2"]')).toBeTruthy()
+
+    // 第二次:人把兩筆讀數刪掉、改填單一值 17(人填=confirmed)→ 再上傳也不覆蓋
+    for (let i = 0; i < 2; i++) await act(async () => container.querySelector('button[aria-label="刪除 C2 坍度 第 1 筆"]').click())
+    await typeC2('17')
+    await pick(); await flushAll()
+    expect(container.querySelector('input[aria-label="C2 坍度 實際檢查情形"]').value).toBe('17')
+    expect(container.textContent).toContain('沒有可補的空白欄位')
+    // 存檔:建議標 accepted(兩筆)
+    await act(async () => button('存檔').click())
+    await flushAll()
+    expect(state.store.saveFieldDocumentVersion).toHaveBeenCalledWith(expect.objectContaining({ documentId: 'SC1', content: expect.objectContaining({ results: expect.objectContaining({ C2: { value: 17 } }) }), attachments: expect.arrayContaining([expect.objectContaining({ photo_id: 'p2' })]) }))
+    expect(state.store.resolveAgentAction).toHaveBeenCalledWith('A9', 'accepted')
   })
 
   it('人填實測值即 confirmed、判定預覽即時算;系統帶入的勾選要按確認才齊備;存檔遇 PD001 明確提示且輸入留著', async () => {

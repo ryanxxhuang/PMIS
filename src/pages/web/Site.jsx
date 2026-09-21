@@ -54,7 +54,7 @@ export default function Site() {
   // 現場作業入口=該角色在導覽上看得見的現場紀錄子頁(navConfig 單一來源;A 包起監造日誌與
   // 監造查驗表單對廠商 hiddenFor、停留點與工安 hidden)。這裡不再手抄入口清單,子頁增減自動跟上。
   const siteTabs = useMemo(() => {
-    const group = visibleNavGroups(org, can?.override, isPlatformAdmin).flatMap((g) => g.items).find((n) => n.to === '/site')
+    const group = visibleNavGroups(org, can?.override, isPlatformAdmin).flatMap((g) => g.items).find((n) => n.entry === '/site')
     return (group?.tabs || []).filter((t) => t.to !== '/site') // 現場總覽就是本頁,不當入口
   }, [org, can?.override, isPlatformAdmin])
 

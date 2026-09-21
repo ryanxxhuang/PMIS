@@ -360,6 +360,12 @@ export function fieldLabel(key, content, labels = null) {
     const name = it ? [it.item_no, it.description].filter(Boolean).join(' ') : m[1]
     return `${name}${m[2] === 'qty_today' ? ' 當日數量' : ' 施作位置'}`
   }
+  // 整列帶入的工項(applySuggestion 回 items.<id>):顯示工項名,不露內部 id
+  const row = /^items\.([^.]+)$/.exec(key)
+  if (row) {
+    const it = content?.items?.[row[1]]
+    return it ? `工項 ${[it.item_no, it.description].filter(Boolean).join(' ')}` : '工項列'
+  }
   return key
 }
 
@@ -759,6 +765,9 @@ export function removeItemRow({ content, sources }, id) {
 // AI 建議(agent_actions kind=suggest_field_update 的 evidence.suggestion)套進目前草稿:
 // 只補「目前仍 pending／缺鍵」且建議 filled 的欄位,絕不覆蓋人填(confirmed)或人已標不適用的;
 // 工項列只加不減;附件以 photo_id 聯集。回傳套用了哪些鍵供人看。
+// 自檢表 results(2026-09-21 起):AI 只會抄錄紙上**已經寫好**的讀數(G 包,含分列 readings),不代為量測——所以建議裡
+// filled 的項目可以補進目前**沒有值**的項目,連同其 field_sources 一起帶(狀態仍是 filled=待確認,人要逐項按「確認」才能簽;
+// 這不是放寬確認,只是讓表內上傳把紙上的字填進格子)。已有值(單一值或 readings)或人已確認／標不適用的項目一律不動。
 export function applySuggestion(state, suggestion) {
   if (!suggestion?.content) return { state, applied: [] }
   let { content, sources } = state
@@ -772,12 +781,27 @@ export function applySuggestion(state, suggestion) {
     sources = { ...sources, [key]: { ...sug[key] } }
     applied.push(key)
   }
-  // 頂層欄位逐鍵(三類共用);日期／範本／照片清單不是欄位,items／extras 另處理;自檢表 results 永遠不由建議帶入(實測值只能人填)
+  // 頂層欄位逐鍵(三類共用);日期／範本／照片清單不是欄位,items／extras／results 另處理
   for (const [k, v] of Object.entries(suggestion.content)) {
     if (['log_date', 'check_date', 'template', 'template_id', 'template_title', 'template_source', 'items', 'extras', 'results', 'photo_ids', 'unmatched_photo_ids'].includes(k)) continue
     if (v != null) take(k, v)
   }
   for (const [k, v] of Object.entries(suggestion.content.extras || {})) take(`extras.${k}`, v)
+  // 檢查項目:只補目前表上存在(同範本)且沒有值的項目;值與 readings 擇一(與 DB fn_checklist_result_check 同形狀),備註保留
+  for (const [no, r] of Object.entries(suggestion.content.results || {})) {
+    const key = `results.${no}`
+    const cur = content.results?.[no]
+    if (!cur) continue
+    const hasValue = cur.value != null || (Array.isArray(cur.readings) && cur.readings.length > 0)
+    const curSrc = sources?.[key]
+    if (hasValue || (curSrc && curSrc.status !== 'pending') || sug[key]?.status !== 'filled') continue
+    const readings = Array.isArray(r?.readings) && r.readings.length ? r.readings : null
+    if (r?.value == null && !readings) continue
+    const next = readings ? { ...withoutReadings(cur), value: null, readings } : { ...withoutReadings(cur), value: r.value }
+    content = { ...content, results: { ...content.results, [no]: next } }
+    sources = { ...sources, [key]: { ...sug[key] } }
+    applied.push(key)
+  }
   for (const [wid, it] of Object.entries(suggestion.content.items || {})) {
     if (!content.items?.[wid]) {
       content = { ...content, items: { ...(content.items || {}), [wid]: { ...it, qty_today: null, location: it.location ?? null } } }

@@ -4,7 +4,7 @@
 // 未配對(未匯標單)、重複照片、時間預算切斷與續跑、run 認領衝突、逐功能閘門 fail-closed、
 // 監造日誌內容來源讀取失敗不建半份。stub 只證明流程,不證明模型辨識正確(模型品質見 P7b)。
 import { describe, it, expect } from 'vitest'
-import { runDraftFieldDocuments, MAX_ATTEMPTS } from './fieldDocDraftRun.ts'
+import { runDraftFieldDocuments, majorityWorkItem, MAX_ATTEMPTS } from './fieldDocDraftRun.ts'
 import { agentDraftDailyLog, agentDraftSelfCheck, agentSelfCheckKey } from './agentFieldDocDraft.ts'
 import { taipeiDateOf } from './fieldDocDraft.ts'
 import type { DraftRepo, DraftVision, IntakePhotoRow, IntakeRow, PhotoAiPatch, VisionResult } from './fieldDocDraftRun.ts'
@@ -33,6 +33,7 @@ type World = {
   photoPatches: { id: string; patch: PhotoAiPatch }[]
   failUpdatePhoto?: (id: string) => { error: string; code?: string } | null
   failInsertVersion?: string
+  failPhotosBySha?: string
   downloadFail?: Set<string>
   // 監造日誌的內容來源(P3a)
   inspections?: DayInspection[]
@@ -82,6 +83,15 @@ function memoryRepo(w: World): DraftRepo {
     listIntakePhotos: async (id) => w.photos.filter((p) => (p.intake_id ?? 'i1') === id).map((p) => ({ ...p })),
     listPhotosByIds: async (ids) => w.photos.filter((p) => ids.includes(p.id)).map((p) => ({ ...p })),
     listPhotosTakenOn: async (date, wid = null) => w.photos.filter((p) => taipeiDateOf(p.taken_at) === date && (!wid || p.work_item_id === wid)).map((p) => ({ ...p })),
+    listRecognizedPhotosBySha: async (shas) => (w.failPhotosBySha ? { error: w.failPhotosBySha } : w.photos
+      .filter((p) => p.content_sha256 && shas.includes(p.content_sha256) && ['done', 'not_site', 'unreadable'].includes(p.ai_status ?? ''))
+      .map((p) => ({ ...p }))),
+    // 責任方鏡像 DB generated column(fn_field_document_owner_org):日誌／自檢=廠商,監造日誌／查驗表單=監造
+    getDocumentById: async (id) => {
+      const d = w.docs.find((x) => x.id === id)
+      if (!d) return null
+      return { id: d.id, status: d.status, current_version_no: d.current_version_no, intake_id: d.intake_id, doc_type: d.doc_type, doc_date: d.doc_date, target_key: d.target_key, template_id: d.template_id ?? null, owner_org: d.doc_type === 'daily_log' || d.doc_type === 'self_check' ? 'contractor' : 'supervisor' }
+    },
     downloadPhoto: async (path) => (w.downloadFail?.has(path) ? { error: '資料存取失敗（代碼 db_error）' } : { base64: `b64:${path}`, mime: 'image/jpeg' }),
     updatePhoto: async (id, patch) => {
       const f = w.failUpdatePhoto?.(id)
@@ -967,5 +977,186 @@ describe('紙表逐格辨識(B2;獨立 AI 功能 paperform.cells)', () => {
     await run(w2, stubVision({ classify: paperClassify, board: () => (++m === 1 ? wholeBoard() : { data: { nope: true } }) }))
     expect((w2.photos[0].ai_result as { whiteboard: unknown; whiteboard_skipped: string }).whiteboard).toBeNull()
     expect((w2.photos[0].ai_result as { whiteboard_skipped: string }).whiteboard_skipped).toBe('second_pass_failed:invalid_output')
+  })
+})
+
+// ── 表內上傳(2026-09-21;target_document_id):只填指定文件、只留建議、不寫版本;同內容照片沿用辨識結果 ─────────
+describe('表內上傳(target_document_id):只為目標文件留建議,不推候選、不建其他文件、不寫版本', () => {
+  const targetDoc = (over: Partial<Doc> = {}): Doc => ({ id: 'docT', doc_type: 'daily_log', doc_date: '2026-09-17', intake_id: null, target_key: null, status: 'draft', current_version_no: 1, required_fields: [], recheck: [], ...over })
+  const humanVer = (docId: string, content: Record<string, unknown>): Ver => ({ document_id: docId, version_no: 1, author_kind: 'human', content, attachments: [], field_sources: {}, content_hash: `h-${docId}` })
+  // 板上寫了兩筆坍度(編號 1、2):自檢表 C2 分列抄錄
+  const boardClassify = (): VisionResult<unknown> => ({ data: { caption: '坍度試驗', category: '施工作業', is_construction: true, legible: true, text_legible: true, has_board: true, record_medium: 'whiteboard', work_item_hint: '鋼筋加工及組立', visible_progress: '', location: null, location_text: '' } })
+  const slumpBoard = (logDate = ''): VisionResult<unknown> => ({ data: {
+    record_medium: 'whiteboard', log_date: logDate, log_date_text: logDate, weather: '', location: '', location_text: '', work_item_text: '', work_summary: '', items: [],
+    observations: [
+      { kind: 'measured', label: '坍度', entry_no: '1', raw_text: '18 CM', value: 18, value2: null, unit: 'CM' },
+      { kind: 'measured', label: '坍度', entry_no: '2', raw_text: '19 CM', value: 19, value2: null, unit: 'CM' },
+    ],
+  } })
+  type Body = { target?: { document_id: string; agent_action_id: string; suggestion: { content: Record<string, unknown>; field_sources: Record<string, { status: string; source: string | null }>; attachments: { photo_id: string }[] }; pending_fields: string[]; recheck: { key: string }[]; notes: string[] }; documents: { action: string; document_id: string | null; reason: string | null }[]; intake: { status: string; candidates: Candidate[] }; notes: string[]; remaining: number }
+  type Candidate = { doc_type: string; state: string; document_id: string | null; target_key: string | null }
+
+  it('施工日誌目標:有人工版本也好、沒有也好,一律不寫版本、只留 suggest_field_update 並回 target;同批不再推自檢表;candidates 記一筆代表目標', async () => {
+    const w = world({ docs: [targetDoc()], versions: [humanVer('docT', { log_date: '2026-09-17', work_summary: '人寫的' })], photos: [photo('p1')], checklistTemplates: [T_CONC], intake: intake({ log_date: '2026-09-17' }) })
+    const r = await run(w, stubVision(), { targetDocumentId: 'docT' })
+    expect(r.status).toBe(200)
+    expect(w.versions).toHaveLength(1)
+    expect(w.docs).toHaveLength(1) // 照片配到工項也不起自檢表
+    expect(w.docs[0].current_version_no).toBe(1)
+    expect(w.actions).toHaveLength(1)
+    expect(w.actions[0]).toMatchObject({ kind: 'suggest_field_update', target_table: 'field_documents', target_id: 'docT', agent_role: 'contractor', evidence: { intake_id: 'i1', origin: 'in_form', doc_type: 'daily_log', against_version_no: 1 } })
+    const body = r.body as unknown as Body
+    expect(body.target).toMatchObject({ document_id: 'docT', agent_action_id: 'act1' })
+    expect(body.target!.suggestion.content).toMatchObject({ log_date: '2026-09-17', items: { 'wi-steel': { qty_today: null } } })
+    expect(body.target!.suggestion.field_sources.log_date).toMatchObject({ status: 'filled', source: 'document:docT' })
+    expect(body.target!.suggestion.attachments.map((a) => a.photo_id)).toEqual(['p1'])
+    expect(body.target!.pending_fields).toContain('items.wi-steel.qty_today')
+    expect(body.documents).toEqual([expect.objectContaining({ action: 'suggested', document_id: 'docT' })])
+    expect(body.intake.candidates).toEqual([expect.objectContaining({ doc_type: 'daily_log', state: 'suggested', document_id: 'docT', target_key: 'document:docT' })])
+    expect(body.intake.status).toBe('ready')
+    expect(w.photos[0]).toMatchObject({ ai_status: 'done', work_item_id: 'wi-steel' })
+
+    // 沒有人工版本(剛建立、版本 0)同樣只留建議
+    const w0 = world({ docs: [targetDoc({ id: 'docZ', current_version_no: 0 })], photos: [photo('p1')] })
+    const r0 = await run(w0, stubVision(), { targetDocumentId: 'docZ' })
+    expect(r0.status).toBe(200)
+    expect(w0.versions).toEqual([])
+    expect(w0.actions.map((a) => a.kind)).toEqual(['suggest_field_update'])
+  })
+
+  it('目標已簽署／提送 → 409 target_locked,認領前就擋(批次不動、照片不辨識)', async () => {
+    for (const status of ['signed', 'submitted', 'received']) {
+      const w = world({ docs: [targetDoc({ status })], photos: [photo('p1')] })
+      const r = await run(w, stubVision(), { targetDocumentId: 'docT' })
+      expect(r.status).toBe(409)
+      expect(r.body.code).toBe('target_locked')
+      expect(w.intake.attempts).toBe(0)
+      expect(w.finishes).toEqual([])
+      expect(w.photoPatches).toEqual([])
+    }
+  })
+
+  it('目標不在本案／責任方不同／類型不支援 → 404／403／400,都不動批次', async () => {
+    const missing = world({ photos: [photo('p1')] })
+    expect((await run(missing, stubVision(), { targetDocumentId: 'nope' })).body.code).toBe('target_not_found')
+    // 監造批次指向廠商的施工日誌:責任方不同(DB generated column),不能由監造照片填入
+    const sup = world({ callerOrg: 'supervisor', intake: intake({ uploader_org: 'supervisor' }), docs: [targetDoc()], photos: [photo('p1')] })
+    const r2 = await run(sup, stubVision(), { targetDocumentId: 'docT' })
+    expect(r2.status).toBe(403)
+    expect(r2.body.code).toBe('target_org_mismatch')
+    const supLog = world({ callerOrg: 'supervisor', intake: intake({ uploader_org: 'supervisor' }), docs: [targetDoc({ id: 'docSL', doc_type: 'supervisor_log' })], photos: [photo('p1')] })
+    const r3 = await run(supLog, stubVision(), { targetDocumentId: 'docSL' })
+    expect(r3.status).toBe(400)
+    expect(r3.body.code).toBe('target_unsupported')
+    for (const w of [missing, sup, supLog]) { expect(w.finishes).toEqual([]); expect(w.actions).toEqual([]) }
+  })
+
+  it('自主檢查表目標:範本＝文件的範本、工項＝文件已填的(照片配到別的也不改);板上兩筆坍度分列抄進 results 標 filled 待確認', async () => {
+    const w = world({
+      docs: [targetDoc({ id: 'docS', doc_type: 'self_check', status: 'pending_input', template_id: 'tpl-conc' })],
+      versions: [humanVer('docS', { check_date: '2026-09-17', template_id: 'tpl-conc', work_item_id: 'wi-form', results: { B1: { value: null }, C2: { value: null } } })],
+      photos: [photo('p1')], checklistTemplates: [T_CONC], intake: intake({ log_date: '2026-09-17' }),
+    })
+    const r = await run(w, stubVision({ classify: boardClassify, board: () => slumpBoard() }), { targetDocumentId: 'docS' })
+    expect(r.status).toBe(200)
+    expect(w.docs).toHaveLength(1) // 不起施工日誌
+    expect(w.versions).toHaveLength(1)
+    const body = r.body as unknown as Body
+    const c = body.target!.suggestion.content as { template_id: string; work_item_id: string; results: Record<string, { value: unknown; readings?: unknown[] }> }
+    expect(c.template_id).toBe('tpl-conc')
+    expect(c.work_item_id).toBe('wi-form')
+    expect(c.results.C2).toEqual({ value: null, readings: [
+      { entry_no: '1', value: 18, value2: null, raw_text: '18 CM' }, { entry_no: '2', value: 19, value2: null, raw_text: '19 CM' },
+    ] })
+    expect(c.results.B1).toEqual({ value: null })
+    expect(body.target!.suggestion.field_sources['results.C2']).toMatchObject({ status: 'filled', source: 'record:p1' })
+    expect(body.target!.suggestion.field_sources['results.B1'].status).toBe('pending')
+    expect(body.target!.suggestion.field_sources.template_id).toMatchObject({ status: 'filled', source: 'system:template_match' })
+    expect(body.intake.candidates).toEqual([expect.objectContaining({ doc_type: 'self_check', state: 'suggested', document_id: 'docS' })])
+  })
+
+  it('自主檢查表目標沒填工項:本批照片配到的工項多數決;平手就留空待人選(不猜)', async () => {
+    const w = world({
+      docs: [targetDoc({ id: 'docS', doc_type: 'self_check', template_id: 'tpl-conc' })],
+      versions: [humanVer('docS', { template_id: 'tpl-conc', work_item_id: null, results: { B1: { value: null }, C2: { value: null } } })],
+      photos: [photo('p1'), photo('p2')], checklistTemplates: [T_CONC],
+    })
+    const r = await run(w, stubVision(), { targetDocumentId: 'docS' })
+    const body = r.body as unknown as Body
+    expect((body.target!.suggestion.content as { work_item_id: string }).work_item_id).toBe('wi-steel')
+    expect(body.target!.suggestion.field_sources.work_item_id).toMatchObject({ status: 'filled', source: 'ai:photo' })
+
+    // 一張人已掛模板工項、一張配到鋼筋:1:1 平手 → 不帶工項
+    const tie = world({
+      docs: [targetDoc({ id: 'docS', doc_type: 'self_check', template_id: 'tpl-conc' })],
+      versions: [humanVer('docS', { template_id: 'tpl-conc', results: { B1: { value: null }, C2: { value: null } } })],
+      photos: [photo('p1', { work_item_id: 'wi-form' }), photo('p2')], checklistTemplates: [T_CONC],
+    })
+    const r2 = await run(tie, stubVision(), { targetDocumentId: 'docS' })
+    const b2 = r2.body as unknown as Body
+    expect((b2.target!.suggestion.content as { work_item_id: string | null }).work_item_id).toBeNull()
+    expect(b2.target!.suggestion.field_sources.work_item_id.status).toBe('pending')
+    expect(majorityWorkItem(['a', 'a', 'b'])).toBe('a')
+    expect(majorityWorkItem(['a', 'b'])).toBeNull()
+    expect(majorityWorkItem([null, undefined])).toBeNull()
+  })
+
+  it('自主檢查表目標的範本已不存在 → 該份 error(不建半份、不留建議),批次 partial', async () => {
+    const w = world({ docs: [targetDoc({ id: 'docS', doc_type: 'self_check', template_id: 'tpl-gone' })], photos: [photo('p1')], checklistTemplates: [T_CONC] })
+    const r = await run(w, stubVision(), { targetDocumentId: 'docS' })
+    expect(r.status).toBe(200)
+    const body = r.body as unknown as Body
+    expect(body.target).toBeUndefined()
+    expect(body.documents[0]).toMatchObject({ action: 'error', reason: expect.stringContaining('範本已不存在') })
+    expect(body.intake.status).toBe('partial')
+    expect(w.actions).toEqual([])
+  })
+
+  it('照片推得的日期與文件日期不同:仍全部納入,notes 與 target.recheck 明寫,不默默丟掉', async () => {
+    const w = world({ docs: [targetDoc()], versions: [humanVer('docT', { log_date: '2026-09-17' })], photos: [photo('p1')] })
+    const r = await run(w, stubVision({ classify: boardClassify, board: () => slumpBoard('2026-09-18') }), { targetDocumentId: 'docT' })
+    const body = r.body as unknown as Body
+    expect(body.target!.suggestion.attachments.map((a) => a.photo_id)).toEqual(['p1'])
+    expect(body.notes).toEqual(expect.arrayContaining([expect.stringContaining('與文件日期 2026-09-17 不同')]))
+    expect(body.target!.recheck).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'log_date' })]))
+    expect(body.target!.notes).toHaveLength(1)
+  })
+
+  it('時間預算用完(remaining>0):先回續跑、不留建議;續跑那一輪辨識完才留一筆', async () => {
+    const w = world({ docs: [targetDoc()], photos: [photo('p1')] })
+    const r = await run(w, stubVision(), { targetDocumentId: 'docT', budgetMs: -1 })
+    const body = r.body as unknown as Body
+    expect(body.remaining).toBe(1)
+    expect(body.target).toBeUndefined()
+    expect(w.actions).toEqual([])
+    expect(body.intake.status).toBe('recognizing')
+    expect(body.intake.candidates).toEqual([expect.objectContaining({ state: 'ready', document_id: 'docT' })])
+    const r2 = await run(w, stubVision(), { targetDocumentId: 'docT' })
+    expect((r2.body as unknown as Body).target?.document_id).toBe('docT')
+    expect(w.actions).toHaveLength(1)
+  })
+
+  it('同內容(同 sha)照片本案已辨識過:沿用其結果寫進這張照片、不呼叫模型;工項用目前標單重配;明確重新辨識才打模型', async () => {
+    const prior = photo('p0', { intake_id: 'i0', content_sha256: 'S1', ai_status: 'done', work_item_id: null, caption: '先前的說明',
+      ai_result: { classify: { caption: '先前的說明', category: '施工作業', is_construction: true, legible: true, text_legible: false, has_board: false, record_medium: 'none', work_item_hint: '鋼筋加工及組立', visible_progress: '', location: null, location_text: '', dropped: [] }, whiteboard: null, whiteboard_skipped: null, match: { work_item_id: null, hint: '鋼筋加工及組立' } } })
+    const w = world({ docs: [targetDoc()], photos: [prior, photo('p1', { content_sha256: 'S1' })] })
+    const calls: string[] = []
+    const r = await run(w, stubVision({ calls }), { targetDocumentId: 'docT' })
+    expect(r.status).toBe(200)
+    expect(calls).toEqual([]) // 沒有打模型(用量只在呼叫器記,沒呼叫就沒有用量)
+    expect(w.photos[1]).toMatchObject({ ai_status: 'done', caption: '先前的說明', work_item_id: 'wi-steel' }) // 先前未配到工項,現在依標單配到
+    expect(r.body.notes).toEqual(expect.arrayContaining(['1 張沿用先前同內容照片的辨識結果(未重新呼叫模型)']))
+    expect(((r.body as unknown as Body).target!.suggestion.attachments).map((a) => a.photo_id)).toEqual(['p1'])
+
+    // 明確要求重新辨識:不沿用快取
+    const redo: string[] = []
+    await run(w, stubVision({ calls: redo }), { targetDocumentId: 'docT', rerecognizePhotoIds: ['p1'] })
+    expect(redo.filter((c) => c.startsWith('classify:'))).toEqual(['classify:b64:prj/intake/i1/p1.jpg'])
+
+    // 既有同 sha 照片辨識失敗(failed)或結果讀不出來 → 不沿用,照常辨識
+    const bad = world({ photos: [photo('p0', { intake_id: 'i0', content_sha256: 'S2', ai_status: 'failed', ai_result: { error: 'timeout' } }), photo('p1', { content_sha256: 'S2' })] })
+    const fresh: string[] = []
+    await run(bad, stubVision({ calls: fresh }))
+    expect(fresh.filter((c) => c.startsWith('classify:'))).toHaveLength(1)
   })
 })

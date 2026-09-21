@@ -9,7 +9,7 @@ import { plannedPctNow } from '../../lib/progressPlan.js'
 import { latestValuationAt } from '../../lib/progressAsOf.js'
 import { taipeiISODate } from '../../lib/dates.js'
 import { useTodayTasks } from '../../lib/useTodayTasks.js'
-import { BALL_SOURCES, BALL_SOURCES_TITLE, resolveBallKey, ROLE_WORK, navLabel } from '../../lib/navConfig.js'
+import { BALL_SOURCES, BALL_SOURCES_TITLE, resolveBallKey, ROLE_WORK, navLabel, coreOnlyNav } from '../../lib/navConfig.js'
 import { KIND_LABEL } from '../../lib/agentRole.js'
 import { buildInsights, insightsForRole } from '../../lib/aiInsights.js'
 import { buildSetupSteps } from '../../lib/setupChecklist.js'
@@ -284,7 +284,7 @@ export default function Dashboard() {
           也吃同一個 aiEnabled 閘門——功能關閉就整顆不渲染,不擺一顆按了會失望的鈕。
           在內容流最底而非 fixed:不與 bottom nav / FAB 疊,也不遮住任何待辦列。
           只在「待我處理」出現:問的是「現在該做什麼」,不是等對方或已完成的脈絡。 */}
-      {ball === 'mine' && aiEnabled('agent.run') && (
+      {ball === 'mine' && aiEnabled('agent.run') && !coreOnlyNav(myOrg) && ( /* 廠商三核心不給問答入口(2026-09-21) */
         <Button size="lg" className="w-full md:hidden"
           onClick={() => navigate('/agent', { state: { q: '今天最該處理什麼？' } })}>
           <MSym name="smart_toy" size={18} />問 GovAgent：今天最該處理什麼？

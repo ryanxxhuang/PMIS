@@ -10,7 +10,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { maskDbError } from './publicError.ts'
 import { fetchAllRows } from './integrityAuditTool.ts'
-import type { DraftRepo, IntakePhotoRow, IntakeRow, DocRow, VersionRow, RepoError } from './fieldDocDraftRun.ts'
+import type { DraftRepo, IntakePhotoRow, IntakeRow, DocRow, TargetDocRow, VersionRow, RepoError } from './fieldDocDraftRun.ts'
 import type { ChecklistTemplateRow, DayDefect, DayInspection, FormalDailyLog, LeafWorkItem, LegacyDailyLog, OpenInspection } from './fieldDocDraft.ts'
 import type { FieldDocTemplate } from './fieldDocTemplate.ts'
 import { taipeiDayRange } from './fieldDocDraft.ts'
@@ -95,6 +95,25 @@ export function supabaseDraftRepo(db: SupabaseClient, service: SupabaseClient, p
       })
       if (byUpload.error) return { error: byUpload.error }
       return [...byTaken.rows, ...byUpload.rows]
+    },
+
+    // 本案已辨識且同內容雜湊的照片(表內上傳沿用辨識結果;最近辨識的優先,呼叫端排除本批自己的列)
+    async listRecognizedPhotosBySha(shas) {
+      if (!shas.length) return []
+      const { data, error } = await db.from('photos').select(PHOTO_COLS).eq('project_id', projectId)
+        .in('content_sha256', shas.slice(0, 500)).in('ai_status', ['done', 'not_site', 'unreadable'])
+        .order('ai_run_at', { ascending: false, nullsFirst: false }).order('id').limit(1000)
+      if (error) return err('photos_by_sha', error)
+      return (data ?? []) as IntakePhotoRow[]
+    },
+
+    // 表內上傳的目標文件(RLS 讀;責任方是 DB generated column,不信任前端)
+    async getDocumentById(docId) {
+      const { data, error } = await db.from('field_documents')
+        .select('id, doc_type, doc_date, status, current_version_no, intake_id, target_key, template_id, owner_org')
+        .eq('id', docId).eq('project_id', projectId).maybeSingle()
+      if (error) return err('target_doc', error)
+      return (data as TargetDocRow | null) ?? null
     },
 
     async downloadPhoto(storagePath) {
