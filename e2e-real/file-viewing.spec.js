@@ -5,6 +5,9 @@
 //      成 ASCII,沒這層的話政府文件的中文檔名會存成底線醜檔名)
 // 不需要 Edge runtime:AI 分析失敗只影響抽取,不影響「檔案已落地可開」——
 // partial/failed(已上傳)列本來就必須能開檔,這正是要驗的韌性。
+// 但 E 包起本機 Edge 與模型金鑰同一個 env-file 一起起(runbook),這條鏈就會真的等 live 抽取跑到終態:
+// extract-requirements 單一 request 的牆鐘上限是 REQUEST_ABS_CAP_MS=140 s(大批次還會續跑),原本 60 s 的等待比產品
+// 自己的預算短,live 慢一點就假紅(F2 全套實跑一次)。等待改依模式取:live 依產品預算,fixture 維持 60 s。
 import { test, expect } from '@playwright/test'
 import {
   uniqueEmail, createConfirmedUser, cleanupUser, deleteOwnedProjects,
@@ -18,6 +21,7 @@ const CONTRACT_TEXT = [
   '第三條 工程期限：乙方應於2026年10月31日前完成全部工程。',
 ].join('\n')
 
+const LIVE_EDGE = Boolean(process.env.ANTHROPIC_API_KEY?.trim())
 const conEmail = uniqueEmail('fv-con')
 let conId
 
@@ -40,17 +44,24 @@ test.afterAll(async () => {
 })
 
 test('檔名開啟簽名 URL 預覽,下載還原中文原始檔名', async ({ page }) => {
-  test.setTimeout(90_000)
+  test.setTimeout(LIVE_EDGE ? 300_000 : 90_000)
   await loginReal(page, conEmail)
   await gotoHash(page, '/contract')
+  // 先等頁面就緒(契約選單載入、預設「我的施工契約」就位)再選檔——與 chain 3 同一組守門。
+  // 進頁立刻 setInputFiles 會在 React 還沒接上 onChange／契約清單還沒載入時觸發,上傳靜默不發生
+  // (trace 裡 storage／documents／Edge 一個請求都沒有),在較慢的機器上每次都中;之後再等「下載」只會等到逾時。
+  await expect(page.getByText('專案文件一次上傳')).toBeVisible()
+  await expect(page.getByRole('option', { name: /我的施工契約/ })).toBeAttached()
   await page.locator('input[type="file"]').setInputFiles({
     name: FILE_NAME, mimeType: 'text/plain',
     buffer: Buffer.from(CONTRACT_TEXT, 'utf-8'),
   })
+  // 上傳一定要先看得到那一列(Storage＋documents 真路徑落地);拿不到列就是上傳失敗,不該再等 AI 終態
+  await expect(page.getByText(FILE_NAME).first()).toBeVisible({ timeout: 15_000 })
 
   // 等 run 走到終態:文件清單列的「下載」只在非處理中出現(AI 分析失敗也算終態)
   const downloadBtn = page.getByRole('button', { name: '下載' })
-  await expect(downloadBtn).toBeVisible({ timeout: 60_000 })
+  await expect(downloadBtn).toBeVisible({ timeout: LIVE_EDGE ? 240_000 : 60_000 })
 
   // ── 1. 檔名可點:text/plain 走預覽分支,新分頁網址是私有 bucket 簽名 URL ──
   const nameBtn = page.getByRole('button', { name: FILE_NAME })

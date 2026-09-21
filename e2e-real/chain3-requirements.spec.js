@@ -12,6 +12,7 @@ import {
 const PROJECT_NAME = `鏈3文件工程-${Date.now().toString(36)}`
 const REQ_TITLE = `開工後提送品質計畫-${Date.now().toString(36)}`
 const LIVE_EDGE = Boolean(process.env.ANTHROPIC_API_KEY?.trim())
+const reviewEntry = (page) => page.getByRole('main').locator('a', { has: page.locator('button'), hasText: '擷取審核' })
 // 兩條條款各有用途:第三條是無歧義的「純期限」(live 斷言錨點——完工是期限不是送審,
 // 抽取器只可能給 deadline);第十條是「帶期限的送審義務」,抽取器合理地會歸類為
 // submittal(2026-08-15 實測如此),所以不對它做型別斷言,只靠它讓文件更像真契約。
@@ -232,9 +233,10 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
   await c.auth.signOut()
 
   // 審核與履約已分頁:從可見的「擷取審核」入口檢視人工／AI 整理來源。
-  // 側欄子頁也有同名入口(履約時程群組的子頁),這裡點的是頁首動作——限定在主內容區,否則 strict mode 撞兩個
+  // 主內容區裡同名連結不只一個(頁首動作、契約整理流程／子頁分頁條都連到同一頁),strict mode 會撞;
+  // 這裡明確點頁首動作——它是唯一「Link 包 Button」的那一個(Requirements.jsx 頁首入口的作法)
   await gotoHash(page, '/requirements')
-  await page.getByRole('main').getByRole('link', { name: '擷取審核', exact: true }).click()
+  await reviewEntry(page).click()
   await page.getByRole('listitem').filter({ hasText: requirementTitle }).first().click()
   await expect(page.getByRole('button', { name: '確認無誤', exact: true })).toHaveCount(0)
   // quick filter「不採用」也是 button,只在詳情動作區驗沒有審查按鈕。
@@ -243,7 +245,7 @@ test('鏈 3:上傳文件→待審 Requirement→監造核定→期限追蹤出�
 
   await loginReal(page, supEmail)
   await gotoHash(page, '/requirements')
-  await page.getByRole('main').getByRole('link', { name: '擷取審核', exact: true }).click()
+  await reviewEntry(page).click()
   await page.getByRole('listitem').filter({ hasText: requirementTitle }).first().click()
   const confirmBtn = page.getByRole('button', { name: '確認無誤', exact: true })
   if (!LIVE_EDGE) {

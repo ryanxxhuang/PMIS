@@ -86,7 +86,8 @@ test.beforeAll(async () => {
     p_project: projectId, p_anchors: { commencement_date: COMMENCE_1, end_date: END_DATE }, p_change_kind: 'edit',
   })
   if (anchorErr) throw new Error(`設基準日失敗:${anchorErr.message}`)
-  const base = { project_id: projectId, status: 'needs_review', origin: 'manual', lifecycle_phase: '施工中', requirement_type: 'deadline', frequency_config: {} }
+  // trigger_config／frequency_config 皆 NOT NULL:單次列各自覆寫 trigger_config,循環列覆寫 frequency_type／frequency_config
+  const base = { project_id: projectId, status: 'needs_review', origin: 'manual', lifecycle_phase: '施工中', requirement_type: 'deadline', trigger_config: {}, frequency_config: {} }
   const { data: reqs, error: reqErr } = await c.from('requirements').insert([
     { ...base, title: T_OVERDUE, description: '固定期限(3 天前)。', responsible_party_type: 'contractor', trigger_type: 'fixed', trigger_config: { fixed_date: D_OVERDUE } },
     { ...base, title: T_RESCHED, description: '開工後 30 日內提送。', responsible_party_type: 'contractor', trigger_type: 'commencement', trigger_config: { offset_days: 30, offset_dir: 'after' } },
@@ -139,7 +140,9 @@ test('鏈 22:逾期／改期／已完成／廢止四種轉移端到端;早報 dr
   const overdueRow = list.getByRole('listitem').filter({ hasText: T_OVERDUE }).first()
   await expect(overdueRow).toBeVisible()
   await expect(overdueRow.getByText('逾期 3 日')).toBeVisible()
-  await expect(overdueRow).toHaveAttribute('aria-current', 'true')
+  // 預設選第一條已逾期(README 3):本案最逾期的是每月 10 日循環的本月期次(比 3 天前的固定期限更早),所以預設選中的是它,不是 T_OVERDUE
+  await expect(list.getByRole('listitem').filter({ hasText: /逾期 \d+ 日/ }).first()).toHaveAttribute('aria-current', 'true')
+  await expect(list.getByRole('listitem').filter({ hasText: T_CANCEL }).first()).toHaveAttribute('aria-current', 'true')
   await expect(list.getByRole('listitem').filter({ hasText: T_SUP })).toHaveCount(0) // 廠商只看自己
   await gotoHash(page, '/dashboard')
   await expect(page.getByRole('group', { name: '現在輪到我', exact: true })).toContainText(T_OVERDUE)
@@ -206,8 +209,8 @@ test('鏈 22:逾期／改期／已完成／廢止四種轉移端到端;早報 dr
   expect(periodsBefore.length).toBeGreaterThan(0)
   expect(periodsBefore.every((p) => p.status === '待辦')).toBe(true)
   await loginReal(page, supEmail)
-  await gotoHash(page, '/requirements')
-  await page.getByRole('main').getByRole('link', { name: '擷取審核', exact: true }).click()
+  // 已確認的契約重點不在擷取審核預設的「待確認」快篩裡:走與時程／待補設定同一個深連結 ?highlight=<id>(chain 19 同)
+  await gotoHash(page, `/requirements/review?highlight=${reqIds[T_CANCEL]}`)
   await page.getByRole('listitem').filter({ hasText: T_CANCEL }).first().click()
   await page.getByRole('button', { name: '廢止取代', exact: true }).click()
   await page.getByRole('dialog').getByRole('button', { name: '廢止取代', exact: true }).click()
