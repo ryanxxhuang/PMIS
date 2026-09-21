@@ -26,7 +26,7 @@ npm run test:e2e:real                               # terminal B
 
 5189 被別的 worktree 佔用時，Playwright 直接報「is already used」、不沿用（T2）。等對方跑完，或用 `E2E_REAL_PORT` 換一個本次專用的埠（與 Demo 端的 `E2E_DEMO_PORT` 同一個做法），例如 `E2E_REAL_PORT=5289 npm run test:e2e:real`。
 
-二十四條鏈：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾（chain 4；F2 起含「有效確認量擋重匯」）、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14，P3f）、保固期滿日與保固類循環義務（chain 15，P5e）、查驗表單範本與舊判定更正（chain 16，P3g）、真實表單格子編輯（chain 17，C 包）、監造兩份紙本表單（chain 18，C2）、契約義務時點待補（chain 19，F1）、服務憑證寫入被 DB 拒絕（chain 20，F2）、紙表觀察→草稿→待確認→簽署（chain 21，F2）、義務四種轉移＋早報角色分流（chain 22，F2）（chain 5–10、12–16、20–22 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
+二十四條鏈（`npm run test:e2e:real` 共 26 項、25 個 spec；F2 於 2026-09-21 重建的本機棧全套實跑 25 綠＋chain 3 live 一次模型輸出不完整重跑即綠）：Auth 冒煙、建案／三方邀請與正式模式、估驗金流、契約／履約、BOQ 交易回滾（chain 4；F2 起含「有效確認量擋重匯」）、原檔預覽／下載、現場文書（chain 5）、監造日誌（chain 6）、監造確認量與估驗聯動（chain 7）、自主檢查表（chain 8）、未確認量不可請款（chain 9）、監造查驗表單（chain 10）、撤銷／減量／補證／調整（chain 11，P4d；說明在該 spec 檔頭）、共用補值（chain 12）、月報與佐證包重用已簽署資料（chain 13）、捨棄草稿後重新起稿（chain 14，P3f）、保固期滿日與保固類循環義務（chain 15，P5e）、查驗表單範本與舊判定更正（chain 16，P3g）、真實表單格子編輯（chain 17，C 包）、監造兩份紙本表單（chain 18，C2）、契約義務時點待補（chain 19，F1）、服務憑證寫入被 DB 拒絕（chain 20，F2）、紙表觀察→草稿→待確認→簽署（chain 21，F2）、義務四種轉移＋早報角色分流（chain 22，F2）（chain 5–10、12–16、20–22 見下節）。Demo E2E 仍以 `npm run test:e2e` 執行；兩套不能互相取代。
 
 PDF 交付的兩項真後端驗收由 E 包補進既有鏈（D 包在 Demo 驗不到）：chain 5 在列印頁**實際下載檔案並解析**，證明拿到的是簽署列指向的已簽版本（檔名 `v3_已簽署`、紙面沒有「草稿・未簽署」）；chain 13 下載估驗佐證包的 PDF，證明**真 Supabase Storage 簽名網址**的照片抓得回來（CORS 沒擋）且各自內嵌成影像。
 

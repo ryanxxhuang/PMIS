@@ -107,7 +107,7 @@ test('鏈 21:紙表觀察→草稿欄位(證據／待確認)→簽署被擋(PD00
   const { data: vA } = await con.from('field_document_versions').select('content, field_sources, content_hash').eq('document_id', lineA.id).eq('version_no', 1).single()
   expect(vA.content.results).toEqual({ A1: { value: null }, A2: { value: null }, B1: { value: null } })
   expect(vA.content.check_date).toBe(PAPER_DATE)
-  expect(vA.field_sources.check_date).toMatchObject({ status: 'filled', source: 'whiteboard' })
+  expect(vA.field_sources.check_date).toMatchObject({ status: 'filled', source: `whiteboard:${pA.id}` }) // 日期綁到讀出它的那張照片
   const a1 = vA.field_sources['results.A1']
   expect(a1.status).toBe('pending')
   expect(a1.reason).toContain('紙上編號 1、4 各有實測紀錄')
@@ -123,7 +123,7 @@ test('鏈 21:紙表觀察→草稿欄位(證據／待確認)→簽署被擋(PD00
   expect(vA.field_sources.work_item_id).toMatchObject({ status: 'filled', source: 'ai:photo' })
   // 施工日誌同日:日期也是紙上的
   const { data: dlA } = await con.from('field_document_versions').select('field_sources').eq('document_id', dailyLogs.find((d) => d.doc_date === PAPER_DATE).id).eq('version_no', 1).single()
-  expect(dlA.field_sources.log_date).toMatchObject({ status: 'filled', source: 'whiteboard' })
+  expect(dlA.field_sources.log_date).toMatchObject({ status: 'filled', source: `whiteboard:${pA.id}` })
 
   // ── 簽署 RPC:pending 項目未確認 → PD004(伺服器規則) ───────────────────────────────────────
   const { error: pd004 } = await con.rpc('sign_field_document', { p_document_id: lineA.id, p_version_no: 1, p_content_hash: vA.content_hash, p_intent: '測試:未確認即簽' })
@@ -134,10 +134,13 @@ test('鏈 21:紙表觀察→草稿欄位(證據／待確認)→簽署被擋(PD00
   await gotoHash(page, `/self-check?doc=${lineA.id}`)
   const card = page.getByRole('group', { name: '本份自主檢查表', exact: true })
   await expect(saveStatus).toHaveText(/已存檔.*版本 1/)
-  await expect(card.getByText(PAPER_DATE).first()).toBeVisible()
+  await expect(card.getByText(/檢查日期/).first()).toBeVisible()
+  await expect(card.getByText('115 年 8 月 4 日').first()).toBeVisible() // 紙上 115.8.4 → 表頭以民國年呈現(rocDateText)
   await expect(page.getByRole('button', { name: '簽署此版本' })).toHaveCount(0)
-  await card.getByRole('button', { name: '原文' }).first().click()
-  const evidenceA = page.getByRole('group', { name: '欄位證據' }).first()
+  // 「原文」按鈕每個格子各一顆(位置欄也有一顆);要看的是 A1 線徑那一列的
+  const rowA1 = card.getByRole('row').filter({ hasText: '線徑' }).first()
+  await rowA1.getByRole('button', { name: '原文' }).click()
+  const evidenceA = rowA1.getByRole('group', { name: '欄位證據' })
   await expect(evidenceA).toContainText('紙上編號 1、4 各有實測紀錄')
   await expect(evidenceA).toContainText('線徑：「13 * 11 MM」（編號 1）（單位 MM）（紙上實測欄）')
   await expect(evidenceA).toContainText('線徑：「11 * 11 MM」（編號 4）（單位 MM）（紙上實測欄）')
